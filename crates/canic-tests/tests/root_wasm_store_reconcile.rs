@@ -4,7 +4,9 @@
 mod root;
 
 use candid::encode_one;
-use canic::{Error, cdk::utils::wasm::get_wasm_hash, dto::error::ErrorCode, protocol};
+use canic::{
+    CANIC_WASM_CHUNK_BYTES, Error, cdk::utils::wasm::get_wasm_hash, dto::error::ErrorCode, protocol,
+};
 use canic_control_plane::{
     dto::template::{
         TemplateChunkInput, TemplateChunkSetInfoResponse, TemplateChunkSetPrepareInput,
@@ -24,15 +26,16 @@ use canic_testkit::{
     artifacts::{WasmBuildProfile, build_dfx_all_with_env, workspace_root_for},
     pic::Pic,
 };
-use root::harness::setup_root;
+use root::harness::setup_root_with_release_roles;
 use std::{fs, path::PathBuf};
 
-const CHUNK_BYTES: usize = 1024 * 1024;
 const STORE_ROLLOVER_SAFETY_BYTES: u64 = 64 * 1024;
 const TEST_DFX_BUILD_LOCK_RELATIVE: &str = ".dfx/canic-tests-reconcile-build.lock";
 const TEST_SMALL_STORE_RUSTFLAGS: &str = "--cfg canic_test_small_wasm_store";
 const ROOT_WASM_RELATIVE: &str = ".dfx/local/canisters/root/root.wasm.gz";
 const UPGRADE_READY_TICK_LIMIT: usize = 120;
+const ROOT_RECONCILE_RELEASE_ROLES: &[&str] =
+    &["app", "minimal", "scale", "scale_hub", "test", "user_hub"];
 
 ///
 /// ReleaseFixture
@@ -348,7 +351,7 @@ fn setup_root_with_small_implicit_store() -> root::harness::RootSetup {
         WasmBuildProfile::Debug,
         &[("RUSTFLAGS", TEST_SMALL_STORE_RUSTFLAGS)],
     );
-    setup_root()
+    setup_root_with_release_roles(ROOT_RECONCILE_RELEASE_ROLES)
 }
 
 // Retire one managed store so the GC/finalize/delete canary can drive the full lifecycle.
@@ -903,11 +906,11 @@ fn release_fixture(template_id: &TemplateId, version: &str, payload_len: usize) 
     let payload = vec![0xA5; payload_len];
     let payload_hash = get_wasm_hash(&payload);
     let chunk_hashes = payload
-        .chunks(CHUNK_BYTES)
+        .chunks(CANIC_WASM_CHUNK_BYTES)
         .map(get_wasm_hash)
         .collect::<Vec<_>>();
     let chunks = payload
-        .chunks(CHUNK_BYTES)
+        .chunks(CANIC_WASM_CHUNK_BYTES)
         .enumerate()
         .map(|(chunk_index, bytes)| TemplateChunkInput {
             template_id: template_id.clone(),

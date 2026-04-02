@@ -1,3 +1,5 @@
+mod root;
+
 use candid::{CandidType, Principal, decode_one, encode_args, encode_one, utils::ArgumentEncoder};
 use canic::{
     Error,
@@ -15,17 +17,34 @@ use pocket_ic::{PocketIc, PocketIcBuilder};
 use serde::de::DeserializeOwned;
 use std::{
     collections::HashMap,
+    env, fs, io,
     ops::{Deref, DerefMut},
     panic::{AssertUnwindSafe, catch_unwind},
+    path::{Path, PathBuf},
+    process,
     sync::{Mutex, MutexGuard},
+    thread,
+    time::{Duration, Instant},
+};
+
+pub use root::{
+    RootBaselineMetadata, RootBaselineSpec, build_root_cached_baseline,
+    ensure_root_release_artifacts_built, load_root_wasm, restore_root_cached_baseline,
+    setup_root_topology,
 };
 
 const INSTALL_CYCLES: u128 = 500 * TC;
-static PIC_BUILD_SERIAL: Mutex<()> = Mutex::new(());
+const PIC_PROCESS_LOCK_DIR_NAME: &str = "canic-pocket-ic.lock";
+const PIC_PROCESS_LOCK_RETRY_DELAY: Duration = Duration::from_millis(100);
+const PIC_PROCESS_LOCK_LOG_AFTER: Duration = Duration::from_secs(1);
 
 struct ControllerSnapshot {
     snapshot_id: Vec<u8>,
     sender: Option<Principal>,
+}
+
+struct ProcessLockGuard {
+    path: PathBuf,
 }
 
 ///
@@ -35,18 +54,70 @@ struct ControllerSnapshot {
 pub struct ControllerSnapshots(HashMap<Principal, ControllerSnapshot>);
 
 ///
+/// CachedPicBaseline
+///
+
+pub struct CachedPicBaseline<T> {
+    pub pic: Pic,
+    pub snapshots: ControllerSnapshots,
+    pub metadata: T,
+}
+
+///
+/// CachedPicBaselineGuard
+///
+
+pub struct CachedPicBaselineGuard<'a, T> {
+    guard: MutexGuard<'a, Option<CachedPicBaseline<T>>>,
+}
+
+///
+/// PicSerialGuard
+///
+
+pub struct PicSerialGuard {
+    _process_lock: ProcessLockGuard,
+}
+
+///
 /// Create a fresh PocketIC universe.
 ///
 /// IMPORTANT:
 /// - Each call creates a new IC instance
-/// - WARNING: DO NOT CACHE OR SHARE `Pic` ACROSS TESTS
-/// - Reusing `Pic` can retain global locks and background runtime state
-///   and can make later tests hang or fail nondeterministically
+/// - WARNING: callers must hold a `PicSerialGuard` for the full `Pic` lifetime
 /// - Required to avoid PocketIC wasm chunk store exhaustion
 ///
 #[must_use]
 pub fn pic() -> Pic {
     PicBuilder::new().with_application_subnet().build()
+}
+
+/// Acquire the shared PocketIC serialization guard for the current process.
+#[must_use]
+pub fn acquire_pic_serial_guard() -> PicSerialGuard {
+    PicSerialGuard {
+        _process_lock: acquire_process_lock(),
+    }
+}
+
+/// Acquire one process-local cached PocketIC baseline, building it on first use.
+pub fn acquire_cached_pic_baseline<T, F>(
+    slot: &'static Mutex<Option<CachedPicBaseline<T>>>,
+    build: F,
+) -> (CachedPicBaselineGuard<'static, T>, bool)
+where
+    F: FnOnce() -> CachedPicBaseline<T>,
+{
+    let mut guard = slot
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let cache_hit = guard.is_some();
+
+    if !cache_hit {
+        *guard = Some(build());
+    }
+
+    (CachedPicBaselineGuard { guard }, cache_hit)
 }
 
 ///
@@ -69,54 +140,101 @@ impl PicBuilder {
         Self(PocketIcBuilder::new())
     }
 
-    /// Include an application subnet in the singleton universe.
+    /// Include an application subnet in the PocketIC universe.
     #[must_use]
     pub fn with_application_subnet(mut self) -> Self {
         self.0 = self.0.with_application_subnet();
         self
     }
 
-    /// Include an NNS subnet in the singleton universe.
+    /// Include an NNS subnet in the PocketIC universe.
     #[must_use]
     pub fn with_nns_subnet(mut self) -> Self {
         self.0 = self.0.with_nns_subnet();
         self
     }
 
-    /// Finish building the singleton PocketIC instance and wrap it.
+    /// Finish building the PocketIC instance and wrap it.
     #[must_use]
     pub fn build(self) -> Pic {
-        // Hold the guard for the full PocketIC lifetime to avoid concurrent
-        // server interactions that can crash the local pocket-ic process
-        // (for example `KeyAlreadyExists { key: "nns_subnet_id", ... }`).
-        let serial_guard = PIC_BUILD_SERIAL
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-
         Pic {
             inner: self.0.build(),
-            _serial_guard: serial_guard,
         }
     }
 }
 
 ///
 /// Pic
-/// Thin wrapper around the global PocketIC instance.
+/// Thin wrapper around a PocketIC instance.
 ///
 /// This type intentionally exposes only a minimal API surface; callers should
-/// use `pic()` to obtain the singleton and then perform installs/calls.
-///
-/// WARNING: DO NOT CACHE OR SHARE `Pic` ACROSS TESTS.
-/// Keep `Pic` lifetime scoped to a single test setup and drop it promptly.
+/// use `pic()` to obtain an instance and then perform installs/calls.
+/// Callers must hold a `PicSerialGuard` for the full `Pic` lifetime.
 ///
 
 pub struct Pic {
     inner: PocketIc,
-    _serial_guard: MutexGuard<'static, ()>,
+}
+
+impl<T> Deref for CachedPicBaselineGuard<'_, T> {
+    type Target = CachedPicBaseline<T>;
+
+    fn deref(&self) -> &Self::Target {
+        self.guard
+            .as_ref()
+            .expect("cached PocketIC baseline must exist")
+    }
+}
+
+impl<T> DerefMut for CachedPicBaselineGuard<'_, T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.guard
+            .as_mut()
+            .expect("cached PocketIC baseline must exist")
+    }
+}
+
+impl<T> CachedPicBaseline<T> {
+    /// Capture one immutable cached baseline from the current PocketIC instance.
+    pub fn capture<I>(
+        pic: Pic,
+        controller_id: Principal,
+        canister_ids: I,
+        metadata: T,
+    ) -> Option<Self>
+    where
+        I: IntoIterator<Item = Principal>,
+    {
+        let snapshots = pic.capture_controller_snapshots(controller_id, canister_ids)?;
+
+        Some(Self {
+            pic,
+            snapshots,
+            metadata,
+        })
+    }
+
+    /// Restore the captured snapshot set back into the owned PocketIC instance.
+    pub fn restore(&self, controller_id: Principal) {
+        self.pic
+            .restore_controller_snapshots(controller_id, &self.snapshots);
+    }
 }
 
 impl Pic {
+    /// Capture the current PocketIC wall-clock time as nanoseconds since epoch.
+    #[must_use]
+    pub fn current_time_nanos(&self) -> u64 {
+        self.inner.get_time().as_nanos_since_unix_epoch()
+    }
+
+    /// Restore PocketIC wall-clock and certified time from a captured nanosecond value.
+    pub fn restore_time_nanos(&self, nanos_since_epoch: u64) {
+        let restored = pocket_ic::Time::from_nanos_since_unix_epoch(nanos_since_epoch);
+        self.inner.set_time(restored);
+        self.inner.set_certified_time(restored);
+    }
+
     /// Install a root canister with the default root init arguments.
     pub fn create_and_install_root_canister(&self, wasm: Vec<u8>) -> Result<Principal, Error> {
         let init_bytes = install_root_args()?;
@@ -440,6 +558,13 @@ impl Pic {
     }
 }
 
+impl Drop for ProcessLockGuard {
+    fn drop(&mut self) {
+        let _ = fs::remove_file(process_lock_owner_path(&self.path));
+        let _ = fs::remove_dir(&self.path);
+    }
+}
+
 impl Deref for Pic {
     type Target = PocketIc;
 
@@ -511,4 +636,73 @@ fn controller_sender_candidates(
     } else {
         [Some(controller_id), None]
     }
+}
+
+fn acquire_process_lock() -> ProcessLockGuard {
+    let lock_dir = env::temp_dir().join(PIC_PROCESS_LOCK_DIR_NAME);
+    let started_waiting = Instant::now();
+    let mut logged_wait = false;
+
+    loop {
+        match fs::create_dir(&lock_dir) {
+            Ok(()) => {
+                fs::write(
+                    process_lock_owner_path(&lock_dir),
+                    process::id().to_string(),
+                )
+                .unwrap_or_else(|err| {
+                    let _ = fs::remove_dir(&lock_dir);
+                    panic!(
+                        "failed to record PocketIC process lock owner at {}: {err}",
+                        lock_dir.display()
+                    );
+                });
+
+                if logged_wait {
+                    eprintln!(
+                        "[canic_testkit::pic] acquired cross-process PocketIC lock at {}",
+                        lock_dir.display()
+                    );
+                }
+
+                return ProcessLockGuard { path: lock_dir };
+            }
+            Err(err) if err.kind() == io::ErrorKind::AlreadyExists => {
+                if process_lock_is_stale(&lock_dir) {
+                    let _ = fs::remove_file(process_lock_owner_path(&lock_dir));
+                    let _ = fs::remove_dir(&lock_dir);
+                    continue;
+                }
+
+                if !logged_wait && started_waiting.elapsed() >= PIC_PROCESS_LOCK_LOG_AFTER {
+                    eprintln!(
+                        "[canic_testkit::pic] waiting for cross-process PocketIC lock at {}",
+                        lock_dir.display()
+                    );
+                    logged_wait = true;
+                }
+
+                thread::sleep(PIC_PROCESS_LOCK_RETRY_DELAY);
+            }
+            Err(err) => panic!(
+                "failed to create PocketIC process lock dir at {}: {err}",
+                lock_dir.display()
+            ),
+        }
+    }
+}
+
+fn process_lock_owner_path(lock_dir: &Path) -> PathBuf {
+    lock_dir.join("owner")
+}
+
+fn process_lock_is_stale(lock_dir: &Path) -> bool {
+    let Ok(pid_text) = fs::read_to_string(process_lock_owner_path(lock_dir)) else {
+        return true;
+    };
+    let Ok(pid) = pid_text.trim().parse::<u32>() else {
+        return true;
+    };
+
+    !Path::new("/proc").join(pid.to_string()).exists()
 }

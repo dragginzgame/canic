@@ -3,7 +3,7 @@
 #![allow(clippy::unused_async)]
 
 use canic::{
-    Error,
+    CANIC_WASM_CHUNK_BYTES, Error,
     api::auth::DelegationApi,
     api::canister::CanisterRole,
     dto::auth::{
@@ -31,9 +31,6 @@ const TEST_DELEGATION_CERT_DOMAIN: &[u8] = b"CANIC_DELEGATION_CERT_V1";
 const TEST_DELEGATED_TOKEN_DOMAIN: &[u8] = b"CANIC_DELEGATED_TOKEN_V1";
 const TEST_DELEGATION_ROOT_KEY_SEED: [u8; 32] = [11u8; 32];
 const TEST_DELEGATION_SHARD_KEY_SEED: [u8; 32] = [13u8; 32];
-// Maximum management-canister chunk-store payload accepted per call. Use the
-// full 1 MiB limit to keep bootstrap round-trips low without exceeding bounds.
-const BOOTSTRAP_CHUNK_BYTES: usize = 1024 * 1024;
 type TestAttestationKeyEntry = (u32, u8, AttestationKeyStatus, Option<u64>, Option<u64>);
 
 ///
@@ -353,7 +350,7 @@ fn stage_chunked_bootstrap_release(role: CanisterRole, bytes: &'static [u8]) {
     let payload_hash = Sha256::digest(bytes).to_vec();
     let now_secs = ic_cdk::api::time() / 1_000_000_000;
     let chunks = bytes
-        .chunks(BOOTSTRAP_CHUNK_BYTES)
+        .chunks(CANIC_WASM_CHUNK_BYTES)
         .map(<[u8]>::to_vec)
         .collect::<Vec<_>>();
     let chunk_hashes = chunks

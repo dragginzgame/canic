@@ -133,6 +133,16 @@ impl WasmStoreBootstrapApi {
 
     // Stage one approved manifest in the current canister's local bootstrap source.
     pub fn stage_manifest(input: TemplateManifestInput) {
+        log!(
+            Topic::Wasm,
+            Info,
+            "stage manifest template={} role={} version={} bytes={} binding={}",
+            input.template_id,
+            input.role,
+            input.version,
+            input.payload_size_bytes,
+            input.store_binding,
+        );
         support::stage_manifest(input);
     }
 
@@ -140,12 +150,53 @@ impl WasmStoreBootstrapApi {
     pub fn prepare_chunk_set(
         request: TemplateChunkSetPrepareInput,
     ) -> Result<TemplateChunkSetInfoResponse, Error> {
-        support::prepare_chunk_set(request)
+        let template_id = request.template_id.clone();
+        let version = request.version.clone();
+        log!(
+            Topic::Wasm,
+            Info,
+            "prepare chunk upload template={} version={} chunks={} bytes={}",
+            request.template_id,
+            request.version,
+            request.chunk_hashes.len(),
+            request.payload_size_bytes,
+        );
+        let response = support::prepare_chunk_set(request)?;
+        log!(
+            Topic::Wasm,
+            Ok,
+            "prepared chunk upload template={} version={} with {} chunk hashes",
+            template_id,
+            version,
+            response.chunk_hashes.len(),
+        );
+        Ok(response)
     }
 
     // Stage one chunk into the current canister's local bootstrap source.
     pub fn publish_chunk(request: TemplateChunkInput) -> Result<(), Error> {
-        support::publish_chunk(request)
+        log!(
+            Topic::Wasm,
+            Info,
+            "publish chunk template={} version={} chunk_index={} bytes={}",
+            request.template_id,
+            request.version,
+            request.chunk_index,
+            request.bytes.len(),
+        );
+        let template_id = request.template_id.clone();
+        let version = request.version.clone();
+        let chunk_index = request.chunk_index;
+        support::publish_chunk(request)?;
+        log!(
+            Topic::Wasm,
+            Ok,
+            "published chunk template={} version={} chunk_index={}",
+            template_id,
+            version,
+            chunk_index,
+        );
+        Ok(())
     }
 
     // Publish all root-local staged releases into the current subnet's selected wasm store.

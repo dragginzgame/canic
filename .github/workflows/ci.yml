@@ -54,7 +54,7 @@ jobs:
         run: bash scripts/ci/run-forbidden-crypto-guards.sh
       - run: make fmt-check
       - run: make clippy
-      - run: cargo test --workspace --all-targets --verbose --locked -- --test-threads=1
+      - run: make test-unit
       - name: Build examples (default)
         run: cargo build -p canic --examples --locked
 
@@ -93,5 +93,5 @@ jobs:
         run: bash scripts/ci/run-forbidden-crypto-guards.sh
       - run: make fmt-check
       - run: make clippy
-      - run: cargo test --workspace --all-targets --verbose --locked -- --test-threads=1
+      - run: make test-unit
       - run: cargo build --release --workspace --locked

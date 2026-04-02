@@ -13,10 +13,10 @@ use canic::{
 use canic_internal::canister::{APP, SCALE_HUB, TEST, USER_HUB};
 use canic_testkit::{
     artifacts::{
-        WasmBuildProfile, build_wasm_canisters, prebuilt_wasm_dir, read_wasm, test_target_dir,
-        wasm_artifacts_ready, workspace_root_for,
+        WasmBuildProfile, build_wasm_canisters, read_wasm, test_target_dir, wasm_artifacts_ready,
+        workspace_root_for,
     },
-    pic::pic,
+    pic::{acquire_pic_serial_guard, pic},
 };
 use std::{
     path::{Path, PathBuf},
@@ -28,7 +28,6 @@ const INSTALL_CYCLES: u128 = 1_000_000_000_000;
 const READY_TICK_LIMIT: usize = 120;
 const INSTALL_CODE_RETRY_LIMIT: usize = 4;
 const CANISTERS: [&str; 2] = ["canister_test", "intent_authority"];
-const PREBUILT_WASM_DIR_ENV: &str = "CANIC_PREBUILT_WASM_DIR";
 const INSTALL_CODE_COOLDOWN: Duration = Duration::from_secs(5 * 60);
 static BUILD_ONCE: Once = Once::new();
 
@@ -42,18 +41,9 @@ fn lifecycle_boundary_traps_are_phase_correct() {
     let target_dir = test_target_dir(&workspace_root, "pic-wasm");
     build_canisters_once(&workspace_root);
 
-    let canic_wasm = read_wasm(
-        &target_dir,
-        "canister_test",
-        WasmBuildProfile::Release,
-        PREBUILT_WASM_DIR_ENV,
-    );
-    let authority_wasm = read_wasm(
-        &target_dir,
-        "intent_authority",
-        WasmBuildProfile::Release,
-        PREBUILT_WASM_DIR_ENV,
-    );
+    let canic_wasm = read_wasm(&target_dir, "canister_test", WasmBuildProfile::Release);
+    let authority_wasm = read_wasm(&target_dir, "intent_authority", WasmBuildProfile::Release);
+    let _serial_guard = acquire_pic_serial_guard();
     let pic = pic();
 
     let canic_id = pic.create_canister();
@@ -113,12 +103,8 @@ fn non_root_post_upgrade_remains_ready_across_repeated_upgrades() {
     let target_dir = test_target_dir(&workspace_root, "pic-wasm");
     build_canisters_once(&workspace_root);
 
-    let canic_wasm = read_wasm(
-        &target_dir,
-        "canister_test",
-        WasmBuildProfile::Release,
-        PREBUILT_WASM_DIR_ENV,
-    );
+    let canic_wasm = read_wasm(&target_dir, "canister_test", WasmBuildProfile::Release);
+    let _serial_guard = acquire_pic_serial_guard();
     let pic = pic();
 
     let canic_id = pic.create_canister();
@@ -152,18 +138,9 @@ fn non_root_post_upgrade_failure_reports_phase_error() {
     let target_dir = test_target_dir(&workspace_root, "pic-wasm");
     build_canisters_once(&workspace_root);
 
-    let canic_wasm = read_wasm(
-        &target_dir,
-        "canister_test",
-        WasmBuildProfile::Release,
-        PREBUILT_WASM_DIR_ENV,
-    );
-    let authority_wasm = read_wasm(
-        &target_dir,
-        "intent_authority",
-        WasmBuildProfile::Release,
-        PREBUILT_WASM_DIR_ENV,
-    );
+    let canic_wasm = read_wasm(&target_dir, "canister_test", WasmBuildProfile::Release);
+    let authority_wasm = read_wasm(&target_dir, "intent_authority", WasmBuildProfile::Release);
+    let _serial_guard = acquire_pic_serial_guard();
     let pic = pic();
 
     let authority_id = pic.create_canister();
@@ -357,14 +334,7 @@ fn build_canisters_once(workspace_root: &Path) {
     BUILD_ONCE.call_once(|| {
         let target_dir = test_target_dir(workspace_root, "pic-wasm");
 
-        if prebuilt_wasm_dir(PREBUILT_WASM_DIR_ENV).is_some()
-            || wasm_artifacts_ready(
-                &target_dir,
-                &CANISTERS,
-                WasmBuildProfile::Release,
-                PREBUILT_WASM_DIR_ENV,
-            )
-        {
+        if wasm_artifacts_ready(&target_dir, &CANISTERS, WasmBuildProfile::Release) {
             return;
         }
 

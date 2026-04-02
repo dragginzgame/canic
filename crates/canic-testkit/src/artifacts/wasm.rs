@@ -1,4 +1,3 @@
-use super::workspace::prebuilt_wasm_dir;
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -9,6 +8,8 @@ use std::{
 /// WasmBuildProfile
 ///
 
+const WASM_RELEASE_PROFILE_NAME: &str = "wasm-release";
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum WasmBuildProfile {
     Debug,
@@ -16,12 +17,12 @@ pub enum WasmBuildProfile {
 }
 
 impl WasmBuildProfile {
-    /// Return the Cargo profile flag for this build profile.
+    /// Return the Cargo profile arguments for this build profile.
     #[must_use]
-    pub const fn cargo_flag(self) -> Option<&'static str> {
+    pub const fn cargo_args(self) -> &'static [&'static str] {
         match self {
-            Self::Debug => None,
-            Self::Release => Some("--release"),
+            Self::Debug => &[],
+            Self::Release => &["--profile", WASM_RELEASE_PROFILE_NAME],
         }
     }
 
@@ -30,11 +31,11 @@ impl WasmBuildProfile {
     pub const fn target_dir_name(self) -> &'static str {
         match self {
             Self::Debug => "debug",
-            Self::Release => "release",
+            Self::Release => WASM_RELEASE_PROFILE_NAME,
         }
     }
 
-    /// Return the `RELEASE` environment value expected by `dfx`.
+    /// Return the `RELEASE` environment value expected by Canic local builders.
     #[must_use]
     pub const fn dfx_release_value(self) -> &'static str {
         match self {
@@ -46,16 +47,7 @@ impl WasmBuildProfile {
 
 /// Resolve the wasm artifact path for one crate under a target directory.
 #[must_use]
-pub fn wasm_path(
-    target_dir: &Path,
-    crate_name: &str,
-    profile: WasmBuildProfile,
-    prebuilt_env_var: &str,
-) -> PathBuf {
-    if let Some(dir) = prebuilt_wasm_dir(prebuilt_env_var) {
-        return dir.join(format!("{crate_name}.wasm"));
-    }
-
+pub fn wasm_path(target_dir: &Path, crate_name: &str, profile: WasmBuildProfile) -> PathBuf {
     target_dir
         .join("wasm32-unknown-unknown")
         .join(profile.target_dir_name())
@@ -68,22 +60,16 @@ pub fn wasm_artifacts_ready(
     target_dir: &Path,
     canisters: &[&str],
     profile: WasmBuildProfile,
-    prebuilt_env_var: &str,
 ) -> bool {
     canisters
         .iter()
-        .all(|name| wasm_path(target_dir, name, profile, prebuilt_env_var).is_file())
+        .all(|name| wasm_path(target_dir, name, profile).is_file())
 }
 
 /// Read a compiled wasm artifact for one crate.
 #[must_use]
-pub fn read_wasm(
-    target_dir: &Path,
-    crate_name: &str,
-    profile: WasmBuildProfile,
-    prebuilt_env_var: &str,
-) -> Vec<u8> {
-    let path = wasm_path(target_dir, crate_name, profile, prebuilt_env_var);
+pub fn read_wasm(target_dir: &Path, crate_name: &str, profile: WasmBuildProfile) -> Vec<u8> {
+    let path = wasm_path(target_dir, crate_name, profile);
     fs::read(&path).unwrap_or_else(|err| panic!("failed to read {crate_name} wasm: {err}"))
 }
 
@@ -100,10 +86,7 @@ pub fn build_wasm_canisters(
     cmd.env("CARGO_TARGET_DIR", target_dir);
     cmd.env("DFX_NETWORK", "local");
     cmd.args(["build", "--target", "wasm32-unknown-unknown"]);
-
-    if let Some(flag) = profile.cargo_flag() {
-        cmd.arg(flag);
-    }
+    cmd.args(profile.cargo_args());
 
     for (key, value) in extra_env {
         cmd.env(key, value);

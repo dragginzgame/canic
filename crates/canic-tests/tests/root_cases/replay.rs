@@ -1,8 +1,4 @@
-// Category C - Artifact / deployment test (embedded config).
-// This test relies on embedded production config by design.
-
-mod root;
-
+use crate::root::harness::{RootSetup, setup_root_cached_scaling};
 use canic::{
     Error,
     cdk::types::Principal,
@@ -22,13 +18,12 @@ use canic::{
     protocol,
 };
 use canic_internal::canister;
-use root::harness::{RootSetup, setup_root};
 use std::convert::TryFrom;
 use std::time::Duration;
 
 #[test]
 fn unauthorized_caller_is_denied_for_each_root_capability_variant() {
-    let setup = setup_root();
+    let setup = setup_root_cached_scaling();
     let test_pid = setup
         .subnet_directory
         .get(&canister::TEST)
@@ -77,7 +72,7 @@ fn unauthorized_caller_is_denied_for_each_root_capability_variant() {
 
 #[test]
 fn upgrade_policy_denies_registered_non_parent_caller() {
-    let setup = setup_root();
+    let setup = setup_root_cached_scaling();
     let caller = setup
         .subnet_directory
         .get(&canister::TEST)
@@ -106,7 +101,7 @@ fn upgrade_policy_denies_registered_non_parent_caller() {
 
 #[test]
 fn structural_proof_denies_unsupported_issue_delegation_capability() {
-    let setup = setup_root();
+    let setup = setup_root_cached_scaling();
     let caller = setup
         .subnet_directory
         .get(&canister::TEST)
@@ -143,7 +138,7 @@ fn structural_proof_denies_unsupported_issue_delegation_capability() {
 
 #[test]
 fn cycles_routes_through_dispatcher_and_replay_duplicate_same() {
-    let setup = setup_root();
+    let setup = setup_root_cached_scaling();
     let caller = setup
         .subnet_directory
         .get(&canister::SCALE_HUB)
@@ -183,7 +178,7 @@ fn cycles_routes_through_dispatcher_and_replay_duplicate_same() {
 
 #[test]
 fn upgrade_routes_through_dispatcher_non_skip_path() {
-    let setup = setup_root();
+    let setup = setup_root_cached_scaling();
     let caller = setup.root_id;
     let target = setup
         .subnet_directory
@@ -238,7 +233,7 @@ fn upgrade_routes_through_dispatcher_non_skip_path() {
 
 #[test]
 fn replay_rejects_cross_variant_same_request_id() {
-    let setup = setup_root();
+    let setup = setup_root_cached_scaling();
     let caller = setup.root_id;
 
     let metadata = metadata([11u8; 32], 120);
@@ -284,7 +279,7 @@ fn replay_rejects_cross_variant_same_request_id() {
 
 #[test]
 fn replay_rejects_same_variant_mutated_payload() {
-    let setup = setup_root();
+    let setup = setup_root_cached_scaling();
     let caller = setup
         .subnet_directory
         .get(&canister::TEST)
@@ -324,7 +319,7 @@ fn replay_rejects_same_variant_mutated_payload() {
 
 #[test]
 fn replay_returns_cached_response_for_identical_request() {
-    let setup = setup_root();
+    let setup = setup_root_cached_scaling();
     let caller = setup
         .subnet_directory
         .get(&canister::TEST)
@@ -364,7 +359,7 @@ fn replay_returns_cached_response_for_identical_request() {
 
 #[test]
 fn cycles_rejects_when_requested_above_root_balance() {
-    let setup = setup_root();
+    let setup = setup_root_cached_scaling();
     let caller = setup
         .subnet_directory
         .get(&canister::SCALE_HUB)
@@ -396,7 +391,7 @@ fn cycles_rejects_when_requested_above_root_balance() {
 
 #[test]
 fn replay_rejects_ttl_above_max() {
-    let setup = setup_root();
+    let setup = setup_root_cached_scaling();
     let caller = setup
         .subnet_directory
         .get(&canister::TEST)
@@ -425,7 +420,7 @@ fn replay_rejects_ttl_above_max() {
 
 #[test]
 fn replay_rejects_expired_request() {
-    let setup = setup_root();
+    let setup = setup_root_cached_scaling();
     let caller = setup
         .subnet_directory
         .get(&canister::TEST)
@@ -461,7 +456,7 @@ fn replay_rejects_expired_request() {
 
 #[test]
 fn upgrade_replay_returns_cached_response_and_rejects_conflict() {
-    let setup = setup_root();
+    let setup = setup_root_cached_scaling();
     let caller = setup.root_id;
     let app = setup
         .subnet_directory
@@ -546,7 +541,7 @@ fn upgrade_replay_returns_cached_response_and_rejects_conflict() {
 
 #[test]
 fn unsupported_capability_proof_rejection_does_not_commit_replay_entry() {
-    let setup = setup_root();
+    let setup = setup_root_cached_scaling();
     let caller = setup
         .subnet_directory
         .get(&canister::TEST)

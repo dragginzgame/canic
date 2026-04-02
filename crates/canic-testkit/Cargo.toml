@@ -16,6 +16,7 @@ publish = true
 [dependencies]
 candid = { workspace = true }
 canic = { workspace = true }
+canic-control-plane = { workspace = true }
 derive_more = { workspace = true }
 pocket-ic = { workspace = true }
 serde = { workspace = true }

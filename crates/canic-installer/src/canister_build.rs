@@ -19,6 +19,7 @@ const WASM_STORE_ROLE: &str = "wasm_store";
 const CANISTERS_ROOT_RELATIVE: &str = "canisters";
 const LOCAL_ARTIFACT_ROOT_RELATIVE: &str = ".dfx/local/canisters";
 const WASM_TARGET: &str = "wasm32-unknown-unknown";
+const WASM_RELEASE_PROFILE_NAME: &str = "wasm-release";
 
 ///
 /// CanisterBuildProfile
@@ -45,7 +46,7 @@ impl CanisterBuildProfile {
     pub const fn cargo_args(self) -> &'static [&'static str] {
         match self {
             Self::Debug => &[],
-            Self::Release => &["--release"],
+            Self::Release => &["--profile", WASM_RELEASE_PROFILE_NAME],
         }
     }
 
@@ -54,7 +55,7 @@ impl CanisterBuildProfile {
     pub const fn target_dir_name(self) -> &'static str {
         match self {
             Self::Debug => "debug",
-            Self::Release => "release",
+            Self::Release => WASM_RELEASE_PROFILE_NAME,
         }
     }
 }

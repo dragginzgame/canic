@@ -237,7 +237,7 @@ Use `PageRequest { limit, offset }` to avoid passing raw integers into queries.
 * Build local canister WASMs through `dfx`: `dfx build --all`
 * Build example targets: `cargo build -p canic --examples`
 * Role-attestation PocketIC flow: `cargo test -p canic-core --test pic_role_attestation role_attestation_issue_and_verify_happy_path -- --nocapture`
-* Root replay dispatcher coverage: `cargo test -p canic-tests --test root_replay --locked upgrade_routes_through_dispatcher_non_skip_path -- --nocapture --test-threads=1`
+* Root replay dispatcher coverage: `cargo test -p canic-tests --test root_suite --locked upgrade_routes_through_dispatcher_non_skip_path -- --nocapture --test-threads=1`
 
 `rust-toolchain.toml` pins the toolchain so CI and local builds stay in sync.
 

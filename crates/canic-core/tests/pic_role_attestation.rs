@@ -23,25 +23,30 @@ use canic_core::dto::{
     topology::SubnetRegistryResponse,
 };
 use canic_core::ids::{CanisterRole, cap};
+use canic_testkit::pic::PicSerialGuard;
 use pocket_ic::PocketIcBuilder;
 use serde::de::DeserializeOwned;
 use sha2::{Digest, Sha256};
 use std::{
-    env, fs,
+    fs,
+    io::Write,
     ops::{Deref, DerefMut},
     path::{Path, PathBuf},
     process::Command,
-    sync::{Mutex, MutexGuard, Once},
+    sync::{Mutex, MutexGuard, Once, OnceLock},
     time::Duration,
 };
 
 const ROOT_INSTALL_CYCLES: u128 = 80_000_000_000_000;
 const CANISTER_PACKAGES: [&str; 1] = ["delegation_root_stub"];
-const PREBUILT_WASM_DIR_ENV: &str = "CANIC_PREBUILT_WASM_DIR";
 static BUILD_ONCE: Once = Once::new();
 static BUILD_WITHOUT_TEST_MATERIAL_ONCE: Once = Once::new();
-static PIC_BUILD_SERIAL: Mutex<()> = Mutex::new(());
 static CANISTER_BUILD_SERIAL: Mutex<()> = Mutex::new(());
+static ROOT_SIGNER_BASELINE: OnceLock<Mutex<CachedBaseline>> = OnceLock::new();
+static ROOT_SIGNER_VERIFIER_BASELINE: OnceLock<Mutex<CachedBaseline>> = OnceLock::new();
+static ROOT_SIGNER_NO_TEST_HOOK_BASELINE: OnceLock<Mutex<CachedBaseline>> = OnceLock::new();
+static DELEGATION_ADMIN_FIXTURE_CACHE: OnceLock<Mutex<Option<DelegationAdminCachedData>>> =
+    OnceLock::new();
 
 ///
 /// SerialPic
@@ -49,7 +54,7 @@ static CANISTER_BUILD_SERIAL: Mutex<()> = Mutex::new(());
 
 struct SerialPic {
     pic: pocket_ic::PocketIc,
-    _serial_guard: MutexGuard<'static, ()>,
+    _serial_guard: PicSerialGuard,
 }
 
 impl Deref for SerialPic {
@@ -67,12 +72,114 @@ impl DerefMut for SerialPic {
 }
 
 ///
+/// PicBorrow
+///
+
+struct PicBorrow<'a, T: Deref<Target = pocket_ic::PocketIc>>(&'a T);
+
+impl<T: Deref<Target = pocket_ic::PocketIc>> Deref for PicBorrow<'_, T> {
+    type Target = pocket_ic::PocketIc;
+
+    fn deref(&self) -> &Self::Target {
+        self.0.deref()
+    }
+}
+
+///
 /// InstalledRoot
 ///
 
 struct InstalledRoot {
     pic: SerialPic,
     root_id: Principal,
+}
+
+///
+/// CachedInstalledRoot
+///
+
+struct CachedInstalledRoot {
+    pic: BaselinePicGuard<'static>,
+    root_id: Principal,
+    signer_id: Principal,
+    verifier_id: Option<Principal>,
+}
+
+///
+/// BaselinePicGuard
+///
+
+struct BaselinePicGuard<'a> {
+    baseline: MutexGuard<'a, CachedBaseline>,
+}
+
+impl Deref for BaselinePicGuard<'_> {
+    type Target = pocket_ic::PocketIc;
+
+    fn deref(&self) -> &Self::Target {
+        &self.baseline.pic
+    }
+}
+
+///
+/// SnapshotHandle
+///
+
+struct SnapshotHandle {
+    snapshot_id: Vec<u8>,
+    sender: Option<Principal>,
+}
+
+///
+/// CachedCanisterSnapshot
+///
+
+struct CachedCanisterSnapshot {
+    canister_id: Principal,
+    sender: Option<Principal>,
+    snapshot_id: Vec<u8>,
+}
+
+///
+/// CachedBaseline
+///
+
+struct CachedBaseline {
+    pic: pocket_ic::PocketIc,
+    root_id: Principal,
+    wasm_store_id: Principal,
+    signer_id: Principal,
+    verifier_id: Option<Principal>,
+    snapshots: Vec<CachedCanisterSnapshot>,
+}
+
+///
+/// DelegationAdminCachedData
+///
+
+#[derive(Clone)]
+struct DelegationAdminCachedData {
+    root_id: Principal,
+    signer_id: Principal,
+    verifier_id: Principal,
+    delegated_subject: Principal,
+    stale_token: DelegatedToken,
+    current_token: DelegatedToken,
+    root_public_key: Vec<u8>,
+    shard_public_key: Vec<u8>,
+}
+
+#[derive(Clone, Copy)]
+enum AttestationCacheKind {
+    SignerOnly,
+    SignerAndVerifier,
+    SignerOnlyWithoutTestMaterial,
+}
+
+// Emit one short progress marker for long grouped PocketIC scenario tests.
+fn test_progress(test_name: &str, phase: &str) {
+    eprintln!("[pic_role_attestation] {test_name}: {phase}");
+    let _ = std::io::stderr().flush();
 }
 
 // Build the standard test root canister variant and install it into a fresh
@@ -96,12 +203,210 @@ fn install_test_root_without_test_material() -> InstalledRoot {
     install_root_fixture(root_wasm)
 }
 
+// Reuse a restored normal-build `root + signer` baseline without test install hooks.
+fn install_test_root_without_test_material_cached() -> CachedInstalledRoot {
+    install_cached_root_fixture(AttestationCacheKind::SignerOnlyWithoutTestMaterial)
+}
+
 // Install one root wasm into a fresh serialized PocketIC instance.
 fn install_root_fixture(root_wasm: Vec<u8>) -> InstalledRoot {
     let pic = build_pic();
     let root_id = install_root_canister(&pic, root_wasm);
 
     InstalledRoot { pic, root_id }
+}
+
+// Reuse a restored `root + signer` baseline for tests that do not create extra canisters.
+fn install_test_root_cached() -> CachedInstalledRoot {
+    install_cached_root_fixture(AttestationCacheKind::SignerOnly)
+}
+
+// Reuse a restored `root + signer + verifier` baseline for admin/provisioning tests.
+fn install_test_root_with_verifier_cached() -> CachedInstalledRoot {
+    install_cached_root_fixture(AttestationCacheKind::SignerAndVerifier)
+}
+
+// Restore or create the requested cached baseline and keep it alive until test drop.
+fn install_cached_root_fixture(cache_kind: AttestationCacheKind) -> CachedInstalledRoot {
+    test_progress(
+        "fixture",
+        match cache_kind {
+            AttestationCacheKind::SignerOnly => "request cached root+signer baseline",
+            AttestationCacheKind::SignerAndVerifier => {
+                "request cached root+signer+verifier baseline"
+            }
+            AttestationCacheKind::SignerOnlyWithoutTestMaterial => {
+                "request cached root+signer normal-build baseline"
+            }
+        },
+    );
+    let baseline_lock =
+        baseline_slot(cache_kind).get_or_init(|| Mutex::new(build_cached_baseline(cache_kind)));
+    let baseline = baseline_lock
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    test_progress("fixture", "cache hit, restoring cached baseline");
+    restore_cached_baseline(&baseline);
+    test_progress("fixture", "cached fixture restore complete");
+
+    CachedInstalledRoot {
+        root_id: baseline.root_id,
+        signer_id: baseline.signer_id,
+        verifier_id: baseline.verifier_id,
+        pic: BaselinePicGuard { baseline },
+    }
+}
+
+// Build one reusable baseline and capture immutable snapshot IDs inside it.
+fn build_cached_baseline(cache_kind: AttestationCacheKind) -> CachedBaseline {
+    test_progress("fixture", "cache miss, building fresh baseline");
+    let InstalledRoot { pic, root_id } = match cache_kind {
+        AttestationCacheKind::SignerOnly | AttestationCacheKind::SignerAndVerifier => {
+            install_test_root()
+        }
+        AttestationCacheKind::SignerOnlyWithoutTestMaterial => {
+            install_test_root_without_test_material()
+        }
+    };
+    test_progress("fixture", "waiting for signer registration");
+    let signer_id = signer_pid(&pic, root_id);
+    wait_until_ready(&pic, signer_id);
+    let wasm_store_id = wasm_store_pid(&pic, root_id);
+    wait_until_ready(&pic, wasm_store_id);
+    test_progress("fixture", "signer ready");
+    let verifier_id = matches!(cache_kind, AttestationCacheKind::SignerAndVerifier).then(|| {
+        test_progress("fixture", "creating verifier baseline canister");
+        let verifier_id = create_verifier_canister(&pic, root_id);
+        test_progress("fixture", "verifier baseline canister ready");
+        verifier_id
+    });
+
+    test_progress(
+        "fixture",
+        "waiting for root readiness before snapshot capture",
+    );
+    wait_until_ready(&pic, root_id);
+    test_progress("fixture", "capturing baseline snapshots");
+    let mut snapshots = vec![
+        capture_baseline_snapshot(&pic, root_id, root_id),
+        capture_baseline_snapshot(&pic, root_id, wasm_store_id),
+        capture_baseline_snapshot(&pic, root_id, signer_id),
+    ];
+    if let Some(verifier_id) = verifier_id {
+        snapshots.push(capture_baseline_snapshot(&pic, root_id, verifier_id));
+    }
+
+    test_progress("fixture", "fresh baseline ready");
+    let SerialPic { pic, _serial_guard } = pic;
+    drop(_serial_guard);
+    CachedBaseline {
+        pic,
+        root_id,
+        wasm_store_id,
+        signer_id,
+        verifier_id,
+        snapshots,
+    }
+}
+
+// Restore the cached baseline snapshots into the same baseline PocketIC instance.
+fn restore_cached_baseline(baseline: &CachedBaseline) {
+    test_progress("fixture", "restoring cached baseline snapshots");
+    for snapshot in &baseline.snapshots {
+        if snapshot.canister_id == baseline.root_id {
+            continue;
+        }
+        restore_cached_snapshot(&baseline.pic, snapshot);
+    }
+    if let Some(root_snapshot) = baseline
+        .snapshots
+        .iter()
+        .find(|snapshot| snapshot.canister_id == baseline.root_id)
+    {
+        restore_cached_snapshot(&baseline.pic, root_snapshot);
+    }
+
+    baseline.pic.tick();
+
+    test_progress("fixture", "waiting for restored root and signer readiness");
+    wait_until_ready(&baseline.pic, baseline.wasm_store_id);
+    wait_until_ready(&baseline.pic, baseline.signer_id);
+    if let Some(verifier_id) = baseline.verifier_id {
+        test_progress("fixture", "waiting for restored verifier readiness");
+        wait_until_ready(&baseline.pic, verifier_id);
+    }
+    wait_until_ready(&baseline.pic, baseline.root_id);
+}
+
+// Capture one reusable snapshot for later reload into the same baseline instance.
+fn capture_baseline_snapshot(
+    pic: &SerialPic,
+    controller_id: Principal,
+    canister_id: Principal,
+) -> CachedCanisterSnapshot {
+    let snapshot = take_snapshot_handle(pic, controller_id, canister_id).unwrap_or_else(|| {
+        panic!("downloaded baseline snapshot unavailable for {canister_id}");
+    });
+    CachedCanisterSnapshot {
+        canister_id,
+        sender: snapshot.sender,
+        snapshot_id: snapshot.snapshot_id,
+    }
+}
+
+// Load one cached snapshot back into the same canister ID on the baseline instance.
+fn restore_cached_snapshot(pic: &pocket_ic::PocketIc, snapshot: &CachedCanisterSnapshot) {
+    pic.load_canister_snapshot(
+        snapshot.canister_id,
+        snapshot.sender,
+        snapshot.snapshot_id.clone(),
+    )
+    .unwrap_or_else(|err| {
+        panic!(
+            "failed to load cached baseline snapshot for {}: {err}",
+            snapshot.canister_id
+        )
+    });
+}
+
+// Capture one snapshot handle with controller-aware sender fallbacks.
+fn take_snapshot_handle(
+    pic: &SerialPic,
+    controller_id: Principal,
+    canister_id: Principal,
+) -> Option<SnapshotHandle> {
+    let mut last_err = None;
+
+    for sender in controller_sender_candidates(controller_id, canister_id) {
+        match pic.take_canister_snapshot(canister_id, sender, None) {
+            Ok(snapshot) => {
+                return Some(SnapshotHandle {
+                    snapshot_id: snapshot.id,
+                    sender,
+                });
+            }
+            Err(err) => last_err = Some((sender, err)),
+        }
+    }
+
+    if let Some((sender, err)) = last_err {
+        eprintln!(
+            "failed to capture cached fixture snapshot for {canister_id} using sender {sender:?}: {err}"
+        );
+    }
+
+    None
+}
+
+// Return the immutable baseline slot for one cache kind.
+const fn baseline_slot(
+    cache_kind: AttestationCacheKind,
+) -> &'static OnceLock<Mutex<CachedBaseline>> {
+    match cache_kind {
+        AttestationCacheKind::SignerOnly => &ROOT_SIGNER_BASELINE,
+        AttestationCacheKind::SignerAndVerifier => &ROOT_SIGNER_VERIFIER_BASELINE,
+        AttestationCacheKind::SignerOnlyWithoutTestMaterial => &ROOT_SIGNER_NO_TEST_HOOK_BASELINE,
+    }
 }
 
 fn encode_role_attestation_capability_proof(proof: RoleAttestationProof) -> CapabilityProof {
@@ -118,7 +423,9 @@ fn encode_delegated_grant_capability_proof(proof: DelegatedGrantProof) -> Capabi
 
 #[test]
 fn role_attestation_verification_paths() {
-    let InstalledRoot { pic, root_id } = install_test_root();
+    let setup = install_test_root_cached();
+    let pic = PicBorrow(&setup.pic);
+    let root_id = setup.root_id;
 
     // Happy path should verify a freshly issued self-attestation.
     let issued = issue_self_attestation(&pic, root_id, 60, Some(root_id));
@@ -201,7 +508,9 @@ fn role_attestation_verification_paths() {
 
 #[test]
 fn role_attestation_verify_handles_rotated_key_grace_window() {
-    let InstalledRoot { pic, root_id } = install_test_root();
+    let setup = install_test_root_cached();
+    let pic = PicBorrow(&setup.pic);
+    let root_id = setup.root_id;
 
     let previous_key_id = 1_001u32;
     let previous_key_seed = 3u8;
@@ -296,9 +605,14 @@ fn role_attestation_verify_handles_rotated_key_grace_window() {
 #[test]
 #[expect(clippy::too_many_lines)]
 fn delegated_session_bootstrap_affects_authenticated_guard_only() {
-    let InstalledRoot { pic, root_id } = install_test_root();
-    let signer_id = signer_pid(&pic, root_id);
-    wait_until_ready(&pic, signer_id);
+    test_progress(
+        "delegated_session_bootstrap_affects_authenticated_guard_only",
+        "setup root",
+    );
+    let setup = install_test_root_cached();
+    let pic = PicBorrow(&setup.pic);
+    let root_id = setup.root_id;
+    let signer_id = setup.signer_id;
 
     let wallet = Principal::from_slice(&[41; 29]);
     let delegated_subject = Principal::from_slice(&[42; 29]);
@@ -340,6 +654,10 @@ fn delegated_session_bootstrap_affects_authenticated_guard_only() {
     );
     install_signer_material.expect("install signer delegation material must succeed");
 
+    test_progress(
+        "delegated_session_bootstrap_affects_authenticated_guard_only",
+        "verify guard behavior before and after bootstrap",
+    );
     let denied_before: Result<(), Error> = update_call_as(
         &pic,
         signer_id,
@@ -425,13 +743,22 @@ fn delegated_session_bootstrap_affects_authenticated_guard_only() {
         err.message.contains("does not match caller"),
         "expected subject mismatch denial after clear, got: {err:?}"
     );
+    test_progress(
+        "delegated_session_bootstrap_affects_authenticated_guard_only",
+        "done",
+    );
 }
 
 #[test]
 fn authenticated_guard_checks_current_proof_before_signature_validation() {
-    let InstalledRoot { pic, root_id } = install_test_root();
-    let signer_id = signer_pid(&pic, root_id);
-    wait_until_ready(&pic, signer_id);
+    test_progress(
+        "authenticated_guard_checks_current_proof_before_signature_validation",
+        "setup root",
+    );
+    let setup = install_test_root_cached();
+    let pic = PicBorrow(&setup.pic);
+    let root_id = setup.root_id;
+    let signer_id = setup.signer_id;
 
     let wallet = Principal::from_slice(&[92; 29]);
     let now: Result<u64, Error> =
@@ -489,6 +816,10 @@ fn authenticated_guard_checks_current_proof_before_signature_validation() {
     );
     install_verifier_material.expect("install signer delegation material must succeed");
 
+    test_progress(
+        "authenticated_guard_checks_current_proof_before_signature_validation",
+        "proof miss before signature validation",
+    );
     // Make signatures invalid so stage ordering regressions fail this test.
     token_a.proof.cert_sig.clear();
     token_a.token_sig.clear();
@@ -510,21 +841,33 @@ fn authenticated_guard_checks_current_proof_before_signature_validation() {
         !err.message.contains("signature unavailable"),
         "expected proof check to run before signature validation, got: {err:?}"
     );
+    test_progress(
+        "authenticated_guard_checks_current_proof_before_signature_validation",
+        "done",
+    );
 }
 
 #[test]
 fn delegation_admin_prewarm_updates_stale_verifier_proof_and_records_metrics() {
+    test_progress(
+        "delegation_admin_prewarm_updates_stale_verifier_proof_and_records_metrics",
+        "setup fixture",
+    );
     let fixture = delegation_admin_fixture(83);
 
+    test_progress(
+        "delegation_admin_prewarm_updates_stale_verifier_proof_and_records_metrics",
+        "install root and stale verifier proof",
+    );
     install_root_test_delegation_material(
-        &fixture.pic,
+        &fixture.setup.pic,
         fixture.root_id,
         fixture.current_token.proof.clone(),
         fixture.root_public_key.clone(),
         fixture.shard_public_key.clone(),
     );
     install_signer_test_delegation_material(
-        &fixture.pic,
+        &fixture.setup.pic,
         fixture.verifier_id,
         fixture.root_id,
         fixture.stale_token.proof.clone(),
@@ -533,14 +876,18 @@ fn delegation_admin_prewarm_updates_stale_verifier_proof_and_records_metrics() {
     );
 
     assert_token_verify_proof_missing(
-        &fixture.pic,
+        &fixture.setup.pic,
         fixture.verifier_id,
         fixture.delegated_subject,
         fixture.current_token.clone(),
     );
 
+    test_progress(
+        "delegation_admin_prewarm_updates_stale_verifier_proof_and_records_metrics",
+        "prewarm verifier",
+    );
     let prewarm = prewarm_verifiers(
-        &fixture.pic,
+        &fixture.setup.pic,
         fixture.root_id,
         fixture.current_token.proof.clone(),
         vec![fixture.verifier_id],
@@ -558,7 +905,7 @@ fn delegation_admin_prewarm_updates_stale_verifier_proof_and_records_metrics() {
     );
 
     let verified_after_prewarm: Result<(), Error> = update_call_as(
-        &fixture.pic,
+        &fixture.setup.pic,
         fixture.verifier_id,
         fixture.delegated_subject,
         "signer_verify_token",
@@ -567,7 +914,7 @@ fn delegation_admin_prewarm_updates_stale_verifier_proof_and_records_metrics() {
     verified_after_prewarm.expect("prewarm should update verifier proof");
 
     assert_access_metrics(
-        &fixture.pic,
+        &fixture.setup.pic,
         fixture.root_id,
         "auth_signer",
         &[
@@ -592,27 +939,39 @@ fn delegation_admin_prewarm_updates_stale_verifier_proof_and_records_metrics() {
         ],
     );
     assert_access_metrics(
-        &fixture.pic,
+        &fixture.setup.pic,
         fixture.verifier_id,
         "auth_verifier",
         &[("token_rejected_proof_miss", 1)],
+    );
+    test_progress(
+        "delegation_admin_prewarm_updates_stale_verifier_proof_and_records_metrics",
+        "done",
     );
 }
 
 #[test]
 fn delegation_admin_repair_requires_matching_local_root_proof() {
+    test_progress(
+        "delegation_admin_repair_requires_matching_local_root_proof",
+        "setup fixture",
+    );
     let fixture = delegation_admin_fixture(84);
 
     install_root_test_delegation_material(
-        &fixture.pic,
+        &fixture.setup.pic,
         fixture.root_id,
         fixture.stale_token.proof,
         fixture.root_public_key,
         fixture.shard_public_key,
     );
 
+    test_progress(
+        "delegation_admin_repair_requires_matching_local_root_proof",
+        "repair verifier with mismatched local proof",
+    );
     let repair = repair_verifiers(
-        &fixture.pic,
+        &fixture.setup.pic,
         fixture.root_id,
         fixture.current_token.proof,
         vec![fixture.verifier_id],
@@ -625,7 +984,7 @@ fn delegation_admin_repair_requires_matching_local_root_proof() {
     );
 
     assert_access_metrics(
-        &fixture.pic,
+        &fixture.setup.pic,
         fixture.root_id,
         "auth_signer",
         &[
@@ -644,22 +1003,34 @@ fn delegation_admin_repair_requires_matching_local_root_proof() {
             ),
         ],
     );
+    test_progress(
+        "delegation_admin_repair_requires_matching_local_root_proof",
+        "done",
+    );
 }
 
 #[test]
 fn verifier_store_rejects_root_push_when_local_canister_is_not_in_proof_audience() {
+    test_progress(
+        "verifier_store_rejects_root_push_when_local_canister_is_not_in_proof_audience",
+        "setup fixture",
+    );
     let fixture = delegation_admin_fixture(88);
 
     install_root_test_delegation_material(
-        &fixture.pic,
+        &fixture.setup.pic,
         fixture.root_id,
         fixture.current_token.proof.clone(),
         fixture.root_public_key,
         fixture.shard_public_key,
     );
 
+    test_progress(
+        "verifier_store_rejects_root_push_when_local_canister_is_not_in_proof_audience",
+        "push verifier proof outside audience",
+    );
     let store: Result<(), Error> = update_call_as(
-        &fixture.pic,
+        &fixture.setup.pic,
         fixture.signer_id,
         fixture.root_id,
         "canic_delegation_set_verifier_proof",
@@ -676,7 +1047,7 @@ fn verifier_store_rejects_root_push_when_local_canister_is_not_in_proof_audience
     );
 
     assert_access_metrics(
-        &fixture.pic,
+        &fixture.setup.pic,
         fixture.signer_id,
         "auth_signer",
         &[(
@@ -684,14 +1055,26 @@ fn verifier_store_rejects_root_push_when_local_canister_is_not_in_proof_audience
             1,
         )],
     );
+    test_progress(
+        "verifier_store_rejects_root_push_when_local_canister_is_not_in_proof_audience",
+        "done",
+    );
 }
 
 #[test]
 fn signer_runtime_prefers_most_recent_keyed_proof_for_signing_selection() {
+    test_progress(
+        "signer_runtime_prefers_most_recent_keyed_proof_for_signing_selection",
+        "setup fixture",
+    );
     let fixture = delegation_admin_fixture(85);
 
+    test_progress(
+        "signer_runtime_prefers_most_recent_keyed_proof_for_signing_selection",
+        "install stale signing proof",
+    );
     install_signer_test_delegation_material(
-        &fixture.pic,
+        &fixture.setup.pic,
         fixture.signer_id,
         fixture.root_id,
         fixture.stale_token.proof.clone(),
@@ -701,7 +1084,7 @@ fn signer_runtime_prefers_most_recent_keyed_proof_for_signing_selection() {
 
     let selected_before: Result<Option<canic_core::dto::auth::DelegationProof>, Error> =
         query_call_as(
-            &fixture.pic,
+            &fixture.setup.pic,
             fixture.signer_id,
             Principal::anonymous(),
             "signer_current_signing_proof_test",
@@ -713,8 +1096,12 @@ fn signer_runtime_prefers_most_recent_keyed_proof_for_signing_selection() {
         "signer should expose the initially installed proof"
     );
 
+    test_progress(
+        "signer_runtime_prefers_most_recent_keyed_proof_for_signing_selection",
+        "install current signing proof",
+    );
     install_signer_test_delegation_material(
-        &fixture.pic,
+        &fixture.setup.pic,
         fixture.signer_id,
         fixture.root_id,
         fixture.current_token.proof.clone(),
@@ -724,7 +1111,7 @@ fn signer_runtime_prefers_most_recent_keyed_proof_for_signing_selection() {
 
     let selected_after: Result<Option<canic_core::dto::auth::DelegationProof>, Error> =
         query_call_as(
-            &fixture.pic,
+            &fixture.setup.pic,
             fixture.signer_id,
             Principal::anonymous(),
             "signer_current_signing_proof_test",
@@ -735,59 +1122,33 @@ fn signer_runtime_prefers_most_recent_keyed_proof_for_signing_selection() {
         Some(fixture.current_token.proof),
         "signer should prefer the newest keyed proof after rotation"
     );
+    test_progress(
+        "signer_runtime_prefers_most_recent_keyed_proof_for_signing_selection",
+        "done",
+    );
 }
 
 #[test]
 #[expect(clippy::too_many_lines)]
 fn delegation_tier1_issue_verify_bootstrap_authenticated_end_to_end() {
-    let InstalledRoot { pic, root_id } = install_test_root();
+    test_progress(
+        "delegation_tier1_issue_verify_bootstrap_authenticated_end_to_end",
+        "setup cached verifier baseline",
+    );
+    let setup = install_test_root_with_verifier_cached();
+    let pic = PicBorrow(&setup.pic);
+    let root_id = setup.root_id;
     let signer_id = signer_pid(&pic, root_id);
     wait_until_ready(&pic, signer_id);
-
-    let issued_attestation: Result<SignedRoleAttestation, Error> = update_call_as(
-        &pic,
-        root_id,
-        root_id,
-        "root_issue_self_attestation_test",
-        (60u64, Some(root_id), 0u64),
-    );
-    let issued_attestation =
-        issued_attestation.expect("root role attestation issuance must succeed");
-    let issued_at = issued_attestation.payload.issued_at;
-
-    let create_verifier_request = Request::CreateCanister(CreateCanisterRequest {
-        canister_role: CanisterRole::new("project_hub"),
-        parent: CreateCanisterParent::Root,
-        extra_arg: None,
-        metadata: None,
-    });
-    let create_verifier_envelope = RootCapabilityEnvelopeV1 {
-        service: CapabilityService::Root,
-        capability_version: CAPABILITY_VERSION_V1,
-        capability: create_verifier_request.clone(),
-        proof: encode_role_attestation_capability_proof(RoleAttestationProof {
-            proof_version: PROOF_VERSION_V1,
-            capability_hash: root_capability_hash(root_id, &create_verifier_request),
-            attestation: issued_attestation,
-        }),
-        metadata: capability_metadata(issued_at, 21, 19, 60),
-    };
-    let create_verifier_response: Result<RootCapabilityResponseV1, Error> = update_call_as(
-        &pic,
-        root_id,
-        root_id,
-        "canic_response_capability_v1",
-        (create_verifier_envelope,),
-    );
-    let verifier_id = match create_verifier_response
-        .expect("verifier canister creation capability call must succeed")
-        .response
-    {
-        Response::CreateCanister(res) => res.new_canister_pid,
-        other => panic!("expected create-canister response, got: {other:?}"),
-    };
+    let verifier_id = setup
+        .verifier_id
+        .expect("cached verifier baseline must include verifier");
     wait_until_ready(&pic, verifier_id);
 
+    test_progress(
+        "delegation_tier1_issue_verify_bootstrap_authenticated_end_to_end",
+        "issue delegated token and install proof material",
+    );
     let wallet = Principal::from_slice(&[61; 29]);
     let delegated_subject = Principal::from_slice(&[62; 29]);
     let now: Result<u64, Error> =
@@ -842,6 +1203,10 @@ fn delegation_tier1_issue_verify_bootstrap_authenticated_end_to_end() {
     );
     install_verifier_material.expect("install verifier delegation material must succeed");
 
+    test_progress(
+        "delegation_tier1_issue_verify_bootstrap_authenticated_end_to_end",
+        "verify token and bootstrap session",
+    );
     let verify_on_verifier: Result<(), Error> = update_call_as(
         &pic,
         verifier_id,
@@ -876,14 +1241,23 @@ fn delegation_tier1_issue_verify_bootstrap_authenticated_end_to_end() {
         update_call_as(&pic, verifier_id, wallet, "signer_verify_token", (token,));
     authenticated_after_bootstrap
         .expect("authenticated guard must succeed after verifier bootstrap");
+    test_progress(
+        "delegation_tier1_issue_verify_bootstrap_authenticated_end_to_end",
+        "done",
+    );
 }
 
 #[test]
 #[expect(clippy::too_many_lines)]
 fn delegated_session_does_not_affect_role_attestation_or_capability_raw_caller_checks() {
-    let InstalledRoot { pic, root_id } = install_test_root();
-    let signer_id = signer_pid(&pic, root_id);
-    wait_until_ready(&pic, signer_id);
+    test_progress(
+        "delegated_session_does_not_affect_role_attestation_or_capability_raw_caller_checks",
+        "setup root",
+    );
+    let setup = install_test_root_cached();
+    let pic = PicBorrow(&setup.pic);
+    let root_id = setup.root_id;
+    let signer_id = setup.signer_id;
 
     let wallet = Principal::from_slice(&[51; 29]);
     let delegated_subject = Principal::from_slice(&[52; 29]);
@@ -917,6 +1291,10 @@ fn delegated_session_does_not_affect_role_attestation_or_capability_raw_caller_c
     );
     let (root_public_key, shard_public_key) = keys.expect("query test delegation keys failed");
 
+    test_progress(
+        "delegated_session_does_not_affect_role_attestation_or_capability_raw_caller_checks",
+        "reject canister bootstrap caller",
+    );
     let canister_bootstrap_attempt: Result<(), Error> = update_call_as(
         &pic,
         root_id,
@@ -940,6 +1318,10 @@ fn delegated_session_does_not_affect_role_attestation_or_capability_raw_caller_c
     );
     stored.expect("installing root verifier proof material should succeed");
 
+    test_progress(
+        "delegated_session_does_not_affect_role_attestation_or_capability_raw_caller_checks",
+        "bootstrap wallet session and verify raw caller semantics",
+    );
     let bootstrap_ok: Result<(), Error> = update_call_as(
         &pic,
         root_id,
@@ -1008,14 +1390,23 @@ fn delegated_session_does_not_affect_role_attestation_or_capability_raw_caller_c
             .contains("not registered on the subnet registry"),
         "expected raw caller subnet-registry denial, got: {err:?}"
     );
+    test_progress(
+        "delegated_session_does_not_affect_role_attestation_or_capability_raw_caller_checks",
+        "done",
+    );
 }
 
 #[test]
 #[expect(clippy::too_many_lines)]
 fn delegated_session_bootstrap_replay_policy_and_metrics() {
-    let InstalledRoot { pic, root_id } = install_test_root();
-    let signer_id = signer_pid(&pic, root_id);
-    wait_until_ready(&pic, signer_id);
+    test_progress(
+        "delegated_session_bootstrap_replay_policy_and_metrics",
+        "setup root",
+    );
+    let setup = install_test_root_cached();
+    let pic = PicBorrow(&setup.pic);
+    let root_id = setup.root_id;
+    let signer_id = setup.signer_id;
 
     let wallet = Principal::from_slice(&[71; 29]);
     let wallet_other = Principal::from_slice(&[72; 29]);
@@ -1064,6 +1455,10 @@ fn delegated_session_bootstrap_replay_policy_and_metrics() {
     );
     install_signer_material_a.expect("install signer proof A should succeed");
 
+    test_progress(
+        "delegated_session_bootstrap_replay_policy_and_metrics",
+        "bootstrap and replay token A",
+    );
     let bootstrap_a: Result<(), Error> = update_call_as(
         &pic,
         signer_id,
@@ -1132,6 +1527,10 @@ fn delegated_session_bootstrap_replay_policy_and_metrics() {
         1
     );
 
+    test_progress(
+        "delegated_session_bootstrap_replay_policy_and_metrics",
+        "clear session and reject replay reuse",
+    );
     let clear: Result<(), Error> = update_call_as(
         &pic,
         signer_id,
@@ -1219,6 +1618,10 @@ fn delegated_session_bootstrap_replay_policy_and_metrics() {
     );
     install_signer_material_b.expect("install signer proof B should succeed");
 
+    test_progress(
+        "delegated_session_bootstrap_replay_policy_and_metrics",
+        "issue fresh tokens B and C",
+    );
     let bootstrap_b: Result<(), Error> = update_call_as(
         &pic,
         signer_id,
@@ -1270,13 +1673,22 @@ fn delegated_session_bootstrap_replay_policy_and_metrics() {
         access_metric_count(&pic, signer_id, "auth_session", "session_replaced"),
         1
     );
+    test_progress(
+        "delegated_session_bootstrap_replay_policy_and_metrics",
+        "done",
+    );
 }
 
 #[test]
 fn delegated_session_bootstrap_replay_with_expired_token_fails_closed() {
-    let InstalledRoot { pic, root_id } = install_test_root();
-    let signer_id = signer_pid(&pic, root_id);
-    wait_until_ready(&pic, signer_id);
+    test_progress(
+        "delegated_session_bootstrap_replay_with_expired_token_fails_closed",
+        "setup root",
+    );
+    let setup = install_test_root_cached();
+    let pic = PicBorrow(&setup.pic);
+    let root_id = setup.root_id;
+    let signer_id = setup.signer_id;
 
     let wallet = Principal::from_slice(&[81; 29]);
     let delegated_subject = Principal::from_slice(&[82; 29]);
@@ -1319,6 +1731,10 @@ fn delegated_session_bootstrap_replay_with_expired_token_fails_closed() {
     );
     install_signer_material.expect("install signer proof should succeed");
 
+    test_progress(
+        "delegated_session_bootstrap_replay_with_expired_token_fails_closed",
+        "bootstrap then expire token",
+    );
     let bootstrap_ok: Result<(), Error> = update_call_as(
         &pic,
         signer_id,
@@ -1348,11 +1764,21 @@ fn delegated_session_bootstrap_replay_with_expired_token_fails_closed() {
         ),
         1
     );
+    test_progress(
+        "delegated_session_bootstrap_replay_with_expired_token_fails_closed",
+        "done",
+    );
 }
 
 #[test]
 fn test_delegation_material_install_hook_not_compiled_in_normal_build() {
-    let InstalledRoot { pic, root_id } = install_test_root_without_test_material();
+    test_progress(
+        "test_delegation_material_install_hook_not_compiled_in_normal_build",
+        "setup cached normal-build root",
+    );
+    let setup = install_test_root_without_test_material_cached();
+    let pic = PicBorrow(&setup.pic);
+    let root_id = setup.root_id;
     let signer_id = signer_pid(&pic, root_id);
     wait_until_ready(&pic, signer_id);
 
@@ -1401,17 +1827,31 @@ fn test_delegation_material_install_hook_not_compiled_in_normal_build() {
             || normalized.contains("has no update method"),
         "expected missing-method failure, got: {err}"
     );
+    test_progress(
+        "test_delegation_material_install_hook_not_compiled_in_normal_build",
+        "done",
+    );
 }
 
 #[test]
 #[expect(clippy::too_many_lines)]
 fn capability_endpoint_role_attestation_proof_paths() {
-    let InstalledRoot { pic, root_id } = install_test_root();
+    test_progress(
+        "capability_endpoint_role_attestation_proof_paths",
+        "setup root",
+    );
+    let setup = install_test_root_cached();
+    let pic = PicBorrow(&setup.pic);
+    let root_id = setup.root_id;
     let request = Request::Cycles(CyclesRequest {
         cycles: 1,
         metadata: None,
     });
 
+    test_progress(
+        "capability_endpoint_role_attestation_proof_paths",
+        "valid cycles proof",
+    );
     // A valid role-attestation proof should authorize the cycles request.
     let issued = issue_self_attestation(&pic, root_id, 60, Some(root_id));
     let issued_at = issued.payload.issued_at;
@@ -1430,6 +1870,10 @@ fn capability_endpoint_role_attestation_proof_paths() {
         other => panic!("expected cycles response, got: {other:?}"),
     }
 
+    test_progress(
+        "capability_endpoint_role_attestation_proof_paths",
+        "tampered signature rejection",
+    );
     // Tampering with the signature must fail during attestation verification.
     let mut issued = issue_self_attestation(&pic, root_id, 60, Some(root_id));
     let issued_at = issued.payload.issued_at;
@@ -1452,6 +1896,10 @@ fn capability_endpoint_role_attestation_proof_paths() {
         "expected signature error, got: {err:?}"
     );
 
+    test_progress(
+        "capability_endpoint_role_attestation_proof_paths",
+        "capability hash mismatch rejection",
+    );
     // Capability hashes must match the request exactly.
     let issued = issue_self_attestation(&pic, root_id, 60, Some(root_id));
     let issued_at = issued.payload.issued_at;
@@ -1480,6 +1928,10 @@ fn capability_endpoint_role_attestation_proof_paths() {
         "expected capability_hash mismatch error, got: {err:?}"
     );
 
+    test_progress(
+        "capability_endpoint_role_attestation_proof_paths",
+        "audience mismatch rejection",
+    );
     // Audience mismatches must be enforced by the capability verifier.
     let wrong_audience = Principal::from_slice(&[9; 29]);
     let issued = issue_self_attestation(&pic, root_id, 60, Some(wrong_audience));
@@ -1500,6 +1952,10 @@ fn capability_endpoint_role_attestation_proof_paths() {
         "expected audience mismatch error, got: {err:?}"
     );
 
+    test_progress(
+        "capability_endpoint_role_attestation_proof_paths",
+        "expiry rejection",
+    );
     // Expiry is time-sensitive, so keep it last after advancing the clock.
     let issued = issue_self_attestation(&pic, root_id, 1, Some(root_id));
     let issued_at = issued.payload.issued_at;
@@ -1519,15 +1975,26 @@ fn capability_endpoint_role_attestation_proof_paths() {
         err.message.contains("expired"),
         "expected expired attestation error, got: {err:?}"
     );
+    test_progress("capability_endpoint_role_attestation_proof_paths", "done");
 }
 
 #[test]
 #[expect(clippy::too_many_lines)]
 fn capability_endpoint_policy_and_structural_paths() {
-    let InstalledRoot { pic, root_id } = install_test_root();
+    test_progress(
+        "capability_endpoint_policy_and_structural_paths",
+        "setup root",
+    );
+    let setup = install_test_root_cached();
+    let pic = PicBorrow(&setup.pic);
+    let root_id = setup.root_id;
     let issued = issue_self_attestation(&pic, root_id, 60, Some(root_id));
     let issued_at = issued.payload.issued_at;
 
+    test_progress(
+        "capability_endpoint_policy_and_structural_paths",
+        "subject mismatch policy rejection",
+    );
     // Policy must reject subject-mismatch requests even with a valid proof.
     let subject_mismatch_request = Request::IssueRoleAttestation(RoleAttestationRequest {
         subject: Principal::anonymous(),
@@ -1564,6 +2031,10 @@ fn capability_endpoint_policy_and_structural_paths() {
         "expected subject mismatch policy error, got: {err:?}"
     );
 
+    test_progress(
+        "capability_endpoint_policy_and_structural_paths",
+        "policy denial replay behavior",
+    );
     // Policy denials must not poison replay detection for the same request id.
     let envelope_a = RootCapabilityEnvelopeV1 {
         service: CapabilityService::Root,
@@ -1618,6 +2089,10 @@ fn capability_endpoint_policy_and_structural_paths() {
         "policy denial should not be replay-cached, got: {second_err:?}"
     );
 
+    test_progress(
+        "capability_endpoint_policy_and_structural_paths",
+        "missing audience rejection",
+    );
     // Missing audiences must be rejected by the policy layer.
     let missing_audience_request = Request::IssueRoleAttestation(RoleAttestationRequest {
         subject: root_id,
@@ -1653,6 +2128,10 @@ fn capability_endpoint_policy_and_structural_paths() {
         "expected audience-required policy error, got: {err:?}"
     );
 
+    test_progress(
+        "capability_endpoint_policy_and_structural_paths",
+        "supported structural proof",
+    );
     // Structural proof is allowed only for the limited cycles family.
     let cycles_request = Request::Cycles(CyclesRequest {
         cycles: 1,
@@ -1678,6 +2157,10 @@ fn capability_endpoint_policy_and_structural_paths() {
         other => panic!("expected cycles response, got: {other:?}"),
     }
 
+    test_progress(
+        "capability_endpoint_policy_and_structural_paths",
+        "unsupported structural rejection",
+    );
     let unsupported_structural_request = Request::IssueRoleAttestation(RoleAttestationRequest {
         subject: root_id,
         role: CanisterRole::ROOT,
@@ -1708,6 +2191,10 @@ fn capability_endpoint_policy_and_structural_paths() {
         "expected structural capability-scope rejection, got: {err:?}"
     );
 
+    test_progress(
+        "capability_endpoint_policy_and_structural_paths",
+        "delegated grant scope rejection",
+    );
     // Delegated grants must name the correct capability family.
     let capability_hash = root_capability_hash(root_id, &cycles_request);
     let envelope = RootCapabilityEnvelopeV1 {
@@ -1749,6 +2236,7 @@ fn capability_endpoint_policy_and_structural_paths() {
         err.message.contains("capability_family"),
         "expected delegated-grant scope rejection, got: {err:?}"
     );
+    test_progress("capability_endpoint_policy_and_structural_paths", "done");
 }
 
 ///
@@ -1756,7 +2244,7 @@ fn capability_endpoint_policy_and_structural_paths() {
 ///
 
 struct DelegationAdminFixture {
-    pic: SerialPic,
+    setup: CachedInstalledRoot,
     root_id: Principal,
     signer_id: Principal,
     verifier_id: Principal,
@@ -1768,27 +2256,54 @@ struct DelegationAdminFixture {
 }
 
 // Build a reusable root/signer/verifier setup with two proof generations.
-fn delegation_admin_fixture(subject_seed: u8) -> DelegationAdminFixture {
-    let InstalledRoot { pic, root_id } = install_test_root();
-    let signer_id = signer_pid(&pic, root_id);
-    let verifier_id = create_verifier_canister(&pic, root_id);
-    wait_until_ready(&pic, signer_id);
+fn delegation_admin_fixture(_subject_seed: u8) -> DelegationAdminFixture {
+    let setup = install_test_root_with_verifier_cached();
+    let root_id = setup.root_id;
+    let signer_id = setup.signer_id;
+    let verifier_id = setup.verifier_id.expect("cached verifier must exist");
+    let cached = delegation_admin_cached_data(&setup.pic, root_id, signer_id, verifier_id);
 
-    let delegated_subject = Principal::from_slice(&[subject_seed; 29]);
-    let stale_token =
-        issue_test_delegated_token(&pic, root_id, signer_id, verifier_id, delegated_subject, 60);
-    let current_token = issue_test_delegated_token(
-        &pic,
+    DelegationAdminFixture {
+        setup,
         root_id,
         signer_id,
         verifier_id,
-        delegated_subject,
-        120,
-    );
-    let (root_public_key, shard_public_key) = delegation_public_keys(&pic, root_id);
+        delegated_subject: cached.delegated_subject,
+        stale_token: cached.stale_token,
+        current_token: cached.current_token,
+        root_public_key: cached.root_public_key,
+        shard_public_key: cached.shard_public_key,
+    }
+}
 
-    DelegationAdminFixture {
-        pic,
+// Reuse the same issued admin tokens and public keys across restored verifier baselines.
+fn delegation_admin_cached_data(
+    pic: &pocket_ic::PocketIc,
+    root_id: Principal,
+    signer_id: Principal,
+    verifier_id: Principal,
+) -> DelegationAdminCachedData {
+    let cache = DELEGATION_ADMIN_FIXTURE_CACHE.get_or_init(|| Mutex::new(None));
+    let mut cache = cache
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+
+    if let Some(cached) = cache.as_ref()
+        && cached.root_id == root_id
+        && cached.signer_id == signer_id
+        && cached.verifier_id == verifier_id
+    {
+        return cached.clone();
+    }
+
+    let delegated_subject = Principal::from_slice(&[83; 29]);
+    let stale_token =
+        issue_test_delegated_token(pic, root_id, signer_id, verifier_id, delegated_subject, 60);
+    let current_token =
+        issue_test_delegated_token(pic, root_id, signer_id, verifier_id, delegated_subject, 120);
+    let (root_public_key, shard_public_key) = delegation_public_keys(pic, root_id);
+
+    let generated = DelegationAdminCachedData {
         root_id,
         signer_id,
         verifier_id,
@@ -1797,7 +2312,9 @@ fn delegation_admin_fixture(subject_seed: u8) -> DelegationAdminFixture {
         current_token,
         root_public_key,
         shard_public_key,
-    }
+    };
+    *cache = Some(generated.clone());
+    generated
 }
 
 // Issue a test delegated token for the requested verifier audience and TTL.
@@ -2110,6 +2627,7 @@ fn access_metric_count(
 
 // Create a non-root verifier canister through the root capability endpoint.
 fn create_verifier_canister(pic: &pocket_ic::PocketIc, root_id: Principal) -> Principal {
+    test_progress("fixture", "issuing verifier creation attestation");
     let issued: Result<SignedRoleAttestation, Error> = update_call_as(
         pic,
         root_id,
@@ -2151,12 +2669,21 @@ fn create_verifier_canister(pic: &pocket_ic::PocketIc, root_id: Principal) -> Pr
         Response::CreateCanister(res) => res.new_canister_pid,
         other => panic!("expected create-canister response, got: {other:?}"),
     };
+    test_progress("fixture", "waiting for created verifier readiness");
     wait_until_ready(pic, verifier_id);
     verifier_id
 }
 
 fn signer_pid(pic: &pocket_ic::PocketIc, root_id: Principal) -> Principal {
-    for _ in 0..120 {
+    role_pid(pic, root_id, "signer")
+}
+
+fn wasm_store_pid(pic: &pocket_ic::PocketIc, root_id: Principal) -> Principal {
+    role_pid(pic, root_id, "wasm_store")
+}
+
+fn role_pid(pic: &pocket_ic::PocketIc, root_id: Principal, role: &'static str) -> Principal {
+    for attempt in 0..120 {
         let registry: Result<SubnetRegistryResponse, Error> = query_call_as(
             pic,
             root_id,
@@ -2169,21 +2696,39 @@ fn signer_pid(pic: &pocket_ic::PocketIc, root_id: Principal) -> Principal {
             && let Some(pid) = registry
                 .0
                 .into_iter()
-                .find(|entry| entry.role == CanisterRole::new("signer"))
+                .find(|entry| entry.role == CanisterRole::new(role))
                 .map(|entry| entry.pid)
         {
             return pid;
         }
 
+        if attempt == 0 || attempt == 30 || attempt == 60 || attempt == 90 {
+            test_progress(
+                "fixture",
+                &format!("waiting for {role} pid to appear in subnet registry"),
+            );
+        }
         pic.tick();
     }
 
-    panic!("signer canister must be registered");
+    panic!("{role} canister must be registered");
+}
+
+// Prefer the likely controller sender first to reduce noisy snapshot failures.
+fn controller_sender_candidates(
+    controller_id: Principal,
+    canister_id: Principal,
+) -> [Option<Principal>; 2] {
+    if canister_id == controller_id {
+        [None, Some(controller_id)]
+    } else {
+        [Some(controller_id), None]
+    }
 }
 
 fn wait_until_ready(pic: &pocket_ic::PocketIc, canister_id: Principal) {
     let payload = encode_args(()).expect("encode empty args");
-    for _ in 0..240 {
+    for attempt in 0..240 {
         if let Ok(bytes) = pic.query_call(
             canister_id,
             Principal::anonymous(),
@@ -2193,6 +2738,12 @@ fn wait_until_ready(pic: &pocket_ic::PocketIc, canister_id: Principal) {
             && ready
         {
             return;
+        }
+        if attempt == 0 || attempt == 60 || attempt == 120 || attempt == 180 {
+            test_progress(
+                "fixture",
+                &format!("waiting for canic_ready on {canister_id}"),
+            );
         }
         pic.tick();
     }
@@ -2290,18 +2841,29 @@ fn build_canisters_once(workspace_root: &PathBuf) {
         .unwrap_or_else(std::sync::PoisonError::into_inner);
 
     BUILD_ONCE.call_once_force(|_| {
-        if prebuilt_wasm_dir().is_some() {
+        let target_dir = test_target_dir(workspace_root);
+        if wasm_artifacts_ready(&target_dir, &CANISTER_PACKAGES) {
+            test_progress("fixture", "reusing cached PIC wasm artifacts");
             return;
         }
 
-        let target_dir = test_target_dir(workspace_root);
+        test_progress(
+            "fixture",
+            "building PIC wasm artifacts with test delegation material",
+        );
         let mut cmd = Command::new("cargo");
         cmd.current_dir(workspace_root);
         cmd.env("CARGO_TARGET_DIR", &target_dir);
         cmd.env("DFX_NETWORK", "local");
         // Activate compile-time test delegation-material hooks for PIC canisters.
         cmd.env("CANIC_TEST_DELEGATION_MATERIAL", "1");
-        cmd.args(["build", "--release", "--target", "wasm32-unknown-unknown"]);
+        cmd.args([
+            "build",
+            "--profile",
+            "wasm-release",
+            "--target",
+            "wasm32-unknown-unknown",
+        ]);
         for name in CANISTER_PACKAGES {
             cmd.args(["-p", name]);
         }
@@ -2311,6 +2873,10 @@ fn build_canisters_once(workspace_root: &PathBuf) {
             output.status.success(),
             "cargo build failed: {}",
             String::from_utf8_lossy(&output.stderr)
+        );
+        test_progress(
+            "fixture",
+            "finished PIC wasm build with test delegation material",
         );
     });
 }
@@ -2324,11 +2890,26 @@ fn build_canisters_without_test_material_once(workspace_root: &PathBuf) {
 
     BUILD_WITHOUT_TEST_MATERIAL_ONCE.call_once_force(|_| {
         let target_dir = test_target_dir_without_test_material(workspace_root);
+        if wasm_artifacts_ready(&target_dir, &CANISTER_PACKAGES) {
+            test_progress("fixture", "reusing cached normal-build PIC wasm artifacts");
+            return;
+        }
+
+        test_progress(
+            "fixture",
+            "building PIC wasm artifacts without test delegation material",
+        );
         let mut cmd = Command::new("cargo");
         cmd.current_dir(workspace_root);
         cmd.env("CARGO_TARGET_DIR", &target_dir);
         cmd.env("DFX_NETWORK", "local");
-        cmd.args(["build", "--release", "--target", "wasm32-unknown-unknown"]);
+        cmd.args([
+            "build",
+            "--profile",
+            "wasm-release",
+            "--target",
+            "wasm32-unknown-unknown",
+        ]);
         for name in CANISTER_PACKAGES {
             cmd.args(["-p", name]);
         }
@@ -2339,17 +2920,30 @@ fn build_canisters_without_test_material_once(workspace_root: &PathBuf) {
             "cargo build failed: {}",
             String::from_utf8_lossy(&output.stderr)
         );
+        test_progress(
+            "fixture",
+            "finished PIC wasm build without test delegation material",
+        );
     });
+}
+
+// Skip inner cargo builds when the expected wasm artifacts already exist.
+fn wasm_artifacts_ready(target_dir: &Path, canisters: &[&str]) -> bool {
+    canisters
+        .iter()
+        .all(|name| wasm_path_from_target(target_dir, name).is_file())
 }
 
 // Serialize full PocketIC usage to avoid concurrent server races across tests.
 fn build_pic() -> SerialPic {
-    let serial_guard = PIC_BUILD_SERIAL
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    test_progress("fixture", "acquiring PocketIC serial guard");
+    let serial_guard = canic_testkit::pic::acquire_pic_serial_guard();
+    test_progress("fixture", "starting serialized PocketIC instance");
+    let pic = PocketIcBuilder::new().with_application_subnet().build();
+    test_progress("fixture", "serialized PocketIC instance ready");
 
     SerialPic {
-        pic: PocketIcBuilder::new().with_application_subnet().build(),
+        pic,
         _serial_guard: serial_guard,
     }
 }
@@ -2365,10 +2959,6 @@ fn read_wasm_from_target(target_dir: &Path, crate_name: &str) -> Vec<u8> {
 }
 
 fn wasm_path(workspace_root: &Path, crate_name: &str) -> PathBuf {
-    if let Some(dir) = prebuilt_wasm_dir() {
-        return dir.join(format!("{crate_name}.wasm"));
-    }
-
     let target_dir = test_target_dir(workspace_root);
 
     wasm_path_from_target(&target_dir, crate_name)
@@ -2377,12 +2967,8 @@ fn wasm_path(workspace_root: &Path, crate_name: &str) -> PathBuf {
 fn wasm_path_from_target(target_dir: &Path, crate_name: &str) -> PathBuf {
     target_dir
         .join("wasm32-unknown-unknown")
-        .join("release")
+        .join("wasm-release")
         .join(format!("{crate_name}.wasm"))
-}
-
-fn prebuilt_wasm_dir() -> Option<PathBuf> {
-    env::var(PREBUILT_WASM_DIR_ENV).ok().map(PathBuf::from)
 }
 
 fn test_target_dir(workspace_root: &Path) -> PathBuf {

@@ -271,6 +271,7 @@ dependencies = [
  "candid",
  "canic-cdk",
  "canic-memory",
+ "canic-testkit",
  "canic-types",
  "criterion",
  "ctor",
@@ -344,6 +345,7 @@ version = "0.21.10"
 dependencies = [
  "candid",
  "canic",
+ "canic-control-plane",
  "derive_more",
  "pocket-ic",
  "serde",
