@@ -24,9 +24,9 @@ fn intent_race_capacity_one() {
     println!("intent_race: workspace_root={}", workspace_root.display());
     build_canisters(&workspace_root);
 
-    let authority_wasm = read_wasm(&target_dir, "intent_authority", WasmBuildProfile::Release);
-    let external_wasm = read_wasm(&target_dir, "intent_external", WasmBuildProfile::Release);
-    let client_wasm = read_wasm(&target_dir, "intent_client", WasmBuildProfile::Release);
+    let authority_wasm = read_wasm(&target_dir, "intent_authority", WasmBuildProfile::Fast);
+    let external_wasm = read_wasm(&target_dir, "intent_external", WasmBuildProfile::Fast);
+    let client_wasm = read_wasm(&target_dir, "intent_client", WasmBuildProfile::Fast);
     println!(
         "intent_race: wasm sizes authority={} external={} client={}",
         authority_wasm.len(),
@@ -104,7 +104,7 @@ fn intent_race_capacity_one() {
 fn build_canisters(workspace_root: &Path) {
     BUILD_ONCE.call_once(|| {
         let target_dir = test_target_dir(workspace_root, "pic-wasm");
-        if wasm_artifacts_ready(&target_dir, &CANISTERS, WasmBuildProfile::Release) {
+        if wasm_artifacts_ready(&target_dir, &CANISTERS, WasmBuildProfile::Fast) {
             return;
         }
 
@@ -112,7 +112,7 @@ fn build_canisters(workspace_root: &Path) {
             workspace_root,
             &target_dir,
             &CANISTERS,
-            WasmBuildProfile::Release,
+            WasmBuildProfile::Fast,
             &[],
         );
     });

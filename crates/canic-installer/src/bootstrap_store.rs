@@ -17,7 +17,6 @@ const CANONICAL_WASM_STORE_MANIFEST_RELATIVE: &str = "crates/canic-wasm-store/Ca
 const CANONICAL_WASM_STORE_DID_FILE: &str = "wasm_store.did";
 const CANONICAL_WASM_STORE_CRATE_NAME: &str = "canister_wasm_store";
 const GENERATED_WRAPPER_PACKAGE_NAME: &str = "canic-generated-wasm-store";
-const WASM_RELEASE_PROFILE_NAME: &str = "wasm-release";
 const CANIC_FAMILY_CRATES: &[&str] = &[
     "canic-cdk",
     "canic-control-plane",
@@ -35,14 +34,16 @@ const CANIC_FAMILY_CRATES: &[&str] = &[
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum BootstrapWasmStoreBuildProfile {
     Debug,
+    Fast,
     Release,
 }
 
 impl BootstrapWasmStoreBuildProfile {
     #[must_use]
     pub fn current() -> Self {
-        match std::env::var("RELEASE").ok().as_deref() {
-            Some("0") => Self::Debug,
+        match std::env::var("CANIC_WASM_PROFILE").ok().as_deref() {
+            Some("debug") => Self::Debug,
+            Some("fast") => Self::Fast,
             _ => Self::Release,
         }
     }
@@ -51,7 +52,8 @@ impl BootstrapWasmStoreBuildProfile {
     pub const fn cargo_args(self) -> &'static [&'static str] {
         match self {
             Self::Debug => &[],
-            Self::Release => &["--profile", WASM_RELEASE_PROFILE_NAME],
+            Self::Fast => &["--profile", "fast"],
+            Self::Release => &["--release"],
         }
     }
 
@@ -59,7 +61,8 @@ impl BootstrapWasmStoreBuildProfile {
     pub const fn target_dir_name(self) -> &'static str {
         match self {
             Self::Debug => "debug",
-            Self::Release => WASM_RELEASE_PROFILE_NAME,
+            Self::Fast => "fast",
+            Self::Release => "release",
         }
     }
 
@@ -331,6 +334,7 @@ name = \"{GENERATED_WRAPPER_PACKAGE_NAME}\"\n\
 version = \"0.0.0\"\n\
 edition = \"2024\"\n\
 publish = false\n\n\
+[workspace]\n\n\
 [lib]\n\
 name = \"{CANONICAL_WASM_STORE_CRATE_NAME}\"\n\
 crate-type = [\"cdylib\", \"rlib\"]\n\n\
@@ -342,6 +346,24 @@ candid = {{ version = \"0.10\", default-features = false }}\n\n\
 canic = {{ path = \"{}\" }}\n",
         canic_root.display(),
         canic_root.display()
+    );
+
+    cargo_toml.push_str(
+        "\n[profile.release]\n\
+opt-level = \"z\"\n\
+lto = true\n\
+codegen-units = 1\n\
+strip = \"symbols\"\n\
+debug = false\n\
+panic = \"abort\"\n\
+overflow-checks = false\n\
+incremental = false\n\
+\n\
+[profile.fast]\n\
+inherits = \"release\"\n\
+lto = false\n\
+codegen-units = 16\n\
+incremental = true\n",
     );
 
     if !patch_table.is_empty() {

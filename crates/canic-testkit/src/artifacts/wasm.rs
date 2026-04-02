@@ -8,11 +8,10 @@ use std::{
 /// WasmBuildProfile
 ///
 
-const WASM_RELEASE_PROFILE_NAME: &str = "wasm-release";
-
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum WasmBuildProfile {
     Debug,
+    Fast,
     Release,
 }
 
@@ -22,7 +21,8 @@ impl WasmBuildProfile {
     pub const fn cargo_args(self) -> &'static [&'static str] {
         match self {
             Self::Debug => &[],
-            Self::Release => &["--profile", WASM_RELEASE_PROFILE_NAME],
+            Self::Fast => &["--profile", "fast"],
+            Self::Release => &["--release"],
         }
     }
 
@@ -31,16 +31,18 @@ impl WasmBuildProfile {
     pub const fn target_dir_name(self) -> &'static str {
         match self {
             Self::Debug => "debug",
-            Self::Release => WASM_RELEASE_PROFILE_NAME,
+            Self::Fast => "fast",
+            Self::Release => "release",
         }
     }
 
-    /// Return the `RELEASE` environment value expected by Canic local builders.
+    /// Return the explicit Canic wasm-profile selector for local builders.
     #[must_use]
-    pub const fn dfx_release_value(self) -> &'static str {
+    pub const fn canic_wasm_profile_value(self) -> &'static str {
         match self {
-            Self::Debug => "0",
-            Self::Release => "1",
+            Self::Debug => "debug",
+            Self::Fast => "fast",
+            Self::Release => "release",
         }
     }
 }

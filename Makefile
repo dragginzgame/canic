@@ -36,6 +36,10 @@ endif
 
 export DFX_NETWORK
 CARGO_ENV := DFX_NETWORK=$(DFX_NETWORK) $(CARGO_ENV)
+ifneq ($(CANIC_WASM_PROFILE),)
+export CANIC_WASM_PROFILE
+CARGO_ENV := CANIC_WASM_PROFILE=$(CANIC_WASM_PROFILE) $(CARGO_ENV)
+endif
 
 # Check for clean git state
 ensure-clean:
@@ -69,7 +73,7 @@ help:
 	@echo "  test-installed-canic-installer  Verify the installed-binary canic-installer path"
 	@echo ""
 	@echo "Development:"
-	@echo "  demo-install    Install the full local reference topology with optimized dev wasm by default (fails if dfx is not already running)"
+	@echo "  demo-install    Install the full local reference topology with fast wasm by default (fails if dfx is not already running)"
 	@echo "  test             Run clippy + workspace tests (PocketIC/Cargo only)"
 	@echo "  test-wasm        Run clippy + fast non-PocketIC tests for wasm iteration"
 	@echo "  build            Build all crates"
@@ -86,7 +90,7 @@ help:
 	@echo "Examples:"
 	@echo "  make patch       # Bump patch version"
 	@echo "  make patch-quick # Fast patch bump using cargo check"
-	@echo "  make demo-install # Fast local install using optimized dev wasm (override with RELEASE=1)"
+	@echo "  make demo-install # Fast local install using fast wasm (override with CANIC_WASM_PROFILE=debug|fast|release)"
 	@echo "  make test        # Run clippy and workspace tests"
 	@echo "  make test-wasm   # Fast wasm iteration path without PocketIC/e2e"
 	@echo "  make build       # Build project"
@@ -168,7 +172,7 @@ test-installed-canic-installer:
 
 demo-install:
 	@mkdir -p "$(TEST_TMPDIR)"
-	TMPDIR="$(TEST_TMPDIR)" RELEASE="$(if $(RELEASE),$(RELEASE),0)" $(CARGO_ENV) cargo run -q -p canic-installer --bin canic-install-root -- root
+	TMPDIR="$(TEST_TMPDIR)" CANIC_WASM_PROFILE="$(if $(CANIC_WASM_PROFILE),$(CANIC_WASM_PROFILE),fast)" $(CARGO_ENV) cargo run -q -p canic-installer --bin canic-install-root -- root
 
 test: clippy test-unit
 
@@ -179,7 +183,7 @@ test-wasm: clippy test-unit-fast
 
 # Version-bump gate.
 # Keeps clippy plus the fast unit/lib/bin workspace run, while leaving the
-# local `dfx` smoke path as an explicit manual target.
+# local `dfx` fast path as an explicit manual target.
 test-bump: clippy test-unit-fast
 
 quick-bump:

@@ -28,9 +28,10 @@ The workspace ships a family of reference canisters with two structural
 properties that change how a wasm audit must work:
 
 1. `dfx` is the canonical canister builder and shrink/gzip owner.
-2. `root` is a bundle canister that embeds child `.wasm.gz` artifacts via
-   `include_bytes!`, so it must be evaluated as a special outlier rather than
-   as a normal peer to leaf canisters.
+2. `root` remains a special control-plane outlier because it embeds the
+   bootstrap `wasm_store.wasm.gz` artifact and carries the thin-root install
+   boundary, so it must still be evaluated separately from normal leaf
+   canisters.
 
 An audit copied directly from another repo will miss both of these facts and
 will produce misleading comparisons.
@@ -108,21 +109,24 @@ Default scope is the full reference canister set in `dfx.json`:
 
 ### Default Profile
 
-- profile: `wasm-release`
+- profile: `release`
 
 The recurring audit must still compare the audited profile against `wasm-debug`
 artifacts for the same canisters.
 
 Reason:
 
-- `wasm-release` remains the shipping/install authority
+- `release` remains the shipping/install authority
+- `fast` is the middle shrunk local/test/demo lane and is worth auditing when
+  local/operator cost is the question rather than shipping cost
 - `wasm-debug` is the fastest way to see whether a regression is coming from
   optimization-sensitive codegen/linking or from real surface-area growth
 - large debug-vs-release gaps are diagnostic signals and must be tracked, not ignored
 
 Profile mapping:
 
-- `wasm-release` -> Cargo `--release`
+- `release` -> Cargo `--release`
+- `fast` -> Cargo `--profile fast`
 - `wasm-debug` -> Cargo debug build
 
 ## Canic Artifact Model (Mandatory)
@@ -173,9 +177,9 @@ They do NOT decide optimization success on their own.
 
 ### Root Bundle Rule
 
-`root` must always be called out separately because it embeds child
-`.wasm.gz` bundles and is therefore not comparable one-to-one with leaf
-canisters.
+`root` must always be called out separately because it embeds the bootstrap
+`wasm_store.wasm.gz` artifact and carries the control-plane/install boundary, so
+it is still not comparable one-to-one with leaf canisters.
 
 Required:
 
@@ -220,11 +224,16 @@ Optional controls:
 - `WASM_AUDIT_DATE=YYYY-MM-DD` to pin the report day path
 - `WASM_AUDIT_SKIP_BUILD=1` to reuse cached artifacts under `artifacts/wasm-size/`
 - `WASM_CANISTER_NAME=<name>` to scope to a single canister
-- `WASM_PROFILE=wasm-release|wasm-debug`
+- `WASM_PROFILE=release|fast|wasm-debug`
+
+Compatibility note:
+
+- the runner still accepts the older `wasm-release` alias, but new reports
+  should use `release`
 
 Recurring-run rule:
 
-- a normal dated audit run must audit `wasm-release`
+- a normal dated audit run must audit `release`
 - the same dated run must also capture `wasm-debug` built artifacts for profile comparison
 - a report that lacks `wasm-debug` comparison must call that out explicitly as `PARTIAL` or `BLOCKED`
 

@@ -37,8 +37,8 @@ fn sharding_bootstraps_first_shard_when_active_empty() {
     let target_dir = test_target_dir(&workspace_root, "pic-wasm");
     build_canisters_once(&workspace_root);
 
-    let root_wasm = read_wasm(&target_dir, "sharding_root_stub", WasmBuildProfile::Release);
-    let user_hub_wasm = read_wasm(&target_dir, "canister_user_hub", WasmBuildProfile::Release);
+    let root_wasm = read_wasm(&target_dir, "sharding_root_stub", WasmBuildProfile::Fast);
+    let user_hub_wasm = read_wasm(&target_dir, "canister_user_hub", WasmBuildProfile::Fast);
 
     let _serial_guard = acquire_pic_serial_guard();
     let pic = pic();
@@ -90,8 +90,8 @@ fn sharding_does_not_spawn_extra_shard_after_bootstrap() {
     let target_dir = test_target_dir(&workspace_root, "pic-wasm");
     build_canisters_once(&workspace_root);
 
-    let root_wasm = read_wasm(&target_dir, "sharding_root_stub", WasmBuildProfile::Release);
-    let user_hub_wasm = read_wasm(&target_dir, "canister_user_hub", WasmBuildProfile::Release);
+    let root_wasm = read_wasm(&target_dir, "sharding_root_stub", WasmBuildProfile::Fast);
+    let user_hub_wasm = read_wasm(&target_dir, "canister_user_hub", WasmBuildProfile::Fast);
 
     let _serial_guard = acquire_pic_serial_guard();
     let pic = pic();
@@ -183,7 +183,7 @@ where
 fn build_canisters_once(workspace_root: &Path) {
     BUILD_ONCE.call_once(|| {
         let target_dir = test_target_dir(workspace_root, "pic-wasm");
-        if wasm_artifacts_ready(&target_dir, &CANISTER_PACKAGES, WasmBuildProfile::Release) {
+        if wasm_artifacts_ready(&target_dir, &CANISTER_PACKAGES, WasmBuildProfile::Fast) {
             return;
         }
 
@@ -191,7 +191,7 @@ fn build_canisters_once(workspace_root: &Path) {
             workspace_root,
             &target_dir,
             &CANISTER_PACKAGES,
-            WasmBuildProfile::Release,
+            WasmBuildProfile::Fast,
             &[],
         );
     });

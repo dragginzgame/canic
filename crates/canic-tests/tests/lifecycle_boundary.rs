@@ -41,8 +41,8 @@ fn lifecycle_boundary_traps_are_phase_correct() {
     let target_dir = test_target_dir(&workspace_root, "pic-wasm");
     build_canisters_once(&workspace_root);
 
-    let canic_wasm = read_wasm(&target_dir, "canister_test", WasmBuildProfile::Release);
-    let authority_wasm = read_wasm(&target_dir, "intent_authority", WasmBuildProfile::Release);
+    let canic_wasm = read_wasm(&target_dir, "canister_test", WasmBuildProfile::Fast);
+    let authority_wasm = read_wasm(&target_dir, "intent_authority", WasmBuildProfile::Fast);
     let _serial_guard = acquire_pic_serial_guard();
     let pic = pic();
 
@@ -103,7 +103,7 @@ fn non_root_post_upgrade_remains_ready_across_repeated_upgrades() {
     let target_dir = test_target_dir(&workspace_root, "pic-wasm");
     build_canisters_once(&workspace_root);
 
-    let canic_wasm = read_wasm(&target_dir, "canister_test", WasmBuildProfile::Release);
+    let canic_wasm = read_wasm(&target_dir, "canister_test", WasmBuildProfile::Fast);
     let _serial_guard = acquire_pic_serial_guard();
     let pic = pic();
 
@@ -138,8 +138,8 @@ fn non_root_post_upgrade_failure_reports_phase_error() {
     let target_dir = test_target_dir(&workspace_root, "pic-wasm");
     build_canisters_once(&workspace_root);
 
-    let canic_wasm = read_wasm(&target_dir, "canister_test", WasmBuildProfile::Release);
-    let authority_wasm = read_wasm(&target_dir, "intent_authority", WasmBuildProfile::Release);
+    let canic_wasm = read_wasm(&target_dir, "canister_test", WasmBuildProfile::Fast);
+    let authority_wasm = read_wasm(&target_dir, "intent_authority", WasmBuildProfile::Fast);
     let _serial_guard = acquire_pic_serial_guard();
     let pic = pic();
 
@@ -334,7 +334,7 @@ fn build_canisters_once(workspace_root: &Path) {
     BUILD_ONCE.call_once(|| {
         let target_dir = test_target_dir(workspace_root, "pic-wasm");
 
-        if wasm_artifacts_ready(&target_dir, &CANISTERS, WasmBuildProfile::Release) {
+        if wasm_artifacts_ready(&target_dir, &CANISTERS, WasmBuildProfile::Fast) {
             return;
         }
 
@@ -342,7 +342,7 @@ fn build_canisters_once(workspace_root: &Path) {
             workspace_root,
             &target_dir,
             &CANISTERS,
-            WasmBuildProfile::Release,
+            WasmBuildProfile::Fast,
             &[],
         );
     });

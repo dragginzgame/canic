@@ -37,6 +37,10 @@ const INSTALL_CYCLES: u128 = 500 * TC;
 const PIC_PROCESS_LOCK_DIR_NAME: &str = "canic-pocket-ic.lock";
 const PIC_PROCESS_LOCK_RETRY_DELAY: Duration = Duration::from_millis(100);
 const PIC_PROCESS_LOCK_LOG_AFTER: Duration = Duration::from_secs(1);
+static PIC_PROCESS_LOCK_STATE: Mutex<ProcessLockState> = Mutex::new(ProcessLockState {
+    ref_count: 0,
+    process_lock: None,
+});
 
 struct ControllerSnapshot {
     snapshot_id: Vec<u8>,
@@ -45,6 +49,11 @@ struct ControllerSnapshot {
 
 struct ProcessLockGuard {
     path: PathBuf,
+}
+
+struct ProcessLockState {
+    ref_count: usize,
+    process_lock: Option<ProcessLockGuard>,
 }
 
 ///
@@ -61,6 +70,7 @@ pub struct CachedPicBaseline<T> {
     pub pic: Pic,
     pub snapshots: ControllerSnapshots,
     pub metadata: T,
+    _serial_guard: PicSerialGuard,
 }
 
 ///
@@ -76,7 +86,7 @@ pub struct CachedPicBaselineGuard<'a, T> {
 ///
 
 pub struct PicSerialGuard {
-    _process_lock: ProcessLockGuard,
+    _private: (),
 }
 
 ///
@@ -95,9 +105,16 @@ pub fn pic() -> Pic {
 /// Acquire the shared PocketIC serialization guard for the current process.
 #[must_use]
 pub fn acquire_pic_serial_guard() -> PicSerialGuard {
-    PicSerialGuard {
-        _process_lock: acquire_process_lock(),
+    let mut state = PIC_PROCESS_LOCK_STATE
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+
+    if state.ref_count == 0 {
+        state.process_lock = Some(acquire_process_lock());
     }
+    state.ref_count += 1;
+
+    PicSerialGuard { _private: () }
 }
 
 /// Acquire one process-local cached PocketIC baseline, building it on first use.
@@ -211,6 +228,7 @@ impl<T> CachedPicBaseline<T> {
             pic,
             snapshots,
             metadata,
+            _serial_guard: acquire_pic_serial_guard(),
         })
     }
 
@@ -562,6 +580,22 @@ impl Drop for ProcessLockGuard {
     fn drop(&mut self) {
         let _ = fs::remove_file(process_lock_owner_path(&self.path));
         let _ = fs::remove_dir(&self.path);
+    }
+}
+
+impl Drop for PicSerialGuard {
+    fn drop(&mut self) {
+        let mut state = PIC_PROCESS_LOCK_STATE
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+
+        state.ref_count = state
+            .ref_count
+            .checked_sub(1)
+            .expect("PocketIC serial guard refcount underflow");
+        if state.ref_count == 0 {
+            state.process_lock.take();
+        }
     }
 }
 

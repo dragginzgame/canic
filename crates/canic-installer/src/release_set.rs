@@ -87,10 +87,12 @@ pub fn dfx_root() -> Result<PathBuf, Box<dyn std::error::Error>> {
         return Ok(root);
     }
 
-    if let Ok(path) = std::env::var("CANIC_WORKSPACE_ROOT")
-        && let Some(root) = discover_dfx_root_from(&PathBuf::from(path))
-    {
-        return Ok(root);
+    if let Ok(path) = std::env::var("CANIC_WORKSPACE_ROOT") {
+        let workspace_root = PathBuf::from(path).canonicalize()?;
+        if let Some(root) = discover_dfx_root_from(&workspace_root) {
+            return Ok(root);
+        }
+        return Ok(workspace_root);
     }
 
     Ok(current_dir)

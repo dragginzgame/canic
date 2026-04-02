@@ -30,12 +30,24 @@ From the repo root:
 make demo-install
 ```
 
-`make demo-install` and `make test-canisters` default to `RELEASE=0`, so the
-repo-local smoke path uses the optimized dev wasm profile. If you want to force
-release wasm artifacts for the same flow, run:
+Canic now supports three wasm build profiles:
+- `debug`: plain Cargo debug wasm, mainly for raw artifact/debugging work
+- `fast`: the middle local/test profile, smaller and faster than debug without paying full release cost
+- `release`: the shipping/install profile
+
+`make demo-install` and `make test-canisters` default to the middle `fast`
+profile, and `CANIC_WASM_PROFILE` is the explicit selector.
+
+If you want to force release wasm artifacts for the same flow, run:
 
 ```bash
-RELEASE=1 make demo-install
+CANIC_WASM_PROFILE=release make demo-install
+```
+
+If you want the raw debug wasm lane instead, run:
+
+```bash
+CANIC_WASM_PROFILE=debug make demo-install
 ```
 
 This one command:
@@ -47,7 +59,7 @@ This one command:
 - resumes bootstrap so `root` can create the internal `wasm_store` and publish the staged release set
 - waits for `root` to report `READY`
 
-This is a manual local smoke flow, not part of `make test`.
+This is a manual local fast flow, not part of `make test`.
 
 `make test` now runs with `--nocapture`, so long serial PocketIC runs keep
 their phase markers visible by default:
@@ -81,6 +93,9 @@ That public builder:
 - lets the public bootstrap builder resolve the canonical `canic-wasm-store` source automatically from the current `canic` checkout or published registry source, and if that canonical crate is not present it synthesizes a hidden wrapper directly from the resolved `canic` source, so downstreams do not need their own `wasm_store` crate or extra `wasm_store` build config
 - copies the resulting WASM into `.dfx/local/canisters/<name>/<name>.wasm`
 - runs `candid-extractor` to produce `.dfx/local/canisters/<name>/<name>.did`
+
+Profile selection for the public builder is:
+- `CANIC_WASM_PROFILE=debug|fast|release`
 
 ## Why `.wasm.gz` Exists
 

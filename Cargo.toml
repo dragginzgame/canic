@@ -150,8 +150,9 @@ strip = "symbols"
 debug = false
 panic = "abort"
 overflow-checks = false
+incremental = false
 
-[profile.wasm-release]
+[profile.fast]
 inherits = "release"
 lto = false
 codegen-units = 16

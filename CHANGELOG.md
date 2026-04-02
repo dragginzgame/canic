@@ -5,8 +5,18 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.22.x] - 2026-04-02 - Audits, Wasm Size, and Perf
+
+- `0.22.0` opens the audit/perf line by making `.dfx` artifact reuse aware of build env and profile, moving more reusable PocketIC root-baseline setup into `canic-testkit`, standardizing three wasm build lanes (`debug`, `fast`, `release`) across repo-local and downstream builders, and tightening the special small-store reconcile lane so future wasm-size and runtime audit work starts from reproducible test/build inputs instead of accidental artifact drift.
+
+See detailed breakdown:
+[docs/changelog/0.22.md](docs/changelog/0.22.md)
+
+---
+
 ## [0.21.x] - 2026-04-01 - Implicit Wasm Store and Managed Release Fleet
 
+- `0.21.12` fixes the release lane so `make publish` can resume after partial crates.io uploads, skips already-published workspace crates instead of aborting at the first duplicate, keeps workspace manifest inheritance intact, and unblocks `canic-core` publish preparation by using a targeted `--no-verify` publish exception for its test-only `canic-testkit` edge.
 - `0.21.11` stops the local installer from overriding caller-selected build profiles, keeps repo-local smoke installs on the optimized dev wasm path by default, hardcodes Canic wasm staging/install chunks to the IC-safe `1_048_576` bytes with no env or config override surface, adds visible installer plus root-side staging progress, moves reusable root PocketIC baseline setup into `canic-testkit`, front-loads root artifact builds once per workspace test run, and makes the normal `make test` path run with `--nocapture` plus explicit per-suite timings so long PocketIC phases stay visible live.
 - `0.21.10` teaches the public `canic-installer` tools to separate Cargo/config discovery from DFX artifact output, so split repos like `backend/` + `frontend/` can keep one real repo-root `.dfx` while pointing Canic at a nested Rust workspace through `CANIC_WORKSPACE_ROOT` and `CANIC_DFX_ROOT`, and the repo-local `make demo-install` / `make test-canisters` smoke path now defaults to optimized dev wasm instead of slower release canister builds.
 - `0.21.9` finishes productizing the downstream build/install boundary by publishing `canic-build-canister-artifact` and `canic-install-root`, shrinking the repo-local build/install scripts into thin wrappers, and adding an installed-binary `canic-installer` probe so downstream projects can rely on public Canic tools instead of copying more shell logic.

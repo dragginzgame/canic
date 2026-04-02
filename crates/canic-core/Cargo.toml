@@ -37,7 +37,7 @@ toml = { workspace = true }
 candid = { workspace = true }
 
 [dev-dependencies]
-canic-testkit = { path = "../canic-testkit" }
+canic-testkit = { workspace = true }
 criterion = { workspace = true }
 futures = { workspace = true }
 pocket-ic = { workspace = true }

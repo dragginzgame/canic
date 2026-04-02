@@ -97,7 +97,7 @@ impl RootSetupProfile {
     }
 
     fn baseline_spec(self) -> RootBaselineSpec<'static> {
-        baseline_spec_for_roles(self.release_roles())
+        baseline_spec_for_roles(self.release_roles(), WasmBuildProfile::Fast, &[])
     }
 }
 
@@ -133,7 +133,37 @@ pub fn setup_root() -> RootSetup {
 /// This is intended for specialized suites that need the live managed release set
 /// to include a template outside the default fast test profiles.
 pub fn setup_root_with_release_roles(release_roles: &'static [&'static str]) -> RootSetup {
-    setup_root_fresh_spec(baseline_spec_for_roles(release_roles))
+    setup_root_fresh_spec(baseline_spec_for_roles(
+        release_roles,
+        WasmBuildProfile::Fast,
+        &[],
+    ))
+}
+
+/// Acquire an isolated fresh root setup for one explicit managed release-set profile and build env.
+pub fn setup_root_with_release_roles_and_build_env(
+    release_roles: &'static [&'static str],
+    build_extra_env: &'static [(&'static str, &'static str)],
+) -> RootSetup {
+    setup_root_with_release_roles_profile_and_build_env(
+        release_roles,
+        WasmBuildProfile::Fast,
+        build_extra_env,
+    )
+}
+
+/// Acquire an isolated fresh root setup for one explicit managed release-set profile, build
+/// profile, and build env.
+pub fn setup_root_with_release_roles_profile_and_build_env(
+    release_roles: &'static [&'static str],
+    build_profile: WasmBuildProfile,
+    build_extra_env: &'static [(&'static str, &'static str)],
+) -> RootSetup {
+    setup_root_fresh_spec(baseline_spec_for_roles(
+        release_roles,
+        build_profile,
+        build_extra_env,
+    ))
 }
 
 /// Acquire an isolated topology-only cached root setup.
@@ -216,7 +246,11 @@ fn workspace_root() -> PathBuf {
     workspace_root_for(env!("CARGO_MANIFEST_DIR"))
 }
 
-fn baseline_spec_for_roles(release_roles: &'static [&'static str]) -> RootBaselineSpec<'static> {
+fn baseline_spec_for_roles(
+    release_roles: &'static [&'static str],
+    build_profile: WasmBuildProfile,
+    build_extra_env: &'static [(&'static str, &'static str)],
+) -> RootBaselineSpec<'static> {
     RootBaselineSpec {
         progress_prefix: "root_harness",
         workspace_root: workspace_root(),
@@ -227,7 +261,8 @@ fn baseline_spec_for_roles(release_roles: &'static [&'static str]) -> RootBaseli
         release_roles,
         dfx_build_lock_relative: DFX_BUILD_LOCK_RELATIVE,
         build_network: "local",
-        build_profile: WasmBuildProfile::Debug,
+        build_profile,
+        build_extra_env,
         bootstrap_tick_limit: BOOTSTRAP_TICK_LIMIT,
         root_setup_max_attempts: ROOT_SETUP_MAX_ATTEMPTS,
         pocket_ic_wasm_chunk_store_limit_bytes: 100 * 1024 * 1024,
