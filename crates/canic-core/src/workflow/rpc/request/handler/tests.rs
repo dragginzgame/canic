@@ -2,7 +2,7 @@ use super::*;
 use crate::{
     cdk::types::Principal,
     dto::{
-        auth::{DelegationRequest, RoleAttestationRequest},
+        auth::{DelegationCert, DelegationRequest, RoleAttestationRequest},
         rpc::{
             CreateCanisterParent, CreateCanisterRequest, CyclesRequest, CyclesResponse,
             RootCapabilityCommand, RootRequestMetadata, UpgradeCanisterRequest,
@@ -72,6 +72,17 @@ fn cycles_funding_snapshot_map() -> HashMap<
         .collect()
 }
 
+fn sample_delegation_cert(root_pid: Principal) -> DelegationCert {
+    DelegationCert {
+        root_pid,
+        shard_pid: p(2),
+        issued_at: 100,
+        expires_at: 200,
+        scopes: vec!["rpc:verify".to_string()],
+        aud: vec![p(3)],
+    }
+}
+
 #[test]
 fn map_request_maps_provision() {
     let req = RootCapabilityCommand::ProvisionCanister(CreateCanisterRequest {
@@ -137,6 +148,93 @@ fn map_request_maps_issue_role_attestation() {
 
     let mapped = RootResponseWorkflow::map_request(req);
     assert_eq!(mapped.capability_name(), "IssueRoleAttestation");
+}
+
+#[test]
+fn validate_delegation_cert_policy_rejects_invalid_window() {
+    let root_pid = p(1);
+    let _restore = configure_root_env(root_pid);
+
+    let mut cert = sample_delegation_cert(root_pid);
+    cert.expires_at = cert.issued_at;
+
+    let err =
+        delegation::validate_delegation_cert_policy(&cert).expect_err("invalid window must fail");
+    assert!(
+        err.to_string()
+            .contains("expires_at must be greater than issued_at")
+    );
+}
+
+#[test]
+fn validate_delegation_cert_policy_rejects_empty_audience() {
+    let root_pid = p(1);
+    let _restore = configure_root_env(root_pid);
+
+    let mut cert = sample_delegation_cert(root_pid);
+    cert.aud.clear();
+
+    let err =
+        delegation::validate_delegation_cert_policy(&cert).expect_err("empty audience must fail");
+    assert!(
+        err.to_string()
+            .contains("delegation audience must not be empty")
+    );
+}
+
+#[test]
+fn validate_delegation_cert_policy_rejects_empty_scopes() {
+    let root_pid = p(1);
+    let _restore = configure_root_env(root_pid);
+
+    let mut cert = sample_delegation_cert(root_pid);
+    cert.scopes.clear();
+
+    let err =
+        delegation::validate_delegation_cert_policy(&cert).expect_err("empty scopes must fail");
+    assert!(
+        err.to_string()
+            .contains("delegation scopes must not be empty")
+    );
+}
+
+#[test]
+fn validate_delegation_cert_policy_rejects_empty_scope_values() {
+    let root_pid = p(1);
+    let _restore = configure_root_env(root_pid);
+
+    let mut cert = sample_delegation_cert(root_pid);
+    cert.scopes = vec![String::new()];
+
+    let err = delegation::validate_delegation_cert_policy(&cert)
+        .expect_err("empty scope value must fail");
+    assert!(err.to_string().contains("must not contain empty strings"));
+}
+
+#[test]
+fn validate_delegation_cert_policy_rejects_root_pid_mismatch() {
+    let root_pid = p(1);
+    let _restore = configure_root_env(root_pid);
+
+    let cert = sample_delegation_cert(p(9));
+    let err = delegation::validate_delegation_cert_policy(&cert)
+        .expect_err("root pid mismatch must fail");
+    assert!(err.to_string().contains("delegation root pid mismatch"));
+}
+
+#[test]
+fn validate_delegation_cert_policy_rejects_shard_equal_to_root() {
+    let root_pid = p(1);
+    let _restore = configure_root_env(root_pid);
+
+    let mut cert = sample_delegation_cert(root_pid);
+    cert.shard_pid = root_pid;
+
+    let err = delegation::validate_delegation_cert_policy(&cert).expect_err("root shard must fail");
+    assert!(
+        err.to_string()
+            .contains("delegation shard_pid must not equal root pid")
+    );
 }
 
 #[test]

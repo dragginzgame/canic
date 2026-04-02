@@ -9,13 +9,7 @@ PACKAGE_ROOT="$TOOL_ROOT/package-root"
 DOWNSTREAM_ROOT="$TOOL_ROOT/downstream-root"
 VERSION="$(
     cargo metadata --no-deps --format-version=1 --manifest-path "$ROOT/Cargo.toml" |
-        python3 -c '
-import json, sys
-
-data = json.load(sys.stdin)
-root = next(pkg for pkg in data["packages"] if pkg["name"] == "canic")
-print(root["version"])
-'
+        jq -r '.packages[] | select(.name == "canic") | .version'
 )"
 
 cleanup() {
@@ -26,8 +20,8 @@ trap cleanup EXIT
 
 ensure_packaged_crate() {
     local crate_name="$1"
-    local crate_dir="$PACKAGE_STAGING_ROOT/$crate_name-$VERSION"
-    if [ -d "$crate_dir" ]; then
+    local crate_archive="$PACKAGE_STAGING_ROOT/$crate_name-$VERSION.crate"
+    if [ -f "$crate_archive" ]; then
         return
     fi
 
@@ -37,21 +31,21 @@ ensure_packaged_crate() {
 populate_isolated_package_root() {
     mkdir -p "$PACKAGE_ROOT"
 
-    local crate_dir=""
-    for crate_dir in \
-        "$PACKAGE_STAGING_ROOT/canic-cdk-$VERSION" \
-        "$PACKAGE_STAGING_ROOT/canic-core-$VERSION" \
-        "$PACKAGE_STAGING_ROOT/canic-dsl-macros-$VERSION" \
-        "$PACKAGE_STAGING_ROOT/canic-memory-$VERSION" \
-        "$PACKAGE_STAGING_ROOT/canic-types-$VERSION" \
-        "$PACKAGE_STAGING_ROOT/canic-$VERSION" \
-        "$PACKAGE_STAGING_ROOT/canic-installer-$VERSION"
+    local crate_archive=""
+    for crate_archive in \
+        "$PACKAGE_STAGING_ROOT/canic-cdk-$VERSION.crate" \
+        "$PACKAGE_STAGING_ROOT/canic-core-$VERSION.crate" \
+        "$PACKAGE_STAGING_ROOT/canic-dsl-macros-$VERSION.crate" \
+        "$PACKAGE_STAGING_ROOT/canic-memory-$VERSION.crate" \
+        "$PACKAGE_STAGING_ROOT/canic-types-$VERSION.crate" \
+        "$PACKAGE_STAGING_ROOT/canic-$VERSION.crate" \
+        "$PACKAGE_STAGING_ROOT/canic-installer-$VERSION.crate"
     do
-        [ -d "$crate_dir" ] || {
-            echo "expected packaged crate directory at $crate_dir" >&2
+        [ -f "$crate_archive" ] || {
+            echo "expected packaged crate archive at $crate_archive" >&2
             exit 1
         }
-        cp -R "$crate_dir" "$PACKAGE_ROOT/"
+        tar -xzf "$crate_archive" -C "$PACKAGE_ROOT"
     done
 }
 
@@ -122,16 +116,7 @@ kind = "root"
 kind = "singleton"
 EOF
 
-    python3 - <<'PY' "$DOWNSTREAM_ROOT/.dfx/local/canisters/app/app.wasm.gz"
-import gzip
-import pathlib
-import sys
-
-path = pathlib.Path(sys.argv[1])
-path.parent.mkdir(parents=True, exist_ok=True)
-with gzip.open(path, "wb") as f:
-    f.write(b"\x00asm\x01\x00\x00\x00")
-PY
+    printf '\x00asm\x01\x00\x00\x00' | gzip -n > "$DOWNSTREAM_ROOT/.dfx/local/canisters/app/app.wasm.gz"
 }
 
 run_probe() {
@@ -150,19 +135,12 @@ assert_probe_outputs() {
         exit 1
     }
 
-    python3 - <<'PY' "$manifest_path"
-import json
-import pathlib
-import sys
-
-manifest = json.loads(pathlib.Path(sys.argv[1]).read_text())
-entries = manifest.get("entries", [])
-
-assert manifest.get("release_version") == "0.0.0", manifest
-assert len(entries) == 1, entries
-assert entries[0]["role"] == "app", entries
-assert entries[0]["artifact_relative_path"] == ".dfx/local/canisters/app/app.wasm.gz", entries
-PY
+    jq -e '
+        .release_version == "0.0.0" and
+        (.entries | length) == 1 and
+        .entries[0].role == "app" and
+        .entries[0].artifact_relative_path == ".dfx/local/canisters/app/app.wasm.gz"
+    ' "$manifest_path" >/dev/null
 }
 
 main() {

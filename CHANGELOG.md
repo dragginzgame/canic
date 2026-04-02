@@ -7,7 +7,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.21.x] - 2026-04-01 - Implicit Wasm Store and Managed Release Fleet
 
-- `0.21.8` cleans up the thin-root follow-through by moving GitHub Actions onto the same shared Canic wasm build helper, preferring the public `canic-install-reference-topology` binary in the local wrapper, and removing a few stale installer/build names so the live scripts, CI, and docs all describe the same downstream boundary.
+- `0.21.10` teaches the public `canic-installer` tools to separate Cargo/config discovery from DFX artifact output, so split repos like `backend/` + `frontend/` can keep one real repo-root `.dfx` while pointing Canic at a nested Rust workspace through `CANIC_WORKSPACE_ROOT` and `CANIC_DFX_ROOT`.
+- `0.21.9` finishes productizing the downstream build/install boundary by publishing `canic-build-canister-artifact` and `canic-install-root`, shrinking the repo-local build/install scripts into thin wrappers, and adding an installed-binary `canic-installer` probe so downstream projects can rely on public Canic tools instead of copying more shell logic.
+- `0.21.8` finishes the thin-root cleanup by moving GitHub Actions onto the shared Canic wasm build helper, preferring the public installer binaries in the repo-local wrappers, and publishing the hidden bootstrap `wasm_store` build behind `canic-build-wasm-store-artifact` so downstreams no longer need to re-own that shell logic.
 - `0.21.7` hardens the new `canic-installer` path by fixing its false ready-timeout on successful thin-root installs, adding direct coverage for the accepted `canic_ready` JSON shapes, rejecting bad `.wasm.gz` release artifacts before any root staging work begins, opportunistically emitting `root.release-set.json` from the public installer path during normal custom builds, and proving the packaged installer can emit a downstream manifest from normalized package contents.
 - `0.21.6` publishes `canic-installer` as the downstream thin-root installer surface, moves the manifest/staging binaries off workspace-private `canic-internal`, and hardens `root.release-set.json` so it only stages roles from the single subnet that actually owns `root`.
 - `0.21.4` keeps `root.wasm` thin again by embedding only the bootstrap `wasm_store`, moving ordinary release staging back out to a manifest-driven Rust installer flow in `canic-internal`, removing the hidden `wasm_store` leak from downstream `dfx.json`, and restoring a manual `scripts/app/dfx_start.sh` convenience script without reintroducing auto-started `dfx` into the normal test or install gates.
@@ -16,8 +18,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - `0.21.1` hardens the first managed-fleet release by scoping and pruning stale approved roles to the current config-driven release set, keeping the implicit `wasm_store` preset downstream-safe without const-only assumptions, tightening the root-owned overview semantics so its headroom flag is clearly approved-state-only, and removing the local `dfx` smoke path from `make test` / `make test-bump` so the normal test gate stays PocketIC/Cargo-driven while manual `dfx` installs still fail fast if the replica is not already running.
 - `0.21.0` starts the new managed release-fleet line: `root` now owns the implicit `wasm_store` bootstrap, embeds the build-produced `.wasm.gz` bootstrap and ordinary release artifacts, manages a tracked multi-store fleet with exact-release reuse and post-upgrade reconcile, and lets downstreams build through `canic` without carrying a local `wasm_store` crate or a manual bootstrap script.
 
-```toml
-canic = { version = "0.21.0", features = ["control-plane"] }
+```bash
+cargo install --locked canic-installer --version <same-version-as-canic>
+dfx build --all
+canic-install-root root
 ```
 
 See detailed breakdown:

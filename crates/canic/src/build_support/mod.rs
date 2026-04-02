@@ -42,6 +42,7 @@ pub fn emit_root_wasm_store_bootstrap_release_set(config_path: &Path) -> bool {
     println!("cargo:rerun-if-changed={}", artifact_root.display());
     println!("cargo:rerun-if-changed={}", artifact_path.display());
     println!("cargo:rerun-if-env-changed=CANIC_REQUIRE_EMBEDDED_RELEASE_ARTIFACTS");
+    println!("cargo:rerun-if-env-changed=CANIC_DFX_ROOT");
 
     if !artifact_path.is_file() {
         assert!(
@@ -122,6 +123,22 @@ fn discover_workspace_root(manifest_dir: &Path) -> PathBuf {
 }
 
 fn discover_release_artifact_root(workspace_root: &Path) -> PathBuf {
+    if let Ok(root) = env::var("CANIC_DFX_ROOT") {
+        let dfx_root = PathBuf::from(root);
+        let network = env::var("DFX_NETWORK").unwrap_or_else(|_| "local".to_string());
+        let network_root = dfx_root.join(".dfx").join(&network).join("canisters");
+        if network_root.is_dir() {
+            return network_root;
+        }
+
+        let local_root = dfx_root.join(".dfx").join("local").join("canisters");
+        if local_root.is_dir() {
+            return local_root;
+        }
+
+        return network_root;
+    }
+
     let network = env::var("DFX_NETWORK").unwrap_or_else(|_| "local".to_string());
     let network_root = workspace_root.join(".dfx").join(&network).join("canisters");
     if network_root.is_dir() {

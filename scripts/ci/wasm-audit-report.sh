@@ -6,14 +6,12 @@ METHOD_TAG="Method V1"
 AUDIT_SLUG="wasm-footprint"
 DEFINITION_PATH="docs/audits/recurring/system/wasm-footprint.md"
 DEFAULT_PROFILE="wasm-release"
-DEFAULT_CANISTERS=(app minimal user_hub user_shard scale_hub scale test root)
-# Root is thin again, but its audit build still depends on the ordinary
-# reference artifacts existing first so the manifest and bootstrap flow stay
-# aligned with the current release-set path.
-ROOT_RELEASE_SET_CANISTERS=(app minimal user_hub user_shard scale_hub scale test)
 
 ROOT_DIR="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 cd "$ROOT_DIR"
+source "$ROOT_DIR/scripts/app/reference_canisters.sh"
+
+DEFAULT_CANISTERS=("${REFERENCE_CANISTERS[@]}")
 
 declare -a VERIFICATION_ROWS=()
 declare -A BUILT_WASM_BYTES=()

@@ -51,9 +51,13 @@ dfx build --all
 ```
 
 `dfx.json` uses custom build commands which call `scripts/app/build.sh <canister>`. That script:
-- builds the Rust canister crate for `wasm32-unknown-unknown`
-- keeps `wasm_store` out of downstream `dfx.json` and resolves it internally from the canonical `canic-wasm-store` package instead of a local `canisters/wasm_store` crate
-- discovers the matching `canic-wasm-store` source automatically from the current `canic` checkout or published registry source, and if that canonical crate is not present it synthesizes a hidden wrapper directly from the resolved `canic` source, so downstreams do not need their own `wasm_store` crate or extra `wasm_store` build config
+- is now just a thin wrapper around the published `canic-build-canister-artifact` binary from `canic-installer`
+
+That public builder:
+- builds the requested Rust canister crate for `wasm32-unknown-unknown`
+- refreshes the hidden bootstrap `wasm_store` artifact automatically when building `root`
+- keeps `wasm_store` out of downstream `dfx.json` and delegates the hidden bootstrap build to the published `canic-build-wasm-store-artifact` tool from `canic-installer`
+- lets the public bootstrap builder resolve the canonical `canic-wasm-store` source automatically from the current `canic` checkout or published registry source, and if that canonical crate is not present it synthesizes a hidden wrapper directly from the resolved `canic` source, so downstreams do not need their own `wasm_store` crate or extra `wasm_store` build config
 - copies the resulting WASM into `.dfx/local/canisters/<name>/<name>.wasm`
 - runs `candid-extractor` to produce `.dfx/local/canisters/<name>/<name>.did`
 
@@ -72,3 +76,21 @@ During normal custom builds, `scripts/app/build.sh` now opportunistically emits
 that manifest as soon as the full root-subnet ordinary artifact set exists, so
 downstreams do not need a local copy of the manifest-emission logic just to
 keep `.dfx/local/canisters/root/root.release-set.json` in sync.
+
+If you do not want the repo-local wrapper at all, the equivalent direct calls are:
+
+```bash
+scripts/app/canic_installer.sh canic-build-canister-artifact root
+scripts/app/canic_installer.sh canic-install-root root
+```
+
+In split repos where the Rust workspace lives under `backend/` but `dfx.json`
+and `.dfx` live at the repo root, set:
+
+```bash
+CANIC_WORKSPACE_ROOT=/path/to/repo/backend
+CANIC_DFX_ROOT=/path/to/repo
+```
+
+The first root drives Cargo and config discovery; the second root owns emitted
+artifacts and the hidden generated bootstrap-store wrapper.

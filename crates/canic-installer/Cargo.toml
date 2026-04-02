@@ -18,12 +18,24 @@ name = "canic-emit-root-release-set-manifest"
 path = "src/bin/emit_root_release_set_manifest.rs"
 
 [[bin]]
+name = "canic-build-wasm-store-artifact"
+path = "src/bin/build_wasm_store_artifact.rs"
+
+[[bin]]
+name = "canic-build-canister-artifact"
+path = "src/bin/build_canister_artifact.rs"
+
+[[bin]]
 name = "canic-stage-root-release-set"
 path = "src/bin/stage_root_release_set.rs"
 
 [[bin]]
 name = "canic-install-reference-topology"
 path = "src/bin/install_reference_topology.rs"
+
+[[bin]]
+name = "canic-install-root"
+path = "src/bin/install_root.rs"
 
 [dependencies]
 canic = { workspace = true }

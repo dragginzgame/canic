@@ -21,6 +21,16 @@ const fn p(id: u8) -> Principal {
     Principal::from_slice(&[id; 29])
 }
 
+///
+/// DelegationFixture
+///
+
+struct DelegationFixture {
+    setup: RootSetup,
+    test_pid: Principal,
+    shard_pid: Principal,
+}
+
 // Canonical signer-initiated delegation flow:
 // user_shard requests delegation from root (no admin provisioning).
 
@@ -30,45 +40,16 @@ fn delegation_provisioning_flow() {
         return;
     }
 
-    log_step("delegation_provisioning_flow: setup root");
-    let setup = setup_root();
+    let fixture = setup_delegation_fixture("delegation_provisioning_flow");
+    let token = issue_test_token(
+        &fixture,
+        p(9),
+        vec![fixture.test_pid],
+        vec![cap::VERIFY.to_string()],
+        60,
+    );
 
-    let user_hub_pid = setup
-        .subnet_directory
-        .get(&canister::USER_HUB)
-        .copied()
-        .expect("user_hub must exist in subnet directory");
-
-    log_step(&format!("user_hub={user_hub_pid} root={}", setup.root_id));
-
-    let tenant = p(7);
-    let shard_pid = create_user_shard(&setup, user_hub_pid, tenant);
-    let test_pid = setup
-        .subnet_directory
-        .get(&canister::TEST)
-        .copied()
-        .expect("test canister must exist in subnet directory");
-
-    let now = now_secs();
-    let claims = DelegatedTokenClaims {
-        sub: p(9),
-        shard_pid,
-        aud: vec![test_pid],
-        scopes: vec![cap::VERIFY.to_string()],
-        iat: now,
-        exp: now + 60,
-    };
-
-    let issued: Result<Result<DelegatedToken, Error>, Error> =
-        setup
-            .pic
-            .update_call(shard_pid, "user_shard_issue_token", (claims,));
-
-    let token = issued
-        .expect("user_shard_issue_token transport failed")
-        .expect("user_shard_issue_token application failed");
-
-    DelegationApi::verify_delegation_proof(&token.proof, setup.root_id)
+    DelegationApi::verify_delegation_proof(&token.proof, fixture.setup.root_id)
         .expect("delegation proof must verify");
 }
 
@@ -78,53 +59,26 @@ fn delegated_token_flow() {
         return;
     }
 
-    log_step("delegated_token_flow: setup root");
-    let setup = setup_root();
-
-    let user_hub_pid = setup
-        .subnet_directory
-        .get(&canister::USER_HUB)
-        .copied()
-        .expect("user_hub must exist in subnet directory");
-
-    log_step(&format!("user_hub={user_hub_pid} root={}", setup.root_id));
-
-    let tenant = p(7);
-    let shard_pid = create_user_shard(&setup, user_hub_pid, tenant);
-    let test_pid = setup
-        .subnet_directory
-        .get(&canister::TEST)
-        .copied()
-        .expect("test canister must exist in subnet directory");
+    let fixture = setup_delegation_fixture("delegated_token_flow");
     let caller = p(9);
-
-    let now = now_secs();
-    let claims = DelegatedTokenClaims {
-        sub: caller,
-        shard_pid,
-        aud: vec![test_pid],
-        scopes: vec![cap::VERIFY.to_string()],
-        iat: now,
-        exp: now + 60,
-    };
-
-    let issued: Result<Result<DelegatedToken, Error>, Error> =
-        setup
-            .pic
-            .update_call(shard_pid, "user_shard_issue_token", (claims,));
-
-    let token = issued
-        .expect("user_shard_issue_token transport failed")
-        .expect("user_shard_issue_token application failed");
+    let token = issue_test_token(
+        &fixture,
+        caller,
+        vec![fixture.test_pid],
+        vec![cap::VERIFY.to_string()],
+        60,
+    );
     log_step(&format!(
         "issued token proof shard={}",
         token.proof.cert.shard_pid
     ));
 
-    let verify: Result<Result<(), Error>, Error> =
-        setup
-            .pic
-            .update_call_as(test_pid, caller, "test_verify_delegated_token", (token,));
+    let verify: Result<Result<(), Error>, Error> = fixture.setup.pic.update_call_as(
+        fixture.test_pid,
+        caller,
+        "test_verify_delegated_token",
+        (token,),
+    );
 
     verify
         .expect("test_verify_delegated_token transport failed")
@@ -137,47 +91,20 @@ fn authenticated_rpc_flow() {
         return;
     }
 
-    log_step("authenticated_rpc_flow: setup root");
-    let setup = setup_root();
-
-    let user_hub_pid = setup
-        .subnet_directory
-        .get(&canister::USER_HUB)
-        .copied()
-        .expect("user_hub must exist in subnet directory");
-    let test_pid = setup
-        .subnet_directory
-        .get(&canister::TEST)
-        .copied()
-        .expect("test canister must exist in subnet directory");
-
-    let tenant = p(7);
-    let shard_pid = create_user_shard(&setup, user_hub_pid, tenant);
+    let fixture = setup_delegation_fixture("authenticated_rpc_flow");
     let subject = p(9);
     let mismatched_caller = p(10);
-
-    let now = now_secs();
-    let claims = DelegatedTokenClaims {
-        sub: subject,
-        shard_pid,
-        aud: vec![test_pid],
-        scopes: vec![cap::VERIFY.to_string()],
-        iat: now,
-        exp: now + 60,
-    };
-
-    let issued: Result<Result<DelegatedToken, Error>, Error> =
-        setup
-            .pic
-            .update_call(shard_pid, "user_shard_issue_token", (claims,));
-
-    let token = issued
-        .expect("user_shard_issue_token transport failed")
-        .expect("user_shard_issue_token application failed");
+    let token = issue_test_token(
+        &fixture,
+        subject,
+        vec![fixture.test_pid],
+        vec![cap::VERIFY.to_string()],
+        60,
+    );
 
     // Establish that the token is otherwise valid in the same request pipeline.
-    let ok_response: Result<Result<(), Error>, Error> = setup.pic.update_call_as(
-        test_pid,
+    let ok_response: Result<Result<(), Error>, Error> = fixture.setup.pic.update_call_as(
+        fixture.test_pid,
         subject,
         "test_verify_delegated_token",
         (token.clone(),),
@@ -187,10 +114,11 @@ fn authenticated_rpc_flow() {
         .expect("test_verify_delegated_token should succeed for subject caller");
 
     log_step(&format!(
-        "calling test_verify_delegated_token via test={test_pid}"
+        "calling test_verify_delegated_token via test={}",
+        fixture.test_pid
     ));
-    let response: Result<Result<(), Error>, Error> = setup.pic.update_call_as(
-        test_pid,
+    let response: Result<Result<(), Error>, Error> = fixture.setup.pic.update_call_as(
+        fixture.test_pid,
         mismatched_caller,
         "test_verify_delegated_token",
         (token,),
@@ -212,46 +140,24 @@ fn authenticated_rpc_flow_rejects_valid_token_missing_required_scope() {
         return;
     }
 
-    log_step("authenticated_rpc_flow_rejects_valid_token_missing_required_scope: setup root");
-    let setup = setup_root();
-
-    let user_hub_pid = setup
-        .subnet_directory
-        .get(&canister::USER_HUB)
-        .copied()
-        .expect("user_hub must exist in subnet directory");
-    let test_pid = setup
-        .subnet_directory
-        .get(&canister::TEST)
-        .copied()
-        .expect("test canister must exist in subnet directory");
-
-    let tenant = p(7);
-    let shard_pid = create_user_shard(&setup, user_hub_pid, tenant);
+    let fixture = setup_delegation_fixture(
+        "authenticated_rpc_flow_rejects_valid_token_missing_required_scope",
+    );
     let caller = p(9);
+    let token = issue_test_token(
+        &fixture,
+        caller,
+        vec![fixture.test_pid],
+        vec![cap::READ.to_string()],
+        60,
+    );
 
-    let now = now_secs();
-    let claims = DelegatedTokenClaims {
-        sub: caller,
-        shard_pid,
-        aud: vec![test_pid],
-        scopes: vec![cap::READ.to_string()],
-        iat: now,
-        exp: now + 60,
-    };
-
-    let issued: Result<Result<DelegatedToken, Error>, Error> =
-        setup
-            .pic
-            .update_call(shard_pid, "user_shard_issue_token", (claims,));
-    let token = issued
-        .expect("user_shard_issue_token transport failed")
-        .expect("user_shard_issue_token application failed");
-
-    let response: Result<Result<(), Error>, Error> =
-        setup
-            .pic
-            .update_call_as(test_pid, caller, "test_verify_delegated_token", (token,));
+    let response: Result<Result<(), Error>, Error> = fixture.setup.pic.update_call_as(
+        fixture.test_pid,
+        caller,
+        "test_verify_delegated_token",
+        (token,),
+    );
 
     let err = response
         .expect("test_verify_delegated_token transport failed")
@@ -269,49 +175,25 @@ fn authenticated_rpc_flow_rejects_expired_token() {
         return;
     }
 
-    log_step("authenticated_rpc_flow_rejects_expired_token: setup root");
-    let setup = setup_root();
-
-    let user_hub_pid = setup
-        .subnet_directory
-        .get(&canister::USER_HUB)
-        .copied()
-        .expect("user_hub must exist in subnet directory");
-    let test_pid = setup
-        .subnet_directory
-        .get(&canister::TEST)
-        .copied()
-        .expect("test canister must exist in subnet directory");
-
-    let tenant = p(7);
-    let shard_pid = create_user_shard(&setup, user_hub_pid, tenant);
+    let fixture = setup_delegation_fixture("authenticated_rpc_flow_rejects_expired_token");
     let caller = p(9);
+    let token = issue_test_token(
+        &fixture,
+        caller,
+        vec![fixture.test_pid],
+        vec![cap::VERIFY.to_string()],
+        1,
+    );
 
-    let now = now_secs();
-    let claims = DelegatedTokenClaims {
-        sub: caller,
-        shard_pid,
-        aud: vec![test_pid],
-        scopes: vec![cap::VERIFY.to_string()],
-        iat: now,
-        exp: now + 1,
-    };
+    fixture.setup.pic.advance_time(Duration::from_secs(2));
+    fixture.setup.pic.tick();
 
-    let issued: Result<Result<DelegatedToken, Error>, Error> =
-        setup
-            .pic
-            .update_call(shard_pid, "user_shard_issue_token", (claims,));
-    let token = issued
-        .expect("user_shard_issue_token transport failed")
-        .expect("user_shard_issue_token application failed");
-
-    setup.pic.advance_time(Duration::from_secs(2));
-    setup.pic.tick();
-
-    let response: Result<Result<(), Error>, Error> =
-        setup
-            .pic
-            .update_call_as(test_pid, caller, "test_verify_delegated_token", (token,));
+    let response: Result<Result<(), Error>, Error> = fixture.setup.pic.update_call_as(
+        fixture.test_pid,
+        caller,
+        "test_verify_delegated_token",
+        (token,),
+    );
 
     let err = response
         .expect("test_verify_delegated_token transport failed")
@@ -329,20 +211,12 @@ fn delegated_token_request_rejected_on_invalid_claims() {
         return;
     }
 
-    log_step("delegated_token_request_rejected_on_invalid_claims: setup root");
-    let setup = setup_root();
-
-    let user_hub_pid = setup
-        .subnet_directory
-        .get(&canister::USER_HUB)
-        .copied()
-        .expect("user_hub must exist in subnet directory");
-    let shard_pid = create_user_shard(&setup, user_hub_pid, p(7));
+    let fixture = setup_delegation_fixture("delegated_token_request_rejected_on_invalid_claims");
 
     let now = now_secs();
     let claims = DelegatedTokenClaims {
         sub: p(9),
-        shard_pid,
+        shard_pid: fixture.shard_pid,
         aud: Vec::new(),
         scopes: Vec::new(),
         iat: now,
@@ -350,9 +224,10 @@ fn delegated_token_request_rejected_on_invalid_claims() {
     };
 
     let issued: Result<Result<DelegatedToken, Error>, Error> =
-        setup
+        fixture
+            .setup
             .pic
-            .update_call(shard_pid, "user_shard_issue_token", (claims,));
+            .update_call(fixture.shard_pid, "user_shard_issue_token", (claims,));
 
     let err = issued
         .expect("user_shard_issue_token transport failed")
@@ -408,6 +283,61 @@ fn should_run_local(test_name: &str) -> bool {
     } else {
         true
     }
+}
+
+// Build the standard certified delegation fixture used by most PocketIC flow tests.
+fn setup_delegation_fixture(test_name: &str) -> DelegationFixture {
+    log_step(&format!("{test_name}: setup root"));
+    let setup = setup_root();
+    let user_hub_pid = setup
+        .subnet_directory
+        .get(&canister::USER_HUB)
+        .copied()
+        .expect("user_hub must exist in subnet directory");
+    let test_pid = setup
+        .subnet_directory
+        .get(&canister::TEST)
+        .copied()
+        .expect("test canister must exist in subnet directory");
+
+    log_step(&format!("user_hub={user_hub_pid} root={}", setup.root_id));
+
+    let shard_pid = create_user_shard(&setup, user_hub_pid, p(7));
+
+    DelegationFixture {
+        setup,
+        test_pid,
+        shard_pid,
+    }
+}
+
+// Issue one delegated token from the test shard with caller-selected claims.
+fn issue_test_token(
+    fixture: &DelegationFixture,
+    subject: Principal,
+    aud: Vec<Principal>,
+    scopes: Vec<String>,
+    ttl_secs: u64,
+) -> DelegatedToken {
+    let now = now_secs();
+    let claims = DelegatedTokenClaims {
+        sub: subject,
+        shard_pid: fixture.shard_pid,
+        aud,
+        scopes,
+        iat: now,
+        exp: now + ttl_secs,
+    };
+
+    let issued: Result<Result<DelegatedToken, Error>, Error> =
+        fixture
+            .setup
+            .pic
+            .update_call(fixture.shard_pid, "user_shard_issue_token", (claims,));
+
+    issued
+        .expect("user_shard_issue_token transport failed")
+        .expect("user_shard_issue_token application failed")
 }
 
 fn create_user_shard(setup: &RootSetup, user_hub_pid: Principal, tenant: Principal) -> Principal {

@@ -588,6 +588,13 @@ Rules:
 * Do not add `use crate::...` imports in the middle of a file.
 * Group imports logically and keep them consolidated instead of scattering them across sections.
 
+### Language Boundaries
+
+* Do not add Python code to this repository.
+* Do not add `.py` scripts, Python-based build helpers, Python-based test helpers, or Python-based CI glue.
+* If automation or tooling is needed, prefer Rust first, then shell only when a small wrapper is sufficient.
+* Existing Python snippets outside the repo may be used transiently during local debugging, but Python must not become part of the committed codebase.
+
 ### Module layout
 
 * Use directory modules with `mod.rs` for module roots (for example `foo/mod.rs`), not flat `foo.rs` roots.

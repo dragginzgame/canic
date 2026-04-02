@@ -35,7 +35,7 @@ pub fn dfx_artifact_ready(
     }
 }
 
-/// Build all `dfx` canisters while holding a file lock around the build.
+/// Build all local `.dfx` canister artifacts while holding a file lock around the build.
 pub fn build_dfx_all(
     workspace_root: &Path,
     lock_relative_path: &str,
@@ -45,8 +45,8 @@ pub fn build_dfx_all(
     build_dfx_all_with_env(workspace_root, lock_relative_path, network, profile, &[]);
 }
 
-/// Build all `dfx` canisters while holding a file lock around the build and applying
-/// additional environment overrides.
+/// Build all local `.dfx` canister artifacts while holding a file lock around the build and
+/// applying additional environment overrides.
 pub fn build_dfx_all_with_env(
     workspace_root: &Path,
     lock_relative_path: &str,
@@ -54,7 +54,7 @@ pub fn build_dfx_all_with_env(
     profile: WasmBuildProfile,
     extra_env: &[(&str, &str)],
 ) {
-    let output = run_dfx_build_with_lock(
+    let output = run_local_artifact_build_with_lock(
         workspace_root,
         lock_relative_path,
         network,
@@ -63,7 +63,7 @@ pub fn build_dfx_all_with_env(
     );
     assert!(
         output.status.success(),
-        "dfx build --all failed: {}",
+        "local artifact build failed: {}",
         String::from_utf8_lossy(&output.stderr)
     );
 }
@@ -98,9 +98,8 @@ fn newest_path_mtime(path: &Path) -> io::Result<SystemTime> {
     Ok(newest)
 }
 
-// Invoke `dfx canister create --all` and `dfx build --all` under one file lock when `flock`
-// is available.
-fn run_dfx_build_with_lock(
+// Invoke the shared local artifact build helper under one file lock when `flock` is available.
+fn run_local_artifact_build_with_lock(
     workspace_root: &Path,
     lock_relative_path: &str,
     network: &str,
@@ -122,11 +121,7 @@ fn run_dfx_build_with_lock(
         .env("DFX_NETWORK", network)
         .env("RELEASE", profile.dfx_release_value())
         .env("CARGO_TARGET_DIR", &target_dir)
-        .args([
-            "-lc",
-            "dfx canister create --all -qq >/dev/null 2>&1 || true\n\
-             dfx build --all",
-        ]);
+        .arg("scripts/ci/build-ci-wasm-artifacts.sh");
     for (key, value) in extra_env {
         flock.env(key, value);
     }
@@ -134,15 +129,14 @@ fn run_dfx_build_with_lock(
     match flock.output() {
         Ok(output) => output,
         Err(err) if err.kind() == io::ErrorKind::NotFound => {
-            run_dfx_build(workspace_root, network, profile, extra_env)
+            run_local_artifact_build(workspace_root, network, profile, extra_env)
         }
-        Err(err) => panic!("failed to run `flock` for `dfx build --all`: {err}"),
+        Err(err) => panic!("failed to run `flock` for local artifact build: {err}"),
     }
 }
 
-// Invoke `dfx canister create --all` and `dfx build --all` directly when `flock` is
-// unavailable.
-fn run_dfx_build(
+// Invoke the shared local artifact build helper directly when `flock` is unavailable.
+fn run_local_artifact_build(
     workspace_root: &Path,
     network: &str,
     profile: WasmBuildProfile,
@@ -151,28 +145,18 @@ fn run_dfx_build(
     let target_dir = workspace_root.join("target/dfx-build");
     let _ = fs::create_dir_all(&target_dir);
 
-    let mut create = Command::new("dfx");
-    create
-        .current_dir(workspace_root)
-        .env("DFX_NETWORK", network)
-        .env("RELEASE", profile.dfx_release_value())
-        .env("CARGO_TARGET_DIR", &target_dir)
-        .args(["canister", "create", "--all", "-qq"]);
-    for (key, value) in extra_env {
-        create.env(key, value);
-    }
-    let _ = create.output();
-
-    let mut build = Command::new("dfx");
+    let mut build = Command::new("bash");
     build
         .current_dir(workspace_root)
         .env("DFX_NETWORK", network)
         .env("RELEASE", profile.dfx_release_value())
         .env("CARGO_TARGET_DIR", &target_dir)
-        .args(["build", "--all"]);
+        .arg("scripts/ci/build-ci-wasm-artifacts.sh");
     for (key, value) in extra_env {
         build.env(key, value);
     }
 
-    build.output().expect("failed to run `dfx build --all`")
+    build
+        .output()
+        .expect("failed to run local artifact build helper")
 }

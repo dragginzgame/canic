@@ -1,6 +1,6 @@
 .PHONY: help version tags patch patch-quick minor major package publish \
         test-packaged-downstream test-packaged-downstream-wasm-store \
-        test-packaged-downstream-installer \
+        test-packaged-downstream-installer test-installed-canic-installer \
         test test-wasm test-bump build check clippy fmt fmt-check clean install-dev \
         demo-install test-watch all ensure-clean \
         ensure-hooks install-hooks
@@ -66,6 +66,7 @@ help:
 	@echo "  test-packaged-downstream  Verify the packaged-downstream wasm_store and installer paths"
 	@echo "  test-packaged-downstream-wasm-store  Verify the hidden packaged-downstream wasm_store build path"
 	@echo "  test-packaged-downstream-installer  Verify the packaged-downstream installer manifest path"
+	@echo "  test-installed-canic-installer  Verify the installed-binary canic-installer path"
 	@echo ""
 	@echo "Development:"
 	@echo "  demo-install    Install the full local reference topology (fails if dfx is not already running)"
@@ -158,13 +159,16 @@ test-packaged-downstream-wasm-store:
 test-packaged-downstream-installer:
 	$(CARGO_ENV) scripts/ci/verify-packaged-downstream-installer.sh
 
+test-installed-canic-installer:
+	$(CARGO_ENV) scripts/ci/verify-installed-canic-installer.sh
+
 #
 # Tests
 #
 
 demo-install:
 	@mkdir -p "$(TEST_TMPDIR)"
-	TMPDIR="$(TEST_TMPDIR)" $(CARGO_ENV) cargo run -q -p canic-installer --bin canic-install-reference-topology -- root
+	TMPDIR="$(TEST_TMPDIR)" $(CARGO_ENV) cargo run -q -p canic-installer --bin canic-install-root -- root
 
 test: clippy test-unit
 
@@ -193,7 +197,7 @@ test-unit-fast:
 	TMPDIR="$(TEST_TMPDIR)" $(CARGO_ENV) cargo test --workspace --lib --bins -- --test-threads=1
 
 test-canisters: demo-install
-	test_pid="$$(TMPDIR="$(TEST_TMPDIR)" dfx canister call root canic_subnet_registry --output json | python3 -c 'import json,sys; data=json.load(sys.stdin); matches=[entry["pid"] for entry in data.get("Ok", []) if entry.get("role")=="test"]; print(matches[0]) if matches else sys.exit("root canic_subnet_registry did not contain role '\''test'\''")')"; \
+	test_pid="$$(TMPDIR="$(TEST_TMPDIR)" dfx canister call root canic_subnet_registry --output json | jq -er '.Ok[] | select(.role == "test") | .pid' | head -n1)"; \
 	TMPDIR="$(TEST_TMPDIR)" dfx canister call "$$test_pid" test
 
 #
