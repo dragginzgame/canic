@@ -41,50 +41,17 @@ jobs:
       - name: Install PocketIC server
         shell: bash
         run: |
-          set -euxo pipefail
-          VERSION="${POCKET_IC_VERSION}"
-          DIR="$RUNNER_TEMP/pocket-ic-server-$VERSION"
-          BIN="$DIR/pocket-ic"
-          mkdir -p "$DIR"
-
-          if [ ! -x "$BIN" ]; then
-            curl -L \
-              -o "$BIN.gz" \
-              "https://github.com/dfinity/pocketic/releases/download/$VERSION/pocket-ic-x86_64-linux.gz"
-            gunzip -f "$BIN.gz"
-            chmod +x "$BIN"
-          fi
-
+          BIN="$(bash scripts/ci/install-pocketic.sh "$POCKET_IC_VERSION")"
           echo "POCKET_IC_BIN=$BIN" >> "$GITHUB_ENV"
       - name: Build canister wasm artifacts
         shell: bash
         run: bash scripts/ci/build-ci-wasm-artifacts.sh
       - name: Layering guards
         shell: bash
-        run: |
-          set -euo pipefail
-          if rg "storage::stable::.*Record" crates/canic-core/src/workflow; then
-            echo "workflow must not touch storage records"
-            exit 1
-          fi
-
-          if rg "pub use .*Record" crates/canic-core/src | rg -v "pub\\(crate\\)"; then
-            echo "record types must not be publicly re-exported"
-            exit 1
-          fi
-
-          if rg "(to_view|from_view)" crates/canic-core/src | rg -v "record_to_view|view::"; then
-            echo "misuse of 'view' detected in function names"
-            exit 1
-          fi
+        run: bash scripts/ci/run-layering-guards.sh
       - name: Forbidden crypto API guards
         shell: bash
-        run: |
-          set -euo pipefail
-          if rg -n "sign_with_ecdsa|verify_ecdsa|ecdsa_public_key" crates; then
-            echo "forbidden ECDSA API detected"
-            exit 1
-          fi
+        run: bash scripts/ci/run-forbidden-crypto-guards.sh
       - run: make fmt-check
       - run: make clippy
       - run: cargo test --workspace --all-targets --verbose --locked -- --test-threads=1
@@ -116,32 +83,14 @@ jobs:
       - name: Install PocketIC server
         shell: bash
         run: |
-          set -euxo pipefail
-          VERSION="${POCKET_IC_VERSION}"
-          DIR="$RUNNER_TEMP/pocket-ic-server-$VERSION"
-          BIN="$DIR/pocket-ic"
-          mkdir -p "$DIR"
-
-          if [ ! -x "$BIN" ]; then
-            curl -L \
-              -o "$BIN.gz" \
-              "https://github.com/dfinity/pocketic/releases/download/$VERSION/pocket-ic-x86_64-linux.gz"
-            gunzip -f "$BIN.gz"
-            chmod +x "$BIN"
-          fi
-
+          BIN="$(bash scripts/ci/install-pocketic.sh "$POCKET_IC_VERSION")"
           echo "POCKET_IC_BIN=$BIN" >> "$GITHUB_ENV"
       - name: Build canister wasm artifacts
         shell: bash
         run: bash scripts/ci/build-ci-wasm-artifacts.sh
       - name: Forbidden crypto API guards
         shell: bash
-        run: |
-          set -euo pipefail
-          if rg -n "sign_with_ecdsa|verify_ecdsa|ecdsa_public_key" crates; then
-            echo "forbidden ECDSA API detected"
-            exit 1
-          fi
+        run: bash scripts/ci/run-forbidden-crypto-guards.sh
       - run: make fmt-check
       - run: make clippy
       - run: cargo test --workspace --all-targets --verbose --locked -- --test-threads=1

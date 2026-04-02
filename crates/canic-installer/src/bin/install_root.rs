@@ -1,6 +1,6 @@
 use canic_installer::install_root::{InstallRootOptions, install_root};
 
-// Run the compatibility install entrypoint for the older reference-topology name.
+// Run the generic local-root install entrypoint.
 fn main() {
     if let Err(err) = run() {
         eprintln!("{err}");
@@ -8,7 +8,7 @@ fn main() {
     }
 }
 
-// Execute the local reference-topology install flow against an already running replica.
+// Execute the published local-root install flow against an already running replica.
 fn run() -> Result<(), Box<dyn std::error::Error>> {
     install_root(InstallRootOptions::from_env_and_args())
 }

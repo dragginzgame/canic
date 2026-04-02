@@ -2,10 +2,7 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT_CANISTER="${1:-${ROOT_CANISTER:-root}}"
 
-if command -v canic-install-reference-topology >/dev/null 2>&1; then
-    exec canic-install-reference-topology "${ROOT_CANISTER}"
-fi
-
-exec cargo run -q -p canic-installer --bin canic-install-reference-topology -- "${ROOT_CANISTER}"
+exec "$SCRIPT_DIR/canic_installer.sh" canic-install-root "${ROOT_CANISTER}"

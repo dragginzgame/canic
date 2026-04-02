@@ -23,7 +23,7 @@ The shared demo topology lives in `canisters/canic.toml` and is referenced by ea
 
 ## Local Workflow
 
-These canisters are wired through `dfx.json` (custom build steps call `scripts/app/build.sh`).
+These canisters are wired through `dfx.json` (custom build steps call `scripts/app/build.sh`, which is now a thin wrapper around the published `canic-build-canister-artifact` binary).
 
 - Install the full local reference topology: `make demo-install`
 - `root` stays thin: only the bootstrap `wasm_store` artifact is embedded, and the ordinary configured release set is staged after install from the build-produced `.dfx/local/canisters/root/root.release-set.json` manifest.

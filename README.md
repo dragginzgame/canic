@@ -142,6 +142,41 @@ See `canisters/root` and the reference canisters under `canisters/*` for end‑t
 
 Populate `canic.toml` with subnet definitions, directory membership, and per‑canister policies. Each `[subnets.<name>]` block lists `auto_create` and `subnet_directory` canister roles, then nests `[subnets.<name>.canisters.<role>]` tables for top‑up settings plus optional sharding and scaling pools. Global tables such as `controllers`, `app_directory`, `app`, `auth`, `log`, and `standards` shape the overall cluster, while per-subnet warm-pool policy lives under `[subnets.<name>.pool]` (older configs may still refer to this as `reserve`). The `[log]` block controls ring/age retention and per‑entry size caps. The full schema lives in `CONFIG.md`. The role identifiers resolve to the `CanisterRole`/`SubnetRole` wrappers in `crates/canic-core/src/ids/`.
 
+### 5. Local Build and Install
+
+For local DFX workflows, install the published helper that owns Canic's thin-root build and install boundary:
+
+```bash
+cargo install --locked canic-installer --version <same-version-as-canic>
+```
+
+Then, from your workspace root:
+
+```bash
+dfx canister create --all
+dfx build --all
+canic-install-root root
+```
+
+`root` stays thin in this flow. It embeds only the bootstrap `wasm_store.wasm.gz`; ordinary child releases stay outside `root` and are staged after install from `.dfx/local/canisters/root/root.release-set.json`.
+
+If your repo splits the Rust workspace and the DFX app root (for example `backend/` + `frontend/`), point Canic at both roots explicitly:
+
+```bash
+CANIC_WORKSPACE_ROOT=/path/to/repo/backend \
+CANIC_DFX_ROOT=/path/to/repo \
+canic-build-canister-artifact root
+```
+
+`CANIC_WORKSPACE_ROOT` controls Cargo, `canic.toml`, and canister manifests. `CANIC_DFX_ROOT` controls `dfx.json`, `.dfx`, emitted artifacts, and the hidden generated bootstrap-store wrapper.
+
+If you need the lower-level build/install boundaries directly, `canic-installer` also publishes:
+
+- `canic-build-canister-artifact`
+- `canic-build-wasm-store-artifact`
+- `canic-emit-root-release-set-manifest`
+- `canic-stage-root-release-set`
+
 ## Layered Architecture
 
 Canic follows a strict layered design to keep boundaries stable and refactors cheap. Dependencies must flow inward; boundary code must not depend on concrete storage representations.

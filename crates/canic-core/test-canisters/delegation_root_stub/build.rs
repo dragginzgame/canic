@@ -11,20 +11,46 @@ fn main() {
         println!("cargo:rustc-cfg=canic_test_delegation_material");
     }
 
+    let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR"));
+    let workspace_root = discover_workspace_root(&manifest_dir);
+    let out_dir = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR"));
+
+    // Build the hidden bootstrap store artifact first so `build_root!` can
+    // embed a registered bootstrap module even on plain cargo builds.
+    let bootstrap_target_dir = out_dir.join("bootstrap_wasm_store_target");
+    fs::create_dir_all(&bootstrap_target_dir).expect("create bootstrap wasm_store target dir");
+    let mut bootstrap_cmd = Command::new("cargo");
+    bootstrap_cmd.current_dir(&workspace_root);
+    bootstrap_cmd.env("CANIC_WORKSPACE_ROOT", &workspace_root);
+    bootstrap_cmd.env("CANIC_CONFIG_PATH", manifest_dir.join("canic.toml"));
+    bootstrap_cmd.env("CARGO_TARGET_DIR", &bootstrap_target_dir);
+    bootstrap_cmd.env("DFX_NETWORK", "local");
+    bootstrap_cmd.env("RELEASE", "1");
+    bootstrap_cmd.args([
+        "run",
+        "-q",
+        "-p",
+        "canic-installer",
+        "--bin",
+        "canic-build-wasm-store-artifact",
+        "--",
+    ]);
+    let bootstrap_output = bootstrap_cmd
+        .output()
+        .expect("build bootstrap wasm_store artifact");
+    assert!(
+        bootstrap_output.status.success(),
+        "bootstrap wasm_store artifact build failed: {}",
+        String::from_utf8_lossy(&bootstrap_output.stderr)
+    );
+
     canic::build_root!("canic.toml");
 
-    let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR"));
-    let workspace_root = manifest_dir
-        .parent()
-        .and_then(|p| p.parent())
-        .expect("workspace root");
-
-    let out_dir = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR"));
     let target_dir = out_dir.join("embedded_wasm_target");
     fs::create_dir_all(&target_dir).expect("create embedded wasm target dir");
 
     let mut cmd = Command::new("cargo");
-    cmd.current_dir(workspace_root);
+    cmd.current_dir(&workspace_root);
     cmd.env("CARGO_TARGET_DIR", &target_dir);
     if let Some(flag) = env::var_os("CANIC_TEST_DELEGATION_MATERIAL") {
         cmd.env("CANIC_TEST_DELEGATION_MATERIAL", flag);
@@ -70,5 +96,26 @@ fn main() {
         workspace_root
             .join("crates/canic-core/test-canisters/delegation_signer_stub/canic.toml")
             .display()
+    );
+}
+
+fn discover_workspace_root(manifest_dir: &std::path::Path) -> PathBuf {
+    for candidate in manifest_dir.ancestors() {
+        let cargo_toml = candidate.join("Cargo.toml");
+        if !cargo_toml.is_file() {
+            continue;
+        }
+
+        let cargo_toml_text = fs::read_to_string(&cargo_toml)
+            .unwrap_or_else(|err| panic!("read {} failed: {err}", cargo_toml.display()));
+
+        if cargo_toml_text.contains("[workspace]") {
+            return candidate.to_path_buf();
+        }
+    }
+
+    panic!(
+        "unable to discover workspace root from {}; expected an ancestor Cargo.toml with [workspace]",
+        manifest_dir.display()
     );
 }

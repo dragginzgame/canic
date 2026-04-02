@@ -41,6 +41,7 @@ const PREBUILT_WASM_DIR_ENV: &str = "CANIC_PREBUILT_WASM_DIR";
 static BUILD_ONCE: Once = Once::new();
 static BUILD_WITHOUT_TEST_MATERIAL_ONCE: Once = Once::new();
 static PIC_BUILD_SERIAL: Mutex<()> = Mutex::new(());
+static CANISTER_BUILD_SERIAL: Mutex<()> = Mutex::new(());
 
 ///
 /// SerialPic
@@ -65,6 +66,44 @@ impl DerefMut for SerialPic {
     }
 }
 
+///
+/// InstalledRoot
+///
+
+struct InstalledRoot {
+    pic: SerialPic,
+    root_id: Principal,
+}
+
+// Build the standard test root canister variant and install it into a fresh
+// PocketIC instance for one test.
+fn install_test_root() -> InstalledRoot {
+    let workspace_root = workspace_root();
+    build_canisters_once(&workspace_root);
+    let root_wasm = read_wasm(&workspace_root, "delegation_root_stub");
+    install_root_fixture(root_wasm)
+}
+
+// Build the normal-build root variant without delegation-material hooks and
+// install it into a fresh PocketIC instance for one test.
+fn install_test_root_without_test_material() -> InstalledRoot {
+    let workspace_root = workspace_root();
+    build_canisters_without_test_material_once(&workspace_root);
+    let root_wasm = read_wasm_from_target(
+        &test_target_dir_without_test_material(&workspace_root),
+        "delegation_root_stub",
+    );
+    install_root_fixture(root_wasm)
+}
+
+// Install one root wasm into a fresh serialized PocketIC instance.
+fn install_root_fixture(root_wasm: Vec<u8>) -> InstalledRoot {
+    let pic = build_pic();
+    let root_id = install_root_canister(&pic, root_wasm);
+
+    InstalledRoot { pic, root_id }
+}
+
 fn encode_role_attestation_capability_proof(proof: RoleAttestationProof) -> CapabilityProof {
     proof
         .try_into()
@@ -79,12 +118,7 @@ fn encode_delegated_grant_capability_proof(proof: DelegatedGrantProof) -> Capabi
 
 #[test]
 fn role_attestation_issue_and_verify_happy_path() {
-    let workspace_root = workspace_root();
-    build_canisters_once(&workspace_root);
-    let root_wasm = read_wasm(&workspace_root, "delegation_root_stub");
-
-    let pic = build_pic();
-    let root_id = install_root_canister(&pic, root_wasm);
+    let InstalledRoot { pic, root_id } = install_test_root();
 
     let issued: Result<SignedRoleAttestation, Error> = update_call_as(
         &pic,
@@ -107,12 +141,7 @@ fn role_attestation_issue_and_verify_happy_path() {
 
 #[test]
 fn role_attestation_verify_rejects_mismatched_caller() {
-    let workspace_root = workspace_root();
-    build_canisters_once(&workspace_root);
-    let root_wasm = read_wasm(&workspace_root, "delegation_root_stub");
-
-    let pic = build_pic();
-    let root_id = install_root_canister(&pic, root_wasm);
+    let InstalledRoot { pic, root_id } = install_test_root();
 
     let issued: Result<SignedRoleAttestation, Error> = update_call_as(
         &pic,
@@ -140,12 +169,7 @@ fn role_attestation_verify_rejects_mismatched_caller() {
 
 #[test]
 fn role_attestation_verify_rejects_expired() {
-    let workspace_root = workspace_root();
-    build_canisters_once(&workspace_root);
-    let root_wasm = read_wasm(&workspace_root, "delegation_root_stub");
-
-    let pic = build_pic();
-    let root_id = install_root_canister(&pic, root_wasm);
+    let InstalledRoot { pic, root_id } = install_test_root();
 
     let issued: Result<SignedRoleAttestation, Error> = update_call_as(
         &pic,
@@ -176,12 +200,7 @@ fn role_attestation_verify_rejects_expired() {
 
 #[test]
 fn role_attestation_verify_rejects_audience_mismatch() {
-    let workspace_root = workspace_root();
-    build_canisters_once(&workspace_root);
-    let root_wasm = read_wasm(&workspace_root, "delegation_root_stub");
-
-    let pic = build_pic();
-    let root_id = install_root_canister(&pic, root_wasm);
+    let InstalledRoot { pic, root_id } = install_test_root();
     let wrong_audience = Principal::from_slice(&[9; 29]);
 
     let issued: Result<SignedRoleAttestation, Error> = update_call_as(
@@ -210,12 +229,7 @@ fn role_attestation_verify_rejects_audience_mismatch() {
 
 #[test]
 fn role_attestation_verify_rejects_epoch_floor() {
-    let workspace_root = workspace_root();
-    build_canisters_once(&workspace_root);
-    let root_wasm = read_wasm(&workspace_root, "delegation_root_stub");
-
-    let pic = build_pic();
-    let root_id = install_root_canister(&pic, root_wasm);
+    let InstalledRoot { pic, root_id } = install_test_root();
 
     let issued: Result<SignedRoleAttestation, Error> = update_call_as(
         &pic,
@@ -243,12 +257,7 @@ fn role_attestation_verify_rejects_epoch_floor() {
 
 #[test]
 fn role_attestation_verify_handles_rotated_key_grace_window() {
-    let workspace_root = workspace_root();
-    build_canisters_once(&workspace_root);
-    let root_wasm = read_wasm(&workspace_root, "delegation_root_stub");
-
-    let pic = build_pic();
-    let root_id = install_root_canister(&pic, root_wasm);
+    let InstalledRoot { pic, root_id } = install_test_root();
 
     let previous_key_id = 1_001u32;
     let previous_key_seed = 3u8;
@@ -343,12 +352,7 @@ fn role_attestation_verify_handles_rotated_key_grace_window() {
 #[test]
 #[expect(clippy::too_many_lines)]
 fn delegated_session_bootstrap_affects_authenticated_guard_only() {
-    let workspace_root = workspace_root();
-    build_canisters_once(&workspace_root);
-    let root_wasm = read_wasm(&workspace_root, "delegation_root_stub");
-
-    let pic = build_pic();
-    let root_id = install_root_canister(&pic, root_wasm);
+    let InstalledRoot { pic, root_id } = install_test_root();
     let signer_id = signer_pid(&pic, root_id);
     wait_until_ready(&pic, signer_id);
 
@@ -481,12 +485,7 @@ fn delegated_session_bootstrap_affects_authenticated_guard_only() {
 
 #[test]
 fn authenticated_guard_checks_current_proof_before_signature_validation() {
-    let workspace_root = workspace_root();
-    build_canisters_once(&workspace_root);
-    let root_wasm = read_wasm(&workspace_root, "delegation_root_stub");
-
-    let pic = build_pic();
-    let root_id = install_root_canister(&pic, root_wasm);
+    let InstalledRoot { pic, root_id } = install_test_root();
     let signer_id = signer_pid(&pic, root_id);
     wait_until_ready(&pic, signer_id);
 
@@ -797,12 +796,7 @@ fn signer_runtime_prefers_most_recent_keyed_proof_for_signing_selection() {
 #[test]
 #[expect(clippy::too_many_lines)]
 fn delegation_tier1_issue_verify_bootstrap_authenticated_end_to_end() {
-    let workspace_root = workspace_root();
-    build_canisters_once(&workspace_root);
-    let root_wasm = read_wasm(&workspace_root, "delegation_root_stub");
-
-    let pic = build_pic();
-    let root_id = install_root_canister(&pic, root_wasm);
+    let InstalledRoot { pic, root_id } = install_test_root();
     let signer_id = signer_pid(&pic, root_id);
     wait_until_ready(&pic, signer_id);
 
@@ -943,12 +937,7 @@ fn delegation_tier1_issue_verify_bootstrap_authenticated_end_to_end() {
 #[test]
 #[expect(clippy::too_many_lines)]
 fn delegated_session_does_not_affect_role_attestation_or_capability_raw_caller_checks() {
-    let workspace_root = workspace_root();
-    build_canisters_once(&workspace_root);
-    let root_wasm = read_wasm(&workspace_root, "delegation_root_stub");
-
-    let pic = build_pic();
-    let root_id = install_root_canister(&pic, root_wasm);
+    let InstalledRoot { pic, root_id } = install_test_root();
     let signer_id = signer_pid(&pic, root_id);
     wait_until_ready(&pic, signer_id);
 
@@ -1080,12 +1069,7 @@ fn delegated_session_does_not_affect_role_attestation_or_capability_raw_caller_c
 #[test]
 #[expect(clippy::too_many_lines)]
 fn delegated_session_bootstrap_replay_policy_and_metrics() {
-    let workspace_root = workspace_root();
-    build_canisters_once(&workspace_root);
-    let root_wasm = read_wasm(&workspace_root, "delegation_root_stub");
-
-    let pic = build_pic();
-    let root_id = install_root_canister(&pic, root_wasm);
+    let InstalledRoot { pic, root_id } = install_test_root();
     let signer_id = signer_pid(&pic, root_id);
     wait_until_ready(&pic, signer_id);
 
@@ -1346,12 +1330,7 @@ fn delegated_session_bootstrap_replay_policy_and_metrics() {
 
 #[test]
 fn delegated_session_bootstrap_replay_with_expired_token_fails_closed() {
-    let workspace_root = workspace_root();
-    build_canisters_once(&workspace_root);
-    let root_wasm = read_wasm(&workspace_root, "delegation_root_stub");
-
-    let pic = build_pic();
-    let root_id = install_root_canister(&pic, root_wasm);
+    let InstalledRoot { pic, root_id } = install_test_root();
     let signer_id = signer_pid(&pic, root_id);
     wait_until_ready(&pic, signer_id);
 
@@ -1429,15 +1408,7 @@ fn delegated_session_bootstrap_replay_with_expired_token_fails_closed() {
 
 #[test]
 fn test_delegation_material_install_hook_not_compiled_in_normal_build() {
-    let workspace_root = workspace_root();
-    build_canisters_without_test_material_once(&workspace_root);
-    let root_wasm = read_wasm_from_target(
-        &test_target_dir_without_test_material(&workspace_root),
-        "delegation_root_stub",
-    );
-
-    let pic = build_pic();
-    let root_id = install_root_canister(&pic, root_wasm);
+    let InstalledRoot { pic, root_id } = install_test_root_without_test_material();
     let signer_id = signer_pid(&pic, root_id);
     wait_until_ready(&pic, signer_id);
 
@@ -1490,12 +1461,7 @@ fn test_delegation_material_install_hook_not_compiled_in_normal_build() {
 
 #[test]
 fn capability_endpoint_role_attestation_proof_happy_path() {
-    let workspace_root = workspace_root();
-    build_canisters_once(&workspace_root);
-    let root_wasm = read_wasm(&workspace_root, "delegation_root_stub");
-
-    let pic = build_pic();
-    let root_id = install_root_canister(&pic, root_wasm);
+    let InstalledRoot { pic, root_id } = install_test_root();
 
     let issued: Result<SignedRoleAttestation, Error> = update_call_as(
         &pic,
@@ -1539,12 +1505,7 @@ fn capability_endpoint_role_attestation_proof_happy_path() {
 
 #[test]
 fn capability_endpoint_rejects_expired_role_attestation() {
-    let workspace_root = workspace_root();
-    build_canisters_once(&workspace_root);
-    let root_wasm = read_wasm(&workspace_root, "delegation_root_stub");
-
-    let pic = build_pic();
-    let root_id = install_root_canister(&pic, root_wasm);
+    let InstalledRoot { pic, root_id } = install_test_root();
 
     let issued: Result<SignedRoleAttestation, Error> = update_call_as(
         &pic,
@@ -1591,12 +1552,7 @@ fn capability_endpoint_rejects_expired_role_attestation() {
 
 #[test]
 fn capability_endpoint_rejects_audience_mismatch() {
-    let workspace_root = workspace_root();
-    build_canisters_once(&workspace_root);
-    let root_wasm = read_wasm(&workspace_root, "delegation_root_stub");
-
-    let pic = build_pic();
-    let root_id = install_root_canister(&pic, root_wasm);
+    let InstalledRoot { pic, root_id } = install_test_root();
     let wrong_audience = Principal::from_slice(&[9; 29]);
 
     let issued: Result<SignedRoleAttestation, Error> = update_call_as(
@@ -1642,12 +1598,7 @@ fn capability_endpoint_rejects_audience_mismatch() {
 
 #[test]
 fn capability_endpoint_policy_denies_role_attestation_subject_mismatch() {
-    let workspace_root = workspace_root();
-    build_canisters_once(&workspace_root);
-    let root_wasm = read_wasm(&workspace_root, "delegation_root_stub");
-
-    let pic = build_pic();
-    let root_id = install_root_canister(&pic, root_wasm);
+    let InstalledRoot { pic, root_id } = install_test_root();
 
     let issued: Result<SignedRoleAttestation, Error> = update_call_as(
         &pic,
@@ -1698,12 +1649,7 @@ fn capability_endpoint_policy_denies_role_attestation_subject_mismatch() {
 
 #[test]
 fn capability_endpoint_policy_denial_is_not_replay_cached() {
-    let workspace_root = workspace_root();
-    build_canisters_once(&workspace_root);
-    let root_wasm = read_wasm(&workspace_root, "delegation_root_stub");
-
-    let pic = build_pic();
-    let root_id = install_root_canister(&pic, root_wasm);
+    let InstalledRoot { pic, root_id } = install_test_root();
 
     let issued: Result<SignedRoleAttestation, Error> = update_call_as(
         &pic,
@@ -1783,12 +1729,7 @@ fn capability_endpoint_policy_denial_is_not_replay_cached() {
 
 #[test]
 fn capability_endpoint_policy_denies_role_attestation_missing_audience() {
-    let workspace_root = workspace_root();
-    build_canisters_once(&workspace_root);
-    let root_wasm = read_wasm(&workspace_root, "delegation_root_stub");
-
-    let pic = build_pic();
-    let root_id = install_root_canister(&pic, root_wasm);
+    let InstalledRoot { pic, root_id } = install_test_root();
 
     let issued: Result<SignedRoleAttestation, Error> = update_call_as(
         &pic,
@@ -1839,12 +1780,7 @@ fn capability_endpoint_policy_denies_role_attestation_missing_audience() {
 
 #[test]
 fn capability_endpoint_rejects_tampered_signature() {
-    let workspace_root = workspace_root();
-    build_canisters_once(&workspace_root);
-    let root_wasm = read_wasm(&workspace_root, "delegation_root_stub");
-
-    let pic = build_pic();
-    let root_id = install_root_canister(&pic, root_wasm);
+    let InstalledRoot { pic, root_id } = install_test_root();
 
     let issued: Result<SignedRoleAttestation, Error> = update_call_as(
         &pic,
@@ -1892,12 +1828,7 @@ fn capability_endpoint_rejects_tampered_signature() {
 
 #[test]
 fn capability_endpoint_allows_structural_cycles_for_registered_caller() {
-    let workspace_root = workspace_root();
-    build_canisters_once(&workspace_root);
-    let root_wasm = read_wasm(&workspace_root, "delegation_root_stub");
-
-    let pic = build_pic();
-    let root_id = install_root_canister(&pic, root_wasm);
+    let InstalledRoot { pic, root_id } = install_test_root();
 
     let issued: Result<SignedRoleAttestation, Error> = update_call_as(
         &pic,
@@ -1939,12 +1870,7 @@ fn capability_endpoint_allows_structural_cycles_for_registered_caller() {
 
 #[test]
 fn capability_endpoint_rejects_structural_for_unsupported_capability() {
-    let workspace_root = workspace_root();
-    build_canisters_once(&workspace_root);
-    let root_wasm = read_wasm(&workspace_root, "delegation_root_stub");
-
-    let pic = build_pic();
-    let root_id = install_root_canister(&pic, root_wasm);
+    let InstalledRoot { pic, root_id } = install_test_root();
 
     let issued: Result<SignedRoleAttestation, Error> = update_call_as(
         &pic,
@@ -1992,12 +1918,7 @@ fn capability_endpoint_rejects_structural_for_unsupported_capability() {
 
 #[test]
 fn capability_endpoint_rejects_delegated_grant_scope_mismatch() {
-    let workspace_root = workspace_root();
-    build_canisters_once(&workspace_root);
-    let root_wasm = read_wasm(&workspace_root, "delegation_root_stub");
-
-    let pic = build_pic();
-    let root_id = install_root_canister(&pic, root_wasm);
+    let InstalledRoot { pic, root_id } = install_test_root();
 
     let issued: Result<SignedRoleAttestation, Error> = update_call_as(
         &pic,
@@ -2060,12 +1981,7 @@ fn capability_endpoint_rejects_delegated_grant_scope_mismatch() {
 
 #[test]
 fn capability_endpoint_rejects_capability_hash_mismatch() {
-    let workspace_root = workspace_root();
-    build_canisters_once(&workspace_root);
-    let root_wasm = read_wasm(&workspace_root, "delegation_root_stub");
-
-    let pic = build_pic();
-    let root_id = install_root_canister(&pic, root_wasm);
+    let InstalledRoot { pic, root_id } = install_test_root();
 
     let issued: Result<SignedRoleAttestation, Error> = update_call_as(
         &pic,
@@ -2126,12 +2042,7 @@ struct DelegationAdminFixture {
 
 // Build a reusable root/signer/verifier setup with two proof generations.
 fn delegation_admin_fixture(subject_seed: u8) -> DelegationAdminFixture {
-    let workspace_root = workspace_root();
-    build_canisters_once(&workspace_root);
-    let root_wasm = read_wasm(&workspace_root, "delegation_root_stub");
-
-    let pic = build_pic();
-    let root_id = install_root_canister(&pic, root_wasm);
+    let InstalledRoot { pic, root_id } = install_test_root();
     let signer_id = signer_pid(&pic, root_id);
     let verifier_id = create_verifier_canister(&pic, root_id);
     wait_until_ready(&pic, signer_id);
@@ -2607,6 +2518,10 @@ const fn capability_metadata(
 // Build the test canisters with delegation-material test cfg enabled.
 // This path is used by the main delegated-session regression suite.
 fn build_canisters_once(workspace_root: &PathBuf) {
+    let _serial_guard = CANISTER_BUILD_SERIAL
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+
     BUILD_ONCE.call_once_force(|_| {
         if prebuilt_wasm_dir().is_some() {
             return;
@@ -2636,6 +2551,10 @@ fn build_canisters_once(workspace_root: &PathBuf) {
 // Build the same test canisters without delegation-material test cfg enabled.
 // This validates that normal builds do not compile the install hook.
 fn build_canisters_without_test_material_once(workspace_root: &PathBuf) {
+    let _serial_guard = CANISTER_BUILD_SERIAL
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+
     BUILD_WITHOUT_TEST_MATERIAL_ONCE.call_once_force(|_| {
         let target_dir = test_target_dir_without_test_material(workspace_root);
         let mut cmd = Command::new("cargo");

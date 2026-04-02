@@ -17,6 +17,7 @@ use std::{
 const ROOT_CONFIG_RELATIVE: &str = "canisters/canic.toml";
 const ROOT_MANIFEST_RELATIVE: &str = "canisters/root/Cargo.toml";
 const WORKSPACE_MANIFEST_RELATIVE: &str = "Cargo.toml";
+const DFX_CONFIG_FILE: &str = "dfx.json";
 pub const ROOT_RELEASE_CHUNK_BYTES: usize = 1024 * 1024;
 pub const ROOT_RELEASE_SET_MANIFEST_FILE: &str = "root.release-set.json";
 const GZIP_MAGIC: [u8; 2] = [0x1f, 0x8b];
@@ -47,14 +48,53 @@ pub struct ReleaseSetEntry {
     pub chunk_sha256_hex: Vec<String>,
 }
 
-// Resolve the downstream workspace root from the current working directory or
-// an explicit override.
+// Resolve the downstream Cargo workspace root from the current directory,
+// config hints, or an explicit override.
 pub fn workspace_root() -> Result<PathBuf, Box<dyn std::error::Error>> {
     if let Ok(path) = std::env::var("CANIC_WORKSPACE_ROOT") {
         return Ok(PathBuf::from(path).canonicalize()?);
     }
 
+    if let Some(root) = std::env::var_os("CANIC_WORKSPACE_MANIFEST_PATH")
+        .map(PathBuf::from)
+        .and_then(|path| discover_workspace_root_from(&path))
+    {
+        return Ok(root);
+    }
+
+    if let Some(root) = std::env::var_os("CANIC_CONFIG_PATH")
+        .map(PathBuf::from)
+        .and_then(|path| discover_workspace_root_from(&path))
+    {
+        return Ok(root);
+    }
+
+    if let Some(root) = discover_workspace_root_from(&std::env::current_dir()?) {
+        return Ok(root);
+    }
+
     Ok(std::env::current_dir()?.canonicalize()?)
+}
+
+// Resolve the downstream DFX/project root from the current directory or an
+// explicit override.
+pub fn dfx_root() -> Result<PathBuf, Box<dyn std::error::Error>> {
+    if let Ok(path) = std::env::var("CANIC_DFX_ROOT") {
+        return Ok(PathBuf::from(path).canonicalize()?);
+    }
+
+    let current_dir = std::env::current_dir()?.canonicalize()?;
+    if let Some(root) = discover_dfx_root_from(&current_dir) {
+        return Ok(root);
+    }
+
+    if let Ok(path) = std::env::var("CANIC_WORKSPACE_ROOT")
+        && let Some(root) = discover_dfx_root_from(&PathBuf::from(path))
+    {
+        return Ok(root);
+    }
+
+    Ok(current_dir)
 }
 
 // Resolve the downstream Canic config path.
@@ -84,15 +124,15 @@ pub fn workspace_manifest_path(workspace_root: &Path) -> PathBuf {
 
 // Prefer the selected DFX network artifact root and fall back to local when present.
 pub fn resolve_artifact_root(
-    workspace_root: &Path,
+    dfx_root: &Path,
     network: &str,
 ) -> Result<PathBuf, Box<dyn std::error::Error>> {
-    let preferred = workspace_root.join(".dfx").join(network).join("canisters");
+    let preferred = dfx_root.join(".dfx").join(network).join("canisters");
     if preferred.is_dir() {
         return Ok(preferred);
     }
 
-    let fallback = workspace_root.join(".dfx/local/canisters");
+    let fallback = dfx_root.join(".dfx/local/canisters");
     if fallback.is_dir() {
         return Ok(fallback);
     }
@@ -123,9 +163,10 @@ pub fn root_release_set_manifest_path(
 // Build and persist the current root release-set manifest from built `.wasm.gz` artifacts.
 pub fn emit_root_release_set_manifest(
     workspace_root: &Path,
+    dfx_root: &Path,
     network: &str,
 ) -> Result<PathBuf, Box<dyn std::error::Error>> {
-    let artifact_root = resolve_artifact_root(workspace_root, network)?;
+    let artifact_root = resolve_artifact_root(dfx_root, network)?;
     let config_path = config_path(workspace_root);
     let manifest_path = root_release_set_manifest_path(&artifact_root)?;
     let release_version = load_root_package_version(
@@ -134,7 +175,7 @@ pub fn emit_root_release_set_manifest(
     )?;
     let entries = configured_release_roles(&config_path)?
         .into_iter()
-        .map(|role_name| build_release_set_entry(workspace_root, &artifact_root, &role_name))
+        .map(|role_name| build_release_set_entry(dfx_root, &artifact_root, &role_name))
         .collect::<Result<Vec<_>, _>>()?;
     let manifest = RootReleaseSetManifest {
         release_version,
@@ -148,9 +189,10 @@ pub fn emit_root_release_set_manifest(
 // Emit the root release-set manifest only once every required ordinary artifact exists.
 pub fn emit_root_release_set_manifest_if_ready(
     workspace_root: &Path,
+    dfx_root: &Path,
     network: &str,
 ) -> Result<Option<PathBuf>, Box<dyn std::error::Error>> {
-    let artifact_root = resolve_artifact_root(workspace_root, network)?;
+    let artifact_root = resolve_artifact_root(dfx_root, network)?;
     let roles = configured_release_roles(&config_path(workspace_root))?;
 
     for role_name in roles {
@@ -162,7 +204,7 @@ pub fn emit_root_release_set_manifest_if_ready(
         }
     }
 
-    emit_root_release_set_manifest(workspace_root, network).map(Some)
+    emit_root_release_set_manifest(workspace_root, dfx_root, network).map(Some)
 }
 
 // Load one previously emitted root release-set manifest from disk.
@@ -303,7 +345,7 @@ pub fn root_time_secs(root_canister: &str) -> Result<u64, Box<dyn std::error::Er
 
 // Stage one emitted release-set manifest into root and resume bootstrap-ready state.
 pub fn stage_root_release_set(
-    workspace_root: &Path,
+    dfx_root: &Path,
     root_canister: &str,
     manifest: &RootReleaseSetManifest,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -311,7 +353,7 @@ pub fn stage_root_release_set(
 
     for entry in &manifest.entries {
         stage_release_entry(
-            workspace_root,
+            dfx_root,
             root_canister,
             &manifest.release_version,
             entry,
@@ -340,7 +382,9 @@ pub fn dfx_call(
     argument: Option<&str>,
     output: Option<&str>,
 ) -> Result<String, Box<dyn std::error::Error>> {
+    let dfx_root = dfx_root()?;
     let mut command = Command::new("dfx");
+    command.current_dir(&dfx_root);
     command.args(["canister", "call", canister, method]);
 
     if let Some(output) = output {
@@ -422,7 +466,7 @@ pub fn json_u64(value: &Value) -> Option<u64> {
 
 // Build one release-set entry from one built ordinary role artifact.
 fn build_release_set_entry(
-    workspace_root: &Path,
+    dfx_root: &Path,
     artifact_root: &Path,
     role_name: &str,
 ) -> Result<ReleaseSetEntry, Box<dyn std::error::Error>> {
@@ -430,12 +474,12 @@ fn build_release_set_entry(
         .join(role_name)
         .join(format!("{role_name}.wasm.gz"));
     let artifact_relative_path = artifact_path
-        .strip_prefix(workspace_root)
+        .strip_prefix(dfx_root)
         .map_err(|_| {
             format!(
-                "artifact {} is not under workspace root {}",
+                "artifact {} is not under DFX root {}",
                 artifact_path.display(),
-                workspace_root.display()
+                dfx_root.display()
             )
         })?
         .to_string_lossy()
@@ -460,13 +504,13 @@ fn build_release_set_entry(
 
 // Stage one manifest, prepare its chunk set, and publish all chunk bytes into root.
 fn stage_release_entry(
-    workspace_root: &Path,
+    dfx_root: &Path,
     root_canister: &str,
     release_version: &str,
     entry: &ReleaseSetEntry,
     now_secs: u64,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let artifact_path = workspace_root.join(&entry.artifact_relative_path);
+    let artifact_path = dfx_root.join(&entry.artifact_relative_path);
     let wasm_module = read_release_artifact(&artifact_path)?;
 
     if wasm_module.len() as u64 != entry.payload_size_bytes {
@@ -624,6 +668,37 @@ fn write_argument_file(argument: &str) -> Result<PathBuf, Box<dyn std::error::Er
     ));
     fs::write(&path, argument)?;
     Ok(path)
+}
+
+fn discover_workspace_root_from(path: &Path) -> Option<PathBuf> {
+    let start = if path.is_file() { path.parent()? } else { path };
+
+    for candidate in start.ancestors() {
+        let manifest_path = candidate.join(WORKSPACE_MANIFEST_RELATIVE);
+        if !manifest_path.is_file() {
+            continue;
+        }
+
+        let manifest = fs::read_to_string(&manifest_path).ok()?;
+        if manifest.contains("[workspace]") {
+            return candidate.canonicalize().ok();
+        }
+    }
+
+    None
+}
+
+fn discover_dfx_root_from(path: &Path) -> Option<PathBuf> {
+    let start = if path.is_file() { path.parent()? } else { path };
+
+    for candidate in start.ancestors() {
+        let dfx_config = candidate.join(DFX_CONFIG_FILE);
+        if dfx_config.is_file() {
+            return candidate.canonicalize().ok();
+        }
+    }
+
+    None
 }
 
 // Render one byte slice as lowercase hexadecimal.
