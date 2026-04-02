@@ -1,5 +1,6 @@
 .PHONY: help version tags patch patch-quick minor major package publish \
-        test-packaged-downstream \
+        test-packaged-downstream test-packaged-downstream-wasm-store \
+        test-packaged-downstream-installer \
         test test-wasm test-bump build check clippy fmt fmt-check clean install-dev \
         demo-install test-watch all ensure-clean \
         ensure-hooks install-hooks
@@ -62,7 +63,9 @@ help:
 	@echo "  major            Bump major version (x.0.0)"
 	@echo "  package          Build a publishable crate tarball"
 	@echo "  publish          Publish workspace crates to registry in dependency order"
-	@echo "  test-packaged-downstream  Verify the hidden packaged-downstream wasm_store build path"
+	@echo "  test-packaged-downstream  Verify the packaged-downstream wasm_store and installer paths"
+	@echo "  test-packaged-downstream-wasm-store  Verify the hidden packaged-downstream wasm_store build path"
+	@echo "  test-packaged-downstream-installer  Verify the packaged-downstream installer manifest path"
 	@echo ""
 	@echo "Development:"
 	@echo "  demo-install    Install the full local reference topology (fails if dfx is not already running)"
@@ -147,7 +150,9 @@ package: ensure-clean
 publish: ensure-clean
 	$(CARGO_ENV) scripts/ci/publish-workspace.sh
 
-test-packaged-downstream:
+test-packaged-downstream: test-packaged-downstream-wasm-store test-packaged-downstream-installer
+
+test-packaged-downstream-wasm-store:
 	$(CARGO_ENV) scripts/ci/verify-packaged-downstream-wasm-store.sh
 
 test-packaged-downstream-installer:
