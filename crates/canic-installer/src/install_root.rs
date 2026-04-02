@@ -301,12 +301,8 @@ mod tests {
     }
 
     #[test]
-    fn dfx_build_command_preserves_caller_release_env_selection() {
+    fn dfx_build_command_does_not_override_profile_env() {
         let command = dfx_build_all_command(Path::new("/tmp/canic-dfx-root"));
-        let release_override = command
-            .get_envs()
-            .find(|(key, _)| *key == "RELEASE")
-            .map(|(_, value)| value);
 
         assert_eq!(command.get_program(), "dfx");
         assert_eq!(
@@ -323,8 +319,8 @@ mod tests {
             Some("/tmp/canic-dfx-root".to_string())
         );
         assert!(
-            release_override.is_none(),
-            "dfx build must inherit caller-provided RELEASE instead of overriding it"
+            command.get_envs().next().is_none(),
+            "dfx build must not override profile env"
         );
     }
 }

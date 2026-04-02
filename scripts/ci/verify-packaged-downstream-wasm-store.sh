@@ -21,10 +21,7 @@ trap cleanup EXIT
 ensure_packaged_crate() {
     local crate_name="$1"
     local crate_archive="$PACKAGE_STAGING_ROOT/$crate_name-$VERSION.crate"
-    if [ -f "$crate_archive" ]; then
-        return
-    fi
-
+    rm -f "$crate_archive"
     cargo package -p "$crate_name" --allow-dirty --no-verify >/dev/null
 }
 
@@ -96,6 +93,7 @@ run_probe() {
     (
         cd "$TOOL_ROOT"
         CANIC_WORKSPACE_ROOT="$DOWNSTREAM_ROOT" \
+            CANIC_WASM_PROFILE=fast \
             cargo run --offline -q -p canic-installer --bin canic-build-wasm-store-artifact >/dev/null
     )
 }
@@ -129,6 +127,14 @@ assert_probe_outputs() {
 
     grep -q '\[patch.crates-io\]' "$wrapper_manifest" || {
         echo "expected generated wrapper to patch sibling packaged Canic crates" >&2
+        exit 1
+    }
+    grep -q '\[profile.fast\]' "$wrapper_manifest" || {
+        echo "expected generated wrapper to define the Canic fast profile" >&2
+        exit 1
+    }
+    grep -q '\[profile.release\]' "$wrapper_manifest" || {
+        echo "expected generated wrapper to define the Canic release profile" >&2
         exit 1
     }
 }

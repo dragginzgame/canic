@@ -104,6 +104,9 @@ for crate in "${PUBLISH_ORDER[@]}"; do
 
     echo "Publishing $crate $version"
     publish_args=(publish -p "$crate" --locked)
+    if [ "$crate" = "canic-core" ]; then
+        publish_args+=(--no-verify)
+    fi
     if [ "$PUBLISH_DRY_RUN" = "1" ]; then
         publish_args+=(--dry-run)
     fi

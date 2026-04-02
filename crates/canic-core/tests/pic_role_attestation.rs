@@ -151,6 +151,7 @@ struct CachedBaseline {
     signer_id: Principal,
     verifier_id: Option<Principal>,
     snapshots: Vec<CachedCanisterSnapshot>,
+    _serial_guard: PicSerialGuard,
 }
 
 ///
@@ -298,7 +299,6 @@ fn build_cached_baseline(cache_kind: AttestationCacheKind) -> CachedBaseline {
 
     test_progress("fixture", "fresh baseline ready");
     let SerialPic { pic, _serial_guard } = pic;
-    drop(_serial_guard);
     CachedBaseline {
         pic,
         root_id,
@@ -306,6 +306,7 @@ fn build_cached_baseline(cache_kind: AttestationCacheKind) -> CachedBaseline {
         signer_id,
         verifier_id,
         snapshots,
+        _serial_guard,
     }
 }
 
@@ -2860,7 +2861,7 @@ fn build_canisters_once(workspace_root: &PathBuf) {
         cmd.args([
             "build",
             "--profile",
-            "wasm-release",
+            "fast",
             "--target",
             "wasm32-unknown-unknown",
         ]);
@@ -2906,7 +2907,7 @@ fn build_canisters_without_test_material_once(workspace_root: &PathBuf) {
         cmd.args([
             "build",
             "--profile",
-            "wasm-release",
+            "fast",
             "--target",
             "wasm32-unknown-unknown",
         ]);
@@ -2967,7 +2968,7 @@ fn wasm_path(workspace_root: &Path, crate_name: &str) -> PathBuf {
 fn wasm_path_from_target(target_dir: &Path, crate_name: &str) -> PathBuf {
     target_dir
         .join("wasm32-unknown-unknown")
-        .join("wasm-release")
+        .join("fast")
         .join(format!("{crate_name}.wasm"))
 }
 

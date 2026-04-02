@@ -28,7 +28,7 @@ fn main() {
     bootstrap_cmd.env("CANIC_CONFIG_PATH", manifest_dir.join("canic.toml"));
     bootstrap_cmd.env("CARGO_TARGET_DIR", &bootstrap_target_dir);
     bootstrap_cmd.env("DFX_NETWORK", "local");
-    bootstrap_cmd.env("RELEASE", "1");
+    bootstrap_cmd.env("CANIC_WASM_PROFILE", "fast");
     bootstrap_cmd.args([
         "run",
         "-q",
@@ -61,7 +61,7 @@ fn main() {
     cmd.args([
         "build",
         "--profile",
-        "wasm-release",
+        "fast",
         "--target",
         "wasm32-unknown-unknown",
         "-p",
@@ -76,7 +76,7 @@ fn main() {
 
     let wasm_path = target_dir
         .join("wasm32-unknown-unknown")
-        .join("wasm-release")
+        .join("fast")
         .join("delegation_signer_stub.wasm");
 
     let out_wasm = out_dir.join("delegation_signer_stub.wasm");

@@ -23,19 +23,19 @@ use canic_control_plane::{
 };
 use canic_internal::canister::MINIMAL;
 use canic_testkit::{
-    artifacts::{WasmBuildProfile, build_dfx_all_with_env, workspace_root_for},
+    artifacts::{WasmBuildProfile, workspace_root_for},
     pic::Pic,
 };
-use root::harness::setup_root_with_release_roles;
+use root::harness::setup_root_with_release_roles_profile_and_build_env;
 use std::{fs, path::PathBuf};
 
 const STORE_ROLLOVER_SAFETY_BYTES: u64 = 64 * 1024;
-const TEST_DFX_BUILD_LOCK_RELATIVE: &str = ".dfx/canic-tests-reconcile-build.lock";
 const TEST_SMALL_STORE_RUSTFLAGS: &str = "--cfg canic_test_small_wasm_store";
 const ROOT_WASM_RELATIVE: &str = ".dfx/local/canisters/root/root.wasm.gz";
 const UPGRADE_READY_TICK_LIMIT: usize = 120;
 const ROOT_RECONCILE_RELEASE_ROLES: &[&str] =
     &["app", "minimal", "scale", "scale_hub", "test", "user_hub"];
+const ROOT_RECONCILE_BUILD_ENV: &[(&str, &str)] = &[("RUSTFLAGS", TEST_SMALL_STORE_RUSTFLAGS)];
 
 ///
 /// ReleaseFixture
@@ -343,15 +343,11 @@ fn root_retired_store_gc_finalize_and_delete_cleans_up_tracked_store() {
 
 // Build the debug reference topology with the hidden small-cap store cfg, then install root.
 fn setup_root_with_small_implicit_store() -> root::harness::RootSetup {
-    let workspace_root = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
-    build_dfx_all_with_env(
-        &workspace_root,
-        TEST_DFX_BUILD_LOCK_RELATIVE,
-        "local",
+    setup_root_with_release_roles_profile_and_build_env(
+        ROOT_RECONCILE_RELEASE_ROLES,
         WasmBuildProfile::Debug,
-        &[("RUSTFLAGS", TEST_SMALL_STORE_RUSTFLAGS)],
-    );
-    setup_root_with_release_roles(ROOT_RECONCILE_RELEASE_ROLES)
+        ROOT_RECONCILE_BUILD_ENV,
+    )
 }
 
 // Retire one managed store so the GC/finalize/delete canary can drive the full lifecycle.

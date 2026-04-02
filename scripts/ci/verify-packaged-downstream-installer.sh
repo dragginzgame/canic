@@ -21,10 +21,7 @@ trap cleanup EXIT
 ensure_packaged_crate() {
     local crate_name="$1"
     local crate_archive="$PACKAGE_STAGING_ROOT/$crate_name-$VERSION.crate"
-    if [ -f "$crate_archive" ]; then
-        return
-    fi
-
+    rm -f "$crate_archive"
     cargo package -p "$crate_name" --allow-dirty --no-verify >/dev/null
 }
 

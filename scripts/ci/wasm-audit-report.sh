@@ -5,7 +5,7 @@ set -euo pipefail
 METHOD_TAG="Method V1"
 AUDIT_SLUG="wasm-footprint"
 DEFINITION_PATH="docs/audits/recurring/system/wasm-footprint.md"
-DEFAULT_PROFILE="wasm-release"
+DEFAULT_PROFILE="release"
 
 ROOT_DIR="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 cd "$ROOT_DIR"
@@ -75,10 +75,15 @@ gzip_deterministic() {
 
 normalize_profile() {
     case "${WASM_PROFILE:-$DEFAULT_PROFILE}" in
-    wasm-release | release)
-        PROFILE_NAME="wasm-release"
-        PROFILE_DIR="wasm-release"
-        CARGO_PROFILE_FLAG="--profile wasm-release"
+    release)
+        PROFILE_NAME="release"
+        PROFILE_DIR="release"
+        CARGO_PROFILE_FLAG="--release"
+        ;;
+    fast)
+        PROFILE_NAME="fast"
+        PROFILE_DIR="fast"
+        CARGO_PROFILE_FLAG="--profile fast"
         ;;
     wasm-debug | debug)
         PROFILE_NAME="wasm-debug"
@@ -370,8 +375,10 @@ write_aggregate_json() {
 }
 
 profile_command_note() {
-    if [ "$PROFILE_NAME" = "wasm-release" ]; then
+    if [ "$PROFILE_NAME" = "release" ]; then
         printf 'cargo/dfx release builds'
+    elif [ "$PROFILE_NAME" = "fast" ]; then
+        printf 'cargo/dfx fast builds'
     else
         printf 'cargo/dfx debug builds'
     fi

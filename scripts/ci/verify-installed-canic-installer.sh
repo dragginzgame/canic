@@ -18,9 +18,9 @@ main() {
 
     (
         cd "$ROOT"
-        CANIC_WORKSPACE_ROOT="$ROOT" RELEASE=0 DFX_NETWORK=local \
+        CANIC_WORKSPACE_ROOT="$ROOT" CANIC_WASM_PROFILE=fast DFX_NETWORK=local \
             "$BIN_ROOT/canic-build-canister-artifact" app >/dev/null
-        CANIC_WORKSPACE_ROOT="$ROOT" RELEASE=0 DFX_NETWORK=local \
+        CANIC_WORKSPACE_ROOT="$ROOT" CANIC_WASM_PROFILE=fast DFX_NETWORK=local \
             "$BIN_ROOT/canic-build-canister-artifact" root >/dev/null
         CANIC_WORKSPACE_ROOT="$ROOT" DFX_NETWORK=local \
             "$BIN_ROOT/canic-emit-root-release-set-manifest" --if-ready >/dev/null
@@ -44,7 +44,7 @@ main() {
     mkdir -p "$SPLIT_DFX_ROOT"
     (
         cd "$ROOT"
-        CANIC_WORKSPACE_ROOT="$ROOT" CANIC_DFX_ROOT="$SPLIT_DFX_ROOT" RELEASE=0 DFX_NETWORK=local \
+        CANIC_WORKSPACE_ROOT="$ROOT" CANIC_DFX_ROOT="$SPLIT_DFX_ROOT" CANIC_WASM_PROFILE=fast DFX_NETWORK=local \
             "$BIN_ROOT/canic-build-canister-artifact" root >/dev/null
     )
 

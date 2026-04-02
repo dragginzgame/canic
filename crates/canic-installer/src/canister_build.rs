@@ -19,7 +19,6 @@ const WASM_STORE_ROLE: &str = "wasm_store";
 const CANISTERS_ROOT_RELATIVE: &str = "canisters";
 const LOCAL_ARTIFACT_ROOT_RELATIVE: &str = ".dfx/local/canisters";
 const WASM_TARGET: &str = "wasm32-unknown-unknown";
-const WASM_RELEASE_PROFILE_NAME: &str = "wasm-release";
 
 ///
 /// CanisterBuildProfile
@@ -28,15 +27,17 @@ const WASM_RELEASE_PROFILE_NAME: &str = "wasm-release";
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum CanisterBuildProfile {
     Debug,
+    Fast,
     Release,
 }
 
 impl CanisterBuildProfile {
-    // Resolve the current requested build profile from the shared `RELEASE` env.
+    // Resolve the current requested build profile from the explicit Canic wasm selector.
     #[must_use]
     pub fn current() -> Self {
-        match std::env::var("RELEASE").ok().as_deref() {
-            Some("0") => Self::Debug,
+        match std::env::var("CANIC_WASM_PROFILE").ok().as_deref() {
+            Some("debug") => Self::Debug,
+            Some("fast") => Self::Fast,
             _ => Self::Release,
         }
     }
@@ -46,7 +47,8 @@ impl CanisterBuildProfile {
     pub const fn cargo_args(self) -> &'static [&'static str] {
         match self {
             Self::Debug => &[],
-            Self::Release => &["--profile", WASM_RELEASE_PROFILE_NAME],
+            Self::Fast => &["--profile", "fast"],
+            Self::Release => &["--release"],
         }
     }
 
@@ -55,7 +57,8 @@ impl CanisterBuildProfile {
     pub const fn target_dir_name(self) -> &'static str {
         match self {
             Self::Debug => "debug",
-            Self::Release => WASM_RELEASE_PROFILE_NAME,
+            Self::Fast => "fast",
+            Self::Release => "release",
         }
     }
 }
@@ -65,6 +68,7 @@ impl From<CanisterBuildProfile> for BootstrapWasmStoreBuildProfile {
     fn from(value: CanisterBuildProfile) -> Self {
         match value {
             CanisterBuildProfile::Debug => Self::Debug,
+            CanisterBuildProfile::Fast => Self::Fast,
             CanisterBuildProfile::Release => Self::Release,
         }
     }

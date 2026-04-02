@@ -160,11 +160,26 @@ canic-install-root root
 
 `root` stays thin in this flow. It embeds only the bootstrap `wasm_store.wasm.gz`; ordinary child releases stay outside `root` and are staged after install from `.dfx/local/canisters/root/root.release-set.json`.
 
+Canic now treats wasm build selection as an explicit three-profile contract:
+
+- `CANIC_WASM_PROFILE=debug` for raw large debug wasm
+- `CANIC_WASM_PROFILE=fast` for the middle local/test/demo lane
+- `CANIC_WASM_PROFILE=release` for shipping/install artifacts
+
+If unset, the published installer/build tools default to `release`.
+
+Typical local fast flow:
+
+```bash
+CANIC_WASM_PROFILE=fast canic-install-root root
+```
+
 If your repo splits the Rust workspace and the DFX app root (for example `backend/` + `frontend/`), point Canic at both roots explicitly:
 
 ```bash
 CANIC_WORKSPACE_ROOT=/path/to/repo/backend \
 CANIC_DFX_ROOT=/path/to/repo \
+CANIC_WASM_PROFILE=fast \
 canic-build-canister-artifact root
 ```
 

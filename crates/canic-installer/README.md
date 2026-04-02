@@ -20,6 +20,14 @@ Typical installed binaries:
 - `canic-install-root`
 - `canic-install-reference-topology`
 
+Build-profile selection is explicit:
+
+- `CANIC_WASM_PROFILE=debug` builds raw debug wasm
+- `CANIC_WASM_PROFILE=fast` builds the middle shrunk local/test/demo lane
+- `CANIC_WASM_PROFILE=release` builds the shipping/install lane
+
+If unset, installer/build binaries default to `release`.
+
 When the Rust workspace root and the DFX/project root differ, set both:
 
 - `CANIC_WORKSPACE_ROOT` for Cargo, `canic.toml`, and canister manifests

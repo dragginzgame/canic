@@ -1,5 +1,5 @@
 use super::{CachedPicBaseline, Pic, pic};
-use crate::artifacts::{WasmBuildProfile, build_dfx_all, dfx_artifact_ready};
+use crate::artifacts::{WasmBuildProfile, build_dfx_all_with_env, dfx_artifact_ready_for_build};
 use canic::{
     Error,
     cdk::types::Principal,
@@ -37,6 +37,7 @@ pub struct RootBaselineSpec<'a> {
     pub dfx_build_lock_relative: &'a str,
     pub build_network: &'a str,
     pub build_profile: WasmBuildProfile,
+    pub build_extra_env: &'a [(&'a str, &'a str)],
     pub bootstrap_tick_limit: usize,
     pub root_setup_max_attempts: usize,
     pub pocket_ic_wasm_chunk_store_limit_bytes: usize,
@@ -76,11 +77,12 @@ pub fn ensure_root_release_artifacts_built(spec: &RootBaselineSpec<'_>) {
 
     progress(spec, "building local DFX artifacts for root baseline");
     let started_at = Instant::now();
-    build_dfx_all(
+    build_dfx_all_with_env(
         &spec.workspace_root,
         spec.dfx_build_lock_relative,
         spec.build_network,
         spec.build_profile,
+        spec.build_extra_env,
     );
     progress_elapsed(spec, "finished local DFX artifact build", started_at);
 }
@@ -324,10 +326,13 @@ fn load_release_wasm_gz(spec: &RootBaselineSpec<'_>, role_name: &str) -> Vec<u8>
 
 // Confirm the root bootstrap artifact and every managed ordinary release artifact are fresh.
 fn root_release_artifacts_ready(spec: &RootBaselineSpec<'_>) -> bool {
-    if !dfx_artifact_ready(
+    if !dfx_artifact_ready_for_build(
         &spec.workspace_root,
         spec.root_wasm_artifact_relative,
         spec.artifact_watch_paths,
+        spec.build_network,
+        spec.build_profile,
+        spec.build_extra_env,
     ) {
         return false;
     }
@@ -338,10 +343,13 @@ fn root_release_artifacts_ready(spec: &RootBaselineSpec<'_>) -> bool {
             "{}/{role_name}/{role_name}.wasm.gz",
             spec.root_release_artifacts_relative
         );
-        dfx_artifact_ready(
+        dfx_artifact_ready_for_build(
             &spec.workspace_root,
             &artifact_relative_path,
             spec.artifact_watch_paths,
+            spec.build_network,
+            spec.build_profile,
+            spec.build_extra_env,
         )
     })
 }
