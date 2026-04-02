@@ -58,6 +58,20 @@ fn relative_display(root: &Path, path: &Path) -> String {
         .to_string()
 }
 
+// Allow the one intentional local-only dev-dependency edge that breaks the
+// publish-time test cycle between `canic-core` and the later-published
+// `canic-testkit` crate.
+fn allow_local_path_dependency(
+    root: &Path,
+    manifest_path: &Path,
+    section_path: &str,
+    name: &str,
+) -> bool {
+    relative_display(root, manifest_path) == "crates/canic-core/Cargo.toml"
+        && section_path == "dev-dependencies"
+        && name == "canic-testkit"
+}
+
 // Records dependency tables that pin versions or local paths in member manifests.
 fn collect_dependency_failures(
     root: &Path,
@@ -146,6 +160,9 @@ fn check_dependency_table(
                 }
 
                 if table.contains_key("path") {
+                    if allow_local_path_dependency(root, manifest_path, &section_path, name) {
+                        continue;
+                    }
                     failures.push(format!(
                         "{}: [{section_path}] {name} uses a local `path`; use the workspace root declaration instead",
                         relative_display(root, manifest_path),
