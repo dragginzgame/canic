@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.22.x] - 2026-04-02 - Audits, Wasm Size, and Perf
 
-- `0.22.0` opens the audit/perf line by making `.dfx` artifact reuse aware of build env and profile, moving more reusable PocketIC root-baseline setup into `canic-testkit`, standardizing three wasm build lanes (`debug`, `fast`, `release`) across repo-local and downstream builders, and tightening the special small-store reconcile lane so future wasm-size and runtime audit work starts from reproducible test/build inputs instead of accidental artifact drift.
+- `0.22.0` opens the audit/perf line by making `.dfx` artifact reuse aware of build env and profile, moving more reusable PocketIC root-baseline setup into `canic-testkit`, standardizing three wasm build lanes (`debug`, `fast`, `release`) across repo-local and downstream builders, tightening the special small-store reconcile lane so future wasm-size and runtime audit work starts from reproducible test/build inputs instead of accidental artifact drift, and keeping `make publish` viable by explicitly allowing the one local `canic-core -> canic-testkit` test-only edge needed to break the crates.io publish cycle.
 
 See detailed breakdown:
 [docs/changelog/0.22.md](docs/changelog/0.22.md)
