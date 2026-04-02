@@ -4,7 +4,7 @@ use crate::release_set::{
     stage_root_release_set, workspace_root,
 };
 use serde_json::Value;
-use std::{env, process::Command, thread, time::Duration};
+use std::{env, path::Path, process::Command, thread, time::Duration};
 
 ///
 /// InstallRootOptions
@@ -48,11 +48,7 @@ pub fn install_root(options: InstallRootOptions) -> Result<(), Box<dyn std::erro
         .args(["canister", "create", "--all", "-qq"]);
     run_command(&mut create)?;
 
-    let mut build = Command::new("dfx");
-    build
-        .current_dir(&dfx_root)
-        .env("RELEASE", "1")
-        .args(["build", "--all"]);
+    let mut build = dfx_build_all_command(&dfx_root);
     run_command(&mut build)?;
 
     let manifest_path =
@@ -99,6 +95,14 @@ pub fn install_root(options: InstallRootOptions) -> Result<(), Box<dyn std::erro
         options.root_canister
     );
     Ok(())
+}
+
+// Spawn the local `dfx build --all` step without overriding the caller's
+// selected build profile environment.
+fn dfx_build_all_command(dfx_root: &Path) -> Command {
+    let mut command = Command::new("dfx");
+    command.current_dir(dfx_root).args(["build", "--all"]);
+    command
 }
 
 // Fail fast unless the requested DFX replica is already running.
@@ -275,8 +279,9 @@ fn print_raw_call(root_canister: &str, method: &str) {
 
 #[cfg(test)]
 mod tests {
-    use super::parse_root_ready_value;
+    use super::{dfx_build_all_command, parse_root_ready_value};
     use serde_json::json;
+    use std::path::Path;
 
     #[test]
     fn parse_root_ready_accepts_plain_true() {
@@ -293,5 +298,33 @@ mod tests {
         assert!(!parse_root_ready_value(&json!(false)));
         assert!(!parse_root_ready_value(&json!({ "Ok": false })));
         assert!(!parse_root_ready_value(&json!({ "Err": "nope" })));
+    }
+
+    #[test]
+    fn dfx_build_command_preserves_caller_release_env_selection() {
+        let command = dfx_build_all_command(Path::new("/tmp/canic-dfx-root"));
+        let release_override = command
+            .get_envs()
+            .find(|(key, _)| *key == "RELEASE")
+            .map(|(_, value)| value);
+
+        assert_eq!(command.get_program(), "dfx");
+        assert_eq!(
+            command
+                .get_args()
+                .map(|arg| arg.to_string_lossy().into_owned())
+                .collect::<Vec<_>>(),
+            ["build", "--all"]
+        );
+        assert_eq!(
+            command
+                .get_current_dir()
+                .map(|path| path.to_string_lossy().into_owned()),
+            Some("/tmp/canic-dfx-root".to_string())
+        );
+        assert!(
+            release_override.is_none(),
+            "dfx build must inherit caller-provided RELEASE instead of overriding it"
+        );
     }
 }

@@ -30,9 +30,17 @@ From the repo root:
 make demo-install
 ```
 
+`make demo-install` and `make test-canisters` default to `RELEASE=0`, so the
+repo-local smoke path uses the optimized dev wasm profile. If you want to force
+release wasm artifacts for the same flow, run:
+
+```bash
+RELEASE=1 make demo-install
+```
+
 This one command:
 - creates the reference canisters in `dfx`
-- builds the release artifacts
+- builds the local canister artifacts
 - emits a build-produced root release-set manifest from the configured ordinary `.wasm.gz` artifacts
 - reinstalls `root` in `Prime` mode
 - stages the configured ordinary release set into `root` through the published Rust helper in `canic-installer`
@@ -40,6 +48,19 @@ This one command:
 - waits for `root` to report `READY`
 
 This is a manual local smoke flow, not part of `make test`.
+
+`make test` now runs with `--nocapture`, so long serial PocketIC runs keep
+their phase markers visible by default:
+
+```bash
+make test
+```
+
+The fast non-PocketIC path follows the same rule:
+
+```bash
+make test-wasm
+```
 
 ## Build Canisters
 

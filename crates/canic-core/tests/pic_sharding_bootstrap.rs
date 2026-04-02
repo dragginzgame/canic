@@ -12,56 +12,36 @@ use canic_core::{
     },
     ids::{CanisterRole, SubnetRole},
 };
-use pocket_ic::PocketIcBuilder;
+use canic_testkit::{
+    artifacts::{
+        WasmBuildProfile, build_wasm_canisters, read_wasm, test_target_dir, wasm_artifacts_ready,
+        workspace_root_for,
+    },
+    pic::{acquire_pic_serial_guard, pic},
+};
 use serde::de::DeserializeOwned;
 use std::{
-    env, fs,
-    ops::{Deref, DerefMut},
     path::{Path, PathBuf},
-    process::Command,
-    sync::{Mutex, MutexGuard, Once},
+    sync::Once,
 };
 
 const ROOT_INSTALL_CYCLES: u128 = 80_000_000_000_000;
 const USER_HUB_INSTALL_CYCLES: u128 = 20_000_000_000_000;
 const CANISTER_PACKAGES: [&str; 2] = ["sharding_root_stub", "canister_user_hub"];
 const POOL_NAME: &str = "user_shards";
-const PREBUILT_WASM_DIR_ENV: &str = "CANIC_PREBUILT_WASM_DIR";
 static BUILD_ONCE: Once = Once::new();
-static PIC_BUILD_SERIAL: Mutex<()> = Mutex::new(());
-
-///
-/// SerialPic
-///
-
-struct SerialPic {
-    pic: pocket_ic::PocketIc,
-    _serial_guard: MutexGuard<'static, ()>,
-}
-
-impl Deref for SerialPic {
-    type Target = pocket_ic::PocketIc;
-
-    fn deref(&self) -> &Self::Target {
-        &self.pic
-    }
-}
-
-impl DerefMut for SerialPic {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.pic
-    }
-}
 
 #[test]
 fn sharding_bootstraps_first_shard_when_active_empty() {
     let workspace_root = workspace_root();
+    let target_dir = test_target_dir(&workspace_root, "pic-wasm");
     build_canisters_once(&workspace_root);
 
-    let root_wasm = read_wasm(&workspace_root, "sharding_root_stub");
-    let user_hub_wasm = read_wasm(&workspace_root, "canister_user_hub");
+    let root_wasm = read_wasm(&target_dir, "sharding_root_stub", WasmBuildProfile::Release);
+    let user_hub_wasm = read_wasm(&target_dir, "canister_user_hub", WasmBuildProfile::Release);
 
-    let pic = build_pic();
+    let _serial_guard = acquire_pic_serial_guard();
+    let pic = pic();
 
     let root_id = pic.create_canister();
     pic.add_cycles(root_id, ROOT_INSTALL_CYCLES);
@@ -107,12 +87,14 @@ fn sharding_bootstraps_first_shard_when_active_empty() {
 #[test]
 fn sharding_does_not_spawn_extra_shard_after_bootstrap() {
     let workspace_root = workspace_root();
+    let target_dir = test_target_dir(&workspace_root, "pic-wasm");
     build_canisters_once(&workspace_root);
 
-    let root_wasm = read_wasm(&workspace_root, "sharding_root_stub");
-    let user_hub_wasm = read_wasm(&workspace_root, "canister_user_hub");
+    let root_wasm = read_wasm(&target_dir, "sharding_root_stub", WasmBuildProfile::Release);
+    let user_hub_wasm = read_wasm(&target_dir, "canister_user_hub", WasmBuildProfile::Release);
 
-    let pic = build_pic();
+    let _serial_guard = acquire_pic_serial_guard();
+    let pic = pic();
 
     let root_id = pic.create_canister();
     pic.add_cycles(root_id, ROOT_INSTALL_CYCLES);
@@ -198,80 +180,23 @@ where
     decode_one(&result).expect("decode response")
 }
 
-fn build_canisters_once(workspace_root: &PathBuf) {
+fn build_canisters_once(workspace_root: &Path) {
     BUILD_ONCE.call_once(|| {
-        if prebuilt_wasm_dir().is_some() || wasm_artifacts_ready(workspace_root, &CANISTER_PACKAGES)
-        {
+        let target_dir = test_target_dir(workspace_root, "pic-wasm");
+        if wasm_artifacts_ready(&target_dir, &CANISTER_PACKAGES, WasmBuildProfile::Release) {
             return;
         }
 
-        let target_dir = test_target_dir(workspace_root);
-        let mut cmd = Command::new("cargo");
-        cmd.current_dir(workspace_root);
-        cmd.env("CARGO_TARGET_DIR", &target_dir);
-        cmd.env("DFX_NETWORK", "local");
-        cmd.args(["build", "--target", "wasm32-unknown-unknown"]);
-        for name in CANISTER_PACKAGES {
-            cmd.args(["-p", name]);
-        }
-
-        let output = cmd.output().expect("failed to run cargo build");
-        assert!(
-            output.status.success(),
-            "cargo build failed: {}",
-            String::from_utf8_lossy(&output.stderr)
+        build_wasm_canisters(
+            workspace_root,
+            &target_dir,
+            &CANISTER_PACKAGES,
+            WasmBuildProfile::Release,
+            &[],
         );
     });
 }
 
-fn wasm_artifacts_ready(workspace_root: &Path, canisters: &[&str]) -> bool {
-    canisters
-        .iter()
-        .all(|name| wasm_path(workspace_root, name).is_file())
-}
-
-// Serialize full PocketIC usage to avoid concurrent server races across tests.
-fn build_pic() -> SerialPic {
-    let serial_guard = PIC_BUILD_SERIAL
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
-
-    SerialPic {
-        pic: PocketIcBuilder::new().with_application_subnet().build(),
-        _serial_guard: serial_guard,
-    }
-}
-
-fn read_wasm(workspace_root: &Path, crate_name: &str) -> Vec<u8> {
-    let wasm_path = wasm_path(workspace_root, crate_name);
-    fs::read(&wasm_path).unwrap_or_else(|err| panic!("failed to read {crate_name} wasm: {err}"))
-}
-
-fn wasm_path(workspace_root: &Path, crate_name: &str) -> PathBuf {
-    if let Some(dir) = prebuilt_wasm_dir() {
-        return dir.join(format!("{crate_name}.wasm"));
-    }
-
-    let target_dir = test_target_dir(workspace_root);
-
-    target_dir
-        .join("wasm32-unknown-unknown")
-        .join("debug")
-        .join(format!("{crate_name}.wasm"))
-}
-
-fn prebuilt_wasm_dir() -> Option<PathBuf> {
-    env::var(PREBUILT_WASM_DIR_ENV).ok().map(PathBuf::from)
-}
-
-fn test_target_dir(workspace_root: &Path) -> PathBuf {
-    workspace_root.join("target").join("pic-wasm")
-}
-
 fn workspace_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .and_then(|p| p.parent())
-        .map(PathBuf::from)
-        .expect("workspace root")
+    workspace_root_for(env!("CARGO_MANIFEST_DIR"))
 }

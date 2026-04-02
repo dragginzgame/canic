@@ -17,6 +17,7 @@ const CANONICAL_WASM_STORE_MANIFEST_RELATIVE: &str = "crates/canic-wasm-store/Ca
 const CANONICAL_WASM_STORE_DID_FILE: &str = "wasm_store.did";
 const CANONICAL_WASM_STORE_CRATE_NAME: &str = "canister_wasm_store";
 const GENERATED_WRAPPER_PACKAGE_NAME: &str = "canic-generated-wasm-store";
+const WASM_RELEASE_PROFILE_NAME: &str = "wasm-release";
 const CANIC_FAMILY_CRATES: &[&str] = &[
     "canic-cdk",
     "canic-control-plane",
@@ -50,7 +51,7 @@ impl BootstrapWasmStoreBuildProfile {
     pub const fn cargo_args(self) -> &'static [&'static str] {
         match self {
             Self::Debug => &[],
-            Self::Release => &["--release"],
+            Self::Release => &["--profile", WASM_RELEASE_PROFILE_NAME],
         }
     }
 
@@ -58,7 +59,7 @@ impl BootstrapWasmStoreBuildProfile {
     pub const fn target_dir_name(self) -> &'static str {
         match self {
             Self::Debug => "debug",
-            Self::Release => "release",
+            Self::Release => WASM_RELEASE_PROFILE_NAME,
         }
     }
 

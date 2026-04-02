@@ -1,18 +1,19 @@
-// Category C - Artifact / deployment test (embedded config).
-// This test relies on embedded production config by design.
-
-mod root;
-
-use canic::ids::CanisterRole;
-use canic_internal::canister;
-use root::{
+use crate::root::{
     assertions::{
         assert_child_env, assert_children_match_registry, assert_directories_consistent,
         assert_registry_parents, assert_state_endpoints_are_root_only, registry_pid_for_role,
     },
-    harness::setup_root,
+    harness::{setup_root, setup_root_cached_topology},
     workers::{count_workers, create_worker},
 };
+use canic::ids::CanisterRole;
+use canic_internal::canister;
+use std::io::Write;
+
+fn test_progress(test_name: &str, phase: &str) {
+    eprintln!("[root_hierarchy] {test_name}: {phase}");
+    let _ = std::io::stderr().flush();
+}
 
 ///
 /// TESTS
@@ -20,8 +21,13 @@ use root::{
 
 #[test]
 fn root_builds_hierarchy_and_exposes_env() {
-    let setup = setup_root();
+    test_progress("root_builds_hierarchy_and_exposes_env", "setup root");
+    let setup = setup_root_cached_topology();
 
+    test_progress(
+        "root_builds_hierarchy_and_exposes_env",
+        "assert registry parent relationships",
+    );
     assert_registry_parents(
         &setup.pic,
         setup.root_id,
@@ -36,6 +42,10 @@ fn root_builds_hierarchy_and_exposes_env() {
 
     let wasm_store_pid =
         registry_pid_for_role(&setup.pic, setup.root_id, &CanisterRole::WASM_STORE);
+    test_progress(
+        "root_builds_hierarchy_and_exposes_env",
+        "assert wasm_store child env",
+    );
     assert_child_env(
         &setup.pic,
         wasm_store_pid,
@@ -43,30 +53,35 @@ fn root_builds_hierarchy_and_exposes_env() {
         setup.root_id,
     );
 
+    test_progress(
+        "root_builds_hierarchy_and_exposes_env",
+        "assert each child env",
+    );
     for (role, pid) in &setup.subnet_directory {
         if !role.is_root() {
             assert_child_env(&setup.pic, *pid, role.clone(), setup.root_id);
         }
     }
+    test_progress("root_builds_hierarchy_and_exposes_env", "done");
 }
 
 #[test]
 fn directories_are_consistent_across_canisters() {
-    let setup = setup_root();
+    let setup = setup_root_cached_topology();
 
     assert_directories_consistent(&setup.pic, setup.root_id, &setup.subnet_directory);
 }
 
 #[test]
 fn subnet_children_matches_registry_on_root() {
-    let setup = setup_root();
+    let setup = setup_root_cached_topology();
 
     assert_children_match_registry(&setup.pic, setup.root_id);
 }
 
 #[test]
 fn state_endpoints_are_root_only() {
-    let setup = setup_root();
+    let setup = setup_root_cached_topology();
 
     let app_pid = setup
         .subnet_directory

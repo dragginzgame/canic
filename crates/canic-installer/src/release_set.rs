@@ -1,5 +1,5 @@
 use canic::protocol;
-use canic_core::bootstrap::parse_config_model;
+use canic_core::{CANIC_WASM_CHUNK_BYTES, bootstrap::parse_config_model};
 use flate2::read::GzDecoder;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -8,7 +8,7 @@ use std::{
     collections::BTreeSet,
     fmt::Write,
     fs,
-    io::Read,
+    io::{Read, Write as IoWrite},
     path::{Path, PathBuf},
     process::Command,
     time::{SystemTime, UNIX_EPOCH},
@@ -18,7 +18,6 @@ const ROOT_CONFIG_RELATIVE: &str = "canisters/canic.toml";
 const ROOT_MANIFEST_RELATIVE: &str = "canisters/root/Cargo.toml";
 const WORKSPACE_MANIFEST_RELATIVE: &str = "Cargo.toml";
 const DFX_CONFIG_FILE: &str = "dfx.json";
-pub const ROOT_RELEASE_CHUNK_BYTES: usize = 1024 * 1024;
 pub const ROOT_RELEASE_SET_MANIFEST_FILE: &str = "root.release-set.json";
 const GZIP_MAGIC: [u8; 2] = [0x1f, 0x8b];
 const WASM_MAGIC: [u8; 4] = [0x00, 0x61, 0x73, 0x6d];
@@ -350,17 +349,27 @@ pub fn stage_root_release_set(
     manifest: &RootReleaseSetManifest,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let now_secs = root_time_secs(root_canister)?;
+    let total_entries = manifest.entries.len();
 
-    for entry in &manifest.entries {
+    print_stage_progress(&format!(
+        "Staging {total_entries} release entries into {root_canister}"
+    ));
+
+    for (entry_index, entry) in manifest.entries.iter().enumerate() {
         stage_release_entry(
             dfx_root,
             root_canister,
             &manifest.release_version,
             entry,
             now_secs,
+            entry_index + 1,
+            total_entries,
         )?;
     }
 
+    print_stage_progress(&format!(
+        "Finished staging {total_entries} release entries into {root_canister}"
+    ));
     Ok(())
 }
 
@@ -487,7 +496,7 @@ fn build_release_set_entry(
     let wasm_module = read_release_artifact(&artifact_path)?;
 
     let chunk_hashes = wasm_module
-        .chunks(ROOT_RELEASE_CHUNK_BYTES)
+        .chunks(CANIC_WASM_CHUNK_BYTES)
         .map(wasm_hash_hex)
         .collect::<Vec<_>>();
 
@@ -497,7 +506,7 @@ fn build_release_set_entry(
         artifact_relative_path,
         payload_size_bytes: wasm_module.len() as u64,
         payload_sha256_hex: wasm_hash_hex(&wasm_module),
-        chunk_size_bytes: ROOT_RELEASE_CHUNK_BYTES as u64,
+        chunk_size_bytes: CANIC_WASM_CHUNK_BYTES as u64,
         chunk_sha256_hex: chunk_hashes,
     })
 }
@@ -509,6 +518,8 @@ fn stage_release_entry(
     release_version: &str,
     entry: &ReleaseSetEntry,
     now_secs: u64,
+    entry_index: usize,
+    total_entries: usize,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let artifact_path = dfx_root.join(&entry.artifact_relative_path);
     let wasm_module = read_release_artifact(&artifact_path)?;
@@ -538,7 +549,7 @@ fn stage_release_entry(
     }
 
     let chunks = wasm_module
-        .chunks(ROOT_RELEASE_CHUNK_BYTES)
+        .chunks(CANIC_WASM_CHUNK_BYTES)
         .map(<[u8]>::to_vec)
         .collect::<Vec<_>>();
     let chunk_hashes = chunks
@@ -555,6 +566,56 @@ fn stage_release_entry(
         .into());
     }
 
+    print_stage_progress(&format!(
+        "Staging release {entry_index}/{total_entries}: {} ({} chunk{})",
+        entry.role,
+        chunks.len(),
+        if chunks.len() == 1 { "" } else { "s" }
+    ));
+
+    stage_release_manifest(
+        root_canister,
+        release_version,
+        entry,
+        now_secs,
+        &payload_hash,
+        wasm_module.len(),
+    )?;
+    print_stage_progress(&format!(
+        "Staged manifest for {} ({entry_index}/{total_entries})",
+        entry.role
+    ));
+
+    prepare_release_chunks(
+        root_canister,
+        release_version,
+        entry,
+        &payload_hash,
+        wasm_module.len(),
+    )?;
+    print_stage_progress(&format!(
+        "Prepared chunk upload for {} ({}/{})",
+        entry.role, entry_index, total_entries
+    ));
+
+    publish_release_chunks(root_canister, release_version, entry, &chunks)?;
+
+    print_stage_progress(&format!(
+        "Finished release {entry_index}/{total_entries}: {}",
+        entry.role
+    ));
+    Ok(())
+}
+
+// Stage one approved manifest into root before any chunk preparation/upload begins.
+fn stage_release_manifest(
+    root_canister: &str,
+    release_version: &str,
+    entry: &ReleaseSetEntry,
+    now_secs: u64,
+    payload_hash: &[u8],
+    payload_size_bytes: usize,
+) -> Result<(), Box<dyn std::error::Error>> {
     let manifest = format!(
         "(record {{ template_id = {}; role = {}; version = {}; payload_hash = {}; \
          payload_size_bytes = {} : nat64; store_binding = \"bootstrap\"; \
@@ -563,8 +624,8 @@ fn stage_release_entry(
         idl_text(&entry.template_id),
         idl_text(&entry.role),
         idl_text(release_version),
-        idl_blob(&payload_hash),
-        wasm_module.len(),
+        idl_blob(payload_hash),
+        payload_size_bytes,
         now_secs,
         now_secs,
     );
@@ -574,7 +635,17 @@ fn stage_release_entry(
         Some(&manifest),
         None,
     )?;
+    Ok(())
+}
 
+// Prepare the root-local chunk set metadata before sending any chunk bytes.
+fn prepare_release_chunks(
+    root_canister: &str,
+    release_version: &str,
+    entry: &ReleaseSetEntry,
+    payload_hash: &[u8],
+    payload_size_bytes: usize,
+) -> Result<(), Box<dyn std::error::Error>> {
     let chunk_hash_literals = entry
         .chunk_sha256_hex
         .iter()
@@ -587,8 +658,8 @@ fn stage_release_entry(
          payload_size_bytes = {} : nat64; chunk_hashes = vec {{ {} }} }})",
         idl_text(&entry.template_id),
         idl_text(release_version),
-        idl_blob(&payload_hash),
-        wasm_module.len(),
+        idl_blob(payload_hash),
+        payload_size_bytes,
         chunk_hash_literals,
     );
     let _ = dfx_call(
@@ -597,8 +668,24 @@ fn stage_release_entry(
         Some(&prepare),
         None,
     )?;
+    Ok(())
+}
 
+// Upload every prepared chunk and print live progress before and after each call.
+fn publish_release_chunks(
+    root_canister: &str,
+    release_version: &str,
+    entry: &ReleaseSetEntry,
+    chunks: &[Vec<u8>],
+) -> Result<(), Box<dyn std::error::Error>> {
     for (chunk_index, chunk) in chunks.iter().enumerate() {
+        let chunk_number = chunk_index + 1;
+        let total_chunks = chunks.len();
+        print_stage_progress(&format!(
+            "Uploading chunk {chunk_number}/{total_chunks} for {} ({} bytes)",
+            entry.role,
+            chunk.len()
+        ));
         let request = format!(
             "(record {{ template_id = {}; version = {}; chunk_index = {} : nat32; bytes = {} }})",
             idl_text(&entry.template_id),
@@ -612,9 +699,18 @@ fn stage_release_entry(
             Some(&request),
             None,
         )?;
+        print_stage_progress(&format!(
+            "Uploaded chunk {chunk_number}/{total_chunks} for {}",
+            entry.role
+        ));
     }
-
     Ok(())
+}
+
+// Print one installer progress line immediately so long staging loops stay visible.
+fn print_stage_progress(message: &str) {
+    println!("{message}");
+    let _ = std::io::stdout().flush();
 }
 
 // Read one staged release artifact and validate that it is a non-empty gzip stream

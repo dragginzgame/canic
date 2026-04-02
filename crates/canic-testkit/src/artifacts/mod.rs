@@ -8,4 +8,4 @@ pub use dfx::{
 pub use wasm::{
     WasmBuildProfile, build_wasm_canisters, read_wasm, wasm_artifacts_ready, wasm_path,
 };
-pub use workspace::{prebuilt_wasm_dir, test_target_dir, workspace_root_for};
+pub use workspace::{test_target_dir, workspace_root_for};

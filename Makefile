@@ -69,7 +69,7 @@ help:
 	@echo "  test-installed-canic-installer  Verify the installed-binary canic-installer path"
 	@echo ""
 	@echo "Development:"
-	@echo "  demo-install    Install the full local reference topology (fails if dfx is not already running)"
+	@echo "  demo-install    Install the full local reference topology with optimized dev wasm by default (fails if dfx is not already running)"
 	@echo "  test             Run clippy + workspace tests (PocketIC/Cargo only)"
 	@echo "  test-wasm        Run clippy + fast non-PocketIC tests for wasm iteration"
 	@echo "  build            Build all crates"
@@ -86,7 +86,7 @@ help:
 	@echo "Examples:"
 	@echo "  make patch       # Bump patch version"
 	@echo "  make patch-quick # Fast patch bump using cargo check"
-	@echo "  make demo-install # Build + install the local reference topology"
+	@echo "  make demo-install # Fast local install using optimized dev wasm (override with RELEASE=1)"
 	@echo "  make test        # Run clippy and workspace tests"
 	@echo "  make test-wasm   # Fast wasm iteration path without PocketIC/e2e"
 	@echo "  make build       # Build project"
@@ -168,7 +168,7 @@ test-installed-canic-installer:
 
 demo-install:
 	@mkdir -p "$(TEST_TMPDIR)"
-	TMPDIR="$(TEST_TMPDIR)" $(CARGO_ENV) cargo run -q -p canic-installer --bin canic-install-root -- root
+	TMPDIR="$(TEST_TMPDIR)" RELEASE="$(if $(RELEASE),$(RELEASE),0)" $(CARGO_ENV) cargo run -q -p canic-installer --bin canic-install-root -- root
 
 test: clippy test-unit
 
@@ -185,16 +185,19 @@ test-bump: clippy test-unit-fast
 quick-bump:
 	$(CARGO_ENV) cargo check --workspace
 
-# Keep rust test execution single-threaded for PocketIC stability.
-# Parallel test threads can trigger PocketIC panics like:
+# Keep rust test execution single-threaded inside each test binary for PocketIC
+# stability and deterministic fixture reuse.
+# Integration test binaries are run explicitly in sequence so they do not queue
+# behind the shared PocketIC runtime lock and look hung at startup.
+# Parallel test threads can still trigger PocketIC panics like:
 # `KeyAlreadyExists { key: "nns_subnet_id", version: 2 }` and incomplete HTTP messages.
 test-unit:
 	@mkdir -p "$(TEST_TMPDIR)"
-	TMPDIR="$(TEST_TMPDIR)" $(CARGO_ENV) cargo test --workspace -- --test-threads=1
+	TMPDIR="$(TEST_TMPDIR)" $(CARGO_ENV) bash scripts/ci/run-workspace-tests.sh full
 
 test-unit-fast:
 	@mkdir -p "$(TEST_TMPDIR)"
-	TMPDIR="$(TEST_TMPDIR)" $(CARGO_ENV) cargo test --workspace --lib --bins -- --test-threads=1
+	TMPDIR="$(TEST_TMPDIR)" $(CARGO_ENV) bash scripts/ci/run-workspace-tests.sh fast
 
 test-canisters: demo-install
 	test_pid="$$(TMPDIR="$(TEST_TMPDIR)" dfx canister call root canic_subnet_registry --output json | jq -er '.Ok[] | select(.role == "test") | .pid' | head -n1)"; \

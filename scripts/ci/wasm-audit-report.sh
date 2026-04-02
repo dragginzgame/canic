@@ -77,8 +77,8 @@ normalize_profile() {
     case "${WASM_PROFILE:-$DEFAULT_PROFILE}" in
     wasm-release | release)
         PROFILE_NAME="wasm-release"
-        PROFILE_DIR="release"
-        CARGO_PROFILE_FLAG="--release"
+        PROFILE_DIR="wasm-release"
+        CARGO_PROFILE_FLAG="--profile wasm-release"
         ;;
     wasm-debug | debug)
         PROFILE_NAME="wasm-debug"

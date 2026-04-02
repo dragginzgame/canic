@@ -3,6 +3,7 @@ use std::{env, fs, path::PathBuf, process::Command};
 fn main() {
     // Rebuild when test-material cfg flag changes to avoid stale cfg mismatches.
     println!("cargo:rerun-if-env-changed=CANIC_TEST_DELEGATION_MATERIAL");
+    println!("cargo:rerun-if-env-changed=CARGO_TARGET_DIR");
 
     // Register and forward the test-only delegation-material cfg for this
     // canister and the nested signer build that this script triggers.
@@ -14,10 +15,12 @@ fn main() {
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR"));
     let workspace_root = discover_workspace_root(&manifest_dir);
     let out_dir = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR"));
+    let outer_target_dir =
+        env::var("CARGO_TARGET_DIR").map_or_else(|_| workspace_root.join("target"), PathBuf::from);
 
     // Build the hidden bootstrap store artifact first so `build_root!` can
     // embed a registered bootstrap module even on plain cargo builds.
-    let bootstrap_target_dir = out_dir.join("bootstrap_wasm_store_target");
+    let bootstrap_target_dir = outer_target_dir.join("delegation_root_stub_bootstrap_wasm_store");
     fs::create_dir_all(&bootstrap_target_dir).expect("create bootstrap wasm_store target dir");
     let mut bootstrap_cmd = Command::new("cargo");
     bootstrap_cmd.current_dir(&workspace_root);
@@ -46,7 +49,7 @@ fn main() {
 
     canic::build_root!("canic.toml");
 
-    let target_dir = out_dir.join("embedded_wasm_target");
+    let target_dir = outer_target_dir.join("delegation_root_stub_embedded_wasm");
     fs::create_dir_all(&target_dir).expect("create embedded wasm target dir");
 
     let mut cmd = Command::new("cargo");
@@ -57,7 +60,8 @@ fn main() {
     }
     cmd.args([
         "build",
-        "--release",
+        "--profile",
+        "wasm-release",
         "--target",
         "wasm32-unknown-unknown",
         "-p",
@@ -72,7 +76,7 @@ fn main() {
 
     let wasm_path = target_dir
         .join("wasm32-unknown-unknown")
-        .join("release")
+        .join("wasm-release")
         .join("delegation_signer_stub.wasm");
 
     let out_wasm = out_dir.join("delegation_signer_stub.wasm");

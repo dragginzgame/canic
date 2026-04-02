@@ -92,6 +92,7 @@ pub mod access {
 
 pub const CRATE_NAME: &str = env!("CARGO_PKG_NAME");
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+pub const CANIC_WASM_CHUNK_BYTES: usize = canic_core::CANIC_WASM_CHUNK_BYTES;
 
 // -----------------------------------------------------------------------------
 // Prelude
