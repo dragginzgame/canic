@@ -97,6 +97,11 @@ for crate in "${PUBLISH_ORDER[@]}"; do
         matched_from=1
     fi
 
+    if registry_has_version "$crate" "$version"; then
+        echo "Skipping $crate $version (already on crates.io)"
+        continue
+    fi
+
     echo "Publishing $crate $version"
     publish_args=(publish -p "$crate" --locked)
     if [ "$PUBLISH_DRY_RUN" = "1" ]; then
