@@ -260,6 +260,7 @@ dependencies = [
  "canic-core",
  "canic-memory",
  "serde",
+ "sha2 0.11.0",
  "thiserror 2.0.18",
 ]
 
@@ -272,7 +273,6 @@ dependencies = [
  "canic-cdk",
  "canic-memory",
  "canic-testkit",
- "canic-types",
  "criterion",
  "ctor",
  "derive_more",
@@ -362,15 +362,6 @@ dependencies = [
  "canic-testkit",
  "serde",
  "serde_json",
-]
-
-[[package]]
-name = "canic-types"
-version = "0.22.1"
-dependencies = [
- "candid",
- "canic-memory",
- "serde",
 ]
 
 [[package]]

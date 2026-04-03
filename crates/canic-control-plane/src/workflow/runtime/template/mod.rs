@@ -208,20 +208,18 @@ async fn ensure_store_chunk_hashes_present(
         return Ok(());
     }
 
-    let chunks =
-        publication::store_chunks(store_pid, template_id, version, info.chunk_hashes.len()).await?;
-
-    for (chunk_index, (expected_hash, bytes)) in info
-        .chunk_hashes
-        .iter()
-        .cloned()
-        .zip(chunks.into_iter())
-        .enumerate()
-    {
+    for (chunk_index, expected_hash) in info.chunk_hashes.iter().cloned().enumerate() {
         if stored_hashes.contains(&expected_hash) {
             continue;
         }
 
+        let chunk_index = u32::try_from(chunk_index).map_err(|_| {
+            InternalError::workflow(
+                InternalErrorOrigin::Workflow,
+                format!("template '{template_id}' exceeds supported chunk indexing bounds"),
+            )
+        })?;
+        let bytes = publication::store_chunk(store_pid, template_id, version, chunk_index).await?;
         let uploaded_hash = MgmtOps::upload_chunk(store_pid, bytes).await?;
         if uploaded_hash != expected_hash {
             return Err(InternalError::workflow(

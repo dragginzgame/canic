@@ -25,6 +25,7 @@ use cp_core::{
     format::byte_size,
     ops::ic::mgmt::MgmtOps,
 };
+use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 
 ///
@@ -76,7 +77,7 @@ impl TemplateChunkedOps {
         let chunk_sets = TemplateChunkSetStateStore::export();
         let chunks = TemplateChunkStore::export();
         let occupied_store_bytes = occupied_store_bytes(&manifests, &chunk_sets, &chunks);
-        let template_versions = projected_template_versions(&manifests, &chunk_sets, &chunks);
+        let template_versions = projected_template_versions(&manifests, &chunk_sets);
         let remaining_store_bytes = limits.max_store_bytes.saturating_sub(occupied_store_bytes);
         let release_count = u32::try_from(
             template_versions
@@ -178,13 +179,12 @@ impl TemplateChunkedOps {
     ) -> Result<(), InternalError> {
         let projected_manifests = projected_manifests_after_replace(&input);
         let projected_chunk_sets = TemplateChunkSetStateStore::export();
-        let projected_chunks = TemplateChunkStore::export();
-        ensure_store_limits(
-            limits,
-            &projected_manifests,
-            &projected_chunk_sets,
-            &projected_chunks,
-        )?;
+        let projected_bytes = manifest_store_bytes(&projected_manifests)
+            + chunk_set_store_bytes(&projected_chunk_sets)
+            + TemplateChunkStore::occupied_bytes();
+        let projected_versions =
+            projected_template_versions(&projected_manifests, &projected_chunk_sets);
+        ensure_store_limits_from_versions(limits, projected_bytes, projected_versions)?;
 
         TemplateManifestOps::replace_approved_from_input(input);
         Ok(())
@@ -210,15 +210,15 @@ impl TemplateChunkedOps {
             return Err(TemplateManifestOpsError::PayloadSizeMismatch(release).into());
         }
 
-        let mut payload = Vec::new();
+        let mut payload_hasher = Sha256::new();
         let mut chunk_hashes = Vec::with_capacity(input.chunks.len());
 
         for chunk in &input.chunks {
-            payload.extend_from_slice(chunk);
+            payload_hasher.update(chunk);
             chunk_hashes.push(get_wasm_hash(chunk));
         }
 
-        if get_wasm_hash(&payload) != input.payload_hash {
+        if payload_hasher.finalize().to_vec() != input.payload_hash {
             return Err(TemplateManifestOpsError::PayloadHashMismatch(release).into());
         }
 
@@ -268,15 +268,15 @@ impl TemplateChunkedOps {
             return Err(TemplateManifestOpsError::PayloadSizeMismatch(release).into());
         }
 
-        let mut payload = Vec::new();
+        let mut payload_hasher = Sha256::new();
         let mut chunk_hashes = Vec::with_capacity(input.chunks.len());
 
         for chunk in &input.chunks {
-            payload.extend_from_slice(chunk);
+            payload_hasher.update(chunk);
             chunk_hashes.push(get_wasm_hash(chunk));
         }
 
-        if get_wasm_hash(&payload) != input.payload_hash {
+        if payload_hasher.finalize().to_vec() != input.payload_hash {
             return Err(TemplateManifestOpsError::PayloadHashMismatch(release).into());
         }
 
@@ -307,13 +307,27 @@ impl TemplateChunkedOps {
 
         let projected_manifests = TemplateManifestStateStore::export().entries;
         let projected_chunk_sets = replace_chunk_set_entry(release, projected_chunk_set);
-        let projected_chunks = replace_chunk_entries(projected_chunks);
-        ensure_store_limits(
-            limits,
-            &projected_manifests,
-            &projected_chunk_sets,
-            &projected_chunks,
-        )?;
+        let current_chunk_bytes = TemplateChunkStore::occupied_bytes();
+        let replaced_chunk_bytes = projected_chunks
+            .iter()
+            .map(|(chunk_key, _)| {
+                TemplateChunkStore::get(chunk_key)
+                    .as_ref()
+                    .map_or(0, |record| chunk_entry_store_bytes(chunk_key, record))
+            })
+            .sum::<u64>();
+        let inserted_chunk_bytes = projected_chunks
+            .iter()
+            .map(|(chunk_key, record)| chunk_entry_store_bytes(chunk_key, record))
+            .sum::<u64>();
+        let projected_bytes = TemplateManifestStateStore::occupied_bytes()
+            + chunk_set_store_bytes(&projected_chunk_sets)
+            + current_chunk_bytes
+                .saturating_sub(replaced_chunk_bytes)
+                .saturating_add(inserted_chunk_bytes);
+        let projected_versions =
+            projected_template_versions(&projected_manifests, &projected_chunk_sets);
+        ensure_store_limits_from_versions(limits, projected_bytes, projected_versions)?;
 
         Self::publish_chunk_set_from_input(input, created_at)
     }
@@ -366,13 +380,12 @@ impl TemplateChunkedOps {
 
         let projected_manifests = TemplateManifestStateStore::export().entries;
         let projected_chunk_sets = replace_chunk_set_entry(release.clone(), info_record.clone());
-        let projected_chunks = TemplateChunkStore::export();
-        ensure_store_limits(
-            limits,
-            &projected_manifests,
-            &projected_chunk_sets,
-            &projected_chunks,
-        )?;
+        let projected_bytes = TemplateManifestStateStore::occupied_bytes()
+            + chunk_set_store_bytes(&projected_chunk_sets)
+            + TemplateChunkStore::occupied_bytes();
+        let projected_versions =
+            projected_template_versions(&projected_manifests, &projected_chunk_sets);
+        ensure_store_limits_from_versions(limits, projected_bytes, projected_versions)?;
 
         TemplateChunkSetStateStore::upsert(release, info_record.clone());
 
@@ -497,7 +510,8 @@ impl TemplateChunkedOps {
             return Err(TemplateManifestOpsError::TemplateChunkSetEmpty(release).into());
         }
 
-        let mut payload = Vec::new();
+        let mut payload_hasher = Sha256::new();
+        let mut payload_size_bytes = 0_u64;
 
         for (chunk_index, expected_hash) in info.chunk_hashes.iter().enumerate() {
             let chunk_index = u32::try_from(chunk_index)
@@ -511,14 +525,15 @@ impl TemplateChunkedOps {
                 return Err(TemplateManifestOpsError::TemplateChunkHashMismatch(chunk_key).into());
             }
 
-            payload.extend_from_slice(&response.bytes);
+            payload_size_bytes = payload_size_bytes.saturating_add(response.bytes.len() as u64);
+            payload_hasher.update(&response.bytes);
         }
 
-        if payload.len() as u64 != manifest.payload_size_bytes {
+        if payload_size_bytes != manifest.payload_size_bytes {
             return Err(TemplateManifestOpsError::PayloadSizeMismatch(release).into());
         }
 
-        if get_wasm_hash(&payload) != manifest.payload_hash {
+        if payload_hasher.finalize().to_vec() != manifest.payload_hash {
             return Err(TemplateManifestOpsError::PayloadHashMismatch(release).into());
         }
 
@@ -532,10 +547,10 @@ impl TemplateChunkedOps {
         let chunks = TemplateChunkStore::export();
         let stored_chunk_hashes = MgmtOps::stored_chunks(canister_self()).await?;
         let template_count =
-            u32::try_from(projected_template_versions(&manifests, &chunk_sets, &chunks).len())
+            u32::try_from(projected_template_versions(&manifests, &chunk_sets).len())
                 .unwrap_or(u32::MAX);
         let release_count = u32::try_from(
-            projected_template_versions(&manifests, &chunk_sets, &chunks)
+            projected_template_versions(&manifests, &chunk_sets)
                 .values()
                 .map(BTreeSet::len)
                 .sum::<usize>(),
@@ -572,16 +587,8 @@ fn occupied_store_bytes(
     chunk_sets: &[(TemplateReleaseKey, TemplateChunkSetRecord)],
     chunks: &[(TemplateChunkKey, TemplateChunkRecord)],
 ) -> u64 {
-    let manifest_bytes = manifests
-        .iter()
-        .map(|(template_id, record)| {
-            (template_id.to_bytes().len() + record.to_bytes().len()) as u64
-        })
-        .sum::<u64>();
-    let chunk_set_bytes = chunk_sets
-        .iter()
-        .map(|(release, record)| (release.to_bytes().len() + record.to_bytes().len()) as u64)
-        .sum::<u64>();
+    let manifest_bytes = manifest_store_bytes(manifests);
+    let chunk_set_bytes = chunk_set_store_bytes(chunk_sets);
     let chunk_bytes = chunks
         .iter()
         .map(|(chunk_key, record)| (chunk_key.to_bytes().len() + record.to_bytes().len()) as u64)
@@ -590,13 +597,27 @@ fn occupied_store_bytes(
     manifest_bytes + chunk_set_bytes + chunk_bytes
 }
 
-fn ensure_store_limits(
+fn manifest_store_bytes(manifests: &[(TemplateReleaseKey, TemplateManifestRecord)]) -> u64 {
+    manifests
+        .iter()
+        .map(|(template_id, record)| {
+            (template_id.to_bytes().len() + record.to_bytes().len()) as u64
+        })
+        .sum::<u64>()
+}
+
+fn chunk_set_store_bytes(chunk_sets: &[(TemplateReleaseKey, TemplateChunkSetRecord)]) -> u64 {
+    chunk_sets
+        .iter()
+        .map(|(release, record)| (release.to_bytes().len() + record.to_bytes().len()) as u64)
+        .sum::<u64>()
+}
+
+fn ensure_store_limits_from_versions(
     limits: WasmStoreLimits,
-    manifests: &[(TemplateReleaseKey, TemplateManifestRecord)],
-    chunk_sets: &[(TemplateReleaseKey, TemplateChunkSetRecord)],
-    chunks: &[(TemplateChunkKey, TemplateChunkRecord)],
+    projected_bytes: u64,
+    projected_versions: BTreeMap<TemplateId, BTreeSet<TemplateVersion>>,
 ) -> Result<(), InternalError> {
-    let projected_bytes = occupied_store_bytes(manifests, chunk_sets, chunks);
     if projected_bytes > limits.max_store_bytes {
         return Err(TemplateManifestOpsError::WasmStoreCapacityExceeded {
             projected_bytes,
@@ -604,8 +625,6 @@ fn ensure_store_limits(
         }
         .into());
     }
-
-    let projected_versions = projected_template_versions(manifests, chunk_sets, chunks);
 
     if let Some(max_templates) = limits.max_templates {
         let projected_templates = u32::try_from(projected_versions.len()).unwrap_or(u32::MAX);
@@ -638,7 +657,6 @@ fn ensure_store_limits(
 fn projected_template_versions(
     manifests: &[(TemplateReleaseKey, TemplateManifestRecord)],
     chunk_sets: &[(TemplateReleaseKey, TemplateChunkSetRecord)],
-    chunks: &[(TemplateChunkKey, TemplateChunkRecord)],
 ) -> BTreeMap<TemplateId, BTreeSet<TemplateVersion>> {
     let mut template_versions = BTreeMap::<TemplateId, BTreeSet<TemplateVersion>>::new();
 
@@ -654,13 +672,6 @@ fn projected_template_versions(
             .entry(release.template_id.clone())
             .or_default()
             .insert(release.version.clone());
-    }
-
-    for (chunk_key, _) in chunks {
-        template_versions
-            .entry(chunk_key.release.template_id.clone())
-            .or_default()
-            .insert(chunk_key.release.version.clone());
     }
 
     template_versions
@@ -714,25 +725,6 @@ fn replace_chunk_set_entry(
         existing.1 = record;
     } else {
         entries.push((release, record));
-    }
-
-    entries
-}
-
-fn replace_chunk_entries(
-    replacements: Vec<(TemplateChunkKey, TemplateChunkRecord)>,
-) -> Vec<(TemplateChunkKey, TemplateChunkRecord)> {
-    let mut entries = TemplateChunkStore::export();
-
-    for (chunk_key, record) in replacements {
-        if let Some(existing) = entries
-            .iter_mut()
-            .find(|(existing_key, _)| *existing_key == chunk_key)
-        {
-            existing.1 = record;
-        } else {
-            entries.push((chunk_key, record));
-        }
     }
 
     entries
