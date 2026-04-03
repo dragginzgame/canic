@@ -2,6 +2,17 @@
 
 Published installer and release-set tooling for downstream Canic workspaces.
 
+For the full local setup path, prefer the shared tagged installer script from the
+Canic repo:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/dragginzgame/canic/v0.22.10/scripts/install.sh | bash
+```
+
+That script bootstraps Rust when needed, installs the pinned toolchain,
+`canic-installer`, the required wasm/Candid utilities, and `dfx` when it is
+missing. This crate README documents the thinner installed-binary surface below.
+
 This crate owns the public thin-root build and staging path:
 
 - build visible canister artifacts through `canic-build-canister-artifact`
