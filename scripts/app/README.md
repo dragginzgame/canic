@@ -85,6 +85,7 @@ dfx build --all
 
 `dfx.json` uses custom build commands which call `scripts/app/build.sh <canister>`. That script:
 - is now just a thin wrapper around the published `canic-build-canister-artifact` binary from `canic-installer`
+- prints the workspace/DFX roots once per `dfx build` parent process and a short elapsed-time line per canister build so long downstream/custom-build runs stay readable
 
 That public builder:
 - builds the requested Rust canister crate for `wasm32-unknown-unknown`
