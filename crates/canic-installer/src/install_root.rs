@@ -11,7 +11,7 @@ use std::{
     path::Path,
     process::Command,
     thread,
-    time::{Duration, Instant},
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
 ///
@@ -90,8 +90,9 @@ pub fn install_root(options: InstallRootOptions) -> Result<(), Box<dyn std::erro
     timings.create_canisters = create_started_at.elapsed();
 
     let build_targets = local_install_build_targets(&workspace_root, &options.root_canister)?;
+    let build_session_id = install_build_session_id();
     let build_started_at = Instant::now();
-    run_dfx_build_targets(&dfx_root, &build_targets)?;
+    run_dfx_build_targets(&dfx_root, &build_targets, &build_session_id)?;
     timings.build_all = build_started_at.elapsed();
 
     let emit_manifest_started_at = Instant::now();
@@ -161,9 +162,10 @@ fn local_install_build_targets(
 fn run_dfx_build_targets(
     dfx_root: &Path,
     targets: &[String],
+    build_session_id: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
     for target in targets {
-        let mut command = dfx_build_target_command(dfx_root, target);
+        let mut command = dfx_build_target_command(dfx_root, target, build_session_id);
         run_command(&mut command)?;
     }
 
@@ -172,10 +174,20 @@ fn run_dfx_build_targets(
 
 // Spawn one local `dfx build <canister>` step without overriding the caller's
 // selected build profile environment.
-fn dfx_build_target_command(dfx_root: &Path, target: &str) -> Command {
+fn dfx_build_target_command(dfx_root: &Path, target: &str, build_session_id: &str) -> Command {
     let mut command = Command::new("dfx");
-    command.current_dir(dfx_root).args(["build", target]);
     command
+        .current_dir(dfx_root)
+        .env("CANIC_BUILD_CONTEXT_SESSION", build_session_id)
+        .args(["build", "-qq", target]);
+    command
+}
+
+fn install_build_session_id() -> String {
+    let unique = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |duration| duration.as_nanos());
+    format!("install-root-{}-{unique}", std::process::id())
 }
 
 // Top up local root cycles only when the current balance is below the target floor.
@@ -551,9 +563,9 @@ fn print_raw_call(root_canister: &str, method: &str) {
 #[cfg(test)]
 mod tests {
     use super::{
-        LOCAL_ROOT_TARGET_CYCLES, dfx_build_target_command, local_install_build_targets,
-        parse_bootstrap_status_value, parse_canister_status_cycles, parse_root_ready_value,
-        required_local_cycle_topup,
+        LOCAL_ROOT_TARGET_CYCLES, dfx_build_target_command, install_build_session_id,
+        local_install_build_targets, parse_bootstrap_status_value, parse_canister_status_cycles,
+        parse_root_ready_value, required_local_cycle_topup,
     };
     use serde_json::json;
     use std::{
@@ -653,7 +665,11 @@ Cycle balance: 12_345 Cycles
 
     #[test]
     fn dfx_build_command_targets_one_canister_per_call() {
-        let command = dfx_build_target_command(Path::new("/tmp/canic-dfx-root"), "user_hub");
+        let command = dfx_build_target_command(
+            Path::new("/tmp/canic-dfx-root"),
+            "user_hub",
+            "install-root-test",
+        );
 
         assert_eq!(command.get_program(), "dfx");
         assert_eq!(
@@ -661,7 +677,7 @@ Cycle balance: 12_345 Cycles
                 .get_args()
                 .map(|arg| arg.to_string_lossy().into_owned())
                 .collect::<Vec<_>>(),
-            ["build", "user_hub"]
+            ["build", "-qq", "user_hub"]
         );
         assert_eq!(
             command
@@ -670,9 +686,17 @@ Cycle balance: 12_345 Cycles
             Some("/tmp/canic-dfx-root".to_string())
         );
         assert!(
-            command.get_envs().next().is_none(),
-            "dfx build must not override profile env"
+            command
+                .get_envs()
+                .any(|(key, value)| key == "CANIC_BUILD_CONTEXT_SESSION" && value.is_some()),
+            "dfx build must carry the shared build-session marker"
         );
+    }
+
+    #[test]
+    fn install_build_session_id_is_prefixed_for_logs() {
+        let session_id = install_build_session_id();
+        assert!(session_id.starts_with("install-root-"));
     }
 
     #[test]
