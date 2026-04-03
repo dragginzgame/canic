@@ -52,6 +52,8 @@ struct InstallTimingSummary {
     wait_ready: Duration,
 }
 
+const LOCAL_ROOT_TARGET_CYCLES: u128 = 9_000_000_000_000_000;
+
 impl InstallRootOptions {
     // Resolve the current local-root install options from args and environment.
     #[must_use]
@@ -97,19 +99,8 @@ pub fn install_root(options: InstallRootOptions) -> Result<(), Box<dyn std::erro
         emit_root_release_set_manifest(&workspace_root, &dfx_root, &options.network)?;
     timings.emit_manifest = emit_manifest_started_at.elapsed();
 
-    let mut fabricate = Command::new("dfx");
-    fabricate.current_dir(&dfx_root);
-    fabricate.args([
-        "ledger",
-        "fabricate-cycles",
-        "--canister",
-        &options.root_canister,
-        "--cycles",
-        "9000000000000000",
-    ]);
-    let fabricate_started_at = Instant::now();
-    let _ = run_command_allow_failure(&mut fabricate)?;
-    timings.fabricate_cycles = fabricate_started_at.elapsed();
+    timings.fabricate_cycles =
+        maybe_fabricate_local_cycles(&dfx_root, &options.root_canister, &options.network)?;
 
     let mut install = Command::new("dfx");
     install.current_dir(&dfx_root).args([
@@ -161,6 +152,111 @@ fn dfx_build_all_command(dfx_root: &Path) -> Command {
     let mut command = Command::new("dfx");
     command.current_dir(dfx_root).args(["build", "--all"]);
     command
+}
+
+// Top up local root cycles only when the current balance is below the target floor.
+fn maybe_fabricate_local_cycles(
+    dfx_root: &Path,
+    root_canister: &str,
+    network: &str,
+) -> Result<Duration, Box<dyn std::error::Error>> {
+    if network != "local" {
+        return Ok(Duration::ZERO);
+    }
+
+    let current_balance = root_cycle_balance(dfx_root, root_canister)?;
+    let Some(fabricate_cycles) = required_local_cycle_topup(current_balance) else {
+        println!(
+            "Skipping local cycle fabrication for {root_canister}; balance {} already meets target {}",
+            format_cycles(current_balance),
+            format_cycles(LOCAL_ROOT_TARGET_CYCLES)
+        );
+        return Ok(Duration::ZERO);
+    };
+
+    println!(
+        "Fabricating {} cycles locally for {root_canister} to reach target {} (current balance {})",
+        format_cycles(fabricate_cycles),
+        format_cycles(LOCAL_ROOT_TARGET_CYCLES),
+        format_cycles(current_balance)
+    );
+
+    let mut fabricate = Command::new("dfx");
+    fabricate.current_dir(dfx_root);
+    fabricate.args([
+        "ledger",
+        "fabricate-cycles",
+        "--canister",
+        root_canister,
+        "--cycles",
+        &fabricate_cycles.to_string(),
+    ]);
+    let fabricate_started_at = Instant::now();
+    let _ = run_command_allow_failure(&mut fabricate)?;
+
+    Ok(fabricate_started_at.elapsed())
+}
+
+// Read the current root canister cycle balance from `dfx canister status`.
+fn root_cycle_balance(
+    dfx_root: &Path,
+    root_canister: &str,
+) -> Result<u128, Box<dyn std::error::Error>> {
+    let output = Command::new("dfx")
+        .current_dir(dfx_root)
+        .args(["canister", "status", root_canister])
+        .output()?;
+    if !output.status.success() {
+        return Err(format!("dfx canister status failed: {}", output.status).into());
+    }
+
+    let stdout = String::from_utf8(output.stdout)?;
+    parse_canister_status_cycles(&stdout)
+        .ok_or_else(|| "could not parse cycle balance from `dfx canister status` output".into())
+}
+
+// Parse the cycle balance from the human-readable `dfx canister status` output.
+fn parse_canister_status_cycles(status_output: &str) -> Option<u128> {
+    status_output
+        .lines()
+        .find_map(parse_canister_status_balance_line)
+}
+
+fn parse_canister_status_balance_line(line: &str) -> Option<u128> {
+    let (label, value) = line.trim().split_once(':')?;
+    let label = label.trim().to_ascii_lowercase();
+    if label != "balance" && label != "cycle balance" {
+        return None;
+    }
+
+    let digits = value
+        .chars()
+        .filter(char::is_ascii_digit)
+        .collect::<String>();
+    if digits.is_empty() {
+        return None;
+    }
+
+    digits.parse::<u128>().ok()
+}
+
+// Return the local top-up delta needed to bring root up to the target cycle floor.
+fn required_local_cycle_topup(current_balance: u128) -> Option<u128> {
+    (current_balance < LOCAL_ROOT_TARGET_CYCLES)
+        .then_some(LOCAL_ROOT_TARGET_CYCLES.saturating_sub(current_balance))
+        .filter(|cycles| *cycles > 0)
+}
+
+fn format_cycles(value: u128) -> String {
+    let digits = value.to_string();
+    let mut out = String::with_capacity(digits.len() + (digits.len().saturating_sub(1) / 3));
+    for (index, ch) in digits.chars().enumerate() {
+        if index > 0 && (digits.len() - index).is_multiple_of(3) {
+            out.push('_');
+        }
+        out.push(ch);
+    }
+    out
 }
 
 // Fail fast unless the requested DFX replica is already running.
@@ -318,21 +414,21 @@ fn parse_bootstrap_status_value(data: &Value) -> Option<BootstrapStatusSnapshot>
 
 fn print_install_timing_summary(timings: &InstallTimingSummary, total: Duration) {
     println!("Install timing summary:");
-    println!(
-        "  create_canisters={:.2}s build_all={:.2}s emit_manifest={:.2}s fabricate_cycles={:.2}s",
-        timings.create_canisters.as_secs_f64(),
-        timings.build_all.as_secs_f64(),
-        timings.emit_manifest.as_secs_f64(),
-        timings.fabricate_cycles.as_secs_f64(),
-    );
-    println!(
-        "  install_root={:.2}s stage_release_set={:.2}s resume_bootstrap={:.2}s wait_ready={:.2}s total={:.2}s",
-        timings.install_root.as_secs_f64(),
-        timings.stage_release_set.as_secs_f64(),
-        timings.resume_bootstrap.as_secs_f64(),
-        timings.wait_ready.as_secs_f64(),
-        total.as_secs_f64(),
-    );
+    println!("{:<20} {:>10}", "phase", "elapsed");
+    println!("{:<20} {:>10}", "--------------------", "----------");
+    print_timing_row("create_canisters", timings.create_canisters);
+    print_timing_row("build_all", timings.build_all);
+    print_timing_row("emit_manifest", timings.emit_manifest);
+    print_timing_row("fabricate_cycles", timings.fabricate_cycles);
+    print_timing_row("install_root", timings.install_root);
+    print_timing_row("stage_release_set", timings.stage_release_set);
+    print_timing_row("resume_bootstrap", timings.resume_bootstrap);
+    print_timing_row("wait_ready", timings.wait_ready);
+    print_timing_row("total", total);
+}
+
+fn print_timing_row(label: &str, duration: Duration) {
+    println!("{label:<20} {:>9.2}s", duration.as_secs_f64());
 }
 
 // Print recent structured root log entries without raw byte dumps.
@@ -432,7 +528,10 @@ fn print_raw_call(root_canister: &str, method: &str) {
 
 #[cfg(test)]
 mod tests {
-    use super::{dfx_build_all_command, parse_bootstrap_status_value, parse_root_ready_value};
+    use super::{
+        LOCAL_ROOT_TARGET_CYCLES, dfx_build_all_command, parse_bootstrap_status_value,
+        parse_canister_status_cycles, parse_root_ready_value, required_local_cycle_topup,
+    };
     use serde_json::json;
     use std::path::Path;
 
@@ -481,6 +580,48 @@ mod tests {
         assert!(!status.ready);
         assert_eq!(status.phase, "failed");
         assert_eq!(status.last_error.as_deref(), Some("registry phase failed"));
+    }
+
+    #[test]
+    fn parse_canister_status_cycles_accepts_balance_line() {
+        let output = "\
+Canister status call result for root.
+Status: Running
+Balance: 9_002_999_998_056_000 Cycles
+Memory Size: 1_234_567 Bytes
+";
+
+        assert_eq!(
+            parse_canister_status_cycles(output),
+            Some(9_002_999_998_056_000)
+        );
+    }
+
+    #[test]
+    fn parse_canister_status_cycles_accepts_cycle_balance_line() {
+        let output = "\
+Canister status call result for root.
+Cycle balance: 12_345 Cycles
+";
+
+        assert_eq!(parse_canister_status_cycles(output), Some(12_345));
+    }
+
+    #[test]
+    fn required_local_cycle_topup_skips_when_balance_already_meets_target() {
+        assert_eq!(required_local_cycle_topup(LOCAL_ROOT_TARGET_CYCLES), None);
+        assert_eq!(
+            required_local_cycle_topup(LOCAL_ROOT_TARGET_CYCLES + 1_000),
+            None
+        );
+    }
+
+    #[test]
+    fn required_local_cycle_topup_returns_missing_delta_only() {
+        assert_eq!(
+            required_local_cycle_topup(3_000_000_000_000),
+            Some(8_997_000_000_000_000)
+        );
     }
 
     #[test]
