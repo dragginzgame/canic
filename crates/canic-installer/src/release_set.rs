@@ -14,13 +14,25 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-const ROOT_CONFIG_RELATIVE: &str = "canisters/canic.toml";
-const ROOT_MANIFEST_RELATIVE: &str = "canisters/root/Cargo.toml";
+const CANISTERS_ROOT_RELATIVE: &str = "canisters";
+const ROOT_CONFIG_FILE: &str = "canic.toml";
 const WORKSPACE_MANIFEST_RELATIVE: &str = "Cargo.toml";
 const DFX_CONFIG_FILE: &str = "dfx.json";
 pub const ROOT_RELEASE_SET_MANIFEST_FILE: &str = "root.release-set.json";
 const GZIP_MAGIC: [u8; 2] = [0x1f, 0x8b];
 const WASM_MAGIC: [u8; 4] = [0x00, 0x61, 0x73, 0x6d];
+
+#[derive(Clone, Debug, Deserialize)]
+struct CargoMetadata {
+    packages: Vec<CargoMetadataPackage>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+struct CargoMetadataPackage {
+    name: String,
+    manifest_path: PathBuf,
+    metadata: Option<Value>,
+}
 
 ///
 /// RootReleaseSetManifest
@@ -101,17 +113,58 @@ pub fn dfx_root() -> Result<PathBuf, Box<dyn std::error::Error>> {
 // Resolve the downstream Canic config path.
 #[must_use]
 pub fn config_path(workspace_root: &Path) -> PathBuf {
-    std::env::var_os("CANIC_CONFIG_PATH")
-        .map_or_else(|| workspace_root.join(ROOT_CONFIG_RELATIVE), PathBuf::from)
+    std::env::var_os("CANIC_CONFIG_PATH").map_or_else(
+        || canisters_root(workspace_root).join(ROOT_CONFIG_FILE),
+        |path| normalize_workspace_path(workspace_root, PathBuf::from(path)),
+    )
+}
+
+// Resolve the downstream canister-manifest root.
+#[must_use]
+pub fn canisters_root(workspace_root: &Path) -> PathBuf {
+    if let Some(path) = std::env::var_os("CANIC_CANISTERS_ROOT") {
+        return normalize_workspace_path(workspace_root, PathBuf::from(path));
+    }
+
+    if let Some(path) = std::env::var_os("CANIC_CONFIG_PATH") {
+        let config_path = normalize_workspace_path(workspace_root, PathBuf::from(path));
+        if let Some(parent) = config_path.parent() {
+            return parent.to_path_buf();
+        }
+    }
+
+    if let Some(manifest_path) = discover_canister_manifest_from_metadata(workspace_root, "root")
+        && let Some(parent) = manifest_path.parent().and_then(Path::parent)
+    {
+        return parent.to_path_buf();
+    }
+
+    workspace_root.join(CANISTERS_ROOT_RELATIVE)
 }
 
 // Resolve the downstream root canister manifest path.
 #[must_use]
 pub fn root_manifest_path(workspace_root: &Path) -> PathBuf {
     std::env::var_os("CANIC_ROOT_MANIFEST_PATH").map_or_else(
-        || workspace_root.join(ROOT_MANIFEST_RELATIVE),
-        PathBuf::from,
+        || {
+            discover_canister_manifest_from_metadata(workspace_root, "root").unwrap_or_else(|| {
+                canisters_root(workspace_root)
+                    .join("root")
+                    .join("Cargo.toml")
+            })
+        },
+        |path| normalize_workspace_path(workspace_root, PathBuf::from(path)),
     )
+}
+
+// Resolve the downstream manifest path for one visible canister role.
+#[must_use]
+pub fn canister_manifest_path(workspace_root: &Path, canister_name: &str) -> PathBuf {
+    discover_canister_manifest_from_metadata(workspace_root, canister_name).unwrap_or_else(|| {
+        canisters_root(workspace_root)
+            .join(canister_name)
+            .join("Cargo.toml")
+    })
 }
 
 // Resolve the downstream workspace manifest path.
@@ -119,7 +172,7 @@ pub fn root_manifest_path(workspace_root: &Path) -> PathBuf {
 pub fn workspace_manifest_path(workspace_root: &Path) -> PathBuf {
     std::env::var_os("CANIC_WORKSPACE_MANIFEST_PATH").map_or_else(
         || workspace_root.join(WORKSPACE_MANIFEST_RELATIVE),
-        PathBuf::from,
+        |path| normalize_workspace_path(workspace_root, PathBuf::from(path)),
     )
 }
 
@@ -782,6 +835,63 @@ fn discover_dfx_root_from(path: &Path) -> Option<PathBuf> {
     None
 }
 
+fn normalize_workspace_path(workspace_root: &Path, path: PathBuf) -> PathBuf {
+    if path.is_absolute() {
+        path
+    } else {
+        workspace_root.join(path)
+    }
+}
+
+fn discover_canister_manifest_from_metadata(
+    workspace_root: &Path,
+    role_name: &str,
+) -> Option<PathBuf> {
+    let metadata = cargo_metadata(workspace_root).ok()?;
+    let expected_package_name = format!("canister_{role_name}");
+
+    metadata
+        .packages
+        .into_iter()
+        .find(|package| {
+            package_declares_role(package, role_name) || package.name == expected_package_name
+        })
+        .map(|package| package.manifest_path)
+}
+
+fn package_declares_role(package: &CargoMetadataPackage, role_name: &str) -> bool {
+    package
+        .metadata
+        .as_ref()
+        .and_then(|metadata| metadata.get("canic"))
+        .and_then(|canic| canic.get("role"))
+        .and_then(Value::as_str)
+        == Some(role_name)
+}
+
+fn cargo_metadata(workspace_root: &Path) -> Result<CargoMetadata, Box<dyn std::error::Error>> {
+    let output = Command::new("cargo")
+        .current_dir(workspace_root)
+        .args([
+            "metadata",
+            "--format-version=1",
+            "--no-deps",
+            "--manifest-path",
+            &workspace_root.join("Cargo.toml").display().to_string(),
+        ])
+        .output()?;
+
+    if !output.status.success() {
+        return Err(format!(
+            "cargo metadata failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        )
+        .into());
+    }
+
+    Ok(serde_json::from_slice(&output.stdout)?)
+}
+
 // Render one byte slice as lowercase hexadecimal.
 fn hex_bytes(bytes: &[u8]) -> String {
     let mut encoded = String::with_capacity(bytes.len() * 2);
@@ -809,9 +919,19 @@ fn decode_hex(hex: &str) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
 
 #[cfg(test)]
 mod tests {
-    use super::{configured_release_roles_from_source, read_release_artifact};
+    use super::{
+        canister_manifest_path, canisters_root, config_path, configured_release_roles_from_source,
+        read_release_artifact, root_manifest_path,
+    };
     use flate2::{Compression, write::GzEncoder};
-    use std::{fs, io::Write};
+    use std::{
+        fs,
+        io::Write,
+        path::Path,
+        sync::{Mutex, OnceLock},
+    };
+
+    static ENV_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
     const REAL_CONFIG: &str = r#"
 controllers = []
 app_directory = ["user_hub", "scale_hub"]
@@ -965,9 +1085,197 @@ kind = "replica"
         let _ = fs::remove_file(path);
     }
 
+    #[test]
+    fn canisters_root_defaults_to_workspace_canisters() {
+        let _env = env_lock();
+        clear_path_env();
+
+        assert_eq!(
+            canisters_root(Path::new("/tmp/workspace")),
+            Path::new("/tmp/workspace/canisters")
+        );
+    }
+
+    #[test]
+    fn canisters_root_respects_explicit_override() {
+        let _env = env_lock();
+        clear_path_env();
+        unsafe {
+            std::env::set_var("CANIC_CANISTERS_ROOT", "src/canisters");
+        }
+
+        assert_eq!(
+            canisters_root(Path::new("/tmp/workspace")),
+            Path::new("/tmp/workspace/src/canisters")
+        );
+    }
+
+    #[test]
+    fn canisters_root_infers_parent_from_config_path() {
+        let _env = env_lock();
+        clear_path_env();
+        unsafe {
+            std::env::set_var("CANIC_CONFIG_PATH", "src/canisters/canic.toml");
+        }
+
+        assert_eq!(
+            canisters_root(Path::new("/tmp/workspace")),
+            Path::new("/tmp/workspace/src/canisters")
+        );
+        assert_eq!(
+            config_path(Path::new("/tmp/workspace")),
+            Path::new("/tmp/workspace/src/canisters/canic.toml")
+        );
+        assert_eq!(
+            root_manifest_path(Path::new("/tmp/workspace")),
+            Path::new("/tmp/workspace/src/canisters/root/Cargo.toml")
+        );
+    }
+
+    #[test]
+    fn manifest_discovery_uses_workspace_metadata_for_nested_canisters() {
+        let _env = env_lock();
+        clear_path_env();
+        let temp_root = temp_test_dir("metadata-nested");
+        fs::create_dir_all(temp_root.join("src/canisters/project/ledger/src")).unwrap();
+        fs::create_dir_all(temp_root.join("src/canisters/root/src")).unwrap();
+        fs::write(
+            temp_root.join("Cargo.toml"),
+            r#"[workspace]
+members = [
+    "src/canisters/project/ledger",
+    "src/canisters/root",
+]
+resolver = "2"
+"#,
+        )
+        .unwrap();
+        fs::write(
+            temp_root.join("src/canisters/project/ledger/Cargo.toml"),
+            r#"[package]
+name = "canister_project_ledger"
+version = "0.1.0"
+edition = "2024"
+"#,
+        )
+        .unwrap();
+        fs::write(
+            temp_root.join("src/canisters/project/ledger/src/lib.rs"),
+            "",
+        )
+        .unwrap();
+        fs::write(
+            temp_root.join("src/canisters/root/Cargo.toml"),
+            r#"[package]
+name = "canister_root"
+version = "0.1.0"
+edition = "2024"
+"#,
+        )
+        .unwrap();
+        fs::write(temp_root.join("src/canisters/root/src/lib.rs"), "").unwrap();
+
+        assert_eq!(
+            canister_manifest_path(&temp_root, "project_ledger"),
+            temp_root.join("src/canisters/project/ledger/Cargo.toml")
+        );
+        assert_eq!(canisters_root(&temp_root), temp_root.join("src/canisters"));
+        assert_eq!(
+            root_manifest_path(&temp_root),
+            temp_root.join("src/canisters/root/Cargo.toml")
+        );
+
+        let _ = fs::remove_dir_all(temp_root);
+    }
+
+    #[test]
+    fn manifest_discovery_respects_explicit_metadata_role() {
+        let _env = env_lock();
+        clear_path_env();
+        let temp_root = temp_test_dir("metadata-role");
+        fs::create_dir_all(temp_root.join("src/canisters/project/ledger/src")).unwrap();
+        fs::create_dir_all(temp_root.join("src/canisters/root/src")).unwrap();
+        fs::write(
+            temp_root.join("Cargo.toml"),
+            r#"[workspace]
+members = [
+    "src/canisters/project/ledger",
+    "src/canisters/root",
+]
+resolver = "2"
+"#,
+        )
+        .unwrap();
+        fs::write(
+            temp_root.join("src/canisters/project/ledger/Cargo.toml"),
+            r#"[package]
+name = "toko_project_ledger"
+version = "0.1.0"
+edition = "2024"
+
+[package.metadata.canic]
+role = "project_ledger"
+"#,
+        )
+        .unwrap();
+        fs::write(
+            temp_root.join("src/canisters/project/ledger/src/lib.rs"),
+            "",
+        )
+        .unwrap();
+        fs::write(
+            temp_root.join("src/canisters/root/Cargo.toml"),
+            r#"[package]
+name = "canister_root"
+version = "0.1.0"
+edition = "2024"
+"#,
+        )
+        .unwrap();
+        fs::write(temp_root.join("src/canisters/root/src/lib.rs"), "").unwrap();
+
+        assert_eq!(
+            canister_manifest_path(&temp_root, "project_ledger"),
+            temp_root.join("src/canisters/project/ledger/Cargo.toml")
+        );
+
+        let _ = fs::remove_dir_all(temp_root);
+    }
+
     fn gzipped_bytes(input: &[u8]) -> Vec<u8> {
         let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
         encoder.write_all(input).unwrap();
         encoder.finish().unwrap()
+    }
+
+    fn env_lock() -> std::sync::MutexGuard<'static, ()> {
+        ENV_LOCK
+            .get_or_init(|| Mutex::new(()))
+            .lock()
+            .expect("env lock must not be poisoned")
+    }
+
+    fn clear_path_env() {
+        for key in [
+            "CANIC_CANISTERS_ROOT",
+            "CANIC_CONFIG_PATH",
+            "CANIC_ROOT_MANIFEST_PATH",
+            "CANIC_WORKSPACE_MANIFEST_PATH",
+        ] {
+            unsafe {
+                std::env::remove_var(key);
+            }
+        }
+    }
+
+    fn temp_test_dir(label: &str) -> std::path::PathBuf {
+        std::env::temp_dir().join(format!(
+            "canic-installer-{label}-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system time must be after unix epoch")
+                .as_nanos()
+        ))
     }
 }

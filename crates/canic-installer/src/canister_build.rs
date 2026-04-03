@@ -3,7 +3,9 @@ use crate::{
         BootstrapWasmStoreBuildOutput, BootstrapWasmStoreBuildProfile,
         build_bootstrap_wasm_store_artifact,
     },
-    release_set::{dfx_root, emit_root_release_set_manifest_if_ready, workspace_root},
+    release_set::{
+        canister_manifest_path, dfx_root, emit_root_release_set_manifest_if_ready, workspace_root,
+    },
 };
 use flate2::{Compression, GzBuilder};
 use serde_json::Value;
@@ -16,7 +18,6 @@ use std::{
 
 const ROOT_ROLE: &str = "root";
 const WASM_STORE_ROLE: &str = "wasm_store";
-const CANISTERS_ROOT_RELATIVE: &str = "canisters";
 const LOCAL_ARTIFACT_ROOT_RELATIVE: &str = ".dfx/local/canisters";
 const WASM_TARGET: &str = "wasm32-unknown-unknown";
 
@@ -157,14 +158,6 @@ pub fn build_canister_artifact(
         did_path,
         manifest_path,
     })
-}
-
-// Resolve the conventional manifest path for one downstream/reference canister.
-fn canister_manifest_path(workspace_root: &Path, canister_name: &str) -> PathBuf {
-    workspace_root
-        .join(CANISTERS_ROOT_RELATIVE)
-        .join(canister_name)
-        .join("Cargo.toml")
 }
 
 // Read the real package name from one canister manifest so downstreams are not
