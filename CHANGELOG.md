@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.22.x] - 2026-04-02 - Audits, Wasm Size, and Perf
 
+- `0.22.10` fixes the narrowed local root-install build path so it issues one `dfx build <canister>` call per selected target, matching the real DFX CLI contract and restoring downstream `make test-canisters` flows after the `0.22.9` targeted-build change.
 - `0.22.9` tightens the local thin-root install path by fabricating cycles only when local root is actually short, building only `root` plus the configured release roles from the root-owning subnet, keeping the normal wait loop quieter, and removing the now-redundant DFX dependency edges from the reference `dfx.json`.
 - `0.22.8` cleans up the repo-local/downstream output so both the shell wrapper and direct `canic-build-canister-artifact` calls print the workspace/DFX roots once per run, show the selected `debug|fast|release` build profile, add visible spacing between canister builds, log per-canister elapsed time with `0.01s` precision, and render the installer’s end-of-run timing summary as a readable table.
 - `0.22.7` lets the installer auto-discover nested canister manifests from Cargo workspace metadata so downstreams no longer need flat alias directories just to match Canic role names.
