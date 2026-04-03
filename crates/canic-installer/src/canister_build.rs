@@ -133,6 +133,7 @@ pub fn build_canister_artifact(
         require_embedded_release_artifacts,
     )?;
     write_wasm_artifact(&release_wasm_path, &wasm_path)?;
+    maybe_shrink_wasm_artifact(&wasm_path)?;
     write_gzip_artifact(&wasm_path, &wasm_gz_path)?;
 
     let debug_wasm_path = run_canister_build(
@@ -256,6 +257,30 @@ fn build_hidden_wasm_store_artifact(
 ) -> Result<CanisterArtifactBuildOutput, Box<dyn std::error::Error>> {
     let output = build_bootstrap_wasm_store_artifact(workspace_root, dfx_root, profile.into())?;
     Ok(map_bootstrap_output(output))
+}
+
+// Apply `ic-wasm shrink` when available so visible canister artifacts follow
+// the same size-reduction path as the hidden bootstrap store artifact.
+fn maybe_shrink_wasm_artifact(wasm_path: &Path) -> Result<(), Box<dyn std::error::Error>> {
+    let shrunk_path = wasm_path.with_extension("wasm.shrunk");
+    match Command::new("ic-wasm")
+        .arg(wasm_path)
+        .arg("-o")
+        .arg(&shrunk_path)
+        .arg("shrink")
+        .status()
+    {
+        Ok(status) if status.success() => {
+            fs::rename(shrunk_path, wasm_path)?;
+        }
+        Ok(_) => {
+            let _ = fs::remove_file(shrunk_path);
+        }
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
+        Err(err) => return Err(err.into()),
+    }
+
+    Ok(())
 }
 
 // Normalize the hidden bootstrap builder output to the public canister-artifact shape.

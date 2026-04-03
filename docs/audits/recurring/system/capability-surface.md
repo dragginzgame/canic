@@ -84,7 +84,7 @@ Primary code areas:
 - `crates/canic-core/src/dto/capability/**`
 - `crates/canic-core/src/dto/rpc.rs`
 - `crates/canic-core/src/api/rpc/**`
-- generated `.did` files under `canisters/**`
+- generated `.did` files under `.dfx/local/canisters/**`
 
 ## False-Positive Filters (Required)
 
@@ -159,7 +159,7 @@ Suggested scans:
 ```bash
 rg -n '^macro_rules! canic_endpoints' crates/canic/src/macros/endpoints.rs
 rg -n 'canic_response_capability_v1|canic_wasm_store_|canic_delegation_' crates/canic/src/macros/endpoints.rs
-rg -n '^  canic_.*_admin :' canisters -g '*.did'
+rg -n '^  canic_.*_admin :' .dfx/local/canisters -g '*.did'
 rg -n 'cfg\\(canic_' crates/canic/src/macros/endpoints.rs
 ```
 
@@ -246,7 +246,7 @@ roles.
 Suggested scans:
 
 ```bash
-rg -n 'canic_response_capability_v1|canic_delegation_|canic_wasm_store_|canic_sync_' canisters -g '*.did'
+rg -n 'canic_response_capability_v1|canic_delegation_|canic_wasm_store_|canic_sync_' .dfx/local/canisters -g '*.did'
 rg -n 'cfg\\(canic_' crates/canic/src/macros/endpoints.rs
 rg -n 'canic_response_capability_v1|canic_delegation_|canic_wasm_store_|canic_sync_' crates/canic-core/src crates/canic/src -g '*.rs'
 ```

@@ -7,6 +7,14 @@ type AppMode = variant { Enabled; Disabled; Readonly };
 // 
 type AppStateInput = record { mode : AppMode; cycles_funding_enabled : bool };
 // 
+// BootstrapStatusResponse
+// 
+type BootstrapStatusResponse = record {
+  last_error : opt text;
+  phase : text;
+  ready : bool;
+};
+// 
 // CanicStandardsResponse
 // 
 type CanicStandardsResponse = record {
@@ -582,6 +590,7 @@ type WasmStoreTemplateStatusResponse = record {
 };
 service : (CanisterInitPayload, opt blob) -> {
   canic_app_directory : (PageRequest) -> (Result) query;
+  canic_bootstrap_status : () -> (BootstrapStatusResponse) query;
   canic_canister_children : (PageRequest) -> (Result_1) query;
   canic_canister_cycle_balance : () -> (Result_2) query;
   canic_canister_version : () -> (Result_3) query;
