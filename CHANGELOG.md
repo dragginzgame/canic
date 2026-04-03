@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.22.x] - 2026-04-02 - Audits, Wasm Size, and Perf
 
+- `0.22.4` continues the downstream `wasm_store` instruction-limit follow-through by removing the managed-store chunk-store preflight during install-source resolution, so root no longer asks a freshly published store to enumerate its whole chunk-hash set again before `install_chunked_code`.
 - `0.22.3` finishes the downstream `wasm_store` instruction-limit follow-through by replacing repeated full-store occupied-byte rescans with incremental counters, so each new chunk upload no longer re-serializes every already-stored chunk just to enforce capacity.
 - `0.22.2` continues the `wasm_store` publication follow-through by streaming release chunks through the live root/store publication path instead of buffering full releases in memory and switching staged-release payload verification to incremental hashing, further reducing the cost of large downstream bootstrap publication.
 - `0.22.1` follows up the audit/perf line by caching the expensive debug small-store reconcile baseline, adding a compact workspace timing summary table, recording the first dated `0.22` instruction-footprint report, hardening the wasm audit runner so missing local `dfx` fails fast, keeping `make publish` viable with the one intentional local `canic-core -> canic-testkit` test-only edge, and trimming managed `wasm_store` publication hot paths so large downstream release sets stop hitting instruction limits during bootstrap.
