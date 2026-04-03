@@ -90,9 +90,8 @@ pub fn install_root(options: InstallRootOptions) -> Result<(), Box<dyn std::erro
     timings.create_canisters = create_started_at.elapsed();
 
     let build_targets = local_install_build_targets(&workspace_root, &options.root_canister)?;
-    let mut build = dfx_build_targets_command(&dfx_root, &build_targets);
     let build_started_at = Instant::now();
-    run_command(&mut build)?;
+    run_dfx_build_targets(&dfx_root, &build_targets)?;
     timings.build_all = build_started_at.elapsed();
 
     let emit_manifest_started_at = Instant::now();
@@ -158,11 +157,24 @@ fn local_install_build_targets(
     Ok(targets)
 }
 
-// Spawn the local `dfx build` step for only the configured root install targets
-// without overriding the caller's selected build profile environment.
-fn dfx_build_targets_command(dfx_root: &Path, targets: &[String]) -> Command {
+// Run one `dfx build <canister>` call per configured local install target.
+fn run_dfx_build_targets(
+    dfx_root: &Path,
+    targets: &[String],
+) -> Result<(), Box<dyn std::error::Error>> {
+    for target in targets {
+        let mut command = dfx_build_target_command(dfx_root, target);
+        run_command(&mut command)?;
+    }
+
+    Ok(())
+}
+
+// Spawn one local `dfx build <canister>` step without overriding the caller's
+// selected build profile environment.
+fn dfx_build_target_command(dfx_root: &Path, target: &str) -> Command {
     let mut command = Command::new("dfx");
-    command.current_dir(dfx_root).arg("build").args(targets);
+    command.current_dir(dfx_root).args(["build", target]);
     command
 }
 
@@ -539,7 +551,7 @@ fn print_raw_call(root_canister: &str, method: &str) {
 #[cfg(test)]
 mod tests {
     use super::{
-        LOCAL_ROOT_TARGET_CYCLES, dfx_build_targets_command, local_install_build_targets,
+        LOCAL_ROOT_TARGET_CYCLES, dfx_build_target_command, local_install_build_targets,
         parse_bootstrap_status_value, parse_canister_status_cycles, parse_root_ready_value,
         required_local_cycle_topup,
     };
@@ -640,13 +652,8 @@ Cycle balance: 12_345 Cycles
     }
 
     #[test]
-    fn dfx_build_command_targets_only_requested_canisters() {
-        let targets = vec![
-            "root".to_string(),
-            "app".to_string(),
-            "user_hub".to_string(),
-        ];
-        let command = dfx_build_targets_command(Path::new("/tmp/canic-dfx-root"), &targets);
+    fn dfx_build_command_targets_one_canister_per_call() {
+        let command = dfx_build_target_command(Path::new("/tmp/canic-dfx-root"), "user_hub");
 
         assert_eq!(command.get_program(), "dfx");
         assert_eq!(
@@ -654,7 +661,7 @@ Cycle balance: 12_345 Cycles
                 .get_args()
                 .map(|arg| arg.to_string_lossy().into_owned())
                 .collect::<Vec<_>>(),
-            ["build", "root", "app", "user_hub"]
+            ["build", "user_hub"]
         );
         assert_eq!(
             command
