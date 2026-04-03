@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.22.x] - 2026-04-02 - Audits, Wasm Size, and Perf
 
+- `0.22.2` finishes the `wasm_store` publication follow-through by streaming release chunks through the live root/store publication path instead of buffering full releases in memory, switching staged-release payload verification to incremental hashing, and further reducing the chance that large downstream bootstrap publication hits single-message instruction limits.
 - `0.22.1` follows up the audit/perf line by caching the expensive debug small-store reconcile baseline, adding a compact workspace timing summary table, recording the first dated `0.22` instruction-footprint report, hardening the wasm audit runner so missing local `dfx` fails fast, keeping `make publish` viable with the one intentional local `canic-core -> canic-testkit` test-only edge, and trimming managed `wasm_store` publication hot paths so large downstream release sets stop hitting instruction limits during bootstrap.
 - `0.22.0` opens the audit/perf line by making `.dfx` artifact reuse aware of build env and profile, moving more reusable PocketIC root-baseline setup into `canic-testkit`, standardizing three wasm build lanes (`debug`, `fast`, `release`) across repo-local and downstream builders, and routing the special small-store reconcile build through the shared root harness so future audit work starts from reproducible inputs instead of stale artifact reuse.
 

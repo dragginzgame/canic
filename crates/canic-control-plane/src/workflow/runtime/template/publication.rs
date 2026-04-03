@@ -99,36 +99,25 @@ pub(super) async fn store_complete_gc(store_pid: Principal) -> Result<(), Intern
     call_store_result(store_pid, protocol::CANIC_WASM_STORE_COMPLETE_GC, ()).await
 }
 
-// Fetch all deterministic chunks for one release from one wasm store.
-pub(super) async fn store_chunks(
+// Fetch one deterministic chunk for one release from one wasm store.
+pub(super) async fn store_chunk(
     store_pid: Principal,
     template_id: &TemplateId,
     version: &TemplateVersion,
-    chunk_count: usize,
-) -> Result<Vec<Vec<u8>>, InternalError> {
-    let mut chunks = Vec::with_capacity(chunk_count);
+    chunk_index: u32,
+) -> Result<Vec<u8>, InternalError> {
+    let response: TemplateChunkResponse = call_store_result(
+        store_pid,
+        protocol::CANIC_WASM_STORE_CHUNK,
+        (
+            template_id.as_str().to_string(),
+            version.as_str().to_string(),
+            chunk_index,
+        ),
+    )
+    .await?;
 
-    for chunk_index in 0..chunk_count {
-        let chunk_index = u32::try_from(chunk_index).map_err(|_| {
-            InternalError::workflow(
-                InternalErrorOrigin::Workflow,
-                format!("template '{template_id}' exceeds supported chunk indexing bounds"),
-            )
-        })?;
-        let response: TemplateChunkResponse = call_store_result(
-            store_pid,
-            protocol::CANIC_WASM_STORE_CHUNK,
-            (
-                template_id.as_str().to_string(),
-                version.as_str().to_string(),
-                chunk_index,
-            ),
-        )
-        .await?;
-        chunks.push(response.bytes);
-    }
-
-    Ok(chunks)
+    Ok(response.bytes)
 }
 
 // Resolve the configured logical binding for one registered store canister id.
@@ -144,25 +133,13 @@ pub(super) fn store_binding_for_pid(
 }
 
 // Return deterministic chunk bytes from the current canister's local bootstrap source.
-fn local_chunks(
+fn local_chunk(
     template_id: &TemplateId,
     version: &TemplateVersion,
-    chunk_count: usize,
-) -> Result<Vec<Vec<u8>>, InternalError> {
-    let mut chunks = Vec::with_capacity(chunk_count);
-
-    for chunk_index in 0..chunk_count {
-        let chunk_index = u32::try_from(chunk_index).map_err(|_| {
-            InternalError::workflow(
-                InternalErrorOrigin::Workflow,
-                format!("template '{template_id}' exceeds supported chunk indexing bounds"),
-            )
-        })?;
-        let response = TemplateChunkedOps::chunk_response(template_id, version, chunk_index)?;
-        chunks.push(response.bytes);
-    }
-
-    Ok(chunks)
+    chunk_index: u32,
+) -> Result<Vec<u8>, InternalError> {
+    let response = TemplateChunkedOps::chunk_response(template_id, version, chunk_index)?;
+    Ok(response.bytes)
 }
 
 ///
@@ -1226,22 +1203,22 @@ impl WasmStorePublicationWorkflow {
         }
     }
 
-    // Resolve deterministic chunk bytes for one manifest from its authoritative source.
-    async fn source_chunks_for_manifest(
+    // Resolve one deterministic chunk for one manifest from its authoritative source.
+    async fn source_chunk_for_manifest(
         manifest: &TemplateManifestResponse,
-        chunk_count: usize,
-    ) -> Result<Vec<Vec<u8>>, InternalError> {
+        chunk_index: u32,
+    ) -> Result<Vec<u8>, InternalError> {
         match Self::source_store_pid_for_manifest(manifest)? {
             Some(store_pid) => {
-                store_chunks(
+                store_chunk(
                     store_pid,
                     &manifest.template_id,
                     &manifest.version,
-                    chunk_count,
+                    chunk_index,
                 )
                 .await
             }
-            None => local_chunks(&manifest.template_id, &manifest.version, chunk_count),
+            None => local_chunk(&manifest.template_id, &manifest.version, chunk_index),
         }
     }
 
@@ -1329,7 +1306,6 @@ impl WasmStorePublicationWorkflow {
         manifest: TemplateManifestResponse,
     ) -> Result<(), InternalError> {
         let info = Self::source_chunk_set_info_for_manifest(&manifest).await?;
-        let chunks = Self::source_chunks_for_manifest(&manifest, info.chunk_hashes.len()).await?;
         let chunk_hashes = info.chunk_hashes.clone();
         target_store.ensure_stored_chunk_hashes().await?;
 
@@ -1347,7 +1323,7 @@ impl WasmStorePublicationWorkflow {
         .await?;
         canic_core::perf!("publish_prepare_store");
 
-        for (chunk_index, bytes) in chunks.into_iter().enumerate() {
+        for (chunk_index, expected_hash) in chunk_hashes.iter().cloned().enumerate() {
             let chunk_index = u32::try_from(chunk_index).map_err(|_| {
                 InternalError::workflow(
                     InternalErrorOrigin::Workflow,
@@ -1357,11 +1333,11 @@ impl WasmStorePublicationWorkflow {
                     ),
                 )
             })?;
-            let expected_hash = chunk_hashes[chunk_index as usize].clone();
             let already_uploaded = target_store
                 .stored_chunk_hashes
                 .as_ref()
                 .is_some_and(|hashes| hashes.contains(&expected_hash));
+            let bytes = Self::source_chunk_for_manifest(&manifest, chunk_index).await?;
 
             call_store_result::<(), _>(
                 target_store.pid,

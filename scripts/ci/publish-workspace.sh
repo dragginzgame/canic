@@ -14,7 +14,6 @@ PUBLISH_TIMEOUT_SECS="${PUBLISH_TIMEOUT_SECS:-300}"
 PUBLISH_ORDER=(
     canic-cdk
     canic-memory
-    canic-types
     canic-core
     canic-control-plane
     canic-sharding-runtime

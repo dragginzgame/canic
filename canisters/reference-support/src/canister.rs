@@ -7,9 +7,6 @@ use canic_core::ids::CanisterRole;
 /// this pattern as a reference when wiring their own type catalogs.
 ///
 
-pub const ROOT: CanisterRole = CanisterRole::ROOT;
-pub const WASM_STORE: CanisterRole = CanisterRole::WASM_STORE;
-
 pub const APP: CanisterRole = CanisterRole::new("app");
 pub const AUTH: CanisterRole = CanisterRole::new("auth");
 pub const MINIMAL: CanisterRole = CanisterRole::new("minimal");

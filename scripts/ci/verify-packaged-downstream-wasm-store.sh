@@ -37,7 +37,6 @@ populate_isolated_package_root() {
         "$PACKAGE_STAGING_ROOT/canic-installer-$VERSION.crate" \
         "$PACKAGE_STAGING_ROOT/canic-memory-$VERSION.crate" \
         "$PACKAGE_STAGING_ROOT/canic-sharding-runtime-$VERSION.crate" \
-        "$PACKAGE_STAGING_ROOT/canic-types-$VERSION.crate" \
         "$PACKAGE_STAGING_ROOT/canic-$VERSION.crate"
     do
         [ -f "$crate_archive" ] || {
@@ -64,7 +63,6 @@ canic-core = { path = "package-root/canic-core-$VERSION" }
 canic-dsl-macros = { path = "package-root/canic-dsl-macros-$VERSION" }
 canic-memory = { path = "package-root/canic-memory-$VERSION" }
 canic-sharding-runtime = { path = "package-root/canic-sharding-runtime-$VERSION" }
-canic-types = { path = "package-root/canic-types-$VERSION" }
 EOF
 }
 
@@ -147,7 +145,6 @@ main() {
     ensure_packaged_crate canic-installer
     ensure_packaged_crate canic-memory
     ensure_packaged_crate canic-sharding-runtime
-    ensure_packaged_crate canic-types
     ensure_packaged_crate canic
     populate_isolated_package_root
 

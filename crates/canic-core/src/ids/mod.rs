@@ -11,13 +11,14 @@
 
 pub mod capability;
 pub use capability as cap;
+mod canister;
 mod endpoint;
 mod intent;
 mod metrics;
 mod network;
 mod subnet;
 
-pub use canic_types::CanisterRole;
+pub use canister::CanisterRole;
 pub use endpoint::{EndpointCall, EndpointCallKind, EndpointId};
 pub use intent::IntentResourceKey;
 pub use metrics::{AccessMetricKind, SystemMetricKind};
