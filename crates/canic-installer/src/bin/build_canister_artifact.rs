@@ -19,7 +19,6 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         .ok_or_else(|| "usage: canic-build-canister-artifact <canister_name>".to_string())?;
     let profile = CanisterBuildProfile::current();
     print_build_context_once(profile)?;
-    eprintln!();
     eprintln!(
         "Canic build start: canister={canister_name} profile={}",
         profile.target_dir_name()
@@ -31,6 +30,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("{}", output.wasm_gz_path.display());
     eprintln!("Canic build done: canister={canister_name} elapsed={elapsed:.2}s");
+    eprintln!();
     Ok(())
 }
 
@@ -46,7 +46,9 @@ fn print_build_context_once(
     let network = env::var("DFX_NETWORK").unwrap_or_else(|_| "local".to_string());
     let marker_file = marker_dir.join(format!(
         ".canic-build-context-{}",
-        parent_process_id().unwrap_or_else(std::process::id)
+        dfx_ancestor_process_id()
+            .or_else(parent_process_id)
+            .unwrap_or_else(std::process::id)
     ));
 
     if !marker_file.exists() {
@@ -67,6 +69,32 @@ fn print_build_context_once(
 fn parent_process_id() -> Option<u32> {
     let stat = fs::read_to_string("/proc/self/stat").ok()?;
     parse_parent_process_id(&stat)
+}
+
+fn dfx_ancestor_process_id() -> Option<u32> {
+    let mut pid = parent_process_id()?;
+    loop {
+        if process_comm(pid).as_deref() == Some("dfx") {
+            return Some(pid);
+        }
+
+        let parent = process_parent_id(pid)?;
+        if parent == 0 || parent == pid {
+            return None;
+        }
+        pid = parent;
+    }
+}
+
+fn process_parent_id(pid: u32) -> Option<u32> {
+    let stat = fs::read_to_string(format!("/proc/{pid}/stat")).ok()?;
+    parse_parent_process_id(&stat)
+}
+
+fn process_comm(pid: u32) -> Option<String> {
+    fs::read_to_string(format!("/proc/{pid}/comm"))
+        .ok()
+        .map(|comm| comm.trim().to_string())
 }
 
 fn parse_parent_process_id(stat: &str) -> Option<u32> {
