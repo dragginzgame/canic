@@ -192,10 +192,6 @@ build_and_cache_artifacts() {
     mkdir -p "$CACHE_RAW_DIR" "$CACHE_SHRUNK_DIR" "$CACHE_ANALYSIS_DIR"
     mkdir -p .dfx/local/canisters
 
-    if has_cmd dfx; then
-        dfx canister create --all -qq >/dev/null 2>&1 || true
-    fi
-
     local include_root=0
     local canister
     for canister in "${CANISTERS[@]}"; do
@@ -234,6 +230,18 @@ build_and_cache_artifacts() {
         gzip_deterministic "$shrunk_wasm" "$shrunk_gz"
         cp -f "$CACHE_RAW_DIR/$canister.wasm" "$analysis_wasm"
     done
+}
+
+ensure_local_dfx_ready() {
+    if ! dfx ping local >/dev/null 2>&1; then
+        echo "local dfx replica is not reachable; start it manually before running scripts/ci/wasm-audit-report.sh" >&2
+        exit 1
+    fi
+
+    if ! dfx canister create --all -qq >/dev/null 2>&1; then
+        echo "dfx canister create --all failed; verify the local replica is healthy and the current dfx project can create canisters" >&2
+        exit 1
+    fi
 }
 
 validate_cached_artifacts() {
@@ -741,6 +749,7 @@ else
         echo "dfx is required unless WASM_AUDIT_SKIP_BUILD=1" >&2
         exit 1
     fi
+    ensure_local_dfx_ready
     build_and_cache_artifacts
     record_verification "cargo build --target wasm32-unknown-unknown ... && dfx build ..." "PASS" "built and cached raw/shrunk artifacts for $(profile_command_note)"
 fi

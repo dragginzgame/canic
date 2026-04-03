@@ -3,10 +3,39 @@ set -euo pipefail
 
 MODE="${1:-full}"
 HARNESS_ARGS=(-- --test-threads=1 --nocapture)
+SUMMARY_LABELS=()
+SUMMARY_DURATIONS=()
+SUMMARY_KINDS=()
 
 elapsed_seconds() {
     local started_at="$1"
     echo "$((SECONDS - started_at))s"
+}
+
+record_summary() {
+    SUMMARY_LABELS+=("$1")
+    SUMMARY_DURATIONS+=("$2")
+    SUMMARY_KINDS+=("$3")
+}
+
+print_summary() {
+    local count="${#SUMMARY_LABELS[@]}"
+    if [[ "$count" -eq 0 ]]; then
+        return
+    fi
+
+    echo
+    echo "==> workspace timing summary"
+    printf '%-12s %-8s %s\n' "kind" "elapsed" "label"
+    printf '%-12s %-8s %s\n' "----" "-------" "-----"
+
+    local i
+    for ((i = 0; i < count; i++)); do
+        printf '%-12s %-8s %s\n' \
+            "${SUMMARY_KINDS[$i]}" \
+            "${SUMMARY_DURATIONS[$i]}" \
+            "${SUMMARY_LABELS[$i]}"
+    done
 }
 
 run_test() {
@@ -15,7 +44,10 @@ run_test() {
     echo "==> $label"
     local started_at="$SECONDS"
     cargo test "$@" "${HARNESS_ARGS[@]}"
-    echo "==> $label done in $(elapsed_seconds "$started_at")"
+    local elapsed
+    elapsed="$(elapsed_seconds "$started_at")"
+    echo "==> $label done in $elapsed"
+    record_summary "$label" "$elapsed" "test"
 }
 
 prebuild_root_test_artifacts() {
@@ -23,13 +55,17 @@ prebuild_root_test_artifacts() {
     echo "==> $label"
     local started_at="$SECONDS"
     bash scripts/ci/build-ci-wasm-artifacts.sh
-    echo "==> $label done in $(elapsed_seconds "$started_at")"
+    local elapsed
+    elapsed="$(elapsed_seconds "$started_at")"
+    echo "==> $label done in $elapsed"
+    record_summary "$label" "$elapsed" "prebuild"
 }
 
 # Compile and run all unit/lib/bin tests together first.
 run_test "workspace lib/bin tests" --workspace --lib --bins
 
 if [[ "$MODE" == "fast" ]]; then
+    print_summary
     exit 0
 fi
 
@@ -49,3 +85,5 @@ run_test "canic-tests lifecycle_boundary" -p canic-tests --test lifecycle_bounda
 run_test "canic-tests root_suite" -p canic-tests --test root_suite
 run_test "canic-tests root_wasm_store_reconcile" -p canic-tests --test root_wasm_store_reconcile
 run_test "canic-tests instruction_audit" -p canic-tests --test instruction_audit
+
+print_summary

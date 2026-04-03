@@ -166,6 +166,22 @@ pub fn setup_root_with_release_roles_profile_and_build_env(
     ))
 }
 
+/// Acquire one cached root setup for an explicit managed release-set profile, build profile, and
+/// build env.
+pub fn setup_root_cached_with_release_roles_profile_and_build_env(
+    cache_label: &'static str,
+    cache_slot: &'static Mutex<Option<CachedPicBaseline<RootBaselineMetadata>>>,
+    release_roles: &'static [&'static str],
+    build_profile: WasmBuildProfile,
+    build_extra_env: &'static [(&'static str, &'static str)],
+) -> RootSetup {
+    setup_root_cached_spec(
+        cache_label,
+        cache_slot,
+        baseline_spec_for_roles(release_roles, build_profile, build_extra_env),
+    )
+}
+
 /// Acquire an isolated topology-only cached root setup.
 ///
 /// This stages only the ordinary releases needed by hierarchy assertions.
@@ -205,15 +221,26 @@ fn setup_root_fresh_spec(spec: RootBaselineSpec<'static>) -> RootSetup {
 }
 
 fn setup_root_cached(profile: RootSetupProfile) -> RootSetup {
-    test_progress(&format!("request {}", profile.cache_label()));
+    setup_root_cached_spec(
+        profile.cache_label(),
+        profile.cache_slot(),
+        profile.baseline_spec(),
+    )
+}
+
+fn setup_root_cached_spec(
+    cache_label: &str,
+    cache_slot: &'static Mutex<Option<CachedPicBaseline<RootBaselineMetadata>>>,
+    spec: RootBaselineSpec<'static>,
+) -> RootSetup {
+    test_progress(&format!("request {cache_label}"));
 
     let serial_guard = acquire_root_setup_serial_guard();
     let pic_serial_guard = acquire_pic_serial_guard();
-    let spec = profile.baseline_spec();
     ensure_root_release_artifacts_built(&spec);
     let root_wasm = load_root_wasm(&spec).expect("load root wasm");
 
-    let (baseline, cache_hit) = acquire_cached_pic_baseline(profile.cache_slot(), || {
+    let (baseline, cache_hit) = acquire_cached_pic_baseline(cache_slot, || {
         test_progress("cache miss, building fresh root baseline");
         build_root_cached_baseline(&spec, root_wasm)
     });

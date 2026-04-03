@@ -431,22 +431,28 @@ impl TemplateChunkedOps {
             return Err(TemplateManifestOpsError::TemplateChunkHashMismatch(chunk_key).into());
         }
 
-        let projected_manifests = TemplateManifestStateStore::export().entries;
-        let projected_chunk_sets = TemplateChunkSetStateStore::export();
-        let projected_chunks = replace_chunk_entries(vec![(
-            chunk_key.clone(),
-            TemplateChunkRecord {
-                bytes: input.bytes.clone(),
-            },
-        )]);
-        ensure_store_limits(
-            limits,
-            &projected_manifests,
-            &projected_chunk_sets,
-            &projected_chunks,
-        )?;
+        // Manifest/template-version limits are fixed by the earlier manifest + prepare phases.
+        // Publishing one chunk can only change the occupied-byte total for this store.
+        let new_record = TemplateChunkRecord { bytes: input.bytes };
+        let current_store_bytes = TemplateManifestStateStore::occupied_bytes()
+            + TemplateChunkSetStateStore::occupied_bytes()
+            + TemplateChunkStore::occupied_bytes();
+        let existing_chunk_bytes = TemplateChunkStore::get(&chunk_key)
+            .as_ref()
+            .map_or(0, |record| chunk_entry_store_bytes(&chunk_key, record));
+        let projected_bytes = current_store_bytes
+            .saturating_sub(existing_chunk_bytes)
+            .saturating_add(chunk_entry_store_bytes(&chunk_key, &new_record));
 
-        TemplateChunkStore::upsert(chunk_key, TemplateChunkRecord { bytes: input.bytes });
+        if projected_bytes > limits.max_store_bytes {
+            return Err(TemplateManifestOpsError::WasmStoreCapacityExceeded {
+                projected_bytes,
+                max_store_bytes: limits.max_store_bytes,
+            }
+            .into());
+        }
+
+        TemplateChunkStore::upsert(chunk_key, new_record);
 
         Ok(())
     }
@@ -730,4 +736,117 @@ fn replace_chunk_entries(
     }
 
     entries
+}
+
+fn chunk_entry_store_bytes(chunk_key: &TemplateChunkKey, record: &TemplateChunkRecord) -> u64 {
+    (chunk_key.to_bytes().len() + record.to_bytes().len()) as u64
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ids::{TemplateId, WasmStoreBinding};
+
+    fn reset_store() {
+        TemplateManifestStateStore::clear_for_test();
+        TemplateChunkSetStateStore::clear_for_test();
+        TemplateChunkStore::clear_for_test();
+    }
+
+    fn approved_manifest_input() -> TemplateManifestInput {
+        TemplateManifestInput {
+            template_id: TemplateId::new("embedded:app"),
+            role: CanisterRole::new("app"),
+            version: TemplateVersion::new("0.18.0"),
+            payload_hash: vec![7; 32],
+            payload_size_bytes: 32,
+            store_binding: WasmStoreBinding::new("primary"),
+            chunking_mode: TemplateChunkingMode::Chunked,
+            manifest_state: TemplateManifestState::Approved,
+            approved_at: Some(42),
+            created_at: 41,
+        }
+    }
+
+    #[test]
+    fn publish_chunk_in_store_rejects_incremental_capacity_overflow() {
+        reset_store();
+
+        let chunk_zero = vec![1_u8; 8];
+        let chunk_one = vec![2_u8; 8];
+        let payload_hash = get_wasm_hash(&[chunk_zero.clone(), chunk_one.clone()].concat());
+        let release = TemplateReleaseKey::new(
+            TemplateId::new("embedded:app"),
+            TemplateVersion::new("0.18.0"),
+        );
+
+        TemplateChunkedOps::replace_approved_in_store_from_input(
+            approved_manifest_input(),
+            WasmStoreLimits {
+                max_store_bytes: 10_000,
+                max_templates: None,
+                max_template_versions_per_template: None,
+            },
+        )
+        .unwrap();
+
+        TemplateChunkedOps::prepare_chunk_set_in_store_from_input(
+            TemplateChunkSetPrepareInput {
+                template_id: release.template_id.clone(),
+                version: release.version.clone(),
+                payload_hash,
+                payload_size_bytes: 16,
+                chunk_hashes: vec![get_wasm_hash(&chunk_zero), get_wasm_hash(&chunk_one)],
+            },
+            77,
+            WasmStoreLimits {
+                max_store_bytes: 10_000,
+                max_templates: None,
+                max_template_versions_per_template: None,
+            },
+        )
+        .unwrap();
+
+        TemplateChunkedOps::publish_chunk_in_store_from_input(
+            TemplateChunkInput {
+                template_id: release.template_id.clone(),
+                version: release.version.clone(),
+                chunk_index: 0,
+                bytes: chunk_zero,
+            },
+            WasmStoreLimits {
+                max_store_bytes: 10_000,
+                max_templates: None,
+                max_template_versions_per_template: None,
+            },
+        )
+        .unwrap();
+
+        let current_store_bytes = TemplateManifestStateStore::occupied_bytes()
+            + TemplateChunkSetStateStore::occupied_bytes()
+            + TemplateChunkStore::occupied_bytes();
+        let chunk_one_key = TemplateChunkKey::new(release.clone(), 1);
+        let chunk_one_record = TemplateChunkRecord {
+            bytes: chunk_one.clone(),
+        };
+        let exact_limit =
+            current_store_bytes + chunk_entry_store_bytes(&chunk_one_key, &chunk_one_record) - 1;
+
+        let err = TemplateChunkedOps::publish_chunk_in_store_from_input(
+            TemplateChunkInput {
+                template_id: release.template_id,
+                version: release.version,
+                chunk_index: 1,
+                bytes: chunk_one,
+            },
+            WasmStoreLimits {
+                max_store_bytes: exact_limit,
+                max_templates: None,
+                max_template_versions_per_template: None,
+            },
+        )
+        .expect_err("second chunk should fail once its incremental bytes exceed the limit");
+
+        assert!(err.to_string().contains("capacity exceeded"));
+    }
 }

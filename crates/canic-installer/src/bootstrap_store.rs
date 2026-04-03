@@ -395,6 +395,7 @@ fn generated_wasm_store_wrapper_patch_table(canic_manifest_path: &Path) -> Strin
         .parent()
         .expect("canic manifest path must have parent");
     let sibling_root = canic_root.parent().expect("canic root must have parent");
+    let registry_version = registry_package_version_suffix(canic_manifest_path, "canic");
     let mut rendered = String::new();
 
     for crate_name in CANIC_FAMILY_CRATES {
@@ -402,7 +403,8 @@ fn generated_wasm_store_wrapper_patch_table(canic_manifest_path: &Path) -> Strin
 
         if !manifest_path.is_file() {
             manifest_path =
-                find_versioned_sibling_manifest(sibling_root, crate_name).unwrap_or_default();
+                find_versioned_sibling_manifest(sibling_root, crate_name, registry_version)
+                    .unwrap_or_default();
         }
 
         if !manifest_path.is_file() {
@@ -426,8 +428,29 @@ fn generated_wasm_store_wrapper_patch_table(canic_manifest_path: &Path) -> Strin
     }
 }
 
+fn registry_package_version_suffix<'a>(
+    manifest_path: &'a Path,
+    crate_name: &str,
+) -> Option<&'a str> {
+    let parent_name = manifest_path.parent()?.file_name()?.to_str()?;
+    parent_name.strip_prefix(&format!("{crate_name}-"))
+}
+
 // Locate a versioned sibling packaged crate under the same registry source root.
-fn find_versioned_sibling_manifest(sibling_root: &Path, crate_name: &str) -> Option<PathBuf> {
+fn find_versioned_sibling_manifest(
+    sibling_root: &Path,
+    crate_name: &str,
+    version_hint: Option<&str>,
+) -> Option<PathBuf> {
+    if let Some(version) = version_hint {
+        let preferred = sibling_root
+            .join(format!("{crate_name}-{version}"))
+            .join("Cargo.toml");
+        if preferred.is_file() {
+            return Some(preferred);
+        }
+    }
+
     let mut candidates = fs::read_dir(sibling_root).ok()?;
     while let Some(Ok(entry)) = candidates.next() {
         let file_name = entry.file_name();
@@ -594,8 +617,12 @@ fn bootstrap_wasm_store_watch_paths(
                     continue;
                 }
 
-                if let Some(versioned) = find_versioned_sibling_manifest(sibling_root, crate_name)
-                    .and_then(|manifest| manifest.parent().map(Path::to_path_buf))
+                if let Some(versioned) = find_versioned_sibling_manifest(
+                    sibling_root,
+                    crate_name,
+                    registry_package_version_suffix(canic_manifest_path, "canic"),
+                )
+                .and_then(|manifest| manifest.parent().map(Path::to_path_buf))
                 {
                     paths.push(versioned);
                 }

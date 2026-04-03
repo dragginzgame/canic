@@ -1,0 +1,11 @@
+canister	endpoint_or_flow	scenario_key	count	total_local_instructions	avg_local_instructions
+app	canic_time	app:canic_time:minimal-valid	0	0	0
+app	canic_env	app:canic_env:minimal-valid	0	0	0
+app	canic_log	app:canic_log:empty-page	0	0	0
+root	canic_subnet_registry	root:canic_subnet_registry:full-registry	0	0	0
+root	canic_subnet_state	root:canic_subnet_state:empty-struct	0	0	0
+scale_hub	plan_create_worker	scale_hub:plan_create_worker:empty-pool	0	0	0
+test	test	test:test:minimal-valid	1	330	330
+root	canic_template_stage_manifest_admin	root:canic_template_stage_manifest_admin:single-chunk	1	575406	575406
+root	canic_template_prepare_admin	root:canic_template_prepare_admin:single-chunk	1	217731	217731
+root	canic_template_publish_chunk_admin	root:canic_template_publish_chunk_admin:single-chunk	1	18767190	18767190

@@ -1,5 +1,7 @@
 use crate::ids::{TemplateChunkKey, TemplateReleaseKey};
-use canic_cdk::structures::{BTreeMap, DefaultMemoryImpl, memory::VirtualMemory};
+use canic_cdk::structures::{
+    BTreeMap, DefaultMemoryImpl, memory::VirtualMemory, storable::Storable,
+};
 use canic_memory::{eager_static, ic_memory, impl_storable_unbounded};
 use serde::{Deserialize, Serialize};
 use std::{cell::RefCell, collections::BTreeMap as StdBTreeMap};
@@ -79,6 +81,16 @@ impl TemplateChunkSetStateStore {
         })
     }
 
+    // Return current chunk-set occupied bytes without cloning the full snapshot.
+    #[must_use]
+    pub fn occupied_bytes() -> u64 {
+        TEMPLATE_CHUNK_SETS.with_borrow(|map| {
+            map.iter()
+                .map(|entry| (entry.key().to_bytes().len() + entry.value().to_bytes().len()) as u64)
+                .sum()
+        })
+    }
+
     // Clear the chunk-set metadata store.
     pub fn clear() {
         TEMPLATE_CHUNK_SETS.with_borrow_mut(BTreeMap::clear);
@@ -118,6 +130,16 @@ impl TemplateChunkStore {
             map.iter()
                 .map(|entry| (entry.key().clone(), entry.value()))
                 .collect()
+        })
+    }
+
+    // Return current chunk occupied bytes without cloning the full chunk snapshot.
+    #[must_use]
+    pub fn occupied_bytes() -> u64 {
+        TEMPLATE_CHUNKS.with_borrow(|map| {
+            map.iter()
+                .map(|entry| (entry.key().to_bytes().len() + entry.value().to_bytes().len()) as u64)
+                .sum()
         })
     }
 
