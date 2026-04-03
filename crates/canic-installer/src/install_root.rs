@@ -1,7 +1,7 @@
 use crate::release_set::{
-    dfx_call, dfx_root, emit_root_release_set_manifest, load_root_release_set_manifest,
-    resolve_artifact_root, resume_root_bootstrap, root_release_set_manifest_path,
-    stage_root_release_set, workspace_root,
+    config_path, configured_release_roles, dfx_call, dfx_root, emit_root_release_set_manifest,
+    load_root_release_set_manifest, resolve_artifact_root, resume_root_bootstrap,
+    root_release_set_manifest_path, stage_root_release_set, workspace_root,
 };
 use canic_core::protocol;
 use serde::Deserialize;
@@ -89,7 +89,8 @@ pub fn install_root(options: InstallRootOptions) -> Result<(), Box<dyn std::erro
     run_command(&mut create)?;
     timings.create_canisters = create_started_at.elapsed();
 
-    let mut build = dfx_build_all_command(&dfx_root);
+    let build_targets = local_install_build_targets(&workspace_root, &options.root_canister)?;
+    let mut build = dfx_build_targets_command(&dfx_root, &build_targets);
     let build_started_at = Instant::now();
     run_command(&mut build)?;
     timings.build_all = build_started_at.elapsed();
@@ -146,11 +147,22 @@ pub fn install_root(options: InstallRootOptions) -> Result<(), Box<dyn std::erro
     Ok(())
 }
 
-// Spawn the local `dfx build --all` step without overriding the caller's
-// selected build profile environment.
-fn dfx_build_all_command(dfx_root: &Path) -> Command {
+// Resolve the local install build set from the root canister plus the
+// configured ordinary roles owned by the root subnet.
+fn local_install_build_targets(
+    workspace_root: &Path,
+    root_canister: &str,
+) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+    let mut targets = vec![root_canister.to_string()];
+    targets.extend(configured_release_roles(&config_path(workspace_root))?);
+    Ok(targets)
+}
+
+// Spawn the local `dfx build` step for only the configured root install targets
+// without overriding the caller's selected build profile environment.
+fn dfx_build_targets_command(dfx_root: &Path, targets: &[String]) -> Command {
     let mut command = Command::new("dfx");
-    command.current_dir(dfx_root).args(["build", "--all"]);
+    command.current_dir(dfx_root).arg("build").args(targets);
     command
 }
 
@@ -355,8 +367,6 @@ fn wait_for_root_ready(
                 println!("Current subnet registry roles:");
                 println!("  {}", registry_roles(&registry_json));
             }
-            println!("Recent root logs:");
-            print_recent_root_logs(root_canister);
             next_report = elapsed + 5;
         }
 
@@ -529,11 +539,16 @@ fn print_raw_call(root_canister: &str, method: &str) {
 #[cfg(test)]
 mod tests {
     use super::{
-        LOCAL_ROOT_TARGET_CYCLES, dfx_build_all_command, parse_bootstrap_status_value,
-        parse_canister_status_cycles, parse_root_ready_value, required_local_cycle_topup,
+        LOCAL_ROOT_TARGET_CYCLES, dfx_build_targets_command, local_install_build_targets,
+        parse_bootstrap_status_value, parse_canister_status_cycles, parse_root_ready_value,
+        required_local_cycle_topup,
     };
     use serde_json::json;
-    use std::path::Path;
+    use std::{
+        fs,
+        path::{Path, PathBuf},
+        time::{SystemTime, UNIX_EPOCH},
+    };
 
     #[test]
     fn parse_root_ready_accepts_plain_true() {
@@ -625,8 +640,13 @@ Cycle balance: 12_345 Cycles
     }
 
     #[test]
-    fn dfx_build_command_does_not_override_profile_env() {
-        let command = dfx_build_all_command(Path::new("/tmp/canic-dfx-root"));
+    fn dfx_build_command_targets_only_requested_canisters() {
+        let targets = vec![
+            "root".to_string(),
+            "app".to_string(),
+            "user_hub".to_string(),
+        ];
+        let command = dfx_build_targets_command(Path::new("/tmp/canic-dfx-root"), &targets);
 
         assert_eq!(command.get_program(), "dfx");
         assert_eq!(
@@ -634,7 +654,7 @@ Cycle balance: 12_345 Cycles
                 .get_args()
                 .map(|arg| arg.to_string_lossy().into_owned())
                 .collect::<Vec<_>>(),
-            ["build", "--all"]
+            ["build", "root", "app", "user_hub"]
         );
         assert_eq!(
             command
@@ -646,5 +666,51 @@ Cycle balance: 12_345 Cycles
             command.get_envs().next().is_none(),
             "dfx build must not override profile env"
         );
+    }
+
+    #[test]
+    fn local_install_build_targets_use_root_subnet_release_roles_only() {
+        let workspace_root = write_temp_workspace_config(
+            r#"
+[subnets.prime.canisters.root]
+kind = "root"
+
+[subnets.prime.canisters.project_registry]
+kind = "singleton"
+
+[subnets.prime.canisters.user_hub]
+kind = "singleton"
+
+[subnets.extra.canisters.oracle_pokemon]
+kind = "singleton"
+"#,
+        );
+
+        let targets =
+            local_install_build_targets(&workspace_root, "root").expect("targets must resolve");
+
+        assert_eq!(
+            targets,
+            vec![
+                "root".to_string(),
+                "project_registry".to_string(),
+                "user_hub".to_string()
+            ]
+        );
+    }
+
+    fn write_temp_workspace_config(config_source: &str) -> PathBuf {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("clock must be monotonic enough for test temp dir")
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!(
+            "canic-install-root-test-{}-{unique}",
+            std::process::id()
+        ));
+        fs::create_dir_all(root.join("canisters")).expect("temp canisters dir must be created");
+        fs::write(root.join("canisters/canic.toml"), config_source)
+            .expect("temp canic.toml must be written");
+        root
     }
 }

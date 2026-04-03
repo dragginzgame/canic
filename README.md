@@ -159,7 +159,7 @@ Then, with the target `dfx` replica already running, from your workspace root:
 canic-install-root root
 ```
 
-`canic-install-root` now owns the local thin-root flow end to end. It creates local canisters, runs `dfx build --all`, emits `.dfx/local/canisters/root/root.release-set.json`, reinstalls `root`, stages the ordinary release set, resumes bootstrap, and waits for `canic_ready`.
+`canic-install-root` now owns the local thin-root flow end to end. It creates local canisters, builds `root` plus only the ordinary roles from the subnet that owns `root`, emits `.dfx/local/canisters/root/root.release-set.json`, reinstalls `root`, stages the ordinary release set, resumes bootstrap, and waits for `canic_ready`.
 
 `root` stays thin in this flow. It embeds only the bootstrap `wasm_store.wasm.gz`; ordinary child releases stay outside `root` and are staged after install from `.dfx/local/canisters/root/root.release-set.json`.
 
