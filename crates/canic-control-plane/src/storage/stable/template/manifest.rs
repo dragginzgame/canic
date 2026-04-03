@@ -19,6 +19,10 @@ eager_static! {
     );
 }
 
+eager_static! {
+    static TEMPLATE_MANIFESTS_OCCUPIED_BYTES: RefCell<Option<u64>> = RefCell::new(None);
+}
+
 ///
 /// TemplateManifestRecord
 ///
@@ -65,7 +69,18 @@ impl TemplateManifestStateStore {
     // Insert or replace a stored template manifest record.
     pub fn upsert(release: TemplateReleaseKey, record: TemplateManifestRecord) {
         TEMPLATE_MANIFESTS.with_borrow_mut(|map| {
-            map.insert(release, record);
+            let previous = map.insert(release.clone(), record.clone());
+            TEMPLATE_MANIFESTS_OCCUPIED_BYTES.with_borrow_mut(|occupied| {
+                if let Some(current) = occupied.as_mut() {
+                    let previous_bytes = previous
+                        .as_ref()
+                        .map_or(0, |previous| manifest_entry_size(&release, previous));
+                    let next_bytes = manifest_entry_size(&release, &record);
+                    *current = current
+                        .saturating_sub(previous_bytes)
+                        .saturating_add(next_bytes);
+                }
+            });
         });
     }
 
@@ -83,16 +98,28 @@ impl TemplateManifestStateStore {
     // Return current manifest-store occupied bytes without cloning the full snapshot.
     #[must_use]
     pub fn occupied_bytes() -> u64 {
-        TEMPLATE_MANIFESTS.with_borrow(|map| {
+        if let Some(bytes) = TEMPLATE_MANIFESTS_OCCUPIED_BYTES.with_borrow(|occupied| *occupied) {
+            return bytes;
+        }
+
+        let bytes = TEMPLATE_MANIFESTS.with_borrow(|map| {
             map.iter()
-                .map(|entry| (entry.key().to_bytes().len() + entry.value().to_bytes().len()) as u64)
+                .map(|entry| manifest_entry_size(entry.key(), &entry.value()))
                 .sum()
-        })
+        });
+        TEMPLATE_MANIFESTS_OCCUPIED_BYTES.with_borrow_mut(|occupied| {
+            *occupied = Some(bytes);
+        });
+
+        bytes
     }
 
     // Clear the manifest store.
     pub fn clear() {
         TEMPLATE_MANIFESTS.with_borrow_mut(BTreeMap::clear);
+        TEMPLATE_MANIFESTS_OCCUPIED_BYTES.with_borrow_mut(|occupied| {
+            *occupied = Some(0);
+        });
     }
 
     // Clear the manifest store for isolated unit tests.
@@ -100,6 +127,10 @@ impl TemplateManifestStateStore {
     pub fn clear_for_test() {
         Self::clear();
     }
+}
+
+fn manifest_entry_size(release: &TemplateReleaseKey, record: &TemplateManifestRecord) -> u64 {
+    (release.to_bytes().len() + record.to_bytes().len()) as u64
 }
 
 #[cfg(test)]
