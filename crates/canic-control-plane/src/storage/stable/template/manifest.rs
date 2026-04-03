@@ -2,7 +2,9 @@ use crate::ids::{
     CanisterRole, TemplateChunkingMode, TemplateManifestState, TemplateReleaseKey, TemplateVersion,
     WasmStoreBinding,
 };
-use canic_cdk::structures::{BTreeMap, DefaultMemoryImpl, memory::VirtualMemory};
+use canic_cdk::structures::{
+    BTreeMap, DefaultMemoryImpl, memory::VirtualMemory, storable::Storable,
+};
 use canic_memory::{eager_static, ic_memory, impl_storable_bounded};
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
@@ -75,6 +77,16 @@ impl TemplateManifestStateStore {
                 .iter()
                 .map(|entry| (entry.key().clone(), entry.value()))
                 .collect(),
+        })
+    }
+
+    // Return current manifest-store occupied bytes without cloning the full snapshot.
+    #[must_use]
+    pub fn occupied_bytes() -> u64 {
+        TEMPLATE_MANIFESTS.with_borrow(|map| {
+            map.iter()
+                .map(|entry| (entry.key().to_bytes().len() + entry.value().to_bytes().len()) as u64)
+                .sum()
         })
     }
 

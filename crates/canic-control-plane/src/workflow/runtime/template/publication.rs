@@ -178,6 +178,7 @@ struct PublicationStoreSnapshot {
     created_at: u64,
     status: WasmStoreStatusResponse,
     releases: Vec<WasmStoreCatalogEntryResponse>,
+    stored_chunk_hashes: Option<BTreeSet<Vec<u8>>>,
 }
 
 #[derive(Clone, Debug)]
@@ -275,6 +276,20 @@ impl PublicationStoreSnapshot {
         }
 
         true
+    }
+
+    // Load the current management-canister chunk hashes once for this store.
+    async fn ensure_stored_chunk_hashes(&mut self) -> Result<(), InternalError> {
+        if self.stored_chunk_hashes.is_none() {
+            self.stored_chunk_hashes = Some(
+                MgmtOps::stored_chunks(self.pid)
+                    .await?
+                    .into_iter()
+                    .collect::<BTreeSet<_>>(),
+            );
+        }
+
+        Ok(())
     }
 
     // Project one successful placement into the in-memory fleet snapshot.
@@ -425,6 +440,12 @@ impl PublicationStoreFleet {
         }
     }
 
+    fn store_index_for_binding(&self, binding: &WasmStoreBinding) -> Option<usize> {
+        self.stores
+            .iter()
+            .position(|store| &store.binding == binding)
+    }
+
     // Append one newly-created empty store to the writable fleet snapshot.
     fn push_store(&mut self, record: WasmStoreRecord, config: WasmStoreConfig) {
         self.stores.push(PublicationStoreSnapshot {
@@ -460,6 +481,7 @@ impl PublicationStoreFleet {
                 templates: Vec::new(),
             },
             releases: Vec::new(),
+            stored_chunk_hashes: Some(BTreeSet::new()),
         });
     }
 }
@@ -623,6 +645,7 @@ impl WasmStorePublicationWorkflow {
                 created_at: record.created_at,
                 status,
                 releases,
+                stored_chunk_hashes: None,
             });
         }
 
@@ -1302,20 +1325,16 @@ impl WasmStorePublicationWorkflow {
 
     // Publish one approved manifest into the target store from its authoritative source.
     async fn publish_manifest_to_store(
-        target_store_pid: Principal,
-        target_store_binding: WasmStoreBinding,
+        target_store: &mut PublicationStoreSnapshot,
         manifest: TemplateManifestResponse,
     ) -> Result<(), InternalError> {
         let info = Self::source_chunk_set_info_for_manifest(&manifest).await?;
         let chunks = Self::source_chunks_for_manifest(&manifest, info.chunk_hashes.len()).await?;
         let chunk_hashes = info.chunk_hashes.clone();
-        let existing_hashes = MgmtOps::stored_chunks(target_store_pid)
-            .await?
-            .into_iter()
-            .collect::<BTreeSet<_>>();
+        target_store.ensure_stored_chunk_hashes().await?;
 
         let _: TemplateChunkSetInfoResponse = call_store_result(
-            target_store_pid,
+            target_store.pid,
             protocol::CANIC_WASM_STORE_PREPARE,
             (TemplateChunkSetPrepareInput {
                 template_id: manifest.template_id.clone(),
@@ -1339,9 +1358,13 @@ impl WasmStorePublicationWorkflow {
                 )
             })?;
             let expected_hash = chunk_hashes[chunk_index as usize].clone();
+            let already_uploaded = target_store
+                .stored_chunk_hashes
+                .as_ref()
+                .is_some_and(|hashes| hashes.contains(&expected_hash));
 
             call_store_result::<(), _>(
-                target_store_pid,
+                target_store.pid,
                 protocol::CANIC_WASM_STORE_PUBLISH_CHUNK,
                 (TemplateChunkInput {
                     template_id: manifest.template_id.clone(),
@@ -1353,23 +1376,28 @@ impl WasmStorePublicationWorkflow {
             .await?;
             canic_core::perf!("publish_push_store_chunk");
 
-            if !existing_hashes.contains(&expected_hash) {
-                let uploaded_hash = MgmtOps::upload_chunk(target_store_pid, bytes).await?;
+            if !already_uploaded {
+                let uploaded_hash = MgmtOps::upload_chunk(target_store.pid, bytes).await?;
                 if uploaded_hash != expected_hash {
                     return Err(InternalError::workflow(
                         InternalErrorOrigin::Workflow,
                         format!(
                             "template '{}' chunk {} hash mismatch for {}",
-                            manifest.template_id, chunk_index, target_store_pid
+                            manifest.template_id, chunk_index, target_store.pid
                         ),
                     ));
                 }
+                target_store
+                    .stored_chunk_hashes
+                    .as_mut()
+                    .expect("stored chunk hashes must be initialized")
+                    .insert(expected_hash);
             }
         }
 
         Self::promote_manifest_to_target_store(
-            target_store_pid,
-            target_store_binding.clone(),
+            target_store.pid,
+            target_store.binding.clone(),
             TemplateManifestInput {
                 template_id: manifest.template_id.clone(),
                 role: manifest.role.clone(),
@@ -1393,7 +1421,7 @@ impl WasmStorePublicationWorkflow {
             manifest.role,
             manifest.template_id,
             manifest.version,
-            target_store_pid,
+            target_store.pid,
             chunk_hashes.len()
         );
 
@@ -1426,14 +1454,21 @@ impl WasmStorePublicationWorkflow {
                 } else {
                     "publish"
                 };
+                let store_index = fleet
+                    .store_index_for_binding(&placement.binding)
+                    .ok_or_else(|| {
+                        InternalError::workflow(
+                            InternalErrorOrigin::Workflow,
+                            format!("ws '{}' missing from fleet snapshot", placement.binding),
+                        )
+                    })?;
 
-                match Self::publish_manifest_to_store(
-                    placement.pid,
-                    placement.binding.clone(),
-                    manifest.clone(),
-                )
-                .await
-                {
+                let publish_result = {
+                    let target_store = &mut fleet.stores[store_index];
+                    Self::publish_manifest_to_store(target_store, manifest.clone()).await
+                };
+
+                match publish_result {
                     Ok(()) => {
                         log!(
                             Topic::Wasm,
@@ -1451,12 +1486,18 @@ impl WasmStorePublicationWorkflow {
                         }
 
                         let retry = Self::create_store_for_fleet(fleet).await?;
-                        Self::publish_manifest_to_store(
-                            retry.pid,
-                            retry.binding.clone(),
-                            manifest.clone(),
-                        )
-                        .await?;
+                        let retry_index = fleet
+                            .store_index_for_binding(&retry.binding)
+                            .ok_or_else(|| {
+                                InternalError::workflow(
+                                    InternalErrorOrigin::Workflow,
+                                    format!("ws '{}' missing from fleet snapshot", retry.binding),
+                                )
+                            })?;
+                        {
+                            let target_store = &mut fleet.stores[retry_index];
+                            Self::publish_manifest_to_store(target_store, manifest.clone()).await?;
+                        }
                         log!(
                             Topic::Wasm,
                             Warn,
@@ -1510,6 +1551,7 @@ impl WasmStorePublicationWorkflow {
             created_at: IcOps::now_secs(),
             status: target_status,
             releases: target_catalog,
+            stored_chunk_hashes: None,
         };
 
         for manifest in Self::managed_release_manifests()? {
@@ -1529,12 +1571,7 @@ impl WasmStorePublicationWorkflow {
                 ));
             }
 
-            Self::publish_manifest_to_store(
-                target_store_pid,
-                target_store_binding.clone(),
-                manifest.clone(),
-            )
-            .await?;
+            Self::publish_manifest_to_store(&mut target_store, manifest.clone()).await?;
             target_store.record_release(&manifest);
         }
 
@@ -1676,6 +1713,7 @@ mod tests {
                 templates,
             },
             releases,
+            stored_chunk_hashes: None,
         }
     }
 

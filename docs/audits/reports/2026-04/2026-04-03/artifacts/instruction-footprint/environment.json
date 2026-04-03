@@ -1,0 +1,33 @@
+{
+  "code_snapshot_identifier": "928f6003",
+  "branch": "main",
+  "worktree": "dirty",
+  "run_timestamp_utc": "2026-04-03T07:34:58Z",
+  "execution_environment": "PocketIC",
+  "target_canisters_in_scope": [
+    "app",
+    "root",
+    "scale_hub",
+    "test"
+  ],
+  "target_endpoints_in_scope": [
+    "app::canic_time",
+    "app::canic_env",
+    "app::canic_log",
+    "root::canic_subnet_registry",
+    "root::canic_subnet_state",
+    "scale_hub::plan_create_worker",
+    "test::test",
+    "root::canic_template_stage_manifest_admin",
+    "root::canic_template_prepare_admin",
+    "root::canic_template_publish_chunk_admin"
+  ],
+  "target_flows_in_scope": [
+    "root capability dispatch",
+    "delegated auth issuance/verification",
+    "replay/cached-response path",
+    "sharding assignment/query flow",
+    "scaling/provisioning flow",
+    "bootstrap/install/publication flow"
+  ]
+}
