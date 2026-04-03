@@ -75,7 +75,6 @@ The crate was historically known as **ICU** (Internet Computer Utilities). All c
   * `app/` – bootstrap scripts for the demo topology.
   * `bench/` – local benchmarking helpers.
   * `ci/` – version bumping and recurring audit helpers used by CI and local maintenance flows.
-  * `env/` – local environment utilities (e.g., shared env updates).
   * `env.sh` – shared environment bootstrap for scripts and tooling.
 * `.github/workflows/` – CI checks and tag-driven build workflows.
 
@@ -147,13 +146,7 @@ Populate `canic.toml` with subnet definitions, directory membership, and per‑c
 
 ### 5. Local Build and Install
 
-For local DFX workflows, install the published helper that owns Canic's thin-root build and install boundary:
-
-```bash
-cargo install --locked canic-installer --version <same-version-as-canic>
-```
-
-Or use the one-line setup script:
+For local DFX workflows, prefer the shared setup script:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/dragginzgame/canic/v0.22.10/scripts/install.sh | bash
@@ -174,6 +167,12 @@ That script installs:
 It bootstraps Rust when needed and runs the Cargo installs through the pinned `1.94.1` toolchain instead of relying on whatever default toolchain happens to be active locally.
 
 When run from a repo checkout, it also configures `.githooks/` automatically if present. The setup script installs tools only; it does not start a local `dfx` replica for you.
+
+If you only want the thin-root helper without the broader setup path, you can still install it directly:
+
+```bash
+cargo install --locked canic-installer --version <same-version-as-canic>
+```
 
 Then, with the target `dfx` replica already running, from your workspace root:
 
