@@ -1,3 +1,4 @@
+pub mod bootstrap;
 pub mod env;
 pub mod log;
 pub mod memory;

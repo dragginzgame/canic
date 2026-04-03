@@ -21,7 +21,7 @@ use cp_core::{
     ops::{
         config::ConfigOps,
         ic::{IcOps, network::NetworkOps},
-        runtime::{env::EnvOps, ready::ReadyOps},
+        runtime::{bootstrap::BootstrapStatusOps, env::EnvOps, ready::ReadyOps},
         storage::{
             directory::{app::AppDirectoryOps, subnet::SubnetDirectoryOps},
             pool::PoolOps,
@@ -85,24 +85,28 @@ fn root_missing_staged_release_roles(
     Ok(missing)
 }
 
+fn validation_failure_summary(report: &ValidationReport) -> String {
+    report.issues.first().map_or_else(
+        || "bootstrap validation failed".to_string(),
+        |issue| format!("bootstrap validation failed: {}", issue.message),
+    )
+}
+
 pub async fn bootstrap_init_root_canister() {
     if !root_has_embedded_wasm_store_bootstrap() {
-        log!(
-            Topic::Init,
-            Error,
-            "bootstrap (root:init) embedded wasm_store bootstrap module is not registered"
-        );
+        let message =
+            "bootstrap (root:init) embedded wasm_store bootstrap module is not registered";
+        BootstrapStatusOps::mark_failed(message);
+        log!(Topic::Init, Error, "{message}");
         return;
     }
 
     let data = match RootBootstrapContext::load() {
         Ok(data) => data,
         Err(err) => {
-            log!(
-                Topic::Init,
-                Error,
-                "bootstrap (root:init) bootstrap preflight failed: {err}"
-            );
+            let message = format!("bootstrap (root:init) bootstrap preflight failed: {err}");
+            BootstrapStatusOps::mark_failed(message.clone());
+            log!(Topic::Init, Error, "{message}");
             return;
         }
     };
@@ -110,16 +114,15 @@ pub async fn bootstrap_init_root_canister() {
     let missing_roles = match root_missing_staged_release_roles(&data) {
         Ok(missing_roles) => missing_roles,
         Err(err) => {
-            log!(
-                Topic::Init,
-                Error,
-                "bootstrap (root:init) release-set preflight failed: {err}"
-            );
+            let message = format!("bootstrap (root:init) release-set preflight failed: {err}");
+            BootstrapStatusOps::mark_failed(message.clone());
+            log!(Topic::Init, Error, "{message}");
             return;
         }
     };
 
     if !missing_roles.is_empty() {
+        BootstrapStatusOps::set_phase("root:init:waiting_staged_releases");
         log!(
             Topic::Init,
             Info,
@@ -132,11 +135,13 @@ pub async fn bootstrap_init_root_canister() {
     let _guard = match TopologyGuard::try_enter() {
         Ok(g) => g,
         Err(err) => {
+            BootstrapStatusOps::set_phase("root:init:skipped");
             log!(Topic::Init, Info, "bootstrap (root:init) skipped: {err}");
             return;
         }
     };
 
+    BootstrapStatusOps::set_phase("root:init:import_pool");
     log!(Topic::Init, Info, "bootstrap (root:init) start");
 
     // On fresh init, wait for configured pool imports before auto-create.
@@ -144,25 +149,29 @@ pub async fn bootstrap_init_root_canister() {
     root_import_pool_from_config(true).await;
     canic_core::perf!("bootstrap_import_pool");
 
+    BootstrapStatusOps::set_phase("root:init:create_canisters");
     if let Err(err) = root_create_canisters().await {
-        log!(Topic::Init, Error, "registry phase failed: {err}");
+        let message = format!("registry phase failed: {err}");
+        log!(Topic::Init, Error, "{message}");
+        BootstrapStatusOps::mark_failed(message);
         return;
     }
     canic_core::perf!("bootstrap_create_canisters");
 
+    BootstrapStatusOps::set_phase("root:init:rebuild_directories");
     if let Err(err) = root_rebuild_directories_from_registry() {
-        log!(
-            Topic::Init,
-            Error,
-            "directory materialization failed: {err}"
-        );
+        let message = format!("directory materialization failed: {err}");
+        log!(Topic::Init, Error, "{message}");
+        BootstrapStatusOps::mark_failed(message);
         return;
     }
     canic_core::perf!("bootstrap_rebuild_directories");
 
+    BootstrapStatusOps::set_phase("root:init:validate");
     let report = root_validate_state();
     canic_core::perf!("bootstrap_validate_state");
     if !report.ok {
+        BootstrapStatusOps::mark_failed(validation_failure_summary(&report));
         log!(
             Topic::Init,
             Error,
@@ -179,22 +188,19 @@ pub async fn bootstrap_init_root_canister() {
 /// Bootstrap workflow for the root canister after upgrade.
 pub async fn bootstrap_post_upgrade_root_canister() {
     if !root_has_embedded_wasm_store_bootstrap() {
-        log!(
-            Topic::Init,
-            Error,
-            "bootstrap (root:upgrade) embedded wasm_store bootstrap module is not registered"
-        );
+        let message =
+            "bootstrap (root:upgrade) embedded wasm_store bootstrap module is not registered";
+        BootstrapStatusOps::mark_failed(message);
+        log!(Topic::Init, Error, "{message}");
         return;
     }
 
     let data = match RootBootstrapContext::load() {
         Ok(data) => data,
         Err(err) => {
-            log!(
-                Topic::Init,
-                Error,
-                "bootstrap (root:upgrade) bootstrap preflight failed: {err}"
-            );
+            let message = format!("bootstrap (root:upgrade) bootstrap preflight failed: {err}");
+            log!(Topic::Init, Error, "{message}");
+            BootstrapStatusOps::mark_failed(message);
             return;
         }
     };
@@ -202,16 +208,15 @@ pub async fn bootstrap_post_upgrade_root_canister() {
     let missing_roles = match root_missing_staged_release_roles(&data) {
         Ok(missing_roles) => missing_roles,
         Err(err) => {
-            log!(
-                Topic::Init,
-                Error,
-                "bootstrap (root:upgrade) release-set preflight failed: {err}"
-            );
+            let message = format!("bootstrap (root:upgrade) release-set preflight failed: {err}");
+            log!(Topic::Init, Error, "{message}");
+            BootstrapStatusOps::mark_failed(message);
             return;
         }
     };
 
     if !missing_roles.is_empty() {
+        BootstrapStatusOps::set_phase("root:upgrade:waiting_staged_releases");
         log!(
             Topic::Init,
             Info,
@@ -223,11 +228,16 @@ pub async fn bootstrap_post_upgrade_root_canister() {
 
     // Environment already exists; only enrich + reconcile
     log!(Topic::Init, Info, "bootstrap (root:upgrade) start");
+    BootstrapStatusOps::set_phase("root:upgrade:set_subnet_id");
     root_set_subnet_id().await;
     // Keep post-upgrade non-blocking; queued imports continue in background.
+    BootstrapStatusOps::set_phase("root:upgrade:import_pool");
     root_import_pool_from_config(false).await;
+    BootstrapStatusOps::set_phase("root:upgrade:reconcile_wasm_store");
     if let Err(err) = root_reconcile_wasm_store().await {
-        log!(Topic::Init, Error, "wasm store reconcile failed: {err}");
+        let message = format!("wasm store reconcile failed: {err}");
+        log!(Topic::Init, Error, "{message}");
+        BootstrapStatusOps::mark_failed(message);
         return;
     }
     log!(Topic::Init, Info, "bootstrap (root:upgrade) complete");

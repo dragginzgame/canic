@@ -40,6 +40,11 @@ macro_rules! canic_emit_lifecycle_core_endpoints {
         fn canic_ready() -> bool {
             $crate::__internal::core::api::ready::ReadyApi::is_ready()
         }
+
+        #[$crate::canic_query(internal)]
+        fn canic_bootstrap_status() -> ::canic::dto::state::BootstrapStatusResponse {
+            $crate::__internal::core::api::ready::ReadyApi::bootstrap_status()
+        }
     };
 }
 

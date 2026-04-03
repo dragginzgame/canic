@@ -1,3 +1,4 @@
+use super::bootstrap::BootstrapStatusOps;
 use std::cell::Cell;
 
 thread_local! {
@@ -30,6 +31,7 @@ impl ReadyOps {
         READY.with(|ready| {
             if !ready.get() {
                 ready.set(true);
+                BootstrapStatusOps::mark_ready();
                 crate::log!(crate::log::Topic::Init, Info, "canister marked READY");
             }
         });

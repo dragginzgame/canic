@@ -22,7 +22,7 @@ The crate was historically known as **ICU** (Internet Computer Utilities). All c
 * 🔐 **Auth utilities** – composable `requires(...)` expressions with `all(...)`, `any(...)`, and `not(...)` for controllers, parents, whitelist principals, and more.
 * 🔏 **Delegated auth model** – root-anchored delegated token flow (`root -> user_shard -> user token`) with direct caller binding (`sub == caller`), explicit audience/scope checks, and local verification.
 * 🗃️ **Stable memory ergonomics** – `ic_memory!`, `ic_memory_range!`, and `eager_static!` manage IC stable structures safely across upgrades.
-* 📦 **WASM registry** – consistently ship/lookup child canister WASMs with hash tracking.
+* 📦 **Managed `wasm_store` publication** – stage and publish child canister WASMs with hash tracking while keeping `root` thin.
 * 🪵 **Configurable logging** – ring/age retention with second‑level timestamps and paged log/query helpers; provisioning calls log caller/parent context on `create_canister_request` failures to simplify bootstrap debugging.
 * ♻️ **Lifecycle helpers** – shard policies, pool capacity, scaling helpers, and sync cascades keep fleets healthy.
 * 🧪 **Ready for CI** – Rust 2024 edition, toolchain pinned to Rust 1.94.1, with `cargo fmt`, `cargo clippy -- -D warnings`, and `cargo test` wired via `make` targets.
@@ -39,7 +39,7 @@ The crate was historically known as **ICU** (Internet Computer Utilities). All c
 
   * `src/access/` – boundary helpers (authorization, guards, endpoint‑adjacent policy). Must not depend on concrete model types.
   * `src/api/` – public runtime APIs re-exported through the `canic` facade.
-  * `src/bootstrap.rs` – config bootstrap and embedded-config helpers.
+  * `src/bootstrap/` – config bootstrap and embedded-config helpers.
   * `src/config/` – configuration loaders, validators, and schema helpers.
   * `src/dispatch/` – endpoint routing helpers used by the macros.
   * `src/domain/` – pure domain and policy logic.
@@ -53,13 +53,15 @@ The crate was historically known as **ICU** (Internet Computer Utilities). All c
   * `src/view/` – internal read‑only projections used by workflow/policy/ops.
   * `src/workflow/` – orchestration, retries, cascades, and multi‑step behaviors.
 * `crates/canic-installer/` – published installer and release-set tooling for downstream workspaces.
-* `crates/canic-internal/` – internal helpers and fixtures used by the workspace.
+* `crates/canic-control-plane/` – root/store control-plane runtime used by the orchestrator lane.
 * `crates/canic-memory/` – standalone stable‑memory crate (manager, registry, eager TLS, memory macros) usable by Canic and external crates.
+* `crates/canic-sharding-runtime/` – optional sharding runtime lane used by sharded deployments.
 * `crates/canic-testkit/` – host‑side test utilities and fixtures for Canic canisters.
+* `crates/canic-tests/` – workspace-only integration test host package for the PocketIC and root-suite coverage.
 * `crates/canic-dsl-macros/` – proc macros for defining endpoints (`#[canic_query]`, `#[canic_update]`).
 * `crates/canic-cdk/` – curated IC CDK façade used by the public/runtime crates (management, timers, stable‑structures glue).
 * `crates/canic-wasm-store/` – canonical publishable `wasm_store` canister crate used for the implicit bootstrap store artifact; downstream build helpers can also synthesize the same hidden wrapper directly from `canic` when they only depend on the facade crate.
-* `canisters/` – reference canisters that exercise the library end to end:
+* `canisters/` – reference canisters and workspace-only support crates that exercise the library end to end:
 
   * `root/` orchestrator tying together shards, scaling, pool flows, and the implicit bootstrap `wasm_store`.
   * `app/` – sample application canister used in integration flows.
@@ -67,6 +69,7 @@ The crate was historically known as **ICU** (Internet Computer Utilities). All c
   * `scale/`, `scale_hub/` – pool scaling agents demonstrating capacity workflows.
   * `minimal/` – minimal runtime baseline canister.
   * `test/` – workspace‑only test canister used by host‑side fixtures.
+  * `reference-support/` – workspace-only shared support crate published internally as `canic-internal`.
 * `scripts/` – build, release, audit, and environment helpers.
 
   * `app/` – bootstrap scripts for the demo topology.
@@ -136,7 +139,7 @@ async fn canic_install(_: Option<Vec<u8>>) {}
 async fn canic_upgrade() {}
 ```
 
-See `canisters/root` and the reference canisters under `canisters/*` for end‑to‑end patterns, including WASM registries and endpoint exports.
+See `canisters/root` and the reference canisters under `canisters/*` for end‑to‑end patterns, including managed `wasm_store` publication and endpoint exports.
 
 ### 4. Define your topology
 
@@ -150,15 +153,17 @@ For local DFX workflows, install the published helper that owns Canic's thin-roo
 cargo install --locked canic-installer --version <same-version-as-canic>
 ```
 
-Then, from your workspace root:
+Then, with the target `dfx` replica already running, from your workspace root:
 
 ```bash
-dfx canister create --all
-dfx build --all
 canic-install-root root
 ```
 
+`canic-install-root` now owns the local thin-root flow end to end. It creates local canisters, runs `dfx build --all`, emits `.dfx/local/canisters/root/root.release-set.json`, reinstalls `root`, stages the ordinary release set, resumes bootstrap, and waits for `canic_ready`.
+
 `root` stays thin in this flow. It embeds only the bootstrap `wasm_store.wasm.gz`; ordinary child releases stay outside `root` and are staged after install from `.dfx/local/canisters/root/root.release-set.json`.
+
+Visible canister Candid files are generated build artifacts under `.dfx/local/canisters/<role>/<role>.did`. They are not committed source files. The checked-in exception is `crates/canic-wasm-store/wasm_store.did`, which remains the canonical published interface for the hidden bootstrap store crate.
 
 Canic now treats wasm build selection as an explicit three-profile contract:
 
@@ -251,7 +256,7 @@ Use `PageRequest { limit, offset }` to avoid passing raw integers into queries.
 * Build workspace release artifacts: `make build`
 * Build local canister WASMs through `dfx`: `dfx build --all`
 * Build example targets: `cargo build -p canic --examples`
-* Role-attestation PocketIC flow: `cargo test -p canic-core --test pic_role_attestation role_attestation_issue_and_verify_happy_path -- --nocapture`
+* Role-attestation PocketIC flow: `cargo test -p canic-core --test pic_role_attestation capability_endpoint_policy_and_structural_paths -- --nocapture`
 * Root replay dispatcher coverage: `cargo test -p canic-tests --test root_suite --locked upgrade_routes_through_dispatcher_non_skip_path -- --nocapture --test-threads=1`
 
 `rust-toolchain.toml` pins the toolchain so CI and local builds stay in sync.
@@ -263,7 +268,7 @@ Explore the runnable example under `crates/canic/examples/`:
 * `minimal_root.rs` – bootstrap a bare‑bones orchestrator.
 
 ```bash
-cargo run -p canic --example minimal_root
+cargo run -p canic --example minimal_root --features control-plane
 ```
 
 ## Project Status & Contributing

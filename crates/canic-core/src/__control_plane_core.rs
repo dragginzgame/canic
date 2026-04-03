@@ -50,6 +50,10 @@ pub mod ops {
     }
 
     pub mod runtime {
+        pub mod bootstrap {
+            pub use crate::ops::runtime::bootstrap::BootstrapStatusOps;
+        }
+
         pub mod env {
             pub use crate::ops::runtime::env::EnvOps;
         }

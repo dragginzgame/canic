@@ -65,3 +65,14 @@ pub struct SubnetStateInput;
 
 #[derive(CandidType, Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq)]
 pub struct SubnetStateResponse;
+
+///
+/// BootstrapStatusResponse
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+pub struct BootstrapStatusResponse {
+    pub ready: bool,
+    pub phase: String,
+    pub last_error: Option<String>,
+}

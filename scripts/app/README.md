@@ -94,6 +94,15 @@ That public builder:
 - copies the resulting WASM into `.dfx/local/canisters/<name>/<name>.wasm`
 - runs `candid-extractor` to produce `.dfx/local/canisters/<name>/<name>.did`
 
+The visible reference canister `.did` files now live only under `.dfx/local`.
+They are generated build artifacts, not committed source files.
+
+The one checked-in exception is:
+- `crates/canic-wasm-store/wasm_store.did`
+
+That file remains the canonical published interface for the hidden bootstrap
+`wasm_store` crate and the packaged downstream installer path.
+
 Profile selection for the public builder is:
 - `CANIC_WASM_PROFILE=debug|fast|release`
 
