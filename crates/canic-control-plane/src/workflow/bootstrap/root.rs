@@ -321,8 +321,12 @@ pub async fn root_create_canisters() -> Result<(), InternalError> {
     canic_core::perf!("bootstrap_ensure_wasm_store");
     WasmStorePublicationWorkflow::publish_staged_release_set_to_current_store().await?;
     canic_core::perf!("bootstrap_publish_release_set");
-    import_default_wasm_store_catalog().await?;
-    canic_core::perf!("bootstrap_import_store_catalog");
+
+    // Publication already mirrors each selected managed-store binding back into
+    // root-owned manifest state. Re-importing the full fleet catalog here is
+    // redundant on init and can force an expensive snapshot of the just-
+    // retired rollover store before bootstrap completes.
+
     ensure_required_canisters(&data).await
 }
 
