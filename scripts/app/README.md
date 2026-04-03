@@ -139,3 +139,24 @@ CANIC_DFX_ROOT=/path/to/repo
 
 The first root drives Cargo and config discovery; the second root owns emitted
 artifacts and the hidden generated bootstrap-store wrapper.
+
+If canister crates live under a different directory such as
+`backend/src/canisters`, also set:
+
+```bash
+CANIC_CANISTERS_ROOT=src/canisters
+```
+
+relative to `CANIC_WORKSPACE_ROOT`, or point `CANIC_CONFIG_PATH` at the real
+`canic.toml` path and let the builder infer the canister root from that config
+location.
+
+The builder also tries Cargo workspace metadata first, so nested paths like
+`src/canisters/project/ledger` work without extra config when package names
+still follow `canister_<role>`. If a package name does not follow that
+convention, declare the mapping in `Cargo.toml`:
+
+```toml
+[package.metadata.canic]
+role = "project_ledger"
+```

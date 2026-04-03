@@ -190,6 +190,30 @@ canic-build-canister-artifact root
 
 `CANIC_WORKSPACE_ROOT` controls Cargo, `canic.toml`, and canister manifests. `CANIC_DFX_ROOT` controls `dfx.json`, `.dfx`, emitted artifacts, and the hidden generated bootstrap-store wrapper.
 
+If your canister crates do not live under the default `canisters/` directory,
+Canic now tries to discover them from Cargo workspace metadata first. In the
+common case, zero extra config is needed as long as package names still follow
+the normal `canister_<role>` convention, even if the manifests live in nested
+paths like `src/canisters/project/ledger`.
+
+If you need to override discovery explicitly, set:
+
+```bash
+CANIC_CANISTERS_ROOT=src/canisters
+```
+
+relative to `CANIC_WORKSPACE_ROOT`, or point `CANIC_CONFIG_PATH` at the real
+`canic.toml` location and Canic will infer the canister-manifest root from that
+config path.
+
+If a package name does not follow `canister_<role>`, declare the mapping in its
+`Cargo.toml`:
+
+```toml
+[package.metadata.canic]
+role = "project_ledger"
+```
+
 If you need the lower-level build/install boundaries directly, `canic-installer` also publishes:
 
 - `canic-build-canister-artifact`

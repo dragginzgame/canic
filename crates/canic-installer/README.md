@@ -32,3 +32,23 @@ When the Rust workspace root and the DFX/project root differ, set both:
 
 - `CANIC_WORKSPACE_ROOT` for Cargo, `canic.toml`, and canister manifests
 - `CANIC_DFX_ROOT` for `dfx.json`, `.dfx`, and emitted artifacts
+
+If canister crates live somewhere other than the default `canisters/`
+directory, the installer first tries to discover them from Cargo workspace
+metadata. Zero extra config is needed when package names still follow the
+normal `canister_<role>` convention, even if manifests live in nested paths.
+
+If you need to override discovery explicitly, set:
+
+- `CANIC_CANISTERS_ROOT` for the canister crate root relative to `CANIC_WORKSPACE_ROOT`
+
+or point `CANIC_CONFIG_PATH` at the real `canic.toml` path and the installer
+will infer the canister-manifest root from that config location.
+
+If a package name does not follow `canister_<role>`, declare the role mapping
+in `Cargo.toml`:
+
+```toml
+[package.metadata.canic]
+role = "project_ledger"
+```
