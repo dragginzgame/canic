@@ -44,12 +44,15 @@ fn print_build_context_once(
 
     let requested_profile = env::var("CANIC_WASM_PROFILE").unwrap_or_else(|_| "unset".to_string());
     let network = env::var("DFX_NETWORK").unwrap_or_else(|_| "local".to_string());
-    let marker_file = marker_dir.join(format!(
-        ".canic-build-context-{}",
-        dfx_ancestor_process_id()
-            .or_else(parent_process_id)
-            .unwrap_or_else(std::process::id)
-    ));
+    let marker_key = env::var("CANIC_BUILD_CONTEXT_SESSION")
+        .ok()
+        .unwrap_or_else(|| {
+            dfx_ancestor_process_id()
+                .or_else(parent_process_id)
+                .unwrap_or_else(std::process::id)
+                .to_string()
+        });
+    let marker_file = marker_dir.join(format!(".canic-build-context-{marker_key}"));
 
     if !marker_file.exists() {
         fs::write(&marker_file, [])?;

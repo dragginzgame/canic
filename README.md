@@ -153,6 +153,28 @@ For local DFX workflows, install the published helper that owns Canic's thin-roo
 cargo install --locked canic-installer --version <same-version-as-canic>
 ```
 
+Or use the one-line setup script:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/dragginzgame/canic/v0.22.10/scripts/install.sh | bash
+```
+
+That script installs:
+
+- Rust via `rustup` if it is not already installed
+- Rust `1.94.1`
+- `rustfmt` and `clippy`
+- `wasm32-unknown-unknown`
+- `candid-extractor`
+- `ic-wasm`
+- `cargo-watch`, `cargo-edit`, `cargo-get`, `cargo-sort`, and `cargo-sort-derives`
+- `canic-installer` `0.22.10`
+- `dfx` if it is not already installed
+
+It bootstraps Rust when needed and runs the Cargo installs through the pinned `1.94.1` toolchain instead of relying on whatever default toolchain happens to be active locally.
+
+When run from a repo checkout, it also configures `.githooks/` automatically if present. The setup script installs tools only; it does not start a local `dfx` replica for you.
+
 Then, with the target `dfx` replica already running, from your workspace root:
 
 ```bash

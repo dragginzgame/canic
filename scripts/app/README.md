@@ -4,9 +4,11 @@ These scripts support the reference canisters under `canisters/` and the local t
 
 ## Prerequisites
 
-- `dfx` installed and on your `PATH`
-- Wasm target + candid tooling:
-  - `make install-canister-deps` (installs `wasm32-unknown-unknown` and `candid-extractor`)
+- Canic/Rust tooling installed:
+  - `make install-canister-deps`
+  - or `bash scripts/install.sh`
+  - the shared setup script bootstraps Rust when needed, installs the pinned Rust toolchain, `rustfmt`, `clippy`, `wasm32-unknown-unknown`, `candid-extractor`, `ic-wasm`, common cargo helper tools, the matching `canic-installer`, and `dfx` if it is missing
+  - the same script also configures `.githooks/` automatically when run from a Canic checkout
 
 ## Local Replica Contract
 

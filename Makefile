@@ -1,9 +1,10 @@
 .PHONY: help version tags patch patch-quick minor major package publish \
         test-packaged-downstream test-packaged-downstream-wasm-store \
         test-packaged-downstream-installer test-installed-canic-installer \
-        test test-wasm test-bump build check clippy fmt fmt-check clean install-dev \
-        demo-install test-watch all ensure-clean \
-        ensure-hooks install-hooks
+        test test-wasm test-bump build check clippy fmt fmt-check clean install-all \
+        install-tooling install-dev install-canister-deps demo-install test-watch \
+        all ensure-clean ensure-hooks install-hooks test-unit test-unit-fast \
+        test-canisters quick-bump fmt-core
 
 # in case we need to use this
 CARGO_ENV :=
@@ -53,9 +54,10 @@ help:
 	@echo "Available commands:"
 	@echo ""
 	@echo "Setup / Installation:"
-	@echo "  install-all      Install both dev and canister dependencies"
-	@echo "  install-dev      Install Rust development dependencies"
-	@echo "  install-canister-deps  Install Wasm target + candid tools"
+	@echo "  install-all      Install the full Rust/Cargo/Canic toolchain and configure git hooks"
+	@echo "  install-tooling  Install the shared Rust/Cargo/Canic toolchain"
+	@echo "  install-dev      Alias for install-tooling"
+	@echo "  install-canister-deps  Alias for install-tooling"
 	@echo "  install-hooks    Configure git hooks"
 	@echo ""
 	@echo "Version Management:"
@@ -99,21 +101,13 @@ help:
 # Installing
 #
 
-# Install everything (dev + canister deps)
-install-all: install-dev install-canister-deps install-hooks
+# Install everything (Rust tooling + Canic installer + wasm deps + hooks when present)
+install-all: install-tooling
 	@echo "✅ All development and canister dependencies installed"
 
-# Install Rust development tooling
-install-dev:
-	cargo install cargo-watch --locked || true
-	cargo install cargo-edit --locked || true
-	cargo install cargo-get cargo-sort cargo-sort-derives --locked || true
-
-# Install wasm target + candid tools
-install-canister-deps:
-	rustup toolchain install 1.94.1 || true
-	rustup target add wasm32-unknown-unknown
-	cargo install candid-extractor ic-wasm --locked || true
+# Install the shared Rust/Cargo/Canic toolchain
+install-tooling install-dev install-canister-deps:
+	bash scripts/install.sh
 
 
 # Optional explicit install target (idempotent)
