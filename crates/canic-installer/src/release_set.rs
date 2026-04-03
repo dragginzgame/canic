@@ -537,42 +537,24 @@ fn stage_release_entry(
         .into());
     }
 
-    let payload_hash = wasm_hash(&wasm_module);
-    let payload_hash_hex = hex_bytes(&payload_hash);
-    if payload_hash_hex != entry.payload_sha256_hex {
+    let chunk_count = wasm_module.chunks(CANIC_WASM_CHUNK_BYTES).count();
+    if chunk_count != entry.chunk_sha256_hex.len() {
         return Err(format!(
-            "release artifact hash drift for {}: manifest={} actual={} ({})",
+            "release chunk count drift for {}: manifest={} actual={} ({})",
             entry.role,
-            entry.payload_sha256_hex,
-            payload_hash_hex,
+            entry.chunk_sha256_hex.len(),
+            chunk_count,
             artifact_path.display()
         )
         .into());
     }
-
-    let chunks = wasm_module
-        .chunks(CANIC_WASM_CHUNK_BYTES)
-        .map(<[u8]>::to_vec)
-        .collect::<Vec<_>>();
-    let chunk_hashes = chunks
-        .iter()
-        .map(|chunk| wasm_hash_hex(chunk))
-        .collect::<Vec<_>>();
-
-    if chunk_hashes != entry.chunk_sha256_hex {
-        return Err(format!(
-            "release chunk hash drift for {} ({})",
-            entry.role,
-            artifact_path.display()
-        )
-        .into());
-    }
+    let payload_hash = decode_hex(&entry.payload_sha256_hex)?;
 
     print_stage_progress(&format!(
         "Staging release {entry_index}/{total_entries}: {} ({} chunk{})",
         entry.role,
-        chunks.len(),
-        if chunks.len() == 1 { "" } else { "s" }
+        chunk_count,
+        if chunk_count == 1 { "" } else { "s" }
     ));
 
     stage_release_manifest(
@@ -600,7 +582,7 @@ fn stage_release_entry(
         entry.role, entry_index, total_entries
     ));
 
-    publish_release_chunks(root_canister, release_version, entry, &chunks)?;
+    publish_release_chunks(root_canister, release_version, entry, &wasm_module)?;
 
     print_stage_progress(&format!(
         "Finished release {entry_index}/{total_entries}: {}",
@@ -678,11 +660,12 @@ fn publish_release_chunks(
     root_canister: &str,
     release_version: &str,
     entry: &ReleaseSetEntry,
-    chunks: &[Vec<u8>],
+    wasm_module: &[u8],
 ) -> Result<(), Box<dyn std::error::Error>> {
-    for (chunk_index, chunk) in chunks.iter().enumerate() {
+    let total_chunks = entry.chunk_sha256_hex.len();
+
+    for (chunk_index, chunk) in wasm_module.chunks(CANIC_WASM_CHUNK_BYTES).enumerate() {
         let chunk_number = chunk_index + 1;
-        let total_chunks = chunks.len();
         print_stage_progress(&format!(
             "Uploading chunk {chunk_number}/{total_chunks} for {} ({} bytes)",
             entry.role,

@@ -133,9 +133,6 @@ async fn resolved_store_chunk_set_for_manifest(
         ));
     }
 
-    ensure_store_chunk_hashes_present(store_pid, &manifest.template_id, &manifest.version, &info)
-        .await?;
-
     Ok((store_pid, info))
 }
 
@@ -179,53 +176,6 @@ async fn ensure_bootstrap_chunk_hashes_present(
                 InternalErrorOrigin::Workflow,
                 format!(
                     "template '{template_id}' bootstrap chunk {chunk_index} uploaded hash mismatch for root {store_pid}",
-                ),
-            ));
-        }
-    }
-
-    Ok(())
-}
-
-// Upload any missing deterministic chunks into the selected store's local
-// management chunk store before install uses it as the source canister.
-async fn ensure_store_chunk_hashes_present(
-    store_pid: Principal,
-    template_id: &TemplateId,
-    version: &TemplateVersion,
-    info: &TemplateChunkSetInfoResponse,
-) -> Result<(), InternalError> {
-    let stored_hashes = MgmtOps::stored_chunks(store_pid)
-        .await?
-        .into_iter()
-        .collect::<BTreeSet<_>>();
-
-    if info
-        .chunk_hashes
-        .iter()
-        .all(|expected_hash| stored_hashes.contains(expected_hash))
-    {
-        return Ok(());
-    }
-
-    for (chunk_index, expected_hash) in info.chunk_hashes.iter().cloned().enumerate() {
-        if stored_hashes.contains(&expected_hash) {
-            continue;
-        }
-
-        let chunk_index = u32::try_from(chunk_index).map_err(|_| {
-            InternalError::workflow(
-                InternalErrorOrigin::Workflow,
-                format!("template '{template_id}' exceeds supported chunk indexing bounds"),
-            )
-        })?;
-        let bytes = publication::store_chunk(store_pid, template_id, version, chunk_index).await?;
-        let uploaded_hash = MgmtOps::upload_chunk(store_pid, bytes).await?;
-        if uploaded_hash != expected_hash {
-            return Err(InternalError::workflow(
-                InternalErrorOrigin::Workflow,
-                format!(
-                    "template '{template_id}' chunk {chunk_index} uploaded hash mismatch for store {store_pid}",
                 ),
             ));
         }
