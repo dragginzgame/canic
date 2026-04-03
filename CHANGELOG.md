@@ -5,6 +5,15 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.23.x] - 2026-04-03 - Deferred Follow-Through
+
+- `0.23.0` opens the next line by carrying the remaining `0.22` deferred work into a fresh design/status lane instead of continuing to stretch the now-closed audit, wasm-size, and perf cleanup line.
+
+See detailed breakdown:
+[docs/changelog/0.23.md](docs/changelog/0.23.md)
+
+---
+
 ## [0.22.x] - 2026-04-02 - Audits, Wasm Size, and Perf
 
 - `0.22.10` fixes the narrowed local root-install build path so it issues one quiet `dfx build <canister>` call per selected target, matches the real DFX CLI contract, keeps the one-time Canic build context stable across the whole install, restores downstream `make test-canisters` flows after the `0.22.9` targeted-build change, adds a curlable `scripts/install.sh` setup path that bootstraps Rust when needed and installs the pinned Rust/Cargo/Canic toolchain plus `dfx` in one step, and removes the stale duplicate environment-update path so setup docs point at one shared flow.
