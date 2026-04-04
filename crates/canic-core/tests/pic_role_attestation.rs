@@ -20,11 +20,12 @@ use canic_core::dto::{
     rpc::{CreateCanisterParent, CreateCanisterRequest},
     rpc::{CyclesRequest, Request, Response},
     subnet::SubnetIdentity,
-    topology::SubnetRegistryResponse,
 };
 use canic_core::ids::{CanisterRole, cap};
-use canic_testkit::pic::PicSerialGuard;
-use pocket_ic::PocketIcBuilder;
+use canic_testkit::pic::{
+    CachedPicBaseline, CachedPicBaselineGuard, Pic, PicSerialGuard, acquire_cached_pic_baseline,
+    pic as shared_pic, role_pid as lookup_role_pid, wait_until_ready as wait_for_ready_canister,
+};
 use serde::de::DeserializeOwned;
 use sha2::{Digest, Sha256};
 use std::{
@@ -33,7 +34,7 @@ use std::{
     ops::{Deref, DerefMut},
     path::{Path, PathBuf},
     process::Command,
-    sync::{Mutex, MutexGuard, Once, OnceLock},
+    sync::{Mutex, Once, OnceLock},
     time::Duration,
 };
 
@@ -42,9 +43,15 @@ const CANISTER_PACKAGES: [&str; 1] = ["delegation_root_stub"];
 static BUILD_ONCE: Once = Once::new();
 static BUILD_WITHOUT_TEST_MATERIAL_ONCE: Once = Once::new();
 static CANISTER_BUILD_SERIAL: Mutex<()> = Mutex::new(());
-static ROOT_SIGNER_BASELINE: OnceLock<Mutex<CachedBaseline>> = OnceLock::new();
-static ROOT_SIGNER_VERIFIER_BASELINE: OnceLock<Mutex<CachedBaseline>> = OnceLock::new();
-static ROOT_SIGNER_NO_TEST_HOOK_BASELINE: OnceLock<Mutex<CachedBaseline>> = OnceLock::new();
+static ROOT_SIGNER_BASELINE: OnceLock<
+    Mutex<Option<CachedPicBaseline<AttestationBaselineMetadata>>>,
+> = OnceLock::new();
+static ROOT_SIGNER_VERIFIER_BASELINE: OnceLock<
+    Mutex<Option<CachedPicBaseline<AttestationBaselineMetadata>>>,
+> = OnceLock::new();
+static ROOT_SIGNER_NO_TEST_HOOK_BASELINE: OnceLock<
+    Mutex<Option<CachedPicBaseline<AttestationBaselineMetadata>>>,
+> = OnceLock::new();
 static DELEGATION_ADMIN_FIXTURE_CACHE: OnceLock<Mutex<Option<DelegationAdminCachedData>>> =
     OnceLock::new();
 
@@ -53,7 +60,7 @@ static DELEGATION_ADMIN_FIXTURE_CACHE: OnceLock<Mutex<Option<DelegationAdminCach
 ///
 
 struct SerialPic {
-    pic: pocket_ic::PocketIc,
+    pic: Pic,
     _serial_guard: PicSerialGuard,
 }
 
@@ -110,7 +117,7 @@ struct CachedInstalledRoot {
 ///
 
 struct BaselinePicGuard<'a> {
-    baseline: MutexGuard<'a, CachedBaseline>,
+    baseline: CachedPicBaselineGuard<'a, AttestationBaselineMetadata>,
 }
 
 impl Deref for BaselinePicGuard<'_> {
@@ -122,36 +129,14 @@ impl Deref for BaselinePicGuard<'_> {
 }
 
 ///
-/// SnapshotHandle
+/// AttestationBaselineMetadata
 ///
 
-struct SnapshotHandle {
-    snapshot_id: Vec<u8>,
-    sender: Option<Principal>,
-}
-
-///
-/// CachedCanisterSnapshot
-///
-
-struct CachedCanisterSnapshot {
-    canister_id: Principal,
-    sender: Option<Principal>,
-    snapshot_id: Vec<u8>,
-}
-
-///
-/// CachedBaseline
-///
-
-struct CachedBaseline {
-    pic: pocket_ic::PocketIc,
+struct AttestationBaselineMetadata {
     root_id: Principal,
     wasm_store_id: Principal,
     signer_id: Principal,
     verifier_id: Option<Principal>,
-    snapshots: Vec<CachedCanisterSnapshot>,
-    _serial_guard: PicSerialGuard,
 }
 
 ///
@@ -241,25 +226,27 @@ fn install_cached_root_fixture(cache_kind: AttestationCacheKind) -> CachedInstal
             }
         },
     );
-    let baseline_lock =
-        baseline_slot(cache_kind).get_or_init(|| Mutex::new(build_cached_baseline(cache_kind)));
-    let baseline = baseline_lock
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
-    test_progress("fixture", "cache hit, restoring cached baseline");
-    restore_cached_baseline(&baseline);
+    let baseline_slot = baseline_slot(cache_kind).get_or_init(|| Mutex::new(None));
+    let (baseline, cache_hit) =
+        acquire_cached_pic_baseline(baseline_slot, || build_cached_baseline(cache_kind));
+    if cache_hit {
+        test_progress("fixture", "cache hit, restoring cached baseline");
+        restore_cached_baseline(&baseline);
+    }
     test_progress("fixture", "cached fixture restore complete");
 
     CachedInstalledRoot {
-        root_id: baseline.root_id,
-        signer_id: baseline.signer_id,
-        verifier_id: baseline.verifier_id,
+        root_id: baseline.metadata.root_id,
+        signer_id: baseline.metadata.signer_id,
+        verifier_id: baseline.metadata.verifier_id,
         pic: BaselinePicGuard { baseline },
     }
 }
 
 // Build one reusable baseline and capture immutable snapshot IDs inside it.
-fn build_cached_baseline(cache_kind: AttestationCacheKind) -> CachedBaseline {
+fn build_cached_baseline(
+    cache_kind: AttestationCacheKind,
+) -> CachedPicBaseline<AttestationBaselineMetadata> {
     test_progress("fixture", "cache miss, building fresh baseline");
     let InstalledRoot { pic, root_id } = match cache_kind {
         AttestationCacheKind::SignerOnly | AttestationCacheKind::SignerAndVerifier => {
@@ -271,9 +258,9 @@ fn build_cached_baseline(cache_kind: AttestationCacheKind) -> CachedBaseline {
     };
     test_progress("fixture", "waiting for signer registration");
     let signer_id = signer_pid(&pic, root_id);
-    wait_until_ready(&pic, signer_id);
+    wait_for_ready_canister(&pic, signer_id, 240);
     let wasm_store_id = wasm_store_pid(&pic, root_id);
-    wait_until_ready(&pic, wasm_store_id);
+    wait_for_ready_canister(&pic, wasm_store_id, 240);
     test_progress("fixture", "signer ready");
     let verifier_id = matches!(cache_kind, AttestationCacheKind::SignerAndVerifier).then(|| {
         test_progress("fixture", "creating verifier baseline canister");
@@ -286,123 +273,51 @@ fn build_cached_baseline(cache_kind: AttestationCacheKind) -> CachedBaseline {
         "fixture",
         "waiting for root readiness before snapshot capture",
     );
-    wait_until_ready(&pic, root_id);
+    wait_for_ready_canister(&pic, root_id, 240);
     test_progress("fixture", "capturing baseline snapshots");
-    let mut snapshots = vec![
-        capture_baseline_snapshot(&pic, root_id, root_id),
-        capture_baseline_snapshot(&pic, root_id, wasm_store_id),
-        capture_baseline_snapshot(&pic, root_id, signer_id),
-    ];
-    if let Some(verifier_id) = verifier_id {
-        snapshots.push(capture_baseline_snapshot(&pic, root_id, verifier_id));
-    }
-
-    test_progress("fixture", "fresh baseline ready");
+    let controller_ids = std::iter::once(root_id)
+        .chain(std::iter::once(wasm_store_id))
+        .chain(std::iter::once(signer_id))
+        .chain(verifier_id)
+        .collect::<Vec<_>>();
     let SerialPic { pic, _serial_guard } = pic;
-    CachedBaseline {
+    let baseline = CachedPicBaseline::capture(
         pic,
         root_id,
-        wasm_store_id,
-        signer_id,
-        verifier_id,
-        snapshots,
-        _serial_guard,
-    }
+        controller_ids,
+        AttestationBaselineMetadata {
+            root_id,
+            wasm_store_id,
+            signer_id,
+            verifier_id,
+        },
+    )
+    .expect("downloaded baseline snapshots unavailable");
+    test_progress("fixture", "fresh baseline ready");
+    baseline
 }
 
 // Restore the cached baseline snapshots into the same baseline PocketIC instance.
-fn restore_cached_baseline(baseline: &CachedBaseline) {
+fn restore_cached_baseline(baseline: &CachedPicBaseline<AttestationBaselineMetadata>) {
     test_progress("fixture", "restoring cached baseline snapshots");
-    for snapshot in &baseline.snapshots {
-        if snapshot.canister_id == baseline.root_id {
-            continue;
-        }
-        restore_cached_snapshot(&baseline.pic, snapshot);
-    }
-    if let Some(root_snapshot) = baseline
-        .snapshots
-        .iter()
-        .find(|snapshot| snapshot.canister_id == baseline.root_id)
-    {
-        restore_cached_snapshot(&baseline.pic, root_snapshot);
-    }
+    baseline.restore(baseline.metadata.root_id);
 
     baseline.pic.tick();
 
     test_progress("fixture", "waiting for restored root and signer readiness");
-    wait_until_ready(&baseline.pic, baseline.wasm_store_id);
-    wait_until_ready(&baseline.pic, baseline.signer_id);
-    if let Some(verifier_id) = baseline.verifier_id {
+    wait_for_ready_canister(&baseline.pic, baseline.metadata.wasm_store_id, 240);
+    wait_for_ready_canister(&baseline.pic, baseline.metadata.signer_id, 240);
+    if let Some(verifier_id) = baseline.metadata.verifier_id {
         test_progress("fixture", "waiting for restored verifier readiness");
-        wait_until_ready(&baseline.pic, verifier_id);
+        wait_for_ready_canister(&baseline.pic, verifier_id, 240);
     }
-    wait_until_ready(&baseline.pic, baseline.root_id);
-}
-
-// Capture one reusable snapshot for later reload into the same baseline instance.
-fn capture_baseline_snapshot(
-    pic: &SerialPic,
-    controller_id: Principal,
-    canister_id: Principal,
-) -> CachedCanisterSnapshot {
-    let snapshot = take_snapshot_handle(pic, controller_id, canister_id).unwrap_or_else(|| {
-        panic!("downloaded baseline snapshot unavailable for {canister_id}");
-    });
-    CachedCanisterSnapshot {
-        canister_id,
-        sender: snapshot.sender,
-        snapshot_id: snapshot.snapshot_id,
-    }
-}
-
-// Load one cached snapshot back into the same canister ID on the baseline instance.
-fn restore_cached_snapshot(pic: &pocket_ic::PocketIc, snapshot: &CachedCanisterSnapshot) {
-    pic.load_canister_snapshot(
-        snapshot.canister_id,
-        snapshot.sender,
-        snapshot.snapshot_id.clone(),
-    )
-    .unwrap_or_else(|err| {
-        panic!(
-            "failed to load cached baseline snapshot for {}: {err}",
-            snapshot.canister_id
-        )
-    });
-}
-
-// Capture one snapshot handle with controller-aware sender fallbacks.
-fn take_snapshot_handle(
-    pic: &SerialPic,
-    controller_id: Principal,
-    canister_id: Principal,
-) -> Option<SnapshotHandle> {
-    let mut last_err = None;
-
-    for sender in controller_sender_candidates(controller_id, canister_id) {
-        match pic.take_canister_snapshot(canister_id, sender, None) {
-            Ok(snapshot) => {
-                return Some(SnapshotHandle {
-                    snapshot_id: snapshot.id,
-                    sender,
-                });
-            }
-            Err(err) => last_err = Some((sender, err)),
-        }
-    }
-
-    if let Some((sender, err)) = last_err {
-        eprintln!(
-            "failed to capture cached fixture snapshot for {canister_id} using sender {sender:?}: {err}"
-        );
-    }
-
-    None
+    wait_for_ready_canister(&baseline.pic, baseline.metadata.root_id, 240);
 }
 
 // Return the immutable baseline slot for one cache kind.
 const fn baseline_slot(
     cache_kind: AttestationCacheKind,
-) -> &'static OnceLock<Mutex<CachedBaseline>> {
+) -> &'static OnceLock<Mutex<Option<CachedPicBaseline<AttestationBaselineMetadata>>>> {
     match cache_kind {
         AttestationCacheKind::SignerOnly => &ROOT_SIGNER_BASELINE,
         AttestationCacheKind::SignerAndVerifier => &ROOT_SIGNER_VERIFIER_BASELINE,
@@ -1140,11 +1055,11 @@ fn delegation_tier1_issue_verify_bootstrap_authenticated_end_to_end() {
     let pic = PicBorrow(&setup.pic);
     let root_id = setup.root_id;
     let signer_id = signer_pid(&pic, root_id);
-    wait_until_ready(&pic, signer_id);
+    wait_for_ready_canister(&pic, signer_id, 240);
     let verifier_id = setup
         .verifier_id
         .expect("cached verifier baseline must include verifier");
-    wait_until_ready(&pic, verifier_id);
+    wait_for_ready_canister(&pic, verifier_id, 240);
 
     test_progress(
         "delegation_tier1_issue_verify_bootstrap_authenticated_end_to_end",
@@ -1781,7 +1696,7 @@ fn test_delegation_material_install_hook_not_compiled_in_normal_build() {
     let pic = PicBorrow(&setup.pic);
     let root_id = setup.root_id;
     let signer_id = signer_pid(&pic, root_id);
-    wait_until_ready(&pic, signer_id);
+    wait_for_ready_canister(&pic, signer_id, 240);
 
     let now: Result<u64, Error> =
         query_call_as(&pic, root_id, Principal::anonymous(), "root_now_secs", ());
@@ -2671,85 +2586,16 @@ fn create_verifier_canister(pic: &pocket_ic::PocketIc, root_id: Principal) -> Pr
         other => panic!("expected create-canister response, got: {other:?}"),
     };
     test_progress("fixture", "waiting for created verifier readiness");
-    wait_until_ready(pic, verifier_id);
+    wait_for_ready_canister(pic, verifier_id, 240);
     verifier_id
 }
 
 fn signer_pid(pic: &pocket_ic::PocketIc, root_id: Principal) -> Principal {
-    role_pid(pic, root_id, "signer")
+    lookup_role_pid(pic, root_id, "signer", 120)
 }
 
 fn wasm_store_pid(pic: &pocket_ic::PocketIc, root_id: Principal) -> Principal {
-    role_pid(pic, root_id, "wasm_store")
-}
-
-fn role_pid(pic: &pocket_ic::PocketIc, root_id: Principal, role: &'static str) -> Principal {
-    for attempt in 0..120 {
-        let registry: Result<SubnetRegistryResponse, Error> = query_call_as(
-            pic,
-            root_id,
-            Principal::anonymous(),
-            "canic_subnet_registry",
-            (),
-        );
-
-        if let Ok(registry) = registry
-            && let Some(pid) = registry
-                .0
-                .into_iter()
-                .find(|entry| entry.role == CanisterRole::new(role))
-                .map(|entry| entry.pid)
-        {
-            return pid;
-        }
-
-        if attempt == 0 || attempt == 30 || attempt == 60 || attempt == 90 {
-            test_progress(
-                "fixture",
-                &format!("waiting for {role} pid to appear in subnet registry"),
-            );
-        }
-        pic.tick();
-    }
-
-    panic!("{role} canister must be registered");
-}
-
-// Prefer the likely controller sender first to reduce noisy snapshot failures.
-fn controller_sender_candidates(
-    controller_id: Principal,
-    canister_id: Principal,
-) -> [Option<Principal>; 2] {
-    if canister_id == controller_id {
-        [None, Some(controller_id)]
-    } else {
-        [Some(controller_id), None]
-    }
-}
-
-fn wait_until_ready(pic: &pocket_ic::PocketIc, canister_id: Principal) {
-    let payload = encode_args(()).expect("encode empty args");
-    for attempt in 0..240 {
-        if let Ok(bytes) = pic.query_call(
-            canister_id,
-            Principal::anonymous(),
-            "canic_ready",
-            payload.clone(),
-        ) && let Ok(ready) = decode_one::<bool>(&bytes)
-            && ready
-        {
-            return;
-        }
-        if attempt == 0 || attempt == 60 || attempt == 120 || attempt == 180 {
-            test_progress(
-                "fixture",
-                &format!("waiting for canic_ready on {canister_id}"),
-            );
-        }
-        pic.tick();
-    }
-
-    panic!("canister did not report ready in time: {canister_id}");
+    lookup_role_pid(pic, root_id, "wasm_store", 120)
 }
 
 fn bogus_delegated_token(root_pid: Principal, shard_pid: Principal) -> DelegatedToken {
@@ -2940,7 +2786,7 @@ fn build_pic() -> SerialPic {
     test_progress("fixture", "acquiring PocketIC serial guard");
     let serial_guard = canic_testkit::pic::acquire_pic_serial_guard();
     test_progress("fixture", "starting serialized PocketIC instance");
-    let pic = PocketIcBuilder::new().with_application_subnet().build();
+    let pic = shared_pic();
     test_progress("fixture", "serialized PocketIC instance ready");
 
     SerialPic {
