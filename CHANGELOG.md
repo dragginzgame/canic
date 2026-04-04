@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.23.x] - 2026-04-03 - Deferred Follow-Through
 
-- `0.23.0` opens the next line by carrying the remaining `0.22` deferred work into a fresh design/status lane instead of continuing to stretch the now-closed audit, wasm-size, and perf cleanup line.
+- `0.23.0` opens the next line by carrying the remaining `0.22` deferred work into a fresh design lane, adds a checked-in shrunk-wasm budget surface plus budget/delta reporting to the recurring wasm audit output, records the first dated post-cleanup wasm-footprint rerun with every reference leaf canister under budget while `root` remains the one explicit outlier, and starts the planned testkit follow-through by moving the heavy `pic_role_attestation` fixture onto shared `canic-testkit` baseline, role-lookup, and ready-wait plumbing.
 
 See detailed breakdown:
 [docs/changelog/0.23.md](docs/changelog/0.23.md)

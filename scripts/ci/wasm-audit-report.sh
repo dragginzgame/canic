@@ -5,6 +5,7 @@ set -euo pipefail
 METHOD_TAG="Method V1"
 AUDIT_SLUG="wasm-footprint"
 DEFINITION_PATH="docs/audits/recurring/system/wasm-footprint.md"
+BUDGETS_PATH="docs/audits/recurring/system/wasm-budgets.tsv"
 DEFAULT_PROFILE="release"
 
 ROOT_DIR="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
@@ -35,6 +36,11 @@ declare -A HOTSPOT_SHALLOW=()
 declare -A HOTSPOT_RETAINED=()
 declare -A CANISTER_KIND=()
 declare -A BUILT_ALREADY=()
+declare -A BUDGET_BYTES=()
+declare -A BUDGET_NOTE=()
+declare -A BUDGET_DELTA_BYTES=()
+declare -A BUDGET_STATUS=()
+declare -i BUDGET_OVERRUN_COUNT=0
 
 has_cmd() {
     command -v "$1" >/dev/null 2>&1
@@ -45,6 +51,22 @@ record_verification() {
     local status="$2"
     local notes="$3"
     VERIFICATION_ROWS+=("| \`$cmd\` | $status | $notes |")
+}
+
+load_budgets() {
+    if [ ! -f "$BUDGETS_PATH" ]; then
+        return 1
+    fi
+
+    while IFS=$'\t' read -r canister budget note; do
+        if [ -z "${canister:-}" ] || [[ "$canister" == \#* ]]; then
+            continue
+        fi
+        BUDGET_BYTES["$canister"]="$budget"
+        BUDGET_NOTE["$canister"]="${note:-}"
+    done <"$BUDGETS_PATH"
+
+    return 0
 }
 
 next_scope_stem() {
@@ -295,6 +317,9 @@ write_per_canister_json() {
   },
   "shrink_delta_bytes": ${SHRINK_DELTA_BYTES[$canister]},
   "shrink_delta_percent": ${SHRINK_DELTA_PCT[$canister]},
+  "budget_bytes": "${BUDGET_BYTES[$canister]:-N/A}",
+  "budget_delta_bytes": "${BUDGET_DELTA_BYTES[$canister]:-N/A}",
+  "budget_status": "${BUDGET_STATUS[$canister]:-N/A}",
   "baseline_delta_bytes": "${BASELINE_DELTA_BYTES[$canister]}",
   "baseline_delta_percent": "${BASELINE_DELTA_PCT[$canister]}"
 }
@@ -319,6 +344,9 @@ write_per_canister_markdown() {
 | Shrunk wasm.gz bytes | ${SHRUNK_WASM_GZ_BYTES[$canister]} |
 | Shrink delta bytes | ${SHRINK_DELTA_BYTES[$canister]} |
 | Shrink delta percent | ${SHRINK_DELTA_PCT[$canister]}% |
+| Budget bytes | ${BUDGET_BYTES[$canister]:-N/A} |
+| Budget delta bytes | ${BUDGET_DELTA_BYTES[$canister]:-N/A} |
+| Budget status | ${BUDGET_STATUS[$canister]:-N/A} |
 | Baseline delta bytes | ${BASELINE_DELTA_BYTES[$canister]} |
 | Baseline delta percent | ${BASELINE_DELTA_PCT[$canister]} |
 
@@ -374,6 +402,9 @@ write_aggregate_json() {
             printf '      "shrunk_wasm_gz_bytes": %s,\n' "${SHRUNK_WASM_GZ_BYTES[$canister]}"
             printf '      "shrink_delta_bytes": %s,\n' "${SHRINK_DELTA_BYTES[$canister]}"
             printf '      "shrink_delta_percent": %s,\n' "${SHRINK_DELTA_PCT[$canister]}"
+            printf '      "budget_bytes": "%s",\n' "${BUDGET_BYTES[$canister]:-N/A}"
+            printf '      "budget_delta_bytes": "%s",\n' "${BUDGET_DELTA_BYTES[$canister]:-N/A}"
+            printf '      "budget_status": "%s",\n' "${BUDGET_STATUS[$canister]:-N/A}"
             printf '      "baseline_delta_bytes": "%s"\n' "${BASELINE_DELTA_BYTES[$canister]}"
             printf '    }'
         done
@@ -416,24 +447,32 @@ normalize_baseline_delta_pct() {
     }'
 }
 
+signed_bytes() {
+    local value="$1"
+    printf '%+d' "$value"
+}
+
 run_top_summary() {
     local output="$1"
     local canister
 
-    cat >"$output" <<EOF
+cat >"$output" <<EOF
 # Wasm Size Summary - $RUN_DATE
 
-| Canister | Kind | Built wasm | Shrunk wasm | Delta | Built gz | Shrunk gz |
-| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| Canister | Kind | Built wasm | Shrunk wasm | Delta | Budget | Budget delta | Budget status | Built gz | Shrunk gz |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | --- | ---: | ---: |
 EOF
 
     for canister in "${CANISTERS[@]}"; do
-        printf '| `%s` | %s | %s | %s | %s | %s | %s |\n' \
+        printf '| `%s` | %s | %s | %s | %s | %s | %s | %s | %s | %s |\n' \
             "$canister" \
             "${CANISTER_KIND[$canister]}" \
             "${BUILT_WASM_BYTES[$canister]}" \
             "${SHRUNK_WASM_BYTES[$canister]}" \
             "${SHRINK_DELTA_BYTES[$canister]}" \
+            "${BUDGET_BYTES[$canister]:-N/A}" \
+            "${BUDGET_DELTA_BYTES[$canister]:-N/A}" \
+            "${BUDGET_STATUS[$canister]:-N/A}" \
             "${BUILT_WASM_GZ_BYTES[$canister]}" \
             "${SHRUNK_WASM_GZ_BYTES[$canister]}" \
             >>"$output"
@@ -506,6 +545,7 @@ render_report() {
     local checklist_monos
     local checklist_baseline
     local checklist_delta
+    local checklist_budget
     local canister
 
     checklist_artifacts="PASS"
@@ -515,9 +555,13 @@ render_report() {
     checklist_monos="PASS"
     checklist_baseline="PASS"
     checklist_delta="PASS"
+    checklist_budget="PASS"
 
     if [ "$BASELINE_PATH" = "N/A" ]; then
         checklist_delta="PARTIAL"
+    fi
+    if [ "${#BUDGET_BYTES[@]}" -eq 0 ]; then
+        checklist_budget="PARTIAL"
     fi
     if [ "$TWIGGY_AVAILABLE" -eq 0 ]; then
         checklist_top="PARTIAL"
@@ -554,6 +598,7 @@ render_report() {
 | Twiggy dominators captured | $checklist_dominators | \`*.twiggy-dominators.txt\` emitted for each canister when \`twiggy\` is available. |
 | Twiggy monos captured | $checklist_monos | \`*.twiggy-monos.txt\` emitted for each canister when \`twiggy\` is available. |
 | Baseline path selected by daily baseline discipline | $checklist_baseline | Current run stem is \`$SCOPE_STEM\`; baseline path resolves to \`$BASELINE_PATH\`. |
+| Budget surface recorded for the current reference roles | $checklist_budget | $( [ "${#BUDGET_BYTES[@]}" -eq 0 ] && printf 'No checked-in budget table was loaded.' || printf 'Checked-in budget table loaded from `%s`.' "$BUDGETS_PATH" ) |
 | Size deltas versus baseline recorded when baseline exists | $checklist_delta | $( [ "$BASELINE_PATH" = "N/A" ] && printf 'First run of day; baseline deltas are \`N/A\`.' || printf 'Baseline deltas were calculated from \`%s\`.' "$BASELINE_PATH" ) |
 | Verification readout captured | PASS | Command outcomes are recorded in the Verification Readout section. |
 
@@ -603,6 +648,25 @@ EOF
 
     cat >>"$report_path" <<EOF
 
+## Budget Snapshot
+
+| Canister | Shrunk wasm | Budget | Budget delta | Status | Note |
+| --- | ---: | ---: | ---: | --- | --- |
+EOF
+
+    for canister in "${CANISTERS[@]}"; do
+        printf '| `%s` | %s | %s | %s | %s | %s |\n' \
+            "$canister" \
+            "${SHRUNK_WASM_BYTES[$canister]}" \
+            "${BUDGET_BYTES[$canister]:-N/A}" \
+            "${BUDGET_DELTA_BYTES[$canister]:-N/A}" \
+            "${BUDGET_STATUS[$canister]:-N/A}" \
+            "${BUDGET_NOTE[$canister]:-N/A}" \
+            >>"$report_path"
+    done
+
+    cat >>"$report_path" <<EOF
+
 ## Dependency Fan-In Pressure
 
 - \`minimal\` remains the shared-runtime floor. If \`minimal\` stays close to feature canisters, size pressure is coming from shared crates rather than role-specific logic.
@@ -616,20 +680,24 @@ EOF
 | Minimal floor close to feature canisters | $( if [ "${SHRUNK_WASM_BYTES[minimal]:-0}" -gt 0 ] && [ "${SHRUNK_WASM_BYTES[app]:-0}" -gt 0 ] && awk -v minimal="${SHRUNK_WASM_BYTES[minimal]}" -v app="${SHRUNK_WASM_BYTES[app]}" 'BEGIN { exit !((app - minimal) <= (app * 0.10)) }'; then printf 'WARN'; else printf 'OK'; fi ) | \`minimal\` shrunk wasm = ${SHRUNK_WASM_BYTES[minimal]:-N/A}, \`app\` shrunk wasm = ${SHRUNK_WASM_BYTES[app]:-N/A}. |
 | Root control-plane outlier | $( if [ "${SHRUNK_WASM_BYTES[root]:-0}" -gt 0 ]; then printf 'WARN'; else printf 'N/A'; fi ) | \`root\` shrunk wasm = ${SHRUNK_WASM_BYTES[root]:-N/A}. |
 | Shrink delta unexpectedly low | $( if [ "${SHRINK_DELTA_BYTES[minimal]:-0}" -le 0 ]; then printf 'WARN'; else printf 'OK'; fi ) | \`minimal\` shrink delta = ${SHRINK_DELTA_BYTES[minimal]:-N/A} bytes. |
+| Budget overruns in current scope | $( if [ "$BUDGET_OVERRUN_COUNT" -gt 0 ]; then printf 'WARN'; else printf 'OK'; fi ) | $BUDGET_OVERRUN_COUNT canister(s) currently exceed the checked-in shrunk-wasm budget table. |
 
 ## Per-Canister Snapshot
 
-| Canister | Kind | Built wasm | Shrunk wasm | Shrink delta | Built gz | Shrunk gz | Baseline delta | Built funcs | Shrunk funcs | Exports | Detail |
-| --- | --- | ---: | ---: | ---: | ---: | ---: | --- | ---: | ---: | ---: | --- |
+| Canister | Kind | Built wasm | Shrunk wasm | Shrink delta | Budget | Budget delta | Budget status | Built gz | Shrunk gz | Baseline delta | Built funcs | Shrunk funcs | Exports | Detail |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | --- | ---: | ---: | --- | ---: | ---: | ---: | --- |
 EOF
 
     for canister in "${CANISTERS[@]}"; do
-        printf '| `%s` | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | [%s.md](%s/%s.md) |\n' \
+        printf '| `%s` | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | [%s.md](%s/%s.md) |\n' \
             "$canister" \
             "${CANISTER_KIND[$canister]}" \
             "${BUILT_WASM_BYTES[$canister]}" \
             "${SHRUNK_WASM_BYTES[$canister]}" \
             "${SHRINK_DELTA_BYTES[$canister]}" \
+            "${BUDGET_BYTES[$canister]:-N/A}" \
+            "${BUDGET_DELTA_BYTES[$canister]:-N/A}" \
+            "${BUDGET_STATUS[$canister]:-N/A}" \
             "${BUILT_WASM_GZ_BYTES[$canister]}" \
             "${SHRUNK_WASM_GZ_BYTES[$canister]}" \
             "${BASELINE_DELTA_BYTES[$canister]}" \
@@ -670,6 +738,18 @@ EOF
    Action: install \`twiggy\` before the next wasm footprint run so retained-size and monomorphization evidence is not \`BLOCKED\`.
    Target report date/run: \`docs/audits/reports/$MONTH/$RUN_DATE/$AUDIT_SLUG.md\`
 EOF
+    elif [ "$BUDGET_OVERRUN_COUNT" -gt 0 ]; then
+        cat >>"$report_path" <<EOF
+1. Owner boundary: \`wasm budget discipline\`
+   Action: investigate the current budget overruns first and decide whether the bytes should come down or the checked-in budget table should move with an explicit reason.
+   Target report date/run: \`docs/audits/reports/$MONTH/$RUN_DATE/$AUDIT_SLUG.md\`
+2. Owner boundary: \`shared runtime baseline\`
+   Action: compare \`minimal\` retained hotspots against one feature canister in the next run and treat overlapping drivers as shared-cost reduction candidates.
+   Target report date/run: \`docs/audits/reports/$MONTH/$RUN_DATE/$AUDIT_SLUG.md\`
+3. Owner boundary: \`bundle canister root\`
+   Action: keep tracking \`root\` separately from leaf canisters so child bundle growth and root-local growth do not get conflated.
+   Target report date/run: \`docs/audits/reports/$MONTH/$RUN_DATE/$AUDIT_SLUG.md\`
+EOF
     else
         cat >>"$report_path" <<EOF
 1. Owner boundary: \`shared runtime baseline\`
@@ -697,6 +777,11 @@ EOF
 
 normalize_profile
 select_canisters
+if load_budgets; then
+    record_verification "checked-in wasm budget table" "PASS" "loaded shrunk-wasm budgets from \`$BUDGETS_PATH\`"
+else
+    record_verification "checked-in wasm budget table" "BLOCKED" "budget table not found at \`$BUDGETS_PATH\`"
+fi
 
 RUN_DATE="${WASM_AUDIT_DATE:-$(date -u +%F)}"
 RUN_TIMESTAMP="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -768,7 +853,7 @@ fi
 
 SIZE_METRICS_TSV="$ARTIFACTS_DIR/size-metrics.tsv"
 {
-    printf 'canister\tkind\tbuilt_wasm_bytes\tbuilt_wasm_gz_bytes\tshrunk_wasm_bytes\tshrunk_wasm_gz_bytes\tshrink_delta_bytes\tshrink_delta_percent\tbuilt_functions\tshrunk_functions\tbuilt_exports\tshrunk_exports\n'
+    printf 'canister\tkind\tbuilt_wasm_bytes\tbuilt_wasm_gz_bytes\tshrunk_wasm_bytes\tshrunk_wasm_gz_bytes\tshrink_delta_bytes\tshrink_delta_percent\tbudget_bytes\tbudget_delta_bytes\tbudget_status\tbuilt_functions\tshrunk_functions\tbuilt_exports\tshrunk_exports\n'
 } >"$SIZE_METRICS_TSV"
 
 for canister in "${CANISTERS[@]}"; do
@@ -838,8 +923,21 @@ for canister in "${CANISTERS[@]}"; do
 
     BASELINE_DELTA_BYTES["$canister"]="N/A"
     BASELINE_DELTA_PCT["$canister"]="N/A"
+    BUDGET_DELTA_BYTES["$canister"]="N/A"
+    BUDGET_STATUS["$canister"]="N/A"
 
-    printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+    if [ -n "${BUDGET_BYTES[$canister]:-}" ]; then
+        budget_delta="$(( ${SHRUNK_WASM_BYTES[$canister]} - ${BUDGET_BYTES[$canister]} ))"
+        BUDGET_DELTA_BYTES["$canister"]="$(signed_bytes "$budget_delta")"
+        if [ "$budget_delta" -le 0 ]; then
+            BUDGET_STATUS["$canister"]="OK"
+        else
+            BUDGET_STATUS["$canister"]="OVER"
+            BUDGET_OVERRUN_COUNT=$((BUDGET_OVERRUN_COUNT + 1))
+        fi
+    fi
+
+    printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
         "$canister" \
         "${CANISTER_KIND[$canister]}" \
         "${BUILT_WASM_BYTES[$canister]}" \
@@ -848,6 +946,9 @@ for canister in "${CANISTERS[@]}"; do
         "${SHRUNK_WASM_GZ_BYTES[$canister]}" \
         "${SHRINK_DELTA_BYTES[$canister]}" \
         "${SHRINK_DELTA_PCT[$canister]}" \
+        "${BUDGET_BYTES[$canister]:-N/A}" \
+        "${BUDGET_DELTA_BYTES[$canister]:-N/A}" \
+        "${BUDGET_STATUS[$canister]:-N/A}" \
         "${BUILT_FUNCTIONS[$canister]}" \
         "${SHRUNK_FUNCTIONS[$canister]}" \
         "${BUILT_EXPORTS[$canister]}" \
