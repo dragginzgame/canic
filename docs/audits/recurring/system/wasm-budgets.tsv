@@ -1,9 +1,0 @@
-# canister	shrunk_wasm_budget_bytes	note
-app	1950000	reference application leaf
-minimal	1950000	shared runtime floor
-user_hub	2100000	user coordinator leaf
-user_shard	2050000	user shard leaf
-scale_hub	2000000	scaling coordinator leaf
-scale	1950000	scaling worker leaf
-test	2000000	test helper leaf
-root	3200000	control-plane bundle outlier
