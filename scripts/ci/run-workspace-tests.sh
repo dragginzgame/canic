@@ -64,6 +64,11 @@ prebuild_root_test_artifacts() {
 # Compile and run all unit/lib/bin tests together first.
 run_test "workspace lib/bin tests" --workspace --lib --bins
 
+# Keep cheap release-surface contract tests in both the full and fast lanes so
+# version bumps and tagged installer drift fail before PocketIC-heavy work.
+run_test "canic protocol_surface" -p canic --test protocol_surface
+run_test "canic install_script_surface" -p canic --test install_script_surface
+
 if [[ "$MODE" == "fast" ]]; then
     print_summary
     exit 0
