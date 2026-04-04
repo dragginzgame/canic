@@ -1,9 +1,8 @@
 use crate::{
-    InternalError,
     dto::auth::{DelegationRequest, RoleAttestationRequest},
     dto::rpc::{
-        CreateCanisterRequest, CyclesRequest, RootCapabilityCommand, RootRequestMetadata,
-        UpgradeCanisterRequest,
+        CreateCanisterParent, CreateCanisterRequest, CyclesRequest, RootCapabilityCommand,
+        RootRequestMetadata, UpgradeCanisterRequest,
     },
     ops::runtime::metrics::root_capability::RootCapabilityMetricKey,
 };
@@ -48,36 +47,64 @@ impl RootCapability {
         }
     }
 
-    pub(super) fn payload_hash(&self) -> Result<[u8; 32], InternalError> {
-        let canonical = match self {
+    pub(super) fn payload_hash(&self) -> [u8; 32] {
+        let mut hasher = super::replay::payload_hasher();
+
+        match self {
             Self::Provision(req) => {
-                let mut canonical = req.clone();
-                canonical.metadata = None;
-                RootCapabilityCommand::ProvisionCanister(canonical)
+                super::replay::hash_str(&mut hasher, "ProvisionCanister");
+                super::replay::hash_role(&mut hasher, &req.canister_role);
+                hash_create_canister_parent(&mut hasher, &req.parent);
+                super::replay::hash_optional_bytes(&mut hasher, req.extra_arg.as_deref());
             }
             Self::Upgrade(req) => {
-                let mut canonical = req.clone();
-                canonical.metadata = None;
-                RootCapabilityCommand::UpgradeCanister(canonical)
+                super::replay::hash_str(&mut hasher, "UpgradeCanister");
+                super::replay::hash_principal(&mut hasher, &req.canister_pid);
             }
             Self::RequestCycles(req) => {
-                let mut canonical = req.clone();
-                canonical.metadata = None;
-                RootCapabilityCommand::RequestCycles(canonical)
+                super::replay::hash_str(&mut hasher, "RequestCycles");
+                super::replay::hash_u128(&mut hasher, req.cycles);
             }
             Self::IssueDelegation(req) => {
-                let mut canonical = req.clone();
-                canonical.metadata = None;
-                RootCapabilityCommand::IssueDelegation(canonical)
+                super::replay::hash_str(&mut hasher, "IssueDelegation");
+                super::replay::hash_principal(&mut hasher, &req.shard_pid);
+                super::replay::hash_strings(&mut hasher, &req.scopes);
+                super::replay::hash_principals(&mut hasher, &req.aud);
+                super::replay::hash_u64(&mut hasher, req.ttl_secs);
+                super::replay::hash_principals(&mut hasher, &req.verifier_targets);
+                super::replay::hash_bool(&mut hasher, req.include_root_verifier);
             }
             Self::IssueRoleAttestation(req) => {
-                let mut canonical = req.clone();
-                canonical.metadata = None;
-                RootCapabilityCommand::IssueRoleAttestation(canonical)
+                super::replay::hash_str(&mut hasher, "IssueRoleAttestation");
+                super::replay::hash_principal(&mut hasher, &req.subject);
+                super::replay::hash_role(&mut hasher, &req.role);
+                super::replay::hash_optional_principal(&mut hasher, req.subnet_id);
+                super::replay::hash_optional_principal(&mut hasher, req.audience);
+                super::replay::hash_u64(&mut hasher, req.ttl_secs);
+                super::replay::hash_u64(&mut hasher, req.epoch);
             }
-        };
+        }
 
-        super::replay::hash_capability_payload(&canonical)
+        super::replay::finish_payload_hash(hasher)
+    }
+}
+
+// hash_create_canister_parent
+//
+// Append the canonical create-parent selector into the replay payload hash.
+fn hash_create_canister_parent(hasher: &mut sha2::Sha256, parent: &CreateCanisterParent) {
+    match parent {
+        CreateCanisterParent::Root => super::replay::hash_str(hasher, "Root"),
+        CreateCanisterParent::ThisCanister => super::replay::hash_str(hasher, "ThisCanister"),
+        CreateCanisterParent::Parent => super::replay::hash_str(hasher, "Parent"),
+        CreateCanisterParent::Canister(pid) => {
+            super::replay::hash_str(hasher, "Canister");
+            super::replay::hash_principal(hasher, pid);
+        }
+        CreateCanisterParent::Directory(role) => {
+            super::replay::hash_str(hasher, "Directory");
+            super::replay::hash_role(hasher, role);
+        }
     }
 }
 

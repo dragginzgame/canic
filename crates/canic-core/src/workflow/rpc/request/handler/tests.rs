@@ -835,14 +835,12 @@ fn payload_hash_ignores_metadata() {
         cycles: 42,
         metadata: Some(meta(1, 60)),
     })
-    .payload_hash()
-    .expect("hash");
+    .payload_hash();
     let hash_b = RootCapability::RequestCycles(CyclesRequest {
         cycles: 42,
         metadata: Some(meta(9, 120)),
     })
-    .payload_hash()
-    .expect("hash");
+    .payload_hash();
 
     assert_eq!(hash_a, hash_b, "metadata must not affect payload hash");
 }
@@ -853,8 +851,7 @@ fn payload_hash_includes_capability_variant_discriminant() {
         cycles: 42,
         metadata: None,
     })
-    .payload_hash()
-    .expect("hash");
+    .payload_hash();
 
     let legacy_struct_hash = {
         let bytes = encode_one(&CyclesRequest {
@@ -941,7 +938,7 @@ fn check_replay_rejects_expired_entry_when_purge_limit_exceeded() {
         cycles: 500,
         metadata: Some(meta(11, 60)),
     });
-    let payload_hash = capability.payload_hash().expect("hash");
+    let payload_hash = capability.payload_hash();
     let request_id = capability.metadata().expect("metadata").request_id;
     let target_key = replay::replay_slot_key(ctx.caller, ctx.self_pid, request_id);
     let response_candid = encode_one(Response::Cycles(CyclesResponse {

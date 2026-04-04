@@ -3,10 +3,11 @@ use crate::{
         BTreeMap, DefaultMemoryImpl, Storable, memory::VirtualMemory, storable::Bound,
     },
     eager_static, ic_memory,
-    memory::impl_storable_unbounded,
     storage::{prelude::*, stable::memory::auth::ROOT_REPLAY_ID},
 };
 use std::{borrow::Cow, cell::RefCell};
+
+const ROOT_REPLAY_RECORD_FIXED_BYTES: usize = 52;
 
 eager_static! {
     static ROOT_REPLAY: RefCell<
@@ -61,7 +62,69 @@ pub struct RootReplayRecord {
     pub response_candid: Vec<u8>,
 }
 
-impl_storable_unbounded!(RootReplayRecord);
+impl Storable for RootReplayRecord {
+    const BOUND: Bound = Bound::Unbounded;
+
+    fn to_bytes(&self) -> Cow<'_, [u8]> {
+        Cow::Owned(self.clone().into_bytes())
+    }
+
+    fn into_bytes(self) -> Vec<u8> {
+        let response_len =
+            u32::try_from(self.response_candid.len()).expect("root replay response bytes fit u32");
+        let mut bytes = Vec::with_capacity(
+            ROOT_REPLAY_RECORD_FIXED_BYTES + usize::try_from(response_len).unwrap_or(usize::MAX),
+        );
+        bytes.extend_from_slice(&self.payload_hash);
+        bytes.extend_from_slice(&self.issued_at.to_le_bytes());
+        bytes.extend_from_slice(&self.expires_at.to_le_bytes());
+        bytes.extend_from_slice(&response_len.to_le_bytes());
+        bytes.extend_from_slice(&self.response_candid);
+        bytes
+    }
+
+    fn from_bytes(bytes: Cow<'_, [u8]>) -> Self {
+        let bytes = bytes.as_ref();
+        assert!(
+            bytes.len() >= ROOT_REPLAY_RECORD_FIXED_BYTES,
+            "root replay record shorter than fixed header"
+        );
+
+        let mut payload_hash = [0u8; 32];
+        payload_hash.copy_from_slice(&bytes[0..32]);
+
+        let issued_at = u64::from_le_bytes(
+            bytes[32..40]
+                .try_into()
+                .expect("root replay record issued_at"),
+        );
+        let expires_at = u64::from_le_bytes(
+            bytes[40..48]
+                .try_into()
+                .expect("root replay record expires_at"),
+        );
+        let response_len = u32::from_le_bytes(
+            bytes[48..52]
+                .try_into()
+                .expect("root replay record response length"),
+        ) as usize;
+        let response_end = ROOT_REPLAY_RECORD_FIXED_BYTES
+            .checked_add(response_len)
+            .expect("root replay response length overflow");
+        assert_eq!(
+            bytes.len(),
+            response_end,
+            "root replay record response length mismatch"
+        );
+
+        Self {
+            payload_hash,
+            issued_at,
+            expires_at,
+            response_candid: bytes[ROOT_REPLAY_RECORD_FIXED_BYTES..response_end].to_vec(),
+        }
+    }
+}
 
 ///
 /// RootReplayStore
@@ -110,5 +173,48 @@ impl RootReplayStore {
 impl RootReplayStore {
     pub(crate) fn reset_for_tests() {
         ROOT_REPLAY.with_borrow_mut(BTreeMap::clear);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // round_trip_record
+    //
+    // Ensure the manual replay record encoding is lossless for stored payloads.
+    fn round_trip_record(record: RootReplayRecord) {
+        let encoded = record.clone().into_bytes();
+        let decoded = RootReplayRecord::from_bytes(Cow::Owned(encoded.clone()));
+
+        assert_eq!(
+            decoded, record,
+            "manual replay record round-trip must match"
+        );
+        assert_eq!(
+            encoded.len(),
+            ROOT_REPLAY_RECORD_FIXED_BYTES + record.response_candid.len(),
+            "encoded replay record length must match fixed header plus payload bytes"
+        );
+    }
+
+    #[test]
+    fn root_replay_record_round_trips_empty_response() {
+        round_trip_record(RootReplayRecord {
+            payload_hash: [7u8; 32],
+            issued_at: 11,
+            expires_at: 22,
+            response_candid: vec![],
+        });
+    }
+
+    #[test]
+    fn root_replay_record_round_trips_populated_response() {
+        round_trip_record(RootReplayRecord {
+            payload_hash: [9u8; 32],
+            issued_at: 111,
+            expires_at: 222,
+            response_candid: vec![1, 2, 3, 4, 5, 6],
+        });
     }
 }

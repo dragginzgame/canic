@@ -133,8 +133,10 @@ async fn execute_issue_delegation(
         .await?;
 
     if req.include_root_verifier {
-        DelegatedTokenOps::cache_public_keys_for_cert(&response.proof.cert).await?;
+        DelegatedTokenOps::cache_shard_public_key_for_cert(&response.proof.cert).await?;
+        crate::perf!("cache_root_verifier_keys");
         let outcome = DelegationStateOps::upsert_proof_from_dto(response.proof.clone(), ctx.now)?;
+        crate::perf!("cache_root_verifier_proof");
         record_verifier_proof_cache_stats(
             outcome.stats.size,
             outcome.stats.active_count,

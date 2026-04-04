@@ -75,8 +75,9 @@ impl TemplateChunkedOps {
     ) -> WasmStoreStatusResponse {
         let manifests = TemplateManifestStateStore::export().entries;
         let chunk_sets = TemplateChunkSetStateStore::export();
-        let chunks = TemplateChunkStore::export();
-        let occupied_store_bytes = occupied_store_bytes(&manifests, &chunk_sets, &chunks);
+        let occupied_store_bytes = TemplateManifestStateStore::occupied_bytes()
+            + TemplateChunkSetStateStore::occupied_bytes()
+            + TemplateChunkStore::occupied_bytes();
         let template_versions = projected_template_versions(&manifests, &chunk_sets);
         let remaining_store_bytes = limits.max_store_bytes.saturating_sub(occupied_store_bytes);
         let release_count = u32::try_from(
@@ -310,11 +311,7 @@ impl TemplateChunkedOps {
         let current_chunk_bytes = TemplateChunkStore::occupied_bytes();
         let replaced_chunk_bytes = projected_chunks
             .iter()
-            .map(|(chunk_key, _)| {
-                TemplateChunkStore::get(chunk_key)
-                    .as_ref()
-                    .map_or(0, |record| chunk_entry_store_bytes(chunk_key, record))
-            })
+            .map(|(chunk_key, _)| TemplateChunkStore::entry_bytes(chunk_key).unwrap_or(0))
             .sum::<u64>();
         let inserted_chunk_bytes = projected_chunks
             .iter()
@@ -413,8 +410,10 @@ impl TemplateChunkedOps {
         if actual_hash != expected_hash {
             return Err(TemplateManifestOpsError::TemplateChunkHashMismatch(chunk_key).into());
         }
+        canic_core::perf!("publish_stage_validate_chunk");
 
         TemplateChunkStore::upsert(chunk_key, TemplateChunkRecord { bytes: input.bytes });
+        canic_core::perf!("publish_stage_upsert_chunk");
 
         Ok(())
     }
@@ -443,6 +442,7 @@ impl TemplateChunkedOps {
         if actual_hash != expected_hash {
             return Err(TemplateManifestOpsError::TemplateChunkHashMismatch(chunk_key).into());
         }
+        canic_core::perf!("publish_store_validate_chunk");
 
         // Manifest/template-version limits are fixed by the earlier manifest + prepare phases.
         // Publishing one chunk can only change the occupied-byte total for this store.
@@ -450,12 +450,11 @@ impl TemplateChunkedOps {
         let current_store_bytes = TemplateManifestStateStore::occupied_bytes()
             + TemplateChunkSetStateStore::occupied_bytes()
             + TemplateChunkStore::occupied_bytes();
-        let existing_chunk_bytes = TemplateChunkStore::get(&chunk_key)
-            .as_ref()
-            .map_or(0, |record| chunk_entry_store_bytes(&chunk_key, record));
+        let existing_chunk_bytes = TemplateChunkStore::entry_bytes(&chunk_key).unwrap_or(0);
         let projected_bytes = current_store_bytes
             .saturating_sub(existing_chunk_bytes)
             .saturating_add(chunk_entry_store_bytes(&chunk_key, &new_record));
+        canic_core::perf!("publish_store_project_capacity");
 
         if projected_bytes > limits.max_store_bytes {
             return Err(TemplateManifestOpsError::WasmStoreCapacityExceeded {
@@ -464,8 +463,10 @@ impl TemplateChunkedOps {
             }
             .into());
         }
+        canic_core::perf!("publish_store_enforce_capacity");
 
         TemplateChunkStore::upsert(chunk_key, new_record);
+        canic_core::perf!("publish_store_upsert_chunk");
 
         Ok(())
     }
@@ -558,7 +559,9 @@ impl TemplateChunkedOps {
         .unwrap_or(u32::MAX);
         let chunk_count = u32::try_from(chunks.len()).unwrap_or(u32::MAX);
         let chunk_store_hash_count = u32::try_from(stored_chunk_hashes.len()).unwrap_or(u32::MAX);
-        let reclaimed_store_bytes = occupied_store_bytes(&manifests, &chunk_sets, &chunks);
+        let reclaimed_store_bytes = TemplateManifestStateStore::occupied_bytes()
+            + TemplateChunkSetStateStore::occupied_bytes()
+            + TemplateChunkStore::occupied_bytes();
 
         MgmtOps::clear_chunk_store(canister_self()).await?;
         TemplateManifestStateStore::clear();
@@ -580,21 +583,6 @@ fn chunk_set_record_to_response(record: TemplateChunkSetRecord) -> TemplateChunk
     TemplateChunkSetInfoResponse {
         chunk_hashes: record.chunk_hashes,
     }
-}
-
-fn occupied_store_bytes(
-    manifests: &[(TemplateReleaseKey, TemplateManifestRecord)],
-    chunk_sets: &[(TemplateReleaseKey, TemplateChunkSetRecord)],
-    chunks: &[(TemplateChunkKey, TemplateChunkRecord)],
-) -> u64 {
-    let manifest_bytes = manifest_store_bytes(manifests);
-    let chunk_set_bytes = chunk_set_store_bytes(chunk_sets);
-    let chunk_bytes = chunks
-        .iter()
-        .map(|(chunk_key, record)| (chunk_key.to_bytes().len() + record.to_bytes().len()) as u64)
-        .sum::<u64>();
-
-    manifest_bytes + chunk_set_bytes + chunk_bytes
 }
 
 fn manifest_store_bytes(manifests: &[(TemplateReleaseKey, TemplateManifestRecord)]) -> u64 {
@@ -731,7 +719,7 @@ fn replace_chunk_set_entry(
 }
 
 fn chunk_entry_store_bytes(chunk_key: &TemplateChunkKey, record: &TemplateChunkRecord) -> u64 {
-    (chunk_key.to_bytes().len() + record.to_bytes().len()) as u64
+    (chunk_key.to_bytes().len() + 12 + record.bytes.len()) as u64
 }
 
 #[cfg(test)]

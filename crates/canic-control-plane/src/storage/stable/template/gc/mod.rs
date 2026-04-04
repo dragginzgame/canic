@@ -6,16 +6,6 @@ use std::cell::RefCell;
 
 const WASM_STORE_GC_STATE_ID: u8 = 62;
 
-const _: () = {
-    #[canic_memory::__reexports::ctor::ctor(
-        anonymous,
-        crate_path = canic_memory::__reexports::ctor
-    )]
-    fn __canic_reserve_wasm_store_gc_memory_range() {
-        canic_memory::ic_memory_range!(62, 62);
-    }
-};
-
 eager_static! {
     static WASM_STORE_GC_STATE: RefCell<
         Cell<WasmStoreGcStateRecord, VirtualMemory<DefaultMemoryImpl>>
