@@ -1,8 +1,8 @@
 use crate::dto::prelude::*;
 
-///
-/// CanisterInfo
-///
+//
+// CanisterInfo
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct CanisterInfo {
@@ -13,9 +13,9 @@ pub struct CanisterInfo {
     pub created_at: u64,
 }
 
-///
-/// CanisterStatusResponse
-///
+//
+// CanisterStatusResponse
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct CanisterStatusResponse {
@@ -30,9 +30,9 @@ pub struct CanisterStatusResponse {
     pub query_stats: QueryStats,
 }
 
-///
-/// CanisterStatusType
-///
+//
+// CanisterStatusType
+//
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize)]
 pub enum CanisterStatusType {
@@ -44,9 +44,9 @@ pub enum CanisterStatusType {
     Stopped,
 }
 
-///
-/// CanisterSettings
-///
+//
+// CanisterSettings
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct CanisterSettings {
@@ -62,9 +62,9 @@ pub struct CanisterSettings {
     pub environment_variables: Vec<EnvironmentVariable>,
 }
 
-///
-/// LogVisibility
-///
+//
+// LogVisibility
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
 pub enum LogVisibility {
@@ -76,9 +76,9 @@ pub enum LogVisibility {
     AllowedViewers(Vec<Principal>),
 }
 
-///
-/// EnvironmentVariable
-///
+//
+// EnvironmentVariable
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct EnvironmentVariable {
@@ -86,9 +86,9 @@ pub struct EnvironmentVariable {
     pub value: String,
 }
 
-///
-/// MemoryMetrics
-///
+//
+// MemoryMetrics
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct MemoryMetrics {
@@ -102,9 +102,9 @@ pub struct MemoryMetrics {
     pub snapshots_size: Nat,
 }
 
-///
-/// QueryStats
-///
+//
+// QueryStats
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct QueryStats {

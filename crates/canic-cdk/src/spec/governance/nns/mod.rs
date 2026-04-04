@@ -4,25 +4,25 @@
 
 use crate::spec::prelude::*;
 
-///
-/// GetSubnetForCanisterRequest
-///
+//
+// GetSubnetForCanisterRequest
+//
 
 #[derive(CandidType, Debug, Deserialize)]
 pub struct GetSubnetForCanisterRequest {
     pub principal: Principal,
 }
 
-///
-/// GetSubnetForCanisterResponse
-/// Minimal NNS response describing the assigned subnet for a canister.
-///
+//
+// GetSubnetForCanisterResponse
+// Minimal NNS response describing the assigned subnet for a canister.
+//
 
 pub type GetSubnetForCanisterResponse = Result<GetSubnetForCanisterPayload, String>;
 
-///
-/// GetSubnetForCanisterPayload
-///
+//
+// GetSubnetForCanisterPayload
+//
 
 #[derive(CandidType, Debug, Deserialize)]
 pub struct GetSubnetForCanisterPayload {

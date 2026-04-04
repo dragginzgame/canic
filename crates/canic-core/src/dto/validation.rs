@@ -1,8 +1,8 @@
 use crate::dto::prelude::*;
 
-///
-/// ValidationReport
-///
+//
+// ValidationReport
+//
 
 #[expect(clippy::struct_excessive_bools)]
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
@@ -14,9 +14,9 @@ pub struct ValidationReport {
     pub issues: Vec<ValidationIssue>,
 }
 
-///
-/// ValidationIssue
-///
+//
+// ValidationIssue
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct ValidationIssue {

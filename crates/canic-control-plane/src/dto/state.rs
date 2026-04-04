@@ -2,9 +2,9 @@ use crate::ids::WasmStoreBinding;
 use candid::{CandidType, Principal};
 use serde::Deserialize;
 
-///
-/// WasmStoreStateResponse
-///
+//
+// WasmStoreStateResponse
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct WasmStoreStateResponse {
@@ -13,9 +13,9 @@ pub struct WasmStoreStateResponse {
     pub created_at: u64,
 }
 
-///
-/// SubnetStateResponse
-///
+//
+// SubnetStateResponse
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct SubnetStateResponse {

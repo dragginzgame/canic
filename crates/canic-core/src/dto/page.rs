@@ -1,9 +1,10 @@
 use crate::dto::prelude::*;
 
-///
-/// Page
-/// Generic pagination envelope
-///
+//
+// Page
+//
+// Pagination envelope.
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct Page<T> {
@@ -11,10 +12,11 @@ pub struct Page<T> {
     pub total: u64,
 }
 
-///
-/// PageRequest
-/// Pagination envelope to avoid passing raw integers around
-///
+//
+// PageRequest
+//
+// Pagination request.
+//
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
 pub struct PageRequest {

@@ -4,17 +4,17 @@ use crate::{
     ops::prelude::*,
 };
 
-///
-/// TokenAudience
-///
+//
+// TokenAudience
+//
 
 pub struct TokenAudience<'a> {
     pub aud: &'a [Principal],
 }
 
-///
-/// TokenGrant
-///
+//
+// TokenGrant
+//
 
 pub struct TokenGrant<'a> {
     pub shard_pid: Principal,
@@ -22,9 +22,9 @@ pub struct TokenGrant<'a> {
     pub scopes: &'a [String],
 }
 
-///
-/// TokenLifetime
-///
+//
+// TokenLifetime
+//
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct TokenLifetime {
@@ -32,9 +32,9 @@ pub struct TokenLifetime {
     pub exp: u64,
 }
 
-///
-/// VerifiedTokenClaims
-///
+//
+// VerifiedTokenClaims
+//
 
 #[derive(CandidType, Clone, Debug, Eq, PartialEq)]
 pub struct VerifiedTokenClaims {
@@ -47,7 +47,7 @@ pub struct VerifiedTokenClaims {
 }
 
 impl VerifiedTokenClaims {
-    /// Build internal verified claims from the boundary DTO shape.
+    // Build internal verified claims from the boundary DTO shape.
     #[must_use]
     pub fn from_dto(claims: DelegatedTokenClaims) -> Self {
         Self {
@@ -60,13 +60,13 @@ impl VerifiedTokenClaims {
         }
     }
 
-    /// Build internal verified claims from a borrowed DTO payload.
+    // Build internal verified claims from a borrowed DTO payload.
     #[must_use]
     pub fn from_dto_ref(claims: &DelegatedTokenClaims) -> Self {
         Self::from_dto(claims.clone())
     }
 
-    /// Convert internal verified claims back into the boundary DTO shape.
+    // Convert internal verified claims back into the boundary DTO shape.
     #[must_use]
     pub fn to_dto(&self) -> DelegatedTokenClaims {
         DelegatedTokenClaims {
@@ -79,13 +79,13 @@ impl VerifiedTokenClaims {
         }
     }
 
-    /// Borrow the audience-only subset used by verifier-local checks.
+    // Borrow the audience-only subset used by verifier-local checks.
     #[must_use]
     pub fn audience(&self) -> TokenAudience<'_> {
         TokenAudience { aud: &self.aud }
     }
 
-    /// Borrow the grant-bound subset used against delegation certs.
+    // Borrow the grant-bound subset used against delegation certs.
     #[must_use]
     pub fn grant(&self) -> TokenGrant<'_> {
         TokenGrant {
@@ -95,7 +95,7 @@ impl VerifiedTokenClaims {
         }
     }
 
-    /// Return the token lifetime bounds.
+    // Return the token lifetime bounds.
     #[must_use]
     pub const fn lifetime(&self) -> TokenLifetime {
         TokenLifetime {
@@ -104,34 +104,34 @@ impl VerifiedTokenClaims {
         }
     }
 
-    /// Return the authenticated token subject.
+    // Return the authenticated token subject.
     #[must_use]
     pub const fn subject(&self) -> Principal {
         self.sub
     }
 
-    /// Return the shard that signed or will sign the token.
+    // Return the shard that signed or will sign the token.
     #[must_use]
     pub const fn shard_pid(&self) -> Principal {
         self.shard_pid
     }
 
-    /// Return the token expiry timestamp.
+    // Return the token expiry timestamp.
     #[must_use]
     pub const fn expires_at(&self) -> u64 {
         self.exp
     }
 
-    /// Borrow the granted scopes.
+    // Borrow the granted scopes.
     #[must_use]
     pub fn scopes(&self) -> &[String] {
         &self.scopes
     }
 }
 
-///
-/// VerifiedDelegatedToken
-///
+//
+// VerifiedDelegatedToken
+//
 
 pub struct VerifiedDelegatedToken {
     pub claims: VerifiedTokenClaims,
@@ -139,7 +139,7 @@ pub struct VerifiedDelegatedToken {
 }
 
 impl VerifiedDelegatedToken {
-    /// Convert verified token contents back into DTO parts for boundary consumers.
+    // Convert verified token contents back into DTO parts for boundary consumers.
     #[must_use]
     pub fn into_parts(self) -> (DelegatedTokenClaims, DelegationCert) {
         (self.claims.to_dto(), self.cert)

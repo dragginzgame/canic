@@ -14,9 +14,9 @@ use crate::{
 use serde::Deserialize;
 use thiserror::Error as ThisError;
 
-///
-/// MgmtInfraError
-///
+//
+// MgmtInfraError
+//
 
 #[derive(Debug, ThisError)]
 pub enum MgmtInfraError {
@@ -24,9 +24,9 @@ pub enum MgmtInfraError {
     RawRandInvalidLength { len: usize },
 }
 
-///
-/// InfraCanisterSettings
-///
+//
+// InfraCanisterSettings
+//
 
 #[derive(CandidType, Clone, Debug, Default, Deserialize, Eq, PartialEq)]
 pub struct InfraCanisterSettings {
@@ -42,9 +42,9 @@ pub struct InfraCanisterSettings {
     pub environment_variables: Option<Vec<InfraEnvironmentVariable>>,
 }
 
-///
-/// InfraCreateCanisterArgs
-///
+//
+// InfraCreateCanisterArgs
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 struct InfraCreateCanisterArgs {
@@ -52,27 +52,27 @@ struct InfraCreateCanisterArgs {
     sender_canister_version: Option<u64>,
 }
 
-///
-/// InfraCreateCanisterResult
-///
+//
+// InfraCreateCanisterResult
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 struct InfraCreateCanisterResult {
     canister_id: Principal,
 }
 
-///
-/// InfraCanisterIdRecord
-///
+//
+// InfraCanisterIdRecord
+//
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
 struct InfraCanisterIdRecord {
     canister_id: Principal,
 }
 
-///
-/// InfraCanisterIdRecordExtended
-///
+//
+// InfraCanisterIdRecordExtended
+//
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
 struct InfraCanisterIdRecordExtended {
@@ -80,9 +80,9 @@ struct InfraCanisterIdRecordExtended {
     sender_canister_version: Option<u64>,
 }
 
-///
-/// InfraCanisterInstallMode
-///
+//
+// InfraCanisterInstallMode
+//
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
 pub enum InfraCanisterInstallMode {
@@ -94,9 +94,9 @@ pub enum InfraCanisterInstallMode {
     Upgrade(Option<InfraUpgradeFlags>),
 }
 
-///
-/// InfraUpgradeFlags
-///
+//
+// InfraUpgradeFlags
+//
 
 #[derive(CandidType, Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq)]
 pub struct InfraUpgradeFlags {
@@ -104,9 +104,9 @@ pub struct InfraUpgradeFlags {
     pub wasm_memory_persistence: Option<InfraWasmMemoryPersistence>,
 }
 
-///
-/// InfraWasmMemoryPersistence
-///
+//
+// InfraWasmMemoryPersistence
+//
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
 pub enum InfraWasmMemoryPersistence {
@@ -116,18 +116,18 @@ pub enum InfraWasmMemoryPersistence {
     Replace,
 }
 
-///
-/// InfraChunkHash
-///
+//
+// InfraChunkHash
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 struct InfraChunkHash {
     hash: Vec<u8>,
 }
 
-///
-/// InfraUploadChunkArgs
-///
+//
+// InfraUploadChunkArgs
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 struct InfraUploadChunkArgs {
@@ -135,18 +135,18 @@ struct InfraUploadChunkArgs {
     chunk: Vec<u8>,
 }
 
-///
-/// InfraClearChunkStoreArgs
-///
+//
+// InfraClearChunkStoreArgs
+//
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
 struct InfraClearChunkStoreArgs {
     canister_id: Principal,
 }
 
-///
-/// InfraInstallChunkedCodeArgs
-///
+//
+// InfraInstallChunkedCodeArgs
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 struct InfraInstallChunkedCodeArgs {
@@ -159,9 +159,9 @@ struct InfraInstallChunkedCodeArgs {
     sender_canister_version: Option<u64>,
 }
 
-///
-/// InfraInstallCodeArgs
-///
+//
+// InfraInstallCodeArgs
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 struct InfraInstallCodeArgs {
@@ -172,9 +172,9 @@ struct InfraInstallCodeArgs {
     sender_canister_version: Option<u64>,
 }
 
-///
-/// InfraUpdateSettingsArgs
-///
+//
+// InfraUpdateSettingsArgs
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct InfraUpdateSettingsArgs {
@@ -183,9 +183,9 @@ pub struct InfraUpdateSettingsArgs {
     pub sender_canister_version: Option<u64>,
 }
 
-///
-/// InfraCanisterStatusType
-///
+//
+// InfraCanisterStatusType
+//
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
 pub enum InfraCanisterStatusType {
@@ -197,9 +197,9 @@ pub enum InfraCanisterStatusType {
     Stopped,
 }
 
-///
-/// InfraLogVisibility
-///
+//
+// InfraLogVisibility
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub enum InfraLogVisibility {
@@ -211,9 +211,9 @@ pub enum InfraLogVisibility {
     AllowedViewers(Vec<Principal>),
 }
 
-///
-/// InfraEnvironmentVariable
-///
+//
+// InfraEnvironmentVariable
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct InfraEnvironmentVariable {
@@ -221,9 +221,9 @@ pub struct InfraEnvironmentVariable {
     pub value: String,
 }
 
-///
-/// InfraDefiniteCanisterSettings
-///
+//
+// InfraDefiniteCanisterSettings
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct InfraDefiniteCanisterSettings {
@@ -239,9 +239,9 @@ pub struct InfraDefiniteCanisterSettings {
     pub environment_variables: Vec<InfraEnvironmentVariable>,
 }
 
-///
-/// InfraMemoryMetrics
-///
+//
+// InfraMemoryMetrics
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct InfraMemoryMetrics {
@@ -255,9 +255,9 @@ pub struct InfraMemoryMetrics {
     pub snapshots_size: Nat,
 }
 
-///
-/// InfraQueryStats
-///
+//
+// InfraQueryStats
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct InfraQueryStats {
@@ -267,9 +267,9 @@ pub struct InfraQueryStats {
     pub response_payload_bytes_total: Nat,
 }
 
-///
-/// InfraCanisterStatusResult
-///
+//
+// InfraCanisterStatusResult
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct InfraCanisterStatusResult {
@@ -284,14 +284,14 @@ pub struct InfraCanisterStatusResult {
     pub query_stats: InfraQueryStats,
 }
 
-///
-/// MgmtInfra
-///
+//
+// MgmtInfra
+//
 
 pub struct MgmtInfra;
 
 impl MgmtInfra {
-    /// Create a canister with explicit controllers and an initial cycle balance.
+    // Create a canister with explicit controllers and an initial cycle balance.
     pub async fn create_canister(
         controllers: Vec<Principal>,
         cycles: Cycles,
@@ -317,7 +317,7 @@ impl MgmtInfra {
 
     // ────────────────────────────── CANISTER STATUS ──────────────────────────────
 
-    /// Query the management canister for a canister's status.
+    // Query the management canister for a canister's status.
     pub async fn canister_status(
         canister_pid: Principal,
     ) -> Result<InfraCanisterStatusResult, InfraError> {
@@ -335,13 +335,13 @@ impl MgmtInfra {
 
     // ──────────────────────────────── CYCLES API ─────────────────────────────────
 
-    /// Returns the local canister's cycle balance (cheap).
+    // Returns the local canister's cycle balance (cheap).
     #[must_use]
     pub fn canister_cycle_balance() -> Cycles {
         cdk::api::canister_cycle_balance().into()
     }
 
-    /// Deposits cycles into a canister.
+    // Deposits cycles into a canister.
     pub async fn deposit_cycles(canister_pid: Principal, cycles: u128) -> Result<(), InfraError> {
         let args = InfraCanisterIdRecord {
             canister_id: canister_pid,
@@ -355,7 +355,7 @@ impl MgmtInfra {
         Ok(())
     }
 
-    /// Gets a canister's cycle balance (expensive: calls mgmt canister).
+    // Gets a canister's cycle balance (expensive: calls mgmt canister).
     pub async fn get_cycles(canister_pid: Principal) -> Result<Cycles, InfraError> {
         let status = Self::canister_status(canister_pid).await?;
         Ok(status.cycles.into())
@@ -363,7 +363,7 @@ impl MgmtInfra {
 
     // ──────────────────────────────── RANDOMNESS ────────────────────────────────
 
-    /// Query the management canister for raw randomness.
+    // Query the management canister for raw randomness.
     pub async fn raw_rand() -> Result<[u8; 32], InfraError> {
         let response = Call::unbounded_wait(Principal::management_canister(), "raw_rand")
             .execute()
@@ -382,7 +382,7 @@ impl MgmtInfra {
 
     // ────────────────────────────── INSTALL / UNINSTALL ──────────────────────────
 
-    /// Upload one wasm chunk into a canister's chunk store.
+    // Upload one wasm chunk into a canister's chunk store.
     pub async fn upload_chunk(
         canister_pid: Principal,
         chunk: Vec<u8>,
@@ -401,7 +401,7 @@ impl MgmtInfra {
         Ok(hash.hash)
     }
 
-    /// List the chunk hashes currently stored in one canister's chunk store.
+    // List the chunk hashes currently stored in one canister's chunk store.
     pub async fn stored_chunks(canister_pid: Principal) -> Result<Vec<Vec<u8>>, InfraError> {
         let args = InfraCanisterIdRecord {
             canister_id: canister_pid,
@@ -415,7 +415,7 @@ impl MgmtInfra {
         Ok(hashes.into_iter().map(|hash| hash.hash).collect())
     }
 
-    /// Clear the chunk store of one canister.
+    // Clear the chunk store of one canister.
     pub async fn clear_chunk_store(canister_pid: Principal) -> Result<(), InfraError> {
         let args = InfraClearChunkStoreArgs {
             canister_id: canister_pid,
@@ -429,7 +429,7 @@ impl MgmtInfra {
         Ok(())
     }
 
-    /// Install or upgrade a canister from chunks stored in a same-subnet store canister.
+    // Install or upgrade a canister from chunks stored in a same-subnet store canister.
     pub async fn install_chunked_code<T: ArgumentEncoder>(
         mode: InfraCanisterInstallMode,
         target_canister: Principal,
@@ -460,7 +460,7 @@ impl MgmtInfra {
         Ok(())
     }
 
-    /// Install or upgrade a canister from an embedded wasm payload.
+    // Install or upgrade a canister from an embedded wasm payload.
     pub async fn install_code<T: ArgumentEncoder>(
         mode: InfraCanisterInstallMode,
         canister_id: Principal,
@@ -484,7 +484,7 @@ impl MgmtInfra {
         Ok(())
     }
 
-    /// Uninstalls code from a canister.
+    // Uninstalls code from a canister.
     pub async fn uninstall_code(canister_pid: Principal) -> Result<(), InfraError> {
         let args = InfraCanisterIdRecordExtended {
             canister_id: canister_pid,
@@ -498,7 +498,7 @@ impl MgmtInfra {
         Ok(())
     }
 
-    /// Stops a canister.
+    // Stops a canister.
     pub async fn stop_canister(canister_pid: Principal) -> Result<(), InfraError> {
         let args = InfraCanisterIdRecord {
             canister_id: canister_pid,
@@ -511,7 +511,7 @@ impl MgmtInfra {
         Ok(())
     }
 
-    /// Deletes a canister (code + controllers) via the management canister.
+    // Deletes a canister (code + controllers) via the management canister.
     pub async fn delete_canister(canister_pid: Principal) -> Result<(), InfraError> {
         let args = InfraCanisterIdRecord {
             canister_id: canister_pid,
@@ -526,7 +526,7 @@ impl MgmtInfra {
 
     // ─────────────────────────────── SETTINGS API ────────────────────────────────
 
-    /// Updates canister settings via the management canister.
+    // Updates canister settings via the management canister.
     pub async fn update_settings(args: &InfraUpdateSettingsArgs) -> Result<(), InfraError> {
         Call::bounded_wait(Principal::management_canister(), "update_settings")
             .with_arg(args.clone())?

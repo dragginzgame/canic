@@ -1,8 +1,8 @@
 use crate::dto::{auth::SignedRoleAttestation, capability::CapabilityService, prelude::*};
 
-///
-/// RoleAttestationProof
-///
+//
+// RoleAttestationProof
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct RoleAttestationProof {
@@ -11,9 +11,9 @@ pub struct RoleAttestationProof {
     pub attestation: SignedRoleAttestation,
 }
 
-///
-/// DelegatedGrantScope
-///
+//
+// DelegatedGrantScope
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct DelegatedGrantScope {
@@ -21,9 +21,9 @@ pub struct DelegatedGrantScope {
     pub capability_family: String,
 }
 
-///
-/// DelegatedGrant
-///
+//
+// DelegatedGrant
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct DelegatedGrant {
@@ -38,9 +38,9 @@ pub struct DelegatedGrant {
     pub epoch: u64,
 }
 
-///
-/// DelegatedGrantProof
-///
+//
+// DelegatedGrantProof
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct DelegatedGrantProof {

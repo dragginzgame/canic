@@ -1,17 +1,17 @@
 use crate::dto::prelude::*;
 
-///
-/// MemoryRegistryResponse
-///
+//
+// MemoryRegistryResponse
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct MemoryRegistryResponse {
     pub entries: Vec<MemoryRegistryEntry>,
 }
 
-///
-/// MemoryRegistryEntry
-///
+//
+// MemoryRegistryEntry
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct MemoryRegistryEntry {

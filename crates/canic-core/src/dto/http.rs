@@ -1,8 +1,8 @@
 use crate::dto::prelude::*;
 
-///
-/// HttpRequestArgs
-///
+//
+// HttpRequestArgs
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct HttpRequestArgs {
@@ -14,9 +14,9 @@ pub struct HttpRequestArgs {
     pub is_replicated: Option<bool>,
 }
 
-///
-/// HttpRequestResult
-///
+//
+// HttpRequestResult
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct HttpRequestResult {
@@ -26,9 +26,9 @@ pub struct HttpRequestResult {
     pub body: Vec<u8>,
 }
 
-///
-/// HttpMethod
-///
+//
+// HttpMethod
+//
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize)]
 pub enum HttpMethod {
@@ -40,9 +40,9 @@ pub enum HttpMethod {
     HEAD,
 }
 
-///
-/// HttpHeader
-///
+//
+// HttpHeader
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct HttpHeader {

@@ -15,19 +15,19 @@
 
 use crate::{cdk::types::Cycles, dto::prelude::*};
 
-///
-/// CanisterPoolResponse
-/// Read-only pool snapshot for endpoints.
-///
+//
+// CanisterPoolResponse
+// Read-only pool snapshot for endpoints.
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct CanisterPoolResponse {
     pub entries: Vec<CanisterPoolEntry>,
 }
 
-///
-/// CanisterPoolEntry
-///
+//
+// CanisterPoolEntry
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct CanisterPoolEntry {
@@ -40,9 +40,9 @@ pub struct CanisterPoolEntry {
     pub module_hash: Option<Vec<u8>>,
 }
 
-///
-/// CanisterPoolStatus
-///
+//
+// CanisterPoolStatus
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub enum CanisterPoolStatus {
@@ -51,54 +51,54 @@ pub enum CanisterPoolStatus {
     Failed { reason: String },
 }
 
-///
-/// PoolAdminCommand
-///
-/// These represent *intent*, not execution.
-/// Validation and authorization are handled elsewhere.
-///
+//
+// PoolAdminCommand
+//
+// These represent *intent*, not execution.
+// Validation and authorization are handled elsewhere.
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub enum PoolAdminCommand {
-    /// Create a fresh empty pool canister.
+    // Create a fresh empty pool canister.
     CreateEmpty,
 
-    /// Recycle an existing canister back into the pool.
+    // Recycle an existing canister back into the pool.
     Recycle { pid: Principal },
 
-    /// Import a canister into the pool immediately (synchronous).
+    // Import a canister into the pool immediately (synchronous).
     ImportImmediate { pid: Principal },
 
-    /// Queue one or more canisters for pool import.
+    // Queue one or more canisters for pool import.
     ImportQueued { pids: Vec<Principal> },
 }
 
-///
-/// PoolAdminResponse
-/// These describe *what happened*, not *how* it happened.
-///
+//
+// PoolAdminResponse
+// These describe *what happened*, not *how* it happened.
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub enum PoolAdminResponse {
-    /// A new pool canister was created.
+    // A new pool canister was created.
     Created { pid: Principal },
 
-    /// A canister was successfully recycled into the pool.
+    // A canister was successfully recycled into the pool.
     Recycled,
 
-    /// A canister was imported immediately.
+    // A canister was imported immediately.
     Imported,
 
-    /// One or more canisters were queued for import.
+    // One or more canisters were queued for import.
     QueuedImported { result: PoolBatchResult },
 
-    /// Failed pool entries were requeued.
+    // Failed pool entries were requeued.
     FailedRequeued { result: PoolBatchResult },
 }
 
-///
-/// PoolBatchResult
-///
+//
+// PoolBatchResult
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct PoolBatchResult {

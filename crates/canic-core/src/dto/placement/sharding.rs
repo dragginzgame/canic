@@ -1,8 +1,8 @@
 use crate::dto::prelude::*;
 
-///
-/// ShardingRegistryEntry
-///
+//
+// ShardingRegistryEntry
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct ShardingRegistryEntry {
@@ -10,27 +10,27 @@ pub struct ShardingRegistryEntry {
     pub entry: ShardEntry,
 }
 
-///
-/// ShardingRegistryResponse
-///
+//
+// ShardingRegistryResponse
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct ShardingRegistryResponse(pub Vec<ShardingRegistryEntry>);
 
-///
-/// ShardingPartitionKeysResponse
-///
+//
+// ShardingPartitionKeysResponse
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct ShardingPartitionKeysResponse(pub Vec<String>);
 
-///
-/// ShardEntry
-///
+//
+// ShardEntry
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct ShardEntry {
-    /// Logical slot index within the pool (assigned deterministically).
+    // Logical slot index within the pool (assigned deterministically).
     pub slot: u32,
     pub capacity: u32,
     pub count: u32,
@@ -39,21 +39,21 @@ pub struct ShardEntry {
     pub created_at: u64,
 }
 
-///
-/// ShardingPlanStateResponse
-///
+//
+// ShardingPlanStateResponse
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub enum ShardingPlanStateResponse {
-    /// Partition key already has a shard assigned.
+    // Partition key already has a shard assigned.
     AlreadyAssigned { pid: Principal },
 
-    /// Partition key can be deterministically assigned to an existing shard (via HRW).
+    // Partition key can be deterministically assigned to an existing shard (via HRW).
     UseExisting { pid: Principal },
 
-    /// Policy allows creation of a new shard.
+    // Policy allows creation of a new shard.
     CreateAllowed,
 
-    /// Policy forbids creation of a new shard (e.g., capacity reached).
+    // Policy forbids creation of a new shard (e.g., capacity reached).
     CreateBlocked { reason: String },
 }

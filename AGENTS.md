@@ -635,6 +635,14 @@ pub struct ConfigApi;
   * `// --- Removal --------------------------------------------------------`
 * Related function families should be grouped under consistent banner headers (for example `Validation`, `Mapping`, `Execution`, `Cleanup`).
 
+### `CandidType` Comment Rule
+
+* Types that derive `CandidType` and ship in canister wasm must not use `///` or `//!` comments by default.
+* Use `//` comments for intent/context on `CandidType` structs, enums, and related wire-shape types unless runtime Candid docs are explicitly desired.
+* Reason: `candid` retains Rust doc attributes in runtime type metadata, which inflates shipped wasm even in release builds.
+* The struct-doc block rule above does not apply to `CandidType` types; for those, preserving wasm size takes priority.
+* Any exception that intentionally keeps `///` on a shipped `CandidType` type must be rare and justified in code review.
+
 ---
 
 ## 🧪 Testing

@@ -33,9 +33,9 @@ const TEST_DELEGATION_ROOT_KEY_SEED: [u8; 32] = [11u8; 32];
 const TEST_DELEGATION_SHARD_KEY_SEED: [u8; 32] = [13u8; 32];
 type TestAttestationKeyEntry = (u32, u8, AttestationKeyStatus, Option<u64>, Option<u64>);
 
-///
-/// TestTokenSigningPayload
-///
+//
+// TestTokenSigningPayload
+//
 
 #[derive(CandidType)]
 struct TestTokenSigningPayload {

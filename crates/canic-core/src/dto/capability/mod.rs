@@ -7,30 +7,30 @@ pub mod proof;
 
 pub use proof::{DelegatedGrant, DelegatedGrantProof, DelegatedGrantScope, RoleAttestationProof};
 
-///
-/// CapabilityVersion
-///
+//
+// CapabilityVersion
+//
 
 pub const CAPABILITY_VERSION_V1: u16 = 1;
 
-///
-/// ProofVersion
-///
+//
+// ProofVersion
+//
 
 pub const PROOF_VERSION_V1: u16 = 1;
 
-///
-/// CapabilityService
-///
+//
+// CapabilityService
+//
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
 pub enum CapabilityService {
     Root,
 }
 
-///
-/// CapabilityRequestMetadata
-///
+//
+// CapabilityRequestMetadata
+//
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
 pub struct CapabilityRequestMetadata {
@@ -40,9 +40,9 @@ pub struct CapabilityRequestMetadata {
     pub ttl_seconds: u32,
 }
 
-///
-/// CapabilityProofBlob
-///
+//
+// CapabilityProofBlob
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct CapabilityProofBlob {
@@ -51,9 +51,9 @@ pub struct CapabilityProofBlob {
     pub payload: Vec<u8>,
 }
 
-///
-/// CapabilityProof
-///
+//
+// CapabilityProof
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub enum CapabilityProof {
@@ -62,9 +62,9 @@ pub enum CapabilityProof {
     DelegatedGrant(CapabilityProofBlob),
 }
 
-///
-/// RootCapabilityEnvelopeV1
-///
+//
+// RootCapabilityEnvelopeV1
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct RootCapabilityEnvelopeV1 {
@@ -75,9 +75,9 @@ pub struct RootCapabilityEnvelopeV1 {
     pub metadata: CapabilityRequestMetadata,
 }
 
-///
-/// RootCapabilityResponseV1
-///
+//
+// RootCapabilityResponseV1
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct RootCapabilityResponseV1 {

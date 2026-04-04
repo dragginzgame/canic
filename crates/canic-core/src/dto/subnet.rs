@@ -1,11 +1,11 @@
 use crate::dto::prelude::*;
 
-///
-/// SubnetIdentity
-///
-/// Represents the *runtime identity* of the subnet this canister is executing in.
-/// Must never be constructed from configuration alone.
-///
+//
+// SubnetIdentity
+//
+// Represents the *runtime identity* of the subnet this canister is executing in.
+// Must never be constructed from configuration alone.
+//
 
 #[derive(CandidType, Debug, Deserialize)]
 pub enum SubnetIdentity {
@@ -18,10 +18,10 @@ pub enum SubnetIdentity {
     Manual,
 }
 
-///
-/// SubnetContextParams
-/// everything we need to populate the SubnetContext on a non-Prime subnet
-///
+//
+// SubnetContextParams
+// everything we need to populate the SubnetContext on a non-Prime subnet
+//
 
 #[derive(CandidType, Debug, Deserialize)]
 pub struct SubnetContextParams {

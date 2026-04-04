@@ -1,18 +1,18 @@
 use candid::{CandidType, Deserialize, Nat};
 use serde::Serialize;
 
-///
-/// ErrorInfo
-///
+//
+// ErrorInfo
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ErrorInfo {
     pub description: String,
 }
 
-///
-/// Icrc21Error
-///
+//
+// Icrc21Error
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum Icrc21Error {

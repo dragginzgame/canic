@@ -1,8 +1,8 @@
 use crate::dto::prelude::*;
 
-///
-/// ScalingRegistryEntry
-///
+//
+// ScalingRegistryEntry
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct ScalingRegistryEntry {
@@ -10,16 +10,16 @@ pub struct ScalingRegistryEntry {
     pub entry: WorkerEntry,
 }
 
-///
-/// ScalingRegistryResponse
-///
+//
+// ScalingRegistryResponse
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct ScalingRegistryResponse(pub Vec<ScalingRegistryEntry>);
 
-///
-/// WorkerEntry
-///
+//
+// WorkerEntry
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct WorkerEntry {

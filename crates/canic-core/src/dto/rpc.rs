@@ -6,10 +6,11 @@ use crate::dto::{
     prelude::*,
 };
 
-///
-/// Request
-/// Root-directed orchestration commands.
-///
+//
+// Request
+//
+// Root orchestration request.
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
 pub enum Request {
@@ -21,49 +22,49 @@ pub enum Request {
 }
 
 impl Request {
-    /// create_canister
-    ///
-    /// Build a root request for canister provisioning.
+    // create_canister
+    //
+    // Build a root request for canister provisioning.
     #[must_use]
     pub const fn create_canister(request: CreateCanisterRequest) -> Self {
         Self::CreateCanister(request)
     }
 
-    /// upgrade_canister
-    ///
-    /// Build a root request for upgrading an existing canister.
+    // upgrade_canister
+    //
+    // Build a root request for upgrading an existing canister.
     #[must_use]
     pub const fn upgrade_canister(request: UpgradeCanisterRequest) -> Self {
         Self::UpgradeCanister(request)
     }
 
-    /// cycles
-    ///
-    /// Build a root request for requesting/transferring cycles.
+    // cycles
+    //
+    // Build a root request for requesting/transferring cycles.
     #[must_use]
     pub const fn cycles(request: CyclesRequest) -> Self {
         Self::Cycles(request)
     }
 
-    /// issue_delegation
-    ///
-    /// Build a root request for delegated token issuance.
+    // issue_delegation
+    //
+    // Build a root request for delegated token issuance.
     #[must_use]
     pub const fn issue_delegation(request: DelegationRequest) -> Self {
         Self::IssueDelegation(request)
     }
 
-    /// issue_role_attestation
-    ///
-    /// Build a root request for role attestation issuance.
+    // issue_role_attestation
+    //
+    // Build a root request for role attestation issuance.
     #[must_use]
     pub const fn issue_role_attestation(request: RoleAttestationRequest) -> Self {
         Self::IssueRoleAttestation(request)
     }
 
-    /// family
-    ///
-    /// Resolve the request capability family without exposing variant matches at call sites.
+    // family
+    //
+    // Resolve the request capability family without exposing variant matches at call sites.
     #[must_use]
     pub const fn family(&self) -> RequestFamily {
         match self {
@@ -75,9 +76,9 @@ impl Request {
         }
     }
 
-    /// metadata
-    ///
-    /// Return replay metadata carried by the request variant.
+    // metadata
+    //
+    // Return replay metadata carried by the request variant.
     #[must_use]
     pub const fn metadata(&self) -> Option<RootRequestMetadata> {
         match self {
@@ -89,9 +90,9 @@ impl Request {
         }
     }
 
-    /// with_metadata
-    ///
-    /// Attach root replay metadata to the request payload.
+    // with_metadata
+    //
+    // Attach root replay metadata to the request payload.
     #[must_use]
     pub const fn with_metadata(mut self, metadata: RootRequestMetadata) -> Self {
         match &mut self {
@@ -104,9 +105,9 @@ impl Request {
         self
     }
 
-    /// without_metadata
-    ///
-    /// Remove root replay metadata for canonical hashing and signature binding.
+    // without_metadata
+    //
+    // Remove root replay metadata for canonical hashing and signature binding.
     #[must_use]
     pub const fn without_metadata(mut self) -> Self {
         match &mut self {
@@ -119,9 +120,9 @@ impl Request {
         self
     }
 
-    /// upgrade_request
-    ///
-    /// Return the upgrade payload when this request belongs to the upgrade family.
+    // upgrade_request
+    //
+    // Return the upgrade payload when this request belongs to the upgrade family.
     #[must_use]
     pub const fn upgrade_request(&self) -> Option<&UpgradeCanisterRequest> {
         match self {
@@ -131,10 +132,11 @@ impl Request {
     }
 }
 
-///
-/// RequestFamily
-/// Stable capability family identifier for request dispatch logic.
-///
+//
+// RequestFamily
+//
+// Request family label.
+//
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum RequestFamily {
@@ -146,9 +148,9 @@ pub enum RequestFamily {
 }
 
 impl RequestFamily {
-    /// label
-    ///
-    /// Return the canonical family label used across capability checks and logs.
+    // label
+    //
+    // Return the canonical family label used across capability checks and logs.
     #[must_use]
     pub const fn label(self) -> &'static str {
         match self {
@@ -161,10 +163,11 @@ impl RequestFamily {
     }
 }
 
-///
-/// RootCapabilityCommand
-/// Internal root capability command shape used by root workflow dispatch.
-///
+//
+// RootCapabilityCommand
+//
+// Internal root command.
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
 pub enum RootCapabilityCommand {
@@ -187,10 +190,11 @@ impl From<Request> for RootCapabilityCommand {
     }
 }
 
-///
-/// RootRequestMetadata
-/// Replay and idempotency metadata for mutating root requests.
-///
+//
+// RootRequestMetadata
+//
+// Replay metadata.
+//
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
 pub struct RootRequestMetadata {
@@ -198,10 +202,11 @@ pub struct RootRequestMetadata {
     pub ttl_seconds: u64,
 }
 
-///
-/// CreateCanisterRequest
-/// Payload for [`Request::CreateCanister`]
-///
+//
+// CreateCanisterRequest
+//
+// Create-canister payload.
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct CreateCanisterRequest {
@@ -212,26 +217,28 @@ pub struct CreateCanisterRequest {
     pub metadata: Option<RootRequestMetadata>,
 }
 
-///
-/// CreateCanisterParent
-/// Parent-location choices for a new canister
-///
+//
+// CreateCanisterParent
+//
+// Parent selection.
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
 pub enum CreateCanisterParent {
     Root,
-    /// Use the requesting canister as parent.
+    // Use the requesting canister.
     ThisCanister,
-    /// Use the requesting canister's parent (creates a sibling).
+    // Use the caller's parent.
     Parent,
     Canister(Principal),
     Directory(CanisterRole),
 }
 
-///
-/// UpgradeCanisterRequest
-/// Payload for [`Request::UpgradeCanister`]
-///
+//
+// UpgradeCanisterRequest
+//
+// Upgrade-canister payload.
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct UpgradeCanisterRequest {
@@ -240,10 +247,11 @@ pub struct UpgradeCanisterRequest {
     pub metadata: Option<RootRequestMetadata>,
 }
 
-///
-/// CyclesRequest
-/// Payload for [`Request::Cycles`]
-///
+//
+// CyclesRequest
+//
+// Cycles payload.
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct CyclesRequest {
@@ -252,10 +260,11 @@ pub struct CyclesRequest {
     pub metadata: Option<RootRequestMetadata>,
 }
 
-///
-/// Response
-/// Response payloads produced by root for orchestration requests.
-///
+//
+// Response
+//
+// Root response payload.
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
 pub enum Response {
@@ -266,37 +275,37 @@ pub enum Response {
     RoleAttestationIssued(SignedRoleAttestation),
 }
 
-///
-/// CreateCanisterResponse
-/// Result of creating and installing a new canister.
-///
+//
+// CreateCanisterResponse
+// Result of creating and installing a new canister.
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct CreateCanisterResponse {
     pub new_canister_pid: Principal,
 }
 
-///
-/// UpgradeCanisterResponse
-/// Result of an upgrade request (currently empty, reserved for metadata)
-///
+//
+// UpgradeCanisterResponse
+// Result of an upgrade request (currently empty, reserved for metadata)
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct UpgradeCanisterResponse {}
 
-///
-/// CyclesResponse
-/// Result of transferring cycles to a child canister
-///
+//
+// CyclesResponse
+// Result of transferring cycles to a child canister
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct CyclesResponse {
     pub cycles_transferred: u128,
 }
 
-///
-/// TESTS
-///
+//
+// TESTS
+//
 
 #[cfg(test)]
 mod tests {

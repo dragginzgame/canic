@@ -4,10 +4,10 @@
 
 use crate::spec::prelude::*;
 
-///
-/// ListNeurons
-/// Request payload for SNS `list_neurons` with optional principal filtering.
-///
+//
+// ListNeurons
+// Request payload for SNS `list_neurons` with optional principal filtering.
+//
 
 #[derive(CandidType, Deserialize)]
 pub struct ListNeurons {
@@ -16,30 +16,30 @@ pub struct ListNeurons {
     pub start_page_at: Option<NeuronId>,
 }
 
-///
-/// NeuronId
-/// Wrapper around the raw bytes identifying an SNS neuron.
-///
+//
+// NeuronId
+// Wrapper around the raw bytes identifying an SNS neuron.
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct NeuronId {
     pub id: ByteBuf,
 }
 
-///
-/// ListNeuronsResponse
-/// Response payload containing the returned SNS neurons.
-///
+//
+// ListNeuronsResponse
+// Response payload containing the returned SNS neurons.
+//
 
 #[derive(CandidType, Deserialize)]
 pub struct ListNeuronsResponse {
     pub neurons: Vec<Neuron>,
 }
 
-///
-/// Neuron
-/// Simplified view of an SNS neuron record used in ops modules.
-///
+//
+// Neuron
+// Simplified view of an SNS neuron record used in ops modules.
+//
 
 #[derive(CandidType, Deserialize)]
 pub struct Neuron {

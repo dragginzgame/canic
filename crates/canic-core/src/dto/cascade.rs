@@ -4,11 +4,11 @@ use crate::dto::{
     topology::{AppDirectoryArgs, SubnetDirectoryArgs},
 };
 
-///
-/// StateSnapshotInput
-/// Snapshot of mutable state and directory sections that can be propagated to peers.
-/// Pure DTO.
-///
+//
+// StateSnapshotInput
+//
+// Cascade state snapshot.
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct StateSnapshotInput {
@@ -18,29 +18,24 @@ pub struct StateSnapshotInput {
     pub subnet_directory: Option<SubnetDirectoryArgs>,
 }
 
-///
-/// TopologySnapshotInput
-/// Partial topology snapshot used for cascade.
-/// Contains:
-/// - a parent path (root -> target)
-/// - direct children for each node on that path only
-///
-/// This is not a full topology export.
-///
-/// Pure DTO.
-///
+//
+// TopologySnapshotInput
+//
+// Cascade topology snapshot.
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct TopologySnapshotInput {
     pub parents: Vec<TopologyPathNode>,
-    /// Children keyed by their parent pid (at most one entry per parent).
+    // Children keyed by parent pid.
     pub children_map: Vec<TopologyChildren>,
 }
 
-///
-/// TopologyChildren
-/// Parent-keyed children list used in topology cascades.
-///
+//
+// TopologyChildren
+//
+// Parent-keyed child list.
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct TopologyChildren {
@@ -48,10 +43,11 @@ pub struct TopologyChildren {
     pub children: Vec<TopologyDirectChild>,
 }
 
-///
-/// TopologyDirectChild
-/// Direct child node for parent-keyed topology maps.
-///
+//
+// TopologyDirectChild
+//
+// Direct child node.
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct TopologyDirectChild {
@@ -59,10 +55,11 @@ pub struct TopologyDirectChild {
     pub role: CanisterRole,
 }
 
-///
-/// TopologyPathNode
-/// Snapshot node for parent-path traversal (includes identity).
-///
+//
+// TopologyPathNode
+//
+// Parent-path node.
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct TopologyPathNode {

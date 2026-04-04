@@ -4,9 +4,9 @@ use crate::dto::{
     topology::{AppDirectoryArgs, SubnetDirectoryArgs},
 };
 
-///
-/// CanisterInitPayload
-///
+//
+// CanisterInitPayload
+//
 
 #[derive(CandidType, Debug, Deserialize)]
 pub struct CanisterInitPayload {

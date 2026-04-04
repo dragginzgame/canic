@@ -1,8 +1,8 @@
 use crate::{dto::prelude::*, log::Level};
 
-///
-/// LogEntry
-///
+//
+// LogEntry
+//
 
 #[derive(CandidType, Deserialize)]
 pub struct LogEntry {

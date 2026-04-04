@@ -5,6 +5,15 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.24.x] - 2026-04-04 - Shared Runtime Reduction and Test Boundary Cleanup
+
+- `0.24.0` opens the new minor line after the accidental version bump, switches shared `CandidType` source docs from `///` to `//` so they stop leaking into release wasm, brings the current `minimal` artifact down from `1764427` to `1741732` shrunk bytes, and carries the current focus forward: shared-runtime wasm reduction, clearer public-vs-internal test support boundaries, and release-surface hardening.
+
+See detailed breakdown:
+[docs/changelog/0.24.md](docs/changelog/0.24.md)
+
+---
+
 ## [0.23.x] - 2026-04-03 - Deferred Follow-Through
 
 - `0.23.2` removes the checked-in wasm budget layer from the recurring footprint audit, so follow-through work is driven by dated size deltas and hotspot evidence instead of static thresholds.
