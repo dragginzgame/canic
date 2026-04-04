@@ -1,5 +1,3 @@
-mod root;
-
 use candid::{CandidType, Principal, decode_one, encode_args, encode_one, utils::ArgumentEncoder};
 use canic::{
     Error,
@@ -25,12 +23,6 @@ use std::{
     sync::{Mutex, MutexGuard},
     thread,
     time::{Duration, Instant},
-};
-
-pub use root::{
-    RootBaselineMetadata, RootBaselineSpec, build_root_cached_baseline,
-    ensure_root_release_artifacts_built, load_root_wasm, restore_root_cached_baseline,
-    setup_root_topology,
 };
 
 const INSTALL_CYCLES: u128 = 500 * TC;
@@ -228,6 +220,13 @@ impl PicBuilder {
     #[must_use]
     pub fn with_application_subnet(mut self) -> Self {
         self.0 = self.0.with_application_subnet();
+        self
+    }
+
+    /// Include an II subnet so threshold keys are available in the PocketIC universe.
+    #[must_use]
+    pub fn with_ii_subnet(mut self) -> Self {
+        self.0 = self.0.with_ii_subnet();
         self
     }
 

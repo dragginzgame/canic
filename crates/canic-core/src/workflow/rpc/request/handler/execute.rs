@@ -40,9 +40,14 @@ pub(super) async fn execute_root_capability(
     let result = match capability {
         RootCapability::Provision(req) => execute_provision(ctx, &req).await,
         RootCapability::Upgrade(req) => execute_upgrade(&req).await,
-        RootCapability::RequestCycles(req) => nonroot_cycles::execute_request_cycles(ctx, &req)
-            .await
-            .map(Response::Cycles),
+        RootCapability::RequestCycles(req) => {
+            let response = if ctx.is_root_env {
+                nonroot_cycles::execute_root_request_cycles(ctx, &req).await
+            } else {
+                nonroot_cycles::execute_request_cycles(ctx, &req).await
+            }?;
+            Ok(Response::Cycles(response))
+        }
         RootCapability::IssueDelegation(req) => execute_issue_delegation(ctx, &req).await,
         RootCapability::IssueRoleAttestation(req) => {
             execute_issue_role_attestation(ctx, &req).await

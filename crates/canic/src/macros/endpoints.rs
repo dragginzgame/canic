@@ -16,11 +16,6 @@
 #[macro_export]
 macro_rules! canic_emit_lifecycle_core_endpoints {
     () => {
-        #[$crate::canic_update(internal)]
-        fn canic_ic_cycles_accept(max_amount: u128) -> u128 {
-            $crate::cdk::api::msg_cycles_accept(max_amount)
-        }
-
         #[$crate::canic_query]
         fn canic_canister_cycle_balance() -> Result<u128, ::canic::Error> {
             Ok($crate::cdk::api::canister_cycle_balance())
@@ -172,7 +167,7 @@ macro_rules! canic_emit_auth_attestation_endpoints {
         }
 
         #[cfg(not(canic_is_root))]
-        #[$crate::canic_update(internal, requires(caller::is_root()))]
+        #[$crate::canic_update(internal)]
         async fn canic_response_capability_v1(
             envelope: ::canic::dto::capability::RootCapabilityEnvelopeV1,
         ) -> Result<::canic::dto::capability::RootCapabilityResponseV1, ::canic::Error> {

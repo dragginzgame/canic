@@ -31,7 +31,6 @@ pub const CANIC_TEMPLATE_PUBLISH_TO_CURRENT_STORE_ADMIN: &str =
     "canic_template_publish_to_current_store_admin";
 pub const CANIC_TEMPLATE_STAGE_MANIFEST_ADMIN: &str = "canic_template_stage_manifest_admin";
 pub const CANIC_WASM_STORE_ADMIN: &str = "canic_wasm_store_admin";
-pub const CANIC_IC_CYCLES_ACCEPT: &str = "canic_ic_cycles_accept";
 pub const ICRC10_SUPPORTED_STANDARDS: &str = "icrc10_supported_standards";
 pub const ICRC21_CANISTER_CALL_CONSENT_MESSAGE: &str = "icrc21_canister_call_consent_message";
 pub const CANIC_CANISTER_CYCLE_BALANCE: &str = "canic_canister_cycle_balance";

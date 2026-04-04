@@ -7,7 +7,10 @@ use crate::{
         error::Error,
         rpc::{Request, RequestFamily},
     },
-    ops::{ic::IcOps, storage::registry::subnet::SubnetRegistryOps},
+    ops::{
+        ic::IcOps, storage::children::CanisterChildrenOps,
+        storage::registry::subnet::SubnetRegistryOps,
+    },
 };
 use candid::{decode_one, encode_one};
 use std::convert::TryFrom;
@@ -43,6 +46,21 @@ pub(super) fn verify_root_structural_proof(capability: &Request) -> Result<(), E
     Err(Error::forbidden(
         "structural proof is only supported for root cycles and upgrade capabilities",
     ))
+}
+
+/// verify_nonroot_structural_cycles_proof
+///
+/// Verify that a structural cycles request came from a cached direct child.
+pub(super) fn verify_nonroot_structural_cycles_proof() -> Result<(), Error> {
+    let caller = IcOps::msg_caller();
+
+    if !CanisterChildrenOps::contains_pid(&caller) {
+        return Err(Error::forbidden(
+            "structural proof requires caller to be a direct child of receiver",
+        ));
+    }
+
+    Ok(())
 }
 
 /// verify_capability_hash_binding

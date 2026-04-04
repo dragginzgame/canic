@@ -1,24 +1,22 @@
 [package]
-name = "canic-testkit"
+name = "canic-testing-internal"
 edition = { workspace = true }
 rust-version = { workspace = true }
 version = { workspace = true }
 license = { workspace = true }
-description = { workspace = true }
+description = "Workspace-only internal test support for Canic self-tests"
 readme = "README.md"
-documentation = "https://docs.rs/canic-testkit"
-homepage = { workspace = true }
-repository = { workspace = true }
-keywords = { workspace = true }
-categories = { workspace = true }
-publish = true
+publish = false
 
 [dependencies]
 candid = { workspace = true }
 canic = { workspace = true }
-derive_more = { workspace = true }
+canic-control-plane = { workspace = true }
+canic-core = { workspace = true }
+canic-testkit = { workspace = true }
 pocket-ic = { workspace = true }
 serde = { workspace = true }
+sha2 = { workspace = true }
 
 [lints]
 workspace = true

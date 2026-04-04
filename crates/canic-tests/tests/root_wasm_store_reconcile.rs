@@ -22,9 +22,10 @@ use canic_control_plane::{
     },
 };
 use canic_internal::canister::MINIMAL;
+use canic_testing_internal::pic::RootBaselineMetadata;
 use canic_testkit::{
     artifacts::{WasmBuildProfile, workspace_root_for},
-    pic::{CachedPicBaseline, Pic, RootBaselineMetadata},
+    pic::{CachedPicBaseline, Pic},
 };
 use root::harness::setup_root_cached_with_release_roles_profile_and_build_env;
 use std::{fs, path::PathBuf, sync::Mutex};

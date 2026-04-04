@@ -1,5 +1,3 @@
-use super::{CachedPicBaseline, Pic, pic};
-use crate::artifacts::{WasmBuildProfile, build_dfx_all_with_env, dfx_artifact_ready_for_build};
 use canic::{
     Error,
     cdk::types::Principal,
@@ -18,6 +16,10 @@ use canic_control_plane::{
     ids::{
         TemplateChunkingMode, TemplateId, TemplateManifestState, TemplateVersion, WasmStoreBinding,
     },
+};
+use canic_testkit::{
+    artifacts::{WasmBuildProfile, build_dfx_all_with_env, dfx_artifact_ready_for_build},
+    pic::{CachedPicBaseline, Pic, PicBuilder},
 };
 use std::{collections::HashMap, fs, io, io::Write, path::PathBuf, time::Instant};
 
@@ -174,7 +176,10 @@ pub fn setup_root_topology(
         let attempt_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             progress(spec, "starting PocketIC instance");
             let pic_started_at = Instant::now();
-            let pic = pic();
+            let pic = PicBuilder::new()
+                .with_ii_subnet()
+                .with_application_subnet()
+                .build();
             progress_elapsed(spec, "PocketIC instance ready", pic_started_at);
 
             progress(spec, "installing root canister");

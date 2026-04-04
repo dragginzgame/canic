@@ -23,7 +23,11 @@ pub(super) fn authorize(
     // RequestCycles already owns its authorization metrics/logging in the
     // shared cycles helper so root and non-root paths stay aligned.
     if let RootCapability::RequestCycles(req) = capability {
-        return nonroot_cycles::authorize_request_cycles(ctx, req);
+        return if ctx.is_root_env {
+            nonroot_cycles::authorize_root_request_cycles(ctx, req)
+        } else {
+            nonroot_cycles::authorize_request_cycles(ctx, req)
+        };
     }
 
     let capability_key = capability.metric_key();

@@ -24,6 +24,7 @@ members = [
     "crates/canic-installer",
     "crates/canic-memory",
     "crates/canic-sharding-runtime",
+    "crates/canic-testing-internal",
     "crates/canic-testkit",
     "crates/canic-tests",
     "crates/canic-wasm-store",
@@ -56,6 +57,7 @@ canic-installer = { version = "0.23.0", path = "crates/canic-installer" }
 canic-internal = { version = "0.23.0", path = "canisters/reference-support" }
 canic-memory = { version = "0.23.0", path = "crates/canic-memory" }
 canic-sharding-runtime = { version = "0.23.0", path = "crates/canic-sharding-runtime" }
+canic-testing-internal = { version = "0.23.0", path = "crates/canic-testing-internal" }
 canic-testkit = { version = "0.23.0", path = "crates/canic-testkit" }
 canic-wasm-store = { version = "0.23.0", path = "crates/canic-wasm-store" }
 convert_case = "0.11"

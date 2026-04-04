@@ -56,7 +56,8 @@ The crate was historically known as **ICU** (Internet Computer Utilities). All c
 * `crates/canic-control-plane/` – root/store control-plane runtime used by the orchestrator lane.
 * `crates/canic-memory/` – standalone stable‑memory crate (manager, registry, eager TLS, memory macros) usable by Canic and external crates.
 * `crates/canic-sharding-runtime/` – optional sharding runtime lane used by sharded deployments.
-* `crates/canic-testkit/` – host‑side test utilities and fixtures for Canic canisters.
+* `crates/canic-testkit/` – public PocketIC-oriented test utilities for projects that use Canic.
+* `crates/canic-testing-internal/` – workspace-only internal self-test support for Canic’s own root/auth harnesses.
 * `crates/canic-tests/` – workspace-only integration test host package for the PocketIC and root-suite coverage.
 * `crates/canic-dsl-macros/` – proc macros for defining endpoints (`#[canic_query]`, `#[canic_update]`).
 * `crates/canic-cdk/` – curated IC CDK façade used by the public/runtime crates (management, timers, stable‑structures glue).
@@ -149,7 +150,7 @@ Populate `canic.toml` with subnet definitions, directory membership, and per‑c
 For local DFX workflows, prefer the shared setup script:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/dragginzgame/canic/v0.22.10/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/dragginzgame/canic/v0.23.0/scripts/install.sh | bash
 ```
 
 That script installs:
@@ -161,7 +162,7 @@ That script installs:
 - `candid-extractor`
 - `ic-wasm`
 - `cargo-watch`, `cargo-edit`, `cargo-get`, `cargo-sort`, and `cargo-sort-derives`
-- `canic-installer` `0.22.10`
+- `canic-installer` `0.23.0`
 - `dfx` if it is not already installed
 
 It bootstraps Rust when needed and runs the Cargo installs through the pinned `1.94.1` toolchain instead of relying on whatever default toolchain happens to be active locally.

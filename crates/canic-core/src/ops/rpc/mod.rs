@@ -5,11 +5,12 @@ use crate::{
     dto::{
         auth::{RoleAttestationRequest, SignedRoleAttestation},
         capability::{
-            CAPABILITY_VERSION_V1, CapabilityRequestMetadata, CapabilityService, PROOF_VERSION_V1,
-            RoleAttestationProof, RootCapabilityEnvelopeV1, RootCapabilityResponseV1,
+            CAPABILITY_VERSION_V1, CapabilityProof, CapabilityRequestMetadata, CapabilityService,
+            PROOF_VERSION_V1, RoleAttestationProof, RootCapabilityEnvelopeV1,
+            RootCapabilityResponseV1,
         },
         error::Error,
-        rpc::RootRequestMetadata,
+        rpc::{RequestFamily, RootRequestMetadata},
     },
     ops::{
         OpsError,
@@ -114,10 +115,14 @@ impl RpcOps {
         target_pid: Principal,
         rpc: R,
     ) -> Result<R::Response, InternalError> {
-        let root_pid = EnvOps::root_pid()?;
         let request = rpc.into_request();
-        let attestation = Self::request_root_response_attestation(root_pid, target_pid).await?;
-        let call_res = Self::call_response_capability_v1(target_pid, request, attestation).await?;
+        let call_res = if request.family() == RequestFamily::RequestCycles {
+            Self::call_response_capability_v1_structural(target_pid, request).await?
+        } else {
+            let root_pid = EnvOps::root_pid()?;
+            let attestation = Self::request_root_response_attestation(root_pid, target_pid).await?;
+            Self::call_response_capability_v1(target_pid, request, attestation).await?
+        };
 
         let response = R::try_from_response(call_res)?;
 
@@ -170,6 +175,26 @@ impl RpcOps {
             capability: dto_request,
             proof,
             metadata: capability_metadata_from_request(&request),
+        };
+
+        let response: RootCapabilityResponseV1 =
+            Self::call_rpc_result(target_pid, protocol::CANIC_RESPONSE_CAPABILITY_V1, envelope)
+                .await?;
+
+        Ok(response.response)
+    }
+
+    async fn call_response_capability_v1_structural(
+        target_pid: Principal,
+        request: Request,
+    ) -> Result<Response, InternalError> {
+        let metadata = capability_metadata_from_request(&request);
+        let envelope = RootCapabilityEnvelopeV1 {
+            service: CapabilityService::Root,
+            capability_version: CAPABILITY_VERSION_V1,
+            capability: request,
+            proof: CapabilityProof::Structural,
+            metadata,
         };
 
         let response: RootCapabilityResponseV1 =

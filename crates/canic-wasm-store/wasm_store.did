@@ -596,7 +596,6 @@ service : (CanisterInitPayload, opt blob) -> {
   canic_canister_version : () -> (Result_3) query;
   canic_cycle_tracker : (PageRequest) -> (Result_4) query;
   canic_env : () -> (Result_5) query;
-  canic_ic_cycles_accept : (nat) -> (nat);
   canic_log : (opt text, opt text, opt Level, PageRequest) -> (Result_6) query;
   canic_memory_registry : () -> (Result_7) query;
   canic_metrics : (MetricsKind, PageRequest) -> (Result_8) query;

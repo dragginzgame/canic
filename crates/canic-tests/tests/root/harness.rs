@@ -2,13 +2,16 @@
 // This test relies on embedded production config by design.
 
 use canic::{cdk::types::Principal, ids::CanisterRole};
+use canic_testing_internal::pic::{
+    RootBaselineMetadata, RootBaselineSpec, build_root_cached_baseline,
+    ensure_root_release_artifacts_built, load_root_wasm, restore_root_cached_baseline,
+    setup_root_topology,
+};
 use canic_testkit::{
     artifacts::{WasmBuildProfile, workspace_root_for},
     pic::{
-        CachedPicBaseline, CachedPicBaselineGuard, Pic, PicSerialGuard, RootBaselineMetadata,
-        RootBaselineSpec, acquire_cached_pic_baseline, acquire_pic_serial_guard,
-        build_root_cached_baseline, ensure_root_release_artifacts_built, load_root_wasm,
-        restore_root_cached_baseline, setup_root_topology,
+        CachedPicBaseline, CachedPicBaselineGuard, Pic, PicSerialGuard,
+        acquire_cached_pic_baseline, acquire_pic_serial_guard,
     },
 };
 use std::{
@@ -31,6 +34,7 @@ const ROOT_SETUP_MAX_ATTEMPTS: usize = 2;
 const ROOT_WASM_WATCH_PATHS: &[&str] = &[
     "Cargo.toml",
     "Cargo.lock",
+    "canisters",
     "dfx.json",
     "crates",
     "scripts/app/build.sh",
