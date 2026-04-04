@@ -1,5 +1,9 @@
 # canic-testkit
 
-Test utilities and fixtures for exercising Canic canisters in host-side environments.
+Public PocketIC-oriented test utilities for projects that use Canic.
 
-This crate is part of the Canic workspace; see `../../README.md` for the main project documentation.
+This crate is intentionally limited to generic host-side test infrastructure,
+such as the PocketIC wrapper, generic call helpers, ready polling, and cached
+baseline primitives. Canic's own root-topology and auth-fixture harness code
+belongs in the unpublished `canic-testing-internal` workspace crate instead of
+expanding this public surface.

@@ -4,6 +4,7 @@ use super::{
 };
 use crate::{
     InternalError,
+    cdk::types::Principal,
     dto::rpc::{CyclesRequest, CyclesResponse, Response, RootCapabilityCommand},
     log,
     log::Topic,
@@ -20,8 +21,9 @@ use crate::{
                 RootCapabilityMetricKey, RootCapabilityMetricOutcome, RootCapabilityMetrics,
             },
         },
-        storage::registry::subnet::SubnetRegistryOps,
+        storage::{children::CanisterChildrenOps, registry::subnet::SubnetRegistryOps},
     },
+    storage::canister::CanisterRecord,
     workflow::rpc::RpcWorkflowError,
 };
 use candid::{decode_one, encode_one};
@@ -103,7 +105,24 @@ pub(super) fn authorize_request_cycles(
     ctx: &RootContext,
     req: &CyclesRequest,
 ) -> Result<(), InternalError> {
-    let decision = authorize_request_cycles_inner(ctx, req);
+    authorize_request_cycles_with_resolver(ctx, req, direct_child_record)
+}
+
+// Run root cycles authorization against the authoritative subnet registry.
+pub(super) fn authorize_root_request_cycles(
+    ctx: &RootContext,
+    req: &CyclesRequest,
+) -> Result<(), InternalError> {
+    authorize_request_cycles_with_resolver(ctx, req, registry_child_record)
+}
+
+// Apply cycles authorization with a caller->child lookup chosen by the caller type.
+fn authorize_request_cycles_with_resolver(
+    ctx: &RootContext,
+    req: &CyclesRequest,
+    resolve_child: fn(Principal) -> Option<CanisterRecord>,
+) -> Result<(), InternalError> {
+    let decision = authorize_request_cycles_inner(ctx, req, resolve_child);
 
     match &decision {
         Ok(()) => {
@@ -143,10 +162,11 @@ pub(super) fn authorize_request_cycles(
 pub(super) fn authorize_request_cycles_inner(
     ctx: &RootContext,
     req: &CyclesRequest,
+    resolve_child: fn(Principal) -> Option<CanisterRecord>,
 ) -> Result<(), InternalError> {
     CyclesFundingMetrics::record_requested(ctx.caller, req.cycles);
 
-    let Some(child) = SubnetRegistryOps::get(ctx.caller) else {
+    let Some(child) = resolve_child(ctx.caller) else {
         CyclesFundingMetrics::record_denied(
             ctx.caller,
             req.cycles,
@@ -154,11 +174,7 @@ pub(super) fn authorize_request_cycles_inner(
         );
         return Err(RpcWorkflowError::ChildNotFound(ctx.caller).into());
     };
-    let root_self_request = ctx.is_root_env
-        && ctx.caller == ctx.self_pid
-        && child.role == crate::ids::CanisterRole::ROOT
-        && child.parent_pid.is_none();
-    if child.parent_pid != Some(ctx.self_pid) && !root_self_request {
+    if child.parent_pid != Some(ctx.self_pid) {
         CyclesFundingMetrics::record_denied(
             ctx.caller,
             req.cycles,
@@ -217,13 +233,25 @@ pub(super) async fn execute_request_cycles(
     ctx: &RootContext,
     req: &CyclesRequest,
 ) -> Result<CyclesResponse, InternalError> {
-    let child =
-        SubnetRegistryOps::get(ctx.caller).ok_or(RpcWorkflowError::ChildNotFound(ctx.caller))?;
-    let root_self_request = ctx.is_root_env
-        && ctx.caller == ctx.self_pid
-        && child.role == crate::ids::CanisterRole::ROOT
-        && child.parent_pid.is_none();
-    if child.parent_pid != Some(ctx.self_pid) && !root_self_request {
+    execute_request_cycles_with_resolver(ctx, req, direct_child_record).await
+}
+
+// Execute root cycles funding against the authoritative subnet registry.
+pub(super) async fn execute_root_request_cycles(
+    ctx: &RootContext,
+    req: &CyclesRequest,
+) -> Result<CyclesResponse, InternalError> {
+    execute_request_cycles_with_resolver(ctx, req, registry_child_record).await
+}
+
+// Execute the approved cycles transfer using the caller-specific child resolver.
+async fn execute_request_cycles_with_resolver(
+    ctx: &RootContext,
+    req: &CyclesRequest,
+    resolve_child: fn(Principal) -> Option<CanisterRecord>,
+) -> Result<CyclesResponse, InternalError> {
+    let child = resolve_child(ctx.caller).ok_or(RpcWorkflowError::ChildNotFound(ctx.caller))?;
+    if child.parent_pid != Some(ctx.self_pid) {
         return Err(RpcWorkflowError::NotChildOfCaller(ctx.caller, ctx.self_pid).into());
     }
 
@@ -248,6 +276,19 @@ pub(super) async fn execute_request_cycles(
     Ok(CyclesResponse {
         cycles_transferred: approved_cycles,
     })
+}
+
+// Resolve one direct child record from the locally cascaded children cache.
+fn direct_child_record(pid: Principal) -> Option<CanisterRecord> {
+    CanisterChildrenOps::data()
+        .entries
+        .into_iter()
+        .find_map(|(child_pid, record)| (child_pid == pid).then_some(record))
+}
+
+// Resolve one child record from the authoritative root subnet registry.
+fn registry_child_record(pid: Principal) -> Option<CanisterRecord> {
+    SubnetRegistryOps::get(pid)
 }
 
 // Map pure funding policy failures into workflow errors with current metrics.

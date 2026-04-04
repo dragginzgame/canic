@@ -272,6 +272,7 @@ dependencies = [
  "candid",
  "canic-cdk",
  "canic-memory",
+ "canic-testing-internal",
  "canic-testkit",
  "criterion",
  "ctor",
@@ -340,12 +341,25 @@ dependencies = [
 ]
 
 [[package]]
-name = "canic-testkit"
+name = "canic-testing-internal"
 version = "0.23.0"
 dependencies = [
  "candid",
  "canic",
  "canic-control-plane",
+ "canic-core",
+ "canic-testkit",
+ "pocket-ic",
+ "serde",
+ "sha2 0.11.0",
+]
+
+[[package]]
+name = "canic-testkit"
+version = "0.23.0"
+dependencies = [
+ "candid",
+ "canic",
  "derive_more",
  "pocket-ic",
  "serde",
@@ -359,6 +373,7 @@ dependencies = [
  "canic",
  "canic-control-plane",
  "canic-internal",
+ "canic-testing-internal",
  "canic-testkit",
  "serde",
  "serde_json",

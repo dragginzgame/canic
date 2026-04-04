@@ -1,8 +1,8 @@
-//! Test utilities and fixtures for exercising Canic canisters.
+//! Public PocketIC-oriented test utilities for projects that use Canic.
 //!
 //! This crate is intended for host-side test environments (for example via
-//! PocketIC) and provides small helpers for generating stable dummy principals
-//! and accounts.
+//! PocketIC) and provides generic helpers such as stable dummy principals,
+//! PocketIC wrappers, and cached baseline primitives.
 
 pub mod artifacts;
 pub mod pic;

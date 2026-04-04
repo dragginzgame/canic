@@ -1,4 +1,7 @@
-use crate::root::harness::{RootSetup, setup_root_cached_scaling};
+use crate::root::{
+    harness::{RootSetup, setup_root_cached_scaling},
+    workers::create_worker,
+};
 use canic::{
     Error,
     cdk::types::Principal,
@@ -173,6 +176,63 @@ fn cycles_routes_through_dispatcher_and_replay_duplicate_same() {
     assert_eq!(
         metric_count(&metrics, "RequestCycles", "ExecutionSuccess"),
         1
+    );
+}
+
+#[test]
+fn root_cycles_request_increases_direct_child_balance() {
+    let setup = setup_root_cached_scaling();
+    let caller = setup
+        .subnet_directory
+        .get(&canister::TEST)
+        .copied()
+        .expect("test canister must exist");
+    let amount = 321_000u128;
+    let request = Request::Cycles(CyclesRequest {
+        cycles: amount,
+        metadata: Some(metadata([81u8; 32], 120)),
+    });
+
+    let before = canister_cycle_balance(&setup, caller);
+    let response = root_response_as(&setup, caller, request).expect("root cycles call works");
+    let after = canister_cycle_balance(&setup, caller);
+
+    match response {
+        Response::Cycles(response) => assert_eq!(response.cycles_transferred, amount),
+        other => panic!("expected cycles response, got: {other:?}"),
+    }
+    assert_eq!(
+        after.saturating_sub(before),
+        amount,
+        "root direct-child funding must increase the child balance by the granted amount"
+    );
+}
+
+#[test]
+fn parent_cycles_request_increases_direct_child_balance() {
+    let setup = setup_root_cached_scaling();
+    let parent = setup
+        .subnet_directory
+        .get(&canister::SCALE_HUB)
+        .copied()
+        .expect("scale_hub canister must exist");
+    let caller = create_worker(&setup.pic, parent).expect("scale_hub must create one worker");
+    let amount = 654_000u128;
+
+    let response: Result<Result<u128, Error>, Error> =
+        setup
+            .pic
+            .update_call(caller, "request_cycles_from_parent", (amount,));
+    let metrics = cycles_funding_metrics(&setup, parent);
+
+    let transferred = response
+        .expect("parent cycles transport must succeed")
+        .expect("parent cycles call must succeed");
+    assert_eq!(transferred, amount);
+    assert_eq!(
+        cycles_funding_amount(&metrics, "cycles_granted_to_child", caller),
+        amount,
+        "non-root parent funding must record the granted child amount in parent metrics"
     );
 }
 
@@ -587,6 +647,16 @@ fn root_response_as(
     caller: Principal,
     request: Request,
 ) -> Result<Response, Error> {
+    capability_response_as(setup, setup.root_id, caller, request)
+}
+
+// Call one capability endpoint as the requested caller and return its typed response.
+fn capability_response_as(
+    setup: &RootSetup,
+    target_pid: Principal,
+    caller: Principal,
+    request: Request,
+) -> Result<Response, Error> {
     let (request_id, nonce, ttl_seconds) = capability_metadata_from_request(&request);
     let envelope = RootCapabilityEnvelopeV1 {
         service: CapabilityService::Root,
@@ -596,13 +666,13 @@ fn root_response_as(
         metadata: CapabilityRequestMetadata {
             request_id,
             nonce,
-            issued_at: root_now_secs(setup),
+            issued_at: target_now_secs(setup, target_pid),
             ttl_seconds,
         },
     };
 
     let result: Result<Result<RootCapabilityResponseV1, Error>, Error> = setup.pic.update_call_as(
-        setup.root_id,
+        target_pid,
         caller,
         protocol::CANIC_RESPONSE_CAPABILITY_V1,
         (envelope,),
@@ -612,25 +682,60 @@ fn root_response_as(
         .map(|response| response.response)
 }
 
-fn root_capability_metrics(setup: &RootSetup) -> Vec<MetricEntry> {
-    let response: Result<Page<MetricEntry>, Error> = setup
+// Read the live cycle balance that the canister itself reports through the public query surface.
+fn canister_cycle_balance(setup: &RootSetup, canister_id: Principal) -> u128 {
+    let balance: Result<u128, Error> = setup
         .pic
+        .query_call(canister_id, protocol::CANIC_CANISTER_CYCLE_BALANCE, ())
+        .expect("cycle balance transport query must succeed");
+    balance.expect("cycle balance query must succeed")
+}
+
+fn root_capability_metrics(setup: &RootSetup) -> Vec<MetricEntry> {
+    query_metrics(&setup.pic, setup.root_id, MetricsKind::RootCapability)
+}
+
+// Read one canister's public metrics page for the requested metric family.
+fn query_metrics(
+    pic: &canic_testkit::pic::Pic,
+    canister_id: Principal,
+    kind: MetricsKind,
+) -> Vec<MetricEntry> {
+    let response: Result<Page<MetricEntry>, Error> = pic
         .query_call(
-            setup.root_id,
+            canister_id,
             protocol::CANIC_METRICS,
             (
-                MetricsKind::RootCapability,
+                kind,
                 PageRequest {
                     limit: 256,
                     offset: 0,
                 },
             ),
         )
-        .expect("root capability metrics transport query failed");
+        .expect("metrics transport query failed");
 
-    response
-        .expect("root capability metrics application query failed")
-        .entries
+    response.expect("metrics application query failed").entries
+}
+
+// Read one canister's cycles-funding metrics page.
+fn cycles_funding_metrics(setup: &RootSetup, canister_id: Principal) -> Vec<MetricEntry> {
+    query_metrics(&setup.pic, canister_id, MetricsKind::CyclesFunding)
+}
+
+// Sum one cycles-funding `U128` metric for a specific child principal.
+fn cycles_funding_amount(entries: &[MetricEntry], label: &str, child: Principal) -> u128 {
+    entries
+        .iter()
+        .filter(|entry| {
+            entry.labels.first().is_some_and(|value| value == label)
+                && entry.principal == Some(child)
+        })
+        .map(|entry| match entry.value {
+            MetricValue::U128(value) => value,
+            MetricValue::Count(_) | MetricValue::CountAndU64 { .. } => 0,
+        })
+        .sum()
 }
 
 fn metric_count(entries: &[MetricEntry], capability: &str, event: &str) -> u64 {
@@ -671,10 +776,11 @@ fn legacy_event_parts(event: &str) -> (&'static str, &'static str) {
     }
 }
 
-fn root_now_secs(setup: &RootSetup) -> u64 {
+// Read one canister's current time in seconds for capability metadata issuance.
+fn target_now_secs(setup: &RootSetup, canister_id: Principal) -> u64 {
     let now: Result<u64, Error> = setup
         .pic
-        .query_call(setup.root_id, protocol::CANIC_TIME, ())
+        .query_call(canister_id, protocol::CANIC_TIME, ())
         .expect("canic_time transport query failed");
     now.expect("canic_time application query failed") / 1_000_000_000
 }

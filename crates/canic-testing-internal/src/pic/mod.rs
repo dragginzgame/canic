@@ -1,0 +1,13 @@
+mod attestation;
+mod root;
+
+pub use attestation::{
+    BaselinePicGuard, CachedInstalledRoot, install_test_root_cached,
+    install_test_root_with_verifier_cached, install_test_root_without_test_material_cached,
+    signer_pid, wasm_store_pid,
+};
+pub use root::{
+    RootBaselineMetadata, RootBaselineSpec, build_root_cached_baseline,
+    ensure_root_release_artifacts_built, load_root_wasm, restore_root_cached_baseline,
+    setup_root_topology,
+};

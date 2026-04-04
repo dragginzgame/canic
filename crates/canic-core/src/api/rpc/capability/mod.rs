@@ -84,7 +84,13 @@ async fn verify_root_capability_proof(
 }
 
 fn verify_nonroot_cycles_proof(capability: &Request) -> Result<(), Error> {
-    proof::verify_root_structural_proof(capability)
+    if capability.family() != RequestFamily::RequestCycles {
+        return Err(Error::forbidden(
+            "non-root capability endpoint only supports structural cycles requests",
+        ));
+    }
+
+    proof::verify_nonroot_structural_cycles_proof()
 }
 
 #[cfg(test)]
