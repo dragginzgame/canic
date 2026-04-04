@@ -454,7 +454,8 @@ mod tests {
         );
         TemplateChunkStore::upsert(chunk_key.clone(), TemplateChunkRecord { bytes: vec![4, 5] });
 
-        let payload_slots = TEMPLATE_CHUNK_PAYLOADS.with_borrow(|payloads| payloads.len());
+        let payload_slots =
+            TEMPLATE_CHUNK_PAYLOADS.with_borrow(canic_cdk::structures::StableVec::len);
         assert_eq!(payload_slots, 1);
         assert_eq!(
             TemplateChunkStore::get(&chunk_key),
