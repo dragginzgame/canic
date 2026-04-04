@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.23.x] - 2026-04-03 - Deferred Follow-Through
 
+- `0.23.2` removes the checked-in wasm budget layer from the recurring footprint audit, so follow-through work is driven by dated size deltas and hotspot evidence instead of static thresholds.
 - `0.23.1` follows up the new parent-to-child cycles test helper with a small `scale` canister cleanup so the `request_cycles_from_parent` endpoint stays warning-free under `make clippy`.
 - `0.23.0` starts the follow-through line with checked-in wasm budgets, a dated wasm-footprint rerun, a clearer split between the public `canic-testkit` PocketIC wrapper and the new unpublished `canic-testing-internal` self-test crate, a removal of the unused `*cycles_accept` compatibility endpoint so management-canister cycle deposit stays the only Canic-managed funding path, and a fix for the curlable setup script so its default `canic-installer` version stays aligned with the current Canic release.
 

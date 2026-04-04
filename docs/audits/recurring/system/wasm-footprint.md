@@ -17,10 +17,6 @@ The job of this audit is to measure shipped wasm output, explain where the
 bytes live, and identify the largest retained-size drivers with artifact tools
 such as `ic-wasm` and `twiggy`.
 
-This audit also owns the checked-in shrunk-wasm budget surface at:
-
-- `docs/audits/recurring/system/wasm-budgets.tsv`
-
 This audit is not permission to delete intended behavior to make the numbers
 look better.
 
@@ -94,8 +90,7 @@ Measure and report:
 - raw debug/dev wasm size (`wasm-debug built .wasm`) for comparison against the audit profile
 - optional debug/dev deterministic gzip (`wasm-debug built .wasm.gz`) when captured by the runner
 - shrink deltas between built and shrunk artifacts
-- current shrunk-wasm budget bytes per canister when a checked-in budget exists
-- current budget delta and whether the canister is within or over that budget
+- current shrunk-wasm bytes per canister in the audited scope
 - debug-vs-audit deltas between `wasm-debug` and the audited profile
 - `ic-wasm info` structure snapshots for built and shrunk artifacts
 - `twiggy` breakdowns (`top`, retained `top`, `dominators`, `monos`) for hotspot attribution
@@ -216,7 +211,7 @@ For each run, explicitly mark `PASS` / `PARTIAL` / `FAIL` with concrete evidence
 6. Baseline path was selected according to Canic daily baseline discipline.
 7. `wasm-debug` artifacts were captured or the run explicitly marked them `BLOCKED`.
 8. Debug-vs-audit size deltas were recorded when comparable debug artifacts exist.
-9. Checked-in shrunk-wasm budgets were loaded or the run explicitly marked them `BLOCKED`.
+9. Current per-canister size snapshots were recorded in the top-level report and machine-readable artifact.
 10. Size deltas versus baseline were recorded when comparable baseline artifacts exist.
 11. Verification readout includes command outcomes with `PASS` / `FAIL` / `BLOCKED`.
 
