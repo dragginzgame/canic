@@ -1,3 +1,4 @@
+use crate::ops::ic::IcOps;
 #[cfg(test)]
 use crate::{
     InternalError,
@@ -40,6 +41,22 @@ const ROLE_ATTESTATION_KEY_ID_V1: u32 = 1;
 ///
 
 pub struct DelegatedTokenOps;
+
+impl DelegatedTokenOps {
+    // Warm the root delegation and attestation public-key caches once.
+    pub async fn prewarm_root_key_material() -> Result<(), crate::InternalError> {
+        let root_pid = IcOps::canister_self();
+        let now_secs = IcOps::now_secs();
+
+        let delegated_key_name = keys::delegated_tokens_key_name()?;
+        keys::ensure_root_public_key_cached(&delegated_key_name, root_pid).await?;
+
+        let attestation_key_name = keys::attestation_key_name()?;
+        keys::ensure_attestation_key_cached(&attestation_key_name, root_pid, now_secs).await?;
+
+        Ok(())
+    }
+}
 
 #[cfg(test)]
 fn verify_role_attestation_claims(

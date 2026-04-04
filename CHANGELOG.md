@@ -7,7 +7,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.24.x] - 2026-04-04 - Shared Runtime Reduction and Test Boundary Cleanup
 
-- `0.24.0` opens the new minor line after the accidental version bump, switches shared `CandidType` source docs from `///` to `//` so they stop leaking into release wasm, brings the current `minimal` artifact down from `1764427` to `1741732` shrunk bytes, and carries the current focus forward: shared-runtime wasm reduction, clearer public-vs-internal test support boundaries, and release-surface hardening.
+- `0.24.1` follows up the first `0.24` perf pass by warming root delegation and attestation key material during setup, which cuts sampled `root::canic_request_delegation` from `4356980` in `instruction-footprint-17` to `3934327` in `instruction-footprint-18`.
+- `0.24.0` continues the shared-runtime reduction line by trimming shipped `CandidType` doc bloat, separating the public `canic-testkit` surface from unpublished self-test support, cutting sampled root chunk publication from about `9.7M` to `390k` local instructions, cutting sampled `root::canic_request_delegation` from `5516827` in `instruction-footprint-15` to `4356980` in `instruction-footprint-17`, and hardening the audit and release surfaces around those reductions.
 
 See detailed breakdown:
 [docs/changelog/0.24.md](docs/changelog/0.24.md)

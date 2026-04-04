@@ -11,13 +11,19 @@
 #[cfg(debug_assertions)]
 use canic::api::rpc::RpcApi;
 #[cfg(debug_assertions)]
-use canic::prelude::*;
-#[cfg(debug_assertions)]
-use canic::{Error, dto::rpc::CreateCanisterParent, dto::rpc::CreateCanisterResponse};
+use canic::{dto::rpc::CreateCanisterParent, dto::rpc::CreateCanisterResponse};
 #[cfg(debug_assertions)]
 use canic_internal::canister;
 #[cfg(debug_assertions)]
 use std::collections::HashMap;
+
+use canic::{
+    __internal::core::{api::state::SubnetStateQuery, perf},
+    Error,
+    api::{auth::DelegationApi, canister::registry::SubnetRegistryApi},
+    dto::{state::SubnetStateResponse, topology::SubnetRegistryResponse},
+    prelude::*,
+};
 
 //
 // CANIC
@@ -25,9 +31,28 @@ use std::collections::HashMap;
 
 canic::start_root!();
 
-async fn canic_setup() {}
+// Warm root auth key material outside the first live delegation request path.
+async fn canic_setup() {
+    let _ = DelegationApi::prewarm_root_key_material().await;
+}
 async fn canic_install() {}
 async fn canic_upgrade() {}
+
+// Measure the root subnet registry query in the same call context as the
+// returned local instruction counter.
+#[canic_query(requires(env::build_local_only()))]
+async fn canic_subnet_registry_perf_test() -> Result<(SubnetRegistryResponse, u64), Error> {
+    let value = SubnetRegistryApi::registry();
+    Ok((value, perf::perf_counter()))
+}
+
+// Measure the root subnet state query in the same call context as the
+// returned local instruction counter.
+#[canic_query(requires(env::build_local_only()))]
+async fn canic_subnet_state_perf_test() -> Result<(SubnetStateResponse, u64), Error> {
+    let value = SubnetStateQuery::snapshot();
+    Ok((value, perf::perf_counter()))
+}
 
 #[cfg(debug_assertions)]
 /// create_minimal

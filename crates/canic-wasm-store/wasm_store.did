@@ -1,30 +1,15 @@
-// 
-// AppMode
-// 
 type AppMode = variant { Enabled; Disabled; Readonly };
-// 
-// AppStateInput
-// 
 type AppStateInput = record { mode : AppMode; cycles_funding_enabled : bool };
-// 
-// BootstrapStatusResponse
-// 
 type BootstrapStatusResponse = record {
   last_error : opt text;
   phase : text;
   ready : bool;
 };
-// 
-// CanicStandardsResponse
-// 
 type CanicStandardsResponse = record {
   name : text;
   description : text;
   version : text;
 };
-// 
-// CanisterInfo
-// 
 type CanisterInfo = record {
   pid : principal;
   role : text;
@@ -32,91 +17,48 @@ type CanisterInfo = record {
   module_hash : opt blob;
   parent_pid : opt principal;
 };
-// 
-// CanisterInitPayload
-// 
 type CanisterInitPayload = record {
   env : EnvBootstrapArgs;
   subnet_directory : vec TopologyDirectChild;
   app_directory : vec TopologyDirectChild;
 };
-// 
-// CapabilityProof
-// 
 type CapabilityProof = variant {
   Structural;
   DelegatedGrant : CapabilityProofBlob;
   RoleAttestation : CapabilityProofBlob;
 };
-// 
-// CapabilityProofBlob
-// 
 type CapabilityProofBlob = record {
   capability_hash : blob;
   proof_version : nat16;
   payload : blob;
 };
-// 
-// CapabilityRequestMetadata
-// 
 type CapabilityRequestMetadata = record {
   request_id : blob;
   issued_at : nat64;
   ttl_seconds : nat32;
   nonce : blob;
 };
-// 
-// CapabilityService
-// 
 type CapabilityService = variant { Root };
-// 
-// CreateCanisterParent
-// Parent-location choices for a new canister
-// 
 type CreateCanisterParent = variant {
-  // Use the requesting canister as parent.
   ThisCanister;
-  // Use the requesting canister's parent (creates a sibling).
   Parent;
   Root;
   Canister : principal;
   Directory : text;
 };
-// 
-// CreateCanisterRequest
-// Payload for [`Request::CreateCanister`]
-// 
 type CreateCanisterRequest = record {
   metadata : opt RootRequestMetadata;
   extra_arg : opt blob;
   canister_role : text;
   parent : CreateCanisterParent;
 };
-// 
-// CreateCanisterResponse
-// Result of creating and installing a new canister.
-// 
 type CreateCanisterResponse = record { new_canister_pid : principal };
-// 
-// CycleTrackerEntry
-// 
 type CycleTrackerEntry = record { cycles : nat; timestamp_secs : nat64 };
-// 
-// CyclesRequest
-// Payload for [`Request::Cycles`]
-// 
 type CyclesRequest = record {
   metadata : opt RootRequestMetadata;
   cycles : nat;
 };
-// 
-// CyclesResponse
-// Result of transferring cycles to a child canister
-// 
 type CyclesResponse = record { cycles_transferred : nat };
-// 
-// DelegationCert
-// 
 type DelegationCert = record {
   aud : vec principal;
   issued_at : nat64;
@@ -125,31 +67,19 @@ type DelegationCert = record {
   expires_at : nat64;
   root_pid : principal;
 };
-// 
-// DelegationProof
-// 
 type DelegationProof = record { cert_sig : blob; cert : DelegationCert };
-// 
-// DelegationProvisionResponse
-// 
 type DelegationProvisionResponse = record {
   results : vec DelegationProvisionTargetResponse;
   proof : DelegationProof;
 };
 type DelegationProvisionStatus = variant { Ok; Failed };
 type DelegationProvisionTargetKind = variant { Signer; Verifier };
-// 
-// DelegationProvisionTargetResponse
-// 
 type DelegationProvisionTargetResponse = record {
   status : DelegationProvisionStatus;
   kind : DelegationProvisionTargetKind;
   error : opt Error;
   target : principal;
 };
-// 
-// DelegationRequest
-// 
 type DelegationRequest = record {
   aud : vec principal;
   shard_pid : principal;
@@ -159,17 +89,8 @@ type DelegationRequest = record {
   include_root_verifier : bool;
   ttl_secs : nat64;
 };
-// 
-// DirectoryEntryInput
-// 
 type DirectoryEntryInput = record { pid : principal; role : text };
-// 
-// DirectoryEntryResponse
-// 
 type DirectoryEntryResponse = record { pid : principal; role : text };
-// 
-// EnvBootstrapArgs
-// 
 type EnvBootstrapArgs = record {
   prime_root_pid : opt principal;
   canister_role : opt text;
@@ -178,9 +99,6 @@ type EnvBootstrapArgs = record {
   parent_pid : opt principal;
   subnet_pid : opt principal;
 };
-// 
-// EnvSnapshotResponse
-// 
 type EnvSnapshotResponse = record {
   prime_root_pid : opt principal;
   canister_role : opt text;
@@ -189,19 +107,7 @@ type EnvSnapshotResponse = record {
   parent_pid : opt principal;
   subnet_pid : opt principal;
 };
-// 
-// Error
-// 
-// Public-facing error DTO returned across the canister API boundary.
-// Encodes a stable error code and a human-readable message.
-// 
 type Error = record { code : ErrorCode; message : text };
-// 
-// ErrorCode
-// 
-// Stable public error codes returned by the API.
-// New variants may be added in the future; consumers must handle unknown values.
-// 
 type ErrorCode = variant {
   Internal;
   PolicyRoleAlreadyRegistered;
@@ -222,9 +128,6 @@ type ErrorCode = variant {
 // Debug
 // 
 type Level = variant { Ok; Error; Info; Warn; Debug };
-// 
-// LogEntry
-// 
 type LogEntry = record {
   topic : opt text;
   crate_name : text;
@@ -232,71 +135,22 @@ type LogEntry = record {
   level : Level;
   message : text;
 };
-// 
-// MemoryRegistryEntry
-// 
 type MemoryRegistryEntry = record {
   id : nat8;
   crate_name : text;
   label : text;
 };
-// 
-// MemoryRegistryResponse
-// 
 type MemoryRegistryResponse = record { entries : vec MemoryRegistryEntry };
-// 
-// MetricEntry
-// 
-// Unified metrics row for all query families.
-// 
-// The requested `MetricsKind` defines the meaning of `value`.
-// 
 type MetricEntry = record {
-  // Optional principal dimension.
   "principal" : opt principal;
-  // Metric payload for the requested family.
   value : MetricValue;
-  // Ordered, low-cardinality labels for the requested metric family.
   labels : vec text;
 };
-// 
-// MetricValue
-// 
 type MetricValue = variant {
   U128 : nat;
   CountAndU64 : record { count : nat64; value_u64 : nat64 };
   Count : nat64;
 };
-// 
-// Metrics DTOs
-// 
-// WHY THIS MODULE EXISTS
-// ----------------------
-// This module defines the **public, serialized representation** of metrics
-// exposed by the system.
-// 
-// These types are:
-// - Read-only snapshots
-// - Emitted at query/read time
-// - Detached from internal storage or aggregation strategy
-// 
-// Invariants:
-// - These structs MUST remain stable across upgrades.
-// - They MUST NOT encode internal metric layout or backend details.
-// - Cardinality must remain bounded by design.
-// 
-// Any change here affects:
-// - External dashboards
-// - Monitoring integrations
-// - Long-term metric continuity
-// 
-// Treat changes as **breaking API changes**.
-// 
-// 
-// MetricsKind
-// 
-// Metric family selector for the unified metrics query endpoint.
-// 
 type MetricsKind = variant {
   Icc;
   System;
@@ -308,40 +162,12 @@ type MetricsKind = variant {
   Timer;
   CyclesFunding;
 };
-// 
-// Page
-// Generic pagination envelope
-// 
 type Page = record { total : nat64; entries : vec DirectoryEntryResponse };
-// 
-// PageRequest
-// Pagination envelope to avoid passing raw integers around
-// 
 type PageRequest = record { offset : nat64; limit : nat64 };
-// 
-// Page
-// Generic pagination envelope
-// 
 type Page_1 = record { total : nat64; entries : vec CanisterInfo };
-// 
-// Page
-// Generic pagination envelope
-// 
 type Page_2 = record { total : nat64; entries : vec CycleTrackerEntry };
-// 
-// Page
-// Generic pagination envelope
-// 
 type Page_3 = record { total : nat64; entries : vec LogEntry };
-// 
-// Page
-// Generic pagination envelope
-// 
 type Page_4 = record { total : nat64; entries : vec MetricEntry };
-// 
-// Request
-// Root-directed orchestration commands.
-// 
 type Request = variant {
   IssueDelegation : DelegationRequest;
   CreateCanister : CreateCanisterRequest;
@@ -349,10 +175,6 @@ type Request = variant {
   Cycles : CyclesRequest;
   IssueRoleAttestation : RoleAttestationRequest;
 };
-// 
-// Response
-// Response payloads produced by root for orchestration requests.
-// 
 type Response = variant {
   RoleAttestationIssued : SignedRoleAttestation;
   CreateCanister : CreateCanisterResponse;
@@ -378,9 +200,6 @@ type Result_6 = variant { Ok : Page_3; Err : Error };
 type Result_7 = variant { Ok : MemoryRegistryResponse; Err : Error };
 type Result_8 = variant { Ok : Page_4; Err : Error };
 type Result_9 = variant { Ok : RootCapabilityResponseV1; Err : Error };
-// 
-// RoleAttestation
-// 
 type RoleAttestation = record {
   issued_at : nat64;
   subject : principal;
@@ -390,9 +209,6 @@ type RoleAttestation = record {
   epoch : nat64;
   expires_at : nat64;
 };
-// 
-// RoleAttestationRequest
-// 
 type RoleAttestationRequest = record {
   subject : principal;
   metadata : opt RootRequestMetadata;
@@ -402,9 +218,6 @@ type RoleAttestationRequest = record {
   epoch : nat64;
   ttl_secs : nat64;
 };
-// 
-// RootCapabilityEnvelopeV1
-// 
 type RootCapabilityEnvelopeV1 = record {
   "service" : CapabilityService;
   metadata : CapabilityRequestMetadata;
@@ -412,54 +225,27 @@ type RootCapabilityEnvelopeV1 = record {
   proof : CapabilityProof;
   capability : Request;
 };
-// 
-// RootCapabilityResponseV1
-// 
 type RootCapabilityResponseV1 = record { response : Response };
-// 
-// RootRequestMetadata
-// Replay and idempotency metadata for mutating root requests.
-// 
 type RootRequestMetadata = record { request_id : blob; ttl_seconds : nat64 };
-// 
-// SignedRoleAttestation
-// 
 type SignedRoleAttestation = record {
   signature : blob;
   key_id : nat32;
   payload : RoleAttestation;
 };
-// 
-// StateSnapshotInput
-// Snapshot of mutable state and directory sections that can be propagated to peers.
-// Pure DTO.
-// 
 type StateSnapshotInput = record {
   subnet_state : opt null;
   app_state : opt AppStateInput;
   subnet_directory : opt vec DirectoryEntryInput;
   app_directory : opt vec DirectoryEntryInput;
 };
-// 
-// TemplateChunkInput
-// 
 type TemplateChunkInput = record {
   chunk_index : nat32;
   template_id : text;
   version : text;
   bytes : blob;
 };
-// 
-// TemplateChunkResponse
-// 
 type TemplateChunkResponse = record { bytes : blob };
-// 
-// TemplateChunkSetInfoResponse
-// 
 type TemplateChunkSetInfoResponse = record { chunk_hashes : vec blob };
-// 
-// TemplateChunkSetPrepareInput
-// 
 type TemplateChunkSetPrepareInput = record {
   payload_size_bytes : nat64;
   chunk_hashes : vec blob;
@@ -471,9 +257,6 @@ type TemplateChunkSetPrepareInput = record {
 // TemplateChunkingMode
 // 
 type TemplateChunkingMode = variant { Chunked; Inline };
-// 
-// TemplateManifestInput
-// 
 type TemplateManifestInput = record {
   role : text;
   payload_size_bytes : nat64;
@@ -490,55 +273,24 @@ type TemplateManifestInput = record {
 // TemplateManifestState
 // 
 type TemplateManifestState = variant { Blocked; Staged; Approved; Deprecated };
-// 
-// TopologyChildren
-// Parent-keyed children list used in topology cascades.
-// 
 type TopologyChildren = record {
   children : vec TopologyDirectChild;
   parent_pid : principal;
 };
-// 
-// TopologyDirectChild
-// Direct child node for parent-keyed topology maps.
-// 
 type TopologyDirectChild = record { pid : principal; role : text };
-// 
-// TopologyPathNode
-// Snapshot node for parent-path traversal (includes identity).
-// 
 type TopologyPathNode = record {
   pid : principal;
   role : text;
   parent_pid : opt principal;
 };
-// 
-// TopologySnapshotInput
-// Partial topology snapshot used for cascade.
-// Contains:
-// - a parent path (root -> target)
-// - direct children for each node on that path only
-// 
-// This is not a full topology export.
-// 
-// Pure DTO.
-// 
 type TopologySnapshotInput = record {
-  // Children keyed by their parent pid (at most one entry per parent).
   children_map : vec TopologyChildren;
   parents : vec TopologyPathNode;
 };
-// 
-// UpgradeCanisterRequest
-// Payload for [`Request::UpgradeCanister`]
-// 
 type UpgradeCanisterRequest = record {
   canister_pid : principal;
   metadata : opt RootRequestMetadata;
 };
-// 
-// WasmStoreCatalogEntryResponse
-// 
 type WasmStoreCatalogEntryResponse = record {
   role : text;
   payload_size_bytes : nat64;
@@ -550,9 +302,6 @@ type WasmStoreCatalogEntryResponse = record {
 // WasmStoreGcMode
 // 
 type WasmStoreGcMode = variant { Complete; Normal; Prepared; InProgress };
-// 
-// WasmStoreGcStatusResponse
-// 
 type WasmStoreGcStatusResponse = record {
   prepared_at : opt nat64;
   changed_at : nat64;
@@ -561,9 +310,6 @@ type WasmStoreGcStatusResponse = record {
   completed_at : opt nat64;
   started_at : opt nat64;
 };
-// 
-// WasmStoreStatusResponse
-// 
 type WasmStoreStatusResponse = record {
   gc : WasmStoreGcStatusResponse;
   templates : vec WasmStoreTemplateStatusResponse;
@@ -581,9 +327,6 @@ type WasmStoreStatusResponse = record {
   occupied_store_size : text;
   template_count : nat32;
 };
-// 
-// WasmStoreTemplateStatusResponse
-// 
 type WasmStoreTemplateStatusResponse = record {
   template_id : text;
   versions : nat16;

@@ -4,7 +4,9 @@ use super::{
 };
 use crate::{
     InternalError,
-    dto::rpc::{Response, RootCapabilityCommand},
+    cdk::types::Principal,
+    dto::rpc::Response,
+    ids::CanisterRole,
     ops::{
         replay::{
             self as replay_ops, ReplayCommitError, ReplayReserveError,
@@ -17,10 +19,8 @@ use crate::{
     workflow::rpc::RpcWorkflowError,
 };
 #[cfg(test)]
-use crate::{
-    cdk::types::Principal, ops::replay::key as replay_key, storage::stable::replay::ReplaySlotKey,
-};
-use candid::{decode_one, encode_one};
+use crate::{ops::replay::key as replay_key, storage::stable::replay::ReplaySlotKey};
+use candid::decode_one;
 use sha2::{Digest, Sha256};
 
 /// ReplayPreflight
@@ -44,7 +44,7 @@ pub(super) fn check_replay(
     let metadata = capability
         .metadata()
         .ok_or(RpcWorkflowError::MissingReplayMetadata(capability_name))?;
-    let payload_hash = capability.payload_hash()?;
+    let payload_hash = capability.payload_hash();
     crate::perf!("prepare_replay_input");
 
     let decision =
@@ -171,16 +171,111 @@ pub(super) fn abort_replay(pending: ReplayPending) {
     crate::perf!("abort_replay");
 }
 
-/// hash_capability_payload
+/// payload_hasher
 ///
-/// Compute replay payload hash for canonical capability request bytes.
-pub(super) fn hash_capability_payload(
-    payload: &RootCapabilityCommand,
-) -> Result<[u8; 32], InternalError> {
-    let bytes = encode_one(payload).map_err(|err| {
-        RpcWorkflowError::ReplayEncodeFailed(format!("canonical payload encode failed: {err}"))
-    })?;
-    Ok(hash_domain_separated(REPLAY_PAYLOAD_HASH_DOMAIN, &bytes))
+/// Start a replay payload hasher with the shared domain prefix applied.
+pub(super) fn payload_hasher() -> Sha256 {
+    let mut hasher = Sha256::new();
+    hasher.update((REPLAY_PAYLOAD_HASH_DOMAIN.len() as u64).to_be_bytes());
+    hasher.update(REPLAY_PAYLOAD_HASH_DOMAIN);
+    hasher
+}
+
+/// hash_u64
+///
+/// Append one fixed-width `u64` field to the replay payload hash.
+pub(super) fn hash_u64(hasher: &mut Sha256, value: u64) {
+    hasher.update(value.to_be_bytes());
+}
+
+/// hash_u128
+///
+/// Append one fixed-width `u128` field to the replay payload hash.
+pub(super) fn hash_u128(hasher: &mut Sha256, value: u128) {
+    hasher.update(value.to_be_bytes());
+}
+
+/// hash_bool
+///
+/// Append one boolean field to the replay payload hash.
+pub(super) fn hash_bool(hasher: &mut Sha256, value: bool) {
+    hasher.update([u8::from(value)]);
+}
+
+/// hash_bytes
+///
+/// Append one length-prefixed byte slice to the replay payload hash.
+pub(super) fn hash_bytes(hasher: &mut Sha256, bytes: &[u8]) {
+    hasher.update((bytes.len() as u64).to_be_bytes());
+    hasher.update(bytes);
+}
+
+/// hash_str
+///
+/// Append one UTF-8 string field to the replay payload hash.
+pub(super) fn hash_str(hasher: &mut Sha256, value: &str) {
+    hash_bytes(hasher, value.as_bytes());
+}
+
+/// hash_role
+///
+/// Append one canister role field to the replay payload hash.
+pub(super) fn hash_role(hasher: &mut Sha256, role: &CanisterRole) {
+    hash_str(hasher, role.as_str());
+}
+
+/// hash_principal
+///
+/// Append one principal field to the replay payload hash.
+pub(super) fn hash_principal(hasher: &mut Sha256, principal: &Principal) {
+    hash_bytes(hasher, principal.as_slice());
+}
+
+/// hash_principals
+///
+/// Append one principal-vector field to the replay payload hash.
+pub(super) fn hash_principals(hasher: &mut Sha256, principals: &[Principal]) {
+    hash_u64(hasher, principals.len() as u64);
+    for principal in principals {
+        hash_principal(hasher, principal);
+    }
+}
+
+/// hash_strings
+///
+/// Append one string-vector field to the replay payload hash.
+pub(super) fn hash_strings(hasher: &mut Sha256, values: &[String]) {
+    hash_u64(hasher, values.len() as u64);
+    for value in values {
+        hash_str(hasher, value);
+    }
+}
+
+/// hash_optional_principal
+///
+/// Append one optional principal field to the replay payload hash.
+pub(super) fn hash_optional_principal(hasher: &mut Sha256, principal: Option<Principal>) {
+    hash_bool(hasher, principal.is_some());
+    if let Some(principal) = principal {
+        hash_principal(hasher, &principal);
+    }
+}
+
+/// hash_optional_bytes
+///
+/// Append one optional byte-vector field to the replay payload hash.
+pub(super) fn hash_optional_bytes(hasher: &mut Sha256, bytes: Option<&[u8]>) {
+    hash_bool(hasher, bytes.is_some());
+    if let Some(bytes) = bytes {
+        hash_bytes(hasher, bytes);
+    }
+}
+
+/// finish_payload_hash
+///
+/// Finalize a prepared replay payload hash.
+pub(super) fn finish_payload_hash(hasher: Sha256) -> [u8; 32] {
+    hasher.finalize().into()
 }
 
 /// replay_slot_key
@@ -198,6 +293,7 @@ pub(super) fn replay_slot_key(
 /// hash_domain_separated
 ///
 /// Build deterministic domain-separated hash values for replay payloads.
+#[cfg(test)]
 pub(super) fn hash_domain_separated(domain: &[u8], payload: &[u8]) -> [u8; 32] {
     let mut hasher = Sha256::new();
     hasher.update((domain.len() as u64).to_be_bytes());

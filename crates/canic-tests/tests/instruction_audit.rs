@@ -5,15 +5,22 @@ mod root;
 
 use canic::{
     Error,
-    cdk::utils::wasm::get_wasm_hash,
+    cdk::{types::Principal, utils::wasm::get_wasm_hash},
     dto::{
+        auth::{DelegatedToken, DelegatedTokenClaims, DelegationRequest},
+        capability::{
+            CAPABILITY_VERSION_V1, CapabilityProof, CapabilityRequestMetadata, CapabilityService,
+            RootCapabilityEnvelopeV1, RootCapabilityResponseV1,
+        },
         env::EnvSnapshotResponse,
         log::LogEntry,
         metrics::{MetricEntry, MetricValue, MetricsKind},
         page::{Page, PageRequest},
+        rpc::{CyclesRequest, Request, Response, RootRequestMetadata},
         state::SubnetStateResponse,
         topology::SubnetRegistryResponse,
     },
+    ids::cap,
     protocol,
 };
 use canic_control_plane::{
@@ -25,12 +32,13 @@ use canic_control_plane::{
         TemplateChunkingMode, TemplateId, TemplateManifestState, TemplateVersion, WasmStoreBinding,
     },
 };
-use canic_internal::canister::{APP, SCALE_HUB, TEST};
+use canic_internal::canister::{APP, SCALE_HUB, TEST, USER_HUB};
 use canic_testkit::pic::Pic;
-use root::harness::setup_root;
+use root::harness::{setup_root, setup_root_with_release_roles};
 use serde::Serialize;
 use std::{
     collections::BTreeSet,
+    convert::TryFrom,
     env, fs,
     path::{Path, PathBuf},
 };
@@ -38,6 +46,20 @@ use std::{
 const METHOD_TAG: &str = "Method V1";
 const PERF_PAGE_LIMIT: u64 = 512;
 const CHECKPOINT_SCAN_ROOTS: &[&str] = &["crates"];
+const APP_CANIC_TIME_PERF_TEST: &str = "canic_time_perf_test";
+const APP_CANIC_ENV_PERF_TEST: &str = "canic_env_perf_test";
+const APP_CANIC_LOG_PERF_TEST: &str = "canic_log_perf_test";
+const ROOT_CANIC_SUBNET_REGISTRY_PERF_TEST: &str = "canic_subnet_registry_perf_test";
+const ROOT_CANIC_SUBNET_STATE_PERF_TEST: &str = "canic_subnet_state_perf_test";
+const SCALE_HUB_PLAN_CREATE_WORKER_PERF_TEST: &str = "plan_create_worker_perf_test";
+const ROOT_SHARDING_RELEASE_ROLES: &[&str] = &[
+    "app",
+    "scale",
+    "scale_hub",
+    "test",
+    "user_hub",
+    "user_shard",
+];
 const FLOW_GAPS: &[(&str, &str)] = &[
     (
         "root capability dispatch",
@@ -132,6 +154,33 @@ struct CanonicalPerfRow {
 struct ScenarioResult {
     scenario: AuditScenario,
     row: CanonicalPerfRow,
+    checkpoint_rows: Vec<CheckpointDeltaRow>,
+}
+
+///
+/// PreparedScenario
+///
+
+struct PreparedScenario {
+    target_pid: Principal,
+    caller_pid: Option<Principal>,
+    delegated_token: Option<DelegatedToken>,
+}
+
+///
+/// CheckpointDeltaRow
+///
+
+#[derive(Serialize)]
+struct CheckpointDeltaRow {
+    scenario_key: String,
+    canister: String,
+    endpoint_or_flow: String,
+    scope: String,
+    label: String,
+    count: u64,
+    total_local_instructions: u64,
+    avg_local_instructions: u64,
 }
 
 ///
@@ -215,6 +264,7 @@ fn generate_instruction_footprint_report() {
     let method_path = paths.artifacts_dir.join("method.json");
     let environment_path = paths.artifacts_dir.join("environment.json");
     let endpoint_matrix_path = paths.artifacts_dir.join("endpoint-matrix.tsv");
+    let checkpoint_delta_path = paths.artifacts_dir.join("checkpoint-deltas.json");
     let checkpoint_gap_path = paths.artifacts_dir.join("checkpoint-coverage-gaps.json");
 
     write_json(&scenario_manifest_path, &scenarios);
@@ -227,7 +277,12 @@ fn generate_instruction_footprint_report() {
         .iter()
         .map(|result| &result.row)
         .collect::<Vec<&CanonicalPerfRow>>();
+    let checkpoint_rows = results
+        .iter()
+        .flat_map(|result| result.checkpoint_rows.iter())
+        .collect::<Vec<_>>();
     write_json(&perf_rows_path, &perf_rows);
+    write_json(&checkpoint_delta_path, &checkpoint_rows);
     write_endpoint_matrix_tsv(&endpoint_matrix_path, &results);
 
     let gaps = checkpoint_coverage_gaps(&checkpoint_sites);
@@ -239,14 +294,19 @@ fn generate_instruction_footprint_report() {
         .filter(|result| query_perf_is_unobservable(&result.scenario, &result.row))
         .count();
 
-    let verification_rows = verification_rows(&paths, &checkpoint_sites, query_unobservable_count);
+    let verification_rows = verification_rows(
+        &paths,
+        &checkpoint_sites,
+        query_unobservable_count,
+        checkpoint_rows.len(),
+    );
     write_verification_readout(&verification_path, &verification_rows);
 
     let method = MethodArtifact {
         method_tag: METHOD_TAG.to_string(),
-        normalization: "MetricsKind::Perf rows are normalized into canonical endpoint rows. Update/timer lanes produce comparable persisted deltas; successful query lanes currently do not persist `PERF_TABLE` deltas and are reported as method-limited rather than true zero-cost rows.".to_string(),
+        normalization: "MetricsKind::Perf rows are normalized into canonical endpoint rows. Update/timer lanes use persisted perf deltas; sampled query lanes use local-only same-call probe endpoints that return the measured `perf_counter()` alongside the real query result.".to_string(),
         freshness_rule: "One fresh `setup_root()` topology per measured scenario; baseline and post-call perf tables sampled inside that isolated topology.".to_string(),
-        checkpoint_rule: "Checkpoint deltas are unavailable until real `perf!` call sites exist; flows are reported as coverage gaps rather than inferred.".to_string(),
+        checkpoint_rule: "Checkpoint deltas are diffed from `MetricsKind::Perf` rows before/after sampled update scenarios. Query scenarios remain endpoint-only unless they traverse explicit checkpoint instrumentation.".to_string(),
     };
     write_json(&method_path, &method);
 
@@ -261,6 +321,7 @@ fn generate_instruction_footprint_report() {
             "root".to_string(),
             "scale_hub".to_string(),
             "test".to_string(),
+            "user_hub".to_string(),
         ],
         target_endpoints_in_scope: scenarios
             .iter()
@@ -385,6 +446,70 @@ fn scenarios() -> Vec<AuditScenario> {
             notes: "Scaling dry-run query before any extra worker exists in the pool.",
         },
         AuditScenario {
+            key: "scale_hub:create_worker:first-worker",
+            canister: "scale_hub",
+            endpoint_or_flow: "create_worker",
+            transport_mode: "update",
+            subject_kind: "endpoint",
+            subject_label: "create_worker",
+            arg_class: "empty-pool",
+            caller_class: "anonymous",
+            auth_state: "local-test-only",
+            replay_state: "n/a",
+            cache_state: "cold",
+            topology_state: "root_bootstrapped+no-extra-workers",
+            freshness_model: "fresh-topology-per-scenario",
+            notes: "Scaling worker creation update over the empty local pool to exercise placement checkpoints.",
+        },
+        AuditScenario {
+            key: "user_hub:create_account:first-account",
+            canister: "user_hub",
+            endpoint_or_flow: "create_account",
+            transport_mode: "update",
+            subject_kind: "endpoint",
+            subject_label: "create_account",
+            arg_class: "new-principal",
+            caller_class: "anonymous",
+            auth_state: "local-test-only",
+            replay_state: "n/a",
+            cache_state: "cold",
+            topology_state: "root_bootstrapped+user_shard-template-staged",
+            freshness_model: "fresh-topology-per-scenario",
+            notes: "Sharding assignment update for a brand-new principal to exercise shard placement checkpoints.",
+        },
+        AuditScenario {
+            key: "root:canic_request_delegation:fresh-shard",
+            canister: "root",
+            endpoint_or_flow: "canic_request_delegation",
+            transport_mode: "update",
+            subject_kind: "endpoint",
+            subject_label: "canic_request_delegation",
+            arg_class: "fresh-shard",
+            caller_class: "registered-shard",
+            auth_state: "registered-subnet-caller",
+            replay_state: "fresh",
+            cache_state: "cold",
+            topology_state: "root_bootstrapped+fresh-user-shard",
+            freshness_model: "fresh-topology-per-scenario",
+            notes: "Root delegation provisioning request from a freshly created shard to exercise delegated auth issuance and proof fanout checkpoints.",
+        },
+        AuditScenario {
+            key: "test:test_verify_delegated_token:valid-delegated-token",
+            canister: "test",
+            endpoint_or_flow: "test_verify_delegated_token",
+            transport_mode: "update",
+            subject_kind: "endpoint",
+            subject_label: "test_verify_delegated_token",
+            arg_class: "valid-delegated-token",
+            caller_class: "delegated-subject",
+            auth_state: "delegated-token",
+            replay_state: "n/a",
+            cache_state: "cold",
+            topology_state: "root_bootstrapped+fresh-user-shard+verifier-ready",
+            freshness_model: "fresh-topology-per-scenario",
+            notes: "Verifier-side delegated token confirmation on the shared test canister using a freshly minted token from a newly created user shard.",
+        },
+        AuditScenario {
             key: "test:test:minimal-valid",
             canister: "test",
             endpoint_or_flow: "test",
@@ -399,6 +524,22 @@ fn scenarios() -> Vec<AuditScenario> {
             topology_state: "root_bootstrapped+local-test-helper-ready",
             freshness_model: "fresh-topology-per-scenario",
             notes: "Minimal local/dev update on the shared test helper canister with no chain-key dependency.",
+        },
+        AuditScenario {
+            key: "root:canic_response_capability_v1:request-cycles-fresh",
+            canister: "root",
+            endpoint_or_flow: "canic_response_capability_v1",
+            transport_mode: "update",
+            subject_kind: "endpoint",
+            subject_label: "canic_response_capability_v1",
+            arg_class: "cycles-request",
+            caller_class: "registered-direct-child",
+            auth_state: "structural-proof",
+            replay_state: "fresh",
+            cache_state: "cold",
+            topology_state: "root_bootstrapped+local-test-helper-ready",
+            freshness_model: "fresh-topology-per-scenario",
+            notes: "Fresh root capability cycles request from a registered direct child to exercise replay and dispatcher checkpoints.",
         },
         AuditScenario {
             key: "root:canic_template_stage_manifest_admin:single-chunk",
@@ -479,32 +620,65 @@ fn audit_metadata() -> AuditMetadata {
     }
 }
 
+// Return the current workspace minor line like `0.24`.
+fn current_minor_line() -> String {
+    let version = env!("CARGO_PKG_VERSION");
+    let mut parts = version.split('.');
+    let major = parts.next().unwrap_or("0");
+    let minor = parts.next().unwrap_or("0");
+    format!("{major}.{minor}")
+}
+
 // Require one environment variable and panic early when the runner forgot it.
 fn required_env(key: &str) -> String {
     env::var(key).unwrap_or_else(|_| panic!("missing required env var: {key}"))
 }
 
-// Query calls do not currently leave comparable persisted perf deltas.
+// Query rows only count as unobservable if the probe path failed to return a
+// same-call local instruction counter.
 fn query_perf_is_unobservable(scenario: &AuditScenario, row: &CanonicalPerfRow) -> bool {
     scenario.transport_mode == "query" && row.count == 0
 }
 
+// Choose the fresh root topology shape required for one scenario.
+fn setup_for_scenario(scenario: &AuditScenario) -> root::harness::RootSetup {
+    match scenario.key {
+        "user_hub:create_account:first-account"
+        | "root:canic_request_delegation:fresh-shard"
+        | "test:test_verify_delegated_token:valid-delegated-token" => {
+            setup_root_with_release_roles(ROOT_SHARDING_RELEASE_ROLES)
+        }
+        _ => setup_root(),
+    }
+}
+
 // Execute one scenario in an isolated fresh topology and derive the endpoint delta.
 fn run_scenario(scenario: &AuditScenario) -> ScenarioResult {
-    let setup = setup_root();
-    let target_pid = scenario_target_pid(setup.root_id, scenario, &setup.subnet_directory);
-    prepare_scenario(&setup.pic, scenario, setup.root_id);
-    let before = perf_entries(&setup.pic, target_pid);
-
-    execute_scenario(&setup.pic, scenario, target_pid);
-
-    let after = perf_entries(&setup.pic, target_pid);
-    let (count, total_instructions) = perf_delta(
-        &before,
-        &after,
-        scenario.subject_kind,
-        scenario.subject_label,
-    );
+    let setup = setup_for_scenario(scenario);
+    let prepared = prepare_scenario(&setup, scenario);
+    let target_pid = prepared.target_pid;
+    let (count, total_instructions, sample_origin, checkpoint_rows) =
+        if scenario.transport_mode == "query" {
+            let total = execute_query_perf_probe(&setup.pic, scenario, target_pid);
+            (1, total, "derived".to_string(), Vec::new())
+        } else {
+            let before = perf_entries(&setup.pic, target_pid);
+            execute_scenario(&setup, scenario, &prepared);
+            let after = perf_entries(&setup.pic, target_pid);
+            let (count, total_instructions) = perf_delta(
+                &before,
+                &after,
+                scenario.subject_kind,
+                scenario.subject_label,
+            );
+            let checkpoint_rows = checkpoint_deltas(scenario, &before, &after);
+            (
+                count,
+                total_instructions,
+                "derived".to_string(),
+                checkpoint_rows,
+            )
+        };
     let avg_local_instructions = if count == 0 {
         0
     } else {
@@ -534,8 +708,9 @@ fn run_scenario(scenario: &AuditScenario) -> ScenarioResult {
                 format!("method_tag={METHOD_TAG}"),
             ],
             principal_scope: Some(scenario.caller_class.to_string()),
-            sample_origin: "derived".to_string(),
+            sample_origin,
         },
+        checkpoint_rows,
     }
 }
 
@@ -556,6 +731,9 @@ fn scenario_target_pid(
         "scale_hub" => *subnet_directory
             .get(&SCALE_HUB)
             .expect("scale_hub must exist in subnet directory"),
+        "user_hub" => *subnet_directory
+            .get(&USER_HUB)
+            .expect("user_hub must exist in subnet directory"),
         "test" => *subnet_directory
             .get(&TEST)
             .expect("test must exist in subnet directory"),
@@ -564,41 +742,278 @@ fn scenario_target_pid(
 }
 
 // Prepare scenario-specific prerequisites outside the measured perf window.
-fn prepare_scenario(pic: &Pic, scenario: &AuditScenario, root_id: canic::cdk::types::Principal) {
+fn prepare_scenario(
+    setup: &root::harness::RootSetup,
+    scenario: &AuditScenario,
+) -> PreparedScenario {
+    let target_pid = scenario_target_pid(setup.root_id, scenario, &setup.subnet_directory);
+
     match scenario.key {
         "root:canic_template_prepare_admin:single-chunk" => {
             let fixture = audit_template_fixture(scenario);
-            stage_manifest(pic, root_id, &fixture.manifest);
+            stage_manifest(&setup.pic, target_pid, &fixture.manifest);
+            PreparedScenario {
+                target_pid,
+                caller_pid: None,
+                delegated_token: None,
+            }
         }
         "root:canic_template_publish_chunk_admin:single-chunk" => {
             let fixture = audit_template_fixture(scenario);
-            stage_manifest(pic, root_id, &fixture.manifest);
-            prepare_chunk_set(pic, root_id, &fixture.prepare);
+            stage_manifest(&setup.pic, target_pid, &fixture.manifest);
+            prepare_chunk_set(&setup.pic, target_pid, &fixture.prepare);
+            PreparedScenario {
+                target_pid,
+                caller_pid: None,
+                delegated_token: None,
+            }
         }
-        _ => {}
+        "root:canic_request_delegation:fresh-shard" => {
+            let user_hub_pid = *setup
+                .subnet_directory
+                .get(&USER_HUB)
+                .expect("user_hub must exist for auth audit scenario");
+            let shard_pid =
+                create_user_shard(&setup.pic, user_hub_pid, Principal::from_slice(&[43; 29]));
+            PreparedScenario {
+                target_pid,
+                caller_pid: Some(shard_pid),
+                delegated_token: None,
+            }
+        }
+        "test:test_verify_delegated_token:valid-delegated-token" => {
+            let user_hub_pid = *setup
+                .subnet_directory
+                .get(&USER_HUB)
+                .expect("user_hub must exist for verifier auth audit scenario");
+            let shard_pid =
+                create_user_shard(&setup.pic, user_hub_pid, Principal::from_slice(&[44; 29]));
+            let subject = Principal::from_slice(&[45; 29]);
+            let provision = request_root_delegation_provision(setup, shard_pid, target_pid);
+            let token = issue_delegated_token(
+                &setup.pic,
+                shard_pid,
+                target_pid,
+                subject,
+                provision.proof.cert.issued_at,
+                provision.proof.cert.expires_at,
+            );
+            PreparedScenario {
+                target_pid,
+                caller_pid: Some(subject),
+                delegated_token: Some(token),
+            }
+        }
+        _ => PreparedScenario {
+            target_pid,
+            caller_pid: None,
+            delegated_token: None,
+        },
     }
 }
 
 // Execute the actual endpoint call for one scenario.
-fn execute_scenario(pic: &Pic, scenario: &AuditScenario, target_pid: canic::cdk::types::Principal) {
+fn execute_scenario(
+    setup: &root::harness::RootSetup,
+    scenario: &AuditScenario,
+    prepared: &PreparedScenario,
+) {
+    let target_pid = prepared.target_pid;
+    match scenario.key {
+        "scale_hub:create_worker:first-worker" => {
+            let response: Result<Principal, Error> = setup
+                .pic
+                .update_call(target_pid, "create_worker", ())
+                .expect("create_worker transport failed");
+            let _ = response.expect("create_worker application failed");
+        }
+        "user_hub:create_account:first-account" => {
+            let response: Result<Principal, Error> = setup
+                .pic
+                .update_call(
+                    target_pid,
+                    "create_account",
+                    (Principal::from_slice(&[42; 29]),),
+                )
+                .expect("create_account transport failed");
+            let _ = response.expect("create_account application failed");
+        }
+        "root:canic_request_delegation:fresh-shard" => {
+            execute_root_delegation_issue_scenario(setup, target_pid, prepared);
+        }
+        "test:test:minimal-valid" => {
+            let response: Result<(), Error> = setup
+                .pic
+                .update_call(target_pid, "test", ())
+                .expect("test transport failed");
+            response.expect("test application failed");
+        }
+        "test:test_verify_delegated_token:valid-delegated-token" => {
+            execute_verifier_auth_scenario(setup, target_pid, prepared);
+        }
+        "root:canic_response_capability_v1:request-cycles-fresh" => {
+            execute_root_cycles_scenario(setup, target_pid);
+        }
+        "root:canic_template_stage_manifest_admin:single-chunk" => {
+            let fixture = audit_template_fixture(scenario);
+            stage_manifest(&setup.pic, target_pid, &fixture.manifest);
+        }
+        "root:canic_template_prepare_admin:single-chunk" => {
+            let fixture = audit_template_fixture(scenario);
+            prepare_chunk_set(&setup.pic, target_pid, &fixture.prepare);
+        }
+        "root:canic_template_publish_chunk_admin:single-chunk" => {
+            let fixture = audit_template_fixture(scenario);
+            publish_chunk(&setup.pic, target_pid, &fixture.chunk);
+        }
+        other => panic!("unsupported audit scenario: {other}"),
+    }
+}
+
+// Execute the root-side delegated auth issuance scenario from a fresh shard.
+fn execute_root_delegation_issue_scenario(
+    setup: &root::harness::RootSetup,
+    _target_pid: Principal,
+    prepared: &PreparedScenario,
+) {
+    let caller = prepared
+        .caller_pid
+        .expect("auth audit scenario must resolve a shard caller");
+    let verifier_pid = *setup
+        .subnet_directory
+        .get(&TEST)
+        .expect("test canister must exist for auth audit scenario");
+    let response = request_root_delegation_provision(setup, caller, verifier_pid);
+    assert_eq!(response.proof.cert.shard_pid, caller);
+}
+
+// Execute the verifier-side delegated token confirmation scenario.
+fn execute_verifier_auth_scenario(
+    setup: &root::harness::RootSetup,
+    target_pid: Principal,
+    prepared: &PreparedScenario,
+) {
+    let caller = prepared
+        .caller_pid
+        .expect("verifier auth audit scenario must resolve a delegated subject caller");
+    let token = prepared
+        .delegated_token
+        .clone()
+        .expect("verifier auth audit scenario must mint a delegated token");
+    let response: Result<Result<(), Error>, Error> =
+        setup
+            .pic
+            .update_call_as(target_pid, caller, "test_verify_delegated_token", (token,));
+    response
+        .expect("test_verify_delegated_token transport failed")
+        .expect("test_verify_delegated_token application failed");
+}
+
+// Execute the fresh root cycles request scenario through the root dispatcher.
+fn execute_root_cycles_scenario(setup: &root::harness::RootSetup, target_pid: Principal) {
+    let caller = *setup
+        .subnet_directory
+        .get(&TEST)
+        .expect("test canister must exist for root capability request");
+    let request = Request::Cycles(CyclesRequest {
+        cycles: 999,
+        metadata: Some(metadata([90u8; 32], 120)),
+    });
+    let response = root_capability_response_as(setup, target_pid, caller, request)
+        .expect("fresh root cycles capability request must succeed");
+    match response {
+        Response::Cycles(response) => {
+            assert_eq!(response.cycles_transferred, 999);
+        }
+        other => panic!("expected cycles response, got: {other:?}"),
+    }
+}
+
+// Create one user shard through the reference `user_hub` path.
+fn create_user_shard(pic: &Pic, user_hub_pid: Principal, tenant: Principal) -> Principal {
+    let created: Result<Principal, Error> = pic
+        .update_call(user_hub_pid, "create_account", (tenant,))
+        .expect("create_account transport failed");
+    created.expect("create_account application failed")
+}
+
+// Mint one delegated token from a prepared local test shard.
+fn issue_delegated_token(
+    pic: &Pic,
+    shard_pid: Principal,
+    verifier_pid: Principal,
+    subject: Principal,
+    issued_at: u64,
+    expires_at: u64,
+) -> DelegatedToken {
+    let claims = DelegatedTokenClaims {
+        sub: subject,
+        shard_pid,
+        aud: vec![verifier_pid],
+        scopes: vec![cap::VERIFY.to_string()],
+        iat: issued_at,
+        exp: expires_at,
+    };
+    let issued: Result<DelegatedToken, Error> = pic
+        .update_call(shard_pid, "user_shard_issue_token", (claims,))
+        .expect("user_shard_issue_token transport failed");
+    issued.expect("user_shard_issue_token application failed")
+}
+
+// Request one canonical root-issued delegation for a shard/verifier pair.
+fn request_root_delegation_provision(
+    setup: &root::harness::RootSetup,
+    shard_pid: Principal,
+    verifier_pid: Principal,
+) -> canic::dto::auth::DelegationProvisionResponse {
+    let request = DelegationRequest {
+        shard_pid,
+        scopes: vec![cap::VERIFY.to_string()],
+        aud: vec![verifier_pid],
+        ttl_secs: 60,
+        verifier_targets: vec![verifier_pid],
+        include_root_verifier: true,
+        metadata: None,
+    };
+    let response: Result<Result<canic::dto::auth::DelegationProvisionResponse, Error>, Error> =
+        setup.pic.update_call_as(
+            setup.root_id,
+            shard_pid,
+            protocol::CANIC_REQUEST_DELEGATION,
+            (request,),
+        );
+    response
+        .expect("canic_request_delegation transport failed")
+        .expect("canic_request_delegation application failed")
+}
+
+// Execute the query path inside a same-call perf probe endpoint and return the
+// measured local instruction counter from that call context.
+fn execute_query_perf_probe(
+    pic: &Pic,
+    scenario: &AuditScenario,
+    target_pid: canic::cdk::types::Principal,
+) -> u64 {
     match scenario.key {
         "app:canic_time:minimal-valid" => {
-            let response: Result<u64, Error> = pic
-                .query_call(target_pid, protocol::CANIC_TIME, ())
-                .expect("canic_time transport query failed");
-            let _ = response.expect("canic_time application query failed");
+            let response: Result<(u64, u64), Error> = pic
+                .query_call(target_pid, APP_CANIC_TIME_PERF_TEST, ())
+                .expect("canic_time_perf_test transport query failed");
+            let (_value, perf) = response.expect("canic_time_perf_test application query failed");
+            perf
         }
         "app:canic_env:minimal-valid" => {
-            let response: Result<EnvSnapshotResponse, Error> = pic
-                .query_call(target_pid, protocol::CANIC_ENV, ())
-                .expect("canic_env transport query failed");
-            let _ = response.expect("canic_env application query failed");
+            let response: Result<(EnvSnapshotResponse, u64), Error> = pic
+                .query_call(target_pid, APP_CANIC_ENV_PERF_TEST, ())
+                .expect("canic_env_perf_test transport query failed");
+            let (_value, perf) = response.expect("canic_env_perf_test application query failed");
+            perf
         }
         "app:canic_log:empty-page" => {
-            let response: Result<Page<LogEntry>, Error> = pic
+            let response: Result<(Page<LogEntry>, u64), Error> = pic
                 .query_call(
                     target_pid,
-                    protocol::CANIC_LOG,
+                    APP_CANIC_LOG_PERF_TEST,
                     (
                         Option::<String>::None,
                         Option::<String>::None,
@@ -609,46 +1024,35 @@ fn execute_scenario(pic: &Pic, scenario: &AuditScenario, target_pid: canic::cdk:
                         },
                     ),
                 )
-                .expect("canic_log transport query failed");
-            let _ = response.expect("canic_log application query failed");
+                .expect("canic_log_perf_test transport query failed");
+            let (_value, perf) = response.expect("canic_log_perf_test application query failed");
+            perf
         }
         "root:canic_subnet_registry:full-registry" => {
-            let response: Result<SubnetRegistryResponse, Error> = pic
-                .query_call(target_pid, protocol::CANIC_SUBNET_REGISTRY, ())
-                .expect("canic_subnet_registry transport query failed");
-            let _ = response.expect("canic_subnet_registry application query failed");
+            let response: Result<(SubnetRegistryResponse, u64), Error> = pic
+                .query_call(target_pid, ROOT_CANIC_SUBNET_REGISTRY_PERF_TEST, ())
+                .expect("canic_subnet_registry_perf_test transport query failed");
+            let (_value, perf) =
+                response.expect("canic_subnet_registry_perf_test application query failed");
+            perf
         }
         "root:canic_subnet_state:empty-struct" => {
-            let response: Result<SubnetStateResponse, Error> = pic
-                .query_call(target_pid, protocol::CANIC_SUBNET_STATE, ())
-                .expect("canic_subnet_state transport query failed");
-            let _ = response.expect("canic_subnet_state application query failed");
+            let response: Result<(SubnetStateResponse, u64), Error> = pic
+                .query_call(target_pid, ROOT_CANIC_SUBNET_STATE_PERF_TEST, ())
+                .expect("canic_subnet_state_perf_test transport query failed");
+            let (_value, perf) =
+                response.expect("canic_subnet_state_perf_test application query failed");
+            perf
         }
         "scale_hub:plan_create_worker:empty-pool" => {
-            let response: Result<bool, Error> = pic
-                .query_call(target_pid, "plan_create_worker", ())
-                .expect("plan_create_worker transport failed");
-            let _ = response.expect("plan_create_worker application failed");
+            let response: Result<(bool, u64), Error> = pic
+                .query_call(target_pid, SCALE_HUB_PLAN_CREATE_WORKER_PERF_TEST, ())
+                .expect("plan_create_worker_perf_test transport query failed");
+            let (_value, perf) =
+                response.expect("plan_create_worker_perf_test application query failed");
+            perf
         }
-        "test:test:minimal-valid" => {
-            let response: Result<(), Error> = pic
-                .update_call(target_pid, "test", ())
-                .expect("test transport failed");
-            response.expect("test application failed");
-        }
-        "root:canic_template_stage_manifest_admin:single-chunk" => {
-            let fixture = audit_template_fixture(scenario);
-            stage_manifest(pic, target_pid, &fixture.manifest);
-        }
-        "root:canic_template_prepare_admin:single-chunk" => {
-            let fixture = audit_template_fixture(scenario);
-            prepare_chunk_set(pic, target_pid, &fixture.prepare);
-        }
-        "root:canic_template_publish_chunk_admin:single-chunk" => {
-            let fixture = audit_template_fixture(scenario);
-            publish_chunk(pic, target_pid, &fixture.chunk);
-        }
-        other => panic!("unsupported audit scenario: {other}"),
+        other => panic!("unsupported query perf probe scenario: {other}"),
     }
 }
 
@@ -797,6 +1201,150 @@ fn perf_slot(entries: &[MetricEntry], subject_kind: &str, subject_label: &str) -
         .unwrap_or((0, 0))
 }
 
+// Derive checkpoint deltas from two perf snapshots for one sampled update scenario.
+fn checkpoint_deltas(
+    scenario: &AuditScenario,
+    before: &[MetricEntry],
+    after: &[MetricEntry],
+) -> Vec<CheckpointDeltaRow> {
+    let mut rows = after
+        .iter()
+        .filter_map(|entry| {
+            let [kind, scope, label] = entry.labels.as_slice() else {
+                return None;
+            };
+            if kind != "checkpoint" {
+                return None;
+            }
+
+            let before_slot = perf_checkpoint_slot(before, scope, label);
+            let after_slot = match entry.value {
+                MetricValue::CountAndU64 { count, value_u64 } => (count, value_u64),
+                MetricValue::Count(count) => (count, 0),
+                MetricValue::U128(_) => (0, 0),
+            };
+
+            let count = after_slot.0.saturating_sub(before_slot.0);
+            let total_local_instructions = after_slot.1.saturating_sub(before_slot.1);
+            if count == 0 && total_local_instructions == 0 {
+                return None;
+            }
+
+            Some(CheckpointDeltaRow {
+                scenario_key: scenario.key.to_string(),
+                canister: scenario.canister.to_string(),
+                endpoint_or_flow: scenario.endpoint_or_flow.to_string(),
+                scope: scope.clone(),
+                label: label.clone(),
+                count,
+                total_local_instructions,
+                avg_local_instructions: if count == 0 {
+                    0
+                } else {
+                    total_local_instructions / count
+                },
+            })
+        })
+        .collect::<Vec<_>>();
+
+    rows.sort_by_key(|row| std::cmp::Reverse(row.total_local_instructions));
+    rows
+}
+
+// Project one checkpoint row into `(count, total_instructions)`.
+fn perf_checkpoint_slot(entries: &[MetricEntry], scope: &str, label: &str) -> (u64, u64) {
+    entries
+        .iter()
+        .find_map(|entry| {
+            let [kind, entry_scope, entry_label] = entry.labels.as_slice() else {
+                return None;
+            };
+            if kind == "checkpoint" && entry_scope == scope && entry_label == label {
+                Some(match entry.value {
+                    MetricValue::CountAndU64 { count, value_u64 } => (count, value_u64),
+                    MetricValue::Count(count) => (count, 0),
+                    MetricValue::U128(_) => (0, 0),
+                })
+            } else {
+                None
+            }
+        })
+        .unwrap_or((0, 0))
+}
+
+// Execute one structural root capability call as the requested child caller.
+fn root_capability_response_as(
+    setup: &root::harness::RootSetup,
+    target_pid: Principal,
+    caller: Principal,
+    request: Request,
+) -> Result<Response, Error> {
+    let (request_id, nonce, ttl_seconds) = capability_metadata_from_request(&request);
+    let envelope = RootCapabilityEnvelopeV1 {
+        service: CapabilityService::Root,
+        capability_version: CAPABILITY_VERSION_V1,
+        capability: request,
+        proof: CapabilityProof::Structural,
+        metadata: CapabilityRequestMetadata {
+            request_id,
+            nonce,
+            issued_at: target_now_secs(setup, target_pid),
+            ttl_seconds,
+        },
+    };
+
+    let result: Result<Result<RootCapabilityResponseV1, Error>, Error> = setup.pic.update_call_as(
+        target_pid,
+        caller,
+        protocol::CANIC_RESPONSE_CAPABILITY_V1,
+        (envelope,),
+    );
+    result
+        .expect("root capability transport call failed")
+        .map(|response| response.response)
+}
+
+// Read one canister's current time in seconds for capability metadata issuance.
+fn target_now_secs(setup: &root::harness::RootSetup, canister_id: Principal) -> u64 {
+    let now: Result<u64, Error> = setup
+        .pic
+        .query_call(canister_id, protocol::CANIC_TIME, ())
+        .expect("canic_time transport query failed");
+    now.expect("canic_time application query failed") / 1_000_000_000
+}
+
+// Rebuild the capability metadata tuple that the structural envelope expects.
+fn capability_metadata_from_request(request: &Request) -> ([u8; 16], [u8; 16], u32) {
+    let metadata = match request {
+        Request::CreateCanister(req) => req.metadata,
+        Request::UpgradeCanister(req) => req.metadata,
+        Request::Cycles(req) => req.metadata,
+        Request::IssueDelegation(req) => req.metadata,
+        Request::IssueRoleAttestation(req) => req.metadata,
+    };
+
+    match metadata {
+        Some(meta) => {
+            let mut request_id = [0u8; 16];
+            request_id.copy_from_slice(&meta.request_id[..16]);
+            let mut nonce = [0u8; 16];
+            nonce.copy_from_slice(&meta.request_id[16..]);
+            let ttl_seconds =
+                u32::try_from(meta.ttl_seconds.min(u64::from(u32::MAX))).expect("ttl bounded");
+            (request_id, nonce, ttl_seconds)
+        }
+        None => ([0u8; 16], [0u8; 16], 60),
+    }
+}
+
+// Build one deterministic root request metadata value for audit scenarios.
+const fn metadata(request_id: [u8; 32], ttl_seconds: u64) -> RootRequestMetadata {
+    RootRequestMetadata {
+        request_id,
+        ttl_seconds,
+    }
+}
+
 // Scan the repo for concrete `perf!` checkpoint call sites.
 fn scan_perf_callsites(workspace_root: &Path) -> Vec<String> {
     let mut out = Vec::new();
@@ -893,6 +1441,7 @@ fn verification_rows(
     paths: &AuditPaths,
     checkpoint_sites: &[String],
     query_unobservable_count: usize,
+    measured_checkpoint_count: usize,
 ) -> Vec<VerificationRow> {
     vec![
         VerificationRow {
@@ -912,10 +1461,7 @@ fn verification_rows(
             command: "canic_metrics(MetricsKind::Perf, PageRequest { limit=512, offset=0 })"
                 .to_string(),
             status: "PASS".to_string(),
-            notes: format!(
-                "Perf rows were sampled before and after each scenario; normalized rows saved under `{}`.",
-                paths.artifacts_dir.join("perf-rows.json").display()
-            ),
+            notes: format!("Update scenarios were sampled before/after through persisted perf rows, and query scenarios used same-call local-only probe endpoints; normalized rows saved under `{}`.", paths.artifacts_dir.join("perf-rows.json").display()),
         },
         VerificationRow {
             command: "repo checkpoint scan".to_string(),
@@ -927,6 +1473,23 @@ fn verification_rows(
             },
         },
         VerificationRow {
+            command: "checkpoint delta capture".to_string(),
+            status: if measured_checkpoint_count == 0 {
+                "PARTIAL".to_string()
+            } else {
+                "PASS".to_string()
+            },
+            notes: if measured_checkpoint_count == 0 {
+                "Sampled update scenarios did not produce any non-zero checkpoint deltas."
+                    .to_string()
+            } else {
+                format!(
+                    "{measured_checkpoint_count} non-zero checkpoint delta rows were captured under `{}`.",
+                    paths.artifacts_dir.join("checkpoint-deltas.json").display()
+                )
+            },
+        },
+        VerificationRow {
             command: "query perf visibility".to_string(),
             status: if query_unobservable_count == 0 {
                 "PASS".to_string()
@@ -934,11 +1497,10 @@ fn verification_rows(
                 "PARTIAL".to_string()
             },
             notes: if query_unobservable_count == 0 {
-                "No query scenarios hit the current persisted-perf visibility limitation."
-                    .to_string()
+                "All sampled query scenarios returned same-call local instruction counters through the local-only probe endpoints.".to_string()
             } else {
                 format!(
-                    "{query_unobservable_count} successful query scenarios left no persisted `MetricsKind::Perf` delta; they are treated as method-limited rather than zero-cost."
+                    "{query_unobservable_count} sampled query scenarios failed to return a same-call local instruction counter through the probe path."
                 )
             },
         },
@@ -1012,6 +1574,10 @@ fn write_report(
         .iter()
         .filter(|result| query_perf_is_unobservable(&result.scenario, &result.row))
         .count();
+    let checkpoint_rows = results
+        .iter()
+        .flat_map(|result| result.checkpoint_rows.iter())
+        .collect::<Vec<_>>();
 
     let mut ordered = results
         .iter()
@@ -1021,6 +1587,7 @@ fn write_report(
 
     let hotspot_rows = ordered.iter().take(3).copied().collect::<Vec<_>>();
     let risk_score = risk_score(checkpoint_sites, query_unobservable_count, &hotspot_rows);
+    let minor_line = current_minor_line();
     let report_date = metadata
         .run_timestamp_utc
         .get(..10)
@@ -1051,9 +1618,9 @@ fn write_report(
         "# Instruction Footprint Audit - {report_date}\n\n"
     ));
     out.push_str("## Report Preamble\n\n");
-    out.push_str(
-        "- Scope: Canic instruction footprint (first `0.20` baseline, partial canister scope)\n",
-    );
+    out.push_str(&format!(
+        "- Scope: Canic instruction footprint (first `{minor_line}` baseline, partial canister scope)\n"
+    ));
     out.push_str("- Definition path: `docs/audits/recurring/system/instruction-footprint.md`\n");
     out.push_str(&format!(
         "- Compared baseline report path: `{}`\n",
@@ -1079,7 +1646,7 @@ fn write_report(
     out.push_str(&format!(
         "- Target endpoints/flows in scope: {target_endpoints}\n"
     ));
-    out.push_str("- Deferred from this baseline: `scale_hub::create_worker` and sharding assignment updates require chain-key ECDSA in PocketIC; the default root harness does not provision that key yet.\n\n");
+    out.push_str("- Deferred from this baseline: no additional functional flows are deferred beyond first-run comparability; this run covers shared queries plus delegated auth issuance, verifier confirmation, replay/cycles, scaling worker creation, sharding account creation, and root template admin updates.\n\n");
 
     out.push_str("## Findings / Checklist\n\n");
     out.push_str("| Check | Result | Evidence |\n| --- | --- | --- |\n");
@@ -1088,6 +1655,10 @@ fn write_report(
     ));
     out.push_str(&format!(
         "| Normalized perf rows recorded | PASS | `artifacts/{artifacts_dir_name}/perf-rows.json` stores canonical endpoint rows with count and total local instructions. |\n"
+    ));
+    out.push_str(&format!(
+        "| Checkpoint deltas recorded | {} | `artifacts/{artifacts_dir_name}/checkpoint-deltas.json` stores non-zero per-scenario checkpoint rows. |\n",
+        if checkpoint_rows.is_empty() { "PARTIAL" } else { "PASS" }
     ));
     out.push_str("| Fresh topology isolation used | PASS | Each scenario ran under a fresh `setup_root()` install instead of reusing one cumulative perf table. |\n");
     out.push_str(&format!(
@@ -1099,18 +1670,19 @@ fn write_report(
         out.push_str("| `perf!` checkpoints available for critical flows | PASS | Current repo scan found at least one `perf!` call site. |\n");
     }
     if query_unobservable_count == 0 {
-        out.push_str("| Query endpoint perf visibility | PASS | No sampled query scenario hit the current persisted-perf visibility limitation. |\n");
+        out.push_str("| Query endpoint perf visibility | PASS | Sampled query scenarios were measured through same-call local-only perf probe endpoints. |\n");
     } else {
         out.push_str(&format!(
-            "| Query endpoint perf visibility | PARTIAL | {query_unobservable_count} successful query scenarios left no persisted `MetricsKind::Perf` delta; those rows are method-limited rather than true zero-cost measurements. |\n"
+            "| Query endpoint perf visibility | PARTIAL | {query_unobservable_count} sampled query scenarios failed to return a same-call local instruction counter through the probe path. |\n"
         ));
     }
     out.push_str("| Baseline path selected by daily baseline discipline | PARTIAL | First run of day for `instruction-footprint`; baseline deltas are `N/A`. |\n\n");
 
     out.push_str("## Comparison to Previous Relevant Run\n\n");
     out.push_str("- First run of day for `instruction-footprint`; this report establishes the daily baseline.\n");
+    out.push_str("- Query scenarios are now sampled through same-call local-only perf probes, so their rows are directly comparable to later probe-backed reruns.\n");
     if query_unobservable_count > 0 {
-        out.push_str("- Current query scenarios are not yet comparable through persisted `MetricsKind::Perf` rows, so this baseline should be treated as update-visible only until query accounting is widened.\n");
+        out.push_str("- One or more query probe calls still failed to return a usable local instruction counter, so those rows remain partial until the probe path is stable.\n");
     }
     out.push_str("- Baseline drift values are `N/A` until a same-day rerun or later comparable run exists.\n\n");
 
@@ -1119,7 +1691,9 @@ fn write_report(
     out.push_str("| --- | --- | --- | ---: | ---: | ---: | --- | --- |\n");
     for result in results {
         let notes = if query_perf_is_unobservable(&result.scenario, &result.row) {
-            "method-limited: successful query left no persisted perf delta"
+            "probe failed to return a local instruction counter"
+        } else if result.scenario.transport_mode == "query" {
+            "same-call local-only perf probe"
         } else {
             ""
         };
@@ -1145,6 +1719,28 @@ fn write_report(
     } else {
         for site in checkpoint_sites {
             out.push_str(&format!("- `{site}`\n"));
+        }
+        out.push('\n');
+    }
+
+    out.push_str("## Measured Checkpoint Deltas\n\n");
+    if checkpoint_rows.is_empty() {
+        out.push_str("- No sampled scenario produced a non-zero checkpoint delta in this run.\n\n");
+    } else {
+        let mut ordered_checkpoint_rows = checkpoint_rows;
+        ordered_checkpoint_rows.sort_by_key(|row| std::cmp::Reverse(row.total_local_instructions));
+        out.push_str("| Scenario | Scope | Label | Count | Total local instructions | Avg local instructions |\n");
+        out.push_str("| --- | --- | --- | ---: | ---: | ---: |\n");
+        for row in ordered_checkpoint_rows.iter().take(12) {
+            out.push_str(&format!(
+                "| `{}` | `{}` | `{}` | {} | {} | {} |\n",
+                row.scenario_key,
+                row.scope,
+                row.label,
+                row.count,
+                row.total_local_instructions,
+                row.avg_local_instructions
+            ));
         }
         out.push('\n');
     }
@@ -1206,17 +1802,19 @@ fn write_report(
     out.push('\n');
 
     out.push_str("## Hub Module Pressure\n\n");
-    out.push_str("- `scale_hub::plan_create_worker` concentrates cost in the scaling coordinator surface plus `canic-core` placement workflow. That makes scaling one of the first shared instruction hot paths worth reducing even before live worker provisioning is measurable in PocketIC.\n");
+    out.push_str("- `scale_hub::create_worker` concentrates cost in the scaling coordinator surface plus `canic-core` placement workflow. That makes scaling one of the first shared instruction hot paths worth reducing.\n");
+    out.push_str("- `user_hub::create_account` is now measurable as a real sharding update, and its first-account path is dominated by `canic-sharding-runtime::workflow::bootstrap_empty_active`.\n");
+    out.push_str("- `root::canic_response_capability_v1` now has measured replay/cycles stage deltas, so root capability work no longer has to be treated as an opaque endpoint total.\n");
     out.push_str("- `test::test` provides the current chain-key-free update floor on a non-root child canister. Drift there points back to shared runtime/update overhead rather than topology-specific logic.\n");
     out.push_str("- Root state/registry reads stay separate from the leaf floor. They matter for operator paths, but they should not be confused with the shared ordinary-leaf baseline.\n\n");
 
     out.push_str("## Dependency Fan-In Pressure\n\n");
-    out.push_str("- Shared lifecycle/observability endpoints (`canic_time`, `canic_env`, `canic_log`) all route through the default `start!` bundle, but the current persisted perf transport does not yet expose comparable query deltas. Their zero rows in this report are method-limited, not true zero-cost measurements.\n");
+    out.push_str("- Shared lifecycle/observability endpoints (`canic_time`, `canic_env`, `canic_log`) all route through the default `start!` bundle, and this matrix now samples them through same-call local-only perf probes. Their rows reflect actual query counters from the measured call context rather than inferred zeroes.\n");
     out.push_str("- The sampled non-trivial hotspot fans into `canic-core` placement orchestration (`workflow/placement/scaling`). The local `test::test` update acts as the baseline floor for update overhead on an ordinary child canister.\n");
     if checkpoint_sites.is_empty() {
         out.push_str("- There is currently no flow-stage attribution because `perf!` coverage is absent. That is itself a dependency-pressure signal: optimization work is bottlenecked by missing internal checkpoints.\n\n");
     } else {
-        out.push_str("- Flow-stage checkpoints now exist in the scaling, sharding, auth, and replay workflows, but the current sampled matrix still does not hit enough update paths to rank checkpoint-stage costs directly.\n\n");
+        out.push_str("- Flow-stage checkpoints now exist in the scaling, sharding, auth, and replay workflows. This matrix records non-zero checkpoint deltas for sampled update scenarios, so the next optimization pass can target concrete stages instead of endpoint totals alone.\n\n");
     }
 
     out.push_str("## Early Warning Signals\n\n");
@@ -1232,7 +1830,7 @@ fn write_report(
     }
     if query_unobservable_count > 0 {
         out.push_str(&format!(
-            "| Query endpoint deltas currently not persisted | WARN | {query_unobservable_count} sampled query scenarios returned successfully but left no persisted `MetricsKind::Perf` delta. |\n"
+            "| Query probe path failed on sampled rows | WARN | {query_unobservable_count} sampled query scenarios did not return a usable same-call local instruction counter. |\n"
         ));
     }
     if let Some(top) = hotspot_rows.first() {
@@ -1245,7 +1843,7 @@ fn write_report(
 
     out.push_str("## Risk Score\n\n");
     out.push_str(&format!("Risk Score: **{risk_score} / 10**\n\n"));
-    out.push_str("Interpretation: the main current risk is observability incompleteness rather than one measured endpoint spike. The first baseline is good enough to rank entrypoints, but not yet good enough to localize flow stages.\n\n");
+    out.push_str("Interpretation: query visibility and stage attribution are now working for the sampled matrix. The remaining audit risk is mostly first-run comparability (`N/A` baseline deltas) plus a few endpoint-only paths that still do not have deeper internal stage attribution, not missing coverage of the critical flows themselves.\n\n");
 
     out.push_str("## Verification Readout\n\n");
     out.push_str("| Command | Status | Notes |\n| --- | --- | --- |\n");
@@ -1262,10 +1860,12 @@ fn write_report(
     if checkpoint_sites.is_empty() {
         out.push_str("   Action: add first stable `perf!` checkpoints to the scaling, sharding, and root-capability workflows so the next rerun can move from endpoint-only totals to real flow-stage attribution.\n");
     } else {
-        out.push_str("   Action: extend the audit matrix with update scenarios that actually traverse the new scaling, sharding, replay, and auth checkpoints so the next rerun can rank stage-level costs instead of just scan-site presence.\n");
+        out.push_str("   Action: rerun this audit after one concrete perf change so the next report has real comparable baseline deltas instead of first-run `N/A`, and only add deeper verifier-side auth checkpoints if that endpoint-total starts to matter.\n");
     }
     out.push_str("2. Owner boundary: `shared update hotspots`\n");
-    out.push_str("   Action: compare `scale_hub::plan_create_worker` against the `test::test` update floor before/after any placement-runtime cleanup, using this report as the `0.20` baseline.\n");
+    out.push_str(&format!(
+        "   Action: compare `scale_hub::create_worker` and `user_hub::create_account` against the `test::test` update floor before/after any placement/sharding-runtime cleanup, using this report as the `{minor_line}` baseline.\n"
+    ));
     out.push_str("3. Owner boundary: `shared observability floor`\n");
     out.push_str("   Action: keep `app` query surfaces in the matrix so shared-runtime drift does not hide behind root-only or coordinator-only endpoints.\n\n");
 
@@ -1279,6 +1879,9 @@ fn write_report(
     ));
     out.push_str(&format!(
         "- [endpoint-matrix.tsv](artifacts/{artifacts_dir_name}/endpoint-matrix.tsv)\n"
+    ));
+    out.push_str(&format!(
+        "- [checkpoint-deltas.json](artifacts/{artifacts_dir_name}/checkpoint-deltas.json)\n"
     ));
     out.push_str(&format!(
         "- [flow-checkpoints.log](artifacts/{artifacts_dir_name}/flow-checkpoints.log)\n"
@@ -1311,6 +1914,14 @@ fn render_scope(items: BTreeSet<&str>) -> String {
 // Map the current highest-cost labels back to concrete modules/files.
 fn hotspot_hint(subject_label: &str) -> (&'static str, &'static str) {
     match subject_label {
+        "create_account" => (
+            "Sharding coordinator plus `canic-sharding-runtime` workflow",
+            "[user_hub/lib](/home/adam/projects/canic/canisters/user_hub/src/lib.rs), [sharding workflow](/home/adam/projects/canic/crates/canic-sharding-runtime/src/workflow/mod.rs)",
+        ),
+        "canic_response_capability_v1" => (
+            "Root dispatcher plus replay/capability workflow",
+            "[request handler](/home/adam/projects/canic/crates/canic-core/src/workflow/rpc/request/handler/mod.rs), [replay workflow](/home/adam/projects/canic/crates/canic-core/src/workflow/rpc/request/handler/replay.rs)",
+        ),
         "create_worker" => (
             "Scaling coordinator plus `canic-core` placement workflow",
             "[scale_hub/lib](/home/adam/projects/canic/canisters/scale_hub/src/lib.rs), [scaling workflow](/home/adam/projects/canic/crates/canic-core/src/workflow/placement/scaling/mod.rs)",

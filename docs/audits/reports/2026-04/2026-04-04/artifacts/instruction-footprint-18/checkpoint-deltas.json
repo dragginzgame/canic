@@ -1,0 +1,402 @@
+[
+  {
+    "scenario_key": "scale_hub:create_worker:first-worker",
+    "canister": "scale_hub",
+    "endpoint_or_flow": "create_worker",
+    "scope": "canic_core::workflow::placement::scaling",
+    "label": "create_canister",
+    "count": 1,
+    "total_local_instructions": 3886924,
+    "avg_local_instructions": 3886924
+  },
+  {
+    "scenario_key": "scale_hub:create_worker:first-worker",
+    "canister": "scale_hub",
+    "endpoint_or_flow": "create_worker",
+    "scope": "canic_core::workflow::placement::scaling",
+    "label": "register_worker",
+    "count": 1,
+    "total_local_instructions": 23988,
+    "avg_local_instructions": 23988
+  },
+  {
+    "scenario_key": "scale_hub:create_worker:first-worker",
+    "canister": "scale_hub",
+    "endpoint_or_flow": "create_worker",
+    "scope": "canic_core::workflow::placement::scaling",
+    "label": "plan_spawn",
+    "count": 1,
+    "total_local_instructions": 8892,
+    "avg_local_instructions": 8892
+  },
+  {
+    "scenario_key": "scale_hub:create_worker:first-worker",
+    "canister": "scale_hub",
+    "endpoint_or_flow": "create_worker",
+    "scope": "canic_core::workflow::placement::scaling",
+    "label": "observe_state",
+    "count": 1,
+    "total_local_instructions": 331,
+    "avg_local_instructions": 331
+  },
+  {
+    "scenario_key": "user_hub:create_account:first-account",
+    "canister": "user_hub",
+    "endpoint_or_flow": "create_account",
+    "scope": "canic_sharding_runtime::workflow",
+    "label": "bootstrap_empty_active",
+    "count": 1,
+    "total_local_instructions": 3999761,
+    "avg_local_instructions": 3999761
+  },
+  {
+    "scenario_key": "user_hub:create_account:first-account",
+    "canister": "user_hub",
+    "endpoint_or_flow": "create_account",
+    "scope": "canic_sharding_runtime::workflow",
+    "label": "assign_existing",
+    "count": 1,
+    "total_local_instructions": 87236,
+    "avg_local_instructions": 87236
+  },
+  {
+    "scenario_key": "user_hub:create_account:first-account",
+    "canister": "user_hub",
+    "endpoint_or_flow": "create_account",
+    "scope": "canic_sharding_runtime::workflow",
+    "label": "collect_registry",
+    "count": 1,
+    "total_local_instructions": 55469,
+    "avg_local_instructions": 55469
+  },
+  {
+    "scenario_key": "user_hub:create_account:first-account",
+    "canister": "user_hub",
+    "endpoint_or_flow": "create_account",
+    "scope": "canic_sharding_runtime::workflow",
+    "label": "plan_assign",
+    "count": 1,
+    "total_local_instructions": 14741,
+    "avg_local_instructions": 14741
+  },
+  {
+    "scenario_key": "user_hub:create_account:first-account",
+    "canister": "user_hub",
+    "endpoint_or_flow": "create_account",
+    "scope": "canic_sharding_runtime::workflow",
+    "label": "load_active_shards",
+    "count": 1,
+    "total_local_instructions": 331,
+    "avg_local_instructions": 331
+  },
+  {
+    "scenario_key": "root:canic_request_delegation:fresh-shard",
+    "canister": "root",
+    "endpoint_or_flow": "canic_request_delegation",
+    "scope": "canic_core::workflow::rpc::request::handler",
+    "label": "commit_replay",
+    "count": 1,
+    "total_local_instructions": 985457,
+    "avg_local_instructions": 985457
+  },
+  {
+    "scenario_key": "root:canic_request_delegation:fresh-shard",
+    "canister": "root",
+    "endpoint_or_flow": "canic_request_delegation",
+    "scope": "canic_core::workflow::auth",
+    "label": "prepare_call",
+    "count": 2,
+    "total_local_instructions": 645625,
+    "avg_local_instructions": 322812
+  },
+  {
+    "scenario_key": "root:canic_request_delegation:fresh-shard",
+    "canister": "root",
+    "endpoint_or_flow": "canic_request_delegation",
+    "scope": "canic_core::workflow::auth",
+    "label": "decode_response",
+    "count": 2,
+    "total_local_instructions": 513391,
+    "avg_local_instructions": 256695
+  },
+  {
+    "scenario_key": "root:canic_request_delegation:fresh-shard",
+    "canister": "root",
+    "endpoint_or_flow": "canic_request_delegation",
+    "scope": "canic_core::workflow::auth",
+    "label": "issue_proof",
+    "count": 1,
+    "total_local_instructions": 504032,
+    "avg_local_instructions": 504032
+  },
+  {
+    "scenario_key": "root:canic_request_delegation:fresh-shard",
+    "canister": "root",
+    "endpoint_or_flow": "canic_request_delegation",
+    "scope": "canic_core::workflow::rpc::request::handler::execute",
+    "label": "cache_root_verifier_keys",
+    "count": 1,
+    "total_local_instructions": 415675,
+    "avg_local_instructions": 415675
+  },
+  {
+    "scenario_key": "root:canic_request_delegation:fresh-shard",
+    "canister": "root",
+    "endpoint_or_flow": "canic_request_delegation",
+    "scope": "canic_core::workflow::rpc::request::handler::execute",
+    "label": "cache_root_verifier_proof",
+    "count": 1,
+    "total_local_instructions": 264185,
+    "avg_local_instructions": 264185
+  },
+  {
+    "scenario_key": "root:canic_request_delegation:fresh-shard",
+    "canister": "root",
+    "endpoint_or_flow": "canic_request_delegation",
+    "scope": "canic_core::workflow::rpc::request::handler::replay",
+    "label": "prepare_replay_input",
+    "count": 1,
+    "total_local_instructions": 139418,
+    "avg_local_instructions": 139418
+  },
+  {
+    "scenario_key": "root:canic_request_delegation:fresh-shard",
+    "canister": "root",
+    "endpoint_or_flow": "canic_request_delegation",
+    "scope": "canic_core::workflow::auth",
+    "label": "execute_call",
+    "count": 2,
+    "total_local_instructions": 117980,
+    "avg_local_instructions": 58990
+  },
+  {
+    "scenario_key": "root:canic_request_delegation:fresh-shard",
+    "canister": "root",
+    "endpoint_or_flow": "canic_request_delegation",
+    "scope": "canic_core::workflow::rpc::request::handler::replay",
+    "label": "evaluate_replay",
+    "count": 1,
+    "total_local_instructions": 60874,
+    "avg_local_instructions": 60874
+  },
+  {
+    "scenario_key": "root:canic_request_delegation:fresh-shard",
+    "canister": "root",
+    "endpoint_or_flow": "canic_request_delegation",
+    "scope": "canic_core::workflow::auth",
+    "label": "push_signers",
+    "count": 1,
+    "total_local_instructions": 58723,
+    "avg_local_instructions": 58723
+  },
+  {
+    "scenario_key": "root:canic_request_delegation:fresh-shard",
+    "canister": "root",
+    "endpoint_or_flow": "canic_request_delegation",
+    "scope": "canic_core::workflow::auth",
+    "label": "push_verifiers",
+    "count": 1,
+    "total_local_instructions": 51693,
+    "avg_local_instructions": 51693
+  },
+  {
+    "scenario_key": "root:canic_request_delegation:fresh-shard",
+    "canister": "root",
+    "endpoint_or_flow": "canic_request_delegation",
+    "scope": "canic_core::workflow::rpc::request::handler::replay",
+    "label": "reserve_fresh",
+    "count": 1,
+    "total_local_instructions": 45085,
+    "avg_local_instructions": 45085
+  },
+  {
+    "scenario_key": "root:canic_request_delegation:fresh-shard",
+    "canister": "root",
+    "endpoint_or_flow": "canic_request_delegation",
+    "scope": "canic_core::workflow::rpc::request::handler",
+    "label": "execute_capability",
+    "count": 1,
+    "total_local_instructions": 44029,
+    "avg_local_instructions": 44029
+  },
+  {
+    "scenario_key": "root:canic_request_delegation:fresh-shard",
+    "canister": "root",
+    "endpoint_or_flow": "canic_request_delegation",
+    "scope": "canic_core::workflow::auth",
+    "label": "finalize_result",
+    "count": 2,
+    "total_local_instructions": 9567,
+    "avg_local_instructions": 4783
+  },
+  {
+    "scenario_key": "root:canic_request_delegation:fresh-shard",
+    "canister": "root",
+    "endpoint_or_flow": "canic_request_delegation",
+    "scope": "canic_core::workflow::rpc::request::handler",
+    "label": "preflight",
+    "count": 1,
+    "total_local_instructions": 8612,
+    "avg_local_instructions": 8612
+  },
+  {
+    "scenario_key": "root:canic_request_delegation:fresh-shard",
+    "canister": "root",
+    "endpoint_or_flow": "canic_request_delegation",
+    "scope": "canic_core::workflow::rpc::request::handler",
+    "label": "map_request",
+    "count": 1,
+    "total_local_instructions": 7175,
+    "avg_local_instructions": 7175
+  },
+  {
+    "scenario_key": "root:canic_request_delegation:fresh-shard",
+    "canister": "root",
+    "endpoint_or_flow": "canic_request_delegation",
+    "scope": "canic_core::workflow::rpc::request::handler::replay",
+    "label": "commit_encode",
+    "count": 1,
+    "total_local_instructions": 6362,
+    "avg_local_instructions": 6362
+  },
+  {
+    "scenario_key": "root:canic_request_delegation:fresh-shard",
+    "canister": "root",
+    "endpoint_or_flow": "canic_request_delegation",
+    "scope": "canic_core::workflow::rpc::request::handler",
+    "label": "extract_context",
+    "count": 1,
+    "total_local_instructions": 0,
+    "avg_local_instructions": 0
+  },
+  {
+    "scenario_key": "root:canic_response_capability_v1:request-cycles-fresh",
+    "canister": "root",
+    "endpoint_or_flow": "canic_response_capability_v1",
+    "scope": "canic_core::workflow::rpc::request::handler",
+    "label": "commit_replay",
+    "count": 1,
+    "total_local_instructions": 902602,
+    "avg_local_instructions": 902602
+  },
+  {
+    "scenario_key": "root:canic_response_capability_v1:request-cycles-fresh",
+    "canister": "root",
+    "endpoint_or_flow": "canic_response_capability_v1",
+    "scope": "canic_core::workflow::rpc::request::handler",
+    "label": "execute_capability",
+    "count": 1,
+    "total_local_instructions": 292715,
+    "avg_local_instructions": 292715
+  },
+  {
+    "scenario_key": "root:canic_response_capability_v1:request-cycles-fresh",
+    "canister": "root",
+    "endpoint_or_flow": "canic_response_capability_v1",
+    "scope": "canic_core::workflow::rpc::request::handler",
+    "label": "preflight",
+    "count": 1,
+    "total_local_instructions": 115758,
+    "avg_local_instructions": 115758
+  },
+  {
+    "scenario_key": "root:canic_response_capability_v1:request-cycles-fresh",
+    "canister": "root",
+    "endpoint_or_flow": "canic_response_capability_v1",
+    "scope": "canic_core::workflow::rpc::request::handler::replay",
+    "label": "evaluate_replay",
+    "count": 1,
+    "total_local_instructions": 35815,
+    "avg_local_instructions": 35815
+  },
+  {
+    "scenario_key": "root:canic_response_capability_v1:request-cycles-fresh",
+    "canister": "root",
+    "endpoint_or_flow": "canic_response_capability_v1",
+    "scope": "canic_core::workflow::rpc::request::handler::replay",
+    "label": "prepare_replay_input",
+    "count": 1,
+    "total_local_instructions": 25274,
+    "avg_local_instructions": 25274
+  },
+  {
+    "scenario_key": "root:canic_response_capability_v1:request-cycles-fresh",
+    "canister": "root",
+    "endpoint_or_flow": "canic_response_capability_v1",
+    "scope": "canic_core::workflow::rpc::request::handler::replay",
+    "label": "reserve_fresh",
+    "count": 1,
+    "total_local_instructions": 20141,
+    "avg_local_instructions": 20141
+  },
+  {
+    "scenario_key": "root:canic_response_capability_v1:request-cycles-fresh",
+    "canister": "root",
+    "endpoint_or_flow": "canic_response_capability_v1",
+    "scope": "canic_core::workflow::rpc::request::handler",
+    "label": "map_request",
+    "count": 1,
+    "total_local_instructions": 5072,
+    "avg_local_instructions": 5072
+  },
+  {
+    "scenario_key": "root:canic_response_capability_v1:request-cycles-fresh",
+    "canister": "root",
+    "endpoint_or_flow": "canic_response_capability_v1",
+    "scope": "canic_core::workflow::rpc::request::handler::replay",
+    "label": "commit_encode",
+    "count": 1,
+    "total_local_instructions": 4492,
+    "avg_local_instructions": 4492
+  },
+  {
+    "scenario_key": "root:canic_response_capability_v1:request-cycles-fresh",
+    "canister": "root",
+    "endpoint_or_flow": "canic_response_capability_v1",
+    "scope": "canic_core::workflow::rpc::request::handler",
+    "label": "extract_context",
+    "count": 1,
+    "total_local_instructions": 0,
+    "avg_local_instructions": 0
+  },
+  {
+    "scenario_key": "root:canic_template_publish_chunk_admin:single-chunk",
+    "canister": "root",
+    "endpoint_or_flow": "canic_template_publish_chunk_admin",
+    "scope": "canic_control_plane::storage::stable::template::chunked",
+    "label": "chunk_store_insert",
+    "count": 1,
+    "total_local_instructions": 197836,
+    "avg_local_instructions": 197836
+  },
+  {
+    "scenario_key": "root:canic_template_publish_chunk_admin:single-chunk",
+    "canister": "root",
+    "endpoint_or_flow": "canic_template_publish_chunk_admin",
+    "scope": "canic_control_plane::ops::storage::template::chunked",
+    "label": "publish_stage_upsert_chunk",
+    "count": 1,
+    "total_local_instructions": 7587,
+    "avg_local_instructions": 7587
+  },
+  {
+    "scenario_key": "root:canic_template_publish_chunk_admin:single-chunk",
+    "canister": "root",
+    "endpoint_or_flow": "canic_template_publish_chunk_admin",
+    "scope": "canic_control_plane::storage::stable::template::chunked",
+    "label": "chunk_store_accounting",
+    "count": 1,
+    "total_local_instructions": 6637,
+    "avg_local_instructions": 6637
+  },
+  {
+    "scenario_key": "root:canic_template_publish_chunk_admin:single-chunk",
+    "canister": "root",
+    "endpoint_or_flow": "canic_template_publish_chunk_admin",
+    "scope": "canic_control_plane::ops::storage::template::chunked",
+    "label": "publish_stage_validate_chunk",
+    "count": 1,
+    "total_local_instructions": 0,
+    "avg_local_instructions": 0
+  }
+]
