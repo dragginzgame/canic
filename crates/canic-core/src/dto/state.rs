@@ -1,8 +1,8 @@
 use crate::dto::prelude::*;
 
-///
-/// AppCommand
-///
+//
+// AppCommand
+//
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
 pub enum AppCommand {
@@ -10,9 +10,9 @@ pub enum AppCommand {
     SetCyclesFundingEnabled(bool),
 }
 
-///
-/// AppStatus
-///
+//
+// AppStatus
+//
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
 pub enum AppStatus {
@@ -21,9 +21,9 @@ pub enum AppStatus {
     Stopped,
 }
 
-///
-/// AppMode
-///
+//
+// AppMode
+//
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
 pub enum AppMode {
@@ -32,9 +32,9 @@ pub enum AppMode {
     Disabled,
 }
 
-///
-/// AppStateInput
-///
+//
+// AppStateInput
+//
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
 pub struct AppStateInput {
@@ -42,9 +42,9 @@ pub struct AppStateInput {
     pub cycles_funding_enabled: bool,
 }
 
-///
-/// AppStateResponse
-///
+//
+// AppStateResponse
+//
 
 #[derive(CandidType, Deserialize)]
 pub struct AppStateResponse {
@@ -52,23 +52,23 @@ pub struct AppStateResponse {
     pub cycles_funding_enabled: bool,
 }
 
-///
-/// SubnetStateInput
-///
+//
+// SubnetStateInput
+//
 
 #[derive(CandidType, Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq)]
 pub struct SubnetStateInput;
 
-///
-/// SubnetStateResponse
-///
+//
+// SubnetStateResponse
+//
 
 #[derive(CandidType, Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq)]
 pub struct SubnetStateResponse;
 
-///
-/// BootstrapStatusResponse
-///
+//
+// BootstrapStatusResponse
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct BootstrapStatusResponse {

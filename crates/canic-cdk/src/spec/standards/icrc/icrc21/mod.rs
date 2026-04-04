@@ -1,27 +1,27 @@
 //! The [ICRC-21](https://github.com/dfinity/wg-identity-authentication/blob/main/topics/ICRC-21/icrc_21_consent_msg.md)
 //! Canister Call Consent Messages standard.
 
-///
-/// NOTE: We're using the code directly as importing the icrc-ledger-types is not
-/// currently a good idea.  It's got a lot of bloated dependencies and an older version
-/// of ic-stable-structures
-///
+//
+// NOTE: We're using the code directly as importing the icrc-ledger-types is not
+// currently a good idea.  It's got a lot of bloated dependencies and an older version
+// of ic-stable-structures
+//
 mod errors;
 
 pub use errors::*;
 
 use crate::spec::prelude::*;
 
-///
-/// ConsentResult
-/// (type alias)
-///
+//
+// ConsentResult
+// (type alias)
+//
 
 pub type ConsentResult = Result<ConsentInfo, Icrc21Error>;
 
-///
-/// ConsentInfo
-///
+//
+// ConsentInfo
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct ConsentInfo {
@@ -29,9 +29,9 @@ pub struct ConsentInfo {
     pub metadata: ConsentMessageMetadata,
 }
 
-///
-/// ConsentMessage
-///
+//
+// ConsentMessage
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub enum ConsentMessage {
@@ -39,9 +39,9 @@ pub enum ConsentMessage {
     FieldsDisplayMessage(FieldsDisplay),
 }
 
-///
-/// ConsentMessageMetadata
-///
+//
+// ConsentMessageMetadata
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct ConsentMessageMetadata {
@@ -49,9 +49,9 @@ pub struct ConsentMessageMetadata {
     pub utc_offset_minutes: Option<i16>,
 }
 
-///
-/// ConsentMessageRequest
-///
+//
+// ConsentMessageRequest
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct ConsentMessageRequest {
@@ -60,10 +60,10 @@ pub struct ConsentMessageRequest {
     pub user_preferences: ConsentMessageSpec,
 }
 
-///
-/// ConsentMessageResponse
-/// Wrapper capturing the ok/error variants from an ICRC-21 consent request.
-///
+//
+// ConsentMessageResponse
+// Wrapper capturing the ok/error variants from an ICRC-21 consent request.
+//
 
 #[derive(CandidType, Deserialize)]
 pub enum ConsentMessageResponse {
@@ -80,9 +80,9 @@ impl From<ConsentResult> for ConsentMessageResponse {
     }
 }
 
-///
-/// ConsentMessageSpec
-///
+//
+// ConsentMessageSpec
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct ConsentMessageSpec {
@@ -90,9 +90,9 @@ pub struct ConsentMessageSpec {
     pub device_spec: Option<DisplayMessageType>,
 }
 
-///
-/// DisplayMessageType
-///
+//
+// DisplayMessageType
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub enum DisplayMessageType {
@@ -100,9 +100,9 @@ pub enum DisplayMessageType {
     FieldsDisplay,
 }
 
-///
-/// FieldsDisplay
-///
+//
+// FieldsDisplay
+//
 
 #[derive(CandidType, Clone, Debug, Default, Deserialize, Eq, PartialEq)]
 pub struct FieldsDisplay {
@@ -110,9 +110,9 @@ pub struct FieldsDisplay {
     pub fields: Vec<(String, Value)>,
 }
 
-///
-/// Value
-///
+//
+// Value
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub enum Value {

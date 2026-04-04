@@ -6,6 +6,22 @@ ROOT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT_DIR"
 source "$ROOT_DIR/scripts/app/reference_canisters.sh"
 
+require_cmd() {
+    local cmd="$1"
+
+    if command -v "$cmd" >/dev/null 2>&1; then
+        return 0
+    fi
+
+    echo "missing required build tool '$cmd'" >&2
+    echo "run: bash scripts/install.sh" >&2
+    exit 1
+}
+
+require_cmd cargo
+require_cmd candid-extractor
+require_cmd ic-wasm
+
 # Build the middle fast artifacts by default so PocketIC/test harnesses and
 # local demo flows get smaller faster wasm without paying full release cost.
 BUILD_WASM_PROFILE="${CANIC_WASM_PROFILE:-}"

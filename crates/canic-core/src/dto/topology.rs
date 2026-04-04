@@ -1,15 +1,15 @@
 use crate::dto::{canister::CanisterInfo, prelude::*};
 
-///
-/// AppRegistryResponse
-///
+//
+// AppRegistryResponse
+//
 
 #[derive(CandidType, Deserialize)]
 pub struct AppRegistryResponse(pub Vec<AppRegistryEntry>);
 
-///
-/// AppRegistryEntry
-///
+//
+// AppRegistryEntry
+//
 
 #[derive(CandidType, Deserialize)]
 pub struct AppRegistryEntry {
@@ -17,24 +17,20 @@ pub struct AppRegistryEntry {
     pub root_pid: Principal,
 }
 
-///
-/// SubnetRegistryResponse
-///
-/// External view of the subnet registry.
-/// Each entry is identity-bearing (`pid`) and includes the full
-/// canister record payload.
-///
+//
+// SubnetRegistryResponse
+//
+// External subnet registry view.
+//
 
 #[derive(CandidType, Deserialize)]
 pub struct SubnetRegistryResponse(pub Vec<SubnetRegistryEntry>);
 
-///
-/// SubnetRegistryEntry
-///
-/// Registry entry keyed by canister principal.
-/// The `role` is duplicated outside the record for convenient
-/// filtering and indexing by consumers.
-///
+//
+// SubnetRegistryEntry
+//
+// Subnet registry entry.
+//
 
 #[derive(CandidType, Deserialize)]
 pub struct SubnetRegistryEntry {
@@ -43,23 +39,23 @@ pub struct SubnetRegistryEntry {
     pub record: CanisterInfo,
 }
 
-///
-/// AppDirectoryArgs
-///
+//
+// AppDirectoryArgs
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct AppDirectoryArgs(pub Vec<DirectoryEntryInput>);
 
-///
-/// SubnetDirectoryArgs
-///
+//
+// SubnetDirectoryArgs
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct SubnetDirectoryArgs(pub Vec<DirectoryEntryInput>);
 
-///
-/// DirectoryEntryInput
-///
+//
+// DirectoryEntryInput
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct DirectoryEntryInput {
@@ -67,9 +63,9 @@ pub struct DirectoryEntryInput {
     pub pid: Principal,
 }
 
-///
-/// DirectoryEntryResponse
-///
+//
+// DirectoryEntryResponse
+//
 
 #[derive(CandidType, Debug, Deserialize, Eq, PartialEq)]
 pub struct DirectoryEntryResponse {

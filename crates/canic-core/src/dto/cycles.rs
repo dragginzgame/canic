@@ -1,8 +1,8 @@
 use crate::{cdk::types::Cycles, dto::prelude::*};
 
-///
-/// CycleTrackerEntry
-///
+//
+// CycleTrackerEntry
+//
 
 #[derive(CandidType, Deserialize)]
 pub struct CycleTrackerEntry {

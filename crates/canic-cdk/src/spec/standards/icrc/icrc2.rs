@@ -1,8 +1,8 @@
 use crate::spec::prelude::*;
 
-///
-/// Allowance
-///
+//
+// Allowance
+//
 
 #[derive(CandidType, Deserialize)]
 pub struct Allowance {
@@ -10,10 +10,10 @@ pub struct Allowance {
     pub expires_at: Option<u64>,
 }
 
-///
-/// AllowanceArgs
-/// wrapped to use the canic Account
-///
+//
+// AllowanceArgs
+// wrapped to use the canic Account
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct AllowanceArgs {
@@ -21,10 +21,10 @@ pub struct AllowanceArgs {
     pub spender: Account,
 }
 
-///
-/// TransferFromArgs
-/// transfer_from() arguments
-///
+//
+// TransferFromArgs
+// transfer_from() arguments
+//
 
 #[derive(CandidType, Serialize)]
 pub struct TransferFromArgs {
@@ -35,9 +35,9 @@ pub struct TransferFromArgs {
     pub created_at_time: Option<u64>,
 }
 
-///
-/// TransferFromResult
-///
+//
+// TransferFromResult
+//
 
 #[derive(CandidType, Deserialize)]
 pub enum TransferFromResult {
@@ -47,9 +47,9 @@ pub enum TransferFromResult {
     Err(TransferFromError),
 }
 
-///
-/// TransferFromError
-///
+//
+// TransferFromError
+//
 
 #[derive(CandidType, Debug, Deserialize)]
 pub enum TransferFromError {

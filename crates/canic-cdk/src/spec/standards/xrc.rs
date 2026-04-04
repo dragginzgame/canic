@@ -1,9 +1,9 @@
 use crate::spec::prelude::*;
 
-///
-/// AssetClass
-/// XRC asset class discriminator.
-///
+//
+// AssetClass
+// XRC asset class discriminator.
+//
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
 pub enum AssetClass {
@@ -11,10 +11,10 @@ pub enum AssetClass {
     FiatCurrency,
 }
 
-///
-/// Asset
-/// XRC asset descriptor used in exchange rate queries.
-///
+//
+// Asset
+// XRC asset descriptor used in exchange rate queries.
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct Asset {
@@ -22,10 +22,10 @@ pub struct Asset {
     pub class: AssetClass,
 }
 
-///
-/// GetExchangeRateRequest
-/// Request payload for XRC `get_exchange_rate`.
-///
+//
+// GetExchangeRateRequest
+// Request payload for XRC `get_exchange_rate`.
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct GetExchangeRateRequest {
@@ -34,10 +34,10 @@ pub struct GetExchangeRateRequest {
     pub timestamp: Option<u64>,
 }
 
-///
-/// ExchangeRateMetadata
-/// Metadata attached to a returned exchange rate.
-///
+//
+// ExchangeRateMetadata
+// Metadata attached to a returned exchange rate.
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct ExchangeRateMetadata {
@@ -50,10 +50,10 @@ pub struct ExchangeRateMetadata {
     pub forex_timestamp: Option<u64>,
 }
 
-///
-/// ExchangeRate
-/// Returned exchange rate record.
-///
+//
+// ExchangeRate
+// Returned exchange rate record.
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct ExchangeRate {
@@ -61,10 +61,10 @@ pub struct ExchangeRate {
     pub metadata: ExchangeRateMetadata,
 }
 
-///
-/// ExchangeRateError
-/// Error variants returned by XRC.
-///
+//
+// ExchangeRateError
+// Error variants returned by XRC.
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
 pub enum ExchangeRateError {
@@ -86,10 +86,10 @@ pub enum ExchangeRateError {
     StablecoinRateNotFound,
 }
 
-///
-/// GetExchangeRateResult
-/// Result envelope for XRC `get_exchange_rate`.
-///
+//
+// GetExchangeRateResult
+// Result envelope for XRC `get_exchange_rate`.
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
 pub enum GetExchangeRateResult {

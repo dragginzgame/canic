@@ -8,20 +8,20 @@ use std::{
     str::FromStr,
 };
 
-///
-/// Subaccount
-///
+//
+// Subaccount
+//
 
 pub type Subaccount = [u8; 32];
 
 pub const DEFAULT_SUBACCOUNT: &Subaccount = &[0; 32];
 
-///
-/// Account
-///
-/// Code ported from icrc-ledger-types as we don't want to include that one, it's out of
-/// date and has a lot of extra dependencies
-///
+//
+// Account
+//
+// Code ported from icrc-ledger-types as we don't want to include that one, it's out of
+// date and has a lot of extra dependencies
+//
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Serialize)]
 pub struct Account {
@@ -37,8 +37,8 @@ impl Account {
         }
     }
 
-    /// The effective subaccount of an account - the subaccount if it is set, otherwise the default
-    /// subaccount of all zeroes.
+    // The effective subaccount of an account - the subaccount if it is set, otherwise the default
+    // subaccount of all zeroes.
     #[must_use]
     pub fn effective_subaccount(&self) -> &Subaccount {
         self.subaccount.as_ref().unwrap_or(DEFAULT_SUBACCOUNT)

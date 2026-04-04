@@ -1,12 +1,11 @@
 use crate::{InternalError, access::AccessError, dto::prelude::*};
 use std::fmt::{self, Display};
 
-///
-/// Error
-///
-/// Public-facing error DTO returned across the canister API boundary.
-/// Encodes a stable error code and a human-readable message.
-///
+//
+// Error
+//
+// Public API error payload.
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct Error {
@@ -20,52 +19,52 @@ impl Error {
         Self { code, message }
     }
 
-    /// 409 – Conflict with existing state or resource.
+    // 409 – Conflict with existing state or resource.
     pub fn conflict(message: impl Into<String>) -> Self {
         Self::new(ErrorCode::Conflict, message.into())
     }
 
-    /// 409 – Policy violation with a stable policy-specific code.
+    // 409 – Policy violation with a stable policy-specific code.
     pub fn policy(code: ErrorCode, message: impl Into<String>) -> Self {
         Self::new(code, message.into())
     }
 
-    /// 403 – Authenticated caller is not permitted to perform this action.
+    // 403 – Authenticated caller is not permitted to perform this action.
     pub fn forbidden(message: impl Into<String>) -> Self {
         Self::new(ErrorCode::Forbidden, message.into())
     }
 
-    /// 500 – Internal or unexpected failure.
+    // 500 – Internal or unexpected failure.
     pub fn internal(message: impl Into<String>) -> Self {
         Self::new(ErrorCode::Internal, message.into())
     }
 
-    /// 400 – Invalid input or malformed request.
+    // 400 – Invalid input or malformed request.
     pub fn invalid(message: impl Into<String>) -> Self {
         Self::new(ErrorCode::InvalidInput, message.into())
     }
 
-    /// 500 – Broken invariant or impossible internal state.
+    // 500 – Broken invariant or impossible internal state.
     pub fn invariant(message: impl Into<String>) -> Self {
         Self::new(ErrorCode::InvariantViolation, message.into())
     }
 
-    /// 429 / 507 – Resource, quota, or capacity exhaustion.
+    // 429 / 507 – Resource, quota, or capacity exhaustion.
     pub fn exhausted(message: impl Into<String>) -> Self {
         Self::new(ErrorCode::ResourceExhausted, message.into())
     }
 
-    /// 404 – Requested resource was not found.
+    // 404 – Requested resource was not found.
     pub fn not_found(message: impl Into<String>) -> Self {
         Self::new(ErrorCode::NotFound, message.into())
     }
 
-    /// 401 – Caller is unauthenticated or has an invalid identity.
+    // 401 – Caller is unauthenticated or has an invalid identity.
     pub fn unauthorized(message: impl Into<String>) -> Self {
         Self::new(ErrorCode::Unauthorized, message.into())
     }
 
-    /// 503 – Service is temporarily unavailable due to runtime controls.
+    // 503 – Service is temporarily unavailable due to runtime controls.
     pub fn unavailable(message: impl Into<String>) -> Self {
         Self::new(ErrorCode::Unavailable, message.into())
     }
@@ -83,12 +82,11 @@ impl From<AccessError> for Error {
     }
 }
 
-///
-/// ErrorCode
-///
-/// Stable public error codes returned by the API.
-/// New variants may be added in the future; consumers must handle unknown values.
-///
+//
+// ErrorCode
+//
+// Stable public error codes.
+//
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
 #[non_exhaustive]

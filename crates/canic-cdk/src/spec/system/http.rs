@@ -4,15 +4,15 @@ use candid::define_function;
 // Define the callback function type using the macro
 define_function!(pub CallbackFunc : () -> () query);
 
-///
-/// HeaderField
-///
+//
+// HeaderField
+//
 
 pub type HeaderField = (String, String);
 
-///
-/// HttpRequest
-///
+//
+// HttpRequest
+//
 
 #[derive(CandidType, Clone, Deserialize)]
 pub struct HttpRequest {
@@ -22,9 +22,9 @@ pub struct HttpRequest {
     pub body: Vec<u8>,
 }
 
-///
-/// HttpStatus
-///
+//
+// HttpStatus
+//
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Serialize)]
 pub enum HttpStatus {
@@ -46,9 +46,9 @@ impl HttpStatus {
     }
 }
 
-///
-/// HttpResponse
-///
+//
+// HttpResponse
+//
 
 #[derive(CandidType, Clone, Deserialize)]
 pub struct HttpResponse {
@@ -70,9 +70,9 @@ impl HttpResponse {
     }
 }
 
-///
-/// StreamingCallbackToken
-///
+//
+// StreamingCallbackToken
+//
 
 #[derive(CandidType, Clone, Deserialize, Serialize)]
 pub struct StreamingCallbackToken {
@@ -81,9 +81,9 @@ pub struct StreamingCallbackToken {
     pub headers: Vec<HeaderField>,
 }
 
-///
-/// StreamingCallbackHttpResponse
-///
+//
+// StreamingCallbackHttpResponse
+//
 
 #[derive(CandidType, Deserialize)]
 pub struct StreamingCallbackHttpResponse {
@@ -91,9 +91,9 @@ pub struct StreamingCallbackHttpResponse {
     pub token: Option<StreamingCallbackToken>,
 }
 
-///
-/// StreamingStrategy
-///
+//
+// StreamingStrategy
+//
 
 #[derive(CandidType, Clone, Deserialize)]
 pub enum StreamingStrategy {

@@ -5,9 +5,9 @@ use crate::ids::{
 use candid::{CandidType, Principal};
 use serde::Deserialize;
 
-///
-/// TemplateManifestInput
-///
+//
+// TemplateManifestInput
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct TemplateManifestInput {
@@ -23,9 +23,9 @@ pub struct TemplateManifestInput {
     pub created_at: u64,
 }
 
-///
-/// TemplateManifestResponse
-///
+//
+// TemplateManifestResponse
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct TemplateManifestResponse {
@@ -41,9 +41,9 @@ pub struct TemplateManifestResponse {
     pub created_at: u64,
 }
 
-///
-/// TemplateChunkSetInput
-///
+//
+// TemplateChunkSetInput
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct TemplateChunkSetInput {
@@ -54,9 +54,9 @@ pub struct TemplateChunkSetInput {
     pub chunks: Vec<Vec<u8>>,
 }
 
-///
-/// TemplateChunkSetPrepareInput
-///
+//
+// TemplateChunkSetPrepareInput
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct TemplateChunkSetPrepareInput {
@@ -67,9 +67,9 @@ pub struct TemplateChunkSetPrepareInput {
     pub chunk_hashes: Vec<Vec<u8>>,
 }
 
-///
-/// TemplateChunkInput
-///
+//
+// TemplateChunkInput
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct TemplateChunkInput {
@@ -79,27 +79,27 @@ pub struct TemplateChunkInput {
     pub bytes: Vec<u8>,
 }
 
-///
-/// TemplateChunkSetInfoResponse
-///
+//
+// TemplateChunkSetInfoResponse
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct TemplateChunkSetInfoResponse {
     pub chunk_hashes: Vec<Vec<u8>>,
 }
 
-///
-/// TemplateChunkResponse
-///
+//
+// TemplateChunkResponse
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct TemplateChunkResponse {
     pub bytes: Vec<u8>,
 }
 
-///
-/// WasmStoreCatalogEntryResponse
-///
+//
+// WasmStoreCatalogEntryResponse
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct WasmStoreCatalogEntryResponse {
@@ -110,9 +110,9 @@ pub struct WasmStoreCatalogEntryResponse {
     pub payload_size_bytes: u64,
 }
 
-///
-/// WasmStoreTemplateStatusResponse
-///
+//
+// WasmStoreTemplateStatusResponse
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct WasmStoreTemplateStatusResponse {
@@ -120,9 +120,9 @@ pub struct WasmStoreTemplateStatusResponse {
     pub versions: u16,
 }
 
-///
-/// WasmStoreGcStatusResponse
-///
+//
+// WasmStoreGcStatusResponse
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct WasmStoreGcStatusResponse {
@@ -134,9 +134,9 @@ pub struct WasmStoreGcStatusResponse {
     pub runs_completed: u32,
 }
 
-///
-/// WasmStoreStatusResponse
-///
+//
+// WasmStoreStatusResponse
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct WasmStoreStatusResponse {
@@ -157,9 +157,9 @@ pub struct WasmStoreStatusResponse {
     pub templates: Vec<WasmStoreTemplateStatusResponse>,
 }
 
-///
-/// WasmStorePublicationSlotResponse
-///
+//
+// WasmStorePublicationSlotResponse
+//
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
 pub enum WasmStorePublicationSlotResponse {
@@ -168,9 +168,9 @@ pub enum WasmStorePublicationSlotResponse {
     Retired,
 }
 
-///
-/// WasmStoreOverviewStoreResponse
-///
+//
+// WasmStoreOverviewStoreResponse
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct WasmStoreOverviewStoreResponse {
@@ -195,9 +195,9 @@ pub struct WasmStoreOverviewStoreResponse {
     pub approved_templates: Vec<WasmStoreTemplateStatusResponse>,
 }
 
-///
-/// WasmStoreOverviewResponse
-///
+//
+// WasmStoreOverviewResponse
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct WasmStoreOverviewResponse {
@@ -205,9 +205,9 @@ pub struct WasmStoreOverviewResponse {
     pub stores: Vec<WasmStoreOverviewStoreResponse>,
 }
 
-///
-/// TemplateStagingStatusResponse
-///
+//
+// TemplateStagingStatusResponse
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct TemplateStagingStatusResponse {
@@ -224,9 +224,9 @@ pub struct TemplateStagingStatusResponse {
     pub publishable: bool,
 }
 
-///
-/// WasmStoreBootstrapDebugResponse
-///
+//
+// WasmStoreBootstrapDebugResponse
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct WasmStoreBootstrapDebugResponse {
@@ -235,9 +235,9 @@ pub struct WasmStoreBootstrapDebugResponse {
     pub staged: Vec<TemplateStagingStatusResponse>,
 }
 
-///
-/// WasmStorePublicationStateResponse
-///
+//
+// WasmStorePublicationStateResponse
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct WasmStorePublicationStateResponse {
@@ -249,9 +249,9 @@ pub struct WasmStorePublicationStateResponse {
     pub retired_at: u64,
 }
 
-///
-/// WasmStorePublicationFinalizationStatusResponse
-///
+//
+// WasmStorePublicationFinalizationStatusResponse
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct WasmStorePublicationFinalizationStatusResponse {
@@ -259,9 +259,9 @@ pub struct WasmStorePublicationFinalizationStatusResponse {
     pub finalized_at: u64,
 }
 
-///
-/// WasmStoreRetiredStoreStatusResponse
-///
+//
+// WasmStoreRetiredStoreStatusResponse
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct WasmStoreRetiredStoreStatusResponse {
@@ -273,9 +273,9 @@ pub struct WasmStoreRetiredStoreStatusResponse {
     pub store: WasmStoreStatusResponse,
 }
 
-///
-/// WasmStorePublicationStoreStatusResponse
-///
+//
+// WasmStorePublicationStoreStatusResponse
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct WasmStorePublicationStoreStatusResponse {
@@ -292,9 +292,9 @@ pub struct WasmStorePublicationStoreStatusResponse {
     pub store: WasmStoreStatusResponse,
 }
 
-///
-/// WasmStorePublicationStatusResponse
-///
+//
+// WasmStorePublicationStatusResponse
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct WasmStorePublicationStatusResponse {
@@ -304,9 +304,9 @@ pub struct WasmStorePublicationStatusResponse {
     pub stores: Vec<WasmStorePublicationStoreStatusResponse>,
 }
 
-///
-/// WasmStoreFinalizedStoreResponse
-///
+//
+// WasmStoreFinalizedStoreResponse
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct WasmStoreFinalizedStoreResponse {
@@ -314,9 +314,9 @@ pub struct WasmStoreFinalizedStoreResponse {
     pub store_pid: Principal,
 }
 
-///
-/// WasmStoreAdminCommand
-///
+//
+// WasmStoreAdminCommand
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub enum WasmStoreAdminCommand {
@@ -339,9 +339,9 @@ pub enum WasmStoreAdminCommand {
     },
 }
 
-///
-/// WasmStoreAdminResponse
-///
+//
+// WasmStoreAdminResponse
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub enum WasmStoreAdminResponse {

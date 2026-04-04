@@ -1,8 +1,8 @@
 use crate::dto::prelude::*;
 
-///
-/// EnvBootstrapArgs
-///
+//
+// EnvBootstrapArgs
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct EnvBootstrapArgs {
@@ -19,9 +19,9 @@ pub struct EnvBootstrapArgs {
     pub parent_pid: Option<Principal>,
 }
 
-///
-/// EnvSnapshotResponse
-///
+//
+// EnvSnapshotResponse
+//
 
 #[derive(CandidType, Deserialize)]
 pub struct EnvSnapshotResponse {

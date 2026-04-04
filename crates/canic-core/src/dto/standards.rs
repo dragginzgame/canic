@@ -1,8 +1,8 @@
 use crate::dto::prelude::*;
 
-///
-/// CanicStandardsResponse
-///
+//
+// CanicStandardsResponse
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct CanicStandardsResponse {

@@ -1,8 +1,8 @@
 use crate::dto::{error::Error, prelude::*, rpc::RootRequestMetadata};
 
-///
-/// DelegationCert
-///
+//
+// DelegationCert
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct DelegationCert {
@@ -14,9 +14,9 @@ pub struct DelegationCert {
     pub aud: Vec<Principal>,
 }
 
-///
-/// DelegationProof
-///
+//
+// DelegationProof
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct DelegationProof {
@@ -24,9 +24,9 @@ pub struct DelegationProof {
     pub cert_sig: Vec<u8>,
 }
 
-///
-/// DelegationProofInstallIntent
-///
+//
+// DelegationProofInstallIntent
+//
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
 pub enum DelegationProofInstallIntent {
@@ -35,9 +35,9 @@ pub enum DelegationProofInstallIntent {
     Repair,
 }
 
-///
-/// DelegationProofInstallRequest
-///
+//
+// DelegationProofInstallRequest
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct DelegationProofInstallRequest {
@@ -45,9 +45,9 @@ pub struct DelegationProofInstallRequest {
     pub intent: DelegationProofInstallIntent,
 }
 
-///
-/// DelegatedTokenClaims
-///
+//
+// DelegatedTokenClaims
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct DelegatedTokenClaims {
@@ -59,9 +59,9 @@ pub struct DelegatedTokenClaims {
     pub exp: u64,
 }
 
-///
-/// DelegatedToken
-///
+//
+// DelegatedToken
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct DelegatedToken {
@@ -70,9 +70,9 @@ pub struct DelegatedToken {
     pub token_sig: Vec<u8>,
 }
 
-///
-/// DelegationRequest
-///
+//
+// DelegationRequest
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct DelegationRequest {
@@ -86,9 +86,9 @@ pub struct DelegationRequest {
     pub metadata: Option<RootRequestMetadata>,
 }
 
-///
-/// RoleAttestationRequest
-///
+//
+// RoleAttestationRequest
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct RoleAttestationRequest {
@@ -104,9 +104,9 @@ pub struct RoleAttestationRequest {
     pub metadata: Option<RootRequestMetadata>,
 }
 
-///
-/// RoleAttestation
-///
+//
+// RoleAttestation
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct RoleAttestation {
@@ -121,9 +121,9 @@ pub struct RoleAttestation {
     pub epoch: u64,
 }
 
-///
-/// SignedRoleAttestation
-///
+//
+// SignedRoleAttestation
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct SignedRoleAttestation {
@@ -132,9 +132,9 @@ pub struct SignedRoleAttestation {
     pub key_id: u32,
 }
 
-///
-/// AttestationKeyStatus
-///
+//
+// AttestationKeyStatus
+//
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
 pub enum AttestationKeyStatus {
@@ -142,9 +142,9 @@ pub enum AttestationKeyStatus {
     Previous,
 }
 
-///
-/// AttestationKey
-///
+//
+// AttestationKey
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct AttestationKey {
@@ -157,9 +157,9 @@ pub struct AttestationKey {
     pub valid_until: Option<u64>,
 }
 
-///
-/// AttestationKeySet
-///
+//
+// AttestationKeySet
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct AttestationKeySet {
@@ -170,9 +170,9 @@ pub struct AttestationKeySet {
 
 // admin-only: not part of canonical delegation flow.
 // used for controlled provisioning and tooling flows.
-///
-/// DelegationProvisionRequest
-///
+//
+// DelegationProvisionRequest
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct DelegationProvisionRequest {
@@ -183,9 +183,9 @@ pub struct DelegationProvisionRequest {
 
 // admin-only: not part of canonical delegation flow.
 // used for controlled provisioning and tooling flows.
-///
-/// DelegationProvisionResponse
-///
+//
+// DelegationProvisionResponse
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct DelegationProvisionResponse {
@@ -193,9 +193,9 @@ pub struct DelegationProvisionResponse {
     pub results: Vec<DelegationProvisionTargetResponse>,
 }
 
-///
-/// DelegationVerifierProofPushRequest
-///
+//
+// DelegationVerifierProofPushRequest
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct DelegationVerifierProofPushRequest {
@@ -203,18 +203,18 @@ pub struct DelegationVerifierProofPushRequest {
     pub verifier_targets: Vec<Principal>,
 }
 
-///
-/// DelegationVerifierProofPushResponse
-///
+//
+// DelegationVerifierProofPushResponse
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct DelegationVerifierProofPushResponse {
     pub results: Vec<DelegationProvisionTargetResponse>,
 }
 
-///
-/// DelegationProofStatus
-///
+//
+// DelegationProofStatus
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct DelegationProofStatus {
@@ -235,9 +235,9 @@ pub enum DelegationProvisionStatus {
     Failed,
 }
 
-///
-/// DelegationAdminCommand
-///
+//
+// DelegationAdminCommand
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
 pub enum DelegationAdminCommand {
@@ -245,9 +245,9 @@ pub enum DelegationAdminCommand {
     RepairVerifiers(DelegationVerifierProofPushRequest),
 }
 
-///
-/// DelegationAdminResponse
-///
+//
+// DelegationAdminResponse
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
 pub enum DelegationAdminResponse {
@@ -259,9 +259,9 @@ pub enum DelegationAdminResponse {
     },
 }
 
-///
-/// DelegationProvisionTargetResponse
-///
+//
+// DelegationProvisionTargetResponse
+//
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct DelegationProvisionTargetResponse {

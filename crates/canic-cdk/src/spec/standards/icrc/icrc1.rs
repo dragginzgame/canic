@@ -1,9 +1,9 @@
 use crate::spec::prelude::*;
 
-///
-/// Icrc1TransferArgs
-/// Canonical arguments for an ICRC-1 `transfer` call with consistent naming.
-///
+//
+// Icrc1TransferArgs
+// Canonical arguments for an ICRC-1 `transfer` call with consistent naming.
+//
 
 #[derive(CandidType, Deserialize)]
 pub struct Icrc1TransferArgs {

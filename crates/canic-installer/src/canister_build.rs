@@ -227,7 +227,13 @@ fn extract_candid(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let output = Command::new("candid-extractor")
         .arg(debug_wasm_path)
-        .output()?;
+        .output()
+        .map_err(|err| {
+            format!(
+                "failed to run candid-extractor for {}: {err}",
+                debug_wasm_path.display()
+            )
+        })?;
 
     if !output.status.success() {
         return Err(format!(
@@ -270,7 +276,9 @@ fn maybe_shrink_wasm_artifact(wasm_path: &Path) -> Result<(), Box<dyn std::error
             let _ = fs::remove_file(shrunk_path);
         }
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
-        Err(err) => return Err(err.into()),
+        Err(err) => {
+            return Err(format!("failed to run ic-wasm for {}: {err}", wasm_path.display()).into());
+        }
     }
 
     Ok(())

@@ -53,6 +53,7 @@ Optimization constraint:
 - reduce wasm without removing intended runtime capabilities or operator-facing signal
 - do not count feature removal as a normal wasm optimization win
 - any feature-removal proposal requires a separate explicit design decision outside this recurring audit
+- when a shipped wire type derives `CandidType`, prefer `//` comments over `///` because Rust doc attributes are retained in Candid runtime metadata and can silently grow every canister artifact
 
 ## Run This Audit After
 
@@ -214,6 +215,7 @@ For each run, explicitly mark `PASS` / `PARTIAL` / `FAIL` with concrete evidence
 9. Current per-canister size snapshots were recorded in the top-level report and machine-readable artifact.
 10. Size deltas versus baseline were recorded when comparable baseline artifacts exist.
 11. Verification readout includes command outcomes with `PASS` / `FAIL` / `BLOCKED`.
+12. New `CandidType` wire types were checked for `///` / `//!` doc-comment regressions when shared data-section growth is under review.
 
 ## Execution Contract
 
