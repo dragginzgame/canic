@@ -27,7 +27,6 @@ async fn request_cycles_from_parent(cycles: u128) -> Result<u128, Error> {
     RpcApi::request_cycles(cycles)
         .await
         .map(|response| response.cycles_transferred)
-        .map_err(Error::from)
 }
 
 canic::cdk::export_candid_debug!();
