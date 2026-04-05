@@ -127,6 +127,7 @@ fn map_request_maps_issue_delegation() {
         ttl_secs: 60,
         verifier_targets: vec![p(4)],
         include_root_verifier: true,
+        shard_public_key_sec1: None,
         metadata: None,
     });
 
@@ -258,6 +259,7 @@ fn authorize_rejects_issue_delegation_when_verifier_target_is_root() {
         ttl_secs: 60,
         verifier_targets: vec![root_pid],
         include_root_verifier: true,
+        shard_public_key_sec1: None,
         metadata: None,
     });
 
@@ -289,6 +291,7 @@ fn authorize_rejects_issue_delegation_when_verifier_target_is_shard() {
         ttl_secs: 60,
         verifier_targets: vec![caller],
         include_root_verifier: true,
+        shard_public_key_sec1: None,
         metadata: None,
     });
 
@@ -321,6 +324,7 @@ fn authorize_rejects_issue_delegation_when_verifier_target_is_unregistered() {
         ttl_secs: 60,
         verifier_targets: vec![unregistered],
         include_root_verifier: true,
+        shard_public_key_sec1: None,
         metadata: None,
     });
 
@@ -362,6 +366,7 @@ fn authorize_allows_issue_delegation_when_verifier_target_is_registered() {
         ttl_secs: 60,
         verifier_targets: vec![verifier],
         include_root_verifier: true,
+        shard_public_key_sec1: None,
         metadata: None,
     });
 

@@ -43,6 +43,8 @@ pub enum DelegationProofInstallIntent {
 pub struct DelegationProofInstallRequest {
     pub proof: DelegationProof,
     pub intent: DelegationProofInstallIntent,
+    #[serde(default)]
+    pub shard_public_key_sec1: Option<Vec<u8>>,
 }
 
 //
@@ -82,6 +84,8 @@ pub struct DelegationRequest {
     pub ttl_secs: u64,
     pub verifier_targets: Vec<Principal>,
     pub include_root_verifier: bool,
+    #[serde(default)]
+    pub shard_public_key_sec1: Option<Vec<u8>>,
     #[serde(default)]
     pub metadata: Option<RootRequestMetadata>,
 }
@@ -179,6 +183,8 @@ pub struct DelegationProvisionRequest {
     pub cert: DelegationCert,
     pub signer_targets: Vec<Principal>,
     pub verifier_targets: Vec<Principal>,
+    #[serde(default)]
+    pub shard_public_key_sec1: Option<Vec<u8>>,
 }
 
 // admin-only: not part of canonical delegation flow.

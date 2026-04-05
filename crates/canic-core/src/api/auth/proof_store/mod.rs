@@ -27,6 +27,7 @@ impl DelegationApi {
         proof: DelegationProof,
         intent: crate::dto::auth::DelegationProofInstallIntent,
         kind: DelegationProvisionTargetKind,
+        shard_public_key_sec1: Option<Vec<u8>>,
     ) -> Result<(), Error> {
         if kind == DelegationProvisionTargetKind::Verifier {
             let local = IcOps::canister_self();
@@ -39,9 +40,12 @@ impl DelegationApi {
         }
 
         let root_pid = EnvOps::root_pid().map_err(Error::from)?;
-        DelegatedTokenOps::cache_public_keys_for_cert(&proof.cert)
-            .await
-            .map_err(Self::map_delegation_error)?;
+        DelegatedTokenOps::cache_public_keys_for_cert_with_optional_shard(
+            &proof.cert,
+            shard_public_key_sec1,
+        )
+        .await
+        .map_err(Self::map_delegation_error)?;
         if let Err(err) = DelegatedTokenOps::verify_delegation_proof(&proof, root_pid) {
             let local = IcOps::canister_self();
             log!(
@@ -97,7 +101,13 @@ impl DelegationApi {
             ));
         }
 
-        Self::store_proof_local(request.proof, request.intent, kind).await
+        Self::store_proof_local(
+            request.proof,
+            request.intent,
+            kind,
+            request.shard_public_key_sec1,
+        )
+        .await
     }
 
     pub(super) async fn store_local_signer_proof(proof: DelegationProof) -> Result<(), Error> {
@@ -105,6 +115,7 @@ impl DelegationApi {
             proof,
             crate::dto::auth::DelegationProofInstallIntent::Provisioning,
             DelegationProvisionTargetKind::Signer,
+            None,
         )
         .await
     }

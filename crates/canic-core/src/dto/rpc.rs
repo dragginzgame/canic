@@ -345,6 +345,7 @@ mod tests {
                 ttl_secs: 60,
                 verifier_targets: vec![],
                 include_root_verifier: false,
+                shard_public_key_sec1: None,
                 metadata: None,
             }),
             Request::issue_role_attestation(RoleAttestationRequest {

@@ -20,7 +20,9 @@ use crate::{
     },
 };
 
-use super::{Pic, PicSerialGuard, acquire_pic_serial_guard, pic};
+use super::{
+    Pic, PicSerialGuard, StandaloneCanisterFixtureError, try_acquire_pic_serial_guard, try_pic,
+};
 
 const STANDALONE_INSTALL_CYCLES: u128 = 1_000_000_000_000;
 const STANDALONE_READY_TICK_LIMIT: usize = 60;
@@ -40,7 +42,17 @@ pub struct StandaloneCanisterFixture {
 // caller-provided init args and no Canic-specific bootstrap assumptions.
 #[must_use]
 pub fn install_prebuilt_canister(wasm: Vec<u8>, init_bytes: Vec<u8>) -> StandaloneCanisterFixture {
-    install_prebuilt_canister_with_cycles(wasm, init_bytes, STANDALONE_INSTALL_CYCLES)
+    try_install_prebuilt_canister(wasm, init_bytes)
+        .unwrap_or_else(|err| panic!("failed to install prebuilt canister fixture: {err}"))
+}
+
+// Install one already-built wasm module into a fresh PocketIC instance with
+// caller-provided init args and no Canic-specific bootstrap assumptions.
+pub fn try_install_prebuilt_canister(
+    wasm: Vec<u8>,
+    init_bytes: Vec<u8>,
+) -> Result<StandaloneCanisterFixture, StandaloneCanisterFixtureError> {
+    try_install_prebuilt_canister_with_cycles(wasm, init_bytes, STANDALONE_INSTALL_CYCLES)
 }
 
 // Install one already-built wasm module into a fresh PocketIC instance with
@@ -51,15 +63,29 @@ pub fn install_prebuilt_canister_with_cycles(
     init_bytes: Vec<u8>,
     install_cycles: u128,
 ) -> StandaloneCanisterFixture {
-    let serial_guard = acquire_pic_serial_guard();
-    let pic = pic();
-    let canister_id = pic.create_and_install_with_args(wasm, init_bytes, install_cycles);
+    try_install_prebuilt_canister_with_cycles(wasm, init_bytes, install_cycles)
+        .unwrap_or_else(|err| panic!("failed to install prebuilt canister fixture: {err}"))
+}
 
-    StandaloneCanisterFixture {
+// Install one already-built wasm module into a fresh PocketIC instance with
+// caller-provided init args and explicit install cycles.
+pub fn try_install_prebuilt_canister_with_cycles(
+    wasm: Vec<u8>,
+    init_bytes: Vec<u8>,
+    install_cycles: u128,
+) -> Result<StandaloneCanisterFixture, StandaloneCanisterFixtureError> {
+    let serial_guard =
+        try_acquire_pic_serial_guard().map_err(StandaloneCanisterFixtureError::SerialGuard)?;
+    let pic = try_pic().map_err(StandaloneCanisterFixtureError::Start)?;
+    let canister_id = pic
+        .try_create_and_install_with_args(wasm, init_bytes, install_cycles)
+        .map_err(StandaloneCanisterFixtureError::Install)?;
+
+    Ok(StandaloneCanisterFixture {
         pic,
         canister_id,
         _serial_guard: serial_guard,
-    }
+    })
 }
 
 // Install one non-root Canic canister into a fresh PocketIC instance with

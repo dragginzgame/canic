@@ -118,6 +118,7 @@ fn structural_proof_denies_unsupported_issue_delegation_capability() {
         ttl_secs: 60,
         verifier_targets: Vec::new(),
         include_root_verifier: false,
+        shard_public_key_sec1: None,
         metadata: Some(metadata([35u8; 32], 120)),
     });
     let err = root_response_as(&setup, caller, request)
@@ -616,6 +617,7 @@ fn unsupported_capability_proof_rejection_does_not_commit_replay_entry() {
         ttl_secs: 60,
         verifier_targets: Vec::new(),
         include_root_verifier: false,
+        shard_public_key_sec1: None,
         metadata: Some(metadata),
     };
 
