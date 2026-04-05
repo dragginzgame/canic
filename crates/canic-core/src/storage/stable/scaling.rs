@@ -44,6 +44,17 @@ impl ScalingRegistry {
         });
     }
 
+    /// Count worker entries for one pool.
+    #[must_use]
+    #[expect(clippy::cast_possible_truncation)]
+    pub(crate) fn count_by_pool(pool: &str) -> u32 {
+        SCALING_REGISTRY.with_borrow(|map| {
+            map.iter()
+                .filter(|entry| entry.value().pool.as_ref() == pool)
+                .count() as u32
+        })
+    }
+
     /// Export full registry
     #[must_use]
     pub(crate) fn export() -> ScalingRegistryRecord {

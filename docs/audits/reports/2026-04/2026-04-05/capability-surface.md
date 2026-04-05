@@ -92,7 +92,7 @@
 | `canic_sync_state` / `canic_sync_topology` | yes | yes | yes | active | [api/cascade.rs](/home/adam/projects/canic/crates/canic-core/src/api/cascade.rs), [ops/cascade.rs](/home/adam/projects/canic/crates/canic-core/src/ops/cascade.rs) |
 | `canic_delegation_set_signer_proof` / `canic_delegation_set_verifier_proof` | yes | yes | yes | active | [workflow/auth.rs](/home/adam/projects/canic/crates/canic-core/src/workflow/auth.rs), [pic_role_attestation.rs](/home/adam/projects/canic/crates/canic-core/tests/pic_role_attestation.rs) |
 | `canic_wasm_store_overview` / publication status family | yes | yes | yes | active | [root_wasm_store_reconcile.rs](/home/adam/projects/canic/crates/canic-tests/tests/root_wasm_store_reconcile.rs), [install_root.rs](/home/adam/projects/canic/crates/canic-installer/src/install_root.rs) |
-| internal audit probes (`audit_*_probe`) | no in demo surface | yes in internal test canisters | yes | active | [audit_leaf_probe](/home/adam/projects/canic/crates/canic-core/test-canisters/audit_leaf_probe/src/lib.rs), [audit_root_probe](/home/adam/projects/canic/crates/canic-core/test-canisters/audit_root_probe/src/lib.rs), [audit_scaling_probe](/home/adam/projects/canic/crates/canic-core/test-canisters/audit_scaling_probe/src/lib.rs), [instruction_audit.rs](/home/adam/projects/canic/crates/canic-tests/tests/instruction_audit.rs) |
+| internal audit probes (`audit_*_probe`) | no in demo surface | yes in internal audit canisters | yes | active | [audit_leaf_probe](/home/adam/projects/canic/crates/canic-core/audit-canisters/audit_leaf_probe/src/lib.rs), [audit_root_probe](/home/adam/projects/canic/crates/canic-core/audit-canisters/audit_root_probe/src/lib.rs), [audit_scaling_probe](/home/adam/projects/canic/crates/canic-core/audit-canisters/audit_scaling_probe/src/lib.rs), [instruction_audit.rs](/home/adam/projects/canic/crates/canic-tests/tests/instruction_audit.rs) |
 
 No `dead` endpoint families were detected in the audited set.
 
@@ -171,7 +171,7 @@ These no longer appear in the refreshed default `.did` outputs for ordinary leaf
 | [endpoints.rs](/home/adam/projects/canic/crates/canic/src/macros/endpoints.rs) | shared macro fan-out | `25` endpoint macro families; `60` `fn canic_*` definitions | High |
 | [protocol.rs](/home/adam/projects/canic/crates/canic-core/src/protocol.rs) | wire constant authority | `27` constants, including four newer WasmStore publication/operator names | Medium |
 | [root.did](/home/adam/projects/canic/.dfx/local/canisters/root/root.did) | root control-plane concentration | `37` exported `canic_*` methods, `11` `*_admin` methods | Medium |
-| [audit_leaf_probe](/home/adam/projects/canic/crates/canic-core/test-canisters/audit_leaf_probe/src/lib.rs), [audit_root_probe](/home/adam/projects/canic/crates/canic-core/test-canisters/audit_root_probe/src/lib.rs), [audit_scaling_probe](/home/adam/projects/canic/crates/canic-core/test-canisters/audit_scaling_probe/src/lib.rs) | internal audit-only probe lane | audit measurement helpers now live outside the demo/reference canisters | Positive |
+| [audit_leaf_probe](/home/adam/projects/canic/crates/canic-core/audit-canisters/audit_leaf_probe/src/lib.rs), [audit_root_probe](/home/adam/projects/canic/crates/canic-core/audit-canisters/audit_root_probe/src/lib.rs), [audit_scaling_probe](/home/adam/projects/canic/crates/canic-core/audit-canisters/audit_scaling_probe/src/lib.rs) | internal audit-only probe lane | audit measurement helpers now live outside the demo/reference canisters | Positive |
 
 ## Global Amplification Factor
 

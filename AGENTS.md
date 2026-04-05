@@ -147,7 +147,8 @@ canisters/                  # Reference demo canisters and support crates
 ├─ scale_hub/               # Scaling coordinator
 ├─ minimal/                 # Minimal baseline canister
 └─ reference-support/       # Shared role constants/support crate
-crates/canic-core/test-canisters/ # Internal test-only canister crates
+crates/canic-core/test-canisters/ # Internal correctness/integration canister crates
+crates/canic-core/audit-canisters/ # Internal audit/perf probe canister crates
 scripts/                    # CI / release helpers
 .github/workflows/          # CI pipelines
 dfx.json                    # Local IC topology

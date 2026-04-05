@@ -4,7 +4,7 @@ use crate::dto::{
         DelegationProof, DelegationProvisionResponse, DelegationProvisionStatus,
         DelegationProvisionTargetKind, DelegationProvisionTargetResponse,
     },
-    rpc::Response,
+    rpc::{CyclesResponse, Response},
 };
 use candid::{decode_one, encode_one};
 
@@ -16,6 +16,7 @@ pub mod slot;
 pub mod ttl;
 
 const ROOT_REPLAY_COMPACT_TAG: &[u8] = b"RR2";
+const ROOT_REPLAY_COMPACT_CYCLES_V1: u8 = 0;
 const ROOT_REPLAY_COMPACT_DELEGATION_ISSUED_V1: u8 = 1;
 
 ///
@@ -100,6 +101,15 @@ fn encode_root_replay_response(response: &Response) -> Result<Vec<u8>, ReplayCom
 }
 
 fn try_encode_compact_root_replay_response(response: &Response) -> Option<Vec<u8>> {
+    if let Response::Cycles(CyclesResponse { cycles_transferred }) = response {
+        let payload = cycles_transferred.to_be_bytes();
+        let mut bytes = Vec::with_capacity(ROOT_REPLAY_COMPACT_TAG.len() + 1 + payload.len());
+        bytes.extend_from_slice(ROOT_REPLAY_COMPACT_TAG);
+        bytes.push(ROOT_REPLAY_COMPACT_CYCLES_V1);
+        bytes.extend_from_slice(&payload);
+        return Some(bytes);
+    }
+
     let Response::DelegationIssued(DelegationProvisionResponse { proof, results }) = response
     else {
         return None;
@@ -141,13 +151,24 @@ fn try_decode_compact_root_replay_response(
         return Ok(None);
     }
 
-    let Some((&kind, payload)) = bytes[ROOT_REPLAY_COMPACT_TAG.len()..].split_first() else {
+    let Some((&kind, mut payload)) = bytes[ROOT_REPLAY_COMPACT_TAG.len()..].split_first() else {
         return Err(ReplayDecodeError::DecodeFailed(
             "root replay compact payload missing variant tag".to_string(),
         ));
     };
 
     match kind {
+        ROOT_REPLAY_COMPACT_CYCLES_V1 => {
+            let cycles_transferred = decode_u128(&mut payload)?;
+            if !payload.is_empty() {
+                return Err(ReplayDecodeError::DecodeFailed(
+                    "root replay compact cycles payload had trailing bytes".to_string(),
+                ));
+            }
+            Ok(Some(Response::Cycles(CyclesResponse {
+                cycles_transferred,
+            })))
+        }
         ROOT_REPLAY_COMPACT_DELEGATION_ISSUED_V1 => {
             let compact = decode_compact_delegation_issued(payload)?;
             let results = compact
@@ -264,6 +285,13 @@ fn decode_u64(payload: &mut &[u8]) -> Result<u64, ReplayDecodeError> {
     Ok(u64::from_be_bytes(bytes))
 }
 
+fn decode_u128(payload: &mut &[u8]) -> Result<u128, ReplayDecodeError> {
+    let raw = take_exact(payload, 16, "u128 field")?;
+    let mut bytes = [0u8; 16];
+    bytes.copy_from_slice(raw);
+    Ok(u128::from_be_bytes(bytes))
+}
+
 fn decode_principal(payload: &mut &[u8]) -> Result<Principal, ReplayDecodeError> {
     let raw = decode_bytes(payload)?;
     Ok(Principal::from_slice(&raw))
@@ -349,6 +377,27 @@ mod tests {
                 error: None,
             }],
         })
+    }
+
+    #[test]
+    fn compact_root_replay_round_trips_cycles_response() {
+        let response = Response::Cycles(CyclesResponse {
+            cycles_transferred: 123_456_789_012_345_678_901_234_567_890u128,
+        });
+        let encoded = encode_root_replay_response(&response).expect("encode");
+
+        assert!(
+            encoded.starts_with(ROOT_REPLAY_COMPACT_TAG),
+            "cycles replay should use compact encoding"
+        );
+
+        let decoded = decode_root_replay_response(&encoded).expect("decode");
+        match (decoded, response) {
+            (Response::Cycles(decoded), Response::Cycles(expected)) => {
+                assert_eq!(decoded.cycles_transferred, expected.cycles_transferred);
+            }
+            _ => panic!("expected cycles replay response"),
+        }
     }
 
     #[test]

@@ -40,9 +40,7 @@ use canic_testing_internal::pic::{
     request_root_delegation_provision,
 };
 use canic_testkit::{artifacts::WasmBuildProfile, pic::Pic};
-use root::harness::{
-    setup_root_capability, setup_root_scaling, setup_root_sharding, setup_root_topology,
-};
+use root::harness::{setup_root_capability, setup_root_sharding, setup_root_topology};
 use serde::Serialize;
 use std::{
     collections::BTreeSet,
@@ -321,7 +319,7 @@ fn generate_instruction_footprint_report() {
             "audit_root_probe".to_string(),
             "audit_scaling_probe".to_string(),
             "test".to_string(),
-            "user_hub".to_string(),
+            "root".to_string(),
         ],
         target_endpoints_in_scope: scenarios
             .iter()
@@ -444,38 +442,6 @@ fn scenarios() -> Vec<AuditScenario> {
             topology_state: "standalone-audit-scaling-ready",
             freshness_model: "fresh-standalone-per-scenario",
             notes: "Audit-only scaling dry-run probe before any extra worker exists in one standalone internal scaling canister.",
-        },
-        AuditScenario {
-            key: "scale_hub:create_worker:first-worker",
-            canister: "scale_hub",
-            endpoint_or_flow: "create_worker",
-            transport_mode: "update",
-            subject_kind: "endpoint",
-            subject_label: "create_worker",
-            arg_class: "empty-pool",
-            caller_class: "anonymous",
-            auth_state: "local-test-only",
-            replay_state: "n/a",
-            cache_state: "cold",
-            topology_state: "root_bootstrapped+no-extra-workers",
-            freshness_model: "fresh-topology-per-scenario",
-            notes: "Scaling worker creation update over the empty local pool to exercise placement checkpoints.",
-        },
-        AuditScenario {
-            key: "user_hub:create_account:first-account",
-            canister: "user_hub",
-            endpoint_or_flow: "create_account",
-            transport_mode: "update",
-            subject_kind: "endpoint",
-            subject_label: "create_account",
-            arg_class: "new-principal",
-            caller_class: "anonymous",
-            auth_state: "local-test-only",
-            replay_state: "n/a",
-            cache_state: "cold",
-            topology_state: "root_bootstrapped+user_shard-template-staged",
-            freshness_model: "fresh-topology-per-scenario",
-            notes: "Sharding assignment update for a brand-new principal to exercise shard placement checkpoints.",
         },
         AuditScenario {
             key: "root:canic_request_delegation:fresh-shard",
@@ -652,9 +618,7 @@ fn setup_for_scenario(scenario: &AuditScenario) -> root::harness::RootSetup {
         "root:canic_subnet_registry:full-registry" | "root:canic_subnet_state:empty-struct" => {
             setup_root_topology()
         }
-        "scale_hub:create_worker:first-worker" => setup_root_scaling(),
-        "user_hub:create_account:first-account"
-        | "root:canic_request_delegation:fresh-shard"
+        "root:canic_request_delegation:fresh-shard"
         | "test:test_verify_delegated_token:valid-delegated-token" => setup_root_sharding(),
         _ => setup_root_capability(),
     }
@@ -971,24 +935,6 @@ fn execute_scenario(
 ) {
     let target_pid = prepared.target_pid;
     match scenario.key {
-        "scale_hub:create_worker:first-worker" => {
-            let response: Result<Principal, Error> = setup
-                .pic
-                .update_call(target_pid, "create_worker", ())
-                .expect("create_worker transport failed");
-            let _ = response.expect("create_worker application failed");
-        }
-        "user_hub:create_account:first-account" => {
-            let response: Result<Principal, Error> = setup
-                .pic
-                .update_call(
-                    target_pid,
-                    "create_account",
-                    (Principal::from_slice(&[42; 29]),),
-                )
-                .expect("create_account transport failed");
-            let _ = response.expect("create_account application failed");
-        }
         "root:canic_request_delegation:fresh-shard" => {
             execute_root_delegation_issue_scenario(setup, target_pid, prepared);
         }
@@ -1893,15 +1839,15 @@ fn write_report(
     out.push('\n');
 
     out.push_str("## Hub Module Pressure\n\n");
-    out.push_str("- `scale_hub::create_worker` concentrates cost in the scaling coordinator surface plus `canic-core` placement workflow. That makes scaling one of the first shared instruction hot paths worth reducing.\n");
-    out.push_str("- `user_hub::create_account` is now measurable as a real sharding update, and its first-account path is dominated by `canic-core::workflow::placement::sharding::bootstrap_empty_active`.\n");
     out.push_str("- `root::canic_response_capability_v1` now has measured replay/cycles stage deltas, so root capability work no longer has to be treated as an opaque endpoint total.\n");
+    out.push_str("- `root::canic_request_delegation` remains the main shared update hotspot in the retained audit lane, so further optimization work should stay focused on shared runtime/auth cost rather than demo provisioning flows.\n");
+    out.push_str("- `scale_hub::plan_create_worker` stays in the matrix as an audit-only dry-run probe, which keeps placement-policy visibility without turning demo `create_*` flows into default audit targets.\n");
     out.push_str("- `test::test` provides the current chain-key-free update floor on a non-root child canister. Drift there points back to shared runtime/update overhead rather than topology-specific logic.\n");
     out.push_str("- Root state/registry reads stay separate from the leaf floor. They matter for operator paths, but they should not be confused with the shared ordinary-leaf baseline.\n\n");
 
     out.push_str("## Dependency Fan-In Pressure\n\n");
     out.push_str("- Shared observability reads (`canic_env`, `canic_log`) are now measured through the internal `audit_leaf_probe` canister instead of the shipped demo surface, and raw time is measured through the same internal lane. Their rows still reflect actual query counters from the measured call context rather than inferred zeroes or missing query-side perf-table commits.\n");
-    out.push_str("- The sampled non-trivial hotspot fans into `canic-core` placement orchestration (`workflow/placement/scaling`). The local `test::test` update acts as the baseline floor for update overhead on an ordinary child canister.\n");
+    out.push_str("- The sampled non-trivial hotspots now concentrate in shared auth/replay/root runtime and the audit-only placement dry-run probe. The local `test::test` update acts as the baseline floor for update overhead on an ordinary child canister.\n");
     if checkpoint_sites.is_empty() {
         out.push_str("- There is currently no flow-stage attribution because `perf!` coverage is absent. That is itself a dependency-pressure signal: optimization work is bottlenecked by missing internal checkpoints.\n\n");
     } else {
@@ -1955,7 +1901,7 @@ fn write_report(
     }
     out.push_str("2. Owner boundary: `shared update hotspots`\n");
     out.push_str(&format!(
-        "   Action: compare `scale_hub::create_worker` and `user_hub::create_account` against the `test::test` update floor before/after any placement/sharding cleanup, using this report as the `{minor_line}` baseline.\n"
+        "   Action: compare `root::canic_request_delegation`, `root::canic_response_capability_v1`, and the local `test::test` update floor before/after any shared-runtime cleanup, using this report as the `{minor_line}` baseline.\n"
     ));
     out.push_str("3. Owner boundary: `shared observability floor`\n");
     out.push_str("   Action: keep the internal standalone query probes in the matrix so shared-runtime drift does not hide behind root-only or coordinator-only endpoints.\n\n");
@@ -2005,21 +1951,13 @@ fn render_scope(items: BTreeSet<&str>) -> String {
 // Map the current highest-cost labels back to concrete modules/files.
 fn hotspot_hint(subject_label: &str) -> (&'static str, &'static str) {
     match subject_label {
-        "create_account" => (
-            "Sharding coordinator plus `canic-core` sharding workflow",
-            "[user_hub/lib](/home/adam/projects/canic/canisters/user_hub/src/lib.rs), [sharding workflow](/home/adam/projects/canic/crates/canic-core/src/workflow/placement/sharding/mod.rs)",
-        ),
         "canic_response_capability_v1" => (
             "Root dispatcher plus replay/capability workflow",
             "[request handler](/home/adam/projects/canic/crates/canic-core/src/workflow/rpc/request/handler/mod.rs), [replay workflow](/home/adam/projects/canic/crates/canic-core/src/workflow/rpc/request/handler/replay.rs)",
         ),
-        "create_worker" => (
-            "Scaling coordinator plus `canic-core` placement workflow",
-            "[scale_hub/lib](/home/adam/projects/canic/canisters/scale_hub/src/lib.rs), [scaling workflow](/home/adam/projects/canic/crates/canic-core/src/workflow/placement/scaling/mod.rs)",
-        ),
         "plan_create_worker" => (
             "Scaling policy read path",
-            "[scale_hub/lib](/home/adam/projects/canic/canisters/scale_hub/src/lib.rs), [scaling workflow](/home/adam/projects/canic/crates/canic-core/src/workflow/placement/scaling/mod.rs)",
+            "[audit_scaling_probe](/home/adam/projects/canic/crates/canic-core/audit-canisters/audit_scaling_probe/src/lib.rs), [scaling workflow](/home/adam/projects/canic/crates/canic-core/src/workflow/placement/scaling/mod.rs)",
         ),
         "test" => (
             "Local/dev update floor on the test helper canister",
@@ -2027,23 +1965,23 @@ fn hotspot_hint(subject_label: &str) -> (&'static str, &'static str) {
         ),
         "canic_subnet_registry" => (
             "Root topology registry query",
-            "[audit_root_probe](/home/adam/projects/canic/crates/canic-core/test-canisters/audit_root_probe/src/lib.rs), [registry query](/home/adam/projects/canic/crates/canic-core/src/workflow/topology/registry/query.rs)",
+            "[audit_root_probe](/home/adam/projects/canic/crates/canic-core/audit-canisters/audit_root_probe/src/lib.rs), [registry query](/home/adam/projects/canic/crates/canic-core/src/workflow/topology/registry/query.rs)",
         ),
         "canic_subnet_state" => (
             "Root state snapshot query",
-            "[audit_root_probe](/home/adam/projects/canic/crates/canic-core/test-canisters/audit_root_probe/src/lib.rs), [state query](/home/adam/projects/canic/crates/canic-core/src/workflow/state/query.rs)",
+            "[audit_root_probe](/home/adam/projects/canic/crates/canic-core/audit-canisters/audit_root_probe/src/lib.rs), [state query](/home/adam/projects/canic/crates/canic-core/src/workflow/state/query.rs)",
         ),
         "canic_log" => (
             "Internal audit log pagination probe over the shared log query path",
-            "[audit_leaf_probe](/home/adam/projects/canic/crates/canic-core/test-canisters/audit_leaf_probe/src/lib.rs), [log query](/home/adam/projects/canic/crates/canic-core/src/workflow/log/query.rs)",
+            "[audit_leaf_probe](/home/adam/projects/canic/crates/canic-core/audit-canisters/audit_leaf_probe/src/lib.rs), [log query](/home/adam/projects/canic/crates/canic-core/src/workflow/log/query.rs)",
         ),
         "canic_env" => (
             "Internal audit env snapshot probe over the shared env query path",
-            "[audit_leaf_probe](/home/adam/projects/canic/crates/canic-core/test-canisters/audit_leaf_probe/src/lib.rs), [env query](/home/adam/projects/canic/crates/canic-core/src/workflow/env/query.rs)",
+            "[audit_leaf_probe](/home/adam/projects/canic/crates/canic-core/audit-canisters/audit_leaf_probe/src/lib.rs), [env query](/home/adam/projects/canic/crates/canic-core/src/workflow/env/query.rs)",
         ),
         "canic_time" => (
             "Internal audit raw time probe",
-            "[audit_leaf_probe](/home/adam/projects/canic/crates/canic-core/test-canisters/audit_leaf_probe/src/lib.rs)",
+            "[audit_leaf_probe](/home/adam/projects/canic/crates/canic-core/audit-canisters/audit_leaf_probe/src/lib.rs)",
         ),
         _ => (
             "Shared runtime surface",
