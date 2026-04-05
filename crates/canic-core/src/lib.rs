@@ -19,8 +19,6 @@
 
 #[doc(hidden)]
 pub mod __control_plane_core;
-#[doc(hidden)]
-pub mod __sharding_core;
 pub mod access;
 pub mod api;
 pub mod bootstrap;

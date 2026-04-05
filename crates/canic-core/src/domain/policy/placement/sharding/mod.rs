@@ -1,19 +1,18 @@
 mod backfill;
-pub mod hrw;
-pub mod metrics;
+pub(crate) mod hrw;
+pub(crate) mod metrics;
 
-pub use crate::view::{CreateBlockedReason, ShardingPlanState};
+pub use crate::view::placement::sharding::{CreateBlockedReason, ShardingPlanState};
 
 use crate::{
-    policy::{backfill::plan_slot_backfill, hrw::HrwSelector, metrics::PoolMetrics},
-    view::{ShardPartitionKeyAssignment, ShardPlacement},
-};
-use canic_core::{
-    __sharding_core as sharding_core,
+    InternalError, InternalErrorOrigin,
     cdk::candid::Principal,
-    error::{InternalError, InternalErrorOrigin},
+    config::schema::{ShardPool, ShardPoolPolicy},
+    view::placement::sharding::{ShardPartitionKeyAssignment, ShardPlacement},
 };
-use sharding_core::config::schema::{ShardPool, ShardPoolPolicy};
+use backfill::plan_slot_backfill;
+use hrw::HrwSelector;
+use metrics::PoolMetrics;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ShardingPolicyError {

@@ -47,12 +47,42 @@ pub enum RegistryPolicyError {
 }
 
 ///
+/// RegistryRegistrationObservation
+/// Minimal observed registry facts needed to evaluate registration policy.
+///
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct RegistryRegistrationObservation {
+    pub existing_role_pid: Option<Principal>,
+    pub existing_singleton_under_parent_pid: Option<Principal>,
+}
+
+///
 /// RegistryPolicy
 ///
 
 pub struct RegistryPolicy;
 
 impl RegistryPolicy {
+    // Evaluate registration policy from a minimized observed registry view.
+    pub fn can_register_role_observed(
+        role: &CanisterRole,
+        parent_pid: Principal,
+        observed: RegistryRegistrationObservation,
+        canister_cfg: &CanisterConfig,
+        parent_role: &CanisterRole,
+        parent_cfg: &CanisterConfig,
+    ) -> Result<(), RegistryPolicyError> {
+        Self::can_register_role_with_observation(
+            role,
+            parent_pid,
+            observed,
+            canister_cfg,
+            parent_role,
+            parent_cfg,
+        )
+    }
+
+    // Evaluate registration policy from the full registry snapshot.
     pub fn can_register_role(
         role: &CanisterRole,
         parent_pid: Principal,
@@ -61,12 +91,44 @@ impl RegistryPolicy {
         parent_role: &CanisterRole,
         parent_cfg: &CanisterConfig,
     ) -> Result<(), RegistryPolicyError> {
+        let observed = RegistryRegistrationObservation {
+            existing_role_pid: data
+                .entries
+                .iter()
+                .find(|entry| entry.role == *role)
+                .map(|entry| entry.pid),
+            existing_singleton_under_parent_pid: data
+                .entries
+                .iter()
+                .find(|entry| entry.role == *role && entry.parent_pid == Some(parent_pid))
+                .map(|entry| entry.pid),
+        };
+
+        Self::can_register_role_with_observation(
+            role,
+            parent_pid,
+            observed,
+            canister_cfg,
+            parent_role,
+            parent_cfg,
+        )
+    }
+
+    // Evaluate registration policy from the shared observed facts.
+    fn can_register_role_with_observation(
+        role: &CanisterRole,
+        parent_pid: Principal,
+        observed: RegistryRegistrationObservation,
+        canister_cfg: &CanisterConfig,
+        parent_role: &CanisterRole,
+        parent_cfg: &CanisterConfig,
+    ) -> Result<(), RegistryPolicyError> {
         match canister_cfg.kind {
             CanisterKind::Root => {
-                if let Some(entry) = data.entries.iter().find(|entry| entry.role == *role) {
+                if let Some(pid) = observed.existing_role_pid {
                     return Err(RegistryPolicyError::RoleAlreadyRegistered {
                         role: role.clone(),
-                        pid: entry.pid,
+                        pid,
                     });
                 }
             }
@@ -75,15 +137,11 @@ impl RegistryPolicy {
                     return Ok(());
                 }
 
-                if let Some(entry) = data
-                    .entries
-                    .iter()
-                    .find(|entry| entry.role == *role && entry.parent_pid == Some(parent_pid))
-                {
+                if let Some(pid) = observed.existing_singleton_under_parent_pid {
                     return Err(RegistryPolicyError::SingletonAlreadyRegisteredUnderParent {
                         role: role.clone(),
                         parent_pid,
-                        pid: entry.pid,
+                        pid,
                     });
                 }
             }

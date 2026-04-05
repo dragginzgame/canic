@@ -28,6 +28,7 @@ pub enum StorageOpsError {
     #[error(transparent)]
     IntentStoreOps(#[from] intent::IntentStoreOpsError),
 
+    #[cfg(feature = "sharding")]
     #[error(transparent)]
     ShardingRegistryOps(#[from] placement::sharding::ShardingRegistryOpsError),
 

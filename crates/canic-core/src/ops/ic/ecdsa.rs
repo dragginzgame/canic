@@ -1,13 +1,10 @@
-use crate::{
-    InternalError,
-    cdk::{
-        mgmt::{
-            EcdsaCurve, EcdsaKeyId, EcdsaPublicKeyArgs, SignWithEcdsaArgs, ecdsa_public_key,
-            sign_with_ecdsa,
-        },
-        types::Principal,
-    },
+#[cfg(feature = "auth-crypto")]
+use crate::cdk::mgmt::{
+    EcdsaCurve, EcdsaKeyId, EcdsaPublicKeyArgs, SignWithEcdsaArgs, ecdsa_public_key,
+    sign_with_ecdsa,
 };
+use crate::{InternalError, cdk::types::Principal};
+#[cfg(feature = "auth-crypto")]
 use k256::ecdsa::{Signature, VerifyingKey, signature::hazmat::PrehashVerifier};
 use thiserror::Error as ThisError;
 
@@ -17,6 +14,9 @@ use thiserror::Error as ThisError;
 
 #[derive(Debug, ThisError)]
 pub enum EcdsaOpsError {
+    #[error("auth crypto support is not enabled in this canister build")]
+    AuthCryptoUnavailable,
+
     #[error("ecdsa public key call failed: {0}")]
     PublicKeyCall(String),
 
@@ -42,6 +42,7 @@ impl From<EcdsaOpsError> for InternalError {
 
 pub struct EcdsaOps;
 
+#[cfg(feature = "auth-crypto")]
 impl EcdsaOps {
     pub async fn sign_bytes(
         key_name: &str,
@@ -100,5 +101,32 @@ impl EcdsaOps {
             .map_err(|err| EcdsaOpsError::InvalidSignature(err.to_string()))?;
 
         Ok(())
+    }
+}
+
+#[cfg(not(feature = "auth-crypto"))]
+impl EcdsaOps {
+    pub async fn sign_bytes(
+        _key_name: &str,
+        _derivation_path: Vec<Vec<u8>>,
+        _msg_hash: [u8; 32],
+    ) -> Result<Vec<u8>, InternalError> {
+        Err(EcdsaOpsError::AuthCryptoUnavailable.into())
+    }
+
+    pub async fn public_key_sec1(
+        _key_name: &str,
+        _derivation_path: Vec<Vec<u8>>,
+        _canister_id: Principal,
+    ) -> Result<Vec<u8>, InternalError> {
+        Err(EcdsaOpsError::AuthCryptoUnavailable.into())
+    }
+
+    pub fn verify_signature(
+        _public_key_sec1: &[u8],
+        _msg_hash: [u8; 32],
+        _signature_bytes: &[u8],
+    ) -> Result<(), InternalError> {
+        Err(EcdsaOpsError::AuthCryptoUnavailable.into())
     }
 }

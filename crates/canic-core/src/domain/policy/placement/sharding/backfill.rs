@@ -4,8 +4,7 @@
 //! shard placement decisions. It must never be persisted or exposed
 //! outside the policy layer.
 
-use crate::view::ShardPlacement;
-use canic_core::cdk::candid::Principal;
+use crate::{cdk::candid::Principal, view::placement::sharding::ShardPlacement};
 use std::collections::{BTreeMap, BTreeSet};
 
 ///

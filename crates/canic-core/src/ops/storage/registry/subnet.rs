@@ -148,15 +148,7 @@ impl SubnetRegistryOps {
 
     #[must_use]
     pub fn has_role(role: &CanisterRole) -> bool {
-        let mut found = false;
-
-        SubnetRegistry::for_each(|_, record| {
-            if &record.role == role {
-                found = true;
-            }
-        });
-
-        found
+        Self::find_pid_for_role(role).is_some()
     }
 
     #[must_use]
@@ -168,6 +160,19 @@ impl SubnetRegistryOps {
     #[must_use]
     pub(crate) fn children(pid: Principal) -> Vec<(Principal, CanisterRecord)> {
         SubnetRegistry::children(pid)
+    }
+
+    #[must_use]
+    pub(crate) fn find_pid_for_role(role: &CanisterRole) -> Option<Principal> {
+        SubnetRegistry::find_pid_for_role(role)
+    }
+
+    #[must_use]
+    pub(crate) fn find_child_pid_for_role(
+        parent: Principal,
+        role: &CanisterRole,
+    ) -> Option<Principal> {
+        SubnetRegistry::find_child_pid_for_role(parent, role)
     }
 
     pub(crate) fn parent_chain(

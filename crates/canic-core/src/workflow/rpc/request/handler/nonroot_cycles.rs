@@ -11,7 +11,7 @@ use crate::{
     ops::{
         ic::{IcOps, mgmt::MgmtOps},
         replay::{
-            self as replay_ops, ReplayCommitError, ReplayReserveError,
+            self as replay_ops, ReplayCommitError, ReplayDecodeError, ReplayReserveError,
             guard::{ReplayDecision, ReplayGuardError, ReplayPending, RootReplayGuardInput},
         },
         runtime::env::EnvOps,
@@ -27,7 +27,6 @@ use crate::{
     workflow::rpc::RpcWorkflowError,
 };
 use candid::encode_one;
-use canic_memory::serialize;
 use sha2::{Digest, Sha256};
 
 ///
@@ -444,10 +443,19 @@ fn map_replay_commit_error(err: ReplayCommitError) -> InternalError {
     }
 }
 
+// Convert replay decode failures into the current workflow replay errors.
+fn map_replay_decode_error(err: ReplayDecodeError) -> InternalError {
+    match err {
+        ReplayDecodeError::DecodeFailed(message) => {
+            RpcWorkflowError::ReplayDecodeFailed(message).into()
+        }
+    }
+}
+
 // Decode a cached replay entry back into the cycles response shape.
 fn decode_cycles_response(bytes: &[u8]) -> Result<CyclesResponse, InternalError> {
-    let response: Response = serialize::deserialize(bytes)
-        .map_err(|err| RpcWorkflowError::ReplayDecodeFailed(err.to_string()))?;
+    let response =
+        replay_ops::decode_root_replay_response(bytes).map_err(map_replay_decode_error)?;
     match response {
         Response::Cycles(response) => Ok(response),
         _ => Err(RpcWorkflowError::ReplayDecodeFailed(

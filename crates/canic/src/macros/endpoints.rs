@@ -169,8 +169,8 @@ macro_rules! canic_emit_auth_attestation_endpoints {
         #[cfg(not(canic_is_root))]
         #[$crate::canic_update(internal)]
         async fn canic_response_capability_v1(
-            envelope: ::canic::dto::capability::RootCapabilityEnvelopeV1,
-        ) -> Result<::canic::dto::capability::RootCapabilityResponseV1, ::canic::Error> {
+            envelope: ::canic::dto::capability::NonrootCyclesCapabilityEnvelopeV1,
+        ) -> Result<::canic::dto::capability::NonrootCyclesCapabilityResponseV1, ::canic::Error> {
             $crate::__internal::core::api::rpc::RpcApi::response_capability_v1_nonroot(envelope)
                 .await
         }
@@ -264,7 +264,7 @@ macro_rules! canic_emit_topology_placement_endpoints {
         #[$crate::canic_query(requires(caller::is_controller()))]
         async fn canic_sharding_registry()
         -> Result<::canic::dto::placement::sharding::ShardingRegistryResponse, ::canic::Error> {
-            Ok($crate::__internal::sharding::api::ShardingApi::registry())
+            Ok($crate::__internal::core::api::placement::sharding::ShardingApi::registry())
         }
 
         #[cfg(canic_has_sharding)]
@@ -273,7 +273,7 @@ macro_rules! canic_emit_topology_placement_endpoints {
             pool: String,
             shard_pid: ::canic::__internal::core::cdk::types::Principal,
         ) -> Result<::canic::dto::placement::sharding::ShardingPartitionKeysResponse, ::canic::Error> {
-            Ok($crate::__internal::sharding::api::ShardingApi::partition_keys(&pool, shard_pid))
+            Ok($crate::__internal::core::api::placement::sharding::ShardingApi::partition_keys(&pool, shard_pid))
         }
     };
 }

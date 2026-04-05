@@ -1,5 +1,4 @@
-use crate::workflow::{ShardingWorkflow, query::ShardingQuery};
-use canic_core::{
+use crate::{
     cdk::types::Principal,
     dto::{
         error::Error,
@@ -7,6 +6,7 @@ use canic_core::{
             ShardingPartitionKeysResponse, ShardingPlanStateResponse, ShardingRegistryResponse,
         },
     },
+    workflow::placement::sharding::{ShardingWorkflow, query::ShardingQuery},
 };
 
 ///

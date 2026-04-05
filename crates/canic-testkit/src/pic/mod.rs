@@ -644,8 +644,7 @@ impl Pic {
 
 impl Drop for ProcessLockGuard {
     fn drop(&mut self) {
-        let _ = fs::remove_file(process_lock_owner_path(&self.path));
-        let _ = fs::remove_dir(&self.path);
+        let _ = fs::remove_dir_all(&self.path);
     }
 }
 
@@ -768,9 +767,7 @@ fn acquire_process_lock() -> ProcessLockGuard {
                 return ProcessLockGuard { path: lock_dir };
             }
             Err(err) if err.kind() == io::ErrorKind::AlreadyExists => {
-                if process_lock_is_stale(&lock_dir) {
-                    let _ = fs::remove_file(process_lock_owner_path(&lock_dir));
-                    let _ = fs::remove_dir(&lock_dir);
+                if process_lock_is_stale(&lock_dir) && clear_stale_process_lock(&lock_dir).is_ok() {
                     continue;
                 }
 
@@ -796,6 +793,14 @@ fn process_lock_owner_path(lock_dir: &Path) -> PathBuf {
     lock_dir.join("owner")
 }
 
+fn clear_stale_process_lock(lock_dir: &Path) -> io::Result<()> {
+    match fs::remove_dir_all(lock_dir) {
+        Ok(()) => Ok(()),
+        Err(err) if err.kind() == io::ErrorKind::NotFound => Ok(()),
+        Err(err) => Err(err),
+    }
+}
+
 fn process_lock_is_stale(lock_dir: &Path) -> bool {
     let Ok(pid_text) = fs::read_to_string(process_lock_owner_path(lock_dir)) else {
         return true;
@@ -805,4 +810,33 @@ fn process_lock_is_stale(lock_dir: &Path) -> bool {
     };
 
     !Path::new("/proc").join(pid.to_string()).exists()
+}
+
+#[cfg(test)]
+mod process_lock_tests {
+    use super::{clear_stale_process_lock, process_lock_is_stale, process_lock_owner_path};
+    use std::{
+        fs,
+        path::PathBuf,
+        time::{SystemTime, UNIX_EPOCH},
+    };
+
+    fn unique_lock_dir() -> PathBuf {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("clock must be after unix epoch")
+            .as_nanos();
+        std::env::temp_dir().join(format!("canic-pocket-ic-test-lock-{nanos}"))
+    }
+
+    #[test]
+    fn stale_process_lock_is_detected_and_removed() {
+        let lock_dir = unique_lock_dir();
+        fs::create_dir(&lock_dir).expect("create lock dir");
+        fs::write(process_lock_owner_path(&lock_dir), "999999").expect("write stale owner");
+
+        assert!(process_lock_is_stale(&lock_dir));
+        clear_stale_process_lock(&lock_dir).expect("remove stale lock dir");
+        assert!(!lock_dir.exists());
+    }
 }

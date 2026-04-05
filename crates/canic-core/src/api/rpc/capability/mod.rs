@@ -3,6 +3,7 @@ use crate::{
     dto::{
         capability::{
             CapabilityProof, CapabilityRequestMetadata, CapabilityService, DelegatedGrantProof,
+            NonrootCyclesCapabilityEnvelopeV1, NonrootCyclesCapabilityResponseV1,
         },
         error::Error,
         rpc::{Request, RequestFamily, RootRequestMetadata},
@@ -31,8 +32,8 @@ const MAX_CAPABILITY_CLOCK_SKEW_SECONDS: u64 = 30;
 const DELEGATED_GRANT_KEY_ID_V1: u32 = 1;
 
 pub(super) async fn response_capability_v1_nonroot(
-    envelope: crate::dto::capability::RootCapabilityEnvelopeV1,
-) -> Result<crate::dto::capability::RootCapabilityResponseV1, Error> {
+    envelope: NonrootCyclesCapabilityEnvelopeV1,
+) -> Result<NonrootCyclesCapabilityResponseV1, Error> {
     nonroot::response_capability_v1_nonroot(envelope).await
 }
 
@@ -53,16 +54,9 @@ fn validate_root_capability_envelope(
 fn validate_nonroot_cycles_envelope(
     service: CapabilityService,
     capability_version: u16,
-    capability: &Request,
     proof: &CapabilityProof,
 ) -> Result<(), Error> {
     envelope::validate_root_capability_envelope(service, capability_version, proof)?;
-
-    if capability.family() != RequestFamily::RequestCycles {
-        return Err(Error::forbidden(
-            "non-root capability endpoint only supports structural cycles requests",
-        ));
-    }
 
     if !matches!(proof, CapabilityProof::Structural) {
         return Err(Error::forbidden(
@@ -83,13 +77,7 @@ async fn verify_root_capability_proof(
         .map(|_| ())
 }
 
-fn verify_nonroot_cycles_proof(capability: &Request) -> Result<(), Error> {
-    if capability.family() != RequestFamily::RequestCycles {
-        return Err(Error::forbidden(
-            "non-root capability endpoint only supports structural cycles requests",
-        ));
-    }
-
+fn verify_nonroot_cycles_proof() -> Result<(), Error> {
     proof::verify_nonroot_structural_cycles_proof()
 }
 

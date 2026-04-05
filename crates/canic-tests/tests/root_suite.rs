@@ -6,5 +6,8 @@ mod root;
 #[path = "root_cases/hierarchy.rs"]
 mod root_hierarchy_cases;
 
+#[path = "root_cases/scaling.rs"]
+mod root_scaling_cases;
+
 #[path = "root_cases/replay.rs"]
 mod root_replay_cases;

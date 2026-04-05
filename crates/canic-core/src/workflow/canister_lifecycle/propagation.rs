@@ -35,7 +35,10 @@ impl PropagationWorkflow {
     /// This rebuilds directory snapshots from the registry, applies current
     /// app state, cascades it to dependents, and finally re-asserts
     /// directory ↔ registry consistency.
-    pub async fn propagate_state(role: &CanisterRole) -> Result<(), InternalError> {
+    pub async fn propagate_state(
+        target: Principal,
+        role: &CanisterRole,
+    ) -> Result<(), InternalError> {
         // The implicit wasm_store receives the normal topology cascade, but its
         // publication inventory is synchronized in root-owned subnet state after
         // creation rather than via the immediate create-time state cascade.
@@ -50,7 +53,7 @@ impl PropagationWorkflow {
             .with_subnet_state()
             .build();
 
-        StateCascadeWorkflow::root_cascade_state(&snapshot).await?;
+        StateCascadeWorkflow::root_cascade_state_for_pid(target, &snapshot).await?;
 
         let registry_data = SubnetRegistryOps::data();
         let registry_input = RegistryPolicyInputMapper::record_to_policy_input(registry_data);

@@ -7,7 +7,9 @@ use crate::{
         CanisterConfig, CanisterKind, DelegatedAuthCanisterConfig, RandomnessConfig, ScalePool,
         ScalePoolPolicy, ScalingConfig, ShardingConfig, StandardsCanisterConfig,
     },
-    domain::policy::topology::registry::{RegistryPolicy, RegistryPolicyError},
+    domain::policy::topology::registry::{
+        RegistryPolicy, RegistryPolicyError, RegistryRegistrationObservation,
+    },
     domain::policy::topology::{RegistryPolicyInput, TopologyPolicyError, TopologyPolicyInput},
     dto::error::{Error, ErrorCode},
     ids::CanisterRole,
@@ -356,4 +358,54 @@ fn shard_creation_succeeds_under_singleton_sharding_parent() {
         &singleton_sharding_parent_config(),
     )
     .expect("shard should be allowed under singleton sharding parent");
+}
+
+#[test]
+fn observed_registration_policy_matches_duplicate_singleton_decision() {
+    let role = CanisterRole::new("observed_singleton_child");
+    let parent_role = CanisterRole::new("singleton_parent");
+    let parent_pid = p(11);
+    let existing_pid = p(12);
+
+    let err = RegistryPolicy::can_register_role_observed(
+        &role,
+        parent_pid,
+        RegistryRegistrationObservation {
+            existing_role_pid: Some(existing_pid),
+            existing_singleton_under_parent_pid: Some(existing_pid),
+        },
+        &singleton_canister_config(),
+        &parent_role,
+        &singleton_canister_config(),
+    )
+    .expect_err("observed policy should reject duplicate singleton role under parent");
+
+    match err {
+        RegistryPolicyError::SingletonAlreadyRegisteredUnderParent {
+            role: err_role,
+            parent_pid: err_parent,
+            pid,
+        } => {
+            assert_eq!(err_role, role);
+            assert_eq!(err_parent, parent_pid);
+            assert_eq!(pid, existing_pid);
+        }
+        other => panic!("unexpected observed policy error: {other}"),
+    }
+}
+
+#[test]
+fn observed_registration_policy_accepts_replica_without_registry_snapshot() {
+    let role = CanisterRole::new("replica_child_observed");
+    let parent_role = CanisterRole::new("scale_hub");
+
+    RegistryPolicy::can_register_role_observed(
+        &role,
+        p(13),
+        RegistryRegistrationObservation::default(),
+        &replica_canister_config(),
+        &parent_role,
+        &singleton_scaling_parent_config(),
+    )
+    .expect("replica should be allowed from observed parent config without full registry input");
 }

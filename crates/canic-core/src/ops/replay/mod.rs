@@ -1,5 +1,5 @@
 use crate::dto::rpc::Response;
-use canic_memory::serialize;
+use candid::{decode_one, encode_one};
 
 use self::{guard::ReplayPending, slot as replay_slot};
 
@@ -26,6 +26,15 @@ pub enum ReplayCommitError {
     EncodeFailed(String),
 }
 
+///
+/// ReplayDecodeError
+/// Mechanical replay-decode failures surfaced by cached replay readers.
+///
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum ReplayDecodeError {
+    DecodeFailed(String),
+}
+
 /// reserve_root_replay
 ///
 /// Persist a pending replay reservation marker before capability execution.
@@ -49,10 +58,17 @@ pub fn commit_root_replay(
     pending: ReplayPending,
     response: &Response,
 ) -> Result<(), ReplayCommitError> {
-    let response_bytes = serialize::serialize(response)
-        .map_err(|err| ReplayCommitError::EncodeFailed(err.to_string()))?;
+    let response_bytes =
+        encode_one(response).map_err(|err| ReplayCommitError::EncodeFailed(err.to_string()))?;
     replay_slot::commit_root_slot(pending, response_bytes);
     Ok(())
+}
+
+/// decode_root_replay_response
+///
+/// Decode cached replay bytes back into the canonical root response payload.
+pub fn decode_root_replay_response(bytes: &[u8]) -> Result<Response, ReplayDecodeError> {
+    decode_one(bytes).map_err(|err| ReplayDecodeError::DecodeFailed(err.to_string()))
 }
 
 /// abort_root_replay

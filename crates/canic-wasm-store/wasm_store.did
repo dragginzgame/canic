@@ -39,56 +39,12 @@ type CapabilityRequestMetadata = record {
   nonce : blob;
 };
 type CapabilityService = variant { Root };
-type CreateCanisterParent = variant {
-  ThisCanister;
-  Parent;
-  Root;
-  Canister : principal;
-  Directory : text;
-};
-type CreateCanisterRequest = record {
-  metadata : opt RootRequestMetadata;
-  extra_arg : opt blob;
-  canister_role : text;
-  parent : CreateCanisterParent;
-};
-type CreateCanisterResponse = record { new_canister_pid : principal };
 type CycleTrackerEntry = record { cycles : nat; timestamp_secs : nat64 };
 type CyclesRequest = record {
   metadata : opt RootRequestMetadata;
   cycles : nat;
 };
 type CyclesResponse = record { cycles_transferred : nat };
-type DelegationCert = record {
-  aud : vec principal;
-  issued_at : nat64;
-  shard_pid : principal;
-  scopes : vec text;
-  expires_at : nat64;
-  root_pid : principal;
-};
-type DelegationProof = record { cert_sig : blob; cert : DelegationCert };
-type DelegationProvisionResponse = record {
-  results : vec DelegationProvisionTargetResponse;
-  proof : DelegationProof;
-};
-type DelegationProvisionStatus = variant { Ok; Failed };
-type DelegationProvisionTargetKind = variant { Signer; Verifier };
-type DelegationProvisionTargetResponse = record {
-  status : DelegationProvisionStatus;
-  kind : DelegationProvisionTargetKind;
-  error : opt Error;
-  target : principal;
-};
-type DelegationRequest = record {
-  aud : vec principal;
-  shard_pid : principal;
-  metadata : opt RootRequestMetadata;
-  scopes : vec text;
-  verifier_targets : vec principal;
-  include_root_verifier : bool;
-  ttl_secs : nat64;
-};
 type DirectoryEntryInput = record { pid : principal; role : text };
 type DirectoryEntryResponse = record { pid : principal; role : text };
 type EnvBootstrapArgs = record {
@@ -162,26 +118,20 @@ type MetricsKind = variant {
   Timer;
   CyclesFunding;
 };
+type NonrootCyclesCapabilityEnvelopeV1 = record {
+  "service" : CapabilityService;
+  metadata : CapabilityRequestMetadata;
+  capability_version : nat16;
+  proof : CapabilityProof;
+  capability : CyclesRequest;
+};
+type NonrootCyclesCapabilityResponseV1 = record { response : CyclesResponse };
 type Page = record { total : nat64; entries : vec DirectoryEntryResponse };
 type PageRequest = record { offset : nat64; limit : nat64 };
 type Page_1 = record { total : nat64; entries : vec CanisterInfo };
 type Page_2 = record { total : nat64; entries : vec CycleTrackerEntry };
 type Page_3 = record { total : nat64; entries : vec LogEntry };
 type Page_4 = record { total : nat64; entries : vec MetricEntry };
-type Request = variant {
-  IssueDelegation : DelegationRequest;
-  CreateCanister : CreateCanisterRequest;
-  UpgradeCanister : UpgradeCanisterRequest;
-  Cycles : CyclesRequest;
-  IssueRoleAttestation : RoleAttestationRequest;
-};
-type Response = variant {
-  RoleAttestationIssued : SignedRoleAttestation;
-  CreateCanister : CreateCanisterResponse;
-  UpgradeCanister : record {};
-  DelegationIssued : DelegationProvisionResponse;
-  Cycles : CyclesResponse;
-};
 type Result = variant { Ok : Page; Err : Error };
 type Result_1 = variant { Ok : Page_1; Err : Error };
 type Result_10 = variant { Ok; Err : Error };
@@ -199,39 +149,8 @@ type Result_5 = variant { Ok : EnvSnapshotResponse; Err : Error };
 type Result_6 = variant { Ok : Page_3; Err : Error };
 type Result_7 = variant { Ok : MemoryRegistryResponse; Err : Error };
 type Result_8 = variant { Ok : Page_4; Err : Error };
-type Result_9 = variant { Ok : RootCapabilityResponseV1; Err : Error };
-type RoleAttestation = record {
-  issued_at : nat64;
-  subject : principal;
-  subnet_id : opt principal;
-  role : text;
-  audience : opt principal;
-  epoch : nat64;
-  expires_at : nat64;
-};
-type RoleAttestationRequest = record {
-  subject : principal;
-  metadata : opt RootRequestMetadata;
-  subnet_id : opt principal;
-  role : text;
-  audience : opt principal;
-  epoch : nat64;
-  ttl_secs : nat64;
-};
-type RootCapabilityEnvelopeV1 = record {
-  "service" : CapabilityService;
-  metadata : CapabilityRequestMetadata;
-  capability_version : nat16;
-  proof : CapabilityProof;
-  capability : Request;
-};
-type RootCapabilityResponseV1 = record { response : Response };
+type Result_9 = variant { Ok : NonrootCyclesCapabilityResponseV1; Err : Error };
 type RootRequestMetadata = record { request_id : blob; ttl_seconds : nat64 };
-type SignedRoleAttestation = record {
-  signature : blob;
-  key_id : nat32;
-  payload : RoleAttestation;
-};
 type StateSnapshotInput = record {
   subnet_state : opt null;
   app_state : opt AppStateInput;
@@ -287,10 +206,6 @@ type TopologySnapshotInput = record {
   children_map : vec TopologyChildren;
   parents : vec TopologyPathNode;
 };
-type UpgradeCanisterRequest = record {
-  canister_pid : principal;
-  metadata : opt RootRequestMetadata;
-};
 type WasmStoreCatalogEntryResponse = record {
   role : text;
   payload_size_bytes : nat64;
@@ -343,7 +258,9 @@ service : (CanisterInitPayload, opt blob) -> {
   canic_memory_registry : () -> (Result_7) query;
   canic_metrics : (MetricsKind, PageRequest) -> (Result_8) query;
   canic_ready : () -> (bool) query;
-  canic_response_capability_v1 : (RootCapabilityEnvelopeV1) -> (Result_9);
+  canic_response_capability_v1 : (NonrootCyclesCapabilityEnvelopeV1) -> (
+      Result_9,
+    );
   canic_standards : () -> (CanicStandardsResponse) query;
   canic_subnet_directory : (PageRequest) -> (Result) query;
   canic_sync_state : (StateSnapshotInput) -> (Result_10);

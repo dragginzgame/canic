@@ -1,6 +1,6 @@
 use crate::dto::{
     prelude::*,
-    rpc::{Request, Response},
+    rpc::{CyclesRequest, CyclesResponse, Request, Response},
 };
 
 pub mod proof;
@@ -82,4 +82,26 @@ pub struct RootCapabilityEnvelopeV1 {
 #[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct RootCapabilityResponseV1 {
     pub response: Response,
+}
+
+//
+// NonrootCyclesCapabilityEnvelopeV1
+//
+
+#[derive(CandidType, Clone, Debug, Deserialize)]
+pub struct NonrootCyclesCapabilityEnvelopeV1 {
+    pub service: CapabilityService,
+    pub capability_version: u16,
+    pub capability: CyclesRequest,
+    pub proof: CapabilityProof,
+    pub metadata: CapabilityRequestMetadata,
+}
+
+//
+// NonrootCyclesCapabilityResponseV1
+//
+
+#[derive(CandidType, Clone, Debug, Deserialize)]
+pub struct NonrootCyclesCapabilityResponseV1 {
+    pub response: CyclesResponse,
 }

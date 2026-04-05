@@ -12,6 +12,7 @@ use crate::{
     InternalError, InternalErrorOrigin,
     api::runtime::install::{ApprovedModuleSource, ModuleSourceRuntimeApi},
     config::Config,
+    config::schema::CanisterKind,
     domain::policy,
     dto::{abi::v1::CanisterInitPayload, env::EnvBootstrapArgs},
     ops::{
@@ -25,10 +26,7 @@ use crate::{
             directory::{app::AppDirectoryOps, subnet::SubnetDirectoryOps},
             registry::subnet::SubnetRegistryOps,
         },
-        topology::{
-            directory::builder::{RootAppDirectoryBuilder, RootSubnetDirectoryBuilder},
-            policy::mapper::RegistryPolicyInputMapper,
-        },
+        topology::directory::builder::{RootAppDirectoryBuilder, RootSubnetDirectoryBuilder},
     },
     workflow::{
         cascade::snapshot::StateSnapshotBuilder, pool::PoolWorkflow, prelude::*,
@@ -319,27 +317,7 @@ async fn install_canister(
 
     // Register before install so init hooks can observe the registry; roll back on failure.
     // otherwise if the init() tries to create a canister via root, it will panic
-    let registry_data = SubnetRegistryOps::data();
-    let registry_input = RegistryPolicyInputMapper::record_to_policy_input(registry_data);
-    let canister_cfg = ConfigOps::current_subnet_canister(role)?;
-    let parent_role = registry_input
-        .entries
-        .iter()
-        .find(|entry| entry.pid == parent_pid)
-        .map(|entry| entry.role.clone())
-        .ok_or(policy::topology::TopologyPolicyError::ParentNotFound(
-            parent_pid,
-        ))?;
-    let parent_cfg = ConfigOps::current_subnet_canister(&parent_role)?;
-    policy::topology::registry::RegistryPolicy::can_register_role(
-        role,
-        parent_pid,
-        &registry_input,
-        &canister_cfg,
-        &parent_role,
-        &parent_cfg,
-    )
-    .map_err(policy::topology::TopologyPolicyError::from)?;
+    validate_registration_policy(role, parent_pid)?;
 
     let created_at = IcOps::now_secs();
     SubnetRegistryOps::register_unchecked(pid, role, parent_pid, module_hash.clone(), created_at)?;
@@ -373,6 +351,47 @@ async fn install_canister(
         module_source.payload_size(),
         module_source.chunk_count(),
     );
+
+    Ok(())
+}
+
+// Validate create-time registry policy using targeted registry lookups instead of a full export.
+fn validate_registration_policy(
+    role: &CanisterRole,
+    parent_pid: Principal,
+) -> Result<(), InternalError> {
+    let canister_cfg = ConfigOps::current_subnet_canister(role)?;
+    let parent_role = SubnetRegistryOps::get(parent_pid)
+        .map(|record| record.role)
+        .ok_or(policy::topology::TopologyPolicyError::ParentNotFound(
+            parent_pid,
+        ))?;
+    let parent_cfg = ConfigOps::current_subnet_canister(&parent_role)?;
+
+    let observed = policy::topology::registry::RegistryRegistrationObservation {
+        existing_role_pid: matches!(canister_cfg.kind, CanisterKind::Root)
+            .then(|| SubnetRegistryOps::find_pid_for_role(role))
+            .flatten(),
+        existing_singleton_under_parent_pid: matches!(canister_cfg.kind, CanisterKind::Singleton)
+            .then(|| {
+                if role.is_wasm_store() {
+                    None
+                } else {
+                    SubnetRegistryOps::find_child_pid_for_role(parent_pid, role)
+                }
+            })
+            .flatten(),
+    };
+
+    policy::topology::registry::RegistryPolicy::can_register_role_observed(
+        role,
+        parent_pid,
+        observed,
+        &canister_cfg,
+        &parent_role,
+        &parent_cfg,
+    )
+    .map_err(policy::topology::TopologyPolicyError::from)?;
 
     Ok(())
 }

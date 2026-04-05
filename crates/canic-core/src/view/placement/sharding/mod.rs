@@ -1,4 +1,4 @@
-use canic_core::cdk::candid::Principal;
+use crate::cdk::candid::Principal;
 
 ///
 /// ShardPlacement

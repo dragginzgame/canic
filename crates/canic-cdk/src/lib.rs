@@ -21,7 +21,6 @@ pub use ic_cdk::{
 };
 pub use ic_cdk_management_canister as mgmt;
 pub use ic_cdk_timers as timers;
-pub use icrc_ledger_types;
 
 /// Export Candid only in debug builds.
 #[macro_export]

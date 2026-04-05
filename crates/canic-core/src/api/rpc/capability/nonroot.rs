@@ -1,19 +1,19 @@
 use super::{
     capability_proof_mode_label, capability_proof_mode_metric_key, project_replay_metadata,
-    root_capability_family, root_capability_metric_key, validate_nonroot_cycles_envelope,
-    verify_nonroot_cycles_proof, with_root_request_metadata,
+    validate_nonroot_cycles_envelope, verify_nonroot_cycles_proof,
 };
 use crate::{
     dto::{
-        capability::{RootCapabilityEnvelopeV1, RootCapabilityResponseV1},
+        capability::{NonrootCyclesCapabilityEnvelopeV1, NonrootCyclesCapabilityResponseV1},
         error::Error,
-        rpc::{Request, Response},
     },
     log,
     log::Topic,
     ops::{
         ic::IcOps,
-        runtime::metrics::root_capability::{RootCapabilityMetricOutcome, RootCapabilityMetrics},
+        runtime::metrics::root_capability::{
+            RootCapabilityMetricKey, RootCapabilityMetricOutcome, RootCapabilityMetrics,
+        },
     },
     workflow::rpc::request::handler::NonrootCyclesCapabilityWorkflow,
 };
@@ -22,9 +22,9 @@ use crate::{
 ///
 /// Execute the non-root structural cycles capability path.
 pub(super) async fn response_capability_v1_nonroot(
-    envelope: RootCapabilityEnvelopeV1,
-) -> Result<RootCapabilityResponseV1, Error> {
-    let RootCapabilityEnvelopeV1 {
+    envelope: NonrootCyclesCapabilityEnvelopeV1,
+) -> Result<NonrootCyclesCapabilityResponseV1, Error> {
+    let NonrootCyclesCapabilityEnvelopeV1 {
         service,
         capability_version,
         capability,
@@ -32,11 +32,9 @@ pub(super) async fn response_capability_v1_nonroot(
         metadata,
     } = envelope;
 
-    let capability_key = root_capability_metric_key(&capability);
+    let capability_key = RootCapabilityMetricKey::RequestCycles;
     let proof_mode = capability_proof_mode_metric_key(&proof);
-    if let Err(err) =
-        validate_nonroot_cycles_envelope(service, capability_version, &capability, &proof)
-    {
+    if let Err(err) = validate_nonroot_cycles_envelope(service, capability_version, &proof) {
         RootCapabilityMetrics::record_envelope(
             capability_key,
             RootCapabilityMetricOutcome::Rejected,
@@ -46,7 +44,7 @@ pub(super) async fn response_capability_v1_nonroot(
             Topic::Rpc,
             Warn,
             "non-root capability envelope rejected (capability={}, caller={}, service={:?}, capability_version={}, proof_mode={}): {}",
-            root_capability_family(&capability),
+            "RequestCycles",
             IcOps::msg_caller(),
             service,
             capability_version,
@@ -61,7 +59,7 @@ pub(super) async fn response_capability_v1_nonroot(
         proof_mode,
     );
 
-    if let Err(err) = verify_nonroot_cycles_proof(&capability) {
+    if let Err(err) = verify_nonroot_cycles_proof() {
         RootCapabilityMetrics::record_proof(
             capability_key,
             RootCapabilityMetricOutcome::Rejected,
@@ -71,7 +69,7 @@ pub(super) async fn response_capability_v1_nonroot(
             Topic::Rpc,
             Warn,
             "non-root capability proof rejected (capability={}, caller={}, service={:?}, capability_version={}, proof_mode={}): {}",
-            root_capability_family(&capability),
+            "RequestCycles",
             IcOps::msg_caller(),
             service,
             capability_version,
@@ -87,17 +85,11 @@ pub(super) async fn response_capability_v1_nonroot(
     );
 
     let replay_metadata = project_replay_metadata(metadata, IcOps::now_secs())?;
-    let capability = with_root_request_metadata(capability, replay_metadata);
-    let Request::Cycles(request) = capability else {
-        return Err(Error::invariant(
-            "non-root capability endpoint only supports cycles requests",
-        ));
-    };
+    let mut request = capability;
+    request.metadata = Some(replay_metadata);
     let response = NonrootCyclesCapabilityWorkflow::response_replay_first(request)
         .await
         .map_err(Error::from)?;
 
-    Ok(RootCapabilityResponseV1 {
-        response: Response::Cycles(response),
-    })
+    Ok(NonrootCyclesCapabilityResponseV1 { response })
 }

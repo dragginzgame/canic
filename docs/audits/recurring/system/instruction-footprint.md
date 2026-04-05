@@ -145,6 +145,25 @@ Current interpretation:
 - `total_local_instructions` = accumulated local instructions for that subject
 - `avg_local_instructions = total_local_instructions / count`
 
+### Query Sampling Rule
+
+Query calls must not be sampled by reading back shared perf rows after the
+fact.
+
+Reason:
+
+- query-side state is not committed
+- shared-memory-backed perf rows do not persist from query calls the way they
+  do for update calls
+
+So sampled query lanes must use dedicated same-call probe endpoints that:
+
+- execute the real query path
+- read `performance_counter(1)` inside that same query call context
+- return both the real query result and the measured local instruction counter
+
+Those probe-backed rows are the authoritative query samples for this audit.
+
 ### `perf!` Checkpoints
 
 `perf!` is a checkpoint mechanism for within-flow attribution.
