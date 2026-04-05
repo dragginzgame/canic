@@ -9,5 +9,8 @@ mod root_hierarchy_cases;
 #[path = "root_cases/scaling.rs"]
 mod root_scaling_cases;
 
+#[path = "root_cases/sharding.rs"]
+mod root_sharding_cases;
+
 #[path = "root_cases/replay.rs"]
 mod root_replay_cases;

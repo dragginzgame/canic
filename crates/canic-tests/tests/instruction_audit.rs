@@ -7,7 +7,7 @@ use canic::{
     Error,
     cdk::{types::Principal, utils::wasm::get_wasm_hash},
     dto::{
-        auth::{DelegatedToken, DelegatedTokenClaims, DelegationRequest},
+        auth::DelegatedToken,
         capability::{
             CAPABILITY_VERSION_V1, CapabilityProof, CapabilityRequestMetadata, CapabilityService,
             RootCapabilityEnvelopeV1, RootCapabilityResponseV1,
@@ -33,9 +33,14 @@ use canic_control_plane::{
     },
 };
 use canic_internal::canister::{APP, SCALE_HUB, TEST, USER_HUB};
-use canic_testing_internal::pic::install_standalone_canister;
+use canic_testing_internal::pic::{
+    create_user_shard, install_standalone_canister, issue_delegated_token,
+    request_root_delegation_provision,
+};
 use canic_testkit::{artifacts::WasmBuildProfile, pic::Pic};
-use root::harness::{setup_root_scaling, setup_root_sharding, setup_root_topology};
+use root::harness::{
+    setup_root_capability, setup_root_scaling, setup_root_sharding, setup_root_topology,
+};
 use serde::Serialize;
 use std::{
     collections::BTreeSet,
@@ -637,11 +642,14 @@ fn query_perf_is_unobservable(scenario: &AuditScenario, row: &CanonicalPerfRow) 
 // Choose the fresh root topology shape required for one scenario.
 fn setup_for_scenario(scenario: &AuditScenario) -> root::harness::RootSetup {
     match scenario.key {
+        "root:canic_subnet_registry:full-registry" | "root:canic_subnet_state:empty-struct" => {
+            setup_root_topology()
+        }
         "scale_hub:create_worker:first-worker" => setup_root_scaling(),
         "user_hub:create_account:first-account"
         | "root:canic_request_delegation:fresh-shard"
         | "test:test_verify_delegated_token:valid-delegated-token" => setup_root_sharding(),
-        _ => setup_root_topology(),
+        _ => setup_root_capability(),
     }
 }
 
@@ -867,12 +875,14 @@ fn prepare_scenario(
             let shard_pid =
                 create_user_shard(&setup.pic, user_hub_pid, Principal::from_slice(&[44; 29]));
             let subject = Principal::from_slice(&[45; 29]);
-            let provision = request_root_delegation_provision(setup, shard_pid, target_pid);
+            let provision =
+                request_root_delegation_provision(&setup.pic, setup.root_id, shard_pid, target_pid);
             let token = issue_delegated_token(
                 &setup.pic,
                 shard_pid,
-                target_pid,
                 subject,
+                vec![target_pid],
+                vec![cap::VERIFY.to_string()],
                 provision.proof.cert.issued_at,
                 provision.proof.cert.expires_at,
             );
@@ -961,7 +971,8 @@ fn execute_root_delegation_issue_scenario(
         .subnet_directory
         .get(&TEST)
         .expect("test canister must exist for auth audit scenario");
-    let response = request_root_delegation_provision(setup, caller, verifier_pid);
+    let response =
+        request_root_delegation_provision(&setup.pic, setup.root_id, caller, verifier_pid);
     assert_eq!(response.proof.cert.shard_pid, caller);
 }
 
@@ -1005,64 +1016,6 @@ fn execute_root_cycles_scenario(setup: &root::harness::RootSetup, target_pid: Pr
         }
         other => panic!("expected cycles response, got: {other:?}"),
     }
-}
-
-// Create one user shard through the reference `user_hub` path.
-fn create_user_shard(pic: &Pic, user_hub_pid: Principal, tenant: Principal) -> Principal {
-    let created: Result<Principal, Error> = pic
-        .update_call(user_hub_pid, "create_account", (tenant,))
-        .expect("create_account transport failed");
-    created.expect("create_account application failed")
-}
-
-// Mint one delegated token from a prepared local test shard.
-fn issue_delegated_token(
-    pic: &Pic,
-    shard_pid: Principal,
-    verifier_pid: Principal,
-    subject: Principal,
-    issued_at: u64,
-    expires_at: u64,
-) -> DelegatedToken {
-    let claims = DelegatedTokenClaims {
-        sub: subject,
-        shard_pid,
-        aud: vec![verifier_pid],
-        scopes: vec![cap::VERIFY.to_string()],
-        iat: issued_at,
-        exp: expires_at,
-    };
-    let issued: Result<DelegatedToken, Error> = pic
-        .update_call(shard_pid, "user_shard_issue_token", (claims,))
-        .expect("user_shard_issue_token transport failed");
-    issued.expect("user_shard_issue_token application failed")
-}
-
-// Request one canonical root-issued delegation for a shard/verifier pair.
-fn request_root_delegation_provision(
-    setup: &root::harness::RootSetup,
-    shard_pid: Principal,
-    verifier_pid: Principal,
-) -> canic::dto::auth::DelegationProvisionResponse {
-    let request = DelegationRequest {
-        shard_pid,
-        scopes: vec![cap::VERIFY.to_string()],
-        aud: vec![verifier_pid],
-        ttl_secs: 60,
-        verifier_targets: vec![verifier_pid],
-        include_root_verifier: true,
-        metadata: None,
-    };
-    let response: Result<Result<canic::dto::auth::DelegationProvisionResponse, Error>, Error> =
-        setup.pic.update_call_as(
-            setup.root_id,
-            shard_pid,
-            protocol::CANIC_REQUEST_DELEGATION,
-            (request,),
-        );
-    response
-        .expect("canic_request_delegation transport failed")
-        .expect("canic_request_delegation application failed")
 }
 
 // Execute the query path inside a same-call perf probe endpoint and return the

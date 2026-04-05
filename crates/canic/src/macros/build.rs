@@ -64,9 +64,19 @@ macro_rules! __canic_build_internal {
     ($file:expr, |$cfg_str:ident, $cfg_path:ident, $cfg:ident| $body:block) => {{
         let manifest_dir =
             std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR must be set");
-        let $cfg_path = std::path::PathBuf::from(manifest_dir).join($file);
+        let default_cfg_path = std::path::PathBuf::from(&manifest_dir).join($file);
+        let env_cfg = std::env::var("CANIC_CONFIG_PATH").ok();
+        let $cfg_path = env_cfg.as_ref().map_or(default_cfg_path, |value| {
+            let path = std::path::PathBuf::from(value);
+            if path.is_relative() {
+                std::path::PathBuf::from(&manifest_dir).join(path)
+            } else {
+                path
+            }
+        });
         println!("cargo:rerun-if-changed={}", $cfg_path.display());
         println!("cargo:rerun-if-env-changed=DFX_NETWORK");
+        println!("cargo:rerun-if-env-changed=CANIC_CONFIG_PATH");
         println!("cargo:rerun-if-env-changed=CANIC_INTERNAL_TEST_ENDPOINTS");
         if let Some(parent) = $cfg_path.parent() {
             println!("cargo:rerun-if-changed={}", parent.display());
