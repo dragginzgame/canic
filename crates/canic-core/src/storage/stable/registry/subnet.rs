@@ -149,6 +149,26 @@ impl SubnetRegistry {
         })
     }
 
+    /// Visit each registry entry in deterministic key order.
+    pub(crate) fn for_each<F>(mut visit: F)
+    where
+        F: FnMut(Principal, CanisterRecord),
+    {
+        SUBNET_REGISTRY.with_borrow(|map| {
+            for entry in map.iter() {
+                visit(*entry.key(), entry.value());
+            }
+        });
+    }
+
+    /// Returns the number of registered canisters.
+    #[must_use]
+    pub(crate) fn len() -> usize {
+        SUBNET_REGISTRY.with_borrow(|map| {
+            usize::try_from(map.len()).expect("stable registry length fits in usize")
+        })
+    }
+
     //
     // Export
     //
@@ -260,5 +280,16 @@ mod tests {
         assert!(pids.contains(&p(1)));
         assert!(pids.contains(&p(2)));
         assert!(pids.contains(&p(3)));
+    }
+
+    #[test]
+    fn for_each_visits_all_entries_in_key_order() {
+        seed_simple_tree();
+
+        let mut pids = Vec::new();
+        SubnetRegistry::for_each(|pid, _| pids.push(pid));
+
+        assert_eq!(pids, vec![p(1), p(2), p(3)]);
+        assert_eq!(SubnetRegistry::len(), 3);
     }
 }

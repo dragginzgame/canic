@@ -30,7 +30,7 @@ pub fn reserve_root_slot(pending: ReplayPending) {
             payload_hash: pending.payload_hash,
             issued_at: pending.issued_at,
             expires_at: pending.expires_at,
-            response_candid: vec![],
+            response_bytes: vec![],
         },
     );
 }
@@ -38,14 +38,14 @@ pub fn reserve_root_slot(pending: ReplayPending) {
 /// commit_root_slot
 ///
 /// Persist canonical replay response bytes for an already-reserved replay slot.
-pub fn commit_root_slot(pending: ReplayPending, response_candid: Vec<u8>) {
+pub fn commit_root_slot(pending: ReplayPending, response_bytes: Vec<u8>) {
     RootReplayOps::upsert(
         pending.slot_key,
         RootReplayRecord {
             payload_hash: pending.payload_hash,
             issued_at: pending.issued_at,
             expires_at: pending.expires_at,
-            response_candid,
+            response_bytes,
         },
     );
 }

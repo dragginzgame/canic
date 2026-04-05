@@ -941,7 +941,7 @@ fn check_replay_rejects_expired_entry_when_purge_limit_exceeded() {
     let payload_hash = capability.payload_hash();
     let request_id = capability.metadata().expect("metadata").request_id;
     let target_key = replay::replay_slot_key(ctx.caller, ctx.self_pid, request_id);
-    let response_candid = encode_one(Response::Cycles(CyclesResponse {
+    let response_bytes = canic_memory::serialize::serialize(&Response::Cycles(CyclesResponse {
         cycles_transferred: 500,
     }))
     .expect("encode");
@@ -952,7 +952,7 @@ fn check_replay_rejects_expired_entry_when_purge_limit_exceeded() {
             payload_hash,
             issued_at: 9_900,
             expires_at: 9_999,
-            response_candid: response_candid.clone(),
+            response_bytes: response_bytes.clone(),
         },
     );
 
@@ -980,7 +980,7 @@ fn check_replay_rejects_expired_entry_when_purge_limit_exceeded() {
                 payload_hash: [0u8; 32],
                 issued_at: 9_000,
                 expires_at: 9_100,
-                response_candid: response_candid.clone(),
+                response_bytes: response_bytes.clone(),
             },
         );
         seeded += 1;
@@ -1075,7 +1075,9 @@ fn check_replay_rejects_conflicting_payload_for_same_request_id() {
 fn replay_purge_respects_limit_and_keeps_unexpired_entries() {
     RootReplayOps::reset_for_tests();
 
-    let ok = encode_one(Response::UpgradeCanister(UpgradeCanisterResponse {})).expect("encode");
+    let ok =
+        canic_memory::serialize::serialize(&Response::UpgradeCanister(UpgradeCanisterResponse {}))
+            .expect("encode");
 
     for i in 0..5u8 {
         RootReplayOps::upsert(
@@ -1084,7 +1086,7 @@ fn replay_purge_respects_limit_and_keeps_unexpired_entries() {
                 payload_hash: [i; 32],
                 issued_at: 0,
                 expires_at: 10,
-                response_candid: ok.clone(),
+                response_bytes: ok.clone(),
             },
         );
     }
@@ -1096,7 +1098,7 @@ fn replay_purge_respects_limit_and_keeps_unexpired_entries() {
                 payload_hash: [i; 32],
                 issued_at: 0,
                 expires_at: 999,
-                response_candid: ok.clone(),
+                response_bytes: ok.clone(),
             },
         );
     }
@@ -1122,7 +1124,7 @@ fn replay_purge_respects_limit_and_keeps_unexpired_entries() {
 fn check_replay_rejects_when_capacity_reached() {
     RootReplayOps::reset_for_tests();
 
-    let response_candid = encode_one(Response::Cycles(CyclesResponse {
+    let response_bytes = canic_memory::serialize::serialize(&Response::Cycles(CyclesResponse {
         cycles_transferred: 1,
     }))
     .expect("encode");
@@ -1137,7 +1139,7 @@ fn check_replay_rejects_when_capacity_reached() {
                 payload_hash: [0u8; 32],
                 issued_at: 0,
                 expires_at: 5_000,
-                response_candid: response_candid.clone(),
+                response_bytes: response_bytes.clone(),
             },
         );
     }

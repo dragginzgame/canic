@@ -296,7 +296,9 @@ impl DelegationApi {
         let required_verifier_targets = request.verifier_targets.clone();
         let response = Self::request_delegation_remote(request).await?;
         Self::ensure_required_verifier_targets_provisioned(&required_verifier_targets, &response)?;
-        Self::require_proof()
+        let proof = response.proof;
+        Self::store_local_signer_proof(proof.clone()).await?;
+        Ok(proof)
     }
 
     // Build a canonical delegation request from token claims.

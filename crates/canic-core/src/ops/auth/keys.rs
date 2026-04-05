@@ -102,12 +102,22 @@ pub(super) async fn ensure_shard_public_key_cached(
     key_name: &str,
     shard_pid: Principal,
 ) -> Result<(), InternalError> {
+    if let Some(shard_pk) = fetch_missing_shard_public_key(key_name, shard_pid).await? {
+        DelegationStateOps::set_shard_public_key(shard_pid, shard_pk);
+    }
+
+    Ok(())
+}
+
+pub(super) async fn fetch_missing_shard_public_key(
+    key_name: &str,
+    shard_pid: Principal,
+) -> Result<Option<Vec<u8>>, InternalError> {
     if DelegationStateOps::shard_public_key(shard_pid).is_some() {
-        return Ok(());
+        return Ok(None);
     }
 
     let shard_pk =
         EcdsaOps::public_key_sec1(key_name, shard_derivation_path(shard_pid), shard_pid).await?;
-    DelegationStateOps::set_shard_public_key(shard_pid, shard_pk);
-    Ok(())
+    Ok(Some(shard_pk))
 }

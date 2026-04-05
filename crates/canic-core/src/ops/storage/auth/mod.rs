@@ -150,14 +150,24 @@ impl DelegationStateOps {
         proof: DelegationProof,
         installed_at: u64,
     ) -> Result<DelegationProofUpsertOutcome, InternalError> {
+        Self::upsert_proof_from_dto_with_shard_public_key(proof, installed_at, None)
+    }
+
+    /// Upsert a keyed verifier proof and optional shard key in one stable-state commit.
+    pub fn upsert_proof_from_dto_with_shard_public_key(
+        proof: DelegationProof,
+        installed_at: u64,
+        shard_public_key: Option<Vec<u8>>,
+    ) -> Result<DelegationProofUpsertOutcome, InternalError> {
         let policy = Self::proof_cache_policy()?;
         let entry = DelegationProofRecordMapper::stored_proof_to_entry(
             DelegationProofRecordMapper::dto_to_stored_proof(proof),
             installed_at,
         )?;
         Ok(proof_upsert_record_to_view(
-            DelegationState::upsert_proof_entry(
+            DelegationState::upsert_proof_entry_with_shard_public_key(
                 entry,
+                shard_public_key,
                 installed_at,
                 policy.capacity,
                 policy.active_window_secs,

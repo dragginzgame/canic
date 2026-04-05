@@ -46,7 +46,7 @@ pub enum ReplayDecision {
 /// Canonical cached replay payload bytes for identical replay requests.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ReplayCached {
-    pub response_candid: Vec<u8>,
+    pub response_bytes: Vec<u8>,
 }
 
 /// ReplayGuardError
@@ -109,12 +109,12 @@ fn resolve_existing(
         return ReplayDecision::DuplicateConflict;
     }
 
-    if existing.response_candid.is_empty() {
+    if existing.response_bytes.is_empty() {
         return ReplayDecision::InFlight;
     }
 
     ReplayDecision::DuplicateSame(ReplayCached {
-        response_candid: existing.response_candid,
+        response_bytes: existing.response_bytes,
     })
 }
 
@@ -170,7 +170,7 @@ mod tests {
                 payload_hash: input.payload_hash,
                 issued_at: 900,
                 expires_at: 1_200,
-                response_candid: expected.clone(),
+                response_bytes: expected.clone(),
             },
         );
 
@@ -178,7 +178,7 @@ mod tests {
         assert_eq!(
             decision,
             ReplayDecision::DuplicateSame(ReplayCached {
-                response_candid: expected
+                response_bytes: expected
             })
         );
     }
@@ -195,7 +195,7 @@ mod tests {
                 payload_hash: input.payload_hash,
                 issued_at: 900,
                 expires_at: 1_200,
-                response_candid: vec![],
+                response_bytes: vec![],
             },
         );
 
@@ -215,7 +215,7 @@ mod tests {
                 payload_hash: [8u8; 32],
                 issued_at: 900,
                 expires_at: 1_200,
-                response_candid: vec![],
+                response_bytes: vec![],
             },
         );
 
@@ -236,7 +236,7 @@ mod tests {
                 payload_hash: input.payload_hash,
                 issued_at: 900,
                 expires_at: 1_200,
-                response_candid: vec![],
+                response_bytes: vec![],
             },
         );
 

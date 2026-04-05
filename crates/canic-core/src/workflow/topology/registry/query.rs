@@ -1,9 +1,7 @@
 use crate::{
     dto::topology::{AppRegistryResponse, SubnetRegistryResponse},
     ops::storage::registry::{
-        app::AppRegistryOps,
-        mapper::{AppRegistryResponseMapper, SubnetRegistryResponseMapper},
-        subnet::SubnetRegistryOps,
+        app::AppRegistryOps, mapper::AppRegistryResponseMapper, subnet::SubnetRegistryOps,
     },
 };
 
@@ -29,8 +27,6 @@ pub struct SubnetRegistryQuery;
 
 impl SubnetRegistryQuery {
     pub fn registry() -> SubnetRegistryResponse {
-        let data = SubnetRegistryOps::data();
-
-        SubnetRegistryResponseMapper::record_to_view(data)
+        SubnetRegistryOps::response()
     }
 }

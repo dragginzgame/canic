@@ -28,7 +28,10 @@ use crate::{
 use candid::encode_one;
 use serde::de::DeserializeOwned;
 use sha2::{Digest, Sha256};
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::{
+    cell::RefCell,
+    sync::atomic::{AtomicU64, Ordering},
+};
 use thiserror::Error as ThisError;
 
 ///
@@ -72,6 +75,21 @@ const DEFAULT_CAPABILITY_METADATA_TTL_SECONDS: u32 = 300;
 const CAPABILITY_HASH_DOMAIN_V1: &[u8] = b"CANIC_CAPABILITY_V1";
 static ROOT_ATTESTATION_REQUEST_NONCE: AtomicU64 = AtomicU64::new(1);
 static ROOT_CAPABILITY_METADATA_NONCE: AtomicU64 = AtomicU64::new(1);
+
+thread_local! {
+    static ROOT_RESPONSE_ATTESTATION_CACHE: RefCell<Option<CachedRootResponseAttestation>> =
+        const { RefCell::new(None) };
+}
+
+#[derive(Clone)]
+struct CachedRootResponseAttestation {
+    root_pid: Principal,
+    audience_pid: Principal,
+    subject_pid: Principal,
+    role: CanisterRole,
+    epoch: u64,
+    attestation: SignedRoleAttestation,
+}
 
 ///
 /// RpcOps
@@ -142,6 +160,17 @@ impl RpcOps {
             .copied()
             .unwrap_or(0);
 
+        if let Some(attestation) = cached_root_response_attestation(
+            root_pid,
+            audience_pid,
+            self_pid,
+            &role,
+            epoch,
+            IcOps::now_secs(),
+        ) {
+            return Ok(attestation);
+        }
+
         let request = RoleAttestationRequest {
             subject: self_pid,
             role,
@@ -152,7 +181,17 @@ impl RpcOps {
             metadata: Some(new_root_attestation_request_metadata()),
         };
 
-        Self::call_rpc_result(root_pid, protocol::CANIC_REQUEST_ROLE_ATTESTATION, request).await
+        let attestation: SignedRoleAttestation =
+            Self::call_rpc_result(root_pid, protocol::CANIC_REQUEST_ROLE_ATTESTATION, request)
+                .await?;
+        cache_root_response_attestation(
+            root_pid,
+            audience_pid,
+            self_pid,
+            epoch,
+            attestation.clone(),
+        );
+        Ok(attestation)
     }
 
     async fn call_response_capability_v1(
@@ -258,6 +297,62 @@ fn generate_capability_nonce() -> [u8; 16] {
     out
 }
 
+// cached_root_response_attestation
+//
+// Reuse a still-valid root-issued role attestation for the same audience.
+fn cached_root_response_attestation(
+    root_pid: Principal,
+    audience_pid: Principal,
+    subject_pid: Principal,
+    role: &CanisterRole,
+    epoch: u64,
+    now_secs: u64,
+) -> Option<SignedRoleAttestation> {
+    ROOT_RESPONSE_ATTESTATION_CACHE.with_borrow_mut(|entry| {
+        let cached = entry.as_ref()?;
+        let payload = &cached.attestation.payload;
+        let valid = cached.root_pid == root_pid
+            && cached.audience_pid == audience_pid
+            && cached.subject_pid == subject_pid
+            && &cached.role == role
+            && cached.epoch == epoch
+            && payload.subject == subject_pid
+            && &payload.role == role
+            && payload.audience == Some(audience_pid)
+            && payload.epoch == epoch
+            && now_secs <= payload.expires_at;
+
+        if !valid {
+            *entry = None;
+            return None;
+        }
+
+        Some(cached.attestation.clone())
+    })
+}
+
+// cache_root_response_attestation
+//
+// Store the latest root-issued role attestation for repeated outbound RPC use.
+fn cache_root_response_attestation(
+    root_pid: Principal,
+    audience_pid: Principal,
+    subject_pid: Principal,
+    epoch: u64,
+    attestation: SignedRoleAttestation,
+) {
+    ROOT_RESPONSE_ATTESTATION_CACHE.with_borrow_mut(|entry| {
+        *entry = Some(CachedRootResponseAttestation {
+            root_pid,
+            audience_pid,
+            subject_pid,
+            role: attestation.payload.role.clone(),
+            epoch,
+            attestation,
+        });
+    });
+}
+
 fn root_capability_hash(
     target_canister: Principal,
     capability: &crate::dto::rpc::Request,
@@ -310,7 +405,37 @@ fn generate_root_attestation_request_id() -> [u8; 32] {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::dto::rpc::{CyclesRequest, RootRequestMetadata};
+    use crate::dto::{
+        auth::RoleAttestation,
+        rpc::{CyclesRequest, RootRequestMetadata},
+    };
+
+    const USER_HUB_ROLE: CanisterRole = CanisterRole::new("user_hub");
+
+    fn p(id: u8) -> Principal {
+        Principal::from_slice(&[id; 29])
+    }
+
+    fn sample_attestation(
+        subject: Principal,
+        audience: Principal,
+        expires_at: u64,
+        epoch: u64,
+    ) -> SignedRoleAttestation {
+        SignedRoleAttestation {
+            payload: RoleAttestation {
+                subject,
+                role: USER_HUB_ROLE,
+                subnet_id: None,
+                audience: Some(audience),
+                issued_at: 100,
+                expires_at,
+                epoch,
+            },
+            signature: vec![1, 2, 3],
+            key_id: 7,
+        }
+    }
 
     #[test]
     #[expect(clippy::cast_possible_truncation)]
@@ -348,6 +473,62 @@ mod tests {
         assert_eq!(
             metadata.ttl_seconds,
             DEFAULT_CAPABILITY_METADATA_TTL_SECONDS
+        );
+    }
+
+    #[test]
+    fn cached_root_response_attestation_reuses_matching_entry() {
+        let root_pid = p(1);
+        let audience_pid = p(2);
+        let subject_pid = p(3);
+        let attestation = sample_attestation(subject_pid, audience_pid, 500, 9);
+
+        cache_root_response_attestation(
+            root_pid,
+            audience_pid,
+            subject_pid,
+            9,
+            attestation.clone(),
+        );
+
+        let cached = cached_root_response_attestation(
+            root_pid,
+            audience_pid,
+            subject_pid,
+            &USER_HUB_ROLE,
+            9,
+            400,
+        )
+        .expect("matching cached attestation");
+
+        assert_eq!(cached, attestation);
+    }
+
+    #[test]
+    fn cached_root_response_attestation_invalidates_expired_entry() {
+        let root_pid = p(4);
+        let audience_pid = p(5);
+        let subject_pid = p(6);
+
+        cache_root_response_attestation(
+            root_pid,
+            audience_pid,
+            subject_pid,
+            11,
+            sample_attestation(subject_pid, audience_pid, 120, 11),
+        );
+
+        assert!(
+            cached_root_response_attestation(
+                root_pid,
+                audience_pid,
+                subject_pid,
+                &USER_HUB_ROLE,
+                11,
+                121,
+            )
+            .is_none(),
+            "expired cache entry must not be reused"
         );
     }
 }

@@ -37,8 +37,9 @@ impl DelegationState {
         })
     }
 
-    pub(crate) fn upsert_proof_entry(
+    pub(crate) fn upsert_proof_entry_with_shard_public_key(
         entry: DelegationProofEntryRecord,
+        shard_public_key: Option<Vec<u8>>,
         now_secs: u64,
         capacity: usize,
         active_window_secs: u64,
@@ -46,6 +47,14 @@ impl DelegationState {
         DELEGATION_STATE.with_borrow_mut(|cell| {
             let mut data = cell.get().clone();
             let mut evicted = None;
+
+            if let Some(public_key_sec1) = shard_public_key {
+                upsert_shard_public_key_record(
+                    &mut data.shard_public_keys,
+                    entry.key.shard_pid,
+                    public_key_sec1,
+                );
+            }
 
             if let Some(existing) = data
                 .proofs
@@ -138,19 +147,7 @@ impl DelegationState {
     pub(crate) fn set_shard_public_key(shard_pid: Principal, public_key_sec1: Vec<u8>) {
         DELEGATION_STATE.with_borrow_mut(|cell| {
             let mut data = cell.get().clone();
-
-            if let Some(entry) = data
-                .shard_public_keys
-                .iter_mut()
-                .find(|entry| entry.shard_pid == shard_pid)
-            {
-                entry.public_key_sec1 = public_key_sec1;
-            } else {
-                data.shard_public_keys.push(ShardPublicKeyRecord {
-                    shard_pid,
-                    public_key_sec1,
-                });
-            }
+            upsert_shard_public_key_record(&mut data.shard_public_keys, shard_pid, public_key_sec1);
 
             cell.set(data);
         });
@@ -570,6 +567,24 @@ fn evict_oldest_session_binding(bindings: &mut Vec<DelegatedSessionBootstrapBind
     bindings.swap_remove(oldest_index);
 }
 
+fn upsert_shard_public_key_record(
+    entries: &mut Vec<ShardPublicKeyRecord>,
+    shard_pid: Principal,
+    public_key_sec1: Vec<u8>,
+) {
+    if let Some(entry) = entries
+        .iter_mut()
+        .find(|entry| entry.shard_pid == shard_pid)
+    {
+        entry.public_key_sec1 = public_key_sec1;
+    } else {
+        entries.push(ShardPublicKeyRecord {
+            shard_pid,
+            public_key_sec1,
+        });
+    }
+}
+
 fn evict_proof_entry(
     entries: &mut Vec<DelegationProofEntryRecord>,
     now_secs: u64,
@@ -747,7 +762,13 @@ mod tests {
             cell.set(data);
         });
 
-        let outcome = DelegationState::upsert_proof_entry(entry(120, 2_000, None), 1_000, 96, 600);
+        let outcome = DelegationState::upsert_proof_entry_with_shard_public_key(
+            entry(120, 2_000, None),
+            None,
+            1_000,
+            96,
+            600,
+        );
 
         assert_eq!(
             outcome.evicted,
@@ -780,7 +801,13 @@ mod tests {
             cell.set(data);
         });
 
-        let outcome = DelegationState::upsert_proof_entry(entry(121, 2_000, None), 1_000, 96, 600);
+        let outcome = DelegationState::upsert_proof_entry_with_shard_public_key(
+            entry(121, 2_000, None),
+            None,
+            1_000,
+            96,
+            600,
+        );
 
         assert_eq!(
             outcome.evicted,
