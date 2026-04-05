@@ -43,6 +43,11 @@ struct ProcessLockGuard {
     path: PathBuf,
 }
 
+struct ProcessLockOwner {
+    pid: u32,
+    start_ticks: Option<u64>,
+}
+
 struct ProcessLockState {
     ref_count: usize,
     process_lock: Option<ProcessLockGuard>,
@@ -747,7 +752,7 @@ fn acquire_process_lock() -> ProcessLockGuard {
             Ok(()) => {
                 fs::write(
                     process_lock_owner_path(&lock_dir),
-                    process::id().to_string(),
+                    render_process_lock_owner(),
                 )
                 .unwrap_or_else(|err| {
                     let _ = fs::remove_dir(&lock_dir);
@@ -802,19 +807,91 @@ fn clear_stale_process_lock(lock_dir: &Path) -> io::Result<()> {
 }
 
 fn process_lock_is_stale(lock_dir: &Path) -> bool {
-    let Ok(pid_text) = fs::read_to_string(process_lock_owner_path(lock_dir)) else {
-        return true;
-    };
-    let Ok(pid) = pid_text.trim().parse::<u32>() else {
+    process_lock_is_stale_with_proc_root(lock_dir, Path::new("/proc"))
+}
+
+fn process_lock_is_stale_with_proc_root(lock_dir: &Path, proc_root: &Path) -> bool {
+    let Some(owner) = read_process_lock_owner(&process_lock_owner_path(lock_dir)) else {
         return true;
     };
 
-    !Path::new("/proc").join(pid.to_string()).exists()
+    let proc_dir = proc_root.join(owner.pid.to_string());
+    if !proc_dir.exists() {
+        return true;
+    }
+
+    match owner.start_ticks {
+        Some(expected_ticks) => {
+            read_process_start_ticks(proc_root, owner.pid) != Some(expected_ticks)
+        }
+        None => false,
+    }
+}
+
+fn render_process_lock_owner() -> String {
+    let owner = current_process_lock_owner();
+    match owner.start_ticks {
+        Some(start_ticks) => format!("pid={}\nstart_ticks={start_ticks}\n", owner.pid),
+        None => format!("pid={}\n", owner.pid),
+    }
+}
+
+fn current_process_lock_owner() -> ProcessLockOwner {
+    ProcessLockOwner {
+        pid: process::id(),
+        start_ticks: read_process_start_ticks(Path::new("/proc"), process::id()),
+    }
+}
+
+fn read_process_lock_owner(path: &Path) -> Option<ProcessLockOwner> {
+    let text = fs::read_to_string(path).ok()?;
+    parse_process_lock_owner(&text)
+}
+
+fn parse_process_lock_owner(text: &str) -> Option<ProcessLockOwner> {
+    let trimmed = text.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    if let Ok(pid) = trimmed.parse::<u32>() {
+        return Some(ProcessLockOwner {
+            pid,
+            start_ticks: None,
+        });
+    }
+
+    let mut pid = None;
+    let mut start_ticks = None;
+    for line in trimmed.lines() {
+        if let Some(value) = line.strip_prefix("pid=") {
+            pid = value.trim().parse::<u32>().ok();
+        } else if let Some(value) = line.strip_prefix("start_ticks=") {
+            start_ticks = value.trim().parse::<u64>().ok();
+        }
+    }
+
+    Some(ProcessLockOwner {
+        pid: pid?,
+        start_ticks,
+    })
+}
+
+fn read_process_start_ticks(proc_root: &Path, pid: u32) -> Option<u64> {
+    let stat_path = proc_root.join(pid.to_string()).join("stat");
+    let stat = fs::read_to_string(stat_path).ok()?;
+    let close_paren = stat.rfind(')')?;
+    let rest = stat.get(close_paren + 2..)?;
+    let fields = rest.split_whitespace().collect::<Vec<_>>();
+    fields.get(19)?.parse::<u64>().ok()
 }
 
 #[cfg(test)]
 mod process_lock_tests {
-    use super::{clear_stale_process_lock, process_lock_is_stale, process_lock_owner_path};
+    use super::{
+        clear_stale_process_lock, parse_process_lock_owner, process_lock_is_stale_with_proc_root,
+        process_lock_owner_path,
+    };
     use std::{
         fs,
         path::PathBuf,
@@ -835,8 +912,40 @@ mod process_lock_tests {
         fs::create_dir(&lock_dir).expect("create lock dir");
         fs::write(process_lock_owner_path(&lock_dir), "999999").expect("write stale owner");
 
-        assert!(process_lock_is_stale(&lock_dir));
+        assert!(process_lock_is_stale_with_proc_root(
+            &lock_dir,
+            std::path::Path::new("/proc")
+        ));
         clear_stale_process_lock(&lock_dir).expect("remove stale lock dir");
         assert!(!lock_dir.exists());
+    }
+
+    #[test]
+    fn owner_parser_accepts_legacy_pid_only_format() {
+        let owner = parse_process_lock_owner("12345\n").expect("parse pid-only owner");
+        assert_eq!(owner.pid, 12345);
+        assert_eq!(owner.start_ticks, None);
+    }
+
+    #[test]
+    fn stale_process_lock_detects_pid_reuse_via_start_ticks() {
+        let root = unique_lock_dir();
+        let lock_dir = root.join("lock");
+        let proc_root = root.join("proc");
+        let proc_pid = proc_root.join("77");
+        fs::create_dir_all(&lock_dir).expect("create lock dir");
+        fs::create_dir_all(&proc_pid).expect("create proc pid dir");
+        fs::write(
+            process_lock_owner_path(&lock_dir),
+            "pid=77\nstart_ticks=41\n",
+        )
+        .expect("write owner");
+        fs::write(
+            proc_pid.join("stat"),
+            "77 (cargo) S 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 99 0 0\n",
+        )
+        .expect("write proc stat");
+
+        assert!(process_lock_is_stale_with_proc_root(&lock_dir, &proc_root));
     }
 }

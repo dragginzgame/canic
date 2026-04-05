@@ -30,6 +30,7 @@ These canisters are wired through `dfx.json` (custom build steps call `scripts/a
 - Create/build canisters manually (dfx 0.30.2): `dfx canister create --all` then `dfx build --all`
 - Run the scripted local smoke flow: `make test-canisters`
 
-Note: `make demo-install` and `make test-canisters` assume `dfx` is already
-running. They fail fast if the local replica is not available. They are manual
-local smoke helpers, not part of `make test`.
+Note: `make demo-install` and `make test-canisters` now try one clean local
+`dfx` restart automatically when `dfx ping local` fails. They are still manual
+local smoke helpers, not part of `make test`, and nonlocal targets still
+expect their replica to be managed externally.

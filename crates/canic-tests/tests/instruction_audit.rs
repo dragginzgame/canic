@@ -33,7 +33,8 @@ use canic_control_plane::{
     },
 };
 use canic_internal::canister::{APP, SCALE_HUB, TEST, USER_HUB};
-use canic_testkit::pic::Pic;
+use canic_testing_internal::pic::install_standalone_canister;
+use canic_testkit::{artifacts::WasmBuildProfile, pic::Pic};
 use root::harness::{setup_root_scaling, setup_root_sharding, setup_root_topology};
 use serde::Serialize;
 use std::{
@@ -353,9 +354,9 @@ fn scenarios() -> Vec<AuditScenario> {
             auth_state: "public",
             replay_state: "n/a",
             cache_state: "n/a",
-            topology_state: "root_bootstrapped+child_ready",
-            freshness_model: "fresh-topology-per-scenario",
-            notes: "Shared lifecycle query surface with no arguments on the ordinary app leaf.",
+            topology_state: "standalone-app-ready",
+            freshness_model: "fresh-standalone-per-scenario",
+            notes: "Shared lifecycle query surface with no arguments on one standalone app leaf.",
         },
         AuditScenario {
             key: "app:canic_env:minimal-valid",
@@ -369,9 +370,9 @@ fn scenarios() -> Vec<AuditScenario> {
             auth_state: "public",
             replay_state: "n/a",
             cache_state: "n/a",
-            topology_state: "root_bootstrapped+child_ready",
-            freshness_model: "fresh-topology-per-scenario",
-            notes: "Shared environment snapshot query on the ordinary app leaf canister.",
+            topology_state: "standalone-app-ready",
+            freshness_model: "fresh-standalone-per-scenario",
+            notes: "Shared environment snapshot query on one standalone app leaf canister.",
         },
         AuditScenario {
             key: "app:canic_log:empty-page",
@@ -385,9 +386,9 @@ fn scenarios() -> Vec<AuditScenario> {
             auth_state: "public",
             replay_state: "n/a",
             cache_state: "cold",
-            topology_state: "root_bootstrapped+child_ready",
-            freshness_model: "fresh-topology-per-scenario",
-            notes: "Operator-facing log pagination with the smallest page shape.",
+            topology_state: "standalone-app-ready",
+            freshness_model: "fresh-standalone-per-scenario",
+            notes: "Operator-facing log pagination with the smallest page shape on one standalone app leaf.",
         },
         AuditScenario {
             key: "root:canic_subnet_registry:full-registry",
@@ -402,7 +403,7 @@ fn scenarios() -> Vec<AuditScenario> {
             replay_state: "n/a",
             cache_state: "n/a",
             topology_state: "root_bootstrapped+reference-topology-ready",
-            freshness_model: "fresh-topology-per-scenario",
+            freshness_model: "fresh-standalone-per-scenario",
             notes: "Shared root registry read over the auto-created reference topology.",
         },
         AuditScenario {
@@ -433,9 +434,9 @@ fn scenarios() -> Vec<AuditScenario> {
             auth_state: "local-test-only",
             replay_state: "n/a",
             cache_state: "n/a",
-            topology_state: "root_bootstrapped+no-extra-workers",
-            freshness_model: "fresh-topology-per-scenario",
-            notes: "Scaling dry-run query before any extra worker exists in the pool.",
+            topology_state: "standalone-scale_hub-ready",
+            freshness_model: "fresh-standalone-per-scenario",
+            notes: "Scaling dry-run query before any extra worker exists in the pool on one standalone scale_hub canister.",
         },
         AuditScenario {
             key: "scale_hub:create_worker:first-worker",
@@ -513,9 +514,9 @@ fn scenarios() -> Vec<AuditScenario> {
             auth_state: "local-test-only",
             replay_state: "n/a",
             cache_state: "n/a",
-            topology_state: "root_bootstrapped+local-test-helper-ready",
+            topology_state: "standalone-test-ready",
             freshness_model: "fresh-topology-per-scenario",
-            notes: "Minimal local/dev update on the shared test helper canister with no chain-key dependency.",
+            notes: "Minimal local/dev update on one standalone test helper canister with no chain-key dependency.",
         },
         AuditScenario {
             key: "root:canic_response_capability_v1:request-cycles-fresh",
@@ -646,6 +647,10 @@ fn setup_for_scenario(scenario: &AuditScenario) -> root::harness::RootSetup {
 
 // Execute one scenario in an isolated fresh topology and derive the endpoint delta.
 fn run_scenario(scenario: &AuditScenario) -> ScenarioResult {
+    if let Some(result) = run_standalone_scenario(scenario) {
+        return result;
+    }
+
     let setup = setup_for_scenario(scenario);
     let prepared = prepare_scenario(&setup, scenario);
     let target_pid = prepared.target_pid;
@@ -703,6 +708,87 @@ fn run_scenario(scenario: &AuditScenario) -> ScenarioResult {
             sample_origin,
         },
         checkpoint_rows,
+    }
+}
+
+fn run_standalone_scenario(scenario: &AuditScenario) -> Option<ScenarioResult> {
+    let (crate_name, role) = match scenario.key {
+        "app:canic_time:minimal-valid"
+        | "app:canic_env:minimal-valid"
+        | "app:canic_log:empty-page" => ("canister_app", APP),
+        "scale_hub:plan_create_worker:empty-pool" => ("canister_scale_hub", SCALE_HUB),
+        "test:test:minimal-valid" => ("canister_test", TEST),
+        _ => return None,
+    };
+
+    let fixture = install_standalone_canister(crate_name, role, WasmBuildProfile::Fast);
+    let target_pid = fixture.canister_id;
+    let (count, total_instructions, sample_origin, checkpoint_rows) =
+        if scenario.transport_mode == "query" {
+            let total = execute_query_perf_probe(&fixture.pic, scenario, target_pid);
+            (1, total, "derived".to_string(), Vec::new())
+        } else {
+            let before = perf_entries(&fixture.pic, target_pid);
+            execute_standalone_scenario(&fixture.pic, scenario, target_pid);
+            let after = perf_entries(&fixture.pic, target_pid);
+            let (count, total_instructions) = perf_delta(
+                &before,
+                &after,
+                scenario.subject_kind,
+                scenario.subject_label,
+            );
+            let checkpoint_rows = checkpoint_deltas(scenario, &before, &after);
+            (
+                count,
+                total_instructions,
+                "derived".to_string(),
+                checkpoint_rows,
+            )
+        };
+    let avg_local_instructions = if count == 0 {
+        0
+    } else {
+        total_instructions / count
+    };
+
+    Some(ScenarioResult {
+        scenario: *scenario,
+        row: CanonicalPerfRow {
+            subject_kind: scenario.subject_kind.to_string(),
+            subject_label: scenario.subject_label.to_string(),
+            count,
+            total_local_instructions: total_instructions,
+            avg_local_instructions,
+            scenario_key: scenario.key.to_string(),
+            scenario_labels: vec![
+                format!("canister={}", scenario.canister),
+                format!("endpoint_or_flow={}", scenario.endpoint_or_flow),
+                format!("transport_mode={}", scenario.transport_mode),
+                format!("arg_class={}", scenario.arg_class),
+                format!("caller_class={}", scenario.caller_class),
+                format!("auth_state={}", scenario.auth_state),
+                format!("replay_state={}", scenario.replay_state),
+                format!("cache_state={}", scenario.cache_state),
+                format!("topology_state={}", scenario.topology_state),
+                format!("freshness_model={}", scenario.freshness_model),
+                format!("method_tag={METHOD_TAG}"),
+            ],
+            principal_scope: Some(scenario.caller_class.to_string()),
+            sample_origin,
+        },
+        checkpoint_rows,
+    })
+}
+
+fn execute_standalone_scenario(pic: &Pic, scenario: &AuditScenario, target_pid: Principal) {
+    match scenario.key {
+        "test:test:minimal-valid" => {
+            let response: Result<(), Error> = pic
+                .update_call(target_pid, "test", ())
+                .expect("standalone test transport failed");
+            response.expect("standalone test application failed");
+        }
+        other => panic!("unsupported standalone audit scenario: {other}"),
     }
 }
 

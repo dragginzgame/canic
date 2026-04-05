@@ -10,7 +10,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 candid = { workspace = true }
-canic = { workspace = true, features = ["auth-crypto"] }
+canic = { workspace = true }
 canic-internal = { workspace = true }
 ic-cdk = { workspace = true }
 

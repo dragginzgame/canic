@@ -174,13 +174,15 @@ If you only want the thin-root helper without the broader setup path, you can st
 cargo install --locked canic-installer --version <same-version-as-canic>
 ```
 
-Then, with the target `dfx` replica already running, from your workspace root:
+Then, from your workspace root:
 
 ```bash
 canic-install-root root
 ```
 
 `canic-install-root` now owns the local thin-root flow end to end. It creates local canisters, builds `root` plus only the ordinary roles from the subnet that owns `root`, emits `.dfx/local/canisters/root/root.release-set.json`, reinstalls `root`, stages the ordinary release set, resumes bootstrap, and waits for `canic_ready`.
+
+For `DFX_NETWORK=local`, it also tries one clean `dfx stop` / `dfx start --background --clean --system-canisters` recovery if `dfx ping local` fails first. Nonlocal targets still expect their replica to be managed externally.
 
 `root` stays thin in this flow. It embeds only the bootstrap `wasm_store.wasm.gz`; ordinary child releases stay outside `root` and are staged after install from `.dfx/local/canisters/root/root.release-set.json`.
 

@@ -46,16 +46,7 @@ type CyclesRequest = record {
 };
 type CyclesResponse = record { cycles_transferred : nat };
 type DirectoryEntryInput = record { pid : principal; role : text };
-type DirectoryEntryResponse = record { pid : principal; role : text };
 type EnvBootstrapArgs = record {
-  prime_root_pid : opt principal;
-  canister_role : opt text;
-  subnet_role : opt text;
-  root_pid : opt principal;
-  parent_pid : opt principal;
-  subnet_pid : opt principal;
-};
-type EnvSnapshotResponse = record {
   prime_root_pid : opt principal;
   canister_role : opt text;
   subnet_role : opt text;
@@ -91,12 +82,6 @@ type LogEntry = record {
   level : Level;
   message : text;
 };
-type MemoryRegistryEntry = record {
-  id : nat8;
-  crate_name : text;
-  label : text;
-};
-type MemoryRegistryResponse = record { entries : vec MemoryRegistryEntry };
 type MetricEntry = record {
   "principal" : opt principal;
   value : MetricValue;
@@ -126,30 +111,23 @@ type NonrootCyclesCapabilityEnvelopeV1 = record {
   capability : CyclesRequest;
 };
 type NonrootCyclesCapabilityResponseV1 = record { response : CyclesResponse };
-type Page = record { total : nat64; entries : vec DirectoryEntryResponse };
+type Page = record { total : nat64; entries : vec CanisterInfo };
 type PageRequest = record { offset : nat64; limit : nat64 };
-type Page_1 = record { total : nat64; entries : vec CanisterInfo };
-type Page_2 = record { total : nat64; entries : vec CycleTrackerEntry };
-type Page_3 = record { total : nat64; entries : vec LogEntry };
-type Page_4 = record { total : nat64; entries : vec MetricEntry };
+type Page_1 = record { total : nat64; entries : vec CycleTrackerEntry };
+type Page_2 = record { total : nat64; entries : vec LogEntry };
+type Page_3 = record { total : nat64; entries : vec MetricEntry };
 type Result = variant { Ok : Page; Err : Error };
-type Result_1 = variant { Ok : Page_1; Err : Error };
-type Result_10 = variant { Ok; Err : Error };
-type Result_11 = variant {
-  Ok : vec WasmStoreCatalogEntryResponse;
-  Err : Error;
-};
-type Result_12 = variant { Ok : TemplateChunkResponse; Err : Error };
-type Result_13 = variant { Ok : TemplateChunkSetInfoResponse; Err : Error };
-type Result_14 = variant { Ok : WasmStoreStatusResponse; Err : Error };
-type Result_2 = variant { Ok : nat; Err : Error };
-type Result_3 = variant { Ok : nat64; Err : Error };
+type Result_1 = variant { Ok : nat; Err : Error };
+type Result_10 = variant { Ok : TemplateChunkSetInfoResponse; Err : Error };
+type Result_11 = variant { Ok : WasmStoreStatusResponse; Err : Error };
+type Result_2 = variant { Ok : nat64; Err : Error };
+type Result_3 = variant { Ok : Page_1; Err : Error };
 type Result_4 = variant { Ok : Page_2; Err : Error };
-type Result_5 = variant { Ok : EnvSnapshotResponse; Err : Error };
-type Result_6 = variant { Ok : Page_3; Err : Error };
-type Result_7 = variant { Ok : MemoryRegistryResponse; Err : Error };
-type Result_8 = variant { Ok : Page_4; Err : Error };
-type Result_9 = variant { Ok : NonrootCyclesCapabilityResponseV1; Err : Error };
+type Result_5 = variant { Ok : Page_3; Err : Error };
+type Result_6 = variant { Ok : NonrootCyclesCapabilityResponseV1; Err : Error };
+type Result_7 = variant { Ok; Err : Error };
+type Result_8 = variant { Ok : vec WasmStoreCatalogEntryResponse; Err : Error };
+type Result_9 = variant { Ok : TemplateChunkResponse; Err : Error };
 type RootRequestMetadata = record { request_id : blob; ttl_seconds : nat64 };
 type StateSnapshotInput = record {
   subnet_state : opt null;
@@ -247,34 +225,30 @@ type WasmStoreTemplateStatusResponse = record {
   versions : nat16;
 };
 service : (CanisterInitPayload, opt blob) -> {
-  canic_app_directory : (PageRequest) -> (Result) query;
   canic_bootstrap_status : () -> (BootstrapStatusResponse) query;
-  canic_canister_children : (PageRequest) -> (Result_1) query;
-  canic_canister_cycle_balance : () -> (Result_2) query;
-  canic_canister_version : () -> (Result_3) query;
-  canic_cycle_tracker : (PageRequest) -> (Result_4) query;
-  canic_env : () -> (Result_5) query;
-  canic_log : (opt text, opt text, opt Level, PageRequest) -> (Result_6) query;
-  canic_memory_registry : () -> (Result_7) query;
-  canic_metrics : (MetricsKind, PageRequest) -> (Result_8) query;
+  canic_canister_children : (PageRequest) -> (Result) query;
+  canic_canister_cycle_balance : () -> (Result_1) query;
+  canic_canister_version : () -> (Result_2) query;
+  canic_cycle_tracker : (PageRequest) -> (Result_3) query;
+  canic_log : (opt text, opt text, opt Level, PageRequest) -> (Result_4) query;
+  canic_metrics : (MetricsKind, PageRequest) -> (Result_5) query;
   canic_ready : () -> (bool) query;
   canic_response_capability_v1 : (NonrootCyclesCapabilityEnvelopeV1) -> (
-      Result_9,
+      Result_6,
     );
   canic_standards : () -> (CanicStandardsResponse) query;
-  canic_subnet_directory : (PageRequest) -> (Result) query;
-  canic_sync_state : (StateSnapshotInput) -> (Result_10);
-  canic_sync_topology : (TopologySnapshotInput) -> (Result_10);
-  canic_time : () -> (Result_3) query;
-  canic_wasm_store_begin_gc : () -> (Result_10);
-  canic_wasm_store_catalog : () -> (Result_11) query;
-  canic_wasm_store_chunk : (text, text, nat32) -> (Result_12);
-  canic_wasm_store_complete_gc : () -> (Result_10);
-  canic_wasm_store_info : (text, text) -> (Result_13);
-  canic_wasm_store_prepare : (TemplateChunkSetPrepareInput) -> (Result_13);
-  canic_wasm_store_prepare_gc : () -> (Result_10);
-  canic_wasm_store_publish_chunk : (TemplateChunkInput) -> (Result_10);
-  canic_wasm_store_stage_manifest : (TemplateManifestInput) -> (Result_10);
-  canic_wasm_store_status : () -> (Result_14) query;
+  canic_sync_state : (StateSnapshotInput) -> (Result_7);
+  canic_sync_topology : (TopologySnapshotInput) -> (Result_7);
+  canic_time : () -> (Result_2) query;
+  canic_wasm_store_begin_gc : () -> (Result_7);
+  canic_wasm_store_catalog : () -> (Result_8) query;
+  canic_wasm_store_chunk : (text, text, nat32) -> (Result_9);
+  canic_wasm_store_complete_gc : () -> (Result_7);
+  canic_wasm_store_info : (text, text) -> (Result_10);
+  canic_wasm_store_prepare : (TemplateChunkSetPrepareInput) -> (Result_10);
+  canic_wasm_store_prepare_gc : () -> (Result_7);
+  canic_wasm_store_publish_chunk : (TemplateChunkInput) -> (Result_7);
+  canic_wasm_store_stage_manifest : (TemplateManifestInput) -> (Result_7);
+  canic_wasm_store_status : () -> (Result_11) query;
   icrc10_supported_standards : () -> (vec record { text; text }) query;
 }

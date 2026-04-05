@@ -53,6 +53,7 @@ struct InstallTimingSummary {
 }
 
 const LOCAL_ROOT_TARGET_CYCLES: u128 = 9_000_000_000_000_000;
+const LOCAL_DFX_READY_TIMEOUT_SECONDS: u64 = 30;
 
 impl InstallRootOptions {
     // Resolve the current local-root install options from args and environment.
@@ -80,7 +81,7 @@ pub fn install_root(options: InstallRootOptions) -> Result<(), Box<dyn std::erro
     let mut timings = InstallTimingSummary::default();
 
     println!("Installing root against DFX_NETWORK={}", options.network);
-    require_dfx_running(&options.network)?;
+    ensure_dfx_running(&dfx_root, &options.network)?;
     let mut create = Command::new("dfx");
     create
         .current_dir(&dfx_root)
@@ -295,15 +296,82 @@ fn format_cycles(value: u128) -> String {
     out
 }
 
-// Fail fast unless the requested DFX replica is already running.
-fn require_dfx_running(network: &str) -> Result<(), Box<dyn std::error::Error>> {
-    let result = Command::new("dfx").args(["ping", network]).output()?;
-    if result.status.success() {
+// Ensure the requested replica is reachable before the local install flow begins.
+fn ensure_dfx_running(dfx_root: &Path, network: &str) -> Result<(), Box<dyn std::error::Error>> {
+    if dfx_ping(network)? {
+        return Ok(());
+    }
+
+    if network == "local" && local_dfx_autostart_enabled() {
+        println!("Local dfx replica is not reachable; starting a clean local replica");
+        let mut stop = dfx_stop_command(dfx_root);
+        let _ = run_command_allow_failure(&mut stop)?;
+
+        let mut start = dfx_start_local_command(dfx_root);
+        run_command(&mut start)?;
+        wait_for_dfx_ping(
+            network,
+            Duration::from_secs(LOCAL_DFX_READY_TIMEOUT_SECONDS),
+        )?;
         return Ok(());
     }
 
     Err(format!(
         "dfx replica is not running for network '{network}'\nStart the target replica externally and rerun."
+    )
+    .into())
+}
+
+// Check whether `dfx ping <network>` currently succeeds.
+fn dfx_ping(network: &str) -> Result<bool, Box<dyn std::error::Error>> {
+    Ok(Command::new("dfx")
+        .args(["ping", network])
+        .output()?
+        .status
+        .success())
+}
+
+// Return true when the local install flow should auto-start a clean local replica.
+fn local_dfx_autostart_enabled() -> bool {
+    parse_local_dfx_autostart(env::var("CANIC_AUTO_START_LOCAL_DFX").ok().as_deref())
+}
+
+fn parse_local_dfx_autostart(value: Option<&str>) -> bool {
+    !matches!(
+        value.map(str::trim).map(str::to_ascii_lowercase).as_deref(),
+        Some("0" | "false" | "no" | "off")
+    )
+}
+
+// Spawn one local `dfx stop` command for cleanup before a clean restart.
+fn dfx_stop_command(dfx_root: &Path) -> Command {
+    let mut command = Command::new("dfx");
+    command.current_dir(dfx_root).arg("stop");
+    command
+}
+
+// Spawn one clean background `dfx start` command for local install/test flows.
+fn dfx_start_local_command(dfx_root: &Path) -> Command {
+    let mut command = Command::new("dfx");
+    command
+        .current_dir(dfx_root)
+        .args(["start", "--background", "--clean", "--system-canisters"]);
+    command
+}
+
+// Poll `dfx ping` until the requested network responds or the timeout expires.
+fn wait_for_dfx_ping(network: &str, timeout: Duration) -> Result<(), Box<dyn std::error::Error>> {
+    let start = Instant::now();
+    while start.elapsed() < timeout {
+        if dfx_ping(network)? {
+            return Ok(());
+        }
+        thread::sleep(Duration::from_millis(500));
+    }
+
+    Err(format!(
+        "dfx replica did not become ready for network '{network}' within {}s",
+        timeout.as_secs()
     )
     .into())
 }
@@ -563,8 +631,9 @@ fn print_raw_call(root_canister: &str, method: &str) {
 #[cfg(test)]
 mod tests {
     use super::{
-        LOCAL_ROOT_TARGET_CYCLES, dfx_build_target_command, install_build_session_id,
-        local_install_build_targets, parse_bootstrap_status_value, parse_canister_status_cycles,
+        LOCAL_ROOT_TARGET_CYCLES, dfx_build_target_command, dfx_start_local_command,
+        dfx_stop_command, install_build_session_id, local_install_build_targets,
+        parse_bootstrap_status_value, parse_canister_status_cycles, parse_local_dfx_autostart,
         parse_root_ready_value, required_local_cycle_topup,
     };
     use serde_json::json;
@@ -697,6 +766,62 @@ Cycle balance: 12_345 Cycles
     fn install_build_session_id_is_prefixed_for_logs() {
         let session_id = install_build_session_id();
         assert!(session_id.starts_with("install-root-"));
+    }
+
+    #[test]
+    fn local_dfx_autostart_defaults_to_enabled() {
+        assert!(parse_local_dfx_autostart(None));
+        assert!(parse_local_dfx_autostart(Some("")));
+        assert!(parse_local_dfx_autostart(Some("1")));
+        assert!(parse_local_dfx_autostart(Some("true")));
+    }
+
+    #[test]
+    fn local_dfx_autostart_accepts_explicit_disable_values() {
+        assert!(!parse_local_dfx_autostart(Some("0")));
+        assert!(!parse_local_dfx_autostart(Some("false")));
+        assert!(!parse_local_dfx_autostart(Some("no")));
+        assert!(!parse_local_dfx_autostart(Some("off")));
+    }
+
+    #[test]
+    fn local_dfx_start_command_uses_clean_background_mode() {
+        let command = dfx_start_local_command(Path::new("/tmp/canic-dfx-root"));
+
+        assert_eq!(command.get_program(), "dfx");
+        assert_eq!(
+            command
+                .get_args()
+                .map(|arg| arg.to_string_lossy().into_owned())
+                .collect::<Vec<_>>(),
+            ["start", "--background", "--clean", "--system-canisters"]
+        );
+        assert_eq!(
+            command
+                .get_current_dir()
+                .map(|path| path.to_string_lossy().into_owned()),
+            Some("/tmp/canic-dfx-root".to_string())
+        );
+    }
+
+    #[test]
+    fn local_dfx_stop_command_targets_project_root() {
+        let command = dfx_stop_command(Path::new("/tmp/canic-dfx-root"));
+
+        assert_eq!(command.get_program(), "dfx");
+        assert_eq!(
+            command
+                .get_args()
+                .map(|arg| arg.to_string_lossy().into_owned())
+                .collect::<Vec<_>>(),
+            ["stop"]
+        );
+        assert_eq!(
+            command
+                .get_current_dir()
+                .map(|path| path.to_string_lossy().into_owned()),
+            Some("/tmp/canic-dfx-root".to_string())
+        );
     }
 
     #[test]

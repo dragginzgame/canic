@@ -13,8 +13,9 @@ These scripts support the reference canisters under `canisters/` and the local t
 
 ## Local Replica Contract
 
-The install/build commands below assume the target `dfx` replica is already
-running. They fail fast if it is not.
+The local install commands below now auto-restart a clean local `dfx` replica
+once when `dfx ping local` fails. Nonlocal targets still fail fast and expect
+their target replica to be managed externally.
 
 If you want a manual convenience helper for local work, use:
 
@@ -22,8 +23,9 @@ If you want a manual convenience helper for local work, use:
 scripts/app/dfx_start.sh
 ```
 
-That helper is optional and repo-local only. The install/test flows still do
-not auto-start `dfx`.
+That helper is still optional and repo-local only. The local install/test flows
+can recover the local `dfx` replica themselves, but the wrapper is still useful
+when you want interactive startup logs.
 
 ## Install the Reference Topology
 

@@ -1,6 +1,0 @@
-{
-  "method_tag": "Method V1",
-  "normalization": "MetricsKind::Perf rows are normalized into canonical endpoint rows. Update/timer lanes use persisted perf deltas; sampled query lanes use local-only same-call probe endpoints because query-side perf rows are not committed, so the probe returns the measured `perf_counter()` alongside the real query result.",
-  "freshness_rule": "One fresh `setup_root()` topology per measured scenario; baseline and post-call perf tables sampled inside that isolated topology.",
-  "checkpoint_rule": "Checkpoint deltas are diffed from `MetricsKind::Perf` rows before/after sampled update scenarios. Query scenarios remain endpoint-only unless they traverse explicit checkpoint instrumentation."
-}

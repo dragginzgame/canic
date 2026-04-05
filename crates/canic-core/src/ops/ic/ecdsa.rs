@@ -4,7 +4,6 @@ use crate::cdk::mgmt::{
     sign_with_ecdsa,
 };
 use crate::{InternalError, cdk::types::Principal};
-#[cfg(feature = "auth-crypto")]
 use k256::ecdsa::{Signature, VerifyingKey, signature::hazmat::PrehashVerifier};
 use thiserror::Error as ThisError;
 
@@ -14,8 +13,8 @@ use thiserror::Error as ThisError;
 
 #[derive(Debug, ThisError)]
 pub enum EcdsaOpsError {
-    #[error("auth crypto support is not enabled in this canister build")]
-    AuthCryptoUnavailable,
+    #[error("threshold ecdsa management support is not enabled in this canister build")]
+    ThresholdEcdsaUnavailable,
 
     #[error("ecdsa public key call failed: {0}")]
     PublicKeyCall(String),
@@ -44,6 +43,7 @@ pub struct EcdsaOps;
 
 #[cfg(feature = "auth-crypto")]
 impl EcdsaOps {
+    // Sign a pre-hashed payload using the configured threshold ECDSA key.
     pub async fn sign_bytes(
         key_name: &str,
         derivation_path: Vec<Vec<u8>>,
@@ -65,6 +65,7 @@ impl EcdsaOps {
         Ok(response.signature)
     }
 
+    // Fetch a SEC1-encoded threshold ECDSA public key for the requested path.
     pub async fn public_key_sec1(
         key_name: &str,
         derivation_path: Vec<Vec<u8>>,
@@ -85,7 +86,33 @@ impl EcdsaOps {
 
         Ok(response.public_key)
     }
+}
 
+#[cfg(not(feature = "auth-crypto"))]
+impl EcdsaOps {
+    // Fail closed when threshold ECDSA management support is not compiled in.
+    #[allow(clippy::unused_async)]
+    pub async fn sign_bytes(
+        _key_name: &str,
+        _derivation_path: Vec<Vec<u8>>,
+        _msg_hash: [u8; 32],
+    ) -> Result<Vec<u8>, InternalError> {
+        Err(EcdsaOpsError::ThresholdEcdsaUnavailable.into())
+    }
+
+    // Fail closed when threshold ECDSA public-key fetch support is not compiled in.
+    #[allow(clippy::unused_async)]
+    pub async fn public_key_sec1(
+        _key_name: &str,
+        _derivation_path: Vec<Vec<u8>>,
+        _canister_id: Principal,
+    ) -> Result<Vec<u8>, InternalError> {
+        Err(EcdsaOpsError::ThresholdEcdsaUnavailable.into())
+    }
+}
+
+impl EcdsaOps {
+    // Verify a pre-hashed signature locally with k256 on every canister build.
     pub fn verify_signature(
         public_key_sec1: &[u8],
         msg_hash: [u8; 32],
@@ -104,31 +131,24 @@ impl EcdsaOps {
     }
 }
 
-#[cfg(not(feature = "auth-crypto"))]
-impl EcdsaOps {
-    #[allow(clippy::unused_async)]
-    pub async fn sign_bytes(
-        _key_name: &str,
-        _derivation_path: Vec<Vec<u8>>,
-        _msg_hash: [u8; 32],
-    ) -> Result<Vec<u8>, InternalError> {
-        Err(EcdsaOpsError::AuthCryptoUnavailable.into())
-    }
+#[cfg(test)]
+mod tests {
+    use super::EcdsaOps;
+    use k256::ecdsa::{SigningKey, signature::hazmat::PrehashSigner};
 
-    #[allow(clippy::unused_async)]
-    pub async fn public_key_sec1(
-        _key_name: &str,
-        _derivation_path: Vec<Vec<u8>>,
-        _canister_id: Principal,
-    ) -> Result<Vec<u8>, InternalError> {
-        Err(EcdsaOpsError::AuthCryptoUnavailable.into())
-    }
+    #[test]
+    fn verify_signature_accepts_valid_prehash_without_signing_feature() {
+        let hash = [7u8; 32];
+        let signing_key = SigningKey::from_bytes((&[9u8; 32]).into()).expect("signing key");
+        let signature: k256::ecdsa::Signature =
+            signing_key.sign_prehash(&hash).expect("prehash signature");
+        let public_key = signing_key
+            .verifying_key()
+            .to_encoded_point(true)
+            .as_bytes()
+            .to_vec();
 
-    pub fn verify_signature(
-        _public_key_sec1: &[u8],
-        _msg_hash: [u8; 32],
-        _signature_bytes: &[u8],
-    ) -> Result<(), InternalError> {
-        Err(EcdsaOpsError::AuthCryptoUnavailable.into())
+        EcdsaOps::verify_signature(&public_key, hash, &signature.to_bytes())
+            .expect("local k256 verification must work in default builds");
     }
 }
