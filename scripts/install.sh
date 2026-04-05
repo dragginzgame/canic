@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-CANIC_INSTALLER_VERSION="${CANIC_INSTALLER_VERSION:-0.25.1}"
+CANIC_INSTALLER_VERSION="${CANIC_INSTALLER_VERSION:-0.25.2}"
 CANIC_RUST_TOOLCHAIN="${CANIC_RUST_TOOLCHAIN:-1.94.1}"
 RUSTUP_INIT_URL="https://sh.rustup.rs"
 DFX_INSTALL_URL="https://internetcomputer.org/install.sh"
