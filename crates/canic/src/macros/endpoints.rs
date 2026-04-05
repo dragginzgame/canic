@@ -129,15 +129,9 @@ macro_rules! canic_emit_log_observability_endpoints {
 #[macro_export]
 macro_rules! canic_bundle_observability_endpoints {
     () => {
-        #[cfg(all(
-            not(canic_disable_bundle_observability_memory),
-            canic_enable_internal_test_endpoints
-        ))]
+        #[cfg(not(canic_disable_bundle_observability_memory))]
         $crate::canic_emit_memory_observability_endpoints!();
-        #[cfg(all(
-            not(canic_disable_bundle_observability_env),
-            canic_enable_internal_test_endpoints
-        ))]
+        #[cfg(not(canic_disable_bundle_observability_env))]
         $crate::canic_emit_env_observability_endpoints!();
         #[cfg(not(canic_disable_bundle_observability_log))]
         $crate::canic_emit_log_observability_endpoints!();
@@ -290,10 +284,7 @@ macro_rules! canic_bundle_topology_views_endpoints {
     () => {
         #[cfg(not(canic_disable_bundle_topology_state))]
         $crate::canic_emit_topology_state_endpoints!();
-        #[cfg(all(
-            not(canic_disable_bundle_topology_directory),
-            canic_enable_internal_test_endpoints
-        ))]
+        #[cfg(not(canic_disable_bundle_topology_directory))]
         $crate::canic_emit_topology_directory_endpoints!();
         #[cfg(not(canic_disable_bundle_topology_children))]
         $crate::canic_emit_topology_children_endpoints!();
