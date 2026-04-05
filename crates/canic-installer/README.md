@@ -20,7 +20,7 @@ This crate owns the public thin-root build and staging path:
 - emit `.dfx/<network>/canisters/root/root.release-set.json`
 - stage the ordinary release set into `root`
 - resume root bootstrap
-- drive the local root install flow against an already running `dfx` replica
+- drive the local root install flow, including one clean local `dfx` restart attempt when `dfx ping local` fails
 
 Typical installed binaries:
 

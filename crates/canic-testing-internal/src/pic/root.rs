@@ -23,6 +23,8 @@ use canic_testkit::{
 };
 use std::{collections::HashMap, fs, io, io::Write, path::PathBuf, time::Instant};
 
+const INTERNAL_TEST_ENDPOINTS_ENV: (&str, &str) = ("CANIC_INTERNAL_TEST_ENDPOINTS", "1");
+
 ///
 /// RootBaselineSpec
 ///
@@ -84,7 +86,7 @@ pub fn ensure_root_release_artifacts_built(spec: &RootBaselineSpec<'_>) {
         spec.dfx_build_lock_relative,
         spec.build_network,
         spec.build_profile,
-        spec.build_extra_env,
+        &effective_build_env(spec),
     );
     progress_elapsed(spec, "finished local DFX artifact build", started_at);
 }
@@ -331,13 +333,15 @@ fn load_release_wasm_gz(spec: &RootBaselineSpec<'_>, role_name: &str) -> Vec<u8>
 
 // Confirm the root bootstrap artifact and every managed ordinary release artifact are fresh.
 fn root_release_artifacts_ready(spec: &RootBaselineSpec<'_>) -> bool {
+    let build_env = effective_build_env(spec);
+
     if !dfx_artifact_ready_for_build(
         &spec.workspace_root,
         spec.root_wasm_artifact_relative,
         spec.artifact_watch_paths,
         spec.build_network,
         spec.build_profile,
-        spec.build_extra_env,
+        &build_env,
     ) {
         return false;
     }
@@ -354,9 +358,26 @@ fn root_release_artifacts_ready(spec: &RootBaselineSpec<'_>) -> bool {
             spec.artifact_watch_paths,
             spec.build_network,
             spec.build_profile,
-            spec.build_extra_env,
+            &build_env,
         )
     })
+}
+
+// Ensure internal PocketIC root baselines keep the extra introspection surface
+// even though production canister builds now omit those test-only queries.
+fn effective_build_env<'a>(spec: &'a RootBaselineSpec<'a>) -> Vec<(&'a str, &'a str)> {
+    if spec
+        .build_extra_env
+        .iter()
+        .any(|(key, _)| *key == INTERNAL_TEST_ENDPOINTS_ENV.0)
+    {
+        spec.build_extra_env.to_vec()
+    } else {
+        let mut env = Vec::with_capacity(spec.build_extra_env.len() + 1);
+        env.extend_from_slice(spec.build_extra_env);
+        env.push(INTERNAL_TEST_ENDPOINTS_ENV);
+        env
+    }
 }
 
 // Map the configured ordinary role names into stable `CanisterRole` values.

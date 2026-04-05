@@ -78,16 +78,19 @@ normalize_profile() {
     case "${WASM_PROFILE:-$DEFAULT_PROFILE}" in
     release)
         PROFILE_NAME="release"
+        CANIC_BUILD_PROFILE="release"
         PROFILE_DIR="release"
         CARGO_PROFILE_FLAG="--release"
         ;;
     fast)
         PROFILE_NAME="fast"
+        CANIC_BUILD_PROFILE="fast"
         PROFILE_DIR="fast"
         CARGO_PROFILE_FLAG="--profile fast"
         ;;
     wasm-debug | debug)
         PROFILE_NAME="wasm-debug"
+        CANIC_BUILD_PROFILE="debug"
         PROFILE_DIR="debug"
         CARGO_PROFILE_FLAG=""
         ;;
@@ -218,7 +221,7 @@ build_and_cache_artifacts() {
     fi
 
     for canister in "${CANISTERS[@]}"; do
-        dfx build "$canister"
+        CANIC_WASM_PROFILE="$CANIC_BUILD_PROFILE" bash scripts/app/build.sh "$canister"
     done
 
     for canister in "${CANISTERS[@]}"; do
@@ -231,18 +234,6 @@ build_and_cache_artifacts() {
         gzip_deterministic "$shrunk_wasm" "$shrunk_gz"
         cp -f "$CACHE_RAW_DIR/$canister.wasm" "$analysis_wasm"
     done
-}
-
-ensure_local_dfx_ready() {
-    if ! dfx ping local >/dev/null 2>&1; then
-        echo "local dfx replica is not reachable; start it manually before running scripts/ci/wasm-audit-report.sh" >&2
-        exit 1
-    fi
-
-    if ! dfx canister create --all -qq >/dev/null 2>&1; then
-        echo "dfx canister create --all failed; verify the local replica is healthy and the current dfx project can create canisters" >&2
-        exit 1
-    fi
 }
 
 validate_cached_artifacts() {
@@ -794,7 +785,6 @@ else
         echo "dfx is required unless WASM_AUDIT_SKIP_BUILD=1" >&2
         exit 1
     fi
-    ensure_local_dfx_ready
     build_and_cache_artifacts
     record_verification "cargo build --target wasm32-unknown-unknown ... && dfx build ..." "PASS" "built and cached raw/shrunk artifacts for $(profile_command_note)"
 fi

@@ -14,7 +14,9 @@ use canic::{
     ids::{BuildNetwork, cap},
 };
 use canic_internal::canister;
-use root::harness::{RootSetup, setup_root_cached_sharding, setup_root_cached_topology};
+use canic_testing_internal::pic::{StandaloneCanisterFixture, install_standalone_canister};
+use canic_testkit::artifacts::WasmBuildProfile;
+use root::harness::{RootSetup, setup_root_cached_sharding};
 use std::time::Duration;
 
 const fn p(id: u8) -> Principal {
@@ -241,21 +243,15 @@ fn authenticated_guard_rejects_bogus_token_on_local() {
         return;
     }
 
-    log_step("authenticated_guard_rejects_bogus_token_on_local: setup root");
-    let setup = setup_root_cached_topology();
-
-    let test_pid = setup
-        .subnet_directory
-        .get(&canister::TEST)
-        .copied()
-        .expect("test canister must exist in subnet directory");
+    log_step("authenticated_guard_rejects_bogus_token_on_local: setup standalone test canister");
+    let fixture = setup_standalone_test_canister();
 
     // Intentionally bogus token data: local must reject this.
     let bogus = bogus_delegated_token();
     let verify: Result<Result<(), Error>, Error> =
-        setup
+        fixture
             .pic
-            .update_call(test_pid, "test_verify_delegated_token", (bogus,));
+            .update_call(fixture.canister_id, "test_verify_delegated_token", (bogus,));
 
     let err = verify
         .expect("test_verify_delegated_token transport failed")
@@ -379,4 +375,9 @@ fn bogus_delegated_token() -> DelegatedToken {
         },
         token_sig: vec![0],
     }
+}
+
+// Build and install one standalone `test` canister for local-only guard checks.
+fn setup_standalone_test_canister() -> StandaloneCanisterFixture {
+    install_standalone_canister("canister_test", canister::TEST, WasmBuildProfile::Fast)
 }

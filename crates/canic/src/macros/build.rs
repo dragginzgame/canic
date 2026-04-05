@@ -67,6 +67,7 @@ macro_rules! __canic_build_internal {
         let $cfg_path = std::path::PathBuf::from(manifest_dir).join($file);
         println!("cargo:rerun-if-changed={}", $cfg_path.display());
         println!("cargo:rerun-if-env-changed=DFX_NETWORK");
+        println!("cargo:rerun-if-env-changed=CANIC_INTERNAL_TEST_ENDPOINTS");
         if let Some(parent) = $cfg_path.parent() {
             println!("cargo:rerun-if-changed={}", parent.display());
         }
@@ -112,6 +113,11 @@ macro_rules! __canic_build_internal {
         println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_topology_cycles)");
         println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_topology_placement)");
         println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_nonroot_sync_topology)");
+        println!("cargo:rustc-check-cfg=cfg(canic_enable_internal_test_endpoints)");
+
+        if std::env::var_os("CANIC_INTERNAL_TEST_ENDPOINTS").is_some() {
+            println!("cargo:rustc-cfg=canic_enable_internal_test_endpoints");
+        }
 
         if $cfg.auth.delegated_tokens.enabled {
             println!("cargo:rustc-cfg=canic_delegated_tokens_enabled");

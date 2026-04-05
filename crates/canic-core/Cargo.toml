@@ -16,7 +16,7 @@ publish = true
 [features]
 default = []
 sharding = []
-auth-crypto = ["dep:k256"]
+auth-crypto = []
 
 [dependencies]
 async-trait = { workspace = true }
@@ -25,7 +25,7 @@ canic-cdk = { workspace = true }
 canic-memory = { workspace = true }
 ctor = { workspace = true }
 derive_more = { workspace = true }
-k256 = { workspace = true, optional = true }
+k256 = { workspace = true }
 remain = { workspace = true }
 serde = { workspace = true }
 serde_bytes = { workspace = true }
@@ -45,7 +45,6 @@ canic-testing-internal = { path = "../canic-testing-internal" }
 canic-testkit = { path = "../canic-testkit" }
 criterion = { workspace = true }
 futures = { workspace = true }
-k256 = { workspace = true }
 pocket-ic = { workspace = true }
 
 [[bench]]

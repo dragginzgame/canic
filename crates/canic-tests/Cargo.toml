@@ -10,7 +10,7 @@ publish = false
 
 [dev-dependencies]
 candid = { workspace = true }
-canic = { workspace = true, features = ["auth-crypto"] }
+canic = { workspace = true }
 canic-control-plane = { workspace = true }
 canic-internal = { workspace = true }
 canic-testing-internal = { workspace = true }
