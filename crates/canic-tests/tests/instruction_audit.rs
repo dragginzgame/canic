@@ -2023,7 +2023,7 @@ fn hotspot_hint(subject_label: &str) -> (&'static str, &'static str) {
         ),
         "test" => (
             "Local/dev update floor on the test helper canister",
-            "[test/lib](/home/adam/projects/canic/canisters/test/src/lib.rs)",
+            "[test/lib](/home/adam/projects/canic/crates/canic-core/test-canisters/canister_test/src/lib.rs)",
         ),
         "canic_subnet_registry" => (
             "Root topology registry query",

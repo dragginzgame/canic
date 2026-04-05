@@ -138,7 +138,7 @@ crates/
 ├─ canic-control-plane/     # Root/store control-plane runtime
 ├─ canic-wasm-store/        # Canonical publishable implicit wasm_store canister
 └─ ...                      # Other supporting workspace crates
-canisters/                  # Reference/deployable canisters
+canisters/                  # Reference demo canisters and support crates
 ├─ root/                    # Root orchestrator
 ├─ app/                     # Example application
 ├─ user_hub/                # User signup + provisioning coordinator
@@ -146,7 +146,8 @@ canisters/                  # Reference/deployable canisters
 ├─ scale/                   # Scaling worker
 ├─ scale_hub/               # Scaling coordinator
 ├─ minimal/                 # Minimal baseline canister
-└─ test/                    # Test/demo helper canister
+└─ reference-support/       # Shared role constants/support crate
+crates/canic-core/test-canisters/ # Internal test-only canister crates
 scripts/                    # CI / release helpers
 .github/workflows/          # CI pipelines
 dfx.json                    # Local IC topology

@@ -35,8 +35,8 @@ icrc21 = true # Enable ICRC-21 capability
 #  PRIME SUBNET
 # ================================================================
 [subnets.prime]
-auto_create = ["app", "user_hub", "scale_hub", "test"]
-subnet_directory = ["app", "user_hub", "scale_hub", "test"]
+auto_create = ["app", "user_hub", "scale_hub"]
+subnet_directory = ["app", "user_hub", "scale_hub"]
 pool.minimum_size = 3
 
 # --- Root ---
@@ -83,13 +83,6 @@ policy.min_workers = 2
 # --- Scale ---
 [subnets.prime.canisters.scale]
 kind = "replica"
-
-# --- Test ---
-[subnets.prime.canisters.test]
-kind = "singleton"
-
-[subnets.prime.canisters.test.delegated_auth]
-verifier = true
 
 # ================================================================
 #  GENERAL SUBNET

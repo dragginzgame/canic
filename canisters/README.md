@@ -1,8 +1,8 @@
 # Sample Canisters
 
-The canisters in this directory exist purely for tests, demos, and examples.
-Each crate exercises a different portion of the Canic stack so contributors can
-try features end-to-end without touching production code.
+The canisters in this directory are the reference demo topology.
+They exercise the main Canic flows end to end without carrying internal
+test-only helpers in the shipped demo surface.
 
 The implicit `wasm_store` is no longer sourced from this directory. Its
 canonical canister crate now lives at `crates/canic-wasm-store/` so downstreams
@@ -17,7 +17,10 @@ canonical store source from the resolved `canic` package automatically.
 - `user_hub/` + `user_shard/` – sharding placement plus delegated signing flow (hub does placement only; shard initiates delegation with root).
 - `scale_hub/` + `scale/` – scaling pool demo (spawn replica canisters under policy).
 - `minimal/` – minimal canister used as the shared runtime baseline canister.
-- `test/` – timer and update/query coverage used by `make test-canisters`.
+
+Internal test-only canisters now live under `crates/canic-core/test-canisters/`
+so PocketIC and audit fixtures can keep their own helper surface separate from
+the demo topology.
 
 The shared demo topology lives in `canisters/canic.toml` and is referenced by each canister’s `build.rs`.
 
