@@ -36,6 +36,32 @@ pub struct StandaloneCanisterFixture {
     _serial_guard: PicSerialGuard,
 }
 
+// Install one already-built wasm module into a fresh PocketIC instance with
+// caller-provided init args and no Canic-specific bootstrap assumptions.
+#[must_use]
+pub fn install_prebuilt_canister(wasm: Vec<u8>, init_bytes: Vec<u8>) -> StandaloneCanisterFixture {
+    install_prebuilt_canister_with_cycles(wasm, init_bytes, STANDALONE_INSTALL_CYCLES)
+}
+
+// Install one already-built wasm module into a fresh PocketIC instance with
+// caller-provided init args and explicit install cycles.
+#[must_use]
+pub fn install_prebuilt_canister_with_cycles(
+    wasm: Vec<u8>,
+    init_bytes: Vec<u8>,
+    install_cycles: u128,
+) -> StandaloneCanisterFixture {
+    let serial_guard = acquire_pic_serial_guard();
+    let pic = pic();
+    let canister_id = pic.create_and_install_with_args(wasm, init_bytes, install_cycles);
+
+    StandaloneCanisterFixture {
+        pic,
+        canister_id,
+        _serial_guard: serial_guard,
+    }
+}
+
 // Install one non-root Canic canister into a fresh PocketIC instance with
 // explicit local env bootstrap fields and no hierarchy directories.
 #[must_use]
@@ -55,22 +81,16 @@ pub fn install_standalone_canister(
     ensure_canister_wasm_ready(&workspace_root, &target_dir, crate_name, profile);
 
     let wasm = read_wasm(&target_dir, crate_name, profile);
-    let serial_guard = acquire_pic_serial_guard();
-    let pic = pic();
-    let canister_id = pic.create_canister();
-    pic.add_cycles(canister_id, STANDALONE_INSTALL_CYCLES);
-    pic.install_canister(canister_id, wasm, standalone_init_args(role), None);
+    let fixture = install_prebuilt_canister(wasm, standalone_init_args(role));
+    let canister_id = fixture.canister_id;
+    let pic = &fixture.pic;
     pic.wait_for_ready(
         canister_id,
         STANDALONE_READY_TICK_LIMIT,
         "standalone canister bootstrap",
     );
 
-    StandaloneCanisterFixture {
-        pic,
-        canister_id,
-        _serial_guard: serial_guard,
-    }
+    fixture
 }
 
 // Build the requested wasm artifact once when it is missing from the shared

@@ -88,7 +88,10 @@ pub struct PicSerialGuard {
     _private: (),
 }
 
-pub use standalone::{StandaloneCanisterFixture, install_standalone_canister};
+pub use standalone::{
+    StandaloneCanisterFixture, install_prebuilt_canister, install_prebuilt_canister_with_cycles,
+    install_standalone_canister,
+};
 
 ///
 /// Create a fresh PocketIC universe.
@@ -332,7 +335,7 @@ impl Pic {
     pub fn create_and_install_root_canister(&self, wasm: Vec<u8>) -> Result<Principal, Error> {
         let init_bytes = install_root_args()?;
 
-        Ok(self.create_funded_and_install(wasm, init_bytes))
+        Ok(self.create_and_install_with_args(wasm, init_bytes, INSTALL_CYCLES))
     }
 
     /// Install a canister with the given type and wasm bytes.
@@ -345,7 +348,21 @@ impl Pic {
     ) -> Result<Principal, Error> {
         let init_bytes = install_args(role)?;
 
-        Ok(self.create_funded_and_install(wasm, init_bytes))
+        Ok(self.create_and_install_with_args(wasm, init_bytes, INSTALL_CYCLES))
+    }
+
+    /// Install one arbitrary wasm module with caller-provided init bytes.
+    ///
+    /// This is the generic install path for downstreams that use `canic-testkit`
+    /// without depending on Canic canister init payload conventions.
+    #[must_use]
+    pub fn create_and_install_with_args(
+        &self,
+        wasm: Vec<u8>,
+        init_bytes: Vec<u8>,
+        install_cycles: u128,
+    ) -> Principal {
+        self.create_funded_and_install(wasm, init_bytes, install_cycles)
     }
 
     /// Wait until one canister reports `canic_ready`.
@@ -618,9 +635,14 @@ impl Pic {
     }
 
     // Install a canister after creating it and funding it with cycles.
-    fn create_funded_and_install(&self, wasm: Vec<u8>, init_bytes: Vec<u8>) -> Principal {
+    fn create_funded_and_install(
+        &self,
+        wasm: Vec<u8>,
+        init_bytes: Vec<u8>,
+        install_cycles: u128,
+    ) -> Principal {
         let canister_id = self.create_canister();
-        self.add_cycles(canister_id, INSTALL_CYCLES);
+        self.add_cycles(canister_id, install_cycles);
 
         let install = catch_unwind(AssertUnwindSafe(|| {
             self.inner
