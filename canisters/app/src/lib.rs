@@ -7,7 +7,6 @@
 
 #![allow(clippy::unused_async)]
 
-use canic::{Error, prelude::*};
 use canic_internal::{
     canister::APP,
     reference::empty_shell::{canic_install, canic_setup, canic_upgrade},
