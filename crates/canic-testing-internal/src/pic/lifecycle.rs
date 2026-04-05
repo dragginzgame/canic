@@ -9,6 +9,7 @@ use canic::{
 };
 use canic_internal::canister::{APP, SCALE_HUB, TEST, USER_HUB};
 use canic_testkit::{
+    Fake,
     artifacts::{
         WasmBuildProfile, build_wasm_canisters, read_wasm, test_target_dir, wasm_artifacts_ready,
         workspace_root_for,
@@ -70,59 +71,26 @@ impl LifecycleBoundaryFixture {
 
     /// Wait out the install_code cooldown window inside the same PocketIC instance.
     pub fn wait_out_install_code_rate_limit(&self) {
-        self.pic.advance_time(INSTALL_CODE_COOLDOWN);
-        self.pic.tick_n(2);
+        self.pic
+            .wait_out_install_code_rate_limit(INSTALL_CODE_COOLDOWN);
     }
 
     /// Retry one install_code-like operation while PocketIC still reports rate limiting.
-    pub fn retry_install_code_ok<T, F>(&self, mut op: F) -> Result<T, String>
+    pub fn retry_install_code_ok<T, F>(&self, op: F) -> Result<T, String>
     where
         F: FnMut() -> Result<T, String>,
     {
-        let mut last_err = None;
-
-        for _ in 0..INSTALL_CODE_RETRY_LIMIT {
-            match op() {
-                Ok(value) => return Ok(value),
-                Err(err) if is_install_code_rate_limited(&err) => {
-                    last_err = Some(err);
-                    self.wait_out_install_code_rate_limit();
-                }
-                Err(err) => return Err(err),
-            }
-        }
-
-        Err(last_err.unwrap_or_else(|| "install_code retry loop exhausted".to_string()))
+        self.pic
+            .retry_install_code_ok(INSTALL_CODE_RETRY_LIMIT, INSTALL_CODE_COOLDOWN, op)
     }
 
     /// Retry one install_code-like failure path while PocketIC still reports rate limiting.
-    pub fn retry_install_code_err<F>(
-        &self,
-        first: Result<(), String>,
-        mut op: F,
-    ) -> Result<(), String>
+    pub fn retry_install_code_err<F>(&self, first: Result<(), String>, op: F) -> Result<(), String>
     where
         F: FnMut() -> Result<(), String>,
     {
-        match first {
-            Ok(()) => return Ok(()),
-            Err(err) if !is_install_code_rate_limited(&err) => return Err(err),
-            Err(_) => {}
-        }
-
-        self.wait_out_install_code_rate_limit();
-
-        for _ in 1..INSTALL_CODE_RETRY_LIMIT {
-            match op() {
-                Ok(()) => return Ok(()),
-                Err(err) if is_install_code_rate_limited(&err) => {
-                    self.wait_out_install_code_rate_limit();
-                }
-                Err(err) => return Err(err),
-            }
-        }
-
-        op()
+        self.pic
+            .retry_install_code_err(INSTALL_CODE_RETRY_LIMIT, INSTALL_CODE_COOLDOWN, first, op)
     }
 }
 
@@ -194,12 +162,12 @@ fn build_canisters_once(workspace_root: &Path) {
 fn init_payload(canister_id: Principal) -> CanisterInitPayload {
     let app_directory = app_directory_args();
     let subnet_directory = subnet_directory_args(canister_id);
-    let root_pid = dummy_principal(1);
+    let root_pid = Fake::principal(1);
 
     let env = EnvBootstrapArgs {
         prime_root_pid: Some(root_pid),
         subnet_role: Some(SubnetRole::PRIME),
-        subnet_pid: Some(dummy_principal(2)),
+        subnet_pid: Some(Fake::principal(2)),
         root_pid: Some(root_pid),
         canister_role: Some(TEST),
         parent_pid: Some(root_pid),
@@ -244,12 +212,12 @@ fn directory_entries(
             if role == override_role {
                 *override_pid
             } else {
-                let pid = dummy_principal(next_id);
+                let pid = Fake::principal(u32::from(next_id));
                 next_id = next_id.saturating_add(1);
                 pid
             }
         } else {
-            let pid = dummy_principal(next_id);
+            let pid = Fake::principal(u32::from(next_id));
             next_id = next_id.saturating_add(1);
             pid
         };
@@ -263,15 +231,6 @@ fn directory_entries(
     entries
 }
 
-// Detect the PocketIC install_code rate-limit error string shape.
-fn is_install_code_rate_limited(message: &str) -> bool {
-    message.contains("CanisterInstallCodeRateLimited")
-}
-
 fn workspace_root() -> PathBuf {
     workspace_root_for(env!("CARGO_MANIFEST_DIR"))
-}
-
-const fn dummy_principal(id: u8) -> Principal {
-    Principal::from_slice(&[id; 29])
 }
