@@ -135,13 +135,18 @@ async fn execute_issue_delegation(
             cert,
             signer_targets: vec![],
             verifier_targets: req.verifier_targets.clone(),
+            shard_public_key_sec1: req.shard_public_key_sec1.clone(),
         })
         .await?;
 
     if req.include_root_verifier {
-        let shard_public_key =
-            DelegatedTokenOps::fetch_missing_shard_public_key_for_cert(&response.proof.cert)
-                .await?;
+        let shard_public_key = match req.shard_public_key_sec1.clone() {
+            Some(shard_public_key) => Some(shard_public_key),
+            None => {
+                DelegatedTokenOps::fetch_missing_shard_public_key_for_cert(&response.proof.cert)
+                    .await?
+            }
+        };
         crate::perf!("cache_root_verifier_keys");
         let outcome = DelegationStateOps::upsert_proof_from_dto_with_shard_public_key(
             response.proof.clone(),

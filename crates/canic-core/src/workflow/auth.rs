@@ -23,7 +23,7 @@ use crate::{
     log,
     log::Topic,
     ops::{
-        auth::DelegatedTokenOps,
+        auth::{DelegatedTokenOps, DelegationValidationError},
         ic::call::CallOps,
         runtime::metrics::auth::{
             DelegationProvisionRole, record_delegation_install_total,
@@ -33,6 +33,7 @@ use crate::{
     },
     protocol,
 };
+use candid::encode_one;
 
 // -------------------------------------------------------------------------
 // Logging context
@@ -122,6 +123,11 @@ impl DelegationWorkflow {
     ) -> Result<DelegationProvisionResponse, InternalError> {
         record_delegation_install_total(DelegationProofInstallIntent::Provisioning);
         let proof = Self::issue_delegation(request.cert).await?;
+        let proof_install_args = Self::encode_proof_install_request(
+            &proof,
+            DelegationPushOrigin::Provisioning,
+            request.shard_public_key_sec1.as_deref(),
+        )?;
         crate::perf!("issue_proof");
         log!(
             Topic::Auth,
@@ -137,6 +143,7 @@ impl DelegationWorkflow {
             let result = Self::push_proof(
                 target,
                 &proof,
+                &proof_install_args,
                 DelegationProvisionTargetKind::Signer,
                 DelegationPushOrigin::Provisioning,
             )
@@ -149,6 +156,7 @@ impl DelegationWorkflow {
             let result = Self::push_proof(
                 target,
                 &proof,
+                &proof_install_args,
                 DelegationProvisionTargetKind::Verifier,
                 DelegationPushOrigin::Provisioning,
             )
@@ -193,11 +201,38 @@ impl DelegationWorkflow {
         verifier_targets: Vec<Principal>,
         origin: DelegationPushOrigin,
     ) -> DelegationVerifierProofPushResponse {
+        let proof_install_args = match Self::encode_proof_install_request(proof, origin, None) {
+            Ok(args) => args,
+            Err(err) => {
+                let err = ErrorDto::from(err);
+                let results = verifier_targets
+                    .into_iter()
+                    .map(|target| {
+                        let response = Self::failure(
+                            target,
+                            DelegationProvisionTargetKind::Verifier,
+                            err.clone(),
+                        );
+                        Self::record_push_result_metric(
+                            DelegationProvisionRole::Verifier,
+                            origin,
+                            response.status,
+                        );
+                        Self::log_push_result(&response, origin);
+                        response
+                    })
+                    .collect();
+                record_delegation_push_complete(origin.intent());
+                return DelegationVerifierProofPushResponse { results };
+            }
+        };
+
         let mut results = Vec::new();
         for target in verifier_targets {
             let result = Self::push_proof(
                 target,
                 proof,
+                &proof_install_args,
                 DelegationProvisionTargetKind::Verifier,
                 origin,
             )
@@ -212,6 +247,7 @@ impl DelegationWorkflow {
     pub(crate) async fn push_proof(
         target: Principal,
         proof: &DelegationProof,
+        proof_install_args: &[u8],
         kind: DelegationProvisionTargetKind,
         origin: DelegationPushOrigin,
     ) -> DelegationProvisionTargetResponse {
@@ -236,19 +272,8 @@ impl DelegationWorkflow {
             }
         };
 
-        let request = DelegationProofInstallRequest {
-            proof: proof.clone(),
-            intent: origin.intent(),
-        };
-        let call = match CallOps::unbounded_wait(target, method).with_arg(request) {
-            Ok(call) => call,
-            Err(err) => {
-                let response = Self::failure(target, kind, ErrorDto::from(err));
-                Self::record_push_result_metric(role, origin, response.status);
-                Self::log_push_result(&response, origin);
-                return response;
-            }
-        };
+        let call =
+            CallOps::unbounded_wait(target, method).with_raw_args(proof_install_args.to_vec());
         crate::perf!("prepare_call");
 
         let result = match call.execute().await {
@@ -287,6 +312,26 @@ impl DelegationWorkflow {
         Self::record_push_result_metric(role, origin, response.status);
         Self::log_push_result(&response, origin);
         response
+    }
+
+    // Encode one proof-install payload once so fanout only pays transport cost.
+    fn encode_proof_install_request(
+        proof: &DelegationProof,
+        origin: DelegationPushOrigin,
+        shard_public_key_sec1: Option<&[u8]>,
+    ) -> Result<Vec<u8>, InternalError> {
+        let request = DelegationProofInstallRequest {
+            proof: proof.clone(),
+            intent: origin.intent(),
+            shard_public_key_sec1: shard_public_key_sec1.map(ToOwned::to_owned),
+        };
+        encode_one(&request).map_err(|source| {
+            DelegationValidationError::EncodeFailed {
+                context: "delegation proof install request",
+                source,
+            }
+            .into()
+        })
     }
 
     const fn failure(

@@ -697,6 +697,7 @@ fn verifier_store_rejects_root_push_when_local_canister_is_not_in_proof_audience
         (DelegationProofInstallRequest {
             proof: fixture.current_token.proof,
             intent: DelegationProofInstallIntent::Prewarm,
+            shard_public_key_sec1: None,
         },),
     );
     let err = store.expect_err("verifier store must reject proof outside local audience");

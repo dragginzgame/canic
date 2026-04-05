@@ -58,6 +58,7 @@ pub fn request_root_delegation_provision(
         ttl_secs: 60,
         verifier_targets: vec![verifier_pid],
         include_root_verifier: true,
+        shard_public_key_sec1: None,
         metadata: None,
     };
     let response: Result<Result<DelegationProvisionResponse, Error>, Error> = pic.update_call_as(

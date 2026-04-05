@@ -292,7 +292,12 @@ impl DelegationApi {
 
     // Provision a fresh delegation from root, then resolve the latest locally stored proof.
     async fn setup_delegation(claims: &DelegatedTokenClaims) -> Result<DelegationProof, Error> {
-        let request = Self::delegation_request_from_claims(claims)?;
+        let mut request = Self::delegation_request_from_claims(claims)?;
+        request.shard_public_key_sec1 = Some(
+            DelegatedTokenOps::local_shard_public_key_sec1(request.shard_pid)
+                .await
+                .map_err(Self::map_delegation_error)?,
+        );
         let required_verifier_targets = request.verifier_targets.clone();
         let response = Self::request_delegation_remote(request).await?;
         Self::ensure_required_verifier_targets_provisioned(&required_verifier_targets, &response)?;
@@ -333,6 +338,7 @@ impl DelegationApi {
             ttl_secs,
             verifier_targets,
             include_root_verifier: true,
+            shard_public_key_sec1: None,
             metadata: None,
         })
     }

@@ -14,6 +14,7 @@ use canic::{
 use pocket_ic::{PocketIc, PocketIcBuilder};
 use serde::de::DeserializeOwned;
 use std::{
+    any::Any,
     collections::HashMap,
     env, fs, io,
     ops::{Deref, DerefMut},
@@ -56,6 +57,52 @@ struct ProcessLockState {
 }
 
 ///
+/// PicStartError
+///
+
+#[derive(Debug, Eq, PartialEq)]
+pub enum PicStartError {
+    BinaryUnavailable { message: String },
+    BinaryInvalid { message: String },
+    DownloadFailed { message: String },
+    ServerStartFailed { message: String },
+    StartupTimedOut { message: String },
+    Panic { message: String },
+}
+
+///
+/// PicSerialGuardError
+///
+
+#[derive(Debug)]
+pub enum PicSerialGuardError {
+    LockParentUnavailable { path: PathBuf, source: io::Error },
+    LockUnavailable { path: PathBuf, source: io::Error },
+    LockOwnerRecordFailed { path: PathBuf, source: io::Error },
+}
+
+///
+/// PicInstallError
+///
+
+#[derive(Debug, Eq, PartialEq)]
+pub struct PicInstallError {
+    canister_id: Principal,
+    message: String,
+}
+
+///
+/// StandaloneCanisterFixtureError
+///
+
+#[derive(Debug)]
+pub enum StandaloneCanisterFixtureError {
+    SerialGuard(PicSerialGuardError),
+    Start(PicStartError),
+    Install(PicInstallError),
+}
+
+///
 /// ControllerSnapshots
 ///
 
@@ -90,7 +137,8 @@ pub struct PicSerialGuard {
 
 pub use standalone::{
     StandaloneCanisterFixture, install_prebuilt_canister, install_prebuilt_canister_with_cycles,
-    install_standalone_canister,
+    install_standalone_canister, try_install_prebuilt_canister,
+    try_install_prebuilt_canister_with_cycles,
 };
 
 ///
@@ -103,22 +151,33 @@ pub use standalone::{
 ///
 #[must_use]
 pub fn pic() -> Pic {
-    PicBuilder::new().with_application_subnet().build()
+    try_pic().unwrap_or_else(|err| panic!("failed to start PocketIC: {err}"))
+}
+
+/// Create a fresh PocketIC universe without panicking on startup failures.
+pub fn try_pic() -> Result<Pic, PicStartError> {
+    PicBuilder::new().with_application_subnet().try_build()
 }
 
 /// Acquire the shared PocketIC serialization guard for the current process.
 #[must_use]
 pub fn acquire_pic_serial_guard() -> PicSerialGuard {
+    try_acquire_pic_serial_guard()
+        .unwrap_or_else(|err| panic!("failed to acquire PocketIC serial guard: {err}"))
+}
+
+/// Acquire the shared PocketIC serialization guard for the current process.
+pub fn try_acquire_pic_serial_guard() -> Result<PicSerialGuard, PicSerialGuardError> {
     let mut state = PIC_PROCESS_LOCK_STATE
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
 
     if state.ref_count == 0 {
-        state.process_lock = Some(acquire_process_lock());
+        state.process_lock = Some(acquire_process_lock()?);
     }
     state.ref_count += 1;
 
-    PicSerialGuard { _private: () }
+    Ok(PicSerialGuard { _private: () })
 }
 
 /// Acquire one process-local cached PocketIC baseline, building it on first use.
@@ -252,8 +311,119 @@ impl PicBuilder {
     /// Finish building the PocketIC instance and wrap it.
     #[must_use]
     pub fn build(self) -> Pic {
-        Pic {
-            inner: self.0.build(),
+        self.try_build()
+            .unwrap_or_else(|err| panic!("failed to start PocketIC: {err}"))
+    }
+
+    /// Finish building the PocketIC instance without panicking on startup failures.
+    pub fn try_build(self) -> Result<Pic, PicStartError> {
+        let build = catch_unwind(AssertUnwindSafe(|| self.0.build()));
+
+        match build {
+            Ok(inner) => Ok(Pic { inner }),
+            Err(payload) => Err(classify_pic_start_panic(payload)),
+        }
+    }
+}
+
+impl std::fmt::Display for PicStartError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::BinaryUnavailable { message }
+            | Self::BinaryInvalid { message }
+            | Self::DownloadFailed { message }
+            | Self::ServerStartFailed { message }
+            | Self::StartupTimedOut { message }
+            | Self::Panic { message } => f.write_str(message),
+        }
+    }
+}
+
+impl std::error::Error for PicStartError {}
+
+impl std::fmt::Display for PicSerialGuardError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::LockParentUnavailable { path, source } => write!(
+                f,
+                "failed to create PocketIC lock parent at {}: {source}",
+                path.display()
+            ),
+            Self::LockUnavailable { path, source } => write!(
+                f,
+                "failed to create PocketIC process lock dir at {}: {source}",
+                path.display()
+            ),
+            Self::LockOwnerRecordFailed { path, source } => write!(
+                f,
+                "failed to record PocketIC process lock owner at {}: {source}",
+                path.display()
+            ),
+        }
+    }
+}
+
+impl std::error::Error for PicSerialGuardError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::LockParentUnavailable { source, .. }
+            | Self::LockUnavailable { source, .. }
+            | Self::LockOwnerRecordFailed { source, .. } => Some(source),
+        }
+    }
+}
+
+impl PicInstallError {
+    /// Capture one install failure for a specific canister id.
+    #[must_use]
+    pub const fn new(canister_id: Principal, message: String) -> Self {
+        Self {
+            canister_id,
+            message,
+        }
+    }
+
+    /// Read the canister id that failed to install.
+    #[must_use]
+    pub const fn canister_id(&self) -> Principal {
+        self.canister_id
+    }
+
+    /// Read the captured panic message from the install attempt.
+    #[must_use]
+    pub fn message(&self) -> &str {
+        &self.message
+    }
+}
+
+impl std::fmt::Display for PicInstallError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "failed to install canister {}: {}",
+            self.canister_id, self.message
+        )
+    }
+}
+
+impl std::error::Error for PicInstallError {}
+
+impl std::fmt::Display for StandaloneCanisterFixtureError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::SerialGuard(err) => write!(f, "{err}"),
+            Self::Start(err) => write!(f, "{err}"),
+            Self::Install(err) => write!(f, "{err}"),
+        }
+    }
+}
+
+impl std::error::Error for StandaloneCanisterFixtureError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::SerialGuard(err) => Some(err),
+            Self::Start(err) => Some(err),
+            Self::Install(err) => Some(err),
         }
     }
 }
@@ -362,7 +532,18 @@ impl Pic {
         init_bytes: Vec<u8>,
         install_cycles: u128,
     ) -> Principal {
-        self.create_funded_and_install(wasm, init_bytes, install_cycles)
+        self.try_create_and_install_with_args(wasm, init_bytes, install_cycles)
+            .unwrap_or_else(|err| panic!("{err}"))
+    }
+
+    /// Install one arbitrary wasm module with caller-provided init bytes.
+    pub fn try_create_and_install_with_args(
+        &self,
+        wasm: Vec<u8>,
+        init_bytes: Vec<u8>,
+        install_cycles: u128,
+    ) -> Result<Principal, PicInstallError> {
+        self.try_create_funded_and_install(wasm, init_bytes, install_cycles)
     }
 
     /// Wait until one canister reports `canic_ready`.
@@ -635,12 +816,12 @@ impl Pic {
     }
 
     // Install a canister after creating it and funding it with cycles.
-    fn create_funded_and_install(
+    fn try_create_funded_and_install(
         &self,
         wasm: Vec<u8>,
         init_bytes: Vec<u8>,
         install_cycles: u128,
-    ) -> Principal {
+    ) -> Result<Principal, PicInstallError> {
         let canister_id = self.create_canister();
         self.add_cycles(canister_id, install_cycles);
 
@@ -648,7 +829,7 @@ impl Pic {
             self.inner
                 .install_canister(canister_id, wasm, init_bytes, None);
         }));
-        if let Err(err) = install {
+        if let Err(payload) = install {
             eprintln!("install_canister trapped for {canister_id}");
             if let Ok(status) = self.inner.canister_status(canister_id, None) {
                 eprintln!("canister_status for {canister_id}: {status:?}");
@@ -661,10 +842,13 @@ impl Pic {
                     eprintln!("canister_log {canister_id}: {record:?}");
                 }
             }
-            std::panic::resume_unwind(err);
+            return Err(PicInstallError::new(
+                canister_id,
+                panic_payload_to_string(payload.as_ref()),
+            ));
         }
 
-        canister_id
+        Ok(canister_id)
     }
 
     // Query `canic_ready` and panic with debug context on transport failures.
@@ -836,25 +1020,26 @@ fn controller_sender_candidates(
     }
 }
 
-fn acquire_process_lock() -> ProcessLockGuard {
-    let lock_dir = env::temp_dir().join(PIC_PROCESS_LOCK_DIR_NAME);
+// Acquire the shared filesystem lock that serializes PocketIC usage per host.
+fn acquire_process_lock() -> Result<ProcessLockGuard, PicSerialGuardError> {
+    let lock_dir = process_lock_dir();
+    ensure_process_lock_parent(&lock_dir)?;
     let started_waiting = Instant::now();
     let mut logged_wait = false;
 
     loop {
         match fs::create_dir(&lock_dir) {
             Ok(()) => {
-                fs::write(
+                if let Err(source) = fs::write(
                     process_lock_owner_path(&lock_dir),
                     render_process_lock_owner(),
-                )
-                .unwrap_or_else(|err| {
+                ) {
                     let _ = fs::remove_dir(&lock_dir);
-                    panic!(
-                        "failed to record PocketIC process lock owner at {}: {err}",
-                        lock_dir.display()
-                    );
-                });
+                    return Err(PicSerialGuardError::LockOwnerRecordFailed {
+                        path: lock_dir,
+                        source,
+                    });
+                }
 
                 if logged_wait {
                     eprintln!(
@@ -863,7 +1048,7 @@ fn acquire_process_lock() -> ProcessLockGuard {
                     );
                 }
 
-                return ProcessLockGuard { path: lock_dir };
+                return Ok(ProcessLockGuard { path: lock_dir });
             }
             Err(err) if err.kind() == io::ErrorKind::AlreadyExists => {
                 if process_lock_is_stale(&lock_dir) && clear_stale_process_lock(&lock_dir).is_ok() {
@@ -880,12 +1065,76 @@ fn acquire_process_lock() -> ProcessLockGuard {
 
                 thread::sleep(PIC_PROCESS_LOCK_RETRY_DELAY);
             }
-            Err(err) => panic!(
-                "failed to create PocketIC process lock dir at {}: {err}",
-                lock_dir.display()
-            ),
+            Err(source) => {
+                return Err(PicSerialGuardError::LockUnavailable {
+                    path: lock_dir,
+                    source,
+                });
+            }
         }
     }
+}
+
+// Resolve the cross-process PocketIC lock path from the active temp root.
+fn process_lock_dir() -> PathBuf {
+    process_lock_dir_from_temp_root(&env::temp_dir())
+}
+
+// Resolve the cross-process PocketIC lock path for one explicit temp root.
+fn process_lock_dir_from_temp_root(temp_root: &Path) -> PathBuf {
+    temp_root.join(PIC_PROCESS_LOCK_DIR_NAME)
+}
+
+// Create the temp-root parent chain before trying to create the lock directory itself.
+fn ensure_process_lock_parent(lock_dir: &Path) -> Result<(), PicSerialGuardError> {
+    let parent = lock_dir.parent().unwrap_or_else(|| Path::new("."));
+    fs::create_dir_all(parent).map_err(|source| PicSerialGuardError::LockParentUnavailable {
+        path: parent.to_path_buf(),
+        source,
+    })
+}
+
+// Extract a stable string message from one panic payload.
+fn panic_payload_to_string(payload: &(dyn Any + Send)) -> String {
+    if let Some(message) = payload.downcast_ref::<String>() {
+        return message.clone();
+    }
+    if let Some(message) = payload.downcast_ref::<&'static str>() {
+        return (*message).to_string();
+    }
+
+    "non-string panic payload".to_string()
+}
+
+// Classify one PocketIC startup panic into a typed public error.
+fn classify_pic_start_panic(payload: Box<dyn Any + Send>) -> PicStartError {
+    let message = panic_payload_to_string(payload.as_ref());
+
+    if message.starts_with("Failed to validate PocketIC server binary") {
+        if message.contains("No such file or directory") || message.contains("os error 2") {
+            return PicStartError::BinaryUnavailable { message };
+        }
+
+        return PicStartError::BinaryInvalid { message };
+    }
+
+    if message.starts_with("Failed to download PocketIC server")
+        || message.starts_with("Failed to write PocketIC server binary")
+    {
+        return PicStartError::DownloadFailed { message };
+    }
+
+    if message.starts_with("Failed to start PocketIC binary")
+        || message.starts_with("Failed to create PocketIC server directory")
+    {
+        return PicStartError::ServerStartFailed { message };
+    }
+
+    if message.starts_with("Timed out waiting for PocketIC server being available") {
+        return PicStartError::StartupTimedOut { message };
+    }
+
+    PicStartError::Panic { message }
 }
 
 fn process_lock_owner_path(lock_dir: &Path) -> PathBuf {
@@ -983,8 +1232,9 @@ fn read_process_start_ticks(proc_root: &Path, pid: u32) -> Option<u64> {
 #[cfg(test)]
 mod process_lock_tests {
     use super::{
-        clear_stale_process_lock, parse_process_lock_owner, process_lock_is_stale_with_proc_root,
-        process_lock_owner_path,
+        PicStartError, classify_pic_start_panic, clear_stale_process_lock,
+        ensure_process_lock_parent, parse_process_lock_owner, process_lock_dir_from_temp_root,
+        process_lock_is_stale_with_proc_root, process_lock_owner_path,
     };
     use std::{
         fs,
@@ -1041,5 +1291,34 @@ mod process_lock_tests {
         .expect("write proc stat");
 
         assert!(process_lock_is_stale_with_proc_root(&lock_dir, &proc_root));
+    }
+
+    #[test]
+    fn ensure_process_lock_parent_creates_missing_temp_root_chain() {
+        let root = unique_lock_dir();
+        let temp_root = root.join("repo-local").join("tmp");
+        let lock_dir = process_lock_dir_from_temp_root(&temp_root);
+
+        ensure_process_lock_parent(&lock_dir).expect("create temp-root parent chain");
+
+        assert!(temp_root.exists());
+    }
+
+    #[test]
+    fn pic_start_error_classifies_missing_binary() {
+        let error = classify_pic_start_panic(Box::new(
+            "Failed to validate PocketIC server binary `/tmp/pocket-ic`: `No such file or directory (os error 2)`.".to_string(),
+        ));
+
+        assert!(matches!(error, PicStartError::BinaryUnavailable { .. }));
+    }
+
+    #[test]
+    fn pic_start_error_classifies_failed_spawn() {
+        let error = classify_pic_start_panic(Box::new(
+            "Failed to start PocketIC binary (/tmp/pocket-ic)".to_string(),
+        ));
+
+        assert!(matches!(error, PicStartError::ServerStartFailed { .. }));
     }
 }
