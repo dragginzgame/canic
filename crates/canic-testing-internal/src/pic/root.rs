@@ -439,13 +439,9 @@ fn resume_root_bootstrap(pic: &Pic, root_id: Principal) {
     resumed.expect("resume root bootstrap application");
 }
 
-// Read the current replica time from root so staged manifests use replica timestamps.
-fn root_time_secs(pic: &Pic, root_id: Principal) -> u64 {
-    let now_secs: Result<u64, Error> = pic
-        .query_call(root_id, protocol::CANIC_TIME, ())
-        .expect("query root time transport");
-
-    now_secs.expect("query root time application")
+// Read the current PocketIC wall clock in whole seconds.
+fn root_time_secs(pic: &Pic, _root_id: Principal) -> u64 {
+    pic.current_time_nanos() / 1_000_000_000
 }
 
 // Wait until root reports `canic_ready`.

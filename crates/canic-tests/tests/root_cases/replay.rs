@@ -778,11 +778,8 @@ fn legacy_event_parts(event: &str) -> (&'static str, &'static str) {
 
 // Read one canister's current time in seconds for capability metadata issuance.
 fn target_now_secs(setup: &RootSetup, canister_id: Principal) -> u64 {
-    let now: Result<u64, Error> = setup
-        .pic
-        .query_call(canister_id, protocol::CANIC_TIME, ())
-        .expect("canic_time transport query failed");
-    now.expect("canic_time application query failed") / 1_000_000_000
+    let _ = canister_id;
+    setup.pic.current_time_nanos() / 1_000_000_000
 }
 
 fn capability_metadata_from_request(request: &Request) -> ([u8; 16], [u8; 16], u32) {

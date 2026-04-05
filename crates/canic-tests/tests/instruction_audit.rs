@@ -34,7 +34,8 @@ use canic_control_plane::{
 };
 use canic_internal::canister::{APP, SCALE_HUB, TEST, USER_HUB};
 use canic_testing_internal::pic::{
-    create_user_shard, install_standalone_canister, issue_delegated_token,
+    create_user_shard, install_audit_leaf_probe, install_audit_root_probe,
+    install_audit_scaling_probe, install_standalone_canister, issue_delegated_token,
     request_root_delegation_provision,
 };
 use canic_testkit::{artifacts::WasmBuildProfile, pic::Pic};
@@ -52,12 +53,12 @@ use std::{
 const METHOD_TAG: &str = "Method V1";
 const PERF_PAGE_LIMIT: u64 = 512;
 const CHECKPOINT_SCAN_ROOTS: &[&str] = &["crates"];
-const APP_CANIC_TIME_PERF_TEST: &str = "canic_time_perf_test";
-const APP_CANIC_ENV_PERF_TEST: &str = "canic_env_perf_test";
-const APP_CANIC_LOG_PERF_TEST: &str = "canic_log_perf_test";
-const ROOT_CANIC_SUBNET_REGISTRY_PERF_TEST: &str = "canic_subnet_registry_perf_test";
-const ROOT_CANIC_SUBNET_STATE_PERF_TEST: &str = "canic_subnet_state_perf_test";
-const SCALE_HUB_PLAN_CREATE_WORKER_PERF_TEST: &str = "plan_create_worker_perf_test";
+const AUDIT_TIME_PROBE: &str = "audit_time_probe";
+const AUDIT_ENV_PROBE: &str = "audit_env_probe";
+const AUDIT_LOG_PROBE: &str = "audit_log_probe";
+const AUDIT_SUBNET_REGISTRY_PROBE: &str = "audit_subnet_registry_probe";
+const AUDIT_SUBNET_STATE_PROBE: &str = "audit_subnet_state_probe";
+const AUDIT_PLAN_CREATE_WORKER_PROBE: &str = "audit_plan_create_worker_probe";
 const FLOW_GAPS: &[(&str, &str)] = &[
     (
         "root capability dispatch",
@@ -315,9 +316,9 @@ fn generate_instruction_footprint_report() {
         run_timestamp_utc: metadata.run_timestamp_utc.clone(),
         execution_environment: "PocketIC".to_string(),
         target_canisters_in_scope: vec![
-            "app".to_string(),
-            "root".to_string(),
-            "scale_hub".to_string(),
+            "audit_leaf_probe".to_string(),
+            "audit_root_probe".to_string(),
+            "audit_scaling_probe".to_string(),
             "test".to_string(),
             "user_hub".to_string(),
         ],
@@ -349,24 +350,24 @@ fn scenarios() -> Vec<AuditScenario> {
     vec![
         AuditScenario {
             key: "app:canic_time:minimal-valid",
-            canister: "app",
-            endpoint_or_flow: "canic_time",
+            canister: "audit_leaf_probe",
+            endpoint_or_flow: "audit_time_probe",
             transport_mode: "query",
             subject_kind: "endpoint",
-            subject_label: "canic_time",
+            subject_label: "time_probe",
             arg_class: "minimal-valid",
             caller_class: "anonymous",
             auth_state: "public",
             replay_state: "n/a",
             cache_state: "n/a",
-            topology_state: "standalone-app-ready",
+            topology_state: "standalone-audit-leaf-ready",
             freshness_model: "fresh-standalone-per-scenario",
-            notes: "Shared lifecycle query surface with no arguments on one standalone app leaf.",
+            notes: "Audit-only raw time probe on one standalone internal leaf canister.",
         },
         AuditScenario {
             key: "app:canic_env:minimal-valid",
-            canister: "app",
-            endpoint_or_flow: "canic_env",
+            canister: "audit_leaf_probe",
+            endpoint_or_flow: "audit_env_probe",
             transport_mode: "query",
             subject_kind: "endpoint",
             subject_label: "canic_env",
@@ -375,14 +376,14 @@ fn scenarios() -> Vec<AuditScenario> {
             auth_state: "public",
             replay_state: "n/a",
             cache_state: "n/a",
-            topology_state: "standalone-app-ready",
+            topology_state: "standalone-audit-leaf-ready",
             freshness_model: "fresh-standalone-per-scenario",
-            notes: "Shared environment snapshot query on one standalone app leaf canister.",
+            notes: "Audit-only env snapshot probe on one standalone internal leaf canister.",
         },
         AuditScenario {
             key: "app:canic_log:empty-page",
-            canister: "app",
-            endpoint_or_flow: "canic_log",
+            canister: "audit_leaf_probe",
+            endpoint_or_flow: "audit_log_probe",
             transport_mode: "query",
             subject_kind: "endpoint",
             subject_label: "canic_log",
@@ -391,14 +392,14 @@ fn scenarios() -> Vec<AuditScenario> {
             auth_state: "public",
             replay_state: "n/a",
             cache_state: "cold",
-            topology_state: "standalone-app-ready",
+            topology_state: "standalone-audit-leaf-ready",
             freshness_model: "fresh-standalone-per-scenario",
-            notes: "Operator-facing log pagination with the smallest page shape on one standalone app leaf.",
+            notes: "Audit-only log pagination probe with the smallest page shape on one standalone internal leaf.",
         },
         AuditScenario {
             key: "root:canic_subnet_registry:full-registry",
-            canister: "root",
-            endpoint_or_flow: "canic_subnet_registry",
+            canister: "audit_root_probe",
+            endpoint_or_flow: "audit_subnet_registry_probe",
             transport_mode: "query",
             subject_kind: "endpoint",
             subject_label: "canic_subnet_registry",
@@ -407,14 +408,14 @@ fn scenarios() -> Vec<AuditScenario> {
             auth_state: "public",
             replay_state: "n/a",
             cache_state: "n/a",
-            topology_state: "root_bootstrapped+reference-topology-ready",
+            topology_state: "standalone-audit-root-ready",
             freshness_model: "fresh-standalone-per-scenario",
-            notes: "Shared root registry read over the auto-created reference topology.",
+            notes: "Audit-only root registry probe over a standalone internal root canister.",
         },
         AuditScenario {
             key: "root:canic_subnet_state:empty-struct",
-            canister: "root",
-            endpoint_or_flow: "canic_subnet_state",
+            canister: "audit_root_probe",
+            endpoint_or_flow: "audit_subnet_state_probe",
             transport_mode: "query",
             subject_kind: "endpoint",
             subject_label: "canic_subnet_state",
@@ -423,14 +424,14 @@ fn scenarios() -> Vec<AuditScenario> {
             auth_state: "public",
             replay_state: "n/a",
             cache_state: "n/a",
-            topology_state: "root_bootstrapped+reference-topology-ready",
-            freshness_model: "fresh-topology-per-scenario",
-            notes: "Root-only state snapshot for the restored `[as ss ad sd]` cascade lane.",
+            topology_state: "standalone-audit-root-ready",
+            freshness_model: "fresh-standalone-per-scenario",
+            notes: "Audit-only root state probe on a standalone internal root canister.",
         },
         AuditScenario {
             key: "scale_hub:plan_create_worker:empty-pool",
-            canister: "scale_hub",
-            endpoint_or_flow: "plan_create_worker",
+            canister: "audit_scaling_probe",
+            endpoint_or_flow: "audit_plan_create_worker_probe",
             transport_mode: "query",
             subject_kind: "endpoint",
             subject_label: "plan_create_worker",
@@ -439,9 +440,9 @@ fn scenarios() -> Vec<AuditScenario> {
             auth_state: "local-test-only",
             replay_state: "n/a",
             cache_state: "n/a",
-            topology_state: "standalone-scale_hub-ready",
+            topology_state: "standalone-audit-scaling-ready",
             freshness_model: "fresh-standalone-per-scenario",
-            notes: "Scaling dry-run query before any extra worker exists in the pool on one standalone scale_hub canister.",
+            notes: "Audit-only scaling dry-run probe before any extra worker exists in one standalone internal scaling canister.",
         },
         AuditScenario {
             key: "scale_hub:create_worker:first-worker",
@@ -723,8 +724,13 @@ fn run_standalone_scenario(scenario: &AuditScenario) -> Option<ScenarioResult> {
     let (crate_name, role) = match scenario.key {
         "app:canic_time:minimal-valid"
         | "app:canic_env:minimal-valid"
-        | "app:canic_log:empty-page" => ("canister_app", APP),
-        "scale_hub:plan_create_worker:empty-pool" => ("canister_scale_hub", SCALE_HUB),
+        | "app:canic_log:empty-page" => return Some(run_audit_leaf_probe_scenario(scenario)),
+        "root:canic_subnet_registry:full-registry" | "root:canic_subnet_state:empty-struct" => {
+            return Some(run_audit_root_probe_scenario(scenario));
+        }
+        "scale_hub:plan_create_worker:empty-pool" => {
+            return Some(run_audit_scaling_probe_scenario(scenario));
+        }
         "test:test:minimal-valid" => ("canister_test", TEST),
         _ => return None,
     };
@@ -786,6 +792,57 @@ fn run_standalone_scenario(scenario: &AuditScenario) -> Option<ScenarioResult> {
         },
         checkpoint_rows,
     })
+}
+
+fn run_audit_leaf_probe_scenario(scenario: &AuditScenario) -> ScenarioResult {
+    let fixture = install_audit_leaf_probe(WasmBuildProfile::Fast);
+    run_query_only_standalone_result(scenario, &fixture.pic, fixture.canister_id)
+}
+
+fn run_audit_root_probe_scenario(scenario: &AuditScenario) -> ScenarioResult {
+    let fixture = install_audit_root_probe(WasmBuildProfile::Fast);
+    run_query_only_standalone_result(scenario, &fixture.pic, fixture.canister_id)
+}
+
+fn run_audit_scaling_probe_scenario(scenario: &AuditScenario) -> ScenarioResult {
+    let fixture = install_audit_scaling_probe(WasmBuildProfile::Fast);
+    run_query_only_standalone_result(scenario, &fixture.pic, fixture.canister_id)
+}
+
+fn run_query_only_standalone_result(
+    scenario: &AuditScenario,
+    pic: &Pic,
+    target_pid: Principal,
+) -> ScenarioResult {
+    let total = execute_query_perf_probe(pic, scenario, target_pid);
+
+    ScenarioResult {
+        scenario: *scenario,
+        row: CanonicalPerfRow {
+            subject_kind: scenario.subject_kind.to_string(),
+            subject_label: scenario.subject_label.to_string(),
+            count: 1,
+            total_local_instructions: total,
+            avg_local_instructions: total,
+            scenario_key: scenario.key.to_string(),
+            scenario_labels: vec![
+                format!("canister={}", scenario.canister),
+                format!("endpoint_or_flow={}", scenario.endpoint_or_flow),
+                format!("transport_mode={}", scenario.transport_mode),
+                format!("arg_class={}", scenario.arg_class),
+                format!("caller_class={}", scenario.caller_class),
+                format!("auth_state={}", scenario.auth_state),
+                format!("replay_state={}", scenario.replay_state),
+                format!("cache_state={}", scenario.cache_state),
+                format!("topology_state={}", scenario.topology_state),
+                format!("freshness_model={}", scenario.freshness_model),
+                format!("method_tag={METHOD_TAG}"),
+            ],
+            principal_scope: Some(scenario.caller_class.to_string()),
+            sample_origin: "derived".to_string(),
+        },
+        checkpoint_rows: Vec::new(),
+    }
 }
 
 fn execute_standalone_scenario(pic: &Pic, scenario: &AuditScenario, target_pid: Principal) {
@@ -1028,23 +1085,23 @@ fn execute_query_perf_probe(
     match scenario.key {
         "app:canic_time:minimal-valid" => {
             let response: Result<(u64, u64), Error> = pic
-                .query_call(target_pid, APP_CANIC_TIME_PERF_TEST, ())
-                .expect("canic_time_perf_test transport query failed");
-            let (_value, perf) = response.expect("canic_time_perf_test application query failed");
+                .query_call(target_pid, AUDIT_TIME_PROBE, ())
+                .expect("audit_time_probe transport query failed");
+            let (_value, perf) = response.expect("audit_time_probe application query failed");
             perf
         }
         "app:canic_env:minimal-valid" => {
             let response: Result<(EnvSnapshotResponse, u64), Error> = pic
-                .query_call(target_pid, APP_CANIC_ENV_PERF_TEST, ())
-                .expect("canic_env_perf_test transport query failed");
-            let (_value, perf) = response.expect("canic_env_perf_test application query failed");
+                .query_call(target_pid, AUDIT_ENV_PROBE, ())
+                .expect("audit_env_probe transport query failed");
+            let (_value, perf) = response.expect("audit_env_probe application query failed");
             perf
         }
         "app:canic_log:empty-page" => {
             let response: Result<(Page<LogEntry>, u64), Error> = pic
                 .query_call(
                     target_pid,
-                    APP_CANIC_LOG_PERF_TEST,
+                    AUDIT_LOG_PROBE,
                     (
                         Option::<String>::None,
                         Option::<String>::None,
@@ -1055,32 +1112,32 @@ fn execute_query_perf_probe(
                         },
                     ),
                 )
-                .expect("canic_log_perf_test transport query failed");
-            let (_value, perf) = response.expect("canic_log_perf_test application query failed");
+                .expect("audit_log_probe transport query failed");
+            let (_value, perf) = response.expect("audit_log_probe application query failed");
             perf
         }
         "root:canic_subnet_registry:full-registry" => {
             let response: Result<(SubnetRegistryResponse, u64), Error> = pic
-                .query_call(target_pid, ROOT_CANIC_SUBNET_REGISTRY_PERF_TEST, ())
-                .expect("canic_subnet_registry_perf_test transport query failed");
+                .query_call(target_pid, AUDIT_SUBNET_REGISTRY_PROBE, ())
+                .expect("audit_subnet_registry_probe transport query failed");
             let (_value, perf) =
-                response.expect("canic_subnet_registry_perf_test application query failed");
+                response.expect("audit_subnet_registry_probe application query failed");
             perf
         }
         "root:canic_subnet_state:empty-struct" => {
             let response: Result<(SubnetStateResponse, u64), Error> = pic
-                .query_call(target_pid, ROOT_CANIC_SUBNET_STATE_PERF_TEST, ())
-                .expect("canic_subnet_state_perf_test transport query failed");
+                .query_call(target_pid, AUDIT_SUBNET_STATE_PROBE, ())
+                .expect("audit_subnet_state_probe transport query failed");
             let (_value, perf) =
-                response.expect("canic_subnet_state_perf_test application query failed");
+                response.expect("audit_subnet_state_probe application query failed");
             perf
         }
         "scale_hub:plan_create_worker:empty-pool" => {
             let response: Result<(bool, u64), Error> = pic
-                .query_call(target_pid, SCALE_HUB_PLAN_CREATE_WORKER_PERF_TEST, ())
-                .expect("plan_create_worker_perf_test transport query failed");
+                .query_call(target_pid, AUDIT_PLAN_CREATE_WORKER_PROBE, ())
+                .expect("audit_plan_create_worker_probe transport query failed");
             let (_value, perf) =
-                response.expect("plan_create_worker_perf_test application query failed");
+                response.expect("audit_plan_create_worker_probe application query failed");
             perf
         }
         other => panic!("unsupported query perf probe scenario: {other}"),
@@ -1337,11 +1394,8 @@ fn root_capability_response_as(
 
 // Read one canister's current time in seconds for capability metadata issuance.
 fn target_now_secs(setup: &root::harness::RootSetup, canister_id: Principal) -> u64 {
-    let now: Result<u64, Error> = setup
-        .pic
-        .query_call(canister_id, protocol::CANIC_TIME, ())
-        .expect("canic_time transport query failed");
-    now.expect("canic_time application query failed") / 1_000_000_000
+    let _ = canister_id;
+    setup.pic.current_time_nanos() / 1_000_000_000
 }
 
 // Rebuild the capability metadata tuple that the structural envelope expects.
@@ -1840,7 +1894,7 @@ fn write_report(
     out.push_str("- Root state/registry reads stay separate from the leaf floor. They matter for operator paths, but they should not be confused with the shared ordinary-leaf baseline.\n\n");
 
     out.push_str("## Dependency Fan-In Pressure\n\n");
-    out.push_str("- Shared lifecycle/observability endpoints (`canic_time`, `canic_env`, `canic_log`) all route through the default `start!` bundle, and this matrix now samples them through same-call local-only perf probes. Their rows reflect actual query counters from the measured call context rather than inferred zeroes or missing query-side perf-table commits.\n");
+    out.push_str("- Shared observability reads (`canic_env`, `canic_log`) are now measured through the internal `audit_leaf_probe` canister instead of the shipped demo surface, and raw time is measured through the same internal lane. Their rows still reflect actual query counters from the measured call context rather than inferred zeroes or missing query-side perf-table commits.\n");
     out.push_str("- The sampled non-trivial hotspot fans into `canic-core` placement orchestration (`workflow/placement/scaling`). The local `test::test` update acts as the baseline floor for update overhead on an ordinary child canister.\n");
     if checkpoint_sites.is_empty() {
         out.push_str("- There is currently no flow-stage attribution because `perf!` coverage is absent. That is itself a dependency-pressure signal: optimization work is bottlenecked by missing internal checkpoints.\n\n");
@@ -1898,7 +1952,7 @@ fn write_report(
         "   Action: compare `scale_hub::create_worker` and `user_hub::create_account` against the `test::test` update floor before/after any placement/sharding cleanup, using this report as the `{minor_line}` baseline.\n"
     ));
     out.push_str("3. Owner boundary: `shared observability floor`\n");
-    out.push_str("   Action: keep `app` query surfaces in the matrix so shared-runtime drift does not hide behind root-only or coordinator-only endpoints.\n\n");
+    out.push_str("   Action: keep the internal standalone query probes in the matrix so shared-runtime drift does not hide behind root-only or coordinator-only endpoints.\n\n");
 
     out.push_str("## Report Files\n\n");
     out.push_str(&format!("- [{report_file_name}](./{report_file_name})\n"));
@@ -1967,23 +2021,23 @@ fn hotspot_hint(subject_label: &str) -> (&'static str, &'static str) {
         ),
         "canic_subnet_registry" => (
             "Root topology registry query",
-            "[endpoints](/home/adam/projects/canic/crates/canic/src/macros/endpoints.rs), [registry query](/home/adam/projects/canic/crates/canic-core/src/workflow/topology/registry/query.rs)",
+            "[audit_root_probe](/home/adam/projects/canic/crates/canic-core/test-canisters/audit_root_probe/src/lib.rs), [registry query](/home/adam/projects/canic/crates/canic-core/src/workflow/topology/registry/query.rs)",
         ),
         "canic_subnet_state" => (
             "Root state snapshot query",
-            "[endpoints](/home/adam/projects/canic/crates/canic/src/macros/endpoints.rs), [state query](/home/adam/projects/canic/crates/canic-core/src/workflow/state/query.rs)",
+            "[audit_root_probe](/home/adam/projects/canic/crates/canic-core/test-canisters/audit_root_probe/src/lib.rs), [state query](/home/adam/projects/canic/crates/canic-core/src/workflow/state/query.rs)",
         ),
         "canic_log" => (
-            "Shared log pagination surface",
-            "[endpoints](/home/adam/projects/canic/crates/canic/src/macros/endpoints.rs), [log query](/home/adam/projects/canic/crates/canic-core/src/workflow/log/query.rs)",
+            "Internal audit log pagination probe over the shared log query path",
+            "[audit_leaf_probe](/home/adam/projects/canic/crates/canic-core/test-canisters/audit_leaf_probe/src/lib.rs), [log query](/home/adam/projects/canic/crates/canic-core/src/workflow/log/query.rs)",
         ),
         "canic_env" => (
-            "Shared env snapshot surface",
-            "[endpoints](/home/adam/projects/canic/crates/canic/src/macros/endpoints.rs), [env query](/home/adam/projects/canic/crates/canic-core/src/workflow/env/query.rs)",
+            "Internal audit env snapshot probe over the shared env query path",
+            "[audit_leaf_probe](/home/adam/projects/canic/crates/canic-core/test-canisters/audit_leaf_probe/src/lib.rs), [env query](/home/adam/projects/canic/crates/canic-core/src/workflow/env/query.rs)",
         ),
         "canic_time" => (
-            "Shared lifecycle/runtime query surface",
-            "[endpoints](/home/adam/projects/canic/crates/canic/src/macros/endpoints.rs)",
+            "Internal audit raw time probe",
+            "[audit_leaf_probe](/home/adam/projects/canic/crates/canic-core/test-canisters/audit_leaf_probe/src/lib.rs)",
         ),
         _ => (
             "Shared runtime surface",

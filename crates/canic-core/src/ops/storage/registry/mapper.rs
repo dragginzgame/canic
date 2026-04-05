@@ -13,7 +13,7 @@ pub struct AppRegistryResponseMapper;
 
 impl AppRegistryResponseMapper {
     #[must_use]
-    pub fn record_to_view(data: AppRegistryRecord) -> AppRegistryResponse {
+    pub fn record_to_response(data: AppRegistryRecord) -> AppRegistryResponse {
         let entries = data
             .entries
             .into_iter()
@@ -35,7 +35,7 @@ pub struct SubnetRegistryResponseMapper;
 
 impl SubnetRegistryResponseMapper {
     #[must_use]
-    pub fn entry_to_view(
+    pub fn record_to_response(
         pid: Principal,
         record: crate::storage::canister::CanisterRecord,
     ) -> SubnetRegistryEntry {

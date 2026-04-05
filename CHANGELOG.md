@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.24.x] - 2026-04-04 - Shared Runtime Reduction and Test Boundary Cleanup
 
+- `0.24.7` hardens the `pic_role_attestation` PocketIC suite by rebuilding dead cached baselines automatically after failed restore attempts and by aligning the role-attestation capability tests with the real `signer -> root` cycles caller path instead of the old `root -> root` shortcut.
 - `0.24.6` makes `canic-testkit` more useful for downstreams by promoting the generic standalone non-root PocketIC fixture and PocketIC `install_code` retry helpers into the public crate, while keeping Canic-specific root, attestation, and delegation fixtures internal.
 - `0.24.5` finishes another test-boundary cleanup pass by moving the local bogus-token auth guard onto the standalone PocketIC lane, sharing the internal `user_hub -> user_shard -> root delegation` fixture plumbing across auth-focused suites, and giving the reconcile tests their own named cached root profile so the remaining root hierarchy entrypoints are explicit instead of generic.
 - `0.24.4` keeps hierarchy-heavy testing focused on the cases that really need `root` by moving standalone `app`, `test`, and `scale_hub` checks onto a shared internal PocketIC fixture, keeps heavy internal env/directory queries out of ordinary canister builds behind a test-only flag, and hardens the local tooling path by auto-recovering local `dfx` once and letting the wasm audit build artifacts without depending on a healthy replica first.

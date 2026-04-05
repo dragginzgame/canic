@@ -26,11 +26,6 @@ macro_rules! canic_emit_lifecycle_core_endpoints {
             Ok($crate::cdk::api::canister_version())
         }
 
-        #[$crate::canic_query]
-        fn canic_time() -> Result<u64, ::canic::Error> {
-            Ok($crate::cdk::api::time())
-        }
-
         #[$crate::canic_query(internal)]
         fn canic_ready() -> bool {
             $crate::__internal::core::api::ready::ReadyApi::is_ready()

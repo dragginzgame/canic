@@ -1,0 +1,17 @@
+controllers = []
+app_directory = []
+
+[subnets.prime]
+
+[subnets.prime.canisters.root]
+kind = "root"
+
+[subnets.prime.canisters.scale_hub]
+kind = "singleton"
+
+[subnets.prime.canisters.scale_hub.scaling.pools.scales]
+canister_role = "scale"
+policy.min_workers = 2
+
+[subnets.prime.canisters.scale]
+kind = "replica"

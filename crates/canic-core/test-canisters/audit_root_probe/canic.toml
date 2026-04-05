@@ -1,0 +1,7 @@
+controllers = []
+app_directory = []
+
+[subnets.prime]
+
+[subnets.prime.canisters.root]
+kind = "root"

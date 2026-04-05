@@ -239,7 +239,6 @@ service : (CanisterInitPayload, opt blob) -> {
   canic_standards : () -> (CanicStandardsResponse) query;
   canic_sync_state : (StateSnapshotInput) -> (Result_7);
   canic_sync_topology : (TopologySnapshotInput) -> (Result_7);
-  canic_time : () -> (Result_2) query;
   canic_wasm_store_begin_gc : () -> (Result_7);
   canic_wasm_store_catalog : () -> (Result_8) query;
   canic_wasm_store_chunk : (text, text, nat32) -> (Result_9);

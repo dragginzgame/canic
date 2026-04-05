@@ -8,10 +8,7 @@
 
 #![allow(clippy::unused_async)]
 
-use canic::{
-    __internal::core::perf, Error, api::canister::placement::ScalingApi, cdk::types::Principal,
-    prelude::*,
-};
+use canic::{Error, api::canister::placement::ScalingApi, cdk::types::Principal, prelude::*};
 use canic_internal::canister::SCALE_HUB;
 
 const POOL_NAME: &str = "scales";
@@ -52,18 +49,6 @@ async fn plan_create_worker() -> Result<bool, Error> {
     }
 
     ScalingApi::plan_create_worker(POOL_NAME)
-}
-
-// Measure the scaling dry-run query in the same call context as the returned
-// local instruction counter.
-#[canic_query(requires(env::build_local_only()))]
-async fn plan_create_worker_perf_test() -> Result<(bool, u64), Error> {
-    if let Err(err) = canic::access::env::build_network_local() {
-        return Err(Error::forbidden(err.to_string()));
-    }
-
-    let value = ScalingApi::plan_create_worker(POOL_NAME)?;
-    Ok((value, perf::perf_counter()))
 }
 
 canic::cdk::export_candid_debug!();

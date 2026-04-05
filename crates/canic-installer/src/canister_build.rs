@@ -124,6 +124,7 @@ pub fn build_canister_artifact(
     }
 
     fs::create_dir_all(&artifact_root)?;
+    remove_stale_dfx_candid_sidecars(&artifact_root)?;
 
     let release_wasm_path = run_canister_build(
         workspace_root,
@@ -248,6 +249,26 @@ fn extract_candid(
     Ok(())
 }
 
+// Remove stale DFX-generated Candid sidecars so local surface scans match the
+// extracted `<role>.did` artifact we actually ship and verify.
+fn remove_stale_dfx_candid_sidecars(artifact_root: &Path) -> std::io::Result<()> {
+    for relative in [
+        "constructor.did",
+        "service.did",
+        "service.did.d.ts",
+        "service.did.js",
+    ] {
+        let path = artifact_root.join(relative);
+        match fs::remove_file(path) {
+            Ok(()) => {}
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
+            Err(err) => return Err(err),
+        }
+    }
+
+    Ok(())
+}
+
 // Route the hidden bootstrap store through the published public builder.
 fn build_hidden_wasm_store_artifact(
     workspace_root: &Path,
@@ -337,4 +358,40 @@ fn write_bytes_atomically(
     fs::write(&tmp_path, bytes)?;
     fs::rename(tmp_path, target_path)?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::remove_stale_dfx_candid_sidecars;
+    use std::fs;
+
+    #[test]
+    fn remove_stale_dfx_candid_sidecars_keeps_primary_role_did() {
+        let temp_root = std::env::temp_dir().join(format!(
+            "canic-canister-build-sidecars-{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&temp_root);
+        fs::create_dir_all(&temp_root).unwrap();
+
+        for name in [
+            "constructor.did",
+            "service.did",
+            "service.did.d.ts",
+            "service.did.js",
+            "app.did",
+        ] {
+            fs::write(temp_root.join(name), "x").unwrap();
+        }
+
+        remove_stale_dfx_candid_sidecars(&temp_root).unwrap();
+
+        assert!(!temp_root.join("constructor.did").exists());
+        assert!(!temp_root.join("service.did").exists());
+        assert!(!temp_root.join("service.did.d.ts").exists());
+        assert!(!temp_root.join("service.did.js").exists());
+        assert!(temp_root.join("app.did").exists());
+
+        let _ = fs::remove_dir_all(temp_root);
+    }
 }
