@@ -94,6 +94,13 @@ impl DelegationApi {
             .map_err(Self::map_delegation_error)
     }
 
+    /// Resolve the local shard public key in SEC1 encoding.
+    pub async fn local_shard_public_key_sec1() -> Result<Vec<u8>, Error> {
+        DelegatedTokenOps::local_shard_public_key_sec1(IcOps::canister_self())
+            .await
+            .map_err(Self::map_delegation_error)
+    }
+
     /// Issue a delegated token using a reusable local proof when possible.
     ///
     /// If the proof is missing or no longer valid for the requested claims, this

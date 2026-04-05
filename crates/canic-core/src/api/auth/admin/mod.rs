@@ -211,7 +211,7 @@ impl DelegationApi {
     // Enforce repair as redistribution of already-installed proof state only.
     fn ensure_repair_push_proof_is_locally_available(proof: &DelegationProof) -> Result<(), Error> {
         Self::ensure_repair_push_proof_is_locally_available_with(proof, |candidate| {
-            DelegationStateOps::matching_proof_dto(candidate).map_err(Self::map_delegation_error)
+            Ok(DelegationStateOps::matching_proof_dto(candidate))
         })
     }
 

@@ -133,16 +133,14 @@ impl DelegationStateOps {
     }
 
     /// Resolve a keyed verifier proof that matches the incoming proof identity.
-    pub fn matching_proof_dto(
-        proof: &DelegationProof,
-    ) -> Result<Option<DelegationProof>, InternalError> {
-        let key = DelegationProofRecordMapper::proof_key_from_dto(proof)?;
+    pub fn matching_proof_dto(proof: &DelegationProof) -> Option<DelegationProof> {
+        let key = DelegationProofRecordMapper::proof_key_from_dto(proof);
 
-        Ok(DelegationState::get_proof_entry(&key).map(|entry| {
+        DelegationState::get_proof_entry(&key).map(|entry| {
             DelegationProofRecordMapper::stored_proof_to_dto(
                 DelegationProofRecordMapper::record_to_stored_proof(entry.proof),
             )
-        }))
+        })
     }
 
     /// Upsert a keyed verifier proof into bounded verifier-local storage.
@@ -159,11 +157,21 @@ impl DelegationStateOps {
         installed_at: u64,
         shard_public_key: Option<Vec<u8>>,
     ) -> Result<DelegationProofUpsertOutcome, InternalError> {
-        let policy = Self::proof_cache_policy()?;
-        let entry = DelegationProofRecordMapper::stored_proof_to_entry(
-            DelegationProofRecordMapper::dto_to_stored_proof(proof),
+        Self::upsert_proof_from_dto_ref_with_shard_public_key(
+            &proof,
             installed_at,
-        )?;
+            shard_public_key,
+        )
+    }
+
+    /// Upsert a keyed verifier proof by reference and optional shard key in one stable-state commit.
+    pub fn upsert_proof_from_dto_ref_with_shard_public_key(
+        proof: &DelegationProof,
+        installed_at: u64,
+        shard_public_key: Option<Vec<u8>>,
+    ) -> Result<DelegationProofUpsertOutcome, InternalError> {
+        let policy = Self::proof_cache_policy()?;
+        let entry = DelegationProofRecordMapper::dto_ref_to_entry(proof, installed_at);
         Ok(proof_upsert_record_to_view(
             DelegationState::upsert_proof_entry_with_shard_public_key(
                 entry,
@@ -177,12 +185,9 @@ impl DelegationStateOps {
     }
 
     /// Mark a matching keyed proof as recently verified.
-    pub fn mark_matching_proof_verified(
-        proof: &DelegationProof,
-        now_secs: u64,
-    ) -> Result<bool, InternalError> {
-        let key = DelegationProofRecordMapper::proof_key_from_dto(proof)?;
-        Ok(DelegationState::mark_proof_entry_verified(&key, now_secs))
+    pub fn mark_matching_proof_verified(proof: &DelegationProof, now_secs: u64) -> bool {
+        let key = DelegationProofRecordMapper::proof_key_from_dto(proof);
+        DelegationState::mark_proof_entry_verified(&key, now_secs)
     }
 
     pub fn proof_cache_stats(now_secs: u64) -> Result<DelegationProofCacheStats, InternalError> {

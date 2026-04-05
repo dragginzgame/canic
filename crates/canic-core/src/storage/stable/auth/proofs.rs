@@ -25,21 +25,29 @@ pub(super) fn upsert_proof_entry_with_shard_public_key(
 ) -> DelegationProofUpsertRecord {
     let mut evicted = None;
 
+    let DelegationProofEntryRecord {
+        key,
+        proof,
+        installed_at,
+        ..
+    } = entry;
+
     if let Some(public_key_sec1) = shard_public_key {
-        key_state::set_shard_public_key(data, entry.key.shard_pid, public_key_sec1);
+        key_state::set_shard_public_key(data, key.shard_pid, public_key_sec1);
     }
 
-    if let Some(existing) = data
-        .proofs
-        .iter_mut()
-        .find(|current| current.key == entry.key)
-    {
-        existing.proof = entry.proof.clone();
+    if let Some(existing) = data.proofs.iter_mut().find(|current| current.key == key) {
+        existing.proof = proof;
     } else {
         if data.proofs.len() >= capacity {
             evicted = evict_proof_entry(&mut data.proofs, now_secs, active_window_secs);
         }
-        data.proofs.push(entry);
+        data.proofs.push(DelegationProofEntryRecord {
+            key,
+            proof,
+            installed_at,
+            last_verified_at: None,
+        });
     }
 
     let stats =

@@ -13,10 +13,9 @@ use crate::{
     dto::{
         auth::{
             DelegationAdminCommand, DelegationAdminResponse, DelegationCert, DelegationProof,
-            DelegationProofInstallIntent, DelegationProofInstallRequest,
-            DelegationProvisionRequest, DelegationProvisionResponse, DelegationProvisionStatus,
-            DelegationProvisionTargetKind, DelegationProvisionTargetResponse,
-            DelegationVerifierProofPushResponse,
+            DelegationProofInstallIntent, DelegationProvisionRequest, DelegationProvisionResponse,
+            DelegationProvisionStatus, DelegationProvisionTargetKind,
+            DelegationProvisionTargetResponse, DelegationVerifierProofPushResponse,
         },
         error::Error as ErrorDto,
     },
@@ -33,7 +32,7 @@ use crate::{
     },
     protocol,
 };
-use candid::encode_one;
+use candid::{CandidType, encode_one};
 
 // -------------------------------------------------------------------------
 // Logging context
@@ -90,6 +89,13 @@ impl DelegationPushOrigin {
 
 pub struct DelegationWorkflow;
 
+#[derive(CandidType)]
+struct DelegationProofInstallRequestRef<'a> {
+    proof: &'a DelegationProof,
+    intent: DelegationProofInstallIntent,
+    shard_public_key_sec1: Option<&'a [u8]>,
+}
+
 impl DelegationWorkflow {
     // -------------------------------------------------------------------------
     // Issuance
@@ -128,6 +134,7 @@ impl DelegationWorkflow {
             DelegationPushOrigin::Provisioning,
             request.shard_public_key_sec1.as_deref(),
         )?;
+        crate::perf!("encode_install_request");
         crate::perf!("issue_proof");
         log!(
             Topic::Auth,
@@ -226,6 +233,7 @@ impl DelegationWorkflow {
                 return DelegationVerifierProofPushResponse { results };
             }
         };
+        crate::perf!("encode_install_request");
 
         let mut results = Vec::new();
         for target in verifier_targets {
@@ -320,10 +328,10 @@ impl DelegationWorkflow {
         origin: DelegationPushOrigin,
         shard_public_key_sec1: Option<&[u8]>,
     ) -> Result<Vec<u8>, InternalError> {
-        let request = DelegationProofInstallRequest {
-            proof: proof.clone(),
+        let request = DelegationProofInstallRequestRef {
+            proof,
             intent: origin.intent(),
-            shard_public_key_sec1: shard_public_key_sec1.map(ToOwned::to_owned),
+            shard_public_key_sec1,
         };
         encode_one(&request).map_err(|source| {
             DelegationValidationError::EncodeFailed {
@@ -395,5 +403,61 @@ impl DelegationWorkflow {
                 record_delegation_push_failed(role, origin.intent());
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{DelegationProofInstallRequestRef, DelegationPushOrigin, DelegationWorkflow};
+    use crate::cdk::types::Principal;
+    use crate::dto::auth::{
+        DelegationCert, DelegationProof, DelegationProofInstallIntent,
+        DelegationProofInstallRequest,
+    };
+    use candid::decode_one;
+
+    fn p(id: u8) -> Principal {
+        Principal::from_slice(&[id; 29])
+    }
+
+    #[test]
+    fn borrowed_install_request_encoding_matches_owned_request_shape() {
+        let proof = DelegationProof {
+            cert: DelegationCert {
+                root_pid: p(1),
+                shard_pid: p(2),
+                issued_at: 10,
+                expires_at: 20,
+                scopes: vec!["verify".to_string()],
+                aud: vec![p(3)],
+            },
+            cert_sig: vec![9, 8, 7],
+        };
+        let shard_public_key_sec1 = vec![4, 5, 6];
+
+        let encoded = DelegationWorkflow::encode_proof_install_request(
+            &proof,
+            DelegationPushOrigin::Provisioning,
+            Some(&shard_public_key_sec1),
+        )
+        .expect("borrowed install request must encode");
+
+        let decoded: DelegationProofInstallRequest =
+            decode_one(&encoded).expect("borrowed payload must decode into owned request");
+
+        assert_eq!(decoded.proof.cert.root_pid, proof.cert.root_pid);
+        assert_eq!(decoded.proof.cert.shard_pid, proof.cert.shard_pid);
+        assert_eq!(decoded.proof.cert.issued_at, proof.cert.issued_at);
+        assert_eq!(decoded.proof.cert.expires_at, proof.cert.expires_at);
+        assert_eq!(decoded.proof.cert.scopes, proof.cert.scopes);
+        assert_eq!(decoded.proof.cert.aud, proof.cert.aud);
+        assert_eq!(decoded.proof.cert_sig, proof.cert_sig);
+        assert_eq!(decoded.intent, DelegationProofInstallIntent::Provisioning);
+        assert_eq!(decoded.shard_public_key_sec1, Some(shard_public_key_sec1));
+    }
+
+    #[test]
+    fn borrowed_wire_shape_matches_declared_owned_wire_shape() {
+        let _ = std::mem::size_of::<DelegationProofInstallRequestRef<'static>>();
     }
 }

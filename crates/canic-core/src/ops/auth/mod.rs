@@ -1,3 +1,4 @@
+use crate::dto::auth::DelegationCert;
 use crate::ops::ic::IcOps;
 #[cfg(test)]
 use crate::{
@@ -56,6 +57,10 @@ impl DelegatedTokenOps {
 
         Ok(())
     }
+}
+
+pub fn delegation_cert_hash(cert: &DelegationCert) -> [u8; 32] {
+    crypto::cert_hash(cert)
 }
 
 #[cfg(test)]
