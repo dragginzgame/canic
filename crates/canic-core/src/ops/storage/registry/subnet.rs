@@ -1,5 +1,6 @@
 use crate::{
     InternalError,
+    dto::topology::SubnetRegistryResponse,
     ops::{prelude::*, storage::StorageOpsError},
     storage::{
         canister::CanisterRecord,
@@ -147,10 +148,15 @@ impl SubnetRegistryOps {
 
     #[must_use]
     pub fn has_role(role: &CanisterRole) -> bool {
-        SubnetRegistry::export()
-            .entries
-            .iter()
-            .any(|(_, record)| &record.role == role)
+        let mut found = false;
+
+        SubnetRegistry::for_each(|_, record| {
+            if &record.role == role {
+                found = true;
+            }
+        });
+
+        found
     }
 
     #[must_use]
@@ -190,12 +196,25 @@ impl SubnetRegistryOps {
     }
 
     #[must_use]
+    pub fn response() -> SubnetRegistryResponse {
+        let mut entries = Vec::with_capacity(SubnetRegistry::len());
+
+        SubnetRegistry::for_each(|pid, record| {
+            entries.push(super::mapper::SubnetRegistryResponseMapper::entry_to_view(
+                pid, record,
+            ));
+        });
+
+        SubnetRegistryResponse(entries)
+    }
+
+    #[must_use]
     pub fn role_index() -> BTreeMap<CanisterRole, Vec<Principal>> {
         let mut roles = BTreeMap::<CanisterRole, Vec<Principal>>::new();
 
-        for (pid, entry) in SubnetRegistry::export().entries {
+        SubnetRegistry::for_each(|pid, entry| {
             roles.entry(entry.role).or_default().push(pid);
-        }
+        });
 
         roles
     }
@@ -207,5 +226,62 @@ impl SubnetRegistryOps {
             .ok_or_else(|| SubnetRegistryOpsError::RoleNotFound(role.clone()))?;
         pids.sort();
         Ok(pids)
+    }
+}
+
+///
+/// TESTS
+///
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn p(id: u8) -> Principal {
+        Principal::from_slice(&[id; 29])
+    }
+
+    fn seed_registry() {
+        let _ = SubnetRegistry::remove(&p(93));
+        let _ = SubnetRegistry::remove(&p(92));
+        let _ = SubnetRegistry::remove(&p(91));
+
+        SubnetRegistry::register_root(p(91), 1);
+        SubnetRegistry::register(
+            p(92),
+            &CanisterRole::new("alpha_registry_test"),
+            p(91),
+            vec![2],
+            2,
+        );
+        SubnetRegistry::register(
+            p(93),
+            &CanisterRole::new("beta_registry_test"),
+            p(91),
+            vec![3],
+            3,
+        );
+    }
+
+    #[test]
+    fn response_builds_registry_view_without_export_snapshot() {
+        seed_registry();
+
+        let response = SubnetRegistryOps::response();
+        let alpha = response
+            .0
+            .iter()
+            .find(|entry| entry.pid == p(92))
+            .expect("alpha entry present");
+        let beta = response
+            .0
+            .iter()
+            .find(|entry| entry.pid == p(93))
+            .expect("beta entry present");
+
+        assert!(response.0.iter().any(|entry| entry.pid == p(91)));
+        assert_eq!(alpha.role, CanisterRole::new("alpha_registry_test"));
+        assert_eq!(alpha.record.parent_pid, Some(p(91)));
+        assert_eq!(beta.record.module_hash, Some(vec![3]));
     }
 }

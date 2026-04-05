@@ -4,7 +4,7 @@ use crate::dto::{error::Error, prelude::*, rpc::RootRequestMetadata};
 // DelegationCert
 //
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct DelegationCert {
     pub root_pid: Principal,
     pub shard_pid: Principal,
@@ -18,7 +18,7 @@ pub struct DelegationCert {
 // DelegationProof
 //
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct DelegationProof {
     pub cert: DelegationCert,
     pub cert_sig: Vec<u8>,
@@ -108,7 +108,7 @@ pub struct RoleAttestationRequest {
 // RoleAttestation
 //
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct RoleAttestation {
     pub subject: Principal,
     pub role: CanisterRole,
@@ -125,7 +125,7 @@ pub struct RoleAttestation {
 // SignedRoleAttestation
 //
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct SignedRoleAttestation {
     pub payload: RoleAttestation,
     pub signature: Vec<u8>,
@@ -187,7 +187,7 @@ pub struct DelegationProvisionRequest {
 // DelegationProvisionResponse
 //
 
-#[derive(CandidType, Clone, Debug, Deserialize)]
+#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
 pub struct DelegationProvisionResponse {
     pub proof: DelegationProof,
     pub results: Vec<DelegationProvisionTargetResponse>,
@@ -223,13 +223,13 @@ pub struct DelegationProofStatus {
     pub expires_at: u64,
 }
 
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum DelegationProvisionTargetKind {
     Signer,
     Verifier,
 }
 
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum DelegationProvisionStatus {
     Ok,
     Failed,
@@ -263,7 +263,7 @@ pub enum DelegationAdminResponse {
 // DelegationProvisionTargetResponse
 //
 
-#[derive(CandidType, Clone, Debug, Deserialize)]
+#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
 pub struct DelegationProvisionTargetResponse {
     pub target: Principal,
     pub kind: DelegationProvisionTargetKind,

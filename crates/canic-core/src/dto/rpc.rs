@@ -266,7 +266,7 @@ pub struct CyclesRequest {
 // Root response payload.
 //
 
-#[derive(CandidType, Clone, Debug, Deserialize)]
+#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
 pub enum Response {
     CreateCanister(CreateCanisterResponse),
     UpgradeCanister(UpgradeCanisterResponse),
@@ -280,7 +280,7 @@ pub enum Response {
 // Result of creating and installing a new canister.
 //
 
-#[derive(CandidType, Clone, Debug, Deserialize)]
+#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
 pub struct CreateCanisterResponse {
     pub new_canister_pid: Principal,
 }
@@ -290,7 +290,7 @@ pub struct CreateCanisterResponse {
 // Result of an upgrade request (currently empty, reserved for metadata)
 //
 
-#[derive(CandidType, Clone, Debug, Deserialize)]
+#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
 pub struct UpgradeCanisterResponse {}
 
 //
@@ -298,7 +298,7 @@ pub struct UpgradeCanisterResponse {}
 // Result of transferring cycles to a child canister
 //
 
-#[derive(CandidType, Clone, Debug, Deserialize)]
+#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
 pub struct CyclesResponse {
     pub cycles_transferred: u128,
 }

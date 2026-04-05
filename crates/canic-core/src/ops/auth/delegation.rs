@@ -45,16 +45,12 @@ impl DelegatedTokenOps {
         Ok(())
     }
 
-    /// Cache only the shard public key for a delegation certificate.
-    ///
-    /// Root-controlled issuance already primes the root public key cache during
-    /// signing, so the root verifier path only needs the shard key here.
-    pub(crate) async fn cache_shard_public_key_for_cert(
+    /// Fetch the shard public key only when it is missing from local verifier state.
+    pub(crate) async fn fetch_missing_shard_public_key_for_cert(
         cert: &DelegationCert,
-    ) -> Result<(), InternalError> {
+    ) -> Result<Option<Vec<u8>>, InternalError> {
         let key_name = keys::delegated_tokens_key_name()?;
-        keys::ensure_shard_public_key_cached(&key_name, cert.shard_pid).await?;
-        Ok(())
+        keys::fetch_missing_shard_public_key(&key_name, cert.shard_pid).await
     }
 
     /// Structural verification for a delegation proof.

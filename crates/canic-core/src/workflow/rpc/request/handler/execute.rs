@@ -1,4 +1,7 @@
-use super::{RootCapability, RootContext, authorize, delegation, nonroot_cycles};
+use super::{
+    RootCapability, RootContext, authorize, delegation, nonroot_cycles,
+    nonroot_cycles::AuthorizedCyclesGrant,
+};
 use crate::{
     InternalError,
     dto::auth::{
@@ -34,6 +37,7 @@ use crate::{
 pub(super) async fn execute_root_capability(
     ctx: &RootContext,
     capability: RootCapability,
+    authorized_cycles: Option<AuthorizedCyclesGrant>,
 ) -> Result<Response, InternalError> {
     let capability_name = capability.capability_name();
 
@@ -41,7 +45,9 @@ pub(super) async fn execute_root_capability(
         RootCapability::Provision(req) => execute_provision(ctx, &req).await,
         RootCapability::Upgrade(req) => execute_upgrade(&req).await,
         RootCapability::RequestCycles(req) => {
-            let response = if ctx.is_root_env {
+            let response = if let Some(grant) = authorized_cycles {
+                nonroot_cycles::execute_authorized_request_cycles(ctx, grant).await
+            } else if ctx.is_root_env {
                 nonroot_cycles::execute_root_request_cycles(ctx, &req).await
             } else {
                 nonroot_cycles::execute_request_cycles(ctx, &req).await
@@ -127,15 +133,21 @@ async fn execute_issue_delegation(
     let response: DelegationProvisionResponse =
         DelegationWorkflow::provision(DelegationProvisionRequest {
             cert,
-            signer_targets: vec![ctx.caller],
+            signer_targets: vec![],
             verifier_targets: req.verifier_targets.clone(),
         })
         .await?;
 
     if req.include_root_verifier {
-        DelegatedTokenOps::cache_shard_public_key_for_cert(&response.proof.cert).await?;
+        let shard_public_key =
+            DelegatedTokenOps::fetch_missing_shard_public_key_for_cert(&response.proof.cert)
+                .await?;
         crate::perf!("cache_root_verifier_keys");
-        let outcome = DelegationStateOps::upsert_proof_from_dto(response.proof.clone(), ctx.now)?;
+        let outcome = DelegationStateOps::upsert_proof_from_dto_with_shard_public_key(
+            response.proof.clone(),
+            ctx.now,
+            shard_public_key,
+        )?;
         crate::perf!("cache_root_verifier_proof");
         record_verifier_proof_cache_stats(
             outcome.stats.size,

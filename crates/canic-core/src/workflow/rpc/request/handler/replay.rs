@@ -20,7 +20,7 @@ use crate::{
 };
 #[cfg(test)]
 use crate::{ops::replay::key as replay_key, storage::stable::replay::ReplaySlotKey};
-use candid::decode_one;
+use canic_memory::serialize;
 use sha2::{Digest, Sha256};
 
 /// ReplayPreflight
@@ -69,7 +69,7 @@ pub(super) fn check_replay(
                 capability_key,
                 RootCapabilityMetricOutcome::DuplicateSame,
             );
-            decode_replay_response(&cached.response_candid).map(ReplayPreflight::Cached)
+            decode_replay_response(&cached.response_bytes).map(ReplayPreflight::Cached)
         }
         ReplayDecision::InFlight => {
             crate::perf!("duplicate_in_flight");
@@ -149,7 +149,8 @@ fn map_replay_commit_error(err: ReplayCommitError) -> InternalError {
 ///
 /// Decode cached replay payload bytes back into canonical root responses.
 fn decode_replay_response(bytes: &[u8]) -> Result<Response, InternalError> {
-    decode_one(bytes).map_err(|err| RpcWorkflowError::ReplayDecodeFailed(err.to_string()).into())
+    serialize::deserialize(bytes)
+        .map_err(|err| RpcWorkflowError::ReplayDecodeFailed(err.to_string()).into())
 }
 
 /// commit_replay

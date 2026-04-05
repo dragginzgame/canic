@@ -7,7 +7,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.24.x] - 2026-04-04 - Shared Runtime Reduction and Test Boundary Cleanup
 
-- `0.24.1` follows up the first `0.24` perf pass by warming root delegation and attestation key material during setup, which cuts sampled `root::canic_request_delegation` from `4356980` in `instruction-footprint-17` to `3934327` in `instruction-footprint-18`.
+- `0.24.2` follows the first `0.24` auth reductions by reusing cached root response attestations, carrying cycles authorization through replay/capability execution, trimming replay and registry work, and keeping only the retained final audit output, which cuts sampled `root::canic_request_delegation` from `3205866` in `instruction-footprint-20` to `2281850` in `instruction-footprint-29`.
+- `0.24.1` follows up the first `0.24` perf pass by warming root auth key material during setup, removing the redundant root-to-signer delegation proof push, and collapsing the root verifier cache path into one auth-state write, which cuts sampled `root::canic_request_delegation` from `4356980` in `instruction-footprint-17` to `3205866` in `instruction-footprint-20`.
 - `0.24.0` continues the shared-runtime reduction line by trimming shipped `CandidType` doc bloat, separating the public `canic-testkit` surface from unpublished self-test support, cutting sampled root chunk publication from about `9.7M` to `390k` local instructions, cutting sampled `root::canic_request_delegation` from `5516827` in `instruction-footprint-15` to `4356980` in `instruction-footprint-17`, and hardening the audit and release surfaces around those reductions.
 
 See detailed breakdown:

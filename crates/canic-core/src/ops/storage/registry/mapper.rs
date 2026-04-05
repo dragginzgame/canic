@@ -1,9 +1,8 @@
 use crate::{
+    cdk::candid::Principal,
     dto::canister::CanisterInfo,
-    dto::topology::{
-        AppRegistryEntry, AppRegistryResponse, SubnetRegistryEntry, SubnetRegistryResponse,
-    },
-    storage::stable::registry::{app::AppRegistryRecord, subnet::SubnetRegistryRecord},
+    dto::topology::{AppRegistryEntry, AppRegistryResponse, SubnetRegistryEntry},
+    storage::stable::registry::app::AppRegistryRecord,
 };
 
 ///
@@ -36,27 +35,22 @@ pub struct SubnetRegistryResponseMapper;
 
 impl SubnetRegistryResponseMapper {
     #[must_use]
-    pub fn record_to_view(data: SubnetRegistryRecord) -> SubnetRegistryResponse {
-        let entries = data
-            .entries
-            .into_iter()
-            .map(|(pid, record)| {
-                let record_view = CanisterInfo {
-                    pid,
-                    role: record.role.clone(),
-                    parent_pid: record.parent_pid,
-                    module_hash: record.module_hash,
-                    created_at: record.created_at,
-                };
+    pub fn entry_to_view(
+        pid: Principal,
+        record: crate::storage::canister::CanisterRecord,
+    ) -> SubnetRegistryEntry {
+        let record_view = CanisterInfo {
+            pid,
+            role: record.role.clone(),
+            parent_pid: record.parent_pid,
+            module_hash: record.module_hash,
+            created_at: record.created_at,
+        };
 
-                SubnetRegistryEntry {
-                    pid,
-                    role: record_view.role.clone(),
-                    record: record_view,
-                }
-            })
-            .collect();
-
-        SubnetRegistryResponse(entries)
+        SubnetRegistryEntry {
+            pid,
+            role: record_view.role.clone(),
+            record: record_view,
+        }
     }
 }

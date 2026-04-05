@@ -26,7 +26,8 @@ use crate::{
     storage::canister::CanisterRecord,
     workflow::rpc::RpcWorkflowError,
 };
-use candid::{decode_one, encode_one};
+use candid::encode_one;
+use canic_memory::serialize;
 use sha2::{Digest, Sha256};
 
 ///
@@ -34,6 +35,11 @@ use sha2::{Digest, Sha256};
 ///
 
 pub struct NonrootCyclesCapabilityWorkflow;
+
+#[derive(Clone, Copy, Debug)]
+pub(super) struct AuthorizedCyclesGrant {
+    approved_cycles: u128,
+}
 
 impl NonrootCyclesCapabilityWorkflow {
     /// Execute the non-root cycles capability path with replay-first semantics.
@@ -47,12 +53,15 @@ impl NonrootCyclesCapabilityWorkflow {
             ReplayPreflight::Cached(response) => return Ok(response),
         };
 
-        if let Err(err) = authorize_request_cycles(&ctx, &req) {
-            abort_replay(pending);
-            return Err(err);
-        }
+        let grant = match authorize_request_cycles_plan(&ctx, &req) {
+            Ok(grant) => grant,
+            Err(err) => {
+                abort_replay(pending);
+                return Err(err);
+            }
+        };
 
-        let response = match execute_request_cycles(&ctx, &req).await {
+        let response = match execute_authorized_request_cycles(&ctx, grant).await {
             Ok(response) => response,
             Err(err) => {
                 abort_replay(pending);
@@ -105,7 +114,7 @@ pub(super) fn authorize_request_cycles(
     ctx: &RootContext,
     req: &CyclesRequest,
 ) -> Result<(), InternalError> {
-    authorize_request_cycles_with_resolver(ctx, req, direct_child_record)
+    authorize_request_cycles_plan(ctx, req).map(|_| ())
 }
 
 // Run root cycles authorization against the authoritative subnet registry.
@@ -113,6 +122,22 @@ pub(super) fn authorize_root_request_cycles(
     ctx: &RootContext,
     req: &CyclesRequest,
 ) -> Result<(), InternalError> {
+    authorize_root_request_cycles_plan(ctx, req).map(|_| ())
+}
+
+// Resolve an approved non-root cycles grant in one authorization pass.
+pub(super) fn authorize_request_cycles_plan(
+    ctx: &RootContext,
+    req: &CyclesRequest,
+) -> Result<AuthorizedCyclesGrant, InternalError> {
+    authorize_request_cycles_with_resolver(ctx, req, direct_child_record)
+}
+
+// Resolve an approved root cycles grant in one authorization pass.
+pub(super) fn authorize_root_request_cycles_plan(
+    ctx: &RootContext,
+    req: &CyclesRequest,
+) -> Result<AuthorizedCyclesGrant, InternalError> {
     authorize_request_cycles_with_resolver(ctx, req, registry_child_record)
 }
 
@@ -121,11 +146,11 @@ fn authorize_request_cycles_with_resolver(
     ctx: &RootContext,
     req: &CyclesRequest,
     resolve_child: fn(Principal) -> Option<CanisterRecord>,
-) -> Result<(), InternalError> {
+) -> Result<AuthorizedCyclesGrant, InternalError> {
     let decision = authorize_request_cycles_inner(ctx, req, resolve_child);
 
     match &decision {
-        Ok(()) => {
+        Ok(_) => {
             RootCapabilityMetrics::record_authorization(
                 RootCapabilityMetricKey::RequestCycles,
                 RootCapabilityMetricOutcome::Accepted,
@@ -163,7 +188,7 @@ pub(super) fn authorize_request_cycles_inner(
     ctx: &RootContext,
     req: &CyclesRequest,
     resolve_child: fn(Principal) -> Option<CanisterRecord>,
-) -> Result<(), InternalError> {
+) -> Result<AuthorizedCyclesGrant, InternalError> {
     CyclesFundingMetrics::record_requested(ctx.caller, req.cycles);
 
     let Some(child) = resolve_child(ctx.caller) else {
@@ -225,7 +250,9 @@ pub(super) fn authorize_request_cycles_inner(
         .into());
     }
 
-    Ok(())
+    Ok(AuthorizedCyclesGrant {
+        approved_cycles: decision.approved_cycles,
+    })
 }
 
 // Execute the approved cycles transfer and return the canonical cycles response.
@@ -233,7 +260,8 @@ pub(super) async fn execute_request_cycles(
     ctx: &RootContext,
     req: &CyclesRequest,
 ) -> Result<CyclesResponse, InternalError> {
-    execute_request_cycles_with_resolver(ctx, req, direct_child_record).await
+    let grant = authorize_request_cycles_plan(ctx, req)?;
+    execute_authorized_request_cycles(ctx, grant).await
 }
 
 // Execute root cycles funding against the authoritative subnet registry.
@@ -241,40 +269,29 @@ pub(super) async fn execute_root_request_cycles(
     ctx: &RootContext,
     req: &CyclesRequest,
 ) -> Result<CyclesResponse, InternalError> {
-    execute_request_cycles_with_resolver(ctx, req, registry_child_record).await
+    let grant = authorize_root_request_cycles_plan(ctx, req)?;
+    execute_authorized_request_cycles(ctx, grant).await
 }
 
-// Execute the approved cycles transfer using the caller-specific child resolver.
-async fn execute_request_cycles_with_resolver(
+// Execute an already-authorized cycles transfer.
+pub(super) async fn execute_authorized_request_cycles(
     ctx: &RootContext,
-    req: &CyclesRequest,
-    resolve_child: fn(Principal) -> Option<CanisterRecord>,
+    grant: AuthorizedCyclesGrant,
 ) -> Result<CyclesResponse, InternalError> {
-    let child = resolve_child(ctx.caller).ok_or(RpcWorkflowError::ChildNotFound(ctx.caller))?;
-    if child.parent_pid != Some(ctx.self_pid) {
-        return Err(RpcWorkflowError::NotChildOfCaller(ctx.caller, ctx.self_pid).into());
-    }
-
-    let policy = funding::policy_for_child_role(&child.role);
-    let approved_cycles = match policy.evaluate(ctx.caller, req.cycles, ctx.now) {
-        Ok(decision) => decision.approved_cycles,
-        Err(violation) => return Err(map_funding_policy_violation(ctx, req.cycles, violation)),
-    };
-
-    if let Err(err) = MgmtOps::deposit_cycles(ctx.caller, approved_cycles).await {
+    if let Err(err) = MgmtOps::deposit_cycles(ctx.caller, grant.approved_cycles).await {
         CyclesFundingMetrics::record_denied(
             ctx.caller,
-            approved_cycles,
+            grant.approved_cycles,
             CyclesFundingDeniedReason::ExecutionError,
         );
         return Err(err);
     }
 
-    CyclesFundingMetrics::record_granted(ctx.caller, approved_cycles);
-    funding::record_child_grant(ctx.caller, approved_cycles, ctx.now);
+    CyclesFundingMetrics::record_granted(ctx.caller, grant.approved_cycles);
+    funding::record_child_grant(ctx.caller, grant.approved_cycles, ctx.now);
 
     Ok(CyclesResponse {
-        cycles_transferred: approved_cycles,
+        cycles_transferred: grant.approved_cycles,
     })
 }
 
@@ -363,7 +380,7 @@ fn check_cycles_replay(
                 RootCapabilityMetricKey::RequestCycles,
                 RootCapabilityMetricOutcome::DuplicateSame,
             );
-            decode_cycles_response(&cached.response_candid).map(ReplayPreflight::Cached)
+            decode_cycles_response(&cached.response_bytes).map(ReplayPreflight::Cached)
         }
         ReplayDecision::InFlight => {
             RootCapabilityMetrics::record_replay(
@@ -429,8 +446,8 @@ fn map_replay_commit_error(err: ReplayCommitError) -> InternalError {
 
 // Decode a cached replay entry back into the cycles response shape.
 fn decode_cycles_response(bytes: &[u8]) -> Result<CyclesResponse, InternalError> {
-    let response: Response =
-        decode_one(bytes).map_err(|err| RpcWorkflowError::ReplayDecodeFailed(err.to_string()))?;
+    let response: Response = serialize::deserialize(bytes)
+        .map_err(|err| RpcWorkflowError::ReplayDecodeFailed(err.to_string()))?;
     match response {
         Response::Cycles(response) => Ok(response),
         _ => Err(RpcWorkflowError::ReplayDecodeFailed(

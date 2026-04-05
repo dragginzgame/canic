@@ -112,6 +112,7 @@ impl ShardingWorkflow {
         .await
     }
 
+    #[expect(clippy::too_many_lines)]
     pub async fn assign_with_policy(
         canister_role: &CanisterRole,
         pool: &str,
@@ -119,19 +120,17 @@ impl ShardingWorkflow {
         policy: ShardPoolPolicy,
         extra_arg: Option<Vec<u8>>,
     ) -> Result<Principal, InternalError> {
-        let mut active = ShardingLifecycleOps::active_shards();
+        let active = ShardingLifecycleOps::active_shards();
         canic_core::perf!("load_active_shards");
         if active.is_empty() {
-            Self::bootstrap_empty_active(
+            return Self::assign_bootstrap_created(
                 canister_role,
                 pool,
                 partition_key,
                 &policy,
-                extra_arg.clone(),
+                extra_arg,
             )
-            .await?;
-            active = ShardingLifecycleOps::active_shards();
-            canic_core::perf!("bootstrap_empty_active");
+            .await;
         }
 
         let active_set: BTreeSet<_> = active.into_iter().collect();
@@ -282,6 +281,32 @@ impl ShardingWorkflow {
         Ok(ShardingPlanStateResponseMapper::record_to_view(plan.state))
     }
 
+    // Assign the first shard in an empty pool and persist the initial partition mapping.
+    async fn assign_bootstrap_created(
+        canister_role: &CanisterRole,
+        pool: &str,
+        partition_key: &str,
+        policy: &ShardPoolPolicy,
+        extra_arg: Option<Vec<u8>>,
+    ) -> Result<Principal, InternalError> {
+        let (pid, slot) =
+            Self::bootstrap_empty_active(canister_role, pool, partition_key, policy, extra_arg)
+                .await?;
+        canic_core::perf!("bootstrap_empty_active");
+
+        ShardingRegistryOps::assign(pool, partition_key, pid)?;
+        canic_core::perf!("assign_bootstrap_created");
+
+        canic_core::log!(
+            Topic::Sharding,
+            Ok,
+            "✨ partition_key={partition_key} created+assigned shard={pid} pool={pool} slot={slot}"
+        );
+
+        Ok(pid)
+    }
+
+    // Select a free slot and admit the first active shard for an empty pool.
     #[expect(clippy::cast_possible_truncation)]
     async fn bootstrap_empty_active(
         canister_role: &CanisterRole,
@@ -289,7 +314,7 @@ impl ShardingWorkflow {
         partition_key: &str,
         policy: &ShardPoolPolicy,
         extra_arg: Option<Vec<u8>>,
-    ) -> Result<(), InternalError> {
+    ) -> Result<(Principal, u32), InternalError> {
         let pool_entries = Self::pool_entry_views(pool);
         if pool_entries.len() as u32 >= policy.max_shards {
             return Err(Self::no_active_shards_exhausted(pool, partition_key));
@@ -299,8 +324,8 @@ impl ShardingWorkflow {
         let slot = HrwSelector::select_from_slots(pool, partition_key, &free_slots)
             .ok_or_else(|| Self::no_active_shards_exhausted(pool, partition_key))?;
 
-        let _ = Self::allocate_and_admit(pool, slot, canister_role, policy, extra_arg).await?;
-        Ok(())
+        let pid = Self::allocate_and_admit(pool, slot, canister_role, policy, extra_arg).await?;
+        Ok((pid, slot))
     }
 
     #[expect(clippy::cast_possible_truncation)]

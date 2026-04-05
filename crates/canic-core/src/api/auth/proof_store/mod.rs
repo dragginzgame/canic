@@ -23,26 +23,11 @@ use crate::{
 };
 
 impl DelegationApi {
-    pub async fn store_proof(
-        request: DelegationProofInstallRequest,
+    async fn store_proof_local(
+        proof: DelegationProof,
+        intent: crate::dto::auth::DelegationProofInstallIntent,
         kind: DelegationProvisionTargetKind,
     ) -> Result<(), Error> {
-        let cfg = ConfigOps::delegated_tokens_config().map_err(Error::from)?;
-        if !cfg.enabled {
-            return Err(Error::forbidden(Self::DELEGATED_TOKENS_DISABLED));
-        }
-
-        let root_pid = EnvOps::root_pid().map_err(Error::from)?;
-        let caller = IcOps::msg_caller();
-        if caller != root_pid {
-            return Err(Error::forbidden(
-                "delegation proof store requires root caller",
-            ));
-        }
-
-        let proof = request.proof;
-        let intent = request.intent;
-
         if kind == DelegationProvisionTargetKind::Verifier {
             let local = IcOps::canister_self();
             Self::ensure_target_in_proof_audience(
@@ -53,6 +38,7 @@ impl DelegationApi {
             )?;
         }
 
+        let root_pid = EnvOps::root_pid().map_err(Error::from)?;
         DelegatedTokenOps::cache_public_keys_for_cert(&proof.cert)
             .await
             .map_err(Self::map_delegation_error)?;
@@ -92,6 +78,35 @@ impl DelegationApi {
         );
 
         Ok(())
+    }
+
+    pub async fn store_proof(
+        request: DelegationProofInstallRequest,
+        kind: DelegationProvisionTargetKind,
+    ) -> Result<(), Error> {
+        let cfg = ConfigOps::delegated_tokens_config().map_err(Error::from)?;
+        if !cfg.enabled {
+            return Err(Error::forbidden(Self::DELEGATED_TOKENS_DISABLED));
+        }
+
+        let root_pid = EnvOps::root_pid().map_err(Error::from)?;
+        let caller = IcOps::msg_caller();
+        if caller != root_pid {
+            return Err(Error::forbidden(
+                "delegation proof store requires root caller",
+            ));
+        }
+
+        Self::store_proof_local(request.proof, request.intent, kind).await
+    }
+
+    pub(super) async fn store_local_signer_proof(proof: DelegationProof) -> Result<(), Error> {
+        Self::store_proof_local(
+            proof,
+            crate::dto::auth::DelegationProofInstallIntent::Provisioning,
+            DelegationProvisionTargetKind::Signer,
+        )
+        .await
     }
 
     /// Install delegation proof and key material directly, bypassing management-key lookups.

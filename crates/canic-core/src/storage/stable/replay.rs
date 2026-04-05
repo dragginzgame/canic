@@ -59,7 +59,7 @@ pub struct RootReplayRecord {
     pub payload_hash: [u8; 32],
     pub issued_at: u64,
     pub expires_at: u64,
-    pub response_candid: Vec<u8>,
+    pub response_bytes: Vec<u8>,
 }
 
 impl Storable for RootReplayRecord {
@@ -71,7 +71,7 @@ impl Storable for RootReplayRecord {
 
     fn into_bytes(self) -> Vec<u8> {
         let response_len =
-            u32::try_from(self.response_candid.len()).expect("root replay response bytes fit u32");
+            u32::try_from(self.response_bytes.len()).expect("root replay response bytes fit u32");
         let mut bytes = Vec::with_capacity(
             ROOT_REPLAY_RECORD_FIXED_BYTES + usize::try_from(response_len).unwrap_or(usize::MAX),
         );
@@ -79,7 +79,7 @@ impl Storable for RootReplayRecord {
         bytes.extend_from_slice(&self.issued_at.to_le_bytes());
         bytes.extend_from_slice(&self.expires_at.to_le_bytes());
         bytes.extend_from_slice(&response_len.to_le_bytes());
-        bytes.extend_from_slice(&self.response_candid);
+        bytes.extend_from_slice(&self.response_bytes);
         bytes
     }
 
@@ -121,7 +121,7 @@ impl Storable for RootReplayRecord {
             payload_hash,
             issued_at,
             expires_at,
-            response_candid: bytes[ROOT_REPLAY_RECORD_FIXED_BYTES..response_end].to_vec(),
+            response_bytes: bytes[ROOT_REPLAY_RECORD_FIXED_BYTES..response_end].to_vec(),
         }
     }
 }
@@ -193,7 +193,7 @@ mod tests {
         );
         assert_eq!(
             encoded.len(),
-            ROOT_REPLAY_RECORD_FIXED_BYTES + record.response_candid.len(),
+            ROOT_REPLAY_RECORD_FIXED_BYTES + record.response_bytes.len(),
             "encoded replay record length must match fixed header plus payload bytes"
         );
     }
@@ -204,7 +204,7 @@ mod tests {
             payload_hash: [7u8; 32],
             issued_at: 11,
             expires_at: 22,
-            response_candid: vec![],
+            response_bytes: vec![],
         });
     }
 
@@ -214,7 +214,7 @@ mod tests {
             payload_hash: [9u8; 32],
             issued_at: 111,
             expires_at: 222,
-            response_candid: vec![1, 2, 3, 4, 5, 6],
+            response_bytes: vec![1, 2, 3, 4, 5, 6],
         });
     }
 }

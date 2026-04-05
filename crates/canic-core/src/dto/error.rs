@@ -7,7 +7,7 @@ use std::fmt::{self, Display};
 // Public API error payload.
 //
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct Error {
     pub code: ErrorCode,
     pub message: String,
@@ -88,7 +88,7 @@ impl From<AccessError> for Error {
 // Stable public error codes.
 //
 
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[non_exhaustive]
 #[remain::sorted]
 pub enum ErrorCode {

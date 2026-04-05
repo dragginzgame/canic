@@ -1,5 +1,5 @@
 use crate::dto::rpc::Response;
-use candid::encode_one;
+use canic_memory::serialize;
 
 use self::{guard::ReplayPending, slot as replay_slot};
 
@@ -49,9 +49,9 @@ pub fn commit_root_replay(
     pending: ReplayPending,
     response: &Response,
 ) -> Result<(), ReplayCommitError> {
-    let response_candid =
-        encode_one(response).map_err(|err| ReplayCommitError::EncodeFailed(err.to_string()))?;
-    replay_slot::commit_root_slot(pending, response_candid);
+    let response_bytes = serialize::serialize(response)
+        .map_err(|err| ReplayCommitError::EncodeFailed(err.to_string()))?;
+    replay_slot::commit_root_slot(pending, response_bytes);
     Ok(())
 }
 
