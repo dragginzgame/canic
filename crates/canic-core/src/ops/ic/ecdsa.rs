@@ -106,6 +106,7 @@ impl EcdsaOps {
 
 #[cfg(not(feature = "auth-crypto"))]
 impl EcdsaOps {
+    #[allow(clippy::unused_async)]
     pub async fn sign_bytes(
         _key_name: &str,
         _derivation_path: Vec<Vec<u8>>,
@@ -114,6 +115,7 @@ impl EcdsaOps {
         Err(EcdsaOpsError::AuthCryptoUnavailable.into())
     }
 
+    #[allow(clippy::unused_async)]
     pub async fn public_key_sec1(
         _key_name: &str,
         _derivation_path: Vec<Vec<u8>>,
