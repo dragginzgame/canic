@@ -24,9 +24,10 @@ impl DelegatedTokenOps {
         }
 
         let key_name = keys::delegated_tokens_key_name()?;
-        keys::ensure_root_public_key_cached(&key_name, cert.root_pid).await?;
-        let hash = crypto::cert_hash(&cert)?;
+        let hash = crypto::cert_hash(&cert);
+        crate::perf!("hash_cert");
         let sig = EcdsaOps::sign_bytes(&key_name, keys::root_derivation_path(), hash).await?;
+        crate::perf!("sign_cert");
 
         Ok(DelegationProof {
             cert,

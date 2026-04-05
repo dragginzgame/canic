@@ -86,10 +86,7 @@ fn signed_token_for(
     let mut proof = sample_proof(shard_pid, cert_issued_at);
     proof.cert.aud = vec![audience];
 
-    let (root_public_key, cert_sig) = sign_prehash(
-        root_seed,
-        crypto::cert_hash(&proof.cert).expect("cert hash"),
-    );
+    let (root_public_key, cert_sig) = sign_prehash(root_seed, crypto::cert_hash(&proof.cert));
     let (shard_public_key, token_sig) = sign_prehash(
         shard_seed,
         crypto::token_signing_hash(&VerifiedTokenClaims::from_dto_ref(&claims), &proof.cert)
@@ -474,11 +471,10 @@ fn matching_proof_lookup_distinguishes_missing_key_from_other_stored_proof() {
 
     DelegationStateOps::upsert_proof_from_dto(stored.clone(), 200).expect("store keyed proof");
 
-    let matched = DelegationStateOps::matching_proof_dto(&stored).expect("lookup stored proof");
+    let matched = DelegationStateOps::matching_proof_dto(&stored);
     assert_eq!(matched, Some(stored), "stored proof key must resolve");
 
-    let missing_match =
-        DelegationStateOps::matching_proof_dto(&missing).expect("lookup missing proof");
+    let missing_match = DelegationStateOps::matching_proof_dto(&missing);
     assert_eq!(
         missing_match, None,
         "different proof key must resolve as miss"

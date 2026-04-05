@@ -83,6 +83,9 @@ fn upsert_shard_public_key_record(
         .iter_mut()
         .find(|entry| entry.shard_pid == shard_pid)
     {
+        if entry.public_key_sec1 == public_key_sec1 {
+            return;
+        }
         entry.public_key_sec1 = public_key_sec1;
     } else {
         entries.push(ShardPublicKeyRecord {

@@ -184,7 +184,7 @@ pub(super) fn verify_delegation_signature(proof: &DelegationProof) -> Result<(),
 
     let root_public_key = DelegationStateOps::root_public_key()
         .ok_or(DelegationSignatureError::RootPublicKeyUnavailable)?;
-    let hash = crypto::cert_hash(&proof.cert)?;
+    let hash = crypto::cert_hash(&proof.cert);
     EcdsaOps::verify_signature(&root_public_key, hash, &proof.cert_sig)
         .map_err(|err| map_signature_error(err, SignatureKind::Delegation))?;
 

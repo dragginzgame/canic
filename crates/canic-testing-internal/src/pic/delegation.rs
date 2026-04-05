@@ -9,6 +9,8 @@ use canic::{
 };
 use canic_testkit::pic::Pic;
 
+const USER_SHARD_LOCAL_PUBLIC_KEY_TEST: &str = "user_shard_local_public_key_test";
+
 // Create one user shard through the reference `user_hub` path.
 #[must_use]
 pub fn create_user_shard(pic: &Pic, user_hub_pid: Principal, tenant: Principal) -> Principal {
@@ -51,6 +53,9 @@ pub fn request_root_delegation_provision(
     shard_pid: Principal,
     verifier_pid: Principal,
 ) -> DelegationProvisionResponse {
+    let shard_public_key_sec1: Result<Vec<u8>, Error> = pic
+        .update_call(shard_pid, USER_SHARD_LOCAL_PUBLIC_KEY_TEST, ())
+        .expect("user_shard_local_public_key_test transport failed");
     let request = DelegationRequest {
         shard_pid,
         scopes: vec![cap::VERIFY.to_string()],
@@ -58,7 +63,9 @@ pub fn request_root_delegation_provision(
         ttl_secs: 60,
         verifier_targets: vec![verifier_pid],
         include_root_verifier: true,
-        shard_public_key_sec1: None,
+        shard_public_key_sec1: Some(
+            shard_public_key_sec1.expect("user_shard_local_public_key_test application failed"),
+        ),
         metadata: None,
     };
     let response: Result<Result<DelegationProvisionResponse, Error>, Error> = pic.update_call_as(

@@ -14,7 +14,7 @@ use crate::{dto::auth::DelegationProof, ops::auth::DelegationValidationError};
 // Enforce verifier-local proof presence and equality before token signatures count.
 pub(super) fn verify_current_proof(proof: &DelegationProof) -> Result<(), InternalError> {
     let now_secs = IcOps::now_secs();
-    let Some(stored) = DelegationStateOps::matching_proof_dto(proof)? else {
+    let Some(stored) = DelegationStateOps::matching_proof_dto(proof) else {
         let stats = DelegationStateOps::proof_cache_stats(now_secs)?;
         record_verifier_proof_cache_stats(
             stats.size,
@@ -36,7 +36,7 @@ pub(super) fn verify_current_proof(proof: &DelegationProof) -> Result<(), Intern
     };
 
     if proofs_equal(proof, &stored) {
-        let _ = DelegationStateOps::mark_matching_proof_verified(proof, now_secs)?;
+        let _ = DelegationStateOps::mark_matching_proof_verified(proof, now_secs);
         let stats = DelegationStateOps::proof_cache_stats(now_secs)?;
         record_verifier_proof_cache_stats(
             stats.size,

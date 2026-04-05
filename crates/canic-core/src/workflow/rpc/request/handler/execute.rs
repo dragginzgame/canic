@@ -148,8 +148,8 @@ async fn execute_issue_delegation(
             }
         };
         crate::perf!("cache_root_verifier_keys");
-        let outcome = DelegationStateOps::upsert_proof_from_dto_with_shard_public_key(
-            response.proof.clone(),
+        let outcome = DelegationStateOps::upsert_proof_from_dto_ref_with_shard_public_key(
+            &response.proof,
             ctx.now,
             shard_public_key,
         )?;

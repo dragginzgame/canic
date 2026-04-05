@@ -45,6 +45,16 @@ async fn user_shard_issue_token(claims: DelegatedTokenClaims) -> Result<Delegate
     DelegationApi::issue_token(claims).await
 }
 
+#[cfg(not(canic_disable_bundle_observability_env))]
+#[canic_update]
+async fn user_shard_local_public_key_test() -> Result<Vec<u8>, Error> {
+    if let Err(err) = canic::access::env::build_network_local() {
+        return Err(Error::forbidden(err.to_string()));
+    }
+
+    DelegationApi::local_shard_public_key_sec1().await
+}
+
 #[canic_query(requires(auth::authenticated(cap::VERIFY)))]
 async fn hello(token: DelegatedToken) -> Result<(), Error> {
     Ok(())
