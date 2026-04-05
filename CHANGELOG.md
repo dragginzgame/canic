@@ -5,6 +5,16 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+
+## [0.25.x] - 2026-04-05 - Recurring Audit Refresh
+
+- `0.25.0` refreshes the recurring audit line with retained summary reruns across layering, capability surface, wasm footprint, instruction footprint, lifecycle/change-friction checks, and the auth invariants; the current result is that the invariants still hold while the main remaining pressure is complexity concentrated in the auth/runtime seams.
+
+See detailed breakdown:
+[docs/changelog/0.25.md](docs/changelog/0.25.md)
+
+---
+
 ## [0.24.x] - 2026-04-04 - Shared Runtime Reduction and Test Boundary Cleanup
 
 - `0.24.8` extends public `canic-testkit` with a generic prebuilt-wasm install path, so downstream PocketIC suites that do not use Canic canisters can still stay fully `canic-testkit`-backed instead of hand-rolling `create_canister` / `add_cycles` / `install_canister` adapters.

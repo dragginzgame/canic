@@ -9,7 +9,11 @@
 #![allow(clippy::unused_async)]
 
 #[cfg(debug_assertions)]
+use canic::Error;
+#[cfg(debug_assertions)]
 use canic::api::rpc::RpcApi;
+#[cfg(debug_assertions)]
+use canic::canic_update;
 #[cfg(debug_assertions)]
 use canic::{dto::rpc::CreateCanisterParent, dto::rpc::CreateCanisterResponse};
 #[cfg(debug_assertions)]
@@ -17,7 +21,7 @@ use canic_internal::canister;
 #[cfg(debug_assertions)]
 use std::collections::HashMap;
 
-use canic::{Error, api::auth::DelegationApi, prelude::*};
+use canic::api::auth::DelegationApi;
 
 //
 // CANIC
