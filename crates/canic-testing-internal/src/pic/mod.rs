@@ -17,7 +17,6 @@ pub use canic_testkit::pic::{StandaloneCanisterFixture, install_standalone_canis
 pub use delegation::{create_user_shard, issue_delegated_token, request_root_delegation_provision};
 pub use lifecycle::{
     LifecycleBoundaryFixture, install_lifecycle_boundary_fixture, invalid_init_args, upgrade_args,
-    wait_for_ready,
 };
 pub use root::{
     RootBaselineMetadata, RootBaselineSpec, build_root_cached_baseline,

@@ -2,10 +2,12 @@
 // These checks intentionally avoid the root hierarchy when one standalone
 // canister is enough to exercise the behavior under test.
 
+use candid::encode_one;
 use canic::{
     Error,
     cdk::types::Principal,
     dto::{
+        auth::AttestationKeySet,
         auth::{DelegatedToken, DelegatedTokenClaims, DelegationCert, DelegationProof},
         error::ErrorCode,
     },
@@ -13,11 +15,20 @@ use canic::{
 };
 use canic_internal::canister::TEST;
 use canic_testing_internal::pic::{install_audit_scaling_probe, install_standalone_canister};
-use canic_testkit::artifacts::WasmBuildProfile;
+use canic_testkit::{
+    artifacts::{
+        WasmBuildProfile, build_wasm_canisters, read_wasm, test_target_dir, wasm_artifacts_ready,
+        workspace_root_for,
+    },
+    pic::install_prebuilt_canister,
+};
+use std::sync::OnceLock;
 
 const fn p(id: u8) -> Principal {
     Principal::from_slice(&[id; 29])
 }
+
+static SHARDING_ROOT_STUB_WASM: OnceLock<Vec<u8>> = OnceLock::new();
 
 #[test]
 fn standalone_scale_hub_perf_probe_succeeds() {
@@ -48,6 +59,24 @@ fn standalone_test_auth_guard_rejects_bogus_token() {
     assert_eq!(err.code, ErrorCode::Unauthorized);
 }
 
+#[test]
+fn prebuilt_canister_helper_installs_non_canic_wasm() {
+    let fixture = install_prebuilt_canister(
+        sharding_root_stub_wasm(),
+        encode_one(()).expect("encode empty init"),
+    );
+
+    let key_set: Result<Result<AttestationKeySet, Error>, Error> =
+        fixture
+            .pic
+            .update_call(fixture.canister_id, "canic_attestation_key_set", ());
+
+    let key_set = key_set
+        .expect("canic_attestation_key_set transport failed")
+        .expect("canic_attestation_key_set application failed");
+    assert_eq!(key_set.keys.len(), 1);
+}
+
 fn bogus_delegated_token() -> DelegatedToken {
     DelegatedToken {
         claims: DelegatedTokenClaims {
@@ -71,4 +100,26 @@ fn bogus_delegated_token() -> DelegatedToken {
         },
         token_sig: vec![0],
     }
+}
+
+fn sharding_root_stub_wasm() -> Vec<u8> {
+    SHARDING_ROOT_STUB_WASM
+        .get_or_init(|| {
+            let workspace_root = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
+            let target_dir = test_target_dir(&workspace_root, "standalone-prebuilt-wasm");
+            let canister = "sharding_root_stub";
+
+            if !wasm_artifacts_ready(&target_dir, &[canister], WasmBuildProfile::Fast) {
+                build_wasm_canisters(
+                    &workspace_root,
+                    &target_dir,
+                    &[canister],
+                    WasmBuildProfile::Fast,
+                    &[],
+                );
+            }
+
+            read_wasm(&target_dir, canister, WasmBuildProfile::Fast)
+        })
+        .clone()
 }

@@ -19,14 +19,10 @@ use canic_testkit::{
 use std::{
     path::{Path, PathBuf},
     sync::Once,
-    time::Duration,
 };
 
 const INSTALL_CYCLES: u128 = 1_000_000_000_000;
-const READY_TICK_LIMIT: usize = 120;
-const INSTALL_CODE_RETRY_LIMIT: usize = 4;
 const CANISTERS: [&str; 2] = ["canister_test", "intent_authority"];
-const INSTALL_CODE_COOLDOWN: Duration = Duration::from_secs(5 * 60);
 static BUILD_ONCE: Once = Once::new();
 
 ///
@@ -68,30 +64,6 @@ impl LifecycleBoundaryFixture {
         );
         canister_id
     }
-
-    /// Wait out the install_code cooldown window inside the same PocketIC instance.
-    pub fn wait_out_install_code_rate_limit(&self) {
-        self.pic
-            .wait_out_install_code_rate_limit(INSTALL_CODE_COOLDOWN);
-    }
-
-    /// Retry one install_code-like operation while PocketIC still reports rate limiting.
-    pub fn retry_install_code_ok<T, F>(&self, op: F) -> Result<T, String>
-    where
-        F: FnMut() -> Result<T, String>,
-    {
-        self.pic
-            .retry_install_code_ok(INSTALL_CODE_RETRY_LIMIT, INSTALL_CODE_COOLDOWN, op)
-    }
-
-    /// Retry one install_code-like failure path while PocketIC still reports rate limiting.
-    pub fn retry_install_code_err<F>(&self, first: Result<(), String>, op: F) -> Result<(), String>
-    where
-        F: FnMut() -> Result<(), String>,
-    {
-        self.pic
-            .retry_install_code_err(INSTALL_CODE_RETRY_LIMIT, INSTALL_CODE_COOLDOWN, first, op)
-    }
 }
 
 /// Build the lifecycle-boundary canister pair once and install them into one fresh PocketIC.
@@ -132,11 +104,6 @@ pub fn invalid_init_args() -> Vec<u8> {
 #[must_use]
 pub fn upgrade_args() -> Vec<u8> {
     encode_one(()).expect("encode upgrade")
-}
-
-/// Wait until the installed non-root canister reports ready.
-pub fn wait_for_ready(pic: &Pic, canister_id: Principal, phase: &str) {
-    pic.wait_for_ready(canister_id, READY_TICK_LIMIT, phase);
 }
 
 // Build the dedicated lifecycle-boundary canisters once into the shared test target dir.
