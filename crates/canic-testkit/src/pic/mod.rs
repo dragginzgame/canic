@@ -25,6 +25,8 @@ use std::{
     time::{Duration, Instant},
 };
 
+mod standalone;
+
 const INSTALL_CYCLES: u128 = 500 * TC;
 const PIC_PROCESS_LOCK_DIR_NAME: &str = "canic-pocket-ic.lock";
 const PIC_PROCESS_LOCK_RETRY_DELAY: Duration = Duration::from_millis(100);
@@ -85,6 +87,8 @@ pub struct CachedPicBaselineGuard<'a, T> {
 pub struct PicSerialGuard {
     _private: (),
 }
+
+pub use standalone::{StandaloneCanisterFixture, install_standalone_canister};
 
 ///
 /// Create a fresh PocketIC universe.
@@ -381,6 +385,70 @@ impl Pic {
         panic!("{context}: canisters did not become ready after {tick_limit} ticks");
     }
 
+    /// Wait out the PocketIC `install_code` cooldown window inside the same instance.
+    pub fn wait_out_install_code_rate_limit(&self, cooldown: Duration) {
+        self.advance_time(cooldown);
+        self.tick_n(2);
+    }
+
+    /// Retry one install_code-like operation while PocketIC still reports rate limiting.
+    pub fn retry_install_code_ok<T, F>(
+        &self,
+        retry_limit: usize,
+        cooldown: Duration,
+        mut op: F,
+    ) -> Result<T, String>
+    where
+        F: FnMut() -> Result<T, String>,
+    {
+        let mut last_err = None;
+
+        for _ in 0..retry_limit {
+            match op() {
+                Ok(value) => return Ok(value),
+                Err(err) if is_install_code_rate_limited(&err) => {
+                    last_err = Some(err);
+                    self.wait_out_install_code_rate_limit(cooldown);
+                }
+                Err(err) => return Err(err),
+            }
+        }
+
+        Err(last_err.unwrap_or_else(|| "install_code retry loop exhausted".to_string()))
+    }
+
+    /// Retry one install_code-like failure path while PocketIC still reports rate limiting.
+    pub fn retry_install_code_err<F>(
+        &self,
+        retry_limit: usize,
+        cooldown: Duration,
+        first: Result<(), String>,
+        mut op: F,
+    ) -> Result<(), String>
+    where
+        F: FnMut() -> Result<(), String>,
+    {
+        match first {
+            Ok(()) => return Ok(()),
+            Err(err) if !is_install_code_rate_limited(&err) => return Err(err),
+            Err(_) => {}
+        }
+
+        self.wait_out_install_code_rate_limit(cooldown);
+
+        for _ in 1..retry_limit {
+            match op() {
+                Ok(()) => return Ok(()),
+                Err(err) if is_install_code_rate_limited(&err) => {
+                    self.wait_out_install_code_rate_limit(cooldown);
+                }
+                Err(err) => return Err(err),
+            }
+        }
+
+        op()
+    }
+
     /// Dump basic PocketIC status and log context for one canister.
     pub fn dump_canister_debug(&self, canister_id: Principal, context: &str) {
         eprintln!("{context}: debug for canister {canister_id}");
@@ -645,6 +713,10 @@ impl Pic {
             "failed to restore canister snapshot for {canister_id} using sender {sender:?}: {err}"
         );
     }
+}
+
+fn is_install_code_rate_limited(message: &str) -> bool {
+    message.contains("CanisterInstallCodeRateLimited")
 }
 
 impl Drop for ProcessLockGuard {

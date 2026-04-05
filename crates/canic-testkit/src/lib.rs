@@ -2,7 +2,8 @@
 //!
 //! This crate is intended for host-side test environments (for example via
 //! PocketIC) and provides generic helpers such as stable dummy principals,
-//! PocketIC wrappers, and cached baseline primitives.
+//! PocketIC wrappers, standalone non-root canister fixtures, retry helpers for
+//! PocketIC install throttling, and cached baseline primitives.
 
 pub mod artifacts;
 pub mod pic;
