@@ -113,10 +113,10 @@ macro_rules! __canic_build_internal {
         println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_topology_cycles)");
         println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_topology_placement)");
         println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_nonroot_sync_topology)");
-        println!("cargo:rustc-check-cfg=cfg(canic_enable_internal_test_endpoints)");
-
-        if std::env::var_os("CANIC_INTERNAL_TEST_ENDPOINTS").is_some() {
-            println!("cargo:rustc-cfg=canic_enable_internal_test_endpoints");
+        if std::env::var_os("CANIC_INTERNAL_TEST_ENDPOINTS").is_none() {
+            println!("cargo:rustc-cfg=canic_disable_bundle_observability_memory");
+            println!("cargo:rustc-cfg=canic_disable_bundle_observability_env");
+            println!("cargo:rustc-cfg=canic_disable_bundle_topology_directory");
         }
 
         if $cfg.auth.delegated_tokens.enabled {
