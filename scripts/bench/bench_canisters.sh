@@ -16,13 +16,13 @@ Environment:
   CARGO_TARGET_DIR     Defaults to TMPDIR
   MAX_CANISTERS        Same as --max
   ROOT_CANISTER_ID     Same as --root (defaults to dfx canister id root)
-  CANISTER_METHOD      Same as --method (default: create_minimal on the root canister)
+  CANISTER_METHOD      Same as --method (required)
 EOF
 }
 
 MAX_CANISTERS="${MAX_CANISTERS:-0}"
 ROOT_CANISTER_ID="${ROOT_CANISTER_ID:-}"
-CANISTER_METHOD="${CANISTER_METHOD:-create_minimal}"
+CANISTER_METHOD="${CANISTER_METHOD:-}"
 REPORT_EVERY="${REPORT_EVERY:-10}"
 
 while [[ $# -gt 0 ]]; do
@@ -53,6 +53,12 @@ done
 
 if [[ "$REPORT_EVERY" -le 0 ]]; then
     echo "REPORT_EVERY must be >= 1" >&2
+    exit 1
+fi
+
+if [[ -z "$CANISTER_METHOD" ]]; then
+    echo "CANISTER_METHOD or --method is required" >&2
+    usage
     exit 1
 fi
 

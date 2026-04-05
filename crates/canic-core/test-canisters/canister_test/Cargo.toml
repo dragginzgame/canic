@@ -5,6 +5,9 @@ rust-version = { workspace = true }
 version = { workspace = true }
 publish = false
 
+[package.metadata.canic]
+role = "test"
+
 [lib]
 crate-type = ["cdylib"]
 

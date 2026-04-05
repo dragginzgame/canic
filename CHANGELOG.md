@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.25.x] - 2026-04-05 - Recurring Audit Refresh
 
+- `0.25.1` follows the audit sweep by splitting the auth/runtime complexity hotspots into smaller modules, moving the `test` role out of the default demo topology into internal test-only canisters, and removing root debug helpers so the demo/reference canisters stay closer to real user-facing flows.
 - `0.25.0` refreshes the recurring audit line with retained summary reruns across layering, capability surface, wasm footprint, instruction footprint, lifecycle/change-friction checks, and the auth invariants; the current result is that the invariants still hold while the main remaining pressure is complexity concentrated in the auth/runtime seams.
 
 See detailed breakdown:

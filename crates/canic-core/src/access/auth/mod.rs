@@ -12,32 +12,20 @@
 //! - All temporal validation (iat/exp/now) is enforced before access is granted.
 //! - Endpoint-required scopes are enforced against delegated token claims.
 
+mod identity;
+mod predicates;
+mod token;
+
 use crate::{
     access::AccessError,
-    cdk::{
-        api::{canister_self, is_controller as caller_is_controller, msg_arg_data},
-        candid::de::IDLDeserialize,
-        types::Principal,
-    },
-    config::Config,
-    dto::auth::DelegatedToken,
+    cdk::types::Principal,
     ids::CanisterRole,
     ops::{
-        auth::{DelegatedTokenOps, VerifiedDelegatedToken},
-        ic::IcOps,
-        runtime::env::EnvOps,
-        runtime::metrics::auth::{
-            record_session_fallback_invalid_subject, record_session_fallback_raw_caller,
-        },
-        storage::{
-            auth::DelegationStateOps, children::CanisterChildrenOps,
-            registry::subnet::SubnetRegistryOps,
-        },
+        auth::VerifiedDelegatedToken, runtime::env::EnvOps,
+        storage::registry::subnet::SubnetRegistryOps,
     },
 };
 use std::fmt;
-
-const MAX_INGRESS_BYTES: usize = 64 * 1024; // 64 KiB
 
 pub type Role = CanisterRole;
 
@@ -94,41 +82,6 @@ impl fmt::Display for DelegatedSessionSubjectRejection {
     }
 }
 
-///
-/// CallerBoundToken
-///
-/// Verified delegated token that has passed caller-subject binding.
-struct CallerBoundToken {
-    verified: VerifiedDelegatedToken,
-}
-
-impl CallerBoundToken {
-    /// bind_to_caller
-    ///
-    /// Enforce subject binding and return a caller-bound token wrapper.
-    fn bind_to_caller(
-        verified: VerifiedDelegatedToken,
-        caller: Principal,
-    ) -> Result<Self, AccessError> {
-        enforce_subject_binding(verified.claims.subject(), caller)?;
-        Ok(Self { verified })
-    }
-
-    /// scopes
-    ///
-    /// Borrow token scopes after caller binding has been enforced.
-    fn scopes(&self) -> &[String] {
-        self.verified.claims.scopes()
-    }
-
-    /// into_verified
-    ///
-    /// Unwrap the verified delegated token for downstream consumers.
-    fn into_verified(self) -> VerifiedDelegatedToken {
-        self.verified
-    }
-}
-
 /// resolve_authenticated_identity
 ///
 /// Resolve transport caller and authenticated subject for user auth checks.
@@ -136,32 +89,15 @@ impl CallerBoundToken {
 pub fn resolve_authenticated_identity(
     transport_caller: Principal,
 ) -> ResolvedAuthenticatedIdentity {
-    resolve_authenticated_identity_at(transport_caller, IcOps::now_secs())
+    identity::resolve_authenticated_identity(transport_caller)
 }
 
+#[cfg(test)]
 pub(crate) fn resolve_authenticated_identity_at(
     transport_caller: Principal,
     now_secs: u64,
 ) -> ResolvedAuthenticatedIdentity {
-    if let Some(session) = DelegationStateOps::delegated_session(transport_caller, now_secs) {
-        if validate_delegated_session_subject(session.delegated_pid).is_ok() {
-            return ResolvedAuthenticatedIdentity {
-                transport_caller,
-                authenticated_subject: session.delegated_pid,
-                identity_source: AuthenticatedIdentitySource::DelegatedSession,
-            };
-        }
-
-        DelegationStateOps::clear_delegated_session(transport_caller);
-        record_session_fallback_invalid_subject();
-    }
-
-    record_session_fallback_raw_caller();
-    ResolvedAuthenticatedIdentity {
-        transport_caller,
-        authenticated_subject: transport_caller,
-        identity_source: AuthenticatedIdentitySource::RawCaller,
-    }
+    identity::resolve_authenticated_identity_at(transport_caller, now_secs)
 }
 
 /// validate_delegated_session_subject
@@ -170,116 +106,27 @@ pub(crate) fn resolve_authenticated_identity_at(
 pub fn validate_delegated_session_subject(
     subject: Principal,
 ) -> Result<(), DelegatedSessionSubjectRejection> {
-    if subject == Principal::anonymous() {
-        return Err(DelegatedSessionSubjectRejection::Anonymous);
-    }
-
-    if subject == Principal::management_canister() {
-        return Err(DelegatedSessionSubjectRejection::ManagementCanister);
-    }
-
-    if try_canister_self().is_some_and(|pid| pid == subject) {
-        return Err(DelegatedSessionSubjectRejection::LocalCanister);
-    }
-
-    let env = EnvOps::snapshot();
-    if env.root_pid.is_some_and(|pid| pid == subject) {
-        return Err(DelegatedSessionSubjectRejection::RootCanister);
-    }
-    if env.parent_pid.is_some_and(|pid| pid == subject) {
-        return Err(DelegatedSessionSubjectRejection::ParentCanister);
-    }
-    if env.subnet_pid.is_some_and(|pid| pid == subject) {
-        return Err(DelegatedSessionSubjectRejection::SubnetCanister);
-    }
-    if env.prime_root_pid.is_some_and(|pid| pid == subject) {
-        return Err(DelegatedSessionSubjectRejection::PrimeRootCanister);
-    }
-    if SubnetRegistryOps::is_registered(subject) {
-        return Err(DelegatedSessionSubjectRejection::RegisteredCanister);
-    }
-
-    Ok(())
-}
-
-#[cfg(target_arch = "wasm32")]
-#[expect(clippy::unnecessary_wraps)]
-fn try_canister_self() -> Option<Principal> {
-    Some(IcOps::canister_self())
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-const fn try_canister_self() -> Option<Principal> {
-    None
+    identity::validate_delegated_session_subject(subject)
 }
 
 pub(crate) async fn delegated_token_verified(
     authenticated_subject: Principal,
     required_scope: Option<&str>,
 ) -> Result<VerifiedDelegatedToken, AccessError> {
-    let token = delegated_token_from_args()?;
-
-    let authority_pid =
-        EnvOps::root_pid().map_err(|_| dependency_unavailable("root pid unavailable"))?;
-
-    let now_secs = IcOps::now_secs();
-    let self_pid = IcOps::canister_self();
-
-    verify_token(
-        token,
-        authenticated_subject,
-        authority_pid,
-        now_secs,
-        self_pid,
-        required_scope,
-    )
-    .await
+    token::delegated_token_verified(authenticated_subject, required_scope).await
 }
 
-/// Verify a delegated token against the configured authority.
-#[expect(clippy::unused_async)]
-async fn verify_token(
-    token: DelegatedToken,
-    caller: Principal,
-    authority_pid: Principal,
-    now_secs: u64,
-    self_pid: Principal,
-    required_scope: Option<&str>,
-) -> Result<VerifiedDelegatedToken, AccessError> {
-    let verified = DelegatedTokenOps::verify_token(&token, authority_pid, now_secs, self_pid)
-        .map_err(|err| AccessError::Denied(err.to_string()))?;
-
-    let caller_bound = CallerBoundToken::bind_to_caller(verified, caller)?;
-    enforce_required_scope(required_scope, caller_bound.scopes())?;
-
-    Ok(caller_bound.into_verified())
-}
-
+#[cfg(test)]
 fn enforce_subject_binding(sub: Principal, caller: Principal) -> Result<(), AccessError> {
-    if sub == caller {
-        Ok(())
-    } else {
-        Err(AccessError::Denied(format!(
-            "delegated token subject '{sub}' does not match caller '{caller}'"
-        )))
-    }
+    token::enforce_subject_binding(sub, caller)
 }
 
+#[cfg(test)]
 fn enforce_required_scope(
     required_scope: Option<&str>,
     token_scopes: &[String],
 ) -> Result<(), AccessError> {
-    let Some(required_scope) = required_scope else {
-        return Ok(());
-    };
-
-    if token_scopes.iter().any(|scope| scope == required_scope) {
-        Ok(())
-    } else {
-        Err(AccessError::Denied(format!(
-            "delegated token missing required scope '{required_scope}'"
-        )))
-    }
+    token::enforce_required_scope(required_scope, token_scopes)
 }
 
 // -----------------------------------------------------------------------------
@@ -288,86 +135,34 @@ fn enforce_required_scope(
 
 /// Require that the caller controls the current canister.
 /// Allows controller-only maintenance calls.
-#[expect(clippy::unused_async)]
 pub async fn is_controller(caller: Principal) -> Result<(), AccessError> {
-    if caller_is_controller(&caller) {
-        Ok(())
-    } else {
-        Err(AccessError::Denied(format!(
-            "caller '{caller}' is not a controller of this canister"
-        )))
-    }
+    predicates::is_controller(caller).await
 }
 
 /// Require that the caller appears in the active whitelist (IC deployments).
 /// No-op on local builds; enforces whitelist on IC.
-#[expect(clippy::unused_async)]
 pub async fn is_whitelisted(caller: Principal) -> Result<(), AccessError> {
-    let cfg = Config::try_get().ok_or_else(|| dependency_unavailable("config not initialized"))?;
-
-    if !cfg.is_whitelisted(&caller) {
-        return Err(AccessError::Denied(format!(
-            "caller '{caller}' is not on the whitelist"
-        )));
-    }
-
-    Ok(())
+    predicates::is_whitelisted(caller).await
 }
 
 /// Require that the caller is a direct child of the current canister.
-#[expect(clippy::unused_async)]
 pub async fn is_child(caller: Principal) -> Result<(), AccessError> {
-    if CanisterChildrenOps::contains_pid(&caller) {
-        Ok(())
-    } else {
-        Err(AccessError::Denied(format!(
-            "caller '{caller}' is not a child of this canister"
-        )))
-    }
+    predicates::is_child(caller).await
 }
 
 /// Require that the caller is the configured parent canister.
-#[expect(clippy::unused_async)]
 pub async fn is_parent(caller: Principal) -> Result<(), AccessError> {
-    let snapshot = EnvOps::snapshot();
-    let parent_pid = snapshot
-        .parent_pid
-        .ok_or_else(|| dependency_unavailable("parent pid unavailable"))?;
-
-    if parent_pid == caller {
-        Ok(())
-    } else {
-        Err(AccessError::Denied(format!(
-            "caller '{caller}' is not the parent of this canister"
-        )))
-    }
+    predicates::is_parent(caller).await
 }
 
 /// Require that the caller equals the configured root canister.
-#[expect(clippy::unused_async)]
 pub async fn is_root(caller: Principal) -> Result<(), AccessError> {
-    let root_pid =
-        EnvOps::root_pid().map_err(|_| dependency_unavailable("root pid unavailable"))?;
-
-    if caller == root_pid {
-        Ok(())
-    } else {
-        Err(AccessError::Denied(format!(
-            "caller '{caller}' is not root"
-        )))
-    }
+    predicates::is_root(caller).await
 }
 
 /// Require that the caller is the currently executing canister.
-#[expect(clippy::unused_async)]
 pub async fn is_same_canister(caller: Principal) -> Result<(), AccessError> {
-    if caller == canister_self() {
-        Ok(())
-    } else {
-        Err(AccessError::Denied(format!(
-            "caller '{caller}' is not the current canister"
-        )))
-    }
+    predicates::is_same_canister(caller).await
 }
 
 // -----------------------------------------------------------------------------
@@ -375,56 +170,14 @@ pub async fn is_same_canister(caller: Principal) -> Result<(), AccessError> {
 // -----------------------------------------------------------------------------
 
 /// Require that the caller is registered with the expected canister role.
-#[expect(clippy::unused_async)]
 pub async fn has_role(caller: Principal, role: Role) -> Result<(), AccessError> {
-    if !EnvOps::is_root() {
-        return Err(non_root_subnet_registry_predicate_denial());
-    }
-
-    let record =
-        SubnetRegistryOps::get(caller).ok_or_else(|| caller_not_registered_denial(caller))?;
-
-    if record.role == role {
-        Ok(())
-    } else {
-        Err(AccessError::Denied(format!(
-            "authentication error: caller '{caller}' does not have role '{role}'"
-        )))
-    }
+    predicates::has_role(caller, role).await
 }
 
 /// Ensure the caller matches the app directory entry recorded for `role`.
 /// Require that the caller is registered as a canister on this subnet.
-#[expect(clippy::unused_async)]
 pub async fn is_registered_to_subnet(caller: Principal) -> Result<(), AccessError> {
-    if !EnvOps::is_root() {
-        return Err(non_root_subnet_registry_predicate_denial());
-    }
-
-    if SubnetRegistryOps::is_registered(caller) {
-        Ok(())
-    } else {
-        Err(caller_not_registered_denial(caller))
-    }
-}
-
-fn delegated_token_from_args() -> Result<DelegatedToken, AccessError> {
-    let bytes = msg_arg_data();
-
-    if bytes.len() > MAX_INGRESS_BYTES {
-        return Err(AccessError::Denied(
-            "delegated token payload exceeds size limit".to_string(),
-        ));
-    }
-
-    let mut decoder = IDLDeserialize::new(&bytes)
-        .map_err(|err| AccessError::Denied(format!("failed to decode ingress arguments: {err}")))?;
-
-    decoder.get_value::<DelegatedToken>().map_err(|err| {
-        AccessError::Denied(format!(
-            "failed to decode delegated token as first argument: {err}"
-        ))
-    })
+    predicates::is_registered_to_subnet(caller).await
 }
 
 fn dependency_unavailable(detail: &str) -> AccessError {
@@ -517,7 +270,7 @@ mod tests {
         let _guard = seams::lock();
         AccessMetrics::reset();
         let wallet = p(9);
-        DelegationStateOps::clear_delegated_session(wallet);
+        crate::ops::storage::auth::DelegationStateOps::clear_delegated_session(wallet);
         let resolved = resolve_authenticated_identity(wallet);
         assert_eq!(resolved.authenticated_subject, wallet);
         assert_eq!(
@@ -533,7 +286,7 @@ mod tests {
         AccessMetrics::reset();
         let wallet = p(8);
         let delegated = p(7);
-        DelegationStateOps::upsert_delegated_session(
+        crate::ops::storage::auth::DelegationStateOps::upsert_delegated_session(
             crate::ops::storage::auth::DelegatedSession {
                 wallet_pid: wallet,
                 delegated_pid: delegated,
@@ -557,7 +310,7 @@ mod tests {
             "active delegated session should not fallback to raw caller"
         );
 
-        DelegationStateOps::clear_delegated_session(wallet);
+        crate::ops::storage::auth::DelegationStateOps::clear_delegated_session(wallet);
     }
 
     #[test]
@@ -566,7 +319,7 @@ mod tests {
         AccessMetrics::reset();
         let wallet = p(6);
         let delegated = p(5);
-        DelegationStateOps::upsert_delegated_session(
+        crate::ops::storage::auth::DelegationStateOps::upsert_delegated_session(
             crate::ops::storage::auth::DelegatedSession {
                 wallet_pid: wallet,
                 delegated_pid: delegated,
@@ -589,7 +342,7 @@ mod tests {
             "expired delegated session should fallback to raw caller"
         );
 
-        DelegationStateOps::clear_delegated_session(wallet);
+        crate::ops::storage::auth::DelegationStateOps::clear_delegated_session(wallet);
     }
 
     #[test]
@@ -598,7 +351,7 @@ mod tests {
         AccessMetrics::reset();
         let wallet = p(4);
         let delegated = p(3);
-        DelegationStateOps::upsert_delegated_session(
+        crate::ops::storage::auth::DelegationStateOps::upsert_delegated_session(
             crate::ops::storage::auth::DelegatedSession {
                 wallet_pid: wallet,
                 delegated_pid: delegated,
@@ -608,7 +361,7 @@ mod tests {
             },
             50,
         );
-        DelegationStateOps::clear_delegated_session(wallet);
+        crate::ops::storage::auth::DelegationStateOps::clear_delegated_session(wallet);
 
         let resolved = resolve_authenticated_identity_at(wallet, 100);
         assert_eq!(resolved.authenticated_subject, wallet);
@@ -624,7 +377,7 @@ mod tests {
         let _guard = seams::lock();
         AccessMetrics::reset();
         let wallet = p(23);
-        DelegationStateOps::upsert_delegated_session(
+        crate::ops::storage::auth::DelegationStateOps::upsert_delegated_session(
             crate::ops::storage::auth::DelegatedSession {
                 wallet_pid: wallet,
                 delegated_pid: Principal::management_canister(),
@@ -647,7 +400,7 @@ mod tests {
         );
         assert_eq!(auth_session_metric_count("session_fallback_raw_caller"), 1);
         assert!(
-            DelegationStateOps::delegated_session(wallet, 20).is_none(),
+            crate::ops::storage::auth::DelegationStateOps::delegated_session(wallet, 20).is_none(),
             "invalid delegated session should be cleared"
         );
     }

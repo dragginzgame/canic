@@ -947,8 +947,8 @@ ecdsa_key_name = "test_key_1"
 icrc21 = true
 
 [subnets.prime]
-auto_create = ["app", "user_hub", "scale_hub", "test"]
-subnet_directory = ["app", "user_hub", "scale_hub", "test"]
+auto_create = ["app", "user_hub", "scale_hub"]
+subnet_directory = ["app", "user_hub", "scale_hub"]
 pool.minimum_size = 3
 
 [subnets.prime.canisters.root]
@@ -987,12 +987,6 @@ policy.min_workers = 2
 [subnets.prime.canisters.scale]
 kind = "replica"
 
-[subnets.prime.canisters.test]
-kind = "singleton"
-
-[subnets.prime.canisters.test.delegated_auth]
-verifier = true
-
 [subnets.general]
 
 [subnets.general.canisters.minimal]
@@ -1009,7 +1003,6 @@ kind = "replica"
                 "minimal".to_string(),
                 "scale".to_string(),
                 "scale_hub".to_string(),
-                "test".to_string(),
                 "user_hub".to_string(),
                 "user_shard".to_string(),
             ]

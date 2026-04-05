@@ -10,7 +10,6 @@ REFERENCE_CANISTERS=(
     user_shard
     scale_hub
     scale
-    test
     root
 )
 
@@ -23,5 +22,4 @@ ROOT_RELEASE_SET_CANISTERS=(
     user_shard
     scale_hub
     scale
-    test
 )

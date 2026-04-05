@@ -1,8 +1,5 @@
 //!
-//! App demo canister used for local/dev Canic testing.
-//!
-//! Test-only helper: this canister is intended for local/dev flows and is not
-//! a public-facing deployment target.
+//! App demo canister in the reference topology.
 //!
 
 #![allow(clippy::unused_async)]
