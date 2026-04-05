@@ -1,0 +1,39 @@
+controllers = []
+app_directory = ["scale_hub"]
+
+[app]
+init_mode = "enabled"
+
+[app.whitelist]
+
+[auth.delegated_tokens]
+enabled = true
+ecdsa_key_name = "test_key_1"
+
+[standards]
+icrc21 = true
+
+[subnets.prime]
+auto_create = ["app", "scale_hub", "test"]
+subnet_directory = ["app", "scale_hub", "test"]
+pool.minimum_size = 3
+
+[subnets.prime.canisters.root]
+kind = "root"
+
+[subnets.prime.canisters.app]
+kind = "singleton"
+
+[subnets.prime.canisters.scale_hub]
+kind = "singleton"
+
+[subnets.prime.canisters.test]
+kind = "singleton"
+
+[subnets.prime.canisters.test.delegated_auth]
+verifier = true
+
+[subnets.general]
+
+[subnets.general.canisters.minimal]
+kind = "replica"

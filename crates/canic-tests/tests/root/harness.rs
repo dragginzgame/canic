@@ -27,9 +27,12 @@ const ROOT_WASM_RELATIVE: &str = ".dfx/local/canisters/root/root.wasm.gz";
 const ROOT_WASM_ARTIFACT_RELATIVE: &str = ".dfx/local/canisters/root/root.wasm.gz";
 const ROOT_RELEASE_ARTIFACTS_RELATIVE: &str = ".dfx/local/canisters";
 const ROOT_TOPOLOGY_RELEASE_ROLES: &[&str] = &["app", "scale_hub", "test", "user_hub"];
-const ROOT_SCALING_RELEASE_ROLES: &[&str] = &["app", "scale", "scale_hub", "test", "user_hub"];
-const ROOT_SHARDING_RELEASE_ROLES: &[&str] =
-    &["app", "scale_hub", "test", "user_hub", "user_shard"];
+const ROOT_CAPABILITY_RELEASE_ROLES: &[&str] = &["app", "scale_hub", "test"];
+const ROOT_SCALING_RELEASE_ROLES: &[&str] = &["scale", "scale_hub"];
+const ROOT_SHARDING_RELEASE_ROLES: &[&str] = &["test", "user_hub", "user_shard"];
+const ROOT_RECONCILE_RELEASE_ROLES: &[&str] =
+    &["app", "minimal", "scale", "scale_hub", "test", "user_hub"];
+const TEST_SMALL_STORE_RUSTFLAGS: &str = "--cfg canic_test_small_wasm_store";
 const DFX_BUILD_LOCK_RELATIVE: &str = ".dfx/canic-tests-build.lock";
 const BOOTSTRAP_TICK_LIMIT: usize = 120;
 const ROOT_SETUP_MAX_ATTEMPTS: usize = 2;
@@ -44,9 +47,13 @@ const ROOT_WASM_WATCH_PATHS: &[&str] = &[
 static ROOT_SETUP_SERIAL: Mutex<()> = Mutex::new(());
 static ROOT_TOPOLOGY_BASELINE: Mutex<Option<CachedPicBaseline<RootBaselineMetadata>>> =
     Mutex::new(None);
+static ROOT_CAPABILITY_BASELINE: Mutex<Option<CachedPicBaseline<RootBaselineMetadata>>> =
+    Mutex::new(None);
 static ROOT_SCALING_BASELINE: Mutex<Option<CachedPicBaseline<RootBaselineMetadata>>> =
     Mutex::new(None);
 static ROOT_SHARDING_BASELINE: Mutex<Option<CachedPicBaseline<RootBaselineMetadata>>> =
+    Mutex::new(None);
+static ROOT_RECONCILE_BASELINE: Mutex<Option<CachedPicBaseline<RootBaselineMetadata>>> =
     Mutex::new(None);
 
 fn test_progress(phase: &str) {
@@ -79,37 +86,54 @@ pub enum RootPicHandle {
 #[derive(Clone, Copy)]
 enum RootSetupProfile {
     Topology,
+    Capability,
     Scaling,
     Sharding,
+    ReconcileSmallStore,
 }
 
 impl RootSetupProfile {
     const fn cache_label(self) -> &'static str {
         match self {
             Self::Topology => "cached root topology baseline",
+            Self::Capability => "cached root capability baseline",
             Self::Scaling => "cached root scaling baseline",
             Self::Sharding => "cached root sharding baseline",
+            Self::ReconcileSmallStore => "cached root reconcile small-store baseline",
         }
     }
 
     const fn release_roles(self) -> &'static [&'static str] {
         match self {
             Self::Topology => ROOT_TOPOLOGY_RELEASE_ROLES,
+            Self::Capability => ROOT_CAPABILITY_RELEASE_ROLES,
             Self::Scaling => ROOT_SCALING_RELEASE_ROLES,
             Self::Sharding => ROOT_SHARDING_RELEASE_ROLES,
+            Self::ReconcileSmallStore => ROOT_RECONCILE_RELEASE_ROLES,
         }
     }
 
     fn cache_slot(self) -> &'static Mutex<Option<CachedPicBaseline<RootBaselineMetadata>>> {
         match self {
             Self::Topology => &ROOT_TOPOLOGY_BASELINE,
+            Self::Capability => &ROOT_CAPABILITY_BASELINE,
             Self::Scaling => &ROOT_SCALING_BASELINE,
             Self::Sharding => &ROOT_SHARDING_BASELINE,
+            Self::ReconcileSmallStore => &ROOT_RECONCILE_BASELINE,
+        }
+    }
+
+    const fn build_profile(self) -> WasmBuildProfile {
+        match self {
+            Self::ReconcileSmallStore => WasmBuildProfile::Debug,
+            Self::Topology | Self::Capability | Self::Scaling | Self::Sharding => {
+                WasmBuildProfile::Fast
+            }
         }
     }
 
     fn baseline_spec(self) -> RootBaselineSpec<'static> {
-        baseline_spec_for_roles(self.release_roles(), WasmBuildProfile::Fast, &[])
+        baseline_spec_for_profile(self)
     }
 }
 
@@ -133,13 +157,6 @@ impl DerefMut for RootPicHandle {
     }
 }
 
-/// Acquire an isolated root setup for a test.
-///
-/// This always builds a fresh PocketIC root topology for isolation.
-pub fn setup_root() -> RootSetup {
-    setup_root_topology()
-}
-
 /// Acquire an isolated fresh root setup for the reference topology profile.
 pub fn setup_root_topology() -> RootSetup {
     setup_root_fresh(RootSetupProfile::Topology)
@@ -150,63 +167,14 @@ pub fn setup_root_scaling() -> RootSetup {
     setup_root_fresh(RootSetupProfile::Scaling)
 }
 
+/// Acquire an isolated fresh root setup for root capability and replay paths.
+pub fn setup_root_capability() -> RootSetup {
+    setup_root_fresh(RootSetupProfile::Capability)
+}
+
 /// Acquire an isolated fresh root setup that includes the `user_shard` template.
 pub fn setup_root_sharding() -> RootSetup {
     setup_root_fresh(RootSetupProfile::Sharding)
-}
-
-/// Acquire an isolated fresh root setup for one explicit managed release-set profile.
-///
-/// This is intended for specialized suites that need the live managed release set
-/// to include a template outside the default fast test profiles.
-pub fn setup_root_with_release_roles(release_roles: &'static [&'static str]) -> RootSetup {
-    setup_root_fresh_spec(baseline_spec_for_roles(
-        release_roles,
-        WasmBuildProfile::Fast,
-        &[],
-    ))
-}
-
-/// Acquire an isolated fresh root setup for one explicit managed release-set profile and build env.
-pub fn setup_root_with_release_roles_and_build_env(
-    release_roles: &'static [&'static str],
-    build_extra_env: &'static [(&'static str, &'static str)],
-) -> RootSetup {
-    setup_root_with_release_roles_profile_and_build_env(
-        release_roles,
-        WasmBuildProfile::Fast,
-        build_extra_env,
-    )
-}
-
-/// Acquire an isolated fresh root setup for one explicit managed release-set profile, build
-/// profile, and build env.
-pub fn setup_root_with_release_roles_profile_and_build_env(
-    release_roles: &'static [&'static str],
-    build_profile: WasmBuildProfile,
-    build_extra_env: &'static [(&'static str, &'static str)],
-) -> RootSetup {
-    setup_root_fresh_spec(baseline_spec_for_roles(
-        release_roles,
-        build_profile,
-        build_extra_env,
-    ))
-}
-
-/// Acquire one cached root setup for an explicit managed release-set profile, build profile, and
-/// build env.
-pub fn setup_root_cached_with_release_roles_profile_and_build_env(
-    cache_label: &'static str,
-    cache_slot: &'static Mutex<Option<CachedPicBaseline<RootBaselineMetadata>>>,
-    release_roles: &'static [&'static str],
-    build_profile: WasmBuildProfile,
-    build_extra_env: &'static [(&'static str, &'static str)],
-) -> RootSetup {
-    setup_root_cached_spec(
-        cache_label,
-        cache_slot,
-        baseline_spec_for_roles(release_roles, build_profile, build_extra_env),
-    )
 }
 
 /// Acquire an isolated topology-only cached root setup.
@@ -214,6 +182,11 @@ pub fn setup_root_cached_with_release_roles_profile_and_build_env(
 /// This stages only the ordinary releases needed by hierarchy assertions.
 pub fn setup_root_cached_topology() -> RootSetup {
     setup_root_cached(RootSetupProfile::Topology)
+}
+
+/// Acquire a cached root setup for root capability and replay paths.
+pub fn setup_root_cached_capability() -> RootSetup {
+    setup_root_cached(RootSetupProfile::Capability)
 }
 
 /// Acquire a cached root setup that includes the `scale` template for replay/scaling paths.
@@ -224,6 +197,11 @@ pub fn setup_root_cached_scaling() -> RootSetup {
 /// Acquire a cached root setup that includes the `user_shard` template for auth/sharding paths.
 pub fn setup_root_cached_sharding() -> RootSetup {
     setup_root_cached(RootSetupProfile::Sharding)
+}
+
+/// Acquire a cached root setup for small-store reconcile and wasm_store lifecycle tests.
+pub fn setup_root_cached_reconcile_small_store() -> RootSetup {
+    setup_root_cached(RootSetupProfile::ReconcileSmallStore)
 }
 
 fn setup_root_fresh(profile: RootSetupProfile) -> RootSetup {
@@ -305,14 +283,79 @@ fn workspace_root() -> PathBuf {
     workspace_root_for(env!("CARGO_MANIFEST_DIR"))
 }
 
-fn baseline_spec_for_roles(
+// Map one test profile to its embedded config override without leaking relative
+// crate-local paths into the shared build environment.
+fn profile_build_extra_env(
+    profile: RootSetupProfile,
+    workspace_root: &std::path::Path,
+) -> Vec<(String, String)> {
+    match profile {
+        RootSetupProfile::Topology => Vec::new(),
+        RootSetupProfile::Capability => vec![(
+            "CANIC_CONFIG_PATH".to_string(),
+            workspace_root
+                .join("canisters/test-configs/root-capability.toml")
+                .display()
+                .to_string(),
+        )],
+        RootSetupProfile::Scaling => vec![(
+            "CANIC_CONFIG_PATH".to_string(),
+            workspace_root
+                .join("canisters/test-configs/root-scaling.toml")
+                .display()
+                .to_string(),
+        )],
+        RootSetupProfile::Sharding => vec![(
+            "CANIC_CONFIG_PATH".to_string(),
+            workspace_root
+                .join("canisters/test-configs/root-sharding.toml")
+                .display()
+                .to_string(),
+        )],
+        RootSetupProfile::ReconcileSmallStore => vec![(
+            "RUSTFLAGS".to_string(),
+            TEST_SMALL_STORE_RUSTFLAGS.to_string(),
+        )],
+    }
+}
+
+// Build one reusable baseline spec for a named root harness profile.
+fn baseline_spec_for_profile(profile: RootSetupProfile) -> RootBaselineSpec<'static> {
+    let workspace_root = workspace_root();
+    let build_extra_env = profile_build_extra_env(profile, &workspace_root);
+    baseline_spec_for_roles_owned_env(
+        workspace_root,
+        profile.release_roles(),
+        profile.build_profile(),
+        build_extra_env,
+    )
+}
+
+// Build one reusable baseline spec from static release roles plus owned env overrides.
+fn baseline_spec_for_roles_owned_env(
+    workspace_root: PathBuf,
     release_roles: &'static [&'static str],
     build_profile: WasmBuildProfile,
-    build_extra_env: &'static [(&'static str, &'static str)],
+    mut build_extra_env: Vec<(String, String)>,
 ) -> RootBaselineSpec<'static> {
+    if build_extra_env
+        .iter()
+        .all(|(key, _)| key != "CANIC_REFERENCE_CANISTERS")
+    {
+        let mut build_canisters = release_roles
+            .iter()
+            .map(|role| (*role).to_string())
+            .collect::<Vec<_>>();
+        build_canisters.push("root".to_string());
+        build_extra_env.push((
+            "CANIC_REFERENCE_CANISTERS".to_string(),
+            build_canisters.join(" "),
+        ));
+    }
+
     RootBaselineSpec {
         progress_prefix: "root_harness",
-        workspace_root: workspace_root(),
+        workspace_root,
         root_wasm_relative: ROOT_WASM_RELATIVE,
         root_wasm_artifact_relative: ROOT_WASM_ARTIFACT_RELATIVE,
         root_release_artifacts_relative: ROOT_RELEASE_ARTIFACTS_RELATIVE,

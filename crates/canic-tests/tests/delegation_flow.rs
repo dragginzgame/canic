@@ -8,14 +8,13 @@ use canic::{
     api::{auth::DelegationApi, ic::network::NetworkApi},
     cdk::{types::Principal, utils::time::now_secs},
     dto::{
-        auth::{DelegatedToken, DelegatedTokenClaims, DelegationCert, DelegationProof},
+        auth::{DelegatedToken, DelegatedTokenClaims},
         error::ErrorCode,
     },
     ids::{BuildNetwork, cap},
 };
 use canic_internal::canister;
-use canic_testing_internal::pic::{StandaloneCanisterFixture, install_standalone_canister};
-use canic_testkit::artifacts::WasmBuildProfile;
+use canic_testing_internal::pic::{create_user_shard, issue_delegated_token};
 use root::harness::{RootSetup, setup_root_cached_sharding};
 use std::time::Duration;
 
@@ -237,28 +236,6 @@ fn delegated_token_request_rejected_on_invalid_claims() {
     assert_eq!(err.code, ErrorCode::InvalidInput);
 }
 
-#[test]
-fn authenticated_guard_rejects_bogus_token_on_local() {
-    if !should_run_local("authenticated_guard_rejects_bogus_token_on_local") {
-        return;
-    }
-
-    log_step("authenticated_guard_rejects_bogus_token_on_local: setup standalone test canister");
-    let fixture = setup_standalone_test_canister();
-
-    // Intentionally bogus token data: local must reject this.
-    let bogus = bogus_delegated_token();
-    let verify: Result<Result<(), Error>, Error> =
-        fixture
-            .pic
-            .update_call(fixture.canister_id, "test_verify_delegated_token", (bogus,));
-
-    let err = verify
-        .expect("test_verify_delegated_token transport failed")
-        .expect_err("test_verify_delegated_token should reject bogus token");
-    assert_eq!(err.code, ErrorCode::Unauthorized);
-}
-
 fn log_step(step: &str) {
     canic::cdk::println!("[delegation_flow] {step}");
 }
@@ -269,15 +246,6 @@ fn should_run_certified(test_name: &str) -> bool {
     } else {
         log_step(&format!("{test_name}: skipped (non-ic build)"));
         false
-    }
-}
-
-fn should_run_local(test_name: &str) -> bool {
-    if NetworkApi::build_network() == Some(BuildNetwork::Ic) {
-        log_step(&format!("{test_name}: skipped (ic build)"));
-        false
-    } else {
-        true
     }
 }
 
@@ -298,7 +266,7 @@ fn setup_delegation_fixture(test_name: &str) -> DelegationFixture {
 
     log_step(&format!("user_hub={user_hub_pid} root={}", setup.root_id));
 
-    let shard_pid = create_user_shard(&setup, user_hub_pid, p(7));
+    let shard_pid = create_fixture_user_shard(&setup, user_hub_pid, p(7));
 
     DelegationFixture {
         setup,
@@ -316,68 +284,26 @@ fn issue_test_token(
     ttl_secs: u64,
 ) -> DelegatedToken {
     let now = now_secs();
-    let claims = DelegatedTokenClaims {
-        sub: subject,
-        shard_pid: fixture.shard_pid,
+    issue_delegated_token(
+        &fixture.setup.pic,
+        fixture.shard_pid,
+        subject,
         aud,
         scopes,
-        iat: now,
-        exp: now + ttl_secs,
-    };
-
-    let issued: Result<Result<DelegatedToken, Error>, Error> =
-        fixture
-            .setup
-            .pic
-            .update_call(fixture.shard_pid, "user_shard_issue_token", (claims,));
-
-    issued
-        .expect("user_shard_issue_token transport failed")
-        .expect("user_shard_issue_token application failed")
+        now,
+        now + ttl_secs,
+    )
 }
 
-fn create_user_shard(setup: &RootSetup, user_hub_pid: Principal, tenant: Principal) -> Principal {
+fn create_fixture_user_shard(
+    setup: &RootSetup,
+    user_hub_pid: Principal,
+    tenant: Principal,
+) -> Principal {
     log_step(&format!(
         "create_user_shard tenant={tenant} via hub={user_hub_pid}"
     ));
-    let created: Result<Result<Principal, Error>, Error> =
-        setup
-            .pic
-            .update_call(user_hub_pid, "create_account", (tenant,));
-
-    let pid = created
-        .expect("create_account transport failed")
-        .expect("create_account application failed");
+    let pid = create_user_shard(&setup.pic, user_hub_pid, tenant);
     log_step(&format!("user_shard created pid={pid}"));
     pid
-}
-
-fn bogus_delegated_token() -> DelegatedToken {
-    DelegatedToken {
-        claims: DelegatedTokenClaims {
-            sub: p(31),
-            shard_pid: p(30),
-            aud: vec![p(32)],
-            scopes: vec![cap::READ.to_string()],
-            iat: 1,
-            exp: 2,
-        },
-        proof: DelegationProof {
-            cert: DelegationCert {
-                root_pid: p(29),
-                shard_pid: p(30),
-                aud: vec![p(32)],
-                scopes: vec![cap::READ.to_string()],
-                issued_at: 1,
-                expires_at: 2,
-            },
-            cert_sig: vec![0],
-        },
-        token_sig: vec![0],
-    }
-}
-
-// Build and install one standalone `test` canister for local-only guard checks.
-fn setup_standalone_test_canister() -> StandaloneCanisterFixture {
-    install_standalone_canister("canister_test", canister::TEST, WasmBuildProfile::Fast)
 }

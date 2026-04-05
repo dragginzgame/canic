@@ -41,7 +41,7 @@ pub struct RootBaselineSpec<'a> {
     pub dfx_build_lock_relative: &'a str,
     pub build_network: &'a str,
     pub build_profile: WasmBuildProfile,
-    pub build_extra_env: &'a [(&'a str, &'a str)],
+    pub build_extra_env: Vec<(String, String)>,
     pub bootstrap_tick_limit: usize,
     pub root_setup_max_attempts: usize,
     pub pocket_ic_wasm_chunk_store_limit_bytes: usize,
@@ -366,18 +366,20 @@ fn root_release_artifacts_ready(spec: &RootBaselineSpec<'_>) -> bool {
 // Ensure internal PocketIC root baselines keep the extra introspection surface
 // even though production canister builds now omit those test-only queries.
 fn effective_build_env<'a>(spec: &'a RootBaselineSpec<'a>) -> Vec<(&'a str, &'a str)> {
-    if spec
+    let mut env = spec
         .build_extra_env
         .iter()
-        .any(|(key, _)| *key == INTERNAL_TEST_ENDPOINTS_ENV.0)
+        .map(|(key, value)| (key.as_str(), value.as_str()))
+        .collect::<Vec<_>>();
+
+    if env
+        .iter()
+        .all(|(key, _)| *key != INTERNAL_TEST_ENDPOINTS_ENV.0)
     {
-        spec.build_extra_env.to_vec()
-    } else {
-        let mut env = Vec::with_capacity(spec.build_extra_env.len() + 1);
-        env.extend_from_slice(spec.build_extra_env);
         env.push(INTERNAL_TEST_ENDPOINTS_ENV);
-        env
     }
+
+    env
 }
 
 // Map the configured ordinary role names into stable `CanisterRole` values.

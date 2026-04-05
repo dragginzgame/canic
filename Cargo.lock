@@ -330,6 +330,7 @@ dependencies = [
  "canic",
  "canic-control-plane",
  "canic-core",
+ "canic-internal",
  "canic-testkit",
  "pocket-ic",
  "serde",

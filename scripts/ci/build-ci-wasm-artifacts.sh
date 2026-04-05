@@ -32,16 +32,36 @@ fi
 # Keep PocketIC-oriented CI artifacts small.
 export RUSTFLAGS="${RUSTFLAGS:-} -C debuginfo=0"
 
+BUILD_CANISTERS=("${REFERENCE_CANISTERS[@]}")
+if [ -n "${CANIC_REFERENCE_CANISTERS:-}" ]; then
+    # Allow focused harnesses to build only the canisters they actually stage.
+    read -r -a BUILD_CANISTERS <<<"$CANIC_REFERENCE_CANISTERS"
+fi
+
+NON_ROOT_CANISTERS=()
+BUILD_ROOT=0
+for canister in "${BUILD_CANISTERS[@]}"; do
+    if [ "$canister" = "root" ]; then
+        BUILD_ROOT=1
+    else
+        NON_ROOT_CANISTERS+=("$canister")
+    fi
+done
+
 # Build the ordinary reference artifacts first so the thin-root manifest path
 # can emit once the full root-subnet release set exists. Root itself builds the
 # hidden bootstrap `wasm_store` artifact internally.
-for canister in "${REFERENCE_CANISTERS[@]}"; do
+for canister in "${NON_ROOT_CANISTERS[@]}"; do
     CANIC_WASM_PROFILE="$BUILD_WASM_PROFILE" scripts/app/canic_installer.sh canic-build-canister-artifact "$canister"
 done
 
-ROOT_WASM_GZ_PATH=".dfx/local/canisters/root/root.wasm.gz"
-ROOT_WASM_GZ_BYTES="$(stat -c%s "$ROOT_WASM_GZ_PATH")"
-if [ "$ROOT_WASM_GZ_BYTES" -ge 100000000 ]; then
-    echo "root.wasm.gz too large for PocketIC chunk store: ${ROOT_WASM_GZ_BYTES} bytes" >&2
-    exit 1
+if [ "$BUILD_ROOT" -eq 1 ]; then
+    CANIC_WASM_PROFILE="$BUILD_WASM_PROFILE" scripts/app/canic_installer.sh canic-build-canister-artifact root
+
+    ROOT_WASM_GZ_PATH=".dfx/local/canisters/root/root.wasm.gz"
+    ROOT_WASM_GZ_BYTES="$(stat -c%s "$ROOT_WASM_GZ_PATH")"
+    if [ "$ROOT_WASM_GZ_BYTES" -ge 100000000 ]; then
+        echo "root.wasm.gz too large for PocketIC chunk store: ${ROOT_WASM_GZ_BYTES} bytes" >&2
+        exit 1
+    fi
 fi
