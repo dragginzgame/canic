@@ -9,6 +9,7 @@ pub mod pool;
 pub mod registry;
 pub mod replay;
 pub mod scaling;
+#[cfg(feature = "sharding")]
 pub mod sharding;
 pub mod state;
 
@@ -141,8 +142,11 @@ pub mod memory {
 
     pub mod placement {
         pub const SCALING_REGISTRY_ID: u8 = 49;
+        #[cfg(feature = "sharding")]
         pub const SHARDING_REGISTRY_ID: u8 = 50;
+        #[cfg(feature = "sharding")]
         pub const SHARDING_ASSIGNMENT_ID: u8 = 51;
+        #[cfg(feature = "sharding")]
         pub const SHARDING_ACTIVE_SET_ID: u8 = 53;
 
         // Reserved for:

@@ -16,7 +16,6 @@ PUBLISH_ORDER=(
     canic-memory
     canic-core
     canic-control-plane
-    canic-sharding-runtime
     canic-dsl-macros
     canic
     canic-wasm-store

@@ -8,13 +8,13 @@ use crate::{
     },
 };
 use flate2::{Compression, GzBuilder};
-use serde_json::Value;
 use std::{
     fs,
     io::{Read, Write},
     path::{Path, PathBuf},
     process::Command,
 };
+use toml::Value as TomlValue;
 
 const ROOT_ROLE: &str = "root";
 const WASM_STORE_ROLE: &str = "wasm_store";
@@ -164,12 +164,12 @@ pub fn build_canister_artifact(
 // forced to mirror the reference `canister_<role>` naming scheme.
 fn load_canister_package_name(manifest_path: &Path) -> Result<String, Box<dyn std::error::Error>> {
     let manifest_source = fs::read_to_string(manifest_path)?;
-    let manifest = toml::from_str::<Value>(&manifest_source)?;
+    let manifest = toml::from_str::<TomlValue>(&manifest_source)?;
     let package_name = manifest
         .get("package")
-        .and_then(Value::as_object)
+        .and_then(TomlValue::as_table)
         .and_then(|package| package.get("name"))
-        .and_then(Value::as_str)
+        .and_then(TomlValue::as_str)
         .ok_or_else(|| format!("missing package.name in {}", manifest_path.display()))?;
 
     Ok(package_name.to_string())

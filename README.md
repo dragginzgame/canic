@@ -55,7 +55,6 @@ The crate was historically known as **ICU** (Internet Computer Utilities). All c
 * `crates/canic-installer/` – published installer and release-set tooling for downstream workspaces.
 * `crates/canic-control-plane/` – root/store control-plane runtime used by the orchestrator lane.
 * `crates/canic-memory/` – standalone stable‑memory crate (manager, registry, eager TLS, memory macros) usable by Canic and external crates.
-* `crates/canic-sharding-runtime/` – optional sharding runtime lane used by sharded deployments.
 * `crates/canic-testkit/` – public PocketIC-oriented test utilities for projects that use Canic.
 * `crates/canic-testing-internal/` – workspace-only internal self-test support for Canic’s own root/auth harnesses.
 * `crates/canic-tests/` – workspace-only integration test host package for the PocketIC and root-suite coverage.

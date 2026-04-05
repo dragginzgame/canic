@@ -34,7 +34,7 @@ use canic_control_plane::{
 };
 use canic_internal::canister::{APP, SCALE_HUB, TEST, USER_HUB};
 use canic_testkit::pic::Pic;
-use root::harness::{setup_root, setup_root_with_release_roles};
+use root::harness::{setup_root_scaling, setup_root_sharding, setup_root_topology};
 use serde::Serialize;
 use std::{
     collections::BTreeSet,
@@ -52,14 +52,6 @@ const APP_CANIC_LOG_PERF_TEST: &str = "canic_log_perf_test";
 const ROOT_CANIC_SUBNET_REGISTRY_PERF_TEST: &str = "canic_subnet_registry_perf_test";
 const ROOT_CANIC_SUBNET_STATE_PERF_TEST: &str = "canic_subnet_state_perf_test";
 const SCALE_HUB_PLAN_CREATE_WORKER_PERF_TEST: &str = "plan_create_worker_perf_test";
-const ROOT_SHARDING_RELEASE_ROLES: &[&str] = &[
-    "app",
-    "scale",
-    "scale_hub",
-    "test",
-    "user_hub",
-    "user_shard",
-];
 const FLOW_GAPS: &[(&str, &str)] = &[
     (
         "root capability dispatch",
@@ -75,7 +67,7 @@ const FLOW_GAPS: &[(&str, &str)] = &[
     ),
     (
         "sharding assignment/query flow",
-        "crates/canic-sharding-runtime/src/workflow/mod.rs",
+        "crates/canic-core/src/workflow/placement/sharding/mod.rs",
     ),
     (
         "scaling/provisioning flow",
@@ -304,8 +296,8 @@ fn generate_instruction_footprint_report() {
 
     let method = MethodArtifact {
         method_tag: METHOD_TAG.to_string(),
-        normalization: "MetricsKind::Perf rows are normalized into canonical endpoint rows. Update/timer lanes use persisted perf deltas; sampled query lanes use local-only same-call probe endpoints that return the measured `perf_counter()` alongside the real query result.".to_string(),
-        freshness_rule: "One fresh `setup_root()` topology per measured scenario; baseline and post-call perf tables sampled inside that isolated topology.".to_string(),
+        normalization: "MetricsKind::Perf rows are normalized into canonical endpoint rows. Update/timer lanes use persisted perf deltas; sampled query lanes use local-only same-call probe endpoints because query-side perf rows are not committed, so the probe returns the measured `perf_counter()` alongside the real query result.".to_string(),
+        freshness_rule: "One fresh smallest-profile root harness per measured scenario (`topology`, `scaling`, or `sharding`); baseline and post-call perf tables were sampled inside that isolated topology.".to_string(),
         checkpoint_rule: "Checkpoint deltas are diffed from `MetricsKind::Perf` rows before/after sampled update scenarios. Query scenarios remain endpoint-only unless they traverse explicit checkpoint instrumentation.".to_string(),
     };
     write_json(&method_path, &method);
@@ -634,8 +626,9 @@ fn required_env(key: &str) -> String {
     env::var(key).unwrap_or_else(|_| panic!("missing required env var: {key}"))
 }
 
-// Query rows only count as unobservable if the probe path failed to return a
-// same-call local instruction counter.
+// Query rows only count as unobservable if the same-call probe path failed.
+// Query calls do not commit shared perf-table state, so they cannot rely on
+// post-call `canic_metrics(MetricsKind::Perf, ...)` reads the way updates do.
 fn query_perf_is_unobservable(scenario: &AuditScenario, row: &CanonicalPerfRow) -> bool {
     scenario.transport_mode == "query" && row.count == 0
 }
@@ -643,12 +636,11 @@ fn query_perf_is_unobservable(scenario: &AuditScenario, row: &CanonicalPerfRow) 
 // Choose the fresh root topology shape required for one scenario.
 fn setup_for_scenario(scenario: &AuditScenario) -> root::harness::RootSetup {
     match scenario.key {
+        "scale_hub:create_worker:first-worker" => setup_root_scaling(),
         "user_hub:create_account:first-account"
         | "root:canic_request_delegation:fresh-shard"
-        | "test:test_verify_delegated_token:valid-delegated-token" => {
-            setup_root_with_release_roles(ROOT_SHARDING_RELEASE_ROLES)
-        }
-        _ => setup_root(),
+        | "test:test_verify_delegated_token:valid-delegated-token" => setup_root_sharding(),
+        _ => setup_root_topology(),
     }
 }
 
@@ -1451,17 +1443,17 @@ fn verification_rows(
                 .to_string(),
         },
         VerificationRow {
-            command: "setup_root() per scenario".to_string(),
+            command: "fresh root harness profile per scenario".to_string(),
             status: "PASS".to_string(),
             notes:
-                "Each scenario used a fresh root bootstrap instead of sharing one cumulative perf table."
+                "Each scenario used a fresh smallest-profile root bootstrap instead of sharing one cumulative perf table."
                     .to_string(),
         },
         VerificationRow {
             command: "canic_metrics(MetricsKind::Perf, PageRequest { limit=512, offset=0 })"
                 .to_string(),
             status: "PASS".to_string(),
-            notes: format!("Update scenarios were sampled before/after through persisted perf rows, and query scenarios used same-call local-only probe endpoints; normalized rows saved under `{}`.", paths.artifacts_dir.join("perf-rows.json").display()),
+            notes: format!("Update scenarios were sampled before/after through persisted perf rows, and query scenarios used same-call local-only probe endpoints because query-side perf rows are not committed; normalized rows saved under `{}`.", paths.artifacts_dir.join("perf-rows.json").display()),
         },
         VerificationRow {
             command: "repo checkpoint scan".to_string(),
@@ -1497,7 +1489,7 @@ fn verification_rows(
                 "PARTIAL".to_string()
             },
             notes: if query_unobservable_count == 0 {
-                "All sampled query scenarios returned same-call local instruction counters through the local-only probe endpoints.".to_string()
+                "All sampled query scenarios returned same-call local instruction counters through the local-only probe endpoints, which avoids relying on non-persisted query-side perf state.".to_string()
             } else {
                 format!(
                     "{query_unobservable_count} sampled query scenarios failed to return a same-call local instruction counter through the probe path."
@@ -1660,7 +1652,7 @@ fn write_report(
         "| Checkpoint deltas recorded | {} | `artifacts/{artifacts_dir_name}/checkpoint-deltas.json` stores non-zero per-scenario checkpoint rows. |\n",
         if checkpoint_rows.is_empty() { "PARTIAL" } else { "PASS" }
     ));
-    out.push_str("| Fresh topology isolation used | PASS | Each scenario ran under a fresh `setup_root()` install instead of reusing one cumulative perf table. |\n");
+    out.push_str("| Fresh topology isolation used | PASS | Each scenario ran under a fresh smallest-profile root harness install instead of reusing one cumulative perf table. |\n");
     out.push_str(&format!(
         "| Flow checkpoint coverage scanned | PASS | `artifacts/{artifacts_dir_name}/flow-checkpoints.log` records the current repo scan result. |\n"
     ));
@@ -1670,7 +1662,7 @@ fn write_report(
         out.push_str("| `perf!` checkpoints available for critical flows | PASS | Current repo scan found at least one `perf!` call site. |\n");
     }
     if query_unobservable_count == 0 {
-        out.push_str("| Query endpoint perf visibility | PASS | Sampled query scenarios were measured through same-call local-only perf probe endpoints. |\n");
+        out.push_str("| Query endpoint perf visibility | PASS | Sampled query scenarios were measured through same-call local-only perf probe endpoints because query-side perf rows are not committed. |\n");
     } else {
         out.push_str(&format!(
             "| Query endpoint perf visibility | PARTIAL | {query_unobservable_count} sampled query scenarios failed to return a same-call local instruction counter through the probe path. |\n"
@@ -1680,7 +1672,7 @@ fn write_report(
 
     out.push_str("## Comparison to Previous Relevant Run\n\n");
     out.push_str("- First run of day for `instruction-footprint`; this report establishes the daily baseline.\n");
-    out.push_str("- Query scenarios are now sampled through same-call local-only perf probes, so their rows are directly comparable to later probe-backed reruns.\n");
+    out.push_str("- Query scenarios are now sampled through same-call local-only perf probes because query-side perf rows are not committed, so their rows are directly comparable to later probe-backed reruns.\n");
     if query_unobservable_count > 0 {
         out.push_str("- One or more query probe calls still failed to return a usable local instruction counter, so those rows remain partial until the probe path is stable.\n");
     }
@@ -1803,13 +1795,13 @@ fn write_report(
 
     out.push_str("## Hub Module Pressure\n\n");
     out.push_str("- `scale_hub::create_worker` concentrates cost in the scaling coordinator surface plus `canic-core` placement workflow. That makes scaling one of the first shared instruction hot paths worth reducing.\n");
-    out.push_str("- `user_hub::create_account` is now measurable as a real sharding update, and its first-account path is dominated by `canic-sharding-runtime::workflow::bootstrap_empty_active`.\n");
+    out.push_str("- `user_hub::create_account` is now measurable as a real sharding update, and its first-account path is dominated by `canic-core::workflow::placement::sharding::bootstrap_empty_active`.\n");
     out.push_str("- `root::canic_response_capability_v1` now has measured replay/cycles stage deltas, so root capability work no longer has to be treated as an opaque endpoint total.\n");
     out.push_str("- `test::test` provides the current chain-key-free update floor on a non-root child canister. Drift there points back to shared runtime/update overhead rather than topology-specific logic.\n");
     out.push_str("- Root state/registry reads stay separate from the leaf floor. They matter for operator paths, but they should not be confused with the shared ordinary-leaf baseline.\n\n");
 
     out.push_str("## Dependency Fan-In Pressure\n\n");
-    out.push_str("- Shared lifecycle/observability endpoints (`canic_time`, `canic_env`, `canic_log`) all route through the default `start!` bundle, and this matrix now samples them through same-call local-only perf probes. Their rows reflect actual query counters from the measured call context rather than inferred zeroes.\n");
+    out.push_str("- Shared lifecycle/observability endpoints (`canic_time`, `canic_env`, `canic_log`) all route through the default `start!` bundle, and this matrix now samples them through same-call local-only perf probes. Their rows reflect actual query counters from the measured call context rather than inferred zeroes or missing query-side perf-table commits.\n");
     out.push_str("- The sampled non-trivial hotspot fans into `canic-core` placement orchestration (`workflow/placement/scaling`). The local `test::test` update acts as the baseline floor for update overhead on an ordinary child canister.\n");
     if checkpoint_sites.is_empty() {
         out.push_str("- There is currently no flow-stage attribution because `perf!` coverage is absent. That is itself a dependency-pressure signal: optimization work is bottlenecked by missing internal checkpoints.\n\n");
@@ -1864,7 +1856,7 @@ fn write_report(
     }
     out.push_str("2. Owner boundary: `shared update hotspots`\n");
     out.push_str(&format!(
-        "   Action: compare `scale_hub::create_worker` and `user_hub::create_account` against the `test::test` update floor before/after any placement/sharding-runtime cleanup, using this report as the `{minor_line}` baseline.\n"
+        "   Action: compare `scale_hub::create_worker` and `user_hub::create_account` against the `test::test` update floor before/after any placement/sharding cleanup, using this report as the `{minor_line}` baseline.\n"
     ));
     out.push_str("3. Owner boundary: `shared observability floor`\n");
     out.push_str("   Action: keep `app` query surfaces in the matrix so shared-runtime drift does not hide behind root-only or coordinator-only endpoints.\n\n");
@@ -1915,8 +1907,8 @@ fn render_scope(items: BTreeSet<&str>) -> String {
 fn hotspot_hint(subject_label: &str) -> (&'static str, &'static str) {
     match subject_label {
         "create_account" => (
-            "Sharding coordinator plus `canic-sharding-runtime` workflow",
-            "[user_hub/lib](/home/adam/projects/canic/canisters/user_hub/src/lib.rs), [sharding workflow](/home/adam/projects/canic/crates/canic-sharding-runtime/src/workflow/mod.rs)",
+            "Sharding coordinator plus `canic-core` sharding workflow",
+            "[user_hub/lib](/home/adam/projects/canic/canisters/user_hub/src/lib.rs), [sharding workflow](/home/adam/projects/canic/crates/canic-core/src/workflow/placement/sharding/mod.rs)",
         ),
         "canic_response_capability_v1" => (
             "Root dispatcher plus replay/capability workflow",

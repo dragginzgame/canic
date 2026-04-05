@@ -14,7 +14,7 @@ use canic::{
     ids::{BuildNetwork, cap},
 };
 use canic_internal::canister;
-use root::harness::{RootSetup, setup_root};
+use root::harness::{RootSetup, setup_root_cached_sharding, setup_root_cached_topology};
 use std::time::Duration;
 
 const fn p(id: u8) -> Principal {
@@ -242,7 +242,7 @@ fn authenticated_guard_rejects_bogus_token_on_local() {
     }
 
     log_step("authenticated_guard_rejects_bogus_token_on_local: setup root");
-    let setup = setup_root();
+    let setup = setup_root_cached_topology();
 
     let test_pid = setup
         .subnet_directory
@@ -288,7 +288,7 @@ fn should_run_local(test_name: &str) -> bool {
 // Build the standard certified delegation fixture used by most PocketIC flow tests.
 fn setup_delegation_fixture(test_name: &str) -> DelegationFixture {
     log_step(&format!("{test_name}: setup root"));
-    let setup = setup_root();
+    let setup = setup_root_cached_sharding();
     let user_hub_pid = setup
         .subnet_directory
         .get(&canister::USER_HUB)

@@ -1,13 +1,14 @@
-use crate::mapper::ShardEntryMapper;
-use canic_core::{
-    __sharding_core as sharding_core,
+use crate::{
+    InternalError,
     cdk::types::Principal,
     dto::placement::sharding::{
         ShardingPartitionKeysResponse, ShardingRegistryEntry, ShardingRegistryResponse,
     },
-    error::InternalError,
+    ops::{
+        placement::sharding::mapper::ShardEntryMapper,
+        storage::placement::sharding::ShardingRegistryOps,
+    },
 };
-use sharding_core::ops::storage::placement::sharding::ShardingRegistryOps;
 
 pub struct ShardingQuery;
 

@@ -5,7 +5,7 @@ use canic::{cdk::types::Principal, ids::CanisterRole};
 use canic_testing_internal::pic::{
     RootBaselineMetadata, RootBaselineSpec, build_root_cached_baseline,
     ensure_root_release_artifacts_built, load_root_wasm, restore_root_cached_baseline,
-    setup_root_topology,
+    setup_root_topology as bootstrap_root_topology,
 };
 use canic_testkit::{
     artifacts::{WasmBuildProfile, workspace_root_for},
@@ -28,6 +28,8 @@ const ROOT_WASM_ARTIFACT_RELATIVE: &str = ".dfx/local/canisters/root/root.wasm.g
 const ROOT_RELEASE_ARTIFACTS_RELATIVE: &str = ".dfx/local/canisters";
 const ROOT_TOPOLOGY_RELEASE_ROLES: &[&str] = &["app", "scale_hub", "test", "user_hub"];
 const ROOT_SCALING_RELEASE_ROLES: &[&str] = &["app", "scale", "scale_hub", "test", "user_hub"];
+const ROOT_SHARDING_RELEASE_ROLES: &[&str] =
+    &["app", "scale_hub", "test", "user_hub", "user_shard"];
 const DFX_BUILD_LOCK_RELATIVE: &str = ".dfx/canic-tests-build.lock";
 const BOOTSTRAP_TICK_LIMIT: usize = 120;
 const ROOT_SETUP_MAX_ATTEMPTS: usize = 2;
@@ -43,6 +45,8 @@ static ROOT_SETUP_SERIAL: Mutex<()> = Mutex::new(());
 static ROOT_TOPOLOGY_BASELINE: Mutex<Option<CachedPicBaseline<RootBaselineMetadata>>> =
     Mutex::new(None);
 static ROOT_SCALING_BASELINE: Mutex<Option<CachedPicBaseline<RootBaselineMetadata>>> =
+    Mutex::new(None);
+static ROOT_SHARDING_BASELINE: Mutex<Option<CachedPicBaseline<RootBaselineMetadata>>> =
     Mutex::new(None);
 
 fn test_progress(phase: &str) {
@@ -76,6 +80,7 @@ pub enum RootPicHandle {
 enum RootSetupProfile {
     Topology,
     Scaling,
+    Sharding,
 }
 
 impl RootSetupProfile {
@@ -83,6 +88,7 @@ impl RootSetupProfile {
         match self {
             Self::Topology => "cached root topology baseline",
             Self::Scaling => "cached root scaling baseline",
+            Self::Sharding => "cached root sharding baseline",
         }
     }
 
@@ -90,6 +96,7 @@ impl RootSetupProfile {
         match self {
             Self::Topology => ROOT_TOPOLOGY_RELEASE_ROLES,
             Self::Scaling => ROOT_SCALING_RELEASE_ROLES,
+            Self::Sharding => ROOT_SHARDING_RELEASE_ROLES,
         }
     }
 
@@ -97,6 +104,7 @@ impl RootSetupProfile {
         match self {
             Self::Topology => &ROOT_TOPOLOGY_BASELINE,
             Self::Scaling => &ROOT_SCALING_BASELINE,
+            Self::Sharding => &ROOT_SHARDING_BASELINE,
         }
     }
 
@@ -129,7 +137,22 @@ impl DerefMut for RootPicHandle {
 ///
 /// This always builds a fresh PocketIC root topology for isolation.
 pub fn setup_root() -> RootSetup {
+    setup_root_topology()
+}
+
+/// Acquire an isolated fresh root setup for the reference topology profile.
+pub fn setup_root_topology() -> RootSetup {
+    setup_root_fresh(RootSetupProfile::Topology)
+}
+
+/// Acquire an isolated fresh root setup that includes the `scale` template.
+pub fn setup_root_scaling() -> RootSetup {
     setup_root_fresh(RootSetupProfile::Scaling)
+}
+
+/// Acquire an isolated fresh root setup that includes the `user_shard` template.
+pub fn setup_root_sharding() -> RootSetup {
+    setup_root_fresh(RootSetupProfile::Sharding)
 }
 
 /// Acquire an isolated fresh root setup for one explicit managed release-set profile.
@@ -198,6 +221,11 @@ pub fn setup_root_cached_scaling() -> RootSetup {
     setup_root_cached(RootSetupProfile::Scaling)
 }
 
+/// Acquire a cached root setup that includes the `user_shard` template for auth/sharding paths.
+pub fn setup_root_cached_sharding() -> RootSetup {
+    setup_root_cached(RootSetupProfile::Sharding)
+}
+
 fn setup_root_fresh(profile: RootSetupProfile) -> RootSetup {
     setup_root_fresh_spec(profile.baseline_spec())
 }
@@ -212,7 +240,7 @@ fn setup_root_fresh_spec(spec: RootBaselineSpec<'static>) -> RootSetup {
 
     ensure_root_release_artifacts_built(&spec);
     let root_wasm = load_root_wasm(&spec).expect("load root wasm");
-    let state = setup_root_topology(&spec, root_wasm);
+    let state = bootstrap_root_topology(&spec, root_wasm);
     test_progress("fresh root setup ready");
 
     RootSetup {

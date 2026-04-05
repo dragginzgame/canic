@@ -16,7 +16,8 @@ publish = true
 [features]
 default = []
 control-plane = ["dep:canic-control-plane"]
-sharding = ["dep:canic-sharding-runtime"]
+sharding = ["canic-core/sharding"]
+auth-crypto = ["canic-core/auth-crypto"]
 
 [dependencies]
 candid = { workspace = true }
@@ -25,7 +26,6 @@ canic-control-plane = { workspace = true, optional = true }
 canic-core = { workspace = true }
 canic-dsl-macros = { workspace = true }
 canic-memory = { workspace = true }
-canic-sharding-runtime = { workspace = true, optional = true }
 ic-cdk = { workspace = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
@@ -34,8 +34,6 @@ sha2 = { workspace = true }
 
 [build-dependencies]
 canic-core = { workspace = true }
-flate2 = { workspace = true }
-sha2 = { workspace = true }
 
 [dev-dependencies]
 toml = { workspace = true }

@@ -2,7 +2,7 @@ use canic::protocol;
 use canic_core::{CANIC_WASM_CHUNK_BYTES, bootstrap::parse_config_model};
 use flate2::read::GzDecoder;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::Value as JsonValue;
 use sha2::{Digest, Sha256};
 use std::{
     collections::BTreeSet,
@@ -13,6 +13,7 @@ use std::{
     process::Command,
     time::{SystemTime, UNIX_EPOCH},
 };
+use toml::Value as TomlValue;
 
 const CANISTERS_ROOT_RELATIVE: &str = "canisters";
 const ROOT_CONFIG_FILE: &str = "canic.toml";
@@ -31,7 +32,7 @@ struct CargoMetadata {
 struct CargoMetadataPackage {
     name: String,
     manifest_path: PathBuf,
-    metadata: Option<Value>,
+    metadata: Option<JsonValue>,
 }
 
 ///
@@ -330,10 +331,10 @@ pub fn load_root_package_version(
     workspace_manifest_path: &Path,
 ) -> Result<String, Box<dyn std::error::Error>> {
     let manifest_source = fs::read_to_string(root_manifest_path)?;
-    let manifest = toml::from_str::<Value>(&manifest_source)?;
+    let manifest = toml::from_str::<TomlValue>(&manifest_source)?;
     let version_value = manifest
         .get("package")
-        .and_then(Value::as_object)
+        .and_then(TomlValue::as_table)
         .and_then(|package| package.get("version"))
         .ok_or_else(|| {
             format!(
@@ -347,9 +348,9 @@ pub fn load_root_package_version(
     }
 
     if version_value
-        .as_object()
+        .as_table()
         .and_then(|value| value.get("workspace"))
-        .and_then(Value::as_bool)
+        .and_then(TomlValue::as_bool)
         == Some(true)
     {
         return load_workspace_package_version(workspace_manifest_path);
@@ -367,14 +368,14 @@ pub fn load_workspace_package_version(
     workspace_manifest_path: &Path,
 ) -> Result<String, Box<dyn std::error::Error>> {
     let manifest_source = fs::read_to_string(workspace_manifest_path)?;
-    let manifest = toml::from_str::<Value>(&manifest_source)?;
+    let manifest = toml::from_str::<TomlValue>(&manifest_source)?;
     let version = manifest
         .get("workspace")
-        .and_then(Value::as_object)
+        .and_then(TomlValue::as_table)
         .and_then(|workspace| workspace.get("package"))
-        .and_then(Value::as_object)
+        .and_then(TomlValue::as_table)
         .and_then(|package| package.get("version"))
-        .and_then(Value::as_str)
+        .and_then(TomlValue::as_str)
         .ok_or_else(|| {
             format!(
                 "missing workspace.package.version in {}",
@@ -388,7 +389,7 @@ pub fn load_workspace_package_version(
 // Read the current root time so staged manifests use replica timestamps.
 pub fn root_time_secs(root_canister: &str) -> Result<u64, Box<dyn std::error::Error>> {
     let payload = dfx_call(root_canister, protocol::CANIC_TIME, None, Some("json"))?;
-    let data = serde_json::from_str::<Value>(&payload)?;
+    let data = serde_json::from_str::<JsonValue>(&payload)?;
     let now_nanos = data
         .get("Ok")
         .and_then(json_u64)
@@ -522,7 +523,7 @@ pub fn idl_blob(bytes: &[u8]) -> String {
 
 // Decode a JSON nat that may be emitted as either a number or a string.
 #[must_use]
-pub fn json_u64(value: &Value) -> Option<u64> {
+pub fn json_u64(value: &JsonValue) -> Option<u64> {
     value
         .as_u64()
         .or_else(|| value.as_str().and_then(|raw| raw.parse::<u64>().ok()))
@@ -865,7 +866,7 @@ fn package_declares_role(package: &CargoMetadataPackage, role_name: &str) -> boo
         .as_ref()
         .and_then(|metadata| metadata.get("canic"))
         .and_then(|canic| canic.get("role"))
-        .and_then(Value::as_str)
+        .and_then(JsonValue::as_str)
         == Some(role_name)
 }
 

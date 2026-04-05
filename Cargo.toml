@@ -23,7 +23,6 @@ members = [
     "crates/canic-dsl-macros",
     "crates/canic-installer",
     "crates/canic-memory",
-    "crates/canic-sharding-runtime",
     "crates/canic-testing-internal",
     "crates/canic-testkit",
     "crates/canic-tests",
@@ -56,11 +55,11 @@ canic-dsl-macros = { version = "0.24.2", path = "crates/canic-dsl-macros" }
 canic-installer = { version = "0.24.2", path = "crates/canic-installer" }
 canic-internal = { version = "0.24.2", path = "canisters/reference-support" }
 canic-memory = { version = "0.24.2", path = "crates/canic-memory" }
-canic-sharding-runtime = { version = "0.24.2", path = "crates/canic-sharding-runtime" }
 canic-testing-internal = { version = "0.24.2", path = "crates/canic-testing-internal" }
 canic-testkit = { version = "0.24.2", path = "crates/canic-testkit" }
 canic-wasm-store = { version = "0.24.2", path = "crates/canic-wasm-store" }
 convert_case = "0.11"
+crc32fast = "1.5"
 criterion = "0.8"
 ctor = "0.8"
 derive_more = { version = "2.0", default-features = false, features = ["full"] }
@@ -72,7 +71,6 @@ ic-cdk = "0.20.0"
 ic-cdk-management-canister = "0.1.0"
 ic-cdk-timers = "1.0"
 ic-stable-structures = "0.7.2"
-icrc-ledger-types = "0.1.12"
 k256 = { version = "0.13", default-features = false, features = ["ecdsa"] }
 pocket-ic = "13.0"
 proc-macro2 = "1.0"
@@ -83,11 +81,10 @@ serde = { version = "1.0", default-features = false }
 serde_bytes = "0.11"
 serde_cbor = "0.11"
 serde_json = "1.0"
-sha2 = "0.11"
+sha2 = "0.10.9"
 syn = "2.0"
 thiserror = "2.0"
 toml = "1.0"
-xxhash-rust = { version = "0.8", default-features = false, features = ["xxh3"] }
 
 # shared clippy rules
 [workspace.lints.clippy]
@@ -128,7 +125,6 @@ canic-core = { path = "crates/canic-core" }
 canic-dsl-macros = { path = "crates/canic-dsl-macros" }
 canic-installer = { path = "crates/canic-installer" }
 canic-memory = { path = "crates/canic-memory" }
-canic-sharding-runtime = { path = "crates/canic-sharding-runtime" }
 canic-testkit = { path = "crates/canic-testkit" }
 canic-wasm-store = { path = "crates/canic-wasm-store" }
 

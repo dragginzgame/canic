@@ -136,7 +136,6 @@ crates/
 ├─ canic-cdk/               # Curated IC CDK facade
 ├─ canic-memory/            # Stable-memory helpers/runtime
 ├─ canic-control-plane/     # Root/store control-plane runtime
-├─ canic-sharding-runtime/  # Optional sharding runtime lane
 ├─ canic-wasm-store/        # Canonical publishable implicit wasm_store canister
 └─ ...                      # Other supporting workspace crates
 canisters/                  # Reference/deployable canisters

@@ -9,7 +9,7 @@ use crate::{
     ids::CanisterRole,
     ops::{
         replay::{
-            self as replay_ops, ReplayCommitError, ReplayReserveError,
+            self as replay_ops, ReplayCommitError, ReplayDecodeError, ReplayReserveError,
             guard::{ReplayDecision, ReplayGuardError, ReplayPending, RootReplayGuardInput},
         },
         runtime::metrics::root_capability::{
@@ -20,7 +20,6 @@ use crate::{
 };
 #[cfg(test)]
 use crate::{ops::replay::key as replay_key, storage::stable::replay::ReplaySlotKey};
-use canic_memory::serialize;
 use sha2::{Digest, Sha256};
 
 /// ReplayPreflight
@@ -145,12 +144,22 @@ fn map_replay_commit_error(err: ReplayCommitError) -> InternalError {
     }
 }
 
+/// map_replay_decode_error
+///
+/// Convert ops replay-decode failures into workflow replay errors.
+fn map_replay_decode_error(err: ReplayDecodeError) -> InternalError {
+    match err {
+        ReplayDecodeError::DecodeFailed(message) => {
+            RpcWorkflowError::ReplayDecodeFailed(message).into()
+        }
+    }
+}
+
 /// decode_replay_response
 ///
 /// Decode cached replay payload bytes back into canonical root responses.
 fn decode_replay_response(bytes: &[u8]) -> Result<Response, InternalError> {
-    serialize::deserialize(bytes)
-        .map_err(|err| RpcWorkflowError::ReplayDecodeFailed(err.to_string()).into())
+    replay_ops::decode_root_replay_response(bytes).map_err(map_replay_decode_error)
 }
 
 /// commit_replay

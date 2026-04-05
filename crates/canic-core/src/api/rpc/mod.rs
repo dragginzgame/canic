@@ -3,7 +3,10 @@ mod capability;
 use crate::{
     cdk::{candid::CandidType, types::Principal},
     dto::{
-        capability::{RootCapabilityEnvelopeV1, RootCapabilityResponseV1},
+        capability::{
+            NonrootCyclesCapabilityEnvelopeV1, NonrootCyclesCapabilityResponseV1,
+            RootCapabilityEnvelopeV1, RootCapabilityResponseV1,
+        },
         error::Error,
         rpc::{
             CreateCanisterParent, CreateCanisterResponse, CyclesResponse, UpgradeCanisterResponse,
@@ -44,8 +47,8 @@ impl RpcApi {
 
     /// Dispatch the non-root structural cycles capability path.
     pub async fn response_capability_v1_nonroot(
-        envelope: RootCapabilityEnvelopeV1,
-    ) -> Result<RootCapabilityResponseV1, Error> {
+        envelope: NonrootCyclesCapabilityEnvelopeV1,
+    ) -> Result<NonrootCyclesCapabilityResponseV1, Error> {
         capability::response_capability_v1_nonroot(envelope).await
     }
 

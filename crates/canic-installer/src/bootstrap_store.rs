@@ -23,7 +23,6 @@ const CANIC_FAMILY_CRATES: &[&str] = &[
     "canic-core",
     "canic-dsl-macros",
     "canic-memory",
-    "canic-sharding-runtime",
 ];
 
 ///

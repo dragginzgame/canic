@@ -95,6 +95,46 @@ impl StateCascadeWorkflow {
         Ok(())
     }
 
+    /// Cascade a state snapshot only through the branch that contains `target_pid`.
+    ///
+    /// This is used for create/adopt flows where only one subtree needs the
+    /// current state projection to reach a newly attached descendant.
+    pub async fn root_cascade_state_for_pid(
+        target_pid: Principal,
+        snapshot: &StateSnapshot,
+    ) -> Result<(), InternalError> {
+        EnvOps::require_root()?;
+
+        if state_snapshot_is_empty(snapshot) {
+            log!(
+                Topic::Sync,
+                Info,
+                "sync.state: targeted root cascade skipped (empty snapshot)"
+            );
+            return Ok(());
+        }
+
+        log!(
+            Topic::Sync,
+            Info,
+            "sync.state: targeted root cascade start target={target_pid} snapshot={}",
+            state_snapshot_debug(snapshot)
+        );
+
+        let root_pid = IcOps::canister_self();
+        let parent_chain = SubnetRegistryOps::parent_chain(target_pid)?;
+        let Some(next_child) = next_child_on_path(root_pid, &parent_chain)? else {
+            log!(
+                Topic::Sync,
+                Warn,
+                "sync.state: no branch path to {target_pid}, skipping targeted cascade"
+            );
+            return Ok(());
+        };
+
+        Self::send_snapshot(next_child, snapshot).await
+    }
+
     // ──────────────────────── Non-root cascade ──────────────────────
 
     /// Handle a received state snapshot on a non-root canister:
@@ -195,5 +235,64 @@ impl StateCascadeWorkflow {
                     format!("state cascade rejected by child {pid}: {err}"),
                 )
             })
+    }
+}
+
+// Resolve the first child hop from `self_pid` toward `target_pid`.
+fn next_child_on_path(
+    self_pid: Principal,
+    parents: &[(Principal, crate::storage::canister::CanisterRecord)],
+) -> Result<Option<Principal>, InternalError> {
+    let Some((first_pid, _)) = parents.first() else {
+        return Err(InternalError::invariant(
+            InternalErrorOrigin::Workflow,
+            "state parent chain is empty",
+        ));
+    };
+
+    if *first_pid != self_pid {
+        return Err(InternalError::invariant(
+            InternalErrorOrigin::Workflow,
+            format!("state parent chain does not start with self pid {self_pid}"),
+        ));
+    }
+
+    Ok(parents.get(1).map(|(pid, _)| *pid))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::next_child_on_path;
+    use crate::{cdk::types::Principal, storage::canister::CanisterRecord};
+
+    fn p(id: u8) -> Principal {
+        Principal::from_slice(&[id; 29])
+    }
+
+    fn record(parent_pid: Option<Principal>) -> CanisterRecord {
+        CanisterRecord {
+            role: crate::ids::CanisterRole::new("state_path_test"),
+            parent_pid,
+            module_hash: None,
+            created_at: 0,
+        }
+    }
+
+    #[test]
+    fn next_child_on_path_returns_first_branch_child() {
+        let chain = vec![
+            (p(1), record(None)),
+            (p(2), record(Some(p(1)))),
+            (p(3), record(Some(p(2)))),
+        ];
+
+        assert_eq!(next_child_on_path(p(1), &chain).unwrap(), Some(p(2)));
+    }
+
+    #[test]
+    fn next_child_on_path_returns_none_for_root_target() {
+        let chain = vec![(p(1), record(None))];
+
+        assert_eq!(next_child_on_path(p(1), &chain).unwrap(), None);
     }
 }

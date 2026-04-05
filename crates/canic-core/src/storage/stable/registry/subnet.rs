@@ -149,6 +149,38 @@ impl SubnetRegistry {
         })
     }
 
+    /// Returns the first registered canister id for the requested role.
+    #[must_use]
+    pub(crate) fn find_pid_for_role(role: &CanisterRole) -> Option<Principal> {
+        SUBNET_REGISTRY.with_borrow(|map| {
+            map.iter().find_map(|entry| {
+                if entry.value().role == *role {
+                    Some(*entry.key())
+                } else {
+                    None
+                }
+            })
+        })
+    }
+
+    /// Returns the first direct child id for `parent` with the requested role.
+    #[must_use]
+    pub(crate) fn find_child_pid_for_role(
+        parent: Principal,
+        role: &CanisterRole,
+    ) -> Option<Principal> {
+        SUBNET_REGISTRY.with_borrow(|map| {
+            map.iter().find_map(|entry| {
+                let record = entry.value();
+                if record.parent_pid == Some(parent) && record.role == *role {
+                    Some(*entry.key())
+                } else {
+                    None
+                }
+            })
+        })
+    }
+
     /// Visit each registry entry in deterministic key order.
     pub(crate) fn for_each<F>(mut visit: F)
     where
@@ -238,6 +270,26 @@ mod tests {
 
         let children = SubnetRegistry::children(p(2));
         assert!(children.is_empty());
+    }
+
+    #[test]
+    fn find_pid_for_role_returns_matching_canister() {
+        seed_simple_tree();
+
+        let alpha = SubnetRegistry::find_pid_for_role(&CanisterRole::new("alpha"));
+        assert_eq!(alpha, Some(p(2)));
+    }
+
+    #[test]
+    fn find_child_pid_for_role_returns_matching_direct_child() {
+        seed_simple_tree();
+
+        let alpha = SubnetRegistry::find_child_pid_for_role(p(1), &CanisterRole::new("alpha"));
+        assert_eq!(alpha, Some(p(2)));
+        assert_eq!(
+            SubnetRegistry::find_child_pid_for_role(p(2), &CanisterRole::new("alpha")),
+            None
+        );
     }
 
     #[test]

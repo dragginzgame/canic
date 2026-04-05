@@ -1,7 +1,7 @@
 //! HRW (Highest Random Weight) shard selection.
 
-use canic_core::cdk::candid::Principal;
-use xxhash_rust::xxh3::xxh3_64;
+use crate::cdk::candid::Principal;
+use sha2::{Digest, Sha256};
 
 ///
 /// HrwSelector
@@ -52,25 +52,25 @@ impl HrwSelector {
     }
 
     fn hrw_score(partition_key: &str, shard: &Principal) -> u64 {
-        let mut bytes = Vec::with_capacity(partition_key.len() + shard.as_slice().len());
-        bytes.extend_from_slice(partition_key.as_bytes());
-        bytes.extend_from_slice(shard.as_slice());
-
-        hash_u64(&bytes)
+        let mut hasher = Sha256::new();
+        hasher.update(partition_key.as_bytes());
+        hasher.update(shard.as_slice());
+        score_from_digest(hasher.finalize())
     }
 
     fn hrw_score_slot(pool: &str, partition_key: &str, slot: u32) -> u64 {
-        let mut bytes =
-            Vec::with_capacity(pool.len() + partition_key.len() + std::mem::size_of::<u32>() + 1);
-        bytes.extend_from_slice(pool.as_bytes());
-        bytes.push(0xFF);
-        bytes.extend_from_slice(partition_key.as_bytes());
-        bytes.extend_from_slice(&slot.to_le_bytes());
-
-        hash_u64(&bytes)
+        let mut hasher = Sha256::new();
+        hasher.update(pool.as_bytes());
+        hasher.update([0xFF]);
+        hasher.update(partition_key.as_bytes());
+        hasher.update(slot.to_le_bytes());
+        score_from_digest(hasher.finalize())
     }
 }
 
-fn hash_u64(bytes: &[u8]) -> u64 {
-    xxh3_64(bytes)
+fn score_from_digest(digest: impl AsRef<[u8]>) -> u64 {
+    let bytes: [u8; 8] = digest.as_ref()[..8]
+        .try_into()
+        .expect("sha256 digest prefix must fit into u64 bytes");
+    u64::from_be_bytes(bytes)
 }

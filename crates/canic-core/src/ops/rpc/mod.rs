@@ -6,8 +6,8 @@ use crate::{
         auth::{RoleAttestationRequest, SignedRoleAttestation},
         capability::{
             CAPABILITY_VERSION_V1, CapabilityProof, CapabilityRequestMetadata, CapabilityService,
-            PROOF_VERSION_V1, RoleAttestationProof, RootCapabilityEnvelopeV1,
-            RootCapabilityResponseV1,
+            NonrootCyclesCapabilityEnvelopeV1, NonrootCyclesCapabilityResponseV1, PROOF_VERSION_V1,
+            RoleAttestationProof, RootCapabilityEnvelopeV1, RootCapabilityResponseV1,
         },
         error::Error,
         rpc::{RequestFamily, RootRequestMetadata},
@@ -227,20 +227,44 @@ impl RpcOps {
         target_pid: Principal,
         request: Request,
     ) -> Result<Response, InternalError> {
+        let root_pid = EnvOps::root_pid()?;
+        if target_pid == root_pid {
+            let metadata = capability_metadata_from_request(&request);
+            let envelope = RootCapabilityEnvelopeV1 {
+                service: CapabilityService::Root,
+                capability_version: CAPABILITY_VERSION_V1,
+                capability: request,
+                proof: CapabilityProof::Structural,
+                metadata,
+            };
+
+            let response: RootCapabilityResponseV1 =
+                Self::call_rpc_result(target_pid, protocol::CANIC_RESPONSE_CAPABILITY_V1, envelope)
+                    .await?;
+
+            return Ok(response.response);
+        }
+
         let metadata = capability_metadata_from_request(&request);
-        let envelope = RootCapabilityEnvelopeV1 {
+        let Request::Cycles(capability) = request else {
+            return Err(InternalError::ops(
+                InternalErrorOrigin::Ops,
+                "structural capability path only supports cycles requests",
+            ));
+        };
+        let envelope = NonrootCyclesCapabilityEnvelopeV1 {
             service: CapabilityService::Root,
             capability_version: CAPABILITY_VERSION_V1,
-            capability: request,
+            capability,
             proof: CapabilityProof::Structural,
             metadata,
         };
 
-        let response: RootCapabilityResponseV1 =
+        let response: NonrootCyclesCapabilityResponseV1 =
             Self::call_rpc_result(target_pid, protocol::CANIC_RESPONSE_CAPABILITY_V1, envelope)
                 .await?;
 
-        Ok(response.response)
+        Ok(Response::Cycles(response.response))
     }
 }
 

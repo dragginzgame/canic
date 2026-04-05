@@ -23,8 +23,6 @@ pub mod __internal {
     #[cfg(feature = "control-plane")]
     pub use canic_control_plane as control_plane;
     pub use canic_core as core;
-    #[cfg(feature = "sharding")]
-    pub use canic_sharding_runtime as sharding;
 
     pub mod instructions {
         pub use crate::instructions::format_instructions;
@@ -182,7 +180,7 @@ pub mod api {
             pub use crate::__internal::core::api::placement::scaling::ScalingApi;
 
             #[cfg(feature = "sharding")]
-            pub use crate::__internal::sharding::api::ShardingApi;
+            pub use crate::__internal::core::api::placement::sharding::ShardingApi;
         }
 
         #[cfg(feature = "control-plane")]

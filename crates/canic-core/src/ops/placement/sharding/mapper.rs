@@ -1,10 +1,9 @@
-use crate::view::{ShardPartitionKeyAssignment, ShardPlacement, ShardingPlanState};
-use canic_core::{
-    __sharding_core as sharding_core,
+use crate::{
     cdk::candid::Principal,
     dto::placement::sharding::{ShardEntry, ShardingPlanStateResponse},
+    storage::stable::sharding::{ShardEntryRecord, ShardKey},
+    view::placement::sharding::{ShardPartitionKeyAssignment, ShardPlacement, ShardingPlanState},
 };
-use sharding_core::storage::stable::sharding::{ShardEntryRecord, ShardKey};
 
 ///
 /// ShardPlacementPolicyInputMapper

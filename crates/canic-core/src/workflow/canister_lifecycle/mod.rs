@@ -76,18 +76,14 @@ impl CanisterLifecycleWorkflow {
         parent: Principal,
         extra_arg: Option<Vec<u8>>,
     ) -> Result<CanisterLifecycleResult, InternalError> {
-        let registry_data = SubnetRegistryOps::data();
-        let registry_input = RegistryPolicyInputMapper::record_to_policy_input(registry_data);
-        TopologyPolicy::assert_parent_exists(&registry_input, parent)?;
+        assert_registered_parent(parent)?;
 
         let pid = ProvisionWorkflow::create_and_install_canister(&role, parent, extra_arg).await?;
 
-        let registry_data = SubnetRegistryOps::data();
-        let registry_input = RegistryPolicyInputMapper::record_to_policy_input(registry_data);
-        TopologyPolicy::assert_immediate_parent(&registry_input, pid, parent)?;
+        assert_registered_immediate_parent(pid, parent)?;
 
         PropagationWorkflow::propagate_topology(pid).await?;
-        PropagationWorkflow::propagate_state(&role).await?;
+        PropagationWorkflow::propagate_state(pid, &role).await?;
 
         Ok(CanisterLifecycleResult::created(pid))
     }
@@ -142,5 +138,34 @@ impl CanisterLifecycleWorkflow {
         TopologyPolicy::assert_module_hash(&registry_input, pid, &target_hash)?;
 
         Ok(CanisterLifecycleResult::default())
+    }
+}
+
+// Check that the requested parent already exists without exporting the full registry.
+fn assert_registered_parent(parent_pid: Principal) -> Result<(), InternalError> {
+    if SubnetRegistryOps::is_registered(parent_pid) {
+        Ok(())
+    } else {
+        Err(TopologyPolicyError::ParentNotFound(parent_pid).into())
+    }
+}
+
+// Check that the created child is attached to the expected direct parent.
+fn assert_registered_immediate_parent(
+    pid: Principal,
+    expected_parent: Principal,
+) -> Result<(), InternalError> {
+    let record =
+        SubnetRegistryOps::get(pid).ok_or(TopologyPolicyError::RegistryEntryMissing(pid))?;
+
+    if record.parent_pid == Some(expected_parent) {
+        Ok(())
+    } else {
+        Err(TopologyPolicyError::ImmediateParentMismatch {
+            pid,
+            expected: expected_parent,
+            found: record.parent_pid,
+        }
+        .into())
     }
 }
