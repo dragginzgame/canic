@@ -413,6 +413,27 @@ signed_bytes() {
     printf '%+d' "$value"
 }
 
+baseline_shrunk_from_report() {
+    local report_path="$1"
+    local canister="$2"
+
+    awk -F'|' -v c="$canister" '
+        BEGIN { in_snapshot = 0 }
+        /^## Current Size Snapshot$/ { in_snapshot = 1; next }
+        in_snapshot && /^## / { in_snapshot = 0 }
+        in_snapshot {
+            name = $2
+            gsub(/[`[:space:]]/, "", name)
+            value = $3
+            gsub(/[[:space:]]/, "", value)
+            if (name == c) {
+                print value
+                exit
+            }
+        }
+    ' "$report_path"
+}
+
 run_top_summary() {
     local output="$1"
     local canister
@@ -907,12 +928,25 @@ if [ "$BASELINE_PATH" != "N/A" ]; then
                 fi
             fi
         done
+    elif [ -f "$BASELINE_PATH" ]; then
+        record_verification "baseline markdown comparison" "PASS" "baseline deltas calculated from \`$BASELINE_PATH\` current size snapshot"
+        for canister in "${CANISTERS[@]}"; do
+            baseline_shrunk="$(baseline_shrunk_from_report "$BASELINE_PATH" "$canister")"
+            if [ -n "$baseline_shrunk" ]; then
+                baseline_delta="$(( ${SHRUNK_WASM_BYTES[$canister]} - baseline_shrunk ))"
+                BASELINE_DELTA_BYTES["$canister"]="$(signed_bytes "$baseline_delta")"
+                BASELINE_DELTA_PCT["$canister"]="$(normalize_baseline_delta_pct "$baseline_shrunk" "${SHRUNK_WASM_BYTES[$canister]}")"
+                if [ "$baseline_delta" -gt 0 ]; then
+                    BASELINE_GROWTH_COUNT=$((BASELINE_GROWTH_COUNT + 1))
+                fi
+            fi
+        done
     else
         COMPARABILITY="non-comparable"
-        record_verification "baseline size-metrics.tsv comparison" "BLOCKED" "baseline artifact table not found at \`$BASELINE_TSV\`"
+        record_verification "baseline comparison" "BLOCKED" "baseline artifact table not found at \`$BASELINE_TSV\` and baseline report not found at \`$BASELINE_PATH\`"
     fi
 else
-    record_verification "baseline size-metrics.tsv comparison" "BLOCKED" "first run of day; no baseline comparison available"
+    record_verification "baseline comparison" "BLOCKED" "first run of day; no baseline comparison available"
 fi
 
 write_aggregate_json "$ARTIFACTS_DIR/size-report.json"

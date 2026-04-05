@@ -5,6 +5,7 @@ mod root;
 
 use canic::{
     Error,
+    api::ic::network::NetworkApi,
     cdk::{types::Principal, utils::wasm::get_wasm_hash},
     dto::{
         auth::DelegatedToken,
@@ -20,7 +21,7 @@ use canic::{
         state::SubnetStateResponse,
         topology::SubnetRegistryResponse,
     },
-    ids::cap,
+    ids::{BuildNetwork, cap},
     protocol,
 };
 use canic_control_plane::{
@@ -347,7 +348,7 @@ fn generate_instruction_footprint_report() {
 // Build the fixed scenario manifest for the first 0.20 instruction baseline.
 #[allow(clippy::too_many_lines)]
 fn scenarios() -> Vec<AuditScenario> {
-    vec![
+    let mut scenarios = vec![
         AuditScenario {
             key: "app:canic_time:minimal-valid",
             canister: "audit_leaf_probe",
@@ -493,22 +494,6 @@ fn scenarios() -> Vec<AuditScenario> {
             notes: "Root delegation provisioning request from a freshly created shard to exercise delegated auth issuance and proof fanout checkpoints.",
         },
         AuditScenario {
-            key: "test:test_verify_delegated_token:valid-delegated-token",
-            canister: "test",
-            endpoint_or_flow: "test_verify_delegated_token",
-            transport_mode: "update",
-            subject_kind: "endpoint",
-            subject_label: "test_verify_delegated_token",
-            arg_class: "valid-delegated-token",
-            caller_class: "delegated-subject",
-            auth_state: "delegated-token",
-            replay_state: "n/a",
-            cache_state: "cold",
-            topology_state: "root_bootstrapped+fresh-user-shard+verifier-ready",
-            freshness_model: "fresh-topology-per-scenario",
-            notes: "Verifier-side delegated token confirmation on the shared test canister using a freshly minted token from a newly created user shard.",
-        },
-        AuditScenario {
             key: "test:test:minimal-valid",
             canister: "test",
             endpoint_or_flow: "test",
@@ -588,7 +573,28 @@ fn scenarios() -> Vec<AuditScenario> {
             freshness_model: "fresh-topology-per-scenario",
             notes: "Publishes the only chunk for one synthetic staged release after prepare has completed.",
         },
-    ]
+    ];
+
+    if NetworkApi::build_network() == Some(BuildNetwork::Ic) {
+        scenarios.push(AuditScenario {
+            key: "test:test_verify_delegated_token:valid-delegated-token",
+            canister: "test",
+            endpoint_or_flow: "test_verify_delegated_token",
+            transport_mode: "update",
+            subject_kind: "endpoint",
+            subject_label: "test_verify_delegated_token",
+            arg_class: "valid-delegated-token",
+            caller_class: "delegated-subject",
+            auth_state: "delegated-token",
+            replay_state: "n/a",
+            cache_state: "cold",
+            topology_state: "root_bootstrapped+fresh-user-shard+verifier-ready",
+            freshness_model: "fresh-topology-per-scenario",
+            notes: "Verifier-side delegated token confirmation on the shared test canister using a freshly minted token from a newly created user shard.",
+        });
+    }
+
+    scenarios
 }
 
 // Resolve the repo root from this crate's manifest path.
