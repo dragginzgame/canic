@@ -35,7 +35,6 @@ pub const ICRC10_SUPPORTED_STANDARDS: &str = "icrc10_supported_standards";
 pub const ICRC21_CANISTER_CALL_CONSENT_MESSAGE: &str = "icrc21_canister_call_consent_message";
 pub const CANIC_CANISTER_CYCLE_BALANCE: &str = "canic_canister_cycle_balance";
 pub const CANIC_CANISTER_VERSION: &str = "canic_canister_version";
-pub const CANIC_TIME: &str = "canic_time";
 pub const CANIC_MEMORY_REGISTRY: &str = "canic_memory_registry";
 pub const CANIC_ENV: &str = "canic_env";
 pub const CANIC_LOG: &str = "canic_log";

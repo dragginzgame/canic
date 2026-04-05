@@ -11,8 +11,8 @@ use canic::{
     },
     ids::cap,
 };
-use canic_internal::canister::{SCALE_HUB, TEST};
-use canic_testing_internal::pic::install_standalone_canister;
+use canic_internal::canister::TEST;
+use canic_testing_internal::pic::{install_audit_scaling_probe, install_standalone_canister};
 use canic_testkit::artifacts::WasmBuildProfile;
 
 const fn p(id: u8) -> Principal {
@@ -21,14 +21,13 @@ const fn p(id: u8) -> Principal {
 
 #[test]
 fn standalone_scale_hub_perf_probe_succeeds() {
-    let fixture =
-        install_standalone_canister("canister_scale_hub", SCALE_HUB, WasmBuildProfile::Fast);
+    let fixture = install_audit_scaling_probe(WasmBuildProfile::Fast);
 
     let response: Result<(bool, u64), Error> = fixture
         .pic
-        .query_call(fixture.canister_id, "plan_create_worker_perf_test", ())
-        .expect("plan_create_worker_perf_test transport query failed");
-    let (_plan, perf) = response.expect("plan_create_worker_perf_test application query failed");
+        .query_call(fixture.canister_id, "audit_plan_create_worker_probe", ())
+        .expect("audit_plan_create_worker_probe transport query failed");
+    let (_plan, perf) = response.expect("audit_plan_create_worker_probe application query failed");
 
     assert!(perf > 0, "expected positive local instruction count");
 }

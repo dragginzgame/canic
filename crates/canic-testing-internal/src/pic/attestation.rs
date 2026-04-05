@@ -178,11 +178,9 @@ fn install_cached_root_fixture(cache_kind: AttestationCacheKind) -> CachedInstal
         }
     });
     let baseline_slot = baseline_slot(cache_kind).get_or_init(|| Mutex::new(None));
-    let (baseline, cache_hit) =
-        acquire_cached_pic_baseline(baseline_slot, || build_cached_baseline(cache_kind));
+    let (baseline, cache_hit) = restore_or_rebuild_cached_baseline(baseline_slot, cache_kind);
     if cache_hit {
-        progress("cache hit, restoring cached baseline");
-        restore_cached_baseline(&baseline);
+        progress("cache hit");
     }
     progress("cached fixture restore complete");
 
@@ -192,6 +190,42 @@ fn install_cached_root_fixture(cache_kind: AttestationCacheKind) -> CachedInstal
         verifier_id: baseline.metadata.verifier_id,
         pic: BaselinePicGuard { baseline },
     }
+}
+
+// Restore a cached baseline when possible, or rebuild it if the underlying
+// PocketIC instance has gone away between tests.
+fn restore_or_rebuild_cached_baseline(
+    baseline_slot: &'static Mutex<Option<CachedPicBaseline<AttestationBaselineMetadata>>>,
+    cache_kind: AttestationCacheKind,
+) -> (
+    canic_testkit::pic::CachedPicBaselineGuard<'static, AttestationBaselineMetadata>,
+    bool,
+) {
+    let (baseline, cache_hit) =
+        acquire_cached_pic_baseline(baseline_slot, || build_cached_baseline(cache_kind));
+    if !cache_hit {
+        return (baseline, false);
+    }
+
+    let restore = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        restore_cached_baseline(&baseline);
+    }));
+    if restore.is_ok() {
+        return (baseline, true);
+    }
+
+    progress("cached baseline restore failed; rebuilding fresh baseline");
+    drop(baseline);
+
+    let mut slot = baseline_slot
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    *slot = None;
+    drop(slot);
+
+    let (rebuilt, _cache_hit) =
+        acquire_cached_pic_baseline(baseline_slot, || build_cached_baseline(cache_kind));
+    (rebuilt, false)
 }
 
 // Build one reusable baseline and capture immutable snapshot IDs inside it.

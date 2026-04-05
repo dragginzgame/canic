@@ -15,7 +15,7 @@ impl AppRegistryQuery {
     pub fn registry() -> AppRegistryResponse {
         let data = AppRegistryOps::data();
 
-        AppRegistryResponseMapper::record_to_view(data)
+        AppRegistryResponseMapper::record_to_response(data)
     }
 }
 

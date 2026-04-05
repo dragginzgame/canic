@@ -386,16 +386,14 @@ pub fn load_workspace_package_version(
     Ok(version.to_string())
 }
 
-// Read the current root time so staged manifests use replica timestamps.
+// Read the current host wall clock so staged manifests use a stable whole-second
+// timestamp without depending on an exported root time endpoint.
 pub fn root_time_secs(root_canister: &str) -> Result<u64, Box<dyn std::error::Error>> {
-    let payload = dfx_call(root_canister, protocol::CANIC_TIME, None, Some("json"))?;
-    let data = serde_json::from_str::<JsonValue>(&payload)?;
-    let now_nanos = data
-        .get("Ok")
-        .and_then(json_u64)
-        .ok_or_else(|| format!("unexpected canic_time response: {payload}"))?;
-
-    Ok(now_nanos / 1_000_000_000)
+    let _ = root_canister;
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|err| format!("system clock before unix epoch: {err}"))?;
+    Ok(now.as_secs())
 }
 
 // Stage one emitted release-set manifest into root and resume bootstrap-ready state.

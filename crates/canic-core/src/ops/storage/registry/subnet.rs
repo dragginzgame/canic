@@ -205,9 +205,8 @@ impl SubnetRegistryOps {
         let mut entries = Vec::with_capacity(SubnetRegistry::len());
 
         SubnetRegistry::for_each(|pid, record| {
-            entries.push(super::mapper::SubnetRegistryResponseMapper::entry_to_view(
-                pid, record,
-            ));
+            entries
+                .push(super::mapper::SubnetRegistryResponseMapper::record_to_response(pid, record));
         });
 
         SubnetRegistryResponse(entries)
