@@ -91,6 +91,28 @@ impl ShardingRegistry {
         })
     }
 
+    /// Returns all shard entries registered for one pool.
+    #[must_use]
+    pub(crate) fn entries_for_pool(pool: &str) -> Vec<(Principal, ShardEntryRecord)> {
+        Self::with(|s| {
+            s.all_entries()
+                .into_iter()
+                .filter(|(_, entry)| entry.pool.as_ref() == pool)
+                .collect()
+        })
+    }
+
+    /// Returns all assignments registered for one pool.
+    #[must_use]
+    pub(crate) fn assignments_for_pool(pool: &str) -> Vec<(ShardKey, Principal)> {
+        Self::with(|s| {
+            s.all_assignments()
+                .into_iter()
+                .filter(|(key, _)| key.pool.as_ref() == pool)
+                .collect()
+        })
+    }
+
     /// Exports all shard entries (structural data only).
     ///
     /// NOTE:

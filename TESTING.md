@@ -10,7 +10,7 @@ Follow these rules during refactors to prevent test sprawl.
 - Seam/workflow tests that need `crate::` internals live under `crates/canic-core/src/test/`.
 - PocketIC/system tests live under `crates/canic-core/tests/*.rs` (top-level only).
 - Avoid `#[path = "..."]` in tests; use top-level files in `tests/`.
-- Test canister crates are not tests; keep them outside `tests/` (e.g. `crates/canic-core/test-canisters/`).
+- Test canister crates are not tests; keep correctness fixtures under `crates/*/test-canisters/` and audit probes under `crates/*/audit-canisters/`.
 - Tests that need private internals must not be promoted to public API; use `cfg(test)` or feature-gated test exports.
 This document is the single source of truth for test configuration policy.
 
@@ -92,7 +92,7 @@ to avoid PocketIC startup races under parallel harness execution.
 
 ## Test Canister Artifacts
 
-- Test canister crates live under `crates/*/test-canisters/`.
+- Test canister crates live under `crates/*/test-canisters/`, while audit probe crates live under `crates/*/audit-canisters/`.
 - Their `build.rs` MUST embed static config via `canic::build!` or `canic::build_root!`.
 - Test canisters MUST NOT use `ConfigTestBuilder` or private `canic-core` config internals.
 - No test canister build script may rely on environment-based config overrides.

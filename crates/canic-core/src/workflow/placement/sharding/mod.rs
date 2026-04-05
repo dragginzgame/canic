@@ -130,9 +130,7 @@ impl ShardingWorkflow {
         let active_set: BTreeSet<_> = active.into_iter().collect();
         let routable_active = Self::routable_active_set(&active_set);
 
-        let registry = ShardingRegistryOps::export();
-        let entry_views: Vec<_> = registry
-            .entries
+        let entry_views: Vec<_> = ShardingRegistryOps::entries_for_pool(pool)
             .iter()
             .filter(|(pid, _)| routable_active.contains(pid))
             .map(|(pid, entry)| {
@@ -242,9 +240,7 @@ impl ShardingWorkflow {
         let active_set: BTreeSet<_> = active.into_iter().collect();
         let routable_active = Self::routable_active_set(&active_set);
 
-        let registry = ShardingRegistryOps::export();
-        let entry_views: Vec<_> = registry
-            .entries
+        let entry_views: Vec<_> = ShardingRegistryOps::entries_for_pool(pool)
             .iter()
             .filter(|(pid, _)| routable_active.contains(pid))
             .map(|(pid, entry)| {
@@ -310,6 +306,7 @@ impl ShardingWorkflow {
         extra_arg: Option<Vec<u8>>,
     ) -> Result<(Principal, u32), InternalError> {
         let pool_entries = Self::pool_entry_views(pool);
+        crate::perf!("load_bootstrap_pool_entries");
         if pool_entries.len() as u32 >= policy.max_shards {
             return Err(Self::no_active_shards_exhausted(pool, partition_key));
         }
@@ -317,8 +314,10 @@ impl ShardingWorkflow {
         let free_slots = Self::free_slots(policy.max_shards, &pool_entries);
         let slot = HrwSelector::select_from_slots(pool, partition_key, &free_slots)
             .ok_or_else(|| Self::no_active_shards_exhausted(pool, partition_key))?;
+        crate::perf!("select_bootstrap_slot");
 
         let pid = Self::allocate_and_admit(pool, slot, canister_role, policy, extra_arg).await?;
+        crate::perf!("allocate_bootstrap_shard");
         Ok((pid, slot))
     }
 
@@ -337,16 +336,13 @@ impl ShardingWorkflow {
     }
 
     fn pool_entry_views(pool: &str) -> Vec<(Principal, ShardPlacement)> {
-        let registry = ShardingRegistryOps::export();
         let direct_children = Self::direct_child_pid_set();
-        registry
-            .entries
+        ShardingRegistryOps::entries_for_pool(pool)
             .iter()
             .filter(|(pid, _)| direct_children.is_empty() || direct_children.contains(pid))
             .map(|(pid, entry)| {
                 ShardPlacementPolicyInputMapper::record_to_policy_input(*pid, entry)
             })
-            .filter(|(_, entry)| entry.pool.as_str() == pool)
             .collect()
     }
 

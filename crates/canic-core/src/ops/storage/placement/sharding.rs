@@ -177,12 +177,13 @@ impl ShardingRegistryOps {
     /// at an API or DTO boundary.
     #[must_use]
     pub fn assignments_for_pool(pool: &str) -> Vec<(ShardKey, Principal)> {
-        ShardingRegistry::with(|core| {
-            core.all_assignments()
-                .into_iter()
-                .filter(|(k, _)| k.pool.as_ref() == pool)
-                .collect()
-        })
+        ShardingRegistry::assignments_for_pool(pool)
+    }
+
+    /// Return all shard entries registered for one pool.
+    #[must_use]
+    pub fn entries_for_pool(pool: &str) -> Vec<(Principal, ShardEntryRecord)> {
+        ShardingRegistry::entries_for_pool(pool)
     }
 
     /// Export all shard entries

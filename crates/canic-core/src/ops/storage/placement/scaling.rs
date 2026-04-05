@@ -25,6 +25,7 @@ impl ScalingRegistryOps {
 
     /// Lookup all workers in a given pool
     #[must_use]
+    #[expect(dead_code)]
     pub fn find_by_pool(pool: &str) -> Vec<(Principal, WorkerEntryRecord)> {
         ScalingRegistry::export()
             .entries
@@ -34,9 +35,8 @@ impl ScalingRegistryOps {
     }
 
     #[must_use]
-    #[expect(clippy::cast_possible_truncation)]
     pub fn count_by_pool(pool: &str) -> u32 {
-        Self::find_by_pool(pool).len() as u32
+        ScalingRegistry::count_by_pool(pool)
     }
 
     #[must_use]

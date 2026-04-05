@@ -69,7 +69,8 @@ The crate was historically known as **ICU** (Internet Computer Utilities). All c
   * `scale/`, `scale_hub/` – pool scaling agents demonstrating capacity workflows.
   * `minimal/` – minimal runtime baseline canister.
   * `reference-support/` – workspace-only shared support crate published internally as `canic-internal`.
-* `crates/canic-core/test-canisters/` – internal test-only canisters used by PocketIC fixtures and audit probes, including the internal `test` role implementation.
+* `crates/canic-core/test-canisters/` – internal correctness/integration canisters used by PocketIC fixtures, including the internal `test` role implementation.
+* `crates/canic-core/audit-canisters/` – internal audit-only probe canisters used for instruction and wasm measurement.
 * `scripts/` – build, release, audit, and environment helpers.
 
   * `app/` – bootstrap scripts for the demo topology.
