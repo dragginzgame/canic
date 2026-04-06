@@ -112,6 +112,12 @@ impl EcdsaOps {
 }
 
 impl EcdsaOps {
+    // Report whether threshold ECDSA management support is compiled into this build.
+    #[must_use]
+    pub const fn threshold_management_enabled() -> bool {
+        cfg!(feature = "auth-crypto")
+    }
+
     // Verify a pre-hashed signature locally with k256 on every canister build.
     pub fn verify_signature(
         public_key_sec1: &[u8],

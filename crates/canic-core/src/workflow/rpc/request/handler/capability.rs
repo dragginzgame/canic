@@ -150,8 +150,10 @@ fn hash_issue_delegation_payload(req: &DelegationRequest) -> [u8; 32] {
     super::replay::hash_strings(&mut hasher, &req.scopes);
     super::replay::hash_principals(&mut hasher, &req.aud);
     super::replay::hash_u64(&mut hasher, req.ttl_secs);
+    crate::perf!("hash_replay_delegation_cert");
     super::replay::hash_principals(&mut hasher, &req.verifier_targets);
     super::replay::hash_bool(&mut hasher, req.include_root_verifier);
+    crate::perf!("hash_replay_delegation_targets");
     super::replay::finish_payload_hash(hasher)
 }
 

@@ -7,12 +7,13 @@ pub mod timer;
 
 use crate::{
     InternalError, InternalErrorOrigin, VERSION,
+    config::ConfigModel,
     domain::policy::env::{EnvInput, EnvPolicyError, validate_or_default},
     dto::{abi::v1::CanisterInitPayload, subnet::SubnetIdentity},
     ids::SubnetRole,
     ops::{
         config::ConfigOps,
-        ic::{IcOps, network::NetworkOps},
+        ic::{IcOps, ecdsa::EcdsaOps, network::NetworkOps},
         runtime::{
             env::EnvOps,
             memory::{MemoryRegistryInitSummary, MemoryRegistryOps},
@@ -192,6 +193,7 @@ pub fn init_root_canister(identity: SubnetIdentity) -> Result<(), InternalError>
         )
     })?;
     AppStateOps::init_mode(app_mode);
+    ensure_root_delegated_auth_crypto_contract()?;
 
     let created_at = IcOps::now_secs();
     SubnetRegistryOps::register_root(self_pid, created_at);
@@ -219,6 +221,7 @@ pub fn post_upgrade_root_canister_after_memory_init(
     log_memory_summary(&memory_summary);
 
     // ---  Phase 2 intentionally omitted: post-upgrade does not re-import env or directories.
+    ensure_root_delegated_auth_crypto_contract()?;
 
     // --- Phase 3: Service startup ---
     RuntimeWorkflow::start_all_root().map_err(|err| {
@@ -267,7 +270,7 @@ fn init_nonroot_canister_internal(
     log_memory_summary(&memory_summary);
 
     // --- Phase 2: Payload registration ---
-    EnvWorkflow::init_env_from_args(payload.env, canister_role).map_err(|err| {
+    EnvWorkflow::init_env_from_args(payload.env, canister_role.clone()).map_err(|err| {
         InternalError::invariant(
             InternalErrorOrigin::Workflow,
             format!("env import failed: {err}"),
@@ -294,6 +297,8 @@ fn init_nonroot_canister_internal(
         )
     })?;
     AppStateOps::init_mode(app_mode);
+    let canister_cfg = ConfigOps::current_canister()?;
+    ensure_nonroot_delegated_auth_crypto_contract(&canister_role, &canister_cfg)?;
 
     // --- Phase 3: Service startup ---
     if with_attestation_cache {
@@ -339,6 +344,11 @@ fn post_upgrade_nonroot_canister_after_memory_init_internal(
     log_memory_summary(&memory_summary);
 
     // ---  Phase 2 intentionally omitted: post-upgrade does not re-import env or directories.
+    let canister_cfg = ConfigOps::current_canister().unwrap_or_else(|err| {
+        panic!("current canister config unavailable during post-upgrade runtime init: {err}")
+    });
+    ensure_nonroot_delegated_auth_crypto_contract(&canister_role, &canister_cfg)
+        .unwrap_or_else(|err| panic!("non-root delegated auth runtime contract failed: {err}"));
 
     // --- Phase 3: Service startup ---
     if with_attestation_cache {
@@ -350,4 +360,106 @@ fn post_upgrade_nonroot_canister_after_memory_init_internal(
 
 pub fn init_memory_registry_post_upgrade() -> Result<MemoryRegistryInitSummary, InternalError> {
     init_post_upgrade_memory_registry()
+}
+
+fn ensure_root_delegated_auth_crypto_contract() -> Result<(), InternalError> {
+    let cfg = ConfigOps::get()?;
+    if root_requires_auth_crypto(&cfg) && !EcdsaOps::threshold_management_enabled() {
+        return Err(InternalError::invariant(
+            InternalErrorOrigin::Workflow,
+            "delegated auth is configured in canic.toml, but this root build does not include threshold ECDSA management support; enable the `auth-crypto` feature for the root canister build".to_string(),
+        ));
+    }
+
+    Ok(())
+}
+
+fn ensure_nonroot_delegated_auth_crypto_contract(
+    canister_role: &CanisterRole,
+    canister_cfg: &crate::config::schema::CanisterConfig,
+) -> Result<(), InternalError> {
+    if nonroot_requires_auth_crypto(canister_cfg) && !EcdsaOps::threshold_management_enabled() {
+        return Err(InternalError::invariant(
+            InternalErrorOrigin::Workflow,
+            format!(
+                "canister '{canister_role}' is configured as a delegated auth signer, but this build does not include threshold ECDSA management support; enable the `auth-crypto` feature for that canister build",
+            ),
+        ));
+    }
+
+    Ok(())
+}
+
+fn root_requires_auth_crypto(cfg: &ConfigModel) -> bool {
+    cfg.auth.delegated_tokens.enabled
+        && cfg.subnets.values().any(|subnet| {
+            subnet
+                .canisters
+                .values()
+                .any(|canister| canister.delegated_auth.signer || canister.delegated_auth.verifier)
+        })
+}
+
+const fn nonroot_requires_auth_crypto(
+    canister_cfg: &crate::config::schema::CanisterConfig,
+) -> bool {
+    canister_cfg.delegated_auth.signer
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{nonroot_requires_auth_crypto, root_requires_auth_crypto};
+    use crate::{
+        config::schema::{CanisterKind, DelegatedAuthCanisterConfig},
+        ids::CanisterRole,
+        test::config::ConfigTestBuilder,
+    };
+
+    #[test]
+    fn root_requires_auth_crypto_when_any_delegated_auth_role_exists() {
+        let mut verifier_cfg = ConfigTestBuilder::canister_config(CanisterKind::Singleton);
+        verifier_cfg.delegated_auth = DelegatedAuthCanisterConfig {
+            signer: false,
+            verifier: true,
+        };
+
+        let cfg = ConfigTestBuilder::new()
+            .with_prime_canister(
+                CanisterRole::ROOT,
+                ConfigTestBuilder::canister_config(CanisterKind::Root),
+            )
+            .with_prime_canister("user_hub", verifier_cfg)
+            .build();
+
+        assert!(root_requires_auth_crypto(&cfg));
+    }
+
+    #[test]
+    fn root_does_not_require_auth_crypto_without_delegated_auth_roles() {
+        let cfg = ConfigTestBuilder::new().build();
+
+        assert!(!root_requires_auth_crypto(&cfg));
+    }
+
+    #[test]
+    fn verifier_only_nonroot_does_not_require_auth_crypto() {
+        let mut verifier_cfg = ConfigTestBuilder::canister_config(CanisterKind::Singleton);
+        verifier_cfg.delegated_auth = DelegatedAuthCanisterConfig {
+            signer: false,
+            verifier: true,
+        };
+
+        assert!(!nonroot_requires_auth_crypto(&verifier_cfg));
+    }
+
+    #[test]
+    fn signer_nonroot_requires_auth_crypto() {
+        let mut signer_cfg = ConfigTestBuilder::canister_config(CanisterKind::Shard);
+        signer_cfg.delegated_auth = DelegatedAuthCanisterConfig {
+            signer: true,
+            verifier: true,
+        };
+
+        assert!(nonroot_requires_auth_crypto(&signer_cfg));
+    }
 }

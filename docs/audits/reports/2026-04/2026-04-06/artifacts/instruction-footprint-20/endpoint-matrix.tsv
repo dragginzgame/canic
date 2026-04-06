@@ -1,0 +1,13 @@
+canister	endpoint_or_flow	scenario_key	count	total_local_instructions	avg_local_instructions
+audit_leaf_probe	audit_time_probe	app:canic_time:minimal-valid	1	33424	33424
+audit_leaf_probe	audit_env_probe	app:canic_env:minimal-valid	1	35073	35073
+audit_leaf_probe	audit_log_probe	app:canic_log:empty-page	1	315206	315206
+audit_root_probe	audit_subnet_registry_probe	root:canic_subnet_registry:full-registry	1	76624	76624
+audit_root_probe	audit_subnet_state_probe	root:canic_subnet_state:empty-struct	1	32258	32258
+audit_scaling_probe	audit_plan_create_worker_probe	scale_hub:plan_create_worker:empty-pool	1	63961	63961
+root	canic_request_delegation	root:canic_request_delegation:fresh-shard	1	1719755	1719755
+test	test	test:test:minimal-valid	1	816	816
+root	canic_response_capability_v1	root:canic_response_capability_v1:request-cycles-fresh	1	487599	487599
+root	canic_template_stage_manifest_admin	root:canic_template_stage_manifest_admin:single-chunk	1	413116	413116
+root	canic_template_prepare_admin	root:canic_template_prepare_admin:single-chunk	1	190998	190998
+root	canic_template_publish_chunk_admin	root:canic_template_publish_chunk_admin:single-chunk	1	338582	338582
