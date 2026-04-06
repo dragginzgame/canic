@@ -109,6 +109,10 @@ The one checked-in exception is:
 That file remains the canonical published interface for the hidden bootstrap
 `wasm_store` crate and the packaged downstream installer path.
 
+Ordinary bootstrap builds copy that checked-in DID into `.dfx/local`; they do
+not rewrite the checked-in source file unless
+`CANIC_REFRESH_WASM_STORE_DID=1` is set intentionally.
+
 Profile selection for the public builder is:
 - `CANIC_WASM_PROFILE=debug|fast|release`
 

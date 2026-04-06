@@ -24,9 +24,9 @@ pub struct ControllerSnapshots(HashMap<Principal, ControllerSnapshot>);
 ///
 
 pub struct CachedPicBaseline<T> {
-    pub pic: Pic,
-    pub snapshots: ControllerSnapshots,
-    pub metadata: T,
+    pic: Pic,
+    snapshots: ControllerSnapshots,
+    metadata: T,
     _serial_guard: PicSerialGuard,
 }
 
@@ -154,6 +154,30 @@ impl<T> CachedPicBaseline<T> {
     pub fn restore(&self, controller_id: Principal) {
         self.pic
             .restore_controller_snapshots(controller_id, &self.snapshots);
+    }
+
+    /// Borrow the owned PocketIC instance behind this cached baseline.
+    #[must_use]
+    pub const fn pic(&self) -> &Pic {
+        &self.pic
+    }
+
+    /// Mutably borrow the owned PocketIC instance behind this cached baseline.
+    #[must_use]
+    pub const fn pic_mut(&mut self) -> &mut Pic {
+        &mut self.pic
+    }
+
+    /// Borrow the captured metadata associated with this cached baseline.
+    #[must_use]
+    pub const fn metadata(&self) -> &T {
+        &self.metadata
+    }
+
+    /// Mutably borrow the captured metadata associated with this cached baseline.
+    #[must_use]
+    pub const fn metadata_mut(&mut self) -> &mut T {
+        &mut self.metadata
     }
 }
 

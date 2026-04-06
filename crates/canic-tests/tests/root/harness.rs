@@ -142,7 +142,7 @@ impl Deref for RootPicHandle {
     fn deref(&self) -> &Self::Target {
         match self {
             Self::Fresh(pic) => pic,
-            Self::Cached(baseline) => &baseline.pic,
+            Self::Cached(baseline) => baseline.pic(),
         }
     }
 }
@@ -151,7 +151,7 @@ impl DerefMut for RootPicHandle {
     fn deref_mut(&mut self) -> &mut Self::Target {
         match self {
             Self::Fresh(pic) => pic,
-            Self::Cached(baseline) => &mut baseline.pic,
+            Self::Cached(baseline) => baseline.pic_mut(),
         }
     }
 }
@@ -266,8 +266,8 @@ fn setup_root_cached_spec(
     }
 
     RootSetup {
-        root_id: baseline.metadata.root_id,
-        subnet_directory: baseline.metadata.subnet_directory.clone(),
+        root_id: baseline.metadata().root_id,
+        subnet_directory: baseline.metadata().subnet_directory.clone(),
         pic: RootPicHandle::Cached(baseline),
         _serial_guard: serial_guard,
         _pic_serial_guard: pic_serial_guard,

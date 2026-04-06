@@ -1,4 +1,4 @@
-use candid::{Principal, decode_one, encode_args, encode_one};
+use candid::{encode_args, encode_one};
 use canic::{
     Error,
     cdk::types::TC,
@@ -6,22 +6,20 @@ use canic::{
         abi::v1::CanisterInitPayload,
         env::EnvBootstrapArgs,
         subnet::SubnetIdentity,
-        topology::{AppDirectoryArgs, SubnetDirectoryArgs, SubnetRegistryResponse},
+        topology::{AppDirectoryArgs, SubnetDirectoryArgs},
     },
     ids::CanisterRole,
-    protocol,
 };
 use pocket_ic::{PocketIc, PocketIcBuilder};
-use std::{
-    ops::{Deref, DerefMut},
-    panic::AssertUnwindSafe,
-};
+use std::ops::{Deref, DerefMut};
 
 mod baseline;
 mod calls;
 mod diagnostics;
+mod errors;
 mod lifecycle;
 mod process_lock;
+mod readiness;
 mod snapshot;
 mod standalone;
 mod startup;
@@ -30,32 +28,13 @@ pub use baseline::{
     CachedPicBaseline, CachedPicBaselineGuard, ControllerSnapshots, acquire_cached_pic_baseline,
     drop_stale_cached_pic_baseline, restore_or_rebuild_cached_pic_baseline,
 };
+pub use errors::{PicInstallError, StandaloneCanisterFixtureError};
 pub use process_lock::{
     PicSerialGuard, PicSerialGuardError, acquire_pic_serial_guard, try_acquire_pic_serial_guard,
 };
+pub use readiness::{role_pid, wait_until_ready};
 pub use startup::PicStartError;
 const INSTALL_CYCLES: u128 = 500 * TC;
-
-///
-/// PicInstallError
-///
-
-#[derive(Debug, Eq, PartialEq)]
-pub struct PicInstallError {
-    canister_id: Principal,
-    message: String,
-}
-
-///
-/// StandaloneCanisterFixtureError
-///
-
-#[derive(Debug)]
-pub enum StandaloneCanisterFixtureError {
-    SerialGuard(PicSerialGuardError),
-    Start(PicStartError),
-    Install(PicInstallError),
-}
 
 pub use standalone::{
     StandaloneCanisterFixture, install_prebuilt_canister, install_prebuilt_canister_with_cycles,
@@ -79,73 +58,6 @@ pub fn pic() -> Pic {
 /// Create a fresh PocketIC universe without panicking on startup failures.
 pub fn try_pic() -> Result<Pic, PicStartError> {
     PicBuilder::new().with_application_subnet().try_build()
-}
-
-/// Wait until a PocketIC canister reports `canic_ready`.
-pub fn wait_until_ready(pic: &PocketIc, canister_id: Principal, tick_limit: usize) {
-    let payload = encode_args(()).expect("encode empty args");
-
-    for _ in 0..tick_limit {
-        if let Ok(bytes) = pic.query_call(
-            canister_id,
-            Principal::anonymous(),
-            protocol::CANIC_READY,
-            payload.clone(),
-        ) && let Ok(ready) = decode_one::<bool>(&bytes)
-            && ready
-        {
-            return;
-        }
-        pic.tick();
-    }
-
-    panic!("canister did not report ready in time: {canister_id}");
-}
-
-/// Resolve one role principal from root's subnet registry, polling until present.
-#[must_use]
-pub fn role_pid(
-    pic: &PocketIc,
-    root_id: Principal,
-    role: &'static str,
-    tick_limit: usize,
-) -> Principal {
-    for _ in 0..tick_limit {
-        let registry: Result<Result<SubnetRegistryResponse, Error>, Error> = {
-            let payload = encode_args(()).expect("encode empty args");
-            pic.query_call(
-                root_id,
-                Principal::anonymous(),
-                protocol::CANIC_SUBNET_REGISTRY,
-                payload,
-            )
-            .map_err(|err| {
-                Error::internal(format!(
-                    "pocket_ic query_call failed (canister={root_id}, method={}): {err}",
-                    protocol::CANIC_SUBNET_REGISTRY
-                ))
-            })
-            .and_then(|bytes| {
-                decode_one(&bytes).map_err(|err| {
-                    Error::internal(format!("decode_one failed for subnet registry: {err}"))
-                })
-            })
-        };
-
-        if let Ok(Ok(registry)) = registry
-            && let Some(pid) = registry
-                .0
-                .into_iter()
-                .find(|entry| entry.role == CanisterRole::new(role))
-                .map(|entry| entry.pid)
-        {
-            return pid;
-        }
-
-        pic.tick();
-    }
-
-    panic!("{role} canister must be registered");
 }
 
 ///
@@ -198,66 +110,9 @@ impl PicBuilder {
 
     /// Finish building the PocketIC instance without panicking on startup failures.
     pub fn try_build(self) -> Result<Pic, PicStartError> {
-        startup::try_build_pic(AssertUnwindSafe(self.0).0)
+        startup::try_build_pic(self.0)
     }
 }
-
-impl PicInstallError {
-    /// Capture one install failure for a specific canister id.
-    #[must_use]
-    pub const fn new(canister_id: Principal, message: String) -> Self {
-        Self {
-            canister_id,
-            message,
-        }
-    }
-
-    /// Read the canister id that failed to install.
-    #[must_use]
-    pub const fn canister_id(&self) -> Principal {
-        self.canister_id
-    }
-
-    /// Read the captured panic message from the install attempt.
-    #[must_use]
-    pub fn message(&self) -> &str {
-        &self.message
-    }
-}
-
-impl std::fmt::Display for PicInstallError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "failed to install canister {}: {}",
-            self.canister_id, self.message
-        )
-    }
-}
-
-impl std::error::Error for PicInstallError {}
-
-impl std::fmt::Display for StandaloneCanisterFixtureError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::SerialGuard(err) => write!(f, "{err}"),
-            Self::Start(err) => write!(f, "{err}"),
-            Self::Install(err) => write!(f, "{err}"),
-        }
-    }
-}
-
-impl std::error::Error for StandaloneCanisterFixtureError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        match self {
-            Self::SerialGuard(err) => Some(err),
-            Self::Start(err) => Some(err),
-            Self::Install(err) => Some(err),
-        }
-    }
-}
-
-///
 /// Pic
 /// Thin wrapper around a PocketIC instance.
 ///

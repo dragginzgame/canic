@@ -1,29 +1,21 @@
 use candid::{Principal, encode_one};
 use canic_core::dto::subnet::SubnetIdentity;
-use canic_testkit::artifacts::{
-    WasmBuildProfile, build_internal_test_wasm_canisters,
-    build_internal_test_wasm_canisters_with_env,
-};
 use canic_testkit::pic::{
-    CachedPicBaseline, CachedPicBaselineGuard, Pic, PicSerialGuard, acquire_pic_serial_guard,
-    pic as shared_pic, restore_or_rebuild_cached_pic_baseline, role_pid as lookup_role_pid,
-    wait_until_ready as wait_for_ready_canister,
+    CachedPicBaseline, CachedPicBaselineGuard, restore_or_rebuild_cached_pic_baseline,
+    role_pid as lookup_role_pid, wait_until_ready as wait_for_ready_canister,
 };
 use std::{
-    fs,
     io::Write,
-    ops::{Deref, DerefMut},
-    path::{Path, PathBuf},
-    sync::{Mutex, Once, OnceLock},
+    ops::Deref,
+    sync::{Mutex, OnceLock},
 };
 
-use super::capability::create_verifier_canister;
+use super::{
+    build::{SerialPic, build_normal_root_wasm, build_pic, build_test_root_wasm},
+    capability::create_verifier_canister,
+};
 
 const ROOT_INSTALL_CYCLES: u128 = 80_000_000_000_000;
-const CANISTER_PACKAGES: [&str; 1] = ["delegation_root_stub"];
-static BUILD_ONCE: Once = Once::new();
-static BUILD_WITHOUT_TEST_MATERIAL_ONCE: Once = Once::new();
-static CANISTER_BUILD_SERIAL: Mutex<()> = Mutex::new(());
 static ROOT_SIGNER_BASELINE: OnceLock<
     Mutex<Option<CachedPicBaseline<AttestationBaselineMetadata>>>,
 > = OnceLock::new();
@@ -57,7 +49,7 @@ impl Deref for BaselinePicGuard<'_> {
     type Target = pocket_ic::PocketIc;
 
     fn deref(&self) -> &Self::Target {
-        &self.baseline.pic
+        self.baseline.pic()
     }
 }
 
@@ -77,29 +69,6 @@ enum AttestationCacheKind {
     SignerOnly,
     SignerAndVerifier,
     SignerOnlyWithoutTestMaterial,
-}
-
-///
-/// SerialPic
-///
-
-struct SerialPic {
-    pic: Pic,
-    _serial_guard: PicSerialGuard,
-}
-
-impl Deref for SerialPic {
-    type Target = pocket_ic::PocketIc;
-
-    fn deref(&self) -> &Self::Target {
-        &self.pic
-    }
-}
-
-impl DerefMut for SerialPic {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.pic
-    }
 }
 
 ///
@@ -137,21 +106,12 @@ pub fn install_test_root_without_test_material_cached() -> CachedInstalledRoot {
 
 // Install the test root with delegation-material hooks into a fresh PocketIC instance.
 fn install_test_root() -> InstalledRoot {
-    let workspace_root = workspace_root();
-    build_canisters_once(&workspace_root);
-    let root_wasm = read_wasm(&workspace_root, "delegation_root_stub");
-    install_root_fixture(root_wasm)
+    install_root_fixture(build_test_root_wasm())
 }
 
 // Install the test root without delegation-material hooks into a fresh PocketIC instance.
 fn install_test_root_without_test_material() -> InstalledRoot {
-    let workspace_root = workspace_root();
-    build_canisters_without_test_material_once(&workspace_root);
-    let root_wasm = read_wasm_from_target(
-        &test_target_dir_without_test_material(&workspace_root),
-        "delegation_root_stub",
-    );
-    install_root_fixture(root_wasm)
+    install_root_fixture(build_normal_root_wasm())
 }
 
 // Install one root wasm into a fresh serialized PocketIC instance.
@@ -179,9 +139,9 @@ fn install_cached_root_fixture(cache_kind: AttestationCacheKind) -> CachedInstal
     progress("cached fixture restore complete");
 
     CachedInstalledRoot {
-        root_id: baseline.metadata.root_id,
-        signer_id: baseline.metadata.signer_id,
-        verifier_id: baseline.metadata.verifier_id,
+        root_id: baseline.metadata().root_id,
+        signer_id: baseline.metadata().signer_id,
+        verifier_id: baseline.metadata().verifier_id,
         pic: BaselinePicGuard { baseline },
     }
 }
@@ -236,9 +196,8 @@ fn build_cached_baseline(
         .chain(std::iter::once(signer_id))
         .chain(verifier_id)
         .collect::<Vec<_>>();
-    let SerialPic { pic, _serial_guard } = pic;
     let baseline = CachedPicBaseline::capture(
-        pic,
+        pic.into_pic(),
         root_id,
         controller_ids,
         AttestationBaselineMetadata {
@@ -256,18 +215,18 @@ fn build_cached_baseline(
 // Restore the cached baseline snapshots into the same baseline PocketIC instance.
 fn restore_cached_baseline(baseline: &CachedPicBaseline<AttestationBaselineMetadata>) {
     progress("restoring cached baseline snapshots");
-    baseline.restore(baseline.metadata.root_id);
+    baseline.restore(baseline.metadata().root_id);
 
-    baseline.pic.tick();
+    baseline.pic().tick();
 
     progress("waiting for restored root and signer readiness");
-    wait_for_ready_canister(&baseline.pic, baseline.metadata.wasm_store_id, 240);
-    wait_for_ready_canister(&baseline.pic, baseline.metadata.signer_id, 240);
-    if let Some(verifier_id) = baseline.metadata.verifier_id {
+    wait_for_ready_canister(baseline.pic(), baseline.metadata().wasm_store_id, 240);
+    wait_for_ready_canister(baseline.pic(), baseline.metadata().signer_id, 240);
+    if let Some(verifier_id) = baseline.metadata().verifier_id {
         progress("waiting for restored verifier readiness");
-        wait_for_ready_canister(&baseline.pic, verifier_id, 240);
+        wait_for_ready_canister(baseline.pic(), verifier_id, 240);
     }
-    wait_for_ready_canister(&baseline.pic, baseline.metadata.root_id, 240);
+    wait_for_ready_canister(baseline.pic(), baseline.metadata().root_id, 240);
 }
 
 // Return the immutable baseline slot for one cache kind.
@@ -304,98 +263,4 @@ pub fn signer_pid(pic: &pocket_ic::PocketIc, root_id: Principal) -> Principal {
 #[must_use]
 pub fn wasm_store_pid(pic: &pocket_ic::PocketIc, root_id: Principal) -> Principal {
     lookup_role_pid(pic, root_id, "wasm_store", 120)
-}
-
-// Build the test canisters with delegation-material test cfg enabled.
-fn build_canisters_once(workspace_root: &Path) {
-    let _serial_guard = CANISTER_BUILD_SERIAL
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
-
-    BUILD_ONCE.call_once_force(|_| {
-        let target_dir = test_target_dir(workspace_root);
-        progress("building PIC wasm artifacts with test delegation material");
-        build_internal_test_wasm_canisters_with_env(
-            workspace_root,
-            &target_dir,
-            &CANISTER_PACKAGES,
-            WasmBuildProfile::Fast,
-            &[("CANIC_TEST_DELEGATION_MATERIAL", "1")],
-        );
-        progress("finished PIC wasm build with test delegation material");
-    });
-}
-
-// Build the same test canisters without delegation-material test cfg enabled.
-fn build_canisters_without_test_material_once(workspace_root: &Path) {
-    let _serial_guard = CANISTER_BUILD_SERIAL
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
-
-    BUILD_WITHOUT_TEST_MATERIAL_ONCE.call_once_force(|_| {
-        let target_dir = test_target_dir_without_test_material(workspace_root);
-        progress("building PIC wasm artifacts without test delegation material");
-        build_internal_test_wasm_canisters(
-            workspace_root,
-            &target_dir,
-            &CANISTER_PACKAGES,
-            WasmBuildProfile::Fast,
-        );
-        progress("finished PIC wasm build without test delegation material");
-    });
-}
-
-// Serialize full PocketIC usage to avoid concurrent server races across tests.
-fn build_pic() -> SerialPic {
-    progress("acquiring PocketIC serial guard");
-    let serial_guard = acquire_pic_serial_guard();
-    progress("starting serialized PocketIC instance");
-    let pic = shared_pic();
-    progress("serialized PocketIC instance ready");
-
-    SerialPic {
-        pic,
-        _serial_guard: serial_guard,
-    }
-}
-
-fn read_wasm(workspace_root: &Path, crate_name: &str) -> Vec<u8> {
-    let wasm_path = wasm_path(workspace_root, crate_name);
-    fs::read(&wasm_path).unwrap_or_else(|err| panic!("failed to read {crate_name} wasm: {err}"))
-}
-
-fn read_wasm_from_target(target_dir: &Path, crate_name: &str) -> Vec<u8> {
-    let wasm_path = wasm_path_from_target(target_dir, crate_name);
-    fs::read(&wasm_path).unwrap_or_else(|err| panic!("failed to read {crate_name} wasm: {err}"))
-}
-
-fn wasm_path(workspace_root: &Path, crate_name: &str) -> PathBuf {
-    let target_dir = test_target_dir(workspace_root);
-
-    wasm_path_from_target(&target_dir, crate_name)
-}
-
-fn wasm_path_from_target(target_dir: &Path, crate_name: &str) -> PathBuf {
-    target_dir
-        .join("wasm32-unknown-unknown")
-        .join("fast")
-        .join(format!("{crate_name}.wasm"))
-}
-
-fn test_target_dir(workspace_root: &Path) -> PathBuf {
-    workspace_root.join("target").join("pic-wasm")
-}
-
-fn test_target_dir_without_test_material(workspace_root: &Path) -> PathBuf {
-    workspace_root
-        .join("target")
-        .join("pic-wasm-no-test-material")
-}
-
-fn workspace_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .and_then(|p| p.parent())
-        .map(PathBuf::from)
-        .expect("workspace root")
 }
