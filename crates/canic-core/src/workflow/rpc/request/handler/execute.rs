@@ -136,12 +136,14 @@ async fn execute_issue_delegation(
     };
 
     delegation::validate_delegation_cert_policy(&cert, root_pid)?;
+    let root_public_key_sec1 = DelegatedTokenOps::local_root_public_key_sec1(root_pid).await?;
 
     let (response, cert_hash): (DelegationProvisionResponse, [u8; 32]) =
         DelegationWorkflow::provision(
             cert,
             vec![],
             verifier_targets,
+            root_public_key_sec1.as_slice(),
             shard_public_key_sec1.as_deref(),
         )
         .await?;

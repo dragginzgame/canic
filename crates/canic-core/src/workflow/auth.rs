@@ -94,6 +94,7 @@ pub struct DelegationWorkflow;
 struct DelegationProofInstallRequestRef<'a> {
     proof: &'a DelegationProof,
     intent: DelegationProofInstallIntent,
+    root_public_key_sec1: Option<&'a [u8]>,
     shard_public_key_sec1: Option<&'a [u8]>,
 }
 
@@ -131,6 +132,7 @@ impl DelegationWorkflow {
         cert: DelegationCert,
         signer_targets: Vec<Principal>,
         verifier_targets: Vec<Principal>,
+        root_public_key_sec1: &[u8],
         shard_public_key_sec1: Option<&[u8]>,
     ) -> Result<(DelegationProvisionResponse, [u8; 32]), InternalError> {
         record_delegation_install_total(DelegationProofInstallIntent::Provisioning);
@@ -138,6 +140,7 @@ impl DelegationWorkflow {
         let proof_install_args = Self::encode_proof_install_request(
             &issued.proof,
             DelegationPushOrigin::Provisioning,
+            Some(root_public_key_sec1),
             shard_public_key_sec1,
         )?;
         crate::perf!("encode_install_request");
@@ -220,7 +223,39 @@ impl DelegationWorkflow {
         verifier_targets: Vec<Principal>,
         origin: DelegationPushOrigin,
     ) -> DelegationVerifierProofPushResponse {
-        let proof_install_args = match Self::encode_proof_install_request(proof, origin, None) {
+        crate::perf!("resolve_root_key");
+        let root_public_key_sec1 =
+            match DelegatedTokenOps::local_root_public_key_sec1(proof.cert.root_pid).await {
+                Ok(args) => args,
+                Err(err) => {
+                    let err = ErrorDto::from(err);
+                    let results = verifier_targets
+                        .into_iter()
+                        .map(|target| {
+                            let response = Self::failure(
+                                target,
+                                DelegationProvisionTargetKind::Verifier,
+                                err.clone(),
+                            );
+                            Self::record_push_result_metric(
+                                DelegationProvisionRole::Verifier,
+                                origin,
+                                response.status,
+                            );
+                            Self::log_push_result(&response, origin);
+                            response
+                        })
+                        .collect();
+                    record_delegation_push_complete(origin.intent());
+                    return DelegationVerifierProofPushResponse { results };
+                }
+            };
+        let proof_install_args = match Self::encode_proof_install_request(
+            proof,
+            origin,
+            Some(root_public_key_sec1.as_slice()),
+            None,
+        ) {
             Ok(args) => args,
             Err(err) => {
                 let err = ErrorDto::from(err);
@@ -337,11 +372,13 @@ impl DelegationWorkflow {
     fn encode_proof_install_request(
         proof: &DelegationProof,
         origin: DelegationPushOrigin,
+        root_public_key_sec1: Option<&[u8]>,
         shard_public_key_sec1: Option<&[u8]>,
     ) -> Result<Vec<u8>, InternalError> {
         let request = DelegationProofInstallRequestRef {
             proof,
             intent: origin.intent(),
+            root_public_key_sec1,
             shard_public_key_sec1,
         };
         encode_one(&request).map_err(|source| {
@@ -466,10 +503,12 @@ mod tests {
             cert_sig: vec![9, 8, 7],
         };
         let shard_public_key_sec1 = vec![4, 5, 6];
+        let root_public_key_sec1 = vec![1, 2, 3];
 
         let encoded = DelegationWorkflow::encode_proof_install_request(
             &proof,
             DelegationPushOrigin::Provisioning,
+            Some(&root_public_key_sec1),
             Some(&shard_public_key_sec1),
         )
         .expect("borrowed install request must encode");
@@ -485,6 +524,7 @@ mod tests {
         assert_eq!(decoded.proof.cert.aud, proof.cert.aud);
         assert_eq!(decoded.proof.cert_sig, proof.cert_sig);
         assert_eq!(decoded.intent, DelegationProofInstallIntent::Provisioning);
+        assert_eq!(decoded.root_public_key_sec1, Some(root_public_key_sec1));
         assert_eq!(decoded.shard_public_key_sec1, Some(shard_public_key_sec1));
     }
 
