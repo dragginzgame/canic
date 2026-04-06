@@ -11,6 +11,7 @@ use crate::{
 };
 use candid::{encode_args, encode_one};
 use serde::de::DeserializeOwned;
+use std::borrow::Cow;
 
 const EMPTY_ARGS: &[u8] = b"DIDL\0\0";
 
@@ -22,12 +23,12 @@ pub struct Call;
 
 impl Call {
     #[must_use]
-    pub fn bounded_wait(canister_id: impl Into<Principal>, method: &str) -> CallBuilder {
+    pub fn bounded_wait(canister_id: impl Into<Principal>, method: &str) -> CallBuilder<'static> {
         CallBuilder::new(WaitMode::Bounded, canister_id.into(), method)
     }
 
     #[must_use]
-    pub fn unbounded_wait(canister_id: impl Into<Principal>, method: &str) -> CallBuilder {
+    pub fn unbounded_wait(canister_id: impl Into<Principal>, method: &str) -> CallBuilder<'static> {
         CallBuilder::new(WaitMode::Unbounded, canister_id.into(), method)
     }
 }
@@ -36,30 +37,43 @@ impl Call {
 /// CallBuilder
 ///
 
-pub struct CallBuilder {
+pub struct CallBuilder<'a> {
     wait: WaitMode,
     canister_id: Principal,
     method: String,
     cycles: u128,
-    args: Vec<u8>, // always present; defaults to ()
+    args: Cow<'a, [u8]>, // always present; defaults to ()
 }
 
-impl CallBuilder {
+impl CallBuilder<'_> {
     fn new(wait: WaitMode, canister_id: Principal, method: &str) -> Self {
         Self {
             wait,
             canister_id,
             method: method.to_string(),
             cycles: 0,
-            args: EMPTY_ARGS.to_vec(),
+            args: Cow::Borrowed(EMPTY_ARGS),
         }
     }
 
     /// Use pre-encoded Candid arguments (no validation performed).
     #[must_use]
-    pub fn with_raw_args(mut self, args: Vec<u8>) -> Self {
-        self.args = args;
-        self
+    pub fn with_raw_args<'b>(self, args: impl Into<Cow<'b, [u8]>>) -> CallBuilder<'b> {
+        let Self {
+            wait,
+            canister_id,
+            method,
+            cycles,
+            ..
+        } = self;
+
+        CallBuilder {
+            wait,
+            canister_id,
+            method,
+            cycles,
+            args: args.into(),
+        }
     }
 
     /// Encode a single argument into Candid bytes (fallible).
@@ -68,7 +82,7 @@ impl CallBuilder {
         A: CandidType,
     {
         let mut builder = self;
-        builder.args = encode_one(arg).map_err(IcInfraError::from)?;
+        builder.args = encode_one(arg).map_err(IcInfraError::from)?.into();
         Ok(builder)
     }
 
@@ -78,7 +92,7 @@ impl CallBuilder {
         A: ArgumentEncoder,
     {
         let mut builder = self;
-        builder.args = encode_args(args).map_err(IcInfraError::from)?;
+        builder.args = encode_args(args).map_err(IcInfraError::from)?.into();
         Ok(builder)
     }
 
@@ -95,7 +109,7 @@ impl CallBuilder {
         };
 
         call = call.with_cycles(self.cycles);
-        call = call.with_raw_args(&self.args);
+        call = call.with_raw_args(self.args.as_ref());
 
         let response = call.await.map_err(IcInfraError::from)?;
 
@@ -158,6 +172,6 @@ mod tests {
     fn with_raw_args_overrides_default() {
         let raw = vec![1_u8, 2, 3, 4];
         let builder = Call::bounded_wait(Principal::anonymous(), "noop").with_raw_args(raw.clone());
-        assert_eq!(builder.args, raw);
+        assert_eq!(builder.args.as_ref(), raw.as_slice());
     }
 }

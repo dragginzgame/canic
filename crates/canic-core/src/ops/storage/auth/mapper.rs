@@ -75,9 +75,16 @@ impl DelegationProofRecordMapper {
     }
 
     pub(super) fn proof_key_from_dto(proof: &DelegationProof) -> DelegationProofKeyRecord {
+        Self::proof_key_from_dto_with_cert_hash(proof, cert_hash(&proof.cert))
+    }
+
+    pub(super) const fn proof_key_from_dto_with_cert_hash(
+        proof: &DelegationProof,
+        cert_hash: [u8; 32],
+    ) -> DelegationProofKeyRecord {
         DelegationProofKeyRecord {
             shard_pid: proof.cert.shard_pid,
-            cert_hash: cert_hash(&proof.cert),
+            cert_hash,
         }
     }
 
@@ -86,6 +93,15 @@ impl DelegationProofRecordMapper {
         installed_at: u64,
     ) -> DelegationProofEntryRecord {
         let key = Self::proof_key_from_dto(proof);
+        Self::record_to_entry(Self::dto_ref_to_record(proof), key, installed_at)
+    }
+
+    pub(super) fn dto_ref_to_entry_with_cert_hash(
+        proof: &DelegationProof,
+        cert_hash: [u8; 32],
+        installed_at: u64,
+    ) -> DelegationProofEntryRecord {
+        let key = Self::proof_key_from_dto_with_cert_hash(proof, cert_hash);
         Self::record_to_entry(Self::dto_ref_to_record(proof), key, installed_at)
     }
 }

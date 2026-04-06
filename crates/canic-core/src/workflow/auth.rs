@@ -22,7 +22,7 @@ use crate::{
     log,
     log::Topic,
     ops::{
-        auth::{DelegatedTokenOps, DelegationValidationError},
+        auth::{DelegatedTokenOps, DelegationValidationError, SignedDelegationProof},
         ic::call::CallOps,
         runtime::metrics::auth::{
             DelegationProvisionRole, record_delegation_install_total,
@@ -117,7 +117,9 @@ impl DelegationWorkflow {
     /// - Keeps cryptographic issuance separable from storage and policy
     ///
     /// Authority MUST be enforced by the caller.
-    async fn issue_delegation(cert: DelegationCert) -> Result<DelegationProof, InternalError> {
+    async fn issue_delegation(
+        cert: DelegationCert,
+    ) -> Result<SignedDelegationProof, InternalError> {
         DelegatedTokenOps::sign_delegation_cert(cert).await
     }
 
@@ -130,11 +132,11 @@ impl DelegationWorkflow {
         signer_targets: Vec<Principal>,
         verifier_targets: Vec<Principal>,
         shard_public_key_sec1: Option<&[u8]>,
-    ) -> Result<DelegationProvisionResponse, InternalError> {
+    ) -> Result<(DelegationProvisionResponse, [u8; 32]), InternalError> {
         record_delegation_install_total(DelegationProofInstallIntent::Provisioning);
-        let proof = Self::issue_delegation(cert).await?;
+        let issued = Self::issue_delegation(cert).await?;
         let proof_install_args = Self::encode_proof_install_request(
-            &proof,
+            &issued.proof,
             DelegationPushOrigin::Provisioning,
             shard_public_key_sec1,
         )?;
@@ -144,16 +146,16 @@ impl DelegationWorkflow {
             Topic::Auth,
             Info,
             "delegation provision issued proof shard={} issued_at={} expires_at={}",
-            proof.cert.shard_pid,
-            proof.cert.issued_at,
-            proof.cert.expires_at
+            issued.proof.cert.shard_pid,
+            issued.proof.cert.issued_at,
+            issued.proof.cert.expires_at
         );
         let mut results = Vec::new();
 
         for target in signer_targets {
             let result = Self::push_proof(
                 target,
-                &proof,
+                &issued.proof,
                 &proof_install_args,
                 DelegationProvisionTargetKind::Signer,
                 DelegationPushOrigin::Provisioning,
@@ -166,7 +168,7 @@ impl DelegationWorkflow {
         for target in verifier_targets {
             let result = Self::push_proof(
                 target,
-                &proof,
+                &issued.proof,
                 &proof_install_args,
                 DelegationProvisionTargetKind::Verifier,
                 DelegationPushOrigin::Provisioning,
@@ -177,7 +179,13 @@ impl DelegationWorkflow {
         crate::perf!("push_verifiers");
 
         record_delegation_push_complete(DelegationProofInstallIntent::Provisioning);
-        Ok(DelegationProvisionResponse { proof, results })
+        Ok((
+            DelegationProvisionResponse {
+                proof: issued.proof,
+                results,
+            },
+            issued.cert_hash,
+        ))
     }
 
     /// Execute explicit root-controlled verifier repair/prewarm pushes.
@@ -284,8 +292,7 @@ impl DelegationWorkflow {
             }
         };
 
-        let call =
-            CallOps::unbounded_wait(target, method).with_raw_args(proof_install_args.to_vec());
+        let call = CallOps::unbounded_wait(target, method).with_raw_args(proof_install_args);
         crate::perf!("prepare_call");
 
         let result = match call.execute().await {

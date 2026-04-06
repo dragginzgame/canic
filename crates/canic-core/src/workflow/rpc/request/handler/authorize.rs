@@ -30,8 +30,7 @@ pub(super) fn authorize(
         };
     }
 
-    let capability_key = capability.metric_key();
-    let capability_name = capability.capability_name();
+    let descriptor = capability.descriptor();
     let decision = match capability {
         RootCapability::Provision(_req) => authorize_root_only(ctx),
         RootCapability::Upgrade(req) => {
@@ -49,13 +48,14 @@ pub(super) fn authorize(
     match &decision {
         Ok(()) => {
             RootCapabilityMetrics::record_authorization(
-                capability_key,
+                descriptor.key,
                 RootCapabilityMetricOutcome::Accepted,
             );
             log!(
                 Topic::Rpc,
                 Info,
-                "capability authorized (capability={capability_name}, caller={}, subnet={}, now={})",
+                "capability authorized (capability={}, caller={}, subnet={}, now={})",
+                descriptor.name,
                 ctx.caller,
                 ctx.subnet_id,
                 ctx.now
@@ -63,13 +63,14 @@ pub(super) fn authorize(
         }
         Err(err) => {
             RootCapabilityMetrics::record_authorization(
-                capability_key,
+                descriptor.key,
                 RootCapabilityMetricOutcome::Denied,
             );
             log!(
                 Topic::Rpc,
                 Warn,
-                "capability denied (capability={capability_name}, caller={}, subnet={}, now={}): {err}",
+                "capability denied (capability={}, caller={}, subnet={}, now={}): {err}",
+                descriptor.name,
                 ctx.caller,
                 ctx.subnet_id,
                 ctx.now
@@ -108,10 +109,7 @@ fn authorize_issue_delegation(
         return Err(RpcWorkflowError::DelegatedTokensDisabled.into());
     }
 
-    let root_pid = EnvOps::root_pid()?;
-    if root_pid != ctx.self_pid {
-        return Err(RpcWorkflowError::DelegationMustTargetRoot.into());
-    }
+    let root_pid = ctx.self_pid;
 
     if ctx.caller != req.shard_pid {
         return Err(

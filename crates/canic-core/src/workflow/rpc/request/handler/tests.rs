@@ -158,8 +158,8 @@ fn validate_delegation_cert_policy_rejects_invalid_window() {
     let mut cert = sample_delegation_cert(root_pid);
     cert.expires_at = cert.issued_at;
 
-    let err =
-        delegation::validate_delegation_cert_policy(&cert).expect_err("invalid window must fail");
+    let err = delegation::validate_delegation_cert_policy(&cert, root_pid)
+        .expect_err("invalid window must fail");
     assert!(
         err.to_string()
             .contains("expires_at must be greater than issued_at")
@@ -174,8 +174,8 @@ fn validate_delegation_cert_policy_rejects_empty_audience() {
     let mut cert = sample_delegation_cert(root_pid);
     cert.aud.clear();
 
-    let err =
-        delegation::validate_delegation_cert_policy(&cert).expect_err("empty audience must fail");
+    let err = delegation::validate_delegation_cert_policy(&cert, root_pid)
+        .expect_err("empty audience must fail");
     assert!(
         err.to_string()
             .contains("delegation audience must not be empty")
@@ -190,8 +190,8 @@ fn validate_delegation_cert_policy_rejects_empty_scopes() {
     let mut cert = sample_delegation_cert(root_pid);
     cert.scopes.clear();
 
-    let err =
-        delegation::validate_delegation_cert_policy(&cert).expect_err("empty scopes must fail");
+    let err = delegation::validate_delegation_cert_policy(&cert, root_pid)
+        .expect_err("empty scopes must fail");
     assert!(
         err.to_string()
             .contains("delegation scopes must not be empty")
@@ -206,7 +206,7 @@ fn validate_delegation_cert_policy_rejects_empty_scope_values() {
     let mut cert = sample_delegation_cert(root_pid);
     cert.scopes = vec![String::new()];
 
-    let err = delegation::validate_delegation_cert_policy(&cert)
+    let err = delegation::validate_delegation_cert_policy(&cert, root_pid)
         .expect_err("empty scope value must fail");
     assert!(err.to_string().contains("must not contain empty strings"));
 }
@@ -217,7 +217,7 @@ fn validate_delegation_cert_policy_rejects_root_pid_mismatch() {
     let _restore = configure_root_env(root_pid);
 
     let cert = sample_delegation_cert(p(9));
-    let err = delegation::validate_delegation_cert_policy(&cert)
+    let err = delegation::validate_delegation_cert_policy(&cert, root_pid)
         .expect_err("root pid mismatch must fail");
     assert!(err.to_string().contains("delegation root pid mismatch"));
 }
@@ -230,7 +230,8 @@ fn validate_delegation_cert_policy_rejects_shard_equal_to_root() {
     let mut cert = sample_delegation_cert(root_pid);
     cert.shard_pid = root_pid;
 
-    let err = delegation::validate_delegation_cert_policy(&cert).expect_err("root shard must fail");
+    let err = delegation::validate_delegation_cert_policy(&cert, root_pid)
+        .expect_err("root shard must fail");
     assert!(
         err.to_string()
             .contains("delegation shard_pid must not equal root pid")
@@ -942,8 +943,9 @@ fn check_replay_rejects_expired_entry_when_purge_limit_exceeded() {
         cycles: 500,
         metadata: Some(meta(11, 60)),
     });
-    let payload_hash = capability.payload_hash();
-    let request_id = capability.metadata().expect("metadata").request_id;
+    let replay_input = capability.replay_input().expect("metadata");
+    let payload_hash = replay_input.payload_hash;
+    let request_id = replay_input.metadata.request_id;
     let target_key = replay::replay_slot_key(ctx.caller, ctx.self_pid, request_id);
     let response_bytes = encode_one(Response::Cycles(CyclesResponse {
         cycles_transferred: 500,

@@ -1,4 +1,4 @@
-use super::{DelegatedTokenOps, crypto, keys, verify};
+use super::{DelegatedTokenOps, SignedDelegationProof, crypto, keys, verify};
 use crate::{
     InternalError,
     cdk::types::Principal,
@@ -13,7 +13,7 @@ impl DelegatedTokenOps {
     /// Sign a delegation cert in one step using threshold ECDSA.
     pub(crate) async fn sign_delegation_cert(
         cert: DelegationCert,
-    ) -> Result<DelegationProof, InternalError> {
+    ) -> Result<SignedDelegationProof, InternalError> {
         let local = IcOps::canister_self();
         if cert.root_pid != local {
             return Err(DelegationValidationError::InvalidRootAuthority {
@@ -29,9 +29,12 @@ impl DelegatedTokenOps {
         let sig = EcdsaOps::sign_bytes(&key_name, keys::root_derivation_path(), hash).await?;
         crate::perf!("sign_cert");
 
-        Ok(DelegationProof {
-            cert,
-            cert_sig: sig,
+        Ok(SignedDelegationProof {
+            proof: DelegationProof {
+                cert,
+                cert_sig: sig,
+            },
+            cert_hash: hash,
         })
     }
 

@@ -46,6 +46,11 @@ pub struct CanisterChildren;
 
 impl CanisterChildren {
     #[must_use]
+    pub(crate) fn get(pid: Principal) -> Option<CanisterRecord> {
+        CANISTER_CHILDREN.with_borrow(|map| map.get(&pid))
+    }
+
+    #[must_use]
     pub fn export() -> CanisterChildrenRecord {
         CanisterChildrenRecord {
             entries: CANISTER_CHILDREN

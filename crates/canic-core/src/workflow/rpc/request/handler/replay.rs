@@ -38,17 +38,18 @@ pub(super) fn check_replay(
     ctx: &RootContext,
     capability: &RootCapability,
 ) -> Result<ReplayPreflight, InternalError> {
-    let capability_key = capability.metric_key();
-    let capability_name = capability.capability_name();
-    let metadata = capability
-        .metadata()
-        .ok_or(RpcWorkflowError::MissingReplayMetadata(capability_name))?;
-    let payload_hash = capability.payload_hash();
+    let replay_input = capability
+        .replay_input()
+        .ok_or_else(|| RpcWorkflowError::MissingReplayMetadata(capability.descriptor().name))?;
     crate::perf!("prepare_replay_input");
 
-    let decision =
-        replay::evaluate_root_replay(ctx, metadata.request_id, metadata.ttl_seconds, payload_hash)
-            .map_err(|err| map_replay_guard_error(capability_key, err))?;
+    let decision = replay::evaluate_root_replay(
+        ctx,
+        replay_input.metadata.request_id,
+        replay_input.metadata.ttl_seconds,
+        replay_input.payload_hash,
+    )
+    .map_err(|err| map_replay_guard_error(replay_input.descriptor.key, err))?;
     crate::perf!("evaluate_replay");
 
     match decision {
@@ -57,7 +58,7 @@ pub(super) fn check_replay(
                 .map_err(map_replay_reserve_error)?;
             crate::perf!("reserve_fresh");
             RootCapabilityMetrics::record_replay(
-                capability_key,
+                replay_input.descriptor.key,
                 RootCapabilityMetricOutcome::Accepted,
             );
             Ok(ReplayPreflight::Fresh(pending))
@@ -65,7 +66,7 @@ pub(super) fn check_replay(
         ReplayDecision::DuplicateSame(cached) => {
             crate::perf!("decode_cached");
             RootCapabilityMetrics::record_replay(
-                capability_key,
+                replay_input.descriptor.key,
                 RootCapabilityMetricOutcome::DuplicateSame,
             );
             decode_replay_response(&cached.response_bytes).map(ReplayPreflight::Cached)
@@ -73,26 +74,26 @@ pub(super) fn check_replay(
         ReplayDecision::InFlight => {
             crate::perf!("duplicate_in_flight");
             RootCapabilityMetrics::record_replay(
-                capability_key,
+                replay_input.descriptor.key,
                 RootCapabilityMetricOutcome::DuplicateSame,
             );
-            Err(RpcWorkflowError::ReplayDuplicateSame(capability_name).into())
+            Err(RpcWorkflowError::ReplayDuplicateSame(replay_input.descriptor.name).into())
         }
         ReplayDecision::DuplicateConflict => {
             crate::perf!("duplicate_conflict");
             RootCapabilityMetrics::record_replay(
-                capability_key,
+                replay_input.descriptor.key,
                 RootCapabilityMetricOutcome::DuplicateConflict,
             );
-            Err(RpcWorkflowError::ReplayConflict(capability_name).into())
+            Err(RpcWorkflowError::ReplayConflict(replay_input.descriptor.name).into())
         }
         ReplayDecision::Expired => {
             crate::perf!("replay_expired");
             RootCapabilityMetrics::record_replay(
-                capability_key,
+                replay_input.descriptor.key,
                 RootCapabilityMetricOutcome::Expired,
             );
-            Err(RpcWorkflowError::ReplayExpired(capability_name).into())
+            Err(RpcWorkflowError::ReplayExpired(replay_input.descriptor.name).into())
         }
     }
 }

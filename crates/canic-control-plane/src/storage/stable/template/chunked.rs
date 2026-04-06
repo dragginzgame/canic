@@ -239,50 +239,36 @@ impl TemplateChunkStore {
             bytes: record.bytes,
         };
         let previous = TEMPLATE_CHUNK_REFS.with_borrow(|map| map.get(&chunk_key));
+        let previous_bytes = previous.as_ref().map_or(0, |previous| {
+            chunk_entry_size(&chunk_key, previous.payload_len)
+        });
 
-        if let Some(previous) = previous {
-            let previous_bytes = chunk_entry_size(&chunk_key, previous.payload_len);
+        let slot = if let Some(previous) = previous.as_ref() {
             TEMPLATE_CHUNK_PAYLOADS.with_borrow(|payloads| {
                 payloads.set(previous.slot, &payload_record);
             });
-            TEMPLATE_CHUNK_REFS.with_borrow_mut(|map| {
-                map.insert(
-                    chunk_key,
-                    TemplateChunkRefRecord {
-                        slot: previous.slot,
-                        payload_len,
-                    },
-                );
-            });
-            canic_core::perf!("chunk_store_insert");
-
-            TEMPLATE_CHUNKS_OCCUPIED_BYTES.with_borrow_mut(|occupied| {
-                if let Some(current) = occupied.as_mut() {
-                    *current = current
-                        .saturating_sub(previous_bytes)
-                        .saturating_add(next_bytes);
-                }
-            });
-            canic_core::perf!("chunk_store_accounting");
+            previous.slot
         } else {
-            let slot = TEMPLATE_CHUNK_PAYLOADS.with_borrow(|payloads| {
+            TEMPLATE_CHUNK_PAYLOADS.with_borrow(|payloads| {
                 let slot = payloads.len();
                 payloads.push(&payload_record);
                 slot
-            });
+            })
+        };
 
-            TEMPLATE_CHUNK_REFS.with_borrow_mut(|map| {
-                map.insert(chunk_key, TemplateChunkRefRecord { slot, payload_len });
-            });
-            canic_core::perf!("chunk_store_insert");
+        TEMPLATE_CHUNK_REFS.with_borrow_mut(|map| {
+            map.insert(chunk_key, TemplateChunkRefRecord { slot, payload_len });
+        });
+        canic_core::perf!("chunk_store_insert");
 
-            TEMPLATE_CHUNKS_OCCUPIED_BYTES.with_borrow_mut(|occupied| {
-                if let Some(current) = occupied.as_mut() {
-                    *current = current.saturating_add(next_bytes);
-                }
-            });
-            canic_core::perf!("chunk_store_accounting");
-        }
+        TEMPLATE_CHUNKS_OCCUPIED_BYTES.with_borrow_mut(|occupied| {
+            if let Some(current) = occupied.as_mut() {
+                *current = current
+                    .saturating_sub(previous_bytes)
+                    .saturating_add(next_bytes);
+            }
+        });
+        canic_core::perf!("chunk_store_accounting");
     }
 
     // Fetch one template chunk, if present.
