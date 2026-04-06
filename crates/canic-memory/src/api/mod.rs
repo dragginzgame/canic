@@ -48,6 +48,13 @@ impl MemoryApi {
         MemoryRuntimeApi::bootstrap_registry(crate_name, start, end)
     }
 
+    /// Bootstrap eager TLS, eager-init hooks, and flush deferred registry state
+    /// without reserving a new owner range.
+    pub fn bootstrap_registry_without_range()
+    -> Result<MemoryRegistryInitSummary, MemoryRegistryError> {
+        MemoryRuntimeApi::bootstrap_registry_without_range()
+    }
+
     /// Register one stable-memory ID and return its opened virtual memory handle.
     ///
     /// Call `bootstrap_registry(...)` first so the caller's owned range is reserved.
@@ -132,7 +139,9 @@ fn open_memory(id: u8) -> VirtualMemory<DefaultMemoryImpl> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::registry::{MemoryRegistryError, reset_for_tests};
+    use crate::registry::{
+        MemoryRegistryError, defer_register, defer_reserve_range, reset_for_tests,
+    };
 
     #[test]
     fn register_memory_returns_opened_memory_for_reserved_slot() {
@@ -171,6 +180,25 @@ mod tests {
             panic!("conflicting duplicate register must fail")
         };
         assert!(matches!(err, MemoryRegistryError::DuplicateId(2)));
+    }
+
+    #[test]
+    fn bootstrap_registry_without_range_flushes_deferred_state() {
+        reset_for_tests();
+        defer_reserve_range("crate_a", 1, 3).expect("defer range");
+        defer_register(2, "crate_a", "slot").expect("defer register");
+
+        let summary =
+            MemoryApi::bootstrap_registry_without_range().expect("bootstrap without range");
+
+        assert_eq!(
+            summary.ranges,
+            vec![("crate_a".to_string(), MemoryRange { start: 1, end: 3 })]
+        );
+        assert_eq!(summary.entries.len(), 1);
+        assert_eq!(summary.entries[0].0, 2);
+        assert_eq!(summary.entries[0].1.crate_name, "crate_a");
+        assert_eq!(summary.entries[0].1.label, "slot");
     }
 
     #[test]

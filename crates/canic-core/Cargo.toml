@@ -41,11 +41,8 @@ toml = { workspace = true }
 candid = { workspace = true }
 
 [dev-dependencies]
-canic-testing-internal = { path = "../canic-testing-internal" }
-canic-testkit = { path = "../canic-testkit" }
 criterion = { workspace = true }
 futures = { workspace = true }
-pocket-ic = { workspace = true }
 
 [[bench]]
 name = "serialize"

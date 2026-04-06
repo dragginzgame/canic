@@ -133,6 +133,17 @@ fn init_memory() {
 }
 ```
 
+If your crate already reserved ranges through deferred macros and only needs to
+flush pending registrations before validation, use:
+
+```rust
+use canic_memory::api::MemoryApi;
+
+fn init_memory() {
+    let _ = MemoryApi::bootstrap_registry_without_range().unwrap();
+}
+```
+
 ### Eagerly initialize thread-locals that allocate memory
 
 Why bother? `thread_local!` values are lazy. If a stable `BTreeMap` (or similar) spins up the first time an endpoint is called, you get:
@@ -144,11 +155,11 @@ Why bother? `thread_local!` values are lazy. If a stable `BTreeMap` (or similar)
 
 If you are using the full Canic facade (`canic::start!` / `canic::start_root!`), you do not need to call anything extra: Canic runs eager TLS, executes registered `eager_init!` blocks, and then flushes the memory registry during synchronous lifecycle bootstrap. This work happens during real lifecycle execution, so debug-only Candid extraction can reuse the same artifact without a separate eager-init build variant.
 
-If you are using `canic-memory` standalone without Canic lifecycle wiring, the startup order is: `init_eager_tls()` → run `eager_init!` work → flush the registry. After that, every endpoint starts with the same, prebuilt memory layout.
+If you are using `canic-memory` standalone without Canic lifecycle wiring, the startup order is: eager TLS init → run `eager_init!` work → flush the registry. After that, every endpoint starts with the same, prebuilt memory layout.
 
 ```rust
-use canic_memory::{eager_init, eager_static, runtime::init_eager_tls};
-use canic_memory::runtime::registry::MemoryRegistryRuntime;
+use canic_memory::api::MemoryApi;
+use canic_memory::{eager_init, eager_static};
 use std::cell::RefCell;
 
 eager_static! {
@@ -160,10 +171,8 @@ eager_init!({
 });
 
 fn init() {
-    // standalone canisters should force eager TLS initialization first
-    init_eager_tls();
-    // then flush memory registrations
-    MemoryRegistryRuntime::init(None).unwrap();
+    // standalone canisters can use the supported no-range bootstrap helper
+    MemoryApi::bootstrap_registry_without_range().unwrap();
 }
 ```
 
