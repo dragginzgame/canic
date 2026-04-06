@@ -4,7 +4,7 @@ use crate::{
         memory::{MemoryId, VirtualMemory},
     },
     manager::MEMORY_MANAGER,
-    registry::{MemoryRegistry, MemoryRegistryError},
+    registry::{MemoryRange, MemoryRegistry, MemoryRegistryError},
     runtime::{MemoryRuntimeApi, registry::MemoryRegistryInitSummary},
 };
 
@@ -13,6 +13,18 @@ use crate::{
 ///
 
 pub struct MemoryApi;
+
+///
+/// MemoryInspection
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct MemoryInspection {
+    pub id: u8,
+    pub owner: String,
+    pub range: MemoryRange,
+    pub label: Option<String>,
+}
 
 impl MemoryApi {
     /// Bootstrap eager TLS, eager-init hooks, and the caller's initial reserved range.
@@ -41,6 +53,22 @@ impl MemoryApi {
 
         MemoryRegistry::register(id, crate_name, label)?;
         Ok(open_memory(id))
+    }
+
+    /// Inspect who currently owns one memory id and whether it is registered.
+    #[must_use]
+    pub fn inspect_memory(id: u8) -> Option<MemoryInspection> {
+        let range = MemoryRegistry::export_range_entries()
+            .into_iter()
+            .find(|entry| entry.range.contains(id))?;
+        let label = MemoryRegistry::get(id).map(|entry| entry.label);
+
+        Some(MemoryInspection {
+            id,
+            owner: range.owner,
+            range: range.range,
+            label,
+        })
     }
 }
 
@@ -95,5 +123,34 @@ mod tests {
             panic!("conflicting duplicate register must fail")
         };
         assert!(matches!(err, MemoryRegistryError::DuplicateId(2)));
+    }
+
+    #[test]
+    fn inspect_memory_returns_reserved_owner_without_label() {
+        reset_for_tests();
+        let _ = MemoryApi::bootstrap_registry("crate_a", 1, 3).expect("bootstrap registry");
+
+        let inspection = MemoryApi::inspect_memory(2).expect("reserved slot should inspect");
+        assert_eq!(inspection.owner, "crate_a");
+        assert_eq!(inspection.range, MemoryRange { start: 1, end: 3 });
+        assert_eq!(inspection.label, None);
+    }
+
+    #[test]
+    fn inspect_memory_returns_registered_label() {
+        reset_for_tests();
+        let _ = MemoryApi::bootstrap_registry("crate_a", 1, 3).expect("bootstrap registry");
+        let _ = MemoryApi::register_memory(2, "crate_a", "slot").expect("register memory");
+
+        let inspection = MemoryApi::inspect_memory(2).expect("registered slot should inspect");
+        assert_eq!(inspection.owner, "crate_a");
+        assert_eq!(inspection.range, MemoryRange { start: 1, end: 3 });
+        assert_eq!(inspection.label.as_deref(), Some("slot"));
+    }
+
+    #[test]
+    fn inspect_memory_returns_none_for_unowned_id() {
+        reset_for_tests();
+        assert_eq!(MemoryApi::inspect_memory(9), None);
     }
 }

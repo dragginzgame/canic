@@ -202,18 +202,6 @@ pub mod api {
         pub use crate::__internal::core::{log, perf};
     }
 
-    /// Runtime bootstrap helpers
-    pub mod runtime {
-        pub use crate::__internal::core::api::runtime::MemoryRuntimeApi;
-    }
-
-    /// Protocol (protocol runtime services)
-    pub mod protocol {
-        pub mod icrc21 {
-            pub use crate::__internal::core::dispatch::icrc21::Icrc21Dispatcher;
-        }
-    }
-
     /// Timers and scheduling helpers
     pub mod timer {
         pub use crate::{timer, timer_interval};

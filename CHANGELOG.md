@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.25.x] - 2026-04-05 - Recurring Audit Refresh
 
+- `0.25.8` adds a small read-only `canic-memory` inspection helper so downstreams can ask who owns one memory id, what reserved range it belongs to, and whether that slot already has a registered label, without reaching into registry/runtime internals.
 - `0.25.7` adds a supported dynamic-memory API to `canic-memory`, so downstream crates can reserve ranges, register runtime-selected memory IDs, and open `VirtualMemory` handles without importing the hidden `MEMORY_MANAGER` internals directly, while also hardening shared `canic-testkit` PocketIC baseline recovery and continuing the `canic-testkit::pic` cleanup without changing downstream call sites.
 - `0.25.6` adds the new recurring `module-structure` audit and uses its first retained pass to tighten structural visibility: `canic-core` now hides more support-only root modules, `canic-memory` no longer root-re-exports backend bootstrap state, and `canic-testkit::pic` is split by ownership so the public PocketIC seam is cleaner without changing downstream call sites.
 - `0.25.5` keeps the `0.25` follow-through on the clean side by trimming more shared runtime weight from the default demo surface, removing leftover `wasm_store` carryover endpoints, centralizing the internal test/audit wasm-build path, and landing two small measured runtime cuts that lower sampled `root::canic_request_delegation` from `1768507` to `1726014` local instructions across the retained reruns.
