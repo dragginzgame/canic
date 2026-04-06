@@ -61,8 +61,8 @@ Use `MemoryApi` when the memory ID is chosen at runtime and a macro is not a goo
 use canic_memory::api::MemoryApi;
 
 fn init_dynamic_slot(memory_id: u8) {
-    let _ = MemoryApi::bootstrap_registry("my_crate", 10, 19).unwrap();
-    let memory = MemoryApi::register_memory(memory_id, "my_crate", "CommitMarker").unwrap();
+    MemoryApi::bootstrap_owner_range("my_crate", 10, 19).unwrap();
+    let memory = MemoryApi::register(memory_id, "my_crate", "CommitMarker").unwrap();
 
     // `memory` is a normal `VirtualMemory<DefaultMemoryImpl>` handle.
     let _ = memory;
@@ -71,14 +71,14 @@ fn init_dynamic_slot(memory_id: u8) {
 
 ### Inspect one runtime-selected memory slot
 
-Use `inspect_memory(...)` when validation code needs to confirm who owns an id
+Use `inspect(...)` when validation code needs to confirm who owns an id
 and whether that slot already has a registered label.
 
 ```rust
 use canic_memory::api::MemoryApi;
 
 fn validate_slot(memory_id: u8) {
-    if let Some(info) = MemoryApi::inspect_memory(memory_id) {
+    if let Some(info) = MemoryApi::inspect(memory_id) {
         assert_eq!(info.owner, "my_crate");
         let _label = info.label;
         let _range = info.range;
@@ -95,8 +95,8 @@ reading registry/runtime internals directly.
 use canic_memory::api::MemoryApi;
 
 fn validate_commit_slots() {
-    let owned = MemoryApi::registered_memories_for_owner("my_crate");
-    let marker = MemoryApi::find_registered_memory("my_crate", "CommitMarker");
+    let owned = MemoryApi::registered_for_owner("my_crate");
+    let marker = MemoryApi::find("my_crate", "CommitMarker");
 
     let _ = owned;
     let _ = marker;
@@ -129,7 +129,7 @@ If you want the same flow from the supported public API surface, use:
 use canic_memory::api::MemoryApi;
 
 fn init_memory() {
-    let _ = MemoryApi::bootstrap_registry("my_crate", 10, 19).unwrap();
+    MemoryApi::bootstrap_owner_range("my_crate", 10, 19).unwrap();
 }
 ```
 
@@ -140,7 +140,7 @@ flush pending registrations before validation, use:
 use canic_memory::api::MemoryApi;
 
 fn init_memory() {
-    let _ = MemoryApi::bootstrap_registry_without_range().unwrap();
+    MemoryApi::bootstrap_pending().unwrap();
 }
 ```
 
@@ -172,7 +172,7 @@ eager_init!({
 
 fn init() {
     // standalone canisters can use the supported no-range bootstrap helper
-    MemoryApi::bootstrap_registry_without_range().unwrap();
+    MemoryApi::bootstrap_pending().unwrap();
 }
 ```
 
@@ -206,10 +206,10 @@ For diagnostics, the registry can provide:
 
 These helpers are intended for debugging and tests, not as a stable API contract.
 For ordinary supported reads, prefer:
-- `MemoryApi::inspect_memory(...)` for one id
-- `MemoryApi::registered_memories(...)` for all registered slots
-- `MemoryApi::registered_memories_for_owner(...)` for one owner
-- `MemoryApi::find_registered_memory(...)` for one owner/label lookup
+- `MemoryApi::inspect(...)` for one id
+- `MemoryApi::registered(...)` for all registered slots
+- `MemoryApi::registered_for_owner(...)` for one owner
+- `MemoryApi::find(...)` for one owner/label lookup
 
 ## Notes
 
