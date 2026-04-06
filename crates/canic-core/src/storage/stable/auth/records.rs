@@ -44,7 +44,7 @@ pub struct DelegationProofEntryRecord {
     pub proof: DelegationProofRecord,
     #[serde(default)]
     pub installed_at: u64,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub last_verified_at: Option<u64>,
 }
 
@@ -97,7 +97,7 @@ pub struct DelegatedSessionRecord {
     pub issued_at: u64,
     #[serde(default)]
     pub expires_at: u64,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub bootstrap_token_fingerprint: Option<[u8; 32]>,
 }
 
@@ -135,9 +135,9 @@ pub struct AttestationPublicKeyRecord {
     pub key_id: u32,
     pub public_key_sec1: Vec<u8>,
     pub status: AttestationKeyStatusRecord,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub valid_from: Option<u64>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub valid_until: Option<u64>,
 }
 
@@ -147,21 +147,21 @@ pub struct AttestationPublicKeyRecord {
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct DelegationStateRecord {
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub proofs: Vec<DelegationProofEntryRecord>,
 
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub root_public_key: Option<Vec<u8>>,
 
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub shard_public_keys: Vec<ShardPublicKeyRecord>,
 
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub delegated_sessions: Vec<DelegatedSessionRecord>,
 
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub delegated_session_bootstrap_bindings: Vec<DelegatedSessionBootstrapBindingRecord>,
 
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub attestation_public_keys: Vec<AttestationPublicKeyRecord>,
 }

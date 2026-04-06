@@ -197,6 +197,7 @@ impl DelegationStateOps {
             cert_hash,
             installed_at,
         );
+        crate::perf!("cache_root_verifier_map_entry");
         Ok(proof_upsert_record_to_view(
             DelegationState::upsert_proof_entry_with_shard_public_key(
                 entry,

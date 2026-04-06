@@ -57,6 +57,7 @@ impl DelegationState {
     ) -> DelegationProofUpsertRecord {
         DELEGATION_STATE.with_borrow_mut(|cell| {
             let mut data = cell.get().clone();
+            crate::perf!("cache_root_verifier_clone_state");
             let outcome = proofs::upsert_proof_entry_with_shard_public_key(
                 &mut data,
                 entry,
@@ -65,7 +66,9 @@ impl DelegationState {
                 capacity,
                 active_window_secs,
             );
+            crate::perf!("cache_root_verifier_apply_upsert");
             cell.set(data);
+            crate::perf!("cache_root_verifier_write_state");
             outcome
         })
     }

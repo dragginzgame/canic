@@ -162,7 +162,7 @@ async fn execute_issue_delegation(
                 ctx.now,
                 shard_public_key,
             )?;
-        crate::perf!("cache_root_verifier_proof");
+        crate::perf!("cache_root_verifier_upsert");
         record_verifier_proof_cache_stats(
             outcome.stats.size,
             outcome.stats.active_count,
@@ -181,6 +181,7 @@ async fn execute_issue_delegation(
             };
             record_verifier_proof_cache_eviction(class);
         }
+        crate::perf!("cache_root_verifier_metrics");
     }
 
     Ok(Response::DelegationIssued(response))
