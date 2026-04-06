@@ -4,11 +4,11 @@
 
 - Scope: `crates/canic`, `crates/canic-core`, `crates/canic-cdk`, `crates/canic-memory`, `crates/canic-testkit`, `crates/canic-testing-internal`, `crates/canic-tests`, `canisters/**`, `crates/canic-core/test-canisters/**`, and `crates/canic-core/audit-canisters/**`
 - Compared baseline report path: same-day earlier retained run at this path before audit-backed narrowing and `pic` module cleanup
-- Code snapshot identifier: `fe9b4d85`
+- Code snapshot identifier: `7e514afb`
 - Method tag/version: `module-structure-v1`
 - Comparability status: `comparable`
 - Exclusions applied: `#[cfg(test)]` internals except explicit test-leakage checks, generated `.dfx` artifacts, packaged outputs, and non-runtime scripts
-- Notable methodology changes vs baseline: no method change; this rerun also reflects the later `canic-testkit::pic` split into `diagnostics`, `snapshot`, `calls`, and `lifecycle`
+- Notable methodology changes vs baseline: no method change; this rerun also reflects the later `canic-testkit::pic` split into `diagnostics`, `snapshot`, `calls`, and `lifecycle`, plus the new `canic-memory::api` facade and shared cached-baseline recovery in `canic-testkit`
 
 ## 1. Public Surface Map
 
@@ -23,7 +23,7 @@
 | hidden core support namespaces | module family | `crates/canic-core/src/lib.rs` (`access`, `bootstrap`, `dispatch`, `error`, `__control_plane_core`) | yes | facade-support, macro/build, or endpoint-support item | `pub mod` + `#[doc(hidden)]` | root-reachable support surface remains, but ordinary published exposure was intentionally narrowed | Low |
 | generic testkit surface | module family | `crates/canic-testkit/src/lib.rs` (`artifacts`, `pic`, `Fake`) | yes | intended external API | `pub mod`, `pub struct` | public surface is narrow and clearly test-infra-oriented | Low |
 | curated IC SDK facade | module/re-export family | `crates/canic-cdk/src/lib.rs` (`candid`, `ic_cdk`, `mgmt`, `timers`, `env`, `spec`, `structures`, `types`, `utils`, `export_candid_debug!`) | yes | intended external API | `pub use`, `pub mod`, `#[macro_export]` | stable facade over upstream IC SDK crates | Low |
-| stable-memory support modules | module family | `crates/canic-memory/src/lib.rs` (`macros`, `registry`, `serialize`) | yes | intended external API | `pub mod` | current public surface matches the crate’s stated registry/serialization role | Low |
+| stable-memory support modules | module family | `crates/canic-memory/src/lib.rs` (`api`, `macros`, `registry`, `serialize`) | yes | intended external API | `pub mod` | current public surface matches the crate’s stated registry/serialization role and now includes one small supported runtime-selected memory facade | Low |
 | memory bootstrap internals | module family | `crates/canic-memory/src/lib.rs` (`manager`, `runtime`, `__reexports`) | yes | macro-support / bootstrap-support item | `pub mod` + `#[doc(hidden)]` | hidden support paths remain for macros/bootstrap, but root runtime/backend re-exports were removed | Low |
 | internal test harness root | module | `crates/canic-testing-internal/src/lib.rs` (`pic`) | yes inside crate graph, not published | internal-only harness surface | `pub mod` in `publish = false` crate | acceptable internal exposure; not an external API commitment | Low |
 
@@ -36,7 +36,8 @@
 | `canic-core::access` is now hidden behind the facade | `crates/canic-core/src/lib.rs`, `crates/canic/src/lib.rs` | `#[doc(hidden)] pub mod access` | hidden `pub mod` | access helpers remain available for the `canic` facade and macro support without advertising `canic-core::access` as a normal downstream entry path | Low |
 | `canic-core::error` is now treated as support surface | `crates/canic-core/src/lib.rs`, `crates/canic-core/src/error.rs` | `#[doc(hidden)] pub mod error` | hidden `pub mod` | internal error types remain reachable for lower-level support crates like `canic-control-plane`, but no longer present as a normal published root module | Low |
 | `canic-memory` no longer root-re-exports backend state | `crates/canic-memory/src/lib.rs`, `crates/canic-memory/src/manager.rs` | removed `pub use manager::MEMORY_MANAGER` and `pub use runtime::init_eager_tls` | root re-exports removed; module paths hidden | previous representation-heavy backend leak is gone from the published root | Low |
-| `canic-testkit::pic` remains intentionally public but is structurally narrower | `crates/canic-testkit/src/pic/mod.rs`, `baseline.rs`, `process_lock.rs`, `startup.rs`, `diagnostics.rs`, `snapshot.rs`, `calls.rs`, `lifecycle.rs`, `standalone.rs` | public PocketIC wrapper, locking, cached baselines, install/call helpers | `pub mod` with re-exported submodule items | still a central public seam, but implementation ownership is now split by concern instead of being concentrated in one or two files | Low |
+| `canic-memory::api` is now the supported runtime-selected memory seam | `crates/canic-memory/src/api/mod.rs`, `crates/canic-memory/src/lib.rs` | `pub mod api`, `pub struct MemoryApi`, `pub fn bootstrap_registry`, `pub fn register_memory` | ordinary public module and inherent methods | this is a deliberate facade replacement for prior backend-manager reachability, not an accidental new internal leak | Low |
+| `canic-testkit::pic` remains intentionally public but is structurally narrower | `crates/canic-testkit/src/pic/mod.rs`, `baseline.rs`, `process_lock.rs`, `startup.rs`, `diagnostics.rs`, `snapshot.rs`, `calls.rs`, `lifecycle.rs`, `standalone.rs` | public PocketIC wrapper, locking, cached baselines, install/call helpers | `pub mod` with re-exported submodule items | still a central public seam, but implementation ownership is now split by concern and shared dead-baseline recovery now lives in the toolkit instead of local harness copies | Low |
 
 ### 1C. Public Field Exposure
 
@@ -45,6 +46,7 @@
 | `MemoryRange` | yes | no | yes | simple value type for memory reservations | Low |
 | `MemoryRegistryEntry`, `MemoryRangeEntry`, `MemoryRangeSnapshot` | yes | mild | mostly yes | exposes substrate registry ownership labels and ranges directly, but these are the crate’s stated registry contract | Low |
 | `CachedPicBaseline<T>` | yes | no | yes | public testkit fixture contract exposing `pic`, snapshots, and metadata intentionally | Low |
+| `MemoryApi` | no | no | yes | small public facade for runtime-selected stable-memory registration/opening without exposing backend manager internals | Low |
 
 No medium/high public field leak was confirmed in the current run. The earlier pressure was root/module exposure, not field-level leakage.
 
@@ -56,7 +58,7 @@ No medium/high public field leak was confirmed in the current run. The earlier p
 | --- | --- | --- | ---: | ---: | --- | --- | --- |
 | `crates/canic` | `canic-core`, `canic-cdk`, `canic-memory`, optional `canic-control-plane` | demo canisters, installer, downstreams | 4 | 0 | no | facade direction is clean | Low |
 | `crates/canic-core` | `canic-cdk`, `canic-memory`; test-only dev-deps on `canic-testkit` and `canic-testing-internal` | `canic`, `canic-control-plane`, `canic-testing-internal`, reference-support | 2 | 0 | no runtime upward dependency | runtime direction is clean; publication breadth is pressure, not a dependency violation | Low |
-| `crates/canic-testkit` | `canic`, `pocket-ic`, `candid`, `serde` | `canic-testing-internal`, `canic-tests`, test canisters | 3 | 0 | no | public test infrastructure depends downward on facade/runtime contracts, not on internal harnesses | Low |
+| `crates/canic-testkit` | `canic`, `pocket-ic`, `candid`, `serde` | `canic-testing-internal`, `canic-tests`, test canisters | 3 | 0 | no | public test infrastructure depends downward on facade/runtime contracts, not on internal harnesses, and now owns more of the shared cached-baseline lifecycle itself | Low |
 | `crates/canic-testing-internal` | `canic-testkit`, `canic`, `canic-core`, `canic-control-plane`, `canic-internal` | `canic-tests` and test-only `canic-core` consumers | 4 | 0 | no | correct internal consumer layer; publish boundary contains the broad seam | Low |
 | demo canisters (`canisters/**`) | `canic`, `canic-internal` support constants | root harness / local builds | 2 | 0 | no | demo surface stays on facade/reference support only | Low |
 | test canisters (`crates/canic-core/test-canisters/**`) | `canic`, `canic-testkit` as needed | internal tests and harness code | 2 | 0 | no | ownership is separate from demo canisters | Low |
@@ -106,6 +108,7 @@ Residual pressure remains in the public/internal test seam, but the direction st
 | `crates/canic-testkit/src/pic/mod.rs` | public coordination hub | still owns the public `Pic` type and root-level entry surface, but cached baselines, process locking, startup classification, diagnostics, snapshots, calls, and lifecycle helpers now live in sibling modules; root file dropped from `1324` lines to `349` | Pressure | Low |
 | `crates/canic-testing-internal/src/pic/mod.rs` | internal barrel module | now a 25-line re-export seam rather than a logic hub; it mainly names fixture ownership boundaries (`attestation`, `audit`, `delegation`, `lifecycle`, `root`) | Pressure | Low |
 | `crates/canic-core/src/lib.rs` | published root breadth | the root is materially smaller than baseline because `domain` is now `pub(crate)` and `access`/`bootstrap`/`dispatch`/`error` are hidden, but `canic-core` still functions as a lower-level public facade alongside `canic` | Pressure | Medium |
+| `crates/canic-memory/src/api/mod.rs` | new supported facade seam | public runtime-selected memory registration is intentional and small, but any future expansion here would directly shape the crate’s stable public API | Pressure | Low |
 
 ### 4C. Test Leakage
 
@@ -157,7 +160,7 @@ No runtime module importing test utilities or leaking test helper re-exports int
 | Hub Module | Top Imported Sibling Subsystems (by Symbol Count) | Unique Sibling Subsystems Imported | Cross-Layer Dependency Count | Delta vs Previous Report | HIP | Pressure Band | Risk |
 | --- | --- | ---: | ---: | --- | ---: | --- | --- |
 | `crates/canic-core/src/lib.rs` | `canic_memory` re-exports (`4`), `storage` (`2`), `canic_cdk` (`1`), crate error aliases (`1`) | 4 | 1 | improved: `domain` no longer published; `access`, `bootstrap`, `dispatch`, and `error` are now hidden | 0.25 | low | Medium |
-| `crates/canic-testkit/src/pic/mod.rs` | `canic::dto` (`5`), `candid` (`4`), `canic::ids/protocol/cdk` (`4`), `pocket_ic` (`2`) | 4 | 1 | improved again: diagnostics, snapshots, calls, and lifecycle helpers also moved into sibling modules; root file shrank `1324 -> 349` lines | 0.25 | low | Low |
+| `crates/canic-testkit/src/pic/mod.rs` | `canic::dto` (`5`), `candid` (`4`), `canic::ids/protocol/cdk` (`4`), `pocket_ic` (`2`) | 4 | 1 | improved again: diagnostics, snapshots, calls, and lifecycle helpers also moved into sibling modules; root file shrank `1324 -> 349` lines, and shared cached-baseline recovery moved into the toolkit instead of local harness duplication | 0.25 | low | Low |
 | `crates/canic-testing-internal/src/pic/mod.rs` | internal fixture roots plus `canic_testkit::pic` re-export | 6 | 1 | improved: remains a thin barrel (`25` lines) rather than a logic hub | 0.17 | low | Low |
 
 Interpretation:
@@ -178,7 +181,7 @@ Interpretation:
 
 | Category | Risk Index (1-10, lower is better) | Basis |
 | --- | ---: | --- |
-| Public Surface Discipline | 3 | `canic` and `canic-testkit` are disciplined, and the earlier `canic-core`/`canic-memory` overexposure was narrowed further; remaining risk is mostly broad lower-level API reach, not internal leaks |
+| Public Surface Discipline | 3 | `canic`, `canic-testkit`, and the new `canic-memory::api` seam are disciplined, and the earlier `canic-core`/`canic-memory` overexposure was narrowed further; remaining risk is mostly broad lower-level API reach, not internal leaks |
 | Layer Directionality | 2 | crate direction and runtime layering remain clean in this run |
 | Circularity Safety | 1 | no real crate or subsystem cycle was confirmed |
 | Visibility Hygiene | 3 | the obvious root leaks were fixed; remaining pressure is broad-but-intentional public seams, especially `canic-core` root breadth and the main `canic` facade surface | Low |
@@ -201,6 +204,7 @@ Interpretation:
 | `canic::__internal` and `canic::__build` | macro/build expansion requires reachable support namespace | kept hidden from docs and explicitly documented as non-public contract | yes |
 | hidden `canic-core` support roots (`access`, `bootstrap`, `dispatch`, `error`, `__control_plane_core`) | facade/build/macro/endpoint support still requires root-reachable paths | keep hidden and do not widen them back into ordinary published modules | yes |
 | `canic-testkit` public PocketIC helpers | crate is intentionally a public generic test infrastructure surface | must stay generic and must not absorb Canic-only root harness concepts | yes |
+| `canic-memory::api::MemoryApi` | downstreams need one supported runtime-selected memory entry point without importing hidden manager internals | keep the surface small and avoid growing it into a second registry/backend API | yes |
 | `canic-testing-internal` broad `pic` barrel | crate is `publish = false` and exists specifically to hold Canic-only test harnesses | acceptable only while it remains internal and one-way dependent on `canic-testkit` | yes |
 | public DTO/ID families under `canic` | stable transfer/value contracts are meant to be root-reachable | DTO and ID exposure must not pull storage or workflow internals with them | yes |
 
@@ -212,6 +216,8 @@ Interpretation:
 | narrowed root visibility | `crates/canic-core/src/lib.rs` -> `bootstrap`, `dispatch` | ordinary `pub mod` | hidden `pub mod` | build/endpoint support stays reachable without presenting as normal runtime API |
 | narrowed root visibility | `crates/canic-core/src/lib.rs` -> `access`, `error` | ordinary `pub mod` | hidden `pub mod` | facade/support paths remain reachable without presenting them as normal downstream root modules |
 | removed root re-exports | `crates/canic-memory/src/lib.rs` -> `MEMORY_MANAGER`, `init_eager_tls` | root `pub use` | removed | backend/bootstrap state no longer leaks from the support-crate root |
+| new supported public seam | `crates/canic-memory/src/api/mod.rs` | no supported runtime-selected memory facade | `MemoryApi` with two small public entry points | replaces prior pressure to reach hidden manager internals with an intentional narrow facade |
+| removed convenience facade exports | `crates/canic/src/lib.rs` -> `api::runtime`, `api::protocol::icrc21` | narrow public helper namespaces present | removed | the main facade no longer re-exports the unused `MemoryRuntimeApi` and `Icrc21Dispatcher` convenience seams |
 | reduced hub pressure | `crates/canic-testkit/src/pic/mod.rs` | `776` lines after the first split | `349` lines with `diagnostics.rs`, `snapshot.rs`, `calls.rs`, and `lifecycle.rs` extracted | public seam is still intentional, but root implementation ownership is now much cleaner |
 | reduced internal hub pressure | `crates/canic-testing-internal/src/pic/mod.rs` | flagged as a growing coordination center | currently `25` lines and acting as a barrel only | remaining pressure is low and mostly organizational |
 

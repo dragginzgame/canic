@@ -69,6 +69,23 @@ fn init_dynamic_slot(memory_id: u8) {
 }
 ```
 
+### Inspect one runtime-selected memory slot
+
+Use `inspect_memory(...)` when validation code needs to confirm who owns an id
+and whether that slot already has a registered label.
+
+```rust
+use canic_memory::api::MemoryApi;
+
+fn validate_slot(memory_id: u8) {
+    if let Some(info) = MemoryApi::inspect_memory(memory_id) {
+        assert_eq!(info.owner, "my_crate");
+        let _label = info.label;
+        let _range = info.range;
+    }
+}
+```
+
 ### Flush pending registrations during startup
 
 Call the runtime registry initializer once during init/post-upgrade to validate ranges and apply any pending registrations queued by macros. Repeated calls are allowed when the initial range is identical; conflicts return a `MemoryRegistryError`.
@@ -162,6 +179,7 @@ For diagnostics, the registry can provide:
 - registered IDs grouped by range via `MemoryRegistry::export_ids_by_range()`
 
 These helpers are intended for debugging and tests, not as a stable API contract.
+For ordinary read-only runtime validation of one id, prefer `MemoryApi::inspect_memory(...)`.
 
 ## Notes
 
