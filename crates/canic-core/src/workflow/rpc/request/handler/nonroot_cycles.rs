@@ -4,13 +4,13 @@ use super::{
 use crate::{
     InternalError,
     cdk::types::Principal,
-    dto::rpc::{CyclesRequest, CyclesResponse, Response},
+    dto::rpc::{CyclesRequest, CyclesResponse},
     log,
     log::Topic,
     ops::{
         ic::{IcOps, mgmt::MgmtOps},
         replay::{
-            self as replay_ops, ReplayCommitError, ReplayDecodeError, ReplayReserveError,
+            self as replay_ops, ReplayDecodeError, ReplayReserveError,
             guard::{ReplayDecision, ReplayGuardError, ReplayPending, RootReplayGuardInput},
         },
         runtime::env::EnvOps,
@@ -69,16 +69,7 @@ impl NonrootCyclesCapabilityWorkflow {
             }
         };
 
-        if let Err(err) = commit_cycles_replay(pending, &response) {
-            log!(
-                Topic::Rpc,
-                Warn,
-                "cycles replay finalize failed after successful execution (caller={}, subnet={}, now={}): {err}",
-                ctx.caller,
-                ctx.subnet_id,
-                ctx.now
-            );
-        }
+        commit_cycles_replay(pending, &response);
 
         RootCapabilityMetrics::record_execution(
             RootCapabilityMetricKey::RequestCycles,
@@ -431,15 +422,6 @@ fn map_replay_reserve_error(err: ReplayReserveError) -> InternalError {
     }
 }
 
-// Convert replay commit failures into the current workflow replay errors.
-fn map_replay_commit_error(err: ReplayCommitError) -> InternalError {
-    match err {
-        ReplayCommitError::EncodeFailed(message) => {
-            RpcWorkflowError::ReplayEncodeFailed(message).into()
-        }
-    }
-}
-
 // Convert replay decode failures into the current workflow replay errors.
 fn map_replay_decode_error(err: ReplayDecodeError) -> InternalError {
     match err {
@@ -451,24 +433,12 @@ fn map_replay_decode_error(err: ReplayDecodeError) -> InternalError {
 
 // Decode a cached replay entry back into the cycles response shape.
 fn decode_cycles_response(bytes: &[u8]) -> Result<CyclesResponse, InternalError> {
-    let response =
-        replay_ops::decode_root_replay_response(bytes).map_err(map_replay_decode_error)?;
-    match response {
-        Response::Cycles(response) => Ok(response),
-        _ => Err(RpcWorkflowError::ReplayDecodeFailed(
-            "cached replay payload was not a cycles response".to_string(),
-        )
-        .into()),
-    }
+    replay_ops::decode_root_cycles_replay_response(bytes).map_err(map_replay_decode_error)
 }
 
 // Persist a successful cycles response into the shared replay store.
-fn commit_cycles_replay(
-    pending: ReplayPending,
-    response: &CyclesResponse,
-) -> Result<(), InternalError> {
-    replay_ops::commit_root_replay(pending, &Response::Cycles(response.clone()))
-        .map_err(map_replay_commit_error)
+fn commit_cycles_replay(pending: ReplayPending, response: &CyclesResponse) {
+    replay_ops::commit_root_cycles_replay(pending, response);
 }
 
 // Abort an in-flight cycles replay reservation after a failed request.

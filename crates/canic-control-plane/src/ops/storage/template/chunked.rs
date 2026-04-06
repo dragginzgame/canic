@@ -403,11 +403,11 @@ impl TemplateChunkedOps {
             .into());
         }
 
-        let expected_hash = info.chunk_hashes[input.chunk_index as usize].clone();
+        let expected_hash = &info.chunk_hashes[input.chunk_index as usize];
         let actual_hash = get_wasm_hash(&input.bytes);
         let chunk_key = TemplateChunkKey::new(release, input.chunk_index);
 
-        if actual_hash != expected_hash {
+        if actual_hash != *expected_hash {
             return Err(TemplateManifestOpsError::TemplateChunkHashMismatch(chunk_key).into());
         }
         canic_core::perf!("publish_stage_validate_chunk");
@@ -435,11 +435,11 @@ impl TemplateChunkedOps {
             .into());
         }
 
-        let expected_hash = info.chunk_hashes[input.chunk_index as usize].clone();
+        let expected_hash = &info.chunk_hashes[input.chunk_index as usize];
         let actual_hash = get_wasm_hash(&input.bytes);
         let chunk_key = TemplateChunkKey::new(release, input.chunk_index);
 
-        if actual_hash != expected_hash {
+        if actual_hash != *expected_hash {
             return Err(TemplateManifestOpsError::TemplateChunkHashMismatch(chunk_key).into());
         }
         canic_core::perf!("publish_store_validate_chunk");

@@ -3,7 +3,7 @@ use crate::dto::auth::RoleAttestation;
 use crate::{
     InternalError,
     cdk::types::Principal,
-    dto::rpc::{Request, Response, RootCapabilityCommand},
+    dto::rpc::{Request, Response},
     log,
     log::Topic,
     ops::{
@@ -93,8 +93,7 @@ impl RootResponseWorkflow {
     ) -> Result<Response, InternalError> {
         let ctx = Self::extract_root_context()?;
         crate::perf!("extract_context");
-        let capability_req = RootCapabilityCommand::from(req);
-        let capability = Self::map_request(capability_req);
+        let capability = Self::map_request(req);
         let capability_key = capability.metric_key();
         let capability_name = capability.capability_name();
         crate::perf!("map_request");
@@ -231,7 +230,7 @@ impl RootResponseWorkflow {
         ctx: &RootContext,
         req: &crate::dto::auth::RoleAttestationRequest,
     ) -> Result<RoleAttestation, InternalError> {
-        execute::build_role_attestation(ctx, req)
+        execute::build_role_attestation(ctx, req.clone())
     }
 
     fn extract_root_context() -> Result<RootContext, InternalError> {
@@ -244,7 +243,7 @@ impl RootResponseWorkflow {
         })
     }
 
-    fn map_request(req: RootCapabilityCommand) -> RootCapability {
+    fn map_request(req: Request) -> RootCapability {
         capability::map_request(req)
     }
 }

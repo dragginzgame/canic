@@ -241,12 +241,13 @@ impl TemplateChunkStore {
         let previous = TEMPLATE_CHUNK_REFS.with_borrow(|map| map.get(&chunk_key));
 
         if let Some(previous) = previous {
+            let previous_bytes = chunk_entry_size(&chunk_key, previous.payload_len);
             TEMPLATE_CHUNK_PAYLOADS.with_borrow(|payloads| {
                 payloads.set(previous.slot, &payload_record);
             });
             TEMPLATE_CHUNK_REFS.with_borrow_mut(|map| {
                 map.insert(
-                    chunk_key.clone(),
+                    chunk_key,
                     TemplateChunkRefRecord {
                         slot: previous.slot,
                         payload_len,
@@ -257,7 +258,6 @@ impl TemplateChunkStore {
 
             TEMPLATE_CHUNKS_OCCUPIED_BYTES.with_borrow_mut(|occupied| {
                 if let Some(current) = occupied.as_mut() {
-                    let previous_bytes = chunk_entry_size(&chunk_key, previous.payload_len);
                     *current = current
                         .saturating_sub(previous_bytes)
                         .saturating_add(next_bytes);
@@ -272,10 +272,7 @@ impl TemplateChunkStore {
             });
 
             TEMPLATE_CHUNK_REFS.with_borrow_mut(|map| {
-                map.insert(
-                    chunk_key.clone(),
-                    TemplateChunkRefRecord { slot, payload_len },
-                );
+                map.insert(chunk_key, TemplateChunkRefRecord { slot, payload_len });
             });
             canic_core::perf!("chunk_store_insert");
 

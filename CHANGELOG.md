@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
 
+## [0.26.x] - 2026-04-06 - Metrics Baseline
+
+- `0.26.0` establishes the first `0.26` metrics and performance baseline, refreshing the retained wasm and instruction audit reports so the next runtime work can measure drift against a clear starting point instead of the late `0.25` cleanup line.
+
+See detailed breakdown:
+[docs/changelog/0.26.md](docs/changelog/0.26.md)
+
+---
+
 ## [0.25.x] - 2026-04-05 - Recurring Audit Refresh
 
 - `0.25.11` moves `canic_metrics` off the internal-test build gate and onto a real `canic` `metrics` feature that is enabled by default, so ordinary facade users keep the metrics endpoint by default while still being able to opt out explicitly with Cargo features.
