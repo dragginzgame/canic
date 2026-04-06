@@ -27,6 +27,7 @@ impl DelegationApi {
         proof: DelegationProof,
         intent: crate::dto::auth::DelegationProofInstallIntent,
         kind: DelegationProvisionTargetKind,
+        root_public_key_sec1: Option<Vec<u8>>,
         shard_public_key_sec1: Option<Vec<u8>>,
     ) -> Result<(), Error> {
         if kind == DelegationProvisionTargetKind::Verifier {
@@ -40,8 +41,9 @@ impl DelegationApi {
         }
 
         let root_pid = EnvOps::root_pid().map_err(Error::from)?;
-        DelegatedTokenOps::cache_public_keys_for_cert_with_optional_shard(
+        DelegatedTokenOps::cache_public_keys_for_cert_with_optional_keys(
             &proof.cert,
+            root_public_key_sec1,
             shard_public_key_sec1,
         )
         .await
@@ -105,6 +107,7 @@ impl DelegationApi {
             request.proof,
             request.intent,
             kind,
+            request.root_public_key_sec1,
             request.shard_public_key_sec1,
         )
         .await
@@ -115,6 +118,7 @@ impl DelegationApi {
             proof,
             crate::dto::auth::DelegationProofInstallIntent::Provisioning,
             DelegationProvisionTargetKind::Signer,
+            None,
             None,
         )
         .await

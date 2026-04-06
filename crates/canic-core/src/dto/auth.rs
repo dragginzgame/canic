@@ -44,6 +44,8 @@ pub struct DelegationProofInstallRequest {
     pub proof: DelegationProof,
     pub intent: DelegationProofInstallIntent,
     #[serde(default)]
+    pub root_public_key_sec1: Option<Vec<u8>>,
+    #[serde(default)]
     pub shard_public_key_sec1: Option<Vec<u8>>,
 }
 

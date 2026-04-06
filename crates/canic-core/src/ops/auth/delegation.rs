@@ -63,21 +63,51 @@ impl DelegatedTokenOps {
         Ok(shard_public_key)
     }
 
+    /// Resolve the local root public key, fetching and caching it on demand.
+    pub(crate) async fn local_root_public_key_sec1(
+        root_pid: Principal,
+    ) -> Result<Vec<u8>, InternalError> {
+        let local = IcOps::canister_self();
+        if root_pid != local {
+            return Err(DelegationValidationError::InvalidRootAuthority {
+                expected: local,
+                found: root_pid,
+            }
+            .into());
+        }
+
+        if let Some(root_public_key) =
+            crate::ops::storage::auth::DelegationStateOps::root_public_key()
+        {
+            return Ok(root_public_key);
+        }
+
+        let key_name = keys::delegated_tokens_key_name()?;
+        keys::ensure_root_public_key_cached(&key_name, root_pid).await?;
+        crate::ops::storage::auth::DelegationStateOps::root_public_key()
+            .ok_or_else(|| super::DelegationSignatureError::RootPublicKeyUnavailable.into())
+    }
+
     /// Cache root and shard public keys for a delegation certificate.
     ///
     /// Verification paths are intentionally local-only and do not call IC
     /// management APIs, so provisioning must prime this cache.
     pub async fn cache_public_keys_for_cert(cert: &DelegationCert) -> Result<(), InternalError> {
-        Self::cache_public_keys_for_cert_with_optional_shard(cert, None).await
+        Self::cache_public_keys_for_cert_with_optional_keys(cert, None, None).await
     }
 
-    /// Cache root and shard public keys, trusting caller-provided shard key material when present.
-    pub async fn cache_public_keys_for_cert_with_optional_shard(
+    /// Cache root and shard public keys, trusting caller-provided key material when present.
+    pub async fn cache_public_keys_for_cert_with_optional_keys(
         cert: &DelegationCert,
+        root_public_key: Option<Vec<u8>>,
         shard_public_key: Option<Vec<u8>>,
     ) -> Result<(), InternalError> {
         let key_name = keys::delegated_tokens_key_name()?;
-        keys::ensure_root_public_key_cached(&key_name, cert.root_pid).await?;
+        if let Some(root_public_key) = root_public_key {
+            crate::ops::storage::auth::DelegationStateOps::set_root_public_key(root_public_key);
+        } else {
+            keys::ensure_root_public_key_cached(&key_name, cert.root_pid).await?;
+        }
 
         if let Some(shard_public_key) = shard_public_key {
             crate::ops::storage::auth::DelegationStateOps::set_shard_public_key(
