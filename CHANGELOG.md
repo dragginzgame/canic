@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.25.x] - 2026-04-05 - Recurring Audit Refresh
 
+- `0.25.11` moves `canic_metrics` off the internal-test build gate and onto a real `canic` `metrics` feature that is enabled by default, so ordinary facade users keep the metrics endpoint by default while still being able to opt out explicitly with Cargo features.
 - `0.25.10` cleans up the public `canic-memory` facade by renaming the stable-memory bootstrap and lookup methods toward intent and by hiding the runtime summary type from the public return values, so downstreams use a smaller `MemoryApi` surface instead of substrate-shaped names.
 - `0.25.9` extends `canic-memory` with small read-only registration queries, so downstreams can inspect registered memory ids by owner or label through the supported `MemoryApi` facade instead of reading registry/runtime snapshots directly.
 - `0.25.8` adds a small read-only `canic-memory` inspection helper so downstreams can ask who owns one memory id, what reserved range it belongs to, and whether that slot already has a registered label, without reaching into registry/runtime internals.

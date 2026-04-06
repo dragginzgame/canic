@@ -1,5 +1,34 @@
 # canic
 
-Facade crate that re-exports the Canic stack (core, macros, memory helpers) for canister projects.
+Facade crate that re-exports the main Canic stack for canister projects:
 
-This crate lives in the Canic workspace. See the workspace guide at `../../README.md` for setup, features, and examples.
+- endpoint and lifecycle macros
+- core runtime/types
+- curated IC CDK helpers
+- stable-memory helpers
+
+Most downstream canister projects should start here instead of reaching for
+lower-level crates directly.
+
+## Default surface
+
+The default feature set includes:
+
+- `metrics` — exports `canic_metrics` in ordinary builds unless you opt out
+
+If you want a narrower facade dependency, disable default features in your
+`Cargo.toml`.
+
+## Optional features
+
+- `control-plane` — enable root/`wasm_store` control-plane support
+- `sharding` — enable sharding-oriented runtime support from `canic-core`
+- `auth-crypto` — enable crypto-backed auth/runtime helpers from `canic-core`
+
+## Typical use
+
+Use `canic` in both `[dependencies]` and `[build-dependencies]` so the build
+macros and runtime macros come from the same facade crate.
+
+This crate lives in the Canic workspace. See the workspace guide at
+`../../README.md` for full setup, topology, and example canisters.

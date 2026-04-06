@@ -2,6 +2,17 @@
 
 Published installer and release-set tooling for downstream Canic workspaces.
 
+## Who should use this crate directly
+
+Use this crate directly when you need:
+
+- the installed Canic release/build binaries in CI or local automation
+- root release-set staging or install flows from a published tool package
+- the canonical downstream installer/build surface without cloning the full repo
+
+If you just want a normal local setup, prefer the tagged install script below.
+That is still the simplest entry path for most users.
+
 For the full local setup path, prefer the shared tagged installer script from the
 Canic repo:
 
@@ -12,6 +23,12 @@ curl -fsSL https://raw.githubusercontent.com/dragginzgame/canic/v0.25.10/scripts
 That script bootstraps Rust when needed, installs the pinned toolchain,
 `canic-installer`, the required wasm/Candid utilities, and `dfx` when it is
 missing. This crate README documents the thinner installed-binary surface below.
+
+## What this crate is not
+
+This crate is not a general deployment framework and it is not the main Canic
+application facade. It owns the published build/install/release utilities for
+the standard Canic topology, especially root/bootstrap/store flows.
 
 This crate owns the public thin-root build and staging path:
 

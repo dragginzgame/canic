@@ -5,7 +5,7 @@ rust-version = { workspace = true }
 version = { workspace = true }
 license = { workspace = true }
 description = { workspace = true }
-readme = false
+readme = "README.md"
 documentation = "https://docs.rs/canic-core"
 homepage = { workspace = true }
 repository = { workspace = true }
