@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.25.x] - 2026-04-05 - Recurring Audit Refresh
 
-- `0.25.10` adds `MemoryApi::bootstrap_registry_without_range()`, so downstream crates that already deferred their stable-memory range reservations can flush pending registrations through the supported `canic-memory` facade instead of calling `MemoryRegistryRuntime::init(None)` directly.
+- `0.25.10` cleans up the public `canic-memory` facade by renaming the stable-memory bootstrap and lookup methods toward intent and by hiding the runtime summary type from the public return values, so downstreams use a smaller `MemoryApi` surface instead of substrate-shaped names.
 - `0.25.9` extends `canic-memory` with small read-only registration queries, so downstreams can inspect registered memory ids by owner or label through the supported `MemoryApi` facade instead of reading registry/runtime snapshots directly.
 - `0.25.8` adds a small read-only `canic-memory` inspection helper so downstreams can ask who owns one memory id, what reserved range it belongs to, and whether that slot already has a registered label, without reaching into registry/runtime internals.
 - `0.25.7` adds a supported dynamic-memory API to `canic-memory`, so downstream crates can reserve ranges, register runtime-selected memory IDs, and open `VirtualMemory` handles without importing the hidden `MEMORY_MANAGER` internals directly, while also hardening shared `canic-testkit` PocketIC baseline recovery and continuing the `canic-testkit::pic` cleanup without changing downstream call sites.
