@@ -5,6 +5,7 @@ Shared stable-memory helpers you can drop into any IC canister, even if you are 
 What you get:
 - Reserve and validate a per-crate stable-memory ID range.
 - One place to register stable structures (`ic_memory!` + registry).
+- A supported runtime API for dynamic memory registration/opening (`MemoryApi`).
 - Eager TLS init so thread-locals that allocate memory are ready before entrypoints.
 - Zero dependency on the `canic` crate.
 
@@ -52,6 +53,22 @@ thread_local! {
 }
 ```
 
+### Bootstrap and register one runtime-selected memory slot
+
+Use `MemoryApi` when the memory ID is chosen at runtime and a macro is not a good fit.
+
+```rust
+use canic_memory::api::MemoryApi;
+
+fn init_dynamic_slot(memory_id: u8) {
+    let _ = MemoryApi::bootstrap_registry("my_crate", 10, 19).unwrap();
+    let memory = MemoryApi::register_memory(memory_id, "my_crate", "CommitMarker").unwrap();
+
+    // `memory` is a normal `VirtualMemory<DefaultMemoryImpl>` handle.
+    let _ = memory;
+}
+```
+
 ### Flush pending registrations during startup
 
 Call the runtime registry initializer once during init/post-upgrade to validate ranges and apply any pending registrations queued by macros. Repeated calls are allowed when the initial range is identical; conflicts return a `MemoryRegistryError`.
@@ -71,6 +88,16 @@ fn init_memory() {
 2) apply all pending range reservations,
 3) apply all pending ID registrations (sorted),
 4) return a summary of ranges/entries for logging or inspection.
+
+If you want the same flow from the supported public API surface, use:
+
+```rust
+use canic_memory::api::MemoryApi;
+
+fn init_memory() {
+    let _ = MemoryApi::bootstrap_registry("my_crate", 10, 19).unwrap();
+}
+```
 
 ### Eagerly initialize thread-locals that allocate memory
 

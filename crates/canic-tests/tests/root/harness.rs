@@ -10,8 +10,8 @@ use canic_testing_internal::pic::{
 use canic_testkit::{
     artifacts::{WasmBuildProfile, workspace_root_for},
     pic::{
-        CachedPicBaseline, CachedPicBaselineGuard, Pic, PicSerialGuard,
-        acquire_cached_pic_baseline, acquire_pic_serial_guard,
+        CachedPicBaseline, CachedPicBaselineGuard, Pic, PicSerialGuard, acquire_pic_serial_guard,
+        restore_or_rebuild_cached_pic_baseline,
     },
 };
 use std::{
@@ -249,14 +249,17 @@ fn setup_root_cached_spec(
     ensure_root_release_artifacts_built(&spec);
     let root_wasm = load_root_wasm(&spec).expect("load root wasm");
 
-    let (baseline, cache_hit) = acquire_cached_pic_baseline(cache_slot, || {
-        test_progress("cache miss, building fresh root baseline");
-        build_root_cached_baseline(&spec, root_wasm)
-    });
+    let (baseline, cache_hit) = restore_or_rebuild_cached_pic_baseline(
+        cache_slot,
+        || {
+            test_progress("cache miss, building fresh root baseline");
+            build_root_cached_baseline(&spec, root_wasm.clone())
+        },
+        |baseline| restore_root_cached_baseline(&spec, baseline),
+    );
 
     if cache_hit {
         test_progress("cache hit, restoring cached root baseline");
-        restore_root_cached_baseline(&spec, &baseline);
         test_progress("cached root baseline restore complete");
     } else {
         test_progress("fresh root baseline ready");

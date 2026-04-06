@@ -2,10 +2,11 @@ use candid::Principal;
 use std::{
     collections::HashMap,
     ops::{Deref, DerefMut},
+    panic::{AssertUnwindSafe, catch_unwind, resume_unwind},
     sync::{Mutex, MutexGuard},
 };
 
-use super::{Pic, PicSerialGuard, acquire_pic_serial_guard};
+use super::{Pic, PicSerialGuard, acquire_pic_serial_guard, startup};
 
 struct ControllerSnapshot {
     snapshot_id: Vec<u8>,
@@ -55,6 +56,59 @@ where
     }
 
     (CachedPicBaselineGuard { guard }, cache_hit)
+}
+
+/// Restore one cached PocketIC baseline, rebuilding it if the owned PocketIC
+/// instance has died between tests.
+pub fn restore_or_rebuild_cached_pic_baseline<T, B, R>(
+    slot: &'static Mutex<Option<CachedPicBaseline<T>>>,
+    build: B,
+    restore: R,
+) -> (CachedPicBaselineGuard<'static, T>, bool)
+where
+    B: Fn() -> CachedPicBaseline<T>,
+    R: Fn(&CachedPicBaseline<T>),
+{
+    let (baseline, cache_hit) = acquire_cached_pic_baseline(slot, &build);
+    if !cache_hit {
+        return (baseline, false);
+    }
+
+    let restore_result = catch_unwind(AssertUnwindSafe(|| {
+        restore(&baseline);
+    }));
+    if restore_result.is_ok() {
+        return (baseline, true);
+    }
+
+    let panic_payload = restore_result.expect_err("restore failure must carry panic payload");
+    let message = startup::panic_payload_to_string(panic_payload.as_ref());
+    if !startup::is_dead_instance_transport_error(&message) {
+        resume_unwind(panic_payload);
+    }
+
+    drop(baseline);
+    drop_stale_cached_pic_baseline(slot);
+
+    let (rebuilt, _cache_hit) = acquire_cached_pic_baseline(slot, build);
+    (rebuilt, false)
+}
+
+/// Remove one dead cached baseline and swallow teardown panics from a broken
+/// PocketIC instance so callers can rebuild cleanly.
+pub fn drop_stale_cached_pic_baseline<T>(slot: &'static Mutex<Option<CachedPicBaseline<T>>>) {
+    let stale = {
+        let mut slot = slot
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        slot.take()
+    };
+
+    if let Some(stale) = stale {
+        let _ = catch_unwind(AssertUnwindSafe(|| {
+            drop(stale);
+        }));
+    }
 }
 
 impl<T> Deref for CachedPicBaselineGuard<'_, T> {
