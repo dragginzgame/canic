@@ -14,6 +14,7 @@ rounds:
 4. [wasm-footprint.md](wasm-footprint.md)
 5. [module-structure.md](module-structure.md)
 6. [dependency-hygiene.md](dependency-hygiene.md)
+7. [publish-surface.md](publish-surface.md)
 
 These audits cover:
 
@@ -23,6 +24,7 @@ These audits cover:
 - shipped wasm output and retained-size drift
 - crate/module topology, visibility hygiene, and facade containment
 - crate dependency direction, feature hygiene, and publish-surface discipline
+- published package posture, crate-local docs/examples alignment, and downstream contract clarity
 
 ## Additional System Audits
 
@@ -41,6 +43,8 @@ These audits cover:
   or demo/test/audit boundary cleanliness.
 - Use `dependency-hygiene` when reviewing Cargo graph drift, feature-flag sprawl,
   or publish/package surface cleanliness.
+- Use `publish-surface` when reviewing README/docs.rs posture, published binary
+  contracts, or whether crate-local package documentation matches intended downstream use.
 
 ## Reporting Discipline
 

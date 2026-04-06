@@ -14,7 +14,8 @@ categories = { workspace = true }
 publish = true
 
 [features]
-default = []
+default = ["metrics"]
+metrics = []
 control-plane = ["dep:canic-control-plane"]
 sharding = ["canic-core/sharding"]
 auth-crypto = ["canic-core/auth-crypto"]

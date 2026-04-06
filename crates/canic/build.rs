@@ -27,14 +27,17 @@ fn main() {
     // If the env var changes, we must re-run to pick up a different config.
     println!("cargo:rerun-if-env-changed=CANIC_CONFIG_PATH");
     println!("cargo:rerun-if-env-changed=CANIC_INTERNAL_TEST_ENDPOINTS");
+    println!("cargo:rerun-if-env-changed=CARGO_FEATURE_METRICS");
 
     if std::env::var_os("CANIC_INTERNAL_TEST_ENDPOINTS").is_none() {
         // Default builds ship the slimmer demo/reference surface; internal
         // observability and test harness endpoints opt back in explicitly.
         println!("cargo:rustc-cfg=canic_disable_bundle_observability_memory");
         println!("cargo:rustc-cfg=canic_disable_bundle_observability_env");
-        println!("cargo:rustc-cfg=canic_disable_bundle_metrics");
         println!("cargo:rustc-cfg=canic_disable_bundle_topology_directory");
+    }
+    if std::env::var_os("CARGO_FEATURE_METRICS").is_none() {
+        println!("cargo:rustc-cfg=canic_disable_bundle_metrics");
     }
 
     // Path to this crate at build time.

@@ -2,6 +2,9 @@
 
 Proc macros for defining Internet Computer endpoints in Canic canisters.
 
+Most downstream users should access these macros through `canic`, not by
+depending on `canic-dsl-macros` directly.
+
 This crate provides `#[canic_query]` and `#[canic_update]`, which are thin wrappers
 around the IC CDK `#[query]` / `#[update]` attributes and route through Canic's
 pipeline (requires -> dispatch).
