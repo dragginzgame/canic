@@ -7,7 +7,7 @@ pub mod scheduler;
 use crate::{
     InternalError, InternalErrorOrigin,
     cdk::types::TC,
-    domain::policy::pool::PoolPolicyError,
+    domain::policy::pool::{PoolPolicyError, authority::require_pool_admin},
     dto::pool::{CanisterPoolStatus, PoolBatchResult},
     ids::IntentResourceKey,
     ops::{
@@ -92,9 +92,7 @@ impl PoolWorkflow {
     // -------------------------------------------------------------------------
 
     fn require_pool_admin() -> Result<(), InternalError> {
-        EnvOps::require_root()?;
-
-        Ok(())
+        require_pool_admin(EnvOps::is_root()).map_err(Into::into)
     }
 
     // -------------------------------------------------------------------------

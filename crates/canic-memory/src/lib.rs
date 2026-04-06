@@ -6,16 +6,17 @@
 //! depending on the full `canic` stack.
 
 pub mod macros;
+#[doc(hidden)]
 pub mod manager;
 pub mod registry;
+#[doc(hidden)]
 pub mod runtime;
 pub mod serialize;
 
 pub use ::canic_cdk as cdk;
 
-// internal types
-pub use manager::MEMORY_MANAGER;
-pub use runtime::init_eager_tls;
+// internal derive support
+#[doc(hidden)]
 pub use thiserror::Error as ThisError;
 
 // re-exports

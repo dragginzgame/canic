@@ -19,13 +19,15 @@
 
 #[doc(hidden)]
 pub mod __control_plane_core;
+#[doc(hidden)]
 pub mod access;
 pub mod api;
+#[doc(hidden)]
 pub mod bootstrap;
 #[doc(hidden)]
 pub mod dispatch;
-pub mod domain;
 pub mod dto;
+#[doc(hidden)]
 pub mod error;
 mod format;
 pub mod ids;
@@ -36,6 +38,7 @@ pub mod protocol;
 pub mod test;
 
 pub(crate) mod config;
+pub(crate) mod domain;
 pub(crate) mod infra;
 pub(crate) mod lifecycle;
 pub(crate) mod ops;
