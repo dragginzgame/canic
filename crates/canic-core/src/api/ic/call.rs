@@ -30,6 +30,7 @@ use crate::{
 };
 use candid::utils::{ArgumentDecoder, ArgumentEncoder};
 use serde::de::DeserializeOwned;
+use std::borrow::Cow;
 
 ///
 /// Call
@@ -46,14 +47,14 @@ pub struct Call;
 
 impl Call {
     #[must_use]
-    pub fn bounded_wait(canister_id: impl Into<Principal>, method: &str) -> CallBuilder {
+    pub fn bounded_wait(canister_id: impl Into<Principal>, method: &str) -> CallBuilder<'static> {
         CallBuilder {
             inner: CallWorkflow::bounded_wait(canister_id, method),
         }
     }
 
     #[must_use]
-    pub fn unbounded_wait(canister_id: impl Into<Principal>, method: &str) -> CallBuilder {
+    pub fn unbounded_wait(canister_id: impl Into<Principal>, method: &str) -> CallBuilder<'static> {
         CallBuilder {
             inner: CallWorkflow::unbounded_wait(canister_id, method),
         }
@@ -168,11 +169,11 @@ impl IntentReservation {
 /// CallBuilder (api)
 ///
 
-pub struct CallBuilder {
-    inner: WorkflowCallBuilder,
+pub struct CallBuilder<'a> {
+    inner: WorkflowCallBuilder<'a>,
 }
 
-impl CallBuilder {
+impl CallBuilder<'_> {
     // ---------- arguments ----------
 
     /// Encode a single argument into Candid bytes (fallible).
@@ -197,8 +198,8 @@ impl CallBuilder {
 
     /// Use pre-encoded Candid arguments (no validation performed).
     #[must_use]
-    pub fn with_raw_args(self, args: Vec<u8>) -> Self {
-        Self {
+    pub fn with_raw_args<'b>(self, args: impl Into<Cow<'b, [u8]>>) -> CallBuilder<'b> {
+        CallBuilder {
             inner: self.inner.with_raw_args(args),
         }
     }

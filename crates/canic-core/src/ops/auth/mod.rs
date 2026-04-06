@@ -1,4 +1,4 @@
-use crate::dto::auth::DelegationCert;
+use crate::dto::auth::{DelegationCert, DelegationProof};
 use crate::ops::ic::IcOps;
 #[cfg(test)]
 use crate::{
@@ -42,6 +42,11 @@ const ROLE_ATTESTATION_KEY_ID_V1: u32 = 1;
 ///
 
 pub struct DelegatedTokenOps;
+
+pub struct SignedDelegationProof {
+    pub proof: DelegationProof,
+    pub cert_hash: [u8; 32],
+}
 
 impl DelegatedTokenOps {
     // Warm the root delegation and attestation public-key caches once.

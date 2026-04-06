@@ -42,42 +42,24 @@ impl NonrootCyclesCapabilityWorkflow {
     pub async fn response_replay_first(
         req: CyclesRequest,
     ) -> Result<CyclesResponse, InternalError> {
-        let ctx = extract_root_context()?;
-        let preflight = check_cycles_replay(&ctx, &req)?;
-        let pending = match preflight {
-            ReplayPreflight::Fresh(pending) => pending,
-            ReplayPreflight::Cached(response) => return Ok(response),
-        };
-
-        let grant = match authorize_request_cycles_plan(&ctx, &req) {
-            Ok(grant) => grant,
-            Err(err) => {
-                abort_replay(pending);
-                return Err(err);
-            }
-        };
-
-        let response = match execute_authorized_request_cycles(&ctx, grant).await {
-            Ok(response) => response,
-            Err(err) => {
-                abort_replay(pending);
-                RootCapabilityMetrics::record_execution(
-                    RootCapabilityMetricKey::RequestCycles,
-                    RootCapabilityMetricOutcome::Error,
-                );
-                return Err(err);
-            }
-        };
-
-        commit_cycles_replay(pending, &response);
-
-        RootCapabilityMetrics::record_execution(
-            RootCapabilityMetricKey::RequestCycles,
-            RootCapabilityMetricOutcome::Success,
-        );
-
-        Ok(response)
+        response_replay_first_with_planner(
+            extract_cycles_context(false)?,
+            req,
+            authorize_request_cycles_plan,
+        )
+        .await
     }
+}
+
+pub(super) async fn response_replay_first_root(
+    req: CyclesRequest,
+) -> Result<CyclesResponse, InternalError> {
+    response_replay_first_with_planner(
+        extract_cycles_context(true)?,
+        req,
+        authorize_root_request_cycles_plan,
+    )
+    .await
 }
 
 enum ReplayPreflight {
@@ -85,12 +67,56 @@ enum ReplayPreflight {
     Cached(CyclesResponse),
 }
 
-// Build the current root-like execution context for non-root cycles requests.
-fn extract_root_context() -> Result<RootContext, InternalError> {
+async fn response_replay_first_with_planner(
+    ctx: RootContext,
+    req: CyclesRequest,
+    authorize_plan: fn(
+        &RootContext,
+        &CyclesRequest,
+    ) -> Result<AuthorizedCyclesGrant, InternalError>,
+) -> Result<CyclesResponse, InternalError> {
+    let preflight = check_cycles_replay(&ctx, &req)?;
+    let pending = match preflight {
+        ReplayPreflight::Fresh(pending) => pending,
+        ReplayPreflight::Cached(response) => return Ok(response),
+    };
+
+    let grant = match authorize_plan(&ctx, &req) {
+        Ok(grant) => grant,
+        Err(err) => {
+            abort_replay(pending);
+            return Err(err);
+        }
+    };
+
+    let response = match execute_authorized_request_cycles(&ctx, grant).await {
+        Ok(response) => response,
+        Err(err) => {
+            abort_replay(pending);
+            RootCapabilityMetrics::record_execution(
+                RootCapabilityMetricKey::RequestCycles,
+                RootCapabilityMetricOutcome::Error,
+            );
+            return Err(err);
+        }
+    };
+
+    commit_cycles_replay(pending, &response);
+
+    RootCapabilityMetrics::record_execution(
+        RootCapabilityMetricKey::RequestCycles,
+        RootCapabilityMetricOutcome::Success,
+    );
+
+    Ok(response)
+}
+
+// Build the current cycles execution context with a known root-vs-non-root lane.
+fn extract_cycles_context(is_root_env: bool) -> Result<RootContext, InternalError> {
     Ok(RootContext {
         caller: IcOps::msg_caller(),
         self_pid: IcOps::canister_self(),
-        is_root_env: EnvOps::is_root(),
+        is_root_env,
         subnet_id: EnvOps::subnet_pid()?,
         now: IcOps::now_secs(),
     })
@@ -284,10 +310,7 @@ pub(super) async fn execute_authorized_request_cycles(
 
 // Resolve one direct child record from the locally cascaded children cache.
 fn direct_child_record(pid: Principal) -> Option<CanisterRecord> {
-    CanisterChildrenOps::data()
-        .entries
-        .into_iter()
-        .find_map(|(child_pid, record)| (child_pid == pid).then_some(record))
+    CanisterChildrenOps::get(pid)
 }
 
 // Resolve one child record from the authoritative root subnet registry.

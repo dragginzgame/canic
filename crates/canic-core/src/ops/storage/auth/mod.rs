@@ -184,6 +184,31 @@ impl DelegationStateOps {
         ))
     }
 
+    /// Upsert a keyed verifier proof using a caller-provided cert hash for the proof key.
+    pub fn upsert_proof_from_dto_ref_with_cert_hash_and_shard_public_key(
+        proof: &DelegationProof,
+        cert_hash: [u8; 32],
+        installed_at: u64,
+        shard_public_key: Option<Vec<u8>>,
+    ) -> Result<DelegationProofUpsertOutcome, InternalError> {
+        let policy = Self::proof_cache_policy()?;
+        let entry = DelegationProofRecordMapper::dto_ref_to_entry_with_cert_hash(
+            proof,
+            cert_hash,
+            installed_at,
+        );
+        Ok(proof_upsert_record_to_view(
+            DelegationState::upsert_proof_entry_with_shard_public_key(
+                entry,
+                shard_public_key,
+                installed_at,
+                policy.capacity,
+                policy.active_window_secs,
+            ),
+            policy,
+        ))
+    }
+
     /// Mark a matching keyed proof as recently verified.
     pub fn mark_matching_proof_verified(proof: &DelegationProof, now_secs: u64) -> bool {
         let key = DelegationProofRecordMapper::proof_key_from_dto(proof);

@@ -1,9 +1,12 @@
 use crate::{
-    InternalError, dto::auth::DelegationCert, ops::runtime::env::EnvOps,
+    InternalError, cdk::types::Principal, dto::auth::DelegationCert,
     workflow::rpc::RpcWorkflowError,
 };
 
-pub(super) fn validate_delegation_cert_policy(cert: &DelegationCert) -> Result<(), InternalError> {
+pub(super) fn validate_delegation_cert_policy(
+    cert: &DelegationCert,
+    expected_root_pid: Principal,
+) -> Result<(), InternalError> {
     if cert.expires_at <= cert.issued_at {
         return Err(RpcWorkflowError::DelegationInvalidWindow {
             issued_at: cert.issued_at,
@@ -24,12 +27,13 @@ pub(super) fn validate_delegation_cert_policy(cert: &DelegationCert) -> Result<(
         return Err(RpcWorkflowError::DelegationScopeEmpty.into());
     }
 
-    let root_pid = EnvOps::root_pid()?;
-    if cert.root_pid != root_pid {
-        return Err(RpcWorkflowError::DelegationRootPidMismatch(cert.root_pid, root_pid).into());
+    if cert.root_pid != expected_root_pid {
+        return Err(
+            RpcWorkflowError::DelegationRootPidMismatch(cert.root_pid, expected_root_pid).into(),
+        );
     }
 
-    if cert.shard_pid == root_pid {
+    if cert.shard_pid == expected_root_pid {
         return Err(RpcWorkflowError::DelegationShardCannotBeRoot.into());
     }
 

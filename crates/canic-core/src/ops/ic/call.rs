@@ -13,6 +13,7 @@ use candid::{
     utils::{ArgumentDecoder, ArgumentEncoder},
 };
 use serde::de::DeserializeOwned;
+use std::borrow::Cow;
 use thiserror::Error as ThisError;
 
 ///
@@ -45,7 +46,7 @@ pub struct CallOps;
 
 impl CallOps {
     #[must_use]
-    pub fn bounded_wait(canister_id: impl Into<Principal>, method: &str) -> CallBuilder {
+    pub fn bounded_wait(canister_id: impl Into<Principal>, method: &str) -> CallBuilder<'static> {
         let canister_id: Principal = canister_id.into();
         IccMetrics::record_call(canister_id, method);
 
@@ -55,7 +56,7 @@ impl CallOps {
     }
 
     #[must_use]
-    pub fn unbounded_wait(canister_id: impl Into<Principal>, method: &str) -> CallBuilder {
+    pub fn unbounded_wait(canister_id: impl Into<Principal>, method: &str) -> CallBuilder<'static> {
         let canister_id: Principal = canister_id.into();
         IccMetrics::record_call(canister_id, method);
 
@@ -68,11 +69,11 @@ impl CallOps {
 /// CallBuilder (ops)
 ///
 
-pub struct CallBuilder {
-    inner: InfraCallBuilder,
+pub struct CallBuilder<'a> {
+    inner: InfraCallBuilder<'a>,
 }
 
-impl CallBuilder {
+impl CallBuilder<'_> {
     // single-arg convenience
     /// Encode a single argument into Candid bytes (fallible).
     pub fn with_arg<A>(self, arg: A) -> Result<Self, InternalError>
@@ -95,8 +96,8 @@ impl CallBuilder {
 
     /// Use pre-encoded Candid arguments (no validation performed).
     #[must_use]
-    pub fn with_raw_args(self, args: Vec<u8>) -> Self {
-        Self {
+    pub fn with_raw_args<'b>(self, args: impl Into<Cow<'b, [u8]>>) -> CallBuilder<'b> {
+        CallBuilder {
             inner: self.inner.with_raw_args(args),
         }
     }

@@ -36,11 +36,26 @@ pub(super) fn upsert_proof_entry_with_shard_public_key(
         key_state::set_shard_public_key(data, key.shard_pid, public_key_sec1);
     }
 
-    if let Some(existing) = data.proofs.iter_mut().find(|current| current.key == key) {
-        existing.proof = proof;
+    let mut active_count = 0usize;
+    let mut existing_index = None;
+
+    for (idx, current) in data.proofs.iter().enumerate() {
+        if current.key == key {
+            existing_index = Some(idx);
+        }
+        if proof_entry_is_active(current, now_secs, active_window_secs) {
+            active_count += 1;
+        }
+    }
+
+    if let Some(existing_index) = existing_index {
+        data.proofs[existing_index].proof = proof;
     } else {
         if data.proofs.len() >= capacity {
             evicted = evict_proof_entry(&mut data.proofs, now_secs, active_window_secs);
+            if matches!(evicted, Some(DelegationProofEvictionClassRecord::Active)) {
+                active_count = active_count.saturating_sub(1);
+            }
         }
         data.proofs.push(DelegationProofEntryRecord {
             key,
@@ -50,8 +65,11 @@ pub(super) fn upsert_proof_entry_with_shard_public_key(
         });
     }
 
-    let stats =
-        proof_cache_stats_from_entries(&data.proofs, now_secs, capacity, active_window_secs);
+    let stats = DelegationProofCacheStatsRecord {
+        size: data.proofs.len(),
+        active_count,
+        capacity,
+    };
     DelegationProofUpsertRecord { stats, evicted }
 }
 

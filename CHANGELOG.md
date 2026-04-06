@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.26.x] - 2026-04-06 - Metrics Baseline
 
+- `0.26.2` keeps the first `0.26` runtime follow-through on the clean side by simplifying root replay/cycles routing, tightening delegation and verifier-cache paths, and lowering the retained instruction hotspots to `root::canic_response_capability_v1 = 489511` and `root::canic_request_delegation = 1682331` in the latest same-day rerun.
 - `0.26.1` restores the supported public `ICRC-21` dispatcher facade at `canic::api::protocol::icrc21::Icrc21Dispatcher`, so downstream canisters no longer need hidden `canic-core` paths after the earlier facade narrowing.
 - `0.26.0` establishes the first `0.26` metrics and performance baseline, refreshing the retained wasm and instruction audit reports so the next runtime work can measure drift against a clear starting point instead of the late `0.25` cleanup line.
 

@@ -4,12 +4,12 @@ use super::store_pid_for_binding;
 use crate::{
     config,
     dto::template::{
-        TemplateChunkInput, TemplateChunkResponse, TemplateChunkSetInfoResponse,
-        TemplateChunkSetPrepareInput, TemplateManifestInput, TemplateManifestResponse,
-        WasmStoreAdminCommand, WasmStoreAdminResponse, WasmStoreCatalogEntryResponse,
-        WasmStoreFinalizedStoreResponse, WasmStorePublicationSlotResponse,
-        WasmStorePublicationStatusResponse, WasmStorePublicationStoreStatusResponse,
-        WasmStoreRetiredStoreStatusResponse, WasmStoreStatusResponse,
+        TemplateChunkResponse, TemplateChunkSetInfoResponse, TemplateChunkSetPrepareInput,
+        TemplateManifestInput, TemplateManifestResponse, WasmStoreAdminCommand,
+        WasmStoreAdminResponse, WasmStoreCatalogEntryResponse, WasmStoreFinalizedStoreResponse,
+        WasmStorePublicationSlotResponse, WasmStorePublicationStatusResponse,
+        WasmStorePublicationStoreStatusResponse, WasmStoreRetiredStoreStatusResponse,
+        WasmStoreStatusResponse,
     },
     ids::{
         CanisterRole, TemplateChunkingMode, TemplateId, TemplateManifestState, TemplateReleaseKey,
@@ -22,6 +22,7 @@ use crate::{
     schema::WasmStoreConfig,
     storage::stable::state::subnet::{PublicationStoreStateRecord, WasmStoreRecord},
 };
+use candid::CandidType;
 use canic_core::{__control_plane_core as cp_core, log, log::Topic};
 use cp_core::{
     InternalError, InternalErrorOrigin,
@@ -39,6 +40,14 @@ use cp_core::{
 use std::collections::{BTreeMap, BTreeSet};
 
 const WASM_STORE_ROLE: CanisterRole = CanisterRole::WASM_STORE;
+
+#[derive(CandidType)]
+struct TemplateChunkInputRef<'a> {
+    template_id: &'a TemplateId,
+    version: &'a TemplateVersion,
+    chunk_index: u32,
+    bytes: &'a [u8],
+}
 
 // Fetch the approved embedded catalog from one wasm store.
 pub(super) async fn store_catalog(
@@ -1342,11 +1351,11 @@ impl WasmStorePublicationWorkflow {
             call_store_result::<(), _>(
                 target_store.pid,
                 protocol::CANIC_WASM_STORE_PUBLISH_CHUNK,
-                (TemplateChunkInput {
-                    template_id: manifest.template_id.clone(),
-                    version: manifest.version.clone(),
+                (TemplateChunkInputRef {
+                    template_id: &manifest.template_id,
+                    version: &manifest.version,
                     chunk_index,
-                    bytes: bytes.clone(),
+                    bytes: &bytes,
                 },),
             )
             .await?;

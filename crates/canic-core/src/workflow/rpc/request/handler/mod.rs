@@ -84,6 +84,11 @@ impl RootResponseWorkflow {
     /// Handle a root-bound orchestration request using replay-before-policy
     /// ordering for capability-envelope execution.
     pub async fn response_replay_first(req: Request) -> Result<Response, InternalError> {
+        if let Request::Cycles(req) = req {
+            let response = nonroot_cycles::response_replay_first_root(req).await?;
+            return Ok(Response::Cycles(response));
+        }
+
         Self::response_with_pipeline(req, AuthorizationPipelineOrder::ReplayThenAuthorize).await
     }
 
@@ -94,8 +99,7 @@ impl RootResponseWorkflow {
         let ctx = Self::extract_root_context()?;
         crate::perf!("extract_context");
         let capability = Self::map_request(req);
-        let capability_key = capability.metric_key();
-        let capability_name = capability.capability_name();
+        let descriptor = capability.descriptor();
         crate::perf!("map_request");
 
         let preflight = Self::preflight(&ctx, &capability, order)?;
@@ -112,7 +116,7 @@ impl RootResponseWorkflow {
                 Err(err) => {
                     Self::abort_replay(prepared.pending);
                     RootCapabilityMetrics::record_execution(
-                        capability_key,
+                        descriptor.key,
                         RootCapabilityMetricOutcome::Error,
                     );
                     return Err(err);
@@ -124,7 +128,7 @@ impl RootResponseWorkflow {
                 Topic::Rpc,
                 Warn,
                 "replay finalize failed after successful capability execution (capability={}, caller={}, subnet={}, now={}): {err}",
-                capability_name,
+                descriptor.name,
                 ctx.caller,
                 ctx.subnet_id,
                 ctx.now
@@ -132,7 +136,7 @@ impl RootResponseWorkflow {
         }
         crate::perf!("commit_replay");
         RootCapabilityMetrics::record_execution(
-            capability_key,
+            descriptor.key,
             RootCapabilityMetricOutcome::Success,
         );
 

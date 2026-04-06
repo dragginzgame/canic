@@ -16,76 +16,88 @@ pub(super) enum RootCapability {
     IssueRoleAttestation(RoleAttestationRequest),
 }
 
+#[derive(Clone, Copy)]
+pub(super) struct RootCapabilityDescriptor {
+    pub(super) name: &'static str,
+    pub(super) key: RootCapabilityMetricKey,
+}
+
+#[derive(Clone, Copy)]
+pub(super) struct RootReplayInput {
+    pub(super) descriptor: RootCapabilityDescriptor,
+    pub(super) metadata: RootRequestMetadata,
+    pub(super) payload_hash: [u8; 32],
+}
+
 impl RootCapability {
+    pub(super) const fn descriptor(&self) -> RootCapabilityDescriptor {
+        match self {
+            Self::Provision(_) => RootCapabilityDescriptor {
+                name: "Provision",
+                key: RootCapabilityMetricKey::Provision,
+            },
+            Self::Upgrade(_) => RootCapabilityDescriptor {
+                name: "Upgrade",
+                key: RootCapabilityMetricKey::Upgrade,
+            },
+            Self::RequestCycles(_) => RootCapabilityDescriptor {
+                name: "RequestCycles",
+                key: RootCapabilityMetricKey::RequestCycles,
+            },
+            Self::IssueDelegation(_) => RootCapabilityDescriptor {
+                name: "IssueDelegation",
+                key: RootCapabilityMetricKey::IssueDelegation,
+            },
+            Self::IssueRoleAttestation(_) => RootCapabilityDescriptor {
+                name: "IssueRoleAttestation",
+                key: RootCapabilityMetricKey::IssueRoleAttestation,
+            },
+        }
+    }
+
     pub(super) const fn capability_name(&self) -> &'static str {
+        self.descriptor().name
+    }
+
+    pub(super) fn replay_input(&self) -> Option<RootReplayInput> {
         match self {
-            Self::Provision(_) => "Provision",
-            Self::Upgrade(_) => "Upgrade",
-            Self::RequestCycles(_) => "RequestCycles",
-            Self::IssueDelegation(_) => "IssueDelegation",
-            Self::IssueRoleAttestation(_) => "IssueRoleAttestation",
+            Self::Provision(req) => req.metadata.map(|metadata| RootReplayInput {
+                descriptor: self.descriptor(),
+                metadata,
+                payload_hash: hash_provision_payload(req),
+            }),
+            Self::Upgrade(req) => req.metadata.map(|metadata| RootReplayInput {
+                descriptor: self.descriptor(),
+                metadata,
+                payload_hash: hash_upgrade_payload(req),
+            }),
+            Self::RequestCycles(req) => req.metadata.map(|metadata| RootReplayInput {
+                descriptor: self.descriptor(),
+                metadata,
+                payload_hash: hash_request_cycles_payload(req),
+            }),
+            Self::IssueDelegation(req) => req.metadata.map(|metadata| RootReplayInput {
+                descriptor: self.descriptor(),
+                metadata,
+                payload_hash: hash_issue_delegation_payload(req),
+            }),
+            Self::IssueRoleAttestation(req) => req.metadata.map(|metadata| RootReplayInput {
+                descriptor: self.descriptor(),
+                metadata,
+                payload_hash: hash_issue_role_attestation_payload(req),
+            }),
         }
     }
 
-    pub(super) const fn metadata(&self) -> Option<RootRequestMetadata> {
-        match self {
-            Self::Provision(req) => req.metadata,
-            Self::Upgrade(req) => req.metadata,
-            Self::RequestCycles(req) => req.metadata,
-            Self::IssueDelegation(req) => req.metadata,
-            Self::IssueRoleAttestation(req) => req.metadata,
-        }
-    }
-
-    pub(super) const fn metric_key(&self) -> RootCapabilityMetricKey {
-        match self {
-            Self::Provision(_) => RootCapabilityMetricKey::Provision,
-            Self::Upgrade(_) => RootCapabilityMetricKey::Upgrade,
-            Self::RequestCycles(_) => RootCapabilityMetricKey::RequestCycles,
-            Self::IssueDelegation(_) => RootCapabilityMetricKey::IssueDelegation,
-            Self::IssueRoleAttestation(_) => RootCapabilityMetricKey::IssueRoleAttestation,
-        }
-    }
-
+    #[cfg(test)]
     pub(super) fn payload_hash(&self) -> [u8; 32] {
-        let mut hasher = super::replay::payload_hasher();
-
         match self {
-            Self::Provision(req) => {
-                super::replay::hash_str(&mut hasher, "ProvisionCanister");
-                super::replay::hash_role(&mut hasher, &req.canister_role);
-                hash_create_canister_parent(&mut hasher, &req.parent);
-                super::replay::hash_optional_bytes(&mut hasher, req.extra_arg.as_deref());
-            }
-            Self::Upgrade(req) => {
-                super::replay::hash_str(&mut hasher, "UpgradeCanister");
-                super::replay::hash_principal(&mut hasher, &req.canister_pid);
-            }
-            Self::RequestCycles(req) => {
-                super::replay::hash_str(&mut hasher, "RequestCycles");
-                super::replay::hash_u128(&mut hasher, req.cycles);
-            }
-            Self::IssueDelegation(req) => {
-                super::replay::hash_str(&mut hasher, "IssueDelegation");
-                super::replay::hash_principal(&mut hasher, &req.shard_pid);
-                super::replay::hash_strings(&mut hasher, &req.scopes);
-                super::replay::hash_principals(&mut hasher, &req.aud);
-                super::replay::hash_u64(&mut hasher, req.ttl_secs);
-                super::replay::hash_principals(&mut hasher, &req.verifier_targets);
-                super::replay::hash_bool(&mut hasher, req.include_root_verifier);
-            }
-            Self::IssueRoleAttestation(req) => {
-                super::replay::hash_str(&mut hasher, "IssueRoleAttestation");
-                super::replay::hash_principal(&mut hasher, &req.subject);
-                super::replay::hash_role(&mut hasher, &req.role);
-                super::replay::hash_optional_principal(&mut hasher, req.subnet_id);
-                super::replay::hash_optional_principal(&mut hasher, req.audience);
-                super::replay::hash_u64(&mut hasher, req.ttl_secs);
-                super::replay::hash_u64(&mut hasher, req.epoch);
-            }
+            Self::Provision(req) => hash_provision_payload(req),
+            Self::Upgrade(req) => hash_upgrade_payload(req),
+            Self::RequestCycles(req) => hash_request_cycles_payload(req),
+            Self::IssueDelegation(req) => hash_issue_delegation_payload(req),
+            Self::IssueRoleAttestation(req) => hash_issue_role_attestation_payload(req),
         }
-
-        super::replay::finish_payload_hash(hasher)
     }
 }
 
@@ -106,6 +118,53 @@ fn hash_create_canister_parent(hasher: &mut sha2::Sha256, parent: &CreateCaniste
             super::replay::hash_role(hasher, role);
         }
     }
+}
+
+fn hash_provision_payload(req: &CreateCanisterRequest) -> [u8; 32] {
+    let mut hasher = super::replay::payload_hasher();
+    super::replay::hash_str(&mut hasher, "ProvisionCanister");
+    super::replay::hash_role(&mut hasher, &req.canister_role);
+    hash_create_canister_parent(&mut hasher, &req.parent);
+    super::replay::hash_optional_bytes(&mut hasher, req.extra_arg.as_deref());
+    super::replay::finish_payload_hash(hasher)
+}
+
+fn hash_upgrade_payload(req: &UpgradeCanisterRequest) -> [u8; 32] {
+    let mut hasher = super::replay::payload_hasher();
+    super::replay::hash_str(&mut hasher, "UpgradeCanister");
+    super::replay::hash_principal(&mut hasher, &req.canister_pid);
+    super::replay::finish_payload_hash(hasher)
+}
+
+fn hash_request_cycles_payload(req: &CyclesRequest) -> [u8; 32] {
+    let mut hasher = super::replay::payload_hasher();
+    super::replay::hash_str(&mut hasher, "RequestCycles");
+    super::replay::hash_u128(&mut hasher, req.cycles);
+    super::replay::finish_payload_hash(hasher)
+}
+
+fn hash_issue_delegation_payload(req: &DelegationRequest) -> [u8; 32] {
+    let mut hasher = super::replay::payload_hasher();
+    super::replay::hash_str(&mut hasher, "IssueDelegation");
+    super::replay::hash_principal(&mut hasher, &req.shard_pid);
+    super::replay::hash_strings(&mut hasher, &req.scopes);
+    super::replay::hash_principals(&mut hasher, &req.aud);
+    super::replay::hash_u64(&mut hasher, req.ttl_secs);
+    super::replay::hash_principals(&mut hasher, &req.verifier_targets);
+    super::replay::hash_bool(&mut hasher, req.include_root_verifier);
+    super::replay::finish_payload_hash(hasher)
+}
+
+fn hash_issue_role_attestation_payload(req: &RoleAttestationRequest) -> [u8; 32] {
+    let mut hasher = super::replay::payload_hasher();
+    super::replay::hash_str(&mut hasher, "IssueRoleAttestation");
+    super::replay::hash_principal(&mut hasher, &req.subject);
+    super::replay::hash_role(&mut hasher, &req.role);
+    super::replay::hash_optional_principal(&mut hasher, req.subnet_id);
+    super::replay::hash_optional_principal(&mut hasher, req.audience);
+    super::replay::hash_u64(&mut hasher, req.ttl_secs);
+    super::replay::hash_u64(&mut hasher, req.epoch);
+    super::replay::finish_payload_hash(hasher)
 }
 
 pub(super) fn map_request(req: Request) -> RootCapability {

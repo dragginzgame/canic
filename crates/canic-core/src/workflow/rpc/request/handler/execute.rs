@@ -17,7 +17,6 @@ use crate::{
     ops::{
         auth::DelegatedTokenOps,
         ic::IcOps,
-        runtime::env::EnvOps,
         runtime::metrics::auth::{
             VerifierProofCacheEvictionClass, record_verifier_proof_cache_eviction,
             record_verifier_proof_cache_stats,
@@ -126,7 +125,7 @@ async fn execute_issue_delegation(
         shard_public_key_sec1,
         metadata: _,
     } = req;
-    let root_pid = EnvOps::root_pid()?;
+    let root_pid = ctx.self_pid;
     let cert = DelegationCert {
         root_pid,
         shard_pid,
@@ -136,15 +135,16 @@ async fn execute_issue_delegation(
         aud,
     };
 
-    delegation::validate_delegation_cert_policy(&cert)?;
+    delegation::validate_delegation_cert_policy(&cert, root_pid)?;
 
-    let response: DelegationProvisionResponse = DelegationWorkflow::provision(
-        cert,
-        vec![],
-        verifier_targets,
-        shard_public_key_sec1.as_deref(),
-    )
-    .await?;
+    let (response, cert_hash): (DelegationProvisionResponse, [u8; 32]) =
+        DelegationWorkflow::provision(
+            cert,
+            vec![],
+            verifier_targets,
+            shard_public_key_sec1.as_deref(),
+        )
+        .await?;
 
     if include_root_verifier {
         let shard_public_key = match shard_public_key_sec1 {
@@ -155,11 +155,13 @@ async fn execute_issue_delegation(
             }
         };
         crate::perf!("cache_root_verifier_keys");
-        let outcome = DelegationStateOps::upsert_proof_from_dto_ref_with_shard_public_key(
-            &response.proof,
-            ctx.now,
-            shard_public_key,
-        )?;
+        let outcome =
+            DelegationStateOps::upsert_proof_from_dto_ref_with_cert_hash_and_shard_public_key(
+                &response.proof,
+                cert_hash,
+                ctx.now,
+                shard_public_key,
+            )?;
         crate::perf!("cache_root_verifier_proof");
         record_verifier_proof_cache_stats(
             outcome.stats.size,
