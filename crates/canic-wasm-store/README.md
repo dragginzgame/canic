@@ -25,3 +25,17 @@ enabled so the role stays aligned with the rest of the root/store runtime.
 
 It is not a general facade crate and it is not intended to replace `canic` as
 the normal entry surface for application canisters.
+
+## Canonical DID ownership
+
+[`wasm_store.did`](wasm_store.did) is the checked-in canonical interface for
+this crate. Ordinary local/bootstrap artifact builds copy that file into
+`.dfx/local/canisters/wasm_store/wasm_store.did`; they do not rewrite the
+checked-in source file as a side effect of unrelated workspace changes.
+
+If you intentionally need to refresh the canonical checked-in DID from the
+built crate, run the bootstrap builder with:
+
+```bash
+CANIC_REFRESH_WASM_STORE_DID=1 canic-build-wasm-store-artifact
+```

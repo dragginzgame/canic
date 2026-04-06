@@ -187,7 +187,7 @@ For `DFX_NETWORK=local`, it also tries one clean `dfx stop` / `dfx start --backg
 
 `root` stays thin in this flow. It embeds only the bootstrap `wasm_store.wasm.gz`; ordinary child releases stay outside `root` and are staged after install from `.dfx/local/canisters/root/root.release-set.json`.
 
-Visible canister Candid files are generated build artifacts under `.dfx/local/canisters/<role>/<role>.did`. They are not committed source files. The checked-in exception is `crates/canic-wasm-store/wasm_store.did`, which remains the canonical published interface for the hidden bootstrap store crate.
+Visible canister Candid files are generated build artifacts under `.dfx/local/canisters/<role>/<role>.did`. They are not committed source files. The checked-in exception is `crates/canic-wasm-store/wasm_store.did`, which remains the canonical published interface for the hidden bootstrap store crate. Ordinary bootstrap builds copy that file into `.dfx`; they do not rewrite the checked-in source DID unless `CANIC_REFRESH_WASM_STORE_DID=1` is set intentionally.
 
 Canic now treats wasm build selection as an explicit three-profile contract:
 

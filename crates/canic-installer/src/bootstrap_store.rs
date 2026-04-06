@@ -7,7 +7,6 @@ use std::{
     io::{Read, Write},
     path::{Path, PathBuf},
     process::Command,
-    time::SystemTime,
 };
 
 const WASM_STORE_ROLE: &str = "wasm_store";
@@ -86,7 +85,6 @@ pub struct BootstrapWasmStoreBuildOutput {
 struct BootstrapWasmStoreSource {
     manifest_path: PathBuf,
     source_root: PathBuf,
-    watch_paths: Vec<PathBuf>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -185,11 +183,6 @@ fn resolve_bootstrap_wasm_store_source(
     Ok(BootstrapWasmStoreSource {
         manifest_path: wrapper_root.join("Cargo.toml"),
         source_root: wrapper_root.clone(),
-        watch_paths: bootstrap_wasm_store_watch_paths(
-            workspace_root,
-            &wrapper_root,
-            &canic_manifest_path,
-        ),
     })
 }
 
@@ -208,12 +201,7 @@ fn resolve_canonical_bootstrap_wasm_store_source(
             .to_path_buf();
         return Some(BootstrapWasmStoreSource {
             manifest_path: workspace_manifest,
-            source_root: source_root.clone(),
-            watch_paths: bootstrap_wasm_store_watch_paths(
-                workspace_root,
-                &source_root,
-                canic_manifest_path,
-            ),
+            source_root,
         });
     }
 
@@ -229,12 +217,7 @@ fn resolve_canonical_bootstrap_wasm_store_source(
             .to_path_buf();
         return Some(BootstrapWasmStoreSource {
             manifest_path: package.manifest_path.clone(),
-            source_root: source_root.clone(),
-            watch_paths: bootstrap_wasm_store_watch_paths(
-                workspace_root,
-                &source_root,
-                canic_manifest_path,
-            ),
+            source_root,
         });
     }
 
@@ -257,12 +240,7 @@ fn resolve_canonical_bootstrap_wasm_store_source(
             .to_path_buf();
         return Some(BootstrapWasmStoreSource {
             manifest_path: local_sibling,
-            source_root: source_root.clone(),
-            watch_paths: bootstrap_wasm_store_watch_paths(
-                workspace_root,
-                &source_root,
-                canic_manifest_path,
-            ),
+            source_root,
         });
     }
 
@@ -277,12 +255,7 @@ fn resolve_canonical_bootstrap_wasm_store_source(
                 .to_path_buf();
             return Some(BootstrapWasmStoreSource {
                 manifest_path: registry_sibling,
-                source_root: source_root.clone(),
-                watch_paths: bootstrap_wasm_store_watch_paths(
-                    workspace_root,
-                    &source_root,
-                    canic_manifest_path,
-                ),
+                source_root,
             });
         }
     }
@@ -512,9 +485,10 @@ fn ensure_wasm_store_did(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let source_did_path = source.source_root.join(CANONICAL_WASM_STORE_DID_FILE);
 
-    if source_did_path.is_file()
-        && did_source_is_current(&source_did_path, &source.watch_paths).unwrap_or(false)
-    {
+    // Ordinary artifact builds must treat the checked-in bootstrap `.did` as
+    // canonical source, not as a cache file that gets rewritten on unrelated
+    // workspace changes. Regeneration is explicit.
+    if source_did_path.is_file() && !refresh_canonical_wasm_store_did_enabled() {
         fs::copy(source_did_path, artifact_did_path)?;
         return Ok(());
     }
@@ -544,7 +518,13 @@ fn ensure_wasm_store_did(
         .into());
     }
 
-    fs::write(&source_did_path, &output.stdout)?;
+    if source_did_path
+        .parent()
+        .expect("bootstrap wasm_store did path must have parent")
+        .exists()
+    {
+        fs::write(&source_did_path, &output.stdout)?;
+    }
     fs::copy(source_did_path, artifact_did_path)?;
     if profile == BootstrapWasmStoreBuildProfile::Debug {
         let artifact_root = artifact_did_path
@@ -560,75 +540,15 @@ fn ensure_wasm_store_did(
     Ok(())
 }
 
-// Determine whether a cached `.did` file is newer than the inputs that define it.
-fn did_source_is_current(did_path: &Path, watch_paths: &[PathBuf]) -> std::io::Result<bool> {
-    let did_mtime = fs::metadata(did_path)?.modified()?;
-    Ok(newest_watch_path_mtime(watch_paths)? <= did_mtime)
-}
-
-// Compute the newest modification time across all watched roots.
-fn newest_watch_path_mtime(paths: &[PathBuf]) -> std::io::Result<SystemTime> {
-    let mut newest = SystemTime::UNIX_EPOCH;
-    for path in paths {
-        if path.exists() {
-            newest = newest.max(newest_path_mtime(path)?);
-        }
-    }
-    Ok(newest)
-}
-
-// Recursively compute the newest modification time under one watched root.
-fn newest_path_mtime(path: &Path) -> std::io::Result<SystemTime> {
-    let metadata = fs::metadata(path)?;
-    let mut newest = metadata.modified()?;
-
-    if metadata.is_dir() {
-        for entry in fs::read_dir(path)? {
-            let entry = entry?;
-            newest = newest.max(newest_path_mtime(&entry.path())?);
-        }
-    }
-
-    Ok(newest)
-}
-
-// Gather the watch roots that should invalidate a cached bootstrap-store `.did`.
-fn bootstrap_wasm_store_watch_paths(
-    workspace_root: &Path,
-    source_root: &Path,
-    canic_manifest_path: &Path,
-) -> Vec<PathBuf> {
-    let mut paths = vec![
-        workspace_root.join("Cargo.toml"),
-        workspace_root.join("Cargo.lock"),
-        source_root.to_path_buf(),
-    ];
-
-    if let Some(canic_root) = canic_manifest_path.parent() {
-        paths.push(canic_root.to_path_buf());
-
-        if let Some(sibling_root) = canic_root.parent() {
-            for crate_name in CANIC_FAMILY_CRATES {
-                let sibling = sibling_root.join(crate_name);
-                if sibling.exists() {
-                    paths.push(sibling);
-                    continue;
-                }
-
-                if let Some(versioned) = find_versioned_sibling_manifest(
-                    sibling_root,
-                    crate_name,
-                    registry_package_version_suffix(canic_manifest_path, "canic"),
-                )
-                .and_then(|manifest| manifest.parent().map(Path::to_path_buf))
-                {
-                    paths.push(versioned);
-                }
-            }
-        }
-    }
-
-    paths
+// Regeneration of the canonical bootstrap-store `.did` is explicit so normal
+// artifact builds do not rewrite checked-in source files as a side effect.
+fn refresh_canonical_wasm_store_did_enabled() -> bool {
+    matches!(
+        std::env::var("CANIC_REFRESH_WASM_STORE_DID")
+            .ok()
+            .as_deref(),
+        Some("1" | "true" | "TRUE" | "yes" | "YES")
+    )
 }
 
 // Apply `ic-wasm shrink` when available so the hidden bootstrap artifact matches

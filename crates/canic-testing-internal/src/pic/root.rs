@@ -143,17 +143,17 @@ pub fn restore_root_cached_baseline(
 ) {
     progress(spec, "restoring cached root snapshots");
     let restore_started_at = Instant::now();
-    baseline.restore(baseline.metadata.root_id);
+    baseline.restore(baseline.metadata().root_id);
     progress_elapsed(spec, "restored cached root snapshots", restore_started_at);
 
     progress(spec, "waiting for restored root bootstrap");
     let root_wait_started_at = Instant::now();
-    wait_for_bootstrap(spec, &baseline.pic, baseline.metadata.root_id);
+    wait_for_bootstrap(spec, baseline.pic(), baseline.metadata().root_id);
     progress_elapsed(spec, "restored root bootstrap ready", root_wait_started_at);
 
     progress(spec, "waiting for restored child canisters ready");
     let child_wait_started_at = Instant::now();
-    wait_for_children_ready(spec, &baseline.pic, &baseline.metadata.subnet_directory);
+    wait_for_children_ready(spec, baseline.pic(), &baseline.metadata().subnet_directory);
     progress_elapsed(
         spec,
         "restored child canisters ready",
