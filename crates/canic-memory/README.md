@@ -86,6 +86,23 @@ fn validate_slot(memory_id: u8) {
 }
 ```
 
+### Enumerate or query registered slots by owner/label
+
+Use these helpers when validation code needs registered slots across ids without
+reading registry/runtime internals directly.
+
+```rust
+use canic_memory::api::MemoryApi;
+
+fn validate_commit_slots() {
+    let owned = MemoryApi::registered_memories_for_owner("my_crate");
+    let marker = MemoryApi::find_registered_memory("my_crate", "CommitMarker");
+
+    let _ = owned;
+    let _ = marker;
+}
+```
+
 ### Flush pending registrations during startup
 
 Call the runtime registry initializer once during init/post-upgrade to validate ranges and apply any pending registrations queued by macros. Repeated calls are allowed when the initial range is identical; conflicts return a `MemoryRegistryError`.
@@ -179,7 +196,11 @@ For diagnostics, the registry can provide:
 - registered IDs grouped by range via `MemoryRegistry::export_ids_by_range()`
 
 These helpers are intended for debugging and tests, not as a stable API contract.
-For ordinary read-only runtime validation of one id, prefer `MemoryApi::inspect_memory(...)`.
+For ordinary supported reads, prefer:
+- `MemoryApi::inspect_memory(...)` for one id
+- `MemoryApi::registered_memories(...)` for all registered slots
+- `MemoryApi::registered_memories_for_owner(...)` for one owner
+- `MemoryApi::find_registered_memory(...)` for one owner/label lookup
 
 ## Notes
 

@@ -26,6 +26,18 @@ pub struct MemoryInspection {
     pub label: Option<String>,
 }
 
+///
+/// RegisteredMemory
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RegisteredMemory {
+    pub id: u8,
+    pub owner: String,
+    pub range: MemoryRange,
+    pub label: String,
+}
+
 impl MemoryApi {
     /// Bootstrap eager TLS, eager-init hooks, and the caller's initial reserved range.
     pub fn bootstrap_registry(
@@ -69,6 +81,42 @@ impl MemoryApi {
             range: range.range,
             label,
         })
+    }
+
+    /// List every registered memory slot with owner/range/label context.
+    #[must_use]
+    pub fn registered_memories() -> Vec<RegisteredMemory> {
+        MemoryRegistry::export_ids_by_range()
+            .into_iter()
+            .flat_map(|snapshot| {
+                snapshot
+                    .entries
+                    .into_iter()
+                    .map(move |(id, entry)| RegisteredMemory {
+                        id,
+                        owner: snapshot.owner.clone(),
+                        range: snapshot.range,
+                        label: entry.label,
+                    })
+            })
+            .collect()
+    }
+
+    /// List all registered memory slots for one owner.
+    #[must_use]
+    pub fn registered_memories_for_owner(owner: &str) -> Vec<RegisteredMemory> {
+        Self::registered_memories()
+            .into_iter()
+            .filter(|entry| entry.owner == owner)
+            .collect()
+    }
+
+    /// Find one registered memory slot by owner and label.
+    #[must_use]
+    pub fn find_registered_memory(owner: &str, label: &str) -> Option<RegisteredMemory> {
+        Self::registered_memories()
+            .into_iter()
+            .find(|entry| entry.owner == owner && entry.label == label)
     }
 }
 
@@ -152,5 +200,75 @@ mod tests {
     fn inspect_memory_returns_none_for_unowned_id() {
         reset_for_tests();
         assert_eq!(MemoryApi::inspect_memory(9), None);
+    }
+
+    #[test]
+    fn registered_memories_lists_registered_slots_with_owner_context() {
+        reset_for_tests();
+        let _ = MemoryApi::bootstrap_registry("crate_a", 1, 3).expect("bootstrap registry");
+        let _ = MemoryApi::bootstrap_registry("crate_b", 10, 12).expect("bootstrap registry");
+        let _ = MemoryApi::register_memory(2, "crate_a", "slot_a").expect("register memory");
+        let _ = MemoryApi::register_memory(11, "crate_b", "slot_b").expect("register memory");
+
+        let registrations = MemoryApi::registered_memories();
+        assert_eq!(registrations.len(), 2);
+        assert!(registrations.contains(&RegisteredMemory {
+            id: 2,
+            owner: "crate_a".to_string(),
+            range: MemoryRange { start: 1, end: 3 },
+            label: "slot_a".to_string(),
+        }));
+        assert!(registrations.contains(&RegisteredMemory {
+            id: 11,
+            owner: "crate_b".to_string(),
+            range: MemoryRange { start: 10, end: 12 },
+            label: "slot_b".to_string(),
+        }));
+    }
+
+    #[test]
+    fn registered_memories_for_owner_filters_to_owner() {
+        reset_for_tests();
+        let _ = MemoryApi::bootstrap_registry("crate_a", 1, 3).expect("bootstrap registry");
+        let _ = MemoryApi::bootstrap_registry("crate_b", 10, 12).expect("bootstrap registry");
+        let _ = MemoryApi::register_memory(2, "crate_a", "slot_a").expect("register memory");
+        let _ = MemoryApi::register_memory(11, "crate_b", "slot_b").expect("register memory");
+
+        let registrations = MemoryApi::registered_memories_for_owner("crate_a");
+        assert_eq!(
+            registrations,
+            vec![RegisteredMemory {
+                id: 2,
+                owner: "crate_a".to_string(),
+                range: MemoryRange { start: 1, end: 3 },
+                label: "slot_a".to_string(),
+            }]
+        );
+    }
+
+    #[test]
+    fn find_registered_memory_returns_match_for_owner_and_label() {
+        reset_for_tests();
+        let _ = MemoryApi::bootstrap_registry("crate_a", 1, 3).expect("bootstrap registry");
+        let _ = MemoryApi::register_memory(2, "crate_a", "slot_a").expect("register memory");
+
+        let registration =
+            MemoryApi::find_registered_memory("crate_a", "slot_a").expect("slot should exist");
+        assert_eq!(
+            registration,
+            RegisteredMemory {
+                id: 2,
+                owner: "crate_a".to_string(),
+                range: MemoryRange { start: 1, end: 3 },
+                label: "slot_a".to_string(),
+            }
+        );
+    }
+
+    #[test]
+    fn find_registered_memory_returns_none_when_missing() {
+        reset_for_tests();
+        let _ = MemoryApi::bootstrap_registry("crate_a", 1, 3).expect("bootstrap registry");
+        assert_eq!(MemoryApi::find_registered_memory("crate_a", "slot_a"), None);
     }
 }
