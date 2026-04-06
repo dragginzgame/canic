@@ -13,9 +13,9 @@ use crate::{
     dto::{
         auth::{
             DelegationAdminCommand, DelegationAdminResponse, DelegationCert, DelegationProof,
-            DelegationProofInstallIntent, DelegationProvisionRequest, DelegationProvisionResponse,
-            DelegationProvisionStatus, DelegationProvisionTargetKind,
-            DelegationProvisionTargetResponse, DelegationVerifierProofPushResponse,
+            DelegationProofInstallIntent, DelegationProvisionResponse, DelegationProvisionStatus,
+            DelegationProvisionTargetKind, DelegationProvisionTargetResponse,
+            DelegationVerifierProofPushResponse,
         },
         error::Error as ErrorDto,
     },
@@ -126,14 +126,17 @@ impl DelegationWorkflow {
     // -------------------------------------------------------------------------
 
     pub(crate) async fn provision(
-        request: DelegationProvisionRequest,
+        cert: DelegationCert,
+        signer_targets: Vec<Principal>,
+        verifier_targets: Vec<Principal>,
+        shard_public_key_sec1: Option<&[u8]>,
     ) -> Result<DelegationProvisionResponse, InternalError> {
         record_delegation_install_total(DelegationProofInstallIntent::Provisioning);
-        let proof = Self::issue_delegation(request.cert).await?;
+        let proof = Self::issue_delegation(cert).await?;
         let proof_install_args = Self::encode_proof_install_request(
             &proof,
             DelegationPushOrigin::Provisioning,
-            request.shard_public_key_sec1.as_deref(),
+            shard_public_key_sec1,
         )?;
         crate::perf!("encode_install_request");
         crate::perf!("issue_proof");
@@ -147,7 +150,7 @@ impl DelegationWorkflow {
         );
         let mut results = Vec::new();
 
-        for target in request.signer_targets {
+        for target in signer_targets {
             let result = Self::push_proof(
                 target,
                 &proof,
@@ -160,7 +163,7 @@ impl DelegationWorkflow {
         }
         crate::perf!("push_signers");
 
-        for target in request.verifier_targets {
+        for target in verifier_targets {
             let result = Self::push_proof(
                 target,
                 &proof,

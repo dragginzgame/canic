@@ -197,6 +197,13 @@ pub mod api {
         pub use crate::__internal::core::api::rpc::RpcApi;
     }
 
+    /// Protocol runtime helpers
+    pub mod protocol {
+        pub mod icrc21 {
+            pub use crate::__internal::core::dispatch::icrc21::Icrc21Dispatcher;
+        }
+    }
+
     /// Observability and operational helpers
     pub mod ops {
         pub use crate::__internal::core::{log, perf};

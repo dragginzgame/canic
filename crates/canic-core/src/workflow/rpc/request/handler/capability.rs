@@ -1,8 +1,8 @@
 use crate::{
     dto::auth::{DelegationRequest, RoleAttestationRequest},
     dto::rpc::{
-        CreateCanisterParent, CreateCanisterRequest, CyclesRequest, RootCapabilityCommand,
-        RootRequestMetadata, UpgradeCanisterRequest,
+        CreateCanisterParent, CreateCanisterRequest, CyclesRequest, Request, RootRequestMetadata,
+        UpgradeCanisterRequest,
     },
     ops::runtime::metrics::root_capability::RootCapabilityMetricKey,
 };
@@ -108,14 +108,12 @@ fn hash_create_canister_parent(hasher: &mut sha2::Sha256, parent: &CreateCaniste
     }
 }
 
-pub(super) fn map_request(req: RootCapabilityCommand) -> RootCapability {
+pub(super) fn map_request(req: Request) -> RootCapability {
     match req {
-        RootCapabilityCommand::ProvisionCanister(req) => RootCapability::Provision(req),
-        RootCapabilityCommand::UpgradeCanister(req) => RootCapability::Upgrade(req),
-        RootCapabilityCommand::RequestCycles(req) => RootCapability::RequestCycles(req),
-        RootCapabilityCommand::IssueDelegation(req) => RootCapability::IssueDelegation(req),
-        RootCapabilityCommand::IssueRoleAttestation(req) => {
-            RootCapability::IssueRoleAttestation(req)
-        }
+        Request::CreateCanister(req) => RootCapability::Provision(req),
+        Request::UpgradeCanister(req) => RootCapability::Upgrade(req),
+        Request::Cycles(req) => RootCapability::RequestCycles(req),
+        Request::IssueDelegation(req) => RootCapability::IssueDelegation(req),
+        Request::IssueRoleAttestation(req) => RootCapability::IssueRoleAttestation(req),
     }
 }

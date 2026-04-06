@@ -5,8 +5,7 @@ use crate::{
         auth::{DelegationCert, DelegationRequest, RoleAttestationRequest},
         rpc::{
             CreateCanisterParent, CreateCanisterRequest, CyclesRequest, CyclesResponse,
-            RootCapabilityCommand, RootRequestMetadata, UpgradeCanisterRequest,
-            UpgradeCanisterResponse,
+            RootRequestMetadata, UpgradeCanisterRequest, UpgradeCanisterResponse,
         },
     },
     ids::CanisterRole,
@@ -85,7 +84,7 @@ fn sample_delegation_cert(root_pid: Principal) -> DelegationCert {
 
 #[test]
 fn map_request_maps_provision() {
-    let req = RootCapabilityCommand::ProvisionCanister(CreateCanisterRequest {
+    let req = Request::CreateCanister(CreateCanisterRequest {
         canister_role: CanisterRole::new("app"),
         parent: CreateCanisterParent::Root,
         extra_arg: None,
@@ -98,7 +97,7 @@ fn map_request_maps_provision() {
 
 #[test]
 fn map_request_maps_upgrade() {
-    let req = RootCapabilityCommand::UpgradeCanister(UpgradeCanisterRequest {
+    let req = Request::UpgradeCanister(UpgradeCanisterRequest {
         canister_pid: p(1),
         metadata: None,
     });
@@ -109,7 +108,7 @@ fn map_request_maps_upgrade() {
 
 #[test]
 fn map_request_maps_cycles() {
-    let req = RootCapabilityCommand::RequestCycles(CyclesRequest {
+    let req = Request::Cycles(CyclesRequest {
         cycles: 42,
         metadata: None,
     });
@@ -120,7 +119,7 @@ fn map_request_maps_cycles() {
 
 #[test]
 fn map_request_maps_issue_delegation() {
-    let req = RootCapabilityCommand::IssueDelegation(DelegationRequest {
+    let req = Request::IssueDelegation(DelegationRequest {
         shard_pid: p(2),
         scopes: vec!["rpc:call".to_string()],
         aud: vec![p(3)],
@@ -137,7 +136,7 @@ fn map_request_maps_issue_delegation() {
 
 #[test]
 fn map_request_maps_issue_role_attestation() {
-    let req = RootCapabilityCommand::IssueRoleAttestation(RoleAttestationRequest {
+    let req = Request::IssueRoleAttestation(RoleAttestationRequest {
         subject: p(2),
         role: CanisterRole::new("test"),
         subnet_id: Some(p(7)),

@@ -74,6 +74,14 @@ pub fn commit_root_replay(
     Ok(())
 }
 
+/// commit_root_cycles_replay
+///
+/// Persist a cached cycles response without rebuilding the enum wrapper at the call site.
+pub fn commit_root_cycles_replay(pending: ReplayPending, response: &CyclesResponse) {
+    let response_bytes = encode_root_cycles_replay_response(response);
+    replay_slot::commit_root_slot(pending, response_bytes);
+}
+
 /// decode_root_replay_response
 ///
 /// Decode cached replay bytes back into the canonical root response payload.
@@ -83,6 +91,21 @@ pub fn decode_root_replay_response(bytes: &[u8]) -> Result<Response, ReplayDecod
     }
 
     decode_one(bytes).map_err(|err| ReplayDecodeError::DecodeFailed(err.to_string()))
+}
+
+/// decode_root_cycles_replay_response
+///
+/// Decode cached replay bytes directly into the cycles response shape.
+pub fn decode_root_cycles_replay_response(
+    bytes: &[u8],
+) -> Result<CyclesResponse, ReplayDecodeError> {
+    let response = decode_root_replay_response(bytes)?;
+    match response {
+        Response::Cycles(response) => Ok(response),
+        _ => Err(ReplayDecodeError::DecodeFailed(
+            "cached replay payload was not a cycles response".to_string(),
+        )),
+    }
 }
 
 /// abort_root_replay
@@ -98,6 +121,15 @@ fn encode_root_replay_response(response: &Response) -> Result<Vec<u8>, ReplayCom
     }
 
     encode_one(response).map_err(|err| ReplayCommitError::EncodeFailed(err.to_string()))
+}
+
+fn encode_root_cycles_replay_response(response: &CyclesResponse) -> Vec<u8> {
+    let payload = response.cycles_transferred.to_be_bytes();
+    let mut bytes = Vec::with_capacity(ROOT_REPLAY_COMPACT_TAG.len() + 1 + payload.len());
+    bytes.extend_from_slice(ROOT_REPLAY_COMPACT_TAG);
+    bytes.push(ROOT_REPLAY_COMPACT_CYCLES_V1);
+    bytes.extend_from_slice(&payload);
+    bytes
 }
 
 fn try_encode_compact_root_replay_response(response: &Response) -> Option<Vec<u8>> {

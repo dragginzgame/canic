@@ -5,8 +5,8 @@ use super::{
 use crate::{
     InternalError,
     dto::auth::{
-        DelegationCert, DelegationProvisionRequest, DelegationProvisionResponse, DelegationRequest,
-        RoleAttestation, RoleAttestationRequest,
+        DelegationCert, DelegationProvisionResponse, DelegationRequest, RoleAttestation,
+        RoleAttestationRequest,
     },
     dto::rpc::{
         CreateCanisterParent, CreateCanisterRequest, CreateCanisterResponse, Response,
@@ -54,10 +54,8 @@ pub(super) async fn execute_root_capability(
             }?;
             Ok(Response::Cycles(response))
         }
-        RootCapability::IssueDelegation(req) => execute_issue_delegation(ctx, &req).await,
-        RootCapability::IssueRoleAttestation(req) => {
-            execute_issue_role_attestation(ctx, &req).await
-        }
+        RootCapability::IssueDelegation(req) => execute_issue_delegation(ctx, req).await,
+        RootCapability::IssueRoleAttestation(req) => execute_issue_role_attestation(ctx, req).await,
     };
 
     if let Err(err) = &result {
@@ -116,31 +114,40 @@ async fn execute_upgrade(req: &UpgradeCanisterRequest) -> Result<Response, Inter
 
 async fn execute_issue_delegation(
     ctx: &RootContext,
-    req: &DelegationRequest,
+    req: DelegationRequest,
 ) -> Result<Response, InternalError> {
+    let DelegationRequest {
+        shard_pid,
+        scopes,
+        aud,
+        ttl_secs,
+        verifier_targets,
+        include_root_verifier,
+        shard_public_key_sec1,
+        metadata: _,
+    } = req;
     let root_pid = EnvOps::root_pid()?;
     let cert = DelegationCert {
         root_pid,
-        shard_pid: req.shard_pid,
+        shard_pid,
         issued_at: ctx.now,
-        expires_at: ctx.now.saturating_add(req.ttl_secs),
-        scopes: req.scopes.clone(),
-        aud: req.aud.clone(),
+        expires_at: ctx.now.saturating_add(ttl_secs),
+        scopes,
+        aud,
     };
 
     delegation::validate_delegation_cert_policy(&cert)?;
 
-    let response: DelegationProvisionResponse =
-        DelegationWorkflow::provision(DelegationProvisionRequest {
-            cert,
-            signer_targets: vec![],
-            verifier_targets: req.verifier_targets.clone(),
-            shard_public_key_sec1: req.shard_public_key_sec1.clone(),
-        })
-        .await?;
+    let response: DelegationProvisionResponse = DelegationWorkflow::provision(
+        cert,
+        vec![],
+        verifier_targets,
+        shard_public_key_sec1.as_deref(),
+    )
+    .await?;
 
-    if req.include_root_verifier {
-        let shard_public_key = match req.shard_public_key_sec1.clone() {
+    if include_root_verifier {
+        let shard_public_key = match shard_public_key_sec1 {
             Some(shard_public_key) => Some(shard_public_key),
             None => {
                 DelegatedTokenOps::fetch_missing_shard_public_key_for_cert(&response.proof.cert)
@@ -179,7 +186,7 @@ async fn execute_issue_delegation(
 
 async fn execute_issue_role_attestation(
     ctx: &RootContext,
-    req: &RoleAttestationRequest,
+    req: RoleAttestationRequest,
 ) -> Result<Response, InternalError> {
     let payload = build_role_attestation(ctx, req)?;
     let signed = DelegatedTokenOps::sign_role_attestation(payload).await?;
@@ -200,7 +207,7 @@ async fn execute_issue_role_attestation(
 
 pub(super) fn build_role_attestation(
     ctx: &RootContext,
-    req: &RoleAttestationRequest,
+    req: RoleAttestationRequest,
 ) -> Result<RoleAttestation, InternalError> {
     let max_ttl_secs = authorize::max_role_attestation_ttl_seconds();
     if req.ttl_secs == 0 || req.ttl_secs > max_ttl_secs {
@@ -221,7 +228,7 @@ pub(super) fn build_role_attestation(
 
     Ok(RoleAttestation {
         subject: req.subject,
-        role: req.role.clone(),
+        role: req.role,
         subnet_id: req.subnet_id,
         audience: req.audience,
         issued_at: ctx.now,
