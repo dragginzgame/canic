@@ -13,6 +13,7 @@ rounds:
 3. [complexity-accretion.md](complexity-accretion.md)
 4. [wasm-footprint.md](wasm-footprint.md)
 5. [module-structure.md](module-structure.md)
+6. [dependency-hygiene.md](dependency-hygiene.md)
 
 These audits cover:
 
@@ -21,6 +22,7 @@ These audits cover:
 - branch/enum/concept accretion
 - shipped wasm output and retained-size drift
 - crate/module topology, visibility hygiene, and facade containment
+- crate dependency direction, feature hygiene, and publish-surface discipline
 
 ## Additional System Audits
 
@@ -37,6 +39,8 @@ These audits cover:
 - Use `change-friction` during refactor planning or release-hardening windows.
 - Use `module-structure` when reviewing public surface drift, crate topology,
   or demo/test/audit boundary cleanliness.
+- Use `dependency-hygiene` when reviewing Cargo graph drift, feature-flag sprawl,
+  or publish/package surface cleanliness.
 
 ## Reporting Discipline
 
