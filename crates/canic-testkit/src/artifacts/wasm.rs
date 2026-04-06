@@ -4,6 +4,8 @@ use std::{
     process::Command,
 };
 
+pub const INTERNAL_TEST_ENDPOINTS_ENV: (&str, &str) = ("CANIC_INTERNAL_TEST_ENDPOINTS", "1");
+
 ///
 /// WasmBuildProfile
 ///
@@ -104,4 +106,35 @@ pub fn build_wasm_canisters(
         "cargo build failed: {}",
         String::from_utf8_lossy(&output.stderr)
     );
+}
+
+/// Build one or more wasm canisters with the internal test endpoint surface enabled.
+pub fn build_internal_test_wasm_canisters(
+    workspace_root: &Path,
+    target_dir: &Path,
+    packages: &[&str],
+    profile: WasmBuildProfile,
+) {
+    build_wasm_canisters(
+        workspace_root,
+        target_dir,
+        packages,
+        profile,
+        &[INTERNAL_TEST_ENDPOINTS_ENV],
+    );
+}
+
+/// Build one or more wasm canisters with the internal test endpoint surface
+/// enabled plus any additional caller-provided environment overrides.
+pub fn build_internal_test_wasm_canisters_with_env<'a>(
+    workspace_root: &Path,
+    target_dir: &Path,
+    packages: &[&str],
+    profile: WasmBuildProfile,
+    extra_env: &[(&'a str, &'a str)],
+) {
+    let mut build_env = Vec::with_capacity(extra_env.len() + 1);
+    build_env.push(INTERNAL_TEST_ENDPOINTS_ENV);
+    build_env.extend_from_slice(extra_env);
+    build_wasm_canisters(workspace_root, target_dir, packages, profile, &build_env);
 }

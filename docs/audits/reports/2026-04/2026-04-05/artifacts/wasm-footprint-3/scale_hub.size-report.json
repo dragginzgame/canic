@@ -1,0 +1,25 @@
+{
+  "canister": "scale_hub",
+  "kind": "leaf-canister",
+  "profile": "release",
+  "built": {
+    "wasm_bytes": 1852244,
+    "wasm_gz_bytes": 531861,
+    "functions": 3517,
+    "data_sections": 3,
+    "data_bytes": 139500,
+    "exports": 20
+  },
+  "shrunk": {
+    "wasm_bytes": 1732643,
+    "wasm_gz_bytes": 491638,
+    "functions": 3517,
+    "data_sections": 3,
+    "data_bytes": 139500,
+    "exports": 20
+  },
+  "shrink_delta_bytes": 119601,
+  "shrink_delta_percent": 6.46,
+  "baseline_delta_bytes": "+2838",
+  "baseline_delta_percent": "0.16%"
+}

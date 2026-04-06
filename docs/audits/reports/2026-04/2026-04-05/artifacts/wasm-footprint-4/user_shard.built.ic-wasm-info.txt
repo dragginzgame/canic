@@ -1,0 +1,68 @@
+Number of types: 71
+Number of globals: 3
+
+Number of data sections: 3
+Size of data sections: 141436 bytes
+
+Number of functions: 3538
+Number of callbacks: 1
+Start function: None
+Exported methods: [
+    "canister_init (func_3518)",
+    "canister_post_upgrade (func_3519)",
+    "canister_query canic_bootstrap_status (func_3520)",
+    "canister_query canic_canister_children (func_3521)",
+    "canister_query canic_canister_cycle_balance (func_3522)",
+    "canister_query canic_canister_version (func_3523)",
+    "canister_query canic_cycle_tracker (func_3524)",
+    "canister_query canic_log (func_3525)",
+    "canister_query canic_ready (func_3526)",
+    "canister_query canic_standards (func_3527)",
+    "canister_query hello (func_3528)",
+    "canister_query icrc10_supported_standards (func_3529)",
+    "canister_update canic_delegation_set_signer_proof (func_3530)",
+    "canister_update canic_delegation_set_verifier_proof (func_3531)",
+    "canister_update canic_response_capability_v1 (func_3532)",
+    "canister_update canic_sync_state (func_3533)",
+    "canister_update canic_sync_topology (func_3534)",
+    "canister_update user_shard_issue_token (func_3535)",
+    "canister_global_timer (func_3536)",
+    "canister_update <ic-cdk internal> timer_executor (func_3537)",
+]
+
+Imported IC0 System API: [
+    "msg_reply_data_append",
+    "msg_reply",
+    "cost_sign_with_ecdsa",
+    "canister_version",
+    "time",
+    "stable64_read",
+    "stable64_size",
+    "stable64_grow",
+    "stable64_write",
+    "debug_print",
+    "trap",
+    "performance_counter",
+    "is_controller",
+    "msg_caller_size",
+    "msg_caller_copy",
+    "msg_arg_data_size",
+    "msg_arg_data_copy",
+    "canister_self_size",
+    "canister_self_copy",
+    "canister_cycle_balance128",
+    "msg_reject_code",
+    "msg_reject_msg_size",
+    "msg_reject_msg_copy",
+    "cost_call",
+    "canister_liquid_cycle_balance128",
+    "call_new",
+    "call_on_cleanup",
+    "call_data_append",
+    "call_cycles_add128",
+    "call_with_best_effort_response",
+    "call_perform",
+    "global_timer_set",
+]
+
+Custom sections with size: []

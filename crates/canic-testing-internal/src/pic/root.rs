@@ -18,12 +18,13 @@ use canic_control_plane::{
     },
 };
 use canic_testkit::{
-    artifacts::{WasmBuildProfile, build_dfx_all_with_env, dfx_artifact_ready_for_build},
+    artifacts::{
+        INTERNAL_TEST_ENDPOINTS_ENV, WasmBuildProfile, build_dfx_all_with_env,
+        dfx_artifact_ready_for_build,
+    },
     pic::{CachedPicBaseline, Pic, PicBuilder},
 };
 use std::{collections::HashMap, fs, io, io::Write, path::PathBuf, time::Instant};
-
-const INTERNAL_TEST_ENDPOINTS_ENV: (&str, &str) = ("CANIC_INTERNAL_TEST_ENDPOINTS", "1");
 
 ///
 /// RootBaselineSpec

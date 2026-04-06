@@ -15,7 +15,7 @@ use std::{
 use crate::{
     Fake,
     artifacts::{
-        WasmBuildProfile, build_wasm_canisters, read_wasm, test_target_dir, wasm_artifacts_ready,
+        WasmBuildProfile, build_internal_test_wasm_canisters, read_wasm, test_target_dir,
         workspace_root_for,
     },
 };
@@ -89,7 +89,8 @@ pub fn try_install_prebuilt_canister_with_cycles(
 }
 
 // Install one non-root Canic canister into a fresh PocketIC instance with
-// explicit local env bootstrap fields and no hierarchy directories.
+// explicit local env bootstrap fields, no hierarchy directories, and the
+// internal test endpoint surface enabled for that test build.
 #[must_use]
 pub fn install_standalone_canister(
     crate_name: &str,
@@ -119,8 +120,9 @@ pub fn install_standalone_canister(
     fixture
 }
 
-// Build the requested wasm artifact once when it is missing from the shared
-// standalone target directory.
+// Build the requested wasm artifact once per process for the shared standalone
+// target directory instead of trusting stale on-disk artifacts, and compile it
+// with the internal test endpoint surface enabled.
 fn ensure_canister_wasm_ready(
     workspace_root: &Path,
     target_dir: &Path,
@@ -131,11 +133,7 @@ fn ensure_canister_wasm_ready(
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
 
-    if wasm_artifacts_ready(target_dir, &[crate_name], profile) {
-        return;
-    }
-
-    build_wasm_canisters(workspace_root, target_dir, &[crate_name], profile, &[]);
+    build_internal_test_wasm_canisters(workspace_root, target_dir, &[crate_name], profile);
 }
 
 // Encode one explicit local non-root init payload without any hierarchy

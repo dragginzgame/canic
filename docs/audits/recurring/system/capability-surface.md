@@ -92,6 +92,8 @@ Exclude these from counts unless the audit explicitly says otherwise:
 
 - `tests/`
 - generated code outside canonical generated `.did` outputs
+- internal test-only canisters that are present under `.dfx/local/canisters/**` but not part of the
+  current demo/reference roster
 - comments / docstrings
 - deprecated or legacy modules explicitly marked as such
 
@@ -284,7 +286,12 @@ Rule:
 
 ### 7. DID Surface Growth
 
-Use generated `.did` files as the consumer-facing surface proxy.
+Use generated `.did` files for the current demo/reference roster as the
+consumer-facing surface proxy.
+
+If `.dfx/local/canisters/**` also contains internal test or audit canisters,
+filter them out explicitly and name the retained roster in the report
+preamble.
 
 Suggested scans:
 

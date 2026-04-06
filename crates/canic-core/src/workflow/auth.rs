@@ -33,6 +33,7 @@ use crate::{
     protocol,
 };
 use candid::{CandidType, encode_one};
+use std::sync::OnceLock;
 
 // -------------------------------------------------------------------------
 // Logging context
@@ -295,7 +296,7 @@ impl DelegationWorkflow {
         };
         crate::perf!("execute_call");
 
-        let response: Result<(), ErrorDto> = match result.candid() {
+        let response: Result<(), ErrorDto> = match Self::decode_proof_install_response(&result) {
             Ok(response) => response,
             Err(err) => {
                 let response = Self::failure(target, kind, ErrorDto::from(err));
@@ -334,12 +335,33 @@ impl DelegationWorkflow {
             shard_public_key_sec1,
         };
         encode_one(&request).map_err(|source| {
-            DelegationValidationError::EncodeFailed {
+            InternalError::from(DelegationValidationError::EncodeFailed {
                 context: "delegation proof install request",
                 source,
-            }
-            .into()
+            })
         })
+    }
+
+    // Decode the proof-install response, fast-pathing the fixed `Ok(())` Candid payload.
+    fn decode_proof_install_response(
+        result: &crate::ops::ic::call::CallResult,
+    ) -> Result<Result<(), ErrorDto>, InternalError> {
+        if result.raw_equals(Self::proof_install_ok_response_bytes()) {
+            return Ok(Ok(()));
+        }
+
+        result.candid()
+    }
+
+    // Cache the canonical success payload once so repeated verifier pushes can skip full decode.
+    fn proof_install_ok_response_bytes() -> &'static [u8] {
+        static OK_BYTES: OnceLock<Vec<u8>> = OnceLock::new();
+        OK_BYTES
+            .get_or_init(|| {
+                encode_one(Result::<(), ErrorDto>::Ok(()))
+                    .expect("encode delegation proof install success response")
+            })
+            .as_slice()
     }
 
     const fn failure(
@@ -459,5 +481,15 @@ mod tests {
     #[test]
     fn borrowed_wire_shape_matches_declared_owned_wire_shape() {
         let _ = std::mem::size_of::<DelegationProofInstallRequestRef<'static>>();
+    }
+
+    #[test]
+    fn proof_install_success_response_bytes_match_candid_ok_shape() {
+        let encoded = candid::encode_one(Result::<(), crate::dto::error::Error>::Ok(()))
+            .expect("encode delegation proof install success response");
+        assert_eq!(
+            DelegationWorkflow::proof_install_ok_response_bytes(),
+            encoded.as_slice()
+        );
     }
 }

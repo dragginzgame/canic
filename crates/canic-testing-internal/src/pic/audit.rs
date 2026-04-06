@@ -2,8 +2,7 @@ use canic::cdk::types::Principal;
 use canic_internal::canister::{APP, SCALE_HUB};
 use canic_testkit::{
     artifacts::{
-        WasmBuildProfile, build_wasm_canisters, read_wasm, test_target_dir, wasm_artifacts_ready,
-        workspace_root_for,
+        WasmBuildProfile, build_wasm_canisters, read_wasm, test_target_dir, workspace_root_for,
     },
     pic::{
         Pic, PicSerialGuard, StandaloneCanisterFixture, acquire_pic_serial_guard,
@@ -71,10 +70,6 @@ fn ensure_probe_wasm_ready(
     let _build_guard = AUDIT_BUILD_SERIAL
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
-
-    if wasm_artifacts_ready(target_dir, &[crate_name], profile) {
-        return;
-    }
 
     build_wasm_canisters(workspace_root, target_dir, &[crate_name], profile, &[]);
 }

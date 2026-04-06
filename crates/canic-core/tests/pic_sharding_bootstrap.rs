@@ -14,7 +14,7 @@ use canic_core::{
 };
 use canic_testkit::{
     artifacts::{
-        WasmBuildProfile, build_wasm_canisters, read_wasm, test_target_dir, wasm_artifacts_ready,
+        WasmBuildProfile, build_internal_test_wasm_canisters, read_wasm, test_target_dir,
         workspace_root_for,
     },
     pic::{acquire_pic_serial_guard, pic},
@@ -183,16 +183,11 @@ where
 fn build_canisters_once(workspace_root: &Path) {
     BUILD_ONCE.call_once(|| {
         let target_dir = test_target_dir(workspace_root, "pic-wasm");
-        if wasm_artifacts_ready(&target_dir, &CANISTER_PACKAGES, WasmBuildProfile::Fast) {
-            return;
-        }
-
-        build_wasm_canisters(
+        build_internal_test_wasm_canisters(
             workspace_root,
             &target_dir,
             &CANISTER_PACKAGES,
             WasmBuildProfile::Fast,
-            &[],
         );
     });
 }

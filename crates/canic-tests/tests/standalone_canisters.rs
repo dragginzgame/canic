@@ -17,8 +17,7 @@ use canic_internal::canister::TEST;
 use canic_testing_internal::pic::{install_audit_scaling_probe, install_standalone_canister};
 use canic_testkit::{
     artifacts::{
-        WasmBuildProfile, build_wasm_canisters, read_wasm, test_target_dir, wasm_artifacts_ready,
-        workspace_root_for,
+        WasmBuildProfile, build_wasm_canisters, read_wasm, test_target_dir, workspace_root_for,
     },
     pic::install_prebuilt_canister,
 };
@@ -109,15 +108,13 @@ fn sharding_root_stub_wasm() -> Vec<u8> {
             let target_dir = test_target_dir(&workspace_root, "standalone-prebuilt-wasm");
             let canister = "sharding_root_stub";
 
-            if !wasm_artifacts_ready(&target_dir, &[canister], WasmBuildProfile::Fast) {
-                build_wasm_canisters(
-                    &workspace_root,
-                    &target_dir,
-                    &[canister],
-                    WasmBuildProfile::Fast,
-                    &[],
-                );
-            }
+            build_wasm_canisters(
+                &workspace_root,
+                &target_dir,
+                &[canister],
+                WasmBuildProfile::Fast,
+                &[],
+            );
 
             read_wasm(&target_dir, canister, WasmBuildProfile::Fast)
         })

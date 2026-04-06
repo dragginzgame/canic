@@ -1,5 +1,6 @@
 use candid::{Principal, decode_one, encode_args, encode_one, utils::ArgumentEncoder};
 use canic::Error;
+use canic_core::api::rpc::RpcApi;
 use canic_core::dto::{
     auth::SignedRoleAttestation,
     capability::{
@@ -10,6 +11,10 @@ use canic_core::dto::{
     subnet::SubnetIdentity,
 };
 use canic_core::ids::CanisterRole;
+use canic_testkit::artifacts::{
+    WasmBuildProfile, build_internal_test_wasm_canisters,
+    build_internal_test_wasm_canisters_with_env,
+};
 use canic_testkit::pic::{
     CachedPicBaseline, CachedPicBaselineGuard, Pic, PicSerialGuard, acquire_cached_pic_baseline,
     acquire_pic_serial_guard, pic as shared_pic, role_pid as lookup_role_pid,
@@ -21,7 +26,6 @@ use std::{
     io::Write,
     ops::{Deref, DerefMut},
     path::{Path, PathBuf},
-    process::Command,
     sync::{Mutex, Once, OnceLock},
 };
 
@@ -400,89 +404,42 @@ pub fn wasm_store_pid(pic: &pocket_ic::PocketIc, root_id: Principal) -> Principa
 }
 
 // Build the test canisters with delegation-material test cfg enabled.
-fn build_canisters_once(workspace_root: &PathBuf) {
+fn build_canisters_once(workspace_root: &Path) {
     let _serial_guard = CANISTER_BUILD_SERIAL
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
 
     BUILD_ONCE.call_once_force(|_| {
         let target_dir = test_target_dir(workspace_root);
-        if wasm_artifacts_ready(&target_dir, &CANISTER_PACKAGES) {
-            progress("reusing cached PIC wasm artifacts");
-            return;
-        }
-
         progress("building PIC wasm artifacts with test delegation material");
-        let mut cmd = Command::new("cargo");
-        cmd.current_dir(workspace_root);
-        cmd.env("CARGO_TARGET_DIR", &target_dir);
-        cmd.env("DFX_NETWORK", "local");
-        cmd.env("CANIC_TEST_DELEGATION_MATERIAL", "1");
-        cmd.args([
-            "build",
-            "--profile",
-            "fast",
-            "--target",
-            "wasm32-unknown-unknown",
-        ]);
-        for name in CANISTER_PACKAGES {
-            cmd.args(["-p", name]);
-        }
-
-        let output = cmd.output().expect("failed to run cargo build");
-        assert!(
-            output.status.success(),
-            "cargo build failed: {}",
-            String::from_utf8_lossy(&output.stderr)
+        build_internal_test_wasm_canisters_with_env(
+            workspace_root,
+            &target_dir,
+            &CANISTER_PACKAGES,
+            WasmBuildProfile::Fast,
+            &[("CANIC_TEST_DELEGATION_MATERIAL", "1")],
         );
         progress("finished PIC wasm build with test delegation material");
     });
 }
 
 // Build the same test canisters without delegation-material test cfg enabled.
-fn build_canisters_without_test_material_once(workspace_root: &PathBuf) {
+fn build_canisters_without_test_material_once(workspace_root: &Path) {
     let _serial_guard = CANISTER_BUILD_SERIAL
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
 
     BUILD_WITHOUT_TEST_MATERIAL_ONCE.call_once_force(|_| {
         let target_dir = test_target_dir_without_test_material(workspace_root);
-        if wasm_artifacts_ready(&target_dir, &CANISTER_PACKAGES) {
-            progress("reusing cached normal-build PIC wasm artifacts");
-            return;
-        }
-
         progress("building PIC wasm artifacts without test delegation material");
-        let mut cmd = Command::new("cargo");
-        cmd.current_dir(workspace_root);
-        cmd.env("CARGO_TARGET_DIR", &target_dir);
-        cmd.env("DFX_NETWORK", "local");
-        cmd.args([
-            "build",
-            "--profile",
-            "fast",
-            "--target",
-            "wasm32-unknown-unknown",
-        ]);
-        for name in CANISTER_PACKAGES {
-            cmd.args(["-p", name]);
-        }
-
-        let output = cmd.output().expect("failed to run cargo build");
-        assert!(
-            output.status.success(),
-            "cargo build failed: {}",
-            String::from_utf8_lossy(&output.stderr)
+        build_internal_test_wasm_canisters(
+            workspace_root,
+            &target_dir,
+            &CANISTER_PACKAGES,
+            WasmBuildProfile::Fast,
         );
         progress("finished PIC wasm build without test delegation material");
     });
-}
-
-// Skip inner cargo builds when the expected wasm artifacts already exist.
-fn wasm_artifacts_ready(target_dir: &Path, canisters: &[&str]) -> bool {
-    canisters
-        .iter()
-        .all(|name| wasm_path_from_target(target_dir, name).is_file())
 }
 
 // Serialize full PocketIC usage to avoid concurrent server races across tests.
@@ -547,21 +504,8 @@ fn encode_role_attestation_capability_proof(proof: RoleAttestationProof) -> Capa
 }
 
 fn root_capability_hash(root_id: Principal, request: &Request) -> [u8; 32] {
-    use sha2::{Digest, Sha256};
-
-    let canonical = request.clone().without_metadata();
-    let payload = encode_one(&(
-        root_id,
-        CapabilityService::Root,
-        CAPABILITY_VERSION_V1,
-        canonical,
-    ))
-    .expect("encode capability payload");
-
-    let mut hasher = Sha256::new();
-    hasher.update(b"CANIC_CAPABILITY_V1");
-    hasher.update(payload);
-    hasher.finalize().into()
+    RpcApi::root_capability_hash(root_id, CAPABILITY_VERSION_V1, request)
+        .expect("compute root capability hash")
 }
 
 const fn capability_metadata(

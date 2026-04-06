@@ -10,13 +10,6 @@ type CanicStandardsResponse = record {
   description : text;
   version : text;
 };
-type CanisterInfo = record {
-  pid : principal;
-  role : text;
-  created_at : nat64;
-  module_hash : opt blob;
-  parent_pid : opt principal;
-};
 type CanisterInitPayload = record {
   env : EnvBootstrapArgs;
   subnet_directory : vec TopologyDirectChild;
@@ -39,7 +32,6 @@ type CapabilityRequestMetadata = record {
   nonce : blob;
 };
 type CapabilityService = variant { Root };
-type CycleTrackerEntry = record { cycles : nat; timestamp_secs : nat64 };
 type CyclesRequest = record {
   metadata : opt RootRequestMetadata;
   cycles : nat;
@@ -71,38 +63,6 @@ type ErrorCode = variant {
   Forbidden;
   Conflict;
 };
-// 
-// Debug
-// 
-type Level = variant { Ok; Error; Info; Warn; Debug };
-type LogEntry = record {
-  topic : opt text;
-  crate_name : text;
-  created_at : nat64;
-  level : Level;
-  message : text;
-};
-type MetricEntry = record {
-  "principal" : opt principal;
-  value : MetricValue;
-  labels : vec text;
-};
-type MetricValue = variant {
-  U128 : nat;
-  CountAndU64 : record { count : nat64; value_u64 : nat64 };
-  Count : nat64;
-};
-type MetricsKind = variant {
-  Icc;
-  System;
-  Delegation;
-  Http;
-  Perf;
-  Access;
-  RootCapability;
-  Timer;
-  CyclesFunding;
-};
 type NonrootCyclesCapabilityEnvelopeV1 = record {
   "service" : CapabilityService;
   metadata : CapabilityRequestMetadata;
@@ -111,23 +71,14 @@ type NonrootCyclesCapabilityEnvelopeV1 = record {
   capability : CyclesRequest;
 };
 type NonrootCyclesCapabilityResponseV1 = record { response : CyclesResponse };
-type Page = record { total : nat64; entries : vec CanisterInfo };
-type PageRequest = record { offset : nat64; limit : nat64 };
-type Page_1 = record { total : nat64; entries : vec CycleTrackerEntry };
-type Page_2 = record { total : nat64; entries : vec LogEntry };
-type Page_3 = record { total : nat64; entries : vec MetricEntry };
-type Result = variant { Ok : Page; Err : Error };
-type Result_1 = variant { Ok : nat; Err : Error };
-type Result_10 = variant { Ok : TemplateChunkSetInfoResponse; Err : Error };
-type Result_11 = variant { Ok : WasmStoreStatusResponse; Err : Error };
-type Result_2 = variant { Ok : nat64; Err : Error };
-type Result_3 = variant { Ok : Page_1; Err : Error };
-type Result_4 = variant { Ok : Page_2; Err : Error };
-type Result_5 = variant { Ok : Page_3; Err : Error };
-type Result_6 = variant { Ok : NonrootCyclesCapabilityResponseV1; Err : Error };
-type Result_7 = variant { Ok; Err : Error };
-type Result_8 = variant { Ok : vec WasmStoreCatalogEntryResponse; Err : Error };
-type Result_9 = variant { Ok : TemplateChunkResponse; Err : Error };
+type Result = variant { Ok : nat; Err : Error };
+type Result_1 = variant { Ok : nat64; Err : Error };
+type Result_2 = variant { Ok : NonrootCyclesCapabilityResponseV1; Err : Error };
+type Result_3 = variant { Ok; Err : Error };
+type Result_4 = variant { Ok : vec WasmStoreCatalogEntryResponse; Err : Error };
+type Result_5 = variant { Ok : TemplateChunkResponse; Err : Error };
+type Result_6 = variant { Ok : TemplateChunkSetInfoResponse; Err : Error };
+type Result_7 = variant { Ok : WasmStoreStatusResponse; Err : Error };
 type RootRequestMetadata = record { request_id : blob; ttl_seconds : nat64 };
 type StateSnapshotInput = record {
   subnet_state : opt null;
@@ -226,28 +177,24 @@ type WasmStoreTemplateStatusResponse = record {
 };
 service : (CanisterInitPayload, opt blob) -> {
   canic_bootstrap_status : () -> (BootstrapStatusResponse) query;
-  canic_canister_children : (PageRequest) -> (Result) query;
-  canic_canister_cycle_balance : () -> (Result_1) query;
-  canic_canister_version : () -> (Result_2) query;
-  canic_cycle_tracker : (PageRequest) -> (Result_3) query;
-  canic_log : (opt text, opt text, opt Level, PageRequest) -> (Result_4) query;
-  canic_metrics : (MetricsKind, PageRequest) -> (Result_5) query;
+  canic_canister_cycle_balance : () -> (Result) query;
+  canic_canister_version : () -> (Result_1) query;
   canic_ready : () -> (bool) query;
   canic_response_capability_v1 : (NonrootCyclesCapabilityEnvelopeV1) -> (
-      Result_6,
+      Result_2,
     );
   canic_standards : () -> (CanicStandardsResponse) query;
-  canic_sync_state : (StateSnapshotInput) -> (Result_7);
-  canic_sync_topology : (TopologySnapshotInput) -> (Result_7);
-  canic_wasm_store_begin_gc : () -> (Result_7);
-  canic_wasm_store_catalog : () -> (Result_8) query;
-  canic_wasm_store_chunk : (text, text, nat32) -> (Result_9);
-  canic_wasm_store_complete_gc : () -> (Result_7);
-  canic_wasm_store_info : (text, text) -> (Result_10);
-  canic_wasm_store_prepare : (TemplateChunkSetPrepareInput) -> (Result_10);
-  canic_wasm_store_prepare_gc : () -> (Result_7);
-  canic_wasm_store_publish_chunk : (TemplateChunkInput) -> (Result_7);
-  canic_wasm_store_stage_manifest : (TemplateManifestInput) -> (Result_7);
-  canic_wasm_store_status : () -> (Result_11) query;
+  canic_sync_state : (StateSnapshotInput) -> (Result_3);
+  canic_sync_topology : (TopologySnapshotInput) -> (Result_3);
+  canic_wasm_store_begin_gc : () -> (Result_3);
+  canic_wasm_store_catalog : () -> (Result_4) query;
+  canic_wasm_store_chunk : (text, text, nat32) -> (Result_5);
+  canic_wasm_store_complete_gc : () -> (Result_3);
+  canic_wasm_store_info : (text, text) -> (Result_6);
+  canic_wasm_store_prepare : (TemplateChunkSetPrepareInput) -> (Result_6);
+  canic_wasm_store_prepare_gc : () -> (Result_3);
+  canic_wasm_store_publish_chunk : (TemplateChunkInput) -> (Result_3);
+  canic_wasm_store_stage_manifest : (TemplateManifestInput) -> (Result_3);
+  canic_wasm_store_status : () -> (Result_7) query;
   icrc10_supported_standards : () -> (vec record { text; text }) query;
 }

@@ -1,11 +1,10 @@
 use super::{
-    MAX_ROOT_REPLAY_ENTRIES, MAX_ROOT_TTL_SECONDS, REPLAY_PAYLOAD_HASH_DOMAIN,
-    REPLAY_PURGE_SCAN_LIMIT, RootContext, funding,
+    MAX_ROOT_REPLAY_ENTRIES, MAX_ROOT_TTL_SECONDS, REPLAY_PURGE_SCAN_LIMIT, RootContext, funding,
 };
 use crate::{
     InternalError,
     cdk::types::Principal,
-    dto::rpc::{CyclesRequest, CyclesResponse, Response, RootCapabilityCommand},
+    dto::rpc::{CyclesRequest, CyclesResponse, Response},
     log,
     log::Topic,
     ops::{
@@ -26,8 +25,6 @@ use crate::{
     storage::canister::CanisterRecord,
     workflow::rpc::RpcWorkflowError,
 };
-use candid::encode_one;
-use sha2::{Digest, Sha256};
 
 ///
 /// NonrootCyclesCapabilityWorkflow
@@ -350,7 +347,7 @@ fn check_cycles_replay(
     let metadata = req
         .metadata
         .ok_or(RpcWorkflowError::MissingReplayMetadata("RequestCycles"))?;
-    let payload_hash = hash_cycles_payload(req)?;
+    let payload_hash = hash_cycles_payload(req);
 
     let decision = replay_ops::guard::evaluate_root_replay(RootReplayGuardInput {
         caller: ctx.caller,
@@ -479,23 +476,10 @@ fn abort_replay(pending: ReplayPending) {
     replay_ops::abort_root_replay(pending);
 }
 
-// Hash the canonical cycles payload using the same root replay domain and command shape.
-fn hash_cycles_payload(req: &CyclesRequest) -> Result<[u8; 32], InternalError> {
-    let mut canonical = req.clone();
-    canonical.metadata = None;
-    let payload = RootCapabilityCommand::RequestCycles(canonical);
-    let bytes = encode_one(payload).map_err(|err| {
-        RpcWorkflowError::ReplayEncodeFailed(format!("canonical payload encode failed: {err}"))
-    })?;
-    Ok(hash_domain_separated(REPLAY_PAYLOAD_HASH_DOMAIN, &bytes))
-}
-
-// Compute deterministic domain-separated replay hashes for cycles payloads.
-fn hash_domain_separated(domain: &[u8], payload: &[u8]) -> [u8; 32] {
-    let mut hasher = Sha256::new();
-    hasher.update((domain.len() as u64).to_be_bytes());
-    hasher.update(domain);
-    hasher.update((payload.len() as u64).to_be_bytes());
-    hasher.update(payload);
-    hasher.finalize().into()
+// Hash the canonical cycles payload using the shared replay field-hashing helpers.
+fn hash_cycles_payload(req: &CyclesRequest) -> [u8; 32] {
+    let mut hasher = super::replay::payload_hasher();
+    super::replay::hash_str(&mut hasher, "RequestCycles");
+    super::replay::hash_u128(&mut hasher, req.cycles);
+    super::replay::finish_payload_hash(hasher)
 }
