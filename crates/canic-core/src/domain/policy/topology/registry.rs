@@ -1,10 +1,12 @@
-use super::RegistryPolicyInput;
 use crate::{
     cdk::candid::Principal,
     config::schema::{CanisterConfig, CanisterKind},
     ids::CanisterRole,
 };
 use thiserror::Error as ThisError;
+
+#[cfg(test)]
+use super::RegistryPolicyInput;
 
 ///
 /// RegistryPolicyError
@@ -83,6 +85,7 @@ impl RegistryPolicy {
     }
 
     // Evaluate registration policy from the full registry snapshot.
+    #[cfg(test)]
     pub fn can_register_role(
         role: &CanisterRole,
         parent_pid: Principal,

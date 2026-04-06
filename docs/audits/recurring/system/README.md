@@ -12,13 +12,15 @@ rounds:
 2. [capability-surface.md](capability-surface.md)
 3. [complexity-accretion.md](complexity-accretion.md)
 4. [wasm-footprint.md](wasm-footprint.md)
+5. [module-structure.md](module-structure.md)
 
-These four audits cover:
+These audits cover:
 
 - layering and dependency direction
 - public/internal capability surface growth
 - branch/enum/concept accretion
 - shipped wasm output and retained-size drift
+- crate/module topology, visibility hygiene, and facade containment
 
 ## Additional System Audits
 
@@ -33,6 +35,8 @@ These four audits cover:
   regression detection.
 - Use `bootstrap-lifecycle-symmetry` after lifecycle/bootstrap changes.
 - Use `change-friction` during refactor planning or release-hardening windows.
+- Use `module-structure` when reviewing public surface drift, crate topology,
+  or demo/test/audit boundary cleanliness.
 
 ## Reporting Discipline
 

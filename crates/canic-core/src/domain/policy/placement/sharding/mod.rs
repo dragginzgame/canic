@@ -1,8 +1,10 @@
 mod backfill;
-pub(crate) mod hrw;
-pub(crate) mod metrics;
+mod hrw;
+mod metrics;
 
 pub use crate::view::placement::sharding::{CreateBlockedReason, ShardingPlanState};
+pub use hrw::HrwSelector;
+pub use metrics::{PoolMetrics, compute_pool_metrics};
 
 use crate::{
     InternalError, InternalErrorOrigin,
@@ -11,8 +13,6 @@ use crate::{
     view::placement::sharding::{ShardPartitionKeyAssignment, ShardPlacement},
 };
 use backfill::plan_slot_backfill;
-use hrw::HrwSelector;
-use metrics::PoolMetrics;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ShardingPolicyError {

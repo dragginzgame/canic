@@ -3,7 +3,6 @@ pub mod env;
 pub mod log;
 pub mod placement;
 pub mod pool;
-pub mod randomness;
 pub mod topology;
 pub mod upgrade;
 

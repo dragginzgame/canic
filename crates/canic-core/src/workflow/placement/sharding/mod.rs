@@ -5,8 +5,8 @@ use crate::{
     cdk::types::Principal,
     config::schema::{ShardPool, ShardPoolPolicy},
     domain::policy::placement::sharding::{
-        CreateBlockedReason, ShardingPlanState, ShardingPolicy, ShardingPolicyError, ShardingState,
-        hrw::HrwSelector, metrics::compute_pool_metrics,
+        CreateBlockedReason, HrwSelector, ShardingPlanState, ShardingPolicy, ShardingPolicyError,
+        ShardingState, compute_pool_metrics,
     },
     dto::placement::sharding::ShardingPlanStateResponse,
     ids::CanisterRole,

@@ -220,16 +220,30 @@ fn restore_or_rebuild_cached_baseline(
 
     progress("cached baseline restore failed; rebuilding fresh baseline");
     drop(baseline);
-
-    let mut slot = baseline_slot
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
-    *slot = None;
-    drop(slot);
+    drop_stale_cached_baseline(baseline_slot);
 
     let (rebuilt, _cache_hit) =
         acquire_cached_pic_baseline(baseline_slot, || build_cached_baseline(cache_kind));
     (rebuilt, false)
+}
+
+// Remove one dead cached baseline and swallow teardown panics from a broken
+// PocketIC instance so the fixture can rebuild cleanly.
+fn drop_stale_cached_baseline(
+    baseline_slot: &'static Mutex<Option<CachedPicBaseline<AttestationBaselineMetadata>>>,
+) {
+    let stale = {
+        let mut slot = baseline_slot
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        slot.take()
+    };
+
+    if let Some(stale) = stale {
+        let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            drop(stale);
+        }));
+    }
 }
 
 // Build one reusable baseline and capture immutable snapshot IDs inside it.
