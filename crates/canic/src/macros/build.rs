@@ -78,7 +78,6 @@ macro_rules! __canic_build_internal {
         println!("cargo:rerun-if-env-changed=DFX_NETWORK");
         println!("cargo:rerun-if-env-changed=CANIC_CONFIG_PATH");
         println!("cargo:rerun-if-env-changed=CANIC_INTERNAL_TEST_ENDPOINTS");
-        println!("cargo:rerun-if-env-changed=CARGO_FEATURE_METRICS");
         if let Some(parent) = $cfg_path.parent() {
             println!("cargo:rerun-if-changed={}", parent.display());
         }
@@ -116,7 +115,6 @@ macro_rules! __canic_build_internal {
         println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_observability_memory)");
         println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_observability_env)");
         println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_observability_log)");
-        println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_metrics)");
         println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_auth_attestation)");
         println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_topology_state)");
         println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_topology_directory)");
@@ -131,10 +129,6 @@ macro_rules! __canic_build_internal {
             println!("cargo:rustc-cfg=canic_disable_bundle_observability_env");
             println!("cargo:rustc-cfg=canic_disable_bundle_topology_directory");
         }
-        if std::env::var_os("CARGO_FEATURE_METRICS").is_none() {
-            println!("cargo:rustc-cfg=canic_disable_bundle_metrics");
-        }
-
         if $cfg.auth.delegated_tokens.enabled {
             println!("cargo:rustc-cfg=canic_delegated_tokens_enabled");
         }

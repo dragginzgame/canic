@@ -1,0 +1,25 @@
+{
+  "canister": "app",
+  "kind": "leaf-canister",
+  "profile": "release",
+  "built": {
+    "wasm_bytes": 1748257,
+    "wasm_gz_bytes": 495977,
+    "functions": 3331,
+    "data_sections": 3,
+    "data_bytes": 136260,
+    "exports": 16
+  },
+  "shrunk": {
+    "wasm_bytes": 1635267,
+    "wasm_gz_bytes": 461494,
+    "functions": 3331,
+    "data_sections": 3,
+    "data_bytes": 136260,
+    "exports": 16
+  },
+  "shrink_delta_bytes": 112990,
+  "shrink_delta_percent": 6.46,
+  "baseline_delta_bytes": "N/A",
+  "baseline_delta_percent": "N/A"
+}
