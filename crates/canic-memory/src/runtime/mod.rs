@@ -154,6 +154,15 @@ impl MemoryRuntimeApi {
         run_registered_eager_init();
         registry::MemoryRegistryRuntime::init(Some((crate_name, start, end)))
     }
+
+    /// Bootstrap eager TLS, eager-init hooks, and flush deferred registry state
+    /// without reserving a new owner range.
+    pub fn bootstrap_registry_without_range()
+    -> Result<registry::MemoryRegistryInitSummary, MemoryRegistryError> {
+        init_eager_tls();
+        run_registered_eager_init();
+        registry::MemoryRegistryRuntime::init(None)
+    }
 }
 
 ///
