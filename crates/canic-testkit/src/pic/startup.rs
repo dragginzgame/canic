@@ -54,6 +54,16 @@ pub(super) fn panic_payload_to_string(payload: &(dyn Any + Send)) -> String {
     "non-string panic payload".to_string()
 }
 
+// Detect the PocketIC transport failure class that means the owned instance
+// has already died and cached snapshot restore should rebuild from scratch.
+pub(super) fn is_dead_instance_transport_error(message: &str) -> bool {
+    message.contains("ConnectionRefused")
+        || message.contains("tcp connect error")
+        || message.contains("IncompleteMessage")
+        || message.contains("connection closed before message completed")
+        || message.contains("channel closed")
+}
+
 // Classify one PocketIC startup panic into a typed public error.
 fn classify_pic_start_panic(payload: Box<dyn Any + Send>) -> PicStartError {
     let message = panic_payload_to_string(payload.as_ref());
@@ -87,7 +97,7 @@ fn classify_pic_start_panic(payload: Box<dyn Any + Send>) -> PicStartError {
 
 #[cfg(test)]
 mod tests {
-    use super::{PicStartError, classify_pic_start_panic};
+    use super::{PicStartError, classify_pic_start_panic, is_dead_instance_transport_error};
 
     #[test]
     fn pic_start_error_classifies_missing_binary() {
@@ -105,5 +115,19 @@ mod tests {
         ));
 
         assert!(matches!(error, PicStartError::ServerStartFailed { .. }));
+    }
+
+    #[test]
+    fn dead_instance_transport_error_detects_connection_refused() {
+        assert!(is_dead_instance_transport_error(
+            "reqwest::Error { source: ConnectError(\"tcp connect error\", 127.0.0.1:1234, Os { code: 111, kind: ConnectionRefused, message: \"Connection refused\" }) }"
+        ));
+    }
+
+    #[test]
+    fn dead_instance_transport_error_detects_incomplete_message() {
+        assert!(is_dead_instance_transport_error(
+            "reqwest::Error { source: hyper::Error(IncompleteMessage) }"
+        ));
     }
 }

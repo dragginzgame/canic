@@ -5,6 +5,7 @@
 //! `eager_static!`) so external crates can coordinate stable memory without
 //! depending on the full `canic` stack.
 
+pub mod api;
 pub mod macros;
 #[doc(hidden)]
 pub mod manager;

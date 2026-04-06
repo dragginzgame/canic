@@ -16,8 +16,8 @@ use canic_testkit::artifacts::{
     build_internal_test_wasm_canisters_with_env,
 };
 use canic_testkit::pic::{
-    CachedPicBaseline, CachedPicBaselineGuard, Pic, PicSerialGuard, acquire_cached_pic_baseline,
-    acquire_pic_serial_guard, pic as shared_pic, role_pid as lookup_role_pid,
+    CachedPicBaseline, CachedPicBaselineGuard, Pic, PicSerialGuard, acquire_pic_serial_guard,
+    pic as shared_pic, restore_or_rebuild_cached_pic_baseline, role_pid as lookup_role_pid,
     wait_until_ready as wait_for_ready_canister,
 };
 use serde::de::DeserializeOwned;
@@ -205,45 +205,12 @@ fn restore_or_rebuild_cached_baseline(
     canic_testkit::pic::CachedPicBaselineGuard<'static, AttestationBaselineMetadata>,
     bool,
 ) {
-    let (baseline, cache_hit) =
-        acquire_cached_pic_baseline(baseline_slot, || build_cached_baseline(cache_kind));
-    if !cache_hit {
-        return (baseline, false);
-    }
-
-    let restore = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        restore_cached_baseline(&baseline);
-    }));
-    if restore.is_ok() {
-        return (baseline, true);
-    }
-
-    progress("cached baseline restore failed; rebuilding fresh baseline");
-    drop(baseline);
-    drop_stale_cached_baseline(baseline_slot);
-
-    let (rebuilt, _cache_hit) =
-        acquire_cached_pic_baseline(baseline_slot, || build_cached_baseline(cache_kind));
-    (rebuilt, false)
-}
-
-// Remove one dead cached baseline and swallow teardown panics from a broken
-// PocketIC instance so the fixture can rebuild cleanly.
-fn drop_stale_cached_baseline(
-    baseline_slot: &'static Mutex<Option<CachedPicBaseline<AttestationBaselineMetadata>>>,
-) {
-    let stale = {
-        let mut slot = baseline_slot
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        slot.take()
-    };
-
-    if let Some(stale) = stale {
-        let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            drop(stale);
-        }));
-    }
+    let (baseline, cache_hit) = restore_or_rebuild_cached_pic_baseline(
+        baseline_slot,
+        || build_cached_baseline(cache_kind),
+        restore_cached_baseline,
+    );
+    (baseline, cache_hit)
 }
 
 // Build one reusable baseline and capture immutable snapshot IDs inside it.
