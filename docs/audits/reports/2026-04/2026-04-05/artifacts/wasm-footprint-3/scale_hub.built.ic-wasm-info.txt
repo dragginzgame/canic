@@ -1,0 +1,67 @@
+Number of types: 71
+Number of globals: 3
+
+Number of data sections: 3
+Size of data sections: 139500 bytes
+
+Number of functions: 3517
+Number of callbacks: 1
+Start function: None
+Exported methods: [
+    "canister_init (func_3497)",
+    "canister_post_upgrade (func_3498)",
+    "canister_query canic_bootstrap_status (func_3499)",
+    "canister_query canic_canister_children (func_3500)",
+    "canister_query canic_canister_cycle_balance (func_3501)",
+    "canister_query canic_canister_version (func_3502)",
+    "canister_query canic_cycle_tracker (func_3503)",
+    "canister_query canic_log (func_3504)",
+    "canister_query canic_metrics (func_3505)",
+    "canister_query canic_ready (func_3506)",
+    "canister_query canic_scaling_registry (func_3507)",
+    "canister_query canic_standards (func_3508)",
+    "canister_query icrc10_supported_standards (func_3509)",
+    "canister_query plan_create_worker (func_3510)",
+    "canister_update canic_response_capability_v1 (func_3511)",
+    "canister_update canic_sync_state (func_3512)",
+    "canister_update canic_sync_topology (func_3513)",
+    "canister_update create_worker (func_3514)",
+    "canister_global_timer (func_3515)",
+    "canister_update <ic-cdk internal> timer_executor (func_3516)",
+]
+
+Imported IC0 System API: [
+    "msg_reply_data_append",
+    "msg_reply",
+    "canister_version",
+    "time",
+    "stable64_read",
+    "stable64_size",
+    "stable64_grow",
+    "stable64_write",
+    "debug_print",
+    "trap",
+    "performance_counter",
+    "is_controller",
+    "msg_caller_size",
+    "msg_caller_copy",
+    "msg_arg_data_size",
+    "msg_arg_data_copy",
+    "canister_self_size",
+    "canister_self_copy",
+    "canister_cycle_balance128",
+    "msg_reject_code",
+    "msg_reject_msg_size",
+    "msg_reject_msg_copy",
+    "cost_call",
+    "canister_liquid_cycle_balance128",
+    "call_new",
+    "call_on_cleanup",
+    "call_data_append",
+    "call_cycles_add128",
+    "call_with_best_effort_response",
+    "call_perform",
+    "global_timer_set",
+]
+
+Custom sections with size: []

@@ -651,6 +651,21 @@ macro_rules! canic_bundle_nonroot_only_endpoints {
     };
 }
 
+// Bundle composer for the canonical subnet-local wasm_store runtime surface.
+#[macro_export]
+macro_rules! canic_bundle_wasm_store_runtime_endpoints {
+    () => {
+        $crate::canic_emit_lifecycle_core_endpoints!();
+        $crate::canic_bundle_standards_endpoints!();
+        #[cfg(not(canic_disable_bundle_auth_attestation))]
+        $crate::canic_emit_auth_attestation_endpoints!();
+        #[cfg(not(canic_disable_bundle_nonroot_sync_topology))]
+        $crate::canic_emit_nonroot_sync_topology_endpoints!();
+        $crate::canic_emit_nonroot_auth_attestation_endpoints!();
+        $crate::canic_emit_local_wasm_store_endpoints!();
+    };
+}
+
 // -----------------------------------------------------------------------------
 // Backwards-compatible exported aliases
 // -----------------------------------------------------------------------------
@@ -854,5 +869,13 @@ macro_rules! canic_endpoints_root {
 macro_rules! canic_endpoints_nonroot {
     () => {
         $crate::canic_bundle_nonroot_only_endpoints!();
+    };
+}
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! canic_endpoints_wasm_store {
+    () => {
+        $crate::canic_bundle_wasm_store_runtime_endpoints!();
     };
 }

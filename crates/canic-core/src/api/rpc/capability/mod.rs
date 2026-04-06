@@ -166,7 +166,7 @@ fn delegated_grant_hash(grant: &crate::dto::capability::DelegatedGrant) -> Resul
     grant::delegated_grant_hash(grant)
 }
 
-fn root_capability_hash(
+pub fn root_capability_hash(
     target_canister: Principal,
     capability_version: u16,
     capability: &Request,

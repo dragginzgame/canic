@@ -112,6 +112,10 @@ pub struct CallResult {
 }
 
 impl CallResult {
+    pub fn raw_equals(&self, expected: &[u8]) -> bool {
+        self.inner == expected
+    }
+
     pub fn candid<R>(&self) -> Result<R, InfraError>
     where
         R: CandidType + DeserializeOwned,

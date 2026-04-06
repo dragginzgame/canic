@@ -38,6 +38,15 @@ use crate::{
 pub struct RpcApi;
 
 impl RpcApi {
+    /// Compute the canonical root capability hash used for proof binding.
+    pub fn root_capability_hash(
+        target_canister: Principal,
+        capability_version: u16,
+        capability: &crate::dto::rpc::Request,
+    ) -> Result<[u8; 32], Error> {
+        capability::root_capability_hash(target_canister, capability_version, capability)
+    }
+
     /// Dispatch the full root capability envelope verifier/orchestrator path.
     pub async fn response_capability_v1_root(
         envelope: RootCapabilityEnvelopeV1,

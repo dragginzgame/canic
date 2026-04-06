@@ -1,7 +1,8 @@
 // Category C - Artifact / deployment test (embedded static config).
 // This test relies on embedded config by design (test stub).
 
-use candid::{Principal, decode_one, encode_args, encode_one, utils::ArgumentEncoder};
+use candid::{Principal, decode_one, encode_args, utils::ArgumentEncoder};
+use canic_core::api::rpc::RpcApi;
 use canic_core::dto::{
     auth::{
         AttestationKeyStatus, DelegatedToken, DelegatedTokenClaims, DelegationAdminCommand,
@@ -26,7 +27,6 @@ use canic_testing_internal::pic::{
 };
 use canic_testkit::pic::wait_until_ready as wait_for_ready_canister;
 use serde::de::DeserializeOwned;
-use sha2::{Digest, Sha256};
 use std::{
     io::Write,
     ops::Deref,
@@ -2314,45 +2314,8 @@ fn bogus_delegated_token(root_pid: Principal, shard_pid: Principal) -> Delegated
 }
 
 fn root_capability_hash(target_canister: Principal, capability: &Request) -> [u8; 32] {
-    const CAPABILITY_HASH_DOMAIN_V1: &[u8] = b"CANIC_CAPABILITY_V1";
-    let canonical = strip_request_metadata(capability.clone());
-
-    let payload = encode_one(&(
-        target_canister,
-        CapabilityService::Root,
-        CAPABILITY_VERSION_V1,
-        canonical,
-    ))
-    .expect("encode capability payload");
-    let mut hasher = Sha256::new();
-    hasher.update(CAPABILITY_HASH_DOMAIN_V1);
-    hasher.update(payload);
-    hasher.finalize().into()
-}
-
-fn strip_request_metadata(request: Request) -> Request {
-    match request {
-        Request::CreateCanister(mut req) => {
-            req.metadata = None;
-            Request::CreateCanister(req)
-        }
-        Request::UpgradeCanister(mut req) => {
-            req.metadata = None;
-            Request::UpgradeCanister(req)
-        }
-        Request::Cycles(mut req) => {
-            req.metadata = None;
-            Request::Cycles(req)
-        }
-        Request::IssueDelegation(mut req) => {
-            req.metadata = None;
-            Request::IssueDelegation(req)
-        }
-        Request::IssueRoleAttestation(mut req) => {
-            req.metadata = None;
-            Request::IssueRoleAttestation(req)
-        }
-    }
+    RpcApi::root_capability_hash(target_canister, CAPABILITY_VERSION_V1, capability)
+        .expect("compute root capability hash")
 }
 
 const fn capability_metadata(

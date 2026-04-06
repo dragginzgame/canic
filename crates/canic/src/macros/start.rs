@@ -293,6 +293,10 @@ macro_rules! start_root {
 ///
 /// This specialized macro exists so downstreams can use the built-in Canic
 /// `wasm_store` role without copying the reference canister implementation.
+///
+/// Unlike the ordinary non-root bundle, this surface intentionally excludes the
+/// generic observability and topology-view queries that are not part of the
+/// canonical `wasm_store` contract.
 #[macro_export]
 macro_rules! start_wasm_store {
     ($(init = $init:block)? $(,)?) => {
@@ -305,8 +309,11 @@ macro_rules! start_wasm_store {
         #[allow(clippy::unused_async)]
         async fn canic_upgrade() {}
 
-        $crate::start!($crate::api::canister::CanisterRole::WASM_STORE $(, init = $init)?);
-        $crate::canic_emit_local_wasm_store_endpoints!();
+        $crate::__canic_start_nonroot_lifecycle_core!(
+            $crate::api::canister::CanisterRole::WASM_STORE
+            $(, $init)?
+        );
+        $crate::canic_bundle_wasm_store_runtime_endpoints!();
     };
 }
 

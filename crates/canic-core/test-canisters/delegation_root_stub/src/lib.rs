@@ -6,6 +6,7 @@ use canic::{
     CANIC_WASM_CHUNK_BYTES, Error,
     api::auth::DelegationApi,
     api::canister::CanisterRole,
+    cdk::candid::Principal,
     dto::auth::{
         AttestationKey, AttestationKeySet, AttestationKeyStatus, DelegatedToken,
         DelegatedTokenClaims, DelegationCert, DelegationProof, RoleAttestation,
@@ -294,7 +295,7 @@ fn sign_attestation(payload: &RoleAttestation, seed: [u8; 32]) -> Result<Vec<u8>
 }
 
 fn sign_delegation_cert(cert: &DelegationCert, seed: [u8; 32]) -> Result<Vec<u8>, Error> {
-    let digest = cert_hash(cert)?;
+    let digest = cert_hash(cert);
     sign_digest(digest, seed)
 }
 
@@ -316,10 +317,17 @@ fn sign_digest(digest: [u8; 32], seed: [u8; 32]) -> Result<Vec<u8>, Error> {
     Ok(signature.to_bytes().to_vec())
 }
 
-fn cert_hash(cert: &DelegationCert) -> Result<[u8; 32], Error> {
-    let payload =
-        candid::encode_one(cert).map_err(|err| Error::internal(format!("encode failed: {err}")))?;
-    Ok(hash_domain_separated(TEST_DELEGATION_CERT_DOMAIN, &payload))
+fn cert_hash(cert: &DelegationCert) -> [u8; 32] {
+    let mut hasher = Sha256::new();
+    hasher.update((TEST_DELEGATION_CERT_DOMAIN.len() as u64).to_be_bytes());
+    hasher.update(TEST_DELEGATION_CERT_DOMAIN);
+    update_principal(&mut hasher, cert.root_pid);
+    update_principal(&mut hasher, cert.shard_pid);
+    hasher.update(cert.issued_at.to_be_bytes());
+    hasher.update(cert.expires_at.to_be_bytes());
+    update_strings(&mut hasher, &cert.scopes);
+    update_principals(&mut hasher, &cert.aud);
+    hasher.finalize().into()
 }
 
 fn token_signing_hash(
@@ -327,7 +335,7 @@ fn token_signing_hash(
     cert: &DelegationCert,
 ) -> Result<[u8; 32], Error> {
     let payload = TestTokenSigningPayload {
-        cert_hash: cert_hash(cert)?.to_vec(),
+        cert_hash: cert_hash(cert).to_vec(),
         claims: claims.clone(),
     };
     let encoded = candid::encode_one(&payload)
@@ -342,6 +350,29 @@ fn hash_domain_separated(domain: &[u8], payload: &[u8]) -> [u8; 32] {
     hasher.update((payload.len() as u64).to_be_bytes());
     hasher.update(payload);
     hasher.finalize().into()
+}
+
+fn update_principal(hasher: &mut Sha256, principal: Principal) {
+    update_bytes(hasher, principal.as_slice());
+}
+
+fn update_principals(hasher: &mut Sha256, principals: &[Principal]) {
+    hasher.update((principals.len() as u64).to_be_bytes());
+    for principal in principals {
+        update_principal(hasher, *principal);
+    }
+}
+
+fn update_strings(hasher: &mut Sha256, values: &[String]) {
+    hasher.update((values.len() as u64).to_be_bytes());
+    for value in values {
+        update_bytes(hasher, value.as_bytes());
+    }
+}
+
+fn update_bytes(hasher: &mut Sha256, bytes: &[u8]) {
+    hasher.update((bytes.len() as u64).to_be_bytes());
+    hasher.update(bytes);
 }
 
 fn stage_chunked_bootstrap_release(role: CanisterRole, bytes: &'static [u8]) {
