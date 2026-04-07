@@ -1,7 +1,7 @@
 // Category C - Artifact / deployment test (embedded static config).
 // This test relies on embedded config by design (test stub).
 
-use candid::{Principal, decode_one, encode_args};
+use candid::{Principal, encode_args};
 use canic_core::{
     dto::{
         abi::v1::CanisterInitPayload,
@@ -17,7 +17,7 @@ use canic_testkit::{
         WasmBuildProfile, build_internal_test_wasm_canisters, read_wasm, test_target_dir,
         workspace_root_for,
     },
-    pic::{acquire_pic_serial_guard, pic},
+    pic::{Pic, acquire_pic_serial_guard, pic},
 };
 use serde::de::DeserializeOwned;
 use std::{
@@ -154,30 +154,22 @@ fn user_hub_init_args(root_pid: Principal) -> Vec<u8> {
     encode_args((payload, None::<Vec<u8>>)).expect("encode init args")
 }
 
-fn update_call<T, A>(pic: &pocket_ic::PocketIc, canister_id: Principal, method: &str, args: A) -> T
+fn update_call<T, A>(pic: &Pic, canister_id: Principal, method: &str, args: A) -> T
 where
     T: candid::CandidType + DeserializeOwned,
     A: candid::utils::ArgumentEncoder,
 {
-    let payload = encode_args(args).expect("encode args");
-    let result = pic
-        .update_call(canister_id, Principal::anonymous(), method, payload)
-        .expect("update_call failed");
-
-    decode_one(&result).expect("decode response")
+    pic.update_call(canister_id, method, args)
+        .expect("update_call failed")
 }
 
-fn query_call<T, A>(pic: &pocket_ic::PocketIc, canister_id: Principal, method: &str, args: A) -> T
+fn query_call<T, A>(pic: &Pic, canister_id: Principal, method: &str, args: A) -> T
 where
     T: candid::CandidType + DeserializeOwned,
     A: candid::utils::ArgumentEncoder,
 {
-    let payload = encode_args(args).expect("encode args");
-    let result = pic
-        .query_call(canister_id, Principal::anonymous(), method, payload)
-        .expect("query_call failed");
-
-    decode_one(&result).expect("decode response")
+    pic.query_call(canister_id, method, args)
+        .expect("query_call failed")
 }
 
 fn build_canisters_once(workspace_root: &Path) {

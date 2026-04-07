@@ -1,6 +1,6 @@
 use candid::Principal;
-use canic_testkit::pic::CachedPicBaselineGuard;
-use std::{io::Write, ops::Deref};
+use canic_testkit::pic::{CachedPicBaselineGuard, Pic};
+use std::io::Write;
 
 use super::baseline::{self, AttestationBaselineMetadata};
 
@@ -30,12 +30,10 @@ impl<'a> BaselinePicGuard<'a> {
     ) -> Self {
         Self { baseline }
     }
-}
 
-impl Deref for BaselinePicGuard<'_> {
-    type Target = pocket_ic::PocketIc;
-
-    fn deref(&self) -> &Self::Target {
+    /// Borrow the PocketIC wrapper behind this cached attestation baseline guard.
+    #[must_use]
+    pub fn pic(&self) -> &canic_testkit::pic::Pic {
         self.baseline.pic()
     }
 }
@@ -66,12 +64,12 @@ pub fn install_test_root_without_test_material_cached() -> CachedInstalledRoot {
 
 // Resolve the signer canister from the root-managed subnet registry.
 #[must_use]
-pub fn signer_pid(pic: &pocket_ic::PocketIc, root_id: Principal) -> Principal {
+pub fn signer_pid(pic: &Pic, root_id: Principal) -> Principal {
     baseline::signer_pid(pic, root_id)
 }
 
 // Resolve the managed wasm_store canister from the root-managed subnet registry.
 #[must_use]
-pub fn wasm_store_pid(pic: &pocket_ic::PocketIc, root_id: Principal) -> Principal {
+pub fn wasm_store_pid(pic: &Pic, root_id: Principal) -> Principal {
     baseline::wasm_store_pid(pic, root_id)
 }

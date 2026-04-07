@@ -51,7 +51,7 @@ impl Pic {
         let mut last_err = None;
 
         for sender in candidates {
-            match self.take_canister_snapshot(canister_id, sender, None) {
+            match self.inner.take_canister_snapshot(canister_id, sender, None) {
                 Ok(snapshot) => return Some((snapshot.id, sender)),
                 Err(err) => last_err = Some((sender, err)),
             }
@@ -82,7 +82,10 @@ impl Pic {
         let mut last_err = None;
 
         for sender in candidates {
-            match self.load_canister_snapshot(canister_id, sender, snapshot_id.to_vec()) {
+            match self
+                .inner
+                .load_canister_snapshot(canister_id, sender, snapshot_id.to_vec())
+            {
                 Ok(()) => return,
                 Err(err) => last_err = Some((sender, err)),
             }

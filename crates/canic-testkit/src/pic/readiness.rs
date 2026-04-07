@@ -1,19 +1,17 @@
-use candid::{Principal, decode_one, encode_args};
+use candid::Principal;
 use canic::{Error, dto::topology::SubnetRegistryResponse, ids::CanisterRole, protocol};
-use pocket_ic::PocketIc;
+
+use super::Pic;
 
 /// Wait until a PocketIC canister reports `canic_ready`.
-pub fn wait_until_ready(pic: &PocketIc, canister_id: Principal, tick_limit: usize) {
-    let payload = encode_args(()).expect("encode empty args");
-
+pub fn wait_until_ready(pic: &Pic, canister_id: Principal, tick_limit: usize) {
     for _ in 0..tick_limit {
-        if let Ok(bytes) = pic.query_call(
+        if let Ok(ready) = pic.query_call_as::<bool, _>(
             canister_id,
             Principal::anonymous(),
             protocol::CANIC_READY,
-            payload.clone(),
-        ) && let Ok(ready) = decode_one::<bool>(&bytes)
-            && ready
+            (),
+        ) && ready
         {
             return;
         }
@@ -25,33 +23,14 @@ pub fn wait_until_ready(pic: &PocketIc, canister_id: Principal, tick_limit: usiz
 
 /// Resolve one role principal from root's subnet registry, polling until present.
 #[must_use]
-pub fn role_pid(
-    pic: &PocketIc,
-    root_id: Principal,
-    role: &'static str,
-    tick_limit: usize,
-) -> Principal {
+pub fn role_pid(pic: &Pic, root_id: Principal, role: &'static str, tick_limit: usize) -> Principal {
     for _ in 0..tick_limit {
-        let registry: Result<Result<SubnetRegistryResponse, Error>, Error> = {
-            let payload = encode_args(()).expect("encode empty args");
-            pic.query_call(
-                root_id,
-                Principal::anonymous(),
-                protocol::CANIC_SUBNET_REGISTRY,
-                payload,
-            )
-            .map_err(|err| {
-                Error::internal(format!(
-                    "pocket_ic query_call failed (canister={root_id}, method={}): {err}",
-                    protocol::CANIC_SUBNET_REGISTRY
-                ))
-            })
-            .and_then(|bytes| {
-                decode_one(&bytes).map_err(|err| {
-                    Error::internal(format!("decode_one failed for subnet registry: {err}"))
-                })
-            })
-        };
+        let registry: Result<Result<SubnetRegistryResponse, Error>, Error> = pic.query_call_as(
+            root_id,
+            Principal::anonymous(),
+            protocol::CANIC_SUBNET_REGISTRY,
+            (),
+        );
 
         if let Ok(Ok(registry)) = registry
             && let Some(pid) = registry

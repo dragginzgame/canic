@@ -8,15 +8,28 @@ use std::{
 
 const DFX_BUILD_ENV_STAMP_RELATIVE: &str = ".dfx/canic-build-env.stamp";
 
-/// Check whether one artifact is newer than the inputs that define it.
-fn artifact_is_fresh_against_inputs(
-    workspace_root: &Path,
-    artifact_path: &Path,
-    watched_relative_paths: &[&str],
-) -> io::Result<bool> {
-    let artifact_mtime = fs::metadata(artifact_path)?.modified()?;
-    let newest_input = newest_watched_input_mtime(workspace_root, watched_relative_paths)?;
-    Ok(newest_input <= artifact_mtime)
+///
+/// WatchedInputSnapshot
+///
+
+#[derive(Clone, Copy, Debug)]
+pub struct WatchedInputSnapshot {
+    newest_input_mtime: SystemTime,
+}
+
+impl WatchedInputSnapshot {
+    /// Capture the newest modification time across all watched inputs once.
+    pub fn capture(workspace_root: &Path, watched_relative_paths: &[&str]) -> io::Result<Self> {
+        Ok(Self {
+            newest_input_mtime: newest_watched_input_mtime(workspace_root, watched_relative_paths)?,
+        })
+    }
+
+    /// Check whether one artifact is newer than the captured watched inputs.
+    pub fn artifact_is_fresh(self, artifact_path: &Path) -> io::Result<bool> {
+        let artifact_mtime = fs::metadata(artifact_path)?.modified()?;
+        Ok(self.newest_input_mtime <= artifact_mtime)
+    }
 }
 
 /// Check whether a `dfx` artifact exists, is fresh, and matches the expected build env.
@@ -29,11 +42,37 @@ pub fn dfx_artifact_ready_for_build(
     profile: WasmBuildProfile,
     extra_env: &[(&str, &str)],
 ) -> bool {
+    let Ok(watched_inputs) = WatchedInputSnapshot::capture(workspace_root, watched_relative_paths)
+    else {
+        return false;
+    };
+
+    dfx_artifact_ready_with_snapshot(
+        workspace_root,
+        artifact_relative_path,
+        watched_inputs,
+        network,
+        profile,
+        extra_env,
+    )
+}
+
+/// Check one `dfx` artifact against one already-captured watched-input snapshot.
+#[must_use]
+pub fn dfx_artifact_ready_with_snapshot(
+    workspace_root: &Path,
+    artifact_relative_path: &str,
+    watched_inputs: WatchedInputSnapshot,
+    network: &str,
+    profile: WasmBuildProfile,
+    extra_env: &[(&str, &str)],
+) -> bool {
     let artifact_path = workspace_root.join(artifact_relative_path);
 
     match fs::metadata(&artifact_path) {
         Ok(meta) if meta.is_file() && meta.len() > 0 => {
-            artifact_is_fresh_against_inputs(workspace_root, &artifact_path, watched_relative_paths)
+            watched_inputs
+                .artifact_is_fresh(&artifact_path)
                 .unwrap_or(false)
                 && build_stamp_matches(workspace_root, network, profile, extra_env)
         }

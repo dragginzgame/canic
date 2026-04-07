@@ -1,4 +1,4 @@
-use candid::{Principal, decode_one, encode_args};
+use candid::Principal;
 use canic::Error;
 use canic_core::api::rpc::RpcApi;
 use canic_core::dto::{
@@ -10,13 +10,13 @@ use canic_core::dto::{
     rpc::{CreateCanisterParent, CreateCanisterRequest, Request, Response},
 };
 use canic_core::ids::CanisterRole;
-use canic_testkit::pic::wait_until_ready as wait_for_ready_canister;
+use canic_testkit::pic::{Pic, wait_until_ready as wait_for_ready_canister};
 use serde::de::DeserializeOwned;
 
 use super::fixture::progress;
 
 // Create a non-root verifier canister through the root capability endpoint.
-pub(super) fn create_verifier_canister(pic: &pocket_ic::PocketIc, root_id: Principal) -> Principal {
+pub(super) fn create_verifier_canister(pic: &Pic, root_id: Principal) -> Principal {
     let issued: Result<SignedRoleAttestation, Error> = update_call_as(
         pic,
         root_id,
@@ -65,7 +65,7 @@ pub(super) fn create_verifier_canister(pic: &pocket_ic::PocketIc, root_id: Princ
 
 // Run one typed update call as the requested caller.
 fn update_call_as<T, A>(
-    pic: &pocket_ic::PocketIc,
+    pic: &Pic,
     canister_id: Principal,
     caller: Principal,
     method: &str,
@@ -75,12 +75,8 @@ where
     T: candid::CandidType + DeserializeOwned,
     A: candid::utils::ArgumentEncoder,
 {
-    let payload = encode_args(args).expect("encode args");
-    let result = pic
-        .update_call(canister_id, caller, method, payload)
-        .expect("update_call failed");
-
-    decode_one(&result).expect("decode response")
+    pic.update_call_as(canister_id, caller, method, args)
+        .expect("update_call failed")
 }
 
 fn encode_role_attestation_capability_proof(proof: RoleAttestationProof) -> CapabilityProof {

@@ -13,10 +13,10 @@ use canic_control_plane::{
 };
 use canic_testkit::{
     artifacts::{
-        INTERNAL_TEST_ENDPOINTS_ENV, WasmBuildProfile, build_dfx_all_with_env,
-        dfx_artifact_ready_for_build,
+        INTERNAL_TEST_ENDPOINTS_ENV, WasmBuildProfile, WatchedInputSnapshot,
+        build_dfx_all_with_env, dfx_artifact_ready_with_snapshot,
     },
-    pic::{CachedPicBaseline, Pic, PicBuilder},
+    pic::{CachedPicBaseline, Pic, PicBuilder, PicStartError},
 };
 use std::{collections::HashMap, fs, io, io::Write, path::PathBuf, time::Instant};
 
@@ -169,71 +169,92 @@ pub fn setup_root_topology(
                 spec.root_setup_max_attempts
             ),
         );
-        let wasm = root_wasm.clone();
-        let attempt_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            progress(spec, "starting PocketIC instance");
-            let pic_started_at = Instant::now();
-            let pic = PicBuilder::new()
-                .with_ii_subnet()
-                .with_application_subnet()
-                .build();
-            progress_elapsed(spec, "PocketIC instance ready", pic_started_at);
-
-            progress(spec, "installing root canister");
-            let root_install_started_at = Instant::now();
-            let root_id = pic
-                .create_and_install_root_canister(wasm)
-                .expect("install root canister");
-            progress_elapsed(spec, "root canister installed", root_install_started_at);
-
-            progress(spec, "staging managed release set");
-            let stage_started_at = Instant::now();
-            stage_managed_release_set(spec, &pic, root_id);
-            progress_elapsed(spec, "staged managed release set", stage_started_at);
-
-            progress(spec, "resuming root bootstrap");
-            let resume_started_at = Instant::now();
-            resume_root_bootstrap(&pic, root_id);
-            progress_elapsed(spec, "resumed root bootstrap", resume_started_at);
-
-            progress(spec, "waiting for root bootstrap");
-            let root_wait_started_at = Instant::now();
-            wait_for_bootstrap(spec, &pic, root_id);
-            progress_elapsed(spec, "root bootstrap ready", root_wait_started_at);
-
-            progress(spec, "fetching subnet directory");
-            let directory_started_at = Instant::now();
-            let subnet_directory = fetch_subnet_directory(&pic, root_id);
-            progress_elapsed(spec, "fetched subnet directory", directory_started_at);
-
-            progress(spec, "waiting for child canisters ready");
-            let child_wait_started_at = Instant::now();
-            wait_for_children_ready(spec, &pic, &subnet_directory);
-            progress_elapsed(spec, "child canisters ready", child_wait_started_at);
-
-            InitializedRootTopology {
-                pic,
-                metadata: RootBaselineMetadata {
-                    root_id,
-                    subnet_directory,
-                },
+        let pic_started_at = Instant::now();
+        let pic = match try_start_root_pic(spec) {
+            Ok(pic) => {
+                progress_elapsed(spec, "PocketIC instance ready", pic_started_at);
+                pic
             }
-        }));
-
-        match attempt_result {
-            Ok(state) => return state,
-            Err(err) if attempt < spec.root_setup_max_attempts => {
+            Err(err) if should_retry_root_pic_start(&err, spec, attempt) => {
                 eprintln!(
-                    "setup_root attempt {attempt}/{} failed; retrying",
+                    "setup_root startup attempt {attempt}/{} failed; retrying: {err}",
                     spec.root_setup_max_attempts
                 );
-                drop(err);
+                continue;
             }
-            Err(err) => std::panic::resume_unwind(err),
-        }
+            Err(err) => {
+                panic!(
+                    "failed to start PocketIC instance for root baseline on attempt {attempt}/{}: {err}",
+                    spec.root_setup_max_attempts
+                );
+            }
+        };
+
+        progress(spec, "installing root canister");
+        let root_install_started_at = Instant::now();
+        let root_id = pic
+            .create_and_install_root_canister(root_wasm)
+            .expect("install root canister");
+        progress_elapsed(spec, "root canister installed", root_install_started_at);
+
+        progress(spec, "staging managed release set");
+        let stage_started_at = Instant::now();
+        stage_managed_release_set(spec, &pic, root_id);
+        progress_elapsed(spec, "staged managed release set", stage_started_at);
+
+        progress(spec, "resuming root bootstrap");
+        let resume_started_at = Instant::now();
+        resume_root_bootstrap(&pic, root_id);
+        progress_elapsed(spec, "resumed root bootstrap", resume_started_at);
+
+        progress(spec, "waiting for root bootstrap");
+        let root_wait_started_at = Instant::now();
+        wait_for_bootstrap(spec, &pic, root_id);
+        progress_elapsed(spec, "root bootstrap ready", root_wait_started_at);
+
+        progress(spec, "fetching subnet directory");
+        let directory_started_at = Instant::now();
+        let subnet_directory = fetch_subnet_directory(&pic, root_id);
+        progress_elapsed(spec, "fetched subnet directory", directory_started_at);
+
+        progress(spec, "waiting for child canisters ready");
+        let child_wait_started_at = Instant::now();
+        wait_for_children_ready(spec, &pic, &subnet_directory);
+        progress_elapsed(spec, "child canisters ready", child_wait_started_at);
+
+        return InitializedRootTopology {
+            pic,
+            metadata: RootBaselineMetadata {
+                root_id,
+                subnet_directory,
+            },
+        };
     }
 
     unreachable!("setup_root must return or panic")
+}
+
+// Start the PocketIC instance for one root baseline and retry only on the
+// typed startup failures we explicitly treat as transient.
+fn try_start_root_pic(spec: &RootBaselineSpec<'_>) -> Result<Pic, PicStartError> {
+    progress(spec, "starting PocketIC instance");
+
+    PicBuilder::new()
+        .with_ii_subnet()
+        .with_application_subnet()
+        .try_build()
+}
+
+const fn should_retry_root_pic_start(
+    err: &PicStartError,
+    spec: &RootBaselineSpec<'_>,
+    attempt: usize,
+) -> bool {
+    attempt < spec.root_setup_max_attempts
+        && matches!(
+            err,
+            PicStartError::ServerStartFailed { .. } | PicStartError::StartupTimedOut { .. }
+        )
 }
 
 ///
@@ -329,11 +350,16 @@ fn load_release_wasm_gz(spec: &RootBaselineSpec<'_>, role_name: &str) -> Vec<u8>
 // Confirm the root bootstrap artifact and every managed ordinary release artifact are fresh.
 fn root_release_artifacts_ready(spec: &RootBaselineSpec<'_>) -> bool {
     let build_env = effective_build_env(spec);
+    let Ok(watched_inputs) =
+        WatchedInputSnapshot::capture(&spec.workspace_root, spec.artifact_watch_paths)
+    else {
+        return false;
+    };
 
-    if !dfx_artifact_ready_for_build(
+    if !dfx_artifact_ready_with_snapshot(
         &spec.workspace_root,
         spec.root_wasm_artifact_relative,
-        spec.artifact_watch_paths,
+        watched_inputs,
         spec.build_network,
         spec.build_profile,
         &build_env,
@@ -347,10 +373,10 @@ fn root_release_artifacts_ready(spec: &RootBaselineSpec<'_>) -> bool {
             "{}/{role_name}/{role_name}.wasm.gz",
             spec.root_release_artifacts_relative
         );
-        dfx_artifact_ready_for_build(
+        dfx_artifact_ready_with_snapshot(
             &spec.workspace_root,
             &artifact_relative_path,
-            spec.artifact_watch_paths,
+            watched_inputs,
             spec.build_network,
             spec.build_profile,
             &build_env,

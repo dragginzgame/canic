@@ -1,4 +1,4 @@
-use candid::{encode_args, encode_one};
+use candid::{Principal, encode_args, encode_one};
 use canic::{
     Error,
     cdk::types::TC,
@@ -10,8 +10,10 @@ use canic::{
     },
     ids::CanisterRole,
 };
-use pocket_ic::{PocketIc, PocketIcBuilder};
-use std::ops::{Deref, DerefMut};
+use pocket_ic::{
+    CanisterStatusResult, PocketIc, PocketIcBuilder, RejectResponse, common::rest::RawMessageId,
+};
+use std::time::Duration;
 
 mod baseline;
 mod calls;
@@ -126,6 +128,97 @@ pub struct Pic {
 }
 
 impl Pic {
+    /// Advance one execution round in the owned PocketIC instance.
+    pub fn tick(&self) {
+        self.inner.tick();
+    }
+
+    /// Advance PocketIC wall-clock time by one duration.
+    pub fn advance_time(&self, duration: Duration) {
+        self.inner.advance_time(duration);
+    }
+
+    /// Create one canister with PocketIC default settings.
+    #[must_use]
+    pub fn create_canister(&self) -> Principal {
+        self.inner.create_canister()
+    }
+
+    /// Add cycles to one existing canister.
+    pub fn add_cycles(&self, canister_id: Principal, amount: u128) {
+        let _ = self.inner.add_cycles(canister_id, amount);
+    }
+
+    /// Install one wasm module on one existing canister.
+    pub fn install_canister(
+        &self,
+        canister_id: Principal,
+        wasm_module: Vec<u8>,
+        arg: Vec<u8>,
+        sender: Option<Principal>,
+    ) {
+        self.inner
+            .install_canister(canister_id, wasm_module, arg, sender);
+    }
+
+    /// Upgrade one existing canister with a new wasm module.
+    pub fn upgrade_canister(
+        &self,
+        canister_id: Principal,
+        wasm_module: Vec<u8>,
+        arg: Vec<u8>,
+        sender: Option<Principal>,
+    ) -> Result<(), RejectResponse> {
+        self.inner
+            .upgrade_canister(canister_id, wasm_module, arg, sender)
+    }
+
+    /// Reinstall one existing canister with a new wasm module.
+    pub fn reinstall_canister(
+        &self,
+        canister_id: Principal,
+        wasm_module: Vec<u8>,
+        arg: Vec<u8>,
+        sender: Option<Principal>,
+    ) -> Result<(), RejectResponse> {
+        self.inner
+            .reinstall_canister(canister_id, wasm_module, arg, sender)
+    }
+
+    /// Submit one raw update call without executing it immediately.
+    pub fn submit_call(
+        &self,
+        canister_id: Principal,
+        sender: Principal,
+        method: &str,
+        payload: Vec<u8>,
+    ) -> Result<RawMessageId, RejectResponse> {
+        self.inner.submit_call(canister_id, sender, method, payload)
+    }
+
+    /// Await one previously submitted raw update call.
+    pub fn await_call(&self, message_id: RawMessageId) -> Result<Vec<u8>, RejectResponse> {
+        self.inner.await_call(message_id)
+    }
+
+    /// Fetch one canister status snapshot from PocketIC.
+    pub fn canister_status(
+        &self,
+        canister_id: Principal,
+        sender: Option<Principal>,
+    ) -> Result<CanisterStatusResult, RejectResponse> {
+        self.inner.canister_status(canister_id, sender)
+    }
+
+    /// Fetch one canister log stream from PocketIC.
+    pub fn fetch_canister_logs(
+        &self,
+        canister_id: Principal,
+        sender: Principal,
+    ) -> Result<Vec<pocket_ic::CanisterLogRecord>, RejectResponse> {
+        self.inner.fetch_canister_logs(canister_id, sender)
+    }
+
     /// Capture the current PocketIC wall-clock time as nanoseconds since epoch.
     #[must_use]
     pub fn current_time_nanos(&self) -> u64 {
@@ -137,20 +230,6 @@ impl Pic {
         let restored = pocket_ic::Time::from_nanos_since_unix_epoch(nanos_since_epoch);
         self.inner.set_time(restored);
         self.inner.set_certified_time(restored);
-    }
-}
-
-impl Deref for Pic {
-    type Target = PocketIc;
-
-    fn deref(&self) -> &Self::Target {
-        &self.inner
-    }
-}
-
-impl DerefMut for Pic {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.inner
     }
 }
 
