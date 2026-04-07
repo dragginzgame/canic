@@ -107,6 +107,7 @@ impl DelegationApi {
     /// performs canonical shard-initiated setup and retries with the refreshed proof.
     pub async fn issue_token(claims: DelegatedTokenClaims) -> Result<DelegatedToken, Error> {
         let proof = Self::ensure_signing_proof(&claims).await?;
+        let claims = Self::canonicalize_claims_for_proof(claims, &proof);
         Self::sign_token(claims, proof).await
     }
 
@@ -311,6 +312,23 @@ impl DelegationApi {
         let proof = response.proof;
         Self::store_local_signer_proof(proof.clone()).await?;
         Ok(proof)
+    }
+
+    // Rebase claims onto a freshly issued proof window when delegation setup
+    // completed after the original token timestamps were chosen.
+    fn canonicalize_claims_for_proof(
+        claims: DelegatedTokenClaims,
+        proof: &DelegationProof,
+    ) -> DelegatedTokenClaims {
+        if claims.iat >= proof.cert.issued_at && claims.exp <= proof.cert.expires_at {
+            return claims;
+        }
+
+        DelegatedTokenClaims {
+            iat: proof.cert.issued_at,
+            exp: proof.cert.expires_at,
+            ..claims
+        }
     }
 
     // Build a canonical delegation request from token claims.
