@@ -219,6 +219,37 @@ fn sample_token() -> DelegatedToken {
 }
 
 #[test]
+fn canonicalize_claims_for_proof_rebases_to_fresh_proof_window() {
+    let claims = sample_claims();
+    let proof = DelegationProof {
+        cert: DelegationCert {
+            issued_at: 101,
+            expires_at: 121,
+            ..sample_proof().cert
+        },
+        ..sample_proof()
+    };
+
+    let canonical = DelegationApi::canonicalize_claims_for_proof(claims, &proof);
+    assert_eq!(canonical.iat, 101);
+    assert_eq!(canonical.exp, 121);
+}
+
+#[test]
+fn canonicalize_claims_for_proof_keeps_valid_existing_window() {
+    let claims = sample_claims();
+    let proof = sample_proof();
+
+    let canonical = DelegationApi::canonicalize_claims_for_proof(claims.clone(), &proof);
+    assert_eq!(canonical.sub, claims.sub);
+    assert_eq!(canonical.shard_pid, claims.shard_pid);
+    assert_eq!(canonical.scopes, claims.scopes);
+    assert_eq!(canonical.aud, claims.aud);
+    assert_eq!(canonical.iat, claims.iat);
+    assert_eq!(canonical.exp, claims.exp);
+}
+
+#[test]
 fn proof_is_reusable_for_claims_accepts_valid_subset_and_time_window() {
     let claims = sample_claims();
     let proof = sample_proof();
