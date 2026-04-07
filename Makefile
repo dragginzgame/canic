@@ -1,8 +1,8 @@
 .PHONY: help version tags patch patch-quick minor major package publish \
         test-packaged-downstream test-packaged-downstream-wasm-store \
         test-packaged-downstream-installer test-installed-canic-installer \
-        test test-wasm test-bump build check clippy fmt fmt-check clean install-all \
-        install-tooling install-dev install-canister-deps demo-install test-watch \
+        test test-wasm test-bump build check clippy fmt fmt-check clean \
+        install-dev update-dev demo-install test-watch \
         all ensure-clean ensure-hooks install-hooks test-unit test-unit-fast \
         test-canisters quick-bump fmt-core
 
@@ -54,10 +54,8 @@ help:
 	@echo "Available commands:"
 	@echo ""
 	@echo "Setup / Installation:"
-	@echo "  install-all      Install the full Rust/Cargo/Canic toolchain and configure git hooks"
-	@echo "  install-tooling  Install the shared Rust/Cargo/Canic toolchain"
-	@echo "  install-dev      Alias for install-tooling"
-	@echo "  install-canister-deps  Alias for install-tooling"
+	@echo "  install-dev      Install the shared Rust/Cargo/Canic toolchain"
+	@echo "  update-dev       Update the local Rust/Cargo/DFX development environment"
 	@echo "  install-hooks    Configure git hooks"
 	@echo ""
 	@echo "Version Management:"
@@ -101,13 +99,21 @@ help:
 # Installing
 #
 
-# Install everything (Rust tooling + Canic installer + wasm deps + hooks when present)
-install-all: install-tooling
-	@echo "✅ All development and canister dependencies installed"
-
 # Install the shared Rust/Cargo/Canic toolchain
-install-tooling install-dev install-canister-deps:
+install-dev:
 	bash scripts/install.sh
+
+# Update the local Rust/Cargo/DFX development environment.
+update-dev:
+	rustup update
+	cargo install \
+		cargo-audit cargo-bloat cargo-deny cargo-expand cargo-machete \
+		cargo-llvm-lines cargo-sort cargo-tarpaulin cargo-sort-derives \
+		ripgrep \
+		candid-extractor ic-wasm
+	cargo audit
+	cargo update --verbose
+	dfxvm self update
 
 
 # Optional explicit install target (idempotent)
