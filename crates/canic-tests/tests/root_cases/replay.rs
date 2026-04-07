@@ -18,12 +18,36 @@ use canic::{
             CreateCanisterParent, CreateCanisterRequest, CyclesRequest, Request, Response,
             RootRequestMetadata, UpgradeCanisterRequest,
         },
+        topology::DirectoryEntryResponse,
     },
     protocol,
 };
 use canic_internal::canister;
 use std::convert::TryFrom;
 use std::time::Duration;
+
+#[test]
+fn later_auto_created_sibling_refreshes_existing_subnet_directory_cache() {
+    let setup = setup_cached_root(RootSetupProfile::Capability);
+    let app_pid = setup
+        .subnet_directory
+        .get(&canister::APP)
+        .copied()
+        .expect("app canister must exist");
+    let test_pid = setup
+        .subnet_directory
+        .get(&canister::TEST)
+        .copied()
+        .expect("test canister must exist");
+
+    let app_subnet_directory = query_subnet_directory(&setup, app_pid);
+    assert!(
+        app_subnet_directory
+            .iter()
+            .any(|entry| entry.role == canister::TEST && entry.pid == test_pid),
+        "existing sibling subnet-directory cache must refresh with the later-created test entry",
+    );
+}
 
 #[test]
 fn unauthorized_caller_is_denied_for_each_root_capability_variant() {
@@ -696,6 +720,26 @@ fn canister_cycle_balance(setup: &RootSetup, canister_id: Principal) -> u128 {
 
 fn root_capability_metrics(setup: &RootSetup) -> Vec<MetricEntry> {
     query_metrics(&setup.pic, setup.root_id, MetricsKind::RootCapability)
+}
+
+// Read one canister's cached subnet-directory page through the public query surface.
+fn query_subnet_directory(
+    setup: &RootSetup,
+    canister_id: Principal,
+) -> Vec<DirectoryEntryResponse> {
+    let response: Result<Page<DirectoryEntryResponse>, Error> = setup
+        .pic
+        .query_call(
+            canister_id,
+            protocol::CANIC_SUBNET_DIRECTORY,
+            (PageRequest {
+                limit: 100,
+                offset: 0,
+            },),
+        )
+        .expect("subnet directory transport query failed");
+
+    response.expect("subnet directory query failed").entries
 }
 
 // Read one canister's public metrics page for the requested metric family.
