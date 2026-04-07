@@ -26,6 +26,10 @@ name = "canic-build-canister-artifact"
 path = "src/bin/build_canister_artifact.rs"
 
 [[bin]]
+name = "canic-list-release-roles"
+path = "src/bin/list_release_roles.rs"
+
+[[bin]]
 name = "canic-stage-root-release-set"
 path = "src/bin/stage_root_release_set.rs"
 

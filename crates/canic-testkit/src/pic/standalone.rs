@@ -33,9 +33,35 @@ static STANDALONE_BUILD_SERIAL: Mutex<()> = Mutex::new(());
 ///
 
 pub struct StandaloneCanisterFixture {
-    pub pic: Pic,
-    pub canister_id: canic::cdk::types::Principal,
+    pic: Pic,
+    canister_id: canic::cdk::types::Principal,
     _serial_guard: PicSerialGuard,
+}
+
+impl StandaloneCanisterFixture {
+    /// Borrow the PocketIC instance that owns this standalone fixture.
+    #[must_use]
+    pub const fn pic(&self) -> &Pic {
+        &self.pic
+    }
+
+    /// Mutably borrow the PocketIC instance that owns this standalone fixture.
+    #[must_use]
+    pub const fn pic_mut(&mut self) -> &mut Pic {
+        &mut self.pic
+    }
+
+    /// Read the installed canister id for this standalone fixture.
+    #[must_use]
+    pub const fn canister_id(&self) -> canic::cdk::types::Principal {
+        self.canister_id
+    }
+
+    /// Consume the fixture and return the owned PocketIC instance and canister id.
+    #[must_use]
+    pub fn into_parts(self) -> (Pic, canic::cdk::types::Principal) {
+        (self.pic, self.canister_id)
+    }
 }
 
 // Install one already-built wasm module into a fresh PocketIC instance with
@@ -109,8 +135,8 @@ pub fn install_standalone_canister(
 
     let wasm = read_wasm(&target_dir, crate_name, profile);
     let fixture = install_prebuilt_canister(wasm, standalone_init_args(role));
-    let canister_id = fixture.canister_id;
-    let pic = &fixture.pic;
+    let canister_id = fixture.canister_id();
+    let pic = fixture.pic();
     pic.wait_for_ready(
         canister_id,
         STANDALONE_READY_TICK_LIMIT,

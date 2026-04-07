@@ -9,7 +9,7 @@ use std::{
 const DFX_BUILD_ENV_STAMP_RELATIVE: &str = ".dfx/canic-build-env.stamp";
 
 /// Check whether one artifact is newer than the inputs that define it.
-pub fn artifact_is_fresh_against_inputs(
+fn artifact_is_fresh_against_inputs(
     workspace_root: &Path,
     artifact_path: &Path,
     watched_relative_paths: &[&str],
@@ -17,23 +17,6 @@ pub fn artifact_is_fresh_against_inputs(
     let artifact_mtime = fs::metadata(artifact_path)?.modified()?;
     let newest_input = newest_watched_input_mtime(workspace_root, watched_relative_paths)?;
     Ok(newest_input <= artifact_mtime)
-}
-
-/// Check whether a `dfx` artifact exists and is fresh against watched inputs.
-#[must_use]
-pub fn dfx_artifact_ready(
-    workspace_root: &Path,
-    artifact_relative_path: &str,
-    watched_relative_paths: &[&str],
-) -> bool {
-    dfx_artifact_ready_for_build(
-        workspace_root,
-        artifact_relative_path,
-        watched_relative_paths,
-        "local",
-        WasmBuildProfile::Debug,
-        &[],
-    )
 }
 
 /// Check whether a `dfx` artifact exists, is fresh, and matches the expected build env.
@@ -56,16 +39,6 @@ pub fn dfx_artifact_ready_for_build(
         }
         _ => false,
     }
-}
-
-/// Build all local `.dfx` canister artifacts while holding a file lock around the build.
-pub fn build_dfx_all(
-    workspace_root: &Path,
-    lock_relative_path: &str,
-    network: &str,
-    profile: WasmBuildProfile,
-) {
-    build_dfx_all_with_env(workspace_root, lock_relative_path, network, profile, &[]);
 }
 
 /// Build all local `.dfx` canister artifacts while holding a file lock around the build and

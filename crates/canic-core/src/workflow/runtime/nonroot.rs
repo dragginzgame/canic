@@ -13,7 +13,7 @@ use crate::{
     workflow::{env::EnvWorkflow, prelude::*},
 };
 
-use super::{RuntimeWorkflow, ensure_nonroot_delegated_auth_crypto_contract, log_memory_summary};
+use super::{RuntimeWorkflow, auth::RuntimeAuthWorkflow, log_memory_summary};
 
 ///
 /// init_nonroot_canister
@@ -79,7 +79,7 @@ fn init_nonroot_canister_internal(
     })?;
     AppStateOps::init_mode(app_mode);
     let canister_cfg = ConfigOps::current_canister()?;
-    ensure_nonroot_delegated_auth_crypto_contract(&canister_role, &canister_cfg)?;
+    RuntimeAuthWorkflow::ensure_nonroot_crypto_contract(&canister_role, &canister_cfg)?;
 
     // --- Phase 3: Service startup ---
     if with_attestation_cache {
@@ -128,7 +128,7 @@ fn post_upgrade_nonroot_canister_after_memory_init_internal(
     let canister_cfg = ConfigOps::current_canister().unwrap_or_else(|err| {
         panic!("current canister config unavailable during post-upgrade runtime init: {err}")
     });
-    ensure_nonroot_delegated_auth_crypto_contract(&canister_role, &canister_cfg)
+    RuntimeAuthWorkflow::ensure_nonroot_crypto_contract(&canister_role, &canister_cfg)
         .unwrap_or_else(|err| panic!("non-root delegated auth runtime contract failed: {err}"));
 
     // --- Phase 3: Service startup ---

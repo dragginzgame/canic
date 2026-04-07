@@ -12,7 +12,7 @@ use crate::{
     workflow::prelude::*,
 };
 
-use super::{RuntimeWorkflow, ensure_root_delegated_auth_crypto_contract, log_memory_summary};
+use super::{RuntimeWorkflow, auth::RuntimeAuthWorkflow, log_memory_summary};
 
 ///
 /// init_root_canister
@@ -88,7 +88,7 @@ pub fn init_root_canister(identity: SubnetIdentity) -> Result<(), InternalError>
         )
     })?;
     AppStateOps::init_mode(app_mode);
-    ensure_root_delegated_auth_crypto_contract()?;
+    RuntimeAuthWorkflow::ensure_root_crypto_contract()?;
 
     let created_at = IcOps::now_secs();
     SubnetRegistryOps::register_root(self_pid, created_at);
@@ -116,7 +116,7 @@ pub fn post_upgrade_root_canister_after_memory_init(
     log_memory_summary(&memory_summary);
 
     // --- Phase 2 intentionally omitted: post-upgrade does not re-import env or directories.
-    ensure_root_delegated_auth_crypto_contract()?;
+    RuntimeAuthWorkflow::ensure_root_crypto_contract()?;
 
     // --- Phase 3: Service startup ---
     RuntimeWorkflow::start_all_root().map_err(|err| {

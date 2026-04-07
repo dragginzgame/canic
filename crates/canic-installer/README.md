@@ -44,6 +44,7 @@ Typical installed binaries:
 - `canic-build-canister-artifact`
 - `canic-build-wasm-store-artifact`
 - `canic-emit-root-release-set-manifest`
+- `canic-list-release-roles`
 - `canic-stage-root-release-set`
 - `canic-install-root`
 - `canic-install-reference-topology`
@@ -65,6 +66,21 @@ If canister crates live somewhere other than the default `canisters/`
 directory, the installer first tries to discover them from Cargo workspace
 metadata. Zero extra config is needed when package names still follow the
 normal `canister_<role>` convention, even if manifests live in nested paths.
+
+If you need the configured ordinary role list from `canic.toml` directly,
+`canic-installer` now exposes it as one public CLI:
+
+```bash
+canic-list-release-roles
+```
+
+That command prints one role per line for the single subnet that owns `root`,
+excluding `root` and the hidden bootstrap `wasm_store`. To point at a specific
+config path explicitly:
+
+```bash
+canic-list-release-roles path/to/canic.toml
+```
 
 If you need to override discovery explicitly, set:
 

@@ -4,4 +4,7 @@
 #![allow(dead_code)]
 pub mod assertions;
 pub mod harness;
+mod profile;
 pub mod workers;
+
+pub use profile::RootSetupProfile;

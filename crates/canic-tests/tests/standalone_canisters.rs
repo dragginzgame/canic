@@ -34,8 +34,8 @@ fn standalone_scale_hub_perf_probe_succeeds() {
     let fixture = install_audit_scaling_probe(WasmBuildProfile::Fast);
 
     let response: Result<(bool, u64), Error> = fixture
-        .pic
-        .query_call(fixture.canister_id, "audit_plan_create_worker_probe", ())
+        .pic()
+        .query_call(fixture.canister_id(), "audit_plan_create_worker_probe", ())
         .expect("audit_plan_create_worker_probe transport query failed");
     let (_plan, perf) = response.expect("audit_plan_create_worker_probe application query failed");
 
@@ -46,8 +46,8 @@ fn standalone_scale_hub_perf_probe_succeeds() {
 fn standalone_test_auth_guard_rejects_bogus_token() {
     let fixture = install_standalone_canister("canister_test", TEST, WasmBuildProfile::Fast);
 
-    let verify: Result<Result<(), Error>, Error> = fixture.pic.update_call(
-        fixture.canister_id,
+    let verify: Result<Result<(), Error>, Error> = fixture.pic().update_call(
+        fixture.canister_id(),
         "test_verify_delegated_token",
         (bogus_delegated_token(),),
     );
@@ -67,8 +67,8 @@ fn prebuilt_canister_helper_installs_non_canic_wasm() {
 
     let key_set: Result<Result<AttestationKeySet, Error>, Error> =
         fixture
-            .pic
-            .update_call(fixture.canister_id, "canic_attestation_key_set", ());
+            .pic()
+            .update_call(fixture.canister_id(), "canic_attestation_key_set", ());
 
     let key_set = key_set
         .expect("canic_attestation_key_set transport failed")

@@ -5,10 +5,16 @@ Facade crate that re-exports the main Canic stack for canister projects:
 - endpoint and lifecycle macros
 - core runtime/types
 - curated IC CDK helpers
-- stable-memory helpers
+- stable-memory helpers under `canic::memory`
 
 Most downstream canister projects should start here instead of reaching for
 lower-level crates directly.
+
+Use the explicit module paths for the larger bundled surfaces:
+
+- `canic::api::*` for runtime APIs
+- `canic::cdk::*` for curated IC CDK helpers
+- `canic::memory::*` for stable-memory helpers and macros
 
 ## Default surface
 

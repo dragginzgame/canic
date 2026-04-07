@@ -16,16 +16,24 @@ use canic::{
 use canic_testkit::pic::Pic;
 use std::collections::HashMap;
 
+// Query the authoritative root subnet registry once and unwrap the canonical response shape.
+fn query_subnet_registry(
+    pic: &Pic,
+    root_id: Principal,
+) -> Vec<canic::dto::topology::SubnetRegistryEntry> {
+    let registry: Result<canic::dto::topology::SubnetRegistryResponse, canic::Error> = pic
+        .query_call(root_id, protocol::CANIC_SUBNET_REGISTRY, ())
+        .expect("query registry transport");
+    registry.expect("query registry application").0
+}
+
 /// Assert that the registry contains the expected roles with the expected parents.
 pub fn assert_registry_parents(
     pic: &Pic,
     root_id: Principal,
     expected: &[(CanisterRole, Option<Principal>)],
 ) {
-    let registry: Result<canic::dto::topology::SubnetRegistryResponse, canic::Error> = pic
-        .query_call(root_id, protocol::CANIC_SUBNET_REGISTRY, ())
-        .expect("query registry transport");
-    let registry = registry.expect("query registry application").0;
+    let registry = query_subnet_registry(pic, root_id);
 
     for (role, expected_parent) in expected {
         let entry = registry
@@ -42,10 +50,7 @@ pub fn assert_registry_parents(
 
 /// Look up one canister principal by role in the root subnet registry.
 pub fn registry_pid_for_role(pic: &Pic, root_id: Principal, role: &CanisterRole) -> Principal {
-    let registry: Result<canic::dto::topology::SubnetRegistryResponse, canic::Error> = pic
-        .query_call(root_id, protocol::CANIC_SUBNET_REGISTRY, ())
-        .expect("query registry transport");
-    let registry = registry.expect("query registry application").0;
+    let registry = query_subnet_registry(pic, root_id);
 
     registry
         .iter()
@@ -236,10 +241,7 @@ fn assert_child_directories_resolve_to_root(
 /// Assert that the CANIC_CANISTER_CHILDREN endpoint matches the registry.
 pub fn assert_children_match_registry(pic: &Pic, root_id: Principal) {
     // 1. Query authoritative registry
-    let registry: Result<canic::dto::topology::SubnetRegistryResponse, canic::Error> = pic
-        .query_call(root_id, protocol::CANIC_SUBNET_REGISTRY, ())
-        .expect("query registry transport");
-    let registry = registry.expect("query registry application").0;
+    let registry = query_subnet_registry(pic, root_id);
 
     // 2. Build expected children from registry (topology-only)
     let mut expected: Vec<CanisterInfo> = registry
