@@ -8,10 +8,10 @@ cd "$ROOT_DIR"
 
 sed -E -i \
   "s#CANIC_INSTALLER_VERSION=\"\\\$\\{CANIC_INSTALLER_VERSION:-[0-9]+\\.[0-9]+\\.[0-9]+\\}\"#CANIC_INSTALLER_VERSION=\"\\\${CANIC_INSTALLER_VERSION:-$NEW_VERSION}\"#" \
-  scripts/install.sh
+  scripts/dev/install_dev.sh
 
 sed -E -i \
-  "s#https://raw.githubusercontent.com/dragginzgame/canic/v[0-9]+\\.[0-9]+\\.[0-9]+/scripts/install.sh#https://raw.githubusercontent.com/dragginzgame/canic/v$NEW_VERSION/scripts/install.sh#g" \
+  "s#https://raw.githubusercontent.com/dragginzgame/canic/v[0-9]+\\.[0-9]+\\.[0-9]+/scripts/dev/install_dev.sh#https://raw.githubusercontent.com/dragginzgame/canic/v$NEW_VERSION/scripts/dev/install_dev.sh#g" \
   README.md \
   crates/canic-installer/README.md
 

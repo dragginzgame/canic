@@ -40,14 +40,14 @@ fn workspace_version() -> String {
 fn tagged_install_script_url() -> String {
     let workspace_version = workspace_version();
     format!(
-        "https://raw.githubusercontent.com/dragginzgame/canic/v{workspace_version}/scripts/install.sh"
+        "https://raw.githubusercontent.com/dragginzgame/canic/v{workspace_version}/scripts/dev/install_dev.sh"
     )
 }
 
 // Keeps the curlable installer pinned to the same version as the current workspace release.
 #[test]
 fn install_script_default_installer_version_matches_workspace_version() {
-    let install_script_path = workspace_root().join("scripts/install.sh");
+    let install_script_path = workspace_root().join("scripts/dev/install_dev.sh");
     let install_script = read_text(&install_script_path);
     let workspace_version = workspace_version();
     let expected =

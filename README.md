@@ -74,9 +74,8 @@ The crate was historically known as **ICU** (Internet Computer Utilities). All c
 * `scripts/` – build, release, audit, and environment helpers.
 
   * `app/` – bootstrap scripts for the demo topology.
-  * `bench/` – local benchmarking helpers.
   * `ci/` – version bumping and recurring audit helpers used by CI and local maintenance flows.
-  * `env.sh` – shared environment bootstrap for scripts and tooling.
+  * `dev/` – local developer setup and maintenance helpers.
 * `.github/workflows/` – CI checks and tag-driven build workflows.
 
 ## Getting Started
@@ -150,7 +149,7 @@ Populate `canic.toml` with subnet definitions, directory membership, and per‑c
 For local DFX workflows, prefer the shared setup script:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/dragginzgame/canic/v0.26.5/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/dragginzgame/canic/v0.26.5/scripts/dev/install_dev.sh | bash
 ```
 
 That script installs:
