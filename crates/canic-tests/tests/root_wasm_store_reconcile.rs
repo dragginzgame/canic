@@ -23,7 +23,7 @@ use canic_control_plane::{
 };
 use canic_internal::canister::MINIMAL;
 use canic_testkit::{artifacts::workspace_root_for, pic::Pic};
-use root::harness::setup_root_cached_reconcile_small_store;
+use root::{RootSetupProfile, harness::setup_cached_root};
 use std::{fs, path::PathBuf};
 
 const STORE_ROLLOVER_SAFETY_BYTES: u64 = 64 * 1024;
@@ -336,7 +336,7 @@ fn root_retired_store_gc_finalize_and_delete_cleans_up_tracked_store() {
 
 // Build the debug reference topology with the hidden small-cap store cfg, then install root.
 fn setup_root_with_small_implicit_store() -> root::harness::RootSetup {
-    setup_root_cached_reconcile_small_store()
+    setup_cached_root(RootSetupProfile::ReconcileSmallStore)
 }
 
 // Retire one managed store so the GC/finalize/delete canary can drive the full lifecycle.

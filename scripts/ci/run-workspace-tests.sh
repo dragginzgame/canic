@@ -68,6 +68,7 @@ run_test "workspace lib/bin tests" --workspace --lib --bins
 # version bumps and tagged installer drift fail before PocketIC-heavy work.
 run_test "canic protocol_surface" -p canic --test protocol_surface
 run_test "canic install_script_surface" -p canic --test install_script_surface
+run_test "canic reference_surface" -p canic --test reference_surface
 
 if [[ "$MODE" == "fast" ]]; then
     print_summary

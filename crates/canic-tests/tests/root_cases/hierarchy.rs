@@ -1,9 +1,10 @@
 use crate::root::{
+    RootSetupProfile,
     assertions::{
         assert_child_env, assert_children_match_registry, assert_directories_consistent,
         assert_registry_parents, assert_state_endpoints_are_root_only,
     },
-    harness::setup_root_cached_topology,
+    harness::setup_cached_root,
 };
 use canic::ids::CanisterRole;
 use canic_internal::canister;
@@ -24,7 +25,7 @@ fn root_reference_topology_is_consistent() {
         "root_reference_topology_is_consistent",
         "setup cached topology",
     );
-    let setup = setup_root_cached_topology();
+    let setup = setup_cached_root(RootSetupProfile::Topology);
 
     test_progress(
         "root_reference_topology_is_consistent",

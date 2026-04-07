@@ -1,3 +1,4 @@
+mod baseline;
 mod build;
 mod capability;
 mod fixture;

@@ -2,11 +2,27 @@
 
 Public PocketIC-oriented test utilities for projects that use Canic.
 
-This crate is intentionally limited to generic host-side test infrastructure,
-such as the PocketIC wrapper, generic call helpers, ready polling, standalone
-non-root Canic canister fixtures, generic prebuilt-wasm install helpers,
-PocketIC `install_code` retry helpers, fallible PocketIC startup/setup helpers,
-and cached baseline primitives.
-Canic's own root-topology and auth-fixture harness code belongs in the
-unpublished `canic-testing-internal` workspace crate instead of expanding this
-public surface.
+Use this crate when you want generic host-side test infrastructure that is
+still publishable and reusable outside the Canic workspace.
+
+What it owns:
+- PocketIC startup and builder helpers
+- generic call/install helpers
+- ready polling and diagnostics
+- standalone non-root canister fixtures
+- generic prebuilt-wasm install helpers
+- cached PocketIC baseline primitives
+- workspace/wasm artifact helpers used by host-side tests
+
+What it intentionally does not own:
+- Canic's full root-topology harness
+- attestation-specific fixture policy
+- repo-only audit probes
+- broad Canic self-test orchestration
+
+Those repo-specific seams belong in the unpublished
+`canic-testing-internal` crate instead of widening this public surface.
+
+If you are writing downstream PocketIC tests, start here.
+If you are editing Canic's own root/auth integration harnesses, you probably
+want `canic-testing-internal` instead.

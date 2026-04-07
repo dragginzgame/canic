@@ -38,8 +38,13 @@ pub struct CachedPicBaselineGuard<'a, T> {
     guard: MutexGuard<'a, Option<CachedPicBaseline<T>>>,
 }
 
+enum CachedBaselineRestoreFailure {
+    DeadInstanceTransport,
+    Panic(Box<dyn std::any::Any + Send>),
+}
+
 /// Acquire one process-local cached PocketIC baseline, building it on first use.
-pub fn acquire_cached_pic_baseline<T, F>(
+fn acquire_cached_pic_baseline<T, F>(
     slot: &'static Mutex<Option<CachedPicBaseline<T>>>,
     build: F,
 ) -> (CachedPicBaselineGuard<'static, T>, bool)
@@ -74,17 +79,12 @@ where
         return (baseline, false);
     }
 
-    let restore_result = catch_unwind(AssertUnwindSafe(|| {
-        restore(&baseline);
-    }));
-    if restore_result.is_ok() {
-        return (baseline, true);
-    }
-
-    let panic_payload = restore_result.expect_err("restore failure must carry panic payload");
-    let message = startup::panic_payload_to_string(panic_payload.as_ref());
-    if !startup::is_dead_instance_transport_error(&message) {
-        resume_unwind(panic_payload);
+    match try_restore_cached_pic_baseline(&baseline, restore) {
+        Ok(()) => return (baseline, true),
+        Err(CachedBaselineRestoreFailure::DeadInstanceTransport) => {}
+        Err(CachedBaselineRestoreFailure::Panic(payload)) => {
+            resume_unwind(payload);
+        }
     }
 
     drop(baseline);
@@ -94,9 +94,30 @@ where
     (rebuilt, false)
 }
 
+// Attempt one cached baseline restore and classify only the one recovery path
+// we intentionally swallow: a dead PocketIC transport instance.
+fn try_restore_cached_pic_baseline<T, R>(
+    baseline: &CachedPicBaseline<T>,
+    restore: R,
+) -> Result<(), CachedBaselineRestoreFailure>
+where
+    R: Fn(&CachedPicBaseline<T>),
+{
+    match catch_unwind(AssertUnwindSafe(|| restore(baseline))) {
+        Ok(()) => Ok(()),
+        Err(payload) => {
+            if startup::panic_is_dead_instance_transport(payload.as_ref()) {
+                Err(CachedBaselineRestoreFailure::DeadInstanceTransport)
+            } else {
+                Err(CachedBaselineRestoreFailure::Panic(payload))
+            }
+        }
+    }
+}
+
 /// Remove one dead cached baseline and swallow teardown panics from a broken
 /// PocketIC instance so callers can rebuild cleanly.
-pub fn drop_stale_cached_pic_baseline<T>(slot: &'static Mutex<Option<CachedPicBaseline<T>>>) {
+fn drop_stale_cached_pic_baseline<T>(slot: &'static Mutex<Option<CachedPicBaseline<T>>>) {
     let stale = {
         let mut slot = slot
             .lock()

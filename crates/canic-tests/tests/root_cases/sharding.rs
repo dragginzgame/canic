@@ -1,10 +1,12 @@
-use crate::root::{assertions::assert_registry_parents, harness::setup_root_cached_sharding};
+use crate::root::{
+    RootSetupProfile, assertions::assert_registry_parents, harness::setup_cached_root,
+};
 use canic::{Error, cdk::types::Principal, ids::CanisterRole};
 use canic_internal::canister;
 
 #[test]
 fn user_hub_sharding_profile_stays_minimal_and_can_create_a_shard() {
-    let setup = setup_root_cached_sharding();
+    let setup = setup_cached_root(RootSetupProfile::Sharding);
 
     assert!(
         !setup.subnet_directory.contains_key(&canister::APP),

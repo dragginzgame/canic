@@ -242,6 +242,7 @@ If you need the lower-level build/install boundaries directly, `canic-installer`
 - `canic-build-canister-artifact`
 - `canic-build-wasm-store-artifact`
 - `canic-emit-root-release-set-manifest`
+- `canic-list-release-roles`
 - `canic-stage-root-release-set`
 
 ## Layered Architecture

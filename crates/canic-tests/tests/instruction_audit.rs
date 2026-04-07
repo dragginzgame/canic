@@ -40,7 +40,7 @@ use canic_testing_internal::pic::{
     request_root_delegation_provision,
 };
 use canic_testkit::{artifacts::WasmBuildProfile, pic::Pic};
-use root::harness::{setup_root_capability, setup_root_sharding, setup_root_topology};
+use root::{RootSetupProfile, harness::setup_root};
 use serde::Serialize;
 use std::{
     collections::BTreeSet,
@@ -616,11 +616,13 @@ fn query_perf_is_unobservable(scenario: &AuditScenario, row: &CanonicalPerfRow) 
 fn setup_for_scenario(scenario: &AuditScenario) -> root::harness::RootSetup {
     match scenario.key {
         "root:canic_subnet_registry:full-registry" | "root:canic_subnet_state:empty-struct" => {
-            setup_root_topology()
+            setup_root(RootSetupProfile::Topology)
         }
         "root:canic_request_delegation:fresh-shard"
-        | "test:test_verify_delegated_token:valid-delegated-token" => setup_root_sharding(),
-        _ => setup_root_capability(),
+        | "test:test_verify_delegated_token:valid-delegated-token" => {
+            setup_root(RootSetupProfile::Sharding)
+        }
+        _ => setup_root(RootSetupProfile::Capability),
     }
 }
 
@@ -706,15 +708,15 @@ fn run_standalone_scenario(scenario: &AuditScenario) -> Option<ScenarioResult> {
     };
 
     let fixture = install_standalone_canister(crate_name, role, WasmBuildProfile::Fast);
-    let target_pid = fixture.canister_id;
+    let target_pid = fixture.canister_id();
     let (count, total_instructions, sample_origin, checkpoint_rows) =
         if scenario.transport_mode == "query" {
-            let total = execute_query_perf_probe(&fixture.pic, scenario, target_pid);
+            let total = execute_query_perf_probe(fixture.pic(), scenario, target_pid);
             (1, total, "derived".to_string(), Vec::new())
         } else {
-            let before = perf_entries(&fixture.pic, target_pid);
-            execute_standalone_scenario(&fixture.pic, scenario, target_pid);
-            let after = perf_entries(&fixture.pic, target_pid);
+            let before = perf_entries(fixture.pic(), target_pid);
+            execute_standalone_scenario(fixture.pic(), scenario, target_pid);
+            let after = perf_entries(fixture.pic(), target_pid);
             let (count, total_instructions) = perf_delta(
                 &before,
                 &after,
@@ -766,7 +768,7 @@ fn run_standalone_scenario(scenario: &AuditScenario) -> Option<ScenarioResult> {
 
 fn run_audit_leaf_probe_scenario(scenario: &AuditScenario) -> ScenarioResult {
     let fixture = install_audit_leaf_probe(WasmBuildProfile::Fast);
-    run_query_only_standalone_result(scenario, &fixture.pic, fixture.canister_id)
+    run_query_only_standalone_result(scenario, fixture.pic(), fixture.canister_id())
 }
 
 fn run_audit_root_probe_scenario(scenario: &AuditScenario) -> ScenarioResult {
@@ -776,7 +778,7 @@ fn run_audit_root_probe_scenario(scenario: &AuditScenario) -> ScenarioResult {
 
 fn run_audit_scaling_probe_scenario(scenario: &AuditScenario) -> ScenarioResult {
     let fixture = install_audit_scaling_probe(WasmBuildProfile::Fast);
-    run_query_only_standalone_result(scenario, &fixture.pic, fixture.canister_id)
+    run_query_only_standalone_result(scenario, fixture.pic(), fixture.canister_id())
 }
 
 fn run_query_only_standalone_result(

@@ -2,10 +2,7 @@ mod dfx;
 mod wasm;
 mod workspace;
 
-pub use dfx::{
-    artifact_is_fresh_against_inputs, build_dfx_all, build_dfx_all_with_env, dfx_artifact_ready,
-    dfx_artifact_ready_for_build,
-};
+pub use dfx::{build_dfx_all_with_env, dfx_artifact_ready_for_build};
 pub use wasm::{
     INTERNAL_TEST_ENDPOINTS_ENV, WasmBuildProfile, build_internal_test_wasm_canisters,
     build_internal_test_wasm_canisters_with_env, build_wasm_canisters, read_wasm,

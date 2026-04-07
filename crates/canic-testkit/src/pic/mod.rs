@@ -25,8 +25,8 @@ mod standalone;
 mod startup;
 
 pub use baseline::{
-    CachedPicBaseline, CachedPicBaselineGuard, ControllerSnapshots, acquire_cached_pic_baseline,
-    drop_stale_cached_pic_baseline, restore_or_rebuild_cached_pic_baseline,
+    CachedPicBaseline, CachedPicBaselineGuard, ControllerSnapshots,
+    restore_or_rebuild_cached_pic_baseline,
 };
 pub use errors::{PicInstallError, StandaloneCanisterFixtureError};
 pub use process_lock::{

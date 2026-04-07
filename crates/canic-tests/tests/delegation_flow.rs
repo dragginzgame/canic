@@ -15,7 +15,10 @@ use canic::{
 };
 use canic_internal::canister;
 use canic_testing_internal::pic::{create_user_shard, issue_delegated_token};
-use root::harness::{RootSetup, setup_root_cached_sharding};
+use root::{
+    RootSetupProfile,
+    harness::{RootSetup, setup_cached_root},
+};
 use std::time::Duration;
 
 const fn p(id: u8) -> Principal {
@@ -252,7 +255,7 @@ fn should_run_certified(test_name: &str) -> bool {
 // Build the standard certified delegation fixture used by most PocketIC flow tests.
 fn setup_delegation_fixture(test_name: &str) -> DelegationFixture {
     log_step(&format!("{test_name}: setup root"));
-    let setup = setup_root_cached_sharding();
+    let setup = setup_cached_root(RootSetupProfile::Sharding);
     let user_hub_pid = setup
         .subnet_directory
         .get(&canister::USER_HUB)

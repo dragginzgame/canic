@@ -1,12 +1,13 @@
 use crate::root::{
-    harness::setup_root_cached_scaling,
+    RootSetupProfile,
+    harness::setup_cached_root,
     workers::{count_workers, create_worker},
 };
 use canic_internal::canister;
 
 #[test]
 fn worker_topology_cascades_through_parent() {
-    let setup = setup_root_cached_scaling();
+    let setup = setup_cached_root(RootSetupProfile::Scaling);
 
     let scale_hub_pid = setup
         .subnet_directory

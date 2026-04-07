@@ -18,6 +18,12 @@ pub enum PicStartError {
     Panic { message: String },
 }
 
+#[derive(Debug, Eq, PartialEq)]
+pub(super) enum PicPanicKind {
+    DeadInstanceTransport { message: String },
+    Other { message: String },
+}
+
 pub(super) fn try_build_pic(builder: PocketIcBuilder) -> Result<Pic, PicStartError> {
     let build = catch_unwind(|| builder.build());
 
@@ -54,6 +60,27 @@ pub(super) fn panic_payload_to_string(payload: &(dyn Any + Send)) -> String {
     "non-string panic payload".to_string()
 }
 
+// Classify one panic payload so callers can recover dead-instance restores
+// without repeating transport-string matching at each call site.
+pub(super) fn classify_pic_panic(payload: Box<dyn Any + Send>) -> PicPanicKind {
+    let message = panic_payload_to_string(payload.as_ref());
+
+    if is_dead_instance_transport_error(&message) {
+        return PicPanicKind::DeadInstanceTransport { message };
+    }
+
+    PicPanicKind::Other { message }
+}
+
+// Check whether one panic payload belongs to the dead-instance transport class
+// without consuming it, so callers can still resume the original panic.
+pub(super) fn panic_is_dead_instance_transport(payload: &(dyn Any + Send)) -> bool {
+    matches!(
+        classify_pic_panic(Box::new(panic_payload_to_string(payload))),
+        PicPanicKind::DeadInstanceTransport { .. }
+    )
+}
+
 // Detect the PocketIC transport failure class that means the owned instance
 // has already died and cached snapshot restore should rebuild from scratch.
 pub(super) fn is_dead_instance_transport_error(message: &str) -> bool {
@@ -66,7 +93,11 @@ pub(super) fn is_dead_instance_transport_error(message: &str) -> bool {
 
 // Classify one PocketIC startup panic into a typed public error.
 fn classify_pic_start_panic(payload: Box<dyn Any + Send>) -> PicStartError {
-    let message = panic_payload_to_string(payload.as_ref());
+    let message = match classify_pic_panic(payload) {
+        PicPanicKind::DeadInstanceTransport { message } | PicPanicKind::Other { message } => {
+            message
+        }
+    };
 
     if message.starts_with("Failed to validate PocketIC server binary") {
         if message.contains("No such file or directory") || message.contains("os error 2") {
@@ -97,7 +128,10 @@ fn classify_pic_start_panic(payload: Box<dyn Any + Send>) -> PicStartError {
 
 #[cfg(test)]
 mod tests {
-    use super::{PicStartError, classify_pic_start_panic, is_dead_instance_transport_error};
+    use super::{
+        PicPanicKind, PicStartError, classify_pic_panic, classify_pic_start_panic,
+        is_dead_instance_transport_error,
+    };
 
     #[test]
     fn pic_start_error_classifies_missing_binary() {
@@ -128,6 +162,18 @@ mod tests {
     fn dead_instance_transport_error_detects_incomplete_message() {
         assert!(is_dead_instance_transport_error(
             "reqwest::Error { source: hyper::Error(IncompleteMessage) }"
+        ));
+    }
+
+    #[test]
+    fn classify_pic_panic_marks_dead_instance_transport() {
+        let classified = classify_pic_panic(Box::new(
+            "reqwest::Error { source: hyper::Error(IncompleteMessage) }".to_string(),
+        ));
+
+        assert!(matches!(
+            classified,
+            PicPanicKind::DeadInstanceTransport { .. }
         ));
     }
 }
