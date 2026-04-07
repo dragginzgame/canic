@@ -214,6 +214,8 @@ mod tests {
     use std::{
         fs,
         path::PathBuf,
+        thread::sleep,
+        time::Duration,
         time::{SystemTime, UNIX_EPOCH},
     };
 
@@ -232,8 +234,9 @@ mod tests {
         let workspace_root = temp_workspace();
         let artifact_relative_path = ".dfx/local/canisters/root/root.wasm.gz";
         let artifact_path = workspace_root.join(artifact_relative_path);
-        fs::write(&artifact_path, b"wasm").expect("write artifact");
         fs::write(workspace_root.join("Cargo.toml"), "workspace").expect("write watched input");
+        sleep(Duration::from_millis(20));
+        fs::write(&artifact_path, b"wasm").expect("write artifact");
         fs::write(
             workspace_root.join(".dfx/canic-build-env.stamp"),
             build_stamp_contents("local", WasmBuildProfile::Debug, &[]),
