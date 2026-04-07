@@ -1,5 +1,5 @@
 use crate::release_set::{
-    config_path, configured_release_roles, dfx_call, dfx_root, emit_root_release_set_manifest,
+    config_path, configured_install_targets, dfx_call, dfx_root, emit_root_release_set_manifest,
     load_root_release_set_manifest, resolve_artifact_root, resume_root_bootstrap,
     root_release_set_manifest_path, stage_root_release_set, workspace_root,
 };
@@ -154,9 +154,7 @@ fn local_install_build_targets(
     workspace_root: &Path,
     root_canister: &str,
 ) -> Result<Vec<String>, Box<dyn std::error::Error>> {
-    let mut targets = vec![root_canister.to_string()];
-    targets.extend(configured_release_roles(&config_path(workspace_root))?);
-    Ok(targets)
+    configured_install_targets(&config_path(workspace_root), root_canister)
 }
 
 // Run one `dfx build <canister>` call per configured local install target.
