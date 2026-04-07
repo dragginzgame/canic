@@ -1,11 +1,5 @@
 use canic::{
-    Error,
-    cdk::types::Principal,
-    dto::{
-        page::{Page, PageRequest},
-        topology::DirectoryEntryResponse,
-    },
-    ids::CanisterRole,
+    Error, cdk::types::Principal, dto::topology::SubnetRegistryResponse, ids::CanisterRole,
     protocol,
 };
 use canic_control_plane::{
@@ -466,23 +460,19 @@ fn wait_for_children_ready(
     );
 }
 
-// Fetch the subnet directory from root as a role → principal map.
+// Fetch the authoritative subnet registry from root and project it into the
+// role → principal map used by the root harness metadata.
 fn fetch_subnet_directory(pic: &Pic, root_id: Principal) -> HashMap<CanisterRole, Principal> {
-    let page: Result<Page<DirectoryEntryResponse>, canic::Error> = pic
-        .query_call(
-            root_id,
-            protocol::CANIC_SUBNET_DIRECTORY,
-            (PageRequest {
-                limit: 100,
-                offset: 0,
-            },),
-        )
-        .expect("query subnet directory transport");
+    let registry: Result<SubnetRegistryResponse, canic::Error> = pic
+        .query_call(root_id, protocol::CANIC_SUBNET_REGISTRY, ())
+        .expect("query subnet registry transport");
 
-    let page = page.expect("query subnet directory application");
+    let registry = registry.expect("query subnet registry application");
 
-    page.entries
+    registry
+        .0
         .into_iter()
+        .filter(|entry| !entry.role.is_root() && !entry.role.is_wasm_store())
         .map(|entry| (entry.role, entry.pid))
         .collect()
 }
