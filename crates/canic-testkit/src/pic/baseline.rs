@@ -1,7 +1,6 @@
 use candid::Principal;
 use std::{
     collections::HashMap,
-    ops::{Deref, DerefMut},
     panic::{AssertUnwindSafe, catch_unwind, resume_unwind},
     sync::{Mutex, MutexGuard},
 };
@@ -79,7 +78,13 @@ where
         return (baseline, false);
     }
 
-    match try_restore_cached_pic_baseline(&baseline, restore) {
+    match try_restore_cached_pic_baseline(
+        baseline
+            .guard
+            .as_ref()
+            .expect("cached PocketIC baseline must exist"),
+        restore,
+    ) {
         Ok(()) => return (baseline, true),
         Err(CachedBaselineRestoreFailure::DeadInstanceTransport) => {}
         Err(CachedBaselineRestoreFailure::Panic(payload)) => {
@@ -132,21 +137,49 @@ fn drop_stale_cached_pic_baseline<T>(slot: &'static Mutex<Option<CachedPicBaseli
     }
 }
 
-impl<T> Deref for CachedPicBaselineGuard<'_, T> {
-    type Target = CachedPicBaseline<T>;
-
-    fn deref(&self) -> &Self::Target {
+impl<T> CachedPicBaselineGuard<'_, T> {
+    /// Borrow the owned PocketIC instance behind this cached baseline guard.
+    #[must_use]
+    pub fn pic(&self) -> &Pic {
         self.guard
             .as_ref()
             .expect("cached PocketIC baseline must exist")
+            .pic()
     }
-}
 
-impl<T> DerefMut for CachedPicBaselineGuard<'_, T> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
+    /// Mutably borrow the owned PocketIC instance behind this cached baseline guard.
+    #[must_use]
+    pub fn pic_mut(&mut self) -> &mut Pic {
         self.guard
             .as_mut()
             .expect("cached PocketIC baseline must exist")
+            .pic_mut()
+    }
+
+    /// Borrow the captured metadata behind this cached baseline guard.
+    #[must_use]
+    pub fn metadata(&self) -> &T {
+        self.guard
+            .as_ref()
+            .expect("cached PocketIC baseline must exist")
+            .metadata()
+    }
+
+    /// Mutably borrow the captured metadata behind this cached baseline guard.
+    #[must_use]
+    pub fn metadata_mut(&mut self) -> &mut T {
+        self.guard
+            .as_mut()
+            .expect("cached PocketIC baseline must exist")
+            .metadata_mut()
+    }
+
+    /// Restore the captured snapshot set back into the owned PocketIC instance.
+    pub fn restore(&self, controller_id: Principal) {
+        self.guard
+            .as_ref()
+            .expect("cached PocketIC baseline must exist")
+            .restore(controller_id);
     }
 }
 

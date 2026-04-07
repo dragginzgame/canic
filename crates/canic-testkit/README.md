@@ -14,6 +14,11 @@ What it owns:
 - cached PocketIC baseline primitives
 - workspace/wasm artifact helpers used by host-side tests
 
+Current API shape:
+- `Pic` is the intentional host-side wrapper surface for PocketIC calls used by this crate
+- cached baseline guards expose explicit accessors instead of transparently derefing into raw `PocketIc`
+- tests should prefer the wrapper methods and fixture helpers here instead of reaching through to the underlying PocketIC client directly
+
 What it intentionally does not own:
 - Canic's full root-topology harness
 - attestation-specific fixture policy

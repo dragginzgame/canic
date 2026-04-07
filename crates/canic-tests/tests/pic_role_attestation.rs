@@ -1,7 +1,7 @@
 // Category C - Artifact / deployment test (embedded static config).
 // This test relies on embedded config by design (test stub).
 
-use candid::{Principal, decode_one, encode_args, utils::ArgumentEncoder};
+use candid::{Principal, utils::ArgumentEncoder};
 use canic_core::api::rpc::RpcApi;
 use canic_core::dto::{
     auth::{
@@ -25,7 +25,7 @@ use canic_testing_internal::pic::{
     CachedInstalledRoot, install_test_root_cached, install_test_root_with_verifier_cached,
     install_test_root_without_test_material_cached, signer_pid,
 };
-use canic_testkit::pic::wait_until_ready as wait_for_ready_canister;
+use canic_testkit::pic::{Pic, wait_until_ready as wait_for_ready_canister};
 use serde::de::DeserializeOwned;
 use std::{
     io::Write,
@@ -37,13 +37,13 @@ use std::{
 static DELEGATION_ADMIN_FIXTURE_CACHE: OnceLock<Mutex<Option<DelegationAdminCachedData>>> =
     OnceLock::new();
 
-struct PicBorrow<'a, T: Deref<Target = pocket_ic::PocketIc>>(&'a T);
+struct PicBorrow<'a>(&'a Pic);
 
-impl<T: Deref<Target = pocket_ic::PocketIc>> Deref for PicBorrow<'_, T> {
-    type Target = pocket_ic::PocketIc;
+impl Deref for PicBorrow<'_> {
+    type Target = Pic;
 
     fn deref(&self) -> &Self::Target {
-        self.0.deref()
+        self.0
     }
 }
 
@@ -84,7 +84,7 @@ fn encode_delegated_grant_capability_proof(proof: DelegatedGrantProof) -> Capabi
 #[test]
 fn role_attestation_verification_paths() {
     let setup = install_test_root_cached();
-    let pic = PicBorrow(&setup.pic);
+    let pic = PicBorrow(setup.pic.pic());
     let root_id = setup.root_id;
 
     // Happy path should verify a freshly issued self-attestation.
@@ -169,7 +169,7 @@ fn role_attestation_verification_paths() {
 #[test]
 fn role_attestation_verify_handles_rotated_key_grace_window() {
     let setup = install_test_root_cached();
-    let pic = PicBorrow(&setup.pic);
+    let pic = PicBorrow(setup.pic.pic());
     let root_id = setup.root_id;
 
     let previous_key_id = 1_001u32;
@@ -270,7 +270,7 @@ fn delegated_session_bootstrap_affects_authenticated_guard_only() {
         "setup root",
     );
     let setup = install_test_root_cached();
-    let pic = PicBorrow(&setup.pic);
+    let pic = PicBorrow(setup.pic.pic());
     let root_id = setup.root_id;
     let signer_id = setup.signer_id;
 
@@ -416,7 +416,7 @@ fn authenticated_guard_checks_current_proof_before_signature_validation() {
         "setup root",
     );
     let setup = install_test_root_cached();
-    let pic = PicBorrow(&setup.pic);
+    let pic = PicBorrow(setup.pic.pic());
     let root_id = setup.root_id;
     let signer_id = setup.signer_id;
 
@@ -520,14 +520,14 @@ fn delegation_admin_prewarm_updates_stale_verifier_proof_and_records_metrics() {
         "install root and stale verifier proof",
     );
     install_root_test_delegation_material(
-        &fixture.setup.pic,
+        fixture.setup.pic.pic(),
         fixture.root_id,
         fixture.current_token.proof.clone(),
         fixture.root_public_key.clone(),
         fixture.shard_public_key.clone(),
     );
     install_signer_test_delegation_material(
-        &fixture.setup.pic,
+        fixture.setup.pic.pic(),
         fixture.verifier_id,
         fixture.root_id,
         fixture.stale_token.proof.clone(),
@@ -536,7 +536,7 @@ fn delegation_admin_prewarm_updates_stale_verifier_proof_and_records_metrics() {
     );
 
     assert_token_verify_proof_missing(
-        &fixture.setup.pic,
+        fixture.setup.pic.pic(),
         fixture.verifier_id,
         fixture.delegated_subject,
         fixture.current_token.clone(),
@@ -547,7 +547,7 @@ fn delegation_admin_prewarm_updates_stale_verifier_proof_and_records_metrics() {
         "prewarm verifier",
     );
     let prewarm = prewarm_verifiers(
-        &fixture.setup.pic,
+        fixture.setup.pic.pic(),
         fixture.root_id,
         fixture.current_token.proof.clone(),
         vec![fixture.verifier_id],
@@ -565,7 +565,7 @@ fn delegation_admin_prewarm_updates_stale_verifier_proof_and_records_metrics() {
     );
 
     let verified_after_prewarm: Result<(), Error> = update_call_as(
-        &fixture.setup.pic,
+        fixture.setup.pic.pic(),
         fixture.verifier_id,
         fixture.delegated_subject,
         "signer_verify_token",
@@ -574,7 +574,7 @@ fn delegation_admin_prewarm_updates_stale_verifier_proof_and_records_metrics() {
     verified_after_prewarm.expect("prewarm should update verifier proof");
 
     assert_access_metrics(
-        &fixture.setup.pic,
+        fixture.setup.pic.pic(),
         fixture.root_id,
         "auth_signer",
         &[
@@ -599,7 +599,7 @@ fn delegation_admin_prewarm_updates_stale_verifier_proof_and_records_metrics() {
         ],
     );
     assert_access_metrics(
-        &fixture.setup.pic,
+        fixture.setup.pic.pic(),
         fixture.verifier_id,
         "auth_verifier",
         &[("token_rejected_proof_miss", 1)],
@@ -619,7 +619,7 @@ fn delegation_admin_repair_requires_matching_local_root_proof() {
     let fixture = delegation_admin_fixture(84);
 
     install_root_test_delegation_material(
-        &fixture.setup.pic,
+        fixture.setup.pic.pic(),
         fixture.root_id,
         fixture.stale_token.proof,
         fixture.root_public_key,
@@ -631,7 +631,7 @@ fn delegation_admin_repair_requires_matching_local_root_proof() {
         "repair verifier with mismatched local proof",
     );
     let repair = repair_verifiers(
-        &fixture.setup.pic,
+        fixture.setup.pic.pic(),
         fixture.root_id,
         fixture.current_token.proof,
         vec![fixture.verifier_id],
@@ -644,7 +644,7 @@ fn delegation_admin_repair_requires_matching_local_root_proof() {
     );
 
     assert_access_metrics(
-        &fixture.setup.pic,
+        fixture.setup.pic.pic(),
         fixture.root_id,
         "auth_signer",
         &[
@@ -678,7 +678,7 @@ fn verifier_store_rejects_root_push_when_local_canister_is_not_in_proof_audience
     let fixture = delegation_admin_fixture(88);
 
     install_root_test_delegation_material(
-        &fixture.setup.pic,
+        fixture.setup.pic.pic(),
         fixture.root_id,
         fixture.current_token.proof.clone(),
         fixture.root_public_key,
@@ -690,7 +690,7 @@ fn verifier_store_rejects_root_push_when_local_canister_is_not_in_proof_audience
         "push verifier proof outside audience",
     );
     let store: Result<(), Error> = update_call_as(
-        &fixture.setup.pic,
+        fixture.setup.pic.pic(),
         fixture.signer_id,
         fixture.root_id,
         "canic_delegation_set_verifier_proof",
@@ -709,7 +709,7 @@ fn verifier_store_rejects_root_push_when_local_canister_is_not_in_proof_audience
     );
 
     assert_access_metrics(
-        &fixture.setup.pic,
+        fixture.setup.pic.pic(),
         fixture.signer_id,
         "auth_signer",
         &[(
@@ -736,7 +736,7 @@ fn signer_runtime_prefers_most_recent_keyed_proof_for_signing_selection() {
         "install stale signing proof",
     );
     install_signer_test_delegation_material(
-        &fixture.setup.pic,
+        fixture.setup.pic.pic(),
         fixture.signer_id,
         fixture.root_id,
         fixture.stale_token.proof.clone(),
@@ -746,7 +746,7 @@ fn signer_runtime_prefers_most_recent_keyed_proof_for_signing_selection() {
 
     let selected_before: Result<Option<canic_core::dto::auth::DelegationProof>, Error> =
         query_call_as(
-            &fixture.setup.pic,
+            fixture.setup.pic.pic(),
             fixture.signer_id,
             Principal::anonymous(),
             "signer_current_signing_proof_test",
@@ -763,7 +763,7 @@ fn signer_runtime_prefers_most_recent_keyed_proof_for_signing_selection() {
         "install current signing proof",
     );
     install_signer_test_delegation_material(
-        &fixture.setup.pic,
+        fixture.setup.pic.pic(),
         fixture.signer_id,
         fixture.root_id,
         fixture.current_token.proof.clone(),
@@ -773,7 +773,7 @@ fn signer_runtime_prefers_most_recent_keyed_proof_for_signing_selection() {
 
     let selected_after: Result<Option<canic_core::dto::auth::DelegationProof>, Error> =
         query_call_as(
-            &fixture.setup.pic,
+            fixture.setup.pic.pic(),
             fixture.signer_id,
             Principal::anonymous(),
             "signer_current_signing_proof_test",
@@ -798,7 +798,7 @@ fn delegation_tier1_issue_verify_bootstrap_authenticated_end_to_end() {
         "setup cached verifier baseline",
     );
     let setup = install_test_root_with_verifier_cached();
-    let pic = PicBorrow(&setup.pic);
+    let pic = PicBorrow(setup.pic.pic());
     let root_id = setup.root_id;
     let signer_id = signer_pid(&pic, root_id);
     wait_for_ready_canister(&pic, signer_id, 240);
@@ -917,7 +917,7 @@ fn delegated_session_does_not_affect_role_attestation_or_capability_raw_caller_c
         "setup root",
     );
     let setup = install_test_root_cached();
-    let pic = PicBorrow(&setup.pic);
+    let pic = PicBorrow(setup.pic.pic());
     let root_id = setup.root_id;
     let signer_id = setup.signer_id;
 
@@ -1066,7 +1066,7 @@ fn delegated_session_bootstrap_replay_policy_and_metrics() {
         "setup root",
     );
     let setup = install_test_root_cached();
-    let pic = PicBorrow(&setup.pic);
+    let pic = PicBorrow(setup.pic.pic());
     let root_id = setup.root_id;
     let signer_id = setup.signer_id;
 
@@ -1348,7 +1348,7 @@ fn delegated_session_bootstrap_replay_with_expired_token_fails_closed() {
         "setup root",
     );
     let setup = install_test_root_cached();
-    let pic = PicBorrow(&setup.pic);
+    let pic = PicBorrow(setup.pic.pic());
     let root_id = setup.root_id;
     let signer_id = setup.signer_id;
 
@@ -1439,7 +1439,7 @@ fn test_delegation_material_install_hook_not_compiled_in_normal_build() {
         "setup cached normal-build root",
     );
     let setup = install_test_root_without_test_material_cached();
-    let pic = PicBorrow(&setup.pic);
+    let pic = PicBorrow(setup.pic.pic());
     let root_id = setup.root_id;
     let signer_id = signer_pid(&pic, root_id);
     wait_for_ready_canister(&pic, signer_id, 240);
@@ -1503,7 +1503,7 @@ fn capability_endpoint_role_attestation_proof_paths() {
         "setup root",
     );
     let setup = install_test_root_cached();
-    let pic = PicBorrow(&setup.pic);
+    let pic = PicBorrow(setup.pic.pic());
     let root_id = setup.root_id;
     let signer_id = setup.signer_id;
     let request = Request::Cycles(CyclesRequest {
@@ -1649,7 +1649,7 @@ fn capability_endpoint_policy_and_structural_paths() {
         "setup root",
     );
     let setup = install_test_root_cached();
-    let pic = PicBorrow(&setup.pic);
+    let pic = PicBorrow(setup.pic.pic());
     let root_id = setup.root_id;
     let signer_id = setup.signer_id;
     let issued = issue_self_attestation(&pic, root_id, 60, Some(root_id));
@@ -1925,7 +1925,7 @@ fn delegation_admin_fixture(_subject_seed: u8) -> DelegationAdminFixture {
     let root_id = setup.root_id;
     let signer_id = setup.signer_id;
     let verifier_id = setup.verifier_id.expect("cached verifier must exist");
-    let cached = delegation_admin_cached_data(&setup.pic, root_id, signer_id, verifier_id);
+    let cached = delegation_admin_cached_data(setup.pic.pic(), root_id, signer_id, verifier_id);
 
     DelegationAdminFixture {
         setup,
@@ -1942,7 +1942,7 @@ fn delegation_admin_fixture(_subject_seed: u8) -> DelegationAdminFixture {
 
 // Reuse the same issued admin tokens and public keys across restored verifier baselines.
 fn delegation_admin_cached_data(
-    pic: &pocket_ic::PocketIc,
+    pic: &Pic,
     root_id: Principal,
     signer_id: Principal,
     verifier_id: Principal,
@@ -1983,7 +1983,7 @@ fn delegation_admin_cached_data(
 
 // Issue a test delegated token for the requested verifier audience and TTL.
 fn issue_test_delegated_token(
-    pic: &pocket_ic::PocketIc,
+    pic: &Pic,
     root_id: Principal,
     signer_id: Principal,
     verifier_id: Principal,
@@ -2013,7 +2013,7 @@ fn issue_test_delegated_token(
 }
 
 // Query the root test public keys used for proof installation hooks.
-fn delegation_public_keys(pic: &pocket_ic::PocketIc, root_id: Principal) -> (Vec<u8>, Vec<u8>) {
+fn delegation_public_keys(pic: &Pic, root_id: Principal) -> (Vec<u8>, Vec<u8>) {
     let keys: Result<(Vec<u8>, Vec<u8>), Error> = query_call_as(
         pic,
         root_id,
@@ -2027,7 +2027,7 @@ fn delegation_public_keys(pic: &pocket_ic::PocketIc, root_id: Principal) -> (Vec
 
 // Install proof material into the root verifier test hook.
 fn install_root_test_delegation_material(
-    pic: &pocket_ic::PocketIc,
+    pic: &Pic,
     root_id: Principal,
     proof: canic_core::dto::auth::DelegationProof,
     root_public_key: Vec<u8>,
@@ -2046,7 +2046,7 @@ fn install_root_test_delegation_material(
 
 // Install proof material into a signer/verifier test hook.
 fn install_signer_test_delegation_material(
-    pic: &pocket_ic::PocketIc,
+    pic: &Pic,
     canister_id: Principal,
     caller: Principal,
     proof: canic_core::dto::auth::DelegationProof,
@@ -2066,7 +2066,7 @@ fn install_signer_test_delegation_material(
 
 // Verify that keyed lookup fails as a proof miss before any prewarm repair.
 fn assert_token_verify_proof_missing(
-    pic: &pocket_ic::PocketIc,
+    pic: &Pic,
     verifier_id: Principal,
     delegated_subject: Principal,
     token: DelegatedToken,
@@ -2088,7 +2088,7 @@ fn assert_token_verify_proof_missing(
 
 // Dispatch a root prewarm admin command and decode the typed response.
 fn prewarm_verifiers(
-    pic: &pocket_ic::PocketIc,
+    pic: &Pic,
     root_id: Principal,
     proof: canic_core::dto::auth::DelegationProof,
     verifier_targets: Vec<Principal>,
@@ -2111,7 +2111,7 @@ fn prewarm_verifiers(
 
 // Dispatch a root repair admin command and preserve the typed error surface.
 fn repair_verifiers(
-    pic: &pocket_ic::PocketIc,
+    pic: &Pic,
     root_id: Principal,
     proof: canic_core::dto::auth::DelegationProof,
     verifier_targets: Vec<Principal>,
@@ -2132,7 +2132,7 @@ fn repair_verifiers(
 
 // Assert a batch of access-metric predicates for a single canister endpoint.
 fn assert_access_metrics(
-    pic: &pocket_ic::PocketIc,
+    pic: &Pic,
     canister_id: Principal,
     endpoint: &str,
     expected: &[(&str, u64)],
@@ -2148,7 +2148,7 @@ fn assert_access_metrics(
 
 // Issue one self-attestation from the root test hook for the requested audience.
 fn issue_self_attestation(
-    pic: &pocket_ic::PocketIc,
+    pic: &Pic,
     root_id: Principal,
     ttl_secs: u64,
     audience: Option<Principal>,
@@ -2158,7 +2158,7 @@ fn issue_self_attestation(
 
 // Issue one self-attestation from the root test hook as an explicit caller.
 fn issue_self_attestation_as(
-    pic: &pocket_ic::PocketIc,
+    pic: &Pic,
     root_id: Principal,
     caller: Principal,
     ttl_secs: u64,
@@ -2198,7 +2198,7 @@ fn cycles_role_attestation_envelope(
 }
 
 fn update_call_as<T, A>(
-    pic: &pocket_ic::PocketIc,
+    pic: &Pic,
     canister_id: Principal,
     caller: Principal,
     method: &str,
@@ -2208,31 +2208,27 @@ where
     T: candid::CandidType + DeserializeOwned,
     A: ArgumentEncoder,
 {
-    let payload = encode_args(args).expect("encode args");
-    let result = pic
-        .update_call(canister_id, caller, method, payload)
-        .expect("update_call failed");
-
-    decode_one(&result).expect("decode response")
+    pic.update_call_as(canister_id, caller, method, args)
+        .expect("update_call failed")
 }
 
 fn update_call_raw_as<A>(
-    pic: &pocket_ic::PocketIc,
+    pic: &Pic,
     canister_id: Principal,
     caller: Principal,
     method: &str,
     args: A,
-) -> Result<Vec<u8>, String>
+) -> Result<(), String>
 where
     A: ArgumentEncoder,
 {
-    let payload = encode_args(args).expect("encode args");
-    pic.update_call(canister_id, caller, method, payload)
+    pic.update_call_as::<Result<(), Error>, _>(canister_id, caller, method, args)
+        .map(|_| ())
         .map_err(|err| err.to_string())
 }
 
 fn query_call_as<T, A>(
-    pic: &pocket_ic::PocketIc,
+    pic: &Pic,
     canister_id: Principal,
     caller: Principal,
     method: &str,
@@ -2242,20 +2238,11 @@ where
     T: candid::CandidType + DeserializeOwned,
     A: ArgumentEncoder,
 {
-    let payload = encode_args(args).expect("encode args");
-    let result = pic
-        .query_call(canister_id, caller, method, payload)
-        .expect("query_call failed");
-
-    decode_one(&result).expect("decode response")
+    pic.query_call_as(canister_id, caller, method, args)
+        .expect("query_call failed")
 }
 
-fn access_metric_count(
-    pic: &pocket_ic::PocketIc,
-    canister_id: Principal,
-    endpoint: &str,
-    predicate: &str,
-) -> u64 {
+fn access_metric_count(pic: &Pic, canister_id: Principal, endpoint: &str, predicate: &str) -> u64 {
     let response: Result<Page<MetricEntry>, Error> = query_call_as(
         pic,
         canister_id,

@@ -245,6 +245,16 @@ If you need the lower-level build/install boundaries directly, `canic-installer`
 - `canic-list-install-targets`
 - `canic-stage-root-release-set`
 
+`canic-list-install-targets` is the supported way to derive the local install
+target roster from `canic.toml`. It prints `root` first, then the ordinary
+roles from the single subnet that owns `root`, and still excludes the hidden
+bootstrap `wasm_store`.
+
+If you are writing host-side PocketIC tests against Canic, prefer
+`crates/canic-testkit/` for the public wrapper surface. The unpublished
+`crates/canic-testing-internal/` crate owns Canic's heavier root/auth harnesses
+and other repo-only fixtures.
+
 ## Layered Architecture
 
 Canic follows a strict layered design to keep boundaries stable and refactors cheap. Dependencies must flow inward; boundary code must not depend on concrete storage representations.

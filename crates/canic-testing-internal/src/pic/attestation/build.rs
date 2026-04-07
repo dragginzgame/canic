@@ -27,7 +27,7 @@ pub(super) struct SerialPic {
 }
 
 impl Deref for SerialPic {
-    type Target = pocket_ic::PocketIc;
+    type Target = Pic;
 
     fn deref(&self) -> &Self::Target {
         &self.pic

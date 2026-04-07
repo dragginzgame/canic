@@ -1,7 +1,7 @@
 use candid::{Principal, encode_one};
 use canic_core::dto::subnet::SubnetIdentity;
 use canic_testkit::pic::{
-    CachedPicBaseline, CachedPicBaselineGuard, restore_or_rebuild_cached_pic_baseline,
+    CachedPicBaseline, CachedPicBaselineGuard, Pic, restore_or_rebuild_cached_pic_baseline,
     role_pid as lookup_role_pid, wait_until_ready as wait_for_ready_canister,
 };
 use std::sync::{Mutex, OnceLock};
@@ -63,13 +63,13 @@ pub(super) fn install_signer_only_without_test_material_cached_root_fixture() ->
 
 // Resolve the signer canister from the root-managed subnet registry.
 #[must_use]
-pub(super) fn signer_pid(pic: &pocket_ic::PocketIc, root_id: Principal) -> Principal {
+pub(super) fn signer_pid(pic: &Pic, root_id: Principal) -> Principal {
     lookup_role_pid(pic, root_id, "signer", 120)
 }
 
 // Resolve the managed wasm_store canister from the root-managed subnet registry.
 #[must_use]
-pub(super) fn wasm_store_pid(pic: &pocket_ic::PocketIc, root_id: Principal) -> Principal {
+pub(super) fn wasm_store_pid(pic: &Pic, root_id: Principal) -> Principal {
     lookup_role_pid(pic, root_id, "wasm_store", 120)
 }
 
@@ -210,7 +210,7 @@ const fn baseline_slot(
 }
 
 // Install the root canister under PocketIC with the manual subnet identity.
-fn install_root_canister(pic: &pocket_ic::PocketIc, wasm: Vec<u8>) -> Principal {
+fn install_root_canister(pic: &Pic, wasm: Vec<u8>) -> Principal {
     let root_id = pic.create_canister();
     pic.add_cycles(root_id, ROOT_INSTALL_CYCLES);
     pic.install_canister(

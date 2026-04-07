@@ -1,3 +1,7 @@
+use crate::workspace_discovery::{
+    discover_canister_manifest_from_metadata, discover_dfx_root_from, discover_workspace_root_from,
+    normalize_workspace_path,
+};
 use canic::protocol;
 use canic_core::{CANIC_WASM_CHUNK_BYTES, bootstrap::parse_config_model};
 use flate2::read::GzDecoder;
@@ -18,22 +22,9 @@ use toml::Value as TomlValue;
 const CANISTERS_ROOT_RELATIVE: &str = "canisters";
 const ROOT_CONFIG_FILE: &str = "canic.toml";
 const WORKSPACE_MANIFEST_RELATIVE: &str = "Cargo.toml";
-const DFX_CONFIG_FILE: &str = "dfx.json";
 pub const ROOT_RELEASE_SET_MANIFEST_FILE: &str = "root.release-set.json";
 const GZIP_MAGIC: [u8; 2] = [0x1f, 0x8b];
 const WASM_MAGIC: [u8; 4] = [0x00, 0x61, 0x73, 0x6d];
-
-#[derive(Clone, Debug, Deserialize)]
-struct CargoMetadata {
-    packages: Vec<CargoMetadataPackage>,
-}
-
-#[derive(Clone, Debug, Deserialize)]
-struct CargoMetadataPackage {
-    name: String,
-    manifest_path: PathBuf,
-    metadata: Option<JsonValue>,
-}
 
 ///
 /// RootReleaseSetManifest
@@ -811,94 +802,6 @@ fn write_argument_file(argument: &str) -> Result<PathBuf, Box<dyn std::error::Er
     ));
     fs::write(&path, argument)?;
     Ok(path)
-}
-
-fn discover_workspace_root_from(path: &Path) -> Option<PathBuf> {
-    let start = if path.is_file() { path.parent()? } else { path };
-
-    for candidate in start.ancestors() {
-        let manifest_path = candidate.join(WORKSPACE_MANIFEST_RELATIVE);
-        if !manifest_path.is_file() {
-            continue;
-        }
-
-        let manifest = fs::read_to_string(&manifest_path).ok()?;
-        if manifest.contains("[workspace]") {
-            return candidate.canonicalize().ok();
-        }
-    }
-
-    None
-}
-
-fn discover_dfx_root_from(path: &Path) -> Option<PathBuf> {
-    let start = if path.is_file() { path.parent()? } else { path };
-
-    for candidate in start.ancestors() {
-        let dfx_config = candidate.join(DFX_CONFIG_FILE);
-        if dfx_config.is_file() {
-            return candidate.canonicalize().ok();
-        }
-    }
-
-    None
-}
-
-fn normalize_workspace_path(workspace_root: &Path, path: PathBuf) -> PathBuf {
-    if path.is_absolute() {
-        path
-    } else {
-        workspace_root.join(path)
-    }
-}
-
-fn discover_canister_manifest_from_metadata(
-    workspace_root: &Path,
-    role_name: &str,
-) -> Option<PathBuf> {
-    let metadata = cargo_metadata(workspace_root).ok()?;
-    let expected_package_name = format!("canister_{role_name}");
-
-    metadata
-        .packages
-        .into_iter()
-        .find(|package| {
-            package_declares_role(package, role_name) || package.name == expected_package_name
-        })
-        .map(|package| package.manifest_path)
-}
-
-fn package_declares_role(package: &CargoMetadataPackage, role_name: &str) -> bool {
-    package
-        .metadata
-        .as_ref()
-        .and_then(|metadata| metadata.get("canic"))
-        .and_then(|canic| canic.get("role"))
-        .and_then(JsonValue::as_str)
-        == Some(role_name)
-}
-
-fn cargo_metadata(workspace_root: &Path) -> Result<CargoMetadata, Box<dyn std::error::Error>> {
-    let output = Command::new("cargo")
-        .current_dir(workspace_root)
-        .args([
-            "metadata",
-            "--format-version=1",
-            "--no-deps",
-            "--manifest-path",
-            &workspace_root.join("Cargo.toml").display().to_string(),
-        ])
-        .output()?;
-
-    if !output.status.success() {
-        return Err(format!(
-            "cargo metadata failed: {}",
-            String::from_utf8_lossy(&output.stderr)
-        )
-        .into());
-    }
-
-    Ok(serde_json::from_slice(&output.stdout)?)
 }
 
 // Render one byte slice as lowercase hexadecimal.
