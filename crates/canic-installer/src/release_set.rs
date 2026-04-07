@@ -279,6 +279,16 @@ pub fn configured_release_roles(
         .map_err(|err| format!("invalid {}: {err}", config_path.display()).into())
 }
 
+// Enumerate the local install targets: root plus the ordinary roles owned by its subnet.
+pub fn configured_install_targets(
+    config_path: &Path,
+    root_canister: &str,
+) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+    let mut targets = vec![root_canister.to_string()];
+    targets.extend(configured_release_roles(config_path)?);
+    Ok(targets)
+}
+
 // Enumerate the configured ordinary roles for the single subnet that owns `root`.
 fn configured_release_roles_from_source(
     config_source: &str,
@@ -919,8 +929,8 @@ fn decode_hex(hex: &str) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
 #[cfg(test)]
 mod tests {
     use super::{
-        canister_manifest_path, canisters_root, config_path, configured_release_roles_from_source,
-        read_release_artifact, root_manifest_path,
+        canister_manifest_path, canisters_root, config_path, configured_install_targets,
+        configured_release_roles_from_source, read_release_artifact, root_manifest_path,
     };
     use flate2::{Compression, write::GzEncoder};
     use std::{
@@ -1023,6 +1033,33 @@ kind = "replica"
         let config = REAL_CONFIG.replace("[subnets.prime.canisters.root]\nkind = \"root\"\n\n", "");
 
         assert!(configured_release_roles_from_source(&config).is_err());
+    }
+
+    #[test]
+    fn configured_install_targets_include_root_plus_release_roles() {
+        let temp_dir = std::env::temp_dir();
+        let config_path = temp_dir.join(format!(
+            "canic-installer-install-targets-{}-{}.toml",
+            std::process::id(),
+            1
+        ));
+        fs::write(&config_path, REAL_CONFIG).unwrap();
+
+        let targets = configured_install_targets(&config_path, "root").unwrap();
+        assert_eq!(
+            targets,
+            vec![
+                "root".to_string(),
+                "app".to_string(),
+                "minimal".to_string(),
+                "scale".to_string(),
+                "scale_hub".to_string(),
+                "user_hub".to_string(),
+                "user_shard".to_string(),
+            ]
+        );
+
+        let _ = fs::remove_file(config_path);
     }
 
     #[test]

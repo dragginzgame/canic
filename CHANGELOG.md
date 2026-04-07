@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.26.x] - 2026-04-06 - Metrics Baseline
 
-- `0.26.7` adds a public `canic-list-release-roles` CLI to `canic-installer`, so downstream workspaces can list the ordinary roles from `canic.toml` without re-owning that parser logic.
+- `0.26.7` adds a public `canic-list-install-targets` CLI to `canic-installer`, so downstream workspaces can list the local install target set from `canic.toml` without re-owning that parser logic.
 - `0.26.6` cleans up the local tooling surface by moving the shared setup script into `scripts/dev/install_dev.sh`, removing stale `Makefile` convenience aliases and old install targets, and keeping the release-facing install URL/tests aligned with that slimmer setup path.
 - `0.26.5` fixes a delegated-token timing race during fresh proof provisioning: when a signer has to ask root for a new delegation first, Canic now rebases the token timestamps onto that new proof window so downstream verifiers stop seeing `token issued before delegation` on otherwise valid login flows.
 - `0.26.4` keeps the late `0.26` follow-through on the clean side by splitting more `canic-testkit` and runtime ownership seams, making `wasm_store.did` refresh explicit instead of incidental during normal bootstrap builds, fixing the workspace test runner so the PocketIC suites follow their moved `canic-tests` package targets, and finishing the delegated-auth verifier bootstrap fix so root now pushes the delegation public key with the proof and verifier-only canisters do not need their own threshold-ECDSA support for delegation provisioning.
