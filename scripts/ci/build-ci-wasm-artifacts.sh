@@ -14,7 +14,7 @@ require_cmd() {
     fi
 
     echo "missing required build tool '$cmd'" >&2
-    echo "run: bash scripts/install.sh" >&2
+    echo "run: bash scripts/dev/install_dev.sh" >&2
     exit 1
 }
 

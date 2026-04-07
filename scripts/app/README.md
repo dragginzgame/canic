@@ -6,7 +6,7 @@ These scripts support the reference canisters under `canisters/` and the local t
 
 - Canic/Rust tooling installed:
   - `make install-dev`
-  - or `bash scripts/install.sh`
+  - or `bash scripts/dev/install_dev.sh`
   - the shared setup script bootstraps Rust when needed, installs the pinned Rust toolchain, `rustfmt`, `clippy`, `wasm32-unknown-unknown`, `candid-extractor`, `ic-wasm`, common cargo helper tools, the matching `canic-installer`, and `dfx` if it is missing
   - the same script also configures `.githooks/` automatically when run from a Canic checkout
 

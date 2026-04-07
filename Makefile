@@ -1,10 +1,10 @@
 .PHONY: help version tags patch patch-quick minor major package publish \
-        test-packaged-downstream test-packaged-downstream-wasm-store \
+        test-packaged-downstream-wasm-store \
         test-packaged-downstream-installer test-installed-canic-installer \
         test test-wasm test-bump build check clippy fmt fmt-check clean \
-        install-dev update-dev demo-install test-watch \
-        all ensure-clean ensure-hooks install-hooks test-unit test-unit-fast \
-        test-canisters quick-bump fmt-core
+        install-dev update-dev demo-install \
+        ensure-clean ensure-hooks test-unit test-unit-fast \
+        test-canisters fmt-core cloc
 
 # in case we need to use this
 CARGO_ENV :=
@@ -56,7 +56,7 @@ help:
 	@echo "Setup / Installation:"
 	@echo "  install-dev      Install the shared Rust/Cargo/Canic toolchain"
 	@echo "  update-dev       Update the local Rust/Cargo/DFX development environment"
-	@echo "  install-hooks    Configure git hooks"
+	@echo "  ensure-hooks     Configure git hooks"
 	@echo ""
 	@echo "Version Management:"
 	@echo "  version          Show current version"
@@ -67,7 +67,6 @@ help:
 	@echo "  major            Bump major version (x.0.0)"
 	@echo "  package          Build a publishable crate tarball"
 	@echo "  publish          Publish workspace crates to registry in dependency order"
-	@echo "  test-packaged-downstream  Verify the packaged-downstream wasm_store and installer paths"
 	@echo "  test-packaged-downstream-wasm-store  Verify the hidden packaged-downstream wasm_store build path"
 	@echo "  test-packaged-downstream-installer  Verify the packaged-downstream installer manifest path"
 	@echo "  test-installed-canic-installer  Verify the installed-binary canic-installer path"
@@ -84,8 +83,7 @@ help:
 	@echo "  clean            Clean build artifacts"
 	@echo ""
 	@echo "Utilities:"
-	@echo "  test-watch       Run tests in watch mode"
-	@echo "  all              Run all checks, tests, and build"
+	@echo "  cloc             Show runtime vs test Rust LOC across canic crates"
 	@echo ""
 	@echo "Examples:"
 	@echo "  make patch       # Bump patch version"
@@ -101,7 +99,7 @@ help:
 
 # Install the shared Rust/Cargo/Canic toolchain
 install-dev:
-	bash scripts/install.sh
+	bash scripts/dev/install_dev.sh
 
 # Update the local Rust/Cargo/DFX development environment.
 update-dev:
@@ -117,7 +115,7 @@ update-dev:
 
 
 # Optional explicit install target (idempotent)
-install-hooks ensure-hooks:
+ensure-hooks:
 	@if [ -d .git ]; then \
 		git config --local core.hooksPath .githooks || true; \
 		chmod +x .githooks/* 2>/dev/null || true; \
@@ -140,7 +138,8 @@ tags:
 patch: ensure-clean fmt test-bump
 	@scripts/ci/bump-version.sh patch
 
-patch-quick: ensure-clean fmt quick-bump
+patch-quick: ensure-clean fmt
+	$(CARGO_ENV) cargo check --workspace
 	@scripts/ci/bump-version.sh patch
 
 minor: ensure-clean fmt test-bump
@@ -154,8 +153,6 @@ package: ensure-clean
 
 publish: ensure-clean
 	$(CARGO_ENV) scripts/ci/publish-workspace.sh
-
-test-packaged-downstream: test-packaged-downstream-wasm-store test-packaged-downstream-installer
 
 test-packaged-downstream-wasm-store:
 	$(CARGO_ENV) scripts/ci/verify-packaged-downstream-wasm-store.sh
@@ -185,9 +182,6 @@ test-wasm: clippy test-unit-fast
 # Keeps clippy plus the fast unit/lib/bin workspace run, while leaving the
 # local `dfx` fast path as an explicit manual target.
 test-bump: clippy test-unit-fast
-
-quick-bump:
-	$(CARGO_ENV) cargo check --workspace
 
 # Keep rust test execution single-threaded inside each test binary for PocketIC
 # stability and deterministic fixture reuse.
@@ -237,9 +231,5 @@ fmt-check-core:
 clean:
 	cargo clean
 
-# Run tests in watch mode
-test-watch:
-	cargo watch -x test
-
-# Build and test everything
-all: ensure-clean ensure-hooks clean fmt-check check test build
+cloc:
+	bash scripts/dev/cloc.sh
