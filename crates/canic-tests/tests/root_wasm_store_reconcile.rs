@@ -1,7 +1,7 @@
 // Category C - Artifact / deployment test (embedded config).
 // This test relies on embedded production config by design.
 
-mod root;
+mod reconcile_root_harness;
 
 use candid::encode_one;
 use canic::{
@@ -23,7 +23,7 @@ use canic_control_plane::{
 };
 use canic_internal::canister::MINIMAL;
 use canic_testkit::{artifacts::workspace_root_for, pic::Pic};
-use root::{RootSetupProfile, harness::setup_cached_root};
+use reconcile_root_harness::setup_cached_root;
 use std::{fs, path::PathBuf};
 
 const STORE_ROLLOVER_SAFETY_BYTES: u64 = 64 * 1024;
@@ -335,8 +335,8 @@ fn root_retired_store_gc_finalize_and_delete_cleans_up_tracked_store() {
 }
 
 // Build the debug reference topology with the hidden small-cap store cfg, then install root.
-fn setup_root_with_small_implicit_store() -> root::harness::RootSetup {
-    setup_cached_root(RootSetupProfile::ReconcileSmallStore)
+fn setup_root_with_small_implicit_store() -> reconcile_root_harness::RootSetup {
+    setup_cached_root()
 }
 
 // Retire one managed store so the GC/finalize/delete canary can drive the full lifecycle.
