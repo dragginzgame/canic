@@ -1,6 +1,25 @@
 //!
 //! Small formatting helpers shared across logs and status responses.
 //!
+use std::fmt::{self, Display, Formatter};
+
+///
+/// OptionalDisplay
+///
+
+pub struct OptionalDisplay<T>(pub Option<T>);
+
+impl<T> Display for OptionalDisplay<T>
+where
+    T: Display,
+{
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match &self.0 {
+            Some(value) => value.fmt(f),
+            None => f.write_str("None"),
+        }
+    }
+}
 
 ///
 /// Truncate a string to at most `max_chars` Unicode scalar values.
@@ -41,12 +60,24 @@ pub fn byte_size(bytes: u64) -> String {
 }
 
 ///
+/// Format one optional display value for logs and status output.
+///
+#[must_use]
+pub const fn display_optional<T>(value: Option<T>) -> OptionalDisplay<T>
+where
+    T: Display,
+{
+    OptionalDisplay(value)
+}
+
+///
 /// TESTS
 ///
 
 #[cfg(test)]
 mod tests {
-    use super::{byte_size, truncate};
+    use super::{byte_size, display_optional, truncate};
+    use crate::cdk::types::Principal;
 
     #[test]
     fn keeps_short_strings() {
@@ -73,5 +104,12 @@ mod tests {
         assert_eq!(byte_size(720_795), "703.90 KiB");
         assert_eq!(byte_size(13_936_529), "13.29 MiB");
         assert_eq!(byte_size(9_102_643), "8.68 MiB");
+    }
+
+    #[test]
+    fn formats_optional_display_values() {
+        let pid = Principal::from_slice(&[7; 29]);
+        assert_eq!(display_optional(Some(pid)).to_string(), pid.to_string());
+        assert_eq!(display_optional::<Principal>(None).to_string(), "None");
     }
 }
