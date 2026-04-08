@@ -12,6 +12,7 @@ use crate::{
         CreateCanisterParent, CreateCanisterRequest, CreateCanisterResponse, Response,
         UpgradeCanisterRequest, UpgradeCanisterResponse,
     },
+    format::display_optional,
     log,
     log::Topic,
     ops::{
@@ -198,11 +199,11 @@ async fn execute_issue_role_attestation(
     log!(
         Topic::Auth,
         Info,
-        "role attestation issued subject={} role={} audience={:?} subnet={:?} issued_at={} expires_at={} epoch={}",
+        "role attestation issued subject={} role={} audience={} subnet={} issued_at={} expires_at={} epoch={}",
         signed.payload.subject,
         signed.payload.role,
-        signed.payload.audience,
-        signed.payload.subnet_id,
+        display_optional(signed.payload.audience),
+        display_optional(signed.payload.subnet_id),
         signed.payload.issued_at,
         signed.payload.expires_at,
         signed.payload.epoch

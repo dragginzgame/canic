@@ -1,0 +1,83 @@
+{
+  "scope": "wasm-footprint",
+  "profile": "release",
+  "canisters": [
+    {
+      "canister": "app",
+      "kind": "leaf-canister",
+      "built_wasm_bytes": 1785182,
+      "built_wasm_gz_bytes": 508551,
+      "shrunk_wasm_bytes": 1670024,
+      "shrunk_wasm_gz_bytes": 472959,
+      "shrink_delta_bytes": 115158,
+      "shrink_delta_percent": 6.45,
+      "baseline_delta_bytes": "N/A"
+    },
+    {
+      "canister": "minimal",
+      "kind": "leaf-canister",
+      "built_wasm_bytes": 1785182,
+      "built_wasm_gz_bytes": 508390,
+      "shrunk_wasm_bytes": 1670024,
+      "shrunk_wasm_gz_bytes": 472922,
+      "shrink_delta_bytes": 115158,
+      "shrink_delta_percent": 6.45,
+      "baseline_delta_bytes": "N/A"
+    },
+    {
+      "canister": "user_hub",
+      "kind": "leaf-canister",
+      "built_wasm_bytes": 1959786,
+      "built_wasm_gz_bytes": 568816,
+      "shrunk_wasm_bytes": 1833407,
+      "shrunk_wasm_gz_bytes": 522912,
+      "shrink_delta_bytes": 126379,
+      "shrink_delta_percent": 6.45,
+      "baseline_delta_bytes": "N/A"
+    },
+    {
+      "canister": "user_shard",
+      "kind": "leaf-canister",
+      "built_wasm_bytes": 1909514,
+      "built_wasm_gz_bytes": 553661,
+      "shrunk_wasm_bytes": 1785124,
+      "shrunk_wasm_gz_bytes": 513267,
+      "shrink_delta_bytes": 124390,
+      "shrink_delta_percent": 6.51,
+      "baseline_delta_bytes": "N/A"
+    },
+    {
+      "canister": "scale_hub",
+      "kind": "leaf-canister",
+      "built_wasm_bytes": 1850155,
+      "built_wasm_gz_bytes": 530153,
+      "shrunk_wasm_bytes": 1730868,
+      "shrunk_wasm_gz_bytes": 491766,
+      "shrink_delta_bytes": 119287,
+      "shrink_delta_percent": 6.45,
+      "baseline_delta_bytes": "N/A"
+    },
+    {
+      "canister": "scale",
+      "kind": "leaf-canister",
+      "built_wasm_bytes": 1804387,
+      "built_wasm_gz_bytes": 517328,
+      "shrunk_wasm_bytes": 1688123,
+      "shrunk_wasm_gz_bytes": 481041,
+      "shrink_delta_bytes": 116264,
+      "shrink_delta_percent": 6.44,
+      "baseline_delta_bytes": "N/A"
+    },
+    {
+      "canister": "root",
+      "kind": "bundle-canister",
+      "built_wasm_bytes": 3952152,
+      "built_wasm_gz_bytes": 1534582,
+      "shrunk_wasm_bytes": 3715491,
+      "shrunk_wasm_gz_bytes": 1422629,
+      "shrink_delta_bytes": 236661,
+      "shrink_delta_percent": 5.99,
+      "baseline_delta_bytes": "N/A"
+    }
+  ]
+}

@@ -1,6 +1,7 @@
 use crate::{
     cdk::types::Principal,
     dto::auth::SignedRoleAttestation,
+    format::display_optional,
     log,
     log::Topic,
     ops::{
@@ -86,15 +87,15 @@ pub(super) fn log_attestation_verifier_rejection(
     log!(
         Topic::Auth,
         Warn,
-        "role attestation rejected phase={} local={} caller={} subject={} role={} key_id={} audience={:?} subnet={:?} issued_at={} expires_at={} epoch={} error={}",
+        "role attestation rejected phase={} local={} caller={} subject={} role={} key_id={} audience={} subnet={} issued_at={} expires_at={} epoch={} error={}",
         phase,
         self_pid,
         caller,
         attestation.payload.subject,
         attestation.payload.role,
         attestation.key_id,
-        attestation.payload.audience,
-        attestation.payload.subnet_id,
+        display_optional(attestation.payload.audience),
+        display_optional(attestation.payload.subnet_id),
         attestation.payload.issued_at,
         attestation.payload.expires_at,
         attestation.payload.epoch,
