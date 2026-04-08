@@ -1,7 +1,8 @@
 // Category C - Artifact / deployment test (embedded config).
 // This test relies on embedded production config by design.
 
-mod root;
+mod delegation_root_harness;
+mod root_cached_support;
 
 use canic::{
     Error,
@@ -15,10 +16,8 @@ use canic::{
 };
 use canic_internal::canister;
 use canic_testing_internal::pic::{create_user_shard, issue_delegated_token};
-use root::{
-    RootSetupProfile,
-    harness::{RootSetup, setup_cached_root},
-};
+use delegation_root_harness::setup_cached_root;
+use root_cached_support::RootSetup;
 use std::time::Duration;
 
 const fn p(id: u8) -> Principal {
@@ -255,7 +254,7 @@ fn should_run_certified(test_name: &str) -> bool {
 // Build the standard certified delegation fixture used by most PocketIC flow tests.
 fn setup_delegation_fixture(test_name: &str) -> DelegationFixture {
     log_step(&format!("{test_name}: setup root"));
-    let setup = setup_cached_root(RootSetupProfile::Sharding);
+    let setup = setup_cached_root();
     let user_hub_pid = setup
         .subnet_directory
         .get(&canister::USER_HUB)

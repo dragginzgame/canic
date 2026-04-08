@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.26.x] - 2026-04-06 - Metrics Baseline
 
+- `0.26.12` finishes another late-line cleanup pass by splitting more oversized installer/test/runtime support seams, isolating the audit target from the full cached-root helper tree so dead-code warnings stop spilling across test binaries, and keeping the focused root/audit verification green without reopening the runtime surface.
 - `0.26.11` keeps the late `0.26` line on maintenance-only follow-through, with small cleanup around the installer/test-harness seams, README alignment around the public install-target and PocketIC test surfaces, and another full root-suite verification pass.
 - `0.26.10` keeps the late `0.26` line on maintenance follow-through only, with small installer/test-harness cleanup, README alignment around the public install-target and PocketIC test surfaces, and another full root-suite verification pass.
 - `0.26.9` hardens the late `0.26` maintenance line by tightening the public PocketIC test wrapper boundary, narrowing cached root-baseline retries to real startup failures, reducing repeated local artifact freshness scans, and splitting installer workspace discovery into a smaller shared seam.
