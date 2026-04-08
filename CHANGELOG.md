@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.26.x] - 2026-04-06 - Metrics Baseline
 
+- `0.26.11` keeps the late `0.26` line on maintenance-only follow-through, with small cleanup around the installer/test-harness seams, README alignment around the public install-target and PocketIC test surfaces, and another full root-suite verification pass.
 - `0.26.10` keeps the late `0.26` line on maintenance follow-through only, with small installer/test-harness cleanup, README alignment around the public install-target and PocketIC test surfaces, and another full root-suite verification pass.
 - `0.26.9` hardens the late `0.26` maintenance line by tightening the public PocketIC test wrapper boundary, narrowing cached root-baseline retries to real startup failures, reducing repeated local artifact freshness scans, and splitting installer workspace discovery into a smaller shared seam.
 - `0.26.8` corrects the new installer CLI surface by renaming it to `canic-list-install-targets` and making it print the full local install target set, including `root`, so downstream scripts can use the same target list Canic’s own local install path uses.
