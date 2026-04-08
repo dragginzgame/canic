@@ -1,20 +1,28 @@
-use canic_testing_internal::pic::{RootBaselineMetadata, RootBaselineSpec};
+// Category C - Artifact / deployment test (embedded config).
+// This test relies on embedded production config by design.
+
+use canic::{cdk::types::Principal, ids::CanisterRole};
+use canic_testing_internal::pic::{
+    RootBaselineSpec, ensure_root_release_artifacts_built, load_root_wasm,
+    setup_root_topology as bootstrap_root_topology,
+};
 use canic_testkit::{
     artifacts::{WasmBuildProfile, workspace_root_for},
-    pic::CachedPicBaseline,
+    pic::{Pic, PicSerialGuard, acquire_pic_serial_guard},
 };
-use std::{path::PathBuf, sync::Mutex};
+use std::{
+    collections::HashMap,
+    io::Write,
+    path::PathBuf,
+    sync::{Mutex, MutexGuard},
+};
 
-/// Default location of the root wasm relative to the workspace root.
 const ROOT_WASM_RELATIVE: &str = ".dfx/local/canisters/root/root.wasm.gz";
 const ROOT_WASM_ARTIFACT_RELATIVE: &str = ".dfx/local/canisters/root/root.wasm.gz";
 const ROOT_RELEASE_ARTIFACTS_RELATIVE: &str = ".dfx/local/canisters";
 const ROOT_TOPOLOGY_RELEASE_ROLES: &[&str] = &["app", "scale_hub", "user_hub"];
 const ROOT_CAPABILITY_RELEASE_ROLES: &[&str] = &["app", "scale_hub", "test"];
-const ROOT_SCALING_RELEASE_ROLES: &[&str] = &["scale", "scale_hub"];
 const ROOT_SHARDING_RELEASE_ROLES: &[&str] = &["test", "user_hub", "user_shard"];
-const ROOT_RECONCILE_RELEASE_ROLES: &[&str] = &["app", "minimal", "scale", "scale_hub", "user_hub"];
-const TEST_SMALL_STORE_RUSTFLAGS: &str = "--cfg canic_test_small_wasm_store";
 const DFX_BUILD_LOCK_RELATIVE: &str = ".dfx/canic-tests-build.lock";
 const BOOTSTRAP_TICK_LIMIT: usize = 120;
 const ROOT_SETUP_MAX_ATTEMPTS: usize = 2;
@@ -27,72 +35,78 @@ const ROOT_WASM_WATCH_PATHS: &[&str] = &[
     "scripts/app/build.sh",
 ];
 
-static ROOT_TOPOLOGY_BASELINE: Mutex<Option<CachedPicBaseline<RootBaselineMetadata>>> =
-    Mutex::new(None);
-static ROOT_CAPABILITY_BASELINE: Mutex<Option<CachedPicBaseline<RootBaselineMetadata>>> =
-    Mutex::new(None);
-static ROOT_SCALING_BASELINE: Mutex<Option<CachedPicBaseline<RootBaselineMetadata>>> =
-    Mutex::new(None);
-static ROOT_SHARDING_BASELINE: Mutex<Option<CachedPicBaseline<RootBaselineMetadata>>> =
-    Mutex::new(None);
-static ROOT_RECONCILE_BASELINE: Mutex<Option<CachedPicBaseline<RootBaselineMetadata>>> =
-    Mutex::new(None);
+static ROOT_SETUP_SERIAL: Mutex<()> = Mutex::new(());
+
+///
+/// RootSetupProfile
+///
 
 #[derive(Clone, Copy)]
 pub enum RootSetupProfile {
     Topology,
     Capability,
-    Scaling,
     Sharding,
-    #[allow(dead_code)]
-    ReconcileSmallStore,
 }
 
 impl RootSetupProfile {
-    pub(crate) const fn cache_label(self) -> &'static str {
-        match self {
-            Self::Topology => "cached root topology baseline",
-            Self::Capability => "cached root capability baseline",
-            Self::Scaling => "cached root scaling baseline",
-            Self::Sharding => "cached root sharding baseline",
-            Self::ReconcileSmallStore => "cached root reconcile small-store baseline",
-        }
-    }
-
     const fn release_roles(self) -> &'static [&'static str] {
         match self {
             Self::Topology => ROOT_TOPOLOGY_RELEASE_ROLES,
             Self::Capability => ROOT_CAPABILITY_RELEASE_ROLES,
-            Self::Scaling => ROOT_SCALING_RELEASE_ROLES,
             Self::Sharding => ROOT_SHARDING_RELEASE_ROLES,
-            Self::ReconcileSmallStore => ROOT_RECONCILE_RELEASE_ROLES,
         }
     }
 
-    pub(crate) fn cache_slot(
-        self,
-    ) -> &'static Mutex<Option<CachedPicBaseline<RootBaselineMetadata>>> {
-        match self {
-            Self::Topology => &ROOT_TOPOLOGY_BASELINE,
-            Self::Capability => &ROOT_CAPABILITY_BASELINE,
-            Self::Scaling => &ROOT_SCALING_BASELINE,
-            Self::Sharding => &ROOT_SHARDING_BASELINE,
-            Self::ReconcileSmallStore => &ROOT_RECONCILE_BASELINE,
-        }
-    }
-
-    const fn build_profile(self) -> WasmBuildProfile {
-        match self {
-            Self::ReconcileSmallStore => WasmBuildProfile::Debug,
-            Self::Topology | Self::Capability | Self::Scaling | Self::Sharding => {
-                WasmBuildProfile::Fast
-            }
-        }
-    }
-
-    pub(crate) fn baseline_spec(self) -> RootBaselineSpec<'static> {
+    fn baseline_spec(self) -> RootBaselineSpec<'static> {
         baseline_spec_for_profile(self)
     }
+}
+
+///
+/// RootSetup
+///
+
+pub struct RootSetup {
+    pub pic: Pic,
+    pub root_id: Principal,
+    pub subnet_directory: HashMap<CanisterRole, Principal>,
+    _serial_guard: MutexGuard<'static, ()>,
+    _pic_serial_guard: PicSerialGuard,
+}
+
+/// Acquire an isolated fresh root setup for one named root test profile.
+pub fn setup_root(profile: RootSetupProfile) -> RootSetup {
+    let spec = profile.baseline_spec();
+
+    test_progress("request fresh root setup");
+
+    let serial_guard = acquire_root_setup_serial_guard();
+    let pic_serial_guard = acquire_pic_serial_guard();
+
+    ensure_root_release_artifacts_built(&spec);
+    let root_wasm = load_root_wasm(&spec).expect("load root wasm");
+    let state = bootstrap_root_topology(&spec, root_wasm);
+    test_progress("fresh root setup ready");
+
+    RootSetup {
+        pic: state.pic,
+        root_id: state.metadata.root_id,
+        subnet_directory: state.metadata.subnet_directory,
+        _serial_guard: serial_guard,
+        _pic_serial_guard: pic_serial_guard,
+    }
+}
+
+fn test_progress(phase: &str) {
+    eprintln!("[root_harness] {phase}");
+    let _ = std::io::stderr().flush();
+}
+
+// Serialize full root PocketIC usage to avoid concurrent runtime contention.
+fn acquire_root_setup_serial_guard() -> MutexGuard<'static, ()> {
+    ROOT_SETUP_SERIAL
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
 // Return the shared repo root for root-harness artifact and config discovery.
@@ -115,23 +129,12 @@ fn profile_build_extra_env(
                 .display()
                 .to_string(),
         )],
-        RootSetupProfile::Scaling => vec![(
-            "CANIC_CONFIG_PATH".to_string(),
-            workspace_root
-                .join("canisters/test-configs/root-scaling.toml")
-                .display()
-                .to_string(),
-        )],
         RootSetupProfile::Sharding => vec![(
             "CANIC_CONFIG_PATH".to_string(),
             workspace_root
                 .join("canisters/test-configs/root-sharding.toml")
                 .display()
                 .to_string(),
-        )],
-        RootSetupProfile::ReconcileSmallStore => vec![(
-            "RUSTFLAGS".to_string(),
-            TEST_SMALL_STORE_RUSTFLAGS.to_string(),
         )],
     }
 }
@@ -143,7 +146,7 @@ fn baseline_spec_for_profile(profile: RootSetupProfile) -> RootBaselineSpec<'sta
     baseline_spec_for_roles_owned_env(
         workspace_root,
         profile.release_roles(),
-        profile.build_profile(),
+        WasmBuildProfile::Fast,
         build_extra_env,
     )
 }

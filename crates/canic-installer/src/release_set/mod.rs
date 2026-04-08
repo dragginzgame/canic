@@ -1,15 +1,15 @@
-use canic_core::bootstrap::parse_config_model;
-use serde::{Deserialize, Serialize};
-use std::{
-    collections::BTreeSet,
-    fs,
-    path::Path,
-    time::{SystemTime, UNIX_EPOCH},
-};
+use std::time::{SystemTime, UNIX_EPOCH};
 
+mod config;
+mod manifest;
 mod paths;
 mod stage;
 
+pub use config::{configured_install_targets, configured_release_roles};
+pub use manifest::{
+    ReleaseSetEntry, RootReleaseSetManifest, emit_root_release_set_manifest,
+    emit_root_release_set_manifest_if_ready, load_root_release_set_manifest,
+};
 pub use paths::{
     canister_manifest_path, canisters_root, config_path, dfx_root, load_root_package_version,
     load_workspace_package_version, resolve_artifact_root, root_manifest_path,
@@ -24,157 +24,15 @@ pub use stage::{
 #[cfg(test)]
 use stage::read_release_artifact;
 
+#[cfg(test)]
+use config::configured_release_roles_from_source;
+
 pub(super) const CANISTERS_ROOT_RELATIVE: &str = "canisters";
 pub(super) const ROOT_CONFIG_FILE: &str = "canic.toml";
 pub(super) const WORKSPACE_MANIFEST_RELATIVE: &str = "Cargo.toml";
 pub const ROOT_RELEASE_SET_MANIFEST_FILE: &str = "root.release-set.json";
 pub(super) const GZIP_MAGIC: [u8; 2] = [0x1f, 0x8b];
 pub(super) const WASM_MAGIC: [u8; 4] = [0x00, 0x61, 0x73, 0x6d];
-
-///
-/// RootReleaseSetManifest
-///
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct RootReleaseSetManifest {
-    pub release_version: String,
-    pub entries: Vec<ReleaseSetEntry>,
-}
-
-///
-/// ReleaseSetEntry
-///
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct ReleaseSetEntry {
-    pub role: String,
-    pub template_id: String,
-    pub artifact_relative_path: String,
-    pub payload_size_bytes: u64,
-    pub payload_sha256_hex: String,
-    pub chunk_size_bytes: u64,
-    pub chunk_sha256_hex: Vec<String>,
-}
-
-// Build and persist the current root release-set manifest from built `.wasm.gz` artifacts.
-pub fn emit_root_release_set_manifest(
-    workspace_root: &Path,
-    dfx_root: &Path,
-    network: &str,
-) -> Result<std::path::PathBuf, Box<dyn std::error::Error>> {
-    let artifact_root = resolve_artifact_root(dfx_root, network)?;
-    let config_path = config_path(workspace_root);
-    let manifest_path = root_release_set_manifest_path(&artifact_root)?;
-    let release_version = load_root_package_version(
-        &root_manifest_path(workspace_root),
-        &workspace_manifest_path(workspace_root),
-    )?;
-    let entries = configured_release_roles(&config_path)?
-        .into_iter()
-        .map(|role_name| build_release_set_entry(dfx_root, &artifact_root, &role_name))
-        .collect::<Result<Vec<_>, _>>()?;
-    let manifest = RootReleaseSetManifest {
-        release_version,
-        entries,
-    };
-
-    fs::write(&manifest_path, serde_json::to_vec_pretty(&manifest)?)?;
-    Ok(manifest_path)
-}
-
-// Emit the root release-set manifest only once every required ordinary artifact exists.
-pub fn emit_root_release_set_manifest_if_ready(
-    workspace_root: &Path,
-    dfx_root: &Path,
-    network: &str,
-) -> Result<Option<std::path::PathBuf>, Box<dyn std::error::Error>> {
-    let artifact_root = resolve_artifact_root(dfx_root, network)?;
-    let roles = configured_release_roles(&config_path(workspace_root))?;
-
-    for role_name in roles {
-        let artifact_path = artifact_root
-            .join(&role_name)
-            .join(format!("{role_name}.wasm.gz"));
-        if !artifact_path.is_file() {
-            return Ok(None);
-        }
-    }
-
-    emit_root_release_set_manifest(workspace_root, dfx_root, network).map(Some)
-}
-
-// Load one previously emitted root release-set manifest from disk.
-pub fn load_root_release_set_manifest(
-    manifest_path: &Path,
-) -> Result<RootReleaseSetManifest, Box<dyn std::error::Error>> {
-    let source = fs::read(manifest_path)?;
-    Ok(serde_json::from_slice(&source)?)
-}
-
-// Enumerate the configured ordinary roles that root must publish before bootstrap resumes.
-pub fn configured_release_roles(
-    config_path: &Path,
-) -> Result<Vec<String>, Box<dyn std::error::Error>> {
-    let config_source = fs::read_to_string(config_path)?;
-    configured_release_roles_from_source(&config_source)
-        .map_err(|err| format!("invalid {}: {err}", config_path.display()).into())
-}
-
-// Enumerate the local install targets: root plus the ordinary roles owned by its subnet.
-pub fn configured_install_targets(
-    config_path: &Path,
-    root_canister: &str,
-) -> Result<Vec<String>, Box<dyn std::error::Error>> {
-    let mut targets = vec![root_canister.to_string()];
-    targets.extend(configured_release_roles(config_path)?);
-    Ok(targets)
-}
-
-// Enumerate the configured ordinary roles for the single subnet that owns `root`.
-fn configured_release_roles_from_source(
-    config_source: &str,
-) -> Result<Vec<String>, Box<dyn std::error::Error>> {
-    let config = parse_config_model(config_source).map_err(|err| err.to_string())?;
-    let mut roles = BTreeSet::new();
-    let mut root_subnet_roles = None;
-
-    for (subnet_role, subnet) in &config.subnets {
-        if !subnet
-            .canisters
-            .keys()
-            .any(canic::ids::CanisterRole::is_root)
-        {
-            continue;
-        }
-
-        if root_subnet_roles.is_some() {
-            return Err(format!(
-                "multiple subnets define a root canister; release-set staging requires exactly one root subnet (found at least '{subnet_role}')"
-            )
-            .into());
-        }
-
-        root_subnet_roles = Some(
-            subnet
-                .canisters
-                .keys()
-                .filter(|role| !role.is_root() && !role.is_wasm_store())
-                .map(|role| role.as_str().to_string())
-                .collect::<Vec<_>>(),
-        );
-    }
-
-    let root_subnet_roles = root_subnet_roles.ok_or_else(|| {
-        "no subnet defines a root canister; release-set staging requires exactly one root subnet"
-            .to_string()
-    })?;
-
-    for role in root_subnet_roles {
-        roles.insert(role);
-    }
-
-    Ok(roles.into_iter().collect())
-}
 
 // Read the current host wall clock so staged manifests use a stable whole-second
 // timestamp without depending on an exported root time endpoint.
