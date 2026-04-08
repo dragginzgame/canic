@@ -1,476 +1,55 @@
-use super::WASM_STORE_BOOTSTRAP_BINDING;
-use super::call_store_result;
-use super::store_pid_for_binding;
+mod fleet;
+mod store;
+
+use super::{WASM_STORE_BOOTSTRAP_BINDING, store_pid_for_binding};
 use crate::{
     config,
     dto::template::{
-        TemplateChunkResponse, TemplateChunkSetInfoResponse, TemplateChunkSetPrepareInput,
-        TemplateManifestInput, TemplateManifestResponse, WasmStoreAdminCommand,
-        WasmStoreAdminResponse, WasmStoreCatalogEntryResponse, WasmStoreFinalizedStoreResponse,
-        WasmStorePublicationSlotResponse, WasmStorePublicationStatusResponse,
-        WasmStorePublicationStoreStatusResponse, WasmStoreRetiredStoreStatusResponse,
-        WasmStoreStatusResponse,
+        TemplateChunkSetInfoResponse, TemplateChunkSetPrepareInput, TemplateManifestInput,
+        TemplateManifestResponse, WasmStoreAdminCommand, WasmStoreAdminResponse,
+        WasmStoreFinalizedStoreResponse, WasmStorePublicationSlotResponse,
+        WasmStorePublicationStatusResponse, WasmStorePublicationStoreStatusResponse,
+        WasmStoreRetiredStoreStatusResponse,
     },
     ids::{
-        CanisterRole, TemplateChunkingMode, TemplateId, TemplateManifestState, TemplateReleaseKey,
-        TemplateVersion, WasmStoreBinding, WasmStoreGcMode,
+        CanisterRole, TemplateChunkingMode, TemplateManifestState, WasmStoreBinding,
+        WasmStoreGcMode,
     },
     ops::storage::{
         state::subnet::SubnetStateOps,
         template::{TemplateChunkedOps, TemplateManifestOps},
     },
-    schema::WasmStoreConfig,
-    storage::stable::state::subnet::{PublicationStoreStateRecord, WasmStoreRecord},
+    storage::stable::state::subnet::PublicationStoreStateRecord,
 };
-use candid::CandidType;
 use canic_core::{__control_plane_core as cp_core, log, log::Topic};
 use cp_core::{
     InternalError, InternalErrorOrigin,
     cdk::types::Principal,
-    ops::{
-        ic::{IcOps, mgmt::MgmtOps},
-        storage::registry::subnet::SubnetRegistryOps,
-    },
-    protocol,
+    ops::{ic::IcOps, storage::registry::subnet::SubnetRegistryOps},
     workflow::{
         canister_lifecycle::{CanisterLifecycleEvent, CanisterLifecycleWorkflow},
         ic::provision::ProvisionWorkflow,
     },
 };
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
+
+use fleet::{
+    PublicationPlacement, PublicationPlacementAction, PublicationStoreFleet,
+    PublicationStoreSnapshot,
+};
+use store::{
+    TemplateChunkInputRef, local_chunk, store_begin_gc, store_binding_for_pid, store_catalog,
+    store_chunk, store_chunk_set_info, store_complete_gc, store_prepare_gc, store_stage_manifest,
+    store_status,
+};
 
 const WASM_STORE_ROLE: CanisterRole = CanisterRole::WASM_STORE;
-
-#[derive(CandidType)]
-struct TemplateChunkInputRef<'a> {
-    template_id: &'a TemplateId,
-    version: &'a TemplateVersion,
-    chunk_index: u32,
-    bytes: &'a [u8],
-}
-
-// Fetch the approved embedded catalog from one wasm store.
-pub(super) async fn store_catalog(
-    store_pid: Principal,
-) -> Result<Vec<WasmStoreCatalogEntryResponse>, InternalError> {
-    call_store_result(store_pid, protocol::CANIC_WASM_STORE_CATALOG, ()).await
-}
-
-// Fetch deterministic chunk-set metadata for one release from one wasm store.
-pub(super) async fn store_chunk_set_info(
-    store_pid: Principal,
-    template_id: &TemplateId,
-    version: &TemplateVersion,
-) -> Result<TemplateChunkSetInfoResponse, InternalError> {
-    call_store_result(
-        store_pid,
-        protocol::CANIC_WASM_STORE_INFO,
-        (
-            template_id.as_str().to_string(),
-            version.as_str().to_string(),
-        ),
-    )
-    .await
-}
-
-// Fetch current occupied-byte and retention state from one wasm store.
-pub(super) async fn store_status(
-    store_pid: Principal,
-) -> Result<WasmStoreStatusResponse, InternalError> {
-    call_store_result(store_pid, protocol::CANIC_WASM_STORE_STATUS, ()).await
-}
-
-// Stage one approved manifest into one live wasm store.
-pub(super) async fn store_stage_manifest(
-    store_pid: Principal,
-    request: TemplateManifestInput,
-) -> Result<(), InternalError> {
-    call_store_result(
-        store_pid,
-        protocol::CANIC_WASM_STORE_STAGE_MANIFEST,
-        (request,),
-    )
-    .await
-}
-
-// Mark one local wasm store as prepared for store-local GC execution.
-pub(super) async fn store_prepare_gc(store_pid: Principal) -> Result<(), InternalError> {
-    call_store_result(store_pid, protocol::CANIC_WASM_STORE_PREPARE_GC, ()).await
-}
-
-// Mark one local wasm store as actively executing store-local GC.
-pub(super) async fn store_begin_gc(store_pid: Principal) -> Result<(), InternalError> {
-    call_store_result(store_pid, protocol::CANIC_WASM_STORE_BEGIN_GC, ()).await
-}
-
-// Mark one local wasm store as having completed the current local GC pass.
-pub(super) async fn store_complete_gc(store_pid: Principal) -> Result<(), InternalError> {
-    call_store_result(store_pid, protocol::CANIC_WASM_STORE_COMPLETE_GC, ()).await
-}
-
-// Fetch one deterministic chunk for one release from one wasm store.
-pub(super) async fn store_chunk(
-    store_pid: Principal,
-    template_id: &TemplateId,
-    version: &TemplateVersion,
-    chunk_index: u32,
-) -> Result<Vec<u8>, InternalError> {
-    let response: TemplateChunkResponse = call_store_result(
-        store_pid,
-        protocol::CANIC_WASM_STORE_CHUNK,
-        (
-            template_id.as_str().to_string(),
-            version.as_str().to_string(),
-            chunk_index,
-        ),
-    )
-    .await?;
-
-    Ok(response.bytes)
-}
-
-// Resolve the configured logical binding for one registered store canister id.
-pub(super) fn store_binding_for_pid(
-    store_pid: Principal,
-) -> Result<WasmStoreBinding, InternalError> {
-    SubnetStateOps::wasm_store_binding_for_pid(store_pid).ok_or_else(|| {
-        InternalError::workflow(
-            InternalErrorOrigin::Workflow,
-            format!("wasm store {store_pid} is not registered"),
-        )
-    })
-}
-
-// Return deterministic chunk bytes from the current canister's local bootstrap source.
-fn local_chunk(
-    template_id: &TemplateId,
-    version: &TemplateVersion,
-    chunk_index: u32,
-) -> Result<Vec<u8>, InternalError> {
-    let response = TemplateChunkedOps::chunk_response(template_id, version, chunk_index)?;
-    Ok(response.bytes)
-}
 
 ///
 /// WasmStorePublicationWorkflow
 ///
 
 pub struct WasmStorePublicationWorkflow;
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-struct PublicationStoreSnapshot {
-    binding: WasmStoreBinding,
-    pid: Principal,
-    created_at: u64,
-    status: WasmStoreStatusResponse,
-    releases: Vec<WasmStoreCatalogEntryResponse>,
-    stored_chunk_hashes: Option<BTreeSet<Vec<u8>>>,
-}
-
-#[derive(Clone, Debug)]
-struct PublicationStoreFleet {
-    preferred_binding: Option<WasmStoreBinding>,
-    reserved_state: PublicationStoreStateRecord,
-    stores: Vec<PublicationStoreSnapshot>,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum PublicationPlacementAction {
-    Reuse,
-    Publish,
-    Create,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-struct PublicationPlacement {
-    binding: WasmStoreBinding,
-    pid: Principal,
-    action: PublicationPlacementAction,
-}
-
-impl PublicationStoreSnapshot {
-    // Return the stable release key for one catalog entry.
-    fn release_key(entry: &WasmStoreCatalogEntryResponse) -> TemplateReleaseKey {
-        TemplateReleaseKey::new(entry.template_id.clone(), entry.version.clone())
-    }
-
-    // Return true when this store already carries the exact release bytes for one manifest.
-    fn has_exact_release(&self, manifest: &TemplateManifestResponse) -> bool {
-        self.releases.iter().any(|entry| {
-            entry.role == manifest.role
-                && entry.template_id == manifest.template_id
-                && entry.version == manifest.version
-                && entry.payload_hash == manifest.payload_hash
-                && entry.payload_size_bytes == manifest.payload_size_bytes
-        })
-    }
-
-    // Return any conflicting existing release occupying the same template/version key.
-    fn conflicting_release(
-        &self,
-        manifest: &TemplateManifestResponse,
-    ) -> Option<&WasmStoreCatalogEntryResponse> {
-        self.releases.iter().find(|entry| {
-            entry.template_id == manifest.template_id
-                && entry.version == manifest.version
-                && (entry.role != manifest.role
-                    || entry.payload_hash != manifest.payload_hash
-                    || entry.payload_size_bytes != manifest.payload_size_bytes)
-        })
-    }
-
-    // Return true when this store can still accept one additional release projection.
-    fn can_accept_release(&self, manifest: &TemplateManifestResponse) -> bool {
-        if self.has_exact_release(manifest) {
-            return true;
-        }
-
-        if self.conflicting_release(manifest).is_some() {
-            return false;
-        }
-
-        if self.status.remaining_store_bytes < manifest.payload_size_bytes {
-            return false;
-        }
-
-        let templates = self
-            .status
-            .templates
-            .iter()
-            .map(|template| (template.template_id.clone(), template.versions))
-            .collect::<BTreeMap<_, _>>();
-        let current_versions = templates
-            .get(&manifest.template_id)
-            .copied()
-            .unwrap_or_default();
-
-        if current_versions == 0
-            && self
-                .status
-                .max_templates
-                .is_some_and(|max_templates| self.status.template_count >= max_templates)
-        {
-            return false;
-        }
-
-        if self
-            .status
-            .max_template_versions_per_template
-            .is_some_and(|max_versions| current_versions >= max_versions)
-        {
-            return false;
-        }
-
-        true
-    }
-
-    // Load the current management-canister chunk hashes once for this store.
-    async fn ensure_stored_chunk_hashes(&mut self) -> Result<(), InternalError> {
-        if self.stored_chunk_hashes.is_none() {
-            self.stored_chunk_hashes = Some(
-                MgmtOps::stored_chunks(self.pid)
-                    .await?
-                    .into_iter()
-                    .collect::<BTreeSet<_>>(),
-            );
-        }
-
-        Ok(())
-    }
-
-    // Project one successful placement into the in-memory fleet snapshot.
-    fn record_release(&mut self, manifest: &TemplateManifestResponse) {
-        if self.has_exact_release(manifest) {
-            return;
-        }
-
-        self.releases.push(WasmStoreCatalogEntryResponse {
-            role: manifest.role.clone(),
-            template_id: manifest.template_id.clone(),
-            version: manifest.version.clone(),
-            payload_hash: manifest.payload_hash.clone(),
-            payload_size_bytes: manifest.payload_size_bytes,
-        });
-        self.releases
-            .sort_by(|left, right| Self::release_key(left).cmp(&Self::release_key(right)));
-
-        self.status.occupied_store_bytes = self
-            .status
-            .occupied_store_bytes
-            .saturating_add(manifest.payload_size_bytes);
-        self.status.remaining_store_bytes = self
-            .status
-            .remaining_store_bytes
-            .saturating_sub(manifest.payload_size_bytes);
-        self.status.within_headroom = self
-            .status
-            .headroom_bytes
-            .is_some_and(|threshold| self.status.remaining_store_bytes <= threshold);
-        self.status.release_count = self.status.release_count.saturating_add(1);
-
-        if let Some(existing) = self
-            .status
-            .templates
-            .iter_mut()
-            .find(|template| template.template_id == manifest.template_id)
-        {
-            existing.versions = existing.versions.saturating_add(1);
-        } else {
-            self.status.template_count = self.status.template_count.saturating_add(1);
-            self.status
-                .templates
-                .push(crate::dto::template::WasmStoreTemplateStatusResponse {
-                    template_id: manifest.template_id.clone(),
-                    versions: 1,
-                });
-            self.status
-                .templates
-                .sort_by(|left, right| left.template_id.cmp(&right.template_id));
-        }
-    }
-}
-
-impl PublicationStoreFleet {
-    // Build the writable candidate order for automatic publication decisions.
-    fn writable_store_indices(&self) -> Vec<usize> {
-        let mut indexed = self
-            .stores
-            .iter()
-            .enumerate()
-            .filter(|(_, store)| {
-                !WasmStorePublicationWorkflow::binding_is_reserved_for_publication(
-                    &self.reserved_state,
-                    &store.binding,
-                )
-            })
-            .collect::<Vec<_>>();
-
-        indexed.sort_by(|(_, left), (_, right)| {
-            let left_rank = usize::from(self.preferred_binding.as_ref() != Some(&left.binding));
-            let right_rank = usize::from(self.preferred_binding.as_ref() != Some(&right.binding));
-
-            left_rank
-                .cmp(&right_rank)
-                .then(left.created_at.cmp(&right.created_at))
-                .then(left.binding.cmp(&right.binding))
-        });
-
-        indexed.into_iter().map(|(index, _)| index).collect()
-    }
-
-    // Resolve one exact reusable placement or one publishable writable store.
-    fn select_existing_store_for_release(
-        &self,
-        manifest: &TemplateManifestResponse,
-    ) -> Result<Option<PublicationPlacement>, InternalError> {
-        let mut exact_match = None;
-
-        for index in self.writable_store_indices() {
-            let store = &self.stores[index];
-
-            if let Some(conflict) = store.conflicting_release(manifest) {
-                return Err(InternalError::workflow(
-                    InternalErrorOrigin::Workflow,
-                    format!(
-                        "ws conflict for {}@{} on {}: existing hash/size differ ({:?}, {})",
-                        manifest.template_id,
-                        manifest.version,
-                        store.binding,
-                        conflict.payload_hash,
-                        conflict.payload_size_bytes
-                    ),
-                ));
-            }
-
-            if store.has_exact_release(manifest) {
-                exact_match = Some(PublicationPlacement {
-                    binding: store.binding.clone(),
-                    pid: store.pid,
-                    action: PublicationPlacementAction::Reuse,
-                });
-                break;
-            }
-        }
-
-        if exact_match.is_some() {
-            return Ok(exact_match);
-        }
-
-        for index in self.writable_store_indices() {
-            let store = &self.stores[index];
-
-            if store.can_accept_release(manifest) {
-                return Ok(Some(PublicationPlacement {
-                    binding: store.binding.clone(),
-                    pid: store.pid,
-                    action: PublicationPlacementAction::Publish,
-                }));
-            }
-        }
-
-        Ok(None)
-    }
-
-    // Project one successful placement back into the fleet snapshot.
-    fn record_placement(
-        &mut self,
-        binding: &WasmStoreBinding,
-        manifest: &TemplateManifestResponse,
-    ) {
-        if let Some(store) = self
-            .stores
-            .iter_mut()
-            .find(|store| &store.binding == binding)
-        {
-            store.record_release(manifest);
-        }
-    }
-
-    fn store_index_for_binding(&self, binding: &WasmStoreBinding) -> Option<usize> {
-        self.stores
-            .iter()
-            .position(|store| &store.binding == binding)
-    }
-
-    // Append one newly-created empty store to the writable fleet snapshot.
-    fn push_store(&mut self, record: WasmStoreRecord, config: WasmStoreConfig) {
-        self.stores.push(PublicationStoreSnapshot {
-            binding: record.binding,
-            pid: record.pid,
-            created_at: record.created_at,
-            status: WasmStoreStatusResponse {
-                gc: crate::dto::template::WasmStoreGcStatusResponse {
-                    mode: record.gc.mode,
-                    changed_at: record.gc.changed_at,
-                    prepared_at: record.gc.prepared_at,
-                    started_at: record.gc.started_at,
-                    completed_at: record.gc.completed_at,
-                    runs_completed: record.gc.runs_completed,
-                },
-                occupied_store_bytes: 0,
-                occupied_store_size: "0.00 B".to_string(),
-                max_store_bytes: config.max_store_bytes(),
-                max_store_size: canic_core::__control_plane_core::format::byte_size(
-                    config.max_store_bytes(),
-                ),
-                remaining_store_bytes: config.max_store_bytes(),
-                remaining_store_size: canic_core::__control_plane_core::format::byte_size(
-                    config.max_store_bytes(),
-                ),
-                headroom_bytes: config.headroom_bytes(),
-                headroom_size: config.headroom_bytes().map(cp_core::format::byte_size),
-                within_headroom: false,
-                template_count: 0,
-                max_templates: config.max_templates(),
-                release_count: 0,
-                max_template_versions_per_template: config.max_template_versions_per_template(),
-                templates: Vec::new(),
-            },
-            releases: Vec::new(),
-            stored_chunk_hashes: Some(BTreeSet::new()),
-        });
-    }
-}
 
 impl WasmStorePublicationWorkflow {
     const WASM_STORE_CAPACITY_EXCEEDED_MESSAGE: &str = "wasm store capacity exceeded";
@@ -733,7 +312,7 @@ impl WasmStorePublicationWorkflow {
     }
 
     // Return true when a binding is already reserved for detached or retired lifecycle state.
-    fn binding_is_reserved_for_publication(
+    pub(super) fn binding_is_reserved_for_publication(
         state: &PublicationStoreStateRecord,
         binding: &WasmStoreBinding,
     ) -> bool {
@@ -784,7 +363,8 @@ impl WasmStorePublicationWorkflow {
     }
 
     // Reject rollover when it would overwrite an older retired store.
-    fn ensure_retired_binding_slot_available_for_promotion() -> Result<(), InternalError> {
+    pub(super) fn ensure_retired_binding_slot_available_for_promotion() -> Result<(), InternalError>
+    {
         let state = SubnetStateOps::publication_store_state();
 
         if state.detached_binding.is_some() && state.retired_binding.is_some() {
@@ -798,7 +378,8 @@ impl WasmStorePublicationWorkflow {
     }
 
     // Reject explicit retirement when one retired store is already pending cleanup.
-    fn ensure_retired_binding_slot_available_for_retirement() -> Result<(), InternalError> {
+    pub(super) fn ensure_retired_binding_slot_available_for_retirement() -> Result<(), InternalError>
+    {
         let state = SubnetStateOps::publication_store_state();
 
         if state.retired_binding.is_some() {
@@ -1318,9 +899,9 @@ impl WasmStorePublicationWorkflow {
         let chunk_hashes = info.chunk_hashes.clone();
         target_store.ensure_stored_chunk_hashes().await?;
 
-        let _: TemplateChunkSetInfoResponse = call_store_result(
+        let _: TemplateChunkSetInfoResponse = super::call_store_result(
             target_store.pid,
-            protocol::CANIC_WASM_STORE_PREPARE,
+            cp_core::protocol::CANIC_WASM_STORE_PREPARE,
             (TemplateChunkSetPrepareInput {
                 template_id: manifest.template_id.clone(),
                 version: manifest.version.clone(),
@@ -1348,9 +929,9 @@ impl WasmStorePublicationWorkflow {
                 .is_some_and(|hashes| hashes.contains(&expected_hash));
             let bytes = Self::source_chunk_for_manifest(&manifest, chunk_index).await?;
 
-            call_store_result::<(), _>(
+            super::call_store_result::<(), _>(
                 target_store.pid,
-                protocol::CANIC_WASM_STORE_PUBLISH_CHUNK,
+                cp_core::protocol::CANIC_WASM_STORE_PUBLISH_CHUNK,
                 (TemplateChunkInputRef {
                     template_id: &manifest.template_id,
                     version: &manifest.version,
@@ -1362,7 +943,8 @@ impl WasmStorePublicationWorkflow {
             canic_core::perf!("publish_push_store_chunk");
 
             if !already_uploaded {
-                let uploaded_hash = MgmtOps::upload_chunk(target_store.pid, bytes).await?;
+                let uploaded_hash =
+                    cp_core::ops::ic::mgmt::MgmtOps::upload_chunk(target_store.pid, bytes).await?;
                 if uploaded_hash != expected_hash {
                     return Err(InternalError::workflow(
                         InternalErrorOrigin::Workflow,
@@ -1510,7 +1092,6 @@ impl WasmStorePublicationWorkflow {
             .filter(|manifest| manifest.store_binding == WASM_STORE_BOOTSTRAP_BINDING)
             .collect::<Vec<_>>();
 
-        // Fail closed before any store writes if one staged release is incomplete.
         for manifest in &manifests {
             TemplateChunkedOps::validate_staged_release(manifest)?;
         }
@@ -1617,383 +1198,5 @@ impl WasmStorePublicationWorkflow {
         });
 
         Ok(())
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{
-        PublicationPlacementAction, PublicationStoreFleet, PublicationStoreSnapshot,
-        WasmStorePublicationWorkflow,
-    };
-    use crate::{
-        dto::template::{
-            TemplateManifestResponse, WasmStoreCatalogEntryResponse, WasmStoreGcStatusResponse,
-            WasmStoreStatusResponse, WasmStoreTemplateStatusResponse,
-        },
-        ids::WasmStoreBinding,
-        ids::{
-            CanisterRole, TemplateChunkingMode, TemplateId, TemplateManifestState, TemplateVersion,
-        },
-        ops::storage::state::subnet::SubnetStateOps,
-        storage::stable::state::subnet::{PublicationStoreStateRecord, SubnetStateRecord},
-    };
-    use candid::Principal;
-
-    fn manifest(
-        role: &'static str,
-        template_id: &'static str,
-        version: &'static str,
-        payload_hash: u8,
-        payload_size_bytes: u64,
-    ) -> TemplateManifestResponse {
-        TemplateManifestResponse {
-            template_id: TemplateId::new(template_id),
-            role: CanisterRole::new(role),
-            version: TemplateVersion::new(version),
-            payload_hash: vec![payload_hash; 32],
-            payload_size_bytes,
-            store_binding: WasmStoreBinding::new("bootstrap"),
-            chunking_mode: TemplateChunkingMode::Chunked,
-            manifest_state: TemplateManifestState::Approved,
-            approved_at: Some(10),
-            created_at: 9,
-        }
-    }
-
-    fn store(
-        binding: &'static str,
-        pid_byte: u8,
-        created_at: u64,
-        remaining_store_bytes: u64,
-        releases: Vec<WasmStoreCatalogEntryResponse>,
-        templates: Vec<WasmStoreTemplateStatusResponse>,
-    ) -> PublicationStoreSnapshot {
-        PublicationStoreSnapshot {
-            binding: WasmStoreBinding::new(binding),
-            pid: Principal::from_slice(&[pid_byte; 29]),
-            created_at,
-            status: WasmStoreStatusResponse {
-                gc: WasmStoreGcStatusResponse {
-                    mode: crate::ids::WasmStoreGcMode::Normal,
-                    changed_at: 0,
-                    prepared_at: None,
-                    started_at: None,
-                    completed_at: None,
-                    runs_completed: 0,
-                },
-                occupied_store_bytes: 40_000_000_u64.saturating_sub(remaining_store_bytes),
-                occupied_store_size: String::new(),
-                max_store_bytes: 40_000_000,
-                max_store_size: String::new(),
-                remaining_store_bytes,
-                remaining_store_size: String::new(),
-                headroom_bytes: Some(4_000_000),
-                headroom_size: None,
-                within_headroom: remaining_store_bytes <= 4_000_000,
-                template_count: u32::try_from(templates.len()).unwrap_or(u32::MAX),
-                max_templates: None,
-                release_count: u32::try_from(releases.len()).unwrap_or(u32::MAX),
-                max_template_versions_per_template: None,
-                templates,
-            },
-            releases,
-            stored_chunk_hashes: None,
-        }
-    }
-
-    #[test]
-    fn promotion_is_blocked_when_it_would_overwrite_retired_binding() {
-        SubnetStateOps::import(SubnetStateRecord {
-            publication_store: PublicationStoreStateRecord {
-                active_binding: Some(WasmStoreBinding::new("active")),
-                detached_binding: Some(WasmStoreBinding::new("detached")),
-                retired_binding: Some(WasmStoreBinding::new("retired")),
-                generation: 3,
-                changed_at: 30,
-                retired_at: 20,
-            },
-            wasm_stores: Vec::new(),
-        });
-
-        let err =
-            WasmStorePublicationWorkflow::ensure_retired_binding_slot_available_for_promotion()
-                .expect_err("promotion must fail closed while retired binding is still pending");
-
-        assert!(err.to_string().contains("rollover blocked"));
-    }
-
-    #[test]
-    fn explicit_retirement_is_blocked_when_retired_binding_already_exists() {
-        SubnetStateOps::import(SubnetStateRecord {
-            publication_store: PublicationStoreStateRecord {
-                active_binding: Some(WasmStoreBinding::new("active")),
-                detached_binding: Some(WasmStoreBinding::new("detached")),
-                retired_binding: Some(WasmStoreBinding::new("retired")),
-                generation: 3,
-                changed_at: 30,
-                retired_at: 20,
-            },
-            wasm_stores: Vec::new(),
-        });
-
-        let err =
-            WasmStorePublicationWorkflow::ensure_retired_binding_slot_available_for_retirement()
-                .expect_err("retirement must fail closed while an older retired binding exists");
-
-        assert!(err.to_string().contains("retirement blocked"));
-    }
-
-    #[test]
-    fn detached_and_retired_bindings_are_not_publication_candidates() {
-        let state = PublicationStoreStateRecord {
-            active_binding: Some(WasmStoreBinding::new("active")),
-            detached_binding: Some(WasmStoreBinding::new("detached")),
-            retired_binding: Some(WasmStoreBinding::new("retired")),
-            generation: 3,
-            changed_at: 30,
-            retired_at: 20,
-        };
-
-        assert!(
-            !WasmStorePublicationWorkflow::binding_is_reserved_for_publication(
-                &state,
-                &WasmStoreBinding::new("active"),
-            )
-        );
-        assert!(
-            WasmStorePublicationWorkflow::binding_is_reserved_for_publication(
-                &state,
-                &WasmStoreBinding::new("detached"),
-            )
-        );
-        assert!(
-            WasmStorePublicationWorkflow::binding_is_reserved_for_publication(
-                &state,
-                &WasmStoreBinding::new("retired"),
-            )
-        );
-    }
-
-    #[test]
-    fn exact_release_is_reused_before_new_store_is_created() {
-        let manifest = manifest("app", "embedded:app", "0.20.9", 7, 512);
-        let fleet = PublicationStoreFleet {
-            preferred_binding: Some(WasmStoreBinding::new("primary")),
-            reserved_state: PublicationStoreStateRecord::default(),
-            stores: vec![store(
-                "primary",
-                1,
-                10,
-                20_000_000,
-                vec![WasmStoreCatalogEntryResponse {
-                    role: manifest.role.clone(),
-                    template_id: manifest.template_id.clone(),
-                    version: manifest.version.clone(),
-                    payload_hash: manifest.payload_hash.clone(),
-                    payload_size_bytes: manifest.payload_size_bytes,
-                }],
-                vec![WasmStoreTemplateStatusResponse {
-                    template_id: manifest.template_id.clone(),
-                    versions: 1,
-                }],
-            )],
-        };
-
-        let placement = fleet
-            .select_existing_store_for_release(&manifest)
-            .expect("selection must succeed")
-            .expect("exact release must be reusable");
-
-        assert_eq!(placement.binding, WasmStoreBinding::new("primary"));
-        assert_eq!(placement.action, PublicationPlacementAction::Reuse);
-    }
-
-    #[test]
-    fn conflicting_duplicate_release_is_rejected() {
-        let manifest = manifest("app", "embedded:app", "0.20.9", 7, 512);
-        let fleet = PublicationStoreFleet {
-            preferred_binding: Some(WasmStoreBinding::new("primary")),
-            reserved_state: PublicationStoreStateRecord::default(),
-            stores: vec![store(
-                "primary",
-                1,
-                10,
-                20_000_000,
-                vec![WasmStoreCatalogEntryResponse {
-                    role: manifest.role.clone(),
-                    template_id: manifest.template_id.clone(),
-                    version: manifest.version.clone(),
-                    payload_hash: vec![9; 32],
-                    payload_size_bytes: manifest.payload_size_bytes,
-                }],
-                vec![WasmStoreTemplateStatusResponse {
-                    template_id: manifest.template_id.clone(),
-                    versions: 1,
-                }],
-            )],
-        };
-
-        let err = fleet
-            .select_existing_store_for_release(&manifest)
-            .expect_err("conflicting duplicate release must fail");
-
-        assert!(err.to_string().contains("ws conflict"));
-    }
-
-    #[test]
-    fn placement_uses_another_store_before_requesting_new_capacity() {
-        let manifest = manifest("app", "embedded:app", "0.20.9", 7, 8_000_000);
-        let fleet = PublicationStoreFleet {
-            preferred_binding: Some(WasmStoreBinding::new("primary")),
-            reserved_state: PublicationStoreStateRecord::default(),
-            stores: vec![
-                store("primary", 1, 10, 2_000_000, Vec::new(), Vec::new()),
-                store("secondary", 2, 20, 16_000_000, Vec::new(), Vec::new()),
-            ],
-        };
-
-        let placement = fleet
-            .select_existing_store_for_release(&manifest)
-            .expect("selection must succeed")
-            .expect("a second store should be selected");
-
-        assert_eq!(placement.binding, WasmStoreBinding::new("secondary"));
-        assert_eq!(placement.action, PublicationPlacementAction::Publish);
-    }
-
-    #[test]
-    fn reconcile_binding_ignores_older_role_versions_on_other_stores() {
-        let manifest = manifest("app", "embedded:app", "0.20.10", 7, 512);
-        let fleet = PublicationStoreFleet {
-            preferred_binding: Some(WasmStoreBinding::new("primary")),
-            reserved_state: PublicationStoreStateRecord::default(),
-            stores: vec![
-                store(
-                    "primary",
-                    1,
-                    10,
-                    20_000_000,
-                    vec![WasmStoreCatalogEntryResponse {
-                        role: manifest.role.clone(),
-                        template_id: manifest.template_id.clone(),
-                        version: manifest.version.clone(),
-                        payload_hash: manifest.payload_hash.clone(),
-                        payload_size_bytes: manifest.payload_size_bytes,
-                    }],
-                    vec![WasmStoreTemplateStatusResponse {
-                        template_id: manifest.template_id.clone(),
-                        versions: 1,
-                    }],
-                ),
-                store(
-                    "secondary",
-                    2,
-                    20,
-                    20_000_000,
-                    vec![WasmStoreCatalogEntryResponse {
-                        role: manifest.role.clone(),
-                        template_id: manifest.template_id.clone(),
-                        version: TemplateVersion::new("0.20.9"),
-                        payload_hash: vec![5; 32],
-                        payload_size_bytes: manifest.payload_size_bytes,
-                    }],
-                    vec![WasmStoreTemplateStatusResponse {
-                        template_id: manifest.template_id.clone(),
-                        versions: 1,
-                    }],
-                ),
-            ],
-        };
-
-        let binding =
-            WasmStorePublicationWorkflow::reconciled_binding_for_manifest(&fleet, &manifest)
-                .expect("older versions on another store must not conflict");
-
-        assert_eq!(binding, WasmStoreBinding::new("primary"));
-    }
-
-    #[test]
-    fn reconcile_binding_uses_preferred_exact_duplicate_when_current_binding_is_gone() {
-        let mut manifest = manifest("app", "embedded:app", "0.20.10", 7, 512);
-        manifest.store_binding = WasmStoreBinding::new("missing");
-
-        let fleet = PublicationStoreFleet {
-            preferred_binding: Some(WasmStoreBinding::new("secondary")),
-            reserved_state: PublicationStoreStateRecord::default(),
-            stores: vec![
-                store(
-                    "primary",
-                    1,
-                    10,
-                    20_000_000,
-                    vec![WasmStoreCatalogEntryResponse {
-                        role: manifest.role.clone(),
-                        template_id: manifest.template_id.clone(),
-                        version: manifest.version.clone(),
-                        payload_hash: manifest.payload_hash.clone(),
-                        payload_size_bytes: manifest.payload_size_bytes,
-                    }],
-                    vec![WasmStoreTemplateStatusResponse {
-                        template_id: manifest.template_id.clone(),
-                        versions: 1,
-                    }],
-                ),
-                store(
-                    "secondary",
-                    2,
-                    20,
-                    20_000_000,
-                    vec![WasmStoreCatalogEntryResponse {
-                        role: manifest.role.clone(),
-                        template_id: manifest.template_id.clone(),
-                        version: manifest.version.clone(),
-                        payload_hash: manifest.payload_hash.clone(),
-                        payload_size_bytes: manifest.payload_size_bytes,
-                    }],
-                    vec![WasmStoreTemplateStatusResponse {
-                        template_id: manifest.template_id.clone(),
-                        versions: 1,
-                    }],
-                ),
-            ],
-        };
-
-        let binding =
-            WasmStorePublicationWorkflow::reconciled_binding_for_manifest(&fleet, &manifest)
-                .expect("an exact duplicate on the preferred store should be reusable");
-
-        assert_eq!(binding, WasmStoreBinding::new("secondary"));
-    }
-
-    #[test]
-    fn reconcile_binding_rejects_missing_exact_release() {
-        let manifest = manifest("app", "embedded:app", "0.20.10", 7, 512);
-        let fleet = PublicationStoreFleet {
-            preferred_binding: Some(WasmStoreBinding::new("primary")),
-            reserved_state: PublicationStoreStateRecord::default(),
-            stores: vec![store(
-                "primary",
-                1,
-                10,
-                20_000_000,
-                vec![WasmStoreCatalogEntryResponse {
-                    role: manifest.role.clone(),
-                    template_id: manifest.template_id.clone(),
-                    version: TemplateVersion::new("0.20.9"),
-                    payload_hash: manifest.payload_hash.clone(),
-                    payload_size_bytes: manifest.payload_size_bytes,
-                }],
-                vec![WasmStoreTemplateStatusResponse {
-                    template_id: manifest.template_id.clone(),
-                    versions: 1,
-                }],
-            )],
-        };
-
-        let err = WasmStorePublicationWorkflow::reconciled_binding_for_manifest(&fleet, &manifest)
-            .expect_err("reconcile must fail when the exact approved release disappeared");
-
-        assert!(err.to_string().contains("missing exact release"));
     }
 }

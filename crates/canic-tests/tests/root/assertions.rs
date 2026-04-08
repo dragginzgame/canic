@@ -8,13 +8,11 @@ use canic::{
         env::EnvSnapshotResponse,
         page::{Page, PageRequest},
         state::{AppStateResponse, SubnetStateResponse},
-        topology::DirectoryEntryResponse,
     },
     ids::{CanisterRole, SubnetRole},
     protocol,
 };
 use canic_testkit::pic::Pic;
-use std::collections::HashMap;
 
 // Query the authoritative root subnet registry once and unwrap the canonical response shape.
 fn query_subnet_registry(
@@ -48,19 +46,6 @@ pub fn assert_registry_parents(
     }
 }
 
-/// Look up one canister principal by role in the root subnet registry.
-pub fn registry_pid_for_role(pic: &Pic, root_id: Principal, role: &CanisterRole) -> Principal {
-    let registry = query_subnet_registry(pic, root_id);
-
-    registry
-        .iter()
-        .find(|entry| &entry.role == role)
-        .map_or_else(
-            || panic!("missing {role} entry in registry"),
-            |entry| entry.pid,
-        )
-}
-
 /// Assert that a child canister exposes a correct EnvSnapshotResponse.
 pub fn assert_child_env(pic: &Pic, child_pid: Principal, role: CanisterRole, root_id: Principal) {
     let env: Result<EnvSnapshotResponse, canic::Error> = pic
@@ -88,153 +73,6 @@ pub fn assert_child_env(pic: &Pic, child_pid: Principal, role: CanisterRole, roo
     assert!(
         env.subnet_pid.is_some(),
         "env subnet pid should be set for {role}"
-    );
-}
-
-/// Assert that the root directories are authoritative and child views stay rooted in them.
-pub fn assert_directories_consistent(
-    pic: &Pic,
-    root_id: Principal,
-    subnet_directory: &HashMap<CanisterRole, Principal>,
-) {
-    let root_app_dir = query_directory(pic, root_id, protocol::CANIC_APP_DIRECTORY, "root app");
-    let root_subnet_dir = query_directory(
-        pic,
-        root_id,
-        protocol::CANIC_SUBNET_DIRECTORY,
-        "root subnet",
-    );
-
-    assert_root_directories_match_snapshot(&root_app_dir, &root_subnet_dir, subnet_directory);
-
-    for (role, pid) in subnet_directory.iter().filter(|(r, _)| !r.is_root()) {
-        assert_child_directories_resolve_to_root(
-            pic,
-            *pid,
-            role,
-            *pid,
-            &root_app_dir,
-            &root_subnet_dir,
-        );
-    }
-}
-
-// Query one directory endpoint from one canister with the canonical page shape.
-fn query_directory(
-    pic: &Pic,
-    canister_id: Principal,
-    method: &str,
-    label: &str,
-) -> Page<DirectoryEntryResponse> {
-    let response: Result<Page<DirectoryEntryResponse>, canic::Error> = pic
-        .query_call(
-            canister_id,
-            method,
-            (PageRequest {
-                limit: 100,
-                offset: 0,
-            },),
-        )
-        .unwrap_or_else(|_| panic!("query {label} directory transport"));
-    response.unwrap_or_else(|_| panic!("query {label} directory application"))
-}
-
-// Normalize directory entries into stable `(role, pid)` tuples for comparisons.
-fn normalize_directory_entries(
-    entries: &[DirectoryEntryResponse],
-) -> Vec<(CanisterRole, Principal)> {
-    let mut normalized = entries
-        .iter()
-        .map(|entry| (entry.role.clone(), entry.pid))
-        .collect::<Vec<_>>();
-    normalized.sort_by(|a, b| a.0.cmp(&b.0));
-    normalized
-}
-
-// Assert that root-owned directory surfaces line up with the harness snapshot.
-fn assert_root_directories_match_snapshot(
-    root_app_dir: &Page<DirectoryEntryResponse>,
-    root_subnet_dir: &Page<DirectoryEntryResponse>,
-    subnet_directory: &HashMap<CanisterRole, Principal>,
-) {
-    let expected_subnet_dir = normalize_directory_entries(
-        &subnet_directory
-            .iter()
-            .map(|(role, pid)| DirectoryEntryResponse {
-                role: role.clone(),
-                pid: *pid,
-            })
-            .collect::<Vec<_>>(),
-    );
-    let actual_root_subnet_dir = normalize_directory_entries(&root_subnet_dir.entries);
-
-    assert_eq!(
-        actual_root_subnet_dir, expected_subnet_dir,
-        "root subnet directory must match the harness subnet directory snapshot"
-    );
-
-    for entry in &root_app_dir.entries {
-        let expected_pid = subnet_directory.get(&entry.role).unwrap_or_else(|| {
-            panic!(
-                "root app directory role {} missing from harness",
-                entry.role
-            )
-        });
-        assert_eq!(
-            entry.pid, *expected_pid,
-            "root app directory pid mismatch for {}",
-            entry.role
-        );
-    }
-}
-
-// Assert that one child's partial directory views stay rooted in the authoritative root entries.
-fn assert_child_directories_resolve_to_root(
-    pic: &Pic,
-    child_pid: Principal,
-    role: &CanisterRole,
-    expected_pid: Principal,
-    root_app_dir: &Page<DirectoryEntryResponse>,
-    root_subnet_dir: &Page<DirectoryEntryResponse>,
-) {
-    let app_dir = query_directory(pic, child_pid, protocol::CANIC_APP_DIRECTORY, "child app");
-    let subnet_dir = query_directory(
-        pic,
-        child_pid,
-        protocol::CANIC_SUBNET_DIRECTORY,
-        "child subnet",
-    );
-
-    for entry in &app_dir.entries {
-        assert!(
-            root_app_dir.entries.contains(entry),
-            "app directory entry {entry:?} for {role} must exist in the root app directory",
-        );
-    }
-
-    for entry in &subnet_dir.entries {
-        assert!(
-            root_subnet_dir.entries.contains(entry),
-            "subnet directory entry {entry:?} for {role} must exist in the root subnet directory",
-        );
-    }
-
-    if root_app_dir.entries.iter().any(|entry| entry.role == *role) {
-        assert!(
-            app_dir
-                .entries
-                .iter()
-                .any(|entry| entry.role == *role && entry.pid == expected_pid),
-            "app directory for {role} must still resolve the child itself",
-        );
-    }
-
-    assert!(
-        subnet_dir
-            .entries
-            .iter()
-            .any(|entry| entry.role == *role && entry.pid == expected_pid),
-        "subnet directory for {role} must still resolve the child itself",
     );
 }
 
