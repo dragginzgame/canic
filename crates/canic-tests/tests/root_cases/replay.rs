@@ -18,7 +18,7 @@ use canic::{
             CreateCanisterParent, CreateCanisterRequest, CyclesRequest, Request, Response,
             RootRequestMetadata, UpgradeCanisterRequest,
         },
-        topology::DirectoryEntryResponse,
+        topology::IndexEntryResponse,
     },
     protocol,
 };
@@ -27,22 +27,22 @@ use std::convert::TryFrom;
 use std::time::Duration;
 
 #[test]
-fn later_auto_created_sibling_refreshes_existing_subnet_directory_cache() {
+fn later_auto_created_sibling_refreshes_existing_subnet_index_cache() {
     let setup = setup_cached_root(RootSetupProfile::Capability);
     let app_pid = setup
-        .subnet_directory
+        .subnet_index
         .get(&canister::APP)
         .copied()
         .expect("app canister must exist");
     let test_pid = setup
-        .subnet_directory
+        .subnet_index
         .get(&canister::TEST)
         .copied()
         .expect("test canister must exist");
 
-    let app_subnet_directory = query_subnet_directory(&setup, app_pid);
+    let app_subnet_index = query_subnet_index(&setup, app_pid);
     assert!(
-        app_subnet_directory
+        app_subnet_index
             .iter()
             .any(|entry| entry.role == canister::TEST && entry.pid == test_pid),
         "existing sibling subnet-directory cache must refresh with the later-created test entry",
@@ -53,7 +53,7 @@ fn later_auto_created_sibling_refreshes_existing_subnet_directory_cache() {
 fn unauthorized_caller_is_denied_for_each_root_capability_variant() {
     let setup = setup_cached_root(RootSetupProfile::Capability);
     let test_pid = setup
-        .subnet_directory
+        .subnet_index
         .get(&canister::TEST)
         .copied()
         .expect("test canister must exist");
@@ -102,12 +102,12 @@ fn unauthorized_caller_is_denied_for_each_root_capability_variant() {
 fn upgrade_policy_denies_registered_non_parent_caller() {
     let setup = setup_cached_root(RootSetupProfile::Capability);
     let caller = setup
-        .subnet_directory
+        .subnet_index
         .get(&canister::TEST)
         .copied()
         .expect("test canister must exist");
     let app_pid = setup
-        .subnet_directory
+        .subnet_index
         .get(&canister::APP)
         .copied()
         .expect("app canister must exist");
@@ -131,7 +131,7 @@ fn upgrade_policy_denies_registered_non_parent_caller() {
 fn structural_proof_denies_unsupported_issue_delegation_capability() {
     let setup = setup_cached_root(RootSetupProfile::Capability);
     let caller = setup
-        .subnet_directory
+        .subnet_index
         .get(&canister::TEST)
         .copied()
         .expect("test canister must exist");
@@ -169,7 +169,7 @@ fn structural_proof_denies_unsupported_issue_delegation_capability() {
 fn cycles_routes_through_dispatcher_and_replay_duplicate_same() {
     let setup = setup_cached_root(RootSetupProfile::Capability);
     let caller = setup
-        .subnet_directory
+        .subnet_index
         .get(&canister::SCALE_HUB)
         .copied()
         .expect("scale_hub canister must exist");
@@ -209,7 +209,7 @@ fn cycles_routes_through_dispatcher_and_replay_duplicate_same() {
 fn root_cycles_request_increases_direct_child_balance() {
     let setup = setup_cached_root(RootSetupProfile::Capability);
     let caller = setup
-        .subnet_directory
+        .subnet_index
         .get(&canister::TEST)
         .copied()
         .expect("test canister must exist");
@@ -238,7 +238,7 @@ fn root_cycles_request_increases_direct_child_balance() {
 fn parent_cycles_request_increases_direct_child_balance() {
     let setup = setup_cached_root(RootSetupProfile::Scaling);
     let parent = setup
-        .subnet_directory
+        .subnet_index
         .get(&canister::SCALE_HUB)
         .copied()
         .expect("scale_hub canister must exist");
@@ -267,7 +267,7 @@ fn upgrade_routes_through_dispatcher_non_skip_path() {
     let setup = setup_cached_root(RootSetupProfile::Capability);
     let caller = setup.root_id;
     let target = setup
-        .subnet_directory
+        .subnet_index
         .get(&canister::TEST)
         .copied()
         .expect("test canister exists");
@@ -324,7 +324,7 @@ fn replay_rejects_cross_variant_same_request_id() {
 
     let metadata = metadata([11u8; 32], 120);
     let target = setup
-        .subnet_directory
+        .subnet_index
         .get(&canister::APP)
         .copied()
         .expect("app canister exists");
@@ -367,7 +367,7 @@ fn replay_rejects_cross_variant_same_request_id() {
 fn replay_rejects_same_variant_mutated_payload() {
     let setup = setup_cached_root(RootSetupProfile::Capability);
     let caller = setup
-        .subnet_directory
+        .subnet_index
         .get(&canister::TEST)
         .copied()
         .expect("test canister must exist");
@@ -407,7 +407,7 @@ fn replay_rejects_same_variant_mutated_payload() {
 fn replay_returns_cached_response_for_identical_request() {
     let setup = setup_cached_root(RootSetupProfile::Capability);
     let caller = setup
-        .subnet_directory
+        .subnet_index
         .get(&canister::TEST)
         .copied()
         .expect("test canister must exist");
@@ -447,7 +447,7 @@ fn replay_returns_cached_response_for_identical_request() {
 fn cycles_rejects_when_requested_above_root_balance() {
     let setup = setup_cached_root(RootSetupProfile::Capability);
     let caller = setup
-        .subnet_directory
+        .subnet_index
         .get(&canister::SCALE_HUB)
         .copied()
         .expect("scale_hub canister must exist");
@@ -479,7 +479,7 @@ fn cycles_rejects_when_requested_above_root_balance() {
 fn replay_rejects_ttl_above_max() {
     let setup = setup_cached_root(RootSetupProfile::Capability);
     let caller = setup
-        .subnet_directory
+        .subnet_index
         .get(&canister::TEST)
         .copied()
         .expect("test canister must exist");
@@ -508,7 +508,7 @@ fn replay_rejects_ttl_above_max() {
 fn replay_rejects_expired_request() {
     let setup = setup_cached_root(RootSetupProfile::Capability);
     let caller = setup
-        .subnet_directory
+        .subnet_index
         .get(&canister::TEST)
         .copied()
         .expect("test canister must exist");
@@ -545,12 +545,12 @@ fn upgrade_replay_returns_cached_response_and_rejects_conflict() {
     let setup = setup_cached_root(RootSetupProfile::Capability);
     let caller = setup.root_id;
     let app = setup
-        .subnet_directory
+        .subnet_index
         .get(&canister::APP)
         .copied()
         .expect("app canister exists");
     let test = setup
-        .subnet_directory
+        .subnet_index
         .get(&canister::TEST)
         .copied()
         .expect("test canister exists");
@@ -629,7 +629,7 @@ fn upgrade_replay_returns_cached_response_and_rejects_conflict() {
 fn unsupported_capability_proof_rejection_does_not_commit_replay_entry() {
     let setup = setup_cached_root(RootSetupProfile::Capability);
     let caller = setup
-        .subnet_directory
+        .subnet_index
         .get(&canister::TEST)
         .copied()
         .expect("test canister exists");
@@ -723,15 +723,12 @@ fn root_capability_metrics(setup: &RootSetup) -> Vec<MetricEntry> {
 }
 
 // Read one canister's cached subnet-directory page through the public query surface.
-fn query_subnet_directory(
-    setup: &RootSetup,
-    canister_id: Principal,
-) -> Vec<DirectoryEntryResponse> {
-    let response: Result<Page<DirectoryEntryResponse>, Error> = setup
+fn query_subnet_index(setup: &RootSetup, canister_id: Principal) -> Vec<IndexEntryResponse> {
+    let response: Result<Page<IndexEntryResponse>, Error> = setup
         .pic
         .query_call(
             canister_id,
-            protocol::CANIC_SUBNET_DIRECTORY,
+            protocol::CANIC_SUBNET_INDEX,
             (PageRequest {
                 limit: 100,
                 offset: 0,

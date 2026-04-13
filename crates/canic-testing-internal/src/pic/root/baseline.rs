@@ -32,7 +32,7 @@ pub fn restore_root_cached_baseline(
 
     progress(spec, "waiting for restored child canisters ready");
     let child_wait_started_at = Instant::now();
-    wait_for_children_ready(spec, baseline.pic(), &baseline.metadata().subnet_directory);
+    wait_for_children_ready(spec, baseline.pic(), &baseline.metadata().subnet_index);
     progress_elapsed(
         spec,
         "restored child canisters ready",
@@ -46,7 +46,7 @@ fn capture_cached_root_baseline(
     initialized: InitializedRootTopology,
 ) -> CachedPicBaseline<RootBaselineMetadata> {
     let controller_ids = std::iter::once(initialized.metadata.root_id)
-        .chain(initialized.metadata.subnet_directory.values().copied())
+        .chain(initialized.metadata.subnet_index.values().copied())
         .collect::<Vec<_>>();
 
     progress(spec, "capturing cached root snapshots");

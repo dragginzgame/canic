@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.27.x] - 2026-04-13 - Topology Taxonomy
 
+- `0.27.1` carries the full first topology implementation cut: it replaces `tenant` with `instance`, renames the old lookup/export surface from `directory` to `index` across config and runtime APIs, updates the checked-in configs and `.did` surface to the new terms, and leaves only `app_directory` / `subnet_directory` as temporary config parse aliases during migration.
 - `0.27.0` starts the topology-taxonomy line by separating structural canister kind from placement family, reserving `directory` for keyed instance placement while renaming the older lookup concept toward `app_index` / `subnet_index`, and making `tenant -> instance` an immediate migration decision instead of a tolerated long-term ambiguity.
 
 See detailed breakdown:

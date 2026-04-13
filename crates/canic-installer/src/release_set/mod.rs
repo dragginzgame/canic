@@ -62,7 +62,7 @@ mod tests {
     static ENV_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
     const REAL_CONFIG: &str = r#"
 controllers = []
-app_directory = ["user_hub", "scale_hub"]
+app_index = ["user_hub", "scale_hub"]
 
 [app]
 init_mode = "enabled"
@@ -87,7 +87,7 @@ kind = "singleton"
 
     const MULTI_ROOT_CONFIG: &str = r#"
 controllers = []
-app_directory = []
+app_index = []
 
 [app]
 init_mode = "enabled"
@@ -102,7 +102,7 @@ kind = "root"
 
     const NO_ROOT_CONFIG: &str = r#"
 controllers = []
-app_directory = []
+app_index = []
 
 [app]
 init_mode = "enabled"
@@ -150,7 +150,7 @@ kind = "singleton"
     fn configured_release_roles_filters_root_and_wasm_store() {
         let config = r#"
 controllers = []
-app_directory = []
+app_index = []
 
 [app]
 init_mode = "enabled"

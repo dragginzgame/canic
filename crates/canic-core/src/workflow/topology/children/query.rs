@@ -56,7 +56,7 @@ impl CanisterChildrenQuery {
     }
 
     /// Returns all children with the given role.
-    /// Intended for replica, tenant, or shard kinds.
+    /// Intended for replica, instance, or shard kinds.
     #[must_use]
     pub fn list_children_by_role(role: &CanisterRole) -> Vec<CanisterInfo> {
         CanisterChildrenOps::infos()

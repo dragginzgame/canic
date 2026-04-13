@@ -16,9 +16,7 @@ impl RpcAdapter {
             dto::CreateCanisterParent::ThisCanister => ops::CreateCanisterParent::ThisCanister,
             dto::CreateCanisterParent::Parent => ops::CreateCanisterParent::Parent,
             dto::CreateCanisterParent::Canister(pid) => ops::CreateCanisterParent::Canister(pid),
-            dto::CreateCanisterParent::Directory(role) => {
-                ops::CreateCanisterParent::Directory(role)
-            }
+            dto::CreateCanisterParent::Index(role) => ops::CreateCanisterParent::Index(role),
         }
     }
 

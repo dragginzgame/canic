@@ -118,7 +118,7 @@ macro_rules! __canic_build_internal {
         println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_metrics)");
         println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_auth_attestation)");
         println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_topology_state)");
-        println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_topology_directory)");
+        println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_topology_index)");
         println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_topology_children)");
         println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_topology_cycles)");
         println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_topology_placement)");
@@ -128,7 +128,7 @@ macro_rules! __canic_build_internal {
             // observability and test harness endpoints opt back in explicitly.
             println!("cargo:rustc-cfg=canic_disable_bundle_observability_memory");
             println!("cargo:rustc-cfg=canic_disable_bundle_observability_env");
-            println!("cargo:rustc-cfg=canic_disable_bundle_topology_directory");
+            println!("cargo:rustc-cfg=canic_disable_bundle_topology_index");
         }
         if $cfg.auth.delegated_tokens.enabled {
             println!("cargo:rustc-cfg=canic_delegated_tokens_enabled");

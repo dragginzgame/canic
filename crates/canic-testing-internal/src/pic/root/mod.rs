@@ -41,7 +41,7 @@ pub struct RootBaselineSpec<'a> {
 
 pub struct RootBaselineMetadata {
     pub root_id: Principal,
-    pub subnet_directory: HashMap<CanisterRole, Principal>,
+    pub subnet_index: HashMap<CanisterRole, Principal>,
 }
 
 // Print one progress line for a root-test setup phase and flush immediately.

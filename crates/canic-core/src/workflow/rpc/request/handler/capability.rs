@@ -113,8 +113,8 @@ fn hash_create_canister_parent(hasher: &mut sha2::Sha256, parent: &CreateCaniste
             super::replay::hash_str(hasher, "Canister");
             super::replay::hash_principal(hasher, pid);
         }
-        CreateCanisterParent::Directory(role) => {
-            super::replay::hash_str(hasher, "Directory");
+        CreateCanisterParent::Index(role) => {
+            super::replay::hash_str(hasher, "Index");
             super::replay::hash_role(hasher, role);
         }
     }

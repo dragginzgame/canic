@@ -29,8 +29,8 @@ impl ConfigTestBuilder {
     }
 
     #[must_use]
-    pub fn with_app_directory(mut self, role: impl Into<CanisterRole>) -> Self {
-        self.model.app_directory.insert(role.into());
+    pub fn with_app_index(mut self, role: impl Into<CanisterRole>) -> Self {
+        self.model.app_index.insert(role.into());
         self
     }
 

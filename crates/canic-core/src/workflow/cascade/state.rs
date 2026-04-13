@@ -19,7 +19,7 @@ use crate::{
         runtime::env::EnvOps,
         storage::{
             children::CanisterChildrenOps,
-            directory::{app::AppDirectoryOps, subnet::SubnetDirectoryOps},
+            index::{app::AppIndexOps, subnet::SubnetIndexOps},
             registry::subnet::SubnetRegistryOps,
             state::{app::AppStateOps, subnet::SubnetStateOps},
         },
@@ -168,12 +168,12 @@ impl StateCascadeWorkflow {
             SubnetStateOps::import_input(subnet);
         }
 
-        if let Some(dir) = &snapshot.app_directory {
-            AppDirectoryOps::import_args_allow_incomplete(dir.clone())?;
+        if let Some(dir) = &snapshot.app_index {
+            AppIndexOps::import_args_allow_incomplete(dir.clone())?;
         }
 
-        if let Some(dir) = &snapshot.subnet_directory {
-            SubnetDirectoryOps::import_args_allow_incomplete(dir.clone())?;
+        if let Some(dir) = &snapshot.subnet_index {
+            SubnetIndexOps::import_args_allow_incomplete(dir.clone())?;
         }
 
         Ok(())

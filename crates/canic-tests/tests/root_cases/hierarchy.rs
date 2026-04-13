@@ -47,7 +47,7 @@ fn root_reference_topology_is_consistent() {
         "root_reference_topology_is_consistent",
         "assert each child env",
     );
-    for (role, pid) in &setup.subnet_directory {
+    for (role, pid) in &setup.subnet_index {
         if !role.is_root() && *role != CanisterRole::WASM_STORE {
             assert_child_env(&setup.pic, *pid, role.clone(), setup.root_id);
         }
@@ -60,7 +60,7 @@ fn root_reference_topology_is_consistent() {
     assert_children_match_registry(&setup.pic, setup.root_id);
 
     let app_pid = setup
-        .subnet_directory
+        .subnet_index
         .get(&canister::APP)
         .copied()
         .expect("app must exist in subnet directory");

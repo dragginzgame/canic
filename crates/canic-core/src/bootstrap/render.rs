@@ -27,7 +27,7 @@ fn render_config_model(config: &ConfigModel) -> TokenStream {
     let log = render_log_config(&config.log);
     let auth = render_auth_config(&config.auth);
     let app = render_app_config(&config.app);
-    let app_directory = render_btree_set(config.app_directory.iter(), render_canister_role);
+    let app_index = render_btree_set(config.app_index.iter(), render_canister_role);
     let subnets = render_btree_map(
         config.subnets.iter(),
         render_subnet_role,
@@ -41,7 +41,7 @@ fn render_config_model(config: &ConfigModel) -> TokenStream {
             log: #log,
             auth: #auth,
             app: #app,
-            app_directory: #app_directory,
+            app_index: #app_index,
             subnets: #subnets,
         }
     }
@@ -314,14 +314,14 @@ fn render_subnet_config(config: &SubnetConfig) -> TokenStream {
         render_canister_config,
     );
     let auto_create = render_btree_set(config.auto_create.iter(), render_canister_role);
-    let subnet_directory = render_btree_set(config.subnet_directory.iter(), render_canister_role);
+    let subnet_index = render_btree_set(config.subnet_index.iter(), render_canister_role);
     let pool = render_canister_pool(&config.pool);
 
     quote! {
         ::canic::__internal::core::bootstrap::compiled::SubnetConfig {
             canisters: #canisters,
             auto_create: #auto_create,
-            subnet_directory: #subnet_directory,
+            subnet_index: #subnet_index,
             pool: #pool,
         }
     }
@@ -395,8 +395,8 @@ fn render_canister_kind(kind: CanisterKind) -> TokenStream {
         CanisterKind::Shard => {
             quote!(::canic::__internal::core::bootstrap::compiled::CanisterKind::Shard)
         }
-        CanisterKind::Tenant => {
-            quote!(::canic::__internal::core::bootstrap::compiled::CanisterKind::Tenant)
+        CanisterKind::Instance => {
+            quote!(::canic::__internal::core::bootstrap::compiled::CanisterKind::Instance)
         }
     }
 }

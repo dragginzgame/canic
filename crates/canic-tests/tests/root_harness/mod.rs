@@ -69,7 +69,7 @@ impl RootSetupProfile {
 pub struct RootSetup {
     pub pic: Pic,
     pub root_id: Principal,
-    pub subnet_directory: HashMap<CanisterRole, Principal>,
+    pub subnet_index: HashMap<CanisterRole, Principal>,
     _serial_guard: MutexGuard<'static, ()>,
     _pic_serial_guard: PicSerialGuard,
 }
@@ -91,7 +91,7 @@ pub fn setup_root(profile: RootSetupProfile) -> RootSetup {
     RootSetup {
         pic: state.pic,
         root_id: state.metadata.root_id,
-        subnet_directory: state.metadata.subnet_directory,
+        subnet_index: state.metadata.subnet_index,
         _serial_guard: serial_guard,
         _pic_serial_guard: pic_serial_guard,
     }

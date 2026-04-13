@@ -12,15 +12,15 @@ use thiserror::Error as ThisError;
 
 #[derive(Debug, ThisError)]
 pub enum TopologyPolicyError {
-    #[error("directory entry role mismatch for pid {pid}: expected {expected}, got {found}")]
-    DirectoryRoleMismatch {
+    #[error("index entry role mismatch for pid {pid}: expected {expected}, got {found}")]
+    IndexRoleMismatch {
         pid: Principal,
         expected: CanisterRole,
         found: CanisterRole,
     },
 
-    #[error("directory role {0} appears more than once")]
-    DuplicateDirectoryRole(CanisterRole),
+    #[error("index role {0} appears more than once")]
+    DuplicateIndexRole(CanisterRole),
 
     #[error("immediate-parent mismatch: canister {pid} expects parent {expected}, got {found:?}")]
     ImmediateParentMismatch {
@@ -117,7 +117,7 @@ impl TopologyPolicy {
         }
     }
 
-    pub fn assert_directory_consistent_with_registry(
+    pub fn assert_index_consistent_with_registry(
         registry: &RegistryPolicyInput,
         entries: &[(CanisterRole, Principal)],
     ) -> Result<(), TopologyPolicyError> {
@@ -127,7 +127,7 @@ impl TopologyPolicy {
             let record = Self::registry_record(registry, *pid)?;
 
             if record.role != *role {
-                return Err(TopologyPolicyError::DirectoryRoleMismatch {
+                return Err(TopologyPolicyError::IndexRoleMismatch {
                     pid: *pid,
                     expected: record.role.clone(),
                     found: role.clone(),
@@ -135,7 +135,7 @@ impl TopologyPolicy {
             }
 
             if !seen_roles.insert(role.clone()) {
-                return Err(TopologyPolicyError::DuplicateDirectoryRole(role.clone()));
+                return Err(TopologyPolicyError::DuplicateIndexRole(role.clone()));
             }
         }
 

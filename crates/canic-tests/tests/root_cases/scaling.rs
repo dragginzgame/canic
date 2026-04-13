@@ -10,7 +10,7 @@ fn worker_topology_cascades_through_parent() {
     let setup = setup_cached_root(RootSetupProfile::Scaling);
 
     let scale_hub_pid = setup
-        .subnet_directory
+        .subnet_index
         .get(&canister::SCALE_HUB)
         .copied()
         .expect("scale_hub must exist in subnet directory");

@@ -228,20 +228,20 @@ fn execute_standalone_scenario(pic: &Pic, scenario: &AuditScenario, target_pid: 
 fn scenario_target_pid(
     root_id: Principal,
     scenario: &AuditScenario,
-    subnet_directory: &std::collections::HashMap<canic::ids::CanisterRole, Principal>,
+    subnet_index: &std::collections::HashMap<canic::ids::CanisterRole, Principal>,
 ) -> Principal {
     match scenario.canister {
         "root" => root_id,
-        "app" => *subnet_directory
+        "app" => *subnet_index
             .get(&APP)
             .expect("app must exist in subnet directory"),
-        "scale_hub" => *subnet_directory
+        "scale_hub" => *subnet_index
             .get(&SCALE_HUB)
             .expect("scale_hub must exist in subnet directory"),
-        "user_hub" => *subnet_directory
+        "user_hub" => *subnet_index
             .get(&USER_HUB)
             .expect("user_hub must exist in subnet directory"),
-        "test" => *subnet_directory
+        "test" => *subnet_index
             .get(&TEST)
             .expect("test must exist in subnet directory"),
         other => panic!("unsupported audit canister: {other}"),
@@ -250,7 +250,7 @@ fn scenario_target_pid(
 
 // Prepare scenario-specific prerequisites outside the measured perf window.
 fn prepare_scenario(setup: &root_harness::RootSetup, scenario: &AuditScenario) -> PreparedScenario {
-    let target_pid = scenario_target_pid(setup.root_id, scenario, &setup.subnet_directory);
+    let target_pid = scenario_target_pid(setup.root_id, scenario, &setup.subnet_index);
 
     match scenario.key {
         "root:canic_template_prepare_admin:single-chunk" => {
@@ -274,7 +274,7 @@ fn prepare_scenario(setup: &root_harness::RootSetup, scenario: &AuditScenario) -
         }
         "root:canic_request_delegation:fresh-shard" => {
             let user_hub_pid = *setup
-                .subnet_directory
+                .subnet_index
                 .get(&USER_HUB)
                 .expect("user_hub must exist for auth audit scenario");
             let shard_pid =
@@ -287,7 +287,7 @@ fn prepare_scenario(setup: &root_harness::RootSetup, scenario: &AuditScenario) -
         }
         "test:test_verify_delegated_token:valid-delegated-token" => {
             let user_hub_pid = *setup
-                .subnet_directory
+                .subnet_index
                 .get(&USER_HUB)
                 .expect("user_hub must exist for verifier auth audit scenario");
             let shard_pid =
@@ -368,7 +368,7 @@ fn execute_root_delegation_issue_scenario(
         .caller_pid
         .expect("auth audit scenario must resolve a shard caller");
     let verifier_pid = *setup
-        .subnet_directory
+        .subnet_index
         .get(&TEST)
         .expect("test canister must exist for auth audit scenario");
     let response =
@@ -401,7 +401,7 @@ fn execute_verifier_auth_scenario(
 // Execute the fresh root cycles request scenario through the root dispatcher.
 fn execute_root_cycles_scenario(setup: &root_harness::RootSetup, target_pid: Principal) {
     let caller = *setup
-        .subnet_directory
+        .subnet_index
         .get(&TEST)
         .expect("test canister must exist for root capability request");
     let request = Request::Cycles(CyclesRequest {

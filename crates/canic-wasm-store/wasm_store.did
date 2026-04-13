@@ -12,8 +12,8 @@ type CanicStandardsResponse = record {
 };
 type CanisterInitPayload = record {
   env : EnvBootstrapArgs;
-  subnet_directory : vec TopologyDirectChild;
-  app_directory : vec TopologyDirectChild;
+  subnet_index : vec TopologyDirectChild;
+  app_index : vec TopologyDirectChild;
 };
 type CapabilityProof = variant {
   Structural;
@@ -37,7 +37,7 @@ type CyclesRequest = record {
   cycles : nat;
 };
 type CyclesResponse = record { cycles_transferred : nat };
-type DirectoryEntryInput = record { pid : principal; role : text };
+type IndexEntryInput = record { pid : principal; role : text };
 type EnvBootstrapArgs = record {
   prime_root_pid : opt principal;
   canister_role : opt text;
@@ -52,7 +52,7 @@ type ErrorCode = variant {
   PolicyRoleAlreadyRegistered;
   InvalidInput;
   InvariantViolation;
-  PolicyTenantRequiresSingletonParent;
+  PolicyInstanceRequiresSingletonParent;
   PolicyShardRequiresSingletonWithSharding;
   NotFound;
   PolicySingletonAlreadyRegisteredUnderParent;
@@ -83,8 +83,8 @@ type RootRequestMetadata = record { request_id : blob; ttl_seconds : nat64 };
 type StateSnapshotInput = record {
   subnet_state : opt null;
   app_state : opt AppStateInput;
-  subnet_directory : opt vec DirectoryEntryInput;
-  app_directory : opt vec DirectoryEntryInput;
+  subnet_index : opt vec IndexEntryInput;
+  app_index : opt vec IndexEntryInput;
 };
 type TemplateChunkInput = record {
   chunk_index : nat32;

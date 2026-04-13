@@ -35,7 +35,7 @@ fn test_progress(phase: &str) {
 pub struct RootSetup {
     pub pic: RootPicHandle,
     pub root_id: Principal,
-    pub subnet_directory: HashMap<CanisterRole, Principal>,
+    pub subnet_index: HashMap<CanisterRole, Principal>,
     _serial_guard: MutexGuard<'static, ()>,
     _pic_serial_guard: PicSerialGuard,
 }
@@ -99,7 +99,7 @@ fn setup_root_fresh_spec(spec: RootBaselineSpec<'static>) -> RootSetup {
     RootSetup {
         pic: RootPicHandle::Fresh(Box::new(state.pic)),
         root_id: state.metadata.root_id,
-        subnet_directory: state.metadata.subnet_directory,
+        subnet_index: state.metadata.subnet_index,
         _serial_guard: serial_guard,
         _pic_serial_guard: pic_serial_guard,
     }
@@ -143,7 +143,7 @@ fn setup_root_cached_spec(
 
     RootSetup {
         root_id: baseline.metadata().root_id,
-        subnet_directory: baseline.metadata().subnet_directory.clone(),
+        subnet_index: baseline.metadata().subnet_index.clone(),
         pic: RootPicHandle::Cached(baseline),
         _serial_guard: serial_guard,
         _pic_serial_guard: pic_serial_guard,

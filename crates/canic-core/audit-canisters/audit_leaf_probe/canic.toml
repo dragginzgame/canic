@@ -1,5 +1,5 @@
 controllers = []
-app_directory = []
+app_index = []
 
 [subnets.prime]
 

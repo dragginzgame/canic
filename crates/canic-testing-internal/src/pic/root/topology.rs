@@ -64,19 +64,19 @@ pub fn setup_root_topology(
 
         progress(spec, "fetching subnet directory");
         let directory_started_at = Instant::now();
-        let subnet_directory = fetch_subnet_directory(&pic, root_id);
+        let subnet_index = fetch_subnet_index(&pic, root_id);
         progress_elapsed(spec, "fetched subnet directory", directory_started_at);
 
         progress(spec, "waiting for child canisters ready");
         let child_wait_started_at = Instant::now();
-        wait_for_children_ready(spec, &pic, &subnet_directory);
+        wait_for_children_ready(spec, &pic, &subnet_index);
         progress_elapsed(spec, "child canisters ready", child_wait_started_at);
 
         return InitializedRootTopology {
             pic,
             metadata: RootBaselineMetadata {
                 root_id,
-                subnet_directory,
+                subnet_index,
             },
         };
     }
@@ -93,10 +93,10 @@ pub fn wait_for_bootstrap(spec: &RootBaselineSpec<'_>, pic: &Pic, root_id: Princ
 pub fn wait_for_children_ready(
     spec: &RootBaselineSpec<'_>,
     pic: &Pic,
-    subnet_directory: &HashMap<CanisterRole, Principal>,
+    subnet_index: &HashMap<CanisterRole, Principal>,
 ) {
     pic.wait_for_all_ready(
-        subnet_directory
+        subnet_index
             .iter()
             .filter(|(role, _)| !role.is_root())
             .map(|(_, pid)| *pid),
@@ -130,7 +130,7 @@ const fn should_retry_root_pic_start(
 
 // Fetch the authoritative subnet registry from root and project it into the
 // role → principal map used by the root harness metadata.
-fn fetch_subnet_directory(pic: &Pic, root_id: Principal) -> HashMap<CanisterRole, Principal> {
+fn fetch_subnet_index(pic: &Pic, root_id: Principal) -> HashMap<CanisterRole, Principal> {
     let registry: Result<SubnetRegistryResponse, canic::Error> = pic
         .query_call(root_id, canic::protocol::CANIC_SUBNET_REGISTRY, ())
         .expect("query subnet registry transport");

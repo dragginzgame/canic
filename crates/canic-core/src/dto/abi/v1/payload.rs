@@ -1,7 +1,7 @@
 use crate::dto::{
     env::EnvBootstrapArgs,
     prelude::*,
-    topology::{AppDirectoryArgs, SubnetDirectoryArgs},
+    topology::{AppIndexArgs, SubnetIndexArgs},
 };
 
 //
@@ -11,6 +11,6 @@ use crate::dto::{
 #[derive(CandidType, Debug, Deserialize)]
 pub struct CanisterInitPayload {
     pub env: EnvBootstrapArgs,
-    pub app_directory: AppDirectoryArgs,
-    pub subnet_directory: SubnetDirectoryArgs,
+    pub app_index: AppIndexArgs,
+    pub subnet_index: SubnetIndexArgs,
 }

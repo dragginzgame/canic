@@ -48,8 +48,8 @@ pub struct SubnetConfig {
     #[serde(default)]
     pub auto_create: BTreeSet<CanisterRole>,
 
-    #[serde(default)]
-    pub subnet_directory: BTreeSet<CanisterRole>,
+    #[serde(default, alias = "subnet_directory")]
+    pub subnet_index: BTreeSet<CanisterRole>,
 
     #[serde(default)]
     pub pool: CanisterPool,
@@ -82,18 +82,18 @@ impl Validate for SubnetConfig {
             }
         }
 
-        // subnet_directory must reference singleton canisters
-        for role in &self.subnet_directory {
-            validate_role_len(role, "subnet directory canister")?;
+        // subnet_index must reference singleton canisters
+        for role in &self.subnet_index {
+            validate_role_len(role, "subnet index canister")?;
             let cfg = self.canisters.get(role).ok_or_else(|| {
                 ConfigSchemaError::ValidationError(format!(
-                    "subnet directory canister '{role}' is not defined in subnet",
+                    "subnet index canister '{role}' is not defined in subnet",
                 ))
             })?;
 
             if cfg.kind != CanisterKind::Singleton {
                 return Err(ConfigSchemaError::ValidationError(format!(
-                    "subnet directory canister '{role}' must have kind = \"singleton\"",
+                    "subnet index canister '{role}' must have kind = \"singleton\"",
                 )));
             }
         }
@@ -274,7 +274,7 @@ impl CanisterConfig {
                 // Singletons are the only canisters allowed to define scaling and/or sharding
             }
 
-            CanisterKind::Replica | CanisterKind::Shard | CanisterKind::Tenant => {
+            CanisterKind::Replica | CanisterKind::Shard | CanisterKind::Instance => {
                 if self.scaling.is_some() || self.sharding.is_some() {
                     return Err(ConfigSchemaError::ValidationError(format!(
                         "canister '{canister}' kind = \"{}\" cannot define scaling or sharding",
@@ -386,7 +386,7 @@ pub enum CanisterKind {
     Singleton,
     Replica,
     Shard,
-    Tenant,
+    Instance,
 }
 
 impl fmt::Display for CanisterKind {
@@ -396,7 +396,7 @@ impl fmt::Display for CanisterKind {
             Self::Singleton => "singleton",
             Self::Replica => "replica",
             Self::Shard => "shard",
-            Self::Tenant => "tenant",
+            Self::Instance => "instance",
         };
 
         f.write_str(label)
@@ -465,7 +465,7 @@ pub enum RandomnessSource {
 /// (stateless, scaling)
 ///
 /// * Organizes canisters into **replica groups** (e.g. "oracle").
-/// * Replicas are interchangeable and handle transient tasks (no tenant assignment).
+/// * Replicas are interchangeable and handle transient tasks (no stable instance assignment).
 /// * Scaling is about throughput, not capacity.
 /// * Hence: `ReplicaManager → pools → ReplicaSpec → ReplicaPolicy`.
 ///
@@ -520,7 +520,7 @@ impl Default for ScalePoolPolicy {
 ///
 /// * Organizes canisters into named **pools**.
 /// * Each pool manages a set of **shards**, and each shard owns a partition of state.
-/// * Tenants are assigned to shards via HRW and stay there.
+/// * Stable logical keys are assigned to shards via HRW and stay there.
 /// * Hence: `ShardManager → pools → ShardPoolSpec → ShardPoolPolicy`.
 ///
 
@@ -1011,20 +1011,20 @@ role = "shard"
     }
 
     #[test]
-    fn tenant_kind_parses() {
+    fn instance_kind_parses() {
         let subnet = toml::from_str::<SubnetConfig>(
             r#"
-[canisters.tenant_role]
-kind = "tenant"
+[canisters.instance_role]
+kind = "instance"
 "#,
         )
-        .expect("expected tenant kind to parse");
+        .expect("expected instance kind to parse");
 
         let cfg = subnet
             .canisters
-            .get(&CanisterRole::from("tenant_role"))
-            .expect("tenant role config should exist");
-        assert_eq!(cfg.kind, CanisterKind::Tenant);
+            .get(&CanisterRole::from("instance_role"))
+            .expect("instance role config should exist");
+        assert_eq!(cfg.kind, CanisterKind::Instance);
     }
 
     #[test]

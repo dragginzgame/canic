@@ -1,7 +1,7 @@
 pub mod auth;
 pub mod children;
 pub mod cycles;
-pub mod directory;
+pub mod index;
 pub mod intent;
 pub mod placement;
 pub mod pool;
@@ -23,7 +23,7 @@ pub enum StorageOpsError {
     AppStateOps(#[from] state::app::AppStateOpsError),
 
     #[error(transparent)]
-    DirectoryOps(#[from] directory::DirectoryOpsError),
+    IndexOps(#[from] index::IndexOpsError),
 
     #[error(transparent)]
     IntentStoreOps(#[from] intent::IntentStoreOpsError),

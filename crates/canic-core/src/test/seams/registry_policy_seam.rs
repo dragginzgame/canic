@@ -104,9 +104,9 @@ fn shard_canister_config() -> CanisterConfig {
     }
 }
 
-fn tenant_canister_config() -> CanisterConfig {
+fn instance_canister_config() -> CanisterConfig {
     CanisterConfig {
-        kind: CanisterKind::Tenant,
+        kind: CanisterKind::Instance,
         initial_cycles: Cycles::new(0),
         topup_policy: None,
         randomness: RandomnessConfig::default(),
@@ -159,7 +159,7 @@ fn registry_kind_policy_blocks_but_ops_allows() {
         RegistryPolicyError::SingletonAlreadyRegisteredUnderParent { .. }
         | RegistryPolicyError::ReplicaRequiresSingletonWithScaling { .. }
         | RegistryPolicyError::ShardRequiresSingletonWithSharding { .. }
-        | RegistryPolicyError::TenantRequiresSingletonParent { .. } => {
+        | RegistryPolicyError::InstanceRequiresSingletonParent { .. } => {
             panic!("expected root duplicate role error")
         }
     }
@@ -229,7 +229,7 @@ fn registry_singleton_policy_blocks_under_parent() {
         RegistryPolicyError::RoleAlreadyRegistered { .. }
         | RegistryPolicyError::ReplicaRequiresSingletonWithScaling { .. }
         | RegistryPolicyError::ShardRequiresSingletonWithSharding { .. }
-        | RegistryPolicyError::TenantRequiresSingletonParent { .. } => {
+        | RegistryPolicyError::InstanceRequiresSingletonParent { .. } => {
             panic!("expected duplicate singleton under parent error");
         }
     }
@@ -270,8 +270,8 @@ fn registry_wasm_store_policy_allows_multiple_under_same_parent() {
 }
 
 #[test]
-fn tenant_creation_requires_singleton_parent() {
-    let role = CanisterRole::new("tenant_child");
+fn instance_creation_requires_singleton_parent() {
+    let role = CanisterRole::new("instance_child");
     let parent_role = CanisterRole::new("plain_parent");
     let parent_pid = p(7);
     let data = RegistryPolicyInput { entries: vec![] };
@@ -280,25 +280,28 @@ fn tenant_creation_requires_singleton_parent() {
         &role,
         parent_pid,
         &data,
-        &tenant_canister_config(),
+        &instance_canister_config(),
         &parent_role,
         &root_canister_config(),
     )
-    .expect_err("policy should reject tenant creation under non-singleton parent");
+    .expect_err("policy should reject instance creation under non-singleton parent");
 
     match &err {
-        RegistryPolicyError::TenantRequiresSingletonParent {
+        RegistryPolicyError::InstanceRequiresSingletonParent {
             role: err_role,
             parent_role: err_parent_role,
         } => {
             assert_eq!(err_role, &role);
             assert_eq!(err_parent_role, &parent_role);
         }
-        _ => panic!("expected tenant singleton-parent policy error"),
+        _ => panic!("expected instance singleton-parent policy error"),
     }
 
     let public = Error::from(InternalError::from(TopologyPolicyError::from(err)));
-    assert_eq!(public.code, ErrorCode::PolicyTenantRequiresSingletonParent);
+    assert_eq!(
+        public.code,
+        ErrorCode::PolicyInstanceRequiresSingletonParent
+    );
     assert!(
         public
             .message
@@ -307,8 +310,8 @@ fn tenant_creation_requires_singleton_parent() {
 }
 
 #[test]
-fn tenant_creation_succeeds_under_singleton_parent() {
-    let role = CanisterRole::new("tenant_child");
+fn instance_creation_succeeds_under_singleton_parent() {
+    let role = CanisterRole::new("instance_child");
     let parent_role = CanisterRole::new("project_hub");
     let parent_pid = p(10);
     let data = RegistryPolicyInput { entries: vec![] };
@@ -317,11 +320,11 @@ fn tenant_creation_succeeds_under_singleton_parent() {
         &role,
         parent_pid,
         &data,
-        &tenant_canister_config(),
+        &instance_canister_config(),
         &parent_role,
         &singleton_canister_config(),
     )
-    .expect("tenant should be allowed under singleton parent");
+    .expect("instance should be allowed under singleton parent");
 }
 
 #[test]

@@ -19,7 +19,7 @@ use crate::{
             record_delegation_install_validation_failed,
         },
         storage::{
-            auth::DelegationStateOps, directory::subnet::SubnetDirectoryOps,
+            auth::DelegationStateOps, index::subnet::SubnetIndexOps,
             registry::subnet::SubnetRegistryOps,
         },
     },
@@ -252,7 +252,7 @@ impl DelegationApi {
             return true;
         }
 
-        SubnetDirectoryOps::data()
+        SubnetIndexOps::data()
             .entries
             .iter()
             .any(|(_, pid)| *pid == principal)
