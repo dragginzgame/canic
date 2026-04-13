@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.27.x] - 2026-04-13 - Topology Taxonomy
 
+- `0.27.4` removes the remaining `derive_more` dependency from the published crate set by replacing a few simple wrapper derives with explicit trait impls, which keeps the public workspace dependency surface smaller and more predictable without changing behavior.
 - `0.27.3` hardens `directory` placement under failure by making async create finalization claim-owned, treating missing provisional children as already cleaned during stale recovery, and routing resolve/recover through one shared pending-state classifier so key liveness and repair behavior stop drifting.
 - `0.27.2` adds the first full `directory` placement cut: singleton parents can now declare keyed `directory` pools, `instance` children are restricted to those parents, the runtime stores `Pending | Bound` directory entries, and `resolve_or_create` now claims before async create, repairs valid stale provisional children, and never lets stale `Pending` claims block progress forever.
 - `0.27.1` carries the full first topology implementation cut: it replaces `tenant` with `instance`, renames the old lookup/export surface from `directory` to `index` across config and runtime APIs, updates the checked-in configs and `.did` surface to the new terms, and leaves only `app_directory` / `subnet_directory` as temporary config parse aliases during migration.

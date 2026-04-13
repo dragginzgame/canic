@@ -6,9 +6,13 @@
 
 use crate::structures::{Storable, storable::Bound};
 use candid::CandidType;
-use derive_more::{Deref, DerefMut, Display};
 use serde::{Deserialize, Serialize};
-use std::{borrow::Cow, convert::TryFrom};
+use std::{
+    borrow::Cow,
+    convert::TryFrom,
+    fmt::{self, Display},
+    ops::{Deref, DerefMut},
+};
 
 ///
 /// BoundedString
@@ -16,20 +20,7 @@ use std::{borrow::Cow, convert::TryFrom};
 /// storage trait implementations.
 ///
 
-#[derive(
-    CandidType,
-    Clone,
-    Debug,
-    Deref,
-    DerefMut,
-    Deserialize,
-    Display,
-    Eq,
-    Ord,
-    PartialEq,
-    PartialOrd,
-    Serialize,
-)]
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 pub struct BoundedString<const N: u32>(pub String);
 
 #[expect(clippy::cast_possible_truncation)]
@@ -62,6 +53,29 @@ impl<const N: u32> BoundedString<N> {
 impl<const N: u32> AsRef<str> for BoundedString<N> {
     fn as_ref(&self) -> &str {
         &self.0
+    }
+}
+
+impl<const N: u32> Deref for BoundedString<N> {
+    type Target = String;
+
+    // Expose the inner string for existing string-like call sites.
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<const N: u32> DerefMut for BoundedString<N> {
+    // Expose mutable string access while preserving the bounded wrapper.
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl<const N: u32> Display for BoundedString<N> {
+    // Render the bounded wrapper exactly like its inner string.
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        Display::fmt(&self.0, f)
     }
 }
 

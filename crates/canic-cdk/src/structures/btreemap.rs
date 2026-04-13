@@ -1,14 +1,13 @@
 pub use ic_stable_structures::btreemap::*;
 
-use derive_more::{Deref, DerefMut};
 use ic_stable_structures::{Memory, Storable, btreemap::BTreeMap as WrappedBTreeMap};
+use std::ops::{Deref, DerefMut};
 
 ///
 /// BTreeMap
 /// a wrapper around BTreeMap that uses the default VirtualMemory
 ///
 
-#[derive(Deref, DerefMut)]
 pub struct BTreeMap<K, V, M>
 where
     K: Storable + Ord + Clone,
@@ -45,5 +44,31 @@ where
     /// couldn't be wrapped as it took ownership, so they made a new one
     pub fn clear(&mut self) {
         self.clear_new();
+    }
+}
+
+impl<K, V, M> Deref for BTreeMap<K, V, M>
+where
+    K: Storable + Ord + Clone,
+    V: Storable + Clone,
+    M: Memory,
+{
+    type Target = WrappedBTreeMap<K, V, M>;
+
+    // Expose the wrapped stable map through the wrapper transparently.
+    fn deref(&self) -> &Self::Target {
+        &self.data
+    }
+}
+
+impl<K, V, M> DerefMut for BTreeMap<K, V, M>
+where
+    K: Storable + Ord + Clone,
+    V: Storable + Clone,
+    M: Memory,
+{
+    // Expose mutable access to the wrapped stable map.
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.data
     }
 }

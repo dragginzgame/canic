@@ -2,11 +2,11 @@ use crate::{
     candid::{CandidType, Nat},
     structures::{Storable, storable::Bound},
 };
-use derive_more::{Add, AddAssign, Sub, SubAssign};
 use serde::{Deserialize, Serialize, de::Deserializer};
 use std::{
     borrow::Cow,
     fmt::{self, Display},
+    ops::{Add, AddAssign, Sub, SubAssign},
     str::FromStr,
 };
 
@@ -28,21 +28,7 @@ pub const QC: u128 = 1_000_000_000_000_000;
 ///
 
 #[derive(
-    Add,
-    AddAssign,
-    CandidType,
-    Clone,
-    Default,
-    Debug,
-    Deserialize,
-    PartialEq,
-    Eq,
-    Hash,
-    PartialOrd,
-    Ord,
-    Serialize,
-    SubAssign,
-    Sub,
+    CandidType, Clone, Default, Debug, Deserialize, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize,
 )]
 pub struct Cycles(u128);
 
@@ -105,6 +91,38 @@ impl From<u128> for Cycles {
 impl From<Cycles> for u128 {
     fn from(c: Cycles) -> Self {
         c.0
+    }
+}
+
+impl Add for Cycles {
+    type Output = Self;
+
+    // Add two cycle balances while preserving the wrapper type.
+    fn add(self, rhs: Self) -> Self::Output {
+        Self(self.0 + rhs.0)
+    }
+}
+
+impl AddAssign for Cycles {
+    // Accumulate another cycle balance into this wrapper.
+    fn add_assign(&mut self, rhs: Self) {
+        self.0 += rhs.0;
+    }
+}
+
+impl Sub for Cycles {
+    type Output = Self;
+
+    // Subtract one cycle balance from another inside the wrapper type.
+    fn sub(self, rhs: Self) -> Self::Output {
+        Self(self.0 - rhs.0)
+    }
+}
+
+impl SubAssign for Cycles {
+    // Reduce this wrapper by another cycle balance in place.
+    fn sub_assign(&mut self, rhs: Self) {
+        self.0 -= rhs.0;
     }
 }
 

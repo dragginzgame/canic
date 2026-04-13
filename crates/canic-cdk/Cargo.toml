@@ -17,7 +17,6 @@ publish = true
 base32 = { workspace = true }
 candid = { workspace = true }
 crc32fast = { workspace = true }
-derive_more = { workspace = true }
 ic-cdk = { workspace = true }
 ic-cdk-management-canister = { workspace = true }
 ic-cdk-timers = { workspace = true }
