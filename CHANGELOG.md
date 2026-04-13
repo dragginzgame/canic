@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
 
+## [0.27.x] - 2026-04-13 - Topology Taxonomy
+
+- `0.27.0` starts the topology-taxonomy line by separating structural canister kind from placement family, reserving `directory` for keyed instance placement while renaming the older lookup concept toward `app_index` / `subnet_index`, and making `tenant -> instance` an immediate migration decision instead of a tolerated long-term ambiguity.
+
+See detailed breakdown:
+[docs/changelog/0.27.md](docs/changelog/0.27.md)
+
+---
+
 ## [0.26.x] - 2026-04-06 - Metrics Baseline
 
 - `0.26.12` finishes another late-line cleanup pass by splitting more oversized installer/test/runtime support seams, isolating the audit target from the full cached-root helper tree so dead-code warnings stop spilling across test binaries, and keeping the focused root/audit verification green without reopening the runtime surface.

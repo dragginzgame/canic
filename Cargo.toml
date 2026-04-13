@@ -64,7 +64,7 @@ canic-wasm-store = { version = "0.26.12", path = "crates/canic-wasm-store" }
 convert_case = "0.11"
 crc32fast = "1.5"
 criterion = "0.8"
-ctor = "0.9.1"
+ctor = "0.8"
 derive_more = { version = "2.0", default-features = false, features = ["full"] }
 flate2 = { version = "1.1", default-features = false, features = [
     "rust_backend",
