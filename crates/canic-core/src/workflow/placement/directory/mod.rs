@@ -531,6 +531,10 @@ const fn pending_is_stale(now: u64, created_at: u64) -> bool {
     now.saturating_sub(created_at) > DirectoryRegistryOps::PENDING_TTL_SECS
 }
 
+///
+/// TESTS
+///
+
 #[cfg(test)]
 mod tests {
     use super::*;

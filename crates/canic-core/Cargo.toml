@@ -24,7 +24,6 @@ candid = { workspace = true }
 canic-cdk = { workspace = true }
 canic-memory = { workspace = true }
 ctor = { workspace = true }
-derive_more = { workspace = true }
 k256 = { workspace = true }
 remain = { workspace = true }
 serde = { workspace = true }
