@@ -64,13 +64,13 @@ pub mod ops {
     }
 
     pub mod storage {
-        pub mod directory {
+        pub mod index {
             pub mod app {
-                pub use crate::ops::storage::directory::app::AppDirectoryOps;
+                pub use crate::ops::storage::index::app::AppIndexOps;
             }
 
             pub mod subnet {
-                pub use crate::ops::storage::directory::subnet::SubnetDirectoryOps;
+                pub use crate::ops::storage::index::subnet::SubnetIndexOps;
             }
         }
 

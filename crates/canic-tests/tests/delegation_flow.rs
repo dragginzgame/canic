@@ -256,12 +256,12 @@ fn setup_delegation_fixture(test_name: &str) -> DelegationFixture {
     log_step(&format!("{test_name}: setup root"));
     let setup = setup_cached_root();
     let user_hub_pid = setup
-        .subnet_directory
+        .subnet_index
         .get(&canister::USER_HUB)
         .copied()
         .expect("user_hub must exist in subnet directory");
     let test_pid = setup
-        .subnet_directory
+        .subnet_index
         .get(&canister::TEST)
         .copied()
         .expect("test canister must exist in subnet directory");

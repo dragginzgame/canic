@@ -23,7 +23,7 @@ use crate::{
             record_verifier_proof_cache_stats,
         },
         storage::{
-            auth::DelegationStateOps, directory::subnet::SubnetDirectoryOps,
+            auth::DelegationStateOps, index::subnet::SubnetIndexOps,
             registry::subnet::SubnetRegistryOps,
         },
     },
@@ -82,7 +82,7 @@ async fn execute_provision(
         CreateCanisterParent::ThisCanister => ctx.caller,
         CreateCanisterParent::Parent => SubnetRegistryOps::get_parent(ctx.caller)
             .ok_or(RpcWorkflowError::ParentNotFound(ctx.caller))?,
-        CreateCanisterParent::Directory(role) => SubnetDirectoryOps::get(role)
+        CreateCanisterParent::Index(role) => SubnetIndexOps::get(role)
             .ok_or_else(|| RpcWorkflowError::CanisterRoleNotFound(role.clone()))?,
     };
 

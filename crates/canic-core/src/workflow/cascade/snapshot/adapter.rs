@@ -34,8 +34,8 @@ impl StateSnapshotAdapter {
         StateSnapshotInput {
             app_state: snapshot.app_state,
             subnet_state: snapshot.subnet_state,
-            app_directory: snapshot.app_directory.clone(),
-            subnet_directory: snapshot.subnet_directory.clone(),
+            app_index: snapshot.app_index.clone(),
+            subnet_index: snapshot.subnet_index.clone(),
         }
     }
 

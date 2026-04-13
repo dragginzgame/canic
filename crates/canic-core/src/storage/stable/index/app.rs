@@ -1,42 +1,42 @@
 use crate::{
     cdk::structures::{BTreeMap, DefaultMemoryImpl, memory::VirtualMemory},
-    storage::{prelude::*, stable::memory::topology::APP_DIRECTORY_ID},
+    storage::{prelude::*, stable::memory::topology::APP_INDEX_ID},
 };
 use std::cell::RefCell;
 
 eager_static! {
-    static APP_DIRECTORY: RefCell<BTreeMap<CanisterRole, Principal, VirtualMemory<DefaultMemoryImpl>>> =
-        RefCell::new(BTreeMap::init(ic_memory!(AppDirectory, APP_DIRECTORY_ID)));
+    static APP_INDEX: RefCell<BTreeMap<CanisterRole, Principal, VirtualMemory<DefaultMemoryImpl>>> =
+        RefCell::new(BTreeMap::init(ic_memory!(AppIndex, APP_INDEX_ID)));
 }
 
 ///
-/// AppDirectoryRecord
+/// AppIndexRecord
 ///
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct AppDirectoryRecord {
+pub struct AppIndexRecord {
     pub entries: Vec<(CanisterRole, Principal)>,
 }
 
 ///
-/// AppDirectory
+/// AppIndex
 ///
-/// Stable-memory–backed directory mapping canister roles to principals.
+/// Stable-memory-backed index mapping canister roles to principals.
 ///
 /// Invariants:
 /// - Each role appears at most once.
-/// - The directory is authoritative; imports replace all existing entries.
+/// - The index is authoritative; imports replace all existing entries.
 /// - This structure is persisted and replicated via snapshot import/export.
 ///
 
-pub struct AppDirectory;
+pub struct AppIndex;
 
-impl AppDirectory {
+impl AppIndex {
     // cannot return an iterator because of stable memory
     #[must_use]
-    pub(crate) fn export() -> AppDirectoryRecord {
-        AppDirectoryRecord {
-            entries: APP_DIRECTORY.with_borrow(|map| {
+    pub(crate) fn export() -> AppIndexRecord {
+        AppIndexRecord {
+            entries: APP_INDEX.with_borrow(|map| {
                 map.iter()
                     .map(|entry| (entry.key().clone(), entry.value()))
                     .collect()
@@ -44,8 +44,8 @@ impl AppDirectory {
         }
     }
 
-    pub(crate) fn import(data: AppDirectoryRecord) {
-        APP_DIRECTORY.with_borrow_mut(|map| {
+    pub(crate) fn import(data: AppIndexRecord) {
+        APP_INDEX.with_borrow_mut(|map| {
             map.clear();
             for (role, pid) in data.entries {
                 map.insert(role, pid);

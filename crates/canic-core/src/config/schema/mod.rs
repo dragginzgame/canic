@@ -113,7 +113,7 @@ pub trait Validate {
 /// - A PRIME subnet MUST exist
 /// - Exactly one ROOT canister MUST exist globally
 /// - ROOT canister MUST be in the PRIME subnet
-/// - App directory canisters must be SINGLETONs in PRIME
+/// - App index canisters must be SINGLETONs in PRIME
 /// - Role names are length-limited
 /// - Delegated token TTL is sane
 /// - Whitelist principals are valid
@@ -139,10 +139,10 @@ pub struct ConfigModel {
     #[serde(default)]
     pub app: AppConfig,
 
-    /// Canister roles that participate in the application directory.
+    /// Canister roles that participate in the application index.
     /// These must exist in the PRIME subnet and be SINGLETON canisters.
-    #[serde(default)]
-    pub app_directory: BTreeSet<CanisterRole>,
+    #[serde(default, alias = "app_directory")]
+    pub app_index: BTreeSet<CanisterRole>,
 
     /// All subnets keyed by role.
     #[serde(default)]
@@ -234,19 +234,19 @@ impl Validate for ConfigModel {
             ));
         }
 
-        // App directory canisters must exist in PRIME and be SINGLETONs
-        for canister_role in &self.app_directory {
-            validate_canister_role_len(canister_role, "app directory canister")?;
+        // App index canisters must exist in PRIME and be SINGLETONs
+        for canister_role in &self.app_index {
+            validate_canister_role_len(canister_role, "app index canister")?;
 
             let canister_cfg = prime_subnet.canisters.get(canister_role).ok_or_else(|| {
                 ConfigSchemaError::ValidationError(format!(
-                    "app directory canister '{canister_role}' is not in prime subnet",
+                    "app index canister '{canister_role}' is not in prime subnet",
                 ))
             })?;
 
             if canister_cfg.kind != CanisterKind::Singleton {
                 return Err(ConfigSchemaError::ValidationError(format!(
-                    "app directory canister '{canister_role}' must have kind = \"singleton\"",
+                    "app index canister '{canister_role}' must have kind = \"singleton\"",
                 )));
             }
         }

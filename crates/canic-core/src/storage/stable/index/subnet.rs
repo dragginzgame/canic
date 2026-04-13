@@ -1,43 +1,43 @@
 use crate::{
     cdk::structures::{BTreeMap, DefaultMemoryImpl, memory::VirtualMemory},
-    storage::{prelude::*, stable::memory::topology::SUBNET_DIRECTORY_ID},
+    storage::{prelude::*, stable::memory::topology::SUBNET_INDEX_ID},
 };
 use std::cell::RefCell;
 
 eager_static! {
-    static SUBNET_DIRECTORY: RefCell<BTreeMap<CanisterRole, Principal, VirtualMemory<DefaultMemoryImpl>>> =
-        RefCell::new(BTreeMap::init(ic_memory!(SubnetDirectory, SUBNET_DIRECTORY_ID)));
+    static SUBNET_INDEX: RefCell<BTreeMap<CanisterRole, Principal, VirtualMemory<DefaultMemoryImpl>>> =
+        RefCell::new(BTreeMap::init(ic_memory!(SubnetIndex, SUBNET_INDEX_ID)));
 }
 
 ///
-/// SubnetDirectoryRecord
+/// SubnetIndexRecord
 ///
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct SubnetDirectoryRecord {
+pub struct SubnetIndexRecord {
     pub entries: Vec<(CanisterRole, Principal)>,
 }
 
 ///
-/// SubnetDirectory
+/// SubnetIndex
 ///
 /// Stable-memory–backed model relation mapping subnet-scoped canister
 /// roles to their principals.
 ///
 /// Invariants:
 /// - Each role appears at most once.
-/// - This directory is authoritative and replaced wholesale on import.
+/// - This index is authoritative and replaced wholesale on import.
 /// - DTO/snapshot representations are constructed in higher layers.
 ///
 
-pub struct SubnetDirectory;
+pub struct SubnetIndex;
 
-impl SubnetDirectory {
+impl SubnetIndex {
     // cannot return an iterator because of stable memory
     #[must_use]
-    pub(crate) fn export() -> SubnetDirectoryRecord {
-        SubnetDirectoryRecord {
-            entries: SUBNET_DIRECTORY.with_borrow(|map| {
+    pub(crate) fn export() -> SubnetIndexRecord {
+        SubnetIndexRecord {
+            entries: SUBNET_INDEX.with_borrow(|map| {
                 map.iter()
                     .map(|entry| (entry.key().clone(), entry.value()))
                     .collect()
@@ -45,8 +45,8 @@ impl SubnetDirectory {
         }
     }
 
-    pub(crate) fn import(data: SubnetDirectoryRecord) {
-        SUBNET_DIRECTORY.with_borrow_mut(|map| {
+    pub(crate) fn import(data: SubnetIndexRecord) {
+        SUBNET_INDEX.with_borrow_mut(|map| {
             map.clear();
             for (role, pid) in data.entries {
                 map.insert(role, pid);

@@ -6,7 +6,7 @@ use crate::{
         config::ConfigOps,
         runtime::memory::{MemoryRegistryInitSummary, MemoryRegistryOps},
         storage::{
-            directory::{app::AppDirectoryOps, subnet::SubnetDirectoryOps},
+            index::{app::AppIndexOps, subnet::SubnetIndexOps},
             state::app::AppStateOps,
         },
     },
@@ -58,13 +58,13 @@ fn init_nonroot_canister_internal(
         )
     })?;
 
-    AppDirectoryOps::import_args_allow_incomplete(payload.app_directory).map_err(|err| {
+    AppIndexOps::import_args_allow_incomplete(payload.app_index).map_err(|err| {
         InternalError::invariant(
             InternalErrorOrigin::Workflow,
             format!("app directory import failed: {err}"),
         )
     })?;
-    SubnetDirectoryOps::import_args_allow_incomplete(payload.subnet_directory).map_err(|err| {
+    SubnetIndexOps::import_args_allow_incomplete(payload.subnet_index).map_err(|err| {
         InternalError::invariant(
             InternalErrorOrigin::Workflow,
             format!("subnet directory import failed: {err}"),

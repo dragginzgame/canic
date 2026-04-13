@@ -8,7 +8,7 @@ use canic_core::{
         env::EnvBootstrapArgs,
         error::Error,
         placement::sharding::{ShardingPartitionKeysResponse, ShardingRegistryResponse},
-        topology::{AppDirectoryArgs, SubnetDirectoryArgs},
+        topology::{AppIndexArgs, SubnetIndexArgs},
     },
     ids::{CanisterRole, SubnetRole},
 };
@@ -147,8 +147,8 @@ fn user_hub_init_args(root_pid: Principal) -> Vec<u8> {
 
     let payload = CanisterInitPayload {
         env,
-        app_directory: AppDirectoryArgs(Vec::new()),
-        subnet_directory: SubnetDirectoryArgs(Vec::new()),
+        app_index: AppIndexArgs(Vec::new()),
+        subnet_index: SubnetIndexArgs(Vec::new()),
     };
 
     encode_args((payload, None::<Vec<u8>>)).expect("encode init args")

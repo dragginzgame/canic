@@ -3,7 +3,7 @@ use canic::{
     dto::{
         abi::v1::CanisterInitPayload,
         env::EnvBootstrapArgs,
-        topology::{AppDirectoryArgs, DirectoryEntryInput, SubnetDirectoryArgs},
+        topology::{AppIndexArgs, IndexEntryInput, SubnetIndexArgs},
     },
     ids::{CanisterRole, SubnetRole},
 };
@@ -93,8 +93,8 @@ pub fn invalid_init_args() -> Vec<u8> {
             canister_role: None,
             parent_pid: None,
         },
-        app_directory: AppDirectoryArgs(Vec::new()),
-        subnet_directory: SubnetDirectoryArgs(Vec::new()),
+        app_index: AppIndexArgs(Vec::new()),
+        subnet_index: SubnetIndexArgs(Vec::new()),
     };
 
     encode_init_args(payload)
@@ -121,8 +121,8 @@ fn build_canisters_once(workspace_root: &Path) {
 
 // Encode the standard valid non-root init payload for the lifecycle-boundary test canister.
 fn init_payload(canister_id: Principal) -> CanisterInitPayload {
-    let app_directory = app_directory_args();
-    let subnet_directory = subnet_directory_args(canister_id);
+    let app_index = app_index_args();
+    let subnet_index = subnet_index_args(canister_id);
     let root_pid = Fake::principal(1);
 
     let env = EnvBootstrapArgs {
@@ -136,8 +136,8 @@ fn init_payload(canister_id: Principal) -> CanisterInitPayload {
 
     CanisterInitPayload {
         env,
-        app_directory,
-        subnet_directory,
+        app_index,
+        subnet_index,
     }
 }
 
@@ -148,16 +148,16 @@ fn encode_init_args(payload: CanisterInitPayload) -> Vec<u8> {
 }
 
 // Build the minimal app-directory view used by lifecycle-boundary installs.
-fn app_directory_args() -> AppDirectoryArgs {
+fn app_index_args() -> AppIndexArgs {
     let roles = [USER_HUB, SCALE_HUB];
-    AppDirectoryArgs(directory_entries(&roles, None, 10))
+    AppIndexArgs(directory_entries(&roles, None, 10))
 }
 
 // Build the subnet directory view used by lifecycle-boundary installs.
-fn subnet_directory_args(canister_id: Principal) -> SubnetDirectoryArgs {
+fn subnet_index_args(canister_id: Principal) -> SubnetIndexArgs {
     let roles = [APP, USER_HUB, SCALE_HUB, TEST];
     let override_role = Some((TEST, canister_id));
-    SubnetDirectoryArgs(directory_entries(&roles, override_role, 20))
+    SubnetIndexArgs(directory_entries(&roles, override_role, 20))
 }
 
 // Build deterministic directory entries with one optional explicit role override.
@@ -165,7 +165,7 @@ fn directory_entries(
     roles: &[CanisterRole],
     override_role: Option<(CanisterRole, Principal)>,
     mut next_id: u8,
-) -> Vec<DirectoryEntryInput> {
+) -> Vec<IndexEntryInput> {
     let mut entries = Vec::new();
 
     for role in roles {
@@ -183,7 +183,7 @@ fn directory_entries(
             pid
         };
 
-        entries.push(DirectoryEntryInput {
+        entries.push(IndexEntryInput {
             role: role.clone(),
             pid,
         });

@@ -1,27 +1,27 @@
 use super::{ensure_required_roles, ensure_unique_roles};
 use crate::{
     InternalError,
-    dto::topology::AppDirectoryArgs,
+    dto::topology::AppIndexArgs,
     ops::config::ConfigOps,
     ops::prelude::*,
-    ops::storage::directory::mapper::AppDirectoryRecordMapper,
-    storage::stable::directory::app::{AppDirectory, AppDirectoryRecord},
+    ops::storage::index::mapper::AppIndexRecordMapper,
+    storage::stable::index::app::{AppIndex, AppIndexRecord},
 };
 
 ///
-/// AppDirectoryOps
+/// AppIndexOps
 ///
 
-pub struct AppDirectoryOps;
+pub struct AppIndexOps;
 
-impl AppDirectoryOps {
+impl AppIndexOps {
     // -------------------------------------------------------------
     // Getters
     // -------------------------------------------------------------
 
     #[must_use]
     pub fn get(role: &CanisterRole) -> Option<Principal> {
-        AppDirectory::export()
+        AppIndex::export()
             .entries
             .iter()
             .find_map(|(r, pid)| (r == role).then_some(*pid))
@@ -32,34 +32,32 @@ impl AppDirectoryOps {
     // -------------------------------------------------------------
 
     #[must_use]
-    pub fn data() -> AppDirectoryRecord {
-        AppDirectory::export()
+    pub fn data() -> AppIndexRecord {
+        AppIndex::export()
     }
 
     #[must_use]
-    pub fn snapshot_args() -> AppDirectoryArgs {
-        AppDirectoryRecordMapper::record_to_view(AppDirectory::export())
+    pub fn snapshot_args() -> AppIndexArgs {
+        AppIndexRecordMapper::record_to_view(AppIndex::export())
     }
 
-    pub(crate) fn import_args_allow_incomplete(
-        args: AppDirectoryArgs,
-    ) -> Result<(), InternalError> {
-        let data = AppDirectoryRecordMapper::dto_to_record(args);
+    pub(crate) fn import_args_allow_incomplete(args: AppIndexArgs) -> Result<(), InternalError> {
+        let data = AppIndexRecordMapper::dto_to_record(args);
         Self::import_allow_incomplete(data)
     }
 
-    pub(crate) fn import(data: AppDirectoryRecord) -> Result<(), InternalError> {
+    pub(crate) fn import(data: AppIndexRecord) -> Result<(), InternalError> {
         ensure_unique_roles(&data.entries, "app")?;
-        let required = ConfigOps::get()?.app_directory.clone();
+        let required = ConfigOps::get()?.app_index.clone();
         ensure_required_roles(&data.entries, "app", &required)?;
-        AppDirectory::import(data);
+        AppIndex::import(data);
 
         Ok(())
     }
 
-    pub(crate) fn import_allow_incomplete(data: AppDirectoryRecord) -> Result<(), InternalError> {
+    pub(crate) fn import_allow_incomplete(data: AppIndexRecord) -> Result<(), InternalError> {
         ensure_unique_roles(&data.entries, "app")?;
-        AppDirectory::import(data);
+        AppIndex::import(data);
 
         Ok(())
     }

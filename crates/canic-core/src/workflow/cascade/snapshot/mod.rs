@@ -14,7 +14,7 @@ use crate::{
     dto::{
         cascade::StateSnapshotInput,
         state::{AppStateInput, SubnetStateInput},
-        topology::{AppDirectoryArgs, SubnetDirectoryArgs},
+        topology::{AppIndexArgs, SubnetIndexArgs},
     },
     ops::{
         runtime::env::EnvOps,
@@ -22,7 +22,7 @@ use crate::{
             registry::subnet::SubnetRegistryOps,
             state::{app::AppStateOps, subnet::SubnetStateOps},
         },
-        topology::directory::{AppDirectoryResolver, SubnetDirectoryResolver},
+        topology::index::{AppIndexResolver, SubnetIndexResolver},
     },
     workflow::prelude::*,
 };
@@ -37,8 +37,8 @@ use std::collections::HashMap;
 pub struct StateSnapshot {
     pub app_state: Option<AppStateInput>,
     pub subnet_state: Option<SubnetStateInput>,
-    pub app_directory: Option<AppDirectoryArgs>,
-    pub subnet_directory: Option<SubnetDirectoryArgs>,
+    pub app_index: Option<AppIndexArgs>,
+    pub subnet_index: Option<SubnetIndexArgs>,
 }
 
 ///
@@ -74,13 +74,13 @@ impl StateSnapshotBuilder {
         self
     }
 
-    pub fn with_app_directory(mut self) -> Result<Self, InternalError> {
-        self.snapshot.app_directory = Some(AppDirectoryResolver::resolve_input()?);
+    pub fn with_app_index(mut self) -> Result<Self, InternalError> {
+        self.snapshot.app_index = Some(AppIndexResolver::resolve_input()?);
         Ok(self)
     }
 
-    pub fn with_subnet_directory(mut self) -> Result<Self, InternalError> {
-        self.snapshot.subnet_directory = Some(SubnetDirectoryResolver::resolve_input()?);
+    pub fn with_subnet_index(mut self) -> Result<Self, InternalError> {
+        self.snapshot.subnet_index = Some(SubnetIndexResolver::resolve_input()?);
         Ok(self)
     }
 
@@ -95,8 +95,8 @@ impl From<StateSnapshotInput> for StateSnapshot {
         Self {
             app_state: snapshot.app_state,
             subnet_state: snapshot.subnet_state,
-            app_directory: snapshot.app_directory,
-            subnet_directory: snapshot.subnet_directory,
+            app_index: snapshot.app_index,
+            subnet_index: snapshot.subnet_index,
         }
     }
 }
@@ -196,8 +196,8 @@ impl TopologySnapshotBuilder {
 pub const fn state_snapshot_is_empty(snapshot: &StateSnapshot) -> bool {
     snapshot.app_state.is_none()
         && snapshot.subnet_state.is_none()
-        && snapshot.app_directory.is_none()
-        && snapshot.subnet_directory.is_none()
+        && snapshot.app_index.is_none()
+        && snapshot.subnet_index.is_none()
 }
 
 #[must_use]
@@ -210,8 +210,8 @@ pub fn state_snapshot_debug(snapshot: &StateSnapshot) -> String {
         "[{} {} {} {}]",
         fmt(snapshot.app_state.is_some(), "as"),
         fmt(snapshot.subnet_state.is_some(), "ss"),
-        fmt(snapshot.app_directory.is_some(), "ad"),
-        fmt(snapshot.subnet_directory.is_some(), "sd"),
+        fmt(snapshot.app_index.is_some(), "ad"),
+        fmt(snapshot.subnet_index.is_some(), "sd"),
     )
 }
 
@@ -228,8 +228,8 @@ mod tests {
                 cycles_funding_enabled: true,
             }),
             subnet_state: Some(SubnetStateInput),
-            app_directory: None,
-            subnet_directory: None,
+            app_index: None,
+            subnet_index: None,
         };
 
         assert_eq!(super::state_snapshot_debug(&snapshot), "[as ss .. ..]");

@@ -1,8 +1,8 @@
 pub mod auth;
 pub mod children;
 pub mod cycles;
-pub mod directory;
 pub mod env;
+pub mod index;
 pub mod intent;
 pub mod log;
 pub mod pool;
@@ -59,8 +59,8 @@ pub mod memory {
 
     pub mod topology {
         pub const CANISTER_CHILDREN_ID: u8 = 5;
-        pub const APP_DIRECTORY_ID: u8 = 6;
-        pub const SUBNET_DIRECTORY_ID: u8 = 7;
+        pub const APP_INDEX_ID: u8 = 6;
+        pub const SUBNET_INDEX_ID: u8 = 7;
         pub const APP_REGISTRY_ID: u8 = 8;
         pub const SUBNET_REGISTRY_ID: u8 = 9;
 

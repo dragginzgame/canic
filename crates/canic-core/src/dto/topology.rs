@@ -40,35 +40,35 @@ pub struct SubnetRegistryEntry {
 }
 
 //
-// AppDirectoryArgs
+// AppIndexArgs
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-pub struct AppDirectoryArgs(pub Vec<DirectoryEntryInput>);
+pub struct AppIndexArgs(pub Vec<IndexEntryInput>);
 
 //
-// SubnetDirectoryArgs
-//
-
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-pub struct SubnetDirectoryArgs(pub Vec<DirectoryEntryInput>);
-
-//
-// DirectoryEntryInput
+// SubnetIndexArgs
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-pub struct DirectoryEntryInput {
+pub struct SubnetIndexArgs(pub Vec<IndexEntryInput>);
+
+//
+// IndexEntryInput
+//
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+pub struct IndexEntryInput {
     pub role: CanisterRole,
     pub pid: Principal,
 }
 
 //
-// DirectoryEntryResponse
+// IndexEntryResponse
 //
 
 #[derive(CandidType, Debug, Deserialize, Eq, PartialEq)]
-pub struct DirectoryEntryResponse {
+pub struct IndexEntryResponse {
     pub role: CanisterRole,
     pub pid: Principal,
 }

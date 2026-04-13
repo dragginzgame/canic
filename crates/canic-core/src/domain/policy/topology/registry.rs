@@ -41,8 +41,10 @@ pub enum RegistryPolicyError {
         parent_role: CanisterRole,
     },
 
-    #[error("tenant role {role} must be created by a singleton parent (parent role {parent_role})")]
-    TenantRequiresSingletonParent {
+    #[error(
+        "instance role {role} must be created by a singleton parent (parent role {parent_role})"
+    )]
+    InstanceRequiresSingletonParent {
         role: CanisterRole,
         parent_role: CanisterRole,
     },
@@ -164,9 +166,9 @@ impl RegistryPolicy {
                     });
                 }
             }
-            CanisterKind::Tenant => {
+            CanisterKind::Instance => {
                 if parent_cfg.kind != CanisterKind::Singleton {
-                    return Err(RegistryPolicyError::TenantRequiresSingletonParent {
+                    return Err(RegistryPolicyError::InstanceRequiresSingletonParent {
                         role: role.clone(),
                         parent_role: parent_role.clone(),
                     });

@@ -3,7 +3,7 @@ use crate::{
     domain::policy::topology::TopologyPolicy,
     ops::{
         storage::{
-            directory::{app::AppDirectoryOps, subnet::SubnetDirectoryOps},
+            index::{app::AppIndexOps, subnet::SubnetIndexOps},
             registry::subnet::SubnetRegistryOps,
         },
         topology::policy::mapper::RegistryPolicyInputMapper,
@@ -30,11 +30,11 @@ impl PropagationWorkflow {
         TopologyCascadeWorkflow::root_cascade_topology_for_pid(target).await
     }
 
-    /// Propagate application/subnet state and directory views after structural mutations.
+    /// Propagate application/subnet state and index views after structural mutations.
     ///
-    /// This rebuilds directory snapshots from the registry, applies current
+    /// This rebuilds index snapshots from the registry, applies current
     /// app state, cascades it to root children, and finally re-asserts
-    /// directory ↔ registry consistency.
+    /// index ↔ registry consistency.
     pub async fn propagate_state(
         _target: Principal,
         role: &CanisterRole,
@@ -46,9 +46,9 @@ impl PropagationWorkflow {
             return Ok(());
         }
 
-        // Shared directory/app-state changes are sibling-visible, so create/adopt
+        // Shared index/app-state changes are sibling-visible, so create/adopt
         // state propagation must refresh all root children, not only the target branch.
-        let snapshot = ProvisionWorkflow::rebuild_directories_from_registry(Some(role))?
+        let snapshot = ProvisionWorkflow::rebuild_indexes_from_registry(Some(role))?
             .with_app_state()
             .with_subnet_state()
             .build();
@@ -57,16 +57,13 @@ impl PropagationWorkflow {
 
         let registry_data = SubnetRegistryOps::data();
         let registry_input = RegistryPolicyInputMapper::record_to_policy_input(registry_data);
-        let app_data = AppDirectoryOps::data();
-        let subnet_data = SubnetDirectoryOps::data();
+        let app_data = AppIndexOps::data();
+        let subnet_data = SubnetIndexOps::data();
 
-        TopologyPolicy::assert_directory_consistent_with_registry(
-            &registry_input,
-            &app_data.entries,
-        )
-        .map_err(InternalError::from)?;
+        TopologyPolicy::assert_index_consistent_with_registry(&registry_input, &app_data.entries)
+            .map_err(InternalError::from)?;
 
-        TopologyPolicy::assert_directory_consistent_with_registry(
+        TopologyPolicy::assert_index_consistent_with_registry(
             &registry_input,
             &subnet_data.entries,
         )

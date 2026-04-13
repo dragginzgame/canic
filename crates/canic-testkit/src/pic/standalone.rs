@@ -3,7 +3,7 @@ use canic::{
     dto::{
         abi::v1::CanisterInitPayload,
         env::EnvBootstrapArgs,
-        topology::{AppDirectoryArgs, SubnetDirectoryArgs},
+        topology::{AppIndexArgs, SubnetIndexArgs},
     },
     ids::{CanisterRole, SubnetRole},
 };
@@ -175,8 +175,8 @@ fn standalone_init_args(role: CanisterRole) -> Vec<u8> {
             canister_role: Some(role),
             parent_pid: Some(root_pid),
         },
-        app_directory: AppDirectoryArgs(Vec::new()),
-        subnet_directory: SubnetDirectoryArgs(Vec::new()),
+        app_index: AppIndexArgs(Vec::new()),
+        subnet_index: SubnetIndexArgs(Vec::new()),
     };
 
     encode_args::<(CanisterInitPayload, Option<Vec<u8>>)>((payload, None))

@@ -9,39 +9,36 @@ use std::collections::BTreeSet;
 use thiserror::Error as ThisError;
 
 ///
-/// DirectoryOpsError
+/// IndexOpsError
 ///
 
 #[derive(Debug, ThisError)]
-pub enum DirectoryOpsError {
-    #[error("{directory} directory role {role} appears more than once")]
+pub enum IndexOpsError {
+    #[error("{index} index role {role} appears more than once")]
     DuplicateRole {
-        directory: &'static str,
+        index: &'static str,
         role: CanisterRole,
     },
 
-    #[error("{directory} directory missing required roles: {roles}")]
-    MissingRoles {
-        directory: &'static str,
-        roles: String,
-    },
+    #[error("{index} index missing required roles: {roles}")]
+    MissingRoles { index: &'static str, roles: String },
 }
 
-impl From<DirectoryOpsError> for InternalError {
-    fn from(err: DirectoryOpsError) -> Self {
+impl From<IndexOpsError> for InternalError {
+    fn from(err: IndexOpsError) -> Self {
         StorageOpsError::from(err).into()
     }
 }
 
 pub(super) fn ensure_unique_roles(
     entries: &[(CanisterRole, Principal)],
-    directory: &'static str,
-) -> Result<(), DirectoryOpsError> {
+    index: &'static str,
+) -> Result<(), IndexOpsError> {
     let mut seen = BTreeSet::new();
     for (role, _) in entries {
         if !seen.insert(role.clone()) {
-            return Err(DirectoryOpsError::DuplicateRole {
-                directory,
+            return Err(IndexOpsError::DuplicateRole {
+                index,
                 role: role.clone(),
             });
         }
@@ -52,9 +49,9 @@ pub(super) fn ensure_unique_roles(
 
 pub(super) fn ensure_required_roles(
     entries: &[(CanisterRole, Principal)],
-    directory: &'static str,
+    index: &'static str,
     required: &BTreeSet<CanisterRole>,
-) -> Result<(), DirectoryOpsError> {
+) -> Result<(), IndexOpsError> {
     if required.is_empty() {
         return Ok(());
     }
@@ -69,8 +66,8 @@ pub(super) fn ensure_required_roles(
     if missing.is_empty() {
         Ok(())
     } else {
-        Err(DirectoryOpsError::MissingRoles {
-            directory,
+        Err(IndexOpsError::MissingRoles {
+            index,
             roles: missing.join(", "),
         })
     }

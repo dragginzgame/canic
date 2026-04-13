@@ -1,25 +1,25 @@
 use crate::{
     InternalError,
     ids::CanisterRole,
-    ops::storage::directory::DirectoryOpsError,
+    ops::storage::index::IndexOpsError,
     storage::stable::{
-        directory::{app::AppDirectoryRecord, subnet::SubnetDirectoryRecord},
+        index::{app::AppIndexRecord, subnet::SubnetIndexRecord},
         registry::subnet::SubnetRegistryRecord,
     },
 };
 use std::collections::{BTreeMap, BTreeSet};
 
 ///
-/// RootAppDirectoryBuilder
+/// RootAppIndexBuilder
 ///
 
-pub struct RootAppDirectoryBuilder;
+pub struct RootAppIndexBuilder;
 
-impl RootAppDirectoryBuilder {
+impl RootAppIndexBuilder {
     pub fn build(
         registry: &SubnetRegistryRecord,
         app_roles: &BTreeSet<CanisterRole>,
-    ) -> Result<AppDirectoryRecord, InternalError> {
+    ) -> Result<AppIndexRecord, InternalError> {
         let mut entries = BTreeMap::new();
 
         for (pid, entry) in registry
@@ -28,31 +28,31 @@ impl RootAppDirectoryBuilder {
             .filter(|(_, entry)| app_roles.contains(&entry.role))
         {
             if entries.insert(entry.role.clone(), *pid).is_some() {
-                return Err(DirectoryOpsError::DuplicateRole {
-                    directory: "app",
+                return Err(IndexOpsError::DuplicateRole {
+                    index: "app",
                     role: entry.role.clone(),
                 }
                 .into());
             }
         }
 
-        Ok(AppDirectoryRecord {
+        Ok(AppIndexRecord {
             entries: entries.into_iter().collect(),
         })
     }
 }
 
 ///
-/// RootSubnetDirectoryBuilder
+/// RootSubnetIndexBuilder
 ///
 
-pub struct RootSubnetDirectoryBuilder;
+pub struct RootSubnetIndexBuilder;
 
-impl RootSubnetDirectoryBuilder {
+impl RootSubnetIndexBuilder {
     pub fn build(
         registry: &SubnetRegistryRecord,
         subnet_roles: &BTreeSet<CanisterRole>,
-    ) -> Result<SubnetDirectoryRecord, InternalError> {
+    ) -> Result<SubnetIndexRecord, InternalError> {
         let mut entries = BTreeMap::new();
 
         for (pid, entry) in registry
@@ -61,15 +61,15 @@ impl RootSubnetDirectoryBuilder {
             .filter(|(_, entry)| subnet_roles.contains(&entry.role))
         {
             if entries.insert(entry.role.clone(), *pid).is_some() {
-                return Err(DirectoryOpsError::DuplicateRole {
-                    directory: "subnet",
+                return Err(IndexOpsError::DuplicateRole {
+                    index: "subnet",
                     role: entry.role.clone(),
                 }
                 .into());
             }
         }
 
-        Ok(SubnetDirectoryRecord {
+        Ok(SubnetIndexRecord {
             entries: entries.into_iter().collect(),
         })
     }

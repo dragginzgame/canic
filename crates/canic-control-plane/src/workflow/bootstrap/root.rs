@@ -23,7 +23,7 @@ use cp_core::{
         ic::{IcOps, network::NetworkOps},
         runtime::{bootstrap::BootstrapStatusOps, env::EnvOps, ready::ReadyOps},
         storage::{
-            directory::{app::AppDirectoryOps, subnet::SubnetDirectoryOps},
+            index::{app::AppIndexOps, subnet::SubnetIndexOps},
             pool::PoolOps,
             registry::subnet::SubnetRegistryOps,
         },
@@ -158,14 +158,14 @@ pub async fn bootstrap_init_root_canister() {
     }
     canic_core::perf!("bootstrap_create_canisters");
 
-    BootstrapStatusOps::set_phase("root:init:rebuild_directories");
-    if let Err(err) = root_rebuild_directories_from_registry() {
-        let message = format!("directory materialization failed: {err}");
+    BootstrapStatusOps::set_phase("root:init:rebuild_indexes");
+    if let Err(err) = root_rebuild_indexes_from_registry() {
+        let message = format!("index materialization failed: {err}");
         log!(Topic::Init, Error, "{message}");
         BootstrapStatusOps::mark_failed(message);
         return;
     }
-    canic_core::perf!("bootstrap_rebuild_directories");
+    canic_core::perf!("bootstrap_rebuild_indexes");
 
     BootstrapStatusOps::set_phase("root:init:validate");
     let report = root_validate_state();
@@ -340,8 +340,8 @@ pub async fn root_create_canisters() -> Result<(), InternalError> {
     ensure_required_canisters(&data).await
 }
 
-pub fn root_rebuild_directories_from_registry() -> Result<(), InternalError> {
-    let _ = ProvisionWorkflow::rebuild_directories_from_registry(None)?;
+pub fn root_rebuild_indexes_from_registry() -> Result<(), InternalError> {
+    let _ = ProvisionWorkflow::rebuild_indexes_from_registry(None)?;
 
     Ok(())
 }
@@ -660,8 +660,8 @@ async fn import_default_wasm_store_catalog() -> Result<(), InternalError> {
 }
 
 pub fn root_validate_state() -> ValidationReport {
-    let app_data = AppDirectoryOps::data();
-    let subnet_data = SubnetDirectoryOps::data();
+    let app_data = AppIndexOps::data();
+    let subnet_data = SubnetIndexOps::data();
 
     let mut issues = Vec::new();
 
@@ -676,33 +676,29 @@ pub fn root_validate_state() -> ValidationReport {
 
     let registry_roles = SubnetRegistryOps::role_index();
 
-    let (app_unique, app_consistent) = check_directory(
-        "app_directory",
-        &app_data.entries,
-        &registry_roles,
-        &mut issues,
-    );
-    let (subnet_unique, subnet_consistent) = check_directory(
-        "subnet_directory",
+    let (app_unique, app_consistent) =
+        check_index("app_index", &app_data.entries, &registry_roles, &mut issues);
+    let (subnet_unique, subnet_consistent) = check_index(
+        "subnet_index",
         &subnet_data.entries,
         &registry_roles,
         &mut issues,
     );
 
-    let unique_directory_roles = app_unique && subnet_unique;
-    let registry_directory_consistent = app_consistent && subnet_consistent;
-    let ok = env_complete && unique_directory_roles && registry_directory_consistent;
+    let unique_index_roles = app_unique && subnet_unique;
+    let registry_index_consistent = app_consistent && subnet_consistent;
+    let ok = env_complete && unique_index_roles && registry_index_consistent;
 
     ValidationReport {
         ok,
-        registry_directory_consistent,
-        unique_directory_roles,
+        registry_index_consistent,
+        unique_index_roles,
         env_complete,
         issues,
     }
 }
 
-fn check_directory(
+fn check_index(
     label: &str,
     entries: &[(CanisterRole, Principal)],
     registry_roles: &BTreeMap<CanisterRole, Vec<Principal>>,
@@ -718,7 +714,7 @@ fn check_directory(
         if *count > 1 {
             unique = false;
             issues.push(ValidationIssue {
-                code: "directory_role_duplicate".to_string(),
+                code: "index_role_duplicate".to_string(),
                 message: format!("{label} has duplicate role {role}"),
             });
         }
@@ -727,14 +723,14 @@ fn check_directory(
             None => {
                 consistent = false;
                 issues.push(ValidationIssue {
-                    code: "directory_role_missing_in_registry".to_string(),
+                    code: "index_role_missing_in_registry".to_string(),
                     message: format!("{label} role {role} not present in registry"),
                 });
             }
             Some(pids) if pids.len() > 1 => {
                 consistent = false;
                 issues.push(ValidationIssue {
-                    code: "directory_role_duplicate_in_registry".to_string(),
+                    code: "index_role_duplicate_in_registry".to_string(),
                     message: format!(
                         "{label} role {role} has multiple registry entries ({})",
                         pids.len()
@@ -745,7 +741,7 @@ fn check_directory(
                 if pids[0] != *pid {
                     consistent = false;
                     issues.push(ValidationIssue {
-                        code: "directory_role_pid_mismatch".to_string(),
+                        code: "index_role_pid_mismatch".to_string(),
                         message: format!(
                             "{label} role {role} points to {pid}, registry has {}",
                             pids[0]

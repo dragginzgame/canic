@@ -2,23 +2,23 @@
 
 use crate::{
     ids::CanisterRole,
-    ops::storage::{directory::subnet::SubnetDirectoryOps, registry::subnet::SubnetRegistryOps},
-    storage::stable::directory::subnet::SubnetDirectoryRecord,
+    ops::storage::{index::subnet::SubnetIndexOps, registry::subnet::SubnetRegistryOps},
+    storage::stable::index::subnet::SubnetIndexRecord,
     test::seams::{lock, p},
-    workflow::topology::directory::query::SubnetDirectoryQuery,
+    workflow::topology::index::query::SubnetIndexQuery,
 };
 
 #[test]
-fn directory_addressing_prefers_directory_over_registry_duplicates() {
+fn index_addressing_prefers_index_over_registry_duplicates() {
     let _guard = lock();
 
     for (pid, _) in SubnetRegistryOps::data().entries {
         let _ = SubnetRegistryOps::remove(&pid);
     }
-    SubnetDirectoryOps::import_allow_incomplete(SubnetDirectoryRecord {
+    SubnetIndexOps::import_allow_incomplete(SubnetIndexRecord {
         entries: Vec::new(),
     })
-    .expect("clear subnet directory");
+    .expect("clear subnet index");
 
     let role = CanisterRole::new("seam_directory_role");
     let root_pid = p(10);
@@ -32,12 +32,12 @@ fn directory_addressing_prefers_directory_over_registry_duplicates() {
     SubnetRegistryOps::register_unchecked(pid_b, &role, root_pid, vec![], created_at)
         .expect("register second canister with same role");
 
-    SubnetDirectoryOps::import_allow_incomplete(SubnetDirectoryRecord {
+    SubnetIndexOps::import_allow_incomplete(SubnetIndexRecord {
         entries: vec![(role.clone(), pid_b)],
     })
-    .expect("import subnet directory");
+    .expect("import subnet index");
 
-    let resolved = SubnetDirectoryQuery::get(role.clone()).expect("directory role missing");
+    let resolved = SubnetIndexQuery::get(role.clone()).expect("index role missing");
     assert_eq!(resolved, pid_b);
 
     let duplicates = SubnetRegistryOps::data()
@@ -50,16 +50,16 @@ fn directory_addressing_prefers_directory_over_registry_duplicates() {
 }
 
 #[test]
-fn directory_addressing_does_not_fallback_to_registry() {
+fn index_addressing_does_not_fallback_to_registry() {
     let _guard = lock();
 
     for (pid, _) in SubnetRegistryOps::data().entries {
         let _ = SubnetRegistryOps::remove(&pid);
     }
-    SubnetDirectoryOps::import_allow_incomplete(SubnetDirectoryRecord {
+    SubnetIndexOps::import_allow_incomplete(SubnetIndexRecord {
         entries: Vec::new(),
     })
-    .expect("clear subnet directory");
+    .expect("clear subnet index");
 
     let role = CanisterRole::new("seam_directory_no_fallback");
     let root_pid = p(13);
@@ -70,7 +70,7 @@ fn directory_addressing_does_not_fallback_to_registry() {
     SubnetRegistryOps::register_unchecked(pid, &role, root_pid, vec![], created_at)
         .expect("register canister");
 
-    let resolved = SubnetDirectoryQuery::get(role.clone());
+    let resolved = SubnetIndexQuery::get(role.clone());
     assert!(resolved.is_none());
 
     let registry_count = SubnetRegistryOps::data()

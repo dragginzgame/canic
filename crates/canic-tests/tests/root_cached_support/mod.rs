@@ -45,7 +45,7 @@ static ROOT_SETUP_SERIAL: Mutex<()> = Mutex::new(());
 pub struct RootSetup {
     pub pic: RootPicHandle,
     pub root_id: Principal,
-    pub subnet_directory: HashMap<CanisterRole, Principal>,
+    pub subnet_index: HashMap<CanisterRole, Principal>,
     _serial_guard: MutexGuard<'static, ()>,
     _pic_serial_guard: PicSerialGuard,
 }
@@ -95,7 +95,7 @@ pub fn setup_cached_root(
 
     RootSetup {
         root_id: baseline.metadata().root_id,
-        subnet_directory: baseline.metadata().subnet_directory.clone(),
+        subnet_index: baseline.metadata().subnet_index.clone(),
         pic: RootPicHandle(baseline),
         _serial_guard: serial_guard,
         _pic_serial_guard: pic_serial_guard,

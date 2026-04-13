@@ -9,16 +9,16 @@ fn user_hub_sharding_profile_stays_minimal_and_can_create_a_shard() {
     let setup = setup_cached_root(RootSetupProfile::Sharding);
 
     assert!(
-        !setup.subnet_directory.contains_key(&canister::APP),
+        !setup.subnet_index.contains_key(&canister::APP),
         "sharding profile should not boot app",
     );
     assert!(
-        !setup.subnet_directory.contains_key(&canister::SCALE_HUB),
+        !setup.subnet_index.contains_key(&canister::SCALE_HUB),
         "sharding profile should not boot scale_hub",
     );
 
     let user_hub_pid = setup
-        .subnet_directory
+        .subnet_index
         .get(&canister::USER_HUB)
         .copied()
         .expect("user_hub must exist in sharding profile");

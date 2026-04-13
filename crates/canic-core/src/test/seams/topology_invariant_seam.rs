@@ -17,7 +17,7 @@ fn topology_invariants_live_in_policy() {
     let _guard = lock();
 
     let _config = ConfigTestBuilder::new()
-        .with_app_directory("alpha")
+        .with_app_index("alpha")
         .with_prime_canister_kind("alpha", CanisterKind::Singleton)
         .install();
 
@@ -33,12 +33,8 @@ fn topology_invariants_live_in_policy() {
 
     let mismatched = vec![(CanisterRole::new("beta"), p(30))];
 
-    let err =
-        TopologyPolicy::assert_directory_consistent_with_registry(&registry_data, &mismatched)
-            .expect_err("policy should detect directory divergence");
+    let err = TopologyPolicy::assert_index_consistent_with_registry(&registry_data, &mismatched)
+        .expect_err("policy should detect index divergence");
 
-    assert!(matches!(
-        err,
-        TopologyPolicyError::DirectoryRoleMismatch { .. }
-    ));
+    assert!(matches!(err, TopologyPolicyError::IndexRoleMismatch { .. }));
 }

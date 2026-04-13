@@ -39,10 +39,8 @@ pub mod canister {
         pub use crate::__internal::core::api::topology::children::CanisterChildrenApi;
     }
 
-    pub mod directory {
-        pub use crate::__internal::core::api::topology::directory::{
-            AppDirectoryApi, SubnetDirectoryApi,
-        };
+    pub mod index {
+        pub use crate::__internal::core::api::topology::index::{AppIndexApi, SubnetIndexApi};
     }
 
     pub mod registry {

@@ -6,7 +6,7 @@ use canic::{
         abi::v1::CanisterInitPayload,
         env::EnvBootstrapArgs,
         subnet::SubnetIdentity,
-        topology::{AppDirectoryArgs, SubnetDirectoryArgs},
+        topology::{AppIndexArgs, SubnetIndexArgs},
     },
     ids::CanisterRole,
 };
@@ -266,8 +266,8 @@ fn install_args(role: CanisterRole) -> Result<Vec<u8>, Error> {
         // a test explicitly exercises directory-dependent behavior.
         let payload = CanisterInitPayload {
             env,
-            app_directory: AppDirectoryArgs(Vec::new()),
-            subnet_directory: SubnetDirectoryArgs(Vec::new()),
+            app_index: AppIndexArgs(Vec::new()),
+            subnet_index: SubnetIndexArgs(Vec::new()),
         };
 
         encode_args::<(CanisterInitPayload, Option<Vec<u8>>)>((payload, None))

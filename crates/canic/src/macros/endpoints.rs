@@ -191,28 +191,28 @@ macro_rules! canic_emit_topology_state_endpoints {
     };
 }
 
-// Leaf emitter for shared directory views.
+// Leaf emitter for shared index views.
 #[macro_export]
-macro_rules! canic_emit_topology_directory_endpoints {
+macro_rules! canic_emit_topology_index_endpoints {
     () => {
         #[$crate::canic_query]
-        fn canic_app_directory(
+        fn canic_app_index(
             page: ::canic::dto::page::PageRequest,
         ) -> Result<
-            ::canic::dto::page::Page<::canic::dto::topology::DirectoryEntryResponse>,
+            ::canic::dto::page::Page<::canic::dto::topology::IndexEntryResponse>,
             ::canic::Error,
         > {
-            Ok($crate::__internal::core::api::topology::directory::AppDirectoryApi::page(page))
+            Ok($crate::__internal::core::api::topology::index::AppIndexApi::page(page))
         }
 
         #[$crate::canic_query]
-        fn canic_subnet_directory(
+        fn canic_subnet_index(
             page: ::canic::dto::page::PageRequest,
         ) -> Result<
-            ::canic::dto::page::Page<::canic::dto::topology::DirectoryEntryResponse>,
+            ::canic::dto::page::Page<::canic::dto::topology::IndexEntryResponse>,
             ::canic::Error,
         > {
-            Ok($crate::__internal::core::api::topology::directory::SubnetDirectoryApi::page(page))
+            Ok($crate::__internal::core::api::topology::index::SubnetIndexApi::page(page))
         }
     };
 }
@@ -273,14 +273,14 @@ macro_rules! canic_emit_topology_placement_endpoints {
     };
 }
 
-// Bundle composer for shared state, directory, topology, and placement views.
+// Bundle composer for shared state, index, topology, and placement views.
 #[macro_export]
 macro_rules! canic_bundle_topology_views_endpoints {
     () => {
         #[cfg(not(canic_disable_bundle_topology_state))]
         $crate::canic_emit_topology_state_endpoints!();
-        #[cfg(not(canic_disable_bundle_topology_directory))]
-        $crate::canic_emit_topology_directory_endpoints!();
+        #[cfg(not(canic_disable_bundle_topology_index))]
+        $crate::canic_emit_topology_index_endpoints!();
         #[cfg(not(canic_disable_bundle_topology_children))]
         $crate::canic_emit_topology_children_endpoints!();
         #[cfg(not(canic_disable_bundle_topology_cycles))]
@@ -762,9 +762,9 @@ macro_rules! canic_endpoints_topology_state {
 
 #[doc(hidden)]
 #[macro_export]
-macro_rules! canic_endpoints_topology_directory {
+macro_rules! canic_endpoints_topology_index {
     () => {
-        $crate::canic_emit_topology_directory_endpoints!();
+        $crate::canic_emit_topology_index_endpoints!();
     };
 }
 
