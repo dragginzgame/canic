@@ -4,8 +4,9 @@ use crate::{
     InternalError,
     cdk::types::Cycles,
     config::schema::{
-        CanisterConfig, CanisterKind, DelegatedAuthCanisterConfig, RandomnessConfig, ScalePool,
-        ScalePoolPolicy, ScalingConfig, ShardingConfig, StandardsCanisterConfig,
+        CanisterConfig, CanisterKind, DelegatedAuthCanisterConfig, DirectoryConfig, DirectoryPool,
+        RandomnessConfig, ScalePool, ScalePoolPolicy, ScalingConfig, ShardingConfig,
+        StandardsCanisterConfig,
     },
     domain::policy::topology::registry::{
         RegistryPolicy, RegistryPolicyError, RegistryRegistrationObservation,
@@ -25,6 +26,7 @@ fn root_canister_config() -> CanisterConfig {
         randomness: RandomnessConfig::default(),
         scaling: None,
         sharding: None,
+        directory: None,
         delegated_auth: DelegatedAuthCanisterConfig::default(),
         standards: StandardsCanisterConfig::default(),
     }
@@ -38,6 +40,7 @@ fn singleton_canister_config() -> CanisterConfig {
         randomness: RandomnessConfig::default(),
         scaling: None,
         sharding: None,
+        directory: None,
         delegated_auth: DelegatedAuthCanisterConfig::default(),
         standards: StandardsCanisterConfig::default(),
     }
@@ -60,6 +63,7 @@ fn singleton_scaling_parent_config() -> CanisterConfig {
         randomness: RandomnessConfig::default(),
         scaling: Some(scaling),
         sharding: None,
+        directory: None,
         delegated_auth: DelegatedAuthCanisterConfig::default(),
         standards: StandardsCanisterConfig::default(),
     }
@@ -73,6 +77,31 @@ fn singleton_sharding_parent_config() -> CanisterConfig {
         randomness: RandomnessConfig::default(),
         scaling: None,
         sharding: Some(ShardingConfig::default()),
+        directory: None,
+        delegated_auth: DelegatedAuthCanisterConfig::default(),
+        standards: StandardsCanisterConfig::default(),
+    }
+}
+
+// Build a singleton parent that owns one keyed directory pool for instances.
+fn singleton_directory_parent_config() -> CanisterConfig {
+    let mut directory = DirectoryConfig::default();
+    directory.pools.insert(
+        "projects".to_string(),
+        DirectoryPool {
+            canister_role: CanisterRole::new("instance_child"),
+            key_name: "project".to_string(),
+        },
+    );
+
+    CanisterConfig {
+        kind: CanisterKind::Singleton,
+        initial_cycles: Cycles::new(0),
+        topup_policy: None,
+        randomness: RandomnessConfig::default(),
+        scaling: None,
+        sharding: None,
+        directory: Some(directory),
         delegated_auth: DelegatedAuthCanisterConfig::default(),
         standards: StandardsCanisterConfig::default(),
     }
@@ -86,6 +115,7 @@ fn replica_canister_config() -> CanisterConfig {
         randomness: RandomnessConfig::default(),
         scaling: None,
         sharding: None,
+        directory: None,
         delegated_auth: DelegatedAuthCanisterConfig::default(),
         standards: StandardsCanisterConfig::default(),
     }
@@ -99,6 +129,7 @@ fn shard_canister_config() -> CanisterConfig {
         randomness: RandomnessConfig::default(),
         scaling: None,
         sharding: None,
+        directory: None,
         delegated_auth: DelegatedAuthCanisterConfig::default(),
         standards: StandardsCanisterConfig::default(),
     }
@@ -112,6 +143,7 @@ fn instance_canister_config() -> CanisterConfig {
         randomness: RandomnessConfig::default(),
         scaling: None,
         sharding: None,
+        directory: None,
         delegated_auth: DelegatedAuthCanisterConfig::default(),
         standards: StandardsCanisterConfig::default(),
     }
@@ -159,7 +191,7 @@ fn registry_kind_policy_blocks_but_ops_allows() {
         RegistryPolicyError::SingletonAlreadyRegisteredUnderParent { .. }
         | RegistryPolicyError::ReplicaRequiresSingletonWithScaling { .. }
         | RegistryPolicyError::ShardRequiresSingletonWithSharding { .. }
-        | RegistryPolicyError::InstanceRequiresSingletonParent { .. } => {
+        | RegistryPolicyError::InstanceRequiresSingletonWithDirectory { .. } => {
             panic!("expected root duplicate role error")
         }
     }
@@ -229,7 +261,7 @@ fn registry_singleton_policy_blocks_under_parent() {
         RegistryPolicyError::RoleAlreadyRegistered { .. }
         | RegistryPolicyError::ReplicaRequiresSingletonWithScaling { .. }
         | RegistryPolicyError::ShardRequiresSingletonWithSharding { .. }
-        | RegistryPolicyError::InstanceRequiresSingletonParent { .. } => {
+        | RegistryPolicyError::InstanceRequiresSingletonWithDirectory { .. } => {
             panic!("expected duplicate singleton under parent error");
         }
     }
@@ -270,7 +302,7 @@ fn registry_wasm_store_policy_allows_multiple_under_same_parent() {
 }
 
 #[test]
-fn instance_creation_requires_singleton_parent() {
+fn instance_creation_requires_singleton_directory_parent() {
     let role = CanisterRole::new("instance_child");
     let parent_role = CanisterRole::new("plain_parent");
     let parent_pid = p(7);
@@ -287,7 +319,7 @@ fn instance_creation_requires_singleton_parent() {
     .expect_err("policy should reject instance creation under non-singleton parent");
 
     match &err {
-        RegistryPolicyError::InstanceRequiresSingletonParent {
+        RegistryPolicyError::InstanceRequiresSingletonWithDirectory {
             role: err_role,
             parent_role: err_parent_role,
         } => {
@@ -300,17 +332,46 @@ fn instance_creation_requires_singleton_parent() {
     let public = Error::from(InternalError::from(TopologyPolicyError::from(err)));
     assert_eq!(
         public.code,
-        ErrorCode::PolicyInstanceRequiresSingletonParent
+        ErrorCode::PolicyInstanceRequiresSingletonWithDirectory
     );
     assert!(
         public
             .message
-            .contains("must be created by a singleton parent")
+            .contains("must be created by a singleton parent with directory config")
     );
 }
 
 #[test]
-fn instance_creation_succeeds_under_singleton_parent() {
+fn instance_creation_requires_directory_config_on_singleton_parent() {
+    let role = CanisterRole::new("instance_child");
+    let parent_role = CanisterRole::new("project_hub");
+    let parent_pid = p(9);
+    let data = RegistryPolicyInput { entries: vec![] };
+
+    let err = RegistryPolicy::can_register_role(
+        &role,
+        parent_pid,
+        &data,
+        &instance_canister_config(),
+        &parent_role,
+        &singleton_canister_config(),
+    )
+    .expect_err("policy should reject instance creation under singleton parent without directory");
+
+    match &err {
+        RegistryPolicyError::InstanceRequiresSingletonWithDirectory {
+            role: err_role,
+            parent_role: err_parent_role,
+        } => {
+            assert_eq!(err_role, &role);
+            assert_eq!(err_parent_role, &parent_role);
+        }
+        _ => panic!("expected instance singleton-directory policy error"),
+    }
+}
+
+#[test]
+fn instance_creation_succeeds_under_singleton_directory_parent() {
     let role = CanisterRole::new("instance_child");
     let parent_role = CanisterRole::new("project_hub");
     let parent_pid = p(10);
@@ -322,9 +383,9 @@ fn instance_creation_succeeds_under_singleton_parent() {
         &data,
         &instance_canister_config(),
         &parent_role,
-        &singleton_canister_config(),
+        &singleton_directory_parent_config(),
     )
-    .expect("instance should be allowed under singleton parent");
+    .expect("instance should be allowed under singleton directory parent");
 }
 
 #[test]

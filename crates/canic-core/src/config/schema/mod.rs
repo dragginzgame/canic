@@ -178,6 +178,7 @@ impl ConfigModel {
                 randomness: RandomnessConfig::default(),
                 scaling: None,
                 sharding: None,
+                directory: None,
                 delegated_auth: DelegatedAuthCanisterConfig::default(),
                 standards: StandardsCanisterConfig::default(),
             },
@@ -668,6 +669,7 @@ mod tests {
             randomness: RandomnessConfig::default(),
             scaling: None,
             sharding: None,
+            directory: None,
             delegated_auth: DelegatedAuthCanisterConfig::default(),
             standards: StandardsCanisterConfig::default(),
         }
