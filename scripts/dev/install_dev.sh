@@ -16,6 +16,12 @@ CANIC_WASM_TOOLS=(
     candid-extractor
     ic-wasm
 )
+CANIC_PYTHON_PACKAGE_BREW="${CANIC_PYTHON_PACKAGE_BREW:-python}"
+CANIC_PYTHON_PACKAGE_APT="${CANIC_PYTHON_PACKAGE_APT:-python3}"
+CANIC_PYTHON_PACKAGE_DNF="${CANIC_PYTHON_PACKAGE_DNF:-python3}"
+CANIC_PYTHON_PACKAGE_YUM="${CANIC_PYTHON_PACKAGE_YUM:-python3}"
+CANIC_PYTHON_PACKAGE_PACMAN="${CANIC_PYTHON_PACKAGE_PACMAN:-python}"
+CANIC_PYTHON_PACKAGE_ZYPPER="${CANIC_PYTHON_PACKAGE_ZYPPER:-python3}"
 
 blue() {
     printf '\033[1;34m%s\033[0m\n' "$1" >&2
@@ -41,6 +47,17 @@ cargo_toolchain() {
     cargo +"$CANIC_RUST_TOOLCHAIN" "$@"
 }
 
+run_with_optional_sudo() {
+    if [ "$(id -u)" -eq 0 ]; then
+        "$@"
+    elif command -v sudo >/dev/null 2>&1; then
+        sudo "$@"
+    else
+        red "missing required privilege helper: sudo"
+        exit 1
+    fi
+}
+
 require_command() {
     local command_name="$1"
 
@@ -62,6 +79,81 @@ install_cargo_tools() {
     cargo_toolchain install --locked "${tools[@]}"
 }
 
+detect_python_package_manager() {
+    if command -v brew >/dev/null 2>&1; then
+        printf 'brew\n'
+    elif command -v apt-get >/dev/null 2>&1; then
+        printf 'apt-get\n'
+    elif command -v dnf >/dev/null 2>&1; then
+        printf 'dnf\n'
+    elif command -v yum >/dev/null 2>&1; then
+        printf 'yum\n'
+    elif command -v pacman >/dev/null 2>&1; then
+        printf 'pacman\n'
+    elif command -v zypper >/dev/null 2>&1; then
+        printf 'zypper\n'
+    else
+        printf 'none\n'
+    fi
+}
+
+install_or_update_python() {
+    local mode="$1"
+    local manager
+
+    if command -v python3 >/dev/null 2>&1; then
+        green "python3 already installed: $(command -v python3)"
+        if [ "$mode" = "install" ]; then
+            return 0
+        fi
+    fi
+
+    manager="$(detect_python_package_manager)"
+    if [ "$manager" = "none" ]; then
+        red "unable to install python3 automatically: no supported package manager found"
+        exit 1
+    fi
+
+    yellow "Python 3:"
+
+    case "$manager" in
+    brew)
+        if [ "$mode" = "update" ]; then
+            cyan_command "brew upgrade $CANIC_PYTHON_PACKAGE_BREW || brew install $CANIC_PYTHON_PACKAGE_BREW"
+            brew upgrade "$CANIC_PYTHON_PACKAGE_BREW" || brew install "$CANIC_PYTHON_PACKAGE_BREW"
+        else
+            cyan_command "brew install $CANIC_PYTHON_PACKAGE_BREW"
+            brew install "$CANIC_PYTHON_PACKAGE_BREW"
+        fi
+        ;;
+    apt-get)
+        cyan_command "sudo apt-get update"
+        run_with_optional_sudo apt-get update
+        cyan_command "sudo apt-get install -y $CANIC_PYTHON_PACKAGE_APT"
+        run_with_optional_sudo apt-get install -y "$CANIC_PYTHON_PACKAGE_APT"
+        ;;
+    dnf)
+        cyan_command "sudo dnf install -y $CANIC_PYTHON_PACKAGE_DNF"
+        run_with_optional_sudo dnf install -y "$CANIC_PYTHON_PACKAGE_DNF"
+        ;;
+    yum)
+        cyan_command "sudo yum install -y $CANIC_PYTHON_PACKAGE_YUM"
+        run_with_optional_sudo yum install -y "$CANIC_PYTHON_PACKAGE_YUM"
+        ;;
+    pacman)
+        cyan_command "sudo pacman -Sy --needed $CANIC_PYTHON_PACKAGE_PACMAN"
+        run_with_optional_sudo pacman -Sy --needed "$CANIC_PYTHON_PACKAGE_PACMAN"
+        ;;
+    zypper)
+        cyan_command "sudo zypper install -y $CANIC_PYTHON_PACKAGE_ZYPPER"
+        run_with_optional_sudo zypper install -y "$CANIC_PYTHON_PACKAGE_ZYPPER"
+        ;;
+    esac
+
+    require_command python3
+    green "python3 ready: $(python3 --version 2>&1)"
+}
+
 configure_git_hooks_if_present() {
     if [ -d .git ] && [ -d .githooks ]; then
         yellow "Git hooks:"
@@ -72,6 +164,13 @@ configure_git_hooks_if_present() {
 }
 
 main() {
+    if [ "${1:-}" = "--update-python" ]; then
+        blue "Updating Python prerequisites"
+        install_or_update_python update
+        green "Python update complete."
+        return 0
+    fi
+
     blue "Installing Canic prerequisites"
 
     if ! command -v rustup >/dev/null 2>&1 || ! command -v cargo >/dev/null 2>&1; then
@@ -96,6 +195,8 @@ main() {
     yellow "Wasm target:"
     cyan_command "rustup target add --toolchain $CANIC_RUST_TOOLCHAIN wasm32-unknown-unknown"
     rustup target add --toolchain "$CANIC_RUST_TOOLCHAIN" wasm32-unknown-unknown
+
+    install_or_update_python install
 
     install_cargo_tools "Rust development tools" "${CANIC_DEV_TOOLS[@]}"
     install_cargo_tools "Wasm and Candid tools" "${CANIC_WASM_TOOLS[@]}"

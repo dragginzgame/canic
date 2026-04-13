@@ -54,8 +54,8 @@ help:
 	@echo "Available commands:"
 	@echo ""
 	@echo "Setup / Installation:"
-	@echo "  install-dev      Install the shared Rust/Cargo/Canic toolchain"
-	@echo "  update-dev       Update the local Rust/Cargo/DFX development environment"
+	@echo "  install-dev      Install the shared Rust/Cargo/Python/Canic toolchain"
+	@echo "  update-dev       Update the local Rust/Cargo/Python/DFX development environment"
 	@echo "  ensure-hooks     Configure git hooks"
 	@echo ""
 	@echo "Version Management:"
@@ -101,8 +101,9 @@ help:
 install-dev:
 	bash scripts/dev/install_dev.sh
 
-# Update the local Rust/Cargo/DFX development environment.
+# Update the local Rust/Cargo/Python/DFX development environment.
 update-dev:
+	bash scripts/dev/install_dev.sh --update-python
 	rustup update
 	cargo install \
 		cargo-audit cargo-bloat cargo-deny cargo-expand cargo-machete \
