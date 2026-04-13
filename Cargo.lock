@@ -2034,6 +2034,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "project_hub_stub"
+version = "0.27.2"
+dependencies = [
+ "candid",
+ "canic",
+ "ic-cdk",
+]
+
+[[package]]
+name = "project_instance_stub"
+version = "0.27.2"
+dependencies = [
+ "candid",
+ "canic",
+ "ic-cdk",
+]
+
+[[package]]
 name = "psm"
 version = "0.1.30"
 source = "registry+https://github.com/rust-lang/crates.io-index"

@@ -23,6 +23,11 @@ pub type CreateCanisterParent = crate::dto::rpc::CreateCanisterParent;
 /// Ops-local alias for canister-upgrade request payload.
 pub type UpgradeCanisterRequest = crate::dto::rpc::UpgradeCanisterRequest;
 
+/// RecycleCanisterRequest
+///
+/// Ops-local alias for one-child recycle-to-pool request payload.
+pub type RecycleCanisterRequest = crate::dto::rpc::RecycleCanisterRequest;
+
 /// CyclesRequest
 ///
 /// Ops-local alias for cycles request payload.
@@ -42,6 +47,11 @@ pub type CreateCanisterResponse = crate::dto::rpc::CreateCanisterResponse;
 ///
 /// Ops-local alias for canister-upgrade response payload.
 pub type UpgradeCanisterResponse = crate::dto::rpc::UpgradeCanisterResponse;
+
+/// RecycleCanisterResponse
+///
+/// Ops-local alias for recycle-to-pool response payload.
+pub type RecycleCanisterResponse = crate::dto::rpc::RecycleCanisterResponse;
 
 /// CyclesResponse
 ///

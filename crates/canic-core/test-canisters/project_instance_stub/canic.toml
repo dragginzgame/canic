@@ -1,0 +1,17 @@
+controllers = []
+app_index = []
+
+[subnets.prime]
+
+[subnets.prime.canisters.root]
+kind = "root"
+
+[subnets.prime.canisters.project_hub]
+kind = "singleton"
+
+[subnets.prime.canisters.project_hub.directory.pools.projects]
+canister_role = "project_instance"
+key_name = "project"
+
+[subnets.prime.canisters.project_instance]
+kind = "instance"

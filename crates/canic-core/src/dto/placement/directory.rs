@@ -34,3 +34,31 @@ pub enum DirectoryEntryStatusResponse {
         bound_at: u64,
     },
 }
+
+//
+// DirectoryRecoveryResponse
+//
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+pub enum DirectoryRecoveryResponse {
+    Missing,
+    FreshPending {
+        owner_pid: Principal,
+        created_at: u64,
+        provisional_pid: Option<Principal>,
+    },
+    Bound {
+        instance_pid: Principal,
+        bound_at: u64,
+    },
+    RepairedToBound {
+        instance_pid: Principal,
+        bound_at: u64,
+    },
+    ReleasedStalePending {
+        owner_pid: Principal,
+        created_at: u64,
+        provisional_pid: Option<Principal>,
+        released_at: u64,
+    },
+}

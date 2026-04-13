@@ -734,6 +734,7 @@ fn capability_metadata_from_request(request: &Request) -> ([u8; 16], [u8; 16], u
     let metadata = match request {
         Request::CreateCanister(req) => req.metadata,
         Request::UpgradeCanister(req) => req.metadata,
+        Request::RecycleCanister(req) => req.metadata,
         Request::Cycles(req) => req.metadata,
         Request::IssueDelegation(req) => req.metadata,
         Request::IssueRoleAttestation(req) => req.metadata,

@@ -1,7 +1,7 @@
 use super::{
     CreateCanisterParent, CreateCanisterRequest, CreateCanisterResponse, CyclesRequest,
-    CyclesResponse, Request, RequestOpsError, Response, RootRequestMetadata,
-    UpgradeCanisterRequest, UpgradeCanisterResponse,
+    CyclesResponse, RecycleCanisterRequest, RecycleCanisterResponse, Request, RequestOpsError,
+    Response, RootRequestMetadata, UpgradeCanisterRequest, UpgradeCanisterResponse,
 };
 use crate::{
     InternalError, InternalErrorOrigin,
@@ -62,6 +62,20 @@ impl RequestOps {
         RpcOps::execute_response_rpc(
             root_pid,
             UpgradeCanisterRpc {
+                canister_pid,
+                metadata: Some(new_request_metadata()),
+            },
+        )
+        .await
+    }
+
+    pub async fn recycle_canister(
+        canister_pid: Principal,
+    ) -> Result<RecycleCanisterResponse, InternalError> {
+        let root_pid = EnvOps::root_pid()?;
+        RpcOps::execute_response_rpc(
+            root_pid,
+            RecycleCanisterRpc {
                 canister_pid,
                 metadata: Some(new_request_metadata()),
             },
@@ -135,6 +149,33 @@ impl Rpc for UpgradeCanisterRpc {
     fn try_from_response(resp: Response) -> Result<Self::Response, InternalError> {
         match resp {
             Response::UpgradeCanister(r) => Ok(r),
+            _ => Err(RequestOpsError::InvalidResponseType.into()),
+        }
+    }
+}
+
+///
+/// RecycleCanisterRpc
+///
+
+pub struct RecycleCanisterRpc {
+    pub canister_pid: Principal,
+    pub metadata: Option<RootRequestMetadata>,
+}
+
+impl Rpc for RecycleCanisterRpc {
+    type Response = RecycleCanisterResponse;
+
+    fn into_request(self) -> Request {
+        Request::recycle_canister(RecycleCanisterRequest {
+            canister_pid: self.canister_pid,
+            metadata: self.metadata,
+        })
+    }
+
+    fn try_from_response(resp: Response) -> Result<Self::Response, InternalError> {
+        match resp {
+            Response::RecycleCanister(r) => Ok(r),
             _ => Err(RequestOpsError::InvalidResponseType.into()),
         }
     }

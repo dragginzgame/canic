@@ -11,10 +11,11 @@ pub mod compiled {
         config::schema::{
             AppConfig, AppInitMode, AuthConfig, CanisterConfig, CanisterKind, CanisterPool,
             ConfigModel, DelegatedAuthCanisterConfig, DelegatedTokenConfig,
-            DelegationProofCacheConfig, DelegationProofCacheProfile, LogConfig, PoolImport,
-            RandomnessConfig, RandomnessSource, RoleAttestationConfig, ScalePool, ScalePoolPolicy,
-            ScalingConfig, ShardPool, ShardPoolPolicy, ShardingConfig, Standards,
-            StandardsCanisterConfig, SubnetConfig, TopupPolicy, Whitelist,
+            DelegationProofCacheConfig, DelegationProofCacheProfile, DirectoryConfig,
+            DirectoryPool, LogConfig, PoolImport, RandomnessConfig, RandomnessSource,
+            RoleAttestationConfig, ScalePool, ScalePoolPolicy, ScalingConfig, ShardPool,
+            ShardPoolPolicy, ShardingConfig, Standards, StandardsCanisterConfig, SubnetConfig,
+            TopupPolicy, Whitelist,
         },
         ids::{CanisterRole, SubnetRole},
     };
