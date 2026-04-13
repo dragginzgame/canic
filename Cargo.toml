@@ -65,7 +65,7 @@ canic-testkit = { version = "0.27.4", path = "crates/canic-testkit" }
 canic-wasm-store = { version = "0.27.4", path = "crates/canic-wasm-store" }
 crc32fast = "1.5"
 criterion = "0.8"
-ctor = "0.8"
+ctor = { version = "0.10", default-features = false }
 flate2 = { version = "1.1", default-features = false, features = [
     "rust_backend",
 ] }
