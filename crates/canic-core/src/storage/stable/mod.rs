@@ -1,6 +1,7 @@
 pub mod auth;
 pub mod children;
 pub mod cycles;
+pub mod directory;
 pub mod env;
 pub mod index;
 pub mod intent;
@@ -146,6 +147,7 @@ pub mod memory {
         pub const SHARDING_REGISTRY_ID: u8 = 50;
         #[cfg(feature = "sharding")]
         pub const SHARDING_ASSIGNMENT_ID: u8 = 51;
+        pub const DIRECTORY_REGISTRY_ID: u8 = 52;
         #[cfg(feature = "sharding")]
         pub const SHARDING_ACTIVE_SET_ID: u8 = 53;
 
@@ -154,7 +156,7 @@ pub mod memory {
         // - shard health / liveness
         // - rebalance / drain state
         // - migration metadata
-        // 52, 54–58
+        // 54–58
     }
 
     // ---------------------------------------------------------------------

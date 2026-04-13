@@ -33,6 +33,7 @@ pub fn init_sharding_test_config() {
         randomness: RandomnessConfig::default(),
         scaling: None,
         sharding: None,
+        directory: None,
         delegated_auth: DelegatedAuthCanisterConfig::default(),
         standards: StandardsCanisterConfig::default(),
     };
@@ -44,6 +45,7 @@ pub fn init_sharding_test_config() {
         randomness: RandomnessConfig::default(),
         scaling: None,
         sharding: Some(sharding),
+        directory: None,
         delegated_auth: DelegatedAuthCanisterConfig::default(),
         standards: StandardsCanisterConfig::default(),
     };
@@ -55,6 +57,7 @@ pub fn init_sharding_test_config() {
         randomness: RandomnessConfig::default(),
         scaling: None,
         sharding: None,
+        directory: None,
         delegated_auth: DelegatedAuthCanisterConfig::default(),
         standards: StandardsCanisterConfig::default(),
     };

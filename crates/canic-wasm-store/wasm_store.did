@@ -52,7 +52,7 @@ type ErrorCode = variant {
   PolicyRoleAlreadyRegistered;
   InvalidInput;
   InvariantViolation;
-  PolicyInstanceRequiresSingletonParent;
+  PolicyInstanceRequiresSingletonWithDirectory;
   PolicyShardRequiresSingletonWithSharding;
   NotFound;
   PolicySingletonAlreadyRegisteredUnderParent;

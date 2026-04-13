@@ -98,7 +98,7 @@ pub enum ErrorCode {
     InvalidInput,
     InvariantViolation,
     NotFound,
-    PolicyInstanceRequiresSingletonParent,
+    PolicyInstanceRequiresSingletonWithDirectory,
     PolicyReplicaRequiresSingletonWithScaling,
     PolicyRoleAlreadyRegistered,
     PolicyShardRequiresSingletonWithSharding,

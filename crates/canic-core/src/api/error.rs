@@ -16,8 +16,8 @@ fn registry_policy_error_code(message: &str) -> Option<ErrorCode> {
     if message.contains("must be created by a singleton parent with sharding config") {
         return Some(ErrorCode::PolicyShardRequiresSingletonWithSharding);
     }
-    if message.contains("must be created by a singleton parent") {
-        return Some(ErrorCode::PolicyInstanceRequiresSingletonParent);
+    if message.contains("must be created by a singleton parent with directory config") {
+        return Some(ErrorCode::PolicyInstanceRequiresSingletonWithDirectory);
     }
 
     None

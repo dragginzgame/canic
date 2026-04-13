@@ -108,6 +108,7 @@ impl ConfigTestBuilder {
             randomness: RandomnessConfig::default(),
             scaling: None,
             sharding: None,
+            directory: None,
             delegated_auth: DelegatedAuthCanisterConfig::default(),
             standards: StandardsCanisterConfig::default(),
         }

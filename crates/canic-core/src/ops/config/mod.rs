@@ -4,7 +4,7 @@ use crate::{
         Config, ConfigError, ConfigModel,
         schema::{
             AppInitMode, CanisterConfig, DelegatedTokenConfig, DelegationProofCacheProfile,
-            LogConfig, RoleAttestationConfig, ScalingConfig, SubnetConfig,
+            DirectoryConfig, LogConfig, RoleAttestationConfig, ScalingConfig, SubnetConfig,
         },
     },
     ids::{CanisterRole, SubnetRole},
@@ -162,6 +162,11 @@ impl ConfigOps {
     /// Fetch the scaling configuration for the *current* canister.
     pub(crate) fn current_scaling_config() -> Result<Option<ScalingConfig>, InternalError> {
         Ok(Self::current_canister()?.scaling)
+    }
+
+    /// Fetch the directory placement config for the *current* canister.
+    pub(crate) fn current_directory_config() -> Result<Option<DirectoryConfig>, InternalError> {
+        Ok(Self::current_canister()?.directory)
     }
 
     /// Fetch the configuration for a specific canister in the *current* subnet.

@@ -3,10 +3,10 @@ use crate::{
     config::schema::{
         AppConfig, AppInitMode, AuthConfig, CanisterConfig, CanisterKind, CanisterPool,
         ConfigModel, DelegatedAuthCanisterConfig, DelegatedTokenConfig, DelegationProofCacheConfig,
-        DelegationProofCacheProfile, LogConfig, PoolImport, RandomnessConfig, RandomnessSource,
-        RoleAttestationConfig, ScalePool, ScalePoolPolicy, ScalingConfig, ShardPool,
-        ShardPoolPolicy, ShardingConfig, Standards, StandardsCanisterConfig, SubnetConfig,
-        TopupPolicy, Whitelist,
+        DelegationProofCacheProfile, DirectoryConfig, DirectoryPool, LogConfig, PoolImport,
+        RandomnessConfig, RandomnessSource, RoleAttestationConfig, ScalePool, ScalePoolPolicy,
+        ScalingConfig, ShardPool, ShardPoolPolicy, ShardingConfig, Standards,
+        StandardsCanisterConfig, SubnetConfig, TopupPolicy, Whitelist,
     },
     ids::{CanisterRole, SubnetRole},
 };
@@ -363,6 +363,7 @@ fn render_canister_config(config: &CanisterConfig) -> TokenStream {
     let randomness = render_randomness_config(&config.randomness);
     let scaling = render_option(config.scaling.as_ref(), render_scaling_config);
     let sharding = render_option(config.sharding.as_ref(), render_sharding_config);
+    let directory = render_option(config.directory.as_ref(), render_directory_config);
     let delegated_auth = render_delegated_auth_canister_config(&config.delegated_auth);
     let standards = render_standards_canister_config(&config.standards);
 
@@ -374,6 +375,7 @@ fn render_canister_config(config: &CanisterConfig) -> TokenStream {
             randomness: #randomness,
             scaling: #scaling,
             sharding: #sharding,
+            directory: #directory,
             delegated_auth: #delegated_auth,
             standards: #standards,
         }
@@ -550,6 +552,21 @@ fn render_sharding_config(config: &ShardingConfig) -> TokenStream {
     }
 }
 
+// Render the directory placement config subtree.
+fn render_directory_config(config: &DirectoryConfig) -> TokenStream {
+    let pools = render_btree_map(
+        config.pools.iter(),
+        |name| render_owned_string(name),
+        render_directory_pool,
+    );
+
+    quote! {
+        ::canic::__internal::core::bootstrap::compiled::DirectoryConfig {
+            pools: #pools,
+        }
+    }
+}
+
 // Render a stateful shard pool definition.
 fn render_shard_pool(pool: &ShardPool) -> TokenStream {
     let canister_role = render_canister_role(&pool.canister_role);
@@ -572,6 +589,19 @@ fn render_shard_pool_policy(policy: &ShardPoolPolicy) -> TokenStream {
         ::canic::__internal::core::bootstrap::compiled::ShardPoolPolicy {
             capacity: #capacity,
             max_shards: #max_shards,
+        }
+    }
+}
+
+// Render one keyed-instance placement pool.
+fn render_directory_pool(pool: &DirectoryPool) -> TokenStream {
+    let canister_role = render_canister_role(&pool.canister_role);
+    let key_name = render_owned_string(&pool.key_name);
+
+    quote! {
+        ::canic::__internal::core::bootstrap::compiled::DirectoryPool {
+            canister_role: #canister_role,
+            key_name: #key_name,
         }
     }
 }

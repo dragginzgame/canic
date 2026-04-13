@@ -118,6 +118,7 @@ impl Validate for SubnetConfig {
             cfg.validate_topup_policy(role)?;
             cfg.validate_scaling(role, &self.canisters)?;
             cfg.validate_sharding(role, &self.canisters)?;
+            cfg.validate_directory(role, &self.canisters)?;
         }
 
         Ok(())
@@ -173,6 +174,7 @@ fn implicit_wasm_store_canister_config() -> CanisterConfig {
         randomness: RandomnessConfig::default(),
         scaling: None,
         sharding: None,
+        directory: None,
         delegated_auth: DelegatedAuthCanisterConfig::default(),
         standards: StandardsCanisterConfig::default(),
     }
@@ -228,6 +230,9 @@ pub struct CanisterConfig {
     pub sharding: Option<ShardingConfig>,
 
     #[serde(default)]
+    pub directory: Option<DirectoryConfig>,
+
+    #[serde(default)]
     pub delegated_auth: DelegatedAuthCanisterConfig,
 
     #[serde(default)]
@@ -260,24 +265,25 @@ impl CanisterConfig {
             CanisterKind::Root => {
                 if self.scaling.is_some()
                     || self.sharding.is_some()
+                    || self.directory.is_some()
                     || self.delegated_auth.signer
                     || self.delegated_auth.verifier
                     || self.standards.icrc21
                 {
                     return Err(ConfigSchemaError::ValidationError(format!(
-                        "canister '{canister}' kind = \"root\" cannot define scaling, sharding, delegated auth roles, or canister-local standards",
+                        "canister '{canister}' kind = \"root\" cannot define scaling, sharding, directory, delegated auth roles, or canister-local standards",
                     )));
                 }
             }
 
             CanisterKind::Singleton => {
-                // Singletons are the only canisters allowed to define scaling and/or sharding
+                // Singletons are the only canisters allowed to define scaling, sharding, and/or directory
             }
 
             CanisterKind::Replica | CanisterKind::Shard | CanisterKind::Instance => {
-                if self.scaling.is_some() || self.sharding.is_some() {
+                if self.scaling.is_some() || self.sharding.is_some() || self.directory.is_some() {
                     return Err(ConfigSchemaError::ValidationError(format!(
-                        "canister '{canister}' kind = \"{}\" cannot define scaling or sharding",
+                        "canister '{canister}' kind = \"{}\" cannot define scaling, sharding, or directory",
                         self.kind,
                     )));
                 }
@@ -364,6 +370,56 @@ impl CanisterConfig {
             if pool.policy.max_workers != 0 && pool.policy.max_workers < pool.policy.min_workers {
                 return Err(ConfigSchemaError::ValidationError(format!(
                     "canister '{role}' scaling pool '{pool_name}' has max_workers < min_workers",
+                )));
+            }
+        }
+
+        Ok(())
+    }
+
+    // Validate keyed instance-placement pools for singleton directory parents.
+    #[cfg(any(not(target_arch = "wasm32"), test))]
+    fn validate_directory(
+        &self,
+        role: &CanisterRole,
+        all_roles: &BTreeMap<CanisterRole, Self>,
+    ) -> Result<(), ConfigSchemaError> {
+        let Some(directory) = &self.directory else {
+            return Ok(());
+        };
+
+        for (pool_name, pool) in &directory.pools {
+            if pool_name.len() > NAME_MAX_BYTES {
+                return Err(ConfigSchemaError::ValidationError(format!(
+                    "canister '{role}' directory pool '{pool_name}' name exceeds {NAME_MAX_BYTES} bytes",
+                )));
+            }
+
+            if pool.key_name.is_empty() {
+                return Err(ConfigSchemaError::ValidationError(format!(
+                    "canister '{role}' directory pool '{pool_name}' must define a non-empty key_name",
+                )));
+            }
+
+            if pool.key_name.len() > NAME_MAX_BYTES {
+                return Err(ConfigSchemaError::ValidationError(format!(
+                    "canister '{role}' directory pool '{pool_name}' key_name '{}' exceeds {NAME_MAX_BYTES} bytes",
+                    pool.key_name
+                )));
+            }
+
+            if !all_roles.contains_key(&pool.canister_role) {
+                return Err(ConfigSchemaError::ValidationError(format!(
+                    "canister '{role}' directory pool '{pool_name}' references unknown canister role '{}'",
+                    pool.canister_role
+                )));
+            }
+
+            let target = &all_roles[&pool.canister_role];
+            if target.kind != CanisterKind::Instance {
+                return Err(ConfigSchemaError::ValidationError(format!(
+                    "canister '{role}' directory pool '{pool_name}' references canister '{}' which is not kind = \"instance\"",
+                    pool.canister_role
                 )));
             }
         }
@@ -532,6 +588,34 @@ pub struct ShardingConfig {
 }
 
 ///
+/// DirectoryConfig
+/// (keyed instance placement)
+///
+/// * Organizes canisters into named **pools**.
+/// * Each pool maps one configured key name to at most one dedicated instance root.
+/// * The resolved instance identity is stable and usually owns a recursive subtree.
+/// * Hence: `DirectoryManager → pools → DirectoryPool`.
+///
+
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct DirectoryConfig {
+    #[serde(default)]
+    pub pools: BTreeMap<String, DirectoryPool>,
+}
+
+///
+/// DirectoryPool
+///
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct DirectoryPool {
+    pub canister_role: CanisterRole,
+    pub key_name: String,
+}
+
+///
 /// ShardPool
 ///
 
@@ -581,6 +665,7 @@ mod tests {
             randomness: RandomnessConfig::default(),
             scaling: None,
             sharding: None,
+            directory: None,
             delegated_auth: DelegatedAuthCanisterConfig::default(),
             standards: StandardsCanisterConfig::default(),
         }
@@ -805,6 +890,109 @@ mod tests {
         subnet
             .validate()
             .expect_err("expected scaling pool name length to fail");
+    }
+
+    #[test]
+    fn directory_pool_references_must_exist_in_subnet() {
+        let managing_role: CanisterRole = "project_hub".into();
+        let mut canisters = BTreeMap::new();
+
+        let mut directory = DirectoryConfig::default();
+        directory.pools.insert(
+            "projects".into(),
+            DirectoryPool {
+                canister_role: CanisterRole::from("missing_project_instance"),
+                key_name: "project".into(),
+            },
+        );
+
+        let manager_cfg = CanisterConfig {
+            directory: Some(directory),
+            ..base_canister_config(CanisterKind::Singleton)
+        };
+
+        canisters.insert(managing_role, manager_cfg);
+
+        let subnet = SubnetConfig {
+            canisters,
+            ..Default::default()
+        };
+
+        subnet
+            .validate()
+            .expect_err("expected missing directory target role to fail");
+    }
+
+    #[test]
+    fn directory_pool_target_must_be_instance_kind() {
+        let managing_role: CanisterRole = "project_hub".into();
+        let mut canisters = BTreeMap::new();
+
+        let mut directory = DirectoryConfig::default();
+        directory.pools.insert(
+            "projects".into(),
+            DirectoryPool {
+                canister_role: CanisterRole::from("project_instance"),
+                key_name: "project".into(),
+            },
+        );
+
+        canisters.insert(
+            CanisterRole::from("project_instance"),
+            base_canister_config(CanisterKind::Singleton),
+        );
+        canisters.insert(
+            managing_role,
+            CanisterConfig {
+                directory: Some(directory),
+                ..base_canister_config(CanisterKind::Singleton)
+            },
+        );
+
+        let subnet = SubnetConfig {
+            canisters,
+            ..Default::default()
+        };
+
+        subnet
+            .validate()
+            .expect_err("expected non-instance directory target role to fail");
+    }
+
+    #[test]
+    fn directory_pool_requires_non_empty_key_name() {
+        let managing_role: CanisterRole = "project_hub".into();
+        let mut canisters = BTreeMap::new();
+
+        let mut directory = DirectoryConfig::default();
+        directory.pools.insert(
+            "projects".into(),
+            DirectoryPool {
+                canister_role: CanisterRole::from("project_instance"),
+                key_name: String::new(),
+            },
+        );
+
+        canisters.insert(
+            CanisterRole::from("project_instance"),
+            base_canister_config(CanisterKind::Instance),
+        );
+        canisters.insert(
+            managing_role,
+            CanisterConfig {
+                directory: Some(directory),
+                ..base_canister_config(CanisterKind::Singleton)
+            },
+        );
+
+        let subnet = SubnetConfig {
+            canisters,
+            ..Default::default()
+        };
+
+        subnet
+            .validate()
+            .expect_err("expected empty directory key name to fail");
     }
 
     #[test]
