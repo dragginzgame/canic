@@ -55,6 +55,8 @@ pub struct DirectoryRegistryRecord {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum DirectoryEntryRecord {
     Pending {
+        #[serde(default)]
+        claim_id: u64,
         owner_pid: Principal,
         created_at: u64,
         provisional_pid: Option<Principal>,
@@ -66,7 +68,7 @@ pub enum DirectoryEntryRecord {
 }
 
 impl DirectoryEntryRecord {
-    pub const STORABLE_MAX_SIZE: u32 = 160;
+    pub const STORABLE_MAX_SIZE: u32 = 192;
 }
 
 impl_storable_bounded!(
@@ -91,6 +93,11 @@ impl DirectoryRegistry {
         DIRECTORY_REGISTRY.with_borrow_mut(|map| {
             map.insert(key, entry);
         });
+    }
+
+    #[must_use]
+    pub(crate) fn remove(key: &DirectoryKey) -> Option<DirectoryEntryRecord> {
+        DIRECTORY_REGISTRY.with_borrow_mut(|map| map.remove(key))
     }
 
     #[must_use]

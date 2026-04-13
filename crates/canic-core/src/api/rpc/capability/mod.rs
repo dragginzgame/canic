@@ -100,6 +100,7 @@ const fn root_capability_metric_key(capability: &Request) -> RootCapabilityMetri
     match capability.family() {
         RequestFamily::Provision => RootCapabilityMetricKey::Provision,
         RequestFamily::Upgrade => RootCapabilityMetricKey::Upgrade,
+        RequestFamily::RecycleCanister => RootCapabilityMetricKey::RecycleCanister,
         RequestFamily::RequestCycles => RootCapabilityMetricKey::RequestCycles,
         RequestFamily::IssueDelegation => RootCapabilityMetricKey::IssueDelegation,
         RequestFamily::IssueRoleAttestation => RootCapabilityMetricKey::IssueRoleAttestation,

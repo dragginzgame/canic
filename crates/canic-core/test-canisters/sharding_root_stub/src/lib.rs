@@ -10,7 +10,8 @@ use canic::{
     },
     dto::capability::{RootCapabilityEnvelopeV1, RootCapabilityResponseV1},
     dto::rpc::{
-        CreateCanisterResponse, CyclesResponse, Request, Response, UpgradeCanisterResponse,
+        CreateCanisterResponse, CyclesResponse, RecycleCanisterResponse, Request, Response,
+        UpgradeCanisterResponse,
     },
 };
 
@@ -80,6 +81,7 @@ async fn handle_request(request: Request) -> Result<Response, Error> {
             }))
         }
         Request::UpgradeCanister(_) => Ok(Response::UpgradeCanister(UpgradeCanisterResponse {})),
+        Request::RecycleCanister(_) => Ok(Response::RecycleCanister(RecycleCanisterResponse {})),
         Request::Cycles(req) => Ok(Response::Cycles(CyclesResponse {
             cycles_transferred: req.cycles,
         })),

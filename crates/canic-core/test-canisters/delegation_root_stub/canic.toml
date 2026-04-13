@@ -23,5 +23,13 @@ verifier = true
 kind = "singleton"
 initial_cycles = "1T"
 
+[subnets.prime.canisters.project_hub.directory.pools.projects]
+canister_role = "project_instance"
+key_name = "project"
+
 [subnets.prime.canisters.project_hub.delegated_auth]
 verifier = true
+
+[subnets.prime.canisters.project_instance]
+kind = "instance"
+initial_cycles = "1T"

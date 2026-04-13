@@ -1,0 +1,23 @@
+[package]
+name = "project_instance_stub"
+edition = { workspace = true }
+rust-version = { workspace = true }
+version = { workspace = true }
+publish = false
+
+[package.metadata.canic]
+role = "project_instance"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+candid = { workspace = true }
+canic = { workspace = true }
+ic-cdk = { workspace = true }
+
+[build-dependencies]
+canic = { workspace = true }
+
+[lints]
+workspace = true

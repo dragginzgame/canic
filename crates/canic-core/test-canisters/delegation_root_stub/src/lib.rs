@@ -432,8 +432,15 @@ fn seed_chunked_bootstrap_release_set(releases: &'static [(CanisterRole, &[u8])]
 // wasm_store comes up.
 const SIGNER_ROLE: CanisterRole = CanisterRole::new("signer");
 const PROJECT_HUB_ROLE: CanisterRole = CanisterRole::new("project_hub");
+const PROJECT_INSTANCE_ROLE: CanisterRole = CanisterRole::new("project_instance");
 const SIGNER_WASM: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/delegation_signer_stub.wasm"));
-const CHUNKED_BOOTSTRAP_RELEASE_SET: &[(CanisterRole, &[u8])] =
-    &[(SIGNER_ROLE, SIGNER_WASM), (PROJECT_HUB_ROLE, SIGNER_WASM)];
+const PROJECT_HUB_WASM: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/project_hub_stub.wasm"));
+const PROJECT_INSTANCE_WASM: &[u8] =
+    include_bytes!(concat!(env!("OUT_DIR"), "/project_instance_stub.wasm"));
+const CHUNKED_BOOTSTRAP_RELEASE_SET: &[(CanisterRole, &[u8])] = &[
+    (SIGNER_ROLE, SIGNER_WASM),
+    (PROJECT_HUB_ROLE, PROJECT_HUB_WASM),
+    (PROJECT_INSTANCE_ROLE, PROJECT_INSTANCE_WASM),
+];
 
 canic::cdk::export_candid_debug!();

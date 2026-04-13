@@ -5,7 +5,8 @@ use crate::{
         auth::{DelegationCert, DelegationRequest, RoleAttestationRequest},
         rpc::{
             CreateCanisterParent, CreateCanisterRequest, CyclesRequest, CyclesResponse,
-            RootRequestMetadata, UpgradeCanisterRequest, UpgradeCanisterResponse,
+            RecycleCanisterRequest, RootRequestMetadata, UpgradeCanisterRequest,
+            UpgradeCanisterResponse,
         },
     },
     ids::CanisterRole,
@@ -107,6 +108,17 @@ fn map_request_maps_upgrade() {
 }
 
 #[test]
+fn map_request_maps_recycle_canister() {
+    let req = Request::RecycleCanister(RecycleCanisterRequest {
+        canister_pid: p(4),
+        metadata: None,
+    });
+
+    let mapped = RootResponseWorkflow::map_request(req);
+    assert_eq!(mapped.capability_name(), "RecycleCanister");
+}
+
+#[test]
 fn map_request_maps_cycles() {
     let req = Request::Cycles(CyclesRequest {
         cycles: 42,
@@ -115,6 +127,92 @@ fn map_request_maps_cycles() {
 
     let mapped = RootResponseWorkflow::map_request(req);
     assert_eq!(mapped.capability_name(), "RequestCycles");
+}
+
+#[test]
+fn authorize_recycle_rejects_non_child_caller() {
+    let root_pid = p(70);
+    let _restore = configure_root_env(root_pid);
+    SubnetRegistryOps::register_root(root_pid, 1);
+
+    let caller = p(71);
+    let child = p(72);
+    let other_parent = p(73);
+    SubnetRegistryOps::register_unchecked(
+        other_parent,
+        &CanisterRole::new("project_hub"),
+        root_pid,
+        vec![],
+        2,
+    )
+    .expect("register sibling parent");
+    SubnetRegistryOps::register_unchecked(
+        child,
+        &CanisterRole::new("project_instance"),
+        other_parent,
+        vec![],
+        3,
+    )
+    .expect("register child");
+
+    let ctx = RootContext {
+        caller,
+        self_pid: root_pid,
+        is_root_env: true,
+        subnet_id: p(2),
+        now: 5,
+    };
+    let capability = RootCapability::RecycleCanister(RecycleCanisterRequest {
+        canister_pid: child,
+        metadata: None,
+    });
+
+    let err = RootResponseWorkflow::authorize(&ctx, &capability).expect_err("must deny");
+    assert!(
+        err.to_string().contains("is not a child of caller"),
+        "expected non-child denial, got: {err}"
+    );
+}
+
+#[test]
+fn authorize_recycle_allows_direct_child_caller() {
+    let root_pid = p(80);
+    let _restore = configure_root_env(root_pid);
+    SubnetRegistryOps::register_root(root_pid, 1);
+
+    let caller = p(81);
+    let child = p(82);
+    SubnetRegistryOps::register_unchecked(
+        caller,
+        &CanisterRole::new("project_hub"),
+        root_pid,
+        vec![],
+        2,
+    )
+    .expect("register parent");
+    SubnetRegistryOps::register_unchecked(
+        child,
+        &CanisterRole::new("project_instance"),
+        caller,
+        vec![],
+        3,
+    )
+    .expect("register child");
+
+    let ctx = RootContext {
+        caller,
+        self_pid: root_pid,
+        is_root_env: true,
+        subnet_id: p(2),
+        now: 5,
+    };
+    let capability = RootCapability::RecycleCanister(RecycleCanisterRequest {
+        canister_pid: child,
+        metadata: None,
+    });
+
+    RootResponseWorkflow::authorize(&ctx, &capability)
+        .expect("direct child recycle must authorize");
 }
 
 #[test]

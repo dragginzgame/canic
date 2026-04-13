@@ -4,7 +4,7 @@ use super::{
 use crate::{
     InternalError,
     dto::auth::{DelegationRequest, RoleAttestationRequest},
-    dto::rpc::UpgradeCanisterRequest,
+    dto::rpc::{RecycleCanisterRequest, UpgradeCanisterRequest},
     log,
     log::Topic,
     ops::{
@@ -35,6 +35,9 @@ pub(super) fn authorize(
         RootCapability::Provision(_req) => authorize_root_only(ctx),
         RootCapability::Upgrade(req) => {
             authorize_root_only(ctx).and_then(|()| authorize_upgrade(ctx, req))
+        }
+        RootCapability::RecycleCanister(req) => {
+            authorize_root_only(ctx).and_then(|()| authorize_recycle(ctx, req))
         }
         RootCapability::RequestCycles(_) => unreachable!("handled before generic authorization"),
         RootCapability::IssueDelegation(req) => {
@@ -94,6 +97,18 @@ fn authorize_upgrade(ctx: &RootContext, req: &UpgradeCanisterRequest) -> Result<
         .ok_or(RpcWorkflowError::ChildNotFound(req.canister_pid))?;
 
     if registry_entry.parent_pid != Some(ctx.caller) {
+        return Err(RpcWorkflowError::NotChildOfCaller(req.canister_pid, ctx.caller).into());
+    }
+
+    Ok(())
+}
+
+fn authorize_recycle(ctx: &RootContext, req: &RecycleCanisterRequest) -> Result<(), InternalError> {
+    let Some(registry_entry) = SubnetRegistryOps::get(req.canister_pid) else {
+        return Ok(());
+    };
+
+    if ctx.caller != ctx.self_pid && registry_entry.parent_pid != Some(ctx.caller) {
         return Err(RpcWorkflowError::NotChildOfCaller(req.canister_pid, ctx.caller).into());
     }
 

@@ -13,6 +13,7 @@ thread_local! {
 pub enum RootCapabilityMetricKey {
     Provision,
     Upgrade,
+    RecycleCanister,
     RequestCycles,
     IssueDelegation,
     IssueRoleAttestation,
@@ -24,6 +25,7 @@ impl RootCapabilityMetricKey {
         match self {
             Self::Provision => "Provision",
             Self::Upgrade => "Upgrade",
+            Self::RecycleCanister => "RecycleCanister",
             Self::RequestCycles => "RequestCycles",
             Self::IssueDelegation => "IssueDelegation",
             Self::IssueRoleAttestation => "IssueRoleAttestation",

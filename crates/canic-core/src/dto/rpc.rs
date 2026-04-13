@@ -16,6 +16,7 @@ use crate::dto::{
 pub enum Request {
     CreateCanister(CreateCanisterRequest),
     UpgradeCanister(UpgradeCanisterRequest),
+    RecycleCanister(RecycleCanisterRequest),
     Cycles(CyclesRequest),
     IssueDelegation(DelegationRequest),
     IssueRoleAttestation(RoleAttestationRequest),
@@ -36,6 +37,14 @@ impl Request {
     #[must_use]
     pub const fn upgrade_canister(request: UpgradeCanisterRequest) -> Self {
         Self::UpgradeCanister(request)
+    }
+
+    // recycle_canister
+    //
+    // Build a root request for recycling one child canister back into the pool.
+    #[must_use]
+    pub const fn recycle_canister(request: RecycleCanisterRequest) -> Self {
+        Self::RecycleCanister(request)
     }
 
     // cycles
@@ -70,6 +79,7 @@ impl Request {
         match self {
             Self::CreateCanister(_) => RequestFamily::Provision,
             Self::UpgradeCanister(_) => RequestFamily::Upgrade,
+            Self::RecycleCanister(_) => RequestFamily::RecycleCanister,
             Self::Cycles(_) => RequestFamily::RequestCycles,
             Self::IssueDelegation(_) => RequestFamily::IssueDelegation,
             Self::IssueRoleAttestation(_) => RequestFamily::IssueRoleAttestation,
@@ -84,6 +94,7 @@ impl Request {
         match self {
             Self::CreateCanister(req) => req.metadata,
             Self::UpgradeCanister(req) => req.metadata,
+            Self::RecycleCanister(req) => req.metadata,
             Self::Cycles(req) => req.metadata,
             Self::IssueDelegation(req) => req.metadata,
             Self::IssueRoleAttestation(req) => req.metadata,
@@ -98,6 +109,7 @@ impl Request {
         match &mut self {
             Self::CreateCanister(req) => req.metadata = Some(metadata),
             Self::UpgradeCanister(req) => req.metadata = Some(metadata),
+            Self::RecycleCanister(req) => req.metadata = Some(metadata),
             Self::Cycles(req) => req.metadata = Some(metadata),
             Self::IssueDelegation(req) => req.metadata = Some(metadata),
             Self::IssueRoleAttestation(req) => req.metadata = Some(metadata),
@@ -113,6 +125,7 @@ impl Request {
         match &mut self {
             Self::CreateCanister(req) => req.metadata = None,
             Self::UpgradeCanister(req) => req.metadata = None,
+            Self::RecycleCanister(req) => req.metadata = None,
             Self::Cycles(req) => req.metadata = None,
             Self::IssueDelegation(req) => req.metadata = None,
             Self::IssueRoleAttestation(req) => req.metadata = None,
@@ -142,6 +155,7 @@ impl Request {
 pub enum RequestFamily {
     Provision,
     Upgrade,
+    RecycleCanister,
     RequestCycles,
     IssueDelegation,
     IssueRoleAttestation,
@@ -156,6 +170,7 @@ impl RequestFamily {
         match self {
             Self::Provision => "Provision",
             Self::Upgrade => "Upgrade",
+            Self::RecycleCanister => "RecycleCanister",
             Self::RequestCycles => "RequestCycles",
             Self::IssueDelegation => "IssueDelegation",
             Self::IssueRoleAttestation => "IssueRoleAttestation",
@@ -173,6 +188,7 @@ impl RequestFamily {
 pub enum RootCapabilityCommand {
     ProvisionCanister(CreateCanisterRequest),
     UpgradeCanister(UpgradeCanisterRequest),
+    RecycleCanister(RecycleCanisterRequest),
     RequestCycles(CyclesRequest),
     IssueDelegation(DelegationRequest),
     IssueRoleAttestation(RoleAttestationRequest),
@@ -183,6 +199,7 @@ impl From<Request> for RootCapabilityCommand {
         match value {
             Request::CreateCanister(req) => Self::ProvisionCanister(req),
             Request::UpgradeCanister(req) => Self::UpgradeCanister(req),
+            Request::RecycleCanister(req) => Self::RecycleCanister(req),
             Request::Cycles(req) => Self::RequestCycles(req),
             Request::IssueDelegation(req) => Self::IssueDelegation(req),
             Request::IssueRoleAttestation(req) => Self::IssueRoleAttestation(req),
@@ -248,6 +265,19 @@ pub struct UpgradeCanisterRequest {
 }
 
 //
+// RecycleCanisterRequest
+//
+// Recycle-one-child payload.
+//
+
+#[derive(CandidType, Clone, Debug, Deserialize)]
+pub struct RecycleCanisterRequest {
+    pub canister_pid: Principal,
+    #[serde(default)]
+    pub metadata: Option<RootRequestMetadata>,
+}
+
+//
 // CyclesRequest
 //
 // Cycles payload.
@@ -270,6 +300,7 @@ pub struct CyclesRequest {
 pub enum Response {
     CreateCanister(CreateCanisterResponse),
     UpgradeCanister(UpgradeCanisterResponse),
+    RecycleCanister(RecycleCanisterResponse),
     Cycles(CyclesResponse),
     DelegationIssued(DelegationProvisionResponse),
     RoleAttestationIssued(SignedRoleAttestation),
@@ -292,6 +323,14 @@ pub struct CreateCanisterResponse {
 
 #[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
 pub struct UpgradeCanisterResponse {}
+
+//
+// RecycleCanisterResponse
+// Result of recycling one canister back into the pool.
+//
+
+#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+pub struct RecycleCanisterResponse {}
 
 //
 // CyclesResponse
@@ -334,6 +373,10 @@ mod tests {
                 canister_pid: p(2),
                 metadata: None,
             }),
+            Request::recycle_canister(RecycleCanisterRequest {
+                canister_pid: p(7),
+                metadata: None,
+            }),
             Request::cycles(CyclesRequest {
                 cycles: 100,
                 metadata: None,
@@ -371,6 +414,7 @@ mod tests {
             vec![
                 RequestFamily::Provision,
                 RequestFamily::Upgrade,
+                RequestFamily::RecycleCanister,
                 RequestFamily::RequestCycles,
                 RequestFamily::IssueDelegation,
                 RequestFamily::IssueRoleAttestation,

@@ -2,7 +2,9 @@ use crate::{
     cdk::types::Principal,
     dto::{
         error::Error,
-        placement::directory::{DirectoryEntryStatusResponse, DirectoryRegistryResponse},
+        placement::directory::{
+            DirectoryEntryStatusResponse, DirectoryRecoveryResponse, DirectoryRegistryResponse,
+        },
     },
     workflow::placement::directory::{DirectoryWorkflow, query::DirectoryQuery},
 };
@@ -22,6 +24,15 @@ impl DirectoryApi {
     #[must_use]
     pub fn lookup_entry(pool: &str, key_value: &str) -> Option<DirectoryEntryStatusResponse> {
         DirectoryQuery::lookup_entry(pool, key_value)
+    }
+
+    pub async fn recover_entry(
+        pool: &str,
+        key_value: impl AsRef<str>,
+    ) -> Result<DirectoryRecoveryResponse, Error> {
+        DirectoryWorkflow::recover_entry(pool, key_value.as_ref())
+            .await
+            .map_err(Error::from)
     }
 
     pub async fn resolve_or_create(

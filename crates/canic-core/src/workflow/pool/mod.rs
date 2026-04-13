@@ -7,7 +7,7 @@ pub mod scheduler;
 use crate::{
     InternalError, InternalErrorOrigin,
     cdk::types::TC,
-    domain::policy::pool::{PoolPolicyError, authority::require_pool_admin},
+    domain::policy::pool::authority::require_pool_admin,
     dto::pool::{CanisterPoolStatus, PoolBatchResult},
     ids::IntentResourceKey,
     ops::{
@@ -174,9 +174,11 @@ impl PoolWorkflow {
     pub async fn pool_recycle_canister(pid: Principal) -> Result<(), InternalError> {
         Self::require_pool_admin()?;
 
-        // Must exist in registry to be recycled
-        let entry =
-            SubnetRegistryOps::get(pid).ok_or(PoolPolicyError::NotRegisteredInSubnet(pid))?;
+        // Recycling a missing child is an idempotent no-op so stale directory cleanup
+        // never depends on the provisional child still existing.
+        let Some(entry) = SubnetRegistryOps::get(pid) else {
+            return Ok(());
+        };
 
         let role = Some(entry.role.clone());
         let module_hash = entry.module_hash.clone();

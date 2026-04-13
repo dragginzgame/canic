@@ -9,8 +9,9 @@ use crate::{
         RoleAttestationRequest,
     },
     dto::rpc::{
-        CreateCanisterParent, CreateCanisterRequest, CreateCanisterResponse, Response,
-        UpgradeCanisterRequest, UpgradeCanisterResponse,
+        CreateCanisterParent, CreateCanisterRequest, CreateCanisterResponse,
+        RecycleCanisterRequest, RecycleCanisterResponse, Response, UpgradeCanisterRequest,
+        UpgradeCanisterResponse,
     },
     format::display_optional,
     log,
@@ -30,6 +31,7 @@ use crate::{
     workflow::{
         auth::DelegationWorkflow,
         canister_lifecycle::{CanisterLifecycleEvent, CanisterLifecycleWorkflow},
+        pool::PoolWorkflow,
         rpc::RpcWorkflowError,
     },
 };
@@ -44,6 +46,7 @@ pub(super) async fn execute_root_capability(
     let result = match capability {
         RootCapability::Provision(req) => execute_provision(ctx, &req).await,
         RootCapability::Upgrade(req) => execute_upgrade(&req).await,
+        RootCapability::RecycleCanister(req) => execute_recycle(&req).await,
         RootCapability::RequestCycles(req) => {
             let response = if let Some(grant) = authorized_cycles {
                 nonroot_cycles::execute_authorized_request_cycles(ctx, grant).await
@@ -110,6 +113,12 @@ async fn execute_upgrade(req: &UpgradeCanisterRequest) -> Result<Response, Inter
     CanisterLifecycleWorkflow::apply(event).await?;
 
     Ok(Response::UpgradeCanister(UpgradeCanisterResponse {}))
+}
+
+async fn execute_recycle(req: &RecycleCanisterRequest) -> Result<Response, InternalError> {
+    PoolWorkflow::pool_recycle_canister(req.canister_pid).await?;
+
+    Ok(Response::RecycleCanister(RecycleCanisterResponse {}))
 }
 
 async fn execute_issue_delegation(

@@ -1,8 +1,8 @@
 use crate::{
     dto::auth::{DelegationRequest, RoleAttestationRequest},
     dto::rpc::{
-        CreateCanisterParent, CreateCanisterRequest, CyclesRequest, Request, RootRequestMetadata,
-        UpgradeCanisterRequest,
+        CreateCanisterParent, CreateCanisterRequest, CyclesRequest, RecycleCanisterRequest,
+        Request, RootRequestMetadata, UpgradeCanisterRequest,
     },
     ops::runtime::metrics::root_capability::RootCapabilityMetricKey,
 };
@@ -11,6 +11,7 @@ use crate::{
 pub(super) enum RootCapability {
     Provision(CreateCanisterRequest),
     Upgrade(UpgradeCanisterRequest),
+    RecycleCanister(RecycleCanisterRequest),
     RequestCycles(CyclesRequest),
     IssueDelegation(DelegationRequest),
     IssueRoleAttestation(RoleAttestationRequest),
@@ -39,6 +40,10 @@ impl RootCapability {
             Self::Upgrade(_) => RootCapabilityDescriptor {
                 name: "Upgrade",
                 key: RootCapabilityMetricKey::Upgrade,
+            },
+            Self::RecycleCanister(_) => RootCapabilityDescriptor {
+                name: "RecycleCanister",
+                key: RootCapabilityMetricKey::RecycleCanister,
             },
             Self::RequestCycles(_) => RootCapabilityDescriptor {
                 name: "RequestCycles",
@@ -71,6 +76,11 @@ impl RootCapability {
                 metadata,
                 payload_hash: hash_upgrade_payload(req),
             }),
+            Self::RecycleCanister(req) => req.metadata.map(|metadata| RootReplayInput {
+                descriptor: self.descriptor(),
+                metadata,
+                payload_hash: hash_recycle_payload(req),
+            }),
             Self::RequestCycles(req) => req.metadata.map(|metadata| RootReplayInput {
                 descriptor: self.descriptor(),
                 metadata,
@@ -94,6 +104,7 @@ impl RootCapability {
         match self {
             Self::Provision(req) => hash_provision_payload(req),
             Self::Upgrade(req) => hash_upgrade_payload(req),
+            Self::RecycleCanister(req) => hash_recycle_payload(req),
             Self::RequestCycles(req) => hash_request_cycles_payload(req),
             Self::IssueDelegation(req) => hash_issue_delegation_payload(req),
             Self::IssueRoleAttestation(req) => hash_issue_role_attestation_payload(req),
@@ -136,6 +147,13 @@ fn hash_upgrade_payload(req: &UpgradeCanisterRequest) -> [u8; 32] {
     super::replay::finish_payload_hash(hasher)
 }
 
+fn hash_recycle_payload(req: &RecycleCanisterRequest) -> [u8; 32] {
+    let mut hasher = super::replay::payload_hasher();
+    super::replay::hash_str(&mut hasher, "RecycleCanister");
+    super::replay::hash_principal(&mut hasher, &req.canister_pid);
+    super::replay::finish_payload_hash(hasher)
+}
+
 fn hash_request_cycles_payload(req: &CyclesRequest) -> [u8; 32] {
     let mut hasher = super::replay::payload_hasher();
     super::replay::hash_str(&mut hasher, "RequestCycles");
@@ -173,6 +191,7 @@ pub(super) fn map_request(req: Request) -> RootCapability {
     match req {
         Request::CreateCanister(req) => RootCapability::Provision(req),
         Request::UpgradeCanister(req) => RootCapability::Upgrade(req),
+        Request::RecycleCanister(req) => RootCapability::RecycleCanister(req),
         Request::Cycles(req) => RootCapability::RequestCycles(req),
         Request::IssueDelegation(req) => RootCapability::IssueDelegation(req),
         Request::IssueRoleAttestation(req) => RootCapability::IssueRoleAttestation(req),
