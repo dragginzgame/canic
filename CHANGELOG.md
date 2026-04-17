@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.27.x] - 2026-04-13 - Topology Taxonomy
 
+- `0.27.7` switches `canic-cdk` over to the canonical upstream `icrc-ledger-types` `Account` and `Subaccount` definitions, so downstream code can stay on Canic’s `cdk::types` facade while aligning with the standard ICRC ledger wire types instead of Canic’s local copy.
+- `0.27.6` rolls the shared `ctor` dependency back to the earlier `0.8` line after the brief `0.10` upgrade in `0.27.5`, keeping Canic's constructor-macro path on the previously working version while retagging the shared installer/docs to point at the new patch.
 - `0.27.5` teaches the shared `install-dev` / `update-dev` bootstrap path to provision Python 3, so local developer setup covers the Python-based helper lane without asking contributors to install it separately first.
 - `0.27.4` removes the remaining `derive_more` dependency from the published crate set by replacing a few simple wrapper derives with explicit trait impls, which keeps the public workspace dependency surface smaller and more predictable without changing behavior.
 - `0.27.3` hardens `directory` placement under failure by making async create finalization claim-owned, treating missing provisional children as already cleaned during stale recovery, and routing resolve/recover through one shared pending-state classifier so key liveness and repair behavior stop drifting.
