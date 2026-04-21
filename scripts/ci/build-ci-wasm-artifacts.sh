@@ -5,6 +5,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT_DIR"
 source "$ROOT_DIR/scripts/app/reference_canisters.sh"
+source "$ROOT_DIR/scripts/ci/require_dfx.sh"
 
 require_cmd() {
     local cmd="$1"
@@ -21,6 +22,7 @@ require_cmd() {
 require_cmd cargo
 require_cmd candid-extractor
 require_cmd ic-wasm
+require_dfx_ready
 
 # Build the middle fast artifacts by default so PocketIC/test harnesses and
 # local demo flows get smaller faster wasm without paying full release cost.

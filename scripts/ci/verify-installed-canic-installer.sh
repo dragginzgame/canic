@@ -7,6 +7,8 @@ INSTALL_ROOT="$TMP_ROOT/install-root"
 BIN_ROOT="$INSTALL_ROOT/bin"
 SPLIT_DFX_ROOT="$TMP_ROOT/split-dfx-root"
 
+source "$ROOT/scripts/ci/require_dfx.sh"
+
 cleanup() {
     rm -rf "$TMP_ROOT"
 }
@@ -14,6 +16,8 @@ cleanup() {
 trap cleanup EXIT
 
 main() {
+    require_dfx_ready
+
     cargo install --offline --locked --path "$ROOT/crates/canic-installer" --root "$INSTALL_ROOT" >/dev/null
 
     (

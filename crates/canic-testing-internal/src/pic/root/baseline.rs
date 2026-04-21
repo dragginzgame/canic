@@ -47,6 +47,7 @@ fn capture_cached_root_baseline(
 ) -> CachedPicBaseline<RootBaselineMetadata> {
     let controller_ids = std::iter::once(initialized.metadata.root_id)
         .chain(initialized.metadata.subnet_index.values().copied())
+        .chain(initialized.metadata.managed_store_pids.iter().copied())
         .collect::<Vec<_>>();
 
     progress(spec, "capturing cached root snapshots");

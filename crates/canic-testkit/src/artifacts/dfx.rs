@@ -142,8 +142,7 @@ fn build_stamp_matches(
     extra_env: &[(&str, &str)],
 ) -> bool {
     fs::read_to_string(workspace_root.join(DFX_BUILD_ENV_STAMP_RELATIVE))
-        .map(|current| current == build_stamp_contents(network, profile, extra_env))
-        .unwrap_or(false)
+        .is_ok_and(|current| current == build_stamp_contents(network, profile, extra_env))
 }
 
 fn write_build_stamp(
@@ -173,7 +172,7 @@ fn build_stamp_contents(
     ];
 
     let mut extra = extra_env.to_vec();
-    extra.sort_unstable_by(|(left, _), (right, _)| left.cmp(right));
+    extra.sort_unstable_by_key(|(left, _)| *left);
     lines.extend(
         extra
             .into_iter()
