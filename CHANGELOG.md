@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.27.x] - 2026-04-13 - Topology Taxonomy
 
+- `0.27.8` bumps the pinned workspace Rust toolchain to `1.95.0`, aligns CI and the shared developer bootstrap with that compiler, and folds the required new Clippy cleanup into the tree so the standard warning-as-error checks stay green on the newer toolchain.
 - `0.27.7` switches `canic-cdk` over to the canonical upstream `icrc-ledger-types` `Account` and `Subaccount` definitions, so downstream code can stay on Canic’s `cdk::types` facade while aligning with the standard ICRC ledger wire types instead of Canic’s local copy.
 - `0.27.6` rolls the shared `ctor` dependency back to the earlier `0.8` line after the brief `0.10` upgrade in `0.27.5`, keeping Canic's constructor-macro path on the previously working version while retagging the shared installer/docs to point at the new patch.
 - `0.27.5` teaches the shared `install-dev` / `update-dev` bootstrap path to provision Python 3, so local developer setup covers the Python-based helper lane without asking contributors to install it separately first.

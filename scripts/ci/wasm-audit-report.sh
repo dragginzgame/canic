@@ -10,6 +10,7 @@ DEFAULT_PROFILE="release"
 ROOT_DIR="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 cd "$ROOT_DIR"
 source "$ROOT_DIR/scripts/app/reference_canisters.sh"
+source "$ROOT_DIR/scripts/ci/require_dfx.sh"
 
 DEFAULT_CANISTERS=("${REFERENCE_CANISTERS[@]}")
 
@@ -802,10 +803,7 @@ else
         echo "cargo is required unless WASM_AUDIT_SKIP_BUILD=1" >&2
         exit 1
     fi
-    if ! has_cmd dfx; then
-        echo "dfx is required unless WASM_AUDIT_SKIP_BUILD=1" >&2
-        exit 1
-    fi
+    require_dfx_ready
     build_and_cache_artifacts
     record_verification "cargo build --target wasm32-unknown-unknown ... && dfx build ..." "PASS" "built and cached raw/shrunk artifacts for $(profile_command_note)"
 fi

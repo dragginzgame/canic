@@ -26,7 +26,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@v1
         with:
-          toolchain: 1.94.1
+          toolchain: 1.95.0
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
       - name: Install fmt tools
@@ -35,6 +35,15 @@ jobs:
         run: rustup target add wasm32-unknown-unknown
       - name: Install canister build tools
         run: cargo install --locked candid-extractor ic-wasm
+      - name: Install dfx
+        shell: bash
+        run: |
+          sh -ci "$(curl -fsSL https://internetcomputer.org/install.sh)"
+          echo "$HOME/bin:$HOME/.local/bin:$HOME/.local/share/dfx/bin" >> "$GITHUB_PATH"
+      - name: Check dfx
+        run: dfx --version
+      - name: Start local dfx
+        run: dfx start --background --clean --system-canisters
       - name: Cache PocketIC server
         uses: actions/cache@v4
         with:
@@ -70,7 +79,7 @@ jobs:
           clean: true
       - uses: dtolnay/rust-toolchain@v1
         with:
-          toolchain: 1.94.1
+          toolchain: 1.95.0
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
       - name: Install fmt tools
@@ -79,6 +88,15 @@ jobs:
         run: rustup target add wasm32-unknown-unknown
       - name: Install canister build tools
         run: cargo install --locked candid-extractor ic-wasm
+      - name: Install dfx
+        shell: bash
+        run: |
+          sh -ci "$(curl -fsSL https://internetcomputer.org/install.sh)"
+          echo "$HOME/bin:$HOME/.local/bin:$HOME/.local/share/dfx/bin" >> "$GITHUB_PATH"
+      - name: Check dfx
+        run: dfx --version
+      - name: Start local dfx
+        run: dfx start --background --clean --system-canisters
       - name: Cache PocketIC server
         uses: actions/cache@v4
         with:

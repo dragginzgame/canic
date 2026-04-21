@@ -52,11 +52,7 @@ pub(super) fn run_scenario(scenario: &AuditScenario) -> ScenarioResult {
                 checkpoint_rows,
             )
         };
-    let avg_local_instructions = if count == 0 {
-        0
-    } else {
-        total_instructions / count
-    };
+    let avg_local_instructions = total_instructions.checked_div(count).unwrap_or(0);
 
     ScenarioResult {
         scenario: *scenario,
@@ -126,11 +122,7 @@ fn run_standalone_scenario(scenario: &AuditScenario) -> Option<ScenarioResult> {
                 checkpoint_rows,
             )
         };
-    let avg_local_instructions = if count == 0 {
-        0
-    } else {
-        total_instructions / count
-    };
+    let avg_local_instructions = total_instructions.checked_div(count).unwrap_or(0);
 
     Some(ScenarioResult {
         scenario: *scenario,
@@ -657,11 +649,7 @@ fn checkpoint_deltas(
                 label: label.clone(),
                 count,
                 total_local_instructions,
-                avg_local_instructions: if count == 0 {
-                    0
-                } else {
-                    total_local_instructions / count
-                },
+                avg_local_instructions: total_local_instructions.checked_div(count).unwrap_or(0),
             })
         })
         .collect::<Vec<_>>();

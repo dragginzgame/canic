@@ -231,7 +231,7 @@ fn authorize_issue_role_attestation(
 }
 
 pub(super) fn max_role_attestation_ttl_seconds() -> u64 {
-    ConfigOps::role_attestation_config()
-        .map(|cfg| cfg.max_ttl_secs)
-        .unwrap_or(DEFAULT_MAX_ROLE_ATTESTATION_TTL_SECONDS)
+    ConfigOps::role_attestation_config().map_or(DEFAULT_MAX_ROLE_ATTESTATION_TTL_SECONDS, |cfg| {
+        cfg.max_ttl_secs
+    })
 }

@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 const IMPLICIT_WASM_STORE_ROLE: CanisterRole = CanisterRole::WASM_STORE;
 #[cfg(canic_test_small_wasm_store)]
-const IMPLICIT_WASM_STORE_MAX_STORE_BYTES: u64 = 4_000_000;
+const IMPLICIT_WASM_STORE_MAX_STORE_BYTES: u64 = 3_500_000;
 #[cfg(not(canic_test_small_wasm_store))]
 const IMPLICIT_WASM_STORE_MAX_STORE_BYTES: u64 = 40_000_000;
 #[cfg(canic_test_small_wasm_store)]
