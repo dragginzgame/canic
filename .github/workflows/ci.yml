@@ -52,10 +52,7 @@ jobs:
       - name: Install canister build tools
         run: cargo install --locked candid-extractor ic-wasm
       - name: Install dfx
-        shell: bash
-        run: |
-          sh -ci "$(curl -fsSL https://internetcomputer.org/install.sh)"
-          echo "$HOME/bin:$HOME/.local/bin:$HOME/.local/share/dfx/bin" >> "$GITHUB_PATH"
+        uses: dfinity/setup-dfx@main
       - name: Check dfx
         run: dfx --version
       - name: Start local dfx
@@ -105,10 +102,7 @@ jobs:
       - name: Install canister build tools
         run: cargo install --locked candid-extractor ic-wasm
       - name: Install dfx
-        shell: bash
-        run: |
-          sh -ci "$(curl -fsSL https://internetcomputer.org/install.sh)"
-          echo "$HOME/bin:$HOME/.local/bin:$HOME/.local/share/dfx/bin" >> "$GITHUB_PATH"
+        uses: dfinity/setup-dfx@main
       - name: Check dfx
         run: dfx --version
       - name: Start local dfx
