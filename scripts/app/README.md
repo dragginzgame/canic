@@ -147,7 +147,7 @@ CANIC_DFX_ROOT=/path/to/repo
 ```
 
 The first root drives Cargo and config discovery; the second root owns emitted
-artifacts and the hidden generated bootstrap-store wrapper.
+artifacts and the generated bootstrap-store wrapper.
 
 If canister crates live under a different directory such as
 `backend/src/canisters`, also set:

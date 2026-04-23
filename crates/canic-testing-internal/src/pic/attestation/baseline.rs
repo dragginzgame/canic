@@ -9,7 +9,7 @@ use std::sync::{Mutex, OnceLock};
 use super::{
     build::{build_normal_root_wasm, build_pic, build_test_root_wasm},
     capability::create_verifier_canister,
-    fixture::{BaselinePicGuard, CachedInstalledRoot, progress},
+    fixture::{CachedInstalledRoot, progress},
 };
 
 const ROOT_INSTALL_CYCLES: u128 = 80_000_000_000_000;
@@ -23,7 +23,7 @@ static ROOT_SIGNER_NO_TEST_HOOK_BASELINE: OnceLock<
     Mutex<Option<CachedPicBaseline<AttestationBaselineMetadata>>>,
 > = OnceLock::new();
 
-pub(super) struct AttestationBaselineMetadata {
+pub struct AttestationBaselineMetadata {
     root_id: Principal,
     wasm_store_id: Principal,
     signer_id: Principal,
@@ -93,7 +93,7 @@ fn install_cached_root_fixture(cache_kind: AttestationCacheKind) -> CachedInstal
         root_id: baseline.metadata().root_id,
         signer_id: baseline.metadata().signer_id,
         verifier_id: baseline.metadata().verifier_id,
-        pic: BaselinePicGuard::new(baseline),
+        pic: baseline,
     }
 }
 

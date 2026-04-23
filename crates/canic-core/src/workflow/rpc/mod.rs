@@ -1,4 +1,3 @@
-pub mod adapter;
 pub mod request;
 
 use crate::{
