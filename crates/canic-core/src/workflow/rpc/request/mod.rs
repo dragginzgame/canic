@@ -6,7 +6,7 @@ use crate::{
         CreateCanisterParent, CreateCanisterResponse, CyclesResponse, UpgradeCanisterResponse,
     },
     ops::rpc::request::RequestOps,
-    workflow::{prelude::*, rpc::adapter::RpcAdapter},
+    workflow::prelude::*,
 };
 
 ///
@@ -24,18 +24,13 @@ impl RpcRequestWorkflow {
     where
         A: CandidType + Send + Sync,
     {
-        let parent = RpcAdapter::create_canister_parent_from_dto(parent);
-        let response = RequestOps::create_canister(canister_role, parent, extra).await?;
-
-        Ok(RpcAdapter::create_canister_response_to_dto(response))
+        RequestOps::create_canister(canister_role, parent, extra).await
     }
 
     pub async fn upgrade_canister_request(
         canister_pid: Principal,
     ) -> Result<UpgradeCanisterResponse, InternalError> {
-        let response = RequestOps::upgrade_canister(canister_pid).await?;
-
-        Ok(RpcAdapter::upgrade_canister_response_to_dto(response))
+        RequestOps::upgrade_canister(canister_pid).await
     }
 
     pub async fn request_cycles(cycles: u128) -> Result<CyclesResponse, InternalError> {

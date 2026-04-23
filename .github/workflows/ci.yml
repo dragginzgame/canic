@@ -24,6 +24,8 @@ jobs:
   msrv:
     if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    env:
+      RUSTUP_TOOLCHAIN: ${{ env.CANIC_MSRV }}
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@v1
@@ -38,6 +40,8 @@ jobs:
   checks:
     if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    env:
+      RUSTUP_TOOLCHAIN: ${{ env.CANIC_INTERNAL_TOOLCHAIN }}
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@v1
@@ -48,7 +52,7 @@ jobs:
       - name: Install fmt tools
         run: cargo install cargo-sort cargo-sort-derives --locked
       - name: Install wasm target
-        run: rustup target add wasm32-unknown-unknown
+        run: rustup target add --toolchain ${{ env.CANIC_INTERNAL_TOOLCHAIN }} wasm32-unknown-unknown
       - name: Install canister build tools
         run: cargo install --locked candid-extractor ic-wasm
       - name: Install dfx
@@ -85,6 +89,8 @@ jobs:
   tag_checks:
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
+    env:
+      RUSTUP_TOOLCHAIN: ${{ env.CANIC_INTERNAL_TOOLCHAIN }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -98,7 +104,7 @@ jobs:
       - name: Install fmt tools
         run: cargo install cargo-sort cargo-sort-derives --locked
       - name: Install wasm target
-        run: rustup target add wasm32-unknown-unknown
+        run: rustup target add --toolchain ${{ env.CANIC_INTERNAL_TOOLCHAIN }} wasm32-unknown-unknown
       - name: Install canister build tools
         run: cargo install --locked candid-extractor ic-wasm
       - name: Install dfx

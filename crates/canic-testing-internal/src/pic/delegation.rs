@@ -13,9 +13,9 @@ const USER_SHARD_LOCAL_PUBLIC_KEY_TEST: &str = "user_shard_local_public_key_test
 
 // Create one user shard through the reference `user_hub` path.
 #[must_use]
-pub fn create_user_shard(pic: &Pic, user_hub_pid: Principal, tenant: Principal) -> Principal {
+pub fn create_user_shard(pic: &Pic, user_hub_pid: Principal, user_pid: Principal) -> Principal {
     let created: Result<Principal, Error> = pic
-        .update_call(user_hub_pid, "create_account", (tenant,))
+        .update_call(user_hub_pid, "create_account", (user_pid,))
         .expect("create_account transport failed");
     created.expect("create_account application failed")
 }

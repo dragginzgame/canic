@@ -101,11 +101,11 @@ assert_probe_outputs() {
     local did_path="$DOWNSTREAM_ROOT/.dfx/local/canisters/wasm_store/wasm_store.did"
 
     [ ! -d "$PACKAGE_ROOT/canic-wasm-store-$VERSION" ] || {
-        echo "expected isolated package root to exclude canic-wasm-store so the hidden wrapper path is exercised" >&2
+        echo "expected isolated package root to exclude canic-wasm-store so the generated wrapper path is exercised" >&2
         exit 1
     }
     [ -f "$wrapper_manifest" ] || {
-        echo "expected generated hidden wasm_store wrapper at $wrapper_manifest" >&2
+        echo "expected generated wasm_store wrapper at $wrapper_manifest" >&2
         exit 1
     }
     [ -s "$wasm_path" ] || {

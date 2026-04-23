@@ -15,28 +15,7 @@ pub struct CachedInstalledRoot {
     pub verifier_id: Option<Principal>,
 }
 
-///
-/// BaselinePicGuard
-///
-
-pub struct BaselinePicGuard<'a> {
-    baseline: CachedPicBaselineGuard<'a, AttestationBaselineMetadata>,
-}
-
-impl<'a> BaselinePicGuard<'a> {
-    // Wrap one cached attestation baseline guard in the fixture-facing Pic view.
-    pub(super) const fn new(
-        baseline: CachedPicBaselineGuard<'a, AttestationBaselineMetadata>,
-    ) -> Self {
-        Self { baseline }
-    }
-
-    /// Borrow the PocketIC wrapper behind this cached attestation baseline guard.
-    #[must_use]
-    pub fn pic(&self) -> &canic_testkit::pic::Pic {
-        self.baseline.pic()
-    }
-}
+pub type BaselinePicGuard<'a> = CachedPicBaselineGuard<'a, AttestationBaselineMetadata>;
 
 // Emit one short progress marker for long grouped PocketIC scenario tests.
 pub(super) fn progress(phase: &str) {
