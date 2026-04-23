@@ -25,7 +25,7 @@ The crate was historically known as **ICU** (Internet Computer Utilities). All c
 * 📦 **Managed `wasm_store` publication** – stage and publish child canister WASMs with hash tracking while keeping `root` thin.
 * 🪵 **Configurable logging** – ring/age retention with second‑level timestamps and paged log/query helpers; provisioning calls log caller/parent context on `create_canister_request` failures to simplify bootstrap debugging.
 * ♻️ **Lifecycle helpers** – shard policies, pool capacity, scaling helpers, and sync cascades keep fleets healthy.
-* 🧪 **Ready for CI** – Rust 2024 edition, toolchain pinned to Rust 1.95.0, with `cargo fmt`, `cargo clippy -- -D warnings`, and `cargo test` wired via `make` targets.
+* 🧪 **Ready for CI** – Rust 2024 edition, internal toolchain pinned to Rust `1.95.0`, published crates declaring MSRV `1.91.0`, and `cargo fmt`, `cargo clippy -- -D warnings`, plus `cargo test` wired via `make` targets.
 
 ## 📁 Repository Layout
 
@@ -155,7 +155,7 @@ curl -fsSL https://raw.githubusercontent.com/dragginzgame/canic/v0.27.8/scripts/
 That script installs:
 
 - Rust via `rustup` if it is not already installed
-- Rust `1.95.0`
+- Rust `1.95.0` for the repo-local toolchain
 - `rustfmt` and `clippy`
 - `wasm32-unknown-unknown`
 - `candid-extractor`
@@ -164,7 +164,8 @@ That script installs:
 - `canic-installer` `0.27.8`
 - `dfx` if it is not already installed
 
-It bootstraps Rust when needed and runs the Cargo installs through the pinned `1.95.0` toolchain instead of relying on whatever default toolchain happens to be active locally.
+It bootstraps Rust when needed and runs the Cargo installs through the pinned `1.95.0` internal toolchain instead of relying on whatever default toolchain happens to be active locally.
+Published workspace crates still declare MSRV `1.91.0` for downstream source builds.
 
 When run from a repo checkout, it also configures `.githooks/` automatically if present. The setup script installs tools only; it does not start a local `dfx` replica for you.
 
@@ -317,7 +318,8 @@ Use `PageRequest { limit, offset }` to avoid passing raw integers into queries.
 * Role-attestation PocketIC flow: `cargo test -p canic-core --test pic_role_attestation capability_endpoint_policy_and_structural_paths -- --nocapture`
 * Root replay dispatcher coverage: `cargo test -p canic-tests --test root_suite --locked upgrade_routes_through_dispatcher_non_skip_path -- --nocapture --test-threads=1`
 
-`rust-toolchain.toml` pins the toolchain so CI and local builds stay in sync.
+`rust-toolchain.toml` pins the internal toolchain so CI and local builds stay in sync.
+Published crates declare MSRV `1.91.0` separately through `workspace.package.rust-version`.
 
 ## Examples
 
