@@ -25,7 +25,7 @@ fn configure_cfg() {
     }
 }
 
-// Build the hidden bootstrap wasm_store artifact so `build_root!` can embed it.
+// Build the implicit bootstrap wasm_store artifact so `build_root!` can embed it.
 fn build_bootstrap_wasm_store(
     workspace_root: &std::path::Path,
     manifest_dir: &std::path::Path,
@@ -34,7 +34,7 @@ fn build_bootstrap_wasm_store(
     let bootstrap_target_dir = outer_target_dir.join("delegation_root_stub_bootstrap_wasm_store");
     fs::create_dir_all(&bootstrap_target_dir).expect("create bootstrap wasm_store target dir");
 
-    let mut bootstrap_cmd = Command::new("cargo");
+    let mut bootstrap_cmd = cargo_command();
     bootstrap_cmd.current_dir(workspace_root);
     bootstrap_cmd.env("CANIC_WORKSPACE_ROOT", workspace_root);
     bootstrap_cmd.env("CANIC_CONFIG_PATH", manifest_dir.join("canic.toml"));
@@ -70,7 +70,7 @@ fn build_embedded_test_canisters(
     let target_dir = outer_target_dir.join("delegation_root_stub_embedded_wasm");
     fs::create_dir_all(&target_dir).expect("create embedded wasm target dir");
 
-    let mut cmd = Command::new("cargo");
+    let mut cmd = cargo_command();
     cmd.current_dir(workspace_root);
     cmd.env("CARGO_TARGET_DIR", &target_dir);
     if let Some(flag) = env::var_os("CANIC_TEST_DELEGATION_MATERIAL") {
@@ -159,4 +159,15 @@ fn discover_workspace_root(manifest_dir: &std::path::Path) -> PathBuf {
         "unable to discover workspace root from {}; expected an ancestor Cargo.toml with [workspace]",
         manifest_dir.display()
     );
+}
+
+fn cargo_command() -> Command {
+    let cargo = env::var_os("CARGO").unwrap_or_else(|| "cargo".into());
+    let mut command = Command::new(cargo);
+
+    if let Some(toolchain) = env::var_os("RUSTUP_TOOLCHAIN") {
+        command.env("RUSTUP_TOOLCHAIN", toolchain);
+    }
+
+    command
 }

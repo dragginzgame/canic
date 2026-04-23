@@ -11,13 +11,14 @@
 //!
 //! This module intentionally contains **no business logic**, **no policy
 //! enforcement**, and **no orchestration**. It exists solely to adapt endpoint
-//! functions to shared cross-cutting concerns (currently performance tracking).
+//! functions to shared cross-cutting concerns (currently runtime bootstrap
+//! readiness plus performance tracking).
 //!
 //! **DO NOT MERGE INTO WORKFLOW.**
 //!
 //! `dispatch` operates strictly at the *endpoint boundary*. It must remain a
 //! thin adapter layer and must not:
-//! - call `ops`
+//! - call application `ops` beyond minimal runtime bootstrap readiness
 //! - call `storage`
 //! - perform sequencing or lifecycle coordination
 //! - enforce access, domain, or policy rules

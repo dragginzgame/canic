@@ -1,12 +1,15 @@
+//! Workspace and DFX root discovery helpers for downstream install tooling.
+
 use serde::Deserialize;
 use serde_json::Value as JsonValue;
 use std::{
     collections::HashMap,
     fs,
     path::{Path, PathBuf},
-    process::Command,
     sync::{Mutex, OnceLock},
 };
+
+use crate::cargo_command;
 
 const WORKSPACE_MANIFEST_RELATIVE: &str = "Cargo.toml";
 const DFX_CONFIG_FILE: &str = "dfx.json";
@@ -25,7 +28,7 @@ struct CargoMetadataPackage {
 
 static CARGO_METADATA_CACHE: OnceLock<Mutex<HashMap<PathBuf, CargoMetadata>>> = OnceLock::new();
 
-// Resolve the nearest Cargo workspace root from one file or directory path.
+// Resolve the nearest Cargo workspace root from a starting file or directory path.
 pub fn discover_workspace_root_from(path: &Path) -> Option<PathBuf> {
     let start = if path.is_file() { path.parent()? } else { path };
 
@@ -44,7 +47,7 @@ pub fn discover_workspace_root_from(path: &Path) -> Option<PathBuf> {
     None
 }
 
-// Resolve the nearest DFX root from one file or directory path.
+// Resolve the nearest DFX root from a starting file or directory path.
 pub fn discover_dfx_root_from(path: &Path) -> Option<PathBuf> {
     let start = if path.is_file() { path.parent()? } else { path };
 
@@ -58,7 +61,7 @@ pub fn discover_dfx_root_from(path: &Path) -> Option<PathBuf> {
     None
 }
 
-// Normalize one workspace-relative path against the chosen workspace root.
+// Normalize a workspace-relative path against the chosen workspace root.
 pub fn normalize_workspace_path(workspace_root: &Path, path: PathBuf) -> PathBuf {
     if path.is_absolute() {
         path
@@ -67,7 +70,7 @@ pub fn normalize_workspace_path(workspace_root: &Path, path: PathBuf) -> PathBuf
     }
 }
 
-// Discover the manifest for one role using workspace metadata first, then package naming.
+// Discover the manifest for a role using workspace metadata first, then package naming.
 pub fn discover_canister_manifest_from_metadata(
     workspace_root: &Path,
     role_name: &str,
@@ -84,7 +87,7 @@ pub fn discover_canister_manifest_from_metadata(
         .map(|package| package.manifest_path)
 }
 
-// Check whether one package declares the requested Canic role in Cargo metadata.
+// Check whether a package declares the requested Canic role in Cargo metadata.
 fn package_declares_role(package: &CargoMetadataPackage, role_name: &str) -> bool {
     package
         .metadata
@@ -97,7 +100,7 @@ fn package_declares_role(package: &CargoMetadataPackage, role_name: &str) -> boo
 
 // Load Cargo workspace metadata once from the requested workspace root.
 fn cargo_metadata(workspace_root: &Path) -> Result<CargoMetadata, Box<dyn std::error::Error>> {
-    let output = Command::new("cargo")
+    let output = cargo_command()
         .current_dir(workspace_root)
         .args([
             "metadata",

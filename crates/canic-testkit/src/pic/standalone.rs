@@ -115,7 +115,7 @@ pub fn try_install_prebuilt_canister_with_cycles(
 }
 
 // Install one non-root Canic canister into a fresh PocketIC instance with
-// explicit local env bootstrap fields, no hierarchy directories, and the
+// explicit local env bootstrap fields, empty topology indexes, and the
 // internal test endpoint surface enabled for that test build.
 #[must_use]
 pub fn install_standalone_canister(
@@ -162,8 +162,8 @@ fn ensure_canister_wasm_ready(
     build_internal_test_wasm_canisters(workspace_root, target_dir, &[crate_name], profile);
 }
 
-// Encode one explicit local non-root init payload without any hierarchy
-// directory snapshots.
+// Encode one explicit local non-root init payload without any preloaded
+// topology index snapshots.
 fn standalone_init_args(role: CanisterRole) -> Vec<u8> {
     let root_pid = Fake::principal(1);
     let payload = CanisterInitPayload {

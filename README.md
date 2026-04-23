@@ -42,15 +42,15 @@ The crate was historically known as **ICU** (Internet Computer Utilities). All c
   * `src/bootstrap/` – config bootstrap and embedded-config helpers.
   * `src/config/` – configuration loaders, validators, and schema helpers.
   * `src/dispatch/` – endpoint routing helpers used by the macros.
-  * `src/domain/` – pure domain and policy logic.
+  * `src/domain/` – pure value and decision helpers used by the runtime.
   * `src/dto/` – candid‑friendly DTOs for paging and exports.
   * `src/ids/` – strongly‑typed role identifiers (`CanisterRole`, `SubnetRole`, etc.).
   * `src/infra/` – low‑level IC capability bindings (no domain logic).
   * `src/log.rs` – logging macros.
   * `src/lifecycle/` – synchronous lifecycle adapters that restore env and schedule async bootstrap.
-  * `src/ops/` – application services bridging model to endpoints (includes single‑step IC/timer façades).
+  * `src/ops/` – application services bridging storage/runtime state to endpoints (includes single‑step IC/timer façades).
   * `src/storage/` – persisted schemas and storage helpers backing stable memory.
-  * `src/view/` – internal read‑only projections used by workflow/policy/ops.
+  * `src/view/` – internal read‑only projections used by workflow/domain/ops.
   * `src/workflow/` – orchestration, retries, cascades, and multi‑step behaviors.
 * `crates/canic-installer/` – published installer and release-set tooling for downstream workspaces.
 * `crates/canic-control-plane/` – root/store control-plane runtime used by the orchestrator lane.
@@ -60,7 +60,7 @@ The crate was historically known as **ICU** (Internet Computer Utilities). All c
 * `crates/canic-tests/` – workspace-only integration test host package for the PocketIC and root-suite coverage.
 * `crates/canic-dsl-macros/` – proc macros for defining endpoints (`#[canic_query]`, `#[canic_update]`).
 * `crates/canic-cdk/` – curated IC CDK façade used by the public/runtime crates (management, timers, stable‑structures glue).
-* `crates/canic-wasm-store/` – canonical publishable `wasm_store` canister crate used for the implicit bootstrap store artifact; downstream build helpers can also synthesize the same hidden wrapper directly from `canic` when they only depend on the facade crate.
+* `crates/canic-wasm-store/` – canonical publishable `wasm_store` canister crate used for the implicit bootstrap-store artifact; downstream build helpers can also synthesize the same wrapper directly from `canic` when they only depend on the facade crate.
 * `canisters/` – reference demo canisters and workspace-only support crates that exercise the library end to end:
 
   * `root/` orchestrator tying together shards, scaling, pool flows, and the implicit bootstrap `wasm_store`.
@@ -187,7 +187,7 @@ For `DFX_NETWORK=local`, it also tries one clean `dfx stop` / `dfx start --backg
 
 `root` stays thin in this flow. It embeds only the bootstrap `wasm_store.wasm.gz`; ordinary child releases stay outside `root` and are staged after install from `.dfx/local/canisters/root/root.release-set.json`.
 
-Visible canister Candid files are generated build artifacts under `.dfx/local/canisters/<role>/<role>.did`. They are not committed source files. The checked-in exception is `crates/canic-wasm-store/wasm_store.did`, which remains the canonical published interface for the hidden bootstrap store crate. Ordinary bootstrap builds copy that file into `.dfx`; they do not rewrite the checked-in source DID unless `CANIC_REFRESH_WASM_STORE_DID=1` is set intentionally.
+Visible canister Candid files are generated build artifacts under `.dfx/local/canisters/<role>/<role>.did`. They are not committed source files. The checked-in exception is `crates/canic-wasm-store/wasm_store.did`, which remains the canonical published interface for the implicit bootstrap `wasm_store` crate. Ordinary bootstrap builds copy that file into `.dfx`; they do not rewrite the checked-in source DID unless `CANIC_REFRESH_WASM_STORE_DID=1` is set intentionally.
 
 Canic now treats wasm build selection as an explicit three-profile contract:
 
@@ -212,7 +212,7 @@ CANIC_WASM_PROFILE=fast \
 canic-build-canister-artifact root
 ```
 
-`CANIC_WORKSPACE_ROOT` controls Cargo, `canic.toml`, and canister manifests. `CANIC_DFX_ROOT` controls `dfx.json`, `.dfx`, emitted artifacts, and the hidden generated bootstrap-store wrapper.
+`CANIC_WORKSPACE_ROOT` controls Cargo, `canic.toml`, and canister manifests. `CANIC_DFX_ROOT` controls `dfx.json`, `.dfx`, emitted artifacts, and the generated bootstrap-store wrapper.
 
 If your canister crates do not live under the default `canisters/` directory,
 Canic now tries to discover them from Cargo workspace metadata first. In the
@@ -248,7 +248,7 @@ If you need the lower-level build/install boundaries directly, `canic-installer`
 
 `canic-list-install-targets` is the supported way to derive the local install
 target roster from `canic.toml`. It prints `root` first, then the ordinary
-roles from the single subnet that owns `root`, and still excludes the hidden
+roles from the single subnet that owns `root`, and still excludes the implicit
 bootstrap `wasm_store`.
 
 If you are writing host-side PocketIC tests against Canic, prefer
@@ -258,12 +258,12 @@ and other repo-only fixtures.
 
 ## Layered Architecture
 
-Canic follows a strict layered design to keep boundaries stable and refactors cheap. Dependencies must flow inward; boundary code must not depend on concrete storage representations.
+Canic follows a strict layered design to keep boundaries stable and refactors cheap. Dependencies must flow downward, and boundary code must not reach directly into authoritative state.
 
-* `storage/` – authoritative persisted state and storage helpers for stable memory.
-* `view/` – internal read-only projections used by workflow, ops, and policy.
-* `ops/` – deterministic application services over storage plus approved single-step platform effects.
-* `domain/policy` – pure decision logic (no mutation, no IC calls).
+* `storage/` plus runtime registries – authoritative persisted or in-memory state, including stable-memory layout and local structural invariants.
+* `view/` – internal read-only projections consumed by `ops`, `workflow`, and pure decision helpers.
+* `ops/` – deterministic application services over stored/runtime state plus approved single-step platform effects.
+* `domain/` and related pure helpers – deterministic decision/value logic with no mutation or IC calls.
 * `workflow/` – orchestration and multi-step behavior over time.
 * `access/` plus macro-generated endpoints – request guards and system-boundary wiring that delegate immediately to `workflow` or `ops`.
 

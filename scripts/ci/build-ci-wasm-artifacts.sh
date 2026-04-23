@@ -52,7 +52,7 @@ done
 
 # Build the ordinary reference artifacts first so the thin-root manifest path
 # can emit once the full root-subnet release set exists. Root itself builds the
-# hidden bootstrap `wasm_store` artifact internally.
+# implicit bootstrap `wasm_store` artifact internally.
 for canister in "${NON_ROOT_CANISTERS[@]}"; do
     CANIC_WASM_PROFILE="$BUILD_WASM_PROFILE" scripts/app/canic_installer.sh canic-build-canister-artifact "$canister"
 done

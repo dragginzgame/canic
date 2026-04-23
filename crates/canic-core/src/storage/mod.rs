@@ -4,7 +4,8 @@
 //! stable memory. It is platform-aware (IC principals, cycles) and
 //! intentionally does NOT represent a pure domain model in the DDD sense.
 //!
-//! Business orchestration and policy live in `workflow`.
+//! Multi-step orchestration lives in `workflow`; pure decision helpers live in
+//! `domain`.
 
 pub mod canister;
 pub mod stable;

@@ -4,7 +4,7 @@
 
 This document defines source consistency and readability standards used across the CANIC workspace (`crates/canic`, `crates/canic-core`, and related canisters).
 
-Its goal is to keep the codebase easy to navigate while preserving architectural boundaries (`endpoints -> workflow -> policy -> ops -> model`).
+Its goal is to keep the codebase easy to navigate while preserving architectural boundaries (`endpoints -> workflow -> domain/pure decision helpers -> ops -> storage`).
 
 If this document conflicts with `AGENTS.md`, follow `AGENTS.md`.
 

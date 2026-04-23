@@ -93,9 +93,9 @@ dfx build --all
 
 That public builder:
 - builds the requested Rust canister crate for `wasm32-unknown-unknown`
-- refreshes the hidden bootstrap `wasm_store` artifact automatically when building `root`
-- keeps `wasm_store` out of downstream `dfx.json` and delegates the hidden bootstrap build to the published `canic-build-wasm-store-artifact` tool from `canic-installer`
-- lets the public bootstrap builder resolve the canonical `canic-wasm-store` source automatically from the current `canic` checkout or published registry source, and if that canonical crate is not present it synthesizes a hidden wrapper directly from the resolved `canic` source, so downstreams do not need their own `wasm_store` crate or extra `wasm_store` build config
+- refreshes the implicit bootstrap `wasm_store` artifact automatically when building `root`
+- keeps `wasm_store` out of downstream `dfx.json` and delegates the implicit bootstrap build to the published `canic-build-wasm-store-artifact` tool from `canic-installer`
+- lets the public bootstrap builder resolve the canonical `canic-wasm-store` source automatically from the current `canic` checkout or published registry source, and if that canonical crate is not present it synthesizes a wrapper directly from the resolved `canic` source, so downstreams do not need their own `wasm_store` crate or extra `wasm_store` build config
 - copies the resulting WASM into `.dfx/local/canisters/<name>/<name>.wasm`
 - runs `candid-extractor` to produce `.dfx/local/canisters/<name>/<name>.did`
 
@@ -105,7 +105,7 @@ They are generated build artifacts, not committed source files.
 The one checked-in exception is:
 - `crates/canic-wasm-store/wasm_store.did`
 
-That file remains the canonical published interface for the hidden bootstrap
+That file remains the canonical published interface for the implicit bootstrap
 `wasm_store` crate and the packaged downstream installer path.
 
 Ordinary bootstrap builds copy that checked-in DID into `.dfx/local`; they do

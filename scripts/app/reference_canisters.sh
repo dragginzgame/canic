@@ -14,7 +14,7 @@ REFERENCE_CANISTERS=(
 )
 
 # Ordinary release roles expected to be staged into `root` for the reference
-# topology. This intentionally excludes the hidden bootstrap `wasm_store`.
+# topology. This intentionally excludes the implicit bootstrap `wasm_store`.
 ROOT_RELEASE_SET_CANISTERS=(
     app
     minimal

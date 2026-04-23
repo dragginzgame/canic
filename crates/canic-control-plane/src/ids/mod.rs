@@ -1,3 +1,5 @@
+//! Control-plane-specific identifiers and value types.
+
 use candid::{
     CandidType,
     types::{Serializer, Type},

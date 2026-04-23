@@ -1,3 +1,9 @@
+//! Control-plane runtime for root and `wasm_store` orchestration.
+//!
+//! This crate layers the template publication and managed-store workflows on
+//! top of `canic-core` and is re-exported through the `canic` facade when the
+//! control-plane feature is enabled.
+
 const _: () = {
     #[canic_memory::__reexports::ctor::ctor(
         anonymous,

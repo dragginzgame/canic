@@ -18,7 +18,8 @@ thread_local! {
 
 ///
 /// ConsentHandlerFn
-/// this is what the user has to pass into canic
+///
+/// Shared handler shape for registered ICRC-21 consent message builders.
 ///
 
 pub type ConsentHandlerFn = Arc<dyn Fn(ConsentMessageRequest) -> ConsentMessageResponse + 'static>;
@@ -38,10 +39,10 @@ pub struct Icrc21Dispatcher {}
 
 impl Icrc21Dispatcher {
     ///
-    /// Use the builder at
-    /// https://docs.rs/icrc-ledger-types/latest/icrc_ledger_types/icrc21/lib/struct.ConsentMessageBuilder.html
+    /// Register the consent message handler for one canister method.
     ///
-    /// and then register the method and handler here
+    /// Handlers are usually built from the upstream ICRC-21 consent message
+    /// builder and installed during init/startup.
     ///
 
     pub fn register<F>(method: &str, handler: F)
@@ -83,6 +84,7 @@ impl Icrc21Dispatcher {
     }
 
     #[must_use]
+    /// Resolve and execute the registered consent handler for the request.
     pub fn consent_message(req: ConsentMessageRequest) -> ConsentMessageResponse {
         match Self::get_handler(&req.method) {
             Some(handler) => handler(req),

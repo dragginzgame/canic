@@ -118,7 +118,6 @@ pub(super) async fn has_role(caller: Principal, role: Role) -> Result<(), Access
     }
 }
 
-/// Ensure the caller matches the app directory entry recorded for `role`.
 /// Require that the caller is registered as a canister on this subnet.
 #[expect(clippy::unused_async)]
 pub(super) async fn is_registered_to_subnet(caller: Principal) -> Result<(), AccessError> {

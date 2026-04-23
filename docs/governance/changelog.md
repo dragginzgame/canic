@@ -1,4 +1,4 @@
-# IcyDB Changelog Governance
+# Canic Changelog Governance
 
 This document defines the authoritative rules for maintaining
 `CHANGELOG.md` and minor-line changelog archives.
@@ -9,7 +9,7 @@ These rules are intended to be followed by automated agents.
 
 # 1. Purpose
 
-The root `CHANGELOG.md` file is the canonical release ledger for IcyDB.
+The root `CHANGELOG.md` file is the canonical release ledger for Canic.
 
 It records high-level architectural and behavioral changes per release.
 
@@ -257,4 +257,4 @@ Changelog governance is architectural, not cosmetic.
 
 It documents system evolution and must reflect real semantic shifts.
 
-It is part of IcyDB's correctness discipline.
+It is part of Canic's correctness discipline.

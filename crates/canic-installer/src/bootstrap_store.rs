@@ -1,4 +1,7 @@
-use crate::release_set::{config_path, dfx_root, workspace_root};
+use crate::{
+    cargo_command,
+    release_set::{config_path, dfx_root, workspace_root},
+};
 use flate2::{Compression, GzBuilder};
 use serde::Deserialize;
 use std::{
@@ -99,7 +102,7 @@ struct CargoMetadataPackage {
     manifest_path: PathBuf,
 }
 
-// Build the hidden bootstrap `wasm_store` artifact and populate the canonical
+// Build the implicit bootstrap `wasm_store` artifact and populate the canonical
 // local DFX artifact paths for downstream/root builds.
 pub fn build_bootstrap_wasm_store_artifact(
     workspace_root: &Path,
@@ -265,7 +268,7 @@ fn resolve_canonical_bootstrap_wasm_store_source(
 
 // Query cargo metadata for the current downstream workspace.
 fn cargo_metadata(workspace_root: &Path) -> Result<CargoMetadata, Box<dyn std::error::Error>> {
-    let output = Command::new("cargo")
+    let output = cargo_command()
         .current_dir(workspace_root)
         .args([
             "metadata",
@@ -446,7 +449,7 @@ fn run_wasm_store_cargo_build(
     config_path: &Path,
     profile: BootstrapWasmStoreBuildProfile,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let mut command = Command::new("cargo");
+    let mut command = cargo_command();
     command
         .current_dir(workspace_root)
         .env("CANIC_CONFIG_PATH", config_path)
@@ -551,8 +554,8 @@ fn refresh_canonical_wasm_store_did_enabled() -> bool {
     )
 }
 
-// Apply `ic-wasm shrink` when available so the hidden bootstrap artifact matches
-// the normal custom-build path.
+// Apply `ic-wasm shrink` when available so the bootstrap artifact matches the
+// normal custom-build path.
 fn maybe_shrink_wasm_artifact(wasm_path: &Path) -> Result<(), Box<dyn std::error::Error>> {
     let shrunk_path = wasm_path.with_extension("wasm.shrunk");
     match Command::new("ic-wasm")

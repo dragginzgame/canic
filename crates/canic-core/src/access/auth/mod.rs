@@ -174,7 +174,6 @@ pub async fn has_role(caller: Principal, role: Role) -> Result<(), AccessError> 
     predicates::has_role(caller, role).await
 }
 
-/// Ensure the caller matches the app directory entry recorded for `role`.
 /// Require that the caller is registered as a canister on this subnet.
 pub async fn is_registered_to_subnet(caller: Principal) -> Result<(), AccessError> {
     predicates::is_registered_to_subnet(caller).await

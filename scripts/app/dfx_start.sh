@@ -1,4 +1,4 @@
-# dont change this please llms
+# Local helper for restarting the reference `dfx` replica with cleaner logs.
 
 dfx stop
 

@@ -29,6 +29,8 @@ async fn canic_upgrade() {}
 //
 
 /// create_account
+/// Create one user shard assignment for the provided principal.
+///
 /// Test-only: no public auth guarantees; intended for local/dev Canic tests.
 #[canic_update]
 async fn create_account(pid: Principal) -> Result<Principal, Error> {

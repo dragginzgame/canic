@@ -1,3 +1,5 @@
+//! Stable-structure re-exports plus a few small Canic wrappers.
+
 pub mod btreemap;
 
 pub use btreemap::BTreeMap;
