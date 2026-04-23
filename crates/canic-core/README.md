@@ -7,7 +7,8 @@ Most canister projects should depend on `canic` (the facade crate) and use:
 - `canic::start!` / `canic::start_root!` from `lib.rs` to wire init/upgrade and export endpoints
 
 `canic-core` is still published because it holds the underlying building blocks:
-typed config, auth/policy helpers, storage/view layers, and the workflow and ops internals that power the facade crate.
+typed config, auth/decision helpers, storage/view layers, and the workflow and
+ops internals that power the facade crate.
 
 See `../../README.md` for the workspace overview and `../../CONFIG.md` for the `canic.toml` schema.
 
@@ -17,13 +18,13 @@ Canic is intentionally layered to keep the boundary surface small and ownership 
 
 - `access/` – authorization and guard helpers used by endpoint macros.
 - `config/` – parse + validate `canic.toml` into a typed schema.
-- `storage/` – persisted schemas and stable-memory-backed state.
-- `view/` – internal read-only projections over storage state.
-- `ops/` – deterministic services over storage plus approved single-step platform effects.
-- `domain/` – pure domain and policy logic.
+- `storage/` – authoritative persisted schemas and stable-memory-backed state helpers.
+- `view/` – internal read-only projections over stored/runtime state.
+- `ops/` – deterministic services over stored/runtime state plus approved single-step platform effects.
+- `domain/` – pure value and decision helpers used by the higher-level runtime.
 - `workflow/` – orchestration, retries, and multi-step behavior over time.
 
-The default flow is: endpoints → workflow → domain/policy → ops → storage.
+The default flow is: endpoints → workflow → domain/decision helpers → ops → storage.
 
 ## Module Map
 

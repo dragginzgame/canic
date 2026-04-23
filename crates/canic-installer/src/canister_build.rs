@@ -3,6 +3,7 @@ use crate::{
         BootstrapWasmStoreBuildOutput, BootstrapWasmStoreBuildProfile,
         build_bootstrap_wasm_store_artifact,
     },
+    cargo_command,
     release_set::{
         canister_manifest_path, dfx_root, emit_root_release_set_manifest_if_ready, workspace_root,
     },
@@ -65,7 +66,7 @@ impl CanisterBuildProfile {
 }
 
 impl From<CanisterBuildProfile> for BootstrapWasmStoreBuildProfile {
-    // Reuse the same release/debug switch for the hidden bootstrap store build.
+    // Reuse the same profile selection for the implicit bootstrap store build.
     fn from(value: CanisterBuildProfile) -> Self {
         match value {
             CanisterBuildProfile::Debug => Self::Debug,
@@ -187,7 +188,7 @@ fn run_canister_build(
 ) -> Result<PathBuf, Box<dyn std::error::Error>> {
     let target_root = std::env::var_os("CARGO_TARGET_DIR")
         .map_or_else(|| workspace_root.join("target"), PathBuf::from);
-    let mut command = Command::new("cargo");
+    let mut command = cargo_command();
     command
         .current_dir(workspace_root)
         .env("CARGO_TARGET_DIR", &target_root)
@@ -269,7 +270,7 @@ fn remove_stale_dfx_candid_sidecars(artifact_root: &Path) -> std::io::Result<()>
     Ok(())
 }
 
-// Route the hidden bootstrap store through the published public builder.
+// Route the implicit bootstrap store through the published public builder.
 fn build_hidden_wasm_store_artifact(
     workspace_root: &Path,
     dfx_root: &Path,
@@ -280,7 +281,7 @@ fn build_hidden_wasm_store_artifact(
 }
 
 // Apply `ic-wasm shrink` when available so visible canister artifacts follow
-// the same size-reduction path as the hidden bootstrap store artifact.
+// the same size-reduction path as the implicit bootstrap store artifact.
 fn maybe_shrink_wasm_artifact(wasm_path: &Path) -> Result<(), Box<dyn std::error::Error>> {
     let shrunk_path = wasm_path.with_extension("wasm.shrunk");
     match Command::new("ic-wasm")
@@ -305,7 +306,7 @@ fn maybe_shrink_wasm_artifact(wasm_path: &Path) -> Result<(), Box<dyn std::error
     Ok(())
 }
 
-// Normalize the hidden bootstrap builder output to the public canister-artifact shape.
+// Normalize the bootstrap store builder output to the public canister-artifact shape.
 fn map_bootstrap_output(output: BootstrapWasmStoreBuildOutput) -> CanisterArtifactBuildOutput {
     CanisterArtifactBuildOutput {
         artifact_root: output.artifact_root,

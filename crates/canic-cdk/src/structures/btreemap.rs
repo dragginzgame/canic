@@ -5,7 +5,9 @@ use std::ops::{Deref, DerefMut};
 
 ///
 /// BTreeMap
-/// a wrapper around BTreeMap that uses the default VirtualMemory
+///
+/// Thin wrapper around `ic_stable_structures::BTreeMap` with a small helper
+/// API used across Canic.
 ///
 
 pub struct BTreeMap<K, V, M>
@@ -39,9 +41,7 @@ where
         self.iter().map(|e| (e.key().clone(), e.value())).collect()
     }
 
-    /// clear
-    /// the original clear() method in the ic-stable-structures library
-    /// couldn't be wrapped as it took ownership, so they made a new one
+    /// Clear the map through the non-consuming helper exposed upstream.
     pub fn clear(&mut self) {
         self.clear_new();
     }

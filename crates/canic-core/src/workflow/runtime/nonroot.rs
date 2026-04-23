@@ -18,6 +18,8 @@ use super::{RuntimeWorkflow, auth::RuntimeAuthWorkflow, log_memory_summary};
 ///
 /// init_nonroot_canister
 ///
+/// Restore runtime state for a non-root canister during `init`.
+///
 
 pub fn init_nonroot_canister(
     canister_role: CanisterRole,
@@ -61,13 +63,13 @@ fn init_nonroot_canister_internal(
     AppIndexOps::import_args_allow_incomplete(payload.app_index).map_err(|err| {
         InternalError::invariant(
             InternalErrorOrigin::Workflow,
-            format!("app directory import failed: {err}"),
+            format!("app index import failed: {err}"),
         )
     })?;
     SubnetIndexOps::import_args_allow_incomplete(payload.subnet_index).map_err(|err| {
         InternalError::invariant(
             InternalErrorOrigin::Workflow,
-            format!("subnet directory import failed: {err}"),
+            format!("subnet index import failed: {err}"),
         )
     })?;
 
@@ -93,6 +95,8 @@ fn init_nonroot_canister_internal(
 
 ///
 /// post_upgrade_nonroot_canister
+///
+/// Restore runtime services for a non-root canister after stable memory init.
 ///
 
 pub fn post_upgrade_nonroot_canister_after_memory_init(

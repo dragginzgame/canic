@@ -46,6 +46,7 @@ async fn user_shard_issue_token(claims: DelegatedTokenClaims) -> Result<Delegate
 }
 
 #[cfg(not(canic_disable_bundle_observability_env))]
+/// Return the local shard public key for local/dev attestation test flows.
 #[canic_update]
 async fn user_shard_local_public_key_test() -> Result<Vec<u8>, Error> {
     if let Err(err) = canic::access::env::build_network_local() {

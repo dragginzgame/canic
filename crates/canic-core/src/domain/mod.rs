@@ -1,3 +1,8 @@
+//! Pure value and decision helpers used by higher-level runtime layers.
+//!
+//! `domain` owns deterministic computation and error composition, but it does
+//! not perform storage access or orchestration.
+
 pub mod icrc;
 pub mod policy;
 

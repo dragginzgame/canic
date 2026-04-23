@@ -1,3 +1,5 @@
+//! Release-set discovery, manifest emission, and staging helpers.
+
 use std::time::{SystemTime, UNIX_EPOCH};
 
 mod config;

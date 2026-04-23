@@ -1,3 +1,5 @@
+//! Host-side artifact discovery and build helpers for PocketIC tests.
+
 mod dfx;
 mod wasm;
 mod workspace;

@@ -25,7 +25,7 @@ pub mod timer;
 pub mod topology;
 
 ///
-/// Workflow Query Re-exports
+/// Read-only query re-exports
 ///
 /// Only queries that satisfy ALL of the following may be re-exported directly:
 ///

@@ -85,7 +85,7 @@ pub fn build_wasm_canisters(
     profile: WasmBuildProfile,
     extra_env: &[(&str, &str)],
 ) {
-    let mut cmd = Command::new("cargo");
+    let mut cmd = cargo_command();
     cmd.current_dir(workspace_root);
     cmd.env("CARGO_TARGET_DIR", target_dir);
     cmd.env("DFX_NETWORK", "local");
@@ -106,6 +106,17 @@ pub fn build_wasm_canisters(
         "cargo build failed: {}",
         String::from_utf8_lossy(&output.stderr)
     );
+}
+
+fn cargo_command() -> Command {
+    let cargo = std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into());
+    let mut command = Command::new(cargo);
+
+    if let Some(toolchain) = std::env::var_os("RUSTUP_TOOLCHAIN") {
+        command.env("RUSTUP_TOOLCHAIN", toolchain);
+    }
+
+    command
 }
 
 /// Build one or more wasm canisters with the internal test endpoint surface enabled.

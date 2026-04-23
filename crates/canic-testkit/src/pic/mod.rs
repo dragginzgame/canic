@@ -1,3 +1,5 @@
+//! PocketIC wrapper and fixture helpers for host-side Canic tests.
+
 use candid::{Principal, encode_args, encode_one};
 use canic::{
     Error,
@@ -45,7 +47,7 @@ pub use standalone::{
 };
 
 ///
-/// Create a fresh PocketIC universe.
+/// Create a fresh PocketIC instance with the default Canic test subnet layout.
 ///
 /// IMPORTANT:
 /// - Each call creates a new IC instance
@@ -57,7 +59,7 @@ pub fn pic() -> Pic {
     try_pic().unwrap_or_else(|err| panic!("failed to start PocketIC: {err}"))
 }
 
-/// Create a fresh PocketIC universe without panicking on startup failures.
+/// Create a fresh PocketIC instance without panicking on startup failures.
 pub fn try_pic() -> Result<Pic, PicStartError> {
     PicBuilder::new().with_application_subnet().try_build()
 }
@@ -66,8 +68,8 @@ pub fn try_pic() -> Result<Pic, PicStartError> {
 /// PicBuilder
 /// Thin wrapper around the PocketIC builder.
 ///
-/// This builder is only used to configure the singleton. It does not create
-/// additional IC instances beyond the global `Pic`.
+/// This builder configures one PocketIC instance before startup.
+/// It does not share or reuse a global test runtime.
 ///
 /// Note: this file is test-only infrastructure; simplicity wins over abstraction.
 ///
@@ -82,21 +84,21 @@ impl PicBuilder {
         Self(PocketIcBuilder::new())
     }
 
-    /// Include an application subnet in the PocketIC universe.
+    /// Include an application subnet in the PocketIC instance.
     #[must_use]
     pub fn with_application_subnet(mut self) -> Self {
         self.0 = self.0.with_application_subnet();
         self
     }
 
-    /// Include an II subnet so threshold keys are available in the PocketIC universe.
+    /// Include an II subnet so threshold keys are available in the PocketIC instance.
     #[must_use]
     pub fn with_ii_subnet(mut self) -> Self {
         self.0 = self.0.with_ii_subnet();
         self
     }
 
-    /// Include an NNS subnet in the PocketIC universe.
+    /// Include an NNS subnet in the PocketIC instance.
     #[must_use]
     pub fn with_nns_subnet(mut self) -> Self {
         self.0 = self.0.with_nns_subnet();

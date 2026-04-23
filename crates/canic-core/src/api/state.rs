@@ -3,7 +3,7 @@ use crate::{
     workflow::state::AppStateWorkflow,
 };
 
-/// Workflow Query Re-export
+/// Re-export of read-only state query surfaces.
 pub use crate::workflow::state::query::{AppStateQuery, SubnetStateQuery};
 
 ///

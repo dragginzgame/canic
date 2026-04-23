@@ -1,3 +1,5 @@
+//! Ops helpers for app and subnet indexes plus shared validation.
+
 pub mod app;
 pub mod mapper;
 pub mod subnet;

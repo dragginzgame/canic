@@ -7,8 +7,9 @@
 //! - Mutate state and perform single-step platform side effects
 //! - Read and export internal state as snapshots
 //!
-//! Ops must not construct DTO views or perform pagination.
-//! Projection and paging are owned by workflow/query.
+//! Ops may project stored/runtime state into internal views or DTO-ready
+//! snapshots, but endpoint-specific pagination and boundary shaping stay in the
+//! API/workflow layers.
 //!
 //! ## Naming and structure
 //!
@@ -54,8 +55,8 @@ use thiserror::Error as ThisError;
 ///
 /// OpsError
 ///
-/// Ops public APIs return Result<_, InternalError>.
-/// Ops-scoped error enums are implementation details used to preserve structure and ownership.
+/// Ops public APIs return `Result<_, InternalError>`.
+/// Ops-scoped error enums stay internal so the public error surface remains uniform.
 ///
 
 #[derive(Debug, ThisError)]

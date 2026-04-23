@@ -18,9 +18,7 @@ canonical store source from the resolved `canic` package automatically.
 - `scale_hub/` + `scale/` – scaling pool demo (spawn replica canisters under policy).
 - `minimal/` – minimal canister used as the shared runtime baseline canister.
 
-Internal correctness fixtures now live under `crates/canic-core/test-canisters/`, and internal audit probes now live under `crates/canic-core/audit-canisters/`.
-so PocketIC and audit fixtures can keep their own helper surface separate from
-the demo topology.
+Internal correctness fixtures now live under `crates/canic-core/test-canisters/`, and internal audit probes now live under `crates/canic-core/audit-canisters/`. This keeps PocketIC and audit fixtures separate from the shipped demo topology.
 
 The shared demo topology lives in `canisters/canic.toml` and is referenced by each canister’s `build.rs`.
 

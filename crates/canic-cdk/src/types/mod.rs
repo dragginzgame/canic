@@ -1,3 +1,5 @@
+//! Common IC-facing value types re-exported through the Canic CDK surface.
+
 pub mod cycles;
 pub mod string;
 pub mod wasm;

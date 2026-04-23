@@ -33,7 +33,7 @@ the standard Canic topology, especially root/bootstrap/store flows.
 This crate owns the public thin-root build and staging path:
 
 - build visible canister artifacts through `canic-build-canister-artifact`
-- build the hidden bootstrap store through `canic-build-wasm-store-artifact`
+- build the implicit bootstrap `wasm_store` through `canic-build-wasm-store-artifact`
 - emit `.dfx/<network>/canisters/root/root.release-set.json`
 - stage the ordinary release set into `root`
 - resume root bootstrap
@@ -76,7 +76,7 @@ canic-list-install-targets
 
 That command prints one install target per line for the single subnet that owns
 `root`, including `root` first and then the ordinary roles for that subnet.
-The hidden bootstrap `wasm_store` is still excluded. To point at a specific
+The implicit bootstrap `wasm_store` is still excluded. To point at a specific
 config path explicitly:
 
 ```bash

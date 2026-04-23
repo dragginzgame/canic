@@ -27,8 +27,9 @@ async fn canic_upgrade() {}
 // ENDPOINTS
 //
 
-/// Create a new worker in the given pool.
-/// no authentication needed as for canic testing
+/// Create a new worker in the configured pool.
+///
+/// This endpoint is intentionally local-only for the reference Canic test flow.
 #[canic_update]
 async fn create_worker() -> Result<Principal, Error> {
     if let Err(err) = canic::access::env::build_network_local() {
@@ -41,7 +42,8 @@ async fn create_worker() -> Result<Principal, Error> {
 }
 
 /// Dry-run the worker creation decision using config-driven policy.
-/// no authentication needed as for canic testing
+///
+/// This endpoint is intentionally local-only for the reference Canic test flow.
 #[canic_query]
 async fn plan_create_worker() -> Result<bool, Error> {
     if let Err(err) = canic::access::env::build_network_local() {

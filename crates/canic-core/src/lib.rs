@@ -7,15 +7,16 @@
 //!
 //! ## Layering
 //!
-//! Canic is organized to keep endpoint code thin and policies centralized:
+//! Canic is organized to keep endpoint code thin and coordination centralized:
 //! - `access/` contains access expressions, predicates, and metrics for boundary enforcement.
 //! - `workflow/` implements orchestration and lifecycle workflows.
-//! - `policy/` owns deterministic decision rules.
+//! - `domain/` contains pure value and decision helpers.
 //! - `ops/` provides mechanical, reusable side-effecting operations.
-//! - `model/` owns storage (stable memory) and in-process registries/caches.
+//! - `storage/` owns stable-memory-backed schemas and helpers.
+//! - `view/` exposes internal read-only projections over stored/runtime state.
 //! - macro entrypoints live in the `canic` facade crate.
 //!
-//! The default flow is: endpoints → workflow → policy → ops → model.
+//! The default flow is: endpoints → workflow → domain/decision helpers → ops → storage.
 
 #[doc(hidden)]
 pub mod __control_plane_core;

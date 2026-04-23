@@ -9,7 +9,7 @@ fn main() {
     }
 }
 
-// Build the hidden bootstrap `wasm_store` artifact for the current workspace.
+// Build the implicit bootstrap `wasm_store` artifact for the current workspace.
 fn run() -> Result<(), Box<dyn std::error::Error>> {
     let output = build_current_workspace_bootstrap_wasm_store_artifact(
         BootstrapWasmStoreBuildProfile::current(),

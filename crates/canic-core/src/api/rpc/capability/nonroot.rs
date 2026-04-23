@@ -18,9 +18,7 @@ use crate::{
     workflow::rpc::request::handler::NonrootCyclesCapabilityWorkflow,
 };
 
-/// response_capability_v1_nonroot
-///
-/// Execute the non-root structural cycles capability path.
+/// Validate and execute the non-root request-cycles capability path.
 pub(super) async fn response_capability_v1_nonroot(
     envelope: NonrootCyclesCapabilityEnvelopeV1,
 ) -> Result<NonrootCyclesCapabilityResponseV1, Error> {

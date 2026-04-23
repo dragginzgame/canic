@@ -1,6 +1,6 @@
 //!
-//! Minimal demo canister used as a minimal Canic baseline.
-//! Lives in `canisters` solely as a minimal shell for audit and test flows.
+//! Minimal demo canister used as the smallest Canic reference baseline.
+//! Lives in `canisters` solely as a lightweight shell for audit and test flows.
 //!
 //! Test-only helper: this canister is intended for local/dev flows and is not
 //! a public-facing deployment target.

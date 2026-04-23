@@ -1,3 +1,5 @@
+//! Repo-only PocketIC fixtures layered on top of `canic-testkit`.
+
 mod attestation;
 mod audit;
 mod delegation;

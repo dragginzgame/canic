@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.27.x] - 2026-04-13 - Topology Taxonomy
 
+- `0.27.11` fixes the nested Cargo build paths used by bootstrap/test canister builds so they reuse the parent CI toolchain selection, which stops the MSRV lane from failing when those nested wasm builds would otherwise miss the installed `wasm32-unknown-unknown` target.
+- `0.27.10` fixes the GitHub Actions `dfx` bootstrap lane by replacing the shell-installed `dfxvm` path with the official `dfinity/setup-dfx` action, so CI no longer fails on non-interactive runner shells while installing `dfx`.
 - `0.27.9` separates Canic’s published MSRV from its repo-local toolchain pin by declaring Rust `1.91.0` across the workspace crates while keeping internal CI and bootstrap builds on Rust `1.95.0`, so downstream source consumers are not forced onto the newer compiler just because Canic uses it internally.
 - `0.27.8` bumps the pinned workspace Rust toolchain to `1.95.0`, aligns CI and the shared developer bootstrap with that compiler, and folds the required new Clippy cleanup into the tree so the standard warning-as-error checks stay green on the newer toolchain.
 - `0.27.7` switches `canic-cdk` over to the canonical upstream `icrc-ledger-types` `Account` and `Subaccount` definitions, so downstream code can stay on Canic’s `cdk::types` facade while aligning with the standard ICRC ledger wire types instead of Canic’s local copy.
