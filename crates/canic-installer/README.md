@@ -20,7 +20,7 @@ Canic repo:
 curl -fsSL https://raw.githubusercontent.com/dragginzgame/canic/v0.27.8/scripts/dev/install_dev.sh | bash
 ```
 
-That script bootstraps Rust when needed, installs the pinned toolchain,
+That script bootstraps Rust when needed, installs the pinned internal toolchain,
 `canic-installer`, the required wasm/Candid utilities, and `dfx` when it is
 missing. This crate README documents the thinner installed-binary surface below.
 

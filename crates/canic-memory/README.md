@@ -2,6 +2,10 @@
 
 Shared stable-memory helpers you can drop into any IC canister, even if you are not using the rest of Canic. It keeps you honest about which IDs you use and makes TLS-backed stable structures initialize in a predictable order.
 
+This crate currently declares MSRV `1.91.0`. The Canic repo itself builds with a
+newer pinned internal toolchain, but downstream crates that compile
+`canic-memory` from source should only need Rust `1.91.0` or newer.
+
 What you get:
 - Reserve and validate a per-crate stable-memory ID range.
 - One place to register stable structures (`ic_memory!` + registry).

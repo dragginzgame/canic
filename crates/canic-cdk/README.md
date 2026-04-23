@@ -2,6 +2,10 @@
 
 Canic's lightweight wrapper around `ic-cdk` types and helpers used across the stack.
 
+This crate currently declares MSRV `1.91.0`. The Canic repo itself builds with a
+newer pinned internal toolchain, but downstream crates that compile
+`canic-cdk` from source should only need Rust `1.91.0` or newer.
+
 This crate exists to give Canic (and downstream canisters) a stable import surface:
 
 - `canic::cdk::api` and `canic::cdk::mgmt` re-export `ic_cdk` APIs.
@@ -24,4 +28,5 @@ fn whoami() -> Principal {
 }
 ```
 
-For installation and workspace usage, see `../../README.md`.
+For installation, workspace usage, and the repo-level internal toolchain pin,
+see `../../README.md`.
