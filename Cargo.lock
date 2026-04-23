@@ -78,7 +78,7 @@ checksum = "1505bd5d3d116872e7271a6d4e16d81d0c8570876c8de68093a09ac269d8aac0"
 
 [[package]]
 name = "audit_leaf_probe"
-version = "0.27.8"
+version = "0.27.9"
 dependencies = [
  "candid",
  "canic",
@@ -88,7 +88,7 @@ dependencies = [
 
 [[package]]
 name = "audit_root_probe"
-version = "0.27.8"
+version = "0.27.9"
 dependencies = [
  "candid",
  "canic",
@@ -97,7 +97,7 @@ dependencies = [
 
 [[package]]
 name = "audit_scaling_probe"
-version = "0.27.8"
+version = "0.27.9"
 dependencies = [
  "candid",
  "canic",
@@ -239,7 +239,7 @@ dependencies = [
 
 [[package]]
 name = "canic"
-version = "0.27.8"
+version = "0.27.9"
 dependencies = [
  "candid",
  "canic-cdk",
@@ -256,7 +256,7 @@ dependencies = [
 
 [[package]]
 name = "canic-cdk"
-version = "0.27.8"
+version = "0.27.9"
 dependencies = [
  "candid",
  "ic-cdk",
@@ -271,7 +271,7 @@ dependencies = [
 
 [[package]]
 name = "canic-control-plane"
-version = "0.27.8"
+version = "0.27.9"
 dependencies = [
  "async-trait",
  "candid",
@@ -285,7 +285,7 @@ dependencies = [
 
 [[package]]
 name = "canic-core"
-version = "0.27.8"
+version = "0.27.9"
 dependencies = [
  "async-trait",
  "candid",
@@ -307,7 +307,7 @@ dependencies = [
 
 [[package]]
 name = "canic-dsl-macros"
-version = "0.27.8"
+version = "0.27.9"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -316,7 +316,7 @@ dependencies = [
 
 [[package]]
 name = "canic-installer"
-version = "0.27.8"
+version = "0.27.9"
 dependencies = [
  "canic",
  "canic-core",
@@ -329,14 +329,14 @@ dependencies = [
 
 [[package]]
 name = "canic-internal"
-version = "0.27.8"
+version = "0.27.9"
 dependencies = [
  "canic-core",
 ]
 
 [[package]]
 name = "canic-memory"
-version = "0.27.8"
+version = "0.27.9"
 dependencies = [
  "candid",
  "canic-cdk",
@@ -348,7 +348,7 @@ dependencies = [
 
 [[package]]
 name = "canic-testing-internal"
-version = "0.27.8"
+version = "0.27.9"
 dependencies = [
  "candid",
  "canic",
@@ -363,7 +363,7 @@ dependencies = [
 
 [[package]]
 name = "canic-testkit"
-version = "0.27.8"
+version = "0.27.9"
 dependencies = [
  "candid",
  "canic",
@@ -373,7 +373,7 @@ dependencies = [
 
 [[package]]
 name = "canic-tests"
-version = "0.27.8"
+version = "0.27.9"
 dependencies = [
  "candid",
  "canic",
@@ -389,7 +389,7 @@ dependencies = [
 
 [[package]]
 name = "canic-wasm-store"
-version = "0.27.8"
+version = "0.27.9"
 dependencies = [
  "candid",
  "canic",
@@ -398,7 +398,7 @@ dependencies = [
 
 [[package]]
 name = "canister_app"
-version = "0.27.8"
+version = "0.27.9"
 dependencies = [
  "candid",
  "canic",
@@ -408,7 +408,7 @@ dependencies = [
 
 [[package]]
 name = "canister_minimal"
-version = "0.27.8"
+version = "0.27.9"
 dependencies = [
  "candid",
  "canic",
@@ -418,7 +418,7 @@ dependencies = [
 
 [[package]]
 name = "canister_root"
-version = "0.27.8"
+version = "0.27.9"
 dependencies = [
  "candid",
  "canic",
@@ -431,7 +431,7 @@ dependencies = [
 
 [[package]]
 name = "canister_scale"
-version = "0.27.8"
+version = "0.27.9"
 dependencies = [
  "candid",
  "canic",
@@ -441,7 +441,7 @@ dependencies = [
 
 [[package]]
 name = "canister_scale_hub"
-version = "0.27.8"
+version = "0.27.9"
 dependencies = [
  "candid",
  "canic",
@@ -451,7 +451,7 @@ dependencies = [
 
 [[package]]
 name = "canister_test"
-version = "0.27.8"
+version = "0.27.9"
 dependencies = [
  "candid",
  "canic",
@@ -462,7 +462,7 @@ dependencies = [
 
 [[package]]
 name = "canister_user_hub"
-version = "0.27.8"
+version = "0.27.9"
 dependencies = [
  "candid",
  "canic",
@@ -472,7 +472,7 @@ dependencies = [
 
 [[package]]
 name = "canister_user_shard"
-version = "0.27.8"
+version = "0.27.9"
 dependencies = [
  "candid",
  "canic",
@@ -755,7 +755,7 @@ checksum = "d7a1e2f27636f116493b8b860f5546edb47c8d8f8ea73e1d2a20be88e28d1fea"
 
 [[package]]
 name = "delegation_root_stub"
-version = "0.27.8"
+version = "0.27.9"
 dependencies = [
  "candid",
  "canic",
@@ -768,7 +768,7 @@ dependencies = [
 
 [[package]]
 name = "delegation_signer_stub"
-version = "0.27.8"
+version = "0.27.9"
 dependencies = [
  "candid",
  "canic",
@@ -1607,7 +1607,7 @@ dependencies = [
 
 [[package]]
 name = "intent_authority"
-version = "0.27.8"
+version = "0.27.9"
 dependencies = [
  "candid",
  "canic-core",
@@ -1616,7 +1616,7 @@ dependencies = [
 
 [[package]]
 name = "intent_client"
-version = "0.27.8"
+version = "0.27.9"
 dependencies = [
  "candid",
  "ic-cdk",
@@ -1624,7 +1624,7 @@ dependencies = [
 
 [[package]]
 name = "intent_external"
-version = "0.27.8"
+version = "0.27.9"
 dependencies = [
  "candid",
  "ic-cdk",
@@ -2060,7 +2060,7 @@ dependencies = [
 
 [[package]]
 name = "project_hub_stub"
-version = "0.27.8"
+version = "0.27.9"
 dependencies = [
  "candid",
  "canic",
@@ -2069,7 +2069,7 @@ dependencies = [
 
 [[package]]
 name = "project_instance_stub"
-version = "0.27.8"
+version = "0.27.9"
 dependencies = [
  "candid",
  "canic",
@@ -2078,9 +2078,9 @@ dependencies = [
 
 [[package]]
 name = "psm"
-version = "0.1.30"
+version = "0.1.31"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3852766467df634d74f0b2d7819bf8dc483a0eb2e3b0f50f756f9cfe8b0d18d8"
+checksum = "645dbe486e346d9b5de3ef16ede18c26e6c70ad97418f4874b8b1889d6e761ea"
 dependencies = [
  "ar_archive_writer",
  "cc",
@@ -2380,9 +2380,9 @@ dependencies = [
 
 [[package]]
 name = "rustls"
-version = "0.23.38"
+version = "0.23.39"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "69f9466fb2c14ea04357e91413efb882e2a6d4a406e625449bc0a5d360d53a21"
+checksum = "7c2c118cb077cca2822033836dfb1b975355dfb784b5e8da48f7b6c5db74e60e"
 dependencies = [
  "once_cell",
  "ring",
@@ -2416,9 +2416,9 @@ dependencies = [
 
 [[package]]
 name = "rustls-webpki"
-version = "0.103.12"
+version = "0.103.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8279bb85272c9f10811ae6a6c547ff594d6a7f3c6c6b02ee9726d1d0dcfcdd06"
+checksum = "61c429a8649f110dddef65e2a5ad240f747e85f7758a6bccc7e5777bd33f756e"
 dependencies = [
  "ring",
  "rustls-pki-types",
@@ -2659,7 +2659,7 @@ dependencies = [
 
 [[package]]
 name = "sharding_root_stub"
-version = "0.27.8"
+version = "0.27.9"
 dependencies = [
  "candid",
  "canic",
@@ -2749,15 +2749,15 @@ checksum = "6ce2be8dc25455e1f91df71bfa12ad37d7af1092ae736f3a6cd0e37bc7810596"
 
 [[package]]
 name = "stacker"
-version = "0.1.23"
+version = "0.1.24"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "08d74a23609d509411d10e2176dc2a4346e3b4aea2e7b1869f19fdedbc71c013"
+checksum = "640c8cdd92b6b12f5bcb1803ca3bbf5ab96e5e6b6b96b9ab77dabe9e880b3190"
 dependencies = [
  "cc",
  "cfg-if",
  "libc",
  "psm",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -3493,15 +3493,6 @@ dependencies = [
 
 [[package]]
 name = "windows-sys"
-version = "0.59.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1e38bc4d79ed67fd075bcc251a1c39b32a1776bbe92e5bef1f0bf1f8c531853b"
-dependencies = [
- "windows-targets 0.52.6",
-]
-
-[[package]]
-name = "windows-sys"
 version = "0.60.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f2f500e4d28234f72040990ec9d39e3a6b950f9f22d3dba18416c35882612bcb"
@@ -3649,9 +3640,9 @@ checksum = "d6bbff5f0aada427a1e5a6da5f1f98158182f26556f345ac9e04d36d0ebed650"
 
 [[package]]
 name = "winnow"
-version = "1.0.1"
+version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "09dac053f1cd375980747450bfc7250c264eaae0583872e845c0c7cd578872b5"
+checksum = "2ee1708bef14716a11bae175f579062d4554d95be2c6829f518df847b7b3fdd0"
 
 [[package]]
 name = "wit-bindgen"
