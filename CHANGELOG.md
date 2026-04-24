@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.27.x] - 2026-04-13 - Topology Taxonomy
 
+- `0.27.13` fixes fresh root bootstrap with large static pool imports by waiting only for the configured initial pool slice and queueing the remaining `pool.import.ic` canisters, so downstream reinstalls no longer sit in `root:init:import_pool` while resetting the entire spare pool.
 - `0.27.12` fixes the remaining GitHub Actions toolchain drift by exporting `RUSTUP_TOOLCHAIN` per CI job and installing `wasm32-unknown-unknown` for the matching internal toolchain, so nested bootstrap and test-canister wasm builds stop falling back to the wrong compiler during CI.
 - `0.27.11` fixes the nested Cargo build paths used by bootstrap/test canister builds so they reuse the parent CI toolchain selection, which stops the MSRV lane from failing when those nested wasm builds would otherwise miss the installed `wasm32-unknown-unknown` target.
 - `0.27.10` fixes the GitHub Actions `dfx` bootstrap lane by replacing the shell-installed `dfxvm` path with the official `dfinity/setup-dfx` action, so CI no longer fails on non-interactive runner shells while installing `dfx`.
