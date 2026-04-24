@@ -144,9 +144,9 @@ pub async fn bootstrap_init_root_canister() {
     BootstrapStatusOps::set_phase("root:init:import_pool");
     log!(Topic::Init, Info, "bootstrap (root:init) start");
 
-    // On fresh init, wait for configured pool imports before auto-create.
-    // This avoids creating new canisters while reserve imports are still pending.
-    root_import_pool_from_config(true).await;
+    // On fresh init, only wait for the configured initial import slice before
+    // auto-create. Remaining static imports are queued for the pool worker.
+    root_import_pool_from_config(false).await;
     canic_core::perf!("bootstrap_import_pool");
 
     BootstrapStatusOps::set_phase("root:init:create_canisters");
