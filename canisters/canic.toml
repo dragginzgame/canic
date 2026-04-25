@@ -55,6 +55,7 @@ kind = "singleton"
 [subnets.prime.canisters.user_hub.sharding.pools.user_shards]
 canister_role = "user_shard"
 policy.capacity = 100
+policy.initial_shards = 1
 policy.max_shards = 4
 
 # --- User Shard ---
@@ -78,6 +79,7 @@ topup_policy.amount = "4T"
 # --- Scale Hub Pools ---
 [subnets.prime.canisters.scale_hub.scaling.pools.scales]
 canister_role = "scale"
+policy.initial_workers = 1
 policy.min_workers = 2
 
 # --- Scale ---

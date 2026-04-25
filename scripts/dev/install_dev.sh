@@ -3,6 +3,10 @@ set -euo pipefail
 
 CANIC_INSTALLER_VERSION="${CANIC_INSTALLER_VERSION:-0.27.15}"
 CANIC_RUST_TOOLCHAIN="${CANIC_RUST_TOOLCHAIN:-1.95.0}"
+ACTIONLINT_VERSION="${ACTIONLINT_VERSION:-1.7.8}"
+ACTIONLINT_INSTALL_DIR="${ACTIONLINT_INSTALL_DIR:-$HOME/.local/bin}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 RUSTUP_INIT_URL="https://sh.rustup.rs"
 DFX_INSTALL_URL="https://internetcomputer.org/install.sh"
 CANIC_DEV_TOOLS=(
@@ -77,6 +81,23 @@ install_cargo_tools() {
     yellow "$label:"
     cyan_command "cargo +$CANIC_RUST_TOOLCHAIN install --locked ${tools[*]}"
     cargo_toolchain install --locked "${tools[@]}"
+}
+
+install_or_update_actionlint() {
+    local bin
+
+    yellow "actionlint:"
+    cyan_command "ACTIONLINT_INSTALL_DIR=$ACTIONLINT_INSTALL_DIR bash scripts/ci/install-actionlint.sh $ACTIONLINT_VERSION"
+    require_command curl
+    require_command tar
+    bin="$(ACTIONLINT_INSTALL_DIR="$ACTIONLINT_INSTALL_DIR" bash "$ROOT_DIR/scripts/ci/install-actionlint.sh" "$ACTIONLINT_VERSION")"
+
+    green "actionlint installed: $("$bin" -version 2>&1)"
+    if command -v actionlint >/dev/null 2>&1; then
+        green "actionlint on PATH: $(command -v actionlint)"
+    else
+        yellow "actionlint installed at $ACTIONLINT_INSTALL_DIR/actionlint; add $ACTIONLINT_INSTALL_DIR to PATH to run it directly."
+    fi
 }
 
 detect_python_package_manager() {
@@ -165,9 +186,10 @@ configure_git_hooks_if_present() {
 
 main() {
     if [ "${1:-}" = "--update-python" ]; then
-        blue "Updating Python prerequisites"
+        blue "Updating Python and workflow lint prerequisites"
         install_or_update_python update
-        green "Python update complete."
+        install_or_update_actionlint
+        green "Python and workflow lint update complete."
         return 0
     fi
 
@@ -200,6 +222,7 @@ main() {
 
     install_cargo_tools "Rust development tools" "${CANIC_DEV_TOOLS[@]}"
     install_cargo_tools "Wasm and Candid tools" "${CANIC_WASM_TOOLS[@]}"
+    install_or_update_actionlint
 
     yellow "Canic installer:"
     cyan_command "cargo +$CANIC_RUST_TOOLCHAIN install --locked canic-installer --version $CANIC_INSTALLER_VERSION"
