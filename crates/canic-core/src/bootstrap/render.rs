@@ -526,11 +526,13 @@ fn render_scale_pool(pool: &ScalePool) -> TokenStream {
 
 // Render the scaling pool worker policy.
 fn render_scale_pool_policy(policy: &ScalePoolPolicy) -> TokenStream {
+    let initial_workers = policy.initial_workers;
     let min_workers = policy.min_workers;
     let max_workers = policy.max_workers;
 
     quote! {
         ::canic::__internal::core::bootstrap::compiled::ScalePoolPolicy {
+            initial_workers: #initial_workers,
             min_workers: #min_workers,
             max_workers: #max_workers,
         }

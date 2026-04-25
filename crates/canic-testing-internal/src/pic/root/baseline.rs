@@ -1,6 +1,6 @@
 use super::{
     InitializedRootTopology, RootBaselineMetadata, RootBaselineSpec, progress, progress_elapsed,
-    topology::{wait_for_bootstrap, wait_for_children_ready},
+    topology::{wait_for_bootstrap, wait_for_children_ready, wait_for_snapshot_pids_ready},
 };
 use canic_testkit::pic::CachedPicBaseline;
 use std::time::Instant;
@@ -33,6 +33,7 @@ pub fn restore_root_cached_baseline(
     progress(spec, "waiting for restored child canisters ready");
     let child_wait_started_at = Instant::now();
     wait_for_children_ready(spec, baseline.pic(), &baseline.metadata().subnet_index);
+    wait_for_snapshot_pids_ready(spec, baseline.pic(), &baseline.metadata().snapshot_pids);
     progress_elapsed(
         spec,
         "restored child canisters ready",
@@ -46,7 +47,7 @@ fn capture_cached_root_baseline(
     initialized: InitializedRootTopology,
 ) -> CachedPicBaseline<RootBaselineMetadata> {
     let controller_ids = std::iter::once(initialized.metadata.root_id)
-        .chain(initialized.metadata.subnet_index.values().copied())
+        .chain(initialized.metadata.snapshot_pids.iter().copied())
         .chain(initialized.metadata.managed_store_pids.iter().copied())
         .collect::<Vec<_>>();
 

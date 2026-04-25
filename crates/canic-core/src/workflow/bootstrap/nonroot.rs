@@ -27,6 +27,7 @@
 
 use crate::{InternalError, ops::runtime::ready::ReadyOps, workflow::prelude::*};
 
+use crate::workflow::placement::scaling::ScalingWorkflow;
 #[cfg(feature = "sharding")]
 use crate::workflow::placement::sharding::ShardingWorkflow;
 use crate::workflow::runtime::auth::RuntimeAuthWorkflow;
@@ -56,6 +57,8 @@ pub async fn bootstrap_init_nonroot_canister(_args: Option<Vec<u8>>) -> Result<(
 
     #[cfg(feature = "sharding")]
     ShardingWorkflow::bootstrap_configured_initial_shards().await?;
+
+    ScalingWorkflow::bootstrap_configured_initial_workers().await?;
 
     RuntimeAuthWorkflow::prewarm_signer_delegation_proof().await?;
 

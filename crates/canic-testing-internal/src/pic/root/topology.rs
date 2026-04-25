@@ -4,7 +4,10 @@ use super::{
 use canic::{cdk::types::Principal, dto::topology::SubnetRegistryResponse, ids::CanisterRole};
 use canic_control_plane::dto::template::WasmStoreOverviewResponse;
 use canic_testkit::pic::{Pic, PicBuilder, PicStartError};
-use std::{collections::HashMap, time::Instant};
+use std::{
+    collections::{BTreeSet, HashMap},
+    time::Instant,
+};
 
 /// Install root, stage one ordinary release profile, resume bootstrap, and fetch the subnet map.
 #[must_use]
@@ -73,6 +76,16 @@ pub fn setup_root_topology(
         wait_for_children_ready(spec, &pic, &subnet_index);
         progress_elapsed(spec, "child canisters ready", child_wait_started_at);
 
+        progress(spec, "fetching registered child snapshots");
+        let snapshot_started_at = Instant::now();
+        let snapshot_pids = fetch_snapshot_pids(&pic, root_id);
+        wait_for_snapshot_pids_ready(spec, &pic, &snapshot_pids);
+        progress_elapsed(
+            spec,
+            "registered child snapshots ready",
+            snapshot_started_at,
+        );
+
         let managed_store_pids = fetch_managed_store_pids(&pic, root_id);
 
         return InitializedRootTopology {
@@ -80,6 +93,7 @@ pub fn setup_root_topology(
             metadata: RootBaselineMetadata {
                 root_id,
                 subnet_index,
+                snapshot_pids,
                 managed_store_pids,
             },
         };
@@ -106,6 +120,19 @@ pub fn wait_for_children_ready(
             .map(|(_, pid)| *pid),
         spec.bootstrap_tick_limit,
         "root children bootstrap",
+    );
+}
+
+// Wait until every registered child PID that will be snapshotted is ready.
+pub fn wait_for_snapshot_pids_ready(
+    spec: &RootBaselineSpec<'_>,
+    pic: &Pic,
+    snapshot_pids: &[Principal],
+) {
+    pic.wait_for_all_ready(
+        snapshot_pids.iter().copied(),
+        spec.bootstrap_tick_limit,
+        "root registered child bootstrap",
     );
 }
 
@@ -146,6 +173,23 @@ fn fetch_subnet_index(pic: &Pic, root_id: Principal) -> HashMap<CanisterRole, Pr
         .into_iter()
         .filter(|entry| !entry.role.is_root() && !entry.role.is_wasm_store())
         .map(|entry| (entry.role, entry.pid))
+        .collect()
+}
+
+// Fetch every non-root PID in root's registry so cached baselines include replicas.
+fn fetch_snapshot_pids(pic: &Pic, root_id: Principal) -> Vec<Principal> {
+    let registry: Result<SubnetRegistryResponse, canic::Error> = pic
+        .query_call(root_id, canic::protocol::CANIC_SUBNET_REGISTRY, ())
+        .expect("query subnet registry transport");
+
+    registry
+        .expect("query subnet registry application")
+        .0
+        .into_iter()
+        .filter(|entry| !entry.role.is_root())
+        .map(|entry| entry.pid)
+        .collect::<BTreeSet<_>>()
+        .into_iter()
         .collect()
 }
 

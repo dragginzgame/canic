@@ -378,6 +378,13 @@ impl CanisterConfig {
                     "canister '{role}' scaling pool '{pool_name}' has max_workers < min_workers",
                 )));
             }
+
+            if pool.policy.max_workers != 0 && pool.policy.max_workers < pool.policy.initial_workers
+            {
+                return Err(ConfigSchemaError::ValidationError(format!(
+                    "canister '{role}' scaling pool '{pool_name}' has max_workers < initial_workers",
+                )));
+            }
         }
 
         Ok(())
@@ -560,6 +567,9 @@ pub struct ScalePool {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields, default)]
 pub struct ScalePoolPolicy {
+    /// Number of replica canisters to create during startup warmup
+    pub initial_workers: u32,
+
     /// Minimum number of replica canisters to keep alive
     pub min_workers: u32,
 
@@ -570,6 +580,7 @@ pub struct ScalePoolPolicy {
 impl Default for ScalePoolPolicy {
     fn default() -> Self {
         Self {
+            initial_workers: 1,
             min_workers: 1,
             max_workers: 32,
         }
@@ -885,6 +896,7 @@ mod tests {
             ScalePool {
                 canister_role: CanisterRole::from("replica"),
                 policy: ScalePoolPolicy {
+                    initial_workers: 1,
                     min_workers: 5,
                     max_workers: 3,
                 },
@@ -911,6 +923,52 @@ mod tests {
         subnet
             .validate()
             .expect_err("expected invalid scaling policy to fail");
+    }
+
+    #[test]
+    fn scaling_pool_policy_defaults_to_one_initial_worker() {
+        let policy: ScalePoolPolicy =
+            toml::from_str("min_workers = 2\nmax_workers = 4").expect("policy should parse");
+
+        assert_eq!(policy.initial_workers, 1);
+    }
+
+    #[test]
+    fn scaling_pool_policy_rejects_initial_workers_above_bounded_max() {
+        let mut canisters = BTreeMap::new();
+        let mut pools = BTreeMap::new();
+        pools.insert(
+            "replica".into(),
+            ScalePool {
+                canister_role: CanisterRole::from("replica"),
+                policy: ScalePoolPolicy {
+                    initial_workers: 4,
+                    min_workers: 1,
+                    max_workers: 3,
+                },
+            },
+        );
+
+        canisters.insert(
+            CanisterRole::from("replica"),
+            base_canister_config(CanisterKind::Replica),
+        );
+
+        let manager_cfg = CanisterConfig {
+            scaling: Some(ScalingConfig { pools }),
+            ..base_canister_config(CanisterKind::Singleton)
+        };
+
+        canisters.insert(CanisterRole::from("manager"), manager_cfg);
+
+        let subnet = SubnetConfig {
+            canisters,
+            ..Default::default()
+        };
+
+        subnet
+            .validate()
+            .expect_err("expected oversized initial_workers to fail");
     }
 
     #[test]
