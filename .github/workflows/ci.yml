@@ -4,6 +4,7 @@ env:
   CANIC_MSRV: 1.91.0
   CANIC_INTERNAL_TOOLCHAIN: 1.95.0
   POCKET_IC_VERSION: 13.0.0
+  ACTIONLINT_VERSION: 1.7.8
 
 permissions:
   contents: read
@@ -25,14 +26,14 @@ jobs:
     if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     env:
-      RUSTUP_TOOLCHAIN: ${{ env.CANIC_MSRV }}
+      RUSTUP_TOOLCHAIN: 1.91.0
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@v1
         with:
-          toolchain: ${{ env.CANIC_MSRV }}
+          toolchain: 1.91.0
       - name: Install wasm target
-        run: rustup target add --toolchain ${{ env.CANIC_MSRV }} wasm32-unknown-unknown
+        run: rustup target add --toolchain "$RUSTUP_TOOLCHAIN" wasm32-unknown-unknown
       - uses: Swatinem/rust-cache@v2
       - name: Check workspace MSRV
         run: cargo check --workspace --locked
@@ -41,18 +42,26 @@ jobs:
     if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     env:
-      RUSTUP_TOOLCHAIN: ${{ env.CANIC_INTERNAL_TOOLCHAIN }}
+      RUSTUP_TOOLCHAIN: 1.95.0
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@v1
         with:
-          toolchain: ${{ env.CANIC_INTERNAL_TOOLCHAIN }}
+          toolchain: 1.95.0
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
       - name: Install fmt tools
         run: cargo install cargo-sort cargo-sort-derives --locked
       - name: Install wasm target
-        run: rustup target add --toolchain ${{ env.CANIC_INTERNAL_TOOLCHAIN }} wasm32-unknown-unknown
+        run: rustup target add --toolchain "$RUSTUP_TOOLCHAIN" wasm32-unknown-unknown
+      - name: Install actionlint
+        shell: bash
+        run: |
+          BIN="$(bash scripts/ci/install-actionlint.sh "$ACTIONLINT_VERSION")"
+          echo "ACTIONLINT_BIN=$BIN" >> "$GITHUB_ENV"
+      - name: Lint GitHub Actions workflows
+        shell: bash
+        run: "$ACTIONLINT_BIN"
       - name: Install canister build tools
         run: cargo install --locked candid-extractor ic-wasm
       - name: Install dfx
@@ -90,7 +99,7 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     env:
-      RUSTUP_TOOLCHAIN: ${{ env.CANIC_INTERNAL_TOOLCHAIN }}
+      RUSTUP_TOOLCHAIN: 1.95.0
     steps:
       - uses: actions/checkout@v4
         with:
@@ -98,13 +107,21 @@ jobs:
           clean: true
       - uses: dtolnay/rust-toolchain@v1
         with:
-          toolchain: ${{ env.CANIC_INTERNAL_TOOLCHAIN }}
+          toolchain: 1.95.0
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
       - name: Install fmt tools
         run: cargo install cargo-sort cargo-sort-derives --locked
       - name: Install wasm target
-        run: rustup target add --toolchain ${{ env.CANIC_INTERNAL_TOOLCHAIN }} wasm32-unknown-unknown
+        run: rustup target add --toolchain "$RUSTUP_TOOLCHAIN" wasm32-unknown-unknown
+      - name: Install actionlint
+        shell: bash
+        run: |
+          BIN="$(bash scripts/ci/install-actionlint.sh "$ACTIONLINT_VERSION")"
+          echo "ACTIONLINT_BIN=$BIN" >> "$GITHUB_ENV"
+      - name: Lint GitHub Actions workflows
+        shell: bash
+        run: "$ACTIONLINT_BIN"
       - name: Install canister build tools
         run: cargo install --locked candid-extractor ic-wasm
       - name: Install dfx

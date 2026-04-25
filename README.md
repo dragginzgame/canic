@@ -160,6 +160,7 @@ That script installs:
 - `wasm32-unknown-unknown`
 - `candid-extractor`
 - `ic-wasm`
+- `actionlint`
 - `cargo-watch`, `cargo-edit`, `cargo-get`, `cargo-sort`, and `cargo-sort-derives`
 - `canic-installer` `0.27.15`
 - `dfx` if it is not already installed
