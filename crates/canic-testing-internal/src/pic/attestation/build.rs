@@ -2,7 +2,7 @@ use canic_testkit::artifacts::{
     WasmBuildProfile, build_internal_test_wasm_canisters,
     build_internal_test_wasm_canisters_with_env,
 };
-use canic_testkit::pic::{Pic, PicSerialGuard, acquire_pic_serial_guard, pic as shared_pic};
+use canic_testkit::pic::{Pic, PicBuilder, PicSerialGuard, acquire_pic_serial_guard};
 use std::{
     fs,
     ops::{Deref, DerefMut},
@@ -69,7 +69,10 @@ pub(super) fn build_pic() -> SerialPic {
     progress("acquiring PocketIC serial guard");
     let serial_guard = acquire_pic_serial_guard();
     progress("starting serialized PocketIC instance");
-    let pic = shared_pic();
+    let pic = PicBuilder::new()
+        .with_ii_subnet()
+        .with_application_subnet()
+        .build();
     progress("serialized PocketIC instance ready");
 
     SerialPic {

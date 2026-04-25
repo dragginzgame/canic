@@ -1,4 +1,5 @@
 use crate::pic_role_attestation_support::*;
+use std::time::Duration;
 
 #[test]
 fn delegation_admin_prewarm_updates_stale_verifier_proof_and_records_metrics() {
@@ -228,6 +229,8 @@ fn signer_runtime_prefers_most_recent_keyed_proof_for_signing_selection() {
         "signer_runtime_prefers_most_recent_keyed_proof_for_signing_selection",
         "install stale signing proof",
     );
+    fixture.setup.pic.pic().advance_time(Duration::from_secs(1));
+    fixture.setup.pic.pic().tick();
     install_signer_test_delegation_material(
         fixture.setup.pic.pic(),
         fixture.signer_id,
