@@ -28,6 +28,7 @@ topup_policy.amount = "4T"
 
 [subnets.prime.canisters.scale_hub.scaling.pools.scales]
 canister_role = "scale"
+policy.initial_workers = 1
 policy.min_workers = 2
 
 [subnets.prime.canisters.scale]

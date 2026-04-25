@@ -170,6 +170,7 @@ Scaling pools model interchangeable replicas with simple bounds on how many to k
 ```
 [subnets.<name>.canisters.<role>.scaling.pools.<pool>]
 canister_role = "replica_role"
+policy.initial_workers = 1
 policy.min_workers = 2
 policy.max_workers = 16
 ```
@@ -177,6 +178,7 @@ policy.max_workers = 16
 Fields:
 
 - `canister_role` – canister role that represents replicas in this pool (must exist in the same subnet).
+- `policy.initial_workers` – workers to create during canister startup warmup (default `1`).
 - `policy.min_workers` – minimum workers to keep alive (default `1`).
 - `policy.max_workers` – hard cap on workers (default `32`, set to `0` for no max).
 
@@ -258,6 +260,7 @@ topup.amount = "5T"
 
 [subnets.prime.canisters.scale_hub.scaling.pools.scales]
 canister_role = "scale"
+policy.initial_workers = 1
 policy.min_workers = 2
 
 [subnets.prime.canisters.scale]

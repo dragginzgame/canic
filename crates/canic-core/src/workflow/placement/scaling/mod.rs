@@ -11,7 +11,8 @@ pub mod query;
 
 use crate::{
     InternalError, InternalErrorOrigin,
-    domain::policy::placement::scaling::{ScalingPlan, ScalingPolicy},
+    cdk::types::BoundedString64,
+    domain::policy::placement::scaling::{ScalingPlan, ScalingPolicy, ScalingWorkerPlanEntry},
     ops::{
         config::ConfigOps,
         ic::IcOps,
@@ -28,6 +29,19 @@ use crate::{
 pub struct ScalingWorkflow;
 
 impl ScalingWorkflow {
+    /// Create configured startup workers for every scaling pool on this canister.
+    pub(crate) async fn bootstrap_configured_initial_workers() -> Result<(), InternalError> {
+        let Some(scaling) = ConfigOps::current_scaling_config()? else {
+            return Ok(());
+        };
+
+        for (pool, pool_cfg) in scaling.pools {
+            Self::bootstrap_initial_workers_for_pool(&pool, &pool_cfg).await?;
+        }
+
+        Ok(())
+    }
+
     /// Create a new worker canister in the given pool, if policy allows.
     pub(crate) async fn create_worker(pool: &str) -> Result<Principal, InternalError> {
         // 0. Observe state (workflow responsibility)
@@ -54,21 +68,7 @@ impl ScalingWorkflow {
             )
         })?;
 
-        let role = entry_plan.canister_role.clone();
-
-        // 3. Create the canister
-        let pid =
-            RequestOps::create_canister::<()>(&role, CreateCanisterParent::ThisCanister, None)
-                .await?
-                .new_canister_pid;
-        crate::perf!("create_canister");
-
-        // 4. Register in memory
-        let created_at_secs = IcOps::now_secs();
-        ScalingRegistryOps::upsert_from_plan(pid, entry_plan, created_at_secs);
-        crate::perf!("register_worker");
-
-        Ok(pid)
+        Self::create_worker_from_plan(entry_plan).await
     }
 
     /// Plan whether a worker should be created according to policy.
@@ -82,5 +82,56 @@ impl ScalingWorkflow {
         crate::perf!("plan_spawn");
 
         Ok(plan.should_spawn)
+    }
+
+    // Create enough workers to satisfy one pool's startup warmup target.
+    async fn bootstrap_initial_workers_for_pool(
+        pool: &str,
+        pool_cfg: &crate::config::schema::ScalePool,
+    ) -> Result<(), InternalError> {
+        let target = pool_cfg.policy.initial_workers;
+        if target == 0 {
+            return Ok(());
+        }
+
+        loop {
+            let current = ScalingRegistryOps::count_by_pool(pool);
+            if current >= target {
+                return Ok(());
+            }
+
+            let entry_plan = ScalingWorkerPlanEntry {
+                pool: BoundedString64::new(pool),
+                canister_role: pool_cfg.canister_role.clone(),
+            };
+            let pid = Self::create_worker_from_plan(entry_plan).await?;
+
+            crate::log!(
+                Topic::Init,
+                Ok,
+                "scale.bootstrap: {pid} pool={pool} worker={}/{}",
+                current.saturating_add(1),
+                target
+            );
+        }
+    }
+
+    // Create and register a worker from a policy-approved or bootstrap-approved plan.
+    async fn create_worker_from_plan(
+        entry_plan: ScalingWorkerPlanEntry,
+    ) -> Result<Principal, InternalError> {
+        let role = entry_plan.canister_role.clone();
+
+        let pid =
+            RequestOps::create_canister::<()>(&role, CreateCanisterParent::ThisCanister, None)
+                .await?
+                .new_canister_pid;
+        crate::perf!("create_canister");
+
+        let created_at_secs = IcOps::now_secs();
+        ScalingRegistryOps::upsert_from_plan(pid, entry_plan, created_at_secs);
+        crate::perf!("register_worker");
+
+        Ok(pid)
     }
 }

@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.27.x] - 2026-04-13 - Topology Taxonomy
 
+- `0.27.15` adds `initial_workers` to scaling pool policy, so scaling parents can warm workers during bootstrap while keeping startup size separate from steady-state `min_workers` and bounded by `max_workers`.
 - `0.27.14` adds `initial_shards` to sharding pool policy and prewarms delegated signer proof during shard bootstrap, so first account placement can reuse a ready, root-authorized shard instead of paying canister creation and delegation setup on the request path.
 - `0.27.13` fixes fresh root bootstrap with large static pool imports by waiting only for the configured initial pool slice and queueing the remaining `pool.import.ic` canisters, so downstream reinstalls no longer sit in `root:init:import_pool` while resetting the entire spare pool.
 - `0.27.12` fixes the remaining GitHub Actions toolchain drift by exporting `RUSTUP_TOOLCHAIN` per CI job and installing `wasm32-unknown-unknown` for the matching internal toolchain, so nested bootstrap and test-canister wasm builds stop falling back to the wrong compiler during CI.
