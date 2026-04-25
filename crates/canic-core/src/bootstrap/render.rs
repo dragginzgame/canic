@@ -583,11 +583,13 @@ fn render_shard_pool(pool: &ShardPool) -> TokenStream {
 // Render the shard pool capacity policy.
 fn render_shard_pool_policy(policy: &ShardPoolPolicy) -> TokenStream {
     let capacity = policy.capacity;
+    let initial_shards = policy.initial_shards;
     let max_shards = policy.max_shards;
 
     quote! {
         ::canic::__internal::core::bootstrap::compiled::ShardPoolPolicy {
             capacity: #capacity,
+            initial_shards: #initial_shards,
             max_shards: #max_shards,
         }
     }
