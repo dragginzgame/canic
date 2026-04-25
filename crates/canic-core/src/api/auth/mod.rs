@@ -85,6 +85,12 @@ impl DelegationApi {
         DelegationStateOps::latest_proof_dto()
     }
 
+    /// Return whether this canister currently has a local signing proof.
+    #[must_use]
+    pub fn has_signing_proof() -> bool {
+        DelegationStateOps::latest_proof_dto().is_some()
+    }
+
     async fn sign_token(
         claims: DelegatedTokenClaims,
         proof: DelegationProof,

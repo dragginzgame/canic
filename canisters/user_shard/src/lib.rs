@@ -56,6 +56,17 @@ async fn user_shard_local_public_key_test() -> Result<Vec<u8>, Error> {
     DelegationApi::local_shard_public_key_sec1().await
 }
 
+/// user_shard_has_signing_proof_test
+/// Return whether startup delegation proof prewarm installed local signer proof.
+#[canic_query]
+async fn user_shard_has_signing_proof_test() -> Result<bool, Error> {
+    if let Err(err) = canic::access::env::build_network_local() {
+        return Err(Error::forbidden(err.to_string()));
+    }
+
+    Ok(DelegationApi::has_signing_proof())
+}
+
 #[canic_query(requires(auth::authenticated(cap::VERIFY)))]
 async fn hello(token: DelegatedToken) -> Result<(), Error> {
     Ok(())

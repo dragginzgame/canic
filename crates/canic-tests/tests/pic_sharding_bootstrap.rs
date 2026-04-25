@@ -55,21 +55,27 @@ fn sharding_bootstraps_first_shard_when_active_empty() {
         user_hub_init_args(root_id),
         None,
     );
+    pic.wait_for_ready(user_hub_id, 50, "user hub bootstrap");
+
+    let registry: Result<ShardingRegistryResponse, Error> =
+        query_call(&pic, user_hub_id, "canic_sharding_registry", ());
+    let registry = registry.expect("registry query failed");
+    let pool_entries = registry_pool_entries(registry);
+
+    assert_eq!(pool_entries.len(), 1);
+    let bootstrap_shard_pid = pool_entries[0].pid;
 
     let partition_key = Principal::from_slice(&[10; 29]);
     let shard_pid: Result<Principal, Error> =
         update_call(&pic, user_hub_id, "create_account", (partition_key,));
     let shard_pid = shard_pid.expect("create_account failed");
+    assert_eq!(shard_pid, bootstrap_shard_pid);
 
     let registry: Result<ShardingRegistryResponse, Error> =
         query_call(&pic, user_hub_id, "canic_sharding_registry", ());
     let registry = registry.expect("registry query failed");
 
-    let pool_entries: Vec<_> = registry
-        .0
-        .into_iter()
-        .filter(|entry| entry.entry.pool == POOL_NAME)
-        .collect();
+    let pool_entries = registry_pool_entries(registry);
 
     assert_eq!(pool_entries.len(), 1);
     assert_eq!(pool_entries[0].pid, shard_pid);
@@ -108,6 +114,7 @@ fn sharding_does_not_spawn_extra_shard_after_bootstrap() {
         user_hub_init_args(root_id),
         None,
     );
+    pic.wait_for_ready(user_hub_id, 50, "user hub bootstrap");
 
     let partition_key_a = Principal::from_slice(&[10; 29]);
     let partition_key_b = Principal::from_slice(&[11; 29]);
@@ -170,6 +177,17 @@ where
 {
     pic.query_call(canister_id, method, args)
         .expect("query_call failed")
+}
+
+// Collect only the entries for the user-shard pool under test.
+fn registry_pool_entries(
+    registry: ShardingRegistryResponse,
+) -> Vec<canic_core::dto::placement::sharding::ShardingRegistryEntry> {
+    registry
+        .0
+        .into_iter()
+        .filter(|entry| entry.entry.pool == POOL_NAME)
+        .collect()
 }
 
 fn build_canisters_once(workspace_root: &Path) {

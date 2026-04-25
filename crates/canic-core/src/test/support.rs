@@ -21,6 +21,7 @@ pub fn init_sharding_test_config() {
             canister_role: CanisterRole::from("shard"),
             policy: ShardPoolPolicy {
                 capacity: 1,
+                initial_shards: 1,
                 max_shards: 2,
             },
         },

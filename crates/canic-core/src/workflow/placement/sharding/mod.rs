@@ -92,6 +92,19 @@ impl ShardAllocator {
 pub struct ShardingWorkflow;
 
 impl ShardingWorkflow {
+    /// Create configured startup shards for every pool on the current canister.
+    pub async fn bootstrap_configured_initial_shards() -> Result<(), InternalError> {
+        let Some(sharding) = ConfigOps::current_canister()?.sharding else {
+            return Ok(());
+        };
+
+        for (pool, pool_cfg) in sharding.pools {
+            Self::bootstrap_initial_shards_for_pool(&pool, &pool_cfg).await?;
+        }
+
+        Ok(())
+    }
+
     pub async fn assign_to_pool(
         pool: &str,
         partition_key: impl AsRef<str>,
@@ -374,6 +387,47 @@ impl ShardingWorkflow {
         (0..max_shards)
             .filter(|slot| !occupied.contains(slot))
             .collect()
+    }
+
+    // Create enough unassigned shards to satisfy a pool's configured startup target.
+    async fn bootstrap_initial_shards_for_pool(
+        pool: &str,
+        pool_cfg: &ShardPool,
+    ) -> Result<(), InternalError> {
+        let target = pool_cfg
+            .policy
+            .initial_shards
+            .min(pool_cfg.policy.max_shards);
+        if target == 0 {
+            return Ok(());
+        }
+
+        loop {
+            let pool_entries = Self::pool_entry_views(pool);
+            let current = u32::try_from(pool_entries.len()).unwrap_or(u32::MAX);
+            if current >= target {
+                return Ok(());
+            }
+
+            let slot = Self::free_slots(pool_cfg.policy.max_shards, &pool_entries)
+                .into_iter()
+                .next()
+                .ok_or_else(|| Self::no_active_shards_exhausted(pool, "__bootstrap__"))?;
+            let pid = Self::allocate_and_admit(
+                pool,
+                slot,
+                &pool_cfg.canister_role,
+                &pool_cfg.policy,
+                None,
+            )
+            .await?;
+
+            crate::log!(
+                Topic::Sharding,
+                Ok,
+                "✨ shard.bootstrap: {pid} pool={pool} slot={slot}"
+            );
+        }
     }
 
     async fn allocate_and_admit(

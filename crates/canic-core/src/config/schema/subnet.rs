@@ -330,6 +330,12 @@ impl CanisterConfig {
                     "canister '{role}' sharding pool '{pool_name}' must have positive capacity and max_shards",
                 )));
             }
+
+            if pool.policy.initial_shards > pool.policy.max_shards {
+                return Err(ConfigSchemaError::ValidationError(format!(
+                    "canister '{role}' sharding pool '{pool_name}' has initial_shards > max_shards",
+                )));
+            }
         }
 
         Ok(())
@@ -636,6 +642,7 @@ pub struct ShardPool {
 #[serde(deny_unknown_fields, default)]
 pub struct ShardPoolPolicy {
     pub capacity: u32,
+    pub initial_shards: u32,
     pub max_shards: u32,
 }
 
@@ -643,6 +650,7 @@ impl Default for ShardPoolPolicy {
     fn default() -> Self {
         Self {
             capacity: 1_000,
+            initial_shards: 1,
             max_shards: 4,
         }
     }
@@ -747,6 +755,7 @@ mod tests {
                 canister_role: managing_role.clone(),
                 policy: ShardPoolPolicy {
                     capacity: 0,
+                    initial_shards: 1,
                     max_shards: 0,
                 },
             },
@@ -768,6 +777,52 @@ mod tests {
         subnet
             .validate()
             .expect_err("expected invalid sharding policy to fail");
+    }
+
+    #[test]
+    fn sharding_pool_policy_defaults_to_one_initial_shard() {
+        let policy: ShardPoolPolicy =
+            toml::from_str("capacity = 100\nmax_shards = 4").expect("policy should parse");
+
+        assert_eq!(policy.initial_shards, 1);
+    }
+
+    #[test]
+    fn sharding_pool_policy_rejects_initial_shards_above_max() {
+        let managing_role: CanisterRole = "shard_hub".into();
+        let worker_role: CanisterRole = "shard_worker".into();
+        let mut canisters = BTreeMap::new();
+
+        let mut sharding = ShardingConfig::default();
+        sharding.pools.insert(
+            "primary".into(),
+            ShardPool {
+                canister_role: worker_role.clone(),
+                policy: ShardPoolPolicy {
+                    capacity: 10,
+                    initial_shards: 3,
+                    max_shards: 2,
+                },
+            },
+        );
+
+        canisters.insert(worker_role, base_canister_config(CanisterKind::Shard));
+        canisters.insert(
+            managing_role,
+            CanisterConfig {
+                sharding: Some(sharding),
+                ..base_canister_config(CanisterKind::Singleton)
+            },
+        );
+
+        let subnet = SubnetConfig {
+            canisters,
+            ..Default::default()
+        };
+
+        subnet
+            .validate()
+            .expect_err("expected oversized initial_shards to fail");
     }
 
     #[test]

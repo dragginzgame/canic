@@ -27,6 +27,10 @@
 
 use crate::{InternalError, ops::runtime::ready::ReadyOps, workflow::prelude::*};
 
+#[cfg(feature = "sharding")]
+use crate::workflow::placement::sharding::ShardingWorkflow;
+use crate::workflow::runtime::auth::RuntimeAuthWorkflow;
+
 ///
 /// Bootstrap workflow for non-root canisters during init.
 ///
@@ -47,9 +51,14 @@ use crate::{InternalError, ops::runtime::ready::ReadyOps, workflow::prelude::*};
 ///
 /// This function is safe to retry and safe to run multiple times.
 ///
-#[expect(clippy::unused_async)]
 pub async fn bootstrap_init_nonroot_canister(_args: Option<Vec<u8>>) -> Result<(), InternalError> {
     log!(Topic::Init, Info, "bootstrap (nonroot): init start");
+
+    #[cfg(feature = "sharding")]
+    ShardingWorkflow::bootstrap_configured_initial_shards().await?;
+
+    RuntimeAuthWorkflow::prewarm_signer_delegation_proof().await?;
+
     log!(Topic::Init, Info, "bootstrap (nonroot): init complete");
     ReadyOps::mark_ready();
 

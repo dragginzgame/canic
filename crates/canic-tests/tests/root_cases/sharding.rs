@@ -1,11 +1,14 @@
 use crate::root::{
     RootSetupProfile, assertions::assert_registry_parents, harness::setup_cached_root,
 };
-use canic::{Error, cdk::types::Principal, ids::CanisterRole};
+use canic::{
+    Error, cdk::types::Principal, dto::placement::sharding::ShardingRegistryResponse,
+    ids::CanisterRole,
+};
 use canic_internal::canister;
 
 #[test]
-fn user_hub_sharding_profile_stays_minimal_and_can_create_a_shard() {
+fn user_hub_sharding_profile_prewarms_first_shard_and_delegation() {
     let setup = setup_cached_root(RootSetupProfile::Sharding);
 
     assert!(
@@ -23,6 +26,31 @@ fn user_hub_sharding_profile_stays_minimal_and_can_create_a_shard() {
         .copied()
         .expect("user_hub must exist in sharding profile");
 
+    let registry: Result<Result<ShardingRegistryResponse, Error>, Error> =
+        setup
+            .pic
+            .query_call_as(user_hub_pid, setup.root_id, "canic_sharding_registry", ());
+    let registry = registry
+        .expect("registry query transport failed")
+        .expect("registry query application failed");
+    let startup_shard_pid = registry
+        .0
+        .into_iter()
+        .find(|entry| entry.entry.pool == "user_shards")
+        .map(|entry| entry.pid)
+        .expect("startup user shard must exist before first account create");
+
+    let has_proof: Result<Result<bool, Error>, Error> =
+        setup
+            .pic
+            .query_call(startup_shard_pid, "user_shard_has_signing_proof_test", ());
+    assert!(
+        has_proof
+            .expect("signing proof query transport failed")
+            .expect("signing proof query application failed"),
+        "startup user shard must have root delegation proof before first account create",
+    );
+
     let created: Result<Result<Principal, Error>, Error> = setup.pic.update_call(
         user_hub_pid,
         "create_account",
@@ -31,6 +59,7 @@ fn user_hub_sharding_profile_stays_minimal_and_can_create_a_shard() {
     let shard_pid = created
         .expect("create_account transport failed")
         .expect("create_account application failed");
+    assert_eq!(shard_pid, startup_shard_pid);
     setup
         .pic
         .wait_for_ready(shard_pid, 50, "user shard bootstrap");
