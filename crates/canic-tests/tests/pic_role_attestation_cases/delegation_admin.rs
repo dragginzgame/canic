@@ -309,6 +309,7 @@ fn test_delegation_material_install_hook_not_compiled_in_normal_build() {
         aud: vec![root_id],
         iat: now,
         exp: now + 120,
+        ext: None,
     };
     let issued_token: Result<DelegatedToken, Error> = update_call_as(
         &pic,

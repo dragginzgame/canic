@@ -85,6 +85,7 @@ fn bogus_delegated_token() -> DelegatedToken {
             scopes: vec![cap::READ.to_string()],
             iat: 1,
             exp: 2,
+            ext: None,
         },
         proof: DelegationProof {
             cert: DelegationCert {

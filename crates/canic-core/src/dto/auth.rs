@@ -61,6 +61,10 @@ pub struct DelegatedTokenClaims {
     pub aud: Vec<Principal>,
     pub iat: u64,
     pub exp: u64,
+    // Optional signed application payload. CANIC preserves this field but does
+    // not interpret it; applications own its schema and authorization meaning.
+    #[serde(default)]
+    pub ext: Option<Vec<u8>>,
 }
 
 //

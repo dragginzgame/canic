@@ -38,6 +38,7 @@ pub fn issue_delegated_token(
         scopes,
         iat: issued_at,
         exp: expires_at,
+        ext: None,
     };
     let issued: Result<DelegatedToken, Error> = pic
         .update_call(shard_pid, "user_shard_issue_token", (claims,))

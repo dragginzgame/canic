@@ -25,6 +25,7 @@ fn delegated_session_bootstrap_affects_authenticated_guard_only() {
         aud: vec![signer_id],
         iat: now,
         exp: now + 120,
+        ext: None,
     };
     let issued: Result<DelegatedToken, Error> = update_call_as(
         &pic,
@@ -170,6 +171,7 @@ fn authenticated_guard_checks_current_proof_before_signature_validation() {
         aud: vec![signer_id],
         iat: now,
         exp: now + 120,
+        ext: None,
     };
     let token_a: Result<DelegatedToken, Error> = update_call_as(
         &pic,
@@ -187,6 +189,7 @@ fn authenticated_guard_checks_current_proof_before_signature_validation() {
         aud: vec![signer_id],
         iat: now,
         exp: now + 120,
+        ext: None,
     };
     let token_b: Result<DelegatedToken, Error> = update_call_as(
         &pic,
@@ -279,6 +282,7 @@ fn delegation_tier1_issue_verify_bootstrap_authenticated_end_to_end() {
         aud: vec![verifier_id],
         iat: now,
         exp: now + 120,
+        ext: None,
     };
     let issued_token: Result<DelegatedToken, Error> = update_call_as(
         &pic,
@@ -389,6 +393,7 @@ fn delegated_session_does_not_affect_role_attestation_or_capability_raw_caller_c
         aud: vec![root_id],
         iat: now,
         exp: now + 120,
+        ext: None,
     };
     let issued_token: Result<DelegatedToken, Error> = update_call_as(
         &pic,
@@ -541,6 +546,7 @@ fn delegated_session_bootstrap_replay_policy_and_metrics() {
         aud: vec![signer_id],
         iat: now,
         exp: now + 120,
+        ext: None,
     };
     let token_a: Result<DelegatedToken, Error> = update_call_as(
         &pic,
@@ -712,6 +718,7 @@ fn delegated_session_bootstrap_replay_policy_and_metrics() {
         aud: vec![signer_id],
         iat: now,
         exp: now + 180,
+        ext: None,
     };
     let token_b: Result<DelegatedToken, Error> = update_call_as(
         &pic,
@@ -759,6 +766,7 @@ fn delegated_session_bootstrap_replay_policy_and_metrics() {
         aud: vec![signer_id],
         iat: now,
         exp: now + 240,
+        ext: None,
     };
     let token_c: Result<DelegatedToken, Error> = update_call_as(
         &pic,
@@ -821,6 +829,7 @@ fn delegated_session_bootstrap_replay_with_expired_token_fails_closed() {
         aud: vec![signer_id],
         iat: now,
         exp: now + 5,
+        ext: None,
     };
     let token: Result<DelegatedToken, Error> = update_call_as(
         &pic,

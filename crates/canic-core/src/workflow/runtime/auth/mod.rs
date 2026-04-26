@@ -98,6 +98,7 @@ impl RuntimeAuthWorkflow {
             aud: Self::signer_prewarm_audience()?,
             iat: now,
             exp: now.saturating_add(ttl_secs),
+            ext: None,
         };
 
         if DelegationStateOps::latest_proof_dto()

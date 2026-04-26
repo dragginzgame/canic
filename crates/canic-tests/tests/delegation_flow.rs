@@ -224,6 +224,7 @@ fn delegated_token_request_rejected_on_invalid_claims() {
         scopes: Vec::new(),
         iat: now,
         exp: now + 60,
+        ext: None,
     };
 
     let issued: Result<Result<DelegatedToken, Error>, Error> =

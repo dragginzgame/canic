@@ -193,6 +193,7 @@ fn sample_claims() -> DelegatedTokenClaims {
         aud: vec![p(3)],
         iat: 100,
         exp: 120,
+        ext: None,
     }
 }
 

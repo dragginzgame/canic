@@ -42,6 +42,7 @@ fn sample_claims() -> DelegatedTokenClaims {
         aud: vec![p(3)],
         iat: 100,
         exp: 120,
+        ext: None,
     }
 }
 
@@ -58,6 +59,7 @@ fn sample_claims_for(
         aud: vec![audience],
         iat,
         exp,
+        ext: None,
     }
 }
 
@@ -557,12 +559,41 @@ fn trace_token_trust_chain_records_canonical_order_for_valid_token() {
     assert_eq!(claims.scopes, token.claims.scopes);
     assert_eq!(claims.iat, token.claims.iat);
     assert_eq!(claims.exp, token.claims.exp);
+    assert_eq!(claims.ext, token.claims.ext);
     assert_eq!(verified.cert.root_pid, token.proof.cert.root_pid);
     assert_eq!(verified.cert.shard_pid, token.proof.cert.shard_pid);
     assert_eq!(verified.cert.issued_at, token.proof.cert.issued_at);
     assert_eq!(verified.cert.expires_at, token.proof.cert.expires_at);
     assert_eq!(verified.cert.aud, token.proof.cert.aud);
     assert_eq!(verified.cert.scopes, token.proof.cert.scopes);
+}
+
+#[test]
+fn verified_token_claims_preserves_signed_extension_payload() {
+    let mut claims = sample_claims();
+    claims.ext = Some(b"user_id:toko-123".to_vec());
+
+    let verified = VerifiedTokenClaims::from_dto_ref(&claims);
+    let roundtrip = verified.to_dto();
+
+    assert_eq!(roundtrip.ext, claims.ext);
+}
+
+#[test]
+fn token_signing_hash_binds_extension_payload() {
+    let mut claims_a = sample_claims();
+    claims_a.ext = Some(b"user_id:toko-123".to_vec());
+
+    let mut claims_b = claims_a.clone();
+    claims_b.ext = Some(b"user_id:toko-456".to_vec());
+
+    let cert = sample_proof(p(2), 90).cert;
+    let hash_a = crypto::token_signing_hash(&VerifiedTokenClaims::from_dto_ref(&claims_a), &cert)
+        .expect("hash_a");
+    let hash_b = crypto::token_signing_hash(&VerifiedTokenClaims::from_dto_ref(&claims_b), &cert)
+        .expect("hash_b");
+
+    assert_ne!(hash_a, hash_b);
 }
 
 #[test]
