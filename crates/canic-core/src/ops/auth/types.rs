@@ -44,6 +44,7 @@ pub struct VerifiedTokenClaims {
     aud: Vec<Principal>,
     iat: u64,
     exp: u64,
+    ext: Option<Vec<u8>>,
 }
 
 impl VerifiedTokenClaims {
@@ -57,6 +58,7 @@ impl VerifiedTokenClaims {
             aud: claims.aud,
             iat: claims.iat,
             exp: claims.exp,
+            ext: claims.ext,
         }
     }
 
@@ -76,6 +78,7 @@ impl VerifiedTokenClaims {
             aud: self.aud.clone(),
             iat: self.iat,
             exp: self.exp,
+            ext: self.ext.clone(),
         }
     }
 

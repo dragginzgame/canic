@@ -118,6 +118,7 @@ pub fn issue_test_delegated_token(
         aud: vec![verifier_id],
         iat: now,
         exp: now + ttl_seconds,
+        ext: None,
     };
     let issued_token: Result<DelegatedToken, Error> = update_call_as(
         pic,
@@ -258,6 +259,7 @@ pub fn bogus_delegated_token(root_pid: Principal, shard_pid: Principal) -> Deleg
             scopes: vec![cap::VERIFY.to_string()],
             iat: 1,
             exp: 2,
+            ext: None,
         },
         proof: canic_core::dto::auth::DelegationProof {
             cert: canic_core::dto::auth::DelegationCert {
