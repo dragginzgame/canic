@@ -349,6 +349,7 @@ pub struct CyclesResponse {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::dto::auth::DelegationAudience;
 
     fn p(id: u8) -> Principal {
         Principal::from_slice(&[id; 29])
@@ -384,11 +385,11 @@ mod tests {
             Request::issue_delegation(DelegationRequest {
                 shard_pid: p(3),
                 scopes: vec!["rpc:verify".to_string()],
-                aud: vec![p(4)],
+                aud: DelegationAudience::Roles(vec![CanisterRole::new("app")]),
                 ttl_secs: 60,
                 verifier_targets: vec![],
                 include_root_verifier: false,
-                shard_public_key_sec1: None,
+                shard_public_key_sec1: vec![1, 2, 3],
                 metadata: None,
             }),
             Request::issue_role_attestation(RoleAttestationRequest {

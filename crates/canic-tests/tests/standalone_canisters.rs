@@ -8,7 +8,10 @@ use canic::{
     cdk::types::Principal,
     dto::{
         auth::AttestationKeySet,
-        auth::{DelegatedToken, DelegatedTokenClaims, DelegationCert, DelegationProof},
+        auth::{
+            DelegatedToken, DelegatedTokenClaims, DelegationAudience, DelegationCert,
+            DelegationProof,
+        },
         error::ErrorCode,
     },
     ids::cap,
@@ -81,7 +84,7 @@ fn bogus_delegated_token() -> DelegatedToken {
         claims: DelegatedTokenClaims {
             sub: p(31),
             shard_pid: p(30),
-            aud: vec![p(32)],
+            aud: DelegationAudience::Any,
             scopes: vec![cap::READ.to_string()],
             iat: 1,
             exp: 2,
@@ -91,7 +94,7 @@ fn bogus_delegated_token() -> DelegatedToken {
             cert: DelegationCert {
                 root_pid: p(29),
                 shard_pid: p(30),
-                aud: vec![p(32)],
+                aud: DelegationAudience::Any,
                 scopes: vec![cap::READ.to_string()],
                 issued_at: 1,
                 expires_at: 2,

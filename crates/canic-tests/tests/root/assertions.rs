@@ -47,7 +47,13 @@ pub fn assert_registry_parents(
 }
 
 /// Assert that a child canister exposes a correct EnvSnapshotResponse.
-pub fn assert_child_env(pic: &Pic, child_pid: Principal, role: CanisterRole, root_id: Principal) {
+pub fn assert_child_env(
+    pic: &Pic,
+    child_pid: Principal,
+    role: CanisterRole,
+    expected_parent_id: Principal,
+    root_id: Principal,
+) {
     let env: Result<EnvSnapshotResponse, canic::Error> = pic
         .query_call(child_pid, protocol::CANIC_ENV, ())
         .expect("query env transport");
@@ -58,7 +64,11 @@ pub fn assert_child_env(pic: &Pic, child_pid: Principal, role: CanisterRole, roo
         Some(role.clone()),
         "env canister role for {role}"
     );
-    assert_eq!(env.parent_pid, Some(root_id), "env parent for {role}");
+    assert_eq!(
+        env.parent_pid,
+        Some(expected_parent_id),
+        "env parent for {role}"
+    );
     assert_eq!(env.root_pid, Some(root_id), "env root for {role}");
     assert_eq!(
         env.prime_root_pid,

@@ -4,7 +4,7 @@ use super::{
 use crate::{
     InternalError,
     cdk::types::Principal,
-    dto::auth::{DelegationCert, RoleAttestation},
+    dto::auth::{DelegationAudience, DelegationCert, RoleAttestation},
     ops::{auth::DelegationValidationError, prelude::*},
 };
 use candid::encode_one;
@@ -68,7 +68,7 @@ fn hash_delegation_cert(cert: &DelegationCert) -> [u8; 32] {
     hasher.update(cert.issued_at.to_be_bytes());
     hasher.update(cert.expires_at.to_be_bytes());
     update_strings(&mut hasher, &cert.scopes);
-    update_principals(&mut hasher, &cert.aud);
+    update_audience(&mut hasher, &cert.aud);
     hasher.finalize().into()
 }
 
@@ -76,10 +76,18 @@ fn update_principal(hasher: &mut Sha256, principal: Principal) {
     update_bytes(hasher, principal.as_slice());
 }
 
-fn update_principals(hasher: &mut Sha256, principals: &[Principal]) {
-    hasher.update((principals.len() as u64).to_be_bytes());
-    for principal in principals {
-        update_principal(hasher, *principal);
+fn update_audience(hasher: &mut Sha256, audience: &DelegationAudience) {
+    match audience {
+        DelegationAudience::Any => {
+            hasher.update(0u8.to_be_bytes());
+        }
+        DelegationAudience::Roles(roles) => {
+            hasher.update(1u8.to_be_bytes());
+            hasher.update((roles.len() as u64).to_be_bytes());
+            for role in roles {
+                update_bytes(hasher, role.as_str().as_bytes());
+            }
+        }
     }
 }
 

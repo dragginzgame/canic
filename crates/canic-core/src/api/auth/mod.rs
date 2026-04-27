@@ -2,10 +2,10 @@ use crate::{
     cdk::types::Principal,
     dto::{
         auth::{
-            AttestationKeySet, DelegatedToken, DelegatedTokenClaims, DelegationCert,
-            DelegationProof, DelegationProvisionResponse, DelegationProvisionStatus,
-            DelegationProvisionTargetKind, DelegationRequest, RoleAttestationRequest,
-            SignedRoleAttestation,
+            AttestationKeySet, DelegatedToken, DelegatedTokenClaims, DelegationAudience,
+            DelegationCert, DelegationProof, DelegationProvisionResponse,
+            DelegationProvisionStatus, DelegationProvisionTargetKind, DelegationRequest,
+            RoleAttestationRequest, SignedRoleAttestation,
         },
         error::{Error, ErrorCode},
         rpc::{Request as RootRequest, Response as RootCapabilityResponse},
@@ -30,7 +30,9 @@ use crate::{
     protocol,
     workflow::rpc::request::handler::RootResponseWorkflow,
 };
-use std::borrow::Borrow;
+
+#[cfg(test)]
+use crate::ids::CanisterRole;
 
 // Internal auth pipeline:
 // - `session` owns delegated-session ingress and replay/session state handling.
@@ -167,11 +169,10 @@ impl DelegationApi {
     /// Scopes and `ext` are preserved. The replacement expiry is capped at the
     /// old token expiry, so this refreshes audience only and does not renew the
     /// session.
-    pub async fn reissue_token<A>(token: DelegatedToken, aud: A) -> Result<DelegatedToken, Error>
-    where
-        A: IntoIterator,
-        A::Item: Borrow<Principal>,
-    {
+    pub async fn reissue_token(
+        token: DelegatedToken,
+        aud: DelegationAudience,
+    ) -> Result<DelegatedToken, Error> {
         let aud = Self::normalize_audience(aud)?;
         let root_pid = EnvOps::root_pid().map_err(Error::from)?;
         let now_secs = IcOps::now_secs();
@@ -190,14 +191,10 @@ impl DelegationApi {
     /// With no token, this mints a default `verify`-scoped token for
     /// `msg_caller()`. With a caller-bound token, this returns it unchanged when
     /// it already covers the audience or reissues it without extending expiry.
-    pub async fn ensure_token<A>(
+    pub async fn ensure_token(
         token: Option<DelegatedToken>,
-        aud: A,
-    ) -> Result<DelegatedToken, Error>
-    where
-        A: IntoIterator,
-        A::Item: Borrow<Principal>,
-    {
+        aud: DelegationAudience,
+    ) -> Result<DelegatedToken, Error> {
         let requested_aud = Self::normalize_audience(aud)?;
         match token {
             Some(token) => Self::ensure_existing_token_for_audience(token, requested_aud).await,
@@ -226,17 +223,16 @@ impl DelegationApi {
     // Return an existing caller-bound token or reissue it to cover missing audience entries.
     async fn ensure_existing_token_for_audience(
         token: DelegatedToken,
-        requested_aud: Vec<Principal>,
+        requested_aud: DelegationAudience,
     ) -> Result<DelegatedToken, Error> {
         let root_pid = EnvOps::root_pid().map_err(Error::from)?;
         let now_secs = IcOps::now_secs();
         let (old_claims, _) = Self::verify_token_for_caller(&token, root_pid, now_secs)?;
-        if audience::principals_subset(&requested_aud, &old_claims.aud) {
+        if audience::roles_subset(&requested_aud, &old_claims.aud) {
             return Ok(token);
         }
 
-        let mut aud = old_claims.aud.clone();
-        Self::append_missing_principals(&mut aud, &requested_aud);
+        let aud = Self::merge_audience_for_reissue(old_claims.aud.clone(), requested_aud);
         let replacement_claims = DelegatedTokenClaims {
             aud,
             iat: now_secs,
@@ -247,7 +243,9 @@ impl DelegationApi {
     }
 
     // Issue the initial caller-bound token for an authenticated wallet/session principal.
-    async fn issue_token_for_caller_audience(aud: Vec<Principal>) -> Result<DelegatedToken, Error> {
+    async fn issue_token_for_caller_audience(
+        aud: DelegationAudience,
+    ) -> Result<DelegatedToken, Error> {
         let caller = IcOps::msg_caller();
         if let Err(reason) = crate::access::auth::validate_delegated_session_subject(caller) {
             return Err(Error::forbidden(format!(
@@ -434,12 +432,11 @@ impl DelegationApi {
 
     // Provision a fresh delegation from root, then resolve the latest locally stored proof.
     async fn setup_delegation(claims: &DelegatedTokenClaims) -> Result<DelegationProof, Error> {
-        let mut request = Self::delegation_request_from_claims(claims)?;
-        request.shard_public_key_sec1 = Some(
-            DelegatedTokenOps::local_shard_public_key_sec1(request.shard_pid)
+        let shard_public_key_sec1 =
+            DelegatedTokenOps::local_shard_public_key_sec1(claims.shard_pid)
                 .await
-                .map_err(Self::map_delegation_error)?,
-        );
+                .map_err(Self::map_delegation_error)?;
+        let request = Self::delegation_request_from_claims(claims, shard_public_key_sec1)?;
         let required_verifier_targets = request.verifier_targets.clone();
         let response = Self::request_delegation_remote(request).await?;
         Self::ensure_required_verifier_targets_provisioned(&required_verifier_targets, &response)?;
@@ -480,32 +477,40 @@ impl DelegationApi {
         }
     }
 
-    // Normalize caller-supplied audience principals with set semantics.
-    fn normalize_audience<A>(audience: A) -> Result<Vec<Principal>, Error>
-    where
-        A: IntoIterator,
-        A::Item: Borrow<Principal>,
-    {
+    // Normalize caller-supplied audience roles with set semantics.
+    fn normalize_audience(audience: DelegationAudience) -> Result<DelegationAudience, Error> {
+        let DelegationAudience::Roles(roles) = audience else {
+            return Ok(DelegationAudience::Any);
+        };
+
         let mut out = Vec::new();
-        for principal in audience {
-            let principal = *principal.borrow();
-            if !out.contains(&principal) {
-                out.push(principal);
+        for role in roles {
+            if !out.contains(&role) {
+                out.push(role);
             }
         }
 
         if out.is_empty() {
-            return Err(Error::invalid("token audience must not be empty"));
+            return Err(Error::invalid("token audience role list must not be empty"));
         }
 
-        Ok(out)
+        Ok(DelegationAudience::Roles(out))
     }
 
-    // Append principals not already present in the target vector.
-    fn append_missing_principals(target: &mut Vec<Principal>, source: &[Principal]) {
-        for principal in source {
-            if !target.contains(principal) {
-                target.push(*principal);
+    // Merge role-scoped audiences while preserving wildcard broadening semantics.
+    fn merge_audience_for_reissue(
+        current: DelegationAudience,
+        requested: DelegationAudience,
+    ) -> DelegationAudience {
+        match (current, requested) {
+            (DelegationAudience::Any, _) | (_, DelegationAudience::Any) => DelegationAudience::Any,
+            (DelegationAudience::Roles(mut current), DelegationAudience::Roles(requested)) => {
+                for role in requested {
+                    if !current.contains(&role) {
+                        current.push(role);
+                    }
+                }
+                DelegationAudience::Roles(current)
             }
         }
     }
@@ -515,9 +520,9 @@ impl DelegationApi {
         old_claims: &DelegatedTokenClaims,
         replacement_claims: &DelegatedTokenClaims,
     ) -> Result<(), Error> {
-        if replacement_claims.aud.is_empty() {
+        if audience::has_empty_roles(&replacement_claims.aud) {
             return Err(Error::invalid(
-                "replacement token audience must not be empty",
+                "replacement token audience role list must not be empty",
             ));
         }
 
@@ -577,6 +582,7 @@ impl DelegationApi {
     // Build a canonical delegation request from token claims.
     fn delegation_request_from_claims(
         claims: &DelegatedTokenClaims,
+        shard_public_key_sec1: Vec<u8>,
     ) -> Result<DelegationRequest, Error> {
         let ttl_secs = claims.exp.saturating_sub(claims.iat);
         if ttl_secs == 0 {
@@ -591,11 +597,10 @@ impl DelegationApi {
             &claims.aud,
             signer_pid,
             root_pid,
-            Self::is_registered_canister,
         )
-        .map_err(|principal| {
+        .map_err(|role| {
             Error::invalid(format!(
-                "delegation audience principal '{principal}' is invalid for canonical verifier provisioning"
+                "delegation audience role '{role}' is invalid for canonical verifier provisioning"
             ))
         })?;
 
@@ -606,7 +611,7 @@ impl DelegationApi {
             ttl_secs,
             verifier_targets,
             include_root_verifier: true,
-            shard_public_key_sec1: None,
+            shard_public_key_sec1,
             metadata: None,
         })
     }
@@ -653,33 +658,43 @@ impl DelegationApi {
 
     // Derive required verifier targets from audience with strict filtering/validation.
     #[cfg(test)]
-    fn derive_required_verifier_targets_from_aud<F>(
-        audience: &[Principal],
+    fn derive_required_verifier_targets_from_aud(
+        audience: &DelegationAudience,
         signer_pid: Principal,
         root_pid: Principal,
-        is_valid_target: F,
-    ) -> Result<Vec<Principal>, Error>
-    where
-        F: FnMut(Principal) -> bool,
-    {
-        DelegatedTokenOps::required_verifier_targets_from_audience(
-            audience,
-            signer_pid,
-            root_pid,
-            is_valid_target,
-        )
-        .map_err(|principal| {
-            Error::invalid(format!(
-                "delegation audience principal '{principal}' is invalid for canonical verifier provisioning"
-            ))
-        })
+        mut resolve_role: impl FnMut(&CanisterRole) -> Result<Vec<Principal>, ()>,
+    ) -> Result<Vec<Principal>, Error> {
+        let mut verifier_targets = Vec::new();
+        let DelegationAudience::Roles(roles) = audience else {
+            return Ok(verifier_targets);
+        };
+        if roles.is_empty() {
+            return Err(Error::invalid(
+                "delegation audience role list must not be empty",
+            ));
+        }
+
+        for role in roles {
+            let pids = resolve_role(role).map_err(|()| {
+                Error::invalid(format!(
+                    "delegation audience role '{role}' is invalid for canonical verifier provisioning"
+                ))
+            })?;
+            for pid in pids {
+                if pid == signer_pid || pid == root_pid || verifier_targets.contains(&pid) {
+                    continue;
+                }
+                verifier_targets.push(pid);
+            }
+        }
+        Ok(verifier_targets)
     }
 
     // Delegated audience invariants:
-    // 1. claims.aud must be non-empty.
-    // 2. claims.aud must be a set-subset of proof.cert.aud.
-    // 3. proof installation on target T requires T ∈ proof.cert.aud.
-    // 4. token acceptance on canister C requires C ∈ claims.aud.
+    // 1. Some(empty) audiences are invalid; None means any registered verifier.
+    // 2. claims.aud must stay within proof.cert.aud.
+    // 3. proof installation on target T requires T's role to be allowed by proof.cert.aud.
+    // 4. token acceptance on canister C requires C's role to be allowed by claims.aud.
     //
     // Keep ingress, fanout, install, and runtime checks aligned to this block.
 }

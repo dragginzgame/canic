@@ -2,7 +2,8 @@ use candid::Principal;
 use canic::{
     Error,
     dto::auth::{
-        DelegatedToken, DelegatedTokenClaims, DelegationProvisionResponse, DelegationRequest,
+        DelegatedToken, DelegatedTokenClaims, DelegationAudience, DelegationProvisionResponse,
+        DelegationRequest,
     },
     ids::cap,
     protocol,
@@ -26,7 +27,7 @@ pub fn issue_delegated_token(
     pic: &Pic,
     shard_pid: Principal,
     subject: Principal,
-    aud: Vec<Principal>,
+    aud: DelegationAudience,
     scopes: Vec<String>,
     issued_at: u64,
     expires_at: u64,
@@ -60,13 +61,12 @@ pub fn request_root_delegation_provision(
     let request = DelegationRequest {
         shard_pid,
         scopes: vec![cap::VERIFY.to_string()],
-        aud: vec![verifier_pid],
+        aud: DelegationAudience::Any,
         ttl_secs: 60,
         verifier_targets: vec![verifier_pid],
         include_root_verifier: true,
-        shard_public_key_sec1: Some(
-            shard_public_key_sec1.expect("user_shard_local_public_key_test application failed"),
-        ),
+        shard_public_key_sec1: shard_public_key_sec1
+            .expect("user_shard_local_public_key_test application failed"),
         metadata: None,
     };
     let response: Result<Result<DelegationProvisionResponse, Error>, Error> = pic.update_call_as(

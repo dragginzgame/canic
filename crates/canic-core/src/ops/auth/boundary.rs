@@ -1,13 +1,15 @@
 use super::{DelegatedTokenOps, VerifiedTokenClaims, audience};
 use crate::{
     cdk::types::Principal,
-    dto::auth::{DelegatedToken, DelegatedTokenClaims, DelegationProof},
+    dto::auth::{DelegatedToken, DelegatedTokenClaims, DelegationAudience, DelegationProof},
+    ids::CanisterRole,
+    ops::{config::ConfigOps, storage::registry::subnet::SubnetRegistryOps},
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum BootstrapTokenAudienceSubset {
     Accepted,
-    EmptyClaimsAudience,
+    EmptyRoleAudience,
     OutsideProofAudience,
 }
 
@@ -41,7 +43,7 @@ impl DelegatedTokenOps {
         }
 
         let grant = claims.grant();
-        audience::principals_subset(grant.aud, &proof.cert.aud)
+        audience::roles_subset(grant.aud, &proof.cert.aud)
             && audience::strings_subset(grant.scopes, &proof.cert.scopes)
     }
 
@@ -49,11 +51,11 @@ impl DelegatedTokenOps {
     pub(crate) fn bootstrap_token_audience_subset(
         token: &DelegatedToken,
     ) -> BootstrapTokenAudienceSubset {
-        if token.claims.aud.is_empty() {
-            return BootstrapTokenAudienceSubset::EmptyClaimsAudience;
+        if audience::has_empty_roles(&token.claims.aud) {
+            return BootstrapTokenAudienceSubset::EmptyRoleAudience;
         }
 
-        if audience::principals_subset(&token.claims.aud, &token.proof.cert.aud) {
+        if audience::roles_subset(&token.claims.aud, &token.proof.cert.aud) {
             BootstrapTokenAudienceSubset::Accepted
         } else {
             BootstrapTokenAudienceSubset::OutsideProofAudience
@@ -91,30 +93,60 @@ impl DelegatedTokenOps {
     }
 
     // Derive canonical verifier fanout targets from token audience while rejecting invalid entries.
-    pub(crate) fn required_verifier_targets_from_audience<F>(
-        audience: &[Principal],
+    pub(crate) fn required_verifier_targets_from_audience(
+        audience: &DelegationAudience,
         signer_pid: Principal,
         root_pid: Principal,
-        mut is_valid_target: F,
-    ) -> Result<Vec<Principal>, Principal>
-    where
-        F: FnMut(Principal) -> bool,
-    {
+    ) -> Result<Vec<Principal>, CanisterRole> {
         let mut verifier_targets = Vec::new();
-        for principal in audience {
-            if *principal == signer_pid || *principal == root_pid {
-                continue;
-            }
+        match audience {
+            DelegationAudience::Any => {
+                for (role, pids) in SubnetRegistryOps::role_index() {
+                    let cfg =
+                        ConfigOps::current_subnet_canister(&role).map_err(|_| role.clone())?;
+                    if !cfg.delegated_auth.verifier {
+                        continue;
+                    }
 
-            if !is_valid_target(*principal) {
-                return Err(*principal);
+                    append_target_pids(&mut verifier_targets, pids, signer_pid, root_pid);
+                }
             }
+            DelegationAudience::Roles(roles) if roles.is_empty() => {
+                return Err(CanisterRole::new(""));
+            }
+            DelegationAudience::Roles(roles) => {
+                for role in roles {
+                    let cfg = ConfigOps::current_subnet_canister(role).map_err(|_| role.clone())?;
+                    if !cfg.delegated_auth.verifier {
+                        return Err(role.clone());
+                    }
 
-            if !verifier_targets.contains(principal) {
-                verifier_targets.push(*principal);
+                    let pids = SubnetRegistryOps::role_index()
+                        .remove(role)
+                        .unwrap_or_default();
+                    append_target_pids(&mut verifier_targets, pids, signer_pid, root_pid);
+                }
             }
         }
 
         Ok(verifier_targets)
+    }
+}
+
+// Append verifier targets while preserving deterministic first-seen order.
+fn append_target_pids(
+    verifier_targets: &mut Vec<Principal>,
+    pids: Vec<Principal>,
+    signer_pid: Principal,
+    root_pid: Principal,
+) {
+    for pid in pids {
+        if pid == signer_pid || pid == root_pid {
+            continue;
+        }
+
+        if !verifier_targets.contains(&pid) {
+            verifier_targets.push(pid);
+        }
     }
 }

@@ -9,7 +9,8 @@ use std::{path::PathBuf, sync::Mutex};
 const ROOT_WASM_RELATIVE: &str = ".dfx/local/canisters/root/root.wasm.gz";
 const ROOT_WASM_ARTIFACT_RELATIVE: &str = ".dfx/local/canisters/root/root.wasm.gz";
 const ROOT_RELEASE_ARTIFACTS_RELATIVE: &str = ".dfx/local/canisters";
-const ROOT_TOPOLOGY_RELEASE_ROLES: &[&str] = &["app", "scale_hub", "user_hub"];
+const ROOT_TOPOLOGY_RELEASE_ROLES: &[&str] =
+    &["app", "scale", "scale_hub", "user_hub", "user_shard"];
 const ROOT_CAPABILITY_RELEASE_ROLES: &[&str] = &["app", "scale_hub", "test"];
 const ROOT_SCALING_RELEASE_ROLES: &[&str] = &["scale", "scale_hub"];
 const ROOT_SHARDING_RELEASE_ROLES: &[&str] = &["test", "user_hub", "user_shard"];

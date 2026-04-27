@@ -18,7 +18,7 @@ use crate::{
             record_delegation_install_validation_failed, record_verifier_proof_cache_eviction,
             record_verifier_proof_cache_stats,
         },
-        storage::auth::DelegationStateOps,
+        storage::{auth::DelegationStateOps, registry::subnet::SubnetRegistryOps},
     },
 };
 
@@ -108,7 +108,7 @@ impl DelegationApi {
             request.intent,
             kind,
             request.root_public_key_sec1,
-            request.shard_public_key_sec1,
+            Some(request.shard_public_key_sec1),
         )
         .await
     }
@@ -169,7 +169,21 @@ impl DelegationApi {
         intent: crate::dto::auth::DelegationProofInstallIntent,
         stage: AudienceBindingFailureStage,
     ) -> Result<(), Error> {
-        if audience::principal_allowed(target, &proof.cert.aud) {
+        let Some(record) = SubnetRegistryOps::get(target) else {
+            return Err(Error::invalid(format!(
+                "delegation verifier target '{target}' is not registered"
+            )));
+        };
+
+        let canister_cfg = ConfigOps::current_subnet_canister(&record.role).map_err(Error::from)?;
+        if !canister_cfg.delegated_auth.verifier {
+            return Err(Error::invalid(format!(
+                "delegation verifier target '{target}' role '{}' is not configured as a verifier",
+                record.role
+            )));
+        }
+
+        if audience::role_allowed(&record.role, &proof.cert.aud) {
             return Ok(());
         }
 
@@ -189,7 +203,8 @@ impl DelegationApi {
         }
 
         Err(Error::invalid(format!(
-            "delegation verifier target '{target}' is not in proof audience"
+            "delegation verifier target '{target}' role '{}' is not in proof audience",
+            record.role
         )))
     }
 

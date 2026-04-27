@@ -5,6 +5,22 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.28.x] - 2026-04-27 - Delegation Audience Hard Cut
+
+- `0.28.0` hard-cuts delegated auth onto `DelegationAudience` and required shard public keys, so stale-audience token refresh and verifier proof installation use explicit, non-optional auth material.
+
+```rust
+let token = DelegationApi::ensure_token(
+    existing_token,
+    DelegationAudience::Roles(vec![CanisterRole::new("project_hub")]),
+)
+.await?;
+```
+
+See detailed breakdown:
+[docs/changelog/0.28.md](docs/changelog/0.28.md)
+
+---
 
 ## [0.27.x] - 2026-04-13 - Topology Taxonomy & Bug Fixing
 

@@ -291,7 +291,7 @@ fn prepare_scenario(setup: &root_harness::RootSetup, scenario: &AuditScenario) -
                 &setup.pic,
                 shard_pid,
                 subject,
-                vec![target_pid],
+                DelegationAudience::Any,
                 vec![cap::VERIFY.to_string()],
                 provision.proof.cert.issued_at,
                 provision.proof.cert.expires_at,

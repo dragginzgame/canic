@@ -136,7 +136,7 @@ fn authorize_issue_delegation(
         return Err(RpcWorkflowError::DelegationInvalidTtl(req.ttl_secs).into());
     }
 
-    if req.aud.is_empty() {
+    if crate::ops::auth::audience::has_empty_roles(&req.aud) {
         return Err(RpcWorkflowError::DelegationAudienceEmpty.into());
     }
 
@@ -165,7 +165,17 @@ fn authorize_issue_delegation(
             .into());
         }
 
-        if !SubnetRegistryOps::is_registered(*target) {
+        let Some(target_record) = SubnetRegistryOps::get(*target) else {
+            return Err(RpcWorkflowError::DelegationVerifierTargetNotRegistered {
+                target: *target,
+            }
+            .into());
+        };
+
+        let target_cfg = ConfigOps::current_subnet_canister(&target_record.role)?;
+        if !target_cfg.delegated_auth.verifier
+            || !crate::ops::auth::audience::role_allowed(&target_record.role, &req.aud)
+        {
             return Err(RpcWorkflowError::DelegationVerifierTargetNotRegistered {
                 target: *target,
             }

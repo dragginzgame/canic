@@ -7,7 +7,9 @@ use crate::{
             DelegationExpiryError, DelegationSignatureError, TokenAudience, TokenGrant,
             TokenLifetime, VerifiedTokenClaims,
         },
+        config::ConfigOps,
         ic::{IcOps, ecdsa::EcdsaOps},
+        runtime::env::EnvOps,
         runtime::metrics::auth::record_verifier_cert_expired,
         storage::auth::DelegationStateOps,
     },
@@ -313,7 +315,10 @@ pub(super) fn verify_self_audience(
     audience_input: TokenAudience<'_>,
     self_pid: Principal,
 ) -> Result<(), InternalError> {
-    audience::verify_self_audience(audience_input, self_pid).map_err(InternalError::from)
+    let self_role = EnvOps::canister_role()?;
+    let self_is_verifier = ConfigOps::current_canister()?.delegated_auth.verifier;
+    audience::verify_self_audience(audience_input, self_pid, &self_role, self_is_verifier)
+        .map_err(InternalError::from)
 }
 
 // Enforce token grant bounds against the delegation certificate scope and audience.

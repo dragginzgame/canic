@@ -4,7 +4,7 @@ use canic::{
     api::ic::network::NetworkApi,
     cdk::{types::Principal, utils::wasm::get_wasm_hash},
     dto::{
-        auth::DelegatedToken,
+        auth::{DelegatedToken, DelegationAudience},
         capability::{
             CAPABILITY_VERSION_V1, CapabilityProof, CapabilityRequestMetadata, CapabilityService,
             RootCapabilityEnvelopeV1, RootCapabilityResponseV1,

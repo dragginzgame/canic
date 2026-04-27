@@ -49,7 +49,7 @@ fn root_reference_topology_is_consistent() {
     );
     for (role, pid) in &setup.subnet_index {
         if !role.is_root() && *role != CanisterRole::WASM_STORE {
-            assert_child_env(&setup.pic, *pid, role.clone(), setup.root_id);
+            assert_child_env(&setup.pic, *pid, role.clone(), setup.root_id, setup.root_id);
         }
     }
 

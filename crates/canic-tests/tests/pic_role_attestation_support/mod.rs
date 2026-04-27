@@ -3,9 +3,9 @@ pub use canic_core::api::rpc::RpcApi;
 pub use canic_core::dto::{
     auth::{
         AttestationKeyStatus, DelegatedToken, DelegatedTokenClaims, DelegationAdminCommand,
-        DelegationAdminResponse, DelegationProofInstallIntent, DelegationProofInstallRequest,
-        DelegationProvisionStatus, DelegationVerifierProofPushRequest, RoleAttestationRequest,
-        SignedRoleAttestation,
+        DelegationAdminResponse, DelegationAudience, DelegationProofInstallIntent,
+        DelegationProofInstallRequest, DelegationProvisionStatus,
+        DelegationVerifierProofPushRequest, RoleAttestationRequest, SignedRoleAttestation,
     },
     capability::{
         CAPABILITY_VERSION_V1, CapabilityProof, CapabilityRequestMetadata, CapabilityService,

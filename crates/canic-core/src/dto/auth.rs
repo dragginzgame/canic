@@ -1,6 +1,16 @@
 use crate::dto::{error::Error, prelude::*, rpc::RootRequestMetadata};
 
 //
+// DelegationAudience
+//
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum DelegationAudience {
+    Any,
+    Roles(Vec<CanisterRole>),
+}
+
+//
 // DelegationCert
 //
 
@@ -11,7 +21,7 @@ pub struct DelegationCert {
     pub issued_at: u64,
     pub expires_at: u64,
     pub scopes: Vec<String>,
-    pub aud: Vec<Principal>,
+    pub aud: DelegationAudience,
 }
 
 //
@@ -45,8 +55,7 @@ pub struct DelegationProofInstallRequest {
     pub intent: DelegationProofInstallIntent,
     #[serde(default)]
     pub root_public_key_sec1: Option<Vec<u8>>,
-    #[serde(default)]
-    pub shard_public_key_sec1: Option<Vec<u8>>,
+    pub shard_public_key_sec1: Vec<u8>,
 }
 
 //
@@ -58,7 +67,7 @@ pub struct DelegatedTokenClaims {
     pub sub: Principal,
     pub shard_pid: Principal,
     pub scopes: Vec<String>,
-    pub aud: Vec<Principal>,
+    pub aud: DelegationAudience,
     pub iat: u64,
     pub exp: u64,
     // Optional signed application payload. CANIC preserves this field but does
@@ -86,12 +95,11 @@ pub struct DelegatedToken {
 pub struct DelegationRequest {
     pub shard_pid: Principal,
     pub scopes: Vec<String>,
-    pub aud: Vec<Principal>,
+    pub aud: DelegationAudience,
     pub ttl_secs: u64,
     pub verifier_targets: Vec<Principal>,
     pub include_root_verifier: bool,
-    #[serde(default)]
-    pub shard_public_key_sec1: Option<Vec<u8>>,
+    pub shard_public_key_sec1: Vec<u8>,
     #[serde(default)]
     pub metadata: Option<RootRequestMetadata>,
 }
@@ -189,8 +197,7 @@ pub struct DelegationProvisionRequest {
     pub cert: DelegationCert,
     pub signer_targets: Vec<Principal>,
     pub verifier_targets: Vec<Principal>,
-    #[serde(default)]
-    pub shard_public_key_sec1: Option<Vec<u8>>,
+    pub shard_public_key_sec1: Vec<u8>,
 }
 
 // admin-only: not part of canonical delegation flow.

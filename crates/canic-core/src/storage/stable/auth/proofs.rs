@@ -202,6 +202,7 @@ mod tests {
     use super::*;
     use crate::cdk::types::Principal;
     use crate::storage::stable::auth::{DELEGATION_STATE, DelegationState};
+    use crate::{dto::auth::DelegationAudience, ids::CanisterRole};
 
     ///
     /// DelegationStateRestore
@@ -238,7 +239,7 @@ mod tests {
                     issued_at: installed_at,
                     expires_at: installed_at + 100,
                     scopes: vec!["verify".to_string()],
-                    aud: vec![p(2)],
+                    aud: DelegationAudience::Roles(vec![CanisterRole::new("project_hub")]),
                 },
                 cert_sig: vec![id],
             },

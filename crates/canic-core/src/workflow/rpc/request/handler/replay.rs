@@ -5,7 +5,7 @@ use super::{
 use crate::{
     InternalError,
     cdk::types::Principal,
-    dto::rpc::Response,
+    dto::{auth::DelegationAudience, rpc::Response},
     ids::CanisterRole,
     ops::{
         replay::{
@@ -249,6 +249,22 @@ pub(super) fn hash_principals(hasher: &mut Sha256, principals: &[Principal]) {
     hash_u64(hasher, principals.len() as u64);
     for principal in principals {
         hash_principal(hasher, principal);
+    }
+}
+
+/// hash_audience
+///
+/// Append one delegation audience field to the replay payload hash.
+pub(super) fn hash_audience(hasher: &mut Sha256, audience: &DelegationAudience) {
+    match audience {
+        DelegationAudience::Any => hash_bool(hasher, false),
+        DelegationAudience::Roles(roles) => {
+            hash_bool(hasher, true);
+            hash_u64(hasher, roles.len() as u64);
+            for role in roles {
+                hash_role(hasher, role);
+            }
+        }
     }
 }
 

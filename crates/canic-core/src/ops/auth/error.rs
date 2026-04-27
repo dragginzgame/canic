@@ -1,4 +1,4 @@
-use crate::{InternalError, InternalErrorOrigin, ops::prelude::*};
+use crate::{InternalError, InternalErrorOrigin, ids::CanisterRole, ops::prelude::*};
 use thiserror::Error as ThisError;
 
 #[derive(Debug, ThisError)]
@@ -89,6 +89,15 @@ pub enum DelegationScopeError {
     #[error("audience principal '{aud}' not allowed by delegation")]
     AudienceNotAllowed { aud: Principal },
 
+    #[error("audience role '{role}' not allowed by delegation")]
+    AudienceRoleNotAllowed { role: CanisterRole },
+
+    #[error("wildcard verifier audience not allowed by role-scoped delegation")]
+    AudienceAnyNotAllowed,
+
+    #[error("token audience role list must not be empty")]
+    AudienceRoleListEmpty,
+
     #[error("scope '{scope}' not allowed by delegation")]
     ScopeNotAllowed { scope: String },
 
@@ -100,6 +109,15 @@ pub enum DelegationScopeError {
 
     #[error("token audience does not include local canister '{self_pid}'")]
     SelfAudienceMissing { self_pid: Principal },
+
+    #[error("token audience does not include local canister role '{role}' for '{self_pid}'")]
+    SelfRoleAudienceMissing {
+        self_pid: Principal,
+        role: CanisterRole,
+    },
+
+    #[error("local canister '{self_pid}' is not configured as a delegated auth verifier")]
+    SelfVerifierUnavailable { self_pid: Principal },
 
     #[error("attestation subject mismatch (expected caller {expected}, found {found})")]
     AttestationSubjectMismatch {

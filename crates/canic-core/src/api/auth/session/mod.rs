@@ -166,8 +166,8 @@ impl DelegationApi {
     pub(super) fn ensure_token_claim_audience_subset(token: &DelegatedToken) -> Result<(), Error> {
         match DelegatedTokenOps::bootstrap_token_audience_subset(token) {
             BootstrapTokenAudienceSubset::Accepted => Ok(()),
-            BootstrapTokenAudienceSubset::EmptyClaimsAudience => Err(Error::invalid(
-                "delegated token claims audience must not be empty",
+            BootstrapTokenAudienceSubset::EmptyRoleAudience => Err(Error::invalid(
+                "delegated token claims audience role list must not be empty",
             )),
             BootstrapTokenAudienceSubset::OutsideProofAudience => Err(Error::invalid(
                 "delegated token claims audience is not a subset of proof audience",
