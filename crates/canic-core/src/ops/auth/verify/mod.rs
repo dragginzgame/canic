@@ -73,6 +73,15 @@ pub(super) fn verify_token_trust_chain(
     token_chain::verify_token_trust_chain(token, authority_pid, now_secs, self_pid)
 }
 
+// Route issuer-side delegated-token verification through the token-chain verifier module.
+pub(super) fn verify_token_trust_chain_for_reissue(
+    token: &DelegatedToken,
+    authority_pid: Principal,
+    now_secs: u64,
+) -> Result<(), InternalError> {
+    token_chain::verify_token_trust_chain_for_reissue(token, authority_pid, now_secs)
+}
+
 // Expose the trust-chain trace seam for unit tests without widening production visibility.
 #[cfg(test)]
 pub(super) fn trace_token_trust_chain(
