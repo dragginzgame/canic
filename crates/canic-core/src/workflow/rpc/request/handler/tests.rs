@@ -1,8 +1,9 @@
 use super::*;
 use crate::{
     cdk::types::Principal,
+    config::schema::{CanisterKind, DelegatedAuthCanisterConfig},
     dto::{
-        auth::{DelegationCert, DelegationRequest, RoleAttestationRequest},
+        auth::{DelegationAudience, DelegationCert, DelegationRequest, RoleAttestationRequest},
         rpc::{
             CreateCanisterParent, CreateCanisterRequest, CyclesRequest, CyclesResponse,
             RecycleCanisterRequest, RootRequestMetadata, UpgradeCanisterRequest,
@@ -21,6 +22,7 @@ use crate::{
     storage::stable::env::{Env, EnvRecord},
     storage::stable::replay::{ReplaySlotKey, RootReplayRecord},
     storage::stable::state::app::{AppMode, AppStateRecord},
+    test::config::ConfigTestBuilder,
 };
 use candid::encode_one;
 use sha2::{Digest, Sha256};
@@ -53,6 +55,7 @@ fn configure_root_env(root_pid: Principal) -> EnvRestore {
     let original = Env::export();
     Env::import(EnvRecord {
         root_pid: Some(root_pid),
+        subnet_role: Some(crate::ids::SubnetRole::PRIME),
         ..EnvRecord::default()
     });
     EnvRestore(original)
@@ -79,7 +82,7 @@ fn sample_delegation_cert(root_pid: Principal) -> DelegationCert {
         issued_at: 100,
         expires_at: 200,
         scopes: vec!["rpc:verify".to_string()],
-        aud: vec![p(3)],
+        aud: DelegationAudience::Roles(vec![CanisterRole::new("project_hub")]),
     }
 }
 
@@ -220,11 +223,11 @@ fn map_request_maps_issue_delegation() {
     let req = Request::IssueDelegation(DelegationRequest {
         shard_pid: p(2),
         scopes: vec!["rpc:call".to_string()],
-        aud: vec![p(3)],
+        aud: DelegationAudience::Roles(vec![CanisterRole::new("project_hub")]),
         ttl_secs: 60,
         verifier_targets: vec![p(4)],
         include_root_verifier: true,
-        shard_public_key_sec1: None,
+        shard_public_key_sec1: vec![1, 2, 3],
         metadata: None,
     });
 
@@ -270,7 +273,7 @@ fn validate_delegation_cert_policy_rejects_empty_audience() {
     let _restore = configure_root_env(root_pid);
 
     let mut cert = sample_delegation_cert(root_pid);
-    cert.aud.clear();
+    cert.aud = DelegationAudience::Roles(Vec::new());
 
     let err = delegation::validate_delegation_cert_policy(&cert, root_pid)
         .expect_err("empty audience must fail");
@@ -353,11 +356,11 @@ fn authorize_rejects_issue_delegation_when_verifier_target_is_root() {
     let capability = RootCapability::IssueDelegation(DelegationRequest {
         shard_pid: caller,
         scopes: vec!["rpc:verify".to_string()],
-        aud: vec![p(33)],
+        aud: DelegationAudience::Roles(vec![CanisterRole::new("project_hub")]),
         ttl_secs: 60,
         verifier_targets: vec![root_pid],
         include_root_verifier: true,
-        shard_public_key_sec1: None,
+        shard_public_key_sec1: vec![1, 2, 3],
         metadata: None,
     });
 
@@ -385,11 +388,11 @@ fn authorize_rejects_issue_delegation_when_verifier_target_is_shard() {
     let capability = RootCapability::IssueDelegation(DelegationRequest {
         shard_pid: caller,
         scopes: vec!["rpc:verify".to_string()],
-        aud: vec![p(35)],
+        aud: DelegationAudience::Roles(vec![CanisterRole::new("project_hub")]),
         ttl_secs: 60,
         verifier_targets: vec![caller],
         include_root_verifier: true,
-        shard_public_key_sec1: None,
+        shard_public_key_sec1: vec![1, 2, 3],
         metadata: None,
     });
 
@@ -418,11 +421,11 @@ fn authorize_rejects_issue_delegation_when_verifier_target_is_unregistered() {
     let capability = RootCapability::IssueDelegation(DelegationRequest {
         shard_pid: caller,
         scopes: vec!["rpc:verify".to_string()],
-        aud: vec![unregistered],
+        aud: DelegationAudience::Roles(vec![CanisterRole::new("project_hub")]),
         ttl_secs: 60,
         verifier_targets: vec![unregistered],
         include_root_verifier: true,
-        shard_public_key_sec1: None,
+        shard_public_key_sec1: vec![1, 2, 3],
         metadata: None,
     });
 
@@ -437,6 +440,18 @@ fn authorize_rejects_issue_delegation_when_verifier_target_is_unregistered() {
 fn authorize_allows_issue_delegation_when_verifier_target_is_registered() {
     let root_pid = p(60);
     let _restore = configure_root_env(root_pid);
+    let mut verifier_cfg = ConfigTestBuilder::canister_config(CanisterKind::Singleton);
+    verifier_cfg.delegated_auth = DelegatedAuthCanisterConfig {
+        signer: false,
+        verifier: true,
+    };
+    let _config = ConfigTestBuilder::new()
+        .with_prime_canister(
+            CanisterRole::ROOT,
+            ConfigTestBuilder::canister_config(CanisterKind::Root),
+        )
+        .with_prime_canister(CanisterRole::new("project_hub"), verifier_cfg)
+        .install();
     SubnetRegistryOps::register_root(root_pid, 1);
 
     let verifier = p(38);
@@ -460,11 +475,11 @@ fn authorize_allows_issue_delegation_when_verifier_target_is_registered() {
     let capability = RootCapability::IssueDelegation(DelegationRequest {
         shard_pid: caller,
         scopes: vec!["rpc:verify".to_string()],
-        aud: vec![verifier],
+        aud: DelegationAudience::Roles(vec![CanisterRole::new("project_hub")]),
         ttl_secs: 60,
         verifier_targets: vec![verifier],
         include_root_verifier: true,
-        shard_public_key_sec1: None,
+        shard_public_key_sec1: vec![1, 2, 3],
         metadata: None,
     });
 

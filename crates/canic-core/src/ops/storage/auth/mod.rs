@@ -4,8 +4,8 @@ use crate::{
     InternalError,
     cdk::types::Principal,
     config::schema::DelegationProofCacheProfile,
-    dto::auth::AttestationKeySet,
     dto::auth::{AttestationKey, DelegationProof},
+    dto::auth::{AttestationKeySet, DelegationAudience},
     ops::config::{ConfigOps, DelegationProofCachePolicy},
     storage::stable::auth::{
         DelegatedSessionBootstrapBindingRecord, DelegatedSessionRecord,
@@ -52,7 +52,7 @@ struct StoredDelegationCert {
     issued_at: u64,
     expires_at: u64,
     scopes: Vec<String>,
-    aud: Vec<Principal>,
+    aud: DelegationAudience,
 }
 
 ///

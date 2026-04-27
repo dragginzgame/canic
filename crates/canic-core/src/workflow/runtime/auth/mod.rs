@@ -2,17 +2,17 @@ use crate::{
     InternalError, InternalErrorOrigin,
     config::ConfigModel,
     dto::auth::{
-        DelegatedTokenClaims, DelegationProvisionResponse, DelegationProvisionStatus,
-        DelegationProvisionTargetKind, DelegationRequest,
+        DelegatedTokenClaims, DelegationAudience, DelegationProvisionResponse,
+        DelegationProvisionStatus, DelegationProvisionTargetKind, DelegationRequest,
     },
     ids::{CanisterRole, cap},
     ops::{
-        auth::DelegatedTokenOps,
+        auth::{DelegatedTokenOps, audience},
         config::ConfigOps,
         ic::{IcOps, ecdsa::EcdsaOps},
         rpc::RpcOps,
         runtime::env::EnvOps,
-        storage::{auth::DelegationStateOps, index::subnet::SubnetIndexOps},
+        storage::auth::DelegationStateOps,
     },
     protocol,
     workflow::prelude::*,
@@ -95,7 +95,7 @@ impl RuntimeAuthWorkflow {
             sub: IcOps::canister_self(),
             shard_pid: IcOps::canister_self(),
             scopes: vec![cap::VERIFY.to_string()],
-            aud: Self::signer_prewarm_audience()?,
+            aud: DelegationAudience::Any,
             iat: now,
             exp: now.saturating_add(ttl_secs),
             ext: None,
@@ -117,7 +117,7 @@ impl RuntimeAuthWorkflow {
             ttl_secs,
             verifier_targets: verifier_targets.clone(),
             include_root_verifier: true,
-            shard_public_key_sec1: Some(shard_public_key_sec1),
+            shard_public_key_sec1,
             metadata: None,
         };
 
@@ -132,47 +132,29 @@ impl RuntimeAuthWorkflow {
         crate::log!(
             Topic::Auth,
             Info,
-            "delegation signer proof prewarmed shard={} aud={} ttl_secs={}",
+            "delegation signer proof prewarmed shard={} aud_roles={} ttl_secs={}",
             response.proof.cert.shard_pid,
-            response.proof.cert.aud.len(),
+            audience::role_count(&response.proof.cert.aud),
             ttl_secs
         );
 
         Ok(())
     }
 
-    // Build a broad local proof audience from the current signer and indexed verifier canisters.
-    fn signer_prewarm_audience() -> Result<Vec<Principal>, InternalError> {
-        let local = IcOps::canister_self();
-        let subnet_cfg = ConfigOps::current_subnet()?;
-        let mut audience = vec![local];
-
-        for (role, canister_cfg) in subnet_cfg.canisters {
-            if !canister_cfg.delegated_auth.verifier {
-                continue;
-            }
-
-            if let Some(pid) = SubnetIndexOps::get(&role)
-                && !audience.contains(&pid)
-            {
-                audience.push(pid);
-            }
-        }
-
-        Ok(audience)
-    }
-
     // Select remote verifier targets that need root-pushed proof material during prewarm.
     fn signer_prewarm_verifier_targets(
-        audience: &[Principal],
+        audience: &DelegationAudience,
     ) -> Result<Vec<Principal>, InternalError> {
         let local = IcOps::canister_self();
         let root = EnvOps::root_pid()?;
-        let verifier_targets = audience
-            .iter()
-            .copied()
-            .filter(|pid| *pid != local && *pid != root)
-            .collect();
+        let verifier_targets =
+            DelegatedTokenOps::required_verifier_targets_from_audience(audience, local, root)
+                .map_err(|role| {
+                    InternalError::workflow(
+                        InternalErrorOrigin::Workflow,
+                        format!("delegation prewarm audience role '{role}' is not a verifier"),
+                    )
+                })?;
 
         Ok(verifier_targets)
     }

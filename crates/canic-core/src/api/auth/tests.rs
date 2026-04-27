@@ -1,15 +1,19 @@
 use super::proof_store::AudienceBindingFailureStage;
 use super::*;
-use crate::InternalErrorOrigin;
 use crate::cdk::types::Principal;
+use crate::config::schema::{CanisterKind, DelegatedAuthCanisterConfig};
 use crate::dto::auth::{
-    DelegatedToken, DelegatedTokenClaims, DelegationCert, DelegationProof,
+    DelegatedToken, DelegatedTokenClaims, DelegationAudience, DelegationCert, DelegationProof,
     DelegationProofInstallIntent, DelegationProvisionResponse, DelegationProvisionStatus,
     DelegationProvisionTargetKind, DelegationProvisionTargetResponse,
     DelegationVerifierProofPushRequest,
 };
 use crate::dto::error::ErrorCode;
 use crate::ops::auth::{DelegatedTokenOpsError, DelegationExpiryError, DelegationValidationError};
+use crate::ops::storage::registry::subnet::SubnetRegistryOps;
+use crate::storage::stable::env::{Env, EnvRecord};
+use crate::test::config::ConfigTestBuilder;
+use crate::{InternalErrorOrigin, ids::SubnetRole};
 use futures::executor::block_on;
 use std::cell::Cell;
 
@@ -185,12 +189,70 @@ fn p(id: u8) -> Principal {
     Principal::from_slice(&[id; 29])
 }
 
+struct EnvRestore(EnvRecord);
+
+impl Drop for EnvRestore {
+    fn drop(&mut self) {
+        Env::import(self.0.clone());
+    }
+}
+
+fn verifier_cfg() -> crate::config::schema::CanisterConfig {
+    let mut cfg = ConfigTestBuilder::canister_config(CanisterKind::Singleton);
+    cfg.delegated_auth = DelegatedAuthCanisterConfig {
+        signer: false,
+        verifier: true,
+    };
+    cfg
+}
+
+fn install_proof_audience_test_context() -> EnvRestore {
+    let _config = ConfigTestBuilder::new()
+        .with_prime_canister(
+            CanisterRole::ROOT,
+            ConfigTestBuilder::canister_config(CanisterKind::Root),
+        )
+        .with_prime_canister(CanisterRole::new("project_hub"), verifier_cfg())
+        .with_prime_canister(CanisterRole::new("admin"), verifier_cfg())
+        .install();
+
+    let root_pid = p(1);
+    if SubnetRegistryOps::get(root_pid).is_none() {
+        SubnetRegistryOps::register_root(root_pid, 1);
+    }
+    for (pid, role) in [
+        (p(3), CanisterRole::new("project_hub")),
+        (p(4), CanisterRole::new("project_hub")),
+        (p(9), CanisterRole::new("admin")),
+    ] {
+        if SubnetRegistryOps::get(pid).is_none() {
+            SubnetRegistryOps::register_unchecked(
+                pid,
+                &role,
+                root_pid,
+                vec![],
+                u64::from(pid.as_slice()[0]),
+            )
+            .expect("register verifier test canister");
+        }
+    }
+
+    let original = Env::export();
+    Env::import(EnvRecord {
+        root_pid: Some(root_pid),
+        subnet_role: Some(SubnetRole::PRIME),
+        canister_role: Some(CanisterRole::ROOT),
+        ..EnvRecord::default()
+    });
+    EnvRestore(original)
+}
+
 fn sample_claims() -> DelegatedTokenClaims {
     DelegatedTokenClaims {
         sub: p(9),
         shard_pid: p(2),
         scopes: vec!["verify".to_string()],
-        aud: vec![p(3)],
+        aud: DelegationAudience::Roles(vec![CanisterRole::new("app")]),
         iat: 100,
         exp: 120,
         ext: None,
@@ -205,7 +267,11 @@ fn sample_proof() -> DelegationProof {
             issued_at: 90,
             expires_at: 130,
             scopes: vec!["verify".to_string(), "read".to_string()],
-            aud: vec![p(3), p(4)],
+            aud: DelegationAudience::Roles(vec![
+                CanisterRole::new("app"),
+                CanisterRole::new("api"),
+                CanisterRole::new("project_hub"),
+            ]),
         },
         cert_sig: vec![1, 2, 3],
     }
@@ -251,25 +317,32 @@ fn canonicalize_claims_for_proof_keeps_valid_existing_window() {
 }
 
 #[test]
-fn normalize_audience_accepts_array_and_dedupes() {
-    let audience =
-        DelegationApi::normalize_audience([p(3), p(4), p(3)]).expect("array audience is valid");
+fn normalize_audience_accepts_roles_and_dedupes() {
+    let audience = DelegationApi::normalize_audience(DelegationAudience::Roles(vec![
+        CanisterRole::new("app"),
+        CanisterRole::new("api"),
+        CanisterRole::new("app"),
+    ]))
+    .expect("role audience is valid");
 
-    assert_eq!(audience, vec![p(3), p(4)]);
+    assert_eq!(
+        audience,
+        DelegationAudience::Roles(vec![CanisterRole::new("app"), CanisterRole::new("api")])
+    );
 }
 
 #[test]
-fn normalize_audience_accepts_slice_and_dedupes() {
-    let input = vec![p(3), p(4), p(3)];
-    let audience = DelegationApi::normalize_audience(&input).expect("slice audience is valid");
+fn normalize_audience_accepts_any_registered_verifier() {
+    let audience = DelegationApi::normalize_audience(DelegationAudience::Any)
+        .expect("wildcard audience is valid");
 
-    assert_eq!(audience, vec![p(3), p(4)]);
+    assert_eq!(audience, DelegationAudience::Any);
 }
 
 #[test]
-fn normalize_audience_rejects_empty_input() {
-    let err = DelegationApi::normalize_audience(Vec::<Principal>::new())
-        .expect_err("empty audience must fail");
+fn normalize_audience_rejects_empty_role_list() {
+    let err = DelegationApi::normalize_audience(DelegationAudience::Roles(Vec::new()))
+        .expect_err("empty role audience must fail");
 
     assert_eq!(err.code, ErrorCode::InvalidInput);
     assert!(
@@ -279,12 +352,20 @@ fn normalize_audience_rejects_empty_input() {
 }
 
 #[test]
-fn append_missing_principals_preserves_existing_order() {
-    let mut target = vec![p(3), p(4)];
+fn merge_audience_for_reissue_preserves_existing_order() {
+    let merged = DelegationApi::merge_audience_for_reissue(
+        DelegationAudience::Roles(vec![CanisterRole::new("app"), CanisterRole::new("api")]),
+        DelegationAudience::Roles(vec![CanisterRole::new("api"), CanisterRole::new("admin")]),
+    );
 
-    DelegationApi::append_missing_principals(&mut target, &[p(4), p(5), p(3), p(6)]);
-
-    assert_eq!(target, vec![p(3), p(4), p(5), p(6)]);
+    assert_eq!(
+        merged,
+        DelegationAudience::Roles(vec![
+            CanisterRole::new("app"),
+            CanisterRole::new("api"),
+            CanisterRole::new("admin")
+        ])
+    );
 }
 
 #[test]
@@ -292,7 +373,7 @@ fn reissue_claims_allowed_accepts_scope_subset_and_changed_ext() {
     let mut old_claims = sample_claims();
     old_claims.scopes = vec!["verify".to_string(), "read".to_string()];
     let mut replacement = old_claims.clone();
-    replacement.aud = vec![p(4)];
+    replacement.aud = DelegationAudience::Roles(vec![CanisterRole::new("api")]);
     replacement.scopes = vec!["read".to_string()];
     replacement.ext = Some(vec![1, 2, 3]);
 
@@ -368,7 +449,7 @@ fn reissue_claims_reject_shard_change() {
 fn reissue_claims_reject_empty_audience() {
     let old_claims = sample_claims();
     let mut replacement = old_claims.clone();
-    replacement.aud.clear();
+    replacement.aud = DelegationAudience::Roles(Vec::new());
 
     let err = DelegationApi::ensure_reissue_claims_allowed(&old_claims, &replacement)
         .expect_err("replacement audience must not be empty");
@@ -469,7 +550,11 @@ fn ensure_token_claim_audience_subset_accepts_subset() {
 #[test]
 fn ensure_token_claim_audience_subset_uses_set_semantics() {
     let mut token = sample_token();
-    token.claims.aud = vec![p(4), p(3), p(3)];
+    token.claims.aud = DelegationAudience::Roles(vec![
+        CanisterRole::new("api"),
+        CanisterRole::new("app"),
+        CanisterRole::new("app"),
+    ]);
 
     DelegationApi::ensure_token_claim_audience_subset(&token)
         .expect("duplicate and reordered audience entries must be accepted");
@@ -478,7 +563,7 @@ fn ensure_token_claim_audience_subset_uses_set_semantics() {
 #[test]
 fn ensure_token_claim_audience_subset_rejects_empty_claim_audience() {
     let mut token = sample_token();
-    token.claims.aud.clear();
+    token.claims.aud = DelegationAudience::Roles(Vec::new());
 
     let err = DelegationApi::ensure_token_claim_audience_subset(&token)
         .expect_err("empty claims audience must fail");
@@ -490,7 +575,7 @@ fn ensure_token_claim_audience_subset_rejects_empty_claim_audience() {
 #[test]
 fn ensure_token_claim_audience_subset_rejects_claim_outside_proof_audience() {
     let mut token = sample_token();
-    token.claims.aud.push(p(9));
+    token.claims.aud = DelegationAudience::Roles(vec![CanisterRole::new("admin")]);
 
     let err = DelegationApi::ensure_token_claim_audience_subset(&token)
         .expect_err("claims audience outside proof audience must fail");
@@ -502,7 +587,7 @@ fn ensure_token_claim_audience_subset_rejects_claim_outside_proof_audience() {
 #[test]
 fn ensure_token_claim_audience_subset_rejects_empty_proof_audience() {
     let mut token = sample_token();
-    token.proof.cert.aud.clear();
+    token.proof.cert.aud = DelegationAudience::Roles(Vec::new());
 
     let err = DelegationApi::ensure_token_claim_audience_subset(&token)
         .expect_err("empty proof audience must fail");
@@ -517,13 +602,20 @@ fn derive_required_verifier_targets_excludes_root_and_signer_and_dedupes() {
     let root_pid = p(2);
     let verifier_a = p(3);
     let verifier_b = p(4);
-    let audience = vec![signer_pid, root_pid, verifier_a, verifier_a, verifier_b];
+    let audience =
+        DelegationAudience::Roles(vec![CanisterRole::new("app"), CanisterRole::new("app")]);
 
     let derived = DelegationApi::derive_required_verifier_targets_from_aud(
         &audience,
         signer_pid,
         root_pid,
-        |principal| principal == verifier_a || principal == verifier_b,
+        |role| {
+            (role == &CanisterRole::new("app"))
+                .then_some(vec![
+                    signer_pid, root_pid, verifier_a, verifier_a, verifier_b,
+                ])
+                .ok_or(())
+        },
     )
     .expect("target derivation should succeed");
 
@@ -534,14 +626,13 @@ fn derive_required_verifier_targets_excludes_root_and_signer_and_dedupes() {
 fn derive_required_verifier_targets_rejects_invalid_audience_target() {
     let signer_pid = p(1);
     let root_pid = p(2);
-    let invalid_verifier = p(9);
-    let audience = vec![invalid_verifier];
+    let audience = DelegationAudience::Roles(vec![CanisterRole::new("invalid")]);
 
     let err = DelegationApi::derive_required_verifier_targets_from_aud(
         &audience,
         signer_pid,
         root_pid,
-        |_principal| false,
+        |_role| Err(()),
     )
     .expect_err("invalid verifier target must fail closed");
 
@@ -636,6 +727,7 @@ fn ensure_required_verifier_targets_provisioned_rejects_missing_target_result() 
 
 #[test]
 fn normalize_explicit_verifier_push_request_dedupes_targets() {
+    let _env = install_proof_audience_test_context();
     let root_pid = p(1);
     let verifier_a = p(3);
     let verifier_b = p(4);
@@ -709,6 +801,7 @@ fn normalize_explicit_verifier_push_request_rejects_unregistered_target() {
 
 #[test]
 fn normalize_explicit_verifier_push_request_rejects_target_not_in_audience() {
+    let _env = install_proof_audience_test_context();
     let root_pid = p(1);
     let verifier_a = p(3);
     let verifier_b = p(4);
@@ -731,6 +824,7 @@ fn normalize_explicit_verifier_push_request_rejects_target_not_in_audience() {
 
 #[test]
 fn normalize_explicit_verifier_push_request_is_idempotent() {
+    let _env = install_proof_audience_test_context();
     let root_pid = p(1);
     let verifier_a = p(3);
     let verifier_b = p(4);
@@ -820,6 +914,7 @@ fn repair_accepts_existing_identical_local_proof() {
 
 #[test]
 fn ensure_target_in_proof_audience_accepts_allowed_verifier() {
+    let _env = install_proof_audience_test_context();
     DelegationApi::ensure_target_in_proof_audience(
         &sample_proof(),
         p(3),
@@ -831,6 +926,7 @@ fn ensure_target_in_proof_audience_accepts_allowed_verifier() {
 
 #[test]
 fn ensure_target_in_proof_audience_rejects_target_outside_audience() {
+    let _env = install_proof_audience_test_context();
     let err = DelegationApi::ensure_target_in_proof_audience(
         &sample_proof(),
         p(9),

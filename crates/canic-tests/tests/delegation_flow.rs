@@ -9,7 +9,7 @@ use canic::{
     api::{auth::DelegationApi, ic::network::NetworkApi},
     cdk::{types::Principal, utils::time::now_secs},
     dto::{
-        auth::{DelegatedToken, DelegatedTokenClaims},
+        auth::{DelegatedToken, DelegatedTokenClaims, DelegationAudience},
         error::ErrorCode,
     },
     ids::{BuildNetwork, cap},
@@ -220,7 +220,7 @@ fn delegated_token_request_rejected_on_invalid_claims() {
     let claims = DelegatedTokenClaims {
         sub: p(9),
         shard_pid: fixture.shard_pid,
-        aud: Vec::new(),
+        aud: DelegationAudience::Roles(Vec::new()),
         scopes: Vec::new(),
         iat: now,
         exp: now + 60,
@@ -282,7 +282,7 @@ fn setup_delegation_fixture(test_name: &str) -> DelegationFixture {
 fn issue_test_token(
     fixture: &DelegationFixture,
     subject: Principal,
-    aud: Vec<Principal>,
+    _aud: Vec<Principal>,
     scopes: Vec<String>,
     ttl_secs: u64,
 ) -> DelegatedToken {
@@ -291,7 +291,7 @@ fn issue_test_token(
         &fixture.setup.pic,
         fixture.shard_pid,
         subject,
-        aud,
+        DelegationAudience::Any,
         scopes,
         now,
         now + ttl_secs,

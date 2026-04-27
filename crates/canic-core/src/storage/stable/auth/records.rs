@@ -1,4 +1,4 @@
-use crate::storage::prelude::*;
+use crate::{dto::auth::DelegationAudience, storage::prelude::*};
 
 ///
 /// DelegationCertRecord
@@ -11,7 +11,7 @@ pub struct DelegationCertRecord {
     pub issued_at: u64,
     pub expires_at: u64,
     pub scopes: Vec<String>,
-    pub aud: Vec<Principal>,
+    pub aud: DelegationAudience,
 }
 
 ///

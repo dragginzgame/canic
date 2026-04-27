@@ -9,7 +9,7 @@ use canic::{
     cdk::candid::Principal,
     dto::auth::{
         AttestationKey, AttestationKeySet, AttestationKeyStatus, DelegatedToken,
-        DelegatedTokenClaims, DelegationCert, DelegationProof, RoleAttestation,
+        DelegatedTokenClaims, DelegationAudience, DelegationCert, DelegationProof, RoleAttestation,
         RoleAttestationRequest, SignedRoleAttestation,
     },
     prelude::*,
@@ -206,8 +206,8 @@ async fn root_issue_test_delegated_token(
     if claims.exp <= claims.iat {
         return Err(Error::invalid("token exp must be greater than iat"));
     }
-    if claims.aud.is_empty() {
-        return Err(Error::invalid("token aud must not be empty"));
+    if claims.aud.as_ref().is_some_and(Vec::is_empty) {
+        return Err(Error::invalid("token aud role list must not be empty"));
     }
     if claims.scopes.is_empty() {
         return Err(Error::invalid("token scopes must not be empty"));
@@ -326,7 +326,7 @@ fn cert_hash(cert: &DelegationCert) -> [u8; 32] {
     hasher.update(cert.issued_at.to_be_bytes());
     hasher.update(cert.expires_at.to_be_bytes());
     update_strings(&mut hasher, &cert.scopes);
-    update_principals(&mut hasher, &cert.aud);
+    update_audience(&mut hasher, &cert.aud);
     hasher.finalize().into()
 }
 
@@ -356,10 +356,18 @@ fn update_principal(hasher: &mut Sha256, principal: Principal) {
     update_bytes(hasher, principal.as_slice());
 }
 
-fn update_principals(hasher: &mut Sha256, principals: &[Principal]) {
-    hasher.update((principals.len() as u64).to_be_bytes());
-    for principal in principals {
-        update_principal(hasher, *principal);
+fn update_audience(hasher: &mut Sha256, audience: &DelegationAudience) {
+    match audience {
+        DelegationAudience::Any => {
+            hasher.update(0u8.to_be_bytes());
+        }
+        DelegationAudience::Roles(roles) => {
+            hasher.update(1u8.to_be_bytes());
+            hasher.update((roles.len() as u64).to_be_bytes());
+            for role in roles {
+                update_bytes(hasher, role.as_str().as_bytes());
+            }
+        }
     }
 }
 

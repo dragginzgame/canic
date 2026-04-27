@@ -120,14 +120,6 @@ impl DelegatedTokenOps {
         Ok(())
     }
 
-    /// Fetch the shard public key only when it is missing from local verifier state.
-    pub(crate) async fn fetch_missing_shard_public_key_for_cert(
-        cert: &DelegationCert,
-    ) -> Result<Option<Vec<u8>>, InternalError> {
-        let key_name = keys::delegated_tokens_key_name()?;
-        keys::fetch_missing_shard_public_key(&key_name, cert.shard_pid).await
-    }
-
     /// Structural verification for a delegation proof.
     pub(super) fn verify_delegation_structure(
         proof: &DelegationProof,

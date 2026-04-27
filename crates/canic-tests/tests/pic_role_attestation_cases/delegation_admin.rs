@@ -192,7 +192,7 @@ fn verifier_store_rejects_root_push_when_local_canister_is_not_in_proof_audience
             proof: fixture.current_token.proof,
             intent: DelegationProofInstallIntent::Prewarm,
             root_public_key_sec1: None,
-            shard_public_key_sec1: None,
+            shard_public_key_sec1: vec![1, 2, 3],
         },),
     );
     let err = store.expect_err("verifier store must reject proof outside local audience");
@@ -306,7 +306,7 @@ fn test_delegation_material_install_hook_not_compiled_in_normal_build() {
         sub: Principal::from_slice(&[61; 29]),
         shard_pid: signer_id,
         scopes: vec![cap::VERIFY.to_string()],
-        aud: vec![root_id],
+        aud: DelegationAudience::Any,
         iat: now,
         exp: now + 120,
         ext: None,

@@ -1,11 +1,49 @@
 use super::*;
 use crate::dto::auth::{
-    AttestationKeyStatus, DelegatedToken, DelegatedTokenClaims, DelegationCert, DelegationProof,
+    AttestationKeyStatus, DelegatedToken, DelegatedTokenClaims, DelegationAudience, DelegationCert,
+    DelegationProof,
+};
+use crate::{
+    config::schema::{CanisterKind, DelegatedAuthCanisterConfig},
+    storage::stable::env::{Env, EnvRecord},
+    test::config::ConfigTestBuilder,
 };
 use k256::ecdsa::{SigningKey, signature::hazmat::PrehashSigner};
 
 fn p(id: u8) -> Principal {
     Principal::from_slice(&[id; 29])
+}
+
+struct EnvRestore(EnvRecord);
+
+impl Drop for EnvRestore {
+    fn drop(&mut self) {
+        Env::import(self.0.clone());
+    }
+}
+
+fn install_verifier_env(role: CanisterRole, root_pid: Principal) -> EnvRestore {
+    let mut verifier_cfg = ConfigTestBuilder::canister_config(CanisterKind::Singleton);
+    verifier_cfg.delegated_auth = DelegatedAuthCanisterConfig {
+        signer: false,
+        verifier: true,
+    };
+    let _config = ConfigTestBuilder::new()
+        .with_prime_canister(
+            CanisterRole::ROOT,
+            ConfigTestBuilder::canister_config(CanisterKind::Root),
+        )
+        .with_prime_canister(role.clone(), verifier_cfg)
+        .install();
+
+    let original = Env::export();
+    Env::import(EnvRecord {
+        root_pid: Some(root_pid),
+        subnet_role: Some(crate::ids::SubnetRole::PRIME),
+        canister_role: Some(role),
+        ..EnvRecord::default()
+    });
+    EnvRestore(original)
 }
 
 fn sample_attestation(epoch: u64) -> RoleAttestation {
@@ -28,7 +66,7 @@ fn sample_proof(shard_pid: Principal, issued_at: u64) -> DelegationProof {
             issued_at,
             expires_at: issued_at + 120,
             scopes: vec!["verify".to_string()],
-            aud: vec![p(3)],
+            aud: DelegationAudience::Roles(vec![CanisterRole::new("app")]),
         },
         cert_sig: vec![shard_pid.as_slice()[0], issued_at.to_le_bytes()[0]],
     }
@@ -39,7 +77,7 @@ fn sample_claims() -> DelegatedTokenClaims {
         sub: p(9),
         shard_pid: p(2),
         scopes: vec!["verify".to_string()],
-        aud: vec![p(3)],
+        aud: DelegationAudience::Roles(vec![CanisterRole::new("app")]),
         iat: 100,
         exp: 120,
         ext: None,
@@ -48,7 +86,7 @@ fn sample_claims() -> DelegatedTokenClaims {
 
 fn sample_claims_for(
     shard_pid: Principal,
-    audience: Principal,
+    _audience: Principal,
     iat: u64,
     exp: u64,
 ) -> DelegatedTokenClaims {
@@ -56,7 +94,7 @@ fn sample_claims_for(
         sub: p(9),
         shard_pid,
         scopes: vec!["verify".to_string()],
-        aud: vec![audience],
+        aud: DelegationAudience::Roles(vec![CanisterRole::new("app")]),
         iat,
         exp,
         ext: None,
@@ -86,7 +124,7 @@ fn signed_token_for(
 ) -> DelegatedToken {
     let claims = sample_claims_for(shard_pid, audience, token_iat, token_exp);
     let mut proof = sample_proof(shard_pid, cert_issued_at);
-    proof.cert.aud = vec![audience];
+    proof.cert.aud = DelegationAudience::Roles(vec![CanisterRole::new("app")]);
 
     let (root_public_key, cert_sig) = sign_prehash(root_seed, crypto::cert_hash(&proof.cert));
     let (shard_public_key, token_sig) = sign_prehash(
@@ -127,9 +165,17 @@ fn role_attestation_hash_changes_with_payload() {
 }
 
 #[test]
-fn audience_helpers_use_set_semantics_for_principals() {
-    assert!(audience::principals_subset(&[p(3), p(3)], &[p(3), p(4)]));
-    assert!(!audience::principals_subset(&[p(3), p(5)], &[p(3), p(4)]));
+fn audience_helpers_use_set_semantics_for_roles() {
+    let app = CanisterRole::new("app");
+    let api = CanisterRole::new("api");
+    assert!(audience::roles_subset(
+        &DelegationAudience::Roles(vec![app.clone(), app.clone()]),
+        &DelegationAudience::Roles(vec![app, api])
+    ));
+    assert!(!audience::roles_subset(
+        &DelegationAudience::Any,
+        &DelegationAudience::Roles(vec![CanisterRole::new("app"), CanisterRole::new("api")])
+    ));
 }
 
 #[test]
@@ -142,14 +188,14 @@ fn audience_helpers_validate_claims_against_cert() {
 #[test]
 fn audience_helpers_reject_claim_outside_cert_audience() {
     let mut claims = sample_claims();
-    claims.aud.push(p(8));
+    claims.aud = DelegationAudience::Roles(vec![CanisterRole::new("admin")]);
 
     let claims = VerifiedTokenClaims::from_dto(claims);
     let err = audience::validate_claims_against_cert(claims.grant(), &sample_proof(p(2), 90).cert)
         .expect_err("audience outside cert must fail");
     assert!(matches!(
         err,
-        DelegationScopeError::AudienceNotAllowed { aud } if aud == p(8)
+        DelegationScopeError::AudienceRoleNotAllowed { role } if role == CanisterRole::new("admin")
     ));
 }
 
@@ -514,6 +560,7 @@ fn latest_proof_prefers_most_recent_keyed_install_for_signing() {
 fn trace_token_trust_chain_stops_at_current_proof_before_signatures() {
     let authority_pid = p(42);
     let self_pid = p(61);
+    let _env = install_verifier_env(CanisterRole::new("app"), authority_pid);
     let token = signed_token_for(p(51), self_pid, 500, 505, 520, 51, 61);
 
     let (stages, result) = trace_token_trust_chain_with_forced_current_proof_failure(
@@ -534,6 +581,7 @@ fn trace_token_trust_chain_stops_at_current_proof_before_signatures() {
 fn trace_token_trust_chain_records_canonical_order_for_valid_token() {
     let authority_pid = p(42);
     let self_pid = p(62);
+    let _env = install_verifier_env(CanisterRole::new("app"), authority_pid);
     let token = signed_token_for(p(52), self_pid, 600, 605, 620, 52, 62);
 
     DelegationStateOps::upsert_proof_from_dto(token.proof.clone(), 600).expect("store proof");

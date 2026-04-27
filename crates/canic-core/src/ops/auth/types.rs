@@ -1,6 +1,6 @@
 use crate::{
     cdk::types::Principal,
-    dto::auth::{DelegatedTokenClaims, DelegationCert},
+    dto::auth::{DelegatedTokenClaims, DelegationAudience, DelegationCert},
     ops::prelude::*,
 };
 
@@ -9,7 +9,7 @@ use crate::{
 //
 
 pub struct TokenAudience<'a> {
-    pub aud: &'a [Principal],
+    pub aud: &'a DelegationAudience,
 }
 
 //
@@ -18,7 +18,7 @@ pub struct TokenAudience<'a> {
 
 pub struct TokenGrant<'a> {
     pub shard_pid: Principal,
-    pub aud: &'a [Principal],
+    pub aud: &'a DelegationAudience,
     pub scopes: &'a [String],
 }
 
@@ -41,7 +41,7 @@ pub struct VerifiedTokenClaims {
     sub: Principal,
     shard_pid: Principal,
     scopes: Vec<String>,
-    aud: Vec<Principal>,
+    aud: DelegationAudience,
     iat: u64,
     exp: u64,
     ext: Option<Vec<u8>>,
@@ -84,7 +84,7 @@ impl VerifiedTokenClaims {
 
     // Borrow the audience-only subset used by verifier-local checks.
     #[must_use]
-    pub fn audience(&self) -> TokenAudience<'_> {
+    pub const fn audience(&self) -> TokenAudience<'_> {
         TokenAudience { aud: &self.aud }
     }
 

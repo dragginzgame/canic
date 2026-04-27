@@ -1,5 +1,5 @@
 use crate::{
-    InternalError, cdk::types::Principal, dto::auth::DelegationCert,
+    InternalError, cdk::types::Principal, dto::auth::DelegationCert, ops::auth::audience,
     workflow::rpc::RpcWorkflowError,
 };
 
@@ -15,7 +15,7 @@ pub(super) fn validate_delegation_cert_policy(
         .into());
     }
 
-    if cert.aud.is_empty() {
+    if audience::has_empty_roles(&cert.aud) {
         return Err(RpcWorkflowError::DelegationAudienceEmpty.into());
     }
 

@@ -154,25 +154,18 @@ async fn execute_issue_delegation(
             vec![],
             verifier_targets,
             root_public_key_sec1.as_slice(),
-            shard_public_key_sec1.as_deref(),
+            shard_public_key_sec1.as_slice(),
         )
         .await?;
 
     if include_root_verifier {
-        let shard_public_key = match shard_public_key_sec1 {
-            Some(shard_public_key) => Some(shard_public_key),
-            None => {
-                DelegatedTokenOps::fetch_missing_shard_public_key_for_cert(&response.proof.cert)
-                    .await?
-            }
-        };
         crate::perf!("cache_root_verifier_keys");
         let outcome =
             DelegationStateOps::upsert_proof_from_dto_ref_with_cert_hash_and_shard_public_key(
                 &response.proof,
                 cert_hash,
                 ctx.now,
-                shard_public_key,
+                Some(shard_public_key_sec1),
             )?;
         crate::perf!("cache_root_verifier_upsert");
         record_verifier_proof_cache_stats(

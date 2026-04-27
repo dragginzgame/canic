@@ -7,6 +7,7 @@ use canic::{
     Error,
     cdk::types::Principal,
     dto::{
+        auth::DelegationAudience,
         capability::{
             CAPABILITY_VERSION_V1, CapabilityProof, CapabilityRequestMetadata, CapabilityService,
             RootCapabilityEnvelopeV1, RootCapabilityResponseV1,
@@ -139,11 +140,11 @@ fn structural_proof_denies_unsupported_issue_delegation_capability() {
     let request = Request::IssueDelegation(canic::dto::auth::DelegationRequest {
         shard_pid: caller,
         scopes: vec!["rpc:verify".to_string()],
-        aud: vec![caller],
+        aud: DelegationAudience::Any,
         ttl_secs: 60,
         verifier_targets: Vec::new(),
         include_root_verifier: false,
-        shard_public_key_sec1: None,
+        shard_public_key_sec1: vec![1, 2, 3],
         metadata: Some(metadata([35u8; 32], 120)),
     });
     let err = root_response_as(&setup, caller, request)
@@ -638,11 +639,11 @@ fn unsupported_capability_proof_rejection_does_not_commit_replay_entry() {
     let invalid = canic::dto::auth::DelegationRequest {
         shard_pid: caller,
         scopes: vec!["rpc:verify".to_string()],
-        aud: vec![caller],
+        aud: DelegationAudience::Any,
         ttl_secs: 60,
         verifier_targets: Vec::new(),
         include_root_verifier: false,
-        shard_public_key_sec1: None,
+        shard_public_key_sec1: vec![1, 2, 3],
         metadata: Some(metadata),
     };
 

@@ -1,15 +1,41 @@
-use crate::{cdk::types::Principal, dto::auth::DelegationCert};
+use crate::{
+    cdk::types::Principal,
+    dto::auth::{DelegationAudience, DelegationCert},
+    ids::CanisterRole,
+};
 
 use super::{DelegationScopeError, TokenAudience, TokenGrant};
 
-// Return true when the principal is present in the allowed set.
-pub fn principal_allowed(target: Principal, allowed: &[Principal]) -> bool {
-    allowed.contains(&target)
+// Return true when the local verifier role is allowed by the audience.
+pub fn role_allowed(target: &CanisterRole, allowed: &DelegationAudience) -> bool {
+    match allowed {
+        DelegationAudience::Any => true,
+        DelegationAudience::Roles(roles) => roles.iter().any(|role| role == target),
+    }
 }
 
-// Return true when every principal in `subset` is present in `superset`.
-pub fn principals_subset(subset: &[Principal], superset: &[Principal]) -> bool {
-    subset.iter().all(|item| principal_allowed(*item, superset))
+// Return true when a token audience stays within the delegation cert audience.
+pub fn roles_subset(subset: &DelegationAudience, superset: &DelegationAudience) -> bool {
+    match (subset, superset) {
+        (DelegationAudience::Any, DelegationAudience::Roles(_)) => false,
+        (DelegationAudience::Any | DelegationAudience::Roles(_), DelegationAudience::Any) => true,
+        (DelegationAudience::Roles(subset), DelegationAudience::Roles(superset)) => subset
+            .iter()
+            .all(|item| superset.iter().any(|allowed| allowed == item)),
+    }
+}
+
+// Return true when a scoped audience has no roles.
+pub const fn has_empty_roles(audience: &DelegationAudience) -> bool {
+    matches!(audience, DelegationAudience::Roles(roles) if roles.is_empty())
+}
+
+// Return the number of role entries in a scoped audience.
+pub const fn role_count(audience: &DelegationAudience) -> usize {
+    match audience {
+        DelegationAudience::Any => 0,
+        DelegationAudience::Roles(roles) => roles.len(),
+    }
 }
 
 // Return true when every string in `subset` is present in `superset`.
@@ -21,11 +47,23 @@ pub fn strings_subset(subset: &[String], superset: &[String]) -> bool {
 pub fn verify_self_audience(
     audience: TokenAudience<'_>,
     self_pid: Principal,
+    self_role: &CanisterRole,
+    self_is_verifier: bool,
 ) -> Result<(), DelegationScopeError> {
-    if principal_allowed(self_pid, audience.aud) {
-        Ok(())
-    } else {
-        Err(DelegationScopeError::SelfAudienceMissing { self_pid })
+    if !self_is_verifier {
+        return Err(DelegationScopeError::SelfVerifierUnavailable { self_pid });
+    }
+
+    match audience.aud {
+        DelegationAudience::Any => Ok(()),
+        DelegationAudience::Roles(roles) if roles.is_empty() => {
+            Err(DelegationScopeError::AudienceRoleListEmpty)
+        }
+        DelegationAudience::Roles(roles) if roles.iter().any(|role| role == self_role) => Ok(()),
+        DelegationAudience::Roles(_) => Err(DelegationScopeError::SelfRoleAudienceMissing {
+            self_pid,
+            role: self_role.clone(),
+        }),
     }
 }
 
@@ -41,11 +79,25 @@ pub fn validate_claims_against_cert(
         });
     }
 
-    if !principals_subset(grant.aud, &cert.aud) {
-        for aud in grant.aud {
-            if !principal_allowed(*aud, &cert.aud) {
-                return Err(DelegationScopeError::AudienceNotAllowed { aud: *aud });
+    if has_empty_roles(grant.aud) || has_empty_roles(&cert.aud) {
+        return Err(DelegationScopeError::AudienceRoleListEmpty);
+    }
+
+    if !roles_subset(grant.aud, &cert.aud) {
+        match (grant.aud, &cert.aud) {
+            (DelegationAudience::Any, DelegationAudience::Roles(_)) => {
+                return Err(DelegationScopeError::AudienceAnyNotAllowed);
             }
+            (DelegationAudience::Roles(grant_roles), DelegationAudience::Roles(cert_roles)) => {
+                for role in grant_roles {
+                    if !cert_roles.iter().any(|allowed| allowed == role) {
+                        return Err(DelegationScopeError::AudienceRoleNotAllowed {
+                            role: role.clone(),
+                        });
+                    }
+                }
+            }
+            _ => {}
         }
     }
 

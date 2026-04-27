@@ -1,11 +1,12 @@
-use crate::cdk::types::Principal;
 use crate::dto::{
     auth::{
-        DelegationProof, DelegationProvisionResponse, DelegationProvisionStatus,
-        DelegationProvisionTargetKind, DelegationProvisionTargetResponse,
+        DelegationAudience, DelegationProof, DelegationProvisionResponse,
+        DelegationProvisionStatus, DelegationProvisionTargetKind,
+        DelegationProvisionTargetResponse,
     },
     rpc::{CyclesResponse, Response},
 };
+use crate::{cdk::types::Principal, ids::CanisterRole};
 use candid::{decode_one, encode_one};
 
 use self::{guard::ReplayPending, slot as replay_slot};
@@ -243,7 +244,7 @@ fn encode_compact_delegation_issued(compact: &ReplayDelegationIssuedCompactV1<'_
     bytes.extend_from_slice(&compact.proof.cert.issued_at.to_be_bytes());
     bytes.extend_from_slice(&compact.proof.cert.expires_at.to_be_bytes());
     encode_string_vec(&mut bytes, &compact.proof.cert.scopes);
-    encode_principal_vec(&mut bytes, &compact.proof.cert.aud);
+    encode_audience(&mut bytes, &compact.proof.cert.aud);
     encode_bytes(&mut bytes, &compact.proof.cert_sig);
     encode_principal_vec(&mut bytes, &compact.verifier_targets);
     bytes
@@ -257,7 +258,7 @@ fn decode_compact_delegation_issued(
     let issued_at = decode_u64(&mut payload)?;
     let expires_at = decode_u64(&mut payload)?;
     let scopes = decode_string_vec(&mut payload)?;
-    let aud = decode_principal_vec(&mut payload)?;
+    let aud = decode_audience(&mut payload)?;
     let cert_sig = decode_bytes(&mut payload)?;
     let verifier_targets = decode_principal_vec(&mut payload)?;
     if !payload.is_empty() {
@@ -297,6 +298,19 @@ fn encode_string_vec(bytes: &mut Vec<u8>, values: &[String]) {
     encode_len(bytes, values.len());
     for value in values {
         encode_bytes(bytes, value.as_bytes());
+    }
+}
+
+fn encode_audience(bytes: &mut Vec<u8>, audience: &DelegationAudience) {
+    match audience {
+        DelegationAudience::Any => bytes.push(0),
+        DelegationAudience::Roles(roles) => {
+            bytes.push(1);
+            encode_len(bytes, roles.len());
+            for role in roles {
+                encode_bytes(bytes, role.as_str().as_bytes());
+            }
+        }
     }
 }
 
@@ -350,6 +364,23 @@ fn decode_string_vec(payload: &mut &[u8]) -> Result<Vec<String>, ReplayDecodeErr
     Ok(values)
 }
 
+fn decode_audience(payload: &mut &[u8]) -> Result<DelegationAudience, ReplayDecodeError> {
+    let tag = take_exact(payload, 1, "optional role audience tag")?[0];
+    match tag {
+        0 => Ok(DelegationAudience::Any),
+        1 => {
+            let roles = decode_string_vec(payload)?
+                .into_iter()
+                .map(CanisterRole::owned)
+                .collect();
+            Ok(DelegationAudience::Roles(roles))
+        }
+        other => Err(ReplayDecodeError::DecodeFailed(format!(
+            "unknown optional role audience tag: {other}"
+        ))),
+    }
+}
+
 fn decode_bytes(payload: &mut &[u8]) -> Result<Vec<u8>, ReplayDecodeError> {
     let len = decode_len(payload, "byte field length")?;
     Ok(take_exact(payload, len, "byte field")?.to_vec())
@@ -398,7 +429,7 @@ mod tests {
                     issued_at: 11,
                     expires_at: 22,
                     scopes: vec!["verify".to_string()],
-                    aud: vec![p(3)],
+                    aud: DelegationAudience::Roles(vec![CanisterRole::new("project_hub")]),
                 },
                 cert_sig: vec![7, 8, 9],
             },
