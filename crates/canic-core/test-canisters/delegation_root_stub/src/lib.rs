@@ -206,7 +206,7 @@ async fn root_issue_test_delegated_token(
     if claims.exp <= claims.iat {
         return Err(Error::invalid("token exp must be greater than iat"));
     }
-    if claims.aud.as_ref().is_some_and(Vec::is_empty) {
+    if matches!(&claims.aud, DelegationAudience::Roles(roles) if roles.is_empty()) {
         return Err(Error::invalid("token aud role list must not be empty"));
     }
     if claims.scopes.is_empty() {
