@@ -8,7 +8,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.27.x] - 2026-04-13 - Topology Taxonomy & Bug Fixing
 
-- `0.27.19` restores signed delegated-token extension payloads, so downstream apps can keep carrying app-owned identity context such as `user_id` without moving that data into CANIC-owned auth semantics.
+- `0.27.20` restores signed delegated-token extension payloads and adds idempotent issuer-side token ensure/reissue helpers, so downstream apps can refresh stale audiences without moving app-owned identity context into CANIC-owned auth semantics or silently renewing sessions.
+- `0.27.19` refreshes the release metadata and installer references for the late `0.27` line while preserving the prior CI-maintenance changelog backfill.
 - `0.27.18` fixes the role-attestation PocketIC baseline by starting attestation fixtures with threshold-key support, so delegated signer proof prewarm completes and CI no longer times out waiting for signer readiness.
 - `0.27.17` carries a small CI maintenance fix, keeping the release-line checks aligned before the role-attestation fixture fix in `0.27.18`.
 - `0.27.16` wires `actionlint` into dev setup and CI, so GitHub Actions workflow syntax and context errors are caught before they block pull request checks or tag checks.

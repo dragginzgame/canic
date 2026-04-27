@@ -50,7 +50,7 @@ impl TokenTrustChainStage {
 struct TokenTrustChainContext {
     authority_pid: Principal,
     now_secs: u64,
-    self_pid: Principal,
+    self_audience_pid: Option<Principal>,
 }
 
 // Translate low-level ECDSA verification failures into trust-chain error variants.
@@ -77,7 +77,28 @@ pub(super) fn verify_token_trust_chain(
         TokenTrustChainContext {
             authority_pid,
             now_secs,
-            self_pid,
+            self_audience_pid: Some(self_pid),
+        },
+        |_| {},
+        verify_current_proof,
+        verify_delegation_signature,
+        verify_token_sig,
+    )
+}
+
+// Verify an issuer-side token trust chain without requiring the old audience
+// to include the local signer.
+pub(super) fn verify_token_trust_chain_for_reissue(
+    token: &DelegatedToken,
+    authority_pid: Principal,
+    now_secs: u64,
+) -> Result<(), InternalError> {
+    verify_token_trust_chain_with_probe_and_steps(
+        token,
+        TokenTrustChainContext {
+            authority_pid,
+            now_secs,
+            self_audience_pid: None,
         },
         |_| {},
         verify_current_proof,
@@ -109,7 +130,9 @@ where
     let claims = VerifiedTokenClaims::from_dto_ref(&token.claims);
     verify_time_bounds(claims.lifetime(), &token.proof.cert, ctx.now_secs)?;
     validate_claims_against_cert(claims.grant(), &token.proof.cert)?;
-    verify_self_audience(claims.audience(), ctx.self_pid)?;
+    if let Some(self_pid) = ctx.self_audience_pid {
+        verify_self_audience(claims.audience(), self_pid)?;
+    }
 
     on_stage(TokenTrustChainStage::CurrentProof);
     verify_current_proof_step(&token.proof)?;
@@ -137,7 +160,7 @@ pub(super) fn trace_token_trust_chain(
         TokenTrustChainContext {
             authority_pid,
             now_secs,
-            self_pid,
+            self_audience_pid: Some(self_pid),
         },
         |stage| {
             stages.push(stage.label());
@@ -164,7 +187,7 @@ pub(super) fn trace_token_trust_chain_with_forced_current_proof_failure(
         TokenTrustChainContext {
             authority_pid,
             now_secs,
-            self_pid,
+            self_audience_pid: Some(self_pid),
         },
         |stage| {
             stages.push(stage.label());

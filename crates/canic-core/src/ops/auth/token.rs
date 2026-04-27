@@ -101,4 +101,31 @@ impl DelegatedTokenOps {
             cert: token.proof.cert.clone(),
         })
     }
+
+    // Verify a token for issuer-side reissue where the old audience may be stale.
+    pub fn verify_token_for_reissue(
+        token: &DelegatedToken,
+        authority_pid: Principal,
+        now_secs: u64,
+    ) -> Result<VerifiedDelegatedToken, InternalError> {
+        let cfg = ConfigOps::delegated_tokens_config()?;
+        if !cfg.enabled {
+            return Err(DelegationValidationError::DelegatedTokenAuthDisabled.into());
+        }
+
+        let claims = VerifiedTokenClaims::from_dto_ref(&token.claims);
+        let lifetime = claims.lifetime();
+        Self::validate_claim_invariants(lifetime, now_secs).map_err(InternalError::from)?;
+
+        if let Some(max_ttl_secs) = cfg.max_ttl_secs {
+            verify::verify_max_ttl(lifetime, max_ttl_secs).map_err(InternalError::from)?;
+        }
+
+        verify::verify_token_trust_chain_for_reissue(token, authority_pid, now_secs)?;
+
+        Ok(VerifiedDelegatedToken {
+            claims,
+            cert: token.proof.cert.clone(),
+        })
+    }
 }

@@ -251,6 +251,186 @@ fn canonicalize_claims_for_proof_keeps_valid_existing_window() {
 }
 
 #[test]
+fn normalize_audience_accepts_array_and_dedupes() {
+    let audience =
+        DelegationApi::normalize_audience([p(3), p(4), p(3)]).expect("array audience is valid");
+
+    assert_eq!(audience, vec![p(3), p(4)]);
+}
+
+#[test]
+fn normalize_audience_accepts_slice_and_dedupes() {
+    let input = vec![p(3), p(4), p(3)];
+    let audience = DelegationApi::normalize_audience(&input).expect("slice audience is valid");
+
+    assert_eq!(audience, vec![p(3), p(4)]);
+}
+
+#[test]
+fn normalize_audience_rejects_empty_input() {
+    let err = DelegationApi::normalize_audience(Vec::<Principal>::new())
+        .expect_err("empty audience must fail");
+
+    assert_eq!(err.code, ErrorCode::InvalidInput);
+    assert!(
+        err.message.contains("audience"),
+        "expected audience message, got: {err:?}"
+    );
+}
+
+#[test]
+fn append_missing_principals_preserves_existing_order() {
+    let mut target = vec![p(3), p(4)];
+
+    DelegationApi::append_missing_principals(&mut target, &[p(4), p(5), p(3), p(6)]);
+
+    assert_eq!(target, vec![p(3), p(4), p(5), p(6)]);
+}
+
+#[test]
+fn reissue_claims_allowed_accepts_scope_subset_and_changed_ext() {
+    let mut old_claims = sample_claims();
+    old_claims.scopes = vec!["verify".to_string(), "read".to_string()];
+    let mut replacement = old_claims.clone();
+    replacement.aud = vec![p(4)];
+    replacement.scopes = vec!["read".to_string()];
+    replacement.ext = Some(vec![1, 2, 3]);
+
+    DelegationApi::ensure_reissue_claims_allowed(&old_claims, &replacement)
+        .expect("subset scope and app-owned ext replacement must be accepted");
+}
+
+#[test]
+fn reissue_claims_reject_expiry_extension() {
+    let old_claims = sample_claims();
+    let mut replacement = old_claims.clone();
+    replacement.exp = old_claims.exp + 1;
+
+    let err = DelegationApi::ensure_reissue_claims_allowed(&old_claims, &replacement)
+        .expect_err("default reissue must not renew the session");
+
+    assert_eq!(err.code, ErrorCode::Forbidden);
+    assert!(
+        err.message.contains("expiry must not exceed"),
+        "expected expiry cap message, got: {err:?}"
+    );
+}
+
+#[test]
+fn reissue_claims_reject_scope_expansion() {
+    let old_claims = sample_claims();
+    let mut replacement = old_claims.clone();
+    replacement.scopes.push("admin".to_string());
+
+    let err = DelegationApi::ensure_reissue_claims_allowed(&old_claims, &replacement)
+        .expect_err("scope expansion must be rejected");
+
+    assert_eq!(err.code, ErrorCode::Forbidden);
+    assert!(
+        err.message.contains("scopes must be a subset"),
+        "expected scope subset message, got: {err:?}"
+    );
+}
+
+#[test]
+fn reissue_claims_reject_subject_change() {
+    let old_claims = sample_claims();
+    let mut replacement = old_claims.clone();
+    replacement.sub = p(8);
+
+    let err = DelegationApi::ensure_reissue_claims_allowed(&old_claims, &replacement)
+        .expect_err("reissue must stay bound to the same subject");
+
+    assert_eq!(err.code, ErrorCode::Forbidden);
+    assert!(
+        err.message.contains("subject"),
+        "expected subject mismatch message, got: {err:?}"
+    );
+}
+
+#[test]
+fn reissue_claims_reject_shard_change() {
+    let old_claims = sample_claims();
+    let mut replacement = old_claims.clone();
+    replacement.shard_pid = p(8);
+
+    let err = DelegationApi::ensure_reissue_claims_allowed(&old_claims, &replacement)
+        .expect_err("reissue must stay bound to the same shard");
+
+    assert_eq!(err.code, ErrorCode::Forbidden);
+    assert!(
+        err.message.contains("shard"),
+        "expected shard mismatch message, got: {err:?}"
+    );
+}
+
+#[test]
+fn reissue_claims_reject_empty_audience() {
+    let old_claims = sample_claims();
+    let mut replacement = old_claims.clone();
+    replacement.aud.clear();
+
+    let err = DelegationApi::ensure_reissue_claims_allowed(&old_claims, &replacement)
+        .expect_err("replacement audience must not be empty");
+
+    assert_eq!(err.code, ErrorCode::InvalidInput);
+    assert!(
+        err.message.contains("audience"),
+        "expected audience message, got: {err:?}"
+    );
+}
+
+#[test]
+fn canonicalize_reissue_claims_caps_expiry_to_old_token() {
+    let mut claims = sample_claims();
+    claims.iat = 100;
+    claims.exp = 125;
+    let mut proof = sample_proof();
+    proof.cert.issued_at = 105;
+    proof.cert.expires_at = 140;
+
+    let canonical = DelegationApi::canonicalize_reissue_claims_for_proof(claims, &proof, 120)
+        .expect("valid proof window must be accepted");
+
+    assert_eq!(canonical.iat, 105);
+    assert_eq!(canonical.exp, 120);
+}
+
+#[test]
+fn canonicalize_reissue_claims_caps_expiry_to_proof() {
+    let mut claims = sample_claims();
+    claims.iat = 100;
+    claims.exp = 120;
+    let mut proof = sample_proof();
+    proof.cert.issued_at = 100;
+    proof.cert.expires_at = 115;
+
+    let canonical = DelegationApi::canonicalize_reissue_claims_for_proof(claims, &proof, 120)
+        .expect("proof expiry should clamp replacement token");
+
+    assert_eq!(canonical.exp, 115);
+}
+
+#[test]
+fn canonicalize_reissue_claims_rejects_proof_window_after_session_expiry() {
+    let mut claims = sample_claims();
+    claims.iat = 100;
+    claims.exp = 120;
+    let mut proof = sample_proof();
+    proof.cert.issued_at = 121;
+    proof.cert.expires_at = 140;
+
+    let err = DelegationApi::canonicalize_reissue_claims_for_proof(claims, &proof, 120)
+        .expect_err("proof starting after old expiry must fail closed");
+
+    assert_eq!(err.code, ErrorCode::InvalidInput);
+    assert!(
+        err.message.contains("proof window"),
+        "expected proof-window message, got: {err:?}"
+    );
+}
+
+#[test]
 fn proof_is_reusable_for_claims_accepts_valid_subset_and_time_window() {
     let claims = sample_claims();
     let proof = sample_proof();

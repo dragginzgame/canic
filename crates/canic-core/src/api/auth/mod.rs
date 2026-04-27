@@ -11,10 +11,11 @@ use crate::{
         rpc::{Request as RootRequest, Response as RootCapabilityResponse},
     },
     error::InternalErrorClass,
+    ids::cap,
     log,
     log::Topic,
     ops::{
-        auth::DelegatedTokenOps,
+        auth::{DelegatedTokenOps, audience},
         config::ConfigOps,
         ic::IcOps,
         rpc::RpcOps,
@@ -29,6 +30,7 @@ use crate::{
     protocol,
     workflow::rpc::request::handler::RootResponseWorkflow,
 };
+use std::borrow::Borrow;
 
 // Internal auth pipeline:
 // - `session` owns delegated-session ingress and replay/session state handling.
@@ -143,6 +145,132 @@ impl DelegationApi {
         DelegatedTokenOps::verify_token(token, authority_pid, now_secs, IcOps::canister_self())
             .map(crate::ops::auth::VerifiedDelegatedToken::into_parts)
             .map_err(Self::map_delegation_error)
+    }
+
+    /// Verify a delegated token and require its subject to match `msg_caller()`.
+    ///
+    /// This issuer-side helper does not require the old token audience to
+    /// include the local signer, which allows stale-audience reissue flows.
+    pub fn verify_token_for_caller(
+        token: &DelegatedToken,
+        authority_pid: Principal,
+        now_secs: u64,
+    ) -> Result<(DelegatedTokenClaims, DelegationCert), Error> {
+        let verified = DelegatedTokenOps::verify_token_for_reissue(token, authority_pid, now_secs)
+            .map_err(Self::map_delegation_error)?;
+        Self::ensure_claims_bound_to_caller(&verified.claims.to_dto(), IcOps::msg_caller())?;
+        Ok(verified.into_parts())
+    }
+
+    /// Reissue a caller-bound token for a new audience without extending expiry.
+    ///
+    /// Scopes and `ext` are preserved. The replacement expiry is capped at the
+    /// old token expiry, so this refreshes audience only and does not renew the
+    /// session.
+    pub async fn reissue_token<A>(token: DelegatedToken, aud: A) -> Result<DelegatedToken, Error>
+    where
+        A: IntoIterator,
+        A::Item: Borrow<Principal>,
+    {
+        let aud = Self::normalize_audience(aud)?;
+        let root_pid = EnvOps::root_pid().map_err(Error::from)?;
+        let now_secs = IcOps::now_secs();
+        let (old_claims, _) = Self::verify_token_for_caller(&token, root_pid, now_secs)?;
+        let replacement_claims = DelegatedTokenClaims {
+            aud,
+            iat: now_secs,
+            ..old_claims.clone()
+        };
+
+        Self::reissue_token_from_verified(old_claims, replacement_claims).await
+    }
+
+    /// Ensure the caller has a valid delegated token for the requested audience.
+    ///
+    /// With no token, this mints a default `verify`-scoped token for
+    /// `msg_caller()`. With a caller-bound token, this returns it unchanged when
+    /// it already covers the audience or reissues it without extending expiry.
+    pub async fn ensure_token<A>(
+        token: Option<DelegatedToken>,
+        aud: A,
+    ) -> Result<DelegatedToken, Error>
+    where
+        A: IntoIterator,
+        A::Item: Borrow<Principal>,
+    {
+        let requested_aud = Self::normalize_audience(aud)?;
+        match token {
+            Some(token) => Self::ensure_existing_token_for_audience(token, requested_aud).await,
+            None => Self::issue_token_for_caller_audience(requested_aud).await,
+        }
+    }
+
+    /// Reissue a token from previously verified claims and proposed claims.
+    ///
+    /// CANIC enforces same `sub`, same `shard_pid`, no expiry extension, and a
+    /// default scope-subset rule.
+    pub async fn reissue_token_from_verified(
+        old_claims: DelegatedTokenClaims,
+        replacement_claims: DelegatedTokenClaims,
+    ) -> Result<DelegatedToken, Error> {
+        Self::ensure_reissue_claims_allowed(&old_claims, &replacement_claims)?;
+        let proof = Self::ensure_signing_proof(&replacement_claims).await?;
+        let replacement_claims = Self::canonicalize_reissue_claims_for_proof(
+            replacement_claims,
+            &proof,
+            old_claims.exp,
+        )?;
+        Self::sign_token(replacement_claims, proof).await
+    }
+
+    // Return an existing caller-bound token or reissue it to cover missing audience entries.
+    async fn ensure_existing_token_for_audience(
+        token: DelegatedToken,
+        requested_aud: Vec<Principal>,
+    ) -> Result<DelegatedToken, Error> {
+        let root_pid = EnvOps::root_pid().map_err(Error::from)?;
+        let now_secs = IcOps::now_secs();
+        let (old_claims, _) = Self::verify_token_for_caller(&token, root_pid, now_secs)?;
+        if audience::principals_subset(&requested_aud, &old_claims.aud) {
+            return Ok(token);
+        }
+
+        let mut aud = old_claims.aud.clone();
+        Self::append_missing_principals(&mut aud, &requested_aud);
+        let replacement_claims = DelegatedTokenClaims {
+            aud,
+            iat: now_secs,
+            ..old_claims.clone()
+        };
+
+        Self::reissue_token_from_verified(old_claims, replacement_claims).await
+    }
+
+    // Issue the initial caller-bound token for an authenticated wallet/session principal.
+    async fn issue_token_for_caller_audience(aud: Vec<Principal>) -> Result<DelegatedToken, Error> {
+        let caller = IcOps::msg_caller();
+        if let Err(reason) = crate::access::auth::validate_delegated_session_subject(caller) {
+            return Err(Error::forbidden(format!(
+                "delegated token caller rejected: {reason}"
+            )));
+        }
+
+        let now_secs = IcOps::now_secs();
+        let ttl_secs = ConfigOps::delegated_tokens_config()
+            .map_err(Error::from)?
+            .max_ttl_secs
+            .unwrap_or(Self::MAX_DELEGATED_SESSION_TTL_SECS);
+        let claims = DelegatedTokenClaims {
+            sub: caller,
+            shard_pid: IcOps::canister_self(),
+            scopes: vec![cap::VERIFY.to_string()],
+            aud,
+            iat: now_secs,
+            exp: now_secs.saturating_add(ttl_secs),
+            ext: None,
+        };
+
+        Self::issue_token(claims).await
     }
 
     /// Canonical shard-initiated delegation request (user_shard -> root).
@@ -335,6 +463,115 @@ impl DelegationApi {
             exp: proof.cert.expires_at,
             ..claims
         }
+    }
+
+    // Bind verified token claims to the current IC caller.
+    fn ensure_claims_bound_to_caller(
+        claims: &DelegatedTokenClaims,
+        caller: Principal,
+    ) -> Result<(), Error> {
+        if claims.sub == caller {
+            Ok(())
+        } else {
+            Err(Error::forbidden(format!(
+                "delegated token subject '{}' does not match caller '{}'",
+                claims.sub, caller
+            )))
+        }
+    }
+
+    // Normalize caller-supplied audience principals with set semantics.
+    fn normalize_audience<A>(audience: A) -> Result<Vec<Principal>, Error>
+    where
+        A: IntoIterator,
+        A::Item: Borrow<Principal>,
+    {
+        let mut out = Vec::new();
+        for principal in audience {
+            let principal = *principal.borrow();
+            if !out.contains(&principal) {
+                out.push(principal);
+            }
+        }
+
+        if out.is_empty() {
+            return Err(Error::invalid("token audience must not be empty"));
+        }
+
+        Ok(out)
+    }
+
+    // Append principals not already present in the target vector.
+    fn append_missing_principals(target: &mut Vec<Principal>, source: &[Principal]) {
+        for principal in source {
+            if !target.contains(principal) {
+                target.push(*principal);
+            }
+        }
+    }
+
+    // Enforce same-session reissue invariants before resolving signing material.
+    fn ensure_reissue_claims_allowed(
+        old_claims: &DelegatedTokenClaims,
+        replacement_claims: &DelegatedTokenClaims,
+    ) -> Result<(), Error> {
+        if replacement_claims.aud.is_empty() {
+            return Err(Error::invalid(
+                "replacement token audience must not be empty",
+            ));
+        }
+
+        if replacement_claims.sub != old_claims.sub {
+            return Err(Error::forbidden(format!(
+                "replacement token subject '{}' must match old subject '{}'",
+                replacement_claims.sub, old_claims.sub
+            )));
+        }
+
+        if replacement_claims.shard_pid != old_claims.shard_pid {
+            return Err(Error::forbidden(format!(
+                "replacement token shard '{}' must match old shard '{}'",
+                replacement_claims.shard_pid, old_claims.shard_pid
+            )));
+        }
+
+        if replacement_claims.exp > old_claims.exp {
+            return Err(Error::forbidden(
+                "replacement token expiry must not exceed old token expiry",
+            ));
+        }
+
+        if replacement_claims.exp < replacement_claims.iat {
+            return Err(Error::invalid(
+                "replacement token expiry must not precede issued_at",
+            ));
+        }
+
+        if !audience::strings_subset(&replacement_claims.scopes, &old_claims.scopes) {
+            return Err(Error::forbidden(
+                "replacement token scopes must be a subset of old token scopes",
+            ));
+        }
+
+        Ok(())
+    }
+
+    // Rebase reissue timing onto the resolved proof while preserving the old-expiry cap.
+    fn canonicalize_reissue_claims_for_proof(
+        claims: DelegatedTokenClaims,
+        proof: &DelegationProof,
+        old_exp: u64,
+    ) -> Result<DelegatedTokenClaims, Error> {
+        let iat = claims.iat.max(proof.cert.issued_at);
+        let exp = claims.exp.min(old_exp).min(proof.cert.expires_at);
+
+        if exp < iat {
+            return Err(Error::invalid(
+                "replacement token expiry is outside the current signing proof window",
+            ));
+        }
+
+        Ok(DelegatedTokenClaims { iat, exp, ..claims })
     }
 
     // Build a canonical delegation request from token claims.
