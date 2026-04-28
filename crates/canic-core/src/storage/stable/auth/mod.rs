@@ -91,6 +91,13 @@ impl DelegationState {
         DELEGATION_STATE.with_borrow(|cell| proofs::get_latest_proof_entry(&cell.get().proofs))
     }
 
+    // Resolve all unexpired keyed proofs.
+    #[must_use]
+    pub(crate) fn get_unexpired_proof_entries(now_secs: u64) -> Vec<DelegationProofEntryRecord> {
+        DELEGATION_STATE
+            .with_borrow(|cell| proofs::get_unexpired_proof_entries(&cell.get().proofs, now_secs))
+    }
+
     // Compute proof-cache stats under the current cache policy window.
     #[must_use]
     pub(crate) fn proof_cache_stats(

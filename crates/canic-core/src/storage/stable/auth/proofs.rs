@@ -97,6 +97,18 @@ pub(super) fn get_latest_proof_entry(
         .cloned()
 }
 
+// Resolve all proof entries that can still back issued tokens.
+pub(super) fn get_unexpired_proof_entries(
+    entries: &[DelegationProofEntryRecord],
+    now_secs: u64,
+) -> Vec<DelegationProofEntryRecord> {
+    entries
+        .iter()
+        .filter(|entry| now_secs <= entry.proof.cert.expires_at)
+        .cloned()
+        .collect()
+}
+
 // Compute proof-cache stats from the current proof entries.
 pub(super) fn proof_cache_stats_from_entries(
     entries: &[DelegationProofEntryRecord],
@@ -355,6 +367,32 @@ mod tests {
         let latest = DelegationState::get_latest_proof_entry().expect("latest proof must exist");
         assert_eq!(latest.key.shard_pid, p(12));
         assert_eq!(latest.installed_at, 300);
+    }
+
+    #[test]
+    fn unexpired_proof_entries_keep_old_active_token_proofs() {
+        let _restore =
+            DelegationStateRestore(DELEGATION_STATE.with_borrow(|cell| cell.get().clone()));
+
+        DELEGATION_STATE.with_borrow_mut(|cell| {
+            let mut data = cell.get().clone();
+            data.proofs = vec![
+                entry(31, 100, None),
+                entry(32, 200, None),
+                entry(33, 300, None),
+            ];
+            data.proofs[0].proof.cert.expires_at = 150;
+            data.proofs[1].proof.cert.expires_at = 250;
+            data.proofs[2].proof.cert.expires_at = 350;
+            cell.set(data);
+        });
+
+        let entries = DelegationState::get_unexpired_proof_entries(250);
+        let shard_pids: Vec<_> = entries
+            .into_iter()
+            .map(|entry| entry.key.shard_pid)
+            .collect();
+        assert_eq!(shard_pids, vec![p(32), p(33)]);
     }
 
     #[test]

@@ -5,8 +5,18 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.29.x] - 2026-04-28 - Delegated Auth V2
+
+- `0.29.0` starts the hard-cut Delegated Auth V2 line with a design for self-validating delegated tokens plus the first V2 DTO and canonical-encoding implementation slice.
+
+See detailed breakdown:
+[docs/changelog/0.29.md](docs/changelog/0.29.md)
+
+---
+
 ## [0.28.x] - 2026-04-27 - Delegation Audience Hard Cut
 
+- `0.28.4` pushes still-valid delegated-auth proofs to newly created verifier canisters, so tokens issued before a topology change keep working on the new verifier.
 - `0.28.3` removes obsolete delegated-auth signer-proof and admin verifier-prewarm flows now that signer lifecycle prewarm uses canonical root issuance.
 - `0.28.2` adds focused lifecycle-gap regression coverage for verifier proof-cache loss, moves the reinstall/upgrade mechanics into the test harness, and fixes the reconcile root harness so staged releases match configured initial shards.
 - `0.28.1` forces delegated signer lifecycle prewarm to refresh verifier fanout even when the signer already has a reusable proof, aligns init/post-upgrade readiness on the same auth bootstrap flow, makes root own verifier fanout derivation, success, and root-local proof caching, and adds a signed-off delegated-auth lifecycle design note: [docs/design/0.28-delegated-auth-lifecycle/0.28-design.md](docs/design/0.28-delegated-auth-lifecycle/0.28-design.md).

@@ -33,3 +33,6 @@ verifier = true
 [subnets.prime.canisters.project_instance]
 kind = "instance"
 initial_cycles = "1T"
+
+[subnets.prime.canisters.project_instance.delegated_auth]
+verifier = true

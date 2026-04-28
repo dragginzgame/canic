@@ -2,10 +2,11 @@
 // This test relies on embedded config by design (test stub).
 
 use candid::{Principal, encode_one};
+use canic::protocol;
 use canic_core::{
     api::rpc::RpcApi,
     dto::{
-        auth::SignedRoleAttestation,
+        auth::{DelegatedToken, DelegatedTokenClaims, DelegationAudience, SignedRoleAttestation},
         capability::{
             CAPABILITY_VERSION_V1, CapabilityProof, CapabilityRequestMetadata, CapabilityService,
             PROOF_VERSION_V1, RoleAttestationProof, RootCapabilityEnvelopeV1,
@@ -15,8 +16,9 @@ use canic_core::{
         placement::directory::DirectoryEntryStatusResponse,
         rpc::{CreateCanisterParent, CreateCanisterRequest, Request, Response},
         subnet::SubnetIdentity,
+        topology::SubnetRegistryResponse,
     },
-    ids::CanisterRole,
+    ids::{CanisterRole, cap},
 };
 use canic_testkit::{
     artifacts::{
@@ -60,6 +62,7 @@ fn directory_resolves_one_key_to_one_instance_and_reuses_it() {
     wait_until_ready(&pic, root_id, 240);
 
     let project_hub_id = create_project_hub(&pic, root_id);
+    let (token_subject, token) = issue_project_instance_token(&pic, root_id);
 
     let alpha_first: Result<DirectoryEntryStatusResponse, Error> = update_call(
         &pic,
@@ -87,6 +90,16 @@ fn directory_resolves_one_key_to_one_instance_and_reuses_it() {
         alpha_pid
     );
 
+    let verified_on_new_instance: Result<(), Error> = update_call_as(
+        &pic,
+        alpha_pid,
+        token_subject,
+        "instance_verify_token",
+        (token,),
+    );
+    verified_on_new_instance
+        .expect("new project instance should receive the old active proof during creation");
+
     let alpha_second: Result<DirectoryEntryStatusResponse, Error> = update_call(
         &pic,
         project_hub_id,
@@ -106,6 +119,45 @@ fn directory_resolves_one_key_to_one_instance_and_reuses_it() {
     let beta_pid = expect_bound(beta);
 
     assert_ne!(alpha_pid, beta_pid);
+}
+
+// Issue one project-instance-scoped token before any project instance verifier exists.
+fn issue_project_instance_token(pic: &Pic, root_id: Principal) -> (Principal, DelegatedToken) {
+    let signer_id = signer_pid(pic, root_id);
+    let now: Result<u64, Error> = query_call(pic, root_id, "root_now_secs", ());
+    let now = now.expect("query root now_secs failed");
+    let token_subject = Principal::from_slice(&[91; 29]);
+    let claims = DelegatedTokenClaims {
+        sub: token_subject,
+        shard_pid: signer_id,
+        scopes: vec![cap::VERIFY.to_string()],
+        aud: DelegationAudience::Roles(vec![CanisterRole::new("project_instance")]),
+        iat: now,
+        exp: now + 600,
+        ext: None,
+    };
+    let token: Result<DelegatedToken, Error> = update_call_as(
+        pic,
+        signer_id,
+        token_subject,
+        "signer_issue_token",
+        (claims,),
+    );
+    let token = token.expect("issue project-instance token failed");
+
+    (token_subject, token)
+}
+
+// Resolve the auto-created signer canister from root's subnet registry.
+fn signer_pid(pic: &Pic, root_id: Principal) -> Principal {
+    let registry: Result<SubnetRegistryResponse, Error> =
+        query_call(pic, root_id, protocol::CANIC_SUBNET_REGISTRY, ());
+    let SubnetRegistryResponse(entries) = registry.expect("query root subnet registry failed");
+    entries
+        .into_iter()
+        .find(|entry| entry.role == CanisterRole::new("signer"))
+        .map(|entry| entry.pid)
+        .expect("signer must be registered")
 }
 
 // Issue a root-backed create-canister capability request for the embedded project_hub role.

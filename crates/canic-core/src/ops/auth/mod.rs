@@ -18,6 +18,7 @@ mod error;
 mod keys;
 mod token;
 mod types;
+pub mod v2;
 mod verify;
 pub use boundary::{
     BootstrapTokenAudienceSubset, DelegatedSessionExpiryClamp,
