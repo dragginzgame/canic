@@ -22,7 +22,14 @@ use std::{
 const ROOT_WASM_RELATIVE: &str = ".dfx/local/canisters/root/root.wasm.gz";
 const ROOT_WASM_ARTIFACT_RELATIVE: &str = ".dfx/local/canisters/root/root.wasm.gz";
 const ROOT_RELEASE_ARTIFACTS_RELATIVE: &str = ".dfx/local/canisters";
-const ROOT_RECONCILE_RELEASE_ROLES: &[&str] = &["app", "minimal", "scale", "scale_hub", "user_hub"];
+const ROOT_RECONCILE_RELEASE_ROLES: &[&str] = &[
+    "app",
+    "minimal",
+    "scale",
+    "scale_hub",
+    "user_hub",
+    "user_shard",
+];
 const TEST_SMALL_STORE_RUSTFLAGS: &str = "--cfg canic_test_small_wasm_store";
 const DFX_BUILD_LOCK_RELATIVE: &str = ".dfx/canic-tests-build.lock";
 const BOOTSTRAP_TICK_LIMIT: usize = 120;
