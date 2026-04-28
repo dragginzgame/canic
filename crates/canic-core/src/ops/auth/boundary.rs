@@ -114,9 +114,11 @@ impl DelegatedTokenOps {
         root_pid: Principal,
     ) -> Result<Vec<Principal>, DelegationVerifierTargetDerivationError> {
         let mut verifier_targets = Vec::new();
+        let role_index = SubnetRegistryOps::role_index();
+
         match audience {
             DelegationAudience::Any => {
-                for (role, pids) in SubnetRegistryOps::role_index() {
+                for (role, pids) in role_index {
                     let cfg = ConfigOps::current_subnet_canister(&role).map_err(|_| {
                         DelegationVerifierTargetDerivationError::RoleNotConfigured(role.clone())
                     })?;
@@ -141,9 +143,7 @@ impl DelegatedTokenOps {
                         ));
                     }
 
-                    let pids = SubnetRegistryOps::role_index()
-                        .remove(role)
-                        .unwrap_or_default();
+                    let pids = role_index.get(role).cloned().unwrap_or_default();
                     append_target_pids(&mut verifier_targets, pids, signer_pid, root_pid);
                 }
             }

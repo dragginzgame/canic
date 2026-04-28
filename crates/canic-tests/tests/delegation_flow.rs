@@ -16,9 +16,13 @@ use canic::{
 };
 use canic_internal::canister;
 use canic_testing_internal::pic::{create_user_shard, issue_delegated_token};
-use delegation_root_harness::setup_cached_root;
+use delegation_root_harness::{
+    reinstall_test_verifier, setup_cached_root, upgrade_user_shard_signer,
+};
 use root_cached_support::RootSetup;
 use std::time::Duration;
+
+const LIFECYCLE_GAP_TOKEN_TTL_SECS: u64 = 900;
 
 const fn p(id: u8) -> Principal {
     Principal::from_slice(&[id; 29])
@@ -86,6 +90,40 @@ fn delegated_token_flow() {
     verify
         .expect("test_verify_delegated_token transport failed")
         .expect("test_verify_delegated_token application failed");
+}
+
+#[test]
+fn signer_lifecycle_repushes_reusable_proof_after_verifier_cache_loss() {
+    if !should_run_certified("signer_lifecycle_repushes_reusable_proof_after_verifier_cache_loss") {
+        return;
+    }
+
+    let fixture = setup_delegation_fixture(
+        "signer_lifecycle_repushes_reusable_proof_after_verifier_cache_loss",
+    );
+    let caller = p(9);
+    let token = issue_test_token(
+        &fixture,
+        caller,
+        vec![fixture.test_pid],
+        vec![cap::VERIFY.to_string()],
+        LIFECYCLE_GAP_TOKEN_TTL_SECS,
+    );
+
+    assert_token_accepted(&fixture, caller, token.clone(), "before verifier reinstall");
+
+    reinstall_test_verifier(&fixture.setup, fixture.test_pid);
+    assert_token_rejected_with_proof_miss(&fixture, caller, token);
+
+    upgrade_user_shard_signer(&fixture.setup, fixture.shard_pid);
+    let token = issue_test_token(
+        &fixture,
+        caller,
+        vec![fixture.test_pid],
+        vec![cap::VERIFY.to_string()],
+        60,
+    );
+    assert_token_accepted(&fixture, caller, token, "after signer lifecycle prewarm");
 }
 
 #[test]
@@ -309,4 +347,46 @@ fn create_fixture_user_shard(
     let pid = create_user_shard(&setup.pic, user_hub_pid, tenant);
     log_step(&format!("user_shard created pid={pid}"));
     pid
+}
+
+// Assert that one delegated token succeeds through the verifier endpoint.
+fn assert_token_accepted(
+    fixture: &DelegationFixture,
+    caller: Principal,
+    token: DelegatedToken,
+    context: &str,
+) {
+    let verify: Result<Result<(), Error>, Error> = fixture.setup.pic.update_call_as(
+        fixture.test_pid,
+        caller,
+        "test_verify_delegated_token",
+        (token,),
+    );
+
+    verify
+        .unwrap_or_else(|err| panic!("{context}: verifier transport failed: {err}"))
+        .unwrap_or_else(|err| panic!("{context}: verifier application failed: {err:?}"));
+}
+
+// Assert that reinstalling the verifier really removed the cached proof.
+fn assert_token_rejected_with_proof_miss(
+    fixture: &DelegationFixture,
+    caller: Principal,
+    token: DelegatedToken,
+) {
+    let response: Result<Result<(), Error>, Error> = fixture.setup.pic.update_call_as(
+        fixture.test_pid,
+        caller,
+        "test_verify_delegated_token",
+        (token,),
+    );
+
+    let err = response
+        .expect("test_verify_delegated_token transport failed after verifier reinstall")
+        .expect_err("verifier should reject while proof cache is empty");
+    assert_eq!(err.code, ErrorCode::Unauthorized);
+    assert!(
+        err.message.contains("proof miss"),
+        "expected delegation proof miss, got: {err:?}"
+    );
 }
