@@ -132,6 +132,19 @@ impl DelegationStateOps {
         })
     }
 
+    /// Resolve all unexpired keyed delegation proofs that may back existing tokens.
+    #[must_use]
+    pub fn unexpired_proofs_dto(now_secs: u64) -> Vec<DelegationProof> {
+        DelegationState::get_unexpired_proof_entries(now_secs)
+            .into_iter()
+            .map(|entry| {
+                DelegationProofRecordMapper::stored_proof_to_dto(
+                    DelegationProofRecordMapper::record_to_stored_proof(entry.proof),
+                )
+            })
+            .collect()
+    }
+
     /// Resolve a keyed verifier proof that matches the incoming proof identity.
     pub fn matching_proof_dto(proof: &DelegationProof) -> Option<DelegationProof> {
         let key = DelegationProofRecordMapper::proof_key_from_dto(proof);
