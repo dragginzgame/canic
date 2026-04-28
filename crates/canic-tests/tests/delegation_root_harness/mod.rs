@@ -11,6 +11,10 @@ use canic_testkit::{
 };
 use std::sync::Mutex;
 
+mod lifecycle_gap;
+
+pub use lifecycle_gap::{reinstall_test_verifier, upgrade_user_shard_signer};
+
 const ROOT_SHARDING_RELEASE_ROLES: &[&str] = &["test", "user_hub", "user_shard"];
 
 static ROOT_SHARDING_BASELINE: Mutex<Option<CachedPicBaseline<RootBaselineMetadata>>> =
