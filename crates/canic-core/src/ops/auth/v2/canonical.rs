@@ -376,6 +376,38 @@ mod tests {
     }
 
     #[test]
+    fn claims_hash_canonicalizes_audience_and_scope_order() {
+        let mut left = DelegatedTokenClaimsV2 {
+            version: 2,
+            subject: p(10),
+            issuer_shard_pid: p(11),
+            cert_hash: [12; 32],
+            issued_at: 100,
+            expires_at: 120,
+            aud: DelegationAudienceV2::RolesOrPrincipals {
+                roles: vec![
+                    CanisterRole::new("project_instance"),
+                    CanisterRole::new("project_instance"),
+                ],
+                principals: vec![p(30), p(20), p(30)],
+            },
+            scopes: vec!["write".to_string(), "read".to_string(), "read".to_string()],
+            nonce: [14; 16],
+        };
+        let mut right = left.clone();
+        right.aud = DelegationAudienceV2::RolesOrPrincipals {
+            roles: vec![CanisterRole::new("project_instance")],
+            principals: vec![p(20), p(30)],
+        };
+        right.scopes = vec!["read".to_string(), "write".to_string()];
+
+        assert_eq!(claims_hash(&left).unwrap(), claims_hash(&right).unwrap());
+
+        left.nonce = [15; 16];
+        assert_ne!(claims_hash(&left).unwrap(), claims_hash(&right).unwrap());
+    }
+
+    #[test]
     fn role_hash_is_domain_separated_from_certificate_hash() {
         let role = CanisterRole::new("project_instance");
         let cert = sample_cert();

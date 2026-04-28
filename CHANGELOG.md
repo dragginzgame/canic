@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.29.x] - 2026-04-28 - Delegated Auth V2
 
+- `0.29.1` adds the next Delegated Auth V2 implementation slice: policy helpers, root-key trust resolution, pure verifier logic, pure root proof issuance, pure shard token minting, and focused auth edge-case coverage.
 - `0.29.0` starts the hard-cut Delegated Auth V2 line with a design for self-validating delegated tokens plus the first V2 DTO and canonical-encoding implementation slice.
 
 See detailed breakdown:

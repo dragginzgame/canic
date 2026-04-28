@@ -43,6 +43,21 @@ If code conflicts with this document, **the code is wrong**.
 
 ---
 
+### Git Command Boundary
+
+Codex / automated agents must **never** run:
+
+* `git add`
+* `git commit`
+* `git push`
+
+This applies even when the user asks to publish, push, clean the tree, preserve work,
+or prepare a release. Agents may inspect Git state with read-only commands such as
+`git status`, `git diff`, `git log`, and `git show`, but staging, committing, and
+pushing are human-owned actions.
+
+---
+
 ### Build-time Network Requirement
 
 * `DFX_NETWORK` selects the target network (`local` or `ic`).
