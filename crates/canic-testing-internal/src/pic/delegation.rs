@@ -53,7 +53,7 @@ pub fn request_root_delegation_provision(
     pic: &Pic,
     root_id: Principal,
     shard_pid: Principal,
-    verifier_pid: Principal,
+    _verifier_pid: Principal,
 ) -> DelegationProvisionResponse {
     let shard_public_key_sec1: Result<Vec<u8>, Error> = pic
         .update_call(shard_pid, USER_SHARD_LOCAL_PUBLIC_KEY_TEST, ())
@@ -63,8 +63,6 @@ pub fn request_root_delegation_provision(
         scopes: vec![cap::VERIFY.to_string()],
         aud: DelegationAudience::Any,
         ttl_secs: 60,
-        verifier_targets: vec![verifier_pid],
-        include_root_verifier: true,
         shard_public_key_sec1: shard_public_key_sec1
             .expect("user_shard_local_public_key_test application failed"),
         metadata: None,

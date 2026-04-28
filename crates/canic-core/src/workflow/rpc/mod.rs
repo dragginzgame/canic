@@ -79,9 +79,6 @@ pub enum RpcWorkflowError {
     #[error("delegated token auth disabled; set auth.delegated_tokens.enabled=true in canic.toml")]
     DelegatedTokensDisabled,
 
-    #[error("delegation request must target root")]
-    DelegationMustTargetRoot,
-
     #[error("delegation request caller {0} must match shard_pid {1}")]
     DelegationCallerShardMismatch(Principal, Principal),
 
@@ -97,20 +94,17 @@ pub enum RpcWorkflowError {
     #[error("delegation scope values must not contain empty strings")]
     DelegationScopeEmpty,
 
-    #[error("delegation verifier target {target} must be registered in subnet registry")]
-    DelegationVerifierTargetNotRegistered { target: Principal },
+    #[error("delegation audience role {role} is not configured in the current subnet")]
+    DelegationAudienceRoleNotConfigured { role: CanisterRole },
 
-    #[error("delegation verifier target {target} must not equal shard_pid {shard_pid}")]
-    DelegationVerifierTargetIncludesShard {
-        target: Principal,
-        shard_pid: Principal,
-    },
+    #[error("delegation audience role {role} is not a registered verifier role")]
+    DelegationAudienceRoleNotVerifier { role: CanisterRole },
 
-    #[error("delegation verifier target {target} must not equal root pid {root_pid}")]
-    DelegationVerifierTargetIncludesRoot {
-        target: Principal,
-        root_pid: Principal,
-    },
+    #[error("delegation provisioning missing verifier target result for {target}")]
+    DelegationVerifierTargetResultMissing { target: Principal },
+
+    #[error("delegation provisioning failed for verifier target {target}: {detail}")]
+    DelegationVerifierTargetProvisionFailed { target: Principal, detail: String },
 
     #[error(
         "delegation expires_at must be greater than issued_at (issued_at={issued_at}, expires_at={expires_at})"

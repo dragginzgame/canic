@@ -130,7 +130,6 @@ impl DelegationWorkflow {
 
     pub(crate) async fn provision(
         cert: DelegationCert,
-        signer_targets: Vec<Principal>,
         verifier_targets: Vec<Principal>,
         root_public_key_sec1: &[u8],
         shard_public_key_sec1: &[u8],
@@ -154,19 +153,6 @@ impl DelegationWorkflow {
             issued.proof.cert.expires_at
         );
         let mut results = Vec::new();
-
-        for target in signer_targets {
-            let result = Self::push_proof(
-                target,
-                &issued.proof,
-                &proof_install_args,
-                DelegationProvisionTargetKind::Signer,
-                DelegationPushOrigin::Provisioning,
-            )
-            .await;
-            results.push(result);
-        }
-        crate::perf!("push_signers");
 
         for target in verifier_targets {
             let result = Self::push_proof(

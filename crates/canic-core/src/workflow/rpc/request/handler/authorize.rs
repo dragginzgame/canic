@@ -1,5 +1,6 @@
 use super::{
-    DEFAULT_MAX_ROLE_ATTESTATION_TTL_SECONDS, RootCapability, RootContext, nonroot_cycles,
+    DEFAULT_MAX_ROLE_ATTESTATION_TTL_SECONDS, RootCapability, RootContext, delegation,
+    nonroot_cycles,
 };
 use crate::{
     InternalError,
@@ -8,6 +9,7 @@ use crate::{
     log,
     log::Topic,
     ops::{
+        auth::DelegatedTokenOps,
         config::ConfigOps,
         runtime::env::EnvOps,
         runtime::metrics::root_capability::{RootCapabilityMetricOutcome, RootCapabilityMetrics},
@@ -148,40 +150,8 @@ fn authorize_issue_delegation(
         return Err(RpcWorkflowError::DelegationScopeEmpty.into());
     }
 
-    for target in &req.verifier_targets {
-        if *target == req.shard_pid {
-            return Err(RpcWorkflowError::DelegationVerifierTargetIncludesShard {
-                target: *target,
-                shard_pid: req.shard_pid,
-            }
-            .into());
-        }
-
-        if *target == root_pid {
-            return Err(RpcWorkflowError::DelegationVerifierTargetIncludesRoot {
-                target: *target,
-                root_pid,
-            }
-            .into());
-        }
-
-        let Some(target_record) = SubnetRegistryOps::get(*target) else {
-            return Err(RpcWorkflowError::DelegationVerifierTargetNotRegistered {
-                target: *target,
-            }
-            .into());
-        };
-
-        let target_cfg = ConfigOps::current_subnet_canister(&target_record.role)?;
-        if !target_cfg.delegated_auth.verifier
-            || !crate::ops::auth::audience::role_allowed(&target_record.role, &req.aud)
-        {
-            return Err(RpcWorkflowError::DelegationVerifierTargetNotRegistered {
-                target: *target,
-            }
-            .into());
-        }
-    }
+    DelegatedTokenOps::required_verifier_targets_from_audience(&req.aud, req.shard_pid, root_pid)
+        .map_err(delegation::map_verifier_target_derivation_error)?;
 
     Ok(())
 }

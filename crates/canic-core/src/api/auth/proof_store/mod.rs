@@ -32,7 +32,7 @@ impl DelegationApi {
     ) -> Result<(), Error> {
         if kind == DelegationProvisionTargetKind::Verifier {
             let local = IcOps::canister_self();
-            Self::ensure_target_in_proof_audience(
+            Self::ensure_local_verifier_in_proof_audience(
                 &proof,
                 local,
                 intent,
@@ -205,6 +205,45 @@ impl DelegationApi {
         Err(Error::invalid(format!(
             "delegation verifier target '{target}' role '{}' is not in proof audience",
             record.role
+        )))
+    }
+
+    // Enforce audience binding for target-local verifier installs.
+    fn ensure_local_verifier_in_proof_audience(
+        proof: &DelegationProof,
+        target: Principal,
+        intent: crate::dto::auth::DelegationProofInstallIntent,
+        stage: AudienceBindingFailureStage,
+    ) -> Result<(), Error> {
+        let role = EnvOps::canister_role().map_err(Error::from)?;
+        let canister_cfg = ConfigOps::current_canister().map_err(Error::from)?;
+        if !canister_cfg.delegated_auth.verifier {
+            return Err(Error::invalid(format!(
+                "delegation verifier target '{target}' role '{role}' is not configured as a verifier"
+            )));
+        }
+
+        if audience::role_allowed(&role, &proof.cert.aud) {
+            return Ok(());
+        }
+
+        match stage {
+            AudienceBindingFailureStage::Normalization => {
+                record_delegation_install_normalization_rejected(
+                    intent,
+                    DelegationInstallNormalizationRejectReason::TargetNotInAudience,
+                );
+            }
+            AudienceBindingFailureStage::PostNormalization => {
+                record_delegation_install_validation_failed(
+                    intent,
+                    DelegationInstallValidationFailureReason::TargetNotInAudience,
+                );
+            }
+        }
+
+        Err(Error::invalid(format!(
+            "delegation verifier target '{target}' role '{role}' is not in proof audience"
         )))
     }
 

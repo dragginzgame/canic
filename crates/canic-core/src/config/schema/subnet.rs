@@ -709,6 +709,24 @@ mod tests {
     }
 
     #[test]
+    fn root_canister_rejects_configured_delegated_auth_roles() {
+        let mut cfg = base_canister_config(CanisterKind::Root);
+        cfg.delegated_auth = DelegatedAuthCanisterConfig {
+            signer: true,
+            verifier: true,
+        };
+
+        let err = cfg
+            .validate_kind(&CanisterRole::ROOT)
+            .expect_err("root delegated auth roles must be implicit services, not config toggles");
+
+        assert!(
+            err.to_string().contains("delegated auth roles"),
+            "expected root delegated-auth role validation error, got: {err}"
+        );
+    }
+
+    #[test]
     fn auto_create_entries_must_exist_in_subnet() {
         let mut auto_create = BTreeSet::new();
         auto_create.insert(CanisterRole::from("missing_auto_canister"));

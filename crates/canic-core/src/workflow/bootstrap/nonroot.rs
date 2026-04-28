@@ -16,9 +16,9 @@
 //! - All cross-canister lifecycle orchestration is owned by the root canister.
 //!
 //! Current behavior:
-//! - This phase is intentionally minimal and log-only.
-//! - All required invariants are established earlier during
-//!   `workflow::runtime` initialization.
+//! - Bootstrap configured placement workers.
+//! - Prewarm delegated signer proof material when configured.
+//! - Mark the canister ready only after bootstrap work succeeds.
 //!
 //! Architectural note:
 //! This module exists to make the lifecycle boundary explicit and stable.
@@ -79,13 +79,12 @@ pub async fn bootstrap_init_nonroot_canister(_args: Option<Vec<u8>>) -> Result<(
 /// - Must tolerate repeated execution.
 /// - Must not assume ordering relative to other canisters.
 ///
-/// Errors are logged but do not abort the canister.
+/// Errors are propagated to the lifecycle adapter, matching init bootstrap
+/// semantics.
 ///
-/// Current behavior is intentionally minimal.
-///
-#[expect(clippy::unused_async)]
 pub async fn bootstrap_post_upgrade_nonroot_canister() -> Result<(), InternalError> {
     log!(Topic::Init, Info, "bootstrap (nonroot): post-upgrade start");
+    RuntimeAuthWorkflow::prewarm_signer_delegation_proof().await?;
     log!(
         Topic::Init,
         Info,

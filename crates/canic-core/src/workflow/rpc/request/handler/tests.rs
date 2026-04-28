@@ -3,7 +3,12 @@ use crate::{
     cdk::types::Principal,
     config::schema::{CanisterKind, DelegatedAuthCanisterConfig},
     dto::{
-        auth::{DelegationAudience, DelegationCert, DelegationRequest, RoleAttestationRequest},
+        auth::{
+            DelegationAudience, DelegationCert, DelegationProof, DelegationProvisionResponse,
+            DelegationProvisionStatus, DelegationProvisionTargetKind,
+            DelegationProvisionTargetResponse, DelegationRequest, RoleAttestationRequest,
+        },
+        error::Error,
         rpc::{
             CreateCanisterParent, CreateCanisterRequest, CyclesRequest, CyclesResponse,
             RecycleCanisterRequest, RootRequestMetadata, UpgradeCanisterRequest,
@@ -30,6 +35,27 @@ use std::collections::HashMap;
 
 fn p(id: u8) -> Principal {
     Principal::from_slice(&[id; 29])
+}
+
+fn sample_delegation_response(
+    results: Vec<DelegationProvisionTargetResponse>,
+) -> DelegationProvisionResponse {
+    let root_pid = p(1);
+    let shard_pid = p(2);
+    DelegationProvisionResponse {
+        proof: DelegationProof {
+            cert: DelegationCert {
+                root_pid,
+                shard_pid,
+                issued_at: 100,
+                expires_at: 200,
+                scopes: vec!["rpc:verify".to_string()],
+                aud: DelegationAudience::Any,
+            },
+            cert_sig: vec![1, 2, 3],
+        },
+        results,
+    }
 }
 
 fn meta(id: u8, ttl_seconds: u64) -> RootRequestMetadata {
@@ -225,8 +251,6 @@ fn map_request_maps_issue_delegation() {
         scopes: vec!["rpc:call".to_string()],
         aud: DelegationAudience::Roles(vec![CanisterRole::new("project_hub")]),
         ttl_secs: 60,
-        verifier_targets: vec![p(4)],
-        include_root_verifier: true,
         shard_public_key_sec1: vec![1, 2, 3],
         metadata: None,
     });
@@ -340,41 +364,21 @@ fn validate_delegation_cert_policy_rejects_shard_equal_to_root() {
 }
 
 #[test]
-fn authorize_rejects_issue_delegation_when_verifier_target_is_root() {
-    let root_pid = p(30);
-    let _restore = configure_root_env(root_pid);
-    SubnetRegistryOps::register_root(root_pid, 1);
-
-    let caller = p(31);
-    let ctx = RootContext {
-        caller,
-        self_pid: root_pid,
-        is_root_env: true,
-        subnet_id: p(2),
-        now: 5,
-    };
-    let capability = RootCapability::IssueDelegation(DelegationRequest {
-        shard_pid: caller,
-        scopes: vec!["rpc:verify".to_string()],
-        aud: DelegationAudience::Roles(vec![CanisterRole::new("project_hub")]),
-        ttl_secs: 60,
-        verifier_targets: vec![root_pid],
-        include_root_verifier: true,
-        shard_public_key_sec1: vec![1, 2, 3],
-        metadata: None,
-    });
-
-    let err = RootResponseWorkflow::authorize(&ctx, &capability).expect_err("must deny");
-    assert!(
-        err.to_string().contains("must not equal root pid"),
-        "expected root-target denial, got: {err}"
-    );
-}
-
-#[test]
-fn authorize_rejects_issue_delegation_when_verifier_target_is_shard() {
+fn authorize_rejects_issue_delegation_when_audience_role_is_not_a_verifier() {
     let root_pid = p(40);
     let _restore = configure_root_env(root_pid);
+    let mut non_verifier_cfg = ConfigTestBuilder::canister_config(CanisterKind::Singleton);
+    non_verifier_cfg.delegated_auth = DelegatedAuthCanisterConfig {
+        signer: false,
+        verifier: false,
+    };
+    let _config = ConfigTestBuilder::new()
+        .with_prime_canister(
+            CanisterRole::ROOT,
+            ConfigTestBuilder::canister_config(CanisterKind::Root),
+        )
+        .with_prime_canister(CanisterRole::new("project_hub"), non_verifier_cfg)
+        .install();
     SubnetRegistryOps::register_root(root_pid, 1);
 
     let caller = p(34);
@@ -390,54 +394,19 @@ fn authorize_rejects_issue_delegation_when_verifier_target_is_shard() {
         scopes: vec!["rpc:verify".to_string()],
         aud: DelegationAudience::Roles(vec![CanisterRole::new("project_hub")]),
         ttl_secs: 60,
-        verifier_targets: vec![caller],
-        include_root_verifier: true,
         shard_public_key_sec1: vec![1, 2, 3],
         metadata: None,
     });
 
     let err = RootResponseWorkflow::authorize(&ctx, &capability).expect_err("must deny");
     assert!(
-        err.to_string().contains("must not equal shard_pid"),
-        "expected shard-target denial, got: {err}"
+        err.to_string().contains("not a registered verifier role"),
+        "expected audience verifier-role denial, got: {err}"
     );
 }
 
 #[test]
-fn authorize_rejects_issue_delegation_when_verifier_target_is_unregistered() {
-    let root_pid = p(50);
-    let _restore = configure_root_env(root_pid);
-    SubnetRegistryOps::register_root(root_pid, 1);
-
-    let caller = p(36);
-    let unregistered = p(37);
-    let ctx = RootContext {
-        caller,
-        self_pid: root_pid,
-        is_root_env: true,
-        subnet_id: p(2),
-        now: 5,
-    };
-    let capability = RootCapability::IssueDelegation(DelegationRequest {
-        shard_pid: caller,
-        scopes: vec!["rpc:verify".to_string()],
-        aud: DelegationAudience::Roles(vec![CanisterRole::new("project_hub")]),
-        ttl_secs: 60,
-        verifier_targets: vec![unregistered],
-        include_root_verifier: true,
-        shard_public_key_sec1: vec![1, 2, 3],
-        metadata: None,
-    });
-
-    let err = RootResponseWorkflow::authorize(&ctx, &capability).expect_err("must deny");
-    assert!(
-        err.to_string().contains("must be registered"),
-        "expected unregistered-target denial, got: {err}"
-    );
-}
-
-#[test]
-fn authorize_allows_issue_delegation_when_verifier_target_is_registered() {
+fn authorize_allows_issue_delegation_when_audience_role_has_registered_verifier() {
     let root_pid = p(60);
     let _restore = configure_root_env(root_pid);
     let mut verifier_cfg = ConfigTestBuilder::canister_config(CanisterKind::Singleton);
@@ -477,13 +446,63 @@ fn authorize_allows_issue_delegation_when_verifier_target_is_registered() {
         scopes: vec!["rpc:verify".to_string()],
         aud: DelegationAudience::Roles(vec![CanisterRole::new("project_hub")]),
         ttl_secs: 60,
-        verifier_targets: vec![verifier],
-        include_root_verifier: true,
         shard_public_key_sec1: vec![1, 2, 3],
         metadata: None,
     });
 
     RootResponseWorkflow::authorize(&ctx, &capability).expect("registered verifier must authorize");
+}
+
+#[test]
+fn issue_delegation_fanout_validation_accepts_required_ok_result() {
+    let required_target = p(70);
+    let response = sample_delegation_response(vec![DelegationProvisionTargetResponse {
+        target: required_target,
+        kind: DelegationProvisionTargetKind::Verifier,
+        status: DelegationProvisionStatus::Ok,
+        error: None,
+    }]);
+
+    execute::ensure_required_verifier_targets_provisioned(&[required_target], &response)
+        .expect("required verifier fanout should pass when target is ok");
+}
+
+#[test]
+fn issue_delegation_fanout_validation_rejects_missing_required_result() {
+    let required_target = p(71);
+    let response = sample_delegation_response(vec![DelegationProvisionTargetResponse {
+        target: p(72),
+        kind: DelegationProvisionTargetKind::Verifier,
+        status: DelegationProvisionStatus::Ok,
+        error: None,
+    }]);
+
+    let err = execute::ensure_required_verifier_targets_provisioned(&[required_target], &response)
+        .expect_err("missing verifier fanout result must fail closed");
+
+    assert!(
+        err.to_string().contains("missing verifier target result"),
+        "expected missing-result message, got: {err}"
+    );
+}
+
+#[test]
+fn issue_delegation_fanout_validation_rejects_failed_required_result() {
+    let required_target = p(73);
+    let response = sample_delegation_response(vec![DelegationProvisionTargetResponse {
+        target: required_target,
+        kind: DelegationProvisionTargetKind::Verifier,
+        status: DelegationProvisionStatus::Failed,
+        error: Some(Error::internal("simulated push failure")),
+    }]);
+
+    let err = execute::ensure_required_verifier_targets_provisioned(&[required_target], &response)
+        .expect_err("failed verifier fanout must fail closed");
+
+    assert!(
+        err.to_string().contains("simulated push failure"),
+        "expected provisioning failure detail, got: {err}"
+    );
 }
 
 #[test]

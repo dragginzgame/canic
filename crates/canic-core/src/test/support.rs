@@ -71,14 +71,23 @@ pub fn init_sharding_test_config() {
 
     // Single synthetic principal for root/subnet/parent roles in tests.
     let root_pid = Principal::from_slice(&[1; 29]);
+    import_test_env("manager", SubnetRole::PRIME, root_pid);
+}
+
+/// Imports a synthetic runtime env for unit tests.
+pub fn import_test_env(
+    canister_role: impl Into<CanisterRole>,
+    subnet_role: impl Into<SubnetRole>,
+    root_pid: Principal,
+) {
     let snapshot = EnvRecord {
-        canister_role: Some(CanisterRole::from("manager")),
-        subnet_role: Some(SubnetRole::PRIME),
+        canister_role: Some(canister_role.into()),
+        subnet_role: Some(subnet_role.into()),
         root_pid: Some(root_pid),
         prime_root_pid: Some(root_pid),
         subnet_pid: Some(root_pid),
         parent_pid: Some(root_pid),
     };
 
-    EnvOps::import(snapshot).expect("init sharding test env");
+    EnvOps::import(snapshot).expect("import test env");
 }

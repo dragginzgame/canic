@@ -546,15 +546,14 @@ mod tests {
         },
         ids::SubnetRole,
         ops::{
-            runtime::env::EnvOps,
             storage::children::CanisterChildrenOps,
             storage::placement::directory::{DirectoryClaimResult, DirectoryRegistryOps},
             storage::registry::subnet::SubnetRegistryOps,
         },
-        storage::stable::env::EnvRecord,
         test::{
             config::ConfigTestBuilder,
             seams::{lock, p},
+            support::import_test_env,
         },
     };
     use futures::executor::block_on;
@@ -604,15 +603,11 @@ mod tests {
             )
             .install();
 
-        let env = EnvRecord {
-            canister_role: Some(CanisterRole::new("project_hub")),
-            subnet_role: Some(SubnetRole::PRIME),
-            root_pid: Some(root_pid),
-            prime_root_pid: Some(root_pid),
-            subnet_pid: Some(root_pid),
-            parent_pid: Some(root_pid),
-        };
-        EnvOps::import(env).expect("import directory test env");
+        import_test_env(
+            CanisterRole::new("project_hub"),
+            SubnetRole::PRIME,
+            root_pid,
+        );
 
         clear_subnet_registry();
         DirectoryRegistryOps::clear_for_test();

@@ -97,8 +97,6 @@ pub struct DelegationRequest {
     pub scopes: Vec<String>,
     pub aud: DelegationAudience,
     pub ttl_secs: u64,
-    pub verifier_targets: Vec<Principal>,
-    pub include_root_verifier: bool,
     pub shard_public_key_sec1: Vec<u8>,
     #[serde(default)]
     pub metadata: Option<RootRequestMetadata>,
@@ -184,20 +182,6 @@ pub struct AttestationKeySet {
     pub root_pid: Principal,
     pub generated_at: u64,
     pub keys: Vec<AttestationKey>,
-}
-
-// admin-only: not part of canonical delegation flow.
-// used for controlled provisioning and tooling flows.
-//
-// DelegationProvisionRequest
-//
-
-#[derive(CandidType, Clone, Debug, Deserialize)]
-pub struct DelegationProvisionRequest {
-    pub cert: DelegationCert,
-    pub signer_targets: Vec<Principal>,
-    pub verifier_targets: Vec<Principal>,
-    pub shard_public_key_sec1: Vec<u8>,
 }
 
 // admin-only: not part of canonical delegation flow.

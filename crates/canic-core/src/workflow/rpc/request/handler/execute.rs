@@ -4,9 +4,10 @@ use super::{
 };
 use crate::{
     InternalError,
+    cdk::types::Principal,
     dto::auth::{
-        DelegationCert, DelegationProvisionResponse, DelegationRequest, RoleAttestation,
-        RoleAttestationRequest,
+        DelegationCert, DelegationProvisionResponse, DelegationProvisionStatus,
+        DelegationProvisionTargetKind, DelegationRequest, RoleAttestation, RoleAttestationRequest,
     },
     dto::rpc::{
         CreateCanisterParent, CreateCanisterRequest, CreateCanisterResponse,
@@ -20,7 +21,9 @@ use crate::{
         auth::DelegatedTokenOps,
         ic::IcOps,
         runtime::metrics::auth::{
-            VerifierProofCacheEvictionClass, record_verifier_proof_cache_eviction,
+            VerifierProofCacheEvictionClass, record_delegation_provision_complete,
+            record_delegation_verifier_target_count, record_delegation_verifier_target_failed,
+            record_delegation_verifier_target_missing, record_verifier_proof_cache_eviction,
             record_verifier_proof_cache_stats,
         },
         storage::{
@@ -130,12 +133,14 @@ async fn execute_issue_delegation(
         scopes,
         aud,
         ttl_secs,
-        verifier_targets,
-        include_root_verifier,
         shard_public_key_sec1,
         metadata: _,
     } = req;
     let root_pid = ctx.self_pid;
+    let verifier_targets =
+        DelegatedTokenOps::required_verifier_targets_from_audience(&aud, shard_pid, root_pid)
+            .map_err(delegation::map_verifier_target_derivation_error)?;
+    let required_verifier_targets = verifier_targets.clone();
     let cert = DelegationCert {
         root_pid,
         shard_pid,
@@ -151,45 +156,91 @@ async fn execute_issue_delegation(
     let (response, cert_hash): (DelegationProvisionResponse, [u8; 32]) =
         DelegationWorkflow::provision(
             cert,
-            vec![],
             verifier_targets,
             root_public_key_sec1.as_slice(),
             shard_public_key_sec1.as_slice(),
         )
         .await?;
 
-    if include_root_verifier {
-        crate::perf!("cache_root_verifier_keys");
-        let outcome =
-            DelegationStateOps::upsert_proof_from_dto_ref_with_cert_hash_and_shard_public_key(
-                &response.proof,
-                cert_hash,
-                ctx.now,
-                Some(shard_public_key_sec1),
-            )?;
-        crate::perf!("cache_root_verifier_upsert");
-        record_verifier_proof_cache_stats(
-            outcome.stats.size,
-            outcome.stats.active_count,
-            outcome.stats.capacity,
-            outcome.stats.profile,
-            outcome.stats.active_window_secs,
-        );
-        if let Some(class) = outcome.evicted {
-            let class = match class {
-                crate::ops::storage::auth::DelegationProofEvictionClass::Cold => {
-                    VerifierProofCacheEvictionClass::Cold
-                }
-                crate::ops::storage::auth::DelegationProofEvictionClass::Active => {
-                    VerifierProofCacheEvictionClass::Active
-                }
-            };
-            record_verifier_proof_cache_eviction(class);
-        }
-        crate::perf!("cache_root_verifier_metrics");
-    }
+    ensure_required_verifier_targets_provisioned(&required_verifier_targets, &response)?;
+
+    cache_root_verifier_proof(ctx, &response, cert_hash, shard_public_key_sec1)?;
 
     Ok(Response::DelegationIssued(response))
+}
+
+// Fail canonical issuance when any root-derived verifier fanout target failed.
+pub(super) fn ensure_required_verifier_targets_provisioned(
+    verifier_targets: &[Principal],
+    response: &DelegationProvisionResponse,
+) -> Result<(), InternalError> {
+    record_delegation_verifier_target_count(verifier_targets.len());
+
+    for target in verifier_targets {
+        let Some(result) = response.results.iter().find(|entry| {
+            entry.kind == DelegationProvisionTargetKind::Verifier && entry.target == *target
+        }) else {
+            record_delegation_verifier_target_missing();
+            return Err(RpcWorkflowError::DelegationVerifierTargetResultMissing {
+                target: *target,
+            }
+            .into());
+        };
+
+        if result.status != DelegationProvisionStatus::Ok {
+            record_delegation_verifier_target_failed();
+            let detail = result
+                .error
+                .as_ref()
+                .map_or_else(|| "unknown error".to_string(), ToString::to_string);
+            return Err(RpcWorkflowError::DelegationVerifierTargetProvisionFailed {
+                target: *target,
+                detail,
+            }
+            .into());
+        }
+    }
+
+    record_delegation_provision_complete();
+    Ok(())
+}
+
+// Store root's verifier proof copy for the issued delegation response.
+fn cache_root_verifier_proof(
+    ctx: &RootContext,
+    response: &DelegationProvisionResponse,
+    cert_hash: [u8; 32],
+    shard_public_key_sec1: Vec<u8>,
+) -> Result<(), InternalError> {
+    crate::perf!("cache_root_verifier_keys");
+    let outcome =
+        DelegationStateOps::upsert_proof_from_dto_ref_with_cert_hash_and_shard_public_key(
+            &response.proof,
+            cert_hash,
+            ctx.now,
+            Some(shard_public_key_sec1),
+        )?;
+    crate::perf!("cache_root_verifier_upsert");
+    record_verifier_proof_cache_stats(
+        outcome.stats.size,
+        outcome.stats.active_count,
+        outcome.stats.capacity,
+        outcome.stats.profile,
+        outcome.stats.active_window_secs,
+    );
+    if let Some(class) = outcome.evicted {
+        let class = match class {
+            crate::ops::storage::auth::DelegationProofEvictionClass::Cold => {
+                VerifierProofCacheEvictionClass::Cold
+            }
+            crate::ops::storage::auth::DelegationProofEvictionClass::Active => {
+                VerifierProofCacheEvictionClass::Active
+            }
+        };
+        record_verifier_proof_cache_eviction(class);
+    }
+    crate::perf!("cache_root_verifier_metrics");
+    Ok(())
 }
 
 async fn execute_issue_role_attestation(

@@ -1,4 +1,5 @@
 pub use candid::{Principal, utils::ArgumentEncoder};
+pub use canic::protocol;
 pub use canic_core::api::rpc::RpcApi;
 pub use canic_core::dto::{
     auth::{
@@ -16,6 +17,7 @@ pub use canic_core::dto::{
     metrics::{MetricEntry, MetricValue, MetricsKind},
     page::{Page, PageRequest},
     rpc::{CyclesRequest, Request, Response},
+    topology::SubnetRegistryResponse,
 };
 pub use canic_core::ids::{CanisterRole, cap};
 pub use canic_testing_internal::pic::{

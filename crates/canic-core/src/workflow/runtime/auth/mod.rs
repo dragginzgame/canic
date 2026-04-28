@@ -1,13 +1,11 @@
 use crate::{
     InternalError, InternalErrorOrigin,
+    cdk::types::Principal,
     config::ConfigModel,
-    dto::auth::{
-        DelegatedTokenClaims, DelegationAudience, DelegationProvisionResponse,
-        DelegationProvisionStatus, DelegationProvisionTargetKind, DelegationRequest,
-    },
+    dto::auth::{DelegationAudience, DelegationProvisionResponse, DelegationRequest},
     ids::{CanisterRole, cap},
     ops::{
-        auth::{DelegatedTokenOps, audience},
+        auth::{DelegatedTokenOps, TokenGrant, TokenLifetime, audience},
         config::ConfigOps,
         ic::{IcOps, ecdsa::EcdsaOps},
         rpc::RpcOps,
@@ -19,6 +17,48 @@ use crate::{
 };
 
 const DEFAULT_SIGNER_DELEGATION_PREWARM_TTL_SECS: u64 = 900;
+
+///
+/// SignerDelegationPrewarmPlan
+///
+
+struct SignerDelegationPrewarmPlan {
+    shard_pid: Principal,
+    scopes: Vec<String>,
+    aud: DelegationAudience,
+    iat: u64,
+    exp: u64,
+}
+
+impl SignerDelegationPrewarmPlan {
+    // Build the default signer delegation grant used by runtime lifecycle prewarm.
+    fn default(now_secs: u64, ttl_secs: u64) -> Self {
+        Self {
+            shard_pid: IcOps::canister_self(),
+            scopes: vec![cap::VERIFY.to_string()],
+            aud: DelegationAudience::Any,
+            iat: now_secs,
+            exp: now_secs.saturating_add(ttl_secs),
+        }
+    }
+
+    // Borrow the grant fields that must be covered by the signing proof.
+    fn grant(&self) -> TokenGrant<'_> {
+        TokenGrant {
+            shard_pid: self.shard_pid,
+            aud: &self.aud,
+            scopes: &self.scopes,
+        }
+    }
+
+    // Return the proof lifetime window required by this prewarm plan.
+    const fn lifetime(&self) -> TokenLifetime {
+        TokenLifetime {
+            iat: self.iat,
+            exp: self.exp,
+        }
+    }
+}
 
 ///
 /// RuntimeAuthWorkflow
@@ -91,32 +131,33 @@ impl RuntimeAuthWorkflow {
             .max_ttl_secs
             .unwrap_or(DEFAULT_SIGNER_DELEGATION_PREWARM_TTL_SECS);
         let now = IcOps::now_secs();
-        let claims = DelegatedTokenClaims {
-            sub: IcOps::canister_self(),
-            shard_pid: IcOps::canister_self(),
-            scopes: vec![cap::VERIFY.to_string()],
-            aud: DelegationAudience::Any,
-            iat: now,
-            exp: now.saturating_add(ttl_secs),
-            ext: None,
-        };
+        let plan = SignerDelegationPrewarmPlan::default(now, ttl_secs);
 
-        if DelegationStateOps::latest_proof_dto()
-            .is_some_and(|proof| DelegatedTokenOps::proof_reusable_for_claims(&proof, &claims, now))
+        if let Some(proof) = DelegationStateOps::latest_proof_dto()
+            && DelegatedTokenOps::proof_reusable_for_grant(
+                &proof,
+                plan.grant(),
+                plan.lifetime(),
+                now,
+            )
         {
-            return Ok(());
+            crate::log!(
+                Topic::Auth,
+                Info,
+                "delegation signer proof prewarm refreshing reusable local proof shard={} issued_at={} expires_at={}",
+                proof.cert.shard_pid,
+                proof.cert.issued_at,
+                proof.cert.expires_at
+            );
         }
 
-        let verifier_targets = Self::signer_prewarm_verifier_targets(&claims.aud)?;
         let shard_public_key_sec1 =
-            DelegatedTokenOps::local_shard_public_key_sec1(claims.shard_pid).await?;
+            DelegatedTokenOps::local_shard_public_key_sec1(plan.shard_pid).await?;
         let request = DelegationRequest {
-            shard_pid: claims.shard_pid,
-            scopes: claims.scopes,
-            aud: claims.aud,
+            shard_pid: plan.shard_pid,
+            scopes: plan.scopes,
+            aud: plan.aud,
             ttl_secs,
-            verifier_targets: verifier_targets.clone(),
-            include_root_verifier: true,
             shard_public_key_sec1,
             metadata: None,
         };
@@ -124,7 +165,6 @@ impl RuntimeAuthWorkflow {
         let root_pid = EnvOps::root_pid()?;
         let response: DelegationProvisionResponse =
             RpcOps::call_rpc_result(root_pid, protocol::CANIC_REQUEST_DELEGATION, request).await?;
-        Self::ensure_prewarm_verifier_targets_provisioned(&verifier_targets, &response)?;
         DelegatedTokenOps::cache_public_keys_for_cert(&response.proof.cert).await?;
         DelegatedTokenOps::verify_delegation_proof(&response.proof, root_pid)?;
         DelegationStateOps::upsert_proof_from_dto(response.proof.clone(), IcOps::now_secs())?;
@@ -137,57 +177,6 @@ impl RuntimeAuthWorkflow {
             audience::role_count(&response.proof.cert.aud),
             ttl_secs
         );
-
-        Ok(())
-    }
-
-    // Select remote verifier targets that need root-pushed proof material during prewarm.
-    fn signer_prewarm_verifier_targets(
-        audience: &DelegationAudience,
-    ) -> Result<Vec<Principal>, InternalError> {
-        let local = IcOps::canister_self();
-        let root = EnvOps::root_pid()?;
-        let verifier_targets =
-            DelegatedTokenOps::required_verifier_targets_from_audience(audience, local, root)
-                .map_err(|role| {
-                    InternalError::workflow(
-                        InternalErrorOrigin::Workflow,
-                        format!("delegation prewarm audience role '{role}' is not a verifier"),
-                    )
-                })?;
-
-        Ok(verifier_targets)
-    }
-
-    // Fail signer prewarm when root did not successfully install every required verifier target.
-    fn ensure_prewarm_verifier_targets_provisioned(
-        verifier_targets: &[Principal],
-        response: &DelegationProvisionResponse,
-    ) -> Result<(), InternalError> {
-        for target in verifier_targets {
-            let Some(result) = response.results.iter().find(|entry| {
-                entry.kind == DelegationProvisionTargetKind::Verifier && entry.target == *target
-            }) else {
-                return Err(InternalError::workflow(
-                    InternalErrorOrigin::Workflow,
-                    format!("delegation prewarm missing verifier target result for '{target}'"),
-                ));
-            };
-
-            if result.status != DelegationProvisionStatus::Ok {
-                return Err(InternalError::workflow(
-                    InternalErrorOrigin::Workflow,
-                    format!(
-                        "delegation prewarm failed for verifier target '{}': {}",
-                        target,
-                        result
-                            .error
-                            .as_ref()
-                            .map_or_else(|| "unknown error".to_string(), ToString::to_string)
-                    ),
-                ));
-            }
-        }
 
         Ok(())
     }
