@@ -149,7 +149,7 @@ Populate `canic.toml` with subnet definitions, directory membership, and per‑c
 For local DFX workflows, prefer the shared setup script:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/dragginzgame/canic/v0.29.0/scripts/dev/install_dev.sh | bash
+curl -fsSL https://raw.githubusercontent.com/dragginzgame/canic/v0.29.1/scripts/dev/install_dev.sh | bash
 ```
 
 That script installs:
@@ -162,7 +162,7 @@ That script installs:
 - `ic-wasm`
 - `actionlint`
 - `cargo-watch`, `cargo-edit`, `cargo-get`, `cargo-sort`, and `cargo-sort-derives`
-- `canic-installer` `0.29.0`
+- `canic-installer` `0.29.1`
 - `dfx` if it is not already installed
 
 It bootstraps Rust when needed and runs the Cargo installs through the pinned `1.95.0` internal toolchain instead of relying on whatever default toolchain happens to be active locally.
