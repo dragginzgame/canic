@@ -1,8 +1,8 @@
 use super::{
     AuthMetricPredicate, DelegationInstallNormalizationRejectReason,
-    DelegationInstallValidationFailureReason, DelegationProvisionRole, auth_signer_endpoint,
-    complete_predicate, fanout_bucket, install_intent_label, record_auth_metric,
-    signer_issue_without_proof_predicate, verifier_target_count_predicate,
+    DelegationInstallValidationFailureReason, auth_signer_endpoint, complete_predicate,
+    fanout_bucket, install_intent_label, push_attempt_predicate, push_success_predicate,
+    record_auth_metric, signer_issue_without_proof_predicate, verifier_target_count_predicate,
     verifier_target_failed_predicate, verifier_target_missing_predicate,
 };
 use crate::{
@@ -44,35 +44,26 @@ pub fn record_delegation_verifier_target_count(target_count: usize) {
     }
 }
 
-pub fn record_delegation_push_attempt(
-    role: DelegationProvisionRole,
-    intent: DelegationProofInstallIntent,
-) {
+pub fn record_delegation_push_attempt(intent: DelegationProofInstallIntent) {
     AccessMetrics::increment(
         auth_signer_endpoint(),
         AccessMetricKind::Auth,
-        role.attempt_predicate(intent),
+        push_attempt_predicate(intent),
     );
 }
 
-pub fn record_delegation_push_success(
-    role: DelegationProvisionRole,
-    intent: DelegationProofInstallIntent,
-) {
+pub fn record_delegation_push_success(intent: DelegationProofInstallIntent) {
     AccessMetrics::increment(
         auth_signer_endpoint(),
         AccessMetricKind::Auth,
-        role.success_predicate(intent),
+        push_success_predicate(intent),
     );
 }
 
-pub fn record_delegation_push_failed(
-    role: DelegationProvisionRole,
-    intent: DelegationProofInstallIntent,
-) {
+pub fn record_delegation_push_failed(intent: DelegationProofInstallIntent) {
     record_auth_metric(
         auth_signer_endpoint(),
-        AuthMetricPredicate::DelegationPushFailed { role, intent },
+        AuthMetricPredicate::DelegationPushFailed { intent },
     );
 }
 

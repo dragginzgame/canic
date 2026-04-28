@@ -3,7 +3,7 @@ use std::path::PathBuf;
 fn main() {
     // The exported endpoint macros use these cfg names when optional endpoint
     // groups are compiled out for a role-specific canister build.
-    println!("cargo:rustc-check-cfg=cfg(canic_accepts_delegation_signer_proof)");
+    println!("cargo:rustc-check-cfg=cfg(canic_delegated_auth_signer)");
     println!("cargo:rustc-check-cfg=cfg(canic_accepts_delegation_verifier_proof)");
     println!("cargo:rustc-check-cfg=cfg(canic_delegated_tokens_enabled)");
     println!("cargo:rustc-check-cfg=cfg(canic_icrc21_enabled)");

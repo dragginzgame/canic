@@ -33,7 +33,6 @@ use crate::{
 struct PreparedDelegationVerifierPush {
     proof: DelegationProof,
     verifier_targets: Vec<Principal>,
-    intent: crate::dto::auth::DelegationProofInstallIntent,
 }
 
 impl PreparedDelegationVerifierPush {
@@ -43,22 +42,12 @@ impl PreparedDelegationVerifierPush {
             proof: self.proof,
             verifier_targets: self.verifier_targets,
         };
-        match self.intent {
-            crate::dto::auth::DelegationProofInstallIntent::Prewarm => {
-                DelegationAdminCommand::PrewarmVerifiers(request)
-            }
-            crate::dto::auth::DelegationProofInstallIntent::Repair => {
-                DelegationAdminCommand::RepairVerifiers(request)
-            }
-            crate::dto::auth::DelegationProofInstallIntent::Provisioning => {
-                unreachable!("provisioning does not use explicit admin push")
-            }
-        }
+        DelegationAdminCommand::RepairVerifiers(request)
     }
 }
 
 impl DelegationApi {
-    /// Execute explicit root-controlled delegation repair/prewarm operations.
+    /// Execute explicit root-controlled delegation repair operations.
     pub async fn admin(cmd: DelegationAdminCommand) -> Result<DelegationAdminResponse, Error> {
         let cfg = ConfigOps::delegated_tokens_config().map_err(Error::from)?;
         if !cfg.enabled {
@@ -69,25 +58,11 @@ impl DelegationApi {
         }
 
         let prepared = match cmd {
-            DelegationAdminCommand::PrewarmVerifiers(request) => {
-                record_delegation_install_total(
-                    crate::dto::auth::DelegationProofInstallIntent::Prewarm,
-                );
-                Self::prepare_explicit_verifier_push(
-                    request,
-                    crate::dto::auth::DelegationProofInstallIntent::Prewarm,
-                )
-                .await?
-            }
             DelegationAdminCommand::RepairVerifiers(request) => {
                 record_delegation_install_total(
                     crate::dto::auth::DelegationProofInstallIntent::Repair,
                 );
-                Self::prepare_explicit_verifier_push(
-                    request,
-                    crate::dto::auth::DelegationProofInstallIntent::Repair,
-                )
-                .await?
+                Self::prepare_explicit_verifier_push(request).await?
             }
         };
 
@@ -99,29 +74,26 @@ impl DelegationApi {
     // Normalize and verify an explicit verifier-push request before workflow fanout.
     async fn prepare_explicit_verifier_push(
         request: DelegationVerifierProofPushRequest,
-        intent: crate::dto::auth::DelegationProofInstallIntent,
     ) -> Result<PreparedDelegationVerifierPush, Error> {
         let request = Self::normalize_explicit_verifier_push_request_with(
             request,
-            intent,
             EnvOps::root_pid().map_err(Error::from)?,
             Self::is_registered_canister,
         )?;
+        let intent = crate::dto::auth::DelegationProofInstallIntent::Repair;
         record_delegation_install_normalized_target_count(intent, request.verifier_targets.len());
         record_delegation_install_fanout_bucket(intent, request.verifier_targets.len());
-        Self::prepare_explicit_verifier_push_proof(&request.proof, intent).await?;
+        Self::prepare_explicit_verifier_push_proof(&request.proof).await?;
 
         Ok(PreparedDelegationVerifierPush {
             proof: request.proof,
             verifier_targets: request.verifier_targets,
-            intent,
         })
     }
 
     // Normalize explicit verifier push targets with root/signer/registration guards.
     pub(super) fn normalize_explicit_verifier_push_request_with<F>(
         request: DelegationVerifierProofPushRequest,
-        intent: crate::dto::auth::DelegationProofInstallIntent,
         root_pid: Principal,
         mut is_valid_target: F,
     ) -> Result<DelegationVerifierProofPushRequest, Error>
@@ -134,7 +106,7 @@ impl DelegationApi {
         for principal in request.verifier_targets {
             if principal == signer_pid {
                 record_delegation_install_normalization_rejected(
-                    intent,
+                    crate::dto::auth::DelegationProofInstallIntent::Repair,
                     DelegationInstallNormalizationRejectReason::SignerTarget,
                 );
                 return Err(Error::invalid(
@@ -143,7 +115,7 @@ impl DelegationApi {
             }
             if principal == root_pid {
                 record_delegation_install_normalization_rejected(
-                    intent,
+                    crate::dto::auth::DelegationProofInstallIntent::Repair,
                     DelegationInstallNormalizationRejectReason::RootTarget,
                 );
                 return Err(Error::invalid(
@@ -152,7 +124,7 @@ impl DelegationApi {
             }
             if !is_valid_target(principal) {
                 record_delegation_install_normalization_rejected(
-                    intent,
+                    crate::dto::auth::DelegationProofInstallIntent::Repair,
                     DelegationInstallNormalizationRejectReason::UnregisteredTarget,
                 );
                 return Err(Error::invalid(format!(
@@ -168,7 +140,7 @@ impl DelegationApi {
             Self::ensure_target_in_proof_audience(
                 &request.proof,
                 *principal,
-                intent,
+                crate::dto::auth::DelegationProofInstallIntent::Repair,
                 AudienceBindingFailureStage::Normalization,
             )?;
         }
@@ -180,10 +152,8 @@ impl DelegationApi {
     }
 
     // Validate/caches proof dependencies once before explicit fanout.
-    async fn prepare_explicit_verifier_push_proof(
-        proof: &DelegationProof,
-        intent: crate::dto::auth::DelegationProofInstallIntent,
-    ) -> Result<(), Error> {
+    async fn prepare_explicit_verifier_push_proof(proof: &DelegationProof) -> Result<(), Error> {
+        let intent = crate::dto::auth::DelegationProofInstallIntent::Repair;
         let root_pid = EnvOps::root_pid().map_err(Error::from)?;
         crate::ops::auth::DelegatedTokenOps::cache_public_keys_for_cert(&proof.cert)
             .await
@@ -201,9 +171,7 @@ impl DelegationApi {
             );
         })?;
 
-        if intent == crate::dto::auth::DelegationProofInstallIntent::Repair {
-            Self::ensure_repair_push_proof_is_locally_available(proof)?;
-        }
+        Self::ensure_repair_push_proof_is_locally_available(proof)?;
 
         Ok(())
     }

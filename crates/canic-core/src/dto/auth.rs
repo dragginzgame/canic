@@ -41,7 +41,6 @@ pub struct DelegationProof {
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
 pub enum DelegationProofInstallIntent {
     Provisioning,
-    Prewarm,
     Repair,
 }
 
@@ -184,8 +183,7 @@ pub struct AttestationKeySet {
     pub keys: Vec<AttestationKey>,
 }
 
-// admin-only: not part of canonical delegation flow.
-// used for controlled provisioning and tooling flows.
+// Canonical delegation issuance response. Fanout results are verifier-only.
 //
 // DelegationProvisionResponse
 //
@@ -227,12 +225,6 @@ pub struct DelegationProofStatus {
 }
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub enum DelegationProvisionTargetKind {
-    Signer,
-    Verifier,
-}
-
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum DelegationProvisionStatus {
     Ok,
     Failed,
@@ -244,7 +236,6 @@ pub enum DelegationProvisionStatus {
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
 pub enum DelegationAdminCommand {
-    PrewarmVerifiers(DelegationVerifierProofPushRequest),
     RepairVerifiers(DelegationVerifierProofPushRequest),
 }
 
@@ -254,9 +245,6 @@ pub enum DelegationAdminCommand {
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
 pub enum DelegationAdminResponse {
-    PrewarmedVerifiers {
-        result: DelegationVerifierProofPushResponse,
-    },
     RepairedVerifiers {
         result: DelegationVerifierProofPushResponse,
     },
@@ -269,7 +257,6 @@ pub enum DelegationAdminResponse {
 #[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
 pub struct DelegationProvisionTargetResponse {
     pub target: Principal,
-    pub kind: DelegationProvisionTargetKind,
     pub status: DelegationProvisionStatus,
     pub error: Option<Error>,
 }

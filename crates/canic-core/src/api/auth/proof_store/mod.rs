@@ -2,7 +2,7 @@ use super::DelegationApi;
 use crate::{
     cdk::types::Principal,
     dto::{
-        auth::{DelegationProof, DelegationProofInstallRequest, DelegationProvisionTargetKind},
+        auth::{DelegationProof, DelegationProofInstallRequest},
         error::Error,
     },
     log,
@@ -26,11 +26,11 @@ impl DelegationApi {
     async fn store_proof_local(
         proof: DelegationProof,
         intent: crate::dto::auth::DelegationProofInstallIntent,
-        kind: DelegationProvisionTargetKind,
+        verifier_install: bool,
         root_public_key_sec1: Option<Vec<u8>>,
         shard_public_key_sec1: Option<Vec<u8>>,
     ) -> Result<(), Error> {
-        if kind == DelegationProvisionTargetKind::Verifier {
+        if verifier_install {
             let local = IcOps::canister_self();
             Self::ensure_local_verifier_in_proof_audience(
                 &proof,
@@ -53,9 +53,9 @@ impl DelegationApi {
             log!(
                 Topic::Auth,
                 Warn,
-                "delegation proof rejected intent={:?} kind={:?} local={} shard={} issued_at={} expires_at={} error={}",
+                "delegation proof rejected intent={:?} verifier_install={} local={} shard={} issued_at={} expires_at={} error={}",
                 intent,
-                kind,
+                verifier_install,
                 local,
                 proof.cert.shard_pid,
                 proof.cert.issued_at,
@@ -67,16 +67,16 @@ impl DelegationApi {
 
         let outcome = DelegationStateOps::upsert_proof_from_dto(proof.clone(), IcOps::now_secs())
             .map_err(Self::map_delegation_error)?;
-        if kind == DelegationProvisionTargetKind::Verifier {
+        if verifier_install {
             Self::record_verifier_cache_install_outcome(outcome);
         }
         let local = IcOps::canister_self();
         log!(
             Topic::Auth,
             Info,
-            "delegation proof stored intent={:?} kind={:?} local={} shard={} issued_at={} expires_at={}",
+            "delegation proof stored intent={:?} verifier_install={} local={} shard={} issued_at={} expires_at={}",
             intent,
-            kind,
+            verifier_install,
             local,
             proof.cert.shard_pid,
             proof.cert.issued_at,
@@ -86,10 +86,7 @@ impl DelegationApi {
         Ok(())
     }
 
-    pub async fn store_proof(
-        request: DelegationProofInstallRequest,
-        kind: DelegationProvisionTargetKind,
-    ) -> Result<(), Error> {
+    pub async fn store_verifier_proof(request: DelegationProofInstallRequest) -> Result<(), Error> {
         let cfg = ConfigOps::delegated_tokens_config().map_err(Error::from)?;
         if !cfg.enabled {
             return Err(Error::forbidden(Self::DELEGATED_TOKENS_DISABLED));
@@ -106,7 +103,7 @@ impl DelegationApi {
         Self::store_proof_local(
             request.proof,
             request.intent,
-            kind,
+            true,
             request.root_public_key_sec1,
             Some(request.shard_public_key_sec1),
         )
@@ -117,7 +114,7 @@ impl DelegationApi {
         Self::store_proof_local(
             proof,
             crate::dto::auth::DelegationProofInstallIntent::Provisioning,
-            DelegationProvisionTargetKind::Signer,
+            false,
             None,
             None,
         )

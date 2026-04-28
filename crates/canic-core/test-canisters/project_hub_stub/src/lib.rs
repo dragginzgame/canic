@@ -9,7 +9,6 @@ use canic::{
     api::auth::DelegationApi,
     api::canister::{CanisterRole, placement::DirectoryApi},
     cdk::candid::Principal,
-    dto::auth::DelegationProvisionTargetKind,
     dto::{
         auth::{DelegatedToken, DelegationProofInstallRequest, SignedRoleAttestation},
         placement::directory::{DirectoryEntryStatusResponse, DirectoryRecoveryResponse},
@@ -92,7 +91,7 @@ async fn signer_verify_role_attestation(
 async fn canic_delegation_set_verifier_proof(
     request: DelegationProofInstallRequest,
 ) -> Result<(), Error> {
-    DelegationApi::store_proof(request, DelegationProvisionTargetKind::Verifier).await
+    DelegationApi::store_verifier_proof(request).await
 }
 
 /// Resolve one logical project key to a dedicated instance, creating it when absent.

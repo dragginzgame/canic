@@ -200,7 +200,7 @@ pub fn install_signer_test_delegation_material(
     install.expect("signer delegation material install must succeed");
 }
 
-// Verify that keyed lookup fails as a proof miss before any prewarm repair.
+// Verify that keyed lookup fails as a proof miss before explicit repair.
 pub fn assert_token_verify_proof_missing(
     pic: &Pic,
     verifier_id: Principal,
@@ -220,29 +220,6 @@ pub fn assert_token_verify_proof_missing(
         err.message.contains("delegation proof miss"),
         "expected proof-miss denial, got: {err:?}"
     );
-}
-
-// Dispatch a root prewarm admin command and decode the typed response.
-pub fn prewarm_verifiers(
-    pic: &Pic,
-    root_id: Principal,
-    proof: canic_core::dto::auth::DelegationProof,
-    verifier_targets: Vec<Principal>,
-) -> DelegationAdminResponse {
-    let prewarm: Result<DelegationAdminResponse, Error> = update_call_as(
-        pic,
-        root_id,
-        Principal::anonymous(),
-        "canic_delegation_admin",
-        (DelegationAdminCommand::PrewarmVerifiers(
-            DelegationVerifierProofPushRequest {
-                proof,
-                verifier_targets,
-            },
-        ),),
-    );
-
-    prewarm.expect("prewarm admin call must succeed")
 }
 
 // Dispatch a root repair admin command and preserve the typed error surface.

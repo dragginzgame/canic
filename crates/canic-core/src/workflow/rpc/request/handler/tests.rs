@@ -5,8 +5,8 @@ use crate::{
     dto::{
         auth::{
             DelegationAudience, DelegationCert, DelegationProof, DelegationProvisionResponse,
-            DelegationProvisionStatus, DelegationProvisionTargetKind,
-            DelegationProvisionTargetResponse, DelegationRequest, RoleAttestationRequest,
+            DelegationProvisionStatus, DelegationProvisionTargetResponse, DelegationRequest,
+            RoleAttestationRequest,
         },
         error::Error,
         rpc::{
@@ -458,7 +458,6 @@ fn issue_delegation_fanout_validation_accepts_required_ok_result() {
     let required_target = p(70);
     let response = sample_delegation_response(vec![DelegationProvisionTargetResponse {
         target: required_target,
-        kind: DelegationProvisionTargetKind::Verifier,
         status: DelegationProvisionStatus::Ok,
         error: None,
     }]);
@@ -472,7 +471,6 @@ fn issue_delegation_fanout_validation_rejects_missing_required_result() {
     let required_target = p(71);
     let response = sample_delegation_response(vec![DelegationProvisionTargetResponse {
         target: p(72),
-        kind: DelegationProvisionTargetKind::Verifier,
         status: DelegationProvisionStatus::Ok,
         error: None,
     }]);
@@ -491,7 +489,6 @@ fn issue_delegation_fanout_validation_rejects_failed_required_result() {
     let required_target = p(73);
     let response = sample_delegation_response(vec![DelegationProvisionTargetResponse {
         target: required_target,
-        kind: DelegationProvisionTargetKind::Verifier,
         status: DelegationProvisionStatus::Failed,
         error: Some(Error::internal("simulated push failure")),
     }]);

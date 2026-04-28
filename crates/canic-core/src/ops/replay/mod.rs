@@ -1,8 +1,7 @@
 use crate::dto::{
     auth::{
         DelegationAudience, DelegationProof, DelegationProvisionResponse,
-        DelegationProvisionStatus, DelegationProvisionTargetKind,
-        DelegationProvisionTargetResponse,
+        DelegationProvisionStatus, DelegationProvisionTargetResponse,
     },
     rpc::{CyclesResponse, Response},
 };
@@ -153,7 +152,6 @@ fn try_encode_compact_root_replay_response(response: &Response) -> Option<Vec<u8
         if !matches!(
             result,
             DelegationProvisionTargetResponse {
-                kind: DelegationProvisionTargetKind::Verifier,
                 status: DelegationProvisionStatus::Ok,
                 error: None,
                 ..
@@ -209,7 +207,6 @@ fn try_decode_compact_root_replay_response(
                 .into_iter()
                 .map(|target| DelegationProvisionTargetResponse {
                     target,
-                    kind: DelegationProvisionTargetKind::Verifier,
                     status: DelegationProvisionStatus::Ok,
                     error: None,
                 })
@@ -435,7 +432,6 @@ mod tests {
             },
             results: vec![DelegationProvisionTargetResponse {
                 target: p(3),
-                kind: DelegationProvisionTargetKind::Verifier,
                 status: DelegationProvisionStatus::Ok,
                 error: None,
             }],
@@ -480,7 +476,6 @@ mod tests {
                 assert_eq!(decoded.results.len(), expected.results.len());
                 for (decoded, expected) in decoded.results.iter().zip(expected.results.iter()) {
                     assert_eq!(decoded.target, expected.target);
-                    assert_eq!(decoded.kind, expected.kind);
                     assert_eq!(decoded.status, expected.status);
                     assert_eq!(
                         decoded.error.as_ref().map(|err| err.code),
@@ -505,7 +500,6 @@ mod tests {
             },
             results: vec![DelegationProvisionTargetResponse {
                 target: p(3),
-                kind: DelegationProvisionTargetKind::Verifier,
                 status: DelegationProvisionStatus::Failed,
                 error: Some(Error::new(ErrorCode::Internal, "push failed".to_string())),
             }],
@@ -524,7 +518,6 @@ mod tests {
                 assert_eq!(decoded.results.len(), expected.results.len());
                 for (decoded, expected) in decoded.results.iter().zip(expected.results.iter()) {
                     assert_eq!(decoded.target, expected.target);
-                    assert_eq!(decoded.kind, expected.kind);
                     assert_eq!(decoded.status, expected.status);
                     assert_eq!(
                         decoded.error.as_ref().map(|err| err.code),

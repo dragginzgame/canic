@@ -103,7 +103,7 @@ macro_rules! __canic_build_internal {
         $body
 
         // Emit compile-time endpoint surface flags from validated config.
-        println!("cargo:rustc-check-cfg=cfg(canic_accepts_delegation_signer_proof)");
+        println!("cargo:rustc-check-cfg=cfg(canic_delegated_auth_signer)");
         println!("cargo:rustc-check-cfg=cfg(canic_accepts_delegation_verifier_proof)");
         println!("cargo:rustc-check-cfg=cfg(canic_delegated_tokens_enabled)");
         println!("cargo:rustc-check-cfg=cfg(canic_icrc21_enabled)");
@@ -159,7 +159,7 @@ macro_rules! __canic_build_internal {
 
             if let Some(role_name) = inferred_role_name.as_deref() {
                 let mut role_found = false;
-                let mut accepts_signer_proof = false;
+                let mut delegated_auth_signer = false;
                 let mut accepts_verifier_proof = false;
                 let mut has_icrc21 = false;
                 let mut has_scaling = false;
@@ -170,7 +170,7 @@ macro_rules! __canic_build_internal {
                 for subnet in $cfg.subnets.values() {
                     if let Some(canister_cfg) = subnet.get_canister(&role_id) {
                         role_found = true;
-                        accepts_signer_proof |= canister_cfg.delegated_auth.signer;
+                        delegated_auth_signer |= canister_cfg.delegated_auth.signer;
                         accepts_verifier_proof |= canister_cfg.delegated_auth.verifier;
                         has_icrc21 |= canister_cfg.standards.icrc21;
                         has_scaling |= canister_cfg.scaling.is_some();
@@ -188,8 +188,8 @@ macro_rules! __canic_build_internal {
                         println!("cargo:rustc-cfg=canic_icrc21_enabled");
                     }
 
-                    if accepts_signer_proof && $cfg.auth.delegated_tokens.enabled {
-                        println!("cargo:rustc-cfg=canic_accepts_delegation_signer_proof");
+                    if delegated_auth_signer && $cfg.auth.delegated_tokens.enabled {
+                        println!("cargo:rustc-cfg=canic_delegated_auth_signer");
                     }
 
                     if accepts_verifier_proof && $cfg.auth.delegated_tokens.enabled {

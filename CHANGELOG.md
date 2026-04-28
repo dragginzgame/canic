@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.28.x] - 2026-04-27 - Delegation Audience Hard Cut
 
+- `0.28.3` removes obsolete delegated-auth signer-proof and admin verifier-prewarm flows now that signer lifecycle prewarm uses canonical root issuance.
 - `0.28.2` adds focused lifecycle-gap regression coverage for verifier proof-cache loss, moves the reinstall/upgrade mechanics into the test harness, and fixes the reconcile root harness so staged releases match configured initial shards.
 - `0.28.1` forces delegated signer lifecycle prewarm to refresh verifier fanout even when the signer already has a reusable proof, aligns init/post-upgrade readiness on the same auth bootstrap flow, makes root own verifier fanout derivation, success, and root-local proof caching, and adds a signed-off delegated-auth lifecycle design note: [docs/design/0.28-delegated-auth-lifecycle/0.28-design.md](docs/design/0.28-delegated-auth-lifecycle/0.28-design.md).
 - `0.28.0` hard-cuts delegated auth onto `DelegationAudience` and required shard public keys, so stale-audience token refresh and verifier proof installation use explicit, non-optional auth material.

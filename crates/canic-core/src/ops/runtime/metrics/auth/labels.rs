@@ -14,42 +14,17 @@ const PRED_DELEGATION_VERIFIER_TARGET_FAILED: &str = "delegation_verifier_target
 const PRED_DELEGATION_VERIFIER_TARGET_MISSING: &str = "delegation_verifier_target_missing";
 const PRED_DELEGATION_VERIFIER_TARGET_COUNT: &str = "delegation_verifier_target_count";
 const PRED_DELEGATION_PROVISION_COMPLETE: &str = "delegation_provision_complete";
-const PRED_DELEGATION_PROVISION_ATTEMPT_SIGNER: &str =
-    "delegation_provision_attempt{role=\"signer\"}";
 const PRED_DELEGATION_PROVISION_ATTEMPT_VERIFIER: &str =
     "delegation_provision_attempt{role=\"verifier\"}";
-const PRED_DELEGATION_PROVISION_SUCCESS_SIGNER: &str =
-    "delegation_provision_success{role=\"signer\"}";
 const PRED_DELEGATION_PROVISION_SUCCESS_VERIFIER: &str =
     "delegation_provision_success{role=\"verifier\"}";
-const PRED_DELEGATION_PROVISION_FAILED_SIGNER: &str =
-    "delegation_provision_failed{role=\"signer\"}";
 const PRED_DELEGATION_PROVISION_FAILED_VERIFIER: &str =
     "delegation_provision_failed{role=\"verifier\"}";
-const PRED_DELEGATION_PUSH_COMPLETE_PREWARM: &str = "delegation_push_complete{origin=\"prewarm\"}";
 const PRED_DELEGATION_PUSH_COMPLETE_REPAIR: &str = "delegation_push_complete{origin=\"repair\"}";
-const PRED_DELEGATION_PUSH_ATTEMPT_SIGNER_PREWARM: &str =
-    "delegation_push_attempt{role=\"signer\",origin=\"prewarm\"}";
-const PRED_DELEGATION_PUSH_ATTEMPT_VERIFIER_PREWARM: &str =
-    "delegation_push_attempt{role=\"verifier\",origin=\"prewarm\"}";
-const PRED_DELEGATION_PUSH_ATTEMPT_SIGNER_REPAIR: &str =
-    "delegation_push_attempt{role=\"signer\",origin=\"repair\"}";
 const PRED_DELEGATION_PUSH_ATTEMPT_VERIFIER_REPAIR: &str =
     "delegation_push_attempt{role=\"verifier\",origin=\"repair\"}";
-const PRED_DELEGATION_PUSH_SUCCESS_SIGNER_PREWARM: &str =
-    "delegation_push_success{role=\"signer\",origin=\"prewarm\"}";
-const PRED_DELEGATION_PUSH_SUCCESS_VERIFIER_PREWARM: &str =
-    "delegation_push_success{role=\"verifier\",origin=\"prewarm\"}";
-const PRED_DELEGATION_PUSH_SUCCESS_SIGNER_REPAIR: &str =
-    "delegation_push_success{role=\"signer\",origin=\"repair\"}";
 const PRED_DELEGATION_PUSH_SUCCESS_VERIFIER_REPAIR: &str =
     "delegation_push_success{role=\"verifier\",origin=\"repair\"}";
-const PRED_DELEGATION_PUSH_FAILED_SIGNER_PREWARM: &str =
-    "delegation_push_failed{role=\"signer\",origin=\"prewarm\"}";
-const PRED_DELEGATION_PUSH_FAILED_VERIFIER_PREWARM: &str =
-    "delegation_push_failed{role=\"verifier\",origin=\"prewarm\"}";
-const PRED_DELEGATION_PUSH_FAILED_SIGNER_REPAIR: &str =
-    "delegation_push_failed{role=\"signer\",origin=\"repair\"}";
 const PRED_DELEGATION_PUSH_FAILED_VERIFIER_REPAIR: &str =
     "delegation_push_failed{role=\"verifier\",origin=\"repair\"}";
 const PRED_SESSION_BOOTSTRAP_REJECTED_DISABLED: &str = "session_bootstrap_rejected_disabled";
@@ -115,72 +90,24 @@ pub(super) const fn verifier_target_count_predicate() -> &'static str {
     PRED_DELEGATION_VERIFIER_TARGET_COUNT
 }
 
-pub(super) const fn delegation_provision_attempt_signer_predicate() -> &'static str {
-    PRED_DELEGATION_PROVISION_ATTEMPT_SIGNER
-}
-
 pub(super) const fn delegation_provision_attempt_verifier_predicate() -> &'static str {
     PRED_DELEGATION_PROVISION_ATTEMPT_VERIFIER
-}
-
-pub(super) const fn delegation_provision_success_signer_predicate() -> &'static str {
-    PRED_DELEGATION_PROVISION_SUCCESS_SIGNER
 }
 
 pub(super) const fn delegation_provision_success_verifier_predicate() -> &'static str {
     PRED_DELEGATION_PROVISION_SUCCESS_VERIFIER
 }
 
-pub(super) const fn delegation_provision_failed_signer_predicate() -> &'static str {
-    PRED_DELEGATION_PROVISION_FAILED_SIGNER
-}
-
 pub(super) const fn delegation_provision_failed_verifier_predicate() -> &'static str {
     PRED_DELEGATION_PROVISION_FAILED_VERIFIER
-}
-
-pub(super) const fn delegation_push_attempt_signer_prewarm_predicate() -> &'static str {
-    PRED_DELEGATION_PUSH_ATTEMPT_SIGNER_PREWARM
-}
-
-pub(super) const fn delegation_push_attempt_verifier_prewarm_predicate() -> &'static str {
-    PRED_DELEGATION_PUSH_ATTEMPT_VERIFIER_PREWARM
-}
-
-pub(super) const fn delegation_push_attempt_signer_repair_predicate() -> &'static str {
-    PRED_DELEGATION_PUSH_ATTEMPT_SIGNER_REPAIR
 }
 
 pub(super) const fn delegation_push_attempt_verifier_repair_predicate() -> &'static str {
     PRED_DELEGATION_PUSH_ATTEMPT_VERIFIER_REPAIR
 }
 
-pub(super) const fn delegation_push_success_signer_prewarm_predicate() -> &'static str {
-    PRED_DELEGATION_PUSH_SUCCESS_SIGNER_PREWARM
-}
-
-pub(super) const fn delegation_push_success_verifier_prewarm_predicate() -> &'static str {
-    PRED_DELEGATION_PUSH_SUCCESS_VERIFIER_PREWARM
-}
-
-pub(super) const fn delegation_push_success_signer_repair_predicate() -> &'static str {
-    PRED_DELEGATION_PUSH_SUCCESS_SIGNER_REPAIR
-}
-
 pub(super) const fn delegation_push_success_verifier_repair_predicate() -> &'static str {
     PRED_DELEGATION_PUSH_SUCCESS_VERIFIER_REPAIR
-}
-
-pub(super) const fn delegation_push_failed_signer_prewarm_predicate() -> &'static str {
-    PRED_DELEGATION_PUSH_FAILED_SIGNER_PREWARM
-}
-
-pub(super) const fn delegation_push_failed_verifier_prewarm_predicate() -> &'static str {
-    PRED_DELEGATION_PUSH_FAILED_VERIFIER_PREWARM
-}
-
-pub(super) const fn delegation_push_failed_signer_repair_predicate() -> &'static str {
-    PRED_DELEGATION_PUSH_FAILED_SIGNER_REPAIR
 }
 
 pub(super) const fn delegation_push_failed_verifier_repair_predicate() -> &'static str {
@@ -278,7 +205,6 @@ pub(super) const fn attestation_refresh_failed_predicate() -> &'static str {
 pub(super) const fn complete_predicate(intent: DelegationProofInstallIntent) -> &'static str {
     match intent {
         DelegationProofInstallIntent::Provisioning => PRED_DELEGATION_PROVISION_COMPLETE,
-        DelegationProofInstallIntent::Prewarm => PRED_DELEGATION_PUSH_COMPLETE_PREWARM,
         DelegationProofInstallIntent::Repair => PRED_DELEGATION_PUSH_COMPLETE_REPAIR,
     }
 }
@@ -286,7 +212,6 @@ pub(super) const fn complete_predicate(intent: DelegationProofInstallIntent) -> 
 pub(super) const fn install_intent_label(intent: DelegationProofInstallIntent) -> &'static str {
     match intent {
         DelegationProofInstallIntent::Provisioning => "provisioning",
-        DelegationProofInstallIntent::Prewarm => "prewarm",
         DelegationProofInstallIntent::Repair => "repair",
     }
 }

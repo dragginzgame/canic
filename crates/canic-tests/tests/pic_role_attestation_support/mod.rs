@@ -42,6 +42,6 @@ pub use calls::{PicBorrow, query_call_as, test_progress, update_call_as, update_
 pub use delegation::{
     assert_token_verify_proof_missing, bogus_delegated_token, delegation_admin_fixture,
     install_root_test_delegation_material, install_signer_test_delegation_material,
-    prewarm_verifiers, repair_verifiers,
+    repair_verifiers,
 };
 pub use metrics::{access_metric_count, assert_access_metrics};
