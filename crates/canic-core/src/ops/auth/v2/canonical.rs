@@ -45,6 +45,10 @@ pub fn root_key_certificate_payload_hash(cert: &RootKeyCertificateV2) -> [u8; 32
     hash_bytes(&root_key_certificate_payload_bytes(cert))
 }
 
+pub fn public_key_hash(public_key_sec1: &[u8]) -> [u8; 32] {
+    hash_bytes(public_key_sec1)
+}
+
 pub fn role_hash(role: &CanisterRole) -> Result<[u8; 32], CanonicalAuthV2Error> {
     validate_role(role)?;
 
