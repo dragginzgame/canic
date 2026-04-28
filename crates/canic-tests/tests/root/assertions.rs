@@ -86,6 +86,26 @@ pub fn assert_child_env(
     );
 }
 
+/// Assert that every registered child exposes env fields matching the registry.
+pub fn assert_child_envs_match_registry(pic: &Pic, root_id: Principal) {
+    let registry = query_subnet_registry(pic, root_id);
+
+    for entry in registry {
+        if entry.role.is_root() || entry.role.is_wasm_store() {
+            continue;
+        }
+
+        let expected_parent_id = entry.record.parent_pid.unwrap_or_else(|| {
+            panic!(
+                "registered non-root canister {} ({}) must have a parent",
+                entry.pid, entry.role
+            )
+        });
+
+        assert_child_env(pic, entry.pid, entry.role, expected_parent_id, root_id);
+    }
+}
+
 /// Assert that the CANIC_CANISTER_CHILDREN endpoint matches the registry.
 pub fn assert_children_match_registry(pic: &Pic, root_id: Principal) {
     // 1. Query authoritative registry

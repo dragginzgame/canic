@@ -19,7 +19,10 @@ mod keys;
 mod token;
 mod types;
 mod verify;
-pub use boundary::{BootstrapTokenAudienceSubset, DelegatedSessionExpiryClamp};
+pub use boundary::{
+    BootstrapTokenAudienceSubset, DelegatedSessionExpiryClamp,
+    DelegationVerifierTargetDerivationError,
+};
 pub use error::{
     DelegatedTokenOpsError, DelegationExpiryError, DelegationScopeError, DelegationSignatureError,
     DelegationValidationError,

@@ -1,4 +1,4 @@
-use super::{DelegatedTokenOps, VerifiedTokenClaims, audience};
+use super::{DelegatedTokenOps, TokenGrant, TokenLifetime, VerifiedTokenClaims, audience};
 use crate::{
     cdk::types::Principal,
     dto::auth::{DelegatedToken, DelegatedTokenClaims, DelegationAudience, DelegationProof},
@@ -21,6 +21,13 @@ pub enum DelegatedSessionExpiryClamp {
     ExpiredToken,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum DelegationVerifierTargetDerivationError {
+    EmptyAudience,
+    RoleNotConfigured(CanisterRole),
+    RoleNotVerifier(CanisterRole),
+}
+
 impl DelegatedTokenOps {
     // Check whether a locally cached proof can safely sign the requested claims.
     pub(crate) fn proof_reusable_for_claims(
@@ -29,20 +36,28 @@ impl DelegatedTokenOps {
         now_secs: u64,
     ) -> bool {
         let claims = VerifiedTokenClaims::from_dto_ref(claims);
+        Self::proof_reusable_for_grant(proof, claims.grant(), claims.lifetime(), now_secs)
+    }
+
+    // Check whether a locally cached proof can safely sign one grant/lifetime pair.
+    pub(crate) fn proof_reusable_for_grant(
+        proof: &DelegationProof,
+        grant: TokenGrant<'_>,
+        lifetime: TokenLifetime,
+        now_secs: u64,
+    ) -> bool {
         if now_secs > proof.cert.expires_at {
             return false;
         }
 
-        if claims.shard_pid() != proof.cert.shard_pid {
+        if grant.shard_pid != proof.cert.shard_pid {
             return false;
         }
 
-        let lifetime = claims.lifetime();
         if lifetime.iat < proof.cert.issued_at || lifetime.exp > proof.cert.expires_at {
             return false;
         }
 
-        let grant = claims.grant();
         audience::roles_subset(grant.aud, &proof.cert.aud)
             && audience::strings_subset(grant.scopes, &proof.cert.scopes)
     }
@@ -97,13 +112,14 @@ impl DelegatedTokenOps {
         audience: &DelegationAudience,
         signer_pid: Principal,
         root_pid: Principal,
-    ) -> Result<Vec<Principal>, CanisterRole> {
+    ) -> Result<Vec<Principal>, DelegationVerifierTargetDerivationError> {
         let mut verifier_targets = Vec::new();
         match audience {
             DelegationAudience::Any => {
                 for (role, pids) in SubnetRegistryOps::role_index() {
-                    let cfg =
-                        ConfigOps::current_subnet_canister(&role).map_err(|_| role.clone())?;
+                    let cfg = ConfigOps::current_subnet_canister(&role).map_err(|_| {
+                        DelegationVerifierTargetDerivationError::RoleNotConfigured(role.clone())
+                    })?;
                     if !cfg.delegated_auth.verifier {
                         continue;
                     }
@@ -112,13 +128,17 @@ impl DelegatedTokenOps {
                 }
             }
             DelegationAudience::Roles(roles) if roles.is_empty() => {
-                return Err(CanisterRole::new(""));
+                return Err(DelegationVerifierTargetDerivationError::EmptyAudience);
             }
             DelegationAudience::Roles(roles) => {
                 for role in roles {
-                    let cfg = ConfigOps::current_subnet_canister(role).map_err(|_| role.clone())?;
+                    let cfg = ConfigOps::current_subnet_canister(role).map_err(|_| {
+                        DelegationVerifierTargetDerivationError::RoleNotConfigured(role.clone())
+                    })?;
                     if !cfg.delegated_auth.verifier {
-                        return Err(role.clone());
+                        return Err(DelegationVerifierTargetDerivationError::RoleNotVerifier(
+                            role.clone(),
+                        ));
                     }
 
                     let pids = SubnetRegistryOps::role_index()

@@ -1,5 +1,8 @@
 use crate::{
-    InternalError, cdk::types::Principal, dto::auth::DelegationCert, ops::auth::audience,
+    InternalError,
+    cdk::types::Principal,
+    dto::auth::DelegationCert,
+    ops::auth::{DelegationVerifierTargetDerivationError, audience},
     workflow::rpc::RpcWorkflowError,
 };
 
@@ -38,4 +41,21 @@ pub(super) fn validate_delegation_cert_policy(
     }
 
     Ok(())
+}
+
+// Convert canonical verifier-target derivation failures into root RPC errors.
+pub(super) fn map_verifier_target_derivation_error(
+    err: DelegationVerifierTargetDerivationError,
+) -> RpcWorkflowError {
+    match err {
+        DelegationVerifierTargetDerivationError::EmptyAudience => {
+            RpcWorkflowError::DelegationAudienceEmpty
+        }
+        DelegationVerifierTargetDerivationError::RoleNotConfigured(role) => {
+            RpcWorkflowError::DelegationAudienceRoleNotConfigured { role }
+        }
+        DelegationVerifierTargetDerivationError::RoleNotVerifier(role) => {
+            RpcWorkflowError::DelegationAudienceRoleNotVerifier { role }
+        }
+    }
 }

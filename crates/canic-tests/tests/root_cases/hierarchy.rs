@@ -1,7 +1,7 @@
 use crate::root::{
     RootSetupProfile,
     assertions::{
-        assert_child_env, assert_children_match_registry, assert_registry_parents,
+        assert_child_envs_match_registry, assert_children_match_registry, assert_registry_parents,
         assert_state_endpoints_are_root_only,
     },
     harness::setup_root,
@@ -47,11 +47,7 @@ fn root_reference_topology_is_consistent() {
         "root_reference_topology_is_consistent",
         "assert each child env",
     );
-    for (role, pid) in &setup.subnet_index {
-        if !role.is_root() && *role != CanisterRole::WASM_STORE {
-            assert_child_env(&setup.pic, *pid, role.clone(), setup.root_id, setup.root_id);
-        }
-    }
+    assert_child_envs_match_registry(&setup.pic, setup.root_id);
 
     test_progress(
         "root_reference_topology_is_consistent",

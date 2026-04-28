@@ -142,8 +142,6 @@ fn structural_proof_denies_unsupported_issue_delegation_capability() {
         scopes: vec!["rpc:verify".to_string()],
         aud: DelegationAudience::Any,
         ttl_secs: 60,
-        verifier_targets: Vec::new(),
-        include_root_verifier: false,
         shard_public_key_sec1: vec![1, 2, 3],
         metadata: Some(metadata([35u8; 32], 120)),
     });
@@ -641,8 +639,6 @@ fn unsupported_capability_proof_rejection_does_not_commit_replay_entry() {
         scopes: vec!["rpc:verify".to_string()],
         aud: DelegationAudience::Any,
         ttl_secs: 60,
-        verifier_targets: Vec::new(),
-        include_root_verifier: false,
         shard_public_key_sec1: vec![1, 2, 3],
         metadata: Some(metadata),
     };

@@ -3,8 +3,7 @@ use crate::{
     dto::{
         auth::{
             AttestationKeySet, DelegatedToken, DelegatedTokenClaims, DelegationAudience,
-            DelegationCert, DelegationProof, DelegationProvisionResponse,
-            DelegationProvisionStatus, DelegationProvisionTargetKind, DelegationRequest,
+            DelegationCert, DelegationProof, DelegationProvisionResponse, DelegationRequest,
             RoleAttestationRequest, SignedRoleAttestation,
         },
         error::{Error, ErrorCode},
@@ -21,9 +20,7 @@ use crate::{
         rpc::RpcOps,
         runtime::env::EnvOps,
         runtime::metrics::auth::{
-            record_attestation_refresh_failed, record_delegation_provision_complete,
-            record_delegation_verifier_target_count, record_delegation_verifier_target_failed,
-            record_delegation_verifier_target_missing, record_signer_issue_without_proof,
+            record_attestation_refresh_failed, record_signer_issue_without_proof,
         },
         storage::auth::DelegationStateOps,
     },
@@ -437,9 +434,7 @@ impl DelegationApi {
                 .await
                 .map_err(Self::map_delegation_error)?;
         let request = Self::delegation_request_from_claims(claims, shard_public_key_sec1)?;
-        let required_verifier_targets = request.verifier_targets.clone();
         let response = Self::request_delegation_remote(request).await?;
-        Self::ensure_required_verifier_targets_provisioned(&required_verifier_targets, &response)?;
         let proof = response.proof;
         Self::store_local_signer_proof(proof.clone()).await?;
         Ok(proof)
@@ -592,102 +587,15 @@ impl DelegationApi {
         }
 
         let signer_pid = IcOps::canister_self();
-        let root_pid = EnvOps::root_pid().map_err(Error::from)?;
-        let verifier_targets = DelegatedTokenOps::required_verifier_targets_from_audience(
-            &claims.aud,
-            signer_pid,
-            root_pid,
-        )
-        .map_err(|role| {
-            Error::invalid(format!(
-                "delegation audience role '{role}' is invalid for canonical verifier provisioning"
-            ))
-        })?;
 
         Ok(DelegationRequest {
             shard_pid: signer_pid,
             scopes: claims.scopes.clone(),
             aud: claims.aud.clone(),
             ttl_secs,
-            verifier_targets,
-            include_root_verifier: true,
             shard_public_key_sec1,
             metadata: None,
         })
-    }
-
-    // Validate required verifier fanout and fail closed when any required target is missing/failing.
-    fn ensure_required_verifier_targets_provisioned(
-        required_targets: &[Principal],
-        response: &DelegationProvisionResponse,
-    ) -> Result<(), Error> {
-        let mut checked = Vec::new();
-        for target in required_targets {
-            if checked.contains(target) {
-                continue;
-            }
-            checked.push(*target);
-        }
-        record_delegation_verifier_target_count(checked.len());
-
-        for target in &checked {
-            let Some(result) = response.results.iter().find(|entry| {
-                entry.kind == DelegationProvisionTargetKind::Verifier && entry.target == *target
-            }) else {
-                record_delegation_verifier_target_missing();
-                return Err(Error::internal(format!(
-                    "delegation provisioning missing verifier target result for '{target}'"
-                )));
-            };
-
-            if result.status != DelegationProvisionStatus::Ok {
-                record_delegation_verifier_target_failed();
-                let detail = result
-                    .error
-                    .as_ref()
-                    .map_or_else(|| "unknown error".to_string(), ToString::to_string);
-                return Err(Error::internal(format!(
-                    "delegation provisioning failed for required verifier target '{target}': {detail}"
-                )));
-            }
-        }
-
-        record_delegation_provision_complete();
-        Ok(())
-    }
-
-    // Derive required verifier targets from audience with strict filtering/validation.
-    #[cfg(test)]
-    fn derive_required_verifier_targets_from_aud(
-        audience: &DelegationAudience,
-        signer_pid: Principal,
-        root_pid: Principal,
-        mut resolve_role: impl FnMut(&CanisterRole) -> Result<Vec<Principal>, ()>,
-    ) -> Result<Vec<Principal>, Error> {
-        let mut verifier_targets = Vec::new();
-        let DelegationAudience::Roles(roles) = audience else {
-            return Ok(verifier_targets);
-        };
-        if roles.is_empty() {
-            return Err(Error::invalid(
-                "delegation audience role list must not be empty",
-            ));
-        }
-
-        for role in roles {
-            let pids = resolve_role(role).map_err(|()| {
-                Error::invalid(format!(
-                    "delegation audience role '{role}' is invalid for canonical verifier provisioning"
-                ))
-            })?;
-            for pid in pids {
-                if pid == signer_pid || pid == root_pid || verifier_targets.contains(&pid) {
-                    continue;
-                }
-                verifier_targets.push(pid);
-            }
-        }
-        Ok(verifier_targets)
     }
 
     // Delegated audience invariants:

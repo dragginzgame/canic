@@ -104,7 +104,7 @@ pub fn issue_test_delegated_token(
     pic: &Pic,
     root_id: Principal,
     signer_id: Principal,
-    _verifier_id: Principal,
+    verifier_id: Principal,
     delegated_subject: Principal,
     ttl_seconds: u64,
 ) -> DelegatedToken {
@@ -115,7 +115,7 @@ pub fn issue_test_delegated_token(
         sub: delegated_subject,
         shard_pid: signer_id,
         scopes: vec![cap::VERIFY.to_string()],
-        aud: DelegationAudience::Any,
+        aud: DelegationAudience::Roles(vec![verifier_role(pic, root_id, verifier_id)]),
         iat: now,
         exp: now + ttl_seconds,
         ext: None,
@@ -129,6 +129,23 @@ pub fn issue_test_delegated_token(
     );
 
     issued_token.expect("delegated token issuance failed")
+}
+
+// Resolve the role for a verifier pid from the root subnet registry.
+fn verifier_role(pic: &Pic, root_id: Principal, verifier_id: Principal) -> CanisterRole {
+    let registry: Result<SubnetRegistryResponse, Error> = query_call_as(
+        pic,
+        root_id,
+        Principal::anonymous(),
+        protocol::CANIC_SUBNET_REGISTRY,
+        (),
+    );
+    let SubnetRegistryResponse(entries) = registry.expect("query root subnet registry failed");
+    entries
+        .into_iter()
+        .find(|entry| entry.pid == verifier_id)
+        .map(|entry| entry.role)
+        .expect("verifier must be registered in root subnet registry")
 }
 
 // Query the root test public keys used for proof installation hooks.

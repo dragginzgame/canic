@@ -242,16 +242,6 @@ pub(super) fn hash_principal(hasher: &mut Sha256, principal: &Principal) {
     hash_bytes(hasher, principal.as_slice());
 }
 
-/// hash_principals
-///
-/// Append one principal-vector field to the replay payload hash.
-pub(super) fn hash_principals(hasher: &mut Sha256, principals: &[Principal]) {
-    hash_u64(hasher, principals.len() as u64);
-    for principal in principals {
-        hash_principal(hasher, principal);
-    }
-}
-
 /// hash_audience
 ///
 /// Append one delegation audience field to the replay payload hash.

@@ -316,9 +316,22 @@ pub(super) fn verify_self_audience(
     self_pid: Principal,
 ) -> Result<(), InternalError> {
     let self_role = EnvOps::canister_role()?;
-    let self_is_verifier = ConfigOps::current_canister()?.delegated_auth.verifier;
+    let self_is_verifier =
+        self_is_root_runtime() || ConfigOps::current_canister()?.delegated_auth.verifier;
     audience::verify_self_audience(audience_input, self_pid, &self_role, self_is_verifier)
         .map_err(InternalError::from)
+}
+
+// Return whether the executing wasm canister is the configured root.
+#[cfg(target_arch = "wasm32")]
+fn self_is_root_runtime() -> bool {
+    EnvOps::is_root()
+}
+
+// Keep host-side unit tests away from IC-only `canister_self`.
+#[cfg(not(target_arch = "wasm32"))]
+const fn self_is_root_runtime() -> bool {
+    false
 }
 
 // Enforce token grant bounds against the delegation certificate scope and audience.

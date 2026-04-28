@@ -387,8 +387,6 @@ mod tests {
                 scopes: vec!["rpc:verify".to_string()],
                 aud: DelegationAudience::Roles(vec![CanisterRole::new("app")]),
                 ttl_secs: 60,
-                verifier_targets: vec![],
-                include_root_verifier: false,
                 shard_public_key_sec1: vec![1, 2, 3],
                 metadata: None,
             }),
