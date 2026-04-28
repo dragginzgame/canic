@@ -504,35 +504,12 @@ macro_rules! canic_emit_nonroot_sync_topology_endpoints {
 #[macro_export]
 macro_rules! canic_emit_nonroot_auth_attestation_endpoints {
     () => {
-        #[cfg(canic_accepts_delegation_signer_proof)]
-        #[$crate::canic_update(internal, requires(caller::is_root()))]
-        async fn canic_delegation_set_signer_proof(
-            request: ::canic::dto::auth::DelegationProofInstallRequest,
-        ) -> Result<(), ::canic::Error> {
-            let self_pid = $crate::__internal::core::cdk::api::canister_self();
-            if request.proof.cert.shard_pid != self_pid {
-                return Err(::canic::Error::invalid(
-                    "delegation shard does not match canister",
-                ));
-            }
-
-            $crate::__internal::core::api::auth::DelegationApi::store_proof(
-                request,
-                ::canic::dto::auth::DelegationProvisionTargetKind::Signer,
-            )
-            .await
-        }
-
         #[cfg(canic_accepts_delegation_verifier_proof)]
         #[$crate::canic_update(internal, requires(caller::is_root()))]
         async fn canic_delegation_set_verifier_proof(
             request: ::canic::dto::auth::DelegationProofInstallRequest,
         ) -> Result<(), ::canic::Error> {
-            $crate::__internal::core::api::auth::DelegationApi::store_proof(
-                request,
-                ::canic::dto::auth::DelegationProvisionTargetKind::Verifier,
-            )
-            .await
+            $crate::__internal::core::api::auth::DelegationApi::store_verifier_proof(request).await
         }
     };
 }

@@ -24,7 +24,7 @@ macro_rules! __canic_start_nonroot_lifecycle_core {
             let (config, config_source, config_path) = __canic_compiled_config();
 
             #[cfg(any(
-                canic_accepts_delegation_signer_proof,
+                canic_delegated_auth_signer,
                 canic_accepts_delegation_verifier_proof
             ))]
             $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::init_nonroot_canister_before_bootstrap_with_attestation_cache(
@@ -36,7 +36,7 @@ macro_rules! __canic_start_nonroot_lifecycle_core {
             );
 
             #[cfg(not(any(
-                canic_accepts_delegation_signer_proof,
+                canic_delegated_auth_signer,
                 canic_accepts_delegation_verifier_proof
             )))]
             $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::init_nonroot_canister_before_bootstrap(
@@ -57,7 +57,7 @@ macro_rules! __canic_start_nonroot_lifecycle_core {
             let (config, config_source, config_path) = __canic_compiled_config();
 
             #[cfg(any(
-                canic_accepts_delegation_signer_proof,
+                canic_delegated_auth_signer,
                 canic_accepts_delegation_verifier_proof
             ))]
             $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::post_upgrade_nonroot_canister_before_bootstrap_with_attestation_cache(
@@ -68,7 +68,7 @@ macro_rules! __canic_start_nonroot_lifecycle_core {
             );
 
             #[cfg(not(any(
-                canic_accepts_delegation_signer_proof,
+                canic_delegated_auth_signer,
                 canic_accepts_delegation_verifier_proof
             )))]
             $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::post_upgrade_nonroot_canister_before_bootstrap(

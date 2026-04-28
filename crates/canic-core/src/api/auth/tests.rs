@@ -606,7 +606,6 @@ fn normalize_explicit_verifier_push_request_dedupes_targets() {
             proof: sample_proof(),
             verifier_targets: vec![verifier_a, verifier_a, verifier_b],
         },
-        DelegationProofInstallIntent::Repair,
         root_pid,
         |principal| principal == verifier_a || principal == verifier_b,
     )
@@ -622,7 +621,6 @@ fn normalize_explicit_verifier_push_request_rejects_signer_target() {
             proof: sample_proof(),
             verifier_targets: vec![sample_proof().cert.shard_pid],
         },
-        DelegationProofInstallIntent::Repair,
         p(1),
         |_principal| true,
     )
@@ -641,7 +639,6 @@ fn normalize_explicit_verifier_push_request_rejects_root_target() {
             proof: sample_proof(),
             verifier_targets: vec![root_pid],
         },
-        DelegationProofInstallIntent::Repair,
         root_pid,
         |_principal| true,
     )
@@ -658,7 +655,6 @@ fn normalize_explicit_verifier_push_request_rejects_unregistered_target() {
             proof: sample_proof(),
             verifier_targets: vec![p(99)],
         },
-        DelegationProofInstallIntent::Repair,
         p(1),
         |_principal| false,
     )
@@ -681,7 +677,6 @@ fn normalize_explicit_verifier_push_request_rejects_target_not_in_audience() {
             proof: sample_proof(),
             verifier_targets: vec![verifier_a, verifier_b, out_of_audience],
         },
-        DelegationProofInstallIntent::Prewarm,
         root_pid,
         |_principal| true,
     )
@@ -704,7 +699,6 @@ fn normalize_explicit_verifier_push_request_is_idempotent() {
 
     let once = DelegationApi::normalize_explicit_verifier_push_request_with(
         request,
-        DelegationProofInstallIntent::Repair,
         root_pid,
         |principal| principal == verifier_a || principal == verifier_b,
     )
@@ -712,7 +706,6 @@ fn normalize_explicit_verifier_push_request_is_idempotent() {
 
     let twice = DelegationApi::normalize_explicit_verifier_push_request_with(
         once.clone(),
-        DelegationProofInstallIntent::Repair,
         root_pid,
         |principal| principal == verifier_a || principal == verifier_b,
     )
@@ -733,7 +726,6 @@ fn normalize_explicit_verifier_push_request_rejects_mixed_targets_without_partia
             proof: sample_proof(),
             verifier_targets: vec![verifier_a, invalid, verifier_b],
         },
-        DelegationProofInstallIntent::Repair,
         root_pid,
         |principal| principal == verifier_a || principal == verifier_b,
     )

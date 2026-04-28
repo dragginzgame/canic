@@ -6,8 +6,8 @@ use crate::{
     InternalError,
     cdk::types::Principal,
     dto::auth::{
-        DelegationCert, DelegationProvisionResponse, DelegationProvisionStatus,
-        DelegationProvisionTargetKind, DelegationRequest, RoleAttestation, RoleAttestationRequest,
+        DelegationCert, DelegationProvisionResponse, DelegationProvisionStatus, DelegationRequest,
+        RoleAttestation, RoleAttestationRequest,
     },
     dto::rpc::{
         CreateCanisterParent, CreateCanisterRequest, CreateCanisterResponse,
@@ -177,9 +177,11 @@ pub(super) fn ensure_required_verifier_targets_provisioned(
     record_delegation_verifier_target_count(verifier_targets.len());
 
     for target in verifier_targets {
-        let Some(result) = response.results.iter().find(|entry| {
-            entry.kind == DelegationProvisionTargetKind::Verifier && entry.target == *target
-        }) else {
+        let Some(result) = response
+            .results
+            .iter()
+            .find(|entry| entry.target == *target)
+        else {
             record_delegation_verifier_target_missing();
             return Err(RpcWorkflowError::DelegationVerifierTargetResultMissing {
                 target: *target,

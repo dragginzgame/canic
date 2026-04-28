@@ -2,15 +2,15 @@ use crate::pic_role_attestation_support::*;
 use std::time::Duration;
 
 #[test]
-fn delegation_admin_prewarm_updates_stale_verifier_proof_and_records_metrics() {
+fn delegation_admin_repair_updates_stale_verifier_proof_and_records_metrics() {
     test_progress(
-        "delegation_admin_prewarm_updates_stale_verifier_proof_and_records_metrics",
+        "delegation_admin_repair_updates_stale_verifier_proof_and_records_metrics",
         "setup fixture",
     );
     let fixture = delegation_admin_fixture(83);
 
     test_progress(
-        "delegation_admin_prewarm_updates_stale_verifier_proof_and_records_metrics",
+        "delegation_admin_repair_updates_stale_verifier_proof_and_records_metrics",
         "install root and stale verifier proof",
     );
     install_root_test_delegation_material(
@@ -37,59 +37,58 @@ fn delegation_admin_prewarm_updates_stale_verifier_proof_and_records_metrics() {
     );
 
     test_progress(
-        "delegation_admin_prewarm_updates_stale_verifier_proof_and_records_metrics",
-        "prewarm verifier",
+        "delegation_admin_repair_updates_stale_verifier_proof_and_records_metrics",
+        "repair verifier",
     );
-    let prewarm = prewarm_verifiers(
+    let repair = repair_verifiers(
         fixture.setup.pic.pic(),
         fixture.root_id,
         fixture.current_token.proof.clone(),
         vec![fixture.verifier_id],
-    );
-    let DelegationAdminResponse::PrewarmedVerifiers { result } = prewarm else {
-        panic!("expected prewarm response");
-    };
+    )
+    .expect("repair admin call must succeed");
+    let DelegationAdminResponse::RepairedVerifiers { result } = repair;
     assert_eq!(result.results.len(), 1);
     let response = &result.results[0];
     assert_eq!(response.target, fixture.verifier_id);
     assert_eq!(response.status, DelegationProvisionStatus::Ok);
     assert!(
         response.error.is_none(),
-        "unexpected prewarm error: {response:?}"
+        "unexpected repair error: {response:?}"
     );
 
-    let verified_after_prewarm: Result<(), Error> = update_call_as(
+    let verified_after_repair: Result<(), Error> = update_call_as(
         fixture.setup.pic.pic(),
         fixture.verifier_id,
         fixture.delegated_subject,
         "signer_verify_token",
         (fixture.current_token,),
     );
-    verified_after_prewarm.expect("prewarm should update verifier proof");
+    verified_after_repair.expect("repair should update verifier proof");
 
     assert_access_metrics(
         fixture.setup.pic.pic(),
         fixture.root_id,
         "auth_signer",
         &[
-            ("delegation_install_total{intent=\"prewarm\"}", 1),
+            ("delegation_install_total{intent=\"repair\"}", 1),
             (
-                "delegation_install_normalized_target_total{intent=\"prewarm\"}",
+                "delegation_install_normalized_target_total{intent=\"repair\"}",
                 1,
             ),
             (
-                "delegation_install_fanout_bucket{intent=\"prewarm\",bucket=\"1\"}",
+                "delegation_install_fanout_bucket{intent=\"repair\",bucket=\"1\"}",
                 1,
             ),
             (
-                "delegation_push_attempt{role=\"verifier\",origin=\"prewarm\"}",
+                "delegation_push_attempt{role=\"verifier\",origin=\"repair\"}",
                 1,
             ),
             (
-                "delegation_push_success{role=\"verifier\",origin=\"prewarm\"}",
+                "delegation_push_success{role=\"verifier\",origin=\"repair\"}",
                 1,
             ),
-            ("delegation_push_complete{origin=\"prewarm\"}", 1),
+            ("delegation_push_complete{origin=\"repair\"}", 1),
         ],
     );
     assert_access_metrics(
@@ -99,7 +98,7 @@ fn delegation_admin_prewarm_updates_stale_verifier_proof_and_records_metrics() {
         &[("token_rejected_proof_miss", 1)],
     );
     test_progress(
-        "delegation_admin_prewarm_updates_stale_verifier_proof_and_records_metrics",
+        "delegation_admin_repair_updates_stale_verifier_proof_and_records_metrics",
         "done",
     );
 }
@@ -190,7 +189,7 @@ fn verifier_store_rejects_root_push_when_local_canister_is_not_in_proof_audience
         "canic_delegation_set_verifier_proof",
         (DelegationProofInstallRequest {
             proof: fixture.current_token.proof,
-            intent: DelegationProofInstallIntent::Prewarm,
+            intent: DelegationProofInstallIntent::Repair,
             root_public_key_sec1: None,
             shard_public_key_sec1: vec![1, 2, 3],
         },),
@@ -207,7 +206,7 @@ fn verifier_store_rejects_root_push_when_local_canister_is_not_in_proof_audience
         fixture.signer_id,
         "auth_signer",
         &[(
-            "delegation_install_validation_failed{intent=\"prewarm\",stage=\"post_normalization\",reason=\"target_not_in_audience\"}",
+            "delegation_install_validation_failed{intent=\"repair\",stage=\"post_normalization\",reason=\"target_not_in_audience\"}",
             1,
         )],
     );

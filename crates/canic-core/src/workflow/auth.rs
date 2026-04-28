@@ -14,8 +14,7 @@ use crate::{
         auth::{
             DelegationAdminCommand, DelegationAdminResponse, DelegationCert, DelegationProof,
             DelegationProofInstallIntent, DelegationProvisionResponse, DelegationProvisionStatus,
-            DelegationProvisionTargetKind, DelegationProvisionTargetResponse,
-            DelegationVerifierProofPushResponse,
+            DelegationProvisionTargetResponse, DelegationVerifierProofPushResponse,
         },
         error::Error as ErrorDto,
     },
@@ -25,9 +24,9 @@ use crate::{
         auth::{DelegatedTokenOps, DelegationValidationError, SignedDelegationProof},
         ic::call::CallOps,
         runtime::metrics::auth::{
-            DelegationProvisionRole, record_delegation_install_total,
-            record_delegation_push_attempt, record_delegation_push_complete,
-            record_delegation_push_failed, record_delegation_push_success,
+            record_delegation_install_total, record_delegation_push_attempt,
+            record_delegation_push_complete, record_delegation_push_failed,
+            record_delegation_push_success,
         },
     },
     protocol,
@@ -42,7 +41,6 @@ use std::sync::OnceLock;
 #[derive(Clone, Copy, Debug)]
 pub enum DelegationPushOrigin {
     Provisioning,
-    Prewarm,
     Repair,
 }
 
@@ -50,7 +48,6 @@ impl DelegationPushOrigin {
     const fn label(self) -> &'static str {
         match self {
             Self::Provisioning => "provisioning",
-            Self::Prewarm => "prewarm",
             Self::Repair => "repair",
         }
     }
@@ -58,7 +55,6 @@ impl DelegationPushOrigin {
     const fn intent(self) -> DelegationProofInstallIntent {
         match self {
             Self::Provisioning => DelegationProofInstallIntent::Provisioning,
-            Self::Prewarm => DelegationProofInstallIntent::Prewarm,
             Self::Repair => DelegationProofInstallIntent::Repair,
         }
     }
@@ -159,7 +155,6 @@ impl DelegationWorkflow {
                 target,
                 &issued.proof,
                 &proof_install_args,
-                DelegationProvisionTargetKind::Verifier,
                 DelegationPushOrigin::Provisioning,
             )
             .await;
@@ -177,20 +172,11 @@ impl DelegationWorkflow {
         ))
     }
 
-    /// Execute explicit root-controlled verifier repair/prewarm pushes.
+    /// Execute explicit root-controlled verifier repair pushes.
     pub async fn handle_admin(
         cmd: DelegationAdminCommand,
     ) -> Result<DelegationAdminResponse, InternalError> {
         match cmd {
-            DelegationAdminCommand::PrewarmVerifiers(request) => {
-                let result = Self::push_verifier_targets(
-                    &request.proof,
-                    request.verifier_targets,
-                    DelegationPushOrigin::Prewarm,
-                )
-                .await;
-                Ok(DelegationAdminResponse::PrewarmedVerifiers { result })
-            }
             DelegationAdminCommand::RepairVerifiers(request) => {
                 let result = Self::push_verifier_targets(
                     &request.proof,
@@ -240,14 +226,7 @@ impl DelegationWorkflow {
 
         let mut results = Vec::new();
         for target in verifier_targets {
-            let result = Self::push_proof(
-                target,
-                proof,
-                &proof_install_args,
-                DelegationProvisionTargetKind::Verifier,
-                origin,
-            )
-            .await;
+            let result = Self::push_proof(target, proof, &proof_install_args, origin).await;
             results.push(result);
         }
 
@@ -263,13 +242,8 @@ impl DelegationWorkflow {
         let results = verifier_targets
             .into_iter()
             .map(|target| {
-                let response =
-                    Self::failure(target, DelegationProvisionTargetKind::Verifier, err.clone());
-                Self::record_push_result_metric(
-                    DelegationProvisionRole::Verifier,
-                    origin,
-                    response.status,
-                );
+                let response = Self::failure(target, err.clone());
+                Self::record_push_result_metric(origin, response.status);
                 Self::log_push_result(&response, origin);
                 response
             })
@@ -282,38 +256,29 @@ impl DelegationWorkflow {
         target: Principal,
         proof: &DelegationProof,
         proof_install_args: &[u8],
-        kind: DelegationProvisionTargetKind,
         origin: DelegationPushOrigin,
     ) -> DelegationProvisionTargetResponse {
-        let role = Self::metric_role(kind);
-        record_delegation_push_attempt(role, origin.intent());
+        record_delegation_push_attempt(origin.intent());
         log!(
             Topic::Auth,
             Info,
-            "delegation push attempt origin={} kind={:?} target={} shard={} issued_at={} expires_at={}",
+            "delegation push attempt origin={} target={} shard={} issued_at={} expires_at={}",
             origin.label(),
-            kind,
             target,
             proof.cert.shard_pid,
             proof.cert.issued_at,
             proof.cert.expires_at
         );
 
-        let method = match kind {
-            DelegationProvisionTargetKind::Signer => protocol::CANIC_DELEGATION_SET_SIGNER_PROOF,
-            DelegationProvisionTargetKind::Verifier => {
-                protocol::CANIC_DELEGATION_SET_VERIFIER_PROOF
-            }
-        };
-
-        let call = CallOps::unbounded_wait(target, method).with_raw_args(proof_install_args);
+        let call = CallOps::unbounded_wait(target, protocol::CANIC_DELEGATION_SET_VERIFIER_PROOF)
+            .with_raw_args(proof_install_args);
         crate::perf!("prepare_call");
 
         let result = match call.execute().await {
             Ok(result) => result,
             Err(err) => {
-                let response = Self::failure(target, kind, ErrorDto::from(err));
-                Self::record_push_result_metric(role, origin, response.status);
+                let response = Self::failure(target, ErrorDto::from(err));
+                Self::record_push_result_metric(origin, response.status);
                 Self::log_push_result(&response, origin);
                 return response;
             }
@@ -323,8 +288,8 @@ impl DelegationWorkflow {
         let response: Result<(), ErrorDto> = match Self::decode_proof_install_response(&result) {
             Ok(response) => response,
             Err(err) => {
-                let response = Self::failure(target, kind, ErrorDto::from(err));
-                Self::record_push_result_metric(role, origin, response.status);
+                let response = Self::failure(target, ErrorDto::from(err));
+                Self::record_push_result_metric(origin, response.status);
                 Self::log_push_result(&response, origin);
                 return response;
             }
@@ -334,15 +299,14 @@ impl DelegationWorkflow {
         let response = match response {
             Ok(()) => DelegationProvisionTargetResponse {
                 target,
-                kind,
                 status: DelegationProvisionStatus::Ok,
                 error: None,
             },
-            Err(err) => Self::failure(target, kind, err),
+            Err(err) => Self::failure(target, err),
         };
         crate::perf!("finalize_result");
 
-        Self::record_push_result_metric(role, origin, response.status);
+        Self::record_push_result_metric(origin, response.status);
         Self::log_push_result(&response, origin);
         response
     }
@@ -390,14 +354,9 @@ impl DelegationWorkflow {
             .as_slice()
     }
 
-    const fn failure(
-        target: Principal,
-        kind: DelegationProvisionTargetKind,
-        err: ErrorDto,
-    ) -> DelegationProvisionTargetResponse {
+    const fn failure(target: Principal, err: ErrorDto) -> DelegationProvisionTargetResponse {
         DelegationProvisionTargetResponse {
             target,
-            kind,
             status: DelegationProvisionStatus::Failed,
             error: Some(err),
         }
@@ -409,9 +368,8 @@ impl DelegationWorkflow {
                 log!(
                     Topic::Auth,
                     Info,
-                    "delegation push ok origin={} kind={:?} target={}",
+                    "delegation push ok origin={} target={}",
                     origin.label(),
-                    response.kind,
                     response.target
                 );
             }
@@ -423,9 +381,8 @@ impl DelegationWorkflow {
                 log!(
                     Topic::Auth,
                     Warn,
-                    "delegation push failed origin={} kind={:?} target={} error={}",
+                    "delegation push failed origin={} target={} error={}",
                     origin.label(),
-                    response.kind,
                     response.target,
                     err
                 );
@@ -433,22 +390,11 @@ impl DelegationWorkflow {
         }
     }
 
-    const fn metric_role(kind: DelegationProvisionTargetKind) -> DelegationProvisionRole {
-        match kind {
-            DelegationProvisionTargetKind::Signer => DelegationProvisionRole::Signer,
-            DelegationProvisionTargetKind::Verifier => DelegationProvisionRole::Verifier,
-        }
-    }
-
-    fn record_push_result_metric(
-        role: DelegationProvisionRole,
-        origin: DelegationPushOrigin,
-        status: DelegationProvisionStatus,
-    ) {
+    fn record_push_result_metric(origin: DelegationPushOrigin, status: DelegationProvisionStatus) {
         match status {
-            DelegationProvisionStatus::Ok => record_delegation_push_success(role, origin.intent()),
+            DelegationProvisionStatus::Ok => record_delegation_push_success(origin.intent()),
             DelegationProvisionStatus::Failed => {
-                record_delegation_push_failed(role, origin.intent());
+                record_delegation_push_failed(origin.intent());
             }
         }
     }

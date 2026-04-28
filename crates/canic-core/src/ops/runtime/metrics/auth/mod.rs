@@ -44,8 +44,8 @@ use labels::{
     attestation_unknown_key_id_predicate, attestation_verify_failed_predicate,
     auth_attestation_verifier_endpoint, auth_session_endpoint, auth_signer_endpoint,
     auth_verifier_endpoint, cert_expired_predicate, complete_predicate,
-    delegation_provision_attempt_signer_predicate, delegation_provision_attempt_verifier_predicate,
-    delegation_provision_failed_verifier_predicate, delegation_provision_success_signer_predicate,
+    delegation_provision_attempt_verifier_predicate,
+    delegation_provision_failed_verifier_predicate,
     delegation_provision_success_verifier_predicate, fanout_bucket, install_intent_label,
     normalization_reject_reason_label, proof_cache_active_size_predicate,
     proof_cache_active_window_predicate, proof_cache_capacity_predicate,
@@ -66,79 +66,35 @@ use labels::{
     verifier_target_missing_predicate,
 };
 
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub enum DelegationProvisionRole {
-    Signer,
-    Verifier,
+const fn push_attempt_predicate(intent: DelegationProofInstallIntent) -> &'static str {
+    match intent {
+        DelegationProofInstallIntent::Provisioning => {
+            delegation_provision_attempt_verifier_predicate()
+        }
+        DelegationProofInstallIntent::Repair => {
+            labels::delegation_push_attempt_verifier_repair_predicate()
+        }
+    }
 }
 
-impl DelegationProvisionRole {
-    const fn attempt_predicate(self, intent: DelegationProofInstallIntent) -> &'static str {
-        match (self, intent) {
-            (Self::Signer, DelegationProofInstallIntent::Provisioning) => {
-                delegation_provision_attempt_signer_predicate()
-            }
-            (Self::Verifier, DelegationProofInstallIntent::Provisioning) => {
-                delegation_provision_attempt_verifier_predicate()
-            }
-            (Self::Signer, DelegationProofInstallIntent::Prewarm) => {
-                labels::delegation_push_attempt_signer_prewarm_predicate()
-            }
-            (Self::Verifier, DelegationProofInstallIntent::Prewarm) => {
-                labels::delegation_push_attempt_verifier_prewarm_predicate()
-            }
-            (Self::Signer, DelegationProofInstallIntent::Repair) => {
-                labels::delegation_push_attempt_signer_repair_predicate()
-            }
-            (Self::Verifier, DelegationProofInstallIntent::Repair) => {
-                labels::delegation_push_attempt_verifier_repair_predicate()
-            }
+const fn push_success_predicate(intent: DelegationProofInstallIntent) -> &'static str {
+    match intent {
+        DelegationProofInstallIntent::Provisioning => {
+            delegation_provision_success_verifier_predicate()
+        }
+        DelegationProofInstallIntent::Repair => {
+            labels::delegation_push_success_verifier_repair_predicate()
         }
     }
+}
 
-    const fn success_predicate(self, intent: DelegationProofInstallIntent) -> &'static str {
-        match (self, intent) {
-            (Self::Signer, DelegationProofInstallIntent::Provisioning) => {
-                delegation_provision_success_signer_predicate()
-            }
-            (Self::Verifier, DelegationProofInstallIntent::Provisioning) => {
-                delegation_provision_success_verifier_predicate()
-            }
-            (Self::Signer, DelegationProofInstallIntent::Prewarm) => {
-                labels::delegation_push_success_signer_prewarm_predicate()
-            }
-            (Self::Verifier, DelegationProofInstallIntent::Prewarm) => {
-                labels::delegation_push_success_verifier_prewarm_predicate()
-            }
-            (Self::Signer, DelegationProofInstallIntent::Repair) => {
-                labels::delegation_push_success_signer_repair_predicate()
-            }
-            (Self::Verifier, DelegationProofInstallIntent::Repair) => {
-                labels::delegation_push_success_verifier_repair_predicate()
-            }
+const fn push_failed_predicate(intent: DelegationProofInstallIntent) -> &'static str {
+    match intent {
+        DelegationProofInstallIntent::Provisioning => {
+            delegation_provision_failed_verifier_predicate()
         }
-    }
-
-    const fn failed_predicate(self, intent: DelegationProofInstallIntent) -> &'static str {
-        match (self, intent) {
-            (Self::Signer, DelegationProofInstallIntent::Provisioning) => {
-                labels::delegation_provision_failed_signer_predicate()
-            }
-            (Self::Verifier, DelegationProofInstallIntent::Provisioning) => {
-                delegation_provision_failed_verifier_predicate()
-            }
-            (Self::Signer, DelegationProofInstallIntent::Prewarm) => {
-                labels::delegation_push_failed_signer_prewarm_predicate()
-            }
-            (Self::Verifier, DelegationProofInstallIntent::Prewarm) => {
-                labels::delegation_push_failed_verifier_prewarm_predicate()
-            }
-            (Self::Signer, DelegationProofInstallIntent::Repair) => {
-                labels::delegation_push_failed_signer_repair_predicate()
-            }
-            (Self::Verifier, DelegationProofInstallIntent::Repair) => {
-                labels::delegation_push_failed_verifier_repair_predicate()
-            }
+        DelegationProofInstallIntent::Repair => {
+            labels::delegation_push_failed_verifier_repair_predicate()
         }
     }
 }
@@ -170,7 +126,6 @@ pub enum VerifierProofCacheEvictionClass {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum AuthMetricPredicate {
     DelegationPushFailed {
-        role: DelegationProvisionRole,
         intent: DelegationProofInstallIntent,
     },
     DelegationInstallNormalizationRejected {
@@ -195,9 +150,7 @@ impl AuthMetricPredicate {
     #[must_use]
     pub fn as_str(self) -> Cow<'static, str> {
         match self {
-            Self::DelegationPushFailed { role, intent } => {
-                Cow::Borrowed(role.failed_predicate(intent))
-            }
+            Self::DelegationPushFailed { intent } => Cow::Borrowed(push_failed_predicate(intent)),
             Self::DelegationInstallNormalizationRejected { intent, reason } => Cow::Owned(format!(
                 "delegation_install_normalization_rejected{{intent=\"{}\",reason=\"{}\"}}",
                 install_intent_label(intent),
@@ -328,26 +281,9 @@ mod tests {
     fn delegation_provision_metrics_increment_expected_predicates() {
         AccessMetrics::reset();
 
-        record_delegation_push_attempt(
-            DelegationProvisionRole::Signer,
-            DelegationProofInstallIntent::Provisioning,
-        );
-        record_delegation_push_attempt(
-            DelegationProvisionRole::Verifier,
-            DelegationProofInstallIntent::Provisioning,
-        );
-        record_delegation_push_success(
-            DelegationProvisionRole::Signer,
-            DelegationProofInstallIntent::Provisioning,
-        );
-        record_delegation_push_success(
-            DelegationProvisionRole::Verifier,
-            DelegationProofInstallIntent::Provisioning,
-        );
-        record_delegation_push_failed(
-            DelegationProvisionRole::Verifier,
-            DelegationProofInstallIntent::Provisioning,
-        );
+        record_delegation_push_attempt(DelegationProofInstallIntent::Provisioning);
+        record_delegation_push_success(DelegationProofInstallIntent::Provisioning);
+        record_delegation_push_failed(DelegationProofInstallIntent::Provisioning);
         record_delegation_verifier_target_failed();
         record_delegation_verifier_target_missing();
         record_delegation_verifier_target_count(3);
@@ -356,21 +292,7 @@ mod tests {
         assert_eq!(
             metric_count(
                 auth_signer_endpoint(),
-                labels::delegation_provision_attempt_signer_predicate()
-            ),
-            1
-        );
-        assert_eq!(
-            metric_count(
-                auth_signer_endpoint(),
                 labels::delegation_provision_attempt_verifier_predicate()
-            ),
-            1
-        );
-        assert_eq!(
-            metric_count(
-                auth_signer_endpoint(),
-                labels::delegation_provision_success_signer_predicate()
             ),
             1
         );
