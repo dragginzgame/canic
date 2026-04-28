@@ -86,6 +86,17 @@ pub struct RootKeySetV2 {
 }
 
 //
+// RootTrustAnchorV2
+//
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootTrustAnchorV2 {
+    pub root_pid: Principal,
+    pub trusted_root_keys: RootKeySetV2,
+    pub key_authority: Option<RootKeyAuthorityV2>,
+}
+
+//
 // ShardKeyBindingV2
 //
 

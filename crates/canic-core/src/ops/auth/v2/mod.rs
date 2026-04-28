@@ -4,3 +4,5 @@ mod audience;
 mod canonical;
 #[allow(dead_code)]
 mod policy;
+#[allow(dead_code)]
+mod root_key;
