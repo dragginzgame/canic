@@ -34,10 +34,6 @@ name = "canic-stage-root-release-set"
 path = "src/bin/stage_root_release_set.rs"
 
 [[bin]]
-name = "canic-install-reference-topology"
-path = "src/bin/install_reference_topology.rs"
-
-[[bin]]
 name = "canic-install-root"
 path = "src/bin/install_root.rs"
 

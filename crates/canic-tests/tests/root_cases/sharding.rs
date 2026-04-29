@@ -8,7 +8,7 @@ use canic::{
 use canic_internal::canister;
 
 #[test]
-fn user_hub_sharding_profile_prewarms_first_shard_and_delegation() {
+fn user_hub_sharding_profile_prewarms_first_shard_signing_key() {
     let setup = setup_cached_root(RootSetupProfile::Sharding);
 
     assert!(
@@ -40,15 +40,16 @@ fn user_hub_sharding_profile_prewarms_first_shard_and_delegation() {
         .map(|entry| entry.pid)
         .expect("startup user shard must exist before first account create");
 
-    let has_proof: Result<Result<bool, Error>, Error> =
+    let shard_public_key: Result<Result<Vec<u8>, Error>, Error> =
         setup
             .pic
-            .query_call(startup_shard_pid, "user_shard_has_signing_proof_test", ());
+            .update_call(startup_shard_pid, "user_shard_local_public_key_test", ());
     assert!(
-        has_proof
-            .expect("signing proof query transport failed")
-            .expect("signing proof query application failed"),
-        "startup user shard must have root delegation proof before first account create",
+        !shard_public_key
+            .expect("signing key update transport failed")
+            .expect("signing key update application failed")
+            .is_empty(),
+        "startup user shard must have local signer key material before first account create",
     );
 
     let created: Result<Result<Principal, Error>, Error> = setup.pic.update_call(

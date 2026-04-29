@@ -7,8 +7,10 @@ use crate::{
     cdk::types::Principal,
     dto::auth::{AttestationKey, AttestationKeyStatus},
     ops::{
-        auth::DelegationValidationError, config::ConfigOps, ic::ecdsa::EcdsaOps,
-        storage::auth::DelegationStateOps,
+        auth::DelegationValidationError,
+        config::ConfigOps,
+        ic::ecdsa::EcdsaOps,
+        storage::{auth::DelegationStateOps, state::subnet::SubnetStateOps},
     },
 };
 use std::cmp::Reverse;
@@ -89,16 +91,15 @@ pub(super) async fn ensure_attestation_key_cached(
     Ok(())
 }
 
-pub(super) async fn ensure_root_public_key_cached(
+pub(super) async fn ensure_root_public_key_published(
     key_name: &str,
     root_pid: Principal,
 ) -> Result<(), InternalError> {
-    if DelegationStateOps::root_public_key(key_name).is_some() {
-        return Ok(());
+    if SubnetStateOps::delegated_root_public_key(key_name).is_none() {
+        let root_pk = EcdsaOps::public_key_sec1(key_name, root_derivation_path(), root_pid).await?;
+        SubnetStateOps::set_delegated_root_public_key(key_name.to_string(), root_pk);
     }
 
-    let root_pk = EcdsaOps::public_key_sec1(key_name, root_derivation_path(), root_pid).await?;
-    DelegationStateOps::set_root_public_key(key_name.to_string(), root_pk);
     Ok(())
 }
 

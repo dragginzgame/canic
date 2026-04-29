@@ -304,21 +304,3 @@ macro_rules! start_wasm_store {
         $crate::canic_bundle_wasm_store_runtime_endpoints!();
     };
 }
-
-///
-/// Load the build-produced configuration artifacts during init and upgrade hooks.
-///
-/// This macro exists solely for backwards-compatible macro internals and is no
-/// longer used by the lifecycle entrypoints, which now load a generated config
-/// model plus the compact embedded TOML source. It remains as a thin source-only
-/// loader for any legacy macro internals that still need the canonical text.
-
-#[doc(hidden)]
-#[macro_export]
-macro_rules! __canic_load_config {
-    () => {{
-        let config_path = env!("CANIC_CONFIG_PATH");
-        let config_str = include_str!(env!("CANIC_CONFIG_SOURCE_PATH"));
-        (config_str, config_path)
-    }};
-}

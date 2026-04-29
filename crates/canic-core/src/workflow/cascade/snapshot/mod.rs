@@ -227,7 +227,7 @@ mod tests {
                 mode: AppMode::Enabled,
                 cycles_funding_enabled: true,
             }),
-            subnet_state: Some(SubnetStateInput),
+            subnet_state: Some(SubnetStateInput::default()),
             app_index: None,
             subnet_index: None,
         };

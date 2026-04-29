@@ -706,7 +706,7 @@ fn payload_hash_includes_capability_variant_discriminant() {
     })
     .payload_hash();
 
-    let legacy_struct_hash = {
+    let struct_only_hash = {
         let bytes = encode_one(&CyclesRequest {
             cycles: 42,
             metadata: None,
@@ -716,7 +716,7 @@ fn payload_hash_includes_capability_variant_discriminant() {
     };
 
     assert_ne!(
-        capability_hash, legacy_struct_hash,
+        capability_hash, struct_only_hash,
         "capability payload hash must include variant discriminant"
     );
 }

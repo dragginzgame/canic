@@ -257,13 +257,6 @@ fn parse_process_lock_owner(text: &str) -> Option<ProcessLockOwner> {
         return None;
     }
 
-    if let Ok(pid) = trimmed.parse::<u32>() {
-        return Some(ProcessLockOwner {
-            pid,
-            start_ticks: None,
-        });
-    }
-
     let mut pid = None;
     let mut start_ticks = None;
     for line in trimmed.lines() {
@@ -325,10 +318,8 @@ mod tests {
     }
 
     #[test]
-    fn owner_parser_accepts_legacy_pid_only_format() {
-        let owner = parse_process_lock_owner("12345\n").expect("parse pid-only owner");
-        assert_eq!(owner.pid, 12345);
-        assert_eq!(owner.start_ticks, None);
+    fn owner_parser_rejects_pid_only_format() {
+        assert!(parse_process_lock_owner("12345\n").is_none());
     }
 
     #[test]

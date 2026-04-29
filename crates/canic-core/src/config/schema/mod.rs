@@ -141,7 +141,7 @@ pub struct ConfigModel {
 
     /// Canister roles that participate in the application index.
     /// These must exist in the PRIME subnet and be SINGLETON canisters.
-    #[serde(default, alias = "app_directory")]
+    #[serde(default)]
     pub app_index: BTreeSet<CanisterRole>,
 
     /// All subnets keyed by role.
@@ -361,7 +361,7 @@ impl Validate for AuthConfig {
 ///
 /// Semantics:
 /// - enabled = false => delegated token auth disabled entirely
-/// - max_ttl_secs = None => no upper TTL bound
+/// - max_ttl_secs = None => use the runtime default TTL ceiling
 /// - max_ttl_secs = Some => hard upper bound on token lifetime
 ///
 

@@ -17,6 +17,7 @@ use crate::{
     ops::{
         auth::DelegationValidationError,
         ic::{IcOps, ecdsa::EcdsaOps},
+        storage::state::subnet::SubnetStateOps,
     },
 };
 
@@ -97,14 +98,12 @@ impl DelegatedTokenOps {
         }
 
         let key_name = keys::delegated_tokens_key_name()?;
-        if let Some(root_public_key) =
-            crate::ops::storage::auth::DelegationStateOps::root_public_key(&key_name)
-        {
+        if let Some(root_public_key) = SubnetStateOps::delegated_root_public_key(&key_name) {
             return Ok(root_public_key);
         }
 
-        keys::ensure_root_public_key_cached(&key_name, root_pid).await?;
-        crate::ops::storage::auth::DelegationStateOps::root_public_key(&key_name)
+        keys::ensure_root_public_key_published(&key_name, root_pid).await?;
+        SubnetStateOps::delegated_root_public_key(&key_name)
             .ok_or_else(|| super::DelegationSignatureError::RootPublicKeyUnavailable.into())
     }
 }

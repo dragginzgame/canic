@@ -13,9 +13,9 @@ use canic::api::auth::DelegationApi;
 
 canic::start_root!();
 
-// Warm root auth key material outside the first live delegation request path.
+// Publish root auth material before the first live delegated-auth request path.
 async fn canic_setup() {
-    let _ = DelegationApi::prewarm_root_key_material().await;
+    let _ = DelegationApi::publish_root_auth_material().await;
 }
 async fn canic_install() {}
 async fn canic_upgrade() {}

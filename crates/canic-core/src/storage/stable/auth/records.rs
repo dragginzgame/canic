@@ -1,17 +1,6 @@
 use crate::storage::prelude::*;
 
 ///
-/// RootPublicKeyRecord
-///
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct RootPublicKeyRecord {
-    pub public_key_sec1: Vec<u8>,
-    pub key_name: String,
-    pub key_hash: [u8; 32],
-}
-
-///
 /// ShardPublicKeyRecord
 ///
 
@@ -31,11 +20,8 @@ pub struct ShardPublicKeyRecord {
 pub struct DelegatedSessionRecord {
     pub wallet_pid: Principal,
     pub delegated_pid: Principal,
-    #[serde(default)]
     pub issued_at: u64,
-    #[serde(default)]
     pub expires_at: u64,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub bootstrap_token_fingerprint: Option<[u8; 32]>,
 }
 
@@ -48,9 +34,7 @@ pub struct DelegatedSessionBootstrapBindingRecord {
     pub wallet_pid: Principal,
     pub delegated_pid: Principal,
     pub token_fingerprint: [u8; 32],
-    #[serde(default)]
     pub bound_at: u64,
-    #[serde(default)]
     pub expires_at: u64,
 }
 
@@ -75,9 +59,7 @@ pub struct AttestationPublicKeyRecord {
     pub key_name: String,
     pub key_hash: [u8; 32],
     pub status: AttestationKeyStatusRecord,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub valid_from: Option<u64>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub valid_until: Option<u64>,
 }
 
@@ -87,18 +69,11 @@ pub struct AttestationPublicKeyRecord {
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct DelegationStateRecord {
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub root_public_key: Option<RootPublicKeyRecord>,
-
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub shard_public_keys: Vec<ShardPublicKeyRecord>,
 
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub delegated_sessions: Vec<DelegatedSessionRecord>,
 
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub delegated_session_bootstrap_bindings: Vec<DelegatedSessionBootstrapBindingRecord>,
 
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub attestation_public_keys: Vec<AttestationPublicKeyRecord>,
 }

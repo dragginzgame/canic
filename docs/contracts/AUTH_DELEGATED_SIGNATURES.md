@@ -13,6 +13,7 @@ configured root principal + root public key -> root certificate -> shard signatu
 
 - Root signs a `DelegationCert` for one `shard_pid`.
 - Root certifies the shard public key inside the certificate.
+- Root publishes the delegated root public key through cascaded `SubnetState`.
 - Shard signs `DelegatedTokenClaims` for one delegated subject.
 - Verifiers validate locally without proof distribution, proof fanout, topology
   catch-up, or verifier-local proof lookup.
@@ -98,6 +99,24 @@ Delegated-token signing domains are defined in
 
 Root does not push proof state to verifiers.
 
+Root does cascade root trust-anchor state to verifiers:
+
+```rust
+pub struct SubnetStateRecord {
+    pub auth: SubnetAuthStateRecord,
+}
+
+pub struct SubnetAuthStateRecord {
+    pub delegated_root_public_key: Option<RootPublicKeyRecord>,
+}
+```
+
+`SubnetState` remains separate from `AppState`. App state controls app-mode
+runtime behavior. Subnet state carries subnet-scoped shared control-plane data.
+The delegated root public key is the first auth entry in `SubnetState` because
+all verifier canisters in the subnet need it and root may change it when the
+delegated-auth key config changes.
+
 ### Token minting
 
 1. Shard obtains a `DelegationProof`.
@@ -120,7 +139,8 @@ Checks enforced before authorization:
 - certificate and claim canonical hashes recompute successfully
 - `cert.root_pid == EnvOps::root_pid()`
 - `cert.root_key_id == auth.delegated_tokens.ecdsa_key_name`
-- cached root key identity matches configured key name and `cert.root_key_hash`
+- delegated root public key exists in cascaded local `SubnetState`
+- delegated root public key identity matches configured key name and `cert.root_key_hash`
 - root certificate signature verifies
 - shard key binding matches configured key name and deterministic shard path
 - `hash(cert.shard_public_key_sec1) == cert.shard_key_hash`
@@ -138,9 +158,23 @@ Checks enforced before authorization:
 
 No verification step checks for local proof presence.
 
-## Stable Key Cache Contract
+No verification step may fetch root key material. Plain queries, composite
+queries, and updates use the same local root trust-anchor lookup. If the
+`SubnetState` cascade has not populated the delegated root public key yet,
+verification fails cleanly as root key unavailable.
 
-Stable key caches are caches, not authority.
+## Shared Key State Contract
+
+Delegated root public key state is subnet-scoped control-plane state:
+
+```rust
+SubnetState.auth.delegated_root_public_key.key_name == configured_key_name
+sha256(SubnetState.auth.delegated_root_public_key.public_key_sec1)
+  == SubnetState.auth.delegated_root_public_key.key_hash
+```
+
+Stable key caches remain caches, not authority, for shard and role-attestation
+material:
 
 ```rust
 cache_hit => cached.key_name == configured_key_name
@@ -149,7 +183,6 @@ cache_hit => sha256(cached.public_key_sec1) == cached.key_hash
 
 This applies to:
 
-- `RootPublicKeyRecord`
 - `ShardPublicKeyRecord`
 - `AttestationPublicKeyRecord`
 
@@ -158,6 +191,11 @@ identity. A verifier must not retag root-provided attestation key bytes with
 its own local key name.
 
 Identity-less key-cache records are invalid state.
+
+For delegated-token verification, `SubnetState` is the only supported
+distribution mechanism for the root public key. Verifier-side first-use ECDSA
+public-key fetches and background delegated-root-key warmup loops are not part
+of the contract.
 
 ## Endpoint Type Contract
 
@@ -190,6 +228,9 @@ The auth architecture must not introduce:
 
 - verifier-local proof lookup as an acceptance condition
 - proof distribution as an authentication correctness requirement
+- verifier-side root-key fetch-on-verify
+- query-time key fetch from an authenticated access guard
+- delegated-root-key background warmup timers
 - implicit revocation by deleting proof or cache state
 - two-step signature materialization (`prepare`/`get`)
 - detached verification with caller-supplied arbitrary public keys

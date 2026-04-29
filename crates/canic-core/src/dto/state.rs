@@ -53,18 +53,42 @@ pub struct AppStateResponse {
 }
 
 //
+// SubnetRootPublicKeyInput
+//
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+pub struct SubnetRootPublicKeyInput {
+    pub public_key_sec1: Vec<u8>,
+    pub key_name: String,
+    pub key_hash: [u8; 32],
+}
+
+//
+// SubnetAuthStateInput
+//
+
+#[derive(CandidType, Clone, Debug, Default, Deserialize, Eq, PartialEq)]
+pub struct SubnetAuthStateInput {
+    pub delegated_root_public_key: Option<SubnetRootPublicKeyInput>,
+}
+
+//
 // SubnetStateInput
 //
 
-#[derive(CandidType, Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq)]
-pub struct SubnetStateInput;
+#[derive(CandidType, Clone, Debug, Default, Deserialize, Eq, PartialEq)]
+pub struct SubnetStateInput {
+    pub auth: SubnetAuthStateInput,
+}
 
 //
 // SubnetStateResponse
 //
 
-#[derive(CandidType, Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq)]
-pub struct SubnetStateResponse;
+#[derive(CandidType, Clone, Debug, Default, Deserialize, Eq, PartialEq)]
+pub struct SubnetStateResponse {
+    pub auth: SubnetAuthStateInput,
+}
 
 //
 // BootstrapStatusResponse

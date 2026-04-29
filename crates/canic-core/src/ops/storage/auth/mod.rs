@@ -50,24 +50,16 @@ pub struct DelegatedSessionBootstrapBinding {
 /// Responsibilities:
 /// - Provide a narrow, explicit API for delegation state access
 /// - Prevent access-layer code from depending on storage internals
-/// - Serve as the choke point for future changes (migration, versioning)
+/// - Serve as the choke point for schema and lifecycle changes
 ///
 /// This is a **security-sensitive boundary**:
-/// delegation state determines which signer authorities are trusted.
+/// delegation state stores signer key material, delegated sessions, and
+/// role-attestation keys.
 ///
 
 pub struct DelegationStateOps;
 
 impl DelegationStateOps {
-    #[must_use]
-    pub fn root_public_key(key_name: &str) -> Option<Vec<u8>> {
-        DelegationState::get_root_public_key(key_name)
-    }
-
-    pub fn set_root_public_key(key_name: String, public_key_sec1: Vec<u8>) {
-        DelegationState::set_root_public_key(key_name, public_key_sec1);
-    }
-
     #[must_use]
     pub fn shard_public_key(shard_pid: Principal, key_name: &str) -> Option<Vec<u8>> {
         DelegationState::get_shard_public_key(shard_pid, key_name)

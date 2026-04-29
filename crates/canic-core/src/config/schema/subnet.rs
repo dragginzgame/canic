@@ -48,7 +48,7 @@ pub struct SubnetConfig {
     #[serde(default)]
     pub auto_create: BTreeSet<CanisterRole>,
 
-    #[serde(default, alias = "subnet_directory")]
+    #[serde(default)]
     pub subnet_index: BTreeSet<CanisterRole>,
 
     #[serde(default)]
@@ -187,7 +187,7 @@ pub struct DelegatedAuthCanisterConfig {
     pub signer: bool,
 
     #[serde(default)]
-    pub verifier: bool,
+    pub attestation_cache: bool,
 }
 
 ///
@@ -267,11 +267,11 @@ impl CanisterConfig {
                     || self.sharding.is_some()
                     || self.directory.is_some()
                     || self.delegated_auth.signer
-                    || self.delegated_auth.verifier
+                    || self.delegated_auth.attestation_cache
                     || self.standards.icrc21
                 {
                     return Err(ConfigSchemaError::ValidationError(format!(
-                        "canister '{canister}' kind = \"root\" cannot define scaling, sharding, directory, delegated auth roles, or canister-local standards",
+                        "canister '{canister}' kind = \"root\" cannot define scaling, sharding, directory, delegated auth signer/cache roles, or canister-local standards",
                     )));
                 }
             }
@@ -713,15 +713,16 @@ mod tests {
         let mut cfg = base_canister_config(CanisterKind::Root);
         cfg.delegated_auth = DelegatedAuthCanisterConfig {
             signer: true,
-            verifier: true,
+            attestation_cache: true,
         };
 
-        let err = cfg
-            .validate_kind(&CanisterRole::ROOT)
-            .expect_err("root delegated auth roles must be implicit services, not config toggles");
+        let err = cfg.validate_kind(&CanisterRole::ROOT).expect_err(
+            "root delegated auth signer/cache roles must be implicit services, not config toggles",
+        );
 
         assert!(
-            err.to_string().contains("delegated auth roles"),
+            err.to_string()
+                .contains("delegated auth signer/cache roles"),
             "expected root delegated-auth role validation error, got: {err}"
         );
     }
@@ -1347,24 +1348,24 @@ kind = "instance"
     }
 
     #[test]
-    fn legacy_node_kind_is_rejected() {
+    fn removed_node_kind_is_rejected() {
         toml::from_str::<SubnetConfig>(
             r#"
 [canisters.app]
 kind = "node"
 "#,
         )
-        .expect_err("expected legacy node kind to fail parsing");
+        .expect_err("expected removed node kind to fail parsing");
     }
 
     #[test]
-    fn legacy_worker_kind_is_rejected() {
+    fn removed_worker_kind_is_rejected() {
         toml::from_str::<SubnetConfig>(
             r#"
 [canisters.app]
 kind = "worker"
 "#,
         )
-        .expect_err("expected legacy worker kind to fail parsing");
+        .expect_err("expected removed worker kind to fail parsing");
     }
 }

@@ -34,13 +34,13 @@ kind = "shard"
 
 [subnets.prime.canisters.user_shard.delegated_auth]
 signer = true
-verifier = true
+attestation_cache = true
 
 [subnets.prime.canisters.test]
 kind = "singleton"
 
 [subnets.prime.canisters.test.delegated_auth]
-verifier = true
+attestation_cache = true
 
 [subnets.general]
 

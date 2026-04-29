@@ -4,7 +4,10 @@ use crate::{
     InternalError,
     dto::state::AppCommand,
     ops::{runtime::env::EnvOps, storage::state::app::AppStateOps},
-    workflow::cascade::{snapshot::StateSnapshotBuilder, state::StateCascadeWorkflow},
+    workflow::{
+        cascade::{snapshot::StateSnapshotBuilder, state::StateCascadeWorkflow},
+        runtime::auth::RuntimeAuthWorkflow,
+    },
 };
 
 ///
@@ -29,6 +32,7 @@ impl AppStateWorkflow {
     pub async fn execute_command(cmd: AppCommand) -> Result<(), InternalError> {
         EnvOps::require_root()?;
         AppStateOps::apply_command(cmd)?;
+        RuntimeAuthWorkflow::publish_root_delegated_key_to_subnet_state().await?;
 
         let snapshot = StateSnapshotBuilder::new()?
             .with_app_state()

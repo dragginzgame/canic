@@ -7,7 +7,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.29.x] - 2026-04-28 - Delegated Auth Hard Cut
 
-- `0.29.4` tightens the hard-cut delegated-auth model by removing a misleading verifier-side shard-key-hash parameter, aligning the design doc with signed shard-key binding, and rechecking that proof caches, V2 names, and root-key fallback surfaces are gone.
+- `0.29.5` removes old shim surfaces from the hard-cut line: authenticated guards require `DelegatedToken`, config uses only `app_index` / `subnet_index`, the installer exposes only `canic-install-root`, and the testkit process lock requires the structured owner format.
+- `0.29.4` tightens the hard-cut delegated-auth model, moves delegated root trust material into cascaded `SubnetState`, removes verifier-side root-key fetch-on-verify, aligns the README/design docs with the current signed shard-key binding and thin-root install flow, and rechecks that proof caches, V2 names, and root-key fallback surfaces are gone.
 - `0.29.3` removes the temporary version suffix from delegated-auth DTOs, APIs, endpoint names, and internal modules, and makes stable auth key caches identity-bound so key-name changes cannot reuse stale key material.
 - `0.29.2` hard-cuts delegated auth to self-validating tokens: verifier proof caches/fanout/admin repair are removed, guards accept only the current delegated-token shape, and old V1 DTO/API/test surfaces are gone.
 - `0.29.1` adds the next Delegated Auth implementation slice: policy helpers, root-key trust resolution, pure verifier logic, pure root proof issuance, internal root signing, pure shard token minting, internal shard signing, internal verifier validation, explicit API helpers, the root delegation endpoint, signer-facing mint helpers, root-key pull-on-verify, current-shape guard validation, delegated signer lifecycle prewarm, root-owned TTL policy, topology catch-up proof-sync removal, and focused auth edge-case coverage.

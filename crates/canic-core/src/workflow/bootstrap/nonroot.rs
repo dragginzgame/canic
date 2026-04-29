@@ -17,7 +17,7 @@
 //!
 //! Current behavior:
 //! - Bootstrap configured placement workers.
-//! - Prewarm delegated signer proof material when configured.
+//! - Prewarm delegated signer key material when configured.
 //! - Mark the canister ready only after bootstrap work succeeds.
 //!
 //! Architectural note:
@@ -60,7 +60,7 @@ pub async fn bootstrap_init_nonroot_canister(_args: Option<Vec<u8>>) -> Result<(
 
     ScalingWorkflow::bootstrap_configured_initial_workers().await?;
 
-    RuntimeAuthWorkflow::prewarm_signer_delegation_proof().await?;
+    RuntimeAuthWorkflow::prewarm_signer_key_material().await?;
 
     log!(Topic::Init, Info, "bootstrap (nonroot): init complete");
     ReadyOps::mark_ready();
@@ -84,7 +84,7 @@ pub async fn bootstrap_init_nonroot_canister(_args: Option<Vec<u8>>) -> Result<(
 ///
 pub async fn bootstrap_post_upgrade_nonroot_canister() -> Result<(), InternalError> {
     log!(Topic::Init, Info, "bootstrap (nonroot): post-upgrade start");
-    RuntimeAuthWorkflow::prewarm_signer_delegation_proof().await?;
+    RuntimeAuthWorkflow::prewarm_signer_key_material().await?;
     log!(
         Topic::Init,
         Info,

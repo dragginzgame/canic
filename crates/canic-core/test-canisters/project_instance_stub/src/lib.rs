@@ -3,10 +3,7 @@
 #![allow(clippy::unused_async)]
 
 use canic::{
-    Error,
-    api::canister::CanisterRole,
-    cdk::{candid::Reserved, types::Principal},
-    ids::cap,
+    Error, api::canister::CanisterRole, cdk::types::Principal, dto::auth::DelegatedToken, ids::cap,
     prelude::*,
 };
 
@@ -31,7 +28,7 @@ async fn instance_id() -> Result<Principal, Error> {
 
 /// Verify one self-contained delegated token.
 #[canic_update(requires(auth::authenticated(cap::VERIFY)))]
-async fn instance_verify_token(_token: Reserved) -> Result<(), Error> {
+async fn instance_verify_token(_token: DelegatedToken) -> Result<(), Error> {
     Ok(())
 }
 

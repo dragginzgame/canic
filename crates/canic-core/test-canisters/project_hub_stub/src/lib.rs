@@ -6,9 +6,9 @@ use canic::{
     Error,
     api::auth::DelegationApi,
     api::canister::{CanisterRole, placement::DirectoryApi},
-    cdk::candid::{Principal, Reserved},
+    cdk::candid::Principal,
     dto::{
-        auth::SignedRoleAttestation,
+        auth::{DelegatedToken, SignedRoleAttestation},
         placement::directory::{DirectoryEntryStatusResponse, DirectoryRecoveryResponse},
     },
     ids::cap,
@@ -30,12 +30,12 @@ async fn canic_install(_args: Option<Vec<u8>>) {}
 async fn canic_upgrade() {}
 
 #[canic_update(requires(auth::authenticated(cap::VERIFY)))]
-async fn signer_verify_token(_token: Reserved) -> Result<(), Error> {
+async fn signer_verify_token(_token: DelegatedToken) -> Result<(), Error> {
     Ok(())
 }
 
 #[canic_update(requires(auth::authenticated()))]
-async fn signer_verify_token_any(_token: Reserved) -> Result<(), Error> {
+async fn signer_verify_token_any(_token: DelegatedToken) -> Result<(), Error> {
     Ok(())
 }
 

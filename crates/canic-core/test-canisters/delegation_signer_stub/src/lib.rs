@@ -5,7 +5,7 @@
 use canic::{
     Error,
     api::auth::DelegationApi,
-    cdk::candid::{Principal, Reserved},
+    cdk::candid::Principal,
     dto::auth::{DelegatedToken, DelegatedTokenMintRequest, SignedRoleAttestation},
     ids::cap,
     prelude::*,
@@ -24,12 +24,12 @@ async fn signer_issue_token(request: DelegatedTokenMintRequest) -> Result<Delega
 }
 
 #[canic_update(requires(auth::authenticated(cap::VERIFY)))]
-async fn signer_verify_token(_token: Reserved) -> Result<(), Error> {
+async fn signer_verify_token(_token: DelegatedToken) -> Result<(), Error> {
     Ok(())
 }
 
 #[canic_update(requires(auth::authenticated()))]
-async fn signer_verify_token_any(_token: Reserved) -> Result<(), Error> {
+async fn signer_verify_token_any(_token: DelegatedToken) -> Result<(), Error> {
     Ok(())
 }
 

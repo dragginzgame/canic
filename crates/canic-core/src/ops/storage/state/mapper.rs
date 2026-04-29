@@ -1,12 +1,12 @@
 use crate::{
     dto::state::{
-        AppCommand, AppMode as AppModeDto, AppStateInput, AppStateResponse, SubnetStateInput,
-        SubnetStateResponse,
+        AppCommand, AppMode as AppModeDto, AppStateInput, AppStateResponse, SubnetAuthStateInput,
+        SubnetRootPublicKeyInput, SubnetStateInput, SubnetStateResponse,
     },
     ops::storage::state::app::AppStateCommand,
     storage::stable::state::{
         app::{AppMode as StorageAppMode, AppStateRecord},
-        subnet::SubnetStateRecord,
+        subnet::{RootPublicKeyRecord, SubnetAuthStateRecord, SubnetStateRecord},
     },
 };
 
@@ -88,19 +88,57 @@ pub struct SubnetStateMapper;
 impl SubnetStateMapper {
     // Map a stored subnet-state snapshot into the DTO input shape.
     #[must_use]
-    pub const fn record_to_input(_: SubnetStateRecord) -> SubnetStateInput {
-        SubnetStateInput
+    pub fn record_to_input(data: SubnetStateRecord) -> SubnetStateInput {
+        SubnetStateInput {
+            auth: subnet_auth_record_to_input(data.auth),
+        }
     }
 
     // Map a stored subnet-state snapshot into the public response shape.
     #[must_use]
-    pub const fn record_to_response(_: SubnetStateRecord) -> SubnetStateResponse {
-        SubnetStateResponse
+    pub fn record_to_response(data: SubnetStateRecord) -> SubnetStateResponse {
+        SubnetStateResponse {
+            auth: subnet_auth_record_to_input(data.auth),
+        }
     }
 
     // Map a DTO input snapshot back into the stored subnet-state record.
     #[must_use]
-    pub const fn input_to_record(_: SubnetStateInput) -> SubnetStateRecord {
-        SubnetStateRecord
+    pub fn input_to_record(view: SubnetStateInput) -> SubnetStateRecord {
+        SubnetStateRecord {
+            auth: subnet_auth_input_to_record(view.auth),
+        }
+    }
+}
+
+// Map stored subnet auth state into the DTO input shape.
+fn subnet_auth_record_to_input(data: SubnetAuthStateRecord) -> SubnetAuthStateInput {
+    SubnetAuthStateInput {
+        delegated_root_public_key: data.delegated_root_public_key.map(root_key_record_to_input),
+    }
+}
+
+// Map subnet auth DTO state back into the stored record shape.
+fn subnet_auth_input_to_record(view: SubnetAuthStateInput) -> SubnetAuthStateRecord {
+    SubnetAuthStateRecord {
+        delegated_root_public_key: view.delegated_root_public_key.map(root_key_input_to_record),
+    }
+}
+
+// Map one root public-key record into the subnet-state DTO shape.
+fn root_key_record_to_input(record: RootPublicKeyRecord) -> SubnetRootPublicKeyInput {
+    SubnetRootPublicKeyInput {
+        public_key_sec1: record.public_key_sec1,
+        key_name: record.key_name,
+        key_hash: record.key_hash,
+    }
+}
+
+// Map one root public-key DTO into the subnet-state record shape.
+fn root_key_input_to_record(input: SubnetRootPublicKeyInput) -> RootPublicKeyRecord {
+    RootPublicKeyRecord {
+        public_key_sec1: input.public_key_sec1,
+        key_name: input.key_name,
+        key_hash: input.key_hash,
     }
 }

@@ -4,7 +4,7 @@ This guide documents the canonical shape of `canic.toml`, the configuration file
 
 At a high level the file describes:
 
-- Global cluster settings (`controllers`, `app_directory`, `standards`, `app`).
+- Global cluster settings (`controllers`, `app_index`, `standards`, `app`).
 - Subnet-specific behaviour under `subnets.<name>` (including per-subnet pool settings).
 - Per-canister policies inside each subnet, with optional scaling and sharding pools.
 - Subnet-local wasm-store topology and capacity policy for chunk-store-backed installs.
@@ -18,7 +18,7 @@ All fields are validated when `canic::build!` or `canic::build_root!` run, so co
 Canic treats config/env identity as startup invariants. Missing env data is a fatal error.
 
 - Build time: `CANIC_CONFIG_PATH` is embedded into the Wasm and `DFX_NETWORK` is baked in (`local` or `ic`), defaulting to `local` when unset.
-- Init/post-upgrade: `__canic_load_config!()` loads the embedded TOML; `ConfigOps::current_*` is infallible.
+- Init/post-upgrade: generated lifecycle code loads the embedded TOML and parsed config model; `ConfigOps::current_*` is infallible.
 - Root env: `root_init(identity)` sets base env fields directly from `SubnetIdentity` (no registry lookup).
   - `Prime` means root == subnet == prime root.
   - `Standard` carries the `subnet_type` and `prime_root_pid` from the prime subnet.
@@ -34,7 +34,7 @@ Canic treats config/env identity as startup invariants. Missing env data is a fa
 
 Optional list of controller principals appended to every provisioned canister.
 
-### `app_directory = ["role_a", "role_b", ...]`
+### `app_index = ["role_a", "role_b", ...]`
 
 Global set of canister roles that should appear in the prime root directory export. Every entry must also exist under `subnets.prime.canisters` and have `kind = "singleton"`.
 
@@ -77,7 +77,15 @@ Root-signed delegated token authentication (cert -> proof -> token).
 
 - `enabled: bool` – enable delegated token auth (default `true`).
 - `ecdsa_key_name: string` – signing key name for delegated-token proofs and tokens (default `"test_key_1"`).
-- `max_ttl_secs: u64` – optional upper bound on delegated token TTL in seconds (default `null` = no upper bound; must be > 0 when set).
+- `max_ttl_secs: u64` – optional upper bound on delegated cert/token/session TTL in seconds (default `null` = runtime default cap; must be > 0 when set).
+
+### `[auth.role_attestation]`
+
+Root-signed role-attestation settings for root capability RPC proofs.
+
+- `ecdsa_key_name: string` – signing key name for role-attestation proofs (default `"test_key_1"`).
+- `max_ttl_secs: u64` – maximum role-attestation lifetime in seconds (default `900`, must be > 0).
+- `min_accepted_epoch_by_role.<role>: u64` – optional per-role epoch floor for rejecting older attestations.
 
 ### `[standards]`
 
@@ -95,7 +103,7 @@ Declare each subnet under `[subnets.<name>]`. The name is an arbitrary identifie
 ### `[subnets.<name>]`
 
 - `auto_create = ["role_a", ...]` – canister roles that root should ensure exist during bootstrap (must exist in `canisters`).
-- `subnet_directory = ["role_a", ...]` – canister roles exposed through `canic_subnet_directory()`. Entries must have `kind = "singleton"`.
+- `subnet_index = ["role_a", ...]` – canister roles exposed through `canic_subnet_index()`. Entries must have `kind = "singleton"`.
 - `canisters.*` – nested tables describing per-role policies (see below).
 
 ### Implicit `wasm_store`
@@ -141,6 +149,8 @@ from the table key (`subnets.<name>.canisters.<role>`); do not declare `role`, `
   - `time` uses `ic_cdk::api::time()` and is deterministic/low-entropy; use for non-sensitive randomness only.
 - `scaling` – optional table that defines stateless replica pools.
 - `sharding` – optional table that defines stateful shard pools.
+- `delegated_auth.signer = true` – mark this role as a delegated-token signer; Canic prewarms local shard signing key material.
+- `delegated_auth.attestation_cache = true` – start the role-attestation key cache for canisters that verify root-signed role attestations. Delegated-token endpoint verification itself is driven by endpoint guards and local `SubnetState`, not this flag.
 
 The `wasm_store` role is reserved and implicit.
 Do not add it under `canisters.*`.
@@ -202,7 +212,7 @@ Fields:
 
 ```toml
 controllers = ["aaaaa-aa"]
-app_directory = ["user_hub", "scale_hub"]
+app_index = ["user_hub", "scale_hub"]
 
 [auth.delegated_tokens]
 enabled = true
@@ -212,7 +222,7 @@ icrc21 = true
 
 [subnets.prime]
 auto_create = ["app", "user_hub", "scale_hub"]
-subnet_directory = ["app", "user_hub", "scale_hub"]
+subnet_index = ["app", "user_hub", "scale_hub"]
 pool.minimum_size = 3
 pool.import.initial = 3
 pool.import.local = ["aaaaa-aa"]

@@ -44,6 +44,7 @@ pub enum MintDelegatedTokenError {
     AudienceNotSubset,
     #[error("delegated auth token scope rejected: {scope}")]
     ScopeRejected { scope: String },
+    #[cfg(test)]
     #[error("delegated auth shard signature failed: {0}")]
     SignFailed(String),
     #[error(transparent)]
@@ -52,6 +53,7 @@ pub enum MintDelegatedTokenError {
     Canonical(#[from] CanonicalAuthError),
 }
 
+#[cfg(test)]
 pub fn mint_delegated_token<F>(
     input: MintDelegatedTokenInput<'_>,
     sign_claims_hash: F,

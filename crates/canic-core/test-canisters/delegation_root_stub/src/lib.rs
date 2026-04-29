@@ -187,7 +187,7 @@ async fn root_bootstrap_delegated_session(
     delegated_subject: candid::Principal,
     requested_ttl_secs: Option<u64>,
 ) -> Result<(), Error> {
-    DelegationApi::set_delegated_session_subject(delegated_subject, token, requested_ttl_secs).await
+    DelegationApi::set_delegated_session_subject(delegated_subject, token, requested_ttl_secs)
 }
 
 #[canic_update]

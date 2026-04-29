@@ -26,7 +26,7 @@ use sha2::{Digest, Sha256};
 
 impl DelegationApi {
     /// Persist a temporary delegated session subject for the caller wallet.
-    pub async fn set_delegated_session_subject(
+    pub fn set_delegated_session_subject(
         delegated_subject: Principal,
         bootstrap_token: DelegatedToken,
         requested_ttl_secs: Option<u64>,
@@ -53,12 +53,6 @@ impl DelegationApi {
         }
 
         let issued_at = IcOps::now_secs();
-        DelegatedTokenOps::ensure_root_public_key_cached(&bootstrap_token)
-            .await
-            .map_err(|err| {
-                record_session_bootstrap_rejected_token_invalid();
-                Self::map_delegation_error(err)
-            })?;
         let max_ttl_secs = Self::delegated_auth_max_ttl_secs()?;
         let verified = DelegatedTokenOps::verify_token(VerifyDelegatedTokenRuntimeInput {
             token: &bootstrap_token,

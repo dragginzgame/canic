@@ -5,7 +5,7 @@ use crate::{
         error::Error,
         rpc::Request,
     },
-    ops::{config::ConfigOps, ic::ecdsa::EcdsaOps, storage::auth::DelegationStateOps},
+    ops::{config::ConfigOps, ic::ecdsa::EcdsaOps, storage::state::subnet::SubnetStateOps},
 };
 use candid::encode_one;
 use sha2::{Digest, Sha256};
@@ -108,7 +108,7 @@ pub(super) fn verify_root_delegated_grant_signature(
     let key_name = ConfigOps::delegated_tokens_config()
         .map_err(Error::from)?
         .ecdsa_key_name;
-    let root_public_key = DelegationStateOps::root_public_key(&key_name)
+    let root_public_key = SubnetStateOps::delegated_root_public_key(&key_name)
         .ok_or_else(|| Error::forbidden("delegated grant root public key unavailable"))?;
     let grant_hash = delegated_grant_hash(grant)?;
     EcdsaOps::verify_signature(&root_public_key, grant_hash, signature)

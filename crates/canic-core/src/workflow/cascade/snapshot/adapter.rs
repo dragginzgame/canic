@@ -33,7 +33,7 @@ impl StateSnapshotAdapter {
     pub fn to_input(snapshot: &StateSnapshot) -> StateSnapshotInput {
         StateSnapshotInput {
             app_state: snapshot.app_state,
-            subnet_state: snapshot.subnet_state,
+            subnet_state: snapshot.subnet_state.clone(),
             app_index: snapshot.app_index.clone(),
             subnet_index: snapshot.subnet_index.clone(),
         }

@@ -12,7 +12,7 @@ mod sessions;
 
 pub use records::{
     AttestationKeyStatusRecord, AttestationPublicKeyRecord, DelegatedSessionBootstrapBindingRecord,
-    DelegatedSessionRecord, DelegationStateRecord, RootPublicKeyRecord, ShardPublicKeyRecord,
+    DelegatedSessionRecord, DelegationStateRecord, ShardPublicKeyRecord,
 };
 
 const DELEGATED_SESSION_CAPACITY: usize = 2_048;
@@ -35,21 +35,6 @@ impl_storable_unbounded!(DelegationStateRecord);
 pub struct DelegationState;
 
 impl DelegationState {
-    // Resolve the root verifier key, if present.
-    #[must_use]
-    pub(crate) fn get_root_public_key(key_name: &str) -> Option<Vec<u8>> {
-        DELEGATION_STATE.with_borrow(|cell| key_state::get_root_public_key(cell.get(), key_name))
-    }
-
-    // Persist the current root verifier key.
-    pub(crate) fn set_root_public_key(key_name: String, public_key_sec1: Vec<u8>) {
-        DELEGATION_STATE.with_borrow_mut(|cell| {
-            let mut data = cell.get().clone();
-            key_state::set_root_public_key(&mut data, key_name, public_key_sec1);
-            cell.set(data);
-        });
-    }
-
     // Resolve a shard public key by shard principal.
     #[must_use]
     pub(crate) fn get_shard_public_key(shard_pid: Principal, key_name: &str) -> Option<Vec<u8>> {

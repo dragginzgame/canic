@@ -1,36 +1,6 @@
-use super::{
-    AttestationPublicKeyRecord, DelegationStateRecord, RootPublicKeyRecord, ShardPublicKeyRecord,
-};
+use super::{AttestationPublicKeyRecord, DelegationStateRecord, ShardPublicKeyRecord};
 use crate::storage::prelude::*;
 use sha2::{Digest, Sha256};
-
-// Resolve the current root public key, if one is stored.
-pub(super) fn get_root_public_key(data: &DelegationStateRecord, key_name: &str) -> Option<Vec<u8>> {
-    data.root_public_key
-        .as_ref()
-        .filter(|entry| {
-            key_identity_matches(
-                &entry.public_key_sec1,
-                &entry.key_name,
-                entry.key_hash,
-                key_name,
-            )
-        })
-        .map(|entry| entry.public_key_sec1.clone())
-}
-
-// Persist the current root public key.
-pub(super) fn set_root_public_key(
-    data: &mut DelegationStateRecord,
-    key_name: String,
-    public_key_sec1: Vec<u8>,
-) {
-    data.root_public_key = Some(RootPublicKeyRecord {
-        key_hash: public_key_hash(&public_key_sec1),
-        key_name,
-        public_key_sec1,
-    });
-}
 
 // Resolve one shard public key by shard principal.
 pub(super) fn get_shard_public_key(
@@ -184,19 +154,6 @@ mod tests {
     // Build deterministic principals for key-cache unit tests.
     fn p(id: u8) -> Principal {
         Principal::from_slice(&[id; 29])
-    }
-
-    #[test]
-    fn root_public_key_cache_requires_matching_identity() {
-        let mut data = DelegationStateRecord::default();
-
-        set_root_public_key(&mut data, "key_a".to_string(), vec![1, 2, 3]);
-
-        assert_eq!(get_root_public_key(&data, "key_a"), Some(vec![1, 2, 3]));
-        assert_eq!(get_root_public_key(&data, "key_b"), None);
-
-        data.root_public_key.as_mut().expect("root key").key_hash = [9; 32];
-        assert_eq!(get_root_public_key(&data, "key_a"), None);
     }
 
     #[test]

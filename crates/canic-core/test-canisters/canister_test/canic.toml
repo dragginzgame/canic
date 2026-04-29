@@ -22,4 +22,4 @@ kind = "root"
 kind = "singleton"
 
 [subnets.prime.canisters.test.delegated_auth]
-verifier = true
+attestation_cache = true

@@ -1,6 +1,6 @@
 #![allow(clippy::unused_async)]
 
-use canic::{Error, cdk::candid::Reserved, ids::cap, prelude::*};
+use canic::{Error, dto::auth::DelegatedToken, ids::cap, prelude::*};
 use canic_internal::canister::TEST;
 use std::time::Duration;
 
@@ -22,7 +22,7 @@ async fn test() -> Result<(), Error> {
 }
 
 #[canic_update(requires(auth::authenticated(cap::VERIFY)))]
-async fn test_verify_delegated_token(_token: Reserved) -> Result<(), Error> {
+async fn test_verify_delegated_token(_token: DelegatedToken) -> Result<(), Error> {
     if let Err(err) = canic::access::env::build_network_local() {
         return Err(Error::forbidden(err.to_string()));
     }

@@ -134,7 +134,7 @@ fn validate_authenticated_args(sig: &Signature) -> syn::Result<()> {
         return Err(syn::Error::new_spanned(first_ty, authenticated_arg_error()));
     };
 
-    if matches!(ident.to_string().as_str(), "DelegatedToken" | "Reserved") {
+    if ident == "DelegatedToken" {
         return Ok(());
     }
 
@@ -142,7 +142,7 @@ fn validate_authenticated_args(sig: &Signature) -> syn::Result<()> {
 }
 
 const fn authenticated_arg_error() -> &'static str {
-    "authenticated(...) requires a first argument of type `DelegatedToken` or `Reserved`"
+    "authenticated(...) requires a first argument of type `DelegatedToken`"
 }
 
 fn type_ident(ty: &Type) -> Option<&syn::Ident> {
@@ -205,14 +205,6 @@ mod tests {
     fn authenticated_accepts_delegated_token_first_arg() {
         let sig: Signature = syn::parse_quote!(
             async fn hello(token: ::canic::dto::auth::DelegatedToken) -> Result<(), ::canic::Error>
-        );
-        validate(parsed_authenticated(), &sig, true).expect("authenticated arg ok");
-    }
-
-    #[test]
-    fn authenticated_accepts_reserved_first_arg_for_guarded_surfaces() {
-        let sig: Signature = syn::parse_quote!(
-            async fn hello(token: ::canic::cdk::candid::Reserved) -> Result<(), ::canic::Error>
         );
         validate(parsed_authenticated(), &sig, true).expect("authenticated arg ok");
     }

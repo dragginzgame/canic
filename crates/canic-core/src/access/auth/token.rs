@@ -13,7 +13,7 @@ use crate::{
 const MAX_INGRESS_BYTES: usize = 64 * 1024; // 64 KiB
 const DEFAULT_DELEGATED_AUTH_MAX_TTL_SECS: u64 = 24 * 60 * 60;
 
-pub(super) async fn delegated_token_verified(
+pub(super) fn delegated_token_verified(
     authenticated_subject: Principal,
     required_scope: Option<&str>,
 ) -> Result<VerifiedAccessToken, AccessError> {
@@ -21,20 +21,16 @@ pub(super) async fn delegated_token_verified(
 
     let now_secs = IcOps::now_secs();
 
-    verify_token(token, authenticated_subject, now_secs, required_scope).await
+    verify_token(token, authenticated_subject, now_secs, required_scope)
 }
 
 // Verify a delegated token without local proof-cache lookup.
-async fn verify_token(
+fn verify_token(
     token: DelegatedToken,
     caller: Principal,
     now_secs: u64,
     required_scope: Option<&str>,
 ) -> Result<VerifiedAccessToken, AccessError> {
-    DelegatedTokenOps::ensure_root_public_key_cached(&token)
-        .await
-        .map_err(|err| AccessError::Denied(err.to_string()))?;
-
     let max_ttl_secs = delegated_auth_max_ttl_secs()?;
     let required_scopes = required_scope
         .map(|scope| vec![scope.to_string()])

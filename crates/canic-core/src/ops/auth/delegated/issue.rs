@@ -49,6 +49,7 @@ pub enum IssueDelegationProofError {
     ScopesEmpty,
     #[error("delegated auth cert scope is empty")]
     ScopeEmpty,
+    #[cfg(test)]
     #[error("delegated auth root signature failed: {0}")]
     SignFailed(String),
     #[error(transparent)]
@@ -60,6 +61,7 @@ pub enum IssueDelegationProofError {
 }
 
 /// Build and sign one self-validating delegation proof.
+#[cfg(test)]
 pub fn issue_delegation_proof<F>(
     input: IssueDelegationProofInput,
     sign_cert_hash: F,

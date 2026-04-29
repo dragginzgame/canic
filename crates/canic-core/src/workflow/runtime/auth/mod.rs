@@ -7,6 +7,7 @@ use crate::{
         auth::DelegatedTokenOps,
         config::ConfigOps,
         ic::{IcOps, ecdsa::EcdsaOps},
+        runtime::env::EnvOps,
     },
     workflow::prelude::*,
 };
@@ -69,7 +70,7 @@ impl RuntimeAuthWorkflow {
     }
 
     /// Prewarm local signer key material when the current canister is a delegated signer.
-    pub async fn prewarm_signer_delegation_proof() -> Result<(), InternalError> {
+    pub async fn prewarm_signer_key_material() -> Result<(), InternalError> {
         let delegated_tokens_cfg = ConfigOps::delegated_tokens_config()?;
         let canister_cfg = ConfigOps::current_canister()?;
         if !delegated_tokens_cfg.enabled || !canister_cfg.delegated_auth.signer {
@@ -90,16 +91,27 @@ impl RuntimeAuthWorkflow {
 
         Ok(())
     }
+
+    /// Ensure root delegated auth trust material is published in subnet state.
+    pub async fn publish_root_delegated_key_to_subnet_state() -> Result<(), InternalError> {
+        EnvOps::require_root()?;
+
+        let delegated_tokens_cfg = ConfigOps::delegated_tokens_config()?;
+        if !delegated_tokens_cfg.enabled {
+            return Ok(());
+        }
+
+        DelegatedTokenOps::publish_root_delegated_key_material().await
+    }
 }
 
 // Decide whether the root runtime must carry threshold-ECDSA management support.
 fn root_requires_auth_crypto(cfg: &ConfigModel) -> bool {
     cfg.auth.delegated_tokens.enabled
         && cfg.subnets.values().any(|subnet| {
-            subnet
-                .canisters
-                .values()
-                .any(|canister| canister.delegated_auth.signer || canister.delegated_auth.verifier)
+            subnet.canisters.values().any(|canister| {
+                canister.delegated_auth.signer || canister.delegated_auth.attestation_cache
+            })
         })
 }
 
@@ -124,7 +136,7 @@ mod tests {
         let mut verifier_cfg = ConfigTestBuilder::canister_config(CanisterKind::Singleton);
         verifier_cfg.delegated_auth = DelegatedAuthCanisterConfig {
             signer: false,
-            verifier: true,
+            attestation_cache: true,
         };
 
         let cfg = ConfigTestBuilder::new()
@@ -150,7 +162,7 @@ mod tests {
         let mut verifier_cfg = ConfigTestBuilder::canister_config(CanisterKind::Singleton);
         verifier_cfg.delegated_auth = DelegatedAuthCanisterConfig {
             signer: false,
-            verifier: true,
+            attestation_cache: true,
         };
 
         assert!(!nonroot_requires_auth_crypto(&verifier_cfg));
@@ -161,7 +173,7 @@ mod tests {
         let mut signer_cfg = ConfigTestBuilder::canister_config(CanisterKind::Shard);
         signer_cfg.delegated_auth = DelegatedAuthCanisterConfig {
             signer: true,
-            verifier: true,
+            attestation_cache: true,
         };
 
         assert!(nonroot_requires_auth_crypto(&signer_cfg));

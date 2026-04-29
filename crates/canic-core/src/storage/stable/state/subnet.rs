@@ -12,18 +12,40 @@ eager_static! {
     static SUBNET_STATE: RefCell<Cell<SubnetStateRecord, VirtualMemory<DefaultMemoryImpl>>> =
         RefCell::new(Cell::init(
             ic_memory!(SubnetState, SUBNET_STATE_ID),
-            SubnetStateRecord,
+            SubnetStateRecord::default(),
         ));
+}
+
+///
+/// RootPublicKeyRecord
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootPublicKeyRecord {
+    pub public_key_sec1: Vec<u8>,
+    pub key_name: String,
+    pub key_hash: [u8; 32],
+}
+
+///
+/// SubnetAuthStateRecord
+///
+
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+pub struct SubnetAuthStateRecord {
+    pub delegated_root_public_key: Option<RootPublicKeyRecord>,
 }
 
 ///
 /// SubnetStateRecord
 ///
 
-#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
-pub struct SubnetStateRecord;
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+pub struct SubnetStateRecord {
+    pub auth: SubnetAuthStateRecord,
+}
 
-impl_storable_bounded!(SubnetStateRecord, 8, true);
+impl_storable_bounded!(SubnetStateRecord, 1024, true);
 
 ///
 /// SubnetState
@@ -38,7 +60,7 @@ impl SubnetState {
 
     #[must_use]
     pub(crate) fn export() -> SubnetStateRecord {
-        SUBNET_STATE.with_borrow(|cell| *cell.get())
+        SUBNET_STATE.with_borrow(|cell| cell.get().clone())
     }
 }
 
@@ -52,7 +74,17 @@ mod tests {
 
     #[test]
     fn subnet_state_round_trip() {
-        SubnetState::import(SubnetStateRecord);
-        assert_eq!(SubnetState::export(), SubnetStateRecord);
+        let record = SubnetStateRecord {
+            auth: SubnetAuthStateRecord {
+                delegated_root_public_key: Some(RootPublicKeyRecord {
+                    public_key_sec1: vec![1, 2, 3],
+                    key_name: "test_key_1".to_string(),
+                    key_hash: [7; 32],
+                }),
+            },
+        };
+
+        SubnetState::import(record.clone());
+        assert_eq!(SubnetState::export(), record);
     }
 }

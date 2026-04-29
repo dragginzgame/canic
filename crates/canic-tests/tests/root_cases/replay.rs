@@ -701,7 +701,7 @@ fn cycles_funding_amount(entries: &[MetricEntry], label: &str, child: Principal)
 }
 
 fn metric_count(entries: &[MetricEntry], capability: &str, event: &str) -> u64 {
-    let (event_type, outcome) = legacy_event_parts(event);
+    let (event_type, outcome) = metric_event_parts(event);
     entries
         .iter()
         .filter(|entry| {
@@ -719,7 +719,7 @@ fn metric_count(entries: &[MetricEntry], capability: &str, event: &str) -> u64 {
         .sum()
 }
 
-fn legacy_event_parts(event: &str) -> (&'static str, &'static str) {
+fn metric_event_parts(event: &str) -> (&'static str, &'static str) {
     match event {
         "EnvelopeRejected" => ("Envelope", "Rejected"),
         "EnvelopeValidated" => ("Envelope", "Accepted"),
@@ -734,7 +734,7 @@ fn legacy_event_parts(event: &str) -> (&'static str, &'static str) {
         "ReplayTtlExceeded" => ("Replay", "TtlExceeded"),
         "ExecutionSuccess" => ("Execution", "Success"),
         "ExecutionError" => ("Execution", "Error"),
-        other => panic!("unexpected legacy root capability metric event: {other}"),
+        other => panic!("unexpected root capability metric event: {other}"),
     }
 }
 

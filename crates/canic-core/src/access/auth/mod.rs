@@ -113,11 +113,11 @@ pub fn validate_delegated_session_subject(
     identity::validate_delegated_session_subject(subject)
 }
 
-pub(crate) async fn delegated_token_verified(
+pub(crate) fn delegated_token_verified(
     authenticated_subject: Principal,
     required_scope: Option<&str>,
 ) -> Result<VerifiedAccessToken, AccessError> {
-    token::delegated_token_verified(authenticated_subject, required_scope).await
+    token::delegated_token_verified(authenticated_subject, required_scope)
 }
 
 #[cfg(test)]

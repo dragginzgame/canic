@@ -33,13 +33,19 @@ const ROLE_ATTESTATION_KEY_ID_V1: u32 = 1;
 pub struct DelegatedTokenOps;
 
 impl DelegatedTokenOps {
-    // Warm the root delegation and attestation public-key caches once.
-    pub async fn prewarm_root_key_material() -> Result<(), crate::InternalError> {
+    // Publish the root delegation public key into cascaded subnet state.
+    pub async fn publish_root_delegated_key_material() -> Result<(), crate::InternalError> {
+        let root_pid = IcOps::canister_self();
+        let delegated_key_name = keys::delegated_tokens_key_name()?;
+        keys::ensure_root_public_key_published(&delegated_key_name, root_pid).await
+    }
+
+    // Publish root auth material and warm local root-owned auth keys once.
+    pub async fn publish_root_auth_material() -> Result<(), crate::InternalError> {
         let root_pid = IcOps::canister_self();
         let now_secs = IcOps::now_secs();
 
-        let delegated_key_name = keys::delegated_tokens_key_name()?;
-        keys::ensure_root_public_key_cached(&delegated_key_name, root_pid).await?;
+        Self::publish_root_delegated_key_material().await?;
 
         let attestation_key_name = keys::attestation_key_name()?;
         keys::ensure_attestation_key_cached(&attestation_key_name, root_pid, now_secs).await?;

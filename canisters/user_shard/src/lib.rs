@@ -11,7 +11,6 @@
 use canic::{
     Error,
     api::auth::DelegationApi,
-    cdk::candid::Reserved,
     dto::auth::{DelegatedToken, DelegatedTokenMintRequest},
     ids::cap,
     prelude::*,
@@ -60,7 +59,7 @@ async fn user_shard_local_public_key_test() -> Result<Vec<u8>, Error> {
 }
 
 #[canic_query(requires(auth::authenticated(cap::VERIFY)))]
-async fn hello(_token: Reserved) -> Result<(), Error> {
+async fn hello(_token: DelegatedToken) -> Result<(), Error> {
     Ok(())
 }
 

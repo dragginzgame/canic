@@ -15,4 +15,4 @@ kind = "shard"
 
 [subnets.prime.canisters.user_shard.delegated_auth]
 signer = true
-verifier = true
+attestation_cache = true

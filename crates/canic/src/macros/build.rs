@@ -171,7 +171,7 @@ macro_rules! __canic_build_internal {
                     if let Some(canister_cfg) = subnet.get_canister(&role_id) {
                         role_found = true;
                         delegated_auth_signer |= canister_cfg.delegated_auth.signer;
-                        auth_attestation_cache |= canister_cfg.delegated_auth.verifier;
+                        auth_attestation_cache |= canister_cfg.delegated_auth.attestation_cache;
                         has_icrc21 |= canister_cfg.standards.icrc21;
                         has_scaling |= canister_cfg.scaling.is_some();
                         has_sharding |= canister_cfg.sharding.is_some();

@@ -169,13 +169,17 @@ impl DelegationApi {
             .map_err(Self::map_delegation_error)
     }
 
-    /// Warm the root delegation and attestation key caches once.
-    pub async fn prewarm_root_key_material() -> Result<(), Error> {
+    /// Publish root auth material into subnet state and warm root-owned keys once.
+    pub async fn publish_root_auth_material() -> Result<(), Error> {
         EnvOps::require_root().map_err(Error::from)?;
-        DelegatedTokenOps::prewarm_root_key_material()
+        DelegatedTokenOps::publish_root_auth_material()
             .await
             .map_err(|err| {
-                log!(Topic::Auth, Warn, "root auth key prewarm failed: {err}");
+                log!(
+                    Topic::Auth,
+                    Warn,
+                    "root auth material publish failed: {err}"
+                );
                 Self::map_delegation_error(err)
             })
     }

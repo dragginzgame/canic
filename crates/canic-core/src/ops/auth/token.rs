@@ -22,7 +22,7 @@ use crate::{
         config::ConfigOps,
         ic::{IcOps, ecdsa::EcdsaOps},
         runtime::env::EnvOps,
-        storage::auth::DelegationStateOps,
+        storage::state::subnet::SubnetStateOps,
     },
 };
 
@@ -96,49 +96,6 @@ impl DelegatedTokenOps {
         .map_err(map_verify_delegated_token_error)
     }
 
-    /// Ensure the expected root public key for a token is cached locally.
-    pub async fn ensure_root_public_key_cached(
-        token: &DelegatedToken,
-    ) -> Result<(), InternalError> {
-        let cert = &token.proof.cert;
-        let expected_root = EnvOps::root_pid()?;
-        if cert.root_pid != expected_root {
-            return Err(DelegationValidationError::DelegatedAuth(format!(
-                "delegated auth root pid mismatch (expected {expected_root}, found {})",
-                cert.root_pid
-            ))
-            .into());
-        }
-
-        let key_name = keys::delegated_tokens_key_name()?;
-        if cert.root_key_id != key_name {
-            return Err(DelegationValidationError::DelegatedAuth(format!(
-                "delegated auth root key id mismatch (expected {key_name}, found {})",
-                cert.root_key_id
-            ))
-            .into());
-        }
-
-        if let Some(root_public_key) = DelegationStateOps::root_public_key(&key_name)
-            && public_key_hash(&root_public_key) == cert.root_key_hash
-        {
-            return Ok(());
-        }
-
-        let root_public_key =
-            EcdsaOps::public_key_sec1(&key_name, keys::root_derivation_path(), cert.root_pid)
-                .await?;
-        if public_key_hash(&root_public_key) != cert.root_key_hash {
-            return Err(DelegationValidationError::DelegatedAuth(
-                "delegated auth fetched root public key hash mismatch".to_string(),
-            )
-            .into());
-        }
-
-        DelegationStateOps::set_root_public_key(key_name, root_public_key);
-        Ok(())
-    }
-
     fn root_trust_anchor(
         token: &DelegatedToken,
         now_secs: u64,
@@ -153,7 +110,7 @@ impl DelegatedTokenOps {
             .into());
         }
 
-        let root_public_key = DelegationStateOps::root_public_key(&key_name)
+        let root_public_key = SubnetStateOps::delegated_root_public_key(&key_name)
             .ok_or(DelegationSignatureError::RootPublicKeyUnavailable)?;
         let key_hash = public_key_hash(&root_public_key);
 
