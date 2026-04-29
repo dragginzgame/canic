@@ -104,11 +104,7 @@ mod tests {
         }
     }
 
-    fn req<'a>(
-        key: &'a RootPublicKey,
-        root_pid: Principal,
-        now_secs: u64,
-    ) -> RootKeyResolveRequest<'a> {
+    fn req(key: &RootPublicKey, root_pid: Principal, now_secs: u64) -> RootKeyResolveRequest<'_> {
         RootKeyResolveRequest {
             root_pid,
             key_id: &key.key_id,
