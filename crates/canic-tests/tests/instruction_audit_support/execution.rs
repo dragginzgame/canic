@@ -291,7 +291,7 @@ fn prepare_scenario(setup: &root_harness::RootSetup, scenario: &AuditScenario) -
                 &setup.pic,
                 shard_pid,
                 subject,
-                DelegationAudienceV2::Principals(vec![target_pid]),
+                DelegationAudience::Principals(vec![target_pid]),
                 vec![cap::VERIFY.to_string()],
                 provision.cert.max_token_ttl_secs,
                 provision

@@ -1,49 +1,49 @@
 use crate::{
     cdk::types::Principal,
     dto::auth::{
-        DelegatedTokenClaimsV2, DelegationAudienceV2, DelegationCertV2, RootKeyCertificateV2,
-        ShardKeyBindingV2, SignatureAlgorithmV2,
+        DelegatedTokenClaims, DelegationAudience, DelegationCert, ShardKeyBinding,
+        SignatureAlgorithm,
     },
     ids::CanisterRole,
 };
 use sha2::{Digest, Sha256};
-use std::collections::BTreeSet;
 use thiserror::Error;
 
-const DOMAIN_SEPARATOR: &[u8] = b"CANIC-AUTH-V2\0";
+const DOMAIN_SEPARATOR: &[u8] = b"CANIC-AUTH\0";
 
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum CanonicalDomainV2 {
+pub enum CanonicalDomain {
     DelegationCert = 1,
     DelegatedTokenClaims = 2,
-    RootKeyCertificate = 3,
     RoleHash = 4,
     DerivationPath = 5,
 }
 
 #[derive(Debug, Eq, Error, PartialEq)]
-pub enum CanonicalAuthV2Error {
-    #[error("delegated auth v2 role is empty")]
+pub enum CanonicalAuthError {
+    #[error("delegated auth role is empty")]
     EmptyRole,
-    #[error("delegated auth v2 role contains invalid characters: {role}")]
+    #[error("delegated auth role contains invalid characters: {role}")]
     InvalidRole { role: String },
-    #[error("delegated auth v2 scope is empty")]
+    #[error("delegated auth scope is empty")]
     EmptyScope,
-    #[error("delegated auth v2 scope contains invalid characters: {scope}")]
+    #[error("delegated auth scope contains invalid characters: {scope}")]
     InvalidScope { scope: String },
+    #[error("delegated auth roles must be strictly sorted and unique")]
+    NonCanonicalRoles,
+    #[error("delegated auth scopes must be strictly sorted and unique")]
+    NonCanonicalScopes,
+    #[error("delegated auth principals must be strictly sorted and unique")]
+    NonCanonicalPrincipals,
 }
 
-pub fn cert_hash(cert: &DelegationCertV2) -> Result<[u8; 32], CanonicalAuthV2Error> {
+pub fn cert_hash(cert: &DelegationCert) -> Result<[u8; 32], CanonicalAuthError> {
     Ok(hash_bytes(&cert_bytes(cert)?))
 }
 
-pub fn claims_hash(claims: &DelegatedTokenClaimsV2) -> Result<[u8; 32], CanonicalAuthV2Error> {
+pub fn claims_hash(claims: &DelegatedTokenClaims) -> Result<[u8; 32], CanonicalAuthError> {
     Ok(hash_bytes(&claims_bytes(claims)?))
-}
-
-pub fn root_key_certificate_payload_hash(cert: &RootKeyCertificateV2) -> [u8; 32] {
-    hash_bytes(&root_key_certificate_payload_bytes(cert))
 }
 
 pub fn public_key_hash(public_key_sec1: &[u8]) -> [u8; 32] {
@@ -55,7 +55,7 @@ pub fn key_name_hash(key_name: &str) -> [u8; 32] {
 }
 
 pub fn derivation_path_hash(path: &[Vec<u8>]) -> [u8; 32] {
-    let mut out = domain_bytes(CanonicalDomainV2::DerivationPath);
+    let mut out = domain_bytes(CanonicalDomain::DerivationPath);
     encode_len(&mut out, path.len());
     for segment in path {
         encode_bytes(&mut out, segment);
@@ -63,16 +63,16 @@ pub fn derivation_path_hash(path: &[Vec<u8>]) -> [u8; 32] {
     hash_bytes(&out)
 }
 
-pub fn role_hash(role: &CanisterRole) -> Result<[u8; 32], CanonicalAuthV2Error> {
+pub fn role_hash(role: &CanisterRole) -> Result<[u8; 32], CanonicalAuthError> {
     validate_role(role)?;
 
-    let mut out = domain_bytes(CanonicalDomainV2::RoleHash);
+    let mut out = domain_bytes(CanonicalDomain::RoleHash);
     encode_string(&mut out, role.as_str());
     Ok(hash_bytes(&out))
 }
 
-pub fn cert_bytes(cert: &DelegationCertV2) -> Result<Vec<u8>, CanonicalAuthV2Error> {
-    let mut out = domain_bytes(CanonicalDomainV2::DelegationCert);
+pub fn cert_bytes(cert: &DelegationCert) -> Result<Vec<u8>, CanonicalAuthError> {
+    let mut out = domain_bytes(CanonicalDomain::DelegationCert);
 
     encode_u16(&mut out, cert.version);
     encode_principal(&mut out, cert.root_pid);
@@ -94,8 +94,8 @@ pub fn cert_bytes(cert: &DelegationCertV2) -> Result<Vec<u8>, CanonicalAuthV2Err
     Ok(out)
 }
 
-pub fn claims_bytes(claims: &DelegatedTokenClaimsV2) -> Result<Vec<u8>, CanonicalAuthV2Error> {
-    let mut out = domain_bytes(CanonicalDomainV2::DelegatedTokenClaims);
+pub fn claims_bytes(claims: &DelegatedTokenClaims) -> Result<Vec<u8>, CanonicalAuthError> {
+    let mut out = domain_bytes(CanonicalDomain::DelegatedTokenClaims);
 
     encode_u16(&mut out, claims.version);
     encode_principal(&mut out, claims.subject);
@@ -110,21 +110,7 @@ pub fn claims_bytes(claims: &DelegatedTokenClaimsV2) -> Result<Vec<u8>, Canonica
     Ok(out)
 }
 
-pub fn root_key_certificate_payload_bytes(cert: &RootKeyCertificateV2) -> Vec<u8> {
-    let mut out = domain_bytes(CanonicalDomainV2::RootKeyCertificate);
-
-    encode_principal(&mut out, cert.root_pid);
-    encode_string(&mut out, &cert.key_id);
-    encode_algorithm(&mut out, cert.alg);
-    encode_bytes(&mut out, &cert.public_key_sec1);
-    encode_fixed_32(&mut out, cert.key_hash);
-    encode_u64(&mut out, cert.not_before);
-    encode_option_u64(&mut out, cert.not_after);
-
-    out
-}
-
-fn domain_bytes(domain: CanonicalDomainV2) -> Vec<u8> {
+fn domain_bytes(domain: CanonicalDomain) -> Vec<u8> {
     let mut out = Vec::with_capacity(128);
     out.extend_from_slice(DOMAIN_SEPARATOR);
     out.push(domain as u8);
@@ -135,39 +121,39 @@ fn hash_bytes(bytes: &[u8]) -> [u8; 32] {
     Sha256::digest(bytes).into()
 }
 
-fn encode_algorithm(out: &mut Vec<u8>, alg: SignatureAlgorithmV2) {
+fn encode_algorithm(out: &mut Vec<u8>, alg: SignatureAlgorithm) {
     let tag = match alg {
-        SignatureAlgorithmV2::EcdsaP256Sha256 => 1,
+        SignatureAlgorithm::EcdsaP256Sha256 => 1,
     };
     out.push(tag);
 }
 
 fn encode_audience(
     out: &mut Vec<u8>,
-    audience: &DelegationAudienceV2,
-) -> Result<(), CanonicalAuthV2Error> {
+    audience: &DelegationAudience,
+) -> Result<(), CanonicalAuthError> {
     match audience {
-        DelegationAudienceV2::Roles(roles) => {
+        DelegationAudience::Roles(roles) => {
             out.push(1);
             encode_roles(out, roles)?;
         }
-        DelegationAudienceV2::Principals(principals) => {
+        DelegationAudience::Principals(principals) => {
             out.push(2);
-            encode_principals(out, principals);
+            encode_principals(out, principals)?;
         }
-        DelegationAudienceV2::RolesOrPrincipals { roles, principals } => {
+        DelegationAudience::RolesOrPrincipals { roles, principals } => {
             out.push(3);
             encode_roles(out, roles)?;
-            encode_principals(out, principals);
+            encode_principals(out, principals)?;
         }
     }
 
     Ok(())
 }
 
-fn encode_shard_key_binding(out: &mut Vec<u8>, binding: ShardKeyBindingV2) {
+fn encode_shard_key_binding(out: &mut Vec<u8>, binding: ShardKeyBinding) {
     match binding {
-        ShardKeyBindingV2::IcThresholdEcdsa {
+        ShardKeyBinding::IcThresholdEcdsa {
             key_name_hash,
             derivation_path_hash,
         } => {
@@ -178,67 +164,84 @@ fn encode_shard_key_binding(out: &mut Vec<u8>, binding: ShardKeyBindingV2) {
     }
 }
 
-fn encode_roles(out: &mut Vec<u8>, roles: &[CanisterRole]) -> Result<(), CanonicalAuthV2Error> {
-    let mut encoded = BTreeSet::new();
+fn encode_roles(out: &mut Vec<u8>, roles: &[CanisterRole]) -> Result<(), CanonicalAuthError> {
+    let mut previous = None;
     for role in roles {
         validate_role(role)?;
-        encoded.insert(role.as_str().as_bytes().to_vec());
+        let current = role.as_str().as_bytes();
+        if previous.is_some_and(|previous| previous >= current) {
+            return Err(CanonicalAuthError::NonCanonicalRoles);
+        }
+        previous = Some(current);
     }
 
-    encode_len(out, encoded.len());
-    for role in encoded {
-        encode_bytes(out, &role);
+    encode_len(out, roles.len());
+    for role in roles {
+        encode_bytes(out, role.as_str().as_bytes());
     }
 
     Ok(())
 }
 
-fn encode_scopes(out: &mut Vec<u8>, scopes: &[String]) -> Result<(), CanonicalAuthV2Error> {
-    let mut encoded = BTreeSet::new();
+fn encode_scopes(out: &mut Vec<u8>, scopes: &[String]) -> Result<(), CanonicalAuthError> {
+    let mut previous = None;
     for scope in scopes {
         validate_scope(scope)?;
-        encoded.insert(scope.as_bytes().to_vec());
+        let current = scope.as_bytes();
+        if previous.is_some_and(|previous| previous >= current) {
+            return Err(CanonicalAuthError::NonCanonicalScopes);
+        }
+        previous = Some(current);
     }
 
-    encode_len(out, encoded.len());
-    for scope in encoded {
-        encode_bytes(out, &scope);
+    encode_len(out, scopes.len());
+    for scope in scopes {
+        encode_bytes(out, scope.as_bytes());
     }
 
     Ok(())
 }
 
-fn encode_principals(out: &mut Vec<u8>, principals: &[Principal]) {
-    let mut encoded = BTreeSet::new();
+fn encode_principals(
+    out: &mut Vec<u8>,
+    principals: &[Principal],
+) -> Result<(), CanonicalAuthError> {
+    let mut previous = None;
     for principal in principals {
-        encoded.insert(principal.as_slice().to_vec());
+        let current = principal.as_slice();
+        if previous.is_some_and(|previous| previous >= current) {
+            return Err(CanonicalAuthError::NonCanonicalPrincipals);
+        }
+        previous = Some(current);
     }
 
-    encode_len(out, encoded.len());
-    for principal in encoded {
-        encode_bytes(out, &principal);
+    encode_len(out, principals.len());
+    for principal in principals {
+        encode_bytes(out, principal.as_slice());
     }
+
+    Ok(())
 }
 
-fn validate_role(role: &CanisterRole) -> Result<(), CanonicalAuthV2Error> {
+fn validate_role(role: &CanisterRole) -> Result<(), CanonicalAuthError> {
     let role = role.as_str();
     if role.is_empty() {
-        return Err(CanonicalAuthV2Error::EmptyRole);
+        return Err(CanonicalAuthError::EmptyRole);
     }
     if !role.bytes().all(is_canonical_label_byte) {
-        return Err(CanonicalAuthV2Error::InvalidRole {
+        return Err(CanonicalAuthError::InvalidRole {
             role: role.to_string(),
         });
     }
     Ok(())
 }
 
-fn validate_scope(scope: &str) -> Result<(), CanonicalAuthV2Error> {
+fn validate_scope(scope: &str) -> Result<(), CanonicalAuthError> {
     if scope.is_empty() {
-        return Err(CanonicalAuthV2Error::EmptyScope);
+        return Err(CanonicalAuthError::EmptyScope);
     }
     if !scope.bytes().all(is_canonical_label_byte) {
-        return Err(CanonicalAuthV2Error::InvalidScope {
+        return Err(CanonicalAuthError::InvalidScope {
             scope: scope.to_string(),
         });
     }
@@ -276,16 +279,6 @@ fn encode_option_fixed_32(out: &mut Vec<u8>, bytes: Option<[u8; 32]>) {
     }
 }
 
-fn encode_option_u64(out: &mut Vec<u8>, value: Option<u64>) {
-    match value {
-        Some(value) => {
-            out.push(1);
-            encode_u64(out, value);
-        }
-        None => out.push(0),
-    }
-}
-
 fn encode_u16(out: &mut Vec<u8>, value: u16) {
     out.extend_from_slice(&value.to_be_bytes());
 }
@@ -295,7 +288,7 @@ fn encode_u64(out: &mut Vec<u8>, value: u64) {
 }
 
 fn encode_len(out: &mut Vec<u8>, len: usize) {
-    let len = u32::try_from(len).expect("delegated auth v2 canonical vector length exceeds u32");
+    let len = u32::try_from(len).expect("delegated auth canonical vector length exceeds u32");
     out.extend_from_slice(&len.to_be_bytes());
 }
 
@@ -307,61 +300,78 @@ mod tests {
         Principal::from_slice(&[id; 29])
     }
 
-    fn sample_cert() -> DelegationCertV2 {
-        DelegationCertV2 {
+    fn sample_cert() -> DelegationCert {
+        DelegationCert {
             version: 2,
             root_pid: p(1),
             root_key_id: "root-key".to_string(),
             root_key_hash: [2; 32],
-            alg: SignatureAlgorithmV2::EcdsaP256Sha256,
+            alg: SignatureAlgorithm::EcdsaP256Sha256,
             shard_pid: p(3),
             shard_key_id: "shard-key".to_string(),
             shard_public_key_sec1: vec![4, 5, 6],
             shard_key_hash: [7; 32],
-            shard_key_binding: ShardKeyBindingV2::IcThresholdEcdsa {
+            shard_key_binding: ShardKeyBinding::IcThresholdEcdsa {
                 key_name_hash: [8; 32],
                 derivation_path_hash: [9; 32],
             },
             issued_at: 100,
             expires_at: 200,
             max_token_ttl_secs: 60,
-            scopes: vec!["write".to_string(), "read".to_string()],
-            aud: DelegationAudienceV2::Roles(vec![CanisterRole::new("project_instance")]),
+            scopes: vec!["read".to_string(), "write".to_string()],
+            aud: DelegationAudience::Roles(vec![CanisterRole::new("project_instance")]),
             verifier_role_hash: Some(role_hash(&CanisterRole::new("project_instance")).unwrap()),
         }
     }
 
     #[test]
-    fn cert_hash_canonicalizes_role_scope_and_principal_order() {
-        let mut left = sample_cert();
-        left.scopes = vec!["write".to_string(), "read".to_string(), "read".to_string()];
-        left.aud = DelegationAudienceV2::RolesOrPrincipals {
+    fn cert_hash_rejects_noncanonical_scope_order() {
+        let mut cert = sample_cert();
+        cert.scopes = vec!["write".to_string(), "read".to_string()];
+
+        assert_eq!(
+            cert_hash(&cert),
+            Err(CanonicalAuthError::NonCanonicalScopes)
+        );
+    }
+
+    #[test]
+    fn cert_hash_rejects_duplicate_roles() {
+        let mut cert = sample_cert();
+        cert.aud = DelegationAudience::RolesOrPrincipals {
             roles: vec![
                 CanisterRole::new("project_instance"),
                 CanisterRole::new("project_instance"),
             ],
-            principals: vec![p(9), p(4), p(9)],
-        };
-
-        let mut right = sample_cert();
-        right.scopes = vec!["read".to_string(), "write".to_string()];
-        right.aud = DelegationAudienceV2::RolesOrPrincipals {
-            roles: vec![CanisterRole::new("project_instance")],
             principals: vec![p(4), p(9)],
         };
 
-        assert_eq!(cert_hash(&left).unwrap(), cert_hash(&right).unwrap());
+        assert_eq!(cert_hash(&cert), Err(CanonicalAuthError::NonCanonicalRoles));
+    }
+
+    #[test]
+    fn cert_hash_rejects_noncanonical_principals() {
+        let mut cert = sample_cert();
+        cert.aud = DelegationAudience::RolesOrPrincipals {
+            roles: vec![CanisterRole::new("project_instance")],
+            principals: vec![p(9), p(4)],
+        };
+
+        assert_eq!(
+            cert_hash(&cert),
+            Err(CanonicalAuthError::NonCanonicalPrincipals)
+        );
     }
 
     #[test]
     fn cert_hash_rejects_noncanonical_roles() {
         let mut cert = sample_cert();
         cert.aud =
-            DelegationAudienceV2::Roles(vec![CanisterRole::owned("ProjectInstance".to_string())]);
+            DelegationAudience::Roles(vec![CanisterRole::owned("ProjectInstance".to_string())]);
 
         assert_eq!(
             cert_hash(&cert),
-            Err(CanonicalAuthV2Error::InvalidRole {
+            Err(CanonicalAuthError::InvalidRole {
                 role: "ProjectInstance".to_string(),
             })
         );
@@ -369,56 +379,58 @@ mod tests {
 
     #[test]
     fn claims_hash_rejects_noncanonical_scopes() {
-        let claims = DelegatedTokenClaimsV2 {
+        let claims = DelegatedTokenClaims {
             version: 2,
             subject: p(10),
             issuer_shard_pid: p(11),
             cert_hash: [12; 32],
             issued_at: 100,
             expires_at: 120,
-            aud: DelegationAudienceV2::Principals(vec![p(13)]),
+            aud: DelegationAudience::Principals(vec![p(13)]),
             scopes: vec!["Read".to_string()],
             nonce: [14; 16],
         };
 
         assert_eq!(
             claims_hash(&claims),
-            Err(CanonicalAuthV2Error::InvalidScope {
+            Err(CanonicalAuthError::InvalidScope {
                 scope: "Read".to_string(),
             })
         );
     }
 
     #[test]
-    fn claims_hash_canonicalizes_audience_and_scope_order() {
-        let mut left = DelegatedTokenClaimsV2 {
+    fn claims_hash_rejects_noncanonical_audience_and_scope_order() {
+        let mut left = DelegatedTokenClaims {
             version: 2,
             subject: p(10),
             issuer_shard_pid: p(11),
             cert_hash: [12; 32],
             issued_at: 100,
             expires_at: 120,
-            aud: DelegationAudienceV2::RolesOrPrincipals {
-                roles: vec![
-                    CanisterRole::new("project_instance"),
-                    CanisterRole::new("project_instance"),
-                ],
-                principals: vec![p(30), p(20), p(30)],
+            aud: DelegationAudience::RolesOrPrincipals {
+                roles: vec![CanisterRole::new("project_instance")],
+                principals: vec![p(20), p(30)],
             },
-            scopes: vec!["write".to_string(), "read".to_string(), "read".to_string()],
+            scopes: vec!["write".to_string(), "read".to_string()],
             nonce: [14; 16],
         };
-        let mut right = left.clone();
-        right.aud = DelegationAudienceV2::RolesOrPrincipals {
+
+        assert_eq!(
+            claims_hash(&left),
+            Err(CanonicalAuthError::NonCanonicalScopes)
+        );
+
+        left.scopes = vec!["read".to_string(), "write".to_string()];
+        left.aud = DelegationAudience::RolesOrPrincipals {
             roles: vec![CanisterRole::new("project_instance")],
-            principals: vec![p(20), p(30)],
+            principals: vec![p(30), p(20)],
         };
-        right.scopes = vec!["read".to_string(), "write".to_string()];
 
-        assert_eq!(claims_hash(&left).unwrap(), claims_hash(&right).unwrap());
-
-        left.nonce = [15; 16];
-        assert_ne!(claims_hash(&left).unwrap(), claims_hash(&right).unwrap());
+        assert_eq!(
+            claims_hash(&left),
+            Err(CanonicalAuthError::NonCanonicalPrincipals)
+        );
     }
 
     #[test]
@@ -427,33 +439,6 @@ mod tests {
         let cert = sample_cert();
 
         assert_ne!(role_hash(&role).unwrap(), cert_hash(&cert).unwrap());
-    }
-
-    #[test]
-    fn root_key_certificate_payload_ignores_authority_signature() {
-        let mut left = RootKeyCertificateV2 {
-            root_pid: p(1),
-            key_id: "root-key".to_string(),
-            alg: SignatureAlgorithmV2::EcdsaP256Sha256,
-            public_key_sec1: vec![1, 2, 3],
-            key_hash: [4; 32],
-            not_before: 100,
-            not_after: Some(200),
-            authority_sig: vec![5, 6],
-        };
-        let mut right = left.clone();
-        right.authority_sig = vec![7, 8, 9];
-
-        assert_eq!(
-            root_key_certificate_payload_hash(&left),
-            root_key_certificate_payload_hash(&right)
-        );
-
-        left.key_id = "other-root-key".to_string();
-        assert_ne!(
-            root_key_certificate_payload_hash(&left),
-            root_key_certificate_payload_hash(&right)
-        );
     }
 
     #[test]

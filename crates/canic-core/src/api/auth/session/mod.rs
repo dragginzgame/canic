@@ -2,11 +2,9 @@ use super::DelegationApi;
 use crate::{
     access::auth::validate_delegated_session_subject,
     cdk::types::Principal,
-    dto::{auth::DelegatedTokenV2, error::Error},
+    dto::{auth::DelegatedToken, error::Error},
     ops::{
-        auth::{
-            DelegatedSessionExpiryClamp, DelegatedTokenOps, VerifyDelegatedTokenV2RuntimeInput,
-        },
+        auth::{DelegatedSessionExpiryClamp, DelegatedTokenOps, VerifyDelegatedTokenRuntimeInput},
         config::ConfigOps,
         ic::IcOps,
         runtime::metrics::auth::{
@@ -30,7 +28,7 @@ impl DelegationApi {
     /// Persist a temporary delegated session subject for the caller wallet.
     pub async fn set_delegated_session_subject(
         delegated_subject: Principal,
-        bootstrap_token: DelegatedTokenV2,
+        bootstrap_token: DelegatedToken,
         requested_ttl_secs: Option<u64>,
     ) -> Result<(), Error> {
         let cfg = ConfigOps::delegated_tokens_config().map_err(Error::from)?;
@@ -55,14 +53,14 @@ impl DelegationApi {
         }
 
         let issued_at = IcOps::now_secs();
-        DelegatedTokenOps::ensure_v2_root_public_key_cached(&bootstrap_token)
+        DelegatedTokenOps::ensure_root_public_key_cached(&bootstrap_token)
             .await
             .map_err(|err| {
                 record_session_bootstrap_rejected_token_invalid();
                 Self::map_delegation_error(err)
             })?;
         let max_ttl_secs = Self::delegated_auth_max_ttl_secs()?;
-        let verified = DelegatedTokenOps::verify_token_v2(VerifyDelegatedTokenV2RuntimeInput {
+        let verified = DelegatedTokenOps::verify_token(VerifyDelegatedTokenRuntimeInput {
             token: &bootstrap_token,
             max_cert_ttl_secs: max_ttl_secs,
             max_token_ttl_secs: max_ttl_secs,
@@ -171,7 +169,7 @@ impl DelegationApi {
 
     // Fingerprint a bootstrap token for replay protection and idempotence checks.
     fn delegated_session_bootstrap_token_fingerprint(
-        token: &DelegatedTokenV2,
+        token: &DelegatedToken,
     ) -> Result<[u8; 32], Error> {
         let token_bytes = crate::cdk::candid::encode_one(token).map_err(|err| {
             Error::internal(format!("bootstrap token fingerprint encode failed: {err}"))

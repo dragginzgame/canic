@@ -2,7 +2,7 @@
 
 ## Audit ID
 
-`bootstrap-lifecycle-symmetry/v2`
+`bootstrap-lifecycle-symmetry/current`
 
 ## Objective
 
@@ -100,7 +100,7 @@ Record all of the following in the result file:
 * audited paths
 * baseline report path
 * code snapshot identifier
-* method tag: `bootstrap-lifecycle-symmetry/v2`
+* method tag: `bootstrap-lifecycle-symmetry/current`
 * comparability status: `comparable` | `partially comparable` | `not comparable`
 
 ### Comparability Rules

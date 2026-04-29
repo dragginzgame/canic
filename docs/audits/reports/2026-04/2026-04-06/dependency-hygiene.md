@@ -5,7 +5,7 @@
 - Scope: workspace root `Cargo.toml`; published/support crate manifests under `crates/canic`, `crates/canic-cdk`, `crates/canic-control-plane`, `crates/canic-core`, `crates/canic-dsl-macros`, `crates/canic-installer`, `crates/canic-memory`, `crates/canic-testkit`, and `crates/canic-wasm-store`; internal/support manifests under `crates/canic-testing-internal`, `crates/canic-tests`, `canisters/reference-support`, `canisters/**`, `crates/canic-core/test-canisters/**`, and `crates/canic-core/audit-canisters/**`
 - Compared baseline report path: same-day earlier retained run at this path before the revised `dependency-hygiene` audit wording, the `canic` `metrics` default-feature change, and the later `MemoryApi` naming cleanup
 - Code snapshot identifier: `9b3aade1ef65dbb856a9c1a966f8dd63a5b3a6cb`
-- Method tag/version: `dependency-hygiene-v2`
+- Method tag/version: `dependency-hygiene-current`
 - Comparability status: `comparable`
 - Exclusions applied: lockfile-only noise, generated outputs, packaged artifacts, and test-only fixture crates when judging runtime package surface except explicit leakage checks
 - Notable methodology changes vs baseline: revised `dependency-hygiene` audit wording adopted for this rerun; conclusions remain based on the same direct manifest inspection plus `cargo metadata` method, and this rerun also reflects the `canic-core` PocketIC test move into `canic-tests`, the `MemoryApi` public rename cleanup, and the new default `metrics` feature on `canic`

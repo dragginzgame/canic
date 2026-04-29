@@ -16,7 +16,7 @@
   - Branch: `main`
   - Commit: `f26eccd6`
   - Worktree: `dirty`
-  - Method: `Method V2.0`
+  - Method: `Current Method`
   - Comparability: `non-comparable` versus earlier same-day baseline (hard/drift split, GAF/utilization sections, and fully refreshed `.did` artifacts)
 
 Audits generated in this run:

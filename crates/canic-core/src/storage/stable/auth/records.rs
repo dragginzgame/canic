@@ -1,6 +1,17 @@
 use crate::storage::prelude::*;
 
 ///
+/// RootPublicKeyRecord
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootPublicKeyRecord {
+    pub public_key_sec1: Vec<u8>,
+    pub key_name: String,
+    pub key_hash: [u8; 32],
+}
+
+///
 /// ShardPublicKeyRecord
 ///
 
@@ -8,6 +19,8 @@ use crate::storage::prelude::*;
 pub struct ShardPublicKeyRecord {
     pub shard_pid: Principal,
     pub public_key_sec1: Vec<u8>,
+    pub key_name: String,
+    pub key_hash: [u8; 32],
 }
 
 ///
@@ -59,6 +72,8 @@ pub enum AttestationKeyStatusRecord {
 pub struct AttestationPublicKeyRecord {
     pub key_id: u32,
     pub public_key_sec1: Vec<u8>,
+    pub key_name: String,
+    pub key_hash: [u8; 32],
     pub status: AttestationKeyStatusRecord,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub valid_from: Option<u64>,
@@ -73,7 +88,7 @@ pub struct AttestationPublicKeyRecord {
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct DelegationStateRecord {
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub root_public_key: Option<Vec<u8>>,
+    pub root_public_key: Option<RootPublicKeyRecord>,
 
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub shard_public_keys: Vec<ShardPublicKeyRecord>,

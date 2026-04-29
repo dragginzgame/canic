@@ -60,21 +60,21 @@ pub struct DelegationStateOps;
 
 impl DelegationStateOps {
     #[must_use]
-    pub fn root_public_key() -> Option<Vec<u8>> {
-        DelegationState::get_root_public_key()
+    pub fn root_public_key(key_name: &str) -> Option<Vec<u8>> {
+        DelegationState::get_root_public_key(key_name)
     }
 
-    pub fn set_root_public_key(public_key_sec1: Vec<u8>) {
-        DelegationState::set_root_public_key(public_key_sec1);
+    pub fn set_root_public_key(key_name: String, public_key_sec1: Vec<u8>) {
+        DelegationState::set_root_public_key(key_name, public_key_sec1);
     }
 
     #[must_use]
-    pub fn shard_public_key(shard_pid: Principal) -> Option<Vec<u8>> {
-        DelegationState::get_shard_public_key(shard_pid)
+    pub fn shard_public_key(shard_pid: Principal, key_name: &str) -> Option<Vec<u8>> {
+        DelegationState::get_shard_public_key(shard_pid, key_name)
     }
 
-    pub fn set_shard_public_key(shard_pid: Principal, public_key_sec1: Vec<u8>) {
-        DelegationState::set_shard_public_key(shard_pid, public_key_sec1);
+    pub fn set_shard_public_key(shard_pid: Principal, key_name: String, public_key_sec1: Vec<u8>) {
+        DelegationState::set_shard_public_key(shard_pid, key_name, public_key_sec1);
     }
 
     /// Return an active delegated session for the provided wallet caller.
@@ -137,19 +137,19 @@ impl DelegationStateOps {
     }
 
     #[must_use]
-    pub fn attestation_public_key(key_id: u32) -> Option<AttestationKey> {
-        DelegationState::get_attestation_public_key(key_id)
+    pub fn attestation_public_key(key_id: u32, key_name: &str) -> Option<AttestationKey> {
+        DelegationState::get_attestation_public_key(key_id, key_name)
             .map(AttestationPublicKeyRecordMapper::record_to_dto)
     }
 
     #[must_use]
-    pub fn attestation_public_key_sec1(key_id: u32) -> Option<Vec<u8>> {
-        Self::attestation_public_key(key_id).map(|entry| entry.public_key)
+    pub fn attestation_public_key_sec1(key_id: u32, key_name: &str) -> Option<Vec<u8>> {
+        Self::attestation_public_key(key_id, key_name).map(|entry| entry.public_key)
     }
 
     #[must_use]
-    pub fn attestation_keys() -> Vec<AttestationKey> {
-        DelegationState::get_attestation_public_keys()
+    pub fn attestation_keys(key_name: &str) -> Vec<AttestationKey> {
+        DelegationState::get_attestation_public_keys(key_name)
             .into_iter()
             .map(AttestationPublicKeyRecordMapper::record_to_dto)
             .collect()

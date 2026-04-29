@@ -3,12 +3,12 @@ use crate::ops::ic::IcOps;
 mod attestation;
 mod boundary;
 mod crypto;
+mod delegated;
 mod delegation;
 mod error;
 mod keys;
 mod token;
 mod types;
-pub mod v2;
 mod verify;
 pub use boundary::DelegatedSessionExpiryClamp;
 pub use error::{
@@ -16,7 +16,7 @@ pub use error::{
     DelegationValidationError,
 };
 pub use types::{
-    SignDelegatedTokenV2Input, SignDelegationProofV2Input, VerifyDelegatedTokenV2RuntimeInput,
+    SignDelegatedTokenInput, SignDelegationProofInput, VerifyDelegatedTokenRuntimeInput,
 };
 
 const DERIVATION_NAMESPACE: &[u8] = b"canic";

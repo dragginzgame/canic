@@ -5,7 +5,7 @@
 - Scope: `crates/canic/src/macros/endpoints.rs`, `crates/canic/src/macros/start.rs`, `crates/canic-core/src/protocol.rs`, `crates/canic-core/src/dto/capability/**`, `crates/canic-core/src/dto/rpc.rs`, `crates/canic-core/src/api/rpc/**`, generated `.did` files under `canisters/**`
 - Compared baseline report path: `docs/audits/reports/2026-03/2026-03-29/capability-surface.md`
 - Code snapshot identifier: `f26eccd6`
-- Method tag/version: `Method V2.0`
+- Method tag/version: `Current Method`
 - Comparability status: `non-comparable` (audit definition now includes hard/drift split, utilization, GAF, deterministic scoring, and this rerun refreshed all generated `.did` files before scanning)
 - Auditor: `codex`
 - Run timestamp (UTC): `2026-03-29T18:19:47Z`

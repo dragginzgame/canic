@@ -5,7 +5,7 @@
 - Scope: workspace root package policy where relevant; published crate manifests under `crates/canic`, `crates/canic-cdk`, `crates/canic-core`, `crates/canic-control-plane`, `crates/canic-memory`, `crates/canic-testkit`, `crates/canic-wasm-store`, `crates/canic-installer`, and `crates/canic-dsl-macros`; package-local README/docs posture and public binary/example surface where present
 - Compared baseline report path: same-day earlier retained run at this path before the revised `publish-surface` audit wording
 - Code snapshot identifier: `9b3aade1ef65dbb856a9c1a966f8dd63a5b3a6cb`
-- Method tag/version: `publish-surface-v2`
+- Method tag/version: `publish-surface-current`
 - Comparability status: `comparable`
 - Exclusions applied: internal crates with `publish = false`, generated docs, packaged artifacts, and non-package-local scripts except where a package README presents them as part of the installed surface
 - Notable methodology changes vs baseline: revised `publish-surface` audit wording adopted for this rerun; conclusions still come from direct manifest, README, binary, example, and feature inspection across the published crate set
@@ -102,7 +102,7 @@ Interpretation:
 
 | Delta Type | Crate / Surface | Previous | Current | Impact |
 | --- | --- | --- | --- | --- |
-| audit method | entire audit family | `publish-surface-v1` | `publish-surface-v2` | retained report now explicitly tracks default-feature contract pressure and publishable-but-underspecified crates under the revised wording |
+| audit method | entire audit family | `publish-surface-legacy` | `publish-surface-current` | retained report now explicitly tracks default-feature contract pressure and publishable-but-underspecified crates under the revised wording |
 
 ## Verification Readout
 

@@ -12,7 +12,7 @@ mod sessions;
 
 pub use records::{
     AttestationKeyStatusRecord, AttestationPublicKeyRecord, DelegatedSessionBootstrapBindingRecord,
-    DelegatedSessionRecord, DelegationStateRecord, ShardPublicKeyRecord,
+    DelegatedSessionRecord, DelegationStateRecord, RootPublicKeyRecord, ShardPublicKeyRecord,
 };
 
 const DELEGATED_SESSION_CAPACITY: usize = 2_048;
@@ -37,30 +37,35 @@ pub struct DelegationState;
 impl DelegationState {
     // Resolve the root verifier key, if present.
     #[must_use]
-    pub(crate) fn get_root_public_key() -> Option<Vec<u8>> {
-        DELEGATION_STATE.with_borrow(|cell| key_state::get_root_public_key(cell.get()))
+    pub(crate) fn get_root_public_key(key_name: &str) -> Option<Vec<u8>> {
+        DELEGATION_STATE.with_borrow(|cell| key_state::get_root_public_key(cell.get(), key_name))
     }
 
     // Persist the current root verifier key.
-    pub(crate) fn set_root_public_key(public_key_sec1: Vec<u8>) {
+    pub(crate) fn set_root_public_key(key_name: String, public_key_sec1: Vec<u8>) {
         DELEGATION_STATE.with_borrow_mut(|cell| {
             let mut data = cell.get().clone();
-            key_state::set_root_public_key(&mut data, public_key_sec1);
+            key_state::set_root_public_key(&mut data, key_name, public_key_sec1);
             cell.set(data);
         });
     }
 
     // Resolve a shard public key by shard principal.
     #[must_use]
-    pub(crate) fn get_shard_public_key(shard_pid: Principal) -> Option<Vec<u8>> {
-        DELEGATION_STATE.with_borrow(|cell| key_state::get_shard_public_key(cell.get(), shard_pid))
+    pub(crate) fn get_shard_public_key(shard_pid: Principal, key_name: &str) -> Option<Vec<u8>> {
+        DELEGATION_STATE
+            .with_borrow(|cell| key_state::get_shard_public_key(cell.get(), shard_pid, key_name))
     }
 
     // Persist or replace a shard public key.
-    pub(crate) fn set_shard_public_key(shard_pid: Principal, public_key_sec1: Vec<u8>) {
+    pub(crate) fn set_shard_public_key(
+        shard_pid: Principal,
+        key_name: String,
+        public_key_sec1: Vec<u8>,
+    ) {
         DELEGATION_STATE.with_borrow_mut(|cell| {
             let mut data = cell.get().clone();
-            key_state::set_shard_public_key(&mut data, shard_pid, public_key_sec1);
+            key_state::set_shard_public_key(&mut data, shard_pid, key_name, public_key_sec1);
             cell.set(data);
         });
     }
@@ -175,15 +180,19 @@ impl DelegationState {
 
     // Resolve one attestation public key by key id.
     #[must_use]
-    pub(crate) fn get_attestation_public_key(key_id: u32) -> Option<AttestationPublicKeyRecord> {
+    pub(crate) fn get_attestation_public_key(
+        key_id: u32,
+        key_name: &str,
+    ) -> Option<AttestationPublicKeyRecord> {
         DELEGATION_STATE
-            .with_borrow(|cell| key_state::get_attestation_public_key(cell.get(), key_id))
+            .with_borrow(|cell| key_state::get_attestation_public_key(cell.get(), key_id, key_name))
     }
 
     // Resolve the full attestation public key set.
     #[must_use]
-    pub(crate) fn get_attestation_public_keys() -> Vec<AttestationPublicKeyRecord> {
-        DELEGATION_STATE.with_borrow(|cell| key_state::get_attestation_public_keys(cell.get()))
+    pub(crate) fn get_attestation_public_keys(key_name: &str) -> Vec<AttestationPublicKeyRecord> {
+        DELEGATION_STATE
+            .with_borrow(|cell| key_state::get_attestation_public_keys(cell.get(), key_name))
     }
 
     // Replace the attestation public key set.

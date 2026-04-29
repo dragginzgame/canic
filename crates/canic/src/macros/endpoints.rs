@@ -354,10 +354,10 @@ macro_rules! canic_emit_root_admin_endpoints {
 macro_rules! canic_emit_root_auth_attestation_endpoints {
     () => {
         #[$crate::canic_update(internal, requires(caller::is_registered_to_subnet()))]
-        async fn canic_request_delegation_v2(
-            request: ::canic::dto::auth::DelegationProofIssueRequestV2,
-        ) -> Result<::canic::dto::auth::DelegationProofV2, ::canic::Error> {
-            $crate::__internal::core::api::auth::DelegationApi::issue_delegation_proof_v2(request)
+        async fn canic_request_delegation(
+            request: ::canic::dto::auth::DelegationProofIssueRequest,
+        ) -> Result<::canic::dto::auth::DelegationProof, ::canic::Error> {
+            $crate::__internal::core::api::auth::DelegationApi::issue_delegation_proof(request)
                 .await
         }
 

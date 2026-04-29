@@ -5,7 +5,7 @@
 - Scope: `crates/canic/src/macros/endpoints.rs`, `crates/canic/src/macros/start.rs`, `crates/canic-core/src/protocol.rs`, `crates/canic-core/src/dto/capability/**`, `crates/canic-core/src/dto/rpc.rs`, `crates/canic-core/src/api/rpc/**`, generated `.did` files under `.dfx/local/canisters/**`
 - Compared baseline report path: `docs/audits/reports/2026-03/2026-03-29/capability-surface-2.md`
 - Code snapshot identifier: `07500bcd`
-- Method tag/version: `Method V2.1`
+- Method tag/version: `Current Method`
 - Comparability status: `partially comparable` (wire/protocol counts are directly comparable; generated `.did` outputs were freshly rebuilt for the current canonical eight-canister demo/reference roster, so the old eleven-canister per-role table is only directionally comparable)
 - Auditor: `codex`
 - Run timestamp (UTC): `2026-04-05T00:00:00Z`

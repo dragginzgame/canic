@@ -2,16 +2,16 @@ use super::{VerifiedAccessToken, dependency_unavailable};
 use crate::{
     access::AccessError,
     cdk::{api::msg_arg_data, candid::de::IDLDeserialize, types::Principal},
-    dto::auth::DelegatedTokenV2,
+    dto::auth::DelegatedToken,
     ops::{
-        auth::{DelegatedTokenOps, VerifyDelegatedTokenV2RuntimeInput},
+        auth::{DelegatedTokenOps, VerifyDelegatedTokenRuntimeInput},
         config::ConfigOps,
         ic::IcOps,
     },
 };
 
 const MAX_INGRESS_BYTES: usize = 64 * 1024; // 64 KiB
-const DEFAULT_DELEGATED_AUTH_V2_MAX_TTL_SECS: u64 = 24 * 60 * 60;
+const DEFAULT_DELEGATED_AUTH_MAX_TTL_SECS: u64 = 24 * 60 * 60;
 
 pub(super) async fn delegated_token_verified(
     authenticated_subject: Principal,
@@ -21,25 +21,25 @@ pub(super) async fn delegated_token_verified(
 
     let now_secs = IcOps::now_secs();
 
-    verify_token_v2(token, authenticated_subject, now_secs, required_scope).await
+    verify_token(token, authenticated_subject, now_secs, required_scope).await
 }
 
 // Verify a delegated token without local proof-cache lookup.
-async fn verify_token_v2(
-    token: DelegatedTokenV2,
+async fn verify_token(
+    token: DelegatedToken,
     caller: Principal,
     now_secs: u64,
     required_scope: Option<&str>,
 ) -> Result<VerifiedAccessToken, AccessError> {
-    DelegatedTokenOps::ensure_v2_root_public_key_cached(&token)
+    DelegatedTokenOps::ensure_root_public_key_cached(&token)
         .await
         .map_err(|err| AccessError::Denied(err.to_string()))?;
 
-    let max_ttl_secs = delegated_auth_v2_max_ttl_secs()?;
+    let max_ttl_secs = delegated_auth_max_ttl_secs()?;
     let required_scopes = required_scope
         .map(|scope| vec![scope.to_string()])
         .unwrap_or_default();
-    let verified = DelegatedTokenOps::verify_token_v2(VerifyDelegatedTokenV2RuntimeInput {
+    let verified = DelegatedTokenOps::verify_token(VerifyDelegatedTokenRuntimeInput {
         token: &token,
         max_cert_ttl_secs: max_ttl_secs,
         max_token_ttl_secs: max_ttl_secs,
@@ -86,7 +86,7 @@ pub(super) fn enforce_required_scope(
     }
 }
 
-fn delegated_token_from_args() -> Result<DelegatedTokenV2, AccessError> {
+fn delegated_token_from_args() -> Result<DelegatedToken, AccessError> {
     let bytes = msg_arg_data();
 
     if bytes.len() > MAX_INGRESS_BYTES {
@@ -95,24 +95,24 @@ fn delegated_token_from_args() -> Result<DelegatedTokenV2, AccessError> {
         ));
     }
 
-    delegated_token_v2_from_bytes(&bytes).map_err(|err| {
+    delegated_token_from_bytes(&bytes).map_err(|err| {
         AccessError::Denied(format!(
-            "failed to decode DelegatedTokenV2 as first argument: {err}"
+            "failed to decode DelegatedToken as first argument: {err}"
         ))
     })
 }
 
 // Decode the first ingress argument as a delegated token.
-fn delegated_token_v2_from_bytes(bytes: &[u8]) -> Result<DelegatedTokenV2, String> {
+fn delegated_token_from_bytes(bytes: &[u8]) -> Result<DelegatedToken, String> {
     let mut decoder = IDLDeserialize::new(bytes)
         .map_err(|err| format!("failed to decode ingress arguments: {err}"))?;
     decoder
-        .get_value::<DelegatedTokenV2>()
+        .get_value::<DelegatedToken>()
         .map_err(|err| err.to_string())
 }
 
-// Resolve the verifier-side V2 TTL policy from delegated-token config.
-fn delegated_auth_v2_max_ttl_secs() -> Result<u64, AccessError> {
+// Resolve the verifier-side TTL policy from delegated-token config.
+fn delegated_auth_max_ttl_secs() -> Result<u64, AccessError> {
     let cfg = ConfigOps::delegated_tokens_config()
         .map_err(|_| dependency_unavailable("delegated token config unavailable"))?;
     if !cfg.enabled {
@@ -124,5 +124,5 @@ fn delegated_auth_v2_max_ttl_secs() -> Result<u64, AccessError> {
 
     Ok(cfg
         .max_ttl_secs
-        .unwrap_or(DEFAULT_DELEGATED_AUTH_V2_MAX_TTL_SECS))
+        .unwrap_or(DEFAULT_DELEGATED_AUTH_MAX_TTL_SECS))
 }

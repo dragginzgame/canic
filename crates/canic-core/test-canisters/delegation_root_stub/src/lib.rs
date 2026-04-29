@@ -7,7 +7,7 @@ use canic::{
     api::auth::DelegationApi,
     api::canister::CanisterRole,
     dto::auth::{
-        AttestationKey, AttestationKeySet, AttestationKeyStatus, DelegatedTokenV2, RoleAttestation,
+        AttestationKey, AttestationKeySet, AttestationKeyStatus, DelegatedToken, RoleAttestation,
         RoleAttestationRequest, SignedRoleAttestation,
     },
     prelude::*,
@@ -26,6 +26,7 @@ use sha2::{Digest, Sha256};
 const TEST_ATTESTATION_DOMAIN: &[u8] = b"CANIC_ROLE_ATTESTATION_V1";
 const TEST_ATTESTATION_KEY_ID: u32 = 4_242;
 const TEST_ATTESTATION_KEY_SEED: [u8; 32] = [7u8; 32];
+const TEST_ATTESTATION_KEY_NAME: &str = "test_key_1";
 type TestAttestationKeyEntry = (u32, u8, AttestationKeyStatus, Option<u64>, Option<u64>);
 
 canic::start_root!(
@@ -89,6 +90,8 @@ async fn root_issue_self_attestation_test(
         generated_at: issued_at,
         keys: vec![AttestationKey {
             key_id: TEST_ATTESTATION_KEY_ID,
+            key_hash: public_key_hash(&public_key),
+            key_name: TEST_ATTESTATION_KEY_NAME.to_string(),
             public_key,
             status: AttestationKeyStatus::Current,
             valid_from: Some(issued_at),
@@ -142,9 +145,12 @@ async fn root_set_test_attestation_key_set(
     let keys = entries
         .into_iter()
         .map(|(key_id, key_seed, status, valid_from, valid_until)| {
+            let public_key = test_public_key([key_seed; 32])?;
             Ok(AttestationKey {
                 key_id,
-                public_key: test_public_key([key_seed; 32])?,
+                key_hash: public_key_hash(&public_key),
+                key_name: TEST_ATTESTATION_KEY_NAME.to_string(),
+                public_key,
                 status,
                 valid_from,
                 valid_until,
@@ -177,7 +183,7 @@ async fn root_now_secs() -> Result<u64, Error> {
 
 #[canic_update]
 async fn root_bootstrap_delegated_session(
-    token: DelegatedTokenV2,
+    token: DelegatedToken,
     delegated_subject: candid::Principal,
     requested_ttl_secs: Option<u64>,
 ) -> Result<(), Error> {
@@ -203,6 +209,12 @@ fn test_public_key(seed: [u8; 32]) -> Result<Vec<u8>, Error> {
         .to_encoded_point(true)
         .as_bytes()
         .to_vec())
+}
+
+fn public_key_hash(public_key_sec1: &[u8]) -> [u8; 32] {
+    let mut hasher = Sha256::new();
+    hasher.update(public_key_sec1);
+    hasher.finalize().into()
 }
 
 fn sign_attestation(payload: &RoleAttestation, seed: [u8; 32]) -> Result<Vec<u8>, Error> {

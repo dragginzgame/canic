@@ -14,6 +14,8 @@ impl AttestationPublicKeyRecordMapper {
     pub fn dto_to_record(key: AttestationKey) -> AttestationPublicKeyRecord {
         AttestationPublicKeyRecord {
             key_id: key.key_id,
+            key_hash: key.key_hash,
+            key_name: key.key_name,
             public_key_sec1: key.public_key,
             status: match key.status {
                 AttestationKeyStatus::Current => AttestationKeyStatusRecord::Current,
@@ -29,6 +31,8 @@ impl AttestationPublicKeyRecordMapper {
         AttestationKey {
             key_id: record.key_id,
             public_key: record.public_key_sec1,
+            key_name: record.key_name,
+            key_hash: record.key_hash,
             status: match record.status {
                 AttestationKeyStatusRecord::Current => AttestationKeyStatus::Current,
                 AttestationKeyStatusRecord::Previous => AttestationKeyStatus::Previous,

@@ -1,8 +1,8 @@
 use crate::{
     dto::{
         auth::{
-            AttestationKeySet, DelegatedTokenIssueRequestV2, DelegatedTokenMintRequestV2,
-            DelegatedTokenV2, DelegationProofIssueRequestV2, DelegationProofV2,
+            AttestationKeySet, DelegatedToken, DelegatedTokenIssueRequest,
+            DelegatedTokenMintRequest, DelegationProof, DelegationProofIssueRequest,
             RoleAttestationRequest, SignedRoleAttestation,
         },
         error::Error,
@@ -13,8 +13,8 @@ use crate::{
     log::Topic,
     ops::{
         auth::{
-            DelegatedTokenOps, SignDelegatedTokenV2Input, SignDelegationProofV2Input,
-            VerifyDelegatedTokenV2RuntimeInput,
+            DelegatedTokenOps, SignDelegatedTokenInput, SignDelegationProofInput,
+            VerifyDelegatedTokenRuntimeInput,
         },
         config::ConfigOps,
         ic::IcOps,
@@ -47,7 +47,7 @@ impl DelegationApi {
         "delegated token auth disabled; set auth.delegated_tokens.enabled=true in canic.toml";
     const MAX_DELEGATED_SESSION_TTL_SECS: u64 = 24 * 60 * 60;
     const SESSION_BOOTSTRAP_TOKEN_FINGERPRINT_DOMAIN: &[u8] =
-        b"canic-session-bootstrap-token-fingerprint:v2";
+        b"canic-session-bootstrap-token-fingerprint";
 
     // Map internal auth failures onto public endpoint errors.
     fn map_delegation_error(err: crate::InternalError) -> Error {
@@ -67,10 +67,8 @@ impl DelegationApi {
     }
 
     /// Issue a delegated token from an explicit self-contained proof.
-    pub async fn issue_token(
-        request: DelegatedTokenIssueRequestV2,
-    ) -> Result<DelegatedTokenV2, Error> {
-        DelegatedTokenOps::sign_token_v2(SignDelegatedTokenV2Input {
+    pub async fn issue_token(request: DelegatedTokenIssueRequest) -> Result<DelegatedToken, Error> {
+        DelegatedTokenOps::sign_token(SignDelegatedTokenInput {
             proof: request.proof,
             subject: request.subject,
             audience: request.aud,
@@ -83,19 +81,16 @@ impl DelegationApi {
     }
 
     /// Request a root proof, then issue a self-contained delegated token.
-    pub async fn mint_token(
-        request: DelegatedTokenMintRequestV2,
-    ) -> Result<DelegatedTokenV2, Error> {
-        let proof = Self::request_delegation(DelegationProofIssueRequestV2 {
+    pub async fn mint_token(request: DelegatedTokenMintRequest) -> Result<DelegatedToken, Error> {
+        let proof = Self::request_delegation(DelegationProofIssueRequest {
             shard_pid: IcOps::canister_self(),
             scopes: request.scopes.clone(),
             aud: request.aud.clone(),
             cert_ttl_secs: request.cert_ttl_secs,
-            root_key_cert: request.root_key_cert,
         })
         .await?;
 
-        Self::issue_token(DelegatedTokenIssueRequestV2 {
+        Self::issue_token(DelegatedTokenIssueRequest {
             proof,
             subject: request.subject,
             aud: request.aud,
@@ -106,22 +101,15 @@ impl DelegationApi {
         .await
     }
 
-    /// Backwards-compatible Rust helper name for callers already moved to V2 DTOs.
-    pub async fn mint_token_v2(
-        request: DelegatedTokenMintRequestV2,
-    ) -> Result<DelegatedTokenV2, Error> {
-        Self::mint_token(request).await
-    }
-
     /// Full delegated token verification without verifier-local proof lookup.
     pub fn verify_token(
-        token: &DelegatedTokenV2,
+        token: &DelegatedToken,
         max_cert_ttl_secs: u64,
         max_token_ttl_secs: u64,
         required_scopes: &[String],
         now_secs: u64,
     ) -> Result<(), Error> {
-        DelegatedTokenOps::verify_token_v2(VerifyDelegatedTokenV2RuntimeInput {
+        DelegatedTokenOps::verify_token(VerifyDelegatedTokenRuntimeInput {
             token,
             max_cert_ttl_secs,
             max_token_ttl_secs,
@@ -134,26 +122,19 @@ impl DelegationApi {
 
     /// Request a self-contained delegation proof from root over RPC.
     pub async fn request_delegation(
-        request: DelegationProofIssueRequestV2,
-    ) -> Result<DelegationProofV2, Error> {
+        request: DelegationProofIssueRequest,
+    ) -> Result<DelegationProof, Error> {
         Self::request_delegation_remote(request).await
-    }
-
-    /// Backwards-compatible Rust helper name for callers already moved to V2 DTOs.
-    pub async fn request_delegation_v2(
-        request: DelegationProofIssueRequestV2,
-    ) -> Result<DelegationProofV2, Error> {
-        Self::request_delegation(request).await
     }
 
     /// Issue a self-contained delegation proof from the local root.
     pub async fn issue_delegation_proof(
-        request: DelegationProofIssueRequestV2,
-    ) -> Result<DelegationProofV2, Error> {
+        request: DelegationProofIssueRequest,
+    ) -> Result<DelegationProof, Error> {
         EnvOps::require_root().map_err(Error::from)?;
         let max_cert_ttl_secs = Self::delegated_auth_max_ttl_secs()?;
         let max_token_ttl_secs = request.cert_ttl_secs.min(max_cert_ttl_secs);
-        DelegatedTokenOps::sign_delegation_proof_v2(SignDelegationProofV2Input {
+        DelegatedTokenOps::sign_delegation_proof(SignDelegationProofInput {
             audience: request.aud,
             scopes: request.scopes,
             shard_pid: request.shard_pid,
@@ -161,17 +142,9 @@ impl DelegationApi {
             max_token_ttl_secs,
             max_cert_ttl_secs,
             issued_at: IcOps::now_secs(),
-            root_key_cert: request.root_key_cert,
         })
         .await
         .map_err(Self::map_delegation_error)
-    }
-
-    /// Backwards-compatible Rust helper name for callers already moved to V2 DTOs.
-    pub async fn issue_delegation_proof_v2(
-        request: DelegationProofIssueRequestV2,
-    ) -> Result<DelegationProofV2, Error> {
-        Self::issue_delegation_proof(request).await
     }
 
     /// Request a signed role attestation from root over RPC.
@@ -315,10 +288,10 @@ impl DelegationApi {
 impl DelegationApi {
     // Route a self-contained delegation proof request over RPC to root.
     async fn request_delegation_remote(
-        request: DelegationProofIssueRequestV2,
-    ) -> Result<DelegationProofV2, Error> {
+        request: DelegationProofIssueRequest,
+    ) -> Result<DelegationProof, Error> {
         let root_pid = EnvOps::root_pid().map_err(Error::from)?;
-        RpcOps::call_rpc_result(root_pid, protocol::CANIC_REQUEST_DELEGATION_V2, request)
+        RpcOps::call_rpc_result(root_pid, protocol::CANIC_REQUEST_DELEGATION, request)
             .await
             .map_err(Self::map_delegation_error)
     }

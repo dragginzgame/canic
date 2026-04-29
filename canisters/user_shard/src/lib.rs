@@ -1,5 +1,5 @@
 //!
-//! User shard canister that issues self-contained delegated auth V2 tokens.
+//! User shard canister that issues self-contained delegated auth tokens.
 //!
 //! Test-only helper: this canister is intended for local/dev flows and is not
 //! a public-facing deployment target. Its endpoints may intentionally omit
@@ -12,7 +12,7 @@ use canic::{
     Error,
     api::auth::DelegationApi,
     cdk::candid::Reserved,
-    dto::auth::{DelegatedTokenMintRequestV2, DelegatedTokenV2},
+    dto::auth::{DelegatedToken, DelegatedTokenMintRequest},
     ids::cap,
     prelude::*,
 };
@@ -38,14 +38,14 @@ async fn canic_upgrade() {}
 /// Test-only: no public auth guarantees; intended for local/dev Canic tests.
 #[canic_update]
 async fn user_shard_issue_token(
-    request: DelegatedTokenMintRequestV2,
-) -> Result<DelegatedTokenV2, Error> {
+    request: DelegatedTokenMintRequest,
+) -> Result<DelegatedToken, Error> {
     // Test-only guard: keep this endpoint out of non-local flows.
     if let Err(err) = canic::access::env::build_network_local() {
         return Err(Error::forbidden(err.to_string()));
     }
 
-    DelegationApi::mint_token_v2(request).await
+    DelegationApi::mint_token(request).await
 }
 
 #[cfg(not(canic_disable_bundle_observability_env))]

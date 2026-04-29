@@ -56,7 +56,7 @@ with audit logs; new coverage test ensures idempotency.
 - Docs: README notes the leaner `DelegationSessionView` (caller infers expiry from
 `expires_at`).
 
-## [0.7.3] - Partition Registry v2
+## [0.7.3] - Partition Registry current
 - now you can configure multiple pools each with a different CanisterRole
 
 ## [0.7.0] - Partition Registry

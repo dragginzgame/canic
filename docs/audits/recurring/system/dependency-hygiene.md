@@ -115,7 +115,7 @@ Required fields:
 * **Scope**: exact crates/manifests included
 * **Compared baseline report path**: prior comparable report path or `N/A`
 * **Code snapshot identifier**: commit SHA, tree hash, or equivalent
-* **Method tag/version**: e.g. `dependency-hygiene-v2`
+* **Method tag/version**: e.g. `dependency-hygiene-current`
 * **Comparability status**:
 
   * `comparable`

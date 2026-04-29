@@ -101,7 +101,7 @@ Required fields:
 * **Scope**: exact crates/directories included in this run
 * **Compared baseline report path**: prior comparable report path or `N/A`
 * **Code snapshot identifier**: commit SHA, tree hash, or equivalent immutable snapshot reference
-* **Method tag/version**: e.g. `module-structure-v2`
+* **Method tag/version**: e.g. `module-structure-current`
 * **Comparability status**:
 
   * `comparable`

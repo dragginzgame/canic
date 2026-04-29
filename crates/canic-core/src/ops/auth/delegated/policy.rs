@@ -1,63 +1,60 @@
 use super::{
-    audience::{AudienceV2Error, validate_cert_role_hash},
+    audience::{AudienceError, validate_cert_role_hash},
     canonical::public_key_hash,
 };
-use crate::{cdk::types::Principal, dto::auth::DelegationCertV2};
+use crate::{cdk::types::Principal, dto::auth::DelegationCert};
 use thiserror::Error;
 
-pub const DELEGATED_AUTH_V2_VERSION: u16 = 2;
+pub const DELEGATED_AUTH_VERSION: u16 = 2;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct DelegatedAuthTtlPolicyV2 {
+pub struct DelegatedAuthTtlPolicy {
     pub max_cert_ttl_secs: u64,
     pub max_token_ttl_secs: u64,
 }
 
 #[derive(Debug, Eq, Error, PartialEq)]
-pub enum CertPolicyV2Error {
-    #[error("delegated auth v2 cert version mismatch (expected {expected}, found {found})")]
+pub enum CertPolicyError {
+    #[error("delegated auth cert version mismatch (expected {expected}, found {found})")]
     VersionMismatch { expected: u16, found: u16 },
-    #[error("delegated auth v2 cert root pid mismatch (expected {expected}, found {found})")]
+    #[error("delegated auth cert root pid mismatch (expected {expected}, found {found})")]
     RootPidMismatch {
         expected: Principal,
         found: Principal,
     },
-    #[error("delegated auth v2 cert expires_at must be greater than issued_at")]
+    #[error("delegated auth cert expires_at must be greater than issued_at")]
     InvalidCertWindow,
-    #[error("delegated auth v2 cert ttl {ttl_secs}s exceeds max {max_ttl_secs}s")]
+    #[error("delegated auth cert ttl {ttl_secs}s exceeds max {max_ttl_secs}s")]
     CertTtlExceeded { ttl_secs: u64, max_ttl_secs: u64 },
-    #[error("delegated auth v2 max token ttl must be greater than zero")]
+    #[error("delegated auth max token ttl must be greater than zero")]
     TokenTtlZero,
-    #[error("delegated auth v2 max token ttl {ttl_secs}s exceeds max {max_ttl_secs}s")]
+    #[error("delegated auth max token ttl {ttl_secs}s exceeds max {max_ttl_secs}s")]
     TokenTtlExceeded { ttl_secs: u64, max_ttl_secs: u64 },
-    #[error("delegated auth v2 max token ttl {token_ttl_secs}s exceeds cert ttl {cert_ttl_secs}s")]
+    #[error("delegated auth max token ttl {token_ttl_secs}s exceeds cert ttl {cert_ttl_secs}s")]
     TokenTtlOutlivesCert {
         token_ttl_secs: u64,
         cert_ttl_secs: u64,
     },
-    #[error("delegated auth v2 shard public key hash mismatch")]
+    #[error("delegated auth shard public key hash mismatch")]
     ShardPublicKeyHashMismatch,
-    #[error("delegated auth v2 shard derived key hash mismatch")]
-    ShardDerivedKeyHashMismatch,
     #[error(transparent)]
-    Audience(#[from] AudienceV2Error),
+    Audience(#[from] AudienceError),
 }
 
 pub fn validate_cert_issuance_policy(
-    cert: &DelegationCertV2,
-    policy: DelegatedAuthTtlPolicyV2,
+    cert: &DelegationCert,
+    policy: DelegatedAuthTtlPolicy,
     expected_root_pid: Principal,
-    expected_shard_key_hash: [u8; 32],
-) -> Result<(), CertPolicyV2Error> {
-    if cert.version != DELEGATED_AUTH_V2_VERSION {
-        return Err(CertPolicyV2Error::VersionMismatch {
-            expected: DELEGATED_AUTH_V2_VERSION,
+) -> Result<(), CertPolicyError> {
+    if cert.version != DELEGATED_AUTH_VERSION {
+        return Err(CertPolicyError::VersionMismatch {
+            expected: DELEGATED_AUTH_VERSION,
             found: cert.version,
         });
     }
 
     if cert.root_pid != expected_root_pid {
-        return Err(CertPolicyV2Error::RootPidMismatch {
+        return Err(CertPolicyError::RootPidMismatch {
             expected: expected_root_pid,
             found: cert.root_pid,
         });
@@ -66,32 +63,32 @@ pub fn validate_cert_issuance_policy(
     let cert_ttl_secs = cert
         .expires_at
         .checked_sub(cert.issued_at)
-        .ok_or(CertPolicyV2Error::InvalidCertWindow)?;
+        .ok_or(CertPolicyError::InvalidCertWindow)?;
 
     if cert_ttl_secs == 0 {
-        return Err(CertPolicyV2Error::InvalidCertWindow);
+        return Err(CertPolicyError::InvalidCertWindow);
     }
 
     if cert_ttl_secs > policy.max_cert_ttl_secs {
-        return Err(CertPolicyV2Error::CertTtlExceeded {
+        return Err(CertPolicyError::CertTtlExceeded {
             ttl_secs: cert_ttl_secs,
             max_ttl_secs: policy.max_cert_ttl_secs,
         });
     }
 
     if cert.max_token_ttl_secs == 0 {
-        return Err(CertPolicyV2Error::TokenTtlZero);
+        return Err(CertPolicyError::TokenTtlZero);
     }
 
     if cert.max_token_ttl_secs > policy.max_token_ttl_secs {
-        return Err(CertPolicyV2Error::TokenTtlExceeded {
+        return Err(CertPolicyError::TokenTtlExceeded {
             ttl_secs: cert.max_token_ttl_secs,
             max_ttl_secs: policy.max_token_ttl_secs,
         });
     }
 
     if cert.max_token_ttl_secs > cert_ttl_secs {
-        return Err(CertPolicyV2Error::TokenTtlOutlivesCert {
+        return Err(CertPolicyError::TokenTtlOutlivesCert {
             token_ttl_secs: cert.max_token_ttl_secs,
             cert_ttl_secs,
         });
@@ -100,11 +97,7 @@ pub fn validate_cert_issuance_policy(
     validate_cert_role_hash(&cert.aud, cert.verifier_role_hash)?;
 
     if public_key_hash(&cert.shard_public_key_sec1) != cert.shard_key_hash {
-        return Err(CertPolicyV2Error::ShardPublicKeyHashMismatch);
-    }
-
-    if cert.shard_key_hash != expected_shard_key_hash {
-        return Err(CertPolicyV2Error::ShardDerivedKeyHashMismatch);
+        return Err(CertPolicyError::ShardPublicKeyHashMismatch);
     }
 
     Ok(())
@@ -114,38 +107,38 @@ pub fn validate_cert_issuance_policy(
 mod tests {
     use super::*;
     use crate::{
-        dto::auth::{DelegationAudienceV2, ShardKeyBindingV2, SignatureAlgorithmV2},
+        dto::auth::{DelegationAudience, ShardKeyBinding, SignatureAlgorithm},
         ids::CanisterRole,
-        ops::auth::v2::canonical::role_hash,
+        ops::auth::delegated::canonical::role_hash,
     };
 
     fn p(id: u8) -> Principal {
         Principal::from_slice(&[id; 29])
     }
 
-    fn policy() -> DelegatedAuthTtlPolicyV2 {
-        DelegatedAuthTtlPolicyV2 {
+    fn policy() -> DelegatedAuthTtlPolicy {
+        DelegatedAuthTtlPolicy {
             max_cert_ttl_secs: 600,
             max_token_ttl_secs: 120,
         }
     }
 
-    fn sample_cert() -> DelegationCertV2 {
+    fn sample_cert() -> DelegationCert {
         let role = CanisterRole::new("project_instance");
         let shard_public_key_sec1 = vec![2, 3, 4];
         let shard_key_hash = public_key_hash(&shard_public_key_sec1);
 
-        DelegationCertV2 {
-            version: DELEGATED_AUTH_V2_VERSION,
+        DelegationCert {
+            version: DELEGATED_AUTH_VERSION,
             root_pid: p(1),
             root_key_id: "root-key".to_string(),
             root_key_hash: [9; 32],
-            alg: SignatureAlgorithmV2::EcdsaP256Sha256,
+            alg: SignatureAlgorithm::EcdsaP256Sha256,
             shard_pid: p(2),
             shard_key_id: "shard-key".to_string(),
             shard_public_key_sec1,
             shard_key_hash,
-            shard_key_binding: ShardKeyBindingV2::IcThresholdEcdsa {
+            shard_key_binding: ShardKeyBinding::IcThresholdEcdsa {
                 key_name_hash: [5; 32],
                 derivation_path_hash: [6; 32],
             },
@@ -153,7 +146,7 @@ mod tests {
             expires_at: 500,
             max_token_ttl_secs: 120,
             scopes: vec!["read".to_string()],
-            aud: DelegationAudienceV2::Roles(vec![role.clone()]),
+            aud: DelegationAudience::Roles(vec![role.clone()]),
             verifier_role_hash: Some(role_hash(&role).unwrap()),
         }
     }
@@ -162,7 +155,7 @@ mod tests {
     fn cert_policy_accepts_well_formed_cert() {
         let cert = sample_cert();
 
-        validate_cert_issuance_policy(&cert, policy(), p(1), cert.shard_key_hash).unwrap();
+        validate_cert_issuance_policy(&cert, policy(), p(1)).unwrap();
     }
 
     #[test]
@@ -170,8 +163,8 @@ mod tests {
         let cert = sample_cert();
 
         assert_eq!(
-            validate_cert_issuance_policy(&cert, policy(), p(9), cert.shard_key_hash),
-            Err(CertPolicyV2Error::RootPidMismatch {
+            validate_cert_issuance_policy(&cert, policy(), p(9)),
+            Err(CertPolicyError::RootPidMismatch {
                 expected: p(9),
                 found: p(1),
             })
@@ -184,8 +177,8 @@ mod tests {
         cert.expires_at = 900;
 
         assert_eq!(
-            validate_cert_issuance_policy(&cert, policy(), p(1), cert.shard_key_hash),
-            Err(CertPolicyV2Error::CertTtlExceeded {
+            validate_cert_issuance_policy(&cert, policy(), p(1)),
+            Err(CertPolicyError::CertTtlExceeded {
                 ttl_secs: 800,
                 max_ttl_secs: 600,
             })
@@ -198,8 +191,8 @@ mod tests {
         cert.max_token_ttl_secs = 121;
 
         assert_eq!(
-            validate_cert_issuance_policy(&cert, policy(), p(1), cert.shard_key_hash),
-            Err(CertPolicyV2Error::TokenTtlExceeded {
+            validate_cert_issuance_policy(&cert, policy(), p(1)),
+            Err(CertPolicyError::TokenTtlExceeded {
                 ttl_secs: 121,
                 max_ttl_secs: 120,
             })
@@ -212,8 +205,8 @@ mod tests {
         cert.expires_at = 150;
 
         assert_eq!(
-            validate_cert_issuance_policy(&cert, policy(), p(1), cert.shard_key_hash),
-            Err(CertPolicyV2Error::TokenTtlOutlivesCert {
+            validate_cert_issuance_policy(&cert, policy(), p(1)),
+            Err(CertPolicyError::TokenTtlOutlivesCert {
                 token_ttl_secs: 120,
                 cert_ttl_secs: 50,
             })
@@ -226,32 +219,19 @@ mod tests {
         cert.verifier_role_hash = Some([1; 32]);
 
         assert_eq!(
-            validate_cert_issuance_policy(&cert, policy(), p(1), cert.shard_key_hash),
-            Err(CertPolicyV2Error::Audience(
-                AudienceV2Error::RoleHashMismatch
-            ))
+            validate_cert_issuance_policy(&cert, policy(), p(1)),
+            Err(CertPolicyError::Audience(AudienceError::RoleHashMismatch))
         );
     }
 
     #[test]
     fn cert_policy_enforces_shard_public_key_hash_binding() {
         let mut cert = sample_cert();
-        let expected = cert.shard_key_hash;
         cert.shard_public_key_sec1 = vec![7, 8, 9];
 
         assert_eq!(
-            validate_cert_issuance_policy(&cert, policy(), p(1), expected),
-            Err(CertPolicyV2Error::ShardPublicKeyHashMismatch)
-        );
-    }
-
-    #[test]
-    fn cert_policy_enforces_shard_derivation_binding() {
-        let cert = sample_cert();
-
-        assert_eq!(
-            validate_cert_issuance_policy(&cert, policy(), p(1), [0; 32]),
-            Err(CertPolicyV2Error::ShardDerivedKeyHashMismatch)
+            validate_cert_issuance_policy(&cert, policy(), p(1)),
+            Err(CertPolicyError::ShardPublicKeyHashMismatch)
         );
     }
 }

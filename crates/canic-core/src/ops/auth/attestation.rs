@@ -38,7 +38,7 @@ impl DelegatedTokenOps {
         Ok(AttestationKeySet {
             root_pid,
             generated_at: now_secs,
-            keys: keys::attestation_keys_sorted(),
+            keys: keys::attestation_keys_sorted(&key_name),
         })
     }
 
@@ -58,7 +58,9 @@ impl DelegatedTokenOps {
             return Err(DelegationSignatureError::AttestationSignatureUnavailable.into());
         }
 
-        let key = DelegationStateOps::attestation_public_key(attestation.key_id).ok_or(
+        let key_name = keys::attestation_key_name()
+            .map_err(|err| DelegationValidationError::DelegatedAuth(err.to_string()))?;
+        let key = DelegationStateOps::attestation_public_key(attestation.key_id, &key_name).ok_or(
             DelegationValidationError::AttestationUnknownKeyId {
                 key_id: attestation.key_id,
             },

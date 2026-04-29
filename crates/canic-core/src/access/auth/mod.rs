@@ -349,6 +349,38 @@ mod tests {
     }
 
     #[test]
+    fn resolve_authenticated_identity_falls_back_at_session_expiry_boundary() {
+        let _guard = seams::lock();
+        AccessMetrics::reset();
+        let wallet = p(16);
+        let delegated = p(15);
+        crate::ops::storage::auth::DelegationStateOps::upsert_delegated_session(
+            crate::ops::storage::auth::DelegatedSession {
+                wallet_pid: wallet,
+                delegated_pid: delegated,
+                issued_at: 100,
+                expires_at: 120,
+                bootstrap_token_fingerprint: None,
+            },
+            100,
+        );
+
+        let resolved = resolve_authenticated_identity_at(wallet, 120);
+        assert_eq!(resolved.authenticated_subject, wallet);
+        assert_eq!(
+            resolved.identity_source,
+            AuthenticatedIdentitySource::RawCaller
+        );
+        assert_eq!(
+            auth_session_metric_count("session_fallback_raw_caller"),
+            1,
+            "delegated session expiry must match token expiry boundary"
+        );
+
+        crate::ops::storage::auth::DelegationStateOps::clear_delegated_session(wallet);
+    }
+
+    #[test]
     fn resolve_authenticated_identity_falls_back_after_clear() {
         let _guard = seams::lock();
         AccessMetrics::reset();

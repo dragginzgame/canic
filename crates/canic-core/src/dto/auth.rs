@@ -1,20 +1,20 @@
 use crate::dto::{prelude::*, rpc::RootRequestMetadata};
 
 //
-// SignatureAlgorithmV2
+// SignatureAlgorithm
 //
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub enum SignatureAlgorithmV2 {
+pub enum SignatureAlgorithm {
     EcdsaP256Sha256,
 }
 
 //
-// DelegationAudienceV2
+// DelegationAudience
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub enum DelegationAudienceV2 {
+pub enum DelegationAudience {
     Roles(Vec<CanisterRole>),
     Principals(Vec<Principal>),
     RolesOrPrincipals {
@@ -24,42 +24,14 @@ pub enum DelegationAudienceV2 {
 }
 
 //
-// RootKeyAuthorityV2
+// RootPublicKey
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct RootKeyAuthorityV2 {
-    pub authority_key_id: String,
-    pub authority_alg: SignatureAlgorithmV2,
-    pub authority_public_key_sec1: Vec<u8>,
-    pub authority_key_hash: [u8; 32],
-}
-
-//
-// RootKeyCertificateV2
-//
-
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct RootKeyCertificateV2 {
+pub struct RootPublicKey {
     pub root_pid: Principal,
     pub key_id: String,
-    pub alg: SignatureAlgorithmV2,
-    pub public_key_sec1: Vec<u8>,
-    pub key_hash: [u8; 32],
-    pub not_before: u64,
-    pub not_after: Option<u64>,
-    pub authority_sig: Vec<u8>,
-}
-
-//
-// RootPublicKeyV2
-//
-
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct RootPublicKeyV2 {
-    pub root_pid: Principal,
-    pub key_id: String,
-    pub alg: SignatureAlgorithmV2,
+    pub alg: SignatureAlgorithm,
     pub public_key_sec1: Vec<u8>,
     pub key_hash: [u8; 32],
     pub not_before: u64,
@@ -67,31 +39,21 @@ pub struct RootPublicKeyV2 {
 }
 
 //
-// RootKeySetV2
+// RootTrustAnchor
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct RootKeySetV2 {
-    pub keys: Vec<RootPublicKeyV2>,
-}
-
-//
-// RootTrustAnchorV2
-//
-
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct RootTrustAnchorV2 {
+pub struct RootTrustAnchor {
     pub root_pid: Principal,
-    pub trusted_root_keys: RootKeySetV2,
-    pub key_authority: Option<RootKeyAuthorityV2>,
+    pub root_key: RootPublicKey,
 }
 
 //
-// ShardKeyBindingV2
+// ShardKeyBinding
 //
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub enum ShardKeyBindingV2 {
+pub enum ShardKeyBinding {
     IcThresholdEcdsa {
         key_name_hash: [u8; 32],
         derivation_path_hash: [u8; 32],
@@ -99,111 +61,105 @@ pub enum ShardKeyBindingV2 {
 }
 
 //
-// DelegationCertV2
+// DelegationCert
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct DelegationCertV2 {
+pub struct DelegationCert {
     pub version: u16,
     pub root_pid: Principal,
     pub root_key_id: String,
     pub root_key_hash: [u8; 32],
-    pub alg: SignatureAlgorithmV2,
+    pub alg: SignatureAlgorithm,
     pub shard_pid: Principal,
     pub shard_key_id: String,
     pub shard_public_key_sec1: Vec<u8>,
     pub shard_key_hash: [u8; 32],
-    pub shard_key_binding: ShardKeyBindingV2,
+    pub shard_key_binding: ShardKeyBinding,
     pub issued_at: u64,
     pub expires_at: u64,
     pub max_token_ttl_secs: u64,
     pub scopes: Vec<String>,
-    pub aud: DelegationAudienceV2,
+    pub aud: DelegationAudience,
     pub verifier_role_hash: Option<[u8; 32]>,
 }
 
 //
-// DelegationProofV2
+// DelegationProof
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct DelegationProofV2 {
-    pub cert: DelegationCertV2,
+pub struct DelegationProof {
+    pub cert: DelegationCert,
     pub root_sig: Vec<u8>,
-    pub root_public_key_sec1: Option<Vec<u8>>,
-    pub root_key_cert: Option<RootKeyCertificateV2>,
 }
 
 //
-// DelegatedTokenClaimsV2
+// DelegatedTokenClaims
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct DelegatedTokenClaimsV2 {
+pub struct DelegatedTokenClaims {
     pub version: u16,
     pub subject: Principal,
     pub issuer_shard_pid: Principal,
     pub cert_hash: [u8; 32],
     pub issued_at: u64,
     pub expires_at: u64,
-    pub aud: DelegationAudienceV2,
+    pub aud: DelegationAudience,
     pub scopes: Vec<String>,
     pub nonce: [u8; 16],
 }
 
 //
-// DelegatedTokenV2
+// DelegatedToken
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct DelegatedTokenV2 {
-    pub claims: DelegatedTokenClaimsV2,
-    pub proof: DelegationProofV2,
+pub struct DelegatedToken {
+    pub claims: DelegatedTokenClaims,
+    pub proof: DelegationProof,
     pub shard_sig: Vec<u8>,
 }
 
 //
-// DelegationProofIssueRequestV2
+// DelegationProofIssueRequest
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct DelegationProofIssueRequestV2 {
+pub struct DelegationProofIssueRequest {
     pub shard_pid: Principal,
     pub scopes: Vec<String>,
-    pub aud: DelegationAudienceV2,
+    pub aud: DelegationAudience,
     pub cert_ttl_secs: u64,
-    #[serde(default)]
-    pub root_key_cert: Option<RootKeyCertificateV2>,
 }
 
 //
-// DelegatedTokenIssueRequestV2
+// DelegatedTokenIssueRequest
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct DelegatedTokenIssueRequestV2 {
-    pub proof: DelegationProofV2,
+pub struct DelegatedTokenIssueRequest {
+    pub proof: DelegationProof,
     pub subject: Principal,
-    pub aud: DelegationAudienceV2,
+    pub aud: DelegationAudience,
     pub scopes: Vec<String>,
     pub ttl_secs: u64,
     pub nonce: [u8; 16],
 }
 
 //
-// DelegatedTokenMintRequestV2
+// DelegatedTokenMintRequest
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct DelegatedTokenMintRequestV2 {
+pub struct DelegatedTokenMintRequest {
     pub subject: Principal,
-    pub aud: DelegationAudienceV2,
+    pub aud: DelegationAudience,
     pub scopes: Vec<String>,
     pub token_ttl_secs: u64,
     pub cert_ttl_secs: u64,
     pub nonce: [u8; 16],
-    #[serde(default)]
-    pub root_key_cert: Option<RootKeyCertificateV2>,
 }
 
 //
@@ -270,6 +226,8 @@ pub enum AttestationKeyStatus {
 pub struct AttestationKey {
     pub key_id: u32,
     pub public_key: Vec<u8>,
+    pub key_name: String,
+    pub key_hash: [u8; 32],
     pub status: AttestationKeyStatus,
     #[serde(default)]
     pub valid_from: Option<u64>,

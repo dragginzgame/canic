@@ -1,4 +1,4 @@
-# Auth Contract: Root-Anchored Delegated ECDSA Tokens
+# Auth Contract: Self-Validating Delegated Tokens
 
 This document defines the delegated-token authentication model implemented in
 Canic today.
@@ -8,12 +8,14 @@ Canic today.
 Canonical trust chain:
 
 ```text
-IC root key -> root canister -> shard canister -> user-bound delegated token
+configured root principal + root public key -> root certificate -> shard signature -> delegated token
 ```
 
 - Root signs a `DelegationCert` for one `shard_pid`.
-- Shard signs `DelegatedToken` claims for one user (`sub`).
-- Verifiers validate locally without inter-canister auth round-trips.
+- Root certifies the shard public key inside the certificate.
+- Shard signs `DelegatedTokenClaims` for one delegated subject.
+- Verifiers validate locally without proof distribution, proof fanout, topology
+  catch-up, or verifier-local proof lookup.
 
 ## Canonical Payloads
 
@@ -21,94 +23,152 @@ Source: `crates/canic-core/src/dto/auth.rs`
 
 ```rust
 pub struct DelegationCert {
+    pub version: u16,
     pub root_pid: Principal,
+    pub root_key_id: String,
+    pub root_key_hash: [u8; 32],
+    pub alg: SignatureAlgorithm,
     pub shard_pid: Principal,
+    pub shard_key_id: String,
+    pub shard_public_key_sec1: Vec<u8>,
+    pub shard_key_hash: [u8; 32],
+    pub shard_key_binding: ShardKeyBinding,
     pub issued_at: u64,
     pub expires_at: u64,
+    pub max_token_ttl_secs: u64,
     pub scopes: Vec<String>,
-    pub aud: Vec<Principal>,
+    pub aud: DelegationAudience,
+    pub verifier_role_hash: Option<[u8; 32]>,
 }
 
 pub struct DelegatedTokenClaims {
-    pub sub: Principal,
-    pub shard_pid: Principal,
+    pub version: u16,
+    pub subject: Principal,
+    pub issuer_shard_pid: Principal,
+    pub cert_hash: [u8; 32],
+    pub issued_at: u64,
+    pub expires_at: u64,
+    pub aud: DelegationAudience,
     pub scopes: Vec<String>,
-    pub aud: Vec<Principal>,
-    pub iat: u64,
-    pub exp: u64,
+    pub nonce: [u8; 16],
+}
+
+pub struct AttestationKey {
+    pub key_id: u32,
+    pub public_key: Vec<u8>,
+    pub key_name: String,
+    pub key_hash: [u8; 32],
+    pub status: AttestationKeyStatus,
+    pub valid_from: Option<u64>,
+    pub valid_until: Option<u64>,
 }
 ```
 
-`sub` is explicit and required.
+Signed structures use `CanicAuthCanonical`. Canonical vectors are strict:
+roles, principals, and scopes must already be sorted and duplicate-free.
 
 ## Crypto Backend and Signing Rules
 
-- Signing uses threshold ECDSA management APIs via `ops/ic/ecdsa.rs`:
-  - `sign_with_ecdsa`
-  - `ecdsa_public_key`
-- Signature verification is pure Rust (`k256`) and runs locally:
-  - no management canister calls during token verification
-  - pre-hash verification (`verify_prehash`) over a single SHA-256 hash
+- Signing uses threshold ECDSA management APIs via `ops/ic/ecdsa.rs`.
+- Signature verification is pure Rust (`k256`) and runs locally.
+- Verification uses pre-hash verification over canonical SHA-256 hashes.
 
 Deterministic derivation paths:
+
 - root path: `["canic", "root"]`
 - shard path: `["canic", "shard", shard_pid_bytes]`
+- role-attestation path: `["canic", "attestation", "root"]`
 
-Domain-separated hashing:
-- cert domain: `CANIC_DELEGATION_CERT_V1`
-- token domain: `CANIC_DELEGATED_TOKEN_V1`
+Delegated-token signing domains are defined in
+`crates/canic-core/src/ops/auth/delegated/canonical.rs`.
 
-Token signature preimage includes:
-- all `DelegatedTokenClaims`
-- `cert_hash` (SHA-256 over domain-separated, candid-encoded `DelegationCert`)
+## Issuance Flow
 
-Implementation: `crates/canic-core/src/ops/auth/mod.rs`
+### Root certificate issuance
 
-## Issuance and Provisioning Flow
+1. Shard calls root through `DelegationApi::request_delegation`.
+2. Root validates:
+   - delegated auth is enabled
+   - root authority is the local canister
+   - certificate TTL and token TTL policy
+   - audience shape and role-hash binding
+   - shard public-key hash and deterministic shard derivation binding
+3. Root signs the canonical certificate hash.
+4. Root returns a self-contained `DelegationProof`.
 
-### Canonical flow (shard-initiated)
-1. Shard calls root: `DelegationApi::request_delegation`.
-2. Root verifies:
-   - delegated auth feature enabled
-   - `self == root_pid`
-   - `caller == request.shard_pid`
-   - cert policy constraints (expiry, aud/scopes non-empty, shard registered, etc.)
-3. Root signs delegation cert in one step (`sign_delegation_cert`).
-4. Root provisions proof to signer/verifier targets via workflow.
+Root does not push proof state to verifiers.
 
-### Token issuance
-- Shard issues token with one call (`DelegationApi::issue_token`).
-- API reuses local proof only when still valid for claims; otherwise it reprovisions via canonical delegation request before signing.
+### Token minting
 
-No prepare/get two-step signature API is used.
+1. Shard obtains a `DelegationProof`.
+2. Shard validates audience, scope, and TTL attenuation.
+3. Shard signs canonical token claims with its deterministic shard ECDSA path.
+4. Shard returns a self-contained `DelegatedToken`.
 
-## Verification Contract (Verifier Canister)
+`DelegationApi::mint_token` performs proof request and token signing in one
+API call. `DelegationApi::issue_token` signs from an explicit proof.
+
+## Verification Contract
 
 Verification entrypoint:
+
 - `access::auth::authenticated(required_scope)`
 
 Checks enforced before authorization:
+
 - delegated token decodes from ingress first argument
-- proof/cert structure valid
-- cert root authority matches expected root principal
-- cert signature valid under cached root public key
-- cert temporal validity (`issued_at < expires_at`, not expired)
-- token signature valid under cached shard public key
-- `claims.shard_pid == cert.shard_pid`
-- `claims.aud` subset of `cert.aud`
-- `claims.scopes` subset of `cert.scopes`
-- verifier audience binding: `self_pid in claims.aud`
-- proof matches verifier’s locally stored current proof
-- subject binding: `claims.sub == ic_cdk::caller()`
-- endpoint binding: required scope is present in `claims.scopes`
+- certificate and claim canonical hashes recompute successfully
+- `cert.root_pid == EnvOps::root_pid()`
+- `cert.root_key_id == auth.delegated_tokens.ecdsa_key_name`
+- cached root key identity matches configured key name and `cert.root_key_hash`
+- root certificate signature verifies
+- shard key binding matches configured key name and deterministic shard path
+- `hash(cert.shard_public_key_sec1) == cert.shard_key_hash`
+- shard token signature verifies under `cert.shard_public_key_sec1`
+- `claims.issuer_shard_pid == cert.shard_pid`
+- `claims.cert_hash == hash(cert)`
+- certificate and token time windows are valid
+- token does not outlive certificate or root token-TTL policy
+- `claims.aud` is a subset of `cert.aud`
+- `claims.scopes` is a subset of `cert.scopes`
+- local principal or configured local role is in `claims.aud`
+- role audiences match `cert.verifier_role_hash`
+- endpoint required scopes are present in `claims.scopes`
+- delegated session subject binding is enforced before replacing caller identity
+
+No verification step checks for local proof presence.
+
+## Stable Key Cache Contract
+
+Stable key caches are caches, not authority.
+
+```rust
+cache_hit => cached.key_name == configured_key_name
+cache_hit => sha256(cached.public_key_sec1) == cached.key_hash
+```
+
+This applies to:
+
+- `RootPublicKeyRecord`
+- `ShardPublicKeyRecord`
+- `AttestationPublicKeyRecord`
+
+Role-attestation key-set refresh preserves root-provided `AttestationKey`
+identity. A verifier must not retag root-provided attestation key bytes with
+its own local key name.
+
+Identity-less key-cache records are invalid state.
 
 ## Endpoint Type Contract
 
 ### Direct endpoints
+
 - Supported model.
-- Token subject must bind to transport caller (`sub == caller`).
+- Token subject must bind to transport caller before delegated session state is
+  accepted.
 
 ### Relayed endpoints
+
 - Not supported.
 - No `presenter_pid` contract.
 - No relay envelope auth mode.
@@ -116,31 +176,36 @@ Checks enforced before authorization:
 ## Root Authority Contract
 
 Root authority source:
+
 - `EnvOps::root_pid()`
 
 Immutability:
+
 - `EnvOps::import` treats `root_pid` as write-once.
 - Re-import with a different `root_pid` is rejected.
 
 ## Forbidden Patterns
 
 The auth architecture must not introduce:
+
+- verifier-local proof lookup as an acceptance condition
+- proof distribution as an authentication correctness requirement
+- implicit revocation by deleting proof or cache state
 - two-step signature materialization (`prepare`/`get`)
 - detached verification with caller-supplied arbitrary public keys
 - endpoint APIs that return raw signatures for later submission
 - relay envelope auth modes (`AuthenticatedRequest`/`presenter_pid`)
-- auth paths that skip `sub == caller`
+- auth paths that skip delegated subject binding
 
 Allowed internal use:
-- `sign_with_ecdsa` / `ecdsa_public_key` only inside the IC ECDSA ops façade
+
+- `sign_with_ecdsa` / `ecdsa_public_key` only inside the IC ECDSA ops facade
   and call paths that perform root/shard signing or key caching.
 
 ## Test-Only Paths
 
-The following are explicitly test-only and guarded to local/dev flows:
+The following are explicitly test-only or demo-local:
+
 - `user_shard_issue_token` in `canisters/user_shard/src/lib.rs`
 - `create_account` in `canisters/user_hub/src/lib.rs`
 - `plan_create_account` in `canisters/user_hub/src/lib.rs`
-
-Admin provisioning API (`DelegationApi::provision`) is retained as a
-root-only tooling/test escape hatch and is not the canonical user auth flow.

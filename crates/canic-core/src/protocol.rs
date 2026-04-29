@@ -3,7 +3,7 @@
 /// Keep these synchronized with the macro-defined endpoints.
 
 pub const CANIC_RESPONSE_CAPABILITY_V1: &str = "canic_response_capability_v1";
-pub const CANIC_REQUEST_DELEGATION_V2: &str = "canic_request_delegation_v2";
+pub const CANIC_REQUEST_DELEGATION: &str = "canic_request_delegation";
 pub const CANIC_REQUEST_ROLE_ATTESTATION: &str = "canic_request_role_attestation";
 pub const CANIC_ATTESTATION_KEY_SET: &str = "canic_attestation_key_set";
 pub const CANIC_BOOTSTRAP_STATUS: &str = "canic_bootstrap_status";

@@ -111,9 +111,9 @@ pub(super) fn prune_expired_delegated_session_bootstrap_bindings(
     before.saturating_sub(bindings.len())
 }
 
-// Treat delegated sessions as expired once `now_secs` passes `expires_at`.
+// Treat delegated sessions as expired at the same exclusive boundary as tokens.
 const fn session_expired(expires_at: u64, now_secs: u64) -> bool {
-    now_secs > expires_at
+    now_secs >= expires_at
 }
 
 // Remove expired delegated sessions in-place.
@@ -121,9 +121,9 @@ fn prune_expired_sessions(sessions: &mut Vec<DelegatedSessionRecord>, now_secs: 
     sessions.retain(|entry| !session_expired(entry.expires_at, now_secs));
 }
 
-// Treat bootstrap bindings as expired once `now_secs` passes `expires_at`.
+// Treat bootstrap bindings as expired at the same exclusive boundary as tokens.
 const fn session_binding_expired(expires_at: u64, now_secs: u64) -> bool {
-    now_secs > expires_at
+    now_secs >= expires_at
 }
 
 // Remove expired delegated-session bootstrap bindings in-place.

@@ -1,6 +1,6 @@
 use super::{
     ATTESTATION_PATH_SEGMENT, DERIVATION_NAMESPACE, ROLE_ATTESTATION_KEY_ID_V1, ROOT_PATH_SEGMENT,
-    SHARD_PATH_SEGMENT,
+    SHARD_PATH_SEGMENT, delegated::canonical::public_key_hash,
 };
 use crate::{
     InternalError,
@@ -13,8 +13,8 @@ use crate::{
 };
 use std::cmp::Reverse;
 
-pub(super) fn attestation_keys_sorted() -> Vec<AttestationKey> {
-    let mut keys = DelegationStateOps::attestation_keys();
+pub(super) fn attestation_keys_sorted(key_name: &str) -> Vec<AttestationKey> {
+    let mut keys = DelegationStateOps::attestation_keys(key_name);
     keys.sort_by_key(|entry| {
         let status_rank = match entry.status {
             AttestationKeyStatus::Current => 0u8,
@@ -68,7 +68,9 @@ pub(super) async fn ensure_attestation_key_cached(
     root_pid: Principal,
     now_secs: u64,
 ) -> Result<(), InternalError> {
-    if DelegationStateOps::attestation_public_key_sec1(ROLE_ATTESTATION_KEY_ID_V1).is_some() {
+    if DelegationStateOps::attestation_public_key_sec1(ROLE_ATTESTATION_KEY_ID_V1, key_name)
+        .is_some()
+    {
         return Ok(());
     }
 
@@ -76,6 +78,8 @@ pub(super) async fn ensure_attestation_key_cached(
         EcdsaOps::public_key_sec1(key_name, attestation_derivation_path(), root_pid).await?;
     DelegationStateOps::upsert_attestation_key(AttestationKey {
         key_id: ROLE_ATTESTATION_KEY_ID_V1,
+        key_hash: public_key_hash(&public_key),
+        key_name: key_name.to_string(),
         public_key,
         status: AttestationKeyStatus::Current,
         valid_from: Some(now_secs),
@@ -89,12 +93,12 @@ pub(super) async fn ensure_root_public_key_cached(
     key_name: &str,
     root_pid: Principal,
 ) -> Result<(), InternalError> {
-    if DelegationStateOps::root_public_key().is_some() {
+    if DelegationStateOps::root_public_key(key_name).is_some() {
         return Ok(());
     }
 
     let root_pk = EcdsaOps::public_key_sec1(key_name, root_derivation_path(), root_pid).await?;
-    DelegationStateOps::set_root_public_key(root_pk);
+    DelegationStateOps::set_root_public_key(key_name.to_string(), root_pk);
     Ok(())
 }
 
@@ -103,7 +107,7 @@ pub(super) async fn ensure_shard_public_key_cached(
     shard_pid: Principal,
 ) -> Result<(), InternalError> {
     if let Some(shard_pk) = fetch_missing_shard_public_key(key_name, shard_pid).await? {
-        DelegationStateOps::set_shard_public_key(shard_pid, shard_pk);
+        DelegationStateOps::set_shard_public_key(shard_pid, key_name.to_string(), shard_pk);
     }
 
     Ok(())
@@ -113,7 +117,7 @@ pub(super) async fn fetch_missing_shard_public_key(
     key_name: &str,
     shard_pid: Principal,
 ) -> Result<Option<Vec<u8>>, InternalError> {
-    if DelegationStateOps::shard_public_key(shard_pid).is_some() {
+    if DelegationStateOps::shard_public_key(shard_pid, key_name).is_some() {
         return Ok(None);
     }
 

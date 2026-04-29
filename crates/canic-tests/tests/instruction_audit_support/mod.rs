@@ -4,7 +4,7 @@ use canic::{
     api::ic::network::NetworkApi,
     cdk::{types::Principal, utils::wasm::get_wasm_hash},
     dto::{
-        auth::{DelegatedTokenV2, DelegationAudienceV2},
+        auth::{DelegatedToken, DelegationAudience},
         capability::{
             CAPABILITY_VERSION_V1, CapabilityProof, CapabilityRequestMetadata, CapabilityService,
             RootCapabilityEnvelopeV1, RootCapabilityResponseV1,
@@ -168,7 +168,7 @@ struct ScenarioResult {
 struct PreparedScenario {
     target_pid: Principal,
     caller_pid: Option<Principal>,
-    delegated_token: Option<DelegatedTokenV2>,
+    delegated_token: Option<DelegatedToken>,
 }
 
 ///

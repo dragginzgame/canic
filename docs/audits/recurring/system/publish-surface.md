@@ -114,7 +114,7 @@ Required fields:
 * **Scope**: exact published/publishable crates and package artifacts reviewed
 * **Compared baseline report path**: prior comparable report path or `N/A`
 * **Code snapshot identifier**: commit SHA, tree hash, or equivalent
-* **Method tag/version**: e.g. `publish-surface-v2`
+* **Method tag/version**: e.g. `publish-surface-current`
 * **Comparability status**:
 
   * `comparable`
