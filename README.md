@@ -108,14 +108,14 @@ Populate `canic.toml` with subnet definitions, role policies, directory membersh
 For local DFX workflows, prefer the shared setup script:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/dragginzgame/canic/v0.29.4/scripts/dev/install_dev.sh | bash
+curl -fsSL https://raw.githubusercontent.com/dragginzgame/canic/v0.29.5/scripts/dev/install_dev.sh | bash
 ```
 
 The script installs Rust when needed, the repo-local Rust `1.95.0` toolchain, `wasm32-unknown-unknown`, `rustfmt`, `clippy`, Candid/wasm utilities, `actionlint`, common Cargo helper tools, and `dfx` when missing.
 
 It also installs:
 
-- `canic-installer` `0.29.4`
+- `canic-installer` `0.29.5`
 
 Published crates still declare MSRV `1.91.0` for downstream source builds.
 
