@@ -1,14 +1,4 @@
-use crate::dto::{error::Error, prelude::*, rpc::RootRequestMetadata};
-
-//
-// DelegationAudience
-//
-
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub enum DelegationAudience {
-    Any,
-    Roles(Vec<CanisterRole>),
-}
+use crate::dto::{prelude::*, rpc::RootRequestMetadata};
 
 //
 // SignatureAlgorithmV2
@@ -173,94 +163,47 @@ pub struct DelegatedTokenV2 {
 }
 
 //
-// DelegationCert
+// DelegationProofIssueRequestV2
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct DelegationCert {
-    pub root_pid: Principal,
+pub struct DelegationProofIssueRequestV2 {
     pub shard_pid: Principal,
-    pub issued_at: u64,
-    pub expires_at: u64,
     pub scopes: Vec<String>,
-    pub aud: DelegationAudience,
+    pub aud: DelegationAudienceV2,
+    pub cert_ttl_secs: u64,
+    #[serde(default)]
+    pub root_key_cert: Option<RootKeyCertificateV2>,
 }
 
 //
-// DelegationProof
+// DelegatedTokenIssueRequestV2
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct DelegationProof {
-    pub cert: DelegationCert,
-    pub cert_sig: Vec<u8>,
-}
-
-//
-// DelegationProofInstallIntent
-//
-
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
-pub enum DelegationProofInstallIntent {
-    Provisioning,
-    Repair,
-}
-
-//
-// DelegationProofInstallRequest
-//
-
-#[derive(CandidType, Clone, Debug, Deserialize)]
-pub struct DelegationProofInstallRequest {
-    pub proof: DelegationProof,
-    pub intent: DelegationProofInstallIntent,
-    #[serde(default)]
-    pub root_public_key_sec1: Option<Vec<u8>>,
-    pub shard_public_key_sec1: Vec<u8>,
-}
-
-//
-// DelegatedTokenClaims
-//
-
-#[derive(CandidType, Clone, Debug, Deserialize)]
-pub struct DelegatedTokenClaims {
-    pub sub: Principal,
-    pub shard_pid: Principal,
+pub struct DelegatedTokenIssueRequestV2 {
+    pub proof: DelegationProofV2,
+    pub subject: Principal,
+    pub aud: DelegationAudienceV2,
     pub scopes: Vec<String>,
-    pub aud: DelegationAudience,
-    pub iat: u64,
-    pub exp: u64,
-    // Optional signed application payload. CANIC preserves this field but does
-    // not interpret it; applications own its schema and authorization meaning.
-    #[serde(default)]
-    pub ext: Option<Vec<u8>>,
-}
-
-//
-// DelegatedToken
-//
-
-#[derive(CandidType, Clone, Debug, Deserialize)]
-pub struct DelegatedToken {
-    pub claims: DelegatedTokenClaims,
-    pub proof: DelegationProof,
-    pub token_sig: Vec<u8>,
-}
-
-//
-// DelegationRequest
-//
-
-#[derive(CandidType, Clone, Debug, Deserialize)]
-pub struct DelegationRequest {
-    pub shard_pid: Principal,
-    pub scopes: Vec<String>,
-    pub aud: DelegationAudience,
     pub ttl_secs: u64,
-    pub shard_public_key_sec1: Vec<u8>,
+    pub nonce: [u8; 16],
+}
+
+//
+// DelegatedTokenMintRequestV2
+//
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct DelegatedTokenMintRequestV2 {
+    pub subject: Principal,
+    pub aud: DelegationAudienceV2,
+    pub scopes: Vec<String>,
+    pub token_ttl_secs: u64,
+    pub cert_ttl_secs: u64,
+    pub nonce: [u8; 16],
     #[serde(default)]
-    pub metadata: Option<RootRequestMetadata>,
+    pub root_key_cert: Option<RootKeyCertificateV2>,
 }
 
 //
@@ -343,82 +286,4 @@ pub struct AttestationKeySet {
     pub root_pid: Principal,
     pub generated_at: u64,
     pub keys: Vec<AttestationKey>,
-}
-
-// Canonical delegation issuance response. Fanout results are verifier-only.
-//
-// DelegationProvisionResponse
-//
-
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
-pub struct DelegationProvisionResponse {
-    pub proof: DelegationProof,
-    pub results: Vec<DelegationProvisionTargetResponse>,
-}
-
-//
-// DelegationVerifierProofPushRequest
-//
-
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-pub struct DelegationVerifierProofPushRequest {
-    pub proof: DelegationProof,
-    pub verifier_targets: Vec<Principal>,
-}
-
-//
-// DelegationVerifierProofPushResponse
-//
-
-#[derive(CandidType, Clone, Debug, Deserialize)]
-pub struct DelegationVerifierProofPushResponse {
-    pub results: Vec<DelegationProvisionTargetResponse>,
-}
-
-//
-// DelegationProofStatus
-//
-
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-pub struct DelegationProofStatus {
-    pub shard_pid: Principal,
-    pub issued_at: u64,
-    pub expires_at: u64,
-}
-
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub enum DelegationProvisionStatus {
-    Ok,
-    Failed,
-}
-
-//
-// DelegationAdminCommand
-//
-
-#[derive(CandidType, Clone, Debug, Deserialize)]
-pub enum DelegationAdminCommand {
-    RepairVerifiers(DelegationVerifierProofPushRequest),
-}
-
-//
-// DelegationAdminResponse
-//
-
-#[derive(CandidType, Clone, Debug, Deserialize)]
-pub enum DelegationAdminResponse {
-    RepairedVerifiers {
-        result: DelegationVerifierProofPushResponse,
-    },
-}
-
-//
-// DelegationProvisionTargetResponse
-//
-
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
-pub struct DelegationProvisionTargetResponse {
-    pub target: Principal,
-    pub status: DelegationProvisionStatus,
-    pub error: Option<Error>,
 }

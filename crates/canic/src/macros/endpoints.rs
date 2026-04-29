@@ -354,10 +354,10 @@ macro_rules! canic_emit_root_admin_endpoints {
 macro_rules! canic_emit_root_auth_attestation_endpoints {
     () => {
         #[$crate::canic_update(internal, requires(caller::is_registered_to_subnet()))]
-        async fn canic_request_delegation(
-            request: ::canic::dto::auth::DelegationRequest,
-        ) -> Result<::canic::dto::auth::DelegationProvisionResponse, ::canic::Error> {
-            $crate::__internal::core::api::auth::DelegationApi::request_delegation_root(request)
+        async fn canic_request_delegation_v2(
+            request: ::canic::dto::auth::DelegationProofIssueRequestV2,
+        ) -> Result<::canic::dto::auth::DelegationProofV2, ::canic::Error> {
+            $crate::__internal::core::api::auth::DelegationApi::issue_delegation_proof_v2(request)
                 .await
         }
 
@@ -375,13 +375,6 @@ macro_rules! canic_emit_root_auth_attestation_endpoints {
         async fn canic_attestation_key_set()
         -> Result<::canic::dto::auth::AttestationKeySet, ::canic::Error> {
             $crate::__internal::core::api::auth::DelegationApi::attestation_key_set().await
-        }
-
-        #[$crate::canic_update(requires(caller::is_controller()))]
-        async fn canic_delegation_admin(
-            cmd: ::canic::dto::auth::DelegationAdminCommand,
-        ) -> Result<::canic::dto::auth::DelegationAdminResponse, ::canic::Error> {
-            $crate::__internal::core::api::auth::DelegationApi::admin(cmd).await
         }
     };
 }
@@ -503,15 +496,7 @@ macro_rules! canic_emit_nonroot_sync_topology_endpoints {
 // Leaf emitter for the non-root auth/attestation provisioning surface.
 #[macro_export]
 macro_rules! canic_emit_nonroot_auth_attestation_endpoints {
-    () => {
-        #[cfg(canic_accepts_delegation_verifier_proof)]
-        #[$crate::canic_update(internal, requires(caller::is_root()))]
-        async fn canic_delegation_set_verifier_proof(
-            request: ::canic::dto::auth::DelegationProofInstallRequest,
-        ) -> Result<(), ::canic::Error> {
-            $crate::__internal::core::api::auth::DelegationApi::store_verifier_proof(request).await
-        }
-    };
+    () => {};
 }
 
 // Leaf emitter for the canonical local wasm-store canister surface.

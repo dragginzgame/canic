@@ -19,7 +19,6 @@ mod tests;
 
 mod authorize;
 mod capability;
-mod delegation;
 mod execute;
 mod funding;
 mod nonroot_cycles;

@@ -7,8 +7,7 @@
 //! - delegated token verification
 //!
 //! Security invariants for delegated tokens:
-//! - Delegated tokens are only valid if their proof matches a verifier-local keyed delegation proof.
-//! - Delegation rotation may retain multiple proofs concurrently until older tokens age out.
+//! - Delegated tokens are self-validating and must not require verifier-local proof cache state.
 //! - All temporal validation (iat/exp/now) is enforced before access is granted.
 //! - Endpoint-required scopes are enforced against delegated token claims.
 
@@ -20,10 +19,7 @@ use crate::{
     access::AccessError,
     cdk::types::Principal,
     ids::CanisterRole,
-    ops::{
-        auth::VerifiedDelegatedToken, runtime::env::EnvOps,
-        storage::registry::subnet::SubnetRegistryOps,
-    },
+    ops::{runtime::env::EnvOps, storage::registry::subnet::SubnetRegistryOps},
 };
 use std::fmt;
 
@@ -48,6 +44,14 @@ pub struct ResolvedAuthenticatedIdentity {
     pub transport_caller: Principal,
     pub authenticated_subject: Principal,
     pub identity_source: AuthenticatedIdentitySource,
+}
+
+///
+/// VerifiedAccessToken
+///
+
+pub(crate) struct VerifiedAccessToken {
+    pub issuer_shard_pid: Principal,
 }
 
 ///
@@ -112,7 +116,7 @@ pub fn validate_delegated_session_subject(
 pub(crate) async fn delegated_token_verified(
     authenticated_subject: Principal,
     required_scope: Option<&str>,
-) -> Result<VerifiedDelegatedToken, AccessError> {
+) -> Result<VerifiedAccessToken, AccessError> {
     token::delegated_token_verified(authenticated_subject, required_scope).await
 }
 

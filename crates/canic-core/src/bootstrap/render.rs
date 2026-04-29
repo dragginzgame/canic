@@ -2,11 +2,11 @@ use crate::{
     cdk::candid::Principal,
     config::schema::{
         AppConfig, AppInitMode, AuthConfig, CanisterConfig, CanisterKind, CanisterPool,
-        ConfigModel, DelegatedAuthCanisterConfig, DelegatedTokenConfig, DelegationProofCacheConfig,
-        DelegationProofCacheProfile, DirectoryConfig, DirectoryPool, LogConfig, PoolImport,
-        RandomnessConfig, RandomnessSource, RoleAttestationConfig, ScalePool, ScalePoolPolicy,
-        ScalingConfig, ShardPool, ShardPoolPolicy, ShardingConfig, Standards,
-        StandardsCanisterConfig, SubnetConfig, TopupPolicy, Whitelist,
+        ConfigModel, DelegatedAuthCanisterConfig, DelegatedTokenConfig, DirectoryConfig,
+        DirectoryPool, LogConfig, PoolImport, RandomnessConfig, RandomnessSource,
+        RoleAttestationConfig, ScalePool, ScalePoolPolicy, ScalingConfig, ShardPool,
+        ShardPoolPolicy, ShardingConfig, Standards, StandardsCanisterConfig, SubnetConfig,
+        TopupPolicy, Whitelist,
     },
     ids::{CanisterRole, SubnetRole},
 };
@@ -195,53 +195,12 @@ fn render_delegated_token_config(config: &DelegatedTokenConfig) -> TokenStream {
     let enabled = config.enabled;
     let ecdsa_key_name = render_owned_string(&config.ecdsa_key_name);
     let max_ttl_secs = render_option(config.max_ttl_secs.as_ref(), |value| quote!(#value));
-    let proof_cache = render_delegation_proof_cache_config(&config.proof_cache);
 
     quote! {
         ::canic::__internal::core::bootstrap::compiled::DelegatedTokenConfig {
             enabled: #enabled,
             ecdsa_key_name: #ecdsa_key_name,
             max_ttl_secs: #max_ttl_secs,
-            proof_cache: #proof_cache,
-        }
-    }
-}
-
-// Render the proof-cache tuning block.
-fn render_delegation_proof_cache_config(config: &DelegationProofCacheConfig) -> TokenStream {
-    let profile = render_option(config.profile.as_ref(), |profile| {
-        render_delegation_proof_cache_profile(*profile)
-    });
-    let shard_count_hint = render_option(config.shard_count_hint.as_ref(), |value| quote!(#value));
-    let capacity_override =
-        render_option(config.capacity_override.as_ref(), |value| quote!(#value));
-    let active_window_secs = config.active_window_secs;
-
-    quote! {
-        ::canic::__internal::core::bootstrap::compiled::DelegationProofCacheConfig {
-            profile: #profile,
-            shard_count_hint: #shard_count_hint,
-            capacity_override: #capacity_override,
-            active_window_secs: #active_window_secs,
-        }
-    }
-}
-
-// Render the proof-cache sizing profile enum.
-fn render_delegation_proof_cache_profile(profile: DelegationProofCacheProfile) -> TokenStream {
-    match profile {
-        DelegationProofCacheProfile::Small => {
-            quote!(
-                ::canic::__internal::core::bootstrap::compiled::DelegationProofCacheProfile::Small
-            )
-        }
-        DelegationProofCacheProfile::Standard => {
-            quote!(::canic::__internal::core::bootstrap::compiled::DelegationProofCacheProfile::Standard)
-        }
-        DelegationProofCacheProfile::Large => {
-            quote!(
-                ::canic::__internal::core::bootstrap::compiled::DelegationProofCacheProfile::Large
-            )
         }
     }
 }

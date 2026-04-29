@@ -21,6 +21,13 @@ pub struct MintDelegatedTokenV2Input<'a> {
     pub now_secs: u64,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PreparedDelegatedTokenV2 {
+    pub claims: DelegatedTokenClaimsV2,
+    pub claims_hash: [u8; 32],
+    pub proof: DelegationProofV2,
+}
+
 #[derive(Debug, Eq, Error, PartialEq)]
 pub enum MintDelegatedTokenV2Error {
     #[error("delegated auth v2 cert is not yet valid")]
@@ -54,6 +61,16 @@ pub fn mint_delegated_token_v2<F>(
 where
     F: FnOnce([u8; 32]) -> Result<Vec<u8>, String>,
 {
+    let prepared = prepare_delegated_token_v2(input)?;
+    let shard_sig =
+        sign_claims_hash(prepared.claims_hash).map_err(MintDelegatedTokenV2Error::SignFailed)?;
+    Ok(finish_delegated_token_v2(prepared, shard_sig))
+}
+
+/// Prepare one canonical V2 delegated-token claims payload before shard signing.
+pub fn prepare_delegated_token_v2(
+    input: MintDelegatedTokenV2Input<'_>,
+) -> Result<PreparedDelegatedTokenV2, MintDelegatedTokenV2Error> {
     let cert = &input.proof.cert;
 
     if input.now_secs < cert.issued_at {
@@ -97,14 +114,25 @@ where
         scopes: input.scopes,
         nonce: input.nonce,
     };
-    let shard_sig =
-        sign_claims_hash(claims_hash(&claims)?).map_err(MintDelegatedTokenV2Error::SignFailed)?;
+    let claims_hash = claims_hash(&claims)?;
 
-    Ok(DelegatedTokenV2 {
+    Ok(PreparedDelegatedTokenV2 {
         claims,
+        claims_hash,
         proof: input.proof.clone(),
-        shard_sig,
     })
+}
+
+/// Combine prepared V2 token claims with their shard signature.
+pub fn finish_delegated_token_v2(
+    prepared: PreparedDelegatedTokenV2,
+    shard_sig: Vec<u8>,
+) -> DelegatedTokenV2 {
+    DelegatedTokenV2 {
+        claims: prepared.claims,
+        proof: prepared.proof,
+        shard_sig,
+    }
 }
 
 fn verify_scopes(subset: &[String], superset: &[String]) -> Result<(), MintDelegatedTokenV2Error> {

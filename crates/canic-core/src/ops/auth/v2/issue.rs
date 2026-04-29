@@ -35,6 +35,14 @@ pub struct IssuedDelegationProofV2 {
     pub cert_hash: [u8; 32],
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PreparedDelegationCertV2 {
+    pub cert: DelegationCertV2,
+    pub cert_hash: [u8; 32],
+    pub root_public_key_sec1: Vec<u8>,
+    pub root_key_cert: Option<RootKeyCertificateV2>,
+}
+
 #[derive(Debug, Eq, Error, PartialEq)]
 pub enum IssueDelegationProofV2Error {
     #[error("delegated auth v2 cert ttl must be greater than zero")]
@@ -63,6 +71,16 @@ pub fn issue_delegation_proof_v2<F>(
 where
     F: FnOnce([u8; 32]) -> Result<Vec<u8>, String>,
 {
+    let prepared = prepare_delegation_cert_v2(input)?;
+    let root_sig =
+        sign_cert_hash(prepared.cert_hash).map_err(IssueDelegationProofV2Error::SignFailed)?;
+    Ok(finish_delegation_proof_v2(prepared, root_sig))
+}
+
+/// Prepare one canonical V2 delegation certificate before root signing.
+pub fn prepare_delegation_cert_v2(
+    input: IssueDelegationProofV2Input,
+) -> Result<PreparedDelegationCertV2, IssueDelegationProofV2Error> {
     if input.cert_ttl_secs == 0 {
         return Err(IssueDelegationProofV2Error::CertTtlZero);
     }
@@ -99,17 +117,29 @@ where
     validate_cert_issuance_policy_for_built_cert(&cert, input.ttl_policy)?;
 
     let cert_hash = cert_hash(&cert)?;
-    let root_sig = sign_cert_hash(cert_hash).map_err(IssueDelegationProofV2Error::SignFailed)?;
 
-    Ok(IssuedDelegationProofV2 {
-        proof: DelegationProofV2 {
-            cert,
-            root_sig,
-            root_public_key_sec1: Some(input.root_public_key_sec1),
-            root_key_cert: input.root_key_cert,
-        },
+    Ok(PreparedDelegationCertV2 {
+        cert,
         cert_hash,
+        root_public_key_sec1: input.root_public_key_sec1,
+        root_key_cert: input.root_key_cert,
     })
+}
+
+/// Combine a prepared V2 certificate with its root signature.
+pub fn finish_delegation_proof_v2(
+    prepared: PreparedDelegationCertV2,
+    root_sig: Vec<u8>,
+) -> IssuedDelegationProofV2 {
+    IssuedDelegationProofV2 {
+        proof: DelegationProofV2 {
+            cert: prepared.cert,
+            root_sig,
+            root_public_key_sec1: Some(prepared.root_public_key_sec1),
+            root_key_cert: prepared.root_key_cert,
+        },
+        cert_hash: prepared.cert_hash,
+    }
 }
 
 fn validate_cert_issuance_policy_for_built_cert(

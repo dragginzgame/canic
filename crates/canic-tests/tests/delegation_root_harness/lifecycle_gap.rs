@@ -48,8 +48,7 @@ pub fn reinstall_test_verifier(setup: &RootSetup, test_pid: Principal) {
         .wait_for_ready(test_pid, READY_TICK_LIMIT, "test verifier reinstall");
 }
 
-/// Upgrade the signer shard so post-upgrade bootstrap runs signer proof
-/// prewarm and re-pushes proof coverage to root-derived verifiers.
+/// Upgrade the signer shard after verifier reinstall while preserving topology identity.
 pub fn upgrade_user_shard_signer(setup: &RootSetup, shard_pid: Principal) {
     log_step(&format!("upgrade signer shard={shard_pid}"));
     setup

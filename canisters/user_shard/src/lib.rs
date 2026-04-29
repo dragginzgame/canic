@@ -1,5 +1,5 @@
 //!
-//! User shard canister that stores delegation proofs and issues delegated tokens.
+//! User shard canister that issues self-contained delegated auth V2 tokens.
 //!
 //! Test-only helper: this canister is intended for local/dev flows and is not
 //! a public-facing deployment target. Its endpoints may intentionally omit
@@ -11,7 +11,8 @@
 use canic::{
     Error,
     api::auth::DelegationApi,
-    dto::auth::{DelegatedToken, DelegatedTokenClaims},
+    cdk::candid::Reserved,
+    dto::auth::{DelegatedTokenMintRequestV2, DelegatedTokenV2},
     ids::cap,
     prelude::*,
 };
@@ -32,17 +33,19 @@ async fn canic_upgrade() {}
 //
 
 /// user_shard_issue_token
-/// Issue a delegated token using the locally stored delegation proof.
+/// Issue a self-contained delegated token without local proof-cache state.
 ///
 /// Test-only: no public auth guarantees; intended for local/dev Canic tests.
 #[canic_update]
-async fn user_shard_issue_token(claims: DelegatedTokenClaims) -> Result<DelegatedToken, Error> {
+async fn user_shard_issue_token(
+    request: DelegatedTokenMintRequestV2,
+) -> Result<DelegatedTokenV2, Error> {
     // Test-only guard: keep this endpoint out of non-local flows.
     if let Err(err) = canic::access::env::build_network_local() {
         return Err(Error::forbidden(err.to_string()));
     }
 
-    DelegationApi::issue_token(claims).await
+    DelegationApi::mint_token_v2(request).await
 }
 
 #[cfg(not(canic_disable_bundle_observability_env))]
@@ -56,19 +59,8 @@ async fn user_shard_local_public_key_test() -> Result<Vec<u8>, Error> {
     DelegationApi::local_shard_public_key_sec1().await
 }
 
-/// user_shard_has_signing_proof_test
-/// Return whether startup delegation proof prewarm installed local signer proof.
-#[canic_query]
-async fn user_shard_has_signing_proof_test() -> Result<bool, Error> {
-    if let Err(err) = canic::access::env::build_network_local() {
-        return Err(Error::forbidden(err.to_string()));
-    }
-
-    Ok(DelegationApi::has_signing_proof())
-}
-
 #[canic_query(requires(auth::authenticated(cap::VERIFY)))]
-async fn hello(token: DelegatedToken) -> Result<(), Error> {
+async fn hello(_token: Reserved) -> Result<(), Error> {
     Ok(())
 }
 

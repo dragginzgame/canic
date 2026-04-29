@@ -1,8 +1,18 @@
-use super::{DelegatedTokenOps, SignedDelegationProof, crypto, keys, verify};
+use super::{
+    DelegatedTokenOps, SignDelegationProofV2Input, keys,
+    v2::{
+        canonical::{derivation_path_hash, key_name_hash},
+        issue::{
+            IssueDelegationProofV2Error, IssueDelegationProofV2Input, finish_delegation_proof_v2,
+            prepare_delegation_cert_v2,
+        },
+        policy::DelegatedAuthTtlPolicyV2,
+    },
+};
 use crate::{
     InternalError,
     cdk::types::Principal,
-    dto::auth::{DelegationCert, DelegationProof},
+    dto::auth::{DelegationProofV2, ShardKeyBindingV2},
     ops::{
         auth::DelegationValidationError,
         ic::{IcOps, ecdsa::EcdsaOps},
@@ -10,35 +20,44 @@ use crate::{
 };
 
 impl DelegatedTokenOps {
-    /// Sign a delegation cert in one step using threshold ECDSA.
-    pub(crate) async fn sign_delegation_cert(
-        cert: DelegationCert,
-    ) -> Result<SignedDelegationProof, InternalError> {
-        let local = IcOps::canister_self();
-        if cert.root_pid != local {
-            return Err(DelegationValidationError::InvalidRootAuthority {
-                expected: local,
-                found: cert.root_pid,
-            }
-            .into());
-        }
-
+    /// Sign a V2 delegation proof with local root threshold ECDSA material.
+    pub(crate) async fn sign_delegation_proof_v2(
+        input: SignDelegationProofV2Input,
+    ) -> Result<DelegationProofV2, InternalError> {
+        let root_pid = IcOps::canister_self();
         let key_name = keys::delegated_tokens_key_name()?;
-        crate::perf!("resolve_signing_key_name");
-        let hash = crypto::cert_hash(&cert);
-        crate::perf!("hash_cert");
-        let derivation_path = keys::root_derivation_path();
-        crate::perf!("build_root_derivation_path");
-        let sig = EcdsaOps::sign_bytes(&key_name, derivation_path, hash).await?;
-        crate::perf!("sign_cert");
+        let root_derivation_path = keys::root_derivation_path();
+        let shard_derivation_path = keys::shard_derivation_path(input.shard_pid);
 
-        Ok(SignedDelegationProof {
-            proof: DelegationProof {
-                cert,
-                cert_sig: sig,
+        let root_public_key_sec1 = Self::local_root_public_key_sec1(root_pid).await?;
+        let shard_public_key_sec1 = Self::local_shard_public_key_sec1(input.shard_pid).await?;
+        let prepared = prepare_delegation_cert_v2(IssueDelegationProofV2Input {
+            root_pid,
+            root_key_id: key_name.clone(),
+            root_public_key_sec1,
+            root_key_cert: input.root_key_cert,
+            shard_pid: input.shard_pid,
+            shard_key_id: key_name.clone(),
+            shard_public_key_sec1,
+            shard_key_binding: ShardKeyBindingV2::IcThresholdEcdsa {
+                key_name_hash: key_name_hash(&key_name),
+                derivation_path_hash: derivation_path_hash(&shard_derivation_path),
             },
-            cert_hash: hash,
+            issued_at: input.issued_at,
+            cert_ttl_secs: input.cert_ttl_secs,
+            max_token_ttl_secs: input.max_token_ttl_secs,
+            scopes: input.scopes,
+            audience: input.audience,
+            ttl_policy: DelegatedAuthTtlPolicyV2 {
+                max_cert_ttl_secs: input.max_cert_ttl_secs,
+                max_token_ttl_secs: input.max_token_ttl_secs,
+            },
         })
+        .map_err(map_issue_delegation_proof_v2_error)?;
+
+        let root_sig =
+            EcdsaOps::sign_bytes(&key_name, root_derivation_path, prepared.cert_hash).await?;
+        Ok(finish_delegation_proof_v2(prepared, root_sig).proof)
     }
 
     /// Resolve the local shard public key, fetching and caching it on demand.
@@ -87,79 +106,8 @@ impl DelegatedTokenOps {
         crate::ops::storage::auth::DelegationStateOps::root_public_key()
             .ok_or_else(|| super::DelegationSignatureError::RootPublicKeyUnavailable.into())
     }
+}
 
-    /// Cache root and shard public keys for a delegation certificate.
-    ///
-    /// Verification paths are intentionally local-only and do not call IC
-    /// management APIs, so provisioning must prime this cache.
-    pub async fn cache_public_keys_for_cert(cert: &DelegationCert) -> Result<(), InternalError> {
-        Self::cache_public_keys_for_cert_with_optional_keys(cert, None, None).await
-    }
-
-    /// Cache root and shard public keys, trusting caller-provided key material when present.
-    pub async fn cache_public_keys_for_cert_with_optional_keys(
-        cert: &DelegationCert,
-        root_public_key: Option<Vec<u8>>,
-        shard_public_key: Option<Vec<u8>>,
-    ) -> Result<(), InternalError> {
-        let key_name = keys::delegated_tokens_key_name()?;
-        if let Some(root_public_key) = root_public_key {
-            crate::ops::storage::auth::DelegationStateOps::set_root_public_key(root_public_key);
-        } else {
-            keys::ensure_root_public_key_cached(&key_name, cert.root_pid).await?;
-        }
-
-        if let Some(shard_public_key) = shard_public_key {
-            crate::ops::storage::auth::DelegationStateOps::set_shard_public_key(
-                cert.shard_pid,
-                shard_public_key,
-            );
-        } else {
-            keys::ensure_shard_public_key_cached(&key_name, cert.shard_pid).await?;
-        }
-        Ok(())
-    }
-
-    /// Structural verification for a delegation proof.
-    pub(super) fn verify_delegation_structure(
-        proof: &DelegationProof,
-        expected_root: Option<Principal>,
-    ) -> Result<(), InternalError> {
-        if proof.cert.expires_at <= proof.cert.issued_at {
-            return Err(DelegationValidationError::CertInvalidWindow {
-                issued_at: proof.cert.issued_at,
-                expires_at: proof.cert.expires_at,
-            }
-            .into());
-        }
-
-        if let Some(expected) = expected_root
-            && proof.cert.root_pid != expected
-        {
-            return Err(DelegationValidationError::InvalidRootAuthority {
-                expected,
-                found: proof.cert.root_pid,
-            }
-            .into());
-        }
-
-        Ok(())
-    }
-
-    /// Cryptographic verification for a delegation proof.
-    pub(super) fn verify_delegation_signature(
-        proof: &DelegationProof,
-    ) -> Result<(), InternalError> {
-        verify::verify_delegation_signature(proof)
-    }
-
-    /// Full delegation proof verification (structure + signature).
-    pub fn verify_delegation_proof(
-        proof: &DelegationProof,
-        authority_pid: Principal,
-    ) -> Result<(), InternalError> {
-        Self::verify_delegation_structure(proof, Some(authority_pid))?;
-        Self::verify_delegation_signature(proof)?;
-        Ok(())
-    }
+fn map_issue_delegation_proof_v2_error(err: IssueDelegationProofV2Error) -> InternalError {
+    DelegationValidationError::DelegatedAuthV2(err.to_string()).into()
 }

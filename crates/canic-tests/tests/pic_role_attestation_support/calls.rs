@@ -32,33 +32,3 @@ where
     pic.update_call_as(canister_id, caller, method, args)
         .expect("update_call failed")
 }
-
-pub fn update_call_raw_as<A>(
-    pic: &Pic,
-    canister_id: Principal,
-    caller: Principal,
-    method: &str,
-    args: A,
-) -> Result<(), String>
-where
-    A: ArgumentEncoder,
-{
-    pic.update_call_as::<Result<(), Error>, _>(canister_id, caller, method, args)
-        .map(|_| ())
-        .map_err(|err| err.to_string())
-}
-
-pub fn query_call_as<T, A>(
-    pic: &Pic,
-    canister_id: Principal,
-    caller: Principal,
-    method: &str,
-    args: A,
-) -> T
-where
-    T: candid::CandidType + DeserializeOwned,
-    A: ArgumentEncoder,
-{
-    pic.query_call_as(canister_id, caller, method, args)
-        .expect("query_call failed")
-}

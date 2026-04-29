@@ -119,35 +119,30 @@ fn validate_authenticated_args(sig: &Signature) -> syn::Result<()> {
     let Some(first) = sig.inputs.first() else {
         return Err(syn::Error::new_spanned(
             &sig.ident,
-            "authenticated(...) requires a first argument of type `DelegatedToken`",
+            authenticated_arg_error(),
         ));
     };
 
     let first_ty = match first {
         FnArg::Typed(pat) => pat.ty.as_ref(),
         FnArg::Receiver(recv) => {
-            return Err(syn::Error::new_spanned(
-                recv,
-                "authenticated(...) requires a first argument of type `DelegatedToken`",
-            ));
+            return Err(syn::Error::new_spanned(recv, authenticated_arg_error()));
         }
     };
 
     let Some(ident) = type_ident(first_ty) else {
-        return Err(syn::Error::new_spanned(
-            first_ty,
-            "authenticated(...) requires a first argument of type `DelegatedToken`",
-        ));
+        return Err(syn::Error::new_spanned(first_ty, authenticated_arg_error()));
     };
 
-    if ident == "DelegatedToken" {
+    if matches!(ident.to_string().as_str(), "DelegatedTokenV2" | "Reserved") {
         return Ok(());
     }
 
-    Err(syn::Error::new_spanned(
-        first_ty,
-        "authenticated(...) requires a first argument of type `DelegatedToken`",
-    ))
+    Err(syn::Error::new_spanned(first_ty, authenticated_arg_error()))
+}
+
+const fn authenticated_arg_error() -> &'static str {
+    "authenticated(...) requires a first argument of type `DelegatedTokenV2` or `Reserved`"
 }
 
 fn type_ident(ty: &Type) -> Option<&syn::Ident> {
@@ -207,9 +202,17 @@ mod tests {
     }
 
     #[test]
-    fn authenticated_accepts_delegated_token_first_arg() {
+    fn authenticated_accepts_delegated_token_v2_first_arg() {
         let sig: Signature = syn::parse_quote!(
-            async fn hello(token: ::canic::dto::auth::DelegatedToken) -> Result<(), ::canic::Error>
+            async fn hello(token: ::canic::dto::auth::DelegatedTokenV2) -> Result<(), ::canic::Error>
+        );
+        validate(parsed_authenticated(), &sig, true).expect("authenticated arg ok");
+    }
+
+    #[test]
+    fn authenticated_accepts_reserved_first_arg_for_dual_token_surfaces() {
+        let sig: Signature = syn::parse_quote!(
+            async fn hello(token: ::canic::cdk::candid::Reserved) -> Result<(), ::canic::Error>
         );
         validate(parsed_authenticated(), &sig, true).expect("authenticated arg ok");
     }

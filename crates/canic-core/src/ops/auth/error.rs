@@ -55,6 +55,9 @@ pub enum DelegationValidationError {
 
     #[error("delegation proof does not match stored proof")]
     ProofMismatch,
+
+    #[error("delegated auth v2 validation failed: {0}")]
+    DelegatedAuthV2(String),
 }
 
 #[derive(Debug, ThisError)]

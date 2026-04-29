@@ -394,7 +394,7 @@ impl BuiltinPredicateEvaluator for AuthenticatedEvaluator {
         let verified =
             access::auth::delegated_token_verified(ctx.authenticated_caller, required_scope)
                 .await?;
-        DelegationMetrics::record_authority(verified.cert.shard_pid);
+        DelegationMetrics::record_authority(verified.issuer_shard_pid);
         Ok(())
     }
 

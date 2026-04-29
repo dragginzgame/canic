@@ -1,8 +1,5 @@
 use crate::{
-    dto::{
-        auth::{DelegationRequest, RoleAttestationRequest},
-        rpc::RootRequestMetadata,
-    },
+    dto::{auth::RoleAttestationRequest, rpc::RootRequestMetadata},
     ops::ic::IcOps,
 };
 use sha2::{Digest, Sha256};
@@ -10,13 +7,6 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 const DEFAULT_ROOT_REQUEST_TTL_SECONDS: u64 = 300;
 static ROOT_REQUEST_NONCE: AtomicU64 = AtomicU64::new(1);
-
-pub(super) fn with_root_request_metadata(mut request: DelegationRequest) -> DelegationRequest {
-    if request.metadata.is_none() {
-        request.metadata = Some(new_request_metadata());
-    }
-    request
-}
 
 pub(super) fn with_root_attestation_request_metadata(
     mut request: RoleAttestationRequest,

@@ -2,60 +2,28 @@ use crate::{
     InternalError, InternalErrorOrigin,
     cdk::types::Principal,
     config::ConfigModel,
-    dto::auth::{DelegationAudience, DelegationProvisionResponse, DelegationRequest},
-    ids::{CanisterRole, cap},
+    ids::CanisterRole,
     ops::{
-        auth::{DelegatedTokenOps, TokenGrant, TokenLifetime, audience},
+        auth::DelegatedTokenOps,
         config::ConfigOps,
         ic::{IcOps, ecdsa::EcdsaOps},
-        rpc::RpcOps,
-        runtime::env::EnvOps,
-        storage::auth::DelegationStateOps,
     },
-    protocol,
     workflow::prelude::*,
 };
 
-const DEFAULT_SIGNER_DELEGATION_PREWARM_TTL_SECS: u64 = 900;
-
 ///
-/// SignerDelegationPrewarmPlan
+/// SignerAuthMaterialPrewarmPlan
 ///
 
-struct SignerDelegationPrewarmPlan {
+struct SignerAuthMaterialPrewarmPlan {
     shard_pid: Principal,
-    scopes: Vec<String>,
-    aud: DelegationAudience,
-    iat: u64,
-    exp: u64,
 }
 
-impl SignerDelegationPrewarmPlan {
-    // Build the default signer delegation grant used by runtime lifecycle prewarm.
-    fn default(now_secs: u64, ttl_secs: u64) -> Self {
+impl SignerAuthMaterialPrewarmPlan {
+    // Build the local signer material prewarm plan used by runtime lifecycle.
+    fn default() -> Self {
         Self {
             shard_pid: IcOps::canister_self(),
-            scopes: vec![cap::VERIFY.to_string()],
-            aud: DelegationAudience::Any,
-            iat: now_secs,
-            exp: now_secs.saturating_add(ttl_secs),
-        }
-    }
-
-    // Borrow the grant fields that must be covered by the signing proof.
-    fn grant(&self) -> TokenGrant<'_> {
-        TokenGrant {
-            shard_pid: self.shard_pid,
-            aud: &self.aud,
-            scopes: &self.scopes,
-        }
-    }
-
-    // Return the proof lifetime window required by this prewarm plan.
-    const fn lifetime(&self) -> TokenLifetime {
-        TokenLifetime {
-            iat: self.iat,
-            exp: self.exp,
         }
     }
 }
@@ -70,25 +38,6 @@ impl SignerDelegationPrewarmPlan {
 pub struct RuntimeAuthWorkflow;
 
 impl RuntimeAuthWorkflow {
-    /// Log the resolved verifier proof-cache policy once during runtime startup.
-    pub fn log_delegation_proof_cache_policy() {
-        match ConfigOps::delegation_proof_cache_policy() {
-            Ok(policy) => crate::log!(
-                Topic::Auth,
-                Info,
-                "delegation proof cache policy profile={} capacity={} active_window_secs={}",
-                policy.profile.as_str(),
-                policy.capacity,
-                policy.active_window_secs
-            ),
-            Err(err) => crate::log!(
-                Topic::Auth,
-                Warn,
-                "delegation proof cache policy unavailable at runtime startup: {err}"
-            ),
-        }
-    }
-
     /// Fail fast when root delegated-auth config requires threshold ECDSA support.
     pub fn ensure_root_crypto_contract() -> Result<(), InternalError> {
         let cfg = ConfigOps::get()?;
@@ -119,7 +68,7 @@ impl RuntimeAuthWorkflow {
         Ok(())
     }
 
-    /// Prewarm one local signer proof when the current canister is a delegated signer.
+    /// Prewarm local signer key material when the current canister is a delegated signer.
     pub async fn prewarm_signer_delegation_proof() -> Result<(), InternalError> {
         let delegated_tokens_cfg = ConfigOps::delegated_tokens_config()?;
         let canister_cfg = ConfigOps::current_canister()?;
@@ -127,55 +76,16 @@ impl RuntimeAuthWorkflow {
             return Ok(());
         }
 
-        let ttl_secs = delegated_tokens_cfg
-            .max_ttl_secs
-            .unwrap_or(DEFAULT_SIGNER_DELEGATION_PREWARM_TTL_SECS);
-        let now = IcOps::now_secs();
-        let plan = SignerDelegationPrewarmPlan::default(now, ttl_secs);
-
-        if let Some(proof) = DelegationStateOps::latest_proof_dto()
-            && DelegatedTokenOps::proof_reusable_for_grant(
-                &proof,
-                plan.grant(),
-                plan.lifetime(),
-                now,
-            )
-        {
-            crate::log!(
-                Topic::Auth,
-                Info,
-                "delegation signer proof prewarm refreshing reusable local proof shard={} issued_at={} expires_at={}",
-                proof.cert.shard_pid,
-                proof.cert.issued_at,
-                proof.cert.expires_at
-            );
-        }
-
+        let plan = SignerAuthMaterialPrewarmPlan::default();
         let shard_public_key_sec1 =
             DelegatedTokenOps::local_shard_public_key_sec1(plan.shard_pid).await?;
-        let request = DelegationRequest {
-            shard_pid: plan.shard_pid,
-            scopes: plan.scopes,
-            aud: plan.aud,
-            ttl_secs,
-            shard_public_key_sec1,
-            metadata: None,
-        };
-
-        let root_pid = EnvOps::root_pid()?;
-        let response: DelegationProvisionResponse =
-            RpcOps::call_rpc_result(root_pid, protocol::CANIC_REQUEST_DELEGATION, request).await?;
-        DelegatedTokenOps::cache_public_keys_for_cert(&response.proof.cert).await?;
-        DelegatedTokenOps::verify_delegation_proof(&response.proof, root_pid)?;
-        DelegationStateOps::upsert_proof_from_dto(response.proof.clone(), IcOps::now_secs())?;
 
         crate::log!(
             Topic::Auth,
             Info,
-            "delegation signer proof prewarmed shard={} aud_roles={} ttl_secs={}",
-            response.proof.cert.shard_pid,
-            audience::role_count(&response.proof.cert.aud),
-            ttl_secs
+            "delegation signer auth material prewarmed shard={} shard_public_key_bytes={}",
+            plan.shard_pid,
+            shard_public_key_sec1.len()
         );
 
         Ok(())

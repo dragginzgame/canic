@@ -7,7 +7,6 @@ use canic::{
     Error,
     cdk::types::Principal,
     dto::{
-        auth::DelegationAudience,
         capability::{
             CAPABILITY_VERSION_V1, CapabilityProof, CapabilityRequestMetadata, CapabilityService,
             RootCapabilityEnvelopeV1, RootCapabilityResponseV1,
@@ -126,42 +125,6 @@ fn upgrade_policy_denies_registered_non_parent_caller() {
     assert_eq!(metric_count(&metrics, "Upgrade", "Denied"), 0);
     assert_eq!(metric_count(&metrics, "Upgrade", "Authorized"), 0);
     assert_eq!(metric_count(&metrics, "Upgrade", "ExecutionSuccess"), 0);
-}
-
-#[test]
-fn structural_proof_denies_unsupported_issue_delegation_capability() {
-    let setup = setup_cached_root(RootSetupProfile::Capability);
-    let caller = setup
-        .subnet_index
-        .get(&canister::TEST)
-        .copied()
-        .expect("test canister must exist");
-
-    let request = Request::IssueDelegation(canic::dto::auth::DelegationRequest {
-        shard_pid: caller,
-        scopes: vec!["rpc:verify".to_string()],
-        aud: DelegationAudience::Any,
-        ttl_secs: 60,
-        shard_public_key_sec1: vec![1, 2, 3],
-        metadata: Some(metadata([35u8; 32], 120)),
-    });
-    let err = root_response_as(&setup, caller, request)
-        .expect_err("unsupported structural capability must fail closed");
-    assert_eq!(err.code, ErrorCode::Forbidden);
-
-    let metrics = root_capability_metrics(&setup);
-    assert_eq!(
-        metric_count(&metrics, "IssueDelegation", "ProofRejected"),
-        1
-    );
-    assert_eq!(
-        metric_count(&metrics, "IssueDelegation", "ReplayAccepted"),
-        0
-    );
-    assert_eq!(
-        metric_count(&metrics, "IssueDelegation", "ExecutionSuccess"),
-        0
-    );
 }
 
 #[test]
@@ -624,48 +587,6 @@ fn upgrade_replay_returns_cached_response_and_rejects_conflict() {
     assert_eq!(metric_count(&metrics, "Upgrade", "ExecutionSuccess"), 1);
 }
 
-#[test]
-fn unsupported_capability_proof_rejection_does_not_commit_replay_entry() {
-    let setup = setup_cached_root(RootSetupProfile::Capability);
-    let caller = setup
-        .subnet_index
-        .get(&canister::TEST)
-        .copied()
-        .expect("test canister exists");
-    let metadata = metadata([17u8; 32], 120);
-
-    let invalid = canic::dto::auth::DelegationRequest {
-        shard_pid: caller,
-        scopes: vec!["rpc:verify".to_string()],
-        aud: DelegationAudience::Any,
-        ttl_secs: 60,
-        shard_public_key_sec1: vec![1, 2, 3],
-        metadata: Some(metadata),
-    };
-
-    let first = root_response_as(&setup, caller, Request::IssueDelegation(invalid.clone()))
-        .expect_err("unsupported structural delegation request must fail");
-    assert_eq!(first.code, ErrorCode::Forbidden);
-
-    let second = root_response_as(&setup, caller, Request::IssueDelegation(invalid))
-        .expect_err("unsupported structural replay must not be committed");
-    assert_eq!(second.code, ErrorCode::Forbidden);
-
-    let metrics = root_capability_metrics(&setup);
-    assert_eq!(
-        metric_count(&metrics, "IssueDelegation", "ProofRejected"),
-        2
-    );
-    assert_eq!(
-        metric_count(&metrics, "IssueDelegation", "ReplayAccepted"),
-        0
-    );
-    assert_eq!(
-        metric_count(&metrics, "IssueDelegation", "ExecutionError"),
-        0
-    );
-}
-
 fn root_response_as(
     setup: &RootSetup,
     caller: Principal,
@@ -829,7 +750,6 @@ fn capability_metadata_from_request(request: &Request) -> ([u8; 16], [u8; 16], u
         Request::UpgradeCanister(req) => req.metadata,
         Request::RecycleCanister(req) => req.metadata,
         Request::Cycles(req) => req.metadata,
-        Request::IssueDelegation(req) => req.metadata,
         Request::IssueRoleAttestation(req) => req.metadata,
     };
 

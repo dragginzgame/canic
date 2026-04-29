@@ -85,9 +85,6 @@ async fn handle_request(request: Request) -> Result<Response, Error> {
         Request::Cycles(req) => Ok(Response::Cycles(CyclesResponse {
             cycles_transferred: req.cycles,
         })),
-        Request::IssueDelegation(_) => Err(Error::invalid(
-            "issue_delegation unsupported in sharding_root_stub",
-        )),
         Request::IssueRoleAttestation(_) => Err(Error::invalid(
             "issue_role_attestation unsupported in sharding_root_stub",
         )),

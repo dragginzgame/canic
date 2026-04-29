@@ -2,12 +2,13 @@ use super::DelegationApi;
 use crate::{
     access::auth::validate_delegated_session_subject,
     cdk::types::Principal,
-    dto::{auth::DelegatedToken, error::Error},
+    dto::{auth::DelegatedTokenV2, error::Error},
     ops::{
-        auth::{BootstrapTokenAudienceSubset, DelegatedSessionExpiryClamp, DelegatedTokenOps},
+        auth::{
+            DelegatedSessionExpiryClamp, DelegatedTokenOps, VerifyDelegatedTokenV2RuntimeInput,
+        },
         config::ConfigOps,
         ic::IcOps,
-        runtime::env::EnvOps,
         runtime::metrics::auth::{
             record_session_bootstrap_rejected_disabled,
             record_session_bootstrap_rejected_replay_conflict,
@@ -27,9 +28,9 @@ use sha2::{Digest, Sha256};
 
 impl DelegationApi {
     /// Persist a temporary delegated session subject for the caller wallet.
-    pub fn set_delegated_session_subject(
+    pub async fn set_delegated_session_subject(
         delegated_subject: Principal,
-        bootstrap_token: DelegatedToken,
+        bootstrap_token: DelegatedTokenV2,
         requested_ttl_secs: Option<u64>,
     ) -> Result<(), Error> {
         let cfg = ConfigOps::delegated_tokens_config().map_err(Error::from)?;
@@ -54,24 +55,30 @@ impl DelegationApi {
         }
 
         let issued_at = IcOps::now_secs();
-        let authority_pid = EnvOps::root_pid().map_err(Error::from)?;
-        let self_pid = IcOps::canister_self();
-        Self::ensure_token_claim_audience_subset(&bootstrap_token).inspect_err(|_| {
-            record_session_bootstrap_rejected_token_invalid();
-        })?;
-        let verified =
-            DelegatedTokenOps::verify_token(&bootstrap_token, authority_pid, issued_at, self_pid)
-                .map_err(|err| {
+        DelegatedTokenOps::ensure_v2_root_public_key_cached(&bootstrap_token)
+            .await
+            .map_err(|err| {
                 record_session_bootstrap_rejected_token_invalid();
                 Self::map_delegation_error(err)
             })?;
+        let max_ttl_secs = Self::delegated_auth_max_ttl_secs()?;
+        let verified = DelegatedTokenOps::verify_token_v2(VerifyDelegatedTokenV2RuntimeInput {
+            token: &bootstrap_token,
+            max_cert_ttl_secs: max_ttl_secs,
+            max_token_ttl_secs: max_ttl_secs,
+            required_scopes: &[],
+            now_secs: issued_at,
+        })
+        .map_err(|err| {
+            record_session_bootstrap_rejected_token_invalid();
+            Self::map_delegation_error(err)
+        })?;
 
-        if verified.claims.subject() != delegated_subject {
+        if verified.subject != delegated_subject {
             record_session_bootstrap_rejected_subject_mismatch();
             return Err(Error::forbidden(format!(
                 "delegated session subject mismatch: requested={} token_subject={}",
-                delegated_subject,
-                verified.claims.subject()
+                delegated_subject, verified.subject
             )));
         }
 
@@ -80,7 +87,7 @@ impl DelegationApi {
             .unwrap_or(Self::MAX_DELEGATED_SESSION_TTL_SECS);
         let expires_at = Self::clamp_delegated_session_expires_at(
             issued_at,
-            verified.claims.expires_at(),
+            bootstrap_token.claims.expires_at,
             configured_max_ttl_secs,
             requested_ttl_secs,
         )
@@ -118,7 +125,7 @@ impl DelegationApi {
                 delegated_pid: delegated_subject,
                 token_fingerprint,
                 bound_at: issued_at,
-                expires_at: verified.claims.expires_at(),
+                expires_at: bootstrap_token.claims.expires_at,
             },
             issued_at,
         );
@@ -162,22 +169,9 @@ impl DelegationApi {
         removed
     }
 
-    // Reject externally supplied tokens whose requested audience is empty or exceeds the proof audience.
-    pub(super) fn ensure_token_claim_audience_subset(token: &DelegatedToken) -> Result<(), Error> {
-        match DelegatedTokenOps::bootstrap_token_audience_subset(token) {
-            BootstrapTokenAudienceSubset::Accepted => Ok(()),
-            BootstrapTokenAudienceSubset::EmptyRoleAudience => Err(Error::invalid(
-                "delegated token claims audience role list must not be empty",
-            )),
-            BootstrapTokenAudienceSubset::OutsideProofAudience => Err(Error::invalid(
-                "delegated token claims audience is not a subset of proof audience",
-            )),
-        }
-    }
-
     // Fingerprint a bootstrap token for replay protection and idempotence checks.
     fn delegated_session_bootstrap_token_fingerprint(
-        token: &DelegatedToken,
+        token: &DelegatedTokenV2,
     ) -> Result<[u8; 32], Error> {
         let token_bytes = crate::cdk::candid::encode_one(token).map_err(|err| {
             Error::internal(format!("bootstrap token fingerprint encode failed: {err}"))

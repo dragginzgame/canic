@@ -1,15 +1,13 @@
 use super::{
-    DEFAULT_MAX_ROLE_ATTESTATION_TTL_SECONDS, RootCapability, RootContext, delegation,
-    nonroot_cycles,
+    DEFAULT_MAX_ROLE_ATTESTATION_TTL_SECONDS, RootCapability, RootContext, nonroot_cycles,
 };
 use crate::{
     InternalError,
-    dto::auth::{DelegationRequest, RoleAttestationRequest},
+    dto::auth::RoleAttestationRequest,
     dto::rpc::{RecycleCanisterRequest, UpgradeCanisterRequest},
     log,
     log::Topic,
     ops::{
-        auth::DelegatedTokenOps,
         config::ConfigOps,
         runtime::env::EnvOps,
         runtime::metrics::root_capability::{RootCapabilityMetricOutcome, RootCapabilityMetrics},
@@ -42,9 +40,6 @@ pub(super) fn authorize(
             authorize_root_only(ctx).and_then(|()| authorize_recycle(ctx, req))
         }
         RootCapability::RequestCycles(_) => unreachable!("handled before generic authorization"),
-        RootCapability::IssueDelegation(req) => {
-            authorize_root_only(ctx).and_then(|()| authorize_issue_delegation(ctx, req))
-        }
         RootCapability::IssueRoleAttestation(req) => {
             authorize_root_only(ctx).and_then(|()| authorize_issue_role_attestation(ctx, req))
         }
@@ -113,45 +108,6 @@ fn authorize_recycle(ctx: &RootContext, req: &RecycleCanisterRequest) -> Result<
     if ctx.caller != ctx.self_pid && registry_entry.parent_pid != Some(ctx.caller) {
         return Err(RpcWorkflowError::NotChildOfCaller(req.canister_pid, ctx.caller).into());
     }
-
-    Ok(())
-}
-
-fn authorize_issue_delegation(
-    ctx: &RootContext,
-    req: &DelegationRequest,
-) -> Result<(), InternalError> {
-    let cfg = ConfigOps::delegated_tokens_config()?;
-    if !cfg.enabled {
-        return Err(RpcWorkflowError::DelegatedTokensDisabled.into());
-    }
-
-    let root_pid = ctx.self_pid;
-
-    if ctx.caller != req.shard_pid {
-        return Err(
-            RpcWorkflowError::DelegationCallerShardMismatch(ctx.caller, req.shard_pid).into(),
-        );
-    }
-
-    if req.ttl_secs == 0 {
-        return Err(RpcWorkflowError::DelegationInvalidTtl(req.ttl_secs).into());
-    }
-
-    if crate::ops::auth::audience::has_empty_roles(&req.aud) {
-        return Err(RpcWorkflowError::DelegationAudienceEmpty.into());
-    }
-
-    if req.scopes.is_empty() {
-        return Err(RpcWorkflowError::DelegationScopesEmpty.into());
-    }
-
-    if req.scopes.iter().any(String::is_empty) {
-        return Err(RpcWorkflowError::DelegationScopeEmpty.into());
-    }
-
-    DelegatedTokenOps::required_verifier_targets_from_audience(&req.aud, req.shard_pid, root_pid)
-        .map_err(delegation::map_verifier_target_derivation_error)?;
 
     Ok(())
 }

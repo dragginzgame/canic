@@ -354,129 +354,6 @@ impl Validate for AuthConfig {
     }
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum DelegationProofCacheProfile {
-    Small,
-    Standard,
-    Large,
-}
-
-impl DelegationProofCacheProfile {
-    #[must_use]
-    pub const fn capacity(self) -> usize {
-        match self {
-            Self::Small => 64,
-            Self::Standard => 96,
-            Self::Large => 160,
-        }
-    }
-
-    #[must_use]
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::Small => "small",
-            Self::Standard => "standard",
-            Self::Large => "large",
-        }
-    }
-
-    const fn from_shard_count_hint(shard_count_hint: Option<u16>) -> Self {
-        match shard_count_hint {
-            Some(0..=16) => Self::Small,
-            Some(17..=48) | None => Self::Standard,
-            Some(_) => Self::Large,
-        }
-    }
-}
-
-///
-/// DelegationProofCacheConfig
-///
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
-pub struct DelegationProofCacheConfig {
-    #[serde(default)]
-    pub profile: Option<DelegationProofCacheProfile>,
-
-    #[serde(default)]
-    pub shard_count_hint: Option<u16>,
-
-    #[serde(default)]
-    pub capacity_override: Option<u16>,
-
-    #[serde(default = "default_delegation_proof_cache_active_window_secs")]
-    pub active_window_secs: u32,
-}
-
-impl DelegationProofCacheConfig {
-    #[must_use]
-    pub fn resolved_profile(&self) -> DelegationProofCacheProfile {
-        self.profile.unwrap_or_else(|| {
-            DelegationProofCacheProfile::from_shard_count_hint(self.shard_count_hint)
-        })
-    }
-
-    pub fn resolved_capacity(&self) -> usize {
-        self.capacity_override
-            .map_or_else(|| self.resolved_profile().capacity(), usize::from)
-    }
-}
-
-const fn default_delegation_proof_cache_active_window_secs() -> u32 {
-    10 * 60
-}
-
-impl Default for DelegationProofCacheConfig {
-    fn default() -> Self {
-        Self {
-            profile: None,
-            shard_count_hint: None,
-            capacity_override: None,
-            active_window_secs: default_delegation_proof_cache_active_window_secs(),
-        }
-    }
-}
-
-#[cfg(any(not(target_arch = "wasm32"), test))]
-impl Validate for DelegationProofCacheConfig {
-    fn validate(&self) -> Result<(), ConfigSchemaError> {
-        if matches!(self.shard_count_hint, Some(0)) {
-            return Err(ConfigSchemaError::ValidationError(
-                "auth.delegated_tokens.proof_cache.shard_count_hint must be greater than zero"
-                    .into(),
-            ));
-        }
-
-        if matches!(self.capacity_override, Some(0)) {
-            return Err(ConfigSchemaError::ValidationError(
-                "auth.delegated_tokens.proof_cache.capacity_override must be greater than zero"
-                    .into(),
-            ));
-        }
-
-        if self.active_window_secs == 0 {
-            return Err(ConfigSchemaError::ValidationError(
-                "auth.delegated_tokens.proof_cache.active_window_secs must be greater than zero"
-                    .into(),
-            ));
-        }
-
-        let minimum_capacity = self.resolved_profile().capacity();
-        if let Some(capacity_override) = self.capacity_override
-            && usize::from(capacity_override) < minimum_capacity
-        {
-            return Err(ConfigSchemaError::ValidationError(format!(
-                "auth.delegated_tokens.proof_cache.capacity_override must be >= {minimum_capacity} for profile '{}'",
-                self.resolved_profile().as_str(),
-            )));
-        }
-
-        Ok(())
-    }
-}
-
 ///
 /// DelegatedTokenConfig
 ///
@@ -499,9 +376,6 @@ pub struct DelegatedTokenConfig {
 
     #[serde(default)]
     pub max_ttl_secs: Option<u64>,
-
-    #[serde(default)]
-    pub proof_cache: DelegationProofCacheConfig,
 }
 
 const fn default_delegated_tokens_enabled() -> bool {
@@ -518,7 +392,6 @@ impl Default for DelegatedTokenConfig {
             enabled: default_delegated_tokens_enabled(),
             ecdsa_key_name: default_delegated_tokens_ecdsa_key_name(),
             max_ttl_secs: None,
-            proof_cache: DelegationProofCacheConfig::default(),
         }
     }
 }
@@ -540,7 +413,7 @@ impl Validate for DelegatedTokenConfig {
             ));
         }
 
-        self.proof_cache.validate()
+        Ok(())
     }
 }
 
@@ -725,56 +598,6 @@ mod tests {
         cfg.auth.delegated_tokens.max_ttl_secs = Some(0);
 
         cfg.validate().expect_err("expected zero ttl to fail");
-    }
-
-    #[test]
-    fn delegated_tokens_proof_cache_shard_count_hint_zero_is_invalid() {
-        let mut cfg = ConfigModel::test_default();
-        cfg.auth.delegated_tokens.proof_cache.shard_count_hint = Some(0);
-
-        cfg.validate()
-            .expect_err("expected zero shard count hint to fail");
-    }
-
-    #[test]
-    fn delegated_tokens_proof_cache_active_window_zero_is_invalid() {
-        let mut cfg = ConfigModel::test_default();
-        cfg.auth.delegated_tokens.proof_cache.active_window_secs = 0;
-
-        cfg.validate()
-            .expect_err("expected zero active window to fail");
-    }
-
-    #[test]
-    fn delegated_tokens_proof_cache_capacity_override_below_profile_min_is_invalid() {
-        let mut cfg = ConfigModel::test_default();
-        cfg.auth.delegated_tokens.proof_cache.profile = Some(DelegationProofCacheProfile::Large);
-        cfg.auth.delegated_tokens.proof_cache.capacity_override = Some(96);
-
-        cfg.validate()
-            .expect_err("expected undersized override to fail");
-    }
-
-    #[test]
-    fn delegated_tokens_proof_cache_profile_resolves_from_shard_hint() {
-        let mut cfg = ConfigModel::test_default();
-        cfg.auth.delegated_tokens.proof_cache.shard_count_hint = Some(12);
-        assert_eq!(
-            cfg.auth.delegated_tokens.proof_cache.resolved_profile(),
-            DelegationProofCacheProfile::Small
-        );
-
-        cfg.auth.delegated_tokens.proof_cache.shard_count_hint = Some(32);
-        assert_eq!(
-            cfg.auth.delegated_tokens.proof_cache.resolved_profile(),
-            DelegationProofCacheProfile::Standard
-        );
-
-        cfg.auth.delegated_tokens.proof_cache.shard_count_hint = Some(64);
-        assert_eq!(
-            cfg.auth.delegated_tokens.proof_cache.resolved_profile(),
-            DelegationProofCacheProfile::Large
-        );
     }
 
     #[test]

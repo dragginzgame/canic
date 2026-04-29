@@ -40,7 +40,6 @@ impl RuntimeWorkflow {
 
     /// Start timers that should run on delegated-auth-aware non-root canisters.
     pub fn start_all_with_attestation_cache() {
-        auth::RuntimeAuthWorkflow::log_delegation_proof_cache_policy();
         workflow::runtime::attestation::AttestationKeyCacheWorkflow::start();
         Self::start_all();
     }

@@ -10,8 +10,7 @@ pub mod compiled {
         cdk::{candid::Principal, types::Cycles},
         config::schema::{
             AppConfig, AppInitMode, AuthConfig, CanisterConfig, CanisterKind, CanisterPool,
-            ConfigModel, DelegatedAuthCanisterConfig, DelegatedTokenConfig,
-            DelegationProofCacheConfig, DelegationProofCacheProfile, DirectoryConfig,
+            ConfigModel, DelegatedAuthCanisterConfig, DelegatedTokenConfig, DirectoryConfig,
             DirectoryPool, LogConfig, PoolImport, RandomnessConfig, RandomnessSource,
             RoleAttestationConfig, ScalePool, ScalePoolPolicy, ScalingConfig, ShardPool,
             ShardPoolPolicy, ShardingConfig, Standards, StandardsCanisterConfig, SubnetConfig,

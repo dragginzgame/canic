@@ -1,79 +1,4 @@
-use crate::{dto::auth::DelegationAudience, storage::prelude::*};
-
-///
-/// DelegationCertRecord
-///
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct DelegationCertRecord {
-    pub root_pid: Principal,
-    pub shard_pid: Principal,
-    pub issued_at: u64,
-    pub expires_at: u64,
-    pub scopes: Vec<String>,
-    pub aud: DelegationAudience,
-}
-
-///
-/// DelegationProofRecord
-///
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct DelegationProofRecord {
-    pub cert: DelegationCertRecord,
-    pub cert_sig: Vec<u8>,
-}
-
-///
-/// DelegationProofKeyRecord
-///
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct DelegationProofKeyRecord {
-    pub shard_pid: Principal,
-    pub cert_hash: [u8; 32],
-}
-
-///
-/// DelegationProofEntryRecord
-///
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct DelegationProofEntryRecord {
-    pub key: DelegationProofKeyRecord,
-    pub proof: DelegationProofRecord,
-    #[serde(default)]
-    pub installed_at: u64,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub last_verified_at: Option<u64>,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum DelegationProofEvictionClassRecord {
-    Cold,
-    Active,
-}
-
-///
-/// DelegationProofCacheStatsRecord
-///
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct DelegationProofCacheStatsRecord {
-    pub size: usize,
-    pub active_count: usize,
-    pub capacity: usize,
-}
-
-///
-/// DelegationProofUpsertRecord
-///
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct DelegationProofUpsertRecord {
-    pub stats: DelegationProofCacheStatsRecord,
-    pub evicted: Option<DelegationProofEvictionClassRecord>,
-}
+use crate::storage::prelude::*;
 
 ///
 /// ShardPublicKeyRecord
@@ -147,9 +72,6 @@ pub struct AttestationPublicKeyRecord {
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct DelegationStateRecord {
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub proofs: Vec<DelegationProofEntryRecord>,
-
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub root_public_key: Option<Vec<u8>>,
 

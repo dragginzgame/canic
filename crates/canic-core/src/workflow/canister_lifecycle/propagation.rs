@@ -1,20 +1,14 @@
 use crate::{
-    InternalError, InternalErrorOrigin,
+    InternalError,
     domain::policy::topology::TopologyPolicy,
-    dto::auth::{DelegationProof, DelegationProvisionStatus},
     ops::{
-        auth::audience,
-        config::ConfigOps,
-        ic::IcOps,
         storage::{
-            auth::DelegationStateOps,
             index::{app::AppIndexOps, subnet::SubnetIndexOps},
             registry::subnet::SubnetRegistryOps,
         },
         topology::policy::mapper::RegistryPolicyInputMapper,
     },
     workflow::{
-        auth::{DelegationPushOrigin, DelegationWorkflow},
         cascade::{state::StateCascadeWorkflow, topology::TopologyCascadeWorkflow},
         ic::provision::ProvisionWorkflow,
         prelude::*,
@@ -75,79 +69,6 @@ impl PropagationWorkflow {
         )
         .map_err(InternalError::from)?;
 
-        Self::propagate_delegation_proofs_to_new_verifier(_target, role).await?;
-
         Ok(())
-    }
-
-    // Push every unexpired root-cached signer proof that can authorize the new verifier role.
-    async fn propagate_delegation_proofs_to_new_verifier(
-        target: Principal,
-        role: &CanisterRole,
-    ) -> Result<(), InternalError> {
-        let cfg = ConfigOps::delegated_tokens_config()?;
-        if !cfg.enabled {
-            return Ok(());
-        }
-
-        let canister_cfg = ConfigOps::current_subnet_canister(role)?;
-        if !canister_cfg.delegated_auth.verifier {
-            return Ok(());
-        }
-
-        let proofs = Self::unexpired_proofs_for_verifier_role(role);
-        for proof in proofs {
-            let response = DelegationWorkflow::push_verifier_targets(
-                &proof,
-                vec![target],
-                DelegationPushOrigin::Provisioning,
-            )
-            .await;
-            Self::ensure_delegation_proof_push_succeeded(target, &proof, &response)?;
-        }
-
-        Ok(())
-    }
-
-    // Select unexpired proofs whose audience covers the verifier role.
-    fn unexpired_proofs_for_verifier_role(role: &CanisterRole) -> Vec<DelegationProof> {
-        let now_secs = IcOps::now_secs();
-        DelegationStateOps::unexpired_proofs_dto(now_secs)
-            .into_iter()
-            .filter(|proof| audience::role_allowed(role, &proof.cert.aud))
-            .collect()
-    }
-
-    // Fail creation propagation if the new verifier did not receive one required proof.
-    fn ensure_delegation_proof_push_succeeded(
-        target: Principal,
-        proof: &DelegationProof,
-        response: &crate::dto::auth::DelegationVerifierProofPushResponse,
-    ) -> Result<(), InternalError> {
-        let Some(result) = response.results.iter().find(|entry| entry.target == target) else {
-            return Err(InternalError::workflow(
-                InternalErrorOrigin::Workflow,
-                format!(
-                    "delegation proof propagation missing target result target={target} shard={}",
-                    proof.cert.shard_pid
-                ),
-            ));
-        };
-
-        if result.status == DelegationProvisionStatus::Ok {
-            return Ok(());
-        }
-
-        let detail = result
-            .error
-            .as_ref()
-            .map_or_else(|| "unknown error".to_string(), ToString::to_string);
-        Err(InternalError::workflow(
-            InternalErrorOrigin::Workflow,
-            format!(
-                "delegation proof propagation failed target={target} shard={} error={detail}",
-                proof.cert.shard_pid
-            ),
-        ))
     }
 }

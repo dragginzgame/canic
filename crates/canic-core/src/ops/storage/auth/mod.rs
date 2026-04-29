@@ -1,19 +1,13 @@
 pub mod mapper;
 
 use crate::{
-    InternalError,
     cdk::types::Principal,
-    config::schema::DelegationProofCacheProfile,
-    dto::auth::{AttestationKey, DelegationProof},
-    dto::auth::{AttestationKeySet, DelegationAudience},
-    ops::config::{ConfigOps, DelegationProofCachePolicy},
+    dto::auth::{AttestationKey, AttestationKeySet},
     storage::stable::auth::{
-        DelegatedSessionBootstrapBindingRecord, DelegatedSessionRecord,
-        DelegationProofCacheStatsRecord, DelegationProofEvictionClassRecord,
-        DelegationProofUpsertRecord, DelegationState,
+        DelegatedSessionBootstrapBindingRecord, DelegatedSessionRecord, DelegationState,
     },
 };
-use mapper::{AttestationPublicKeyRecordMapper, DelegationProofRecordMapper};
+use mapper::AttestationPublicKeyRecordMapper;
 
 ///
 /// DelegatedSession
@@ -42,63 +36,6 @@ pub struct DelegatedSessionBootstrapBinding {
 }
 
 ///
-/// StoredDelegationCert
-///
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-struct StoredDelegationCert {
-    root_pid: Principal,
-    shard_pid: Principal,
-    issued_at: u64,
-    expires_at: u64,
-    scopes: Vec<String>,
-    aud: DelegationAudience,
-}
-
-///
-/// StoredDelegationProof
-///
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-struct StoredDelegationProof {
-    cert: StoredDelegationCert,
-    cert_sig: Vec<u8>,
-}
-
-///
-/// DelegationProofEvictionClass
-///
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum DelegationProofEvictionClass {
-    Cold,
-    Active,
-}
-
-///
-/// DelegationProofCacheStats
-///
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct DelegationProofCacheStats {
-    pub size: usize,
-    pub active_count: usize,
-    pub capacity: usize,
-    pub profile: DelegationProofCacheProfile,
-    pub active_window_secs: u64,
-}
-
-///
-/// DelegationProofUpsertOutcome
-///
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct DelegationProofUpsertOutcome {
-    pub stats: DelegationProofCacheStats,
-    pub evicted: Option<DelegationProofEvictionClass>,
-}
-
-///
 /// DelegationStateOps
 ///
 /// WHY THIS FILE EXISTS
@@ -122,125 +59,6 @@ pub struct DelegationProofUpsertOutcome {
 pub struct DelegationStateOps;
 
 impl DelegationStateOps {
-    /// Resolve the most recently installed keyed delegation proof for signer issuance.
-    #[must_use]
-    pub fn latest_proof_dto() -> Option<DelegationProof> {
-        DelegationState::get_latest_proof_entry().map(|entry| {
-            DelegationProofRecordMapper::stored_proof_to_dto(
-                DelegationProofRecordMapper::record_to_stored_proof(entry.proof),
-            )
-        })
-    }
-
-    /// Resolve all unexpired keyed delegation proofs that may back existing tokens.
-    #[must_use]
-    pub fn unexpired_proofs_dto(now_secs: u64) -> Vec<DelegationProof> {
-        DelegationState::get_unexpired_proof_entries(now_secs)
-            .into_iter()
-            .map(|entry| {
-                DelegationProofRecordMapper::stored_proof_to_dto(
-                    DelegationProofRecordMapper::record_to_stored_proof(entry.proof),
-                )
-            })
-            .collect()
-    }
-
-    /// Resolve a keyed verifier proof that matches the incoming proof identity.
-    pub fn matching_proof_dto(proof: &DelegationProof) -> Option<DelegationProof> {
-        let key = DelegationProofRecordMapper::proof_key_from_dto(proof);
-
-        DelegationState::get_proof_entry(&key).map(|entry| {
-            DelegationProofRecordMapper::stored_proof_to_dto(
-                DelegationProofRecordMapper::record_to_stored_proof(entry.proof),
-            )
-        })
-    }
-
-    /// Upsert a keyed verifier proof into bounded verifier-local storage.
-    pub fn upsert_proof_from_dto(
-        proof: DelegationProof,
-        installed_at: u64,
-    ) -> Result<DelegationProofUpsertOutcome, InternalError> {
-        Self::upsert_proof_from_dto_with_shard_public_key(proof, installed_at, None)
-    }
-
-    /// Upsert a keyed verifier proof and optional shard key in one stable-state commit.
-    pub fn upsert_proof_from_dto_with_shard_public_key(
-        proof: DelegationProof,
-        installed_at: u64,
-        shard_public_key: Option<Vec<u8>>,
-    ) -> Result<DelegationProofUpsertOutcome, InternalError> {
-        Self::upsert_proof_from_dto_ref_with_shard_public_key(
-            &proof,
-            installed_at,
-            shard_public_key,
-        )
-    }
-
-    /// Upsert a keyed verifier proof by reference and optional shard key in one stable-state commit.
-    pub fn upsert_proof_from_dto_ref_with_shard_public_key(
-        proof: &DelegationProof,
-        installed_at: u64,
-        shard_public_key: Option<Vec<u8>>,
-    ) -> Result<DelegationProofUpsertOutcome, InternalError> {
-        let policy = Self::proof_cache_policy()?;
-        let entry = DelegationProofRecordMapper::dto_ref_to_entry(proof, installed_at);
-        Ok(proof_upsert_record_to_view(
-            DelegationState::upsert_proof_entry_with_shard_public_key(
-                entry,
-                shard_public_key,
-                installed_at,
-                policy.capacity,
-                policy.active_window_secs,
-            ),
-            policy,
-        ))
-    }
-
-    /// Upsert a keyed verifier proof using a caller-provided cert hash for the proof key.
-    pub fn upsert_proof_from_dto_ref_with_cert_hash_and_shard_public_key(
-        proof: &DelegationProof,
-        cert_hash: [u8; 32],
-        installed_at: u64,
-        shard_public_key: Option<Vec<u8>>,
-    ) -> Result<DelegationProofUpsertOutcome, InternalError> {
-        let policy = Self::proof_cache_policy()?;
-        let entry = DelegationProofRecordMapper::dto_ref_to_entry_with_cert_hash(
-            proof,
-            cert_hash,
-            installed_at,
-        );
-        crate::perf!("cache_root_verifier_map_entry");
-        Ok(proof_upsert_record_to_view(
-            DelegationState::upsert_proof_entry_with_shard_public_key(
-                entry,
-                shard_public_key,
-                installed_at,
-                policy.capacity,
-                policy.active_window_secs,
-            ),
-            policy,
-        ))
-    }
-
-    /// Mark a matching keyed proof as recently verified.
-    pub fn mark_matching_proof_verified(proof: &DelegationProof, now_secs: u64) -> bool {
-        let key = DelegationProofRecordMapper::proof_key_from_dto(proof);
-        DelegationState::mark_proof_entry_verified(&key, now_secs)
-    }
-
-    pub fn proof_cache_stats(now_secs: u64) -> Result<DelegationProofCacheStats, InternalError> {
-        let policy = Self::proof_cache_policy()?;
-        Ok(proof_cache_stats_record_to_view(
-            DelegationState::proof_cache_stats(
-                now_secs,
-                policy.capacity,
-                policy.active_window_secs,
-            ),
-            policy,
-        ))
-    }
-
     #[must_use]
     pub fn root_public_key() -> Option<Vec<u8>> {
         DelegationState::get_root_public_key()
@@ -351,11 +169,6 @@ impl DelegationStateOps {
             AttestationPublicKeyRecordMapper::dto_to_record(key),
         );
     }
-
-    // Resolve the static verifier proof-cache policy from config.
-    fn proof_cache_policy() -> Result<DelegationProofCachePolicy, InternalError> {
-        ConfigOps::delegation_proof_cache_policy()
-    }
 }
 
 const fn delegated_session_record_to_view(record: DelegatedSessionRecord) -> DelegatedSession {
@@ -399,37 +212,5 @@ const fn delegated_session_bootstrap_binding_view_to_record(
         token_fingerprint: view.token_fingerprint,
         bound_at: view.bound_at,
         expires_at: view.expires_at,
-    }
-}
-
-const fn proof_cache_stats_record_to_view(
-    stats: DelegationProofCacheStatsRecord,
-    policy: DelegationProofCachePolicy,
-) -> DelegationProofCacheStats {
-    DelegationProofCacheStats {
-        size: stats.size,
-        active_count: stats.active_count,
-        capacity: stats.capacity,
-        profile: policy.profile,
-        active_window_secs: policy.active_window_secs,
-    }
-}
-
-const fn proof_eviction_record_to_view(
-    eviction: DelegationProofEvictionClassRecord,
-) -> DelegationProofEvictionClass {
-    match eviction {
-        DelegationProofEvictionClassRecord::Cold => DelegationProofEvictionClass::Cold,
-        DelegationProofEvictionClassRecord::Active => DelegationProofEvictionClass::Active,
-    }
-}
-
-fn proof_upsert_record_to_view(
-    record: DelegationProofUpsertRecord,
-    policy: DelegationProofCachePolicy,
-) -> DelegationProofUpsertOutcome {
-    DelegationProofUpsertOutcome {
-        stats: proof_cache_stats_record_to_view(record.stats, policy),
-        evicted: record.evicted.map(proof_eviction_record_to_view),
     }
 }

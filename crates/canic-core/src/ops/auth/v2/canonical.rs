@@ -19,6 +19,7 @@ pub enum CanonicalDomainV2 {
     DelegatedTokenClaims = 2,
     RootKeyCertificate = 3,
     RoleHash = 4,
+    DerivationPath = 5,
 }
 
 #[derive(Debug, Eq, Error, PartialEq)]
@@ -47,6 +48,19 @@ pub fn root_key_certificate_payload_hash(cert: &RootKeyCertificateV2) -> [u8; 32
 
 pub fn public_key_hash(public_key_sec1: &[u8]) -> [u8; 32] {
     hash_bytes(public_key_sec1)
+}
+
+pub fn key_name_hash(key_name: &str) -> [u8; 32] {
+    hash_bytes(key_name.as_bytes())
+}
+
+pub fn derivation_path_hash(path: &[Vec<u8>]) -> [u8; 32] {
+    let mut out = domain_bytes(CanonicalDomainV2::DerivationPath);
+    encode_len(&mut out, path.len());
+    for segment in path {
+        encode_bytes(&mut out, segment);
+    }
+    hash_bytes(&out)
 }
 
 pub fn role_hash(role: &CanisterRole) -> Result<[u8; 32], CanonicalAuthV2Error> {
@@ -440,5 +454,14 @@ mod tests {
             root_key_certificate_payload_hash(&left),
             root_key_certificate_payload_hash(&right)
         );
+    }
+
+    #[test]
+    fn derivation_path_hash_preserves_segment_boundaries() {
+        let left = vec![b"ab".to_vec(), b"c".to_vec()];
+        let right = vec![b"a".to_vec(), b"bc".to_vec()];
+
+        assert_ne!(derivation_path_hash(&left), derivation_path_hash(&right));
+        assert_eq!(key_name_hash("dfx_test_key"), key_name_hash("dfx_test_key"));
     }
 }

@@ -291,10 +291,13 @@ fn prepare_scenario(setup: &root_harness::RootSetup, scenario: &AuditScenario) -
                 &setup.pic,
                 shard_pid,
                 subject,
-                DelegationAudience::Any,
+                DelegationAudienceV2::Principals(vec![target_pid]),
                 vec![cap::VERIFY.to_string()],
-                provision.proof.cert.issued_at,
-                provision.proof.cert.expires_at,
+                provision.cert.max_token_ttl_secs,
+                provision
+                    .cert
+                    .expires_at
+                    .saturating_sub(provision.cert.issued_at),
             );
             PreparedScenario {
                 target_pid,
@@ -365,7 +368,7 @@ fn execute_root_delegation_issue_scenario(
         .expect("test canister must exist for auth audit scenario");
     let response =
         request_root_delegation_provision(&setup.pic, setup.root_id, caller, verifier_pid);
-    assert_eq!(response.proof.cert.shard_pid, caller);
+    assert_eq!(response.cert.shard_pid, caller);
 }
 
 // Execute the verifier-side delegated token confirmation scenario.
@@ -724,7 +727,6 @@ fn capability_metadata_from_request(request: &Request) -> ([u8; 16], [u8; 16], u
         Request::UpgradeCanister(req) => req.metadata,
         Request::RecycleCanister(req) => req.metadata,
         Request::Cycles(req) => req.metadata,
-        Request::IssueDelegation(req) => req.metadata,
         Request::IssueRoleAttestation(req) => req.metadata,
     };
 

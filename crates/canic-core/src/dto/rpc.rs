@@ -1,8 +1,5 @@
 use crate::dto::{
-    auth::{
-        DelegationProvisionResponse, DelegationRequest, RoleAttestationRequest,
-        SignedRoleAttestation,
-    },
+    auth::{RoleAttestationRequest, SignedRoleAttestation},
     prelude::*,
 };
 
@@ -18,7 +15,6 @@ pub enum Request {
     UpgradeCanister(UpgradeCanisterRequest),
     RecycleCanister(RecycleCanisterRequest),
     Cycles(CyclesRequest),
-    IssueDelegation(DelegationRequest),
     IssueRoleAttestation(RoleAttestationRequest),
 }
 
@@ -55,14 +51,6 @@ impl Request {
         Self::Cycles(request)
     }
 
-    // issue_delegation
-    //
-    // Build a root request for delegated token issuance.
-    #[must_use]
-    pub const fn issue_delegation(request: DelegationRequest) -> Self {
-        Self::IssueDelegation(request)
-    }
-
     // issue_role_attestation
     //
     // Build a root request for role attestation issuance.
@@ -81,7 +69,6 @@ impl Request {
             Self::UpgradeCanister(_) => RequestFamily::Upgrade,
             Self::RecycleCanister(_) => RequestFamily::RecycleCanister,
             Self::Cycles(_) => RequestFamily::RequestCycles,
-            Self::IssueDelegation(_) => RequestFamily::IssueDelegation,
             Self::IssueRoleAttestation(_) => RequestFamily::IssueRoleAttestation,
         }
     }
@@ -96,7 +83,6 @@ impl Request {
             Self::UpgradeCanister(req) => req.metadata,
             Self::RecycleCanister(req) => req.metadata,
             Self::Cycles(req) => req.metadata,
-            Self::IssueDelegation(req) => req.metadata,
             Self::IssueRoleAttestation(req) => req.metadata,
         }
     }
@@ -111,7 +97,6 @@ impl Request {
             Self::UpgradeCanister(req) => req.metadata = Some(metadata),
             Self::RecycleCanister(req) => req.metadata = Some(metadata),
             Self::Cycles(req) => req.metadata = Some(metadata),
-            Self::IssueDelegation(req) => req.metadata = Some(metadata),
             Self::IssueRoleAttestation(req) => req.metadata = Some(metadata),
         }
         self
@@ -127,7 +112,6 @@ impl Request {
             Self::UpgradeCanister(req) => req.metadata = None,
             Self::RecycleCanister(req) => req.metadata = None,
             Self::Cycles(req) => req.metadata = None,
-            Self::IssueDelegation(req) => req.metadata = None,
             Self::IssueRoleAttestation(req) => req.metadata = None,
         }
         self
@@ -157,7 +141,6 @@ pub enum RequestFamily {
     Upgrade,
     RecycleCanister,
     RequestCycles,
-    IssueDelegation,
     IssueRoleAttestation,
 }
 
@@ -172,7 +155,6 @@ impl RequestFamily {
             Self::Upgrade => "Upgrade",
             Self::RecycleCanister => "RecycleCanister",
             Self::RequestCycles => "RequestCycles",
-            Self::IssueDelegation => "IssueDelegation",
             Self::IssueRoleAttestation => "IssueRoleAttestation",
         }
     }
@@ -190,7 +172,6 @@ pub enum RootCapabilityCommand {
     UpgradeCanister(UpgradeCanisterRequest),
     RecycleCanister(RecycleCanisterRequest),
     RequestCycles(CyclesRequest),
-    IssueDelegation(DelegationRequest),
     IssueRoleAttestation(RoleAttestationRequest),
 }
 
@@ -201,7 +182,6 @@ impl From<Request> for RootCapabilityCommand {
             Request::UpgradeCanister(req) => Self::UpgradeCanister(req),
             Request::RecycleCanister(req) => Self::RecycleCanister(req),
             Request::Cycles(req) => Self::RequestCycles(req),
-            Request::IssueDelegation(req) => Self::IssueDelegation(req),
             Request::IssueRoleAttestation(req) => Self::IssueRoleAttestation(req),
         }
     }
@@ -302,7 +282,6 @@ pub enum Response {
     UpgradeCanister(UpgradeCanisterResponse),
     RecycleCanister(RecycleCanisterResponse),
     Cycles(CyclesResponse),
-    DelegationIssued(DelegationProvisionResponse),
     RoleAttestationIssued(SignedRoleAttestation),
 }
 
@@ -349,7 +328,6 @@ pub struct CyclesResponse {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::dto::auth::DelegationAudience;
 
     fn p(id: u8) -> Principal {
         Principal::from_slice(&[id; 29])
@@ -382,14 +360,6 @@ mod tests {
                 cycles: 100,
                 metadata: None,
             }),
-            Request::issue_delegation(DelegationRequest {
-                shard_pid: p(3),
-                scopes: vec!["rpc:verify".to_string()],
-                aud: DelegationAudience::Roles(vec![CanisterRole::new("app")]),
-                ttl_secs: 60,
-                shard_public_key_sec1: vec![1, 2, 3],
-                metadata: None,
-            }),
             Request::issue_role_attestation(RoleAttestationRequest {
                 subject: p(5),
                 role: CanisterRole::new("test"),
@@ -415,7 +385,6 @@ mod tests {
                 RequestFamily::Upgrade,
                 RequestFamily::RecycleCanister,
                 RequestFamily::RequestCycles,
-                RequestFamily::IssueDelegation,
                 RequestFamily::IssueRoleAttestation,
             ]
         );

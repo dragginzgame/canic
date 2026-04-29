@@ -1,46 +1,36 @@
 use crate::{
-    cdk::types::Principal,
     dto::{
         auth::{
-            AttestationKeySet, DelegatedToken, DelegatedTokenClaims, DelegationAudience,
-            DelegationCert, DelegationProof, DelegationProvisionResponse, DelegationRequest,
+            AttestationKeySet, DelegatedTokenIssueRequestV2, DelegatedTokenMintRequestV2,
+            DelegatedTokenV2, DelegationProofIssueRequestV2, DelegationProofV2,
             RoleAttestationRequest, SignedRoleAttestation,
         },
-        error::{Error, ErrorCode},
+        error::Error,
         rpc::{Request as RootRequest, Response as RootCapabilityResponse},
     },
     error::InternalErrorClass,
-    ids::cap,
     log,
     log::Topic,
     ops::{
-        auth::{DelegatedTokenOps, audience},
+        auth::{
+            DelegatedTokenOps, SignDelegatedTokenV2Input, SignDelegationProofV2Input,
+            VerifyDelegatedTokenV2RuntimeInput,
+        },
         config::ConfigOps,
         ic::IcOps,
         rpc::RpcOps,
         runtime::env::EnvOps,
-        runtime::metrics::auth::{
-            record_attestation_refresh_failed, record_signer_issue_without_proof,
-        },
-        storage::auth::DelegationStateOps,
+        runtime::metrics::auth::record_attestation_refresh_failed,
     },
     protocol,
     workflow::rpc::request::handler::RootResponseWorkflow,
 };
 
-#[cfg(test)]
-use crate::ids::CanisterRole;
-
 // Internal auth pipeline:
 // - `session` owns delegated-session ingress and replay/session state handling.
-// - `admin` owns explicit root-driven fanout preparation and routing.
-// - `proof_store` owns proof-install validation and storage/cache side effects.
-//
-// Keep these modules free of lateral calls to each other. Coordination stays here,
-// and shared invariants should live in dedicated seams like `ops::auth::audience`.
-mod admin;
+// - `metadata` owns root request metadata construction.
+// - `verify_flow` owns verifier-side attestation refresh behavior.
 mod metadata;
-mod proof_store;
 mod session;
 mod verify_flow;
 
@@ -57,8 +47,9 @@ impl DelegationApi {
         "delegated token auth disabled; set auth.delegated_tokens.enabled=true in canic.toml";
     const MAX_DELEGATED_SESSION_TTL_SECS: u64 = 24 * 60 * 60;
     const SESSION_BOOTSTRAP_TOKEN_FINGERPRINT_DOMAIN: &[u8] =
-        b"canic-session-bootstrap-token-fingerprint:v1";
+        b"canic-session-bootstrap-token-fingerprint:v2";
 
+    // Map internal auth failures onto public endpoint errors.
     fn map_delegation_error(err: crate::InternalError) -> Error {
         match err.class() {
             InternalErrorClass::Infra | InternalErrorClass::Ops | InternalErrorClass::Workflow => {
@@ -68,39 +59,6 @@ impl DelegationApi {
         }
     }
 
-    /// Full delegation proof verification (structure + signature).
-    ///
-    /// Purely local verification; does not read certified data or require a
-    /// query context.
-    pub fn verify_delegation_proof(
-        proof: &DelegationProof,
-        authority_pid: Principal,
-    ) -> Result<(), Error> {
-        DelegatedTokenOps::verify_delegation_proof(proof, authority_pid)
-            .map_err(Self::map_delegation_error)
-    }
-
-    #[cfg(canic_test_delegation_material)]
-    #[must_use]
-    pub fn current_signing_proof_for_test() -> Option<DelegationProof> {
-        DelegationStateOps::latest_proof_dto()
-    }
-
-    /// Return whether this canister currently has a local signing proof.
-    #[must_use]
-    pub fn has_signing_proof() -> bool {
-        DelegationStateOps::latest_proof_dto().is_some()
-    }
-
-    async fn sign_token(
-        claims: DelegatedTokenClaims,
-        proof: DelegationProof,
-    ) -> Result<DelegatedToken, Error> {
-        DelegatedTokenOps::sign_token(claims, proof)
-            .await
-            .map_err(Self::map_delegation_error)
-    }
-
     /// Resolve the local shard public key in SEC1 encoding.
     pub async fn local_shard_public_key_sec1() -> Result<Vec<u8>, Error> {
         DelegatedTokenOps::local_shard_public_key_sec1(IcOps::canister_self())
@@ -108,176 +66,115 @@ impl DelegationApi {
             .map_err(Self::map_delegation_error)
     }
 
-    /// Issue a delegated token using a reusable local proof when possible.
-    ///
-    /// If the proof is missing or no longer valid for the requested claims, this
-    /// performs canonical shard-initiated setup and retries with the refreshed proof.
-    pub async fn issue_token(claims: DelegatedTokenClaims) -> Result<DelegatedToken, Error> {
-        let proof = Self::ensure_signing_proof(&claims).await?;
-        let claims = Self::canonicalize_claims_for_proof(claims, &proof);
-        Self::sign_token(claims, proof).await
+    /// Issue a delegated token from an explicit self-contained proof.
+    pub async fn issue_token(
+        request: DelegatedTokenIssueRequestV2,
+    ) -> Result<DelegatedTokenV2, Error> {
+        DelegatedTokenOps::sign_token_v2(SignDelegatedTokenV2Input {
+            proof: request.proof,
+            subject: request.subject,
+            audience: request.aud,
+            scopes: request.scopes,
+            ttl_secs: request.ttl_secs,
+            nonce: request.nonce,
+        })
+        .await
+        .map_err(Self::map_delegation_error)
     }
 
-    /// Full delegated token verification (structure + signature).
-    ///
-    /// Purely local verification; does not read certified data or require a
-    /// query context.
+    /// Request a root proof, then issue a self-contained delegated token.
+    pub async fn mint_token(
+        request: DelegatedTokenMintRequestV2,
+    ) -> Result<DelegatedTokenV2, Error> {
+        let proof = Self::request_delegation(DelegationProofIssueRequestV2 {
+            shard_pid: IcOps::canister_self(),
+            scopes: request.scopes.clone(),
+            aud: request.aud.clone(),
+            cert_ttl_secs: request.cert_ttl_secs,
+            root_key_cert: request.root_key_cert,
+        })
+        .await?;
+
+        Self::issue_token(DelegatedTokenIssueRequestV2 {
+            proof,
+            subject: request.subject,
+            aud: request.aud,
+            scopes: request.scopes,
+            ttl_secs: request.token_ttl_secs,
+            nonce: request.nonce,
+        })
+        .await
+    }
+
+    /// Backwards-compatible Rust helper name for callers already moved to V2 DTOs.
+    pub async fn mint_token_v2(
+        request: DelegatedTokenMintRequestV2,
+    ) -> Result<DelegatedTokenV2, Error> {
+        Self::mint_token(request).await
+    }
+
+    /// Full delegated token verification without verifier-local proof lookup.
     pub fn verify_token(
-        token: &DelegatedToken,
-        authority_pid: Principal,
+        token: &DelegatedTokenV2,
+        max_cert_ttl_secs: u64,
+        max_token_ttl_secs: u64,
+        required_scopes: &[String],
         now_secs: u64,
     ) -> Result<(), Error> {
-        DelegatedTokenOps::verify_token(token, authority_pid, now_secs, IcOps::canister_self())
-            .map(|_| ())
-            .map_err(Self::map_delegation_error)
+        DelegatedTokenOps::verify_token_v2(VerifyDelegatedTokenV2RuntimeInput {
+            token,
+            max_cert_ttl_secs,
+            max_token_ttl_secs,
+            required_scopes,
+            now_secs,
+        })
+        .map(|_| ())
+        .map_err(Self::map_delegation_error)
     }
 
-    /// Verify a delegated token and return verified contents.
-    ///
-    /// This is intended for application-layer session construction.
-    /// It performs full verification and returns verified claims and cert.
-    pub fn verify_token_verified(
-        token: &DelegatedToken,
-        authority_pid: Principal,
-        now_secs: u64,
-    ) -> Result<(DelegatedTokenClaims, DelegationCert), Error> {
-        DelegatedTokenOps::verify_token(token, authority_pid, now_secs, IcOps::canister_self())
-            .map(crate::ops::auth::VerifiedDelegatedToken::into_parts)
-            .map_err(Self::map_delegation_error)
-    }
-
-    /// Verify a delegated token and require its subject to match `msg_caller()`.
-    ///
-    /// This issuer-side helper does not require the old token audience to
-    /// include the local signer, which allows stale-audience reissue flows.
-    pub fn verify_token_for_caller(
-        token: &DelegatedToken,
-        authority_pid: Principal,
-        now_secs: u64,
-    ) -> Result<(DelegatedTokenClaims, DelegationCert), Error> {
-        let verified = DelegatedTokenOps::verify_token_for_reissue(token, authority_pid, now_secs)
-            .map_err(Self::map_delegation_error)?;
-        Self::ensure_claims_bound_to_caller(&verified.claims.to_dto(), IcOps::msg_caller())?;
-        Ok(verified.into_parts())
-    }
-
-    /// Reissue a caller-bound token for a new audience without extending expiry.
-    ///
-    /// Scopes and `ext` are preserved. The replacement expiry is capped at the
-    /// old token expiry, so this refreshes audience only and does not renew the
-    /// session.
-    pub async fn reissue_token(
-        token: DelegatedToken,
-        aud: DelegationAudience,
-    ) -> Result<DelegatedToken, Error> {
-        let aud = Self::normalize_audience(aud)?;
-        let root_pid = EnvOps::root_pid().map_err(Error::from)?;
-        let now_secs = IcOps::now_secs();
-        let (old_claims, _) = Self::verify_token_for_caller(&token, root_pid, now_secs)?;
-        let replacement_claims = DelegatedTokenClaims {
-            aud,
-            iat: now_secs,
-            ..old_claims.clone()
-        };
-
-        Self::reissue_token_from_verified(old_claims, replacement_claims).await
-    }
-
-    /// Ensure the caller has a valid delegated token for the requested audience.
-    ///
-    /// With no token, this mints a default `verify`-scoped token for
-    /// `msg_caller()`. With a caller-bound token, this returns it unchanged when
-    /// it already covers the audience or reissues it without extending expiry.
-    pub async fn ensure_token(
-        token: Option<DelegatedToken>,
-        aud: DelegationAudience,
-    ) -> Result<DelegatedToken, Error> {
-        let requested_aud = Self::normalize_audience(aud)?;
-        match token {
-            Some(token) => Self::ensure_existing_token_for_audience(token, requested_aud).await,
-            None => Self::issue_token_for_caller_audience(requested_aud).await,
-        }
-    }
-
-    /// Reissue a token from previously verified claims and proposed claims.
-    ///
-    /// CANIC enforces same `sub`, same `shard_pid`, no expiry extension, and a
-    /// default scope-subset rule.
-    pub async fn reissue_token_from_verified(
-        old_claims: DelegatedTokenClaims,
-        replacement_claims: DelegatedTokenClaims,
-    ) -> Result<DelegatedToken, Error> {
-        Self::ensure_reissue_claims_allowed(&old_claims, &replacement_claims)?;
-        let proof = Self::ensure_signing_proof(&replacement_claims).await?;
-        let replacement_claims = Self::canonicalize_reissue_claims_for_proof(
-            replacement_claims,
-            &proof,
-            old_claims.exp,
-        )?;
-        Self::sign_token(replacement_claims, proof).await
-    }
-
-    // Return an existing caller-bound token or reissue it to cover missing audience entries.
-    async fn ensure_existing_token_for_audience(
-        token: DelegatedToken,
-        requested_aud: DelegationAudience,
-    ) -> Result<DelegatedToken, Error> {
-        let root_pid = EnvOps::root_pid().map_err(Error::from)?;
-        let now_secs = IcOps::now_secs();
-        let (old_claims, _) = Self::verify_token_for_caller(&token, root_pid, now_secs)?;
-        if audience::roles_subset(&requested_aud, &old_claims.aud) {
-            return Ok(token);
-        }
-
-        let aud = Self::merge_audience_for_reissue(old_claims.aud.clone(), requested_aud);
-        let replacement_claims = DelegatedTokenClaims {
-            aud,
-            iat: now_secs,
-            ..old_claims.clone()
-        };
-
-        Self::reissue_token_from_verified(old_claims, replacement_claims).await
-    }
-
-    // Issue the initial caller-bound token for an authenticated wallet/session principal.
-    async fn issue_token_for_caller_audience(
-        aud: DelegationAudience,
-    ) -> Result<DelegatedToken, Error> {
-        let caller = IcOps::msg_caller();
-        if let Err(reason) = crate::access::auth::validate_delegated_session_subject(caller) {
-            return Err(Error::forbidden(format!(
-                "delegated token caller rejected: {reason}"
-            )));
-        }
-
-        let now_secs = IcOps::now_secs();
-        let ttl_secs = ConfigOps::delegated_tokens_config()
-            .map_err(Error::from)?
-            .max_ttl_secs
-            .unwrap_or(Self::MAX_DELEGATED_SESSION_TTL_SECS);
-        let claims = DelegatedTokenClaims {
-            sub: caller,
-            shard_pid: IcOps::canister_self(),
-            scopes: vec![cap::VERIFY.to_string()],
-            aud,
-            iat: now_secs,
-            exp: now_secs.saturating_add(ttl_secs),
-            ext: None,
-        };
-
-        Self::issue_token(claims).await
-    }
-
-    /// Canonical shard-initiated delegation request (user_shard -> root).
-    ///
-    /// Caller must match shard_pid and be registered to the subnet.
+    /// Request a self-contained delegation proof from root over RPC.
     pub async fn request_delegation(
-        request: DelegationRequest,
-    ) -> Result<DelegationProvisionResponse, Error> {
-        let request = metadata::with_root_request_metadata(request);
+        request: DelegationProofIssueRequestV2,
+    ) -> Result<DelegationProofV2, Error> {
         Self::request_delegation_remote(request).await
     }
 
+    /// Backwards-compatible Rust helper name for callers already moved to V2 DTOs.
+    pub async fn request_delegation_v2(
+        request: DelegationProofIssueRequestV2,
+    ) -> Result<DelegationProofV2, Error> {
+        Self::request_delegation(request).await
+    }
+
+    /// Issue a self-contained delegation proof from the local root.
+    pub async fn issue_delegation_proof(
+        request: DelegationProofIssueRequestV2,
+    ) -> Result<DelegationProofV2, Error> {
+        EnvOps::require_root().map_err(Error::from)?;
+        let max_cert_ttl_secs = Self::delegated_auth_max_ttl_secs()?;
+        let max_token_ttl_secs = request.cert_ttl_secs.min(max_cert_ttl_secs);
+        DelegatedTokenOps::sign_delegation_proof_v2(SignDelegationProofV2Input {
+            audience: request.aud,
+            scopes: request.scopes,
+            shard_pid: request.shard_pid,
+            cert_ttl_secs: request.cert_ttl_secs,
+            max_token_ttl_secs,
+            max_cert_ttl_secs,
+            issued_at: IcOps::now_secs(),
+            root_key_cert: request.root_key_cert,
+        })
+        .await
+        .map_err(Self::map_delegation_error)
+    }
+
+    /// Backwards-compatible Rust helper name for callers already moved to V2 DTOs.
+    pub async fn issue_delegation_proof_v2(
+        request: DelegationProofIssueRequestV2,
+    ) -> Result<DelegationProofV2, Error> {
+        Self::issue_delegation_proof(request).await
+    }
+
+    /// Request a signed role attestation from root over RPC.
     pub async fn request_role_attestation(
         request: RoleAttestationRequest,
     ) -> Result<SignedRoleAttestation, Error> {
@@ -292,6 +189,7 @@ impl DelegationApi {
         }
     }
 
+    /// Return the current root role-attestation key set.
     pub async fn attestation_key_set() -> Result<AttestationKeySet, Error> {
         DelegatedTokenOps::attestation_key_set()
             .await
@@ -309,10 +207,12 @@ impl DelegationApi {
             })
     }
 
+    /// Replace the verifier-local role-attestation key set.
     pub fn replace_attestation_key_set(key_set: AttestationKeySet) {
         DelegatedTokenOps::replace_attestation_key_set(key_set);
     }
 
+    /// Verify a role attestation, refreshing root keys once on unknown key.
     pub async fn verify_role_attestation(
         attestation: &SignedRoleAttestation,
         min_accepted_epoch: u64,
@@ -399,238 +299,26 @@ impl DelegationApi {
         }
     }
 
-    fn require_proof() -> Result<DelegationProof, Error> {
+    // Resolve the root-owned TTL ceiling from delegated-token config.
+    fn delegated_auth_max_ttl_secs() -> Result<u64, Error> {
         let cfg = ConfigOps::delegated_tokens_config().map_err(Error::from)?;
         if !cfg.enabled {
             return Err(Error::forbidden(Self::DELEGATED_TOKENS_DISABLED));
         }
 
-        DelegationStateOps::latest_proof_dto().ok_or_else(|| {
-            record_signer_issue_without_proof();
-            Error::not_found("delegation proof not installed")
-        })
+        Ok(cfg
+            .max_ttl_secs
+            .unwrap_or(Self::MAX_DELEGATED_SESSION_TTL_SECS))
     }
-
-    // Resolve a proof that is currently usable for token issuance.
-    async fn ensure_signing_proof(claims: &DelegatedTokenClaims) -> Result<DelegationProof, Error> {
-        let now_secs = IcOps::now_secs();
-
-        match Self::require_proof() {
-            Ok(proof)
-                if !DelegatedTokenOps::proof_reusable_for_claims(&proof, claims, now_secs) =>
-            {
-                Self::setup_delegation(claims).await
-            }
-            Ok(proof) => Ok(proof),
-            Err(err) if err.code == ErrorCode::NotFound => Self::setup_delegation(claims).await,
-            Err(err) => Err(err),
-        }
-    }
-
-    // Provision a fresh delegation from root, then resolve the latest locally stored proof.
-    async fn setup_delegation(claims: &DelegatedTokenClaims) -> Result<DelegationProof, Error> {
-        let shard_public_key_sec1 =
-            DelegatedTokenOps::local_shard_public_key_sec1(claims.shard_pid)
-                .await
-                .map_err(Self::map_delegation_error)?;
-        let request = Self::delegation_request_from_claims(claims, shard_public_key_sec1)?;
-        let response = Self::request_delegation_remote(request).await?;
-        let proof = response.proof;
-        Self::store_local_signer_proof(proof.clone()).await?;
-        Ok(proof)
-    }
-
-    // Rebase claims onto a freshly issued proof window when delegation setup
-    // completed after the original token timestamps were chosen.
-    fn canonicalize_claims_for_proof(
-        claims: DelegatedTokenClaims,
-        proof: &DelegationProof,
-    ) -> DelegatedTokenClaims {
-        if claims.iat >= proof.cert.issued_at && claims.exp <= proof.cert.expires_at {
-            return claims;
-        }
-
-        DelegatedTokenClaims {
-            iat: proof.cert.issued_at,
-            exp: proof.cert.expires_at,
-            ..claims
-        }
-    }
-
-    // Bind verified token claims to the current IC caller.
-    fn ensure_claims_bound_to_caller(
-        claims: &DelegatedTokenClaims,
-        caller: Principal,
-    ) -> Result<(), Error> {
-        if claims.sub == caller {
-            Ok(())
-        } else {
-            Err(Error::forbidden(format!(
-                "delegated token subject '{}' does not match caller '{}'",
-                claims.sub, caller
-            )))
-        }
-    }
-
-    // Normalize caller-supplied audience roles with set semantics.
-    fn normalize_audience(audience: DelegationAudience) -> Result<DelegationAudience, Error> {
-        let DelegationAudience::Roles(roles) = audience else {
-            return Ok(DelegationAudience::Any);
-        };
-
-        let mut out = Vec::new();
-        for role in roles {
-            if !out.contains(&role) {
-                out.push(role);
-            }
-        }
-
-        if out.is_empty() {
-            return Err(Error::invalid("token audience role list must not be empty"));
-        }
-
-        Ok(DelegationAudience::Roles(out))
-    }
-
-    // Merge role-scoped audiences while preserving wildcard broadening semantics.
-    fn merge_audience_for_reissue(
-        current: DelegationAudience,
-        requested: DelegationAudience,
-    ) -> DelegationAudience {
-        match (current, requested) {
-            (DelegationAudience::Any, _) | (_, DelegationAudience::Any) => DelegationAudience::Any,
-            (DelegationAudience::Roles(mut current), DelegationAudience::Roles(requested)) => {
-                for role in requested {
-                    if !current.contains(&role) {
-                        current.push(role);
-                    }
-                }
-                DelegationAudience::Roles(current)
-            }
-        }
-    }
-
-    // Enforce same-session reissue invariants before resolving signing material.
-    fn ensure_reissue_claims_allowed(
-        old_claims: &DelegatedTokenClaims,
-        replacement_claims: &DelegatedTokenClaims,
-    ) -> Result<(), Error> {
-        if audience::has_empty_roles(&replacement_claims.aud) {
-            return Err(Error::invalid(
-                "replacement token audience role list must not be empty",
-            ));
-        }
-
-        if replacement_claims.sub != old_claims.sub {
-            return Err(Error::forbidden(format!(
-                "replacement token subject '{}' must match old subject '{}'",
-                replacement_claims.sub, old_claims.sub
-            )));
-        }
-
-        if replacement_claims.shard_pid != old_claims.shard_pid {
-            return Err(Error::forbidden(format!(
-                "replacement token shard '{}' must match old shard '{}'",
-                replacement_claims.shard_pid, old_claims.shard_pid
-            )));
-        }
-
-        if replacement_claims.exp > old_claims.exp {
-            return Err(Error::forbidden(
-                "replacement token expiry must not exceed old token expiry",
-            ));
-        }
-
-        if replacement_claims.exp < replacement_claims.iat {
-            return Err(Error::invalid(
-                "replacement token expiry must not precede issued_at",
-            ));
-        }
-
-        if !audience::strings_subset(&replacement_claims.scopes, &old_claims.scopes) {
-            return Err(Error::forbidden(
-                "replacement token scopes must be a subset of old token scopes",
-            ));
-        }
-
-        Ok(())
-    }
-
-    // Rebase reissue timing onto the resolved proof while preserving the old-expiry cap.
-    fn canonicalize_reissue_claims_for_proof(
-        claims: DelegatedTokenClaims,
-        proof: &DelegationProof,
-        old_exp: u64,
-    ) -> Result<DelegatedTokenClaims, Error> {
-        let iat = claims.iat.max(proof.cert.issued_at);
-        let exp = claims.exp.min(old_exp).min(proof.cert.expires_at);
-
-        if exp < iat {
-            return Err(Error::invalid(
-                "replacement token expiry is outside the current signing proof window",
-            ));
-        }
-
-        Ok(DelegatedTokenClaims { iat, exp, ..claims })
-    }
-
-    // Build a canonical delegation request from token claims.
-    fn delegation_request_from_claims(
-        claims: &DelegatedTokenClaims,
-        shard_public_key_sec1: Vec<u8>,
-    ) -> Result<DelegationRequest, Error> {
-        let ttl_secs = claims.exp.saturating_sub(claims.iat);
-        if ttl_secs == 0 {
-            return Err(Error::invalid(
-                "delegation ttl_secs must be greater than zero",
-            ));
-        }
-
-        let signer_pid = IcOps::canister_self();
-
-        Ok(DelegationRequest {
-            shard_pid: signer_pid,
-            scopes: claims.scopes.clone(),
-            aud: claims.aud.clone(),
-            ttl_secs,
-            shard_public_key_sec1,
-            metadata: None,
-        })
-    }
-
-    // Delegated audience invariants:
-    // 1. Some(empty) audiences are invalid; None means any registered verifier.
-    // 2. claims.aud must stay within proof.cert.aud.
-    // 3. proof installation on target T requires T's role to be allowed by proof.cert.aud.
-    // 4. token acceptance on canister C requires C's role to be allowed by claims.aud.
-    //
-    // Keep ingress, fanout, install, and runtime checks aligned to this block.
 }
 
 impl DelegationApi {
-    // Execute one local root delegation provisioning request.
-    pub async fn request_delegation_root(
-        request: DelegationRequest,
-    ) -> Result<DelegationProvisionResponse, Error> {
-        let request = metadata::with_root_request_metadata(request);
-        let response = RootResponseWorkflow::response(RootRequest::issue_delegation(request))
-            .await
-            .map_err(Self::map_delegation_error)?;
-
-        match response {
-            RootCapabilityResponse::DelegationIssued(response) => Ok(response),
-            _ => Err(Error::internal(
-                "invalid root response type for delegation request",
-            )),
-        }
-    }
-
-    // Route a canonical delegation provisioning request over RPC to root.
+    // Route a self-contained delegation proof request over RPC to root.
     async fn request_delegation_remote(
-        request: DelegationRequest,
-    ) -> Result<DelegationProvisionResponse, Error> {
+        request: DelegationProofIssueRequestV2,
+    ) -> Result<DelegationProofV2, Error> {
         let root_pid = EnvOps::root_pid().map_err(Error::from)?;
-        RpcOps::call_rpc_result(root_pid, protocol::CANIC_REQUEST_DELEGATION, request)
+        RpcOps::call_rpc_result(root_pid, protocol::CANIC_REQUEST_DELEGATION_V2, request)
             .await
             .map_err(Self::map_delegation_error)
     }
@@ -662,6 +350,3 @@ impl DelegationApi {
             .map_err(Self::map_delegation_error)
     }
 }
-
-#[cfg(test)]
-mod tests;

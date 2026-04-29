@@ -7,7 +7,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.29.x] - 2026-04-28 - Delegated Auth V2
 
-- `0.29.1` adds the next Delegated Auth V2 implementation slice: policy helpers, root-key trust resolution, pure verifier logic, pure root proof issuance, pure shard token minting, and focused auth edge-case coverage.
+- `0.29.2` hard-cuts delegated auth to V2: tokens are self-validating, verifier proof caches/fanout/admin repair are removed, guards accept only V2 delegated tokens, and old V1 DTO/API/test surfaces are gone.
+- `0.29.1` adds the next Delegated Auth V2 implementation slice: policy helpers, root-key trust resolution, pure verifier logic, pure root proof issuance, internal root signing, pure shard token minting, internal shard signing, internal verifier validation, explicit V2 API helpers, the root V2 delegation endpoint, signer-facing V2 mint helpers, V2 root-key pull-on-verify, dual V1/V2 guard validation, dual token endpoint surfaces, V2 signer lifecycle prewarm, root-owned V2 TTL policy, topology catch-up proof-sync removal, and focused auth edge-case coverage.
 - `0.29.0` starts the hard-cut Delegated Auth V2 line with a design for self-validating delegated tokens plus the first V2 DTO and canonical-encoding implementation slice.
 
 See detailed breakdown:

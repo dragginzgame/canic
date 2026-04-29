@@ -7,16 +7,12 @@ use crate::{
 use std::cell::RefCell;
 
 mod key_state;
-mod proofs;
 mod records;
 mod sessions;
 
 pub use records::{
     AttestationKeyStatusRecord, AttestationPublicKeyRecord, DelegatedSessionBootstrapBindingRecord,
-    DelegatedSessionRecord, DelegationCertRecord, DelegationProofCacheStatsRecord,
-    DelegationProofEntryRecord, DelegationProofEvictionClassRecord, DelegationProofKeyRecord,
-    DelegationProofRecord, DelegationProofUpsertRecord, DelegationStateRecord,
-    ShardPublicKeyRecord,
+    DelegatedSessionRecord, DelegationStateRecord, ShardPublicKeyRecord,
 };
 
 const DELEGATED_SESSION_CAPACITY: usize = 2_048;
@@ -39,82 +35,6 @@ impl_storable_unbounded!(DelegationStateRecord);
 pub struct DelegationState;
 
 impl DelegationState {
-    // Resolve one keyed delegation proof from stable auth state.
-    #[must_use]
-    pub(crate) fn get_proof_entry(
-        key: &DelegationProofKeyRecord,
-    ) -> Option<DelegationProofEntryRecord> {
-        DELEGATION_STATE.with_borrow(|cell| proofs::get_proof_entry(&cell.get().proofs, key))
-    }
-
-    // Upsert a verifier proof and optional shard key in one stable-state commit.
-    pub(crate) fn upsert_proof_entry_with_shard_public_key(
-        entry: DelegationProofEntryRecord,
-        shard_public_key: Option<Vec<u8>>,
-        now_secs: u64,
-        capacity: usize,
-        active_window_secs: u64,
-    ) -> DelegationProofUpsertRecord {
-        DELEGATION_STATE.with_borrow_mut(|cell| {
-            let mut data = cell.get().clone();
-            crate::perf!("cache_root_verifier_clone_state");
-            let outcome = proofs::upsert_proof_entry_with_shard_public_key(
-                &mut data,
-                entry,
-                shard_public_key,
-                now_secs,
-                capacity,
-                active_window_secs,
-            );
-            crate::perf!("cache_root_verifier_apply_upsert");
-            cell.set(data);
-            crate::perf!("cache_root_verifier_write_state");
-            outcome
-        })
-    }
-
-    // Mark one keyed proof as recently verified.
-    pub(crate) fn mark_proof_entry_verified(key: &DelegationProofKeyRecord, now_secs: u64) -> bool {
-        DELEGATION_STATE.with_borrow_mut(|cell| {
-            let mut data = cell.get().clone();
-            let found = proofs::mark_proof_entry_verified(&mut data.proofs, key, now_secs);
-            if found {
-                cell.set(data);
-            }
-            found
-        })
-    }
-
-    // Resolve the most recently installed keyed proof.
-    #[must_use]
-    pub(crate) fn get_latest_proof_entry() -> Option<DelegationProofEntryRecord> {
-        DELEGATION_STATE.with_borrow(|cell| proofs::get_latest_proof_entry(&cell.get().proofs))
-    }
-
-    // Resolve all unexpired keyed proofs.
-    #[must_use]
-    pub(crate) fn get_unexpired_proof_entries(now_secs: u64) -> Vec<DelegationProofEntryRecord> {
-        DELEGATION_STATE
-            .with_borrow(|cell| proofs::get_unexpired_proof_entries(&cell.get().proofs, now_secs))
-    }
-
-    // Compute proof-cache stats under the current cache policy window.
-    #[must_use]
-    pub(crate) fn proof_cache_stats(
-        now_secs: u64,
-        capacity: usize,
-        active_window_secs: u64,
-    ) -> DelegationProofCacheStatsRecord {
-        DELEGATION_STATE.with_borrow(|cell| {
-            proofs::proof_cache_stats_from_entries(
-                &cell.get().proofs,
-                now_secs,
-                capacity,
-                active_window_secs,
-            )
-        })
-    }
-
     // Resolve the root verifier key, if present.
     #[must_use]
     pub(crate) fn get_root_public_key() -> Option<Vec<u8>> {

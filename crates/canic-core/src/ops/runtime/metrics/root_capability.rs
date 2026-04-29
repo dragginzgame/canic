@@ -15,7 +15,6 @@ pub enum RootCapabilityMetricKey {
     Upgrade,
     RecycleCanister,
     RequestCycles,
-    IssueDelegation,
     IssueRoleAttestation,
 }
 
@@ -27,7 +26,6 @@ impl RootCapabilityMetricKey {
             Self::Upgrade => "Upgrade",
             Self::RecycleCanister => "RecycleCanister",
             Self::RequestCycles => "RequestCycles",
-            Self::IssueDelegation => "IssueDelegation",
             Self::IssueRoleAttestation => "IssueRoleAttestation",
         }
     }
