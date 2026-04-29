@@ -13,6 +13,6 @@ kind = "root"
 [subnets.prime.canisters.user_shard]
 kind = "shard"
 
-[subnets.prime.canisters.user_shard.delegated_auth]
-signer = true
-attestation_cache = true
+[subnets.prime.canisters.user_shard.auth]
+delegated_token_signer = true
+role_attestation_cache = true

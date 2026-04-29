@@ -67,7 +67,7 @@ impl CapabilityProofVerifier for RoleAttestationVerifier {
             proof.capability_hash,
         )?;
 
-        crate::api::auth::DelegationApi::verify_role_attestation(&proof.attestation, 0).await?;
+        crate::api::auth::AuthApi::verify_role_attestation(&proof.attestation, 0).await?;
         Ok(VerifiedCapability)
     }
 }

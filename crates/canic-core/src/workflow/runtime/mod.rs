@@ -17,11 +17,7 @@ use crate::{
     workflow::{self, prelude::*},
 };
 
-pub use nonroot::{
-    init_nonroot_canister, init_nonroot_canister_with_attestation_cache,
-    post_upgrade_nonroot_canister_after_memory_init,
-    post_upgrade_nonroot_canister_after_memory_init_with_attestation_cache,
-};
+pub use nonroot::{init_nonroot_canister, post_upgrade_nonroot_canister_after_memory_init};
 pub use root::{init_root_canister, post_upgrade_root_canister_after_memory_init};
 
 ///
@@ -38,9 +34,9 @@ impl RuntimeWorkflow {
         workflow::runtime::cycles::CycleTrackerWorkflow::start();
     }
 
-    /// Start timers that should run on delegated-auth-aware non-root canisters.
-    pub fn start_all_with_attestation_cache() {
-        workflow::runtime::attestation::AttestationKeyCacheWorkflow::start();
+    /// Start timers that should run on role-attestation-refreshing non-root canisters.
+    pub fn start_all_with_role_attestation_refresh() {
+        workflow::runtime::attestation::RoleAttestationKeyRefreshWorkflow::start();
         Self::start_all();
     }
 

@@ -66,10 +66,10 @@ pub fn setup_root_topology(
         wait_for_bootstrap(spec, &pic, root_id);
         progress_elapsed(spec, "root bootstrap ready", root_wait_started_at);
 
-        progress(spec, "fetching subnet directory");
-        let directory_started_at = Instant::now();
+        progress(spec, "fetching subnet index");
+        let index_started_at = Instant::now();
         let subnet_index = fetch_subnet_index(&pic, root_id);
-        progress_elapsed(spec, "fetched subnet directory", directory_started_at);
+        progress_elapsed(spec, "fetched subnet index", index_started_at);
 
         progress(spec, "waiting for child canisters ready");
         let child_wait_started_at = Instant::now();

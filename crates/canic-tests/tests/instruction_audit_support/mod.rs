@@ -29,7 +29,7 @@ use canic_control_plane::{
         TemplateChunkingMode, TemplateId, TemplateManifestState, TemplateVersion, WasmStoreBinding,
     },
 };
-use canic_internal::canister::{APP, SCALE_HUB, TEST, USER_HUB};
+use canic_reference_support::canister::{APP, SCALE_HUB, TEST, USER_HUB};
 use canic_testing_internal::pic::{
     create_user_shard, install_audit_leaf_probe, install_audit_root_probe,
     install_audit_scaling_probe, install_standalone_canister, issue_delegated_token,

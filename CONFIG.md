@@ -149,8 +149,8 @@ from the table key (`subnets.<name>.canisters.<role>`); do not declare `role`, `
   - `time` uses `ic_cdk::api::time()` and is deterministic/low-entropy; use for non-sensitive randomness only.
 - `scaling` – optional table that defines stateless replica pools.
 - `sharding` – optional table that defines stateful shard pools.
-- `delegated_auth.signer = true` – mark this role as a delegated-token signer; Canic prewarms local shard signing key material.
-- `delegated_auth.attestation_cache = true` – start the role-attestation key cache for canisters that verify root-signed role attestations. Delegated-token endpoint verification itself is driven by endpoint guards and local `SubnetState`, not this flag.
+- `auth.delegated_token_signer = true` – mark this role as a delegated-token signer; Canic prewarms local shard signing key material.
+- `auth.role_attestation_cache = true` – start the role-attestation key cache for canisters that verify root-signed role attestations. Delegated-token endpoint verification itself is driven by endpoint guards and local `SubnetState`, not this flag.
 
 The `wasm_store` role is reserved and implicit.
 Do not add it under `canisters.*`.

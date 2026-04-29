@@ -38,11 +38,11 @@ impl AppIndexOps {
 
     #[must_use]
     pub fn snapshot_args() -> AppIndexArgs {
-        AppIndexRecordMapper::record_to_view(AppIndex::export())
+        AppIndexRecordMapper::record_to_input(AppIndex::export())
     }
 
     pub(crate) fn import_args_allow_incomplete(args: AppIndexArgs) -> Result<(), InternalError> {
-        let data = AppIndexRecordMapper::dto_to_record(args);
+        let data = AppIndexRecordMapper::input_to_record(args);
         Self::import_allow_incomplete(data)
     }
 

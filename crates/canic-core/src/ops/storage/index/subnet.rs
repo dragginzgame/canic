@@ -39,11 +39,11 @@ impl SubnetIndexOps {
 
     #[must_use]
     pub fn snapshot_args() -> SubnetIndexArgs {
-        SubnetIndexRecordMapper::record_to_view(SubnetIndex::export())
+        SubnetIndexRecordMapper::record_to_input(SubnetIndex::export())
     }
 
     pub(crate) fn import_args_allow_incomplete(args: SubnetIndexArgs) -> Result<(), InternalError> {
-        let data = SubnetIndexRecordMapper::dto_to_record(args);
+        let data = SubnetIndexRecordMapper::input_to_record(args);
         Self::import_allow_incomplete(data)
     }
 

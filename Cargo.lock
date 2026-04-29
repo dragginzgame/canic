@@ -82,7 +82,7 @@ version = "0.29.5"
 dependencies = [
  "candid",
  "canic",
- "canic-internal",
+ "canic-reference-support",
  "ic-cdk",
 ]
 
@@ -101,7 +101,7 @@ version = "0.29.5"
 dependencies = [
  "candid",
  "canic",
- "canic-internal",
+ "canic-reference-support",
  "ic-cdk",
 ]
 
@@ -245,7 +245,7 @@ dependencies = [
  "canic-cdk",
  "canic-control-plane",
  "canic-core",
- "canic-dsl-macros",
+ "canic-macros",
  "canic-memory",
  "flate2",
  "ic-cdk",
@@ -306,15 +306,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "canic-dsl-macros"
-version = "0.29.5"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.117",
-]
-
-[[package]]
 name = "canic-installer"
 version = "0.29.5"
 dependencies = [
@@ -328,10 +319,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "canic-internal"
+name = "canic-macros"
 version = "0.29.5"
 dependencies = [
- "canic-core",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.117",
 ]
 
 [[package]]
@@ -347,6 +340,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "canic-reference-support"
+version = "0.29.5"
+dependencies = [
+ "canic-core",
+]
+
+[[package]]
 name = "canic-testing-internal"
 version = "0.29.5"
 dependencies = [
@@ -354,7 +354,7 @@ dependencies = [
  "canic",
  "canic-control-plane",
  "canic-core",
- "canic-internal",
+ "canic-reference-support",
  "canic-testkit",
  "pocket-ic",
  "serde",
@@ -379,7 +379,7 @@ dependencies = [
  "canic",
  "canic-control-plane",
  "canic-core",
- "canic-internal",
+ "canic-reference-support",
  "canic-testing-internal",
  "canic-testkit",
  "pocket-ic",
@@ -402,7 +402,7 @@ version = "0.29.5"
 dependencies = [
  "candid",
  "canic",
- "canic-internal",
+ "canic-reference-support",
  "ic-cdk",
 ]
 
@@ -412,7 +412,7 @@ version = "0.29.5"
 dependencies = [
  "candid",
  "canic",
- "canic-internal",
+ "canic-reference-support",
  "ic-cdk",
 ]
 
@@ -422,7 +422,7 @@ version = "0.29.5"
 dependencies = [
  "candid",
  "canic",
- "canic-internal",
+ "canic-reference-support",
  "ic-cdk",
  "pocket-ic",
  "serde",
@@ -435,7 +435,7 @@ version = "0.29.5"
 dependencies = [
  "candid",
  "canic",
- "canic-internal",
+ "canic-reference-support",
  "ic-cdk",
 ]
 
@@ -445,7 +445,7 @@ version = "0.29.5"
 dependencies = [
  "candid",
  "canic",
- "canic-internal",
+ "canic-reference-support",
  "ic-cdk",
 ]
 
@@ -455,7 +455,7 @@ version = "0.29.5"
 dependencies = [
  "candid",
  "canic",
- "canic-internal",
+ "canic-reference-support",
  "canic-testkit",
  "ic-cdk",
 ]
@@ -466,7 +466,7 @@ version = "0.29.5"
 dependencies = [
  "candid",
  "canic",
- "canic-internal",
+ "canic-reference-support",
  "ic-cdk",
 ]
 
@@ -476,7 +476,7 @@ version = "0.29.5"
 dependencies = [
  "candid",
  "canic",
- "canic-internal",
+ "canic-reference-support",
  "ic-cdk",
 ]
 
@@ -772,7 +772,7 @@ version = "0.29.5"
 dependencies = [
  "candid",
  "canic",
- "canic-internal",
+ "canic-reference-support",
  "ic-cdk",
 ]
 

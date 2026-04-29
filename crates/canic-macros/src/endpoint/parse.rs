@@ -16,7 +16,7 @@ use syn::{Expr, Ident, Meta, Path, Token, parse::Parser, punctuated::Punctuated}
 //
 
 ///
-/// BuiltinPredicate
+/// AuthScopeArg
 ///
 
 #[derive(Clone, Debug)]
@@ -24,6 +24,10 @@ pub enum AuthScopeArg {
     Literal(String),
     Expr(TokenStream2),
 }
+
+///
+/// BuiltinPredicate
+///
 
 #[derive(Clone, Debug)]
 pub enum BuiltinPredicate {
@@ -66,10 +70,6 @@ pub enum AccessPredicateAst {
     Builtin(BuiltinPredicate),
     Custom(TokenStream2),
 }
-
-//
-// ParsedArgs
-//
 
 ///
 /// ParsedArgs
@@ -492,6 +492,10 @@ fn path_ident(path: &Path) -> syn::Result<&Ident> {
         .map(|segment| &segment.ident)
         .ok_or_else(|| syn::Error::new_spanned(path, "expected a DSL symbol"))
 }
+
+///
+/// TESTS
+///
 
 #[cfg(test)]
 mod tests {

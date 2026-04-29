@@ -8,7 +8,7 @@
 
 #![allow(clippy::unused_async)]
 
-use canic_internal::{
+use canic_reference_support::{
     canister::MINIMAL,
     reference::empty_shell::{canic_install, canic_setup, canic_upgrade},
 };

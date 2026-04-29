@@ -4,7 +4,7 @@ use crate::{
     cdk::{api::msg_arg_data, candid::de::IDLDeserialize, types::Principal},
     dto::auth::DelegatedToken,
     ops::{
-        auth::{DelegatedTokenOps, VerifyDelegatedTokenRuntimeInput},
+        auth::{AuthOps, VerifyDelegatedTokenRuntimeInput},
         config::ConfigOps,
         ic::IcOps,
     },
@@ -31,11 +31,11 @@ fn verify_token(
     now_secs: u64,
     required_scope: Option<&str>,
 ) -> Result<VerifiedAccessToken, AccessError> {
-    let max_ttl_secs = delegated_auth_max_ttl_secs()?;
+    let max_ttl_secs = delegated_token_max_ttl_secs()?;
     let required_scopes = required_scope
         .map(|scope| vec![scope.to_string()])
         .unwrap_or_default();
-    let verified = DelegatedTokenOps::verify_token(VerifyDelegatedTokenRuntimeInput {
+    let verified = AuthOps::verify_token(VerifyDelegatedTokenRuntimeInput {
         token: &token,
         max_cert_ttl_secs: max_ttl_secs,
         max_token_ttl_secs: max_ttl_secs,
@@ -108,7 +108,7 @@ fn delegated_token_from_bytes(bytes: &[u8]) -> Result<DelegatedToken, String> {
 }
 
 // Resolve the verifier-side TTL policy from delegated-token config.
-fn delegated_auth_max_ttl_secs() -> Result<u64, AccessError> {
+fn delegated_token_max_ttl_secs() -> Result<u64, AccessError> {
     let cfg = ConfigOps::delegated_tokens_config()
         .map_err(|_| dependency_unavailable("delegated token config unavailable"))?;
     if !cfg.enabled {

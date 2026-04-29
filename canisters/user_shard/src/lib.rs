@@ -10,12 +10,12 @@
 
 use canic::{
     Error,
-    api::auth::DelegationApi,
+    api::auth::AuthApi,
     dto::auth::{DelegatedToken, DelegatedTokenMintRequest},
     ids::cap,
     prelude::*,
 };
-use canic_internal::canister::USER_SHARD;
+use canic_reference_support::canister::USER_SHARD;
 
 //
 // CANIC
@@ -44,7 +44,7 @@ async fn user_shard_issue_token(
         return Err(Error::forbidden(err.to_string()));
     }
 
-    DelegationApi::mint_token(request).await
+    AuthApi::mint_token(request).await
 }
 
 #[cfg(not(canic_disable_bundle_observability_env))]
@@ -55,7 +55,7 @@ async fn user_shard_local_public_key_test() -> Result<Vec<u8>, Error> {
         return Err(Error::forbidden(err.to_string()));
     }
 
-    DelegationApi::local_shard_public_key_sec1().await
+    AuthApi::local_shard_public_key_sec1().await
 }
 
 #[canic_query(requires(auth::authenticated(cap::VERIFY)))]

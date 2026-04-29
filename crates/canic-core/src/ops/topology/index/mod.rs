@@ -39,7 +39,7 @@ impl AppIndexResolver {
     }
 
     pub fn resolve_input() -> Result<AppIndexArgs, InternalError> {
-        Self::resolve().map(AppIndexRecordMapper::record_to_view)
+        Self::resolve().map(AppIndexRecordMapper::record_to_input)
     }
 }
 
@@ -62,6 +62,6 @@ impl SubnetIndexResolver {
     }
 
     pub fn resolve_input() -> Result<SubnetIndexArgs, InternalError> {
-        Self::resolve().map(SubnetIndexRecordMapper::record_to_view)
+        Self::resolve().map(SubnetIndexRecordMapper::record_to_input)
     }
 }

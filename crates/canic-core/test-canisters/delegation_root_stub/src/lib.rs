@@ -4,7 +4,7 @@
 
 use canic::{
     CANIC_WASM_CHUNK_BYTES, Error,
-    api::auth::DelegationApi,
+    api::auth::AuthApi,
     api::canister::CanisterRole,
     dto::auth::{
         AttestationKey, AttestationKeySet, AttestationKeyStatus, DelegatedToken, RoleAttestation,
@@ -55,7 +55,7 @@ async fn root_issue_self_attestation(
         epoch,
         metadata: None,
     };
-    DelegationApi::request_role_attestation(request).await
+    AuthApi::request_role_attestation(request).await
 }
 
 #[canic_update]
@@ -85,7 +85,7 @@ async fn root_issue_self_attestation_test(
     let signature = sign_attestation(&payload, TEST_ATTESTATION_KEY_SEED)?;
     let public_key = test_public_key(TEST_ATTESTATION_KEY_SEED)?;
 
-    DelegationApi::replace_attestation_key_set(AttestationKeySet {
+    AuthApi::replace_attestation_key_set(AttestationKeySet {
         root_pid: canister_self(),
         generated_at: issued_at,
         keys: vec![AttestationKey {
@@ -159,7 +159,7 @@ async fn root_set_test_attestation_key_set(
         .collect::<Result<Vec<_>, Error>>()?;
 
     let generated_at = ic_cdk::api::time() / 1_000_000_000;
-    DelegationApi::replace_attestation_key_set(AttestationKeySet {
+    AuthApi::replace_attestation_key_set(AttestationKeySet {
         root_pid: canister_self(),
         generated_at,
         keys,
@@ -173,7 +173,7 @@ async fn root_verify_role_attestation(
     attestation: SignedRoleAttestation,
     min_accepted_epoch: u64,
 ) -> Result<(), Error> {
-    DelegationApi::verify_role_attestation(&attestation, min_accepted_epoch).await
+    AuthApi::verify_role_attestation(&attestation, min_accepted_epoch).await
 }
 
 #[canic_query]
@@ -187,18 +187,18 @@ async fn root_bootstrap_delegated_session(
     delegated_subject: candid::Principal,
     requested_ttl_secs: Option<u64>,
 ) -> Result<(), Error> {
-    DelegationApi::set_delegated_session_subject(delegated_subject, token, requested_ttl_secs)
+    AuthApi::set_delegated_session_subject(delegated_subject, token, requested_ttl_secs)
 }
 
 #[canic_update]
 async fn root_clear_delegated_session() -> Result<(), Error> {
-    DelegationApi::clear_delegated_session();
+    AuthApi::clear_delegated_session();
     Ok(())
 }
 
 #[canic_query]
 async fn root_delegated_session_subject() -> Result<Option<candid::Principal>, Error> {
-    Ok(DelegationApi::delegated_session_subject())
+    Ok(AuthApi::delegated_session_subject())
 }
 
 fn test_public_key(seed: [u8; 32]) -> Result<Vec<u8>, Error> {

@@ -18,4 +18,4 @@ pub use crate::{
     },
 };
 
-pub use canic_dsl_macros::{canic_query, canic_update};
+pub use canic_macros::{canic_query, canic_update};

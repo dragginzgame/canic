@@ -7,7 +7,7 @@ use canic::{
     },
     ids::{CanisterRole, SubnetRole},
 };
-use canic_internal::canister::{APP, SCALE_HUB, TEST, USER_HUB};
+use canic_reference_support::canister::{APP, SCALE_HUB, TEST, USER_HUB};
 use canic_testkit::{
     Fake,
     artifacts::{
@@ -147,21 +147,21 @@ fn encode_init_args(payload: CanisterInitPayload) -> Vec<u8> {
         .expect("encode init args")
 }
 
-// Build the minimal app-directory view used by lifecycle-boundary installs.
+// Build the minimal app index args used by lifecycle-boundary installs.
 fn app_index_args() -> AppIndexArgs {
     let roles = [USER_HUB, SCALE_HUB];
-    AppIndexArgs(directory_entries(&roles, None, 10))
+    AppIndexArgs(index_entries(&roles, None, 10))
 }
 
-// Build the subnet directory view used by lifecycle-boundary installs.
+// Build the subnet index args used by lifecycle-boundary installs.
 fn subnet_index_args(canister_id: Principal) -> SubnetIndexArgs {
     let roles = [APP, USER_HUB, SCALE_HUB, TEST];
     let override_role = Some((TEST, canister_id));
-    SubnetIndexArgs(directory_entries(&roles, override_role, 20))
+    SubnetIndexArgs(index_entries(&roles, override_role, 20))
 }
 
-// Build deterministic directory entries with one optional explicit role override.
-fn directory_entries(
+// Build deterministic index entries with one optional explicit role override.
+fn index_entries(
     roles: &[CanisterRole],
     override_role: Option<(CanisterRole, Principal)>,
     mut next_id: u8,

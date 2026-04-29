@@ -162,7 +162,7 @@ pub struct CanisterPool {
 ///
 
 ///
-/// DelegatedAuthCanisterConfig
+/// CanisterAuthConfig
 ///
 
 // Build the implicit canister configuration for the mandatory store role.
@@ -175,19 +175,19 @@ fn implicit_wasm_store_canister_config() -> CanisterConfig {
         scaling: None,
         sharding: None,
         directory: None,
-        delegated_auth: DelegatedAuthCanisterConfig::default(),
+        auth: CanisterAuthConfig::default(),
         standards: StandardsCanisterConfig::default(),
     }
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
-pub struct DelegatedAuthCanisterConfig {
+pub struct CanisterAuthConfig {
     #[serde(default)]
-    pub signer: bool,
+    pub delegated_token_signer: bool,
 
     #[serde(default)]
-    pub attestation_cache: bool,
+    pub role_attestation_cache: bool,
 }
 
 ///
@@ -233,7 +233,7 @@ pub struct CanisterConfig {
     pub directory: Option<DirectoryConfig>,
 
     #[serde(default)]
-    pub delegated_auth: DelegatedAuthCanisterConfig,
+    pub auth: CanisterAuthConfig,
 
     #[serde(default)]
     pub standards: StandardsCanisterConfig,
@@ -266,12 +266,12 @@ impl CanisterConfig {
                 if self.scaling.is_some()
                     || self.sharding.is_some()
                     || self.directory.is_some()
-                    || self.delegated_auth.signer
-                    || self.delegated_auth.attestation_cache
+                    || self.auth.delegated_token_signer
+                    || self.auth.role_attestation_cache
                     || self.standards.icrc21
                 {
                     return Err(ConfigSchemaError::ValidationError(format!(
-                        "canister '{canister}' kind = \"root\" cannot define scaling, sharding, directory, delegated auth signer/cache roles, or canister-local standards",
+                        "canister '{canister}' kind = \"root\" cannot define scaling, sharding, directory, auth signer/cache roles, or canister-local standards",
                     )));
                 }
             }
@@ -685,7 +685,7 @@ mod tests {
             scaling: None,
             sharding: None,
             directory: None,
-            delegated_auth: DelegatedAuthCanisterConfig::default(),
+            auth: CanisterAuthConfig::default(),
             standards: StandardsCanisterConfig::default(),
         }
     }
@@ -709,11 +709,11 @@ mod tests {
     }
 
     #[test]
-    fn root_canister_rejects_configured_delegated_auth_roles() {
+    fn root_canister_rejects_configured_auth_roles() {
         let mut cfg = base_canister_config(CanisterKind::Root);
-        cfg.delegated_auth = DelegatedAuthCanisterConfig {
-            signer: true,
-            attestation_cache: true,
+        cfg.auth = CanisterAuthConfig {
+            delegated_token_signer: true,
+            role_attestation_cache: true,
         };
 
         let err = cfg.validate_kind(&CanisterRole::ROOT).expect_err(
@@ -721,9 +721,8 @@ mod tests {
         );
 
         assert!(
-            err.to_string()
-                .contains("delegated auth signer/cache roles"),
-            "expected root delegated-auth role validation error, got: {err}"
+            err.to_string().contains("auth signer/cache roles"),
+            "expected root auth role validation error, got: {err}"
         );
     }
 

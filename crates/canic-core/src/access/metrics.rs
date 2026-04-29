@@ -104,11 +104,11 @@ impl EndpointResultMetrics {
 }
 
 ///
-/// DelegationMetrics
+/// DelegatedAuthMetrics
 ///
 /// Delegated authorization authority metrics.
 ///
-/// Records which delegation authority (cert signer) was used to
+/// Records which delegated-auth authority (cert signer) was used to
 /// successfully validate a delegated token.
 ///
 /// WHY THIS LIVES HERE:
@@ -121,10 +121,10 @@ impl EndpointResultMetrics {
 /// - Must not be called on denied or partially-verified tokens.
 /// - Cardinality is bounded by active delegation authorities.
 ///
-pub struct DelegationMetrics;
+pub struct DelegatedAuthMetrics;
 
-impl DelegationMetrics {
+impl DelegatedAuthMetrics {
     pub fn record_authority(authority: Principal) {
-        ops::runtime::metrics::delegation::DelegationMetrics::record_authority(authority);
+        ops::runtime::metrics::delegated_auth::DelegatedAuthMetrics::record_authority(authority);
     }
 }

@@ -87,7 +87,7 @@ Delegated-token signing domains are defined in
 
 ### Root certificate issuance
 
-1. Shard calls root through `DelegationApi::request_delegation`.
+1. Shard calls root through `AuthApi::request_delegation`.
 2. Root validates:
    - delegated auth is enabled
    - root authority is the local canister
@@ -124,8 +124,8 @@ delegated-auth key config changes.
 3. Shard signs canonical token claims with its deterministic shard ECDSA path.
 4. Shard returns a self-contained `DelegatedToken`.
 
-`DelegationApi::mint_token` performs proof request and token signing in one
-API call. `DelegationApi::issue_token` signs from an explicit proof.
+`AuthApi::mint_token` performs proof request and token signing in one
+API call. `AuthApi::issue_token` signs from an explicit proof.
 
 ## Verification Contract
 

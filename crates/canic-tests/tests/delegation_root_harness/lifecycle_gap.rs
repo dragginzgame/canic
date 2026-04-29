@@ -11,7 +11,7 @@ use canic::{
     },
     ids::{CanisterRole, SubnetRole},
 };
-use canic_internal::canister;
+use canic_reference_support::canister;
 use canic_testing_internal::pic::upgrade_args;
 use canic_testkit::artifacts::workspace_root_for;
 use std::{fs, path::PathBuf, time::Duration};
@@ -120,11 +120,11 @@ fn workspace_root() -> PathBuf {
     workspace_root_for(env!("CARGO_MANIFEST_DIR"))
 }
 
-// Resolve one role principal from the setup's cached subnet directory.
+// Resolve one role principal from the setup's cached subnet index.
 fn role_pid(setup: &RootSetup, role: &CanisterRole) -> Principal {
     setup
         .subnet_index
         .get(role)
         .copied()
-        .unwrap_or_else(|| panic!("{role} must exist in subnet directory"))
+        .unwrap_or_else(|| panic!("{role} must exist in subnet index"))
 }

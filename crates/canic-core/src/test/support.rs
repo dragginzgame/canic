@@ -4,7 +4,7 @@ use crate::{
     cdk::candid::Principal,
     cdk::types::Cycles,
     config::schema::{
-        CanisterConfig, CanisterKind, DelegatedAuthCanisterConfig, RandomnessConfig, ShardPool,
+        CanisterAuthConfig, CanisterConfig, CanisterKind, RandomnessConfig, ShardPool,
         ShardPoolPolicy, ShardingConfig, StandardsCanisterConfig,
     },
     ids::{CanisterRole, SubnetRole},
@@ -35,7 +35,7 @@ pub fn init_sharding_test_config() {
         scaling: None,
         sharding: None,
         directory: None,
-        delegated_auth: DelegatedAuthCanisterConfig::default(),
+        auth: CanisterAuthConfig::default(),
         standards: StandardsCanisterConfig::default(),
     };
 
@@ -47,7 +47,7 @@ pub fn init_sharding_test_config() {
         scaling: None,
         sharding: Some(sharding),
         directory: None,
-        delegated_auth: DelegatedAuthCanisterConfig::default(),
+        auth: CanisterAuthConfig::default(),
         standards: StandardsCanisterConfig::default(),
     };
 
@@ -59,7 +59,7 @@ pub fn init_sharding_test_config() {
         scaling: None,
         sharding: None,
         directory: None,
-        delegated_auth: DelegatedAuthCanisterConfig::default(),
+        auth: CanisterAuthConfig::default(),
         standards: StandardsCanisterConfig::default(),
     };
 

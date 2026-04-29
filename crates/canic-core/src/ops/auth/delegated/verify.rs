@@ -22,7 +22,7 @@ pub struct VerifyDelegatedTokenInput<'a> {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct VerifiedDelegation {
+pub struct VerifiedDelegatedToken {
     pub subject: Principal,
     pub issuer_shard_pid: Principal,
     pub scopes: Vec<String>,
@@ -84,7 +84,7 @@ pub enum VerifyDelegatedTokenError {
 pub fn verify_delegated_token<F>(
     input: VerifyDelegatedTokenInput<'_>,
     mut verify_signature: F,
-) -> Result<VerifiedDelegation, VerifyDelegatedTokenError>
+) -> Result<VerifiedDelegatedToken, VerifyDelegatedTokenError>
 where
     F: FnMut(&[u8], [u8; 32], &[u8], SignatureAlgorithm) -> Result<(), String>,
 {
@@ -136,7 +136,7 @@ where
     )
     .map_err(VerifyDelegatedTokenError::ShardSignatureInvalid)?;
 
-    Ok(VerifiedDelegation {
+    Ok(VerifiedDelegatedToken {
         subject: claims.subject,
         issuer_shard_pid: claims.issuer_shard_pid,
         scopes: claims.scopes.clone(),

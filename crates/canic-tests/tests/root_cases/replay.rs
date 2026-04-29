@@ -22,7 +22,7 @@ use canic::{
     },
     protocol,
 };
-use canic_internal::canister;
+use canic_reference_support::canister;
 use std::convert::TryFrom;
 use std::time::Duration;
 
@@ -45,7 +45,7 @@ fn later_auto_created_sibling_refreshes_existing_subnet_index_cache() {
         app_subnet_index
             .iter()
             .any(|entry| entry.role == canister::TEST && entry.pid == test_pid),
-        "existing sibling subnet-directory cache must refresh with the later-created test entry",
+        "existing sibling subnet-index cache must refresh with the later-created test entry",
     );
 }
 
@@ -640,7 +640,7 @@ fn root_capability_metrics(setup: &RootSetup) -> Vec<MetricEntry> {
     query_metrics(&setup.pic, setup.root_id, MetricsKind::RootCapability)
 }
 
-// Read one canister's cached subnet-directory page through the public query surface.
+// Read one canister's cached subnet-index page through the public query surface.
 fn query_subnet_index(setup: &RootSetup, canister_id: Principal) -> Vec<IndexEntryResponse> {
     let response: Result<Page<IndexEntryResponse>, Error> = setup
         .pic
@@ -652,9 +652,9 @@ fn query_subnet_index(setup: &RootSetup, canister_id: Principal) -> Vec<IndexEnt
                 offset: 0,
             },),
         )
-        .expect("subnet directory transport query failed");
+        .expect("subnet index transport query failed");
 
-    response.expect("subnet directory query failed").entries
+    response.expect("subnet index query failed").entries
 }
 
 // Read one canister's public metrics page for the requested metric family.

@@ -8,7 +8,7 @@ use crate::{
         runtime::metrics::auth::{
             record_session_fallback_invalid_subject, record_session_fallback_raw_caller,
         },
-        storage::{auth::DelegationStateOps, registry::subnet::SubnetRegistryOps},
+        storage::{auth::AuthStateOps, registry::subnet::SubnetRegistryOps},
     },
 };
 
@@ -26,7 +26,7 @@ pub(super) fn resolve_authenticated_identity_at(
     transport_caller: Principal,
     now_secs: u64,
 ) -> ResolvedAuthenticatedIdentity {
-    if let Some(session) = DelegationStateOps::delegated_session(transport_caller, now_secs) {
+    if let Some(session) = AuthStateOps::delegated_session(transport_caller, now_secs) {
         if validate_delegated_session_subject(session.delegated_pid).is_ok() {
             return ResolvedAuthenticatedIdentity {
                 transport_caller,
@@ -35,7 +35,7 @@ pub(super) fn resolve_authenticated_identity_at(
             };
         }
 
-        DelegationStateOps::clear_delegated_session(transport_caller);
+        AuthStateOps::clear_delegated_session(transport_caller);
         record_session_fallback_invalid_subject();
     }
 

@@ -5,7 +5,7 @@ use crate::{
     log,
     log::Topic,
     ops::{
-        auth::{DelegatedTokenOpsError, DelegationExpiryError, DelegationValidationError},
+        auth::{AuthExpiryError, AuthOpsError, AuthValidationError},
         runtime::metrics::auth::{
             record_attestation_epoch_rejected, record_attestation_unknown_key_id,
             record_attestation_verify_failed,
@@ -16,12 +16,12 @@ use std::future::Future;
 
 #[derive(Debug)]
 pub(super) enum RoleAttestationVerifyFlowError {
-    Initial(DelegatedTokenOpsError),
+    Initial(AuthOpsError),
     Refresh {
-        trigger: DelegatedTokenOpsError,
+        trigger: AuthOpsError,
         source: crate::InternalError,
     },
-    PostRefresh(DelegatedTokenOpsError),
+    PostRefresh(AuthOpsError),
 }
 
 pub(super) async fn verify_role_attestation_with_single_refresh<Verify, Refresh, RefreshFuture>(
@@ -29,16 +29,14 @@ pub(super) async fn verify_role_attestation_with_single_refresh<Verify, Refresh,
     mut refresh: Refresh,
 ) -> Result<(), RoleAttestationVerifyFlowError>
 where
-    Verify: FnMut() -> Result<(), DelegatedTokenOpsError>,
+    Verify: FnMut() -> Result<(), AuthOpsError>,
     Refresh: FnMut() -> RefreshFuture,
     RefreshFuture: Future<Output = Result<(), crate::InternalError>>,
 {
     match verify() {
         Ok(()) => Ok(()),
         Err(
-            err @ DelegatedTokenOpsError::Validation(
-                DelegationValidationError::AttestationUnknownKeyId { .. },
-            ),
+            err @ AuthOpsError::Validation(AuthValidationError::AttestationUnknownKeyId { .. }),
         ) => {
             refresh()
                 .await
@@ -60,17 +58,13 @@ pub(super) fn resolve_min_accepted_epoch(explicit: u64, configured: Option<u64>)
     }
 }
 
-pub(super) fn record_attestation_verifier_rejection(err: &DelegatedTokenOpsError) {
+pub(super) fn record_attestation_verifier_rejection(err: &AuthOpsError) {
     record_attestation_verify_failed();
     match err {
-        DelegatedTokenOpsError::Validation(
-            DelegationValidationError::AttestationUnknownKeyId { .. },
-        ) => {
+        AuthOpsError::Validation(AuthValidationError::AttestationUnknownKeyId { .. }) => {
             record_attestation_unknown_key_id();
         }
-        DelegatedTokenOpsError::Expiry(DelegationExpiryError::AttestationEpochRejected {
-            ..
-        }) => {
+        AuthOpsError::Expiry(AuthExpiryError::AttestationEpochRejected { .. }) => {
             record_attestation_epoch_rejected();
         }
         _ => {}
@@ -78,7 +72,7 @@ pub(super) fn record_attestation_verifier_rejection(err: &DelegatedTokenOpsError
 }
 
 pub(super) fn log_attestation_verifier_rejection(
-    err: &DelegatedTokenOpsError,
+    err: &AuthOpsError,
     attestation: &SignedRoleAttestation,
     caller: Principal,
     self_pid: Principal,

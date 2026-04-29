@@ -24,22 +24,7 @@ use super::{RuntimeWorkflow, auth::RuntimeAuthWorkflow, log_memory_summary};
 pub fn init_nonroot_canister(
     canister_role: CanisterRole,
     payload: CanisterInitPayload,
-) -> Result<(), InternalError> {
-    init_nonroot_canister_internal(canister_role, payload, false)
-}
-
-pub fn init_nonroot_canister_with_attestation_cache(
-    canister_role: CanisterRole,
-    payload: CanisterInitPayload,
-) -> Result<(), InternalError> {
-    init_nonroot_canister_internal(canister_role, payload, true)
-}
-
-// Initialize a non-root canister and start only the runtime services it needs.
-fn init_nonroot_canister_internal(
-    canister_role: CanisterRole,
-    payload: CanisterInitPayload,
-    with_attestation_cache: bool,
+    with_role_attestation_refresh: bool,
 ) -> Result<(), InternalError> {
     // --- Phase 1: Init base systems ---
     let memory_summary = MemoryRegistryOps::bootstrap_registry().map_err(|err| {
@@ -84,8 +69,8 @@ fn init_nonroot_canister_internal(
     RuntimeAuthWorkflow::ensure_nonroot_crypto_contract(&canister_role, &canister_cfg)?;
 
     // --- Phase 3: Service startup ---
-    if with_attestation_cache {
-        RuntimeWorkflow::start_all_with_attestation_cache();
+    if with_role_attestation_refresh {
+        RuntimeWorkflow::start_all_with_role_attestation_refresh();
     } else {
         RuntimeWorkflow::start_all();
     }
@@ -102,22 +87,7 @@ fn init_nonroot_canister_internal(
 pub fn post_upgrade_nonroot_canister_after_memory_init(
     canister_role: CanisterRole,
     memory_summary: MemoryRegistryInitSummary,
-) {
-    post_upgrade_nonroot_canister_after_memory_init_internal(canister_role, memory_summary, false);
-}
-
-pub fn post_upgrade_nonroot_canister_after_memory_init_with_attestation_cache(
-    canister_role: CanisterRole,
-    memory_summary: MemoryRegistryInitSummary,
-) {
-    post_upgrade_nonroot_canister_after_memory_init_internal(canister_role, memory_summary, true);
-}
-
-// Restore post-upgrade runtime services for a non-root canister.
-fn post_upgrade_nonroot_canister_after_memory_init_internal(
-    canister_role: CanisterRole,
-    memory_summary: MemoryRegistryInitSummary,
-    with_attestation_cache: bool,
+    with_role_attestation_refresh: bool,
 ) {
     crate::log::set_ready();
     crate::log!(
@@ -136,8 +106,8 @@ fn post_upgrade_nonroot_canister_after_memory_init_internal(
         .unwrap_or_else(|err| panic!("non-root delegated auth runtime contract failed: {err}"));
 
     // --- Phase 3: Service startup ---
-    if with_attestation_cache {
-        RuntimeWorkflow::start_all_with_attestation_cache();
+    if with_role_attestation_refresh {
+        RuntimeWorkflow::start_all_with_role_attestation_refresh();
     } else {
         RuntimeWorkflow::start_all();
     }

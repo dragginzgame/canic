@@ -31,7 +31,7 @@ pub struct AttestationBaselineMetadata {
 }
 
 #[derive(Clone, Copy)]
-enum AttestationCacheKind {
+enum RoleAttestationBaselineKind {
     SignerOnly,
     SignerAndVerifier,
     SignerOnlyWithoutTestMaterial,
@@ -45,20 +45,20 @@ struct InstalledRoot {
 // Restore or create the cached `root + signer` baseline.
 #[must_use]
 pub(super) fn install_signer_only_cached_root_fixture() -> CachedInstalledRoot {
-    install_cached_root_fixture(AttestationCacheKind::SignerOnly)
+    install_cached_root_fixture(RoleAttestationBaselineKind::SignerOnly)
 }
 
 // Restore or create the cached `root + signer + verifier` baseline.
 #[must_use]
 pub(super) fn install_signer_and_verifier_cached_root_fixture() -> CachedInstalledRoot {
-    install_cached_root_fixture(AttestationCacheKind::SignerAndVerifier)
+    install_cached_root_fixture(RoleAttestationBaselineKind::SignerAndVerifier)
 }
 
 // Restore or create the cached normal-build `root + signer` baseline.
 #[must_use]
 pub(super) fn install_signer_only_without_test_material_cached_root_fixture() -> CachedInstalledRoot
 {
-    install_cached_root_fixture(AttestationCacheKind::SignerOnlyWithoutTestMaterial)
+    install_cached_root_fixture(RoleAttestationBaselineKind::SignerOnlyWithoutTestMaterial)
 }
 
 // Resolve the signer canister from the root-managed subnet registry.
@@ -74,11 +74,13 @@ pub(super) fn wasm_store_pid(pic: &Pic, root_id: Principal) -> Principal {
 }
 
 // Restore or create the requested cached baseline and keep it alive until test drop.
-fn install_cached_root_fixture(cache_kind: AttestationCacheKind) -> CachedInstalledRoot {
+fn install_cached_root_fixture(cache_kind: RoleAttestationBaselineKind) -> CachedInstalledRoot {
     progress(match cache_kind {
-        AttestationCacheKind::SignerOnly => "request cached root+signer baseline",
-        AttestationCacheKind::SignerAndVerifier => "request cached root+signer+verifier baseline",
-        AttestationCacheKind::SignerOnlyWithoutTestMaterial => {
+        RoleAttestationBaselineKind::SignerOnly => "request cached root+signer baseline",
+        RoleAttestationBaselineKind::SignerAndVerifier => {
+            "request cached root+signer+verifier baseline"
+        }
+        RoleAttestationBaselineKind::SignerOnlyWithoutTestMaterial => {
             "request cached root+signer normal-build baseline"
         }
     });
@@ -101,7 +103,7 @@ fn install_cached_root_fixture(cache_kind: AttestationCacheKind) -> CachedInstal
 // PocketIC instance has gone away between tests.
 fn restore_or_rebuild_cached_baseline(
     baseline_slot: &'static Mutex<Option<CachedPicBaseline<AttestationBaselineMetadata>>>,
-    cache_kind: AttestationCacheKind,
+    cache_kind: RoleAttestationBaselineKind,
 ) -> (
     CachedPicBaselineGuard<'static, AttestationBaselineMetadata>,
     bool,
@@ -115,14 +117,13 @@ fn restore_or_rebuild_cached_baseline(
 
 // Build one reusable baseline and capture immutable snapshot IDs inside it.
 fn build_cached_baseline(
-    cache_kind: AttestationCacheKind,
+    cache_kind: RoleAttestationBaselineKind,
 ) -> CachedPicBaseline<AttestationBaselineMetadata> {
     progress("cache miss, building fresh baseline");
     let InstalledRoot { pic, root_id } = match cache_kind {
-        AttestationCacheKind::SignerOnly | AttestationCacheKind::SignerAndVerifier => {
-            install_test_root()
-        }
-        AttestationCacheKind::SignerOnlyWithoutTestMaterial => {
+        RoleAttestationBaselineKind::SignerOnly
+        | RoleAttestationBaselineKind::SignerAndVerifier => install_test_root(),
+        RoleAttestationBaselineKind::SignerOnlyWithoutTestMaterial => {
             install_test_root_without_test_material()
         }
     };
@@ -132,12 +133,13 @@ fn build_cached_baseline(
     let wasm_store_id = wasm_store_pid(&pic, root_id);
     wait_for_ready_canister(&pic, wasm_store_id, 240);
     progress("signer ready");
-    let verifier_id = matches!(cache_kind, AttestationCacheKind::SignerAndVerifier).then(|| {
-        progress("creating verifier baseline canister");
-        let verifier_id = create_verifier_canister(&pic, root_id);
-        progress("verifier baseline canister ready");
-        verifier_id
-    });
+    let verifier_id =
+        matches!(cache_kind, RoleAttestationBaselineKind::SignerAndVerifier).then(|| {
+            progress("creating verifier baseline canister");
+            let verifier_id = create_verifier_canister(&pic, root_id);
+            progress("verifier baseline canister ready");
+            verifier_id
+        });
 
     progress("waiting for root readiness before snapshot capture");
     wait_for_ready_canister(&pic, root_id, 240);
@@ -200,12 +202,14 @@ fn install_root_fixture(root_wasm: Vec<u8>) -> InstalledRoot {
 
 // Return the immutable baseline slot for one cache kind.
 const fn baseline_slot(
-    cache_kind: AttestationCacheKind,
+    cache_kind: RoleAttestationBaselineKind,
 ) -> &'static OnceLock<Mutex<Option<CachedPicBaseline<AttestationBaselineMetadata>>>> {
     match cache_kind {
-        AttestationCacheKind::SignerOnly => &ROOT_SIGNER_BASELINE,
-        AttestationCacheKind::SignerAndVerifier => &ROOT_SIGNER_VERIFIER_BASELINE,
-        AttestationCacheKind::SignerOnlyWithoutTestMaterial => &ROOT_SIGNER_NO_TEST_HOOK_BASELINE,
+        RoleAttestationBaselineKind::SignerOnly => &ROOT_SIGNER_BASELINE,
+        RoleAttestationBaselineKind::SignerAndVerifier => &ROOT_SIGNER_VERIFIER_BASELINE,
+        RoleAttestationBaselineKind::SignerOnlyWithoutTestMaterial => {
+            &ROOT_SIGNER_NO_TEST_HOOK_BASELINE
+        }
     }
 }
 

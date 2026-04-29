@@ -2,22 +2,22 @@ use crate::{InternalError, InternalErrorOrigin, ids::CanisterRole, ops::prelude:
 use thiserror::Error as ThisError;
 
 #[derive(Debug, ThisError)]
-pub enum DelegatedTokenOpsError {
+pub enum AuthOpsError {
     #[error(transparent)]
-    Validation(#[from] DelegationValidationError),
+    Validation(#[from] AuthValidationError),
 
     #[error(transparent)]
-    Signature(#[from] DelegationSignatureError),
+    Signature(#[from] AuthSignatureError),
 
     #[error(transparent)]
-    Scope(#[from] DelegationScopeError),
+    Scope(#[from] AuthScopeError),
 
     #[error(transparent)]
-    Expiry(#[from] DelegationExpiryError),
+    Expiry(#[from] AuthExpiryError),
 }
 
 #[derive(Debug, ThisError)]
-pub enum DelegationValidationError {
+pub enum AuthValidationError {
     #[error(
         "delegation cert expires_at ({expires_at}) must be greater than issued_at ({issued_at})"
     )]
@@ -50,12 +50,12 @@ pub enum DelegationValidationError {
     #[error("delegated token auth disabled (set auth.delegated_tokens.enabled=true in canic.toml)")]
     DelegatedTokenAuthDisabled,
 
-    #[error("delegated auth validation failed: {0}")]
-    DelegatedAuth(String),
+    #[error("auth validation failed: {0}")]
+    Auth(String),
 }
 
 #[derive(Debug, ThisError)]
-pub enum DelegationSignatureError {
+pub enum AuthSignatureError {
     #[error("delegation cert signature unavailable")]
     CertSignatureUnavailable,
 
@@ -74,7 +74,7 @@ pub enum DelegationSignatureError {
     #[error("attestation signature invalid: {0}")]
     AttestationSignatureInvalid(String),
 
-    #[error("root public key unavailable for delegation verification")]
+    #[error("root public key unavailable for delegated-token verification")]
     RootPublicKeyUnavailable,
 
     #[error("shard public key unavailable for shard '{shard_pid}'")]
@@ -82,7 +82,7 @@ pub enum DelegationSignatureError {
 }
 
 #[derive(Debug, ThisError)]
-pub enum DelegationScopeError {
+pub enum AuthScopeError {
     #[error("audience principal '{aud}' not allowed by delegation")]
     AudienceNotAllowed { aud: Principal },
 
@@ -136,7 +136,7 @@ pub enum DelegationScopeError {
 }
 
 #[derive(Debug, ThisError)]
-pub enum DelegationExpiryError {
+pub enum AuthExpiryError {
     #[error("delegation cert expired at {expires_at}")]
     CertExpired { expires_at: u64 },
 
@@ -181,32 +181,32 @@ pub enum DelegationExpiryError {
     AttestationEpochRejected { epoch: u64, min_accepted_epoch: u64 },
 }
 
-impl From<DelegatedTokenOpsError> for InternalError {
-    fn from(err: DelegatedTokenOpsError) -> Self {
+impl From<AuthOpsError> for InternalError {
+    fn from(err: AuthOpsError) -> Self {
         Self::ops(InternalErrorOrigin::Ops, err.to_string())
     }
 }
 
-impl From<DelegationValidationError> for InternalError {
-    fn from(err: DelegationValidationError) -> Self {
-        DelegatedTokenOpsError::from(err).into()
+impl From<AuthValidationError> for InternalError {
+    fn from(err: AuthValidationError) -> Self {
+        AuthOpsError::from(err).into()
     }
 }
 
-impl From<DelegationSignatureError> for InternalError {
-    fn from(err: DelegationSignatureError) -> Self {
-        DelegatedTokenOpsError::from(err).into()
+impl From<AuthSignatureError> for InternalError {
+    fn from(err: AuthSignatureError) -> Self {
+        AuthOpsError::from(err).into()
     }
 }
 
-impl From<DelegationScopeError> for InternalError {
-    fn from(err: DelegationScopeError) -> Self {
-        DelegatedTokenOpsError::from(err).into()
+impl From<AuthScopeError> for InternalError {
+    fn from(err: AuthScopeError) -> Self {
+        AuthOpsError::from(err).into()
     }
 }
 
-impl From<DelegationExpiryError> for InternalError {
-    fn from(err: DelegationExpiryError) -> Self {
-        DelegatedTokenOpsError::from(err).into()
+impl From<AuthExpiryError> for InternalError {
+    fn from(err: AuthExpiryError) -> Self {
+        AuthOpsError::from(err).into()
     }
 }

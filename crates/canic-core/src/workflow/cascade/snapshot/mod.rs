@@ -210,8 +210,8 @@ pub fn state_snapshot_debug(snapshot: &StateSnapshot) -> String {
         "[{} {} {} {}]",
         fmt(snapshot.app_state.is_some(), "as"),
         fmt(snapshot.subnet_state.is_some(), "ss"),
-        fmt(snapshot.app_index.is_some(), "ad"),
-        fmt(snapshot.subnet_index.is_some(), "sd"),
+        fmt(snapshot.app_index.is_some(), "ai"),
+        fmt(snapshot.subnet_index.is_some(), "si"),
     )
 }
 

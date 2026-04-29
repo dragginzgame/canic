@@ -6,9 +6,9 @@
 /// core layout.
 ///
 
-/// Delegation workflow helpers
+/// Authentication workflow helpers
 pub mod auth {
-    pub use crate::__internal::core::api::auth::DelegationApi;
+    pub use crate::__internal::core::api::auth::AuthApi;
 }
 
 /// Environment queries

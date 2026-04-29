@@ -1,6 +1,6 @@
 use super::{AccessContext, AppPredicate, BuiltinPredicate, CallerPredicate, EnvironmentPredicate};
 use crate::{
-    access::{self, AccessError, metrics::DelegationMetrics},
+    access::{self, AccessError, metrics::DelegatedAuthMetrics},
     ids::AccessMetricKind,
 };
 use async_trait::async_trait;
@@ -393,7 +393,7 @@ impl BuiltinPredicateEvaluator for AuthenticatedEvaluator {
         };
         let verified =
             access::auth::delegated_token_verified(ctx.authenticated_caller, required_scope)?;
-        DelegationMetrics::record_authority(verified.issuer_shard_pid);
+        DelegatedAuthMetrics::record_authority(verified.issuer_shard_pid);
         Ok(())
     }
 

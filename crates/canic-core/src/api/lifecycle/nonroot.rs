@@ -15,6 +15,7 @@ impl LifecycleApi {
         config: ConfigModel,
         config_source: &str,
         config_path: &str,
+        with_role_attestation_refresh: bool,
     ) {
         lifecycle::init::nonroot::init_nonroot_canister_before_bootstrap(
             role,
@@ -22,22 +23,7 @@ impl LifecycleApi {
             config,
             config_source,
             config_path,
-        );
-    }
-
-    pub fn init_nonroot_canister_before_bootstrap_with_attestation_cache(
-        role: CanisterRole,
-        payload: CanisterInitPayload,
-        config: ConfigModel,
-        config_source: &str,
-        config_path: &str,
-    ) {
-        lifecycle::init::nonroot::init_nonroot_canister_before_bootstrap_with_attestation_cache(
-            role,
-            payload,
-            config,
-            config_source,
-            config_path,
+            with_role_attestation_refresh,
         );
     }
 
@@ -50,26 +36,14 @@ impl LifecycleApi {
         config: ConfigModel,
         config_source: &str,
         config_path: &str,
+        with_role_attestation_refresh: bool,
     ) {
         lifecycle::upgrade::nonroot::post_upgrade_nonroot_canister_before_bootstrap(
             role,
             config,
             config_source,
             config_path,
-        );
-    }
-
-    pub fn post_upgrade_nonroot_canister_before_bootstrap_with_attestation_cache(
-        role: CanisterRole,
-        config: ConfigModel,
-        config_source: &str,
-        config_path: &str,
-    ) {
-        lifecycle::upgrade::nonroot::post_upgrade_nonroot_canister_before_bootstrap_with_attestation_cache(
-            role,
-            config,
-            config_source,
-            config_path,
+            with_role_attestation_refresh,
         );
     }
 

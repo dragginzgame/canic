@@ -23,7 +23,7 @@ const CANIC_FAMILY_CRATES: &[&str] = &[
     "canic-cdk",
     "canic-control-plane",
     "canic-core",
-    "canic-dsl-macros",
+    "canic-macros",
     "canic-memory",
 ];
 

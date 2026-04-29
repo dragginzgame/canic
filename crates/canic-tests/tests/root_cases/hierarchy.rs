@@ -7,7 +7,7 @@ use crate::root::{
     harness::setup_root,
 };
 use canic::ids::CanisterRole;
-use canic_internal::canister;
+use canic_reference_support::canister;
 use std::io::Write;
 
 fn test_progress(test_name: &str, phase: &str) {
@@ -59,7 +59,7 @@ fn root_reference_topology_is_consistent() {
         .subnet_index
         .get(&canister::APP)
         .copied()
-        .expect("app must exist in subnet directory");
+        .expect("app must exist in subnet index");
 
     test_progress(
         "root_reference_topology_is_consistent",

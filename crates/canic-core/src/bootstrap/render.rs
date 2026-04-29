@@ -1,12 +1,11 @@
 use crate::{
     cdk::candid::Principal,
     config::schema::{
-        AppConfig, AppInitMode, AuthConfig, CanisterConfig, CanisterKind, CanisterPool,
-        ConfigModel, DelegatedAuthCanisterConfig, DelegatedTokenConfig, DirectoryConfig,
-        DirectoryPool, LogConfig, PoolImport, RandomnessConfig, RandomnessSource,
-        RoleAttestationConfig, ScalePool, ScalePoolPolicy, ScalingConfig, ShardPool,
-        ShardPoolPolicy, ShardingConfig, Standards, StandardsCanisterConfig, SubnetConfig,
-        TopupPolicy, Whitelist,
+        AppConfig, AppInitMode, AuthConfig, CanisterAuthConfig, CanisterConfig, CanisterKind,
+        CanisterPool, ConfigModel, DelegatedTokenConfig, DirectoryConfig, DirectoryPool, LogConfig,
+        PoolImport, RandomnessConfig, RandomnessSource, RoleAttestationConfig, ScalePool,
+        ScalePoolPolicy, ScalingConfig, ShardPool, ShardPoolPolicy, ShardingConfig, Standards,
+        StandardsCanisterConfig, SubnetConfig, TopupPolicy, Whitelist,
     },
     ids::{CanisterRole, SubnetRole},
 };
@@ -323,7 +322,7 @@ fn render_canister_config(config: &CanisterConfig) -> TokenStream {
     let scaling = render_option(config.scaling.as_ref(), render_scaling_config);
     let sharding = render_option(config.sharding.as_ref(), render_sharding_config);
     let directory = render_option(config.directory.as_ref(), render_directory_config);
-    let delegated_auth = render_delegated_auth_canister_config(&config.delegated_auth);
+    let auth = render_canister_auth_config(&config.auth);
     let standards = render_standards_canister_config(&config.standards);
 
     quote! {
@@ -335,7 +334,7 @@ fn render_canister_config(config: &CanisterConfig) -> TokenStream {
             scaling: #scaling,
             sharding: #sharding,
             directory: #directory,
-            delegated_auth: #delegated_auth,
+            auth: #auth,
             standards: #standards,
         }
     }
@@ -432,14 +431,14 @@ fn render_randomness_source(source: RandomnessSource) -> TokenStream {
 }
 
 // Render the delegated-auth role config.
-fn render_delegated_auth_canister_config(config: &DelegatedAuthCanisterConfig) -> TokenStream {
-    let signer = config.signer;
-    let attestation_cache = config.attestation_cache;
+fn render_canister_auth_config(config: &CanisterAuthConfig) -> TokenStream {
+    let signer = config.delegated_token_signer;
+    let role_attestation_cache = config.role_attestation_cache;
 
     quote! {
-        ::canic::__internal::core::bootstrap::compiled::DelegatedAuthCanisterConfig {
-            signer: #signer,
-            attestation_cache: #attestation_cache,
+        ::canic::__internal::core::bootstrap::compiled::CanisterAuthConfig {
+            delegated_token_signer: #signer,
+            role_attestation_cache: #role_attestation_cache,
         }
     }
 }

@@ -31,7 +31,7 @@ impl PropagationWorkflow {
         TopologyCascadeWorkflow::root_cascade_topology_for_pid(target).await
     }
 
-    /// Propagate application/subnet state and index views after structural mutations.
+    /// Propagate application/subnet state and index snapshots after structural mutations.
     ///
     /// This rebuilds index snapshots from the registry, applies current
     /// app state, cascades it to root children, and finally re-asserts

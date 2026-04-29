@@ -4,7 +4,7 @@ use crate::{
     cdk::types::Principal,
     dto::auth::{AttestationKey, AttestationKeySet},
     storage::stable::auth::{
-        DelegatedSessionBootstrapBindingRecord, DelegatedSessionRecord, DelegationState,
+        AuthState, DelegatedSessionBootstrapBindingRecord, DelegatedSessionRecord,
     },
 };
 use mapper::AttestationPublicKeyRecordMapper;
@@ -36,43 +36,33 @@ pub struct DelegatedSessionBootstrapBinding {
 }
 
 ///
-/// DelegationStateOps
+/// AuthStateOps
 ///
 /// WHY THIS FILE EXISTS
 /// --------------------
 /// This module defines the **only authorized access path** to persisted
-/// delegation state stored in stable memory.
+/// auth state stored in stable memory.
 ///
 /// It intentionally sits between:
 ///   - access / auth logic
 ///   - stable storage implementation details
 ///
 /// Responsibilities:
-/// - Provide a narrow, explicit API for delegation state access
+/// - Provide a narrow, explicit API for auth state access
 /// - Prevent access-layer code from depending on storage internals
 /// - Serve as the choke point for schema and lifecycle changes
 ///
 /// This is a **security-sensitive boundary**:
-/// delegation state stores signer key material, delegated sessions, and
-/// role-attestation keys.
+/// auth state stores delegated sessions and role-attestation keys.
 ///
 
-pub struct DelegationStateOps;
+pub struct AuthStateOps;
 
-impl DelegationStateOps {
-    #[must_use]
-    pub fn shard_public_key(shard_pid: Principal, key_name: &str) -> Option<Vec<u8>> {
-        DelegationState::get_shard_public_key(shard_pid, key_name)
-    }
-
-    pub fn set_shard_public_key(shard_pid: Principal, key_name: String, public_key_sec1: Vec<u8>) {
-        DelegationState::set_shard_public_key(shard_pid, key_name, public_key_sec1);
-    }
-
+impl AuthStateOps {
     /// Return an active delegated session for the provided wallet caller.
     #[must_use]
     pub fn delegated_session(wallet_pid: Principal, now_secs: u64) -> Option<DelegatedSession> {
-        DelegationState::get_active_delegated_session(wallet_pid, now_secs)
+        AuthState::get_active_delegated_session(wallet_pid, now_secs)
             .map(delegated_session_record_to_view)
     }
 
@@ -84,21 +74,18 @@ impl DelegationStateOps {
 
     /// Upsert the delegated session for the provided wallet caller.
     pub fn upsert_delegated_session(session: DelegatedSession, now_secs: u64) {
-        DelegationState::upsert_delegated_session(
-            delegated_session_view_to_record(session),
-            now_secs,
-        );
+        AuthState::upsert_delegated_session(delegated_session_view_to_record(session), now_secs);
     }
 
     /// Remove the delegated session for the provided wallet caller.
     pub fn clear_delegated_session(wallet_pid: Principal) {
-        DelegationState::clear_delegated_session(wallet_pid);
+        AuthState::clear_delegated_session(wallet_pid);
     }
 
     /// Remove all expired delegated sessions and return removed count.
     #[must_use]
     pub fn prune_expired_delegated_sessions(now_secs: u64) -> usize {
-        DelegationState::prune_expired_delegated_sessions(now_secs)
+        AuthState::prune_expired_delegated_sessions(now_secs)
     }
 
     /// Resolve an active delegated-session bootstrap binding by token fingerprint.
@@ -107,7 +94,7 @@ impl DelegationStateOps {
         token_fingerprint: [u8; 32],
         now_secs: u64,
     ) -> Option<DelegatedSessionBootstrapBinding> {
-        DelegationState::get_active_delegated_session_bootstrap_binding(token_fingerprint, now_secs)
+        AuthState::get_active_delegated_session_bootstrap_binding(token_fingerprint, now_secs)
             .map(delegated_session_bootstrap_binding_record_to_view)
     }
 
@@ -116,7 +103,7 @@ impl DelegationStateOps {
         binding: DelegatedSessionBootstrapBinding,
         now_secs: u64,
     ) {
-        DelegationState::upsert_delegated_session_bootstrap_binding(
+        AuthState::upsert_delegated_session_bootstrap_binding(
             delegated_session_bootstrap_binding_view_to_record(binding),
             now_secs,
         );
@@ -125,12 +112,12 @@ impl DelegationStateOps {
     /// Remove expired delegated-session bootstrap bindings and return removed count.
     #[must_use]
     pub fn prune_expired_delegated_session_bootstrap_bindings(now_secs: u64) -> usize {
-        DelegationState::prune_expired_delegated_session_bootstrap_bindings(now_secs)
+        AuthState::prune_expired_delegated_session_bootstrap_bindings(now_secs)
     }
 
     #[must_use]
     pub fn attestation_public_key(key_id: u32, key_name: &str) -> Option<AttestationKey> {
-        DelegationState::get_attestation_public_key(key_id, key_name)
+        AuthState::get_attestation_public_key(key_id, key_name)
             .map(AttestationPublicKeyRecordMapper::record_to_dto)
     }
 
@@ -141,7 +128,7 @@ impl DelegationStateOps {
 
     #[must_use]
     pub fn attestation_keys(key_name: &str) -> Vec<AttestationKey> {
-        DelegationState::get_attestation_public_keys(key_name)
+        AuthState::get_attestation_public_keys(key_name)
             .into_iter()
             .map(AttestationPublicKeyRecordMapper::record_to_dto)
             .collect()
@@ -153,13 +140,13 @@ impl DelegationStateOps {
             .into_iter()
             .map(AttestationPublicKeyRecordMapper::dto_to_record)
             .collect();
-        DelegationState::set_attestation_public_keys(keys);
+        AuthState::set_attestation_public_keys(keys);
     }
 
     pub fn upsert_attestation_key(key: AttestationKey) {
-        DelegationState::upsert_attestation_public_key(
-            AttestationPublicKeyRecordMapper::dto_to_record(key),
-        );
+        AuthState::upsert_attestation_public_key(AttestationPublicKeyRecordMapper::dto_to_record(
+            key,
+        ));
     }
 }
 

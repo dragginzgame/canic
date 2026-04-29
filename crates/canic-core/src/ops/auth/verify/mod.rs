@@ -3,7 +3,7 @@ mod attestation;
 use crate::{
     cdk::types::Principal,
     dto::auth::{AttestationKey, RoleAttestation},
-    ops::auth::DelegatedTokenOpsError,
+    ops::auth::AuthOpsError,
 };
 
 // Route role-attestation verification through the attestation-focused verifier module.
@@ -14,7 +14,7 @@ pub(super) fn verify_role_attestation_claims(
     verifier_subnet: Option<Principal>,
     now_secs: u64,
     min_accepted_epoch: u64,
-) -> Result<(), DelegatedTokenOpsError> {
+) -> Result<(), AuthOpsError> {
     attestation::verify_role_attestation_claims(
         payload,
         caller,
@@ -29,6 +29,6 @@ pub(super) fn verify_role_attestation_claims(
 pub(super) fn verify_attestation_key_validity(
     key: &AttestationKey,
     now_secs: u64,
-) -> Result<(), DelegatedTokenOpsError> {
+) -> Result<(), AuthOpsError> {
     attestation::verify_attestation_key_validity(key, now_secs)
 }

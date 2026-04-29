@@ -1,9 +1,9 @@
-# canic-dsl-macros
+# canic-macros
 
 Proc macros for defining Internet Computer endpoints in Canic canisters.
 
 Most downstream users should access these macros through `canic`, not by
-depending on `canic-dsl-macros` directly.
+depending on `canic-macros` directly.
 
 This crate provides `#[canic_query]` and `#[canic_update]`, which are thin wrappers
 around the IC CDK `#[query]` / `#[update]` attributes and route through Canic's
@@ -11,7 +11,7 @@ pipeline (requires -> dispatch).
 Use `all(...)`, `any(...)`, and `not(...)` inside `requires(...)` for composition.
 
 ```rust
-use canic_dsl_macros::{canic_query, canic_update};
+use canic_macros::{canic_query, canic_update};
 
 #[canic_query]
 fn ping() -> String {

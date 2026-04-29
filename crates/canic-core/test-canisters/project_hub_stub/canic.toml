@@ -13,8 +13,8 @@ kind = "root"
 [subnets.prime.canisters.project_hub]
 kind = "singleton"
 
-[subnets.prime.canisters.project_hub.delegated_auth]
-attestation_cache = true
+[subnets.prime.canisters.project_hub.auth]
+role_attestation_cache = true
 
 [subnets.prime.canisters.project_hub.directory.pools.projects]
 canister_role = "project_instance"

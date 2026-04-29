@@ -226,16 +226,16 @@ fn scenario_target_pid(
         "root" => root_id,
         "app" => *subnet_index
             .get(&APP)
-            .expect("app must exist in subnet directory"),
+            .expect("app must exist in subnet index"),
         "scale_hub" => *subnet_index
             .get(&SCALE_HUB)
-            .expect("scale_hub must exist in subnet directory"),
+            .expect("scale_hub must exist in subnet index"),
         "user_hub" => *subnet_index
             .get(&USER_HUB)
-            .expect("user_hub must exist in subnet directory"),
+            .expect("user_hub must exist in subnet index"),
         "test" => *subnet_index
             .get(&TEST)
-            .expect("test must exist in subnet directory"),
+            .expect("test must exist in subnet index"),
         other => panic!("unsupported audit canister: {other}"),
     }
 }

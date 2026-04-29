@@ -21,7 +21,7 @@ use canic_control_plane::{
         WasmStoreGcMode,
     },
 };
-use canic_internal::canister::MINIMAL;
+use canic_reference_support::canister::MINIMAL;
 use canic_testkit::{artifacts::workspace_root_for, pic::Pic};
 use reconcile_root_harness::setup_cached_root;
 use std::{fs, path::PathBuf};

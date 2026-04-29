@@ -17,7 +17,7 @@ pub enum MetricsKind {
     Http,
     Timer,
     Access,
-    Delegation,
+    DelegatedAuth,
     RootCapability,
     CyclesFunding,
     Perf,

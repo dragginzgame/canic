@@ -33,7 +33,7 @@ populate_isolated_package_root() {
         "$PACKAGE_STAGING_ROOT/canic-cdk-$VERSION.crate" \
         "$PACKAGE_STAGING_ROOT/canic-control-plane-$VERSION.crate" \
         "$PACKAGE_STAGING_ROOT/canic-core-$VERSION.crate" \
-        "$PACKAGE_STAGING_ROOT/canic-dsl-macros-$VERSION.crate" \
+        "$PACKAGE_STAGING_ROOT/canic-macros-$VERSION.crate" \
         "$PACKAGE_STAGING_ROOT/canic-installer-$VERSION.crate" \
         "$PACKAGE_STAGING_ROOT/canic-memory-$VERSION.crate" \
         "$PACKAGE_STAGING_ROOT/canic-$VERSION.crate"
@@ -59,7 +59,7 @@ canic = { path = "package-root/canic-$VERSION" }
 canic-cdk = { path = "package-root/canic-cdk-$VERSION" }
 canic-control-plane = { path = "package-root/canic-control-plane-$VERSION" }
 canic-core = { path = "package-root/canic-core-$VERSION" }
-canic-dsl-macros = { path = "package-root/canic-dsl-macros-$VERSION" }
+canic-macros = { path = "package-root/canic-macros-$VERSION" }
 canic-memory = { path = "package-root/canic-memory-$VERSION" }
 EOF
 }
@@ -139,7 +139,7 @@ main() {
     ensure_packaged_crate canic-cdk
     ensure_packaged_crate canic-control-plane
     ensure_packaged_crate canic-core
-    ensure_packaged_crate canic-dsl-macros
+    ensure_packaged_crate canic-macros
     ensure_packaged_crate canic-installer
     ensure_packaged_crate canic-memory
     ensure_packaged_crate canic

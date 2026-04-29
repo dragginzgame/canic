@@ -4,13 +4,13 @@
 
 use canic::{
     Error,
-    api::auth::DelegationApi,
+    api::auth::AuthApi,
     cdk::candid::Principal,
     dto::auth::{DelegatedToken, DelegatedTokenMintRequest, SignedRoleAttestation},
     ids::cap,
     prelude::*,
 };
-use canic_internal::canister::USER_SHARD;
+use canic_reference_support::canister::USER_SHARD;
 
 canic::start!(USER_SHARD);
 
@@ -20,7 +20,7 @@ async fn canic_upgrade() {}
 
 #[canic_update]
 async fn signer_issue_token(request: DelegatedTokenMintRequest) -> Result<DelegatedToken, Error> {
-    DelegationApi::mint_token(request).await
+    AuthApi::mint_token(request).await
 }
 
 #[canic_update(requires(auth::authenticated(cap::VERIFY)))]
@@ -35,13 +35,13 @@ async fn signer_verify_token_any(_token: DelegatedToken) -> Result<(), Error> {
 
 #[canic_update]
 async fn signer_clear_delegated_session() -> Result<(), Error> {
-    DelegationApi::clear_delegated_session();
+    AuthApi::clear_delegated_session();
     Ok(())
 }
 
 #[canic_query]
 async fn signer_delegated_session_subject() -> Result<Option<Principal>, Error> {
-    Ok(DelegationApi::delegated_session_subject())
+    Ok(AuthApi::delegated_session_subject())
 }
 
 #[canic_update]
@@ -49,7 +49,7 @@ async fn signer_verify_role_attestation(
     attestation: SignedRoleAttestation,
     min_accepted_epoch: u64,
 ) -> Result<(), Error> {
-    DelegationApi::verify_role_attestation(&attestation, min_accepted_epoch).await
+    AuthApi::verify_role_attestation(&attestation, min_accepted_epoch).await
 }
 
 #[canic_update(requires(caller::is_root()))]

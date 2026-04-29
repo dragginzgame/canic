@@ -13,7 +13,7 @@ use crate::{
     log::Topic,
     ops::{
         auth::{
-            DelegatedTokenOps, SignDelegatedTokenInput, SignDelegationProofInput,
+            AuthOps, SignDelegatedTokenInput, SignDelegationProofInput,
             VerifyDelegatedTokenRuntimeInput,
         },
         config::ConfigOps,
@@ -35,14 +35,14 @@ mod session;
 mod verify_flow;
 
 ///
-/// DelegationApi
+/// AuthApi
 ///
-/// Requires auth.delegated_tokens.enabled = true in config.
+/// Owns delegated-token helpers and root-signed role-attestation helpers.
 ///
 
-pub struct DelegationApi;
+pub struct AuthApi;
 
-impl DelegationApi {
+impl AuthApi {
     const DELEGATED_TOKENS_DISABLED: &str =
         "delegated token auth disabled; set auth.delegated_tokens.enabled=true in canic.toml";
     const MAX_DELEGATED_SESSION_TTL_SECS: u64 = 24 * 60 * 60;
@@ -50,7 +50,7 @@ impl DelegationApi {
         b"canic-session-bootstrap-token-fingerprint";
 
     // Map internal auth failures onto public endpoint errors.
-    fn map_delegation_error(err: crate::InternalError) -> Error {
+    fn map_auth_error(err: crate::InternalError) -> Error {
         match err.class() {
             InternalErrorClass::Infra | InternalErrorClass::Ops | InternalErrorClass::Workflow => {
                 Error::internal(err.to_string())
@@ -61,14 +61,14 @@ impl DelegationApi {
 
     /// Resolve the local shard public key in SEC1 encoding.
     pub async fn local_shard_public_key_sec1() -> Result<Vec<u8>, Error> {
-        DelegatedTokenOps::local_shard_public_key_sec1(IcOps::canister_self())
+        AuthOps::local_shard_public_key_sec1(IcOps::canister_self())
             .await
-            .map_err(Self::map_delegation_error)
+            .map_err(Self::map_auth_error)
     }
 
     /// Issue a delegated token from an explicit self-contained proof.
     pub async fn issue_token(request: DelegatedTokenIssueRequest) -> Result<DelegatedToken, Error> {
-        DelegatedTokenOps::sign_token(SignDelegatedTokenInput {
+        AuthOps::sign_token(SignDelegatedTokenInput {
             proof: request.proof,
             subject: request.subject,
             audience: request.aud,
@@ -77,7 +77,7 @@ impl DelegationApi {
             nonce: request.nonce,
         })
         .await
-        .map_err(Self::map_delegation_error)
+        .map_err(Self::map_auth_error)
     }
 
     /// Request a root proof, then issue a self-contained delegated token.
@@ -109,7 +109,7 @@ impl DelegationApi {
         required_scopes: &[String],
         now_secs: u64,
     ) -> Result<(), Error> {
-        DelegatedTokenOps::verify_token(VerifyDelegatedTokenRuntimeInput {
+        AuthOps::verify_token(VerifyDelegatedTokenRuntimeInput {
             token,
             max_cert_ttl_secs,
             max_token_ttl_secs,
@@ -117,7 +117,7 @@ impl DelegationApi {
             now_secs,
         })
         .map(|_| ())
-        .map_err(Self::map_delegation_error)
+        .map_err(Self::map_auth_error)
     }
 
     /// Request a self-contained delegation proof from root over RPC.
@@ -132,9 +132,9 @@ impl DelegationApi {
         request: DelegationProofIssueRequest,
     ) -> Result<DelegationProof, Error> {
         EnvOps::require_root().map_err(Error::from)?;
-        let max_cert_ttl_secs = Self::delegated_auth_max_ttl_secs()?;
+        let max_cert_ttl_secs = Self::delegated_token_max_ttl_secs()?;
         let max_token_ttl_secs = request.cert_ttl_secs.min(max_cert_ttl_secs);
-        DelegatedTokenOps::sign_delegation_proof(SignDelegationProofInput {
+        AuthOps::sign_delegation_proof(SignDelegationProofInput {
             audience: request.aud,
             scopes: request.scopes,
             shard_pid: request.shard_pid,
@@ -144,7 +144,7 @@ impl DelegationApi {
             issued_at: IcOps::now_secs(),
         })
         .await
-        .map_err(Self::map_delegation_error)
+        .map_err(Self::map_auth_error)
     }
 
     /// Request a signed role attestation from root over RPC.
@@ -164,29 +164,27 @@ impl DelegationApi {
 
     /// Return the current root role-attestation key set.
     pub async fn attestation_key_set() -> Result<AttestationKeySet, Error> {
-        DelegatedTokenOps::attestation_key_set()
+        AuthOps::attestation_key_set()
             .await
-            .map_err(Self::map_delegation_error)
+            .map_err(Self::map_auth_error)
     }
 
     /// Publish root auth material into subnet state and warm root-owned keys once.
     pub async fn publish_root_auth_material() -> Result<(), Error> {
         EnvOps::require_root().map_err(Error::from)?;
-        DelegatedTokenOps::publish_root_auth_material()
-            .await
-            .map_err(|err| {
-                log!(
-                    Topic::Auth,
-                    Warn,
-                    "root auth material publish failed: {err}"
-                );
-                Self::map_delegation_error(err)
-            })
+        AuthOps::publish_root_auth_material().await.map_err(|err| {
+            log!(
+                Topic::Auth,
+                Warn,
+                "root auth material publish failed: {err}"
+            );
+            Self::map_auth_error(err)
+        })
     }
 
     /// Replace the verifier-local role-attestation key set.
     pub fn replace_attestation_key_set(key_set: AttestationKeySet) {
-        DelegatedTokenOps::replace_attestation_key_set(key_set);
+        AuthOps::replace_attestation_key_set(key_set);
     }
 
     /// Verify a role attestation, refreshing root keys once on unknown key.
@@ -211,7 +209,7 @@ impl DelegationApi {
         let root_pid = EnvOps::root_pid().map_err(Error::from)?;
 
         let verify = || {
-            DelegatedTokenOps::verify_role_attestation_cached(
+            AuthOps::verify_role_attestation_cached(
                 attestation,
                 caller,
                 self_pid,
@@ -224,7 +222,7 @@ impl DelegationApi {
         let refresh = || async {
             let key_set: AttestationKeySet =
                 RpcOps::call_rpc_result(root_pid, protocol::CANIC_ATTESTATION_KEY_SET, ()).await?;
-            DelegatedTokenOps::replace_attestation_key_set(key_set);
+            AuthOps::replace_attestation_key_set(key_set);
             Ok(())
         };
 
@@ -239,7 +237,7 @@ impl DelegationApi {
                     self_pid,
                     "cached",
                 );
-                Err(Self::map_delegation_error(err.into()))
+                Err(Self::map_auth_error(err.into()))
             }
             Err(verify_flow::RoleAttestationVerifyFlowError::Refresh { trigger, source }) => {
                 verify_flow::record_attestation_verifier_rejection(&trigger);
@@ -260,7 +258,7 @@ impl DelegationApi {
                     attestation.key_id,
                     source
                 );
-                Err(Self::map_delegation_error(source))
+                Err(Self::map_auth_error(source))
             }
             Err(verify_flow::RoleAttestationVerifyFlowError::PostRefresh(err)) => {
                 verify_flow::record_attestation_verifier_rejection(&err);
@@ -271,13 +269,13 @@ impl DelegationApi {
                     self_pid,
                     "post_refresh",
                 );
-                Err(Self::map_delegation_error(err.into()))
+                Err(Self::map_auth_error(err.into()))
             }
         }
     }
 
     // Resolve the root-owned TTL ceiling from delegated-token config.
-    fn delegated_auth_max_ttl_secs() -> Result<u64, Error> {
+    fn delegated_token_max_ttl_secs() -> Result<u64, Error> {
         let cfg = ConfigOps::delegated_tokens_config().map_err(Error::from)?;
         if !cfg.enabled {
             return Err(Error::forbidden(Self::DELEGATED_TOKENS_DISABLED));
@@ -289,7 +287,7 @@ impl DelegationApi {
     }
 }
 
-impl DelegationApi {
+impl AuthApi {
     // Route a self-contained delegation proof request over RPC to root.
     async fn request_delegation_remote(
         request: DelegationProofIssueRequest,
@@ -297,7 +295,7 @@ impl DelegationApi {
         let root_pid = EnvOps::root_pid().map_err(Error::from)?;
         RpcOps::call_rpc_result(root_pid, protocol::CANIC_REQUEST_DELEGATION, request)
             .await
-            .map_err(Self::map_delegation_error)
+            .map_err(Self::map_auth_error)
     }
 
     // Execute one local root role-attestation request.
@@ -307,7 +305,7 @@ impl DelegationApi {
         let request = metadata::with_root_attestation_request_metadata(request);
         let response = RootResponseWorkflow::response(RootRequest::issue_role_attestation(request))
             .await
-            .map_err(Self::map_delegation_error)?;
+            .map_err(Self::map_auth_error)?;
 
         match response {
             RootCapabilityResponse::RoleAttestationIssued(response) => Ok(response),
@@ -324,6 +322,6 @@ impl DelegationApi {
         let root_pid = EnvOps::root_pid().map_err(Error::from)?;
         RpcOps::call_rpc_result(root_pid, protocol::CANIC_REQUEST_ROLE_ATTESTATION, request)
             .await
-            .map_err(Self::map_delegation_error)
+            .map_err(Self::map_auth_error)
     }
 }

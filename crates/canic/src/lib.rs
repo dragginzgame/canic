@@ -50,7 +50,7 @@ pub use canic_memory as memory;
 // Re-exports
 // -----------------------------------------------------------------------------
 pub use canic_core::dto::error::Error;
-pub use canic_dsl_macros::{canic_query, canic_update};
+pub use canic_macros::{canic_query, canic_update};
 
 // -----------------------------------------------------------------------------
 // Constants

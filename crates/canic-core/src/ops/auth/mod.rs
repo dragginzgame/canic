@@ -12,8 +12,7 @@ mod types;
 mod verify;
 pub use boundary::DelegatedSessionExpiryClamp;
 pub use error::{
-    DelegatedTokenOpsError, DelegationExpiryError, DelegationScopeError, DelegationSignatureError,
-    DelegationValidationError,
+    AuthExpiryError, AuthOpsError, AuthScopeError, AuthSignatureError, AuthValidationError,
 };
 pub use types::{
     SignDelegatedTokenInput, SignDelegationProofInput, VerifyDelegatedTokenRuntimeInput,
@@ -27,14 +26,14 @@ const ROLE_ATTESTATION_SIGNING_DOMAIN: &[u8] = b"CANIC_ROLE_ATTESTATION_V1";
 const ROLE_ATTESTATION_KEY_ID_V1: u32 = 1;
 
 ///
-/// DelegatedTokenOps
+/// AuthOps
 ///
 
-pub struct DelegatedTokenOps;
+pub struct AuthOps;
 
-impl DelegatedTokenOps {
-    // Publish the root delegation public key into cascaded subnet state.
-    pub async fn publish_root_delegated_key_material() -> Result<(), crate::InternalError> {
+impl AuthOps {
+    // Publish the root delegated-token public key into cascaded subnet state.
+    pub async fn publish_delegated_token_root_key_material() -> Result<(), crate::InternalError> {
         let root_pid = IcOps::canister_self();
         let delegated_key_name = keys::delegated_tokens_key_name()?;
         keys::ensure_root_public_key_published(&delegated_key_name, root_pid).await
@@ -45,7 +44,7 @@ impl DelegatedTokenOps {
         let root_pid = IcOps::canister_self();
         let now_secs = IcOps::now_secs();
 
-        Self::publish_root_delegated_key_material().await?;
+        Self::publish_delegated_token_root_key_material().await?;
 
         let attestation_key_name = keys::attestation_key_name()?;
         keys::ensure_attestation_key_cached(&attestation_key_name, root_pid, now_secs).await?;

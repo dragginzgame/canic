@@ -4,7 +4,7 @@ use crate::root::{
     workers::{count_workers, create_worker},
 };
 use canic::{Error, dto::placement::scaling::ScalingRegistryResponse};
-use canic_internal::canister;
+use canic_reference_support::canister;
 
 #[test]
 fn scale_hub_bootstraps_initial_worker_then_manual_create_reaches_min() {
@@ -14,7 +14,7 @@ fn scale_hub_bootstraps_initial_worker_then_manual_create_reaches_min() {
         .subnet_index
         .get(&canister::SCALE_HUB)
         .copied()
-        .expect("scale_hub must exist in subnet directory");
+        .expect("scale_hub must exist in subnet index");
 
     let before = count_workers(&setup.pic, setup.root_id, scale_hub_pid);
     assert_eq!(

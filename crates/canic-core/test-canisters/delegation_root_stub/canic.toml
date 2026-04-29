@@ -15,9 +15,9 @@ kind = "root"
 kind = "singleton"
 initial_cycles = "1T"
 
-[subnets.prime.canisters.signer.delegated_auth]
-signer = true
-attestation_cache = true
+[subnets.prime.canisters.signer.auth]
+delegated_token_signer = true
+role_attestation_cache = true
 
 [subnets.prime.canisters.project_hub]
 kind = "singleton"
@@ -27,12 +27,12 @@ initial_cycles = "1T"
 canister_role = "project_instance"
 key_name = "project"
 
-[subnets.prime.canisters.project_hub.delegated_auth]
-attestation_cache = true
+[subnets.prime.canisters.project_hub.auth]
+role_attestation_cache = true
 
 [subnets.prime.canisters.project_instance]
 kind = "instance"
 initial_cycles = "1T"
 
-[subnets.prime.canisters.project_instance.delegated_auth]
-attestation_cache = true
+[subnets.prime.canisters.project_instance.auth]
+role_attestation_cache = true

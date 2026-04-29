@@ -181,10 +181,10 @@ This is intentional: one semantic token must have one valid canonical encoding.
 Entrypoint path:
 
 ```text
-DelegationApi::request_delegation
+AuthApi::request_delegation
   -> root canic_request_delegation
-  -> DelegationApi::issue_delegation_proof
-  -> DelegatedTokenOps::sign_delegation_proof
+  -> AuthApi::issue_delegation_proof
+  -> AuthOps::sign_delegation_proof
 ```
 
 Root issuance steps:
@@ -259,12 +259,12 @@ Root publish entrypoints:
 
 ```text
 canic_setup on root
-  -> DelegationApi::publish_root_auth_material
-  -> DelegatedTokenOps::publish_root_auth_material
+  -> AuthApi::publish_root_auth_material
+  -> AuthOps::publish_root_auth_material
 
 state propagation / canister lifecycle snapshots
   -> RuntimeAuthWorkflow::publish_root_delegated_key_to_subnet_state
-  -> DelegatedTokenOps::publish_root_delegated_key_material
+  -> AuthOps::publish_delegated_token_root_key_material
 ```
 
 `publish_root_auth_material` also warms root-owned role-attestation material.
@@ -275,12 +275,12 @@ Verifier canisters never call a delegated-root-key prewarm API.
 Entrypoint paths:
 
 ```text
-DelegationApi::mint_token
+AuthApi::mint_token
   -> request root proof
-  -> DelegationApi::issue_token
+  -> AuthApi::issue_token
 
-DelegationApi::issue_token
-  -> DelegatedTokenOps::sign_token
+AuthApi::issue_token
+  -> AuthOps::sign_token
 ```
 
 Shard minting steps:
@@ -310,7 +310,7 @@ Signer lifecycle prewarm:
 ```text
 non-root bootstrap
   -> RuntimeAuthWorkflow::prewarm_signer_key_material
-  -> DelegatedTokenOps::local_shard_public_key_sec1
+  -> AuthOps::local_shard_public_key_sec1
 ```
 
 This warms local shard signing key material only. It does not request, store, or
@@ -384,7 +384,7 @@ Delegated sessions allow a wallet caller to temporarily bind an authenticated de
 Entrypoint:
 
 ```text
-DelegationApi::set_delegated_session_subject
+AuthApi::set_delegated_session_subject
 ```
 
 Rules:

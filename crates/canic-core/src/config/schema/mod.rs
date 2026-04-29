@@ -179,7 +179,7 @@ impl ConfigModel {
                 scaling: None,
                 sharding: None,
                 directory: None,
-                delegated_auth: DelegatedAuthCanisterConfig::default(),
+                auth: CanisterAuthConfig::default(),
                 standards: StandardsCanisterConfig::default(),
             },
         );
@@ -543,7 +543,7 @@ mod tests {
             scaling: None,
             sharding: None,
             directory: None,
-            delegated_auth: DelegatedAuthCanisterConfig::default(),
+            auth: CanisterAuthConfig::default(),
             standards: StandardsCanisterConfig::default(),
         }
     }

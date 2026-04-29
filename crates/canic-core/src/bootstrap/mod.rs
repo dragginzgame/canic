@@ -9,12 +9,11 @@ pub mod compiled {
     pub use crate::{
         cdk::{candid::Principal, types::Cycles},
         config::schema::{
-            AppConfig, AppInitMode, AuthConfig, CanisterConfig, CanisterKind, CanisterPool,
-            ConfigModel, DelegatedAuthCanisterConfig, DelegatedTokenConfig, DirectoryConfig,
-            DirectoryPool, LogConfig, PoolImport, RandomnessConfig, RandomnessSource,
-            RoleAttestationConfig, ScalePool, ScalePoolPolicy, ScalingConfig, ShardPool,
-            ShardPoolPolicy, ShardingConfig, Standards, StandardsCanisterConfig, SubnetConfig,
-            TopupPolicy, Whitelist,
+            AppConfig, AppInitMode, AuthConfig, CanisterAuthConfig, CanisterConfig, CanisterKind,
+            CanisterPool, ConfigModel, DelegatedTokenConfig, DirectoryConfig, DirectoryPool,
+            LogConfig, PoolImport, RandomnessConfig, RandomnessSource, RoleAttestationConfig,
+            ScalePool, ScalePoolPolicy, ScalingConfig, ShardPool, ShardPoolPolicy, ShardingConfig,
+            Standards, StandardsCanisterConfig, SubnetConfig, TopupPolicy, Whitelist,
         },
         ids::{CanisterRole, SubnetRole},
     };

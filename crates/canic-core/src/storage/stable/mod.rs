@@ -88,7 +88,7 @@ pub mod memory {
     // ---------------------------------------------------------------------
 
     pub mod auth {
-        pub const DELEGATION_STATE_ID: u8 = 16;
+        pub const AUTH_STATE_ID: u8 = 16;
         pub const ROOT_REPLAY_ID: u8 = 17;
 
         // Reserved: 18–25

@@ -20,5 +20,5 @@ key_name = "project"
 [subnets.prime.canisters.project_instance]
 kind = "instance"
 
-[subnets.prime.canisters.project_instance.delegated_auth]
-attestation_cache = true
+[subnets.prime.canisters.project_instance.auth]
+role_attestation_cache = true

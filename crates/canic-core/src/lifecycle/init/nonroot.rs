@@ -16,6 +16,7 @@ pub fn init_nonroot_canister_before_bootstrap(
     config: ConfigModel,
     config_source: &str,
     config_path: &str,
+    with_role_attestation_refresh: bool,
 ) {
     if let Err(err) = bootstrap::init_compiled_config(config, config_source) {
         lifecycle_trap(
@@ -24,26 +25,8 @@ pub fn init_nonroot_canister_before_bootstrap(
         );
     }
 
-    if let Err(err) = workflow::runtime::init_nonroot_canister(role, payload) {
-        lifecycle_trap(LifecyclePhase::Init, err);
-    }
-}
-
-pub fn init_nonroot_canister_before_bootstrap_with_attestation_cache(
-    role: CanisterRole,
-    payload: CanisterInitPayload,
-    config: ConfigModel,
-    config_source: &str,
-    config_path: &str,
-) {
-    if let Err(err) = bootstrap::init_compiled_config(config, config_source) {
-        lifecycle_trap(
-            LifecyclePhase::Init,
-            format!("config init failed (CANIC_CONFIG_PATH={config_path}): {err}"),
-        );
-    }
-
-    if let Err(err) = workflow::runtime::init_nonroot_canister_with_attestation_cache(role, payload)
+    if let Err(err) =
+        workflow::runtime::init_nonroot_canister(role, payload, with_role_attestation_refresh)
     {
         lifecycle_trap(LifecyclePhase::Init, err);
     }

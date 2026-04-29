@@ -168,12 +168,12 @@ impl StateCascadeWorkflow {
             SubnetStateOps::import_input(subnet);
         }
 
-        if let Some(dir) = &snapshot.app_index {
-            AppIndexOps::import_args_allow_incomplete(dir.clone())?;
+        if let Some(index) = &snapshot.app_index {
+            AppIndexOps::import_args_allow_incomplete(index.clone())?;
         }
 
-        if let Some(dir) = &snapshot.subnet_index {
-            SubnetIndexOps::import_args_allow_incomplete(dir.clone())?;
+        if let Some(index) = &snapshot.subnet_index {
+            SubnetIndexOps::import_args_allow_incomplete(index.clone())?;
         }
 
         Ok(())

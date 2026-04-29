@@ -1,7 +1,7 @@
 #![allow(clippy::unused_async)]
 
 use canic::{Error, dto::auth::DelegatedToken, ids::cap, prelude::*};
-use canic_internal::canister::TEST;
+use canic_reference_support::canister::TEST;
 use std::time::Duration;
 
 canic::start!(TEST);

@@ -273,7 +273,7 @@ mod tests {
         let _guard = seams::lock();
         AccessMetrics::reset();
         let wallet = p(9);
-        crate::ops::storage::auth::DelegationStateOps::clear_delegated_session(wallet);
+        crate::ops::storage::auth::AuthStateOps::clear_delegated_session(wallet);
         let resolved = resolve_authenticated_identity(wallet);
         assert_eq!(resolved.authenticated_subject, wallet);
         assert_eq!(
@@ -289,7 +289,7 @@ mod tests {
         AccessMetrics::reset();
         let wallet = p(8);
         let delegated = p(7);
-        crate::ops::storage::auth::DelegationStateOps::upsert_delegated_session(
+        crate::ops::storage::auth::AuthStateOps::upsert_delegated_session(
             crate::ops::storage::auth::DelegatedSession {
                 wallet_pid: wallet,
                 delegated_pid: delegated,
@@ -313,7 +313,7 @@ mod tests {
             "active delegated session should not fallback to raw caller"
         );
 
-        crate::ops::storage::auth::DelegationStateOps::clear_delegated_session(wallet);
+        crate::ops::storage::auth::AuthStateOps::clear_delegated_session(wallet);
     }
 
     #[test]
@@ -322,7 +322,7 @@ mod tests {
         AccessMetrics::reset();
         let wallet = p(6);
         let delegated = p(5);
-        crate::ops::storage::auth::DelegationStateOps::upsert_delegated_session(
+        crate::ops::storage::auth::AuthStateOps::upsert_delegated_session(
             crate::ops::storage::auth::DelegatedSession {
                 wallet_pid: wallet,
                 delegated_pid: delegated,
@@ -345,7 +345,7 @@ mod tests {
             "expired delegated session should fallback to raw caller"
         );
 
-        crate::ops::storage::auth::DelegationStateOps::clear_delegated_session(wallet);
+        crate::ops::storage::auth::AuthStateOps::clear_delegated_session(wallet);
     }
 
     #[test]
@@ -354,7 +354,7 @@ mod tests {
         AccessMetrics::reset();
         let wallet = p(16);
         let delegated = p(15);
-        crate::ops::storage::auth::DelegationStateOps::upsert_delegated_session(
+        crate::ops::storage::auth::AuthStateOps::upsert_delegated_session(
             crate::ops::storage::auth::DelegatedSession {
                 wallet_pid: wallet,
                 delegated_pid: delegated,
@@ -377,7 +377,7 @@ mod tests {
             "delegated session expiry must match token expiry boundary"
         );
 
-        crate::ops::storage::auth::DelegationStateOps::clear_delegated_session(wallet);
+        crate::ops::storage::auth::AuthStateOps::clear_delegated_session(wallet);
     }
 
     #[test]
@@ -386,7 +386,7 @@ mod tests {
         AccessMetrics::reset();
         let wallet = p(4);
         let delegated = p(3);
-        crate::ops::storage::auth::DelegationStateOps::upsert_delegated_session(
+        crate::ops::storage::auth::AuthStateOps::upsert_delegated_session(
             crate::ops::storage::auth::DelegatedSession {
                 wallet_pid: wallet,
                 delegated_pid: delegated,
@@ -396,7 +396,7 @@ mod tests {
             },
             50,
         );
-        crate::ops::storage::auth::DelegationStateOps::clear_delegated_session(wallet);
+        crate::ops::storage::auth::AuthStateOps::clear_delegated_session(wallet);
 
         let resolved = resolve_authenticated_identity_at(wallet, 100);
         assert_eq!(resolved.authenticated_subject, wallet);
@@ -412,7 +412,7 @@ mod tests {
         let _guard = seams::lock();
         AccessMetrics::reset();
         let wallet = p(23);
-        crate::ops::storage::auth::DelegationStateOps::upsert_delegated_session(
+        crate::ops::storage::auth::AuthStateOps::upsert_delegated_session(
             crate::ops::storage::auth::DelegatedSession {
                 wallet_pid: wallet,
                 delegated_pid: Principal::management_canister(),
@@ -435,7 +435,7 @@ mod tests {
         );
         assert_eq!(auth_session_metric_count("session_fallback_raw_caller"), 1);
         assert!(
-            crate::ops::storage::auth::DelegationStateOps::delegated_session(wallet, 20).is_none(),
+            crate::ops::storage::auth::AuthStateOps::delegated_session(wallet, 20).is_none(),
             "invalid delegated session should be cleared"
         );
     }

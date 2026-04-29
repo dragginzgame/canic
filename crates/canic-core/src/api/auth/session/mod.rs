@@ -1,10 +1,10 @@
-use super::DelegationApi;
+use super::AuthApi;
 use crate::{
     access::auth::validate_delegated_session_subject,
     cdk::types::Principal,
     dto::{auth::DelegatedToken, error::Error},
     ops::{
-        auth::{DelegatedSessionExpiryClamp, DelegatedTokenOps, VerifyDelegatedTokenRuntimeInput},
+        auth::{AuthOps, DelegatedSessionExpiryClamp, VerifyDelegatedTokenRuntimeInput},
         config::ConfigOps,
         ic::IcOps,
         runtime::metrics::auth::{
@@ -19,12 +19,12 @@ use crate::{
             record_session_bootstrap_replay_idempotent, record_session_cleared,
             record_session_created, record_session_pruned, record_session_replaced,
         },
-        storage::auth::{DelegatedSession, DelegatedSessionBootstrapBinding, DelegationStateOps},
+        storage::auth::{AuthStateOps, DelegatedSession, DelegatedSessionBootstrapBinding},
     },
 };
 use sha2::{Digest, Sha256};
 
-impl DelegationApi {
+impl AuthApi {
     /// Persist a temporary delegated session subject for the caller wallet.
     pub fn set_delegated_session_subject(
         delegated_subject: Principal,
@@ -53,8 +53,8 @@ impl DelegationApi {
         }
 
         let issued_at = IcOps::now_secs();
-        let max_ttl_secs = Self::delegated_auth_max_ttl_secs()?;
-        let verified = DelegatedTokenOps::verify_token(VerifyDelegatedTokenRuntimeInput {
+        let max_ttl_secs = Self::delegated_token_max_ttl_secs()?;
+        let verified = AuthOps::verify_token(VerifyDelegatedTokenRuntimeInput {
             token: &bootstrap_token,
             max_cert_ttl_secs: max_ttl_secs,
             max_token_ttl_secs: max_ttl_secs,
@@ -63,7 +63,7 @@ impl DelegationApi {
         })
         .map_err(|err| {
             record_session_bootstrap_rejected_token_invalid();
-            Self::map_delegation_error(err)
+            Self::map_auth_error(err)
         })?;
 
         if verified.subject != delegated_subject {
@@ -99,9 +99,9 @@ impl DelegationApi {
         }
 
         let had_active_session =
-            DelegationStateOps::delegated_session(wallet_caller, issued_at).is_some();
+            AuthStateOps::delegated_session(wallet_caller, issued_at).is_some();
 
-        DelegationStateOps::upsert_delegated_session(
+        AuthStateOps::upsert_delegated_session(
             DelegatedSession {
                 wallet_pid: wallet_caller,
                 delegated_pid: delegated_subject,
@@ -111,7 +111,7 @@ impl DelegationApi {
             },
             issued_at,
         );
-        DelegationStateOps::upsert_delegated_session_bootstrap_binding(
+        AuthStateOps::upsert_delegated_session_bootstrap_binding(
             DelegatedSessionBootstrapBinding {
                 wallet_pid: wallet_caller,
                 delegated_pid: delegated_subject,
@@ -135,8 +135,8 @@ impl DelegationApi {
     pub fn clear_delegated_session() {
         let wallet_caller = IcOps::msg_caller();
         let had_active_session =
-            DelegationStateOps::delegated_session(wallet_caller, IcOps::now_secs()).is_some();
-        DelegationStateOps::clear_delegated_session(wallet_caller);
+            AuthStateOps::delegated_session(wallet_caller, IcOps::now_secs()).is_some();
+        AuthStateOps::clear_delegated_session(wallet_caller);
         if had_active_session {
             record_session_cleared();
         }
@@ -146,15 +146,15 @@ impl DelegationApi {
     #[must_use]
     pub fn delegated_session_subject() -> Option<Principal> {
         let wallet_caller = IcOps::msg_caller();
-        DelegationStateOps::delegated_session_subject(wallet_caller, IcOps::now_secs())
+        AuthStateOps::delegated_session_subject(wallet_caller, IcOps::now_secs())
     }
 
     /// Prune all currently expired delegated sessions.
     #[must_use]
     pub fn prune_expired_delegated_sessions() -> usize {
         let now_secs = IcOps::now_secs();
-        let removed = DelegationStateOps::prune_expired_delegated_sessions(now_secs);
-        let _ = DelegationStateOps::prune_expired_delegated_session_bootstrap_bindings(now_secs);
+        let removed = AuthStateOps::prune_expired_delegated_sessions(now_secs);
+        let _ = AuthStateOps::prune_expired_delegated_session_bootstrap_bindings(now_secs);
         if removed > 0 {
             record_session_pruned(removed);
         }
@@ -182,19 +182,17 @@ impl DelegationApi {
         issued_at: u64,
     ) -> Result<bool, Error> {
         let Some(binding) =
-            DelegationStateOps::delegated_session_bootstrap_binding(token_fingerprint, issued_at)
+            AuthStateOps::delegated_session_bootstrap_binding(token_fingerprint, issued_at)
         else {
             return Ok(false);
         };
 
         if binding.wallet_pid == wallet_caller && binding.delegated_pid == delegated_subject {
-            let active_same_session =
-                DelegationStateOps::delegated_session(wallet_caller, issued_at).is_some_and(
-                    |session| {
-                        session.delegated_pid == delegated_subject
-                            && session.bootstrap_token_fingerprint == Some(token_fingerprint)
-                    },
-                );
+            let active_same_session = AuthStateOps::delegated_session(wallet_caller, issued_at)
+                .is_some_and(|session| {
+                    session.delegated_pid == delegated_subject
+                        && session.bootstrap_token_fingerprint == Some(token_fingerprint)
+                });
 
             if active_same_session {
                 record_session_bootstrap_replay_idempotent();
@@ -221,7 +219,7 @@ impl DelegationApi {
         configured_max_ttl_secs: u64,
         requested_ttl_secs: Option<u64>,
     ) -> Result<u64, Error> {
-        match DelegatedTokenOps::clamp_delegated_session_expires_at(
+        match AuthOps::clamp_delegated_session_expires_at(
             now_secs,
             token_expires_at,
             configured_max_ttl_secs,

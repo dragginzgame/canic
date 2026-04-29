@@ -4,7 +4,7 @@ use crate::{
         error::{Error, ErrorCode},
     },
     ops::{
-        auth::DelegatedTokenOps,
+        auth::AuthOps,
         rpc::RpcOps,
         runtime::{env::EnvOps, timer::TimerId},
     },
@@ -23,12 +23,12 @@ thread_local! {
 const REFRESH_INTERVAL: Duration = WORKFLOW_ATTESTATION_KEY_REFRESH_INTERVAL;
 
 ///
-/// AttestationKeyCacheWorkflow
+/// RoleAttestationKeyRefreshWorkflow
 ///
 
-pub struct AttestationKeyCacheWorkflow;
+pub struct RoleAttestationKeyRefreshWorkflow;
 
-impl AttestationKeyCacheWorkflow {
+impl RoleAttestationKeyRefreshWorkflow {
     // Start the periodic root attestation-key refresh loop for non-root canisters.
     pub fn start() {
         let _ = TimerWorkflow::set_guarded_interval(
@@ -73,7 +73,7 @@ impl AttestationKeyCacheWorkflow {
         {
             Ok(key_set) => {
                 let count = key_set.keys.len();
-                DelegatedTokenOps::replace_attestation_key_set(key_set);
+                AuthOps::replace_attestation_key_set(key_set);
                 log!(
                     Topic::Auth,
                     Info,

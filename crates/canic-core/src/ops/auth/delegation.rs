@@ -1,5 +1,5 @@
 use super::{
-    DelegatedTokenOps, SignDelegationProofInput,
+    AuthOps, SignDelegationProofInput,
     delegated::{
         canonical::{derivation_path_hash, key_name_hash},
         issue::{
@@ -15,13 +15,13 @@ use crate::{
     cdk::types::Principal,
     dto::auth::{DelegationProof, ShardKeyBinding},
     ops::{
-        auth::DelegationValidationError,
+        auth::AuthValidationError,
         ic::{IcOps, ecdsa::EcdsaOps},
         storage::state::subnet::SubnetStateOps,
     },
 };
 
-impl DelegatedTokenOps {
+impl AuthOps {
     /// Sign a delegation proof with local root threshold ECDSA material.
     pub(crate) async fn sign_delegation_proof(
         input: SignDelegationProofInput,
@@ -66,31 +66,17 @@ impl DelegatedTokenOps {
         shard_pid: Principal,
     ) -> Result<Vec<u8>, InternalError> {
         let key_name = keys::delegated_tokens_key_name()?;
-        if let Some(shard_public_key) =
-            crate::ops::storage::auth::DelegationStateOps::shard_public_key(shard_pid, &key_name)
-        {
-            return Ok(shard_public_key);
-        }
-
-        let shard_public_key =
-            EcdsaOps::public_key_sec1(&key_name, keys::shard_derivation_path(shard_pid), shard_pid)
-                .await?;
-        crate::ops::storage::auth::DelegationStateOps::set_shard_public_key(
-            shard_pid,
-            key_name,
-            shard_public_key.clone(),
-        );
-
-        Ok(shard_public_key)
+        EcdsaOps::public_key_sec1(&key_name, keys::shard_derivation_path(shard_pid), shard_pid)
+            .await
     }
 
-    /// Resolve the local root public key, fetching and caching it on demand.
+    /// Resolve the root delegation public key from local subnet state, publishing it on root when absent.
     pub(crate) async fn local_root_public_key(
         root_pid: Principal,
     ) -> Result<Vec<u8>, InternalError> {
         let local = IcOps::canister_self();
         if root_pid != local {
-            return Err(DelegationValidationError::InvalidRootAuthority {
+            return Err(AuthValidationError::InvalidRootAuthority {
                 expected: local,
                 found: root_pid,
             }
@@ -104,10 +90,10 @@ impl DelegatedTokenOps {
 
         keys::ensure_root_public_key_published(&key_name, root_pid).await?;
         SubnetStateOps::delegated_root_public_key(&key_name)
-            .ok_or_else(|| super::DelegationSignatureError::RootPublicKeyUnavailable.into())
+            .ok_or_else(|| super::AuthSignatureError::RootPublicKeyUnavailable.into())
     }
 }
 
 fn map_issue_delegation_proof_error(err: IssueDelegationProofError) -> InternalError {
-    DelegationValidationError::DelegatedAuth(err.to_string()).into()
+    AuthValidationError::Auth(err.to_string()).into()
 }

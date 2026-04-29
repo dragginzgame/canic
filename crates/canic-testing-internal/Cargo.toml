@@ -13,7 +13,7 @@ candid = { workspace = true }
 canic = { workspace = true }
 canic-control-plane = { workspace = true }
 canic-core = { workspace = true }
-canic-internal = { workspace = true }
+canic-reference-support = { workspace = true }
 canic-testkit = { workspace = true }
 pocket-ic = { workspace = true }
 serde = { workspace = true }

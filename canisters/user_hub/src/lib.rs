@@ -10,7 +10,7 @@
 
 use canic::api::canister::placement::ShardingApi;
 use canic::{Error, cdk::types::Principal, prelude::*};
-use canic_internal::canister::USER_HUB;
+use canic_reference_support::canister::USER_HUB;
 
 const POOL_NAME: &str = "user_shards";
 

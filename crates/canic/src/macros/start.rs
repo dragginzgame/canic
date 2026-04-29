@@ -23,22 +23,13 @@ macro_rules! __canic_start_nonroot_lifecycle_core {
         fn init(payload: ::canic::dto::abi::v1::CanisterInitPayload, args: Option<Vec<u8>>) {
             let (config, config_source, config_path) = __canic_compiled_config();
 
-            #[cfg(any(canic_delegated_auth_signer, canic_auth_attestation_cache))]
-            $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::init_nonroot_canister_before_bootstrap_with_attestation_cache(
-                $canister_role,
-                payload,
-                config,
-                config_source,
-                config_path,
-            );
-
-            #[cfg(not(any(canic_delegated_auth_signer, canic_auth_attestation_cache)))]
             $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::init_nonroot_canister_before_bootstrap(
                 $canister_role,
                 payload,
                 config,
                 config_source,
                 config_path,
+                cfg!(canic_role_attestation_refresh),
             );
 
             $crate::__canic_run_start_init_hook!($($init)?);
@@ -50,20 +41,12 @@ macro_rules! __canic_start_nonroot_lifecycle_core {
         fn post_upgrade() {
             let (config, config_source, config_path) = __canic_compiled_config();
 
-            #[cfg(any(canic_delegated_auth_signer, canic_auth_attestation_cache))]
-            $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::post_upgrade_nonroot_canister_before_bootstrap_with_attestation_cache(
-                $canister_role,
-                config,
-                config_source,
-                config_path,
-            );
-
-            #[cfg(not(any(canic_delegated_auth_signer, canic_auth_attestation_cache)))]
             $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::post_upgrade_nonroot_canister_before_bootstrap(
                 $canister_role,
                 config,
                 config_source,
                 config_path,
+                cfg!(canic_role_attestation_refresh),
             );
 
             $crate::__canic_run_start_init_hook!($($init)?);

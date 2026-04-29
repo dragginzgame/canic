@@ -9,7 +9,7 @@
 #![allow(clippy::unused_async)]
 
 use canic::{Error, api::canister::placement::ScalingApi, cdk::types::Principal, prelude::*};
-use canic_internal::canister::SCALE_HUB;
+use canic_reference_support::canister::SCALE_HUB;
 
 const POOL_NAME: &str = "scales";
 

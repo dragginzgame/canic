@@ -1,5 +1,5 @@
 use super::{
-    DelegatedTokenOps, SignDelegatedTokenInput, VerifyDelegatedTokenRuntimeInput,
+    AuthOps, SignDelegatedTokenInput, VerifyDelegatedTokenRuntimeInput,
     delegated::mint::{
         MintDelegatedTokenError, MintDelegatedTokenInput, finish_delegated_token,
         prepare_delegated_token,
@@ -8,7 +8,7 @@ use super::{
         canonical::{derivation_path_hash, key_name_hash, public_key_hash},
         policy::DelegatedAuthTtlPolicy,
         verify::{
-            VerifiedDelegation, VerifyDelegatedTokenError, VerifyDelegatedTokenInput,
+            VerifiedDelegatedToken, VerifyDelegatedTokenError, VerifyDelegatedTokenInput,
             verify_delegated_token,
         },
     },
@@ -18,7 +18,7 @@ use crate::{
     InternalError,
     dto::auth::{DelegatedToken, RootPublicKey, RootTrustAnchor, ShardKeyBinding},
     ops::{
-        auth::{DelegationScopeError, DelegationSignatureError, DelegationValidationError},
+        auth::{AuthScopeError, AuthSignatureError, AuthValidationError},
         config::ConfigOps,
         ic::{IcOps, ecdsa::EcdsaOps},
         runtime::env::EnvOps,
@@ -26,14 +26,14 @@ use crate::{
     },
 };
 
-impl DelegatedTokenOps {
+impl AuthOps {
     /// Sign a self-contained delegated token with local shard threshold ECDSA material.
     pub async fn sign_token(
         input: SignDelegatedTokenInput,
     ) -> Result<DelegatedToken, InternalError> {
         let local = IcOps::canister_self();
         if input.proof.cert.shard_pid != local {
-            return Err(DelegationScopeError::ShardPidMismatch {
+            return Err(AuthScopeError::ShardPidMismatch {
                 expected: local,
                 found: input.proof.cert.shard_pid,
             }
@@ -52,7 +52,6 @@ impl DelegatedTokenOps {
         .map_err(map_mint_delegated_token_error)?;
 
         let key_name = keys::delegated_tokens_key_name()?;
-        keys::ensure_shard_public_key_cached(&key_name, local).await?;
         let shard_sig = EcdsaOps::sign_bytes(
             &key_name,
             keys::shard_derivation_path(local),
@@ -66,10 +65,10 @@ impl DelegatedTokenOps {
     /// Verify a self-contained delegated token without local proof lookup.
     pub fn verify_token(
         input: VerifyDelegatedTokenRuntimeInput<'_>,
-    ) -> Result<VerifiedDelegation, InternalError> {
+    ) -> Result<VerifiedDelegatedToken, InternalError> {
         let cfg = ConfigOps::delegated_tokens_config()?;
         if !cfg.enabled {
-            return Err(DelegationValidationError::DelegatedTokenAuthDisabled.into());
+            return Err(AuthValidationError::DelegatedTokenAuthDisabled.into());
         }
 
         Self::verify_shard_key_binding(input.token)?;
@@ -103,7 +102,7 @@ impl DelegatedTokenOps {
         let cert = &token.proof.cert;
         let key_name = keys::delegated_tokens_key_name()?;
         if cert.root_key_id != key_name {
-            return Err(DelegationValidationError::DelegatedAuth(format!(
+            return Err(AuthValidationError::Auth(format!(
                 "delegated auth root key id mismatch (expected {key_name}, found {})",
                 cert.root_key_id
             ))
@@ -111,7 +110,7 @@ impl DelegatedTokenOps {
         }
 
         let root_public_key = SubnetStateOps::delegated_root_public_key(&key_name)
-            .ok_or(DelegationSignatureError::RootPublicKeyUnavailable)?;
+            .ok_or(AuthSignatureError::RootPublicKeyUnavailable)?;
         let key_hash = public_key_hash(&root_public_key);
 
         Ok(RootTrustAnchor {
@@ -141,7 +140,7 @@ impl DelegatedTokenOps {
                 if observed_key_name_hash != key_name_hash(&key_name)
                     || observed_derivation_path_hash != expected_derivation_path_hash
                 {
-                    return Err(DelegationValidationError::DelegatedAuth(
+                    return Err(AuthValidationError::Auth(
                         "delegated auth shard key binding mismatch".to_string(),
                     )
                     .into());
@@ -153,9 +152,9 @@ impl DelegatedTokenOps {
 }
 
 fn map_mint_delegated_token_error(err: MintDelegatedTokenError) -> InternalError {
-    DelegationValidationError::DelegatedAuth(err.to_string()).into()
+    AuthValidationError::Auth(err.to_string()).into()
 }
 
 fn map_verify_delegated_token_error(err: VerifyDelegatedTokenError) -> InternalError {
-    DelegationValidationError::DelegatedAuth(err.to_string()).into()
+    AuthValidationError::Auth(err.to_string()).into()
 }

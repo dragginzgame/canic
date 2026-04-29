@@ -1,5 +1,5 @@
 [package]
-name = "canic-internal"
+name = "canic-reference-support"
 edition = { workspace = true }
 rust-version = { workspace = true }
 version = { workspace = true }

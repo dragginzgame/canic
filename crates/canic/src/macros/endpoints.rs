@@ -357,24 +357,21 @@ macro_rules! canic_emit_root_auth_attestation_endpoints {
         async fn canic_request_delegation(
             request: ::canic::dto::auth::DelegationProofIssueRequest,
         ) -> Result<::canic::dto::auth::DelegationProof, ::canic::Error> {
-            $crate::__internal::core::api::auth::DelegationApi::issue_delegation_proof(request)
-                .await
+            $crate::__internal::core::api::auth::AuthApi::issue_delegation_proof(request).await
         }
 
         #[$crate::canic_update(internal, requires(caller::is_registered_to_subnet()))]
         async fn canic_request_role_attestation(
             request: ::canic::dto::auth::RoleAttestationRequest,
         ) -> Result<::canic::dto::auth::SignedRoleAttestation, ::canic::Error> {
-            $crate::__internal::core::api::auth::DelegationApi::request_role_attestation_root(
-                request,
-            )
-            .await
+            $crate::__internal::core::api::auth::AuthApi::request_role_attestation_root(request)
+                .await
         }
 
         #[$crate::canic_update(internal, requires(caller::is_registered_to_subnet()))]
         async fn canic_attestation_key_set()
         -> Result<::canic::dto::auth::AttestationKeySet, ::canic::Error> {
-            $crate::__internal::core::api::auth::DelegationApi::attestation_key_set().await
+            $crate::__internal::core::api::auth::AuthApi::attestation_key_set().await
         }
     };
 }

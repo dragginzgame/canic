@@ -16,7 +16,7 @@ PUBLISH_ORDER=(
     canic-memory
     canic-core
     canic-control-plane
-    canic-dsl-macros
+    canic-macros
     canic
     canic-wasm-store
     canic-installer

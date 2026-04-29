@@ -7,7 +7,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.29.x] - 2026-04-28 - Delegated Auth Hard Cut
 
-- `0.29.5` removes old shim surfaces from the hard-cut line: authenticated guards require `DelegatedToken`, config uses only `app_index` / `subnet_index`, the installer exposes only `canic-install-root`, and the testkit process lock requires the structured owner format.
+- `0.29.6` removes the remaining delegated-auth shard public-key stable cache, makes signer startup check key material without persisting it, and tightens active AppIndex/SubnetIndex naming so old directory terminology only remains in historical docs and placement-directory code.
+- `0.29.5` removes old shim surfaces from the hard-cut line: authenticated guards require `DelegatedToken`, config uses only `app_index` / `subnet_index` plus the neutral per-canister `auth` table, role-attestation refresh startup is separated from delegated-token signing, auth identifiers and crate names are explicit, the installer exposes only `canic-install-root`, and the testkit process lock requires the structured owner format.
 - `0.29.4` tightens the hard-cut delegated-auth model, moves delegated root trust material into cascaded `SubnetState`, removes verifier-side root-key fetch-on-verify, aligns the README/design docs with the current signed shard-key binding and thin-root install flow, and rechecks that proof caches, V2 names, and root-key fallback surfaces are gone.
 - `0.29.3` removes the temporary version suffix from delegated-auth DTOs, APIs, endpoint names, and internal modules, and makes stable auth key caches identity-bound so key-name changes cannot reuse stale key material.
 - `0.29.2` hard-cuts delegated auth to self-validating tokens: verifier proof caches/fanout/admin repair are removed, guards accept only the current delegated-token shape, and old V1 DTO/API/test surfaces are gone.

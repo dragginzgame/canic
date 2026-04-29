@@ -2,19 +2,19 @@ use crate::cdk::types::Principal;
 use std::{cell::RefCell, collections::HashMap};
 
 thread_local! {
-    static DELEGATION_METRICS: RefCell<HashMap<Principal, u64>> = RefCell::new(HashMap::new());
+    static DELEGATED_AUTH_METRICS: RefCell<HashMap<Principal, u64>> = RefCell::new(HashMap::new());
 }
 
 ///
-/// DelegationMetrics
+/// DelegatedAuthMetrics
 /// Records verified delegation authorities by signer principal.
 ///
 
-pub struct DelegationMetrics;
+pub struct DelegatedAuthMetrics;
 
-impl DelegationMetrics {
+impl DelegatedAuthMetrics {
     pub fn record_authority(authority: Principal) {
-        DELEGATION_METRICS.with_borrow_mut(|counts| {
+        DELEGATED_AUTH_METRICS.with_borrow_mut(|counts| {
             let entry = counts.entry(authority).or_insert(0);
             *entry = entry.saturating_add(1);
         });
@@ -22,7 +22,7 @@ impl DelegationMetrics {
 
     #[must_use]
     pub fn snapshot() -> Vec<(Principal, u64)> {
-        DELEGATION_METRICS
+        DELEGATED_AUTH_METRICS
             .with_borrow(std::clone::Clone::clone)
             .into_iter()
             .collect()
@@ -30,7 +30,7 @@ impl DelegationMetrics {
 
     #[cfg(test)]
     pub fn reset() {
-        DELEGATION_METRICS.with_borrow_mut(HashMap::clear);
+        DELEGATED_AUTH_METRICS.with_borrow_mut(HashMap::clear);
     }
 }
 
@@ -47,16 +47,16 @@ mod tests {
     }
 
     fn snapshot_map() -> HashMap<Principal, u64> {
-        DelegationMetrics::snapshot().into_iter().collect()
+        DelegatedAuthMetrics::snapshot().into_iter().collect()
     }
 
     #[test]
     fn record_authority_increments() {
-        DelegationMetrics::reset();
+        DelegatedAuthMetrics::reset();
 
         let pid = p(1);
-        DelegationMetrics::record_authority(pid);
-        DelegationMetrics::record_authority(pid);
+        DelegatedAuthMetrics::record_authority(pid);
+        DelegatedAuthMetrics::record_authority(pid);
 
         let map = snapshot_map();
         assert_eq!(map.get(&pid), Some(&2));

@@ -30,8 +30,8 @@ kind = "singleton"
 [subnets.prime.canisters.test]
 kind = "singleton"
 
-[subnets.prime.canisters.test.delegated_auth]
-attestation_cache = true
+[subnets.prime.canisters.test.auth]
+role_attestation_cache = true
 
 [subnets.general]
 

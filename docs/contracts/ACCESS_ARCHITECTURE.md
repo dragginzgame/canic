@@ -54,7 +54,7 @@ separate policy family.
 - required scope exists in token claims
 
 Cryptographic and structural verification is delegated to
-`ops::auth::DelegatedTokenOps::verify_token`.
+`ops::auth::AuthOps::verify_token`.
 
 ## Audience Binding
 

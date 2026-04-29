@@ -1,16 +1,16 @@
-use super::{DelegatedTokenOps, ROLE_ATTESTATION_KEY_ID_V1, crypto, keys, verify};
+use super::{AuthOps, ROLE_ATTESTATION_KEY_ID_V1, crypto, keys, verify};
 use crate::{
     InternalError,
     cdk::types::Principal,
     dto::auth::{AttestationKeySet, RoleAttestation, SignedRoleAttestation},
     ops::{
-        auth::{DelegatedTokenOpsError, DelegationSignatureError, DelegationValidationError},
+        auth::{AuthOpsError, AuthSignatureError, AuthValidationError},
         ic::{IcOps, ecdsa::EcdsaOps},
-        storage::auth::DelegationStateOps,
+        storage::auth::AuthStateOps,
     },
 };
 
-impl DelegatedTokenOps {
+impl AuthOps {
     /// Sign a role attestation payload using the attestation domain.
     pub(crate) async fn sign_role_attestation(
         payload: RoleAttestation,
@@ -43,7 +43,7 @@ impl DelegatedTokenOps {
     }
 
     pub fn replace_attestation_key_set(key_set: AttestationKeySet) {
-        DelegationStateOps::set_attestation_key_set(key_set);
+        AuthStateOps::set_attestation_key_set(key_set);
     }
 
     pub(crate) fn verify_role_attestation_cached(
@@ -53,27 +53,25 @@ impl DelegatedTokenOps {
         verifier_subnet: Option<Principal>,
         now_secs: u64,
         min_accepted_epoch: u64,
-    ) -> Result<RoleAttestation, DelegatedTokenOpsError> {
+    ) -> Result<RoleAttestation, AuthOpsError> {
         if attestation.signature.is_empty() {
-            return Err(DelegationSignatureError::AttestationSignatureUnavailable.into());
+            return Err(AuthSignatureError::AttestationSignatureUnavailable.into());
         }
 
         let key_name = keys::attestation_key_name()
-            .map_err(|err| DelegationValidationError::DelegatedAuth(err.to_string()))?;
-        let key = DelegationStateOps::attestation_public_key(attestation.key_id, &key_name).ok_or(
-            DelegationValidationError::AttestationUnknownKeyId {
+            .map_err(|err| AuthValidationError::Auth(err.to_string()))?;
+        let key = AuthStateOps::attestation_public_key(attestation.key_id, &key_name).ok_or(
+            AuthValidationError::AttestationUnknownKeyId {
                 key_id: attestation.key_id,
             },
         )?;
         verify::verify_attestation_key_validity(&key, now_secs)?;
 
         let public_key = key.public_key;
-        let hash = crypto::role_attestation_hash(&attestation.payload).map_err(|err| {
-            DelegationSignatureError::AttestationSignatureInvalid(err.to_string())
-        })?;
-        EcdsaOps::verify_signature(&public_key, hash, &attestation.signature).map_err(|err| {
-            DelegationSignatureError::AttestationSignatureInvalid(err.to_string())
-        })?;
+        let hash = crypto::role_attestation_hash(&attestation.payload)
+            .map_err(|err| AuthSignatureError::AttestationSignatureInvalid(err.to_string()))?;
+        EcdsaOps::verify_signature(&public_key, hash, &attestation.signature)
+            .map_err(|err| AuthSignatureError::AttestationSignatureInvalid(err.to_string()))?;
 
         verify::verify_role_attestation_claims(
             &attestation.payload,

@@ -103,8 +103,7 @@ macro_rules! __canic_build_internal {
         $body
 
         // Emit compile-time endpoint surface flags from validated config.
-        println!("cargo:rustc-check-cfg=cfg(canic_delegated_auth_signer)");
-        println!("cargo:rustc-check-cfg=cfg(canic_auth_attestation_cache)");
+        println!("cargo:rustc-check-cfg=cfg(canic_role_attestation_refresh)");
         println!("cargo:rustc-check-cfg=cfg(canic_delegated_tokens_enabled)");
         println!("cargo:rustc-check-cfg=cfg(canic_icrc21_enabled)");
         println!("cargo:rustc-check-cfg=cfg(canic_is_root)");
@@ -159,8 +158,7 @@ macro_rules! __canic_build_internal {
 
             if let Some(role_name) = inferred_role_name.as_deref() {
                 let mut role_found = false;
-                let mut delegated_auth_signer = false;
-                let mut auth_attestation_cache = false;
+                let mut role_attestation_refresh = false;
                 let mut has_icrc21 = false;
                 let mut has_scaling = false;
                 let mut has_sharding = false;
@@ -170,8 +168,7 @@ macro_rules! __canic_build_internal {
                 for subnet in $cfg.subnets.values() {
                     if let Some(canister_cfg) = subnet.get_canister(&role_id) {
                         role_found = true;
-                        delegated_auth_signer |= canister_cfg.delegated_auth.signer;
-                        auth_attestation_cache |= canister_cfg.delegated_auth.attestation_cache;
+                        role_attestation_refresh |= canister_cfg.auth.role_attestation_cache;
                         has_icrc21 |= canister_cfg.standards.icrc21;
                         has_scaling |= canister_cfg.scaling.is_some();
                         has_sharding |= canister_cfg.sharding.is_some();
@@ -188,12 +185,8 @@ macro_rules! __canic_build_internal {
                         println!("cargo:rustc-cfg=canic_icrc21_enabled");
                     }
 
-                    if delegated_auth_signer && $cfg.auth.delegated_tokens.enabled {
-                        println!("cargo:rustc-cfg=canic_delegated_auth_signer");
-                    }
-
-                    if auth_attestation_cache && $cfg.auth.delegated_tokens.enabled {
-                        println!("cargo:rustc-cfg=canic_auth_attestation_cache");
+                    if role_attestation_refresh {
+                        println!("cargo:rustc-cfg=canic_role_attestation_refresh");
                     }
 
                     if has_scaling {

@@ -4,7 +4,7 @@
 
 use canic::{
     Error,
-    api::auth::DelegationApi,
+    api::auth::AuthApi,
     api::canister::{CanisterRole, placement::DirectoryApi},
     cdk::candid::Principal,
     dto::{
@@ -41,13 +41,13 @@ async fn signer_verify_token_any(_token: DelegatedToken) -> Result<(), Error> {
 
 #[canic_update]
 async fn signer_clear_delegated_session() -> Result<(), Error> {
-    DelegationApi::clear_delegated_session();
+    AuthApi::clear_delegated_session();
     Ok(())
 }
 
 #[canic_query]
 async fn signer_delegated_session_subject() -> Result<Option<Principal>, Error> {
-    Ok(DelegationApi::delegated_session_subject())
+    Ok(AuthApi::delegated_session_subject())
 }
 
 #[canic_update]
@@ -55,7 +55,7 @@ async fn signer_verify_role_attestation(
     attestation: SignedRoleAttestation,
     min_accepted_epoch: u64,
 ) -> Result<(), Error> {
-    DelegationApi::verify_role_attestation(&attestation, min_accepted_epoch).await
+    AuthApi::verify_role_attestation(&attestation, min_accepted_epoch).await
 }
 
 /// Resolve one logical project key to a dedicated instance, creating it when absent.

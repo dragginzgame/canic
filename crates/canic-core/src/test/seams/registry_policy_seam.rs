@@ -4,7 +4,7 @@ use crate::{
     InternalError,
     cdk::types::Cycles,
     config::schema::{
-        CanisterConfig, CanisterKind, DelegatedAuthCanisterConfig, DirectoryConfig, DirectoryPool,
+        CanisterAuthConfig, CanisterConfig, CanisterKind, DirectoryConfig, DirectoryPool,
         RandomnessConfig, ScalePool, ScalePoolPolicy, ScalingConfig, ShardingConfig,
         StandardsCanisterConfig,
     },
@@ -27,7 +27,7 @@ fn root_canister_config() -> CanisterConfig {
         scaling: None,
         sharding: None,
         directory: None,
-        delegated_auth: DelegatedAuthCanisterConfig::default(),
+        auth: CanisterAuthConfig::default(),
         standards: StandardsCanisterConfig::default(),
     }
 }
@@ -41,7 +41,7 @@ fn singleton_canister_config() -> CanisterConfig {
         scaling: None,
         sharding: None,
         directory: None,
-        delegated_auth: DelegatedAuthCanisterConfig::default(),
+        auth: CanisterAuthConfig::default(),
         standards: StandardsCanisterConfig::default(),
     }
 }
@@ -64,7 +64,7 @@ fn singleton_scaling_parent_config() -> CanisterConfig {
         scaling: Some(scaling),
         sharding: None,
         directory: None,
-        delegated_auth: DelegatedAuthCanisterConfig::default(),
+        auth: CanisterAuthConfig::default(),
         standards: StandardsCanisterConfig::default(),
     }
 }
@@ -78,7 +78,7 @@ fn singleton_sharding_parent_config() -> CanisterConfig {
         scaling: None,
         sharding: Some(ShardingConfig::default()),
         directory: None,
-        delegated_auth: DelegatedAuthCanisterConfig::default(),
+        auth: CanisterAuthConfig::default(),
         standards: StandardsCanisterConfig::default(),
     }
 }
@@ -102,7 +102,7 @@ fn singleton_directory_parent_config() -> CanisterConfig {
         scaling: None,
         sharding: None,
         directory: Some(directory),
-        delegated_auth: DelegatedAuthCanisterConfig::default(),
+        auth: CanisterAuthConfig::default(),
         standards: StandardsCanisterConfig::default(),
     }
 }
@@ -116,7 +116,7 @@ fn replica_canister_config() -> CanisterConfig {
         scaling: None,
         sharding: None,
         directory: None,
-        delegated_auth: DelegatedAuthCanisterConfig::default(),
+        auth: CanisterAuthConfig::default(),
         standards: StandardsCanisterConfig::default(),
     }
 }
@@ -130,7 +130,7 @@ fn shard_canister_config() -> CanisterConfig {
         scaling: None,
         sharding: None,
         directory: None,
-        delegated_auth: DelegatedAuthCanisterConfig::default(),
+        auth: CanisterAuthConfig::default(),
         standards: StandardsCanisterConfig::default(),
     }
 }
@@ -144,7 +144,7 @@ fn instance_canister_config() -> CanisterConfig {
         scaling: None,
         sharding: None,
         directory: None,
-        delegated_auth: DelegatedAuthCanisterConfig::default(),
+        auth: CanisterAuthConfig::default(),
         standards: StandardsCanisterConfig::default(),
     }
 }

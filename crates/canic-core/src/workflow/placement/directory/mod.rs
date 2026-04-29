@@ -541,8 +541,8 @@ mod tests {
     use crate::{
         cdk::types::Cycles,
         config::schema::{
-            CanisterConfig, CanisterKind, DelegatedAuthCanisterConfig, DirectoryConfig,
-            DirectoryPool, RandomnessConfig, StandardsCanisterConfig,
+            CanisterAuthConfig, CanisterConfig, CanisterKind, DirectoryConfig, DirectoryPool,
+            RandomnessConfig, StandardsCanisterConfig,
         },
         ids::SubnetRole,
         ops::{
@@ -580,7 +580,7 @@ mod tests {
             scaling: None,
             sharding: None,
             directory: Some(directory),
-            delegated_auth: DelegatedAuthCanisterConfig::default(),
+            auth: CanisterAuthConfig::default(),
             standards: StandardsCanisterConfig::default(),
         }
     }

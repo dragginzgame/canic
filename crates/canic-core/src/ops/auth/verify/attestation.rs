@@ -1,10 +1,7 @@
 use crate::{
     cdk::types::Principal,
     dto::auth::{AttestationKey, RoleAttestation},
-    ops::auth::{
-        DelegatedTokenOpsError, DelegationExpiryError, DelegationScopeError,
-        DelegationValidationError,
-    },
+    ops::auth::{AuthExpiryError, AuthOpsError, AuthScopeError, AuthValidationError},
 };
 
 // Enforce role-attestation subject, timing, audience, subnet, and epoch bounds.
@@ -15,9 +12,9 @@ pub(super) fn verify_role_attestation_claims(
     verifier_subnet: Option<Principal>,
     now_secs: u64,
     min_accepted_epoch: u64,
-) -> Result<(), DelegatedTokenOpsError> {
+) -> Result<(), AuthOpsError> {
     if payload.subject != caller {
-        return Err(DelegationScopeError::AttestationSubjectMismatch {
+        return Err(AuthScopeError::AttestationSubjectMismatch {
             expected: caller,
             found: payload.subject,
         }
@@ -25,7 +22,7 @@ pub(super) fn verify_role_attestation_claims(
     }
 
     if now_secs > payload.expires_at {
-        return Err(DelegationExpiryError::AttestationExpired {
+        return Err(AuthExpiryError::AttestationExpired {
             expires_at: payload.expires_at,
             now_secs,
         }
@@ -35,7 +32,7 @@ pub(super) fn verify_role_attestation_claims(
     if let Some(audience) = payload.audience
         && audience != self_pid
     {
-        return Err(DelegationScopeError::AttestationAudienceMismatch {
+        return Err(AuthScopeError::AttestationAudienceMismatch {
             expected: self_pid,
             found: audience,
         }
@@ -44,9 +41,9 @@ pub(super) fn verify_role_attestation_claims(
 
     if let Some(attestation_subnet) = payload.subnet_id {
         let verifier_subnet =
-            verifier_subnet.ok_or(DelegationValidationError::AttestationSubnetUnavailable)?;
+            verifier_subnet.ok_or(AuthValidationError::AttestationSubnetUnavailable)?;
         if attestation_subnet != verifier_subnet {
-            return Err(DelegationScopeError::AttestationSubnetMismatch {
+            return Err(AuthScopeError::AttestationSubnetMismatch {
                 expected: verifier_subnet,
                 found: attestation_subnet,
             }
@@ -55,7 +52,7 @@ pub(super) fn verify_role_attestation_claims(
     }
 
     if payload.epoch < min_accepted_epoch {
-        return Err(DelegationExpiryError::AttestationEpochRejected {
+        return Err(AuthExpiryError::AttestationEpochRejected {
             epoch: payload.epoch,
             min_accepted_epoch,
         }
@@ -69,11 +66,11 @@ pub(super) fn verify_role_attestation_claims(
 pub(super) fn verify_attestation_key_validity(
     key: &AttestationKey,
     now_secs: u64,
-) -> Result<(), DelegatedTokenOpsError> {
+) -> Result<(), AuthOpsError> {
     if let Some(valid_from) = key.valid_from
         && now_secs < valid_from
     {
-        return Err(DelegationExpiryError::AttestationKeyNotYetValid {
+        return Err(AuthExpiryError::AttestationKeyNotYetValid {
             key_id: key.key_id,
             valid_from,
             now_secs,
@@ -84,7 +81,7 @@ pub(super) fn verify_attestation_key_validity(
     if let Some(valid_until) = key.valid_until
         && now_secs > valid_until
     {
-        return Err(DelegationExpiryError::AttestationKeyExpired {
+        return Err(AuthExpiryError::AttestationKeyExpired {
             key_id: key.key_id,
             valid_until,
             now_secs,

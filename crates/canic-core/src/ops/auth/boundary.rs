@@ -1,4 +1,4 @@
-use super::DelegatedTokenOps;
+use super::AuthOps;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum DelegatedSessionExpiryClamp {
@@ -8,7 +8,7 @@ pub enum DelegatedSessionExpiryClamp {
     ExpiredToken,
 }
 
-impl DelegatedTokenOps {
+impl AuthOps {
     // Clamp delegated-session expiry against token, config, and requested TTL bounds.
     pub(crate) fn clamp_delegated_session_expires_at(
         now_secs: u64,

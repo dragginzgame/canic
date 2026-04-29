@@ -32,7 +32,7 @@ populate_isolated_package_root() {
     for crate_archive in \
         "$PACKAGE_STAGING_ROOT/canic-cdk-$VERSION.crate" \
         "$PACKAGE_STAGING_ROOT/canic-core-$VERSION.crate" \
-        "$PACKAGE_STAGING_ROOT/canic-dsl-macros-$VERSION.crate" \
+        "$PACKAGE_STAGING_ROOT/canic-macros-$VERSION.crate" \
         "$PACKAGE_STAGING_ROOT/canic-memory-$VERSION.crate" \
         "$PACKAGE_STAGING_ROOT/canic-$VERSION.crate" \
         "$PACKAGE_STAGING_ROOT/canic-installer-$VERSION.crate"
@@ -57,7 +57,7 @@ resolver = "2"
 canic = { path = "package-root/canic-$VERSION" }
 canic-cdk = { path = "package-root/canic-cdk-$VERSION" }
 canic-core = { path = "package-root/canic-core-$VERSION" }
-canic-dsl-macros = { path = "package-root/canic-dsl-macros-$VERSION" }
+canic-macros = { path = "package-root/canic-macros-$VERSION" }
 canic-memory = { path = "package-root/canic-memory-$VERSION" }
 EOF
 }
@@ -86,7 +86,7 @@ EOF
 
     cat > "$DOWNSTREAM_ROOT/canisters/canic.toml" <<'EOF'
 controllers = []
-app_directory = []
+app_index = []
 
 [app]
 init_mode = "enabled"
@@ -101,7 +101,7 @@ icrc21 = false
 
 [subnets.prime]
 auto_create = ["app"]
-subnet_directory = ["app"]
+subnet_index = ["app"]
 pool.minimum_size = 1
 
 [subnets.prime.canisters.root]
@@ -141,7 +141,7 @@ assert_probe_outputs() {
 main() {
     ensure_packaged_crate canic-cdk
     ensure_packaged_crate canic-core
-    ensure_packaged_crate canic-dsl-macros
+    ensure_packaged_crate canic-macros
     ensure_packaged_crate canic-memory
     ensure_packaged_crate canic
     ensure_packaged_crate canic-installer

@@ -101,7 +101,7 @@ See `canisters/root` and the reference canisters under `canisters/*` for end‑t
 
 ### 4. Define your topology
 
-Populate `canic.toml` with subnet definitions, role policies, directory membership, and pool settings. Each `[subnets.<name>]` block lists bootstrap roles and subnet index/directory roles, then nests `[subnets.<name>.canisters.<role>]` tables for cycles, randomness, sharding, scaling, directory pools, and delegated-auth role behavior. The full schema lives in `CONFIG.md`.
+Populate `canic.toml` with subnet definitions, role policies, index exposure, and pool settings. Each `[subnets.<name>]` block lists bootstrap roles and subnet index roles, then nests `[subnets.<name>.canisters.<role>]` tables for cycles, randomness, sharding, scaling, directory pools, and delegated-auth role behavior. The full schema lives in `CONFIG.md`.
 
 ### 5. Local Build and Install
 
@@ -240,7 +240,7 @@ canic_sharding_registry()
 * `canic_scaling_registry()` is exported only for roles whose config enables scaling.
 * `canic_pool_list()` and the controller‑only `canic_pool_admin(cmd)` are root-only endpoints for spare-capacity management.
 
-### Directory Listings 📇
+### Index Listings 📇
 
 * `canic_app_index(PageRequest)` returns the prime root index listing for operator dashboards.
 * `canic_subnet_index(PageRequest)` exposes the per-subnet index so children can discover peers.

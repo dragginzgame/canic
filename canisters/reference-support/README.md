@@ -1,4 +1,4 @@
-# canic-internal
+# canic-reference-support
 
 Workspace-only helpers and fixtures used by the Canic reference canisters and
 integration scaffolding.

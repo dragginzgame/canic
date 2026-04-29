@@ -11,7 +11,7 @@ use canic::{
     },
     prelude::*,
 };
-use canic_internal::canister::APP;
+use canic_reference_support::canister::APP;
 
 canic::start!(APP);
 

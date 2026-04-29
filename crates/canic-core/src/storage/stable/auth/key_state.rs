@@ -1,45 +1,9 @@
-use super::{AttestationPublicKeyRecord, DelegationStateRecord, ShardPublicKeyRecord};
-use crate::storage::prelude::*;
+use super::{AttestationPublicKeyRecord, AuthStateRecord};
 use sha2::{Digest, Sha256};
-
-// Resolve one shard public key by shard principal.
-pub(super) fn get_shard_public_key(
-    data: &DelegationStateRecord,
-    shard_pid: Principal,
-    key_name: &str,
-) -> Option<Vec<u8>> {
-    data.shard_public_keys
-        .iter()
-        .find(|entry| {
-            entry.shard_pid == shard_pid
-                && key_identity_matches(
-                    &entry.public_key_sec1,
-                    &entry.key_name,
-                    entry.key_hash,
-                    key_name,
-                )
-        })
-        .map(|entry| entry.public_key_sec1.clone())
-}
-
-// Persist or replace one shard public key by shard principal.
-pub(super) fn set_shard_public_key(
-    data: &mut DelegationStateRecord,
-    shard_pid: Principal,
-    key_name: String,
-    public_key_sec1: Vec<u8>,
-) {
-    upsert_shard_public_key_record(
-        &mut data.shard_public_keys,
-        shard_pid,
-        key_name,
-        public_key_sec1,
-    );
-}
 
 // Resolve one attestation public key by key id.
 pub(super) fn get_attestation_public_key(
-    data: &DelegationStateRecord,
+    data: &AuthStateRecord,
     key_id: u32,
     key_name: &str,
 ) -> Option<AttestationPublicKeyRecord> {
@@ -59,7 +23,7 @@ pub(super) fn get_attestation_public_key(
 
 // Resolve the full attestation public key set.
 pub(super) fn get_attestation_public_keys(
-    data: &DelegationStateRecord,
+    data: &AuthStateRecord,
     key_name: &str,
 ) -> Vec<AttestationPublicKeyRecord> {
     data.attestation_public_keys
@@ -78,7 +42,7 @@ pub(super) fn get_attestation_public_keys(
 
 // Replace the attestation public key set.
 pub(super) fn set_attestation_public_keys(
-    data: &mut DelegationStateRecord,
+    data: &mut AuthStateRecord,
     keys: Vec<AttestationPublicKeyRecord>,
 ) {
     data.attestation_public_keys = keys;
@@ -86,7 +50,7 @@ pub(super) fn set_attestation_public_keys(
 
 // Upsert one attestation public key by key id.
 pub(super) fn upsert_attestation_public_key(
-    data: &mut DelegationStateRecord,
+    data: &mut AuthStateRecord,
     key: AttestationPublicKeyRecord,
 ) {
     if let Some(existing) = data
@@ -97,35 +61,6 @@ pub(super) fn upsert_attestation_public_key(
         *existing = key;
     } else {
         data.attestation_public_keys.push(key);
-    }
-}
-
-// Upsert one shard public key record by shard principal.
-fn upsert_shard_public_key_record(
-    entries: &mut Vec<ShardPublicKeyRecord>,
-    shard_pid: Principal,
-    key_name: String,
-    public_key_sec1: Vec<u8>,
-) {
-    entries.retain(|entry| entry.shard_pid != shard_pid || entry.key_name == key_name);
-
-    if let Some(entry) = entries
-        .iter_mut()
-        .find(|entry| entry.shard_pid == shard_pid && entry.key_name == key_name)
-    {
-        let key_hash = public_key_hash(&public_key_sec1);
-        if entry.public_key_sec1 == public_key_sec1 && entry.key_hash == key_hash {
-            return;
-        }
-        entry.public_key_sec1 = public_key_sec1;
-        entry.key_hash = key_hash;
-    } else {
-        entries.push(ShardPublicKeyRecord {
-            shard_pid,
-            key_hash: public_key_hash(&public_key_sec1),
-            key_name,
-            public_key_sec1,
-        });
     }
 }
 
@@ -151,31 +86,9 @@ mod tests {
     use super::*;
     use crate::storage::stable::auth::AttestationKeyStatusRecord;
 
-    // Build deterministic principals for key-cache unit tests.
-    fn p(id: u8) -> Principal {
-        Principal::from_slice(&[id; 29])
-    }
-
-    #[test]
-    fn shard_public_key_cache_requires_matching_identity() {
-        let mut data = DelegationStateRecord::default();
-        let shard_pid = p(7);
-
-        set_shard_public_key(&mut data, shard_pid, "key_a".to_string(), vec![4, 5, 6]);
-
-        assert_eq!(
-            get_shard_public_key(&data, shard_pid, "key_a"),
-            Some(vec![4, 5, 6])
-        );
-        assert_eq!(get_shard_public_key(&data, shard_pid, "key_b"), None);
-
-        data.shard_public_keys[0].key_hash = [8; 32];
-        assert_eq!(get_shard_public_key(&data, shard_pid, "key_a"), None);
-    }
-
     #[test]
     fn attestation_public_key_cache_requires_matching_identity() {
-        let mut data = DelegationStateRecord::default();
+        let mut data = AuthStateRecord::default();
         data.attestation_public_keys
             .push(AttestationPublicKeyRecord {
                 key_id: 1,

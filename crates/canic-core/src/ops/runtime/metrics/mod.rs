@@ -1,7 +1,7 @@
 pub mod access;
 pub mod auth;
 pub mod cycles_funding;
-pub mod delegation;
+pub mod delegated_auth;
 pub mod endpoint;
 pub mod http;
 pub mod icc;
@@ -16,7 +16,7 @@ use crate::{
 use {
     access::AccessMetrics,
     cycles_funding::CyclesFundingMetrics,
-    delegation::DelegationMetrics,
+    delegated_auth::DelegatedAuthMetrics,
     http::HttpMetrics,
     icc::IccMetrics,
     root_capability::RootCapabilityMetrics,
@@ -33,7 +33,7 @@ pub fn entries(kind: MetricsKind) -> Vec<MetricEntry> {
         MetricsKind::Http => http_entries(),
         MetricsKind::Timer => timer_entries(),
         MetricsKind::Access => access_entries(),
-        MetricsKind::Delegation => delegation_entries(),
+        MetricsKind::DelegatedAuth => delegated_auth_entries(),
         MetricsKind::RootCapability => root_capability_entries(),
         MetricsKind::CyclesFunding => cycles_funding_entries(),
         MetricsKind::Perf => perf_entries(),
@@ -136,13 +136,13 @@ fn access_entries() -> Vec<MetricEntry> {
         .collect()
 }
 
-/// Project delegation authority counters into the unified public metrics row shape.
+/// Project delegated-auth authority counters into the unified public metrics row shape.
 #[must_use]
-fn delegation_entries() -> Vec<MetricEntry> {
-    DelegationMetrics::snapshot()
+fn delegated_auth_entries() -> Vec<MetricEntry> {
+    DelegatedAuthMetrics::snapshot()
         .into_iter()
         .map(|(authority, count)| MetricEntry {
-            labels: vec!["delegation_authority".to_string()],
+            labels: vec!["delegated_auth_authority".to_string()],
             principal: Some(authority),
             value: MetricValue::Count(count),
         })

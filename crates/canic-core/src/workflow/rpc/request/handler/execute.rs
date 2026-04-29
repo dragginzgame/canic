@@ -13,7 +13,7 @@ use crate::{
     log,
     log::Topic,
     ops::{
-        auth::DelegatedTokenOps,
+        auth::AuthOps,
         ic::IcOps,
         storage::{index::subnet::SubnetIndexOps, registry::subnet::SubnetRegistryOps},
     },
@@ -113,7 +113,7 @@ async fn execute_issue_role_attestation(
     req: RoleAttestationRequest,
 ) -> Result<Response, InternalError> {
     let payload = build_role_attestation(ctx, req)?;
-    let signed = DelegatedTokenOps::sign_role_attestation(payload).await?;
+    let signed = AuthOps::sign_role_attestation(payload).await?;
     log!(
         Topic::Auth,
         Info,

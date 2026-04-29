@@ -1,18 +1,6 @@
 use crate::storage::prelude::*;
 
 ///
-/// ShardPublicKeyRecord
-///
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct ShardPublicKeyRecord {
-    pub shard_pid: Principal,
-    pub public_key_sec1: Vec<u8>,
-    pub key_name: String,
-    pub key_hash: [u8; 32],
-}
-
-///
 /// DelegatedSessionRecord
 ///
 
@@ -64,13 +52,11 @@ pub struct AttestationPublicKeyRecord {
 }
 
 ///
-/// DelegationStateRecord
+/// AuthStateRecord
 ///
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
-pub struct DelegationStateRecord {
-    pub shard_public_keys: Vec<ShardPublicKeyRecord>,
-
+pub struct AuthStateRecord {
     pub delegated_sessions: Vec<DelegatedSessionRecord>,
 
     pub delegated_session_bootstrap_bindings: Vec<DelegatedSessionBootstrapBindingRecord>,

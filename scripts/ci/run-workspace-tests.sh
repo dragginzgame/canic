@@ -86,7 +86,6 @@ prebuild_root_test_artifacts
 run_test "canic-tests pic_intent_race" -p canic-tests --test pic_intent_race
 run_test "canic-tests pic_sharding_bootstrap" -p canic-tests --test pic_sharding_bootstrap
 run_test "canic-tests pic_role_attestation" -p canic-tests --test pic_role_attestation
-run_test "canic-tests delegation_flow" -p canic-tests --test delegation_flow
 run_test "canic-tests lifecycle_boundary" -p canic-tests --test lifecycle_boundary
 run_test "canic-tests root_suite" -p canic-tests --test root_suite
 run_test "canic-tests root_wasm_store_reconcile" -p canic-tests --test root_wasm_store_reconcile
