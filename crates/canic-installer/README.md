@@ -17,7 +17,7 @@ For the full local setup path, prefer the shared tagged installer script from th
 Canic repo:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/dragginzgame/canic/v0.29.1/scripts/dev/install_dev.sh | bash
+curl -fsSL https://raw.githubusercontent.com/dragginzgame/canic/v0.29.2/scripts/dev/install_dev.sh | bash
 ```
 
 That script bootstraps Rust when needed, installs the pinned internal toolchain,
