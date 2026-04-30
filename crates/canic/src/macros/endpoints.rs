@@ -63,7 +63,11 @@ macro_rules! canic_emit_canic_metadata_endpoints {
     () => {
         #[$crate::canic_query(internal)]
         fn canic_standards() -> ::canic::dto::standards::CanicStandardsResponse {
-            $crate::__internal::core::api::standards::CanicStandardsApi::metadata()
+            $crate::__internal::core::api::standards::CanicStandardsApi::metadata_for(
+                env!("CARGO_PKG_NAME"),
+                env!("CARGO_PKG_VERSION"),
+                env!("CARGO_PKG_DESCRIPTION"),
+            )
         }
     };
 }
