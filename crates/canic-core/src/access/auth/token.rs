@@ -1,7 +1,11 @@
 use super::{VerifiedAccessToken, dependency_unavailable};
 use crate::{
     access::AccessError,
-    cdk::{api::msg_arg_data, candid::de::IDLDeserialize, types::Principal},
+    cdk::{
+        api::msg_arg_data,
+        candid::de::{DecoderConfig, IDLDeserialize},
+        types::Principal,
+    },
     dto::auth::DelegatedToken,
     ops::{
         auth::{AuthOps, VerifyDelegatedTokenRuntimeInput},
@@ -10,7 +14,8 @@ use crate::{
     },
 };
 
-const MAX_INGRESS_BYTES: usize = 64 * 1024; // 64 KiB
+const DELEGATED_TOKEN_DECODING_QUOTA: usize = 256 * 1024;
+const DELEGATED_TOKEN_MAX_TYPE_LEN: usize = 16 * 1024;
 const DEFAULT_DELEGATED_AUTH_MAX_TTL_SECS: u64 = 24 * 60 * 60;
 
 pub(super) fn delegated_token_verified(
@@ -84,14 +89,12 @@ pub(super) fn enforce_required_scope(
 
 fn delegated_token_from_args() -> Result<DelegatedToken, AccessError> {
     let bytes = msg_arg_data();
+    delegated_token_from_ingress_bytes(&bytes)
+}
 
-    if bytes.len() > MAX_INGRESS_BYTES {
-        return Err(AccessError::Denied(
-            "delegated token payload exceeds size limit".to_string(),
-        ));
-    }
-
-    delegated_token_from_bytes(&bytes).map_err(|err| {
+// Decode and size-check only the delegated token, not later endpoint payloads.
+fn delegated_token_from_ingress_bytes(bytes: &[u8]) -> Result<DelegatedToken, AccessError> {
+    delegated_token_from_bytes(bytes).map_err(|err| {
         AccessError::Denied(format!(
             "failed to decode DelegatedToken as first argument: {err}"
         ))
@@ -100,7 +103,12 @@ fn delegated_token_from_args() -> Result<DelegatedToken, AccessError> {
 
 // Decode the first ingress argument as a delegated token.
 fn delegated_token_from_bytes(bytes: &[u8]) -> Result<DelegatedToken, String> {
-    let mut decoder = IDLDeserialize::new(bytes)
+    let mut config = DecoderConfig::new();
+    config
+        .set_decoding_quota(DELEGATED_TOKEN_DECODING_QUOTA)
+        .set_max_type_len(DELEGATED_TOKEN_MAX_TYPE_LEN)
+        .set_full_error_message(false);
+    let mut decoder = IDLDeserialize::new_with_config(bytes, &config)
         .map_err(|err| format!("failed to decode ingress arguments: {err}"))?;
     decoder
         .get_value::<DelegatedToken>()
@@ -121,4 +129,91 @@ fn delegated_token_max_ttl_secs() -> Result<u64, AccessError> {
     Ok(cfg
         .max_ttl_secs
         .unwrap_or(DEFAULT_DELEGATED_AUTH_MAX_TTL_SECS))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::delegated_token_from_ingress_bytes;
+    use crate::{
+        cdk::{
+            candid::{Principal, encode_args},
+            types,
+        },
+        dto::auth::{
+            DelegatedToken, DelegatedTokenClaims, DelegationAudience, DelegationCert,
+            DelegationProof, ShardKeyBinding, SignatureAlgorithm,
+        },
+    };
+
+    // Decode auth calls with large non-token arguments after the token.
+    #[test]
+    fn delegated_token_decode_allows_large_trailing_endpoint_payload() {
+        let token = token_with_scopes(vec!["upload:image".to_string()]);
+        let chunk = vec![7_u8; 128 * 1024];
+        let bytes = encode_args((token.clone(), chunk)).expect("encode auth call");
+
+        let decoded =
+            delegated_token_from_ingress_bytes(&bytes).expect("large trailing payload must pass");
+
+        assert_eq!(decoded, token);
+    }
+
+    // Reject genuinely oversized delegated tokens after decoding the first arg.
+    #[test]
+    fn delegated_token_decode_rejects_oversized_token() {
+        let token = token_with_scopes(vec!["x".repeat(300 * 1024)]);
+        let bytes = encode_args((token, Vec::<u8>::new())).expect("encode auth call");
+
+        let err =
+            delegated_token_from_ingress_bytes(&bytes).expect_err("oversized token must fail");
+
+        assert!(err.to_string().contains("failed to decode DelegatedToken"));
+    }
+
+    // Build one structurally complete delegated token for access decode tests.
+    fn token_with_scopes(scopes: Vec<String>) -> DelegatedToken {
+        DelegatedToken {
+            claims: DelegatedTokenClaims {
+                version: 1,
+                subject: p(1),
+                issuer_shard_pid: p(2),
+                cert_hash: [3; 32],
+                issued_at: 10,
+                expires_at: 20,
+                aud: DelegationAudience::Principals(vec![p(4)]),
+                scopes: scopes.clone(),
+                nonce: [5; 16],
+            },
+            proof: DelegationProof {
+                cert: DelegationCert {
+                    version: 1,
+                    root_pid: p(6),
+                    root_key_id: "root-key".to_string(),
+                    root_key_hash: [7; 32],
+                    alg: SignatureAlgorithm::EcdsaP256Sha256,
+                    shard_pid: p(2),
+                    shard_key_id: "shard-key".to_string(),
+                    shard_public_key_sec1: vec![8; 33],
+                    shard_key_hash: [9; 32],
+                    shard_key_binding: ShardKeyBinding::IcThresholdEcdsa {
+                        key_name_hash: [10; 32],
+                        derivation_path_hash: [11; 32],
+                    },
+                    issued_at: 10,
+                    expires_at: 20,
+                    max_token_ttl_secs: 10,
+                    scopes,
+                    aud: DelegationAudience::Principals(vec![p(4)]),
+                    verifier_role_hash: None,
+                },
+                root_sig: vec![12; 64],
+            },
+            shard_sig: vec![13; 64],
+        }
+    }
+
+    // Produce deterministic non-management principals for token fixtures.
+    fn p(id: u8) -> Principal {
+        types::Principal::from_slice(&[id; 29])
+    }
 }
