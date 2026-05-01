@@ -13,7 +13,7 @@ Use this crate directly when you need:
 For normal local setup, use the tagged repo installer script:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/dragginzgame/canic/v0.29.8/scripts/dev/install_dev.sh | bash
+curl -fsSL https://raw.githubusercontent.com/dragginzgame/canic/v0.29.9/scripts/dev/install_dev.sh | bash
 ```
 
 That script bootstraps Rust when needed and installs the pinned internal toolchain, `canic-installer`, wasm/Candid utilities, and `dfx` when missing. This README documents the installed-binary surface.
