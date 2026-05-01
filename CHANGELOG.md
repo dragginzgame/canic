@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.29.x] - 2026-04-28 - Delegated Auth Hard Cut
 
+- `0.29.9` removes high idle drain from delegated-auth/log background timers.
 - `0.29.8` fixes delegated-token guards so large authenticated upload payloads, such as image chunks, no longer count against the token safety check.
 - `0.29.7` fixes `canic_standards` metadata so canisters report their own crate identity instead of always identifying as `canic-core`.
 - `0.29.6` removes the remaining delegated-auth shard public-key stable cache, makes signer startup check key material without persisting it, and tightens active AppIndex/SubnetIndex naming so old directory terminology only remains in historical docs and placement-directory code.

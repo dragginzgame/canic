@@ -172,6 +172,15 @@ pub fn apply_retention(
         return Ok(RetentionSummary::default());
     }
 
+    if cutoff.is_none() && before <= max_entries as u64 {
+        return Ok(RetentionSummary {
+            before,
+            retained: before,
+            dropped_by_age: 0,
+            dropped_by_limit: 0,
+        });
+    }
+
     let mut retained = VecDeque::new();
     let mut eligible = 0u64;
 
