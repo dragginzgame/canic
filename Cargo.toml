@@ -38,7 +38,7 @@ resolver = "2"
 [workspace.package]
 rust-version = "1.91.0"
 edition = "2024"
-version = "0.29.7"
+version = "0.29.8"
 license = "MIT"
 authors = ["borovan <84897664+borovan@users.noreply.github.com>"]
 description = "Canic — a canister orchestration and management toolkit for the Internet Computer"
@@ -51,17 +51,17 @@ readme = "README.md"
 [workspace.dependencies]
 async-trait = "0.1"
 candid = { version = "0.10", default-features = false }
-canic = { version = "0.29.7", path = "crates/canic" }
-canic-cdk = { version = "0.29.7", path = "crates/canic-cdk" }
-canic-control-plane = { version = "0.29.7", path = "crates/canic-control-plane" }
-canic-core = { version = "0.29.7", path = "crates/canic-core" }
-canic-installer = { version = "0.29.7", path = "crates/canic-installer" }
-canic-macros = { version = "0.29.7", path = "crates/canic-macros" }
-canic-memory = { version = "0.29.7", path = "crates/canic-memory" }
-canic-reference-support = { version = "0.29.7", path = "canisters/reference-support" }
-canic-testing-internal = { version = "0.29.7", path = "crates/canic-testing-internal" }
-canic-testkit = { version = "0.29.7", path = "crates/canic-testkit" }
-canic-wasm-store = { version = "0.29.7", path = "crates/canic-wasm-store" }
+canic = { version = "0.29.8", path = "crates/canic" }
+canic-cdk = { version = "0.29.8", path = "crates/canic-cdk" }
+canic-control-plane = { version = "0.29.8", path = "crates/canic-control-plane" }
+canic-core = { version = "0.29.8", path = "crates/canic-core" }
+canic-installer = { version = "0.29.8", path = "crates/canic-installer" }
+canic-macros = { version = "0.29.8", path = "crates/canic-macros" }
+canic-memory = { version = "0.29.8", path = "crates/canic-memory" }
+canic-reference-support = { version = "0.29.8", path = "canisters/reference-support" }
+canic-testing-internal = { version = "0.29.8", path = "crates/canic-testing-internal" }
+canic-testkit = { version = "0.29.8", path = "crates/canic-testkit" }
+canic-wasm-store = { version = "0.29.8", path = "crates/canic-wasm-store" }
 criterion = "0.8"
 ctor = "0.8"
 flate2 = { version = "1.1", default-features = false, features = [
