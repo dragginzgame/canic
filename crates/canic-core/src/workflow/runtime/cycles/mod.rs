@@ -6,7 +6,7 @@ use crate::{
         config::ConfigOps,
         ic::{IcOps, mgmt::MgmtOps},
         rpc::request::RequestOps,
-        runtime::{env::EnvOps, timer::TimerId},
+        runtime::{env::EnvOps, metrics::cycles_topup::CyclesTopupMetrics, timer::TimerId},
         storage::cycles::CycleTrackerOps,
     },
     workflow::{
@@ -75,11 +75,18 @@ impl CycleTrackerWorkflow {
         let canister_cfg = match ConfigOps::current_canister() {
             Ok(cfg) => cfg,
             Err(err) => {
+                CyclesTopupMetrics::record_config_error();
                 log!(Topic::Cycles, Warn, "auto topup skipped: {err}");
                 return;
             }
         };
+        if canister_cfg.topup_policy.is_none() {
+            CyclesTopupMetrics::record_policy_missing();
+            return;
+        }
+
         let Some(plan) = policy::cycles::should_topup(cycles.to_u128(), &canister_cfg) else {
+            CyclesTopupMetrics::record_above_threshold();
             return;
         };
 
@@ -93,9 +100,11 @@ impl CycleTrackerWorkflow {
         });
 
         if !should_request {
+            CyclesTopupMetrics::record_request_in_flight();
             return;
         }
 
+        CyclesTopupMetrics::record_request_scheduled();
         IcOps::spawn(async move {
             let result = RequestOps::request_cycles(plan.amount.to_u128()).await;
 
@@ -104,15 +113,21 @@ impl CycleTrackerWorkflow {
             });
 
             match result {
-                Ok(res) => log!(
-                    Topic::Cycles,
-                    Ok,
-                    "requested {}, topped up by {}, now {}",
-                    plan.amount,
-                    Cycles::from(res.cycles_transferred),
-                    MgmtOps::canister_cycle_balance()
-                ),
-                Err(e) => log!(Topic::Cycles, Error, "failed to request cycles: {e}"),
+                Ok(res) => {
+                    CyclesTopupMetrics::record_request_ok();
+                    log!(
+                        Topic::Cycles,
+                        Ok,
+                        "requested {}, topped up by {}, now {}",
+                        plan.amount,
+                        Cycles::from(res.cycles_transferred),
+                        MgmtOps::canister_cycle_balance()
+                    );
+                }
+                Err(e) => {
+                    CyclesTopupMetrics::record_request_err();
+                    log!(Topic::Cycles, Error, "failed to request cycles: {e}");
+                }
             }
         });
     }

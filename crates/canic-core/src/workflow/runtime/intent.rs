@@ -41,6 +41,10 @@ impl IntentCleanupWorkflow {
     /// Run a cleanup sweep immediately.
     #[must_use]
     pub fn cleanup() -> bool {
+        if Self::stop_when_idle() {
+            return true;
+        }
+
         let now = IcOps::now_secs();
         let expired = IntentStoreOps::list_expired_pending_intents(now);
 
@@ -73,6 +77,29 @@ impl IntentCleanupWorkflow {
             "intent cleanup: expired={expired_total} aborted={aborted} errors={errors}"
         );
 
+        if errors == 0 {
+            Self::stop_when_idle();
+        }
+
         errors == 0
+    }
+
+    // Stop the cleanup timer once there are no pending intents left.
+    fn stop_when_idle() -> bool {
+        match IntentStoreOps::pending_total() {
+            Ok(0) => {
+                let _ = TimerWorkflow::clear_guarded(&INTENT_CLEANUP_TIMER);
+                true
+            }
+            Ok(_) => false,
+            Err(err) => {
+                log!(
+                    Topic::Memory,
+                    Warn,
+                    "intent cleanup pending check failed: {err}"
+                );
+                false
+            }
+        }
     }
 }

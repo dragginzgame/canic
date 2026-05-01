@@ -63,14 +63,21 @@ impl PoolSchedulerWorkflow {
             WORKFLOW_POOL_INIT_DELAY,
             "pool:init",
             || async {
-                Self::schedule();
+                Self::schedule_if_pending();
             },
             WORKFLOW_POOL_CHECK_INTERVAL,
             "pool:interval",
             || async {
-                Self::schedule();
+                Self::schedule_if_pending();
             },
         );
+    }
+
+    /// Schedule a reset worker only when pending reset work exists.
+    pub fn schedule_if_pending() {
+        if Self::has_pending_reset() {
+            Self::schedule();
+        }
     }
 
     /// Schedule a reset worker run.

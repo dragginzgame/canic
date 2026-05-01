@@ -16,10 +16,12 @@ pub enum MetricsKind {
     Icc,
     Http,
     Timer,
+    Endpoint,
     Access,
     DelegatedAuth,
     RootCapability,
     CyclesFunding,
+    CyclesTopup,
     Perf,
 }
 

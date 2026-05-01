@@ -18,6 +18,60 @@ struct EndpointMetricCounts {
 }
 
 ///
+/// EndpointMetricSnapshot
+///
+
+#[derive(Clone)]
+pub struct EndpointMetricSnapshot {
+    pub entries: Vec<(String, EndpointMetricCountsSnapshot)>,
+}
+
+///
+/// EndpointMetricCountsSnapshot
+///
+
+#[derive(Clone, Default)]
+pub struct EndpointMetricCountsSnapshot {
+    pub attempted: u64,
+    pub completed: u64,
+    pub ok: u64,
+    pub err: u64,
+}
+
+///
+/// EndpointMetrics
+///
+/// Best-effort attempt/completion/result counters per endpoint.
+///
+
+pub struct EndpointMetrics;
+
+impl EndpointMetrics {
+    /// Snapshot endpoint counters for public metrics projection.
+    #[must_use]
+    pub fn snapshot() -> EndpointMetricSnapshot {
+        let entries = ENDPOINT_METRICS.with_borrow(|counts| {
+            counts
+                .iter()
+                .map(|(&endpoint, entry)| {
+                    (
+                        endpoint.to_string(),
+                        EndpointMetricCountsSnapshot {
+                            attempted: entry.attempted,
+                            completed: entry.completed,
+                            ok: entry.ok,
+                            err: entry.err,
+                        },
+                    )
+                })
+                .collect()
+        });
+
+        EndpointMetricSnapshot { entries }
+    }
+}
+
+///
 /// EndpointAttemptMetrics
 ///
 /// Best-effort attempt/completion counters per endpoint.
@@ -210,5 +264,27 @@ mod tests {
         assert_eq!(a.err, 0);
         assert_eq!(b.ok, 0);
         assert_eq!(b.err, 1);
+    }
+
+    #[test]
+    fn endpoint_snapshot_exposes_all_counts() {
+        EndpointAttemptMetrics::reset();
+
+        EndpointAttemptMetrics::increment_attempted(EP_A);
+        EndpointAttemptMetrics::increment_completed(EP_A);
+        EndpointResultMetrics::increment_ok(EP_A);
+        EndpointResultMetrics::increment_err(EP_A);
+
+        let snapshot = EndpointMetrics::snapshot();
+        let (_, counts) = snapshot
+            .entries
+            .into_iter()
+            .find(|(endpoint, _)| endpoint == EP_A)
+            .expect("endpoint metrics should include endpoint_a");
+
+        assert_eq!(counts.attempted, 1);
+        assert_eq!(counts.completed, 1);
+        assert_eq!(counts.ok, 1);
+        assert_eq!(counts.err, 1);
     }
 }

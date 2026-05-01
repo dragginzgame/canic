@@ -322,6 +322,11 @@ impl IntentStoreOps {
         expired
     }
 
+    /// Return the stored pending-intent count without scanning the pending index.
+    pub fn pending_total() -> Result<u64, InternalError> {
+        Ok(ensure_schema()?.pending_total)
+    }
+
     // -------------------------------------------------------------
     // Cleanup / repair helpers
     // -------------------------------------------------------------
