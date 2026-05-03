@@ -1,3 +1,5 @@
+pub mod manifest;
+pub mod restore;
 pub mod snapshot;
 
 use std::ffi::OsString;
@@ -13,7 +15,13 @@ pub enum CliError {
     Usage(&'static str),
 
     #[error(transparent)]
+    Manifest(#[from] manifest::ManifestCommandError),
+
+    #[error(transparent)]
     Snapshot(#[from] snapshot::SnapshotCommandError),
+
+    #[error(transparent)]
+    Restore(#[from] restore::RestoreCommandError),
 }
 
 /// Run the CLI from process arguments.
@@ -32,7 +40,9 @@ where
     };
 
     match command.as_str() {
+        "manifest" => manifest::run(args).map_err(CliError::from),
         "snapshot" => snapshot::run(args).map_err(CliError::from),
+        "restore" => restore::run(args).map_err(CliError::from),
         "help" | "--help" | "-h" => {
             println!("{}", usage());
             Ok(())
@@ -43,5 +53,5 @@ where
 
 // Return the top-level usage text.
 const fn usage() -> &'static str {
-    "usage: canic snapshot download --canister <id> --out <dir> [--root <id> | --registry-json <file>] [--include-children] [--recursive] [--dry-run] [--stop-before-snapshot] [--resume-after-snapshot] [--network <name>]"
+    "usage: canic snapshot download --canister <id> --out <dir> [--root <id> | --registry-json <file>] [--include-children] [--recursive] [--dry-run] [--stop-before-snapshot] [--resume-after-snapshot] [--network <name>]\n       canic manifest validate --manifest <file>\n       canic restore plan --manifest <file> [--mapping <file>] [--out <file>]"
 }

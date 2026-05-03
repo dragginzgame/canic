@@ -11,27 +11,28 @@ thread_local! {
 ///
 
 #[derive(Clone, Copy, Eq, Hash, PartialEq)]
+#[remain::sorted]
 pub enum CyclesFundingMetricKey {
-    RequestedTotal,
-    GrantedTotal,
-    DeniedTotal,
-    RequestedByChild,
-    GrantedToChild,
-    DeniedToChild,
     DeniedGlobalKillSwitch,
+    DeniedToChild,
+    DeniedTotal,
+    GrantedToChild,
+    GrantedTotal,
+    RequestedByChild,
+    RequestedTotal,
 }
 
 impl CyclesFundingMetricKey {
     #[must_use]
     pub const fn metric_label(self) -> &'static str {
         match self {
-            Self::RequestedTotal => "cycles_requested_total",
-            Self::GrantedTotal => "cycles_granted_total",
-            Self::DeniedTotal => "cycles_denied_total",
-            Self::RequestedByChild => "cycles_requested_by_child",
-            Self::GrantedToChild => "cycles_granted_to_child",
-            Self::DeniedToChild => "cycles_denied_to_child",
             Self::DeniedGlobalKillSwitch => "cycles_denied_global_kill_switch",
+            Self::DeniedToChild => "cycles_denied_to_child",
+            Self::DeniedTotal => "cycles_denied_total",
+            Self::GrantedToChild => "cycles_granted_to_child",
+            Self::GrantedTotal => "cycles_granted_total",
+            Self::RequestedByChild => "cycles_requested_by_child",
+            Self::RequestedTotal => "cycles_requested_total",
         }
     }
 }
@@ -41,14 +42,15 @@ impl CyclesFundingMetricKey {
 ///
 
 #[derive(Clone, Copy, Eq, Hash, PartialEq)]
+#[remain::sorted]
 pub enum CyclesFundingDeniedReason {
     ChildNotFound,
-    NotDirectChild,
-    KillSwitchDisabled,
-    InsufficientCycles,
-    MaxPerChildExceeded,
     CooldownActive,
     ExecutionError,
+    InsufficientCycles,
+    KillSwitchDisabled,
+    MaxPerChildExceeded,
+    NotDirectChild,
 }
 
 impl CyclesFundingDeniedReason {
@@ -56,12 +58,12 @@ impl CyclesFundingDeniedReason {
     pub const fn metric_label(self) -> &'static str {
         match self {
             Self::ChildNotFound => "child_not_found",
-            Self::NotDirectChild => "not_direct_child",
-            Self::KillSwitchDisabled => "kill_switch_disabled",
-            Self::InsufficientCycles => "insufficient_cycles",
-            Self::MaxPerChildExceeded => "max_per_child_exceeded",
             Self::CooldownActive => "cooldown_active",
             Self::ExecutionError => "execution_error",
+            Self::InsufficientCycles => "insufficient_cycles",
+            Self::KillSwitchDisabled => "kill_switch_disabled",
+            Self::MaxPerChildExceeded => "max_per_child_exceeded",
+            Self::NotDirectChild => "not_direct_child",
         }
     }
 }

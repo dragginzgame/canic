@@ -4,7 +4,7 @@
 // ============================================================================
 //
 // This macro generates the complete access-control wrapper for canister
-// endpoints. The code below is SECURITY- AND METRICS-SENSITIVE.
+// endpoints. The code below is SECURITY-SENSITIVE.
 //
 // The following invariants are intentional and MUST be preserved:
 //
@@ -23,25 +23,15 @@
 //
 //    Successful requests MUST emit NO access metrics.
 //
-//    These invariants are relied upon by EndpointHealth and metrics
-//    aggregation logic.
+//    These invariants are relied upon by access metrics aggregation logic.
 //
-// 3. Lifecycle metrics
-//    ------------------
-//    - increment_attempted() is emitted before any access checks.
-//    - increment_completed() is emitted ONLY after successful dispatch.
-//    - Access denials MUST return before completion is recorded.
-//
-//    For fallible endpoints (Result-returning):
-//    - exactly one of increment_ok() or increment_err() is emitted.
-//
-// 4. Error handling
+// 3. Error handling
 //    --------------
 //    Access failures for gated endpoints must return a Result error; trapping
 //    is forbidden outside lifecycle adapters. Infallible endpoints that can
 //    deny access are rejected at compile time.
 //
-// 5. Macro constraints
+// 4. Macro constraints
 //    ------------------
 //    - requires(...) accepts only expression calls (all/any/not/custom + built-ins).
 //    - `self` receivers are forbidden.
@@ -117,7 +107,6 @@ pub fn expand(kind: EndpointKind, args: ValidatedArgs, mut func: ItemFn) -> Toke
 
     let call_ident = format_ident!("__canic_call");
     let call_decl = call_decl(kind, &call_ident, &orig_name);
-    let attempted = attempted(&call_ident);
 
     let access_stage = access_stage(&access_plan, &call_ident);
 
@@ -134,16 +123,14 @@ pub fn expand(kind: EndpointKind, args: ValidatedArgs, mut func: ItemFn) -> Toke
         impl_name,
         &call_args,
     );
-    let completion = completion(&call_ident, returns_fallible, dispatch_call);
 
     quote! {
         #(#attrs)*
         #cdk_attr
         #vis #wrapper_sig {
             #call_decl
-            #attempted
             #access_stage
-            #completion
+            #dispatch_call
         }
 
         #func
@@ -202,12 +189,6 @@ fn call_decl(kind: EndpointKind, call: &syn::Ident, name: &syn::Ident) -> TokenS
             endpoint: ::canic::__internal::core::ids::EndpointId::new(stringify!(#name)),
             kind: #call_kind,
         };
-    }
-}
-
-fn attempted(call: &syn::Ident) -> TokenStream2 {
-    quote! {
-        ::canic::__internal::core::access::metrics::EndpointAttemptMetrics::increment_attempted(#call);
     }
 }
 
@@ -588,35 +569,6 @@ fn dispatch_call(
     }
 }
 
-fn completion(
-    call: &syn::Ident,
-    returns_fallible: bool,
-    dispatch_call: TokenStream2,
-) -> TokenStream2 {
-    let result_metrics = if returns_fallible {
-        quote! {
-            if out.is_ok() {
-                ::canic::__internal::core::access::metrics::EndpointResultMetrics::increment_ok(#call);
-            } else {
-                ::canic::__internal::core::access::metrics::EndpointResultMetrics::increment_err(#call);
-            }
-        }
-    } else {
-        quote! {
-            ::canic::__internal::core::access::metrics::EndpointResultMetrics::increment_ok(#call);
-        }
-    };
-
-    quote! {
-        {
-            let out = #dispatch_call;
-            ::canic::__internal::core::access::metrics::EndpointAttemptMetrics::increment_completed(#call);
-            #result_metrics
-            out
-        }
-    }
-}
-
 fn extract_args(sig: &syn::Signature) -> syn::Result<Vec<TokenStream2>> {
     let mut out = Vec::new();
     for input in &sig.inputs {
@@ -663,6 +615,25 @@ fn cdk_attr(kind: EndpointKind, forwarded: &[TokenStream2]) -> TokenStream2 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn endpoint_expansion_omits_removed_endpoint_metric_hooks() {
+        let args = ValidatedArgs {
+            forwarded: Vec::new(),
+            requires: Vec::new(),
+            internal: false,
+        };
+        let func: ItemFn = syn::parse_quote!(
+            fn ping() -> Result<(), ::canic::Error> {
+                Ok(())
+            }
+        );
+
+        let expanded = expand(EndpointKind::Query, args, func).to_string();
+
+        assert!(!expanded.contains("EndpointAttemptMetrics"));
+        assert!(!expanded.contains("EndpointResultMetrics"));
+    }
 
     #[test]
     fn default_app_guard_keeps_sync_wrapper_sync() {

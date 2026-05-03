@@ -61,42 +61,6 @@ impl AccessMetrics {
 }
 
 ///
-/// EndpointAttemptMetrics
-///
-
-pub struct EndpointAttemptMetrics;
-
-impl EndpointAttemptMetrics {
-    /// Preserve the macro-emitted endpoint attempt hook after endpoint metrics removal.
-    pub const fn increment_attempted(call: EndpointCall) {
-        let _ = call;
-    }
-
-    /// Preserve the macro-emitted endpoint completion hook after endpoint metrics removal.
-    pub const fn increment_completed(call: EndpointCall) {
-        let _ = call;
-    }
-}
-
-///
-/// EndpointResultMetrics
-///
-
-pub struct EndpointResultMetrics;
-
-impl EndpointResultMetrics {
-    /// Preserve the macro-emitted successful-result hook after endpoint metrics removal.
-    pub const fn increment_ok(call: EndpointCall) {
-        let _ = call;
-    }
-
-    /// Preserve the macro-emitted failed-result hook after endpoint metrics removal.
-    pub const fn increment_err(call: EndpointCall) {
-        let _ = call;
-    }
-}
-
-///
 /// DelegatedAuthMetrics
 ///
 /// Delegated authorization authority metrics.

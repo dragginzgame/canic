@@ -14,10 +14,12 @@ PUBLISH_TIMEOUT_SECS="${PUBLISH_TIMEOUT_SECS:-300}"
 PUBLISH_ORDER=(
     canic-cdk
     canic-memory
+    canic-backup
     canic-core
     canic-control-plane
     canic-macros
     canic
+    canic-cli
     canic-wasm-store
     canic-installer
     canic-testkit

@@ -10,27 +10,28 @@ thread_local! {
 ///
 
 #[derive(Clone, Copy, Eq, Hash, PartialEq)]
+#[remain::sorted]
 pub enum CyclesTopupMetricKey {
+    AboveThreshold,
     ConfigError,
     PolicyMissing,
-    AboveThreshold,
-    RequestInFlight,
-    RequestScheduled,
-    RequestOk,
     RequestErr,
+    RequestInFlight,
+    RequestOk,
+    RequestScheduled,
 }
 
 impl CyclesTopupMetricKey {
     #[must_use]
     pub const fn metric_label(self) -> &'static str {
         match self {
+            Self::AboveThreshold => "above_threshold",
             Self::ConfigError => "config_error",
             Self::PolicyMissing => "policy_missing",
-            Self::AboveThreshold => "above_threshold",
-            Self::RequestInFlight => "request_in_flight",
-            Self::RequestScheduled => "request_scheduled",
-            Self::RequestOk => "request_ok",
             Self::RequestErr => "request_err",
+            Self::RequestInFlight => "request_in_flight",
+            Self::RequestOk => "request_ok",
+            Self::RequestScheduled => "request_scheduled",
         }
     }
 }

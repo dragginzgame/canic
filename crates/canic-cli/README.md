@@ -21,3 +21,19 @@ response instead of querying a live root.
 DFX only creates snapshots for stopped canisters. Pass
 `--stop-before-snapshot --resume-after-snapshot` when the CLI should perform
 that local lifecycle step around each captured artifact.
+
+Validate a captured manifest before restore planning:
+
+```bash
+canic manifest validate \
+  --manifest backups/<run-id>/manifest.json
+```
+
+Restore planning is manifest-driven and performs no mutations:
+
+```bash
+canic restore plan \
+  --manifest backups/<run-id>/manifest.json \
+  --mapping restore-map.json \
+  --out restore-plan.json
+```

@@ -11,6 +11,7 @@ use crate::dto::prelude::*;
 //
 
 #[derive(CandidType, Clone, Copy, Deserialize)]
+#[remain::sorted]
 pub enum MetricsKind {
     Access,
     CyclesFunding,

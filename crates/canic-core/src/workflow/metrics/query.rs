@@ -29,3 +29,46 @@ impl MetricsQuery {
         paginate_vec(entries, page)
     }
 }
+
+///
+/// TESTS
+///
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{ids::AccessMetricKind, ops::runtime::metrics::access::AccessMetrics};
+
+    #[test]
+    fn page_sorts_metric_rows_before_paginating() {
+        AccessMetrics::reset();
+
+        AccessMetrics::increment("zeta", AccessMetricKind::Auth, "caller_is_root");
+        AccessMetrics::increment("alpha", AccessMetricKind::Guard, "app_allows_updates");
+
+        let page = MetricsQuery::page(
+            MetricsKind::Access,
+            PageRequest {
+                limit: 1,
+                offset: 0,
+            },
+        );
+
+        assert_eq!(page.total, 2);
+        assert_eq!(
+            page.entries[0].labels,
+            ["alpha", "guard", "app_allows_updates"]
+        );
+
+        let page = MetricsQuery::page(
+            MetricsKind::Access,
+            PageRequest {
+                limit: 1,
+                offset: 1,
+            },
+        );
+
+        assert_eq!(page.total, 2);
+        assert_eq!(page.entries[0].labels, ["zeta", "auth", "caller_is_root"]);
+    }
+}

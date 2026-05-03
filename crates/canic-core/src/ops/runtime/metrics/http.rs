@@ -28,10 +28,11 @@ pub struct HttpMetricsSnapshot {
 ///
 
 #[derive(Clone, Copy, Eq, Hash, PartialEq)]
+#[remain::sorted]
 pub enum HttpMethod {
     Get,
-    Post,
     Head,
+    Post,
 }
 
 impl HttpMethod {
@@ -39,8 +40,8 @@ impl HttpMethod {
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Get => "GET",
-            Self::Post => "POST",
             Self::Head => "HEAD",
+            Self::Post => "POST",
         }
     }
 }

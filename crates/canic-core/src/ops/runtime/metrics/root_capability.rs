@@ -10,23 +10,24 @@ thread_local! {
 ///
 
 #[derive(Clone, Copy, Eq, Hash, PartialEq)]
+#[remain::sorted]
 pub enum RootCapabilityMetricKey {
+    IssueRoleAttestation,
     Provision,
-    Upgrade,
     RecycleCanister,
     RequestCycles,
-    IssueRoleAttestation,
+    Upgrade,
 }
 
 impl RootCapabilityMetricKey {
     #[must_use]
     pub const fn metric_label(self) -> &'static str {
         match self {
+            Self::IssueRoleAttestation => "IssueRoleAttestation",
             Self::Provision => "Provision",
-            Self::Upgrade => "Upgrade",
             Self::RecycleCanister => "RecycleCanister",
             Self::RequestCycles => "RequestCycles",
-            Self::IssueRoleAttestation => "IssueRoleAttestation",
+            Self::Upgrade => "Upgrade",
         }
     }
 }
@@ -36,23 +37,24 @@ impl RootCapabilityMetricKey {
 ///
 
 #[derive(Clone, Copy, Eq, Hash, PartialEq)]
+#[remain::sorted]
 pub enum RootCapabilityMetricEventType {
-    Envelope,
-    Proof,
     Authorization,
-    Replay,
+    Envelope,
     Execution,
+    Proof,
+    Replay,
 }
 
 impl RootCapabilityMetricEventType {
     #[must_use]
     pub const fn metric_label(self) -> &'static str {
         match self {
-            Self::Envelope => "Envelope",
-            Self::Proof => "Proof",
             Self::Authorization => "Authorization",
-            Self::Replay => "Replay",
+            Self::Envelope => "Envelope",
             Self::Execution => "Execution",
+            Self::Proof => "Proof",
+            Self::Replay => "Replay",
         }
     }
 }
@@ -62,16 +64,17 @@ impl RootCapabilityMetricEventType {
 ///
 
 #[derive(Clone, Copy, Eq, Hash, PartialEq)]
+#[remain::sorted]
 pub enum RootCapabilityMetricOutcome {
     Accepted,
-    Rejected,
     Denied,
-    DuplicateSame,
     DuplicateConflict,
-    Expired,
-    TtlExceeded,
-    Success,
+    DuplicateSame,
     Error,
+    Expired,
+    Rejected,
+    Success,
+    TtlExceeded,
 }
 
 impl RootCapabilityMetricOutcome {
@@ -79,14 +82,14 @@ impl RootCapabilityMetricOutcome {
     pub const fn metric_label(self) -> &'static str {
         match self {
             Self::Accepted => "Accepted",
-            Self::Rejected => "Rejected",
             Self::Denied => "Denied",
-            Self::DuplicateSame => "DuplicateSame",
             Self::DuplicateConflict => "DuplicateConflict",
-            Self::Expired => "Expired",
-            Self::TtlExceeded => "TtlExceeded",
-            Self::Success => "Success",
+            Self::DuplicateSame => "DuplicateSame",
             Self::Error => "Error",
+            Self::Expired => "Expired",
+            Self::Rejected => "Rejected",
+            Self::Success => "Success",
+            Self::TtlExceeded => "TtlExceeded",
         }
     }
 }
@@ -96,21 +99,22 @@ impl RootCapabilityMetricOutcome {
 ///
 
 #[derive(Clone, Copy, Eq, Hash, PartialEq)]
+#[remain::sorted]
 pub enum RootCapabilityMetricProofMode {
-    Unspecified,
-    Structural,
-    RoleAttestation,
     DelegatedGrant,
+    RoleAttestation,
+    Structural,
+    Unspecified,
 }
 
 impl RootCapabilityMetricProofMode {
     #[must_use]
     pub const fn metric_label(self) -> &'static str {
         match self {
-            Self::Unspecified => "Unspecified",
-            Self::Structural => "Structural",
-            Self::RoleAttestation => "RoleAttestation",
             Self::DelegatedGrant => "DelegatedGrant",
+            Self::RoleAttestation => "RoleAttestation",
+            Self::Structural => "Structural",
+            Self::Unspecified => "Unspecified",
         }
     }
 }
