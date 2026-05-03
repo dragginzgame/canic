@@ -29,7 +29,6 @@ use crate::{
 ///      - metric sampling or rate limiting
 ///      - cardinality controls
 ///      - backend changes (heap → stable → off-canister)
-///      - lifecycle validation (attempted → completed → result)
 ///
 /// If this file appears "thin", that is by design.
 /// DO NOT bypass it by calling ops::runtime::metrics directly.
@@ -49,6 +48,7 @@ use crate::{
 pub struct AccessMetrics;
 
 impl AccessMetrics {
+    /// Record one denied endpoint access predicate.
     pub fn increment(call: EndpointCall, kind: AccessMetricKind, predicate: &'static str) {
         // Intentionally forward only the normalized endpoint name.
         // Callers must not depend on backend naming conventions.
@@ -63,43 +63,36 @@ impl AccessMetrics {
 ///
 /// EndpointAttemptMetrics
 ///
-/// Endpoint lifecycle metrics.
-///
-/// These metrics describe execution flow, not authorization:
-/// attempted -> completed -> (ok | err)
-///
+
 pub struct EndpointAttemptMetrics;
 
 impl EndpointAttemptMetrics {
-    pub fn increment_attempted(call: EndpointCall) {
-        ops::runtime::metrics::endpoint::EndpointAttemptMetrics::increment_attempted(
-            call.endpoint.name,
-        );
+    /// Preserve the macro-emitted endpoint attempt hook after endpoint metrics removal.
+    pub const fn increment_attempted(call: EndpointCall) {
+        let _ = call;
     }
 
-    pub fn increment_completed(call: EndpointCall) {
-        ops::runtime::metrics::endpoint::EndpointAttemptMetrics::increment_completed(
-            call.endpoint.name,
-        );
+    /// Preserve the macro-emitted endpoint completion hook after endpoint metrics removal.
+    pub const fn increment_completed(call: EndpointCall) {
+        let _ = call;
     }
 }
 
 ///
 /// EndpointResultMetrics
 ///
-/// Endpoint result metrics (success vs failure).
-///
-/// These metrics intentionally exclude error causes; those belong in logs.
-///
+
 pub struct EndpointResultMetrics;
 
 impl EndpointResultMetrics {
-    pub fn increment_ok(call: EndpointCall) {
-        ops::runtime::metrics::endpoint::EndpointResultMetrics::increment_ok(call.endpoint.name);
+    /// Preserve the macro-emitted successful-result hook after endpoint metrics removal.
+    pub const fn increment_ok(call: EndpointCall) {
+        let _ = call;
     }
 
-    pub fn increment_err(call: EndpointCall) {
-        ops::runtime::metrics::endpoint::EndpointResultMetrics::increment_err(call.endpoint.name);
+    /// Preserve the macro-emitted failed-result hook after endpoint metrics removal.
+    pub const fn increment_err(call: EndpointCall) {
+        let _ = call;
     }
 }
 
@@ -124,6 +117,7 @@ impl EndpointResultMetrics {
 pub struct DelegatedAuthMetrics;
 
 impl DelegatedAuthMetrics {
+    /// Record which delegated-auth authority verified a request.
     pub fn record_authority(authority: Principal) {
         ops::runtime::metrics::delegated_auth::DelegatedAuthMetrics::record_authority(authority);
     }

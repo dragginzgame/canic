@@ -18,9 +18,11 @@ use thiserror::Error as ThisError;
 
 #[derive(Debug, ThisError)]
 pub enum SerializeError {
+    /// CBOR serialization failed.
     #[error("serialize error: {0}")]
     Serialize(String),
 
+    /// CBOR deserialization failed.
     #[error("deserialize error: {0}")]
     Deserialize(String),
 }

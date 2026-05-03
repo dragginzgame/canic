@@ -3,7 +3,6 @@ pub mod auth;
 pub mod cycles_funding;
 pub mod cycles_topup;
 pub mod delegated_auth;
-pub mod endpoint;
 pub mod http;
 pub mod icc;
 pub mod root_capability;
@@ -19,7 +18,6 @@ use {
     cycles_funding::CyclesFundingMetrics,
     cycles_topup::CyclesTopupMetrics,
     delegated_auth::DelegatedAuthMetrics,
-    endpoint::EndpointMetrics,
     http::HttpMetrics,
     icc::IccMetrics,
     root_capability::RootCapabilityMetrics,
@@ -31,17 +29,16 @@ use {
 #[must_use]
 pub fn entries(kind: MetricsKind) -> Vec<MetricEntry> {
     match kind {
-        MetricsKind::System => system_entries(),
-        MetricsKind::Icc => icc_entries(),
-        MetricsKind::Http => http_entries(),
-        MetricsKind::Timer => timer_entries(),
-        MetricsKind::Endpoint => endpoint_entries(),
         MetricsKind::Access => access_entries(),
-        MetricsKind::DelegatedAuth => delegated_auth_entries(),
-        MetricsKind::RootCapability => root_capability_entries(),
         MetricsKind::CyclesFunding => cycles_funding_entries(),
         MetricsKind::CyclesTopup => cycles_topup_entries(),
+        MetricsKind::DelegatedAuth => delegated_auth_entries(),
+        MetricsKind::Http => http_entries(),
+        MetricsKind::Icc => icc_entries(),
         MetricsKind::Perf => perf_entries(),
+        MetricsKind::RootCapability => root_capability_entries(),
+        MetricsKind::System => system_entries(),
+        MetricsKind::Timer => timer_entries(),
     }
 }
 
@@ -123,29 +120,6 @@ fn timer_entries() -> Vec<MetricEntry> {
                 count,
                 value_u64: key.delay_ms,
             },
-        })
-        .collect()
-}
-
-/// Project endpoint attempt/result counters into the unified public metrics row shape.
-#[must_use]
-fn endpoint_entries() -> Vec<MetricEntry> {
-    EndpointMetrics::snapshot()
-        .entries
-        .into_iter()
-        .flat_map(|(endpoint, counts)| {
-            [
-                ("attempted", counts.attempted),
-                ("completed", counts.completed),
-                ("ok", counts.ok),
-                ("err", counts.err),
-            ]
-            .into_iter()
-            .map(move |(label, count)| MetricEntry {
-                labels: vec![endpoint.clone(), label.to_string()],
-                principal: None,
-                value: MetricValue::Count(count),
-            })
         })
         .collect()
 }
@@ -264,26 +238,7 @@ fn perf_entries() -> Vec<MetricEntry> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ops::runtime::metrics::{
-        cycles_topup::CyclesTopupMetrics,
-        endpoint::{EndpointAttemptMetrics, EndpointResultMetrics},
-    };
-
-    #[test]
-    fn endpoint_metrics_are_exposed() {
-        EndpointAttemptMetrics::reset();
-
-        EndpointAttemptMetrics::increment_attempted("create_project");
-        EndpointAttemptMetrics::increment_completed("create_project");
-        EndpointResultMetrics::increment_ok("create_project");
-
-        let entries = entries(MetricsKind::Endpoint);
-
-        assert_metric_count(&entries, &["create_project", "attempted"], 1);
-        assert_metric_count(&entries, &["create_project", "completed"], 1);
-        assert_metric_count(&entries, &["create_project", "ok"], 1);
-        assert_metric_count(&entries, &["create_project", "err"], 0);
-    }
+    use crate::ops::runtime::metrics::cycles_topup::CyclesTopupMetrics;
 
     #[test]
     fn cycles_topup_metrics_are_exposed() {

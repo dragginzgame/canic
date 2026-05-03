@@ -1,7 +1,7 @@
 /// Declare a stable-memory slot backed by the Canic memory registry.
 ///
-/// The macro enqueues a registration for later validation (during
-/// `init_eager_tls`) and immediately returns the
+/// The macro enqueues a registration for lifecycle bootstrap validation and
+/// immediately returns the
 /// [`VirtualMemory`](crate::cdk::structures::memory::VirtualMemory)
 /// handle so callers can wrap it in `Cell`, `BTreeMap`, and other structures.
 /// Memory IDs are automatically namespaced per crate via `CARGO_PKG_NAME`.
@@ -30,8 +30,8 @@ macro_rules! ic_memory {
 
 /// Reserve a contiguous block of stable-memory IDs for the current crate.
 ///
-/// Stores the range request for validation during eager TLS initialization.
-/// The reservation shares the crate namespace used by [`macro@ic_memory`].
+/// Stores the range request for validation during memory bootstrap. The
+/// reservation shares the crate namespace used by [`macro@ic_memory`].
 #[macro_export]
 macro_rules! ic_memory_range {
     ($start:expr, $end:expr) => {{

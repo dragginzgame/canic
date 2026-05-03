@@ -4,14 +4,18 @@ use std::{cell::RefCell, collections::BTreeMap};
 ///
 /// MemoryRange
 ///
+/// Inclusive stable-memory ID range reserved by one owner crate.
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct MemoryRange {
+    /// First stable-memory ID in the range.
     pub start: u8,
+    /// Last stable-memory ID in the range.
     pub end: u8,
 }
 
 impl MemoryRange {
+    /// Return whether `id` is inside this inclusive range.
     #[must_use]
     pub const fn contains(&self, id: u8) -> bool {
         id >= self.start && id <= self.end
@@ -21,80 +25,127 @@ impl MemoryRange {
 ///
 /// MemoryRegistryEntry
 ///
+/// Registered stable-memory slot metadata.
 
 #[derive(Clone, Debug)]
 pub struct MemoryRegistryEntry {
+    /// Crate name that registered the stable-memory slot.
     pub crate_name: String,
+    /// Human-readable label for the registered stable-memory slot.
     pub label: String,
 }
 
 ///
 /// MemoryRangeEntry
 ///
+/// Reserved stable-memory range with explicit owner context.
 
 #[derive(Clone, Debug)]
 pub struct MemoryRangeEntry {
+    /// Crate name that reserved the range.
     pub owner: String,
+    /// Inclusive stable-memory ID range reserved by `owner`.
     pub range: MemoryRange,
 }
 
 ///
 /// MemoryRangeSnapshot
 ///
+/// Registered stable-memory slots grouped under one reserved range.
 
 #[derive(Clone, Debug)]
 pub struct MemoryRangeSnapshot {
+    /// Crate name that reserved the range.
     pub owner: String,
+    /// Inclusive stable-memory ID range reserved by `owner`.
     pub range: MemoryRange,
+    /// Registered entries whose IDs fall inside `range`.
     pub entries: Vec<(u8, MemoryRegistryEntry)>,
 }
 
 ///
 /// MemoryRegistryError
 ///
+/// Errors returned when a memory range or ID registration is invalid.
 
 #[derive(Debug, ThisError)]
 pub enum MemoryRegistryError {
+    /// A requested owner range overlaps an already reserved range.
     #[error(
         "memory range overlap: crate '{existing_crate}' [{existing_start}-{existing_end}]
 conflicts with crate '{new_crate}' [{new_start}-{new_end}]"
     )]
     Overlap {
+        /// Crate that already owns the conflicting range.
         existing_crate: String,
+        /// First ID in the existing range.
         existing_start: u8,
+        /// Last ID in the existing range.
         existing_end: u8,
+        /// Crate requesting the new range.
         new_crate: String,
+        /// First ID in the requested range.
         new_start: u8,
+        /// Last ID in the requested range.
         new_end: u8,
     },
 
+    /// The requested range has `start > end`.
     #[error("memory range is invalid: start={start} end={end}")]
-    InvalidRange { start: u8, end: u8 },
+    InvalidRange {
+        /// First ID in the requested range.
+        start: u8,
+        /// Last ID in the requested range.
+        end: u8,
+    },
 
+    /// The memory ID is already registered.
     #[error("memory id {0} is already registered; each memory id must be globally unique")]
     DuplicateId(u8),
 
+    /// The crate attempted to register an ID before reserving any range.
     #[error("memory id {id} has no reserved range for crate '{crate_name}'")]
-    NoReservedRange { crate_name: String, id: u8 },
+    NoReservedRange {
+        /// Crate attempting to register the ID.
+        crate_name: String,
+        /// Stable-memory ID being registered.
+        id: u8,
+    },
 
+    /// The ID falls inside a range reserved by another crate.
     #[error(
         "memory id {id} reserved to crate '{owner}' [{owner_start}-{owner_end}], not '{crate_name}'"
     )]
     IdOwnedByOther {
+        /// Crate attempting to register the ID.
         crate_name: String,
+        /// Stable-memory ID being registered.
         id: u8,
+        /// Crate that owns the range containing `id`.
         owner: String,
+        /// First ID in the owning range.
         owner_start: u8,
+        /// Last ID in the owning range.
         owner_end: u8,
     },
 
+    /// The crate has reserved ranges, but none contain the requested ID.
     #[error("memory id {id} is outside reserved ranges for crate '{crate_name}'")]
-    IdOutOfRange { crate_name: String, id: u8 },
+    IdOutOfRange {
+        /// Crate attempting to register the ID.
+        crate_name: String,
+        /// Stable-memory ID being registered.
+        id: u8,
+    },
 
+    /// The ID is reserved for stable-structures internals.
     #[error(
         "memory id {id} is reserved for stable-structures internals and cannot be used by application code"
     )]
-    ReservedInternalId { id: u8 },
+    ReservedInternalId {
+        /// Reserved internal stable-memory ID.
+        id: u8,
+    },
 }
 
 //
@@ -118,7 +169,10 @@ thread_local! {
 pub struct MemoryRegistry;
 
 impl MemoryRegistry {
-    /// Reserve a memory range for a crate.
+    /// Reserve an inclusive memory ID range for one crate.
+    ///
+    /// Exact duplicate reservations by the same crate are accepted so init and
+    /// post-upgrade can share the same bootstrap path.
     pub fn reserve_range(crate_name: &str, start: u8, end: u8) -> Result<(), MemoryRegistryError> {
         if start > end {
             return Err(MemoryRegistryError::InvalidRange { start, end });
@@ -158,7 +212,7 @@ impl MemoryRegistry {
         Ok(())
     }
 
-    /// Register a memory ID.
+    /// Register one memory ID under an existing owner range.
     pub fn register(id: u8, crate_name: &str, label: &str) -> Result<(), MemoryRegistryError> {
         validate_non_internal_id(id)?;
         validate_registration_range(crate_name, id)?;
@@ -246,6 +300,8 @@ impl MemoryRegistry {
 // Deferred registration helpers (used before runtime init)
 //
 
+/// Queue a range reservation for deterministic application during bootstrap.
+#[doc(hidden)]
 pub fn defer_reserve_range(
     crate_name: &str,
     start: u8,
@@ -264,6 +320,8 @@ pub fn defer_reserve_range(
     Ok(())
 }
 
+/// Queue an ID registration for deterministic application during bootstrap.
+#[doc(hidden)]
 pub fn defer_register(id: u8, crate_name: &str, label: &str) -> Result<(), MemoryRegistryError> {
     validate_non_internal_id(id)?;
 
@@ -275,13 +333,15 @@ pub fn defer_register(id: u8, crate_name: &str, label: &str) -> Result<(), Memor
     Ok(())
 }
 
+/// Drain all queued range reservations in insertion order.
 #[must_use]
-pub fn drain_pending_ranges() -> Vec<(String, u8, u8)> {
+pub(crate) fn drain_pending_ranges() -> Vec<(String, u8, u8)> {
     PENDING_RANGES.with_borrow_mut(std::mem::take)
 }
 
+/// Drain all queued ID registrations in insertion order.
 #[must_use]
-pub fn drain_pending_registrations() -> Vec<(u8, String, String)> {
+pub(crate) fn drain_pending_registrations() -> Vec<(u8, String, String)> {
     PENDING_REGISTRATIONS.with_borrow_mut(std::mem::take)
 }
 
@@ -290,6 +350,7 @@ pub fn drain_pending_registrations() -> Vec<(u8, String, String)> {
 //
 
 #[cfg(test)]
+/// Clear registry and pending queues for isolated unit tests.
 pub fn reset_for_tests() {
     RESERVED_RANGES.with_borrow_mut(Vec::clear);
     REGISTRY.with_borrow_mut(BTreeMap::clear);

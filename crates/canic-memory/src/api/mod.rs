@@ -11,30 +11,42 @@ use crate::{
 ///
 /// MemoryApi
 ///
+/// Supported facade for memory bootstrap, dynamic slot registration, and
+/// registry inspection.
 
 pub struct MemoryApi;
 
 ///
 /// MemoryInspection
 ///
+/// Read-only description of the owner range for one memory ID.
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct MemoryInspection {
+    /// Stable-memory ID being inspected.
     pub id: u8,
+    /// Crate name that reserved the range containing `id`.
     pub owner: String,
+    /// Reserved range containing `id`.
     pub range: MemoryRange,
+    /// Registered slot label for `id`, when the ID has already been registered.
     pub label: Option<String>,
 }
 
 ///
 /// RegisteredMemory
 ///
+/// Read-only description of one registered stable-memory slot.
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RegisteredMemory {
+    /// Registered stable-memory ID.
     pub id: u8,
+    /// Crate name that owns the slot's reserved range.
     pub owner: String,
+    /// Reserved range containing `id`.
     pub range: MemoryRange,
+    /// Human-readable slot label supplied by the registering crate.
     pub label: String,
 }
 

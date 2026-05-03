@@ -25,7 +25,7 @@ use cp_core::{
         storage::{
             index::{app::AppIndexOps, subnet::SubnetIndexOps},
             pool::PoolOps,
-            registry::subnet::SubnetRegistryOps,
+            registry::{app::AppRegistryOps, subnet::SubnetRegistryOps},
         },
     },
     workflow::{
@@ -141,11 +141,14 @@ pub async fn bootstrap_init_root_canister() {
         }
     };
 
-    BootstrapStatusOps::set_phase("root:init:import_pool");
     log!(Topic::Init, Info, "bootstrap (root:init) start");
+
+    BootstrapStatusOps::set_phase("root:init:set_subnet_id");
+    root_set_subnet_id().await;
 
     // On fresh init, only wait for the configured initial import slice before
     // auto-create. Remaining static imports are queued for the pool worker.
+    BootstrapStatusOps::set_phase("root:init:import_pool");
     root_import_pool_from_config(false).await;
     canic_core::perf!("bootstrap_import_pool");
 
@@ -258,6 +261,7 @@ pub async fn root_set_subnet_id() {
     match IcWorkflow::try_get_current_subnet_pid().await {
         Ok(Some(subnet_pid)) => {
             EnvOps::set_subnet_pid(subnet_pid);
+            AppRegistryOps::upsert(subnet_pid, IcOps::canister_self());
             return;
         }
 
@@ -281,6 +285,7 @@ pub async fn root_set_subnet_id() {
     // Fallback path for non-IC environments
     let fallback = IcOps::canister_self();
     EnvOps::set_subnet_pid(fallback);
+    AppRegistryOps::upsert(fallback, fallback);
 
     log!(
         Topic::Topology,

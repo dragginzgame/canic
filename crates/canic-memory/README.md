@@ -1,222 +1,243 @@
 # canic-memory
 
-Shared stable-memory helpers you can drop into any IC canister, even if you are not using the rest of Canic. It keeps you honest about which IDs you use and makes TLS-backed stable structures initialize in a predictable order.
+`canic-memory` provides stable-memory helpers for Internet Computer canisters. It
+can be used on its own, without the rest of Canic, when a crate needs one shared
+memory manager, deterministic thread-local initialization, and validation for
+stable-memory ID ownership.
 
-This crate currently declares MSRV `1.91.0`. The Canic repo itself builds with a
-newer pinned internal toolchain, but downstream crates that compile
-`canic-memory` from source should only need Rust `1.91.0` or newer.
+The crate currently declares MSRV `1.91.0`. The Canic workspace may build with a
+newer pinned toolchain, but downstream crates compiling `canic-memory` from
+source should only need Rust `1.91.0` or newer.
 
-What you get:
-- Reserve and validate a per-crate stable-memory ID range.
-- One place to register stable structures (`ic_memory!` + registry).
-- A supported runtime API for dynamic memory registration/opening (`MemoryApi`).
-- Eager TLS init so thread-locals that allocate memory are ready before entrypoints.
-- Zero dependency on the `canic` crate.
+## What It Provides
 
-Sample boot logs when everything is wired correctly:
-```
-17:27:24.796 [...] [Init] 🔧 --------------------- 'canic v0.6.x -----------------------
-17:27:24.796 [...] [Init] 🏁 init: root (Prime)
-17:27:24.796 [...] [Memory] 💾 memory.range: canic-core [5-30] (15/26 slots used)
-17:27:24.796 [...] [Wasm] 📄 registry.insert: app (1013.10 KB)
-...
-17:27:26.879 [...] [CanisterLifecycle] ⚡ create_canister: nssc3-p7777-77777-aaawa-cai (5.000 TC)
-17:27:27.549 [...] [Init] 🏁 init: app
-17:27:27.549 [...] [Memory] 💾 memory.range: canic-core [5-30] (15/26 slots used)
-```
+- A shared `MemoryManager<DefaultMemoryImpl>` used by all helpers.
+- Per-crate memory ID range reservation and overlap validation.
+- `ic_memory!` and `ic_memory_range!` for declarative stable-memory slots.
+- `MemoryApi` for runtime-selected stable-memory IDs.
+- `eager_static!` and `eager_init!` for deterministic startup initialization.
+- `impl_storable_bounded!` and `impl_storable_unbounded!` for CBOR-backed
+  `Storable` implementations.
+- A `canic_cdk` re-export at `canic_memory::cdk`.
 
-## Modules
+## Install
 
-- `manager` — thread-local `MemoryManager<DefaultMemoryImpl>` used by all helpers.
-- `registry` — range reservation + ID registry with pending queues for macro-driven registration.
-- `runtime` — eager TLS initialization and registry startup helpers.
-- `macros` — `ic_memory!`, `ic_memory_range!`, `eager_static!`, `eager_init!`.
-
-## Quick start
-
-Add the crate to your `Cargo.toml`:
+Inside the Canic workspace, use the workspace dependency:
 
 ```toml
 canic-memory = { workspace = true }
 ```
 
-### Reserve a range and declare a memory slot
+From another crate, depend on the published crate:
+
+```toml
+canic-memory = "0.29"
+```
+
+## Quick Start
+
+Declare stable structures with `eager_static!` so they are touched during
+startup, not lazily during the first endpoint call.
 
 ```rust
-// Reserve IDs 10–19 for this crate (usually in a module's init or ctor).
-canic_memory::ic_memory_range!(10, 19);
-
-// Declare a stable-memory slot at ID 10 and wrap it in a stable BTreeMap.
-use canic_memory::ic_memory;
-use canic_memory::cdk::structures::{BTreeMap, DefaultMemoryImpl, memory::VirtualMemory};
+use canic_memory::cdk::structures::{
+    BTreeMap, DefaultMemoryImpl,
+    memory::VirtualMemory,
+};
+use canic_memory::{eager_static, ic_memory};
 use std::cell::RefCell;
 
-thread_local! {
-    static USERS: RefCell<BTreeMap<u64, u64, VirtualMemory<DefaultMemoryImpl>>> =
+struct Users;
+
+eager_static! {
+    pub static USERS: RefCell<BTreeMap<u64, u64, VirtualMemory<DefaultMemoryImpl>>> =
         RefCell::new(BTreeMap::init(ic_memory!(Users, 10)));
 }
 ```
 
-### Bootstrap and register one runtime-selected memory slot
-
-Use `MemoryApi` when the memory ID is chosen at runtime and a macro is not a good fit.
+Bootstrap memory during canister startup before any endpoint uses the stable
+structures:
 
 ```rust
 use canic_memory::api::MemoryApi;
 
-fn init_dynamic_slot(memory_id: u8) {
-    MemoryApi::bootstrap_owner_range("my_crate", 10, 19).unwrap();
-    let memory = MemoryApi::register(memory_id, "my_crate", "CommitMarker").unwrap();
+fn init_memory() {
+    MemoryApi::bootstrap_owner_range(env!("CARGO_PKG_NAME"), 10, 19)
+        .expect("stable memory layout must be valid");
+}
+```
 
-    // `memory` is a normal `VirtualMemory<DefaultMemoryImpl>` handle.
+`bootstrap_owner_range(...)` performs the standalone startup sequence:
+
+1. Touch every `eager_static!` thread-local.
+2. Run every registered `eager_init!` body.
+3. Reserve the caller's owner range.
+4. Flush pending `ic_memory_range!` and `ic_memory!` registrations.
+
+When using the full Canic facade (`canic::start!` or `canic::start_root!`), Canic
+runs this lifecycle wiring for you.
+
+## Memory Ranges
+
+Stable-memory IDs are global inside one canister. Reserve a range for each crate
+that owns stable structures, then keep that crate's IDs inside the range.
+
+```rust
+use canic_memory::{eager_init, ic_memory_range};
+
+eager_init!({
+    ic_memory_range!(20, 29);
+});
+```
+
+Range validation catches:
+
+- overlapping ranges
+- `start > end`
+- duplicate IDs
+- IDs outside the owner's reserved range
+- IDs owned by another crate
+- ID `255`, which is reserved for stable-structures internals
+
+Exact duplicate range reservations for the same crate are allowed so init and
+post-upgrade can share the same bootstrap path.
+
+## Runtime-Selected Slots
+
+Use `MemoryApi` when the memory ID is chosen dynamically and `ic_memory!` is not
+a good fit.
+
+```rust
+use canic_memory::api::MemoryApi;
+
+fn open_commit_marker(memory_id: u8) {
+    MemoryApi::bootstrap_owner_range("my_crate", 10, 19)
+        .expect("stable memory layout must be valid");
+
+    let memory = MemoryApi::register(memory_id, "my_crate", "CommitMarker")
+        .expect("commit marker slot must be in range");
+
     let _ = memory;
 }
 ```
 
-### Inspect one runtime-selected memory slot
+`MemoryApi::register(...)` is idempotent for the same owner and label, but it
+returns `MemoryRegistryError::DuplicateId` if the same ID is reused for a
+different registration.
 
-Use `inspect(...)` when validation code needs to confirm who owns an id
-and whether that slot already has a registered label.
+## Registry Introspection
+
+Use the supported `MemoryApi` reads for validation, diagnostics, or endpoint
+responses:
 
 ```rust
 use canic_memory::api::MemoryApi;
 
-fn validate_slot(memory_id: u8) {
+fn validate_slots(memory_id: u8) {
     if let Some(info) = MemoryApi::inspect(memory_id) {
         assert_eq!(info.owner, "my_crate");
-        let _label = info.label;
         let _range = info.range;
+        let _label = info.label;
     }
-}
-```
 
-### Enumerate or query registered slots by owner/label
-
-Use these helpers when validation code needs registered slots across ids without
-reading registry/runtime internals directly.
-
-```rust
-use canic_memory::api::MemoryApi;
-
-fn validate_commit_slots() {
+    let all_registered = MemoryApi::registered();
     let owned = MemoryApi::registered_for_owner("my_crate");
     let marker = MemoryApi::find("my_crate", "CommitMarker");
 
-    let _ = owned;
-    let _ = marker;
+    let _ = (all_registered, owned, marker);
 }
 ```
 
-### Flush pending registrations during startup
+Lower-level registry snapshot helpers also exist for debugging and tests:
 
-Call the runtime registry initializer once during init/post-upgrade to validate ranges and apply any pending registrations queued by macros. Repeated calls are allowed when the initial range is identical; conflicts return a `MemoryRegistryError`.
+- `MemoryRegistry::export_range_entries()`
+- `MemoryRegistry::export_ids_by_range()`
+
+Prefer `MemoryApi` for normal supported reads.
+
+## Storable Helpers
+
+The storable macros implement `ic-stable-structures` `Storable` with Canic's
+shared CBOR serializer.
 
 ```rust
-use canic_memory::runtime::registry::MemoryRegistryRuntime;
+use canic_memory::impl_storable_bounded;
+use serde::{Deserialize, Serialize};
 
-fn init_memory() {
-    // Optionally reserve an initial range for this crate before flushing queues.
-    // Pass `None` if you reserve exclusively via `ic_memory_range!` calls.
-    MemoryRegistryRuntime::init(Some((env!("CARGO_PKG_NAME"), 10, 19))).unwrap();
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+struct UserRecord {
+    id: u64,
+    name: String,
+}
+
+impl_storable_bounded!(UserRecord, 512, false);
+```
+
+Use `impl_storable_bounded!(Type, max_size, is_fixed_size)` when the serialized
+size has a known bound. Use `impl_storable_unbounded!(Type)` only for data that
+is expected to grow beyond a practical fixed bound.
+
+## Standalone Lifecycle
+
+For standalone canisters, call one of the bootstrap helpers from init and
+post-upgrade before handling user calls:
+
+```rust
+use canic_memory::api::MemoryApi;
+
+fn bootstrap_memory() {
+    MemoryApi::bootstrap_owner_range(env!("CARGO_PKG_NAME"), 10, 19)
+        .expect("stable memory layout must be valid");
 }
 ```
 
-`init_memory` will:
-1) reserve the optional initial range,
-2) apply all pending range reservations,
-3) apply all pending ID registrations (sorted),
-4) return a summary of ranges/entries for logging or inspection.
-
-If you want the same flow from the supported public API surface, use:
+If all owner ranges are already queued through `ic_memory_range!`, and the
+caller does not need to reserve an additional initial range, use:
 
 ```rust
 use canic_memory::api::MemoryApi;
 
-fn init_memory() {
-    MemoryApi::bootstrap_owner_range("my_crate", 10, 19).unwrap();
+fn bootstrap_memory() {
+    MemoryApi::bootstrap_pending().expect("stable memory layout must be valid");
 }
 ```
 
-If your crate already reserved ranges through deferred macros and only needs to
-flush pending registrations before validation, use:
+Accessing an `ic_memory!` slot on `wasm32` before bootstrap will panic with a
+message pointing back to memory bootstrap. This is intentional: stable memory
+layout problems should fail during lifecycle startup, not during a user call.
 
-```rust
-use canic_memory::api::MemoryApi;
+## Testing
 
-fn init_memory() {
-    MemoryApi::bootstrap_pending().unwrap();
-}
-```
-
-### Eagerly initialize thread-locals that allocate memory
-
-Why bother? `thread_local!` values are lazy. If a stable `BTreeMap` (or similar) spins up the first time an endpoint is called, you get:
-- unpredictable init order (especially across upgrades),
-- memory allocations happening under a user call instead of during init,
-- possible panics if the registry/ranges were not flushed yet.
-
-`eager_static!` and `eager_init!` make TLS setup a deliberate part of startup instead of a hidden first-use side effect.
-
-If you are using the full Canic facade (`canic::start!` / `canic::start_root!`), you do not need to call anything extra: Canic runs eager TLS, executes registered `eager_init!` blocks, and then flushes the memory registry during synchronous lifecycle bootstrap. This work happens during real lifecycle execution, so debug-only Candid extraction can reuse the same artifact without a separate eager-init build variant.
-
-If you are using `canic-memory` standalone without Canic lifecycle wiring, the startup order is: eager TLS init → run `eager_init!` work → flush the registry. After that, every endpoint starts with the same, prebuilt memory layout.
-
-```rust
-use canic_memory::api::MemoryApi;
-use canic_memory::{eager_init, eager_static};
-use std::cell::RefCell;
-
-eager_static! {
-    static CACHE: RefCell<u32> = const { RefCell::new(0) };
-}
-
-eager_init!({
-    // any one-time setup before entrypoints (optional)
-});
-
-fn init() {
-    // standalone canisters can use the supported no-range bootstrap helper
-    MemoryApi::bootstrap_pending().unwrap();
-}
-```
-
-## Error handling
-
-The registry surfaces `MemoryRegistryError` for:
-- overlapping ranges or duplicate ID registrations
-- invalid range (start > end)
-- registration outside the crate's reserved ranges or owned by another crate
-
-Handle these at init time so your canister fails fast on invalid memory layout.
-
-## Testing helpers
-
-`registry::reset_for_tests()` clears the registry and pending queues to keep unit tests isolated. Example:
+Unit tests that touch the registry can reset global state with
+`registry::reset_for_tests()`:
 
 ```rust
 #[test]
 fn reserves_and_registers() {
     canic_memory::registry::reset_for_tests();
-    canic_memory::runtime::registry::MemoryRegistryRuntime::init(Some(("my_crate", 1, 2))).unwrap();
-    canic_memory::registry::MemoryRegistry::register(1, "my_crate", "Slot").unwrap();
+    canic_memory::api::MemoryApi::bootstrap_owner_range("my_crate", 1, 2)
+        .expect("bootstrap registry");
+    canic_memory::registry::MemoryRegistry::register(1, "my_crate", "Slot")
+        .expect("register slot");
 }
 ```
 
-## Registry introspection
+`reset_for_tests()` is only available under `cfg(test)`.
 
-For diagnostics, the registry can provide:
-- ranges with owners via `MemoryRegistry::export_range_entries()`
-- registered IDs grouped by range via `MemoryRegistry::export_ids_by_range()`
+## Module Map
 
-These helpers are intended for debugging and tests, not as a stable API contract.
-For ordinary supported reads, prefer:
-- `MemoryApi::inspect(...)` for one id
-- `MemoryApi::registered(...)` for all registered slots
-- `MemoryApi::registered_for_owner(...)` for one owner
-- `MemoryApi::find(...)` for one owner/label lookup
+- `api` - supported runtime API for bootstrapping, registration, and reads.
+- `manager` - shared thread-local memory manager.
+- `registry` - range reservation, ID registration, pending queues, and errors.
+- `runtime` - eager TLS execution and registry startup glue.
+- `macros` - exported memory, runtime, and storable macros.
+- `serialize` - CBOR serialization helpers used by storable macros.
 
 ## Notes
 
-- The macros automatically namespace memory IDs by crate (`CARGO_PKG_NAME`) when validating ranges.
-- If you don't want an initial range, omit it and rely solely on `ic_memory_range!` calls before `init_memory`.
-- Consumers outside Canic can import only `canic-memory` plus `canic-cdk`; the rest of the stack is optional.
+- Memory IDs are `u8` values. Application code may use `0..=254`; `255` is
+  reserved internally.
+- `ic_memory!` labels are type paths. Define a small marker type, such as
+  `struct Users;`, for each slot.
+- Consumers outside Canic can import only `canic-memory` plus `canic-cdk`; the
+  rest of the Canic stack is optional.

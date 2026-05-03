@@ -5,10 +5,13 @@
 //! `eager_static!`) so external crates can coordinate stable memory without
 //! depending on the full `canic` stack.
 
+/// Supported high-level API for bootstrapping, registering, and inspecting
+/// stable-memory slots.
 pub mod api;
-pub mod macros;
+mod macros;
 #[doc(hidden)]
 pub mod manager;
+/// Stable-memory range and ID registry used by the public API and macros.
 pub mod registry;
 #[doc(hidden)]
 pub mod runtime;
@@ -18,7 +21,7 @@ pub use ::canic_cdk as cdk;
 
 // internal derive support
 #[doc(hidden)]
-pub use thiserror::Error as ThisError;
+pub(crate) use thiserror::Error as ThisError;
 
 // re-exports
 #[doc(hidden)]

@@ -6,7 +6,7 @@
 //! the size is fixed; the unbounded variant is suitable for archival data
 //! that can grow, at the cost of larger metadata cells.
 
-/// Implement [`Storable`](ic_stable_structures::storable::Storable) with a
+/// Implement [`Storable`](crate::cdk::structures::storable::Storable) with a
 /// bounded size guarantee.
 #[macro_export]
 macro_rules! impl_storable_bounded {
@@ -41,7 +41,7 @@ macro_rules! impl_storable_bounded {
     };
 }
 
-/// Implement [`Storable`](ic_stable_structures::storable::Storable) without a
+/// Implement [`Storable`](crate::cdk::structures::storable::Storable) without a
 /// size bound.
 #[macro_export]
 macro_rules! impl_storable_unbounded {

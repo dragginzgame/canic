@@ -38,6 +38,13 @@ pub struct AppRegistryRecord {
 pub struct AppRegistry;
 
 impl AppRegistry {
+    /// Insert or replace the root principal recorded for a subnet.
+    pub(crate) fn upsert(subnet_pid: Principal, root_pid: Principal) {
+        APP_REGISTRY.with_borrow_mut(|map| {
+            map.insert(subnet_pid, root_pid);
+        });
+    }
+
     #[must_use]
     pub(crate) fn export() -> AppRegistryRecord {
         AppRegistryRecord {

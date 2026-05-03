@@ -18,7 +18,9 @@ thread_local! {
 
 #[derive(Debug)]
 pub struct MemoryRegistryInitSummary {
+    /// Reserved owner ranges after initialization completes.
     pub ranges: Vec<(String, MemoryRange)>,
+    /// Registered memory IDs after initialization completes.
     pub entries: Vec<(u8, MemoryRegistryEntry)>,
 }
 
@@ -76,6 +78,7 @@ impl MemoryRegistryRuntime {
         Ok(summary)
     }
 
+    /// Return whether the memory registry has completed initialization.
     #[must_use]
     pub fn is_initialized() -> bool {
         MEMORY_REGISTRY_INITIALIZED.with(Cell::get)

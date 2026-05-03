@@ -97,16 +97,19 @@ pub fn run_registered_eager_init() {
     }
 }
 
+/// Return whether eager TLS initializers are currently being executed.
 #[must_use]
 pub fn is_eager_tls_initializing() -> bool {
     CANIC_EAGER_TLS_RUNNING.load(Ordering::SeqCst)
 }
 
+/// Return whether memory access is currently allowed during bootstrap.
 #[must_use]
 pub fn is_memory_bootstrap_ready() -> bool {
     is_eager_tls_initializing() || registry::MemoryRegistryRuntime::is_initialized()
 }
 
+/// Panic if a stable-memory slot is touched before memory bootstrap is ready.
 pub fn assert_memory_bootstrap_ready(label: &str, id: u8) {
     if is_memory_bootstrap_ready() {
         return;
@@ -140,6 +143,7 @@ pub fn defer_eager_init(f: fn()) {
 ///
 /// MemoryRuntimeApi
 ///
+/// High-level runtime bootstrap facade used by the supported public API.
 
 pub struct MemoryRuntimeApi;
 

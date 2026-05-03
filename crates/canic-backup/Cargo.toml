@@ -1,0 +1,24 @@
+[package]
+name = "canic-backup"
+edition = { workspace = true }
+rust-version = { workspace = true }
+version = { workspace = true }
+license = { workspace = true }
+description = "Manifest and orchestration primitives for Canic fleet backup and restore"
+readme = "README.md"
+documentation = "https://docs.rs/canic-backup"
+homepage = { workspace = true }
+repository = { workspace = true }
+keywords = { workspace = true }
+categories = { workspace = true }
+publish = true
+
+[dependencies]
+candid = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+thiserror = { workspace = true }
+
+[lints]
+workspace = true

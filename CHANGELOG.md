@@ -5,9 +5,28 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.30.x] - 2026-05-03 - Fleet Snapshot Backups
+
+- `0.30.0` adds the first fleet backup foundation with manifest validation, topology hashing, resumable artifact journals, restore dry-run planning, and a `canic` CLI command for downloading snapshots for a canister and its registry-discovered children.
+
+```bash
+canic snapshot download \
+  --canister <canister-id> \
+  --root <root-canister-id> \
+  --recursive \
+  --out backups/<run-id> \
+  --stop-before-snapshot \
+  --resume-after-snapshot
+```
+
+See detailed breakdown:
+[docs/changelog/0.30.md](docs/changelog/0.30.md)
+
+---
+
 ## [0.29.x] - 2026-04-28 - Delegated Auth Hard Cut
 
-- `0.29.10` exposes endpoint outcome counters and child-side auto-topup decision metrics, making no-policy and above-threshold topup states visible through `canic_metrics`.
+- `0.29.10` removes unused endpoint outcome counters from `canic_metrics` and keeps child-side auto-topup decision metrics visible for no-policy and above-threshold states.
 - `0.29.9` removes high idle drain from delegated-auth, log-retention, intent-cleanup, and pool-reset background timers.
 - `0.29.8` fixes delegated-token guards so large authenticated upload payloads, such as image chunks, no longer count against the token safety check.
 - `0.29.7` fixes `canic_standards` metadata so canisters report their own crate identity instead of always identifying as `canic-core`.
@@ -341,7 +360,7 @@ See detailed breakdown:
 
 ## [0.11.x] - 2026-03-07 - Capabilities Arc and Replay Hardening
 
-- `0.11.1` hardens root capability replay/dispatch behavior and improves auth diagnostics to make failure triage easier.
+- `0.11.1` hardens root capability replay/dispatch behavior, improves auth diagnostics, and records each root's local subnet binding in `canic_app_registry`.
 - `0.11.0` starts the capability-focused auth line with stronger scope checks and safer account/numeric behavior.
 
 See detailed breakdown:

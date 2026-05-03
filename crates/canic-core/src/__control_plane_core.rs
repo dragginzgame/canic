@@ -79,6 +79,10 @@ pub mod ops {
         }
 
         pub mod registry {
+            pub mod app {
+                pub use crate::ops::storage::registry::app::AppRegistryOps;
+            }
+
             pub mod subnet {
                 pub use crate::ops::storage::registry::subnet::SubnetRegistryOps;
             }

@@ -12,17 +12,16 @@ use crate::dto::prelude::*;
 
 #[derive(CandidType, Clone, Copy, Deserialize)]
 pub enum MetricsKind {
-    System,
-    Icc,
-    Http,
-    Timer,
-    Endpoint,
     Access,
-    DelegatedAuth,
-    RootCapability,
     CyclesFunding,
     CyclesTopup,
+    DelegatedAuth,
+    Http,
+    Icc,
     Perf,
+    RootCapability,
+    System,
+    Timer,
 }
 
 //

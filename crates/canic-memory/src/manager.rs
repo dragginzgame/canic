@@ -10,6 +10,7 @@ use std::cell::RefCell;
 // -----------------------------------------------------------------------------
 
 thread_local! {
+    /// Shared stable-memory manager used by the exported memory macros.
     pub static MEMORY_MANAGER: RefCell<MemoryManager<DefaultMemoryImpl>> =
         RefCell::new(MemoryManager::init(DefaultMemoryImpl::default()));
 }
