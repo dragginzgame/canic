@@ -42,6 +42,20 @@ pub fn entries(kind: MetricsKind) -> Vec<MetricEntry> {
     }
 }
 
+#[cfg(test)]
+pub fn reset_for_tests() {
+    AccessMetrics::reset();
+    CyclesFundingMetrics::reset();
+    CyclesTopupMetrics::reset();
+    DelegatedAuthMetrics::reset();
+    HttpMetrics::reset();
+    IccMetrics::reset();
+    RootCapabilityMetrics::reset();
+    SystemMetrics::reset();
+    TimerMetrics::reset();
+    perf::reset();
+}
+
 /// Project system counters into the unified public metrics row shape.
 #[must_use]
 fn system_entries() -> Vec<MetricEntry> {
@@ -238,11 +252,26 @@ fn perf_entries() -> Vec<MetricEntry> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ops::runtime::metrics::cycles_topup::CyclesTopupMetrics;
+    use crate::{
+        cdk::types::Principal,
+        ids::AccessMetricKind,
+        ops::runtime::metrics::{
+            cycles_funding::{CyclesFundingDeniedReason, CyclesFundingMetrics},
+            cycles_topup::CyclesTopupMetrics,
+            http::{HttpMethod, HttpMetrics},
+            icc::IccMetrics,
+            root_capability::{
+                RootCapabilityMetricKey, RootCapabilityMetricOutcome,
+                RootCapabilityMetricProofMode, RootCapabilityMetrics,
+            },
+            timer::{TimerMetrics, TimerMode},
+        },
+    };
+    use std::time::Duration;
 
     #[test]
     fn cycles_topup_metrics_are_exposed() {
-        CyclesTopupMetrics::reset();
+        reset_for_tests();
 
         CyclesTopupMetrics::record_policy_missing();
         CyclesTopupMetrics::record_request_scheduled();
@@ -252,6 +281,62 @@ mod tests {
 
         assert_metric_count(&entries, &["policy_missing"], 1);
         assert_metric_count(&entries, &["request_scheduled"], 2);
+    }
+
+    #[test]
+    fn reset_for_tests_clears_all_metric_families() {
+        reset_for_tests();
+        let principal = Principal::from_slice(&[42; 29]);
+
+        AccessMetrics::increment("create_project", AccessMetricKind::Guard, "controller_only");
+        CyclesFundingMetrics::record_denied(
+            principal,
+            10,
+            CyclesFundingDeniedReason::ChildNotFound,
+        );
+        CyclesTopupMetrics::record_request_scheduled();
+        DelegatedAuthMetrics::record_authority(principal);
+        HttpMetrics::record_http_request(HttpMethod::Get, "https://example.test/a", Some("api"));
+        IccMetrics::record_call(principal, "canic_sync");
+        RootCapabilityMetrics::record_proof(
+            RootCapabilityMetricKey::Provision,
+            RootCapabilityMetricOutcome::Accepted,
+            RootCapabilityMetricProofMode::Structural,
+        );
+        TimerMetrics::record_timer_scheduled(TimerMode::Once, Duration::from_secs(1), "once:test");
+        perf::record_checkpoint("metrics::tests", "checkpoint", 7);
+
+        for kind in [
+            MetricsKind::Access,
+            MetricsKind::CyclesFunding,
+            MetricsKind::CyclesTopup,
+            MetricsKind::DelegatedAuth,
+            MetricsKind::Http,
+            MetricsKind::Icc,
+            MetricsKind::Perf,
+            MetricsKind::RootCapability,
+            MetricsKind::System,
+            MetricsKind::Timer,
+        ] {
+            assert!(!entries(kind).is_empty());
+        }
+
+        reset_for_tests();
+
+        for kind in [
+            MetricsKind::Access,
+            MetricsKind::CyclesFunding,
+            MetricsKind::CyclesTopup,
+            MetricsKind::DelegatedAuth,
+            MetricsKind::Http,
+            MetricsKind::Icc,
+            MetricsKind::Perf,
+            MetricsKind::RootCapability,
+            MetricsKind::System,
+            MetricsKind::Timer,
+        ] {
+            assert!(entries(kind).is_empty());
+        }
     }
 
     fn assert_metric_count(entries: &[MetricEntry], labels: &[&str], expected: u64) {

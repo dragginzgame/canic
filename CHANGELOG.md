@@ -7,7 +7,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.30.x] - 2026-05-03 - Fleet Snapshot Backups
 
-- `0.30.1` finishes the publish follow-through for the fleet backup line by including the new backup and CLI crates in release order, adding manifest validation and restore planning commands, removing the remaining endpoint metrics macro hooks, and refreshing installer/version surfaces.
+- `0.30.3` adds `canic backup status`, `canic backup verify`, and backup layout integrity reporting so operators can inspect resumable journals and validate a manifest, durable artifact set, and SHA-256 checksums before restore planning.
+- `0.30.2` tightens restore preflight by making restore plans include provenance, target parent mapping, identity, snapshot, and verification metadata while rejecting backup-unit and mapping references that do not exist in the manifest.
+- `0.30.1` finishes the publish follow-through for the fleet backup line by including the new backup and CLI crates in release order, adding manifest validation and restore planning commands, removing the remaining endpoint metrics macro hooks, documenting metric row shapes, and refreshing installer/version surfaces.
 - `0.30.0` adds the first fleet backup foundation with manifest validation, topology hashing, resumable artifact journals, restore dry-run planning, and a `canic` CLI command for downloading snapshots for a canister and its registry-discovered children.
 
 ```bash
@@ -26,8 +28,20 @@ canic manifest validate \
 ```
 
 ```bash
+canic backup status \
+  --dir backups/<run-id> \
+  --out backup-status.json
+```
+
+```bash
+canic backup verify \
+  --dir backups/<run-id> \
+  --out backup-integrity.json
+```
+
+```bash
 canic restore plan \
-  --manifest backups/<run-id>/manifest.json \
+  --backup-dir backups/<run-id> \
   --mapping restore-map.json \
   --out restore-plan.json
 ```

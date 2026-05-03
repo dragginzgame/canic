@@ -23,6 +23,7 @@ pub struct IccMetricsSnapshot {
 
 ///
 /// IccMetricKey
+/// Cardinality is bounded by observed canister targets and static method names.
 ///
 
 #[derive(Clone, Eq, Hash, PartialEq)]
@@ -34,6 +35,7 @@ pub struct IccMetricKey {
 ///
 /// IccMetrics
 /// Volatile counters for inter-canister calls keyed by target + method.
+/// Targets may grow with topology size; methods must remain low-cardinality.
 ///
 
 pub struct IccMetrics;
@@ -88,6 +90,7 @@ impl IccMetrics {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ops::runtime::metrics::system::SystemMetrics;
 
     fn snapshot_map() -> HashMap<IccMetricKey, u64> {
         IccMetrics::snapshot().entries.into_iter().collect()
@@ -132,5 +135,27 @@ mod tests {
         );
 
         assert_eq!(map.len(), 3);
+    }
+
+    #[test]
+    fn record_call_updates_icc_and_system_metrics() {
+        IccMetrics::reset();
+        SystemMetrics::reset();
+
+        let target = Principal::from_slice(&[3; 29]);
+        IccMetrics::record_call(target, "canic_sync");
+        IccMetrics::record_call(target, "canic_sync");
+
+        let map = snapshot_map();
+        assert_eq!(
+            map.get(&IccMetricKey {
+                target,
+                method: "canic_sync".to_string()
+            }),
+            Some(&2)
+        );
+
+        let system: HashMap<_, _> = SystemMetrics::snapshot().into_iter().collect();
+        assert_eq!(system.get(&SystemMetricKind::CanisterCall), Some(&2));
     }
 }

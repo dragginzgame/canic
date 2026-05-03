@@ -29,11 +29,27 @@ canic manifest validate \
   --manifest backups/<run-id>/manifest.json
 ```
 
+Inspect resumable journal status:
+
+```bash
+canic backup status \
+  --dir backups/<run-id> \
+  --out backup-status.json
+```
+
+Verify the backup layout and durable artifact checksums:
+
+```bash
+canic backup verify \
+  --dir backups/<run-id> \
+  --out backup-integrity.json
+```
+
 Restore planning is manifest-driven and performs no mutations:
 
 ```bash
 canic restore plan \
-  --manifest backups/<run-id>/manifest.json \
+  --backup-dir backups/<run-id> \
   --mapping restore-map.json \
   --out restore-plan.json
 ```

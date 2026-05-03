@@ -37,11 +37,14 @@ impl MetricsQuery {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{ids::AccessMetricKind, ops::runtime::metrics::access::AccessMetrics};
+    use crate::{
+        ids::AccessMetricKind,
+        ops::runtime::metrics::{self, access::AccessMetrics},
+    };
 
     #[test]
     fn page_sorts_metric_rows_before_paginating() {
-        AccessMetrics::reset();
+        metrics::reset_for_tests();
 
         AccessMetrics::increment("zeta", AccessMetricKind::Auth, "caller_is_root");
         AccessMetrics::increment("alpha", AccessMetricKind::Guard, "app_allows_updates");

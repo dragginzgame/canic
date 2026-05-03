@@ -17,6 +17,7 @@ pub struct AccessMetricsSnapshot {
 ///
 /// AccessMetricKey
 /// Uniquely identifies a rejected access attempt by endpoint + kind + predicate.
+/// Cardinality is bounded by macro-generated endpoint names and static predicate names.
 ///
 
 #[derive(Clone, Eq, Hash, PartialEq)]

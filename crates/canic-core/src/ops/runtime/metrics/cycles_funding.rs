@@ -70,6 +70,8 @@ impl CyclesFundingDeniedReason {
 
 ///
 /// CyclesFundingMetricStorageKey
+/// Child-principal cardinality is intentional and bounded by registered children.
+/// Reason and metric dimensions are fixed enums.
 ///
 
 #[derive(Clone, Copy, Eq, Hash, PartialEq)]

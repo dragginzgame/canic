@@ -8,11 +8,13 @@ thread_local! {
 ///
 /// DelegatedAuthMetrics
 /// Records verified delegation authorities by signer principal.
+/// Cardinality is bounded by configured signer authorities, not request callers.
 ///
 
 pub struct DelegatedAuthMetrics;
 
 impl DelegatedAuthMetrics {
+    /// Record one successful delegated-authority verification.
     pub fn record_authority(authority: Principal) {
         DELEGATED_AUTH_METRICS.with_borrow_mut(|counts| {
             let entry = counts.entry(authority).or_insert(0);

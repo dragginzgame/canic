@@ -48,8 +48,8 @@ impl HttpMethod {
 
 ///
 /// HttpMetrics
-/// Volatile counters for HTTP outcalls keyed by method + label.
-/// The label is a URL override or normalized URL.
+/// Volatile counters for HTTP outcalls keyed by method + low-cardinality label.
+/// Explicit labels are preferred; URL-derived fallback labels strip query/fragment only.
 ///
 
 pub struct HttpMetrics;
@@ -83,6 +83,11 @@ impl HttpMetrics {
 
         HttpMetricsSnapshot { entries }
     }
+
+    #[cfg(test)]
+    pub fn reset() {
+        HTTP_METRICS.with_borrow_mut(HashMap::clear);
+    }
 }
 
 ///
@@ -110,5 +115,53 @@ pub fn normalize_http_label(url: &str, label: Option<&str>) -> String {
         url.to_string()
     } else {
         trimmed.to_string()
+    }
+}
+
+///
+/// TESTS
+///
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn normalize_http_label_prefers_explicit_label() {
+        let label = normalize_http_label(
+            "https://api.example.test/users/123?token=secret#frag",
+            Some("example_api_users"),
+        );
+
+        assert_eq!(label, "example_api_users");
+    }
+
+    #[test]
+    fn normalize_http_label_strips_query_and_fragment() {
+        let label =
+            normalize_http_label(" https://api.example.test/users?token=secret#frag ", None);
+
+        assert_eq!(label, "https://api.example.test/users");
+    }
+
+    #[test]
+    fn http_metrics_preserve_explicit_low_cardinality_label() {
+        HttpMetrics::reset();
+
+        HttpMetrics::record_http_request(
+            HttpMethod::Get,
+            "https://api.example.test/users/123?token=secret",
+            Some("example_api_users"),
+        );
+        HttpMetrics::record_http_request(
+            HttpMethod::Get,
+            "https://api.example.test/users/456?token=secret",
+            Some("example_api_users"),
+        );
+
+        let snapshot = HttpMetrics::snapshot();
+        assert_eq!(snapshot.entries.len(), 1);
+        assert_eq!(snapshot.entries[0].0.label, "example_api_users");
+        assert_eq!(snapshot.entries[0].1, 2);
     }
 }

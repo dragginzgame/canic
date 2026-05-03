@@ -111,6 +111,7 @@ impl HttpOps {
     // -------------------------------------------------------------------------
 
     /// Perform an HTTP GET request and return the raw response.
+    /// Prefer `get_with_label` for dynamic URLs to keep HTTP metrics bounded.
     pub async fn get(
         url: &str,
         headers: &[(&str, &str)],
@@ -119,6 +120,7 @@ impl HttpOps {
     }
 
     /// Same as `get`, with an optional metrics label.
+    /// The label should be stable and low-cardinality when provided.
     pub async fn get_with_label(
         url: &str,
         headers: &[(&str, &str)],
@@ -147,6 +149,7 @@ impl HttpOps {
     // -------------------------------------------------------------------------
 
     /// Same as `get_raw`, with an optional metrics label.
+    /// Pass a label when raw URLs can contain IDs, timestamps, or other unbounded values.
     pub async fn get_raw_with_label(
         args: HttpRequestArgs,
         label: Option<&str>,
@@ -173,6 +176,7 @@ impl HttpOps {
     }
 
     /// Record outbound HTTP metrics.
+    /// URL-derived fallback labels strip query/fragment only; callers own path cardinality.
     fn record_metrics(method: HttpMethod, url: &str, label: Option<&str>) {
         SystemMetrics::increment(SystemMetricKind::HttpOutcall);
         HttpMetrics::record_http_request(metrics_method(method), url, label);

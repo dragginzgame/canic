@@ -1,4 +1,7 @@
-use crate::manifest::{FleetBackupManifest, FleetMember, IdentityMode, ManifestValidationError};
+use crate::manifest::{
+    FleetBackupManifest, FleetMember, IdentityMode, ManifestValidationError, SourceSnapshot,
+    VerificationCheck,
+};
 use candid::Principal;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -42,6 +45,11 @@ pub struct RestoreMappingEntry {
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct RestorePlan {
+    pub backup_id: String,
+    pub source_environment: String,
+    pub source_root_canister: String,
+    pub topology_hash: String,
+    pub member_count: usize,
     pub phases: Vec<RestorePhase>,
 }
 
@@ -76,7 +84,12 @@ pub struct RestorePlanMember {
     pub target_canister: String,
     pub role: String,
     pub parent_source_canister: Option<String>,
+    pub parent_target_canister: Option<String>,
     pub restore_group: u16,
+    pub identity_mode: IdentityMode,
+    pub verification_class: String,
+    pub verification_checks: Vec<VerificationCheck>,
+    pub source_snapshot: SourceSnapshot,
 }
 
 ///
@@ -94,12 +107,20 @@ impl RestorePlanner {
         manifest.validate()?;
         if let Some(mapping) = mapping {
             validate_mapping(mapping)?;
+            validate_mapping_sources(manifest, mapping)?;
         }
 
         let members = resolve_members(manifest, mapping)?;
         let phases = group_and_order_members(members)?;
 
-        Ok(RestorePlan { phases })
+        Ok(RestorePlan {
+            backup_id: manifest.backup_id.clone(),
+            source_environment: manifest.source.environment.clone(),
+            source_root_canister: manifest.source.root_canister.clone(),
+            topology_hash: manifest.fleet.topology_hash.clone(),
+            member_count: manifest.fleet.members.len(),
+            phases,
+        })
     }
 }
 
@@ -120,6 +141,9 @@ pub enum RestorePlanError {
 
     #[error("mapping contains duplicate target canister {0}")]
     DuplicateMappingTarget(String),
+
+    #[error("mapping references unknown source canister {0}")]
+    UnknownMappingSource(String),
 
     #[error("mapping is missing source canister {0}")]
     MissingMappingSource(String),
@@ -162,6 +186,29 @@ fn validate_mapping(mapping: &RestoreMapping) -> Result<(), RestorePlanError> {
     Ok(())
 }
 
+// Ensure mappings only reference members declared in the manifest.
+fn validate_mapping_sources(
+    manifest: &FleetBackupManifest,
+    mapping: &RestoreMapping,
+) -> Result<(), RestorePlanError> {
+    let sources = manifest
+        .fleet
+        .members
+        .iter()
+        .map(|member| member.canister_id.as_str())
+        .collect::<BTreeSet<_>>();
+
+    for entry in &mapping.members {
+        if !sources.contains(entry.source_canister.as_str()) {
+            return Err(RestorePlanError::UnknownMappingSource(
+                entry.source_canister.clone(),
+            ));
+        }
+    }
+
+    Ok(())
+}
+
 // Resolve source manifest members into target restore members.
 fn resolve_members(
     manifest: &FleetBackupManifest,
@@ -169,6 +216,7 @@ fn resolve_members(
 ) -> Result<Vec<RestorePlanMember>, RestorePlanError> {
     let mut plan_members = Vec::with_capacity(manifest.fleet.members.len());
     let mut targets = BTreeSet::new();
+    let mut source_to_target = BTreeMap::new();
 
     for member in &manifest.fleet.members {
         let target = resolve_target(member, mapping)?;
@@ -176,13 +224,27 @@ fn resolve_members(
             return Err(RestorePlanError::DuplicatePlanTarget(target));
         }
 
+        source_to_target.insert(member.canister_id.clone(), target.clone());
         plan_members.push(RestorePlanMember {
             source_canister: member.canister_id.clone(),
             target_canister: target,
             role: member.role.clone(),
             parent_source_canister: member.parent_canister_id.clone(),
+            parent_target_canister: None,
             restore_group: member.restore_group,
+            identity_mode: member.identity_mode.clone(),
+            verification_class: member.verification_class.clone(),
+            verification_checks: member.verification_checks.clone(),
+            source_snapshot: member.source_snapshot.clone(),
         });
+    }
+
+    for member in &mut plan_members {
+        member.parent_target_canister = member
+            .parent_source_canister
+            .as_ref()
+            .and_then(|parent| source_to_target.get(parent))
+            .cloned();
     }
 
     Ok(plan_members)
@@ -381,6 +443,11 @@ mod tests {
         let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
         let ordered = plan.ordered_members();
 
+        assert_eq!(plan.backup_id, "fbk_test_001");
+        assert_eq!(plan.source_environment, "local");
+        assert_eq!(plan.source_root_canister, ROOT);
+        assert_eq!(plan.topology_hash, HASH);
+        assert_eq!(plan.member_count, 2);
         assert_eq!(ordered[0].source_canister, ROOT);
         assert_eq!(ordered[1].source_canister, CHILD);
     }
@@ -433,6 +500,26 @@ mod tests {
             .expect("child member should be planned");
 
         assert_eq!(child.target_canister, TARGET);
+        assert_eq!(child.parent_target_canister, Some(ROOT.to_string()));
+    }
+
+    // Ensure restore plans carry enough metadata for operator preflight.
+    #[test]
+    fn plan_members_include_snapshot_and_verification_metadata() {
+        let manifest = valid_manifest(IdentityMode::Relocatable);
+
+        let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
+        let root = plan
+            .ordered_members()
+            .into_iter()
+            .find(|member| member.source_canister == ROOT)
+            .expect("root member should be planned");
+
+        assert_eq!(root.identity_mode, IdentityMode::Fixed);
+        assert_eq!(root.verification_class, "basic");
+        assert_eq!(root.verification_checks[0].kind, "call");
+        assert_eq!(root.source_snapshot.snapshot_id, "snap-root");
+        assert_eq!(root.source_snapshot.artifact_path, "artifacts/root");
     }
 
     // Ensure mapped restores must cover every source member.
@@ -450,6 +537,34 @@ mod tests {
             .expect_err("incomplete mapping should fail");
 
         assert!(matches!(err, RestorePlanError::MissingMappingSource(_)));
+    }
+
+    // Ensure mappings cannot silently include canisters outside the manifest.
+    #[test]
+    fn mapped_restore_rejects_unknown_mapping_sources() {
+        let manifest = valid_manifest(IdentityMode::Relocatable);
+        let unknown = "rdmx6-jaaaa-aaaaa-aaadq-cai";
+        let mapping = RestoreMapping {
+            members: vec![
+                RestoreMappingEntry {
+                    source_canister: ROOT.to_string(),
+                    target_canister: ROOT.to_string(),
+                },
+                RestoreMappingEntry {
+                    source_canister: CHILD.to_string(),
+                    target_canister: TARGET.to_string(),
+                },
+                RestoreMappingEntry {
+                    source_canister: unknown.to_string(),
+                    target_canister: unknown.to_string(),
+                },
+            ],
+        };
+
+        let err = RestorePlanner::plan(&manifest, Some(&mapping))
+            .expect_err("unknown mapping source should fail");
+
+        assert!(matches!(err, RestorePlanError::UnknownMappingSource(_)));
     }
 
     // Ensure duplicate target mappings fail before a plan is produced.

@@ -1,9 +1,11 @@
 use crate::{
-    journal::DownloadJournal,
+    artifacts::{ArtifactChecksum, ArtifactChecksumError},
+    journal::{ArtifactState, DownloadJournal},
     manifest::{FleetBackupManifest, ManifestValidationError},
 };
-use serde::{Serialize, de::DeserializeOwned};
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use std::{
+    collections::BTreeSet,
     fs::{self, File},
     io,
     path::{Path, PathBuf},
@@ -72,6 +74,39 @@ impl BackupLayout {
         DownloadJournal::validate(&journal)?;
         Ok(journal)
     }
+
+    /// Validate the manifest, journal, and durable artifact checksums.
+    pub fn verify_integrity(&self) -> Result<BackupIntegrityReport, PersistenceError> {
+        let manifest = self.read_manifest()?;
+        let journal = self.read_journal()?;
+        verify_layout_integrity(self, &manifest, &journal)
+    }
+}
+
+///
+/// BackupIntegrityReport
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct BackupIntegrityReport {
+    pub backup_id: String,
+    pub verified: bool,
+    pub manifest_members: usize,
+    pub journal_artifacts: usize,
+    pub durable_artifacts: usize,
+    pub artifacts: Vec<ArtifactIntegrityReport>,
+}
+
+///
+/// ArtifactIntegrityReport
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ArtifactIntegrityReport {
+    pub canister_id: String,
+    pub snapshot_id: String,
+    pub artifact_path: String,
+    pub checksum: String,
 }
 
 ///
@@ -91,6 +126,124 @@ pub enum PersistenceError {
 
     #[error(transparent)]
     InvalidJournal(#[from] crate::journal::JournalValidationError),
+
+    #[error(transparent)]
+    Checksum(#[from] ArtifactChecksumError),
+
+    #[error("manifest backup id {manifest} does not match journal backup id {journal}")]
+    BackupIdMismatch { manifest: String, journal: String },
+
+    #[error("journal artifact {canister_id} snapshot {snapshot_id} is not durable")]
+    NonDurableArtifact {
+        canister_id: String,
+        snapshot_id: String,
+    },
+
+    #[error("manifest member {canister_id} snapshot {snapshot_id} has no journal artifact")]
+    MissingJournalArtifact {
+        canister_id: String,
+        snapshot_id: String,
+    },
+
+    #[error("journal artifact {canister_id} snapshot {snapshot_id} is not declared in manifest")]
+    UnexpectedJournalArtifact {
+        canister_id: String,
+        snapshot_id: String,
+    },
+
+    #[error("artifact path does not exist: {0}")]
+    MissingArtifact(String),
+}
+
+// Verify cross-file backup layout consistency and artifact checksums.
+fn verify_layout_integrity(
+    layout: &BackupLayout,
+    manifest: &FleetBackupManifest,
+    journal: &DownloadJournal,
+) -> Result<BackupIntegrityReport, PersistenceError> {
+    if manifest.backup_id != journal.backup_id {
+        return Err(PersistenceError::BackupIdMismatch {
+            manifest: manifest.backup_id.clone(),
+            journal: journal.backup_id.clone(),
+        });
+    }
+
+    let expected_artifacts = manifest
+        .fleet
+        .members
+        .iter()
+        .map(|member| {
+            (
+                member.canister_id.as_str(),
+                member.source_snapshot.snapshot_id.as_str(),
+            )
+        })
+        .collect::<BTreeSet<_>>();
+    for entry in &journal.artifacts {
+        if !expected_artifacts.contains(&(entry.canister_id.as_str(), entry.snapshot_id.as_str())) {
+            return Err(PersistenceError::UnexpectedJournalArtifact {
+                canister_id: entry.canister_id.clone(),
+                snapshot_id: entry.snapshot_id.clone(),
+            });
+        }
+    }
+
+    let mut artifacts = Vec::with_capacity(journal.artifacts.len());
+    for member in &manifest.fleet.members {
+        let Some(entry) = journal.artifacts.iter().find(|entry| {
+            entry.canister_id == member.canister_id
+                && entry.snapshot_id == member.source_snapshot.snapshot_id
+        }) else {
+            return Err(PersistenceError::MissingJournalArtifact {
+                canister_id: member.canister_id.clone(),
+                snapshot_id: member.source_snapshot.snapshot_id.clone(),
+            });
+        };
+
+        if entry.state != ArtifactState::Durable {
+            return Err(PersistenceError::NonDurableArtifact {
+                canister_id: entry.canister_id.clone(),
+                snapshot_id: entry.snapshot_id.clone(),
+            });
+        }
+
+        let Some(expected_hash) = entry.checksum.as_deref() else {
+            unreachable!("validated durable journals must include checksums");
+        };
+        let artifact_path = resolve_artifact_path(layout.root(), &entry.artifact_path);
+        if !artifact_path.exists() {
+            return Err(PersistenceError::MissingArtifact(
+                artifact_path.display().to_string(),
+            ));
+        }
+
+        ArtifactChecksum::from_path(&artifact_path)?.verify(expected_hash)?;
+        artifacts.push(ArtifactIntegrityReport {
+            canister_id: entry.canister_id.clone(),
+            snapshot_id: entry.snapshot_id.clone(),
+            artifact_path: artifact_path.display().to_string(),
+            checksum: expected_hash.to_string(),
+        });
+    }
+
+    Ok(BackupIntegrityReport {
+        backup_id: manifest.backup_id.clone(),
+        verified: true,
+        manifest_members: manifest.fleet.members.len(),
+        journal_artifacts: journal.artifacts.len(),
+        durable_artifacts: artifacts.len(),
+        artifacts,
+    })
+}
+
+// Resolve artifact paths from either absolute, cwd-relative, or layout-relative values.
+fn resolve_artifact_path(root: &Path, artifact_path: &str) -> PathBuf {
+    let path = PathBuf::from(artifact_path);
+    if path.is_absolute() || path.exists() {
+        path
+    } else {
+        root.join(path)
+    }
 }
 
 // Write JSON to a temporary sibling path and then atomically replace the target.
@@ -207,6 +360,100 @@ mod tests {
         assert!(!manifest_path.exists());
     }
 
+    // Ensure layout integrity verifies manifest, journal, and artifact checksums.
+    #[test]
+    fn integrity_verifies_durable_artifacts() {
+        let root = temp_dir("canic-backup-integrity");
+        let layout = BackupLayout::new(root.clone());
+        let checksum = write_artifact(&root, b"root artifact");
+        let journal = journal_with_checksum(checksum.hash.clone());
+
+        layout
+            .write_manifest(&valid_manifest())
+            .expect("write manifest");
+        layout.write_journal(&journal).expect("write journal");
+
+        let report = layout.verify_integrity().expect("verify integrity");
+
+        fs::remove_dir_all(root).expect("remove temp layout");
+        assert_eq!(report.backup_id, "fbk_test_001");
+        assert!(report.verified);
+        assert_eq!(report.manifest_members, 1);
+        assert_eq!(report.durable_artifacts, 1);
+        assert_eq!(report.artifacts[0].checksum, checksum.hash);
+    }
+
+    // Ensure mismatched manifest and journal backup IDs are rejected.
+    #[test]
+    fn integrity_rejects_backup_id_mismatch() {
+        let root = temp_dir("canic-backup-integrity-id");
+        let layout = BackupLayout::new(root.clone());
+        let checksum = write_artifact(&root, b"root artifact");
+        let mut journal = journal_with_checksum(checksum.hash);
+        journal.backup_id = "other-backup".to_string();
+
+        layout
+            .write_manifest(&valid_manifest())
+            .expect("write manifest");
+        layout.write_journal(&journal).expect("write journal");
+
+        let err = layout
+            .verify_integrity()
+            .expect_err("backup id mismatch should fail");
+
+        fs::remove_dir_all(root).expect("remove temp layout");
+        assert!(matches!(err, PersistenceError::BackupIdMismatch { .. }));
+    }
+
+    // Ensure incomplete journals cannot pass backup integrity verification.
+    #[test]
+    fn integrity_rejects_non_durable_artifacts() {
+        let root = temp_dir("canic-backup-integrity-state");
+        let layout = BackupLayout::new(root.clone());
+        let mut journal = valid_journal();
+        journal.artifacts[0].state = ArtifactState::Created;
+        journal.artifacts[0].checksum = None;
+
+        layout
+            .write_manifest(&valid_manifest())
+            .expect("write manifest");
+        layout.write_journal(&journal).expect("write journal");
+
+        let err = layout
+            .verify_integrity()
+            .expect_err("non-durable artifact should fail");
+
+        fs::remove_dir_all(root).expect("remove temp layout");
+        assert!(matches!(err, PersistenceError::NonDurableArtifact { .. }));
+    }
+
+    // Ensure journals cannot include artifacts outside the manifest boundary.
+    #[test]
+    fn integrity_rejects_unexpected_journal_artifacts() {
+        let root = temp_dir("canic-backup-integrity-extra");
+        let layout = BackupLayout::new(root.clone());
+        let checksum = write_artifact(&root, b"root artifact");
+        let mut journal = journal_with_checksum(checksum.hash);
+        let mut extra = journal.artifacts[0].clone();
+        extra.snapshot_id = "extra-snapshot".to_string();
+        journal.artifacts.push(extra);
+
+        layout
+            .write_manifest(&valid_manifest())
+            .expect("write manifest");
+        layout.write_journal(&journal).expect("write journal");
+
+        let err = layout
+            .verify_integrity()
+            .expect_err("unexpected journal artifact should fail");
+
+        fs::remove_dir_all(root).expect("remove temp layout");
+        assert!(matches!(
+            err,
+            PersistenceError::UnexpectedJournalArtifact { .. }
+        ));
+    }
+
     // Build one valid manifest for persistence tests.
     fn valid_manifest() -> FleetBackupManifest {
         FleetBackupManifest {
@@ -272,6 +519,11 @@ mod tests {
 
     // Build one valid durable journal for persistence tests.
     fn valid_journal() -> DownloadJournal {
+        journal_with_checksum(HASH.to_string())
+    }
+
+    // Build one durable journal with a caller-provided checksum.
+    fn journal_with_checksum(checksum: String) -> DownloadJournal {
         DownloadJournal {
             journal_version: 1,
             backup_id: "fbk_test_001".to_string(),
@@ -282,10 +534,18 @@ mod tests {
                 temp_path: None,
                 artifact_path: "artifacts/root".to_string(),
                 checksum_algorithm: "sha256".to_string(),
-                checksum: Some(HASH.to_string()),
+                checksum: Some(checksum),
                 updated_at: "2026-04-10T12:00:00Z".to_string(),
             }],
         }
+    }
+
+    // Write one artifact at the layout-relative path used by test journals.
+    fn write_artifact(root: &Path, bytes: &[u8]) -> ArtifactChecksum {
+        let path = root.join("artifacts/root");
+        fs::create_dir_all(path.parent().expect("artifact has parent")).expect("create artifacts");
+        fs::write(&path, bytes).expect("write artifact");
+        ArtifactChecksum::from_bytes(bytes)
     }
 
     // Build a unique temporary layout directory.

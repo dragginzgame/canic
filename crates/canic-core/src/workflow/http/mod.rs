@@ -10,6 +10,7 @@ pub struct HttpWorkflow;
 
 impl HttpWorkflow {
     /// Perform a GET request and return the raw response.
+    /// Prefer `get_with_label` when the URL path can contain unbounded values.
     pub async fn get(
         url: &str,
         headers: &[(&str, &str)],
@@ -19,6 +20,7 @@ impl HttpWorkflow {
     }
 
     /// Same as `get`, with an explicit metrics label.
+    /// The label should identify a stable provider or route, not a request-specific value.
     pub async fn get_with_label(
         url: &str,
         headers: &[(&str, &str)],
@@ -34,6 +36,8 @@ impl HttpWorkflow {
         Self::get_raw_with_label(args, None).await
     }
 
+    /// Perform a raw HTTP request with an optional metrics label.
+    /// Pass a stable label whenever the raw URL contains request-specific path data.
     pub async fn get_raw_with_label(
         args: http::HttpRequestArgs,
         label: Option<&str>,

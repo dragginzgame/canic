@@ -1,5 +1,6 @@
 use canic_backup::{
     manifest::FleetBackupManifest,
+    persistence::{BackupLayout, PersistenceError},
     restore::{RestoreMapping, RestorePlan, RestorePlanError, RestorePlanner},
 };
 use std::{
@@ -22,6 +23,9 @@ pub enum RestoreCommandError {
     #[error("missing required option {0}")]
     MissingOption(&'static str),
 
+    #[error("use either --manifest or --backup-dir, not both")]
+    ConflictingManifestSources,
+
     #[error("unknown option {0}")]
     UnknownOption(String),
 
@@ -35,6 +39,9 @@ pub enum RestoreCommandError {
     Json(#[from] serde_json::Error),
 
     #[error(transparent)]
+    Persistence(#[from] PersistenceError),
+
+    #[error(transparent)]
     RestorePlan(#[from] RestorePlanError),
 }
 
@@ -44,7 +51,8 @@ pub enum RestoreCommandError {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RestorePlanOptions {
-    pub manifest: PathBuf,
+    pub manifest: Option<PathBuf>,
+    pub backup_dir: Option<PathBuf>,
     pub mapping: Option<PathBuf>,
     pub out: Option<PathBuf>,
 }
@@ -56,6 +64,7 @@ impl RestorePlanOptions {
         I: IntoIterator<Item = OsString>,
     {
         let mut manifest = None;
+        let mut backup_dir = None;
         let mut mapping = None;
         let mut out = None;
 
@@ -68,6 +77,9 @@ impl RestorePlanOptions {
                 "--manifest" => {
                     manifest = Some(PathBuf::from(next_value(&mut args, "--manifest")?));
                 }
+                "--backup-dir" => {
+                    backup_dir = Some(PathBuf::from(next_value(&mut args, "--backup-dir")?));
+                }
                 "--mapping" => mapping = Some(PathBuf::from(next_value(&mut args, "--mapping")?)),
                 "--out" => out = Some(PathBuf::from(next_value(&mut args, "--out")?)),
                 "--help" | "-h" => return Err(RestoreCommandError::Usage(usage())),
@@ -75,8 +87,19 @@ impl RestorePlanOptions {
             }
         }
 
+        if manifest.is_some() && backup_dir.is_some() {
+            return Err(RestoreCommandError::ConflictingManifestSources);
+        }
+
+        if manifest.is_none() && backup_dir.is_none() {
+            return Err(RestoreCommandError::MissingOption(
+                "--manifest or --backup-dir",
+            ));
+        }
+
         Ok(Self {
-            manifest: manifest.ok_or(RestoreCommandError::MissingOption("--manifest"))?,
+            manifest,
+            backup_dir,
             mapping,
             out,
         })
@@ -107,10 +130,29 @@ where
 
 /// Build a no-mutation restore plan from a manifest and optional mapping.
 pub fn plan_restore(options: &RestorePlanOptions) -> Result<RestorePlan, RestoreCommandError> {
-    let manifest = read_manifest(&options.manifest)?;
+    let manifest = read_manifest_source(options)?;
     let mapping = options.mapping.as_ref().map(read_mapping).transpose()?;
 
     RestorePlanner::plan(&manifest, mapping.as_ref()).map_err(RestoreCommandError::from)
+}
+
+// Read the manifest from a direct path or canonical backup layout.
+fn read_manifest_source(
+    options: &RestorePlanOptions,
+) -> Result<FleetBackupManifest, RestoreCommandError> {
+    if let Some(path) = &options.manifest {
+        return read_manifest(path);
+    }
+
+    let Some(dir) = &options.backup_dir else {
+        return Err(RestoreCommandError::MissingOption(
+            "--manifest or --backup-dir",
+        ));
+    };
+
+    BackupLayout::new(dir.clone())
+        .read_manifest()
+        .map_err(RestoreCommandError::from)
 }
 
 // Read and decode a fleet backup manifest from disk.
@@ -152,7 +194,7 @@ where
 
 // Return restore command usage text.
 const fn usage() -> &'static str {
-    "usage: canic restore plan --manifest <file> [--mapping <file>] [--out <file>]"
+    "usage: canic restore plan (--manifest <file> | --backup-dir <dir>) [--mapping <file>] [--out <file>]"
 }
 
 #[cfg(test)]
@@ -184,9 +226,50 @@ mod tests {
         ])
         .expect("parse options");
 
-        assert_eq!(options.manifest, PathBuf::from("manifest.json"));
+        assert_eq!(options.manifest, Some(PathBuf::from("manifest.json")));
+        assert_eq!(options.backup_dir, None);
         assert_eq!(options.mapping, Some(PathBuf::from("mapping.json")));
         assert_eq!(options.out, Some(PathBuf::from("plan.json")));
+    }
+
+    // Ensure backup-dir restore planning reads the canonical layout manifest.
+    #[test]
+    fn plan_restore_reads_manifest_from_backup_dir() {
+        let root = temp_dir("canic-cli-restore-plan-layout");
+        let layout = BackupLayout::new(root.clone());
+        layout
+            .write_manifest(&valid_manifest())
+            .expect("write manifest");
+
+        let options = RestorePlanOptions {
+            manifest: None,
+            backup_dir: Some(root.clone()),
+            mapping: None,
+            out: None,
+        };
+
+        let plan = plan_restore(&options).expect("plan restore");
+
+        fs::remove_dir_all(root).expect("remove temp root");
+        assert_eq!(plan.backup_id, "backup-test");
+        assert_eq!(plan.member_count, 2);
+    }
+
+    // Ensure restore planning has exactly one manifest source.
+    #[test]
+    fn parse_rejects_conflicting_manifest_sources() {
+        let err = RestorePlanOptions::parse([
+            OsString::from("--manifest"),
+            OsString::from("manifest.json"),
+            OsString::from("--backup-dir"),
+            OsString::from("backups/run"),
+        ])
+        .expect_err("conflicting sources should fail");
+
+        assert!(matches!(
+            err,
+            RestoreCommandError::ConflictingManifestSources
+        ));
     }
 
     // Ensure the CLI planning path validates manifests and applies mappings.
@@ -215,7 +298,8 @@ mod tests {
         .expect("write mapping");
 
         let options = RestorePlanOptions {
-            manifest: manifest_path,
+            manifest: Some(manifest_path),
+            backup_dir: None,
             mapping: Some(mapping_path),
             out: None,
         };

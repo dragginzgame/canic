@@ -33,6 +33,7 @@ impl FleetBackupManifest {
         self.consistency.validate()?;
         self.fleet.validate()?;
         self.verification.validate()?;
+        validate_consistency_against_fleet(&self.consistency, &self.fleet)?;
         Ok(())
     }
 }
@@ -143,6 +144,13 @@ impl BackupUnit {
 
         for role in &self.roles {
             validate_nonempty("consistency.backup_units[].roles[]", role)?;
+        }
+
+        for dependency in &self.dependency_closure {
+            validate_nonempty(
+                "consistency.backup_units[].dependency_closure[]",
+                dependency,
+            )?;
         }
 
         if matches!(self.kind, BackupUnitKind::Flat) {
@@ -315,7 +323,7 @@ pub enum IdentityMode {
 /// SourceSnapshot
 ///
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct SourceSnapshot {
     pub snapshot_id: String,
     pub module_hash: Option<String>,
@@ -414,7 +422,7 @@ impl MemberVerificationChecks {
 /// VerificationCheck
 ///
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct VerificationCheck {
     pub kind: String,
     pub method: Option<String>,
@@ -471,6 +479,46 @@ pub enum ManifestValidationError {
 
     #[error("fleet member {0} has no concrete verification checks")]
     MissingMemberVerificationChecks(String),
+
+    #[error("backup unit {unit_id} references unknown role {role}")]
+    UnknownBackupUnitRole { unit_id: String, role: String },
+
+    #[error("backup unit {unit_id} references unknown dependency {dependency}")]
+    UnknownBackupUnitDependency { unit_id: String, dependency: String },
+}
+
+// Validate cross-section backup unit references after local section checks pass.
+fn validate_consistency_against_fleet(
+    consistency: &ConsistencySection,
+    fleet: &FleetSection,
+) -> Result<(), ManifestValidationError> {
+    let fleet_roles = fleet
+        .members
+        .iter()
+        .map(|member| member.role.as_str())
+        .collect::<BTreeSet<_>>();
+
+    for unit in &consistency.backup_units {
+        for role in &unit.roles {
+            if !fleet_roles.contains(role.as_str()) {
+                return Err(ManifestValidationError::UnknownBackupUnitRole {
+                    unit_id: unit.unit_id.clone(),
+                    role: role.clone(),
+                });
+            }
+        }
+
+        for dependency in &unit.dependency_closure {
+            if !fleet_roles.contains(dependency.as_str()) {
+                return Err(ManifestValidationError::UnknownBackupUnitDependency {
+                    unit_id: unit.unit_id.clone(),
+                    dependency: dependency.clone(),
+                });
+            }
+        }
+    }
+
+    Ok(())
 }
 
 // Validate the manifest format version before checking nested fields.
@@ -586,29 +634,10 @@ mod tests {
                 discovery_topology_hash: HASH.to_string(),
                 pre_snapshot_topology_hash: HASH.to_string(),
                 topology_hash: HASH.to_string(),
-                members: vec![FleetMember {
-                    role: "root".to_string(),
-                    canister_id: ROOT.to_string(),
-                    parent_canister_id: None,
-                    subnet_canister_id: Some(CHILD.to_string()),
-                    controller_hint: Some(ROOT.to_string()),
-                    identity_mode: IdentityMode::Fixed,
-                    restore_group: 1,
-                    verification_class: "basic".to_string(),
-                    verification_checks: vec![VerificationCheck {
-                        kind: "call".to_string(),
-                        method: Some("canic_ready".to_string()),
-                        roles: Vec::new(),
-                    }],
-                    source_snapshot: SourceSnapshot {
-                        snapshot_id: "snap-1".to_string(),
-                        module_hash: Some(HASH.to_string()),
-                        wasm_hash: Some(HASH.to_string()),
-                        code_version: Some("v0.30.0".to_string()),
-                        artifact_path: "artifacts/root".to_string(),
-                        checksum_algorithm: "sha256".to_string(),
-                    },
-                }],
+                members: vec![
+                    fleet_member("root", ROOT, None, IdentityMode::Fixed),
+                    fleet_member("app", CHILD, Some(ROOT), IdentityMode::Relocatable),
+                ],
             },
             verification: VerificationPlan {
                 fleet_checks: vec![VerificationCheck {
@@ -626,6 +655,38 @@ mod tests {
         let manifest = valid_manifest();
 
         manifest.validate().expect("manifest should validate");
+    }
+
+    // Build one valid fleet member for manifest validation tests.
+    fn fleet_member(
+        role: &str,
+        canister_id: &str,
+        parent_canister_id: Option<&str>,
+        identity_mode: IdentityMode,
+    ) -> FleetMember {
+        FleetMember {
+            role: role.to_string(),
+            canister_id: canister_id.to_string(),
+            parent_canister_id: parent_canister_id.map(str::to_string),
+            subnet_canister_id: Some(CHILD.to_string()),
+            controller_hint: Some(ROOT.to_string()),
+            identity_mode,
+            restore_group: 1,
+            verification_class: "basic".to_string(),
+            verification_checks: vec![VerificationCheck {
+                kind: "call".to_string(),
+                method: Some("canic_ready".to_string()),
+                roles: Vec::new(),
+            }],
+            source_snapshot: SourceSnapshot {
+                snapshot_id: format!("snap-{role}"),
+                module_hash: Some(HASH.to_string()),
+                wasm_hash: Some(HASH.to_string()),
+                code_version: Some("v0.30.0".to_string()),
+                artifact_path: format!("artifacts/{role}"),
+                checksum_algorithm: "sha256".to_string(),
+            },
+        }
     }
 
     #[test]
@@ -667,6 +728,40 @@ mod tests {
             .expect_err("missing quiescence strategy should fail");
 
         assert!(matches!(err, ManifestValidationError::EmptyField(_)));
+    }
+
+    #[test]
+    fn backup_unit_roles_must_exist_in_fleet() {
+        let mut manifest = valid_manifest();
+        manifest.consistency.backup_units[0]
+            .roles
+            .push("missing-role".to_string());
+
+        let err = manifest
+            .validate()
+            .expect_err("unknown backup unit role should fail");
+
+        assert!(matches!(
+            err,
+            ManifestValidationError::UnknownBackupUnitRole { .. }
+        ));
+    }
+
+    #[test]
+    fn backup_unit_dependencies_must_exist_in_fleet() {
+        let mut manifest = valid_manifest();
+        manifest.consistency.backup_units[0]
+            .dependency_closure
+            .push("missing-dependency".to_string());
+
+        let err = manifest
+            .validate()
+            .expect_err("unknown backup unit dependency should fail");
+
+        assert!(matches!(
+            err,
+            ManifestValidationError::UnknownBackupUnitDependency { .. }
+        ));
     }
 
     #[test]

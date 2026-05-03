@@ -41,6 +41,35 @@ impl DownloadJournal {
 
         Ok(())
     }
+
+    /// Build a resumability report from the current journal state.
+    #[must_use]
+    pub fn resume_report(&self) -> JournalResumeReport {
+        let mut counts = JournalStateCounts::default();
+        let mut artifacts = Vec::with_capacity(self.artifacts.len());
+
+        for artifact in &self.artifacts {
+            counts.record(artifact.state, artifact.resume_action());
+            artifacts.push(ArtifactResumeReport {
+                canister_id: artifact.canister_id.clone(),
+                snapshot_id: artifact.snapshot_id.clone(),
+                state: artifact.state,
+                resume_action: artifact.resume_action(),
+                artifact_path: artifact.artifact_path.clone(),
+                temp_path: artifact.temp_path.clone(),
+                updated_at: artifact.updated_at.clone(),
+            });
+        }
+
+        JournalResumeReport {
+            backup_id: self.backup_id.clone(),
+            total_artifacts: self.artifacts.len(),
+            is_complete: counts.skip == self.artifacts.len(),
+            pending_artifacts: self.artifacts.len() - counts.skip,
+            counts,
+            artifacts,
+        }
+    }
 }
 
 ///
@@ -156,12 +185,77 @@ impl ArtifactState {
 /// ResumeAction
 ///
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "PascalCase")]
 pub enum ResumeAction {
     Download,
     VerifyChecksum,
     Finalize,
     Skip,
+}
+
+///
+/// JournalResumeReport
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct JournalResumeReport {
+    pub backup_id: String,
+    pub total_artifacts: usize,
+    pub is_complete: bool,
+    pub pending_artifacts: usize,
+    pub counts: JournalStateCounts,
+    pub artifacts: Vec<ArtifactResumeReport>,
+}
+
+///
+/// JournalStateCounts
+///
+
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+pub struct JournalStateCounts {
+    pub created: usize,
+    pub downloaded: usize,
+    pub checksum_verified: usize,
+    pub durable: usize,
+    pub download: usize,
+    pub verify_checksum: usize,
+    pub finalize: usize,
+    pub skip: usize,
+}
+
+impl JournalStateCounts {
+    // Record one artifact's state and next idempotent resume action.
+    const fn record(&mut self, state: ArtifactState, action: ResumeAction) {
+        match state {
+            ArtifactState::Created => self.created += 1,
+            ArtifactState::Downloaded => self.downloaded += 1,
+            ArtifactState::ChecksumVerified => self.checksum_verified += 1,
+            ArtifactState::Durable => self.durable += 1,
+        }
+
+        match action {
+            ResumeAction::Download => self.download += 1,
+            ResumeAction::VerifyChecksum => self.verify_checksum += 1,
+            ResumeAction::Finalize => self.finalize += 1,
+            ResumeAction::Skip => self.skip += 1,
+        }
+    }
+}
+
+///
+/// ArtifactResumeReport
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ArtifactResumeReport {
+    pub canister_id: String,
+    pub snapshot_id: String,
+    pub state: ArtifactState,
+    pub resume_action: ResumeAction,
+    pub artifact_path: String,
+    pub temp_path: Option<String>,
+    pub updated_at: String,
 }
 
 ///
@@ -312,6 +406,35 @@ mod tests {
 
         entry.state = ArtifactState::Durable;
         assert_eq!(entry.resume_action(), ResumeAction::Skip);
+    }
+
+    // Ensure resume reports summarize states and next idempotent actions.
+    #[test]
+    fn resume_report_counts_states_and_actions() {
+        let mut journal = valid_journal();
+        journal.artifacts[0].state = ArtifactState::Created;
+        journal.artifacts[0].checksum = None;
+        let mut downloaded = journal.artifacts[0].clone();
+        downloaded.snapshot_id = "snap-2".to_string();
+        downloaded.state = ArtifactState::Downloaded;
+        downloaded.temp_path = Some("artifacts/root.tmp".to_string());
+        let mut durable = valid_journal().artifacts.remove(0);
+        durable.snapshot_id = "snap-3".to_string();
+        journal.artifacts.push(downloaded);
+        journal.artifacts.push(durable);
+
+        let report = journal.resume_report();
+
+        assert_eq!(report.total_artifacts, 3);
+        assert!(!report.is_complete);
+        assert_eq!(report.pending_artifacts, 2);
+        assert_eq!(report.counts.created, 1);
+        assert_eq!(report.counts.downloaded, 1);
+        assert_eq!(report.counts.durable, 1);
+        assert_eq!(report.counts.download, 1);
+        assert_eq!(report.counts.verify_checksum, 1);
+        assert_eq!(report.counts.skip, 1);
+        assert_eq!(report.artifacts[0].resume_action, ResumeAction::Download);
     }
 
     // Ensure journal transitions cannot move backward.
