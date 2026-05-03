@@ -8,6 +8,8 @@ pub use canic_core::dto::{
         RoleAttestationProof, RootCapabilityEnvelopeV1, RootCapabilityResponseV1,
     },
     error::{Error, ErrorCode},
+    metrics::{MetricEntry, MetricValue, MetricsKind},
+    page::{Page, PageRequest},
     rpc::{CyclesRequest, Request, Response},
 };
 pub use canic_core::ids::CanisterRole;
@@ -18,6 +20,7 @@ pub use std::time::Duration;
 
 mod attestation;
 mod calls;
+mod metrics;
 
 pub use attestation::{
     capability_metadata, cycles_role_attestation_envelope, encode_delegated_grant_capability_proof,
@@ -25,3 +28,4 @@ pub use attestation::{
     root_capability_hash,
 };
 pub use calls::{PicBorrow, test_progress, update_call_as};
+pub use metrics::{metric_count_for_labels, query_metric_entries};

@@ -43,6 +43,7 @@ pub enum ManifestCommandError {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ManifestValidateOptions {
     pub manifest: PathBuf,
+    pub out: Option<PathBuf>,
 }
 
 impl ManifestValidateOptions {
@@ -52,6 +53,7 @@ impl ManifestValidateOptions {
         I: IntoIterator<Item = OsString>,
     {
         let mut manifest = None;
+        let mut out = None;
 
         let mut args = args.into_iter();
         while let Some(arg) = args.next() {
@@ -62,6 +64,7 @@ impl ManifestValidateOptions {
                 "--manifest" => {
                     manifest = Some(PathBuf::from(next_value(&mut args, "--manifest")?));
                 }
+                "--out" => out = Some(PathBuf::from(next_value(&mut args, "--out")?)),
                 "--help" | "-h" => return Err(ManifestCommandError::Usage(usage())),
                 _ => return Err(ManifestCommandError::UnknownOption(arg)),
             }
@@ -69,6 +72,7 @@ impl ManifestValidateOptions {
 
         Ok(Self {
             manifest: manifest.ok_or(ManifestCommandError::MissingOption("--manifest"))?,
+            out,
         })
     }
 }
@@ -87,7 +91,7 @@ where
         "validate" => {
             let options = ManifestValidateOptions::parse(args)?;
             let manifest = validate_manifest(&options)?;
-            write_validation_summary(&manifest)?;
+            write_validation_summary(&options, &manifest)?;
             Ok(())
         }
         "help" | "--help" | "-h" => Err(ManifestCommandError::Usage(usage())),
@@ -106,18 +110,26 @@ pub fn validate_manifest(
 }
 
 // Write a concise validation summary for shell use.
-fn write_validation_summary(manifest: &FleetBackupManifest) -> Result<(), ManifestCommandError> {
+fn write_validation_summary(
+    options: &ManifestValidateOptions,
+    manifest: &FleetBackupManifest,
+) -> Result<(), ManifestCommandError> {
+    let summary = json!({
+        "status": "valid",
+        "backup_id": manifest.backup_id,
+        "members": manifest.fleet.members.len(),
+        "topology_hash": manifest.fleet.topology_hash,
+    });
+
+    if let Some(path) = &options.out {
+        let data = serde_json::to_vec_pretty(&summary)?;
+        fs::write(path, data)?;
+        return Ok(());
+    }
+
     let stdout = io::stdout();
     let mut handle = stdout.lock();
-    serde_json::to_writer_pretty(
-        &mut handle,
-        &json!({
-            "status": "valid",
-            "backup_id": manifest.backup_id,
-            "members": manifest.fleet.members.len(),
-            "topology_hash": manifest.fleet.topology_hash,
-        }),
-    )?;
+    serde_json::to_writer_pretty(&mut handle, &summary)?;
     writeln!(handle)?;
     Ok(())
 }
@@ -134,7 +146,7 @@ where
 
 // Return manifest command usage text.
 const fn usage() -> &'static str {
-    "usage: canic manifest validate --manifest <file>"
+    "usage: canic manifest validate --manifest <file> [--out <file>]"
 }
 
 #[cfg(test)]
@@ -156,10 +168,13 @@ mod tests {
         let options = ManifestValidateOptions::parse([
             OsString::from("--manifest"),
             OsString::from("manifest.json"),
+            OsString::from("--out"),
+            OsString::from("summary.json"),
         ])
         .expect("parse options");
 
         assert_eq!(options.manifest, PathBuf::from("manifest.json"));
+        assert_eq!(options.out, Some(PathBuf::from("summary.json")));
     }
 
     // Ensure manifest validation loads JSON and runs the manifest contract.
@@ -177,6 +192,7 @@ mod tests {
 
         let options = ManifestValidateOptions {
             manifest: manifest_path,
+            out: None,
         };
 
         let manifest = validate_manifest(&options).expect("validate manifest");
@@ -184,6 +200,27 @@ mod tests {
         fs::remove_dir_all(root).expect("remove temp root");
         assert_eq!(manifest.backup_id, "backup-test");
         assert_eq!(manifest.fleet.members.len(), 1);
+    }
+
+    // Ensure manifest validation summaries can be written for automation.
+    #[test]
+    fn write_validation_summary_writes_out_file() {
+        let root = temp_dir("canic-cli-manifest-summary");
+        fs::create_dir_all(&root).expect("create temp root");
+        let out = root.join("summary.json");
+        let options = ManifestValidateOptions {
+            manifest: root.join("manifest.json"),
+            out: Some(out.clone()),
+        };
+
+        write_validation_summary(&options, &valid_manifest()).expect("write summary");
+        let summary: serde_json::Value =
+            serde_json::from_slice(&fs::read(&out).expect("read summary")).expect("parse summary");
+
+        fs::remove_dir_all(root).expect("remove temp root");
+        assert_eq!(summary["status"], "valid");
+        assert_eq!(summary["backup_id"], "backup-test");
+        assert_eq!(summary["members"], 1);
     }
 
     // Build one valid manifest for validation tests.

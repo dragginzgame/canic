@@ -26,6 +26,9 @@ pub enum RestoreCommandError {
     #[error("use either --manifest or --backup-dir, not both")]
     ConflictingManifestSources,
 
+    #[error("--require-verified requires --backup-dir")]
+    RequireVerifiedNeedsBackupDir,
+
     #[error("unknown option {0}")]
     UnknownOption(String),
 
@@ -55,6 +58,7 @@ pub struct RestorePlanOptions {
     pub backup_dir: Option<PathBuf>,
     pub mapping: Option<PathBuf>,
     pub out: Option<PathBuf>,
+    pub require_verified: bool,
 }
 
 impl RestorePlanOptions {
@@ -67,6 +71,7 @@ impl RestorePlanOptions {
         let mut backup_dir = None;
         let mut mapping = None;
         let mut out = None;
+        let mut require_verified = false;
 
         let mut args = args.into_iter();
         while let Some(arg) = args.next() {
@@ -82,6 +87,7 @@ impl RestorePlanOptions {
                 }
                 "--mapping" => mapping = Some(PathBuf::from(next_value(&mut args, "--mapping")?)),
                 "--out" => out = Some(PathBuf::from(next_value(&mut args, "--out")?)),
+                "--require-verified" => require_verified = true,
                 "--help" | "-h" => return Err(RestoreCommandError::Usage(usage())),
                 _ => return Err(RestoreCommandError::UnknownOption(arg)),
             }
@@ -97,11 +103,16 @@ impl RestorePlanOptions {
             ));
         }
 
+        if require_verified && backup_dir.is_none() {
+            return Err(RestoreCommandError::RequireVerifiedNeedsBackupDir);
+        }
+
         Ok(Self {
             manifest,
             backup_dir,
             mapping,
             out,
+            require_verified,
         })
     }
 }
@@ -130,10 +141,28 @@ where
 
 /// Build a no-mutation restore plan from a manifest and optional mapping.
 pub fn plan_restore(options: &RestorePlanOptions) -> Result<RestorePlan, RestoreCommandError> {
+    verify_backup_layout_if_required(options)?;
+
     let manifest = read_manifest_source(options)?;
     let mapping = options.mapping.as_ref().map(read_mapping).transpose()?;
 
     RestorePlanner::plan(&manifest, mapping.as_ref()).map_err(RestoreCommandError::from)
+}
+
+// Verify backup layout integrity before restore planning when requested.
+fn verify_backup_layout_if_required(
+    options: &RestorePlanOptions,
+) -> Result<(), RestoreCommandError> {
+    if !options.require_verified {
+        return Ok(());
+    }
+
+    let Some(dir) = &options.backup_dir else {
+        return Err(RestoreCommandError::RequireVerifiedNeedsBackupDir);
+    };
+
+    BackupLayout::new(dir.clone()).verify_integrity()?;
+    Ok(())
 }
 
 // Read the manifest from a direct path or canonical backup layout.
@@ -194,19 +223,26 @@ where
 
 // Return restore command usage text.
 const fn usage() -> &'static str {
-    "usage: canic restore plan (--manifest <file> | --backup-dir <dir>) [--mapping <file>] [--out <file>]"
+    "usage: canic restore plan (--manifest <file> | --backup-dir <dir>) [--mapping <file>] [--out <file>] [--require-verified]"
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use canic_backup::manifest::{
-        BackupUnit, BackupUnitKind, ConsistencyMode, ConsistencySection, FleetMember, FleetSection,
-        IdentityMode, SourceMetadata, SourceSnapshot, ToolMetadata, VerificationCheck,
-        VerificationPlan,
+    use canic_backup::{
+        artifacts::ArtifactChecksum,
+        journal::{ArtifactJournalEntry, ArtifactState, DownloadJournal},
+        manifest::{
+            BackupUnit, BackupUnitKind, ConsistencyMode, ConsistencySection, FleetMember,
+            FleetSection, IdentityMode, SourceMetadata, SourceSnapshot, ToolMetadata,
+            VerificationCheck, VerificationPlan,
+        },
     };
     use serde_json::json;
-    use std::time::{SystemTime, UNIX_EPOCH};
+    use std::{
+        path::Path,
+        time::{SystemTime, UNIX_EPOCH},
+    };
 
     const ROOT: &str = "aaaaa-aa";
     const CHILD: &str = "renrk-eyaaa-aaaaa-aaada-cai";
@@ -230,6 +266,24 @@ mod tests {
         assert_eq!(options.backup_dir, None);
         assert_eq!(options.mapping, Some(PathBuf::from("mapping.json")));
         assert_eq!(options.out, Some(PathBuf::from("plan.json")));
+        assert!(!options.require_verified);
+    }
+
+    // Ensure verified restore plan options parse with the canonical backup source.
+    #[test]
+    fn parses_verified_restore_plan_options() {
+        let options = RestorePlanOptions::parse([
+            OsString::from("--backup-dir"),
+            OsString::from("backups/run"),
+            OsString::from("--require-verified"),
+        ])
+        .expect("parse verified options");
+
+        assert_eq!(options.manifest, None);
+        assert_eq!(options.backup_dir, Some(PathBuf::from("backups/run")));
+        assert_eq!(options.mapping, None);
+        assert_eq!(options.out, None);
+        assert!(options.require_verified);
     }
 
     // Ensure backup-dir restore planning reads the canonical layout manifest.
@@ -246,6 +300,7 @@ mod tests {
             backup_dir: Some(root.clone()),
             mapping: None,
             out: None,
+            require_verified: false,
         };
 
         let plan = plan_restore(&options).expect("plan restore");
@@ -270,6 +325,68 @@ mod tests {
             err,
             RestoreCommandError::ConflictingManifestSources
         ));
+    }
+
+    // Ensure verified planning requires the canonical backup layout source.
+    #[test]
+    fn parse_rejects_require_verified_with_manifest_source() {
+        let err = RestorePlanOptions::parse([
+            OsString::from("--manifest"),
+            OsString::from("manifest.json"),
+            OsString::from("--require-verified"),
+        ])
+        .expect_err("verification should require a backup layout");
+
+        assert!(matches!(
+            err,
+            RestoreCommandError::RequireVerifiedNeedsBackupDir
+        ));
+    }
+
+    // Ensure restore planning can require manifest, journal, and artifact integrity.
+    #[test]
+    fn plan_restore_requires_verified_backup_layout() {
+        let root = temp_dir("canic-cli-restore-plan-verified");
+        let layout = BackupLayout::new(root.clone());
+        let manifest = valid_manifest();
+        write_verified_layout(&root, &layout, &manifest);
+
+        let options = RestorePlanOptions {
+            manifest: None,
+            backup_dir: Some(root.clone()),
+            mapping: None,
+            out: None,
+            require_verified: true,
+        };
+
+        let plan = plan_restore(&options).expect("plan verified restore");
+
+        fs::remove_dir_all(root).expect("remove temp root");
+        assert_eq!(plan.backup_id, "backup-test");
+        assert_eq!(plan.member_count, 2);
+    }
+
+    // Ensure required verification fails before planning when the layout is incomplete.
+    #[test]
+    fn plan_restore_rejects_unverified_backup_layout() {
+        let root = temp_dir("canic-cli-restore-plan-unverified");
+        let layout = BackupLayout::new(root.clone());
+        layout
+            .write_manifest(&valid_manifest())
+            .expect("write manifest");
+
+        let options = RestorePlanOptions {
+            manifest: None,
+            backup_dir: Some(root.clone()),
+            mapping: None,
+            out: None,
+            require_verified: true,
+        };
+
+        let err = plan_restore(&options).expect_err("missing journal should fail");
+
+        fs::remove_dir_all(root).expect("remove temp root");
+        assert!(matches!(err, RestoreCommandError::Persistence(_)));
     }
 
     // Ensure the CLI planning path validates manifests and applies mappings.
@@ -302,6 +419,7 @@ mod tests {
             backup_dir: None,
             mapping: Some(mapping_path),
             out: None,
+            require_verified: false,
         };
 
         let plan = plan_restore(&options).expect("plan restore");
@@ -384,6 +502,45 @@ mod tests {
                 checksum_algorithm: "sha256".to_string(),
             },
         }
+    }
+
+    // Write a canonical backup layout whose journal checksums match the artifacts.
+    fn write_verified_layout(root: &Path, layout: &BackupLayout, manifest: &FleetBackupManifest) {
+        layout.write_manifest(manifest).expect("write manifest");
+
+        let artifacts = manifest
+            .fleet
+            .members
+            .iter()
+            .map(|member| {
+                let bytes = format!("{} artifact", member.role);
+                let artifact_path = root.join(&member.source_snapshot.artifact_path);
+                if let Some(parent) = artifact_path.parent() {
+                    fs::create_dir_all(parent).expect("create artifact parent");
+                }
+                fs::write(&artifact_path, bytes.as_bytes()).expect("write artifact");
+                let checksum = ArtifactChecksum::from_bytes(bytes.as_bytes());
+
+                ArtifactJournalEntry {
+                    canister_id: member.canister_id.clone(),
+                    snapshot_id: member.source_snapshot.snapshot_id.clone(),
+                    state: ArtifactState::Durable,
+                    temp_path: None,
+                    artifact_path: member.source_snapshot.artifact_path.clone(),
+                    checksum_algorithm: checksum.algorithm,
+                    checksum: Some(checksum.hash),
+                    updated_at: "2026-05-03T00:00:00Z".to_string(),
+                }
+            })
+            .collect();
+
+        layout
+            .write_journal(&DownloadJournal {
+                journal_version: 1,
+                backup_id: manifest.backup_id.clone(),
+                artifacts,
+            })
+            .expect("write journal");
     }
 
     // Build a unique temporary directory.

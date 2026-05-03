@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.30.x] - 2026-05-03 - Fleet Snapshot Backups
 
+- `0.30.5` lets manifest validation write report files, backup status fail on incomplete journals, restore dry-run planning require a verified backup layout, and Access/Perf metrics stay covered end to end.
+- `0.30.4` refreshes the release version and installer surfaces after the backup integrity line so downstream setup paths resolve the live patch.
 - `0.30.3` adds `canic backup status`, `canic backup verify`, and backup layout integrity reporting so operators can inspect resumable journals and validate a manifest, durable artifact set, and SHA-256 checksums before restore planning.
 - `0.30.2` tightens restore preflight by making restore plans include provenance, target parent mapping, identity, snapshot, and verification metadata while rejecting backup-unit and mapping references that do not exist in the manifest.
 - `0.30.1` finishes the publish follow-through for the fleet backup line by including the new backup and CLI crates in release order, adding manifest validation and restore planning commands, removing the remaining endpoint metrics macro hooks, documenting metric row shapes, and refreshing installer/version surfaces.
@@ -24,13 +26,15 @@ canic snapshot download \
 
 ```bash
 canic manifest validate \
-  --manifest backups/<run-id>/manifest.json
+  --manifest backups/<run-id>/manifest.json \
+  --out manifest-validation.json
 ```
 
 ```bash
 canic backup status \
   --dir backups/<run-id> \
-  --out backup-status.json
+  --out backup-status.json \
+  --require-complete
 ```
 
 ```bash
@@ -43,7 +47,8 @@ canic backup verify \
 canic restore plan \
   --backup-dir backups/<run-id> \
   --mapping restore-map.json \
-  --out restore-plan.json
+  --out restore-plan.json \
+  --require-verified
 ```
 
 See detailed breakdown:

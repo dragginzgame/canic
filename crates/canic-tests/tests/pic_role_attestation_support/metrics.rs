@@ -1,36 +1,50 @@
 use super::*;
 
-pub fn access_metric_count(
+// Query one metric page from a canister through the public metrics endpoint.
+pub fn query_metric_page(
     pic: &Pic,
     canister_id: Principal,
-    endpoint: &str,
-    predicate: &str,
-) -> u64 {
-    let response: Result<Page<MetricEntry>, Error> = query_call_as(
-        pic,
+    kind: MetricsKind,
+) -> Page<MetricEntry> {
+    let response: Result<Result<Page<MetricEntry>, Error>, Error> = pic.query_call_as(
         canister_id,
         Principal::anonymous(),
         "canic_metrics",
         (
-            MetricsKind::Access,
+            kind,
             PageRequest {
                 limit: 10_000,
                 offset: 0,
             },
         ),
     );
-    let response = response.expect("query canic_metrics failed");
+
     response
-        .entries
+        .expect("metrics transport query failed")
+        .expect("metrics application query failed")
+}
+
+// Return all metric rows for a metric family using a large deterministic page.
+pub fn query_metric_entries(
+    pic: &Pic,
+    canister_id: Principal,
+    kind: MetricsKind,
+) -> Vec<MetricEntry> {
+    query_metric_page(pic, canister_id, kind).entries
+}
+
+// Read a count-shaped metric row by its exact label set.
+pub fn metric_count_for_labels(
+    pic: &Pic,
+    canister_id: Principal,
+    kind: MetricsKind,
+    labels: &[&str],
+) -> u64 {
+    query_metric_entries(pic, canister_id, kind)
         .into_iter()
         .find_map(|entry| {
-            if entry.labels.first().is_some_and(|label| label == endpoint)
-                && entry.labels.get(2).is_some_and(|label| label == predicate)
-            {
-                Some(match entry.value {
-                    MetricValue::Count(count) | MetricValue::CountAndU64 { count, .. } => count,
-                    MetricValue::U128(_) => 0,
-                })
+            if labels_match(&entry, labels) {
+                Some(metric_count(&entry.value))
             } else {
                 None
             }
@@ -38,18 +52,20 @@ pub fn access_metric_count(
         .unwrap_or(0)
 }
 
-// Assert a batch of access-metric predicates for a single canister endpoint.
-pub fn assert_access_metrics(
-    pic: &Pic,
-    canister_id: Principal,
-    endpoint: &str,
-    expected: &[(&str, u64)],
-) {
-    for (predicate, count) in expected {
-        assert_eq!(
-            access_metric_count(pic, canister_id, endpoint, predicate),
-            *count,
-            "unexpected metric count for {endpoint} / {predicate}"
-        );
+// Match a metric entry against an exact static label set.
+fn labels_match(entry: &MetricEntry, labels: &[&str]) -> bool {
+    entry.labels.len() == labels.len()
+        && entry
+            .labels
+            .iter()
+            .zip(labels.iter())
+            .all(|(actual, expected)| actual == expected)
+}
+
+// Extract the count dimension from count-bearing metric payloads.
+const fn metric_count(value: &MetricValue) -> u64 {
+    match value {
+        MetricValue::Count(count) | MetricValue::CountAndU64 { count, .. } => *count,
+        MetricValue::U128(_) => 0,
     }
 }

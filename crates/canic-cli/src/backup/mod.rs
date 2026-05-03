@@ -28,6 +28,15 @@ pub enum BackupCommandError {
     #[error("option {0} requires a value")]
     MissingValue(&'static str),
 
+    #[error(
+        "backup journal {backup_id} is incomplete: {pending_artifacts}/{total_artifacts} artifacts still require resume work"
+    )]
+    IncompleteJournal {
+        backup_id: String,
+        total_artifacts: usize,
+        pending_artifacts: usize,
+    },
+
     #[error(transparent)]
     Io(#[from] std::io::Error),
 
@@ -85,6 +94,7 @@ impl BackupVerifyOptions {
 pub struct BackupStatusOptions {
     pub dir: PathBuf,
     pub out: Option<PathBuf>,
+    pub require_complete: bool,
 }
 
 impl BackupStatusOptions {
@@ -95,6 +105,7 @@ impl BackupStatusOptions {
     {
         let mut dir = None;
         let mut out = None;
+        let mut require_complete = false;
 
         let mut args = args.into_iter();
         while let Some(arg) = args.next() {
@@ -104,6 +115,7 @@ impl BackupStatusOptions {
             match arg.as_str() {
                 "--dir" => dir = Some(PathBuf::from(next_value(&mut args, "--dir")?)),
                 "--out" => out = Some(PathBuf::from(next_value(&mut args, "--out")?)),
+                "--require-complete" => require_complete = true,
                 "--help" | "-h" => return Err(BackupCommandError::Usage(usage())),
                 _ => return Err(BackupCommandError::UnknownOption(arg)),
             }
@@ -112,6 +124,7 @@ impl BackupStatusOptions {
         Ok(Self {
             dir: dir.ok_or(BackupCommandError::MissingOption("--dir"))?,
             out,
+            require_complete,
         })
     }
 }
@@ -131,6 +144,7 @@ where
             let options = BackupStatusOptions::parse(args)?;
             let report = backup_status(&options)?;
             write_status_report(&options, &report)?;
+            enforce_status_requirements(&options, &report)?;
             Ok(())
         }
         "verify" => {
@@ -151,6 +165,22 @@ pub fn backup_status(
     let layout = BackupLayout::new(options.dir.clone());
     let journal = layout.read_journal()?;
     Ok(journal.resume_report())
+}
+
+// Enforce caller-requested status requirements after the JSON report is written.
+fn enforce_status_requirements(
+    options: &BackupStatusOptions,
+    report: &JournalResumeReport,
+) -> Result<(), BackupCommandError> {
+    if !options.require_complete || report.is_complete {
+        return Ok(());
+    }
+
+    Err(BackupCommandError::IncompleteJournal {
+        backup_id: report.backup_id.clone(),
+        total_artifacts: report.total_artifacts,
+        pending_artifacts: report.pending_artifacts,
+    })
 }
 
 /// Verify a backup directory's manifest, journal, and durable artifacts.
@@ -209,7 +239,7 @@ where
 
 // Return backup command usage text.
 const fn usage() -> &'static str {
-    "usage: canic backup status --dir <backup-dir> [--out <file>]\n       canic backup verify --dir <backup-dir> [--out <file>]"
+    "usage: canic backup status --dir <backup-dir> [--out <file>] [--require-complete]\n       canic backup verify --dir <backup-dir> [--out <file>]"
 }
 
 #[cfg(test)]
@@ -256,11 +286,13 @@ mod tests {
             OsString::from("backups/run"),
             OsString::from("--out"),
             OsString::from("status.json"),
+            OsString::from("--require-complete"),
         ])
         .expect("parse options");
 
         assert_eq!(options.dir, PathBuf::from("backups/run"));
         assert_eq!(options.out, Some(PathBuf::from("status.json")));
+        assert!(options.require_complete);
     }
 
     // Ensure backup status reads the journal and reports resume actions.
@@ -275,6 +307,7 @@ mod tests {
         let options = BackupStatusOptions {
             dir: root.clone(),
             out: None,
+            require_complete: false,
         };
         let report = backup_status(&options).expect("read backup status");
 
@@ -284,6 +317,42 @@ mod tests {
         assert!(report.is_complete);
         assert_eq!(report.pending_artifacts, 0);
         assert_eq!(report.counts.skip, 1);
+    }
+
+    // Ensure require-complete accepts already durable backup journals.
+    #[test]
+    fn require_complete_accepts_complete_status() {
+        let options = BackupStatusOptions {
+            dir: PathBuf::from("unused"),
+            out: None,
+            require_complete: true,
+        };
+        let report = journal_with_checksum(HASH.to_string()).resume_report();
+
+        enforce_status_requirements(&options, &report).expect("complete status should pass");
+    }
+
+    // Ensure require-complete rejects journals that still need resume work.
+    #[test]
+    fn require_complete_rejects_incomplete_status() {
+        let options = BackupStatusOptions {
+            dir: PathBuf::from("unused"),
+            out: None,
+            require_complete: true,
+        };
+        let report = created_journal().resume_report();
+
+        let err = enforce_status_requirements(&options, &report)
+            .expect_err("incomplete status should fail");
+
+        assert!(matches!(
+            err,
+            BackupCommandError::IncompleteJournal {
+                pending_artifacts: 1,
+                total_artifacts: 1,
+                ..
+            }
+        ));
     }
 
     // Ensure the CLI verification path reads a layout and returns an integrity report.
@@ -391,6 +460,24 @@ mod tests {
                 artifact_path: "artifacts/root".to_string(),
                 checksum_algorithm: "sha256".to_string(),
                 checksum: Some(checksum),
+                updated_at: "2026-05-03T00:00:00Z".to_string(),
+            }],
+        }
+    }
+
+    // Build one incomplete journal that still needs artifact download work.
+    fn created_journal() -> DownloadJournal {
+        DownloadJournal {
+            journal_version: 1,
+            backup_id: "backup-test".to_string(),
+            artifacts: vec![ArtifactJournalEntry {
+                canister_id: ROOT.to_string(),
+                snapshot_id: "root-snapshot".to_string(),
+                state: ArtifactState::Created,
+                temp_path: None,
+                artifact_path: "artifacts/root".to_string(),
+                checksum_algorithm: "sha256".to_string(),
+                checksum: None,
                 updated_at: "2026-05-03T00:00:00Z".to_string(),
             }],
         }

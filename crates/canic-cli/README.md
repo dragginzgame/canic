@@ -26,7 +26,8 @@ Validate a captured manifest before restore planning:
 
 ```bash
 canic manifest validate \
-  --manifest backups/<run-id>/manifest.json
+  --manifest backups/<run-id>/manifest.json \
+  --out manifest-validation.json
 ```
 
 Inspect resumable journal status:
@@ -34,8 +35,12 @@ Inspect resumable journal status:
 ```bash
 canic backup status \
   --dir backups/<run-id> \
-  --out backup-status.json
+  --out backup-status.json \
+  --require-complete
 ```
+
+`--require-complete` still writes the JSON status report, then exits with an
+error when any artifact has resume work remaining.
 
 Verify the backup layout and durable artifact checksums:
 
@@ -51,5 +56,9 @@ Restore planning is manifest-driven and performs no mutations:
 canic restore plan \
   --backup-dir backups/<run-id> \
   --mapping restore-map.json \
-  --out restore-plan.json
+  --out restore-plan.json \
+  --require-verified
 ```
+
+`--require-verified` runs the same manifest, journal, durable artifact, and
+checksum checks as `canic backup verify` before emitting the plan.
