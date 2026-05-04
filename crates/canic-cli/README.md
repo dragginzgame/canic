@@ -178,10 +178,19 @@ Summarize a restore apply journal:
 ```bash
 canic restore apply-status \
   --journal restore-apply-journal.json \
-  --out restore-apply-status.json
+  --out restore-apply-status.json \
+  --require-no-pending \
+  --require-no-failed \
+  --require-complete
 ```
 
-Emit the full next ready operation for an external runner:
+Use `--require-no-pending` when scripts should stop if a restore operation is
+already claimed and needs inspection or `apply-unclaim`. Use
+`--require-no-failed` when failed operations should stop the runner before
+completion checks. Use `--require-complete` when scripts should fail until every
+apply operation is completed.
+
+Emit the full next transitionable operation for an external runner:
 
 ```bash
 canic restore apply-next \
@@ -189,7 +198,8 @@ canic restore apply-next \
   --out restore-apply-next.json
 ```
 
-Preview the `dfx` command for the next ready operation without executing it:
+Preview the `dfx` command for the next transitionable operation without
+executing it:
 
 ```bash
 canic restore apply-command \
@@ -200,6 +210,31 @@ canic restore apply-command \
 
 Use `--dfx <path>` when the runner should preview a non-default `dfx` binary.
 
+Claim the next operation before executing it in an external runner:
+
+```bash
+canic restore apply-claim \
+  --journal restore-apply-journal.json \
+  --updated-at 2026-05-04T12:00:00Z \
+  --out restore-apply-journal.json
+```
+
+Claiming marks the next ready operation `pending`. Pending operations remain the
+next transitionable operation until `apply-mark` records them as completed or
+failed, which lets interrupted runners resume from the same journal. Use
+`--updated-at <text>` to record a runner-provided state marker; when omitted,
+the CLI writes `unknown`.
+
+Release the current pending operation back to ready when a runner stopped before
+executing it:
+
+```bash
+canic restore apply-unclaim \
+  --journal restore-apply-journal.json \
+  --updated-at 2026-05-04T12:01:00Z \
+  --out restore-apply-journal.json
+```
+
 Mark one journal operation after an external restore step completes or fails:
 
 ```bash
@@ -207,6 +242,7 @@ canic restore apply-mark \
   --journal restore-apply-journal.json \
   --sequence 0 \
   --state completed \
+  --updated-at 2026-05-04T12:02:00Z \
   --out restore-apply-journal.json
 ```
 
@@ -214,3 +250,54 @@ Use `--state failed --reason <text>` to record a failed operation. The command
 validates the input journal, refuses to skip earlier ready operations, refreshes
 operation counts, and writes the updated journal without executing any restore
 mutation.
+
+Example external restore runner loop:
+
+```bash
+set -euo pipefail
+
+journal=restore-apply-journal.json
+network=local
+
+while true; do
+  canic restore apply-status \
+    --journal "$journal" \
+    --out restore-apply-status.json \
+    --require-no-pending \
+    --require-no-failed
+
+  if canic restore apply-status \
+    --journal "$journal" \
+    --out restore-apply-status.json \
+    --require-complete; then
+    break
+  fi
+
+  canic restore apply-command \
+    --journal "$journal" \
+    --network "$network" \
+    --out restore-apply-command.json
+
+  sequence="$(jq -r '.operation.sequence' restore-apply-command.json)"
+  command="$(jq -r '[.command.program] + .command.args | @sh' restore-apply-command.json)"
+  updated_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+  canic restore apply-claim \
+    --journal "$journal" \
+    --updated-at "$updated_at" \
+    --out "$journal"
+
+  eval "$command"
+
+  canic restore apply-mark \
+    --journal "$journal" \
+    --sequence "$sequence" \
+    --state completed \
+    --updated-at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    --out "$journal"
+done
+```
+
+If the runner stops after claiming work but before executing the previewed
+command, inspect `restore-apply-status.json` and use `apply-unclaim` to release
+the pending operation back to `ready`.

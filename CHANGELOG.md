@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.30.x] - 2026-05-03 - Fleet Snapshot Backups
 
+- `0.30.24` adds `canic restore apply-claim` and `canic restore apply-unclaim`, keeping pending operations as the next resumable restore step so external runners can claim work before executing `dfx` commands and recover cleanly after interruption.
+
+```bash
+canic restore apply-status \
+  --journal restore-apply-journal.json \
+  --out restore-apply-status.json \
+  --require-no-pending \
+  --require-no-failed \
+  --require-complete
+```
+
+```bash
+canic restore apply-claim \
+  --journal restore-apply-journal.json \
+  --updated-at 2026-05-04T12:00:00Z \
+  --out restore-apply-journal.json
+```
+
+```bash
+canic restore apply-unclaim \
+  --journal restore-apply-journal.json \
+  --updated-at 2026-05-04T12:01:00Z \
+  --out restore-apply-journal.json
+```
+
 - `0.30.23` makes restore apply journal advancement ordered, adds `canic restore apply-command`, and exposes `ManagementCall` metrics so external runners cannot skip ahead and operators can see which management-canister operation is failing.
 
 ```bash

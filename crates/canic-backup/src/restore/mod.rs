@@ -397,19 +397,33 @@ impl RestoreApplyJournal {
             .min_by_key(|operation| operation.sequence)
     }
 
-    /// Render the next ready operation as a compact runner-facing response.
+    /// Return the next ready or pending operation that controls runner progress.
+    #[must_use]
+    pub fn next_transition_operation(&self) -> Option<&RestoreApplyJournalOperation> {
+        self.operations
+            .iter()
+            .filter(|operation| {
+                matches!(
+                    operation.state,
+                    RestoreApplyOperationState::Ready | RestoreApplyOperationState::Pending
+                )
+            })
+            .min_by_key(|operation| operation.sequence)
+    }
+
+    /// Render the next transitionable operation as a compact runner response.
     #[must_use]
     pub fn next_operation(&self) -> RestoreApplyNextOperation {
         RestoreApplyNextOperation::from_journal(self)
     }
 
-    /// Render the next ready operation as a concrete no-execute command preview.
+    /// Render the next transitionable operation as a no-execute command preview.
     #[must_use]
     pub fn next_command_preview(&self) -> RestoreApplyCommandPreview {
         RestoreApplyCommandPreview::from_journal(self)
     }
 
-    /// Render the next ready operation as a configured no-execute command preview.
+    /// Render the next transitionable operation with a configured command preview.
     #[must_use]
     pub fn next_command_preview_with_config(
         &self,
@@ -418,12 +432,106 @@ impl RestoreApplyJournal {
         RestoreApplyCommandPreview::from_journal_with_config(self, config)
     }
 
+    /// Mark the next transitionable operation pending and refresh journal counts.
+    pub fn mark_next_operation_pending(&mut self) -> Result<(), RestoreApplyJournalError> {
+        self.mark_next_operation_pending_at(None)
+    }
+
+    /// Mark the next transitionable operation pending with an update marker.
+    pub fn mark_next_operation_pending_at(
+        &mut self,
+        updated_at: Option<String>,
+    ) -> Result<(), RestoreApplyJournalError> {
+        let sequence = self
+            .next_transition_sequence()
+            .ok_or(RestoreApplyJournalError::NoTransitionableOperation)?;
+        self.mark_operation_pending_at(sequence, updated_at)
+    }
+
+    /// Mark one restore apply operation pending and refresh journal counts.
+    pub fn mark_operation_pending(
+        &mut self,
+        sequence: usize,
+    ) -> Result<(), RestoreApplyJournalError> {
+        self.mark_operation_pending_at(sequence, None)
+    }
+
+    /// Mark one restore apply operation pending with an update marker.
+    pub fn mark_operation_pending_at(
+        &mut self,
+        sequence: usize,
+        updated_at: Option<String>,
+    ) -> Result<(), RestoreApplyJournalError> {
+        self.transition_operation(
+            sequence,
+            RestoreApplyOperationState::Pending,
+            Vec::new(),
+            updated_at,
+        )
+    }
+
+    /// Mark the current pending operation ready again and refresh counts.
+    pub fn mark_next_operation_ready(&mut self) -> Result<(), RestoreApplyJournalError> {
+        self.mark_next_operation_ready_at(None)
+    }
+
+    /// Mark the current pending operation ready again with an update marker.
+    pub fn mark_next_operation_ready_at(
+        &mut self,
+        updated_at: Option<String>,
+    ) -> Result<(), RestoreApplyJournalError> {
+        let operation = self
+            .next_transition_operation()
+            .ok_or(RestoreApplyJournalError::NoTransitionableOperation)?;
+        if operation.state != RestoreApplyOperationState::Pending {
+            return Err(RestoreApplyJournalError::NoPendingOperation);
+        }
+
+        self.mark_operation_ready_at(operation.sequence, updated_at)
+    }
+
+    /// Mark one restore apply operation ready again and refresh journal counts.
+    pub fn mark_operation_ready(
+        &mut self,
+        sequence: usize,
+    ) -> Result<(), RestoreApplyJournalError> {
+        self.mark_operation_ready_at(sequence, None)
+    }
+
+    /// Mark one restore apply operation ready again with an update marker.
+    pub fn mark_operation_ready_at(
+        &mut self,
+        sequence: usize,
+        updated_at: Option<String>,
+    ) -> Result<(), RestoreApplyJournalError> {
+        self.transition_operation(
+            sequence,
+            RestoreApplyOperationState::Ready,
+            Vec::new(),
+            updated_at,
+        )
+    }
+
     /// Mark one restore apply operation completed and refresh journal counts.
     pub fn mark_operation_completed(
         &mut self,
         sequence: usize,
     ) -> Result<(), RestoreApplyJournalError> {
-        self.transition_operation(sequence, RestoreApplyOperationState::Completed, Vec::new())
+        self.mark_operation_completed_at(sequence, None)
+    }
+
+    /// Mark one restore apply operation completed with an update marker.
+    pub fn mark_operation_completed_at(
+        &mut self,
+        sequence: usize,
+        updated_at: Option<String>,
+    ) -> Result<(), RestoreApplyJournalError> {
+        self.transition_operation(
+            sequence,
+            RestoreApplyOperationState::Completed,
+            Vec::new(),
+            updated_at,
+        )
     }
 
     /// Mark one restore apply operation failed and refresh journal counts.
@@ -432,11 +540,26 @@ impl RestoreApplyJournal {
         sequence: usize,
         reason: String,
     ) -> Result<(), RestoreApplyJournalError> {
+        self.mark_operation_failed_at(sequence, reason, None)
+    }
+
+    /// Mark one restore apply operation failed with an update marker.
+    pub fn mark_operation_failed_at(
+        &mut self,
+        sequence: usize,
+        reason: String,
+        updated_at: Option<String>,
+    ) -> Result<(), RestoreApplyJournalError> {
         if reason.trim().is_empty() {
             return Err(RestoreApplyJournalError::FailureReasonRequired(sequence));
         }
 
-        self.transition_operation(sequence, RestoreApplyOperationState::Failed, vec![reason])
+        self.transition_operation(
+            sequence,
+            RestoreApplyOperationState::Failed,
+            vec![reason],
+            updated_at,
+        )
     }
 
     // Apply one legal operation state transition and revalidate the journal.
@@ -445,6 +568,7 @@ impl RestoreApplyJournal {
         sequence: usize,
         next_state: RestoreApplyOperationState,
         blocking_reasons: Vec<String>,
+        updated_at: Option<String>,
     ) -> Result<(), RestoreApplyJournalError> {
         let index = self
             .operations
@@ -466,6 +590,7 @@ impl RestoreApplyJournal {
         let operation = &mut self.operations[index];
         operation.state = next_state;
         operation.blocking_reasons = blocking_reasons;
+        operation.state_updated_at = updated_at;
         self.refresh_operation_counts();
         self.validate()
     }
@@ -496,16 +621,8 @@ impl RestoreApplyJournal {
 
     // Return the next operation sequence that can be advanced by a runner.
     fn next_transition_sequence(&self) -> Option<usize> {
-        self.operations
-            .iter()
-            .filter(|operation| {
-                matches!(
-                    operation.state,
-                    RestoreApplyOperationState::Ready | RestoreApplyOperationState::Pending
-                )
-            })
+        self.next_transition_operation()
             .map(|operation| operation.sequence)
-            .min()
     }
 
     // Recompute operation counts after a journal operation state change.
@@ -650,6 +767,10 @@ pub struct RestoreApplyJournalStatus {
     pub failed_operations: usize,
     pub next_ready_sequence: Option<usize>,
     pub next_ready_operation: Option<RestoreApplyOperationKind>,
+    pub next_transition_sequence: Option<usize>,
+    pub next_transition_state: Option<RestoreApplyOperationState>,
+    pub next_transition_operation: Option<RestoreApplyOperationKind>,
+    pub next_transition_updated_at: Option<String>,
 }
 
 impl RestoreApplyJournalStatus {
@@ -657,6 +778,7 @@ impl RestoreApplyJournalStatus {
     #[must_use]
     pub fn from_journal(journal: &RestoreApplyJournal) -> Self {
         let next_ready = journal.next_ready_operation();
+        let next_transition = journal.next_transition_operation();
 
         Self {
             status_version: 1,
@@ -673,6 +795,11 @@ impl RestoreApplyJournalStatus {
             failed_operations: journal.failed_operations,
             next_ready_sequence: next_ready.map(|operation| operation.sequence),
             next_ready_operation: next_ready.map(|operation| operation.operation.clone()),
+            next_transition_sequence: next_transition.map(|operation| operation.sequence),
+            next_transition_state: next_transition.map(|operation| operation.state.clone()),
+            next_transition_operation: next_transition.map(|operation| operation.operation.clone()),
+            next_transition_updated_at: next_transition
+                .and_then(|operation| operation.state_updated_at.clone()),
         }
     }
 }
@@ -698,7 +825,7 @@ impl RestoreApplyNextOperation {
     pub fn from_journal(journal: &RestoreApplyJournal) -> Self {
         let complete =
             journal.operation_count > 0 && journal.completed_operations == journal.operation_count;
-        let operation = journal.next_ready_operation().cloned();
+        let operation = journal.next_transition_operation().cloned();
 
         Self {
             response_version: 1,
@@ -748,7 +875,7 @@ impl RestoreApplyCommandPreview {
     ) -> Self {
         let complete =
             journal.operation_count > 0 && journal.completed_operations == journal.operation_count;
-        let operation = journal.next_ready_operation().cloned();
+        let operation = journal.next_transition_operation().cloned();
         let command = operation
             .as_ref()
             .and_then(|operation| RestoreApplyRunnerCommand::from_operation(operation, config));
@@ -918,6 +1045,8 @@ pub struct RestoreApplyJournalOperation {
     pub sequence: usize,
     pub operation: RestoreApplyOperationKind,
     pub state: RestoreApplyOperationState,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub state_updated_at: Option<String>,
     pub blocking_reasons: Vec<String>,
     pub restore_group: u16,
     pub phase_order: usize,
@@ -941,6 +1070,7 @@ impl RestoreApplyJournalOperation {
             sequence: operation.sequence,
             operation: operation.operation.clone(),
             state: state.clone(),
+            state_updated_at: None,
             blocking_reasons: if state == RestoreApplyOperationState::Blocked {
                 blocked_reasons.to_vec()
             } else {
@@ -963,6 +1093,9 @@ impl RestoreApplyJournalOperation {
         validate_apply_journal_nonempty("operations[].source_canister", &self.source_canister)?;
         validate_apply_journal_nonempty("operations[].target_canister", &self.target_canister)?;
         validate_apply_journal_nonempty("operations[].role", &self.role)?;
+        if let Some(updated_at) = &self.state_updated_at {
+            validate_apply_journal_nonempty("operations[].state_updated_at", updated_at)?;
+        }
 
         match self.state {
             RestoreApplyOperationState::Blocked if self.blocking_reasons.is_empty() => Err(
@@ -992,6 +1125,11 @@ impl RestoreApplyJournalOperation {
     const fn can_transition_to(&self, next_state: &RestoreApplyOperationState) -> bool {
         match (&self.state, next_state) {
             (
+                RestoreApplyOperationState::Ready | RestoreApplyOperationState::Pending,
+                RestoreApplyOperationState::Pending,
+            )
+            | (RestoreApplyOperationState::Pending, RestoreApplyOperationState::Ready)
+            | (
                 RestoreApplyOperationState::Ready
                 | RestoreApplyOperationState::Pending
                 | RestoreApplyOperationState::Completed,
@@ -1078,6 +1216,9 @@ pub enum RestoreApplyJournalError {
 
     #[error("restore apply journal has no operation that can be advanced")]
     NoTransitionableOperation,
+
+    #[error("restore apply journal has no pending operation to release")]
+    NoPendingOperation,
 
     #[error("restore apply journal operation {requested} cannot advance before operation {next}")]
     OutOfOrderOperationTransition { requested: usize, next: usize },
@@ -2129,6 +2270,7 @@ mod tests {
                 sequence: 0,
                 operation,
                 state: RestoreApplyOperationState::Ready,
+                state_updated_at: None,
                 blocking_reasons: Vec::new(),
                 restore_group: 1,
                 phase_order: 0,
@@ -2755,6 +2897,15 @@ mod tests {
             status.next_ready_operation,
             Some(RestoreApplyOperationKind::UploadSnapshot)
         );
+        assert_eq!(status.next_transition_sequence, Some(0));
+        assert_eq!(
+            status.next_transition_state,
+            Some(RestoreApplyOperationState::Ready)
+        );
+        assert_eq!(
+            status.next_transition_operation,
+            Some(RestoreApplyOperationKind::UploadSnapshot)
+        );
     }
 
     // Ensure next-operation output exposes the full next ready journal row.
@@ -3110,6 +3261,167 @@ mod tests {
             err,
             RestoreApplyJournalError::FailureReasonRequired(0)
         ));
+    }
+
+    // Ensure claiming a ready operation marks it pending and keeps it resumable.
+    #[test]
+    fn apply_journal_mark_next_operation_pending_claims_first_operation() {
+        let mut journal =
+            command_preview_journal(RestoreApplyOperationKind::UploadSnapshot, None, None);
+
+        journal
+            .mark_next_operation_pending_at(Some("2026-05-04T12:00:00Z".to_string()))
+            .expect("mark operation pending");
+        let status = journal.status();
+        let next = journal.next_operation();
+        let preview = journal.next_command_preview();
+
+        assert_eq!(journal.pending_operations, 1);
+        assert_eq!(journal.ready_operations, 0);
+        assert_eq!(
+            journal.operations[0].state,
+            RestoreApplyOperationState::Pending
+        );
+        assert_eq!(
+            journal.operations[0].state_updated_at.as_deref(),
+            Some("2026-05-04T12:00:00Z")
+        );
+        assert_eq!(status.next_ready_sequence, None);
+        assert_eq!(status.next_transition_sequence, Some(0));
+        assert_eq!(
+            status.next_transition_state,
+            Some(RestoreApplyOperationState::Pending)
+        );
+        assert_eq!(
+            status.next_transition_updated_at.as_deref(),
+            Some("2026-05-04T12:00:00Z")
+        );
+        assert!(next.operation_available);
+        assert_eq!(
+            next.operation.expect("next operation").state,
+            RestoreApplyOperationState::Pending
+        );
+        assert!(preview.operation_available);
+        assert!(preview.command_available);
+        assert_eq!(
+            preview.operation.expect("preview operation").state,
+            RestoreApplyOperationState::Pending
+        );
+    }
+
+    // Ensure a pending claim can be released back to ready for retry.
+    #[test]
+    fn apply_journal_mark_next_operation_ready_unclaims_pending_operation() {
+        let mut journal =
+            command_preview_journal(RestoreApplyOperationKind::UploadSnapshot, None, None);
+
+        journal
+            .mark_next_operation_pending_at(Some("2026-05-04T12:00:00Z".to_string()))
+            .expect("mark operation pending");
+        journal
+            .mark_next_operation_ready_at(Some("2026-05-04T12:01:00Z".to_string()))
+            .expect("mark operation ready");
+        let status = journal.status();
+        let next = journal.next_operation();
+
+        assert_eq!(journal.pending_operations, 0);
+        assert_eq!(journal.ready_operations, 1);
+        assert_eq!(
+            journal.operations[0].state,
+            RestoreApplyOperationState::Ready
+        );
+        assert_eq!(
+            journal.operations[0].state_updated_at.as_deref(),
+            Some("2026-05-04T12:01:00Z")
+        );
+        assert_eq!(status.next_ready_sequence, Some(0));
+        assert_eq!(status.next_transition_sequence, Some(0));
+        assert_eq!(
+            status.next_transition_state,
+            Some(RestoreApplyOperationState::Ready)
+        );
+        assert_eq!(
+            status.next_transition_updated_at.as_deref(),
+            Some("2026-05-04T12:01:00Z")
+        );
+        assert_eq!(
+            next.operation.expect("next operation").state,
+            RestoreApplyOperationState::Ready
+        );
+    }
+
+    // Ensure empty state update markers are rejected during journal validation.
+    #[test]
+    fn apply_journal_validation_rejects_empty_state_updated_at() {
+        let mut journal =
+            command_preview_journal(RestoreApplyOperationKind::UploadSnapshot, None, None);
+
+        journal.operations[0].state_updated_at = Some(String::new());
+        let err = journal
+            .validate()
+            .expect_err("empty state update marker should fail");
+
+        assert!(matches!(
+            err,
+            RestoreApplyJournalError::MissingField("operations[].state_updated_at")
+        ));
+    }
+
+    // Ensure unclaim fails when the next transitionable operation is not pending.
+    #[test]
+    fn apply_journal_mark_next_operation_ready_rejects_without_pending_operation() {
+        let mut journal =
+            command_preview_journal(RestoreApplyOperationKind::UploadSnapshot, None, None);
+
+        let err = journal
+            .mark_next_operation_ready()
+            .expect_err("ready operation should not unclaim");
+
+        assert!(matches!(err, RestoreApplyJournalError::NoPendingOperation));
+        assert_eq!(journal.ready_operations, 1);
+        assert_eq!(journal.pending_operations, 0);
+    }
+
+    // Ensure pending claims cannot skip earlier ready operations.
+    #[test]
+    fn apply_journal_mark_pending_rejects_out_of_order_operation() {
+        let root = temp_dir("canic-restore-apply-journal-pending-out-of-order");
+        fs::create_dir_all(&root).expect("create temp root");
+        let mut manifest = valid_manifest(IdentityMode::Relocatable);
+        set_member_artifact(
+            &mut manifest,
+            CHILD,
+            &root,
+            "artifacts/child",
+            b"child-snapshot",
+        );
+        set_member_artifact(
+            &mut manifest,
+            ROOT,
+            &root,
+            "artifacts/root",
+            b"root-snapshot",
+        );
+
+        let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
+        let dry_run = RestoreApplyDryRun::try_from_plan_with_artifacts(&plan, None, &root)
+            .expect("dry-run should validate artifacts");
+        let mut journal = RestoreApplyJournal::from_dry_run(&dry_run);
+
+        let err = journal
+            .mark_operation_pending(1)
+            .expect_err("out-of-order pending claim should fail");
+
+        fs::remove_dir_all(root).expect("remove temp root");
+        assert!(matches!(
+            err,
+            RestoreApplyJournalError::OutOfOrderOperationTransition {
+                requested: 1,
+                next: 0
+            }
+        ));
+        assert_eq!(journal.pending_operations, 0);
+        assert_eq!(journal.ready_operations, 8);
     }
 
     // Ensure completing a journal operation updates counts and advances status.
