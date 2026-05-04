@@ -179,14 +179,16 @@ Summarize a restore apply journal:
 canic restore apply-status \
   --journal restore-apply-journal.json \
   --out restore-apply-status.json \
+  --require-ready \
   --require-no-pending \
   --require-no-failed \
   --require-complete
 ```
 
-Use `--require-no-pending` when scripts should stop if a restore operation is
-already claimed and needs inspection or `apply-unclaim`. Use
-`--require-no-failed` when failed operations should stop the runner before
+Use `--require-ready` when scripts should stop if the journal still has blocked
+restore operations. Use `--require-no-pending` when scripts should stop if a
+restore operation is already claimed and needs inspection or `apply-unclaim`.
+Use `--require-no-failed` when failed operations should stop the runner before
 completion checks. Use `--require-complete` when scripts should fail until every
 apply operation is completed.
 
@@ -205,16 +207,20 @@ executing it:
 canic restore apply-command \
   --journal restore-apply-journal.json \
   --network local \
-  --out restore-apply-command.json
+  --out restore-apply-command.json \
+  --require-command
 ```
 
 Use `--dfx <path>` when the runner should preview a non-default `dfx` binary.
+Use `--require-command` when scripts should fail after writing the preview if no
+executable operation is available.
 
 Claim the next operation before executing it in an external runner:
 
 ```bash
 canic restore apply-claim \
   --journal restore-apply-journal.json \
+  --sequence 0 \
   --updated-at 2026-05-04T12:00:00Z \
   --out restore-apply-journal.json
 ```
@@ -222,8 +228,9 @@ canic restore apply-claim \
 Claiming marks the next ready operation `pending`. Pending operations remain the
 next transitionable operation until `apply-mark` records them as completed or
 failed, which lets interrupted runners resume from the same journal. Use
-`--updated-at <text>` to record a runner-provided state marker; when omitted,
-the CLI writes `unknown`.
+`--sequence <n>` to fail if the next transitionable operation no longer matches
+the operation the runner previewed. Use `--updated-at <text>` to record a
+runner-provided state marker; when omitted, the CLI writes `unknown`.
 
 Release the current pending operation back to ready when a runner stopped before
 executing it:
@@ -231,9 +238,13 @@ executing it:
 ```bash
 canic restore apply-unclaim \
   --journal restore-apply-journal.json \
+  --sequence 0 \
   --updated-at 2026-05-04T12:01:00Z \
   --out restore-apply-journal.json
 ```
+
+Use `--sequence <n>` with `apply-unclaim` when recovery scripts should only
+release the pending operation they inspected.
 
 Mark one journal operation after an external restore step completes or fails:
 
@@ -243,13 +254,15 @@ canic restore apply-mark \
   --sequence 0 \
   --state completed \
   --updated-at 2026-05-04T12:02:00Z \
-  --out restore-apply-journal.json
+  --out restore-apply-journal.json \
+  --require-pending
 ```
 
 Use `--state failed --reason <text>` to record a failed operation. The command
 validates the input journal, refuses to skip earlier ready operations, refreshes
 operation counts, and writes the updated journal without executing any restore
-mutation.
+mutation. Use `--require-pending` when runners should only mark operations that
+were claimed first.
 
 Example external restore runner loop:
 
@@ -263,6 +276,7 @@ while true; do
   canic restore apply-status \
     --journal "$journal" \
     --out restore-apply-status.json \
+    --require-ready \
     --require-no-pending \
     --require-no-failed
 
@@ -276,7 +290,8 @@ while true; do
   canic restore apply-command \
     --journal "$journal" \
     --network "$network" \
-    --out restore-apply-command.json
+    --out restore-apply-command.json \
+    --require-command
 
   sequence="$(jq -r '.operation.sequence' restore-apply-command.json)"
   command="$(jq -r '[.command.program] + .command.args | @sh' restore-apply-command.json)"
@@ -284,6 +299,7 @@ while true; do
 
   canic restore apply-claim \
     --journal "$journal" \
+    --sequence "$sequence" \
     --updated-at "$updated_at" \
     --out "$journal"
 
@@ -294,10 +310,11 @@ while true; do
     --sequence "$sequence" \
     --state completed \
     --updated-at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-    --out "$journal"
+    --out "$journal" \
+    --require-pending
 done
 ```
 
 If the runner stops after claiming work but before executing the previewed
-command, inspect `restore-apply-status.json` and use `apply-unclaim` to release
-the pending operation back to `ready`.
+command, inspect `restore-apply-status.json` and use `apply-unclaim --sequence
+<n>` to release the pending operation back to `ready`.

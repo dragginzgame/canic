@@ -7,6 +7,48 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.30.x] - 2026-05-03 - Fleet Snapshot Backups
 
+- `0.30.25` adds restore runner guards for `apply-status --require-ready`, `apply-command --require-command`, `apply-claim --sequence`, `apply-unclaim --sequence`, and `apply-mark --require-pending` so external restore scripts can fail closed when work is blocked, no command is available, the journal moved, or a completion was not claimed first.
+
+```bash
+canic restore apply-status \
+  --journal restore-apply-journal.json \
+  --out restore-apply-status.json \
+  --require-ready \
+  --require-no-pending \
+  --require-no-failed
+```
+
+```bash
+canic restore apply-command \
+  --journal restore-apply-journal.json \
+  --network local \
+  --out restore-apply-command.json \
+  --require-command
+```
+
+```bash
+canic restore apply-claim \
+  --journal restore-apply-journal.json \
+  --sequence 0 \
+  --out restore-apply-journal.json
+```
+
+```bash
+canic restore apply-unclaim \
+  --journal restore-apply-journal.json \
+  --sequence 0 \
+  --out restore-apply-journal.json
+```
+
+```bash
+canic restore apply-mark \
+  --journal restore-apply-journal.json \
+  --sequence 0 \
+  --state completed \
+  --out restore-apply-journal.json \
+  --require-pending
+```
+
 - `0.30.24` adds `canic restore apply-claim` and `canic restore apply-unclaim`, keeping pending operations as the next resumable restore step so external runners can claim work before executing `dfx` commands and recover cleanly after interruption.
 
 ```bash

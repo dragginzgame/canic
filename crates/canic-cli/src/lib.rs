@@ -58,7 +58,7 @@ where
 
 // Return the top-level usage text.
 const fn usage() -> &'static str {
-    "usage: canic snapshot download --canister <id> --out <dir> [--root <id> | --registry-json <file>] [--include-children] [--recursive] [--dry-run] [--stop-before-snapshot] [--resume-after-snapshot] [--network <name>]\n       canic backup preflight --dir <backup-dir> --out-dir <dir> [--mapping <file>] [--require-restore-ready]\n       canic backup inspect --dir <backup-dir> [--out <file>] [--require-ready]\n       canic backup provenance --dir <backup-dir> [--out <file>] [--require-consistent]\n       canic backup status --dir <backup-dir> [--out <file>] [--require-complete]\n       canic backup verify --dir <backup-dir> [--out <file>]\n       canic manifest validate --manifest <file> [--out <file>]\n       canic restore plan (--manifest <file> | --backup-dir <dir>) [--mapping <file>] [--out <file>] [--require-verified] [--require-restore-ready]\n       canic restore status --plan <file> [--out <file>]\n       canic restore apply --plan <file> [--status <file>] [--backup-dir <dir>] --dry-run [--out <file>] [--journal-out <file>]\n       canic restore apply-status --journal <file> [--out <file>] [--require-no-pending] [--require-no-failed] [--require-complete]\n       canic restore apply-next --journal <file> [--out <file>]\n       canic restore apply-command --journal <file> [--dfx <path>] [--network <name>] [--out <file>]\n       canic restore apply-claim --journal <file> [--updated-at <text>] [--out <file>]\n       canic restore apply-unclaim --journal <file> [--updated-at <text>] [--out <file>]\n       canic restore apply-mark --journal <file> --sequence <n> --state completed|failed [--reason <text>] [--updated-at <text>] [--out <file>]"
+    "usage: canic snapshot download --canister <id> --out <dir> [--root <id> | --registry-json <file>] [--include-children] [--recursive] [--dry-run] [--stop-before-snapshot] [--resume-after-snapshot] [--network <name>]\n       canic backup preflight --dir <backup-dir> --out-dir <dir> [--mapping <file>] [--require-restore-ready]\n       canic backup inspect --dir <backup-dir> [--out <file>] [--require-ready]\n       canic backup provenance --dir <backup-dir> [--out <file>] [--require-consistent]\n       canic backup status --dir <backup-dir> [--out <file>] [--require-complete]\n       canic backup verify --dir <backup-dir> [--out <file>]\n       canic manifest validate --manifest <file> [--out <file>]\n       canic restore plan (--manifest <file> | --backup-dir <dir>) [--mapping <file>] [--out <file>] [--require-verified] [--require-restore-ready]\n       canic restore status --plan <file> [--out <file>]\n       canic restore apply --plan <file> [--status <file>] [--backup-dir <dir>] --dry-run [--out <file>] [--journal-out <file>]\n       canic restore apply-status --journal <file> [--out <file>] [--require-ready] [--require-no-pending] [--require-no-failed] [--require-complete]\n       canic restore apply-next --journal <file> [--out <file>]\n       canic restore apply-command --journal <file> [--dfx <path>] [--network <name>] [--out <file>] [--require-command]\n       canic restore apply-claim --journal <file> [--sequence <n>] [--updated-at <text>] [--out <file>]\n       canic restore apply-unclaim --journal <file> [--sequence <n>] [--updated-at <text>] [--out <file>]\n       canic restore apply-mark --journal <file> --sequence <n> --state completed|failed [--reason <text>] [--updated-at <text>] [--out <file>] [--require-pending]"
 }
 
 #[cfg(test)]
@@ -81,20 +81,20 @@ mod tests {
             "canic restore apply --plan <file> [--status <file>] [--backup-dir <dir>] --dry-run [--out <file>] [--journal-out <file>]"
         ));
         assert!(text.contains(
-            "canic restore apply-status --journal <file> [--out <file>] [--require-no-pending] [--require-no-failed] [--require-complete]"
+            "canic restore apply-status --journal <file> [--out <file>] [--require-ready] [--require-no-pending] [--require-no-failed] [--require-complete]"
         ));
         assert!(text.contains("canic restore apply-next --journal <file> [--out <file>]"));
         assert!(text.contains(
-            "canic restore apply-command --journal <file> [--dfx <path>] [--network <name>] [--out <file>]"
+            "canic restore apply-command --journal <file> [--dfx <path>] [--network <name>] [--out <file>] [--require-command]"
         ));
         assert!(text.contains(
-            "canic restore apply-claim --journal <file> [--updated-at <text>] [--out <file>]"
+            "canic restore apply-claim --journal <file> [--sequence <n>] [--updated-at <text>] [--out <file>]"
         ));
         assert!(text.contains(
-            "canic restore apply-unclaim --journal <file> [--updated-at <text>] [--out <file>]"
+            "canic restore apply-unclaim --journal <file> [--sequence <n>] [--updated-at <text>] [--out <file>]"
         ));
         assert!(text.contains(
-            "canic restore apply-mark --journal <file> --sequence <n> --state completed|failed [--reason <text>] [--updated-at <text>] [--out <file>]"
+            "canic restore apply-mark --journal <file> --sequence <n> --state completed|failed [--reason <text>] [--updated-at <text>] [--out <file>] [--require-pending]"
         ));
     }
 }
