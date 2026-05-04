@@ -17,6 +17,7 @@ pub enum LifecycleMetricPhase {
 }
 
 impl LifecycleMetricPhase {
+    #[must_use]
     pub const fn metric_label(self) -> &'static str {
         match self {
             Self::Init => "init",
@@ -37,6 +38,7 @@ pub enum LifecycleMetricRole {
 }
 
 impl LifecycleMetricRole {
+    #[must_use]
     pub const fn metric_label(self) -> &'static str {
         match self {
             Self::Nonroot => "nonroot",
@@ -57,6 +59,7 @@ pub enum LifecycleMetricStage {
 }
 
 impl LifecycleMetricStage {
+    #[must_use]
     pub const fn metric_label(self) -> &'static str {
         match self {
             Self::Bootstrap => "bootstrap",
@@ -81,6 +84,7 @@ pub enum LifecycleMetricOutcome {
 }
 
 impl LifecycleMetricOutcome {
+    #[must_use]
     pub const fn metric_label(self) -> &'static str {
         match self {
             Self::Completed => "completed",
