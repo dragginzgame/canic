@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.30.x] - 2026-05-03 - Fleet Snapshot Backups
 
+- `0.30.26` adds `canic restore apply-report` and `--require-no-attention` so operators and CI can summarize restore apply journal outcomes, counts, and attention-needed operations without reading the full journal.
+
+```bash
+canic restore apply-report \
+  --journal restore-apply-journal.json \
+  --out restore-apply-report.json \
+  --require-no-attention
+```
+
 - `0.30.25` adds restore runner guards for `apply-status --require-ready`, `apply-command --require-command`, `apply-claim --sequence`, `apply-unclaim --sequence`, and `apply-mark --require-pending` so external restore scripts can fail closed when work is blocked, no command is available, the journal moved, or a completion was not claimed first.
 
 ```bash

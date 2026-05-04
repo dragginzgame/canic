@@ -4,8 +4,9 @@ use canic_backup::{
     restore::{
         RestoreApplyCommandConfig, RestoreApplyCommandPreview, RestoreApplyDryRun,
         RestoreApplyDryRunError, RestoreApplyJournal, RestoreApplyJournalError,
-        RestoreApplyJournalStatus, RestoreApplyNextOperation, RestoreApplyOperationState,
-        RestoreMapping, RestorePlan, RestorePlanError, RestorePlanner, RestoreStatus,
+        RestoreApplyJournalReport, RestoreApplyJournalStatus, RestoreApplyNextOperation,
+        RestoreApplyOperationState, RestoreMapping, RestorePlan, RestorePlanError, RestorePlanner,
+        RestoreStatus,
     },
 };
 use std::{
@@ -73,6 +74,12 @@ pub enum RestoreCommandError {
     RestoreApplyNotReady {
         backup_id: String,
         reasons: Vec<String>,
+    },
+
+    #[error("restore apply report for backup {backup_id} requires attention: outcome={outcome:?}")]
+    RestoreApplyReportNeedsAttention {
+        backup_id: String,
+        outcome: canic_backup::restore::RestoreApplyReportOutcome,
     },
 
     #[error(
@@ -369,6 +376,49 @@ impl RestoreApplyStatusOptions {
             require_no_pending,
             require_no_failed,
             require_complete,
+            out,
+        })
+    }
+}
+
+///
+/// RestoreApplyReportOptions
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RestoreApplyReportOptions {
+    pub journal: PathBuf,
+    pub require_no_attention: bool,
+    pub out: Option<PathBuf>,
+}
+
+impl RestoreApplyReportOptions {
+    /// Parse restore apply-report options from CLI arguments.
+    pub fn parse<I>(args: I) -> Result<Self, RestoreCommandError>
+    where
+        I: IntoIterator<Item = OsString>,
+    {
+        let mut journal = None;
+        let mut require_no_attention = false;
+        let mut out = None;
+
+        let mut args = args.into_iter();
+        while let Some(arg) = args.next() {
+            let arg = arg
+                .into_string()
+                .map_err(|_| RestoreCommandError::Usage(usage()))?;
+            match arg.as_str() {
+                "--journal" => journal = Some(PathBuf::from(next_value(&mut args, "--journal")?)),
+                "--require-no-attention" => require_no_attention = true,
+                "--out" => out = Some(PathBuf::from(next_value(&mut args, "--out")?)),
+                "--help" | "-h" => return Err(RestoreCommandError::Usage(usage())),
+                _ => return Err(RestoreCommandError::UnknownOption(arg)),
+            }
+        }
+
+        Ok(Self {
+            journal: journal.ok_or(RestoreCommandError::MissingOption("--journal"))?,
+            require_no_attention,
             out,
         })
     }
@@ -686,6 +736,13 @@ where
             enforce_apply_status_requirements(&options, &status)?;
             Ok(())
         }
+        "apply-report" => {
+            let options = RestoreApplyReportOptions::parse(args)?;
+            let report = restore_apply_report(&options)?;
+            write_apply_report(&options, &report)?;
+            enforce_apply_report_requirements(&options, &report)?;
+            Ok(())
+        }
         "apply-next" => {
             let options = RestoreApplyNextOptions::parse(args)?;
             let next = restore_apply_next(&options)?;
@@ -764,6 +821,29 @@ pub fn restore_apply_status(
 ) -> Result<RestoreApplyJournalStatus, RestoreCommandError> {
     let journal = read_apply_journal(&options.journal)?;
     Ok(journal.status())
+}
+
+/// Build an operator-oriented restore apply report from a journal file.
+pub fn restore_apply_report(
+    options: &RestoreApplyReportOptions,
+) -> Result<RestoreApplyJournalReport, RestoreCommandError> {
+    let journal = read_apply_journal(&options.journal)?;
+    Ok(journal.report())
+}
+
+// Enforce caller-requested apply report requirements after report output is emitted.
+fn enforce_apply_report_requirements(
+    options: &RestoreApplyReportOptions,
+    report: &RestoreApplyJournalReport,
+) -> Result<(), RestoreCommandError> {
+    if !options.require_no_attention || !report.attention_required {
+        return Ok(());
+    }
+
+    Err(RestoreCommandError::RestoreApplyReportNeedsAttention {
+        backup_id: report.backup_id.clone(),
+        outcome: report.outcome.clone(),
+    })
 }
 
 // Enforce caller-requested apply journal requirements after status is emitted.
@@ -1148,6 +1228,24 @@ fn write_apply_status(
     Ok(())
 }
 
+// Write the computed apply journal report to stdout or a requested output file.
+fn write_apply_report(
+    options: &RestoreApplyReportOptions,
+    report: &RestoreApplyJournalReport,
+) -> Result<(), RestoreCommandError> {
+    if let Some(path) = &options.out {
+        let data = serde_json::to_vec_pretty(report)?;
+        fs::write(path, data)?;
+        return Ok(());
+    }
+
+    let stdout = io::stdout();
+    let mut handle = stdout.lock();
+    serde_json::to_writer_pretty(&mut handle, report)?;
+    writeln!(handle)?;
+    Ok(())
+}
+
 // Write the computed apply next-operation response to stdout or a requested output file.
 fn write_apply_next(
     options: &RestoreApplyNextOptions,
@@ -1250,7 +1348,7 @@ where
 
 // Return restore command usage text.
 const fn usage() -> &'static str {
-    "usage: canic restore plan (--manifest <file> | --backup-dir <dir>) [--mapping <file>] [--out <file>] [--require-verified] [--require-restore-ready]\n       canic restore status --plan <file> [--out <file>]\n       canic restore apply --plan <file> [--status <file>] [--backup-dir <dir>] --dry-run [--out <file>] [--journal-out <file>]\n       canic restore apply-status --journal <file> [--out <file>] [--require-ready] [--require-no-pending] [--require-no-failed] [--require-complete]\n       canic restore apply-next --journal <file> [--out <file>]\n       canic restore apply-command --journal <file> [--dfx <path>] [--network <name>] [--out <file>] [--require-command]\n       canic restore apply-claim --journal <file> [--sequence <n>] [--updated-at <text>] [--out <file>]\n       canic restore apply-unclaim --journal <file> [--sequence <n>] [--updated-at <text>] [--out <file>]\n       canic restore apply-mark --journal <file> --sequence <n> --state completed|failed [--reason <text>] [--updated-at <text>] [--out <file>] [--require-pending]"
+    "usage: canic restore plan (--manifest <file> | --backup-dir <dir>) [--mapping <file>] [--out <file>] [--require-verified] [--require-restore-ready]\n       canic restore status --plan <file> [--out <file>]\n       canic restore apply --plan <file> [--status <file>] [--backup-dir <dir>] --dry-run [--out <file>] [--journal-out <file>]\n       canic restore apply-status --journal <file> [--out <file>] [--require-ready] [--require-no-pending] [--require-no-failed] [--require-complete]\n       canic restore apply-report --journal <file> [--out <file>] [--require-no-attention]\n       canic restore apply-next --journal <file> [--out <file>]\n       canic restore apply-command --journal <file> [--dfx <path>] [--network <name>] [--out <file>] [--require-command]\n       canic restore apply-claim --journal <file> [--sequence <n>] [--updated-at <text>] [--out <file>]\n       canic restore apply-unclaim --journal <file> [--sequence <n>] [--updated-at <text>] [--out <file>]\n       canic restore apply-mark --journal <file> --sequence <n> --state completed|failed [--reason <text>] [--updated-at <text>] [--out <file>] [--require-pending]"
 }
 
 #[cfg(test)]
@@ -1387,6 +1485,26 @@ mod tests {
         assert_eq!(
             options.out,
             Some(PathBuf::from("restore-apply-status.json"))
+        );
+    }
+
+    // Ensure restore apply-report options parse the intended journal command.
+    #[test]
+    fn parses_restore_apply_report_options() {
+        let options = RestoreApplyReportOptions::parse([
+            OsString::from("--journal"),
+            OsString::from("restore-apply-journal.json"),
+            OsString::from("--out"),
+            OsString::from("restore-apply-report.json"),
+            OsString::from("--require-no-attention"),
+        ])
+        .expect("parse apply-report options");
+
+        assert_eq!(options.journal, PathBuf::from("restore-apply-journal.json"));
+        assert!(options.require_no_attention);
+        assert_eq!(
+            options.out,
+            Some(PathBuf::from("restore-apply-report.json"))
         );
     }
 
@@ -2057,6 +2175,107 @@ mod tests {
             err,
             RestoreCommandError::RestoreApplyNotReady { reasons, .. }
                 if reasons.contains(&"missing-snapshot-checksum".to_string())
+        ));
+    }
+
+    // Ensure apply-report writes the operator-focused journal summary.
+    #[test]
+    fn run_restore_apply_report_writes_attention_summary() {
+        let root = temp_dir("canic-cli-restore-apply-report");
+        fs::create_dir_all(&root).expect("create temp root");
+        let journal_path = root.join("restore-apply-journal.json");
+        let out_path = root.join("restore-apply-report.json");
+        let mut journal = ready_apply_journal();
+        journal
+            .mark_operation_failed_at(
+                0,
+                "dfx-upload-failed".to_string(),
+                Some("2026-05-05T12:00:00Z".to_string()),
+            )
+            .expect("mark failed operation");
+        journal
+            .mark_next_operation_pending_at(Some("2026-05-05T12:01:00Z".to_string()))
+            .expect("mark pending operation");
+
+        fs::write(
+            &journal_path,
+            serde_json::to_vec(&journal).expect("serialize journal"),
+        )
+        .expect("write journal");
+
+        run([
+            OsString::from("apply-report"),
+            OsString::from("--journal"),
+            OsString::from(journal_path.as_os_str()),
+            OsString::from("--out"),
+            OsString::from(out_path.as_os_str()),
+        ])
+        .expect("write apply report");
+
+        let report: RestoreApplyJournalReport =
+            serde_json::from_slice(&fs::read(&out_path).expect("read apply report"))
+                .expect("decode apply report");
+        let report_json: serde_json::Value =
+            serde_json::to_value(&report).expect("encode apply report");
+
+        fs::remove_dir_all(root).expect("remove temp root");
+        assert_eq!(report.backup_id, "backup-test");
+        assert!(report.attention_required);
+        assert_eq!(report.failed_operations, 1);
+        assert_eq!(report.pending_operations, 1);
+        assert_eq!(report.failed.len(), 1);
+        assert_eq!(report.pending.len(), 1);
+        assert_eq!(report.failed[0].sequence, 0);
+        assert_eq!(report.pending[0].sequence, 1);
+        assert_eq!(
+            report.next_transition.as_ref().map(|op| op.sequence),
+            Some(1)
+        );
+        assert_eq!(report_json["outcome"], "failed");
+        assert_eq!(report_json["failed"][0]["reasons"][0], "dfx-upload-failed");
+    }
+
+    // Ensure apply-report can fail closed after writing an attention report.
+    #[test]
+    fn run_restore_apply_report_require_no_attention_writes_report_then_fails() {
+        let root = temp_dir("canic-cli-restore-apply-report-attention");
+        fs::create_dir_all(&root).expect("create temp root");
+        let journal_path = root.join("restore-apply-journal.json");
+        let out_path = root.join("restore-apply-report.json");
+        let mut journal = ready_apply_journal();
+        journal
+            .mark_next_operation_pending_at(Some("2026-05-05T12:01:00Z".to_string()))
+            .expect("mark pending operation");
+
+        fs::write(
+            &journal_path,
+            serde_json::to_vec(&journal).expect("serialize journal"),
+        )
+        .expect("write journal");
+
+        let err = run([
+            OsString::from("apply-report"),
+            OsString::from("--journal"),
+            OsString::from(journal_path.as_os_str()),
+            OsString::from("--out"),
+            OsString::from(out_path.as_os_str()),
+            OsString::from("--require-no-attention"),
+        ])
+        .expect_err("attention report should fail requirement");
+
+        let report: RestoreApplyJournalReport =
+            serde_json::from_slice(&fs::read(&out_path).expect("read apply report"))
+                .expect("decode apply report");
+
+        fs::remove_dir_all(root).expect("remove temp root");
+        assert!(report.attention_required);
+        assert_eq!(report.pending_operations, 1);
+        assert!(matches!(
+            err,
+            RestoreCommandError::RestoreApplyReportNeedsAttention {
+                outcome: canic_backup::restore::RestoreApplyReportOutcome::Pending,
+                ..
+            }
         ));
     }
 

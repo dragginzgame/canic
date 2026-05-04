@@ -192,6 +192,21 @@ Use `--require-no-failed` when failed operations should stop the runner before
 completion checks. Use `--require-complete` when scripts should fail until every
 apply operation is completed.
 
+Write an operator-focused restore apply report:
+
+```bash
+canic restore apply-report \
+  --journal restore-apply-journal.json \
+  --out restore-apply-report.json \
+  --require-no-attention
+```
+
+Apply reports include one high-level outcome, attention-required status,
+operation counts, blocked reasons, the next transitionable operation, and the
+pending, failed, and blocked operation rows that need review. Use
+`--require-no-attention` when CI should fail after writing the report if the
+journal has pending, failed, or blocked work.
+
 Emit the full next transitionable operation for an external runner:
 
 ```bash

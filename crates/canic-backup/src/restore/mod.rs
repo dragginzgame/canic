@@ -388,6 +388,12 @@ impl RestoreApplyJournal {
         RestoreApplyJournalStatus::from_journal(self)
     }
 
+    /// Build an operator-oriented report from this apply journal.
+    #[must_use]
+    pub fn report(&self) -> RestoreApplyJournalReport {
+        RestoreApplyJournalReport::from_journal(self)
+    }
+
     /// Return the full next ready operation row, if one is available.
     #[must_use]
     pub fn next_ready_operation(&self) -> Option<&RestoreApplyJournalOperation> {
@@ -802,6 +808,157 @@ impl RestoreApplyJournalStatus {
                 .and_then(|operation| operation.state_updated_at.clone()),
         }
     }
+}
+
+///
+/// RestoreApplyJournalReport
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RestoreApplyJournalReport {
+    pub report_version: u16,
+    pub backup_id: String,
+    pub outcome: RestoreApplyReportOutcome,
+    pub attention_required: bool,
+    pub ready: bool,
+    pub complete: bool,
+    pub blocked_reasons: Vec<String>,
+    pub operation_count: usize,
+    pub pending_operations: usize,
+    pub ready_operations: usize,
+    pub blocked_operations: usize,
+    pub completed_operations: usize,
+    pub failed_operations: usize,
+    pub next_transition: Option<RestoreApplyReportOperation>,
+    pub pending: Vec<RestoreApplyReportOperation>,
+    pub failed: Vec<RestoreApplyReportOperation>,
+    pub blocked: Vec<RestoreApplyReportOperation>,
+}
+
+impl RestoreApplyJournalReport {
+    /// Build a compact operator report from a restore apply journal.
+    #[must_use]
+    pub fn from_journal(journal: &RestoreApplyJournal) -> Self {
+        let complete =
+            journal.operation_count > 0 && journal.completed_operations == journal.operation_count;
+        let outcome = RestoreApplyReportOutcome::from_journal(journal, complete);
+        let pending = report_operations_with_state(journal, RestoreApplyOperationState::Pending);
+        let failed = report_operations_with_state(journal, RestoreApplyOperationState::Failed);
+        let blocked = report_operations_with_state(journal, RestoreApplyOperationState::Blocked);
+
+        Self {
+            report_version: 1,
+            backup_id: journal.backup_id.clone(),
+            outcome: outcome.clone(),
+            attention_required: outcome.attention_required(),
+            ready: journal.ready,
+            complete,
+            blocked_reasons: journal.blocked_reasons.clone(),
+            operation_count: journal.operation_count,
+            pending_operations: journal.pending_operations,
+            ready_operations: journal.ready_operations,
+            blocked_operations: journal.blocked_operations,
+            completed_operations: journal.completed_operations,
+            failed_operations: journal.failed_operations,
+            next_transition: journal
+                .next_transition_operation()
+                .map(RestoreApplyReportOperation::from_journal_operation),
+            pending,
+            failed,
+            blocked,
+        }
+    }
+}
+
+///
+/// RestoreApplyReportOutcome
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum RestoreApplyReportOutcome {
+    Empty,
+    Complete,
+    Failed,
+    Blocked,
+    Pending,
+    InProgress,
+}
+
+impl RestoreApplyReportOutcome {
+    // Classify the journal into one high-level operator outcome.
+    const fn from_journal(journal: &RestoreApplyJournal, complete: bool) -> Self {
+        if journal.operation_count == 0 {
+            return Self::Empty;
+        }
+        if complete {
+            return Self::Complete;
+        }
+        if journal.failed_operations > 0 {
+            return Self::Failed;
+        }
+        if !journal.ready || journal.blocked_operations > 0 {
+            return Self::Blocked;
+        }
+        if journal.pending_operations > 0 {
+            return Self::Pending;
+        }
+        Self::InProgress
+    }
+
+    // Return whether this outcome needs operator or automation attention.
+    const fn attention_required(&self) -> bool {
+        matches!(self, Self::Failed | Self::Blocked | Self::Pending)
+    }
+}
+
+///
+/// RestoreApplyReportOperation
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RestoreApplyReportOperation {
+    pub sequence: usize,
+    pub operation: RestoreApplyOperationKind,
+    pub state: RestoreApplyOperationState,
+    pub restore_group: u16,
+    pub phase_order: usize,
+    pub role: String,
+    pub source_canister: String,
+    pub target_canister: String,
+    pub state_updated_at: Option<String>,
+    pub reasons: Vec<String>,
+}
+
+impl RestoreApplyReportOperation {
+    // Build one compact report row from one journal operation.
+    fn from_journal_operation(operation: &RestoreApplyJournalOperation) -> Self {
+        Self {
+            sequence: operation.sequence,
+            operation: operation.operation.clone(),
+            state: operation.state.clone(),
+            restore_group: operation.restore_group,
+            phase_order: operation.phase_order,
+            role: operation.role.clone(),
+            source_canister: operation.source_canister.clone(),
+            target_canister: operation.target_canister.clone(),
+            state_updated_at: operation.state_updated_at.clone(),
+            reasons: operation.blocking_reasons.clone(),
+        }
+    }
+}
+
+// Return compact report rows for operations in one state.
+fn report_operations_with_state(
+    journal: &RestoreApplyJournal,
+    state: RestoreApplyOperationState,
+) -> Vec<RestoreApplyReportOperation> {
+    journal
+        .operations
+        .iter()
+        .filter(|operation| operation.state == state)
+        .map(RestoreApplyReportOperation::from_journal_operation)
+        .collect()
 }
 
 ///
