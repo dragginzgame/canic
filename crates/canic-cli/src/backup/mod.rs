@@ -750,6 +750,7 @@ mod tests {
                 code_version: Some("v0.30.3".to_string()),
                 artifact_path: "artifacts/root".to_string(),
                 checksum_algorithm: "sha256".to_string(),
+                checksum: None,
             },
         }
     }

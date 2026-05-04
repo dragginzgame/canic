@@ -500,6 +500,7 @@ mod tests {
                 code_version: Some("v0.30.1".to_string()),
                 artifact_path: format!("artifacts/{role}"),
                 checksum_algorithm: "sha256".to_string(),
+                checksum: None,
             },
         }
     }

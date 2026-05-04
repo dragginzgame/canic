@@ -76,6 +76,7 @@ impl DiscoveredMember {
                 code_version: self.snapshot_plan.code_version,
                 artifact_path: self.snapshot_plan.artifact_path,
                 checksum_algorithm: self.snapshot_plan.checksum_algorithm,
+                checksum: self.snapshot_plan.checksum,
             },
         }
     }
@@ -93,6 +94,7 @@ pub struct SnapshotPlan {
     pub code_version: Option<String>,
     pub artifact_path: String,
     pub checksum_algorithm: String,
+    pub checksum: Option<String>,
 }
 
 ///
@@ -246,6 +248,7 @@ mod tests {
                 code_version: Some("v0.30.0".to_string()),
                 artifact_path: format!("artifacts/{role}"),
                 checksum_algorithm: "sha256".to_string(),
+                checksum: Some(HASH.to_string()),
             },
         }
     }

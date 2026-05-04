@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.30.x] - 2026-05-03 - Fleet Snapshot Backups
 
+- `0.30.8` records durable artifact checksums in manifest snapshot provenance and rejects verified backup layouts when manifest and journal checksums disagree.
 - `0.30.7` makes snapshot capture write the canonical backup manifest, adds `canic backup preflight` for the standard no-mutation restore-readiness report bundle, and cleans up the 0.30 changelog example placement.
 
 ```bash

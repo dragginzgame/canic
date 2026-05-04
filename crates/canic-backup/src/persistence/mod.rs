@@ -151,6 +151,16 @@ pub enum PersistenceError {
         snapshot_id: String,
     },
 
+    #[error(
+        "manifest checksum for {canister_id} snapshot {snapshot_id} does not match journal checksum"
+    )]
+    ManifestJournalChecksumMismatch {
+        canister_id: String,
+        snapshot_id: String,
+        manifest: String,
+        journal: String,
+    },
+
     #[error("artifact path does not exist: {0}")]
     MissingArtifact(String),
 }
@@ -210,6 +220,16 @@ fn verify_layout_integrity(
         let Some(expected_hash) = entry.checksum.as_deref() else {
             unreachable!("validated durable journals must include checksums");
         };
+        if let Some(manifest_hash) = member.source_snapshot.checksum.as_deref()
+            && manifest_hash != expected_hash
+        {
+            return Err(PersistenceError::ManifestJournalChecksumMismatch {
+                canister_id: entry.canister_id.clone(),
+                snapshot_id: entry.snapshot_id.clone(),
+                manifest: manifest_hash.to_string(),
+                journal: expected_hash.to_string(),
+            });
+        }
         let artifact_path = resolve_artifact_path(layout.root(), &entry.artifact_path);
         if !artifact_path.exists() {
             return Err(PersistenceError::MissingArtifact(
@@ -454,6 +474,32 @@ mod tests {
         ));
     }
 
+    // Ensure manifest snapshot checksums cannot drift from the durable journal.
+    #[test]
+    fn integrity_rejects_manifest_journal_checksum_mismatch() {
+        let root = temp_dir("canic-backup-integrity-manifest-checksum");
+        let layout = BackupLayout::new(root.clone());
+        let checksum = write_artifact(&root, b"root artifact");
+        let mut manifest = valid_manifest();
+        manifest.fleet.members[0].source_snapshot.checksum =
+            Some("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff".to_string());
+
+        layout.write_manifest(&manifest).expect("write manifest");
+        layout
+            .write_journal(&journal_with_checksum(checksum.hash))
+            .expect("write journal");
+
+        let err = layout
+            .verify_integrity()
+            .expect_err("manifest checksum mismatch should fail");
+
+        fs::remove_dir_all(root).expect("remove temp layout");
+        assert!(matches!(
+            err,
+            PersistenceError::ManifestJournalChecksumMismatch { .. }
+        ));
+    }
+
     // Build one valid manifest for persistence tests.
     fn valid_manifest() -> FleetBackupManifest {
         FleetBackupManifest {
@@ -507,6 +553,7 @@ mod tests {
                         code_version: Some("v0.30.0".to_string()),
                         artifact_path: "artifacts/root".to_string(),
                         checksum_algorithm: "sha256".to_string(),
+                        checksum: None,
                     },
                 }],
             },

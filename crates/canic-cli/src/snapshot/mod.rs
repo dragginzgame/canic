@@ -886,6 +886,7 @@ fn fleet_member(
             code_version: None,
             artifact_path: safe_path_segment(&target.canister_id),
             checksum_algorithm: "sha256".to_string(),
+            checksum: Some(artifact.checksum.clone()),
         },
     })
 }
@@ -1140,6 +1141,13 @@ exit 1
         assert_eq!(
             manifest.fleet.members[0].source_snapshot.snapshot_id,
             "snapshot-aaaaa-aa"
+        );
+        assert_eq!(
+            manifest.fleet.members[0]
+                .source_snapshot
+                .checksum
+                .as_deref(),
+            journal.artifacts[0].checksum.as_deref()
         );
     }
 

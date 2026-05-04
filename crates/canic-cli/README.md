@@ -23,7 +23,9 @@ DFX only creates snapshots for stopped canisters. Pass
 that local lifecycle step around each captured artifact.
 
 Successful non-dry-run captures write the canonical backup layout: manifest,
-download journal, and durable artifact directories.
+download journal, and durable artifact directories. Generated manifests include
+each durable artifact checksum so verification can detect manifest/journal
+drift before restore planning.
 
 Validate a captured manifest before restore planning:
 

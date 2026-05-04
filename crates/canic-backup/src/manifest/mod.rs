@@ -331,6 +331,8 @@ pub struct SourceSnapshot {
     pub code_version: Option<String>,
     pub artifact_path: String,
     pub checksum_algorithm: String,
+    #[serde(default)]
+    pub checksum: Option<String>,
 }
 
 impl SourceSnapshot {
@@ -365,6 +367,10 @@ impl SourceSnapshot {
                 self.checksum_algorithm.clone(),
             ));
         }
+        validate_optional_hash(
+            "fleet.members[].source_snapshot.checksum",
+            self.checksum.as_deref(),
+        )?;
         Ok(())
     }
 }
@@ -594,6 +600,17 @@ fn validate_hash(field: &'static str, value: &str) -> Result<(), ManifestValidat
     }
 }
 
+// Validate optional SHA-256 hex values only when present.
+fn validate_optional_hash(
+    field: &'static str,
+    value: Option<&str>,
+) -> Result<(), ManifestValidationError> {
+    if let Some(value) = value {
+        validate_hash(field, value)?;
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -657,6 +674,22 @@ mod tests {
         manifest.validate().expect("manifest should validate");
     }
 
+    // Ensure snapshot checksum provenance stays canonical when present.
+    #[test]
+    fn invalid_snapshot_checksum_fails_validation() {
+        let mut manifest = valid_manifest();
+        manifest.fleet.members[0].source_snapshot.checksum = Some("not-a-sha".to_string());
+
+        let err = manifest
+            .validate()
+            .expect_err("invalid snapshot checksum should fail");
+
+        assert!(matches!(
+            err,
+            ManifestValidationError::InvalidHash("fleet.members[].source_snapshot.checksum")
+        ));
+    }
+
     // Build one valid fleet member for manifest validation tests.
     fn fleet_member(
         role: &str,
@@ -685,6 +718,7 @@ mod tests {
                 code_version: Some("v0.30.0".to_string()),
                 artifact_path: format!("artifacts/{role}"),
                 checksum_algorithm: "sha256".to_string(),
+                checksum: Some(HASH.to_string()),
             },
         }
     }

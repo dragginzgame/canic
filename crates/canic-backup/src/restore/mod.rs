@@ -431,6 +431,7 @@ mod tests {
                 code_version: Some("v0.30.0".to_string()),
                 artifact_path: format!("artifacts/{role}"),
                 checksum_algorithm: "sha256".to_string(),
+                checksum: Some(HASH.to_string()),
             },
         }
     }
