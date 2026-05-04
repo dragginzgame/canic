@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.30.x] - 2026-05-03 - Fleet Snapshot Backups
 
+- `0.30.11` refreshes the release version and installer surfaces after the 0.30.10 topology/journal inspection line so downstream setup paths resolve the live patch.
 - `0.30.10` adds scriptable backup inspection, records topology receipts in journals, rejects manifest/journal artifact path drift, fails snapshot capture if topology changes before the first snapshot is created, and updates runtime `ctor` hooks for the explicit unsafe constructor form.
 - `0.30.9` refreshes the release version and installer surfaces after the manifest snapshot checksum line so downstream setup paths resolve the live patch.
 - `0.30.8` records durable artifact checksums in manifest snapshot provenance and rejects verified backup layouts when manifest and journal checksums disagree.
