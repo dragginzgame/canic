@@ -6,6 +6,10 @@ use crate::{
         ic::IcOpsError,
         runtime::metrics::{
             http::{HttpMethod as MetricsHttpMethod, HttpMetrics},
+            platform_call::{
+                PlatformCallMetricMode, PlatformCallMetricOutcome, PlatformCallMetricReason,
+                PlatformCallMetricSurface, PlatformCallMetrics,
+            },
             system::SystemMetrics,
         },
     },
@@ -138,6 +142,10 @@ impl HttpOps {
         let status = u32::try_from(&res.status.0).unwrap_or(u32::MAX);
 
         if !(200..300).contains(&status) {
+            record_http_call(
+                PlatformCallMetricOutcome::Failed,
+                PlatformCallMetricReason::HttpStatus,
+            );
             return Err(HttpOpsError::HttpStatus(status).into());
         }
 
@@ -168,9 +176,24 @@ impl HttpOps {
     ) -> Result<HttpRequestResult, InternalError> {
         Self::record_metrics(args.method, &args.url, label);
         let cdk_args = crate::cdk::mgmt::HttpRequestArgs::from(args);
-        let res = HttpInfra::http_request_raw(&cdk_args)
-            .await
-            .map_err(HttpOpsError::from)?;
+        record_http_call(
+            PlatformCallMetricOutcome::Started,
+            PlatformCallMetricReason::Ok,
+        );
+        let res = match HttpInfra::http_request_raw(&cdk_args).await {
+            Ok(res) => res,
+            Err(err) => {
+                record_http_call(
+                    PlatformCallMetricOutcome::Failed,
+                    PlatformCallMetricReason::Infra,
+                );
+                return Err(HttpOpsError::from(err).into());
+            }
+        };
+        record_http_call(
+            PlatformCallMetricOutcome::Completed,
+            PlatformCallMetricReason::Ok,
+        );
 
         Ok(HttpRequestResult::from(res))
     }
@@ -195,6 +218,16 @@ impl HttpOps {
             })
             .collect()
     }
+}
+
+// Record one HTTP outcall metric with no URL or label dimensions.
+fn record_http_call(outcome: PlatformCallMetricOutcome, reason: PlatformCallMetricReason) {
+    PlatformCallMetrics::record(
+        PlatformCallMetricSurface::Http,
+        PlatformCallMetricMode::Update,
+        outcome,
+        reason,
+    );
 }
 
 const fn metrics_method(method: HttpMethod) -> MetricsHttpMethod {

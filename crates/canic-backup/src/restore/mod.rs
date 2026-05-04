@@ -1,11 +1,15 @@
-use crate::manifest::{
-    FleetBackupManifest, FleetMember, IdentityMode, ManifestValidationError, SourceSnapshot,
-    VerificationCheck,
+use crate::{
+    artifacts::{ArtifactChecksum, ArtifactChecksumError},
+    manifest::{
+        FleetBackupManifest, FleetMember, IdentityMode, ManifestValidationError, SourceSnapshot,
+        VerificationCheck,
+    },
 };
 use candid::Principal;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, BTreeSet},
+    path::{Component, Path, PathBuf},
     str::FromStr,
 };
 use thiserror::Error as ThisError;
@@ -202,6 +206,7 @@ pub struct RestoreApplyDryRun {
     pub planned_code_reinstalls: usize,
     pub planned_verification_checks: usize,
     pub rendered_operations: usize,
+    pub artifact_validation: Option<RestoreApplyArtifactValidation>,
     pub phases: Vec<RestoreApplyDryRunPhase>,
 }
 
@@ -216,6 +221,17 @@ impl RestoreApplyDryRun {
         }
 
         Ok(Self::from_validated_plan(plan, status))
+    }
+
+    /// Build an apply dry-run and verify all referenced artifacts under a backup root.
+    pub fn try_from_plan_with_artifacts(
+        plan: &RestorePlan,
+        status: Option<&RestoreStatus>,
+        backup_root: &Path,
+    ) -> Result<Self, RestoreApplyDryRunError> {
+        let mut dry_run = Self::try_from_plan(plan, status)?;
+        dry_run.artifact_validation = Some(validate_restore_apply_artifacts(plan, backup_root)?);
+        Ok(dry_run)
     }
 
     // Build a no-mutation apply dry-run after any supplied status is validated.
@@ -246,9 +262,113 @@ impl RestoreApplyDryRun {
             planned_code_reinstalls: plan.operation_summary.planned_code_reinstalls,
             planned_verification_checks: plan.operation_summary.planned_verification_checks,
             rendered_operations,
+            artifact_validation: None,
             phases,
         }
     }
+}
+
+// Verify every planned restore artifact against one backup directory root.
+fn validate_restore_apply_artifacts(
+    plan: &RestorePlan,
+    backup_root: &Path,
+) -> Result<RestoreApplyArtifactValidation, RestoreApplyDryRunError> {
+    let mut checks = Vec::new();
+
+    for member in plan.ordered_members() {
+        checks.push(validate_restore_apply_artifact(member, backup_root)?);
+    }
+
+    let members_with_expected_checksums = checks
+        .iter()
+        .filter(|check| check.checksum_expected.is_some())
+        .count();
+    let artifacts_present = checks.iter().all(|check| check.exists);
+    let checksums_verified = members_with_expected_checksums == plan.member_count
+        && checks.iter().all(|check| check.checksum_verified);
+
+    Ok(RestoreApplyArtifactValidation {
+        backup_root: backup_root.to_string_lossy().to_string(),
+        checked_members: checks.len(),
+        artifacts_present,
+        checksums_verified,
+        members_with_expected_checksums,
+        checks,
+    })
+}
+
+// Verify one planned restore artifact path and checksum.
+fn validate_restore_apply_artifact(
+    member: &RestorePlanMember,
+    backup_root: &Path,
+) -> Result<RestoreApplyArtifactCheck, RestoreApplyDryRunError> {
+    let artifact_path = safe_restore_artifact_path(
+        &member.source_canister,
+        &member.source_snapshot.artifact_path,
+    )?;
+    let resolved_path = backup_root.join(&artifact_path);
+
+    if !resolved_path.exists() {
+        return Err(RestoreApplyDryRunError::ArtifactMissing {
+            source_canister: member.source_canister.clone(),
+            artifact_path: member.source_snapshot.artifact_path.clone(),
+            resolved_path: resolved_path.to_string_lossy().to_string(),
+        });
+    }
+
+    let (checksum_actual, checksum_verified) =
+        if let Some(expected) = &member.source_snapshot.checksum {
+            let checksum = ArtifactChecksum::from_path(&resolved_path).map_err(|source| {
+                RestoreApplyDryRunError::ArtifactChecksum {
+                    source_canister: member.source_canister.clone(),
+                    artifact_path: member.source_snapshot.artifact_path.clone(),
+                    source,
+                }
+            })?;
+            checksum.verify(expected).map_err(|source| {
+                RestoreApplyDryRunError::ArtifactChecksum {
+                    source_canister: member.source_canister.clone(),
+                    artifact_path: member.source_snapshot.artifact_path.clone(),
+                    source,
+                }
+            })?;
+            (Some(checksum.hash), true)
+        } else {
+            (None, false)
+        };
+
+    Ok(RestoreApplyArtifactCheck {
+        source_canister: member.source_canister.clone(),
+        target_canister: member.target_canister.clone(),
+        snapshot_id: member.source_snapshot.snapshot_id.clone(),
+        artifact_path: member.source_snapshot.artifact_path.clone(),
+        resolved_path: resolved_path.to_string_lossy().to_string(),
+        exists: true,
+        checksum_algorithm: member.source_snapshot.checksum_algorithm.clone(),
+        checksum_expected: member.source_snapshot.checksum.clone(),
+        checksum_actual,
+        checksum_verified,
+    })
+}
+
+// Reject absolute paths and parent traversal before joining with the backup root.
+fn safe_restore_artifact_path(
+    source_canister: &str,
+    artifact_path: &str,
+) -> Result<PathBuf, RestoreApplyDryRunError> {
+    let path = Path::new(artifact_path);
+    let is_safe = path
+        .components()
+        .all(|component| matches!(component, Component::Normal(_) | Component::CurDir));
+
+    if is_safe {
+        return Ok(path.to_path_buf());
+    }
+
+    Err(RestoreApplyDryRunError::ArtifactPathEscapesBackup {
+        source_canister: source_canister.to_string(),
+        artifact_path: artifact_path.to_string(),
+    })
 }
 
 // Validate that a supplied restore status belongs to the restore plan.
@@ -309,6 +429,38 @@ const fn validate_status_usize_field(
         plan,
         status,
     })
+}
+
+///
+/// RestoreApplyArtifactValidation
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RestoreApplyArtifactValidation {
+    pub backup_root: String,
+    pub checked_members: usize,
+    pub artifacts_present: bool,
+    pub checksums_verified: bool,
+    pub members_with_expected_checksums: usize,
+    pub checks: Vec<RestoreApplyArtifactCheck>,
+}
+
+///
+/// RestoreApplyArtifactCheck
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RestoreApplyArtifactCheck {
+    pub source_canister: String,
+    pub target_canister: String,
+    pub snapshot_id: String,
+    pub artifact_path: String,
+    pub resolved_path: String,
+    pub exists: bool,
+    pub checksum_algorithm: String,
+    pub checksum_expected: Option<String>,
+    pub checksum_actual: Option<String>,
+    pub checksum_verified: bool,
 }
 
 ///
@@ -443,6 +595,29 @@ pub enum RestoreApplyDryRunError {
         field: &'static str,
         plan: usize,
         status: usize,
+    },
+
+    #[error("restore artifact path for {source_canister} escapes backup root: {artifact_path}")]
+    ArtifactPathEscapesBackup {
+        source_canister: String,
+        artifact_path: String,
+    },
+
+    #[error(
+        "restore artifact for {source_canister} is missing: {artifact_path} at {resolved_path}"
+    )]
+    ArtifactMissing {
+        source_canister: String,
+        artifact_path: String,
+        resolved_path: String,
+    },
+
+    #[error("restore artifact checksum failed for {source_canister} at {artifact_path}: {source}")]
+    ArtifactChecksum {
+        source_canister: String,
+        artifact_path: String,
+        #[source]
+        source: ArtifactChecksumError,
     },
 }
 
@@ -1106,6 +1281,11 @@ mod tests {
         MemberVerificationChecks, SourceMetadata, SourceSnapshot, ToolMetadata, VerificationCheck,
         VerificationPlan,
     };
+    use std::{
+        env, fs,
+        path::{Path, PathBuf},
+        time::{SystemTime, UNIX_EPOCH},
+    };
 
     const ROOT: &str = "aaaaa-aa";
     const CHILD: &str = "renrk-eyaaa-aaaaa-aaada-cai";
@@ -1579,6 +1759,82 @@ mod tests {
         assert_eq!(dry_run.phases[1].operations[3].sequence, 7);
     }
 
+    // Ensure apply dry-runs can prove referenced artifacts exist and match checksums.
+    #[test]
+    fn apply_dry_run_validates_artifacts_under_backup_root() {
+        let root = temp_dir("canic-restore-apply-artifacts-ok");
+        fs::create_dir_all(&root).expect("create temp root");
+        let mut manifest = valid_manifest(IdentityMode::Relocatable);
+        set_member_artifact(
+            &mut manifest,
+            CHILD,
+            &root,
+            "artifacts/child",
+            b"child-snapshot",
+        );
+        set_member_artifact(
+            &mut manifest,
+            ROOT,
+            &root,
+            "artifacts/root",
+            b"root-snapshot",
+        );
+
+        let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
+        let dry_run = RestoreApplyDryRun::try_from_plan_with_artifacts(&plan, None, &root)
+            .expect("dry-run should validate artifacts");
+
+        let validation = dry_run
+            .artifact_validation
+            .expect("artifact validation should be present");
+        assert_eq!(validation.checked_members, 2);
+        assert!(validation.artifacts_present);
+        assert!(validation.checksums_verified);
+        assert_eq!(validation.members_with_expected_checksums, 2);
+        assert_eq!(validation.checks[0].source_canister, ROOT);
+        assert!(validation.checks[0].checksum_verified);
+
+        fs::remove_dir_all(root).expect("remove temp root");
+    }
+
+    // Ensure apply dry-runs fail closed when a referenced artifact is missing.
+    #[test]
+    fn apply_dry_run_rejects_missing_artifacts() {
+        let root = temp_dir("canic-restore-apply-artifacts-missing");
+        fs::create_dir_all(&root).expect("create temp root");
+        let mut manifest = valid_manifest(IdentityMode::Relocatable);
+        manifest.fleet.members[0].source_snapshot.artifact_path = "missing-child".to_string();
+
+        let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
+        let err = RestoreApplyDryRun::try_from_plan_with_artifacts(&plan, None, &root)
+            .expect_err("missing artifact should fail");
+
+        fs::remove_dir_all(root).expect("remove temp root");
+        assert!(matches!(
+            err,
+            RestoreApplyDryRunError::ArtifactMissing { .. }
+        ));
+    }
+
+    // Ensure apply dry-runs reject artifact paths that escape the backup directory.
+    #[test]
+    fn apply_dry_run_rejects_artifact_path_traversal() {
+        let root = temp_dir("canic-restore-apply-artifacts-traversal");
+        fs::create_dir_all(&root).expect("create temp root");
+        let mut manifest = valid_manifest(IdentityMode::Relocatable);
+        manifest.fleet.members[1].source_snapshot.artifact_path = "../outside".to_string();
+
+        let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
+        let err = RestoreApplyDryRun::try_from_plan_with_artifacts(&plan, None, &root)
+            .expect_err("path traversal should fail");
+
+        fs::remove_dir_all(root).expect("remove temp root");
+        assert!(matches!(
+            err,
+            RestoreApplyDryRunError::ArtifactPathEscapesBackup { .. }
+        ));
+    }
+
     // Ensure apply dry-runs reject status files that do not match the plan.
     #[test]
     fn apply_dry_run_rejects_mismatched_status() {
@@ -1698,5 +1954,36 @@ mod tests {
             .expect_err("duplicate targets should fail");
 
         assert!(matches!(err, RestorePlanError::DuplicateMappingTarget(_)));
+    }
+
+    // Write one artifact and record its path and checksum in the test manifest.
+    fn set_member_artifact(
+        manifest: &mut FleetBackupManifest,
+        canister_id: &str,
+        root: &Path,
+        artifact_path: &str,
+        bytes: &[u8],
+    ) {
+        let full_path = root.join(artifact_path);
+        fs::create_dir_all(full_path.parent().expect("artifact parent")).expect("create parent");
+        fs::write(&full_path, bytes).expect("write artifact");
+        let checksum = ArtifactChecksum::from_bytes(bytes);
+        let member = manifest
+            .fleet
+            .members
+            .iter_mut()
+            .find(|member| member.canister_id == canister_id)
+            .expect("member should exist");
+        member.source_snapshot.artifact_path = artifact_path.to_string();
+        member.source_snapshot.checksum = Some(checksum.hash);
+    }
+
+    // Return a unique temporary directory for restore tests.
+    fn temp_dir(name: &str) -> PathBuf {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time should be after epoch")
+            .as_nanos();
+        env::temp_dir().join(format!("{name}-{nanos}"))
     }
 }

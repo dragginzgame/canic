@@ -183,6 +183,7 @@ impl RestoreStatusOptions {
 pub struct RestoreApplyOptions {
     pub plan: PathBuf,
     pub status: Option<PathBuf>,
+    pub backup_dir: Option<PathBuf>,
     pub out: Option<PathBuf>,
     pub dry_run: bool,
 }
@@ -195,6 +196,7 @@ impl RestoreApplyOptions {
     {
         let mut plan = None;
         let mut status = None;
+        let mut backup_dir = None;
         let mut out = None;
         let mut dry_run = false;
 
@@ -206,6 +208,9 @@ impl RestoreApplyOptions {
             match arg.as_str() {
                 "--plan" => plan = Some(PathBuf::from(next_value(&mut args, "--plan")?)),
                 "--status" => status = Some(PathBuf::from(next_value(&mut args, "--status")?)),
+                "--backup-dir" => {
+                    backup_dir = Some(PathBuf::from(next_value(&mut args, "--backup-dir")?));
+                }
                 "--out" => out = Some(PathBuf::from(next_value(&mut args, "--out")?)),
                 "--dry-run" => dry_run = true,
                 "--help" | "-h" => return Err(RestoreCommandError::Usage(usage())),
@@ -220,6 +225,7 @@ impl RestoreApplyOptions {
         Ok(Self {
             plan: plan.ok_or(RestoreCommandError::MissingOption("--plan"))?,
             status,
+            backup_dir,
             out,
             dry_run,
         })
@@ -285,6 +291,15 @@ pub fn restore_apply_dry_run(
 ) -> Result<RestoreApplyDryRun, RestoreCommandError> {
     let plan = read_plan(&options.plan)?;
     let status = options.status.as_ref().map(read_status).transpose()?;
+    if let Some(backup_dir) = &options.backup_dir {
+        return RestoreApplyDryRun::try_from_plan_with_artifacts(
+            &plan,
+            status.as_ref(),
+            backup_dir,
+        )
+        .map_err(RestoreCommandError::from);
+    }
+
     RestoreApplyDryRun::try_from_plan(&plan, status.as_ref()).map_err(RestoreCommandError::from)
 }
 
@@ -425,7 +440,7 @@ where
 
 // Return restore command usage text.
 const fn usage() -> &'static str {
-    "usage: canic restore plan (--manifest <file> | --backup-dir <dir>) [--mapping <file>] [--out <file>] [--require-verified] [--require-restore-ready]\n       canic restore status --plan <file> [--out <file>]\n       canic restore apply --plan <file> [--status <file>] --dry-run [--out <file>]"
+    "usage: canic restore plan (--manifest <file> | --backup-dir <dir>) [--mapping <file>] [--out <file>] [--require-verified] [--require-restore-ready]\n       canic restore status --plan <file> [--out <file>]\n       canic restore apply --plan <file> [--status <file>] [--backup-dir <dir>] --dry-run [--out <file>]"
 }
 
 #[cfg(test)]
@@ -514,6 +529,8 @@ mod tests {
             OsString::from("restore-plan.json"),
             OsString::from("--status"),
             OsString::from("restore-status.json"),
+            OsString::from("--backup-dir"),
+            OsString::from("backups/run"),
             OsString::from("--dry-run"),
             OsString::from("--out"),
             OsString::from("restore-apply-dry-run.json"),
@@ -522,6 +539,7 @@ mod tests {
 
         assert_eq!(options.plan, PathBuf::from("restore-plan.json"));
         assert_eq!(options.status, Some(PathBuf::from("restore-status.json")));
+        assert_eq!(options.backup_dir, Some(PathBuf::from("backups/run")));
         assert_eq!(
             options.out,
             Some(PathBuf::from("restore-apply-dry-run.json"))
@@ -874,6 +892,49 @@ mod tests {
         );
     }
 
+    // Ensure restore apply dry-run can validate artifacts under a backup directory.
+    #[test]
+    fn run_restore_apply_dry_run_validates_backup_dir_artifacts() {
+        let root = temp_dir("canic-cli-restore-apply-artifacts");
+        fs::create_dir_all(&root).expect("create temp root");
+        let plan_path = root.join("restore-plan.json");
+        let out_path = root.join("restore-apply-dry-run.json");
+        let mut manifest = valid_manifest();
+        write_manifest_artifacts(&root, &mut manifest);
+        let plan = RestorePlanner::plan(&manifest, None).expect("build plan");
+
+        fs::write(
+            &plan_path,
+            serde_json::to_vec(&plan).expect("serialize plan"),
+        )
+        .expect("write plan");
+
+        run([
+            OsString::from("apply"),
+            OsString::from("--plan"),
+            OsString::from(plan_path.as_os_str()),
+            OsString::from("--backup-dir"),
+            OsString::from(root.as_os_str()),
+            OsString::from("--dry-run"),
+            OsString::from("--out"),
+            OsString::from(out_path.as_os_str()),
+        ])
+        .expect("write apply dry-run");
+
+        let dry_run: RestoreApplyDryRun =
+            serde_json::from_slice(&fs::read(&out_path).expect("read dry-run"))
+                .expect("decode dry-run");
+        let validation = dry_run
+            .artifact_validation
+            .expect("artifact validation should be present");
+
+        fs::remove_dir_all(root).expect("remove temp root");
+        assert_eq!(validation.checked_members, 2);
+        assert!(validation.artifacts_present);
+        assert!(validation.checksums_verified);
+        assert_eq!(validation.members_with_expected_checksums, 2);
+    }
+
     // Ensure restore apply dry-run rejects status files from another plan.
     #[test]
     fn run_restore_apply_dry_run_rejects_mismatched_status() {
@@ -1045,6 +1106,20 @@ mod tests {
                 artifacts,
             })
             .expect("write journal");
+    }
+
+    // Write artifact bytes and update the manifest checksums for apply validation.
+    fn write_manifest_artifacts(root: &Path, manifest: &mut FleetBackupManifest) {
+        for member in &mut manifest.fleet.members {
+            let bytes = format!("{} apply artifact", member.role);
+            let artifact_path = root.join(&member.source_snapshot.artifact_path);
+            if let Some(parent) = artifact_path.parent() {
+                fs::create_dir_all(parent).expect("create artifact parent");
+            }
+            fs::write(&artifact_path, bytes.as_bytes()).expect("write artifact");
+            let checksum = ArtifactChecksum::from_bytes(bytes.as_bytes());
+            member.source_snapshot.checksum = Some(checksum.hash);
+        }
     }
 
     // Build a unique temporary directory.

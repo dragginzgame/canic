@@ -1,5 +1,12 @@
 use crate::{
-    ops::{ic::IcOps, storage::intent::IntentStoreOps},
+    ops::{
+        ic::IcOps,
+        runtime::metrics::intent::{
+            IntentMetricOperation, IntentMetricOutcome, IntentMetricReason, IntentMetricSurface,
+            IntentMetrics,
+        },
+        storage::intent::IntentStoreOps,
+    },
     workflow::{
         config::{WORKFLOW_INIT_DELAY, WORKFLOW_INTENT_CLEANUP_INTERVAL},
         prelude::*,
@@ -42,6 +49,11 @@ impl IntentCleanupWorkflow {
     #[must_use]
     pub fn cleanup() -> bool {
         if Self::stop_when_idle() {
+            record_cleanup_intent(
+                IntentMetricOperation::Cleanup,
+                IntentMetricOutcome::Completed,
+                IntentMetricReason::Idle,
+            );
             return true;
         }
 
@@ -49,6 +61,11 @@ impl IntentCleanupWorkflow {
         let expired = IntentStoreOps::list_expired_pending_intents(now);
 
         if expired.is_empty() {
+            record_cleanup_intent(
+                IntentMetricOperation::Cleanup,
+                IntentMetricOutcome::Completed,
+                IntentMetricReason::NoExpired,
+            );
             return true;
         }
 
@@ -58,9 +75,21 @@ impl IntentCleanupWorkflow {
 
         for intent_id in expired {
             match IntentStoreOps::abort_intent_if_pending(intent_id) {
-                Ok(true) => aborted += 1,
+                Ok(true) => {
+                    record_cleanup_intent(
+                        IntentMetricOperation::Abort,
+                        IntentMetricOutcome::Completed,
+                        IntentMetricReason::Expired,
+                    );
+                    aborted += 1;
+                }
                 Ok(false) => {}
                 Err(err) => {
+                    record_cleanup_intent(
+                        IntentMetricOperation::Abort,
+                        IntentMetricOutcome::Failed,
+                        IntentMetricReason::StorageFailed,
+                    );
                     errors += 1;
                     log!(
                         Topic::Memory,
@@ -78,7 +107,18 @@ impl IntentCleanupWorkflow {
         );
 
         if errors == 0 {
+            record_cleanup_intent(
+                IntentMetricOperation::Cleanup,
+                IntentMetricOutcome::Completed,
+                IntentMetricReason::Ok,
+            );
             Self::stop_when_idle();
+        } else {
+            record_cleanup_intent(
+                IntentMetricOperation::Cleanup,
+                IntentMetricOutcome::Failed,
+                IntentMetricReason::StorageFailed,
+            );
         }
 
         errors == 0
@@ -93,6 +133,11 @@ impl IntentCleanupWorkflow {
             }
             Ok(_) => false,
             Err(err) => {
+                record_cleanup_intent(
+                    IntentMetricOperation::Cleanup,
+                    IntentMetricOutcome::Failed,
+                    IntentMetricReason::StorageFailed,
+                );
                 log!(
                     Topic::Memory,
                     Warn,
@@ -102,4 +147,13 @@ impl IntentCleanupWorkflow {
             }
         }
     }
+}
+
+// Record a cleanup-surface intent metric with fixed labels only.
+fn record_cleanup_intent(
+    operation: IntentMetricOperation,
+    outcome: IntentMetricOutcome,
+    reason: IntentMetricReason,
+) {
+    IntentMetrics::record(IntentMetricSurface::Cleanup, operation, outcome, reason);
 }

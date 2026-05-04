@@ -17,6 +17,10 @@ use crate::{
         },
         runtime::env::EnvOps,
         runtime::metrics::{
+            intent::{
+                IntentMetricOperation, IntentMetricOutcome, IntentMetricReason,
+                IntentMetricSurface, IntentMetrics,
+            },
             pool::{
                 PoolMetricOperation as MetricOperation, PoolMetricOutcome as MetricOutcome,
                 PoolMetricReason as MetricReason,
@@ -188,13 +192,6 @@ impl PoolWorkflow {
             return Err(err.into());
         }
 
-        let intent_id = match IntentStoreOps::allocate_intent_id() {
-            Ok(intent_id) => intent_id,
-            Err(err) => {
-                MetricEvent::failed(MetricOperation::ImportImmediate, &err);
-                return Err(err);
-            }
-        };
         let intent_key = match pool_import_intent_key(pid) {
             Ok(intent_key) => intent_key,
             Err(err) => {
@@ -202,15 +199,14 @@ impl PoolWorkflow {
                 return Err(err);
             }
         };
-        let now_secs = IcOps::now_secs();
-        let created_at = now_secs;
-        IntentCleanupWorkflow::ensure_started();
-        if let Err(err) =
-            IntentStoreOps::try_reserve(intent_id, intent_key, 1, created_at, None, now_secs)
-        {
-            MetricEvent::failed(MetricOperation::ImportImmediate, &err);
-            return Err(err);
-        }
+
+        let intent_id = match reserve_pool_import_intent(intent_key) {
+            Ok(intent_id) => intent_id,
+            Err(err) => {
+                MetricEvent::failed(MetricOperation::ImportImmediate, &err);
+                return Err(err);
+            }
+        };
 
         // Invariant: mark_pending_reset must remain synchronous and non-trapping.
         Self::mark_pending_reset(pid);
@@ -220,12 +216,7 @@ impl PoolWorkflow {
                 let _ = SubnetRegistryOps::remove(&pid);
                 Self::mark_ready(pid, cycles);
 
-                if let Err(err) = IntentStoreOps::commit_at(intent_id, IcOps::now_secs()) {
-                    log!(
-                        Topic::CanisterPool,
-                        Warn,
-                        "pool import commit failed for {pid}: {err}"
-                    );
+                if let Err(err) = commit_pool_import_intent(intent_id, pid) {
                     MetricEvent::failed(MetricOperation::ImportImmediate, &err);
                     return Err(err);
                 }
@@ -242,13 +233,7 @@ impl PoolWorkflow {
                 );
                 Self::mark_failed(pid, &err);
 
-                if let Err(abort_err) = IntentStoreOps::abort(intent_id) {
-                    log!(
-                        Topic::CanisterPool,
-                        Warn,
-                        "pool import abort failed for {pid}: {abort_err}"
-                    );
-                }
+                abort_pool_import_intent(intent_id, pid);
 
                 MetricEvent::failed(MetricOperation::ImportImmediate, &err);
                 Err(err)
@@ -392,6 +377,102 @@ fn pool_import_intent_key(pid: Principal) -> Result<IntentResourceKey, InternalE
             format!("pool import intent key: {err}"),
         )
     })
+}
+
+// Reserve the import intent before resetting an external canister into the pool.
+fn reserve_pool_import_intent(
+    intent_key: IntentResourceKey,
+) -> Result<crate::storage::stable::intent::IntentId, InternalError> {
+    let intent_id = match IntentStoreOps::allocate_intent_id() {
+        Ok(intent_id) => intent_id,
+        Err(err) => {
+            record_pool_intent(
+                IntentMetricOperation::Reserve,
+                IntentMetricOutcome::Failed,
+                IntentMetricReason::StorageFailed,
+            );
+            return Err(err);
+        }
+    };
+
+    let now_secs = IcOps::now_secs();
+    IntentCleanupWorkflow::ensure_started();
+    if let Err(err) =
+        IntentStoreOps::try_reserve(intent_id, intent_key, 1, now_secs, None, now_secs)
+    {
+        record_pool_intent(
+            IntentMetricOperation::Reserve,
+            IntentMetricOutcome::Failed,
+            IntentMetricReason::StorageFailed,
+        );
+        return Err(err);
+    }
+
+    record_pool_intent(
+        IntentMetricOperation::Reserve,
+        IntentMetricOutcome::Completed,
+        IntentMetricReason::Ok,
+    );
+
+    Ok(intent_id)
+}
+
+// Commit the import intent after the canister has been reset and registered.
+fn commit_pool_import_intent(
+    intent_id: crate::storage::stable::intent::IntentId,
+    pid: Principal,
+) -> Result<(), InternalError> {
+    if let Err(err) = IntentStoreOps::commit_at(intent_id, IcOps::now_secs()) {
+        record_pool_intent(
+            IntentMetricOperation::Commit,
+            IntentMetricOutcome::Failed,
+            IntentMetricReason::StorageFailed,
+        );
+        log!(
+            Topic::CanisterPool,
+            Warn,
+            "pool import commit failed for {pid}: {err}"
+        );
+        return Err(err);
+    }
+
+    record_pool_intent(
+        IntentMetricOperation::Commit,
+        IntentMetricOutcome::Completed,
+        IntentMetricReason::Ok,
+    );
+    Ok(())
+}
+
+// Abort the import intent after reset fails; the reset error remains authoritative.
+fn abort_pool_import_intent(intent_id: crate::storage::stable::intent::IntentId, pid: Principal) {
+    if let Err(abort_err) = IntentStoreOps::abort(intent_id) {
+        record_pool_intent(
+            IntentMetricOperation::Abort,
+            IntentMetricOutcome::Failed,
+            IntentMetricReason::StorageFailed,
+        );
+        log!(
+            Topic::CanisterPool,
+            Warn,
+            "pool import abort failed for {pid}: {abort_err}"
+        );
+    } else {
+        record_pool_intent(
+            IntentMetricOperation::Abort,
+            IntentMetricOutcome::Completed,
+            IntentMetricReason::Ok,
+        );
+    }
+}
+
+// Record a pool-surface intent metric with fixed labels only.
+fn record_pool_intent(
+    operation: IntentMetricOperation,
+    outcome: IntentMetricOutcome,
+    reason: IntentMetricReason,
+) {
+    IntentMetrics::record(IntentMetricSurface::Pool, operation, outcome, reason);
 }
 
 // Encode raw principal bytes as lowercase hex for intent resource keys.

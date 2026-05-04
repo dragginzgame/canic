@@ -6,7 +6,17 @@ use crate::{
             Call as InfraCall, CallBuilder as InfraCallBuilder, CallResult as InfraCallResult,
         },
     },
-    ops::{ic::IcOpsError, prelude::*, runtime::metrics::icc::IccMetrics},
+    ops::{
+        ic::IcOpsError,
+        prelude::*,
+        runtime::metrics::{
+            inter_canister_call::InterCanisterCallMetrics,
+            platform_call::{
+                PlatformCallMetricMode, PlatformCallMetricOutcome, PlatformCallMetricReason,
+                PlatformCallMetricSurface, PlatformCallMetrics,
+            },
+        },
+    },
 };
 use candid::{
     CandidType,
@@ -33,13 +43,13 @@ impl From<CallError> for InternalError {
 ///
 /// CallOps
 ///
-/// Ops-level IC call façade.
+/// Ops-level platform call façade.
 ///
 /// This type:
 /// - records call metrics
 /// - delegates all mechanics to infra
 /// - imposes no policy
-/// - exposes the approved IC call surface
+/// - exposes the approved platform call surface
 ///
 
 pub struct CallOps;
@@ -48,20 +58,22 @@ impl CallOps {
     #[must_use]
     pub fn bounded_wait(canister_id: impl Into<Principal>, method: &str) -> CallBuilder<'static> {
         let canister_id: Principal = canister_id.into();
-        IccMetrics::record_call(canister_id, method);
+        InterCanisterCallMetrics::record_call(canister_id, method);
 
         CallBuilder {
             inner: InfraCall::bounded_wait(canister_id, method),
+            mode: PlatformCallMetricMode::BoundedWait,
         }
     }
 
     #[must_use]
     pub fn unbounded_wait(canister_id: impl Into<Principal>, method: &str) -> CallBuilder<'static> {
         let canister_id: Principal = canister_id.into();
-        IccMetrics::record_call(canister_id, method);
+        InterCanisterCallMetrics::record_call(canister_id, method);
 
         CallBuilder {
             inner: InfraCall::unbounded_wait(canister_id, method),
+            mode: PlatformCallMetricMode::UnboundedWait,
         }
     }
 }
@@ -71,6 +83,7 @@ impl CallOps {
 
 pub struct CallBuilder<'a> {
     inner: InfraCallBuilder<'a>,
+    mode: PlatformCallMetricMode,
 }
 
 impl CallBuilder<'_> {
@@ -80,8 +93,19 @@ impl CallBuilder<'_> {
     where
         A: CandidType,
     {
-        let inner = self.inner.with_arg(arg).map_err(CallError::from)?;
-        Ok(Self { inner })
+        let mode = self.mode;
+        let inner = match self.inner.with_arg(arg).map_err(CallError::from) {
+            Ok(inner) => inner,
+            Err(err) => {
+                record_generic_call(
+                    mode,
+                    PlatformCallMetricOutcome::Failed,
+                    PlatformCallMetricReason::CandidEncode,
+                );
+                return Err(err.into());
+            }
+        };
+        Ok(Self { inner, mode })
     }
 
     // multi-arg convenience (IMPORTANT FIX)
@@ -90,8 +114,19 @@ impl CallBuilder<'_> {
     where
         A: ArgumentEncoder,
     {
-        let inner = self.inner.with_args(args).map_err(CallError::from)?;
-        Ok(Self { inner })
+        let mode = self.mode;
+        let inner = match self.inner.with_args(args).map_err(CallError::from) {
+            Ok(inner) => inner,
+            Err(err) => {
+                record_generic_call(
+                    mode,
+                    PlatformCallMetricOutcome::Failed,
+                    PlatformCallMetricReason::CandidEncode,
+                );
+                return Err(err.into());
+            }
+        };
+        Ok(Self { inner, mode })
     }
 
     /// Use pre-encoded Candid arguments (no validation performed).
@@ -99,6 +134,7 @@ impl CallBuilder<'_> {
     pub fn with_raw_args<'b>(self, args: impl Into<Cow<'b, [u8]>>) -> CallBuilder<'b> {
         CallBuilder {
             inner: self.inner.with_raw_args(args),
+            mode: self.mode,
         }
     }
 
@@ -109,8 +145,31 @@ impl CallBuilder<'_> {
     }
 
     pub async fn execute(self) -> Result<CallResult, InternalError> {
-        let inner = self.inner.execute().await.map_err(CallError::from)?;
-        Ok(CallResult { inner })
+        record_generic_call(
+            self.mode,
+            PlatformCallMetricOutcome::Started,
+            PlatformCallMetricReason::Ok,
+        );
+        let inner = match self.inner.execute().await.map_err(CallError::from) {
+            Ok(inner) => inner,
+            Err(err) => {
+                record_generic_call(
+                    self.mode,
+                    PlatformCallMetricOutcome::Failed,
+                    PlatformCallMetricReason::Infra,
+                );
+                return Err(err.into());
+            }
+        };
+        record_generic_call(
+            self.mode,
+            PlatformCallMetricOutcome::Completed,
+            PlatformCallMetricReason::Ok,
+        );
+        Ok(CallResult {
+            inner,
+            mode: self.mode,
+        })
     }
 }
 
@@ -120,6 +179,7 @@ impl CallBuilder<'_> {
 
 pub struct CallResult {
     inner: InfraCallResult,
+    mode: PlatformCallMetricMode,
 }
 
 impl CallResult {
@@ -131,19 +191,56 @@ impl CallResult {
     where
         R: CandidType + DeserializeOwned,
     {
-        self.inner
-            .candid()
-            .map_err(CallError::from)
-            .map_err(InternalError::from)
+        match self.inner.candid().map_err(CallError::from) {
+            Ok(value) => {
+                record_generic_call(
+                    self.mode,
+                    PlatformCallMetricOutcome::Completed,
+                    PlatformCallMetricReason::CandidDecode,
+                );
+                Ok(value)
+            }
+            Err(err) => {
+                record_generic_call(
+                    self.mode,
+                    PlatformCallMetricOutcome::Failed,
+                    PlatformCallMetricReason::CandidDecode,
+                );
+                Err(err.into())
+            }
+        }
     }
 
     pub fn candid_tuple<R>(&self) -> Result<R, InternalError>
     where
         R: for<'de> ArgumentDecoder<'de>,
     {
-        self.inner
-            .candid_tuple()
-            .map_err(CallError::from)
-            .map_err(InternalError::from)
+        match self.inner.candid_tuple().map_err(CallError::from) {
+            Ok(value) => {
+                record_generic_call(
+                    self.mode,
+                    PlatformCallMetricOutcome::Completed,
+                    PlatformCallMetricReason::CandidDecode,
+                );
+                Ok(value)
+            }
+            Err(err) => {
+                record_generic_call(
+                    self.mode,
+                    PlatformCallMetricOutcome::Failed,
+                    PlatformCallMetricReason::CandidDecode,
+                );
+                Err(err.into())
+            }
+        }
     }
+}
+
+// Record one generic platform call metric with no target or method labels.
+fn record_generic_call(
+    mode: PlatformCallMetricMode,
+    outcome: PlatformCallMetricOutcome,
+    reason: PlatformCallMetricReason,
+) {
+    PlatformCallMetrics::record(PlatformCallMetricSurface::Generic, mode, outcome, reason);
 }

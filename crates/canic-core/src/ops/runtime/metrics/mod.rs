@@ -7,8 +7,10 @@ pub mod cycles_topup;
 pub mod delegated_auth;
 pub mod directory;
 pub mod http;
-pub mod icc;
+pub mod intent;
+pub mod inter_canister_call;
 pub mod lifecycle;
+pub mod platform_call;
 pub mod pool;
 pub mod recording;
 pub mod replay;
@@ -34,8 +36,10 @@ use {
     delegated_auth::DelegatedAuthMetrics,
     directory::DirectoryMetrics,
     http::HttpMetrics,
-    icc::IccMetrics,
+    intent::IntentMetrics,
+    inter_canister_call::InterCanisterCallMetrics,
     lifecycle::LifecycleMetrics,
+    platform_call::PlatformCallMetrics,
     pool::PoolMetrics,
     replay::ReplayMetrics,
     root_capability::RootCapabilityMetrics,
@@ -61,9 +65,11 @@ pub fn entries(kind: MetricsKind) -> Vec<MetricEntry> {
         MetricsKind::DelegatedAuth => delegated_auth_entries(),
         MetricsKind::Directory => directory_entries(),
         MetricsKind::Http => http_entries(),
-        MetricsKind::Icc => icc_entries(),
+        MetricsKind::Intent => intent_entries(),
+        MetricsKind::InterCanisterCall => inter_canister_call_entries(),
         MetricsKind::Lifecycle => lifecycle_entries(),
         MetricsKind::Perf => perf_entries(),
+        MetricsKind::PlatformCall => platform_call_entries(),
         MetricsKind::Pool => pool_entries(),
         MetricsKind::Replay => replay_entries(),
         MetricsKind::RootCapability => root_capability_entries(),
@@ -87,7 +93,9 @@ pub fn reset_for_tests() {
     DelegatedAuthMetrics::reset();
     DirectoryMetrics::reset();
     HttpMetrics::reset();
-    IccMetrics::reset();
+    PlatformCallMetrics::reset();
+    InterCanisterCallMetrics::reset();
+    IntentMetrics::reset();
     LifecycleMetrics::reset();
     PoolMetrics::reset();
     ReplayMetrics::reset();
@@ -99,6 +107,42 @@ pub fn reset_for_tests() {
     TimerMetrics::reset();
     WasmStoreMetrics::reset();
     perf::reset();
+}
+
+/// Project low-cardinality platform call outcome counters into public metrics rows.
+#[must_use]
+fn platform_call_entries() -> Vec<MetricEntry> {
+    PlatformCallMetrics::snapshot()
+        .into_iter()
+        .map(|(key, count)| MetricEntry {
+            labels: vec![
+                key.surface.metric_label().to_string(),
+                key.mode.metric_label().to_string(),
+                key.outcome.metric_label().to_string(),
+                key.reason.metric_label().to_string(),
+            ],
+            principal: None,
+            value: MetricValue::Count(count),
+        })
+        .collect()
+}
+
+/// Project intent reservation counters into the unified public metrics row shape.
+#[must_use]
+fn intent_entries() -> Vec<MetricEntry> {
+    IntentMetrics::snapshot()
+        .into_iter()
+        .map(|(key, count)| MetricEntry {
+            labels: vec![
+                key.surface.metric_label().to_string(),
+                key.operation.metric_label().to_string(),
+                key.outcome.metric_label().to_string(),
+                key.reason.metric_label().to_string(),
+            ],
+            principal: None,
+            value: MetricValue::Count(count),
+        })
+        .collect()
 }
 
 /// Project replay safety counters into the unified public metrics row shape.
@@ -309,8 +353,8 @@ fn lifecycle_entries() -> Vec<MetricEntry> {
 
 /// Project inter-canister call counters into the unified public metrics row shape.
 #[must_use]
-fn icc_entries() -> Vec<MetricEntry> {
-    IccMetrics::snapshot()
+fn inter_canister_call_entries() -> Vec<MetricEntry> {
+    InterCanisterCallMetrics::snapshot()
         .entries
         .into_iter()
         .map(|(key, count)| MetricEntry {
@@ -519,10 +563,18 @@ mod tests {
                 DirectoryMetrics,
             },
             http::{HttpMethod, HttpMetrics},
-            icc::IccMetrics,
+            intent::{
+                IntentMetricOperation, IntentMetricOutcome, IntentMetricReason,
+                IntentMetricSurface, IntentMetrics,
+            },
+            inter_canister_call::InterCanisterCallMetrics,
             lifecycle::{
                 LifecycleMetricOutcome, LifecycleMetricPhase, LifecycleMetricRole,
                 LifecycleMetricStage, LifecycleMetrics,
+            },
+            platform_call::{
+                PlatformCallMetricMode, PlatformCallMetricOutcome, PlatformCallMetricReason,
+                PlatformCallMetricSurface, PlatformCallMetrics,
             },
             pool::{PoolMetricOperation, PoolMetricOutcome, PoolMetricReason, PoolMetrics},
             replay::{
@@ -894,6 +946,70 @@ mod tests {
         assert_metric_count(&entries, &["request_scheduled"], 2);
     }
 
+    // Verify platform call metrics expose stable label rows and accumulate counts.
+    #[test]
+    fn platform_call_metrics_are_exposed_with_stable_labels() {
+        reset_for_tests();
+
+        PlatformCallMetrics::record(
+            PlatformCallMetricSurface::Generic,
+            PlatformCallMetricMode::BoundedWait,
+            PlatformCallMetricOutcome::Started,
+            PlatformCallMetricReason::Ok,
+        );
+        PlatformCallMetrics::record(
+            PlatformCallMetricSurface::Ledger,
+            PlatformCallMetricMode::Update,
+            PlatformCallMetricOutcome::Failed,
+            PlatformCallMetricReason::LedgerRejected,
+        );
+        PlatformCallMetrics::record(
+            PlatformCallMetricSurface::Ledger,
+            PlatformCallMetricMode::Update,
+            PlatformCallMetricOutcome::Failed,
+            PlatformCallMetricReason::LedgerRejected,
+        );
+
+        let entries = entries(MetricsKind::PlatformCall);
+
+        assert_metric_count(&entries, &["generic", "bounded_wait", "started", "ok"], 1);
+        assert_metric_count(
+            &entries,
+            &["ledger", "update", "failed", "ledger_rejected"],
+            2,
+        );
+    }
+
+    // Verify intent metrics expose stable label rows and accumulate counts.
+    #[test]
+    fn intent_metrics_are_exposed_with_stable_labels() {
+        reset_for_tests();
+
+        IntentMetrics::record(
+            IntentMetricSurface::Call,
+            IntentMetricOperation::Reserve,
+            IntentMetricOutcome::Completed,
+            IntentMetricReason::Ok,
+        );
+        IntentMetrics::record(
+            IntentMetricSurface::Call,
+            IntentMetricOperation::Commit,
+            IntentMetricOutcome::Failed,
+            IntentMetricReason::StorageFailed,
+        );
+        IntentMetrics::record(
+            IntentMetricSurface::Call,
+            IntentMetricOperation::Commit,
+            IntentMetricOutcome::Failed,
+            IntentMetricReason::StorageFailed,
+        );
+
+        let entries = entries(MetricsKind::Intent);
+
+        assert_metric_count(&entries, &["call", "reserve", "completed", "ok"], 1);
+        assert_metric_count(&entries, &["call", "commit", "failed", "storage_failed"], 2);
+    }
+
     // Verify replay metrics expose stable label rows and accumulate counts.
     #[test]
     fn replay_metrics_are_exposed_with_stable_labels() {
@@ -986,7 +1102,19 @@ mod tests {
             DirectoryMetricReason::Ok,
         );
         HttpMetrics::record_http_request(HttpMethod::Get, "https://example.test/a", Some("api"));
-        IccMetrics::record_call(principal, "canic_sync");
+        PlatformCallMetrics::record(
+            PlatformCallMetricSurface::Generic,
+            PlatformCallMetricMode::BoundedWait,
+            PlatformCallMetricOutcome::Started,
+            PlatformCallMetricReason::Ok,
+        );
+        InterCanisterCallMetrics::record_call(principal, "canic_sync");
+        IntentMetrics::record(
+            IntentMetricSurface::Call,
+            IntentMetricOperation::Reserve,
+            IntentMetricOutcome::Completed,
+            IntentMetricReason::Ok,
+        );
         LifecycleMetrics::record(
             LifecycleMetricPhase::Init,
             LifecycleMetricRole::Nonroot,
@@ -1051,9 +1179,11 @@ mod tests {
             MetricsKind::DelegatedAuth,
             MetricsKind::Directory,
             MetricsKind::Http,
-            MetricsKind::Icc,
+            MetricsKind::Intent,
+            MetricsKind::InterCanisterCall,
             MetricsKind::Lifecycle,
             MetricsKind::Perf,
+            MetricsKind::PlatformCall,
             MetricsKind::Pool,
             MetricsKind::Replay,
             MetricsKind::RootCapability,

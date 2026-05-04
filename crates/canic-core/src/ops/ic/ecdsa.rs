@@ -3,7 +3,14 @@ use crate::cdk::mgmt::{
     EcdsaCurve, EcdsaKeyId, EcdsaPublicKeyArgs, SignWithEcdsaArgs, ecdsa_public_key,
     sign_with_ecdsa,
 };
-use crate::{InternalError, cdk::types::Principal};
+use crate::{
+    InternalError,
+    cdk::types::Principal,
+    ops::runtime::metrics::platform_call::{
+        PlatformCallMetricMode, PlatformCallMetricOutcome, PlatformCallMetricReason,
+        PlatformCallMetricSurface, PlatformCallMetrics,
+    },
+};
 use k256::ecdsa::{Signature, VerifyingKey, signature::hazmat::PrehashVerifier};
 use thiserror::Error as ThisError;
 
@@ -58,9 +65,27 @@ impl EcdsaOps {
             },
         };
 
-        let response = sign_with_ecdsa(&args)
-            .await
-            .map_err(|err| EcdsaOpsError::SignCall(err.to_string()))?;
+        record_ecdsa_call(
+            PlatformCallMetricMode::Update,
+            PlatformCallMetricOutcome::Started,
+            PlatformCallMetricReason::Ok,
+        );
+        let response = match sign_with_ecdsa(&args).await {
+            Ok(response) => response,
+            Err(err) => {
+                record_ecdsa_call(
+                    PlatformCallMetricMode::Update,
+                    PlatformCallMetricOutcome::Failed,
+                    PlatformCallMetricReason::Infra,
+                );
+                return Err(EcdsaOpsError::SignCall(err.to_string()).into());
+            }
+        };
+        record_ecdsa_call(
+            PlatformCallMetricMode::Update,
+            PlatformCallMetricOutcome::Completed,
+            PlatformCallMetricReason::Ok,
+        );
 
         Ok(response.signature)
     }
@@ -80,9 +105,27 @@ impl EcdsaOps {
             },
         };
 
-        let response = ecdsa_public_key(&args)
-            .await
-            .map_err(|err| EcdsaOpsError::PublicKeyCall(err.to_string()))?;
+        record_ecdsa_call(
+            PlatformCallMetricMode::Query,
+            PlatformCallMetricOutcome::Started,
+            PlatformCallMetricReason::Ok,
+        );
+        let response = match ecdsa_public_key(&args).await {
+            Ok(response) => response,
+            Err(err) => {
+                record_ecdsa_call(
+                    PlatformCallMetricMode::Query,
+                    PlatformCallMetricOutcome::Failed,
+                    PlatformCallMetricReason::Infra,
+                );
+                return Err(EcdsaOpsError::PublicKeyCall(err.to_string()).into());
+            }
+        };
+        record_ecdsa_call(
+            PlatformCallMetricMode::Query,
+            PlatformCallMetricOutcome::Completed,
+            PlatformCallMetricReason::Ok,
+        );
 
         Ok(response.public_key)
     }
@@ -97,6 +140,11 @@ impl EcdsaOps {
         _derivation_path: Vec<Vec<u8>>,
         _msg_hash: [u8; 32],
     ) -> Result<Vec<u8>, InternalError> {
+        record_ecdsa_call(
+            PlatformCallMetricMode::Update,
+            PlatformCallMetricOutcome::Failed,
+            PlatformCallMetricReason::Unavailable,
+        );
         Err(EcdsaOpsError::ThresholdEcdsaUnavailable.into())
     }
 
@@ -107,6 +155,11 @@ impl EcdsaOps {
         _derivation_path: Vec<Vec<u8>>,
         _canister_id: Principal,
     ) -> Result<Vec<u8>, InternalError> {
+        record_ecdsa_call(
+            PlatformCallMetricMode::Query,
+            PlatformCallMetricOutcome::Failed,
+            PlatformCallMetricReason::Unavailable,
+        );
         Err(EcdsaOpsError::ThresholdEcdsaUnavailable.into())
     }
 }
@@ -124,17 +177,59 @@ impl EcdsaOps {
         msg_hash: [u8; 32],
         signature_bytes: &[u8],
     ) -> Result<(), InternalError> {
-        let verifying_key = VerifyingKey::from_sec1_bytes(public_key_sec1)
-            .map_err(|err| EcdsaOpsError::InvalidPublicKey(err.to_string()))?;
-        let signature = Signature::try_from(signature_bytes)
-            .map_err(|err| EcdsaOpsError::InvalidSignature(err.to_string()))?;
+        record_ecdsa_call(
+            PlatformCallMetricMode::LocalVerify,
+            PlatformCallMetricOutcome::Started,
+            PlatformCallMetricReason::Ok,
+        );
+        let verifying_key = match VerifyingKey::from_sec1_bytes(public_key_sec1) {
+            Ok(key) => key,
+            Err(err) => {
+                record_ecdsa_call(
+                    PlatformCallMetricMode::LocalVerify,
+                    PlatformCallMetricOutcome::Failed,
+                    PlatformCallMetricReason::InvalidPublicKey,
+                );
+                return Err(EcdsaOpsError::InvalidPublicKey(err.to_string()).into());
+            }
+        };
+        let signature = match Signature::try_from(signature_bytes) {
+            Ok(signature) => signature,
+            Err(err) => {
+                record_ecdsa_call(
+                    PlatformCallMetricMode::LocalVerify,
+                    PlatformCallMetricOutcome::Failed,
+                    PlatformCallMetricReason::InvalidSignature,
+                );
+                return Err(EcdsaOpsError::InvalidSignature(err.to_string()).into());
+            }
+        };
 
-        verifying_key
-            .verify_prehash(&msg_hash, &signature)
-            .map_err(|err| EcdsaOpsError::InvalidSignature(err.to_string()))?;
+        if let Err(err) = verifying_key.verify_prehash(&msg_hash, &signature) {
+            record_ecdsa_call(
+                PlatformCallMetricMode::LocalVerify,
+                PlatformCallMetricOutcome::Failed,
+                PlatformCallMetricReason::InvalidSignature,
+            );
+            return Err(EcdsaOpsError::InvalidSignature(err.to_string()).into());
+        }
 
+        record_ecdsa_call(
+            PlatformCallMetricMode::LocalVerify,
+            PlatformCallMetricOutcome::Completed,
+            PlatformCallMetricReason::Ok,
+        );
         Ok(())
     }
+}
+
+// Record one ECDSA metric with no key name or derivation path labels.
+fn record_ecdsa_call(
+    mode: PlatformCallMetricMode,
+    outcome: PlatformCallMetricOutcome,
+    reason: PlatformCallMetricReason,
+) {
+    PlatformCallMetrics::record(PlatformCallMetricSurface::Ecdsa, mode, outcome, reason);
 }
 
 #[cfg(test)]

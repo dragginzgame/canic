@@ -1,6 +1,6 @@
 use crate::{
     cdk::{
-        call::{Call as IcCall, Response as IcResponse},
+        call::Response,
         candid::{
             CandidType,
             utils::{ArgumentDecoder, ArgumentEncoder},
@@ -104,8 +104,12 @@ impl CallBuilder<'_> {
 
     pub async fn execute(self) -> Result<CallResult, InfraError> {
         let mut call = match self.wait {
-            WaitMode::Bounded => IcCall::bounded_wait(self.canister_id, &self.method),
-            WaitMode::Unbounded => IcCall::unbounded_wait(self.canister_id, &self.method),
+            WaitMode::Bounded => {
+                crate::cdk::call::Call::bounded_wait(self.canister_id, &self.method)
+            }
+            WaitMode::Unbounded => {
+                crate::cdk::call::Call::unbounded_wait(self.canister_id, &self.method)
+            }
         };
 
         call = call.with_cycles(self.cycles);
@@ -122,7 +126,7 @@ impl CallBuilder<'_> {
 ///
 
 pub struct CallResult {
-    inner: IcResponse,
+    inner: Response,
 }
 
 impl CallResult {

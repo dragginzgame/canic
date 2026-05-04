@@ -48,9 +48,11 @@ rather than as a successful zero-cost query measurement.
 | `DelegatedAuth` | `[delegated_auth_authority]` or `[operation, outcome, reason]` | Verified signer authority for authority rows; otherwise `None` | `Count` | Authority rows are bounded by configured signer authorities. Outcome rows use fixed enums for token verification progress and failure reasons. |
 | `Directory` | `[operation, outcome, reason]` | `None` | `Count` | All dimensions are fixed enums for keyed directory resolution, claims, stale repair, cleanup, and binding. |
 | `Http` | `[method, label]` | `None` | `Count` | Use explicit stable labels for dynamic URLs. URL fallback labels strip query and fragment only. |
-| `Icc` | `[method]` | Target canister principal | `Count` | Target cardinality grows with topology size; method names should stay static. |
+| `Intent` | `[surface, operation, outcome, reason]` | `None` | `Count` | All dimensions are fixed enums for call, pool, and cleanup intent reservation visibility. |
+| `InterCanisterCall` | `[method]` | Target canister principal | `Count` | Target cardinality grows with topology size; method names should stay static. |
 | `Lifecycle` | `[phase, role, stage, outcome]` | `None` | `Count` | All dimensions are fixed enums for lifecycle runtime seeding and async bootstrap visibility. |
 | `Perf` | `[endpoint, name]`, `[timer, label]`, or `[checkpoint, scope, label]` | `None` | `CountAndU64` | `value_u64` is total instructions across samples. |
+| `PlatformCall` | `[surface, mode, outcome, reason]` | `None` | `Count` | All dimensions are fixed enums for generic IC calls, management calls, ledgers, ECDSA, HTTP outcalls, and XRC. |
 | `Pool` | `[operation, outcome, reason]` | `None` | `Count` | All dimensions are fixed enums for pool create/import/recycle/reset/scheduler visibility. |
 | `Replay` | `[operation, outcome, reason]` | `None` | `Count` | All dimensions are fixed enums for root capability replay checks, reservation, cached decode, commit, and abort visibility. |
 | `RootCapability` | `[capability, event_type, outcome, proof_mode]` | `None` | `Count` | All dimensions are fixed enums. |
@@ -171,7 +173,7 @@ available.
 ### `Cascade`
 
 Cascade rows expose state/topology propagation progress without using target
-canister IDs, template IDs, or role labels as dimensions. Use `Icc` rows when
+canister IDs, template IDs, or role labels as dimensions. Use `InterCanisterCall` rows when
 target-principal visibility is needed.
 
 Operations:
@@ -344,6 +346,83 @@ HttpApi::get_with_label(url, headers, "provider_route").await
 over unlabeled calls when `url` may contain IDs, account names, timestamps, or other request-specific path segments.
 
 Unlabeled HTTP metrics normalize the URL by removing query strings and fragments, but they do not rewrite dynamic path segments.
+
+### `PlatformCall`
+
+Platform-call rows expose low-cardinality platform-call outcomes without using target
+principals, method names, URLs, ledger IDs, key names, or asset pairs as
+dimensions. Use `InterCanisterCall` when target-principal and method-level call volume is
+needed.
+
+Surfaces:
+
+- `ecdsa`
+- `generic`
+- `http`
+- `ledger`
+- `management`
+- `xrc`
+
+Modes:
+
+- `bounded_wait`
+- `local_verify`
+- `query`
+- `unbounded_wait`
+- `update`
+
+Outcomes:
+
+- `completed`
+- `failed`
+- `started`
+
+Reasons:
+
+- `candid_decode`
+- `candid_encode`
+- `http_status`
+- `infra`
+- `invalid_public_key`
+- `invalid_signature`
+- `ledger_rejected`
+- `ok`
+- `rejected`
+- `unavailable`
+
+### `Intent`
+
+Intent rows expose reservation lifecycle outcomes without using resource keys,
+intent IDs, call methods, or canister principals as dimensions.
+
+Surfaces:
+
+- `call`
+- `cleanup`
+- `pool`
+
+Operations:
+
+- `abort`
+- `capacity_check`
+- `cleanup`
+- `commit`
+- `reserve`
+
+Outcomes:
+
+- `completed`
+- `failed`
+
+Reasons:
+
+- `capacity`
+- `expired`
+- `idle`
+- `no_expired`
+- `ok`
+- `overflow`
+- `storage_failed`
 
 ### `Lifecycle`
 

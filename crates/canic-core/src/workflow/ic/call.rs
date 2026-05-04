@@ -6,6 +6,10 @@ use crate::{
             IcOps,
             call::{CallBuilder as OpsCallBuilder, CallOps, CallResult as OpsCallResult},
         },
+        runtime::metrics::intent::{
+            IntentMetricOperation, IntentMetricOutcome, IntentMetricReason, IntentMetricSurface,
+            IntentMetrics,
+        },
         storage::intent::IntentStoreOps,
     },
     workflow::{prelude::*, runtime::intent::IntentCleanupWorkflow},
@@ -145,7 +149,7 @@ impl CallBuilder<'_> {
             });
         };
 
-        let resource_key = IntentResourceKey::try_new(intent.key).map_err(|err| {
+        let resource_key = IntentResourceKey::try_new(intent.key.clone()).map_err(|err| {
             InternalError::invariant(
                 InternalErrorOrigin::Workflow,
                 format!("intent key invalid: {err}"),
@@ -154,59 +158,174 @@ impl CallBuilder<'_> {
 
         IntentCleanupWorkflow::ensure_started();
 
-        if let Some(max_in_flight) = intent.max_in_flight {
-            let totals = IntentStoreOps::totals_at(&resource_key, now);
-            let in_flight = totals.reserved_qty;
-            let next = next_in_flight_quantity(in_flight, intent.quantity)?;
-
-            if next > max_in_flight {
-                return Err(InternalError::domain(
-                    InternalErrorOrigin::Domain,
-                    format!(
-                        "intent capacity exceeded key={resource_key} in_flight={in_flight} \
-requested={} max_in_flight={max_in_flight}",
-                        intent.quantity
-                    ),
-                ));
-            }
-        }
-
-        let intent_id = IntentStoreOps::allocate_intent_id()?;
-        let created_at = now;
-        let _ = IntentStoreOps::try_reserve(
-            intent_id,
-            resource_key.clone(),
-            intent.quantity,
-            created_at,
-            intent.ttl_secs,
-            now,
-        )?;
+        enforce_call_intent_capacity(&resource_key, &intent, now)?;
+        let intent_id = reserve_call_intent(&resource_key, &intent, now)?;
 
         match inner.execute().await {
             Ok(inner) => {
-                if let Err(err) = IntentStoreOps::commit_at(intent_id, now) {
-                    crate::log!(
-                        Error,
-                        "intent commit failed id={intent_id} key={resource_key}: {err}"
-                    );
-                }
+                commit_call_intent(intent_id, &resource_key, now);
 
                 Ok(CallResult { inner })
             }
-            Err(call_err) => {
-                if let Err(abort_err) = IntentStoreOps::abort(intent_id) {
-                    let message = format!("{call_err}; intent abort failed: {abort_err}");
-                    return Err(InternalError::new(
-                        call_err.class(),
-                        call_err.origin(),
-                        message,
-                    ));
-                }
-
-                Err(call_err)
-            }
+            Err(call_err) => abort_call_intent(intent_id, call_err),
         }
     }
+}
+
+// Enforce the optional in-flight limit before reserving an intent.
+fn enforce_call_intent_capacity(
+    resource_key: &IntentResourceKey,
+    intent: &IntentSpec,
+    now: u64,
+) -> Result<(), InternalError> {
+    let Some(max_in_flight) = intent.max_in_flight else {
+        return Ok(());
+    };
+
+    let totals = IntentStoreOps::totals_at(resource_key, now);
+    let in_flight = totals.reserved_qty;
+    let next = match next_in_flight_quantity(in_flight, intent.quantity) {
+        Ok(next) => next,
+        Err(err) => {
+            record_call_intent(
+                IntentMetricOperation::CapacityCheck,
+                IntentMetricOutcome::Failed,
+                IntentMetricReason::Overflow,
+            );
+            return Err(err);
+        }
+    };
+
+    if next > max_in_flight {
+        record_call_intent(
+            IntentMetricOperation::CapacityCheck,
+            IntentMetricOutcome::Failed,
+            IntentMetricReason::Capacity,
+        );
+        return Err(InternalError::domain(
+            InternalErrorOrigin::Domain,
+            format!(
+                "intent capacity exceeded key={resource_key} in_flight={in_flight} \
+requested={} max_in_flight={max_in_flight}",
+                intent.quantity
+            ),
+        ));
+    }
+
+    record_call_intent(
+        IntentMetricOperation::CapacityCheck,
+        IntentMetricOutcome::Completed,
+        IntentMetricReason::Ok,
+    );
+
+    Ok(())
+}
+
+// Reserve a call intent and record the storage outcome.
+fn reserve_call_intent(
+    resource_key: &IntentResourceKey,
+    intent: &IntentSpec,
+    now: u64,
+) -> Result<crate::storage::stable::intent::IntentId, InternalError> {
+    let intent_id = match IntentStoreOps::allocate_intent_id() {
+        Ok(intent_id) => intent_id,
+        Err(err) => {
+            record_call_intent(
+                IntentMetricOperation::Reserve,
+                IntentMetricOutcome::Failed,
+                IntentMetricReason::StorageFailed,
+            );
+            return Err(err);
+        }
+    };
+    let _ = match IntentStoreOps::try_reserve(
+        intent_id,
+        resource_key.clone(),
+        intent.quantity,
+        now,
+        intent.ttl_secs,
+        now,
+    ) {
+        Ok(record) => {
+            record_call_intent(
+                IntentMetricOperation::Reserve,
+                IntentMetricOutcome::Completed,
+                IntentMetricReason::Ok,
+            );
+            record
+        }
+        Err(err) => {
+            record_call_intent(
+                IntentMetricOperation::Reserve,
+                IntentMetricOutcome::Failed,
+                IntentMetricReason::StorageFailed,
+            );
+            return Err(err);
+        }
+    };
+
+    Ok(intent_id)
+}
+
+// Commit a call intent after successful execution; call results remain authoritative.
+fn commit_call_intent(
+    intent_id: crate::storage::stable::intent::IntentId,
+    resource_key: &IntentResourceKey,
+    now: u64,
+) {
+    if let Err(err) = IntentStoreOps::commit_at(intent_id, now) {
+        record_call_intent(
+            IntentMetricOperation::Commit,
+            IntentMetricOutcome::Failed,
+            IntentMetricReason::StorageFailed,
+        );
+        crate::log!(
+            Error,
+            "intent commit failed id={intent_id} key={resource_key}: {err}"
+        );
+    } else {
+        record_call_intent(
+            IntentMetricOperation::Commit,
+            IntentMetricOutcome::Completed,
+            IntentMetricReason::Ok,
+        );
+    }
+}
+
+// Abort a call intent after failed execution and attach abort errors to the result.
+fn abort_call_intent(
+    intent_id: crate::storage::stable::intent::IntentId,
+    call_err: InternalError,
+) -> Result<CallResult, InternalError> {
+    if let Err(abort_err) = IntentStoreOps::abort(intent_id) {
+        record_call_intent(
+            IntentMetricOperation::Abort,
+            IntentMetricOutcome::Failed,
+            IntentMetricReason::StorageFailed,
+        );
+        let message = format!("{call_err}; intent abort failed: {abort_err}");
+        return Err(InternalError::new(
+            call_err.class(),
+            call_err.origin(),
+            message,
+        ));
+    }
+
+    record_call_intent(
+        IntentMetricOperation::Abort,
+        IntentMetricOutcome::Completed,
+        IntentMetricReason::Ok,
+    );
+    Err(call_err)
+}
+
+// Record a call-surface intent metric with fixed labels only.
+fn record_call_intent(
+    operation: IntentMetricOperation,
+    outcome: IntentMetricOutcome,
+    reason: IntentMetricReason,
+) {
+    IntentMetrics::record(IntentMetricSurface::Call, operation, outcome, reason);
 }
 
 // Compute the next in-flight quantity after applying a reservation request.

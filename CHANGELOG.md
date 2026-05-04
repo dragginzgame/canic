@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.30.x] - 2026-05-03 - Fleet Snapshot Backups
 
+- `0.30.20` lets `canic restore apply --dry-run` validate restore artifacts under a backup directory before any future restore execution path can rely on the plan, and adds first-class `Intent` and `PlatformCall` metrics for reservation and platform-call visibility.
+
+```bash
+canic restore apply \
+  --plan restore-plan.json \
+  --status restore-status.json \
+  --backup-dir backups/<run-id> \
+  --dry-run \
+  --out restore-apply-dry-run.json
+```
+
 - `0.30.19` adds `canic restore apply --dry-run` so operators can render ordered upload, load, reinstall, and verification operations from a restore plan before real restore execution exists, and adds first-class `Auth` and `Replay` metrics for session, attestation, and replay-safety visibility.
 
 ```bash

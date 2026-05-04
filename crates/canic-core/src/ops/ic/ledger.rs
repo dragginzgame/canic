@@ -8,7 +8,14 @@ use crate::{
     InternalError,
     cdk::spec::standards::icrc::icrc2::{Allowance, TransferFromArgs, TransferFromResult},
     infra::{InfraError, ic::ledger::LedgerInfra},
-    ops::{ic::IcOpsError, prelude::*},
+    ops::{
+        ic::IcOpsError,
+        prelude::*,
+        runtime::metrics::platform_call::{
+            PlatformCallMetricMode, PlatformCallMetricOutcome, PlatformCallMetricReason,
+            PlatformCallMetricSurface, PlatformCallMetrics,
+        },
+    },
 };
 use thiserror::Error as ThisError;
 
@@ -18,7 +25,7 @@ use thiserror::Error as ThisError;
 
 #[derive(Debug, ThisError)]
 pub enum LedgerOpsError {
-    /// Any infra failure (IC call failed, candid errors, ledger rejection mapped in infra, etc.)
+    /// Any infra failure (platform call failed, candid errors, ledger rejection mapped in infra, etc.)
     #[error(transparent)]
     Infra(#[from] InfraError),
 }
@@ -64,9 +71,24 @@ impl LedgerOps {
         payer: Account,
         spender: Account,
     ) -> Result<Allowance, InternalError> {
-        let allowance = LedgerInfra::icrc2_allowance(ledger_id, payer, spender)
-            .await
-            .map_err(LedgerOpsError::from)?;
+        record_ledger_call(
+            PlatformCallMetricOutcome::Started,
+            PlatformCallMetricReason::Ok,
+        );
+        let allowance = match LedgerInfra::icrc2_allowance(ledger_id, payer, spender).await {
+            Ok(allowance) => allowance,
+            Err(err) => {
+                record_ledger_call(
+                    PlatformCallMetricOutcome::Failed,
+                    PlatformCallMetricReason::Infra,
+                );
+                return Err(LedgerOpsError::from(err).into());
+            }
+        };
+        record_ledger_call(
+            PlatformCallMetricOutcome::Completed,
+            PlatformCallMetricReason::Ok,
+        );
 
         Ok(allowance)
     }
@@ -94,17 +116,39 @@ impl LedgerOps {
             created_at_time: Some(crate::cdk::api::time()),
         };
 
-        let result: TransferFromResult = LedgerInfra::icrc2_transfer_from(ledger_id, args)
-            .await
-            .map_err(LedgerOpsError::from)?;
+        record_ledger_call(
+            PlatformCallMetricOutcome::Started,
+            PlatformCallMetricReason::Ok,
+        );
+        let result: TransferFromResult =
+            match LedgerInfra::icrc2_transfer_from(ledger_id, args).await {
+                Ok(result) => result,
+                Err(err) => {
+                    record_ledger_call(
+                        PlatformCallMetricOutcome::Failed,
+                        PlatformCallMetricReason::Infra,
+                    );
+                    return Err(LedgerOpsError::from(err).into());
+                }
+            };
 
         match result {
-            TransferFromResult::Ok(block_index) => Ok(block_index),
+            TransferFromResult::Ok(block_index) => {
+                record_ledger_call(
+                    PlatformCallMetricOutcome::Completed,
+                    PlatformCallMetricReason::Ok,
+                );
+                Ok(block_index)
+            }
 
             // By construction, infra::ic::ledger::icrc2_transfer_from already maps Err(...)
             // into InfraError (lossless), so this branch should be unreachable. Keep it anyway
             // to be robust to future infra changes.
             TransferFromResult::Err(_) => {
+                record_ledger_call(
+                    PlatformCallMetricOutcome::Failed,
+                    PlatformCallMetricReason::LedgerRejected,
+                );
                 unreachable!()
                 /*
                 Err(LedgerOpsError::Infra(InfraError::from(
@@ -119,4 +163,14 @@ impl LedgerOps {
             }
         }
     }
+}
+
+// Record one ledger-call metric with no ledger, account, or token labels.
+fn record_ledger_call(outcome: PlatformCallMetricOutcome, reason: PlatformCallMetricReason) {
+    PlatformCallMetrics::record(
+        PlatformCallMetricSurface::Ledger,
+        PlatformCallMetricMode::Update,
+        outcome,
+        reason,
+    );
 }

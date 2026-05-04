@@ -8,43 +8,43 @@ thread_local! {
     /// Thread-local storage for inter-canister call counters.
     ///
     /// Keyed by `(target, method)` and holding the number of calls observed.
-    static ICC_METRICS: RefCell<HashMap<IccMetricKey, u64>> =
+    static INTER_CANISTER_CALL_METRICS: RefCell<HashMap<InterCanisterCallMetricKey, u64>> =
         RefCell::new(HashMap::new());
 }
 
 ///
-/// IccMetricsSnapshot
+/// InterCanisterCallMetricsSnapshot
 ///
 
 #[derive(Clone)]
-pub struct IccMetricsSnapshot {
-    pub entries: Vec<(IccMetricKey, u64)>,
+pub struct InterCanisterCallMetricsSnapshot {
+    pub entries: Vec<(InterCanisterCallMetricKey, u64)>,
 }
 
 ///
-/// IccMetricKey
+/// InterCanisterCallMetricKey
 /// Cardinality is bounded by observed canister targets and static method names.
 ///
 
 #[derive(Clone, Eq, Hash, PartialEq)]
-pub struct IccMetricKey {
+pub struct InterCanisterCallMetricKey {
     pub target: Principal,
     pub method: String,
 }
 
 ///
-/// IccMetrics
+/// InterCanisterCallMetrics
 /// Volatile counters for inter-canister calls keyed by target + method.
 /// Targets may grow with topology size; methods must remain low-cardinality.
 ///
 
-pub struct IccMetrics;
+pub struct InterCanisterCallMetrics;
 
-impl IccMetrics {
-    /// Increment the ICC counter for a target/method pair.
+impl InterCanisterCallMetrics {
+    /// Increment the inter-canister call counter for a target/method pair.
     fn increment(target: Principal, method: &str) {
-        ICC_METRICS.with_borrow_mut(|counts| {
-            let key = IccMetricKey {
+        INTER_CANISTER_CALL_METRICS.with_borrow_mut(|counts| {
+            let key = InterCanisterCallMetricKey {
                 target,
                 method: method.to_string(),
             };
@@ -65,21 +65,21 @@ impl IccMetrics {
         Self::increment(target, method);
     }
 
-    /// Snapshot the current ICC metrics as a stable vector.
+    /// Snapshot the current inter-canister call metrics as a stable vector.
     #[must_use]
-    pub fn snapshot() -> IccMetricsSnapshot {
-        let entries = ICC_METRICS
+    pub fn snapshot() -> InterCanisterCallMetricsSnapshot {
+        let entries = INTER_CANISTER_CALL_METRICS
             .with_borrow(std::clone::Clone::clone)
             .into_iter()
             .collect();
 
-        IccMetricsSnapshot { entries }
+        InterCanisterCallMetricsSnapshot { entries }
     }
 
-    /// Test-only helper: clear all ICC metrics.
+    /// Test-only helper: clear all inter-canister call metrics.
     #[cfg(test)]
     pub fn reset() {
-        ICC_METRICS.with_borrow_mut(HashMap::clear);
+        INTER_CANISTER_CALL_METRICS.with_borrow_mut(HashMap::clear);
     }
 }
 
@@ -92,26 +92,29 @@ mod tests {
     use super::*;
     use crate::ops::runtime::metrics::system::SystemMetrics;
 
-    fn snapshot_map() -> HashMap<IccMetricKey, u64> {
-        IccMetrics::snapshot().entries.into_iter().collect()
+    fn snapshot_map() -> HashMap<InterCanisterCallMetricKey, u64> {
+        InterCanisterCallMetrics::snapshot()
+            .entries
+            .into_iter()
+            .collect()
     }
 
     #[test]
-    fn icc_metrics_track_target_and_method() {
-        IccMetrics::reset();
+    fn inter_canister_call_metrics_track_target_and_method() {
+        InterCanisterCallMetrics::reset();
 
         let t1 = Principal::from_slice(&[1; 29]);
         let t2 = Principal::from_slice(&[2; 29]);
 
-        IccMetrics::increment(t1, "foo");
-        IccMetrics::increment(t1, "foo");
-        IccMetrics::increment(t1, "bar");
-        IccMetrics::increment(t2, "foo");
+        InterCanisterCallMetrics::increment(t1, "foo");
+        InterCanisterCallMetrics::increment(t1, "foo");
+        InterCanisterCallMetrics::increment(t1, "bar");
+        InterCanisterCallMetrics::increment(t2, "foo");
 
         let map = snapshot_map();
 
         assert_eq!(
-            map.get(&IccMetricKey {
+            map.get(&InterCanisterCallMetricKey {
                 target: t1,
                 method: "foo".to_string()
             }),
@@ -119,7 +122,7 @@ mod tests {
         );
 
         assert_eq!(
-            map.get(&IccMetricKey {
+            map.get(&InterCanisterCallMetricKey {
                 target: t1,
                 method: "bar".to_string()
             }),
@@ -127,7 +130,7 @@ mod tests {
         );
 
         assert_eq!(
-            map.get(&IccMetricKey {
+            map.get(&InterCanisterCallMetricKey {
                 target: t2,
                 method: "foo".to_string()
             }),
@@ -138,17 +141,17 @@ mod tests {
     }
 
     #[test]
-    fn record_call_updates_icc_and_system_metrics() {
-        IccMetrics::reset();
+    fn record_call_updates_inter_canister_call_and_system_metrics() {
+        InterCanisterCallMetrics::reset();
         SystemMetrics::reset();
 
         let target = Principal::from_slice(&[3; 29]);
-        IccMetrics::record_call(target, "canic_sync");
-        IccMetrics::record_call(target, "canic_sync");
+        InterCanisterCallMetrics::record_call(target, "canic_sync");
+        InterCanisterCallMetrics::record_call(target, "canic_sync");
 
         let map = snapshot_map();
         assert_eq!(
-            map.get(&IccMetricKey {
+            map.get(&InterCanisterCallMetricKey {
                 target,
                 method: "canic_sync".to_string()
             }),
