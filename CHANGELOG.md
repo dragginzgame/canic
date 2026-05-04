@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.30.x] - 2026-05-03 - Fleet Snapshot Backups
 
+- `0.30.23` makes restore apply journal advancement ordered, adds `canic restore apply-command`, and exposes `ManagementCall` metrics so external runners cannot skip ahead and operators can see which management-canister operation is failing.
+
+```bash
+canic restore apply-command \
+  --journal restore-apply-journal.json \
+  --network local \
+  --out restore-apply-command.json
+```
+
 - `0.30.22` adds restore apply journal state transitions plus `canic restore apply-next` and `canic restore apply-mark` so external restore runners can fetch the next operation and mark individual operations completed or failed while keeping resumable journal counts consistent, and tightens metrics documentation and facade coverage so every metric family stays visible and documented.
 
 ```bash

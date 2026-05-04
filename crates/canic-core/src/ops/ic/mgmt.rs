@@ -23,6 +23,10 @@ use crate::{
                 CanisterOpsMetricOperation, CanisterOpsMetricOutcome, CanisterOpsMetricReason,
                 CanisterOpsMetrics,
             },
+            management_call::{
+                ManagementCallMetricOperation, ManagementCallMetricOutcome,
+                ManagementCallMetricReason, ManagementCallMetrics,
+            },
             platform_call::{
                 PlatformCallMetricMode, PlatformCallMetricOutcome, PlatformCallMetricReason,
                 PlatformCallMetricSurface, PlatformCallMetrics,
@@ -203,7 +207,11 @@ impl MgmtOps {
         controllers: Vec<Principal>,
         cycles: Cycles,
     ) -> Result<Principal, InternalError> {
-        let pid = management_call(MgmtInfra::create_canister(controllers, cycles)).await?;
+        let pid = management_call(
+            ManagementCallMetricOperation::CreateCanister,
+            MgmtInfra::create_canister(controllers, cycles),
+        )
+        .await?;
 
         SystemMetrics::increment(SystemMetricKind::CreateCanister);
 
@@ -212,7 +220,11 @@ impl MgmtOps {
 
     /// Internal ops entrypoint used by workflow and other ops helpers.
     pub async fn canister_status(canister_pid: Principal) -> Result<CanisterStatus, InternalError> {
-        let status = management_call(MgmtInfra::canister_status(canister_pid)).await?;
+        let status = management_call(
+            ManagementCallMetricOperation::CanisterStatus,
+            MgmtInfra::canister_status(canister_pid),
+        )
+        .await?;
 
         SystemMetrics::increment(SystemMetricKind::CanisterStatus);
 
@@ -231,11 +243,10 @@ impl MgmtOps {
             CanisterOpsMetricReason::Ok,
         );
 
-        match management_call(MgmtInfra::take_canister_snapshot(
-            canister_pid,
-            replace_snapshot,
-            uninstall_code,
-        ))
+        match management_call(
+            ManagementCallMetricOperation::TakeCanisterSnapshot,
+            MgmtInfra::take_canister_snapshot(canister_pid, replace_snapshot, uninstall_code),
+        )
         .await
         {
             Ok(snapshot) => {
@@ -274,7 +285,12 @@ impl MgmtOps {
             CanisterOpsMetricReason::Ok,
         );
 
-        match management_call(MgmtInfra::load_canister_snapshot(canister_pid, snapshot_id)).await {
+        match management_call(
+            ManagementCallMetricOperation::LoadCanisterSnapshot,
+            MgmtInfra::load_canister_snapshot(canister_pid, snapshot_id),
+        )
+        .await
+        {
             Ok(()) => {
                 record_unscoped_canister_op(
                     CanisterOpsMetricOperation::Restore,
@@ -314,7 +330,11 @@ impl MgmtOps {
         canister_pid: Principal,
         cycles: u128,
     ) -> Result<(), InternalError> {
-        management_call(MgmtInfra::deposit_cycles(canister_pid, cycles)).await?;
+        management_call(
+            ManagementCallMetricOperation::DepositCycles,
+            MgmtInfra::deposit_cycles(canister_pid, cycles),
+        )
+        .await?;
 
         SystemMetrics::increment(SystemMetricKind::DepositCycles);
 
@@ -323,7 +343,11 @@ impl MgmtOps {
 
     /// Gets a canister's cycle balance (expensive: calls mgmt canister).
     pub async fn get_cycles(canister_pid: Principal) -> Result<Cycles, InternalError> {
-        let cycles = management_call(MgmtInfra::get_cycles(canister_pid)).await?;
+        let cycles = management_call(
+            ManagementCallMetricOperation::GetCycles,
+            MgmtInfra::get_cycles(canister_pid),
+        )
+        .await?;
 
         Ok(cycles)
     }
@@ -342,14 +366,17 @@ impl MgmtOps {
         args: T,
     ) -> Result<(), InternalError> {
         let chunk_count = chunk_hashes_list.len();
-        management_call(MgmtInfra::install_chunked_code(
-            install_mode_to_infra(mode),
-            target_canister,
-            store_canister,
-            chunk_hashes_list,
-            wasm_module_hash,
-            args,
-        ))
+        management_call(
+            ManagementCallMetricOperation::InstallChunkedCode,
+            MgmtInfra::install_chunked_code(
+                install_mode_to_infra(mode),
+                target_canister,
+                store_canister,
+                chunk_hashes_list,
+                wasm_module_hash,
+                args,
+            ),
+        )
         .await?;
 
         let metric_kind = match mode {
@@ -376,12 +403,15 @@ impl MgmtOps {
         args: T,
     ) -> Result<(), InternalError> {
         let payload_size_bytes = wasm_module.len();
-        management_call(MgmtInfra::install_code(
-            install_mode_to_infra(mode),
-            target_canister,
-            wasm_module,
-            args,
-        ))
+        management_call(
+            ManagementCallMetricOperation::InstallCode,
+            MgmtInfra::install_code(
+                install_mode_to_infra(mode),
+                target_canister,
+                wasm_module,
+                args,
+            ),
+        )
         .await?;
 
         let metric_kind = match mode {
@@ -438,7 +468,11 @@ impl MgmtOps {
         chunk: Vec<u8>,
     ) -> Result<Vec<u8>, InternalError> {
         let chunk_len = chunk.len();
-        let hash = management_call(MgmtInfra::upload_chunk(canister_pid, chunk)).await?;
+        let hash = management_call(
+            ManagementCallMetricOperation::UploadChunk,
+            MgmtInfra::upload_chunk(canister_pid, chunk),
+        )
+        .await?;
 
         #[expect(clippy::cast_precision_loss)]
         let bytes_kb = chunk_len as f64 / 1_000.0;
@@ -453,12 +487,20 @@ impl MgmtOps {
 
     /// List the chunk hashes currently stored in one canister's chunk store.
     pub async fn stored_chunks(canister_pid: Principal) -> Result<Vec<Vec<u8>>, InternalError> {
-        management_call(MgmtInfra::stored_chunks(canister_pid)).await
+        management_call(
+            ManagementCallMetricOperation::StoredChunks,
+            MgmtInfra::stored_chunks(canister_pid),
+        )
+        .await
     }
 
     /// Clear the chunk store of one canister.
     pub async fn clear_chunk_store(canister_pid: Principal) -> Result<(), InternalError> {
-        management_call(MgmtInfra::clear_chunk_store(canister_pid)).await?;
+        management_call(
+            ManagementCallMetricOperation::ClearChunkStore,
+            MgmtInfra::clear_chunk_store(canister_pid),
+        )
+        .await?;
 
         log!(
             Topic::CanisterLifecycle,
@@ -471,7 +513,11 @@ impl MgmtOps {
 
     /// Uninstalls code from a canister and records metrics.
     pub async fn uninstall_code(canister_pid: Principal) -> Result<(), InternalError> {
-        management_call(MgmtInfra::uninstall_code(canister_pid)).await?;
+        management_call(
+            ManagementCallMetricOperation::UninstallCode,
+            MgmtInfra::uninstall_code(canister_pid),
+        )
+        .await?;
 
         SystemMetrics::increment(SystemMetricKind::UninstallCode);
 
@@ -486,7 +532,11 @@ impl MgmtOps {
 
     /// Stops a canister via the management canister.
     pub async fn stop_canister(canister_pid: Principal) -> Result<(), InternalError> {
-        management_call(MgmtInfra::stop_canister(canister_pid)).await?;
+        management_call(
+            ManagementCallMetricOperation::StopCanister,
+            MgmtInfra::stop_canister(canister_pid),
+        )
+        .await?;
 
         log!(
             Topic::CanisterLifecycle,
@@ -499,7 +549,11 @@ impl MgmtOps {
 
     /// Deletes a canister (code + controllers) via the management canister.
     pub async fn delete_canister(canister_pid: Principal) -> Result<(), InternalError> {
-        management_call(MgmtInfra::delete_canister(canister_pid)).await?;
+        management_call(
+            ManagementCallMetricOperation::DeleteCanister,
+            MgmtInfra::delete_canister(canister_pid),
+        )
+        .await?;
 
         SystemMetrics::increment(SystemMetricKind::DeleteCanister);
 
@@ -512,7 +566,11 @@ impl MgmtOps {
 
     /// Query the management canister for raw randomness and record metrics.
     pub async fn raw_rand() -> Result<[u8; 32], InternalError> {
-        let seed = management_call(MgmtInfra::raw_rand()).await?;
+        let seed = management_call(
+            ManagementCallMetricOperation::RawRand,
+            MgmtInfra::raw_rand(),
+        )
+        .await?;
 
         SystemMetrics::increment(SystemMetricKind::RawRand);
 
@@ -526,7 +584,11 @@ impl MgmtOps {
     /// Updates canister settings via the management canister and records metrics.
     pub async fn update_settings(args: &UpdateSettingsArgs) -> Result<(), InternalError> {
         let infra_args = update_settings_to_infra(args);
-        management_call(MgmtInfra::update_settings(&infra_args)).await?;
+        management_call(
+            ManagementCallMetricOperation::UpdateSettings,
+            MgmtInfra::update_settings(&infra_args),
+        )
+        .await?;
 
         SystemMetrics::increment(SystemMetricKind::UpdateSettings);
 
@@ -540,39 +602,56 @@ impl MgmtOps {
 
 // Execute one management-canister call and record low-cardinality outcomes.
 async fn management_call<T>(
+    operation: ManagementCallMetricOperation,
     fut: impl Future<Output = Result<T, InfraError>>,
 ) -> Result<T, InternalError> {
     record_management_call(
+        operation,
         PlatformCallMetricOutcome::Started,
         PlatformCallMetricReason::Ok,
+        ManagementCallMetricOutcome::Started,
+        ManagementCallMetricReason::Ok,
     );
 
     match fut.await {
         Ok(value) => {
             record_management_call(
+                operation,
                 PlatformCallMetricOutcome::Completed,
                 PlatformCallMetricReason::Ok,
+                ManagementCallMetricOutcome::Completed,
+                ManagementCallMetricReason::Ok,
             );
             Ok(value)
         }
         Err(err) => {
             record_management_call(
+                operation,
                 PlatformCallMetricOutcome::Failed,
                 PlatformCallMetricReason::Infra,
+                ManagementCallMetricOutcome::Failed,
+                ManagementCallMetricReason::Infra,
             );
             Err(IcOpsError::from(err).into())
         }
     }
 }
 
-// Record one management-call metric with no target or method labels.
-fn record_management_call(outcome: PlatformCallMetricOutcome, reason: PlatformCallMetricReason) {
+// Record management-call metrics with no target or method labels.
+fn record_management_call(
+    operation: ManagementCallMetricOperation,
+    platform_outcome: PlatformCallMetricOutcome,
+    platform_reason: PlatformCallMetricReason,
+    management_outcome: ManagementCallMetricOutcome,
+    management_reason: ManagementCallMetricReason,
+) {
     PlatformCallMetrics::record(
         PlatformCallMetricSurface::Management,
         PlatformCallMetricMode::Update,
-        outcome,
-        reason,
+        platform_outcome,
+        platform_reason,
     );
+    ManagementCallMetrics::record(operation, management_outcome, management_reason);
 }
 
 fn canister_status_from_infra(status: InfraCanisterStatusResult) -> CanisterStatus {

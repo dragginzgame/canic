@@ -44,6 +44,7 @@ fn all_metric_families_are_public_facade_usable() {
         MetricsKind::Intent,
         MetricsKind::InterCanisterCall,
         MetricsKind::Lifecycle,
+        MetricsKind::ManagementCall,
         MetricsKind::Perf,
         MetricsKind::PlatformCall,
         MetricsKind::Pool,

@@ -403,6 +403,21 @@ impl RestoreApplyJournal {
         RestoreApplyNextOperation::from_journal(self)
     }
 
+    /// Render the next ready operation as a concrete no-execute command preview.
+    #[must_use]
+    pub fn next_command_preview(&self) -> RestoreApplyCommandPreview {
+        RestoreApplyCommandPreview::from_journal(self)
+    }
+
+    /// Render the next ready operation as a configured no-execute command preview.
+    #[must_use]
+    pub fn next_command_preview_with_config(
+        &self,
+        config: &RestoreApplyCommandConfig,
+    ) -> RestoreApplyCommandPreview {
+        RestoreApplyCommandPreview::from_journal_with_config(self, config)
+    }
+
     /// Mark one restore apply operation completed and refresh journal counts.
     pub fn mark_operation_completed(
         &mut self,
@@ -431,11 +446,12 @@ impl RestoreApplyJournal {
         next_state: RestoreApplyOperationState,
         blocking_reasons: Vec<String>,
     ) -> Result<(), RestoreApplyJournalError> {
-        let operation = self
+        let index = self
             .operations
-            .iter_mut()
-            .find(|operation| operation.sequence == sequence)
+            .iter()
+            .position(|operation| operation.sequence == sequence)
             .ok_or(RestoreApplyJournalError::OperationNotFound(sequence))?;
+        let operation = &self.operations[index];
 
         if !operation.can_transition_to(&next_state) {
             return Err(RestoreApplyJournalError::InvalidOperationTransition {
@@ -445,10 +461,51 @@ impl RestoreApplyJournal {
             });
         }
 
+        self.validate_operation_transition_order(operation, &next_state)?;
+
+        let operation = &mut self.operations[index];
         operation.state = next_state;
         operation.blocking_reasons = blocking_reasons;
         self.refresh_operation_counts();
         self.validate()
+    }
+
+    // Ensure fresh operation transitions advance in journal order.
+    fn validate_operation_transition_order(
+        &self,
+        operation: &RestoreApplyJournalOperation,
+        next_state: &RestoreApplyOperationState,
+    ) -> Result<(), RestoreApplyJournalError> {
+        if operation.state == *next_state {
+            return Ok(());
+        }
+
+        let next_sequence = self
+            .next_transition_sequence()
+            .ok_or(RestoreApplyJournalError::NoTransitionableOperation)?;
+
+        if operation.sequence == next_sequence {
+            return Ok(());
+        }
+
+        Err(RestoreApplyJournalError::OutOfOrderOperationTransition {
+            requested: operation.sequence,
+            next: next_sequence,
+        })
+    }
+
+    // Return the next operation sequence that can be advanced by a runner.
+    fn next_transition_sequence(&self) -> Option<usize> {
+        self.operations
+            .iter()
+            .filter(|operation| {
+                matches!(
+                    operation.state,
+                    RestoreApplyOperationState::Ready | RestoreApplyOperationState::Pending
+                )
+            })
+            .map(|operation| operation.sequence)
+            .min()
     }
 
     // Recompute operation counts after a journal operation state change.
@@ -656,6 +713,203 @@ impl RestoreApplyNextOperation {
 }
 
 ///
+/// RestoreApplyCommandPreview
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "runner preview exposes machine-readable availability and safety flags"
+)]
+pub struct RestoreApplyCommandPreview {
+    pub response_version: u16,
+    pub backup_id: String,
+    pub ready: bool,
+    pub complete: bool,
+    pub operation_available: bool,
+    pub command_available: bool,
+    pub blocked_reasons: Vec<String>,
+    pub operation: Option<RestoreApplyJournalOperation>,
+    pub command: Option<RestoreApplyRunnerCommand>,
+}
+
+impl RestoreApplyCommandPreview {
+    /// Build a no-execute runner command preview from a restore apply journal.
+    #[must_use]
+    pub fn from_journal(journal: &RestoreApplyJournal) -> Self {
+        Self::from_journal_with_config(journal, &RestoreApplyCommandConfig::default())
+    }
+
+    /// Build a configured no-execute runner command preview from a journal.
+    #[must_use]
+    pub fn from_journal_with_config(
+        journal: &RestoreApplyJournal,
+        config: &RestoreApplyCommandConfig,
+    ) -> Self {
+        let complete =
+            journal.operation_count > 0 && journal.completed_operations == journal.operation_count;
+        let operation = journal.next_ready_operation().cloned();
+        let command = operation
+            .as_ref()
+            .and_then(|operation| RestoreApplyRunnerCommand::from_operation(operation, config));
+
+        Self {
+            response_version: 1,
+            backup_id: journal.backup_id.clone(),
+            ready: journal.ready,
+            complete,
+            operation_available: operation.is_some(),
+            command_available: command.is_some(),
+            blocked_reasons: journal.blocked_reasons.clone(),
+            operation,
+            command,
+        }
+    }
+}
+
+///
+/// RestoreApplyCommandConfig
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RestoreApplyCommandConfig {
+    pub program: String,
+    pub network: Option<String>,
+}
+
+impl Default for RestoreApplyCommandConfig {
+    /// Build the default restore apply command preview configuration.
+    fn default() -> Self {
+        Self {
+            program: "dfx".to_string(),
+            network: None,
+        }
+    }
+}
+
+///
+/// RestoreApplyRunnerCommand
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RestoreApplyRunnerCommand {
+    pub program: String,
+    pub args: Vec<String>,
+    pub mutates: bool,
+    pub requires_stopped_canister: bool,
+    pub note: String,
+}
+
+impl RestoreApplyRunnerCommand {
+    // Build a no-execute dfx command preview for one ready operation.
+    fn from_operation(
+        operation: &RestoreApplyJournalOperation,
+        config: &RestoreApplyCommandConfig,
+    ) -> Option<Self> {
+        match operation.operation {
+            RestoreApplyOperationKind::UploadSnapshot => {
+                let artifact_path = operation.artifact_path.as_ref()?;
+                Some(Self {
+                    program: config.program.clone(),
+                    args: dfx_canister_args(
+                        config,
+                        vec![
+                            "snapshot".to_string(),
+                            "upload".to_string(),
+                            "--dir".to_string(),
+                            artifact_path.clone(),
+                            operation.target_canister.clone(),
+                        ],
+                    ),
+                    mutates: true,
+                    requires_stopped_canister: false,
+                    note: "uploads the downloaded snapshot artifact to the target canister"
+                        .to_string(),
+                })
+            }
+            RestoreApplyOperationKind::LoadSnapshot => {
+                let snapshot_id = operation.snapshot_id.as_ref()?;
+                Some(Self {
+                    program: config.program.clone(),
+                    args: dfx_canister_args(
+                        config,
+                        vec![
+                            "snapshot".to_string(),
+                            "load".to_string(),
+                            operation.target_canister.clone(),
+                            snapshot_id.clone(),
+                        ],
+                    ),
+                    mutates: true,
+                    requires_stopped_canister: true,
+                    note: "loads the uploaded snapshot into the target canister".to_string(),
+                })
+            }
+            RestoreApplyOperationKind::ReinstallCode => Some(Self {
+                program: config.program.clone(),
+                args: dfx_canister_args(
+                    config,
+                    vec![
+                        "install".to_string(),
+                        "--mode".to_string(),
+                        "reinstall".to_string(),
+                        "--yes".to_string(),
+                        operation.target_canister.clone(),
+                    ],
+                ),
+                mutates: true,
+                requires_stopped_canister: false,
+                note: "reinstalls target canister code using the local dfx project configuration"
+                    .to_string(),
+            }),
+            RestoreApplyOperationKind::VerifyMember => {
+                match operation.verification_kind.as_deref() {
+                    Some("status") => Some(Self {
+                        program: config.program.clone(),
+                        args: dfx_canister_args(
+                            config,
+                            vec!["status".to_string(), operation.target_canister.clone()],
+                        ),
+                        mutates: false,
+                        requires_stopped_canister: false,
+                        note: "checks target canister status".to_string(),
+                    }),
+                    Some(_) => {
+                        let method = operation.verification_method.as_ref()?;
+                        Some(Self {
+                            program: config.program.clone(),
+                            args: dfx_canister_args(
+                                config,
+                                vec![
+                                    "call".to_string(),
+                                    operation.target_canister.clone(),
+                                    method.clone(),
+                                ],
+                            ),
+                            mutates: false,
+                            requires_stopped_canister: false,
+                            note: "calls the declared verification method".to_string(),
+                        })
+                    }
+                    None => None,
+                }
+            }
+        }
+    }
+}
+
+// Build `dfx canister` arguments with the optional network selector.
+fn dfx_canister_args(config: &RestoreApplyCommandConfig, mut tail: Vec<String>) -> Vec<String> {
+    let mut args = vec!["canister".to_string()];
+    if let Some(network) = &config.network {
+        args.push("--network".to_string());
+        args.push(network.clone());
+    }
+    args.append(&mut tail);
+    args
+}
+
+///
 /// RestoreApplyJournalOperation
 ///
 
@@ -821,6 +1075,12 @@ pub enum RestoreApplyJournalError {
 
     #[error("failed restore apply journal operation {0} requires a reason")]
     FailureReasonRequired(usize),
+
+    #[error("restore apply journal has no operation that can be advanced")]
+    NoTransitionableOperation,
+
+    #[error("restore apply journal operation {requested} cannot advance before operation {next}")]
+    OutOfOrderOperationTransition { requested: usize, next: usize },
 }
 
 // Verify every planned restore artifact against one backup directory root.
@@ -1848,6 +2108,44 @@ mod tests {
     const TARGET: &str = "rno2w-sqaaa-aaaaa-aaacq-cai";
     const HASH: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 
+    // Build a one-operation ready journal for command preview tests.
+    fn command_preview_journal(
+        operation: RestoreApplyOperationKind,
+        verification_kind: Option<&str>,
+        verification_method: Option<&str>,
+    ) -> RestoreApplyJournal {
+        let journal = RestoreApplyJournal {
+            journal_version: 1,
+            backup_id: "fbk_test_001".to_string(),
+            ready: true,
+            blocked_reasons: Vec::new(),
+            operation_count: 1,
+            pending_operations: 0,
+            ready_operations: 1,
+            blocked_operations: 0,
+            completed_operations: 0,
+            failed_operations: 0,
+            operations: vec![RestoreApplyJournalOperation {
+                sequence: 0,
+                operation,
+                state: RestoreApplyOperationState::Ready,
+                blocking_reasons: Vec::new(),
+                restore_group: 1,
+                phase_order: 0,
+                source_canister: ROOT.to_string(),
+                target_canister: ROOT.to_string(),
+                role: "root".to_string(),
+                snapshot_id: Some("snap-root".to_string()),
+                artifact_path: Some("artifacts/root".to_string()),
+                verification_kind: verification_kind.map(str::to_string),
+                verification_method: verification_method.map(str::to_string),
+            }],
+        };
+
+        journal.validate().expect("journal should validate");
+        journal
+    }
+
     // Build one valid manifest with a parent and child in the same restore group.
     fn valid_manifest(identity_mode: IdentityMode) -> FleetBackupManifest {
         FleetBackupManifest {
@@ -2519,6 +2817,237 @@ mod tests {
         );
     }
 
+    // Ensure command previews expose the dfx upload command without executing it.
+    #[test]
+    fn apply_journal_command_preview_reports_upload_command() {
+        let root = temp_dir("canic-restore-apply-command-upload");
+        fs::create_dir_all(&root).expect("create temp root");
+        let mut manifest = valid_manifest(IdentityMode::Relocatable);
+        set_member_artifact(
+            &mut manifest,
+            CHILD,
+            &root,
+            "artifacts/child",
+            b"child-snapshot",
+        );
+        set_member_artifact(
+            &mut manifest,
+            ROOT,
+            &root,
+            "artifacts/root",
+            b"root-snapshot",
+        );
+
+        let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
+        let dry_run = RestoreApplyDryRun::try_from_plan_with_artifacts(&plan, None, &root)
+            .expect("dry-run should validate artifacts");
+        let journal = RestoreApplyJournal::from_dry_run(&dry_run);
+        let preview = journal.next_command_preview();
+
+        fs::remove_dir_all(root).expect("remove temp root");
+        assert!(preview.ready);
+        assert!(preview.operation_available);
+        assert!(preview.command_available);
+        let command = preview.command.expect("command preview");
+        assert_eq!(command.program, "dfx");
+        assert_eq!(
+            command.args,
+            vec![
+                "canister".to_string(),
+                "snapshot".to_string(),
+                "upload".to_string(),
+                "--dir".to_string(),
+                "artifacts/root".to_string(),
+                ROOT.to_string(),
+            ]
+        );
+        assert!(command.mutates);
+        assert!(!command.requires_stopped_canister);
+    }
+
+    // Ensure command previews carry configured dfx program and network.
+    #[test]
+    fn apply_journal_command_preview_honors_command_config() {
+        let root = temp_dir("canic-restore-apply-command-config");
+        fs::create_dir_all(&root).expect("create temp root");
+        let mut manifest = valid_manifest(IdentityMode::Relocatable);
+        set_member_artifact(
+            &mut manifest,
+            CHILD,
+            &root,
+            "artifacts/child",
+            b"child-snapshot",
+        );
+        set_member_artifact(
+            &mut manifest,
+            ROOT,
+            &root,
+            "artifacts/root",
+            b"root-snapshot",
+        );
+
+        let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
+        let dry_run = RestoreApplyDryRun::try_from_plan_with_artifacts(&plan, None, &root)
+            .expect("dry-run should validate artifacts");
+        let journal = RestoreApplyJournal::from_dry_run(&dry_run);
+        let preview = journal.next_command_preview_with_config(&RestoreApplyCommandConfig {
+            program: "/tmp/dfx".to_string(),
+            network: Some("local".to_string()),
+        });
+
+        fs::remove_dir_all(root).expect("remove temp root");
+        let command = preview.command.expect("command preview");
+        assert_eq!(command.program, "/tmp/dfx");
+        assert_eq!(
+            command.args,
+            vec![
+                "canister".to_string(),
+                "--network".to_string(),
+                "local".to_string(),
+                "snapshot".to_string(),
+                "upload".to_string(),
+                "--dir".to_string(),
+                "artifacts/root".to_string(),
+                ROOT.to_string(),
+            ]
+        );
+    }
+
+    // Ensure command previews expose stopped-canister hints for snapshot load.
+    #[test]
+    fn apply_journal_command_preview_reports_load_command() {
+        let root = temp_dir("canic-restore-apply-command-load");
+        fs::create_dir_all(&root).expect("create temp root");
+        let mut manifest = valid_manifest(IdentityMode::Relocatable);
+        set_member_artifact(
+            &mut manifest,
+            CHILD,
+            &root,
+            "artifacts/child",
+            b"child-snapshot",
+        );
+        set_member_artifact(
+            &mut manifest,
+            ROOT,
+            &root,
+            "artifacts/root",
+            b"root-snapshot",
+        );
+
+        let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
+        let dry_run = RestoreApplyDryRun::try_from_plan_with_artifacts(&plan, None, &root)
+            .expect("dry-run should validate artifacts");
+        let mut journal = RestoreApplyJournal::from_dry_run(&dry_run);
+        journal
+            .mark_operation_completed(0)
+            .expect("mark upload completed");
+        let preview = journal.next_command_preview();
+
+        fs::remove_dir_all(root).expect("remove temp root");
+        let command = preview.command.expect("command preview");
+        assert_eq!(
+            command.args,
+            vec![
+                "canister".to_string(),
+                "snapshot".to_string(),
+                "load".to_string(),
+                ROOT.to_string(),
+                "snap-root".to_string(),
+            ]
+        );
+        assert!(command.mutates);
+        assert!(command.requires_stopped_canister);
+    }
+
+    // Ensure command previews expose reinstall commands without executing them.
+    #[test]
+    fn apply_journal_command_preview_reports_reinstall_command() {
+        let journal = command_preview_journal(RestoreApplyOperationKind::ReinstallCode, None, None);
+        let preview = journal.next_command_preview_with_config(&RestoreApplyCommandConfig {
+            program: "dfx".to_string(),
+            network: Some("local".to_string()),
+        });
+
+        assert!(preview.command_available);
+        let command = preview.command.expect("command preview");
+        assert_eq!(
+            command.args,
+            vec![
+                "canister".to_string(),
+                "--network".to_string(),
+                "local".to_string(),
+                "install".to_string(),
+                "--mode".to_string(),
+                "reinstall".to_string(),
+                "--yes".to_string(),
+                ROOT.to_string(),
+            ]
+        );
+        assert!(command.mutates);
+        assert!(!command.requires_stopped_canister);
+    }
+
+    // Ensure status verification previews use `dfx canister status`.
+    #[test]
+    fn apply_journal_command_preview_reports_status_verification_command() {
+        let journal = command_preview_journal(
+            RestoreApplyOperationKind::VerifyMember,
+            Some("status"),
+            None,
+        );
+        let preview = journal.next_command_preview();
+
+        assert!(preview.command_available);
+        let command = preview.command.expect("command preview");
+        assert_eq!(
+            command.args,
+            vec![
+                "canister".to_string(),
+                "status".to_string(),
+                ROOT.to_string()
+            ]
+        );
+        assert!(!command.mutates);
+        assert!(!command.requires_stopped_canister);
+    }
+
+    // Ensure method verification previews use `dfx canister call`.
+    #[test]
+    fn apply_journal_command_preview_reports_method_verification_command() {
+        let journal = command_preview_journal(
+            RestoreApplyOperationKind::VerifyMember,
+            Some("query"),
+            Some("health"),
+        );
+        let preview = journal.next_command_preview();
+
+        assert!(preview.command_available);
+        let command = preview.command.expect("command preview");
+        assert_eq!(
+            command.args,
+            vec![
+                "canister".to_string(),
+                "call".to_string(),
+                ROOT.to_string(),
+                "health".to_string(),
+            ]
+        );
+        assert!(!command.mutates);
+        assert!(!command.requires_stopped_canister);
+    }
+
+    // Ensure unsupported verification rows do not pretend to be runnable.
+    #[test]
+    fn apply_journal_command_preview_reports_unavailable_for_unknown_verification() {
+        let journal =
+            command_preview_journal(RestoreApplyOperationKind::VerifyMember, Some("query"), None);
+        let preview = journal.next_command_preview();
+
+        assert!(preview.operation_available);
+        assert!(!preview.command_available);
+        assert!(preview.command.is_none());
+    }
+
     // Ensure apply journal validation rejects inconsistent state counts.
     #[test]
     fn apply_journal_validation_rejects_count_mismatch() {
@@ -2622,6 +3151,48 @@ mod tests {
         assert_eq!(journal.completed_operations, 1);
         assert_eq!(journal.ready_operations, 7);
         assert_eq!(status.next_ready_sequence, Some(1));
+    }
+
+    // Ensure journal transitions cannot skip earlier ready operations.
+    #[test]
+    fn apply_journal_mark_completed_rejects_out_of_order_operation() {
+        let root = temp_dir("canic-restore-apply-journal-out-of-order");
+        fs::create_dir_all(&root).expect("create temp root");
+        let mut manifest = valid_manifest(IdentityMode::Relocatable);
+        set_member_artifact(
+            &mut manifest,
+            CHILD,
+            &root,
+            "artifacts/child",
+            b"child-snapshot",
+        );
+        set_member_artifact(
+            &mut manifest,
+            ROOT,
+            &root,
+            "artifacts/root",
+            b"root-snapshot",
+        );
+
+        let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
+        let dry_run = RestoreApplyDryRun::try_from_plan_with_artifacts(&plan, None, &root)
+            .expect("dry-run should validate artifacts");
+        let mut journal = RestoreApplyJournal::from_dry_run(&dry_run);
+
+        let err = journal
+            .mark_operation_completed(1)
+            .expect_err("out-of-order operation should fail");
+
+        fs::remove_dir_all(root).expect("remove temp root");
+        assert!(matches!(
+            err,
+            RestoreApplyJournalError::OutOfOrderOperationTransition {
+                requested: 1,
+                next: 0
+            }
+        ));
+        assert_eq!(journal.completed_operations, 0);
+        assert_eq!(journal.ready_operations, 8);
     }
 
     // Ensure failed journal operations carry a reason and update counts.

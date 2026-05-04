@@ -189,6 +189,17 @@ canic restore apply-next \
   --out restore-apply-next.json
 ```
 
+Preview the `dfx` command for the next ready operation without executing it:
+
+```bash
+canic restore apply-command \
+  --journal restore-apply-journal.json \
+  --network local \
+  --out restore-apply-command.json
+```
+
+Use `--dfx <path>` when the runner should preview a non-default `dfx` binary.
+
 Mark one journal operation after an external restore step completes or fails:
 
 ```bash
@@ -200,5 +211,6 @@ canic restore apply-mark \
 ```
 
 Use `--state failed --reason <text>` to record a failed operation. The command
-validates the input journal, refreshes operation counts, and writes the updated
-journal without executing any restore mutation.
+validates the input journal, refuses to skip earlier ready operations, refreshes
+operation counts, and writes the updated journal without executing any restore
+mutation.

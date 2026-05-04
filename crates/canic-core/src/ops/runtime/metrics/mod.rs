@@ -10,6 +10,7 @@ pub mod http;
 pub mod intent;
 pub mod inter_canister_call;
 pub mod lifecycle;
+pub mod management_call;
 pub mod platform_call;
 pub mod pool;
 pub mod provisioning;
@@ -40,6 +41,7 @@ use {
     intent::IntentMetrics,
     inter_canister_call::InterCanisterCallMetrics,
     lifecycle::LifecycleMetrics,
+    management_call::ManagementCallMetrics,
     platform_call::PlatformCallMetrics,
     pool::PoolMetrics,
     provisioning::ProvisioningMetrics,
@@ -70,6 +72,7 @@ pub fn entries(kind: MetricsKind) -> Vec<MetricEntry> {
         MetricsKind::Intent => intent_entries(),
         MetricsKind::InterCanisterCall => inter_canister_call_entries(),
         MetricsKind::Lifecycle => lifecycle_entries(),
+        MetricsKind::ManagementCall => management_call_entries(),
         MetricsKind::Perf => perf_entries(),
         MetricsKind::PlatformCall => platform_call_entries(),
         MetricsKind::Pool => pool_entries(),
@@ -100,6 +103,7 @@ pub fn reset_for_tests() {
     InterCanisterCallMetrics::reset();
     IntentMetrics::reset();
     LifecycleMetrics::reset();
+    ManagementCallMetrics::reset();
     PoolMetrics::reset();
     ProvisioningMetrics::reset();
     ReplayMetrics::reset();
@@ -111,6 +115,23 @@ pub fn reset_for_tests() {
     TimerMetrics::reset();
     WasmStoreMetrics::reset();
     perf::reset();
+}
+
+/// Project management-canister call outcome counters into public metrics rows.
+#[must_use]
+fn management_call_entries() -> Vec<MetricEntry> {
+    ManagementCallMetrics::snapshot()
+        .into_iter()
+        .map(|(key, count)| MetricEntry {
+            labels: vec![
+                key.operation.metric_label().to_string(),
+                key.outcome.metric_label().to_string(),
+                key.reason.metric_label().to_string(),
+            ],
+            principal: None,
+            value: MetricValue::Count(count),
+        })
+        .collect()
 }
 
 /// Project low-cardinality platform call outcome counters into public metrics rows.
@@ -594,6 +615,10 @@ mod tests {
                 LifecycleMetricOutcome, LifecycleMetricPhase, LifecycleMetricRole,
                 LifecycleMetricStage, LifecycleMetrics,
             },
+            management_call::{
+                ManagementCallMetricOperation, ManagementCallMetricOutcome,
+                ManagementCallMetricReason, ManagementCallMetrics,
+            },
             platform_call::{
                 PlatformCallMetricMode, PlatformCallMetricOutcome, PlatformCallMetricReason,
                 PlatformCallMetricSurface, PlatformCallMetrics,
@@ -992,6 +1017,33 @@ mod tests {
         );
     }
 
+    // Verify management-call metrics expose stable label rows and accumulate counts.
+    #[test]
+    fn management_call_metrics_are_exposed_with_stable_labels() {
+        reset_for_tests();
+
+        ManagementCallMetrics::record(
+            ManagementCallMetricOperation::InstallCode,
+            ManagementCallMetricOutcome::Started,
+            ManagementCallMetricReason::Ok,
+        );
+        ManagementCallMetrics::record(
+            ManagementCallMetricOperation::InstallCode,
+            ManagementCallMetricOutcome::Failed,
+            ManagementCallMetricReason::Infra,
+        );
+        ManagementCallMetrics::record(
+            ManagementCallMetricOperation::InstallCode,
+            ManagementCallMetricOutcome::Failed,
+            ManagementCallMetricReason::Infra,
+        );
+
+        let entries = entries(MetricsKind::ManagementCall);
+
+        assert_metric_count(&entries, &["install_code", "started", "ok"], 1);
+        assert_metric_count(&entries, &["install_code", "failed", "infra"], 2);
+    }
+
     #[test]
     fn cycles_topup_metrics_are_exposed() {
         reset_for_tests();
@@ -1128,6 +1180,21 @@ mod tests {
     #[test]
     fn reset_for_tests_clears_all_metric_families() {
         reset_for_tests();
+        seed_all_metric_families_for_reset_test();
+
+        for kind in all_metric_kinds() {
+            assert!(!entries(*kind).is_empty());
+        }
+
+        reset_for_tests();
+
+        for kind in all_metric_kinds() {
+            assert!(entries(*kind).is_empty());
+        }
+    }
+
+    // Seed one row for every metric family so reset coverage stays complete.
+    fn seed_all_metric_families_for_reset_test() {
         let principal = Principal::from_slice(&[42; 29]);
 
         AccessMetrics::increment("create_project", AccessMetricKind::Guard, "controller_only");
@@ -1181,6 +1248,11 @@ mod tests {
             LifecycleMetricStage::Bootstrap,
             LifecycleMetricOutcome::Started,
         );
+        ManagementCallMetrics::record(
+            ManagementCallMetricOperation::InstallCode,
+            ManagementCallMetricOutcome::Started,
+            ManagementCallMetricReason::Ok,
+        );
         PoolMetrics::record(
             PoolMetricOperation::Reset,
             PoolMetricOutcome::Started,
@@ -1221,16 +1293,6 @@ mod tests {
             WasmStoreMetricReason::Ok,
         );
         perf::record_checkpoint("metrics::tests", "checkpoint", 7);
-
-        for kind in all_metric_kinds() {
-            assert!(!entries(*kind).is_empty());
-        }
-
-        reset_for_tests();
-
-        for kind in all_metric_kinds() {
-            assert!(entries(*kind).is_empty());
-        }
     }
 
     // Verify the operator metrics guide covers every public metrics family.
@@ -1280,6 +1342,7 @@ mod tests {
             MetricsKind::Intent,
             MetricsKind::InterCanisterCall,
             MetricsKind::Lifecycle,
+            MetricsKind::ManagementCall,
             MetricsKind::Perf,
             MetricsKind::PlatformCall,
             MetricsKind::Pool,
@@ -1314,6 +1377,7 @@ mod tests {
                 Self::Intent => "Intent",
                 Self::InterCanisterCall => "InterCanisterCall",
                 Self::Lifecycle => "Lifecycle",
+                Self::ManagementCall => "ManagementCall",
                 Self::Perf => "Perf",
                 Self::PlatformCall => "PlatformCall",
                 Self::Pool => "Pool",

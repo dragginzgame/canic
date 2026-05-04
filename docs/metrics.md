@@ -51,6 +51,7 @@ rather than as a successful zero-cost query measurement.
 | `Intent` | `[surface, operation, outcome, reason]` | `None` | `Count` | All dimensions are fixed enums for call, pool, and cleanup intent reservation visibility. |
 | `InterCanisterCall` | `[method]` | Target canister principal | `Count` | Target cardinality grows with topology size; method names should stay static. |
 | `Lifecycle` | `[phase, role, stage, outcome]` | `None` | `Count` | All dimensions are fixed enums for lifecycle runtime seeding and async bootstrap visibility. |
+| `ManagementCall` | `[operation, outcome, reason]` | `None` | `Count` | All dimensions are fixed enums for management-canister operation outcome visibility. |
 | `Perf` | `[endpoint, name]`, `[timer, label]`, or `[checkpoint, scope, label]` | `None` | `CountAndU64` | `value_u64` is total instructions across samples. |
 | `PlatformCall` | `[surface, mode, outcome, reason]` | `None` | `Count` | All dimensions are fixed enums for generic IC calls, management calls, ledgers, ECDSA, HTTP outcalls, and XRC. |
 | `Pool` | `[operation, outcome, reason]` | `None` | `Count` | All dimensions are fixed enums for pool create/import/recycle/reset/scheduler visibility. |
@@ -468,6 +469,42 @@ Outcomes:
 - `failed`
 - `waiting`
 - `skipped`
+
+### `ManagementCall`
+
+Management-call rows expose outcome visibility for each management-canister
+operation without using target canister principals, snapshot IDs, module hashes,
+or chunk hashes as dimensions.
+
+Operations:
+
+- `canister_status`
+- `clear_chunk_store`
+- `create_canister`
+- `delete_canister`
+- `deposit_cycles`
+- `get_cycles`
+- `install_chunked_code`
+- `install_code`
+- `load_canister_snapshot`
+- `raw_rand`
+- `stop_canister`
+- `stored_chunks`
+- `take_canister_snapshot`
+- `uninstall_code`
+- `update_settings`
+- `upload_chunk`
+
+Outcomes:
+
+- `completed`
+- `failed`
+- `started`
+
+Reasons:
+
+- `infra`
+- `ok`
 
 ### `Perf`
 

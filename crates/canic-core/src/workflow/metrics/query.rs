@@ -77,6 +77,10 @@ mod tests {
                 IntentMetricOperation, IntentMetricOutcome, IntentMetricReason,
                 IntentMetricSurface, IntentMetrics,
             },
+            management_call::{
+                ManagementCallMetricOperation, ManagementCallMetricOutcome,
+                ManagementCallMetricReason, ManagementCallMetrics,
+            },
             platform_call::{
                 PlatformCallMetricMode, PlatformCallMetricOutcome, PlatformCallMetricReason,
                 PlatformCallMetricSurface, PlatformCallMetrics,
@@ -181,6 +185,10 @@ mod tests {
             ["call", "capacity_check", "failed", "capacity"],
         );
         assert_first_metric_labels(
+            MetricsKind::ManagementCall,
+            ["install_code", "started", "ok"],
+        );
+        assert_first_metric_labels(
             MetricsKind::PlatformCall,
             ["generic", "bounded_wait", "started", "ok"],
         );
@@ -254,6 +262,7 @@ mod tests {
         );
         record_replay_sort_metrics();
         record_intent_sort_metrics();
+        record_management_call_sort_metrics();
         record_platform_call_sort_metrics();
         record_provisioning_sort_metrics();
         ScalingMetrics::record(
@@ -341,6 +350,20 @@ mod tests {
             PlatformCallMetricMode::BoundedWait,
             PlatformCallMetricOutcome::Started,
             PlatformCallMetricReason::Ok,
+        );
+    }
+
+    // Seed management-call rows used by multi-family sorting coverage.
+    fn record_management_call_sort_metrics() {
+        ManagementCallMetrics::record(
+            ManagementCallMetricOperation::UploadChunk,
+            ManagementCallMetricOutcome::Failed,
+            ManagementCallMetricReason::Infra,
+        );
+        ManagementCallMetrics::record(
+            ManagementCallMetricOperation::InstallCode,
+            ManagementCallMetricOutcome::Started,
+            ManagementCallMetricReason::Ok,
         );
     }
 

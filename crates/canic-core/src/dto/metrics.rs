@@ -25,6 +25,7 @@ pub enum MetricsKind {
     Intent,
     InterCanisterCall,
     Lifecycle,
+    ManagementCall,
     Perf,
     PlatformCall,
     Pool,
