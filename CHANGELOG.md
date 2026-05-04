@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.30.x] - 2026-05-03 - Fleet Snapshot Backups
 
+- `0.30.18` adds restore-readiness gates and `canic restore status` so automation can write report, plan, and initial status artifacts before restore execution, exposes feature-gated sharding and delegated-auth outcome metrics, and records runtime canister snapshot/restore calls in `CanisterOps`.
+
+```bash
+canic restore plan \
+  --backup-dir backups/<run-id> \
+  --mapping restore-map.json \
+  --out restore-plan.json \
+  --require-verified \
+  --require-restore-ready
+```
+
+```bash
+canic restore status \
+  --plan restore-plan.json \
+  --out restore-status.json
+```
+
 - `0.30.17` makes restore dry-run, preflight, and snapshot journals expose explicit mapping, journal operation metrics, provenance, readiness, and reason fields for automation, and adds cascade, pool, scaling, and directory metrics for propagation, reusable-canister, worker-placement, and keyed-placement visibility.
 - `0.30.16` adds canister operation and wasm-store metrics for fleet lifecycle visibility, including create allocation source, propagation failure, and targeted lifecycle metric coverage.
 - `0.30.15` adds restore identity, verification, and topology ordering summaries, typed query perf samples for local-only instruction audit probes, and lifecycle metrics for init/post-upgrade runtime seeding plus async bootstrap progress.

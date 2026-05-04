@@ -48,6 +48,10 @@ impl MetricsQuery {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(feature = "sharding")]
+    use crate::ops::runtime::metrics::sharding::{
+        ShardingMetricOperation, ShardingMetricOutcome, ShardingMetricReason, ShardingMetrics,
+    };
     use crate::{
         ids::{AccessMetricKind, CanisterRole},
         ops::runtime::metrics::{
@@ -196,6 +200,28 @@ mod tests {
         assert_first_metric_labels(MetricsKind::Pool, ["create_empty", "completed", "ok"]);
         assert_first_metric_labels(
             MetricsKind::Scaling,
+            ["bootstrap_pool", "skipped", "target_satisfied"],
+        );
+    }
+
+    #[cfg(feature = "sharding")]
+    #[test]
+    fn page_sorts_sharding_metric_family_before_paginating() {
+        metrics::reset_for_tests();
+
+        ShardingMetrics::record(
+            ShardingMetricOperation::PlanAssign,
+            ShardingMetricOutcome::Completed,
+            ShardingMetricReason::ExistingCapacity,
+        );
+        ShardingMetrics::record(
+            ShardingMetricOperation::BootstrapPool,
+            ShardingMetricOutcome::Skipped,
+            ShardingMetricReason::TargetSatisfied,
+        );
+
+        assert_first_metric_labels(
+            MetricsKind::Sharding,
             ["bootstrap_pool", "skipped", "target_satisfied"],
         );
     }

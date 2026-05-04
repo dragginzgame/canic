@@ -19,9 +19,12 @@ use crate::{
     ops::{
         ic::IcOps,
         runtime::{
-            metrics::pool::{
-                PoolMetricOperation as MetricOperation, PoolMetricOutcome as MetricOutcome,
-                PoolMetricReason as MetricReason, PoolMetrics,
+            metrics::{
+                pool::{
+                    PoolMetricOperation as MetricOperation, PoolMetricOutcome as MetricOutcome,
+                    PoolMetricReason as MetricReason,
+                },
+                recording::PoolMetricEvent as MetricEvent,
             },
             timer::TimerId,
         },
@@ -88,11 +91,7 @@ impl PoolSchedulerWorkflow {
         if Self::has_pending_reset() {
             Self::schedule();
         } else {
-            PoolMetrics::record(
-                MetricOperation::Scheduler,
-                MetricOutcome::Skipped,
-                MetricReason::Empty,
-            );
+            MetricEvent::skipped(MetricOperation::Scheduler, MetricReason::Empty);
         }
     }
 
@@ -100,7 +99,7 @@ impl PoolSchedulerWorkflow {
     ///
     /// This is idempotent and guarded against concurrent execution.
     pub fn schedule() {
-        PoolMetrics::record(
+        MetricEvent::record(
             MetricOperation::Scheduler,
             MetricOutcome::Scheduled,
             MetricReason::Ok,
@@ -125,11 +124,7 @@ impl PoolSchedulerWorkflow {
 
     async fn run_worker(limit: usize) -> Result<(), InternalError> {
         if limit == 0 {
-            PoolMetrics::record(
-                MetricOperation::Scheduler,
-                MetricOutcome::Skipped,
-                MetricReason::Empty,
-            );
+            MetricEvent::skipped(MetricOperation::Scheduler, MetricReason::Empty);
             return Ok(());
         }
 
@@ -144,29 +139,17 @@ impl PoolSchedulerWorkflow {
         });
 
         if !should_run {
-            PoolMetrics::record(
-                MetricOperation::Scheduler,
-                MetricOutcome::Skipped,
-                MetricReason::InProgress,
-            );
+            MetricEvent::skipped(MetricOperation::Scheduler, MetricReason::InProgress);
             return Ok(());
         }
 
-        PoolMetrics::record(
-            MetricOperation::Scheduler,
-            MetricOutcome::Started,
-            MetricReason::Ok,
-        );
+        MetricEvent::started(MetricOperation::Scheduler);
         let result = Self::run_batch(limit).await;
 
         RESET_IN_PROGRESS.with_borrow_mut(|flag| *flag = false);
         Self::maybe_reschedule();
 
-        PoolMetrics::record(
-            MetricOperation::Scheduler,
-            MetricOutcome::Completed,
-            MetricReason::Ok,
-        );
+        MetricEvent::completed(MetricOperation::Scheduler, MetricReason::Ok);
 
         result
     }
@@ -182,11 +165,7 @@ impl PoolSchedulerWorkflow {
 
                 Err(PoolPolicyError::RegisteredInSubnet(_)) => {
                     PoolOps::remove(&pid);
-                    PoolMetrics::record(
-                        MetricOperation::Reset,
-                        MetricOutcome::Skipped,
-                        MetricReason::RegisteredInSubnet,
-                    );
+                    MetricEvent::skipped(MetricOperation::Reset, MetricReason::RegisteredInSubnet);
                     continue;
                 }
 
@@ -194,7 +173,7 @@ impl PoolSchedulerWorkflow {
                     // Not admissible yet → requeue
                     let created_at = IcOps::now_secs();
                     PoolOps::mark_pending_reset(pid, created_at);
-                    PoolMetrics::record(
+                    MetricEvent::record(
                         MetricOperation::Reset,
                         MetricOutcome::Requeued,
                         MetricReason::NonImportableLocal,
@@ -205,7 +184,7 @@ impl PoolSchedulerWorkflow {
                 Err(err) => {
                     let created_at = IcOps::now_secs();
                     PoolOps::mark_pending_reset(pid, created_at);
-                    PoolMetrics::record(
+                    MetricEvent::record(
                         MetricOperation::Reset,
                         MetricOutcome::Requeued,
                         MetricReason::from_policy(&err),

@@ -71,6 +71,121 @@ impl RestorePlan {
 }
 
 ///
+/// RestoreStatus
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RestoreStatus {
+    pub status_version: u16,
+    pub backup_id: String,
+    pub source_environment: String,
+    pub source_root_canister: String,
+    pub topology_hash: String,
+    pub ready: bool,
+    pub readiness_reasons: Vec<String>,
+    pub verification_required: bool,
+    pub member_count: usize,
+    pub phase_count: usize,
+    pub planned_snapshot_loads: usize,
+    pub planned_code_reinstalls: usize,
+    pub planned_verification_checks: usize,
+    pub phases: Vec<RestoreStatusPhase>,
+}
+
+impl RestoreStatus {
+    /// Build the initial no-mutation restore status from a computed plan.
+    #[must_use]
+    pub fn from_plan(plan: &RestorePlan) -> Self {
+        Self {
+            status_version: 1,
+            backup_id: plan.backup_id.clone(),
+            source_environment: plan.source_environment.clone(),
+            source_root_canister: plan.source_root_canister.clone(),
+            topology_hash: plan.topology_hash.clone(),
+            ready: plan.readiness_summary.ready,
+            readiness_reasons: plan.readiness_summary.reasons.clone(),
+            verification_required: plan.verification_summary.verification_required,
+            member_count: plan.member_count,
+            phase_count: plan.ordering_summary.phase_count,
+            planned_snapshot_loads: plan.operation_summary.planned_snapshot_loads,
+            planned_code_reinstalls: plan.operation_summary.planned_code_reinstalls,
+            planned_verification_checks: plan.operation_summary.planned_verification_checks,
+            phases: plan
+                .phases
+                .iter()
+                .map(RestoreStatusPhase::from_plan_phase)
+                .collect(),
+        }
+    }
+}
+
+///
+/// RestoreStatusPhase
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RestoreStatusPhase {
+    pub restore_group: u16,
+    pub members: Vec<RestoreStatusMember>,
+}
+
+impl RestoreStatusPhase {
+    // Build one status phase from one planned restore phase.
+    fn from_plan_phase(phase: &RestorePhase) -> Self {
+        Self {
+            restore_group: phase.restore_group,
+            members: phase
+                .members
+                .iter()
+                .map(RestoreStatusMember::from_plan_member)
+                .collect(),
+        }
+    }
+}
+
+///
+/// RestoreStatusMember
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RestoreStatusMember {
+    pub source_canister: String,
+    pub target_canister: String,
+    pub role: String,
+    pub restore_group: u16,
+    pub phase_order: usize,
+    pub snapshot_id: String,
+    pub artifact_path: String,
+    pub state: RestoreMemberState,
+}
+
+impl RestoreStatusMember {
+    // Build one member status row from one planned restore member.
+    fn from_plan_member(member: &RestorePlanMember) -> Self {
+        Self {
+            source_canister: member.source_canister.clone(),
+            target_canister: member.target_canister.clone(),
+            role: member.role.clone(),
+            restore_group: member.restore_group,
+            phase_order: member.phase_order,
+            snapshot_id: member.source_snapshot.snapshot_id.clone(),
+            artifact_path: member.source_snapshot.artifact_path.clone(),
+            state: RestoreMemberState::Planned,
+        }
+    }
+}
+
+///
+/// RestoreMemberState
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum RestoreMemberState {
+    Planned,
+}
+
+///
 /// RestoreIdentitySummary
 ///
 
@@ -1080,6 +1195,51 @@ mod tests {
         assert_eq!(plan.operation_summary.planned_code_reinstalls, 2);
         assert_eq!(plan.operation_summary.planned_verification_checks, 2);
         assert_eq!(plan.operation_summary.planned_phases, 1);
+    }
+
+    // Ensure initial restore status mirrors the no-mutation restore plan.
+    #[test]
+    fn restore_status_starts_all_members_as_planned() {
+        let manifest = valid_manifest(IdentityMode::Relocatable);
+
+        let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
+        let status = RestoreStatus::from_plan(&plan);
+
+        assert_eq!(status.status_version, 1);
+        assert_eq!(status.backup_id.as_str(), plan.backup_id.as_str());
+        assert_eq!(
+            status.source_environment.as_str(),
+            plan.source_environment.as_str()
+        );
+        assert_eq!(
+            status.source_root_canister.as_str(),
+            plan.source_root_canister.as_str()
+        );
+        assert_eq!(status.topology_hash.as_str(), plan.topology_hash.as_str());
+        assert!(status.ready);
+        assert!(status.readiness_reasons.is_empty());
+        assert!(status.verification_required);
+        assert_eq!(status.member_count, 2);
+        assert_eq!(status.phase_count, 1);
+        assert_eq!(status.planned_snapshot_loads, 2);
+        assert_eq!(status.planned_code_reinstalls, 2);
+        assert_eq!(status.planned_verification_checks, 2);
+        assert_eq!(status.phases.len(), 1);
+        assert_eq!(status.phases[0].restore_group, 1);
+        assert_eq!(status.phases[0].members.len(), 2);
+        assert_eq!(
+            status.phases[0].members[0].state,
+            RestoreMemberState::Planned
+        );
+        assert_eq!(status.phases[0].members[0].source_canister, ROOT);
+        assert_eq!(status.phases[0].members[0].target_canister, ROOT);
+        assert_eq!(status.phases[0].members[0].snapshot_id, "snap-root");
+        assert_eq!(status.phases[0].members[0].artifact_path, "artifacts/root");
+        assert_eq!(
+            status.phases[0].members[1].state,
+            RestoreMemberState::Planned
+        );
+        assert_eq!(status.phases[0].members[1].source_canister, CHILD);
     }
 
     // Ensure role-level verification checks are counted once per matching member.

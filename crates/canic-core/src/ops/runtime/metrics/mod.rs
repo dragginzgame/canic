@@ -10,8 +10,11 @@ pub mod http;
 pub mod icc;
 pub mod lifecycle;
 pub mod pool;
+pub mod recording;
 pub mod root_capability;
 pub mod scaling;
+#[cfg(feature = "sharding")]
+pub mod sharding;
 pub mod system;
 pub mod timer;
 pub mod wasm_store;
@@ -39,6 +42,9 @@ use {
     wasm_store::WasmStoreMetrics,
 };
 
+#[cfg(feature = "sharding")]
+use sharding::ShardingMetrics;
+
 /// Project one metrics family into the unified public metrics row shape.
 #[must_use]
 pub fn entries(kind: MetricsKind) -> Vec<MetricEntry> {
@@ -57,6 +63,8 @@ pub fn entries(kind: MetricsKind) -> Vec<MetricEntry> {
         MetricsKind::Pool => pool_entries(),
         MetricsKind::RootCapability => root_capability_entries(),
         MetricsKind::Scaling => scaling_entries(),
+        #[cfg(feature = "sharding")]
+        MetricsKind::Sharding => sharding_entries(),
         MetricsKind::System => system_entries(),
         MetricsKind::Timer => timer_entries(),
         MetricsKind::WasmStore => wasm_store_entries(),
@@ -78,6 +86,8 @@ pub fn reset_for_tests() {
     PoolMetrics::reset();
     RootCapabilityMetrics::reset();
     ScalingMetrics::reset();
+    #[cfg(feature = "sharding")]
+    ShardingMetrics::reset();
     SystemMetrics::reset();
     TimerMetrics::reset();
     WasmStoreMetrics::reset();
@@ -122,6 +132,24 @@ fn scaling_entries() -> Vec<MetricEntry> {
 #[must_use]
 fn pool_entries() -> Vec<MetricEntry> {
     PoolMetrics::snapshot()
+        .into_iter()
+        .map(|(key, count)| MetricEntry {
+            labels: vec![
+                key.operation.metric_label().to_string(),
+                key.outcome.metric_label().to_string(),
+                key.reason.metric_label().to_string(),
+            ],
+            principal: None,
+            value: MetricValue::Count(count),
+        })
+        .collect()
+}
+
+/// Project sharding placement counters into the unified public metrics row shape.
+#[cfg(feature = "sharding")]
+#[must_use]
+fn sharding_entries() -> Vec<MetricEntry> {
+    ShardingMetrics::snapshot()
         .into_iter()
         .map(|(key, count)| MetricEntry {
             labels: vec![
@@ -303,17 +331,33 @@ fn access_entries() -> Vec<MetricEntry> {
         .collect()
 }
 
-/// Project delegated-auth authority counters into the unified public metrics row shape.
+/// Project delegated-auth counters into the unified public metrics row shape.
 #[must_use]
 fn delegated_auth_entries() -> Vec<MetricEntry> {
-    DelegatedAuthMetrics::snapshot()
+    let mut entries: Vec<_> = DelegatedAuthMetrics::snapshot()
         .into_iter()
         .map(|(authority, count)| MetricEntry {
             labels: vec!["delegated_auth_authority".to_string()],
             principal: Some(authority),
             value: MetricValue::Count(count),
         })
-        .collect()
+        .collect();
+
+    entries.extend(
+        DelegatedAuthMetrics::event_snapshot()
+            .into_iter()
+            .map(|(key, count)| MetricEntry {
+                labels: vec![
+                    key.operation.metric_label().to_string(),
+                    key.outcome.metric_label().to_string(),
+                    key.reason.metric_label().to_string(),
+                ],
+                principal: None,
+                value: MetricValue::Count(count),
+            }),
+    );
+
+    entries
 }
 
 /// Project root-capability counters into the unified public metrics row shape.
@@ -403,6 +447,10 @@ fn perf_entries() -> Vec<MetricEntry> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(feature = "sharding")]
+    use crate::ops::runtime::metrics::sharding::{
+        ShardingMetricOperation, ShardingMetricOutcome, ShardingMetricReason, ShardingMetrics,
+    };
     use crate::{
         cdk::types::Principal,
         ids::{AccessMetricKind, CanisterRole},
@@ -417,6 +465,9 @@ mod tests {
             },
             cycles_funding::{CyclesFundingDeniedReason, CyclesFundingMetrics},
             cycles_topup::CyclesTopupMetrics,
+            delegated_auth::{
+                DelegatedAuthMetricOperation, DelegatedAuthMetricOutcome, DelegatedAuthMetricReason,
+            },
             directory::{
                 DirectoryMetricOperation, DirectoryMetricOutcome, DirectoryMetricReason,
                 DirectoryMetrics,
@@ -665,6 +716,42 @@ mod tests {
         );
     }
 
+    // Verify sharding metrics expose stable label rows and accumulate counts.
+    #[cfg(feature = "sharding")]
+    #[test]
+    fn sharding_metrics_are_exposed_with_stable_labels() {
+        reset_for_tests();
+
+        ShardingMetrics::record(
+            ShardingMetricOperation::PlanAssign,
+            ShardingMetricOutcome::Completed,
+            ShardingMetricReason::ExistingCapacity,
+        );
+        ShardingMetrics::record(
+            ShardingMetricOperation::BootstrapPool,
+            ShardingMetricOutcome::Skipped,
+            ShardingMetricReason::TargetSatisfied,
+        );
+        ShardingMetrics::record(
+            ShardingMetricOperation::BootstrapPool,
+            ShardingMetricOutcome::Skipped,
+            ShardingMetricReason::TargetSatisfied,
+        );
+
+        let entries = entries(MetricsKind::Sharding);
+
+        assert_metric_count(
+            &entries,
+            &["plan_assign", "completed", "existing_capacity"],
+            1,
+        );
+        assert_metric_count(
+            &entries,
+            &["bootstrap_pool", "skipped", "target_satisfied"],
+            2,
+        );
+    }
+
     // Verify lifecycle metrics expose stable label rows and accumulate counts.
     #[test]
     fn lifecycle_metrics_are_exposed_with_stable_labels() {
@@ -711,6 +798,34 @@ mod tests {
 
         assert_metric_count(&entries, &["policy_missing"], 1);
         assert_metric_count(&entries, &["request_scheduled"], 2);
+    }
+
+    // Verify delegated-auth metrics expose authority and outcome rows.
+    #[test]
+    fn delegated_auth_metrics_are_exposed_with_stable_labels() {
+        reset_for_tests();
+
+        let principal = Principal::from_slice(&[42; 29]);
+        DelegatedAuthMetrics::record_authority(principal);
+        DelegatedAuthMetrics::record_verify_started();
+        DelegatedAuthMetrics::record_verify_completed();
+        DelegatedAuthMetrics::record(
+            DelegatedAuthMetricOperation::VerifyToken,
+            DelegatedAuthMetricOutcome::Failed,
+            DelegatedAuthMetricReason::TokenExpired,
+        );
+        DelegatedAuthMetrics::record(
+            DelegatedAuthMetricOperation::VerifyToken,
+            DelegatedAuthMetricOutcome::Failed,
+            DelegatedAuthMetricReason::TokenExpired,
+        );
+
+        let entries = entries(MetricsKind::DelegatedAuth);
+
+        assert_metric_count(&entries, &["delegated_auth_authority"], 1);
+        assert_metric_count(&entries, &["verify_token", "started", "ok"], 1);
+        assert_metric_count(&entries, &["verify_token", "completed", "ok"], 1);
+        assert_metric_count(&entries, &["verify_token", "failed", "token_expired"], 2);
     }
 
     #[test]
@@ -766,6 +881,12 @@ mod tests {
             ScalingMetricOutcome::Started,
             ScalingMetricReason::Ok,
         );
+        #[cfg(feature = "sharding")]
+        ShardingMetrics::record(
+            ShardingMetricOperation::PlanAssign,
+            ShardingMetricOutcome::Started,
+            ShardingMetricReason::Ok,
+        );
         TimerMetrics::record_timer_scheduled(TimerMode::Once, Duration::from_secs(1), "once:test");
         WasmStoreMetrics::record(
             WasmStoreMetricOperation::SourceResolve,
@@ -803,6 +924,8 @@ mod tests {
             MetricsKind::Pool,
             MetricsKind::RootCapability,
             MetricsKind::Scaling,
+            #[cfg(feature = "sharding")]
+            MetricsKind::Sharding,
             MetricsKind::System,
             MetricsKind::Timer,
             MetricsKind::WasmStore,

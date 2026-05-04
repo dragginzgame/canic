@@ -5,7 +5,7 @@ use canic_backup::{
         BackupInspectionReport, BackupIntegrityReport, BackupLayout, BackupProvenanceReport,
         PersistenceError,
     },
-    restore::{RestoreMapping, RestorePlan, RestorePlanError, RestorePlanner},
+    restore::{RestoreMapping, RestorePlan, RestorePlanError, RestorePlanner, RestoreStatus},
 };
 use serde_json::json;
 use std::{
@@ -68,6 +68,12 @@ pub enum BackupCommandError {
         topology_mismatches: usize,
     },
 
+    #[error("restore plan for backup {backup_id} is not restore-ready: reasons={reasons:?}")]
+    RestoreNotReady {
+        backup_id: String,
+        reasons: Vec<String>,
+    },
+
     #[error(transparent)]
     Io(#[from] std::io::Error),
 
@@ -90,6 +96,7 @@ pub struct BackupPreflightOptions {
     pub dir: PathBuf,
     pub out_dir: PathBuf,
     pub mapping: Option<PathBuf>,
+    pub require_restore_ready: bool,
 }
 
 impl BackupPreflightOptions {
@@ -101,6 +108,7 @@ impl BackupPreflightOptions {
         let mut dir = None;
         let mut out_dir = None;
         let mut mapping = None;
+        let mut require_restore_ready = false;
 
         let mut args = args.into_iter();
         while let Some(arg) = args.next() {
@@ -111,6 +119,7 @@ impl BackupPreflightOptions {
                 "--dir" => dir = Some(PathBuf::from(next_value(&mut args, "--dir")?)),
                 "--out-dir" => out_dir = Some(PathBuf::from(next_value(&mut args, "--out-dir")?)),
                 "--mapping" => mapping = Some(PathBuf::from(next_value(&mut args, "--mapping")?)),
+                "--require-restore-ready" => require_restore_ready = true,
                 "--help" | "-h" => return Err(BackupCommandError::Usage(usage())),
                 _ => return Err(BackupCommandError::UnknownOption(arg)),
             }
@@ -120,6 +129,7 @@ impl BackupPreflightOptions {
             dir: dir.ok_or(BackupCommandError::MissingOption("--dir"))?,
             out_dir: out_dir.ok_or(BackupCommandError::MissingOption("--out-dir"))?,
             mapping,
+            require_restore_ready,
         })
     }
 }
@@ -190,6 +200,7 @@ pub struct BackupPreflightReport {
     pub backup_provenance_path: String,
     pub backup_integrity_path: String,
     pub restore_plan_path: String,
+    pub restore_status_path: String,
     pub preflight_summary_path: String,
 }
 
@@ -204,6 +215,7 @@ struct PreflightArtifactPaths {
     backup_provenance: PathBuf,
     backup_integrity: PathBuf,
     restore_plan: PathBuf,
+    restore_status: PathBuf,
     preflight_summary: PathBuf,
 }
 
@@ -220,6 +232,21 @@ struct PreflightReportInput<'a> {
     integrity: &'a BackupIntegrityReport,
     restore_plan: &'a RestorePlan,
     paths: &'a PreflightArtifactPaths,
+}
+
+///
+/// PreflightArtifactInput
+///
+
+struct PreflightArtifactInput<'a> {
+    paths: &'a PreflightArtifactPaths,
+    manifest: &'a FleetBackupManifest,
+    status: &'a JournalResumeReport,
+    inspection: &'a BackupInspectionReport,
+    provenance: &'a BackupProvenanceReport,
+    integrity: &'a BackupIntegrityReport,
+    restore_plan: &'a RestorePlan,
+    restore_status: &'a RestoreStatus,
 }
 
 ///
@@ -453,17 +480,19 @@ pub fn backup_preflight(
     let integrity = layout.verify_integrity()?;
     let mapping = options.mapping.as_ref().map(read_mapping).transpose()?;
     let restore_plan = RestorePlanner::plan(&manifest, mapping.as_ref())?;
+    let restore_status = RestoreStatus::from_plan(&restore_plan);
     let paths = preflight_artifact_paths(&options.out_dir);
 
-    write_preflight_artifacts(
-        &paths,
-        &manifest,
-        &status,
-        &inspection,
-        &provenance,
-        &integrity,
-        &restore_plan,
-    )?;
+    write_preflight_artifacts(PreflightArtifactInput {
+        paths: &paths,
+        manifest: &manifest,
+        status: &status,
+        inspection: &inspection,
+        provenance: &provenance,
+        integrity: &integrity,
+        restore_plan: &restore_plan,
+        restore_status: &restore_status,
+    })?;
     let report = build_preflight_report(PreflightReportInput {
         options,
         manifest: &manifest,
@@ -475,7 +504,23 @@ pub fn backup_preflight(
         paths: &paths,
     });
     write_json_value_file(&paths.preflight_summary, &preflight_summary_value(&report))?;
+    enforce_preflight_requirements(options, &report)?;
     Ok(report)
+}
+
+// Enforce caller-requested preflight requirements after all artifacts are written.
+fn enforce_preflight_requirements(
+    options: &BackupPreflightOptions,
+    report: &BackupPreflightReport,
+) -> Result<(), BackupCommandError> {
+    if !options.require_restore_ready || report.restore_ready {
+        return Ok(());
+    }
+
+    Err(BackupCommandError::RestoreNotReady {
+        backup_id: report.backup_id.clone(),
+        reasons: report.restore_readiness_reasons.clone(),
+    })
 }
 
 // Build the standard preflight artifact path set under one output directory.
@@ -487,40 +532,40 @@ fn preflight_artifact_paths(out_dir: &Path) -> PreflightArtifactPaths {
         backup_provenance: out_dir.join("backup-provenance.json"),
         backup_integrity: out_dir.join("backup-integrity.json"),
         restore_plan: out_dir.join("restore-plan.json"),
+        restore_status: out_dir.join("restore-status.json"),
         preflight_summary: out_dir.join("preflight-summary.json"),
     }
 }
 
 // Write the standard preflight artifacts before emitting the compact summary.
-fn write_preflight_artifacts(
-    paths: &PreflightArtifactPaths,
-    manifest: &FleetBackupManifest,
-    status: &JournalResumeReport,
-    inspection: &BackupInspectionReport,
-    provenance: &BackupProvenanceReport,
-    integrity: &BackupIntegrityReport,
-    restore_plan: &RestorePlan,
-) -> Result<(), BackupCommandError> {
+fn write_preflight_artifacts(input: PreflightArtifactInput<'_>) -> Result<(), BackupCommandError> {
     write_json_value_file(
-        &paths.manifest_validation,
-        &manifest_validation_summary(manifest),
-    )?;
-    fs::write(&paths.backup_status, serde_json::to_vec_pretty(&status)?)?;
-    fs::write(
-        &paths.backup_inspection,
-        serde_json::to_vec_pretty(&inspection)?,
+        &input.paths.manifest_validation,
+        &manifest_validation_summary(input.manifest),
     )?;
     fs::write(
-        &paths.backup_provenance,
-        serde_json::to_vec_pretty(&provenance)?,
+        &input.paths.backup_status,
+        serde_json::to_vec_pretty(&input.status)?,
     )?;
     fs::write(
-        &paths.backup_integrity,
-        serde_json::to_vec_pretty(&integrity)?,
+        &input.paths.backup_inspection,
+        serde_json::to_vec_pretty(&input.inspection)?,
     )?;
     fs::write(
-        &paths.restore_plan,
-        serde_json::to_vec_pretty(&restore_plan)?,
+        &input.paths.backup_provenance,
+        serde_json::to_vec_pretty(&input.provenance)?,
+    )?;
+    fs::write(
+        &input.paths.backup_integrity,
+        serde_json::to_vec_pretty(&input.integrity)?,
+    )?;
+    fs::write(
+        &input.paths.restore_plan,
+        serde_json::to_vec_pretty(&input.restore_plan)?,
+    )?;
+    fs::write(
+        &input.paths.restore_status,
+        serde_json::to_vec_pretty(&input.restore_status)?,
     )?;
     Ok(())
 }
@@ -598,6 +643,7 @@ fn build_preflight_report(input: PreflightReportInput<'_>) -> BackupPreflightRep
         backup_provenance_path: input.paths.backup_provenance.display().to_string(),
         backup_integrity_path: input.paths.backup_integrity.display().to_string(),
         restore_plan_path: input.paths.restore_plan.display().to_string(),
+        restore_status_path: input.paths.restore_status.display().to_string(),
         preflight_summary_path: input.paths.preflight_summary.display().to_string(),
     }
 }
@@ -1116,6 +1162,11 @@ fn insert_preflight_report_paths(
     );
     insert_summary_value(
         summary,
+        "restore_status_path",
+        json!(report.restore_status_path),
+    );
+    insert_summary_value(
+        summary,
         "preflight_summary_path",
         json!(report.preflight_summary_path),
     );
@@ -1227,7 +1278,7 @@ where
 
 // Return backup command usage text.
 const fn usage() -> &'static str {
-    "usage: canic backup preflight --dir <backup-dir> --out-dir <dir> [--mapping <file>]\n       canic backup inspect --dir <backup-dir> [--out <file>] [--require-ready]\n       canic backup provenance --dir <backup-dir> [--out <file>] [--require-consistent]\n       canic backup status --dir <backup-dir> [--out <file>] [--require-complete]\n       canic backup verify --dir <backup-dir> [--out <file>]"
+    "usage: canic backup preflight --dir <backup-dir> --out-dir <dir> [--mapping <file>] [--require-restore-ready]\n       canic backup inspect --dir <backup-dir> [--out <file>] [--require-ready]\n       canic backup provenance --dir <backup-dir> [--out <file>] [--require-consistent]\n       canic backup status --dir <backup-dir> [--out <file>] [--require-complete]\n       canic backup verify --dir <backup-dir> [--out <file>]"
 }
 
 #[cfg(test)]
@@ -1241,6 +1292,7 @@ mod tests {
             FleetMember, FleetSection, IdentityMode, SourceMetadata, SourceSnapshot, ToolMetadata,
             VerificationCheck, VerificationPlan,
         },
+        restore::RestoreMemberState,
     };
     use std::{
         fs,
@@ -1261,12 +1313,14 @@ mod tests {
             OsString::from("reports/run"),
             OsString::from("--mapping"),
             OsString::from("mapping.json"),
+            OsString::from("--require-restore-ready"),
         ])
         .expect("parse options");
 
         assert_eq!(options.dir, PathBuf::from("backups/run"));
         assert_eq!(options.out_dir, PathBuf::from("reports/run"));
         assert_eq!(options.mapping, Some(PathBuf::from("mapping.json")));
+        assert!(options.require_restore_ready);
     }
 
     // Ensure preflight writes the standard no-mutation report bundle.
@@ -1289,6 +1343,7 @@ mod tests {
             dir: backup_dir,
             out_dir: out_dir.clone(),
             mapping: None,
+            require_restore_ready: false,
         };
         let report = backup_preflight(&options).expect("run preflight");
 
@@ -1321,6 +1376,7 @@ mod tests {
         assert!(out_dir.join("backup-provenance.json").exists());
         assert!(out_dir.join("backup-integrity.json").exists());
         assert!(out_dir.join("restore-plan.json").exists());
+        assert!(out_dir.join("restore-status.json").exists());
         assert!(out_dir.join("preflight-summary.json").exists());
 
         let summary: serde_json::Value = serde_json::from_slice(
@@ -1331,9 +1387,21 @@ mod tests {
             &fs::read(out_dir.join("manifest-validation.json")).expect("read manifest summary"),
         )
         .expect("decode manifest summary");
+        let restore_status: RestoreStatus = serde_json::from_slice(
+            &fs::read(out_dir.join("restore-status.json")).expect("read restore status"),
+        )
+        .expect("decode restore status");
 
         fs::remove_dir_all(root).expect("remove temp root");
         assert_preflight_summary_matches_report(&summary, &report);
+        assert_eq!(restore_status.status_version, 1);
+        assert_eq!(restore_status.backup_id.as_str(), report.backup_id.as_str());
+        assert_eq!(restore_status.member_count, report.restore_plan_members);
+        assert_eq!(restore_status.phase_count, report.restore_phase_count);
+        assert_eq!(
+            restore_status.phases[0].members[0].state,
+            RestoreMemberState::Planned
+        );
         assert_eq!(manifest_validation["backup_unit_count"], 1);
         assert_eq!(manifest_validation["consistency_mode"], "crash-consistent");
         assert_eq!(
@@ -1347,6 +1415,93 @@ mod tests {
         assert_eq!(
             manifest_validation["backup_units"][0]["kind"],
             "subtree-rooted"
+        );
+    }
+
+    // Ensure restore-readiness gating happens after writing the report bundle.
+    #[test]
+    fn backup_preflight_require_restore_ready_writes_reports_then_fails() {
+        let root = temp_dir("canic-cli-backup-preflight-require-restore-ready");
+        let out_dir = root.join("reports");
+        let backup_dir = root.join("backup");
+        let layout = BackupLayout::new(backup_dir.clone());
+        let checksum = write_artifact(&backup_dir, b"root artifact");
+
+        layout
+            .write_manifest(&valid_manifest())
+            .expect("write manifest");
+        layout
+            .write_journal(&journal_with_checksum(checksum.hash))
+            .expect("write journal");
+
+        let options = BackupPreflightOptions {
+            dir: backup_dir,
+            out_dir: out_dir.clone(),
+            mapping: None,
+            require_restore_ready: true,
+        };
+
+        let err = backup_preflight(&options).expect_err("restore readiness should be enforced");
+
+        assert!(out_dir.join("preflight-summary.json").exists());
+        assert!(out_dir.join("restore-status.json").exists());
+        let summary: serde_json::Value = serde_json::from_slice(
+            &fs::read(out_dir.join("preflight-summary.json")).expect("read summary"),
+        )
+        .expect("decode summary");
+
+        fs::remove_dir_all(root).expect("remove temp root");
+        assert_eq!(summary["restore_ready"], false);
+        assert!(matches!(
+            err,
+            BackupCommandError::RestoreNotReady {
+                reasons,
+                ..
+            } if reasons == [
+                "missing-module-hash",
+                "missing-wasm-hash",
+                "missing-snapshot-checksum"
+            ]
+        ));
+    }
+
+    // Ensure restore-readiness gating accepts fully populated preflight reports.
+    #[test]
+    fn backup_preflight_require_restore_ready_accepts_ready_report() {
+        let root = temp_dir("canic-cli-backup-preflight-ready");
+        let out_dir = root.join("reports");
+        let backup_dir = root.join("backup");
+        let layout = BackupLayout::new(backup_dir.clone());
+        let checksum = write_artifact(&backup_dir, b"root artifact");
+
+        layout
+            .write_manifest(&restore_ready_manifest(&checksum.hash))
+            .expect("write manifest");
+        layout
+            .write_journal(&journal_with_checksum(checksum.hash))
+            .expect("write journal");
+
+        let options = BackupPreflightOptions {
+            dir: backup_dir,
+            out_dir: out_dir.clone(),
+            mapping: None,
+            require_restore_ready: true,
+        };
+
+        let report = backup_preflight(&options).expect("ready preflight should pass");
+        let summary: serde_json::Value = serde_json::from_slice(
+            &fs::read(out_dir.join("preflight-summary.json")).expect("read summary"),
+        )
+        .expect("decode summary");
+
+        fs::remove_dir_all(root).expect("remove temp root");
+        assert!(report.restore_ready);
+        assert!(report.restore_readiness_reasons.is_empty());
+        assert_eq!(summary["restore_ready"], true);
+        assert_eq!(summary["restore_readiness_reasons"], json!([]));
+        assert_eq!(
+            summary["restore_status_path"],
+            out_dir.join("restore-status.json").display().to_string()
         );
     }
 
@@ -1619,6 +1774,7 @@ mod tests {
             report.backup_integrity_path
         );
         assert_eq!(summary["restore_plan_path"], report.restore_plan_path);
+        assert_eq!(summary["restore_status_path"], report.restore_status_path);
         assert_eq!(
             summary["preflight_summary_path"],
             report.preflight_summary_path
@@ -1644,6 +1800,7 @@ mod tests {
             dir: backup_dir,
             out_dir,
             mapping: None,
+            require_restore_ready: false,
         };
 
         let err = backup_preflight(&options).expect_err("incomplete journal should fail");
@@ -2063,6 +2220,16 @@ mod tests {
                 checksum: None,
             },
         }
+    }
+
+    // Build one manifest whose restore readiness metadata is complete.
+    fn restore_ready_manifest(checksum: &str) -> FleetBackupManifest {
+        let mut manifest = valid_manifest();
+        let snapshot = &mut manifest.fleet.members[0].source_snapshot;
+        snapshot.module_hash = Some(HASH.to_string());
+        snapshot.wasm_hash = Some(HASH.to_string());
+        snapshot.checksum = Some(checksum.to_string());
+        manifest
     }
 
     // Build one durable journal with a caller-provided checksum.

@@ -1,7 +1,7 @@
 use canic_backup::{
     manifest::FleetBackupManifest,
     persistence::{BackupLayout, PersistenceError},
-    restore::{RestoreMapping, RestorePlan, RestorePlanError, RestorePlanner},
+    restore::{RestoreMapping, RestorePlan, RestorePlanError, RestorePlanner, RestoreStatus},
 };
 use std::{
     ffi::OsString,
@@ -28,6 +28,12 @@ pub enum RestoreCommandError {
 
     #[error("--require-verified requires --backup-dir")]
     RequireVerifiedNeedsBackupDir,
+
+    #[error("restore plan for backup {backup_id} is not restore-ready: reasons={reasons:?}")]
+    RestoreNotReady {
+        backup_id: String,
+        reasons: Vec<String>,
+    },
 
     #[error("unknown option {0}")]
     UnknownOption(String),
@@ -59,6 +65,7 @@ pub struct RestorePlanOptions {
     pub mapping: Option<PathBuf>,
     pub out: Option<PathBuf>,
     pub require_verified: bool,
+    pub require_restore_ready: bool,
 }
 
 impl RestorePlanOptions {
@@ -72,6 +79,7 @@ impl RestorePlanOptions {
         let mut mapping = None;
         let mut out = None;
         let mut require_verified = false;
+        let mut require_restore_ready = false;
 
         let mut args = args.into_iter();
         while let Some(arg) = args.next() {
@@ -88,6 +96,7 @@ impl RestorePlanOptions {
                 "--mapping" => mapping = Some(PathBuf::from(next_value(&mut args, "--mapping")?)),
                 "--out" => out = Some(PathBuf::from(next_value(&mut args, "--out")?)),
                 "--require-verified" => require_verified = true,
+                "--require-restore-ready" => require_restore_ready = true,
                 "--help" | "-h" => return Err(RestoreCommandError::Usage(usage())),
                 _ => return Err(RestoreCommandError::UnknownOption(arg)),
             }
@@ -113,6 +122,46 @@ impl RestorePlanOptions {
             mapping,
             out,
             require_verified,
+            require_restore_ready,
+        })
+    }
+}
+
+///
+/// RestoreStatusOptions
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RestoreStatusOptions {
+    pub plan: PathBuf,
+    pub out: Option<PathBuf>,
+}
+
+impl RestoreStatusOptions {
+    /// Parse restore status options from CLI arguments.
+    pub fn parse<I>(args: I) -> Result<Self, RestoreCommandError>
+    where
+        I: IntoIterator<Item = OsString>,
+    {
+        let mut plan = None;
+        let mut out = None;
+
+        let mut args = args.into_iter();
+        while let Some(arg) = args.next() {
+            let arg = arg
+                .into_string()
+                .map_err(|_| RestoreCommandError::Usage(usage()))?;
+            match arg.as_str() {
+                "--plan" => plan = Some(PathBuf::from(next_value(&mut args, "--plan")?)),
+                "--out" => out = Some(PathBuf::from(next_value(&mut args, "--out")?)),
+                "--help" | "-h" => return Err(RestoreCommandError::Usage(usage())),
+                _ => return Err(RestoreCommandError::UnknownOption(arg)),
+            }
+        }
+
+        Ok(Self {
+            plan: plan.ok_or(RestoreCommandError::MissingOption("--plan"))?,
+            out,
         })
     }
 }
@@ -132,6 +181,13 @@ where
             let options = RestorePlanOptions::parse(args)?;
             let plan = plan_restore(&options)?;
             write_plan(&options, &plan)?;
+            enforce_restore_plan_requirements(&options, &plan)?;
+            Ok(())
+        }
+        "status" => {
+            let options = RestoreStatusOptions::parse(args)?;
+            let status = restore_status(&options)?;
+            write_status(&options, &status)?;
             Ok(())
         }
         "help" | "--help" | "-h" => Err(RestoreCommandError::Usage(usage())),
@@ -147,6 +203,29 @@ pub fn plan_restore(options: &RestorePlanOptions) -> Result<RestorePlan, Restore
     let mapping = options.mapping.as_ref().map(read_mapping).transpose()?;
 
     RestorePlanner::plan(&manifest, mapping.as_ref()).map_err(RestoreCommandError::from)
+}
+
+/// Build the initial no-mutation restore status from a restore plan.
+pub fn restore_status(
+    options: &RestoreStatusOptions,
+) -> Result<RestoreStatus, RestoreCommandError> {
+    let plan = read_plan(&options.plan)?;
+    Ok(RestoreStatus::from_plan(&plan))
+}
+
+// Enforce caller-requested restore plan requirements after the plan is emitted.
+fn enforce_restore_plan_requirements(
+    options: &RestorePlanOptions,
+    plan: &RestorePlan,
+) -> Result<(), RestoreCommandError> {
+    if !options.require_restore_ready || plan.readiness_summary.ready {
+        return Ok(());
+    }
+
+    Err(RestoreCommandError::RestoreNotReady {
+        backup_id: plan.backup_id.clone(),
+        reasons: plan.readiness_summary.reasons.clone(),
+    })
 }
 
 // Verify backup layout integrity before restore planning when requested.
@@ -196,6 +275,12 @@ fn read_mapping(path: &PathBuf) -> Result<RestoreMapping, RestoreCommandError> {
     serde_json::from_str(&data).map_err(RestoreCommandError::from)
 }
 
+// Read and decode a restore plan from disk.
+fn read_plan(path: &PathBuf) -> Result<RestorePlan, RestoreCommandError> {
+    let data = fs::read_to_string(path)?;
+    serde_json::from_str(&data).map_err(RestoreCommandError::from)
+}
+
 // Write the computed plan to stdout or a requested output file.
 fn write_plan(options: &RestorePlanOptions, plan: &RestorePlan) -> Result<(), RestoreCommandError> {
     if let Some(path) = &options.out {
@@ -207,6 +292,24 @@ fn write_plan(options: &RestorePlanOptions, plan: &RestorePlan) -> Result<(), Re
     let stdout = io::stdout();
     let mut handle = stdout.lock();
     serde_json::to_writer_pretty(&mut handle, plan)?;
+    writeln!(handle)?;
+    Ok(())
+}
+
+// Write the computed status to stdout or a requested output file.
+fn write_status(
+    options: &RestoreStatusOptions,
+    status: &RestoreStatus,
+) -> Result<(), RestoreCommandError> {
+    if let Some(path) = &options.out {
+        let data = serde_json::to_vec_pretty(status)?;
+        fs::write(path, data)?;
+        return Ok(());
+    }
+
+    let stdout = io::stdout();
+    let mut handle = stdout.lock();
+    serde_json::to_writer_pretty(&mut handle, status)?;
     writeln!(handle)?;
     Ok(())
 }
@@ -223,7 +326,7 @@ where
 
 // Return restore command usage text.
 const fn usage() -> &'static str {
-    "usage: canic restore plan (--manifest <file> | --backup-dir <dir>) [--mapping <file>] [--out <file>] [--require-verified]"
+    "usage: canic restore plan (--manifest <file> | --backup-dir <dir>) [--mapping <file>] [--out <file>] [--require-verified] [--require-restore-ready]\n       canic restore status --plan <file> [--out <file>]"
 }
 
 #[cfg(test)]
@@ -259,6 +362,7 @@ mod tests {
             OsString::from("mapping.json"),
             OsString::from("--out"),
             OsString::from("plan.json"),
+            OsString::from("--require-restore-ready"),
         ])
         .expect("parse options");
 
@@ -267,6 +371,7 @@ mod tests {
         assert_eq!(options.mapping, Some(PathBuf::from("mapping.json")));
         assert_eq!(options.out, Some(PathBuf::from("plan.json")));
         assert!(!options.require_verified);
+        assert!(options.require_restore_ready);
     }
 
     // Ensure verified restore plan options parse with the canonical backup source.
@@ -284,6 +389,22 @@ mod tests {
         assert_eq!(options.mapping, None);
         assert_eq!(options.out, None);
         assert!(options.require_verified);
+        assert!(!options.require_restore_ready);
+    }
+
+    // Ensure restore status options parse the intended no-mutation command.
+    #[test]
+    fn parses_restore_status_options() {
+        let options = RestoreStatusOptions::parse([
+            OsString::from("--plan"),
+            OsString::from("restore-plan.json"),
+            OsString::from("--out"),
+            OsString::from("restore-status.json"),
+        ])
+        .expect("parse status options");
+
+        assert_eq!(options.plan, PathBuf::from("restore-plan.json"));
+        assert_eq!(options.out, Some(PathBuf::from("restore-status.json")));
     }
 
     // Ensure backup-dir restore planning reads the canonical layout manifest.
@@ -301,6 +422,7 @@ mod tests {
             mapping: None,
             out: None,
             require_verified: false,
+            require_restore_ready: false,
         };
 
         let plan = plan_restore(&options).expect("plan restore");
@@ -357,6 +479,7 @@ mod tests {
             mapping: None,
             out: None,
             require_verified: true,
+            require_restore_ready: false,
         };
 
         let plan = plan_restore(&options).expect("plan verified restore");
@@ -381,6 +504,7 @@ mod tests {
             mapping: None,
             out: None,
             require_verified: true,
+            require_restore_ready: false,
         };
 
         let err = plan_restore(&options).expect_err("missing journal should fail");
@@ -420,6 +544,7 @@ mod tests {
             mapping: Some(mapping_path),
             out: None,
             require_verified: false,
+            require_restore_ready: false,
         };
 
         let plan = plan_restore(&options).expect("plan restore");
@@ -429,6 +554,124 @@ mod tests {
         assert_eq!(members.len(), 2);
         assert_eq!(members[0].source_canister, ROOT);
         assert_eq!(members[1].target_canister, MAPPED_CHILD);
+    }
+
+    // Ensure restore-readiness gating happens after writing the plan artifact.
+    #[test]
+    fn run_restore_plan_require_restore_ready_writes_plan_then_fails() {
+        let root = temp_dir("canic-cli-restore-plan-require-ready");
+        fs::create_dir_all(&root).expect("create temp root");
+        let manifest_path = root.join("manifest.json");
+        let out_path = root.join("plan.json");
+
+        fs::write(
+            &manifest_path,
+            serde_json::to_vec(&valid_manifest()).expect("serialize manifest"),
+        )
+        .expect("write manifest");
+
+        let err = run([
+            OsString::from("plan"),
+            OsString::from("--manifest"),
+            OsString::from(manifest_path.as_os_str()),
+            OsString::from("--out"),
+            OsString::from(out_path.as_os_str()),
+            OsString::from("--require-restore-ready"),
+        ])
+        .expect_err("restore readiness should be enforced");
+
+        assert!(out_path.exists());
+        let plan: RestorePlan =
+            serde_json::from_slice(&fs::read(&out_path).expect("read plan")).expect("decode plan");
+
+        fs::remove_dir_all(root).expect("remove temp root");
+        assert!(!plan.readiness_summary.ready);
+        assert!(matches!(
+            err,
+            RestoreCommandError::RestoreNotReady {
+                reasons,
+                ..
+            } if reasons == [
+                "missing-module-hash",
+                "missing-wasm-hash",
+                "missing-snapshot-checksum"
+            ]
+        ));
+    }
+
+    // Ensure restore-readiness gating accepts plans with complete provenance.
+    #[test]
+    fn run_restore_plan_require_restore_ready_accepts_ready_plan() {
+        let root = temp_dir("canic-cli-restore-plan-ready");
+        fs::create_dir_all(&root).expect("create temp root");
+        let manifest_path = root.join("manifest.json");
+        let out_path = root.join("plan.json");
+
+        fs::write(
+            &manifest_path,
+            serde_json::to_vec(&restore_ready_manifest()).expect("serialize manifest"),
+        )
+        .expect("write manifest");
+
+        run([
+            OsString::from("plan"),
+            OsString::from("--manifest"),
+            OsString::from(manifest_path.as_os_str()),
+            OsString::from("--out"),
+            OsString::from(out_path.as_os_str()),
+            OsString::from("--require-restore-ready"),
+        ])
+        .expect("restore-ready plan should pass");
+
+        let plan: RestorePlan =
+            serde_json::from_slice(&fs::read(&out_path).expect("read plan")).expect("decode plan");
+
+        fs::remove_dir_all(root).expect("remove temp root");
+        assert!(plan.readiness_summary.ready);
+        assert!(plan.readiness_summary.reasons.is_empty());
+    }
+
+    // Ensure restore status writes the initial planned execution journal.
+    #[test]
+    fn run_restore_status_writes_planned_status() {
+        let root = temp_dir("canic-cli-restore-status");
+        fs::create_dir_all(&root).expect("create temp root");
+        let plan_path = root.join("restore-plan.json");
+        let out_path = root.join("restore-status.json");
+        let plan = RestorePlanner::plan(&restore_ready_manifest(), None).expect("build plan");
+
+        fs::write(
+            &plan_path,
+            serde_json::to_vec(&plan).expect("serialize plan"),
+        )
+        .expect("write plan");
+
+        run([
+            OsString::from("status"),
+            OsString::from("--plan"),
+            OsString::from(plan_path.as_os_str()),
+            OsString::from("--out"),
+            OsString::from(out_path.as_os_str()),
+        ])
+        .expect("write restore status");
+
+        let status: RestoreStatus =
+            serde_json::from_slice(&fs::read(&out_path).expect("read restore status"))
+                .expect("decode restore status");
+        let status_json: serde_json::Value = serde_json::to_value(&status).expect("encode status");
+
+        fs::remove_dir_all(root).expect("remove temp root");
+        assert_eq!(status.status_version, 1);
+        assert_eq!(status.backup_id.as_str(), "backup-test");
+        assert!(status.ready);
+        assert!(status.readiness_reasons.is_empty());
+        assert_eq!(status.member_count, 2);
+        assert_eq!(status.phase_count, 1);
+        assert_eq!(status.planned_snapshot_loads, 2);
+        assert_eq!(status.planned_code_reinstalls, 2);
+        assert_eq!(status.planned_verification_checks, 2);
+        assert_eq!(status.phases[0].members[0].source_canister, ROOT);
+        assert_eq!(status_json["phases"][0]["members"][0]["state"], "planned");
     }
 
     // Build one valid manifest for restore planning tests.
@@ -470,6 +713,17 @@ mod tests {
             },
             verification: VerificationPlan::default(),
         }
+    }
+
+    // Build one manifest whose restore readiness metadata is complete.
+    fn restore_ready_manifest() -> FleetBackupManifest {
+        let mut manifest = valid_manifest();
+        for member in &mut manifest.fleet.members {
+            member.source_snapshot.module_hash = Some(HASH.to_string());
+            member.source_snapshot.wasm_hash = Some(HASH.to_string());
+            member.source_snapshot.checksum = Some(HASH.to_string());
+        }
+        manifest
     }
 
     // Build one valid manifest member.

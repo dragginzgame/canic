@@ -17,9 +17,12 @@ use crate::{
         config::ConfigOps,
         ic::IcOps,
         rpc::request::{CreateCanisterParent, RequestOps},
-        runtime::metrics::scaling::{
-            ScalingMetricOperation as MetricOperation, ScalingMetricOutcome as MetricOutcome,
-            ScalingMetricReason as MetricReason, ScalingMetrics,
+        runtime::metrics::{
+            recording::ScalingMetricEvent as MetricEvent,
+            scaling::{
+                ScalingMetricOperation as MetricOperation, ScalingMetricOutcome as MetricOutcome,
+                ScalingMetricReason as MetricReason,
+            },
         },
         storage::placement::scaling::ScalingRegistryOps,
     },
@@ -38,65 +41,40 @@ impl ScalingWorkflow {
         let scaling = match ConfigOps::current_scaling_config() {
             Ok(Some(scaling)) => scaling,
             Ok(None) => {
-                ScalingMetrics::record(
+                MetricEvent::skipped(
                     MetricOperation::BootstrapConfig,
-                    MetricOutcome::Skipped,
                     MetricReason::ScalingDisabled,
                 );
                 return Ok(());
             }
             Err(err) => {
-                ScalingMetrics::record(
-                    MetricOperation::BootstrapConfig,
-                    MetricOutcome::Failed,
-                    MetricReason::from_error(&err),
-                );
+                MetricEvent::failed(MetricOperation::BootstrapConfig, &err);
                 return Err(err);
             }
         };
 
-        ScalingMetrics::record(
-            MetricOperation::BootstrapConfig,
-            MetricOutcome::Started,
-            MetricReason::Ok,
-        );
+        MetricEvent::started(MetricOperation::BootstrapConfig);
         for (pool, pool_cfg) in scaling.pools {
             if let Err(err) = Self::bootstrap_initial_workers_for_pool(&pool, &pool_cfg).await {
-                ScalingMetrics::record(
-                    MetricOperation::BootstrapConfig,
-                    MetricOutcome::Failed,
-                    MetricReason::from_error(&err),
-                );
+                MetricEvent::failed(MetricOperation::BootstrapConfig, &err);
                 return Err(err);
             }
         }
 
-        ScalingMetrics::record(
-            MetricOperation::BootstrapConfig,
-            MetricOutcome::Completed,
-            MetricReason::Ok,
-        );
+        MetricEvent::completed(MetricOperation::BootstrapConfig, MetricReason::Ok);
         Ok(())
     }
 
     /// Create a new worker canister in the given pool, if policy allows.
     pub(crate) async fn create_worker(pool: &str) -> Result<Principal, InternalError> {
-        ScalingMetrics::record(
-            MetricOperation::PlanCreate,
-            MetricOutcome::Started,
-            MetricReason::Ok,
-        );
+        MetricEvent::started(MetricOperation::PlanCreate);
 
         // 0. Observe state (workflow responsibility)
         let worker_count = ScalingRegistryOps::count_by_pool(pool);
         let scaling = match ConfigOps::current_scaling_config() {
             Ok(scaling) => scaling,
             Err(err) => {
-                ScalingMetrics::record(
-                    MetricOperation::PlanCreate,
-                    MetricOutcome::Failed,
-                    MetricReason::from_error(&err),
-                );
+                MetricEvent::failed(MetricOperation::PlanCreate, &err);
                 return Err(err);
             }
         };
@@ -111,29 +89,23 @@ impl ScalingWorkflow {
         } = match ScalingPolicy::plan_create_worker(pool, worker_count, scaling) {
             Ok(plan) => plan,
             Err(err) => {
-                ScalingMetrics::record(
-                    MetricOperation::PlanCreate,
-                    MetricOutcome::Failed,
-                    MetricReason::from_error(&err),
-                );
+                MetricEvent::failed(MetricOperation::PlanCreate, &err);
                 return Err(err);
             }
         };
         crate::perf!("plan_spawn");
 
         if !should_spawn {
-            ScalingMetrics::record(
+            MetricEvent::skipped(
                 MetricOperation::PlanCreate,
-                MetricOutcome::Skipped,
                 MetricReason::from_plan_reason(plan_reason),
             );
             return Err(InternalError::domain(InternalErrorOrigin::Workflow, reason));
         }
 
         let entry_plan = worker_entry.ok_or_else(|| {
-            ScalingMetrics::record(
+            MetricEvent::failed_reason(
                 MetricOperation::PlanCreate,
-                MetricOutcome::Failed,
                 MetricReason::MissingWorkerEntry,
             );
             InternalError::invariant(
@@ -142,9 +114,8 @@ impl ScalingWorkflow {
             )
         })?;
 
-        ScalingMetrics::record(
+        MetricEvent::completed(
             MetricOperation::PlanCreate,
-            MetricOutcome::Completed,
             MetricReason::from_plan_reason(plan_reason),
         );
         Self::create_worker_from_plan(entry_plan).await
@@ -152,11 +123,7 @@ impl ScalingWorkflow {
 
     /// Plan whether a worker should be created according to policy.
     pub(crate) fn plan_create_worker(pool: &str) -> Result<bool, InternalError> {
-        ScalingMetrics::record(
-            MetricOperation::PlanCreate,
-            MetricOutcome::Started,
-            MetricReason::Ok,
-        );
+        MetricEvent::started(MetricOperation::PlanCreate);
 
         // 0. Observe state (workflow responsibility)
         let worker_count = ScalingRegistryOps::count_by_pool(pool);
@@ -164,11 +131,7 @@ impl ScalingWorkflow {
         let scaling = match ConfigOps::current_scaling_config() {
             Ok(scaling) => scaling,
             Err(err) => {
-                ScalingMetrics::record(
-                    MetricOperation::PlanCreate,
-                    MetricOutcome::Failed,
-                    MetricReason::from_error(&err),
-                );
+                MetricEvent::failed(MetricOperation::PlanCreate, &err);
                 return Err(err);
             }
         };
@@ -176,17 +139,13 @@ impl ScalingWorkflow {
         let plan = match ScalingPolicy::plan_create_worker(pool, worker_count, scaling) {
             Ok(plan) => plan,
             Err(err) => {
-                ScalingMetrics::record(
-                    MetricOperation::PlanCreate,
-                    MetricOutcome::Failed,
-                    MetricReason::from_error(&err),
-                );
+                MetricEvent::failed(MetricOperation::PlanCreate, &err);
                 return Err(err);
             }
         };
         crate::perf!("plan_spawn");
 
-        ScalingMetrics::record(
+        MetricEvent::record(
             MetricOperation::PlanCreate,
             if plan.should_spawn {
                 MetricOutcome::Completed
@@ -204,16 +163,11 @@ impl ScalingWorkflow {
         pool: &str,
         pool_cfg: &crate::config::schema::ScalePool,
     ) -> Result<(), InternalError> {
-        ScalingMetrics::record(
-            MetricOperation::BootstrapPool,
-            MetricOutcome::Started,
-            MetricReason::Ok,
-        );
+        MetricEvent::started(MetricOperation::BootstrapPool);
         let target = pool_cfg.policy.initial_workers;
         if target == 0 {
-            ScalingMetrics::record(
+            MetricEvent::skipped(
                 MetricOperation::BootstrapPool,
-                MetricOutcome::Skipped,
                 MetricReason::NoInitialWorkers,
             );
             return Ok(());
@@ -223,7 +177,7 @@ impl ScalingWorkflow {
         loop {
             let current = ScalingRegistryOps::count_by_pool(pool);
             if current >= target {
-                ScalingMetrics::record(
+                MetricEvent::record(
                     MetricOperation::BootstrapPool,
                     if created == 0 {
                         MetricOutcome::Skipped
@@ -246,11 +200,7 @@ impl ScalingWorkflow {
             let pid = match Self::create_worker_from_plan(entry_plan).await {
                 Ok(pid) => pid,
                 Err(err) => {
-                    ScalingMetrics::record(
-                        MetricOperation::BootstrapPool,
-                        MetricOutcome::Failed,
-                        MetricReason::from_error(&err),
-                    );
+                    MetricEvent::failed(MetricOperation::BootstrapPool, &err);
                     return Err(err);
                 }
             };
@@ -272,11 +222,7 @@ impl ScalingWorkflow {
     ) -> Result<Principal, InternalError> {
         let role = entry_plan.canister_role.clone();
 
-        ScalingMetrics::record(
-            MetricOperation::CreateWorker,
-            MetricOutcome::Started,
-            MetricReason::Ok,
-        );
+        MetricEvent::started(MetricOperation::CreateWorker);
         let pid = match RequestOps::create_canister::<()>(
             &role,
             CreateCanisterParent::ThisCanister,
@@ -285,36 +231,20 @@ impl ScalingWorkflow {
         .await
         {
             Ok(response) => {
-                ScalingMetrics::record(
-                    MetricOperation::CreateWorker,
-                    MetricOutcome::Completed,
-                    MetricReason::Ok,
-                );
+                MetricEvent::completed(MetricOperation::CreateWorker, MetricReason::Ok);
                 response.new_canister_pid
             }
             Err(err) => {
-                ScalingMetrics::record(
-                    MetricOperation::CreateWorker,
-                    MetricOutcome::Failed,
-                    MetricReason::from_error(&err),
-                );
+                MetricEvent::failed(MetricOperation::CreateWorker, &err);
                 return Err(err);
             }
         };
         crate::perf!("create_canister");
 
-        ScalingMetrics::record(
-            MetricOperation::RegisterWorker,
-            MetricOutcome::Started,
-            MetricReason::Ok,
-        );
+        MetricEvent::started(MetricOperation::RegisterWorker);
         let created_at_secs = IcOps::now_secs();
         ScalingRegistryOps::upsert_from_plan(pid, entry_plan, created_at_secs);
-        ScalingMetrics::record(
-            MetricOperation::RegisterWorker,
-            MetricOutcome::Completed,
-            MetricReason::Ok,
-        );
+        MetricEvent::completed(MetricOperation::RegisterWorker, MetricReason::Ok);
         crate::perf!("register_worker");
 
         Ok(pid)

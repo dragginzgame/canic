@@ -7,12 +7,22 @@ use crate::{
     InternalError, cdk,
     ids::SystemMetricKind,
     infra::ic::mgmt::{
-        InfraCanisterInstallMode, InfraCanisterSettings, InfraCanisterStatusResult,
-        InfraCanisterStatusType, InfraDefiniteCanisterSettings, InfraEnvironmentVariable,
-        InfraLogVisibility, InfraMemoryMetrics, InfraQueryStats, InfraUpdateSettingsArgs,
-        InfraUpgradeFlags, MgmtInfra,
+        InfraCanisterInstallMode, InfraCanisterSettings, InfraCanisterSnapshot,
+        InfraCanisterStatusResult, InfraCanisterStatusType, InfraDefiniteCanisterSettings,
+        InfraEnvironmentVariable, InfraLogVisibility, InfraMemoryMetrics, InfraQueryStats,
+        InfraUpdateSettingsArgs, InfraUpgradeFlags, MgmtInfra,
     },
-    ops::{ic::IcOpsError, prelude::*, runtime::metrics::system::SystemMetrics},
+    ops::{
+        ic::IcOpsError,
+        prelude::*,
+        runtime::metrics::{
+            canister_ops::{
+                CanisterOpsMetricOperation, CanisterOpsMetricOutcome, CanisterOpsMetricReason,
+                CanisterOpsMetrics,
+            },
+            system::SystemMetrics,
+        },
+    },
 };
 use candid::{Nat, utils::ArgumentEncoder};
 
@@ -86,6 +96,17 @@ pub struct UpdateSettingsArgs {
     pub canister_id: Principal,
     pub settings: CanisterSettings,
     pub sender_canister_version: Option<u64>,
+}
+
+///
+/// CanisterSnapshot
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CanisterSnapshot {
+    pub id: Vec<u8>,
+    pub taken_at_timestamp: u64,
+    pub total_size: u64,
 }
 
 ///
@@ -192,6 +213,88 @@ impl MgmtOps {
         SystemMetrics::increment(SystemMetricKind::CanisterStatus);
 
         Ok(canister_status_from_infra(status))
+    }
+
+    /// Create a canister snapshot via the management canister and record metrics.
+    pub async fn take_canister_snapshot(
+        canister_pid: Principal,
+        replace_snapshot: Option<Vec<u8>>,
+        uninstall_code: Option<bool>,
+    ) -> Result<CanisterSnapshot, InternalError> {
+        record_unscoped_canister_op(
+            CanisterOpsMetricOperation::Snapshot,
+            CanisterOpsMetricOutcome::Started,
+            CanisterOpsMetricReason::Ok,
+        );
+
+        match MgmtInfra::take_canister_snapshot(canister_pid, replace_snapshot, uninstall_code)
+            .await
+            .map_err(IcOpsError::from)
+            .map_err(InternalError::from)
+        {
+            Ok(snapshot) => {
+                record_unscoped_canister_op(
+                    CanisterOpsMetricOperation::Snapshot,
+                    CanisterOpsMetricOutcome::Completed,
+                    CanisterOpsMetricReason::Ok,
+                );
+                log!(
+                    Topic::CanisterLifecycle,
+                    Ok,
+                    "take_canister_snapshot: {canister_pid} total_size={}",
+                    snapshot.total_size
+                );
+                Ok(canister_snapshot_from_infra(snapshot))
+            }
+            Err(err) => {
+                record_unscoped_canister_op(
+                    CanisterOpsMetricOperation::Snapshot,
+                    CanisterOpsMetricOutcome::Failed,
+                    CanisterOpsMetricReason::from_error(&err),
+                );
+                Err(err)
+            }
+        }
+    }
+
+    /// Restore a canister from a snapshot via the management canister and record metrics.
+    pub async fn load_canister_snapshot(
+        canister_pid: Principal,
+        snapshot_id: Vec<u8>,
+    ) -> Result<(), InternalError> {
+        record_unscoped_canister_op(
+            CanisterOpsMetricOperation::Restore,
+            CanisterOpsMetricOutcome::Started,
+            CanisterOpsMetricReason::Ok,
+        );
+
+        match MgmtInfra::load_canister_snapshot(canister_pid, snapshot_id)
+            .await
+            .map_err(IcOpsError::from)
+            .map_err(InternalError::from)
+        {
+            Ok(()) => {
+                record_unscoped_canister_op(
+                    CanisterOpsMetricOperation::Restore,
+                    CanisterOpsMetricOutcome::Completed,
+                    CanisterOpsMetricReason::Ok,
+                );
+                log!(
+                    Topic::CanisterLifecycle,
+                    Ok,
+                    "load_canister_snapshot: {canister_pid}"
+                );
+                Ok(())
+            }
+            Err(err) => {
+                record_unscoped_canister_op(
+                    CanisterOpsMetricOperation::Restore,
+                    CanisterOpsMetricOutcome::Failed,
+                    CanisterOpsMetricReason::from_error(&err),
+                );
+                Err(err)
+            }
+        }
     }
 
     //
@@ -465,6 +568,22 @@ fn canister_status_from_infra(status: InfraCanisterStatusResult) -> CanisterStat
         idle_cycles_burned_per_day: status.idle_cycles_burned_per_day,
         query_stats: query_stats_from_infra(status.query_stats),
     }
+}
+
+fn canister_snapshot_from_infra(snapshot: InfraCanisterSnapshot) -> CanisterSnapshot {
+    CanisterSnapshot {
+        id: snapshot.id,
+        taken_at_timestamp: snapshot.taken_at_timestamp,
+        total_size: snapshot.total_size,
+    }
+}
+
+fn record_unscoped_canister_op(
+    operation: CanisterOpsMetricOperation,
+    outcome: CanisterOpsMetricOutcome,
+    reason: CanisterOpsMetricReason,
+) {
+    CanisterOpsMetrics::record_unscoped(operation, outcome, reason);
 }
 
 const fn status_type_from_infra(status: InfraCanisterStatusType) -> CanisterStatusType {

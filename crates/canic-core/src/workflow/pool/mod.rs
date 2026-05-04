@@ -16,9 +16,12 @@ use crate::{
             mgmt::{CanisterSettings, MgmtOps, UpdateSettingsArgs},
         },
         runtime::env::EnvOps,
-        runtime::metrics::pool::{
-            PoolMetricOperation as MetricOperation, PoolMetricOutcome as MetricOutcome,
-            PoolMetricReason as MetricReason, PoolMetrics,
+        runtime::metrics::{
+            pool::{
+                PoolMetricOperation as MetricOperation, PoolMetricOutcome as MetricOutcome,
+                PoolMetricReason as MetricReason,
+            },
+            recording::PoolMetricEvent as MetricEvent,
         },
         storage::{intent::IntentStoreOps, pool::PoolOps, registry::subnet::SubnetRegistryOps},
     },
@@ -44,19 +47,11 @@ impl PoolWorkflow {
     // -------------------------------------------------------------------------
 
     pub async fn reset_into_pool(pid: Principal) -> Result<Cycles, InternalError> {
-        PoolMetrics::record(
-            MetricOperation::Reset,
-            MetricOutcome::Started,
-            MetricReason::Ok,
-        );
+        MetricEvent::started(MetricOperation::Reset);
         let controllers = match Self::pool_controllers() {
             Ok(controllers) => controllers,
             Err(err) => {
-                PoolMetrics::record(
-                    MetricOperation::Reset,
-                    MetricOutcome::Failed,
-                    MetricReason::from_error(&err),
-                );
+                MetricEvent::failed(MetricOperation::Reset, &err);
                 return Err(err);
             }
         };
@@ -71,38 +66,22 @@ impl PoolWorkflow {
         })
         .await
         {
-            PoolMetrics::record(
-                MetricOperation::Reset,
-                MetricOutcome::Failed,
-                MetricReason::from_error(&err),
-            );
+            MetricEvent::failed(MetricOperation::Reset, &err);
             return Err(err);
         }
 
         if let Err(err) = MgmtOps::uninstall_code(pid).await {
-            PoolMetrics::record(
-                MetricOperation::Reset,
-                MetricOutcome::Failed,
-                MetricReason::from_error(&err),
-            );
+            MetricEvent::failed(MetricOperation::Reset, &err);
             return Err(err);
         }
 
         match MgmtOps::get_cycles(pid).await {
             Ok(cycles) => {
-                PoolMetrics::record(
-                    MetricOperation::Reset,
-                    MetricOutcome::Completed,
-                    MetricReason::Ok,
-                );
+                MetricEvent::completed(MetricOperation::Reset, MetricReason::Ok);
                 Ok(cycles)
             }
             Err(err) => {
-                PoolMetrics::record(
-                    MetricOperation::Reset,
-                    MetricOutcome::Failed,
-                    MetricReason::from_error(&err),
-                );
+                MetricEvent::failed(MetricOperation::Reset, &err);
                 Err(err)
             }
         }
@@ -134,19 +113,11 @@ impl PoolWorkflow {
     #[must_use]
     pub fn pop_oldest_ready() -> Option<Principal> {
         let pid = PoolOps::pop_oldest_ready_pid();
-        PoolMetrics::record(
-            MetricOperation::SelectReady,
-            if pid.is_some() {
-                MetricOutcome::Completed
-            } else {
-                MetricOutcome::Skipped
-            },
-            if pid.is_some() {
-                MetricReason::Ok
-            } else {
-                MetricReason::Empty
-            },
-        );
+        if pid.is_some() {
+            MetricEvent::completed(MetricOperation::SelectReady, MetricReason::Ok);
+        } else {
+            MetricEvent::skipped(MetricOperation::SelectReady, MetricReason::Empty);
+        }
         pid
     }
 
@@ -168,17 +139,9 @@ impl PoolWorkflow {
     // -------------------------------------------------------------------------
 
     pub async fn pool_create_canister() -> Result<Principal, InternalError> {
-        PoolMetrics::record(
-            MetricOperation::CreateEmpty,
-            MetricOutcome::Started,
-            MetricReason::Ok,
-        );
+        MetricEvent::started(MetricOperation::CreateEmpty);
         if let Err(err) = Self::require_pool_admin() {
-            PoolMetrics::record(
-                MetricOperation::CreateEmpty,
-                MetricOutcome::Failed,
-                MetricReason::from_error(&err),
-            );
+            MetricEvent::failed(MetricOperation::CreateEmpty, &err);
             return Err(err);
         }
 
@@ -186,22 +149,14 @@ impl PoolWorkflow {
         let controllers = match Self::pool_controllers() {
             Ok(controllers) => controllers,
             Err(err) => {
-                PoolMetrics::record(
-                    MetricOperation::CreateEmpty,
-                    MetricOutcome::Failed,
-                    MetricReason::from_error(&err),
-                );
+                MetricEvent::failed(MetricOperation::CreateEmpty, &err);
                 return Err(err);
             }
         };
         let pid = match MgmtOps::create_canister(controllers, cycles.clone()).await {
             Ok(pid) => pid,
             Err(err) => {
-                PoolMetrics::record(
-                    MetricOperation::CreateEmpty,
-                    MetricOutcome::Failed,
-                    MetricReason::from_error(&err),
-                );
+                MetricEvent::failed(MetricOperation::CreateEmpty, &err);
                 return Err(err);
             }
         };
@@ -209,11 +164,7 @@ impl PoolWorkflow {
         let created_at = IcOps::now_secs();
         PoolOps::register_ready(pid, cycles, None, None, None, created_at);
 
-        PoolMetrics::record(
-            MetricOperation::CreateEmpty,
-            MetricOutcome::Completed,
-            MetricReason::Ok,
-        );
+        MetricEvent::completed(MetricOperation::CreateEmpty, MetricReason::Ok);
 
         Ok(pid)
     }
@@ -222,39 +173,32 @@ impl PoolWorkflow {
     // Import
     // -------------------------------------------------------------------------
 
-    /// Record one immediate-import pool metric row.
-    fn record_import_immediate(outcome: MetricOutcome, reason: MetricReason) {
-        PoolMetrics::record(MetricOperation::ImportImmediate, outcome, reason);
-    }
-
     pub async fn pool_import_canister(pid: Principal) -> Result<(), InternalError> {
-        Self::record_import_immediate(MetricOutcome::Started, MetricReason::Ok);
+        MetricEvent::started(MetricOperation::ImportImmediate);
         if let Err(err) = Self::require_pool_admin() {
-            Self::record_import_immediate(MetricOutcome::Failed, MetricReason::from_error(&err));
+            MetricEvent::failed(MetricOperation::ImportImmediate, &err);
             return Err(err);
         }
         if let Err(err) = admissibility::check_can_enter_pool(pid).await {
-            Self::record_import_immediate(MetricOutcome::Failed, MetricReason::from_policy(&err));
+            MetricEvent::record(
+                MetricOperation::ImportImmediate,
+                MetricOutcome::Failed,
+                MetricReason::from_policy(&err),
+            );
             return Err(err.into());
         }
 
         let intent_id = match IntentStoreOps::allocate_intent_id() {
             Ok(intent_id) => intent_id,
             Err(err) => {
-                Self::record_import_immediate(
-                    MetricOutcome::Failed,
-                    MetricReason::from_error(&err),
-                );
+                MetricEvent::failed(MetricOperation::ImportImmediate, &err);
                 return Err(err);
             }
         };
         let intent_key = match pool_import_intent_key(pid) {
             Ok(intent_key) => intent_key,
             Err(err) => {
-                Self::record_import_immediate(
-                    MetricOutcome::Failed,
-                    MetricReason::from_error(&err),
-                );
+                MetricEvent::failed(MetricOperation::ImportImmediate, &err);
                 return Err(err);
             }
         };
@@ -264,7 +208,7 @@ impl PoolWorkflow {
         if let Err(err) =
             IntentStoreOps::try_reserve(intent_id, intent_key, 1, created_at, None, now_secs)
         {
-            Self::record_import_immediate(MetricOutcome::Failed, MetricReason::from_error(&err));
+            MetricEvent::failed(MetricOperation::ImportImmediate, &err);
             return Err(err);
         }
 
@@ -282,14 +226,11 @@ impl PoolWorkflow {
                         Warn,
                         "pool import commit failed for {pid}: {err}"
                     );
-                    Self::record_import_immediate(
-                        MetricOutcome::Failed,
-                        MetricReason::from_error(&err),
-                    );
+                    MetricEvent::failed(MetricOperation::ImportImmediate, &err);
                     return Err(err);
                 }
 
-                Self::record_import_immediate(MetricOutcome::Completed, MetricReason::Ok);
+                MetricEvent::completed(MetricOperation::ImportImmediate, MetricReason::Ok);
                 Ok(())
             }
             Err(err) => {
@@ -309,10 +250,7 @@ impl PoolWorkflow {
                     );
                 }
 
-                Self::record_import_immediate(
-                    MetricOutcome::Failed,
-                    MetricReason::from_error(&err),
-                );
+                MetricEvent::failed(MetricOperation::ImportImmediate, &err);
                 Err(err)
             }
         }
@@ -323,28 +261,16 @@ impl PoolWorkflow {
     // -------------------------------------------------------------------------
 
     pub async fn pool_recycle_canister(pid: Principal) -> Result<(), InternalError> {
-        PoolMetrics::record(
-            MetricOperation::Recycle,
-            MetricOutcome::Started,
-            MetricReason::Ok,
-        );
+        MetricEvent::started(MetricOperation::Recycle);
         if let Err(err) = Self::require_pool_admin() {
-            PoolMetrics::record(
-                MetricOperation::Recycle,
-                MetricOutcome::Failed,
-                MetricReason::from_error(&err),
-            );
+            MetricEvent::failed(MetricOperation::Recycle, &err);
             return Err(err);
         }
 
         // Recycling a missing child is an idempotent no-op so stale directory cleanup
         // never depends on the provisional child still existing.
         let Some(entry) = SubnetRegistryOps::get(pid) else {
-            PoolMetrics::record(
-                MetricOperation::Recycle,
-                MetricOutcome::Skipped,
-                MetricReason::NotFound,
-            );
+            MetricEvent::skipped(MetricOperation::Recycle, MetricReason::NotFound);
             return Ok(());
         };
 
@@ -355,11 +281,7 @@ impl PoolWorkflow {
         let cycles = match Self::reset_into_pool(pid).await {
             Ok(cycles) => cycles,
             Err(err) => {
-                PoolMetrics::record(
-                    MetricOperation::Recycle,
-                    MetricOutcome::Failed,
-                    MetricReason::from_error(&err),
-                );
+                MetricEvent::failed(MetricOperation::Recycle, &err);
                 return Err(err);
             }
         };
@@ -371,11 +293,7 @@ impl PoolWorkflow {
         let created_at = IcOps::now_secs();
         PoolOps::register_ready(pid, cycles, role, None, module_hash, created_at);
 
-        PoolMetrics::record(
-            MetricOperation::Recycle,
-            MetricOutcome::Completed,
-            MetricReason::Ok,
-        );
+        MetricEvent::completed(MetricOperation::Recycle, MetricReason::Ok);
 
         Ok(())
     }
@@ -387,17 +305,9 @@ impl PoolWorkflow {
     pub async fn pool_import_queued_canisters(
         pids: Vec<Principal>,
     ) -> Result<PoolBatchResult, InternalError> {
-        PoolMetrics::record(
-            MetricOperation::ImportQueued,
-            MetricOutcome::Started,
-            MetricReason::Ok,
-        );
+        MetricEvent::started(MetricOperation::ImportQueued);
         if let Err(err) = Self::require_pool_admin() {
-            PoolMetrics::record(
-                MetricOperation::ImportQueued,
-                MetricOutcome::Failed,
-                MetricReason::from_error(&err),
-            );
+            MetricEvent::failed(MetricOperation::ImportQueued, &err);
             return Err(err);
         }
 
@@ -413,7 +323,7 @@ impl PoolWorkflow {
                     if let Some(entry) = PoolQuery::pool_entry(pid) {
                         if let CanisterPoolStatus::Failed { .. } = entry.status {
                             Self::mark_pending_reset(pid);
-                            PoolMetrics::record(
+                            MetricEvent::record(
                                 MetricOperation::ImportQueued,
                                 MetricOutcome::Requeued,
                                 MetricReason::FailedEntry,
@@ -421,27 +331,22 @@ impl PoolWorkflow {
                             requeued += 1;
                         } else {
                             // already ready or pending reset
-                            PoolMetrics::record(
+                            MetricEvent::skipped(
                                 MetricOperation::ImportQueued,
-                                MetricOutcome::Skipped,
                                 MetricReason::AlreadyPresent,
                             );
                             skipped += 1;
                         }
                     } else {
                         Self::mark_pending_reset(pid);
-                        PoolMetrics::record(
-                            MetricOperation::ImportQueued,
-                            MetricOutcome::Completed,
-                            MetricReason::Ok,
-                        );
+                        MetricEvent::completed(MetricOperation::ImportQueued, MetricReason::Ok);
                         added += 1;
                     }
                 }
 
                 // Any policy rejection is treated as a skip
                 Err(err) => {
-                    PoolMetrics::record(
+                    MetricEvent::record(
                         MetricOperation::ImportQueued,
                         MetricOutcome::Skipped,
                         MetricReason::from_policy(&err),
@@ -462,11 +367,7 @@ impl PoolWorkflow {
             PoolSchedulerWorkflow::schedule();
         }
 
-        PoolMetrics::record(
-            MetricOperation::ImportQueued,
-            MetricOutcome::Completed,
-            MetricReason::Ok,
-        );
+        MetricEvent::completed(MetricOperation::ImportQueued, MetricReason::Ok);
 
         Ok(result)
     }

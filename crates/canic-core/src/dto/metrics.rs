@@ -27,6 +27,8 @@ pub enum MetricsKind {
     Pool,
     RootCapability,
     Scaling,
+    #[cfg(feature = "sharding")]
+    Sharding,
     System,
     Timer,
     WasmStore,

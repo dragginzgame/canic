@@ -21,7 +21,10 @@ use crate::{
         auth::{AuthScopeError, AuthSignatureError, AuthValidationError},
         config::ConfigOps,
         ic::{IcOps, ecdsa::EcdsaOps},
-        runtime::env::EnvOps,
+        runtime::{
+            env::EnvOps,
+            metrics::delegated_auth::{DelegatedAuthMetricReason, DelegatedAuthMetrics},
+        },
         storage::state::subnet::SubnetStateOps,
     },
 };
@@ -66,16 +69,40 @@ impl AuthOps {
     pub fn verify_token(
         input: VerifyDelegatedTokenRuntimeInput<'_>,
     ) -> Result<VerifiedDelegatedToken, InternalError> {
-        let cfg = ConfigOps::delegated_tokens_config()?;
+        DelegatedAuthMetrics::record_verify_started();
+
+        let cfg = match ConfigOps::delegated_tokens_config() {
+            Ok(cfg) => cfg,
+            Err(err) => {
+                DelegatedAuthMetrics::record_verify_failed(DelegatedAuthMetricReason::InvalidState);
+                return Err(err);
+            }
+        };
         if !cfg.enabled {
+            DelegatedAuthMetrics::record_verify_failed(DelegatedAuthMetricReason::Disabled);
             return Err(AuthValidationError::DelegatedTokenAuthDisabled.into());
         }
 
-        Self::verify_shard_key_binding(input.token)?;
-        let root_trust = Self::root_trust_anchor(input.token, input.now_secs)?;
-        let local_role = EnvOps::canister_role()?;
+        if let Err(err) = Self::verify_shard_key_binding(input.token) {
+            DelegatedAuthMetrics::record_verify_failed(DelegatedAuthMetricReason::ShardKeyBinding);
+            return Err(err);
+        }
+        let root_trust = match Self::root_trust_anchor(input.token, input.now_secs) {
+            Ok(root_trust) => root_trust,
+            Err(err) => {
+                DelegatedAuthMetrics::record_verify_failed(DelegatedAuthMetricReason::RootKey);
+                return Err(err);
+            }
+        };
+        let local_role = match EnvOps::canister_role() {
+            Ok(local_role) => local_role,
+            Err(err) => {
+                DelegatedAuthMetrics::record_verify_failed(DelegatedAuthMetricReason::InvalidState);
+                return Err(err);
+            }
+        };
 
-        verify_delegated_token(
+        let verified = verify_delegated_token(
             VerifyDelegatedTokenInput {
                 token: input.token,
                 root_trust: &root_trust,
@@ -92,7 +119,15 @@ impl AuthOps {
                 EcdsaOps::verify_signature(public_key, hash, sig).map_err(|err| err.to_string())
             },
         )
-        .map_err(map_verify_delegated_token_error)
+        .map_err(|err| {
+            DelegatedAuthMetrics::record_verify_failed(delegated_auth_reason_from_verify_error(
+                &err,
+            ));
+            map_verify_delegated_token_error(err)
+        })?;
+
+        DelegatedAuthMetrics::record_verify_completed();
+        Ok(verified)
     }
 
     fn root_trust_anchor(
@@ -157,4 +192,62 @@ fn map_mint_delegated_token_error(err: MintDelegatedTokenError) -> InternalError
 
 fn map_verify_delegated_token_error(err: VerifyDelegatedTokenError) -> InternalError {
     AuthValidationError::Auth(err.to_string()).into()
+}
+
+// Convert typed verifier failures into bounded metric reasons.
+const fn delegated_auth_reason_from_verify_error(
+    err: &VerifyDelegatedTokenError,
+) -> DelegatedAuthMetricReason {
+    match err {
+        VerifyDelegatedTokenError::Audience(_) => DelegatedAuthMetricReason::Audience,
+        VerifyDelegatedTokenError::AudienceNotSubset => {
+            DelegatedAuthMetricReason::AudienceNotSubset
+        }
+        VerifyDelegatedTokenError::Canonical(_) => DelegatedAuthMetricReason::Canonical,
+        VerifyDelegatedTokenError::CertAudienceRejected => {
+            DelegatedAuthMetricReason::CertAudienceRejected
+        }
+        VerifyDelegatedTokenError::CertExpired => DelegatedAuthMetricReason::CertExpired,
+        VerifyDelegatedTokenError::CertHashMismatch => DelegatedAuthMetricReason::CertHashMismatch,
+        VerifyDelegatedTokenError::CertNotYetValid => DelegatedAuthMetricReason::CertNotYetValid,
+        VerifyDelegatedTokenError::CertPolicy(_) => DelegatedAuthMetricReason::CertPolicy,
+        VerifyDelegatedTokenError::IssuerShardPidMismatch => {
+            DelegatedAuthMetricReason::IssuerShardPidMismatch
+        }
+        VerifyDelegatedTokenError::LocalRoleHashMismatch => {
+            DelegatedAuthMetricReason::LocalRoleHashMismatch
+        }
+        VerifyDelegatedTokenError::MissingLocalRole => DelegatedAuthMetricReason::MissingLocalRole,
+        VerifyDelegatedTokenError::RootKey(_) => DelegatedAuthMetricReason::RootKey,
+        VerifyDelegatedTokenError::RootSignatureInvalid(_) => {
+            DelegatedAuthMetricReason::RootSignatureInvalid
+        }
+        VerifyDelegatedTokenError::RootSignatureUnavailable => {
+            DelegatedAuthMetricReason::RootSignatureUnavailable
+        }
+        VerifyDelegatedTokenError::ScopeRejected { .. } => DelegatedAuthMetricReason::ScopeRejected,
+        VerifyDelegatedTokenError::ShardSignatureInvalid(_) => {
+            DelegatedAuthMetricReason::ShardSignatureInvalid
+        }
+        VerifyDelegatedTokenError::ShardSignatureUnavailable => {
+            DelegatedAuthMetricReason::ShardSignatureUnavailable
+        }
+        VerifyDelegatedTokenError::TokenAudienceRejected => {
+            DelegatedAuthMetricReason::TokenAudienceRejected
+        }
+        VerifyDelegatedTokenError::TokenExpired => DelegatedAuthMetricReason::TokenExpired,
+        VerifyDelegatedTokenError::TokenInvalidWindow => {
+            DelegatedAuthMetricReason::TokenInvalidWindow
+        }
+        VerifyDelegatedTokenError::TokenIssuedBeforeCert => {
+            DelegatedAuthMetricReason::TokenIssuedBeforeCert
+        }
+        VerifyDelegatedTokenError::TokenNotYetValid => DelegatedAuthMetricReason::TokenNotYetValid,
+        VerifyDelegatedTokenError::TokenOutlivesCert => {
+            DelegatedAuthMetricReason::TokenOutlivesCert
+        }
+        VerifyDelegatedTokenError::TokenTtlExceeded { .. } => {
+            DelegatedAuthMetricReason::TokenTtlExceeded
+        }
+    }
 }

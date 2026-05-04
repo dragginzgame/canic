@@ -95,12 +95,13 @@ Run the standard no-mutation preflight bundle:
 canic backup preflight \
   --dir backups/<run-id> \
   --out-dir preflight/<run-id> \
-  --mapping restore-map.json
+  --mapping restore-map.json \
+  --require-restore-ready
 ```
 
 Preflight writes `manifest-validation.json`, `backup-status.json`,
 `backup-inspection.json`, `backup-provenance.json`, `backup-integrity.json`,
-`restore-plan.json`, and `preflight-summary.json`.
+`restore-plan.json`, `restore-status.json`, and `preflight-summary.json`.
 The summary records the backup ID, source root, environment, topology hash,
 readiness statuses, provenance consistency status, topology mismatch count,
 journal operation metrics, member counts, restore identity/snapshot/
@@ -108,6 +109,8 @@ verification/operation/ordering counts, snapshot provenance readiness booleans,
 verification readiness booleans, `restore_mapping_supplied`,
 `restore_all_sources_mapped`, `restore_ready`, stable
 `restore_readiness_reasons`, and paths to the generated reports.
+`--require-restore-ready` still writes the full report bundle, then exits with
+an error when `restore_ready` is false.
 
 Restore planning is manifest-driven and performs no mutations:
 
@@ -116,11 +119,14 @@ canic restore plan \
   --backup-dir backups/<run-id> \
   --mapping restore-map.json \
   --out restore-plan.json \
-  --require-verified
+  --require-verified \
+  --require-restore-ready
 ```
 
 `--require-verified` runs the same manifest, journal, durable artifact, and
 checksum checks as `canic backup verify` before emitting the plan.
+`--require-restore-ready` still writes the restore plan, then exits with an
+error when `readiness_summary.ready` is false.
 Restore plans include an `identity_summary` with explicit mapping mode,
 all-sources-mapped status, and fixed, relocatable, mapped, in-place, and
 remapped member counts. They also include a `snapshot_summary` with module
@@ -133,3 +139,15 @@ reinstalls, verification checks, and phases, plus an `ordering_summary` and
 per-member ordering dependency metadata so dry-runs show when parent
 relationships are satisfied inside the same restore group or by an earlier
 group.
+
+Emit the initial restore execution status from a plan:
+
+```bash
+canic restore status \
+  --plan restore-plan.json \
+  --out restore-status.json
+```
+
+Restore status is no-mutation. It copies the plan identity, readiness,
+verification, phase, and operation counts, then marks each planned member as
+`planned` with its source/target canister, snapshot ID, and artifact path.

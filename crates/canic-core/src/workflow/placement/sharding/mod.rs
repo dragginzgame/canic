@@ -19,6 +19,13 @@ use crate::{
             ShardingPlanStateResponseMapper,
         },
         rpc::request::{CreateCanisterParent, RequestOps},
+        runtime::metrics::{
+            recording::ShardingMetricEvent as MetricEvent,
+            sharding::{
+                ShardingMetricOperation as MetricOperation, ShardingMetricOutcome as MetricOutcome,
+                ShardingMetricReason as MetricReason,
+            },
+        },
         storage::{
             children::CanisterChildrenOps,
             placement::{sharding::ShardingRegistryOps, sharding_lifecycle::ShardingLifecycleOps},
@@ -61,9 +68,22 @@ impl ShardAllocator {
         policy: &ShardPoolPolicy,
         extra_arg: Option<Vec<u8>>,
     ) -> Result<Principal, InternalError> {
-        let pid = Self::create_canister_pid(canister_role, extra_arg).await?;
+        MetricEvent::started(MetricOperation::CreateShard);
+
+        let pid = match Self::create_canister_pid(canister_role, extra_arg).await {
+            Ok(pid) => pid,
+            Err(err) => {
+                MetricEvent::failed(MetricOperation::CreateShard, &err);
+                return Err(err);
+            }
+        };
         let created_at = IcOps::now_secs();
-        ShardingRegistryOps::create(pid, pool, slot, canister_role, policy.capacity, created_at)?;
+        if let Err(err) =
+            ShardingRegistryOps::create(pid, pool, slot, canister_role, policy.capacity, created_at)
+        {
+            MetricEvent::failed(MetricOperation::CreateShard, &err);
+            return Err(err);
+        }
 
         crate::log!(
             Topic::Sharding,
@@ -71,6 +91,7 @@ impl ShardAllocator {
             "✨ shard.create: {pid} pool={pool} slot={slot}"
         );
 
+        MetricEvent::completed(MetricOperation::CreateShard, MetricReason::Ok);
         Ok(pid)
     }
 
@@ -94,14 +115,30 @@ pub struct ShardingWorkflow;
 impl ShardingWorkflow {
     /// Create configured startup shards for every pool on the current canister.
     pub async fn bootstrap_configured_initial_shards() -> Result<(), InternalError> {
-        let Some(sharding) = ConfigOps::current_canister()?.sharding else {
+        let canister = match ConfigOps::current_canister() {
+            Ok(canister) => canister,
+            Err(err) => {
+                MetricEvent::failed(MetricOperation::BootstrapConfig, &err);
+                return Err(err);
+            }
+        };
+        let Some(sharding) = canister.sharding else {
+            MetricEvent::skipped(
+                MetricOperation::BootstrapConfig,
+                MetricReason::ShardingDisabled,
+            );
             return Ok(());
         };
 
+        MetricEvent::started(MetricOperation::BootstrapConfig);
         for (pool, pool_cfg) in sharding.pools {
-            Self::bootstrap_initial_shards_for_pool(&pool, &pool_cfg).await?;
+            if let Err(err) = Self::bootstrap_initial_shards_for_pool(&pool, &pool_cfg).await {
+                MetricEvent::failed(MetricOperation::BootstrapConfig, &err);
+                return Err(err);
+            }
         }
 
+        MetricEvent::completed(MetricOperation::BootstrapConfig, MetricReason::Ok);
         Ok(())
     }
 
@@ -109,7 +146,14 @@ impl ShardingWorkflow {
         pool: &str,
         partition_key: impl AsRef<str>,
     ) -> Result<Principal, InternalError> {
-        let pool_cfg = Self::get_shard_pool_cfg(pool)?;
+        let pool_cfg = match Self::get_shard_pool_cfg(pool) {
+            Ok(pool_cfg) => pool_cfg,
+            Err(err) => {
+                MetricEvent::started(MetricOperation::Assign);
+                MetricEvent::failed(MetricOperation::Assign, &err);
+                return Err(err);
+            }
+        };
         Self::assign_with_policy(
             &pool_cfg.canister_role,
             pool,
@@ -120,6 +164,7 @@ impl ShardingWorkflow {
         .await
     }
 
+    #[expect(clippy::too_many_lines)]
     pub async fn assign_with_policy(
         canister_role: &CanisterRole,
         pool: &str,
@@ -127,17 +172,28 @@ impl ShardingWorkflow {
         policy: ShardPoolPolicy,
         extra_arg: Option<Vec<u8>>,
     ) -> Result<Principal, InternalError> {
+        MetricEvent::started(MetricOperation::Assign);
         let active = ShardingLifecycleOps::active_shards();
         crate::perf!("load_active_shards");
         if active.is_empty() {
-            return Self::assign_bootstrap_created(
+            return match Self::assign_bootstrap_created(
                 canister_role,
                 pool,
                 partition_key,
                 &policy,
                 extra_arg,
             )
-            .await;
+            .await
+            {
+                Ok(pid) => {
+                    MetricEvent::completed(MetricOperation::Assign, MetricReason::CreateAllowed);
+                    Ok(pid)
+                }
+                Err(err) => {
+                    MetricEvent::failed(MetricOperation::Assign, &err);
+                    Err(err)
+                }
+            };
         }
 
         let active_set: BTreeSet<_> = active.into_iter().collect();
@@ -174,11 +230,13 @@ impl ShardingWorkflow {
             assignments: &assignment_views,
         };
 
+        MetricEvent::started(MetricOperation::PlanAssign);
         let plan = ShardingPolicy::plan_assign(&state, partition_key, None);
         crate::perf!("plan_assign");
 
         match plan.state {
             ShardingPlanState::AlreadyAssigned { pid } => {
+                MetricEvent::skipped(MetricOperation::PlanAssign, MetricReason::AlreadyAssigned);
                 crate::perf!("already_assigned");
                 let slot = plan
                     .target_slot
@@ -190,11 +248,19 @@ impl ShardingWorkflow {
                     "📦 partition_key={partition_key} already shard={pid} pool={pool} slot={slot:?}"
                 );
 
+                MetricEvent::completed(MetricOperation::Assign, MetricReason::AlreadyAssigned);
                 Ok(pid)
             }
 
             ShardingPlanState::UseExisting { pid } => {
-                ShardingRegistryOps::assign(pool, partition_key, pid)?;
+                MetricEvent::completed(MetricOperation::PlanAssign, MetricReason::ExistingCapacity);
+                MetricEvent::started(MetricOperation::AssignKey);
+                if let Err(err) = ShardingRegistryOps::assign(pool, partition_key, pid) {
+                    MetricEvent::failed(MetricOperation::AssignKey, &err);
+                    MetricEvent::failed(MetricOperation::Assign, &err);
+                    return Err(err);
+                }
+                MetricEvent::completed(MetricOperation::AssignKey, MetricReason::ExistingCapacity);
                 crate::perf!("assign_existing");
 
                 let slot = plan
@@ -207,19 +273,43 @@ impl ShardingWorkflow {
                     "📦 partition_key={partition_key} assigned shard={pid} pool={pool} slot={slot:?}"
                 );
 
+                MetricEvent::completed(MetricOperation::Assign, MetricReason::ExistingCapacity);
                 Ok(pid)
             }
 
             ShardingPlanState::CreateAllowed => {
-                let slot = plan.target_slot.ok_or(ShardingWorkflowError::Invariant(
-                    "sharding policy allowed creation but returned no slot",
-                ))?;
+                let Some(slot) = plan.target_slot else {
+                    MetricEvent::failed_reason(
+                        MetricOperation::PlanAssign,
+                        MetricReason::InvalidState,
+                    );
+                    MetricEvent::failed_reason(MetricOperation::Assign, MetricReason::InvalidState);
+                    return Err(ShardingWorkflowError::Invariant(
+                        "sharding policy allowed creation but returned no slot",
+                    )
+                    .into());
+                };
+                MetricEvent::completed(MetricOperation::PlanAssign, MetricReason::CreateAllowed);
 
                 let pid =
-                    Self::allocate_and_admit(pool, slot, canister_role, &policy, extra_arg).await?;
+                    match Self::allocate_and_admit(pool, slot, canister_role, &policy, extra_arg)
+                        .await
+                    {
+                        Ok(pid) => pid,
+                        Err(err) => {
+                            MetricEvent::failed(MetricOperation::Assign, &err);
+                            return Err(err);
+                        }
+                    };
                 crate::perf!("allocate_shard");
 
-                ShardingRegistryOps::assign(pool, partition_key, pid)?;
+                MetricEvent::started(MetricOperation::AssignKey);
+                if let Err(err) = ShardingRegistryOps::assign(pool, partition_key, pid) {
+                    MetricEvent::failed(MetricOperation::AssignKey, &err);
+                    MetricEvent::failed(MetricOperation::Assign, &err);
+                    return Err(err);
+                }
+                MetricEvent::completed(MetricOperation::AssignKey, MetricReason::CreateAllowed);
                 crate::perf!("assign_created");
 
                 crate::log!(
@@ -228,10 +318,14 @@ impl ShardingWorkflow {
                     "✨ partition_key={partition_key} created+assigned shard={pid} pool={pool} slot={slot}"
                 );
 
+                MetricEvent::completed(MetricOperation::Assign, MetricReason::CreateAllowed);
                 Ok(pid)
             }
 
             ShardingPlanState::CreateBlocked { reason } => {
+                let metric_reason = MetricReason::from_create_blocked_reason(&reason);
+                MetricEvent::skipped(MetricOperation::PlanAssign, metric_reason);
+                MetricEvent::failed_reason(MetricOperation::Assign, metric_reason);
                 crate::perf!("create_blocked");
                 Err(Self::blocked(reason, pool, partition_key))
             }
@@ -292,12 +386,31 @@ impl ShardingWorkflow {
         policy: &ShardPoolPolicy,
         extra_arg: Option<Vec<u8>>,
     ) -> Result<Principal, InternalError> {
-        let (pid, slot) =
-            Self::bootstrap_empty_active(canister_role, pool, partition_key, policy, extra_arg)
-                .await?;
+        MetricEvent::started(MetricOperation::BootstrapActive);
+        let (pid, slot) = match Self::bootstrap_empty_active(
+            canister_role,
+            pool,
+            partition_key,
+            policy,
+            extra_arg,
+        )
+        .await
+        {
+            Ok(value) => value,
+            Err(err) => {
+                MetricEvent::failed(MetricOperation::BootstrapActive, &err);
+                return Err(err);
+            }
+        };
         crate::perf!("bootstrap_empty_active");
 
-        ShardingRegistryOps::assign(pool, partition_key, pid)?;
+        MetricEvent::started(MetricOperation::AssignKey);
+        if let Err(err) = ShardingRegistryOps::assign(pool, partition_key, pid) {
+            MetricEvent::failed(MetricOperation::AssignKey, &err);
+            MetricEvent::failed(MetricOperation::BootstrapActive, &err);
+            return Err(err);
+        }
+        MetricEvent::completed(MetricOperation::AssignKey, MetricReason::CreateAllowed);
         crate::perf!("assign_bootstrap_created");
 
         crate::log!(
@@ -306,6 +419,10 @@ impl ShardingWorkflow {
             "✨ partition_key={partition_key} created+assigned shard={pid} pool={pool} slot={slot}"
         );
 
+        MetricEvent::completed(
+            MetricOperation::BootstrapActive,
+            MetricReason::CreateAllowed,
+        );
         Ok(pid)
     }
 
@@ -394,18 +511,37 @@ impl ShardingWorkflow {
         pool: &str,
         pool_cfg: &ShardPool,
     ) -> Result<(), InternalError> {
+        MetricEvent::started(MetricOperation::BootstrapPool);
         let target = pool_cfg
             .policy
             .initial_shards
             .min(pool_cfg.policy.max_shards);
         if target == 0 {
+            MetricEvent::skipped(
+                MetricOperation::BootstrapPool,
+                MetricReason::NoInitialShards,
+            );
             return Ok(());
         }
 
+        let mut created = 0u32;
         loop {
             let pool_entries = Self::pool_entry_views(pool);
             let current = u32::try_from(pool_entries.len()).unwrap_or(u32::MAX);
             if current >= target {
+                MetricEvent::record(
+                    MetricOperation::BootstrapPool,
+                    if created == 0 {
+                        MetricOutcome::Skipped
+                    } else {
+                        MetricOutcome::Completed
+                    },
+                    if created == 0 {
+                        MetricReason::TargetSatisfied
+                    } else {
+                        MetricReason::Ok
+                    },
+                );
                 return Ok(());
             }
 
@@ -413,14 +549,22 @@ impl ShardingWorkflow {
                 .into_iter()
                 .next()
                 .ok_or_else(|| Self::no_active_shards_exhausted(pool, "__bootstrap__"))?;
-            let pid = Self::allocate_and_admit(
+            let pid = match Self::allocate_and_admit(
                 pool,
                 slot,
                 &pool_cfg.canister_role,
                 &pool_cfg.policy,
                 None,
             )
-            .await?;
+            .await
+            {
+                Ok(pid) => pid,
+                Err(err) => {
+                    MetricEvent::failed(MetricOperation::BootstrapPool, &err);
+                    return Err(err);
+                }
+            };
+            created = created.saturating_add(1);
 
             crate::log!(
                 Topic::Sharding,

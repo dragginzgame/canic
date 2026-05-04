@@ -252,6 +252,16 @@ mod tests {
             CanisterOpsMetricOutcome::Failed,
             CanisterOpsMetricReason::Topology,
         );
+        CanisterOpsMetrics::record_unscoped(
+            CanisterOpsMetricOperation::Snapshot,
+            CanisterOpsMetricOutcome::Completed,
+            CanisterOpsMetricReason::Ok,
+        );
+        CanisterOpsMetrics::record_unscoped(
+            CanisterOpsMetricOperation::Restore,
+            CanisterOpsMetricOutcome::Failed,
+            CanisterOpsMetricReason::ManagementCall,
+        );
 
         let map = snapshot_map();
 
@@ -272,6 +282,24 @@ mod tests {
                 reason: CanisterOpsMetricReason::Topology,
             }),
             Some(&2)
+        );
+        assert_eq!(
+            map.get(&CanisterOpsMetricKey {
+                operation: CanisterOpsMetricOperation::Snapshot,
+                role: "unscoped".to_string(),
+                outcome: CanisterOpsMetricOutcome::Completed,
+                reason: CanisterOpsMetricReason::Ok,
+            }),
+            Some(&1)
+        );
+        assert_eq!(
+            map.get(&CanisterOpsMetricKey {
+                operation: CanisterOpsMetricOperation::Restore,
+                role: "unscoped".to_string(),
+                outcome: CanisterOpsMetricOutcome::Failed,
+                reason: CanisterOpsMetricReason::ManagementCall,
+            }),
+            Some(&1)
         );
     }
 }

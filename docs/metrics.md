@@ -44,7 +44,7 @@ rather than as a successful zero-cost query measurement.
 | `Cascade` | `[operation, snapshot, outcome, reason]` | `None` | `Count` | All dimensions are fixed enums for state/topology cascade fanout, local apply, route resolution, and child-send visibility. |
 | `CyclesFunding` | `[metric]` or `[metric, reason]` | Child principal for child-scoped rows; otherwise `None` | `U128` | Child-principal rows intentionally scale with registered children. Metric and reason dimensions are fixed enums. |
 | `CyclesTopup` | `[metric]` | `None` | `Count` | Fixed auto-top-up decision and outcome labels. |
-| `DelegatedAuth` | `[delegated_auth_authority]` | Verified signer authority | `Count` | Bounded by configured delegated-auth signer authorities, not request callers. |
+| `DelegatedAuth` | `[delegated_auth_authority]` or `[operation, outcome, reason]` | Verified signer authority for authority rows; otherwise `None` | `Count` | Authority rows are bounded by configured signer authorities. Outcome rows use fixed enums for token verification progress and failure reasons. |
 | `Directory` | `[operation, outcome, reason]` | `None` | `Count` | All dimensions are fixed enums for keyed directory resolution, claims, stale repair, cleanup, and binding. |
 | `Http` | `[method, label]` | `None` | `Count` | Use explicit stable labels for dynamic URLs. URL fallback labels strip query and fragment only. |
 | `Icc` | `[method]` | Target canister principal | `Count` | Target cardinality grows with topology size; method names should stay static. |
@@ -53,6 +53,7 @@ rather than as a successful zero-cost query measurement.
 | `Pool` | `[operation, outcome, reason]` | `None` | `Count` | All dimensions are fixed enums for pool create/import/recycle/reset/scheduler visibility. |
 | `RootCapability` | `[capability, event_type, outcome, proof_mode]` | `None` | `Count` | All dimensions are fixed enums. |
 | `Scaling` | `[operation, outcome, reason]` | `None` | `Count` | All dimensions are fixed enums for scaling policy planning, startup warmup, worker creation, and registry updates. |
+| `Sharding` | `[operation, outcome, reason]` | `None` | `Count` | Feature-gated by `sharding`; all dimensions are fixed enums for shard assignment and startup shard bootstrap visibility. |
 | `System` | `[kind]` | `None` | `Count` | Fixed system operation labels. |
 | `Timer` | `[mode, label]` | `None` | `CountAndU64` | `count` is executions; `value_u64` is scheduled delay in milliseconds. Timer labels should be static. |
 | `WasmStore` | `[operation, source, outcome, reason]` | `None` | `Count` | All dimensions are fixed enums for source resolution, bootstrap chunk sync, and managed store publication. |
@@ -112,7 +113,10 @@ Reasons:
 - `unknown`
 
 Current rows are emitted by root create/upgrade workflows, install/delete
-provisioning helpers, and root bootstrap create skips.
+provisioning helpers, root bootstrap create skips, and low-level canister
+snapshot/restore management calls. Snapshot and restore rows use the `unscoped`
+role label at the low-level management boundary when no configured role is
+available.
 
 ### `Cascade`
 
@@ -185,6 +189,54 @@ Metric labels:
 - `request_in_flight`
 - `request_ok`
 - `request_scheduled`
+
+### `DelegatedAuth`
+
+Delegated-auth rows expose both successful authority attribution and bounded
+token-verification outcomes. Authority rows keep the legacy
+`[delegated_auth_authority]` label with the signer principal in `principal`.
+Outcome rows avoid caller principals and token subjects.
+
+Operations:
+
+- `verify_token`
+
+Outcomes:
+
+- `started`
+- `completed`
+- `failed`
+
+Reasons:
+
+- `audience`
+- `audience_not_subset`
+- `canonical`
+- `cert_audience_rejected`
+- `cert_expired`
+- `cert_hash_mismatch`
+- `cert_not_yet_valid`
+- `cert_policy`
+- `disabled`
+- `invalid_state`
+- `issuer_shard_pid_mismatch`
+- `local_role_hash_mismatch`
+- `missing_local_role`
+- `ok`
+- `root_key`
+- `root_signature_invalid`
+- `root_signature_unavailable`
+- `scope_rejected`
+- `shard_key_binding`
+- `shard_signature_invalid`
+- `shard_signature_unavailable`
+- `token_audience_rejected`
+- `token_expired`
+- `token_invalid_window`
+- `token_issued_before_cert`
+- `token_not_yet_valid`
+- `token_outlives_cert`
+- `token_ttl_exceeded`
 
 ### `Directory`
 
@@ -355,6 +407,45 @@ Reasons:
 - `target_satisfied`
 - `unknown`
 - `within_bounds`
+
+### `Sharding`
+
+Sharding rows expose shard assignment and configured startup shard progress
+without using pool names, partition keys, shard roles, or canister IDs as labels.
+This family is available when the `sharding` feature is enabled.
+
+Operations:
+
+- `assign`
+- `assign_key`
+- `bootstrap_active`
+- `bootstrap_config`
+- `bootstrap_pool`
+- `create_shard`
+- `plan_assign`
+
+Outcomes:
+
+- `started`
+- `completed`
+- `failed`
+- `skipped`
+
+Reasons:
+
+- `already_assigned`
+- `create_allowed`
+- `existing_capacity`
+- `invalid_state`
+- `management_call`
+- `no_free_slots`
+- `no_initial_shards`
+- `ok`
+- `policy_denied`
+- `pool_at_capacity`
+- `sharding_disabled`
+- `target_satisfied`
+- `unknown`
 
 ### `Timer`
 

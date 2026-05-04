@@ -58,5 +58,24 @@ where
 
 // Return the top-level usage text.
 const fn usage() -> &'static str {
-    "usage: canic snapshot download --canister <id> --out <dir> [--root <id> | --registry-json <file>] [--include-children] [--recursive] [--dry-run] [--stop-before-snapshot] [--resume-after-snapshot] [--network <name>]\n       canic backup preflight --dir <backup-dir> --out-dir <dir> [--mapping <file>]\n       canic backup inspect --dir <backup-dir> [--out <file>] [--require-ready]\n       canic backup provenance --dir <backup-dir> [--out <file>] [--require-consistent]\n       canic backup status --dir <backup-dir> [--out <file>] [--require-complete]\n       canic backup verify --dir <backup-dir> [--out <file>]\n       canic manifest validate --manifest <file> [--out <file>]\n       canic restore plan (--manifest <file> | --backup-dir <dir>) [--mapping <file>] [--out <file>] [--require-verified]"
+    "usage: canic snapshot download --canister <id> --out <dir> [--root <id> | --registry-json <file>] [--include-children] [--recursive] [--dry-run] [--stop-before-snapshot] [--resume-after-snapshot] [--network <name>]\n       canic backup preflight --dir <backup-dir> --out-dir <dir> [--mapping <file>] [--require-restore-ready]\n       canic backup inspect --dir <backup-dir> [--out <file>] [--require-ready]\n       canic backup provenance --dir <backup-dir> [--out <file>] [--require-consistent]\n       canic backup status --dir <backup-dir> [--out <file>] [--require-complete]\n       canic backup verify --dir <backup-dir> [--out <file>]\n       canic manifest validate --manifest <file> [--out <file>]\n       canic restore plan (--manifest <file> | --backup-dir <dir>) [--mapping <file>] [--out <file>] [--require-verified] [--require-restore-ready]\n       canic restore status --plan <file> [--out <file>]"
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Ensure top-level help stays aligned with restore-readiness gates.
+    #[test]
+    fn usage_lists_restore_readiness_gates() {
+        let text = usage();
+
+        assert!(text.contains(
+            "canic backup preflight --dir <backup-dir> --out-dir <dir> [--mapping <file>] [--require-restore-ready]"
+        ));
+        assert!(text.contains(
+            "canic restore plan (--manifest <file> | --backup-dir <dir>) [--mapping <file>] [--out <file>] [--require-verified] [--require-restore-ready]"
+        ));
+        assert!(text.contains("canic restore status --plan <file> [--out <file>]"));
+    }
 }

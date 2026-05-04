@@ -37,6 +37,8 @@ fn new_metric_families_are_public_facade_usable() {
         MetricsKind::Directory,
         MetricsKind::Pool,
         MetricsKind::Scaling,
+        #[cfg(feature = "sharding")]
+        MetricsKind::Sharding,
         MetricsKind::WasmStore,
     ] {
         let page = MetricsQuery::page(
