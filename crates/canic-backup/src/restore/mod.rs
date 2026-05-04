@@ -268,6 +268,414 @@ impl RestoreApplyDryRun {
     }
 }
 
+///
+/// RestoreApplyJournal
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RestoreApplyJournal {
+    pub journal_version: u16,
+    pub backup_id: String,
+    pub ready: bool,
+    pub blocked_reasons: Vec<String>,
+    pub operation_count: usize,
+    pub pending_operations: usize,
+    pub ready_operations: usize,
+    pub blocked_operations: usize,
+    pub completed_operations: usize,
+    pub failed_operations: usize,
+    pub operations: Vec<RestoreApplyJournalOperation>,
+}
+
+impl RestoreApplyJournal {
+    /// Build the initial no-mutation restore apply journal from a dry-run.
+    #[must_use]
+    pub fn from_dry_run(dry_run: &RestoreApplyDryRun) -> Self {
+        let blocked_reasons = restore_apply_blocked_reasons(dry_run);
+        let initial_state = if blocked_reasons.is_empty() {
+            RestoreApplyOperationState::Ready
+        } else {
+            RestoreApplyOperationState::Blocked
+        };
+        let operations = dry_run
+            .phases
+            .iter()
+            .flat_map(|phase| phase.operations.iter())
+            .map(|operation| {
+                RestoreApplyJournalOperation::from_dry_run_operation(
+                    operation,
+                    initial_state.clone(),
+                    &blocked_reasons,
+                )
+            })
+            .collect::<Vec<_>>();
+        let ready_operations = operations
+            .iter()
+            .filter(|operation| operation.state == RestoreApplyOperationState::Ready)
+            .count();
+        let blocked_operations = operations
+            .iter()
+            .filter(|operation| operation.state == RestoreApplyOperationState::Blocked)
+            .count();
+
+        Self {
+            journal_version: 1,
+            backup_id: dry_run.backup_id.clone(),
+            ready: blocked_reasons.is_empty(),
+            blocked_reasons,
+            operation_count: operations.len(),
+            pending_operations: 0,
+            ready_operations,
+            blocked_operations,
+            completed_operations: 0,
+            failed_operations: 0,
+            operations,
+        }
+    }
+
+    /// Validate the structural consistency of a restore apply journal.
+    pub fn validate(&self) -> Result<(), RestoreApplyJournalError> {
+        validate_apply_journal_version(self.journal_version)?;
+        validate_apply_journal_nonempty("backup_id", &self.backup_id)?;
+        validate_apply_journal_count(
+            "operation_count",
+            self.operation_count,
+            self.operations.len(),
+        )?;
+
+        let state_counts = RestoreApplyJournalStateCounts::from_operations(&self.operations);
+        validate_apply_journal_count(
+            "pending_operations",
+            self.pending_operations,
+            state_counts.pending,
+        )?;
+        validate_apply_journal_count(
+            "ready_operations",
+            self.ready_operations,
+            state_counts.ready,
+        )?;
+        validate_apply_journal_count(
+            "blocked_operations",
+            self.blocked_operations,
+            state_counts.blocked,
+        )?;
+        validate_apply_journal_count(
+            "completed_operations",
+            self.completed_operations,
+            state_counts.completed,
+        )?;
+        validate_apply_journal_count(
+            "failed_operations",
+            self.failed_operations,
+            state_counts.failed,
+        )?;
+
+        if self.ready && (!self.blocked_reasons.is_empty() || self.blocked_operations > 0) {
+            return Err(RestoreApplyJournalError::ReadyJournalHasBlockingState);
+        }
+
+        validate_apply_journal_sequences(&self.operations)?;
+        for operation in &self.operations {
+            operation.validate()?;
+        }
+
+        Ok(())
+    }
+
+    /// Summarize this apply journal for operators and automation.
+    #[must_use]
+    pub fn status(&self) -> RestoreApplyJournalStatus {
+        RestoreApplyJournalStatus::from_journal(self)
+    }
+}
+
+// Validate the supported restore apply journal format version.
+const fn validate_apply_journal_version(version: u16) -> Result<(), RestoreApplyJournalError> {
+    if version == 1 {
+        return Ok(());
+    }
+
+    Err(RestoreApplyJournalError::UnsupportedVersion(version))
+}
+
+// Validate required nonempty restore apply journal fields.
+fn validate_apply_journal_nonempty(
+    field: &'static str,
+    value: &str,
+) -> Result<(), RestoreApplyJournalError> {
+    if !value.trim().is_empty() {
+        return Ok(());
+    }
+
+    Err(RestoreApplyJournalError::MissingField(field))
+}
+
+// Validate one reported restore apply journal count.
+const fn validate_apply_journal_count(
+    field: &'static str,
+    reported: usize,
+    actual: usize,
+) -> Result<(), RestoreApplyJournalError> {
+    if reported == actual {
+        return Ok(());
+    }
+
+    Err(RestoreApplyJournalError::CountMismatch {
+        field,
+        reported,
+        actual,
+    })
+}
+
+// Validate operation sequence values are unique and contiguous from zero.
+fn validate_apply_journal_sequences(
+    operations: &[RestoreApplyJournalOperation],
+) -> Result<(), RestoreApplyJournalError> {
+    let mut sequences = BTreeSet::new();
+    for operation in operations {
+        if !sequences.insert(operation.sequence) {
+            return Err(RestoreApplyJournalError::DuplicateSequence(
+                operation.sequence,
+            ));
+        }
+    }
+
+    for expected in 0..operations.len() {
+        if !sequences.contains(&expected) {
+            return Err(RestoreApplyJournalError::MissingSequence(expected));
+        }
+    }
+
+    Ok(())
+}
+
+///
+/// RestoreApplyJournalStateCounts
+///
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+struct RestoreApplyJournalStateCounts {
+    pending: usize,
+    ready: usize,
+    blocked: usize,
+    completed: usize,
+    failed: usize,
+}
+
+impl RestoreApplyJournalStateCounts {
+    // Count operation states from concrete journal operation rows.
+    fn from_operations(operations: &[RestoreApplyJournalOperation]) -> Self {
+        let mut counts = Self::default();
+        for operation in operations {
+            match operation.state {
+                RestoreApplyOperationState::Pending => counts.pending += 1,
+                RestoreApplyOperationState::Ready => counts.ready += 1,
+                RestoreApplyOperationState::Blocked => counts.blocked += 1,
+                RestoreApplyOperationState::Completed => counts.completed += 1,
+                RestoreApplyOperationState::Failed => counts.failed += 1,
+            }
+        }
+        counts
+    }
+}
+
+// Explain why an apply journal is blocked before mutation is allowed.
+fn restore_apply_blocked_reasons(dry_run: &RestoreApplyDryRun) -> Vec<String> {
+    let mut reasons = dry_run.readiness_reasons.clone();
+
+    match &dry_run.artifact_validation {
+        Some(validation) => {
+            if !validation.artifacts_present {
+                reasons.push("missing-artifacts".to_string());
+            }
+            if !validation.checksums_verified {
+                reasons.push("artifact-checksum-validation-incomplete".to_string());
+            }
+        }
+        None => reasons.push("missing-artifact-validation".to_string()),
+    }
+
+    reasons.sort();
+    reasons.dedup();
+    reasons
+}
+
+///
+/// RestoreApplyJournalStatus
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RestoreApplyJournalStatus {
+    pub status_version: u16,
+    pub backup_id: String,
+    pub ready: bool,
+    pub complete: bool,
+    pub blocked_reasons: Vec<String>,
+    pub operation_count: usize,
+    pub pending_operations: usize,
+    pub ready_operations: usize,
+    pub blocked_operations: usize,
+    pub completed_operations: usize,
+    pub failed_operations: usize,
+    pub next_ready_sequence: Option<usize>,
+    pub next_ready_operation: Option<RestoreApplyOperationKind>,
+}
+
+impl RestoreApplyJournalStatus {
+    /// Build a compact status projection from a restore apply journal.
+    #[must_use]
+    pub fn from_journal(journal: &RestoreApplyJournal) -> Self {
+        let next_ready = journal
+            .operations
+            .iter()
+            .filter(|operation| operation.state == RestoreApplyOperationState::Ready)
+            .min_by_key(|operation| operation.sequence);
+
+        Self {
+            status_version: 1,
+            backup_id: journal.backup_id.clone(),
+            ready: journal.ready,
+            complete: journal.operation_count > 0
+                && journal.completed_operations == journal.operation_count,
+            blocked_reasons: journal.blocked_reasons.clone(),
+            operation_count: journal.operation_count,
+            pending_operations: journal.pending_operations,
+            ready_operations: journal.ready_operations,
+            blocked_operations: journal.blocked_operations,
+            completed_operations: journal.completed_operations,
+            failed_operations: journal.failed_operations,
+            next_ready_sequence: next_ready.map(|operation| operation.sequence),
+            next_ready_operation: next_ready.map(|operation| operation.operation.clone()),
+        }
+    }
+}
+
+///
+/// RestoreApplyJournalOperation
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RestoreApplyJournalOperation {
+    pub sequence: usize,
+    pub operation: RestoreApplyOperationKind,
+    pub state: RestoreApplyOperationState,
+    pub blocking_reasons: Vec<String>,
+    pub restore_group: u16,
+    pub phase_order: usize,
+    pub source_canister: String,
+    pub target_canister: String,
+    pub role: String,
+    pub snapshot_id: Option<String>,
+    pub artifact_path: Option<String>,
+    pub verification_kind: Option<String>,
+    pub verification_method: Option<String>,
+}
+
+impl RestoreApplyJournalOperation {
+    // Build one initial journal operation from the dry-run operation row.
+    fn from_dry_run_operation(
+        operation: &RestoreApplyDryRunOperation,
+        state: RestoreApplyOperationState,
+        blocked_reasons: &[String],
+    ) -> Self {
+        Self {
+            sequence: operation.sequence,
+            operation: operation.operation.clone(),
+            state: state.clone(),
+            blocking_reasons: if state == RestoreApplyOperationState::Blocked {
+                blocked_reasons.to_vec()
+            } else {
+                Vec::new()
+            },
+            restore_group: operation.restore_group,
+            phase_order: operation.phase_order,
+            source_canister: operation.source_canister.clone(),
+            target_canister: operation.target_canister.clone(),
+            role: operation.role.clone(),
+            snapshot_id: operation.snapshot_id.clone(),
+            artifact_path: operation.artifact_path.clone(),
+            verification_kind: operation.verification_kind.clone(),
+            verification_method: operation.verification_method.clone(),
+        }
+    }
+
+    // Validate one restore apply journal operation row.
+    fn validate(&self) -> Result<(), RestoreApplyJournalError> {
+        validate_apply_journal_nonempty("operations[].source_canister", &self.source_canister)?;
+        validate_apply_journal_nonempty("operations[].target_canister", &self.target_canister)?;
+        validate_apply_journal_nonempty("operations[].role", &self.role)?;
+
+        match self.state {
+            RestoreApplyOperationState::Blocked if self.blocking_reasons.is_empty() => Err(
+                RestoreApplyJournalError::BlockedOperationMissingReason(self.sequence),
+            ),
+            RestoreApplyOperationState::Pending
+            | RestoreApplyOperationState::Ready
+            | RestoreApplyOperationState::Completed
+                if !self.blocking_reasons.is_empty() =>
+            {
+                Err(RestoreApplyJournalError::UnblockedOperationHasReasons(
+                    self.sequence,
+                ))
+            }
+            RestoreApplyOperationState::Blocked
+            | RestoreApplyOperationState::Failed
+            | RestoreApplyOperationState::Pending
+            | RestoreApplyOperationState::Ready
+            | RestoreApplyOperationState::Completed => Ok(()),
+        }
+    }
+}
+
+///
+/// RestoreApplyOperationState
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum RestoreApplyOperationState {
+    Pending,
+    Ready,
+    Blocked,
+    Completed,
+    Failed,
+}
+
+///
+/// RestoreApplyJournalError
+///
+
+#[derive(Debug, ThisError)]
+pub enum RestoreApplyJournalError {
+    #[error("unsupported restore apply journal version {0}")]
+    UnsupportedVersion(u16),
+
+    #[error("restore apply journal field {0} is required")]
+    MissingField(&'static str),
+
+    #[error("restore apply journal count {field} mismatch: reported={reported}, actual={actual}")]
+    CountMismatch {
+        field: &'static str,
+        reported: usize,
+        actual: usize,
+    },
+
+    #[error("restore apply journal has duplicate operation sequence {0}")]
+    DuplicateSequence(usize),
+
+    #[error("restore apply journal is missing operation sequence {0}")]
+    MissingSequence(usize),
+
+    #[error("ready restore apply journal cannot include blocked reasons or blocked operations")]
+    ReadyJournalHasBlockingState,
+
+    #[error("blocked restore apply journal operation {0} is missing a blocking reason")]
+    BlockedOperationMissingReason(usize),
+
+    #[error("unblocked restore apply journal operation {0} cannot have blocking reasons")]
+    UnblockedOperationHasReasons(usize),
+}
+
 // Verify every planned restore artifact against one backup directory root.
 fn validate_restore_apply_artifacts(
     plan: &RestorePlan,
@@ -1795,6 +2203,154 @@ mod tests {
         assert!(validation.checks[0].checksum_verified);
 
         fs::remove_dir_all(root).expect("remove temp root");
+    }
+
+    // Ensure an artifact-validated apply dry-run produces a ready initial journal.
+    #[test]
+    fn apply_journal_marks_validated_operations_ready() {
+        let root = temp_dir("canic-restore-apply-journal-ready");
+        fs::create_dir_all(&root).expect("create temp root");
+        let mut manifest = valid_manifest(IdentityMode::Relocatable);
+        set_member_artifact(
+            &mut manifest,
+            CHILD,
+            &root,
+            "artifacts/child",
+            b"child-snapshot",
+        );
+        set_member_artifact(
+            &mut manifest,
+            ROOT,
+            &root,
+            "artifacts/root",
+            b"root-snapshot",
+        );
+
+        let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
+        let dry_run = RestoreApplyDryRun::try_from_plan_with_artifacts(&plan, None, &root)
+            .expect("dry-run should validate artifacts");
+        let journal = RestoreApplyJournal::from_dry_run(&dry_run);
+
+        fs::remove_dir_all(root).expect("remove temp root");
+        assert_eq!(journal.journal_version, 1);
+        assert_eq!(journal.backup_id.as_str(), "fbk_test_001");
+        assert!(journal.ready);
+        assert!(journal.blocked_reasons.is_empty());
+        assert_eq!(journal.operation_count, 8);
+        assert_eq!(journal.ready_operations, 8);
+        assert_eq!(journal.blocked_operations, 0);
+        assert_eq!(journal.operations[0].sequence, 0);
+        assert_eq!(
+            journal.operations[0].state,
+            RestoreApplyOperationState::Ready
+        );
+        assert!(journal.operations[0].blocking_reasons.is_empty());
+    }
+
+    // Ensure apply journals block when artifact validation was not supplied.
+    #[test]
+    fn apply_journal_blocks_without_artifact_validation() {
+        let manifest = valid_manifest(IdentityMode::Relocatable);
+
+        let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
+        let dry_run = RestoreApplyDryRun::try_from_plan(&plan, None).expect("dry-run should build");
+        let journal = RestoreApplyJournal::from_dry_run(&dry_run);
+
+        assert!(!journal.ready);
+        assert_eq!(journal.ready_operations, 0);
+        assert_eq!(journal.blocked_operations, 8);
+        assert!(
+            journal
+                .blocked_reasons
+                .contains(&"missing-artifact-validation".to_string())
+        );
+        assert!(
+            journal.operations[0]
+                .blocking_reasons
+                .contains(&"missing-artifact-validation".to_string())
+        );
+    }
+
+    // Ensure apply journal status exposes compact readiness and next-operation state.
+    #[test]
+    fn apply_journal_status_reports_next_ready_operation() {
+        let root = temp_dir("canic-restore-apply-journal-status");
+        fs::create_dir_all(&root).expect("create temp root");
+        let mut manifest = valid_manifest(IdentityMode::Relocatable);
+        set_member_artifact(
+            &mut manifest,
+            CHILD,
+            &root,
+            "artifacts/child",
+            b"child-snapshot",
+        );
+        set_member_artifact(
+            &mut manifest,
+            ROOT,
+            &root,
+            "artifacts/root",
+            b"root-snapshot",
+        );
+
+        let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
+        let dry_run = RestoreApplyDryRun::try_from_plan_with_artifacts(&plan, None, &root)
+            .expect("dry-run should validate artifacts");
+        let journal = RestoreApplyJournal::from_dry_run(&dry_run);
+        let status = journal.status();
+
+        fs::remove_dir_all(root).expect("remove temp root");
+        assert_eq!(status.status_version, 1);
+        assert_eq!(status.backup_id.as_str(), "fbk_test_001");
+        assert!(status.ready);
+        assert!(!status.complete);
+        assert_eq!(status.operation_count, 8);
+        assert_eq!(status.ready_operations, 8);
+        assert_eq!(status.next_ready_sequence, Some(0));
+        assert_eq!(
+            status.next_ready_operation,
+            Some(RestoreApplyOperationKind::UploadSnapshot)
+        );
+    }
+
+    // Ensure apply journal validation rejects inconsistent state counts.
+    #[test]
+    fn apply_journal_validation_rejects_count_mismatch() {
+        let manifest = valid_manifest(IdentityMode::Relocatable);
+
+        let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
+        let dry_run = RestoreApplyDryRun::try_from_plan(&plan, None).expect("dry-run should build");
+        let mut journal = RestoreApplyJournal::from_dry_run(&dry_run);
+        journal.blocked_operations = 0;
+
+        let err = journal.validate().expect_err("count mismatch should fail");
+
+        assert!(matches!(
+            err,
+            RestoreApplyJournalError::CountMismatch {
+                field: "blocked_operations",
+                ..
+            }
+        ));
+    }
+
+    // Ensure apply journal validation rejects duplicate operation sequences.
+    #[test]
+    fn apply_journal_validation_rejects_duplicate_sequences() {
+        let manifest = valid_manifest(IdentityMode::Relocatable);
+
+        let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
+        let dry_run = RestoreApplyDryRun::try_from_plan(&plan, None).expect("dry-run should build");
+        let mut journal = RestoreApplyJournal::from_dry_run(&dry_run);
+        journal.operations[1].sequence = journal.operations[0].sequence;
+
+        let err = journal
+            .validate()
+            .expect_err("duplicate sequence should fail");
+
+        assert!(matches!(
+            err,
+            RestoreApplyJournalError::DuplicateSequence(0)
+        ));
     }
 
     // Ensure apply dry-runs fail closed when a referenced artifact is missing.

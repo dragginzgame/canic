@@ -26,6 +26,10 @@ use crate::{
             CanisterOpsMetricOperation, CanisterOpsMetricOutcome, CanisterOpsMetricReason,
             CanisterOpsMetrics,
         },
+        runtime::metrics::provisioning::{
+            ProvisioningMetricOperation, ProvisioningMetricOutcome, ProvisioningMetricReason,
+            ProvisioningMetrics,
+        },
         storage::{
             index::{app::AppIndexOps, subnet::SubnetIndexOps},
             registry::subnet::SubnetRegistryOps,
@@ -135,14 +139,34 @@ impl ProvisionWorkflow {
         extra_arg: Option<Vec<u8>>,
     ) -> Result<Principal, InternalError> {
         // Resolve the approved install source before allocation begins.
+        record_provisioning(
+            role,
+            ProvisioningMetricOperation::ResolveModule,
+            ProvisioningMetricOutcome::Started,
+            ProvisioningMetricReason::Ok,
+        );
         let module_source = match ModuleSourceRuntimeApi::approved_module_source(role).await {
-            Ok(module_source) => module_source,
+            Ok(module_source) => {
+                record_provisioning(
+                    role,
+                    ProvisioningMetricOperation::ResolveModule,
+                    ProvisioningMetricOutcome::Completed,
+                    ProvisioningMetricReason::Ok,
+                );
+                module_source
+            }
             Err(err) => {
                 record_canister_op(
                     role,
                     CanisterOpsMetricOperation::Install,
                     CanisterOpsMetricOutcome::Failed,
                     CanisterOpsMetricReason::MissingWasm,
+                );
+                record_provisioning(
+                    role,
+                    ProvisioningMetricOperation::ResolveModule,
+                    ProvisioningMetricOutcome::Failed,
+                    ProvisioningMetricReason::MissingWasm,
                 );
                 return Err(err);
             }
@@ -294,51 +318,23 @@ async fn allocate_canister(
     role: &CanisterRole,
 ) -> Result<(Principal, AllocationSource), InternalError> {
     // use ConfigOps for a clean, ops-layer config lookup
-    let cfg = ConfigOps::current_subnet_canister(role)?;
+    record_provisioning(
+        role,
+        ProvisioningMetricOperation::Allocate,
+        ProvisioningMetricOutcome::Started,
+        ProvisioningMetricReason::Ok,
+    );
+    let cfg = match ConfigOps::current_subnet_canister(role) {
+        Ok(cfg) => cfg,
+        Err(err) => {
+            record_provisioning_failure(role, ProvisioningMetricOperation::Allocate, &err);
+            return Err(err);
+        }
+    };
     let target = cfg.initial_cycles;
 
-    // Reuse from pool
-    if let Some(pid) = PoolWorkflow::pop_oldest_ready() {
-        let mut current = MgmtOps::get_cycles(pid).await?;
-
-        if current < target {
-            let missing = target.to_u128().saturating_sub(current.to_u128());
-            if missing > 0 {
-                if let Err(err) = MgmtOps::deposit_cycles(pid, missing).await {
-                    record_canister_op(
-                        role,
-                        CanisterOpsMetricOperation::Create,
-                        CanisterOpsMetricOutcome::Failed,
-                        CanisterOpsMetricReason::PoolTopup,
-                    );
-                    return Err(err);
-                }
-                current = Cycles::new(current.to_u128() + missing);
-
-                log!(
-                    Topic::CanisterPool,
-                    Ok,
-                    "⚡ allocate_canister: topped up {pid} by {} to meet target {}",
-                    Cycles::from(missing),
-                    target
-                );
-            }
-        }
-
-        log!(
-            Topic::CanisterPool,
-            Ok,
-            "⚡ allocate_canister: reusing {pid} role={role} from pool (current {current})"
-        );
-
-        record_canister_op(
-            role,
-            CanisterOpsMetricOperation::Create,
-            CanisterOpsMetricOutcome::Completed,
-            CanisterOpsMetricReason::PoolReuse,
-        );
-
-        return Ok((pid, AllocationSource::Pool));
+    if let Some(allocation) = try_allocate_from_pool(role, target.clone()).await? {
+        return Ok(allocation);
     }
 
     // Create new canister
@@ -351,6 +347,12 @@ async fn allocate_canister(
                 CanisterOpsMetricOutcome::Failed,
                 CanisterOpsMetricReason::NewAllocation,
             );
+            record_provisioning(
+                role,
+                ProvisioningMetricOperation::Allocate,
+                ProvisioningMetricOutcome::Failed,
+                ProvisioningMetricReason::NewAllocation,
+            );
             return Err(err);
         }
     };
@@ -361,8 +363,94 @@ async fn allocate_canister(
         CanisterOpsMetricOutcome::Completed,
         CanisterOpsMetricReason::NewAllocation,
     );
+    record_provisioning(
+        role,
+        ProvisioningMetricOperation::Allocate,
+        ProvisioningMetricOutcome::Completed,
+        ProvisioningMetricReason::NewAllocation,
+    );
 
     Ok((pid, AllocationSource::New))
+}
+
+// Reuse a ready pool canister when one is available.
+async fn try_allocate_from_pool(
+    role: &CanisterRole,
+    target: Cycles,
+) -> Result<Option<(Principal, AllocationSource)>, InternalError> {
+    let Some(pid) = PoolWorkflow::pop_oldest_ready() else {
+        return Ok(None);
+    };
+
+    let mut current = match MgmtOps::get_cycles(pid).await {
+        Ok(current) => current,
+        Err(err) => {
+            record_provisioning_failure(role, ProvisioningMetricOperation::Allocate, &err);
+            return Err(err);
+        }
+    };
+
+    if current < target {
+        current = topup_pool_allocation(role, pid, current, target).await?;
+    }
+
+    log!(
+        Topic::CanisterPool,
+        Ok,
+        "⚡ allocate_canister: reusing {pid} role={role} from pool (current {current})"
+    );
+    record_canister_op(
+        role,
+        CanisterOpsMetricOperation::Create,
+        CanisterOpsMetricOutcome::Completed,
+        CanisterOpsMetricReason::PoolReuse,
+    );
+    record_provisioning(
+        role,
+        ProvisioningMetricOperation::Allocate,
+        ProvisioningMetricOutcome::Completed,
+        ProvisioningMetricReason::PoolReuse,
+    );
+
+    Ok(Some((pid, AllocationSource::Pool)))
+}
+
+// Top up a reused pool canister to the configured initial cycle target.
+async fn topup_pool_allocation(
+    role: &CanisterRole,
+    pid: Principal,
+    current: Cycles,
+    target: Cycles,
+) -> Result<Cycles, InternalError> {
+    let missing = target.to_u128().saturating_sub(current.to_u128());
+    if missing == 0 {
+        return Ok(current);
+    }
+
+    if let Err(err) = MgmtOps::deposit_cycles(pid, missing).await {
+        record_canister_op(
+            role,
+            CanisterOpsMetricOperation::Create,
+            CanisterOpsMetricOutcome::Failed,
+            CanisterOpsMetricReason::PoolTopup,
+        );
+        record_provisioning(
+            role,
+            ProvisioningMetricOperation::Allocate,
+            ProvisioningMetricOutcome::Failed,
+            ProvisioningMetricReason::PoolTopup,
+        );
+        return Err(err);
+    }
+
+    log!(
+        Topic::CanisterPool,
+        Ok,
+        "⚡ allocate_canister: topped up {pid} by {} to meet target {}",
+        Cycles::from(missing),
+        target
+    );
+    Ok(Cycles::new(current.to_u128() + missing))
 }
 
 /// Create a fresh canister on the IC with the configured controllers.
@@ -399,6 +487,12 @@ async fn install_canister(
     module_source: &ApprovedModuleSource,
     extra_arg: Option<Vec<u8>>,
 ) -> Result<(), InternalError> {
+    record_provisioning(
+        role,
+        ProvisioningMetricOperation::Install,
+        ProvisioningMetricOutcome::Started,
+        ProvisioningMetricReason::Ok,
+    );
     record_canister_op(
         role,
         CanisterOpsMetricOperation::Install,
@@ -410,6 +504,7 @@ async fn install_canister(
         Ok(payload) => payload,
         Err(err) => {
             record_canister_op_failure(role, CanisterOpsMetricOperation::Install, &err);
+            record_provisioning_failure(role, ProvisioningMetricOperation::Install, &err);
             return Err(err);
         }
     };
@@ -424,6 +519,12 @@ async fn install_canister(
             CanisterOpsMetricOutcome::Failed,
             CanisterOpsMetricReason::Topology,
         );
+        record_provisioning(
+            role,
+            ProvisioningMetricOperation::Install,
+            ProvisioningMetricOutcome::Failed,
+            ProvisioningMetricReason::Topology,
+        );
         return Err(err);
     }
 
@@ -436,6 +537,7 @@ async fn install_canister(
         created_at,
     ) {
         record_canister_op_failure(role, CanisterOpsMetricOperation::Install, &err);
+        record_provisioning_failure(role, ProvisioningMetricOperation::Install, &err);
         return Err(err);
     }
 
@@ -449,6 +551,7 @@ async fn install_canister(
     .await
     {
         record_canister_op_failure(role, CanisterOpsMetricOperation::Install, &err);
+        record_provisioning_failure(role, ProvisioningMetricOperation::Install, &err);
 
         let removed = SubnetRegistryOps::remove(&pid);
         if removed.is_none() {
@@ -477,6 +580,12 @@ async fn install_canister(
         CanisterOpsMetricOutcome::Completed,
         CanisterOpsMetricReason::Ok,
     );
+    record_provisioning(
+        role,
+        ProvisioningMetricOperation::Install,
+        ProvisioningMetricOutcome::Completed,
+        ProvisioningMetricReason::Ok,
+    );
 
     Ok(())
 }
@@ -502,6 +611,30 @@ fn record_canister_op_failure(
         operation,
         CanisterOpsMetricOutcome::Failed,
         CanisterOpsMetricReason::from_error(err),
+    );
+}
+
+// Record one provisioning metric for a known role.
+fn record_provisioning(
+    role: &CanisterRole,
+    operation: ProvisioningMetricOperation,
+    outcome: ProvisioningMetricOutcome,
+    reason: ProvisioningMetricReason,
+) {
+    ProvisioningMetrics::record(operation, role, outcome, reason);
+}
+
+// Record one failed provisioning metric using the structured error category.
+fn record_provisioning_failure(
+    role: &CanisterRole,
+    operation: ProvisioningMetricOperation,
+    err: &InternalError,
+) {
+    record_provisioning(
+        role,
+        operation,
+        ProvisioningMetricOutcome::Failed,
+        ProvisioningMetricReason::from_error(err),
     );
 }
 

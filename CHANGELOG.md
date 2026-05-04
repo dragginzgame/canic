@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.30.x] - 2026-05-03 - Fleet Snapshot Backups
 
+- `0.30.21` adds an initial restore apply journal and `canic restore apply-status` so dry-runs can emit and summarize operation states before any mutating restore execution is enabled, and adds first-class `Provisioning` metrics for create, install, propagation, and upgrade workflow visibility.
+
+```bash
+canic restore apply \
+  --plan restore-plan.json \
+  --status restore-status.json \
+  --backup-dir backups/<run-id> \
+  --dry-run \
+  --out restore-apply-dry-run.json \
+  --journal-out restore-apply-journal.json
+```
+
+```bash
+canic restore apply-status \
+  --journal restore-apply-journal.json \
+  --out restore-apply-status.json
+```
+
 - `0.30.20` lets `canic restore apply --dry-run` validate restore artifacts under a backup directory before any future restore execution path can rely on the plan, and adds first-class `Intent` and `PlatformCall` metrics for reservation and platform-call visibility.
 
 ```bash

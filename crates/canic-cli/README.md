@@ -160,12 +160,23 @@ canic restore apply \
   --status restore-status.json \
   --backup-dir backups/<run-id> \
   --dry-run \
-  --out restore-apply-dry-run.json
+  --out restore-apply-dry-run.json \
+  --journal-out restore-apply-journal.json
 ```
 
 Apply dry-run output expands the restore phases into ordered upload, load,
 reinstall, and member verification operations. When `--backup-dir` is supplied,
 the dry-run also verifies that referenced artifact paths stay under that backup
 directory, exist on disk, and match their expected SHA-256 checksums when the
-plan includes checksums. The command requires `--dry-run`; real restore
+plan includes checksums. When `--journal-out` is supplied, the command also
+writes an initial apply journal with each operation marked `ready` or `blocked`
+and stable blocking reasons. The command requires `--dry-run`; real restore
 execution is intentionally not enabled yet.
+
+Summarize a restore apply journal:
+
+```bash
+canic restore apply-status \
+  --journal restore-apply-journal.json \
+  --out restore-apply-status.json
+```

@@ -82,6 +82,10 @@ mod tests {
                 PlatformCallMetricSurface, PlatformCallMetrics,
             },
             pool::{PoolMetricOperation, PoolMetricOutcome, PoolMetricReason, PoolMetrics},
+            provisioning::{
+                ProvisioningMetricOperation, ProvisioningMetricOutcome, ProvisioningMetricReason,
+                ProvisioningMetrics,
+            },
             replay::{
                 ReplayMetricOperation, ReplayMetricOutcome, ReplayMetricReason, ReplayMetrics,
             },
@@ -155,6 +159,43 @@ mod tests {
     fn page_sorts_new_multi_label_metric_families_before_paginating() {
         metrics::reset_for_tests();
 
+        record_multi_label_sort_metrics();
+
+        assert_first_metric_labels(MetricsKind::CanisterOps, ["create", "app", "started", "ok"]);
+        assert_first_metric_labels(
+            MetricsKind::WasmStore,
+            ["chunk_upload", "bootstrap", "skipped", "cache_hit"],
+        );
+        assert_first_metric_labels(
+            MetricsKind::Cascade,
+            ["child_send", "state", "failed", "send_failed"],
+        );
+        assert_first_metric_labels(
+            MetricsKind::Directory,
+            ["classify", "completed", "pending_fresh"],
+        );
+        assert_first_metric_labels(MetricsKind::Pool, ["create_empty", "completed", "ok"]);
+        assert_first_metric_labels(MetricsKind::Replay, ["check", "completed", "fresh"]);
+        assert_first_metric_labels(
+            MetricsKind::Intent,
+            ["call", "capacity_check", "failed", "capacity"],
+        );
+        assert_first_metric_labels(
+            MetricsKind::PlatformCall,
+            ["generic", "bounded_wait", "started", "ok"],
+        );
+        assert_first_metric_labels(
+            MetricsKind::Provisioning,
+            ["allocate", "app", "completed", "new_allocation"],
+        );
+        assert_first_metric_labels(
+            MetricsKind::Scaling,
+            ["bootstrap_pool", "skipped", "target_satisfied"],
+        );
+    }
+
+    // Seed multi-label families used by sorting and pagination coverage.
+    fn record_multi_label_sort_metrics() {
         CanisterOpsMetrics::record(
             CanisterOpsMetricOperation::Upgrade,
             &CanisterRole::new("worker"),
@@ -214,6 +255,7 @@ mod tests {
         record_replay_sort_metrics();
         record_intent_sort_metrics();
         record_platform_call_sort_metrics();
+        record_provisioning_sort_metrics();
         ScalingMetrics::record(
             ScalingMetricOperation::CreateWorker,
             ScalingMetricOutcome::Completed,
@@ -223,34 +265,6 @@ mod tests {
             ScalingMetricOperation::BootstrapPool,
             ScalingMetricOutcome::Skipped,
             ScalingMetricReason::TargetSatisfied,
-        );
-
-        assert_first_metric_labels(MetricsKind::CanisterOps, ["create", "app", "started", "ok"]);
-        assert_first_metric_labels(
-            MetricsKind::WasmStore,
-            ["chunk_upload", "bootstrap", "skipped", "cache_hit"],
-        );
-        assert_first_metric_labels(
-            MetricsKind::Cascade,
-            ["child_send", "state", "failed", "send_failed"],
-        );
-        assert_first_metric_labels(
-            MetricsKind::Directory,
-            ["classify", "completed", "pending_fresh"],
-        );
-        assert_first_metric_labels(MetricsKind::Pool, ["create_empty", "completed", "ok"]);
-        assert_first_metric_labels(MetricsKind::Replay, ["check", "completed", "fresh"]);
-        assert_first_metric_labels(
-            MetricsKind::Intent,
-            ["call", "capacity_check", "failed", "capacity"],
-        );
-        assert_first_metric_labels(
-            MetricsKind::PlatformCall,
-            ["generic", "bounded_wait", "started", "ok"],
-        );
-        assert_first_metric_labels(
-            MetricsKind::Scaling,
-            ["bootstrap_pool", "skipped", "target_satisfied"],
         );
     }
 
@@ -327,6 +341,22 @@ mod tests {
             PlatformCallMetricMode::BoundedWait,
             PlatformCallMetricOutcome::Started,
             PlatformCallMetricReason::Ok,
+        );
+    }
+
+    // Seed provisioning rows used by multi-family sorting coverage.
+    fn record_provisioning_sort_metrics() {
+        ProvisioningMetrics::record(
+            ProvisioningMetricOperation::Upgrade,
+            &CanisterRole::new("worker"),
+            ProvisioningMetricOutcome::Failed,
+            ProvisioningMetricReason::ManagementCall,
+        );
+        ProvisioningMetrics::record(
+            ProvisioningMetricOperation::Allocate,
+            &CanisterRole::new("app"),
+            ProvisioningMetricOutcome::Completed,
+            ProvisioningMetricReason::NewAllocation,
         );
     }
 

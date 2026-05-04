@@ -12,6 +12,7 @@ pub mod inter_canister_call;
 pub mod lifecycle;
 pub mod platform_call;
 pub mod pool;
+pub mod provisioning;
 pub mod recording;
 pub mod replay;
 pub mod root_capability;
@@ -41,6 +42,7 @@ use {
     lifecycle::LifecycleMetrics,
     platform_call::PlatformCallMetrics,
     pool::PoolMetrics,
+    provisioning::ProvisioningMetrics,
     replay::ReplayMetrics,
     root_capability::RootCapabilityMetrics,
     scaling::ScalingMetrics,
@@ -71,6 +73,7 @@ pub fn entries(kind: MetricsKind) -> Vec<MetricEntry> {
         MetricsKind::Perf => perf_entries(),
         MetricsKind::PlatformCall => platform_call_entries(),
         MetricsKind::Pool => pool_entries(),
+        MetricsKind::Provisioning => provisioning_entries(),
         MetricsKind::Replay => replay_entries(),
         MetricsKind::RootCapability => root_capability_entries(),
         MetricsKind::Scaling => scaling_entries(),
@@ -98,6 +101,7 @@ pub fn reset_for_tests() {
     IntentMetrics::reset();
     LifecycleMetrics::reset();
     PoolMetrics::reset();
+    ProvisioningMetrics::reset();
     ReplayMetrics::reset();
     RootCapabilityMetrics::reset();
     ScalingMetrics::reset();
@@ -136,6 +140,24 @@ fn intent_entries() -> Vec<MetricEntry> {
             labels: vec![
                 key.surface.metric_label().to_string(),
                 key.operation.metric_label().to_string(),
+                key.outcome.metric_label().to_string(),
+                key.reason.metric_label().to_string(),
+            ],
+            principal: None,
+            value: MetricValue::Count(count),
+        })
+        .collect()
+}
+
+/// Project provisioning workflow counters into the unified public metrics row shape.
+#[must_use]
+fn provisioning_entries() -> Vec<MetricEntry> {
+    ProvisioningMetrics::snapshot()
+        .into_iter()
+        .map(|(key, count)| MetricEntry {
+            labels: vec![
+                key.operation.metric_label().to_string(),
+                key.role,
                 key.outcome.metric_label().to_string(),
                 key.reason.metric_label().to_string(),
             ],
@@ -577,6 +599,10 @@ mod tests {
                 PlatformCallMetricSurface, PlatformCallMetrics,
             },
             pool::{PoolMetricOperation, PoolMetricOutcome, PoolMetricReason, PoolMetrics},
+            provisioning::{
+                ProvisioningMetricOperation, ProvisioningMetricOutcome, ProvisioningMetricReason,
+                ProvisioningMetrics,
+            },
             replay::{
                 ReplayMetricOperation, ReplayMetricOutcome, ReplayMetricReason, ReplayMetrics,
             },
@@ -823,6 +849,40 @@ mod tests {
         assert_metric_count(
             &entries,
             &["import_queued", "skipped", "already_present"],
+            2,
+        );
+    }
+
+    // Verify provisioning metrics expose stable label rows and accumulate counts.
+    #[test]
+    fn provisioning_metrics_are_exposed_with_stable_labels() {
+        reset_for_tests();
+
+        ProvisioningMetrics::record(
+            ProvisioningMetricOperation::ResolveModule,
+            &CanisterRole::new("app"),
+            ProvisioningMetricOutcome::Started,
+            ProvisioningMetricReason::Ok,
+        );
+        ProvisioningMetrics::record(
+            ProvisioningMetricOperation::Install,
+            &CanisterRole::new("worker"),
+            ProvisioningMetricOutcome::Failed,
+            ProvisioningMetricReason::MissingWasm,
+        );
+        ProvisioningMetrics::record(
+            ProvisioningMetricOperation::Install,
+            &CanisterRole::new("worker"),
+            ProvisioningMetricOutcome::Failed,
+            ProvisioningMetricReason::MissingWasm,
+        );
+
+        let entries = entries(MetricsKind::Provisioning);
+
+        assert_metric_count(&entries, &["resolve_module", "app", "started", "ok"], 1);
+        assert_metric_count(
+            &entries,
+            &["install", "worker", "failed", "missing_wasm"],
             2,
         );
     }
@@ -1126,6 +1186,12 @@ mod tests {
             PoolMetricOutcome::Started,
             PoolMetricReason::Ok,
         );
+        ProvisioningMetrics::record(
+            ProvisioningMetricOperation::Create,
+            &CanisterRole::new("app"),
+            ProvisioningMetricOutcome::Started,
+            ProvisioningMetricReason::Ok,
+        );
         ReplayMetrics::record(
             ReplayMetricOperation::Check,
             ReplayMetricOutcome::Completed,
@@ -1185,6 +1251,7 @@ mod tests {
             MetricsKind::Perf,
             MetricsKind::PlatformCall,
             MetricsKind::Pool,
+            MetricsKind::Provisioning,
             MetricsKind::Replay,
             MetricsKind::RootCapability,
             MetricsKind::Scaling,

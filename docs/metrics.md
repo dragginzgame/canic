@@ -54,6 +54,7 @@ rather than as a successful zero-cost query measurement.
 | `Perf` | `[endpoint, name]`, `[timer, label]`, or `[checkpoint, scope, label]` | `None` | `CountAndU64` | `value_u64` is total instructions across samples. |
 | `PlatformCall` | `[surface, mode, outcome, reason]` | `None` | `Count` | All dimensions are fixed enums for generic IC calls, management calls, ledgers, ECDSA, HTTP outcalls, and XRC. |
 | `Pool` | `[operation, outcome, reason]` | `None` | `Count` | All dimensions are fixed enums for pool create/import/recycle/reset/scheduler visibility. |
+| `Provisioning` | `[operation, role, outcome, reason]` | `None` | `Count` | Operation, outcome, and reason are fixed enums for create/install/upgrade workflow phases. Role labels come from configured canister roles, plus `unknown` when registry lookup fails. |
 | `Replay` | `[operation, outcome, reason]` | `None` | `Count` | All dimensions are fixed enums for root capability replay checks, reservation, cached decode, commit, and abort visibility. |
 | `RootCapability` | `[capability, event_type, outcome, proof_mode]` | `None` | `Count` | All dimensions are fixed enums. |
 | `Scaling` | `[operation, outcome, reason]` | `None` | `Count` | All dimensions are fixed enums for scaling policy planning, startup warmup, worker creation, and registry updates. |
@@ -499,6 +500,47 @@ Reasons:
 - `ok`
 - `policy_denied`
 - `registered_in_subnet`
+- `unknown`
+
+### `Provisioning`
+
+Provisioning rows expose workflow-level create, install, propagation, and
+upgrade progress without using canister principals, module hashes, chunk hashes,
+or parent principals as dimensions. Use `CanisterOps` for lower-level
+management operation visibility and `PlatformCall` for platform-call outcomes.
+
+Operations:
+
+- `allocate`
+- `create`
+- `install`
+- `propagate_state`
+- `propagate_topology`
+- `resolve_module`
+- `upgrade`
+
+Outcomes:
+
+- `completed`
+- `failed`
+- `skipped`
+- `started`
+
+Reasons:
+
+- `already_current`
+- `invalid_state`
+- `management_call`
+- `missing_wasm`
+- `new_allocation`
+- `not_found`
+- `ok`
+- `policy_denied`
+- `pool_reuse`
+- `pool_topup`
+- `state_propagation`
+- `topology`
+- `topology_propagation`
 - `unknown`
 
 ### `Replay`

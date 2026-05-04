@@ -28,6 +28,7 @@ pub enum MetricsKind {
     Perf,
     PlatformCall,
     Pool,
+    Provisioning,
     Replay,
     RootCapability,
     Scaling,

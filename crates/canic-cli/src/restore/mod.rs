@@ -2,8 +2,9 @@ use canic_backup::{
     manifest::FleetBackupManifest,
     persistence::{BackupLayout, PersistenceError},
     restore::{
-        RestoreApplyDryRun, RestoreApplyDryRunError, RestoreMapping, RestorePlan, RestorePlanError,
-        RestorePlanner, RestoreStatus,
+        RestoreApplyDryRun, RestoreApplyDryRunError, RestoreApplyJournal, RestoreApplyJournalError,
+        RestoreApplyJournalStatus, RestoreMapping, RestorePlan, RestorePlanError, RestorePlanner,
+        RestoreStatus,
     },
 };
 use std::{
@@ -61,6 +62,9 @@ pub enum RestoreCommandError {
 
     #[error(transparent)]
     RestoreApplyDryRun(#[from] RestoreApplyDryRunError),
+
+    #[error(transparent)]
+    RestoreApplyJournal(#[from] RestoreApplyJournalError),
 }
 
 ///
@@ -185,6 +189,7 @@ pub struct RestoreApplyOptions {
     pub status: Option<PathBuf>,
     pub backup_dir: Option<PathBuf>,
     pub out: Option<PathBuf>,
+    pub journal_out: Option<PathBuf>,
     pub dry_run: bool,
 }
 
@@ -198,6 +203,7 @@ impl RestoreApplyOptions {
         let mut status = None;
         let mut backup_dir = None;
         let mut out = None;
+        let mut journal_out = None;
         let mut dry_run = false;
 
         let mut args = args.into_iter();
@@ -212,6 +218,9 @@ impl RestoreApplyOptions {
                     backup_dir = Some(PathBuf::from(next_value(&mut args, "--backup-dir")?));
                 }
                 "--out" => out = Some(PathBuf::from(next_value(&mut args, "--out")?)),
+                "--journal-out" => {
+                    journal_out = Some(PathBuf::from(next_value(&mut args, "--journal-out")?));
+                }
                 "--dry-run" => dry_run = true,
                 "--help" | "-h" => return Err(RestoreCommandError::Usage(usage())),
                 _ => return Err(RestoreCommandError::UnknownOption(arg)),
@@ -227,7 +236,47 @@ impl RestoreApplyOptions {
             status,
             backup_dir,
             out,
+            journal_out,
             dry_run,
+        })
+    }
+}
+
+///
+/// RestoreApplyStatusOptions
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RestoreApplyStatusOptions {
+    pub journal: PathBuf,
+    pub out: Option<PathBuf>,
+}
+
+impl RestoreApplyStatusOptions {
+    /// Parse restore apply-status options from CLI arguments.
+    pub fn parse<I>(args: I) -> Result<Self, RestoreCommandError>
+    where
+        I: IntoIterator<Item = OsString>,
+    {
+        let mut journal = None;
+        let mut out = None;
+
+        let mut args = args.into_iter();
+        while let Some(arg) = args.next() {
+            let arg = arg
+                .into_string()
+                .map_err(|_| RestoreCommandError::Usage(usage()))?;
+            match arg.as_str() {
+                "--journal" => journal = Some(PathBuf::from(next_value(&mut args, "--journal")?)),
+                "--out" => out = Some(PathBuf::from(next_value(&mut args, "--out")?)),
+                "--help" | "-h" => return Err(RestoreCommandError::Usage(usage())),
+                _ => return Err(RestoreCommandError::UnknownOption(arg)),
+            }
+        }
+
+        Ok(Self {
+            journal: journal.ok_or(RestoreCommandError::MissingOption("--journal"))?,
+            out,
         })
     }
 }
@@ -260,6 +309,13 @@ where
             let options = RestoreApplyOptions::parse(args)?;
             let dry_run = restore_apply_dry_run(&options)?;
             write_apply_dry_run(&options, &dry_run)?;
+            write_apply_journal_if_requested(&options, &dry_run)?;
+            Ok(())
+        }
+        "apply-status" => {
+            let options = RestoreApplyStatusOptions::parse(args)?;
+            let status = restore_apply_status(&options)?;
+            write_apply_status(&options, &status)?;
             Ok(())
         }
         "help" | "--help" | "-h" => Err(RestoreCommandError::Usage(usage())),
@@ -301,6 +357,14 @@ pub fn restore_apply_dry_run(
     }
 
     RestoreApplyDryRun::try_from_plan(&plan, status.as_ref()).map_err(RestoreCommandError::from)
+}
+
+/// Build a compact restore apply status from a journal file.
+pub fn restore_apply_status(
+    options: &RestoreApplyStatusOptions,
+) -> Result<RestoreApplyJournalStatus, RestoreCommandError> {
+    let journal = read_apply_journal(&options.journal)?;
+    Ok(journal.status())
 }
 
 // Enforce caller-requested restore plan requirements after the plan is emitted.
@@ -377,6 +441,14 @@ fn read_status(path: &PathBuf) -> Result<RestoreStatus, RestoreCommandError> {
     serde_json::from_str(&data).map_err(RestoreCommandError::from)
 }
 
+// Read and decode a restore apply journal from disk.
+fn read_apply_journal(path: &PathBuf) -> Result<RestoreApplyJournal, RestoreCommandError> {
+    let data = fs::read_to_string(path)?;
+    let journal: RestoreApplyJournal = serde_json::from_str(&data)?;
+    journal.validate()?;
+    Ok(journal)
+}
+
 // Write the computed plan to stdout or a requested output file.
 fn write_plan(options: &RestorePlanOptions, plan: &RestorePlan) -> Result<(), RestoreCommandError> {
     if let Some(path) = &options.out {
@@ -428,6 +500,39 @@ fn write_apply_dry_run(
     Ok(())
 }
 
+// Write the initial apply journal when the caller requests one.
+fn write_apply_journal_if_requested(
+    options: &RestoreApplyOptions,
+    dry_run: &RestoreApplyDryRun,
+) -> Result<(), RestoreCommandError> {
+    let Some(path) = &options.journal_out else {
+        return Ok(());
+    };
+
+    let journal = RestoreApplyJournal::from_dry_run(dry_run);
+    let data = serde_json::to_vec_pretty(&journal)?;
+    fs::write(path, data)?;
+    Ok(())
+}
+
+// Write the computed apply journal status to stdout or a requested output file.
+fn write_apply_status(
+    options: &RestoreApplyStatusOptions,
+    status: &RestoreApplyJournalStatus,
+) -> Result<(), RestoreCommandError> {
+    if let Some(path) = &options.out {
+        let data = serde_json::to_vec_pretty(status)?;
+        fs::write(path, data)?;
+        return Ok(());
+    }
+
+    let stdout = io::stdout();
+    let mut handle = stdout.lock();
+    serde_json::to_writer_pretty(&mut handle, status)?;
+    writeln!(handle)?;
+    Ok(())
+}
+
 // Read the next required option value.
 fn next_value<I>(args: &mut I, option: &'static str) -> Result<String, RestoreCommandError>
 where
@@ -440,7 +545,7 @@ where
 
 // Return restore command usage text.
 const fn usage() -> &'static str {
-    "usage: canic restore plan (--manifest <file> | --backup-dir <dir>) [--mapping <file>] [--out <file>] [--require-verified] [--require-restore-ready]\n       canic restore status --plan <file> [--out <file>]\n       canic restore apply --plan <file> [--status <file>] [--backup-dir <dir>] --dry-run [--out <file>]"
+    "usage: canic restore plan (--manifest <file> | --backup-dir <dir>) [--mapping <file>] [--out <file>] [--require-verified] [--require-restore-ready]\n       canic restore status --plan <file> [--out <file>]\n       canic restore apply --plan <file> [--status <file>] [--backup-dir <dir>] --dry-run [--out <file>] [--journal-out <file>]\n       canic restore apply-status --journal <file> [--out <file>]"
 }
 
 #[cfg(test)]
@@ -534,6 +639,8 @@ mod tests {
             OsString::from("--dry-run"),
             OsString::from("--out"),
             OsString::from("restore-apply-dry-run.json"),
+            OsString::from("--journal-out"),
+            OsString::from("restore-apply-journal.json"),
         ])
         .expect("parse apply options");
 
@@ -544,7 +651,29 @@ mod tests {
             options.out,
             Some(PathBuf::from("restore-apply-dry-run.json"))
         );
+        assert_eq!(
+            options.journal_out,
+            Some(PathBuf::from("restore-apply-journal.json"))
+        );
         assert!(options.dry_run);
+    }
+
+    // Ensure restore apply-status options parse the intended journal command.
+    #[test]
+    fn parses_restore_apply_status_options() {
+        let options = RestoreApplyStatusOptions::parse([
+            OsString::from("--journal"),
+            OsString::from("restore-apply-journal.json"),
+            OsString::from("--out"),
+            OsString::from("restore-apply-status.json"),
+        ])
+        .expect("parse apply-status options");
+
+        assert_eq!(options.journal, PathBuf::from("restore-apply-journal.json"));
+        assert_eq!(
+            options.out,
+            Some(PathBuf::from("restore-apply-status.json"))
+        );
     }
 
     // Ensure restore apply refuses non-dry-run execution while apply is scaffolded.
@@ -899,7 +1028,9 @@ mod tests {
         fs::create_dir_all(&root).expect("create temp root");
         let plan_path = root.join("restore-plan.json");
         let out_path = root.join("restore-apply-dry-run.json");
-        let mut manifest = valid_manifest();
+        let journal_path = root.join("restore-apply-journal.json");
+        let status_path = root.join("restore-apply-status.json");
+        let mut manifest = restore_ready_manifest();
         write_manifest_artifacts(&root, &mut manifest);
         let plan = RestorePlanner::plan(&manifest, None).expect("build plan");
 
@@ -918,8 +1049,18 @@ mod tests {
             OsString::from("--dry-run"),
             OsString::from("--out"),
             OsString::from(out_path.as_os_str()),
+            OsString::from("--journal-out"),
+            OsString::from(journal_path.as_os_str()),
         ])
         .expect("write apply dry-run");
+        run([
+            OsString::from("apply-status"),
+            OsString::from("--journal"),
+            OsString::from(journal_path.as_os_str()),
+            OsString::from("--out"),
+            OsString::from(status_path.as_os_str()),
+        ])
+        .expect("write apply status");
 
         let dry_run: RestoreApplyDryRun =
             serde_json::from_slice(&fs::read(&out_path).expect("read dry-run"))
@@ -927,12 +1068,65 @@ mod tests {
         let validation = dry_run
             .artifact_validation
             .expect("artifact validation should be present");
+        let journal_json: serde_json::Value =
+            serde_json::from_slice(&fs::read(&journal_path).expect("read journal"))
+                .expect("decode journal");
+        let status_json: serde_json::Value =
+            serde_json::from_slice(&fs::read(&status_path).expect("read apply status"))
+                .expect("decode apply status");
 
         fs::remove_dir_all(root).expect("remove temp root");
         assert_eq!(validation.checked_members, 2);
         assert!(validation.artifacts_present);
         assert!(validation.checksums_verified);
         assert_eq!(validation.members_with_expected_checksums, 2);
+        assert_eq!(journal_json["ready"], true);
+        assert_eq!(journal_json["operation_count"], 8);
+        assert_eq!(journal_json["ready_operations"], 8);
+        assert_eq!(journal_json["blocked_operations"], 0);
+        assert_eq!(journal_json["operations"][0]["state"], "ready");
+        assert_eq!(status_json["ready"], true);
+        assert_eq!(status_json["operation_count"], 8);
+        assert_eq!(status_json["next_ready_sequence"], 0);
+        assert_eq!(status_json["next_ready_operation"], "upload-snapshot");
+    }
+
+    // Ensure apply-status rejects structurally inconsistent journals.
+    #[test]
+    fn run_restore_apply_status_rejects_invalid_journal() {
+        let root = temp_dir("canic-cli-restore-apply-status-invalid");
+        fs::create_dir_all(&root).expect("create temp root");
+        let journal_path = root.join("restore-apply-journal.json");
+        let out_path = root.join("restore-apply-status.json");
+        let plan = RestorePlanner::plan(&restore_ready_manifest(), None).expect("build plan");
+        let dry_run = RestoreApplyDryRun::try_from_plan(&plan, None).expect("dry-run");
+        let mut journal = RestoreApplyJournal::from_dry_run(&dry_run);
+        journal.operation_count += 1;
+
+        fs::write(
+            &journal_path,
+            serde_json::to_vec(&journal).expect("serialize journal"),
+        )
+        .expect("write journal");
+
+        let err = run([
+            OsString::from("apply-status"),
+            OsString::from("--journal"),
+            OsString::from(journal_path.as_os_str()),
+            OsString::from("--out"),
+            OsString::from(out_path.as_os_str()),
+        ])
+        .expect_err("invalid journal should fail");
+
+        assert!(!out_path.exists());
+        fs::remove_dir_all(root).expect("remove temp root");
+        assert!(matches!(
+            err,
+            RestoreCommandError::RestoreApplyJournal(RestoreApplyJournalError::CountMismatch {
+                field: "operation_count",
+                ..
+            })
+        ));
     }
 
     // Ensure restore apply dry-run rejects status files from another plan.

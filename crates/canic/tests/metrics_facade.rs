@@ -40,6 +40,7 @@ fn new_metric_families_are_public_facade_usable() {
         MetricsKind::InterCanisterCall,
         MetricsKind::PlatformCall,
         MetricsKind::Pool,
+        MetricsKind::Provisioning,
         MetricsKind::Replay,
         MetricsKind::Scaling,
         #[cfg(feature = "sharding")]
