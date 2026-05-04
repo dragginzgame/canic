@@ -40,6 +40,7 @@ rather than as a successful zero-cost query measurement.
 | `MetricsKind` | Labels | Principal | Value | Cardinality notes |
 | ------------- | ------ | --------- | ----- | ----------------- |
 | `Access` | `[endpoint, kind, predicate]` | `None` | `Count` | Bounded by macro-generated endpoint names and static access predicate names. |
+| `CanisterOps` | `[operation, role, outcome, reason]` | `None` | `Count` | Operation, outcome, and reason are fixed enums. Role labels come from configured canister roles, plus `unknown` and `unscoped` fallbacks. |
 | `CyclesFunding` | `[metric]` or `[metric, reason]` | Child principal for child-scoped rows; otherwise `None` | `U128` | Child-principal rows intentionally scale with registered children. Metric and reason dimensions are fixed enums. |
 | `CyclesTopup` | `[metric]` | `None` | `Count` | Fixed auto-top-up decision and outcome labels. |
 | `DelegatedAuth` | `[delegated_auth_authority]` | Verified signer authority | `Count` | Bounded by configured delegated-auth signer authorities, not request callers. |
@@ -50,6 +51,8 @@ rather than as a successful zero-cost query measurement.
 | `RootCapability` | `[capability, event_type, outcome, proof_mode]` | `None` | `Count` | All dimensions are fixed enums. |
 | `System` | `[kind]` | `None` | `Count` | Fixed system operation labels. |
 | `Timer` | `[mode, label]` | `None` | `CountAndU64` | `count` is executions; `value_u64` is scheduled delay in milliseconds. Timer labels should be static. |
+| `WasmStore` | `[operation, source, outcome, reason]` | `None` | `Count` | All dimensions are fixed enums for module-source resolution and wasm-store publication visibility. |
+| `WasmStore` | `[operation, source, outcome, reason]` | `None` | `Count` | All dimensions are fixed enums for source resolution, bootstrap chunk sync, and managed store publication. |
 
 ## Family Details
 
@@ -64,6 +67,49 @@ Access rows are emitted only for denied access checks.
 - `env`
 - `guard`
 - `rule`
+
+### `CanisterOps`
+
+Canister operation rows expose higher-level fleet operation outcomes above the
+raw management-canister system counters.
+
+Operations:
+
+- `create`
+- `delete`
+- `install`
+- `reinstall`
+- `restore`
+- `snapshot`
+- `upgrade`
+
+Outcomes:
+
+- `started`
+- `completed`
+- `failed`
+- `skipped`
+
+Reasons:
+
+- `already_exists`
+- `cycles`
+- `invalid_state`
+- `management_call`
+- `missing_wasm`
+- `new_allocation`
+- `not_found`
+- `ok`
+- `policy_denied`
+- `pool_reuse`
+- `pool_topup`
+- `state_propagation`
+- `topology`
+- `topology_propagation`
+- `unknown`
+
+Current rows are emitted by root create/upgrade workflows, install/delete
+provisioning helpers, and root bootstrap create skips.
 
 ### `CyclesFunding`
 
@@ -157,3 +203,93 @@ Timer rows use `CountAndU64`:
 - `value_u64`: timer delay in milliseconds
 
 Scheduling is also counted separately in `MetricsKind::System` as `TimerScheduled`.
+
+### `WasmStore`
+
+Wasm-store rows expose module-source resolution, bootstrap chunk sync, and
+managed publication progress.
+
+Operations:
+
+- `bootstrap_chunk_sync`
+- `chunk_publish`
+- `chunk_upload`
+- `manifest_promote`
+- `prepare`
+- `release_publish`
+- `source_resolve`
+
+Sources:
+
+- `bootstrap`
+- `embedded`
+- `managed_fleet`
+- `resolver`
+- `store`
+- `target_store`
+
+Outcomes:
+
+- `started`
+- `completed`
+- `failed`
+- `skipped`
+
+Reasons:
+
+- `cache_hit`
+- `cache_miss`
+- `capacity`
+- `hash_mismatch`
+- `invalid_state`
+- `management_call`
+- `missing_chunk`
+- `missing_manifest`
+- `ok`
+- `store_call`
+- `unsupported_inline`
+
+### `WasmStore`
+
+Wasm-store rows expose install-source resolution and store publication progress
+without using template IDs, versions, canister IDs, or bindings as labels.
+
+Operations:
+
+- `bootstrap_chunk_sync`
+- `chunk_publish`
+- `chunk_upload`
+- `manifest_promote`
+- `prepare`
+- `release_publish`
+- `source_resolve`
+
+Sources:
+
+- `bootstrap`
+- `embedded`
+- `managed_fleet`
+- `resolver`
+- `store`
+- `target_store`
+
+Outcomes:
+
+- `started`
+- `completed`
+- `failed`
+- `skipped`
+
+Reasons:
+
+- `cache_hit`
+- `cache_miss`
+- `capacity`
+- `hash_mismatch`
+- `invalid_state`
+- `management_call`
+- `missing_chunk`
+- `missing_manifest`
+- `ok`
+- `store_call`
+- `unsupported_inline`

@@ -2,13 +2,17 @@ mod propagation;
 
 use crate::{
     InternalError,
-    api::runtime::install::ModuleSourceRuntimeApi,
+    api::runtime::install::{ApprovedModuleSource, ModuleSourceRuntimeApi},
     domain::policy::{
         topology::{TopologyPolicy, TopologyPolicyError},
         upgrade::plan_upgrade,
     },
     ops::{
         ic::mgmt::{CanisterInstallMode, MgmtOps},
+        runtime::metrics::canister_ops::{
+            CanisterOpsMetricOperation, CanisterOpsMetricOutcome, CanisterOpsMetricReason,
+            CanisterOpsMetrics,
+        },
         storage::registry::subnet::SubnetRegistryOps,
         topology::policy::mapper::RegistryPolicyInputMapper,
     },
@@ -76,14 +80,68 @@ impl CanisterLifecycleWorkflow {
         parent: Principal,
         extra_arg: Option<Vec<u8>>,
     ) -> Result<CanisterLifecycleResult, InternalError> {
-        assert_registered_parent(parent)?;
+        record_canister_op(
+            &role,
+            CanisterOpsMetricOperation::Create,
+            CanisterOpsMetricOutcome::Started,
+            CanisterOpsMetricReason::Ok,
+        );
 
-        let pid = ProvisionWorkflow::create_and_install_canister(&role, parent, extra_arg).await?;
+        if let Err(err) = assert_registered_parent(parent) {
+            record_canister_op(
+                &role,
+                CanisterOpsMetricOperation::Create,
+                CanisterOpsMetricOutcome::Failed,
+                CanisterOpsMetricReason::Topology,
+            );
+            return Err(err);
+        }
 
-        assert_registered_immediate_parent(pid, parent)?;
+        let pid =
+            match ProvisionWorkflow::create_and_install_canister(&role, parent, extra_arg).await {
+                Ok(pid) => pid,
+                Err(err) => {
+                    record_canister_op_failure(&role, CanisterOpsMetricOperation::Create, &err);
+                    return Err(err);
+                }
+            };
 
-        PropagationWorkflow::propagate_topology(pid).await?;
-        PropagationWorkflow::propagate_state(pid, &role).await?;
+        if let Err(err) = assert_registered_immediate_parent(pid, parent) {
+            record_canister_op(
+                &role,
+                CanisterOpsMetricOperation::Create,
+                CanisterOpsMetricOutcome::Failed,
+                CanisterOpsMetricReason::Topology,
+            );
+            return Err(err);
+        }
+
+        if let Err(err) = PropagationWorkflow::propagate_topology(pid).await {
+            record_canister_op(
+                &role,
+                CanisterOpsMetricOperation::Create,
+                CanisterOpsMetricOutcome::Failed,
+                CanisterOpsMetricReason::TopologyPropagation,
+            );
+            return Err(err);
+        }
+
+        if let Err(err) = PropagationWorkflow::propagate_state(pid, &role).await {
+            record_canister_op(
+                &role,
+                CanisterOpsMetricOperation::Create,
+                CanisterOpsMetricOutcome::Failed,
+                CanisterOpsMetricReason::StatePropagation,
+            );
+            return Err(err);
+        }
+
+        record_canister_op(
+            &role,
+            CanisterOpsMetricOperation::Create,
+            CanisterOpsMetricOutcome::Completed,
+            CanisterOpsMetricReason::Ok,
+        );
 
         Ok(CanisterLifecycleResult::created(pid))
     }
@@ -91,22 +149,21 @@ impl CanisterLifecycleWorkflow {
     // ───────────────────────── Upgrade ──────────────────────────
 
     async fn apply_upgrade(pid: Principal) -> Result<CanisterLifecycleResult, InternalError> {
-        let registry_data = SubnetRegistryOps::data();
-        let registry_input = RegistryPolicyInputMapper::record_to_policy_input(registry_data);
+        let (role, parent_pid) = upgrade_target(pid)?;
 
-        let record = SubnetRegistryOps::get(pid)
-            .ok_or_else(|| InternalError::from(TopologyPolicyError::RegistryEntryMissing(pid)))?;
+        record_canister_op(
+            &role,
+            CanisterOpsMetricOperation::Upgrade,
+            CanisterOpsMetricOutcome::Started,
+            CanisterOpsMetricReason::Ok,
+        );
 
-        let module_source = ModuleSourceRuntimeApi::approved_module_source(&record.role).await?;
+        let module_source = upgrade_module_source(&role).await?;
         let target_hash = module_source.module_hash().to_vec();
+        let current_hash = upgrade_current_hash(pid, &role).await?;
+        let plan = plan_upgrade(current_hash, target_hash.clone());
 
-        let status = MgmtOps::canister_status(pid).await?;
-        let plan = plan_upgrade(status.module_hash, target_hash.clone());
-
-        if let Some(parent_pid) = record.parent_pid {
-            TopologyPolicy::assert_parent_exists(&registry_input, parent_pid)?;
-            TopologyPolicy::assert_immediate_parent(&registry_input, pid, parent_pid)?;
-        }
+        assert_upgrade_parent(pid, parent_pid, &role)?;
 
         if !plan.should_upgrade {
             log!(
@@ -116,29 +173,167 @@ impl CanisterLifecycleWorkflow {
             );
 
             SubnetRegistryOps::update_module_hash(pid, target_hash.clone());
-
-            let registry_data = SubnetRegistryOps::data();
-            let registry_input = RegistryPolicyInputMapper::record_to_policy_input(registry_data);
-            TopologyPolicy::assert_module_hash(&registry_input, pid, &target_hash)?;
+            assert_upgrade_module_hash(pid, &target_hash, &role)?;
+            record_canister_op(
+                &role,
+                CanisterOpsMetricOperation::Upgrade,
+                CanisterOpsMetricOutcome::Skipped,
+                CanisterOpsMetricReason::AlreadyExists,
+            );
 
             return Ok(CanisterLifecycleResult::default());
         }
 
-        ModuleInstallWorkflow::install_code(
+        if let Err(err) = ModuleInstallWorkflow::install_code(
             CanisterInstallMode::Upgrade(None),
             pid,
             &module_source,
             (),
         )
-        .await?;
+        .await
+        {
+            record_canister_op_failure(&role, CanisterOpsMetricOperation::Upgrade, &err);
+            return Err(err);
+        }
         SubnetRegistryOps::update_module_hash(pid, target_hash.clone());
-
-        let registry_data = SubnetRegistryOps::data();
-        let registry_input = RegistryPolicyInputMapper::record_to_policy_input(registry_data);
-        TopologyPolicy::assert_module_hash(&registry_input, pid, &target_hash)?;
+        assert_upgrade_module_hash(pid, &target_hash, &role)?;
+        record_canister_op(
+            &role,
+            CanisterOpsMetricOperation::Upgrade,
+            CanisterOpsMetricOutcome::Completed,
+            CanisterOpsMetricReason::Ok,
+        );
 
         Ok(CanisterLifecycleResult::default())
     }
+}
+
+// Resolve the registry role and parent for one upgrade target.
+fn upgrade_target(pid: Principal) -> Result<(CanisterRole, Option<Principal>), InternalError> {
+    let Some(record) = SubnetRegistryOps::get(pid) else {
+        CanisterOpsMetrics::record_unknown_role(
+            CanisterOpsMetricOperation::Upgrade,
+            CanisterOpsMetricOutcome::Failed,
+            CanisterOpsMetricReason::NotFound,
+        );
+        return Err(InternalError::from(
+            TopologyPolicyError::RegistryEntryMissing(pid),
+        ));
+    };
+
+    Ok((record.role, record.parent_pid))
+}
+
+// Resolve the approved module source for one upgrade target role.
+async fn upgrade_module_source(role: &CanisterRole) -> Result<ApprovedModuleSource, InternalError> {
+    match ModuleSourceRuntimeApi::approved_module_source(role).await {
+        Ok(module_source) => Ok(module_source),
+        Err(err) => {
+            record_canister_op(
+                role,
+                CanisterOpsMetricOperation::Upgrade,
+                CanisterOpsMetricOutcome::Failed,
+                CanisterOpsMetricReason::MissingWasm,
+            );
+            Err(err)
+        }
+    }
+}
+
+// Read the currently installed module hash for one upgrade target.
+async fn upgrade_current_hash(
+    pid: Principal,
+    role: &CanisterRole,
+) -> Result<Option<Vec<u8>>, InternalError> {
+    match MgmtOps::canister_status(pid).await {
+        Ok(status) => Ok(status.module_hash),
+        Err(err) => {
+            record_canister_op_failure(role, CanisterOpsMetricOperation::Upgrade, &err);
+            Err(err)
+        }
+    }
+}
+
+// Assert the upgrade target is still attached to its recorded parent.
+fn assert_upgrade_parent(
+    pid: Principal,
+    parent_pid: Option<Principal>,
+    role: &CanisterRole,
+) -> Result<(), InternalError> {
+    let Some(parent_pid) = parent_pid else {
+        return Ok(());
+    };
+
+    let registry_data = SubnetRegistryOps::data();
+    let registry_input = RegistryPolicyInputMapper::record_to_policy_input(registry_data);
+
+    if let Err(err) = TopologyPolicy::assert_parent_exists(&registry_input, parent_pid) {
+        record_canister_op(
+            role,
+            CanisterOpsMetricOperation::Upgrade,
+            CanisterOpsMetricOutcome::Failed,
+            CanisterOpsMetricReason::Topology,
+        );
+        return Err(err);
+    }
+
+    if let Err(err) = TopologyPolicy::assert_immediate_parent(&registry_input, pid, parent_pid) {
+        record_canister_op(
+            role,
+            CanisterOpsMetricOperation::Upgrade,
+            CanisterOpsMetricOutcome::Failed,
+            CanisterOpsMetricReason::Topology,
+        );
+        return Err(err);
+    }
+
+    Ok(())
+}
+
+// Assert the registry reflects the target module hash after upgrade bookkeeping.
+fn assert_upgrade_module_hash(
+    pid: Principal,
+    target_hash: &[u8],
+    role: &CanisterRole,
+) -> Result<(), InternalError> {
+    let registry_data = SubnetRegistryOps::data();
+    let registry_input = RegistryPolicyInputMapper::record_to_policy_input(registry_data);
+
+    if let Err(err) = TopologyPolicy::assert_module_hash(&registry_input, pid, target_hash) {
+        record_canister_op(
+            role,
+            CanisterOpsMetricOperation::Upgrade,
+            CanisterOpsMetricOutcome::Failed,
+            CanisterOpsMetricReason::Topology,
+        );
+        return Err(err);
+    }
+
+    Ok(())
+}
+
+// Record one canister operation metric for a known role.
+fn record_canister_op(
+    role: &CanisterRole,
+    operation: CanisterOpsMetricOperation,
+    outcome: CanisterOpsMetricOutcome,
+    reason: CanisterOpsMetricReason,
+) {
+    CanisterOpsMetrics::record(operation, role, outcome, reason);
+}
+
+// Record one failed canister operation metric using the structured error category.
+fn record_canister_op_failure(
+    role: &CanisterRole,
+    operation: CanisterOpsMetricOperation,
+    err: &InternalError,
+) {
+    record_canister_op(
+        role,
+        operation,
+        CanisterOpsMetricOutcome::Failed,
+        CanisterOpsMetricReason::from_error(err),
+    );
 }
 
 // Check that the requested parent already exists without exporting the full registry.

@@ -27,3 +27,20 @@ fn metrics_query_page_is_public_facade_usable() {
     let entries: Vec<MetricEntry> = page.entries;
     assert!(entries.is_empty());
 }
+
+// Verify newly added metric families are reachable through the public facade.
+#[test]
+fn new_metric_families_are_public_facade_usable() {
+    for kind in [MetricsKind::CanisterOps, MetricsKind::WasmStore] {
+        let page = MetricsQuery::page(
+            kind,
+            PageRequest {
+                limit: 10,
+                offset: 0,
+            },
+        );
+
+        assert_eq!(page.total, 0);
+        assert!(page.entries.is_empty());
+    }
+}

@@ -4,6 +4,10 @@ use crate::{
     dto::error::Error,
     format::byte_size,
     ids::CanisterRole,
+    ops::runtime::metrics::wasm_store::{
+        WasmStoreMetricOperation, WasmStoreMetricOutcome, WasmStoreMetricReason,
+        WasmStoreMetricSource, WasmStoreMetrics,
+    },
 };
 use async_trait::async_trait;
 use std::{
@@ -199,19 +203,47 @@ impl ModuleSourceRuntimeApi {
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
             sources.get(role).cloned()
         }) {
+            WasmStoreMetrics::record(
+                WasmStoreMetricOperation::SourceResolve,
+                WasmStoreMetricSource::Embedded,
+                WasmStoreMetricOutcome::Completed,
+                WasmStoreMetricReason::Ok,
+            );
             return Ok(source);
         }
 
         let resolver = MODULE_SOURCE_RESOLVER.get().ok_or_else(|| {
+            WasmStoreMetrics::record(
+                WasmStoreMetricOperation::SourceResolve,
+                WasmStoreMetricSource::Resolver,
+                WasmStoreMetricOutcome::Failed,
+                WasmStoreMetricReason::InvalidState,
+            );
             InternalError::workflow(
                 InternalErrorOrigin::Workflow,
                 "module source resolver is not registered; root/control-plane install flows are unavailable".to_string(),
             )
         })?;
 
-        resolver
-            .approved_module_source(role)
-            .await
-            .map_err(InternalError::public)
+        match resolver.approved_module_source(role).await {
+            Ok(source) => {
+                WasmStoreMetrics::record(
+                    WasmStoreMetricOperation::SourceResolve,
+                    WasmStoreMetricSource::Resolver,
+                    WasmStoreMetricOutcome::Completed,
+                    WasmStoreMetricReason::Ok,
+                );
+                Ok(source)
+            }
+            Err(err) => {
+                WasmStoreMetrics::record(
+                    WasmStoreMetricOperation::SourceResolve,
+                    WasmStoreMetricSource::Resolver,
+                    WasmStoreMetricOutcome::Failed,
+                    WasmStoreMetricReason::StoreCall,
+                );
+                Err(InternalError::public(err))
+            }
+        }
     }
 }

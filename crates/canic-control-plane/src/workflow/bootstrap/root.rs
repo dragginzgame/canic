@@ -10,7 +10,9 @@ use crate::{
     workflow::runtime::template::WasmStorePublicationWorkflow,
 };
 use canic_core::api::lifecycle::metrics::{
-    LifecycleMetricOutcome, LifecycleMetricPhase, LifecycleMetricRole, LifecycleMetricsApi,
+    CanisterOpsMetricOperation, CanisterOpsMetricOutcome, CanisterOpsMetricReason,
+    CanisterOpsMetricsApi, LifecycleMetricOutcome, LifecycleMetricPhase, LifecycleMetricRole,
+    LifecycleMetricsApi,
 };
 use canic_core::api::runtime::install::ModuleSourceRuntimeApi;
 use canic_core::{__control_plane_core as cp_core, log, log::Topic};
@@ -619,11 +621,23 @@ async fn ensure_required_canisters(data: &RootBootstrapContext) -> Result<(), In
     for role in &data.subnet_cfg.auto_create {
         // ALWAYS re-check live registry
         if SubnetRegistryOps::has_role(role) {
+            CanisterOpsMetricsApi::record(
+                CanisterOpsMetricOperation::Create,
+                role,
+                CanisterOpsMetricOutcome::Skipped,
+                CanisterOpsMetricReason::AlreadyExists,
+            );
             log!(Topic::Init, Info, "auto_create: {role} present; skip");
             continue;
         }
 
         if !TemplateManifestOps::has_approved_for_role(role)? {
+            CanisterOpsMetricsApi::record(
+                CanisterOpsMetricOperation::Create,
+                role,
+                CanisterOpsMetricOutcome::Skipped,
+                CanisterOpsMetricReason::MissingWasm,
+            );
             log!(
                 Topic::Init,
                 Warn,
@@ -675,6 +689,12 @@ async fn ensure_required_wasm_store_canister() -> Result<(), InternalError> {
 
     let existing_bindings = WasmStorePublicationWorkflow::sync_registered_wasm_store_inventory();
     if !existing_bindings.is_empty() {
+        CanisterOpsMetricsApi::record(
+            CanisterOpsMetricOperation::Create,
+            &role,
+            CanisterOpsMetricOutcome::Skipped,
+            CanisterOpsMetricReason::AlreadyExists,
+        );
         log!(Topic::Init, Info, "ws: {role} present; skip");
         return Ok(());
     }

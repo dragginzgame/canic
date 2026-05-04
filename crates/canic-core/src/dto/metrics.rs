@@ -14,6 +14,7 @@ use crate::dto::prelude::*;
 #[remain::sorted]
 pub enum MetricsKind {
     Access,
+    CanisterOps,
     CyclesFunding,
     CyclesTopup,
     DelegatedAuth,
@@ -24,6 +25,7 @@ pub enum MetricsKind {
     RootCapability,
     System,
     Timer,
+    WasmStore,
 }
 
 //

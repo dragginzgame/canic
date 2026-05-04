@@ -22,6 +22,10 @@ use crate::{
             mgmt::{CanisterInstallMode, MgmtOps},
         },
         runtime::env::EnvOps,
+        runtime::metrics::canister_ops::{
+            CanisterOpsMetricOperation, CanisterOpsMetricOutcome, CanisterOpsMetricReason,
+            CanisterOpsMetrics,
+        },
         storage::{
             index::{app::AppIndexOps, subnet::SubnetIndexOps},
             registry::subnet::SubnetRegistryOps,
@@ -131,7 +135,18 @@ impl ProvisionWorkflow {
         extra_arg: Option<Vec<u8>>,
     ) -> Result<Principal, InternalError> {
         // Resolve the approved install source before allocation begins.
-        let module_source = ModuleSourceRuntimeApi::approved_module_source(role).await?;
+        let module_source = match ModuleSourceRuntimeApi::approved_module_source(role).await {
+            Ok(module_source) => module_source,
+            Err(err) => {
+                record_canister_op(
+                    role,
+                    CanisterOpsMetricOperation::Install,
+                    CanisterOpsMetricOutcome::Failed,
+                    CanisterOpsMetricReason::MissingWasm,
+                );
+                return Err(err);
+            }
+        };
 
         // Phase 1: allocation
         let (pid, source) = allocate_canister(role).await?;
@@ -183,16 +198,51 @@ impl ProvisionWorkflow {
     /// 3. Cascade topology
     /// 4. Sync directories
     pub async fn uninstall_and_delete_canister(pid: Principal) -> Result<(), InternalError> {
-        EnvOps::require_root()?;
+        if let Err(err) = EnvOps::require_root() {
+            CanisterOpsMetrics::record_unscoped(
+                CanisterOpsMetricOperation::Delete,
+                CanisterOpsMetricOutcome::Failed,
+                CanisterOpsMetricReason::from_error(&err),
+            );
+            return Err(err);
+        }
+
+        let role = SubnetRegistryOps::get(pid).map(|record| record.role);
+        record_delete_metric(
+            role.as_ref(),
+            CanisterOpsMetricOutcome::Started,
+            CanisterOpsMetricReason::Ok,
+        );
 
         // Phase 0: uninstall code
-        MgmtOps::uninstall_code(pid).await?;
+        if let Err(err) = MgmtOps::uninstall_code(pid).await {
+            record_delete_metric(
+                role.as_ref(),
+                CanisterOpsMetricOutcome::Failed,
+                CanisterOpsMetricReason::from_error(&err),
+            );
+            return Err(err);
+        }
 
         // Phase 1: stop the canister before deletion.
-        MgmtOps::stop_canister(pid).await?;
+        if let Err(err) = MgmtOps::stop_canister(pid).await {
+            record_delete_metric(
+                role.as_ref(),
+                CanisterOpsMetricOutcome::Failed,
+                CanisterOpsMetricReason::from_error(&err),
+            );
+            return Err(err);
+        }
 
         // Phase 2: delete the canister
-        MgmtOps::delete_canister(pid).await?;
+        if let Err(err) = MgmtOps::delete_canister(pid).await {
+            record_delete_metric(
+                role.as_ref(),
+                CanisterOpsMetricOutcome::Failed,
+                CanisterOpsMetricReason::from_error(&err),
+            );
+            return Err(err);
+        }
 
         // Phase 3: remove registry record
         let removed_entry = SubnetRegistryOps::remove(&pid);
@@ -210,6 +260,12 @@ impl ProvisionWorkflow {
                 "🗑️ delete_canister: {pid} not in registry"
             ),
         }
+
+        record_delete_metric(
+            role.as_ref(),
+            CanisterOpsMetricOutcome::Completed,
+            CanisterOpsMetricReason::Ok,
+        );
 
         Ok(())
     }
@@ -248,7 +304,15 @@ async fn allocate_canister(
         if current < target {
             let missing = target.to_u128().saturating_sub(current.to_u128());
             if missing > 0 {
-                MgmtOps::deposit_cycles(pid, missing).await?;
+                if let Err(err) = MgmtOps::deposit_cycles(pid, missing).await {
+                    record_canister_op(
+                        role,
+                        CanisterOpsMetricOperation::Create,
+                        CanisterOpsMetricOutcome::Failed,
+                        CanisterOpsMetricReason::PoolTopup,
+                    );
+                    return Err(err);
+                }
                 current = Cycles::new(current.to_u128() + missing);
 
                 log!(
@@ -267,11 +331,36 @@ async fn allocate_canister(
             "⚡ allocate_canister: reusing {pid} role={role} from pool (current {current})"
         );
 
+        record_canister_op(
+            role,
+            CanisterOpsMetricOperation::Create,
+            CanisterOpsMetricOutcome::Completed,
+            CanisterOpsMetricReason::PoolReuse,
+        );
+
         return Ok((pid, AllocationSource::Pool));
     }
 
     // Create new canister
-    let pid = create_canister_with_configured_controllers(role, target).await?;
+    let pid = match create_canister_with_configured_controllers(role, target).await {
+        Ok(pid) => pid,
+        Err(err) => {
+            record_canister_op(
+                role,
+                CanisterOpsMetricOperation::Create,
+                CanisterOpsMetricOutcome::Failed,
+                CanisterOpsMetricReason::NewAllocation,
+            );
+            return Err(err);
+        }
+    };
+
+    record_canister_op(
+        role,
+        CanisterOpsMetricOperation::Create,
+        CanisterOpsMetricOutcome::Completed,
+        CanisterOpsMetricReason::NewAllocation,
+    );
 
     Ok((pid, AllocationSource::New))
 }
@@ -310,15 +399,45 @@ async fn install_canister(
     module_source: &ApprovedModuleSource,
     extra_arg: Option<Vec<u8>>,
 ) -> Result<(), InternalError> {
-    let payload = ProvisionWorkflow::build_nonroot_init_payload(role, parent_pid)?;
+    record_canister_op(
+        role,
+        CanisterOpsMetricOperation::Install,
+        CanisterOpsMetricOutcome::Started,
+        CanisterOpsMetricReason::Ok,
+    );
+
+    let payload = match ProvisionWorkflow::build_nonroot_init_payload(role, parent_pid) {
+        Ok(payload) => payload,
+        Err(err) => {
+            record_canister_op_failure(role, CanisterOpsMetricOperation::Install, &err);
+            return Err(err);
+        }
+    };
     let module_hash = module_source.module_hash().to_vec();
 
     // Register before install so init hooks can observe the registry; roll back on failure.
     // otherwise if the init() tries to create a canister via root, it will panic
-    validate_registration_policy(role, parent_pid)?;
+    if let Err(err) = validate_registration_policy(role, parent_pid) {
+        record_canister_op(
+            role,
+            CanisterOpsMetricOperation::Install,
+            CanisterOpsMetricOutcome::Failed,
+            CanisterOpsMetricReason::Topology,
+        );
+        return Err(err);
+    }
 
     let created_at = IcOps::now_secs();
-    SubnetRegistryOps::register_unchecked(pid, role, parent_pid, module_hash.clone(), created_at)?;
+    if let Err(err) = SubnetRegistryOps::register_unchecked(
+        pid,
+        role,
+        parent_pid,
+        module_hash.clone(),
+        created_at,
+    ) {
+        record_canister_op_failure(role, CanisterOpsMetricOperation::Install, &err);
+        return Err(err);
+    }
 
     if let Err(err) = ModuleInstallWorkflow::install_with_payload(
         CanisterInstallMode::Install,
@@ -329,6 +448,8 @@ async fn install_canister(
     )
     .await
     {
+        record_canister_op_failure(role, CanisterOpsMetricOperation::Install, &err);
+
         let removed = SubnetRegistryOps::remove(&pid);
         if removed.is_none() {
             log!(
@@ -350,7 +471,55 @@ async fn install_canister(
         module_source.chunk_count(),
     );
 
+    record_canister_op(
+        role,
+        CanisterOpsMetricOperation::Install,
+        CanisterOpsMetricOutcome::Completed,
+        CanisterOpsMetricReason::Ok,
+    );
+
     Ok(())
+}
+
+// Record one canister operation metric for a known role.
+fn record_canister_op(
+    role: &CanisterRole,
+    operation: CanisterOpsMetricOperation,
+    outcome: CanisterOpsMetricOutcome,
+    reason: CanisterOpsMetricReason,
+) {
+    CanisterOpsMetrics::record(operation, role, outcome, reason);
+}
+
+// Record one failed canister operation metric using the structured error category.
+fn record_canister_op_failure(
+    role: &CanisterRole,
+    operation: CanisterOpsMetricOperation,
+    err: &InternalError,
+) {
+    record_canister_op(
+        role,
+        operation,
+        CanisterOpsMetricOutcome::Failed,
+        CanisterOpsMetricReason::from_error(err),
+    );
+}
+
+// Record one delete metric using the registry role when it is still available.
+fn record_delete_metric(
+    role: Option<&CanisterRole>,
+    outcome: CanisterOpsMetricOutcome,
+    reason: CanisterOpsMetricReason,
+) {
+    if let Some(role) = role {
+        CanisterOpsMetrics::record(CanisterOpsMetricOperation::Delete, role, outcome, reason);
+    } else {
+        CanisterOpsMetrics::record_unknown_role(
+            CanisterOpsMetricOperation::Delete,
+            outcome,
+            reason,
+        );
+    }
 }
 
 // Validate create-time registry policy using targeted registry lookups instead of a full export.

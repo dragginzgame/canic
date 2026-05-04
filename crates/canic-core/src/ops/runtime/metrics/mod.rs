@@ -1,5 +1,6 @@
 pub mod access;
 pub mod auth;
+pub mod canister_ops;
 pub mod cycles_funding;
 pub mod cycles_topup;
 pub mod delegated_auth;
@@ -9,6 +10,7 @@ pub mod lifecycle;
 pub mod root_capability;
 pub mod system;
 pub mod timer;
+pub mod wasm_store;
 
 use crate::{
     dto::metrics::{MetricEntry, MetricValue, MetricsKind},
@@ -16,6 +18,7 @@ use crate::{
 };
 use {
     access::AccessMetrics,
+    canister_ops::CanisterOpsMetrics,
     cycles_funding::CyclesFundingMetrics,
     cycles_topup::CyclesTopupMetrics,
     delegated_auth::DelegatedAuthMetrics,
@@ -25,6 +28,7 @@ use {
     root_capability::RootCapabilityMetrics,
     system::SystemMetrics,
     timer::{TimerMetrics, TimerMode},
+    wasm_store::WasmStoreMetrics,
 };
 
 /// Project one metrics family into the unified public metrics row shape.
@@ -32,6 +36,7 @@ use {
 pub fn entries(kind: MetricsKind) -> Vec<MetricEntry> {
     match kind {
         MetricsKind::Access => access_entries(),
+        MetricsKind::CanisterOps => canister_ops_entries(),
         MetricsKind::CyclesFunding => cycles_funding_entries(),
         MetricsKind::CyclesTopup => cycles_topup_entries(),
         MetricsKind::DelegatedAuth => delegated_auth_entries(),
@@ -42,12 +47,14 @@ pub fn entries(kind: MetricsKind) -> Vec<MetricEntry> {
         MetricsKind::RootCapability => root_capability_entries(),
         MetricsKind::System => system_entries(),
         MetricsKind::Timer => timer_entries(),
+        MetricsKind::WasmStore => wasm_store_entries(),
     }
 }
 
 #[cfg(test)]
 pub fn reset_for_tests() {
     AccessMetrics::reset();
+    CanisterOpsMetrics::reset();
     CyclesFundingMetrics::reset();
     CyclesTopupMetrics::reset();
     DelegatedAuthMetrics::reset();
@@ -57,7 +64,44 @@ pub fn reset_for_tests() {
     RootCapabilityMetrics::reset();
     SystemMetrics::reset();
     TimerMetrics::reset();
+    WasmStoreMetrics::reset();
     perf::reset();
+}
+
+/// Project canister operation counters into the unified public metrics row shape.
+#[must_use]
+fn canister_ops_entries() -> Vec<MetricEntry> {
+    CanisterOpsMetrics::snapshot()
+        .into_iter()
+        .map(|(key, count)| MetricEntry {
+            labels: vec![
+                key.operation.metric_label().to_string(),
+                key.role,
+                key.outcome.metric_label().to_string(),
+                key.reason.metric_label().to_string(),
+            ],
+            principal: None,
+            value: MetricValue::Count(count),
+        })
+        .collect()
+}
+
+/// Project wasm-store operation counters into the unified public metrics row shape.
+#[must_use]
+fn wasm_store_entries() -> Vec<MetricEntry> {
+    WasmStoreMetrics::snapshot()
+        .into_iter()
+        .map(|(key, count)| MetricEntry {
+            labels: vec![
+                key.operation.metric_label().to_string(),
+                key.source.metric_label().to_string(),
+                key.outcome.metric_label().to_string(),
+                key.reason.metric_label().to_string(),
+            ],
+            principal: None,
+            value: MetricValue::Count(count),
+        })
+        .collect()
 }
 
 /// Project system counters into the unified public metrics row shape.
@@ -276,8 +320,12 @@ mod tests {
     use super::*;
     use crate::{
         cdk::types::Principal,
-        ids::AccessMetricKind,
+        ids::{AccessMetricKind, CanisterRole},
         ops::runtime::metrics::{
+            canister_ops::{
+                CanisterOpsMetricOperation, CanisterOpsMetricOutcome, CanisterOpsMetricReason,
+                CanisterOpsMetrics,
+            },
             cycles_funding::{CyclesFundingDeniedReason, CyclesFundingMetrics},
             cycles_topup::CyclesTopupMetrics,
             http::{HttpMethod, HttpMetrics},
@@ -291,9 +339,141 @@ mod tests {
                 RootCapabilityMetricProofMode, RootCapabilityMetrics,
             },
             timer::{TimerMetrics, TimerMode},
+            wasm_store::{
+                WasmStoreMetricOperation, WasmStoreMetricOutcome, WasmStoreMetricReason,
+                WasmStoreMetricSource, WasmStoreMetrics,
+            },
         },
     };
     use std::time::Duration;
+
+    // Verify canister operation metrics expose stable label rows and accumulate counts.
+    #[test]
+    fn canister_ops_metrics_are_exposed_with_stable_labels() {
+        reset_for_tests();
+
+        CanisterOpsMetrics::record(
+            CanisterOpsMetricOperation::Create,
+            &CanisterRole::new("app"),
+            CanisterOpsMetricOutcome::Started,
+            CanisterOpsMetricReason::Ok,
+        );
+        CanisterOpsMetrics::record(
+            CanisterOpsMetricOperation::Upgrade,
+            &CanisterRole::new("worker"),
+            CanisterOpsMetricOutcome::Failed,
+            CanisterOpsMetricReason::ManagementCall,
+        );
+        CanisterOpsMetrics::record(
+            CanisterOpsMetricOperation::Upgrade,
+            &CanisterRole::new("worker"),
+            CanisterOpsMetricOutcome::Failed,
+            CanisterOpsMetricReason::ManagementCall,
+        );
+        CanisterOpsMetrics::record(
+            CanisterOpsMetricOperation::Create,
+            &CanisterRole::new("worker"),
+            CanisterOpsMetricOutcome::Completed,
+            CanisterOpsMetricReason::PoolReuse,
+        );
+        CanisterOpsMetrics::record(
+            CanisterOpsMetricOperation::Create,
+            &CanisterRole::new("worker"),
+            CanisterOpsMetricOutcome::Failed,
+            CanisterOpsMetricReason::StatePropagation,
+        );
+
+        let entries = entries(MetricsKind::CanisterOps);
+
+        assert_metric_count(&entries, &["create", "app", "started", "ok"], 1);
+        assert_metric_count(
+            &entries,
+            &["upgrade", "worker", "failed", "management_call"],
+            2,
+        );
+        assert_metric_count(
+            &entries,
+            &["create", "worker", "completed", "pool_reuse"],
+            1,
+        );
+        assert_metric_count(
+            &entries,
+            &["create", "worker", "failed", "state_propagation"],
+            1,
+        );
+    }
+
+    // Verify wasm-store metrics expose stable label rows and accumulate counts.
+    #[test]
+    fn wasm_store_metrics_are_exposed_with_stable_labels() {
+        reset_for_tests();
+
+        WasmStoreMetrics::record(
+            WasmStoreMetricOperation::SourceResolve,
+            WasmStoreMetricSource::Bootstrap,
+            WasmStoreMetricOutcome::Completed,
+            WasmStoreMetricReason::Ok,
+        );
+        WasmStoreMetrics::record(
+            WasmStoreMetricOperation::ChunkUpload,
+            WasmStoreMetricSource::Store,
+            WasmStoreMetricOutcome::Skipped,
+            WasmStoreMetricReason::CacheHit,
+        );
+        WasmStoreMetrics::record(
+            WasmStoreMetricOperation::ChunkUpload,
+            WasmStoreMetricSource::Store,
+            WasmStoreMetricOutcome::Skipped,
+            WasmStoreMetricReason::CacheHit,
+        );
+
+        let entries = entries(MetricsKind::WasmStore);
+
+        assert_metric_count(
+            &entries,
+            &["source_resolve", "bootstrap", "completed", "ok"],
+            1,
+        );
+        assert_metric_count(
+            &entries,
+            &["chunk_upload", "store", "skipped", "cache_hit"],
+            2,
+        );
+    }
+
+    // Verify lifecycle metrics expose stable label rows and accumulate counts.
+    #[test]
+    fn lifecycle_metrics_are_exposed_with_stable_labels() {
+        reset_for_tests();
+
+        LifecycleMetrics::record(
+            LifecycleMetricPhase::Init,
+            LifecycleMetricRole::Root,
+            LifecycleMetricStage::Runtime,
+            LifecycleMetricOutcome::Started,
+        );
+        LifecycleMetrics::record(
+            LifecycleMetricPhase::Init,
+            LifecycleMetricRole::Root,
+            LifecycleMetricStage::Runtime,
+            LifecycleMetricOutcome::Started,
+        );
+        LifecycleMetrics::record(
+            LifecycleMetricPhase::PostUpgrade,
+            LifecycleMetricRole::Nonroot,
+            LifecycleMetricStage::Bootstrap,
+            LifecycleMetricOutcome::Completed,
+        );
+
+        let entries = entries(MetricsKind::Lifecycle);
+
+        assert_metric_count(&entries, &["init", "root", "runtime", "started"], 2);
+        assert_metric_count(
+            &entries,
+            &["post_upgrade", "nonroot", "bootstrap", "completed"],
+            1,
+        );
+    }
 
     #[test]
     fn cycles_topup_metrics_are_exposed() {
@@ -315,6 +495,12 @@ mod tests {
         let principal = Principal::from_slice(&[42; 29]);
 
         AccessMetrics::increment("create_project", AccessMetricKind::Guard, "controller_only");
+        CanisterOpsMetrics::record(
+            CanisterOpsMetricOperation::Create,
+            &CanisterRole::new("app"),
+            CanisterOpsMetricOutcome::Started,
+            CanisterOpsMetricReason::Ok,
+        );
         CyclesFundingMetrics::record_denied(
             principal,
             10,
@@ -336,10 +522,17 @@ mod tests {
             RootCapabilityMetricProofMode::Structural,
         );
         TimerMetrics::record_timer_scheduled(TimerMode::Once, Duration::from_secs(1), "once:test");
+        WasmStoreMetrics::record(
+            WasmStoreMetricOperation::SourceResolve,
+            WasmStoreMetricSource::Embedded,
+            WasmStoreMetricOutcome::Completed,
+            WasmStoreMetricReason::Ok,
+        );
         perf::record_checkpoint("metrics::tests", "checkpoint", 7);
 
         for kind in [
             MetricsKind::Access,
+            MetricsKind::CanisterOps,
             MetricsKind::CyclesFunding,
             MetricsKind::CyclesTopup,
             MetricsKind::DelegatedAuth,
@@ -350,6 +543,7 @@ mod tests {
             MetricsKind::RootCapability,
             MetricsKind::System,
             MetricsKind::Timer,
+            MetricsKind::WasmStore,
         ] {
             assert!(!entries(kind).is_empty());
         }
@@ -358,6 +552,7 @@ mod tests {
 
         for kind in [
             MetricsKind::Access,
+            MetricsKind::CanisterOps,
             MetricsKind::CyclesFunding,
             MetricsKind::CyclesTopup,
             MetricsKind::DelegatedAuth,
@@ -368,6 +563,7 @@ mod tests {
             MetricsKind::RootCapability,
             MetricsKind::System,
             MetricsKind::Timer,
+            MetricsKind::WasmStore,
         ] {
             assert!(entries(kind).is_empty());
         }
