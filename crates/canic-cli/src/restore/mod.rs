@@ -541,6 +541,7 @@ mod tests {
                 backup_id: manifest.backup_id.clone(),
                 discovery_topology_hash: Some(manifest.fleet.discovery_topology_hash.clone()),
                 pre_snapshot_topology_hash: Some(manifest.fleet.pre_snapshot_topology_hash.clone()),
+                operation_metrics: canic_backup::journal::DownloadOperationMetrics::default(),
                 artifacts,
             })
             .expect("write journal");

@@ -51,7 +51,10 @@ pub struct RestorePlan {
     pub topology_hash: String,
     pub member_count: usize,
     pub identity_summary: RestoreIdentitySummary,
+    pub snapshot_summary: RestoreSnapshotSummary,
     pub verification_summary: RestoreVerificationSummary,
+    pub readiness_summary: RestoreReadinessSummary,
+    pub operation_summary: RestoreOperationSummary,
     pub ordering_summary: RestoreOrderingSummary,
     pub phases: Vec<RestorePhase>,
 }
@@ -73,6 +76,8 @@ impl RestorePlan {
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct RestoreIdentitySummary {
+    pub mapping_supplied: bool,
+    pub all_sources_mapped: bool,
     pub fixed_members: usize,
     pub relocatable_members: usize,
     pub in_place_members: usize,
@@ -81,16 +86,60 @@ pub struct RestoreIdentitySummary {
 }
 
 ///
+/// RestoreSnapshotSummary
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "restore summaries intentionally expose machine-readable readiness flags"
+)]
+pub struct RestoreSnapshotSummary {
+    pub all_members_have_module_hash: bool,
+    pub all_members_have_wasm_hash: bool,
+    pub all_members_have_code_version: bool,
+    pub all_members_have_checksum: bool,
+    pub members_with_module_hash: usize,
+    pub members_with_wasm_hash: usize,
+    pub members_with_code_version: usize,
+    pub members_with_checksum: usize,
+}
+
+///
 /// RestoreVerificationSummary
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct RestoreVerificationSummary {
+    pub verification_required: bool,
+    pub all_members_have_checks: bool,
     pub fleet_checks: usize,
     pub member_check_groups: usize,
     pub member_checks: usize,
     pub members_with_checks: usize,
     pub total_checks: usize,
+}
+
+///
+/// RestoreReadinessSummary
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RestoreReadinessSummary {
+    pub ready: bool,
+    pub reasons: Vec<String>,
+}
+
+///
+/// RestoreOperationSummary
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RestoreOperationSummary {
+    pub planned_snapshot_loads: usize,
+    pub planned_code_reinstalls: usize,
+    pub planned_verification_checks: usize,
+    pub planned_phases: usize,
 }
 
 ///
@@ -177,10 +226,14 @@ impl RestorePlanner {
 
         let members = resolve_members(manifest, mapping)?;
         let identity_summary = restore_identity_summary(&members, mapping.is_some());
+        let snapshot_summary = restore_snapshot_summary(&members);
         let verification_summary = restore_verification_summary(manifest, &members);
+        let readiness_summary = restore_readiness_summary(&snapshot_summary, &verification_summary);
         validate_restore_group_dependencies(&members)?;
         let phases = group_and_order_members(members)?;
         let ordering_summary = restore_ordering_summary(&phases);
+        let operation_summary =
+            restore_operation_summary(manifest.fleet.members.len(), &verification_summary, &phases);
 
         Ok(RestorePlan {
             backup_id: manifest.backup_id.clone(),
@@ -189,7 +242,10 @@ impl RestorePlanner {
             topology_hash: manifest.fleet.topology_hash.clone(),
             member_count: manifest.fleet.members.len(),
             identity_summary,
+            snapshot_summary,
             verification_summary,
+            readiness_summary,
+            operation_summary,
             ordering_summary,
             phases,
         })
@@ -363,6 +419,8 @@ fn restore_identity_summary(
     mapping_supplied: bool,
 ) -> RestoreIdentitySummary {
     let mut summary = RestoreIdentitySummary {
+        mapping_supplied,
+        all_sources_mapped: false,
         fixed_members: 0,
         relocatable_members: 0,
         in_place_members: 0,
@@ -386,7 +444,69 @@ fn restore_identity_summary(
         }
     }
 
+    summary.all_sources_mapped = mapping_supplied && summary.mapped_members == members.len();
+
     summary
+}
+
+// Summarize snapshot provenance completeness before grouping restore phases.
+fn restore_snapshot_summary(members: &[RestorePlanMember]) -> RestoreSnapshotSummary {
+    let members_with_module_hash = members
+        .iter()
+        .filter(|member| member.source_snapshot.module_hash.is_some())
+        .count();
+    let members_with_wasm_hash = members
+        .iter()
+        .filter(|member| member.source_snapshot.wasm_hash.is_some())
+        .count();
+    let members_with_code_version = members
+        .iter()
+        .filter(|member| member.source_snapshot.code_version.is_some())
+        .count();
+    let members_with_checksum = members
+        .iter()
+        .filter(|member| member.source_snapshot.checksum.is_some())
+        .count();
+
+    RestoreSnapshotSummary {
+        all_members_have_module_hash: members_with_module_hash == members.len(),
+        all_members_have_wasm_hash: members_with_wasm_hash == members.len(),
+        all_members_have_code_version: members_with_code_version == members.len(),
+        all_members_have_checksum: members_with_checksum == members.len(),
+        members_with_module_hash,
+        members_with_wasm_hash,
+        members_with_code_version,
+        members_with_checksum,
+    }
+}
+
+// Summarize whether restore planning has the metadata required for automation.
+fn restore_readiness_summary(
+    snapshot: &RestoreSnapshotSummary,
+    verification: &RestoreVerificationSummary,
+) -> RestoreReadinessSummary {
+    let mut reasons = Vec::new();
+
+    if !snapshot.all_members_have_module_hash {
+        reasons.push("missing-module-hash".to_string());
+    }
+    if !snapshot.all_members_have_wasm_hash {
+        reasons.push("missing-wasm-hash".to_string());
+    }
+    if !snapshot.all_members_have_code_version {
+        reasons.push("missing-code-version".to_string());
+    }
+    if !snapshot.all_members_have_checksum {
+        reasons.push("missing-snapshot-checksum".to_string());
+    }
+    if !verification.all_members_have_checks {
+        reasons.push("missing-verification-checks".to_string());
+    }
+
+    RestoreReadinessSummary {
+        ready: reasons.is_empty(),
+        reasons,
+    }
 }
 
 // Summarize restore verification work declared by the manifest and members.
@@ -425,11 +545,27 @@ fn restore_verification_summary(
         .count();
 
     RestoreVerificationSummary {
+        verification_required: true,
+        all_members_have_checks: members_with_checks == members.len(),
         fleet_checks,
         member_check_groups,
         member_checks,
         members_with_checks,
         total_checks: fleet_checks + member_checks,
+    }
+}
+
+// Summarize the concrete restore operations implied by a no-mutation plan.
+const fn restore_operation_summary(
+    member_count: usize,
+    verification_summary: &RestoreVerificationSummary,
+    phases: &[RestorePhase],
+) -> RestoreOperationSummary {
+    RestoreOperationSummary {
+        planned_snapshot_loads: member_count,
+        planned_code_reinstalls: member_count,
+        planned_verification_checks: verification_summary.total_checks,
+        planned_phases: phases.len(),
     }
 }
 
@@ -697,6 +833,10 @@ mod tests {
         assert_eq!(plan.identity_summary.in_place_members, 2);
         assert_eq!(plan.identity_summary.mapped_members, 0);
         assert_eq!(plan.identity_summary.remapped_members, 0);
+        assert!(plan.verification_summary.verification_required);
+        assert!(plan.verification_summary.all_members_have_checks);
+        assert!(plan.readiness_summary.ready);
+        assert!(plan.readiness_summary.reasons.is_empty());
         assert_eq!(plan.verification_summary.fleet_checks, 0);
         assert_eq!(plan.verification_summary.member_check_groups, 0);
         assert_eq!(plan.verification_summary.member_checks, 2);
@@ -838,6 +978,65 @@ mod tests {
         assert_eq!(root.source_snapshot.artifact_path, "artifacts/root");
     }
 
+    // Ensure restore plans make mapping mode explicit.
+    #[test]
+    fn plan_includes_mapping_summary() {
+        let manifest = valid_manifest(IdentityMode::Relocatable);
+        let in_place = RestorePlanner::plan(&manifest, None).expect("plan should build");
+
+        assert!(!in_place.identity_summary.mapping_supplied);
+        assert!(!in_place.identity_summary.all_sources_mapped);
+        assert_eq!(in_place.identity_summary.mapped_members, 0);
+
+        let mapping = RestoreMapping {
+            members: vec![
+                RestoreMappingEntry {
+                    source_canister: ROOT.to_string(),
+                    target_canister: ROOT.to_string(),
+                },
+                RestoreMappingEntry {
+                    source_canister: CHILD.to_string(),
+                    target_canister: TARGET.to_string(),
+                },
+            ],
+        };
+        let mapped = RestorePlanner::plan(&manifest, Some(&mapping)).expect("plan should build");
+
+        assert!(mapped.identity_summary.mapping_supplied);
+        assert!(mapped.identity_summary.all_sources_mapped);
+        assert_eq!(mapped.identity_summary.mapped_members, 2);
+        assert_eq!(mapped.identity_summary.remapped_members, 1);
+    }
+
+    // Ensure restore plans summarize snapshot provenance completeness.
+    #[test]
+    fn plan_includes_snapshot_summary() {
+        let mut manifest = valid_manifest(IdentityMode::Relocatable);
+        manifest.fleet.members[1].source_snapshot.module_hash = None;
+        manifest.fleet.members[1].source_snapshot.wasm_hash = None;
+        manifest.fleet.members[1].source_snapshot.checksum = None;
+
+        let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
+
+        assert!(!plan.snapshot_summary.all_members_have_module_hash);
+        assert!(!plan.snapshot_summary.all_members_have_wasm_hash);
+        assert!(plan.snapshot_summary.all_members_have_code_version);
+        assert!(!plan.snapshot_summary.all_members_have_checksum);
+        assert_eq!(plan.snapshot_summary.members_with_module_hash, 1);
+        assert_eq!(plan.snapshot_summary.members_with_wasm_hash, 1);
+        assert_eq!(plan.snapshot_summary.members_with_code_version, 2);
+        assert_eq!(plan.snapshot_summary.members_with_checksum, 1);
+        assert!(!plan.readiness_summary.ready);
+        assert_eq!(
+            plan.readiness_summary.reasons,
+            [
+                "missing-module-hash",
+                "missing-wasm-hash",
+                "missing-snapshot-checksum"
+            ]
+        );
+    }
+
     // Ensure restore plans summarize manifest-level verification work.
     #[test]
     fn plan_includes_verification_summary() {
@@ -861,11 +1060,26 @@ mod tests {
 
         let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
 
+        assert!(plan.verification_summary.verification_required);
+        assert!(plan.verification_summary.all_members_have_checks);
         assert_eq!(plan.verification_summary.fleet_checks, 1);
         assert_eq!(plan.verification_summary.member_check_groups, 1);
         assert_eq!(plan.verification_summary.member_checks, 3);
         assert_eq!(plan.verification_summary.members_with_checks, 2);
         assert_eq!(plan.verification_summary.total_checks, 4);
+    }
+
+    // Ensure restore plans summarize the concrete operation counts automation will schedule.
+    #[test]
+    fn plan_includes_operation_summary() {
+        let manifest = valid_manifest(IdentityMode::Relocatable);
+
+        let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
+
+        assert_eq!(plan.operation_summary.planned_snapshot_loads, 2);
+        assert_eq!(plan.operation_summary.planned_code_reinstalls, 2);
+        assert_eq!(plan.operation_summary.planned_verification_checks, 2);
+        assert_eq!(plan.operation_summary.planned_phases, 1);
     }
 
     // Ensure role-level verification checks are counted once per matching member.

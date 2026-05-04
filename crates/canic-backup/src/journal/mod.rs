@@ -18,6 +18,8 @@ pub struct DownloadJournal {
     pub discovery_topology_hash: Option<String>,
     #[serde(default)]
     pub pre_snapshot_topology_hash: Option<String>,
+    #[serde(default)]
+    pub operation_metrics: DownloadOperationMetrics,
     pub artifacts: Vec<ArtifactJournalEntry>,
 }
 
@@ -81,9 +83,27 @@ impl DownloadJournal {
             is_complete: counts.skip == self.artifacts.len(),
             pending_artifacts: self.artifacts.len() - counts.skip,
             counts,
+            operation_metrics: self.operation_metrics.clone(),
             artifacts,
         }
     }
+}
+
+///
+/// DownloadOperationMetrics
+///
+
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+pub struct DownloadOperationMetrics {
+    pub target_count: usize,
+    pub snapshot_create_started: usize,
+    pub snapshot_create_completed: usize,
+    pub snapshot_download_started: usize,
+    pub snapshot_download_completed: usize,
+    pub checksum_verify_started: usize,
+    pub checksum_verify_completed: usize,
+    pub artifact_finalize_started: usize,
+    pub artifact_finalize_completed: usize,
 }
 
 ///
@@ -221,6 +241,7 @@ pub struct JournalResumeReport {
     pub is_complete: bool,
     pub pending_artifacts: usize,
     pub counts: JournalStateCounts,
+    pub operation_metrics: DownloadOperationMetrics,
     pub artifacts: Vec<ArtifactResumeReport>,
 }
 
@@ -398,6 +419,7 @@ mod tests {
             backup_id: "fbk_test_001".to_string(),
             discovery_topology_hash: Some(HASH.to_string()),
             pre_snapshot_topology_hash: Some(HASH.to_string()),
+            operation_metrics: DownloadOperationMetrics::default(),
             artifacts: vec![ArtifactJournalEntry {
                 canister_id: ROOT.to_string(),
                 snapshot_id: "snap-1".to_string(),

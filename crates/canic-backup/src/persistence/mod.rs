@@ -1208,6 +1208,7 @@ mod tests {
             backup_id: "fbk_test_001".to_string(),
             discovery_topology_hash: Some(HASH.to_string()),
             pre_snapshot_topology_hash: Some(HASH.to_string()),
+            operation_metrics: crate::journal::DownloadOperationMetrics::default(),
             artifacts: vec![ArtifactJournalEntry {
                 canister_id: ROOT.to_string(),
                 snapshot_id: "snap-root".to_string(),

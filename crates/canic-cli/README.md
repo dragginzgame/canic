@@ -27,7 +27,9 @@ that local lifecycle step around each captured artifact.
 Successful non-dry-run captures write the canonical backup layout: manifest,
 download journal, and durable artifact directories. Generated manifests include
 each durable artifact checksum so verification can detect manifest/journal
-drift before restore planning.
+drift before restore planning. Download journals also include
+`operation_metrics` counters for target count, snapshot create, snapshot
+download, checksum verification, and artifact finalization progress.
 
 Validate a captured manifest before restore planning:
 
@@ -101,8 +103,11 @@ Preflight writes `manifest-validation.json`, `backup-status.json`,
 `restore-plan.json`, and `preflight-summary.json`.
 The summary records the backup ID, source root, environment, topology hash,
 readiness statuses, provenance consistency status, topology mismatch count,
-member counts, restore identity/verification/ordering counts, and paths to the
-generated reports.
+journal operation metrics, member counts, restore identity/snapshot/
+verification/operation/ordering counts, snapshot provenance readiness booleans,
+verification readiness booleans, `restore_mapping_supplied`,
+`restore_all_sources_mapped`, `restore_ready`, stable
+`restore_readiness_reasons`, and paths to the generated reports.
 
 Restore planning is manifest-driven and performs no mutations:
 
@@ -116,8 +121,15 @@ canic restore plan \
 
 `--require-verified` runs the same manifest, journal, durable artifact, and
 checksum checks as `canic backup verify` before emitting the plan.
-Restore plans include an `identity_summary` with fixed, relocatable, mapped,
-in-place, and remapped member counts, plus a `verification_summary` with
-post-restore check counts. They also include an `ordering_summary` and per-member
-ordering dependency metadata so dry-runs show when parent relationships are
-satisfied inside the same restore group or by an earlier group.
+Restore plans include an `identity_summary` with explicit mapping mode,
+all-sources-mapped status, and fixed, relocatable, mapped, in-place, and
+remapped member counts. They also include a `snapshot_summary` with module
+hash, wasm hash, code version, and checksum coverage counts and readiness
+booleans, plus a `verification_summary` with post-restore check counts,
+`verification_required`, and `all_members_have_checks`. A `readiness_summary`
+collapses those signals into a single `ready` flag and stable reason strings.
+Plans also include an `operation_summary` with planned snapshot loads, code
+reinstalls, verification checks, and phases, plus an `ordering_summary` and
+per-member ordering dependency metadata so dry-runs show when parent
+relationships are satisfied inside the same restore group or by an earlier
+group.

@@ -16,7 +16,14 @@ use crate::{
     ops::{
         cascade::CascadeOps,
         ic::IcOps,
-        runtime::env::EnvOps,
+        runtime::{
+            env::EnvOps,
+            metrics::cascade::{
+                CascadeMetricOperation as MetricOperation, CascadeMetricOutcome as MetricOutcome,
+                CascadeMetricReason as MetricReason, CascadeMetricSnapshot as MetricSnapshot,
+                CascadeMetrics,
+            },
+        },
         storage::{
             children::CanisterChildrenOps,
             index::{app::AppIndexOps, subnet::SubnetIndexOps},
@@ -52,6 +59,12 @@ impl StateCascadeWorkflow {
         EnvOps::require_root()?;
 
         if state_snapshot_is_empty(snapshot) {
+            CascadeMetrics::record(
+                MetricOperation::RootFanout,
+                MetricSnapshot::State,
+                MetricOutcome::Skipped,
+                MetricReason::EmptySnapshot,
+            );
             log!(
                 Topic::Sync,
                 Info,
@@ -59,6 +72,13 @@ impl StateCascadeWorkflow {
             );
             return Ok(());
         }
+
+        CascadeMetrics::record(
+            MetricOperation::RootFanout,
+            MetricSnapshot::State,
+            MetricOutcome::Started,
+            MetricReason::Ok,
+        );
 
         log!(
             Topic::Sync,
@@ -84,6 +104,18 @@ impl StateCascadeWorkflow {
             }
         }
 
+        let completion_reason = if failures > 0 {
+            MetricReason::PartialFailure
+        } else {
+            MetricReason::Ok
+        };
+        CascadeMetrics::record(
+            MetricOperation::RootFanout,
+            MetricSnapshot::State,
+            MetricOutcome::Completed,
+            completion_reason,
+        );
+
         if failures > 0 {
             log!(
                 Topic::Sync,
@@ -106,6 +138,12 @@ impl StateCascadeWorkflow {
         let snapshot = StateSnapshotAdapter::from_input(view);
 
         if state_snapshot_is_empty(&snapshot) {
+            CascadeMetrics::record(
+                MetricOperation::NonrootFanout,
+                MetricSnapshot::State,
+                MetricOutcome::Skipped,
+                MetricReason::EmptySnapshot,
+            );
             log!(
                 Topic::Sync,
                 Info,
@@ -113,6 +151,13 @@ impl StateCascadeWorkflow {
             );
             return Ok(());
         }
+
+        CascadeMetrics::record(
+            MetricOperation::NonrootFanout,
+            MetricSnapshot::State,
+            MetricOutcome::Started,
+            MetricReason::Ok,
+        );
 
         log!(
             Topic::Sync,
@@ -122,7 +167,33 @@ impl StateCascadeWorkflow {
         );
 
         // Apply locally before forwarding.
-        Self::apply_state(&snapshot)?;
+        CascadeMetrics::record(
+            MetricOperation::LocalApply,
+            MetricSnapshot::State,
+            MetricOutcome::Started,
+            MetricReason::Ok,
+        );
+        if let Err(err) = Self::apply_state(&snapshot) {
+            CascadeMetrics::record(
+                MetricOperation::LocalApply,
+                MetricSnapshot::State,
+                MetricOutcome::Failed,
+                MetricReason::from_error(&err),
+            );
+            CascadeMetrics::record(
+                MetricOperation::NonrootFanout,
+                MetricSnapshot::State,
+                MetricOutcome::Failed,
+                MetricReason::from_error(&err),
+            );
+            return Err(err);
+        }
+        CascadeMetrics::record(
+            MetricOperation::LocalApply,
+            MetricSnapshot::State,
+            MetricOutcome::Completed,
+            MetricReason::Ok,
+        );
 
         // Cascade using children cache only (never registry).
         let child_pids = CanisterChildrenOps::pids();
@@ -140,6 +211,18 @@ impl StateCascadeWorkflow {
                 );
             }
         }
+
+        let completion_reason = if failures > 0 {
+            MetricReason::PartialFailure
+        } else {
+            MetricReason::Ok
+        };
+        CascadeMetrics::record(
+            MetricOperation::NonrootFanout,
+            MetricSnapshot::State,
+            MetricOutcome::Completed,
+            completion_reason,
+        );
 
         if failures > 0 {
             log!(
@@ -187,13 +270,35 @@ impl StateCascadeWorkflow {
     async fn send_snapshot(pid: Principal, snapshot: &StateSnapshot) -> Result<(), InternalError> {
         let view = StateSnapshotAdapter::to_input(snapshot);
 
-        CascadeOps::send_state_snapshot(pid, &view)
-            .await
-            .map_err(|err| {
-                InternalError::workflow(
+        CascadeMetrics::record(
+            MetricOperation::ChildSend,
+            MetricSnapshot::State,
+            MetricOutcome::Started,
+            MetricReason::Ok,
+        );
+
+        match CascadeOps::send_state_snapshot(pid, &view).await {
+            Ok(()) => {
+                CascadeMetrics::record(
+                    MetricOperation::ChildSend,
+                    MetricSnapshot::State,
+                    MetricOutcome::Completed,
+                    MetricReason::Ok,
+                );
+                Ok(())
+            }
+            Err(err) => {
+                CascadeMetrics::record(
+                    MetricOperation::ChildSend,
+                    MetricSnapshot::State,
+                    MetricOutcome::Failed,
+                    MetricReason::SendFailed,
+                );
+                Err(InternalError::workflow(
                     InternalErrorOrigin::Workflow,
                     format!("state cascade rejected by child {pid}: {err}"),
-                )
-            })
+                ))
+            }
+        }
     }
 }

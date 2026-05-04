@@ -1,13 +1,17 @@
 pub mod access;
 pub mod auth;
 pub mod canister_ops;
+pub mod cascade;
 pub mod cycles_funding;
 pub mod cycles_topup;
 pub mod delegated_auth;
+pub mod directory;
 pub mod http;
 pub mod icc;
 pub mod lifecycle;
+pub mod pool;
 pub mod root_capability;
+pub mod scaling;
 pub mod system;
 pub mod timer;
 pub mod wasm_store;
@@ -19,13 +23,17 @@ use crate::{
 use {
     access::AccessMetrics,
     canister_ops::CanisterOpsMetrics,
+    cascade::CascadeMetrics,
     cycles_funding::CyclesFundingMetrics,
     cycles_topup::CyclesTopupMetrics,
     delegated_auth::DelegatedAuthMetrics,
+    directory::DirectoryMetrics,
     http::HttpMetrics,
     icc::IccMetrics,
     lifecycle::LifecycleMetrics,
+    pool::PoolMetrics,
     root_capability::RootCapabilityMetrics,
+    scaling::ScalingMetrics,
     system::SystemMetrics,
     timer::{TimerMetrics, TimerMode},
     wasm_store::WasmStoreMetrics,
@@ -37,14 +45,18 @@ pub fn entries(kind: MetricsKind) -> Vec<MetricEntry> {
     match kind {
         MetricsKind::Access => access_entries(),
         MetricsKind::CanisterOps => canister_ops_entries(),
+        MetricsKind::Cascade => cascade_entries(),
         MetricsKind::CyclesFunding => cycles_funding_entries(),
         MetricsKind::CyclesTopup => cycles_topup_entries(),
         MetricsKind::DelegatedAuth => delegated_auth_entries(),
+        MetricsKind::Directory => directory_entries(),
         MetricsKind::Http => http_entries(),
         MetricsKind::Icc => icc_entries(),
         MetricsKind::Lifecycle => lifecycle_entries(),
         MetricsKind::Perf => perf_entries(),
+        MetricsKind::Pool => pool_entries(),
         MetricsKind::RootCapability => root_capability_entries(),
+        MetricsKind::Scaling => scaling_entries(),
         MetricsKind::System => system_entries(),
         MetricsKind::Timer => timer_entries(),
         MetricsKind::WasmStore => wasm_store_entries(),
@@ -55,17 +67,90 @@ pub fn entries(kind: MetricsKind) -> Vec<MetricEntry> {
 pub fn reset_for_tests() {
     AccessMetrics::reset();
     CanisterOpsMetrics::reset();
+    CascadeMetrics::reset();
     CyclesFundingMetrics::reset();
     CyclesTopupMetrics::reset();
     DelegatedAuthMetrics::reset();
+    DirectoryMetrics::reset();
     HttpMetrics::reset();
     IccMetrics::reset();
     LifecycleMetrics::reset();
+    PoolMetrics::reset();
     RootCapabilityMetrics::reset();
+    ScalingMetrics::reset();
     SystemMetrics::reset();
     TimerMetrics::reset();
     WasmStoreMetrics::reset();
     perf::reset();
+}
+
+/// Project directory placement counters into the unified public metrics row shape.
+#[must_use]
+fn directory_entries() -> Vec<MetricEntry> {
+    DirectoryMetrics::snapshot()
+        .into_iter()
+        .map(|(key, count)| MetricEntry {
+            labels: vec![
+                key.operation.metric_label().to_string(),
+                key.outcome.metric_label().to_string(),
+                key.reason.metric_label().to_string(),
+            ],
+            principal: None,
+            value: MetricValue::Count(count),
+        })
+        .collect()
+}
+
+/// Project scaling workflow counters into the unified public metrics row shape.
+#[must_use]
+fn scaling_entries() -> Vec<MetricEntry> {
+    ScalingMetrics::snapshot()
+        .into_iter()
+        .map(|(key, count)| MetricEntry {
+            labels: vec![
+                key.operation.metric_label().to_string(),
+                key.outcome.metric_label().to_string(),
+                key.reason.metric_label().to_string(),
+            ],
+            principal: None,
+            value: MetricValue::Count(count),
+        })
+        .collect()
+}
+
+/// Project pool operation counters into the unified public metrics row shape.
+#[must_use]
+fn pool_entries() -> Vec<MetricEntry> {
+    PoolMetrics::snapshot()
+        .into_iter()
+        .map(|(key, count)| MetricEntry {
+            labels: vec![
+                key.operation.metric_label().to_string(),
+                key.outcome.metric_label().to_string(),
+                key.reason.metric_label().to_string(),
+            ],
+            principal: None,
+            value: MetricValue::Count(count),
+        })
+        .collect()
+}
+
+/// Project cascade counters into the unified public metrics row shape.
+#[must_use]
+fn cascade_entries() -> Vec<MetricEntry> {
+    CascadeMetrics::snapshot()
+        .into_iter()
+        .map(|(key, count)| MetricEntry {
+            labels: vec![
+                key.operation.metric_label().to_string(),
+                key.snapshot.metric_label().to_string(),
+                key.outcome.metric_label().to_string(),
+                key.reason.metric_label().to_string(),
+            ],
+            principal: None,
+            value: MetricValue::Count(count),
+        })
+        .collect()
 }
 
 /// Project canister operation counters into the unified public metrics row shape.
@@ -326,17 +411,29 @@ mod tests {
                 CanisterOpsMetricOperation, CanisterOpsMetricOutcome, CanisterOpsMetricReason,
                 CanisterOpsMetrics,
             },
+            cascade::{
+                CascadeMetricOperation, CascadeMetricOutcome, CascadeMetricReason,
+                CascadeMetricSnapshot, CascadeMetrics,
+            },
             cycles_funding::{CyclesFundingDeniedReason, CyclesFundingMetrics},
             cycles_topup::CyclesTopupMetrics,
+            directory::{
+                DirectoryMetricOperation, DirectoryMetricOutcome, DirectoryMetricReason,
+                DirectoryMetrics,
+            },
             http::{HttpMethod, HttpMetrics},
             icc::IccMetrics,
             lifecycle::{
                 LifecycleMetricOutcome, LifecycleMetricPhase, LifecycleMetricRole,
                 LifecycleMetricStage, LifecycleMetrics,
             },
+            pool::{PoolMetricOperation, PoolMetricOutcome, PoolMetricReason, PoolMetrics},
             root_capability::{
                 RootCapabilityMetricKey, RootCapabilityMetricOutcome,
                 RootCapabilityMetricProofMode, RootCapabilityMetrics,
+            },
+            scaling::{
+                ScalingMetricOperation, ScalingMetricOutcome, ScalingMetricReason, ScalingMetrics,
             },
             timer::{TimerMetrics, TimerMode},
             wasm_store::{
@@ -403,6 +500,67 @@ mod tests {
         );
     }
 
+    // Verify cascade metrics expose stable label rows and accumulate counts.
+    #[test]
+    fn cascade_metrics_are_exposed_with_stable_labels() {
+        reset_for_tests();
+
+        CascadeMetrics::record(
+            CascadeMetricOperation::RootFanout,
+            CascadeMetricSnapshot::State,
+            CascadeMetricOutcome::Started,
+            CascadeMetricReason::Ok,
+        );
+        CascadeMetrics::record(
+            CascadeMetricOperation::ChildSend,
+            CascadeMetricSnapshot::Topology,
+            CascadeMetricOutcome::Failed,
+            CascadeMetricReason::SendFailed,
+        );
+        CascadeMetrics::record(
+            CascadeMetricOperation::ChildSend,
+            CascadeMetricSnapshot::Topology,
+            CascadeMetricOutcome::Failed,
+            CascadeMetricReason::SendFailed,
+        );
+
+        let entries = entries(MetricsKind::Cascade);
+
+        assert_metric_count(&entries, &["root_fanout", "state", "started", "ok"], 1);
+        assert_metric_count(
+            &entries,
+            &["child_send", "topology", "failed", "send_failed"],
+            2,
+        );
+    }
+
+    // Verify directory metrics expose stable label rows and accumulate counts.
+    #[test]
+    fn directory_metrics_are_exposed_with_stable_labels() {
+        reset_for_tests();
+
+        DirectoryMetrics::record(
+            DirectoryMetricOperation::Resolve,
+            DirectoryMetricOutcome::Started,
+            DirectoryMetricReason::Ok,
+        );
+        DirectoryMetrics::record(
+            DirectoryMetricOperation::Classify,
+            DirectoryMetricOutcome::Completed,
+            DirectoryMetricReason::PendingFresh,
+        );
+        DirectoryMetrics::record(
+            DirectoryMetricOperation::Classify,
+            DirectoryMetricOutcome::Completed,
+            DirectoryMetricReason::PendingFresh,
+        );
+
+        let entries = entries(MetricsKind::Directory);
+
+        assert_metric_count(&entries, &["resolve", "started", "ok"], 1);
+        assert_metric_count(&entries, &["classify", "completed", "pending_fresh"], 2);
+    }
+
     // Verify wasm-store metrics expose stable label rows and accumulate counts.
     #[test]
     fn wasm_store_metrics_are_exposed_with_stable_labels() {
@@ -437,6 +595,72 @@ mod tests {
         assert_metric_count(
             &entries,
             &["chunk_upload", "store", "skipped", "cache_hit"],
+            2,
+        );
+    }
+
+    // Verify pool metrics expose stable label rows and accumulate counts.
+    #[test]
+    fn pool_metrics_are_exposed_with_stable_labels() {
+        reset_for_tests();
+
+        PoolMetrics::record(
+            PoolMetricOperation::Reset,
+            PoolMetricOutcome::Started,
+            PoolMetricReason::Ok,
+        );
+        PoolMetrics::record(
+            PoolMetricOperation::ImportQueued,
+            PoolMetricOutcome::Skipped,
+            PoolMetricReason::AlreadyPresent,
+        );
+        PoolMetrics::record(
+            PoolMetricOperation::ImportQueued,
+            PoolMetricOutcome::Skipped,
+            PoolMetricReason::AlreadyPresent,
+        );
+
+        let entries = entries(MetricsKind::Pool);
+
+        assert_metric_count(&entries, &["reset", "started", "ok"], 1);
+        assert_metric_count(
+            &entries,
+            &["import_queued", "skipped", "already_present"],
+            2,
+        );
+    }
+
+    // Verify scaling metrics expose stable label rows and accumulate counts.
+    #[test]
+    fn scaling_metrics_are_exposed_with_stable_labels() {
+        reset_for_tests();
+
+        ScalingMetrics::record(
+            ScalingMetricOperation::PlanCreate,
+            ScalingMetricOutcome::Completed,
+            ScalingMetricReason::BelowMinWorkers,
+        );
+        ScalingMetrics::record(
+            ScalingMetricOperation::BootstrapPool,
+            ScalingMetricOutcome::Skipped,
+            ScalingMetricReason::TargetSatisfied,
+        );
+        ScalingMetrics::record(
+            ScalingMetricOperation::BootstrapPool,
+            ScalingMetricOutcome::Skipped,
+            ScalingMetricReason::TargetSatisfied,
+        );
+
+        let entries = entries(MetricsKind::Scaling);
+
+        assert_metric_count(
+            &entries,
+            &["plan_create", "completed", "below_min_workers"],
+            1,
+        );
+        assert_metric_count(
+            &entries,
+            &["bootstrap_pool", "skipped", "target_satisfied"],
             2,
         );
     }
@@ -501,6 +725,12 @@ mod tests {
             CanisterOpsMetricOutcome::Started,
             CanisterOpsMetricReason::Ok,
         );
+        CascadeMetrics::record(
+            CascadeMetricOperation::RootFanout,
+            CascadeMetricSnapshot::State,
+            CascadeMetricOutcome::Started,
+            CascadeMetricReason::Ok,
+        );
         CyclesFundingMetrics::record_denied(
             principal,
             10,
@@ -508,6 +738,11 @@ mod tests {
         );
         CyclesTopupMetrics::record_request_scheduled();
         DelegatedAuthMetrics::record_authority(principal);
+        DirectoryMetrics::record(
+            DirectoryMetricOperation::Resolve,
+            DirectoryMetricOutcome::Started,
+            DirectoryMetricReason::Ok,
+        );
         HttpMetrics::record_http_request(HttpMethod::Get, "https://example.test/a", Some("api"));
         IccMetrics::record_call(principal, "canic_sync");
         LifecycleMetrics::record(
@@ -516,10 +751,20 @@ mod tests {
             LifecycleMetricStage::Bootstrap,
             LifecycleMetricOutcome::Started,
         );
+        PoolMetrics::record(
+            PoolMetricOperation::Reset,
+            PoolMetricOutcome::Started,
+            PoolMetricReason::Ok,
+        );
         RootCapabilityMetrics::record_proof(
             RootCapabilityMetricKey::Provision,
             RootCapabilityMetricOutcome::Accepted,
             RootCapabilityMetricProofMode::Structural,
+        );
+        ScalingMetrics::record(
+            ScalingMetricOperation::PlanCreate,
+            ScalingMetricOutcome::Started,
+            ScalingMetricReason::Ok,
         );
         TimerMetrics::record_timer_scheduled(TimerMode::Once, Duration::from_secs(1), "once:test");
         WasmStoreMetrics::record(
@@ -530,43 +775,38 @@ mod tests {
         );
         perf::record_checkpoint("metrics::tests", "checkpoint", 7);
 
-        for kind in [
-            MetricsKind::Access,
-            MetricsKind::CanisterOps,
-            MetricsKind::CyclesFunding,
-            MetricsKind::CyclesTopup,
-            MetricsKind::DelegatedAuth,
-            MetricsKind::Http,
-            MetricsKind::Icc,
-            MetricsKind::Lifecycle,
-            MetricsKind::Perf,
-            MetricsKind::RootCapability,
-            MetricsKind::System,
-            MetricsKind::Timer,
-            MetricsKind::WasmStore,
-        ] {
-            assert!(!entries(kind).is_empty());
+        for kind in all_metric_kinds() {
+            assert!(!entries(*kind).is_empty());
         }
 
         reset_for_tests();
 
-        for kind in [
+        for kind in all_metric_kinds() {
+            assert!(entries(*kind).is_empty());
+        }
+    }
+
+    // Return every public metric family for reset coverage.
+    fn all_metric_kinds() -> &'static [MetricsKind] {
+        &[
             MetricsKind::Access,
             MetricsKind::CanisterOps,
+            MetricsKind::Cascade,
             MetricsKind::CyclesFunding,
             MetricsKind::CyclesTopup,
             MetricsKind::DelegatedAuth,
+            MetricsKind::Directory,
             MetricsKind::Http,
             MetricsKind::Icc,
             MetricsKind::Lifecycle,
             MetricsKind::Perf,
+            MetricsKind::Pool,
             MetricsKind::RootCapability,
+            MetricsKind::Scaling,
             MetricsKind::System,
             MetricsKind::Timer,
             MetricsKind::WasmStore,
-        ] {
-            assert!(entries(kind).is_empty());
-        }
+        ]
     }
 
     fn assert_metric_count(entries: &[MetricEntry], labels: &[&str], expected: u64) {

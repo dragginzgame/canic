@@ -8,7 +8,16 @@ use crate::{
     InternalError, InternalErrorOrigin,
     dto::cascade::TopologySnapshotInput,
     ops::{
-        cascade::CascadeOps, ic::IcOps, runtime::env::EnvOps,
+        cascade::CascadeOps,
+        ic::IcOps,
+        runtime::{
+            env::EnvOps,
+            metrics::cascade::{
+                CascadeMetricOperation as MetricOperation, CascadeMetricOutcome as MetricOutcome,
+                CascadeMetricReason as MetricReason, CascadeMetricSnapshot as MetricSnapshot,
+                CascadeMetrics,
+            },
+        },
         storage::children::CanisterChildrenOps,
     },
     workflow::{
@@ -37,20 +46,100 @@ impl TopologyCascadeWorkflow {
     pub async fn root_cascade_topology_for_pid(target_pid: Principal) -> Result<(), InternalError> {
         EnvOps::require_root()?;
 
-        let snapshot = TopologySnapshotBuilder::for_target(target_pid)?.build();
+        Self::record(
+            MetricOperation::RootFanout,
+            MetricOutcome::Started,
+            MetricReason::Ok,
+        );
 
-        let root_pid = IcOps::canister_self();
-        let Some(first_child) = Self::next_child_on_path(root_pid, &snapshot.parents)? else {
-            log!(
-                Topic::Sync,
-                Warn,
-                "sync.topology: no branch path to {target_pid}, skipping cascade"
-            );
-            return Ok(());
+        let snapshot = match TopologySnapshotBuilder::for_target(target_pid) {
+            Ok(builder) => builder.build(),
+            Err(err) => {
+                Self::record(
+                    MetricOperation::RootFanout,
+                    MetricOutcome::Failed,
+                    MetricReason::from_error(&err),
+                );
+                return Err(err);
+            }
         };
 
-        let child_snapshot = Self::slice_snapshot_for_child(first_child, &snapshot)?;
-        Self::send_snapshot(&first_child, &child_snapshot).await
+        let root_pid = IcOps::canister_self();
+        let first_child = match Self::next_child_on_path(root_pid, &snapshot.parents) {
+            Ok(Some(first_child)) => first_child,
+            Ok(None) => {
+                Self::record(
+                    MetricOperation::RouteResolve,
+                    MetricOutcome::Skipped,
+                    MetricReason::NoRoute,
+                );
+                Self::record(
+                    MetricOperation::RootFanout,
+                    MetricOutcome::Skipped,
+                    MetricReason::NoRoute,
+                );
+                log!(
+                    Topic::Sync,
+                    Warn,
+                    "sync.topology: no branch path to {target_pid}, skipping cascade"
+                );
+                return Ok(());
+            }
+            Err(err) => {
+                Self::record(
+                    MetricOperation::RouteResolve,
+                    MetricOutcome::Failed,
+                    MetricReason::from_error(&err),
+                );
+                Self::record(
+                    MetricOperation::RootFanout,
+                    MetricOutcome::Failed,
+                    MetricReason::from_error(&err),
+                );
+                return Err(err);
+            }
+        };
+
+        let child_snapshot = match Self::slice_snapshot_for_child(first_child, &snapshot) {
+            Ok(snapshot) => snapshot,
+            Err(err) => {
+                Self::record(
+                    MetricOperation::RouteResolve,
+                    MetricOutcome::Failed,
+                    MetricReason::from_error(&err),
+                );
+                Self::record(
+                    MetricOperation::RootFanout,
+                    MetricOutcome::Failed,
+                    MetricReason::from_error(&err),
+                );
+                return Err(err);
+            }
+        };
+        Self::record(
+            MetricOperation::RouteResolve,
+            MetricOutcome::Completed,
+            MetricReason::Ok,
+        );
+
+        match Self::send_snapshot(&first_child, &child_snapshot).await {
+            Ok(()) => {
+                Self::record(
+                    MetricOperation::RootFanout,
+                    MetricOutcome::Completed,
+                    MetricReason::Ok,
+                );
+                Ok(())
+            }
+            Err(err) => {
+                Self::record(
+                    MetricOperation::RootFanout,
+                    MetricOutcome::Failed,
+                    MetricReason::SendFailed,
+                );
+                Err(err)
+            }
+        }
     }
 
     // ──────────────────────── Non-root cascades ──────────────────────
@@ -64,7 +153,28 @@ impl TopologyCascadeWorkflow {
         let snapshot = TopologySnapshotAdapter::from_input(view);
 
         let self_pid = IcOps::canister_self();
-        let next = Self::next_child_on_path(self_pid, &snapshot.parents)?;
+        Self::record(
+            MetricOperation::NonrootFanout,
+            MetricOutcome::Started,
+            MetricReason::Ok,
+        );
+
+        let next = match Self::next_child_on_path(self_pid, &snapshot.parents) {
+            Ok(next) => next,
+            Err(err) => {
+                Self::record(
+                    MetricOperation::RouteResolve,
+                    MetricOutcome::Failed,
+                    MetricReason::from_error(&err),
+                );
+                Self::record(
+                    MetricOperation::NonrootFanout,
+                    MetricOutcome::Failed,
+                    MetricReason::from_error(&err),
+                );
+                return Err(err);
+            }
+        };
 
         let children = snapshot
             .children_map
@@ -74,6 +184,12 @@ impl TopologyCascadeWorkflow {
 
         warn_if_large("nonroot fanout", children.len());
 
+        Self::record(
+            MetricOperation::LocalApply,
+            MetricOutcome::Started,
+            MetricReason::Ok,
+        );
+
         let children_entries = children
             .into_iter()
             .map(|child| (child.pid, child.role))
@@ -81,32 +197,103 @@ impl TopologyCascadeWorkflow {
 
         CanisterChildrenOps::import_direct_children(self_pid, children_entries);
 
+        Self::record(
+            MetricOperation::LocalApply,
+            MetricOutcome::Completed,
+            MetricReason::Ok,
+        );
+
         if let Some(next_pid) = next {
-            let next_snapshot = Self::slice_snapshot_for_child(next_pid, &snapshot)?;
-            Self::send_snapshot(&next_pid, &next_snapshot).await?;
+            let next_snapshot = match Self::slice_snapshot_for_child(next_pid, &snapshot) {
+                Ok(snapshot) => snapshot,
+                Err(err) => {
+                    Self::record(
+                        MetricOperation::RouteResolve,
+                        MetricOutcome::Failed,
+                        MetricReason::from_error(&err),
+                    );
+                    Self::record(
+                        MetricOperation::NonrootFanout,
+                        MetricOutcome::Failed,
+                        MetricReason::from_error(&err),
+                    );
+                    return Err(err);
+                }
+            };
+            Self::record(
+                MetricOperation::RouteResolve,
+                MetricOutcome::Completed,
+                MetricReason::Ok,
+            );
+            if let Err(err) = Self::send_snapshot(&next_pid, &next_snapshot).await {
+                Self::record(
+                    MetricOperation::NonrootFanout,
+                    MetricOutcome::Failed,
+                    MetricReason::SendFailed,
+                );
+                return Err(err);
+            }
+        } else {
+            Self::record(
+                MetricOperation::RouteResolve,
+                MetricOutcome::Skipped,
+                MetricReason::NoRoute,
+            );
         }
+
+        Self::record(
+            MetricOperation::NonrootFanout,
+            MetricOutcome::Completed,
+            MetricReason::Ok,
+        );
 
         Ok(())
     }
 
     // ───────────────────────── Internal helpers ──────────────────────
 
+    // Record one topology cascade metric row using the fixed topology snapshot label.
+    fn record(operation: MetricOperation, outcome: MetricOutcome, reason: MetricReason) {
+        CascadeMetrics::record(operation, MetricSnapshot::Topology, outcome, reason);
+    }
+
+    // Send a topology snapshot to one child and record bounded transport outcome metrics.
     async fn send_snapshot(
         pid: &Principal,
         snapshot: &TopologySnapshot,
     ) -> Result<(), InternalError> {
         let view = TopologySnapshotAdapter::to_input(snapshot);
 
-        CascadeOps::send_topology_snapshot(*pid, &view)
-            .await
-            .map_err(|err| {
-                InternalError::workflow(
+        Self::record(
+            MetricOperation::ChildSend,
+            MetricOutcome::Started,
+            MetricReason::Ok,
+        );
+
+        match CascadeOps::send_topology_snapshot(*pid, &view).await {
+            Ok(()) => {
+                Self::record(
+                    MetricOperation::ChildSend,
+                    MetricOutcome::Completed,
+                    MetricReason::Ok,
+                );
+                Ok(())
+            }
+            Err(err) => {
+                Self::record(
+                    MetricOperation::ChildSend,
+                    MetricOutcome::Failed,
+                    MetricReason::SendFailed,
+                );
+                Err(InternalError::workflow(
                     InternalErrorOrigin::Workflow,
                     format!("topology cascade rejected by child {pid}: {err}"),
-                )
-            })
+                ))
+            }
+        }
     }
 
+    // Resolve the next child hop from a topology parent chain rooted at this canister.
     fn next_child_on_path(
         self_pid: Principal,
         parents: &[TopologyPathNode],
@@ -128,6 +315,7 @@ impl TopologyCascadeWorkflow {
         Ok(parents.get(1).map(|p| p.pid))
     }
 
+    // Slice a topology snapshot so the next child receives only its branch.
     fn slice_snapshot_for_child(
         next_pid: Principal,
         snapshot: &TopologySnapshot,

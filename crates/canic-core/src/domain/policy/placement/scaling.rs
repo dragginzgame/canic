@@ -44,8 +44,20 @@ impl From<ScalingPolicyError> for InternalError {
 #[derive(Clone, Debug)]
 pub struct ScalingPlan {
     pub should_spawn: bool,
+    pub plan_reason: ScalingPlanReason,
     pub reason: String,
     pub worker_entry: Option<ScalingWorkerPlanEntry>,
+}
+
+///
+/// ScalingPlanReason
+///
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ScalingPlanReason {
+    AtMaxWorkers,
+    BelowMinWorkers,
+    WithinBounds,
 }
 
 ///
@@ -67,6 +79,7 @@ impl ScalingPolicy {
         if policy.max_workers > 0 && worker_count >= policy.max_workers {
             return Ok(ScalingPlan {
                 should_spawn: false,
+                plan_reason: ScalingPlanReason::AtMaxWorkers,
                 reason: format!(
                     "pool '{pool}' at max_workers ({}/{})",
                     worker_count, policy.max_workers
@@ -84,6 +97,7 @@ impl ScalingPolicy {
 
             return Ok(ScalingPlan {
                 should_spawn: true,
+                plan_reason: ScalingPlanReason::BelowMinWorkers,
                 reason: format!(
                     "pool '{pool}' below min_workers (current {worker_count}, min {})",
                     policy.min_workers
@@ -94,6 +108,7 @@ impl ScalingPolicy {
 
         Ok(ScalingPlan {
             should_spawn: false,
+            plan_reason: ScalingPlanReason::WithinBounds,
             reason: format!(
                 "pool '{pool}' within policy bounds (current {worker_count}, min {}, max {})",
                 policy.min_workers, policy.max_workers

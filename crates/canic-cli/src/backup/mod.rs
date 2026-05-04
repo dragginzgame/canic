@@ -1,18 +1,18 @@
 use canic_backup::{
-    journal::JournalResumeReport,
+    journal::{DownloadOperationMetrics, JournalResumeReport},
     manifest::{BackupUnitKind, ConsistencyMode, FleetBackupManifest},
     persistence::{
         BackupInspectionReport, BackupIntegrityReport, BackupLayout, BackupProvenanceReport,
         PersistenceError,
     },
-    restore::{RestoreMapping, RestorePlanError, RestorePlanner},
+    restore::{RestoreMapping, RestorePlan, RestorePlanError, RestorePlanner},
 };
 use serde_json::json;
 use std::{
     ffi::OsString,
     fs,
     io::{self, Write},
-    path::PathBuf,
+    path::{Path, PathBuf},
 };
 use thiserror::Error as ThisError;
 
@@ -129,6 +129,10 @@ impl BackupPreflightOptions {
 ///
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "preflight reports intentionally mirror machine-readable JSON status flags"
+)]
 pub struct BackupPreflightReport {
     pub status: String,
     pub backup_id: String,
@@ -138,6 +142,7 @@ pub struct BackupPreflightReport {
     pub topology_hash: String,
     pub mapping_path: Option<String>,
     pub journal_complete: bool,
+    pub journal_operation_metrics: DownloadOperationMetrics,
     pub inspection_status: String,
     pub provenance_status: String,
     pub backup_id_status: String,
@@ -147,16 +152,34 @@ pub struct BackupPreflightReport {
     pub manifest_members: usize,
     pub backup_unit_count: usize,
     pub restore_plan_members: usize,
+    pub restore_mapping_supplied: bool,
+    pub restore_all_sources_mapped: bool,
     pub restore_fixed_members: usize,
     pub restore_relocatable_members: usize,
     pub restore_in_place_members: usize,
     pub restore_mapped_members: usize,
     pub restore_remapped_members: usize,
+    pub restore_ready: bool,
+    pub restore_readiness_reasons: Vec<String>,
+    pub restore_all_members_have_module_hash: bool,
+    pub restore_all_members_have_wasm_hash: bool,
+    pub restore_all_members_have_code_version: bool,
+    pub restore_all_members_have_checksum: bool,
+    pub restore_members_with_module_hash: usize,
+    pub restore_members_with_wasm_hash: usize,
+    pub restore_members_with_code_version: usize,
+    pub restore_members_with_checksum: usize,
+    pub restore_verification_required: bool,
+    pub restore_all_members_have_checks: bool,
     pub restore_fleet_checks: usize,
     pub restore_member_check_groups: usize,
     pub restore_member_checks: usize,
     pub restore_members_with_checks: usize,
     pub restore_total_checks: usize,
+    pub restore_planned_snapshot_loads: usize,
+    pub restore_planned_code_reinstalls: usize,
+    pub restore_planned_verification_checks: usize,
+    pub restore_planned_phases: usize,
     pub restore_phase_count: usize,
     pub restore_dependency_free_members: usize,
     pub restore_in_group_parent_edges: usize,
@@ -168,6 +191,35 @@ pub struct BackupPreflightReport {
     pub backup_integrity_path: String,
     pub restore_plan_path: String,
     pub preflight_summary_path: String,
+}
+
+///
+/// PreflightArtifactPaths
+///
+
+struct PreflightArtifactPaths {
+    manifest_validation: PathBuf,
+    backup_status: PathBuf,
+    backup_inspection: PathBuf,
+    backup_provenance: PathBuf,
+    backup_integrity: PathBuf,
+    restore_plan: PathBuf,
+    preflight_summary: PathBuf,
+}
+
+///
+/// PreflightReportInput
+///
+
+struct PreflightReportInput<'a> {
+    options: &'a BackupPreflightOptions,
+    manifest: &'a FleetBackupManifest,
+    status: &'a JournalResumeReport,
+    inspection: &'a BackupInspectionReport,
+    provenance: &'a BackupProvenanceReport,
+    integrity: &'a BackupIntegrityReport,
+    restore_plan: &'a RestorePlan,
+    paths: &'a PreflightArtifactPaths,
 }
 
 ///
@@ -401,86 +453,153 @@ pub fn backup_preflight(
     let integrity = layout.verify_integrity()?;
     let mapping = options.mapping.as_ref().map(read_mapping).transpose()?;
     let restore_plan = RestorePlanner::plan(&manifest, mapping.as_ref())?;
+    let paths = preflight_artifact_paths(&options.out_dir);
 
-    let manifest_validation_path = options.out_dir.join("manifest-validation.json");
-    let backup_status_path = options.out_dir.join("backup-status.json");
-    let backup_inspection_path = options.out_dir.join("backup-inspection.json");
-    let backup_provenance_path = options.out_dir.join("backup-provenance.json");
-    let backup_integrity_path = options.out_dir.join("backup-integrity.json");
-    let restore_plan_path = options.out_dir.join("restore-plan.json");
-    let preflight_summary_path = options.out_dir.join("preflight-summary.json");
-
-    write_json_value_file(
-        &manifest_validation_path,
-        &manifest_validation_summary(&manifest),
+    write_preflight_artifacts(
+        &paths,
+        &manifest,
+        &status,
+        &inspection,
+        &provenance,
+        &integrity,
+        &restore_plan,
     )?;
-    fs::write(&backup_status_path, serde_json::to_vec_pretty(&status)?)?;
+    let report = build_preflight_report(PreflightReportInput {
+        options,
+        manifest: &manifest,
+        status: &status,
+        inspection: &inspection,
+        provenance: &provenance,
+        integrity: &integrity,
+        restore_plan: &restore_plan,
+        paths: &paths,
+    });
+    write_json_value_file(&paths.preflight_summary, &preflight_summary_value(&report))?;
+    Ok(report)
+}
+
+// Build the standard preflight artifact path set under one output directory.
+fn preflight_artifact_paths(out_dir: &Path) -> PreflightArtifactPaths {
+    PreflightArtifactPaths {
+        manifest_validation: out_dir.join("manifest-validation.json"),
+        backup_status: out_dir.join("backup-status.json"),
+        backup_inspection: out_dir.join("backup-inspection.json"),
+        backup_provenance: out_dir.join("backup-provenance.json"),
+        backup_integrity: out_dir.join("backup-integrity.json"),
+        restore_plan: out_dir.join("restore-plan.json"),
+        preflight_summary: out_dir.join("preflight-summary.json"),
+    }
+}
+
+// Write the standard preflight artifacts before emitting the compact summary.
+fn write_preflight_artifacts(
+    paths: &PreflightArtifactPaths,
+    manifest: &FleetBackupManifest,
+    status: &JournalResumeReport,
+    inspection: &BackupInspectionReport,
+    provenance: &BackupProvenanceReport,
+    integrity: &BackupIntegrityReport,
+    restore_plan: &RestorePlan,
+) -> Result<(), BackupCommandError> {
+    write_json_value_file(
+        &paths.manifest_validation,
+        &manifest_validation_summary(manifest),
+    )?;
+    fs::write(&paths.backup_status, serde_json::to_vec_pretty(&status)?)?;
     fs::write(
-        &backup_inspection_path,
+        &paths.backup_inspection,
         serde_json::to_vec_pretty(&inspection)?,
     )?;
     fs::write(
-        &backup_provenance_path,
+        &paths.backup_provenance,
         serde_json::to_vec_pretty(&provenance)?,
     )?;
     fs::write(
-        &backup_integrity_path,
+        &paths.backup_integrity,
         serde_json::to_vec_pretty(&integrity)?,
     )?;
     fs::write(
-        &restore_plan_path,
+        &paths.restore_plan,
         serde_json::to_vec_pretty(&restore_plan)?,
     )?;
+    Ok(())
+}
 
-    let report = BackupPreflightReport {
+// Build the in-memory preflight report mirrored by preflight-summary.json.
+fn build_preflight_report(input: PreflightReportInput<'_>) -> BackupPreflightReport {
+    let identity = &input.restore_plan.identity_summary;
+    let snapshot = &input.restore_plan.snapshot_summary;
+    let verification = &input.restore_plan.verification_summary;
+    let operation = &input.restore_plan.operation_summary;
+    let ordering = &input.restore_plan.ordering_summary;
+
+    BackupPreflightReport {
         status: "ready".to_string(),
-        backup_id: manifest.backup_id.clone(),
-        backup_dir: options.dir.display().to_string(),
-        source_environment: manifest.source.environment.clone(),
-        source_root_canister: manifest.source.root_canister.clone(),
-        topology_hash: manifest.fleet.topology_hash.clone(),
-        mapping_path: options
+        backup_id: input.manifest.backup_id.clone(),
+        backup_dir: input.options.dir.display().to_string(),
+        source_environment: input.manifest.source.environment.clone(),
+        source_root_canister: input.manifest.source.root_canister.clone(),
+        topology_hash: input.manifest.fleet.topology_hash.clone(),
+        mapping_path: input
+            .options
             .mapping
             .as_ref()
             .map(|path| path.display().to_string()),
-        journal_complete: status.is_complete,
-        inspection_status: readiness_status(inspection.ready_for_verify).to_string(),
+        journal_complete: input.status.is_complete,
+        journal_operation_metrics: input.status.operation_metrics.clone(),
+        inspection_status: readiness_status(input.inspection.ready_for_verify).to_string(),
         provenance_status: consistency_status(
-            provenance.backup_id_matches && provenance.topology_receipts_match,
+            input.provenance.backup_id_matches && input.provenance.topology_receipts_match,
         )
         .to_string(),
-        backup_id_status: match_status(provenance.backup_id_matches).to_string(),
-        topology_receipts_status: match_status(provenance.topology_receipts_match).to_string(),
-        topology_mismatch_count: provenance.topology_receipt_mismatches.len(),
-        integrity_verified: integrity.verified,
-        manifest_members: manifest.fleet.members.len(),
-        backup_unit_count: provenance.backup_unit_count,
-        restore_plan_members: restore_plan.member_count,
-        restore_fixed_members: restore_plan.identity_summary.fixed_members,
-        restore_relocatable_members: restore_plan.identity_summary.relocatable_members,
-        restore_in_place_members: restore_plan.identity_summary.in_place_members,
-        restore_mapped_members: restore_plan.identity_summary.mapped_members,
-        restore_remapped_members: restore_plan.identity_summary.remapped_members,
-        restore_fleet_checks: restore_plan.verification_summary.fleet_checks,
-        restore_member_check_groups: restore_plan.verification_summary.member_check_groups,
-        restore_member_checks: restore_plan.verification_summary.member_checks,
-        restore_members_with_checks: restore_plan.verification_summary.members_with_checks,
-        restore_total_checks: restore_plan.verification_summary.total_checks,
-        restore_phase_count: restore_plan.ordering_summary.phase_count,
-        restore_dependency_free_members: restore_plan.ordering_summary.dependency_free_members,
-        restore_in_group_parent_edges: restore_plan.ordering_summary.in_group_parent_edges,
-        restore_cross_group_parent_edges: restore_plan.ordering_summary.cross_group_parent_edges,
-        manifest_validation_path: manifest_validation_path.display().to_string(),
-        backup_status_path: backup_status_path.display().to_string(),
-        backup_inspection_path: backup_inspection_path.display().to_string(),
-        backup_provenance_path: backup_provenance_path.display().to_string(),
-        backup_integrity_path: backup_integrity_path.display().to_string(),
-        restore_plan_path: restore_plan_path.display().to_string(),
-        preflight_summary_path: preflight_summary_path.display().to_string(),
-    };
-
-    write_json_value_file(&preflight_summary_path, &preflight_summary_value(&report))?;
-    Ok(report)
+        backup_id_status: match_status(input.provenance.backup_id_matches).to_string(),
+        topology_receipts_status: match_status(input.provenance.topology_receipts_match)
+            .to_string(),
+        topology_mismatch_count: input.provenance.topology_receipt_mismatches.len(),
+        integrity_verified: input.integrity.verified,
+        manifest_members: input.manifest.fleet.members.len(),
+        backup_unit_count: input.provenance.backup_unit_count,
+        restore_plan_members: input.restore_plan.member_count,
+        restore_mapping_supplied: identity.mapping_supplied,
+        restore_all_sources_mapped: identity.all_sources_mapped,
+        restore_fixed_members: identity.fixed_members,
+        restore_relocatable_members: identity.relocatable_members,
+        restore_in_place_members: identity.in_place_members,
+        restore_mapped_members: identity.mapped_members,
+        restore_remapped_members: identity.remapped_members,
+        restore_ready: input.restore_plan.readiness_summary.ready,
+        restore_readiness_reasons: input.restore_plan.readiness_summary.reasons.clone(),
+        restore_all_members_have_module_hash: snapshot.all_members_have_module_hash,
+        restore_all_members_have_wasm_hash: snapshot.all_members_have_wasm_hash,
+        restore_all_members_have_code_version: snapshot.all_members_have_code_version,
+        restore_all_members_have_checksum: snapshot.all_members_have_checksum,
+        restore_members_with_module_hash: snapshot.members_with_module_hash,
+        restore_members_with_wasm_hash: snapshot.members_with_wasm_hash,
+        restore_members_with_code_version: snapshot.members_with_code_version,
+        restore_members_with_checksum: snapshot.members_with_checksum,
+        restore_verification_required: verification.verification_required,
+        restore_all_members_have_checks: verification.all_members_have_checks,
+        restore_fleet_checks: verification.fleet_checks,
+        restore_member_check_groups: verification.member_check_groups,
+        restore_member_checks: verification.member_checks,
+        restore_members_with_checks: verification.members_with_checks,
+        restore_total_checks: verification.total_checks,
+        restore_planned_snapshot_loads: operation.planned_snapshot_loads,
+        restore_planned_code_reinstalls: operation.planned_code_reinstalls,
+        restore_planned_verification_checks: operation.planned_verification_checks,
+        restore_planned_phases: operation.planned_phases,
+        restore_phase_count: ordering.phase_count,
+        restore_dependency_free_members: ordering.dependency_free_members,
+        restore_in_group_parent_edges: ordering.in_group_parent_edges,
+        restore_cross_group_parent_edges: ordering.cross_group_parent_edges,
+        manifest_validation_path: input.paths.manifest_validation.display().to_string(),
+        backup_status_path: input.paths.backup_status.display().to_string(),
+        backup_inspection_path: input.paths.backup_inspection.display().to_string(),
+        backup_provenance_path: input.paths.backup_provenance.display().to_string(),
+        backup_integrity_path: input.paths.backup_integrity.display().to_string(),
+        restore_plan_path: input.paths.restore_plan.display().to_string(),
+        preflight_summary_path: input.paths.preflight_summary.display().to_string(),
+    }
 }
 
 /// Inspect manifest and journal agreement without reading artifact bytes.
@@ -668,46 +787,338 @@ fn write_json_value_file(
 
 // Build the compact preflight summary emitted after all checks pass.
 fn preflight_summary_value(report: &BackupPreflightReport) -> serde_json::Value {
-    json!({
-        "status": report.status,
-        "backup_id": report.backup_id,
-        "backup_dir": report.backup_dir,
-        "source_environment": report.source_environment,
-        "source_root_canister": report.source_root_canister,
-        "topology_hash": report.topology_hash,
-        "mapping_path": report.mapping_path,
-        "journal_complete": report.journal_complete,
-        "inspection_status": report.inspection_status,
-        "provenance_status": report.provenance_status,
-        "backup_id_status": report.backup_id_status,
-        "topology_receipts_status": report.topology_receipts_status,
-        "topology_mismatch_count": report.topology_mismatch_count,
-        "integrity_verified": report.integrity_verified,
-        "manifest_members": report.manifest_members,
-        "backup_unit_count": report.backup_unit_count,
-        "restore_plan_members": report.restore_plan_members,
-        "restore_fixed_members": report.restore_fixed_members,
-        "restore_relocatable_members": report.restore_relocatable_members,
-        "restore_in_place_members": report.restore_in_place_members,
-        "restore_mapped_members": report.restore_mapped_members,
-        "restore_remapped_members": report.restore_remapped_members,
-        "restore_fleet_checks": report.restore_fleet_checks,
-        "restore_member_check_groups": report.restore_member_check_groups,
-        "restore_member_checks": report.restore_member_checks,
-        "restore_members_with_checks": report.restore_members_with_checks,
-        "restore_total_checks": report.restore_total_checks,
-        "restore_phase_count": report.restore_phase_count,
-        "restore_dependency_free_members": report.restore_dependency_free_members,
-        "restore_in_group_parent_edges": report.restore_in_group_parent_edges,
-        "restore_cross_group_parent_edges": report.restore_cross_group_parent_edges,
-        "manifest_validation_path": report.manifest_validation_path,
-        "backup_status_path": report.backup_status_path,
-        "backup_inspection_path": report.backup_inspection_path,
-        "backup_provenance_path": report.backup_provenance_path,
-        "backup_integrity_path": report.backup_integrity_path,
-        "restore_plan_path": report.restore_plan_path,
-        "preflight_summary_path": report.preflight_summary_path,
-    })
+    let mut summary = serde_json::Map::new();
+    insert_preflight_source_summary(&mut summary, report);
+    insert_preflight_restore_summary(&mut summary, report);
+    insert_preflight_report_paths(&mut summary, report);
+    serde_json::Value::Object(summary)
+}
+
+// Insert one named JSON value into the compact preflight summary.
+fn insert_summary_value(
+    summary: &mut serde_json::Map<String, serde_json::Value>,
+    key: &'static str,
+    value: serde_json::Value,
+) {
+    summary.insert(key.to_string(), value);
+}
+
+// Insert backup source and validation status fields into the summary.
+fn insert_preflight_source_summary(
+    summary: &mut serde_json::Map<String, serde_json::Value>,
+    report: &BackupPreflightReport,
+) {
+    insert_summary_value(summary, "status", json!(report.status));
+    insert_summary_value(summary, "backup_id", json!(report.backup_id));
+    insert_summary_value(summary, "backup_dir", json!(report.backup_dir));
+    insert_summary_value(
+        summary,
+        "source_environment",
+        json!(report.source_environment),
+    );
+    insert_summary_value(
+        summary,
+        "source_root_canister",
+        json!(report.source_root_canister),
+    );
+    insert_summary_value(summary, "topology_hash", json!(report.topology_hash));
+    insert_summary_value(summary, "mapping_path", json!(report.mapping_path));
+    insert_summary_value(summary, "journal_complete", json!(report.journal_complete));
+    insert_summary_value(
+        summary,
+        "journal_operation_metrics",
+        json!(report.journal_operation_metrics),
+    );
+    insert_summary_value(
+        summary,
+        "inspection_status",
+        json!(report.inspection_status),
+    );
+    insert_summary_value(
+        summary,
+        "provenance_status",
+        json!(report.provenance_status),
+    );
+    insert_summary_value(summary, "backup_id_status", json!(report.backup_id_status));
+    insert_summary_value(
+        summary,
+        "topology_receipts_status",
+        json!(report.topology_receipts_status),
+    );
+    insert_summary_value(
+        summary,
+        "topology_mismatch_count",
+        json!(report.topology_mismatch_count),
+    );
+    insert_summary_value(
+        summary,
+        "integrity_verified",
+        json!(report.integrity_verified),
+    );
+    insert_summary_value(summary, "manifest_members", json!(report.manifest_members));
+    insert_summary_value(
+        summary,
+        "backup_unit_count",
+        json!(report.backup_unit_count),
+    );
+}
+
+// Insert restore planning summary fields into the compact preflight summary.
+fn insert_preflight_restore_summary(
+    summary: &mut serde_json::Map<String, serde_json::Value>,
+    report: &BackupPreflightReport,
+) {
+    insert_summary_value(
+        summary,
+        "restore_plan_members",
+        json!(report.restore_plan_members),
+    );
+    insert_summary_value(
+        summary,
+        "restore_mapping_supplied",
+        json!(report.restore_mapping_supplied),
+    );
+    insert_summary_value(
+        summary,
+        "restore_all_sources_mapped",
+        json!(report.restore_all_sources_mapped),
+    );
+    insert_preflight_restore_identity_summary(summary, report);
+    insert_preflight_restore_readiness_summary(summary, report);
+    insert_preflight_restore_snapshot_summary(summary, report);
+    insert_preflight_restore_verification_summary(summary, report);
+    insert_preflight_restore_operation_summary(summary, report);
+    insert_preflight_restore_ordering_summary(summary, report);
+}
+
+// Insert restore identity summary fields into the compact preflight summary.
+fn insert_preflight_restore_identity_summary(
+    summary: &mut serde_json::Map<String, serde_json::Value>,
+    report: &BackupPreflightReport,
+) {
+    insert_summary_value(
+        summary,
+        "restore_fixed_members",
+        json!(report.restore_fixed_members),
+    );
+    insert_summary_value(
+        summary,
+        "restore_relocatable_members",
+        json!(report.restore_relocatable_members),
+    );
+    insert_summary_value(
+        summary,
+        "restore_in_place_members",
+        json!(report.restore_in_place_members),
+    );
+    insert_summary_value(
+        summary,
+        "restore_mapped_members",
+        json!(report.restore_mapped_members),
+    );
+    insert_summary_value(
+        summary,
+        "restore_remapped_members",
+        json!(report.restore_remapped_members),
+    );
+}
+
+// Insert restore readiness summary fields into the compact preflight summary.
+fn insert_preflight_restore_readiness_summary(
+    summary: &mut serde_json::Map<String, serde_json::Value>,
+    report: &BackupPreflightReport,
+) {
+    insert_summary_value(summary, "restore_ready", json!(report.restore_ready));
+    insert_summary_value(
+        summary,
+        "restore_readiness_reasons",
+        json!(report.restore_readiness_reasons),
+    );
+}
+
+// Insert restore snapshot summary fields into the compact preflight summary.
+fn insert_preflight_restore_snapshot_summary(
+    summary: &mut serde_json::Map<String, serde_json::Value>,
+    report: &BackupPreflightReport,
+) {
+    insert_summary_value(
+        summary,
+        "restore_all_members_have_module_hash",
+        json!(report.restore_all_members_have_module_hash),
+    );
+    insert_summary_value(
+        summary,
+        "restore_all_members_have_wasm_hash",
+        json!(report.restore_all_members_have_wasm_hash),
+    );
+    insert_summary_value(
+        summary,
+        "restore_all_members_have_code_version",
+        json!(report.restore_all_members_have_code_version),
+    );
+    insert_summary_value(
+        summary,
+        "restore_all_members_have_checksum",
+        json!(report.restore_all_members_have_checksum),
+    );
+    insert_summary_value(
+        summary,
+        "restore_members_with_module_hash",
+        json!(report.restore_members_with_module_hash),
+    );
+    insert_summary_value(
+        summary,
+        "restore_members_with_wasm_hash",
+        json!(report.restore_members_with_wasm_hash),
+    );
+    insert_summary_value(
+        summary,
+        "restore_members_with_code_version",
+        json!(report.restore_members_with_code_version),
+    );
+    insert_summary_value(
+        summary,
+        "restore_members_with_checksum",
+        json!(report.restore_members_with_checksum),
+    );
+}
+
+// Insert restore verification summary fields into the compact preflight summary.
+fn insert_preflight_restore_verification_summary(
+    summary: &mut serde_json::Map<String, serde_json::Value>,
+    report: &BackupPreflightReport,
+) {
+    insert_summary_value(
+        summary,
+        "restore_verification_required",
+        json!(report.restore_verification_required),
+    );
+    insert_summary_value(
+        summary,
+        "restore_all_members_have_checks",
+        json!(report.restore_all_members_have_checks),
+    );
+    insert_summary_value(
+        summary,
+        "restore_fleet_checks",
+        json!(report.restore_fleet_checks),
+    );
+    insert_summary_value(
+        summary,
+        "restore_member_check_groups",
+        json!(report.restore_member_check_groups),
+    );
+    insert_summary_value(
+        summary,
+        "restore_member_checks",
+        json!(report.restore_member_checks),
+    );
+    insert_summary_value(
+        summary,
+        "restore_members_with_checks",
+        json!(report.restore_members_with_checks),
+    );
+    insert_summary_value(
+        summary,
+        "restore_total_checks",
+        json!(report.restore_total_checks),
+    );
+}
+
+// Insert restore operation summary fields into the compact preflight summary.
+fn insert_preflight_restore_operation_summary(
+    summary: &mut serde_json::Map<String, serde_json::Value>,
+    report: &BackupPreflightReport,
+) {
+    insert_summary_value(
+        summary,
+        "restore_planned_snapshot_loads",
+        json!(report.restore_planned_snapshot_loads),
+    );
+    insert_summary_value(
+        summary,
+        "restore_planned_code_reinstalls",
+        json!(report.restore_planned_code_reinstalls),
+    );
+    insert_summary_value(
+        summary,
+        "restore_planned_verification_checks",
+        json!(report.restore_planned_verification_checks),
+    );
+    insert_summary_value(
+        summary,
+        "restore_planned_phases",
+        json!(report.restore_planned_phases),
+    );
+}
+
+// Insert restore ordering summary fields into the compact preflight summary.
+fn insert_preflight_restore_ordering_summary(
+    summary: &mut serde_json::Map<String, serde_json::Value>,
+    report: &BackupPreflightReport,
+) {
+    insert_summary_value(
+        summary,
+        "restore_phase_count",
+        json!(report.restore_phase_count),
+    );
+    insert_summary_value(
+        summary,
+        "restore_dependency_free_members",
+        json!(report.restore_dependency_free_members),
+    );
+    insert_summary_value(
+        summary,
+        "restore_in_group_parent_edges",
+        json!(report.restore_in_group_parent_edges),
+    );
+    insert_summary_value(
+        summary,
+        "restore_cross_group_parent_edges",
+        json!(report.restore_cross_group_parent_edges),
+    );
+}
+
+// Insert generated report paths into the compact preflight summary.
+fn insert_preflight_report_paths(
+    summary: &mut serde_json::Map<String, serde_json::Value>,
+    report: &BackupPreflightReport,
+) {
+    insert_summary_value(
+        summary,
+        "manifest_validation_path",
+        json!(report.manifest_validation_path),
+    );
+    insert_summary_value(
+        summary,
+        "backup_status_path",
+        json!(report.backup_status_path),
+    );
+    insert_summary_value(
+        summary,
+        "backup_inspection_path",
+        json!(report.backup_inspection_path),
+    );
+    insert_summary_value(
+        summary,
+        "backup_provenance_path",
+        json!(report.backup_provenance_path),
+    );
+    insert_summary_value(
+        summary,
+        "backup_integrity_path",
+        json!(report.backup_integrity_path),
+    );
+    insert_summary_value(
+        summary,
+        "restore_plan_path",
+        json!(report.restore_plan_path),
+    );
+    insert_summary_value(
+        summary,
+        "preflight_summary_path",
+        json!(report.preflight_summary_path),
+    );
 }
 
 // Build the same compact validation summary emitted by manifest validation.
@@ -888,6 +1299,10 @@ mod tests {
         assert_eq!(report.topology_hash, HASH);
         assert_eq!(report.mapping_path, None);
         assert!(report.journal_complete);
+        assert_eq!(
+            report.journal_operation_metrics,
+            DownloadOperationMetrics::default()
+        );
         assert_eq!(report.inspection_status, "ready");
         assert_eq!(report.provenance_status, "consistent");
         assert_eq!(report.backup_id_status, "matched");
@@ -897,6 +1312,8 @@ mod tests {
         assert_eq!(report.manifest_members, 1);
         assert_eq!(report.backup_unit_count, 1);
         assert_eq!(report.restore_plan_members, 1);
+        assert!(!report.restore_mapping_supplied);
+        assert!(!report.restore_all_sources_mapped);
         assert_preflight_report_restore_counts(&report);
         assert!(out_dir.join("manifest-validation.json").exists());
         assert!(out_dir.join("backup-status.json").exists());
@@ -940,11 +1357,34 @@ mod tests {
         assert_eq!(report.restore_in_place_members, 1);
         assert_eq!(report.restore_mapped_members, 0);
         assert_eq!(report.restore_remapped_members, 0);
+        assert!(!report.restore_ready);
+        assert_eq!(
+            report.restore_readiness_reasons,
+            [
+                "missing-module-hash",
+                "missing-wasm-hash",
+                "missing-snapshot-checksum"
+            ]
+        );
+        assert!(!report.restore_all_members_have_module_hash);
+        assert!(!report.restore_all_members_have_wasm_hash);
+        assert!(report.restore_all_members_have_code_version);
+        assert!(!report.restore_all_members_have_checksum);
+        assert_eq!(report.restore_members_with_module_hash, 0);
+        assert_eq!(report.restore_members_with_wasm_hash, 0);
+        assert_eq!(report.restore_members_with_code_version, 1);
+        assert_eq!(report.restore_members_with_checksum, 0);
+        assert!(report.restore_verification_required);
+        assert!(report.restore_all_members_have_checks);
         assert_eq!(report.restore_fleet_checks, 0);
         assert_eq!(report.restore_member_check_groups, 0);
         assert_eq!(report.restore_member_checks, 1);
         assert_eq!(report.restore_members_with_checks, 1);
         assert_eq!(report.restore_total_checks, 1);
+        assert_eq!(report.restore_planned_snapshot_loads, 1);
+        assert_eq!(report.restore_planned_code_reinstalls, 1);
+        assert_eq!(report.restore_planned_verification_checks, 1);
+        assert_eq!(report.restore_planned_phases, 1);
         assert_eq!(report.restore_phase_count, 1);
         assert_eq!(report.restore_dependency_free_members, 1);
         assert_eq!(report.restore_in_group_parent_edges, 0);
@@ -956,12 +1396,31 @@ mod tests {
         summary: &serde_json::Value,
         report: &BackupPreflightReport,
     ) {
+        assert_preflight_source_summary_matches_report(summary, report);
+        assert_preflight_restore_identity_summary_matches_report(summary, report);
+        assert_preflight_restore_readiness_summary_matches_report(summary, report);
+        assert_preflight_restore_snapshot_summary_matches_report(summary, report);
+        assert_preflight_restore_verification_summary_matches_report(summary, report);
+        assert_preflight_restore_operation_summary_matches_report(summary, report);
+        assert_preflight_restore_ordering_summary_matches_report(summary, report);
+        assert_preflight_path_summary_matches_report(summary, report);
+    }
+
+    // Compare source and validation summary JSON fields with the in-memory report.
+    fn assert_preflight_source_summary_matches_report(
+        summary: &serde_json::Value,
+        report: &BackupPreflightReport,
+    ) {
         assert_eq!(summary["status"], report.status);
         assert_eq!(summary["backup_id"], report.backup_id);
         assert_eq!(summary["source_environment"], report.source_environment);
         assert_eq!(summary["source_root_canister"], report.source_root_canister);
         assert_eq!(summary["topology_hash"], report.topology_hash);
         assert_eq!(summary["journal_complete"], report.journal_complete);
+        assert_eq!(
+            summary["journal_operation_metrics"],
+            json!(report.journal_operation_metrics)
+        );
         assert_eq!(summary["inspection_status"], report.inspection_status);
         assert_eq!(summary["provenance_status"], report.provenance_status);
         assert_eq!(summary["backup_id_status"], report.backup_id_status);
@@ -977,6 +1436,21 @@ mod tests {
         assert_eq!(summary["manifest_members"], report.manifest_members);
         assert_eq!(summary["backup_unit_count"], report.backup_unit_count);
         assert_eq!(summary["restore_plan_members"], report.restore_plan_members);
+        assert_eq!(
+            summary["restore_mapping_supplied"],
+            report.restore_mapping_supplied
+        );
+        assert_eq!(
+            summary["restore_all_sources_mapped"],
+            report.restore_all_sources_mapped
+        );
+    }
+
+    // Compare restore identity summary JSON fields with the in-memory report.
+    fn assert_preflight_restore_identity_summary_matches_report(
+        summary: &serde_json::Value,
+        report: &BackupPreflightReport,
+    ) {
         assert_eq!(
             summary["restore_fixed_members"],
             report.restore_fixed_members
@@ -997,6 +1471,72 @@ mod tests {
             summary["restore_remapped_members"],
             report.restore_remapped_members
         );
+    }
+
+    // Compare restore readiness summary JSON fields with the in-memory report.
+    fn assert_preflight_restore_readiness_summary_matches_report(
+        summary: &serde_json::Value,
+        report: &BackupPreflightReport,
+    ) {
+        assert_eq!(summary["restore_ready"], report.restore_ready);
+        assert_eq!(
+            summary["restore_readiness_reasons"],
+            json!(report.restore_readiness_reasons)
+        );
+    }
+
+    // Compare restore snapshot summary JSON fields with the in-memory report.
+    fn assert_preflight_restore_snapshot_summary_matches_report(
+        summary: &serde_json::Value,
+        report: &BackupPreflightReport,
+    ) {
+        assert_eq!(
+            summary["restore_all_members_have_module_hash"],
+            report.restore_all_members_have_module_hash
+        );
+        assert_eq!(
+            summary["restore_all_members_have_wasm_hash"],
+            report.restore_all_members_have_wasm_hash
+        );
+        assert_eq!(
+            summary["restore_all_members_have_code_version"],
+            report.restore_all_members_have_code_version
+        );
+        assert_eq!(
+            summary["restore_all_members_have_checksum"],
+            report.restore_all_members_have_checksum
+        );
+        assert_eq!(
+            summary["restore_members_with_module_hash"],
+            report.restore_members_with_module_hash
+        );
+        assert_eq!(
+            summary["restore_members_with_wasm_hash"],
+            report.restore_members_with_wasm_hash
+        );
+        assert_eq!(
+            summary["restore_members_with_code_version"],
+            report.restore_members_with_code_version
+        );
+        assert_eq!(
+            summary["restore_members_with_checksum"],
+            report.restore_members_with_checksum
+        );
+    }
+
+    // Compare restore verification summary JSON fields with the in-memory report.
+    fn assert_preflight_restore_verification_summary_matches_report(
+        summary: &serde_json::Value,
+        report: &BackupPreflightReport,
+    ) {
+        assert_eq!(
+            summary["restore_verification_required"],
+            report.restore_verification_required
+        );
+        assert_eq!(
+            summary["restore_all_members_have_checks"],
+            report.restore_all_members_have_checks
+        );
         assert_eq!(summary["restore_fleet_checks"], report.restore_fleet_checks);
         assert_eq!(
             summary["restore_member_check_groups"],
@@ -1011,6 +1551,36 @@ mod tests {
             report.restore_members_with_checks
         );
         assert_eq!(summary["restore_total_checks"], report.restore_total_checks);
+    }
+
+    // Compare restore operation summary JSON fields with the in-memory report.
+    fn assert_preflight_restore_operation_summary_matches_report(
+        summary: &serde_json::Value,
+        report: &BackupPreflightReport,
+    ) {
+        assert_eq!(
+            summary["restore_planned_snapshot_loads"],
+            report.restore_planned_snapshot_loads
+        );
+        assert_eq!(
+            summary["restore_planned_code_reinstalls"],
+            report.restore_planned_code_reinstalls
+        );
+        assert_eq!(
+            summary["restore_planned_verification_checks"],
+            report.restore_planned_verification_checks
+        );
+        assert_eq!(
+            summary["restore_planned_phases"],
+            report.restore_planned_phases
+        );
+    }
+
+    // Compare restore ordering summary JSON fields with the in-memory report.
+    fn assert_preflight_restore_ordering_summary_matches_report(
+        summary: &serde_json::Value,
+        report: &BackupPreflightReport,
+    ) {
         assert_eq!(summary["restore_phase_count"], report.restore_phase_count);
         assert_eq!(
             summary["restore_dependency_free_members"],
@@ -1024,6 +1594,18 @@ mod tests {
             summary["restore_cross_group_parent_edges"],
             report.restore_cross_group_parent_edges
         );
+    }
+
+    // Compare generated report path JSON fields with the in-memory report.
+    fn assert_preflight_path_summary_matches_report(
+        summary: &serde_json::Value,
+        report: &BackupPreflightReport,
+    ) {
+        assert_eq!(
+            summary["manifest_validation_path"],
+            report.manifest_validation_path
+        );
+        assert_eq!(summary["backup_status_path"], report.backup_status_path);
         assert_eq!(
             summary["backup_inspection_path"],
             report.backup_inspection_path
@@ -1031,6 +1613,15 @@ mod tests {
         assert_eq!(
             summary["backup_provenance_path"],
             report.backup_provenance_path
+        );
+        assert_eq!(
+            summary["backup_integrity_path"],
+            report.backup_integrity_path
+        );
+        assert_eq!(summary["restore_plan_path"], report.restore_plan_path);
+        assert_eq!(
+            summary["preflight_summary_path"],
+            report.preflight_summary_path
         );
     }
 
@@ -1481,6 +2072,7 @@ mod tests {
             backup_id: "backup-test".to_string(),
             discovery_topology_hash: Some(HASH.to_string()),
             pre_snapshot_topology_hash: Some(HASH.to_string()),
+            operation_metrics: canic_backup::journal::DownloadOperationMetrics::default(),
             artifacts: vec![ArtifactJournalEntry {
                 canister_id: ROOT.to_string(),
                 snapshot_id: "root-snapshot".to_string(),
@@ -1501,6 +2093,7 @@ mod tests {
             backup_id: "backup-test".to_string(),
             discovery_topology_hash: Some(HASH.to_string()),
             pre_snapshot_topology_hash: Some(HASH.to_string()),
+            operation_metrics: canic_backup::journal::DownloadOperationMetrics::default(),
             artifacts: vec![ArtifactJournalEntry {
                 canister_id: ROOT.to_string(),
                 snapshot_id: "root-snapshot".to_string(),

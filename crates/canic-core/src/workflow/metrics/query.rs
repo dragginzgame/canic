@@ -57,6 +57,18 @@ mod tests {
                 CanisterOpsMetricOperation, CanisterOpsMetricOutcome, CanisterOpsMetricReason,
                 CanisterOpsMetrics,
             },
+            cascade::{
+                CascadeMetricOperation, CascadeMetricOutcome, CascadeMetricReason,
+                CascadeMetricSnapshot, CascadeMetrics,
+            },
+            directory::{
+                DirectoryMetricOperation, DirectoryMetricOutcome, DirectoryMetricReason,
+                DirectoryMetrics,
+            },
+            pool::{PoolMetricOperation, PoolMetricOutcome, PoolMetricReason, PoolMetrics},
+            scaling::{
+                ScalingMetricOperation, ScalingMetricOutcome, ScalingMetricReason, ScalingMetrics,
+            },
             wasm_store::{
                 WasmStoreMetricOperation, WasmStoreMetricOutcome, WasmStoreMetricReason,
                 WasmStoreMetricSource, WasmStoreMetrics,
@@ -125,30 +137,66 @@ mod tests {
             WasmStoreMetricOutcome::Skipped,
             WasmStoreMetricReason::CacheHit,
         );
-
-        let page = MetricsQuery::page(
-            MetricsKind::CanisterOps,
-            PageRequest {
-                limit: 1,
-                offset: 0,
-            },
+        CascadeMetrics::record(
+            CascadeMetricOperation::RootFanout,
+            CascadeMetricSnapshot::Topology,
+            CascadeMetricOutcome::Completed,
+            CascadeMetricReason::Ok,
+        );
+        CascadeMetrics::record(
+            CascadeMetricOperation::ChildSend,
+            CascadeMetricSnapshot::State,
+            CascadeMetricOutcome::Failed,
+            CascadeMetricReason::SendFailed,
+        );
+        DirectoryMetrics::record(
+            DirectoryMetricOperation::Resolve,
+            DirectoryMetricOutcome::Started,
+            DirectoryMetricReason::Ok,
+        );
+        DirectoryMetrics::record(
+            DirectoryMetricOperation::Classify,
+            DirectoryMetricOutcome::Completed,
+            DirectoryMetricReason::PendingFresh,
+        );
+        PoolMetrics::record(
+            PoolMetricOperation::ImportQueued,
+            PoolMetricOutcome::Skipped,
+            PoolMetricReason::AlreadyPresent,
+        );
+        PoolMetrics::record(
+            PoolMetricOperation::CreateEmpty,
+            PoolMetricOutcome::Completed,
+            PoolMetricReason::Ok,
+        );
+        ScalingMetrics::record(
+            ScalingMetricOperation::CreateWorker,
+            ScalingMetricOutcome::Completed,
+            ScalingMetricReason::Ok,
+        );
+        ScalingMetrics::record(
+            ScalingMetricOperation::BootstrapPool,
+            ScalingMetricOutcome::Skipped,
+            ScalingMetricReason::TargetSatisfied,
         );
 
-        assert_eq!(page.total, 2);
-        assert_eq!(page.entries[0].labels, ["create", "app", "started", "ok"]);
-
-        let page = MetricsQuery::page(
+        assert_first_metric_labels(MetricsKind::CanisterOps, ["create", "app", "started", "ok"]);
+        assert_first_metric_labels(
             MetricsKind::WasmStore,
-            PageRequest {
-                limit: 1,
-                offset: 0,
-            },
+            ["chunk_upload", "bootstrap", "skipped", "cache_hit"],
         );
-
-        assert_eq!(page.total, 2);
-        assert_eq!(
-            page.entries[0].labels,
-            ["chunk_upload", "bootstrap", "skipped", "cache_hit"]
+        assert_first_metric_labels(
+            MetricsKind::Cascade,
+            ["child_send", "state", "failed", "send_failed"],
+        );
+        assert_first_metric_labels(
+            MetricsKind::Directory,
+            ["classify", "completed", "pending_fresh"],
+        );
+        assert_first_metric_labels(MetricsKind::Pool, ["create_empty", "completed", "ok"]);
+        assert_first_metric_labels(
+            MetricsKind::Scaling,
+            ["bootstrap_pool", "skipped", "target_satisfied"],
         );
     }
 
@@ -158,5 +206,19 @@ mod tests {
 
         assert_eq!(sample.value, "ok");
         assert_eq!(sample.local_instructions, 0);
+    }
+
+    // Assert that pagination sees the sorted first row for one metric family.
+    fn assert_first_metric_labels<const N: usize>(kind: MetricsKind, expected: [&str; N]) {
+        let page = MetricsQuery::page(
+            kind,
+            PageRequest {
+                limit: 1,
+                offset: 0,
+            },
+        );
+
+        assert_eq!(page.total, 2);
+        assert_eq!(page.entries[0].labels, expected);
     }
 }

@@ -31,7 +31,14 @@ fn metrics_query_page_is_public_facade_usable() {
 // Verify newly added metric families are reachable through the public facade.
 #[test]
 fn new_metric_families_are_public_facade_usable() {
-    for kind in [MetricsKind::CanisterOps, MetricsKind::WasmStore] {
+    for kind in [
+        MetricsKind::CanisterOps,
+        MetricsKind::Cascade,
+        MetricsKind::Directory,
+        MetricsKind::Pool,
+        MetricsKind::Scaling,
+        MetricsKind::WasmStore,
+    ] {
         let page = MetricsQuery::page(
             kind,
             PageRequest {

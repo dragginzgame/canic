@@ -10,6 +10,10 @@ use crate::{
         config::ConfigOps,
         ic::IcOps,
         rpc::request::{CreateCanisterParent, RequestOps},
+        runtime::metrics::directory::{
+            DirectoryMetricOperation as MetricOperation, DirectoryMetricOutcome as MetricOutcome,
+            DirectoryMetricReason as MetricReason, DirectoryMetrics,
+        },
         storage::{
             children::CanisterChildrenOps,
             placement::directory::{
@@ -80,12 +84,34 @@ pub struct DirectoryWorkflow;
 static DIRECTORY_CLAIM_NONCE: AtomicU64 = AtomicU64::new(1);
 
 impl DirectoryWorkflow {
+    // Record one directory placement metric row.
+    fn record(operation: MetricOperation, outcome: MetricOutcome, reason: MetricReason) {
+        DirectoryMetrics::record(operation, outcome, reason);
+    }
+
+    // Record one resolve metric row.
+    fn record_resolve(outcome: MetricOutcome, reason: MetricReason) {
+        Self::record(MetricOperation::Resolve, outcome, reason);
+    }
+
+    // Record one recovery metric row.
+    fn record_recover(outcome: MetricOutcome, reason: MetricReason) {
+        Self::record(MetricOperation::Recover, outcome, reason);
+    }
+
     /// Resolve a bound instance for one key or create and bind a new one.
     pub async fn resolve_or_create(
         pool: &str,
         key_value: &str,
     ) -> Result<DirectoryEntryStatusResponse, InternalError> {
-        let pool_cfg = Self::get_directory_pool_cfg(pool)?;
+        Self::record_resolve(MetricOutcome::Started, MetricReason::Ok);
+        let pool_cfg = match Self::get_directory_pool_cfg(pool) {
+            Ok(pool_cfg) => pool_cfg,
+            Err(err) => {
+                Self::record_resolve(MetricOutcome::Failed, MetricReason::from_error(&err));
+                return Err(err);
+            }
+        };
         let owner_pid = IcOps::metadata_entropy_canister();
 
         loop {
@@ -96,6 +122,7 @@ impl DirectoryWorkflow {
                     instance_pid,
                     bound_at,
                 }) => {
+                    Self::record_resolve(MetricOutcome::Completed, MetricReason::AlreadyBound);
                     return Ok(DirectoryEntryStatusResponse::Bound {
                         instance_pid,
                         bound_at,
@@ -107,6 +134,7 @@ impl DirectoryWorkflow {
                     created_at,
                     provisional_pid,
                 }) => {
+                    Self::record_resolve(MetricOutcome::Skipped, MetricReason::PendingFresh);
                     return Ok(DirectoryEntryStatusResponse::Pending {
                         owner_pid,
                         created_at,
@@ -118,27 +146,41 @@ impl DirectoryWorkflow {
                     claim_id,
                     provisional_pid,
                 }) => {
-                    return Self::repair_stale_entry(
-                        pool,
-                        key_value,
-                        claim_id,
-                        provisional_pid,
-                        now,
-                    );
+                    let repaired =
+                        Self::repair_stale_entry(pool, key_value, claim_id, provisional_pid, now)?;
+                    Self::record_resolve(MetricOutcome::Completed, MetricReason::StaleRepairable);
+                    return Ok(repaired);
                 }
 
                 Some(DirectoryEntryClassification::NeedsCleanup {
                     claim_id,
                     provisional_pid,
                 }) => {
-                    Self::cleanup_stale_entry(pool, key_value, claim_id, provisional_pid).await?;
+                    if let Err(err) =
+                        Self::cleanup_stale_entry(pool, key_value, claim_id, provisional_pid).await
+                    {
+                        Self::record_resolve(MetricOutcome::Failed, MetricReason::from_error(&err));
+                        return Err(err);
+                    }
                 }
 
                 None => {
-                    if let Some(status) =
-                        Self::claim_and_create_instance(pool, key_value, &pool_cfg, owner_pid)
-                            .await?
+                    let status = match Self::claim_and_create_instance(
+                        pool, key_value, &pool_cfg, owner_pid,
+                    )
+                    .await
                     {
+                        Ok(status) => status,
+                        Err(err) => {
+                            Self::record_resolve(
+                                MetricOutcome::Failed,
+                                MetricReason::from_error(&err),
+                            );
+                            return Err(err);
+                        }
+                    };
+                    if let Some(status) = status {
+                        Self::record_resolve(MetricOutcome::Completed, MetricReason::Ok);
                         return Ok(status);
                     }
                 }
@@ -152,17 +194,28 @@ impl DirectoryWorkflow {
         pool: &str,
         key_value: &str,
     ) -> Result<DirectoryRecoveryResponse, InternalError> {
-        let pool_cfg = Self::get_directory_pool_cfg(pool)?;
+        Self::record_recover(MetricOutcome::Started, MetricReason::Ok);
+        let pool_cfg = match Self::get_directory_pool_cfg(pool) {
+            Ok(pool_cfg) => pool_cfg,
+            Err(err) => {
+                Self::record_recover(MetricOutcome::Failed, MetricReason::from_error(&err));
+                return Err(err);
+            }
+        };
         loop {
             let now = IcOps::now_secs();
 
             match Self::classify_entry(pool, key_value, &pool_cfg, now) {
-                None => return Ok(DirectoryRecoveryResponse::Missing),
+                None => {
+                    Self::record_recover(MetricOutcome::Skipped, MetricReason::Missing);
+                    return Ok(DirectoryRecoveryResponse::Missing);
+                }
 
                 Some(DirectoryEntryClassification::Bound {
                     instance_pid,
                     bound_at,
                 }) => {
+                    Self::record_recover(MetricOutcome::Completed, MetricReason::AlreadyBound);
                     return Ok(DirectoryRecoveryResponse::Bound {
                         instance_pid,
                         bound_at,
@@ -174,6 +227,7 @@ impl DirectoryWorkflow {
                     created_at,
                     provisional_pid,
                 }) => {
+                    Self::record_recover(MetricOutcome::Skipped, MetricReason::PendingFresh);
                     return Ok(DirectoryRecoveryResponse::FreshPending {
                         owner_pid,
                         created_at,
@@ -199,6 +253,7 @@ impl DirectoryWorkflow {
                         ));
                     };
 
+                    Self::record_recover(MetricOutcome::Completed, MetricReason::StaleRepairable);
                     return Ok(DirectoryRecoveryResponse::RepairedToBound {
                         instance_pid,
                         bound_at,
@@ -217,6 +272,7 @@ impl DirectoryWorkflow {
                     )
                     .await?
                     {
+                        Self::record_recover(MetricOutcome::Completed, MetricReason::StaleCleanup);
                         return Ok(response);
                     }
                 }
@@ -226,9 +282,43 @@ impl DirectoryWorkflow {
 
     /// Bind one logical directory key to a validated direct child instance.
     pub fn bind_instance(pool: &str, key_value: &str, pid: Principal) -> Result<(), InternalError> {
-        let pool_cfg = Self::get_directory_pool_cfg(pool)?;
-        Self::validate_bind_target(pid, &pool_cfg.canister_role)?;
-        DirectoryRegistryOps::bind(pool, key_value, pid, IcOps::now_secs())
+        Self::record(
+            MetricOperation::Bind,
+            MetricOutcome::Started,
+            MetricReason::Ok,
+        );
+        let pool_cfg = match Self::get_directory_pool_cfg(pool) {
+            Ok(pool_cfg) => pool_cfg,
+            Err(err) => {
+                Self::record(
+                    MetricOperation::Bind,
+                    MetricOutcome::Failed,
+                    MetricReason::from_error(&err),
+                );
+                return Err(err);
+            }
+        };
+        if let Err((err, reason)) =
+            Self::validate_bind_target_with_reason(pid, &pool_cfg.canister_role)
+        {
+            Self::record(MetricOperation::Bind, MetricOutcome::Failed, reason);
+            return Err(err);
+        }
+        if let Err(err) = DirectoryRegistryOps::bind(pool, key_value, pid, IcOps::now_secs()) {
+            Self::record(
+                MetricOperation::Bind,
+                MetricOutcome::Failed,
+                MetricReason::from_error(&err),
+            );
+            return Err(err);
+        }
+
+        Self::record(
+            MetricOperation::Bind,
+            MetricOutcome::Completed,
+            MetricReason::Ok,
+        );
+        Ok(())
     }
 
     // Finalize one freshly created child using claim-matching writes so late async completions
@@ -239,6 +329,11 @@ impl DirectoryWorkflow {
         claim: DirectoryPendingClaim,
         pid: Principal,
     ) -> Result<Option<DirectoryEntryStatusResponse>, InternalError> {
+        Self::record(
+            MetricOperation::Finalize,
+            MetricOutcome::Started,
+            MetricReason::Ok,
+        );
         if !DirectoryRegistryOps::set_provisional_pid_if_claim_matches(
             pool,
             key_value,
@@ -246,23 +341,49 @@ impl DirectoryWorkflow {
             pid,
         )? {
             Self::recycle_abandoned_child(pid).await?;
+            Self::record(
+                MetricOperation::Finalize,
+                MetricOutcome::Skipped,
+                MetricReason::ClaimLost,
+            );
             return Ok(None);
         }
 
         let bound_at = IcOps::now_secs();
-        if !DirectoryRegistryOps::bind_if_claim_matches(
+        let bound = match DirectoryRegistryOps::bind_if_claim_matches(
             pool,
             key_value,
             claim.claim_id,
             pid,
             bound_at,
-        )? {
+        ) {
+            Ok(bound) => bound,
+            Err(err) => {
+                Self::record(
+                    MetricOperation::Finalize,
+                    MetricOutcome::Failed,
+                    MetricReason::from_error(&err),
+                );
+                return Err(err);
+            }
+        };
+        if !bound {
+            Self::record(
+                MetricOperation::Finalize,
+                MetricOutcome::Failed,
+                MetricReason::ClaimLost,
+            );
             return Err(InternalError::invariant(
                 InternalErrorOrigin::Workflow,
                 "directory claim lost between provisional attach and final bind",
             ));
         }
 
+        Self::record(
+            MetricOperation::Finalize,
+            MetricOutcome::Completed,
+            MetricReason::Ok,
+        );
         Ok(Some(DirectoryEntryStatusResponse::Bound {
             instance_pid: pid,
             bound_at,
@@ -279,39 +400,94 @@ impl DirectoryWorkflow {
         let now = IcOps::now_secs();
         let claim_id = new_claim_id();
 
-        let claim =
-            match DirectoryRegistryOps::claim_pending(pool, key_value, owner_pid, claim_id, now)? {
-                DirectoryClaimResult::Bound {
+        Self::record(
+            MetricOperation::Claim,
+            MetricOutcome::Started,
+            MetricReason::Ok,
+        );
+        let claim_result =
+            match DirectoryRegistryOps::claim_pending(pool, key_value, owner_pid, claim_id, now) {
+                Ok(result) => result,
+                Err(err) => {
+                    Self::record(
+                        MetricOperation::Claim,
+                        MetricOutcome::Failed,
+                        MetricReason::from_error(&err),
+                    );
+                    return Err(err);
+                }
+            };
+        let claim = match claim_result {
+            DirectoryClaimResult::Bound {
+                instance_pid,
+                bound_at,
+            } => {
+                Self::record(
+                    MetricOperation::Claim,
+                    MetricOutcome::Skipped,
+                    MetricReason::AlreadyBound,
+                );
+                return Ok(Some(DirectoryEntryStatusResponse::Bound {
                     instance_pid,
                     bound_at,
-                } => {
-                    return Ok(Some(DirectoryEntryStatusResponse::Bound {
-                        instance_pid,
-                        bound_at,
-                    }));
-                }
-                DirectoryClaimResult::PendingFresh {
-                    claim_id: _,
+                }));
+            }
+            DirectoryClaimResult::PendingFresh {
+                claim_id: _,
+                owner_pid,
+                created_at,
+                provisional_pid,
+            } => {
+                Self::record(
+                    MetricOperation::Claim,
+                    MetricOutcome::Skipped,
+                    MetricReason::PendingFresh,
+                );
+                return Ok(Some(DirectoryEntryStatusResponse::Pending {
                     owner_pid,
                     created_at,
                     provisional_pid,
-                } => {
-                    return Ok(Some(DirectoryEntryStatusResponse::Pending {
-                        owner_pid,
-                        created_at,
-                        provisional_pid,
-                    }));
-                }
-                DirectoryClaimResult::Claimed(claim) => claim,
-            };
+                }));
+            }
+            DirectoryClaimResult::Claimed(claim) => {
+                Self::record(
+                    MetricOperation::Claim,
+                    MetricOutcome::Completed,
+                    MetricReason::Claimed,
+                );
+                claim
+            }
+        };
 
-        let pid = RequestOps::create_canister::<()>(
+        Self::record(
+            MetricOperation::CreateInstance,
+            MetricOutcome::Started,
+            MetricReason::Ok,
+        );
+        let pid = match RequestOps::create_canister::<()>(
             &pool_cfg.canister_role,
             CreateCanisterParent::ThisCanister,
             None,
         )
-        .await?
-        .new_canister_pid;
+        .await
+        {
+            Ok(response) => {
+                Self::record(
+                    MetricOperation::CreateInstance,
+                    MetricOutcome::Completed,
+                    MetricReason::Ok,
+                );
+                response.new_canister_pid
+            }
+            Err(err) => {
+                Self::record(
+                    MetricOperation::CreateInstance,
+                    MetricOutcome::Failed,
+                    MetricReason::from_error(&err),
+                );
+                return Err(err);
+            }
+        };
 
         Self::finalize_created_instance(pool, key_value, claim, pid).await
     }
@@ -324,26 +500,72 @@ impl DirectoryWorkflow {
         claim_id: u64,
         provisional_pid: Option<Principal>,
     ) -> Result<(), InternalError> {
-        if let Some(pid) = provisional_pid {
-            Self::recycle_abandoned_child(pid).await?;
+        Self::record(
+            MetricOperation::CleanupStale,
+            MetricOutcome::Started,
+            MetricReason::Ok,
+        );
+        if let Some(pid) = provisional_pid
+            && let Err(err) = Self::recycle_abandoned_child(pid).await
+        {
+            Self::record(
+                MetricOperation::CleanupStale,
+                MetricOutcome::Failed,
+                MetricReason::from_error(&err),
+            );
+            return Err(err);
         }
 
-        let _ = DirectoryRegistryOps::release_stale_pending_if_claim_matches(
+        if let Err(err) = DirectoryRegistryOps::release_stale_pending_if_claim_matches(
             pool,
             key_value,
             claim_id,
             IcOps::now_secs(),
-        )?;
+        ) {
+            Self::record(
+                MetricOperation::CleanupStale,
+                MetricOutcome::Failed,
+                MetricReason::from_error(&err),
+            );
+            return Err(err);
+        }
+        Self::record(
+            MetricOperation::CleanupStale,
+            MetricOutcome::Completed,
+            MetricReason::ReleasedStale,
+        );
         Ok(())
     }
 
     // Delegate orphan disposition to the root pool lifecycle instead of encoding pool logic here.
     async fn recycle_abandoned_child(pid: Principal) -> Result<(), InternalError> {
         if !SubnetRegistryOps::is_registered(pid) {
+            Self::record(
+                MetricOperation::RecycleAbandoned,
+                MetricOutcome::Skipped,
+                MetricReason::RegistryMissing,
+            );
             return Ok(());
         }
 
-        let _ = RequestOps::recycle_canister(pid).await?;
+        Self::record(
+            MetricOperation::RecycleAbandoned,
+            MetricOutcome::Started,
+            MetricReason::Ok,
+        );
+        if let Err(err) = RequestOps::recycle_canister(pid).await {
+            Self::record(
+                MetricOperation::RecycleAbandoned,
+                MetricOutcome::Failed,
+                MetricReason::from_error(&err),
+            );
+            return Err(err);
+        }
+        Self::record(
+            MetricOperation::RecycleAbandoned,
+            MetricOutcome::Completed,
+            MetricReason::Ok,
+        );
         Ok(())
     }
 
@@ -355,33 +577,81 @@ impl DirectoryWorkflow {
         claim_id: u64,
         provisional_pid: Option<Principal>,
     ) -> Result<Option<DirectoryRecoveryResponse>, InternalError> {
-        if let Some(pid) = provisional_pid {
-            Self::recycle_abandoned_child(pid).await?;
+        Self::record(
+            MetricOperation::CleanupStale,
+            MetricOutcome::Started,
+            MetricReason::Ok,
+        );
+        if let Some(pid) = provisional_pid
+            && let Err(err) = Self::recycle_abandoned_child(pid).await
+        {
+            Self::record(
+                MetricOperation::CleanupStale,
+                MetricOutcome::Failed,
+                MetricReason::from_error(&err),
+            );
+            return Err(err);
         }
 
         let now = IcOps::now_secs();
         match DirectoryRegistryOps::release_stale_pending_if_claim_matches(
             pool, key_value, claim_id, now,
-        )? {
-            DirectoryReleaseResult::ReleasedStalePending {
+        ) {
+            Ok(DirectoryReleaseResult::ReleasedStalePending {
                 owner_pid,
                 created_at,
                 provisional_pid,
-            } => Ok(Some(DirectoryRecoveryResponse::ReleasedStalePending {
-                owner_pid,
-                created_at,
-                provisional_pid,
-                released_at: now,
-            })),
-            DirectoryReleaseResult::Missing => Ok(Some(DirectoryRecoveryResponse::Missing)),
-            DirectoryReleaseResult::Bound {
+            }) => {
+                Self::record(
+                    MetricOperation::CleanupStale,
+                    MetricOutcome::Completed,
+                    MetricReason::ReleasedStale,
+                );
+                Ok(Some(DirectoryRecoveryResponse::ReleasedStalePending {
+                    owner_pid,
+                    created_at,
+                    provisional_pid,
+                    released_at: now,
+                }))
+            }
+            Ok(DirectoryReleaseResult::Missing) => {
+                Self::record(
+                    MetricOperation::CleanupStale,
+                    MetricOutcome::Skipped,
+                    MetricReason::Missing,
+                );
+                Ok(Some(DirectoryRecoveryResponse::Missing))
+            }
+            Ok(DirectoryReleaseResult::Bound {
                 instance_pid,
                 bound_at,
-            } => Ok(Some(DirectoryRecoveryResponse::Bound {
-                instance_pid,
-                bound_at,
-            })),
-            DirectoryReleaseResult::PendingCurrent { .. } => Ok(None),
+            }) => {
+                Self::record(
+                    MetricOperation::CleanupStale,
+                    MetricOutcome::Skipped,
+                    MetricReason::AlreadyBound,
+                );
+                Ok(Some(DirectoryRecoveryResponse::Bound {
+                    instance_pid,
+                    bound_at,
+                }))
+            }
+            Ok(DirectoryReleaseResult::PendingCurrent { .. }) => {
+                Self::record(
+                    MetricOperation::CleanupStale,
+                    MetricOutcome::Skipped,
+                    MetricReason::PendingCurrent,
+                );
+                Ok(None)
+            }
+            Err(err) => {
+                Self::record(
+                    MetricOperation::CleanupStale,
+                    MetricOutcome::Failed,
+                    MetricReason::from_error(&err),
+                );
+                Err(err)
+            }
         }
     }
 
@@ -392,7 +662,14 @@ impl DirectoryWorkflow {
         pool_cfg: &DirectoryPool,
         now: u64,
     ) -> Option<DirectoryEntryClassification> {
-        let state = DirectoryRegistryOps::lookup_state(pool, key_value)?;
+        let Some(state) = DirectoryRegistryOps::lookup_state(pool, key_value) else {
+            Self::record(
+                MetricOperation::Classify,
+                MetricOutcome::Completed,
+                MetricReason::Missing,
+            );
+            return None;
+        };
 
         let classification = match state {
             DirectoryEntryState::Bound {
@@ -418,7 +695,7 @@ impl DirectoryWorkflow {
                 claim_id,
                 provisional_pid: Some(pid),
                 ..
-            } if Self::validate_bind_target(pid, &pool_cfg.canister_role).is_ok() => {
+            } if Self::validate_bind_target_with_reason(pid, &pool_cfg.canister_role).is_ok() => {
                 DirectoryEntryClassification::Repairable {
                     claim_id,
                     provisional_pid: pid,
@@ -435,7 +712,22 @@ impl DirectoryWorkflow {
             },
         };
 
+        Self::record(
+            MetricOperation::Classify,
+            MetricOutcome::Completed,
+            Self::classification_reason(&classification),
+        );
         Some(classification)
+    }
+
+    // Map an internal directory entry classification to the public metric reason vocabulary.
+    const fn classification_reason(classification: &DirectoryEntryClassification) -> MetricReason {
+        match classification {
+            DirectoryEntryClassification::Bound { .. } => MetricReason::AlreadyBound,
+            DirectoryEntryClassification::PendingFresh { .. } => MetricReason::PendingFresh,
+            DirectoryEntryClassification::Repairable { .. } => MetricReason::StaleRepairable,
+            DirectoryEntryClassification::NeedsCleanup { .. } => MetricReason::StaleCleanup,
+        }
     }
 
     // Repair a stale valid provisional child only if its original claim is still current.
@@ -446,49 +738,84 @@ impl DirectoryWorkflow {
         provisional_pid: Principal,
         now: u64,
     ) -> Result<DirectoryEntryStatusResponse, InternalError> {
-        if !DirectoryRegistryOps::bind_if_claim_matches(
+        Self::record(
+            MetricOperation::RepairStale,
+            MetricOutcome::Started,
+            MetricReason::Ok,
+        );
+        let repaired = match DirectoryRegistryOps::bind_if_claim_matches(
             pool,
             key_value,
             claim_id,
             provisional_pid,
             now,
-        )? {
+        ) {
+            Ok(repaired) => repaired,
+            Err(err) => {
+                Self::record(
+                    MetricOperation::RepairStale,
+                    MetricOutcome::Failed,
+                    MetricReason::from_error(&err),
+                );
+                return Err(err);
+            }
+        };
+        if !repaired {
+            Self::record(
+                MetricOperation::RepairStale,
+                MetricOutcome::Failed,
+                MetricReason::ClaimLost,
+            );
             return Err(InternalError::invariant(
                 InternalErrorOrigin::Workflow,
                 "directory claim lost during stale repair without an await boundary",
             ));
         }
 
+        Self::record(
+            MetricOperation::RepairStale,
+            MetricOutcome::Completed,
+            MetricReason::Ok,
+        );
         Ok(DirectoryEntryStatusResponse::Bound {
             instance_pid: provisional_pid,
             bound_at: now,
         })
     }
 
-    // Validate that the target instance is one of this canister's direct children and
-    // that its registered role matches the pool's configured instance role.
-    fn validate_bind_target(
+    // Validate a bind target while preserving a bounded metric reason for callers.
+    fn validate_bind_target_with_reason(
         pid: Principal,
         expected_role: &CanisterRole,
-    ) -> Result<(), InternalError> {
+    ) -> Result<(), (InternalError, MetricReason)> {
         if !CanisterChildrenOps::data()
             .entries
             .iter()
             .any(|(child_pid, _)| *child_pid == pid)
         {
-            return Err(DirectoryWorkflowError::InstanceNotDirectChild(pid).into());
+            return Err((
+                DirectoryWorkflowError::InstanceNotDirectChild(pid).into(),
+                MetricReason::InvalidChild,
+            ));
         }
 
-        let record =
-            SubnetRegistryOps::get(pid).ok_or(DirectoryWorkflowError::RegistryEntryMissing(pid))?;
+        let Some(record) = SubnetRegistryOps::get(pid) else {
+            return Err((
+                DirectoryWorkflowError::RegistryEntryMissing(pid).into(),
+                MetricReason::RegistryMissing,
+            ));
+        };
 
         if record.role != *expected_role {
-            return Err(DirectoryWorkflowError::InstanceRoleMismatch {
-                pid,
-                expected: expected_role.clone(),
-                actual: record.role,
-            }
-            .into());
+            return Err((
+                DirectoryWorkflowError::InstanceRoleMismatch {
+                    pid,
+                    expected: expected_role.clone(),
+                    actual: record.role,
+                }
+                .into(),
+                MetricReason::RoleMismatch,
+            ));
         }
 
         Ok(())

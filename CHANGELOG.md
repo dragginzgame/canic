@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.30.x] - 2026-05-03 - Fleet Snapshot Backups
 
+- `0.30.17` makes restore dry-run, preflight, and snapshot journals expose explicit mapping, journal operation metrics, provenance, readiness, and reason fields for automation, and adds cascade, pool, scaling, and directory metrics for propagation, reusable-canister, worker-placement, and keyed-placement visibility.
 - `0.30.16` adds canister operation and wasm-store metrics for fleet lifecycle visibility, including create allocation source, propagation failure, and targeted lifecycle metric coverage.
 - `0.30.15` adds restore identity, verification, and topology ordering summaries, typed query perf samples for local-only instruction audit probes, and lifecycle metrics for init/post-upgrade runtime seeding plus async bootstrap progress.
 

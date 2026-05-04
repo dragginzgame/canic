@@ -1,8 +1,10 @@
 use candid::Principal;
 use canic_backup::{
     artifacts::{ArtifactChecksum, ArtifactChecksumError},
-    journal::JournalValidationError,
-    journal::{ArtifactJournalEntry, ArtifactState, DownloadJournal},
+    journal::{
+        ArtifactJournalEntry, ArtifactState, DownloadJournal, DownloadOperationMetrics,
+        JournalValidationError,
+    },
     manifest::{
         BackupUnit, BackupUnitKind, ConsistencyMode, ConsistencySection, FleetBackupManifest,
         FleetMember, FleetSection, IdentityMode, ManifestValidationError, SourceMetadata,
@@ -278,6 +280,10 @@ pub fn download_snapshots(
         backup_id: backup_id(options),
         discovery_topology_hash: Some(discovery_topology_hash.hash.clone()),
         pre_snapshot_topology_hash: Some(pre_snapshot_topology_hash.hash.clone()),
+        operation_metrics: DownloadOperationMetrics {
+            target_count: targets.len(),
+            ..DownloadOperationMetrics::default()
+        },
         artifacts: Vec::new(),
     };
     let layout = BackupLayout::new(options.out.clone());
@@ -380,7 +386,9 @@ fn capture_snapshot_artifact(
     temp_path: PathBuf,
 ) -> Result<SnapshotArtifact, SnapshotCommandError> {
     with_optional_stop(options, &target.canister_id, || {
+        journal.operation_metrics.snapshot_create_started += 1;
         let snapshot_id = create_snapshot(options, &target.canister_id)?;
+        journal.operation_metrics.snapshot_create_completed += 1;
         let mut entry = ArtifactJournalEntry {
             canister_id: target.canister_id.clone(),
             snapshot_id: snapshot_id.clone(),
@@ -398,18 +406,26 @@ fn capture_snapshot_artifact(
             fs::remove_dir_all(&temp_path)?;
         }
         fs::create_dir_all(&temp_path)?;
+        journal.operation_metrics.snapshot_download_started += 1;
+        layout.write_journal(journal)?;
         download_snapshot(options, &target.canister_id, &snapshot_id, &temp_path)?;
+        journal.operation_metrics.snapshot_download_completed += 1;
         entry.advance_to(ArtifactState::Downloaded, timestamp_placeholder())?;
         entry.temp_path = Some(temp_path.display().to_string());
         update_journal_entry(journal, &entry);
         layout.write_journal(journal)?;
 
+        journal.operation_metrics.checksum_verify_started += 1;
+        layout.write_journal(journal)?;
         let checksum = ArtifactChecksum::from_path(&temp_path)?;
+        journal.operation_metrics.checksum_verify_completed += 1;
         entry.checksum = Some(checksum.hash.clone());
         entry.advance_to(ArtifactState::ChecksumVerified, timestamp_placeholder())?;
         update_journal_entry(journal, &entry);
         layout.write_journal(journal)?;
 
+        journal.operation_metrics.artifact_finalize_started += 1;
+        layout.write_journal(journal)?;
         if artifact_path.exists() {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::AlreadyExists,
@@ -418,6 +434,7 @@ fn capture_snapshot_artifact(
             .into());
         }
         fs::rename(&temp_path, &artifact_path)?;
+        journal.operation_metrics.artifact_finalize_completed += 1;
         entry.temp_path = None;
         entry.advance_to(ArtifactState::Durable, timestamp_placeholder())?;
         update_journal_entry(journal, &entry);
@@ -1234,6 +1251,15 @@ exit 1
         fs::remove_dir_all(root).expect("remove temp root");
         assert_eq!(result.artifacts.len(), 1);
         assert_eq!(journal.artifacts.len(), 1);
+        assert_eq!(journal.operation_metrics.target_count, 1);
+        assert_eq!(journal.operation_metrics.snapshot_create_started, 1);
+        assert_eq!(journal.operation_metrics.snapshot_create_completed, 1);
+        assert_eq!(journal.operation_metrics.snapshot_download_started, 1);
+        assert_eq!(journal.operation_metrics.snapshot_download_completed, 1);
+        assert_eq!(journal.operation_metrics.checksum_verify_started, 1);
+        assert_eq!(journal.operation_metrics.checksum_verify_completed, 1);
+        assert_eq!(journal.operation_metrics.artifact_finalize_started, 1);
+        assert_eq!(journal.operation_metrics.artifact_finalize_completed, 1);
         assert_eq!(journal.artifacts[0].state, ArtifactState::Durable);
         assert!(journal.artifacts[0].checksum.is_some());
         assert_eq!(manifest.backup_id, journal.backup_id);
