@@ -1,8 +1,15 @@
+use candid::Principal;
 use canic_backup::{
     artifacts::{ArtifactChecksum, ArtifactChecksumError},
     journal::JournalValidationError,
     journal::{ArtifactJournalEntry, ArtifactState, DownloadJournal},
+    manifest::{
+        BackupUnit, BackupUnitKind, ConsistencyMode, ConsistencySection, FleetBackupManifest,
+        FleetMember, FleetSection, IdentityMode, ManifestValidationError, SourceMetadata,
+        SourceSnapshot, ToolMetadata, VerificationCheck, VerificationPlan,
+    },
     persistence::{BackupLayout, PersistenceError},
+    topology::{TopologyHasher, TopologyRecord},
 };
 use serde_json::Value;
 use std::{
@@ -44,6 +51,9 @@ pub enum SnapshotCommandError {
     #[error("could not parse snapshot id from dfx output: {0}")]
     SnapshotIdUnavailable(String),
 
+    #[error("field {field} must be a valid principal: {value}")]
+    InvalidPrincipal { field: &'static str, value: String },
+
     #[error(transparent)]
     Io(#[from] std::io::Error),
 
@@ -58,6 +68,9 @@ pub enum SnapshotCommandError {
 
     #[error(transparent)]
     Journal(#[from] JournalValidationError),
+
+    #[error(transparent)]
+    InvalidManifest(#[from] ManifestValidationError),
 }
 
 ///
@@ -190,6 +203,7 @@ impl SnapshotLifecycleMode {
 pub struct SnapshotTarget {
     pub canister_id: String,
     pub role: Option<String>,
+    pub parent_canister_id: Option<String>,
 }
 
 /// Run a snapshot subcommand.
@@ -255,8 +269,9 @@ pub fn download_snapshots(
     };
     let layout = BackupLayout::new(options.out.clone());
 
-    for target in targets {
-        let artifact_path = options.out.join(safe_path_segment(&target.canister_id));
+    for target in &targets {
+        let artifact_relative_path = PathBuf::from(safe_path_segment(&target.canister_id));
+        let artifact_path = options.out.join(&artifact_relative_path);
         let temp_path = options
             .out
             .join(format!("{}.tmp", safe_path_segment(&target.canister_id)));
@@ -298,7 +313,7 @@ pub fn download_snapshots(
                 snapshot_id: snapshot_id.clone(),
                 state: ArtifactState::Created,
                 temp_path: None,
-                artifact_path: artifact_path.display().to_string(),
+                artifact_path: artifact_relative_path.display().to_string(),
                 checksum_algorithm: "sha256".to_string(),
                 checksum: None,
                 updated_at: timestamp_placeholder(),
@@ -346,6 +361,11 @@ pub fn download_snapshots(
         artifacts.push(artifact);
     }
 
+    if !options.dry_run {
+        let manifest = build_manifest(options, &targets, &artifacts)?;
+        layout.write_manifest(&manifest)?;
+    }
+
     Ok(SnapshotDownloadResult { artifacts })
 }
 
@@ -366,6 +386,7 @@ pub fn resolve_targets(
         return Ok(vec![SnapshotTarget {
             canister_id: options.canister.clone(),
             role: None,
+            parent_canister_id: None,
         }]);
     }
 
@@ -693,6 +714,7 @@ pub fn targets_from_registry(
     targets.push(SnapshotTarget {
         canister_id: root.pid.clone(),
         role: root.role.clone(),
+        parent_canister_id: root.parent_pid.clone(),
     });
     seen.insert(root.pid.clone());
 
@@ -706,6 +728,7 @@ pub fn targets_from_registry(
                 targets.push(SnapshotTarget {
                     canister_id: child.pid.clone(),
                     role: child.role.clone(),
+                    parent_canister_id: child.parent_pid.clone(),
                 });
                 if recursive {
                     queue.push_back(child.pid.clone());
@@ -715,6 +738,175 @@ pub fn targets_from_registry(
     }
 
     Ok(targets)
+}
+
+// Build a validated manifest for one successful snapshot download run.
+fn build_manifest(
+    options: &SnapshotDownloadOptions,
+    targets: &[SnapshotTarget],
+    artifacts: &[SnapshotArtifact],
+) -> Result<FleetBackupManifest, SnapshotCommandError> {
+    let topology_records = targets
+        .iter()
+        .enumerate()
+        .map(|(index, target)| topology_record(options, index, target))
+        .collect::<Result<Vec<_>, _>>()?;
+    let topology_hash = TopologyHasher::hash(&topology_records);
+    let roles = targets
+        .iter()
+        .enumerate()
+        .map(|(index, target)| target_role(options, index, target))
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect::<Vec<_>>();
+
+    let manifest = FleetBackupManifest {
+        manifest_version: 1,
+        backup_id: backup_id(options),
+        created_at: timestamp_placeholder(),
+        tool: ToolMetadata {
+            name: "canic-cli".to_string(),
+            version: env!("CARGO_PKG_VERSION").to_string(),
+        },
+        source: SourceMetadata {
+            environment: options
+                .network
+                .clone()
+                .unwrap_or_else(|| "local".to_string()),
+            root_canister: options
+                .root
+                .clone()
+                .unwrap_or_else(|| options.canister.clone()),
+        },
+        consistency: ConsistencySection {
+            mode: ConsistencyMode::CrashConsistent,
+            backup_units: vec![BackupUnit {
+                unit_id: "snapshot-selection".to_string(),
+                kind: if options.include_children {
+                    BackupUnitKind::SubtreeRooted
+                } else {
+                    BackupUnitKind::Flat
+                },
+                roles,
+                consistency_reason: if options.include_children {
+                    None
+                } else {
+                    Some("explicit single-canister snapshot selection".to_string())
+                },
+                dependency_closure: Vec::new(),
+                topology_validation: if options.include_children {
+                    "registry-subtree-selection".to_string()
+                } else {
+                    "explicit-selection".to_string()
+                },
+                quiescence_strategy: None,
+            }],
+        },
+        fleet: FleetSection {
+            topology_hash_algorithm: topology_hash.algorithm,
+            topology_hash_input: topology_hash.input,
+            discovery_topology_hash: topology_hash.hash.clone(),
+            pre_snapshot_topology_hash: topology_hash.hash.clone(),
+            topology_hash: topology_hash.hash,
+            members: targets
+                .iter()
+                .enumerate()
+                .map(|(index, target)| fleet_member(options, index, target, artifacts))
+                .collect::<Result<Vec<_>, _>>()?,
+        },
+        verification: VerificationPlan::default(),
+    };
+
+    manifest.validate()?;
+    Ok(manifest)
+}
+
+// Build one canonical topology record for manifest hashing.
+fn topology_record(
+    options: &SnapshotDownloadOptions,
+    index: usize,
+    target: &SnapshotTarget,
+) -> Result<TopologyRecord, SnapshotCommandError> {
+    Ok(TopologyRecord {
+        pid: parse_principal("fleet.members[].canister_id", &target.canister_id)?,
+        parent_pid: target
+            .parent_canister_id
+            .as_deref()
+            .map(|parent| parse_principal("fleet.members[].parent_canister_id", parent))
+            .transpose()?,
+        role: target_role(options, index, target),
+        module_hash: None,
+    })
+}
+
+// Build one manifest member from a captured durable artifact.
+fn fleet_member(
+    options: &SnapshotDownloadOptions,
+    index: usize,
+    target: &SnapshotTarget,
+    artifacts: &[SnapshotArtifact],
+) -> Result<FleetMember, SnapshotCommandError> {
+    let Some(artifact) = artifacts
+        .iter()
+        .find(|artifact| artifact.canister_id == target.canister_id)
+    else {
+        return Err(SnapshotCommandError::SnapshotIdUnavailable(format!(
+            "missing artifact for {}",
+            target.canister_id
+        )));
+    };
+    let role = target_role(options, index, target);
+
+    Ok(FleetMember {
+        role: role.clone(),
+        canister_id: target.canister_id.clone(),
+        parent_canister_id: target.parent_canister_id.clone(),
+        subnet_canister_id: options.root.clone(),
+        controller_hint: None,
+        identity_mode: if target.canister_id == options.canister {
+            IdentityMode::Fixed
+        } else {
+            IdentityMode::Relocatable
+        },
+        restore_group: if target.canister_id == options.canister {
+            1
+        } else {
+            2
+        },
+        verification_class: "basic".to_string(),
+        verification_checks: vec![VerificationCheck {
+            kind: "status".to_string(),
+            method: None,
+            roles: vec![role],
+        }],
+        source_snapshot: SourceSnapshot {
+            snapshot_id: artifact.snapshot_id.clone(),
+            module_hash: None,
+            wasm_hash: None,
+            code_version: None,
+            artifact_path: safe_path_segment(&target.canister_id),
+            checksum_algorithm: "sha256".to_string(),
+        },
+    })
+}
+
+// Return the manifest role for one selected snapshot target.
+fn target_role(options: &SnapshotDownloadOptions, index: usize, target: &SnapshotTarget) -> String {
+    target.role.clone().unwrap_or_else(|| {
+        if target.canister_id == options.canister {
+            "root".to_string()
+        } else {
+            format!("member-{index}")
+        }
+    })
+}
+
+// Parse one principal used by generated topology manifest metadata.
+fn parse_principal(field: &'static str, value: &str) -> Result<Principal, SnapshotCommandError> {
+    Principal::from_text(value).map_err(|_| SnapshotCommandError::InvalidPrincipal {
+        field,
+        value: value.to_string(),
+    })
 }
 
 // Parse a likely snapshot id from dfx output.
@@ -882,10 +1074,10 @@ mod tests {
         assert_eq!(options.lifecycle, SnapshotLifecycleMode::StopAndResume);
     }
 
-    // Ensure the actual command path writes a durable journal using a fake dfx binary.
+    // Ensure the actual command path writes a manifest and durable journal.
     #[cfg(unix)]
     #[test]
-    fn download_snapshots_writes_durable_journal() {
+    fn download_snapshots_writes_manifest_and_durable_journal() {
         use std::os::unix::fs::PermissionsExt;
 
         let root = temp_dir("canic-cli-download");
@@ -933,13 +1125,22 @@ exit 1
         };
 
         let result = download_snapshots(&options).expect("download snapshots");
-        let journal = BackupLayout::new(out).read_journal().expect("read journal");
+        let layout = BackupLayout::new(out);
+        let journal = layout.read_journal().expect("read journal");
+        let manifest = layout.read_manifest().expect("read manifest");
 
         fs::remove_dir_all(root).expect("remove temp root");
         assert_eq!(result.artifacts.len(), 1);
         assert_eq!(journal.artifacts.len(), 1);
         assert_eq!(journal.artifacts[0].state, ArtifactState::Durable);
         assert!(journal.artifacts[0].checksum.is_some());
+        assert_eq!(manifest.backup_id, journal.backup_id);
+        assert_eq!(manifest.fleet.members.len(), 1);
+        assert_eq!(manifest.fleet.members[0].canister_id, ROOT);
+        assert_eq!(
+            manifest.fleet.members[0].source_snapshot.snapshot_id,
+            "snapshot-aaaaa-aa"
+        );
     }
 
     // Build representative subnet registry JSON.

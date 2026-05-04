@@ -7,22 +7,17 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.30.x] - 2026-05-03 - Fleet Snapshot Backups
 
-- `0.30.5` lets manifest validation write report files, backup status fail on incomplete journals, restore dry-run planning require a verified backup layout, and Access/Perf metrics stay covered end to end.
-- `0.30.4` refreshes the release version and installer surfaces after the backup integrity line so downstream setup paths resolve the live patch.
-- `0.30.3` adds `canic backup status`, `canic backup verify`, and backup layout integrity reporting so operators can inspect resumable journals and validate a manifest, durable artifact set, and SHA-256 checksums before restore planning.
-- `0.30.2` tightens restore preflight by making restore plans include provenance, target parent mapping, identity, snapshot, and verification metadata while rejecting backup-unit and mapping references that do not exist in the manifest.
-- `0.30.1` finishes the publish follow-through for the fleet backup line by including the new backup and CLI crates in release order, adding manifest validation and restore planning commands, removing the remaining endpoint metrics macro hooks, documenting metric row shapes, and refreshing installer/version surfaces.
-- `0.30.0` adds the first fleet backup foundation with manifest validation, topology hashing, resumable artifact journals, restore dry-run planning, and a `canic` CLI command for downloading snapshots for a canister and its registry-discovered children.
+- `0.30.7` makes snapshot capture write the canonical backup manifest, adds `canic backup preflight` for the standard no-mutation restore-readiness report bundle, and cleans up the 0.30 changelog example placement.
 
 ```bash
-canic snapshot download \
-  --canister <canister-id> \
-  --root <root-canister-id> \
-  --recursive \
-  --out backups/<run-id> \
-  --stop-before-snapshot \
-  --resume-after-snapshot
+canic backup preflight \
+  --dir backups/<run-id> \
+  --out-dir preflight/<run-id> \
+  --mapping restore-map.json
 ```
+
+- `0.30.6` refreshes the release version and installer surfaces after the 0.30.5 operator reporting line so downstream setup paths resolve the live patch.
+- `0.30.5` lets manifest validation write report files, backup status fail on incomplete journals, restore dry-run planning require a verified backup layout, and Access/Perf metrics stay covered end to end.
 
 ```bash
 canic manifest validate \
@@ -38,17 +33,40 @@ canic backup status \
 ```
 
 ```bash
-canic backup verify \
-  --dir backups/<run-id> \
-  --out backup-integrity.json
-```
-
-```bash
 canic restore plan \
   --backup-dir backups/<run-id> \
   --mapping restore-map.json \
   --out restore-plan.json \
   --require-verified
+```
+
+- `0.30.4` refreshes the release version and installer surfaces after the backup integrity line so downstream setup paths resolve the live patch.
+- `0.30.3` adds `canic backup status`, `canic backup verify`, and backup layout integrity reporting so operators can inspect resumable journals and validate a manifest, durable artifact set, and SHA-256 checksums before restore planning.
+
+```bash
+canic backup verify \
+  --dir backups/<run-id> \
+  --out backup-integrity.json
+```
+
+- `0.30.2` tightens restore preflight by making restore plans include provenance, target parent mapping, identity, snapshot, and verification metadata while rejecting backup-unit and mapping references that do not exist in the manifest.
+- `0.30.1` finishes the publish follow-through for the fleet backup line by including the new backup and CLI crates in release order, adding manifest validation and restore planning commands, removing the remaining endpoint metrics macro hooks, documenting metric row shapes, and refreshing installer/version surfaces.
+
+```bash
+canic manifest validate \
+  --manifest backups/<run-id>/manifest.json
+```
+
+- `0.30.0` adds the first fleet backup foundation with manifest validation, topology hashing, resumable artifact journals, restore dry-run planning, and a `canic` CLI command for downloading snapshots for a canister and its registry-discovered children.
+
+```bash
+canic snapshot download \
+  --canister <canister-id> \
+  --root <root-canister-id> \
+  --recursive \
+  --out backups/<run-id> \
+  --stop-before-snapshot \
+  --resume-after-snapshot
 ```
 
 See detailed breakdown:

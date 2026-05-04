@@ -1,7 +1,10 @@
 use canic_backup::{
     journal::JournalResumeReport,
+    manifest::FleetBackupManifest,
     persistence::{BackupIntegrityReport, BackupLayout, PersistenceError},
+    restore::{RestoreMapping, RestorePlanError, RestorePlanner},
 };
+use serde_json::json;
 use std::{
     ffi::OsString,
     fs,
@@ -45,6 +48,76 @@ pub enum BackupCommandError {
 
     #[error(transparent)]
     Persistence(#[from] PersistenceError),
+
+    #[error(transparent)]
+    RestorePlan(#[from] RestorePlanError),
+}
+
+///
+/// BackupPreflightOptions
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct BackupPreflightOptions {
+    pub dir: PathBuf,
+    pub out_dir: PathBuf,
+    pub mapping: Option<PathBuf>,
+}
+
+impl BackupPreflightOptions {
+    /// Parse backup preflight options from CLI arguments.
+    pub fn parse<I>(args: I) -> Result<Self, BackupCommandError>
+    where
+        I: IntoIterator<Item = OsString>,
+    {
+        let mut dir = None;
+        let mut out_dir = None;
+        let mut mapping = None;
+
+        let mut args = args.into_iter();
+        while let Some(arg) = args.next() {
+            let arg = arg
+                .into_string()
+                .map_err(|_| BackupCommandError::Usage(usage()))?;
+            match arg.as_str() {
+                "--dir" => dir = Some(PathBuf::from(next_value(&mut args, "--dir")?)),
+                "--out-dir" => out_dir = Some(PathBuf::from(next_value(&mut args, "--out-dir")?)),
+                "--mapping" => mapping = Some(PathBuf::from(next_value(&mut args, "--mapping")?)),
+                "--help" | "-h" => return Err(BackupCommandError::Usage(usage())),
+                _ => return Err(BackupCommandError::UnknownOption(arg)),
+            }
+        }
+
+        Ok(Self {
+            dir: dir.ok_or(BackupCommandError::MissingOption("--dir"))?,
+            out_dir: out_dir.ok_or(BackupCommandError::MissingOption("--out-dir"))?,
+            mapping,
+        })
+    }
+}
+
+///
+/// BackupPreflightReport
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct BackupPreflightReport {
+    pub status: String,
+    pub backup_id: String,
+    pub backup_dir: String,
+    pub source_environment: String,
+    pub source_root_canister: String,
+    pub topology_hash: String,
+    pub mapping_path: Option<String>,
+    pub journal_complete: bool,
+    pub integrity_verified: bool,
+    pub manifest_members: usize,
+    pub restore_plan_members: usize,
+    pub manifest_validation_path: String,
+    pub backup_status_path: String,
+    pub backup_integrity_path: String,
+    pub restore_plan_path: String,
+    pub preflight_summary_path: String,
 }
 
 ///
@@ -140,6 +213,11 @@ where
     };
 
     match command.as_str() {
+        "preflight" => {
+            let options = BackupPreflightOptions::parse(args)?;
+            backup_preflight(&options)?;
+            Ok(())
+        }
         "status" => {
             let options = BackupStatusOptions::parse(args)?;
             let report = backup_status(&options)?;
@@ -158,6 +236,66 @@ where
     }
 }
 
+/// Run all no-mutation backup checks and write standard preflight artifacts.
+pub fn backup_preflight(
+    options: &BackupPreflightOptions,
+) -> Result<BackupPreflightReport, BackupCommandError> {
+    fs::create_dir_all(&options.out_dir)?;
+
+    let layout = BackupLayout::new(options.dir.clone());
+    let manifest = layout.read_manifest()?;
+    let status = layout.read_journal()?.resume_report();
+    ensure_complete_status(&status)?;
+    let integrity = layout.verify_integrity()?;
+    let mapping = options.mapping.as_ref().map(read_mapping).transpose()?;
+    let restore_plan = RestorePlanner::plan(&manifest, mapping.as_ref())?;
+
+    let manifest_validation_path = options.out_dir.join("manifest-validation.json");
+    let backup_status_path = options.out_dir.join("backup-status.json");
+    let backup_integrity_path = options.out_dir.join("backup-integrity.json");
+    let restore_plan_path = options.out_dir.join("restore-plan.json");
+    let preflight_summary_path = options.out_dir.join("preflight-summary.json");
+
+    write_json_value_file(
+        &manifest_validation_path,
+        &manifest_validation_summary(&manifest),
+    )?;
+    fs::write(&backup_status_path, serde_json::to_vec_pretty(&status)?)?;
+    fs::write(
+        &backup_integrity_path,
+        serde_json::to_vec_pretty(&integrity)?,
+    )?;
+    fs::write(
+        &restore_plan_path,
+        serde_json::to_vec_pretty(&restore_plan)?,
+    )?;
+
+    let report = BackupPreflightReport {
+        status: "ready".to_string(),
+        backup_id: manifest.backup_id.clone(),
+        backup_dir: options.dir.display().to_string(),
+        source_environment: manifest.source.environment.clone(),
+        source_root_canister: manifest.source.root_canister.clone(),
+        topology_hash: manifest.fleet.topology_hash.clone(),
+        mapping_path: options
+            .mapping
+            .as_ref()
+            .map(|path| path.display().to_string()),
+        journal_complete: status.is_complete,
+        integrity_verified: integrity.verified,
+        manifest_members: manifest.fleet.members.len(),
+        restore_plan_members: restore_plan.member_count,
+        manifest_validation_path: manifest_validation_path.display().to_string(),
+        backup_status_path: backup_status_path.display().to_string(),
+        backup_integrity_path: backup_integrity_path.display().to_string(),
+        restore_plan_path: restore_plan_path.display().to_string(),
+        preflight_summary_path: preflight_summary_path.display().to_string(),
+    };
+
+    write_json_value_file(&preflight_summary_path, &preflight_summary_value(&report))?;
+    Ok(report)
+}
+
 /// Summarize a backup journal's resumable state.
 pub fn backup_status(
     options: &BackupStatusOptions,
@@ -167,12 +305,9 @@ pub fn backup_status(
     Ok(journal.resume_report())
 }
 
-// Enforce caller-requested status requirements after the JSON report is written.
-fn enforce_status_requirements(
-    options: &BackupStatusOptions,
-    report: &JournalResumeReport,
-) -> Result<(), BackupCommandError> {
-    if !options.require_complete || report.is_complete {
+// Ensure a journal status report has no remaining resume work.
+fn ensure_complete_status(report: &JournalResumeReport) -> Result<(), BackupCommandError> {
+    if report.is_complete {
         return Ok(());
     }
 
@@ -181,6 +316,18 @@ fn enforce_status_requirements(
         total_artifacts: report.total_artifacts,
         pending_artifacts: report.pending_artifacts,
     })
+}
+
+// Enforce caller-requested status requirements after the JSON report is written.
+fn enforce_status_requirements(
+    options: &BackupStatusOptions,
+    report: &JournalResumeReport,
+) -> Result<(), BackupCommandError> {
+    if !options.require_complete {
+        return Ok(());
+    }
+
+    ensure_complete_status(report)
 }
 
 /// Verify a backup directory's manifest, journal, and durable artifacts.
@@ -227,6 +374,58 @@ fn write_report(
     Ok(())
 }
 
+// Write one pretty JSON value artifact, creating its parent directory when needed.
+fn write_json_value_file(
+    path: &PathBuf,
+    value: &serde_json::Value,
+) -> Result<(), BackupCommandError> {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+
+    let data = serde_json::to_vec_pretty(value)?;
+    fs::write(path, data)?;
+    Ok(())
+}
+
+// Build the compact preflight summary emitted after all checks pass.
+fn preflight_summary_value(report: &BackupPreflightReport) -> serde_json::Value {
+    json!({
+        "status": report.status,
+        "backup_id": report.backup_id,
+        "backup_dir": report.backup_dir,
+        "source_environment": report.source_environment,
+        "source_root_canister": report.source_root_canister,
+        "topology_hash": report.topology_hash,
+        "mapping_path": report.mapping_path,
+        "journal_complete": report.journal_complete,
+        "integrity_verified": report.integrity_verified,
+        "manifest_members": report.manifest_members,
+        "restore_plan_members": report.restore_plan_members,
+        "manifest_validation_path": report.manifest_validation_path,
+        "backup_status_path": report.backup_status_path,
+        "backup_integrity_path": report.backup_integrity_path,
+        "restore_plan_path": report.restore_plan_path,
+        "preflight_summary_path": report.preflight_summary_path,
+    })
+}
+
+// Build the same compact validation summary emitted by manifest validation.
+fn manifest_validation_summary(manifest: &FleetBackupManifest) -> serde_json::Value {
+    json!({
+        "status": "valid",
+        "backup_id": manifest.backup_id,
+        "members": manifest.fleet.members.len(),
+        "topology_hash": manifest.fleet.topology_hash,
+    })
+}
+
+// Read and decode an optional source-to-target restore mapping from disk.
+fn read_mapping(path: &PathBuf) -> Result<RestoreMapping, BackupCommandError> {
+    let data = fs::read_to_string(path)?;
+    serde_json::from_str(&data).map_err(BackupCommandError::from)
+}
+
 // Read the next required option value.
 fn next_value<I>(args: &mut I, option: &'static str) -> Result<String, BackupCommandError>
 where
@@ -239,7 +438,7 @@ where
 
 // Return backup command usage text.
 const fn usage() -> &'static str {
-    "usage: canic backup status --dir <backup-dir> [--out <file>] [--require-complete]\n       canic backup verify --dir <backup-dir> [--out <file>]"
+    "usage: canic backup preflight --dir <backup-dir> --out-dir <dir> [--mapping <file>]\n       canic backup status --dir <backup-dir> [--out <file>] [--require-complete]\n       canic backup verify --dir <backup-dir> [--out <file>]"
 }
 
 #[cfg(test)]
@@ -262,6 +461,114 @@ mod tests {
 
     const ROOT: &str = "aaaaa-aa";
     const HASH: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+
+    // Ensure backup preflight options parse the intended command shape.
+    #[test]
+    fn parses_backup_preflight_options() {
+        let options = BackupPreflightOptions::parse([
+            OsString::from("--dir"),
+            OsString::from("backups/run"),
+            OsString::from("--out-dir"),
+            OsString::from("reports/run"),
+            OsString::from("--mapping"),
+            OsString::from("mapping.json"),
+        ])
+        .expect("parse options");
+
+        assert_eq!(options.dir, PathBuf::from("backups/run"));
+        assert_eq!(options.out_dir, PathBuf::from("reports/run"));
+        assert_eq!(options.mapping, Some(PathBuf::from("mapping.json")));
+    }
+
+    // Ensure preflight writes the standard no-mutation report bundle.
+    #[test]
+    fn backup_preflight_writes_standard_reports() {
+        let root = temp_dir("canic-cli-backup-preflight");
+        let out_dir = root.join("reports");
+        let backup_dir = root.join("backup");
+        let layout = BackupLayout::new(backup_dir.clone());
+        let checksum = write_artifact(&backup_dir, b"root artifact");
+
+        layout
+            .write_manifest(&valid_manifest())
+            .expect("write manifest");
+        layout
+            .write_journal(&journal_with_checksum(checksum.hash))
+            .expect("write journal");
+
+        let options = BackupPreflightOptions {
+            dir: backup_dir,
+            out_dir: out_dir.clone(),
+            mapping: None,
+        };
+        let report = backup_preflight(&options).expect("run preflight");
+
+        assert_eq!(report.status, "ready");
+        assert_eq!(report.backup_id, "backup-test");
+        assert_eq!(report.source_environment, "local");
+        assert_eq!(report.source_root_canister, ROOT);
+        assert_eq!(report.topology_hash, HASH);
+        assert_eq!(report.mapping_path, None);
+        assert!(report.journal_complete);
+        assert!(report.integrity_verified);
+        assert_eq!(report.manifest_members, 1);
+        assert_eq!(report.restore_plan_members, 1);
+        assert!(out_dir.join("manifest-validation.json").exists());
+        assert!(out_dir.join("backup-status.json").exists());
+        assert!(out_dir.join("backup-integrity.json").exists());
+        assert!(out_dir.join("restore-plan.json").exists());
+        assert!(out_dir.join("preflight-summary.json").exists());
+
+        let summary: serde_json::Value = serde_json::from_slice(
+            &fs::read(out_dir.join("preflight-summary.json")).expect("read summary"),
+        )
+        .expect("decode summary");
+
+        fs::remove_dir_all(root).expect("remove temp root");
+        assert_eq!(summary["status"], report.status);
+        assert_eq!(summary["backup_id"], report.backup_id);
+        assert_eq!(summary["source_environment"], report.source_environment);
+        assert_eq!(summary["source_root_canister"], report.source_root_canister);
+        assert_eq!(summary["topology_hash"], report.topology_hash);
+        assert_eq!(summary["journal_complete"], report.journal_complete);
+        assert_eq!(summary["integrity_verified"], report.integrity_verified);
+        assert_eq!(summary["manifest_members"], report.manifest_members);
+        assert_eq!(summary["restore_plan_members"], report.restore_plan_members);
+    }
+
+    // Ensure preflight stops on incomplete journals before claiming readiness.
+    #[test]
+    fn backup_preflight_rejects_incomplete_journal() {
+        let root = temp_dir("canic-cli-backup-preflight-incomplete");
+        let out_dir = root.join("reports");
+        let backup_dir = root.join("backup");
+        let layout = BackupLayout::new(backup_dir.clone());
+
+        layout
+            .write_manifest(&valid_manifest())
+            .expect("write manifest");
+        layout
+            .write_journal(&created_journal())
+            .expect("write journal");
+
+        let options = BackupPreflightOptions {
+            dir: backup_dir,
+            out_dir,
+            mapping: None,
+        };
+
+        let err = backup_preflight(&options).expect_err("incomplete journal should fail");
+
+        fs::remove_dir_all(root).expect("remove temp root");
+        assert!(matches!(
+            err,
+            BackupCommandError::IncompleteJournal {
+                pending_artifacts: 1,
+                total_artifacts: 1,
+                ..
+            }
+        ));
+    }
 
     // Ensure backup verification options parse the intended command shape.
     #[test]

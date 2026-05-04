@@ -22,6 +22,9 @@ DFX only creates snapshots for stopped canisters. Pass
 `--stop-before-snapshot --resume-after-snapshot` when the CLI should perform
 that local lifecycle step around each captured artifact.
 
+Successful non-dry-run captures write the canonical backup layout: manifest,
+download journal, and durable artifact directories.
+
 Validate a captured manifest before restore planning:
 
 ```bash
@@ -49,6 +52,20 @@ canic backup verify \
   --dir backups/<run-id> \
   --out backup-integrity.json
 ```
+
+Run the standard no-mutation preflight bundle:
+
+```bash
+canic backup preflight \
+  --dir backups/<run-id> \
+  --out-dir preflight/<run-id> \
+  --mapping restore-map.json
+```
+
+Preflight writes `manifest-validation.json`, `backup-status.json`,
+`backup-integrity.json`, `restore-plan.json`, and `preflight-summary.json`.
+The summary records the backup ID, source root, environment, topology hash,
+readiness flags, member counts, and paths to the generated reports.
 
 Restore planning is manifest-driven and performs no mutations:
 
