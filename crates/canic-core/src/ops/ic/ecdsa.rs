@@ -143,7 +143,7 @@ impl EcdsaOps {
         record_ecdsa_call(
             PlatformCallMetricMode::Update,
             PlatformCallMetricOutcome::Failed,
-            PlatformCallMetricReason::Unavailable,
+            threshold_management_availability_reason(),
         );
         Err(EcdsaOpsError::ThresholdEcdsaUnavailable.into())
     }
@@ -158,7 +158,7 @@ impl EcdsaOps {
         record_ecdsa_call(
             PlatformCallMetricMode::Query,
             PlatformCallMetricOutcome::Failed,
-            PlatformCallMetricReason::Unavailable,
+            threshold_management_availability_reason(),
         );
         Err(EcdsaOpsError::ThresholdEcdsaUnavailable.into())
     }
@@ -168,7 +168,10 @@ impl EcdsaOps {
     // Report whether threshold ECDSA management support is compiled into this build.
     #[must_use]
     pub const fn threshold_management_enabled() -> bool {
-        cfg!(feature = "auth-crypto")
+        matches!(
+            threshold_management_availability_reason(),
+            PlatformCallMetricReason::Ok
+        )
     }
 
     // Verify a pre-hashed signature locally with k256 on every canister build.
@@ -220,6 +223,15 @@ impl EcdsaOps {
             PlatformCallMetricReason::Ok,
         );
         Ok(())
+    }
+}
+
+// Return the metric reason for compiled ECDSA management availability.
+const fn threshold_management_availability_reason() -> PlatformCallMetricReason {
+    if cfg!(feature = "auth-crypto") {
+        PlatformCallMetricReason::Ok
+    } else {
+        PlatformCallMetricReason::Unavailable
     }
 }
 
