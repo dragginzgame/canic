@@ -1,6 +1,9 @@
 use candid::Principal;
 use serde::{Deserialize, Serialize};
-use std::{collections::BTreeSet, str::FromStr};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    str::FromStr,
+};
 use thiserror::Error as ThisError;
 
 const SUPPORTED_MANIFEST_VERSION: u16 = 1;
@@ -34,6 +37,7 @@ impl FleetBackupManifest {
         self.fleet.validate()?;
         self.verification.validate()?;
         validate_consistency_against_fleet(&self.consistency, &self.fleet)?;
+        validate_verification_against_fleet(&self.verification, &self.fleet)?;
         Ok(())
     }
 }
@@ -93,8 +97,14 @@ impl ConsistencySection {
             ));
         }
 
+        let mut unit_ids = BTreeSet::new();
         for unit in &self.backup_units {
             unit.validate(&self.mode)?;
+            if !unit_ids.insert(unit.unit_id.clone()) {
+                return Err(ManifestValidationError::DuplicateBackupUnitId(
+                    unit.unit_id.clone(),
+                ));
+            }
         }
 
         Ok(())
@@ -145,6 +155,12 @@ impl BackupUnit {
         for role in &self.roles {
             validate_nonempty("consistency.backup_units[].roles[]", role)?;
         }
+        validate_unique_values("consistency.backup_units[].roles[]", &self.roles, |role| {
+            ManifestValidationError::DuplicateBackupUnitRole {
+                unit_id: self.unit_id.clone(),
+                role: role.to_string(),
+            }
+        })?;
 
         for dependency in &self.dependency_closure {
             validate_nonempty(
@@ -152,6 +168,14 @@ impl BackupUnit {
                 dependency,
             )?;
         }
+        validate_unique_values(
+            "consistency.backup_units[].dependency_closure[]",
+            &self.dependency_closure,
+            |dependency| ManifestValidationError::DuplicateBackupUnitDependency {
+                unit_id: self.unit_id.clone(),
+                dependency: dependency.to_string(),
+            },
+        )?;
 
         if matches!(self.kind, BackupUnitKind::Flat) {
             validate_required_option(
@@ -443,6 +467,12 @@ impl VerificationCheck {
         for role in &self.roles {
             validate_nonempty("verification.check.roles[]", role)?;
         }
+        validate_unique_values("verification.check.roles[]", &self.roles, |role| {
+            ManifestValidationError::DuplicateVerificationCheckRole {
+                kind: self.kind.clone(),
+                role: role.to_string(),
+            }
+        })?;
         Ok(())
     }
 }
@@ -483,6 +513,15 @@ pub enum ManifestValidationError {
     #[error("duplicate canister id {0}")]
     DuplicateCanisterId(String),
 
+    #[error("duplicate backup unit id {0}")]
+    DuplicateBackupUnitId(String),
+
+    #[error("backup unit {unit_id} repeats role {role}")]
+    DuplicateBackupUnitRole { unit_id: String, role: String },
+
+    #[error("backup unit {unit_id} repeats dependency {dependency}")]
+    DuplicateBackupUnitDependency { unit_id: String, dependency: String },
+
     #[error("fleet member {0} has no concrete verification checks")]
     MissingMemberVerificationChecks(String),
 
@@ -491,6 +530,33 @@ pub enum ManifestValidationError {
 
     #[error("backup unit {unit_id} references unknown dependency {dependency}")]
     UnknownBackupUnitDependency { unit_id: String, dependency: String },
+
+    #[error("fleet role {role} is not covered by any backup unit")]
+    BackupUnitCoverageMissingRole { role: String },
+
+    #[error("verification plan references unknown role {role}")]
+    UnknownVerificationRole { role: String },
+
+    #[error("duplicate member verification role {0}")]
+    DuplicateMemberVerificationRole(String),
+
+    #[error("verification check {kind} repeats role {role}")]
+    DuplicateVerificationCheckRole { kind: String, role: String },
+
+    #[error("whole-fleet backup unit {unit_id} omits fleet role {role}")]
+    WholeFleetUnitMissingRole { unit_id: String, role: String },
+
+    #[error("subtree backup unit {unit_id} is not connected")]
+    SubtreeBackupUnitNotConnected { unit_id: String },
+
+    #[error(
+        "subtree backup unit {unit_id} includes parent {parent} but omits descendant {descendant}"
+    )]
+    SubtreeBackupUnitMissingDescendant {
+        unit_id: String,
+        parent: String,
+        descendant: String,
+    },
 }
 
 // Validate cross-section backup unit references after local section checks pass.
@@ -503,6 +569,7 @@ fn validate_consistency_against_fleet(
         .iter()
         .map(|member| member.role.as_str())
         .collect::<BTreeSet<_>>();
+    let mut covered_roles = BTreeSet::new();
 
     for unit in &consistency.backup_units {
         for role in &unit.roles {
@@ -512,6 +579,7 @@ fn validate_consistency_against_fleet(
                     role: role.clone(),
                 });
             }
+            covered_roles.insert(role.as_str());
         }
 
         for dependency in &unit.dependency_closure {
@@ -522,9 +590,190 @@ fn validate_consistency_against_fleet(
                 });
             }
         }
+
+        validate_backup_unit_topology(unit, fleet, &fleet_roles)?;
+    }
+
+    for role in &fleet_roles {
+        if !covered_roles.contains(role) {
+            return Err(ManifestValidationError::BackupUnitCoverageMissingRole {
+                role: (*role).to_string(),
+            });
+        }
     }
 
     Ok(())
+}
+
+// Validate verification role references after fleet roles are known.
+fn validate_verification_against_fleet(
+    verification: &VerificationPlan,
+    fleet: &FleetSection,
+) -> Result<(), ManifestValidationError> {
+    let fleet_roles = fleet
+        .members
+        .iter()
+        .map(|member| member.role.as_str())
+        .collect::<BTreeSet<_>>();
+
+    for check in &verification.fleet_checks {
+        validate_verification_check_roles(check, &fleet_roles)?;
+    }
+
+    for member in &fleet.members {
+        for check in &member.verification_checks {
+            validate_verification_check_roles(check, &fleet_roles)?;
+        }
+    }
+
+    let mut member_check_roles = BTreeSet::new();
+    for member in &verification.member_checks {
+        if !fleet_roles.contains(member.role.as_str()) {
+            return Err(ManifestValidationError::UnknownVerificationRole {
+                role: member.role.clone(),
+            });
+        }
+        if !member_check_roles.insert(member.role.as_str()) {
+            return Err(ManifestValidationError::DuplicateMemberVerificationRole(
+                member.role.clone(),
+            ));
+        }
+        for check in &member.checks {
+            validate_verification_check_roles(check, &fleet_roles)?;
+        }
+    }
+
+    Ok(())
+}
+
+// Validate every role filter in one verification check.
+fn validate_verification_check_roles(
+    check: &VerificationCheck,
+    fleet_roles: &BTreeSet<&str>,
+) -> Result<(), ManifestValidationError> {
+    for role in &check.roles {
+        if !fleet_roles.contains(role.as_str()) {
+            return Err(ManifestValidationError::UnknownVerificationRole { role: role.clone() });
+        }
+    }
+
+    Ok(())
+}
+
+// Validate backup unit topology promises against manifest membership.
+fn validate_backup_unit_topology(
+    unit: &BackupUnit,
+    fleet: &FleetSection,
+    fleet_roles: &BTreeSet<&str>,
+) -> Result<(), ManifestValidationError> {
+    match &unit.kind {
+        BackupUnitKind::WholeFleet => validate_whole_fleet_unit(unit, fleet_roles),
+        BackupUnitKind::SubtreeRooted => validate_subtree_unit(unit, fleet),
+        BackupUnitKind::ControlPlaneSubset | BackupUnitKind::Flat => Ok(()),
+    }
+}
+
+// Ensure whole-fleet units cover every role declared by the fleet.
+fn validate_whole_fleet_unit(
+    unit: &BackupUnit,
+    fleet_roles: &BTreeSet<&str>,
+) -> Result<(), ManifestValidationError> {
+    let unit_roles = unit
+        .roles
+        .iter()
+        .map(String::as_str)
+        .collect::<BTreeSet<_>>();
+    for role in fleet_roles {
+        if !unit_roles.contains(role) {
+            return Err(ManifestValidationError::WholeFleetUnitMissingRole {
+                unit_id: unit.unit_id.clone(),
+                role: (*role).to_string(),
+            });
+        }
+    }
+
+    Ok(())
+}
+
+// Ensure subtree units are connected and closed under descendants.
+fn validate_subtree_unit(
+    unit: &BackupUnit,
+    fleet: &FleetSection,
+) -> Result<(), ManifestValidationError> {
+    let unit_roles = unit
+        .roles
+        .iter()
+        .map(String::as_str)
+        .collect::<BTreeSet<_>>();
+    let members_by_id = fleet
+        .members
+        .iter()
+        .map(|member| (member.canister_id.as_str(), member))
+        .collect::<BTreeMap<_, _>>();
+    let unit_member_ids = fleet
+        .members
+        .iter()
+        .filter(|member| unit_roles.contains(member.role.as_str()))
+        .map(|member| member.canister_id.as_str())
+        .collect::<BTreeSet<_>>();
+
+    let root_count = fleet
+        .members
+        .iter()
+        .filter(|member| unit_member_ids.contains(member.canister_id.as_str()))
+        .filter(|member| {
+            member
+                .parent_canister_id
+                .as_deref()
+                .is_none_or(|parent| !unit_member_ids.contains(parent))
+        })
+        .count();
+    if root_count != 1 {
+        return Err(ManifestValidationError::SubtreeBackupUnitNotConnected {
+            unit_id: unit.unit_id.clone(),
+        });
+    }
+
+    for member in &fleet.members {
+        if unit_member_ids.contains(member.canister_id.as_str()) {
+            continue;
+        }
+
+        if let Some(parent) = first_unit_ancestor(member, &members_by_id, &unit_member_ids) {
+            return Err(
+                ManifestValidationError::SubtreeBackupUnitMissingDescendant {
+                    unit_id: unit.unit_id.clone(),
+                    parent: parent.to_string(),
+                    descendant: member.canister_id.clone(),
+                },
+            );
+        }
+    }
+
+    Ok(())
+}
+
+// Return the nearest selected ancestor for a member outside a subtree unit.
+fn first_unit_ancestor<'a>(
+    member: &'a FleetMember,
+    members_by_id: &BTreeMap<&'a str, &'a FleetMember>,
+    unit_member_ids: &BTreeSet<&'a str>,
+) -> Option<&'a str> {
+    let mut visited = BTreeSet::new();
+    let mut parent = member.parent_canister_id.as_deref();
+    while let Some(parent_id) = parent {
+        if unit_member_ids.contains(parent_id) {
+            return Some(parent_id);
+        }
+        if !visited.insert(parent_id) {
+            return None;
+        }
+        parent = members_by_id
+            .get(parent_id)
+            .and_then(|ancestor| ancestor.parent_canister_id.as_deref());
+    }
+
+    None
 }
 
 // Validate the manifest format version before checking nested fields.
@@ -565,6 +814,26 @@ fn validate_required_option(
         Some(value) => validate_nonempty(field, value),
         None => Err(ManifestValidationError::EmptyField(field)),
     }
+}
+
+// Validate that a string list does not repeat values.
+fn validate_unique_values<F>(
+    field: &'static str,
+    values: &[String],
+    error: F,
+) -> Result<(), ManifestValidationError>
+where
+    F: Fn(&str) -> ManifestValidationError,
+{
+    let mut seen = BTreeSet::new();
+    for value in values {
+        validate_nonempty(field, value)?;
+        if !seen.insert(value.as_str()) {
+            return Err(error(value));
+        }
+    }
+
+    Ok(())
 }
 
 // Validate textual principal fields used in JSON manifests.
@@ -799,6 +1068,252 @@ mod tests {
     }
 
     #[test]
+    fn backup_unit_ids_must_be_unique() {
+        let mut manifest = valid_manifest();
+        manifest
+            .consistency
+            .backup_units
+            .push(manifest.consistency.backup_units[0].clone());
+
+        let err = manifest
+            .validate()
+            .expect_err("duplicate unit IDs should fail");
+
+        assert!(matches!(
+            err,
+            ManifestValidationError::DuplicateBackupUnitId(_)
+        ));
+    }
+
+    #[test]
+    fn backup_unit_roles_must_be_unique() {
+        let mut manifest = valid_manifest();
+        manifest.consistency.backup_units[0]
+            .roles
+            .push("root".to_string());
+
+        let err = manifest
+            .validate()
+            .expect_err("duplicate backup unit role should fail");
+
+        assert!(matches!(
+            err,
+            ManifestValidationError::DuplicateBackupUnitRole { .. }
+        ));
+    }
+
+    #[test]
+    fn backup_unit_dependencies_must_be_unique() {
+        let mut manifest = valid_manifest();
+        manifest.consistency.backup_units[0]
+            .dependency_closure
+            .push("root".to_string());
+
+        let err = manifest
+            .validate()
+            .expect_err("duplicate backup unit dependency should fail");
+
+        assert!(matches!(
+            err,
+            ManifestValidationError::DuplicateBackupUnitDependency { .. }
+        ));
+    }
+
+    #[test]
+    fn every_fleet_role_must_be_covered_by_a_backup_unit() {
+        let mut manifest = valid_manifest();
+        manifest.consistency.backup_units[0].roles = vec!["root".to_string()];
+        manifest.consistency.backup_units[0].dependency_closure = vec!["root".to_string()];
+
+        let err = manifest
+            .validate()
+            .expect_err("uncovered app role should fail");
+
+        assert!(matches!(
+            err,
+            ManifestValidationError::BackupUnitCoverageMissingRole { .. }
+        ));
+    }
+
+    #[test]
+    fn fleet_verification_roles_must_exist_in_fleet() {
+        let mut manifest = valid_manifest();
+        manifest.verification.fleet_checks[0]
+            .roles
+            .push("missing-role".to_string());
+
+        let err = manifest
+            .validate()
+            .expect_err("unknown fleet verification role should fail");
+
+        assert!(matches!(
+            err,
+            ManifestValidationError::UnknownVerificationRole { .. }
+        ));
+    }
+
+    #[test]
+    fn member_verification_check_roles_must_exist_in_fleet() {
+        let mut manifest = valid_manifest();
+        manifest.fleet.members[0].verification_checks[0]
+            .roles
+            .push("missing-role".to_string());
+
+        let err = manifest
+            .validate()
+            .expect_err("unknown member verification check role should fail");
+
+        assert!(matches!(
+            err,
+            ManifestValidationError::UnknownVerificationRole { .. }
+        ));
+    }
+
+    #[test]
+    fn verification_check_roles_must_be_unique() {
+        let mut manifest = valid_manifest();
+        manifest.verification.fleet_checks[0]
+            .roles
+            .push("root".to_string());
+        manifest.verification.fleet_checks[0]
+            .roles
+            .push("root".to_string());
+
+        let err = manifest
+            .validate()
+            .expect_err("duplicate verification role filter should fail");
+
+        assert!(matches!(
+            err,
+            ManifestValidationError::DuplicateVerificationCheckRole { .. }
+        ));
+    }
+
+    #[test]
+    fn member_verification_group_roles_must_exist_in_fleet() {
+        let mut manifest = valid_manifest();
+        manifest
+            .verification
+            .member_checks
+            .push(MemberVerificationChecks {
+                role: "missing-role".to_string(),
+                checks: vec![VerificationCheck {
+                    kind: "ready".to_string(),
+                    method: None,
+                    roles: Vec::new(),
+                }],
+            });
+
+        let err = manifest
+            .validate()
+            .expect_err("unknown member verification role should fail");
+
+        assert!(matches!(
+            err,
+            ManifestValidationError::UnknownVerificationRole { .. }
+        ));
+    }
+
+    #[test]
+    fn member_verification_group_roles_must_be_unique() {
+        let mut manifest = valid_manifest();
+        manifest
+            .verification
+            .member_checks
+            .push(member_verification_checks("root"));
+        manifest
+            .verification
+            .member_checks
+            .push(member_verification_checks("root"));
+
+        let err = manifest
+            .validate()
+            .expect_err("duplicate member verification role should fail");
+
+        assert!(matches!(
+            err,
+            ManifestValidationError::DuplicateMemberVerificationRole(_)
+        ));
+    }
+
+    #[test]
+    fn nested_member_verification_roles_must_exist_in_fleet() {
+        let mut manifest = valid_manifest();
+        let mut checks = member_verification_checks("root");
+        checks.checks[0].roles.push("missing-role".to_string());
+        manifest.verification.member_checks.push(checks);
+
+        let err = manifest
+            .validate()
+            .expect_err("unknown nested verification role should fail");
+
+        assert!(matches!(
+            err,
+            ManifestValidationError::UnknownVerificationRole { .. }
+        ));
+    }
+
+    #[test]
+    fn whole_fleet_unit_must_cover_all_roles() {
+        let mut manifest = valid_manifest();
+        manifest.consistency.backup_units[0].kind = BackupUnitKind::WholeFleet;
+        manifest.consistency.backup_units[0].roles = vec!["root".to_string()];
+        manifest.consistency.backup_units[0].consistency_reason = None;
+
+        let err = manifest
+            .validate()
+            .expect_err("whole-fleet unit missing app role should fail");
+
+        assert!(matches!(
+            err,
+            ManifestValidationError::WholeFleetUnitMissingRole { .. }
+        ));
+    }
+
+    #[test]
+    fn subtree_unit_must_be_closed_under_descendants() {
+        let mut manifest = valid_manifest();
+        manifest.consistency.backup_units[0].kind = BackupUnitKind::SubtreeRooted;
+        manifest.consistency.backup_units[0].roles = vec!["root".to_string()];
+        manifest.consistency.backup_units[0].consistency_reason = None;
+
+        let err = manifest
+            .validate()
+            .expect_err("subtree unit omitting app child should fail");
+
+        assert!(matches!(
+            err,
+            ManifestValidationError::SubtreeBackupUnitMissingDescendant { .. }
+        ));
+    }
+
+    #[test]
+    fn subtree_unit_must_be_connected() {
+        let mut manifest = valid_manifest();
+        manifest.fleet.members.push(fleet_member(
+            "worker",
+            "r7inp-6aaaa-aaaaa-aaabq-cai",
+            None,
+            IdentityMode::Relocatable,
+        ));
+        manifest.consistency.backup_units[0].kind = BackupUnitKind::SubtreeRooted;
+        manifest.consistency.backup_units[0].roles = vec!["app".to_string(), "worker".to_string()];
+        manifest.consistency.backup_units[0].consistency_reason = None;
+        manifest.consistency.backup_units[0]
+            .dependency_closure
+            .push("worker".to_string());
+
+        let err = manifest
+            .validate()
+            .expect_err("disconnected subtree unit should fail");
+
+        assert!(matches!(
+            err,
+            ManifestValidationError::SubtreeBackupUnitNotConnected { .. }
+        ));
+    }
+
+    #[test]
     fn manifest_round_trips_through_json() {
         let manifest = valid_manifest();
 
@@ -809,5 +1324,17 @@ mod tests {
         decoded
             .validate()
             .expect("decoded manifest should validate");
+    }
+
+    // Build one role-scoped verification group for validation tests.
+    fn member_verification_checks(role: &str) -> MemberVerificationChecks {
+        MemberVerificationChecks {
+            role: role.to_string(),
+            checks: vec![VerificationCheck {
+                kind: "ready".to_string(),
+                method: None,
+                roles: Vec::new(),
+            }],
+        }
     }
 }

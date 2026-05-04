@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.30.x] - 2026-05-03 - Fleet Snapshot Backups
 
+- `0.30.13` validates backup unit topology and verification role boundaries, rejects ambiguous backup unit and verification filter declarations, and reports backup-unit topology metadata in manifest validation summaries.
 - `0.30.12` adds `canic backup provenance`, includes provenance and compact audit status output in preflight bundles, and makes backup verification fail closed when manifest and journal topology receipts drift.
 
 ```bash

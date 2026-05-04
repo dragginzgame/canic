@@ -37,6 +37,9 @@ canic manifest validate \
   --out manifest-validation.json
 ```
 
+The validation summary includes topology hash inputs, consistency mode, backup
+unit counts, kind counts, and per-unit topology validation metadata.
+
 Inspect resumable journal status:
 
 ```bash

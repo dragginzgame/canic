@@ -1,4 +1,6 @@
-use canic_backup::manifest::{FleetBackupManifest, ManifestValidationError};
+use canic_backup::manifest::{
+    BackupUnitKind, ConsistencyMode, FleetBackupManifest, ManifestValidationError,
+};
 use serde_json::json;
 use std::{
     ffi::OsString,
@@ -114,12 +116,7 @@ fn write_validation_summary(
     options: &ManifestValidateOptions,
     manifest: &FleetBackupManifest,
 ) -> Result<(), ManifestCommandError> {
-    let summary = json!({
-        "status": "valid",
-        "backup_id": manifest.backup_id,
-        "members": manifest.fleet.members.len(),
-        "topology_hash": manifest.fleet.topology_hash,
-    });
+    let summary = manifest_validation_summary(manifest);
 
     if let Some(path) = &options.out {
         let data = serde_json::to_vec_pretty(&summary)?;
@@ -132,6 +129,75 @@ fn write_validation_summary(
     serde_json::to_writer_pretty(&mut handle, &summary)?;
     writeln!(handle)?;
     Ok(())
+}
+
+// Build the manifest validation summary emitted by CLI and preflight workflows.
+fn manifest_validation_summary(manifest: &FleetBackupManifest) -> serde_json::Value {
+    json!({
+        "status": "valid",
+        "backup_id": manifest.backup_id,
+        "members": manifest.fleet.members.len(),
+        "backup_unit_count": manifest.consistency.backup_units.len(),
+        "consistency_mode": consistency_mode_name(&manifest.consistency.mode),
+        "topology_hash": manifest.fleet.topology_hash,
+        "topology_hash_algorithm": manifest.fleet.topology_hash_algorithm,
+        "topology_hash_input": manifest.fleet.topology_hash_input,
+        "topology_validation_status": "validated",
+        "backup_unit_kinds": backup_unit_kind_counts(manifest),
+        "backup_units": manifest
+            .consistency
+            .backup_units
+            .iter()
+            .map(|unit| json!({
+                "unit_id": unit.unit_id,
+                "kind": backup_unit_kind_name(&unit.kind),
+                "role_count": unit.roles.len(),
+                "dependency_count": unit.dependency_closure.len(),
+                "topology_validation": unit.topology_validation,
+            }))
+            .collect::<Vec<_>>(),
+    })
+}
+
+// Count backup units by stable serialized kind name.
+fn backup_unit_kind_counts(manifest: &FleetBackupManifest) -> serde_json::Value {
+    let mut whole_fleet = 0;
+    let mut control_plane_subset = 0;
+    let mut subtree_rooted = 0;
+    let mut flat = 0;
+    for unit in &manifest.consistency.backup_units {
+        match &unit.kind {
+            BackupUnitKind::WholeFleet => whole_fleet += 1,
+            BackupUnitKind::ControlPlaneSubset => control_plane_subset += 1,
+            BackupUnitKind::SubtreeRooted => subtree_rooted += 1,
+            BackupUnitKind::Flat => flat += 1,
+        }
+    }
+
+    json!({
+        "whole_fleet": whole_fleet,
+        "control_plane_subset": control_plane_subset,
+        "subtree_rooted": subtree_rooted,
+        "flat": flat,
+    })
+}
+
+// Return the stable serialized name for a consistency mode.
+const fn consistency_mode_name(mode: &ConsistencyMode) -> &'static str {
+    match mode {
+        ConsistencyMode::CrashConsistent => "crash-consistent",
+        ConsistencyMode::QuiescedUnit => "quiesced-unit",
+    }
+}
+
+// Return the stable serialized name for a backup unit kind.
+const fn backup_unit_kind_name(kind: &BackupUnitKind) -> &'static str {
+    match kind {
+        BackupUnitKind::WholeFleet => "whole-fleet",
+        BackupUnitKind::ControlPlaneSubset => "control-plane-subset",
+        BackupUnitKind::SubtreeRooted => "subtree-rooted",
+        BackupUnitKind::Flat => "flat",
+    }
 }
 
 // Read the next required option value.
@@ -221,6 +287,13 @@ mod tests {
         assert_eq!(summary["status"], "valid");
         assert_eq!(summary["backup_id"], "backup-test");
         assert_eq!(summary["members"], 1);
+        assert_eq!(summary["backup_unit_count"], 1);
+        assert_eq!(summary["consistency_mode"], "crash-consistent");
+        assert_eq!(summary["topology_validation_status"], "validated");
+        assert_eq!(summary["backup_unit_kinds"]["subtree_rooted"], 1);
+        assert_eq!(summary["backup_units"][0]["unit_id"], "fleet");
+        assert_eq!(summary["backup_units"][0]["kind"], "subtree-rooted");
+        assert_eq!(summary["backup_units"][0]["role_count"], 1);
     }
 
     // Build one valid manifest for validation tests.

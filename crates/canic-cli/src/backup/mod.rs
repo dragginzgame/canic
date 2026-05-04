@@ -1,6 +1,6 @@
 use canic_backup::{
     journal::JournalResumeReport,
-    manifest::FleetBackupManifest,
+    manifest::{BackupUnitKind, ConsistencyMode, FleetBackupManifest},
     persistence::{
         BackupInspectionReport, BackupIntegrityReport, BackupLayout, BackupProvenanceReport,
         PersistenceError,
@@ -674,8 +674,67 @@ fn manifest_validation_summary(manifest: &FleetBackupManifest) -> serde_json::Va
         "status": "valid",
         "backup_id": manifest.backup_id,
         "members": manifest.fleet.members.len(),
+        "backup_unit_count": manifest.consistency.backup_units.len(),
+        "consistency_mode": consistency_mode_name(&manifest.consistency.mode),
         "topology_hash": manifest.fleet.topology_hash,
+        "topology_hash_algorithm": manifest.fleet.topology_hash_algorithm,
+        "topology_hash_input": manifest.fleet.topology_hash_input,
+        "topology_validation_status": "validated",
+        "backup_unit_kinds": backup_unit_kind_counts(manifest),
+        "backup_units": manifest
+            .consistency
+            .backup_units
+            .iter()
+            .map(|unit| json!({
+                "unit_id": unit.unit_id,
+                "kind": backup_unit_kind_name(&unit.kind),
+                "role_count": unit.roles.len(),
+                "dependency_count": unit.dependency_closure.len(),
+                "topology_validation": unit.topology_validation,
+            }))
+            .collect::<Vec<_>>(),
     })
+}
+
+// Count backup units by stable serialized kind name.
+fn backup_unit_kind_counts(manifest: &FleetBackupManifest) -> serde_json::Value {
+    let mut whole_fleet = 0;
+    let mut control_plane_subset = 0;
+    let mut subtree_rooted = 0;
+    let mut flat = 0;
+    for unit in &manifest.consistency.backup_units {
+        match &unit.kind {
+            BackupUnitKind::WholeFleet => whole_fleet += 1,
+            BackupUnitKind::ControlPlaneSubset => control_plane_subset += 1,
+            BackupUnitKind::SubtreeRooted => subtree_rooted += 1,
+            BackupUnitKind::Flat => flat += 1,
+        }
+    }
+
+    json!({
+        "whole_fleet": whole_fleet,
+        "control_plane_subset": control_plane_subset,
+        "subtree_rooted": subtree_rooted,
+        "flat": flat,
+    })
+}
+
+// Return the stable serialized name for a consistency mode.
+const fn consistency_mode_name(mode: &ConsistencyMode) -> &'static str {
+    match mode {
+        ConsistencyMode::CrashConsistent => "crash-consistent",
+        ConsistencyMode::QuiescedUnit => "quiesced-unit",
+    }
+}
+
+// Return the stable serialized name for a backup unit kind.
+const fn backup_unit_kind_name(kind: &BackupUnitKind) -> &'static str {
+    match kind {
+        BackupUnitKind::WholeFleet => "whole-fleet",
+        BackupUnitKind::ControlPlaneSubset => "control-plane-subset",
+        BackupUnitKind::SubtreeRooted => "subtree-rooted",
+        BackupUnitKind::Flat => "flat",
+    }
 }
 
 // Return the stable summary status for inspection readiness.
@@ -808,6 +867,10 @@ mod tests {
             &fs::read(out_dir.join("preflight-summary.json")).expect("read summary"),
         )
         .expect("decode summary");
+        let manifest_validation: serde_json::Value = serde_json::from_slice(
+            &fs::read(out_dir.join("manifest-validation.json")).expect("read manifest summary"),
+        )
+        .expect("decode manifest summary");
 
         fs::remove_dir_all(root).expect("remove temp root");
         assert_eq!(summary["status"], report.status);
@@ -838,6 +901,20 @@ mod tests {
         assert_eq!(
             summary["backup_provenance_path"],
             report.backup_provenance_path
+        );
+        assert_eq!(manifest_validation["backup_unit_count"], 1);
+        assert_eq!(manifest_validation["consistency_mode"], "crash-consistent");
+        assert_eq!(
+            manifest_validation["topology_validation_status"],
+            "validated"
+        );
+        assert_eq!(
+            manifest_validation["backup_unit_kinds"]["subtree_rooted"],
+            1
+        );
+        assert_eq!(
+            manifest_validation["backup_units"][0]["kind"],
+            "subtree-rooted"
         );
     }
 
