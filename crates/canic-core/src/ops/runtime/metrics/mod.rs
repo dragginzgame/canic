@@ -1233,6 +1233,38 @@ mod tests {
         }
     }
 
+    // Verify the operator metrics guide covers every public metrics family.
+    #[test]
+    fn metrics_docs_cover_all_metric_families() {
+        let workspace_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let docs_path = workspace_root.join("docs/metrics.md");
+        let git_marker = workspace_root.join(".git");
+
+        if !docs_path.exists() && !git_marker.exists() {
+            return;
+        }
+
+        let docs = std::fs::read_to_string(&docs_path).unwrap_or_else(|error| {
+            let docs_display = docs_path.display();
+            panic!("failed to read {docs_display}: {error}");
+        });
+
+        for kind in all_metric_kinds() {
+            let name = kind.metric_family_name_for_tests();
+            let table_row = format!("| `{name}` |");
+            let detail_header = format!("### `{name}`");
+
+            assert!(
+                docs.contains(&table_row),
+                "docs/metrics.md table should include MetricsKind::{name}"
+            );
+            assert!(
+                docs.contains(&detail_header),
+                "docs/metrics.md details should include MetricsKind::{name}"
+            );
+        }
+    }
+
     // Return every public metric family for reset coverage.
     fn all_metric_kinds() -> &'static [MetricsKind] {
         &[
@@ -1261,6 +1293,41 @@ mod tests {
             MetricsKind::Timer,
             MetricsKind::WasmStore,
         ]
+    }
+
+    trait MetricsKindTestName {
+        fn metric_family_name_for_tests(self) -> &'static str;
+    }
+
+    impl MetricsKindTestName for MetricsKind {
+        fn metric_family_name_for_tests(self) -> &'static str {
+            match self {
+                Self::Access => "Access",
+                Self::Auth => "Auth",
+                Self::CanisterOps => "CanisterOps",
+                Self::Cascade => "Cascade",
+                Self::CyclesFunding => "CyclesFunding",
+                Self::CyclesTopup => "CyclesTopup",
+                Self::DelegatedAuth => "DelegatedAuth",
+                Self::Directory => "Directory",
+                Self::Http => "Http",
+                Self::Intent => "Intent",
+                Self::InterCanisterCall => "InterCanisterCall",
+                Self::Lifecycle => "Lifecycle",
+                Self::Perf => "Perf",
+                Self::PlatformCall => "PlatformCall",
+                Self::Pool => "Pool",
+                Self::Provisioning => "Provisioning",
+                Self::Replay => "Replay",
+                Self::RootCapability => "RootCapability",
+                Self::Scaling => "Scaling",
+                #[cfg(feature = "sharding")]
+                Self::Sharding => "Sharding",
+                Self::System => "System",
+                Self::Timer => "Timer",
+                Self::WasmStore => "WasmStore",
+            }
+        }
     }
 
     fn assert_metric_count(entries: &[MetricEntry], labels: &[&str], expected: u64) {

@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.30.x] - 2026-05-03 - Fleet Snapshot Backups
 
+- `0.30.22` adds restore apply journal state transitions plus `canic restore apply-next` and `canic restore apply-mark` so external restore runners can fetch the next operation and mark individual operations completed or failed while keeping resumable journal counts consistent, and tightens metrics documentation and facade coverage so every metric family stays visible and documented.
+
+```bash
+canic restore apply-next \
+  --journal restore-apply-journal.json \
+  --out restore-apply-next.json
+```
+
+```bash
+canic restore apply-mark \
+  --journal restore-apply-journal.json \
+  --sequence 0 \
+  --state completed \
+  --out restore-apply-journal.json
+```
+
 - `0.30.21` adds an initial restore apply journal and `canic restore apply-status` so dry-runs can emit and summarize operation states before any mutating restore execution is enabled, and adds first-class `Provisioning` metrics for create, install, propagation, and upgrade workflow visibility.
 
 ```bash

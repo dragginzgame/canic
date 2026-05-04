@@ -3,8 +3,8 @@ use canic_backup::{
     persistence::{BackupLayout, PersistenceError},
     restore::{
         RestoreApplyDryRun, RestoreApplyDryRunError, RestoreApplyJournal, RestoreApplyJournalError,
-        RestoreApplyJournalStatus, RestoreMapping, RestorePlan, RestorePlanError, RestorePlanner,
-        RestoreStatus,
+        RestoreApplyJournalStatus, RestoreApplyNextOperation, RestoreMapping, RestorePlan,
+        RestorePlanError, RestorePlanner, RestoreStatus,
     },
 };
 use std::{
@@ -47,6 +47,12 @@ pub enum RestoreCommandError {
 
     #[error("option {0} requires a value")]
     MissingValue(&'static str),
+
+    #[error("option --sequence requires a non-negative integer value")]
+    InvalidSequence,
+
+    #[error("unsupported apply-mark state {0}; use completed or failed")]
+    InvalidApplyMarkState(String),
 
     #[error(transparent)]
     Io(#[from] std::io::Error),
@@ -281,6 +287,123 @@ impl RestoreApplyStatusOptions {
     }
 }
 
+///
+/// RestoreApplyNextOptions
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RestoreApplyNextOptions {
+    pub journal: PathBuf,
+    pub out: Option<PathBuf>,
+}
+
+impl RestoreApplyNextOptions {
+    /// Parse restore apply-next options from CLI arguments.
+    pub fn parse<I>(args: I) -> Result<Self, RestoreCommandError>
+    where
+        I: IntoIterator<Item = OsString>,
+    {
+        let mut journal = None;
+        let mut out = None;
+
+        let mut args = args.into_iter();
+        while let Some(arg) = args.next() {
+            let arg = arg
+                .into_string()
+                .map_err(|_| RestoreCommandError::Usage(usage()))?;
+            match arg.as_str() {
+                "--journal" => journal = Some(PathBuf::from(next_value(&mut args, "--journal")?)),
+                "--out" => out = Some(PathBuf::from(next_value(&mut args, "--out")?)),
+                "--help" | "-h" => return Err(RestoreCommandError::Usage(usage())),
+                _ => return Err(RestoreCommandError::UnknownOption(arg)),
+            }
+        }
+
+        Ok(Self {
+            journal: journal.ok_or(RestoreCommandError::MissingOption("--journal"))?,
+            out,
+        })
+    }
+}
+
+///
+/// RestoreApplyMarkOptions
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RestoreApplyMarkOptions {
+    pub journal: PathBuf,
+    pub sequence: usize,
+    pub state: RestoreApplyMarkState,
+    pub reason: Option<String>,
+    pub out: Option<PathBuf>,
+}
+
+impl RestoreApplyMarkOptions {
+    /// Parse restore apply-mark options from CLI arguments.
+    pub fn parse<I>(args: I) -> Result<Self, RestoreCommandError>
+    where
+        I: IntoIterator<Item = OsString>,
+    {
+        let mut journal = None;
+        let mut sequence = None;
+        let mut state = None;
+        let mut reason = None;
+        let mut out = None;
+
+        let mut args = args.into_iter();
+        while let Some(arg) = args.next() {
+            let arg = arg
+                .into_string()
+                .map_err(|_| RestoreCommandError::Usage(usage()))?;
+            match arg.as_str() {
+                "--journal" => journal = Some(PathBuf::from(next_value(&mut args, "--journal")?)),
+                "--sequence" => {
+                    sequence = Some(parse_sequence(next_value(&mut args, "--sequence")?)?);
+                }
+                "--state" => {
+                    state = Some(RestoreApplyMarkState::parse(next_value(
+                        &mut args, "--state",
+                    )?)?);
+                }
+                "--reason" => reason = Some(next_value(&mut args, "--reason")?),
+                "--out" => out = Some(PathBuf::from(next_value(&mut args, "--out")?)),
+                "--help" | "-h" => return Err(RestoreCommandError::Usage(usage())),
+                _ => return Err(RestoreCommandError::UnknownOption(arg)),
+            }
+        }
+
+        Ok(Self {
+            journal: journal.ok_or(RestoreCommandError::MissingOption("--journal"))?,
+            sequence: sequence.ok_or(RestoreCommandError::MissingOption("--sequence"))?,
+            state: state.ok_or(RestoreCommandError::MissingOption("--state"))?,
+            reason,
+            out,
+        })
+    }
+}
+
+///
+/// RestoreApplyMarkState
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum RestoreApplyMarkState {
+    Completed,
+    Failed,
+}
+
+impl RestoreApplyMarkState {
+    // Parse the restricted operation states accepted by apply-mark.
+    fn parse(value: String) -> Result<Self, RestoreCommandError> {
+        match value.as_str() {
+            "completed" => Ok(Self::Completed),
+            "failed" => Ok(Self::Failed),
+            _ => Err(RestoreCommandError::InvalidApplyMarkState(value)),
+        }
+    }
+}
+
 /// Run a restore subcommand.
 pub fn run<I>(args: I) -> Result<(), RestoreCommandError>
 where
@@ -316,6 +439,18 @@ where
             let options = RestoreApplyStatusOptions::parse(args)?;
             let status = restore_apply_status(&options)?;
             write_apply_status(&options, &status)?;
+            Ok(())
+        }
+        "apply-next" => {
+            let options = RestoreApplyNextOptions::parse(args)?;
+            let next = restore_apply_next(&options)?;
+            write_apply_next(&options, &next)?;
+            Ok(())
+        }
+        "apply-mark" => {
+            let options = RestoreApplyMarkOptions::parse(args)?;
+            let journal = restore_apply_mark(&options)?;
+            write_apply_mark(&options, &journal)?;
             Ok(())
         }
         "help" | "--help" | "-h" => Err(RestoreCommandError::Usage(usage())),
@@ -365,6 +500,39 @@ pub fn restore_apply_status(
 ) -> Result<RestoreApplyJournalStatus, RestoreCommandError> {
     let journal = read_apply_journal(&options.journal)?;
     Ok(journal.status())
+}
+
+/// Build the next restore apply operation response from a journal file.
+pub fn restore_apply_next(
+    options: &RestoreApplyNextOptions,
+) -> Result<RestoreApplyNextOperation, RestoreCommandError> {
+    let journal = read_apply_journal(&options.journal)?;
+    Ok(journal.next_operation())
+}
+
+/// Mark one restore apply journal operation completed or failed.
+pub fn restore_apply_mark(
+    options: &RestoreApplyMarkOptions,
+) -> Result<RestoreApplyJournal, RestoreCommandError> {
+    let mut journal = read_apply_journal(&options.journal)?;
+
+    match options.state {
+        RestoreApplyMarkState::Completed => {
+            journal.mark_operation_completed(options.sequence)?;
+        }
+        RestoreApplyMarkState::Failed => {
+            let reason =
+                options
+                    .reason
+                    .clone()
+                    .ok_or(RestoreApplyJournalError::FailureReasonRequired(
+                        options.sequence,
+                    ))?;
+            journal.mark_operation_failed(options.sequence, reason)?;
+        }
+    }
+
+    Ok(journal)
 }
 
 // Enforce caller-requested restore plan requirements after the plan is emitted.
@@ -447,6 +615,13 @@ fn read_apply_journal(path: &PathBuf) -> Result<RestoreApplyJournal, RestoreComm
     let journal: RestoreApplyJournal = serde_json::from_str(&data)?;
     journal.validate()?;
     Ok(journal)
+}
+
+// Parse a restore apply journal operation sequence value.
+fn parse_sequence(value: String) -> Result<usize, RestoreCommandError> {
+    value
+        .parse::<usize>()
+        .map_err(|_| RestoreCommandError::InvalidSequence)
 }
 
 // Write the computed plan to stdout or a requested output file.
@@ -533,6 +708,42 @@ fn write_apply_status(
     Ok(())
 }
 
+// Write the computed apply next-operation response to stdout or a requested output file.
+fn write_apply_next(
+    options: &RestoreApplyNextOptions,
+    next: &RestoreApplyNextOperation,
+) -> Result<(), RestoreCommandError> {
+    if let Some(path) = &options.out {
+        let data = serde_json::to_vec_pretty(next)?;
+        fs::write(path, data)?;
+        return Ok(());
+    }
+
+    let stdout = io::stdout();
+    let mut handle = stdout.lock();
+    serde_json::to_writer_pretty(&mut handle, next)?;
+    writeln!(handle)?;
+    Ok(())
+}
+
+// Write the updated apply journal to stdout or a requested output file.
+fn write_apply_mark(
+    options: &RestoreApplyMarkOptions,
+    journal: &RestoreApplyJournal,
+) -> Result<(), RestoreCommandError> {
+    if let Some(path) = &options.out {
+        let data = serde_json::to_vec_pretty(journal)?;
+        fs::write(path, data)?;
+        return Ok(());
+    }
+
+    let stdout = io::stdout();
+    let mut handle = stdout.lock();
+    serde_json::to_writer_pretty(&mut handle, journal)?;
+    writeln!(handle)?;
+    Ok(())
+}
+
 // Read the next required option value.
 fn next_value<I>(args: &mut I, option: &'static str) -> Result<String, RestoreCommandError>
 where
@@ -545,7 +756,7 @@ where
 
 // Return restore command usage text.
 const fn usage() -> &'static str {
-    "usage: canic restore plan (--manifest <file> | --backup-dir <dir>) [--mapping <file>] [--out <file>] [--require-verified] [--require-restore-ready]\n       canic restore status --plan <file> [--out <file>]\n       canic restore apply --plan <file> [--status <file>] [--backup-dir <dir>] --dry-run [--out <file>] [--journal-out <file>]\n       canic restore apply-status --journal <file> [--out <file>]"
+    "usage: canic restore plan (--manifest <file> | --backup-dir <dir>) [--mapping <file>] [--out <file>] [--require-verified] [--require-restore-ready]\n       canic restore status --plan <file> [--out <file>]\n       canic restore apply --plan <file> [--status <file>] [--backup-dir <dir>] --dry-run [--out <file>] [--journal-out <file>]\n       canic restore apply-status --journal <file> [--out <file>]\n       canic restore apply-next --journal <file> [--out <file>]\n       canic restore apply-mark --journal <file> --sequence <n> --state completed|failed [--reason <text>] [--out <file>]"
 }
 
 #[cfg(test)]
@@ -673,6 +884,48 @@ mod tests {
         assert_eq!(
             options.out,
             Some(PathBuf::from("restore-apply-status.json"))
+        );
+    }
+
+    // Ensure restore apply-next options parse the intended journal command.
+    #[test]
+    fn parses_restore_apply_next_options() {
+        let options = RestoreApplyNextOptions::parse([
+            OsString::from("--journal"),
+            OsString::from("restore-apply-journal.json"),
+            OsString::from("--out"),
+            OsString::from("restore-apply-next.json"),
+        ])
+        .expect("parse apply-next options");
+
+        assert_eq!(options.journal, PathBuf::from("restore-apply-journal.json"));
+        assert_eq!(options.out, Some(PathBuf::from("restore-apply-next.json")));
+    }
+
+    // Ensure restore apply-mark options parse the intended journal update command.
+    #[test]
+    fn parses_restore_apply_mark_options() {
+        let options = RestoreApplyMarkOptions::parse([
+            OsString::from("--journal"),
+            OsString::from("restore-apply-journal.json"),
+            OsString::from("--sequence"),
+            OsString::from("4"),
+            OsString::from("--state"),
+            OsString::from("failed"),
+            OsString::from("--reason"),
+            OsString::from("dfx-load-failed"),
+            OsString::from("--out"),
+            OsString::from("restore-apply-journal.updated.json"),
+        ])
+        .expect("parse apply-mark options");
+
+        assert_eq!(options.journal, PathBuf::from("restore-apply-journal.json"));
+        assert_eq!(options.sequence, 4);
+        assert_eq!(options.state, RestoreApplyMarkState::Failed);
+        assert_eq!(options.reason.as_deref(), Some("dfx-load-failed"));
+        assert_eq!(
+            options.out,
+            Some(PathBuf::from("restore-apply-journal.updated.json"))
         );
     }
 
@@ -1129,6 +1382,121 @@ mod tests {
         ));
     }
 
+    // Ensure apply-next writes the full next ready operation row for runners.
+    #[test]
+    fn run_restore_apply_next_writes_next_ready_operation() {
+        let root = temp_dir("canic-cli-restore-apply-next");
+        fs::create_dir_all(&root).expect("create temp root");
+        let journal_path = root.join("restore-apply-journal.json");
+        let out_path = root.join("restore-apply-next.json");
+        let mut journal = ready_apply_journal();
+        journal
+            .mark_operation_completed(0)
+            .expect("mark first operation complete");
+
+        fs::write(
+            &journal_path,
+            serde_json::to_vec(&journal).expect("serialize journal"),
+        )
+        .expect("write journal");
+
+        run([
+            OsString::from("apply-next"),
+            OsString::from("--journal"),
+            OsString::from(journal_path.as_os_str()),
+            OsString::from("--out"),
+            OsString::from(out_path.as_os_str()),
+        ])
+        .expect("write apply next");
+
+        let next: RestoreApplyNextOperation =
+            serde_json::from_slice(&fs::read(&out_path).expect("read next operation"))
+                .expect("decode next operation");
+        let operation = next.operation.expect("operation should be available");
+
+        fs::remove_dir_all(root).expect("remove temp root");
+        assert!(next.ready);
+        assert!(next.operation_available);
+        assert_eq!(operation.sequence, 1);
+        assert_eq!(
+            operation.operation,
+            canic_backup::restore::RestoreApplyOperationKind::LoadSnapshot
+        );
+    }
+
+    // Ensure apply-mark can advance one journal operation and keep counts consistent.
+    #[test]
+    fn run_restore_apply_mark_completes_operation() {
+        let root = temp_dir("canic-cli-restore-apply-mark-complete");
+        fs::create_dir_all(&root).expect("create temp root");
+        let journal_path = root.join("restore-apply-journal.json");
+        let updated_path = root.join("restore-apply-journal.updated.json");
+        let journal = ready_apply_journal();
+
+        fs::write(
+            &journal_path,
+            serde_json::to_vec(&journal).expect("serialize journal"),
+        )
+        .expect("write journal");
+
+        run([
+            OsString::from("apply-mark"),
+            OsString::from("--journal"),
+            OsString::from(journal_path.as_os_str()),
+            OsString::from("--sequence"),
+            OsString::from("0"),
+            OsString::from("--state"),
+            OsString::from("completed"),
+            OsString::from("--out"),
+            OsString::from(updated_path.as_os_str()),
+        ])
+        .expect("mark operation completed");
+
+        let updated: RestoreApplyJournal =
+            serde_json::from_slice(&fs::read(&updated_path).expect("read updated journal"))
+                .expect("decode updated journal");
+        let status = updated.status();
+
+        fs::remove_dir_all(root).expect("remove temp root");
+        assert_eq!(updated.completed_operations, 1);
+        assert_eq!(updated.ready_operations, 7);
+        assert_eq!(status.next_ready_sequence, Some(1));
+    }
+
+    // Ensure apply-mark requires failure reasons for failed operation state.
+    #[test]
+    fn run_restore_apply_mark_failed_requires_reason() {
+        let root = temp_dir("canic-cli-restore-apply-mark-failed-reason");
+        fs::create_dir_all(&root).expect("create temp root");
+        let journal_path = root.join("restore-apply-journal.json");
+        let journal = ready_apply_journal();
+
+        fs::write(
+            &journal_path,
+            serde_json::to_vec(&journal).expect("serialize journal"),
+        )
+        .expect("write journal");
+
+        let err = run([
+            OsString::from("apply-mark"),
+            OsString::from("--journal"),
+            OsString::from(journal_path.as_os_str()),
+            OsString::from("--sequence"),
+            OsString::from("0"),
+            OsString::from("--state"),
+            OsString::from("failed"),
+        ])
+        .expect_err("failed state should require reason");
+
+        fs::remove_dir_all(root).expect("remove temp root");
+        assert!(matches!(
+            err,
+            RestoreCommandError::RestoreApplyJournal(
+                RestoreApplyJournalError::FailureReasonRequired(0)
+            )
+        ));
+    }
+
     // Ensure restore apply dry-run rejects status files from another plan.
     #[test]
     fn run_restore_apply_dry_run_rejects_mismatched_status() {
@@ -1173,6 +1541,24 @@ mod tests {
                 ..
             })
         ));
+    }
+
+    // Build one manually ready apply journal for runner-focused CLI tests.
+    fn ready_apply_journal() -> RestoreApplyJournal {
+        let plan = RestorePlanner::plan(&restore_ready_manifest(), None).expect("build plan");
+        let dry_run = RestoreApplyDryRun::try_from_plan(&plan, None).expect("dry-run");
+        let mut journal = RestoreApplyJournal::from_dry_run(&dry_run);
+
+        journal.ready = true;
+        journal.blocked_reasons = Vec::new();
+        for operation in &mut journal.operations {
+            operation.state = canic_backup::restore::RestoreApplyOperationState::Ready;
+            operation.blocking_reasons = Vec::new();
+        }
+        journal.blocked_operations = 0;
+        journal.ready_operations = journal.operation_count;
+        journal.validate().expect("journal should validate");
+        journal
     }
 
     // Build one valid manifest for restore planning tests.

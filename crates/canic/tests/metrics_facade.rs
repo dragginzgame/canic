@@ -28,23 +28,33 @@ fn metrics_query_page_is_public_facade_usable() {
     assert!(entries.is_empty());
 }
 
-// Verify newly added metric families are reachable through the public facade.
+// Verify all metric families are reachable through the public facade.
 #[test]
-fn new_metric_families_are_public_facade_usable() {
+fn all_metric_families_are_public_facade_usable() {
     for kind in [
+        MetricsKind::Access,
         MetricsKind::Auth,
         MetricsKind::CanisterOps,
         MetricsKind::Cascade,
+        MetricsKind::CyclesFunding,
+        MetricsKind::CyclesTopup,
+        MetricsKind::DelegatedAuth,
         MetricsKind::Directory,
+        MetricsKind::Http,
         MetricsKind::Intent,
         MetricsKind::InterCanisterCall,
+        MetricsKind::Lifecycle,
+        MetricsKind::Perf,
         MetricsKind::PlatformCall,
         MetricsKind::Pool,
         MetricsKind::Provisioning,
         MetricsKind::Replay,
+        MetricsKind::RootCapability,
         MetricsKind::Scaling,
         #[cfg(feature = "sharding")]
         MetricsKind::Sharding,
+        MetricsKind::System,
+        MetricsKind::Timer,
         MetricsKind::WasmStore,
     ] {
         let page = MetricsQuery::page(

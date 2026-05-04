@@ -180,3 +180,25 @@ canic restore apply-status \
   --journal restore-apply-journal.json \
   --out restore-apply-status.json
 ```
+
+Emit the full next ready operation for an external runner:
+
+```bash
+canic restore apply-next \
+  --journal restore-apply-journal.json \
+  --out restore-apply-next.json
+```
+
+Mark one journal operation after an external restore step completes or fails:
+
+```bash
+canic restore apply-mark \
+  --journal restore-apply-journal.json \
+  --sequence 0 \
+  --state completed \
+  --out restore-apply-journal.json
+```
+
+Use `--state failed --reason <text>` to record a failed operation. The command
+validates the input journal, refreshes operation counts, and writes the updated
+journal without executing any restore mutation.

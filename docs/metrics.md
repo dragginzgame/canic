@@ -425,6 +425,21 @@ Reasons:
 - `overflow`
 - `storage_failed`
 
+### `InterCanisterCall`
+
+Inter-canister call rows expose target-principal and method-level call volume
+for generic Canic IC calls. Method labels should be static method names; use
+`PlatformCall` when outcome visibility is needed without target-principal
+cardinality.
+
+Labels:
+
+- `method`
+
+Principal:
+
+- target canister principal
+
 ### `Lifecycle`
 
 Lifecycle rows expose synchronous runtime seeding and asynchronous bootstrap
@@ -576,6 +591,47 @@ Reasons:
 - `missing_metadata`
 - `ok`
 
+### `RootCapability`
+
+Root-capability rows expose capability envelope, proof, authorization, replay,
+and execution outcomes without using caller principals, request IDs, or payload
+hashes as dimensions.
+
+Capabilities:
+
+- `IssueRoleAttestation`
+- `Provision`
+- `RecycleCanister`
+- `RequestCycles`
+- `Upgrade`
+
+Event types:
+
+- `Authorization`
+- `Envelope`
+- `Execution`
+- `Proof`
+- `Replay`
+
+Outcomes:
+
+- `Accepted`
+- `Denied`
+- `DuplicateConflict`
+- `DuplicateSame`
+- `Error`
+- `Expired`
+- `Rejected`
+- `Success`
+- `TtlExceeded`
+
+Proof modes:
+
+- `DelegatedGrant`
+- `RoleAttestation`
+- `Structural`
+- `Unspecified`
+
 ### `Scaling`
 
 Scaling rows expose worker pool planning and bootstrap progress without using
@@ -650,6 +706,28 @@ Reasons:
 - `sharding_disabled`
 - `target_satisfied`
 - `unknown`
+
+### `System`
+
+System rows expose coarse platform operation counters. They are intentionally
+fixed labels and should be used for broad operation volume, not detailed
+outcome analysis.
+
+Kinds:
+
+- `CanisterCall`
+- `CanisterStatus`
+- `CreateCanister`
+- `DeleteCanister`
+- `DepositCycles`
+- `HttpOutcall`
+- `InstallCode`
+- `RawRand`
+- `ReinstallCode`
+- `TimerScheduled`
+- `UninstallCode`
+- `UpdateSettings`
+- `UpgradeCode`
 
 ### `Timer`
 

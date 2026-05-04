@@ -387,6 +387,80 @@ impl RestoreApplyJournal {
     pub fn status(&self) -> RestoreApplyJournalStatus {
         RestoreApplyJournalStatus::from_journal(self)
     }
+
+    /// Return the full next ready operation row, if one is available.
+    #[must_use]
+    pub fn next_ready_operation(&self) -> Option<&RestoreApplyJournalOperation> {
+        self.operations
+            .iter()
+            .filter(|operation| operation.state == RestoreApplyOperationState::Ready)
+            .min_by_key(|operation| operation.sequence)
+    }
+
+    /// Render the next ready operation as a compact runner-facing response.
+    #[must_use]
+    pub fn next_operation(&self) -> RestoreApplyNextOperation {
+        RestoreApplyNextOperation::from_journal(self)
+    }
+
+    /// Mark one restore apply operation completed and refresh journal counts.
+    pub fn mark_operation_completed(
+        &mut self,
+        sequence: usize,
+    ) -> Result<(), RestoreApplyJournalError> {
+        self.transition_operation(sequence, RestoreApplyOperationState::Completed, Vec::new())
+    }
+
+    /// Mark one restore apply operation failed and refresh journal counts.
+    pub fn mark_operation_failed(
+        &mut self,
+        sequence: usize,
+        reason: String,
+    ) -> Result<(), RestoreApplyJournalError> {
+        if reason.trim().is_empty() {
+            return Err(RestoreApplyJournalError::FailureReasonRequired(sequence));
+        }
+
+        self.transition_operation(sequence, RestoreApplyOperationState::Failed, vec![reason])
+    }
+
+    // Apply one legal operation state transition and revalidate the journal.
+    fn transition_operation(
+        &mut self,
+        sequence: usize,
+        next_state: RestoreApplyOperationState,
+        blocking_reasons: Vec<String>,
+    ) -> Result<(), RestoreApplyJournalError> {
+        let operation = self
+            .operations
+            .iter_mut()
+            .find(|operation| operation.sequence == sequence)
+            .ok_or(RestoreApplyJournalError::OperationNotFound(sequence))?;
+
+        if !operation.can_transition_to(&next_state) {
+            return Err(RestoreApplyJournalError::InvalidOperationTransition {
+                sequence,
+                from: operation.state.clone(),
+                to: next_state,
+            });
+        }
+
+        operation.state = next_state;
+        operation.blocking_reasons = blocking_reasons;
+        self.refresh_operation_counts();
+        self.validate()
+    }
+
+    // Recompute operation counts after a journal operation state change.
+    fn refresh_operation_counts(&mut self) {
+        let state_counts = RestoreApplyJournalStateCounts::from_operations(&self.operations);
+        self.operation_count = self.operations.len();
+        self.pending_operations = state_counts.pending;
+        self.ready_operations = state_counts.ready;
+        self.blocked_operations = state_counts.blocked;
+        self.completed_operations = state_counts.completed;
+        self.failed_operations = state_counts.failed;
+    }
 }
 
 // Validate the supported restore apply journal format version.
@@ -525,11 +599,7 @@ impl RestoreApplyJournalStatus {
     /// Build a compact status projection from a restore apply journal.
     #[must_use]
     pub fn from_journal(journal: &RestoreApplyJournal) -> Self {
-        let next_ready = journal
-            .operations
-            .iter()
-            .filter(|operation| operation.state == RestoreApplyOperationState::Ready)
-            .min_by_key(|operation| operation.sequence);
+        let next_ready = journal.next_ready_operation();
 
         Self {
             status_version: 1,
@@ -546,6 +616,41 @@ impl RestoreApplyJournalStatus {
             failed_operations: journal.failed_operations,
             next_ready_sequence: next_ready.map(|operation| operation.sequence),
             next_ready_operation: next_ready.map(|operation| operation.operation.clone()),
+        }
+    }
+}
+
+///
+/// RestoreApplyNextOperation
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RestoreApplyNextOperation {
+    pub response_version: u16,
+    pub backup_id: String,
+    pub ready: bool,
+    pub complete: bool,
+    pub operation_available: bool,
+    pub blocked_reasons: Vec<String>,
+    pub operation: Option<RestoreApplyJournalOperation>,
+}
+
+impl RestoreApplyNextOperation {
+    /// Build a compact next-operation response from a restore apply journal.
+    #[must_use]
+    pub fn from_journal(journal: &RestoreApplyJournal) -> Self {
+        let complete =
+            journal.operation_count > 0 && journal.completed_operations == journal.operation_count;
+        let operation = journal.next_ready_operation().cloned();
+
+        Self {
+            response_version: 1,
+            backup_id: journal.backup_id.clone(),
+            ready: journal.ready,
+            complete,
+            operation_available: operation.is_some(),
+            blocked_reasons: journal.blocked_reasons.clone(),
+            operation,
         }
     }
 }
@@ -609,6 +714,9 @@ impl RestoreApplyJournalOperation {
             RestoreApplyOperationState::Blocked if self.blocking_reasons.is_empty() => Err(
                 RestoreApplyJournalError::BlockedOperationMissingReason(self.sequence),
             ),
+            RestoreApplyOperationState::Failed if self.blocking_reasons.is_empty() => Err(
+                RestoreApplyJournalError::FailureReasonRequired(self.sequence),
+            ),
             RestoreApplyOperationState::Pending
             | RestoreApplyOperationState::Ready
             | RestoreApplyOperationState::Completed
@@ -623,6 +731,32 @@ impl RestoreApplyJournalOperation {
             | RestoreApplyOperationState::Pending
             | RestoreApplyOperationState::Ready
             | RestoreApplyOperationState::Completed => Ok(()),
+        }
+    }
+
+    // Decide whether an operation can move to the requested next state.
+    const fn can_transition_to(&self, next_state: &RestoreApplyOperationState) -> bool {
+        match (&self.state, next_state) {
+            (
+                RestoreApplyOperationState::Ready
+                | RestoreApplyOperationState::Pending
+                | RestoreApplyOperationState::Completed,
+                RestoreApplyOperationState::Completed,
+            )
+            | (
+                RestoreApplyOperationState::Ready
+                | RestoreApplyOperationState::Pending
+                | RestoreApplyOperationState::Failed,
+                RestoreApplyOperationState::Failed,
+            ) => true,
+            (
+                RestoreApplyOperationState::Blocked
+                | RestoreApplyOperationState::Completed
+                | RestoreApplyOperationState::Failed
+                | RestoreApplyOperationState::Pending
+                | RestoreApplyOperationState::Ready,
+                _,
+            ) => false,
         }
     }
 }
@@ -674,6 +808,19 @@ pub enum RestoreApplyJournalError {
 
     #[error("unblocked restore apply journal operation {0} cannot have blocking reasons")]
     UnblockedOperationHasReasons(usize),
+
+    #[error("restore apply journal operation {0} was not found")]
+    OperationNotFound(usize),
+
+    #[error("restore apply journal operation {sequence} cannot transition from {from:?} to {to:?}")]
+    InvalidOperationTransition {
+        sequence: usize,
+        from: RestoreApplyOperationState,
+        to: RestoreApplyOperationState,
+    },
+
+    #[error("failed restore apply journal operation {0} requires a reason")]
+    FailureReasonRequired(usize),
 }
 
 // Verify every planned restore artifact against one backup directory root.
@@ -2312,6 +2459,66 @@ mod tests {
         );
     }
 
+    // Ensure next-operation output exposes the full next ready journal row.
+    #[test]
+    fn apply_journal_next_operation_reports_full_ready_row() {
+        let root = temp_dir("canic-restore-apply-journal-next");
+        fs::create_dir_all(&root).expect("create temp root");
+        let mut manifest = valid_manifest(IdentityMode::Relocatable);
+        set_member_artifact(
+            &mut manifest,
+            CHILD,
+            &root,
+            "artifacts/child",
+            b"child-snapshot",
+        );
+        set_member_artifact(
+            &mut manifest,
+            ROOT,
+            &root,
+            "artifacts/root",
+            b"root-snapshot",
+        );
+
+        let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
+        let dry_run = RestoreApplyDryRun::try_from_plan_with_artifacts(&plan, None, &root)
+            .expect("dry-run should validate artifacts");
+        let mut journal = RestoreApplyJournal::from_dry_run(&dry_run);
+        journal
+            .mark_operation_completed(0)
+            .expect("mark operation completed");
+        let next = journal.next_operation();
+
+        fs::remove_dir_all(root).expect("remove temp root");
+        assert!(next.ready);
+        assert!(!next.complete);
+        assert!(next.operation_available);
+        let operation = next.operation.expect("next operation");
+        assert_eq!(operation.sequence, 1);
+        assert_eq!(operation.state, RestoreApplyOperationState::Ready);
+        assert_eq!(operation.operation, RestoreApplyOperationKind::LoadSnapshot);
+        assert_eq!(operation.source_canister, ROOT);
+    }
+
+    // Ensure blocked journals report no next ready operation.
+    #[test]
+    fn apply_journal_next_operation_reports_blocked_state() {
+        let manifest = valid_manifest(IdentityMode::Relocatable);
+
+        let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
+        let dry_run = RestoreApplyDryRun::try_from_plan(&plan, None).expect("dry-run should build");
+        let journal = RestoreApplyJournal::from_dry_run(&dry_run);
+        let next = journal.next_operation();
+
+        assert!(!next.ready);
+        assert!(!next.operation_available);
+        assert!(next.operation.is_none());
+        assert!(
+            next.blocked_reasons
+                .contains(&"missing-artifact-validation".to_string())
+        );
+    }
+
     // Ensure apply journal validation rejects inconsistent state counts.
     #[test]
     fn apply_journal_validation_rejects_count_mismatch() {
@@ -2350,6 +2557,132 @@ mod tests {
         assert!(matches!(
             err,
             RestoreApplyJournalError::DuplicateSequence(0)
+        ));
+    }
+
+    // Ensure failed journal operations must explain why execution failed.
+    #[test]
+    fn apply_journal_validation_rejects_failed_without_reason() {
+        let manifest = valid_manifest(IdentityMode::Relocatable);
+
+        let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
+        let dry_run = RestoreApplyDryRun::try_from_plan(&plan, None).expect("dry-run should build");
+        let mut journal = RestoreApplyJournal::from_dry_run(&dry_run);
+        journal.operations[0].state = RestoreApplyOperationState::Failed;
+        journal.operations[0].blocking_reasons = Vec::new();
+        journal.blocked_operations -= 1;
+        journal.failed_operations = 1;
+
+        let err = journal
+            .validate()
+            .expect_err("failed operation without reason should fail");
+
+        assert!(matches!(
+            err,
+            RestoreApplyJournalError::FailureReasonRequired(0)
+        ));
+    }
+
+    // Ensure completing a journal operation updates counts and advances status.
+    #[test]
+    fn apply_journal_mark_completed_advances_next_ready_operation() {
+        let root = temp_dir("canic-restore-apply-journal-completed");
+        fs::create_dir_all(&root).expect("create temp root");
+        let mut manifest = valid_manifest(IdentityMode::Relocatable);
+        set_member_artifact(
+            &mut manifest,
+            CHILD,
+            &root,
+            "artifacts/child",
+            b"child-snapshot",
+        );
+        set_member_artifact(
+            &mut manifest,
+            ROOT,
+            &root,
+            "artifacts/root",
+            b"root-snapshot",
+        );
+
+        let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
+        let dry_run = RestoreApplyDryRun::try_from_plan_with_artifacts(&plan, None, &root)
+            .expect("dry-run should validate artifacts");
+        let mut journal = RestoreApplyJournal::from_dry_run(&dry_run);
+
+        journal
+            .mark_operation_completed(0)
+            .expect("mark operation completed");
+        let status = journal.status();
+
+        fs::remove_dir_all(root).expect("remove temp root");
+        assert_eq!(
+            journal.operations[0].state,
+            RestoreApplyOperationState::Completed
+        );
+        assert_eq!(journal.completed_operations, 1);
+        assert_eq!(journal.ready_operations, 7);
+        assert_eq!(status.next_ready_sequence, Some(1));
+    }
+
+    // Ensure failed journal operations carry a reason and update counts.
+    #[test]
+    fn apply_journal_mark_failed_records_reason() {
+        let root = temp_dir("canic-restore-apply-journal-failed");
+        fs::create_dir_all(&root).expect("create temp root");
+        let mut manifest = valid_manifest(IdentityMode::Relocatable);
+        set_member_artifact(
+            &mut manifest,
+            CHILD,
+            &root,
+            "artifacts/child",
+            b"child-snapshot",
+        );
+        set_member_artifact(
+            &mut manifest,
+            ROOT,
+            &root,
+            "artifacts/root",
+            b"root-snapshot",
+        );
+
+        let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
+        let dry_run = RestoreApplyDryRun::try_from_plan_with_artifacts(&plan, None, &root)
+            .expect("dry-run should validate artifacts");
+        let mut journal = RestoreApplyJournal::from_dry_run(&dry_run);
+
+        journal
+            .mark_operation_failed(0, "dfx-load-failed".to_string())
+            .expect("mark operation failed");
+
+        fs::remove_dir_all(root).expect("remove temp root");
+        assert_eq!(
+            journal.operations[0].state,
+            RestoreApplyOperationState::Failed
+        );
+        assert_eq!(
+            journal.operations[0].blocking_reasons,
+            vec!["dfx-load-failed".to_string()]
+        );
+        assert_eq!(journal.failed_operations, 1);
+        assert_eq!(journal.ready_operations, 7);
+    }
+
+    // Ensure blocked operations cannot be manually completed before blockers clear.
+    #[test]
+    fn apply_journal_rejects_blocked_operation_completion() {
+        let manifest = valid_manifest(IdentityMode::Relocatable);
+
+        let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
+        let dry_run = RestoreApplyDryRun::try_from_plan(&plan, None).expect("dry-run should build");
+        let mut journal = RestoreApplyJournal::from_dry_run(&dry_run);
+
+        let err = journal
+            .mark_operation_completed(0)
+            .expect_err("blocked operation should not complete");
+
+        assert!(matches!(
+            err,
+            RestoreApplyJournalError::InvalidOperationTransition { sequence: 0, .. }
         ));
     }
 
