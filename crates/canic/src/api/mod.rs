@@ -79,6 +79,11 @@ pub mod protocol {
 }
 
 /// Observability and operational helpers
+pub mod metrics {
+    pub use crate::__internal::core::api::metrics::MetricsQuery;
+}
+
+/// Low-level operational helpers
 pub mod ops {
     pub use crate::__internal::core::{log, perf};
 }

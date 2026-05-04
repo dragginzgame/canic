@@ -19,6 +19,7 @@ pub enum MetricsKind {
     DelegatedAuth,
     Http,
     Icc,
+    Lifecycle,
     Perf,
     RootCapability,
     System,
@@ -52,4 +53,19 @@ pub enum MetricValue {
     Count(u64),
     CountAndU64 { count: u64, value_u64: u64 },
     U128(u128),
+}
+
+//
+// QueryPerfSample
+//
+// Same-call query performance sample.
+//
+
+#[derive(CandidType, Deserialize)]
+pub struct QueryPerfSample<T> {
+    // Query result returned by the probe.
+    pub value: T,
+
+    // Local instruction counter observed in the same query call context.
+    pub local_instructions: u64,
 }

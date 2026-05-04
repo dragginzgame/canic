@@ -72,6 +72,12 @@ pushing are human-owned actions.
 ### Versioning & Release
 
 * Versioning handled by scripts in `scripts/ci/`
+* Codex / automated agents must **never** change release version numbers directly.
+  This includes manual edits to version fields, `cargo set-version`,
+  `scripts/ci/sync-release-surface-version.sh`, `scripts/ci/bump-version.sh`,
+  and `make patch | minor | major`.
+* Release version bumps are human-owned and must happen only through the release
+  workflow below.
 * Use:
 
   * `make patch | minor | major`

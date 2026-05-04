@@ -5,6 +5,7 @@ pub mod cycles_topup;
 pub mod delegated_auth;
 pub mod http;
 pub mod icc;
+pub mod lifecycle;
 pub mod root_capability;
 pub mod system;
 pub mod timer;
@@ -20,6 +21,7 @@ use {
     delegated_auth::DelegatedAuthMetrics,
     http::HttpMetrics,
     icc::IccMetrics,
+    lifecycle::LifecycleMetrics,
     root_capability::RootCapabilityMetrics,
     system::SystemMetrics,
     timer::{TimerMetrics, TimerMode},
@@ -35,6 +37,7 @@ pub fn entries(kind: MetricsKind) -> Vec<MetricEntry> {
         MetricsKind::DelegatedAuth => delegated_auth_entries(),
         MetricsKind::Http => http_entries(),
         MetricsKind::Icc => icc_entries(),
+        MetricsKind::Lifecycle => lifecycle_entries(),
         MetricsKind::Perf => perf_entries(),
         MetricsKind::RootCapability => root_capability_entries(),
         MetricsKind::System => system_entries(),
@@ -50,6 +53,7 @@ pub fn reset_for_tests() {
     DelegatedAuthMetrics::reset();
     HttpMetrics::reset();
     IccMetrics::reset();
+    LifecycleMetrics::reset();
     RootCapabilityMetrics::reset();
     SystemMetrics::reset();
     TimerMetrics::reset();
@@ -79,6 +83,24 @@ fn system_entries() -> Vec<MetricEntry> {
                     crate::ids::SystemMetricKind::UpgradeCode => "UpgradeCode",
                 }
                 .to_string(),
+            ],
+            principal: None,
+            value: MetricValue::Count(count),
+        })
+        .collect()
+}
+
+/// Project lifecycle counters into the unified public metrics row shape.
+#[must_use]
+fn lifecycle_entries() -> Vec<MetricEntry> {
+    LifecycleMetrics::snapshot()
+        .into_iter()
+        .map(|(key, count)| MetricEntry {
+            labels: vec![
+                key.phase.metric_label().to_string(),
+                key.role.metric_label().to_string(),
+                key.stage.metric_label().to_string(),
+                key.outcome.metric_label().to_string(),
             ],
             principal: None,
             value: MetricValue::Count(count),
@@ -260,6 +282,10 @@ mod tests {
             cycles_topup::CyclesTopupMetrics,
             http::{HttpMethod, HttpMetrics},
             icc::IccMetrics,
+            lifecycle::{
+                LifecycleMetricOutcome, LifecycleMetricPhase, LifecycleMetricRole,
+                LifecycleMetricStage, LifecycleMetrics,
+            },
             root_capability::{
                 RootCapabilityMetricKey, RootCapabilityMetricOutcome,
                 RootCapabilityMetricProofMode, RootCapabilityMetrics,
@@ -298,6 +324,12 @@ mod tests {
         DelegatedAuthMetrics::record_authority(principal);
         HttpMetrics::record_http_request(HttpMethod::Get, "https://example.test/a", Some("api"));
         IccMetrics::record_call(principal, "canic_sync");
+        LifecycleMetrics::record(
+            LifecycleMetricPhase::Init,
+            LifecycleMetricRole::Nonroot,
+            LifecycleMetricStage::Bootstrap,
+            LifecycleMetricOutcome::Started,
+        );
         RootCapabilityMetrics::record_proof(
             RootCapabilityMetricKey::Provision,
             RootCapabilityMetricOutcome::Accepted,
@@ -313,6 +345,7 @@ mod tests {
             MetricsKind::DelegatedAuth,
             MetricsKind::Http,
             MetricsKind::Icc,
+            MetricsKind::Lifecycle,
             MetricsKind::Perf,
             MetricsKind::RootCapability,
             MetricsKind::System,
@@ -330,6 +363,7 @@ mod tests {
             MetricsKind::DelegatedAuth,
             MetricsKind::Http,
             MetricsKind::Icc,
+            MetricsKind::Lifecycle,
             MetricsKind::Perf,
             MetricsKind::RootCapability,
             MetricsKind::System,

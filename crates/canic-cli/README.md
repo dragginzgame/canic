@@ -101,7 +101,8 @@ Preflight writes `manifest-validation.json`, `backup-status.json`,
 `restore-plan.json`, and `preflight-summary.json`.
 The summary records the backup ID, source root, environment, topology hash,
 readiness statuses, provenance consistency status, topology mismatch count,
-member counts, and paths to the generated reports.
+member counts, restore identity/verification/ordering counts, and paths to the
+generated reports.
 
 Restore planning is manifest-driven and performs no mutations:
 
@@ -115,3 +116,8 @@ canic restore plan \
 
 `--require-verified` runs the same manifest, journal, durable artifact, and
 checksum checks as `canic backup verify` before emitting the plan.
+Restore plans include an `identity_summary` with fixed, relocatable, mapped,
+in-place, and remapped member counts, plus a `verification_summary` with
+post-restore check counts. They also include an `ordering_summary` and per-member
+ordering dependency metadata so dry-runs show when parent relationships are
+satisfied inside the same restore group or by an earlier group.

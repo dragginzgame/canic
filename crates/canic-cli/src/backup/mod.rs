@@ -147,6 +147,20 @@ pub struct BackupPreflightReport {
     pub manifest_members: usize,
     pub backup_unit_count: usize,
     pub restore_plan_members: usize,
+    pub restore_fixed_members: usize,
+    pub restore_relocatable_members: usize,
+    pub restore_in_place_members: usize,
+    pub restore_mapped_members: usize,
+    pub restore_remapped_members: usize,
+    pub restore_fleet_checks: usize,
+    pub restore_member_check_groups: usize,
+    pub restore_member_checks: usize,
+    pub restore_members_with_checks: usize,
+    pub restore_total_checks: usize,
+    pub restore_phase_count: usize,
+    pub restore_dependency_free_members: usize,
+    pub restore_in_group_parent_edges: usize,
+    pub restore_cross_group_parent_edges: usize,
     pub manifest_validation_path: String,
     pub backup_status_path: String,
     pub backup_inspection_path: String,
@@ -442,6 +456,20 @@ pub fn backup_preflight(
         manifest_members: manifest.fleet.members.len(),
         backup_unit_count: provenance.backup_unit_count,
         restore_plan_members: restore_plan.member_count,
+        restore_fixed_members: restore_plan.identity_summary.fixed_members,
+        restore_relocatable_members: restore_plan.identity_summary.relocatable_members,
+        restore_in_place_members: restore_plan.identity_summary.in_place_members,
+        restore_mapped_members: restore_plan.identity_summary.mapped_members,
+        restore_remapped_members: restore_plan.identity_summary.remapped_members,
+        restore_fleet_checks: restore_plan.verification_summary.fleet_checks,
+        restore_member_check_groups: restore_plan.verification_summary.member_check_groups,
+        restore_member_checks: restore_plan.verification_summary.member_checks,
+        restore_members_with_checks: restore_plan.verification_summary.members_with_checks,
+        restore_total_checks: restore_plan.verification_summary.total_checks,
+        restore_phase_count: restore_plan.ordering_summary.phase_count,
+        restore_dependency_free_members: restore_plan.ordering_summary.dependency_free_members,
+        restore_in_group_parent_edges: restore_plan.ordering_summary.in_group_parent_edges,
+        restore_cross_group_parent_edges: restore_plan.ordering_summary.cross_group_parent_edges,
         manifest_validation_path: manifest_validation_path.display().to_string(),
         backup_status_path: backup_status_path.display().to_string(),
         backup_inspection_path: backup_inspection_path.display().to_string(),
@@ -658,6 +686,20 @@ fn preflight_summary_value(report: &BackupPreflightReport) -> serde_json::Value 
         "manifest_members": report.manifest_members,
         "backup_unit_count": report.backup_unit_count,
         "restore_plan_members": report.restore_plan_members,
+        "restore_fixed_members": report.restore_fixed_members,
+        "restore_relocatable_members": report.restore_relocatable_members,
+        "restore_in_place_members": report.restore_in_place_members,
+        "restore_mapped_members": report.restore_mapped_members,
+        "restore_remapped_members": report.restore_remapped_members,
+        "restore_fleet_checks": report.restore_fleet_checks,
+        "restore_member_check_groups": report.restore_member_check_groups,
+        "restore_member_checks": report.restore_member_checks,
+        "restore_members_with_checks": report.restore_members_with_checks,
+        "restore_total_checks": report.restore_total_checks,
+        "restore_phase_count": report.restore_phase_count,
+        "restore_dependency_free_members": report.restore_dependency_free_members,
+        "restore_in_group_parent_edges": report.restore_in_group_parent_edges,
+        "restore_cross_group_parent_edges": report.restore_cross_group_parent_edges,
         "manifest_validation_path": report.manifest_validation_path,
         "backup_status_path": report.backup_status_path,
         "backup_inspection_path": report.backup_inspection_path,
@@ -855,6 +897,7 @@ mod tests {
         assert_eq!(report.manifest_members, 1);
         assert_eq!(report.backup_unit_count, 1);
         assert_eq!(report.restore_plan_members, 1);
+        assert_preflight_report_restore_counts(&report);
         assert!(out_dir.join("manifest-validation.json").exists());
         assert!(out_dir.join("backup-status.json").exists());
         assert!(out_dir.join("backup-inspection.json").exists());
@@ -873,6 +916,46 @@ mod tests {
         .expect("decode manifest summary");
 
         fs::remove_dir_all(root).expect("remove temp root");
+        assert_preflight_summary_matches_report(&summary, &report);
+        assert_eq!(manifest_validation["backup_unit_count"], 1);
+        assert_eq!(manifest_validation["consistency_mode"], "crash-consistent");
+        assert_eq!(
+            manifest_validation["topology_validation_status"],
+            "validated"
+        );
+        assert_eq!(
+            manifest_validation["backup_unit_kinds"]["subtree_rooted"],
+            1
+        );
+        assert_eq!(
+            manifest_validation["backup_units"][0]["kind"],
+            "subtree-rooted"
+        );
+    }
+
+    // Verify restore summary counts copied out of the generated restore plan.
+    fn assert_preflight_report_restore_counts(report: &BackupPreflightReport) {
+        assert_eq!(report.restore_fixed_members, 1);
+        assert_eq!(report.restore_relocatable_members, 0);
+        assert_eq!(report.restore_in_place_members, 1);
+        assert_eq!(report.restore_mapped_members, 0);
+        assert_eq!(report.restore_remapped_members, 0);
+        assert_eq!(report.restore_fleet_checks, 0);
+        assert_eq!(report.restore_member_check_groups, 0);
+        assert_eq!(report.restore_member_checks, 1);
+        assert_eq!(report.restore_members_with_checks, 1);
+        assert_eq!(report.restore_total_checks, 1);
+        assert_eq!(report.restore_phase_count, 1);
+        assert_eq!(report.restore_dependency_free_members, 1);
+        assert_eq!(report.restore_in_group_parent_edges, 0);
+        assert_eq!(report.restore_cross_group_parent_edges, 0);
+    }
+
+    // Compare preflight summary JSON with the in-memory report.
+    fn assert_preflight_summary_matches_report(
+        summary: &serde_json::Value,
+        report: &BackupPreflightReport,
+    ) {
         assert_eq!(summary["status"], report.status);
         assert_eq!(summary["backup_id"], report.backup_id);
         assert_eq!(summary["source_environment"], report.source_environment);
@@ -895,26 +978,59 @@ mod tests {
         assert_eq!(summary["backup_unit_count"], report.backup_unit_count);
         assert_eq!(summary["restore_plan_members"], report.restore_plan_members);
         assert_eq!(
+            summary["restore_fixed_members"],
+            report.restore_fixed_members
+        );
+        assert_eq!(
+            summary["restore_relocatable_members"],
+            report.restore_relocatable_members
+        );
+        assert_eq!(
+            summary["restore_in_place_members"],
+            report.restore_in_place_members
+        );
+        assert_eq!(
+            summary["restore_mapped_members"],
+            report.restore_mapped_members
+        );
+        assert_eq!(
+            summary["restore_remapped_members"],
+            report.restore_remapped_members
+        );
+        assert_eq!(summary["restore_fleet_checks"], report.restore_fleet_checks);
+        assert_eq!(
+            summary["restore_member_check_groups"],
+            report.restore_member_check_groups
+        );
+        assert_eq!(
+            summary["restore_member_checks"],
+            report.restore_member_checks
+        );
+        assert_eq!(
+            summary["restore_members_with_checks"],
+            report.restore_members_with_checks
+        );
+        assert_eq!(summary["restore_total_checks"], report.restore_total_checks);
+        assert_eq!(summary["restore_phase_count"], report.restore_phase_count);
+        assert_eq!(
+            summary["restore_dependency_free_members"],
+            report.restore_dependency_free_members
+        );
+        assert_eq!(
+            summary["restore_in_group_parent_edges"],
+            report.restore_in_group_parent_edges
+        );
+        assert_eq!(
+            summary["restore_cross_group_parent_edges"],
+            report.restore_cross_group_parent_edges
+        );
+        assert_eq!(
             summary["backup_inspection_path"],
             report.backup_inspection_path
         );
         assert_eq!(
             summary["backup_provenance_path"],
             report.backup_provenance_path
-        );
-        assert_eq!(manifest_validation["backup_unit_count"], 1);
-        assert_eq!(manifest_validation["consistency_mode"], "crash-consistent");
-        assert_eq!(
-            manifest_validation["topology_validation_status"],
-            "validated"
-        );
-        assert_eq!(
-            manifest_validation["backup_unit_kinds"]["subtree_rooted"],
-            1
-        );
-        assert_eq!(
-            manifest_validation["backup_units"][0]["kind"],
-            "subtree-rooted"
         );
     }
 

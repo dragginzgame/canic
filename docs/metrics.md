@@ -13,6 +13,28 @@ Each row has:
 
 `CountAndU64` uses `count` as the event/sample count. The `value_u64` meaning is family-specific.
 
+## Query Perf Samples
+
+Query calls can update in-memory perf tables during the call, but those updates
+are not committed after the query returns. For audit probes that need comparable
+query-side instruction measurements, return a `QueryPerfSample<T>` from the same
+query call:
+
+```rust
+#[canic_query(requires(env::build_local_only()))]
+async fn audit_env_probe() -> Result<QueryPerfSample<EnvSnapshotResponse>, Error> {
+    Ok(MetricsQuery::sample_query(EnvQuery::snapshot()))
+}
+```
+
+`QueryPerfSample::local_instructions` is the local call-context instruction
+counter observed before the query response is returned. Use this for explicit
+audit/probe endpoints; use `canic_metrics(MetricsKind::Perf, ...)` for persisted
+update and timer rows.
+
+Audit reports should treat a zero `local_instructions` value as unobservable
+rather than as a successful zero-cost query measurement.
+
 ## Metric Families
 
 | `MetricsKind` | Labels | Principal | Value | Cardinality notes |
@@ -23,6 +45,7 @@ Each row has:
 | `DelegatedAuth` | `[delegated_auth_authority]` | Verified signer authority | `Count` | Bounded by configured delegated-auth signer authorities, not request callers. |
 | `Http` | `[method, label]` | `None` | `Count` | Use explicit stable labels for dynamic URLs. URL fallback labels strip query and fragment only. |
 | `Icc` | `[method]` | Target canister principal | `Count` | Target cardinality grows with topology size; method names should stay static. |
+| `Lifecycle` | `[phase, role, stage, outcome]` | `None` | `Count` | All dimensions are fixed enums for lifecycle runtime seeding and async bootstrap visibility. |
 | `Perf` | `[endpoint, name]`, `[timer, label]`, or `[checkpoint, scope, label]` | `None` | `CountAndU64` | `value_u64` is total instructions across samples. |
 | `RootCapability` | `[capability, event_type, outcome, proof_mode]` | `None` | `Count` | All dimensions are fixed enums. |
 | `System` | `[kind]` | `None` | `Count` | Fixed system operation labels. |
@@ -88,6 +111,35 @@ over unlabeled calls when `url` may contain IDs, account names, timestamps, or o
 
 Unlabeled HTTP metrics normalize the URL by removing query strings and fragments, but they do not rewrite dynamic path segments.
 
+### `Lifecycle`
+
+Lifecycle rows expose synchronous runtime seeding and asynchronous bootstrap
+progress.
+
+Phases:
+
+- `init`
+- `post_upgrade`
+
+Roles:
+
+- `root`
+- `nonroot`
+
+Stages:
+
+- `runtime`
+- `bootstrap`
+
+Outcomes:
+
+- `scheduled`
+- `started`
+- `completed`
+- `failed`
+- `waiting`
+- `skipped`
+
 ### `Perf`
 
 Perf rows use `CountAndU64`:
@@ -105,4 +157,3 @@ Timer rows use `CountAndU64`:
 - `value_u64`: timer delay in milliseconds
 
 Scheduling is also counted separately in `MetricsKind::System` as `TimerScheduled`.
-

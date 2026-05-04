@@ -50,6 +50,9 @@ pub struct RestorePlan {
     pub source_root_canister: String,
     pub topology_hash: String,
     pub member_count: usize,
+    pub identity_summary: RestoreIdentitySummary,
+    pub verification_summary: RestoreVerificationSummary,
+    pub ordering_summary: RestoreOrderingSummary,
     pub phases: Vec<RestorePhase>,
 }
 
@@ -62,6 +65,44 @@ impl RestorePlan {
             .flat_map(|phase| phase.members.iter())
             .collect()
     }
+}
+
+///
+/// RestoreIdentitySummary
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RestoreIdentitySummary {
+    pub fixed_members: usize,
+    pub relocatable_members: usize,
+    pub in_place_members: usize,
+    pub mapped_members: usize,
+    pub remapped_members: usize,
+}
+
+///
+/// RestoreVerificationSummary
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RestoreVerificationSummary {
+    pub fleet_checks: usize,
+    pub member_check_groups: usize,
+    pub member_checks: usize,
+    pub members_with_checks: usize,
+    pub total_checks: usize,
+}
+
+///
+/// RestoreOrderingSummary
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RestoreOrderingSummary {
+    pub phase_count: usize,
+    pub dependency_free_members: usize,
+    pub in_group_parent_edges: usize,
+    pub cross_group_parent_edges: usize,
 }
 
 ///
@@ -85,11 +126,35 @@ pub struct RestorePlanMember {
     pub role: String,
     pub parent_source_canister: Option<String>,
     pub parent_target_canister: Option<String>,
+    pub ordering_dependency: Option<RestoreOrderingDependency>,
+    pub phase_order: usize,
     pub restore_group: u16,
     pub identity_mode: IdentityMode,
     pub verification_class: String,
     pub verification_checks: Vec<VerificationCheck>,
     pub source_snapshot: SourceSnapshot,
+}
+
+///
+/// RestoreOrderingDependency
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RestoreOrderingDependency {
+    pub source_canister: String,
+    pub target_canister: String,
+    pub relationship: RestoreOrderingRelationship,
+}
+
+///
+/// RestoreOrderingRelationship
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum RestoreOrderingRelationship {
+    ParentInSameGroup,
+    ParentInEarlierGroup,
 }
 
 ///
@@ -111,7 +176,11 @@ impl RestorePlanner {
         }
 
         let members = resolve_members(manifest, mapping)?;
+        let identity_summary = restore_identity_summary(&members, mapping.is_some());
+        let verification_summary = restore_verification_summary(manifest, &members);
+        validate_restore_group_dependencies(&members)?;
         let phases = group_and_order_members(members)?;
+        let ordering_summary = restore_ordering_summary(&phases);
 
         Ok(RestorePlan {
             backup_id: manifest.backup_id.clone(),
@@ -119,6 +188,9 @@ impl RestorePlanner {
             source_root_canister: manifest.source.root_canister.clone(),
             topology_hash: manifest.fleet.topology_hash.clone(),
             member_count: manifest.fleet.members.len(),
+            identity_summary,
+            verification_summary,
+            ordering_summary,
             phases,
         })
     }
@@ -159,6 +231,16 @@ pub enum RestorePlanError {
 
     #[error("restore group {0} contains a parent cycle or unresolved dependency")]
     RestoreOrderCycle(u16),
+
+    #[error(
+        "restore plan places parent {parent_source_canister} in group {parent_restore_group} after child {child_source_canister} in group {child_restore_group}"
+    )]
+    ParentRestoreGroupAfterChild {
+        child_source_canister: String,
+        parent_source_canister: String,
+        child_restore_group: u16,
+        parent_restore_group: u16,
+    },
 }
 
 // Validate a user-supplied restore mapping before applying it to the manifest.
@@ -231,6 +313,8 @@ fn resolve_members(
             role: member.role.clone(),
             parent_source_canister: member.parent_canister_id.clone(),
             parent_target_canister: None,
+            ordering_dependency: None,
+            phase_order: 0,
             restore_group: member.restore_group,
             identity_mode: member.identity_mode.clone(),
             verification_class: member.verification_class.clone(),
@@ -271,6 +355,112 @@ fn resolve_target(
     }
 
     Ok(target)
+}
+
+// Summarize identity and mapping decisions before grouping restore phases.
+fn restore_identity_summary(
+    members: &[RestorePlanMember],
+    mapping_supplied: bool,
+) -> RestoreIdentitySummary {
+    let mut summary = RestoreIdentitySummary {
+        fixed_members: 0,
+        relocatable_members: 0,
+        in_place_members: 0,
+        mapped_members: 0,
+        remapped_members: 0,
+    };
+
+    for member in members {
+        match member.identity_mode {
+            IdentityMode::Fixed => summary.fixed_members += 1,
+            IdentityMode::Relocatable => summary.relocatable_members += 1,
+        }
+
+        if member.source_canister == member.target_canister {
+            summary.in_place_members += 1;
+        } else {
+            summary.remapped_members += 1;
+        }
+        if mapping_supplied {
+            summary.mapped_members += 1;
+        }
+    }
+
+    summary
+}
+
+// Summarize restore verification work declared by the manifest and members.
+fn restore_verification_summary(
+    manifest: &FleetBackupManifest,
+    members: &[RestorePlanMember],
+) -> RestoreVerificationSummary {
+    let fleet_checks = manifest.verification.fleet_checks.len();
+    let member_check_groups = manifest.verification.member_checks.len();
+    let role_check_counts = manifest
+        .verification
+        .member_checks
+        .iter()
+        .map(|group| (group.role.as_str(), group.checks.len()))
+        .collect::<BTreeMap<_, _>>();
+    let inline_member_checks = members
+        .iter()
+        .map(|member| member.verification_checks.len())
+        .sum::<usize>();
+    let role_member_checks = members
+        .iter()
+        .map(|member| {
+            role_check_counts
+                .get(member.role.as_str())
+                .copied()
+                .unwrap_or(0)
+        })
+        .sum::<usize>();
+    let member_checks = inline_member_checks + role_member_checks;
+    let members_with_checks = members
+        .iter()
+        .filter(|member| {
+            !member.verification_checks.is_empty()
+                || role_check_counts.contains_key(member.role.as_str())
+        })
+        .count();
+
+    RestoreVerificationSummary {
+        fleet_checks,
+        member_check_groups,
+        member_checks,
+        members_with_checks,
+        total_checks: fleet_checks + member_checks,
+    }
+}
+
+// Reject group assignments that would restore a child before its parent.
+fn validate_restore_group_dependencies(
+    members: &[RestorePlanMember],
+) -> Result<(), RestorePlanError> {
+    let groups_by_source = members
+        .iter()
+        .map(|member| (member.source_canister.as_str(), member.restore_group))
+        .collect::<BTreeMap<_, _>>();
+
+    for member in members {
+        let Some(parent) = &member.parent_source_canister else {
+            continue;
+        };
+        let Some(parent_group) = groups_by_source.get(parent.as_str()) else {
+            continue;
+        };
+
+        if *parent_group > member.restore_group {
+            return Err(RestorePlanError::ParentRestoreGroupAfterChild {
+                child_source_canister: member.source_canister.clone(),
+                parent_source_canister: parent.clone(),
+                child_restore_group: member.restore_group,
+                parent_restore_group: *parent_group,
+            });
+        }
+    }
+
+    Ok(())
 }
 
 // Group members and apply parent-before-child ordering inside each group.
@@ -315,12 +505,63 @@ fn order_group(
             return Err(RestorePlanError::RestoreOrderCycle(restore_group));
         };
 
-        let member = remaining.remove(index);
+        let mut member = remaining.remove(index);
+        member.phase_order = ordered.len();
+        member.ordering_dependency = ordering_dependency(&member, &group_sources);
         emitted.insert(member.source_canister.clone());
         ordered.push(member);
     }
 
     Ok(ordered)
+}
+
+// Describe the topology dependency that controlled a member's restore ordering.
+fn ordering_dependency(
+    member: &RestorePlanMember,
+    group_sources: &BTreeSet<String>,
+) -> Option<RestoreOrderingDependency> {
+    let parent_source = member.parent_source_canister.as_ref()?;
+    let parent_target = member.parent_target_canister.as_ref()?;
+    let relationship = if group_sources.contains(parent_source) {
+        RestoreOrderingRelationship::ParentInSameGroup
+    } else {
+        RestoreOrderingRelationship::ParentInEarlierGroup
+    };
+
+    Some(RestoreOrderingDependency {
+        source_canister: parent_source.clone(),
+        target_canister: parent_target.clone(),
+        relationship,
+    })
+}
+
+// Summarize the dependency ordering metadata exposed in the restore plan.
+fn restore_ordering_summary(phases: &[RestorePhase]) -> RestoreOrderingSummary {
+    let mut summary = RestoreOrderingSummary {
+        phase_count: phases.len(),
+        dependency_free_members: 0,
+        in_group_parent_edges: 0,
+        cross_group_parent_edges: 0,
+    };
+
+    for member in phases.iter().flat_map(|phase| phase.members.iter()) {
+        match &member.ordering_dependency {
+            Some(dependency)
+                if dependency.relationship == RestoreOrderingRelationship::ParentInSameGroup =>
+            {
+                summary.in_group_parent_edges += 1;
+            }
+            Some(dependency)
+                if dependency.relationship == RestoreOrderingRelationship::ParentInEarlierGroup =>
+            {
+                summary.cross_group_parent_edges += 1;
+            }
+            Some(_) => {}
+            None => summary.dependency_free_members += 1,
+        }
+    }
+
+    summary
 }
 
 // Determine whether a member's in-group parent has already been emitted.
@@ -350,11 +591,13 @@ mod tests {
     use super::*;
     use crate::manifest::{
         BackupUnit, BackupUnitKind, ConsistencyMode, ConsistencySection, FleetSection,
-        SourceMetadata, SourceSnapshot, ToolMetadata, VerificationCheck, VerificationPlan,
+        MemberVerificationChecks, SourceMetadata, SourceSnapshot, ToolMetadata, VerificationCheck,
+        VerificationPlan,
     };
 
     const ROOT: &str = "aaaaa-aa";
     const CHILD: &str = "renrk-eyaaa-aaaaa-aaada-cai";
+    const CHILD_TWO: &str = "r7inp-6aaaa-aaaaa-aaabq-cai";
     const TARGET: &str = "rno2w-sqaaa-aaaaa-aaacq-cai";
     const HASH: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 
@@ -449,8 +692,75 @@ mod tests {
         assert_eq!(plan.source_root_canister, ROOT);
         assert_eq!(plan.topology_hash, HASH);
         assert_eq!(plan.member_count, 2);
+        assert_eq!(plan.identity_summary.fixed_members, 1);
+        assert_eq!(plan.identity_summary.relocatable_members, 1);
+        assert_eq!(plan.identity_summary.in_place_members, 2);
+        assert_eq!(plan.identity_summary.mapped_members, 0);
+        assert_eq!(plan.identity_summary.remapped_members, 0);
+        assert_eq!(plan.verification_summary.fleet_checks, 0);
+        assert_eq!(plan.verification_summary.member_check_groups, 0);
+        assert_eq!(plan.verification_summary.member_checks, 2);
+        assert_eq!(plan.verification_summary.members_with_checks, 2);
+        assert_eq!(plan.verification_summary.total_checks, 2);
+        assert_eq!(plan.ordering_summary.phase_count, 1);
+        assert_eq!(plan.ordering_summary.dependency_free_members, 1);
+        assert_eq!(plan.ordering_summary.in_group_parent_edges, 1);
+        assert_eq!(plan.ordering_summary.cross_group_parent_edges, 0);
+        assert_eq!(ordered[0].phase_order, 0);
+        assert_eq!(ordered[1].phase_order, 1);
         assert_eq!(ordered[0].source_canister, ROOT);
         assert_eq!(ordered[1].source_canister, CHILD);
+        assert_eq!(
+            ordered[1].ordering_dependency,
+            Some(RestoreOrderingDependency {
+                source_canister: ROOT.to_string(),
+                target_canister: ROOT.to_string(),
+                relationship: RestoreOrderingRelationship::ParentInSameGroup,
+            })
+        );
+    }
+
+    // Ensure cross-group parent dependencies are exposed when the parent phase is earlier.
+    #[test]
+    fn plan_reports_parent_dependency_from_earlier_group() {
+        let mut manifest = valid_manifest(IdentityMode::Relocatable);
+        manifest.fleet.members[0].restore_group = 2;
+        manifest.fleet.members[1].restore_group = 1;
+
+        let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
+        let ordered = plan.ordered_members();
+
+        assert_eq!(plan.phases.len(), 2);
+        assert_eq!(plan.ordering_summary.phase_count, 2);
+        assert_eq!(plan.ordering_summary.dependency_free_members, 1);
+        assert_eq!(plan.ordering_summary.in_group_parent_edges, 0);
+        assert_eq!(plan.ordering_summary.cross_group_parent_edges, 1);
+        assert_eq!(ordered[0].source_canister, ROOT);
+        assert_eq!(ordered[1].source_canister, CHILD);
+        assert_eq!(
+            ordered[1].ordering_dependency,
+            Some(RestoreOrderingDependency {
+                source_canister: ROOT.to_string(),
+                target_canister: ROOT.to_string(),
+                relationship: RestoreOrderingRelationship::ParentInEarlierGroup,
+            })
+        );
+    }
+
+    // Ensure restore planning fails when groups would restore a child before its parent.
+    #[test]
+    fn plan_rejects_parent_in_later_restore_group() {
+        let mut manifest = valid_manifest(IdentityMode::Relocatable);
+        manifest.fleet.members[0].restore_group = 1;
+        manifest.fleet.members[1].restore_group = 2;
+
+        let err = RestorePlanner::plan(&manifest, None)
+            .expect_err("parent-after-child group ordering should fail");
+
+        assert!(matches!(
+            err,
+            RestorePlanError::ParentRestoreGroupAfterChild { .. }
+        ));
     }
 
     // Ensure fixed identities cannot be remapped.
@@ -500,6 +810,11 @@ mod tests {
             .find(|member| member.source_canister == CHILD)
             .expect("child member should be planned");
 
+        assert_eq!(plan.identity_summary.fixed_members, 1);
+        assert_eq!(plan.identity_summary.relocatable_members, 1);
+        assert_eq!(plan.identity_summary.in_place_members, 1);
+        assert_eq!(plan.identity_summary.mapped_members, 2);
+        assert_eq!(plan.identity_summary.remapped_members, 1);
         assert_eq!(child.target_canister, TARGET);
         assert_eq!(child.parent_target_canister, Some(ROOT.to_string()));
     }
@@ -521,6 +836,68 @@ mod tests {
         assert_eq!(root.verification_checks[0].kind, "call");
         assert_eq!(root.source_snapshot.snapshot_id, "snap-root");
         assert_eq!(root.source_snapshot.artifact_path, "artifacts/root");
+    }
+
+    // Ensure restore plans summarize manifest-level verification work.
+    #[test]
+    fn plan_includes_verification_summary() {
+        let mut manifest = valid_manifest(IdentityMode::Relocatable);
+        manifest.verification.fleet_checks.push(VerificationCheck {
+            kind: "fleet-ready".to_string(),
+            method: None,
+            roles: Vec::new(),
+        });
+        manifest
+            .verification
+            .member_checks
+            .push(MemberVerificationChecks {
+                role: "app".to_string(),
+                checks: vec![VerificationCheck {
+                    kind: "app-ready".to_string(),
+                    method: Some("ready".to_string()),
+                    roles: Vec::new(),
+                }],
+            });
+
+        let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
+
+        assert_eq!(plan.verification_summary.fleet_checks, 1);
+        assert_eq!(plan.verification_summary.member_check_groups, 1);
+        assert_eq!(plan.verification_summary.member_checks, 3);
+        assert_eq!(plan.verification_summary.members_with_checks, 2);
+        assert_eq!(plan.verification_summary.total_checks, 4);
+    }
+
+    // Ensure role-level verification checks are counted once per matching member.
+    #[test]
+    fn plan_expands_role_verification_checks_per_matching_member() {
+        let mut manifest = valid_manifest(IdentityMode::Relocatable);
+        manifest.fleet.members.push(fleet_member(
+            "app",
+            CHILD_TWO,
+            Some(ROOT),
+            IdentityMode::Relocatable,
+            1,
+        ));
+        manifest
+            .verification
+            .member_checks
+            .push(MemberVerificationChecks {
+                role: "app".to_string(),
+                checks: vec![VerificationCheck {
+                    kind: "app-ready".to_string(),
+                    method: Some("ready".to_string()),
+                    roles: Vec::new(),
+                }],
+            });
+
+        let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
+
+        assert_eq!(plan.verification_summary.fleet_checks, 0);
+        assert_eq!(plan.verification_summary.member_check_groups, 1);
+        assert_eq!(plan.verification_summary.member_checks, 5);
+        assert_eq!(plan.verification_summary.members_with_checks, 3);
+        assert_eq!(plan.verification_summary.total_checks, 5);
     }
 
     // Ensure mapped restores must cover every source member.

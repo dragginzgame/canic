@@ -33,7 +33,8 @@ pub(super) fn run_scenario(scenario: &AuditScenario) -> ScenarioResult {
     let (count, total_instructions, sample_origin, checkpoint_rows) =
         if scenario.transport_mode == "query" {
             let total = execute_query_perf_probe(&setup.pic, scenario, target_pid);
-            (1, total, "derived".to_string(), Vec::new())
+            let (count, total) = query_perf_counts(total);
+            (count, total, "derived".to_string(), Vec::new())
         } else {
             let before = perf_entries(&setup.pic, target_pid);
             execute_scenario(&setup, scenario, &prepared);
@@ -103,7 +104,8 @@ fn run_standalone_scenario(scenario: &AuditScenario) -> Option<ScenarioResult> {
     let (count, total_instructions, sample_origin, checkpoint_rows) =
         if scenario.transport_mode == "query" {
             let total = execute_query_perf_probe(fixture.pic(), scenario, target_pid);
-            (1, total, "derived".to_string(), Vec::new())
+            let (count, total) = query_perf_counts(total);
+            (count, total, "derived".to_string(), Vec::new())
         } else {
             let before = perf_entries(fixture.pic(), target_pid);
             execute_standalone_scenario(fixture.pic(), scenario, target_pid);
@@ -174,13 +176,14 @@ fn run_query_only_standalone_result(
     target_pid: Principal,
 ) -> ScenarioResult {
     let total = execute_query_perf_probe(pic, scenario, target_pid);
+    let (count, total) = query_perf_counts(total);
 
     ScenarioResult {
         scenario: *scenario,
         row: CanonicalPerfRow {
             subject_kind: scenario.subject_kind.to_string(),
             subject_label: scenario.subject_label.to_string(),
-            count: 1,
+            count,
             total_local_instructions: total,
             avg_local_instructions: total,
             scenario_key: scenario.key.to_string(),
@@ -201,6 +204,16 @@ fn run_query_only_standalone_result(
             sample_origin: "derived".to_string(),
         },
         checkpoint_rows: Vec::new(),
+    }
+}
+
+// Convert a same-call query counter into the canonical row counts used by the
+// report; zero means the probe path did not return a usable measurement.
+const fn query_perf_counts(local_instructions: u64) -> (u64, u64) {
+    if local_instructions == 0 {
+        (0, 0)
+    } else {
+        (1, local_instructions)
     }
 }
 
@@ -418,21 +431,23 @@ fn execute_root_cycles_scenario(setup: &root_harness::RootSetup, target_pid: Pri
 fn execute_query_perf_probe(pic: &Pic, scenario: &AuditScenario, target_pid: Principal) -> u64 {
     match scenario.key {
         "app:canic_time:minimal-valid" => {
-            let response: Result<(u64, u64), Error> = pic
+            let response: Result<QueryPerfSample<u64>, Error> = pic
                 .query_call(target_pid, AUDIT_TIME_PROBE, ())
                 .expect("audit_time_probe transport query failed");
-            let (_value, perf) = response.expect("audit_time_probe application query failed");
-            perf
+            response
+                .expect("audit_time_probe application query failed")
+                .local_instructions
         }
         "app:canic_env:minimal-valid" => {
-            let response: Result<(EnvSnapshotResponse, u64), Error> = pic
+            let response: Result<QueryPerfSample<EnvSnapshotResponse>, Error> = pic
                 .query_call(target_pid, AUDIT_ENV_PROBE, ())
                 .expect("audit_env_probe transport query failed");
-            let (_value, perf) = response.expect("audit_env_probe application query failed");
-            perf
+            response
+                .expect("audit_env_probe application query failed")
+                .local_instructions
         }
         "app:canic_log:empty-page" => {
-            let response: Result<(Page<LogEntry>, u64), Error> = pic
+            let response: Result<QueryPerfSample<Page<LogEntry>>, Error> = pic
                 .query_call(
                     target_pid,
                     AUDIT_LOG_PROBE,
@@ -447,32 +462,33 @@ fn execute_query_perf_probe(pic: &Pic, scenario: &AuditScenario, target_pid: Pri
                     ),
                 )
                 .expect("audit_log_probe transport query failed");
-            let (_value, perf) = response.expect("audit_log_probe application query failed");
-            perf
+            response
+                .expect("audit_log_probe application query failed")
+                .local_instructions
         }
         "root:canic_subnet_registry:full-registry" => {
-            let response: Result<(SubnetRegistryResponse, u64), Error> = pic
+            let response: Result<QueryPerfSample<SubnetRegistryResponse>, Error> = pic
                 .query_call(target_pid, AUDIT_SUBNET_REGISTRY_PROBE, ())
                 .expect("audit_subnet_registry_probe transport query failed");
-            let (_value, perf) =
-                response.expect("audit_subnet_registry_probe application query failed");
-            perf
+            response
+                .expect("audit_subnet_registry_probe application query failed")
+                .local_instructions
         }
         "root:canic_subnet_state:empty-struct" => {
-            let response: Result<(SubnetStateResponse, u64), Error> = pic
+            let response: Result<QueryPerfSample<SubnetStateResponse>, Error> = pic
                 .query_call(target_pid, AUDIT_SUBNET_STATE_PROBE, ())
                 .expect("audit_subnet_state_probe transport query failed");
-            let (_value, perf) =
-                response.expect("audit_subnet_state_probe application query failed");
-            perf
+            response
+                .expect("audit_subnet_state_probe application query failed")
+                .local_instructions
         }
         "scale_hub:plan_create_worker:empty-pool" => {
-            let response: Result<(bool, u64), Error> = pic
+            let response: Result<QueryPerfSample<bool>, Error> = pic
                 .query_call(target_pid, AUDIT_PLAN_CREATE_WORKER_PROBE, ())
                 .expect("audit_plan_create_worker_probe transport query failed");
-            let (_value, perf) =
-                response.expect("audit_plan_create_worker_probe application query failed");
-            perf
+            response
+                .expect("audit_plan_create_worker_probe application query failed")
+                .local_instructions
         }
         other => panic!("unsupported query perf probe scenario: {other}"),
     }
@@ -749,5 +765,22 @@ const fn metadata(request_id: [u8; 32], ttl_seconds: u64) -> RootRequestMetadata
     RootRequestMetadata {
         request_id,
         ttl_seconds,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::query_perf_counts;
+
+    // Preserve non-zero same-call query counters as one observed sample.
+    #[test]
+    fn query_perf_counts_accepts_non_zero_sample() {
+        assert_eq!(query_perf_counts(42), (1, 42));
+    }
+
+    // Treat zero same-call query counters as unobservable instead of success.
+    #[test]
+    fn query_perf_counts_rejects_zero_sample() {
+        assert_eq!(query_perf_counts(0), (0, 0));
     }
 }

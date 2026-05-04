@@ -116,7 +116,7 @@ pub(super) fn verification_rows(
             command: "canic_metrics(MetricsKind::Perf, PageRequest { limit=512, offset=0 })"
                 .to_string(),
             status: "PASS".to_string(),
-            notes: format!("Update scenarios were sampled before/after through persisted perf rows, and query scenarios used same-call local-only probe endpoints because query-side perf rows are not committed; normalized rows saved under `{}`.", paths.artifacts_dir.join("perf-rows.json").display()),
+            notes: format!("Update scenarios were sampled before/after through persisted perf rows, and query scenarios used local-only `QueryPerfSample` probe endpoints because query-side perf rows are not committed; normalized rows saved under `{}`.", paths.artifacts_dir.join("perf-rows.json").display()),
         },
         VerificationRow {
             command: "repo checkpoint scan".to_string(),
@@ -152,10 +152,10 @@ pub(super) fn verification_rows(
                 "PARTIAL".to_string()
             },
             notes: if query_unobservable_count == 0 {
-                "All sampled query scenarios returned same-call local instruction counters through the local-only probe endpoints, which avoids relying on non-persisted query-side perf state.".to_string()
+                "All sampled query scenarios returned `QueryPerfSample` local instruction counters through the local-only probe endpoints, which avoids relying on non-persisted query-side perf state.".to_string()
             } else {
                 format!(
-                    "{query_unobservable_count} sampled query scenarios failed to return a same-call local instruction counter through the probe path."
+                    "{query_unobservable_count} sampled query scenarios failed to return a `QueryPerfSample` local instruction counter through the probe path."
                 )
             },
         },
@@ -325,7 +325,7 @@ pub(super) fn write_report(
         out.push_str("| `perf!` checkpoints available for critical flows | PASS | Current repo scan found at least one `perf!` call site. |\n");
     }
     if query_unobservable_count == 0 {
-        out.push_str("| Query endpoint perf visibility | PASS | Sampled query scenarios were measured through same-call local-only perf probe endpoints because query-side perf rows are not committed. |\n");
+        out.push_str("| Query endpoint perf visibility | PASS | Sampled query scenarios were measured through local-only `QueryPerfSample` probe endpoints because query-side perf rows are not committed. |\n");
     } else {
         out.push_str(&format!(
             "| Query endpoint perf visibility | PARTIAL | {query_unobservable_count} sampled query scenarios failed to return a usable local instruction counter through the probe path. |\n"
@@ -335,7 +335,7 @@ pub(super) fn write_report(
 
     out.push_str("## Comparison to Previous Relevant Run\n\n");
     out.push_str("- First run of day for `instruction-footprint`; this report establishes the daily baseline.\n");
-    out.push_str("- Query scenarios are now sampled through same-call local-only perf probes because query-side perf rows are not committed, so their rows are directly comparable to later probe-backed reruns.\n");
+    out.push_str("- Query scenarios are now sampled through local-only `QueryPerfSample` probes because query-side perf rows are not committed, so their rows are directly comparable to later probe-backed reruns.\n");
     if query_unobservable_count > 0 {
         out.push_str("- One or more query probe calls still failed to return a usable local instruction counter, so those rows remain partial until the probe path is stable.\n");
     }
@@ -348,7 +348,7 @@ pub(super) fn write_report(
         let notes = if execution::query_perf_is_unobservable(&result.scenario, &result.row) {
             "probe failed to return a local instruction counter"
         } else if result.scenario.transport_mode == "query" {
-            "same-call local-only perf probe"
+            "local-only QueryPerfSample probe"
         } else {
             ""
         };
@@ -464,7 +464,7 @@ pub(super) fn write_report(
     out.push_str("- Root state/registry reads stay separate from the leaf floor. They matter for operator paths, but they should not be confused with the shared ordinary-leaf baseline.\n\n");
 
     out.push_str("## Dependency Fan-In Pressure\n\n");
-    out.push_str("- Shared observability reads (`canic_env`, `canic_log`) are now measured through the internal `audit_leaf_probe` canister instead of the shipped demo surface, and raw time is measured through the same internal lane. Their rows still reflect actual query counters from the measured call context rather than inferred zeroes or missing query-side perf-table commits.\n");
+    out.push_str("- Shared observability reads (`canic_env`, `canic_log`) are now measured through the internal `audit_leaf_probe` canister instead of the shipped demo surface, and raw time is measured through the same internal lane. Their rows use `QueryPerfSample` counters from the measured call context rather than inferred zeroes or missing query-side perf-table commits.\n");
     out.push_str("- The sampled non-trivial hotspots now concentrate in shared auth/replay/root runtime and the audit-only placement dry-run probe. The local `test::test` update acts as the baseline floor for update overhead on an ordinary child canister.\n");
     if checkpoint_sites.is_empty() {
         out.push_str("- There is currently no flow-stage attribution because `perf!` coverage is absent. That is itself a dependency-pressure signal: optimization work is bottlenecked by missing internal checkpoints.\n\n");
@@ -485,7 +485,7 @@ pub(super) fn write_report(
     }
     if query_unobservable_count > 0 {
         out.push_str(&format!(
-            "| Query probe path failed on sampled rows | WARN | {query_unobservable_count} sampled query scenarios did not return a usable same-call local instruction counter. |\n"
+            "| Query probe path failed on sampled rows | WARN | {query_unobservable_count} sampled query scenarios did not return a usable `QueryPerfSample` local instruction counter. |\n"
         ));
     }
     if let Some(top) = hotspot_rows.first() {

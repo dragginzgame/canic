@@ -11,7 +11,7 @@ use canic::{
         },
         env::EnvSnapshotResponse,
         log::LogEntry,
-        metrics::{MetricEntry, MetricValue, MetricsKind},
+        metrics::{MetricEntry, MetricValue, MetricsKind, QueryPerfSample},
         page::{Page, PageRequest},
         rpc::{CyclesRequest, Request, Response, RootRequestMetadata},
         state::SubnetStateResponse,
@@ -303,7 +303,7 @@ pub fn generate_instruction_footprint_report() {
 
     let method = MethodArtifact {
         method_tag: METHOD_TAG.to_string(),
-        normalization: "MetricsKind::Perf rows are normalized into canonical endpoint rows. Update/timer lanes use persisted perf deltas; sampled query lanes use local-only same-call probe endpoints because query-side perf rows are not committed, so the probe returns the measured `perf_counter()` alongside the real query result.".to_string(),
+        normalization: "MetricsKind::Perf rows are normalized into canonical endpoint rows. Update/timer lanes use persisted perf deltas; sampled query lanes use local-only QueryPerfSample probe endpoints because query-side perf rows are not committed, so the probe returns the measured local instruction counter alongside the real query result.".to_string(),
         freshness_rule: "One fresh smallest-profile root harness per measured scenario (`topology`, `scaling`, or `sharding`); baseline and post-call perf tables were sampled inside that isolated topology.".to_string(),
         checkpoint_rule: "Checkpoint deltas are diffed from `MetricsKind::Perf` rows before/after sampled update scenarios. Query scenarios remain endpoint-only unless they traverse explicit checkpoint instrumentation.".to_string(),
     };

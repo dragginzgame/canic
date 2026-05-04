@@ -1,4 +1,7 @@
 use canic_core::{
+    api::lifecycle::metrics::{
+        LifecycleMetricOutcome, LifecycleMetricPhase, LifecycleMetricRole, LifecycleMetricsApi,
+    },
     bootstrap::{EmbeddedRootBootstrapEntry, compiled::ConfigModel},
     dto::subnet::SubnetIdentity,
 };
@@ -36,6 +39,12 @@ impl LifecycleApi {
 
     /// Delegate root init-time bootstrap scheduling to the current core implementation.
     pub fn schedule_init_root_bootstrap() {
+        LifecycleMetricsApi::record_bootstrap(
+            LifecycleMetricPhase::Init,
+            LifecycleMetricRole::Root,
+            LifecycleMetricOutcome::Scheduled,
+        );
+
         canic_core::api::timer::TimerApi::set_lifecycle_timer(
             Duration::ZERO,
             "canic:bootstrap:init_root_canister",
@@ -68,6 +77,12 @@ impl LifecycleApi {
 
     /// Delegate root post-upgrade bootstrap scheduling to the current core implementation.
     pub fn schedule_post_upgrade_root_bootstrap() {
+        LifecycleMetricsApi::record_bootstrap(
+            LifecycleMetricPhase::PostUpgrade,
+            LifecycleMetricRole::Root,
+            LifecycleMetricOutcome::Scheduled,
+        );
+
         canic_core::api::timer::TimerApi::set_lifecycle_timer(
             Duration::ZERO,
             "canic:bootstrap:post_upgrade_root_canister",

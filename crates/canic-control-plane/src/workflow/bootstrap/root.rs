@@ -9,6 +9,9 @@ use crate::{
     ops::storage::template::{TemplateChunkedOps, TemplateManifestOps},
     workflow::runtime::template::WasmStorePublicationWorkflow,
 };
+use canic_core::api::lifecycle::metrics::{
+    LifecycleMetricOutcome, LifecycleMetricPhase, LifecycleMetricRole, LifecycleMetricsApi,
+};
 use canic_core::api::runtime::install::ModuleSourceRuntimeApi;
 use canic_core::{__control_plane_core as cp_core, log, log::Topic};
 use cp_core::{
@@ -92,11 +95,22 @@ fn validation_failure_summary(report: &ValidationReport) -> String {
     )
 }
 
+fn record_root_bootstrap_metric(phase: LifecycleMetricPhase, outcome: LifecycleMetricOutcome) {
+    LifecycleMetricsApi::record_bootstrap(phase, LifecycleMetricRole::Root, outcome);
+}
+
+fn mark_root_bootstrap_failed(phase: LifecycleMetricPhase, message: String) {
+    record_root_bootstrap_metric(phase, LifecycleMetricOutcome::Failed);
+    BootstrapStatusOps::mark_failed(message);
+}
+
 pub async fn bootstrap_init_root_canister() {
+    record_root_bootstrap_metric(LifecycleMetricPhase::Init, LifecycleMetricOutcome::Started);
+
     if !root_has_embedded_wasm_store_bootstrap() {
         let message =
             "bootstrap (root:init) embedded wasm_store bootstrap module is not registered";
-        BootstrapStatusOps::mark_failed(message);
+        mark_root_bootstrap_failed(LifecycleMetricPhase::Init, message.to_string());
         log!(Topic::Init, Error, "{message}");
         return;
     }
@@ -105,7 +119,7 @@ pub async fn bootstrap_init_root_canister() {
         Ok(data) => data,
         Err(err) => {
             let message = format!("bootstrap (root:init) bootstrap preflight failed: {err}");
-            BootstrapStatusOps::mark_failed(message.clone());
+            mark_root_bootstrap_failed(LifecycleMetricPhase::Init, message.clone());
             log!(Topic::Init, Error, "{message}");
             return;
         }
@@ -115,13 +129,14 @@ pub async fn bootstrap_init_root_canister() {
         Ok(missing_roles) => missing_roles,
         Err(err) => {
             let message = format!("bootstrap (root:init) release-set preflight failed: {err}");
-            BootstrapStatusOps::mark_failed(message.clone());
+            mark_root_bootstrap_failed(LifecycleMetricPhase::Init, message.clone());
             log!(Topic::Init, Error, "{message}");
             return;
         }
     };
 
     if !missing_roles.is_empty() {
+        record_root_bootstrap_metric(LifecycleMetricPhase::Init, LifecycleMetricOutcome::Waiting);
         BootstrapStatusOps::set_phase("root:init:waiting_staged_releases");
         log!(
             Topic::Init,
@@ -135,6 +150,10 @@ pub async fn bootstrap_init_root_canister() {
     let _guard = match TopologyGuard::try_enter() {
         Ok(g) => g,
         Err(err) => {
+            record_root_bootstrap_metric(
+                LifecycleMetricPhase::Init,
+                LifecycleMetricOutcome::Skipped,
+            );
             BootstrapStatusOps::set_phase("root:init:skipped");
             log!(Topic::Init, Info, "bootstrap (root:init) skipped: {err}");
             return;
@@ -156,7 +175,7 @@ pub async fn bootstrap_init_root_canister() {
     if let Err(err) = root_create_canisters().await {
         let message = format!("registry phase failed: {err}");
         log!(Topic::Init, Error, "{message}");
-        BootstrapStatusOps::mark_failed(message);
+        mark_root_bootstrap_failed(LifecycleMetricPhase::Init, message);
         return;
     }
     canic_core::perf!("bootstrap_create_canisters");
@@ -165,7 +184,7 @@ pub async fn bootstrap_init_root_canister() {
     if let Err(err) = root_rebuild_indexes_from_registry() {
         let message = format!("index materialization failed: {err}");
         log!(Topic::Init, Error, "{message}");
-        BootstrapStatusOps::mark_failed(message);
+        mark_root_bootstrap_failed(LifecycleMetricPhase::Init, message);
         return;
     }
     canic_core::perf!("bootstrap_rebuild_indexes");
@@ -174,7 +193,10 @@ pub async fn bootstrap_init_root_canister() {
     let report = root_validate_state();
     canic_core::perf!("bootstrap_validate_state");
     if !report.ok {
-        BootstrapStatusOps::mark_failed(validation_failure_summary(&report));
+        mark_root_bootstrap_failed(
+            LifecycleMetricPhase::Init,
+            validation_failure_summary(&report),
+        );
         log!(
             Topic::Init,
             Error,
@@ -185,15 +207,24 @@ pub async fn bootstrap_init_root_canister() {
     }
 
     log!(Topic::Init, Info, "bootstrap (root:init) complete");
+    record_root_bootstrap_metric(
+        LifecycleMetricPhase::Init,
+        LifecycleMetricOutcome::Completed,
+    );
     ReadyOps::mark_ready();
 }
 
 /// Bootstrap workflow for the root canister after upgrade.
 pub async fn bootstrap_post_upgrade_root_canister() {
+    record_root_bootstrap_metric(
+        LifecycleMetricPhase::PostUpgrade,
+        LifecycleMetricOutcome::Started,
+    );
+
     if !root_has_embedded_wasm_store_bootstrap() {
         let message =
             "bootstrap (root:upgrade) embedded wasm_store bootstrap module is not registered";
-        BootstrapStatusOps::mark_failed(message);
+        mark_root_bootstrap_failed(LifecycleMetricPhase::PostUpgrade, message.to_string());
         log!(Topic::Init, Error, "{message}");
         return;
     }
@@ -203,7 +234,7 @@ pub async fn bootstrap_post_upgrade_root_canister() {
         Err(err) => {
             let message = format!("bootstrap (root:upgrade) bootstrap preflight failed: {err}");
             log!(Topic::Init, Error, "{message}");
-            BootstrapStatusOps::mark_failed(message);
+            mark_root_bootstrap_failed(LifecycleMetricPhase::PostUpgrade, message);
             return;
         }
     };
@@ -213,12 +244,16 @@ pub async fn bootstrap_post_upgrade_root_canister() {
         Err(err) => {
             let message = format!("bootstrap (root:upgrade) release-set preflight failed: {err}");
             log!(Topic::Init, Error, "{message}");
-            BootstrapStatusOps::mark_failed(message);
+            mark_root_bootstrap_failed(LifecycleMetricPhase::PostUpgrade, message);
             return;
         }
     };
 
     if !missing_roles.is_empty() {
+        record_root_bootstrap_metric(
+            LifecycleMetricPhase::PostUpgrade,
+            LifecycleMetricOutcome::Waiting,
+        );
         BootstrapStatusOps::set_phase("root:upgrade:waiting_staged_releases");
         log!(
             Topic::Init,
@@ -240,10 +275,14 @@ pub async fn bootstrap_post_upgrade_root_canister() {
     if let Err(err) = root_reconcile_wasm_store().await {
         let message = format!("wasm store reconcile failed: {err}");
         log!(Topic::Init, Error, "{message}");
-        BootstrapStatusOps::mark_failed(message);
+        mark_root_bootstrap_failed(LifecycleMetricPhase::PostUpgrade, message);
         return;
     }
     log!(Topic::Init, Info, "bootstrap (root:upgrade) complete");
+    record_root_bootstrap_metric(
+        LifecycleMetricPhase::PostUpgrade,
+        LifecycleMetricOutcome::Completed,
+    );
 
     ReadyOps::mark_ready();
 }
