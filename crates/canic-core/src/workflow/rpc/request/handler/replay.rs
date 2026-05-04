@@ -12,6 +12,9 @@ use crate::{
             self as replay_ops, ReplayCommitError, ReplayDecodeError, ReplayReserveError,
             guard::{ReplayDecision, ReplayGuardError, ReplayPending, RootReplayGuardInput},
         },
+        runtime::metrics::replay::{
+            ReplayMetricOperation, ReplayMetricOutcome, ReplayMetricReason, ReplayMetrics,
+        },
         runtime::metrics::root_capability::{
             RootCapabilityMetricKey, RootCapabilityMetricOutcome, RootCapabilityMetrics,
         },
@@ -38,9 +41,14 @@ pub(super) fn check_replay(
     ctx: &RootContext,
     capability: &RootCapability,
 ) -> Result<ReplayPreflight, InternalError> {
-    let replay_input = capability
-        .replay_input()
-        .ok_or_else(|| RpcWorkflowError::MissingReplayMetadata(capability.descriptor().name))?;
+    let replay_input = capability.replay_input().ok_or_else(|| {
+        ReplayMetrics::record(
+            ReplayMetricOperation::Check,
+            ReplayMetricOutcome::Failed,
+            ReplayMetricReason::MissingMetadata,
+        );
+        RpcWorkflowError::MissingReplayMetadata(capability.descriptor().name)
+    })?;
     crate::perf!("prepare_replay_input");
 
     let decision = replay::evaluate_root_replay(
@@ -54,8 +62,18 @@ pub(super) fn check_replay(
 
     match decision {
         ReplayDecision::Fresh(pending) => {
+            ReplayMetrics::record(
+                ReplayMetricOperation::Check,
+                ReplayMetricOutcome::Completed,
+                ReplayMetricReason::Fresh,
+            );
             replay_ops::reserve_root_replay(pending, MAX_ROOT_REPLAY_ENTRIES)
                 .map_err(map_replay_reserve_error)?;
+            ReplayMetrics::record(
+                ReplayMetricOperation::Reserve,
+                ReplayMetricOutcome::Completed,
+                ReplayMetricReason::Ok,
+            );
             crate::perf!("reserve_fresh");
             RootCapabilityMetrics::record_replay(
                 replay_input.descriptor.key,
@@ -65,6 +83,11 @@ pub(super) fn check_replay(
         }
         ReplayDecision::DuplicateSame(cached) => {
             crate::perf!("decode_cached");
+            ReplayMetrics::record(
+                ReplayMetricOperation::Check,
+                ReplayMetricOutcome::Completed,
+                ReplayMetricReason::Duplicate,
+            );
             RootCapabilityMetrics::record_replay(
                 replay_input.descriptor.key,
                 RootCapabilityMetricOutcome::DuplicateSame,
@@ -73,6 +96,11 @@ pub(super) fn check_replay(
         }
         ReplayDecision::InFlight => {
             crate::perf!("duplicate_in_flight");
+            ReplayMetrics::record(
+                ReplayMetricOperation::Check,
+                ReplayMetricOutcome::Failed,
+                ReplayMetricReason::InFlight,
+            );
             RootCapabilityMetrics::record_replay(
                 replay_input.descriptor.key,
                 RootCapabilityMetricOutcome::DuplicateSame,
@@ -81,6 +109,11 @@ pub(super) fn check_replay(
         }
         ReplayDecision::DuplicateConflict => {
             crate::perf!("duplicate_conflict");
+            ReplayMetrics::record(
+                ReplayMetricOperation::Check,
+                ReplayMetricOutcome::Failed,
+                ReplayMetricReason::Conflict,
+            );
             RootCapabilityMetrics::record_replay(
                 replay_input.descriptor.key,
                 RootCapabilityMetricOutcome::DuplicateConflict,
@@ -89,6 +122,11 @@ pub(super) fn check_replay(
         }
         ReplayDecision::Expired => {
             crate::perf!("replay_expired");
+            ReplayMetrics::record(
+                ReplayMetricOperation::Check,
+                ReplayMetricOutcome::Failed,
+                ReplayMetricReason::Expired,
+            );
             RootCapabilityMetrics::record_replay(
                 replay_input.descriptor.key,
                 RootCapabilityMetricOutcome::Expired,
@@ -110,6 +148,11 @@ fn map_replay_guard_error(
             ttl_seconds,
             max_ttl_seconds,
         } => {
+            ReplayMetrics::record(
+                ReplayMetricOperation::Check,
+                ReplayMetricOutcome::Failed,
+                ReplayMetricReason::InvalidTtl,
+            );
             RootCapabilityMetrics::record_replay(
                 capability_key,
                 RootCapabilityMetricOutcome::TtlExceeded,
@@ -129,6 +172,11 @@ fn map_replay_guard_error(
 fn map_replay_reserve_error(err: ReplayReserveError) -> InternalError {
     match err {
         ReplayReserveError::CapacityReached { max_entries } => {
+            ReplayMetrics::record(
+                ReplayMetricOperation::Reserve,
+                ReplayMetricOutcome::Failed,
+                ReplayMetricReason::Capacity,
+            );
             RpcWorkflowError::ReplayStoreCapacityReached(max_entries).into()
         }
     }
@@ -140,6 +188,11 @@ fn map_replay_reserve_error(err: ReplayReserveError) -> InternalError {
 fn map_replay_commit_error(err: ReplayCommitError) -> InternalError {
     match err {
         ReplayCommitError::EncodeFailed(message) => {
+            ReplayMetrics::record(
+                ReplayMetricOperation::Commit,
+                ReplayMetricOutcome::Failed,
+                ReplayMetricReason::EncodeFailed,
+            );
             RpcWorkflowError::ReplayEncodeFailed(message).into()
         }
     }
@@ -151,6 +204,11 @@ fn map_replay_commit_error(err: ReplayCommitError) -> InternalError {
 fn map_replay_decode_error(err: ReplayDecodeError) -> InternalError {
     match err {
         ReplayDecodeError::DecodeFailed(message) => {
+            ReplayMetrics::record(
+                ReplayMetricOperation::Decode,
+                ReplayMetricOutcome::Failed,
+                ReplayMetricReason::DecodeFailed,
+            );
             RpcWorkflowError::ReplayDecodeFailed(message).into()
         }
     }
@@ -160,7 +218,17 @@ fn map_replay_decode_error(err: ReplayDecodeError) -> InternalError {
 ///
 /// Decode cached replay payload bytes back into canonical root responses.
 fn decode_replay_response(bytes: &[u8]) -> Result<Response, InternalError> {
-    replay_ops::decode_root_replay_response(bytes).map_err(map_replay_decode_error)
+    match replay_ops::decode_root_replay_response(bytes) {
+        Ok(response) => {
+            ReplayMetrics::record(
+                ReplayMetricOperation::Decode,
+                ReplayMetricOutcome::Completed,
+                ReplayMetricReason::Ok,
+            );
+            Ok(response)
+        }
+        Err(err) => Err(map_replay_decode_error(err)),
+    }
 }
 
 /// commit_replay
@@ -171,7 +239,17 @@ pub(super) fn commit_replay(
     response: &Response,
 ) -> Result<(), InternalError> {
     crate::perf!("commit_encode");
-    replay_ops::commit_root_replay(pending, response).map_err(map_replay_commit_error)
+    match replay_ops::commit_root_replay(pending, response) {
+        Ok(()) => {
+            ReplayMetrics::record(
+                ReplayMetricOperation::Commit,
+                ReplayMetricOutcome::Completed,
+                ReplayMetricReason::Ok,
+            );
+            Ok(())
+        }
+        Err(err) => Err(map_replay_commit_error(err)),
+    }
 }
 
 /// abort_replay
@@ -179,6 +257,11 @@ pub(super) fn commit_replay(
 /// Remove reserved replay state when capability execution fails.
 pub(super) fn abort_replay(pending: ReplayPending) {
     replay_ops::abort_root_replay(pending);
+    ReplayMetrics::record(
+        ReplayMetricOperation::Abort,
+        ReplayMetricOutcome::Completed,
+        ReplayMetricReason::Ok,
+    );
     crate::perf!("abort_replay");
 }
 

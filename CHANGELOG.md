@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.30.x] - 2026-05-03 - Fleet Snapshot Backups
 
+- `0.30.19` adds `canic restore apply --dry-run` so operators can render ordered upload, load, reinstall, and verification operations from a restore plan before real restore execution exists, and adds first-class `Auth` and `Replay` metrics for session, attestation, and replay-safety visibility.
+
+```bash
+canic restore apply \
+  --plan restore-plan.json \
+  --status restore-status.json \
+  --dry-run \
+  --out restore-apply-dry-run.json
+```
+
 - `0.30.18` adds restore-readiness gates and `canic restore status` so automation can write report, plan, and initial status artifacts before restore execution, exposes feature-gated sharding and delegated-auth outcome metrics, and records runtime canister snapshot/restore calls in `CanisterOps`.
 
 ```bash

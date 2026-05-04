@@ -57,6 +57,10 @@ mod tests {
         ops::runtime::metrics::{
             self,
             access::AccessMetrics,
+            auth::{
+                AuthMetricOperation, AuthMetricOutcome, AuthMetricReason, AuthMetricSurface,
+                AuthMetrics,
+            },
             canister_ops::{
                 CanisterOpsMetricOperation, CanisterOpsMetricOutcome, CanisterOpsMetricReason,
                 CanisterOpsMetrics,
@@ -70,6 +74,9 @@ mod tests {
                 DirectoryMetrics,
             },
             pool::{PoolMetricOperation, PoolMetricOutcome, PoolMetricReason, PoolMetrics},
+            replay::{
+                ReplayMetricOperation, ReplayMetricOutcome, ReplayMetricReason, ReplayMetrics,
+            },
             scaling::{
                 ScalingMetricOperation, ScalingMetricOutcome, ScalingMetricReason, ScalingMetrics,
             },
@@ -111,6 +118,29 @@ mod tests {
 
         assert_eq!(page.total, 2);
         assert_eq!(page.entries[0].labels, ["zeta", "auth", "caller_is_root"]);
+    }
+
+    #[test]
+    fn page_sorts_auth_metric_family_before_paginating() {
+        metrics::reset_for_tests();
+
+        AuthMetrics::record(
+            AuthMetricSurface::Session,
+            AuthMetricOperation::Session,
+            AuthMetricOutcome::Completed,
+            AuthMetricReason::Created,
+        );
+        AuthMetrics::record(
+            AuthMetricSurface::Attestation,
+            AuthMetricOperation::Verify,
+            AuthMetricOutcome::Failed,
+            AuthMetricReason::UnknownKeyId,
+        );
+
+        assert_first_metric_labels(
+            MetricsKind::Auth,
+            ["attestation", "verify", "failed", "unknown_key_id"],
+        );
     }
 
     #[test]
@@ -173,6 +203,16 @@ mod tests {
             PoolMetricOutcome::Completed,
             PoolMetricReason::Ok,
         );
+        ReplayMetrics::record(
+            ReplayMetricOperation::Reserve,
+            ReplayMetricOutcome::Failed,
+            ReplayMetricReason::Capacity,
+        );
+        ReplayMetrics::record(
+            ReplayMetricOperation::Check,
+            ReplayMetricOutcome::Completed,
+            ReplayMetricReason::Fresh,
+        );
         ScalingMetrics::record(
             ScalingMetricOperation::CreateWorker,
             ScalingMetricOutcome::Completed,
@@ -198,6 +238,7 @@ mod tests {
             ["classify", "completed", "pending_fresh"],
         );
         assert_first_metric_labels(MetricsKind::Pool, ["create_empty", "completed", "ok"]);
+        assert_first_metric_labels(MetricsKind::Replay, ["check", "completed", "fresh"]);
         assert_first_metric_labels(
             MetricsKind::Scaling,
             ["bootstrap_pool", "skipped", "target_satisfied"],

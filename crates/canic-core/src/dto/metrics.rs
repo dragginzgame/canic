@@ -14,6 +14,7 @@ use crate::dto::prelude::*;
 #[remain::sorted]
 pub enum MetricsKind {
     Access,
+    Auth,
     CanisterOps,
     Cascade,
     CyclesFunding,
@@ -25,6 +26,7 @@ pub enum MetricsKind {
     Lifecycle,
     Perf,
     Pool,
+    Replay,
     RootCapability,
     Scaling,
     #[cfg(feature = "sharding")]

@@ -186,6 +186,267 @@ pub enum RestoreMemberState {
 }
 
 ///
+/// RestoreApplyDryRun
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RestoreApplyDryRun {
+    pub dry_run_version: u16,
+    pub backup_id: String,
+    pub ready: bool,
+    pub readiness_reasons: Vec<String>,
+    pub member_count: usize,
+    pub phase_count: usize,
+    pub status_supplied: bool,
+    pub planned_snapshot_loads: usize,
+    pub planned_code_reinstalls: usize,
+    pub planned_verification_checks: usize,
+    pub rendered_operations: usize,
+    pub phases: Vec<RestoreApplyDryRunPhase>,
+}
+
+impl RestoreApplyDryRun {
+    /// Build a no-mutation apply dry-run after validating optional status identity.
+    pub fn try_from_plan(
+        plan: &RestorePlan,
+        status: Option<&RestoreStatus>,
+    ) -> Result<Self, RestoreApplyDryRunError> {
+        if let Some(status) = status {
+            validate_restore_status_matches_plan(plan, status)?;
+        }
+
+        Ok(Self::from_validated_plan(plan, status))
+    }
+
+    // Build a no-mutation apply dry-run after any supplied status is validated.
+    fn from_validated_plan(plan: &RestorePlan, status: Option<&RestoreStatus>) -> Self {
+        let mut next_sequence = 0;
+        let phases = plan
+            .phases
+            .iter()
+            .map(|phase| RestoreApplyDryRunPhase::from_plan_phase(phase, &mut next_sequence))
+            .collect::<Vec<_>>();
+        let rendered_operations = phases
+            .iter()
+            .map(|phase| phase.operations.len())
+            .sum::<usize>();
+
+        Self {
+            dry_run_version: 1,
+            backup_id: plan.backup_id.clone(),
+            ready: status.map_or(plan.readiness_summary.ready, |status| status.ready),
+            readiness_reasons: status.map_or_else(
+                || plan.readiness_summary.reasons.clone(),
+                |status| status.readiness_reasons.clone(),
+            ),
+            member_count: plan.member_count,
+            phase_count: plan.ordering_summary.phase_count,
+            status_supplied: status.is_some(),
+            planned_snapshot_loads: plan.operation_summary.planned_snapshot_loads,
+            planned_code_reinstalls: plan.operation_summary.planned_code_reinstalls,
+            planned_verification_checks: plan.operation_summary.planned_verification_checks,
+            rendered_operations,
+            phases,
+        }
+    }
+}
+
+// Validate that a supplied restore status belongs to the restore plan.
+fn validate_restore_status_matches_plan(
+    plan: &RestorePlan,
+    status: &RestoreStatus,
+) -> Result<(), RestoreApplyDryRunError> {
+    validate_status_string_field("backup_id", &plan.backup_id, &status.backup_id)?;
+    validate_status_string_field(
+        "source_environment",
+        &plan.source_environment,
+        &status.source_environment,
+    )?;
+    validate_status_string_field(
+        "source_root_canister",
+        &plan.source_root_canister,
+        &status.source_root_canister,
+    )?;
+    validate_status_string_field("topology_hash", &plan.topology_hash, &status.topology_hash)?;
+    validate_status_usize_field("member_count", plan.member_count, status.member_count)?;
+    validate_status_usize_field(
+        "phase_count",
+        plan.ordering_summary.phase_count,
+        status.phase_count,
+    )?;
+    Ok(())
+}
+
+// Validate one string field shared by restore plan and status.
+fn validate_status_string_field(
+    field: &'static str,
+    plan: &str,
+    status: &str,
+) -> Result<(), RestoreApplyDryRunError> {
+    if plan == status {
+        return Ok(());
+    }
+
+    Err(RestoreApplyDryRunError::StatusPlanMismatch {
+        field,
+        plan: plan.to_string(),
+        status: status.to_string(),
+    })
+}
+
+// Validate one numeric field shared by restore plan and status.
+const fn validate_status_usize_field(
+    field: &'static str,
+    plan: usize,
+    status: usize,
+) -> Result<(), RestoreApplyDryRunError> {
+    if plan == status {
+        return Ok(());
+    }
+
+    Err(RestoreApplyDryRunError::StatusPlanCountMismatch {
+        field,
+        plan,
+        status,
+    })
+}
+
+///
+/// RestoreApplyDryRunPhase
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RestoreApplyDryRunPhase {
+    pub restore_group: u16,
+    pub operations: Vec<RestoreApplyDryRunOperation>,
+}
+
+impl RestoreApplyDryRunPhase {
+    // Build one dry-run phase from one restore plan phase.
+    fn from_plan_phase(phase: &RestorePhase, next_sequence: &mut usize) -> Self {
+        let mut operations = Vec::new();
+
+        for member in &phase.members {
+            push_member_operation(
+                &mut operations,
+                next_sequence,
+                RestoreApplyOperationKind::UploadSnapshot,
+                member,
+                None,
+            );
+            push_member_operation(
+                &mut operations,
+                next_sequence,
+                RestoreApplyOperationKind::LoadSnapshot,
+                member,
+                None,
+            );
+            push_member_operation(
+                &mut operations,
+                next_sequence,
+                RestoreApplyOperationKind::ReinstallCode,
+                member,
+                None,
+            );
+
+            for check in &member.verification_checks {
+                push_member_operation(
+                    &mut operations,
+                    next_sequence,
+                    RestoreApplyOperationKind::VerifyMember,
+                    member,
+                    Some(check),
+                );
+            }
+        }
+
+        Self {
+            restore_group: phase.restore_group,
+            operations,
+        }
+    }
+}
+
+// Append one member-level dry-run operation using the current phase order.
+fn push_member_operation(
+    operations: &mut Vec<RestoreApplyDryRunOperation>,
+    next_sequence: &mut usize,
+    operation: RestoreApplyOperationKind,
+    member: &RestorePlanMember,
+    check: Option<&VerificationCheck>,
+) {
+    let sequence = *next_sequence;
+    *next_sequence += 1;
+
+    operations.push(RestoreApplyDryRunOperation {
+        sequence,
+        operation,
+        restore_group: member.restore_group,
+        phase_order: member.phase_order,
+        source_canister: member.source_canister.clone(),
+        target_canister: member.target_canister.clone(),
+        role: member.role.clone(),
+        snapshot_id: Some(member.source_snapshot.snapshot_id.clone()),
+        artifact_path: Some(member.source_snapshot.artifact_path.clone()),
+        verification_kind: check.map(|check| check.kind.clone()),
+        verification_method: check.and_then(|check| check.method.clone()),
+    });
+}
+
+///
+/// RestoreApplyDryRunOperation
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RestoreApplyDryRunOperation {
+    pub sequence: usize,
+    pub operation: RestoreApplyOperationKind,
+    pub restore_group: u16,
+    pub phase_order: usize,
+    pub source_canister: String,
+    pub target_canister: String,
+    pub role: String,
+    pub snapshot_id: Option<String>,
+    pub artifact_path: Option<String>,
+    pub verification_kind: Option<String>,
+    pub verification_method: Option<String>,
+}
+
+///
+/// RestoreApplyOperationKind
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum RestoreApplyOperationKind {
+    UploadSnapshot,
+    LoadSnapshot,
+    ReinstallCode,
+    VerifyMember,
+}
+
+///
+/// RestoreApplyDryRunError
+///
+
+#[derive(Debug, ThisError)]
+pub enum RestoreApplyDryRunError {
+    #[error("restore status field {field} does not match plan: plan={plan}, status={status}")]
+    StatusPlanMismatch {
+        field: &'static str,
+        plan: String,
+        status: String,
+    },
+
+    #[error("restore status field {field} does not match plan: plan={plan}, status={status}")]
+    StatusPlanCountMismatch {
+        field: &'static str,
+        plan: usize,
+        status: usize,
+    },
+}
+
+///
 /// RestoreIdentitySummary
 ///
 
@@ -1240,6 +1501,103 @@ mod tests {
             RestoreMemberState::Planned
         );
         assert_eq!(status.phases[0].members[1].source_canister, CHILD);
+    }
+
+    // Ensure apply dry-runs render ordered operations without mutating targets.
+    #[test]
+    fn apply_dry_run_renders_ordered_member_operations() {
+        let manifest = valid_manifest(IdentityMode::Relocatable);
+
+        let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
+        let status = RestoreStatus::from_plan(&plan);
+        let dry_run =
+            RestoreApplyDryRun::try_from_plan(&plan, Some(&status)).expect("dry-run should build");
+
+        assert_eq!(dry_run.dry_run_version, 1);
+        assert_eq!(dry_run.backup_id.as_str(), "fbk_test_001");
+        assert!(dry_run.ready);
+        assert!(dry_run.status_supplied);
+        assert_eq!(dry_run.member_count, 2);
+        assert_eq!(dry_run.phase_count, 1);
+        assert_eq!(dry_run.planned_snapshot_loads, 2);
+        assert_eq!(dry_run.planned_code_reinstalls, 2);
+        assert_eq!(dry_run.planned_verification_checks, 2);
+        assert_eq!(dry_run.rendered_operations, 8);
+        assert_eq!(dry_run.phases.len(), 1);
+
+        let operations = &dry_run.phases[0].operations;
+        assert_eq!(operations[0].sequence, 0);
+        assert_eq!(
+            operations[0].operation,
+            RestoreApplyOperationKind::UploadSnapshot
+        );
+        assert_eq!(operations[0].source_canister, ROOT);
+        assert_eq!(operations[0].target_canister, ROOT);
+        assert_eq!(operations[0].snapshot_id, Some("snap-root".to_string()));
+        assert_eq!(
+            operations[0].artifact_path,
+            Some("artifacts/root".to_string())
+        );
+        assert_eq!(
+            operations[1].operation,
+            RestoreApplyOperationKind::LoadSnapshot
+        );
+        assert_eq!(
+            operations[2].operation,
+            RestoreApplyOperationKind::ReinstallCode
+        );
+        assert_eq!(
+            operations[3].operation,
+            RestoreApplyOperationKind::VerifyMember
+        );
+        assert_eq!(operations[3].verification_kind, Some("call".to_string()));
+        assert_eq!(
+            operations[3].verification_method,
+            Some("canic_ready".to_string())
+        );
+        assert_eq!(operations[4].source_canister, CHILD);
+        assert_eq!(
+            operations[7].operation,
+            RestoreApplyOperationKind::VerifyMember
+        );
+    }
+
+    // Ensure apply dry-run operation sequences remain unique across phases.
+    #[test]
+    fn apply_dry_run_sequences_operations_across_phases() {
+        let mut manifest = valid_manifest(IdentityMode::Relocatable);
+        manifest.fleet.members[0].restore_group = 2;
+
+        let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
+        let dry_run = RestoreApplyDryRun::try_from_plan(&plan, None).expect("dry-run should build");
+
+        assert_eq!(dry_run.phases.len(), 2);
+        assert_eq!(dry_run.rendered_operations, 8);
+        assert_eq!(dry_run.phases[0].operations[0].sequence, 0);
+        assert_eq!(dry_run.phases[0].operations[3].sequence, 3);
+        assert_eq!(dry_run.phases[1].operations[0].sequence, 4);
+        assert_eq!(dry_run.phases[1].operations[3].sequence, 7);
+    }
+
+    // Ensure apply dry-runs reject status files that do not match the plan.
+    #[test]
+    fn apply_dry_run_rejects_mismatched_status() {
+        let manifest = valid_manifest(IdentityMode::Relocatable);
+
+        let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
+        let mut status = RestoreStatus::from_plan(&plan);
+        status.backup_id = "other-backup".to_string();
+
+        let err = RestoreApplyDryRun::try_from_plan(&plan, Some(&status))
+            .expect_err("mismatched status should fail");
+
+        assert!(matches!(
+            err,
+            RestoreApplyDryRunError::StatusPlanMismatch {
+                field: "backup_id",
+                ..
+            }
+        ));
     }
 
     // Ensure role-level verification checks are counted once per matching member.

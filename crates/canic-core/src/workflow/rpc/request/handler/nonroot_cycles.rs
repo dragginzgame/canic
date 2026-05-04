@@ -16,6 +16,9 @@ use crate::{
         runtime::env::EnvOps,
         runtime::metrics::{
             cycles_funding::{CyclesFundingDeniedReason, CyclesFundingMetrics},
+            replay::{
+                ReplayMetricOperation, ReplayMetricOutcome, ReplayMetricReason, ReplayMetrics,
+            },
             root_capability::{
                 RootCapabilityMetricKey, RootCapabilityMetricOutcome, RootCapabilityMetrics,
             },
@@ -358,9 +361,14 @@ fn check_cycles_replay(
     ctx: &RootContext,
     req: &CyclesRequest,
 ) -> Result<ReplayPreflight, InternalError> {
-    let metadata = req
-        .metadata
-        .ok_or(RpcWorkflowError::MissingReplayMetadata("RequestCycles"))?;
+    let metadata = req.metadata.ok_or_else(|| {
+        ReplayMetrics::record(
+            ReplayMetricOperation::Check,
+            ReplayMetricOutcome::Failed,
+            ReplayMetricReason::MissingMetadata,
+        );
+        RpcWorkflowError::MissingReplayMetadata("RequestCycles")
+    })?;
     let payload_hash = hash_cycles_payload(req);
 
     let decision = replay_ops::guard::evaluate_root_replay(RootReplayGuardInput {
@@ -377,8 +385,18 @@ fn check_cycles_replay(
 
     match decision {
         ReplayDecision::Fresh(pending) => {
+            ReplayMetrics::record(
+                ReplayMetricOperation::Check,
+                ReplayMetricOutcome::Completed,
+                ReplayMetricReason::Fresh,
+            );
             replay_ops::reserve_root_replay(pending, MAX_ROOT_REPLAY_ENTRIES)
                 .map_err(map_replay_reserve_error)?;
+            ReplayMetrics::record(
+                ReplayMetricOperation::Reserve,
+                ReplayMetricOutcome::Completed,
+                ReplayMetricReason::Ok,
+            );
             RootCapabilityMetrics::record_replay(
                 RootCapabilityMetricKey::RequestCycles,
                 RootCapabilityMetricOutcome::Accepted,
@@ -386,6 +404,11 @@ fn check_cycles_replay(
             Ok(ReplayPreflight::Fresh(pending))
         }
         ReplayDecision::DuplicateSame(cached) => {
+            ReplayMetrics::record(
+                ReplayMetricOperation::Check,
+                ReplayMetricOutcome::Completed,
+                ReplayMetricReason::Duplicate,
+            );
             RootCapabilityMetrics::record_replay(
                 RootCapabilityMetricKey::RequestCycles,
                 RootCapabilityMetricOutcome::DuplicateSame,
@@ -393,6 +416,11 @@ fn check_cycles_replay(
             decode_cycles_response(&cached.response_bytes).map(ReplayPreflight::Cached)
         }
         ReplayDecision::InFlight => {
+            ReplayMetrics::record(
+                ReplayMetricOperation::Check,
+                ReplayMetricOutcome::Failed,
+                ReplayMetricReason::InFlight,
+            );
             RootCapabilityMetrics::record_replay(
                 RootCapabilityMetricKey::RequestCycles,
                 RootCapabilityMetricOutcome::DuplicateSame,
@@ -400,6 +428,11 @@ fn check_cycles_replay(
             Err(RpcWorkflowError::ReplayDuplicateSame("RequestCycles").into())
         }
         ReplayDecision::DuplicateConflict => {
+            ReplayMetrics::record(
+                ReplayMetricOperation::Check,
+                ReplayMetricOutcome::Failed,
+                ReplayMetricReason::Conflict,
+            );
             RootCapabilityMetrics::record_replay(
                 RootCapabilityMetricKey::RequestCycles,
                 RootCapabilityMetricOutcome::DuplicateConflict,
@@ -407,6 +440,11 @@ fn check_cycles_replay(
             Err(RpcWorkflowError::ReplayConflict("RequestCycles").into())
         }
         ReplayDecision::Expired => {
+            ReplayMetrics::record(
+                ReplayMetricOperation::Check,
+                ReplayMetricOutcome::Failed,
+                ReplayMetricReason::Expired,
+            );
             RootCapabilityMetrics::record_replay(
                 RootCapabilityMetricKey::RequestCycles,
                 RootCapabilityMetricOutcome::Expired,
@@ -423,6 +461,11 @@ fn map_replay_guard_error(err: ReplayGuardError) -> InternalError {
             ttl_seconds,
             max_ttl_seconds,
         } => {
+            ReplayMetrics::record(
+                ReplayMetricOperation::Check,
+                ReplayMetricOutcome::Failed,
+                ReplayMetricReason::InvalidTtl,
+            );
             RootCapabilityMetrics::record_replay(
                 RootCapabilityMetricKey::RequestCycles,
                 RootCapabilityMetricOutcome::TtlExceeded,
@@ -440,6 +483,11 @@ fn map_replay_guard_error(err: ReplayGuardError) -> InternalError {
 fn map_replay_reserve_error(err: ReplayReserveError) -> InternalError {
     match err {
         ReplayReserveError::CapacityReached { max_entries } => {
+            ReplayMetrics::record(
+                ReplayMetricOperation::Reserve,
+                ReplayMetricOutcome::Failed,
+                ReplayMetricReason::Capacity,
+            );
             RpcWorkflowError::ReplayStoreCapacityReached(max_entries).into()
         }
     }
@@ -449,6 +497,11 @@ fn map_replay_reserve_error(err: ReplayReserveError) -> InternalError {
 fn map_replay_decode_error(err: ReplayDecodeError) -> InternalError {
     match err {
         ReplayDecodeError::DecodeFailed(message) => {
+            ReplayMetrics::record(
+                ReplayMetricOperation::Decode,
+                ReplayMetricOutcome::Failed,
+                ReplayMetricReason::DecodeFailed,
+            );
             RpcWorkflowError::ReplayDecodeFailed(message).into()
         }
     }
@@ -456,17 +509,37 @@ fn map_replay_decode_error(err: ReplayDecodeError) -> InternalError {
 
 // Decode a cached replay entry back into the cycles response shape.
 fn decode_cycles_response(bytes: &[u8]) -> Result<CyclesResponse, InternalError> {
-    replay_ops::decode_root_cycles_replay_response(bytes).map_err(map_replay_decode_error)
+    match replay_ops::decode_root_cycles_replay_response(bytes) {
+        Ok(response) => {
+            ReplayMetrics::record(
+                ReplayMetricOperation::Decode,
+                ReplayMetricOutcome::Completed,
+                ReplayMetricReason::Ok,
+            );
+            Ok(response)
+        }
+        Err(err) => Err(map_replay_decode_error(err)),
+    }
 }
 
 // Persist a successful cycles response into the shared replay store.
 fn commit_cycles_replay(pending: ReplayPending, response: &CyclesResponse) {
     replay_ops::commit_root_cycles_replay(pending, response);
+    ReplayMetrics::record(
+        ReplayMetricOperation::Commit,
+        ReplayMetricOutcome::Completed,
+        ReplayMetricReason::Ok,
+    );
 }
 
 // Abort an in-flight cycles replay reservation after a failed request.
 fn abort_replay(pending: ReplayPending) {
     replay_ops::abort_root_replay(pending);
+    ReplayMetrics::record(
+        ReplayMetricOperation::Abort,
+        ReplayMetricOutcome::Completed,
+        ReplayMetricReason::Ok,
+    );
 }
 
 // Hash the canonical cycles payload using the shared replay field-hashing helpers.

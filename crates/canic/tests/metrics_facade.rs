@@ -32,10 +32,12 @@ fn metrics_query_page_is_public_facade_usable() {
 #[test]
 fn new_metric_families_are_public_facade_usable() {
     for kind in [
+        MetricsKind::Auth,
         MetricsKind::CanisterOps,
         MetricsKind::Cascade,
         MetricsKind::Directory,
         MetricsKind::Pool,
+        MetricsKind::Replay,
         MetricsKind::Scaling,
         #[cfg(feature = "sharding")]
         MetricsKind::Sharding,

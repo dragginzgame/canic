@@ -40,6 +40,7 @@ rather than as a successful zero-cost query measurement.
 | `MetricsKind` | Labels | Principal | Value | Cardinality notes |
 | ------------- | ------ | --------- | ----- | ----------------- |
 | `Access` | `[endpoint, kind, predicate]` | `None` | `Count` | Bounded by macro-generated endpoint names and static access predicate names. |
+| `Auth` | `[surface, operation, outcome, reason]` | `None` | `Count` | All dimensions are fixed enums for session bootstrap, session lifecycle, identity fallback, and attestation verifier visibility. |
 | `CanisterOps` | `[operation, role, outcome, reason]` | `None` | `Count` | Operation, outcome, and reason are fixed enums. Role labels come from configured canister roles, plus `unknown` and `unscoped` fallbacks. |
 | `Cascade` | `[operation, snapshot, outcome, reason]` | `None` | `Count` | All dimensions are fixed enums for state/topology cascade fanout, local apply, route resolution, and child-send visibility. |
 | `CyclesFunding` | `[metric]` or `[metric, reason]` | Child principal for child-scoped rows; otherwise `None` | `U128` | Child-principal rows intentionally scale with registered children. Metric and reason dimensions are fixed enums. |
@@ -51,6 +52,7 @@ rather than as a successful zero-cost query measurement.
 | `Lifecycle` | `[phase, role, stage, outcome]` | `None` | `Count` | All dimensions are fixed enums for lifecycle runtime seeding and async bootstrap visibility. |
 | `Perf` | `[endpoint, name]`, `[timer, label]`, or `[checkpoint, scope, label]` | `None` | `CountAndU64` | `value_u64` is total instructions across samples. |
 | `Pool` | `[operation, outcome, reason]` | `None` | `Count` | All dimensions are fixed enums for pool create/import/recycle/reset/scheduler visibility. |
+| `Replay` | `[operation, outcome, reason]` | `None` | `Count` | All dimensions are fixed enums for root capability replay checks, reservation, cached decode, commit, and abort visibility. |
 | `RootCapability` | `[capability, event_type, outcome, proof_mode]` | `None` | `Count` | All dimensions are fixed enums. |
 | `Scaling` | `[operation, outcome, reason]` | `None` | `Count` | All dimensions are fixed enums for scaling policy planning, startup warmup, worker creation, and registry updates. |
 | `Sharding` | `[operation, outcome, reason]` | `None` | `Count` | Feature-gated by `sharding`; all dimensions are fixed enums for shard assignment and startup shard bootstrap visibility. |
@@ -71,6 +73,54 @@ Access rows are emitted only for denied access checks.
 - `env`
 - `guard`
 - `rule`
+
+### `Auth`
+
+Auth rows expose session and attestation verifier outcomes without using caller,
+subject, key id, or token material as dimensions. Existing auth compatibility
+rows also remain visible under `Access`.
+
+Surfaces:
+
+- `attestation`
+- `session`
+
+Operations:
+
+- `bootstrap`
+- `identity_fallback`
+- `refresh`
+- `session`
+- `verify`
+
+Outcomes:
+
+- `completed`
+- `failed`
+- `idempotent`
+- `rejected`
+
+Reasons:
+
+- `cleared`
+- `created`
+- `disabled`
+- `epoch_rejected`
+- `invalid_subject`
+- `pruned`
+- `raw_caller`
+- `refresh_failed`
+- `replay`
+- `replay_conflict`
+- `replay_reused`
+- `replaced`
+- `subject_mismatch`
+- `subject_rejected`
+- `token_invalid`
+- `ttl_invalid`
+- `unknown_key_id`
+- `verify_failed`
+- `wallet_caller_rejected`
 
 ### `CanisterOps`
 
@@ -371,6 +421,39 @@ Reasons:
 - `policy_denied`
 - `registered_in_subnet`
 - `unknown`
+
+### `Replay`
+
+Replay rows expose root capability replay safety outcomes without using caller
+principals, request IDs, payload hashes, or capability names as dimensions. Use
+`RootCapability` rows when capability-level replay visibility is needed.
+
+Operations:
+
+- `abort`
+- `check`
+- `commit`
+- `decode`
+- `reserve`
+
+Outcomes:
+
+- `completed`
+- `failed`
+
+Reasons:
+
+- `capacity`
+- `conflict`
+- `decode_failed`
+- `duplicate`
+- `encode_failed`
+- `expired`
+- `fresh`
+- `in_flight`
+- `invalid_ttl`
+- `missing_metadata`
+- `ok`
 
 ### `Scaling`
 

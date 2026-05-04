@@ -1,7 +1,10 @@
 use canic_backup::{
     manifest::FleetBackupManifest,
     persistence::{BackupLayout, PersistenceError},
-    restore::{RestoreMapping, RestorePlan, RestorePlanError, RestorePlanner, RestoreStatus},
+    restore::{
+        RestoreApplyDryRun, RestoreApplyDryRunError, RestoreMapping, RestorePlan, RestorePlanError,
+        RestorePlanner, RestoreStatus,
+    },
 };
 use std::{
     ffi::OsString,
@@ -29,6 +32,9 @@ pub enum RestoreCommandError {
     #[error("--require-verified requires --backup-dir")]
     RequireVerifiedNeedsBackupDir,
 
+    #[error("restore apply currently requires --dry-run")]
+    ApplyRequiresDryRun,
+
     #[error("restore plan for backup {backup_id} is not restore-ready: reasons={reasons:?}")]
     RestoreNotReady {
         backup_id: String,
@@ -52,6 +58,9 @@ pub enum RestoreCommandError {
 
     #[error(transparent)]
     RestorePlan(#[from] RestorePlanError),
+
+    #[error(transparent)]
+    RestoreApplyDryRun(#[from] RestoreApplyDryRunError),
 }
 
 ///
@@ -166,6 +175,57 @@ impl RestoreStatusOptions {
     }
 }
 
+///
+/// RestoreApplyOptions
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RestoreApplyOptions {
+    pub plan: PathBuf,
+    pub status: Option<PathBuf>,
+    pub out: Option<PathBuf>,
+    pub dry_run: bool,
+}
+
+impl RestoreApplyOptions {
+    /// Parse restore apply options from CLI arguments.
+    pub fn parse<I>(args: I) -> Result<Self, RestoreCommandError>
+    where
+        I: IntoIterator<Item = OsString>,
+    {
+        let mut plan = None;
+        let mut status = None;
+        let mut out = None;
+        let mut dry_run = false;
+
+        let mut args = args.into_iter();
+        while let Some(arg) = args.next() {
+            let arg = arg
+                .into_string()
+                .map_err(|_| RestoreCommandError::Usage(usage()))?;
+            match arg.as_str() {
+                "--plan" => plan = Some(PathBuf::from(next_value(&mut args, "--plan")?)),
+                "--status" => status = Some(PathBuf::from(next_value(&mut args, "--status")?)),
+                "--out" => out = Some(PathBuf::from(next_value(&mut args, "--out")?)),
+                "--dry-run" => dry_run = true,
+                "--help" | "-h" => return Err(RestoreCommandError::Usage(usage())),
+                _ => return Err(RestoreCommandError::UnknownOption(arg)),
+            }
+        }
+
+        if !dry_run {
+            return Err(RestoreCommandError::ApplyRequiresDryRun);
+        }
+
+        Ok(Self {
+            plan: plan.ok_or(RestoreCommandError::MissingOption("--plan"))?,
+            status,
+            out,
+            dry_run,
+        })
+    }
+}
+
 /// Run a restore subcommand.
 pub fn run<I>(args: I) -> Result<(), RestoreCommandError>
 where
@@ -190,6 +250,12 @@ where
             write_status(&options, &status)?;
             Ok(())
         }
+        "apply" => {
+            let options = RestoreApplyOptions::parse(args)?;
+            let dry_run = restore_apply_dry_run(&options)?;
+            write_apply_dry_run(&options, &dry_run)?;
+            Ok(())
+        }
         "help" | "--help" | "-h" => Err(RestoreCommandError::Usage(usage())),
         _ => Err(RestoreCommandError::UnknownOption(command)),
     }
@@ -211,6 +277,15 @@ pub fn restore_status(
 ) -> Result<RestoreStatus, RestoreCommandError> {
     let plan = read_plan(&options.plan)?;
     Ok(RestoreStatus::from_plan(&plan))
+}
+
+/// Build a no-mutation restore apply dry-run from a restore plan.
+pub fn restore_apply_dry_run(
+    options: &RestoreApplyOptions,
+) -> Result<RestoreApplyDryRun, RestoreCommandError> {
+    let plan = read_plan(&options.plan)?;
+    let status = options.status.as_ref().map(read_status).transpose()?;
+    RestoreApplyDryRun::try_from_plan(&plan, status.as_ref()).map_err(RestoreCommandError::from)
 }
 
 // Enforce caller-requested restore plan requirements after the plan is emitted.
@@ -281,6 +356,12 @@ fn read_plan(path: &PathBuf) -> Result<RestorePlan, RestoreCommandError> {
     serde_json::from_str(&data).map_err(RestoreCommandError::from)
 }
 
+// Read and decode a restore status from disk.
+fn read_status(path: &PathBuf) -> Result<RestoreStatus, RestoreCommandError> {
+    let data = fs::read_to_string(path)?;
+    serde_json::from_str(&data).map_err(RestoreCommandError::from)
+}
+
 // Write the computed plan to stdout or a requested output file.
 fn write_plan(options: &RestorePlanOptions, plan: &RestorePlan) -> Result<(), RestoreCommandError> {
     if let Some(path) = &options.out {
@@ -314,6 +395,24 @@ fn write_status(
     Ok(())
 }
 
+// Write the computed apply dry-run to stdout or a requested output file.
+fn write_apply_dry_run(
+    options: &RestoreApplyOptions,
+    dry_run: &RestoreApplyDryRun,
+) -> Result<(), RestoreCommandError> {
+    if let Some(path) = &options.out {
+        let data = serde_json::to_vec_pretty(dry_run)?;
+        fs::write(path, data)?;
+        return Ok(());
+    }
+
+    let stdout = io::stdout();
+    let mut handle = stdout.lock();
+    serde_json::to_writer_pretty(&mut handle, dry_run)?;
+    writeln!(handle)?;
+    Ok(())
+}
+
 // Read the next required option value.
 fn next_value<I>(args: &mut I, option: &'static str) -> Result<String, RestoreCommandError>
 where
@@ -326,7 +425,7 @@ where
 
 // Return restore command usage text.
 const fn usage() -> &'static str {
-    "usage: canic restore plan (--manifest <file> | --backup-dir <dir>) [--mapping <file>] [--out <file>] [--require-verified] [--require-restore-ready]\n       canic restore status --plan <file> [--out <file>]"
+    "usage: canic restore plan (--manifest <file> | --backup-dir <dir>) [--mapping <file>] [--out <file>] [--require-verified] [--require-restore-ready]\n       canic restore status --plan <file> [--out <file>]\n       canic restore apply --plan <file> [--status <file>] --dry-run [--out <file>]"
 }
 
 #[cfg(test)]
@@ -405,6 +504,41 @@ mod tests {
 
         assert_eq!(options.plan, PathBuf::from("restore-plan.json"));
         assert_eq!(options.out, Some(PathBuf::from("restore-status.json")));
+    }
+
+    // Ensure restore apply options require the explicit dry-run mode.
+    #[test]
+    fn parses_restore_apply_dry_run_options() {
+        let options = RestoreApplyOptions::parse([
+            OsString::from("--plan"),
+            OsString::from("restore-plan.json"),
+            OsString::from("--status"),
+            OsString::from("restore-status.json"),
+            OsString::from("--dry-run"),
+            OsString::from("--out"),
+            OsString::from("restore-apply-dry-run.json"),
+        ])
+        .expect("parse apply options");
+
+        assert_eq!(options.plan, PathBuf::from("restore-plan.json"));
+        assert_eq!(options.status, Some(PathBuf::from("restore-status.json")));
+        assert_eq!(
+            options.out,
+            Some(PathBuf::from("restore-apply-dry-run.json"))
+        );
+        assert!(options.dry_run);
+    }
+
+    // Ensure restore apply refuses non-dry-run execution while apply is scaffolded.
+    #[test]
+    fn restore_apply_requires_dry_run() {
+        let err = RestoreApplyOptions::parse([
+            OsString::from("--plan"),
+            OsString::from("restore-plan.json"),
+        ])
+        .expect_err("apply without dry-run should fail");
+
+        assert!(matches!(err, RestoreCommandError::ApplyRequiresDryRun));
     }
 
     // Ensure backup-dir restore planning reads the canonical layout manifest.
@@ -672,6 +806,118 @@ mod tests {
         assert_eq!(status.planned_verification_checks, 2);
         assert_eq!(status.phases[0].members[0].source_canister, ROOT);
         assert_eq!(status_json["phases"][0]["members"][0]["state"], "planned");
+    }
+
+    // Ensure restore apply dry-run writes ordered operations from plan and status.
+    #[test]
+    fn run_restore_apply_dry_run_writes_operations() {
+        let root = temp_dir("canic-cli-restore-apply-dry-run");
+        fs::create_dir_all(&root).expect("create temp root");
+        let plan_path = root.join("restore-plan.json");
+        let status_path = root.join("restore-status.json");
+        let out_path = root.join("restore-apply-dry-run.json");
+        let plan = RestorePlanner::plan(&restore_ready_manifest(), None).expect("build plan");
+        let status = RestoreStatus::from_plan(&plan);
+
+        fs::write(
+            &plan_path,
+            serde_json::to_vec(&plan).expect("serialize plan"),
+        )
+        .expect("write plan");
+        fs::write(
+            &status_path,
+            serde_json::to_vec(&status).expect("serialize status"),
+        )
+        .expect("write status");
+
+        run([
+            OsString::from("apply"),
+            OsString::from("--plan"),
+            OsString::from(plan_path.as_os_str()),
+            OsString::from("--status"),
+            OsString::from(status_path.as_os_str()),
+            OsString::from("--dry-run"),
+            OsString::from("--out"),
+            OsString::from(out_path.as_os_str()),
+        ])
+        .expect("write apply dry-run");
+
+        let dry_run: RestoreApplyDryRun =
+            serde_json::from_slice(&fs::read(&out_path).expect("read dry-run"))
+                .expect("decode dry-run");
+        let dry_run_json: serde_json::Value =
+            serde_json::to_value(&dry_run).expect("encode dry-run");
+
+        fs::remove_dir_all(root).expect("remove temp root");
+        assert_eq!(dry_run.dry_run_version, 1);
+        assert_eq!(dry_run.backup_id.as_str(), "backup-test");
+        assert!(dry_run.ready);
+        assert!(dry_run.status_supplied);
+        assert_eq!(dry_run.member_count, 2);
+        assert_eq!(dry_run.phase_count, 1);
+        assert_eq!(dry_run.rendered_operations, 8);
+        assert_eq!(
+            dry_run_json["phases"][0]["operations"][0]["operation"],
+            "upload-snapshot"
+        );
+        assert_eq!(
+            dry_run_json["phases"][0]["operations"][3]["operation"],
+            "verify-member"
+        );
+        assert_eq!(
+            dry_run_json["phases"][0]["operations"][3]["verification_kind"],
+            "status"
+        );
+        assert_eq!(
+            dry_run_json["phases"][0]["operations"][3]["verification_method"],
+            serde_json::Value::Null
+        );
+    }
+
+    // Ensure restore apply dry-run rejects status files from another plan.
+    #[test]
+    fn run_restore_apply_dry_run_rejects_mismatched_status() {
+        let root = temp_dir("canic-cli-restore-apply-dry-run-mismatch");
+        fs::create_dir_all(&root).expect("create temp root");
+        let plan_path = root.join("restore-plan.json");
+        let status_path = root.join("restore-status.json");
+        let out_path = root.join("restore-apply-dry-run.json");
+        let plan = RestorePlanner::plan(&restore_ready_manifest(), None).expect("build plan");
+        let mut status = RestoreStatus::from_plan(&plan);
+        status.backup_id = "other-backup".to_string();
+
+        fs::write(
+            &plan_path,
+            serde_json::to_vec(&plan).expect("serialize plan"),
+        )
+        .expect("write plan");
+        fs::write(
+            &status_path,
+            serde_json::to_vec(&status).expect("serialize status"),
+        )
+        .expect("write status");
+
+        let err = run([
+            OsString::from("apply"),
+            OsString::from("--plan"),
+            OsString::from(plan_path.as_os_str()),
+            OsString::from("--status"),
+            OsString::from(status_path.as_os_str()),
+            OsString::from("--dry-run"),
+            OsString::from("--out"),
+            OsString::from(out_path.as_os_str()),
+        ])
+        .expect_err("mismatched status should fail");
+
+        assert!(!out_path.exists());
+        fs::remove_dir_all(root).expect("remove temp root");
+        assert!(matches!(
+            err,
+            RestoreCommandError::RestoreApplyDryRun(RestoreApplyDryRunError::StatusPlanMismatch {
+                field: "backup_id",
+                ..
+            })
+        ));
     }
 
     // Build one valid manifest for restore planning tests.

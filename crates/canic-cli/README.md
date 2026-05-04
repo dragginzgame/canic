@@ -151,3 +151,17 @@ canic restore status \
 Restore status is no-mutation. It copies the plan identity, readiness,
 verification, phase, and operation counts, then marks each planned member as
 `planned` with its source/target canister, snapshot ID, and artifact path.
+
+Render the restore execution operations without mutating targets:
+
+```bash
+canic restore apply \
+  --plan restore-plan.json \
+  --status restore-status.json \
+  --dry-run \
+  --out restore-apply-dry-run.json
+```
+
+Apply dry-run output expands the restore phases into ordered upload, load,
+reinstall, and member verification operations. The command requires
+`--dry-run`; real restore execution is intentionally not enabled yet.

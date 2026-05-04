@@ -11,6 +11,7 @@ pub mod icc;
 pub mod lifecycle;
 pub mod pool;
 pub mod recording;
+pub mod replay;
 pub mod root_capability;
 pub mod scaling;
 #[cfg(feature = "sharding")]
@@ -25,6 +26,7 @@ use crate::{
 };
 use {
     access::AccessMetrics,
+    auth::AuthMetrics,
     canister_ops::CanisterOpsMetrics,
     cascade::CascadeMetrics,
     cycles_funding::CyclesFundingMetrics,
@@ -35,6 +37,7 @@ use {
     icc::IccMetrics,
     lifecycle::LifecycleMetrics,
     pool::PoolMetrics,
+    replay::ReplayMetrics,
     root_capability::RootCapabilityMetrics,
     scaling::ScalingMetrics,
     system::SystemMetrics,
@@ -50,6 +53,7 @@ use sharding::ShardingMetrics;
 pub fn entries(kind: MetricsKind) -> Vec<MetricEntry> {
     match kind {
         MetricsKind::Access => access_entries(),
+        MetricsKind::Auth => auth_entries(),
         MetricsKind::CanisterOps => canister_ops_entries(),
         MetricsKind::Cascade => cascade_entries(),
         MetricsKind::CyclesFunding => cycles_funding_entries(),
@@ -61,6 +65,7 @@ pub fn entries(kind: MetricsKind) -> Vec<MetricEntry> {
         MetricsKind::Lifecycle => lifecycle_entries(),
         MetricsKind::Perf => perf_entries(),
         MetricsKind::Pool => pool_entries(),
+        MetricsKind::Replay => replay_entries(),
         MetricsKind::RootCapability => root_capability_entries(),
         MetricsKind::Scaling => scaling_entries(),
         #[cfg(feature = "sharding")]
@@ -74,6 +79,7 @@ pub fn entries(kind: MetricsKind) -> Vec<MetricEntry> {
 #[cfg(test)]
 pub fn reset_for_tests() {
     AccessMetrics::reset();
+    AuthMetrics::reset();
     CanisterOpsMetrics::reset();
     CascadeMetrics::reset();
     CyclesFundingMetrics::reset();
@@ -84,6 +90,7 @@ pub fn reset_for_tests() {
     IccMetrics::reset();
     LifecycleMetrics::reset();
     PoolMetrics::reset();
+    ReplayMetrics::reset();
     RootCapabilityMetrics::reset();
     ScalingMetrics::reset();
     #[cfg(feature = "sharding")]
@@ -92,6 +99,41 @@ pub fn reset_for_tests() {
     TimerMetrics::reset();
     WasmStoreMetrics::reset();
     perf::reset();
+}
+
+/// Project replay safety counters into the unified public metrics row shape.
+#[must_use]
+fn replay_entries() -> Vec<MetricEntry> {
+    ReplayMetrics::snapshot()
+        .into_iter()
+        .map(|(key, count)| MetricEntry {
+            labels: vec![
+                key.operation.metric_label().to_string(),
+                key.outcome.metric_label().to_string(),
+                key.reason.metric_label().to_string(),
+            ],
+            principal: None,
+            value: MetricValue::Count(count),
+        })
+        .collect()
+}
+
+/// Project auth runtime counters into the unified public metrics row shape.
+#[must_use]
+fn auth_entries() -> Vec<MetricEntry> {
+    AuthMetrics::snapshot()
+        .into_iter()
+        .map(|(key, count)| MetricEntry {
+            labels: vec![
+                key.surface.metric_label().to_string(),
+                key.operation.metric_label().to_string(),
+                key.outcome.metric_label().to_string(),
+                key.reason.metric_label().to_string(),
+            ],
+            principal: None,
+            value: MetricValue::Count(count),
+        })
+        .collect()
 }
 
 /// Project directory placement counters into the unified public metrics row shape.
@@ -455,6 +497,10 @@ mod tests {
         cdk::types::Principal,
         ids::{AccessMetricKind, CanisterRole},
         ops::runtime::metrics::{
+            auth::{
+                AuthMetricOperation, AuthMetricOutcome, AuthMetricReason, AuthMetricSurface,
+                AuthMetrics,
+            },
             canister_ops::{
                 CanisterOpsMetricOperation, CanisterOpsMetricOutcome, CanisterOpsMetricReason,
                 CanisterOpsMetrics,
@@ -479,6 +525,9 @@ mod tests {
                 LifecycleMetricStage, LifecycleMetrics,
             },
             pool::{PoolMetricOperation, PoolMetricOutcome, PoolMetricReason, PoolMetrics},
+            replay::{
+                ReplayMetricOperation, ReplayMetricOutcome, ReplayMetricReason, ReplayMetrics,
+            },
             root_capability::{
                 RootCapabilityMetricKey, RootCapabilityMetricOutcome,
                 RootCapabilityMetricProofMode, RootCapabilityMetrics,
@@ -494,6 +543,51 @@ mod tests {
         },
     };
     use std::time::Duration;
+
+    // Verify auth metrics expose stable label rows and accumulate counts.
+    #[test]
+    fn auth_metrics_are_exposed_with_stable_labels() {
+        reset_for_tests();
+
+        AuthMetrics::record(
+            AuthMetricSurface::Session,
+            AuthMetricOperation::Bootstrap,
+            AuthMetricOutcome::Rejected,
+            AuthMetricReason::TokenInvalid,
+        );
+        AuthMetrics::record(
+            AuthMetricSurface::Session,
+            AuthMetricOperation::Session,
+            AuthMetricOutcome::Completed,
+            AuthMetricReason::Created,
+        );
+        AuthMetrics::record(
+            AuthMetricSurface::Session,
+            AuthMetricOperation::Session,
+            AuthMetricOutcome::Completed,
+            AuthMetricReason::Created,
+        );
+        AuthMetrics::record(
+            AuthMetricSurface::Attestation,
+            AuthMetricOperation::Verify,
+            AuthMetricOutcome::Failed,
+            AuthMetricReason::UnknownKeyId,
+        );
+
+        let entries = entries(MetricsKind::Auth);
+
+        assert_metric_count(
+            &entries,
+            &["session", "bootstrap", "rejected", "token_invalid"],
+            1,
+        );
+        assert_metric_count(&entries, &["session", "session", "completed", "created"], 2);
+        assert_metric_count(
+            &entries,
+            &["attestation", "verify", "failed", "unknown_key_id"],
+            1,
+        );
+    }
 
     // Verify canister operation metrics expose stable label rows and accumulate counts.
     #[test]
@@ -800,6 +894,33 @@ mod tests {
         assert_metric_count(&entries, &["request_scheduled"], 2);
     }
 
+    // Verify replay metrics expose stable label rows and accumulate counts.
+    #[test]
+    fn replay_metrics_are_exposed_with_stable_labels() {
+        reset_for_tests();
+
+        ReplayMetrics::record(
+            ReplayMetricOperation::Check,
+            ReplayMetricOutcome::Completed,
+            ReplayMetricReason::Fresh,
+        );
+        ReplayMetrics::record(
+            ReplayMetricOperation::Check,
+            ReplayMetricOutcome::Failed,
+            ReplayMetricReason::Conflict,
+        );
+        ReplayMetrics::record(
+            ReplayMetricOperation::Check,
+            ReplayMetricOutcome::Failed,
+            ReplayMetricReason::Conflict,
+        );
+
+        let entries = entries(MetricsKind::Replay);
+
+        assert_metric_count(&entries, &["check", "completed", "fresh"], 1);
+        assert_metric_count(&entries, &["check", "failed", "conflict"], 2);
+    }
+
     // Verify delegated-auth metrics expose authority and outcome rows.
     #[test]
     fn delegated_auth_metrics_are_exposed_with_stable_labels() {
@@ -834,6 +955,12 @@ mod tests {
         let principal = Principal::from_slice(&[42; 29]);
 
         AccessMetrics::increment("create_project", AccessMetricKind::Guard, "controller_only");
+        AuthMetrics::record(
+            AuthMetricSurface::Session,
+            AuthMetricOperation::Session,
+            AuthMetricOutcome::Completed,
+            AuthMetricReason::Created,
+        );
         CanisterOpsMetrics::record(
             CanisterOpsMetricOperation::Create,
             &CanisterRole::new("app"),
@@ -870,6 +997,11 @@ mod tests {
             PoolMetricOperation::Reset,
             PoolMetricOutcome::Started,
             PoolMetricReason::Ok,
+        );
+        ReplayMetrics::record(
+            ReplayMetricOperation::Check,
+            ReplayMetricOutcome::Completed,
+            ReplayMetricReason::Fresh,
         );
         RootCapabilityMetrics::record_proof(
             RootCapabilityMetricKey::Provision,
@@ -911,6 +1043,7 @@ mod tests {
     fn all_metric_kinds() -> &'static [MetricsKind] {
         &[
             MetricsKind::Access,
+            MetricsKind::Auth,
             MetricsKind::CanisterOps,
             MetricsKind::Cascade,
             MetricsKind::CyclesFunding,
@@ -922,6 +1055,7 @@ mod tests {
             MetricsKind::Lifecycle,
             MetricsKind::Perf,
             MetricsKind::Pool,
+            MetricsKind::Replay,
             MetricsKind::RootCapability,
             MetricsKind::Scaling,
             #[cfg(feature = "sharding")]
