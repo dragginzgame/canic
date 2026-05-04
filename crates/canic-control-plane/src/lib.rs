@@ -6,6 +6,7 @@
 
 const _: () = {
     #[canic_memory::__reexports::ctor::ctor(
+        unsafe,
         anonymous,
         crate_path = canic_memory::__reexports::ctor
     )]
@@ -14,6 +15,7 @@ const _: () = {
     }
 
     #[canic_memory::__reexports::ctor::ctor(
+        unsafe,
         anonymous,
         crate_path = canic_memory::__reexports::ctor
     )]

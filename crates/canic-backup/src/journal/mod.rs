@@ -14,6 +14,10 @@ const SHA256_ALGORITHM: &str = "sha256";
 pub struct DownloadJournal {
     pub journal_version: u16,
     pub backup_id: String,
+    #[serde(default)]
+    pub discovery_topology_hash: Option<String>,
+    #[serde(default)]
+    pub pre_snapshot_topology_hash: Option<String>,
     pub artifacts: Vec<ArtifactJournalEntry>,
 }
 
@@ -22,6 +26,14 @@ impl DownloadJournal {
     pub fn validate(&self) -> Result<(), JournalValidationError> {
         validate_journal_version(self.journal_version)?;
         validate_nonempty("backup_id", &self.backup_id)?;
+        validate_optional_hash(
+            "discovery_topology_hash",
+            self.discovery_topology_hash.as_deref(),
+        )?;
+        validate_optional_hash(
+            "pre_snapshot_topology_hash",
+            self.pre_snapshot_topology_hash.as_deref(),
+        )?;
 
         if self.artifacts.is_empty() {
             return Err(JournalValidationError::EmptyCollection("artifacts"));
@@ -63,6 +75,8 @@ impl DownloadJournal {
 
         JournalResumeReport {
             backup_id: self.backup_id.clone(),
+            discovery_topology_hash: self.discovery_topology_hash.clone(),
+            pre_snapshot_topology_hash: self.pre_snapshot_topology_hash.clone(),
             total_artifacts: self.artifacts.len(),
             is_complete: counts.skip == self.artifacts.len(),
             pending_artifacts: self.artifacts.len() - counts.skip,
@@ -201,6 +215,8 @@ pub enum ResumeAction {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct JournalResumeReport {
     pub backup_id: String,
+    pub discovery_topology_hash: Option<String>,
+    pub pre_snapshot_topology_hash: Option<String>,
     pub total_artifacts: usize,
     pub is_complete: bool,
     pub pending_artifacts: usize,
@@ -346,6 +362,17 @@ fn validate_required_hash(
     }
 }
 
+// Validate optional SHA-256 hex fields when present.
+fn validate_optional_hash(
+    field: &'static str,
+    value: Option<&str>,
+) -> Result<(), JournalValidationError> {
+    if let Some(value) = value {
+        validate_hash(field, value)?;
+    }
+    Ok(())
+}
+
 // Validate SHA-256 hex values used for downloaded artifacts.
 fn validate_hash(field: &'static str, value: &str) -> Result<(), JournalValidationError> {
     const SHA256_HEX_LEN: usize = 64;
@@ -369,6 +396,8 @@ mod tests {
         DownloadJournal {
             journal_version: 1,
             backup_id: "fbk_test_001".to_string(),
+            discovery_topology_hash: Some(HASH.to_string()),
+            pre_snapshot_topology_hash: Some(HASH.to_string()),
             artifacts: vec![ArtifactJournalEntry {
                 canister_id: ROOT.to_string(),
                 snapshot_id: "snap-1".to_string(),
@@ -426,6 +455,8 @@ mod tests {
         let report = journal.resume_report();
 
         assert_eq!(report.total_artifacts, 3);
+        assert_eq!(report.discovery_topology_hash.as_deref(), Some(HASH));
+        assert_eq!(report.pre_snapshot_topology_hash.as_deref(), Some(HASH));
         assert!(!report.is_complete);
         assert_eq!(report.pending_artifacts, 2);
         assert_eq!(report.counts.created, 1);

@@ -16,7 +16,9 @@ canic snapshot download \
 
 Use `--recursive` instead of `--include-children` to include all descendants.
 Use `--registry-json <file>` to plan from a saved `canic_subnet_registry`
-response instead of querying a live root.
+response instead of querying a live root. Non-dry-run captures recompute the
+selection topology immediately before snapshot creation and fail if the hash
+changed since discovery.
 
 DFX only creates snapshots for stopped canisters. Pass
 `--stop-before-snapshot --resume-after-snapshot` when the CLI should perform
@@ -47,6 +49,18 @@ canic backup status \
 `--require-complete` still writes the JSON status report, then exits with an
 error when any artifact has resume work remaining.
 
+Inspect manifest and journal agreement without reading artifact bytes:
+
+```bash
+canic backup inspect \
+  --dir backups/<run-id> \
+  --out backup-inspection.json \
+  --require-ready
+```
+
+`--require-ready` still writes the JSON inspection report, then exits with an
+error when manifest and journal metadata are not ready for full verification.
+
 Verify the backup layout and durable artifact checksums:
 
 ```bash
@@ -65,7 +79,8 @@ canic backup preflight \
 ```
 
 Preflight writes `manifest-validation.json`, `backup-status.json`,
-`backup-integrity.json`, `restore-plan.json`, and `preflight-summary.json`.
+`backup-inspection.json`, `backup-integrity.json`, `restore-plan.json`, and
+`preflight-summary.json`.
 The summary records the backup ID, source root, environment, topology hash,
 readiness flags, member counts, and paths to the generated reports.
 

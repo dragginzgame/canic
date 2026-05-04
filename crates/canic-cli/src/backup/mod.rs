@@ -1,7 +1,7 @@
 use canic_backup::{
     journal::JournalResumeReport,
     manifest::FleetBackupManifest,
-    persistence::{BackupIntegrityReport, BackupLayout, PersistenceError},
+    persistence::{BackupInspectionReport, BackupIntegrityReport, BackupLayout, PersistenceError},
     restore::{RestoreMapping, RestorePlanError, RestorePlanner},
 };
 use serde_json::json;
@@ -38,6 +38,19 @@ pub enum BackupCommandError {
         backup_id: String,
         total_artifacts: usize,
         pending_artifacts: usize,
+    },
+
+    #[error(
+        "backup inspection {backup_id} is not ready for verification: backup_id_matches={backup_id_matches}, journal_complete={journal_complete}, missing={missing_artifacts}, unexpected={unexpected_artifacts}, path_mismatches={path_mismatches}, checksum_mismatches={checksum_mismatches}"
+    )]
+    InspectionNotReady {
+        backup_id: String,
+        backup_id_matches: bool,
+        journal_complete: bool,
+        missing_artifacts: usize,
+        unexpected_artifacts: usize,
+        path_mismatches: usize,
+        checksum_mismatches: usize,
     },
 
     #[error(transparent)]
@@ -115,9 +128,53 @@ pub struct BackupPreflightReport {
     pub restore_plan_members: usize,
     pub manifest_validation_path: String,
     pub backup_status_path: String,
+    pub backup_inspection_path: String,
     pub backup_integrity_path: String,
     pub restore_plan_path: String,
     pub preflight_summary_path: String,
+}
+
+///
+/// BackupInspectOptions
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct BackupInspectOptions {
+    pub dir: PathBuf,
+    pub out: Option<PathBuf>,
+    pub require_ready: bool,
+}
+
+impl BackupInspectOptions {
+    /// Parse backup inspection options from CLI arguments.
+    pub fn parse<I>(args: I) -> Result<Self, BackupCommandError>
+    where
+        I: IntoIterator<Item = OsString>,
+    {
+        let mut dir = None;
+        let mut out = None;
+        let mut require_ready = false;
+
+        let mut args = args.into_iter();
+        while let Some(arg) = args.next() {
+            let arg = arg
+                .into_string()
+                .map_err(|_| BackupCommandError::Usage(usage()))?;
+            match arg.as_str() {
+                "--dir" => dir = Some(PathBuf::from(next_value(&mut args, "--dir")?)),
+                "--out" => out = Some(PathBuf::from(next_value(&mut args, "--out")?)),
+                "--require-ready" => require_ready = true,
+                "--help" | "-h" => return Err(BackupCommandError::Usage(usage())),
+                _ => return Err(BackupCommandError::UnknownOption(arg)),
+            }
+        }
+
+        Ok(Self {
+            dir: dir.ok_or(BackupCommandError::MissingOption("--dir"))?,
+            out,
+            require_ready,
+        })
+    }
 }
 
 ///
@@ -218,6 +275,13 @@ where
             backup_preflight(&options)?;
             Ok(())
         }
+        "inspect" => {
+            let options = BackupInspectOptions::parse(args)?;
+            let report = inspect_backup(&options)?;
+            write_inspect_report(&options, &report)?;
+            enforce_inspection_requirements(&options, &report)?;
+            Ok(())
+        }
         "status" => {
             let options = BackupStatusOptions::parse(args)?;
             let report = backup_status(&options)?;
@@ -246,12 +310,14 @@ pub fn backup_preflight(
     let manifest = layout.read_manifest()?;
     let status = layout.read_journal()?.resume_report();
     ensure_complete_status(&status)?;
+    let inspection = layout.inspect()?;
     let integrity = layout.verify_integrity()?;
     let mapping = options.mapping.as_ref().map(read_mapping).transpose()?;
     let restore_plan = RestorePlanner::plan(&manifest, mapping.as_ref())?;
 
     let manifest_validation_path = options.out_dir.join("manifest-validation.json");
     let backup_status_path = options.out_dir.join("backup-status.json");
+    let backup_inspection_path = options.out_dir.join("backup-inspection.json");
     let backup_integrity_path = options.out_dir.join("backup-integrity.json");
     let restore_plan_path = options.out_dir.join("restore-plan.json");
     let preflight_summary_path = options.out_dir.join("preflight-summary.json");
@@ -261,6 +327,10 @@ pub fn backup_preflight(
         &manifest_validation_summary(&manifest),
     )?;
     fs::write(&backup_status_path, serde_json::to_vec_pretty(&status)?)?;
+    fs::write(
+        &backup_inspection_path,
+        serde_json::to_vec_pretty(&inspection)?,
+    )?;
     fs::write(
         &backup_integrity_path,
         serde_json::to_vec_pretty(&integrity)?,
@@ -287,6 +357,7 @@ pub fn backup_preflight(
         restore_plan_members: restore_plan.member_count,
         manifest_validation_path: manifest_validation_path.display().to_string(),
         backup_status_path: backup_status_path.display().to_string(),
+        backup_inspection_path: backup_inspection_path.display().to_string(),
         backup_integrity_path: backup_integrity_path.display().to_string(),
         restore_plan_path: restore_plan_path.display().to_string(),
         preflight_summary_path: preflight_summary_path.display().to_string(),
@@ -294,6 +365,34 @@ pub fn backup_preflight(
 
     write_json_value_file(&preflight_summary_path, &preflight_summary_value(&report))?;
     Ok(report)
+}
+
+/// Inspect manifest and journal agreement without reading artifact bytes.
+pub fn inspect_backup(
+    options: &BackupInspectOptions,
+) -> Result<BackupInspectionReport, BackupCommandError> {
+    let layout = BackupLayout::new(options.dir.clone());
+    layout.inspect().map_err(BackupCommandError::from)
+}
+
+// Ensure an inspection report is ready for full verification when requested.
+fn enforce_inspection_requirements(
+    options: &BackupInspectOptions,
+    report: &BackupInspectionReport,
+) -> Result<(), BackupCommandError> {
+    if !options.require_ready || report.ready_for_verify {
+        return Ok(());
+    }
+
+    Err(BackupCommandError::InspectionNotReady {
+        backup_id: report.backup_id.clone(),
+        backup_id_matches: report.backup_id_matches,
+        journal_complete: report.journal_complete,
+        missing_artifacts: report.missing_journal_artifacts.len(),
+        unexpected_artifacts: report.unexpected_journal_artifacts.len(),
+        path_mismatches: report.path_mismatches.len(),
+        checksum_mismatches: report.checksum_mismatches.len(),
+    })
 }
 
 /// Summarize a backup journal's resumable state.
@@ -356,6 +455,24 @@ fn write_status_report(
     Ok(())
 }
 
+// Write the inspection report to stdout or a requested output file.
+fn write_inspect_report(
+    options: &BackupInspectOptions,
+    report: &BackupInspectionReport,
+) -> Result<(), BackupCommandError> {
+    if let Some(path) = &options.out {
+        let data = serde_json::to_vec_pretty(report)?;
+        fs::write(path, data)?;
+        return Ok(());
+    }
+
+    let stdout = io::stdout();
+    let mut handle = stdout.lock();
+    serde_json::to_writer_pretty(&mut handle, report)?;
+    writeln!(handle)?;
+    Ok(())
+}
+
 // Write the integrity report to stdout or a requested output file.
 fn write_report(
     options: &BackupVerifyOptions,
@@ -404,6 +521,7 @@ fn preflight_summary_value(report: &BackupPreflightReport) -> serde_json::Value 
         "restore_plan_members": report.restore_plan_members,
         "manifest_validation_path": report.manifest_validation_path,
         "backup_status_path": report.backup_status_path,
+        "backup_inspection_path": report.backup_inspection_path,
         "backup_integrity_path": report.backup_integrity_path,
         "restore_plan_path": report.restore_plan_path,
         "preflight_summary_path": report.preflight_summary_path,
@@ -438,7 +556,7 @@ where
 
 // Return backup command usage text.
 const fn usage() -> &'static str {
-    "usage: canic backup preflight --dir <backup-dir> --out-dir <dir> [--mapping <file>]\n       canic backup status --dir <backup-dir> [--out <file>] [--require-complete]\n       canic backup verify --dir <backup-dir> [--out <file>]"
+    "usage: canic backup preflight --dir <backup-dir> --out-dir <dir> [--mapping <file>]\n       canic backup inspect --dir <backup-dir> [--out <file>] [--require-ready]\n       canic backup status --dir <backup-dir> [--out <file>] [--require-complete]\n       canic backup verify --dir <backup-dir> [--out <file>]"
 }
 
 #[cfg(test)]
@@ -515,6 +633,7 @@ mod tests {
         assert_eq!(report.restore_plan_members, 1);
         assert!(out_dir.join("manifest-validation.json").exists());
         assert!(out_dir.join("backup-status.json").exists());
+        assert!(out_dir.join("backup-inspection.json").exists());
         assert!(out_dir.join("backup-integrity.json").exists());
         assert!(out_dir.join("restore-plan.json").exists());
         assert!(out_dir.join("preflight-summary.json").exists());
@@ -534,6 +653,10 @@ mod tests {
         assert_eq!(summary["integrity_verified"], report.integrity_verified);
         assert_eq!(summary["manifest_members"], report.manifest_members);
         assert_eq!(summary["restore_plan_members"], report.restore_plan_members);
+        assert_eq!(
+            summary["backup_inspection_path"],
+            report.backup_inspection_path
+        );
     }
 
     // Ensure preflight stops on incomplete journals before claiming readiness.
@@ -585,6 +708,23 @@ mod tests {
         assert_eq!(options.out, Some(PathBuf::from("report.json")));
     }
 
+    // Ensure backup inspection options parse the intended command shape.
+    #[test]
+    fn parses_backup_inspect_options() {
+        let options = BackupInspectOptions::parse([
+            OsString::from("--dir"),
+            OsString::from("backups/run"),
+            OsString::from("--out"),
+            OsString::from("inspect.json"),
+            OsString::from("--require-ready"),
+        ])
+        .expect("parse options");
+
+        assert_eq!(options.dir, PathBuf::from("backups/run"));
+        assert_eq!(options.out, Some(PathBuf::from("inspect.json")));
+        assert!(options.require_ready);
+    }
+
     // Ensure backup status options parse the intended command shape.
     #[test]
     fn parses_backup_status_options() {
@@ -624,6 +764,78 @@ mod tests {
         assert!(report.is_complete);
         assert_eq!(report.pending_artifacts, 0);
         assert_eq!(report.counts.skip, 1);
+    }
+
+    // Ensure backup inspection reports manifest and journal agreement.
+    #[test]
+    fn inspect_backup_reads_layout_metadata() {
+        let root = temp_dir("canic-cli-backup-inspect");
+        let layout = BackupLayout::new(root.clone());
+
+        layout
+            .write_manifest(&valid_manifest())
+            .expect("write manifest");
+        layout
+            .write_journal(&journal_with_checksum(HASH.to_string()))
+            .expect("write journal");
+
+        let options = BackupInspectOptions {
+            dir: root.clone(),
+            out: None,
+            require_ready: false,
+        };
+        let report = inspect_backup(&options).expect("inspect backup");
+
+        fs::remove_dir_all(root).expect("remove temp root");
+        assert_eq!(report.backup_id, "backup-test");
+        assert!(report.backup_id_matches);
+        assert!(report.journal_complete);
+        assert!(report.ready_for_verify);
+        assert_eq!(report.matched_artifacts, 1);
+    }
+
+    // Ensure require-ready accepts inspection reports ready for verification.
+    #[test]
+    fn require_ready_accepts_ready_inspection() {
+        let options = BackupInspectOptions {
+            dir: PathBuf::from("unused"),
+            out: None,
+            require_ready: true,
+        };
+        let report = ready_inspection_report();
+
+        enforce_inspection_requirements(&options, &report).expect("ready inspection should pass");
+    }
+
+    // Ensure require-ready rejects inspection reports with metadata drift.
+    #[test]
+    fn require_ready_rejects_unready_inspection() {
+        let options = BackupInspectOptions {
+            dir: PathBuf::from("unused"),
+            out: None,
+            require_ready: true,
+        };
+        let mut report = ready_inspection_report();
+        report.ready_for_verify = false;
+        report
+            .path_mismatches
+            .push(canic_backup::persistence::ArtifactPathMismatch {
+                canister_id: ROOT.to_string(),
+                snapshot_id: "root-snapshot".to_string(),
+                manifest: "artifacts/root".to_string(),
+                journal: "artifacts/other-root".to_string(),
+            });
+
+        let err = enforce_inspection_requirements(&options, &report)
+            .expect_err("unready inspection should fail");
+
+        assert!(matches!(
+            err,
+            BackupCommandError::InspectionNotReady {
+                path_mismatches: 1,
+                ..
+            }
+        ));
     }
 
     // Ensure require-complete accepts already durable backup journals.
@@ -760,6 +972,8 @@ mod tests {
         DownloadJournal {
             journal_version: 1,
             backup_id: "backup-test".to_string(),
+            discovery_topology_hash: Some(HASH.to_string()),
+            pre_snapshot_topology_hash: Some(HASH.to_string()),
             artifacts: vec![ArtifactJournalEntry {
                 canister_id: ROOT.to_string(),
                 snapshot_id: "root-snapshot".to_string(),
@@ -778,6 +992,8 @@ mod tests {
         DownloadJournal {
             journal_version: 1,
             backup_id: "backup-test".to_string(),
+            discovery_topology_hash: Some(HASH.to_string()),
+            pre_snapshot_topology_hash: Some(HASH.to_string()),
             artifacts: vec![ArtifactJournalEntry {
                 canister_id: ROOT.to_string(),
                 snapshot_id: "root-snapshot".to_string(),
@@ -788,6 +1004,25 @@ mod tests {
                 checksum: None,
                 updated_at: "2026-05-03T00:00:00Z".to_string(),
             }],
+        }
+    }
+
+    // Build one ready inspection report for requirement tests.
+    fn ready_inspection_report() -> BackupInspectionReport {
+        BackupInspectionReport {
+            backup_id: "backup-test".to_string(),
+            manifest_backup_id: "backup-test".to_string(),
+            journal_backup_id: "backup-test".to_string(),
+            backup_id_matches: true,
+            journal_complete: true,
+            ready_for_verify: true,
+            manifest_members: 1,
+            journal_artifacts: 1,
+            matched_artifacts: 1,
+            missing_journal_artifacts: Vec::new(),
+            unexpected_journal_artifacts: Vec::new(),
+            path_mismatches: Vec::new(),
+            checksum_mismatches: Vec::new(),
         }
     }
 

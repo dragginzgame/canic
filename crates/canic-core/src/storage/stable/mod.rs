@@ -23,6 +23,7 @@ pub const CANIC_MEMORY_MAX: u8 = 59;
 
 const _: () = {
     #[canic_memory::__reexports::ctor::ctor(
+        unsafe,
         anonymous,
         crate_path = canic_memory::__reexports::ctor
     )]

@@ -10,7 +10,7 @@ macro_rules! eager_init {
                 $body
             }
 
-            #[ $crate::__reexports::ctor::ctor(anonymous, crate_path = $crate::__reexports::ctor) ]
+            #[ $crate::__reexports::ctor::ctor(unsafe, anonymous, crate_path = $crate::__reexports::ctor) ]
             fn __canic_register_eager_init() {
                 $crate::runtime::defer_eager_init(__canic_registered_eager_init_body);
             }
@@ -35,7 +35,7 @@ macro_rules! eager_static {
                 $name.with(|_| {});
             }
 
-            #[ $crate::__reexports::ctor::ctor(anonymous, crate_path = $crate::__reexports::ctor) ]
+            #[ $crate::__reexports::ctor::ctor(unsafe, anonymous, crate_path = $crate::__reexports::ctor) ]
             fn __canic_register_eager_tls() {
                 $crate::runtime::defer_tls_initializer(__canic_touch_tls);
             }

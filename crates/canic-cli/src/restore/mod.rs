@@ -539,6 +539,8 @@ mod tests {
             .write_journal(&DownloadJournal {
                 journal_version: 1,
                 backup_id: manifest.backup_id.clone(),
+                discovery_topology_hash: Some(manifest.fleet.discovery_topology_hash.clone()),
+                pre_snapshot_topology_hash: Some(manifest.fleet.pre_snapshot_topology_hash.clone()),
                 artifacts,
             })
             .expect("write journal");

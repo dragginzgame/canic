@@ -9,7 +9,7 @@ use canic_backup::{
         SourceSnapshot, ToolMetadata, VerificationCheck, VerificationPlan,
     },
     persistence::{BackupLayout, PersistenceError},
-    topology::{TopologyHasher, TopologyRecord},
+    topology::{TopologyHash, TopologyHasher, TopologyRecord},
 };
 use serde_json::Value;
 use std::{
@@ -53,6 +53,14 @@ pub enum SnapshotCommandError {
 
     #[error("field {field} must be a valid principal: {value}")]
     InvalidPrincipal { field: &'static str, value: String },
+
+    #[error(
+        "topology changed before snapshot start: discovery={discovery}, pre_snapshot={pre_snapshot}"
+    )]
+    TopologyChanged {
+        discovery: String,
+        pre_snapshot: String,
+    },
 
     #[error(transparent)]
     Io(#[from] std::io::Error),
@@ -261,10 +269,15 @@ pub fn download_snapshots(
     options: &SnapshotDownloadOptions,
 ) -> Result<SnapshotDownloadResult, SnapshotCommandError> {
     let targets = resolve_targets(options)?;
+    let discovery_topology_hash = topology_hash_for_targets(options, &targets)?;
+    let pre_snapshot_topology_hash =
+        accepted_pre_snapshot_topology_hash(options, &discovery_topology_hash)?;
     let mut artifacts = Vec::with_capacity(targets.len());
     let mut journal = DownloadJournal {
         journal_version: 1,
         backup_id: backup_id(options),
+        discovery_topology_hash: Some(discovery_topology_hash.hash.clone()),
+        pre_snapshot_topology_hash: Some(pre_snapshot_topology_hash.hash.clone()),
         artifacts: Vec::new(),
     };
     let layout = BackupLayout::new(options.out.clone());
@@ -277,96 +290,146 @@ pub fn download_snapshots(
             .join(format!("{}.tmp", safe_path_segment(&target.canister_id)));
 
         if options.dry_run {
-            if options.lifecycle.stop_before_snapshot() {
-                println!(
-                    "{}",
-                    stop_canister_command_display(options, &target.canister_id)
-                );
-            }
-            println!(
-                "{}",
-                create_snapshot_command_display(options, &target.canister_id)
-            );
-            println!(
-                "{}",
-                download_snapshot_command_display(options, &target.canister_id, "<snapshot-id>")
-            );
-            artifacts.push(SnapshotArtifact {
-                canister_id: target.canister_id.clone(),
-                snapshot_id: "<snapshot-id>".to_string(),
-                path: artifact_path,
-                checksum: "<sha256>".to_string(),
-            });
-            if options.lifecycle.resume_after_snapshot() {
-                println!(
-                    "{}",
-                    start_canister_command_display(options, &target.canister_id)
-                );
-            }
+            artifacts.push(dry_run_artifact(options, target, artifact_path));
             continue;
         }
 
-        let artifact = with_optional_stop(options, &target.canister_id, || {
-            let snapshot_id = create_snapshot(options, &target.canister_id)?;
-            let mut entry = ArtifactJournalEntry {
-                canister_id: target.canister_id.clone(),
-                snapshot_id: snapshot_id.clone(),
-                state: ArtifactState::Created,
-                temp_path: None,
-                artifact_path: artifact_relative_path.display().to_string(),
-                checksum_algorithm: "sha256".to_string(),
-                checksum: None,
-                updated_at: timestamp_placeholder(),
-            };
-            journal.artifacts.push(entry.clone());
-            layout.write_journal(&journal)?;
-
-            if temp_path.exists() {
-                fs::remove_dir_all(&temp_path)?;
-            }
-            fs::create_dir_all(&temp_path)?;
-            download_snapshot(options, &target.canister_id, &snapshot_id, &temp_path)?;
-            entry.advance_to(ArtifactState::Downloaded, timestamp_placeholder())?;
-            entry.temp_path = Some(temp_path.display().to_string());
-            update_journal_entry(&mut journal, &entry);
-            layout.write_journal(&journal)?;
-
-            let checksum = ArtifactChecksum::from_path(&temp_path)?;
-            entry.checksum = Some(checksum.hash.clone());
-            entry.advance_to(ArtifactState::ChecksumVerified, timestamp_placeholder())?;
-            update_journal_entry(&mut journal, &entry);
-            layout.write_journal(&journal)?;
-
-            if artifact_path.exists() {
-                return Err(std::io::Error::new(
-                    std::io::ErrorKind::AlreadyExists,
-                    format!("artifact path already exists: {}", artifact_path.display()),
-                )
-                .into());
-            }
-            fs::rename(&temp_path, &artifact_path)?;
-            entry.temp_path = None;
-            entry.advance_to(ArtifactState::Durable, timestamp_placeholder())?;
-            update_journal_entry(&mut journal, &entry);
-            layout.write_journal(&journal)?;
-
-            Ok(SnapshotArtifact {
-                canister_id: target.canister_id.clone(),
-                snapshot_id,
-                path: artifact_path,
-                checksum: checksum.hash,
-            })
-        })?;
-
-        artifacts.push(artifact);
+        artifacts.push(capture_snapshot_artifact(
+            options,
+            &layout,
+            &mut journal,
+            target,
+            &artifact_relative_path,
+            artifact_path,
+            temp_path,
+        )?);
     }
 
     if !options.dry_run {
-        let manifest = build_manifest(options, &targets, &artifacts)?;
+        let manifest = build_manifest(
+            options,
+            &targets,
+            &artifacts,
+            discovery_topology_hash,
+            pre_snapshot_topology_hash,
+        )?;
         layout.write_manifest(&manifest)?;
     }
 
     Ok(SnapshotDownloadResult { artifacts })
+}
+
+// Resolve and verify the pre-snapshot topology hash before any mutation.
+fn accepted_pre_snapshot_topology_hash(
+    options: &SnapshotDownloadOptions,
+    discovery_topology_hash: &TopologyHash,
+) -> Result<TopologyHash, SnapshotCommandError> {
+    if options.dry_run {
+        return Ok(discovery_topology_hash.clone());
+    }
+
+    let pre_snapshot_targets = resolve_targets(options)?;
+    let pre_snapshot_topology_hash = topology_hash_for_targets(options, &pre_snapshot_targets)?;
+    ensure_topology_stable(discovery_topology_hash, &pre_snapshot_topology_hash)?;
+    Ok(pre_snapshot_topology_hash)
+}
+
+// Print the planned commands and return a placeholder artifact for dry runs.
+fn dry_run_artifact(
+    options: &SnapshotDownloadOptions,
+    target: &SnapshotTarget,
+    artifact_path: PathBuf,
+) -> SnapshotArtifact {
+    if options.lifecycle.stop_before_snapshot() {
+        println!(
+            "{}",
+            stop_canister_command_display(options, &target.canister_id)
+        );
+    }
+    println!(
+        "{}",
+        create_snapshot_command_display(options, &target.canister_id)
+    );
+    println!(
+        "{}",
+        download_snapshot_command_display(options, &target.canister_id, "<snapshot-id>")
+    );
+    if options.lifecycle.resume_after_snapshot() {
+        println!(
+            "{}",
+            start_canister_command_display(options, &target.canister_id)
+        );
+    }
+
+    SnapshotArtifact {
+        canister_id: target.canister_id.clone(),
+        snapshot_id: "<snapshot-id>".to_string(),
+        path: artifact_path,
+        checksum: "<sha256>".to_string(),
+    }
+}
+
+// Create, download, checksum, and finalize one durable snapshot artifact.
+fn capture_snapshot_artifact(
+    options: &SnapshotDownloadOptions,
+    layout: &BackupLayout,
+    journal: &mut DownloadJournal,
+    target: &SnapshotTarget,
+    artifact_relative_path: &Path,
+    artifact_path: PathBuf,
+    temp_path: PathBuf,
+) -> Result<SnapshotArtifact, SnapshotCommandError> {
+    with_optional_stop(options, &target.canister_id, || {
+        let snapshot_id = create_snapshot(options, &target.canister_id)?;
+        let mut entry = ArtifactJournalEntry {
+            canister_id: target.canister_id.clone(),
+            snapshot_id: snapshot_id.clone(),
+            state: ArtifactState::Created,
+            temp_path: None,
+            artifact_path: artifact_relative_path.display().to_string(),
+            checksum_algorithm: "sha256".to_string(),
+            checksum: None,
+            updated_at: timestamp_placeholder(),
+        };
+        journal.artifacts.push(entry.clone());
+        layout.write_journal(journal)?;
+
+        if temp_path.exists() {
+            fs::remove_dir_all(&temp_path)?;
+        }
+        fs::create_dir_all(&temp_path)?;
+        download_snapshot(options, &target.canister_id, &snapshot_id, &temp_path)?;
+        entry.advance_to(ArtifactState::Downloaded, timestamp_placeholder())?;
+        entry.temp_path = Some(temp_path.display().to_string());
+        update_journal_entry(journal, &entry);
+        layout.write_journal(journal)?;
+
+        let checksum = ArtifactChecksum::from_path(&temp_path)?;
+        entry.checksum = Some(checksum.hash.clone());
+        entry.advance_to(ArtifactState::ChecksumVerified, timestamp_placeholder())?;
+        update_journal_entry(journal, &entry);
+        layout.write_journal(journal)?;
+
+        if artifact_path.exists() {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::AlreadyExists,
+                format!("artifact path already exists: {}", artifact_path.display()),
+            )
+            .into());
+        }
+        fs::rename(&temp_path, &artifact_path)?;
+        entry.temp_path = None;
+        entry.advance_to(ArtifactState::Durable, timestamp_placeholder())?;
+        update_journal_entry(journal, &entry);
+        layout.write_journal(journal)?;
+
+        Ok(SnapshotArtifact {
+            canister_id: target.canister_id.clone(),
+            snapshot_id,
+            path: artifact_path,
+            checksum: checksum.hash,
+        })
+    })
 }
 
 // Replace one artifact row in the mutable journal.
@@ -745,13 +808,9 @@ fn build_manifest(
     options: &SnapshotDownloadOptions,
     targets: &[SnapshotTarget],
     artifacts: &[SnapshotArtifact],
+    discovery_topology_hash: TopologyHash,
+    pre_snapshot_topology_hash: TopologyHash,
 ) -> Result<FleetBackupManifest, SnapshotCommandError> {
-    let topology_records = targets
-        .iter()
-        .enumerate()
-        .map(|(index, target)| topology_record(options, index, target))
-        .collect::<Result<Vec<_>, _>>()?;
-    let topology_hash = TopologyHasher::hash(&topology_records);
     let roles = targets
         .iter()
         .enumerate()
@@ -803,11 +862,11 @@ fn build_manifest(
             }],
         },
         fleet: FleetSection {
-            topology_hash_algorithm: topology_hash.algorithm,
-            topology_hash_input: topology_hash.input,
-            discovery_topology_hash: topology_hash.hash.clone(),
-            pre_snapshot_topology_hash: topology_hash.hash.clone(),
-            topology_hash: topology_hash.hash,
+            topology_hash_algorithm: discovery_topology_hash.algorithm,
+            topology_hash_input: discovery_topology_hash.input,
+            discovery_topology_hash: discovery_topology_hash.hash.clone(),
+            pre_snapshot_topology_hash: pre_snapshot_topology_hash.hash,
+            topology_hash: discovery_topology_hash.hash,
             members: targets
                 .iter()
                 .enumerate()
@@ -819,6 +878,34 @@ fn build_manifest(
 
     manifest.validate()?;
     Ok(manifest)
+}
+
+// Compute the canonical topology hash for one resolved target set.
+fn topology_hash_for_targets(
+    options: &SnapshotDownloadOptions,
+    targets: &[SnapshotTarget],
+) -> Result<TopologyHash, SnapshotCommandError> {
+    let topology_records = targets
+        .iter()
+        .enumerate()
+        .map(|(index, target)| topology_record(options, index, target))
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(TopologyHasher::hash(&topology_records))
+}
+
+// Fail closed if topology changes after discovery but before snapshot creation.
+fn ensure_topology_stable(
+    discovery: &TopologyHash,
+    pre_snapshot: &TopologyHash,
+) -> Result<(), SnapshotCommandError> {
+    if discovery.hash == pre_snapshot.hash {
+        return Ok(());
+    }
+
+    Err(SnapshotCommandError::TopologyChanged {
+        discovery: discovery.hash.clone(),
+        pre_snapshot: pre_snapshot.hash.clone(),
+    })
 }
 
 // Build one canonical topology record for manifest hashing.
@@ -989,6 +1076,7 @@ mod tests {
     const ROOT: &str = "aaaaa-aa";
     const CHILD: &str = "renrk-eyaaa-aaaaa-aaada-cai";
     const GRANDCHILD: &str = "rno2w-sqaaa-aaaaa-aaacq-cai";
+    const HASH: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 
     // Ensure dfx registry JSON parses in the wrapped Ok shape.
     #[test]
@@ -1073,6 +1161,19 @@ mod tests {
         assert!(options.recursive);
         assert!(options.dry_run);
         assert_eq!(options.lifecycle, SnapshotLifecycleMode::StopAndResume);
+    }
+
+    // Ensure snapshot capture fails closed when topology changes before creation.
+    #[test]
+    fn topology_stability_rejects_pre_snapshot_drift() {
+        let discovery = topology_hash(HASH);
+        let pre_snapshot =
+            topology_hash("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
+
+        let err = ensure_topology_stable(&discovery, &pre_snapshot)
+            .expect_err("topology drift should fail");
+
+        assert!(matches!(err, SnapshotCommandError::TopologyChanged { .. }));
     }
 
     // Ensure the actual command path writes a manifest and durable journal.
@@ -1185,6 +1286,15 @@ exit 1
             ]
         })
         .to_string()
+    }
+
+    // Build one topology hash for stability tests.
+    fn topology_hash(hash: &str) -> TopologyHash {
+        TopologyHash {
+            algorithm: "sha256".to_string(),
+            input: "sorted(pid,parent_pid,role,module_hash)".to_string(),
+            hash: hash.to_string(),
+        }
     }
 
     // Build a unique temporary directory.

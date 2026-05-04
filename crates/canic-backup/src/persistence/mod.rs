@@ -5,7 +5,7 @@ use crate::{
 };
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use std::{
-    collections::BTreeSet,
+    collections::{BTreeMap, BTreeSet},
     fs::{self, File},
     io,
     path::{Path, PathBuf},
@@ -81,6 +81,68 @@ impl BackupLayout {
         let journal = self.read_journal()?;
         verify_layout_integrity(self, &manifest, &journal)
     }
+
+    /// Inspect manifest and journal agreement without reading artifact bytes.
+    pub fn inspect(&self) -> Result<BackupInspectionReport, PersistenceError> {
+        let manifest = self.read_manifest()?;
+        let journal = self.read_journal()?;
+        Ok(inspect_layout(&manifest, &journal))
+    }
+}
+
+///
+/// BackupInspectionReport
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct BackupInspectionReport {
+    pub backup_id: String,
+    pub manifest_backup_id: String,
+    pub journal_backup_id: String,
+    pub backup_id_matches: bool,
+    pub journal_complete: bool,
+    pub ready_for_verify: bool,
+    pub manifest_members: usize,
+    pub journal_artifacts: usize,
+    pub matched_artifacts: usize,
+    pub missing_journal_artifacts: Vec<ArtifactReference>,
+    pub unexpected_journal_artifacts: Vec<ArtifactReference>,
+    pub path_mismatches: Vec<ArtifactPathMismatch>,
+    pub checksum_mismatches: Vec<ArtifactChecksumMismatch>,
+}
+
+///
+/// ArtifactReference
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+pub struct ArtifactReference {
+    pub canister_id: String,
+    pub snapshot_id: String,
+}
+
+///
+/// ArtifactPathMismatch
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ArtifactPathMismatch {
+    pub canister_id: String,
+    pub snapshot_id: String,
+    pub manifest: String,
+    pub journal: String,
+}
+
+///
+/// ArtifactChecksumMismatch
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ArtifactChecksumMismatch {
+    pub canister_id: String,
+    pub snapshot_id: String,
+    pub manifest: String,
+    pub journal: String,
 }
 
 ///
@@ -161,8 +223,106 @@ pub enum PersistenceError {
         journal: String,
     },
 
+    #[error(
+        "manifest artifact path for {canister_id} snapshot {snapshot_id} does not match journal artifact path"
+    )]
+    ManifestJournalArtifactPathMismatch {
+        canister_id: String,
+        snapshot_id: String,
+        manifest: String,
+        journal: String,
+    },
+
     #[error("artifact path does not exist: {0}")]
     MissingArtifact(String),
+}
+
+// Inspect manifest and journal agreement without touching artifact contents.
+fn inspect_layout(
+    manifest: &FleetBackupManifest,
+    journal: &DownloadJournal,
+) -> BackupInspectionReport {
+    let journal_report = journal.resume_report();
+    let journal_artifacts = journal
+        .artifacts
+        .iter()
+        .map(|entry| (artifact_key(&entry.canister_id, &entry.snapshot_id), entry))
+        .collect::<BTreeMap<_, _>>();
+    let manifest_artifacts = manifest
+        .fleet
+        .members
+        .iter()
+        .map(|member| {
+            (
+                artifact_key(&member.canister_id, &member.source_snapshot.snapshot_id),
+                member,
+            )
+        })
+        .collect::<BTreeMap<_, _>>();
+
+    let mut matched_artifacts = 0;
+    let mut missing_journal_artifacts = Vec::new();
+    let mut path_mismatches = Vec::new();
+    let mut checksum_mismatches = Vec::new();
+
+    for (key, member) in &manifest_artifacts {
+        let Some(entry) = journal_artifacts.get(key) else {
+            missing_journal_artifacts.push(artifact_reference(key));
+            continue;
+        };
+
+        matched_artifacts += 1;
+        if member.source_snapshot.artifact_path != entry.artifact_path {
+            path_mismatches.push(ArtifactPathMismatch {
+                canister_id: key.0.clone(),
+                snapshot_id: key.1.clone(),
+                manifest: member.source_snapshot.artifact_path.clone(),
+                journal: entry.artifact_path.clone(),
+            });
+        }
+
+        if let (Some(manifest_hash), Some(journal_hash)) = (
+            member.source_snapshot.checksum.as_deref(),
+            entry.checksum.as_deref(),
+        ) && manifest_hash != journal_hash
+        {
+            checksum_mismatches.push(ArtifactChecksumMismatch {
+                canister_id: key.0.clone(),
+                snapshot_id: key.1.clone(),
+                manifest: manifest_hash.to_string(),
+                journal: journal_hash.to_string(),
+            });
+        }
+    }
+
+    let unexpected_journal_artifacts = journal_artifacts
+        .keys()
+        .filter(|key| !manifest_artifacts.contains_key(*key))
+        .map(artifact_reference)
+        .collect::<Vec<_>>();
+    let backup_id_matches = manifest.backup_id == journal.backup_id;
+    let ready_for_verify = backup_id_matches
+        && journal_report.is_complete
+        && missing_journal_artifacts.is_empty()
+        && unexpected_journal_artifacts.is_empty()
+        && path_mismatches.is_empty()
+        && checksum_mismatches.is_empty();
+
+    BackupInspectionReport {
+        backup_id: manifest.backup_id.clone(),
+        manifest_backup_id: manifest.backup_id.clone(),
+        journal_backup_id: journal.backup_id.clone(),
+        backup_id_matches,
+        journal_complete: journal_report.is_complete,
+        ready_for_verify,
+        manifest_members: manifest.fleet.members.len(),
+        journal_artifacts: journal.artifacts.len(),
+        matched_artifacts,
+        missing_journal_artifacts,
+        unexpected_journal_artifacts,
+        path_mismatches,
+        checksum_mismatches,
+    }
 }
 
 // Verify cross-file backup layout consistency and artifact checksums.
@@ -220,6 +380,14 @@ fn verify_layout_integrity(
         let Some(expected_hash) = entry.checksum.as_deref() else {
             unreachable!("validated durable journals must include checksums");
         };
+        if member.source_snapshot.artifact_path != entry.artifact_path {
+            return Err(PersistenceError::ManifestJournalArtifactPathMismatch {
+                canister_id: entry.canister_id.clone(),
+                snapshot_id: entry.snapshot_id.clone(),
+                manifest: member.source_snapshot.artifact_path.clone(),
+                journal: entry.artifact_path.clone(),
+            });
+        }
         if let Some(manifest_hash) = member.source_snapshot.checksum.as_deref()
             && manifest_hash != expected_hash
         {
@@ -254,6 +422,19 @@ fn verify_layout_integrity(
         durable_artifacts: artifacts.len(),
         artifacts,
     })
+}
+
+// Build the stable key used to compare manifest members with journal artifacts.
+fn artifact_key(canister_id: &str, snapshot_id: &str) -> (String, String) {
+    (canister_id.to_string(), snapshot_id.to_string())
+}
+
+// Convert one artifact key into the public report shape.
+fn artifact_reference(key: &(String, String)) -> ArtifactReference {
+    ArtifactReference {
+        canister_id: key.0.clone(),
+        snapshot_id: key.1.clone(),
+    }
 }
 
 // Resolve artifact paths from either absolute, cwd-relative, or layout-relative values.
@@ -380,6 +561,83 @@ mod tests {
         assert!(!manifest_path.exists());
     }
 
+    // Ensure inspection reports manifest and journal agreement without artifact IO.
+    #[test]
+    fn inspect_reports_ready_layout_metadata() {
+        let root = temp_dir("canic-backup-inspect-ready");
+        let layout = BackupLayout::new(root.clone());
+
+        layout
+            .write_manifest(&valid_manifest())
+            .expect("write manifest");
+        layout
+            .write_journal(&valid_journal())
+            .expect("write journal");
+
+        let report = layout.inspect().expect("inspect layout");
+
+        fs::remove_dir_all(root).expect("remove temp layout");
+        assert_eq!(report.backup_id, "fbk_test_001");
+        assert!(report.backup_id_matches);
+        assert!(report.journal_complete);
+        assert!(report.ready_for_verify);
+        assert_eq!(report.manifest_members, 1);
+        assert_eq!(report.journal_artifacts, 1);
+        assert_eq!(report.matched_artifacts, 1);
+        assert!(report.missing_journal_artifacts.is_empty());
+        assert!(report.unexpected_journal_artifacts.is_empty());
+        assert!(report.path_mismatches.is_empty());
+        assert!(report.checksum_mismatches.is_empty());
+    }
+
+    // Ensure inspection surfaces path and checksum drift before full verification.
+    #[test]
+    fn inspect_reports_manifest_journal_provenance_drift() {
+        let root = temp_dir("canic-backup-inspect-drift");
+        let layout = BackupLayout::new(root.clone());
+        let mut manifest = valid_manifest();
+        manifest.fleet.members[0].source_snapshot.artifact_path =
+            "artifacts/manifest-root".to_string();
+        manifest.fleet.members[0].source_snapshot.checksum = Some(HASH.to_string());
+        let mut journal = journal_with_checksum(
+            "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff".to_string(),
+        );
+        journal.artifacts[0].artifact_path = "artifacts/journal-root".to_string();
+
+        layout.write_manifest(&manifest).expect("write manifest");
+        layout.write_journal(&journal).expect("write journal");
+
+        let report = layout.inspect().expect("inspect layout");
+
+        fs::remove_dir_all(root).expect("remove temp layout");
+        assert!(!report.ready_for_verify);
+        assert_eq!(report.matched_artifacts, 1);
+        assert_eq!(report.path_mismatches.len(), 1);
+        assert_eq!(report.checksum_mismatches.len(), 1);
+    }
+
+    // Ensure inspection reports missing and unexpected artifact boundaries.
+    #[test]
+    fn inspect_reports_missing_and_unexpected_artifacts() {
+        let root = temp_dir("canic-backup-inspect-boundary");
+        let layout = BackupLayout::new(root.clone());
+        let mut journal = valid_journal();
+        journal.artifacts[0].snapshot_id = "other-snapshot".to_string();
+
+        layout
+            .write_manifest(&valid_manifest())
+            .expect("write manifest");
+        layout.write_journal(&journal).expect("write journal");
+
+        let report = layout.inspect().expect("inspect layout");
+
+        fs::remove_dir_all(root).expect("remove temp layout");
+        assert!(!report.ready_for_verify);
+        assert_eq!(report.matched_artifacts, 0);
+        assert_eq!(report.missing_journal_artifacts.len(), 1);
+        assert_eq!(report.unexpected_journal_artifacts.len(), 1);
+    }
+
     // Ensure layout integrity verifies manifest, journal, and artifact checksums.
     #[test]
     fn integrity_verifies_durable_artifacts() {
@@ -500,6 +758,32 @@ mod tests {
         ));
     }
 
+    // Ensure manifest and journal artifact paths cannot silently diverge.
+    #[test]
+    fn integrity_rejects_manifest_journal_artifact_path_mismatch() {
+        let root = temp_dir("canic-backup-integrity-manifest-path");
+        let layout = BackupLayout::new(root.clone());
+        let checksum = write_artifact(&root, b"root artifact");
+        let mut manifest = valid_manifest();
+        manifest.fleet.members[0].source_snapshot.artifact_path =
+            "artifacts/different-root".to_string();
+
+        layout.write_manifest(&manifest).expect("write manifest");
+        layout
+            .write_journal(&journal_with_checksum(checksum.hash))
+            .expect("write journal");
+
+        let err = layout
+            .verify_integrity()
+            .expect_err("manifest journal artifact path mismatch should fail");
+
+        fs::remove_dir_all(root).expect("remove temp layout");
+        assert!(matches!(
+            err,
+            PersistenceError::ManifestJournalArtifactPathMismatch { .. }
+        ));
+    }
+
     // Build one valid manifest for persistence tests.
     fn valid_manifest() -> FleetBackupManifest {
         FleetBackupManifest {
@@ -574,6 +858,8 @@ mod tests {
         DownloadJournal {
             journal_version: 1,
             backup_id: "fbk_test_001".to_string(),
+            discovery_topology_hash: Some(HASH.to_string()),
+            pre_snapshot_topology_hash: Some(HASH.to_string()),
             artifacts: vec![ArtifactJournalEntry {
                 canister_id: ROOT.to_string(),
                 snapshot_id: "snap-root".to_string(),
