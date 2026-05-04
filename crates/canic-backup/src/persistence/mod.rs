@@ -1,7 +1,7 @@
 use crate::{
     artifacts::{ArtifactChecksum, ArtifactChecksumError},
     journal::{ArtifactState, DownloadJournal},
-    manifest::{FleetBackupManifest, ManifestValidationError},
+    manifest::{BackupUnitKind, ConsistencyMode, FleetBackupManifest, ManifestValidationError},
 };
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use std::{
@@ -88,6 +88,87 @@ impl BackupLayout {
         let journal = self.read_journal()?;
         Ok(inspect_layout(&manifest, &journal))
     }
+
+    /// Build an audit-oriented provenance report without reading artifact bytes.
+    pub fn provenance(&self) -> Result<BackupProvenanceReport, PersistenceError> {
+        let manifest = self.read_manifest()?;
+        let journal = self.read_journal()?;
+        Ok(provenance_report(&manifest, &journal))
+    }
+}
+
+///
+/// BackupProvenanceReport
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct BackupProvenanceReport {
+    pub backup_id: String,
+    pub manifest_backup_id: String,
+    pub journal_backup_id: String,
+    pub backup_id_matches: bool,
+    pub manifest_version: u16,
+    pub journal_version: u16,
+    pub created_at: String,
+    pub tool_name: String,
+    pub tool_version: String,
+    pub source_environment: String,
+    pub source_root_canister: String,
+    pub topology_hash_algorithm: String,
+    pub topology_hash_input: String,
+    pub discovery_topology_hash: String,
+    pub pre_snapshot_topology_hash: String,
+    pub accepted_topology_hash: String,
+    pub journal_discovery_topology_hash: Option<String>,
+    pub journal_pre_snapshot_topology_hash: Option<String>,
+    pub topology_receipts_match: bool,
+    pub topology_receipt_mismatches: Vec<TopologyReceiptMismatch>,
+    pub backup_unit_count: usize,
+    pub member_count: usize,
+    pub consistency_mode: String,
+    pub backup_units: Vec<BackupUnitProvenance>,
+    pub members: Vec<MemberSnapshotProvenance>,
+}
+
+///
+/// BackupUnitProvenance
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct BackupUnitProvenance {
+    pub unit_id: String,
+    pub kind: String,
+    pub roles: Vec<String>,
+    pub consistency_reason: Option<String>,
+    pub dependency_closure: Vec<String>,
+    pub topology_validation: String,
+    pub quiescence_strategy: Option<String>,
+}
+
+///
+/// MemberSnapshotProvenance
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct MemberSnapshotProvenance {
+    pub canister_id: String,
+    pub role: String,
+    pub parent_canister_id: Option<String>,
+    pub subnet_canister_id: Option<String>,
+    pub identity_mode: String,
+    pub restore_group: u16,
+    pub verification_class: String,
+    pub verification_checks: usize,
+    pub snapshot_id: String,
+    pub module_hash: Option<String>,
+    pub wasm_hash: Option<String>,
+    pub code_version: Option<String>,
+    pub artifact_path: String,
+    pub checksum_algorithm: String,
+    pub manifest_checksum: Option<String>,
+    pub journal_state: Option<String>,
+    pub journal_checksum: Option<String>,
+    pub journal_updated_at: Option<String>,
 }
 
 ///
@@ -105,10 +186,22 @@ pub struct BackupInspectionReport {
     pub manifest_members: usize,
     pub journal_artifacts: usize,
     pub matched_artifacts: usize,
+    pub topology_receipt_mismatches: Vec<TopologyReceiptMismatch>,
     pub missing_journal_artifacts: Vec<ArtifactReference>,
     pub unexpected_journal_artifacts: Vec<ArtifactReference>,
     pub path_mismatches: Vec<ArtifactPathMismatch>,
     pub checksum_mismatches: Vec<ArtifactChecksumMismatch>,
+}
+
+///
+/// TopologyReceiptMismatch
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct TopologyReceiptMismatch {
+    pub field: String,
+    pub manifest: String,
+    pub journal: Option<String>,
 }
 
 ///
@@ -233,6 +326,13 @@ pub enum PersistenceError {
         journal: String,
     },
 
+    #[error("manifest topology receipt {field} does not match journal topology receipt")]
+    ManifestJournalTopologyReceiptMismatch {
+        field: String,
+        manifest: String,
+        journal: Option<String>,
+    },
+
     #[error("artifact path does not exist: {0}")]
     MissingArtifact(String),
 }
@@ -300,8 +400,11 @@ fn inspect_layout(
         .filter(|key| !manifest_artifacts.contains_key(*key))
         .map(artifact_reference)
         .collect::<Vec<_>>();
+    let topology_receipt_mismatches = topology_receipt_mismatches(manifest, journal);
+    let topology_receipts_match = topology_receipt_mismatches.is_empty();
     let backup_id_matches = manifest.backup_id == journal.backup_id;
     let ready_for_verify = backup_id_matches
+        && topology_receipts_match
         && journal_report.is_complete
         && missing_journal_artifacts.is_empty()
         && unexpected_journal_artifacts.is_empty()
@@ -318,10 +421,98 @@ fn inspect_layout(
         manifest_members: manifest.fleet.members.len(),
         journal_artifacts: journal.artifacts.len(),
         matched_artifacts,
+        topology_receipt_mismatches,
         missing_journal_artifacts,
         unexpected_journal_artifacts,
         path_mismatches,
         checksum_mismatches,
+    }
+}
+
+// Build an audit-friendly manifest and journal provenance projection.
+fn provenance_report(
+    manifest: &FleetBackupManifest,
+    journal: &DownloadJournal,
+) -> BackupProvenanceReport {
+    let journal_artifacts = journal
+        .artifacts
+        .iter()
+        .map(|entry| (artifact_key(&entry.canister_id, &entry.snapshot_id), entry))
+        .collect::<BTreeMap<_, _>>();
+    let topology_receipt_mismatches = topology_receipt_mismatches(manifest, journal);
+    let topology_receipts_match = topology_receipt_mismatches.is_empty();
+
+    BackupProvenanceReport {
+        backup_id: manifest.backup_id.clone(),
+        manifest_backup_id: manifest.backup_id.clone(),
+        journal_backup_id: journal.backup_id.clone(),
+        backup_id_matches: manifest.backup_id == journal.backup_id,
+        manifest_version: manifest.manifest_version,
+        journal_version: journal.journal_version,
+        created_at: manifest.created_at.clone(),
+        tool_name: manifest.tool.name.clone(),
+        tool_version: manifest.tool.version.clone(),
+        source_environment: manifest.source.environment.clone(),
+        source_root_canister: manifest.source.root_canister.clone(),
+        topology_hash_algorithm: manifest.fleet.topology_hash_algorithm.clone(),
+        topology_hash_input: manifest.fleet.topology_hash_input.clone(),
+        discovery_topology_hash: manifest.fleet.discovery_topology_hash.clone(),
+        pre_snapshot_topology_hash: manifest.fleet.pre_snapshot_topology_hash.clone(),
+        accepted_topology_hash: manifest.fleet.topology_hash.clone(),
+        journal_discovery_topology_hash: journal.discovery_topology_hash.clone(),
+        journal_pre_snapshot_topology_hash: journal.pre_snapshot_topology_hash.clone(),
+        topology_receipts_match,
+        topology_receipt_mismatches,
+        backup_unit_count: manifest.consistency.backup_units.len(),
+        member_count: manifest.fleet.members.len(),
+        consistency_mode: consistency_mode_name(&manifest.consistency.mode).to_string(),
+        backup_units: manifest
+            .consistency
+            .backup_units
+            .iter()
+            .map(|unit| BackupUnitProvenance {
+                unit_id: unit.unit_id.clone(),
+                kind: backup_unit_kind_name(&unit.kind).to_string(),
+                roles: unit.roles.clone(),
+                consistency_reason: unit.consistency_reason.clone(),
+                dependency_closure: unit.dependency_closure.clone(),
+                topology_validation: unit.topology_validation.clone(),
+                quiescence_strategy: unit.quiescence_strategy.clone(),
+            })
+            .collect(),
+        members: manifest
+            .fleet
+            .members
+            .iter()
+            .map(|member| {
+                let journal_entry = journal_artifacts.get(&artifact_key(
+                    &member.canister_id,
+                    &member.source_snapshot.snapshot_id,
+                ));
+
+                MemberSnapshotProvenance {
+                    canister_id: member.canister_id.clone(),
+                    role: member.role.clone(),
+                    parent_canister_id: member.parent_canister_id.clone(),
+                    subnet_canister_id: member.subnet_canister_id.clone(),
+                    identity_mode: identity_mode_name(&member.identity_mode).to_string(),
+                    restore_group: member.restore_group,
+                    verification_class: member.verification_class.clone(),
+                    verification_checks: member.verification_checks.len(),
+                    snapshot_id: member.source_snapshot.snapshot_id.clone(),
+                    module_hash: member.source_snapshot.module_hash.clone(),
+                    wasm_hash: member.source_snapshot.wasm_hash.clone(),
+                    code_version: member.source_snapshot.code_version.clone(),
+                    artifact_path: member.source_snapshot.artifact_path.clone(),
+                    checksum_algorithm: member.source_snapshot.checksum_algorithm.clone(),
+                    manifest_checksum: member.source_snapshot.checksum.clone(),
+                    journal_state: journal_entry
+                        .map(|entry| artifact_state_name(entry.state).to_string()),
+                    journal_checksum: journal_entry.and_then(|entry| entry.checksum.clone()),
+                    journal_updated_at: journal_entry.map(|entry| entry.updated_at.clone()),
+                }
+            })
+            .collect(),
     }
 }
 
@@ -335,6 +526,17 @@ fn verify_layout_integrity(
         return Err(PersistenceError::BackupIdMismatch {
             manifest: manifest.backup_id.clone(),
             journal: journal.backup_id.clone(),
+        });
+    }
+
+    if let Some(mismatch) = topology_receipt_mismatches(manifest, journal)
+        .into_iter()
+        .next()
+    {
+        return Err(PersistenceError::ManifestJournalTopologyReceiptMismatch {
+            field: mismatch.field,
+            manifest: mismatch.manifest,
+            journal: mismatch.journal,
         });
     }
 
@@ -434,6 +636,81 @@ fn artifact_reference(key: &(String, String)) -> ArtifactReference {
     ArtifactReference {
         canister_id: key.0.clone(),
         snapshot_id: key.1.clone(),
+    }
+}
+
+// Compare manifest and journal topology receipts for fail-closed verification.
+fn topology_receipt_mismatches(
+    manifest: &FleetBackupManifest,
+    journal: &DownloadJournal,
+) -> Vec<TopologyReceiptMismatch> {
+    let mut mismatches = Vec::new();
+    record_topology_receipt_mismatch(
+        &mut mismatches,
+        "discovery_topology_hash",
+        &manifest.fleet.discovery_topology_hash,
+        journal.discovery_topology_hash.as_deref(),
+    );
+    record_topology_receipt_mismatch(
+        &mut mismatches,
+        "pre_snapshot_topology_hash",
+        &manifest.fleet.pre_snapshot_topology_hash,
+        journal.pre_snapshot_topology_hash.as_deref(),
+    );
+    mismatches
+}
+
+// Record one manifest/journal topology receipt mismatch.
+fn record_topology_receipt_mismatch(
+    mismatches: &mut Vec<TopologyReceiptMismatch>,
+    field: &str,
+    manifest: &str,
+    journal: Option<&str>,
+) {
+    if journal == Some(manifest) {
+        return;
+    }
+
+    mismatches.push(TopologyReceiptMismatch {
+        field: field.to_string(),
+        manifest: manifest.to_string(),
+        journal: journal.map(ToString::to_string),
+    });
+}
+
+// Return the stable serialized name for a consistency mode.
+const fn consistency_mode_name(mode: &ConsistencyMode) -> &'static str {
+    match mode {
+        ConsistencyMode::CrashConsistent => "crash-consistent",
+        ConsistencyMode::QuiescedUnit => "quiesced-unit",
+    }
+}
+
+// Return the stable serialized name for a backup unit kind.
+const fn backup_unit_kind_name(kind: &BackupUnitKind) -> &'static str {
+    match kind {
+        BackupUnitKind::WholeFleet => "whole-fleet",
+        BackupUnitKind::ControlPlaneSubset => "control-plane-subset",
+        BackupUnitKind::SubtreeRooted => "subtree-rooted",
+        BackupUnitKind::Flat => "flat",
+    }
+}
+
+// Return the stable serialized name for an identity mode.
+const fn identity_mode_name(mode: &crate::manifest::IdentityMode) -> &'static str {
+    match mode {
+        crate::manifest::IdentityMode::Fixed => "fixed",
+        crate::manifest::IdentityMode::Relocatable => "relocatable",
+    }
+}
+
+// Return the stable serialized name for a journal artifact state.
+const fn artifact_state_name(state: ArtifactState) -> &'static str {
+    match state {
+        ArtifactState::Created => "Created",
+        ArtifactState::Downloaded => "Downloaded",
+        ArtifactState::ChecksumVerified => "ChecksumVerified",
+        ArtifactState::Durable => "Durable",
     }
 }
 
@@ -584,6 +861,7 @@ mod tests {
         assert_eq!(report.manifest_members, 1);
         assert_eq!(report.journal_artifacts, 1);
         assert_eq!(report.matched_artifacts, 1);
+        assert!(report.topology_receipt_mismatches.is_empty());
         assert!(report.missing_journal_artifacts.is_empty());
         assert!(report.unexpected_journal_artifacts.is_empty());
         assert!(report.path_mismatches.is_empty());
@@ -603,6 +881,8 @@ mod tests {
             "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff".to_string(),
         );
         journal.artifacts[0].artifact_path = "artifacts/journal-root".to_string();
+        journal.pre_snapshot_topology_hash =
+            Some("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff".to_string());
 
         layout.write_manifest(&manifest).expect("write manifest");
         layout.write_journal(&journal).expect("write journal");
@@ -612,6 +892,7 @@ mod tests {
         fs::remove_dir_all(root).expect("remove temp layout");
         assert!(!report.ready_for_verify);
         assert_eq!(report.matched_artifacts, 1);
+        assert_eq!(report.topology_receipt_mismatches.len(), 1);
         assert_eq!(report.path_mismatches.len(), 1);
         assert_eq!(report.checksum_mismatches.len(), 1);
     }
@@ -636,6 +917,47 @@ mod tests {
         assert_eq!(report.matched_artifacts, 0);
         assert_eq!(report.missing_journal_artifacts.len(), 1);
         assert_eq!(report.unexpected_journal_artifacts.len(), 1);
+    }
+
+    // Ensure provenance reports source, topology, unit, and snapshot metadata.
+    #[test]
+    fn provenance_reports_manifest_and_journal_receipts() {
+        let root = temp_dir("canic-backup-provenance");
+        let layout = BackupLayout::new(root.clone());
+
+        layout
+            .write_manifest(&valid_manifest())
+            .expect("write manifest");
+        layout
+            .write_journal(&valid_journal())
+            .expect("write journal");
+
+        let report = layout.provenance().expect("read provenance");
+
+        fs::remove_dir_all(root).expect("remove temp layout");
+        assert_eq!(report.backup_id, "fbk_test_001");
+        assert_eq!(report.manifest_backup_id, "fbk_test_001");
+        assert_eq!(report.journal_backup_id, "fbk_test_001");
+        assert!(report.backup_id_matches);
+        assert_eq!(report.source_environment, "local");
+        assert_eq!(report.source_root_canister, ROOT);
+        assert_eq!(report.discovery_topology_hash, HASH);
+        assert_eq!(
+            report.journal_discovery_topology_hash,
+            Some(HASH.to_string())
+        );
+        assert!(report.topology_receipts_match);
+        assert!(report.topology_receipt_mismatches.is_empty());
+        assert_eq!(report.backup_unit_count, 1);
+        assert_eq!(report.member_count, 1);
+        assert_eq!(report.consistency_mode, "crash-consistent");
+        assert_eq!(report.backup_units[0].kind, "whole-fleet");
+        assert_eq!(report.members[0].canister_id, ROOT);
+        assert_eq!(report.members[0].identity_mode, "fixed");
+        assert_eq!(report.members[0].module_hash, Some(HASH.to_string()));
+        assert_eq!(report.members[0].wasm_hash, Some(HASH.to_string()));
+        assert_eq!(report.members[0].journal_state, Some("Durable".to_string()));
+        assert_eq!(report.members[0].journal_checksum, Some(HASH.to_string()));
     }
 
     // Ensure layout integrity verifies manifest, journal, and artifact checksums.
@@ -681,6 +1003,32 @@ mod tests {
 
         fs::remove_dir_all(root).expect("remove temp layout");
         assert!(matches!(err, PersistenceError::BackupIdMismatch { .. }));
+    }
+
+    // Ensure manifest and journal topology receipts cannot silently diverge.
+    #[test]
+    fn integrity_rejects_manifest_journal_topology_receipt_mismatch() {
+        let root = temp_dir("canic-backup-integrity-topology");
+        let layout = BackupLayout::new(root.clone());
+        let checksum = write_artifact(&root, b"root artifact");
+        let mut journal = journal_with_checksum(checksum.hash);
+        journal.discovery_topology_hash =
+            Some("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff".to_string());
+
+        layout
+            .write_manifest(&valid_manifest())
+            .expect("write manifest");
+        layout.write_journal(&journal).expect("write journal");
+
+        let err = layout
+            .verify_integrity()
+            .expect_err("topology receipt mismatch should fail");
+
+        fs::remove_dir_all(root).expect("remove temp layout");
+        assert!(matches!(
+            err,
+            PersistenceError::ManifestJournalTopologyReceiptMismatch { .. }
+        ));
     }
 
     // Ensure incomplete journals cannot pass backup integrity verification.

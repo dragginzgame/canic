@@ -1,7 +1,10 @@
 use canic_backup::{
     journal::JournalResumeReport,
     manifest::FleetBackupManifest,
-    persistence::{BackupInspectionReport, BackupIntegrityReport, BackupLayout, PersistenceError},
+    persistence::{
+        BackupInspectionReport, BackupIntegrityReport, BackupLayout, BackupProvenanceReport,
+        PersistenceError,
+    },
     restore::{RestoreMapping, RestorePlanError, RestorePlanner},
 };
 use serde_json::json;
@@ -41,16 +44,28 @@ pub enum BackupCommandError {
     },
 
     #[error(
-        "backup inspection {backup_id} is not ready for verification: backup_id_matches={backup_id_matches}, journal_complete={journal_complete}, missing={missing_artifacts}, unexpected={unexpected_artifacts}, path_mismatches={path_mismatches}, checksum_mismatches={checksum_mismatches}"
+        "backup inspection {backup_id} is not ready for verification: backup_id_matches={backup_id_matches}, topology_receipts_match={topology_receipts_match}, journal_complete={journal_complete}, topology_mismatches={topology_mismatches}, missing={missing_artifacts}, unexpected={unexpected_artifacts}, path_mismatches={path_mismatches}, checksum_mismatches={checksum_mismatches}"
     )]
     InspectionNotReady {
         backup_id: String,
         backup_id_matches: bool,
+        topology_receipts_match: bool,
         journal_complete: bool,
+        topology_mismatches: usize,
         missing_artifacts: usize,
         unexpected_artifacts: usize,
         path_mismatches: usize,
         checksum_mismatches: usize,
+    },
+
+    #[error(
+        "backup provenance {backup_id} is not consistent: backup_id_matches={backup_id_matches}, topology_receipts_match={topology_receipts_match}, topology_mismatches={topology_mismatches}"
+    )]
+    ProvenanceNotConsistent {
+        backup_id: String,
+        backup_id_matches: bool,
+        topology_receipts_match: bool,
+        topology_mismatches: usize,
     },
 
     #[error(transparent)]
@@ -123,12 +138,19 @@ pub struct BackupPreflightReport {
     pub topology_hash: String,
     pub mapping_path: Option<String>,
     pub journal_complete: bool,
+    pub inspection_status: String,
+    pub provenance_status: String,
+    pub backup_id_status: String,
+    pub topology_receipts_status: String,
+    pub topology_mismatch_count: usize,
     pub integrity_verified: bool,
     pub manifest_members: usize,
+    pub backup_unit_count: usize,
     pub restore_plan_members: usize,
     pub manifest_validation_path: String,
     pub backup_status_path: String,
     pub backup_inspection_path: String,
+    pub backup_provenance_path: String,
     pub backup_integrity_path: String,
     pub restore_plan_path: String,
     pub preflight_summary_path: String,
@@ -173,6 +195,49 @@ impl BackupInspectOptions {
             dir: dir.ok_or(BackupCommandError::MissingOption("--dir"))?,
             out,
             require_ready,
+        })
+    }
+}
+
+///
+/// BackupProvenanceOptions
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct BackupProvenanceOptions {
+    pub dir: PathBuf,
+    pub out: Option<PathBuf>,
+    pub require_consistent: bool,
+}
+
+impl BackupProvenanceOptions {
+    /// Parse backup provenance options from CLI arguments.
+    pub fn parse<I>(args: I) -> Result<Self, BackupCommandError>
+    where
+        I: IntoIterator<Item = OsString>,
+    {
+        let mut dir = None;
+        let mut out = None;
+        let mut require_consistent = false;
+
+        let mut args = args.into_iter();
+        while let Some(arg) = args.next() {
+            let arg = arg
+                .into_string()
+                .map_err(|_| BackupCommandError::Usage(usage()))?;
+            match arg.as_str() {
+                "--dir" => dir = Some(PathBuf::from(next_value(&mut args, "--dir")?)),
+                "--out" => out = Some(PathBuf::from(next_value(&mut args, "--out")?)),
+                "--require-consistent" => require_consistent = true,
+                "--help" | "-h" => return Err(BackupCommandError::Usage(usage())),
+                _ => return Err(BackupCommandError::UnknownOption(arg)),
+            }
+        }
+
+        Ok(Self {
+            dir: dir.ok_or(BackupCommandError::MissingOption("--dir"))?,
+            out,
+            require_consistent,
         })
     }
 }
@@ -282,6 +347,13 @@ where
             enforce_inspection_requirements(&options, &report)?;
             Ok(())
         }
+        "provenance" => {
+            let options = BackupProvenanceOptions::parse(args)?;
+            let report = backup_provenance(&options)?;
+            write_provenance_report(&options, &report)?;
+            enforce_provenance_requirements(&options, &report)?;
+            Ok(())
+        }
         "status" => {
             let options = BackupStatusOptions::parse(args)?;
             let report = backup_status(&options)?;
@@ -311,6 +383,7 @@ pub fn backup_preflight(
     let status = layout.read_journal()?.resume_report();
     ensure_complete_status(&status)?;
     let inspection = layout.inspect()?;
+    let provenance = layout.provenance()?;
     let integrity = layout.verify_integrity()?;
     let mapping = options.mapping.as_ref().map(read_mapping).transpose()?;
     let restore_plan = RestorePlanner::plan(&manifest, mapping.as_ref())?;
@@ -318,6 +391,7 @@ pub fn backup_preflight(
     let manifest_validation_path = options.out_dir.join("manifest-validation.json");
     let backup_status_path = options.out_dir.join("backup-status.json");
     let backup_inspection_path = options.out_dir.join("backup-inspection.json");
+    let backup_provenance_path = options.out_dir.join("backup-provenance.json");
     let backup_integrity_path = options.out_dir.join("backup-integrity.json");
     let restore_plan_path = options.out_dir.join("restore-plan.json");
     let preflight_summary_path = options.out_dir.join("preflight-summary.json");
@@ -330,6 +404,10 @@ pub fn backup_preflight(
     fs::write(
         &backup_inspection_path,
         serde_json::to_vec_pretty(&inspection)?,
+    )?;
+    fs::write(
+        &backup_provenance_path,
+        serde_json::to_vec_pretty(&provenance)?,
     )?;
     fs::write(
         &backup_integrity_path,
@@ -352,12 +430,22 @@ pub fn backup_preflight(
             .as_ref()
             .map(|path| path.display().to_string()),
         journal_complete: status.is_complete,
+        inspection_status: readiness_status(inspection.ready_for_verify).to_string(),
+        provenance_status: consistency_status(
+            provenance.backup_id_matches && provenance.topology_receipts_match,
+        )
+        .to_string(),
+        backup_id_status: match_status(provenance.backup_id_matches).to_string(),
+        topology_receipts_status: match_status(provenance.topology_receipts_match).to_string(),
+        topology_mismatch_count: provenance.topology_receipt_mismatches.len(),
         integrity_verified: integrity.verified,
         manifest_members: manifest.fleet.members.len(),
+        backup_unit_count: provenance.backup_unit_count,
         restore_plan_members: restore_plan.member_count,
         manifest_validation_path: manifest_validation_path.display().to_string(),
         backup_status_path: backup_status_path.display().to_string(),
         backup_inspection_path: backup_inspection_path.display().to_string(),
+        backup_provenance_path: backup_provenance_path.display().to_string(),
         backup_integrity_path: backup_integrity_path.display().to_string(),
         restore_plan_path: restore_plan_path.display().to_string(),
         preflight_summary_path: preflight_summary_path.display().to_string(),
@@ -375,6 +463,31 @@ pub fn inspect_backup(
     layout.inspect().map_err(BackupCommandError::from)
 }
 
+/// Report manifest and journal provenance without reading artifact bytes.
+pub fn backup_provenance(
+    options: &BackupProvenanceOptions,
+) -> Result<BackupProvenanceReport, BackupCommandError> {
+    let layout = BackupLayout::new(options.dir.clone());
+    layout.provenance().map_err(BackupCommandError::from)
+}
+
+// Ensure provenance is internally consistent when requested by scripts.
+fn enforce_provenance_requirements(
+    options: &BackupProvenanceOptions,
+    report: &BackupProvenanceReport,
+) -> Result<(), BackupCommandError> {
+    if !options.require_consistent || (report.backup_id_matches && report.topology_receipts_match) {
+        return Ok(());
+    }
+
+    Err(BackupCommandError::ProvenanceNotConsistent {
+        backup_id: report.backup_id.clone(),
+        backup_id_matches: report.backup_id_matches,
+        topology_receipts_match: report.topology_receipts_match,
+        topology_mismatches: report.topology_receipt_mismatches.len(),
+    })
+}
+
 // Ensure an inspection report is ready for full verification when requested.
 fn enforce_inspection_requirements(
     options: &BackupInspectOptions,
@@ -387,7 +500,9 @@ fn enforce_inspection_requirements(
     Err(BackupCommandError::InspectionNotReady {
         backup_id: report.backup_id.clone(),
         backup_id_matches: report.backup_id_matches,
+        topology_receipts_match: report.topology_receipt_mismatches.is_empty(),
         journal_complete: report.journal_complete,
+        topology_mismatches: report.topology_receipt_mismatches.len(),
         missing_artifacts: report.missing_journal_artifacts.len(),
         unexpected_artifacts: report.unexpected_journal_artifacts.len(),
         path_mismatches: report.path_mismatches.len(),
@@ -473,6 +588,24 @@ fn write_inspect_report(
     Ok(())
 }
 
+// Write the provenance report to stdout or a requested output file.
+fn write_provenance_report(
+    options: &BackupProvenanceOptions,
+    report: &BackupProvenanceReport,
+) -> Result<(), BackupCommandError> {
+    if let Some(path) = &options.out {
+        let data = serde_json::to_vec_pretty(report)?;
+        fs::write(path, data)?;
+        return Ok(());
+    }
+
+    let stdout = io::stdout();
+    let mut handle = stdout.lock();
+    serde_json::to_writer_pretty(&mut handle, report)?;
+    writeln!(handle)?;
+    Ok(())
+}
+
 // Write the integrity report to stdout or a requested output file.
 fn write_report(
     options: &BackupVerifyOptions,
@@ -516,12 +649,19 @@ fn preflight_summary_value(report: &BackupPreflightReport) -> serde_json::Value 
         "topology_hash": report.topology_hash,
         "mapping_path": report.mapping_path,
         "journal_complete": report.journal_complete,
+        "inspection_status": report.inspection_status,
+        "provenance_status": report.provenance_status,
+        "backup_id_status": report.backup_id_status,
+        "topology_receipts_status": report.topology_receipts_status,
+        "topology_mismatch_count": report.topology_mismatch_count,
         "integrity_verified": report.integrity_verified,
         "manifest_members": report.manifest_members,
+        "backup_unit_count": report.backup_unit_count,
         "restore_plan_members": report.restore_plan_members,
         "manifest_validation_path": report.manifest_validation_path,
         "backup_status_path": report.backup_status_path,
         "backup_inspection_path": report.backup_inspection_path,
+        "backup_provenance_path": report.backup_provenance_path,
         "backup_integrity_path": report.backup_integrity_path,
         "restore_plan_path": report.restore_plan_path,
         "preflight_summary_path": report.preflight_summary_path,
@@ -536,6 +676,25 @@ fn manifest_validation_summary(manifest: &FleetBackupManifest) -> serde_json::Va
         "members": manifest.fleet.members.len(),
         "topology_hash": manifest.fleet.topology_hash,
     })
+}
+
+// Return the stable summary status for inspection readiness.
+const fn readiness_status(ready: bool) -> &'static str {
+    if ready { "ready" } else { "not-ready" }
+}
+
+// Return the stable summary status for provenance consistency.
+const fn consistency_status(consistent: bool) -> &'static str {
+    if consistent {
+        "consistent"
+    } else {
+        "inconsistent"
+    }
+}
+
+// Return the stable summary status for equality checks.
+const fn match_status(matches: bool) -> &'static str {
+    if matches { "matched" } else { "mismatched" }
 }
 
 // Read and decode an optional source-to-target restore mapping from disk.
@@ -556,7 +715,7 @@ where
 
 // Return backup command usage text.
 const fn usage() -> &'static str {
-    "usage: canic backup preflight --dir <backup-dir> --out-dir <dir> [--mapping <file>]\n       canic backup inspect --dir <backup-dir> [--out <file>] [--require-ready]\n       canic backup status --dir <backup-dir> [--out <file>] [--require-complete]\n       canic backup verify --dir <backup-dir> [--out <file>]"
+    "usage: canic backup preflight --dir <backup-dir> --out-dir <dir> [--mapping <file>]\n       canic backup inspect --dir <backup-dir> [--out <file>] [--require-ready]\n       canic backup provenance --dir <backup-dir> [--out <file>] [--require-consistent]\n       canic backup status --dir <backup-dir> [--out <file>] [--require-complete]\n       canic backup verify --dir <backup-dir> [--out <file>]"
 }
 
 #[cfg(test)]
@@ -628,12 +787,19 @@ mod tests {
         assert_eq!(report.topology_hash, HASH);
         assert_eq!(report.mapping_path, None);
         assert!(report.journal_complete);
+        assert_eq!(report.inspection_status, "ready");
+        assert_eq!(report.provenance_status, "consistent");
+        assert_eq!(report.backup_id_status, "matched");
+        assert_eq!(report.topology_receipts_status, "matched");
+        assert_eq!(report.topology_mismatch_count, 0);
         assert!(report.integrity_verified);
         assert_eq!(report.manifest_members, 1);
+        assert_eq!(report.backup_unit_count, 1);
         assert_eq!(report.restore_plan_members, 1);
         assert!(out_dir.join("manifest-validation.json").exists());
         assert!(out_dir.join("backup-status.json").exists());
         assert!(out_dir.join("backup-inspection.json").exists());
+        assert!(out_dir.join("backup-provenance.json").exists());
         assert!(out_dir.join("backup-integrity.json").exists());
         assert!(out_dir.join("restore-plan.json").exists());
         assert!(out_dir.join("preflight-summary.json").exists());
@@ -650,12 +816,28 @@ mod tests {
         assert_eq!(summary["source_root_canister"], report.source_root_canister);
         assert_eq!(summary["topology_hash"], report.topology_hash);
         assert_eq!(summary["journal_complete"], report.journal_complete);
+        assert_eq!(summary["inspection_status"], report.inspection_status);
+        assert_eq!(summary["provenance_status"], report.provenance_status);
+        assert_eq!(summary["backup_id_status"], report.backup_id_status);
+        assert_eq!(
+            summary["topology_receipts_status"],
+            report.topology_receipts_status
+        );
+        assert_eq!(
+            summary["topology_mismatch_count"],
+            report.topology_mismatch_count
+        );
         assert_eq!(summary["integrity_verified"], report.integrity_verified);
         assert_eq!(summary["manifest_members"], report.manifest_members);
+        assert_eq!(summary["backup_unit_count"], report.backup_unit_count);
         assert_eq!(summary["restore_plan_members"], report.restore_plan_members);
         assert_eq!(
             summary["backup_inspection_path"],
             report.backup_inspection_path
+        );
+        assert_eq!(
+            summary["backup_provenance_path"],
+            report.backup_provenance_path
         );
     }
 
@@ -725,6 +907,23 @@ mod tests {
         assert!(options.require_ready);
     }
 
+    // Ensure backup provenance options parse the intended command shape.
+    #[test]
+    fn parses_backup_provenance_options() {
+        let options = BackupProvenanceOptions::parse([
+            OsString::from("--dir"),
+            OsString::from("backups/run"),
+            OsString::from("--out"),
+            OsString::from("provenance.json"),
+            OsString::from("--require-consistent"),
+        ])
+        .expect("parse options");
+
+        assert_eq!(options.dir, PathBuf::from("backups/run"));
+        assert_eq!(options.out, Some(PathBuf::from("provenance.json")));
+        assert!(options.require_consistent);
+    }
+
     // Ensure backup status options parse the intended command shape.
     #[test]
     fn parses_backup_status_options() {
@@ -791,7 +990,91 @@ mod tests {
         assert!(report.backup_id_matches);
         assert!(report.journal_complete);
         assert!(report.ready_for_verify);
+        assert!(report.topology_receipt_mismatches.is_empty());
         assert_eq!(report.matched_artifacts, 1);
+    }
+
+    // Ensure backup provenance reports manifest and journal audit metadata.
+    #[test]
+    fn backup_provenance_reads_layout_metadata() {
+        let root = temp_dir("canic-cli-backup-provenance");
+        let layout = BackupLayout::new(root.clone());
+
+        layout
+            .write_manifest(&valid_manifest())
+            .expect("write manifest");
+        layout
+            .write_journal(&journal_with_checksum(HASH.to_string()))
+            .expect("write journal");
+
+        let options = BackupProvenanceOptions {
+            dir: root.clone(),
+            out: None,
+            require_consistent: false,
+        };
+        let report = backup_provenance(&options).expect("read provenance");
+
+        fs::remove_dir_all(root).expect("remove temp root");
+        assert_eq!(report.backup_id, "backup-test");
+        assert!(report.backup_id_matches);
+        assert_eq!(report.source_environment, "local");
+        assert_eq!(report.discovery_topology_hash, HASH);
+        assert!(report.topology_receipts_match);
+        assert!(report.topology_receipt_mismatches.is_empty());
+        assert_eq!(report.backup_unit_count, 1);
+        assert_eq!(report.member_count, 1);
+        assert_eq!(report.backup_units[0].kind, "subtree-rooted");
+        assert_eq!(report.members[0].canister_id, ROOT);
+        assert_eq!(report.members[0].snapshot_id, "root-snapshot");
+        assert_eq!(report.members[0].journal_state, Some("Durable".to_string()));
+    }
+
+    // Ensure require-consistent accepts matching provenance reports.
+    #[test]
+    fn require_consistent_accepts_matching_provenance() {
+        let options = BackupProvenanceOptions {
+            dir: PathBuf::from("unused"),
+            out: None,
+            require_consistent: true,
+        };
+        let report = ready_provenance_report();
+
+        enforce_provenance_requirements(&options, &report)
+            .expect("matching provenance should pass");
+    }
+
+    // Ensure require-consistent rejects backup ID or topology receipt drift.
+    #[test]
+    fn require_consistent_rejects_provenance_drift() {
+        let options = BackupProvenanceOptions {
+            dir: PathBuf::from("unused"),
+            out: None,
+            require_consistent: true,
+        };
+        let mut report = ready_provenance_report();
+        report.backup_id_matches = false;
+        report.journal_backup_id = "other-backup".to_string();
+        report.topology_receipts_match = false;
+        report.topology_receipt_mismatches.push(
+            canic_backup::persistence::TopologyReceiptMismatch {
+                field: "pre_snapshot_topology_hash".to_string(),
+                manifest: HASH.to_string(),
+                journal: None,
+            },
+        );
+
+        let err = enforce_provenance_requirements(&options, &report)
+            .expect_err("provenance drift should fail");
+
+        assert!(matches!(
+            err,
+            BackupCommandError::ProvenanceNotConsistent {
+                backup_id_matches: false,
+                topology_receipts_match: false,
+                topology_mismatches: 1,
+                ..
+            }
+        ));
     }
 
     // Ensure require-ready accepts inspection reports ready for verification.
@@ -833,6 +1116,37 @@ mod tests {
             err,
             BackupCommandError::InspectionNotReady {
                 path_mismatches: 1,
+                ..
+            }
+        ));
+    }
+
+    // Ensure require-ready rejects topology receipt drift.
+    #[test]
+    fn require_ready_rejects_topology_receipt_drift() {
+        let options = BackupInspectOptions {
+            dir: PathBuf::from("unused"),
+            out: None,
+            require_ready: true,
+        };
+        let mut report = ready_inspection_report();
+        report.ready_for_verify = false;
+        report.topology_receipt_mismatches.push(
+            canic_backup::persistence::TopologyReceiptMismatch {
+                field: "discovery_topology_hash".to_string(),
+                manifest: HASH.to_string(),
+                journal: None,
+            },
+        );
+
+        let err = enforce_inspection_requirements(&options, &report)
+            .expect_err("topology receipt drift should fail");
+
+        assert!(matches!(
+            err,
+            BackupCommandError::InspectionNotReady {
+                topology_receipts_match: false,
+                topology_mismatches: 1,
                 ..
             }
         ));
@@ -1019,10 +1333,42 @@ mod tests {
             manifest_members: 1,
             journal_artifacts: 1,
             matched_artifacts: 1,
+            topology_receipt_mismatches: Vec::new(),
             missing_journal_artifacts: Vec::new(),
             unexpected_journal_artifacts: Vec::new(),
             path_mismatches: Vec::new(),
             checksum_mismatches: Vec::new(),
+        }
+    }
+
+    // Build one matching provenance report for requirement tests.
+    fn ready_provenance_report() -> BackupProvenanceReport {
+        BackupProvenanceReport {
+            backup_id: "backup-test".to_string(),
+            manifest_backup_id: "backup-test".to_string(),
+            journal_backup_id: "backup-test".to_string(),
+            backup_id_matches: true,
+            manifest_version: 1,
+            journal_version: 1,
+            created_at: "2026-05-03T00:00:00Z".to_string(),
+            tool_name: "canic".to_string(),
+            tool_version: "0.30.12".to_string(),
+            source_environment: "local".to_string(),
+            source_root_canister: ROOT.to_string(),
+            topology_hash_algorithm: "sha256".to_string(),
+            topology_hash_input: "sorted(pid,parent_pid,role,module_hash)".to_string(),
+            discovery_topology_hash: HASH.to_string(),
+            pre_snapshot_topology_hash: HASH.to_string(),
+            accepted_topology_hash: HASH.to_string(),
+            journal_discovery_topology_hash: Some(HASH.to_string()),
+            journal_pre_snapshot_topology_hash: Some(HASH.to_string()),
+            topology_receipts_match: true,
+            topology_receipt_mismatches: Vec::new(),
+            backup_unit_count: 1,
+            member_count: 1,
+            consistency_mode: "crash-consistent".to_string(),
+            backup_units: Vec::new(),
+            members: Vec::new(),
         }
     }
 

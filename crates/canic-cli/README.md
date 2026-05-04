@@ -59,7 +59,22 @@ canic backup inspect \
 ```
 
 `--require-ready` still writes the JSON inspection report, then exits with an
-error when manifest and journal metadata are not ready for full verification.
+error when manifest and journal metadata, including topology receipts, are not
+ready for full verification.
+
+Emit a provenance report for audit/review workflows:
+
+```bash
+canic backup provenance \
+  --dir backups/<run-id> \
+  --out backup-provenance.json \
+  --require-consistent
+```
+
+The report records source/tool metadata, topology receipts, declared backup
+units, and each member's snapshot/code/artifact provenance without reading
+artifact bytes. `--require-consistent` still writes the JSON report, then exits
+with an error when manifest and journal backup IDs or topology receipts drift.
 
 Verify the backup layout and durable artifact checksums:
 
@@ -79,10 +94,11 @@ canic backup preflight \
 ```
 
 Preflight writes `manifest-validation.json`, `backup-status.json`,
-`backup-inspection.json`, `backup-integrity.json`, `restore-plan.json`, and
-`preflight-summary.json`.
+`backup-inspection.json`, `backup-provenance.json`, `backup-integrity.json`,
+`restore-plan.json`, and `preflight-summary.json`.
 The summary records the backup ID, source root, environment, topology hash,
-readiness flags, member counts, and paths to the generated reports.
+readiness statuses, provenance consistency status, topology mismatch count,
+member counts, and paths to the generated reports.
 
 Restore planning is manifest-driven and performs no mutations:
 
