@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.30.x] - 2026-05-03 - Fleet Snapshot Backups
 
+- `0.30.29` centralizes native restore-runner state strings without changing JSON output, and adds generated ingress payload limits for `canic_update` endpoints with explicit per-endpoint opt-ups.
+
+```rust
+#[canic_update(payload(max_bytes = 32 * 1024))]
+fn import(payload: String) -> Result<usize, Error> {
+    Ok(payload.len())
+}
+```
+
 - `0.30.28` starts runner cleanup by moving `canic restore run` summaries onto typed response structs, adds explicit runner-mode/state/action/count gates for automation, and turns the restore apply script into a mode-aware native-runner wrapper.
 
 ```bash
@@ -45,37 +54,6 @@ canic restore apply-status \
   --require-no-failed
 ```
 
-```bash
-canic restore apply-command \
-  --journal restore-apply-journal.json \
-  --network local \
-  --out restore-apply-command.json \
-  --require-command
-```
-
-```bash
-canic restore apply-claim \
-  --journal restore-apply-journal.json \
-  --sequence 0 \
-  --out restore-apply-journal.json
-```
-
-```bash
-canic restore apply-unclaim \
-  --journal restore-apply-journal.json \
-  --sequence 0 \
-  --out restore-apply-journal.json
-```
-
-```bash
-canic restore apply-mark \
-  --journal restore-apply-journal.json \
-  --sequence 0 \
-  --state completed \
-  --out restore-apply-journal.json \
-  --require-pending
-```
-
 - `0.30.24` adds `canic restore apply-claim` and `canic restore apply-unclaim`, keeping pending operations as the next resumable restore step so external runners can claim work before executing `dfx` commands and recover cleanly after interruption.
 
 ```bash
@@ -85,20 +63,6 @@ canic restore apply-status \
   --require-no-pending \
   --require-no-failed \
   --require-complete
-```
-
-```bash
-canic restore apply-claim \
-  --journal restore-apply-journal.json \
-  --updated-at 2026-05-04T12:00:00Z \
-  --out restore-apply-journal.json
-```
-
-```bash
-canic restore apply-unclaim \
-  --journal restore-apply-journal.json \
-  --updated-at 2026-05-04T12:01:00Z \
-  --out restore-apply-journal.json
 ```
 
 - `0.30.23` makes restore apply journal advancement ordered, adds `canic restore apply-command`, and exposes `ManagementCall` metrics so external runners cannot skip ahead and operators can see which management-canister operation is failing.
@@ -118,14 +82,6 @@ canic restore apply-next \
   --out restore-apply-next.json
 ```
 
-```bash
-canic restore apply-mark \
-  --journal restore-apply-journal.json \
-  --sequence 0 \
-  --state completed \
-  --out restore-apply-journal.json
-```
-
 - `0.30.21` adds an initial restore apply journal and `canic restore apply-status` so dry-runs can emit and summarize operation states before any mutating restore execution is enabled, and adds first-class `Provisioning` metrics for create, install, propagation, and upgrade workflow visibility.
 
 ```bash
@@ -138,11 +94,6 @@ canic restore apply \
   --journal-out restore-apply-journal.json
 ```
 
-```bash
-canic restore apply-status \
-  --journal restore-apply-journal.json \
-  --out restore-apply-status.json
-```
 
 - `0.30.20` lets `canic restore apply --dry-run` validate restore artifacts under a backup directory before any future restore execution path can rely on the plan, and adds first-class `Intent` and `PlatformCall` metrics for reservation and platform-call visibility.
 

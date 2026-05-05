@@ -17,7 +17,8 @@
 ///
 pub use candid;
 pub use ic_cdk::{
-    api, call, eprintln, export_candid, futures, init, post_upgrade, println, query, trap, update,
+    api, call, eprintln, export_candid, futures, init, inspect_message, post_upgrade, println,
+    query, trap, update,
 };
 pub use ic_cdk_management_canister as mgmt;
 pub use ic_cdk_timers as timers;

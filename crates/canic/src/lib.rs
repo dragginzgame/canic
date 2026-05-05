@@ -59,3 +59,5 @@ pub use canic_macros::{canic_query, canic_update};
 pub const CRATE_NAME: &str = env!("CARGO_PKG_NAME");
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 pub const CANIC_WASM_CHUNK_BYTES: usize = canic_core::CANIC_WASM_CHUNK_BYTES;
+pub const CANIC_DEFAULT_UPDATE_INGRESS_MAX_BYTES: usize =
+    canic_core::ingress::payload::DEFAULT_UPDATE_INGRESS_MAX_BYTES;

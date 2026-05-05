@@ -218,6 +218,18 @@ macro_rules! __canic_start_root_capability_bundles {
     };
 }
 
+// Ingress inspect-message hook shared by Canic-managed canisters.
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __canic_start_ingress_payload_inspect {
+    () => {
+        #[::canic::cdk::inspect_message]
+        fn canic_inspect_message() {
+            $crate::__internal::core::ingress::payload::inspect_update_message();
+        }
+    };
+}
+
 /// Configure lifecycle hooks for **non-root** Canic canisters.
 ///
 /// This macro defines the IC-required `init` and `post_upgrade` entry points
@@ -236,6 +248,7 @@ macro_rules! __canic_start_root_capability_bundles {
 macro_rules! start {
     ($canister_role:expr $(, init = $init:block)? $(,)?) => {
         $crate::__canic_start_nonroot_lifecycle_core!($canister_role $(, $init)?);
+        $crate::__canic_start_ingress_payload_inspect!();
         $crate::__canic_start_nonroot_capability_bundles!();
     };
 }
@@ -255,6 +268,7 @@ macro_rules! start {
 macro_rules! start_root {
     ($(init = $init:block)? $(,)?) => {
         $crate::__canic_start_root_lifecycle_core!($($init)?);
+        $crate::__canic_start_ingress_payload_inspect!();
         $crate::__canic_start_root_capability_bundles!();
     };
 }
@@ -284,6 +298,7 @@ macro_rules! start_wasm_store {
             $crate::api::canister::CanisterRole::WASM_STORE
             $(, $init)?
         );
+        $crate::__canic_start_ingress_payload_inspect!();
         $crate::canic_bundle_wasm_store_runtime_endpoints!();
     };
 }

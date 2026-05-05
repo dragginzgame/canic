@@ -91,6 +91,7 @@ pub fn expand(kind: EndpointKind, args: ValidatedArgs, mut func: ItemFn) -> Toke
     }
 
     let cdk_attr = cdk_attr(kind, &args.forwarded);
+    let payload_registration = payload_registration(kind, &args, &orig_name);
     let dispatch_fn = dispatch(kind, wrapper_async);
 
     let wrapper_sig = syn::Signature {
@@ -125,6 +126,8 @@ pub fn expand(kind: EndpointKind, args: ValidatedArgs, mut func: ItemFn) -> Toke
     );
 
     quote! {
+        #payload_registration
+
         #(#attrs)*
         #cdk_attr
         #vis #wrapper_sig {
@@ -171,6 +174,47 @@ fn dispatch(kind: EndpointKind, asyncness: bool) -> TokenStream2 {
         (EndpointKind::Update, true) => {
             quote!(::canic::__internal::core::dispatch::dispatch_update_async)
         }
+    }
+}
+
+fn payload_registration(
+    kind: EndpointKind,
+    args: &ValidatedArgs,
+    name: &syn::Ident,
+) -> TokenStream2 {
+    if !matches!(kind, EndpointKind::Update) {
+        return quote!();
+    }
+
+    let register_name = format_ident!("__canic_register_payload_limit_{}", name);
+    let ctor_name = format_ident!("__canic_ctor_payload_limit_{}", name);
+    let method_name = if let Some(name) = &args.export_name {
+        quote!(#name)
+    } else {
+        quote!(stringify!(#name))
+    };
+    let max_bytes = args.payload_max_bytes.clone().unwrap_or_else(|| {
+        quote!(::canic::__internal::core::ingress::payload::DEFAULT_UPDATE_INGRESS_MAX_BYTES)
+    });
+
+    quote! {
+        const _: () = {
+            fn #register_name() {
+                ::canic::__internal::core::ingress::payload::register_update_limit(
+                    #method_name,
+                    #max_bytes,
+                );
+            }
+
+            #[ ::canic::__internal::core::__reexports::ctor::ctor(
+                unsafe,
+                anonymous,
+                crate_path = ::canic::__internal::core::__reexports::ctor
+            ) ]
+            fn #ctor_name() {
+                #register_name();
+            }
+        };
     }
 }
 
@@ -616,13 +660,19 @@ fn cdk_attr(kind: EndpointKind, forwarded: &[TokenStream2]) -> TokenStream2 {
 mod tests {
     use super::*;
 
+    fn make_args(requires: Vec<AccessExprAst>) -> ValidatedArgs {
+        ValidatedArgs {
+            forwarded: Vec::new(),
+            export_name: None,
+            payload_max_bytes: None,
+            requires,
+            internal: false,
+        }
+    }
+
     #[test]
     fn endpoint_expansion_omits_removed_endpoint_metric_hooks() {
-        let args = ValidatedArgs {
-            forwarded: Vec::new(),
-            requires: Vec::new(),
-            internal: false,
-        };
+        let args = make_args(Vec::new());
         let func: ItemFn = syn::parse_quote!(
             fn ping() -> Result<(), ::canic::Error> {
                 Ok(())
@@ -636,13 +686,30 @@ mod tests {
     }
 
     #[test]
+    fn update_expansion_registers_payload_limit_for_exported_name() {
+        let mut args = make_args(Vec::new());
+        args.export_name = Some(syn::LitStr::new(
+            "wire_ping",
+            proc_macro2::Span::call_site(),
+        ));
+        args.payload_max_bytes = Some(quote!(64 * 1024));
+        let func: ItemFn = syn::parse_quote!(
+            fn ping() -> Result<(), ::canic::Error> {
+                Ok(())
+            }
+        );
+
+        let expanded = expand(EndpointKind::Update, args, func).to_string();
+
+        assert!(expanded.contains("register_update_limit"));
+        assert!(expanded.contains("\"wire_ping\""));
+        assert!(expanded.contains("64 * 1024"));
+    }
+
+    #[test]
     fn default_app_guard_keeps_sync_wrapper_sync() {
         let sig: Signature = syn::parse_quote!(fn ping() -> Result<(), ::canic::Error>);
-        let args = ValidatedArgs {
-            forwarded: Vec::new(),
-            requires: Vec::new(),
-            internal: false,
-        };
+        let args = make_args(Vec::new());
         let plan = build_access_plan(EndpointKind::Update, &args, &sig).expect("access plan");
 
         assert!(!plan.requires_async());
@@ -652,13 +719,9 @@ mod tests {
     #[test]
     fn explicit_requires_forces_async_wrapper() {
         let sig: Signature = syn::parse_quote!(fn ping() -> Result<(), ::canic::Error>);
-        let args = ValidatedArgs {
-            forwarded: Vec::new(),
-            requires: vec![AccessExprAst::Pred(AccessPredicateAst::Builtin(
-                BuiltinPredicate::CallerIsController,
-            ))],
-            internal: false,
-        };
+        let args = make_args(vec![AccessExprAst::Pred(AccessPredicateAst::Builtin(
+            BuiltinPredicate::CallerIsController,
+        ))]);
         let plan = build_access_plan(EndpointKind::Update, &args, &sig).expect("access plan");
 
         assert!(plan.requires_async());
@@ -671,21 +734,13 @@ mod tests {
             fn apply(cmd: ::canic::dto::state::AppCommand) -> Result<(), ::canic::Error>
         );
 
-        let args = ValidatedArgs {
-            forwarded: Vec::new(),
-            requires: Vec::new(),
-            internal: false,
-        };
+        let args = make_args(Vec::new());
         let plan = build_access_plan(EndpointKind::Update, &args, &sig).expect("access plan");
         assert!(matches!(plan, AccessPlan::None));
 
-        let args = ValidatedArgs {
-            forwarded: Vec::new(),
-            requires: vec![AccessExprAst::Pred(AccessPredicateAst::Builtin(
-                BuiltinPredicate::AppAllowsUpdates,
-            ))],
-            internal: false,
-        };
+        let args = make_args(vec![AccessExprAst::Pred(AccessPredicateAst::Builtin(
+            BuiltinPredicate::AppAllowsUpdates,
+        ))]);
         let err = build_access_plan(EndpointKind::Update, &args, &sig).unwrap_err();
         assert!(
             err.to_string()
@@ -696,13 +751,9 @@ mod tests {
     #[test]
     fn access_stage_expr_builds_context_from_resolved_identity() {
         let sig: Signature = syn::parse_quote!(fn ping() -> Result<(), ::canic::Error>);
-        let args = ValidatedArgs {
-            forwarded: Vec::new(),
-            requires: vec![AccessExprAst::Pred(AccessPredicateAst::Builtin(
-                BuiltinPredicate::CallerIsController,
-            ))],
-            internal: false,
-        };
+        let args = make_args(vec![AccessExprAst::Pred(AccessPredicateAst::Builtin(
+            BuiltinPredicate::CallerIsController,
+        ))]);
         let plan = build_access_plan(EndpointKind::Update, &args, &sig).expect("access plan");
         let call = format_ident!("__canic_call");
         let stage = access_stage(&plan, &call).to_string();
@@ -721,11 +772,7 @@ mod tests {
     #[test]
     fn access_stage_default_guard_marks_identity_source_raw_caller() {
         let sig: Signature = syn::parse_quote!(fn ping() -> Result<(), ::canic::Error>);
-        let args = ValidatedArgs {
-            forwarded: Vec::new(),
-            requires: Vec::new(),
-            internal: false,
-        };
+        let args = make_args(Vec::new());
         let plan = build_access_plan(EndpointKind::Update, &args, &sig).expect("access plan");
         let call = format_ident!("__canic_call");
         let stage = access_stage(&plan, &call).to_string();

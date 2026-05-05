@@ -61,7 +61,7 @@ pub fn expand_entry(kind: EndpointKind, attr: TokenStream, item: TokenStream) ->
     // Validate phase (structural invariants only)
     // ---------------------------------------------------------------------
 
-    let validated = match validate::validate(parsed, &sig, is_async) {
+    let validated = match validate::validate(kind, parsed, &sig, is_async) {
         Ok(v) => v,
         Err(e) => return e.to_compile_error().into(),
     };

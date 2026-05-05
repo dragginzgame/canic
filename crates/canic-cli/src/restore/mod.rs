@@ -604,6 +604,30 @@ impl RestoreRunResult {
     }
 }
 
+const RESTORE_RUN_MODE_DRY_RUN: &str = "dry-run";
+const RESTORE_RUN_MODE_EXECUTE: &str = "execute";
+const RESTORE_RUN_MODE_UNCLAIM_PENDING: &str = "unclaim-pending";
+
+const RESTORE_RUN_STOPPED_BLOCKED: &str = "blocked";
+const RESTORE_RUN_STOPPED_COMMAND_FAILED: &str = "command-failed";
+const RESTORE_RUN_STOPPED_COMPLETE: &str = "complete";
+const RESTORE_RUN_STOPPED_MAX_STEPS: &str = "max-steps-reached";
+const RESTORE_RUN_STOPPED_PENDING: &str = "pending";
+const RESTORE_RUN_STOPPED_PREVIEW: &str = "preview";
+const RESTORE_RUN_STOPPED_READY: &str = "ready";
+const RESTORE_RUN_STOPPED_RECOVERED_PENDING: &str = "recovered-pending";
+
+const RESTORE_RUN_ACTION_DONE: &str = "done";
+const RESTORE_RUN_ACTION_FIX_BLOCKED: &str = "fix-blocked-journal";
+const RESTORE_RUN_ACTION_INSPECT_FAILED: &str = "inspect-failed-operation";
+const RESTORE_RUN_ACTION_RERUN: &str = "rerun";
+const RESTORE_RUN_ACTION_UNCLAIM_PENDING: &str = "unclaim-pending";
+
+const RESTORE_RUN_EXECUTED_COMPLETED: &str = "completed";
+const RESTORE_RUN_EXECUTED_FAILED: &str = "failed";
+const RESTORE_RUN_COMMAND_EXIT_PREFIX: &str = "runner-command-exit";
+const RESTORE_RUN_RESPONSE_VERSION: u16 = 1;
+
 ///
 /// RestoreRunResponse
 ///
@@ -650,6 +674,45 @@ pub struct RestoreRunResponse {
     command: Option<RestoreApplyRunnerCommand>,
 }
 
+impl RestoreRunResponse {
+    // Build the shared native runner response fields from an apply journal report.
+    fn from_report(
+        backup_id: String,
+        report: RestoreApplyJournalReport,
+        mode: RestoreRunResponseMode,
+    ) -> Self {
+        Self {
+            run_version: RESTORE_RUN_RESPONSE_VERSION,
+            backup_id,
+            run_mode: mode.run_mode,
+            dry_run: mode.dry_run,
+            execute: mode.execute,
+            unclaim_pending: mode.unclaim_pending,
+            stopped_reason: mode.stopped_reason,
+            next_action: mode.next_action,
+            max_steps_reached: None,
+            executed_operations: Vec::new(),
+            executed_operation_count: None,
+            recovered_operation: None,
+            ready: report.ready,
+            complete: report.complete,
+            attention_required: report.attention_required,
+            outcome: report.outcome,
+            operation_count: report.operation_count,
+            pending_operations: report.pending_operations,
+            ready_operations: report.ready_operations,
+            blocked_operations: report.blocked_operations,
+            completed_operations: report.completed_operations,
+            failed_operations: report.failed_operations,
+            blocked_reasons: report.blocked_reasons,
+            next_transition: report.next_transition,
+            operation_available: None,
+            command_available: None,
+            command: None,
+        }
+    }
+}
+
 ///
 /// RestoreRunExecutedOperation
 ///
@@ -664,6 +727,43 @@ struct RestoreRunExecutedOperation {
     state: &'static str,
 }
 
+impl RestoreRunExecutedOperation {
+    // Build a completed executed-operation summary row from a runner operation.
+    fn completed(
+        operation: RestoreApplyJournalOperation,
+        command: RestoreApplyRunnerCommand,
+        status: String,
+    ) -> Self {
+        Self::from_operation(operation, command, status, RESTORE_RUN_EXECUTED_COMPLETED)
+    }
+
+    // Build a failed executed-operation summary row from a runner operation.
+    fn failed(
+        operation: RestoreApplyJournalOperation,
+        command: RestoreApplyRunnerCommand,
+        status: String,
+    ) -> Self {
+        Self::from_operation(operation, command, status, RESTORE_RUN_EXECUTED_FAILED)
+    }
+
+    // Map a journal operation into the compact runner execution row.
+    fn from_operation(
+        operation: RestoreApplyJournalOperation,
+        command: RestoreApplyRunnerCommand,
+        status: String,
+        state: &'static str,
+    ) -> Self {
+        Self {
+            sequence: operation.sequence,
+            operation: operation.operation,
+            target_canister: operation.target_canister,
+            command,
+            status,
+            state,
+        }
+    }
+}
+
 ///
 /// RestoreRunResponseMode
 ///
@@ -675,6 +775,63 @@ struct RestoreRunResponseMode {
     unclaim_pending: bool,
     stopped_reason: &'static str,
     next_action: &'static str,
+}
+
+impl RestoreRunResponseMode {
+    // Build a response mode from the stable JSON mode flags and action labels.
+    const fn new(
+        run_mode: &'static str,
+        dry_run: bool,
+        execute: bool,
+        unclaim_pending: bool,
+        stopped_reason: &'static str,
+        next_action: &'static str,
+    ) -> Self {
+        Self {
+            run_mode,
+            dry_run,
+            execute,
+            unclaim_pending,
+            stopped_reason,
+            next_action,
+        }
+    }
+
+    // Build a dry-run response mode with a computed stop reason and action.
+    const fn dry_run(stopped_reason: &'static str, next_action: &'static str) -> Self {
+        Self::new(
+            RESTORE_RUN_MODE_DRY_RUN,
+            true,
+            false,
+            false,
+            stopped_reason,
+            next_action,
+        )
+    }
+
+    // Build an execute response mode with a computed stop reason and action.
+    const fn execute(stopped_reason: &'static str, next_action: &'static str) -> Self {
+        Self::new(
+            RESTORE_RUN_MODE_EXECUTE,
+            false,
+            true,
+            false,
+            stopped_reason,
+            next_action,
+        )
+    }
+
+    // Build the pending-operation recovery response mode.
+    const fn unclaim_pending(next_action: &'static str) -> Self {
+        Self::new(
+            RESTORE_RUN_MODE_UNCLAIM_PENDING,
+            false,
+            false,
+            true,
+            RESTORE_RUN_STOPPED_RECOVERED_PENDING,
+            next_action,
+        )
+    }
 }
 
 ///
@@ -1106,24 +1263,14 @@ pub fn restore_run_dry_run(
 ) -> Result<RestoreRunResponse, RestoreCommandError> {
     let journal = read_apply_journal(&options.journal)?;
     let report = journal.report();
-    let preview = journal.next_command_preview_with_config(&RestoreApplyCommandConfig {
-        program: options.dfx.clone(),
-        network: options.network.clone(),
-    });
+    let preview = journal.next_command_preview_with_config(&restore_run_command_config(options));
     let stopped_reason = restore_run_stopped_reason(&report, false, false);
     let next_action = restore_run_next_action(&report, false);
 
-    let mut response = restore_run_response_from_report(
+    let mut response = RestoreRunResponse::from_report(
         journal.backup_id,
         report,
-        RestoreRunResponseMode {
-            run_mode: "dry-run",
-            dry_run: true,
-            execute: false,
-            unclaim_pending: false,
-            stopped_reason,
-            next_action,
-        },
+        RestoreRunResponseMode::dry_run(stopped_reason, next_action),
     );
     response.operation_available = Some(preview.operation_available);
     response.command_available = Some(preview.command_available);
@@ -1147,17 +1294,10 @@ pub fn restore_run_unclaim_pending(
 
     let report = journal.report();
     let next_action = restore_run_next_action(&report, true);
-    let mut response = restore_run_response_from_report(
+    let mut response = RestoreRunResponse::from_report(
         journal.backup_id,
         report,
-        RestoreRunResponseMode {
-            run_mode: "unclaim-pending",
-            dry_run: false,
-            execute: false,
-            unclaim_pending: true,
-            stopped_reason: "recovered-pending",
-            next_action,
-        },
+        RestoreRunResponseMode::unclaim_pending(next_action),
     );
     response.recovered_operation = Some(recovered_operation);
     Ok(response)
@@ -1181,16 +1321,13 @@ fn restore_run_execute_result(
 ) -> Result<RestoreRunResult, RestoreCommandError> {
     let mut journal = read_apply_journal(&options.journal)?;
     let mut executed_operations = Vec::new();
-    let config = RestoreApplyCommandConfig {
-        program: options.dfx.clone(),
-        network: options.network.clone(),
-    };
+    let config = restore_run_command_config(options);
 
     loop {
         let report = journal.report();
-        if report.complete || options.max_steps == Some(executed_operations.len()) {
-            let max_steps_reached =
-                options.max_steps == Some(executed_operations.len()) && !report.complete;
+        let max_steps_reached =
+            restore_run_max_steps_reached(options, executed_operations.len(), &report);
+        if report.complete || max_steps_reached {
             return Ok(RestoreRunResult::ok(restore_run_execute_summary(
                 &journal,
                 executed_operations,
@@ -1205,11 +1342,11 @@ fn restore_run_execute_result(
         let operation = preview
             .operation
             .clone()
-            .ok_or_else(|| restore_run_command_unavailable_error(&preview))?;
+            .ok_or_else(|| restore_command_unavailable_error(&preview))?;
         let command = preview
             .command
             .clone()
-            .ok_or_else(|| restore_run_command_unavailable_error(&preview))?;
+            .ok_or_else(|| restore_command_unavailable_error(&preview))?;
         let sequence = operation.sequence;
 
         enforce_apply_claim_sequence(sequence, &journal)?;
@@ -1223,31 +1360,25 @@ fn restore_run_execute_result(
         if status.success() {
             journal.mark_operation_completed_at(sequence, Some(timestamp_placeholder()))?;
             write_apply_journal_file(&options.journal, &journal)?;
-            executed_operations.push(RestoreRunExecutedOperation {
-                sequence,
-                operation: operation.operation,
-                target_canister: operation.target_canister,
+            executed_operations.push(RestoreRunExecutedOperation::completed(
+                operation,
                 command,
-                status: status_label,
-                state: "completed",
-            });
+                status_label,
+            ));
             continue;
         }
 
         journal.mark_operation_failed_at(
             sequence,
-            format!("runner-command-exit-{status_label}"),
+            format!("{RESTORE_RUN_COMMAND_EXIT_PREFIX}-{status_label}"),
             Some(timestamp_placeholder()),
         )?;
         write_apply_journal_file(&options.journal, &journal)?;
-        executed_operations.push(RestoreRunExecutedOperation {
-            sequence,
-            operation: operation.operation,
-            target_canister: operation.target_canister,
+        executed_operations.push(RestoreRunExecutedOperation::failed(
+            operation,
             command,
-            status: status_label.clone(),
-            state: "failed",
-        });
+            status_label.clone(),
+        ));
         let response = restore_run_execute_summary(&journal, executed_operations, false);
         return Ok(RestoreRunResult {
             response,
@@ -1257,6 +1388,33 @@ fn restore_run_execute_result(
             }),
         });
     }
+}
+
+// Build the shared runner command-preview configuration from CLI options.
+fn restore_run_command_config(options: &RestoreRunOptions) -> RestoreApplyCommandConfig {
+    restore_command_config(&options.dfx, options.network.as_deref())
+}
+
+// Build the shared apply-command preview configuration from CLI options.
+fn restore_apply_command_config(options: &RestoreApplyCommandOptions) -> RestoreApplyCommandConfig {
+    restore_command_config(&options.dfx, options.network.as_deref())
+}
+
+// Build command-preview configuration from common dfx/network inputs.
+fn restore_command_config(program: &str, network: Option<&str>) -> RestoreApplyCommandConfig {
+    RestoreApplyCommandConfig {
+        program: program.to_string(),
+        network: network.map(str::to_string),
+    }
+}
+
+// Check whether execute mode has reached its requested operation batch size.
+fn restore_run_max_steps_reached(
+    options: &RestoreRunOptions,
+    executed_operation_count: usize,
+    report: &RestoreApplyJournalReport,
+) -> bool {
+    options.max_steps == Some(executed_operation_count) && !report.complete
 }
 
 // Build the final native runner execution summary.
@@ -1270,59 +1428,15 @@ fn restore_run_execute_summary(
     let stopped_reason = restore_run_stopped_reason(&report, max_steps_reached, true);
     let next_action = restore_run_next_action(&report, false);
 
-    let mut response = restore_run_response_from_report(
+    let mut response = RestoreRunResponse::from_report(
         journal.backup_id.clone(),
         report,
-        RestoreRunResponseMode {
-            run_mode: "execute",
-            dry_run: false,
-            execute: true,
-            unclaim_pending: false,
-            stopped_reason,
-            next_action,
-        },
+        RestoreRunResponseMode::execute(stopped_reason, next_action),
     );
     response.max_steps_reached = Some(max_steps_reached);
     response.executed_operation_count = Some(executed_operation_count);
     response.executed_operations = executed_operations;
     response
-}
-
-// Build the shared native runner response fields from an apply journal report.
-fn restore_run_response_from_report(
-    backup_id: String,
-    report: RestoreApplyJournalReport,
-    mode: RestoreRunResponseMode,
-) -> RestoreRunResponse {
-    RestoreRunResponse {
-        run_version: 1,
-        backup_id,
-        run_mode: mode.run_mode,
-        dry_run: mode.dry_run,
-        execute: mode.execute,
-        unclaim_pending: mode.unclaim_pending,
-        stopped_reason: mode.stopped_reason,
-        next_action: mode.next_action,
-        max_steps_reached: None,
-        executed_operations: Vec::new(),
-        executed_operation_count: None,
-        recovered_operation: None,
-        ready: report.ready,
-        complete: report.complete,
-        attention_required: report.attention_required,
-        outcome: report.outcome,
-        operation_count: report.operation_count,
-        pending_operations: report.pending_operations,
-        ready_operations: report.ready_operations,
-        blocked_operations: report.blocked_operations,
-        completed_operations: report.completed_operations,
-        failed_operations: report.failed_operations,
-        blocked_reasons: report.blocked_reasons,
-        next_transition: report.next_transition,
-        operation_available: None,
-        command_available: None,
-        command: None,
-    }
 }
 
 // Classify why the native runner stopped for operator summaries.
@@ -1332,24 +1446,24 @@ const fn restore_run_stopped_reason(
     executed: bool,
 ) -> &'static str {
     if report.complete {
-        return "complete";
+        return RESTORE_RUN_STOPPED_COMPLETE;
     }
     if report.failed_operations > 0 {
-        return "command-failed";
+        return RESTORE_RUN_STOPPED_COMMAND_FAILED;
     }
     if report.pending_operations > 0 {
-        return "pending";
+        return RESTORE_RUN_STOPPED_PENDING;
     }
     if !report.ready || report.blocked_operations > 0 {
-        return "blocked";
+        return RESTORE_RUN_STOPPED_BLOCKED;
     }
     if max_steps_reached {
-        return "max-steps-reached";
+        return RESTORE_RUN_STOPPED_MAX_STEPS;
     }
     if executed {
-        return "ready";
+        return RESTORE_RUN_STOPPED_READY;
     }
-    "preview"
+    RESTORE_RUN_STOPPED_PREVIEW
 }
 
 // Recommend the next operator action for the native runner summary.
@@ -1358,21 +1472,21 @@ const fn restore_run_next_action(
     recovered_pending: bool,
 ) -> &'static str {
     if report.complete {
-        return "done";
+        return RESTORE_RUN_ACTION_DONE;
     }
     if report.failed_operations > 0 {
-        return "inspect-failed-operation";
+        return RESTORE_RUN_ACTION_INSPECT_FAILED;
     }
     if report.pending_operations > 0 {
-        return "unclaim-pending";
+        return RESTORE_RUN_ACTION_UNCLAIM_PENDING;
     }
     if !report.ready || report.blocked_operations > 0 {
-        return "fix-blocked-journal";
+        return RESTORE_RUN_ACTION_FIX_BLOCKED;
     }
     if recovered_pending {
-        return "rerun";
+        return RESTORE_RUN_ACTION_RERUN;
     }
-    "rerun"
+    RESTORE_RUN_ACTION_RERUN
 }
 
 // Ensure the journal can be advanced by the native restore runner.
@@ -1416,13 +1530,11 @@ fn enforce_restore_run_command_available(
         return Ok(());
     }
 
-    Err(restore_run_command_unavailable_error(preview))
+    Err(restore_command_unavailable_error(preview))
 }
 
-// Build a restore runner command-unavailable error from a preview.
-fn restore_run_command_unavailable_error(
-    preview: &RestoreApplyCommandPreview,
-) -> RestoreCommandError {
+// Build a shared command-unavailable error from a preview.
+fn restore_command_unavailable_error(preview: &RestoreApplyCommandPreview) -> RestoreCommandError {
     RestoreCommandError::RestoreApplyCommandUnavailable {
         backup_id: preview.backup_id.clone(),
         operation_available: preview.operation_available,
@@ -1568,12 +1680,7 @@ pub fn restore_apply_command(
     options: &RestoreApplyCommandOptions,
 ) -> Result<RestoreApplyCommandPreview, RestoreCommandError> {
     let journal = read_apply_journal(&options.journal)?;
-    Ok(
-        journal.next_command_preview_with_config(&RestoreApplyCommandConfig {
-            program: options.dfx.clone(),
-            network: options.network.clone(),
-        }),
-    )
+    Ok(journal.next_command_preview_with_config(&restore_apply_command_config(options)))
 }
 
 // Enforce caller-requested command preview requirements after preview output is emitted.
@@ -1585,12 +1692,7 @@ fn enforce_apply_command_requirements(
         return Ok(());
     }
 
-    Err(RestoreCommandError::RestoreApplyCommandUnavailable {
-        backup_id: preview.backup_id.clone(),
-        operation_available: preview.operation_available,
-        complete: preview.complete,
-        blocked_reasons: preview.blocked_reasons.clone(),
-    })
+    Err(restore_command_unavailable_error(preview))
 }
 
 /// Mark the next restore apply journal operation pending.

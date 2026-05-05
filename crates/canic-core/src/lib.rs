@@ -32,6 +32,8 @@ pub mod dto;
 pub mod error;
 mod format;
 pub mod ids;
+#[doc(hidden)]
+pub mod ingress;
 pub mod log;
 pub mod perf;
 pub mod protocol;

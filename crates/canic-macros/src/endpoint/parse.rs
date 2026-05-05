@@ -1,6 +1,6 @@
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
-use syn::{Expr, Ident, Meta, Path, Token, parse::Parser, punctuated::Punctuated};
+use syn::{Expr, Ident, LitStr, Meta, Path, Token, parse::Parser, punctuated::Punctuated};
 
 //
 // ============================================================================
@@ -78,6 +78,8 @@ pub enum AccessPredicateAst {
 #[derive(Debug)]
 pub struct ParsedArgs {
     pub forwarded: Vec<TokenStream2>,
+    pub export_name: Option<LitStr>,
+    pub payload_max_bytes: Option<TokenStream2>,
     pub requires: Vec<AccessExprAst>,
     pub requires_async: bool,
     pub requires_fallible: bool,
@@ -98,11 +100,22 @@ pub fn parse_args(attr: TokenStream2) -> syn::Result<ParsedArgs> {
     let mut requires = Vec::new();
     let mut internal = false;
     let mut saw_name = false;
+    let mut export_name = None;
+    let mut payload_max_bytes = None;
 
     for meta in metas {
         match meta {
             Meta::List(list) if list.path.is_ident("requires") => {
                 requires.push(parse_requires(&list)?);
+            }
+            Meta::List(list) if list.path.is_ident("payload") => {
+                if payload_max_bytes.is_some() {
+                    return Err(syn::Error::new_spanned(
+                        list,
+                        "payload(...) must appear only once",
+                    ));
+                }
+                payload_max_bytes = Some(parse_payload_max_bytes(&list)?);
             }
             Meta::Path(path) if path.is_ident("internal") => {
                 if internal {
@@ -140,6 +153,7 @@ pub fn parse_args(attr: TokenStream2) -> syn::Result<ParsedArgs> {
                 };
 
                 forwarded.push(quote!(name = #value));
+                export_name = Some(value.clone());
                 saw_name = true;
             }
             Meta::NameValue(nv) if nv.path.is_ident("internal") => {
@@ -177,28 +191,28 @@ pub fn parse_args(attr: TokenStream2) -> syn::Result<ParsedArgs> {
             Meta::List(list) => {
                 return Err(syn::Error::new_spanned(
                     list,
-                    "unsupported access clause; use requires(...)",
+                    "unsupported endpoint clause; use requires(...) or payload(...)",
                 ));
             }
             Meta::Path(path) => {
                 return Err(syn::Error::new_spanned(
                     path,
-                    "access control must be expressed via requires(...) or internal",
+                    "endpoint attributes must be expressed via requires(...), payload(...), internal, or name = \"...\"",
                 ));
             }
             Meta::NameValue(nv) => {
                 return Err(syn::Error::new_spanned(
                     nv,
-                    "access control must be expressed via requires(...) or internal",
+                    "endpoint attributes must be expressed via requires(...), payload(...), internal, or name = \"...\"",
                 ));
             }
         }
     }
 
-    if requires.is_empty() && !internal && forwarded.is_empty() {
+    if requires.is_empty() && !internal && forwarded.is_empty() && payload_max_bytes.is_none() {
         return Err(syn::Error::new_spanned(
             attr,
-            "expected requires(...), internal, or name = \"...\"",
+            "expected requires(...), internal, name = \"...\", or payload(...)",
         ));
     }
 
@@ -207,6 +221,8 @@ pub fn parse_args(attr: TokenStream2) -> syn::Result<ParsedArgs> {
 
     Ok(ParsedArgs {
         forwarded,
+        export_name,
+        payload_max_bytes,
         requires,
         requires_async,
         requires_fallible,
@@ -217,6 +233,8 @@ pub fn parse_args(attr: TokenStream2) -> syn::Result<ParsedArgs> {
 const fn empty() -> ParsedArgs {
     ParsedArgs {
         forwarded: Vec::new(),
+        export_name: None,
+        payload_max_bytes: None,
         requires: Vec::new(),
         requires_async: false,
         requires_fallible: false,
@@ -232,6 +250,41 @@ const fn empty() -> ParsedArgs {
 fn parse_requires(list: &syn::MetaList) -> syn::Result<AccessExprAst> {
     let exprs = parse_expr_list(&list.tokens)?;
     Ok(AccessExprAst::All(exprs))
+}
+
+fn parse_payload_max_bytes(list: &syn::MetaList) -> syn::Result<TokenStream2> {
+    let metas = Punctuated::<Meta, Token![,]>::parse_terminated
+        .parse2(list.tokens.clone())
+        .map_err(|_| {
+            syn::Error::new_spanned(list, "expected payload(max_bytes = <usize expression>)")
+        })?;
+
+    let mut max_bytes = None;
+
+    for meta in metas {
+        match meta {
+            Meta::NameValue(nv) if nv.path.is_ident("max_bytes") => {
+                if max_bytes.is_some() {
+                    return Err(syn::Error::new_spanned(
+                        nv,
+                        "payload max_bytes must appear only once",
+                    ));
+                }
+                let value = nv.value;
+                max_bytes = Some(quote!(#value));
+            }
+            other => {
+                return Err(syn::Error::new_spanned(
+                    other,
+                    "expected payload(max_bytes = <usize expression>)",
+                ));
+            }
+        }
+    }
+
+    max_bytes.ok_or_else(|| {
+        syn::Error::new_spanned(list, "payload(...) requires max_bytes = <usize expression>")
+    })
 }
 
 fn parse_expr_list(tokens: &TokenStream2) -> syn::Result<Vec<AccessExprAst>> {
@@ -508,13 +561,35 @@ mod tests {
             .expect("name-only args should parse");
 
         assert_eq!(parsed.forwarded.len(), 1);
+        assert_eq!(
+            parsed.export_name.as_ref().map(LitStr::value).as_deref(),
+            Some("icrc10_supported_standards")
+        );
         assert!(parsed.requires.is_empty());
         assert!(!parsed.internal);
     }
 
     #[test]
+    fn payload_max_bytes_is_parsed() {
+        let parsed =
+            parse_args(quote!(payload(max_bytes = 64 * 1024))).expect("payload args should parse");
+
+        assert_eq!(
+            parsed.payload_max_bytes.expect("payload limit").to_string(),
+            "64 * 1024"
+        );
+    }
+
+    #[test]
     fn duplicate_name_is_rejected() {
         let err = parse_args(quote!(name = "a", name = "b")).expect_err("duplicate name");
+        assert!(err.to_string().contains("must appear only once"));
+    }
+
+    #[test]
+    fn duplicate_payload_is_rejected() {
+        let err = parse_args(quote!(payload(max_bytes = 1024), payload(max_bytes = 2048)))
+            .expect_err("duplicate payload");
         assert!(err.to_string().contains("must appear only once"));
     }
 

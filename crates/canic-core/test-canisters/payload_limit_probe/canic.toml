@@ -1,0 +1,15 @@
+controllers = []
+app_index = []
+
+[app]
+init_mode = "enabled"
+
+[app.whitelist]
+
+[subnets.prime]
+
+[subnets.prime.canisters.root]
+kind = "root"
+
+[subnets.prime.canisters.test]
+kind = "singleton"

@@ -24,6 +24,7 @@ members = [
     "crates/canic-core/test-canisters/intent_authority",
     "crates/canic-core/test-canisters/intent_client",
     "crates/canic-core/test-canisters/intent_external",
+    "crates/canic-core/test-canisters/payload_limit_probe",
     "crates/canic-core/test-canisters/project_hub_stub",
     "crates/canic-core/test-canisters/project_instance_stub",
     "crates/canic-core/test-canisters/sharding_root_stub",

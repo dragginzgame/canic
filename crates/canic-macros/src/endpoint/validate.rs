@@ -1,6 +1,9 @@
-use crate::endpoint::parse::{AccessExprAst, AccessPredicateAst, BuiltinPredicate, ParsedArgs};
+use crate::endpoint::{
+    EndpointKind,
+    parse::{AccessExprAst, AccessPredicateAst, BuiltinPredicate, ParsedArgs},
+};
 use proc_macro2::TokenStream as TokenStream2;
-use syn::{FnArg, Signature, Type};
+use syn::{FnArg, LitStr, Signature, Type};
 
 ///
 /// ValidatedArgs
@@ -19,15 +22,25 @@ use syn::{FnArg, Signature, Type};
 #[derive(Debug)]
 pub struct ValidatedArgs {
     pub forwarded: Vec<TokenStream2>,
+    pub export_name: Option<LitStr>,
+    pub payload_max_bytes: Option<TokenStream2>,
     pub requires: Vec<AccessExprAst>,
     pub internal: bool,
 }
 
 pub fn validate(
+    kind: EndpointKind,
     parsed: ParsedArgs,
     sig: &Signature,
     asyncness: bool,
 ) -> syn::Result<ValidatedArgs> {
+    if parsed.payload_max_bytes.is_some() && matches!(kind, EndpointKind::Query) {
+        return Err(syn::Error::new_spanned(
+            &sig.ident,
+            "payload(...) is supported only on canic_update endpoints",
+        ));
+    }
+
     if parsed.requires_async && !asyncness {
         return Err(syn::Error::new_spanned(
             &sig.ident,
@@ -55,6 +68,8 @@ pub fn validate(
 
     Ok(ValidatedArgs {
         forwarded: parsed.forwarded,
+        export_name: parsed.export_name,
+        payload_max_bytes: parsed.payload_max_bytes,
         requires: parsed.requires,
         internal: parsed.internal,
     })
@@ -163,6 +178,8 @@ mod tests {
     fn parsed_authenticated() -> ParsedArgs {
         ParsedArgs {
             forwarded: Vec::new(),
+            export_name: None,
+            payload_max_bytes: None,
             requires: vec![AccessExprAst::Pred(AccessPredicateAst::Builtin(
                 BuiltinPredicate::Authenticated {
                     required_scope: None,
@@ -177,6 +194,8 @@ mod tests {
     fn parsed_registered_to_subnet(internal: bool) -> ParsedArgs {
         ParsedArgs {
             forwarded: Vec::new(),
+            export_name: None,
+            payload_max_bytes: None,
             requires: vec![AccessExprAst::Any(vec![
                 AccessExprAst::Pred(AccessPredicateAst::Builtin(
                     BuiltinPredicate::CallerIsController,
@@ -194,7 +213,7 @@ mod tests {
     #[test]
     fn authenticated_requires_first_argument() {
         let sig: Signature = syn::parse_quote!(async fn hello() -> Result<(), ::canic::Error>);
-        let err = validate(parsed_authenticated(), &sig, true).unwrap_err();
+        let err = validate(EndpointKind::Update, parsed_authenticated(), &sig, true).unwrap_err();
         assert!(
             err.to_string()
                 .contains("authenticated(...) requires a first argument")
@@ -206,7 +225,8 @@ mod tests {
         let sig: Signature = syn::parse_quote!(
             async fn hello(token: ::canic::dto::auth::DelegatedToken) -> Result<(), ::canic::Error>
         );
-        validate(parsed_authenticated(), &sig, true).expect("authenticated arg ok");
+        validate(EndpointKind::Update, parsed_authenticated(), &sig, true)
+            .expect("authenticated arg ok");
     }
 
     #[test]
@@ -214,7 +234,7 @@ mod tests {
         let sig: Signature = syn::parse_quote!(
             async fn hello(user: ::canic::cdk::candid::Principal) -> Result<(), ::canic::Error>
         );
-        let err = validate(parsed_authenticated(), &sig, true).unwrap_err();
+        let err = validate(EndpointKind::Update, parsed_authenticated(), &sig, true).unwrap_err();
         assert!(
             err.to_string()
                 .contains("authenticated(...) requires a first argument")
@@ -224,7 +244,13 @@ mod tests {
     #[test]
     fn registered_to_subnet_requires_internal_endpoint() {
         let sig: Signature = syn::parse_quote!(async fn hello() -> Result<(), ::canic::Error>);
-        let err = validate(parsed_registered_to_subnet(false), &sig, true).unwrap_err();
+        let err = validate(
+            EndpointKind::Update,
+            parsed_registered_to_subnet(false),
+            &sig,
+            true,
+        )
+        .unwrap_err();
         assert!(
             err.to_string()
                 .contains("caller::is_registered_to_subnet() is internal-only")
@@ -234,6 +260,32 @@ mod tests {
     #[test]
     fn registered_to_subnet_is_allowed_for_internal_endpoint() {
         let sig: Signature = syn::parse_quote!(async fn hello() -> Result<(), ::canic::Error>);
-        validate(parsed_registered_to_subnet(true), &sig, true).expect("internal predicate ok");
+        validate(
+            EndpointKind::Update,
+            parsed_registered_to_subnet(true),
+            &sig,
+            true,
+        )
+        .expect("internal predicate ok");
+    }
+
+    #[test]
+    fn payload_limit_is_update_only() {
+        let sig: Signature = syn::parse_quote!(fn hello() -> bool);
+        let parsed = ParsedArgs {
+            forwarded: Vec::new(),
+            export_name: None,
+            payload_max_bytes: Some(quote::quote!(1024)),
+            requires: Vec::new(),
+            requires_async: false,
+            requires_fallible: false,
+            internal: false,
+        };
+
+        let err = validate(EndpointKind::Query, parsed, &sig, false).unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("payload(...) is supported only on canic_update")
+        );
     }
 }
