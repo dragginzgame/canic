@@ -240,7 +240,10 @@ where
             }
             Ok(())
         }
-        "help" | "--help" | "-h" => Err(SnapshotCommandError::Usage(usage())),
+        "help" | "--help" | "-h" => {
+            println!("{}", usage());
+            Ok(())
+        }
         _ => Err(SnapshotCommandError::UnknownOption(command)),
     }
 }

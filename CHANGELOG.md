@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.30.x] - 2026-05-03 - Fleet Snapshot Backups
 
-- `0.30.38` adds the final backup/restore smoke checklist and cross-surface design-readiness coverage so release checks have one canonical path from capture through runner preview.
+- `0.30.38` adds `canic list`, `canic backup smoke`, easier `canic` binary installs, trimmed CLI help, groups repo-owned canisters by purpose, and removes the old shared reference-support crate.
 
 - `0.30.37` adds manifest design-conformance reporting plus manifest, preflight, and restore-plan `--require-design-v1` gates so smoke checks can fail closed on topology, unit, quiescence, verification, provenance, or restore-order gaps.
 
@@ -25,7 +25,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 - `0.30.30` makes restore apply dry-runs render declared fleet-level verification checks as final `verify-fleet` operations, so restore plans, operation counts, and runner previews agree before execution.
 
-- `0.30.29` centralizes native restore-runner state strings without changing JSON output, adds generated ingress payload limits for `canic_update` endpoints, and adds a local playground canister with `start_local!` for quick manual experiments.
+- `0.30.29` centralizes native restore-runner state strings without changing JSON output, adds generated ingress payload limits for `canic_update` endpoints, and adds a local sandbox canister with `start_local!` for quick manual experiments.
 
 ```rust
 #[canic_update(payload(max_bytes = 32 * 1024))]

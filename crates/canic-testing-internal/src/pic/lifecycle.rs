@@ -1,3 +1,4 @@
+use crate::canister::{APP, SCALE_HUB, TEST, USER_HUB};
 use candid::{Principal, encode_args, encode_one};
 use canic::{
     dto::{
@@ -7,7 +8,6 @@ use canic::{
     },
     ids::{CanisterRole, SubnetRole},
 };
-use canic_reference_support::canister::{APP, SCALE_HUB, TEST, USER_HUB};
 use canic_testkit::{
     Fake,
     artifacts::{
@@ -22,7 +22,7 @@ use std::{
 };
 
 const INSTALL_CYCLES: u128 = 1_000_000_000_000;
-const CANISTERS: [&str; 2] = ["canister_test", "intent_authority"];
+const CANISTERS: [&str; 2] = ["runtime_probe", "intent_authority"];
 static BUILD_ONCE: Once = Once::new();
 
 ///
@@ -74,7 +74,7 @@ pub fn install_lifecycle_boundary_fixture() -> LifecycleBoundaryFixture {
     build_canisters_once(&workspace_root);
 
     LifecycleBoundaryFixture {
-        canic_wasm: read_wasm(&target_dir, "canister_test", WasmBuildProfile::Fast),
+        canic_wasm: read_wasm(&target_dir, "runtime_probe", WasmBuildProfile::Fast),
         authority_wasm: read_wasm(&target_dir, "intent_authority", WasmBuildProfile::Fast),
         _serial_guard: acquire_pic_serial_guard(),
         pic: pic(),

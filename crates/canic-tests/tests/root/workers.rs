@@ -12,7 +12,7 @@ use canic::{
     },
     protocol,
 };
-use canic_reference_support::canister::SCALE;
+use canic_testing_internal::canister::SCALE;
 use canic_testkit::pic::Pic;
 
 /// Create a worker canister via the given hub canister.

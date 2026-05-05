@@ -1,3 +1,4 @@
+use crate::restore as cli_restore;
 use canic_backup::{
     journal::{DownloadOperationMetrics, JournalResumeReport},
     manifest::{BackupUnitKind, ConsistencyMode, FleetBackupManifest},
@@ -5,8 +6,12 @@ use canic_backup::{
         BackupInspectionReport, BackupIntegrityReport, BackupLayout, BackupProvenanceReport,
         PersistenceError,
     },
-    restore::{RestoreMapping, RestorePlan, RestorePlanError, RestorePlanner, RestoreStatus},
+    restore::{
+        RestoreApplyJournal, RestoreMapping, RestorePlan, RestorePlanError, RestorePlanner,
+        RestoreStatus,
+    },
 };
+use serde::Serialize;
 use serde_json::json;
 use std::{
     ffi::OsString,
@@ -88,6 +93,9 @@ pub enum BackupCommandError {
 
     #[error(transparent)]
     RestorePlan(#[from] RestorePlanError),
+
+    #[error(transparent)]
+    RestoreCli(#[from] cli_restore::RestoreCommandError),
 }
 
 ///
@@ -135,6 +143,65 @@ impl BackupPreflightOptions {
             dir: dir.ok_or(BackupCommandError::MissingOption("--dir"))?,
             out_dir: out_dir.ok_or(BackupCommandError::MissingOption("--out-dir"))?,
             mapping,
+            require_design_v1,
+            require_restore_ready,
+        })
+    }
+}
+
+///
+/// BackupSmokeOptions
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct BackupSmokeOptions {
+    pub dir: PathBuf,
+    pub out_dir: PathBuf,
+    pub mapping: Option<PathBuf>,
+    pub dfx: String,
+    pub network: Option<String>,
+    pub require_design_v1: bool,
+    pub require_restore_ready: bool,
+}
+
+impl BackupSmokeOptions {
+    /// Parse backup smoke-check options from CLI arguments.
+    pub fn parse<I>(args: I) -> Result<Self, BackupCommandError>
+    where
+        I: IntoIterator<Item = OsString>,
+    {
+        let mut dir = None;
+        let mut out_dir = None;
+        let mut mapping = None;
+        let mut dfx = "dfx".to_string();
+        let mut network = None;
+        let mut require_design_v1 = false;
+        let mut require_restore_ready = false;
+
+        let mut args = args.into_iter();
+        while let Some(arg) = args.next() {
+            let arg = arg
+                .into_string()
+                .map_err(|_| BackupCommandError::Usage(usage()))?;
+            match arg.as_str() {
+                "--dir" => dir = Some(PathBuf::from(next_value(&mut args, "--dir")?)),
+                "--out-dir" => out_dir = Some(PathBuf::from(next_value(&mut args, "--out-dir")?)),
+                "--mapping" => mapping = Some(PathBuf::from(next_value(&mut args, "--mapping")?)),
+                "--dfx" => dfx = next_value(&mut args, "--dfx")?,
+                "--network" => network = Some(next_value(&mut args, "--network")?),
+                "--require-design-v1" => require_design_v1 = true,
+                "--require-restore-ready" => require_restore_ready = true,
+                "--help" | "-h" => return Err(BackupCommandError::Usage(usage())),
+                _ => return Err(BackupCommandError::UnknownOption(arg)),
+            }
+        }
+
+        Ok(Self {
+            dir: dir.ok_or(BackupCommandError::MissingOption("--dir"))?,
+            out_dir: out_dir.ok_or(BackupCommandError::MissingOption("--out-dir"))?,
+            mapping,
+            dfx,
+            network,
             require_design_v1,
             require_restore_ready,
         })
@@ -215,6 +282,29 @@ pub struct BackupPreflightReport {
 }
 
 ///
+/// BackupSmokeReport
+///
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+pub struct BackupSmokeReport {
+    pub status: String,
+    pub backup_id: String,
+    pub backup_dir: String,
+    pub out_dir: String,
+    pub preflight_dir: String,
+    pub preflight_summary_path: String,
+    pub restore_apply_dry_run_path: String,
+    pub restore_apply_journal_path: String,
+    pub restore_run_dry_run_path: String,
+    pub smoke_summary_path: String,
+    pub manifest_design_v1_ready: bool,
+    pub restore_ready: bool,
+    pub restore_readiness_reasons: Vec<String>,
+    pub restore_planned_operations: usize,
+    pub runner_preview_written: bool,
+}
+
+///
 /// PreflightArtifactPaths
 ///
 
@@ -257,6 +347,18 @@ struct PreflightArtifactInput<'a> {
     integrity: &'a BackupIntegrityReport,
     restore_plan: &'a RestorePlan,
     restore_status: &'a RestoreStatus,
+}
+
+///
+/// SmokeArtifactPaths
+///
+
+struct SmokeArtifactPaths {
+    preflight_dir: PathBuf,
+    restore_apply_dry_run: PathBuf,
+    restore_apply_journal: PathBuf,
+    restore_run_dry_run: PathBuf,
+    smoke_summary: PathBuf,
 }
 
 ///
@@ -443,6 +545,11 @@ where
             backup_preflight(&options)?;
             Ok(())
         }
+        "smoke" => {
+            let options = BackupSmokeOptions::parse(args)?;
+            backup_smoke(&options)?;
+            Ok(())
+        }
         "inspect" => {
             let options = BackupInspectOptions::parse(args)?;
             let report = inspect_backup(&options)?;
@@ -470,7 +577,10 @@ where
             write_report(&options, &report)?;
             Ok(())
         }
-        "help" | "--help" | "-h" => Err(BackupCommandError::Usage(usage())),
+        "help" | "--help" | "-h" => {
+            println!("{}", usage());
+            Ok(())
+        }
         _ => Err(BackupCommandError::UnknownOption(command)),
     }
 }
@@ -516,6 +626,129 @@ pub fn backup_preflight(
     write_json_value_file(&paths.preflight_summary, &preflight_summary_value(&report))?;
     enforce_preflight_requirements(options, &report)?;
     Ok(report)
+}
+
+/// Run the post-capture backup/restore smoke path and write all release artifacts.
+pub fn backup_smoke(options: &BackupSmokeOptions) -> Result<BackupSmokeReport, BackupCommandError> {
+    fs::create_dir_all(&options.out_dir)?;
+
+    let paths = smoke_artifact_paths(&options.out_dir);
+    let preflight = backup_preflight(&BackupPreflightOptions {
+        dir: options.dir.clone(),
+        out_dir: paths.preflight_dir.clone(),
+        mapping: options.mapping.clone(),
+        require_design_v1: options.require_design_v1,
+        require_restore_ready: options.require_restore_ready,
+    })?;
+
+    let apply_options = smoke_restore_apply_options(options, &paths);
+    let dry_run = cli_restore::restore_apply_dry_run(&apply_options)?;
+    write_json_file(&paths.restore_apply_dry_run, &dry_run)?;
+    let journal = RestoreApplyJournal::from_dry_run(&dry_run);
+    write_json_file(&paths.restore_apply_journal, &journal)?;
+
+    let run_options = smoke_restore_run_options(options, &paths);
+    let runner_preview = cli_restore::restore_run_dry_run(&run_options)?;
+    write_json_file(&paths.restore_run_dry_run, &runner_preview)?;
+
+    let report = build_smoke_report(options, &paths, &preflight);
+    write_json_file(&paths.smoke_summary, &report)?;
+    Ok(report)
+}
+
+// Build the canonical smoke artifact path set under one output directory.
+fn smoke_artifact_paths(out_dir: &Path) -> SmokeArtifactPaths {
+    SmokeArtifactPaths {
+        preflight_dir: out_dir.join("preflight"),
+        restore_apply_dry_run: out_dir.join("restore-apply-dry-run.json"),
+        restore_apply_journal: out_dir.join("restore-apply-journal.json"),
+        restore_run_dry_run: out_dir.join("restore-run-dry-run.json"),
+        smoke_summary: out_dir.join("smoke-summary.json"),
+    }
+}
+
+// Build restore apply dry-run options for the smoke wrapper.
+fn smoke_restore_apply_options(
+    options: &BackupSmokeOptions,
+    paths: &SmokeArtifactPaths,
+) -> cli_restore::RestoreApplyOptions {
+    cli_restore::RestoreApplyOptions {
+        plan: paths.preflight_dir.join("restore-plan.json"),
+        status: Some(paths.preflight_dir.join("restore-status.json")),
+        backup_dir: Some(options.dir.clone()),
+        out: Some(paths.restore_apply_dry_run.clone()),
+        journal_out: Some(paths.restore_apply_journal.clone()),
+        dry_run: true,
+    }
+}
+
+// Build restore runner preview options for the smoke wrapper.
+fn smoke_restore_run_options(
+    options: &BackupSmokeOptions,
+    paths: &SmokeArtifactPaths,
+) -> cli_restore::RestoreRunOptions {
+    cli_restore::RestoreRunOptions {
+        journal: paths.restore_apply_journal.clone(),
+        dfx: options.dfx.clone(),
+        network: options.network.clone(),
+        out: Some(paths.restore_run_dry_run.clone()),
+        dry_run: true,
+        execute: false,
+        unclaim_pending: false,
+        max_steps: None,
+        updated_at: None,
+        require_complete: false,
+        require_no_attention: false,
+        require_run_mode: None,
+        require_stopped_reason: None,
+        require_next_action: None,
+        require_executed_count: None,
+        require_receipt_count: None,
+        require_completed_receipt_count: None,
+        require_failed_receipt_count: None,
+        require_recovered_receipt_count: None,
+        require_receipt_updated_at: None,
+        require_state_updated_at: None,
+        require_batch_initial_ready_count: None,
+        require_batch_executed_count: None,
+        require_batch_remaining_ready_count: None,
+        require_batch_ready_delta: None,
+        require_batch_remaining_delta: None,
+        require_batch_stopped_by_max_steps: None,
+        require_remaining_count: None,
+        require_attention_count: None,
+        require_completion_basis_points: None,
+        require_no_pending_before: None,
+    }
+}
+
+// Build the compact smoke summary mirrored by smoke-summary.json.
+fn build_smoke_report(
+    options: &BackupSmokeOptions,
+    paths: &SmokeArtifactPaths,
+    preflight: &BackupPreflightReport,
+) -> BackupSmokeReport {
+    BackupSmokeReport {
+        status: "ready".to_string(),
+        backup_id: preflight.backup_id.clone(),
+        backup_dir: options.dir.display().to_string(),
+        out_dir: options.out_dir.display().to_string(),
+        preflight_dir: paths.preflight_dir.display().to_string(),
+        preflight_summary_path: paths
+            .preflight_dir
+            .join("preflight-summary.json")
+            .display()
+            .to_string(),
+        restore_apply_dry_run_path: paths.restore_apply_dry_run.display().to_string(),
+        restore_apply_journal_path: paths.restore_apply_journal.display().to_string(),
+        restore_run_dry_run_path: paths.restore_run_dry_run.display().to_string(),
+        smoke_summary_path: paths.smoke_summary.display().to_string(),
+        manifest_design_v1_ready: preflight.manifest_design_v1_ready,
+        restore_ready: preflight.restore_ready,
+        restore_readiness_reasons: preflight.restore_readiness_reasons.clone(),
+        restore_planned_operations: preflight.restore_planned_operations,
+        runner_preview_written: true,
+    }
 }
 
 // Enforce caller-requested preflight requirements after all artifacts are written.
@@ -835,6 +1068,20 @@ fn write_report(
     let mut handle = stdout.lock();
     serde_json::to_writer_pretty(&mut handle, report)?;
     writeln!(handle)?;
+    Ok(())
+}
+
+// Write one pretty JSON value artifact, creating its parent directory when needed.
+fn write_json_file<T>(path: &PathBuf, value: &T) -> Result<(), BackupCommandError>
+where
+    T: Serialize,
+{
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+
+    let data = serde_json::to_vec_pretty(value)?;
+    fs::write(path, data)?;
     Ok(())
 }
 
@@ -1315,7 +1562,7 @@ where
 
 // Return backup command usage text.
 const fn usage() -> &'static str {
-    "usage: canic backup preflight --dir <backup-dir> --out-dir <dir> [--mapping <file>] [--require-design-v1] [--require-restore-ready]\n       canic backup inspect --dir <backup-dir> [--out <file>] [--require-ready]\n       canic backup provenance --dir <backup-dir> [--out <file>] [--require-consistent]\n       canic backup status --dir <backup-dir> [--out <file>] [--require-complete]\n       canic backup verify --dir <backup-dir> [--out <file>]"
+    "usage: canic backup <command> [<args>]\n\ncommands:\n  smoke       Run the post-capture no-mutation smoke path.\n  preflight   Write the standard validation, integrity, plan, and status bundle.\n  inspect     Check manifest and journal agreement without reading artifact bytes.\n  provenance  Summarize backup source, topology, and artifact provenance.\n  status      Summarize resumable download journal state.\n  verify      Verify layout and durable artifact checksums."
 }
 
 #[cfg(test)]
@@ -1360,6 +1607,47 @@ mod tests {
         assert_eq!(options.mapping, Some(PathBuf::from("mapping.json")));
         assert!(options.require_design_v1);
         assert!(options.require_restore_ready);
+    }
+
+    // Ensure backup smoke options parse the canonical no-mutation wrapper shape.
+    #[test]
+    fn parses_backup_smoke_options() {
+        let options = BackupSmokeOptions::parse([
+            OsString::from("--dir"),
+            OsString::from("backups/run"),
+            OsString::from("--out-dir"),
+            OsString::from("smoke/run"),
+            OsString::from("--mapping"),
+            OsString::from("mapping.json"),
+            OsString::from("--dfx"),
+            OsString::from("/bin/true"),
+            OsString::from("--network"),
+            OsString::from("local"),
+            OsString::from("--require-design-v1"),
+            OsString::from("--require-restore-ready"),
+        ])
+        .expect("parse options");
+
+        assert_eq!(options.dir, PathBuf::from("backups/run"));
+        assert_eq!(options.out_dir, PathBuf::from("smoke/run"));
+        assert_eq!(options.mapping, Some(PathBuf::from("mapping.json")));
+        assert_eq!(options.dfx, "/bin/true");
+        assert_eq!(options.network, Some("local".to_string()));
+        assert!(options.require_design_v1);
+        assert!(options.require_restore_ready);
+    }
+
+    // Ensure backup help stays at command-family level.
+    #[test]
+    fn backup_usage_lists_commands_without_nested_flag_dump() {
+        let text = usage();
+
+        assert!(text.contains("usage: canic backup <command> [<args>]"));
+        assert!(text.contains("smoke"));
+        assert!(text.contains("preflight"));
+        assert!(text.contains("verify"));
+        assert!(!text.contains("--require-restore-ready"));
+        assert!(!text.contains("--require-design-v1"));
     }
 
     // Ensure preflight writes the standard no-mutation report bundle.
@@ -1620,6 +1908,64 @@ mod tests {
             summary["restore_status_path"],
             out_dir.join("restore-status.json").display().to_string()
         );
+    }
+
+    // Ensure backup smoke writes the post-capture release smoke bundle.
+    #[test]
+    fn backup_smoke_writes_release_bundle() {
+        let root = temp_dir("canic-cli-backup-smoke");
+        let out_dir = root.join("smoke");
+        let backup_dir = root.join("backup");
+        let layout = BackupLayout::new(backup_dir.clone());
+        let checksum = write_artifact(&backup_dir, b"root artifact");
+
+        layout
+            .write_manifest(&restore_ready_manifest(&checksum.hash))
+            .expect("write manifest");
+        layout
+            .write_journal(&journal_with_checksum(checksum.hash))
+            .expect("write journal");
+
+        let options = BackupSmokeOptions {
+            dir: backup_dir,
+            out_dir: out_dir.clone(),
+            mapping: None,
+            dfx: "/bin/true".to_string(),
+            network: Some("local".to_string()),
+            require_design_v1: true,
+            require_restore_ready: true,
+        };
+
+        let report = backup_smoke(&options).expect("smoke should pass");
+        let summary: serde_json::Value = serde_json::from_slice(
+            &fs::read(out_dir.join("smoke-summary.json")).expect("read smoke summary"),
+        )
+        .expect("decode smoke summary");
+        let runner_preview: serde_json::Value = serde_json::from_slice(
+            &fs::read(out_dir.join("restore-run-dry-run.json")).expect("read runner preview"),
+        )
+        .expect("decode runner preview");
+
+        assert_eq!(report.status, "ready");
+        assert_eq!(report.backup_id, "backup-test");
+        assert!(report.manifest_design_v1_ready);
+        assert!(report.restore_ready);
+        assert!(report.runner_preview_written);
+        assert!(out_dir.join("preflight/preflight-summary.json").exists());
+        assert!(out_dir.join("preflight/restore-plan.json").exists());
+        assert!(out_dir.join("preflight/restore-status.json").exists());
+        assert!(out_dir.join("restore-apply-dry-run.json").exists());
+        assert!(out_dir.join("restore-apply-journal.json").exists());
+        assert!(out_dir.join("restore-run-dry-run.json").exists());
+        assert_eq!(summary["status"], "ready");
+        assert_eq!(summary["restore_ready"], true);
+        assert_eq!(summary["manifest_design_v1_ready"], true);
+        assert_eq!(summary["runner_preview_written"], true);
+        assert_eq!(runner_preview["run_mode"], "dry-run");
+        assert_eq!(runner_preview["dry_run"], true);
+        assert_eq!(runner_preview["operation_receipt_count"], 0);
+
+        fs::remove_dir_all(root).expect("remove temp root");
     }
 
     // Verify restore summary counts copied out of the generated restore plan.

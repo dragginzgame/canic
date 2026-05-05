@@ -247,6 +247,6 @@ Allowed internal use:
 
 The following are explicitly test-only or demo-local:
 
-- `user_shard_issue_token` in `canisters/user_shard/src/lib.rs`
-- `create_account` in `canisters/user_hub/src/lib.rs`
-- `plan_create_account` in `canisters/user_hub/src/lib.rs`
+- `user_shard_issue_token` in `canisters/demo/user_shard/src/lib.rs`
+- `create_account` in `canisters/demo/user_hub/src/lib.rs`
+- `plan_create_account` in `canisters/demo/user_hub/src/lib.rs`

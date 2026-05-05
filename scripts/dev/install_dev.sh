@@ -2,6 +2,7 @@
 set -euo pipefail
 
 CANIC_INSTALLER_VERSION="${CANIC_INSTALLER_VERSION:-0.30.37}"
+CANIC_CLI_VERSION="${CANIC_CLI_VERSION:-$CANIC_INSTALLER_VERSION}"
 CANIC_RUST_TOOLCHAIN="${CANIC_RUST_TOOLCHAIN:-1.95.0}"
 ACTIONLINT_VERSION="${ACTIONLINT_VERSION:-1.7.8}"
 ACTIONLINT_INSTALL_DIR="${ACTIONLINT_INSTALL_DIR:-$HOME/.local/bin}"
@@ -228,6 +229,10 @@ main() {
     cyan_command "cargo +$CANIC_RUST_TOOLCHAIN install --locked canic-installer --version $CANIC_INSTALLER_VERSION"
     cargo_toolchain install --locked canic-installer --version "$CANIC_INSTALLER_VERSION"
 
+    yellow "Canic CLI:"
+    cyan_command "cargo +$CANIC_RUST_TOOLCHAIN install --locked canic-cli --version $CANIC_CLI_VERSION"
+    cargo_toolchain install --locked canic-cli --version "$CANIC_CLI_VERSION"
+
     configure_git_hooks_if_present
 
     if ! command -v dfx >/dev/null 2>&1; then
@@ -249,6 +254,11 @@ main() {
 
     echo >&2
     green "Canic setup complete."
+    if command -v canic >/dev/null 2>&1; then
+        green "canic ready: $(command -v canic)"
+    else
+        yellow "canic installed under Cargo's bin directory; add \$HOME/.cargo/bin to PATH before running it."
+    fi
 }
 
 main "$@"

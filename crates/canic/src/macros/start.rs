@@ -56,7 +56,7 @@ macro_rules! __canic_start_nonroot_lifecycle_core {
     };
 }
 
-// Local-dev lifecycle core for standalone playground canisters.
+// Local-dev lifecycle core for standalone sandbox canisters.
 #[doc(hidden)]
 #[macro_export]
 macro_rules! __canic_start_local_lifecycle_core {
@@ -337,7 +337,7 @@ macro_rules! start {
 /// Configure a local-only non-root Canic canister for manual development.
 ///
 /// `start_local!` is intentionally for standalone dev canisters such as a
-/// playground. It synthesizes a minimal local environment during `init`, so
+/// sandbox. It synthesizes a minimal local environment during `init`, so
 /// `dfx deploy <canister>` can run without entering the full CANIC bootstrap
 /// payload by hand.
 ///

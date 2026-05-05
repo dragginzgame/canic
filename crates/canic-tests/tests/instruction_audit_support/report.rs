@@ -575,31 +575,31 @@ fn hotspot_hint(subject_label: &str) -> (&'static str, &'static str) {
         ),
         "plan_create_worker" => (
             "Scaling policy read path",
-            "[audit_scaling_probe](/home/adam/projects/canic/crates/canic-core/audit-canisters/audit_scaling_probe/src/lib.rs), [scaling workflow](/home/adam/projects/canic/crates/canic-core/src/workflow/placement/scaling/mod.rs)",
+            "[audit_scaling_probe](/home/adam/projects/canic/canisters/audit/audit_scaling_probe/src/lib.rs), [scaling workflow](/home/adam/projects/canic/crates/canic-core/src/workflow/placement/scaling/mod.rs)",
         ),
         "test" => (
             "Local/dev update floor on the test helper canister",
-            "[test/lib](/home/adam/projects/canic/crates/canic-core/test-canisters/canister_test/src/lib.rs)",
+            "[runtime_probe/lib](/home/adam/projects/canic/canisters/test/runtime_probe/src/lib.rs)",
         ),
         "canic_subnet_registry" => (
             "Root topology registry query",
-            "[audit_root_probe](/home/adam/projects/canic/crates/canic-core/audit-canisters/audit_root_probe/src/lib.rs), [registry query](/home/adam/projects/canic/crates/canic-core/src/workflow/topology/registry/query.rs)",
+            "[audit_root_probe](/home/adam/projects/canic/canisters/audit/audit_root_probe/src/lib.rs), [registry query](/home/adam/projects/canic/crates/canic-core/src/workflow/topology/registry/query.rs)",
         ),
         "canic_subnet_state" => (
             "Root state snapshot query",
-            "[audit_root_probe](/home/adam/projects/canic/crates/canic-core/audit-canisters/audit_root_probe/src/lib.rs), [state query](/home/adam/projects/canic/crates/canic-core/src/workflow/state/query.rs)",
+            "[audit_root_probe](/home/adam/projects/canic/canisters/audit/audit_root_probe/src/lib.rs), [state query](/home/adam/projects/canic/crates/canic-core/src/workflow/state/query.rs)",
         ),
         "canic_log" => (
             "Internal audit log pagination probe over the shared log query path",
-            "[audit_leaf_probe](/home/adam/projects/canic/crates/canic-core/audit-canisters/audit_leaf_probe/src/lib.rs), [log query](/home/adam/projects/canic/crates/canic-core/src/workflow/log/query.rs)",
+            "[audit_leaf_probe](/home/adam/projects/canic/canisters/audit/audit_leaf_probe/src/lib.rs), [log query](/home/adam/projects/canic/crates/canic-core/src/workflow/log/query.rs)",
         ),
         "canic_env" => (
             "Internal audit env snapshot probe over the shared env query path",
-            "[audit_leaf_probe](/home/adam/projects/canic/crates/canic-core/audit-canisters/audit_leaf_probe/src/lib.rs), [env query](/home/adam/projects/canic/crates/canic-core/src/workflow/env/query.rs)",
+            "[audit_leaf_probe](/home/adam/projects/canic/canisters/audit/audit_leaf_probe/src/lib.rs), [env query](/home/adam/projects/canic/crates/canic-core/src/workflow/env/query.rs)",
         ),
         "canic_time" => (
             "Internal audit raw time probe",
-            "[audit_leaf_probe](/home/adam/projects/canic/crates/canic-core/audit-canisters/audit_leaf_probe/src/lib.rs)",
+            "[audit_leaf_probe](/home/adam/projects/canic/canisters/audit/audit_leaf_probe/src/lib.rs)",
         ),
         _ => (
             "Shared runtime surface",

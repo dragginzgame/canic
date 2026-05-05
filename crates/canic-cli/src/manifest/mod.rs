@@ -104,7 +104,10 @@ where
             require_design_conformance(&options, &manifest)?;
             Ok(())
         }
-        "help" | "--help" | "-h" => Err(ManifestCommandError::Usage(usage())),
+        "help" | "--help" | "-h" => {
+            println!("{}", usage());
+            Ok(())
+        }
         _ => Err(ManifestCommandError::UnknownOption(command)),
     }
 }

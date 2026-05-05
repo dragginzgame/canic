@@ -1781,7 +1781,10 @@ where
             write_apply_mark(&options, &journal)?;
             Ok(())
         }
-        "help" | "--help" | "-h" => Err(RestoreCommandError::Usage(usage())),
+        "help" | "--help" | "-h" => {
+            println!("{}", usage());
+            Ok(())
+        }
         _ => Err(RestoreCommandError::UnknownOption(command)),
     }
 }
@@ -3269,7 +3272,7 @@ where
 
 // Return restore command usage text.
 const fn usage() -> &'static str {
-    "usage: canic restore plan (--manifest <file> | --backup-dir <dir>) [--mapping <file>] [--out <file>] [--require-verified] [--require-design-v1] [--require-restore-ready]\n       canic restore status --plan <file> [--out <file>]\n       canic restore apply --plan <file> [--status <file>] [--backup-dir <dir>] --dry-run [--out <file>] [--journal-out <file>]\n       canic restore apply-status --journal <file> [--out <file>] [--require-ready] [--require-no-pending] [--require-no-failed] [--require-complete] [--require-remaining-count <n>] [--require-attention-count <n>] [--require-completion-basis-points <n>] [--require-no-pending-before <text>]\n       canic restore apply-report --journal <file> [--out <file>] [--require-no-attention] [--require-remaining-count <n>] [--require-attention-count <n>] [--require-completion-basis-points <n>] [--require-no-pending-before <text>]\n       canic restore run --journal <file> (--dry-run | --execute | --unclaim-pending) [--dfx <path>] [--network <name>] [--max-steps <n>] [--updated-at <text>] [--out <file>] [--require-complete] [--require-no-attention] [--require-run-mode <text>] [--require-stopped-reason <text>] [--require-next-action <text>] [--require-executed-count <n>] [--require-receipt-count <n>] [--require-completed-receipt-count <n>] [--require-failed-receipt-count <n>] [--require-recovered-receipt-count <n>] [--require-receipt-updated-at <text>] [--require-state-updated-at <text>] [--require-batch-initial-ready-count <n>] [--require-batch-executed-count <n>] [--require-batch-remaining-ready-count <n>] [--require-batch-ready-delta <n>] [--require-batch-remaining-delta <n>] [--require-batch-stopped-by-max-steps true|false] [--require-remaining-count <n>] [--require-attention-count <n>] [--require-completion-basis-points <n>] [--require-no-pending-before <text>]\n       canic restore apply-next --journal <file> [--out <file>]\n       canic restore apply-command --journal <file> [--dfx <path>] [--network <name>] [--out <file>] [--require-command]\n       canic restore apply-claim --journal <file> [--sequence <n>] [--updated-at <text>] [--out <file>]\n       canic restore apply-unclaim --journal <file> [--sequence <n>] [--updated-at <text>] [--out <file>]\n       canic restore apply-mark --journal <file> --sequence <n> --state completed|failed [--reason <text>] [--updated-at <text>] [--out <file>] [--require-pending]"
+    "usage: canic restore <command> [<args>]\n\ncommands:\n  plan           Build a no-mutation restore plan.\n  status         Build initial restore status from a plan.\n  apply          Render restore operations and optionally write an apply journal.\n  apply-status   Summarize apply journal state for scripts.\n  apply-report   Write an operator-focused apply journal report.\n  run            Preview, execute, or recover the native restore runner.\n  apply-next     Show the next transitionable journal operation.\n  apply-command  Preview the next generated dfx command.\n  apply-claim    Mark the next operation pending.\n  apply-unclaim  Move a pending operation back to ready.\n  apply-mark     Mark a pending operation completed or failed."
 }
 
 #[cfg(test)]
@@ -3422,6 +3425,19 @@ mod tests {
         assert!(!options.require_verified);
         assert!(options.require_design_v1);
         assert!(options.require_restore_ready);
+    }
+
+    // Ensure restore help stays at command-family level.
+    #[test]
+    fn restore_usage_lists_commands_without_runner_flag_dump() {
+        let text = usage();
+
+        assert!(text.contains("usage: canic restore <command> [<args>]"));
+        assert!(text.contains("plan"));
+        assert!(text.contains("apply-status"));
+        assert!(text.contains("run"));
+        assert!(!text.contains("--require-batch-ready-delta"));
+        assert!(!text.contains("--require-no-pending-before"));
     }
 
     // Ensure verified restore plan options parse with the canonical backup source.

@@ -1,6 +1,6 @@
 # Local Demo Workflow (`scripts/app/`)
 
-These scripts support the reference canisters under `canisters/` and the local topology in `dfx.json`.
+These scripts support the reference canisters under `canisters/demo/` and the local topology in `dfx.json`.
 
 ## Prerequisites
 

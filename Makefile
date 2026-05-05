@@ -2,7 +2,7 @@
         test-packaged-downstream-wasm-store \
         test-packaged-downstream-installer test-installed-canic-installer \
         test test-wasm test-bump build check clippy fmt fmt-check clean \
-        install-dev update-dev demo-install \
+        install-dev install-canic update-dev demo-install \
         ensure-clean ensure-hooks test-unit test-unit-fast \
         test-canisters fmt-core cloc
 
@@ -55,6 +55,7 @@ help:
 	@echo ""
 	@echo "Setup / Installation:"
 	@echo "  install-dev      Install the shared Rust/Cargo/Python/actionlint/Canic toolchain"
+	@echo "  install-canic    Install only the local canic CLI binary"
 	@echo "  update-dev       Update the local Rust/Cargo/Python/actionlint/DFX development environment"
 	@echo "  ensure-hooks     Configure git hooks"
 	@echo ""
@@ -100,6 +101,10 @@ help:
 # Install the shared Rust/Cargo/Python/actionlint/Canic toolchain
 install-dev:
 	bash scripts/dev/install_dev.sh
+
+# Install only the local canic CLI binary.
+install-canic:
+	cargo install --locked --path crates/canic-cli
 
 # Update the local Rust/Cargo/Python/actionlint/DFX development environment.
 update-dev:

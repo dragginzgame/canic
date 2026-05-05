@@ -1,0 +1,26 @@
+[package]
+name = "runtime_probe"
+edition = { workspace = true }
+rust-version = { workspace = true }
+version = { workspace = true }
+publish = false
+
+[package.metadata.canic]
+role = "test"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+candid = { workspace = true }
+canic = { workspace = true, features = ["auth-crypto"] }
+ic-cdk = { workspace = true }
+
+[build-dependencies]
+canic = { workspace = true }
+
+[dev-dependencies]
+canic-testkit = { workspace = true }
+
+[lints]
+workspace = true

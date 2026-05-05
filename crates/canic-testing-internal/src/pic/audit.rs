@@ -1,5 +1,5 @@
+use crate::canister::{APP, SCALE_HUB};
 use canic::cdk::types::Principal;
-use canic_reference_support::canister::{APP, SCALE_HUB};
 use canic_testkit::{
     artifacts::{
         WasmBuildProfile, build_wasm_canisters, read_wasm, test_target_dir, workspace_root_for,

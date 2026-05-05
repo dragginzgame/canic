@@ -95,7 +95,7 @@ fn run_standalone_scenario(scenario: &AuditScenario) -> Option<ScenarioResult> {
         "scale_hub:plan_create_worker:empty-pool" => {
             return Some(run_audit_scaling_probe_scenario(scenario));
         }
-        "test:test:minimal-valid" => ("canister_test", TEST),
+        "test:test:minimal-valid" => ("runtime_probe", TEST),
         _ => return None,
     };
 

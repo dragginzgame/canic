@@ -20,6 +20,7 @@ The crate was historically known as **ICU** (Internet Computer Utilities). All c
 * **Self-validating delegated auth**: root signs shard certificates, shards mint user tokens, and verifiers validate token + embedded proof with local root/shard key material. Verifiers do not require proof fanout or proof caches.
 * **Stable memory helpers**: `ic_memory!`, `ic_memory_range!`, and `eager_static!` wrap stable structures and upgrade-safe runtime state.
 * **Thin-root release flow**: `canic-installer` builds child WASMs, stages release sets through the implicit `wasm_store`, and keeps ordinary child artifacts out of the root Wasm.
+* **Operator CLI**: the `canic` binary lists registered fleets, captures topology-aware canister snapshots, validates backup manifests, and drives guarded restore planning/journals.
 * **CI-oriented tooling**: Rust 2024, repo toolchain pinned to Rust `1.95.0`, published MSRV `1.91.0`, and standard `make` targets for format, lint, check, test, and build.
 
 ## 📁 Repository Layout
@@ -28,12 +29,16 @@ The crate was historically known as **ICU** (Internet Computer Utilities). All c
 * `crates/canic-core/` – runtime orchestration, config validation, auth, storage, workflow, and endpoint-adjacent APIs.
 * `crates/canic-cdk/` – curated IC CDK facade used by Canic runtime crates.
 * `crates/canic-memory/` – standalone stable-memory helpers.
+* `crates/canic-cli/` – published `canic` operator binary for fleet listing, snapshot, backup, manifest, and restore workflows.
 * `crates/canic-installer/` – published build/install/release-set CLIs.
 * `crates/canic-control-plane/` – root/control-plane runtime support.
 * `crates/canic-wasm-store/` – canonical implicit bootstrap `wasm_store` canister crate.
 * `crates/canic-testkit/` – public PocketIC helpers for downstream tests.
-* `crates/canic-testing-internal/`, `crates/canic-tests/`, `crates/canic-core/test-canisters/`, and `crates/canic-core/audit-canisters/` – repo-only integration, correctness, and audit fixtures.
-* `canisters/` – reference canisters for root, app, user shard/hub, scaling, minimal baselines, and shared support.
+* `crates/canic-testing-internal/` and `crates/canic-tests/` – repo-only PocketIC harnesses and integration tests.
+* `canisters/demo/` – local reference topology for root, app, user shard/hub, scaling, and minimal baselines.
+* `canisters/test/` and `canisters/audit/` – repo-only correctness canisters and audit probes.
+* `canisters/support/` – shared reference support crates used by demo and test canisters.
+* `canisters/sandbox/minimal/` – manual local sandbox canister for temporary endpoint experiments.
 * `scripts/` – dev setup, CI, release, wasm, and audit helpers.
 * `assets/`, `docs/`, `.github/workflows/` – documentation assets, design/audit notes, and CI.
 
@@ -97,7 +102,7 @@ async fn canic_install(_: Option<Vec<u8>>) {}
 async fn canic_upgrade() {}
 ```
 
-See `canisters/root` and the reference canisters under `canisters/*` for end‑to‑end patterns, including managed `wasm_store` publication and endpoint exports.
+See `canisters/demo/root` and the reference canisters under `canisters/demo/*` for end‑to‑end patterns, including managed `wasm_store` publication and endpoint exports.
 
 ### 4. Define your topology
 
@@ -105,17 +110,47 @@ Populate `canic.toml` with subnet definitions, role policies, index exposure, an
 
 ### 5. Local Build and Install
 
+To get the `canic` operator binary from a checkout:
+
+```bash
+make install-canic
+canic help
+```
+
+Without `make`, the equivalent command is:
+
+```bash
+cargo install --locked --path crates/canic-cli
+```
+
+After a release is published, install the same binary from crates.io with:
+
+```bash
+cargo install --locked canic-cli --version <same-version-as-canic>
+```
+
+Once installed, inspect the current registered canisters:
+
+```bash
+canic list --network local
+```
+
+By default, `canic list` resolves the current local root with `dfx canister id root`
+and renders the registered topology as an ASCII tree. Use `canic help` or
+`canic <command> help` for command-specific options.
+
 For local DFX workflows, prefer the shared setup script:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/dragginzgame/canic/v0.30.37/scripts/dev/install_dev.sh | bash
+curl -fsSL https://raw.githubusercontent.com/dragginzgame/canic/main/scripts/dev/install_dev.sh | bash
 ```
 
 The script installs Rust when needed, the repo-local Rust `1.95.0` toolchain, `wasm32-unknown-unknown`, `rustfmt`, `clippy`, Candid/wasm utilities, `actionlint`, common Cargo helper tools, and `dfx` when missing.
 
 It also installs:
 
-- `canic-installer` `0.30.37`
+- `canic-cli` as the `canic` command
+- `canic-installer` at the matching published version
 
 Published crates still declare MSRV `1.91.0` for downstream source builds.
 
@@ -192,6 +227,54 @@ role = "project_ledger"
 
 `canic-list-install-targets` prints `root` first, then ordinary roles from the single subnet that owns `root`. It excludes the implicit bootstrap `wasm_store`.
 
+### 6. Operator Snapshot and Restore Flow
+
+The `canic` binary is the operator entry point for fleet backup/restore work.
+It still uses `dfx` for live IC snapshot operations, but it owns the higher-level
+topology selection, manifests, journals, verification reports, and restore
+readiness checks.
+
+Show the live registry tree:
+
+```bash
+canic list --network local
+```
+
+Plan or capture a canister plus its registered children:
+
+```bash
+canic snapshot download \
+  --canister <canister-id> \
+  --root <root-canister-id> \
+  --include-children \
+  --out backups/<run-id> \
+  --dry-run
+```
+
+Use `--recursive` for all descendants. Non-dry-run captures recompute the
+selected topology immediately before snapshot creation and fail if the topology
+hash changed since discovery. Because `dfx` creates snapshots only for stopped
+canisters, pass `--stop-before-snapshot --resume-after-snapshot` when the CLI
+should wrap that local lifecycle step.
+
+Validate a captured backup before restore planning:
+
+```bash
+canic backup smoke \
+  --dir backups/<run-id> \
+  --out-dir smoke/<run-id> \
+  --require-design-v1 \
+  --require-restore-ready
+```
+
+Restore work is manifest/journal driven. `restore plan`, `restore status`,
+`restore apply --dry-run`, and `restore run --dry-run` are no-mutation paths for
+checking mappings, ordering, checksums, verification coverage, and runner
+commands before execution.
+
+See `crates/canic-cli/README.md` for the full command reference and
+`docs/operations/0.30-backup-restore-smoke.md` for the release smoke checklist.
+
 If you are writing host-side PocketIC tests against Canic, prefer
 `crates/canic-testkit/` for the public wrapper surface. The unpublished
 `crates/canic-testing-internal/` crate owns Canic's heavier root/auth harnesses
@@ -209,6 +292,29 @@ Canic follows the layering rules in `AGENTS.md`. Dependencies flow downward, and
 * `access/` plus macro-generated endpoints – request guards and system-boundary wiring that delegate immediately to `workflow` or `ops`.
 
 ## Capabilities & Endpoints
+
+### Update Payload Limits 🧱
+
+Every `#[canic_update]` endpoint is registered with a generated ingress payload
+limit. The default limit is `16 KiB`, and `canic::start!`,
+`canic::start_root!`, and `canic::start_wasm_store!` wire the IC
+`inspect_message` hook that rejects oversized ingress before consensus.
+
+Use `payload(max_bytes = ...)` when an endpoint intentionally accepts a larger
+request body:
+
+```rust
+use canic::{Error, prelude::*};
+
+#[canic_update(payload(max_bytes = 32 * 1024))]
+fn import_blob(bytes: Vec<u8>) -> Result<usize, Error> {
+    Ok(bytes.len())
+}
+```
+
+The payload check applies to ingress update calls. It is a pre-consensus
+admission guard, not an in-canister audit log; rejected oversized ingress does
+not enter replicated execution.
 
 ### Delegated Auth 🔐
 

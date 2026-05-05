@@ -22,7 +22,7 @@ use canic::{
     },
     protocol,
 };
-use canic_reference_support::canister;
+use canic_testing_internal::canister;
 use std::convert::TryFrom;
 use std::time::Duration;
 

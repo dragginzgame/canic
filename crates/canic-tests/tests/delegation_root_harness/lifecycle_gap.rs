@@ -11,8 +11,7 @@ use canic::{
     },
     ids::{CanisterRole, SubnetRole},
 };
-use canic_reference_support::canister;
-use canic_testing_internal::pic::upgrade_args;
+use canic_testing_internal::{canister, pic::upgrade_args};
 use canic_testkit::artifacts::workspace_root_for;
 use std::{fs, path::PathBuf, time::Duration};
 

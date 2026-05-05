@@ -733,7 +733,7 @@ Typical Canic examples:
 
 * `canic` facade re-exports of stable DTOs and macros
 * `canic-testkit` exposing generic PocketIC helpers
-* demo canisters depending on shared reference-support constants
+* demo canisters carrying tiny local role constants and no-op lifecycle hooks
 * `dto` types being publicly reachable where they are intended contract surface
 
 Produce:
@@ -873,4 +873,3 @@ The report must be written so that another reviewer can answer, for every findin
 * whether it changed since the baseline
 
 If the report cannot support those questions, the run should be marked `BLOCKED` rather than overstated.
-

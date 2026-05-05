@@ -112,21 +112,21 @@ fn profile_build_extra_env(
         RootSetupProfile::Capability => vec![(
             "CANIC_CONFIG_PATH".to_string(),
             workspace_root
-                .join("canisters/test-configs/root-capability.toml")
+                .join("canisters/demo/test-configs/root-capability.toml")
                 .display()
                 .to_string(),
         )],
         RootSetupProfile::Scaling => vec![(
             "CANIC_CONFIG_PATH".to_string(),
             workspace_root
-                .join("canisters/test-configs/root-scaling.toml")
+                .join("canisters/demo/test-configs/root-scaling.toml")
                 .display()
                 .to_string(),
         )],
         RootSetupProfile::Sharding => vec![(
             "CANIC_CONFIG_PATH".to_string(),
             workspace_root
-                .join("canisters/test-configs/root-sharding.toml")
+                .join("canisters/demo/test-configs/root-sharding.toml")
                 .display()
                 .to_string(),
         )],

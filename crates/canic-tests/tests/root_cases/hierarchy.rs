@@ -7,7 +7,7 @@ use crate::root::{
     harness::setup_root,
 };
 use canic::ids::CanisterRole;
-use canic_reference_support::canister;
+use canic_testing_internal::canister;
 use std::io::Write;
 
 fn test_progress(test_name: &str, phase: &str) {

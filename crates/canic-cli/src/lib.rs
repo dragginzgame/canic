@@ -1,4 +1,5 @@
 pub mod backup;
+pub mod list;
 pub mod manifest;
 pub mod restore;
 pub mod snapshot;
@@ -17,6 +18,9 @@ pub enum CliError {
 
     #[error(transparent)]
     Backup(#[from] backup::BackupCommandError),
+
+    #[error(transparent)]
+    List(#[from] list::ListCommandError),
 
     #[error(transparent)]
     Manifest(#[from] manifest::ManifestCommandError),
@@ -45,6 +49,7 @@ where
 
     match command.as_str() {
         "backup" => backup::run(args).map_err(CliError::from),
+        "list" => list::run(args).map_err(CliError::from),
         "manifest" => manifest::run(args).map_err(CliError::from),
         "snapshot" => snapshot::run(args).map_err(CliError::from),
         "restore" => restore::run(args).map_err(CliError::from),
@@ -58,50 +63,36 @@ where
 
 // Return the top-level usage text.
 const fn usage() -> &'static str {
-    "usage: canic snapshot download --canister <id> --out <dir> [--root <id> | --registry-json <file>] [--include-children] [--recursive] [--dry-run] [--stop-before-snapshot] [--resume-after-snapshot] [--network <name>]\n       canic backup preflight --dir <backup-dir> --out-dir <dir> [--mapping <file>] [--require-design-v1] [--require-restore-ready]\n       canic backup inspect --dir <backup-dir> [--out <file>] [--require-ready]\n       canic backup provenance --dir <backup-dir> [--out <file>] [--require-consistent]\n       canic backup status --dir <backup-dir> [--out <file>] [--require-complete]\n       canic backup verify --dir <backup-dir> [--out <file>]\n       canic manifest validate --manifest <file> [--out <file>] [--require-design-v1]\n       canic restore plan (--manifest <file> | --backup-dir <dir>) [--mapping <file>] [--out <file>] [--require-verified] [--require-design-v1] [--require-restore-ready]\n       canic restore status --plan <file> [--out <file>]\n       canic restore apply --plan <file> [--status <file>] [--backup-dir <dir>] --dry-run [--out <file>] [--journal-out <file>]\n       canic restore apply-status --journal <file> [--out <file>] [--require-ready] [--require-no-pending] [--require-no-failed] [--require-complete] [--require-remaining-count <n>] [--require-attention-count <n>] [--require-completion-basis-points <n>] [--require-no-pending-before <text>]\n       canic restore apply-report --journal <file> [--out <file>] [--require-no-attention] [--require-remaining-count <n>] [--require-attention-count <n>] [--require-completion-basis-points <n>] [--require-no-pending-before <text>]\n       canic restore run --journal <file> (--dry-run | --execute | --unclaim-pending) [--dfx <path>] [--network <name>] [--max-steps <n>] [--updated-at <text>] [--out <file>] [--require-complete] [--require-no-attention] [--require-run-mode <text>] [--require-stopped-reason <text>] [--require-next-action <text>] [--require-executed-count <n>] [--require-receipt-count <n>] [--require-completed-receipt-count <n>] [--require-failed-receipt-count <n>] [--require-recovered-receipt-count <n>] [--require-receipt-updated-at <text>] [--require-state-updated-at <text>] [--require-batch-initial-ready-count <n>] [--require-batch-executed-count <n>] [--require-batch-remaining-ready-count <n>] [--require-batch-ready-delta <n>] [--require-batch-remaining-delta <n>] [--require-batch-stopped-by-max-steps true|false] [--require-remaining-count <n>] [--require-attention-count <n>] [--require-completion-basis-points <n>] [--require-no-pending-before <text>]\n       canic restore apply-next --journal <file> [--out <file>]\n       canic restore apply-command --journal <file> [--dfx <path>] [--network <name>] [--out <file>] [--require-command]\n       canic restore apply-claim --journal <file> [--sequence <n>] [--updated-at <text>] [--out <file>]\n       canic restore apply-unclaim --journal <file> [--sequence <n>] [--updated-at <text>] [--out <file>]\n       canic restore apply-mark --journal <file> --sequence <n> --state completed|failed [--reason <text>] [--updated-at <text>] [--out <file>] [--require-pending]"
+    "usage: canic <command> [<args>]\n\ncommands:\n  list       Show registry canisters as an ASCII tree.\n  snapshot   Capture and download canister snapshots.\n  backup     Inspect, verify, preflight, or smoke-check a backup directory.\n  manifest   Validate fleet backup manifests.\n  restore    Plan, preview, summarize, or run restore journals.\n\nhelp:\n  canic help\n  canic <command> help"
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    // Ensure top-level help stays aligned with restore-readiness gates.
+    // Ensure top-level help stays compact as command surfaces grow.
     #[test]
-    fn usage_lists_restore_readiness_gates() {
+    fn usage_lists_command_families_without_nested_flags() {
         let text = usage();
 
-        assert!(text.contains(
-            "canic backup preflight --dir <backup-dir> --out-dir <dir> [--mapping <file>] [--require-design-v1] [--require-restore-ready]"
-        ));
-        assert!(text.contains(
-            "canic restore plan (--manifest <file> | --backup-dir <dir>) [--mapping <file>] [--out <file>] [--require-verified] [--require-design-v1] [--require-restore-ready]"
-        ));
-        assert!(text.contains("canic restore status --plan <file> [--out <file>]"));
-        assert!(text.contains(
-            "canic restore apply --plan <file> [--status <file>] [--backup-dir <dir>] --dry-run [--out <file>] [--journal-out <file>]"
-        ));
-        assert!(text.contains(
-            "canic manifest validate --manifest <file> [--out <file>] [--require-design-v1]"
-        ));
-        assert!(text.contains(
-            "canic restore apply-status --journal <file> [--out <file>] [--require-ready] [--require-no-pending] [--require-no-failed] [--require-complete] [--require-remaining-count <n>] [--require-attention-count <n>] [--require-completion-basis-points <n>] [--require-no-pending-before <text>]"
-        ));
-        assert!(text.contains(
-            "canic restore apply-report --journal <file> [--out <file>] [--require-no-attention] [--require-remaining-count <n>] [--require-attention-count <n>] [--require-completion-basis-points <n>] [--require-no-pending-before <text>]"
-        ));
-        assert!(text.contains("canic restore run --journal <file> (--dry-run | --execute | --unclaim-pending) [--dfx <path>] [--network <name>] [--max-steps <n>] [--updated-at <text>] [--out <file>] [--require-complete] [--require-no-attention] [--require-run-mode <text>] [--require-stopped-reason <text>] [--require-next-action <text>] [--require-executed-count <n>] [--require-receipt-count <n>] [--require-completed-receipt-count <n>] [--require-failed-receipt-count <n>] [--require-recovered-receipt-count <n>] [--require-receipt-updated-at <text>] [--require-state-updated-at <text>] [--require-batch-initial-ready-count <n>] [--require-batch-executed-count <n>] [--require-batch-remaining-ready-count <n>] [--require-batch-ready-delta <n>] [--require-batch-remaining-delta <n>] [--require-batch-stopped-by-max-steps true|false] [--require-remaining-count <n>] [--require-attention-count <n>] [--require-completion-basis-points <n>] [--require-no-pending-before <text>]"));
-        assert!(text.contains("canic restore apply-next --journal <file> [--out <file>]"));
-        assert!(text.contains(
-            "canic restore apply-command --journal <file> [--dfx <path>] [--network <name>] [--out <file>] [--require-command]"
-        ));
-        assert!(text.contains(
-            "canic restore apply-claim --journal <file> [--sequence <n>] [--updated-at <text>] [--out <file>]"
-        ));
-        assert!(text.contains(
-            "canic restore apply-unclaim --journal <file> [--sequence <n>] [--updated-at <text>] [--out <file>]"
-        ));
-        assert!(text.contains(
-            "canic restore apply-mark --journal <file> --sequence <n> --state completed|failed [--reason <text>] [--updated-at <text>] [--out <file>] [--require-pending]"
-        ));
+        assert!(text.contains("usage: canic <command> [<args>]"));
+        assert!(text.contains("list"));
+        assert!(text.contains("snapshot"));
+        assert!(text.contains("backup"));
+        assert!(text.contains("manifest"));
+        assert!(text.contains("restore"));
+        assert!(text.contains("canic <command> help"));
+        assert!(!text.contains("--require-batch-ready-delta"));
+        assert!(!text.contains("--require-no-pending-before"));
+    }
+
+    // Ensure command-family help paths return successfully instead of erroring.
+    #[test]
+    fn command_family_help_returns_ok() {
+        assert!(run([OsString::from("backup"), OsString::from("help")]).is_ok());
+        assert!(run([OsString::from("list"), OsString::from("help")]).is_ok());
+        assert!(run([OsString::from("restore"), OsString::from("help")]).is_ok());
+        assert!(run([OsString::from("manifest"), OsString::from("help")]).is_ok());
+        assert!(run([OsString::from("snapshot"), OsString::from("help")]).is_ok());
     }
 }

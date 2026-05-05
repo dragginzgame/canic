@@ -400,7 +400,7 @@ macro_rules! canic_emit_root_wasm_store_endpoints {
             ::canic::api::canister::template::WasmStoreBootstrapApi::prepare_root_wasm_store_chunk_set(request)
         }
 
-        #[$crate::canic_update(requires(caller::is_controller()))]
+        #[$crate::canic_update(requires(caller::is_controller()), payload(max_bytes = ::canic::CANIC_WASM_CHUNK_BYTES + 64 * 1024))]
         async fn canic_wasm_store_bootstrap_publish_chunk_admin(
             request: ::canic::dto::template::TemplateChunkInput,
         ) -> Result<(), ::canic::Error> {
@@ -434,7 +434,7 @@ macro_rules! canic_emit_root_wasm_store_endpoints {
             ::canic::api::canister::template::WasmStoreBootstrapApi::prepare_chunk_set(request)
         }
 
-        #[$crate::canic_update(requires(caller::is_controller()))]
+        #[$crate::canic_update(requires(caller::is_controller()), payload(max_bytes = ::canic::CANIC_WASM_CHUNK_BYTES + 64 * 1024))]
         async fn canic_template_publish_chunk_admin(
             request: ::canic::dto::template::TemplateChunkInput,
         ) -> Result<(), ::canic::Error> {
@@ -524,7 +524,7 @@ macro_rules! canic_emit_local_wasm_store_endpoints {
             ::canic::api::canister::template::WasmStoreCanisterApi::stage_manifest(request)
         }
 
-        #[$crate::canic_update(internal, requires(caller::is_root()))]
+        #[$crate::canic_update(internal, requires(caller::is_root()), payload(max_bytes = ::canic::CANIC_WASM_CHUNK_BYTES + 64 * 1024))]
         async fn canic_wasm_store_publish_chunk(
             request: ::canic::dto::template::TemplateChunkInput,
         ) -> Result<(), ::canic::Error> {

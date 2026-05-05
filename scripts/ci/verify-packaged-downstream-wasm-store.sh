@@ -67,7 +67,7 @@ EOF
 prepare_downstream_root() {
     mkdir -p "$DOWNSTREAM_ROOT/src" "$DOWNSTREAM_ROOT/canisters"
 
-    cp "$ROOT/canisters/canic.toml" "$DOWNSTREAM_ROOT/canisters/canic.toml"
+    cp "$ROOT/canisters/demo/canic.toml" "$DOWNSTREAM_ROOT/canisters/canic.toml"
 
     cat > "$DOWNSTREAM_ROOT/Cargo.toml" <<EOF
 [package]

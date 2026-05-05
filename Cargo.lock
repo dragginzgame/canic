@@ -82,7 +82,6 @@ version = "0.30.37"
 dependencies = [
  "candid",
  "canic",
- "canic-reference-support",
  "ic-cdk",
 ]
 
@@ -101,7 +100,6 @@ version = "0.30.37"
 dependencies = [
  "candid",
  "canic",
- "canic-reference-support",
  "ic-cdk",
 ]
 
@@ -362,13 +360,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "canic-reference-support"
-version = "0.30.37"
-dependencies = [
- "canic-core",
-]
-
-[[package]]
 name = "canic-testing-internal"
 version = "0.30.37"
 dependencies = [
@@ -376,7 +367,6 @@ dependencies = [
  "canic",
  "canic-control-plane",
  "canic-core",
- "canic-reference-support",
  "canic-testkit",
  "pocket-ic",
  "serde",
@@ -401,7 +391,6 @@ dependencies = [
  "canic",
  "canic-control-plane",
  "canic-core",
- "canic-reference-support",
  "canic-testing-internal",
  "canic-testkit",
  "pocket-ic",
@@ -424,7 +413,6 @@ version = "0.30.37"
 dependencies = [
  "candid",
  "canic",
- "canic-reference-support",
  "ic-cdk",
 ]
 
@@ -434,17 +422,6 @@ version = "0.30.37"
 dependencies = [
  "candid",
  "canic",
- "canic-reference-support",
- "ic-cdk",
-]
-
-[[package]]
-name = "canister_playground"
-version = "0.30.37"
-dependencies = [
- "candid",
- "canic",
- "canic-reference-support",
  "ic-cdk",
 ]
 
@@ -454,11 +431,19 @@ version = "0.30.37"
 dependencies = [
  "candid",
  "canic",
- "canic-reference-support",
  "ic-cdk",
  "pocket-ic",
  "serde",
  "sha2",
+]
+
+[[package]]
+name = "canister_sandbox_minimal"
+version = "0.30.37"
+dependencies = [
+ "candid",
+ "canic",
+ "ic-cdk",
 ]
 
 [[package]]
@@ -467,7 +452,6 @@ version = "0.30.37"
 dependencies = [
  "candid",
  "canic",
- "canic-reference-support",
  "ic-cdk",
 ]
 
@@ -477,18 +461,6 @@ version = "0.30.37"
 dependencies = [
  "candid",
  "canic",
- "canic-reference-support",
- "ic-cdk",
-]
-
-[[package]]
-name = "canister_test"
-version = "0.30.37"
-dependencies = [
- "candid",
- "canic",
- "canic-reference-support",
- "canic-testkit",
  "ic-cdk",
 ]
 
@@ -498,7 +470,6 @@ version = "0.30.37"
 dependencies = [
  "candid",
  "canic",
- "canic-reference-support",
  "ic-cdk",
 ]
 
@@ -508,7 +479,6 @@ version = "0.30.37"
 dependencies = [
  "candid",
  "canic",
- "canic-reference-support",
  "ic-cdk",
 ]
 
@@ -798,7 +768,6 @@ version = "0.30.37"
 dependencies = [
  "candid",
  "canic",
- "canic-reference-support",
  "ic-cdk",
 ]
 
@@ -2379,6 +2348,16 @@ dependencies = [
  "libc",
  "untrusted",
  "windows-sys 0.52.0",
+]
+
+[[package]]
+name = "runtime_probe"
+version = "0.30.37"
+dependencies = [
+ "candid",
+ "canic",
+ "canic-testkit",
+ "ic-cdk",
 ]
 
 [[package]]

@@ -11,7 +11,7 @@ use canic::{
     ids::{CanisterRole, cap},
     protocol,
 };
-use canic_reference_support::canister;
+use canic_testing_internal::canister;
 use canic_testing_internal::pic::{
     create_user_shard, issue_delegated_token, request_root_delegation_provision,
 };

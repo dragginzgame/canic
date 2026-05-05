@@ -265,21 +265,25 @@ kind = "singleton"
     fn root_manifest_path_prefers_canister_manifest_metadata() {
         let temp = TempWorkspace::new();
         let workspace_root = temp.path();
-        fs::create_dir_all(workspace_root.join("canisters/root")).expect("create root dir");
+        fs::create_dir_all(workspace_root.join("canisters/demo/root")).expect("create root dir");
+        fs::create_dir_all(workspace_root.join("canisters/demo/root/src"))
+            .expect("create root src dir");
         fs::write(
             workspace_root.join("Cargo.toml"),
-            "[workspace]\nmembers = []\n",
+            "[workspace]\nmembers = [\"canisters/demo/root\"]\n",
         )
         .expect("write workspace manifest");
         fs::write(
-            workspace_root.join("canisters/root/Cargo.toml"),
-            "[package]\nname = \"canister_root\"\nversion = \"0.1.0\"\n",
+            workspace_root.join("canisters/demo/root/Cargo.toml"),
+            "[package]\nname = \"canister_root\"\nversion = \"0.1.0\"\nedition = \"2024\"\n",
         )
         .expect("write root manifest");
+        fs::write(workspace_root.join("canisters/demo/root/src/lib.rs"), "")
+            .expect("write root lib");
 
         assert_eq!(
             root_manifest_path(workspace_root),
-            workspace_root.join("canisters/root/Cargo.toml")
+            workspace_root.join("canisters/demo/root/Cargo.toml")
         );
     }
 
@@ -287,21 +291,29 @@ kind = "singleton"
     fn canister_manifest_path_prefers_canister_manifest_metadata() {
         let temp = TempWorkspace::new();
         let workspace_root = temp.path();
-        fs::create_dir_all(workspace_root.join("canisters/user_hub")).expect("create user hub dir");
+        fs::create_dir_all(workspace_root.join("canisters/demo/user_hub"))
+            .expect("create user hub dir");
+        fs::create_dir_all(workspace_root.join("canisters/demo/user_hub/src"))
+            .expect("create user hub src dir");
         fs::write(
             workspace_root.join("Cargo.toml"),
-            "[workspace]\nmembers = []\n",
+            "[workspace]\nmembers = [\"canisters/demo/user_hub\"]\n",
         )
         .expect("write workspace manifest");
         fs::write(
-            workspace_root.join("canisters/user_hub/Cargo.toml"),
-            "[package]\nname = \"canister_user_hub\"\nversion = \"0.1.0\"\n",
+            workspace_root.join("canisters/demo/user_hub/Cargo.toml"),
+            "[package]\nname = \"canister_user_hub\"\nversion = \"0.1.0\"\nedition = \"2024\"\n",
         )
         .expect("write user hub manifest");
+        fs::write(
+            workspace_root.join("canisters/demo/user_hub/src/lib.rs"),
+            "",
+        )
+        .expect("write user hub lib");
 
         assert_eq!(
             canister_manifest_path(workspace_root, "user_hub"),
-            workspace_root.join("canisters/user_hub/Cargo.toml")
+            workspace_root.join("canisters/demo/user_hub/Cargo.toml")
         );
     }
 

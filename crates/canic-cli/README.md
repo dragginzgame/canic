@@ -2,8 +2,32 @@
 
 Operator CLI for Canic backup and restore workflows.
 
+Install from this checkout:
+
+```bash
+cargo install --locked --path crates/canic-cli
+canic help
+```
+
+Install from crates.io after a release:
+
+```bash
+cargo install --locked canic-cli --version <version>
+```
+
 For the release smoke path, use the canonical checklist in
 [docs/operations/0.30-backup-restore-smoke.md](../../docs/operations/0.30-backup-restore-smoke.md).
+
+Show the current registered fleet as an ASCII tree:
+
+```bash
+canic list --network local
+```
+
+By default, `canic list` resolves the current project's root with
+`dfx canister id root`. Use `--root <root-canister-id>` to point at a specific
+root, `--canister <id>` to print one subtree, or `--registry-json <file>` to
+render a saved `canic_subnet_registry` response without calling `dfx`.
 
 The initial command focuses on snapshot capture/download planning and execution
 for a canister plus its registry-discovered children.
@@ -124,6 +148,21 @@ readiness booleans, verification readiness booleans, `restore_mapping_supplied`,
 error when manifest design conformance is not ready.
 `--require-restore-ready` still writes the full report bundle, then exits with
 an error when `restore_ready` is false.
+
+Run the full post-capture smoke wrapper:
+
+```bash
+canic backup smoke \
+  --dir backups/<run-id> \
+  --out-dir smoke/<run-id> \
+  --require-design-v1 \
+  --require-restore-ready
+```
+
+Smoke writes the preflight bundle under `preflight/`, renders
+`restore-apply-dry-run.json`, writes `restore-apply-journal.json`, previews the
+native runner into `restore-run-dry-run.json`, and records the paths and
+readiness flags in `smoke-summary.json`. It does not execute restore operations.
 
 Restore planning is manifest-driven and performs no mutations:
 

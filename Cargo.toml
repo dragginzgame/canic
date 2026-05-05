@@ -1,34 +1,33 @@
 
 [workspace]
 members = [
-    "canisters/app",
-    "canisters/minimal",
-    "canisters/playground",
-    "canisters/reference-support",
-    "canisters/root",
-    "canisters/scale",
-    "canisters/scale_hub",
-    "canisters/user_hub",
-    "canisters/user_shard",
+    "canisters/audit/audit_leaf_probe",
+    "canisters/audit/audit_root_probe",
+    "canisters/audit/audit_scaling_probe",
+    "canisters/demo/app",
+    "canisters/demo/minimal",
+    "canisters/demo/root",
+    "canisters/demo/scale",
+    "canisters/demo/scale_hub",
+    "canisters/demo/user_hub",
+    "canisters/demo/user_shard",
+    "canisters/sandbox/minimal",
+    "canisters/test/delegation_root_stub",
+    "canisters/test/delegation_signer_stub",
+    "canisters/test/intent_authority",
+    "canisters/test/intent_client",
+    "canisters/test/intent_external",
+    "canisters/test/payload_limit_probe",
+    "canisters/test/project_hub_stub",
+    "canisters/test/project_instance_stub",
+    "canisters/test/runtime_probe",
+    "canisters/test/sharding_root_stub",
     "crates/canic",
     "crates/canic-backup",
     "crates/canic-cdk",
     "crates/canic-cli",
     "crates/canic-control-plane",
     "crates/canic-core",
-    "crates/canic-core/audit-canisters/audit_leaf_probe",
-    "crates/canic-core/audit-canisters/audit_root_probe",
-    "crates/canic-core/audit-canisters/audit_scaling_probe",
-    "crates/canic-core/test-canisters/canister_test",
-    "crates/canic-core/test-canisters/delegation_root_stub",
-    "crates/canic-core/test-canisters/delegation_signer_stub",
-    "crates/canic-core/test-canisters/intent_authority",
-    "crates/canic-core/test-canisters/intent_client",
-    "crates/canic-core/test-canisters/intent_external",
-    "crates/canic-core/test-canisters/payload_limit_probe",
-    "crates/canic-core/test-canisters/project_hub_stub",
-    "crates/canic-core/test-canisters/project_instance_stub",
-    "crates/canic-core/test-canisters/sharding_root_stub",
     "crates/canic-installer",
     "crates/canic-macros",
     "crates/canic-memory",
@@ -64,7 +63,6 @@ canic-core = { version = "0.30.37", path = "crates/canic-core" }
 canic-installer = { version = "0.30.37", path = "crates/canic-installer" }
 canic-macros = { version = "0.30.37", path = "crates/canic-macros" }
 canic-memory = { version = "0.30.37", path = "crates/canic-memory" }
-canic-reference-support = { version = "0.30.37", path = "canisters/reference-support" }
 canic-testing-internal = { version = "0.30.37", path = "crates/canic-testing-internal" }
 canic-testkit = { version = "0.30.37", path = "crates/canic-testkit" }
 canic-wasm-store = { version = "0.30.37", path = "crates/canic-wasm-store" }

@@ -15,7 +15,6 @@ fn main() {
     println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_observability_memory)");
     println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_observability_env)");
     println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_observability_log)");
-    println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_observability_security)");
     println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_metrics)");
     println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_auth_attestation)");
     println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_topology_state)");
@@ -48,7 +47,7 @@ fn main() {
     // NOTE: This path will NOT exist in `cargo package` / `cargo publish` builds because
     // Cargo builds from a staged directory under target/package/ that does not include
     // workspace siblings.
-    let repo_cfg = manifest_dir.join("../../canisters/canic.toml");
+    let repo_cfg = manifest_dir.join("../../canisters/demo/canic.toml");
 
     // Determine the config path:
     // - If CANIC_CONFIG_PATH is set, it is authoritative (relative paths resolved from the crate).
