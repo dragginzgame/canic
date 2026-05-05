@@ -286,6 +286,7 @@ version = "0.30.27"
 dependencies = [
  "candid",
  "canic-backup",
+ "serde",
  "serde_json",
  "thiserror 2.0.18",
 ]

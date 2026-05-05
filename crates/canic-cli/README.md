@@ -239,9 +239,14 @@ transition. `--max-steps` is useful for cautious incremental restores. Add
 summary and then fail if the journal is incomplete or still needs review.
 If a generated command fails, the runner still writes the summary and updated
 journal before returning a nonzero error.
-Every runner summary includes `stopped_reason` and `next_action` so automation
-can decide whether to rerun, inspect a failed operation, recover a pending
-operation, fix blocked inputs, or stop.
+Every runner summary includes `run_mode`, `stopped_reason`, and `next_action`
+so automation can decide whether to rerun, inspect a failed operation, recover
+a pending operation, fix blocked inputs, or stop.
+Use `--require-run-mode <text>`, `--require-stopped-reason <text>`, and
+`--require-next-action <text>` when CI should write the summary and then fail
+unless the runner stopped in the expected state.
+Use `--require-executed-count <n>` when a batched run must execute exactly the
+expected number of operations.
 
 ```bash
 canic restore run \
@@ -257,12 +262,17 @@ updated journal, and emits a recovery summary.
 ```bash
 scripts/restore/apply_journal.sh \
   --journal restore-apply-journal.json \
-  --network local
+  --execute \
+  --network local \
+  --out restore-run.json
 ```
 
-The script remains as a small compatibility wrapper around the same guarded
-status, command preview, claim, `dfx` execution, mark, and report steps shown
-below.
+The script remains as a small compatibility wrapper around
+`canic restore run`. It defaults to `--execute` for existing callers, can also
+pass through `--dry-run` and `--unclaim-pending`, and accepts the older
+`--report-out`, `--status-out`, and `--command-out` flags for existing runbooks.
+The native runner now owns the guarded status, claim, `dfx` execution, marking,
+and summary behavior.
 
 Emit the full next transitionable operation for an external runner:
 
