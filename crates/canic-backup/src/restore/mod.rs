@@ -920,6 +920,7 @@ pub struct RestoreApplyJournalStatus {
     pub operation_counts: RestoreApplyOperationKindCounts,
     pub operation_counts_supplied: bool,
     pub progress: RestoreApplyProgressSummary,
+    pub pending_summary: RestoreApplyPendingSummary,
     pub pending_operations: usize,
     pub ready_operations: usize,
     pub blocked_operations: usize,
@@ -951,6 +952,7 @@ impl RestoreApplyJournalStatus {
             operation_counts: RestoreApplyOperationKindCounts::from_operations(&journal.operations),
             operation_counts_supplied: journal.operation_counts_supplied(),
             progress: RestoreApplyProgressSummary::from_journal(journal),
+            pending_summary: RestoreApplyPendingSummary::from_journal(journal),
             pending_operations: journal.pending_operations,
             ready_operations: journal.ready_operations,
             blocked_operations: journal.blocked_operations,
@@ -989,6 +991,7 @@ pub struct RestoreApplyJournalReport {
     pub operation_counts: RestoreApplyOperationKindCounts,
     pub operation_counts_supplied: bool,
     pub progress: RestoreApplyProgressSummary,
+    pub pending_summary: RestoreApplyPendingSummary,
     pub pending_operations: usize,
     pub ready_operations: usize,
     pub blocked_operations: usize,
@@ -1023,6 +1026,7 @@ impl RestoreApplyJournalReport {
             operation_counts: RestoreApplyOperationKindCounts::from_operations(&journal.operations),
             operation_counts_supplied: journal.operation_counts_supplied(),
             progress: RestoreApplyProgressSummary::from_journal(journal),
+            pending_summary: RestoreApplyPendingSummary::from_journal(journal),
             pending_operations: journal.pending_operations,
             ready_operations: journal.ready_operations,
             blocked_operations: journal.blocked_operations,
@@ -1036,6 +1040,50 @@ impl RestoreApplyJournalReport {
             blocked,
         }
     }
+}
+
+///
+/// RestoreApplyPendingSummary
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RestoreApplyPendingSummary {
+    pub pending_operations: usize,
+    pub pending_operation_available: bool,
+    pub pending_sequence: Option<usize>,
+    pub pending_operation: Option<RestoreApplyOperationKind>,
+    pub pending_updated_at: Option<String>,
+    pub pending_updated_at_known: bool,
+}
+
+impl RestoreApplyPendingSummary {
+    /// Build a compact pending-operation summary from a restore apply journal.
+    #[must_use]
+    pub fn from_journal(journal: &RestoreApplyJournal) -> Self {
+        let pending = journal
+            .operations
+            .iter()
+            .filter(|operation| operation.state == RestoreApplyOperationState::Pending)
+            .min_by_key(|operation| operation.sequence);
+        let pending_updated_at = pending.and_then(|operation| operation.state_updated_at.clone());
+        let pending_updated_at_known = pending_updated_at
+            .as_deref()
+            .is_some_and(known_state_update_marker);
+
+        Self {
+            pending_operations: journal.pending_operations,
+            pending_operation_available: pending.is_some(),
+            pending_sequence: pending.map(|operation| operation.sequence),
+            pending_operation: pending.map(|operation| operation.operation.clone()),
+            pending_updated_at,
+            pending_updated_at_known,
+        }
+    }
+}
+
+// Return whether a journal update marker can be compared by automation.
+fn known_state_update_marker(value: &str) -> bool {
+    !value.trim().is_empty() && value != "unknown"
 }
 
 ///
@@ -3574,6 +3622,13 @@ mod tests {
         assert_eq!(status.progress.attention_operations, 0);
         assert_eq!(status.progress.completion_basis_points, 0);
         assert_eq!(report.progress, status.progress);
+        assert_eq!(status.pending_summary.pending_operations, 0);
+        assert!(!status.pending_summary.pending_operation_available);
+        assert_eq!(status.pending_summary.pending_sequence, None);
+        assert_eq!(status.pending_summary.pending_operation, None);
+        assert_eq!(status.pending_summary.pending_updated_at, None);
+        assert!(!status.pending_summary.pending_updated_at_known);
+        assert_eq!(report.pending_summary, status.pending_summary);
         assert_eq!(status.ready_operations, 8);
         assert_eq!(status.next_ready_sequence, Some(0));
         assert_eq!(
@@ -4072,6 +4127,7 @@ mod tests {
             .mark_next_operation_pending_at(Some("2026-05-04T12:00:00Z".to_string()))
             .expect("mark operation pending");
         let status = journal.status();
+        let report = journal.report();
         let next = journal.next_operation();
         let preview = journal.next_command_preview();
 
@@ -4095,6 +4151,19 @@ mod tests {
             status.next_transition_updated_at.as_deref(),
             Some("2026-05-04T12:00:00Z")
         );
+        assert_eq!(status.pending_summary.pending_operations, 1);
+        assert!(status.pending_summary.pending_operation_available);
+        assert_eq!(status.pending_summary.pending_sequence, Some(0));
+        assert_eq!(
+            status.pending_summary.pending_operation,
+            Some(RestoreApplyOperationKind::UploadSnapshot)
+        );
+        assert_eq!(
+            status.pending_summary.pending_updated_at.as_deref(),
+            Some("2026-05-04T12:00:00Z")
+        );
+        assert!(status.pending_summary.pending_updated_at_known);
+        assert_eq!(report.pending_summary, status.pending_summary);
         assert!(next.operation_available);
         assert_eq!(
             next.operation.expect("next operation").state,

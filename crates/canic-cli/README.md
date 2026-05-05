@@ -205,6 +205,15 @@ apply operation is completed. Apply status output also includes
 reinstalls, member verifications, fleet verifications, and total verification
 operations. The `progress` object reports total, completed, remaining,
 transitionable, attention-needed, and basis-point completion counts.
+Use `--require-remaining-count <n>`, `--require-attention-count <n>`, and
+`--require-completion-basis-points <n>` when automation should fail after
+writing status unless the integer progress summary matches the expected restore
+state.
+The `pending_summary` object reports the claimed operation sequence, operation
+kind, update marker, and whether that marker is known. Use
+`--require-no-pending-before <text>` with comparable update markers such as
+UTC RFC3339 timestamps to fail after writing status when pending work is older
+than the cutoff or has no known marker.
 
 Write an operator-focused restore apply report:
 
@@ -221,6 +230,10 @@ transitionable operation, and the pending, failed, and blocked operation rows
 that need review. Use
 `--require-no-attention` when CI should fail after writing the report if the
 journal has pending, failed, or blocked work.
+The same `--require-remaining-count <n>`, `--require-attention-count <n>`, and
+`--require-completion-basis-points <n>` gates are available for report output.
+Reports also include `pending_summary` and support
+`--require-no-pending-before <text>` for stale pending-work detection.
 
 Preview or run the maintained restore runner path:
 
@@ -259,14 +272,32 @@ summary and then fail if the journal is incomplete or still needs review.
 If a generated command fails, the runner still writes the summary and updated
 journal before returning a nonzero error.
 Every runner summary includes `run_mode`, `stopped_reason`, `next_action`,
-progress, and operation-kind counts so automation can decide whether to rerun,
-inspect a failed operation, recover a pending operation, fix blocked inputs, or
-stop.
+progress, pending summary, operation receipts, and operation-kind counts so
+automation can decide whether to rerun, inspect a failed operation, recover a
+pending operation, fix blocked inputs, or stop. `operation_receipts` is the
+uniform audit stream for command completion, command failure, and pending
+recovery events, while `operation_receipt_summary` gives compact totals for
+completed commands, failed commands, and recovered pending work. Older
+compatibility fields such as `executed_operations` and `recovered_operation`
+remain available.
 Use `--require-run-mode <text>`, `--require-stopped-reason <text>`, and
 `--require-next-action <text>` when CI should write the summary and then fail
 unless the runner stopped in the expected state.
 Use `--require-executed-count <n>` when a batched run must execute exactly the
 expected number of operations.
+Use `--require-receipt-count <n>` when automation must see exactly the expected
+number of operation audit receipts, including execute and pending-recovery
+events.
+Use `--require-completed-receipt-count <n>`,
+`--require-failed-receipt-count <n>`, and
+`--require-recovered-receipt-count <n>` when automation needs to distinguish
+successful commands, failed commands, and recovered pending work.
+Use `--require-remaining-count <n>`, `--require-attention-count <n>`, and
+`--require-completion-basis-points <n>` to gate runner summaries on the same
+progress fields exposed by `apply-status` and `apply-report`.
+Use `--require-no-pending-before <text>` to make runner automation fail after
+writing the summary when a pending claim is older than the cutoff or has no
+known marker.
 
 ```bash
 canic restore run \
