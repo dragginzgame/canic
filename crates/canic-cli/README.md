@@ -228,6 +228,10 @@ canic restore run \
   --network local \
   --max-steps 1 \
   --out restore-run.json \
+  --require-run-mode execute \
+  --require-stopped-reason max-steps-reached \
+  --require-next-action rerun \
+  --require-executed-count 1 \
   --require-no-attention
 ```
 

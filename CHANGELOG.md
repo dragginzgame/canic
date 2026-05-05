@@ -9,8 +9,6 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 - `0.30.28` starts runner cleanup by moving `canic restore run` summaries onto typed response structs, adds explicit runner-mode/state/action/count gates for automation, and turns the restore apply script into a mode-aware native-runner wrapper.
 
-- `0.30.27` moves guarded restore journal execution into `canic restore run --execute`, keeps `--dry-run` previews, adds pending-operation recovery, writes summaries with `stopped_reason` and `next_action`, adds CI gates, and adds a maintained script wrapper for operators who still want the shell flow.
-
 ```bash
 canic restore run \
   --journal restore-apply-journal.json \
@@ -18,8 +16,14 @@ canic restore run \
   --network local \
   --max-steps 1 \
   --out restore-run.json \
+  --require-run-mode execute \
+  --require-stopped-reason max-steps-reached \
+  --require-next-action rerun \
+  --require-executed-count 1 \
   --require-no-attention
 ```
+
+- `0.30.27` moves guarded restore journal execution into `canic restore run --execute`, keeps `--dry-run` previews, adds pending-operation recovery, writes summaries with `stopped_reason` and `next_action`, adds CI gates, and adds a maintained script wrapper for operators who still want the shell flow.
 
 - `0.30.26` adds `canic restore apply-report` and `--require-no-attention` so operators and CI can summarize restore apply journal outcomes, counts, and attention-needed operations without reading the full journal.
 
