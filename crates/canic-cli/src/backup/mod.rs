@@ -1589,6 +1589,14 @@ mod tests {
             &fs::read(out_dir.join("preflight-summary.json")).expect("read summary"),
         )
         .expect("decode summary");
+        let manifest_validation: serde_json::Value = serde_json::from_slice(
+            &fs::read(out_dir.join("manifest-validation.json")).expect("read manifest summary"),
+        )
+        .expect("decode manifest summary");
+        let restore_plan: RestorePlan = serde_json::from_slice(
+            &fs::read(out_dir.join("restore-plan.json")).expect("read plan"),
+        )
+        .expect("decode restore plan");
 
         fs::remove_dir_all(root).expect("remove temp root");
         assert!(report.manifest_design_v1_ready);
@@ -1596,6 +1604,17 @@ mod tests {
         assert!(report.restore_readiness_reasons.is_empty());
         assert_eq!(summary["restore_ready"], true);
         assert_eq!(summary["manifest_design_v1_ready"], true);
+        assert_eq!(
+            manifest_validation["design_conformance"]["design_v1_ready"],
+            true
+        );
+        assert!(
+            restore_plan
+                .design_conformance
+                .as_ref()
+                .expect("restore plan should include design conformance")
+                .design_v1_ready
+        );
         assert_eq!(summary["restore_readiness_reasons"], json!([]));
         assert_eq!(
             summary["restore_status_path"],

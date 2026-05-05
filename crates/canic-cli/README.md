@@ -2,6 +2,9 @@
 
 Operator CLI for Canic backup and restore workflows.
 
+For the release smoke path, use the canonical checklist in
+[docs/operations/0.30-backup-restore-smoke.md](../../docs/operations/0.30-backup-restore-smoke.md).
+
 The initial command focuses on snapshot capture/download planning and execution
 for a canister plus its registry-discovered children.
 
