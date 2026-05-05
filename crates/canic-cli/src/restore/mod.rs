@@ -14,6 +14,7 @@ use std::{
     fs,
     io::{self, Write},
     path::PathBuf,
+    process::Command,
 };
 use thiserror::Error as ThisError;
 
@@ -37,6 +38,15 @@ pub enum RestoreCommandError {
 
     #[error("restore apply currently requires --dry-run")]
     ApplyRequiresDryRun,
+
+    #[error("restore run requires --dry-run, --execute, or --unclaim-pending")]
+    RestoreRunRequiresMode,
+
+    #[error("use only one restore run mode: --dry-run, --execute, or --unclaim-pending")]
+    RestoreRunConflictingModes,
+
+    #[error("restore run command failed for operation {sequence}: status={status}")]
+    RestoreRunCommandFailed { sequence: usize, status: String },
 
     #[error("restore plan for backup {backup_id} is not restore-ready: reasons={reasons:?}")]
     RestoreNotReady {
@@ -425,6 +435,114 @@ impl RestoreApplyReportOptions {
 }
 
 ///
+/// RestoreRunOptions
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "CLI runner options mirror independent mode and fail-closed guard flags"
+)]
+pub struct RestoreRunOptions {
+    pub journal: PathBuf,
+    pub dfx: String,
+    pub network: Option<String>,
+    pub out: Option<PathBuf>,
+    pub dry_run: bool,
+    pub execute: bool,
+    pub unclaim_pending: bool,
+    pub max_steps: Option<usize>,
+    pub require_complete: bool,
+    pub require_no_attention: bool,
+}
+
+impl RestoreRunOptions {
+    /// Parse restore run options from CLI arguments.
+    pub fn parse<I>(args: I) -> Result<Self, RestoreCommandError>
+    where
+        I: IntoIterator<Item = OsString>,
+    {
+        let mut journal = None;
+        let mut dfx = "dfx".to_string();
+        let mut network = None;
+        let mut out = None;
+        let mut dry_run = false;
+        let mut execute = false;
+        let mut unclaim_pending = false;
+        let mut max_steps = None;
+        let mut require_complete = false;
+        let mut require_no_attention = false;
+
+        let mut args = args.into_iter();
+        while let Some(arg) = args.next() {
+            let arg = arg
+                .into_string()
+                .map_err(|_| RestoreCommandError::Usage(usage()))?;
+            match arg.as_str() {
+                "--journal" => journal = Some(PathBuf::from(next_value(&mut args, "--journal")?)),
+                "--dfx" => dfx = next_value(&mut args, "--dfx")?,
+                "--network" => network = Some(next_value(&mut args, "--network")?),
+                "--out" => out = Some(PathBuf::from(next_value(&mut args, "--out")?)),
+                "--dry-run" => dry_run = true,
+                "--execute" => execute = true,
+                "--unclaim-pending" => unclaim_pending = true,
+                "--max-steps" => {
+                    max_steps = Some(parse_sequence(next_value(&mut args, "--max-steps")?)?);
+                }
+                "--require-complete" => require_complete = true,
+                "--require-no-attention" => require_no_attention = true,
+                "--help" | "-h" => return Err(RestoreCommandError::Usage(usage())),
+                _ => return Err(RestoreCommandError::UnknownOption(arg)),
+            }
+        }
+
+        let mode_count = [dry_run, execute, unclaim_pending]
+            .into_iter()
+            .filter(|enabled| *enabled)
+            .count();
+        if mode_count > 1 {
+            return Err(RestoreCommandError::RestoreRunConflictingModes);
+        }
+
+        if mode_count == 0 {
+            return Err(RestoreCommandError::RestoreRunRequiresMode);
+        }
+
+        Ok(Self {
+            journal: journal.ok_or(RestoreCommandError::MissingOption("--journal"))?,
+            dfx,
+            network,
+            out,
+            dry_run,
+            execute,
+            unclaim_pending,
+            max_steps,
+            require_complete,
+            require_no_attention,
+        })
+    }
+}
+
+///
+/// RestoreRunResult
+///
+
+struct RestoreRunResult {
+    response: serde_json::Value,
+    error: Option<RestoreCommandError>,
+}
+
+impl RestoreRunResult {
+    // Build a successful runner response with no deferred error.
+    const fn ok(response: serde_json::Value) -> Self {
+        Self {
+            response,
+            error: None,
+        }
+    }
+}
+
+///
 /// RestoreApplyNextOptions
 ///
 
@@ -743,6 +861,22 @@ where
             enforce_apply_report_requirements(&options, &report)?;
             Ok(())
         }
+        "run" => {
+            let options = RestoreRunOptions::parse(args)?;
+            let run = if options.execute {
+                restore_run_execute_result(&options)?
+            } else if options.unclaim_pending {
+                RestoreRunResult::ok(restore_run_unclaim_pending(&options)?)
+            } else {
+                RestoreRunResult::ok(restore_run_dry_run(&options)?)
+            };
+            write_restore_run(&options, &run.response)?;
+            if let Some(error) = run.error {
+                return Err(error);
+            }
+            enforce_restore_run_requirements(&options, &run.response)?;
+            Ok(())
+        }
         "apply-next" => {
             let options = RestoreApplyNextOptions::parse(args)?;
             let next = restore_apply_next(&options)?;
@@ -829,6 +963,369 @@ pub fn restore_apply_report(
 ) -> Result<RestoreApplyJournalReport, RestoreCommandError> {
     let journal = read_apply_journal(&options.journal)?;
     Ok(journal.report())
+}
+
+/// Build a no-mutation native restore runner preview from a journal file.
+pub fn restore_run_dry_run(
+    options: &RestoreRunOptions,
+) -> Result<serde_json::Value, RestoreCommandError> {
+    let journal = read_apply_journal(&options.journal)?;
+    let report = journal.report();
+    let preview = journal.next_command_preview_with_config(&RestoreApplyCommandConfig {
+        program: options.dfx.clone(),
+        network: options.network.clone(),
+    });
+    let stopped_reason = restore_run_stopped_reason(&report, false, false);
+    let next_action = restore_run_next_action(&report, false);
+
+    Ok(serde_json::json!({
+        "run_version": 1,
+        "backup_id": journal.backup_id,
+        "dry_run": true,
+        "execute": false,
+        "unclaim_pending": false,
+        "stopped_reason": stopped_reason,
+        "next_action": next_action,
+        "ready": report.ready,
+        "complete": report.complete,
+        "attention_required": report.attention_required,
+        "outcome": report.outcome,
+        "operation_count": report.operation_count,
+        "pending_operations": report.pending_operations,
+        "ready_operations": report.ready_operations,
+        "blocked_operations": report.blocked_operations,
+        "completed_operations": report.completed_operations,
+        "failed_operations": report.failed_operations,
+        "blocked_reasons": report.blocked_reasons,
+        "next_transition": report.next_transition,
+        "operation_available": preview.operation_available,
+        "command_available": preview.command_available,
+        "command": preview.command,
+    }))
+}
+
+/// Recover an interrupted restore runner by unclaiming the pending operation.
+pub fn restore_run_unclaim_pending(
+    options: &RestoreRunOptions,
+) -> Result<serde_json::Value, RestoreCommandError> {
+    let mut journal = read_apply_journal(&options.journal)?;
+    let recovered_operation = journal
+        .next_transition_operation()
+        .filter(|operation| operation.state == RestoreApplyOperationState::Pending)
+        .cloned()
+        .ok_or(RestoreApplyJournalError::NoPendingOperation)?;
+
+    journal.mark_next_operation_ready_at(Some(timestamp_placeholder()))?;
+    write_apply_journal_file(&options.journal, &journal)?;
+
+    let report = journal.report();
+    let next_action = restore_run_next_action(&report, true);
+    Ok(serde_json::json!({
+        "run_version": 1,
+        "backup_id": journal.backup_id,
+        "dry_run": false,
+        "execute": false,
+        "unclaim_pending": true,
+        "stopped_reason": "recovered-pending",
+        "next_action": next_action,
+        "recovered_operation": recovered_operation,
+        "ready": report.ready,
+        "complete": report.complete,
+        "attention_required": report.attention_required,
+        "outcome": report.outcome,
+        "operation_count": report.operation_count,
+        "pending_operations": report.pending_operations,
+        "ready_operations": report.ready_operations,
+        "blocked_operations": report.blocked_operations,
+        "completed_operations": report.completed_operations,
+        "failed_operations": report.failed_operations,
+        "blocked_reasons": report.blocked_reasons,
+        "next_transition": report.next_transition,
+    }))
+}
+
+/// Execute ready restore apply journal operations through generated runner commands.
+pub fn restore_run_execute(
+    options: &RestoreRunOptions,
+) -> Result<serde_json::Value, RestoreCommandError> {
+    let run = restore_run_execute_result(options)?;
+    if let Some(error) = run.error {
+        return Err(error);
+    }
+
+    Ok(run.response)
+}
+
+// Execute ready restore apply operations and retain any deferred runner error.
+fn restore_run_execute_result(
+    options: &RestoreRunOptions,
+) -> Result<RestoreRunResult, RestoreCommandError> {
+    let mut journal = read_apply_journal(&options.journal)?;
+    let mut executed_operations = Vec::new();
+    let config = RestoreApplyCommandConfig {
+        program: options.dfx.clone(),
+        network: options.network.clone(),
+    };
+
+    loop {
+        let report = journal.report();
+        if report.complete || options.max_steps == Some(executed_operations.len()) {
+            let max_steps_reached =
+                options.max_steps == Some(executed_operations.len()) && !report.complete;
+            return Ok(RestoreRunResult::ok(restore_run_execute_summary(
+                &journal,
+                executed_operations,
+                max_steps_reached,
+            )));
+        }
+
+        enforce_restore_run_executable(&journal, &report)?;
+        let preview = journal.next_command_preview_with_config(&config);
+        enforce_restore_run_command_available(&preview)?;
+
+        let operation = preview
+            .operation
+            .clone()
+            .ok_or_else(|| restore_run_command_unavailable_error(&preview))?;
+        let command = preview
+            .command
+            .clone()
+            .ok_or_else(|| restore_run_command_unavailable_error(&preview))?;
+        let sequence = operation.sequence;
+
+        enforce_apply_claim_sequence(sequence, &journal)?;
+        journal.mark_operation_pending_at(sequence, Some(timestamp_placeholder()))?;
+        write_apply_journal_file(&options.journal, &journal)?;
+
+        let status = Command::new(&command.program)
+            .args(&command.args)
+            .status()?;
+        let status_label = exit_status_label(status);
+        if status.success() {
+            journal.mark_operation_completed_at(sequence, Some(timestamp_placeholder()))?;
+            write_apply_journal_file(&options.journal, &journal)?;
+            executed_operations.push(serde_json::json!({
+                "sequence": sequence,
+                "operation": operation.operation,
+                "target_canister": operation.target_canister,
+                "command": command,
+                "status": status_label,
+                "state": "completed",
+            }));
+            continue;
+        }
+
+        journal.mark_operation_failed_at(
+            sequence,
+            format!("runner-command-exit-{status_label}"),
+            Some(timestamp_placeholder()),
+        )?;
+        write_apply_journal_file(&options.journal, &journal)?;
+        executed_operations.push(serde_json::json!({
+            "sequence": sequence,
+            "operation": operation.operation,
+            "target_canister": operation.target_canister,
+            "command": command,
+            "status": status_label,
+            "state": "failed",
+        }));
+        let response = restore_run_execute_summary(&journal, executed_operations, false);
+        return Ok(RestoreRunResult {
+            response,
+            error: Some(RestoreCommandError::RestoreRunCommandFailed {
+                sequence,
+                status: status_label,
+            }),
+        });
+    }
+}
+
+// Build the final native runner execution summary.
+fn restore_run_execute_summary(
+    journal: &RestoreApplyJournal,
+    executed_operations: Vec<serde_json::Value>,
+    max_steps_reached: bool,
+) -> serde_json::Value {
+    let report = journal.report();
+    let executed_operation_count = executed_operations.len();
+    let stopped_reason = restore_run_stopped_reason(&report, max_steps_reached, true);
+    let next_action = restore_run_next_action(&report, false);
+
+    serde_json::json!({
+        "run_version": 1,
+        "backup_id": journal.backup_id.clone(),
+        "dry_run": false,
+        "execute": true,
+        "unclaim_pending": false,
+        "stopped_reason": stopped_reason,
+        "next_action": next_action,
+        "max_steps_reached": max_steps_reached,
+        "executed_operations": executed_operations,
+        "executed_operation_count": executed_operation_count,
+        "ready": report.ready,
+        "complete": report.complete,
+        "attention_required": report.attention_required,
+        "outcome": report.outcome,
+        "operation_count": report.operation_count,
+        "pending_operations": report.pending_operations,
+        "ready_operations": report.ready_operations,
+        "blocked_operations": report.blocked_operations,
+        "completed_operations": report.completed_operations,
+        "failed_operations": report.failed_operations,
+        "blocked_reasons": report.blocked_reasons,
+        "next_transition": report.next_transition,
+    })
+}
+
+// Classify why the native runner stopped for operator summaries.
+const fn restore_run_stopped_reason(
+    report: &RestoreApplyJournalReport,
+    max_steps_reached: bool,
+    executed: bool,
+) -> &'static str {
+    if report.complete {
+        return "complete";
+    }
+    if report.failed_operations > 0 {
+        return "command-failed";
+    }
+    if report.pending_operations > 0 {
+        return "pending";
+    }
+    if !report.ready || report.blocked_operations > 0 {
+        return "blocked";
+    }
+    if max_steps_reached {
+        return "max-steps-reached";
+    }
+    if executed {
+        return "ready";
+    }
+    "preview"
+}
+
+// Recommend the next operator action for the native runner summary.
+const fn restore_run_next_action(
+    report: &RestoreApplyJournalReport,
+    recovered_pending: bool,
+) -> &'static str {
+    if report.complete {
+        return "done";
+    }
+    if report.failed_operations > 0 {
+        return "inspect-failed-operation";
+    }
+    if report.pending_operations > 0 {
+        return "unclaim-pending";
+    }
+    if !report.ready || report.blocked_operations > 0 {
+        return "fix-blocked-journal";
+    }
+    if recovered_pending {
+        return "rerun";
+    }
+    "rerun"
+}
+
+// Ensure the journal can be advanced by the native restore runner.
+fn enforce_restore_run_executable(
+    journal: &RestoreApplyJournal,
+    report: &RestoreApplyJournalReport,
+) -> Result<(), RestoreCommandError> {
+    if report.pending_operations > 0 {
+        return Err(RestoreCommandError::RestoreApplyPending {
+            backup_id: report.backup_id.clone(),
+            pending_operations: report.pending_operations,
+            next_transition_sequence: report
+                .next_transition
+                .as_ref()
+                .map(|operation| operation.sequence),
+        });
+    }
+
+    if report.failed_operations > 0 {
+        return Err(RestoreCommandError::RestoreApplyFailed {
+            backup_id: report.backup_id.clone(),
+            failed_operations: report.failed_operations,
+        });
+    }
+
+    if report.ready {
+        return Ok(());
+    }
+
+    Err(RestoreCommandError::RestoreApplyNotReady {
+        backup_id: journal.backup_id.clone(),
+        reasons: report.blocked_reasons.clone(),
+    })
+}
+
+// Convert an unavailable native runner command into the shared fail-closed error.
+fn enforce_restore_run_command_available(
+    preview: &RestoreApplyCommandPreview,
+) -> Result<(), RestoreCommandError> {
+    if preview.command_available {
+        return Ok(());
+    }
+
+    Err(restore_run_command_unavailable_error(preview))
+}
+
+// Build a restore runner command-unavailable error from a preview.
+fn restore_run_command_unavailable_error(
+    preview: &RestoreApplyCommandPreview,
+) -> RestoreCommandError {
+    RestoreCommandError::RestoreApplyCommandUnavailable {
+        backup_id: preview.backup_id.clone(),
+        operation_available: preview.operation_available,
+        complete: preview.complete,
+        blocked_reasons: preview.blocked_reasons.clone(),
+    }
+}
+
+// Render process exit status without relying on platform-specific internals.
+fn exit_status_label(status: std::process::ExitStatus) -> String {
+    status
+        .code()
+        .map_or_else(|| "signal".to_string(), |code| code.to_string())
+}
+
+// Enforce caller-requested native runner requirements after output is emitted.
+fn enforce_restore_run_requirements(
+    options: &RestoreRunOptions,
+    run: &serde_json::Value,
+) -> Result<(), RestoreCommandError> {
+    if options.require_complete && !bool_field(run, "complete") {
+        return Err(RestoreCommandError::RestoreApplyIncomplete {
+            backup_id: string_field(run, "backup_id"),
+            completed_operations: usize_field(run, "completed_operations"),
+            operation_count: usize_field(run, "operation_count"),
+        });
+    }
+
+    if options.require_no_attention && bool_field(run, "attention_required") {
+        return Err(RestoreCommandError::RestoreApplyReportNeedsAttention {
+            backup_id: string_field(run, "backup_id"),
+            outcome: serde_json::from_value(run["outcome"].clone())?,
+        });
+    }
+
+    Ok(())
+}
+
+// Read one boolean field from an internally generated restore runner response.
+fn bool_field(value: &serde_json::Value, field: &'static str) -> bool {
+    value[field].as_bool().unwrap_or(false)
+}
+
+// Read one string field from an internally generated restore runner response.
+fn string_field(value: &serde_json::Value, field: &'static str) -> String {
+    value[field].as_str().unwrap_or_default().to_string()
+}
+
+// Read one usize field from an internally generated restore runner response.
+fn usize_field(value: &serde_json::Value, field: &'static str) -> usize {
+    usize::try_from(value[field].as_u64().unwrap_or_default()).unwrap_or_default()
 }
 
 // Enforce caller-requested apply report requirements after report output is emitted.
@@ -1246,6 +1743,34 @@ fn write_apply_report(
     Ok(())
 }
 
+// Write the restore runner response to stdout or a requested output file.
+fn write_restore_run(
+    options: &RestoreRunOptions,
+    run: &serde_json::Value,
+) -> Result<(), RestoreCommandError> {
+    if let Some(path) = &options.out {
+        let data = serde_json::to_vec_pretty(run)?;
+        fs::write(path, data)?;
+        return Ok(());
+    }
+
+    let stdout = io::stdout();
+    let mut handle = stdout.lock();
+    serde_json::to_writer_pretty(&mut handle, run)?;
+    writeln!(handle)?;
+    Ok(())
+}
+
+// Persist the restore apply journal to its canonical runner path.
+fn write_apply_journal_file(
+    path: &PathBuf,
+    journal: &RestoreApplyJournal,
+) -> Result<(), RestoreCommandError> {
+    let data = serde_json::to_vec_pretty(journal)?;
+    fs::write(path, data)?;
+    Ok(())
+}
+
 // Write the computed apply next-operation response to stdout or a requested output file.
 fn write_apply_next(
     options: &RestoreApplyNextOptions,
@@ -1348,7 +1873,7 @@ where
 
 // Return restore command usage text.
 const fn usage() -> &'static str {
-    "usage: canic restore plan (--manifest <file> | --backup-dir <dir>) [--mapping <file>] [--out <file>] [--require-verified] [--require-restore-ready]\n       canic restore status --plan <file> [--out <file>]\n       canic restore apply --plan <file> [--status <file>] [--backup-dir <dir>] --dry-run [--out <file>] [--journal-out <file>]\n       canic restore apply-status --journal <file> [--out <file>] [--require-ready] [--require-no-pending] [--require-no-failed] [--require-complete]\n       canic restore apply-report --journal <file> [--out <file>] [--require-no-attention]\n       canic restore apply-next --journal <file> [--out <file>]\n       canic restore apply-command --journal <file> [--dfx <path>] [--network <name>] [--out <file>] [--require-command]\n       canic restore apply-claim --journal <file> [--sequence <n>] [--updated-at <text>] [--out <file>]\n       canic restore apply-unclaim --journal <file> [--sequence <n>] [--updated-at <text>] [--out <file>]\n       canic restore apply-mark --journal <file> --sequence <n> --state completed|failed [--reason <text>] [--updated-at <text>] [--out <file>] [--require-pending]"
+    "usage: canic restore plan (--manifest <file> | --backup-dir <dir>) [--mapping <file>] [--out <file>] [--require-verified] [--require-restore-ready]\n       canic restore status --plan <file> [--out <file>]\n       canic restore apply --plan <file> [--status <file>] [--backup-dir <dir>] --dry-run [--out <file>] [--journal-out <file>]\n       canic restore apply-status --journal <file> [--out <file>] [--require-ready] [--require-no-pending] [--require-no-failed] [--require-complete]\n       canic restore apply-report --journal <file> [--out <file>] [--require-no-attention]\n       canic restore run --journal <file> (--dry-run | --execute | --unclaim-pending) [--dfx <path>] [--network <name>] [--max-steps <n>] [--out <file>] [--require-complete] [--require-no-attention]\n       canic restore apply-next --journal <file> [--out <file>]\n       canic restore apply-command --journal <file> [--dfx <path>] [--network <name>] [--out <file>] [--require-command]\n       canic restore apply-claim --journal <file> [--sequence <n>] [--updated-at <text>] [--out <file>]\n       canic restore apply-unclaim --journal <file> [--sequence <n>] [--updated-at <text>] [--out <file>]\n       canic restore apply-mark --journal <file> --sequence <n> --state completed|failed [--reason <text>] [--updated-at <text>] [--out <file>] [--require-pending]"
 }
 
 #[cfg(test)]
@@ -1508,6 +2033,83 @@ mod tests {
         );
     }
 
+    // Ensure restore run options parse the native runner dry-run command.
+    #[test]
+    fn parses_restore_run_dry_run_options() {
+        let options = RestoreRunOptions::parse([
+            OsString::from("--journal"),
+            OsString::from("restore-apply-journal.json"),
+            OsString::from("--dry-run"),
+            OsString::from("--dfx"),
+            OsString::from("/tmp/dfx"),
+            OsString::from("--network"),
+            OsString::from("local"),
+            OsString::from("--out"),
+            OsString::from("restore-run-dry-run.json"),
+            OsString::from("--max-steps"),
+            OsString::from("1"),
+            OsString::from("--require-complete"),
+            OsString::from("--require-no-attention"),
+        ])
+        .expect("parse restore run options");
+
+        assert_eq!(options.journal, PathBuf::from("restore-apply-journal.json"));
+        assert_eq!(options.dfx, "/tmp/dfx");
+        assert_eq!(options.network.as_deref(), Some("local"));
+        assert_eq!(options.out, Some(PathBuf::from("restore-run-dry-run.json")));
+        assert!(options.dry_run);
+        assert!(!options.execute);
+        assert!(!options.unclaim_pending);
+        assert_eq!(options.max_steps, Some(1));
+        assert!(options.require_complete);
+        assert!(options.require_no_attention);
+    }
+
+    // Ensure restore run options parse the native execute command.
+    #[test]
+    fn parses_restore_run_execute_options() {
+        let options = RestoreRunOptions::parse([
+            OsString::from("--journal"),
+            OsString::from("restore-apply-journal.json"),
+            OsString::from("--execute"),
+            OsString::from("--dfx"),
+            OsString::from("/bin/true"),
+            OsString::from("--max-steps"),
+            OsString::from("4"),
+        ])
+        .expect("parse restore run execute options");
+
+        assert_eq!(options.journal, PathBuf::from("restore-apply-journal.json"));
+        assert_eq!(options.dfx, "/bin/true");
+        assert_eq!(options.network, None);
+        assert_eq!(options.out, None);
+        assert!(!options.dry_run);
+        assert!(options.execute);
+        assert!(!options.unclaim_pending);
+        assert_eq!(options.max_steps, Some(4));
+        assert!(!options.require_complete);
+        assert!(!options.require_no_attention);
+    }
+
+    // Ensure restore run options parse the native pending-operation recovery mode.
+    #[test]
+    fn parses_restore_run_unclaim_pending_options() {
+        let options = RestoreRunOptions::parse([
+            OsString::from("--journal"),
+            OsString::from("restore-apply-journal.json"),
+            OsString::from("--unclaim-pending"),
+            OsString::from("--out"),
+            OsString::from("restore-run.json"),
+        ])
+        .expect("parse restore run unclaim options");
+
+        assert_eq!(options.journal, PathBuf::from("restore-apply-journal.json"));
+        assert_eq!(options.out, Some(PathBuf::from("restore-run.json")));
+        assert!(!options.dry_run);
+        assert!(!options.execute);
+        assert!(options.unclaim_pending);
+    }
+
     // Ensure restore apply-next options parse the intended journal command.
     #[test]
     fn parses_restore_apply_next_options() {
@@ -1639,6 +2241,36 @@ mod tests {
         .expect_err("apply without dry-run should fail");
 
         assert!(matches!(err, RestoreCommandError::ApplyRequiresDryRun));
+    }
+
+    // Ensure restore run refuses mutation while native execution is scaffolded.
+    #[test]
+    fn restore_run_requires_mode() {
+        let err = RestoreRunOptions::parse([
+            OsString::from("--journal"),
+            OsString::from("restore-apply-journal.json"),
+        ])
+        .expect_err("restore run without dry-run should fail");
+
+        assert!(matches!(err, RestoreCommandError::RestoreRunRequiresMode));
+    }
+
+    // Ensure restore run rejects ambiguous execution modes.
+    #[test]
+    fn restore_run_rejects_conflicting_modes() {
+        let err = RestoreRunOptions::parse([
+            OsString::from("--journal"),
+            OsString::from("restore-apply-journal.json"),
+            OsString::from("--dry-run"),
+            OsString::from("--execute"),
+            OsString::from("--unclaim-pending"),
+        ])
+        .expect_err("restore run should reject conflicting modes");
+
+        assert!(matches!(
+            err,
+            RestoreCommandError::RestoreRunConflictingModes
+        ));
     }
 
     // Ensure backup-dir restore planning reads the canonical layout manifest.
@@ -2233,6 +2865,335 @@ mod tests {
         );
         assert_eq!(report_json["outcome"], "failed");
         assert_eq!(report_json["failed"][0]["reasons"][0], "dfx-upload-failed");
+    }
+
+    // Ensure restore run writes a native no-mutation runner preview.
+    #[test]
+    fn run_restore_run_dry_run_writes_native_runner_preview() {
+        let root = temp_dir("canic-cli-restore-run-dry-run");
+        fs::create_dir_all(&root).expect("create temp root");
+        let journal_path = root.join("restore-apply-journal.json");
+        let out_path = root.join("restore-run-dry-run.json");
+        let journal = ready_apply_journal();
+
+        fs::write(
+            &journal_path,
+            serde_json::to_vec(&journal).expect("serialize journal"),
+        )
+        .expect("write journal");
+
+        run([
+            OsString::from("run"),
+            OsString::from("--journal"),
+            OsString::from(journal_path.as_os_str()),
+            OsString::from("--dry-run"),
+            OsString::from("--dfx"),
+            OsString::from("/tmp/dfx"),
+            OsString::from("--network"),
+            OsString::from("local"),
+            OsString::from("--out"),
+            OsString::from(out_path.as_os_str()),
+        ])
+        .expect("write restore run dry-run");
+
+        let dry_run: serde_json::Value =
+            serde_json::from_slice(&fs::read(&out_path).expect("read dry-run"))
+                .expect("decode dry-run");
+
+        fs::remove_dir_all(root).expect("remove temp root");
+        assert_eq!(dry_run["run_version"], 1);
+        assert_eq!(dry_run["backup_id"], "backup-test");
+        assert_eq!(dry_run["dry_run"], true);
+        assert_eq!(dry_run["ready"], true);
+        assert_eq!(dry_run["complete"], false);
+        assert_eq!(dry_run["attention_required"], false);
+        assert_eq!(dry_run["stopped_reason"], "preview");
+        assert_eq!(dry_run["next_action"], "rerun");
+        assert_eq!(dry_run["operation_available"], true);
+        assert_eq!(dry_run["command_available"], true);
+        assert_eq!(dry_run["next_transition"]["sequence"], 0);
+        assert_eq!(dry_run["command"]["program"], "/tmp/dfx");
+        assert_eq!(
+            dry_run["command"]["args"],
+            json!([
+                "canister",
+                "--network",
+                "local",
+                "snapshot",
+                "upload",
+                "--dir",
+                "artifacts/root",
+                ROOT
+            ])
+        );
+        assert_eq!(dry_run["command"]["mutates"], true);
+    }
+
+    // Ensure restore run can recover one interrupted pending operation.
+    #[test]
+    fn run_restore_run_unclaim_pending_marks_operation_ready() {
+        let root = temp_dir("canic-cli-restore-run-unclaim-pending");
+        fs::create_dir_all(&root).expect("create temp root");
+        let journal_path = root.join("restore-apply-journal.json");
+        let out_path = root.join("restore-run.json");
+        let mut journal = ready_apply_journal();
+        journal
+            .mark_next_operation_pending_at(Some("2026-05-05T12:01:00Z".to_string()))
+            .expect("mark pending operation");
+
+        fs::write(
+            &journal_path,
+            serde_json::to_vec(&journal).expect("serialize journal"),
+        )
+        .expect("write journal");
+
+        run([
+            OsString::from("run"),
+            OsString::from("--journal"),
+            OsString::from(journal_path.as_os_str()),
+            OsString::from("--unclaim-pending"),
+            OsString::from("--out"),
+            OsString::from(out_path.as_os_str()),
+        ])
+        .expect("unclaim pending operation");
+
+        let run_summary: serde_json::Value =
+            serde_json::from_slice(&fs::read(&out_path).expect("read run summary"))
+                .expect("decode run summary");
+        let updated: RestoreApplyJournal =
+            serde_json::from_slice(&fs::read(&journal_path).expect("read updated journal"))
+                .expect("decode updated journal");
+
+        fs::remove_dir_all(root).expect("remove temp root");
+        assert_eq!(run_summary["unclaim_pending"], true);
+        assert_eq!(run_summary["stopped_reason"], "recovered-pending");
+        assert_eq!(run_summary["next_action"], "rerun");
+        assert_eq!(run_summary["recovered_operation"]["sequence"], 0);
+        assert_eq!(run_summary["recovered_operation"]["state"], "pending");
+        assert_eq!(run_summary["pending_operations"], 0);
+        assert_eq!(run_summary["ready_operations"], 8);
+        assert_eq!(run_summary["attention_required"], false);
+        assert_eq!(updated.pending_operations, 0);
+        assert_eq!(updated.ready_operations, 8);
+        assert_eq!(
+            updated.operations[0].state,
+            RestoreApplyOperationState::Ready
+        );
+    }
+
+    // Ensure restore run execute claims and completes one generated command.
+    #[test]
+    fn run_restore_run_execute_marks_completed_operation() {
+        let root = temp_dir("canic-cli-restore-run-execute");
+        fs::create_dir_all(&root).expect("create temp root");
+        let journal_path = root.join("restore-apply-journal.json");
+        let out_path = root.join("restore-run.json");
+        let journal = ready_apply_journal();
+
+        fs::write(
+            &journal_path,
+            serde_json::to_vec(&journal).expect("serialize journal"),
+        )
+        .expect("write journal");
+
+        run([
+            OsString::from("run"),
+            OsString::from("--journal"),
+            OsString::from(journal_path.as_os_str()),
+            OsString::from("--execute"),
+            OsString::from("--dfx"),
+            OsString::from("/bin/true"),
+            OsString::from("--max-steps"),
+            OsString::from("1"),
+            OsString::from("--out"),
+            OsString::from(out_path.as_os_str()),
+        ])
+        .expect("execute one restore run step");
+
+        let run_summary: serde_json::Value =
+            serde_json::from_slice(&fs::read(&out_path).expect("read run summary"))
+                .expect("decode run summary");
+        let updated: RestoreApplyJournal =
+            serde_json::from_slice(&fs::read(&journal_path).expect("read updated journal"))
+                .expect("decode updated journal");
+
+        fs::remove_dir_all(root).expect("remove temp root");
+        assert_eq!(run_summary["execute"], true);
+        assert_eq!(run_summary["dry_run"], false);
+        assert_eq!(run_summary["max_steps_reached"], true);
+        assert_eq!(run_summary["stopped_reason"], "max-steps-reached");
+        assert_eq!(run_summary["next_action"], "rerun");
+        assert_eq!(run_summary["executed_operation_count"], 1);
+        assert_eq!(run_summary["executed_operations"][0]["sequence"], 0);
+        assert_eq!(
+            run_summary["executed_operations"][0]["command"]["program"],
+            "/bin/true"
+        );
+        assert_eq!(updated.completed_operations, 1);
+        assert_eq!(updated.pending_operations, 0);
+        assert_eq!(updated.failed_operations, 0);
+        assert_eq!(
+            updated.operations[0].state,
+            RestoreApplyOperationState::Completed
+        );
+    }
+
+    // Ensure restore run can fail closed after writing an incomplete summary.
+    #[test]
+    fn run_restore_run_require_complete_writes_summary_then_fails() {
+        let root = temp_dir("canic-cli-restore-run-require-complete");
+        fs::create_dir_all(&root).expect("create temp root");
+        let journal_path = root.join("restore-apply-journal.json");
+        let out_path = root.join("restore-run.json");
+        let journal = ready_apply_journal();
+
+        fs::write(
+            &journal_path,
+            serde_json::to_vec(&journal).expect("serialize journal"),
+        )
+        .expect("write journal");
+
+        let err = run([
+            OsString::from("run"),
+            OsString::from("--journal"),
+            OsString::from(journal_path.as_os_str()),
+            OsString::from("--execute"),
+            OsString::from("--dfx"),
+            OsString::from("/bin/true"),
+            OsString::from("--max-steps"),
+            OsString::from("1"),
+            OsString::from("--out"),
+            OsString::from(out_path.as_os_str()),
+            OsString::from("--require-complete"),
+        ])
+        .expect_err("incomplete run should fail requirement");
+
+        let run_summary: serde_json::Value =
+            serde_json::from_slice(&fs::read(&out_path).expect("read run summary"))
+                .expect("decode run summary");
+
+        fs::remove_dir_all(root).expect("remove temp root");
+        assert_eq!(run_summary["executed_operation_count"], 1);
+        assert_eq!(run_summary["complete"], false);
+        assert!(matches!(
+            err,
+            RestoreCommandError::RestoreApplyIncomplete {
+                completed_operations: 1,
+                operation_count: 8,
+                ..
+            }
+        ));
+    }
+
+    // Ensure restore run execute records failed command exits in the journal.
+    #[test]
+    fn run_restore_run_execute_marks_failed_operation() {
+        let root = temp_dir("canic-cli-restore-run-execute-failed");
+        fs::create_dir_all(&root).expect("create temp root");
+        let journal_path = root.join("restore-apply-journal.json");
+        let out_path = root.join("restore-run.json");
+        let journal = ready_apply_journal();
+
+        fs::write(
+            &journal_path,
+            serde_json::to_vec(&journal).expect("serialize journal"),
+        )
+        .expect("write journal");
+
+        let err = run([
+            OsString::from("run"),
+            OsString::from("--journal"),
+            OsString::from(journal_path.as_os_str()),
+            OsString::from("--execute"),
+            OsString::from("--dfx"),
+            OsString::from("/bin/false"),
+            OsString::from("--max-steps"),
+            OsString::from("1"),
+            OsString::from("--out"),
+            OsString::from(out_path.as_os_str()),
+        ])
+        .expect_err("failing runner command should fail");
+
+        let run_summary: serde_json::Value =
+            serde_json::from_slice(&fs::read(&out_path).expect("read run summary"))
+                .expect("decode run summary");
+        let updated: RestoreApplyJournal =
+            serde_json::from_slice(&fs::read(&journal_path).expect("read updated journal"))
+                .expect("decode updated journal");
+
+        fs::remove_dir_all(root).expect("remove temp root");
+        assert!(matches!(
+            err,
+            RestoreCommandError::RestoreRunCommandFailed {
+                sequence: 0,
+                status,
+            } if status == "1"
+        ));
+        assert_eq!(updated.failed_operations, 1);
+        assert_eq!(updated.pending_operations, 0);
+        assert_eq!(
+            updated.operations[0].state,
+            RestoreApplyOperationState::Failed
+        );
+        assert_eq!(run_summary["execute"], true);
+        assert_eq!(run_summary["attention_required"], true);
+        assert_eq!(run_summary["outcome"], "failed");
+        assert_eq!(run_summary["stopped_reason"], "command-failed");
+        assert_eq!(run_summary["next_action"], "inspect-failed-operation");
+        assert_eq!(run_summary["executed_operation_count"], 1);
+        assert_eq!(run_summary["executed_operations"][0]["state"], "failed");
+        assert_eq!(run_summary["executed_operations"][0]["status"], "1");
+        assert_eq!(
+            updated.operations[0].blocking_reasons,
+            vec!["runner-command-exit-1".to_string()]
+        );
+    }
+
+    // Ensure restore run can fail closed after writing an attention summary.
+    #[test]
+    fn run_restore_run_require_no_attention_writes_summary_then_fails() {
+        let root = temp_dir("canic-cli-restore-run-require-attention");
+        fs::create_dir_all(&root).expect("create temp root");
+        let journal_path = root.join("restore-apply-journal.json");
+        let out_path = root.join("restore-run.json");
+        let mut journal = ready_apply_journal();
+        journal
+            .mark_next_operation_pending_at(Some("2026-05-05T12:01:00Z".to_string()))
+            .expect("mark pending operation");
+
+        fs::write(
+            &journal_path,
+            serde_json::to_vec(&journal).expect("serialize journal"),
+        )
+        .expect("write journal");
+
+        let err = run([
+            OsString::from("run"),
+            OsString::from("--journal"),
+            OsString::from(journal_path.as_os_str()),
+            OsString::from("--dry-run"),
+            OsString::from("--out"),
+            OsString::from(out_path.as_os_str()),
+            OsString::from("--require-no-attention"),
+        ])
+        .expect_err("attention run should fail requirement");
+
+        let run_summary: serde_json::Value =
+            serde_json::from_slice(&fs::read(&out_path).expect("read run summary"))
+                .expect("decode run summary");
+
+        fs::remove_dir_all(root).expect("remove temp root");
+        assert_eq!(run_summary["attention_required"], true);
+        assert_eq!(run_summary["outcome"], "pending");
+        assert_eq!(run_summary["stopped_reason"], "pending");
+        assert_eq!(run_summary["next_action"], "unclaim-pending");
+        assert!(matches!(
+            err,
+            RestoreCommandError::RestoreApplyReportNeedsAttention {
+                outcome: canic_backup::restore::RestoreApplyReportOutcome::Pending,
+                ..
+            }
+        ));
     }
 
     // Ensure apply-report can fail closed after writing an attention report.

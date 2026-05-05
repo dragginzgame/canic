@@ -207,6 +207,63 @@ pending, failed, and blocked operation rows that need review. Use
 `--require-no-attention` when CI should fail after writing the report if the
 journal has pending, failed, or blocked work.
 
+Preview or run the maintained restore runner path:
+
+```bash
+canic restore run \
+  --journal restore-apply-journal.json \
+  --dry-run \
+  --network local \
+  --out restore-run-dry-run.json
+```
+
+Use `restore run --dry-run` to preview the native runner path from the apply
+journal. It emits the current status, attention summary, next transition, and
+next `dfx` command without mutating the journal or calling `dfx`.
+
+```bash
+canic restore run \
+  --journal restore-apply-journal.json \
+  --execute \
+  --network local \
+  --max-steps 1 \
+  --out restore-run.json \
+  --require-no-attention
+```
+
+Use `restore run --execute` to let `canic` own the guarded runner loop. It
+checks readiness, claims the next sequence, runs the generated `dfx` command,
+marks the operation completed or failed, and persists the journal after each
+transition. `--max-steps` is useful for cautious incremental restores. Add
+`--require-complete` or `--require-no-attention` when CI should write the run
+summary and then fail if the journal is incomplete or still needs review.
+If a generated command fails, the runner still writes the summary and updated
+journal before returning a nonzero error.
+Every runner summary includes `stopped_reason` and `next_action` so automation
+can decide whether to rerun, inspect a failed operation, recover a pending
+operation, fix blocked inputs, or stop.
+
+```bash
+canic restore run \
+  --journal restore-apply-journal.json \
+  --unclaim-pending \
+  --out restore-run-recovery.json
+```
+
+Use `restore run --unclaim-pending` after an interrupted runner leaves one
+operation pending. It moves the pending operation back to ready, writes the
+updated journal, and emits a recovery summary.
+
+```bash
+scripts/restore/apply_journal.sh \
+  --journal restore-apply-journal.json \
+  --network local
+```
+
+The script remains as a small compatibility wrapper around the same guarded
+status, command preview, claim, `dfx` execution, mark, and report steps shown
+below.
+
 Emit the full next transitionable operation for an external runner:
 
 ```bash
