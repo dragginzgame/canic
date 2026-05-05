@@ -142,7 +142,7 @@ and renders the registered topology as an ASCII tree. Use `canic help` or
 For local DFX workflows, prefer the shared setup script:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/dragginzgame/canic/main/scripts/dev/install_dev.sh | bash
+curl -fsSL https://raw.githubusercontent.com/dragginzgame/canic/v0.30.37/scripts/dev/install_dev.sh | bash
 ```
 
 The script installs Rust when needed, the repo-local Rust `1.95.0` toolchain, `wasm32-unknown-unknown`, `rustfmt`, `clippy`, Candid/wasm utilities, `actionlint`, common Cargo helper tools, and `dfx` when missing.
@@ -150,7 +150,7 @@ The script installs Rust when needed, the repo-local Rust `1.95.0` toolchain, `w
 It also installs:
 
 - `canic-cli` as the `canic` command
-- `canic-installer` at the matching published version
+- `canic-installer` `0.30.37`
 
 Published crates still declare MSRV `1.91.0` for downstream source builds.
 
