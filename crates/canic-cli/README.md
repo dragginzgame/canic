@@ -255,6 +255,7 @@ canic restore run \
   --execute \
   --network local \
   --max-steps 1 \
+  --updated-at 2026-05-05T12:03:00Z \
   --out restore-run.json \
   --require-run-mode execute \
   --require-stopped-reason max-steps-reached \
@@ -269,6 +270,17 @@ marks the operation completed or failed, and persists the journal after each
 transition. `--max-steps` is useful for cautious incremental restores. Add
 `--require-complete` or `--require-no-attention` when CI should write the run
 summary and then fail if the journal is incomplete or still needs review.
+Use `--updated-at <text>` to stamp runner-owned pending, completed, failed, and
+recovered operation states with a comparable marker such as an RFC3339
+timestamp; otherwise the marker remains `unknown`. Runner summaries echo a
+supplied marker as `requested_state_updated_at`, including dry-runs or runs
+that emit no operation receipts.
+Use `--require-receipt-updated-at <text>` when CI should fail after writing the
+runner summary unless every emitted operation receipt carries the expected
+state marker.
+Use `--require-state-updated-at <text>` when CI should fail after writing the
+runner summary unless `requested_state_updated_at` matches, including dry-runs
+or runs that emit no receipts.
 If a generated command fails, the runner still writes the summary and updated
 journal before returning a nonzero error.
 Every runner summary includes `run_mode`, `stopped_reason`, `next_action`,
@@ -303,6 +315,7 @@ known marker.
 canic restore run \
   --journal restore-apply-journal.json \
   --unclaim-pending \
+  --updated-at 2026-05-05T12:10:00Z \
   --out restore-run-recovery.json
 ```
 

@@ -100,6 +100,25 @@ pub enum RestoreCommandError {
         actual: usize,
     },
 
+    #[error(
+        "restore run for backup {backup_id} wrote {actual_receipts} receipts with {mismatched_receipts} updated_at mismatches, expected {expected}"
+    )]
+    RestoreRunReceiptUpdatedAtMismatch {
+        backup_id: String,
+        expected: String,
+        actual_receipts: usize,
+        mismatched_receipts: usize,
+    },
+
+    #[error(
+        "restore run for backup {backup_id} reported requested_state_updated_at={actual:?}, expected {expected}"
+    )]
+    RestoreRunStateUpdatedAtMismatch {
+        backup_id: String,
+        expected: String,
+        actual: Option<String>,
+    },
+
     #[error("restore plan for backup {backup_id} is not restore-ready: reasons={reasons:?}")]
     RestoreNotReady {
         backup_id: String,
@@ -580,6 +599,7 @@ pub struct RestoreRunOptions {
     pub execute: bool,
     pub unclaim_pending: bool,
     pub max_steps: Option<usize>,
+    pub updated_at: Option<String>,
     pub require_complete: bool,
     pub require_no_attention: bool,
     pub require_run_mode: Option<String>,
@@ -590,6 +610,8 @@ pub struct RestoreRunOptions {
     pub require_completed_receipt_count: Option<usize>,
     pub require_failed_receipt_count: Option<usize>,
     pub require_recovered_receipt_count: Option<usize>,
+    pub require_receipt_updated_at: Option<String>,
+    pub require_state_updated_at: Option<String>,
     pub require_remaining_count: Option<usize>,
     pub require_attention_count: Option<usize>,
     pub require_completion_basis_points: Option<usize>,
@@ -614,6 +636,7 @@ impl RestoreRunOptions {
         let mut execute = false;
         let mut unclaim_pending = false;
         let mut max_steps = None;
+        let mut updated_at = None;
         let mut require_complete = false;
         let mut require_no_attention = false;
         let mut require_run_mode = None;
@@ -624,6 +647,8 @@ impl RestoreRunOptions {
         let mut require_completed_receipt_count = None;
         let mut require_failed_receipt_count = None;
         let mut require_recovered_receipt_count = None;
+        let mut require_receipt_updated_at = None;
+        let mut require_state_updated_at = None;
         let mut require_remaining_count = None;
         let mut require_attention_count = None;
         let mut require_completion_basis_points = None;
@@ -679,6 +704,7 @@ impl RestoreRunOptions {
                 "--max-steps" => {
                     max_steps = Some(parse_sequence(next_value(&mut args, "--max-steps")?)?);
                 }
+                "--updated-at" => updated_at = Some(next_value(&mut args, "--updated-at")?),
                 "--require-complete" => require_complete = true,
                 "--require-no-attention" => require_no_attention = true,
                 "--require-run-mode" => {
@@ -690,6 +716,14 @@ impl RestoreRunOptions {
                 }
                 "--require-next-action" => {
                     require_next_action = Some(next_value(&mut args, "--require-next-action")?);
+                }
+                "--require-receipt-updated-at" => {
+                    require_receipt_updated_at =
+                        Some(next_value(&mut args, "--require-receipt-updated-at")?);
+                }
+                "--require-state-updated-at" => {
+                    require_state_updated_at =
+                        Some(next_value(&mut args, "--require-state-updated-at")?);
                 }
                 "--help" | "-h" => return Err(RestoreCommandError::Usage(usage())),
                 _ => return Err(RestoreCommandError::UnknownOption(arg)),
@@ -707,6 +741,7 @@ impl RestoreRunOptions {
             execute,
             unclaim_pending,
             max_steps,
+            updated_at,
             require_complete,
             require_no_attention,
             require_run_mode,
@@ -717,6 +752,8 @@ impl RestoreRunOptions {
             require_completed_receipt_count,
             require_failed_receipt_count,
             require_recovered_receipt_count,
+            require_receipt_updated_at,
+            require_state_updated_at,
             require_remaining_count,
             require_attention_count,
             require_completion_basis_points,
@@ -812,6 +849,8 @@ pub struct RestoreRunResponse {
     stopped_reason: &'static str,
     next_action: &'static str,
     #[serde(skip_serializing_if = "Option::is_none")]
+    requested_state_updated_at: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     max_steps_reached: Option<bool>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     executed_operations: Vec<RestoreRunExecutedOperation>,
@@ -864,6 +903,7 @@ impl RestoreRunResponse {
             unclaim_pending: mode.unclaim_pending,
             stopped_reason: mode.stopped_reason,
             next_action: mode.next_action,
+            requested_state_updated_at: None,
             max_steps_reached: None,
             executed_operations: Vec::new(),
             operation_receipts: Vec::new(),
@@ -898,6 +938,11 @@ impl RestoreRunResponse {
         self.operation_receipt_summary = RestoreRunReceiptSummary::from_receipts(&receipts);
         self.operation_receipt_count = Some(receipts.len());
         self.operation_receipts = receipts;
+    }
+
+    // Echo the caller-provided state marker for receipt-free runner summaries.
+    fn set_requested_state_updated_at(&mut self, updated_at: Option<&String>) {
+        self.requested_state_updated_at = updated_at.cloned();
     }
 }
 
@@ -1584,6 +1629,7 @@ pub fn restore_run_dry_run(
         report,
         RestoreRunResponseMode::dry_run(stopped_reason, next_action),
     );
+    response.set_requested_state_updated_at(options.updated_at.as_ref());
     response.operation_available = Some(preview.operation_available);
     response.command_available = Some(preview.command_available);
     response.command = preview.command;
@@ -1601,7 +1647,7 @@ pub fn restore_run_unclaim_pending(
         .cloned()
         .ok_or(RestoreApplyJournalError::NoPendingOperation)?;
 
-    let recovered_updated_at = timestamp_placeholder();
+    let recovered_updated_at = state_updated_at(options.updated_at.as_ref());
     journal.mark_next_operation_ready_at(Some(recovered_updated_at.clone()))?;
     write_apply_journal_file(&options.journal, &journal)?;
 
@@ -1612,6 +1658,7 @@ pub fn restore_run_unclaim_pending(
         report,
         RestoreRunResponseMode::unclaim_pending(next_action),
     );
+    response.set_requested_state_updated_at(options.updated_at.as_ref());
     response.set_operation_receipts(vec![RestoreRunOperationReceipt::recovered_pending(
         recovered_operation.clone(),
         Some(recovered_updated_at),
@@ -1651,6 +1698,7 @@ fn restore_run_execute_result(
                 executed_operations,
                 operation_receipts,
                 max_steps_reached,
+                options.updated_at.as_ref(),
             )));
         }
 
@@ -1669,7 +1717,10 @@ fn restore_run_execute_result(
         let sequence = operation.sequence;
 
         enforce_apply_claim_sequence(sequence, &journal)?;
-        journal.mark_operation_pending_at(sequence, Some(timestamp_placeholder()))?;
+        journal.mark_operation_pending_at(
+            sequence,
+            Some(state_updated_at(options.updated_at.as_ref())),
+        )?;
         write_apply_journal_file(&options.journal, &journal)?;
 
         let status = Command::new(&command.program)
@@ -1677,7 +1728,7 @@ fn restore_run_execute_result(
             .status()?;
         let status_label = exit_status_label(status);
         if status.success() {
-            let completed_updated_at = timestamp_placeholder();
+            let completed_updated_at = state_updated_at(options.updated_at.as_ref());
             journal.mark_operation_completed_at(sequence, Some(completed_updated_at.clone()))?;
             write_apply_journal_file(&options.journal, &journal)?;
             executed_operations.push(RestoreRunExecutedOperation::completed(
@@ -1694,7 +1745,7 @@ fn restore_run_execute_result(
             continue;
         }
 
-        let failed_updated_at = timestamp_placeholder();
+        let failed_updated_at = state_updated_at(options.updated_at.as_ref());
         journal.mark_operation_failed_at(
             sequence,
             format!("{RESTORE_RUN_COMMAND_EXIT_PREFIX}-{status_label}"),
@@ -1712,8 +1763,13 @@ fn restore_run_execute_result(
             status_label.clone(),
             Some(failed_updated_at),
         ));
-        let response =
-            restore_run_execute_summary(&journal, executed_operations, operation_receipts, false);
+        let response = restore_run_execute_summary(
+            &journal,
+            executed_operations,
+            operation_receipts,
+            false,
+            options.updated_at.as_ref(),
+        );
         return Ok(RestoreRunResult {
             response,
             error: Some(RestoreCommandError::RestoreRunCommandFailed {
@@ -1757,6 +1813,7 @@ fn restore_run_execute_summary(
     executed_operations: Vec<RestoreRunExecutedOperation>,
     operation_receipts: Vec<RestoreRunOperationReceipt>,
     max_steps_reached: bool,
+    requested_state_updated_at: Option<&String>,
 ) -> RestoreRunResponse {
     let report = journal.report();
     let executed_operation_count = executed_operations.len();
@@ -1768,6 +1825,7 @@ fn restore_run_execute_summary(
         report,
         RestoreRunResponseMode::execute(stopped_reason, next_action),
     );
+    response.set_requested_state_updated_at(requested_state_updated_at);
     response.max_steps_reached = Some(max_steps_reached);
     response.executed_operation_count = Some(executed_operation_count);
     response.executed_operations = executed_operations;
@@ -1947,6 +2005,29 @@ fn enforce_restore_run_requirements(
         }
     }
 
+    enforce_restore_run_receipt_requirements(options, run)?;
+
+    enforce_progress_requirements(
+        &run.backup_id,
+        &run.progress,
+        options.require_remaining_count,
+        options.require_attention_count,
+        options.require_completion_basis_points,
+    )?;
+    enforce_pending_before_requirement(
+        &run.backup_id,
+        &run.pending_summary,
+        options.require_no_pending_before.as_deref(),
+    )?;
+
+    Ok(())
+}
+
+// Enforce caller-requested native runner receipt and marker requirements.
+fn enforce_restore_run_receipt_requirements(
+    options: &RestoreRunOptions,
+    run: &RestoreRunResponse,
+) -> Result<(), RestoreCommandError> {
     if let Some(expected) = options.require_receipt_count {
         let actual = run.operation_receipt_count.unwrap_or(0);
         if actual != expected {
@@ -1976,19 +2057,62 @@ fn enforce_restore_run_requirements(
         options.require_recovered_receipt_count,
         run.operation_receipt_summary.pending_recovered,
     )?;
+    enforce_restore_run_receipt_updated_at_requirement(
+        &run.backup_id,
+        &run.operation_receipts,
+        options.require_receipt_updated_at.as_deref(),
+    )?;
+    enforce_restore_run_state_updated_at_requirement(
+        &run.backup_id,
+        run.requested_state_updated_at.as_deref(),
+        options.require_state_updated_at.as_deref(),
+    )?;
 
-    enforce_progress_requirements(
-        &run.backup_id,
-        &run.progress,
-        options.require_remaining_count,
-        options.require_attention_count,
-        options.require_completion_basis_points,
-    )?;
-    enforce_pending_before_requirement(
-        &run.backup_id,
-        &run.pending_summary,
-        options.require_no_pending_before.as_deref(),
-    )?;
+    Ok(())
+}
+
+// Fail when a runner summary does not echo the requested state marker.
+fn enforce_restore_run_state_updated_at_requirement(
+    backup_id: &str,
+    actual: Option<&str>,
+    expected: Option<&str>,
+) -> Result<(), RestoreCommandError> {
+    if let Some(expected) = expected
+        && actual != Some(expected)
+    {
+        return Err(RestoreCommandError::RestoreRunStateUpdatedAtMismatch {
+            backup_id: backup_id.to_string(),
+            expected: expected.to_string(),
+            actual: actual.map(str::to_string),
+        });
+    }
+
+    Ok(())
+}
+
+// Fail when emitted runner receipts are missing the requested state marker.
+fn enforce_restore_run_receipt_updated_at_requirement(
+    backup_id: &str,
+    receipts: &[RestoreRunOperationReceipt],
+    expected: Option<&str>,
+) -> Result<(), RestoreCommandError> {
+    let Some(expected) = expected else {
+        return Ok(());
+    };
+
+    let actual_receipts = receipts.len();
+    let mismatched_receipts = receipts
+        .iter()
+        .filter(|receipt| receipt.updated_at.as_deref() != Some(expected))
+        .count();
+    if actual_receipts == 0 || mismatched_receipts > 0 {
+        return Err(RestoreCommandError::RestoreRunReceiptUpdatedAtMismatch {
+            backup_id: backup_id.to_string(),
+            expected: expected.to_string(),
+            actual_receipts,
+            mismatched_receipts,
+        });
+    }
 
     Ok(())
 }
@@ -2769,7 +2893,7 @@ where
 
 // Return restore command usage text.
 const fn usage() -> &'static str {
-    "usage: canic restore plan (--manifest <file> | --backup-dir <dir>) [--mapping <file>] [--out <file>] [--require-verified] [--require-restore-ready]\n       canic restore status --plan <file> [--out <file>]\n       canic restore apply --plan <file> [--status <file>] [--backup-dir <dir>] --dry-run [--out <file>] [--journal-out <file>]\n       canic restore apply-status --journal <file> [--out <file>] [--require-ready] [--require-no-pending] [--require-no-failed] [--require-complete] [--require-remaining-count <n>] [--require-attention-count <n>] [--require-completion-basis-points <n>] [--require-no-pending-before <text>]\n       canic restore apply-report --journal <file> [--out <file>] [--require-no-attention] [--require-remaining-count <n>] [--require-attention-count <n>] [--require-completion-basis-points <n>] [--require-no-pending-before <text>]\n       canic restore run --journal <file> (--dry-run | --execute | --unclaim-pending) [--dfx <path>] [--network <name>] [--max-steps <n>] [--out <file>] [--require-complete] [--require-no-attention] [--require-run-mode <text>] [--require-stopped-reason <text>] [--require-next-action <text>] [--require-executed-count <n>] [--require-receipt-count <n>] [--require-completed-receipt-count <n>] [--require-failed-receipt-count <n>] [--require-recovered-receipt-count <n>] [--require-remaining-count <n>] [--require-attention-count <n>] [--require-completion-basis-points <n>] [--require-no-pending-before <text>]\n       canic restore apply-next --journal <file> [--out <file>]\n       canic restore apply-command --journal <file> [--dfx <path>] [--network <name>] [--out <file>] [--require-command]\n       canic restore apply-claim --journal <file> [--sequence <n>] [--updated-at <text>] [--out <file>]\n       canic restore apply-unclaim --journal <file> [--sequence <n>] [--updated-at <text>] [--out <file>]\n       canic restore apply-mark --journal <file> --sequence <n> --state completed|failed [--reason <text>] [--updated-at <text>] [--out <file>] [--require-pending]"
+    "usage: canic restore plan (--manifest <file> | --backup-dir <dir>) [--mapping <file>] [--out <file>] [--require-verified] [--require-restore-ready]\n       canic restore status --plan <file> [--out <file>]\n       canic restore apply --plan <file> [--status <file>] [--backup-dir <dir>] --dry-run [--out <file>] [--journal-out <file>]\n       canic restore apply-status --journal <file> [--out <file>] [--require-ready] [--require-no-pending] [--require-no-failed] [--require-complete] [--require-remaining-count <n>] [--require-attention-count <n>] [--require-completion-basis-points <n>] [--require-no-pending-before <text>]\n       canic restore apply-report --journal <file> [--out <file>] [--require-no-attention] [--require-remaining-count <n>] [--require-attention-count <n>] [--require-completion-basis-points <n>] [--require-no-pending-before <text>]\n       canic restore run --journal <file> (--dry-run | --execute | --unclaim-pending) [--dfx <path>] [--network <name>] [--max-steps <n>] [--updated-at <text>] [--out <file>] [--require-complete] [--require-no-attention] [--require-run-mode <text>] [--require-stopped-reason <text>] [--require-next-action <text>] [--require-executed-count <n>] [--require-receipt-count <n>] [--require-completed-receipt-count <n>] [--require-failed-receipt-count <n>] [--require-recovered-receipt-count <n>] [--require-receipt-updated-at <text>] [--require-state-updated-at <text>] [--require-remaining-count <n>] [--require-attention-count <n>] [--require-completion-basis-points <n>] [--require-no-pending-before <text>]\n       canic restore apply-next --journal <file> [--out <file>]\n       canic restore apply-command --journal <file> [--dfx <path>] [--network <name>] [--out <file>] [--require-command]\n       canic restore apply-claim --journal <file> [--sequence <n>] [--updated-at <text>] [--out <file>]\n       canic restore apply-unclaim --journal <file> [--sequence <n>] [--updated-at <text>] [--out <file>]\n       canic restore apply-mark --journal <file> --sequence <n> --state completed|failed [--reason <text>] [--updated-at <text>] [--out <file>] [--require-pending]"
 }
 
 #[cfg(test)]
@@ -3054,6 +3178,8 @@ mod tests {
             OsString::from("restore-run-dry-run.json"),
             OsString::from("--max-steps"),
             OsString::from("1"),
+            OsString::from("--updated-at"),
+            OsString::from("2026-05-05T12:03:00Z"),
             OsString::from("--require-complete"),
             OsString::from("--require-no-attention"),
             OsString::from("--require-run-mode"),
@@ -3072,6 +3198,10 @@ mod tests {
             OsString::from("0"),
             OsString::from("--require-recovered-receipt-count"),
             OsString::from("0"),
+            OsString::from("--require-receipt-updated-at"),
+            OsString::from("2026-05-05T12:03:00Z"),
+            OsString::from("--require-state-updated-at"),
+            OsString::from("2026-05-05T12:03:00Z"),
             OsString::from("--require-remaining-count"),
             OsString::from("8"),
             OsString::from("--require-attention-count"),
@@ -3091,6 +3221,7 @@ mod tests {
         assert!(!options.execute);
         assert!(!options.unclaim_pending);
         assert_eq!(options.max_steps, Some(1));
+        assert_eq!(options.updated_at.as_deref(), Some("2026-05-05T12:03:00Z"));
         assert!(options.require_complete);
         assert!(options.require_no_attention);
         assert_eq!(options.require_run_mode.as_deref(), Some("dry-run"));
@@ -3101,6 +3232,14 @@ mod tests {
         assert_eq!(options.require_completed_receipt_count, Some(0));
         assert_eq!(options.require_failed_receipt_count, Some(0));
         assert_eq!(options.require_recovered_receipt_count, Some(0));
+        assert_eq!(
+            options.require_receipt_updated_at.as_deref(),
+            Some("2026-05-05T12:03:00Z")
+        );
+        assert_eq!(
+            options.require_state_updated_at.as_deref(),
+            Some("2026-05-05T12:03:00Z")
+        );
         assert_eq!(options.require_remaining_count, Some(8));
         assert_eq!(options.require_attention_count, Some(0));
         assert_eq!(options.require_completion_basis_points, Some(0));
@@ -3132,6 +3271,7 @@ mod tests {
         assert!(options.execute);
         assert!(!options.unclaim_pending);
         assert_eq!(options.max_steps, Some(4));
+        assert_eq!(options.updated_at, None);
         assert!(!options.require_complete);
         assert!(!options.require_no_attention);
         assert_eq!(options.require_run_mode, None);
@@ -3142,6 +3282,8 @@ mod tests {
         assert_eq!(options.require_completed_receipt_count, None);
         assert_eq!(options.require_failed_receipt_count, None);
         assert_eq!(options.require_recovered_receipt_count, None);
+        assert_eq!(options.require_receipt_updated_at, None);
+        assert_eq!(options.require_state_updated_at, None);
     }
 
     // Ensure restore run options parse the native pending-operation recovery mode.
@@ -4134,8 +4276,12 @@ mod tests {
             OsString::from("/tmp/dfx"),
             OsString::from("--network"),
             OsString::from("local"),
+            OsString::from("--updated-at"),
+            OsString::from("2026-05-05T12:00:00Z"),
             OsString::from("--out"),
             OsString::from(out_path.as_os_str()),
+            OsString::from("--require-state-updated-at"),
+            OsString::from("2026-05-05T12:00:00Z"),
         ])
         .expect("write restore run dry-run");
 
@@ -4148,6 +4294,10 @@ mod tests {
         assert_eq!(dry_run["backup_id"], "backup-test");
         assert_eq!(dry_run["run_mode"], "dry-run");
         assert_eq!(dry_run["dry_run"], true);
+        assert_eq!(
+            dry_run["requested_state_updated_at"],
+            "2026-05-05T12:00:00Z"
+        );
         assert_eq!(dry_run["ready"], true);
         assert_eq!(dry_run["complete"], false);
         assert_eq!(dry_run["attention_required"], false);
@@ -4219,6 +4369,8 @@ mod tests {
             OsString::from("--journal"),
             OsString::from(journal_path.as_os_str()),
             OsString::from("--unclaim-pending"),
+            OsString::from("--updated-at"),
+            OsString::from("2026-05-05T12:02:00Z"),
             OsString::from("--out"),
             OsString::from(out_path.as_os_str()),
         ])
@@ -4236,6 +4388,10 @@ mod tests {
         assert_eq!(run_summary["unclaim_pending"], true);
         assert_eq!(run_summary["stopped_reason"], "recovered-pending");
         assert_eq!(run_summary["next_action"], "rerun");
+        assert_eq!(
+            run_summary["requested_state_updated_at"],
+            "2026-05-05T12:02:00Z"
+        );
         assert_eq!(run_summary["recovered_operation"]["sequence"], 0);
         assert_eq!(run_summary["recovered_operation"]["state"], "pending");
         assert_eq!(run_summary["operation_receipt_count"], 1);
@@ -4263,7 +4419,7 @@ mod tests {
         assert_eq!(run_summary["operation_receipts"][0]["state"], "ready");
         assert_eq!(
             run_summary["operation_receipts"][0]["updated_at"],
-            "unknown"
+            "2026-05-05T12:02:00Z"
         );
         assert_eq!(run_summary["pending_operations"], 0);
         assert_eq!(run_summary["ready_operations"], 8);
@@ -4273,6 +4429,10 @@ mod tests {
         assert_eq!(
             updated.operations[0].state,
             RestoreApplyOperationState::Ready
+        );
+        assert_eq!(
+            updated.operations[0].state_updated_at.as_deref(),
+            Some("2026-05-05T12:02:00Z")
         );
     }
 
@@ -4300,8 +4460,12 @@ mod tests {
             OsString::from("/bin/true"),
             OsString::from("--max-steps"),
             OsString::from("1"),
+            OsString::from("--updated-at"),
+            OsString::from("2026-05-05T12:03:00Z"),
             OsString::from("--out"),
             OsString::from(out_path.as_os_str()),
+            OsString::from("--require-receipt-updated-at"),
+            OsString::from("2026-05-05T12:03:00Z"),
         ])
         .expect("execute one restore run step");
 
@@ -4319,6 +4483,10 @@ mod tests {
         assert_eq!(run_summary["max_steps_reached"], true);
         assert_eq!(run_summary["stopped_reason"], "max-steps-reached");
         assert_eq!(run_summary["next_action"], "rerun");
+        assert_eq!(
+            run_summary["requested_state_updated_at"],
+            "2026-05-05T12:03:00Z"
+        );
         assert_eq!(run_summary["executed_operation_count"], 1);
         assert_eq!(run_summary["operation_receipt_count"], 1);
         assert_eq!(
@@ -4355,7 +4523,7 @@ mod tests {
         assert_eq!(run_summary["operation_receipts"][0]["status"], "0");
         assert_eq!(
             run_summary["operation_receipts"][0]["updated_at"],
-            "unknown"
+            "2026-05-05T12:03:00Z"
         );
         assert_eq!(updated.completed_operations, 1);
         assert_eq!(updated.pending_operations, 0);
@@ -4363,6 +4531,10 @@ mod tests {
         assert_eq!(
             updated.operations[0].state,
             RestoreApplyOperationState::Completed
+        );
+        assert_eq!(
+            updated.operations[0].state_updated_at.as_deref(),
+            Some("2026-05-05T12:03:00Z")
         );
     }
 
@@ -4437,6 +4609,8 @@ mod tests {
             OsString::from("/bin/false"),
             OsString::from("--max-steps"),
             OsString::from("1"),
+            OsString::from("--updated-at"),
+            OsString::from("2026-05-05T12:04:00Z"),
             OsString::from("--out"),
             OsString::from(out_path.as_os_str()),
         ])
@@ -4468,6 +4642,10 @@ mod tests {
         assert_eq!(run_summary["outcome"], "failed");
         assert_eq!(run_summary["stopped_reason"], "command-failed");
         assert_eq!(run_summary["next_action"], "inspect-failed-operation");
+        assert_eq!(
+            run_summary["requested_state_updated_at"],
+            "2026-05-05T12:04:00Z"
+        );
         assert_eq!(run_summary["executed_operation_count"], 1);
         assert_eq!(run_summary["operation_receipt_count"], 1);
         assert_eq!(
@@ -4501,7 +4679,11 @@ mod tests {
         assert_eq!(run_summary["operation_receipts"][0]["status"], "1");
         assert_eq!(
             run_summary["operation_receipts"][0]["updated_at"],
-            "unknown"
+            "2026-05-05T12:04:00Z"
+        );
+        assert_eq!(
+            updated.operations[0].state_updated_at.as_deref(),
+            Some("2026-05-05T12:04:00Z")
         );
         assert_eq!(
             updated.operations[0].blocking_reasons,
@@ -4730,6 +4912,85 @@ mod tests {
                 actual: 0,
                 ..
             }
+        ));
+    }
+
+    // Ensure restore run can fail closed on an unexpected receipt state marker.
+    #[test]
+    fn run_restore_run_require_receipt_updated_at_writes_summary_then_fails() {
+        let fixture = RestoreCliFixture::new(
+            "canic-cli-restore-run-require-receipt-updated-at",
+            "restore-run.json",
+        );
+        let journal = ready_apply_journal();
+        fixture.write_journal(&journal);
+
+        let err = fixture
+            .run_restore_run(&[
+                "--execute",
+                "--dfx",
+                "/bin/true",
+                "--max-steps",
+                "1",
+                "--updated-at",
+                "2026-05-05T12:03:00Z",
+                "--require-receipt-updated-at",
+                "2026-05-05T12:04:00Z",
+            ])
+            .expect_err("receipt updated-at mismatch should fail requirement");
+
+        let run_summary: serde_json::Value = fixture.read_out("read run summary");
+
+        assert_eq!(
+            run_summary["operation_receipts"][0]["updated_at"],
+            "2026-05-05T12:03:00Z"
+        );
+        assert!(matches!(
+            err,
+            RestoreCommandError::RestoreRunReceiptUpdatedAtMismatch {
+                expected,
+                actual_receipts: 1,
+                mismatched_receipts: 1,
+                ..
+            } if expected == "2026-05-05T12:04:00Z"
+        ));
+    }
+
+    // Ensure restore run can fail closed on an unexpected requested state marker.
+    #[test]
+    fn run_restore_run_require_state_updated_at_writes_summary_then_fails() {
+        let fixture = RestoreCliFixture::new(
+            "canic-cli-restore-run-require-state-updated-at",
+            "restore-run.json",
+        );
+        let journal = ready_apply_journal();
+        fixture.write_journal(&journal);
+
+        let err = fixture
+            .run_restore_run(&[
+                "--dry-run",
+                "--updated-at",
+                "2026-05-05T12:03:00Z",
+                "--require-state-updated-at",
+                "2026-05-05T12:04:00Z",
+            ])
+            .expect_err("state updated-at mismatch should fail requirement");
+
+        let run_summary: serde_json::Value = fixture.read_out("read run summary");
+
+        assert_eq!(
+            run_summary["requested_state_updated_at"],
+            "2026-05-05T12:03:00Z"
+        );
+        assert_eq!(run_summary["operation_receipt_count"], 0);
+        assert!(matches!(
+            err,
+            RestoreCommandError::RestoreRunStateUpdatedAtMismatch {
+                expected,
+                actual: Some(actual),
+                ..
+            } if expected == "2026-05-05T12:04:00Z"
+                && actual == "2026-05-05T12:03:00Z"
         ));
     }
 

@@ -7,7 +7,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.30.x] - 2026-05-03 - Fleet Snapshot Backups
 
-- `0.30.33` adds restore apply progress summaries, pending-work summaries, runner operation receipts/summaries, and fail-closed progress/stale-pending/receipt gates so automation can read or require remaining, attention-needed, claimed-work freshness, and execution audit events without recomputing counters.
+- `0.30.35` lets `canic restore run` accept, echo, and require `--updated-at <text>` markers on runner summaries and receipts so native runner transitions can carry operator-supplied comparable state markers instead of always using `unknown`.
+
+- `0.30.34` adds restore pending-work summaries, runner operation receipts/summaries, and fail-closed progress/stale-pending/receipt gates so automation can require claimed-work freshness and execution audit events without recomputing counters.
+
+- `0.30.33` adds restore apply progress summaries to status, report, and runner output so automation can read remaining, transitionable, attention-needed, and integer completion progress without recomputing counters.
 
 - `0.30.32` persists restore apply journal operation-kind counts and validates supplied counts against concrete journal operations, while keeping older journals readable.
 
