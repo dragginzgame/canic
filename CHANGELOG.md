@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.30.x] - 2026-05-03 - Fleet Snapshot Backups
 
-- `0.30.32` persists restore apply journal operation-kind counts and validates supplied counts against concrete journal operations, while keeping older journals readable; Canic canisters also expose a controller-only `canic_security_log` query backed by stable-memory security events for replicated payload-limit rejections.
+- `0.30.32` persists restore apply journal operation-kind counts and validates supplied counts against concrete journal operations, while keeping older journals readable; Canic canisters also expose a controller-only `canic_security_log` query backed by stable-memory security events for replicated payload-limit rejections, and the root example now accepts the generated security observability bundle cfg under strict cfg checking.
 
 - `0.30.31` makes restore planning expand role-level member verification checks into concrete member operations, honors verification role filters before dry-runs or runner previews are generated, and carries operation-kind counts through dry-runs, apply journals, and runner summaries.
 

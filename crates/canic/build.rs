@@ -15,6 +15,7 @@ fn main() {
     println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_observability_memory)");
     println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_observability_env)");
     println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_observability_log)");
+    println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_observability_security)");
     println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_metrics)");
     println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_auth_attestation)");
     println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_topology_state)");
