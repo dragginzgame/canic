@@ -37,6 +37,7 @@ pub const CANIC_MEMORY_REGISTRY: &str = "canic_memory_registry";
 pub const CANIC_ENV: &str = "canic_env";
 pub const CANIC_LOG: &str = "canic_log";
 pub const CANIC_METRICS: &str = "canic_metrics";
+pub const CANIC_SECURITY_LOG: &str = "canic_security_log";
 pub const CANIC_READY: &str = "canic_ready";
 pub const CANIC_APP_STATE: &str = "canic_app_state";
 pub const CANIC_SUBNET_STATE: &str = "canic_subnet_state";

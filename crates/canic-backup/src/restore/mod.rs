@@ -307,6 +307,8 @@ pub struct RestoreApplyJournal {
     pub ready: bool,
     pub blocked_reasons: Vec<String>,
     pub operation_count: usize,
+    #[serde(default)]
+    pub operation_counts: RestoreApplyOperationKindCounts,
     pub pending_operations: usize,
     pub ready_operations: usize,
     pub blocked_operations: usize,
@@ -345,6 +347,7 @@ impl RestoreApplyJournal {
             .iter()
             .filter(|operation| operation.state == RestoreApplyOperationState::Blocked)
             .count();
+        let operation_counts = RestoreApplyOperationKindCounts::from_operations(&operations);
 
         Self {
             journal_version: 1,
@@ -352,6 +355,7 @@ impl RestoreApplyJournal {
             ready: blocked_reasons.is_empty(),
             blocked_reasons,
             operation_count: operations.len(),
+            operation_counts,
             pending_operations: 0,
             ready_operations,
             blocked_operations,
@@ -372,6 +376,9 @@ impl RestoreApplyJournal {
         )?;
 
         let state_counts = RestoreApplyJournalStateCounts::from_operations(&self.operations);
+        let operation_counts = RestoreApplyOperationKindCounts::from_operations(&self.operations);
+        self.operation_counts
+            .validate_matches_if_supplied(&operation_counts)?;
         validate_apply_journal_count(
             "pending_operations",
             self.pending_operations,
@@ -663,11 +670,17 @@ impl RestoreApplyJournal {
     fn refresh_operation_counts(&mut self) {
         let state_counts = RestoreApplyJournalStateCounts::from_operations(&self.operations);
         self.operation_count = self.operations.len();
+        self.operation_counts = RestoreApplyOperationKindCounts::from_operations(&self.operations);
         self.pending_operations = state_counts.pending;
         self.ready_operations = state_counts.ready;
         self.blocked_operations = state_counts.blocked;
         self.completed_operations = state_counts.completed;
         self.failed_operations = state_counts.failed;
+    }
+
+    // Return whether this journal carried a persisted operation-kind receipt.
+    const fn operation_counts_supplied(&self) -> bool {
+        !self.operation_counts.is_empty() || self.operations.is_empty()
     }
 }
 
@@ -786,6 +799,57 @@ impl RestoreApplyOperationKindCounts {
         counts
     }
 
+    /// Validate this count object against concrete operations when it was supplied.
+    pub fn validate_matches_if_supplied(
+        &self,
+        expected: &Self,
+    ) -> Result<(), RestoreApplyJournalError> {
+        if self.is_empty() && !expected.is_empty() {
+            return Ok(());
+        }
+
+        validate_apply_journal_count(
+            "operation_counts.snapshot_uploads",
+            self.snapshot_uploads,
+            expected.snapshot_uploads,
+        )?;
+        validate_apply_journal_count(
+            "operation_counts.snapshot_loads",
+            self.snapshot_loads,
+            expected.snapshot_loads,
+        )?;
+        validate_apply_journal_count(
+            "operation_counts.code_reinstalls",
+            self.code_reinstalls,
+            expected.code_reinstalls,
+        )?;
+        validate_apply_journal_count(
+            "operation_counts.member_verifications",
+            self.member_verifications,
+            expected.member_verifications,
+        )?;
+        validate_apply_journal_count(
+            "operation_counts.fleet_verifications",
+            self.fleet_verifications,
+            expected.fleet_verifications,
+        )?;
+        validate_apply_journal_count(
+            "operation_counts.verification_operations",
+            self.verification_operations,
+            expected.verification_operations,
+        )
+    }
+
+    // Return whether no operation-kind counts are present.
+    const fn is_empty(&self) -> bool {
+        self.snapshot_uploads == 0
+            && self.snapshot_loads == 0
+            && self.code_reinstalls == 0
+            && self.member_verifications == 0
+            && self.fleet_verifications == 0
+            && self.verification_operations == 0
+    }
+
     /// Count restore apply dry-run operations by runner operation kind.
     #[must_use]
     pub fn from_dry_run_phases(phases: &[RestoreApplyDryRunPhase]) -> Self {
@@ -854,6 +918,7 @@ pub struct RestoreApplyJournalStatus {
     pub operation_count: usize,
     #[serde(default)]
     pub operation_counts: RestoreApplyOperationKindCounts,
+    pub operation_counts_supplied: bool,
     pub pending_operations: usize,
     pub ready_operations: usize,
     pub blocked_operations: usize,
@@ -883,6 +948,7 @@ impl RestoreApplyJournalStatus {
             blocked_reasons: journal.blocked_reasons.clone(),
             operation_count: journal.operation_count,
             operation_counts: RestoreApplyOperationKindCounts::from_operations(&journal.operations),
+            operation_counts_supplied: journal.operation_counts_supplied(),
             pending_operations: journal.pending_operations,
             ready_operations: journal.ready_operations,
             blocked_operations: journal.blocked_operations,
@@ -904,6 +970,10 @@ impl RestoreApplyJournalStatus {
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "apply reports intentionally expose stable JSON flags for operators and CI"
+)]
 pub struct RestoreApplyJournalReport {
     pub report_version: u16,
     pub backup_id: String,
@@ -915,6 +985,7 @@ pub struct RestoreApplyJournalReport {
     pub operation_count: usize,
     #[serde(default)]
     pub operation_counts: RestoreApplyOperationKindCounts,
+    pub operation_counts_supplied: bool,
     pub pending_operations: usize,
     pub ready_operations: usize,
     pub blocked_operations: usize,
@@ -947,6 +1018,7 @@ impl RestoreApplyJournalReport {
             blocked_reasons: journal.blocked_reasons.clone(),
             operation_count: journal.operation_count,
             operation_counts: RestoreApplyOperationKindCounts::from_operations(&journal.operations),
+            operation_counts_supplied: journal.operation_counts_supplied(),
             pending_operations: journal.pending_operations,
             ready_operations: journal.ready_operations,
             blocked_operations: journal.blocked_operations,
@@ -2716,6 +2788,7 @@ mod tests {
             ready: true,
             blocked_reasons: Vec::new(),
             operation_count: 1,
+            operation_counts: RestoreApplyOperationKindCounts::default(),
             pending_operations: 0,
             ready_operations: 1,
             blocked_operations: 0,
@@ -3439,7 +3512,10 @@ mod tests {
         assert_eq!(status.operation_counts.member_verifications, 2);
         assert_eq!(status.operation_counts.fleet_verifications, 0);
         assert_eq!(status.operation_counts.verification_operations, 2);
+        assert!(status.operation_counts_supplied);
+        assert_eq!(journal.operation_counts, status.operation_counts);
         assert_eq!(report.operation_counts, status.operation_counts);
+        assert!(report.operation_counts_supplied);
         assert_eq!(status.ready_operations, 8);
         assert_eq!(status.next_ready_sequence, Some(0));
         assert_eq!(
@@ -3771,6 +3847,7 @@ mod tests {
             ready: true,
             blocked_reasons: Vec::new(),
             operation_count: 1,
+            operation_counts: RestoreApplyOperationKindCounts::default(),
             pending_operations: 0,
             ready_operations: 1,
             blocked_operations: 0,
@@ -3827,6 +3904,61 @@ mod tests {
                 ..
             }
         ));
+    }
+
+    // Ensure supplied operation-kind counts must match concrete journal rows.
+    #[test]
+    fn apply_journal_validation_rejects_operation_kind_count_mismatch() {
+        let mut journal =
+            command_preview_journal(RestoreApplyOperationKind::UploadSnapshot, None, None);
+        journal.operation_counts = RestoreApplyOperationKindCounts {
+            snapshot_uploads: 0,
+            snapshot_loads: 1,
+            code_reinstalls: 0,
+            member_verifications: 0,
+            fleet_verifications: 0,
+            verification_operations: 0,
+        };
+
+        let err = journal
+            .validate()
+            .expect_err("operation-kind count mismatch should fail");
+
+        assert!(matches!(
+            err,
+            RestoreApplyJournalError::CountMismatch {
+                field: "operation_counts.snapshot_uploads",
+                reported: 0,
+                actual: 1,
+            }
+        ));
+    }
+
+    // Ensure older journals without operation-kind counts still validate.
+    #[test]
+    fn apply_journal_defaults_missing_operation_kind_counts() {
+        let mut journal =
+            command_preview_journal(RestoreApplyOperationKind::UploadSnapshot, None, None);
+        journal.operation_counts =
+            RestoreApplyOperationKindCounts::from_operations(&journal.operations);
+        let mut value = serde_json::to_value(&journal).expect("serialize journal");
+        value
+            .as_object_mut()
+            .expect("journal should serialize as an object")
+            .remove("operation_counts");
+
+        let decoded: RestoreApplyJournal =
+            serde_json::from_value(value).expect("decode old journal shape");
+        decoded.validate().expect("old journal should validate");
+        let status = decoded.status();
+
+        assert_eq!(
+            decoded.operation_counts,
+            RestoreApplyOperationKindCounts::default()
+        );
+        assert_eq!(status.operation_counts.snapshot_uploads, 1);
+        assert_eq!(status.operation_counts.snapshot_loads, 0);
+        assert!(!status.operation_counts_supplied);
     }
 
     // Ensure apply journal validation rejects duplicate operation sequences.

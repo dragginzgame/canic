@@ -177,7 +177,11 @@ is supplied, the command also writes an initial apply journal with each
 operation marked `ready` or `blocked` and stable blocking reasons. The command
 requires `--dry-run`; real restore execution is intentionally not enabled yet.
 Dry-run output also includes `operation_counts` so operators can compare the
-rendered operation mix before writing or running a journal.
+rendered operation mix before writing or running a journal. Generated apply
+journals persist the same counts and validate them against the concrete journal
+operations when a runner resumes from disk. Status, report, and runner summary
+output include `operation_counts_supplied` to show whether the journal carried a
+persisted receipt or the counts were recomputed from older journal data.
 
 Summarize a restore apply journal:
 

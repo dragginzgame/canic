@@ -18,6 +18,7 @@ pub mod placement;
 pub mod pool;
 pub mod rpc;
 pub mod runtime;
+pub mod security;
 pub mod state;
 pub mod topology;
 pub mod view;

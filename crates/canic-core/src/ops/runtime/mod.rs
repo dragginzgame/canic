@@ -4,6 +4,7 @@ pub mod log;
 pub mod memory;
 pub mod metrics;
 pub mod ready;
+pub mod security;
 pub mod timer;
 
 use crate::{InternalError, ops::OpsError};
@@ -23,6 +24,9 @@ pub enum RuntimeOpsError {
 
     #[error(transparent)]
     MemoryRegistryOps(#[from] memory::MemoryRegistryOpsError),
+
+    #[error(transparent)]
+    SecurityOps(#[from] security::SecurityOpsError),
 }
 
 impl From<RuntimeOpsError> for InternalError {

@@ -10,6 +10,7 @@ pub mod pool;
 pub mod registry;
 pub mod replay;
 pub mod scaling;
+pub mod security;
 #[cfg(feature = "sharding")]
 pub mod sharding;
 pub mod state;
@@ -96,7 +97,7 @@ pub mod memory {
     }
 
     // ---------------------------------------------------------------------
-    // Observability & accounting (26–35)
+    // Observability & accounting (26–28)
     //
     // Expected growth: medium
     // ---------------------------------------------------------------------
@@ -106,7 +107,20 @@ pub mod memory {
         pub const LOG_INDEX_ID: u8 = 27;
         pub const LOG_DATA_ID: u8 = 28;
 
-        // Reserved: 29–35
+        // Reserved: none
+    }
+
+    // ---------------------------------------------------------------------
+    // Security events (29–30)
+    //
+    // Expected growth: medium
+    // ---------------------------------------------------------------------
+
+    pub mod security {
+        pub const SECURITY_EVENT_INDEX_ID: u8 = 29;
+        pub const SECURITY_EVENT_DATA_ID: u8 = 30;
+
+        // Reserved: 31–35
     }
 
     // ---------------------------------------------------------------------
@@ -188,6 +202,9 @@ use thiserror::Error as ThisError;
 pub enum StableMemoryError {
     #[error("log write failed: current_size={current_size}, delta={delta}")]
     LogWriteFailed { current_size: u64, delta: u64 },
+
+    #[error("security event write failed: current_size={current_size}, delta={delta}")]
+    SecurityEventWriteFailed { current_size: u64, delta: u64 },
 }
 
 impl From<StableMemoryError> for InternalError {

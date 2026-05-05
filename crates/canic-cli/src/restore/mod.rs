@@ -661,6 +661,7 @@ pub struct RestoreRunResponse {
     outcome: RestoreApplyReportOutcome,
     operation_count: usize,
     operation_counts: RestoreApplyOperationKindCounts,
+    operation_counts_supplied: bool,
     pending_operations: usize,
     ready_operations: usize,
     blocked_operations: usize,
@@ -702,6 +703,7 @@ impl RestoreRunResponse {
             outcome: report.outcome,
             operation_count: report.operation_count,
             operation_counts: report.operation_counts,
+            operation_counts_supplied: report.operation_counts_supplied,
             pending_operations: report.pending_operations,
             ready_operations: report.ready_operations,
             blocked_operations: report.blocked_operations,
@@ -2975,6 +2977,15 @@ mod tests {
         assert_eq!(validation.members_with_expected_checksums, 2);
         assert_eq!(journal_json["ready"], true);
         assert_eq!(journal_json["operation_count"], 8);
+        assert_eq!(journal_json["operation_counts"]["snapshot_uploads"], 2);
+        assert_eq!(journal_json["operation_counts"]["snapshot_loads"], 2);
+        assert_eq!(journal_json["operation_counts"]["code_reinstalls"], 2);
+        assert_eq!(journal_json["operation_counts"]["member_verifications"], 2);
+        assert_eq!(journal_json["operation_counts"]["fleet_verifications"], 0);
+        assert_eq!(
+            journal_json["operation_counts"]["verification_operations"],
+            2
+        );
         assert_eq!(journal_json["ready_operations"], 8);
         assert_eq!(journal_json["blocked_operations"], 0);
         assert_eq!(journal_json["operations"][0]["state"], "ready");
@@ -2989,6 +3000,7 @@ mod tests {
             status_json["operation_counts"]["verification_operations"],
             2
         );
+        assert_eq!(status_json["operation_counts_supplied"], true);
         assert_eq!(status_json["next_ready_sequence"], 0);
         assert_eq!(status_json["next_ready_operation"], "upload-snapshot");
     }
@@ -3178,6 +3190,7 @@ mod tests {
         assert_eq!(report.operation_counts.member_verifications, 2);
         assert_eq!(report.operation_counts.fleet_verifications, 0);
         assert_eq!(report.operation_counts.verification_operations, 2);
+        assert!(report.operation_counts_supplied);
         assert_eq!(report.failed.len(), 1);
         assert_eq!(report.pending.len(), 1);
         assert_eq!(report.failed[0].sequence, 0);
@@ -3237,6 +3250,7 @@ mod tests {
         assert_eq!(dry_run["operation_counts"]["member_verifications"], 2);
         assert_eq!(dry_run["operation_counts"]["fleet_verifications"], 0);
         assert_eq!(dry_run["operation_counts"]["verification_operations"], 2);
+        assert_eq!(dry_run["operation_counts_supplied"], true);
         assert_eq!(dry_run["stopped_reason"], "preview");
         assert_eq!(dry_run["next_action"], "rerun");
         assert_eq!(dry_run["operation_available"], true);

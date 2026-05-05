@@ -57,3 +57,6 @@ pub mod memory {
 pub mod metrics {
     pub use crate::workflow::metrics::query::MetricsQuery;
 }
+pub mod security {
+    pub use crate::workflow::security::query::SecurityQuery;
+}

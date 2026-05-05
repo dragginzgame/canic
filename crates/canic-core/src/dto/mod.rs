@@ -42,6 +42,7 @@ pub mod page;
 pub mod placement;
 pub mod pool;
 pub mod rpc;
+pub mod security;
 pub mod standards;
 pub mod state;
 pub mod subnet;
