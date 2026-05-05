@@ -1,9 +1,4 @@
 #![allow(clippy::unused_async)]
-#![expect(
-    clippy::unnecessary_wraps,
-    reason = "probe endpoints keep the fallible Result ABI that the PocketIC tests decode"
-)]
-
 use canic::{Error, ids::CanisterRole, prelude::*};
 
 const TEST_ROLE: CanisterRole = CanisterRole::new("test");
