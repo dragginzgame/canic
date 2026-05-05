@@ -175,6 +175,9 @@ pub enum RestoreCommandError {
         reasons: Vec<String>,
     },
 
+    #[error("restore manifest {backup_id} is not design-v1 ready")]
+    DesignConformanceNotReady { backup_id: String },
+
     #[error(
         "restore apply journal for backup {backup_id} has pending operations: pending={pending_operations}, next={next_transition_sequence:?}"
     )]
@@ -318,6 +321,7 @@ pub struct RestorePlanOptions {
     pub mapping: Option<PathBuf>,
     pub out: Option<PathBuf>,
     pub require_verified: bool,
+    pub require_design_v1: bool,
     pub require_restore_ready: bool,
 }
 
@@ -332,6 +336,7 @@ impl RestorePlanOptions {
         let mut mapping = None;
         let mut out = None;
         let mut require_verified = false;
+        let mut require_design_v1 = false;
         let mut require_restore_ready = false;
 
         let mut args = args.into_iter();
@@ -349,6 +354,7 @@ impl RestorePlanOptions {
                 "--mapping" => mapping = Some(PathBuf::from(next_value(&mut args, "--mapping")?)),
                 "--out" => out = Some(PathBuf::from(next_value(&mut args, "--out")?)),
                 "--require-verified" => require_verified = true,
+                "--require-design-v1" => require_design_v1 = true,
                 "--require-restore-ready" => require_restore_ready = true,
                 "--help" | "-h" => return Err(RestoreCommandError::Usage(usage())),
                 _ => return Err(RestoreCommandError::UnknownOption(arg)),
@@ -375,6 +381,7 @@ impl RestorePlanOptions {
             mapping,
             out,
             require_verified,
+            require_design_v1,
             require_restore_ready,
         })
     }
@@ -2777,6 +2784,15 @@ fn enforce_restore_plan_requirements(
     options: &RestorePlanOptions,
     plan: &RestorePlan,
 ) -> Result<(), RestoreCommandError> {
+    if options.require_design_v1 {
+        let manifest = read_manifest_source(options)?;
+        if !manifest.design_conformance_report().design_v1_ready {
+            return Err(RestoreCommandError::DesignConformanceNotReady {
+                backup_id: plan.backup_id.clone(),
+            });
+        }
+    }
+
     if !options.require_restore_ready || plan.readiness_summary.ready {
         return Ok(());
     }
@@ -3253,7 +3269,7 @@ where
 
 // Return restore command usage text.
 const fn usage() -> &'static str {
-    "usage: canic restore plan (--manifest <file> | --backup-dir <dir>) [--mapping <file>] [--out <file>] [--require-verified] [--require-restore-ready]\n       canic restore status --plan <file> [--out <file>]\n       canic restore apply --plan <file> [--status <file>] [--backup-dir <dir>] --dry-run [--out <file>] [--journal-out <file>]\n       canic restore apply-status --journal <file> [--out <file>] [--require-ready] [--require-no-pending] [--require-no-failed] [--require-complete] [--require-remaining-count <n>] [--require-attention-count <n>] [--require-completion-basis-points <n>] [--require-no-pending-before <text>]\n       canic restore apply-report --journal <file> [--out <file>] [--require-no-attention] [--require-remaining-count <n>] [--require-attention-count <n>] [--require-completion-basis-points <n>] [--require-no-pending-before <text>]\n       canic restore run --journal <file> (--dry-run | --execute | --unclaim-pending) [--dfx <path>] [--network <name>] [--max-steps <n>] [--updated-at <text>] [--out <file>] [--require-complete] [--require-no-attention] [--require-run-mode <text>] [--require-stopped-reason <text>] [--require-next-action <text>] [--require-executed-count <n>] [--require-receipt-count <n>] [--require-completed-receipt-count <n>] [--require-failed-receipt-count <n>] [--require-recovered-receipt-count <n>] [--require-receipt-updated-at <text>] [--require-state-updated-at <text>] [--require-batch-initial-ready-count <n>] [--require-batch-executed-count <n>] [--require-batch-remaining-ready-count <n>] [--require-batch-ready-delta <n>] [--require-batch-remaining-delta <n>] [--require-batch-stopped-by-max-steps true|false] [--require-remaining-count <n>] [--require-attention-count <n>] [--require-completion-basis-points <n>] [--require-no-pending-before <text>]\n       canic restore apply-next --journal <file> [--out <file>]\n       canic restore apply-command --journal <file> [--dfx <path>] [--network <name>] [--out <file>] [--require-command]\n       canic restore apply-claim --journal <file> [--sequence <n>] [--updated-at <text>] [--out <file>]\n       canic restore apply-unclaim --journal <file> [--sequence <n>] [--updated-at <text>] [--out <file>]\n       canic restore apply-mark --journal <file> --sequence <n> --state completed|failed [--reason <text>] [--updated-at <text>] [--out <file>] [--require-pending]"
+    "usage: canic restore plan (--manifest <file> | --backup-dir <dir>) [--mapping <file>] [--out <file>] [--require-verified] [--require-design-v1] [--require-restore-ready]\n       canic restore status --plan <file> [--out <file>]\n       canic restore apply --plan <file> [--status <file>] [--backup-dir <dir>] --dry-run [--out <file>] [--journal-out <file>]\n       canic restore apply-status --journal <file> [--out <file>] [--require-ready] [--require-no-pending] [--require-no-failed] [--require-complete] [--require-remaining-count <n>] [--require-attention-count <n>] [--require-completion-basis-points <n>] [--require-no-pending-before <text>]\n       canic restore apply-report --journal <file> [--out <file>] [--require-no-attention] [--require-remaining-count <n>] [--require-attention-count <n>] [--require-completion-basis-points <n>] [--require-no-pending-before <text>]\n       canic restore run --journal <file> (--dry-run | --execute | --unclaim-pending) [--dfx <path>] [--network <name>] [--max-steps <n>] [--updated-at <text>] [--out <file>] [--require-complete] [--require-no-attention] [--require-run-mode <text>] [--require-stopped-reason <text>] [--require-next-action <text>] [--require-executed-count <n>] [--require-receipt-count <n>] [--require-completed-receipt-count <n>] [--require-failed-receipt-count <n>] [--require-recovered-receipt-count <n>] [--require-receipt-updated-at <text>] [--require-state-updated-at <text>] [--require-batch-initial-ready-count <n>] [--require-batch-executed-count <n>] [--require-batch-remaining-ready-count <n>] [--require-batch-ready-delta <n>] [--require-batch-remaining-delta <n>] [--require-batch-stopped-by-max-steps true|false] [--require-remaining-count <n>] [--require-attention-count <n>] [--require-completion-basis-points <n>] [--require-no-pending-before <text>]\n       canic restore apply-next --journal <file> [--out <file>]\n       canic restore apply-command --journal <file> [--dfx <path>] [--network <name>] [--out <file>] [--require-command]\n       canic restore apply-claim --journal <file> [--sequence <n>] [--updated-at <text>] [--out <file>]\n       canic restore apply-unclaim --journal <file> [--sequence <n>] [--updated-at <text>] [--out <file>]\n       canic restore apply-mark --journal <file> --sequence <n> --state completed|failed [--reason <text>] [--updated-at <text>] [--out <file>] [--require-pending]"
 }
 
 #[cfg(test)]
@@ -3394,6 +3410,7 @@ mod tests {
             OsString::from("mapping.json"),
             OsString::from("--out"),
             OsString::from("plan.json"),
+            OsString::from("--require-design-v1"),
             OsString::from("--require-restore-ready"),
         ])
         .expect("parse options");
@@ -3403,6 +3420,7 @@ mod tests {
         assert_eq!(options.mapping, Some(PathBuf::from("mapping.json")));
         assert_eq!(options.out, Some(PathBuf::from("plan.json")));
         assert!(!options.require_verified);
+        assert!(options.require_design_v1);
         assert!(options.require_restore_ready);
     }
 
@@ -3421,6 +3439,7 @@ mod tests {
         assert_eq!(options.mapping, None);
         assert_eq!(options.out, None);
         assert!(options.require_verified);
+        assert!(!options.require_design_v1);
         assert!(!options.require_restore_ready);
     }
 
@@ -3952,6 +3971,7 @@ mod tests {
             mapping: None,
             out: None,
             require_verified: false,
+            require_design_v1: false,
             require_restore_ready: false,
         };
 
@@ -4009,6 +4029,7 @@ mod tests {
             mapping: None,
             out: None,
             require_verified: true,
+            require_design_v1: false,
             require_restore_ready: false,
         };
 
@@ -4034,6 +4055,7 @@ mod tests {
             mapping: None,
             out: None,
             require_verified: true,
+            require_design_v1: false,
             require_restore_ready: false,
         };
 
@@ -4074,6 +4096,7 @@ mod tests {
             mapping: Some(mapping_path),
             out: None,
             require_verified: false,
+            require_design_v1: false,
             require_restore_ready: false,
         };
 
@@ -4129,6 +4152,42 @@ mod tests {
         ));
     }
 
+    // Ensure design-v1 gating happens after writing the plan artifact.
+    #[test]
+    fn run_restore_plan_require_design_v1_writes_plan_then_fails() {
+        let root = temp_dir("canic-cli-restore-plan-require-design-v1");
+        fs::create_dir_all(&root).expect("create temp root");
+        let manifest_path = root.join("manifest.json");
+        let out_path = root.join("plan.json");
+
+        fs::write(
+            &manifest_path,
+            serde_json::to_vec(&valid_manifest()).expect("serialize manifest"),
+        )
+        .expect("write manifest");
+
+        let err = run([
+            OsString::from("plan"),
+            OsString::from("--manifest"),
+            OsString::from(manifest_path.as_os_str()),
+            OsString::from("--out"),
+            OsString::from(out_path.as_os_str()),
+            OsString::from("--require-design-v1"),
+        ])
+        .expect_err("design-v1 readiness should be enforced");
+
+        assert!(out_path.exists());
+        let plan: RestorePlan =
+            serde_json::from_slice(&fs::read(&out_path).expect("read plan")).expect("decode plan");
+
+        fs::remove_dir_all(root).expect("remove temp root");
+        assert_eq!(plan.backup_id, "backup-test");
+        assert!(matches!(
+            err,
+            RestoreCommandError::DesignConformanceNotReady { .. }
+        ));
+    }
+
     // Ensure restore-readiness gating accepts plans with complete provenance.
     #[test]
     fn run_restore_plan_require_restore_ready_accepts_ready_plan() {
@@ -4159,6 +4218,38 @@ mod tests {
         fs::remove_dir_all(root).expect("remove temp root");
         assert!(plan.readiness_summary.ready);
         assert!(plan.readiness_summary.reasons.is_empty());
+    }
+
+    // Ensure design-v1 gating accepts plans with complete manifest conformance.
+    #[test]
+    fn run_restore_plan_require_design_v1_accepts_ready_manifest() {
+        let root = temp_dir("canic-cli-restore-plan-design-v1-ready");
+        fs::create_dir_all(&root).expect("create temp root");
+        let manifest_path = root.join("manifest.json");
+        let out_path = root.join("plan.json");
+
+        fs::write(
+            &manifest_path,
+            serde_json::to_vec(&restore_ready_manifest()).expect("serialize manifest"),
+        )
+        .expect("write manifest");
+
+        run([
+            OsString::from("plan"),
+            OsString::from("--manifest"),
+            OsString::from(manifest_path.as_os_str()),
+            OsString::from("--out"),
+            OsString::from(out_path.as_os_str()),
+            OsString::from("--require-design-v1"),
+        ])
+        .expect("design-v1 ready plan should pass");
+
+        let plan: RestorePlan =
+            serde_json::from_slice(&fs::read(&out_path).expect("read plan")).expect("decode plan");
+
+        fs::remove_dir_all(root).expect("remove temp root");
+        assert_eq!(plan.backup_id, "backup-test");
+        assert!(plan.readiness_summary.ready);
     }
 
     // Ensure restore status writes the initial planned execution journal.

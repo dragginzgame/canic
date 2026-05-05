@@ -8,6 +8,8 @@ use thiserror::Error as ThisError;
 
 const SUPPORTED_MANIFEST_VERSION: u16 = 1;
 const SHA256_ALGORITHM: &str = "sha256";
+const DESIGN_V1: &str = "0.30-design-v1";
+const TOPOLOGY_HASH_INPUT_V1: &str = "sorted(pid,parent_pid,role,module_hash)";
 
 ///
 /// FleetBackupManifest
@@ -40,6 +42,435 @@ impl FleetBackupManifest {
         validate_verification_against_fleet(&self.verification, &self.fleet)?;
         Ok(())
     }
+
+    /// Build a design-conformance report for operator preflight checks.
+    #[must_use]
+    pub fn design_conformance_report(&self) -> ManifestDesignConformanceReport {
+        ManifestDesignConformanceReport::from_manifest(self)
+    }
+}
+
+///
+/// ManifestDesignConformanceReport
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ManifestDesignConformanceReport {
+    pub design_version: String,
+    pub design_v1_ready: bool,
+    pub topology: TopologyConformance,
+    pub backup_units: BackupUnitConformance,
+    pub quiescence: QuiescenceConformance,
+    pub verification: VerificationConformance,
+    pub identity: IdentityConformance,
+    pub snapshot_provenance: SnapshotProvenanceConformance,
+    pub restore_order: RestoreOrderConformance,
+}
+
+impl ManifestDesignConformanceReport {
+    /// Build one report from an already-loaded manifest.
+    fn from_manifest(manifest: &FleetBackupManifest) -> Self {
+        let topology = TopologyConformance::from_manifest(manifest);
+        let backup_units = BackupUnitConformance::from_manifest(manifest);
+        let quiescence = QuiescenceConformance::from_manifest(manifest);
+        let verification = VerificationConformance::from_manifest(manifest);
+        let identity = IdentityConformance::from_manifest(manifest);
+        let snapshot_provenance = SnapshotProvenanceConformance::from_manifest(manifest);
+        let restore_order = RestoreOrderConformance::from_manifest(manifest);
+        let design_v1_ready = topology.design_v1_ready
+            && backup_units.design_v1_ready
+            && quiescence.design_v1_ready
+            && verification.design_v1_ready
+            && snapshot_provenance.design_v1_ready
+            && restore_order.design_v1_ready;
+
+        Self {
+            design_version: DESIGN_V1.to_string(),
+            design_v1_ready,
+            topology,
+            backup_units,
+            quiescence,
+            verification,
+            identity,
+            snapshot_provenance,
+            restore_order,
+        }
+    }
+}
+
+///
+/// TopologyConformance
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[allow(clippy::struct_excessive_bools)]
+pub struct TopologyConformance {
+    pub design_v1_ready: bool,
+    pub algorithm_sha256: bool,
+    pub canonical_input: bool,
+    pub discovery_matches_pre_snapshot: bool,
+    pub accepted_matches_discovery: bool,
+}
+
+impl TopologyConformance {
+    /// Summarize topology hash stability and canonical input metadata.
+    fn from_manifest(manifest: &FleetBackupManifest) -> Self {
+        let algorithm_sha256 = manifest.fleet.topology_hash_algorithm == SHA256_ALGORITHM;
+        let canonical_input = manifest.fleet.topology_hash_input == TOPOLOGY_HASH_INPUT_V1;
+        let discovery_matches_pre_snapshot =
+            manifest.fleet.discovery_topology_hash == manifest.fleet.pre_snapshot_topology_hash;
+        let accepted_matches_discovery =
+            manifest.fleet.topology_hash == manifest.fleet.discovery_topology_hash;
+        let design_v1_ready = algorithm_sha256
+            && canonical_input
+            && discovery_matches_pre_snapshot
+            && accepted_matches_discovery;
+
+        Self {
+            design_v1_ready,
+            algorithm_sha256,
+            canonical_input,
+            discovery_matches_pre_snapshot,
+            accepted_matches_discovery,
+        }
+    }
+}
+
+///
+/// BackupUnitConformance
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[allow(clippy::struct_excessive_bools)]
+pub struct BackupUnitConformance {
+    pub design_v1_ready: bool,
+    pub unit_count: usize,
+    pub all_units_have_roles: bool,
+    pub all_units_have_topology_validation: bool,
+    pub all_roles_covered: bool,
+    pub flat_units: usize,
+    pub flat_units_with_reason: usize,
+    pub subtree_units: usize,
+    pub subtree_units_declared_closed: usize,
+}
+
+impl BackupUnitConformance {
+    /// Summarize backup-unit boundary metadata required by the design.
+    fn from_manifest(manifest: &FleetBackupManifest) -> Self {
+        let unit_count = manifest.consistency.backup_units.len();
+        let all_units_have_roles = manifest
+            .consistency
+            .backup_units
+            .iter()
+            .all(|unit| !unit.roles.is_empty());
+        let all_units_have_topology_validation = manifest
+            .consistency
+            .backup_units
+            .iter()
+            .all(|unit| !unit.topology_validation.trim().is_empty());
+        let all_roles_covered = all_fleet_roles_covered(manifest);
+        let flat_units = manifest
+            .consistency
+            .backup_units
+            .iter()
+            .filter(|unit| matches!(unit.kind, BackupUnitKind::Flat))
+            .count();
+        let flat_units_with_reason = manifest
+            .consistency
+            .backup_units
+            .iter()
+            .filter(|unit| matches!(unit.kind, BackupUnitKind::Flat))
+            .filter(|unit| {
+                unit.consistency_reason
+                    .as_deref()
+                    .is_some_and(|reason| !reason.trim().is_empty())
+            })
+            .count();
+        let subtree_units = manifest
+            .consistency
+            .backup_units
+            .iter()
+            .filter(|unit| matches!(unit.kind, BackupUnitKind::SubtreeRooted))
+            .count();
+        let subtree_units_declared_closed = manifest
+            .consistency
+            .backup_units
+            .iter()
+            .filter(|unit| matches!(unit.kind, BackupUnitKind::SubtreeRooted))
+            .filter(|unit| unit.topology_validation == "subtree-closed")
+            .count();
+        let design_v1_ready = unit_count > 0
+            && all_units_have_roles
+            && all_units_have_topology_validation
+            && all_roles_covered
+            && flat_units == flat_units_with_reason
+            && subtree_units == subtree_units_declared_closed;
+
+        Self {
+            design_v1_ready,
+            unit_count,
+            all_units_have_roles,
+            all_units_have_topology_validation,
+            all_roles_covered,
+            flat_units,
+            flat_units_with_reason,
+            subtree_units,
+            subtree_units_declared_closed,
+        }
+    }
+}
+
+///
+/// QuiescenceConformance
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[allow(clippy::struct_excessive_bools)]
+pub struct QuiescenceConformance {
+    pub design_v1_ready: bool,
+    pub mode: ConsistencyMode,
+    pub quiescence_required: bool,
+    pub unit_count: usize,
+    pub units_with_strategy: usize,
+    pub all_required_units_have_strategy: bool,
+}
+
+impl QuiescenceConformance {
+    /// Summarize the explicit quiescence boundary for the backup.
+    fn from_manifest(manifest: &FleetBackupManifest) -> Self {
+        let quiescence_required =
+            matches!(manifest.consistency.mode, ConsistencyMode::QuiescedUnit);
+        let unit_count = manifest.consistency.backup_units.len();
+        let units_with_strategy = manifest
+            .consistency
+            .backup_units
+            .iter()
+            .filter(|unit| {
+                unit.quiescence_strategy
+                    .as_deref()
+                    .is_some_and(|strategy| !strategy.trim().is_empty())
+            })
+            .count();
+        let all_required_units_have_strategy =
+            !quiescence_required || units_with_strategy == unit_count;
+        let design_v1_ready = all_required_units_have_strategy;
+
+        Self {
+            design_v1_ready,
+            mode: manifest.consistency.mode.clone(),
+            quiescence_required,
+            unit_count,
+            units_with_strategy,
+            all_required_units_have_strategy,
+        }
+    }
+}
+
+///
+/// VerificationConformance
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct VerificationConformance {
+    pub design_v1_ready: bool,
+    pub member_count: usize,
+    pub members_with_checks: usize,
+    pub all_members_have_checks: bool,
+    pub fleet_check_count: usize,
+    pub role_check_group_count: usize,
+}
+
+impl VerificationConformance {
+    /// Summarize concrete verification coverage for restored members.
+    fn from_manifest(manifest: &FleetBackupManifest) -> Self {
+        let member_count = manifest.fleet.members.len();
+        let members_with_checks = manifest
+            .fleet
+            .members
+            .iter()
+            .filter(|member| !member.verification_checks.is_empty())
+            .count();
+        let all_members_have_checks = member_count == members_with_checks;
+        let fleet_check_count = manifest.verification.fleet_checks.len();
+        let role_check_group_count = manifest.verification.member_checks.len();
+        let design_v1_ready = member_count > 0 && all_members_have_checks;
+
+        Self {
+            design_v1_ready,
+            member_count,
+            members_with_checks,
+            all_members_have_checks,
+            fleet_check_count,
+            role_check_group_count,
+        }
+    }
+}
+
+///
+/// IdentityConformance
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct IdentityConformance {
+    pub fixed_members: usize,
+    pub relocatable_members: usize,
+}
+
+impl IdentityConformance {
+    /// Summarize restore identity modes carried by fleet members.
+    fn from_manifest(manifest: &FleetBackupManifest) -> Self {
+        let fixed_members = manifest
+            .fleet
+            .members
+            .iter()
+            .filter(|member| matches!(member.identity_mode, IdentityMode::Fixed))
+            .count();
+        let relocatable_members = manifest
+            .fleet
+            .members
+            .iter()
+            .filter(|member| matches!(member.identity_mode, IdentityMode::Relocatable))
+            .count();
+
+        Self {
+            fixed_members,
+            relocatable_members,
+        }
+    }
+}
+
+///
+/// SnapshotProvenanceConformance
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[allow(clippy::struct_excessive_bools)]
+pub struct SnapshotProvenanceConformance {
+    pub design_v1_ready: bool,
+    pub member_count: usize,
+    pub members_with_snapshot_id: usize,
+    pub members_with_checksum: usize,
+    pub members_with_module_hash: usize,
+    pub members_with_wasm_hash: usize,
+    pub members_with_code_version: usize,
+    pub all_members_have_snapshot_id: bool,
+    pub all_members_have_checksum: bool,
+}
+
+impl SnapshotProvenanceConformance {
+    /// Summarize snapshot artifact provenance completeness.
+    fn from_manifest(manifest: &FleetBackupManifest) -> Self {
+        let member_count = manifest.fleet.members.len();
+        let members_with_snapshot_id = manifest
+            .fleet
+            .members
+            .iter()
+            .filter(|member| !member.source_snapshot.snapshot_id.trim().is_empty())
+            .count();
+        let members_with_checksum = manifest
+            .fleet
+            .members
+            .iter()
+            .filter(|member| member.source_snapshot.checksum.is_some())
+            .count();
+        let members_with_module_hash = manifest
+            .fleet
+            .members
+            .iter()
+            .filter(|member| member.source_snapshot.module_hash.is_some())
+            .count();
+        let members_with_wasm_hash = manifest
+            .fleet
+            .members
+            .iter()
+            .filter(|member| member.source_snapshot.wasm_hash.is_some())
+            .count();
+        let members_with_code_version = manifest
+            .fleet
+            .members
+            .iter()
+            .filter(|member| member.source_snapshot.code_version.is_some())
+            .count();
+        let all_members_have_snapshot_id = member_count == members_with_snapshot_id;
+        let all_members_have_checksum = member_count == members_with_checksum;
+        let design_v1_ready =
+            member_count > 0 && all_members_have_snapshot_id && all_members_have_checksum;
+
+        Self {
+            design_v1_ready,
+            member_count,
+            members_with_snapshot_id,
+            members_with_checksum,
+            members_with_module_hash,
+            members_with_wasm_hash,
+            members_with_code_version,
+            all_members_have_snapshot_id,
+            all_members_have_checksum,
+        }
+    }
+}
+
+///
+/// RestoreOrderConformance
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RestoreOrderConformance {
+    pub design_v1_ready: bool,
+    pub parent_relationships: usize,
+    pub parent_group_violations: Vec<RestoreGroupViolation>,
+}
+
+impl RestoreOrderConformance {
+    /// Summarize whether restore groups preserve parent-before-child ordering.
+    fn from_manifest(manifest: &FleetBackupManifest) -> Self {
+        let members_by_id = manifest
+            .fleet
+            .members
+            .iter()
+            .map(|member| (member.canister_id.as_str(), member))
+            .collect::<BTreeMap<_, _>>();
+        let mut parent_relationships = 0;
+        let mut parent_group_violations = Vec::new();
+
+        for member in &manifest.fleet.members {
+            let Some(parent_id) = member.parent_canister_id.as_deref() else {
+                continue;
+            };
+            let Some(parent) = members_by_id.get(parent_id) else {
+                continue;
+            };
+            parent_relationships += 1;
+            if parent.restore_group > member.restore_group {
+                parent_group_violations.push(RestoreGroupViolation {
+                    parent_canister_id: parent.canister_id.clone(),
+                    child_canister_id: member.canister_id.clone(),
+                    parent_restore_group: parent.restore_group,
+                    child_restore_group: member.restore_group,
+                });
+            }
+        }
+
+        let design_v1_ready = parent_group_violations.is_empty();
+
+        Self {
+            design_v1_ready,
+            parent_relationships,
+            parent_group_violations,
+        }
+    }
+}
+
+///
+/// RestoreGroupViolation
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RestoreGroupViolation {
+    pub parent_canister_id: String,
+    pub child_canister_id: String,
+    pub parent_restore_group: u16,
+    pub child_restore_group: u16,
 }
 
 ///
@@ -557,6 +988,24 @@ pub enum ManifestValidationError {
         parent: String,
         descendant: String,
     },
+}
+
+// Return whether every fleet role is included in at least one backup unit.
+fn all_fleet_roles_covered(manifest: &FleetBackupManifest) -> bool {
+    let fleet_roles = manifest
+        .fleet
+        .members
+        .iter()
+        .map(|member| member.role.as_str())
+        .collect::<BTreeSet<_>>();
+    let covered_roles = manifest
+        .consistency
+        .backup_units
+        .iter()
+        .flat_map(|unit| unit.roles.iter().map(String::as_str))
+        .collect::<BTreeSet<_>>();
+
+    fleet_roles.iter().all(|role| covered_roles.contains(role))
 }
 
 // Validate cross-section backup unit references after local section checks pass.
@@ -1311,6 +1760,48 @@ mod tests {
             err,
             ManifestValidationError::SubtreeBackupUnitNotConnected { .. }
         ));
+    }
+
+    #[test]
+    fn design_conformance_report_accepts_ready_manifest() {
+        let manifest = valid_manifest();
+
+        let report = manifest.design_conformance_report();
+
+        assert!(report.design_v1_ready);
+        assert_eq!(report.design_version, DESIGN_V1);
+        assert!(report.topology.design_v1_ready);
+        assert!(report.topology.canonical_input);
+        assert!(report.backup_units.design_v1_ready);
+        assert_eq!(report.backup_units.flat_units, 1);
+        assert_eq!(report.backup_units.flat_units_with_reason, 1);
+        assert!(report.quiescence.design_v1_ready);
+        assert!(report.quiescence.quiescence_required);
+        assert_eq!(report.verification.members_with_checks, 2);
+        assert_eq!(report.identity.fixed_members, 1);
+        assert_eq!(report.identity.relocatable_members, 1);
+        assert!(report.snapshot_provenance.all_members_have_checksum);
+        assert!(report.restore_order.design_v1_ready);
+    }
+
+    #[test]
+    fn design_conformance_report_flags_soft_gaps() {
+        let mut manifest = valid_manifest();
+        manifest.fleet.topology_hash_input = "legacy-input".to_string();
+        manifest.fleet.members[0].source_snapshot.checksum = None;
+        manifest.fleet.members[0].restore_group = 2;
+        manifest.fleet.members[1].restore_group = 1;
+
+        let report = manifest.design_conformance_report();
+
+        assert!(!report.design_v1_ready);
+        assert!(!report.topology.canonical_input);
+        assert!(!report.snapshot_provenance.all_members_have_checksum);
+        assert_eq!(report.restore_order.parent_group_violations.len(), 1);
+        assert_eq!(
+            report.restore_order.parent_group_violations[0].parent_canister_id,
+            ROOT
+        );
     }
 
     #[test]

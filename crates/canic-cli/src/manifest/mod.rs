@@ -36,6 +36,9 @@ pub enum ManifestCommandError {
 
     #[error(transparent)]
     InvalidManifest(#[from] ManifestValidationError),
+
+    #[error("manifest {backup_id} is not design-v1 ready")]
+    DesignConformanceNotReady { backup_id: String },
 }
 
 ///
@@ -46,6 +49,7 @@ pub enum ManifestCommandError {
 pub struct ManifestValidateOptions {
     pub manifest: PathBuf,
     pub out: Option<PathBuf>,
+    pub require_design_v1: bool,
 }
 
 impl ManifestValidateOptions {
@@ -56,6 +60,7 @@ impl ManifestValidateOptions {
     {
         let mut manifest = None;
         let mut out = None;
+        let mut require_design_v1 = false;
 
         let mut args = args.into_iter();
         while let Some(arg) = args.next() {
@@ -67,6 +72,7 @@ impl ManifestValidateOptions {
                     manifest = Some(PathBuf::from(next_value(&mut args, "--manifest")?));
                 }
                 "--out" => out = Some(PathBuf::from(next_value(&mut args, "--out")?)),
+                "--require-design-v1" => require_design_v1 = true,
                 "--help" | "-h" => return Err(ManifestCommandError::Usage(usage())),
                 _ => return Err(ManifestCommandError::UnknownOption(arg)),
             }
@@ -75,6 +81,7 @@ impl ManifestValidateOptions {
         Ok(Self {
             manifest: manifest.ok_or(ManifestCommandError::MissingOption("--manifest"))?,
             out,
+            require_design_v1,
         })
     }
 }
@@ -94,6 +101,7 @@ where
             let options = ManifestValidateOptions::parse(args)?;
             let manifest = validate_manifest(&options)?;
             write_validation_summary(&options, &manifest)?;
+            require_design_conformance(&options, &manifest)?;
             Ok(())
         }
         "help" | "--help" | "-h" => Err(ManifestCommandError::Usage(usage())),
@@ -133,6 +141,8 @@ fn write_validation_summary(
 
 // Build the manifest validation summary emitted by CLI and preflight workflows.
 fn manifest_validation_summary(manifest: &FleetBackupManifest) -> serde_json::Value {
+    let design_conformance = manifest.design_conformance_report();
+
     json!({
         "status": "valid",
         "backup_id": manifest.backup_id,
@@ -143,6 +153,7 @@ fn manifest_validation_summary(manifest: &FleetBackupManifest) -> serde_json::Va
         "topology_hash_algorithm": manifest.fleet.topology_hash_algorithm,
         "topology_hash_input": manifest.fleet.topology_hash_input,
         "topology_validation_status": "validated",
+        "design_conformance": design_conformance,
         "backup_unit_kinds": backup_unit_kind_counts(manifest),
         "backup_units": manifest
             .consistency
@@ -157,6 +168,25 @@ fn manifest_validation_summary(manifest: &FleetBackupManifest) -> serde_json::Va
             }))
             .collect::<Vec<_>>(),
     })
+}
+
+// Fail closed when callers require the v1 backup/restore design contract.
+fn require_design_conformance(
+    options: &ManifestValidateOptions,
+    manifest: &FleetBackupManifest,
+) -> Result<(), ManifestCommandError> {
+    if !options.require_design_v1 {
+        return Ok(());
+    }
+
+    let report = manifest.design_conformance_report();
+    if report.design_v1_ready {
+        Ok(())
+    } else {
+        Err(ManifestCommandError::DesignConformanceNotReady {
+            backup_id: manifest.backup_id.clone(),
+        })
+    }
 }
 
 // Count backup units by stable serialized kind name.
@@ -212,7 +242,7 @@ where
 
 // Return manifest command usage text.
 const fn usage() -> &'static str {
-    "usage: canic manifest validate --manifest <file> [--out <file>]"
+    "usage: canic manifest validate --manifest <file> [--out <file>] [--require-design-v1]"
 }
 
 #[cfg(test)]
@@ -236,11 +266,13 @@ mod tests {
             OsString::from("manifest.json"),
             OsString::from("--out"),
             OsString::from("summary.json"),
+            OsString::from("--require-design-v1"),
         ])
         .expect("parse options");
 
         assert_eq!(options.manifest, PathBuf::from("manifest.json"));
         assert_eq!(options.out, Some(PathBuf::from("summary.json")));
+        assert!(options.require_design_v1);
     }
 
     // Ensure manifest validation loads JSON and runs the manifest contract.
@@ -259,6 +291,7 @@ mod tests {
         let options = ManifestValidateOptions {
             manifest: manifest_path,
             out: None,
+            require_design_v1: false,
         };
 
         let manifest = validate_manifest(&options).expect("validate manifest");
@@ -277,6 +310,7 @@ mod tests {
         let options = ManifestValidateOptions {
             manifest: root.join("manifest.json"),
             out: Some(out.clone()),
+            require_design_v1: false,
         };
 
         write_validation_summary(&options, &valid_manifest()).expect("write summary");
@@ -294,6 +328,47 @@ mod tests {
         assert_eq!(summary["backup_units"][0]["unit_id"], "fleet");
         assert_eq!(summary["backup_units"][0]["kind"], "subtree-rooted");
         assert_eq!(summary["backup_units"][0]["role_count"], 1);
+        assert_eq!(summary["design_conformance"]["design_v1_ready"], true);
+        assert_eq!(
+            summary["design_conformance"]["topology"]["canonical_input"],
+            true
+        );
+        assert_eq!(
+            summary["design_conformance"]["snapshot_provenance"]["all_members_have_checksum"],
+            true
+        );
+    }
+
+    // Ensure manifest validation can fail closed after writing conformance output.
+    #[test]
+    fn require_design_v1_fails_after_writing_summary() {
+        let root = temp_dir("canic-cli-manifest-design-v1");
+        fs::create_dir_all(&root).expect("create temp root");
+        let out = root.join("summary.json");
+        let mut manifest = valid_manifest();
+        manifest.fleet.topology_hash_input = "legacy-input".to_string();
+        let options = ManifestValidateOptions {
+            manifest: root.join("manifest.json"),
+            out: Some(out.clone()),
+            require_design_v1: true,
+        };
+
+        write_validation_summary(&options, &manifest).expect("write summary");
+        let err = require_design_conformance(&options, &manifest)
+            .expect_err("design-v1 gate should fail");
+        let summary: serde_json::Value =
+            serde_json::from_slice(&fs::read(&out).expect("read summary")).expect("parse summary");
+
+        fs::remove_dir_all(root).expect("remove temp root");
+        assert!(matches!(
+            err,
+            ManifestCommandError::DesignConformanceNotReady { .. }
+        ));
+        assert_eq!(summary["design_conformance"]["design_v1_ready"], false);
+        assert_eq!(
+            summary["design_conformance"]["topology"]["canonical_input"],
+            false
+        );
     }
 
     // Build one valid manifest for validation tests.
@@ -357,7 +432,7 @@ mod tests {
                 code_version: Some("v0.30.1".to_string()),
                 artifact_path: "artifacts/root".to_string(),
                 checksum_algorithm: "sha256".to_string(),
-                checksum: None,
+                checksum: Some(HASH.to_string()),
             },
         }
     }

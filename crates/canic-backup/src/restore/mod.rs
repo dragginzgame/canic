@@ -1,8 +1,8 @@
 use crate::{
     artifacts::{ArtifactChecksum, ArtifactChecksumError},
     manifest::{
-        FleetBackupManifest, FleetMember, IdentityMode, ManifestValidationError, SourceSnapshot,
-        VerificationCheck, VerificationPlan,
+        FleetBackupManifest, FleetMember, IdentityMode, ManifestDesignConformanceReport,
+        ManifestValidationError, SourceSnapshot, VerificationCheck, VerificationPlan,
     },
 };
 use candid::Principal;
@@ -60,6 +60,8 @@ pub struct RestorePlan {
     pub readiness_summary: RestoreReadinessSummary,
     pub operation_summary: RestoreOperationSummary,
     pub ordering_summary: RestoreOrderingSummary,
+    #[serde(default)]
+    pub design_conformance: Option<ManifestDesignConformanceReport>,
     #[serde(default)]
     pub fleet_verification_checks: Vec<VerificationCheck>,
     pub phases: Vec<RestorePhase>,
@@ -2356,6 +2358,7 @@ impl RestorePlanner {
             readiness_summary,
             operation_summary,
             ordering_summary,
+            design_conformance: Some(manifest.design_conformance_report()),
             fleet_verification_checks: manifest.verification.fleet_checks.clone(),
             phases,
         })
@@ -3270,6 +3273,26 @@ mod tests {
         assert_eq!(plan.operation_summary.planned_phases, 1);
     }
 
+    // Ensure restore plans carry manifest design conformance for smoke checks.
+    #[test]
+    fn plan_includes_design_conformance_report() {
+        let manifest = valid_manifest(IdentityMode::Relocatable);
+
+        let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
+        let design = plan
+            .design_conformance
+            .as_ref()
+            .expect("new plans should carry design conformance");
+
+        assert!(design.design_v1_ready);
+        assert!(design.topology.design_v1_ready);
+        assert!(design.backup_units.design_v1_ready);
+        assert!(design.quiescence.design_v1_ready);
+        assert!(design.verification.design_v1_ready);
+        assert!(design.snapshot_provenance.design_v1_ready);
+        assert!(design.restore_order.design_v1_ready);
+    }
+
     // Ensure older restore plan JSON remains readable after adding newer fields.
     #[test]
     fn restore_plan_defaults_missing_newer_restore_fields() {
@@ -3280,6 +3303,10 @@ mod tests {
             .as_object_mut()
             .expect("plan should serialize as an object")
             .remove("fleet_verification_checks");
+        value
+            .as_object_mut()
+            .expect("plan should serialize as an object")
+            .remove("design_conformance");
         let operation_summary = value
             .get_mut("operation_summary")
             .and_then(serde_json::Value::as_object_mut)
@@ -3293,6 +3320,7 @@ mod tests {
             RestoreApplyDryRun::try_from_plan(&decoded, None).expect("old plan should dry-run");
 
         assert!(decoded.fleet_verification_checks.is_empty());
+        assert_eq!(decoded.design_conformance, None);
         assert_eq!(decoded.operation_summary.planned_snapshot_uploads, 0);
         assert_eq!(decoded.operation_summary.planned_operations, 0);
         assert_eq!(status.planned_snapshot_uploads, 2);

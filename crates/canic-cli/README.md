@@ -36,11 +36,18 @@ Validate a captured manifest before restore planning:
 ```bash
 canic manifest validate \
   --manifest backups/<run-id>/manifest.json \
-  --out manifest-validation.json
+  --out manifest-validation.json \
+  --require-design-v1
 ```
 
 The validation summary includes topology hash inputs, consistency mode, backup
-unit counts, kind counts, and per-unit topology validation metadata.
+unit counts, kind counts, per-unit topology validation metadata, and a
+`design_conformance` object for the v1 backup/restore contract. The conformance
+report summarizes topology hash stability, explicit backup-unit boundaries,
+quiescence strategy coverage, member verification coverage, identity modes,
+snapshot artifact provenance, and parent-before-child restore-group ordering.
+`--require-design-v1` still writes the validation summary, then exits with an
+error when any design conformance check is not ready.
 
 Inspect resumable journal status:
 
@@ -96,6 +103,7 @@ canic backup preflight \
   --dir backups/<run-id> \
   --out-dir preflight/<run-id> \
   --mapping restore-map.json \
+  --require-design-v1 \
   --require-restore-ready
 ```
 
@@ -104,11 +112,13 @@ Preflight writes `manifest-validation.json`, `backup-status.json`,
 `restore-plan.json`, `restore-status.json`, and `preflight-summary.json`.
 The summary records the backup ID, source root, environment, topology hash,
 readiness statuses, provenance consistency status, topology mismatch count,
-journal operation metrics, member counts, restore identity/snapshot/
-verification/operation/ordering counts, snapshot provenance readiness booleans,
-verification readiness booleans, `restore_mapping_supplied`,
+journal operation metrics, `manifest_design_v1_ready`, member counts, restore
+identity/snapshot/verification/operation/ordering counts, snapshot provenance
+readiness booleans, verification readiness booleans, `restore_mapping_supplied`,
 `restore_all_sources_mapped`, `restore_ready`, stable
 `restore_readiness_reasons`, and paths to the generated reports.
+`--require-design-v1` still writes the full report bundle, then exits with an
+error when manifest design conformance is not ready.
 `--require-restore-ready` still writes the full report bundle, then exits with
 an error when `restore_ready` is false.
 
@@ -120,11 +130,14 @@ canic restore plan \
   --mapping restore-map.json \
   --out restore-plan.json \
   --require-verified \
+  --require-design-v1 \
   --require-restore-ready
 ```
 
 `--require-verified` runs the same manifest, journal, durable artifact, and
 checksum checks as `canic backup verify` before emitting the plan.
+`--require-design-v1` still writes the restore plan, then exits with an error
+when manifest design conformance is not ready.
 `--require-restore-ready` still writes the restore plan, then exits with an
 error when `readiness_summary.ready` is false.
 Restore plans include an `identity_summary` with explicit mapping mode,
@@ -132,14 +145,15 @@ all-sources-mapped status, and fixed, relocatable, mapped, in-place, and
 remapped member counts. They also include a `snapshot_summary` with module
 hash, wasm hash, code version, and checksum coverage counts and readiness
 booleans, plus a `verification_summary` with post-restore check counts,
-`verification_required`, and `all_members_have_checks`. A `readiness_summary`
-collapses those signals into a single `ready` flag and stable reason strings.
-Plans also include an `operation_summary` with planned snapshot uploads, loads,
-code reinstalls, verification checks, total operations, and phases, a
-`fleet_verification_checks` list for fleet-level checks, plus an
-`ordering_summary` and per-member ordering
-dependency metadata so dry-runs show when parent relationships are satisfied
-inside the same restore group or by an earlier group. Role-level
+`verification_required`, and `all_members_have_checks`. A `design_conformance`
+object carries the manifest design-v1 report into the restore plan artifact,
+and a `readiness_summary` collapses those signals into a single `ready` flag
+and stable reason strings. Plans also include an `operation_summary` with
+planned snapshot uploads, loads, code reinstalls, verification checks, total
+operations, and phases, a `fleet_verification_checks` list for fleet-level
+checks, plus an `ordering_summary` and per-member ordering dependency metadata
+so dry-runs show when parent relationships are satisfied inside the same
+restore group or by an earlier group. Role-level
 `verification.member_checks` are expanded onto matching members during planning,
 and non-empty check `roles` filters limit a check to matching member roles.
 

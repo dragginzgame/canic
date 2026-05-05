@@ -74,6 +74,9 @@ pub enum BackupCommandError {
         reasons: Vec<String>,
     },
 
+    #[error("backup manifest {backup_id} is not design-v1 ready")]
+    DesignConformanceNotReady { backup_id: String },
+
     #[error(transparent)]
     Io(#[from] std::io::Error),
 
@@ -96,6 +99,7 @@ pub struct BackupPreflightOptions {
     pub dir: PathBuf,
     pub out_dir: PathBuf,
     pub mapping: Option<PathBuf>,
+    pub require_design_v1: bool,
     pub require_restore_ready: bool,
 }
 
@@ -108,6 +112,7 @@ impl BackupPreflightOptions {
         let mut dir = None;
         let mut out_dir = None;
         let mut mapping = None;
+        let mut require_design_v1 = false;
         let mut require_restore_ready = false;
 
         let mut args = args.into_iter();
@@ -119,6 +124,7 @@ impl BackupPreflightOptions {
                 "--dir" => dir = Some(PathBuf::from(next_value(&mut args, "--dir")?)),
                 "--out-dir" => out_dir = Some(PathBuf::from(next_value(&mut args, "--out-dir")?)),
                 "--mapping" => mapping = Some(PathBuf::from(next_value(&mut args, "--mapping")?)),
+                "--require-design-v1" => require_design_v1 = true,
                 "--require-restore-ready" => require_restore_ready = true,
                 "--help" | "-h" => return Err(BackupCommandError::Usage(usage())),
                 _ => return Err(BackupCommandError::UnknownOption(arg)),
@@ -129,6 +135,7 @@ impl BackupPreflightOptions {
             dir: dir.ok_or(BackupCommandError::MissingOption("--dir"))?,
             out_dir: out_dir.ok_or(BackupCommandError::MissingOption("--out-dir"))?,
             mapping,
+            require_design_v1,
             require_restore_ready,
         })
     }
@@ -159,6 +166,7 @@ pub struct BackupPreflightReport {
     pub topology_receipts_status: String,
     pub topology_mismatch_count: usize,
     pub integrity_verified: bool,
+    pub manifest_design_v1_ready: bool,
     pub manifest_members: usize,
     pub backup_unit_count: usize,
     pub restore_plan_members: usize,
@@ -515,6 +523,12 @@ fn enforce_preflight_requirements(
     options: &BackupPreflightOptions,
     report: &BackupPreflightReport,
 ) -> Result<(), BackupCommandError> {
+    if options.require_design_v1 && !report.manifest_design_v1_ready {
+        return Err(BackupCommandError::DesignConformanceNotReady {
+            backup_id: report.backup_id.clone(),
+        });
+    }
+
     if !options.require_restore_ready || report.restore_ready {
         return Ok(());
     }
@@ -604,6 +618,7 @@ fn build_preflight_report(input: PreflightReportInput<'_>) -> BackupPreflightRep
             .to_string(),
         topology_mismatch_count: input.provenance.topology_receipt_mismatches.len(),
         integrity_verified: input.integrity.verified,
+        manifest_design_v1_ready: input.manifest.design_conformance_report().design_v1_ready,
         manifest_members: input.manifest.fleet.members.len(),
         backup_unit_count: input.provenance.backup_unit_count,
         restore_plan_members: input.restore_plan.member_count,
@@ -907,6 +922,11 @@ fn insert_preflight_source_summary(
         "integrity_verified",
         json!(report.integrity_verified),
     );
+    insert_summary_value(
+        summary,
+        "manifest_design_v1_ready",
+        json!(report.manifest_design_v1_ready),
+    );
     insert_summary_value(summary, "manifest_members", json!(report.manifest_members));
     insert_summary_value(
         summary,
@@ -1200,6 +1220,7 @@ fn manifest_validation_summary(manifest: &FleetBackupManifest) -> serde_json::Va
         "topology_hash_algorithm": manifest.fleet.topology_hash_algorithm,
         "topology_hash_input": manifest.fleet.topology_hash_input,
         "topology_validation_status": "validated",
+        "design_conformance": manifest.design_conformance_report(),
         "backup_unit_kinds": backup_unit_kind_counts(manifest),
         "backup_units": manifest
             .consistency
@@ -1294,7 +1315,7 @@ where
 
 // Return backup command usage text.
 const fn usage() -> &'static str {
-    "usage: canic backup preflight --dir <backup-dir> --out-dir <dir> [--mapping <file>] [--require-restore-ready]\n       canic backup inspect --dir <backup-dir> [--out <file>] [--require-ready]\n       canic backup provenance --dir <backup-dir> [--out <file>] [--require-consistent]\n       canic backup status --dir <backup-dir> [--out <file>] [--require-complete]\n       canic backup verify --dir <backup-dir> [--out <file>]"
+    "usage: canic backup preflight --dir <backup-dir> --out-dir <dir> [--mapping <file>] [--require-design-v1] [--require-restore-ready]\n       canic backup inspect --dir <backup-dir> [--out <file>] [--require-ready]\n       canic backup provenance --dir <backup-dir> [--out <file>] [--require-consistent]\n       canic backup status --dir <backup-dir> [--out <file>] [--require-complete]\n       canic backup verify --dir <backup-dir> [--out <file>]"
 }
 
 #[cfg(test)]
@@ -1329,6 +1350,7 @@ mod tests {
             OsString::from("reports/run"),
             OsString::from("--mapping"),
             OsString::from("mapping.json"),
+            OsString::from("--require-design-v1"),
             OsString::from("--require-restore-ready"),
         ])
         .expect("parse options");
@@ -1336,6 +1358,7 @@ mod tests {
         assert_eq!(options.dir, PathBuf::from("backups/run"));
         assert_eq!(options.out_dir, PathBuf::from("reports/run"));
         assert_eq!(options.mapping, Some(PathBuf::from("mapping.json")));
+        assert!(options.require_design_v1);
         assert!(options.require_restore_ready);
     }
 
@@ -1359,6 +1382,7 @@ mod tests {
             dir: backup_dir,
             out_dir: out_dir.clone(),
             mapping: None,
+            require_design_v1: false,
             require_restore_ready: false,
         };
         let report = backup_preflight(&options).expect("run preflight");
@@ -1380,6 +1404,7 @@ mod tests {
         assert_eq!(report.topology_receipts_status, "matched");
         assert_eq!(report.topology_mismatch_count, 0);
         assert!(report.integrity_verified);
+        assert!(!report.manifest_design_v1_ready);
         assert_eq!(report.manifest_members, 1);
         assert_eq!(report.backup_unit_count, 1);
         assert_eq!(report.restore_plan_members, 1);
@@ -1432,6 +1457,10 @@ mod tests {
             manifest_validation["backup_units"][0]["kind"],
             "subtree-rooted"
         );
+        assert_eq!(
+            manifest_validation["design_conformance"]["design_v1_ready"],
+            false
+        );
     }
 
     // Ensure restore-readiness gating happens after writing the report bundle.
@@ -1454,6 +1483,7 @@ mod tests {
             dir: backup_dir,
             out_dir: out_dir.clone(),
             mapping: None,
+            require_design_v1: false,
             require_restore_ready: true,
         };
 
@@ -1481,6 +1511,55 @@ mod tests {
         ));
     }
 
+    // Ensure design-v1 gating happens after writing the report bundle.
+    #[test]
+    fn backup_preflight_require_design_v1_writes_reports_then_fails() {
+        let root = temp_dir("canic-cli-backup-preflight-require-design-v1");
+        let out_dir = root.join("reports");
+        let backup_dir = root.join("backup");
+        let layout = BackupLayout::new(backup_dir.clone());
+        let checksum = write_artifact(&backup_dir, b"root artifact");
+
+        layout
+            .write_manifest(&valid_manifest())
+            .expect("write manifest");
+        layout
+            .write_journal(&journal_with_checksum(checksum.hash))
+            .expect("write journal");
+
+        let options = BackupPreflightOptions {
+            dir: backup_dir,
+            out_dir: out_dir.clone(),
+            mapping: None,
+            require_design_v1: true,
+            require_restore_ready: false,
+        };
+
+        let err = backup_preflight(&options).expect_err("design-v1 readiness should be enforced");
+
+        assert!(out_dir.join("preflight-summary.json").exists());
+        assert!(out_dir.join("manifest-validation.json").exists());
+        let summary: serde_json::Value = serde_json::from_slice(
+            &fs::read(out_dir.join("preflight-summary.json")).expect("read summary"),
+        )
+        .expect("decode summary");
+        let manifest_validation: serde_json::Value = serde_json::from_slice(
+            &fs::read(out_dir.join("manifest-validation.json")).expect("read manifest summary"),
+        )
+        .expect("decode manifest summary");
+
+        fs::remove_dir_all(root).expect("remove temp root");
+        assert_eq!(summary["manifest_design_v1_ready"], false);
+        assert_eq!(
+            manifest_validation["design_conformance"]["design_v1_ready"],
+            false
+        );
+        assert!(matches!(
+            err,
+            BackupCommandError::DesignConformanceNotReady { .. }
+        ));
+    }
+
     // Ensure restore-readiness gating accepts fully populated preflight reports.
     #[test]
     fn backup_preflight_require_restore_ready_accepts_ready_report() {
@@ -1501,6 +1580,7 @@ mod tests {
             dir: backup_dir,
             out_dir: out_dir.clone(),
             mapping: None,
+            require_design_v1: true,
             require_restore_ready: true,
         };
 
@@ -1511,9 +1591,11 @@ mod tests {
         .expect("decode summary");
 
         fs::remove_dir_all(root).expect("remove temp root");
+        assert!(report.manifest_design_v1_ready);
         assert!(report.restore_ready);
         assert!(report.restore_readiness_reasons.is_empty());
         assert_eq!(summary["restore_ready"], true);
+        assert_eq!(summary["manifest_design_v1_ready"], true);
         assert_eq!(summary["restore_readiness_reasons"], json!([]));
         assert_eq!(
             summary["restore_status_path"],
@@ -1606,6 +1688,10 @@ mod tests {
             report.topology_mismatch_count
         );
         assert_eq!(summary["integrity_verified"], report.integrity_verified);
+        assert_eq!(
+            summary["manifest_design_v1_ready"],
+            report.manifest_design_v1_ready
+        );
         assert_eq!(summary["manifest_members"], report.manifest_members);
         assert_eq!(summary["backup_unit_count"], report.backup_unit_count);
         assert_eq!(summary["restore_plan_members"], report.restore_plan_members);
@@ -1826,6 +1912,7 @@ mod tests {
             dir: backup_dir,
             out_dir,
             mapping: None,
+            require_design_v1: false,
             require_restore_ready: false,
         };
 

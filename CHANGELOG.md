@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.30.x] - 2026-05-03 - Fleet Snapshot Backups
 
+- `0.30.37` adds manifest design-conformance reporting plus manifest, preflight, and restore-plan `--require-design-v1` gates so smoke checks can fail closed on topology, unit, quiescence, verification, provenance, or restore-order gaps.
+
 - `0.30.36` adds restore runner batch summaries, delta counters, and fail-closed batch gates so automation can see and require how a native runner batch started, changed, and stopped.
 
 - `0.30.35` lets `canic restore run` accept, echo, and require `--updated-at <text>` markers on runner summaries and receipts so native runner transitions can carry operator-supplied comparable state markers instead of always using `unknown`.
