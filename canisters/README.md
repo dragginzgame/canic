@@ -17,7 +17,7 @@ canonical store source from the resolved `canic` package automatically.
 - `user_hub/` + `user_shard/` – sharding placement plus delegated signing flow (hub does placement only; shard initiates delegation with root).
 - `scale_hub/` + `scale/` – scaling pool demo (spawn replica canisters under policy).
 - `minimal/` – minimal canister used as the shared runtime baseline canister.
-- `playground/` – manual local sandbox for temporary endpoint experiments; it uses `canic::start_local!()` so `dfx deploy playground` does not require hand-written CANIC init args, and it is not part of the reference release set or test fixtures.
+- `playground/` – manual local sandbox for temporary endpoint experiments; it uses `canic::start_local!()` so local installs do not require hand-written CANIC init args, and it is not part of `dfx.json`, the reference release set, or test fixtures.
 
 Internal correctness fixtures now live under `crates/canic-core/test-canisters/`, and internal audit probes now live under `crates/canic-core/audit-canisters/`. This keeps PocketIC and audit fixtures separate from the shipped demo topology.
 
@@ -31,6 +31,7 @@ These canisters are wired through `dfx.json` (custom build steps call `scripts/a
 - `root` stays thin: only the bootstrap `wasm_store` artifact is embedded, and the ordinary configured release set is staged after install from the build-produced `.dfx/local/canisters/root/root.release-set.json` manifest.
 - Create/build canisters manually (dfx 0.30.2): `dfx canister create --all` then `dfx build --all`
 - Run the scripted local smoke flow: `make test-canisters`
+- Build the standalone playground manually: `scripts/app/build.sh playground`
 
 Note: `make demo-install` and `make test-canisters` now try one clean local
 `dfx` restart automatically when `dfx ping local` fails. They are still manual

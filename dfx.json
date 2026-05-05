@@ -39,19 +39,6 @@
                 }
             ]
         },
-        "playground": {
-            "type": "custom",
-            "candid": ".dfx/local/canisters/playground/playground.did",
-            "build": "bash -c 'scripts/app/build.sh playground'",
-            "wasm": ".dfx/local/canisters/playground/playground.wasm",
-            "shrink": true,
-            "gzip": true,
-            "metadata": [
-                {
-                    "name": "candid:service"
-                }
-            ]
-        },
         "user_hub": {
             "type": "custom",
             "candid": ".dfx/local/canisters/user_hub/user_hub.did",
