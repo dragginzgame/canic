@@ -186,9 +186,11 @@ pub struct BackupPreflightReport {
     pub restore_member_checks: usize,
     pub restore_members_with_checks: usize,
     pub restore_total_checks: usize,
+    pub restore_planned_snapshot_uploads: usize,
     pub restore_planned_snapshot_loads: usize,
     pub restore_planned_code_reinstalls: usize,
     pub restore_planned_verification_checks: usize,
+    pub restore_planned_operations: usize,
     pub restore_planned_phases: usize,
     pub restore_phase_count: usize,
     pub restore_dependency_free_members: usize,
@@ -629,9 +631,13 @@ fn build_preflight_report(input: PreflightReportInput<'_>) -> BackupPreflightRep
         restore_member_checks: verification.member_checks,
         restore_members_with_checks: verification.members_with_checks,
         restore_total_checks: verification.total_checks,
+        restore_planned_snapshot_uploads: operation
+            .effective_planned_snapshot_uploads(input.restore_plan.member_count),
         restore_planned_snapshot_loads: operation.planned_snapshot_loads,
         restore_planned_code_reinstalls: operation.planned_code_reinstalls,
         restore_planned_verification_checks: operation.planned_verification_checks,
+        restore_planned_operations: operation
+            .effective_planned_operations(input.restore_plan.member_count),
         restore_planned_phases: operation.planned_phases,
         restore_phase_count: ordering.phase_count,
         restore_dependency_free_members: ordering.dependency_free_members,
@@ -1078,6 +1084,11 @@ fn insert_preflight_restore_operation_summary(
 ) {
     insert_summary_value(
         summary,
+        "restore_planned_snapshot_uploads",
+        json!(report.restore_planned_snapshot_uploads),
+    );
+    insert_summary_value(
+        summary,
         "restore_planned_snapshot_loads",
         json!(report.restore_planned_snapshot_loads),
     );
@@ -1090,6 +1101,11 @@ fn insert_preflight_restore_operation_summary(
         summary,
         "restore_planned_verification_checks",
         json!(report.restore_planned_verification_checks),
+    );
+    insert_summary_value(
+        summary,
+        "restore_planned_operations",
+        json!(report.restore_planned_operations),
     );
     insert_summary_value(
         summary,
@@ -1536,9 +1552,11 @@ mod tests {
         assert_eq!(report.restore_member_checks, 1);
         assert_eq!(report.restore_members_with_checks, 1);
         assert_eq!(report.restore_total_checks, 1);
+        assert_eq!(report.restore_planned_snapshot_uploads, 1);
         assert_eq!(report.restore_planned_snapshot_loads, 1);
         assert_eq!(report.restore_planned_code_reinstalls, 1);
         assert_eq!(report.restore_planned_verification_checks, 1);
+        assert_eq!(report.restore_planned_operations, 4);
         assert_eq!(report.restore_planned_phases, 1);
         assert_eq!(report.restore_phase_count, 1);
         assert_eq!(report.restore_dependency_free_members, 1);
@@ -1714,6 +1732,10 @@ mod tests {
         report: &BackupPreflightReport,
     ) {
         assert_eq!(
+            summary["restore_planned_snapshot_uploads"],
+            report.restore_planned_snapshot_uploads
+        );
+        assert_eq!(
             summary["restore_planned_snapshot_loads"],
             report.restore_planned_snapshot_loads
         );
@@ -1724,6 +1746,10 @@ mod tests {
         assert_eq!(
             summary["restore_planned_verification_checks"],
             report.restore_planned_verification_checks
+        );
+        assert_eq!(
+            summary["restore_planned_operations"],
+            report.restore_planned_operations
         );
         assert_eq!(
             summary["restore_planned_phases"],

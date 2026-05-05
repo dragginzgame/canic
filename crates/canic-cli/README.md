@@ -134,11 +134,14 @@ hash, wasm hash, code version, and checksum coverage counts and readiness
 booleans, plus a `verification_summary` with post-restore check counts,
 `verification_required`, and `all_members_have_checks`. A `readiness_summary`
 collapses those signals into a single `ready` flag and stable reason strings.
-Plans also include an `operation_summary` with planned snapshot loads, code
-reinstalls, verification checks, and phases, a `fleet_verification_checks` list
-for fleet-level checks, plus an `ordering_summary` and per-member ordering
+Plans also include an `operation_summary` with planned snapshot uploads, loads,
+code reinstalls, verification checks, total operations, and phases, a
+`fleet_verification_checks` list for fleet-level checks, plus an
+`ordering_summary` and per-member ordering
 dependency metadata so dry-runs show when parent relationships are satisfied
-inside the same restore group or by an earlier group.
+inside the same restore group or by an earlier group. Role-level
+`verification.member_checks` are expanded onto matching members during planning,
+and non-empty check `roles` filters limit a check to matching member roles.
 
 Emit the initial restore execution status from a plan:
 
@@ -173,6 +176,8 @@ expected SHA-256 checksums when the plan includes checksums. When `--journal-out
 is supplied, the command also writes an initial apply journal with each
 operation marked `ready` or `blocked` and stable blocking reasons. The command
 requires `--dry-run`; real restore execution is intentionally not enabled yet.
+Dry-run output also includes `operation_counts` so operators can compare the
+rendered operation mix before writing or running a journal.
 
 Summarize a restore apply journal:
 
@@ -191,7 +196,10 @@ restore operations. Use `--require-no-pending` when scripts should stop if a
 restore operation is already claimed and needs inspection or `apply-unclaim`.
 Use `--require-no-failed` when failed operations should stop the runner before
 completion checks. Use `--require-complete` when scripts should fail until every
-apply operation is completed.
+apply operation is completed. Apply status output also includes
+`operation_counts`, broken down by snapshot uploads, snapshot loads, code
+reinstalls, member verifications, fleet verifications, and total verification
+operations.
 
 Write an operator-focused restore apply report:
 
@@ -203,8 +211,9 @@ canic restore apply-report \
 ```
 
 Apply reports include one high-level outcome, attention-required status,
-operation counts, blocked reasons, the next transitionable operation, and the
-pending, failed, and blocked operation rows that need review. Use
+operation counts, operation-kind counts, blocked reasons, the next
+transitionable operation, and the pending, failed, and blocked operation rows
+that need review. Use
 `--require-no-attention` when CI should fail after writing the report if the
 journal has pending, failed, or blocked work.
 
@@ -244,9 +253,9 @@ transition. `--max-steps` is useful for cautious incremental restores. Add
 summary and then fail if the journal is incomplete or still needs review.
 If a generated command fails, the runner still writes the summary and updated
 journal before returning a nonzero error.
-Every runner summary includes `run_mode`, `stopped_reason`, and `next_action`
-so automation can decide whether to rerun, inspect a failed operation, recover
-a pending operation, fix blocked inputs, or stop.
+Every runner summary includes `run_mode`, `stopped_reason`, `next_action`, and
+operation-kind counts so automation can decide whether to rerun, inspect a
+failed operation, recover a pending operation, fix blocked inputs, or stop.
 Use `--require-run-mode <text>`, `--require-stopped-reason <text>`, and
 `--require-next-action <text>` when CI should write the summary and then fail
 unless the runner stopped in the expected state.

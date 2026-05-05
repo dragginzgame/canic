@@ -2,7 +2,7 @@ use crate::{
     artifacts::{ArtifactChecksum, ArtifactChecksumError},
     manifest::{
         FleetBackupManifest, FleetMember, IdentityMode, ManifestValidationError, SourceSnapshot,
-        VerificationCheck,
+        VerificationCheck, VerificationPlan,
     },
 };
 use candid::Principal;
@@ -92,9 +92,13 @@ pub struct RestoreStatus {
     pub verification_required: bool,
     pub member_count: usize,
     pub phase_count: usize,
+    #[serde(default)]
+    pub planned_snapshot_uploads: usize,
     pub planned_snapshot_loads: usize,
     pub planned_code_reinstalls: usize,
     pub planned_verification_checks: usize,
+    #[serde(default)]
+    pub planned_operations: usize,
     pub phases: Vec<RestoreStatusPhase>,
 }
 
@@ -113,9 +117,15 @@ impl RestoreStatus {
             verification_required: plan.verification_summary.verification_required,
             member_count: plan.member_count,
             phase_count: plan.ordering_summary.phase_count,
+            planned_snapshot_uploads: plan
+                .operation_summary
+                .effective_planned_snapshot_uploads(plan.member_count),
             planned_snapshot_loads: plan.operation_summary.planned_snapshot_loads,
             planned_code_reinstalls: plan.operation_summary.planned_code_reinstalls,
             planned_verification_checks: plan.operation_summary.planned_verification_checks,
+            planned_operations: plan
+                .operation_summary
+                .effective_planned_operations(plan.member_count),
             phases: plan
                 .phases
                 .iter()
@@ -204,10 +214,16 @@ pub struct RestoreApplyDryRun {
     pub member_count: usize,
     pub phase_count: usize,
     pub status_supplied: bool,
+    #[serde(default)]
+    pub planned_snapshot_uploads: usize,
     pub planned_snapshot_loads: usize,
     pub planned_code_reinstalls: usize,
     pub planned_verification_checks: usize,
+    #[serde(default)]
+    pub planned_operations: usize,
     pub rendered_operations: usize,
+    #[serde(default)]
+    pub operation_counts: RestoreApplyOperationKindCounts,
     pub artifact_validation: Option<RestoreApplyArtifactValidation>,
     pub phases: Vec<RestoreApplyDryRunPhase>,
 }
@@ -250,6 +266,7 @@ impl RestoreApplyDryRun {
             .iter()
             .map(|phase| phase.operations.len())
             .sum::<usize>();
+        let operation_counts = RestoreApplyOperationKindCounts::from_dry_run_phases(&phases);
 
         Self {
             dry_run_version: 1,
@@ -262,10 +279,17 @@ impl RestoreApplyDryRun {
             member_count: plan.member_count,
             phase_count: plan.ordering_summary.phase_count,
             status_supplied: status.is_some(),
+            planned_snapshot_uploads: plan
+                .operation_summary
+                .effective_planned_snapshot_uploads(plan.member_count),
             planned_snapshot_loads: plan.operation_summary.planned_snapshot_loads,
             planned_code_reinstalls: plan.operation_summary.planned_code_reinstalls,
             planned_verification_checks: plan.operation_summary.planned_verification_checks,
+            planned_operations: plan
+                .operation_summary
+                .effective_planned_operations(plan.member_count),
             rendered_operations,
+            operation_counts,
             artifact_validation: None,
             phases,
         }
@@ -737,6 +761,64 @@ impl RestoreApplyJournalStateCounts {
     }
 }
 
+///
+/// RestoreApplyOperationKindCounts
+///
+
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RestoreApplyOperationKindCounts {
+    pub snapshot_uploads: usize,
+    pub snapshot_loads: usize,
+    pub code_reinstalls: usize,
+    pub member_verifications: usize,
+    pub fleet_verifications: usize,
+    pub verification_operations: usize,
+}
+
+impl RestoreApplyOperationKindCounts {
+    /// Count restore apply journal operations by runner operation kind.
+    #[must_use]
+    pub fn from_operations(operations: &[RestoreApplyJournalOperation]) -> Self {
+        let mut counts = Self::default();
+        for operation in operations {
+            counts.record(&operation.operation);
+        }
+        counts
+    }
+
+    /// Count restore apply dry-run operations by runner operation kind.
+    #[must_use]
+    pub fn from_dry_run_phases(phases: &[RestoreApplyDryRunPhase]) -> Self {
+        let mut counts = Self::default();
+        for operation in phases.iter().flat_map(|phase| {
+            phase
+                .operations
+                .iter()
+                .map(|operation| &operation.operation)
+        }) {
+            counts.record(operation);
+        }
+        counts
+    }
+
+    // Record one operation kind in the aggregate count object.
+    const fn record(&mut self, operation: &RestoreApplyOperationKind) {
+        match operation {
+            RestoreApplyOperationKind::UploadSnapshot => self.snapshot_uploads += 1,
+            RestoreApplyOperationKind::LoadSnapshot => self.snapshot_loads += 1,
+            RestoreApplyOperationKind::ReinstallCode => self.code_reinstalls += 1,
+            RestoreApplyOperationKind::VerifyMember => {
+                self.member_verifications += 1;
+                self.verification_operations += 1;
+            }
+            RestoreApplyOperationKind::VerifyFleet => {
+                self.fleet_verifications += 1;
+                self.verification_operations += 1;
+            }
+        }
+    }
+}
+
 // Explain why an apply journal is blocked before mutation is allowed.
 fn restore_apply_blocked_reasons(dry_run: &RestoreApplyDryRun) -> Vec<String> {
     let mut reasons = dry_run.readiness_reasons.clone();
@@ -770,6 +852,8 @@ pub struct RestoreApplyJournalStatus {
     pub complete: bool,
     pub blocked_reasons: Vec<String>,
     pub operation_count: usize,
+    #[serde(default)]
+    pub operation_counts: RestoreApplyOperationKindCounts,
     pub pending_operations: usize,
     pub ready_operations: usize,
     pub blocked_operations: usize,
@@ -798,6 +882,7 @@ impl RestoreApplyJournalStatus {
                 && journal.completed_operations == journal.operation_count,
             blocked_reasons: journal.blocked_reasons.clone(),
             operation_count: journal.operation_count,
+            operation_counts: RestoreApplyOperationKindCounts::from_operations(&journal.operations),
             pending_operations: journal.pending_operations,
             ready_operations: journal.ready_operations,
             blocked_operations: journal.blocked_operations,
@@ -828,6 +913,8 @@ pub struct RestoreApplyJournalReport {
     pub complete: bool,
     pub blocked_reasons: Vec<String>,
     pub operation_count: usize,
+    #[serde(default)]
+    pub operation_counts: RestoreApplyOperationKindCounts,
     pub pending_operations: usize,
     pub ready_operations: usize,
     pub blocked_operations: usize,
@@ -859,6 +946,7 @@ impl RestoreApplyJournalReport {
             complete,
             blocked_reasons: journal.blocked_reasons.clone(),
             operation_count: journal.operation_count,
+            operation_counts: RestoreApplyOperationKindCounts::from_operations(&journal.operations),
             pending_operations: journal.pending_operations,
             ready_operations: journal.ready_operations,
             blocked_operations: journal.blocked_operations,
@@ -1282,6 +1370,7 @@ impl RestoreApplyJournalOperation {
         if let Some(updated_at) = &self.state_updated_at {
             validate_apply_journal_nonempty("operations[].state_updated_at", updated_at)?;
         }
+        self.validate_operation_fields()?;
 
         match self.state {
             RestoreApplyOperationState::Blocked if self.blocking_reasons.is_empty() => Err(
@@ -1305,6 +1394,57 @@ impl RestoreApplyJournalOperation {
             | RestoreApplyOperationState::Ready
             | RestoreApplyOperationState::Completed => Ok(()),
         }
+    }
+
+    // Validate fields required by the operation kind before runner command rendering.
+    fn validate_operation_fields(&self) -> Result<(), RestoreApplyJournalError> {
+        match self.operation {
+            RestoreApplyOperationKind::UploadSnapshot => self
+                .validate_required_field("operations[].artifact_path", self.artifact_path.as_ref())
+                .map(|_| ()),
+            RestoreApplyOperationKind::LoadSnapshot => self
+                .validate_required_field("operations[].snapshot_id", self.snapshot_id.as_ref())
+                .map(|_| ()),
+            RestoreApplyOperationKind::ReinstallCode => Ok(()),
+            RestoreApplyOperationKind::VerifyMember | RestoreApplyOperationKind::VerifyFleet => {
+                let kind = self.validate_required_field(
+                    "operations[].verification_kind",
+                    self.verification_kind.as_ref(),
+                )?;
+                if kind == "status" {
+                    return Ok(());
+                }
+                self.validate_required_field(
+                    "operations[].verification_method",
+                    self.verification_method.as_ref(),
+                )
+                .map(|_| ())
+            }
+        }
+    }
+
+    // Return one required optional field after checking it is present and nonempty.
+    fn validate_required_field<'a>(
+        &self,
+        field: &'static str,
+        value: Option<&'a String>,
+    ) -> Result<&'a str, RestoreApplyJournalError> {
+        let value = value.map(String::as_str).ok_or_else(|| {
+            RestoreApplyJournalError::OperationMissingField {
+                sequence: self.sequence,
+                operation: self.operation.clone(),
+                field,
+            }
+        })?;
+        if value.trim().is_empty() {
+            return Err(RestoreApplyJournalError::OperationMissingField {
+                sequence: self.sequence,
+                operation: self.operation.clone(),
+                field,
+            });
+        }
+
+        Ok(value)
     }
 
     // Decide whether an operation can move to the requested next state.
@@ -1386,6 +1526,13 @@ pub enum RestoreApplyJournalError {
 
     #[error("unblocked restore apply journal operation {0} cannot have blocking reasons")]
     UnblockedOperationHasReasons(usize),
+
+    #[error("restore apply journal operation {sequence} {operation:?} is missing field {field}")]
+    OperationMissingField {
+        sequence: usize,
+        operation: RestoreApplyOperationKind,
+        field: &'static str,
+    },
 
     #[error("restore apply journal operation {0} was not found")]
     OperationNotFound(usize),
@@ -1898,10 +2045,39 @@ pub struct RestoreReadinessSummary {
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct RestoreOperationSummary {
+    #[serde(default)]
+    pub planned_snapshot_uploads: usize,
     pub planned_snapshot_loads: usize,
     pub planned_code_reinstalls: usize,
     pub planned_verification_checks: usize,
+    #[serde(default)]
+    pub planned_operations: usize,
     pub planned_phases: usize,
+}
+
+impl RestoreOperationSummary {
+    /// Return planned snapshot uploads, deriving the value for older plan JSON.
+    #[must_use]
+    pub const fn effective_planned_snapshot_uploads(&self, member_count: usize) -> usize {
+        if self.planned_snapshot_uploads == 0 && member_count > 0 {
+            return member_count;
+        }
+
+        self.planned_snapshot_uploads
+    }
+
+    /// Return total planned operations, deriving the value for older plan JSON.
+    #[must_use]
+    pub const fn effective_planned_operations(&self, member_count: usize) -> usize {
+        if self.planned_operations == 0 {
+            return self.effective_planned_snapshot_uploads(member_count)
+                + self.planned_snapshot_loads
+                + self.planned_code_reinstalls
+                + self.planned_verification_checks;
+        }
+
+        self.planned_operations
+    }
 }
 
 ///
@@ -2137,7 +2313,10 @@ fn resolve_members(
             restore_group: member.restore_group,
             identity_mode: member.identity_mode.clone(),
             verification_class: member.verification_class.clone(),
-            verification_checks: member.verification_checks.clone(),
+            verification_checks: concrete_member_verification_checks(
+                member,
+                &manifest.verification,
+            ),
             source_snapshot: member.source_snapshot.clone(),
         });
     }
@@ -2151,6 +2330,40 @@ fn resolve_members(
     }
 
     Ok(plan_members)
+}
+
+// Resolve all concrete verification checks that apply to one restore member role.
+fn concrete_member_verification_checks(
+    member: &FleetMember,
+    verification: &VerificationPlan,
+) -> Vec<VerificationCheck> {
+    let mut checks = member
+        .verification_checks
+        .iter()
+        .filter(|check| verification_check_applies_to_role(check, &member.role))
+        .cloned()
+        .collect::<Vec<_>>();
+
+    for group in &verification.member_checks {
+        if group.role != member.role {
+            continue;
+        }
+
+        checks.extend(
+            group
+                .checks
+                .iter()
+                .filter(|check| verification_check_applies_to_role(check, &member.role))
+                .cloned(),
+        );
+    }
+
+    checks
+}
+
+// Return whether a verification check's role filter includes one member role.
+fn verification_check_applies_to_role(check: &VerificationCheck, role: &str) -> bool {
+    check.roles.is_empty() || check.roles.iter().any(|check_role| check_role == role)
 }
 
 // Resolve one member's target canister, enforcing identity continuity.
@@ -2279,32 +2492,13 @@ fn restore_verification_summary(
 ) -> RestoreVerificationSummary {
     let fleet_checks = manifest.verification.fleet_checks.len();
     let member_check_groups = manifest.verification.member_checks.len();
-    let role_check_counts = manifest
-        .verification
-        .member_checks
-        .iter()
-        .map(|group| (group.role.as_str(), group.checks.len()))
-        .collect::<BTreeMap<_, _>>();
-    let inline_member_checks = members
+    let member_checks = members
         .iter()
         .map(|member| member.verification_checks.len())
         .sum::<usize>();
-    let role_member_checks = members
-        .iter()
-        .map(|member| {
-            role_check_counts
-                .get(member.role.as_str())
-                .copied()
-                .unwrap_or(0)
-        })
-        .sum::<usize>();
-    let member_checks = inline_member_checks + role_member_checks;
     let members_with_checks = members
         .iter()
-        .filter(|member| {
-            !member.verification_checks.is_empty()
-                || role_check_counts.contains_key(member.role.as_str())
-        })
+        .filter(|member| !member.verification_checks.is_empty())
         .count();
 
     RestoreVerificationSummary {
@@ -2325,9 +2519,14 @@ const fn restore_operation_summary(
     phases: &[RestorePhase],
 ) -> RestoreOperationSummary {
     RestoreOperationSummary {
+        planned_snapshot_uploads: member_count,
         planned_snapshot_loads: member_count,
         planned_code_reinstalls: member_count,
         planned_verification_checks: verification_summary.total_checks,
+        planned_operations: member_count
+            + member_count
+            + member_count
+            + verification_summary.total_checks,
         planned_phases: phases.len(),
     }
 }
@@ -2869,6 +3068,12 @@ mod tests {
 
         assert!(plan.verification_summary.verification_required);
         assert!(plan.verification_summary.all_members_have_checks);
+        let app = plan
+            .ordered_members()
+            .into_iter()
+            .find(|member| member.role == "app")
+            .expect("app member should be planned");
+        assert_eq!(app.verification_checks.len(), 2);
         assert_eq!(plan.fleet_verification_checks.len(), 1);
         assert_eq!(plan.fleet_verification_checks[0].kind, "fleet-ready");
         assert_eq!(plan.verification_summary.fleet_checks, 1);
@@ -2885,15 +3090,17 @@ mod tests {
 
         let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
 
+        assert_eq!(plan.operation_summary.planned_snapshot_uploads, 2);
         assert_eq!(plan.operation_summary.planned_snapshot_loads, 2);
         assert_eq!(plan.operation_summary.planned_code_reinstalls, 2);
         assert_eq!(plan.operation_summary.planned_verification_checks, 2);
+        assert_eq!(plan.operation_summary.planned_operations, 8);
         assert_eq!(plan.operation_summary.planned_phases, 1);
     }
 
-    // Ensure older restore plan JSON remains readable after adding fleet checks.
+    // Ensure older restore plan JSON remains readable after adding newer fields.
     #[test]
-    fn restore_plan_defaults_missing_fleet_verification_checks() {
+    fn restore_plan_defaults_missing_newer_restore_fields() {
         let manifest = valid_manifest(IdentityMode::Relocatable);
         let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
         let mut value = serde_json::to_value(&plan).expect("serialize plan");
@@ -2901,10 +3108,25 @@ mod tests {
             .as_object_mut()
             .expect("plan should serialize as an object")
             .remove("fleet_verification_checks");
+        let operation_summary = value
+            .get_mut("operation_summary")
+            .and_then(serde_json::Value::as_object_mut)
+            .expect("operation summary should serialize as an object");
+        operation_summary.remove("planned_snapshot_uploads");
+        operation_summary.remove("planned_operations");
 
         let decoded: RestorePlan = serde_json::from_value(value).expect("decode old plan shape");
+        let status = RestoreStatus::from_plan(&decoded);
+        let dry_run =
+            RestoreApplyDryRun::try_from_plan(&decoded, None).expect("old plan should dry-run");
 
         assert!(decoded.fleet_verification_checks.is_empty());
+        assert_eq!(decoded.operation_summary.planned_snapshot_uploads, 0);
+        assert_eq!(decoded.operation_summary.planned_operations, 0);
+        assert_eq!(status.planned_snapshot_uploads, 2);
+        assert_eq!(status.planned_operations, 8);
+        assert_eq!(dry_run.planned_snapshot_uploads, 2);
+        assert_eq!(dry_run.planned_operations, 8);
         assert_eq!(decoded.backup_id, plan.backup_id);
         assert_eq!(decoded.member_count, plan.member_count);
     }
@@ -2933,9 +3155,11 @@ mod tests {
         assert!(status.verification_required);
         assert_eq!(status.member_count, 2);
         assert_eq!(status.phase_count, 1);
+        assert_eq!(status.planned_snapshot_uploads, 2);
         assert_eq!(status.planned_snapshot_loads, 2);
         assert_eq!(status.planned_code_reinstalls, 2);
         assert_eq!(status.planned_verification_checks, 2);
+        assert_eq!(status.planned_operations, 8);
         assert_eq!(status.phases.len(), 1);
         assert_eq!(status.phases[0].restore_group, 1);
         assert_eq!(status.phases[0].members.len(), 2);
@@ -2970,10 +3194,18 @@ mod tests {
         assert!(dry_run.status_supplied);
         assert_eq!(dry_run.member_count, 2);
         assert_eq!(dry_run.phase_count, 1);
+        assert_eq!(dry_run.planned_snapshot_uploads, 2);
         assert_eq!(dry_run.planned_snapshot_loads, 2);
         assert_eq!(dry_run.planned_code_reinstalls, 2);
         assert_eq!(dry_run.planned_verification_checks, 2);
+        assert_eq!(dry_run.planned_operations, 8);
         assert_eq!(dry_run.rendered_operations, 8);
+        assert_eq!(dry_run.operation_counts.snapshot_uploads, 2);
+        assert_eq!(dry_run.operation_counts.snapshot_loads, 2);
+        assert_eq!(dry_run.operation_counts.code_reinstalls, 2);
+        assert_eq!(dry_run.operation_counts.member_verifications, 2);
+        assert_eq!(dry_run.operation_counts.fleet_verifications, 0);
+        assert_eq!(dry_run.operation_counts.verification_operations, 2);
         assert_eq!(dry_run.phases.len(), 1);
 
         let operations = &dry_run.phases[0].operations;
@@ -3193,6 +3425,7 @@ mod tests {
             .expect("dry-run should validate artifacts");
         let journal = RestoreApplyJournal::from_dry_run(&dry_run);
         let status = journal.status();
+        let report = journal.report();
 
         fs::remove_dir_all(root).expect("remove temp root");
         assert_eq!(status.status_version, 1);
@@ -3200,6 +3433,13 @@ mod tests {
         assert!(status.ready);
         assert!(!status.complete);
         assert_eq!(status.operation_count, 8);
+        assert_eq!(status.operation_counts.snapshot_uploads, 2);
+        assert_eq!(status.operation_counts.snapshot_loads, 2);
+        assert_eq!(status.operation_counts.code_reinstalls, 2);
+        assert_eq!(status.operation_counts.member_verifications, 2);
+        assert_eq!(status.operation_counts.fleet_verifications, 0);
+        assert_eq!(status.operation_counts.verification_operations, 2);
+        assert_eq!(report.operation_counts, status.operation_counts);
         assert_eq!(status.ready_operations, 8);
         assert_eq!(status.next_ready_sequence, Some(0));
         assert_eq!(
@@ -3522,16 +3762,50 @@ mod tests {
         assert_eq!(command.note, "calls the declared fleet verification method");
     }
 
-    // Ensure unsupported verification rows do not pretend to be runnable.
+    // Ensure method verification rows must carry the method they will call.
     #[test]
-    fn apply_journal_command_preview_reports_unavailable_for_unknown_verification() {
-        let journal =
-            command_preview_journal(RestoreApplyOperationKind::VerifyMember, Some("query"), None);
-        let preview = journal.next_command_preview();
+    fn apply_journal_validation_rejects_method_verification_without_method() {
+        let journal = RestoreApplyJournal {
+            journal_version: 1,
+            backup_id: "fbk_test_001".to_string(),
+            ready: true,
+            blocked_reasons: Vec::new(),
+            operation_count: 1,
+            pending_operations: 0,
+            ready_operations: 1,
+            blocked_operations: 0,
+            completed_operations: 0,
+            failed_operations: 0,
+            operations: vec![RestoreApplyJournalOperation {
+                sequence: 0,
+                operation: RestoreApplyOperationKind::VerifyMember,
+                state: RestoreApplyOperationState::Ready,
+                state_updated_at: None,
+                blocking_reasons: Vec::new(),
+                restore_group: 1,
+                phase_order: 0,
+                source_canister: ROOT.to_string(),
+                target_canister: ROOT.to_string(),
+                role: "root".to_string(),
+                snapshot_id: Some("snap-root".to_string()),
+                artifact_path: Some("artifacts/root".to_string()),
+                verification_kind: Some("query".to_string()),
+                verification_method: None,
+            }],
+        };
 
-        assert!(preview.operation_available);
-        assert!(!preview.command_available);
-        assert!(preview.command.is_none());
+        let err = journal
+            .validate()
+            .expect_err("method verification without method should fail");
+
+        assert!(matches!(
+            err,
+            RestoreApplyJournalError::OperationMissingField {
+                sequence: 0,
+                operation: RestoreApplyOperationKind::VerifyMember,
+                field: "operations[].verification_method",
+            }
+        ));
     }
 
     // Ensure apply journal validation rejects inconsistent state counts.
@@ -3699,6 +3973,57 @@ mod tests {
         assert!(matches!(
             err,
             RestoreApplyJournalError::MissingField("operations[].state_updated_at")
+        ));
+    }
+
+    // Ensure operation-specific fields are required before command rendering.
+    #[test]
+    fn apply_journal_validation_rejects_missing_operation_fields() {
+        let mut upload =
+            command_preview_journal(RestoreApplyOperationKind::UploadSnapshot, None, None);
+        upload.operations[0].artifact_path = None;
+        let err = upload
+            .validate()
+            .expect_err("upload without artifact path should fail");
+        assert!(matches!(
+            err,
+            RestoreApplyJournalError::OperationMissingField {
+                sequence: 0,
+                operation: RestoreApplyOperationKind::UploadSnapshot,
+                field: "operations[].artifact_path",
+            }
+        ));
+
+        let mut load = command_preview_journal(RestoreApplyOperationKind::LoadSnapshot, None, None);
+        load.operations[0].snapshot_id = None;
+        let err = load
+            .validate()
+            .expect_err("load without snapshot id should fail");
+        assert!(matches!(
+            err,
+            RestoreApplyJournalError::OperationMissingField {
+                sequence: 0,
+                operation: RestoreApplyOperationKind::LoadSnapshot,
+                field: "operations[].snapshot_id",
+            }
+        ));
+
+        let mut verify = command_preview_journal(
+            RestoreApplyOperationKind::VerifyMember,
+            Some("query"),
+            Some("health"),
+        );
+        verify.operations[0].verification_method = None;
+        let err = verify
+            .validate()
+            .expect_err("method verification without method should fail");
+        assert!(matches!(
+            err,
+            RestoreApplyJournalError::OperationMissingField {
+                sequence: 0,
+                operation: RestoreApplyOperationKind::VerifyMember,
+                field: "operations[].verification_method",
+            }
         ));
     }
 
@@ -3993,6 +4318,67 @@ mod tests {
         assert_eq!(plan.verification_summary.member_checks, 5);
         assert_eq!(plan.verification_summary.members_with_checks, 3);
         assert_eq!(plan.verification_summary.total_checks, 5);
+    }
+
+    // Ensure member verification role filters control concrete restore checks.
+    #[test]
+    fn plan_applies_member_verification_role_filters() {
+        let mut manifest = valid_manifest(IdentityMode::Relocatable);
+        manifest.fleet.members[0]
+            .verification_checks
+            .push(VerificationCheck {
+                kind: "root-only-inline".to_string(),
+                method: Some("wrong_member".to_string()),
+                roles: vec!["root".to_string()],
+            });
+        manifest
+            .verification
+            .member_checks
+            .push(MemberVerificationChecks {
+                role: "app".to_string(),
+                checks: vec![
+                    VerificationCheck {
+                        kind: "app-role-check".to_string(),
+                        method: Some("app_ready".to_string()),
+                        roles: vec!["app".to_string()],
+                    },
+                    VerificationCheck {
+                        kind: "root-filtered-check".to_string(),
+                        method: Some("wrong_role".to_string()),
+                        roles: vec!["root".to_string()],
+                    },
+                ],
+            });
+
+        let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
+        let app = plan
+            .ordered_members()
+            .into_iter()
+            .find(|member| member.role == "app")
+            .expect("app member should be planned");
+        let dry_run = RestoreApplyDryRun::try_from_plan(&plan, None).expect("dry-run should build");
+        let app_verification_methods = dry_run.phases[0]
+            .operations
+            .iter()
+            .filter(|operation| {
+                operation.source_canister == CHILD
+                    && operation.operation == RestoreApplyOperationKind::VerifyMember
+            })
+            .filter_map(|operation| operation.verification_method.as_deref())
+            .collect::<Vec<_>>();
+
+        assert_eq!(app.verification_checks.len(), 2);
+        assert_eq!(
+            app.verification_checks
+                .iter()
+                .map(|check| check.kind.as_str())
+                .collect::<Vec<_>>(),
+            ["call", "app-role-check"]
+        );
+        assert_eq!(plan.verification_summary.member_checks, 3);
+        assert_eq!(plan.verification_summary.total_checks, 3);
+        assert_eq!(dry_run.rendered_operations, 9);
+        assert_eq!(app_verification_methods, ["canic_ready", "app_ready"]);
     }
 
     // Ensure mapped restores must cover every source member.

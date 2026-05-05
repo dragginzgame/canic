@@ -5,9 +5,10 @@ use canic_backup::{
         RestoreApplyCommandConfig, RestoreApplyCommandPreview, RestoreApplyDryRun,
         RestoreApplyDryRunError, RestoreApplyJournal, RestoreApplyJournalError,
         RestoreApplyJournalOperation, RestoreApplyJournalReport, RestoreApplyJournalStatus,
-        RestoreApplyNextOperation, RestoreApplyOperationKind, RestoreApplyOperationState,
-        RestoreApplyReportOperation, RestoreApplyReportOutcome, RestoreApplyRunnerCommand,
-        RestoreMapping, RestorePlan, RestorePlanError, RestorePlanner, RestoreStatus,
+        RestoreApplyNextOperation, RestoreApplyOperationKind, RestoreApplyOperationKindCounts,
+        RestoreApplyOperationState, RestoreApplyReportOperation, RestoreApplyReportOutcome,
+        RestoreApplyRunnerCommand, RestoreMapping, RestorePlan, RestorePlanError, RestorePlanner,
+        RestoreStatus,
     },
 };
 use serde::Serialize;
@@ -659,6 +660,7 @@ pub struct RestoreRunResponse {
     attention_required: bool,
     outcome: RestoreApplyReportOutcome,
     operation_count: usize,
+    operation_counts: RestoreApplyOperationKindCounts,
     pending_operations: usize,
     ready_operations: usize,
     blocked_operations: usize,
@@ -699,6 +701,7 @@ impl RestoreRunResponse {
             attention_required: report.attention_required,
             outcome: report.outcome,
             operation_count: report.operation_count,
+            operation_counts: report.operation_counts,
             pending_operations: report.pending_operations,
             ready_operations: report.ready_operations,
             blocked_operations: report.blocked_operations,
@@ -2825,9 +2828,11 @@ mod tests {
         assert!(status.readiness_reasons.is_empty());
         assert_eq!(status.member_count, 2);
         assert_eq!(status.phase_count, 1);
+        assert_eq!(status.planned_snapshot_uploads, 2);
         assert_eq!(status.planned_snapshot_loads, 2);
         assert_eq!(status.planned_code_reinstalls, 2);
         assert_eq!(status.planned_verification_checks, 2);
+        assert_eq!(status.planned_operations, 8);
         assert_eq!(status.phases[0].members[0].source_canister, ROOT);
         assert_eq!(status_json["phases"][0]["members"][0]["state"], "planned");
     }
@@ -2879,7 +2884,18 @@ mod tests {
         assert!(dry_run.status_supplied);
         assert_eq!(dry_run.member_count, 2);
         assert_eq!(dry_run.phase_count, 1);
+        assert_eq!(dry_run.planned_snapshot_uploads, 2);
+        assert_eq!(dry_run.planned_operations, 8);
         assert_eq!(dry_run.rendered_operations, 8);
+        assert_eq!(dry_run_json["operation_counts"]["snapshot_uploads"], 2);
+        assert_eq!(dry_run_json["operation_counts"]["snapshot_loads"], 2);
+        assert_eq!(dry_run_json["operation_counts"]["code_reinstalls"], 2);
+        assert_eq!(dry_run_json["operation_counts"]["member_verifications"], 2);
+        assert_eq!(dry_run_json["operation_counts"]["fleet_verifications"], 0);
+        assert_eq!(
+            dry_run_json["operation_counts"]["verification_operations"],
+            2
+        );
         assert_eq!(
             dry_run_json["phases"][0]["operations"][0]["operation"],
             "upload-snapshot"
@@ -2964,6 +2980,15 @@ mod tests {
         assert_eq!(journal_json["operations"][0]["state"], "ready");
         assert_eq!(status_json["ready"], true);
         assert_eq!(status_json["operation_count"], 8);
+        assert_eq!(status_json["operation_counts"]["snapshot_uploads"], 2);
+        assert_eq!(status_json["operation_counts"]["snapshot_loads"], 2);
+        assert_eq!(status_json["operation_counts"]["code_reinstalls"], 2);
+        assert_eq!(status_json["operation_counts"]["member_verifications"], 2);
+        assert_eq!(status_json["operation_counts"]["fleet_verifications"], 0);
+        assert_eq!(
+            status_json["operation_counts"]["verification_operations"],
+            2
+        );
         assert_eq!(status_json["next_ready_sequence"], 0);
         assert_eq!(status_json["next_ready_operation"], "upload-snapshot");
     }
@@ -3147,6 +3172,12 @@ mod tests {
         assert!(report.attention_required);
         assert_eq!(report.failed_operations, 1);
         assert_eq!(report.pending_operations, 1);
+        assert_eq!(report.operation_counts.snapshot_uploads, 2);
+        assert_eq!(report.operation_counts.snapshot_loads, 2);
+        assert_eq!(report.operation_counts.code_reinstalls, 2);
+        assert_eq!(report.operation_counts.member_verifications, 2);
+        assert_eq!(report.operation_counts.fleet_verifications, 0);
+        assert_eq!(report.operation_counts.verification_operations, 2);
         assert_eq!(report.failed.len(), 1);
         assert_eq!(report.pending.len(), 1);
         assert_eq!(report.failed[0].sequence, 0);
@@ -3200,6 +3231,12 @@ mod tests {
         assert_eq!(dry_run["ready"], true);
         assert_eq!(dry_run["complete"], false);
         assert_eq!(dry_run["attention_required"], false);
+        assert_eq!(dry_run["operation_counts"]["snapshot_uploads"], 2);
+        assert_eq!(dry_run["operation_counts"]["snapshot_loads"], 2);
+        assert_eq!(dry_run["operation_counts"]["code_reinstalls"], 2);
+        assert_eq!(dry_run["operation_counts"]["member_verifications"], 2);
+        assert_eq!(dry_run["operation_counts"]["fleet_verifications"], 0);
+        assert_eq!(dry_run["operation_counts"]["verification_operations"], 2);
         assert_eq!(dry_run["stopped_reason"], "preview");
         assert_eq!(dry_run["next_action"], "rerun");
         assert_eq!(dry_run["operation_available"], true);
