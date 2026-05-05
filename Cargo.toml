@@ -3,6 +3,7 @@
 members = [
     "canisters/app",
     "canisters/minimal",
+    "canisters/playground",
     "canisters/reference-support",
     "canisters/root",
     "canisters/scale",

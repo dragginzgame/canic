@@ -56,6 +56,87 @@ macro_rules! __canic_start_nonroot_lifecycle_core {
     };
 }
 
+// Local-dev lifecycle core for standalone playground canisters.
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __canic_start_local_lifecycle_core {
+    ($canister_role:expr $(, $init:block)?) => {
+        #[doc(hidden)]
+        fn __canic_compiled_config() -> (
+            $crate::__internal::core::bootstrap::compiled::ConfigModel,
+            &'static str,
+            &'static str,
+        ) {
+            let config_model = include!(env!("CANIC_CONFIG_MODEL_PATH"));
+            let config_source = include_str!(env!("CANIC_CONFIG_SOURCE_PATH"));
+            let config_path = env!("CANIC_CONFIG_PATH");
+            (config_model, config_source, config_path)
+        }
+
+        #[doc(hidden)]
+        fn __canic_local_principal(byte: u8) -> ::canic::cdk::types::Principal {
+            ::canic::cdk::types::Principal::from_slice(&[byte; 29])
+        }
+
+        #[doc(hidden)]
+        fn __canic_local_init_payload(
+            role: $crate::__internal::core::ids::CanisterRole,
+        ) -> ::canic::dto::abi::v1::CanisterInitPayload {
+            let root_pid = __canic_local_principal(1);
+            let subnet_pid = __canic_local_principal(2);
+            ::canic::dto::abi::v1::CanisterInitPayload {
+                env: ::canic::dto::env::EnvBootstrapArgs {
+                    prime_root_pid: Some(root_pid),
+                    subnet_role: Some($crate::__internal::core::ids::SubnetRole::PRIME),
+                    subnet_pid: Some(subnet_pid),
+                    root_pid: Some(root_pid),
+                    canister_role: Some(role),
+                    parent_pid: Some(root_pid),
+                },
+                app_index: ::canic::dto::topology::AppIndexArgs(Vec::new()),
+                subnet_index: ::canic::dto::topology::SubnetIndexArgs(Vec::new()),
+            }
+        }
+
+        #[::canic::cdk::init]
+        fn init(args: Option<Vec<u8>>) {
+            let (config, config_source, config_path) = __canic_compiled_config();
+            let role = $canister_role;
+            let payload = __canic_local_init_payload(role.clone());
+
+            $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::init_nonroot_canister_before_bootstrap(
+                role,
+                payload,
+                config,
+                config_source,
+                config_path,
+                cfg!(canic_role_attestation_refresh),
+            );
+
+            $crate::__canic_run_start_init_hook!($($init)?);
+            $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::schedule_init_nonroot_bootstrap(args.clone());
+            $crate::__canic_start_nonroot_user_timers!(args);
+        }
+
+        #[::canic::cdk::post_upgrade]
+        fn post_upgrade() {
+            let (config, config_source, config_path) = __canic_compiled_config();
+
+            $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::post_upgrade_nonroot_canister_before_bootstrap(
+                $canister_role,
+                config,
+                config_source,
+                config_path,
+                cfg!(canic_role_attestation_refresh),
+            );
+
+            $crate::__canic_run_start_init_hook!($($init)?);
+            $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::schedule_post_upgrade_nonroot_bootstrap();
+            $crate::__canic_start_nonroot_upgrade_timers!();
+        }
+    };
+}
+
 // Lifecycle core for the root Canic canister.
 #[doc(hidden)]
 #[macro_export]
@@ -248,6 +329,25 @@ macro_rules! __canic_start_ingress_payload_inspect {
 macro_rules! start {
     ($canister_role:expr $(, init = $init:block)? $(,)?) => {
         $crate::__canic_start_nonroot_lifecycle_core!($canister_role $(, $init)?);
+        $crate::__canic_start_ingress_payload_inspect!();
+        $crate::__canic_start_nonroot_capability_bundles!();
+    };
+}
+
+/// Configure a local-only non-root Canic canister for manual development.
+///
+/// `start_local!` is intentionally for standalone dev canisters such as a
+/// playground. It synthesizes a minimal local environment during `init`, so
+/// `dfx deploy <canister>` can run without entering the full CANIC bootstrap
+/// payload by hand.
+///
+/// Do not use this macro for production canisters, root-managed child
+/// canisters, release-set members, or test fixtures that need real topology
+/// metadata. Those should use [`start!`] and receive explicit lifecycle args.
+#[macro_export]
+macro_rules! start_local {
+    ($canister_role:expr $(, init = $init:block)? $(,)?) => {
+        $crate::__canic_start_local_lifecycle_core!($canister_role $(, $init)?);
         $crate::__canic_start_ingress_payload_inspect!();
         $crate::__canic_start_nonroot_capability_bundles!();
     };

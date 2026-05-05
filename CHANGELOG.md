@@ -7,7 +7,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.30.x] - 2026-05-03 - Fleet Snapshot Backups
 
-- `0.30.29` centralizes native restore-runner state strings without changing JSON output, and adds generated ingress payload limits for `canic_update` endpoints with explicit per-endpoint opt-ups.
+- `0.30.30` makes restore apply dry-runs render declared fleet-level verification checks as final `verify-fleet` operations, so restore plans, operation counts, and runner previews agree before execution.
+
+- `0.30.29` centralizes native restore-runner state strings without changing JSON output, adds generated ingress payload limits for `canic_update` endpoints, and adds a local playground canister with `start_local!` for quick manual experiments.
 
 ```rust
 #[canic_update(payload(max_bytes = 32 * 1024))]

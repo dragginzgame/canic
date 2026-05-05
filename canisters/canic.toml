@@ -70,6 +70,11 @@ role_attestation_cache = true
 [subnets.prime.canisters.minimal]
 kind = "replica"
 
+# --- Playground ---
+# Manual local sandbox. Not part of auto_create, subnet_index, or root release set.
+[subnets.prime.canisters.playground]
+kind = "singleton"
+
 # --- Scale Hub ---
 [subnets.prime.canisters.scale_hub]
 kind = "singleton"

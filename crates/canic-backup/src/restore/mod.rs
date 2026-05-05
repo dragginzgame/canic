@@ -60,6 +60,8 @@ pub struct RestorePlan {
     pub readiness_summary: RestoreReadinessSummary,
     pub operation_summary: RestoreOperationSummary,
     pub ordering_summary: RestoreOrderingSummary,
+    #[serde(default)]
+    pub fleet_verification_checks: Vec<VerificationCheck>,
     pub phases: Vec<RestorePhase>,
 }
 
@@ -242,6 +244,8 @@ impl RestoreApplyDryRun {
             .iter()
             .map(|phase| RestoreApplyDryRunPhase::from_plan_phase(phase, &mut next_sequence))
             .collect::<Vec<_>>();
+        let mut phases = phases;
+        append_fleet_verification_operations(plan, &mut phases, &mut next_sequence);
         let rendered_operations = phases
             .iter()
             .map(|phase| phase.operations.len())
@@ -1146,7 +1150,7 @@ impl RestoreApplyRunnerCommand {
                 note: "reinstalls target canister code using the local dfx project configuration"
                     .to_string(),
             }),
-            RestoreApplyOperationKind::VerifyMember => {
+            RestoreApplyOperationKind::VerifyMember | RestoreApplyOperationKind::VerifyFleet => {
                 match operation.verification_kind.as_deref() {
                     Some("status") => Some(Self {
                         program: config.program.clone(),
@@ -1156,7 +1160,12 @@ impl RestoreApplyRunnerCommand {
                         ),
                         mutates: false,
                         requires_stopped_canister: false,
-                        note: "checks target canister status".to_string(),
+                        note: verification_command_note(
+                            &operation.operation,
+                            "checks target canister status",
+                            "checks target fleet root canister status",
+                        )
+                        .to_string(),
                     }),
                     Some(_) => {
                         let method = operation.verification_method.as_ref()?;
@@ -1172,13 +1181,33 @@ impl RestoreApplyRunnerCommand {
                             ),
                             mutates: false,
                             requires_stopped_canister: false,
-                            note: "calls the declared verification method".to_string(),
+                            note: verification_command_note(
+                                &operation.operation,
+                                "calls the declared verification method",
+                                "calls the declared fleet verification method",
+                            )
+                            .to_string(),
                         })
                     }
                     None => None,
                 }
             }
         }
+    }
+}
+
+// Return an operator note for member-level or fleet-level verification commands.
+const fn verification_command_note(
+    operation: &RestoreApplyOperationKind,
+    member_note: &'static str,
+    fleet_note: &'static str,
+) -> &'static str {
+    match operation {
+        RestoreApplyOperationKind::VerifyFleet => fleet_note,
+        RestoreApplyOperationKind::UploadSnapshot
+        | RestoreApplyOperationKind::LoadSnapshot
+        | RestoreApplyOperationKind::ReinstallCode
+        | RestoreApplyOperationKind::VerifyMember => member_note,
     }
 }
 
@@ -1658,6 +1687,74 @@ fn push_member_operation(
     });
 }
 
+// Append fleet-level verification checks after all member operations.
+fn append_fleet_verification_operations(
+    plan: &RestorePlan,
+    phases: &mut [RestoreApplyDryRunPhase],
+    next_sequence: &mut usize,
+) {
+    if plan.fleet_verification_checks.is_empty() {
+        return;
+    }
+
+    let Some(phase) = phases.last_mut() else {
+        return;
+    };
+    let root = plan
+        .phases
+        .iter()
+        .flat_map(|phase| phase.members.iter())
+        .find(|member| member.source_canister == plan.source_root_canister);
+    let source_canister = root.map_or_else(
+        || plan.source_root_canister.clone(),
+        |member| member.source_canister.clone(),
+    );
+    let target_canister = root.map_or_else(
+        || plan.source_root_canister.clone(),
+        |member| member.target_canister.clone(),
+    );
+    let restore_group = phase.restore_group;
+
+    for check in &plan.fleet_verification_checks {
+        push_fleet_operation(
+            &mut phase.operations,
+            next_sequence,
+            restore_group,
+            &source_canister,
+            &target_canister,
+            check,
+        );
+    }
+}
+
+// Append one fleet-level dry-run verification operation.
+fn push_fleet_operation(
+    operations: &mut Vec<RestoreApplyDryRunOperation>,
+    next_sequence: &mut usize,
+    restore_group: u16,
+    source_canister: &str,
+    target_canister: &str,
+    check: &VerificationCheck,
+) {
+    let sequence = *next_sequence;
+    *next_sequence += 1;
+    let phase_order = operations.len();
+
+    operations.push(RestoreApplyDryRunOperation {
+        sequence,
+        operation: RestoreApplyOperationKind::VerifyFleet,
+        restore_group,
+        phase_order,
+        source_canister: source_canister.to_string(),
+        target_canister: target_canister.to_string(),
+        role: "fleet".to_string(),
+        snapshot_id: None,
+        artifact_path: None,
+        verification_kind: Some(check.kind.clone()),
+        verification_method: check.method.clone(),
+    });
+}
+
 ///
 /// RestoreApplyDryRunOperation
 ///
@@ -1688,6 +1785,7 @@ pub enum RestoreApplyOperationKind {
     LoadSnapshot,
     ReinstallCode,
     VerifyMember,
+    VerifyFleet,
 }
 
 ///
@@ -1911,6 +2009,7 @@ impl RestorePlanner {
             readiness_summary,
             operation_summary,
             ordering_summary,
+            fleet_verification_checks: manifest.verification.fleet_checks.clone(),
             phases,
         })
     }
@@ -2770,6 +2869,8 @@ mod tests {
 
         assert!(plan.verification_summary.verification_required);
         assert!(plan.verification_summary.all_members_have_checks);
+        assert_eq!(plan.fleet_verification_checks.len(), 1);
+        assert_eq!(plan.fleet_verification_checks[0].kind, "fleet-ready");
         assert_eq!(plan.verification_summary.fleet_checks, 1);
         assert_eq!(plan.verification_summary.member_check_groups, 1);
         assert_eq!(plan.verification_summary.member_checks, 3);
@@ -2788,6 +2889,24 @@ mod tests {
         assert_eq!(plan.operation_summary.planned_code_reinstalls, 2);
         assert_eq!(plan.operation_summary.planned_verification_checks, 2);
         assert_eq!(plan.operation_summary.planned_phases, 1);
+    }
+
+    // Ensure older restore plan JSON remains readable after adding fleet checks.
+    #[test]
+    fn restore_plan_defaults_missing_fleet_verification_checks() {
+        let manifest = valid_manifest(IdentityMode::Relocatable);
+        let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
+        let mut value = serde_json::to_value(&plan).expect("serialize plan");
+        value
+            .as_object_mut()
+            .expect("plan should serialize as an object")
+            .remove("fleet_verification_checks");
+
+        let decoded: RestorePlan = serde_json::from_value(value).expect("decode old plan shape");
+
+        assert!(decoded.fleet_verification_checks.is_empty());
+        assert_eq!(decoded.backup_id, plan.backup_id);
+        assert_eq!(decoded.member_count, plan.member_count);
     }
 
     // Ensure initial restore status mirrors the no-mutation restore plan.
@@ -2891,6 +3010,39 @@ mod tests {
         assert_eq!(
             operations[7].operation,
             RestoreApplyOperationKind::VerifyMember
+        );
+    }
+
+    // Ensure apply dry-runs append fleet verification after member operations.
+    #[test]
+    fn apply_dry_run_renders_fleet_verification_operations() {
+        let mut manifest = valid_manifest(IdentityMode::Relocatable);
+        manifest.verification.fleet_checks.push(VerificationCheck {
+            kind: "fleet-ready".to_string(),
+            method: Some("canic_fleet_ready".to_string()),
+            roles: Vec::new(),
+        });
+
+        let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
+        let dry_run = RestoreApplyDryRun::try_from_plan(&plan, None).expect("dry-run should build");
+
+        assert_eq!(plan.operation_summary.planned_verification_checks, 3);
+        assert_eq!(dry_run.rendered_operations, 9);
+        let operation = dry_run.phases[0]
+            .operations
+            .last()
+            .expect("fleet verification operation should be rendered");
+        assert_eq!(operation.sequence, 8);
+        assert_eq!(operation.operation, RestoreApplyOperationKind::VerifyFleet);
+        assert_eq!(operation.source_canister, ROOT);
+        assert_eq!(operation.target_canister, ROOT);
+        assert_eq!(operation.role, "fleet");
+        assert_eq!(operation.snapshot_id, None);
+        assert_eq!(operation.artifact_path, None);
+        assert_eq!(operation.verification_kind, Some("fleet-ready".to_string()));
+        assert_eq!(
+            operation.verification_method,
+            Some("canic_fleet_ready".to_string())
         );
     }
 
@@ -3342,6 +3494,32 @@ mod tests {
         );
         assert!(!command.mutates);
         assert!(!command.requires_stopped_canister);
+    }
+
+    // Ensure fleet verification previews call the declared method on the target root.
+    #[test]
+    fn apply_journal_command_preview_reports_fleet_verification_command() {
+        let journal = command_preview_journal(
+            RestoreApplyOperationKind::VerifyFleet,
+            Some("fleet-ready"),
+            Some("canic_fleet_ready"),
+        );
+        let preview = journal.next_command_preview();
+
+        assert!(preview.command_available);
+        let command = preview.command.expect("command preview");
+        assert_eq!(
+            command.args,
+            vec![
+                "canister".to_string(),
+                "call".to_string(),
+                ROOT.to_string(),
+                "canic_fleet_ready".to_string(),
+            ]
+        );
+        assert!(!command.mutates);
+        assert!(!command.requires_stopped_canister);
+        assert_eq!(command.note, "calls the declared fleet verification method");
     }
 
     // Ensure unsupported verification rows do not pretend to be runnable.

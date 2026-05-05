@@ -439,6 +439,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "canister_playground"
+version = "0.30.29"
+dependencies = [
+ "candid",
+ "canic",
+ "canic-reference-support",
+ "ic-cdk",
+]
+
+[[package]]
 name = "canister_root"
 version = "0.30.29"
 dependencies = [

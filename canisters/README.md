@@ -17,6 +17,7 @@ canonical store source from the resolved `canic` package automatically.
 - `user_hub/` + `user_shard/` – sharding placement plus delegated signing flow (hub does placement only; shard initiates delegation with root).
 - `scale_hub/` + `scale/` – scaling pool demo (spawn replica canisters under policy).
 - `minimal/` – minimal canister used as the shared runtime baseline canister.
+- `playground/` – manual local sandbox for temporary endpoint experiments; it uses `canic::start_local!()` so `dfx deploy playground` does not require hand-written CANIC init args, and it is not part of the reference release set or test fixtures.
 
 Internal correctness fixtures now live under `crates/canic-core/test-canisters/`, and internal audit probes now live under `crates/canic-core/audit-canisters/`. This keeps PocketIC and audit fixtures separate from the shipped demo topology.
 

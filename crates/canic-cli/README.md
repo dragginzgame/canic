@@ -135,10 +135,10 @@ booleans, plus a `verification_summary` with post-restore check counts,
 `verification_required`, and `all_members_have_checks`. A `readiness_summary`
 collapses those signals into a single `ready` flag and stable reason strings.
 Plans also include an `operation_summary` with planned snapshot loads, code
-reinstalls, verification checks, and phases, plus an `ordering_summary` and
-per-member ordering dependency metadata so dry-runs show when parent
-relationships are satisfied inside the same restore group or by an earlier
-group.
+reinstalls, verification checks, and phases, a `fleet_verification_checks` list
+for fleet-level checks, plus an `ordering_summary` and per-member ordering
+dependency metadata so dry-runs show when parent relationships are satisfied
+inside the same restore group or by an earlier group.
 
 Emit the initial restore execution status from a plan:
 
@@ -165,13 +165,14 @@ canic restore apply \
 ```
 
 Apply dry-run output expands the restore phases into ordered upload, load,
-reinstall, and member verification operations. When `--backup-dir` is supplied,
-the dry-run also verifies that referenced artifact paths stay under that backup
-directory, exist on disk, and match their expected SHA-256 checksums when the
-plan includes checksums. When `--journal-out` is supplied, the command also
-writes an initial apply journal with each operation marked `ready` or `blocked`
-and stable blocking reasons. The command requires `--dry-run`; real restore
-execution is intentionally not enabled yet.
+reinstall, member verification, and final `verify-fleet` operations. Fleet
+verification commands run after member work and target the restored fleet root.
+When `--backup-dir` is supplied, the dry-run also verifies that referenced
+artifact paths stay under that backup directory, exist on disk, and match their
+expected SHA-256 checksums when the plan includes checksums. When `--journal-out`
+is supplied, the command also writes an initial apply journal with each
+operation marked `ready` or `blocked` and stable blocking reasons. The command
+requires `--dry-run`; real restore execution is intentionally not enabled yet.
 
 Summarize a restore apply journal:
 
