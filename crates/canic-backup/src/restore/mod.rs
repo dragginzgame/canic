@@ -919,6 +919,7 @@ pub struct RestoreApplyJournalStatus {
     #[serde(default)]
     pub operation_counts: RestoreApplyOperationKindCounts,
     pub operation_counts_supplied: bool,
+    pub progress: RestoreApplyProgressSummary,
     pub pending_operations: usize,
     pub ready_operations: usize,
     pub blocked_operations: usize,
@@ -949,6 +950,7 @@ impl RestoreApplyJournalStatus {
             operation_count: journal.operation_count,
             operation_counts: RestoreApplyOperationKindCounts::from_operations(&journal.operations),
             operation_counts_supplied: journal.operation_counts_supplied(),
+            progress: RestoreApplyProgressSummary::from_journal(journal),
             pending_operations: journal.pending_operations,
             ready_operations: journal.ready_operations,
             blocked_operations: journal.blocked_operations,
@@ -986,6 +988,7 @@ pub struct RestoreApplyJournalReport {
     #[serde(default)]
     pub operation_counts: RestoreApplyOperationKindCounts,
     pub operation_counts_supplied: bool,
+    pub progress: RestoreApplyProgressSummary,
     pub pending_operations: usize,
     pub ready_operations: usize,
     pub blocked_operations: usize,
@@ -1019,6 +1022,7 @@ impl RestoreApplyJournalReport {
             operation_count: journal.operation_count,
             operation_counts: RestoreApplyOperationKindCounts::from_operations(&journal.operations),
             operation_counts_supplied: journal.operation_counts_supplied(),
+            progress: RestoreApplyProgressSummary::from_journal(journal),
             pending_operations: journal.pending_operations,
             ready_operations: journal.ready_operations,
             blocked_operations: journal.blocked_operations,
@@ -1032,6 +1036,53 @@ impl RestoreApplyJournalReport {
             blocked,
         }
     }
+}
+
+///
+/// RestoreApplyProgressSummary
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RestoreApplyProgressSummary {
+    pub operation_count: usize,
+    pub completed_operations: usize,
+    pub remaining_operations: usize,
+    pub transitionable_operations: usize,
+    pub attention_operations: usize,
+    pub completion_basis_points: usize,
+}
+
+impl RestoreApplyProgressSummary {
+    /// Build a compact progress summary from restore apply journal counters.
+    #[must_use]
+    pub const fn from_journal(journal: &RestoreApplyJournal) -> Self {
+        let remaining_operations = journal
+            .operation_count
+            .saturating_sub(journal.completed_operations);
+        let transitionable_operations = journal.ready_operations + journal.pending_operations;
+        let attention_operations =
+            journal.pending_operations + journal.blocked_operations + journal.failed_operations;
+        let completion_basis_points =
+            completion_basis_points(journal.completed_operations, journal.operation_count);
+
+        Self {
+            operation_count: journal.operation_count,
+            completed_operations: journal.completed_operations,
+            remaining_operations,
+            transitionable_operations,
+            attention_operations,
+            completion_basis_points,
+        }
+    }
+}
+
+// Return completion as basis points so JSON stays deterministic and integer-only.
+const fn completion_basis_points(completed_operations: usize, operation_count: usize) -> usize {
+    if operation_count == 0 {
+        return 0;
+    }
+
+    completed_operations.saturating_mul(10_000) / operation_count
 }
 
 ///
@@ -3516,6 +3567,13 @@ mod tests {
         assert_eq!(journal.operation_counts, status.operation_counts);
         assert_eq!(report.operation_counts, status.operation_counts);
         assert!(report.operation_counts_supplied);
+        assert_eq!(status.progress.operation_count, 8);
+        assert_eq!(status.progress.completed_operations, 0);
+        assert_eq!(status.progress.remaining_operations, 8);
+        assert_eq!(status.progress.transitionable_operations, 8);
+        assert_eq!(status.progress.attention_operations, 0);
+        assert_eq!(status.progress.completion_basis_points, 0);
+        assert_eq!(report.progress, status.progress);
         assert_eq!(status.ready_operations, 8);
         assert_eq!(status.next_ready_sequence, Some(0));
         assert_eq!(
@@ -4255,6 +4313,11 @@ mod tests {
         assert_eq!(journal.completed_operations, 1);
         assert_eq!(journal.ready_operations, 7);
         assert_eq!(status.next_ready_sequence, Some(1));
+        assert_eq!(status.progress.completed_operations, 1);
+        assert_eq!(status.progress.remaining_operations, 7);
+        assert_eq!(status.progress.transitionable_operations, 7);
+        assert_eq!(status.progress.attention_operations, 0);
+        assert_eq!(status.progress.completion_basis_points, 1250);
     }
 
     // Ensure journal transitions cannot skip earlier ready operations.

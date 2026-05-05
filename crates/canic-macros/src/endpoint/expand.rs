@@ -108,7 +108,6 @@ pub fn expand(kind: EndpointKind, args: ValidatedArgs, mut func: ItemFn) -> Toke
 
     let call_ident = format_ident!("__canic_call");
     let call_decl = call_decl(kind, &call_ident, &orig_name);
-    let payload_stage = payload_stage(kind, returns_fallible);
 
     let access_stage = access_stage(&access_plan, &call_ident);
 
@@ -134,7 +133,6 @@ pub fn expand(kind: EndpointKind, args: ValidatedArgs, mut func: ItemFn) -> Toke
         #cdk_attr
         #vis #wrapper_sig {
             #call_decl
-            #payload_stage
             #access_stage
             #dispatch_call
         }
@@ -237,18 +235,6 @@ fn call_decl(kind: EndpointKind, call: &syn::Ident, name: &syn::Ident) -> TokenS
             endpoint: ::canic::__internal::core::ids::EndpointId::new(stringify!(#name)),
             kind: #call_kind,
         };
-    }
-}
-
-fn payload_stage(kind: EndpointKind, returns_fallible: bool) -> TokenStream2 {
-    if !matches!(kind, EndpointKind::Update) || !returns_fallible {
-        return quote!();
-    }
-
-    quote! {
-        if let Err(err) = ::canic::__internal::core::ingress::payload::enforce_update_message() {
-            return Err(err.into());
-        }
     }
 }
 
@@ -720,35 +706,6 @@ mod tests {
         assert!(expanded.contains("register_update_limit"));
         assert!(expanded.contains("\"wire_ping\""));
         assert!(expanded.contains("64 * 1024"));
-    }
-
-    #[test]
-    fn update_expansion_enforces_payload_limit_for_fallible_endpoint() {
-        let args = make_args(Vec::new());
-        let func: ItemFn = syn::parse_quote!(
-            fn ping() -> Result<(), ::canic::Error> {
-                Ok(())
-            }
-        );
-
-        let expanded = expand(EndpointKind::Update, args, func).to_string();
-
-        assert!(expanded.contains("enforce_update_message"));
-        assert!(expanded.contains("return Err (err . into ())"));
-    }
-
-    #[test]
-    fn infallible_update_expansion_keeps_payload_enforcement_in_inspect_only() {
-        let mut args = make_args(Vec::new());
-        args.internal = true;
-        let func: ItemFn = syn::parse_quote!(
-            fn ping() {}
-        );
-
-        let expanded = expand(EndpointKind::Update, args, func).to_string();
-
-        assert!(expanded.contains("register_update_limit"));
-        assert!(!expanded.contains("enforce_update_message"));
     }
 
     #[test]

@@ -1,13 +1,6 @@
 //! Ingress payload limits registered by generated update endpoints.
 
-use crate::{
-    cdk,
-    dto::{
-        error::Error,
-        security::{SecurityEvent, SecurityEventReason},
-    },
-    ops::runtime::security::{SecurityEventInput, SecurityOps},
-};
+use crate::cdk;
 use std::sync::Mutex;
 
 pub const DEFAULT_UPDATE_INGRESS_MAX_BYTES: usize = 16 * 1024;
@@ -42,37 +35,15 @@ pub fn update_limit_for(method: &str) -> Result<Option<usize>, DuplicateUpdatePa
 
 /// Inspect the current ingress update and accept it only when within limit.
 pub fn inspect_update_message() {
-    match current_update_rejection(0) {
-        Ok(None) => cdk::api::accept_message(),
-        Ok(Some(event)) => emit_inspect_security_event(&event),
-        Err(DuplicateUpdatePayloadLimit) => emit_duplicate_limit_event(),
-    }
-}
+    let method = cdk::api::msg_method_name();
+    let payload_len = cdk::api::msg_arg_data().len();
+    let Ok(max_bytes) = update_limit_for(&method) else {
+        return;
+    };
+    let max_bytes = max_bytes.unwrap_or(DEFAULT_UPDATE_INGRESS_MAX_BYTES);
 
-/// Enforce the current update payload limit during replicated execution.
-pub fn enforce_update_message() -> Result<(), Error> {
-    match current_update_rejection(cdk::api::time() / 1_000_000_000) {
-        Ok(None) => Ok(()),
-        Ok(Some(event)) => {
-            if let Err(err) = SecurityOps::record(SecurityEventInput {
-                caller: event.caller,
-                endpoint: event.endpoint.clone(),
-                request_bytes: event.request_bytes,
-                max_bytes: event.max_bytes,
-                created_at: event.created_at,
-                reason: event.reason,
-            }) {
-                cdk::println!("security event stable write failed: {err}");
-            }
-
-            Err(Error::exhausted(format!(
-                "ingress payload for '{}' exceeded configured limit: {} > {} bytes",
-                event.endpoint, event.request_bytes, event.max_bytes
-            )))
-        }
-        Err(DuplicateUpdatePayloadLimit) => Err(Error::internal(
-            "duplicate update payload limit metadata; rejecting request",
-        )),
+    if payload_len <= max_bytes {
+        cdk::api::accept_message();
     }
 }
 
@@ -97,50 +68,6 @@ fn unique_limit_for(
     }
 
     Ok(found)
-}
-
-// Return a security event when the current update exceeds its configured limit.
-fn current_update_rejection(
-    created_at: u64,
-) -> Result<Option<SecurityEvent>, DuplicateUpdatePayloadLimit> {
-    let endpoint = cdk::api::msg_method_name();
-    let request_bytes = cdk::api::msg_arg_data().len();
-    let max_bytes = update_limit_for(&endpoint)?.unwrap_or(DEFAULT_UPDATE_INGRESS_MAX_BYTES);
-
-    if request_bytes <= max_bytes {
-        return Ok(None);
-    }
-
-    Ok(Some(SecurityEvent {
-        id: 0,
-        created_at,
-        caller: cdk::api::msg_caller(),
-        endpoint,
-        request_bytes: usize_to_u64(request_bytes),
-        max_bytes: usize_to_u64(max_bytes),
-        reason: SecurityEventReason::IngressPayloadLimitExceeded,
-    }))
-}
-
-// Emit an operator-visible line for pre-consensus rejects.
-fn emit_inspect_security_event(event: &SecurityEvent) {
-    cdk::println!(
-        "security ingress payload reject caller={} endpoint={} request_bytes={} max_bytes={}",
-        event.caller,
-        event.endpoint,
-        event.request_bytes,
-        event.max_bytes
-    );
-}
-
-// Emit an operator-visible line when generated endpoint metadata is invalid.
-fn emit_duplicate_limit_event() {
-    cdk::println!("security ingress payload reject duplicate update payload limit metadata");
-}
-
-// Convert platform sizes into stable DTO integers without truncating.
-fn usize_to_u64(value: usize) -> u64 {
-    u64::try_from(value).unwrap_or(u64::MAX)
 }
 
 #[cfg(test)]

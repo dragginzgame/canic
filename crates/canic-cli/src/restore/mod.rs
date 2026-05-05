@@ -662,6 +662,7 @@ pub struct RestoreRunResponse {
     operation_count: usize,
     operation_counts: RestoreApplyOperationKindCounts,
     operation_counts_supplied: bool,
+    progress: canic_backup::restore::RestoreApplyProgressSummary,
     pending_operations: usize,
     ready_operations: usize,
     blocked_operations: usize,
@@ -704,6 +705,7 @@ impl RestoreRunResponse {
             operation_count: report.operation_count,
             operation_counts: report.operation_counts,
             operation_counts_supplied: report.operation_counts_supplied,
+            progress: report.progress,
             pending_operations: report.pending_operations,
             ready_operations: report.ready_operations,
             blocked_operations: report.blocked_operations,
@@ -3001,6 +3003,12 @@ mod tests {
             2
         );
         assert_eq!(status_json["operation_counts_supplied"], true);
+        assert_eq!(status_json["progress"]["operation_count"], 8);
+        assert_eq!(status_json["progress"]["completed_operations"], 0);
+        assert_eq!(status_json["progress"]["remaining_operations"], 8);
+        assert_eq!(status_json["progress"]["transitionable_operations"], 8);
+        assert_eq!(status_json["progress"]["attention_operations"], 0);
+        assert_eq!(status_json["progress"]["completion_basis_points"], 0);
         assert_eq!(status_json["next_ready_sequence"], 0);
         assert_eq!(status_json["next_ready_operation"], "upload-snapshot");
     }
@@ -3191,6 +3199,12 @@ mod tests {
         assert_eq!(report.operation_counts.fleet_verifications, 0);
         assert_eq!(report.operation_counts.verification_operations, 2);
         assert!(report.operation_counts_supplied);
+        assert_eq!(report.progress.operation_count, 8);
+        assert_eq!(report.progress.completed_operations, 0);
+        assert_eq!(report.progress.remaining_operations, 8);
+        assert_eq!(report.progress.transitionable_operations, 7);
+        assert_eq!(report.progress.attention_operations, 2);
+        assert_eq!(report.progress.completion_basis_points, 0);
         assert_eq!(report.failed.len(), 1);
         assert_eq!(report.pending.len(), 1);
         assert_eq!(report.failed[0].sequence, 0);
@@ -3251,6 +3265,12 @@ mod tests {
         assert_eq!(dry_run["operation_counts"]["fleet_verifications"], 0);
         assert_eq!(dry_run["operation_counts"]["verification_operations"], 2);
         assert_eq!(dry_run["operation_counts_supplied"], true);
+        assert_eq!(dry_run["progress"]["operation_count"], 8);
+        assert_eq!(dry_run["progress"]["completed_operations"], 0);
+        assert_eq!(dry_run["progress"]["remaining_operations"], 8);
+        assert_eq!(dry_run["progress"]["transitionable_operations"], 8);
+        assert_eq!(dry_run["progress"]["attention_operations"], 0);
+        assert_eq!(dry_run["progress"]["completion_basis_points"], 0);
         assert_eq!(dry_run["stopped_reason"], "preview");
         assert_eq!(dry_run["next_action"], "rerun");
         assert_eq!(dry_run["operation_available"], true);

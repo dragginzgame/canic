@@ -124,20 +124,6 @@ macro_rules! canic_emit_log_observability_endpoints {
     };
 }
 
-// Leaf emitter for runtime security diagnostics shared by all Canic canisters.
-#[macro_export]
-macro_rules! canic_emit_security_observability_endpoints {
-    () => {
-        #[$crate::canic_query(requires(caller::is_controller()))]
-        async fn canic_security_log(
-            page: ::canic::dto::page::PageRequest,
-        ) -> Result<::canic::dto::page::Page<::canic::dto::security::SecurityEvent>, ::canic::Error>
-        {
-            Ok($crate::__internal::core::api::security::SecurityQuery::page(page))
-        }
-    };
-}
-
 // Bundle composer for shared observability and operator-facing diagnostics.
 #[macro_export]
 macro_rules! canic_bundle_observability_endpoints {
@@ -148,8 +134,6 @@ macro_rules! canic_bundle_observability_endpoints {
         $crate::canic_emit_env_observability_endpoints!();
         #[cfg(not(canic_disable_bundle_observability_log))]
         $crate::canic_emit_log_observability_endpoints!();
-        #[cfg(not(canic_disable_bundle_observability_security))]
-        $crate::canic_emit_security_observability_endpoints!();
     };
 }
 

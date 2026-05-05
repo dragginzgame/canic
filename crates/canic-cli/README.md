@@ -203,7 +203,8 @@ completion checks. Use `--require-complete` when scripts should fail until every
 apply operation is completed. Apply status output also includes
 `operation_counts`, broken down by snapshot uploads, snapshot loads, code
 reinstalls, member verifications, fleet verifications, and total verification
-operations.
+operations. The `progress` object reports total, completed, remaining,
+transitionable, attention-needed, and basis-point completion counts.
 
 Write an operator-focused restore apply report:
 
@@ -215,7 +216,7 @@ canic restore apply-report \
 ```
 
 Apply reports include one high-level outcome, attention-required status,
-operation counts, operation-kind counts, blocked reasons, the next
+operation counts, operation-kind counts, progress, blocked reasons, the next
 transitionable operation, and the pending, failed, and blocked operation rows
 that need review. Use
 `--require-no-attention` when CI should fail after writing the report if the
@@ -257,9 +258,10 @@ transition. `--max-steps` is useful for cautious incremental restores. Add
 summary and then fail if the journal is incomplete or still needs review.
 If a generated command fails, the runner still writes the summary and updated
 journal before returning a nonzero error.
-Every runner summary includes `run_mode`, `stopped_reason`, `next_action`, and
-operation-kind counts so automation can decide whether to rerun, inspect a
-failed operation, recover a pending operation, fix blocked inputs, or stop.
+Every runner summary includes `run_mode`, `stopped_reason`, `next_action`,
+progress, and operation-kind counts so automation can decide whether to rerun,
+inspect a failed operation, recover a pending operation, fix blocked inputs, or
+stop.
 Use `--require-run-mode <text>`, `--require-stopped-reason <text>`, and
 `--require-next-action <text>` when CI should write the summary and then fail
 unless the runner stopped in the expected state.
