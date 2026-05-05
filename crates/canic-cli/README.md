@@ -270,6 +270,8 @@ marks the operation completed or failed, and persists the journal after each
 transition. `--max-steps` is useful for cautious incremental restores. Add
 `--require-complete` or `--require-no-attention` when CI should write the run
 summary and then fail if the journal is incomplete or still needs review.
+`--max-steps` must be at least `1`; zero-length execute batches are rejected
+before the runner reads or mutates the journal.
 Use `--updated-at <text>` to stamp runner-owned pending, completed, failed, and
 recovered operation states with a comparable marker such as an RFC3339
 timestamp; otherwise the marker remains `unknown`. Runner summaries echo a
@@ -284,19 +286,30 @@ or runs that emit no receipts.
 If a generated command fails, the runner still writes the summary and updated
 journal before returning a nonzero error.
 Every runner summary includes `run_mode`, `stopped_reason`, `next_action`,
-progress, pending summary, operation receipts, and operation-kind counts so
-automation can decide whether to rerun, inspect a failed operation, recover a
-pending operation, fix blocked inputs, or stop. `operation_receipts` is the
-uniform audit stream for command completion, command failure, and pending
-recovery events, while `operation_receipt_summary` gives compact totals for
-completed commands, failed commands, and recovered pending work. Older
-compatibility fields such as `executed_operations` and `recovered_operation`
-remain available.
+progress, pending summary, batch summary, operation receipts, and
+operation-kind counts so automation can decide whether to rerun, inspect a
+failed operation, recover a pending operation, fix blocked inputs, or stop.
+`batch_summary` reports requested max steps, initial ready operations, initial
+remaining operations, executed operations, remaining ready operations, remaining
+total operations, ready-work delta, remaining-work delta, whether the run
+stopped because of the max-step limit, and completion state.
+`operation_receipts` is the uniform audit stream for command completion,
+command failure, and pending recovery events, while `operation_receipt_summary`
+gives compact totals for completed commands, failed commands, and recovered
+pending work. Older compatibility fields such as `executed_operations` and
+`recovered_operation` remain available.
 Use `--require-run-mode <text>`, `--require-stopped-reason <text>`, and
 `--require-next-action <text>` when CI should write the summary and then fail
 unless the runner stopped in the expected state.
 Use `--require-executed-count <n>` when a batched run must execute exactly the
 expected number of operations.
+Use `--require-batch-initial-ready-count <n>`,
+`--require-batch-executed-count <n>`,
+`--require-batch-remaining-ready-count <n>`,
+`--require-batch-ready-delta <n>`, `--require-batch-remaining-delta <n>`, and
+`--require-batch-stopped-by-max-steps true|false` when automation needs the
+runner to fail closed unless the batch started, changed, and stopped as
+expected.
 Use `--require-receipt-count <n>` when automation must see exactly the expected
 number of operation audit receipts, including execute and pending-recovery
 events.

@@ -111,6 +111,56 @@ pub enum RestoreCommandError {
     },
 
     #[error(
+        "restore run for backup {backup_id} has {actual} remaining ready operations, expected {expected}"
+    )]
+    RestoreRunBatchRemainingReadyCountMismatch {
+        backup_id: String,
+        expected: usize,
+        actual: usize,
+    },
+
+    #[error(
+        "restore run for backup {backup_id} started with {actual} ready operations, expected {expected}"
+    )]
+    RestoreRunBatchInitialReadyCountMismatch {
+        backup_id: String,
+        expected: usize,
+        actual: usize,
+    },
+
+    #[error(
+        "restore run for backup {backup_id} executed {actual} batch operations, expected {expected}"
+    )]
+    RestoreRunBatchExecutedCountMismatch {
+        backup_id: String,
+        expected: usize,
+        actual: usize,
+    },
+
+    #[error("restore run for backup {backup_id} has ready delta {actual}, expected {expected}")]
+    RestoreRunBatchReadyDeltaMismatch {
+        backup_id: String,
+        expected: isize,
+        actual: isize,
+    },
+
+    #[error("restore run for backup {backup_id} has remaining delta {actual}, expected {expected}")]
+    RestoreRunBatchRemainingDeltaMismatch {
+        backup_id: String,
+        expected: isize,
+        actual: isize,
+    },
+
+    #[error(
+        "restore run for backup {backup_id} stopped_by_max_steps={actual}, expected {expected}"
+    )]
+    RestoreRunBatchStoppedByMaxStepsMismatch {
+        backup_id: String,
+        expected: bool,
+        actual: bool,
+    },
+
+    #[error(
         "restore run for backup {backup_id} reported requested_state_updated_at={actual:?}, expected {expected}"
     )]
     RestoreRunStateUpdatedAtMismatch {
@@ -225,6 +275,15 @@ pub enum RestoreCommandError {
 
     #[error("option --sequence requires a non-negative integer value")]
     InvalidSequence,
+
+    #[error("option {option} requires a positive integer value")]
+    InvalidPositiveInteger { option: &'static str },
+
+    #[error("option {option} requires an integer value")]
+    InvalidInteger { option: &'static str },
+
+    #[error("option {option} requires true or false, got {value}")]
+    InvalidBoolean { option: &'static str, value: String },
 
     #[error("unsupported apply-mark state {0}; use completed or failed")]
     InvalidApplyMarkState(String),
@@ -612,6 +671,12 @@ pub struct RestoreRunOptions {
     pub require_recovered_receipt_count: Option<usize>,
     pub require_receipt_updated_at: Option<String>,
     pub require_state_updated_at: Option<String>,
+    pub require_batch_initial_ready_count: Option<usize>,
+    pub require_batch_executed_count: Option<usize>,
+    pub require_batch_remaining_ready_count: Option<usize>,
+    pub require_batch_ready_delta: Option<isize>,
+    pub require_batch_remaining_delta: Option<isize>,
+    pub require_batch_stopped_by_max_steps: Option<bool>,
     pub require_remaining_count: Option<usize>,
     pub require_attention_count: Option<usize>,
     pub require_completion_basis_points: Option<usize>,
@@ -649,6 +714,12 @@ impl RestoreRunOptions {
         let mut require_recovered_receipt_count = None;
         let mut require_receipt_updated_at = None;
         let mut require_state_updated_at = None;
+        let mut require_batch_initial_ready_count = None;
+        let mut require_batch_executed_count = None;
+        let mut require_batch_remaining_ready_count = None;
+        let mut require_batch_ready_delta = None;
+        let mut require_batch_remaining_delta = None;
+        let mut require_batch_stopped_by_max_steps = None;
         let mut require_remaining_count = None;
         let mut require_attention_count = None;
         let mut require_completion_basis_points = None;
@@ -702,7 +773,10 @@ impl RestoreRunOptions {
                 "--execute" => execute = true,
                 "--unclaim-pending" => unclaim_pending = true,
                 "--max-steps" => {
-                    max_steps = Some(parse_sequence(next_value(&mut args, "--max-steps")?)?);
+                    max_steps = Some(parse_positive_integer(
+                        "--max-steps",
+                        next_value(&mut args, "--max-steps")?,
+                    )?);
                 }
                 "--updated-at" => updated_at = Some(next_value(&mut args, "--updated-at")?),
                 "--require-complete" => require_complete = true,
@@ -724,6 +798,42 @@ impl RestoreRunOptions {
                 "--require-state-updated-at" => {
                     require_state_updated_at =
                         Some(next_value(&mut args, "--require-state-updated-at")?);
+                }
+                "--require-batch-initial-ready-count" => {
+                    require_batch_initial_ready_count = Some(parse_sequence(next_value(
+                        &mut args,
+                        "--require-batch-initial-ready-count",
+                    )?)?);
+                }
+                "--require-batch-executed-count" => {
+                    require_batch_executed_count = Some(parse_sequence(next_value(
+                        &mut args,
+                        "--require-batch-executed-count",
+                    )?)?);
+                }
+                "--require-batch-remaining-ready-count" => {
+                    require_batch_remaining_ready_count = Some(parse_sequence(next_value(
+                        &mut args,
+                        "--require-batch-remaining-ready-count",
+                    )?)?);
+                }
+                "--require-batch-ready-delta" => {
+                    require_batch_ready_delta = Some(parse_integer(
+                        "--require-batch-ready-delta",
+                        next_value(&mut args, "--require-batch-ready-delta")?,
+                    )?);
+                }
+                "--require-batch-remaining-delta" => {
+                    require_batch_remaining_delta = Some(parse_integer(
+                        "--require-batch-remaining-delta",
+                        next_value(&mut args, "--require-batch-remaining-delta")?,
+                    )?);
+                }
+                "--require-batch-stopped-by-max-steps" => {
+                    require_batch_stopped_by_max_steps = Some(parse_bool(
+                        "--require-batch-stopped-by-max-steps",
+                        next_value(&mut args, "--require-batch-stopped-by-max-steps")?,
+                    )?);
                 }
                 "--help" | "-h" => return Err(RestoreCommandError::Usage(usage())),
                 _ => return Err(RestoreCommandError::UnknownOption(arg)),
@@ -754,6 +864,12 @@ impl RestoreRunOptions {
             require_recovered_receipt_count,
             require_receipt_updated_at,
             require_state_updated_at,
+            require_batch_initial_ready_count,
+            require_batch_executed_count,
+            require_batch_remaining_ready_count,
+            require_batch_ready_delta,
+            require_batch_remaining_delta,
+            require_batch_stopped_by_max_steps,
             require_remaining_count,
             require_attention_count,
             require_completion_basis_points,
@@ -863,6 +979,7 @@ pub struct RestoreRunResponse {
     executed_operation_count: Option<usize>,
     #[serde(skip_serializing_if = "Option::is_none")]
     recovered_operation: Option<RestoreApplyJournalOperation>,
+    batch_summary: RestoreRunBatchSummary,
     ready: bool,
     complete: bool,
     attention_required: bool,
@@ -911,6 +1028,18 @@ impl RestoreRunResponse {
             operation_receipt_summary: RestoreRunReceiptSummary::default(),
             executed_operation_count: None,
             recovered_operation: None,
+            batch_summary: RestoreRunBatchSummary::from_counts(
+                RestoreRunBatchStart::new(
+                    None,
+                    report.ready_operations,
+                    report.progress.remaining_operations,
+                ),
+                0,
+                report.ready_operations,
+                report.progress.remaining_operations,
+                false,
+                report.complete,
+            ),
             ready: report.ready,
             complete: report.complete,
             attention_required: report.attention_required,
@@ -943,6 +1072,94 @@ impl RestoreRunResponse {
     // Echo the caller-provided state marker for receipt-free runner summaries.
     fn set_requested_state_updated_at(&mut self, updated_at: Option<&String>) {
         self.requested_state_updated_at = updated_at.cloned();
+    }
+
+    // Refresh batch counters after a dry-run, recovery, or execute pass.
+    const fn set_batch_summary(
+        &mut self,
+        batch_start: RestoreRunBatchStart,
+        executed_operations: usize,
+        stopped_by_max_steps: bool,
+    ) {
+        self.batch_summary = RestoreRunBatchSummary::from_counts(
+            batch_start,
+            executed_operations,
+            self.ready_operations,
+            self.progress.remaining_operations,
+            stopped_by_max_steps,
+            self.complete,
+        );
+    }
+}
+
+///
+/// RestoreRunBatchStart
+///
+
+#[derive(Clone, Copy, Debug)]
+struct RestoreRunBatchStart {
+    requested_max_steps: Option<usize>,
+    initial_ready_operations: usize,
+    initial_remaining_operations: usize,
+}
+
+impl RestoreRunBatchStart {
+    // Capture the runner counters observed before a dry-run, recovery, or execute pass.
+    const fn new(
+        requested_max_steps: Option<usize>,
+        initial_ready_operations: usize,
+        initial_remaining_operations: usize,
+    ) -> Self {
+        Self {
+            requested_max_steps,
+            initial_ready_operations,
+            initial_remaining_operations,
+        }
+    }
+}
+
+///
+/// RestoreRunBatchSummary
+///
+
+#[derive(Clone, Debug, Serialize)]
+struct RestoreRunBatchSummary {
+    requested_max_steps: Option<usize>,
+    initial_ready_operations: usize,
+    initial_remaining_operations: usize,
+    executed_operations: usize,
+    remaining_ready_operations: usize,
+    remaining_operations: usize,
+    ready_operations_delta: isize,
+    remaining_operations_delta: isize,
+    stopped_by_max_steps: bool,
+    complete: bool,
+}
+
+impl RestoreRunBatchSummary {
+    // Build the compact batch counters shown in every native runner response.
+    const fn from_counts(
+        batch_start: RestoreRunBatchStart,
+        executed_operations: usize,
+        remaining_ready_operations: usize,
+        remaining_operations: usize,
+        stopped_by_max_steps: bool,
+        complete: bool,
+    ) -> Self {
+        Self {
+            requested_max_steps: batch_start.requested_max_steps,
+            initial_ready_operations: batch_start.initial_ready_operations,
+            initial_remaining_operations: batch_start.initial_remaining_operations,
+            executed_operations,
+            remaining_ready_operations,
+            remaining_operations,
+            ready_operations_delta: remaining_ready_operations.cast_signed()
+                - batch_start.initial_ready_operations.cast_signed(),
+            remaining_operations_delta: remaining_operations.cast_signed()
+                - batch_start.initial_remaining_operations.cast_signed(),
+            stopped_by_max_steps,
+            complete,
+        }
     }
 }
 
@@ -1620,6 +1837,8 @@ pub fn restore_run_dry_run(
 ) -> Result<RestoreRunResponse, RestoreCommandError> {
     let journal = read_apply_journal(&options.journal)?;
     let report = journal.report();
+    let initial_ready_operations = report.ready_operations;
+    let initial_remaining_operations = report.progress.remaining_operations;
     let preview = journal.next_command_preview_with_config(&restore_run_command_config(options));
     let stopped_reason = restore_run_stopped_reason(&report, false, false);
     let next_action = restore_run_next_action(&report, false);
@@ -1630,6 +1849,15 @@ pub fn restore_run_dry_run(
         RestoreRunResponseMode::dry_run(stopped_reason, next_action),
     );
     response.set_requested_state_updated_at(options.updated_at.as_ref());
+    response.set_batch_summary(
+        RestoreRunBatchStart::new(
+            options.max_steps,
+            initial_ready_operations,
+            initial_remaining_operations,
+        ),
+        0,
+        false,
+    );
     response.operation_available = Some(preview.operation_available);
     response.command_available = Some(preview.command_available);
     response.command = preview.command;
@@ -1641,6 +1869,9 @@ pub fn restore_run_unclaim_pending(
     options: &RestoreRunOptions,
 ) -> Result<RestoreRunResponse, RestoreCommandError> {
     let mut journal = read_apply_journal(&options.journal)?;
+    let initial_report = journal.report();
+    let initial_ready_operations = initial_report.ready_operations;
+    let initial_remaining_operations = initial_report.progress.remaining_operations;
     let recovered_operation = journal
         .next_transition_operation()
         .filter(|operation| operation.state == RestoreApplyOperationState::Pending)
@@ -1659,6 +1890,15 @@ pub fn restore_run_unclaim_pending(
         RestoreRunResponseMode::unclaim_pending(next_action),
     );
     response.set_requested_state_updated_at(options.updated_at.as_ref());
+    response.set_batch_summary(
+        RestoreRunBatchStart::new(
+            options.max_steps,
+            initial_ready_operations,
+            initial_remaining_operations,
+        ),
+        0,
+        false,
+    );
     response.set_operation_receipts(vec![RestoreRunOperationReceipt::recovered_pending(
         recovered_operation.clone(),
         Some(recovered_updated_at),
@@ -1684,6 +1924,12 @@ fn restore_run_execute_result(
     options: &RestoreRunOptions,
 ) -> Result<RestoreRunResult, RestoreCommandError> {
     let mut journal = read_apply_journal(&options.journal)?;
+    let initial_report = journal.report();
+    let batch_start = RestoreRunBatchStart::new(
+        options.max_steps,
+        initial_report.ready_operations,
+        initial_report.progress.remaining_operations,
+    );
     let mut executed_operations = Vec::new();
     let mut operation_receipts = Vec::new();
     let config = restore_run_command_config(options);
@@ -1699,6 +1945,7 @@ fn restore_run_execute_result(
                 operation_receipts,
                 max_steps_reached,
                 options.updated_at.as_ref(),
+                batch_start,
             )));
         }
 
@@ -1769,6 +2016,7 @@ fn restore_run_execute_result(
             operation_receipts,
             false,
             options.updated_at.as_ref(),
+            batch_start,
         );
         return Ok(RestoreRunResult {
             response,
@@ -1814,6 +2062,7 @@ fn restore_run_execute_summary(
     operation_receipts: Vec<RestoreRunOperationReceipt>,
     max_steps_reached: bool,
     requested_state_updated_at: Option<&String>,
+    batch_start: RestoreRunBatchStart,
 ) -> RestoreRunResponse {
     let report = journal.report();
     let executed_operation_count = executed_operations.len();
@@ -1826,6 +2075,7 @@ fn restore_run_execute_summary(
         RestoreRunResponseMode::execute(stopped_reason, next_action),
     );
     response.set_requested_state_updated_at(requested_state_updated_at);
+    response.set_batch_summary(batch_start, executed_operation_count, max_steps_reached);
     response.max_steps_reached = Some(max_steps_reached);
     response.executed_operation_count = Some(executed_operation_count);
     response.executed_operations = executed_operations;
@@ -2006,6 +2256,7 @@ fn enforce_restore_run_requirements(
     }
 
     enforce_restore_run_receipt_requirements(options, run)?;
+    enforce_restore_run_batch_requirements(options, run)?;
 
     enforce_progress_requirements(
         &run.backup_id,
@@ -2019,6 +2270,86 @@ fn enforce_restore_run_requirements(
         &run.pending_summary,
         options.require_no_pending_before.as_deref(),
     )?;
+
+    Ok(())
+}
+
+// Enforce caller-requested native runner batch requirements.
+fn enforce_restore_run_batch_requirements(
+    options: &RestoreRunOptions,
+    run: &RestoreRunResponse,
+) -> Result<(), RestoreCommandError> {
+    if let Some(expected) = options.require_batch_initial_ready_count {
+        let actual = run.batch_summary.initial_ready_operations;
+        if actual != expected {
+            return Err(
+                RestoreCommandError::RestoreRunBatchInitialReadyCountMismatch {
+                    backup_id: run.backup_id.clone(),
+                    expected,
+                    actual,
+                },
+            );
+        }
+    }
+
+    if let Some(expected) = options.require_batch_executed_count {
+        let actual = run.batch_summary.executed_operations;
+        if actual != expected {
+            return Err(RestoreCommandError::RestoreRunBatchExecutedCountMismatch {
+                backup_id: run.backup_id.clone(),
+                expected,
+                actual,
+            });
+        }
+    }
+
+    if let Some(expected) = options.require_batch_remaining_ready_count {
+        let actual = run.batch_summary.remaining_ready_operations;
+        if actual != expected {
+            return Err(
+                RestoreCommandError::RestoreRunBatchRemainingReadyCountMismatch {
+                    backup_id: run.backup_id.clone(),
+                    expected,
+                    actual,
+                },
+            );
+        }
+    }
+
+    if let Some(expected) = options.require_batch_ready_delta {
+        let actual = run.batch_summary.ready_operations_delta;
+        if actual != expected {
+            return Err(RestoreCommandError::RestoreRunBatchReadyDeltaMismatch {
+                backup_id: run.backup_id.clone(),
+                expected,
+                actual,
+            });
+        }
+    }
+
+    if let Some(expected) = options.require_batch_remaining_delta {
+        let actual = run.batch_summary.remaining_operations_delta;
+        if actual != expected {
+            return Err(RestoreCommandError::RestoreRunBatchRemainingDeltaMismatch {
+                backup_id: run.backup_id.clone(),
+                expected,
+                actual,
+            });
+        }
+    }
+
+    if let Some(expected) = options.require_batch_stopped_by_max_steps {
+        let actual = run.batch_summary.stopped_by_max_steps;
+        if actual != expected {
+            return Err(
+                RestoreCommandError::RestoreRunBatchStoppedByMaxStepsMismatch {
+                    backup_id: run.backup_id.clone(),
+                    expected,
+                    actual,
+                },
+            );
+        }
+    }
 
     Ok(())
 }
@@ -2651,6 +2982,35 @@ fn parse_sequence(value: String) -> Result<usize, RestoreCommandError> {
         .map_err(|_| RestoreCommandError::InvalidSequence)
 }
 
+// Parse a signed integer CLI value.
+fn parse_integer(option: &'static str, value: String) -> Result<isize, RestoreCommandError> {
+    value
+        .parse::<isize>()
+        .map_err(|_| RestoreCommandError::InvalidInteger { option })
+}
+
+// Parse a positive integer CLI value for options where zero is not meaningful.
+fn parse_positive_integer(
+    option: &'static str,
+    value: String,
+) -> Result<usize, RestoreCommandError> {
+    let parsed = parse_sequence(value)?;
+    if parsed == 0 {
+        return Err(RestoreCommandError::InvalidPositiveInteger { option });
+    }
+
+    Ok(parsed)
+}
+
+// Parse a true/false CLI value for fail-closed requirements.
+fn parse_bool(option: &'static str, value: String) -> Result<bool, RestoreCommandError> {
+    match value.as_str() {
+        "true" => Ok(true),
+        "false" => Ok(false),
+        _ => Err(RestoreCommandError::InvalidBoolean { option, value }),
+    }
+}
+
 // Return the caller-supplied journal update marker or the current placeholder.
 fn state_updated_at(updated_at: Option<&String>) -> String {
     updated_at.cloned().unwrap_or_else(timestamp_placeholder)
@@ -2893,7 +3253,7 @@ where
 
 // Return restore command usage text.
 const fn usage() -> &'static str {
-    "usage: canic restore plan (--manifest <file> | --backup-dir <dir>) [--mapping <file>] [--out <file>] [--require-verified] [--require-restore-ready]\n       canic restore status --plan <file> [--out <file>]\n       canic restore apply --plan <file> [--status <file>] [--backup-dir <dir>] --dry-run [--out <file>] [--journal-out <file>]\n       canic restore apply-status --journal <file> [--out <file>] [--require-ready] [--require-no-pending] [--require-no-failed] [--require-complete] [--require-remaining-count <n>] [--require-attention-count <n>] [--require-completion-basis-points <n>] [--require-no-pending-before <text>]\n       canic restore apply-report --journal <file> [--out <file>] [--require-no-attention] [--require-remaining-count <n>] [--require-attention-count <n>] [--require-completion-basis-points <n>] [--require-no-pending-before <text>]\n       canic restore run --journal <file> (--dry-run | --execute | --unclaim-pending) [--dfx <path>] [--network <name>] [--max-steps <n>] [--updated-at <text>] [--out <file>] [--require-complete] [--require-no-attention] [--require-run-mode <text>] [--require-stopped-reason <text>] [--require-next-action <text>] [--require-executed-count <n>] [--require-receipt-count <n>] [--require-completed-receipt-count <n>] [--require-failed-receipt-count <n>] [--require-recovered-receipt-count <n>] [--require-receipt-updated-at <text>] [--require-state-updated-at <text>] [--require-remaining-count <n>] [--require-attention-count <n>] [--require-completion-basis-points <n>] [--require-no-pending-before <text>]\n       canic restore apply-next --journal <file> [--out <file>]\n       canic restore apply-command --journal <file> [--dfx <path>] [--network <name>] [--out <file>] [--require-command]\n       canic restore apply-claim --journal <file> [--sequence <n>] [--updated-at <text>] [--out <file>]\n       canic restore apply-unclaim --journal <file> [--sequence <n>] [--updated-at <text>] [--out <file>]\n       canic restore apply-mark --journal <file> --sequence <n> --state completed|failed [--reason <text>] [--updated-at <text>] [--out <file>] [--require-pending]"
+    "usage: canic restore plan (--manifest <file> | --backup-dir <dir>) [--mapping <file>] [--out <file>] [--require-verified] [--require-restore-ready]\n       canic restore status --plan <file> [--out <file>]\n       canic restore apply --plan <file> [--status <file>] [--backup-dir <dir>] --dry-run [--out <file>] [--journal-out <file>]\n       canic restore apply-status --journal <file> [--out <file>] [--require-ready] [--require-no-pending] [--require-no-failed] [--require-complete] [--require-remaining-count <n>] [--require-attention-count <n>] [--require-completion-basis-points <n>] [--require-no-pending-before <text>]\n       canic restore apply-report --journal <file> [--out <file>] [--require-no-attention] [--require-remaining-count <n>] [--require-attention-count <n>] [--require-completion-basis-points <n>] [--require-no-pending-before <text>]\n       canic restore run --journal <file> (--dry-run | --execute | --unclaim-pending) [--dfx <path>] [--network <name>] [--max-steps <n>] [--updated-at <text>] [--out <file>] [--require-complete] [--require-no-attention] [--require-run-mode <text>] [--require-stopped-reason <text>] [--require-next-action <text>] [--require-executed-count <n>] [--require-receipt-count <n>] [--require-completed-receipt-count <n>] [--require-failed-receipt-count <n>] [--require-recovered-receipt-count <n>] [--require-receipt-updated-at <text>] [--require-state-updated-at <text>] [--require-batch-initial-ready-count <n>] [--require-batch-executed-count <n>] [--require-batch-remaining-ready-count <n>] [--require-batch-ready-delta <n>] [--require-batch-remaining-delta <n>] [--require-batch-stopped-by-max-steps true|false] [--require-remaining-count <n>] [--require-attention-count <n>] [--require-completion-basis-points <n>] [--require-no-pending-before <text>]\n       canic restore apply-next --journal <file> [--out <file>]\n       canic restore apply-command --journal <file> [--dfx <path>] [--network <name>] [--out <file>] [--require-command]\n       canic restore apply-claim --journal <file> [--sequence <n>] [--updated-at <text>] [--out <file>]\n       canic restore apply-unclaim --journal <file> [--sequence <n>] [--updated-at <text>] [--out <file>]\n       canic restore apply-mark --journal <file> --sequence <n> --state completed|failed [--reason <text>] [--updated-at <text>] [--out <file>] [--require-pending]"
 }
 
 #[cfg(test)]
@@ -2998,6 +3358,30 @@ mod tests {
         fn drop(&mut self) {
             let _ = fs::remove_dir_all(&self.root);
         }
+    }
+
+    // Assert the compact runner batch summary without repeating JSON field walks.
+    fn assert_batch_summary(summary: &serde_json::Value, expected: serde_json::Value) {
+        assert_eq!(summary, &expected);
+    }
+
+    // Assert the batch summary for one successful max-step-limited execute pass.
+    fn assert_completed_execute_batch_summary(run_summary: &serde_json::Value) {
+        assert_batch_summary(
+            &run_summary["batch_summary"],
+            json!({
+                "requested_max_steps": 1,
+                "initial_ready_operations": 8,
+                "initial_remaining_operations": 8,
+                "executed_operations": 1,
+                "remaining_ready_operations": 7,
+                "remaining_operations": 7,
+                "ready_operations_delta": -1,
+                "remaining_operations_delta": -1,
+                "stopped_by_max_steps": true,
+                "complete": false,
+            }),
+        );
     }
 
     // Ensure restore plan options parse the intended no-mutation command.
@@ -3202,6 +3586,18 @@ mod tests {
             OsString::from("2026-05-05T12:03:00Z"),
             OsString::from("--require-state-updated-at"),
             OsString::from("2026-05-05T12:03:00Z"),
+            OsString::from("--require-batch-initial-ready-count"),
+            OsString::from("8"),
+            OsString::from("--require-batch-executed-count"),
+            OsString::from("0"),
+            OsString::from("--require-batch-remaining-ready-count"),
+            OsString::from("8"),
+            OsString::from("--require-batch-ready-delta"),
+            OsString::from("0"),
+            OsString::from("--require-batch-remaining-delta"),
+            OsString::from("0"),
+            OsString::from("--require-batch-stopped-by-max-steps"),
+            OsString::from("false"),
             OsString::from("--require-remaining-count"),
             OsString::from("8"),
             OsString::from("--require-attention-count"),
@@ -3240,6 +3636,12 @@ mod tests {
             options.require_state_updated_at.as_deref(),
             Some("2026-05-05T12:03:00Z")
         );
+        assert_eq!(options.require_batch_initial_ready_count, Some(8));
+        assert_eq!(options.require_batch_executed_count, Some(0));
+        assert_eq!(options.require_batch_remaining_ready_count, Some(8));
+        assert_eq!(options.require_batch_ready_delta, Some(0));
+        assert_eq!(options.require_batch_remaining_delta, Some(0));
+        assert_eq!(options.require_batch_stopped_by_max_steps, Some(false));
         assert_eq!(options.require_remaining_count, Some(8));
         assert_eq!(options.require_attention_count, Some(0));
         assert_eq!(options.require_completion_basis_points, Some(0));
@@ -3284,6 +3686,12 @@ mod tests {
         assert_eq!(options.require_recovered_receipt_count, None);
         assert_eq!(options.require_receipt_updated_at, None);
         assert_eq!(options.require_state_updated_at, None);
+        assert_eq!(options.require_batch_initial_ready_count, None);
+        assert_eq!(options.require_batch_executed_count, None);
+        assert_eq!(options.require_batch_remaining_ready_count, None);
+        assert_eq!(options.require_batch_ready_delta, None);
+        assert_eq!(options.require_batch_remaining_delta, None);
+        assert_eq!(options.require_batch_stopped_by_max_steps, None);
     }
 
     // Ensure restore run options parse the native pending-operation recovery mode.
@@ -3465,6 +3873,67 @@ mod tests {
         assert!(matches!(
             err,
             RestoreCommandError::RestoreRunConflictingModes
+        ));
+    }
+
+    // Ensure restore run rejects zero-length execute batches.
+    #[test]
+    fn restore_run_rejects_zero_max_steps() {
+        let err = RestoreRunOptions::parse([
+            OsString::from("--journal"),
+            OsString::from("restore-apply-journal.json"),
+            OsString::from("--execute"),
+            OsString::from("--max-steps"),
+            OsString::from("0"),
+        ])
+        .expect_err("restore run should reject zero max steps");
+
+        assert!(matches!(
+            err,
+            RestoreCommandError::InvalidPositiveInteger {
+                option: "--max-steps"
+            }
+        ));
+    }
+
+    // Ensure restore run rejects non-boolean batch gate values.
+    #[test]
+    fn restore_run_rejects_invalid_batch_bool() {
+        let err = RestoreRunOptions::parse([
+            OsString::from("--journal"),
+            OsString::from("restore-apply-journal.json"),
+            OsString::from("--dry-run"),
+            OsString::from("--require-batch-stopped-by-max-steps"),
+            OsString::from("maybe"),
+        ])
+        .expect_err("restore run should reject invalid boolean gates");
+
+        assert!(matches!(
+            err,
+            RestoreCommandError::InvalidBoolean {
+                option: "--require-batch-stopped-by-max-steps",
+                value,
+            } if value == "maybe"
+        ));
+    }
+
+    // Ensure restore run rejects non-integer batch delta gates.
+    #[test]
+    fn restore_run_rejects_invalid_batch_delta() {
+        let err = RestoreRunOptions::parse([
+            OsString::from("--journal"),
+            OsString::from("restore-apply-journal.json"),
+            OsString::from("--dry-run"),
+            OsString::from("--require-batch-ready-delta"),
+            OsString::from("not-an-int"),
+        ])
+        .expect_err("restore run should reject invalid signed integer gates");
+
+        assert!(matches!(
+            err,
+            RestoreCommandError::InvalidInteger {
+                option: "--require-batch-ready-delta"
+            }
         ));
     }
 
@@ -4324,6 +4793,21 @@ mod tests {
         assert_eq!(dry_run["operation_receipt_summary"]["command_completed"], 0);
         assert_eq!(dry_run["operation_receipt_summary"]["command_failed"], 0);
         assert_eq!(dry_run["operation_receipt_summary"]["pending_recovered"], 0);
+        assert_batch_summary(
+            &dry_run["batch_summary"],
+            json!({
+                "requested_max_steps": null,
+                "initial_ready_operations": 8,
+                "initial_remaining_operations": 8,
+                "executed_operations": 0,
+                "remaining_ready_operations": 8,
+                "remaining_operations": 8,
+                "ready_operations_delta": 0,
+                "remaining_operations_delta": 0,
+                "stopped_by_max_steps": false,
+                "complete": false,
+            }),
+        );
         assert_eq!(dry_run["stopped_reason"], "preview");
         assert_eq!(dry_run["next_action"], "rerun");
         assert_eq!(dry_run["operation_available"], true);
@@ -4398,6 +4882,21 @@ mod tests {
         assert_eq!(
             run_summary["operation_receipt_summary"]["total_receipts"],
             1
+        );
+        assert_batch_summary(
+            &run_summary["batch_summary"],
+            json!({
+                "requested_max_steps": null,
+                "initial_ready_operations": 7,
+                "initial_remaining_operations": 8,
+                "executed_operations": 0,
+                "remaining_ready_operations": 8,
+                "remaining_operations": 8,
+                "ready_operations_delta": 1,
+                "remaining_operations_delta": 0,
+                "stopped_by_max_steps": false,
+                "complete": false,
+            }),
         );
         assert_eq!(
             run_summary["operation_receipt_summary"]["command_completed"],
@@ -4488,6 +4987,7 @@ mod tests {
             "2026-05-05T12:03:00Z"
         );
         assert_eq!(run_summary["executed_operation_count"], 1);
+        assert_completed_execute_batch_summary(&run_summary);
         assert_eq!(run_summary["operation_receipt_count"], 1);
         assert_eq!(
             run_summary["operation_receipt_summary"]["total_receipts"],
@@ -4991,6 +5491,234 @@ mod tests {
                 ..
             } if expected == "2026-05-05T12:04:00Z"
                 && actual == "2026-05-05T12:03:00Z"
+        ));
+    }
+
+    // Ensure restore run can fail closed on unexpected remaining ready work.
+    #[test]
+    fn run_restore_run_require_batch_remaining_ready_count_writes_summary_then_fails() {
+        let fixture = RestoreCliFixture::new(
+            "canic-cli-restore-run-require-batch-ready-count",
+            "restore-run.json",
+        );
+        let journal = ready_apply_journal();
+        fixture.write_journal(&journal);
+
+        let err = fixture
+            .run_restore_run(&[
+                "--execute",
+                "--dfx",
+                "/bin/true",
+                "--max-steps",
+                "1",
+                "--require-batch-remaining-ready-count",
+                "8",
+            ])
+            .expect_err("batch remaining ready count mismatch should fail requirement");
+
+        let run_summary: serde_json::Value = fixture.read_out("read run summary");
+
+        assert_eq!(run_summary["batch_summary"]["initial_ready_operations"], 8);
+        assert_eq!(run_summary["batch_summary"]["executed_operations"], 1);
+        assert_eq!(
+            run_summary["batch_summary"]["remaining_ready_operations"],
+            7
+        );
+        assert!(matches!(
+            err,
+            RestoreCommandError::RestoreRunBatchRemainingReadyCountMismatch {
+                expected: 8,
+                actual: 7,
+                ..
+            }
+        ));
+    }
+
+    // Ensure restore run can fail closed on an unexpected batch starting point.
+    #[test]
+    fn run_restore_run_require_batch_initial_ready_count_writes_summary_then_fails() {
+        let fixture = RestoreCliFixture::new(
+            "canic-cli-restore-run-require-batch-initial-ready-count",
+            "restore-run.json",
+        );
+        let journal = ready_apply_journal();
+        fixture.write_journal(&journal);
+
+        let err = fixture
+            .run_restore_run(&[
+                "--execute",
+                "--dfx",
+                "/bin/true",
+                "--max-steps",
+                "1",
+                "--require-batch-initial-ready-count",
+                "7",
+            ])
+            .expect_err("batch initial ready count mismatch should fail requirement");
+
+        let run_summary: serde_json::Value = fixture.read_out("read run summary");
+
+        assert_eq!(run_summary["batch_summary"]["initial_ready_operations"], 8);
+        assert_eq!(
+            run_summary["batch_summary"]["remaining_ready_operations"],
+            7
+        );
+        assert!(matches!(
+            err,
+            RestoreCommandError::RestoreRunBatchInitialReadyCountMismatch {
+                expected: 7,
+                actual: 8,
+                ..
+            }
+        ));
+    }
+
+    // Ensure restore run can fail closed on unexpected batch execution volume.
+    #[test]
+    fn run_restore_run_require_batch_executed_count_writes_summary_then_fails() {
+        let fixture = RestoreCliFixture::new(
+            "canic-cli-restore-run-require-batch-executed-count",
+            "restore-run.json",
+        );
+        let journal = ready_apply_journal();
+        fixture.write_journal(&journal);
+
+        let err = fixture
+            .run_restore_run(&[
+                "--execute",
+                "--dfx",
+                "/bin/true",
+                "--max-steps",
+                "1",
+                "--require-batch-executed-count",
+                "2",
+            ])
+            .expect_err("batch executed count mismatch should fail requirement");
+
+        let run_summary: serde_json::Value = fixture.read_out("read run summary");
+
+        assert_eq!(run_summary["batch_summary"]["executed_operations"], 1);
+        assert_eq!(run_summary["batch_summary"]["ready_operations_delta"], -1);
+        assert!(matches!(
+            err,
+            RestoreCommandError::RestoreRunBatchExecutedCountMismatch {
+                expected: 2,
+                actual: 1,
+                ..
+            }
+        ));
+    }
+
+    // Ensure restore run can fail closed on an unexpected ready-work delta.
+    #[test]
+    fn run_restore_run_require_batch_ready_delta_writes_summary_then_fails() {
+        let fixture = RestoreCliFixture::new(
+            "canic-cli-restore-run-require-batch-ready-delta",
+            "restore-run.json",
+        );
+        let journal = ready_apply_journal();
+        fixture.write_journal(&journal);
+
+        let err = fixture
+            .run_restore_run(&[
+                "--execute",
+                "--dfx",
+                "/bin/true",
+                "--max-steps",
+                "1",
+                "--require-batch-ready-delta",
+                "0",
+            ])
+            .expect_err("batch ready delta mismatch should fail requirement");
+
+        let run_summary: serde_json::Value = fixture.read_out("read run summary");
+
+        assert_eq!(run_summary["batch_summary"]["ready_operations_delta"], -1);
+        assert_eq!(
+            run_summary["batch_summary"]["remaining_operations_delta"],
+            -1
+        );
+        assert!(matches!(
+            err,
+            RestoreCommandError::RestoreRunBatchReadyDeltaMismatch {
+                expected: 0,
+                actual: -1,
+                ..
+            }
+        ));
+    }
+
+    // Ensure restore run can fail closed on an unexpected remaining-work delta.
+    #[test]
+    fn run_restore_run_require_batch_remaining_delta_writes_summary_then_fails() {
+        let fixture = RestoreCliFixture::new(
+            "canic-cli-restore-run-require-batch-remaining-delta",
+            "restore-run.json",
+        );
+        let journal = ready_apply_journal();
+        fixture.write_journal(&journal);
+
+        let err = fixture
+            .run_restore_run(&[
+                "--execute",
+                "--dfx",
+                "/bin/true",
+                "--max-steps",
+                "1",
+                "--require-batch-remaining-delta",
+                "0",
+            ])
+            .expect_err("batch remaining delta mismatch should fail requirement");
+
+        let run_summary: serde_json::Value = fixture.read_out("read run summary");
+
+        assert_eq!(
+            run_summary["batch_summary"]["remaining_operations_delta"],
+            -1
+        );
+        assert!(matches!(
+            err,
+            RestoreCommandError::RestoreRunBatchRemainingDeltaMismatch {
+                expected: 0,
+                actual: -1,
+                ..
+            }
+        ));
+    }
+
+    // Ensure restore run can fail closed on an unexpected max-step stop result.
+    #[test]
+    fn run_restore_run_require_batch_stopped_by_max_steps_writes_summary_then_fails() {
+        let fixture = RestoreCliFixture::new(
+            "canic-cli-restore-run-require-batch-max-step-stop",
+            "restore-run.json",
+        );
+        let journal = ready_apply_journal();
+        fixture.write_journal(&journal);
+
+        let err = fixture
+            .run_restore_run(&[
+                "--execute",
+                "--dfx",
+                "/bin/true",
+                "--max-steps",
+                "1",
+                "--require-batch-stopped-by-max-steps",
+                "false",
+            ])
+            .expect_err("batch max-step mismatch should fail requirement");
+
+        let run_summary: serde_json::Value = fixture.read_out("read run summary");
+
+        assert_eq!(run_summary["batch_summary"]["stopped_by_max_steps"], true);
+        assert_eq!(run_summary["stopped_reason"], "max-steps-reached");
+        assert!(matches!(
+            err,
+            RestoreCommandError::RestoreRunBatchStoppedByMaxStepsMismatch {
+                expected: false,
+                actual: true,
+                ..
+            }
         ));
     }
 
