@@ -145,6 +145,7 @@ impl InstallOptions {
             network: self.network,
             ready_timeout_seconds: self.ready_timeout_seconds,
             config_path: self.config_path,
+            interactive_config_selection: true,
         }
     }
 }

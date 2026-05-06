@@ -30,6 +30,7 @@ pub struct InstallRootOptions {
     pub network: String,
     pub ready_timeout_seconds: u64,
     pub config_path: Option<String>,
+    pub interactive_config_selection: bool,
 }
 
 ///
@@ -118,6 +119,7 @@ impl InstallRootOptions {
                 .and_then(|value| value.parse::<u64>().ok())
                 .unwrap_or(120),
             config_path: None,
+            interactive_config_selection: true,
         }
     }
 }
@@ -127,7 +129,11 @@ pub fn install_root(options: InstallRootOptions) -> Result<(), Box<dyn std::erro
     validate_fleet_name(&options.fleet_name)?;
     let workspace_root = workspace_root()?;
     let dfx_root = dfx_root()?;
-    let config_path = resolve_install_config_path(&workspace_root, options.config_path.as_deref())?;
+    let config_path = resolve_install_config_path(
+        &workspace_root,
+        options.config_path.as_deref(),
+        options.interactive_config_selection,
+    )?;
     let total_started_at = Instant::now();
     let mut timings = InstallTimingSummary::default();
 
@@ -384,6 +390,7 @@ fn fleets_dir(dfx_root: &Path, network: &str) -> PathBuf {
 fn resolve_install_config_path(
     workspace_root: &Path,
     explicit_config_path: Option<&str>,
+    interactive: bool,
 ) -> Result<PathBuf, Box<dyn std::error::Error>> {
     if let Some(path) = explicit_config_path {
         return Ok(normalize_workspace_path(
@@ -405,7 +412,9 @@ fn resolve_install_config_path(
     }
 
     let choices = discover_canic_config_choices(&workspace_root.join("canisters"))?;
-    if let Some(path) = prompt_install_config_choice(workspace_root, &default, &choices)? {
+    if interactive
+        && let Some(path) = prompt_install_config_choice(workspace_root, &default, &choices)?
+    {
         return Ok(path);
     }
 
@@ -1525,7 +1534,7 @@ kind = "singleton"
                 env::remove_var("CANIC_CONFIG_PATH");
             }
 
-            let resolved = resolve_install_config_path(&root, None).expect("resolve config");
+            let resolved = resolve_install_config_path(&root, None, false).expect("resolve config");
 
             assert_eq!(resolved, config);
             restore_env_var("CANIC_CONFIG_PATH", previous);
@@ -1536,7 +1545,7 @@ kind = "singleton"
     #[test]
     fn install_config_accepts_explicit_path() {
         let root = unique_temp_dir("canic-install-config-explicit");
-        let resolved = resolve_install_config_path(&root, Some("canisters/demo/canic.toml"))
+        let resolved = resolve_install_config_path(&root, Some("canisters/demo/canic.toml"), false)
             .expect("resolve config");
 
         assert_eq!(resolved, root.join("canisters/demo/canic.toml"));
@@ -1574,7 +1583,8 @@ kind = "singleton"
                 env::remove_var("CANIC_CONFIG_PATH");
             }
 
-            let err = resolve_install_config_path(&root, None).expect_err("selection must fail");
+            let err =
+                resolve_install_config_path(&root, None, false).expect_err("selection must fail");
             let message = err.to_string();
 
             assert!(message.contains("missing default Canic config at canisters/canic.toml"));
