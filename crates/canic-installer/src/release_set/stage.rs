@@ -6,10 +6,10 @@ use sha2::{Digest, Sha256};
 use std::{
     fmt::Write,
     fs,
-    io::{Read, Write as IoWrite},
+    io::{self, IsTerminal, Read, Write as IoWrite},
     path::{Path, PathBuf},
     process::Command,
-    time::{SystemTime, UNIX_EPOCH},
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
 use super::{
@@ -23,27 +23,22 @@ pub fn stage_root_release_set(
     manifest: &RootReleaseSetManifest,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let now_secs = root_time_secs(root_canister)?;
-    let total_entries = manifest.entries.len();
+    println!("Stage release set:");
+    let mut progress = StageProgress::new();
+    progress.print_header();
 
-    print_stage_progress(&format!(
-        "Staging {total_entries} release entries into {root_canister}"
-    ));
-
-    for (entry_index, entry) in manifest.entries.iter().enumerate() {
+    for entry in &manifest.entries {
         stage_release_entry(
             dfx_root,
             root_canister,
             &manifest.release_version,
             entry,
             now_secs,
-            entry_index + 1,
-            total_entries,
+            &mut progress,
         )?;
     }
 
-    print_stage_progress(&format!(
-        "Finished staging {total_entries} release entries into {root_canister}"
-    ));
+    println!();
     Ok(())
 }
 
@@ -192,9 +187,9 @@ fn stage_release_entry(
     release_version: &str,
     entry: &ReleaseSetEntry,
     now_secs: u64,
-    entry_index: usize,
-    total_entries: usize,
+    progress: &mut StageProgress,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    let started_at = Instant::now();
     let artifact_path = dfx_root.join(&entry.artifact_relative_path);
     let wasm_module = read_release_artifact(&artifact_path)?;
 
@@ -222,13 +217,6 @@ fn stage_release_entry(
     }
     let payload_hash = decode_hex(&entry.payload_sha256_hex)?;
 
-    print_stage_progress(&format!(
-        "Staging release {entry_index}/{total_entries}: {} ({} chunk{})",
-        entry.role,
-        chunk_count,
-        if chunk_count == 1 { "" } else { "s" }
-    ));
-
     stage_release_manifest(
         root_canister,
         release_version,
@@ -237,10 +225,6 @@ fn stage_release_entry(
         &payload_hash,
         wasm_module.len(),
     )?;
-    print_stage_progress(&format!(
-        "Staged manifest for {} ({entry_index}/{total_entries})",
-        entry.role
-    ));
 
     prepare_release_chunks(
         root_canister,
@@ -249,17 +233,17 @@ fn stage_release_entry(
         &payload_hash,
         wasm_module.len(),
     )?;
-    print_stage_progress(&format!(
-        "Prepared chunk upload for {} ({}/{})",
-        entry.role, entry_index, total_entries
-    ));
 
-    publish_release_chunks(root_canister, release_version, entry, &wasm_module)?;
-
-    print_stage_progress(&format!(
-        "Finished release {entry_index}/{total_entries}: {}",
-        entry.role
-    ));
+    progress.start_entry(entry, chunk_count)?;
+    publish_release_chunks(
+        root_canister,
+        release_version,
+        entry,
+        &wasm_module,
+        progress,
+    )?;
+    progress.finish_entry(entry, chunk_count)?;
+    progress.print_completed_entry(entry, started_at.elapsed());
     Ok(())
 }
 
@@ -333,16 +317,10 @@ fn publish_release_chunks(
     release_version: &str,
     entry: &ReleaseSetEntry,
     wasm_module: &[u8],
+    progress: &StageProgress,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let total_chunks = entry.chunk_sha256_hex.len();
-
+    let chunk_count = wasm_module.chunks(CANIC_WASM_CHUNK_BYTES).count();
     for (chunk_index, chunk) in wasm_module.chunks(CANIC_WASM_CHUNK_BYTES).enumerate() {
-        let chunk_number = chunk_index + 1;
-        print_stage_progress(&format!(
-            "Uploading chunk {chunk_number}/{total_chunks} for {} ({} bytes)",
-            entry.role,
-            chunk.len()
-        ));
         let request = format!(
             "(record {{ template_id = {}; version = {}; chunk_index = {} : nat32; bytes = {} }})",
             idl_text(&entry.template_id),
@@ -356,18 +334,121 @@ fn publish_release_chunks(
             Some(&request),
             None,
         )?;
-        print_stage_progress(&format!(
-            "Uploaded chunk {chunk_number}/{total_chunks} for {}",
-            entry.role
-        ));
+        progress.update_entry(entry, chunk_index + 1, chunk_count)?;
     }
     Ok(())
 }
 
-// Print one installer progress line immediately so long staging loops stay visible.
-fn print_stage_progress(message: &str) {
-    println!("{message}");
-    let _ = std::io::stdout().flush();
+///
+/// StageProgress
+///
+
+struct StageProgress {
+    interactive: bool,
+    completed_rows: usize,
+}
+
+impl StageProgress {
+    // Create a terminal-aware release-set progress renderer.
+    fn new() -> Self {
+        Self {
+            interactive: io::stdout().is_terminal(),
+            completed_rows: 0,
+        }
+    }
+
+    // Print the staging header with an interactive chunk bar when available.
+    fn print_header(&self) {
+        if self.interactive {
+            println!("{}", chunk_progress_line("-", 0, 0));
+        }
+        println!("{:<16} {:>10}", "CANISTER", "ELAPSED");
+    }
+
+    // Start one release row at zero uploaded chunks for interactive terminals.
+    fn start_entry(
+        &self,
+        entry: &ReleaseSetEntry,
+        chunk_count: usize,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        if self.interactive {
+            self.write_interactive_row(&entry.role, 0, chunk_count)?;
+        }
+        Ok(())
+    }
+
+    // Update one release row after a chunk has been durably published.
+    fn update_entry(
+        &self,
+        entry: &ReleaseSetEntry,
+        uploaded_chunks: usize,
+        chunk_count: usize,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        if self.interactive {
+            self.write_interactive_row(&entry.role, uploaded_chunks, chunk_count)?;
+        }
+        Ok(())
+    }
+
+    // Leave the completed chunk state visible before printing the canister timing row.
+    fn finish_entry(
+        &self,
+        entry: &ReleaseSetEntry,
+        chunk_count: usize,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        if self.interactive {
+            self.write_interactive_row(&entry.role, chunk_count, chunk_count)?;
+        }
+        Ok(())
+    }
+
+    // Print one completed canister timing row below the live chunk bar.
+    fn print_completed_entry(&mut self, entry: &ReleaseSetEntry, elapsed: Duration) {
+        println!("{:<16} {:>9.2}s", entry.role, elapsed.as_secs_f64());
+        self.completed_rows += 1;
+    }
+
+    // Rewrite the top chunk-progress line without disturbing completed rows.
+    fn write_interactive_row(
+        &self,
+        role: &str,
+        uploaded_chunks: usize,
+        chunk_count: usize,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let distance = self.completed_rows + 2;
+        print!("\x1b[{distance}A\r\x1b[2K");
+        print!(
+            "{}",
+            chunk_progress_line(role, uploaded_chunks, chunk_count)
+        );
+        print!("\x1b[{distance}B\r");
+        io::stdout().flush()?;
+        Ok(())
+    }
+}
+
+// Render the single live chunk-progress row.
+fn chunk_progress_line(role: &str, uploaded_chunks: usize, chunk_count: usize) -> String {
+    format!(
+        "{:<16} {:<18}",
+        "CHUNKS",
+        format!("{role} {}", progress_bar(uploaded_chunks, chunk_count, 10))
+    )
+}
+
+// Render a fixed-width ASCII progress bar for chunk uploads.
+fn progress_bar(current: usize, total: usize, width: usize) -> String {
+    if total == 0 || width == 0 {
+        return "[] 0/0".to_string();
+    }
+
+    let filled = current.saturating_mul(width).div_ceil(total);
+    let filled = filled.min(width);
+    format!(
+        "[{}{}] {current}/{total}",
+        "#".repeat(filled),
+        " ".repeat(width - filled)
+    )
 }
 
 // Read one staged release artifact and validate that it is a non-empty gzip stream

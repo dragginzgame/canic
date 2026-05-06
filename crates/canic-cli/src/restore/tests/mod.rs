@@ -168,17 +168,13 @@ fn parses_restore_plan_options() {
 
 // Ensure restore help stays at command-family level.
 #[test]
-fn restore_usage_lists_commands_without_runner_flag_dump() {
+fn restore_usage_lists_command_family() {
     let text = usage();
 
     assert!(text.contains("usage: canic restore <command> [<args>]"));
     assert!(text.contains("plan"));
     assert!(text.contains("apply-status"));
     assert!(text.contains("run"));
-    assert!(!text.contains("apply-next"));
-    assert!(!text.contains("apply-command"));
-    assert!(!text.contains("--require-batch"));
-    assert!(!text.contains("--require-no-pending-before"));
 }
 
 // Ensure uploaded snapshot IDs are parsed from dfx upload output.
@@ -2784,5 +2780,12 @@ fn temp_dir(prefix: &str) -> PathBuf {
         .expect("system time after epoch")
         .as_nanos();
     std::env::temp_dir().join(format!("{prefix}-{}-{nanos}", std::process::id()))
+}
+
+// Derive the runner sidecar lock path for assertions.
+fn journal_lock_path(path: &Path) -> PathBuf {
+    let mut lock_path = path.as_os_str().to_os_string();
+    lock_path.push(".lock");
+    PathBuf::from(lock_path)
 }
 use super::*;

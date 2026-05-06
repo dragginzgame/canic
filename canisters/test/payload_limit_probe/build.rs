@@ -1,4 +1,4 @@
-// Build the probe canister with its local Canic config embedded.
+// Build the probe canister with generated standalone Canic config.
 fn main() {
-    canic::build!("canic.toml");
+    canic::build_standalone!("test");
 }

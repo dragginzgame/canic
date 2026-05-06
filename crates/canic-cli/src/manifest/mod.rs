@@ -72,7 +72,7 @@ impl ManifestValidateOptions {
                     manifest = Some(PathBuf::from(next_value(&mut args, "--manifest")?));
                 }
                 "--out" => out = Some(PathBuf::from(next_value(&mut args, "--out")?)),
-                "--require-design" | "--require-design-v1" => require_design_v1 = true,
+                "--require-design" => require_design_v1 = true,
                 "--help" | "-h" => return Err(ManifestCommandError::Usage(usage())),
                 _ => return Err(ManifestCommandError::UnknownOption(arg)),
             }

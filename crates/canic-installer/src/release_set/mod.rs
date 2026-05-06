@@ -7,10 +7,11 @@ mod manifest;
 mod paths;
 mod stage;
 
-pub use config::{configured_install_targets, configured_release_roles};
+pub use config::{configured_install_targets, configured_release_roles, configured_role_kinds};
 pub use manifest::{
     ReleaseSetEntry, RootReleaseSetManifest, emit_root_release_set_manifest,
-    emit_root_release_set_manifest_if_ready, load_root_release_set_manifest,
+    emit_root_release_set_manifest_if_ready, emit_root_release_set_manifest_with_config,
+    load_root_release_set_manifest,
 };
 pub use paths::{
     canister_manifest_path, canisters_root, config_path, dfx_root, load_root_package_version,
@@ -27,7 +28,7 @@ pub use stage::{
 use stage::read_release_artifact;
 
 #[cfg(test)]
-use config::configured_release_roles_from_source;
+use config::{configured_release_roles_from_source, configured_role_kinds_from_source};
 
 pub(super) const CANISTERS_ROOT_RELATIVE: &str = "canisters";
 pub(super) const ROOT_CONFIG_FILE: &str = "canic.toml";
@@ -50,7 +51,8 @@ pub(super) fn root_time_secs(root_canister: &str) -> Result<u64, Box<dyn std::er
 mod tests {
     use super::{
         canister_manifest_path, canisters_root, config_path, configured_install_targets,
-        configured_release_roles_from_source, read_release_artifact, root_manifest_path,
+        configured_release_roles_from_source, configured_role_kinds_from_source,
+        read_release_artifact, root_manifest_path,
     };
     use flate2::{Compression, write::GzEncoder};
     use std::{
@@ -171,6 +173,18 @@ kind = "singleton"
         let roles = configured_release_roles_from_source(config).expect("release roles");
 
         assert_eq!(roles, vec!["scale_hub".to_string(), "user_hub".to_string()]);
+    }
+
+    #[test]
+    fn configured_role_kinds_lists_configured_roles() {
+        let kinds = configured_role_kinds_from_source(REAL_CONFIG).expect("role kinds");
+
+        assert_eq!(kinds.get("root").map(String::as_str), Some("root"));
+        assert_eq!(kinds.get("user_hub").map(String::as_str), Some("singleton"));
+        assert_eq!(
+            kinds.get("scale_hub").map(String::as_str),
+            Some("singleton")
+        );
     }
 
     #[test]

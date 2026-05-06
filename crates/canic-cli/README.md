@@ -1,8 +1,9 @@
 # canic-cli
 
 `canic-cli` publishes the `canic` operator binary. It is the command-line
-surface for listing a Canic fleet, capturing canister snapshots, validating
-backup artifacts, and preparing guarded restores.
+surface for installing local Canic fleets, listing a Canic fleet, capturing
+canister snapshots, validating backup artifacts, and preparing guarded
+restores.
 
 The CLI currently wraps `dfx` for live snapshot and restore mutations. Canic
 owns the topology selection, manifests, journals, readiness checks, restore
@@ -28,16 +29,62 @@ For a full local development setup, including `dfx`, helper tools,
 
 ## First Commands
 
-Show the current registered fleet as an ASCII tree:
+Show local demo canisters that already have ids:
 
 ```bash
 canic list --network local
 ```
 
-By default, `canic list` resolves the current project's root with
-`dfx canister id root`. Use `--root <root-canister-id>` to point at a specific
-root, `--canister <id>` to print one subtree, or `--registry-json <file>` to
-render a saved `canic_subnet_registry` response without calling `dfx`.
+By default, `canic list` checks Canic's fixed demo canister roster and prints
+a box-drawing canister-id tree for entries that have local `dfx` ids. Once a
+project has Canic fleet state, plain `canic list` reads the installed root
+registry instead. Use `--root <name-or-principal>` to point at a specific
+installed root, `--fleet <name>` to use a saved fleet without switching, or
+`--from <name-or-principal>` to print one subtree with that node as the
+rendered root.
+Live list sources call `canic_ready` for each listed canister and include a
+`READY` column with `yes`, `no`, or `error`.
+
+If the list only shows the `root` row, the project has reserved a local root id
+but has not installed the tree. Run `canic install`, then use `canic list
+--network local` to read the installed root registry.
+
+Install and bootstrap the local fleet:
+
+```bash
+canic install
+```
+
+`canic install` defaults to the `root` dfx canister name. You may pass either a
+dfx canister name or an IC principal as the root target:
+
+```bash
+canic install root
+canic install uxrrr-q7777-77774-qaaaq-cai
+canic install --root uxrrr-q7777-77774-qaaaq-cai
+canic install --fleet demo --config canisters/demo/canic.toml
+```
+
+When the root target is a principal, the CLI still builds the conventional
+`root` canister artifact by default. Use `--root-build-target <dfx-name>` only
+when the local root canister is named differently in `dfx.json`.
+
+`canic install` uses `canisters/canic.toml` when that project default exists.
+If it does not, and other `canic.toml` files are present, the command prints a
+small choices table and requires `--config <path>`.
+
+Successful installs write `.canic/<network>/fleets/<fleet>.json` with the root
+target, resolved root principal, build target, config path, and release-set
+manifest path. `canic list` uses the current fleet when `--root` and `--fleet`
+are not provided; pass `--fleet <name>` to query another saved fleet or
+`--root <name-or-principal>` to override it.
+
+List and switch saved fleets:
+
+```bash
+canic fleets --network local
+canic use demo --network local
+```
 
 Run command-specific help when you need exact flags:
 
@@ -63,8 +110,7 @@ canic snapshot download \
 
 Use `--recursive` instead of `--include-children` to include all descendants.
 Use `--dry-run` to compute the target set without creating or downloading
-snapshots. Use `--registry-json <file>` to plan from a saved registry response
-instead of querying a live root.
+snapshots.
 
 Non-dry-run captures recompute the selected topology immediately before
 snapshot creation and fail if the topology hash changed since discovery. This
@@ -208,9 +254,6 @@ These commands inspect the journal produced by `restore apply --dry-run`:
 `canic restore run` is the only maintained command for advancing a restore
 journal. It owns command preview, claiming, execution, completion/failure
 records, and pending-operation recovery.
-
-The compatibility wrapper `scripts/restore/apply_journal.sh` remains available
-for older runbooks, but it delegates to `canic restore run`.
 
 ## Safety Model
 

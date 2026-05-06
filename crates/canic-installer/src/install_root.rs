@@ -1,14 +1,18 @@
 use crate::release_set::{
-    config_path, configured_install_targets, dfx_call, dfx_root, emit_root_release_set_manifest,
-    load_root_release_set_manifest, resolve_artifact_root, resume_root_bootstrap,
-    root_release_set_manifest_path, stage_root_release_set, workspace_root,
+    configured_install_targets, configured_release_roles, dfx_call, dfx_root,
+    emit_root_release_set_manifest_with_config, load_root_release_set_manifest,
+    resolve_artifact_root, resume_root_bootstrap, root_release_set_manifest_path,
+    stage_root_release_set, workspace_root,
 };
+use crate::workspace_discovery::normalize_workspace_path;
+use canic::cdk::types::Principal;
 use canic_core::protocol;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{
-    env,
-    path::Path,
+    env, fs,
+    io::{self, IsTerminal, Write},
+    path::{Path, PathBuf},
     process::Command,
     thread,
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
@@ -20,9 +24,32 @@ use std::{
 
 #[derive(Clone, Debug)]
 pub struct InstallRootOptions {
+    pub fleet_name: String,
     pub root_canister: String,
+    pub root_build_target: String,
     pub network: String,
     pub ready_timeout_seconds: u64,
+    pub config_path: Option<String>,
+}
+
+///
+/// InstallState
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct InstallState {
+    pub schema_version: u32,
+    #[serde(default = "default_fleet_name")]
+    pub fleet: String,
+    pub installed_at_unix_secs: u64,
+    pub network: String,
+    pub root_target: String,
+    pub root_canister_id: String,
+    pub root_build_target: String,
+    pub workspace_root: String,
+    pub dfx_root: String,
+    pub config_path: String,
+    pub release_set_manifest_path: String,
 }
 
 ///
@@ -52,35 +79,62 @@ struct InstallTimingSummary {
     wait_ready: Duration,
 }
 
+///
+/// ConfigChoiceRow
+///
+
+struct ConfigChoiceRow {
+    option: String,
+    config: String,
+    canisters: String,
+}
+
 const LOCAL_ROOT_TARGET_CYCLES: u128 = 9_000_000_000_000_000;
 const LOCAL_DFX_READY_TIMEOUT_SECONDS: u64 = 30;
+const INSTALL_STATE_SCHEMA_VERSION: u32 = 1;
+const INSTALL_STATE_FILE: &str = "install-state.json";
+pub const DEFAULT_FLEET_NAME: &str = "default";
+const CURRENT_FLEET_FILE: &str = "current-fleet";
+const CONFIG_CHOICE_ROLE_PREVIEW_LIMIT: usize = 5;
 
 impl InstallRootOptions {
     // Resolve the current local-root install options from args and environment.
     #[must_use]
     pub fn from_env_and_args() -> Self {
+        let root_canister = env::args()
+            .nth(1)
+            .or_else(|| env::var("ROOT_CANISTER").ok())
+            .unwrap_or_else(|| "root".to_string());
+
         Self {
-            root_canister: env::args()
-                .nth(1)
-                .or_else(|| env::var("ROOT_CANISTER").ok())
-                .unwrap_or_else(|| "root".to_string()),
+            fleet_name: env::var("CANIC_FLEET").unwrap_or_else(|_| DEFAULT_FLEET_NAME.to_string()),
+            root_build_target: env::var("ROOT_BUILD_TARGET")
+                .ok()
+                .unwrap_or_else(|| root_canister.clone()),
+            root_canister,
             network: env::var("DFX_NETWORK").unwrap_or_else(|_| "local".to_string()),
             ready_timeout_seconds: env::var("READY_TIMEOUT_SECONDS")
                 .ok()
                 .and_then(|value| value.parse::<u64>().ok())
                 .unwrap_or(120),
+            config_path: None,
         }
     }
 }
 
 // Execute the local thin-root install flow against an already running replica.
 pub fn install_root(options: InstallRootOptions) -> Result<(), Box<dyn std::error::Error>> {
+    validate_fleet_name(&options.fleet_name)?;
     let workspace_root = workspace_root()?;
     let dfx_root = dfx_root()?;
+    let config_path = resolve_install_config_path(&workspace_root, options.config_path.as_deref())?;
     let total_started_at = Instant::now();
     let mut timings = InstallTimingSummary::default();
 
-    println!("Installing root against DFX_NETWORK={}", options.network);
+    println!(
+        "Installing fleet {} against DFX_NETWORK={}",
+        options.fleet_name, options.network
+    );
     ensure_dfx_running(&dfx_root, &options.network)?;
     let mut create = Command::new("dfx");
     create
@@ -90,15 +144,19 @@ pub fn install_root(options: InstallRootOptions) -> Result<(), Box<dyn std::erro
     run_command(&mut create)?;
     timings.create_canisters = create_started_at.elapsed();
 
-    let build_targets = local_install_build_targets(&workspace_root, &options.root_canister)?;
+    let build_targets = local_install_build_targets(&config_path, &options.root_build_target)?;
     let build_session_id = install_build_session_id();
     let build_started_at = Instant::now();
-    run_dfx_build_targets(&dfx_root, &build_targets, &build_session_id)?;
+    run_dfx_build_targets(&dfx_root, &build_targets, &build_session_id, &config_path)?;
     timings.build_all = build_started_at.elapsed();
 
     let emit_manifest_started_at = Instant::now();
-    let manifest_path =
-        emit_root_release_set_manifest(&workspace_root, &dfx_root, &options.network)?;
+    let manifest_path = emit_root_release_set_manifest_with_config(
+        &workspace_root,
+        &dfx_root,
+        &options.network,
+        &config_path,
+    )?;
     timings.emit_manifest = emit_manifest_started_at.elapsed();
 
     timings.fabricate_cycles =
@@ -140,21 +198,552 @@ pub fn install_root(options: InstallRootOptions) -> Result<(), Box<dyn std::erro
     }
 
     print_install_timing_summary(&timings, total_started_at.elapsed());
-    println!("Root installed successfully");
-    println!(
-        "Smoke check: dfx canister call {} canic_ready",
-        options.root_canister
-    );
+    let state = build_install_state(
+        &options,
+        &workspace_root,
+        &dfx_root,
+        &config_path,
+        &manifest_path,
+    )?;
+    let state_path = write_install_state(&dfx_root, &options.network, &state)?;
+    print_install_result_summary(&options.network, &state.fleet, &state_path);
     Ok(())
+}
+
+/// Read the persisted install state for one project/network when present.
+pub fn read_install_state(
+    dfx_root: &Path,
+    network: &str,
+) -> Result<Option<InstallState>, Box<dyn std::error::Error>> {
+    if let Some(fleet) = read_selected_fleet_name(dfx_root, network)? {
+        return read_fleet_install_state(dfx_root, network, &fleet);
+    }
+
+    read_legacy_install_state(dfx_root, network)
+}
+
+/// Read a named fleet install state for one project/network when present.
+pub fn read_fleet_install_state(
+    dfx_root: &Path,
+    network: &str,
+    fleet: &str,
+) -> Result<Option<InstallState>, Box<dyn std::error::Error>> {
+    validate_fleet_name(fleet)?;
+    let path = fleet_install_state_path(dfx_root, network, fleet);
+    if !path.is_file() {
+        return Ok(None);
+    }
+
+    let bytes = fs::read(&path)?;
+    let mut state: InstallState = serde_json::from_slice(&bytes)?;
+    if state.fleet.is_empty() {
+        state.fleet = fleet.to_string();
+    }
+    Ok(Some(state))
+}
+
+/// Read the install state for the discovered current project/network.
+pub fn read_current_install_state(
+    network: &str,
+) -> Result<Option<InstallState>, Box<dyn std::error::Error>> {
+    let dfx_root = dfx_root()?;
+    read_install_state(&dfx_root, network)
+}
+
+/// Read either a named fleet state or the selected current fleet state.
+pub fn read_current_or_fleet_install_state(
+    network: &str,
+    fleet: Option<&str>,
+) -> Result<Option<InstallState>, Box<dyn std::error::Error>> {
+    let dfx_root = dfx_root()?;
+    match fleet {
+        Some(fleet) => read_fleet_install_state(&dfx_root, network, fleet),
+        None => read_install_state(&dfx_root, network),
+    }
+}
+
+///
+/// FleetSummary
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct FleetSummary {
+    pub name: String,
+    pub current: bool,
+    pub state: InstallState,
+}
+
+/// List installed fleets for the current project/network.
+pub fn list_current_fleets(network: &str) -> Result<Vec<FleetSummary>, Box<dyn std::error::Error>> {
+    let dfx_root = dfx_root()?;
+    list_fleets(&dfx_root, network)
+}
+
+/// List installed fleets for one project/network.
+pub fn list_fleets(
+    dfx_root: &Path,
+    network: &str,
+) -> Result<Vec<FleetSummary>, Box<dyn std::error::Error>> {
+    let current = read_selected_fleet_name(dfx_root, network)?;
+    let mut fleets = Vec::new();
+    let dir = fleets_dir(dfx_root, network);
+    if dir.is_dir() {
+        for entry in fs::read_dir(&dir)? {
+            let entry = entry?;
+            let path = entry.path();
+            if path.extension().and_then(|ext| ext.to_str()) != Some("json") {
+                continue;
+            }
+            let Some(name) = path.file_stem().and_then(|stem| stem.to_str()) else {
+                continue;
+            };
+            if let Some(state) = read_fleet_install_state(dfx_root, network, name)? {
+                fleets.push(FleetSummary {
+                    name: name.to_string(),
+                    current: current.as_deref() == Some(name),
+                    state,
+                });
+            }
+        }
+    }
+
+    if fleets.is_empty()
+        && let Some(state) = read_legacy_install_state(dfx_root, network)?
+    {
+        fleets.push(FleetSummary {
+            name: state.fleet.clone(),
+            current: true,
+            state,
+        });
+    }
+
+    fleets.sort_by(|left, right| left.name.cmp(&right.name));
+    Ok(fleets)
+}
+
+/// Select one installed fleet as the current project/network default.
+pub fn select_current_fleet(
+    network: &str,
+    fleet: &str,
+) -> Result<InstallState, Box<dyn std::error::Error>> {
+    let dfx_root = dfx_root()?;
+    select_fleet(&dfx_root, network, fleet)
+}
+
+/// Select one installed fleet for one project/network.
+pub fn select_fleet(
+    dfx_root: &Path,
+    network: &str,
+    fleet: &str,
+) -> Result<InstallState, Box<dyn std::error::Error>> {
+    let Some(state) = read_fleet_install_state(dfx_root, network, fleet)?.or_else(|| {
+        matching_legacy_fleet_state(dfx_root, network, fleet)
+            .ok()
+            .flatten()
+    }) else {
+        return Err(format!("unknown fleet {fleet} on network {network}").into());
+    };
+    if fleet_install_state_path(dfx_root, network, fleet).is_file() {
+        write_current_fleet_name(dfx_root, network, fleet)?;
+    } else {
+        write_install_state(dfx_root, network, &state)?;
+    }
+    Ok(state)
+}
+
+/// Return the legacy project-local install state path for one network.
+#[must_use]
+pub fn install_state_path(dfx_root: &Path, network: &str) -> PathBuf {
+    dfx_root
+        .join(".canic")
+        .join(network)
+        .join(INSTALL_STATE_FILE)
+}
+
+/// Return the project-local state path for one named fleet.
+#[must_use]
+pub fn fleet_install_state_path(dfx_root: &Path, network: &str, fleet: &str) -> PathBuf {
+    fleets_dir(dfx_root, network).join(format!("{fleet}.json"))
+}
+
+/// Return the project-local current-fleet pointer path for one network.
+#[must_use]
+pub fn current_fleet_path(dfx_root: &Path, network: &str) -> PathBuf {
+    dfx_root
+        .join(".canic")
+        .join(network)
+        .join(CURRENT_FLEET_FILE)
+}
+
+// Return the directory that owns named fleet state files.
+fn fleets_dir(dfx_root: &Path, network: &str) -> PathBuf {
+    dfx_root.join(".canic").join(network).join("fleets")
+}
+
+// Resolve install config selection without silently choosing among demo/test configs.
+fn resolve_install_config_path(
+    workspace_root: &Path,
+    explicit_config_path: Option<&str>,
+) -> Result<PathBuf, Box<dyn std::error::Error>> {
+    if let Some(path) = explicit_config_path {
+        return Ok(normalize_workspace_path(
+            workspace_root,
+            PathBuf::from(path),
+        ));
+    }
+
+    if let Some(path) = env::var_os("CANIC_CONFIG_PATH") {
+        return Ok(normalize_workspace_path(
+            workspace_root,
+            PathBuf::from(path),
+        ));
+    }
+
+    let default = workspace_root.join("canisters/canic.toml");
+    if default.is_file() {
+        return Ok(default);
+    }
+
+    let choices = discover_canic_config_choices(&workspace_root.join("canisters"))?;
+    if let Some(path) = prompt_install_config_choice(workspace_root, &default, &choices)? {
+        return Ok(path);
+    }
+
+    Err(config_selection_error(workspace_root, &default, &choices).into())
+}
+
+// Discover candidate `canic.toml` files under the conventional canisters tree.
+fn discover_canic_config_choices(root: &Path) -> Result<Vec<PathBuf>, Box<dyn std::error::Error>> {
+    let mut choices = Vec::new();
+    collect_canic_config_choices(root, &mut choices)?;
+    choices.sort();
+    Ok(choices)
+}
+
+// Recursively collect candidate config paths.
+fn collect_canic_config_choices(
+    root: &Path,
+    choices: &mut Vec<PathBuf>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    if !root.is_dir() {
+        return Ok(());
+    }
+
+    for entry in fs::read_dir(root)? {
+        let entry = entry?;
+        let path = entry.path();
+        if path.is_dir() {
+            collect_canic_config_choices(&path, choices)?;
+        } else if path.file_name().and_then(|name| name.to_str()) == Some("canic.toml")
+            && is_install_project_config(&path)
+        {
+            choices.push(path);
+        }
+    }
+
+    Ok(())
+}
+
+// Treat only configs next to a root canister directory as installable choices.
+fn is_install_project_config(path: &Path) -> bool {
+    path.parent()
+        .is_some_and(|parent| parent.join("root/Cargo.toml").is_file())
+}
+
+// Format an actionable config-selection error with whitespace-aligned choices.
+fn config_selection_error(workspace_root: &Path, default: &Path, choices: &[PathBuf]) -> String {
+    let mut lines = vec![format!(
+        "missing default Canic config at {}",
+        display_workspace_path(workspace_root, default)
+    )];
+
+    if choices.is_empty() {
+        lines.push("create canisters/canic.toml or run canic install --config <path>".to_string());
+        return lines.join("\n");
+    }
+
+    if choices.len() == 1 {
+        let choice = display_workspace_path(workspace_root, &choices[0]);
+        lines.push(String::new());
+        lines.extend(config_choice_table(workspace_root, choices));
+        lines.push(String::new());
+        lines.push(format!("run: canic install --config {choice}"));
+        return lines.join("\n");
+    }
+
+    lines.push("choose a config path explicitly:".to_string());
+    lines.push(String::new());
+    lines.extend(config_choice_table(workspace_root, choices));
+    lines.push(String::new());
+    lines.push("run: canic install --config <path>".to_string());
+    lines.join("\n")
+}
+
+// Prompt interactively for one discovered config when running in a terminal.
+fn prompt_install_config_choice(
+    workspace_root: &Path,
+    default: &Path,
+    choices: &[PathBuf],
+) -> Result<Option<PathBuf>, Box<dyn std::error::Error>> {
+    if choices.is_empty() || !io::stdin().is_terminal() {
+        return Ok(None);
+    }
+
+    eprintln!(
+        "missing default Canic config at {}",
+        display_workspace_path(workspace_root, default)
+    );
+    eprintln!();
+    for line in config_choice_table(workspace_root, choices) {
+        eprintln!("{line}");
+    }
+    eprintln!();
+
+    loop {
+        eprint!("enter config number (ctrl-c to quit): ");
+        io::stderr().flush()?;
+
+        let mut answer = String::new();
+        if io::stdin().read_line(&mut answer)? == 0 {
+            return Ok(None);
+        }
+
+        let trimmed = answer.trim();
+        let Ok(index) = trimmed.parse::<usize>() else {
+            eprintln!("invalid selection: {trimmed}");
+            continue;
+        };
+        let Some(path) = choices.get(index.saturating_sub(1)) else {
+            eprintln!("selection out of range: {index}");
+            continue;
+        };
+
+        return Ok(Some(path.clone()));
+    }
+}
+
+// Render config choices with enough metadata to choose the intended topology.
+fn config_choice_table(workspace_root: &Path, choices: &[PathBuf]) -> Vec<String> {
+    let rows = choices
+        .iter()
+        .enumerate()
+        .map(|(index, path)| config_choice_row(workspace_root, index + 1, path))
+        .collect::<Vec<_>>();
+    let option_width = rows
+        .iter()
+        .map(|row| row.option.len())
+        .chain(["#".len()])
+        .max()
+        .expect("option width");
+    let config_width = rows
+        .iter()
+        .map(|row| row.config.len())
+        .chain(["CONFIG".len()])
+        .max()
+        .expect("config width");
+    let mut lines = vec![format!(
+        "{:<option_width$}  {:<config_width$}  CANISTERS",
+        "#", "CONFIG"
+    )];
+
+    for row in rows {
+        lines.push(format!(
+            "{:<option_width$}  {:<config_width$}  {}",
+            row.option, row.config, row.canisters
+        ));
+    }
+
+    lines
+}
+
+// Summarize the root-subnet release roles for one install config choice.
+fn config_choice_row(workspace_root: &Path, option: usize, path: &Path) -> ConfigChoiceRow {
+    let config = display_workspace_path(workspace_root, path);
+    match configured_release_roles(path) {
+        Ok(roles) => ConfigChoiceRow {
+            option: option.to_string(),
+            config,
+            canisters: format_canister_summary(&roles),
+        },
+        Err(_) => ConfigChoiceRow {
+            option: option.to_string(),
+            config,
+            canisters: "invalid config".to_string(),
+        },
+    }
+}
+
+// Format the root-subnet canister count with a bounded role preview.
+fn format_canister_summary(roles: &[String]) -> String {
+    if roles.is_empty() {
+        return "0".to_string();
+    }
+
+    let preview = roles
+        .iter()
+        .take(CONFIG_CHOICE_ROLE_PREVIEW_LIMIT)
+        .map(String::as_str)
+        .collect::<Vec<_>>()
+        .join(", ");
+    let suffix = if roles.len() > CONFIG_CHOICE_ROLE_PREVIEW_LIMIT {
+        ", ..."
+    } else {
+        ""
+    };
+
+    format!("{} ({preview}{suffix})", roles.len())
+}
+
+// Render a workspace-relative path where possible for concise diagnostics.
+fn display_workspace_path(workspace_root: &Path, path: &Path) -> String {
+    path.strip_prefix(workspace_root)
+        .unwrap_or(path)
+        .display()
+        .to_string()
 }
 
 // Resolve the local install build set from the root canister plus the
 // configured ordinary roles owned by the root subnet.
 fn local_install_build_targets(
-    workspace_root: &Path,
+    config_path: &Path,
     root_canister: &str,
 ) -> Result<Vec<String>, Box<dyn std::error::Error>> {
-    configured_install_targets(&config_path(workspace_root), root_canister)
+    configured_install_targets(config_path, root_canister)
+}
+
+// Build the persisted project-local install state from a completed install.
+fn build_install_state(
+    options: &InstallRootOptions,
+    workspace_root: &Path,
+    dfx_root: &Path,
+    config_path: &Path,
+    release_set_manifest_path: &Path,
+) -> Result<InstallState, Box<dyn std::error::Error>> {
+    Ok(InstallState {
+        schema_version: INSTALL_STATE_SCHEMA_VERSION,
+        fleet: options.fleet_name.clone(),
+        installed_at_unix_secs: current_unix_secs()?,
+        network: options.network.clone(),
+        root_target: options.root_canister.clone(),
+        root_canister_id: resolve_root_canister_id(dfx_root, &options.root_canister)?,
+        root_build_target: options.root_build_target.clone(),
+        workspace_root: workspace_root.display().to_string(),
+        dfx_root: dfx_root.display().to_string(),
+        config_path: config_path.display().to_string(),
+        release_set_manifest_path: release_set_manifest_path.display().to_string(),
+    })
+}
+
+// Persist the completed install state under the project-local `.canic` directory.
+fn write_install_state(
+    dfx_root: &Path,
+    network: &str,
+    state: &InstallState,
+) -> Result<PathBuf, Box<dyn std::error::Error>> {
+    validate_fleet_name(&state.fleet)?;
+    let path = fleet_install_state_path(dfx_root, network, &state.fleet);
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    fs::write(&path, serde_json::to_vec_pretty(state)?)?;
+    write_current_fleet_name(dfx_root, network, &state.fleet)?;
+    Ok(path)
+}
+
+// Read a legacy single-slot install state when no named fleet pointer exists.
+fn read_legacy_install_state(
+    dfx_root: &Path,
+    network: &str,
+) -> Result<Option<InstallState>, Box<dyn std::error::Error>> {
+    let path = install_state_path(dfx_root, network);
+    if !path.is_file() {
+        return Ok(None);
+    }
+
+    let bytes = fs::read(&path)?;
+    let mut state: InstallState = serde_json::from_slice(&bytes)?;
+    if state.fleet.is_empty() {
+        state.fleet = DEFAULT_FLEET_NAME.to_string();
+    }
+    Ok(Some(state))
+}
+
+// Return the legacy single-slot state only when it matches the requested fleet.
+fn matching_legacy_fleet_state(
+    dfx_root: &Path,
+    network: &str,
+    fleet: &str,
+) -> Result<Option<InstallState>, Box<dyn std::error::Error>> {
+    Ok(read_legacy_install_state(dfx_root, network)?.filter(|state| state.fleet == fleet))
+}
+
+// Read the selected fleet name for one project/network.
+fn read_selected_fleet_name(
+    dfx_root: &Path,
+    network: &str,
+) -> Result<Option<String>, Box<dyn std::error::Error>> {
+    let path = current_fleet_path(dfx_root, network);
+    if !path.is_file() {
+        return Ok(None);
+    }
+
+    let name = fs::read_to_string(path)?.trim().to_string();
+    validate_fleet_name(&name)?;
+    Ok(Some(name))
+}
+
+// Write the selected fleet name for one project/network.
+fn write_current_fleet_name(
+    dfx_root: &Path,
+    network: &str,
+    fleet: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    validate_fleet_name(fleet)?;
+    let path = current_fleet_path(dfx_root, network);
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    fs::write(path, format!("{fleet}\n"))?;
+    Ok(())
+}
+
+// Return the serde default for legacy install-state records.
+fn default_fleet_name() -> String {
+    DEFAULT_FLEET_NAME.to_string()
+}
+
+// Keep fleet names filesystem-safe and easy to type in commands.
+fn validate_fleet_name(name: &str) -> Result<(), Box<dyn std::error::Error>> {
+    let valid = !name.is_empty()
+        && name
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'));
+    if valid {
+        Ok(())
+    } else {
+        Err(format!("invalid fleet name {name:?}; use letters, numbers, '-' or '_'").into())
+    }
+}
+
+// Resolve the installed root id, accepting principal targets without a dfx lookup.
+fn resolve_root_canister_id(
+    dfx_root: &Path,
+    root_canister: &str,
+) -> Result<String, Box<dyn std::error::Error>> {
+    if Principal::from_text(root_canister).is_ok() {
+        return Ok(root_canister.to_string());
+    }
+
+    let mut command = Command::new("dfx");
+    command
+        .current_dir(dfx_root)
+        .args(["canister", "id", root_canister]);
+    Ok(run_command_stdout(&mut command)?.trim().to_string())
+}
+
+// Read the current host clock as a unix timestamp for install state.
+fn current_unix_secs() -> Result<u64, Box<dyn std::error::Error>> {
+    Ok(SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs())
 }
 
 // Run one `dfx build <canister>` call per configured local install target.
@@ -162,12 +751,37 @@ fn run_dfx_build_targets(
     dfx_root: &Path,
     targets: &[String],
     build_session_id: &str,
+    config_path: &Path,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    for target in targets {
+    println!("Build artifacts:");
+    println!("{:<16} {:<18} {:>10}", "CANISTER", "PROGRESS", "ELAPSED");
+
+    for (index, target) in targets.iter().enumerate() {
         let mut command = dfx_build_target_command(dfx_root, target, build_session_id);
-        run_command(&mut command)?;
+        command.env("CANIC_CONFIG_PATH", config_path);
+        let started_at = Instant::now();
+        let output = command.output()?;
+        let elapsed = started_at.elapsed();
+
+        if !output.status.success() {
+            return Err(format!(
+                "dfx build failed for {target}: {}\nstdout:\n{}\nstderr:\n{}",
+                output.status,
+                String::from_utf8_lossy(&output.stdout).trim(),
+                String::from_utf8_lossy(&output.stderr).trim()
+            )
+            .into());
+        }
+
+        println!(
+            "{:<16} {:<18} {:>9.2}s",
+            target,
+            progress_bar(index + 1, targets.len(), 10),
+            elapsed.as_secs_f64()
+        );
     }
 
+    println!();
     Ok(())
 }
 
@@ -292,6 +906,20 @@ fn format_cycles(value: u128) -> String {
         out.push(ch);
     }
     out
+}
+
+fn progress_bar(current: usize, total: usize, width: usize) -> String {
+    if total == 0 || width == 0 {
+        return "[] 0/0".to_string();
+    }
+
+    let filled = current.saturating_mul(width).div_ceil(total);
+    let filled = filled.min(width);
+    format!(
+        "[{}{}] {current}/{total}",
+        "#".repeat(filled),
+        " ".repeat(width - filled)
+    )
 }
 
 // Ensure the requested replica is reachable before the local install flow begins.
@@ -531,6 +1159,15 @@ fn print_timing_row(label: &str, duration: Duration) {
     println!("{label:<20} {:>9.2}s", duration.as_secs_f64());
 }
 
+// Print the final install result as a compact whitespace table.
+fn print_install_result_summary(network: &str, fleet: &str, state_path: &Path) {
+    println!("Install result:");
+    println!("{:<14} success", "status");
+    println!("{:<14} {}", "fleet", fleet);
+    println!("{:<14} {}", "install_state", state_path.display());
+    println!("{:<14} canic list --network {}", "smoke_check", network);
+}
+
 // Print recent structured root log entries without raw byte dumps.
 fn print_recent_root_logs(root_canister: &str) {
     let page_args = r"(null, null, null, record { limit = 8; offset = 0 })";
@@ -608,6 +1245,21 @@ fn run_command(command: &mut Command) -> Result<(), Box<dyn std::error::Error>> 
     }
 }
 
+// Run one command, require success, and return stdout.
+fn run_command_stdout(command: &mut Command) -> Result<String, Box<dyn std::error::Error>> {
+    let output = command.output()?;
+    if output.status.success() {
+        return Ok(String::from_utf8_lossy(&output.stdout).to_string());
+    }
+
+    Err(format!(
+        "command failed: {}\n{}",
+        output.status,
+        String::from_utf8_lossy(&output.stderr)
+    )
+    .into())
+}
+
 // Run one command and return its status without failing the caller on non-zero exit.
 fn run_command_allow_failure(
     command: &mut Command,
@@ -629,17 +1281,24 @@ fn print_raw_call(root_canister: &str, method: &str) {
 #[cfg(test)]
 mod tests {
     use super::{
-        LOCAL_ROOT_TARGET_CYCLES, dfx_build_target_command, dfx_start_local_command,
-        dfx_stop_command, install_build_session_id, local_install_build_targets,
-        parse_bootstrap_status_value, parse_canister_status_cycles, parse_local_dfx_autostart,
-        parse_root_ready_value, required_local_cycle_topup,
+        INSTALL_STATE_SCHEMA_VERSION, InstallState, LOCAL_ROOT_TARGET_CYCLES,
+        config_selection_error, current_fleet_path, dfx_build_target_command,
+        dfx_start_local_command, dfx_stop_command, discover_canic_config_choices,
+        fleet_install_state_path, install_build_session_id, list_fleets,
+        local_install_build_targets, parse_bootstrap_status_value, parse_canister_status_cycles,
+        parse_local_dfx_autostart, parse_root_ready_value, read_fleet_install_state,
+        read_install_state, required_local_cycle_topup, resolve_install_config_path,
+        write_install_state,
     };
     use serde_json::json;
     use std::{
-        fs,
+        env, fs,
         path::{Path, PathBuf},
+        sync::{Mutex, OnceLock},
         time::{SystemTime, UNIX_EPOCH},
     };
+
+    static ENV_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 
     #[test]
     fn parse_root_ready_accepts_plain_true() {
@@ -841,7 +1500,8 @@ kind = "singleton"
         );
 
         let targets =
-            local_install_build_targets(&workspace_root, "root").expect("targets must resolve");
+            local_install_build_targets(&workspace_root.join("canisters/canic.toml"), "root")
+                .expect("targets must resolve");
 
         assert_eq!(
             targets,
@@ -853,18 +1513,286 @@ kind = "singleton"
         );
     }
 
+    #[test]
+    fn install_config_defaults_to_project_config_when_present() {
+        with_guarded_env(|| {
+            let root = unique_temp_dir("canic-install-config-default");
+            let config = root.join("canisters/canic.toml");
+            fs::create_dir_all(config.parent().expect("config parent")).expect("create parent");
+            fs::write(&config, "").expect("write config");
+            let previous = env::var_os("CANIC_CONFIG_PATH");
+            unsafe {
+                env::remove_var("CANIC_CONFIG_PATH");
+            }
+
+            let resolved = resolve_install_config_path(&root, None).expect("resolve config");
+
+            assert_eq!(resolved, config);
+            restore_env_var("CANIC_CONFIG_PATH", previous);
+            fs::remove_dir_all(root).expect("clean temp dir");
+        });
+    }
+
+    #[test]
+    fn install_config_accepts_explicit_path() {
+        let root = unique_temp_dir("canic-install-config-explicit");
+        let resolved = resolve_install_config_path(&root, Some("canisters/demo/canic.toml"))
+            .expect("resolve config");
+
+        assert_eq!(resolved, root.join("canisters/demo/canic.toml"));
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn install_config_error_lists_choices_when_project_default_missing() {
+        with_guarded_env(|| {
+            let root = unique_temp_dir("canic-install-config-choices");
+            let demo = root.join("canisters/demo/canic.toml");
+            let test = root.join("canisters/test/runtime_probe/canic.toml");
+            fs::create_dir_all(demo.parent().expect("demo parent")).expect("create demo parent");
+            fs::create_dir_all(test.parent().expect("test parent")).expect("create test parent");
+            fs::create_dir_all(root.join("canisters/demo/root")).expect("create demo root");
+            fs::write(
+                &demo,
+                r#"
+[subnets.prime.canisters.root]
+kind = "root"
+
+[subnets.prime.canisters.app]
+kind = "singleton"
+
+[subnets.prime.canisters.user_hub]
+kind = "singleton"
+"#,
+            )
+            .expect("write demo config");
+            fs::write(&test, "").expect("write test config");
+            fs::write(root.join("canisters/demo/root/Cargo.toml"), "")
+                .expect("write demo root manifest");
+            let previous = env::var_os("CANIC_CONFIG_PATH");
+            unsafe {
+                env::remove_var("CANIC_CONFIG_PATH");
+            }
+
+            let err = resolve_install_config_path(&root, None).expect_err("selection must fail");
+            let message = err.to_string();
+
+            assert!(message.contains("missing default Canic config at canisters/canic.toml"));
+            assert!(!message.contains("found one install config:"));
+            assert!(message.contains("canisters/demo/canic.toml"));
+            assert!(message.contains("2 (app, user_hub)"));
+            assert!(message.contains("canisters/canic.toml\n\n#"));
+            assert!(message.contains("2 (app, user_hub)\n\nrun:"));
+            assert!(!message.contains("canisters/test/runtime_probe/canic.toml"));
+            assert!(message.contains("run: canic install --config canisters/demo/canic.toml"));
+
+            restore_env_var("CANIC_CONFIG_PATH", previous);
+            fs::remove_dir_all(root).expect("clean temp dir");
+        });
+    }
+
+    #[test]
+    fn config_selection_error_is_whitespace_table() {
+        let root = unique_temp_dir("canic-install-config-single-table");
+        let config = root.join("canisters/demo/canic.toml");
+        fs::create_dir_all(config.parent().expect("config parent")).expect("create config parent");
+        fs::write(
+            &config,
+            r#"
+[subnets.prime.canisters.root]
+kind = "root"
+
+[subnets.prime.canisters.app]
+kind = "singleton"
+"#,
+        )
+        .expect("write config");
+        let message = config_selection_error(
+            &root,
+            &root.join("canisters/canic.toml"),
+            std::slice::from_ref(&config),
+        );
+
+        assert!(message.contains('#'));
+        assert!(message.contains("CONFIG"));
+        assert!(message.contains("CANISTERS"));
+        assert!(message.contains("canisters/demo/canic.toml"));
+        assert!(message.contains("1 (app)"));
+        assert!(message.contains("canisters/canic.toml\n\n#"));
+        assert!(message.contains("1 (app)\n\nrun:"));
+        assert!(message.contains("run: canic install --config canisters/demo/canic.toml"));
+        fs::remove_dir_all(root).expect("clean temp dir");
+    }
+
+    #[test]
+    fn config_selection_error_lists_multiple_paths_with_numbered_options() {
+        let root = unique_temp_dir("canic-install-config-multiple-table");
+        let demo = root.join("canisters/demo/canic.toml");
+        let example = root.join("canisters/example/canic.toml");
+        fs::create_dir_all(demo.parent().expect("demo parent")).expect("create demo parent");
+        fs::create_dir_all(example.parent().expect("example parent"))
+            .expect("create example parent");
+        fs::write(
+            &demo,
+            r#"
+[subnets.prime.canisters.root]
+kind = "root"
+
+[subnets.prime.canisters.app]
+kind = "singleton"
+"#,
+        )
+        .expect("write demo config");
+        fs::write(
+            &example,
+            r#"
+[subnets.prime.canisters.root]
+kind = "root"
+
+[subnets.prime.canisters.user_hub]
+kind = "singleton"
+
+[subnets.prime.canisters.user_shard]
+kind = "singleton"
+
+[subnets.prime.canisters.scale]
+kind = "singleton"
+
+[subnets.prime.canisters.scale_hub]
+kind = "singleton"
+"#,
+        )
+        .expect("write example config");
+        let message =
+            config_selection_error(&root, &root.join("canisters/canic.toml"), &[demo, example]);
+
+        assert!(message.contains("choose a config path explicitly:"));
+        assert!(message.contains("choose a config path explicitly:\n\n#"));
+        assert!(message.contains('#'));
+        assert!(message.contains("CONFIG"));
+        assert!(message.contains("CANISTERS"));
+        assert!(message.contains("1  canisters/demo/canic.toml"));
+        assert!(message.contains("2  canisters/example/canic.toml"));
+        assert!(message.contains("canisters/demo/canic.toml"));
+        assert!(message.contains("1 (app)"));
+        assert!(message.contains("canisters/example/canic.toml"));
+        assert!(message.contains("4 (scale, scale_hub, user_hub, user_shard)"));
+        assert!(message.contains("4 (scale, scale_hub, user_hub, user_shard)\n\nrun:"));
+        assert!(message.contains("run: canic install --config <path>"));
+        fs::remove_dir_all(root).expect("clean temp dir");
+    }
+
+    #[test]
+    fn discovered_install_config_choices_are_path_sorted() {
+        let root = unique_temp_dir("canic-install-config-sorted");
+        let alpha = root.join("alpha/canic.toml");
+        let zeta = root.join("zeta/canic.toml");
+        fs::create_dir_all(alpha.parent().expect("alpha parent").join("root"))
+            .expect("create alpha root");
+        fs::create_dir_all(zeta.parent().expect("zeta parent").join("root"))
+            .expect("create zeta root");
+        fs::write(&zeta, "").expect("write zeta config");
+        fs::write(&alpha, "").expect("write alpha config");
+        fs::write(
+            alpha
+                .parent()
+                .expect("alpha parent")
+                .join("root/Cargo.toml"),
+            "",
+        )
+        .expect("write alpha root manifest");
+        fs::write(
+            zeta.parent().expect("zeta parent").join("root/Cargo.toml"),
+            "",
+        )
+        .expect("write zeta root manifest");
+
+        let choices = discover_canic_config_choices(&root).expect("discover choices");
+
+        assert_eq!(choices, vec![alpha, zeta]);
+        fs::remove_dir_all(root).expect("clean temp dir");
+    }
+
+    #[test]
+    fn install_state_path_is_scoped_by_network() {
+        assert_eq!(
+            fleet_install_state_path(Path::new("/tmp/canic-project"), "local", "demo"),
+            PathBuf::from("/tmp/canic-project/.canic/local/fleets/demo.json")
+        );
+        assert_eq!(
+            current_fleet_path(Path::new("/tmp/canic-project"), "local"),
+            PathBuf::from("/tmp/canic-project/.canic/local/current-fleet")
+        );
+    }
+
+    #[test]
+    fn install_state_round_trips_from_project_state_dir() {
+        let root = unique_temp_dir("canic-install-state");
+        let state = InstallState {
+            schema_version: INSTALL_STATE_SCHEMA_VERSION,
+            fleet: "demo".to_string(),
+            installed_at_unix_secs: 42,
+            network: "local".to_string(),
+            root_target: "root".to_string(),
+            root_canister_id: "uxrrr-q7777-77774-qaaaq-cai".to_string(),
+            root_build_target: "root".to_string(),
+            workspace_root: root.display().to_string(),
+            dfx_root: root.display().to_string(),
+            config_path: root.join("canisters/canic.toml").display().to_string(),
+            release_set_manifest_path: root
+                .join(".dfx/local/canisters/root/root.release-set.json")
+                .display()
+                .to_string(),
+        };
+
+        let path = write_install_state(&root, "local", &state).expect("write state");
+        let read_back = read_install_state(&root, "local")
+            .expect("read state")
+            .expect("state exists");
+        let named = read_fleet_install_state(&root, "local", "demo")
+            .expect("read named fleet")
+            .expect("named fleet exists");
+        let fleets = list_fleets(&root, "local").expect("list fleets");
+
+        assert_eq!(path, root.join(".canic/local/fleets/demo.json"));
+        assert_eq!(read_back, state);
+        assert_eq!(named, state);
+        assert_eq!(fleets.len(), 1);
+        assert_eq!(fleets[0].name, "demo");
+        assert!(fleets[0].current);
+
+        fs::remove_dir_all(root).expect("clean temp dir");
+    }
+
     fn write_temp_workspace_config(config_source: &str) -> PathBuf {
-        let unique = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("clock must be monotonic enough for test temp dir")
-            .as_nanos();
-        let root = std::env::temp_dir().join(format!(
-            "canic-install-root-test-{}-{unique}",
-            std::process::id()
-        ));
+        let root = unique_temp_dir("canic-install-root-test");
         fs::create_dir_all(root.join("canisters")).expect("temp canisters dir must be created");
         fs::write(root.join("canisters/canic.toml"), config_source)
             .expect("temp canic.toml must be written");
         root
+    }
+
+    fn unique_temp_dir(prefix: &str) -> PathBuf {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("clock must be monotonic enough for test temp dir")
+            .as_nanos();
+        std::env::temp_dir().join(format!("{prefix}-{}-{unique}", std::process::id()))
+    }
+
+    fn with_guarded_env(run: impl FnOnce()) {
+        let lock = ENV_LOCK.get_or_init(|| Mutex::new(()));
+        let _guard = lock.lock().expect("env lock poisoned");
+        run();
+    }
+
+    fn restore_env_var(key: &str, previous: Option<std::ffi::OsString>) {
+        unsafe {
+            if let Some(value) = previous {
+                env::set_var(key, value);
+            } else {
+                env::remove_var(key);
+            }
+        }
     }
 }

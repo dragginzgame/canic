@@ -376,68 +376,55 @@ fn insert_summary_value(
     summary.insert(key.to_string(), value);
 }
 
+// Insert a fixed group of named JSON values into the compact preflight summary.
+fn insert_summary_values<const N: usize>(
+    summary: &mut serde_json::Map<String, serde_json::Value>,
+    values: [(&'static str, serde_json::Value); N],
+) {
+    for (key, value) in values {
+        insert_summary_value(summary, key, value);
+    }
+}
+
 // Insert backup source and validation status fields into the summary.
 fn insert_preflight_source_summary(
     summary: &mut serde_json::Map<String, serde_json::Value>,
     report: &BackupPreflightReport,
 ) {
-    insert_summary_value(summary, "status", json!(report.status));
-    insert_summary_value(summary, "backup_id", json!(report.backup_id));
-    insert_summary_value(summary, "backup_dir", json!(report.backup_dir));
-    insert_summary_value(
+    insert_summary_values(
         summary,
-        "source_environment",
-        json!(report.source_environment),
-    );
-    insert_summary_value(
-        summary,
-        "source_root_canister",
-        json!(report.source_root_canister),
-    );
-    insert_summary_value(summary, "topology_hash", json!(report.topology_hash));
-    insert_summary_value(summary, "mapping_path", json!(report.mapping_path));
-    insert_summary_value(summary, "journal_complete", json!(report.journal_complete));
-    insert_summary_value(
-        summary,
-        "journal_operation_metrics",
-        json!(report.journal_operation_metrics),
-    );
-    insert_summary_value(
-        summary,
-        "inspection_status",
-        json!(report.inspection_status),
-    );
-    insert_summary_value(
-        summary,
-        "provenance_status",
-        json!(report.provenance_status),
-    );
-    insert_summary_value(summary, "backup_id_status", json!(report.backup_id_status));
-    insert_summary_value(
-        summary,
-        "topology_receipts_status",
-        json!(report.topology_receipts_status),
-    );
-    insert_summary_value(
-        summary,
-        "topology_mismatch_count",
-        json!(report.topology_mismatch_count),
-    );
-    insert_summary_value(
-        summary,
-        "integrity_verified",
-        json!(report.integrity_verified),
-    );
-    insert_summary_value(
-        summary,
-        "manifest_design_v1_ready",
-        json!(report.manifest_design_v1_ready),
-    );
-    insert_summary_value(summary, "manifest_members", json!(report.manifest_members));
-    insert_summary_value(
-        summary,
-        "backup_unit_count",
-        json!(report.backup_unit_count),
+        [
+            ("status", json!(report.status)),
+            ("backup_id", json!(report.backup_id)),
+            ("backup_dir", json!(report.backup_dir)),
+            ("source_environment", json!(report.source_environment)),
+            ("source_root_canister", json!(report.source_root_canister)),
+            ("topology_hash", json!(report.topology_hash)),
+            ("mapping_path", json!(report.mapping_path)),
+            ("journal_complete", json!(report.journal_complete)),
+            (
+                "journal_operation_metrics",
+                json!(report.journal_operation_metrics),
+            ),
+            ("inspection_status", json!(report.inspection_status)),
+            ("provenance_status", json!(report.provenance_status)),
+            ("backup_id_status", json!(report.backup_id_status)),
+            (
+                "topology_receipts_status",
+                json!(report.topology_receipts_status),
+            ),
+            (
+                "topology_mismatch_count",
+                json!(report.topology_mismatch_count),
+            ),
+            ("integrity_verified", json!(report.integrity_verified)),
+            (
+                "manifest_design_v1_ready",
+                json!(report.manifest_design_v1_ready),
+            ),
+            ("manifest_members", json!(report.manifest_members)),
+            ("backup_unit_count", json!(report.backup_unit_count)),
+        ],
     );
 }
 
@@ -446,20 +433,19 @@ fn insert_preflight_restore_summary(
     summary: &mut serde_json::Map<String, serde_json::Value>,
     report: &BackupPreflightReport,
 ) {
-    insert_summary_value(
+    insert_summary_values(
         summary,
-        "restore_plan_members",
-        json!(report.restore_plan_members),
-    );
-    insert_summary_value(
-        summary,
-        "restore_mapping_supplied",
-        json!(report.restore_mapping_supplied),
-    );
-    insert_summary_value(
-        summary,
-        "restore_all_sources_mapped",
-        json!(report.restore_all_sources_mapped),
+        [
+            ("restore_plan_members", json!(report.restore_plan_members)),
+            (
+                "restore_mapping_supplied",
+                json!(report.restore_mapping_supplied),
+            ),
+            (
+                "restore_all_sources_mapped",
+                json!(report.restore_all_sources_mapped),
+            ),
+        ],
     );
     insert_preflight_restore_identity_summary(summary, report);
     insert_preflight_restore_readiness_summary(summary, report);
@@ -474,30 +460,27 @@ fn insert_preflight_restore_identity_summary(
     summary: &mut serde_json::Map<String, serde_json::Value>,
     report: &BackupPreflightReport,
 ) {
-    insert_summary_value(
+    insert_summary_values(
         summary,
-        "restore_fixed_members",
-        json!(report.restore_fixed_members),
-    );
-    insert_summary_value(
-        summary,
-        "restore_relocatable_members",
-        json!(report.restore_relocatable_members),
-    );
-    insert_summary_value(
-        summary,
-        "restore_in_place_members",
-        json!(report.restore_in_place_members),
-    );
-    insert_summary_value(
-        summary,
-        "restore_mapped_members",
-        json!(report.restore_mapped_members),
-    );
-    insert_summary_value(
-        summary,
-        "restore_remapped_members",
-        json!(report.restore_remapped_members),
+        [
+            ("restore_fixed_members", json!(report.restore_fixed_members)),
+            (
+                "restore_relocatable_members",
+                json!(report.restore_relocatable_members),
+            ),
+            (
+                "restore_in_place_members",
+                json!(report.restore_in_place_members),
+            ),
+            (
+                "restore_mapped_members",
+                json!(report.restore_mapped_members),
+            ),
+            (
+                "restore_remapped_members",
+                json!(report.restore_remapped_members),
+            ),
+        ],
     );
 }
 
@@ -506,11 +489,15 @@ fn insert_preflight_restore_readiness_summary(
     summary: &mut serde_json::Map<String, serde_json::Value>,
     report: &BackupPreflightReport,
 ) {
-    insert_summary_value(summary, "restore_ready", json!(report.restore_ready));
-    insert_summary_value(
+    insert_summary_values(
         summary,
-        "restore_readiness_reasons",
-        json!(report.restore_readiness_reasons),
+        [
+            ("restore_ready", json!(report.restore_ready)),
+            (
+                "restore_readiness_reasons",
+                json!(report.restore_readiness_reasons),
+            ),
+        ],
     );
 }
 
@@ -519,45 +506,42 @@ fn insert_preflight_restore_snapshot_summary(
     summary: &mut serde_json::Map<String, serde_json::Value>,
     report: &BackupPreflightReport,
 ) {
-    insert_summary_value(
+    insert_summary_values(
         summary,
-        "restore_all_members_have_module_hash",
-        json!(report.restore_all_members_have_module_hash),
-    );
-    insert_summary_value(
-        summary,
-        "restore_all_members_have_wasm_hash",
-        json!(report.restore_all_members_have_wasm_hash),
-    );
-    insert_summary_value(
-        summary,
-        "restore_all_members_have_code_version",
-        json!(report.restore_all_members_have_code_version),
-    );
-    insert_summary_value(
-        summary,
-        "restore_all_members_have_checksum",
-        json!(report.restore_all_members_have_checksum),
-    );
-    insert_summary_value(
-        summary,
-        "restore_members_with_module_hash",
-        json!(report.restore_members_with_module_hash),
-    );
-    insert_summary_value(
-        summary,
-        "restore_members_with_wasm_hash",
-        json!(report.restore_members_with_wasm_hash),
-    );
-    insert_summary_value(
-        summary,
-        "restore_members_with_code_version",
-        json!(report.restore_members_with_code_version),
-    );
-    insert_summary_value(
-        summary,
-        "restore_members_with_checksum",
-        json!(report.restore_members_with_checksum),
+        [
+            (
+                "restore_all_members_have_module_hash",
+                json!(report.restore_all_members_have_module_hash),
+            ),
+            (
+                "restore_all_members_have_wasm_hash",
+                json!(report.restore_all_members_have_wasm_hash),
+            ),
+            (
+                "restore_all_members_have_code_version",
+                json!(report.restore_all_members_have_code_version),
+            ),
+            (
+                "restore_all_members_have_checksum",
+                json!(report.restore_all_members_have_checksum),
+            ),
+            (
+                "restore_members_with_module_hash",
+                json!(report.restore_members_with_module_hash),
+            ),
+            (
+                "restore_members_with_wasm_hash",
+                json!(report.restore_members_with_wasm_hash),
+            ),
+            (
+                "restore_members_with_code_version",
+                json!(report.restore_members_with_code_version),
+            ),
+            (
+                "restore_members_with_checksum",
+                json!(report.restore_members_with_checksum),
+            ),
+        ],
     );
 }
 
@@ -566,40 +550,29 @@ fn insert_preflight_restore_verification_summary(
     summary: &mut serde_json::Map<String, serde_json::Value>,
     report: &BackupPreflightReport,
 ) {
-    insert_summary_value(
+    insert_summary_values(
         summary,
-        "restore_verification_required",
-        json!(report.restore_verification_required),
-    );
-    insert_summary_value(
-        summary,
-        "restore_all_members_have_checks",
-        json!(report.restore_all_members_have_checks),
-    );
-    insert_summary_value(
-        summary,
-        "restore_fleet_checks",
-        json!(report.restore_fleet_checks),
-    );
-    insert_summary_value(
-        summary,
-        "restore_member_check_groups",
-        json!(report.restore_member_check_groups),
-    );
-    insert_summary_value(
-        summary,
-        "restore_member_checks",
-        json!(report.restore_member_checks),
-    );
-    insert_summary_value(
-        summary,
-        "restore_members_with_checks",
-        json!(report.restore_members_with_checks),
-    );
-    insert_summary_value(
-        summary,
-        "restore_total_checks",
-        json!(report.restore_total_checks),
+        [
+            (
+                "restore_verification_required",
+                json!(report.restore_verification_required),
+            ),
+            (
+                "restore_all_members_have_checks",
+                json!(report.restore_all_members_have_checks),
+            ),
+            ("restore_fleet_checks", json!(report.restore_fleet_checks)),
+            (
+                "restore_member_check_groups",
+                json!(report.restore_member_check_groups),
+            ),
+            ("restore_member_checks", json!(report.restore_member_checks)),
+            (
+                "restore_members_with_checks",
+                json!(report.restore_members_with_checks),
+            ),
+            ("restore_total_checks", json!(report.restore_total_checks)),
+        ],
     );
 }
 
@@ -608,35 +581,34 @@ fn insert_preflight_restore_operation_summary(
     summary: &mut serde_json::Map<String, serde_json::Value>,
     report: &BackupPreflightReport,
 ) {
-    insert_summary_value(
+    insert_summary_values(
         summary,
-        "restore_planned_snapshot_uploads",
-        json!(report.restore_planned_snapshot_uploads),
-    );
-    insert_summary_value(
-        summary,
-        "restore_planned_snapshot_loads",
-        json!(report.restore_planned_snapshot_loads),
-    );
-    insert_summary_value(
-        summary,
-        "restore_planned_code_reinstalls",
-        json!(report.restore_planned_code_reinstalls),
-    );
-    insert_summary_value(
-        summary,
-        "restore_planned_verification_checks",
-        json!(report.restore_planned_verification_checks),
-    );
-    insert_summary_value(
-        summary,
-        "restore_planned_operations",
-        json!(report.restore_planned_operations),
-    );
-    insert_summary_value(
-        summary,
-        "restore_planned_phases",
-        json!(report.restore_planned_phases),
+        [
+            (
+                "restore_planned_snapshot_uploads",
+                json!(report.restore_planned_snapshot_uploads),
+            ),
+            (
+                "restore_planned_snapshot_loads",
+                json!(report.restore_planned_snapshot_loads),
+            ),
+            (
+                "restore_planned_code_reinstalls",
+                json!(report.restore_planned_code_reinstalls),
+            ),
+            (
+                "restore_planned_verification_checks",
+                json!(report.restore_planned_verification_checks),
+            ),
+            (
+                "restore_planned_operations",
+                json!(report.restore_planned_operations),
+            ),
+            (
+                "restore_planned_phases",
+                json!(report.restore_planned_phases),
+            ),
+        ],
     );
 }
 
@@ -645,25 +617,23 @@ fn insert_preflight_restore_ordering_summary(
     summary: &mut serde_json::Map<String, serde_json::Value>,
     report: &BackupPreflightReport,
 ) {
-    insert_summary_value(
+    insert_summary_values(
         summary,
-        "restore_phase_count",
-        json!(report.restore_phase_count),
-    );
-    insert_summary_value(
-        summary,
-        "restore_dependency_free_members",
-        json!(report.restore_dependency_free_members),
-    );
-    insert_summary_value(
-        summary,
-        "restore_in_group_parent_edges",
-        json!(report.restore_in_group_parent_edges),
-    );
-    insert_summary_value(
-        summary,
-        "restore_cross_group_parent_edges",
-        json!(report.restore_cross_group_parent_edges),
+        [
+            ("restore_phase_count", json!(report.restore_phase_count)),
+            (
+                "restore_dependency_free_members",
+                json!(report.restore_dependency_free_members),
+            ),
+            (
+                "restore_in_group_parent_edges",
+                json!(report.restore_in_group_parent_edges),
+            ),
+            (
+                "restore_cross_group_parent_edges",
+                json!(report.restore_cross_group_parent_edges),
+            ),
+        ],
     );
 }
 
@@ -672,45 +642,30 @@ fn insert_preflight_report_paths(
     summary: &mut serde_json::Map<String, serde_json::Value>,
     report: &BackupPreflightReport,
 ) {
-    insert_summary_value(
+    insert_summary_values(
         summary,
-        "manifest_validation_path",
-        json!(report.manifest_validation_path),
-    );
-    insert_summary_value(
-        summary,
-        "backup_status_path",
-        json!(report.backup_status_path),
-    );
-    insert_summary_value(
-        summary,
-        "backup_inspection_path",
-        json!(report.backup_inspection_path),
-    );
-    insert_summary_value(
-        summary,
-        "backup_provenance_path",
-        json!(report.backup_provenance_path),
-    );
-    insert_summary_value(
-        summary,
-        "backup_integrity_path",
-        json!(report.backup_integrity_path),
-    );
-    insert_summary_value(
-        summary,
-        "restore_plan_path",
-        json!(report.restore_plan_path),
-    );
-    insert_summary_value(
-        summary,
-        "restore_status_path",
-        json!(report.restore_status_path),
-    );
-    insert_summary_value(
-        summary,
-        "preflight_summary_path",
-        json!(report.preflight_summary_path),
+        [
+            (
+                "manifest_validation_path",
+                json!(report.manifest_validation_path),
+            ),
+            ("backup_status_path", json!(report.backup_status_path)),
+            (
+                "backup_inspection_path",
+                json!(report.backup_inspection_path),
+            ),
+            (
+                "backup_provenance_path",
+                json!(report.backup_provenance_path),
+            ),
+            ("backup_integrity_path", json!(report.backup_integrity_path)),
+            ("restore_plan_path", json!(report.restore_plan_path)),
+            ("restore_status_path", json!(report.restore_status_path)),
+            (
+                "preflight_summary_path",
+                json!(report.preflight_summary_path),
+            ),
+        ],
     );
 }
 

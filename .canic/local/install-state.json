@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "installed_at_unix_secs": 1778085055,
+  "network": "local",
+  "root_target": "root",
+  "root_canister_id": "uxrrr-q7777-77774-qaaaq-cai",
+  "root_build_target": "root",
+  "workspace_root": "/home/adam/projects/canic",
+  "dfx_root": "/home/adam/projects/canic",
+  "config_path": "/home/adam/projects/canic/canisters/demo/canic.toml",
+  "release_set_manifest_path": "/home/adam/projects/canic/.dfx/local/canisters/root/root.release-set.json"
+}

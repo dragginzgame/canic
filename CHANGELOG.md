@@ -7,7 +7,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.31.x] - 2026-05-06 - Snapshot Cleanup
 
-- `0.31.0` starts restore correctness cleanup by stopping normal snapshot restore plans from reinstalling code after `LoadSnapshot`, making snapshot loads consume uploaded target snapshot receipts, resolving upload artifacts from the validated backup root, rendering verification calls as queries by default, locking native runner journal mutations, retaining bounded command output receipts, moving backup preflight logic into `canic-backup`, simplifying the design conformance label, adding `canic --version`, trimming manual restore-journal commands and batch assertion gates in favor of `restore run`, and moving restore/backup option parsing onto `clap`.
+- `0.31.0` cleans up snapshot restore safety, moves more backup/restore logic into `canic-backup`, and trims the restore CLI around `restore run`.
+- It also adds `canic install`, named project-local fleets, numbered config selection, compact install progress output, `canic --version`, and tree-shaped readiness-aware `canic list`.
+- It adds generated standalone build config for sandbox/probe canisters so experiments no longer need throwaway `canic.toml` files.
 
 See detailed breakdown:
 [docs/changelog/0.31.md](docs/changelog/0.31.md)

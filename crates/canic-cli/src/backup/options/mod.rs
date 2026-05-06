@@ -251,11 +251,9 @@ fn flag_arg(id: &'static str) -> Arg {
     Arg::new(id).action(ArgAction::SetTrue)
 }
 
-// Build the current design-conformance flag with its legacy alias.
+// Build the current design-conformance flag.
 fn require_design_arg() -> Arg {
-    flag_arg("require-design")
-        .long("require-design")
-        .alias("require-design-v1")
+    flag_arg("require-design").long("require-design")
 }
 
 // Read one string option from Clap matches.

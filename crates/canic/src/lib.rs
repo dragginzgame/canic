@@ -3,7 +3,8 @@
 //! This crate is the recommended dependency for downstream canister projects. It
 //! re-exports the public Canic runtime surface and provides the common macro entry points:
 //!
-//! - `build!` / `build_root!` for `build.rs` (validate/embed `canic.toml`)
+//! - `build!` / `build_root!` for strict configured canisters
+//! - `build_standalone!` for sandbox/probe canisters with generated minimal config
 //! - `start!` / `start_root!` for `lib.rs` (wire lifecycle hooks and export endpoints)
 //!
 //! For lower-level access, use the `api`, `cdk`, and `memory` modules.
@@ -37,7 +38,9 @@ pub mod __internal {
 #[doc(hidden)]
 #[cfg(any(not(target_arch = "wasm32"), test))]
 pub mod __build {
-    pub use crate::build_support::emit_root_wasm_store_bootstrap_release_set;
+    pub use crate::build_support::{
+        emit_root_wasm_store_bootstrap_release_set, read_config_source_or_default,
+    };
 }
 
 // -----------------------------------------------------------------------------

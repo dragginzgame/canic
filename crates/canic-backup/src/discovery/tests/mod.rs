@@ -1,7 +1,11 @@
 use super::*;
 use candid::Principal;
+use serde_json::json;
 
 const ROOT: Principal = Principal::from_slice(&[]);
+const ROOT_TEXT: &str = "aaaaa-aa";
+const APP_TEXT: &str = "renrk-eyaaa-aaaaa-aaada-cai";
+const WORKER_TEXT: &str = "rno2w-sqaaa-aaaaa-aaacq-cai";
 const HASH: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 
 // Build a deterministic non-root principal for discovery tests.
@@ -67,6 +71,62 @@ fn discovery_requires_verification_checks() {
     assert!(matches!(err, DiscoveryError::MissingVerificationChecks(_)));
 }
 
+// Ensure registry parsing accepts the wrapped dfx JSON shape.
+#[test]
+fn registry_entries_parse_wrapped_dfx_json() {
+    let entries = parse_registry_entries(&registry_json()).expect("parse registry");
+
+    assert_eq!(
+        entries,
+        vec![
+            RegistryEntry {
+                pid: ROOT_TEXT.to_string(),
+                role: Some("root".to_string()),
+                kind: Some("root".to_string()),
+                parent_pid: None,
+            },
+            RegistryEntry {
+                pid: APP_TEXT.to_string(),
+                role: Some("app".to_string()),
+                kind: Some("singleton".to_string()),
+                parent_pid: Some(ROOT_TEXT.to_string()),
+            },
+            RegistryEntry {
+                pid: WORKER_TEXT.to_string(),
+                role: Some("worker".to_string()),
+                kind: Some("replica".to_string()),
+                parent_pid: Some(APP_TEXT.to_string()),
+            },
+        ]
+    );
+}
+
+// Ensure non-recursive target resolution includes only direct children.
+#[test]
+fn registry_targets_include_direct_children() {
+    let entries = parse_registry_entries(&registry_json()).expect("parse registry");
+    let targets = targets_from_registry(&entries, ROOT_TEXT, false).expect("resolve targets");
+    let ids = targets
+        .iter()
+        .map(|target| target.canister_id.as_str())
+        .collect::<Vec<_>>();
+
+    assert_eq!(ids, vec![ROOT_TEXT, APP_TEXT]);
+}
+
+// Ensure recursive target resolution walks the full subtree.
+#[test]
+fn registry_targets_include_recursive_children() {
+    let entries = parse_registry_entries(&registry_json()).expect("parse registry");
+    let targets = targets_from_registry(&entries, ROOT_TEXT, true).expect("resolve targets");
+    let ids = targets
+        .iter()
+        .map(|target| target.canister_id.as_str())
+        .collect::<Vec<_>>();
+
+    assert_eq!(ids, vec![ROOT_TEXT, APP_TEXT, WORKER_TEXT]);
+}
+
 // Build one topology record for tests.
 fn topology_record(pid: Principal, parent_pid: Option<Principal>, role: &str) -> TopologyRecord {
     TopologyRecord {
@@ -107,4 +167,43 @@ fn discovered_member(
             checksum: Some(HASH.to_string()),
         },
     }
+}
+
+// Build representative subnet registry JSON.
+fn registry_json() -> String {
+    json!({
+        "Ok": [
+            {
+                "pid": ROOT_TEXT,
+                "role": "root",
+                "record": {
+                    "pid": ROOT_TEXT,
+                    "role": "root",
+                    "kind": "root",
+                    "parent_pid": null
+                }
+            },
+            {
+                "pid": APP_TEXT,
+                "role": "app",
+                "record": {
+                    "pid": APP_TEXT,
+                    "role": "app",
+                    "kind": "singleton",
+                    "parent_pid": ROOT_TEXT
+                }
+            },
+            {
+                "pid": WORKER_TEXT,
+                "role": "worker",
+                "record": {
+                    "pid": WORKER_TEXT,
+                    "role": "worker",
+                    "kind": "replica",
+                    "parent_pid": [APP_TEXT]
+                }
+            }
+        ]
+    })
+    .to_string()
 }

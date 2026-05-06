@@ -2,7 +2,7 @@
         test-packaged-downstream-wasm-store \
         test-packaged-downstream-installer test-installed-canic-installer \
         test test-wasm test-bump build check clippy fmt fmt-check clean \
-        install install-dev install-canic update-dev demo-install \
+        install install-dev update-dev demo-install \
         ensure-clean ensure-hooks test-unit test-unit-fast \
         test-canisters fmt-core cloc
 
@@ -106,9 +106,6 @@ install-dev:
 install:
 	cargo install --locked --path crates/canic-cli
 
-# Compatibility alias for older local runbooks.
-install-canic: install
-
 # Update the local Rust/Cargo/Python/actionlint/DFX development environment.
 update-dev:
 	bash scripts/dev/install_dev.sh --update-python
@@ -178,7 +175,7 @@ test-installed-canic-installer:
 
 demo-install:
 	@mkdir -p "$(TEST_TMPDIR)"
-	TMPDIR="$(TEST_TMPDIR)" CANIC_WASM_PROFILE="$(if $(CANIC_WASM_PROFILE),$(CANIC_WASM_PROFILE),fast)" $(CARGO_ENV) cargo run -q -p canic-installer --bin canic-install-root -- root
+	TMPDIR="$(TEST_TMPDIR)" CANIC_WASM_PROFILE="$(if $(CANIC_WASM_PROFILE),$(CANIC_WASM_PROFILE),fast)" $(CARGO_ENV) cargo run -q -p canic-cli --bin canic -- install --config canisters/demo/canic.toml
 
 test: clippy test-unit
 

@@ -23,7 +23,22 @@ macro_rules! build_with {
     ($file:expr, |$cfg_str:ident, $cfg_path:ident, $cfg:ident| $body:block) => {{
         $crate::__canic_build_internal! {
             $file,
+            None::<&str>,
             |$cfg_str, $cfg_path, $cfg| $body
+        }
+    }};
+}
+
+/// Generate a minimal standalone config for a non-root experiment canister.
+#[macro_export]
+macro_rules! build_standalone {
+    ($role:expr) => {{
+        $crate::__canic_build_internal! {
+            "canic.toml",
+            Some($role),
+            |cfg_str, cfg_path, cfg| {
+                let _ = (&cfg_str, &cfg_path, &cfg);
+            }
         }
     }};
 }
@@ -42,6 +57,7 @@ macro_rules! build_root_with {
     ($file:expr, |$cfg_str:ident, $cfg_path:ident, $cfg:ident| $body:block) => {{
         $crate::__canic_build_internal! {
             $file,
+            None::<&str>,
             |$cfg_str, $cfg_path, $cfg| {
                 // `start_root!` must always compile the root-only capability
                 // surface, even for test/support crates whose package names do
@@ -61,12 +77,12 @@ macro_rules! build_root_with {
 #[doc(hidden)]
 #[macro_export]
 macro_rules! __canic_build_internal {
-    ($file:expr, |$cfg_str:ident, $cfg_path:ident, $cfg:ident| $body:block) => {{
+    ($file:expr, $default_role:expr, |$cfg_str:ident, $cfg_path:ident, $cfg:ident| $body:block) => {{
         let manifest_dir =
             std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR must be set");
         let default_cfg_path = std::path::PathBuf::from(&manifest_dir).join($file);
         let env_cfg = std::env::var("CANIC_CONFIG_PATH").ok();
-        let $cfg_path = env_cfg.as_ref().map_or(default_cfg_path, |value| {
+        let mut $cfg_path = env_cfg.as_ref().map_or(default_cfg_path, |value| {
             let path = std::path::PathBuf::from(value);
             if path.is_relative() {
                 std::path::PathBuf::from(&manifest_dir).join(path)
@@ -78,17 +94,24 @@ macro_rules! __canic_build_internal {
         println!("cargo:rerun-if-env-changed=DFX_NETWORK");
         println!("cargo:rerun-if-env-changed=CANIC_CONFIG_PATH");
         println!("cargo:rerun-if-env-changed=CANIC_INTERNAL_TEST_ENDPOINTS");
-        if let Some(parent) = $cfg_path.parent() {
+
+        let ($cfg_str, generated_default_config) =
+            $crate::__build::read_config_source_or_default(
+                &$cfg_path,
+                env_cfg.is_some(),
+                $default_role,
+            );
+
+        if generated_default_config {
+            let out_dir =
+                std::path::PathBuf::from(std::env::var("OUT_DIR").expect("OUT_DIR must be set"));
+            let generated_cfg_path = out_dir.join("canic.default.toml");
+            std::fs::write(&generated_cfg_path, &$cfg_str).expect("write default canic config");
+            $cfg_path = generated_cfg_path;
+            println!("cargo:rerun-if-changed={}", $cfg_path.display());
+        } else if let Some(parent) = $cfg_path.parent() {
             println!("cargo:rerun-if-changed={}", parent.display());
         }
-
-        let $cfg_str = match std::fs::read_to_string(&$cfg_path) {
-            Ok(s) => s,
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-                panic!("Missing Canic config at {}", $cfg_path.display())
-            }
-            Err(e) => panic!("Failed to read {}: {}", $cfg_path.display(), e),
-        };
 
         // Validate once on the host, then emit a precompiled runtime model.
         let $cfg = ::std::sync::Arc::new(

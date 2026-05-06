@@ -38,14 +38,24 @@ pub fn emit_root_release_set_manifest(
     dfx_root: &Path,
     network: &str,
 ) -> Result<std::path::PathBuf, Box<dyn std::error::Error>> {
-    let artifact_root = resolve_artifact_root(dfx_root, network)?;
     let config_path = config_path(workspace_root);
+    emit_root_release_set_manifest_with_config(workspace_root, dfx_root, network, &config_path)
+}
+
+// Build and persist the current root release-set manifest with an explicit config path.
+pub fn emit_root_release_set_manifest_with_config(
+    workspace_root: &Path,
+    dfx_root: &Path,
+    network: &str,
+    config_path: &Path,
+) -> Result<std::path::PathBuf, Box<dyn std::error::Error>> {
+    let artifact_root = resolve_artifact_root(dfx_root, network)?;
     let manifest_path = root_release_set_manifest_path(&artifact_root)?;
     let release_version = load_root_package_version(
         &root_manifest_path(workspace_root),
         &workspace_manifest_path(workspace_root),
     )?;
-    let entries = configured_release_roles(&config_path)?
+    let entries = configured_release_roles(config_path)?
         .into_iter()
         .map(|role_name| build_release_set_entry(dfx_root, &artifact_root, &role_name))
         .collect::<Result<Vec<_>, _>>()?;

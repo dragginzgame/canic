@@ -327,9 +327,13 @@ name = "canic-cli"
 version = "0.31.0"
 dependencies = [
  "candid",
+ "canic",
  "canic-backup",
+ "canic-installer",
  "clap",
  "serde",
+ "serde_bytes",
+ "serde_cbor",
  "serde_json",
  "thiserror 2.0.18",
 ]

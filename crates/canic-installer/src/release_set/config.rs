@@ -1,5 +1,9 @@
 use canic_core::bootstrap::parse_config_model;
-use std::{collections::BTreeSet, fs, path::Path};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    fs,
+    path::Path,
+};
 
 // Enumerate the configured ordinary roles that root must publish before bootstrap resumes.
 pub fn configured_release_roles(
@@ -18,6 +22,41 @@ pub fn configured_install_targets(
     let mut targets = vec![root_canister.to_string()];
     targets.extend(configured_release_roles(config_path)?);
     Ok(targets)
+}
+
+// Enumerate configured role kinds across all subnets for operator-facing tables.
+pub fn configured_role_kinds(
+    config_path: &Path,
+) -> Result<BTreeMap<String, String>, Box<dyn std::error::Error>> {
+    let config_source = fs::read_to_string(config_path)?;
+    configured_role_kinds_from_source(&config_source)
+        .map_err(|err| format!("invalid {}: {err}", config_path.display()).into())
+}
+
+// Enumerate configured role kinds from raw config source.
+pub(super) fn configured_role_kinds_from_source(
+    config_source: &str,
+) -> Result<BTreeMap<String, String>, Box<dyn std::error::Error>> {
+    let config = parse_config_model(config_source).map_err(|err| err.to_string())?;
+    let mut kinds = BTreeMap::<String, String>::new();
+
+    for subnet in config.subnets.values() {
+        for (role, canister) in &subnet.canisters {
+            let role = role.as_str().to_string();
+            let kind = canister.kind.to_string();
+            match kinds.get(&role) {
+                Some(existing) if existing != &kind => {
+                    kinds.insert(role, "mixed".to_string());
+                }
+                Some(_) => {}
+                None => {
+                    kinds.insert(role, kind);
+                }
+            }
+        }
+    }
+
+    Ok(kinds)
 }
 
 // Enumerate the configured ordinary roles for the single subnet that owns `root`.

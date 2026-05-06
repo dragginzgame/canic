@@ -14,7 +14,7 @@ The crate was historically known as **ICU** (Internet Computer Utilities). All c
 
 ## Highlights
 
-* **Lifecycle and build macros**: `canic::start!`, `canic::start_root!`, `canic::build!`, and `canic::build_root!` wire IC hooks, endpoint bundles, and compile-time config validation.
+* **Lifecycle and build macros**: `canic::start!`, `canic::start_root!`, `canic::build!`, `canic::build_root!`, and `canic::build_standalone!` wire IC hooks, endpoint bundles, and compile-time config validation.
 * **Topology-aware config**: `canic.toml` describes subnets, roles, singleton/replica/shard/instance placement, warm pools, scaling pools, sharding pools, and directory pools.
 * **Layered runtime APIs**: endpoint guards delegate into `workflow`, `policy`, `ops`, and storage-owned model state instead of mixing orchestration into canister methods.
 * **Self-validating delegated auth**: root signs shard certificates, shards mint user tokens, and verifiers validate token + embedded proof with local root/shard key material. Verifiers do not require proof fanout or proof caches.
@@ -66,7 +66,7 @@ canic = { path = "/path/to/canic/crates/canic" }
 
 ### 2. Configure `build.rs`
 
-Every canister crate should declare a config file (default name: `canic.toml`). Use one of the provided build macros:
+Tree canisters should declare a config file, usually named `canic.toml`. Use one of the provided build macros:
 
 ```rust
 // Root canister build.rs
@@ -83,6 +83,21 @@ fn main() {
 ```
 
 The macro validates the TOML during compilation and exposes the canonical config path via `CANIC_CONFIG_PATH`.
+
+For a temporary sandbox, probe, or one-off local canister that is not the root
+of a configured tree, use a generated standalone config instead:
+
+```rust
+// Standalone non-root build.rs
+fn main() {
+    canic::build_standalone!("sandbox_minimal");
+}
+```
+
+`build_standalone!` generates a minimal topology containing `root` and the
+requested non-root role. If a local `canic.toml` exists, it is used instead.
+If `CANIC_CONFIG_PATH` is set, the build remains strict and the explicit
+config path must exist.
 
 ### 3. Bootstrap your canister
 
@@ -158,10 +173,43 @@ cargo install --locked canic-installer --version <same-version-as-canic>
 Then, from your workspace root:
 
 ```bash
-canic-install-root root
+canic install
 ```
 
-`canic-install-root` owns the local thin-root flow: create local canisters, build `root` plus ordinary roles from the subnet that owns `root`, emit `.dfx/local/canisters/root/root.release-set.json`, reinstall `root`, stage the ordinary release set, resume bootstrap, and wait for `canic_ready`.
+`canic install` owns the local thin-root flow: create local canisters, build `root` plus ordinary roles from the subnet that owns `root`, emit `.dfx/local/canisters/root/root.release-set.json`, reinstall `root`, stage the ordinary release set, resume bootstrap, and wait for `canic_ready`.
+After a successful install, Canic writes project-local fleet state under
+`.canic/<network>/fleets/<fleet>.json` and marks that fleet current for the
+network. That state records the selected root target, resolved root principal,
+build target, config path, and release-set manifest path so later commands know
+which installed Canic fleet this project is using.
+
+The root target defaults to the `root` dfx canister name. To follow normal IC
+operator style, you may pass either a canister name or a principal:
+
+```bash
+canic install root
+canic install uxrrr-q7777-77774-qaaaq-cai
+canic install --root uxrrr-q7777-77774-qaaaq-cai
+canic install --fleet demo --config canisters/demo/canic.toml
+```
+
+Config selection is explicit when more than one topology could apply.
+`canic install` uses `canisters/canic.toml` when that project default exists.
+Otherwise it prints the discovered config choices and asks you to pass
+`--config <path>`:
+
+```bash
+canic install --config canisters/demo/canic.toml
+```
+
+Use `canic fleets` to list installed fleets for the current network, and
+`canic use <fleet>` to switch the default fleet used by commands such as
+`canic list`:
+
+```bash
+canic fleets --network local
+canic use demo --network local
+```
 
 For `DFX_NETWORK=local`, the installer attempts one clean local `dfx` recovery if `dfx ping local` fails. Nonlocal targets must be managed externally.
 
@@ -178,11 +226,28 @@ It still uses `dfx` for live IC snapshot operations, but it owns the higher-leve
 topology selection, manifests, journals, verification reports, and restore
 readiness checks.
 
-Show the live registry tree:
+Show local demo canisters that already have ids:
 
 ```bash
 canic list --network local
 ```
+
+If this only prints the `root` row, `dfx` has reserved the root id but the Canic
+tree is not installed yet. Run `canic install`, then query the installed
+registry with `canic list --network local`. List output uses the canister
+principal as the first column and renders parent/child relationships with
+box-drawing tree branches.
+
+Use `--root` to query a specific installed Canic root, and `--from` to render a
+subtree with the selected node as the displayed root:
+
+```bash
+canic list --root root --from app --network local
+canic list --fleet demo --from app --network local
+```
+
+The CLI calls `canic_ready` on each listed canister and includes a `READY`
+column without failing the whole list for one unavailable canister.
 
 Plan or capture a canister plus its registered children:
 

@@ -20,7 +20,7 @@ That script bootstraps Rust when needed and installs the pinned internal toolcha
 
 ## What this crate is not
 
-This crate is not a general deployment framework and it is not the main Canic application facade. It owns the published build/install/release utilities for standard Canic root/bootstrap/store flows.
+This crate is not a general deployment framework and it is not the main Canic application facade. It owns the published build/install/release utilities for standard Canic root/bootstrap/store flows. For normal operator use, prefer `canic install`; `canic-install-root` remains the lower-level binary for scripts that need the installer package directly.
 
 Public thin-root flow:
 
@@ -72,6 +72,10 @@ If you need to override discovery explicitly, set:
 - `CANIC_CANISTERS_ROOT` for the canister crate root relative to `CANIC_WORKSPACE_ROOT`
 
 or point `CANIC_CONFIG_PATH` at the real `canic.toml` path and the installer will infer the canister-manifest root from that config location.
+
+For `canic install`, the project default is `canisters/canic.toml`. If that
+file is missing and multiple nested `canic.toml` files exist, the command
+prints a choices table and requires `--config <path>` instead of guessing.
 
 If a package name does not follow `canister_<role>`, declare the role mapping
 in `Cargo.toml`:

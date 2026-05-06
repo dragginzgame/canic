@@ -20,7 +20,7 @@ from the resolved `canic` package automatically.
   - `minimal/` – shared runtime baseline canister.
   - `canic.toml` – shared demo topology referenced by each demo canister `build.rs`.
   - `test-configs/` – config fixtures used by local/demo checks.
-- `sandbox/minimal/` – manual local sandbox for temporary endpoint experiments. It uses `canic::start_local!()` with a local minimal config and is not part of `dfx.json`, the demo topology, the reference release set, or automated test fixtures.
+- `sandbox/minimal/` – manual local sandbox for temporary endpoint experiments. It uses `canic::start_local!()` with generated standalone config and is not part of `dfx.json`, the demo topology, the reference release set, or automated test fixtures.
 - `test/` – internal correctness and PocketIC canister fixtures. `runtime_probe/` replaces the older `canister_test` name.
 - `audit/` – internal audit/perf probe canisters used by instruction and capability-surface audits.
 

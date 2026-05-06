@@ -2,7 +2,8 @@ use crate::{
     manifest::{FleetMember, FleetSection, IdentityMode, SourceSnapshot, VerificationCheck},
     topology::{TopologyHasher, TopologyRecord},
 };
-use std::collections::BTreeSet;
+use serde_json::Value;
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use thiserror::Error as ThisError;
 
 ///
@@ -98,6 +99,29 @@ pub struct SnapshotPlan {
 }
 
 ///
+/// RegistryEntry
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RegistryEntry {
+    pub pid: String,
+    pub role: Option<String>,
+    pub kind: Option<String>,
+    pub parent_pid: Option<String>,
+}
+
+///
+/// SnapshotTarget
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SnapshotTarget {
+    pub canister_id: String,
+    pub role: Option<String>,
+    pub parent_canister_id: Option<String>,
+}
+
+///
 /// DiscoveryError
 ///
 
@@ -111,6 +135,113 @@ pub enum DiscoveryError {
 
     #[error("discovered member {0} has no verification checks")]
     MissingVerificationChecks(String),
+
+    #[error("registry JSON must be an array or {{\"Ok\": [...]}}")]
+    InvalidRegistryJsonShape,
+
+    #[error("registry JSON did not contain the requested canister {0}")]
+    CanisterNotInRegistry(String),
+
+    #[error(transparent)]
+    Json(#[from] serde_json::Error),
+}
+
+/// Parse the `dfx --output json` subnet registry shape.
+pub fn parse_registry_entries(registry_json: &str) -> Result<Vec<RegistryEntry>, DiscoveryError> {
+    let data = serde_json::from_str::<Value>(registry_json)?;
+    let entries = data
+        .get("Ok")
+        .and_then(Value::as_array)
+        .or_else(|| data.as_array())
+        .ok_or(DiscoveryError::InvalidRegistryJsonShape)?;
+
+    Ok(entries.iter().filter_map(parse_registry_entry).collect())
+}
+
+/// Resolve selected target and children from registry entries.
+pub fn targets_from_registry(
+    registry: &[RegistryEntry],
+    canister_id: &str,
+    recursive: bool,
+) -> Result<Vec<SnapshotTarget>, DiscoveryError> {
+    let by_pid = registry
+        .iter()
+        .map(|entry| (entry.pid.as_str(), entry))
+        .collect::<BTreeMap<_, _>>();
+
+    let root = by_pid
+        .get(canister_id)
+        .ok_or_else(|| DiscoveryError::CanisterNotInRegistry(canister_id.to_string()))?;
+
+    let mut targets = Vec::new();
+    let mut seen = BTreeSet::new();
+    targets.push(SnapshotTarget {
+        canister_id: root.pid.clone(),
+        role: root.role.clone(),
+        parent_canister_id: root.parent_pid.clone(),
+    });
+    seen.insert(root.pid.clone());
+
+    let mut queue = VecDeque::from([root.pid.clone()]);
+    while let Some(parent) = queue.pop_front() {
+        for child in registry
+            .iter()
+            .filter(|entry| entry.parent_pid.as_deref() == Some(parent.as_str()))
+        {
+            if seen.insert(child.pid.clone()) {
+                targets.push(SnapshotTarget {
+                    canister_id: child.pid.clone(),
+                    role: child.role.clone(),
+                    parent_canister_id: child.parent_pid.clone(),
+                });
+                if recursive {
+                    queue.push_back(child.pid.clone());
+                }
+            }
+        }
+    }
+
+    Ok(targets)
+}
+
+// Parse one registry entry from dfx JSON.
+fn parse_registry_entry(value: &Value) -> Option<RegistryEntry> {
+    let pid = value.get("pid").and_then(Value::as_str)?.to_string();
+    let role = value
+        .get("role")
+        .and_then(Value::as_str)
+        .map(str::to_string);
+    let parent_pid = value
+        .get("record")
+        .and_then(|record| record.get("parent_pid"))
+        .and_then(parse_optional_principal);
+    let kind = value
+        .get("kind")
+        .or_else(|| value.get("record").and_then(|record| record.get("kind")))
+        .and_then(Value::as_str)
+        .map(str::to_string);
+
+    Some(RegistryEntry {
+        pid,
+        role,
+        kind,
+        parent_pid,
+    })
+}
+
+// Parse optional principal JSON emitted as null, string, or optional vector form.
+fn parse_optional_principal(value: &Value) -> Option<String> {
+    if value.is_null() {
+        return None;
+    }
+    if let Some(text) = value.as_str() {
+        return Some(text.to_string());
+    }
+    value
+        .as_array()
+        .and_then(|items| items.first())
+        .and_then(Value::as_str)
+        .map(str::to_string)
 }
 
 // Validate discovery output before building a manifest projection.
