@@ -1,4 +1,7 @@
-use crate::snapshot::{RegistryEntry, SnapshotCommandError, parse_registry_entries};
+use crate::{
+    snapshot::{RegistryEntry, SnapshotCommandError, parse_registry_entries},
+    version_text,
+};
 use std::{
     collections::{BTreeMap, BTreeSet},
     ffi::OsString,
@@ -113,6 +116,14 @@ where
         .is_some_and(|arg| matches!(arg, "help" | "--help" | "-h"))
     {
         println!("{}", usage());
+        return Ok(());
+    }
+    if args
+        .first()
+        .and_then(|arg| arg.to_str())
+        .is_some_and(|arg| matches!(arg, "version" | "--version" | "-V"))
+    {
+        println!("{}", version_text());
         return Ok(());
     }
 

@@ -4,8 +4,13 @@ pub mod manifest;
 pub mod restore;
 pub mod snapshot;
 
+mod output;
+
+use clap::{Arg, ArgAction, Command};
 use std::ffi::OsString;
 use thiserror::Error as ThisError;
+
+const VERSION_TEXT: &str = concat!("canic ", env!("CARGO_PKG_VERSION"));
 
 ///
 /// CliError
@@ -14,7 +19,7 @@ use thiserror::Error as ThisError;
 #[derive(Debug, ThisError)]
 pub enum CliError {
     #[error("{0}")]
-    Usage(&'static str),
+    Usage(String),
 
     #[error(transparent)]
     Backup(#[from] backup::BackupCommandError),
@@ -42,6 +47,16 @@ pub fn run<I>(args: I) -> Result<(), CliError>
 where
     I: IntoIterator<Item = OsString>,
 {
+    let args = args.into_iter().collect::<Vec<_>>();
+    if args
+        .iter()
+        .filter_map(|arg| arg.to_str())
+        .any(|arg| matches!(arg, "version" | "--version" | "-V"))
+    {
+        println!("{}", version_text());
+        return Ok(());
+    }
+
     let mut args = args.into_iter();
     let Some(command) = args.next().and_then(|arg| arg.into_string().ok()) else {
         return Err(CliError::Usage(usage()));
@@ -61,9 +76,42 @@ where
     }
 }
 
+/// Build the top-level command metadata.
+#[must_use]
+pub fn top_level_command() -> Command {
+    Command::new("canic")
+        .about("Operator CLI for Canic fleet backup and restore workflows")
+        .disable_version_flag(true)
+        .arg(
+            Arg::new("version")
+                .short('V')
+                .long("version")
+                .action(ArgAction::SetTrue)
+                .help("Print version"),
+        )
+        .subcommand(Command::new("list").about("Show registry canisters as an ASCII tree"))
+        .subcommand(Command::new("snapshot").about("Capture and download canister snapshots"))
+        .subcommand(
+            Command::new("backup")
+                .about("Inspect, verify, preflight, or smoke-check a backup directory"),
+        )
+        .subcommand(Command::new("manifest").about("Validate fleet backup manifests"))
+        .subcommand(
+            Command::new("restore").about("Plan, preview, summarize, or run restore journals"),
+        )
+        .after_help("Run `canic <command> help` for command-specific help.")
+}
+
+/// Return the CLI version banner.
+#[must_use]
+pub const fn version_text() -> &'static str {
+    VERSION_TEXT
+}
+
 // Return the top-level usage text.
-const fn usage() -> &'static str {
-    "usage: canic <command> [<args>]\n\ncommands:\n  list       Show registry canisters as an ASCII tree.\n  snapshot   Capture and download canister snapshots.\n  backup     Inspect, verify, preflight, or smoke-check a backup directory.\n  manifest   Validate fleet backup manifests.\n  restore    Plan, preview, summarize, or run restore journals.\n\nhelp:\n  canic help\n  canic <command> help"
+fn usage() -> String {
+    let mut command = top_level_command();
+    command.render_help().to_string()
 }
 
 #[cfg(test)]
@@ -75,14 +123,14 @@ mod tests {
     fn usage_lists_command_families_without_nested_flags() {
         let text = usage();
 
-        assert!(text.contains("usage: canic <command> [<args>]"));
+        assert!(text.contains("Usage: canic"));
         assert!(text.contains("list"));
         assert!(text.contains("snapshot"));
         assert!(text.contains("backup"));
         assert!(text.contains("manifest"));
         assert!(text.contains("restore"));
         assert!(text.contains("canic <command> help"));
-        assert!(!text.contains("--require-batch-ready-delta"));
+        assert!(!text.contains("--require-batch"));
         assert!(!text.contains("--require-no-pending-before"));
     }
 
@@ -94,5 +142,25 @@ mod tests {
         assert!(run([OsString::from("restore"), OsString::from("help")]).is_ok());
         assert!(run([OsString::from("manifest"), OsString::from("help")]).is_ok());
         assert!(run([OsString::from("snapshot"), OsString::from("help")]).is_ok());
+    }
+
+    // Ensure version flags are accepted at the top level and command-family level.
+    #[test]
+    fn version_flags_return_ok() {
+        assert_eq!(version_text(), concat!("canic ", env!("CARGO_PKG_VERSION")));
+        assert!(run([OsString::from("--version")]).is_ok());
+        assert!(run([OsString::from("backup"), OsString::from("--version")]).is_ok());
+        assert!(run([OsString::from("list"), OsString::from("--version")]).is_ok());
+        assert!(run([OsString::from("restore"), OsString::from("--version")]).is_ok());
+        assert!(run([OsString::from("manifest"), OsString::from("--version")]).is_ok());
+        assert!(run([OsString::from("snapshot"), OsString::from("--version")]).is_ok());
+        assert!(
+            run([
+                OsString::from("backup"),
+                OsString::from("preflight"),
+                OsString::from("--version")
+            ])
+            .is_ok()
+        );
     }
 }

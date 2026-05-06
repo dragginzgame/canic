@@ -21,9 +21,12 @@ if ! command -v jq >/dev/null 2>&1; then
 fi
 
 tests_pattern='(^|/)(tests/|[^/]*tests\.rs$)'
+crate_column_width=24
+printf -v crate_divider "%*s" "${crate_column_width}" ""
+crate_divider="${crate_divider// /-}"
 
-printf "%-20s %12s %12s %10s\n" "crate" "runtime_loc" "test_loc" "test_%"
-printf "%-20s %12s %12s %10s\n" "--------------------" "------------" "------------" "--------"
+printf "%-*s %12s %12s %10s\n" "${crate_column_width}" "crate" "runtime_loc" "test_loc" "test_%"
+printf "%-*s %12s %12s %10s\n" "${crate_column_width}" "${crate_divider}" "------------" "------------" "--------"
 
 for crate_path in "${crates_dir}"/canic*; do
     [[ -d "${crate_path}" ]] || continue
@@ -53,7 +56,8 @@ for crate_path in "${crates_dir}"/canic*; do
         test_pct="0.0"
     fi
 
-    printf "%-20s %12d %12d %9s%%\n" \
+    printf "%-*s %12d %12d %9s%%\n" \
+        "${crate_column_width}" \
         "${crate_name}" \
         "${runtime_loc}" \
         "${test_loc}" \

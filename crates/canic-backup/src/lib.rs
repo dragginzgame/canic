@@ -9,5 +9,6 @@ pub mod discovery;
 pub mod journal;
 pub mod manifest;
 pub mod persistence;
+pub mod preflight;
 pub mod restore;
 pub mod topology;

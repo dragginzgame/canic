@@ -1,3 +1,4 @@
+use crate::version_text;
 use candid::Principal;
 use canic_backup::{
     artifacts::{ArtifactChecksum, ArtifactChecksumError},
@@ -242,6 +243,10 @@ where
         }
         "help" | "--help" | "-h" => {
             println!("{}", usage());
+            Ok(())
+        }
+        "version" | "--version" | "-V" => {
+            println!("{}", version_text());
             Ok(())
         }
         _ => Err(SnapshotCommandError::UnknownOption(command)),

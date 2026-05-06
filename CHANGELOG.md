@@ -5,7 +5,18 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.31.x] - 2026-05-06 - Snapshot Cleanup
+
+- `0.31.0` starts restore correctness cleanup by stopping normal snapshot restore plans from reinstalling code after `LoadSnapshot`, making snapshot loads consume uploaded target snapshot receipts, resolving upload artifacts from the validated backup root, rendering verification calls as queries by default, locking native runner journal mutations, retaining bounded command output receipts, moving backup preflight logic into `canic-backup`, simplifying the design conformance label, adding `canic --version`, trimming manual restore-journal commands and batch assertion gates in favor of `restore run`, and moving restore/backup option parsing onto `clap`.
+
+See detailed breakdown:
+[docs/changelog/0.31.md](docs/changelog/0.31.md)
+
+---
+
 ## [0.30.x] - 2026-05-03 - Fleet Snapshot Backups
+
+- `0.30.39` trims the `canic` CLI and root README docs into operator-focused guides, removes duplicated installer detail, drops stale canister-layout wording, adds a full 0.30 release audit, and drafts the 0.31 snapshot cleanup plan.
 
 - `0.30.38` adds `canic list`, `canic backup smoke`, easier `canic` binary installs, trimmed CLI help, groups repo-owned canisters by purpose, and removes the old shared reference-support crate.
 

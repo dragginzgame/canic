@@ -1,7 +1,7 @@
+use crate::version_text;
 use canic_backup::manifest::{
-    BackupUnitKind, ConsistencyMode, FleetBackupManifest, ManifestValidationError,
+    FleetBackupManifest, ManifestValidationError, manifest_validation_summary,
 };
-use serde_json::json;
 use std::{
     ffi::OsString,
     fs,
@@ -37,7 +37,7 @@ pub enum ManifestCommandError {
     #[error(transparent)]
     InvalidManifest(#[from] ManifestValidationError),
 
-    #[error("manifest {backup_id} is not design-v1 ready")]
+    #[error("manifest {backup_id} is not design ready")]
     DesignConformanceNotReady { backup_id: String },
 }
 
@@ -72,7 +72,7 @@ impl ManifestValidateOptions {
                     manifest = Some(PathBuf::from(next_value(&mut args, "--manifest")?));
                 }
                 "--out" => out = Some(PathBuf::from(next_value(&mut args, "--out")?)),
-                "--require-design-v1" => require_design_v1 = true,
+                "--require-design" | "--require-design-v1" => require_design_v1 = true,
                 "--help" | "-h" => return Err(ManifestCommandError::Usage(usage())),
                 _ => return Err(ManifestCommandError::UnknownOption(arg)),
             }
@@ -106,6 +106,10 @@ where
         }
         "help" | "--help" | "-h" => {
             println!("{}", usage());
+            Ok(())
+        }
+        "version" | "--version" | "-V" => {
+            println!("{}", version_text());
             Ok(())
         }
         _ => Err(ManifestCommandError::UnknownOption(command)),
@@ -142,37 +146,6 @@ fn write_validation_summary(
     Ok(())
 }
 
-// Build the manifest validation summary emitted by CLI and preflight workflows.
-fn manifest_validation_summary(manifest: &FleetBackupManifest) -> serde_json::Value {
-    let design_conformance = manifest.design_conformance_report();
-
-    json!({
-        "status": "valid",
-        "backup_id": manifest.backup_id,
-        "members": manifest.fleet.members.len(),
-        "backup_unit_count": manifest.consistency.backup_units.len(),
-        "consistency_mode": consistency_mode_name(&manifest.consistency.mode),
-        "topology_hash": manifest.fleet.topology_hash,
-        "topology_hash_algorithm": manifest.fleet.topology_hash_algorithm,
-        "topology_hash_input": manifest.fleet.topology_hash_input,
-        "topology_validation_status": "validated",
-        "design_conformance": design_conformance,
-        "backup_unit_kinds": backup_unit_kind_counts(manifest),
-        "backup_units": manifest
-            .consistency
-            .backup_units
-            .iter()
-            .map(|unit| json!({
-                "unit_id": unit.unit_id,
-                "kind": backup_unit_kind_name(&unit.kind),
-                "role_count": unit.roles.len(),
-                "dependency_count": unit.dependency_closure.len(),
-                "topology_validation": unit.topology_validation,
-            }))
-            .collect::<Vec<_>>(),
-    })
-}
-
 // Fail closed when callers require the v1 backup/restore design contract.
 fn require_design_conformance(
     options: &ManifestValidateOptions,
@@ -192,47 +165,6 @@ fn require_design_conformance(
     }
 }
 
-// Count backup units by stable serialized kind name.
-fn backup_unit_kind_counts(manifest: &FleetBackupManifest) -> serde_json::Value {
-    let mut whole_fleet = 0;
-    let mut control_plane_subset = 0;
-    let mut subtree_rooted = 0;
-    let mut flat = 0;
-    for unit in &manifest.consistency.backup_units {
-        match &unit.kind {
-            BackupUnitKind::WholeFleet => whole_fleet += 1,
-            BackupUnitKind::ControlPlaneSubset => control_plane_subset += 1,
-            BackupUnitKind::SubtreeRooted => subtree_rooted += 1,
-            BackupUnitKind::Flat => flat += 1,
-        }
-    }
-
-    json!({
-        "whole_fleet": whole_fleet,
-        "control_plane_subset": control_plane_subset,
-        "subtree_rooted": subtree_rooted,
-        "flat": flat,
-    })
-}
-
-// Return the stable serialized name for a consistency mode.
-const fn consistency_mode_name(mode: &ConsistencyMode) -> &'static str {
-    match mode {
-        ConsistencyMode::CrashConsistent => "crash-consistent",
-        ConsistencyMode::QuiescedUnit => "quiesced-unit",
-    }
-}
-
-// Return the stable serialized name for a backup unit kind.
-const fn backup_unit_kind_name(kind: &BackupUnitKind) -> &'static str {
-    match kind {
-        BackupUnitKind::WholeFleet => "whole-fleet",
-        BackupUnitKind::ControlPlaneSubset => "control-plane-subset",
-        BackupUnitKind::SubtreeRooted => "subtree-rooted",
-        BackupUnitKind::Flat => "flat",
-    }
-}
-
 // Read the next required option value.
 fn next_value<I>(args: &mut I, option: &'static str) -> Result<String, ManifestCommandError>
 where
@@ -245,7 +177,7 @@ where
 
 // Return manifest command usage text.
 const fn usage() -> &'static str {
-    "usage: canic manifest validate --manifest <file> [--out <file>] [--require-design-v1]"
+    "usage: canic manifest validate --manifest <file> [--out <file>] [--require-design]"
 }
 
 #[cfg(test)]
@@ -269,7 +201,7 @@ mod tests {
             OsString::from("manifest.json"),
             OsString::from("--out"),
             OsString::from("summary.json"),
-            OsString::from("--require-design-v1"),
+            OsString::from("--require-design"),
         ])
         .expect("parse options");
 
@@ -345,7 +277,7 @@ mod tests {
     // Ensure manifest validation can fail closed after writing conformance output.
     #[test]
     fn require_design_v1_fails_after_writing_summary() {
-        let root = temp_dir("canic-cli-manifest-design-v1");
+        let root = temp_dir("canic-cli-manifest-design");
         fs::create_dir_all(&root).expect("create temp root");
         let out = root.join("summary.json");
         let mut manifest = valid_manifest();
@@ -357,8 +289,8 @@ mod tests {
         };
 
         write_validation_summary(&options, &manifest).expect("write summary");
-        let err = require_design_conformance(&options, &manifest)
-            .expect_err("design-v1 gate should fail");
+        let err =
+            require_design_conformance(&options, &manifest).expect_err("design gate should fail");
         let summary: serde_json::Value =
             serde_json::from_slice(&fs::read(&out).expect("read summary")).expect("parse summary");
 

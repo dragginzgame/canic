@@ -37,7 +37,6 @@ The crate was historically known as **ICU** (Internet Computer Utilities). All c
 * `crates/canic-testing-internal/` and `crates/canic-tests/` – repo-only PocketIC harnesses and integration tests.
 * `canisters/demo/` – local reference topology for root, app, user shard/hub, scaling, and minimal baselines.
 * `canisters/test/` and `canisters/audit/` – repo-only correctness canisters and audit probes.
-* `canisters/support/` – shared reference support crates used by demo and test canisters.
 * `canisters/sandbox/minimal/` – manual local sandbox canister for temporary endpoint experiments.
 * `scripts/` – dev setup, CI, release, wasm, and audit helpers.
 * `assets/`, `docs/`, `.github/workflows/` – documentation assets, design/audit notes, and CI.
@@ -129,15 +128,9 @@ After a release is published, install the same binary from crates.io with:
 cargo install --locked canic-cli --version <same-version-as-canic>
 ```
 
-Once installed, inspect the current registered canisters:
-
-```bash
-canic list --network local
-```
-
-By default, `canic list` resolves the current local root with `dfx canister id root`
-and renders the registered topology as an ASCII tree. Use `canic help` or
-`canic <command> help` for command-specific options.
+Use `canic help` or `canic <command> help` for command-specific options, and
+`canic --version` to print the installed CLI version. The first operational
+commands are covered in the snapshot/restore flow below.
 
 For local DFX workflows, prefer the shared setup script:
 
@@ -174,58 +167,9 @@ For `DFX_NETWORK=local`, the installer attempts one clean local `dfx` recovery i
 
 `root` embeds only the bootstrap `wasm_store.wasm.gz`; ordinary child releases stay outside `root` and are staged after install. Visible canister Candid files are generated under `.dfx/local/canisters/<role>/<role>.did`. The checked-in exception is `crates/canic-wasm-store/wasm_store.did`, the canonical interface for the implicit bootstrap `wasm_store` crate.
 
-Canic treats wasm build selection as an explicit three-profile contract:
-
-- `CANIC_WASM_PROFILE=debug` for raw large debug wasm
-- `CANIC_WASM_PROFILE=fast` for the middle local/test/demo lane
-- `CANIC_WASM_PROFILE=release` for shipping/install artifacts
-
-If unset, the published installer/build tools default to `release`.
-
-Typical local fast flow:
-
-```bash
-CANIC_WASM_PROFILE=fast canic-install-root root
-```
-
-If your repo splits the Rust workspace and the DFX app root (for example `backend/` + `frontend/`), point Canic at both roots explicitly:
-
-```bash
-CANIC_WORKSPACE_ROOT=/path/to/repo/backend \
-CANIC_DFX_ROOT=/path/to/repo \
-CANIC_WASM_PROFILE=fast \
-canic-build-canister-artifact root
-```
-
-`CANIC_WORKSPACE_ROOT` controls Cargo, `canic.toml`, and canister manifests. `CANIC_DFX_ROOT` controls `dfx.json`, `.dfx`, emitted artifacts, and the generated bootstrap-store wrapper.
-
-If your canister crates do not live under the default `canisters/` directory, Canic tries Cargo workspace metadata first. Usually no extra config is needed when package names follow the `canister_<role>` convention, even in nested paths such as `src/canisters/project/ledger`.
-
-If you need to override discovery explicitly, set:
-
-```bash
-CANIC_CANISTERS_ROOT=src/canisters
-```
-
-relative to `CANIC_WORKSPACE_ROOT`, or point `CANIC_CONFIG_PATH` at the real `canic.toml` location and Canic will infer the canister-manifest root from that config path.
-
-If a package name does not follow `canister_<role>`, declare the mapping in its
-`Cargo.toml`:
-
-```toml
-[package.metadata.canic]
-role = "project_ledger"
-```
-
-`canic-installer` also publishes lower-level build/install commands:
-
-- `canic-build-canister-artifact`
-- `canic-build-wasm-store-artifact`
-- `canic-emit-root-release-set-manifest`
-- `canic-list-install-targets`
-- `canic-stage-root-release-set`
-
-`canic-list-install-targets` prints `root` first, then ordinary roles from the single subnet that owns `root`. It excludes the implicit bootstrap `wasm_store`.
+For build profiles, split workspace/DFX roots, custom canister roots, role
+metadata, and lower-level build/install commands, see
+`crates/canic-installer/README.md`.
 
 ### 6. Operator Snapshot and Restore Flow
 
@@ -263,7 +207,7 @@ Validate a captured backup before restore planning:
 canic backup smoke \
   --dir backups/<run-id> \
   --out-dir smoke/<run-id> \
-  --require-design-v1 \
+  --require-design \
   --require-restore-ready
 ```
 
@@ -272,7 +216,7 @@ Restore work is manifest/journal driven. `restore plan`, `restore status`,
 checking mappings, ordering, checksums, verification coverage, and runner
 commands before execution.
 
-See `crates/canic-cli/README.md` for the full command reference and
+See `crates/canic-cli/README.md` for the operator guide and
 `docs/operations/0.30-backup-restore-smoke.md` for the release smoke checklist.
 
 If you are writing host-side PocketIC tests against Canic, prefer

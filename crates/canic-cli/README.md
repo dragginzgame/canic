@@ -1,8 +1,16 @@
 # canic-cli
 
-Operator CLI for Canic backup and restore workflows.
+`canic-cli` publishes the `canic` operator binary. It is the command-line
+surface for listing a Canic fleet, capturing canister snapshots, validating
+backup artifacts, and preparing guarded restores.
 
-Install from this checkout:
+The CLI currently wraps `dfx` for live snapshot and restore mutations. Canic
+owns the topology selection, manifests, journals, readiness checks, restore
+ordering, and runner state around those `dfx` calls.
+
+## Install
+
+Install from a checkout:
 
 ```bash
 cargo install --locked --path crates/canic-cli
@@ -15,8 +23,10 @@ Install from crates.io after a release:
 cargo install --locked canic-cli --version <version>
 ```
 
-For the release smoke path, use the canonical checklist in
-[docs/operations/0.30-backup-restore-smoke.md](../../docs/operations/0.30-backup-restore-smoke.md).
+For a full local development setup, including `dfx`, helper tools,
+`canic-cli`, and `canic-installer`, use the install script in the root README.
+
+## First Commands
 
 Show the current registered fleet as an ASCII tree:
 
@@ -29,142 +39,81 @@ By default, `canic list` resolves the current project's root with
 root, `--canister <id>` to print one subtree, or `--registry-json <file>` to
 render a saved `canic_subnet_registry` response without calling `dfx`.
 
-The initial command focuses on snapshot capture/download planning and execution
-for a canister plus its registry-discovered children.
+Run command-specific help when you need exact flags:
+
+```bash
+canic <command> help
+```
+
+Print the installed CLI version with `canic --version`. The flag is accepted
+at any command depth, so `canic backup preflight --version` reports the binary
+version instead of running the command.
+
+## Happy Path
+
+Capture a canister and its direct registered children:
 
 ```bash
 canic snapshot download \
   --canister <canister-id> \
   --root <root-canister-id> \
   --include-children \
-  --out backups/<run-id> \
-  --dry-run
+  --out backups/<run-id>
 ```
 
 Use `--recursive` instead of `--include-children` to include all descendants.
-Use `--registry-json <file>` to plan from a saved `canic_subnet_registry`
-response instead of querying a live root. Non-dry-run captures recompute the
-selection topology immediately before snapshot creation and fail if the hash
-changed since discovery.
+Use `--dry-run` to compute the target set without creating or downloading
+snapshots. Use `--registry-json <file>` to plan from a saved registry response
+instead of querying a live root.
 
-DFX only creates snapshots for stopped canisters. Pass
+Non-dry-run captures recompute the selected topology immediately before
+snapshot creation and fail if the topology hash changed since discovery. This
+keeps subtree backups from silently crossing a registry change.
+
+`dfx` creates snapshots only for stopped canisters. Pass
 `--stop-before-snapshot --resume-after-snapshot` when the CLI should perform
 that local lifecycle step around each captured artifact.
 
-Successful non-dry-run captures write the canonical backup layout: manifest,
-download journal, and durable artifact directories. Generated manifests include
-each durable artifact checksum so verification can detect manifest/journal
-drift before restore planning. Download journals also include
-`operation_metrics` counters for target count, snapshot create, snapshot
-download, checksum verification, and artifact finalization progress.
-
-Validate a captured manifest before restore planning:
-
-```bash
-canic manifest validate \
-  --manifest backups/<run-id>/manifest.json \
-  --out manifest-validation.json \
-  --require-design-v1
-```
-
-The validation summary includes topology hash inputs, consistency mode, backup
-unit counts, kind counts, per-unit topology validation metadata, and a
-`design_conformance` object for the v1 backup/restore contract. The conformance
-report summarizes topology hash stability, explicit backup-unit boundaries,
-quiescence strategy coverage, member verification coverage, identity modes,
-snapshot artifact provenance, and parent-before-child restore-group ordering.
-`--require-design-v1` still writes the validation summary, then exits with an
-error when any design conformance check is not ready.
-
-Inspect resumable journal status:
-
-```bash
-canic backup status \
-  --dir backups/<run-id> \
-  --out backup-status.json \
-  --require-complete
-```
-
-`--require-complete` still writes the JSON status report, then exits with an
-error when any artifact has resume work remaining.
-
-Inspect manifest and journal agreement without reading artifact bytes:
-
-```bash
-canic backup inspect \
-  --dir backups/<run-id> \
-  --out backup-inspection.json \
-  --require-ready
-```
-
-`--require-ready` still writes the JSON inspection report, then exits with an
-error when manifest and journal metadata, including topology receipts, are not
-ready for full verification.
-
-Emit a provenance report for audit/review workflows:
-
-```bash
-canic backup provenance \
-  --dir backups/<run-id> \
-  --out backup-provenance.json \
-  --require-consistent
-```
-
-The report records source/tool metadata, topology receipts, declared backup
-units, and each member's snapshot/code/artifact provenance without reading
-artifact bytes. `--require-consistent` still writes the JSON report, then exits
-with an error when manifest and journal backup IDs or topology receipts drift.
-
-Verify the backup layout and durable artifact checksums:
-
-```bash
-canic backup verify \
-  --dir backups/<run-id> \
-  --out backup-integrity.json
-```
-
-Run the standard no-mutation preflight bundle:
-
-```bash
-canic backup preflight \
-  --dir backups/<run-id> \
-  --out-dir preflight/<run-id> \
-  --mapping restore-map.json \
-  --require-design-v1 \
-  --require-restore-ready
-```
-
-Preflight writes `manifest-validation.json`, `backup-status.json`,
-`backup-inspection.json`, `backup-provenance.json`, `backup-integrity.json`,
-`restore-plan.json`, `restore-status.json`, and `preflight-summary.json`.
-The summary records the backup ID, source root, environment, topology hash,
-readiness statuses, provenance consistency status, topology mismatch count,
-journal operation metrics, `manifest_design_v1_ready`, member counts, restore
-identity/snapshot/verification/operation/ordering counts, snapshot provenance
-readiness booleans, verification readiness booleans, `restore_mapping_supplied`,
-`restore_all_sources_mapped`, `restore_ready`, stable
-`restore_readiness_reasons`, and paths to the generated reports.
-`--require-design-v1` still writes the full report bundle, then exits with an
-error when manifest design conformance is not ready.
-`--require-restore-ready` still writes the full report bundle, then exits with
-an error when `restore_ready` is false.
-
-Run the full post-capture smoke wrapper:
+Run the standard post-capture smoke wrapper:
 
 ```bash
 canic backup smoke \
   --dir backups/<run-id> \
   --out-dir smoke/<run-id> \
-  --require-design-v1 \
+  --require-design \
   --require-restore-ready
 ```
 
-Smoke writes the preflight bundle under `preflight/`, renders
-`restore-apply-dry-run.json`, writes `restore-apply-journal.json`, previews the
-native runner into `restore-run-dry-run.json`, and records the paths and
-readiness flags in `smoke-summary.json`. It does not execute restore operations.
+Smoke is no-mutation. It writes the preflight report bundle, renders restore
+operations, creates a restore apply journal, previews the native runner path,
+and records the readiness flags in `smoke-summary.json`.
 
-Restore planning is manifest-driven and performs no mutations:
+For the release smoke path, use the canonical checklist:
+[docs/operations/0.30-backup-restore-smoke.md](../../docs/operations/0.30-backup-restore-smoke.md).
+
+## Backup Checks
+
+Use these commands after capture and before restore planning:
+
+- `canic manifest validate` checks manifest shape, topology hash inputs,
+  backup units, and design conformance.
+- `canic backup status` summarizes resumable download journal progress.
+- `canic backup inspect` compares manifest and journal metadata without reading
+  artifact bytes.
+- `canic backup provenance` reports source, topology, unit, member, snapshot,
+  code, and artifact provenance.
+- `canic backup verify` reads durable artifacts and verifies checksums.
+- `canic backup preflight` runs the standard no-mutation validation bundle and
+  emits restore planning/status reports.
+- `canic backup smoke` runs preflight plus restore dry-run and runner preview.
+
+The stricter flags intentionally write their reports before returning a nonzero
+exit code. That lets CI and operators inspect the failure artifact that explains
+why a backup is not ready.
+
+## Restore Planning
+
+Restore starts from a manifest, not from loose snapshot files:
 
 ```bash
 canic restore plan \
@@ -172,34 +121,17 @@ canic restore plan \
   --mapping restore-map.json \
   --out restore-plan.json \
   --require-verified \
-  --require-design-v1 \
+  --require-design \
   --require-restore-ready
 ```
 
-`--require-verified` runs the same manifest, journal, durable artifact, and
-checksum checks as `canic backup verify` before emitting the plan.
-`--require-design-v1` still writes the restore plan, then exits with an error
-when manifest design conformance is not ready.
-`--require-restore-ready` still writes the restore plan, then exits with an
-error when `readiness_summary.ready` is false.
-Restore plans include an `identity_summary` with explicit mapping mode,
-all-sources-mapped status, and fixed, relocatable, mapped, in-place, and
-remapped member counts. They also include a `snapshot_summary` with module
-hash, wasm hash, code version, and checksum coverage counts and readiness
-booleans, plus a `verification_summary` with post-restore check counts,
-`verification_required`, and `all_members_have_checks`. A `design_conformance`
-object carries the manifest design-v1 report into the restore plan artifact,
-and a `readiness_summary` collapses those signals into a single `ready` flag
-and stable reason strings. Plans also include an `operation_summary` with
-planned snapshot uploads, loads, code reinstalls, verification checks, total
-operations, and phases, a `fleet_verification_checks` list for fleet-level
-checks, plus an `ordering_summary` and per-member ordering dependency metadata
-so dry-runs show when parent relationships are satisfied inside the same
-restore group or by an earlier group. Role-level
-`verification.member_checks` are expanded onto matching members during planning,
-and non-empty check `roles` filters limit a check to matching member roles.
+Planning performs no mutations. It validates mapping, identity mode, snapshot
+provenance, verification coverage, artifact checksums when requested, and
+restore ordering. Plans include operation counts and parent-before-child
+ordering metadata so operators can see the intended restore sequence before any
+target is touched.
 
-Emit the initial restore execution status from a plan:
+Create the initial restore status:
 
 ```bash
 canic restore status \
@@ -207,11 +139,7 @@ canic restore status \
   --out restore-status.json
 ```
 
-Restore status is no-mutation. It copies the plan identity, readiness,
-verification, phase, and operation counts, then marks each planned member as
-`planned` with its source/target canister, snapshot ID, and artifact path.
-
-Render the restore execution operations without mutating targets:
+Render operations and create an apply journal:
 
 ```bash
 canic restore apply \
@@ -223,75 +151,13 @@ canic restore apply \
   --journal-out restore-apply-journal.json
 ```
 
-Apply dry-run output expands the restore phases into ordered upload, load,
-reinstall, member verification, and final `verify-fleet` operations. Fleet
-verification commands run after member work and target the restored fleet root.
-When `--backup-dir` is supplied, the dry-run also verifies that referenced
-artifact paths stay under that backup directory, exist on disk, and match their
-expected SHA-256 checksums when the plan includes checksums. When `--journal-out`
-is supplied, the command also writes an initial apply journal with each
-operation marked `ready` or `blocked` and stable blocking reasons. The command
-requires `--dry-run`; real restore execution is intentionally not enabled yet.
-Dry-run output also includes `operation_counts` so operators can compare the
-rendered operation mix before writing or running a journal. Generated apply
-journals persist the same counts and validate them against the concrete journal
-operations when a runner resumes from disk. Status, report, and runner summary
-output include `operation_counts_supplied` to show whether the journal carried a
-persisted receipt or the counts were recomputed from older journal data.
+`restore apply` currently requires `--dry-run`; direct mutation through that
+command is intentionally disabled. The generated journal is the input to the
+guarded runner.
 
-Summarize a restore apply journal:
+## Guarded Runner
 
-```bash
-canic restore apply-status \
-  --journal restore-apply-journal.json \
-  --out restore-apply-status.json \
-  --require-ready \
-  --require-no-pending \
-  --require-no-failed \
-  --require-complete
-```
-
-Use `--require-ready` when scripts should stop if the journal still has blocked
-restore operations. Use `--require-no-pending` when scripts should stop if a
-restore operation is already claimed and needs inspection or `apply-unclaim`.
-Use `--require-no-failed` when failed operations should stop the runner before
-completion checks. Use `--require-complete` when scripts should fail until every
-apply operation is completed. Apply status output also includes
-`operation_counts`, broken down by snapshot uploads, snapshot loads, code
-reinstalls, member verifications, fleet verifications, and total verification
-operations. The `progress` object reports total, completed, remaining,
-transitionable, attention-needed, and basis-point completion counts.
-Use `--require-remaining-count <n>`, `--require-attention-count <n>`, and
-`--require-completion-basis-points <n>` when automation should fail after
-writing status unless the integer progress summary matches the expected restore
-state.
-The `pending_summary` object reports the claimed operation sequence, operation
-kind, update marker, and whether that marker is known. Use
-`--require-no-pending-before <text>` with comparable update markers such as
-UTC RFC3339 timestamps to fail after writing status when pending work is older
-than the cutoff or has no known marker.
-
-Write an operator-focused restore apply report:
-
-```bash
-canic restore apply-report \
-  --journal restore-apply-journal.json \
-  --out restore-apply-report.json \
-  --require-no-attention
-```
-
-Apply reports include one high-level outcome, attention-required status,
-operation counts, operation-kind counts, progress, blocked reasons, the next
-transitionable operation, and the pending, failed, and blocked operation rows
-that need review. Use
-`--require-no-attention` when CI should fail after writing the report if the
-journal has pending, failed, or blocked work.
-The same `--require-remaining-count <n>`, `--require-attention-count <n>`, and
-`--require-completion-basis-points <n>` gates are available for report output.
-Reports also include `pending_summary` and support
-`--require-no-pending-before <text>` for stale pending-work detection.
-
-Preview or run the maintained restore runner path:
+Preview the maintained runner path without calling `dfx`:
 
 ```bash
 canic restore run \
@@ -301,9 +167,7 @@ canic restore run \
   --out restore-run-dry-run.json
 ```
 
-Use `restore run --dry-run` to preview the native runner path from the apply
-journal. It emits the current status, attention summary, next transition, and
-next `dfx` command without mutating the journal or calling `dfx`.
+Execute a cautious one-step batch:
 
 ```bash
 canic restore run \
@@ -313,72 +177,16 @@ canic restore run \
   --max-steps 1 \
   --updated-at 2026-05-05T12:03:00Z \
   --out restore-run.json \
-  --require-run-mode execute \
-  --require-stopped-reason max-steps-reached \
-  --require-next-action rerun \
-  --require-executed-count 1 \
   --require-no-attention
 ```
 
-Use `restore run --execute` to let `canic` own the guarded runner loop. It
-checks readiness, claims the next sequence, runs the generated `dfx` command,
-marks the operation completed or failed, and persists the journal after each
-transition. `--max-steps` is useful for cautious incremental restores. Add
-`--require-complete` or `--require-no-attention` when CI should write the run
-summary and then fail if the journal is incomplete or still needs review.
-`--max-steps` must be at least `1`; zero-length execute batches are rejected
-before the runner reads or mutates the journal.
-Use `--updated-at <text>` to stamp runner-owned pending, completed, failed, and
-recovered operation states with a comparable marker such as an RFC3339
-timestamp; otherwise the marker remains `unknown`. Runner summaries echo a
-supplied marker as `requested_state_updated_at`, including dry-runs or runs
-that emit no operation receipts.
-Use `--require-receipt-updated-at <text>` when CI should fail after writing the
-runner summary unless every emitted operation receipt carries the expected
-state marker.
-Use `--require-state-updated-at <text>` when CI should fail after writing the
-runner summary unless `requested_state_updated_at` matches, including dry-runs
-or runs that emit no receipts.
-If a generated command fails, the runner still writes the summary and updated
-journal before returning a nonzero error.
-Every runner summary includes `run_mode`, `stopped_reason`, `next_action`,
-progress, pending summary, batch summary, operation receipts, and
-operation-kind counts so automation can decide whether to rerun, inspect a
-failed operation, recover a pending operation, fix blocked inputs, or stop.
-`batch_summary` reports requested max steps, initial ready operations, initial
-remaining operations, executed operations, remaining ready operations, remaining
-total operations, ready-work delta, remaining-work delta, whether the run
-stopped because of the max-step limit, and completion state.
-`operation_receipts` is the uniform audit stream for command completion,
-command failure, and pending recovery events, while `operation_receipt_summary`
-gives compact totals for completed commands, failed commands, and recovered
-pending work. Older compatibility fields such as `executed_operations` and
-`recovered_operation` remain available.
-Use `--require-run-mode <text>`, `--require-stopped-reason <text>`, and
-`--require-next-action <text>` when CI should write the summary and then fail
-unless the runner stopped in the expected state.
-Use `--require-executed-count <n>` when a batched run must execute exactly the
-expected number of operations.
-Use `--require-batch-initial-ready-count <n>`,
-`--require-batch-executed-count <n>`,
-`--require-batch-remaining-ready-count <n>`,
-`--require-batch-ready-delta <n>`, `--require-batch-remaining-delta <n>`, and
-`--require-batch-stopped-by-max-steps true|false` when automation needs the
-runner to fail closed unless the batch started, changed, and stopped as
-expected.
-Use `--require-receipt-count <n>` when automation must see exactly the expected
-number of operation audit receipts, including execute and pending-recovery
-events.
-Use `--require-completed-receipt-count <n>`,
-`--require-failed-receipt-count <n>`, and
-`--require-recovered-receipt-count <n>` when automation needs to distinguish
-successful commands, failed commands, and recovered pending work.
-Use `--require-remaining-count <n>`, `--require-attention-count <n>`, and
-`--require-completion-basis-points <n>` to gate runner summaries on the same
-progress fields exposed by `apply-status` and `apply-report`.
-Use `--require-no-pending-before <text>` to make runner automation fail after
-writing the summary when a pending claim is older than the cutoff or has no
-known marker.
+The native runner checks journal readiness, claims the next operation, runs the
+generated `dfx` command, marks the operation completed or failed, and persists
+the journal after each transition. `--max-steps 1` is the safest operational
+mode while validating a new restore path.
+
+If a previous runner stopped after claiming work, release the pending operation
+back to ready:
 
 ```bash
 canic restore run \
@@ -388,148 +196,30 @@ canic restore run \
   --out restore-run-recovery.json
 ```
 
-Use `restore run --unclaim-pending` after an interrupted runner leaves one
-operation pending. It moves the pending operation back to ready, writes the
-updated journal, and emits a recovery summary.
+## Restore Journal Tools
 
-```bash
-scripts/restore/apply_journal.sh \
-  --journal restore-apply-journal.json \
-  --execute \
-  --network local \
-  --out restore-run.json
-```
+These commands inspect the journal produced by `restore apply --dry-run`:
 
-The script remains as a small compatibility wrapper around
-`canic restore run`. It defaults to `--execute` for existing callers, can also
-pass through `--dry-run` and `--unclaim-pending`, and accepts the older
-`--report-out`, `--status-out`, and `--command-out` flags for existing runbooks.
-The native runner now owns the guarded status, claim, `dfx` execution, marking,
-and summary behavior.
+- `canic restore apply-status` summarizes progress, blocked work, pending
+  claims, failed operations, and completion counts.
+- `canic restore apply-report` writes an operator-focused report for the work
+  needing attention.
 
-Emit the full next transitionable operation for an external runner:
+`canic restore run` is the only maintained command for advancing a restore
+journal. It owns command preview, claiming, execution, completion/failure
+records, and pending-operation recovery.
 
-```bash
-canic restore apply-next \
-  --journal restore-apply-journal.json \
-  --out restore-apply-next.json
-```
+The compatibility wrapper `scripts/restore/apply_journal.sh` remains available
+for older runbooks, but it delegates to `canic restore run`.
 
-Preview the `dfx` command for the next transitionable operation without
-executing it:
+## Safety Model
 
-```bash
-canic restore apply-command \
-  --journal restore-apply-journal.json \
-  --network local \
-  --out restore-apply-command.json \
-  --require-command
-```
-
-Use `--dfx <path>` when the runner should preview a non-default `dfx` binary.
-Use `--require-command` when scripts should fail after writing the preview if no
-executable operation is available.
-
-Claim the next operation before executing it in an external runner:
-
-```bash
-canic restore apply-claim \
-  --journal restore-apply-journal.json \
-  --sequence 0 \
-  --updated-at 2026-05-04T12:00:00Z \
-  --out restore-apply-journal.json
-```
-
-Claiming marks the next ready operation `pending`. Pending operations remain the
-next transitionable operation until `apply-mark` records them as completed or
-failed, which lets interrupted runners resume from the same journal. Use
-`--sequence <n>` to fail if the next transitionable operation no longer matches
-the operation the runner previewed. Use `--updated-at <text>` to record a
-runner-provided state marker; when omitted, the CLI writes `unknown`.
-
-Release the current pending operation back to ready when a runner stopped before
-executing it:
-
-```bash
-canic restore apply-unclaim \
-  --journal restore-apply-journal.json \
-  --sequence 0 \
-  --updated-at 2026-05-04T12:01:00Z \
-  --out restore-apply-journal.json
-```
-
-Use `--sequence <n>` with `apply-unclaim` when recovery scripts should only
-release the pending operation they inspected.
-
-Mark one journal operation after an external restore step completes or fails:
-
-```bash
-canic restore apply-mark \
-  --journal restore-apply-journal.json \
-  --sequence 0 \
-  --state completed \
-  --updated-at 2026-05-04T12:02:00Z \
-  --out restore-apply-journal.json \
-  --require-pending
-```
-
-Use `--state failed --reason <text>` to record a failed operation. The command
-validates the input journal, refuses to skip earlier ready operations, refreshes
-operation counts, and writes the updated journal without executing any restore
-mutation. Use `--require-pending` when runners should only mark operations that
-were claimed first.
-
-Example external restore runner loop:
-
-```bash
-set -euo pipefail
-
-journal=restore-apply-journal.json
-network=local
-
-while true; do
-  canic restore apply-status \
-    --journal "$journal" \
-    --out restore-apply-status.json \
-    --require-ready \
-    --require-no-pending \
-    --require-no-failed
-
-  if canic restore apply-status \
-    --journal "$journal" \
-    --out restore-apply-status.json \
-    --require-complete; then
-    break
-  fi
-
-  canic restore apply-command \
-    --journal "$journal" \
-    --network "$network" \
-    --out restore-apply-command.json \
-    --require-command
-
-  sequence="$(jq -r '.operation.sequence' restore-apply-command.json)"
-  command="$(jq -r '[.command.program] + .command.args | @sh' restore-apply-command.json)"
-  updated_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-
-  canic restore apply-claim \
-    --journal "$journal" \
-    --sequence "$sequence" \
-    --updated-at "$updated_at" \
-    --out "$journal"
-
-  eval "$command"
-
-  canic restore apply-mark \
-    --journal "$journal" \
-    --sequence "$sequence" \
-    --state completed \
-    --updated-at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-    --out "$journal" \
-    --require-pending
-done
-```
-
-If the runner stops after claiming work but before executing the previewed
-command, inspect `restore-apply-status.json` and use `apply-unclaim --sequence
-<n>` to release the pending operation back to `ready`.
+- Directory data may select a root, but topology defines membership.
+- Captures fail closed when the selected topology hash changes before snapshot
+  creation.
+- Backup manifests carry topology, unit, identity, snapshot, artifact,
+  provenance, and verification metadata.
+- Restore planning is no-mutation and must prove mapping, ordering, checksum,
+  verification, and design-conformance readiness before execution.
+- Runner summaries and journals are durable audit artifacts; failures still
+  write status before returning a nonzero exit code.
