@@ -112,7 +112,7 @@ Populate `canic.toml` with subnet definitions, role policies, index exposure, an
 To get the `canic` operator binary from a checkout:
 
 ```bash
-make install-canic
+make install
 canic help
 ```
 
@@ -135,7 +135,7 @@ commands are covered in the snapshot/restore flow below.
 For local DFX workflows, prefer the shared setup script:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/dragginzgame/canic/v0.30.38/scripts/dev/install_dev.sh | bash
+curl -fsSL https://raw.githubusercontent.com/dragginzgame/canic/v0.31.0/scripts/dev/install_dev.sh | bash
 ```
 
 The script installs Rust when needed, the repo-local Rust `1.95.0` toolchain, `wasm32-unknown-unknown`, `rustfmt`, `clippy`, Candid/wasm utilities, `actionlint`, common Cargo helper tools, and `dfx` when missing.
@@ -143,7 +143,7 @@ The script installs Rust when needed, the repo-local Rust `1.95.0` toolchain, `w
 It also installs:
 
 - `canic-cli` as the `canic` command
-- `canic-installer` `0.30.38`
+- `canic-installer` `0.31.0`
 
 Published crates still declare MSRV `1.91.0` for downstream source builds.
 
