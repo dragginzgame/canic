@@ -22,7 +22,12 @@ ensure_packaged_crate() {
     local crate_name="$1"
     local crate_archive="$PACKAGE_STAGING_ROOT/$crate_name-$VERSION.crate"
     rm -f "$crate_archive"
-    cargo package -p "$crate_name" --allow-dirty --no-verify >/dev/null
+    if [ "$crate_name" = "canic-cli" ]; then
+        cargo package -p "$crate_name" --allow-dirty --no-verify \
+            --config "patch.crates-io.canic-host.path=\"$ROOT/crates/canic-host\"" >/dev/null
+    else
+        cargo package -p "$crate_name" --allow-dirty --no-verify >/dev/null
+    fi
 }
 
 populate_isolated_package_root() {
@@ -31,10 +36,12 @@ populate_isolated_package_root() {
     local crate_archive=""
     for crate_archive in \
         "$PACKAGE_STAGING_ROOT/canic-cdk-$VERSION.crate" \
+        "$PACKAGE_STAGING_ROOT/canic-backup-$VERSION.crate" \
+        "$PACKAGE_STAGING_ROOT/canic-cli-$VERSION.crate" \
         "$PACKAGE_STAGING_ROOT/canic-control-plane-$VERSION.crate" \
         "$PACKAGE_STAGING_ROOT/canic-core-$VERSION.crate" \
         "$PACKAGE_STAGING_ROOT/canic-macros-$VERSION.crate" \
-        "$PACKAGE_STAGING_ROOT/canic-installer-$VERSION.crate" \
+        "$PACKAGE_STAGING_ROOT/canic-host-$VERSION.crate" \
         "$PACKAGE_STAGING_ROOT/canic-memory-$VERSION.crate" \
         "$PACKAGE_STAGING_ROOT/canic-$VERSION.crate"
     do
@@ -51,14 +58,17 @@ prepare_tool_root() {
 
     cat > "$TOOL_ROOT/Cargo.toml" <<EOF
 [workspace]
-members = ["package-root/canic-installer-$VERSION"]
+members = ["package-root/canic-cli-$VERSION"]
 resolver = "2"
 
 [patch.crates-io]
 canic = { path = "package-root/canic-$VERSION" }
+canic-backup = { path = "package-root/canic-backup-$VERSION" }
 canic-cdk = { path = "package-root/canic-cdk-$VERSION" }
+canic-cli = { path = "package-root/canic-cli-$VERSION" }
 canic-control-plane = { path = "package-root/canic-control-plane-$VERSION" }
 canic-core = { path = "package-root/canic-core-$VERSION" }
+canic-host = { path = "package-root/canic-host-$VERSION" }
 canic-macros = { path = "package-root/canic-macros-$VERSION" }
 canic-memory = { path = "package-root/canic-memory-$VERSION" }
 EOF
@@ -90,7 +100,7 @@ run_probe() {
         cd "$TOOL_ROOT"
         CANIC_WORKSPACE_ROOT="$DOWNSTREAM_ROOT" \
             CANIC_WASM_PROFILE=fast \
-            cargo run --offline -q -p canic-installer --bin canic-build-wasm-store-artifact >/dev/null
+            cargo run --offline -q -p canic-cli --bin canic -- build wasm_store >/dev/null
     )
 }
 
@@ -137,10 +147,12 @@ assert_probe_outputs() {
 
 main() {
     ensure_packaged_crate canic-cdk
+    ensure_packaged_crate canic-backup
+    ensure_packaged_crate canic-cli
     ensure_packaged_crate canic-control-plane
     ensure_packaged_crate canic-core
     ensure_packaged_crate canic-macros
-    ensure_packaged_crate canic-installer
+    ensure_packaged_crate canic-host
     ensure_packaged_crate canic-memory
     ensure_packaged_crate canic
     populate_isolated_package_root

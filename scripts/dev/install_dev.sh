@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-CANIC_INSTALLER_VERSION="${CANIC_INSTALLER_VERSION:-0.31.1}"
-CANIC_CLI_VERSION="${CANIC_CLI_VERSION:-$CANIC_INSTALLER_VERSION}"
+CANIC_CLI_VERSION="${CANIC_CLI_VERSION:-0.31.1}"
 CANIC_RUST_TOOLCHAIN="${CANIC_RUST_TOOLCHAIN:-1.95.0}"
 ACTIONLINT_VERSION="${ACTIONLINT_VERSION:-1.7.8}"
 ACTIONLINT_INSTALL_DIR="${ACTIONLINT_INSTALL_DIR:-$HOME/.local/bin}"
@@ -224,10 +223,6 @@ main() {
     install_cargo_tools "Rust development tools" "${CANIC_DEV_TOOLS[@]}"
     install_cargo_tools "Wasm and Candid tools" "${CANIC_WASM_TOOLS[@]}"
     install_or_update_actionlint
-
-    yellow "Canic installer:"
-    cyan_command "cargo +$CANIC_RUST_TOOLCHAIN install --locked canic-installer --version $CANIC_INSTALLER_VERSION"
-    cargo_toolchain install --locked canic-installer --version "$CANIC_INSTALLER_VERSION"
 
     yellow "Canic CLI:"
     cyan_command "cargo +$CANIC_RUST_TOOLCHAIN install --locked canic-cli --version $CANIC_CLI_VERSION"

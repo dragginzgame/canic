@@ -27,8 +27,7 @@ from the resolved `canic` package automatically.
 ## Local Workflow
 
 The demo canisters are wired through `dfx.json`; custom build steps call
-`scripts/app/build.sh`, which is a thin wrapper around the published
-`canic-build-canister-artifact` binary.
+`scripts/app/build.sh`, which is a thin wrapper around `canic build`.
 
 - Install the full local reference topology: `make demo-install`
 - `root` stays thin: only the bootstrap `wasm_store` artifact is embedded, and the ordinary configured release set is staged after install from `.dfx/local/canisters/root/root.release-set.json`.

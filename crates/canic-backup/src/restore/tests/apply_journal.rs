@@ -31,7 +31,7 @@ fn apply_journal_marks_validated_operations_ready() {
     );
 
     let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
-    let dry_run = RestoreApplyDryRun::try_from_plan_with_artifacts(&plan, None, &root)
+    let dry_run = RestoreApplyDryRun::try_from_plan_with_artifacts(&plan, &root)
         .expect("dry-run should validate artifacts");
     let journal = RestoreApplyJournal::from_dry_run(&dry_run);
 
@@ -57,7 +57,7 @@ fn apply_journal_blocks_without_artifact_validation() {
     let manifest = valid_manifest(IdentityMode::Relocatable);
 
     let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
-    let dry_run = RestoreApplyDryRun::try_from_plan(&plan, None).expect("dry-run should build");
+    let dry_run = RestoreApplyDryRun::from_plan(&plan);
     let journal = RestoreApplyJournal::from_dry_run(&dry_run);
 
     assert!(!journal.ready);
@@ -75,9 +75,9 @@ fn apply_journal_blocks_without_artifact_validation() {
     );
 }
 
-// Ensure apply journal status exposes compact readiness and next-operation state.
+// Ensure apply journal report exposes progress, counters, and next transition.
 #[test]
-fn apply_journal_status_reports_next_ready_operation() {
+fn apply_journal_report_exposes_progress_and_next_transition() {
     let root = temp_dir("canic-restore-apply-journal-status");
     fs::create_dir_all(&root).expect("create temp root");
     let mut manifest = valid_manifest(IdentityMode::Relocatable);
@@ -97,62 +97,48 @@ fn apply_journal_status_reports_next_ready_operation() {
     );
 
     let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
-    let dry_run = RestoreApplyDryRun::try_from_plan_with_artifacts(&plan, None, &root)
+    let dry_run = RestoreApplyDryRun::try_from_plan_with_artifacts(&plan, &root)
         .expect("dry-run should validate artifacts");
     let journal = RestoreApplyJournal::from_dry_run(&dry_run);
-    let status = journal.status();
     let report = journal.report();
 
     fs::remove_dir_all(root).expect("remove temp root");
-    assert_eq!(status.status_version, 1);
-    assert_eq!(status.backup_id.as_str(), "fbk_test_001");
-    assert!(status.ready);
-    assert!(!status.complete);
-    assert_eq!(status.operation_count, 6);
-    assert_eq!(status.operation_counts.snapshot_uploads, 2);
-    assert_eq!(status.operation_counts.snapshot_loads, 2);
-    assert_eq!(status.operation_counts.code_reinstalls, 0);
-    assert_eq!(status.operation_counts.member_verifications, 2);
-    assert_eq!(status.operation_counts.fleet_verifications, 0);
-    assert_eq!(status.operation_counts.verification_operations, 2);
-    assert!(status.operation_counts_supplied);
-    assert_eq!(journal.operation_counts, status.operation_counts);
-    assert_eq!(report.operation_counts, status.operation_counts);
-    assert!(report.operation_counts_supplied);
-    assert_eq!(status.progress.operation_count, 6);
-    assert_eq!(status.progress.completed_operations, 0);
-    assert_eq!(status.progress.remaining_operations, 6);
-    assert_eq!(status.progress.transitionable_operations, 6);
-    assert_eq!(status.progress.attention_operations, 0);
-    assert_eq!(status.progress.completion_basis_points, 0);
-    assert_eq!(report.progress, status.progress);
-    assert_eq!(status.pending_summary.pending_operations, 0);
-    assert!(!status.pending_summary.pending_operation_available);
-    assert_eq!(status.pending_summary.pending_sequence, None);
-    assert_eq!(status.pending_summary.pending_operation, None);
-    assert_eq!(status.pending_summary.pending_updated_at, None);
-    assert!(!status.pending_summary.pending_updated_at_known);
-    assert_eq!(report.pending_summary, status.pending_summary);
-    assert_eq!(status.ready_operations, 6);
-    assert_eq!(status.next_ready_sequence, Some(0));
+    assert_eq!(report.report_version, 1);
+    assert_eq!(report.backup_id.as_str(), "fbk_test_001");
+    assert!(report.ready);
+    assert!(!report.complete);
+    assert_eq!(report.operation_count, 6);
+    assert_eq!(report.operation_counts.snapshot_uploads, 2);
+    assert_eq!(report.operation_counts.snapshot_loads, 2);
+    assert_eq!(report.operation_counts.member_verifications, 2);
+    assert_eq!(report.operation_counts.fleet_verifications, 0);
+    assert_eq!(report.operation_counts.verification_operations, 2);
+    assert_eq!(journal.operation_counts, report.operation_counts);
+    assert_eq!(report.progress.operation_count, 6);
+    assert_eq!(report.progress.completed_operations, 0);
+    assert_eq!(report.progress.remaining_operations, 6);
+    assert_eq!(report.progress.transitionable_operations, 6);
+    assert_eq!(report.progress.attention_operations, 0);
+    assert_eq!(report.progress.completion_basis_points, 0);
+    assert_eq!(report.pending_summary.pending_operations, 0);
+    assert!(!report.pending_summary.pending_operation_available);
+    assert_eq!(report.pending_summary.pending_sequence, None);
+    assert_eq!(report.pending_summary.pending_operation, None);
+    assert_eq!(report.pending_summary.pending_updated_at, None);
+    assert!(!report.pending_summary.pending_updated_at_known);
+    assert_eq!(report.ready_operations, 6);
+    let transition = report.next_transition.expect("next transition");
+    assert_eq!(transition.sequence, 0);
+    assert_eq!(transition.state, RestoreApplyOperationState::Ready);
     assert_eq!(
-        status.next_ready_operation,
-        Some(RestoreApplyOperationKind::UploadSnapshot)
-    );
-    assert_eq!(status.next_transition_sequence, Some(0));
-    assert_eq!(
-        status.next_transition_state,
-        Some(RestoreApplyOperationState::Ready)
-    );
-    assert_eq!(
-        status.next_transition_operation,
-        Some(RestoreApplyOperationKind::UploadSnapshot)
+        transition.operation,
+        RestoreApplyOperationKind::UploadSnapshot
     );
 }
 
-// Ensure next-operation output exposes the full next ready journal row.
+// Ensure command preview exposes the full next ready journal row.
 #[test]
-fn apply_journal_next_operation_reports_full_ready_row() {
+fn apply_journal_command_preview_reports_full_ready_row() {
     let root = temp_dir("canic-restore-apply-journal-next");
     fs::create_dir_all(&root).expect("create temp root");
     let mut manifest = valid_manifest(IdentityMode::Relocatable);
@@ -172,40 +158,41 @@ fn apply_journal_next_operation_reports_full_ready_row() {
     );
 
     let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
-    let dry_run = RestoreApplyDryRun::try_from_plan_with_artifacts(&plan, None, &root)
+    let dry_run = RestoreApplyDryRun::try_from_plan_with_artifacts(&plan, &root)
         .expect("dry-run should validate artifacts");
     let mut journal = RestoreApplyJournal::from_dry_run(&dry_run);
     journal
-        .mark_operation_completed(0)
+        .mark_operation_completed_at(0, None)
         .expect("mark operation completed");
-    let next = journal.next_operation();
+    let preview = journal.next_command_preview();
 
     fs::remove_dir_all(root).expect("remove temp root");
-    assert!(next.ready);
-    assert!(!next.complete);
-    assert!(next.operation_available);
-    let operation = next.operation.expect("next operation");
+    assert!(preview.ready);
+    assert!(!preview.complete);
+    assert!(preview.operation_available);
+    let operation = preview.operation.expect("next operation");
     assert_eq!(operation.sequence, 1);
     assert_eq!(operation.state, RestoreApplyOperationState::Ready);
     assert_eq!(operation.operation, RestoreApplyOperationKind::LoadSnapshot);
     assert_eq!(operation.source_canister, ROOT);
 }
 
-// Ensure blocked journals report no next ready operation.
+// Ensure blocked journals report no preview operation.
 #[test]
-fn apply_journal_next_operation_reports_blocked_state() {
+fn apply_journal_command_preview_reports_blocked_state() {
     let manifest = valid_manifest(IdentityMode::Relocatable);
 
     let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
-    let dry_run = RestoreApplyDryRun::try_from_plan(&plan, None).expect("dry-run should build");
+    let dry_run = RestoreApplyDryRun::from_plan(&plan);
     let journal = RestoreApplyJournal::from_dry_run(&dry_run);
-    let next = journal.next_operation();
+    let preview = journal.next_command_preview();
 
-    assert!(!next.ready);
-    assert!(!next.operation_available);
-    assert!(next.operation.is_none());
+    assert!(!preview.ready);
+    assert!(!preview.operation_available);
+    assert!(preview.operation.is_none());
     assert!(
-        next.blocked_reasons
+        preview
+            .blocked_reasons
             .contains(&"missing-artifact-validation".to_string())
     );
 }
@@ -232,7 +219,7 @@ fn apply_journal_command_preview_reports_upload_command() {
     );
 
     let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
-    let dry_run = RestoreApplyDryRun::try_from_plan_with_artifacts(&plan, None, &root)
+    let dry_run = RestoreApplyDryRun::try_from_plan_with_artifacts(&plan, &root)
         .expect("dry-run should validate artifacts");
     let journal = RestoreApplyJournal::from_dry_run(&dry_run);
     let preview = journal.next_command_preview();
@@ -281,7 +268,7 @@ fn apply_journal_command_preview_honors_command_config() {
     );
 
     let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
-    let dry_run = RestoreApplyDryRun::try_from_plan_with_artifacts(&plan, None, &root)
+    let dry_run = RestoreApplyDryRun::try_from_plan_with_artifacts(&plan, &root)
         .expect("dry-run should validate artifacts");
     let journal = RestoreApplyJournal::from_dry_run(&dry_run);
     let preview = journal.next_command_preview_with_config(&RestoreApplyCommandConfig {
@@ -330,16 +317,33 @@ fn apply_journal_command_preview_reports_load_command() {
     );
 
     let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
-    let dry_run = RestoreApplyDryRun::try_from_plan_with_artifacts(&plan, None, &root)
+    let dry_run = RestoreApplyDryRun::try_from_plan_with_artifacts(&plan, &root)
         .expect("dry-run should validate artifacts");
     let mut journal = RestoreApplyJournal::from_dry_run(&dry_run);
     journal
-        .mark_operation_completed(0)
+        .mark_operation_completed_at(0, None)
         .expect("mark upload completed");
     journal
-        .record_operation_receipt(RestoreApplyOperationReceipt::completed_upload(
+        .record_operation_receipt(RestoreApplyOperationReceipt::command_completed(
             &journal.operations[0],
-            "target-snap-root".to_string(),
+            RestoreApplyRunnerCommand {
+                program: "dfx".to_string(),
+                args: vec![
+                    "canister".to_string(),
+                    "snapshot".to_string(),
+                    "upload".to_string(),
+                    ROOT.to_string(),
+                    "artifacts/root".to_string(),
+                ],
+                mutates: true,
+                requires_stopped_canister: false,
+                note: "Upload snapshot artifact to target canister".to_string(),
+            },
+            "exit:0".to_string(),
+            Some("unix:1".to_string()),
+            RestoreApplyCommandOutputPair::from_bytes(b"target-snap-root\n", b"", 1024),
+            1,
+            Some("target-snap-root".to_string()),
         ))
         .expect("record upload receipt");
     let preview = journal.next_command_preview();
@@ -382,11 +386,11 @@ fn apply_journal_load_command_requires_uploaded_snapshot_receipt() {
     );
 
     let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
-    let dry_run = RestoreApplyDryRun::try_from_plan_with_artifacts(&plan, None, &root)
+    let dry_run = RestoreApplyDryRun::try_from_plan_with_artifacts(&plan, &root)
         .expect("dry-run should validate artifacts");
     let mut journal = RestoreApplyJournal::from_dry_run(&dry_run);
     journal
-        .mark_operation_completed(0)
+        .mark_operation_completed_at(0, None)
         .expect("mark upload completed");
     let preview = journal.next_command_preview();
 
@@ -402,42 +406,10 @@ fn apply_journal_load_command_requires_uploaded_snapshot_receipt() {
     );
 }
 
-// Ensure command previews expose reinstall commands without executing them.
-#[test]
-fn apply_journal_command_preview_reports_reinstall_command() {
-    let journal = command_preview_journal(RestoreApplyOperationKind::ReinstallCode, None, None);
-    let preview = journal.next_command_preview_with_config(&RestoreApplyCommandConfig {
-        program: "dfx".to_string(),
-        network: Some("local".to_string()),
-    });
-
-    assert!(preview.command_available);
-    let command = preview.command.expect("command preview");
-    assert_eq!(
-        command.args,
-        vec![
-            "canister".to_string(),
-            "--network".to_string(),
-            "local".to_string(),
-            "install".to_string(),
-            "--mode".to_string(),
-            "reinstall".to_string(),
-            "--yes".to_string(),
-            ROOT.to_string(),
-        ]
-    );
-    assert!(command.mutates);
-    assert!(!command.requires_stopped_canister);
-}
-
 // Ensure status verification previews use `dfx canister status`.
 #[test]
 fn apply_journal_command_preview_reports_status_verification_command() {
-    let journal = command_preview_journal(
-        RestoreApplyOperationKind::VerifyMember,
-        Some("status"),
-        None,
-    );
+    let journal = command_preview_journal(RestoreApplyOperationKind::VerifyMember, Some("status"));
     let preview = journal.next_command_preview();
 
     assert!(preview.command_available);
@@ -454,40 +426,22 @@ fn apply_journal_command_preview_reports_status_verification_command() {
     assert!(!command.requires_stopped_canister);
 }
 
-// Ensure method verification previews use `dfx canister call`.
+// Ensure unsupported verification kinds do not render runner commands.
 #[test]
-fn apply_journal_command_preview_reports_method_verification_command() {
-    let journal = command_preview_journal(
-        RestoreApplyOperationKind::VerifyMember,
-        Some("query"),
-        Some("health"),
-    );
+fn apply_journal_command_preview_rejects_unsupported_verification_command() {
+    let mut journal =
+        command_preview_journal(RestoreApplyOperationKind::VerifyMember, Some("status"));
+    journal.operations[0].verification_kind = Some("query".to_string());
     let preview = journal.next_command_preview();
 
-    assert!(preview.command_available);
-    let command = preview.command.expect("command preview");
-    assert_eq!(
-        command.args,
-        vec![
-            "canister".to_string(),
-            "call".to_string(),
-            "--query".to_string(),
-            ROOT.to_string(),
-            "health".to_string(),
-        ]
-    );
-    assert!(!command.mutates);
-    assert!(!command.requires_stopped_canister);
+    assert!(!preview.command_available);
+    assert!(preview.command.is_none());
 }
 
-// Ensure fleet verification previews call the declared method on the target root.
+// Ensure fleet verification previews check target root status.
 #[test]
 fn apply_journal_command_preview_reports_fleet_verification_command() {
-    let journal = command_preview_journal(
-        RestoreApplyOperationKind::VerifyFleet,
-        Some("fleet-ready"),
-        Some("canic_fleet_ready"),
-    );
+    let journal = command_preview_journal(RestoreApplyOperationKind::VerifyFleet, Some("status"));
     let preview = journal.next_command_preview();
 
     assert!(preview.command_available);
@@ -496,24 +450,19 @@ fn apply_journal_command_preview_reports_fleet_verification_command() {
         command.args,
         vec![
             "canister".to_string(),
-            "call".to_string(),
-            "--query".to_string(),
-            ROOT.to_string(),
-            "canic_fleet_ready".to_string(),
+            "status".to_string(),
+            ROOT.to_string()
         ]
     );
     assert!(!command.mutates);
     assert!(!command.requires_stopped_canister);
-    assert_eq!(
-        command.note,
-        "runs the declared fleet verification method as a query call"
-    );
+    assert_eq!(command.note, "checks target fleet root canister status");
 }
 
-// Ensure method verification rows must carry the method they will call.
+// Ensure unsupported verification rows are rejected before execution.
 #[test]
-fn apply_journal_validation_rejects_method_verification_without_method() {
-    let journal = RestoreApplyJournal {
+fn apply_journal_validation_rejects_unsupported_verification_kind() {
+    let mut journal = RestoreApplyJournal {
         journal_version: 1,
         backup_id: "fbk_test_001".to_string(),
         ready: true,
@@ -532,30 +481,26 @@ fn apply_journal_validation_rejects_method_verification_without_method() {
             state: RestoreApplyOperationState::Ready,
             state_updated_at: None,
             blocking_reasons: Vec::new(),
-            restore_group: 1,
-            phase_order: 0,
+            member_order: 0,
             source_canister: ROOT.to_string(),
             target_canister: ROOT.to_string(),
             role: "root".to_string(),
             snapshot_id: Some("snap-root".to_string()),
             artifact_path: Some("artifacts/root".to_string()),
             verification_kind: Some("query".to_string()),
-            verification_method: None,
         }],
         operation_receipts: Vec::new(),
     };
+    journal.operation_counts =
+        RestoreApplyOperationKindCounts::from_operations(&journal.operations);
 
     let err = journal
         .validate()
-        .expect_err("method verification without method should fail");
+        .expect_err("unsupported verification kind should fail");
 
     assert!(matches!(
         err,
-        RestoreApplyJournalError::OperationMissingField {
-            sequence: 0,
-            operation: RestoreApplyOperationKind::VerifyMember,
-            field: "operations[].verification_method",
-        }
+        RestoreApplyJournalError::UnsupportedVerificationKind { sequence: 0, .. }
     ));
 }
 
@@ -565,7 +510,7 @@ fn apply_journal_validation_rejects_count_mismatch() {
     let manifest = valid_manifest(IdentityMode::Relocatable);
 
     let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
-    let dry_run = RestoreApplyDryRun::try_from_plan(&plan, None).expect("dry-run should build");
+    let dry_run = RestoreApplyDryRun::from_plan(&plan);
     let mut journal = RestoreApplyJournal::from_dry_run(&dry_run);
     journal.blocked_operations = 0;
 
@@ -583,12 +528,10 @@ fn apply_journal_validation_rejects_count_mismatch() {
 // Ensure supplied operation-kind counts must match concrete journal rows.
 #[test]
 fn apply_journal_validation_rejects_operation_kind_count_mismatch() {
-    let mut journal =
-        command_preview_journal(RestoreApplyOperationKind::UploadSnapshot, None, None);
+    let mut journal = command_preview_journal(RestoreApplyOperationKind::UploadSnapshot, None);
     journal.operation_counts = RestoreApplyOperationKindCounts {
         snapshot_uploads: 0,
         snapshot_loads: 1,
-        code_reinstalls: 0,
         member_verifications: 0,
         fleet_verifications: 0,
         verification_operations: 0,
@@ -608,40 +551,13 @@ fn apply_journal_validation_rejects_operation_kind_count_mismatch() {
     ));
 }
 
-// Ensure older journals without operation-kind counts still validate.
-#[test]
-fn apply_journal_defaults_missing_operation_kind_counts() {
-    let mut journal =
-        command_preview_journal(RestoreApplyOperationKind::UploadSnapshot, None, None);
-    journal.operation_counts =
-        RestoreApplyOperationKindCounts::from_operations(&journal.operations);
-    let mut value = serde_json::to_value(&journal).expect("serialize journal");
-    value
-        .as_object_mut()
-        .expect("journal should serialize as an object")
-        .remove("operation_counts");
-
-    let decoded: RestoreApplyJournal =
-        serde_json::from_value(value).expect("decode old journal shape");
-    decoded.validate().expect("old journal should validate");
-    let status = decoded.status();
-
-    assert_eq!(
-        decoded.operation_counts,
-        RestoreApplyOperationKindCounts::default()
-    );
-    assert_eq!(status.operation_counts.snapshot_uploads, 1);
-    assert_eq!(status.operation_counts.snapshot_loads, 0);
-    assert!(!status.operation_counts_supplied);
-}
-
 // Ensure apply journal validation rejects duplicate operation sequences.
 #[test]
 fn apply_journal_validation_rejects_duplicate_sequences() {
     let manifest = valid_manifest(IdentityMode::Relocatable);
 
     let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
-    let dry_run = RestoreApplyDryRun::try_from_plan(&plan, None).expect("dry-run should build");
+    let dry_run = RestoreApplyDryRun::from_plan(&plan);
     let mut journal = RestoreApplyJournal::from_dry_run(&dry_run);
     journal.operations[1].sequence = journal.operations[0].sequence;
 
@@ -661,7 +577,7 @@ fn apply_journal_validation_rejects_failed_without_reason() {
     let manifest = valid_manifest(IdentityMode::Relocatable);
 
     let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
-    let dry_run = RestoreApplyDryRun::try_from_plan(&plan, None).expect("dry-run should build");
+    let dry_run = RestoreApplyDryRun::from_plan(&plan);
     let mut journal = RestoreApplyJournal::from_dry_run(&dry_run);
     journal.operations[0].state = RestoreApplyOperationState::Failed;
     journal.operations[0].blocking_reasons = Vec::new();
@@ -681,15 +597,12 @@ fn apply_journal_validation_rejects_failed_without_reason() {
 // Ensure claiming a ready operation marks it pending and keeps it resumable.
 #[test]
 fn apply_journal_mark_next_operation_pending_claims_first_operation() {
-    let mut journal =
-        command_preview_journal(RestoreApplyOperationKind::UploadSnapshot, None, None);
+    let mut journal = command_preview_journal(RestoreApplyOperationKind::UploadSnapshot, None);
 
     journal
         .mark_next_operation_pending_at(Some("2026-05-04T12:00:00Z".to_string()))
         .expect("mark operation pending");
-    let status = journal.status();
     let report = journal.report();
-    let next = journal.next_operation();
     let preview = journal.next_command_preview();
 
     assert_eq!(journal.pending_operations, 1);
@@ -702,34 +615,33 @@ fn apply_journal_mark_next_operation_pending_claims_first_operation() {
         journal.operations[0].state_updated_at.as_deref(),
         Some("2026-05-04T12:00:00Z")
     );
-    assert_eq!(status.next_ready_sequence, None);
-    assert_eq!(status.next_transition_sequence, Some(0));
+    assert!(report.next_transition.is_some());
     assert_eq!(
-        status.next_transition_state,
-        Some(RestoreApplyOperationState::Pending)
+        report
+            .next_transition
+            .as_ref()
+            .map(|operation| &operation.state),
+        Some(&RestoreApplyOperationState::Pending)
     );
     assert_eq!(
-        status.next_transition_updated_at.as_deref(),
+        report
+            .next_transition
+            .as_ref()
+            .and_then(|operation| operation.state_updated_at.as_deref()),
         Some("2026-05-04T12:00:00Z")
     );
-    assert_eq!(status.pending_summary.pending_operations, 1);
-    assert!(status.pending_summary.pending_operation_available);
-    assert_eq!(status.pending_summary.pending_sequence, Some(0));
+    assert_eq!(report.pending_summary.pending_operations, 1);
+    assert!(report.pending_summary.pending_operation_available);
+    assert_eq!(report.pending_summary.pending_sequence, Some(0));
     assert_eq!(
-        status.pending_summary.pending_operation,
+        report.pending_summary.pending_operation,
         Some(RestoreApplyOperationKind::UploadSnapshot)
     );
     assert_eq!(
-        status.pending_summary.pending_updated_at.as_deref(),
+        report.pending_summary.pending_updated_at.as_deref(),
         Some("2026-05-04T12:00:00Z")
     );
-    assert!(status.pending_summary.pending_updated_at_known);
-    assert_eq!(report.pending_summary, status.pending_summary);
-    assert!(next.operation_available);
-    assert_eq!(
-        next.operation.expect("next operation").state,
-        RestoreApplyOperationState::Pending
-    );
+    assert!(report.pending_summary.pending_updated_at_known);
     assert!(preview.operation_available);
     assert!(preview.command_available);
     assert_eq!(
@@ -741,8 +653,7 @@ fn apply_journal_mark_next_operation_pending_claims_first_operation() {
 // Ensure a pending claim can be released back to ready for retry.
 #[test]
 fn apply_journal_mark_next_operation_ready_unclaims_pending_operation() {
-    let mut journal =
-        command_preview_journal(RestoreApplyOperationKind::UploadSnapshot, None, None);
+    let mut journal = command_preview_journal(RestoreApplyOperationKind::UploadSnapshot, None);
 
     journal
         .mark_next_operation_pending_at(Some("2026-05-04T12:00:00Z".to_string()))
@@ -750,8 +661,8 @@ fn apply_journal_mark_next_operation_ready_unclaims_pending_operation() {
     journal
         .mark_next_operation_ready_at(Some("2026-05-04T12:01:00Z".to_string()))
         .expect("mark operation ready");
-    let status = journal.status();
-    let next = journal.next_operation();
+    let report = journal.report();
+    let preview = journal.next_command_preview();
 
     assert_eq!(journal.pending_operations, 0);
     assert_eq!(journal.ready_operations, 1);
@@ -763,18 +674,29 @@ fn apply_journal_mark_next_operation_ready_unclaims_pending_operation() {
         journal.operations[0].state_updated_at.as_deref(),
         Some("2026-05-04T12:01:00Z")
     );
-    assert_eq!(status.next_ready_sequence, Some(0));
-    assert_eq!(status.next_transition_sequence, Some(0));
     assert_eq!(
-        status.next_transition_state,
-        Some(RestoreApplyOperationState::Ready)
+        report
+            .next_transition
+            .as_ref()
+            .map(|operation| operation.sequence),
+        Some(0)
     );
     assert_eq!(
-        status.next_transition_updated_at.as_deref(),
+        report
+            .next_transition
+            .as_ref()
+            .map(|operation| &operation.state),
+        Some(&RestoreApplyOperationState::Ready)
+    );
+    assert_eq!(
+        report
+            .next_transition
+            .as_ref()
+            .and_then(|operation| operation.state_updated_at.as_deref()),
         Some("2026-05-04T12:01:00Z")
     );
     assert_eq!(
-        next.operation.expect("next operation").state,
+        preview.operation.expect("next operation").state,
         RestoreApplyOperationState::Ready
     );
 }
@@ -782,8 +704,7 @@ fn apply_journal_mark_next_operation_ready_unclaims_pending_operation() {
 // Ensure empty state update markers are rejected during journal validation.
 #[test]
 fn apply_journal_validation_rejects_empty_state_updated_at() {
-    let mut journal =
-        command_preview_journal(RestoreApplyOperationKind::UploadSnapshot, None, None);
+    let mut journal = command_preview_journal(RestoreApplyOperationKind::UploadSnapshot, None);
 
     journal.operations[0].state_updated_at = Some(String::new());
     let err = journal
@@ -799,7 +720,7 @@ fn apply_journal_validation_rejects_empty_state_updated_at() {
 // Ensure operation-specific fields are required before command rendering.
 #[test]
 fn apply_journal_validation_rejects_missing_operation_fields() {
-    let mut upload = command_preview_journal(RestoreApplyOperationKind::UploadSnapshot, None, None);
+    let mut upload = command_preview_journal(RestoreApplyOperationKind::UploadSnapshot, None);
     upload.operations[0].artifact_path = None;
     let err = upload
         .validate()
@@ -813,7 +734,7 @@ fn apply_journal_validation_rejects_missing_operation_fields() {
         }
     ));
 
-    let mut load = command_preview_journal(RestoreApplyOperationKind::LoadSnapshot, None, None);
+    let mut load = command_preview_journal(RestoreApplyOperationKind::LoadSnapshot, None);
     load.operations[0].snapshot_id = None;
     let err = load
         .validate()
@@ -827,21 +748,18 @@ fn apply_journal_validation_rejects_missing_operation_fields() {
         }
     ));
 
-    let mut verify = command_preview_journal(
-        RestoreApplyOperationKind::VerifyMember,
-        Some("query"),
-        Some("health"),
-    );
-    verify.operations[0].verification_method = None;
+    let mut verify =
+        command_preview_journal(RestoreApplyOperationKind::VerifyMember, Some("status"));
+    verify.operations[0].verification_kind = None;
     let err = verify
         .validate()
-        .expect_err("method verification without method should fail");
+        .expect_err("missing verification kind should fail");
     assert!(matches!(
         err,
         RestoreApplyJournalError::OperationMissingField {
             sequence: 0,
             operation: RestoreApplyOperationKind::VerifyMember,
-            field: "operations[].verification_method",
+            field: "operations[].verification_kind",
         }
     ));
 }
@@ -849,11 +767,10 @@ fn apply_journal_validation_rejects_missing_operation_fields() {
 // Ensure unclaim fails when the next transitionable operation is not pending.
 #[test]
 fn apply_journal_mark_next_operation_ready_rejects_without_pending_operation() {
-    let mut journal =
-        command_preview_journal(RestoreApplyOperationKind::UploadSnapshot, None, None);
+    let mut journal = command_preview_journal(RestoreApplyOperationKind::UploadSnapshot, None);
 
     let err = journal
-        .mark_next_operation_ready()
+        .mark_next_operation_ready_at(None)
         .expect_err("ready operation should not unclaim");
 
     assert!(matches!(err, RestoreApplyJournalError::NoPendingOperation));
@@ -883,12 +800,12 @@ fn apply_journal_mark_pending_rejects_out_of_order_operation() {
     );
 
     let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
-    let dry_run = RestoreApplyDryRun::try_from_plan_with_artifacts(&plan, None, &root)
+    let dry_run = RestoreApplyDryRun::try_from_plan_with_artifacts(&plan, &root)
         .expect("dry-run should validate artifacts");
     let mut journal = RestoreApplyJournal::from_dry_run(&dry_run);
 
     let err = journal
-        .mark_operation_pending(1)
+        .mark_operation_pending_at(1, None)
         .expect_err("out-of-order pending claim should fail");
 
     fs::remove_dir_all(root).expect("remove temp root");
@@ -925,14 +842,14 @@ fn apply_journal_mark_completed_advances_next_ready_operation() {
     );
 
     let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
-    let dry_run = RestoreApplyDryRun::try_from_plan_with_artifacts(&plan, None, &root)
+    let dry_run = RestoreApplyDryRun::try_from_plan_with_artifacts(&plan, &root)
         .expect("dry-run should validate artifacts");
     let mut journal = RestoreApplyJournal::from_dry_run(&dry_run);
 
     journal
-        .mark_operation_completed(0)
+        .mark_operation_completed_at(0, None)
         .expect("mark operation completed");
-    let status = journal.status();
+    let report = journal.report();
 
     fs::remove_dir_all(root).expect("remove temp root");
     assert_eq!(
@@ -941,12 +858,18 @@ fn apply_journal_mark_completed_advances_next_ready_operation() {
     );
     assert_eq!(journal.completed_operations, 1);
     assert_eq!(journal.ready_operations, 5);
-    assert_eq!(status.next_ready_sequence, Some(1));
-    assert_eq!(status.progress.completed_operations, 1);
-    assert_eq!(status.progress.remaining_operations, 5);
-    assert_eq!(status.progress.transitionable_operations, 5);
-    assert_eq!(status.progress.attention_operations, 0);
-    assert_eq!(status.progress.completion_basis_points, 1666);
+    assert_eq!(
+        report
+            .next_transition
+            .as_ref()
+            .map(|operation| operation.sequence),
+        Some(1)
+    );
+    assert_eq!(report.progress.completed_operations, 1);
+    assert_eq!(report.progress.remaining_operations, 5);
+    assert_eq!(report.progress.transitionable_operations, 5);
+    assert_eq!(report.progress.attention_operations, 0);
+    assert_eq!(report.progress.completion_basis_points, 1666);
 }
 
 // Ensure journal transitions cannot skip earlier ready operations.
@@ -971,12 +894,12 @@ fn apply_journal_mark_completed_rejects_out_of_order_operation() {
     );
 
     let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
-    let dry_run = RestoreApplyDryRun::try_from_plan_with_artifacts(&plan, None, &root)
+    let dry_run = RestoreApplyDryRun::try_from_plan_with_artifacts(&plan, &root)
         .expect("dry-run should validate artifacts");
     let mut journal = RestoreApplyJournal::from_dry_run(&dry_run);
 
     let err = journal
-        .mark_operation_completed(1)
+        .mark_operation_completed_at(1, None)
         .expect_err("out-of-order operation should fail");
 
     fs::remove_dir_all(root).expect("remove temp root");
@@ -1013,12 +936,12 @@ fn apply_journal_mark_failed_records_reason() {
     );
 
     let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
-    let dry_run = RestoreApplyDryRun::try_from_plan_with_artifacts(&plan, None, &root)
+    let dry_run = RestoreApplyDryRun::try_from_plan_with_artifacts(&plan, &root)
         .expect("dry-run should validate artifacts");
     let mut journal = RestoreApplyJournal::from_dry_run(&dry_run);
 
     journal
-        .mark_operation_failed(0, "dfx-load-failed".to_string())
+        .mark_operation_failed_at(0, "dfx-load-failed".to_string(), None)
         .expect("mark operation failed");
 
     fs::remove_dir_all(root).expect("remove temp root");
@@ -1056,11 +979,11 @@ fn apply_journal_retry_failed_operation_marks_ready() {
     );
 
     let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
-    let dry_run = RestoreApplyDryRun::try_from_plan_with_artifacts(&plan, None, &root)
+    let dry_run = RestoreApplyDryRun::try_from_plan_with_artifacts(&plan, &root)
         .expect("dry-run should validate artifacts");
     let mut journal = RestoreApplyJournal::from_dry_run(&dry_run);
     journal
-        .mark_operation_failed(0, "dfx-upload-failed".to_string())
+        .mark_operation_failed_at(0, "dfx-upload-failed".to_string(), None)
         .expect("mark failed operation");
     journal
         .retry_failed_operation_at(0, Some("2026-05-04T12:03:00Z".to_string()))
@@ -1082,11 +1005,11 @@ fn apply_journal_rejects_blocked_operation_completion() {
     let manifest = valid_manifest(IdentityMode::Relocatable);
 
     let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
-    let dry_run = RestoreApplyDryRun::try_from_plan(&plan, None).expect("dry-run should build");
+    let dry_run = RestoreApplyDryRun::from_plan(&plan);
     let mut journal = RestoreApplyJournal::from_dry_run(&dry_run);
 
     let err = journal
-        .mark_operation_completed(0)
+        .mark_operation_completed_at(0, None)
         .expect_err("blocked operation should not complete");
 
     assert!(matches!(

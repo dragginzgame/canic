@@ -1,20 +1,24 @@
-use crate::version_text;
-use candid::{CandidType, Decode, Encode, Principal};
+use crate::{
+    args::{
+        first_arg_is_help, first_arg_is_version, flag_arg, parse_matches, string_option, value_arg,
+    },
+    version_text,
+};
+use candid::Principal;
 use canic::ids::CanisterRole;
 use canic_backup::discovery::{DiscoveryError, RegistryEntry, parse_registry_entries};
-use canic_installer::{
+use canic_host::{
+    dfx::{Dfx, DfxCommandError},
     install_root::{InstallState, read_current_or_fleet_install_state},
     release_set::{config_path as default_config_path, configured_role_kinds},
+    replica_query,
+    table::WhitespaceTable,
 };
-use serde::{Deserialize, Serialize};
+use clap::Command as ClapCommand;
 use std::{
     collections::{BTreeMap, BTreeSet},
     env,
     ffi::OsString,
-    io::{Read, Write},
-    net::TcpStream,
-    process::Command,
-    time::{SystemTime, UNIX_EPOCH},
 };
 use thiserror::Error as ThisError;
 
@@ -48,9 +52,6 @@ pub enum ListCommandError {
     #[error("unknown option {0}")]
     UnknownOption(String),
 
-    #[error("option {0} requires a value")]
-    MissingValue(&'static str),
-
     #[error("cannot combine --standalone with --root")]
     ConflictingListSources,
 
@@ -68,9 +69,6 @@ pub enum ListCommandError {
     #[error("local replica query failed: {0}")]
     ReplicaQuery(String),
 
-    #[error("local replica rejected query: code={code} message={message}")]
-    ReplicaRejected { code: u64, message: String },
-
     #[error("failed to read canic fleet state: {0}")]
     InstallState(String),
 
@@ -79,9 +77,6 @@ pub enum ListCommandError {
 
     #[error(transparent)]
     Json(#[from] serde_json::Error),
-
-    #[error(transparent)]
-    Cbor(#[from] serde_cbor::Error),
 
     #[error(transparent)]
     Discovery(#[from] DiscoveryError),
@@ -118,45 +113,11 @@ impl ListOptions {
     where
         I: IntoIterator<Item = OsString>,
     {
-        let mut standalone = false;
-        let mut fleet = None;
-        let mut root = None;
-        let mut anchor = None;
-        let mut network = None;
-        let mut dfx = "dfx".to_string();
-
-        let mut args = args.into_iter();
-        while let Some(arg) = args.next() {
-            let arg = arg
-                .into_string()
-                .map_err(|_| ListCommandError::Usage(usage()))?;
-            if let Some(value) = arg.strip_prefix("--fleet=") {
-                fleet = Some(value.to_string());
-                continue;
-            }
-            if let Some(value) = arg.strip_prefix("--root=") {
-                root = Some(value.to_string());
-                continue;
-            }
-            if let Some(value) = arg.strip_prefix("--from=") {
-                anchor = Some(value.to_string());
-                continue;
-            }
-            if let Some(value) = arg.strip_prefix("--network=") {
-                network = Some(value.to_string());
-                continue;
-            }
-            match arg.as_str() {
-                "--standalone" => standalone = true,
-                "--fleet" => fleet = Some(next_value(&mut args, "--fleet")?),
-                "--root" => root = Some(next_value(&mut args, "--root")?),
-                "--from" => anchor = Some(next_value(&mut args, "--from")?),
-                "--network" => network = Some(next_value(&mut args, "--network")?),
-                "--dfx" => dfx = next_value(&mut args, "--dfx")?,
-                "--help" | "-h" => return Err(ListCommandError::Usage(usage())),
-                _ => return Err(ListCommandError::UnknownOption(arg)),
-            }
-        }
+        let args = args.into_iter().collect::<Vec<_>>();
+        let matches =
+            parse_matches(list_command(), args).map_err(|_| ListCommandError::Usage(usage()))?;
+        let standalone = matches.get_flag("standalone");
+        let root = string_option(&matches, "root");
 
         if standalone && root.is_some() {
             return Err(ListCommandError::ConflictingListSources);
@@ -172,13 +133,25 @@ impl ListOptions {
 
         Ok(Self {
             source,
-            fleet,
+            fleet: string_option(&matches, "fleet"),
             root,
-            anchor,
-            network,
-            dfx,
+            anchor: string_option(&matches, "from"),
+            network: string_option(&matches, "network"),
+            dfx: string_option(&matches, "dfx").unwrap_or_else(|| "dfx".to_string()),
         })
     }
+}
+
+// Build the list parser.
+fn list_command() -> ClapCommand {
+    ClapCommand::new("list")
+        .disable_help_flag(true)
+        .arg(flag_arg("standalone").long("standalone"))
+        .arg(value_arg("fleet").long("fleet"))
+        .arg(value_arg("root").long("root"))
+        .arg(value_arg("from").long("from"))
+        .arg(value_arg("network").long("network"))
+        .arg(value_arg("dfx").long("dfx"))
 }
 
 /// Run a list subcommand or the default tree listing.
@@ -187,19 +160,11 @@ where
     I: IntoIterator<Item = OsString>,
 {
     let args = args.into_iter().collect::<Vec<_>>();
-    if args
-        .first()
-        .and_then(|arg| arg.to_str())
-        .is_some_and(|arg| matches!(arg, "help" | "--help" | "-h"))
-    {
+    if first_arg_is_help(&args) {
         println!("{}", usage());
         return Ok(());
     }
-    if args
-        .first()
-        .and_then(|arg| arg.to_str())
-        .is_some_and(|arg| matches!(arg, "version" | "--version" | "-V"))
-    {
+    if first_arg_is_version(&args) {
         println!("{}", version_text());
         return Ok(());
     }
@@ -288,27 +253,24 @@ fn check_ready_status(
     options: &ListOptions,
     canister: &str,
 ) -> Result<ReadyStatus, ListCommandError> {
-    if should_use_local_replica_query(options) {
-        return Ok(match local_query_ready(options, canister) {
-            Ok(true) => ReadyStatus::Ready,
-            Ok(false) => ReadyStatus::NotReady,
-            Err(_) => ReadyStatus::Error,
-        });
+    if replica_query::should_use_local_replica_query(options.network.as_deref()) {
+        return Ok(
+            match replica_query::query_ready(&options.dfx, options.network.as_deref(), canister) {
+                Ok(true) => ReadyStatus::Ready,
+                Ok(false) => ReadyStatus::NotReady,
+                Err(_) => ReadyStatus::Error,
+            },
+        );
     }
 
-    let mut command = Command::new(&options.dfx);
-    command.arg("canister");
-    if let Some(network) = &options.network {
-        command.args(["--network", network]);
-    }
-    command.args(["call", canister, "canic_ready", "--output", "json"]);
-
-    let output = command.output()?;
-    if !output.status.success() {
+    let Ok(output) = Dfx::new(&options.dfx, options.network.clone()).canister_call_output(
+        canister,
+        "canic_ready",
+        Some("json"),
+    ) else {
         return Ok(ReadyStatus::Error);
-    }
-
-    let data = serde_json::from_slice::<serde_json::Value>(&output.stdout)?;
+    };
+    let data = serde_json::from_str::<serde_json::Value>(&output)?;
     Ok(if parse_ready_value(&data) {
         ReadyStatus::Ready
     } else {
@@ -363,30 +325,9 @@ fn resolve_project_canister_id(
     options: &ListOptions,
     name: &str,
 ) -> Result<Option<String>, ListCommandError> {
-    let mut command = Command::new(&options.dfx);
-    command.arg("canister");
-    if let Some(network) = &options.network {
-        command.args(["--network", network]);
-    }
-    command.args(["id", name]);
-
-    let display = command_display(&command);
-    let output = command.output()?;
-    if output.status.success() {
-        return Ok(Some(
-            String::from_utf8_lossy(&output.stdout).trim().to_string(),
-        ));
-    }
-
-    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-    if canister_id_missing(&stderr) {
-        return Ok(None);
-    }
-
-    Err(ListCommandError::DfxFailed {
-        command: display,
-        stderr,
-    })
+    Dfx::new(&options.dfx, options.network.clone())
+        .canister_id_optional(name)
+        .map_err(list_dfx_error)
 }
 
 // Resolve the explicit root id or the current dfx project's `root` canister id.
@@ -401,13 +342,9 @@ fn resolve_root_canister(options: &ListOptions) -> Result<String, ListCommandErr
         return Ok(state.root_canister_id);
     }
 
-    let mut command = Command::new(&options.dfx);
-    command.arg("canister");
-    if let Some(network) = &options.network {
-        command.args(["--network", network]);
-    }
-    command.args(["id", "root"]);
-    run_output(&mut command)
+    Dfx::new(&options.dfx, options.network.clone())
+        .canister_id("root")
+        .map_err(list_dfx_error)
 }
 
 // Read the current or explicitly selected fleet install state.
@@ -439,7 +376,7 @@ fn resolve_canister_identifier(
         .map(|id| id.unwrap_or_else(|| identifier.to_string()))
 }
 
-// Resolve the state network using the same local default as installer commands.
+// Resolve the state network using the same local default as host install commands.
 fn state_network(options: &ListOptions) -> String {
     options
         .network
@@ -450,182 +387,19 @@ fn state_network(options: &ListOptions) -> String {
 
 // Run `dfx canister call <root> canic_subnet_registry --output json`.
 fn call_subnet_registry(options: &ListOptions, root: &str) -> Result<String, ListCommandError> {
-    if should_use_local_replica_query(options) {
-        return local_query_subnet_registry(options, root);
+    if replica_query::should_use_local_replica_query(options.network.as_deref()) {
+        return replica_query::query_subnet_registry_json(
+            &options.dfx,
+            options.network.as_deref(),
+            root,
+        )
+        .map_err(|err| ListCommandError::ReplicaQuery(err.to_string()));
     }
 
-    let mut command = Command::new(&options.dfx);
-    command.arg("canister");
-    if let Some(network) = &options.network {
-        command.args(["--network", network]);
-    }
-    command.args(["call", root, "canic_subnet_registry", "--output", "json"]);
-    run_output(&mut command).map_err(add_root_registry_hint)
-}
-
-// Use direct local replica queries because DFX local calls can fail when stdout is captured.
-fn should_use_local_replica_query(options: &ListOptions) -> bool {
-    options
-        .network
-        .as_deref()
-        .is_none_or(|network| network == "local" || network.starts_with("http://"))
-}
-
-// Query `canic_subnet_registry` directly through the local replica HTTP API.
-fn local_query_subnet_registry(
-    options: &ListOptions,
-    root: &str,
-) -> Result<String, ListCommandError> {
-    let bytes = local_query(options, root, "canic_subnet_registry")?;
-    let result = Decode!(&bytes, Result<SubnetRegistryResponseWire, CanicErrorWire>)
-        .map_err(|err| ListCommandError::ReplicaQuery(err.to_string()))?;
-    let response = result.map_err(|err| ListCommandError::ReplicaQuery(err.to_string()))?;
-    serde_json::to_string(&response.to_dfx_json()).map_err(ListCommandError::from)
-}
-
-// Query `canic_ready` directly through the local replica HTTP API.
-fn local_query_ready(options: &ListOptions, canister: &str) -> Result<bool, ListCommandError> {
-    let bytes = local_query(options, canister, "canic_ready")?;
-    let ready =
-        Decode!(&bytes, bool).map_err(|err| ListCommandError::ReplicaQuery(err.to_string()))?;
-    Ok(ready)
-}
-
-// Execute one anonymous query call against the local replica.
-fn local_query(
-    options: &ListOptions,
-    canister: &str,
-    method: &str,
-) -> Result<Vec<u8>, ListCommandError> {
-    let canister_id = Principal::from_text(canister)
-        .map_err(|err| ListCommandError::ReplicaQuery(err.to_string()))?;
-    let arg = Encode!().map_err(|err| ListCommandError::ReplicaQuery(err.to_string()))?;
-    let sender = Principal::anonymous();
-    let envelope = QueryEnvelope {
-        content: QueryContent {
-            request_type: "query",
-            canister_id: canister_id.as_slice(),
-            method_name: method,
-            arg: &arg,
-            sender: sender.as_slice(),
-            ingress_expiry: ingress_expiry_nanos()?,
-        },
-    };
-    let body = serde_cbor::to_vec(&envelope)?;
-    let endpoint = local_replica_endpoint(options);
-    let response = post_cbor(
-        &endpoint,
-        &format!("/api/v2/canister/{canister}/query"),
-        &body,
-    )?;
-    let query_response = serde_cbor::from_slice::<QueryResponse>(&response)?;
-
-    if query_response.status == "replied" {
-        return query_response
-            .reply
-            .map(|reply| reply.arg)
-            .ok_or_else(|| ListCommandError::ReplicaQuery("missing query reply".to_string()));
-    }
-
-    Err(ListCommandError::ReplicaRejected {
-        code: query_response.reject_code.unwrap_or_default(),
-        message: query_response.reject_message.unwrap_or_default(),
-    })
-}
-
-// Resolve the local replica endpoint from explicit URL or the current DFX port.
-fn local_replica_endpoint(options: &ListOptions) -> String {
-    if let Some(network) = options
-        .network
-        .as_deref()
-        .filter(|network| network.starts_with("http://"))
-    {
-        return network.trim_end_matches('/').to_string();
-    }
-
-    let mut command = Command::new(&options.dfx);
-    command.args(["info", "webserver-port"]);
-    let port = run_output(&mut command).unwrap_or_else(|_| "4943".to_string());
-    format!("http://127.0.0.1:{port}")
-}
-
-// Return an ingress expiry comfortably in the near future for local queries.
-fn ingress_expiry_nanos() -> Result<u64, ListCommandError> {
-    let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_err(|err| ListCommandError::ReplicaQuery(err.to_string()))?;
-    let expiry = now
-        .as_nanos()
-        .saturating_add(5 * 60 * 1_000_000_000)
-        .min(u128::from(u64::MAX));
-    u64::try_from(expiry).map_err(|err| ListCommandError::ReplicaQuery(err.to_string()))
-}
-
-// POST one CBOR request over simple HTTP/1.1 and return the response body.
-fn post_cbor(endpoint: &str, path: &str, body: &[u8]) -> Result<Vec<u8>, ListCommandError> {
-    let (host, port) = parse_http_endpoint(endpoint)?;
-    let mut stream = TcpStream::connect((host.as_str(), port))?;
-    let request = format!(
-        "POST {path} HTTP/1.1\r\nHost: {host}:{port}\r\nContent-Type: application/cbor\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
-        body.len()
-    );
-    stream.write_all(request.as_bytes())?;
-    stream.write_all(body)?;
-
-    let mut response = Vec::new();
-    stream.read_to_end(&mut response)?;
-    split_http_body(&response)
-}
-
-// Parse the limited HTTP endpoints supported by local direct queries.
-fn parse_http_endpoint(endpoint: &str) -> Result<(String, u16), ListCommandError> {
-    let rest = endpoint.strip_prefix("http://").ok_or_else(|| {
-        ListCommandError::ReplicaQuery(format!("unsupported endpoint {endpoint}"))
-    })?;
-    let authority = rest.split('/').next().unwrap_or(rest);
-    let (host, port) = authority
-        .rsplit_once(':')
-        .ok_or_else(|| ListCommandError::ReplicaQuery(format!("missing port in {endpoint}")))?;
-    let port = port
-        .parse::<u16>()
-        .map_err(|err| ListCommandError::ReplicaQuery(err.to_string()))?;
-    Ok((host.to_string(), port))
-}
-
-// Split a simple HTTP response and reject non-2xx status codes.
-fn split_http_body(response: &[u8]) -> Result<Vec<u8>, ListCommandError> {
-    let marker = b"\r\n\r\n";
-    let Some(index) = response
-        .windows(marker.len())
-        .position(|window| window == marker)
-    else {
-        return Err(ListCommandError::ReplicaQuery(
-            "malformed HTTP response".to_string(),
-        ));
-    };
-    let header = String::from_utf8_lossy(&response[..index]);
-    let status_ok = header
-        .lines()
-        .next()
-        .is_some_and(|status| status.contains(" 2"));
-    if !status_ok {
-        return Err(ListCommandError::ReplicaQuery(header.to_string()));
-    }
-    Ok(response[index + marker.len()..].to_vec())
-}
-
-// Execute one command and capture stdout.
-fn run_output(command: &mut Command) -> Result<String, ListCommandError> {
-    let display = command_display(command);
-    let output = command.output()?;
-    if output.status.success() {
-        Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
-    } else {
-        Err(ListCommandError::DfxFailed {
-            command: display,
-            stderr: String::from_utf8_lossy(&output.stderr).to_string(),
-        })
-    }
+    Dfx::new(&options.dfx, options.network.clone())
+        .canister_call_output(root, "canic_subnet_registry", Some("json"))
+        .map_err(list_dfx_error)
+        .map_err(add_root_registry_hint)
 }
 
 // Add a next-step hint for common root registry setup mistakes.
@@ -644,9 +418,14 @@ fn add_root_registry_hint(error: ListCommandError) -> ListCommandError {
     }
 }
 
-// Detect dfx's missing-canister-id diagnostic so standalone mode can skip uncreated entries.
-fn canister_id_missing(stderr: &str) -> bool {
-    stderr.contains("Cannot find canister id")
+// Convert host dfx failures into the list command's public error surface.
+fn list_dfx_error(error: DfxCommandError) -> ListCommandError {
+    match error {
+        DfxCommandError::Io(err) => ListCommandError::Io(err),
+        DfxCommandError::Failed { command, stderr } => {
+            ListCommandError::DfxFailed { command, stderr }
+        }
+    }
 }
 
 // Return guidance for root registry calls that cannot reach an installed Canic root.
@@ -686,17 +465,6 @@ fn standalone_next_step_hint(
     Some(
         "only the local root id exists. Run `canic install` to build, install, stage, and bootstrap the tree; then run `canic list`.",
     )
-}
-
-// Render a command for diagnostics.
-fn command_display(command: &Command) -> String {
-    let mut parts = vec![command.get_program().to_string_lossy().to_string()];
-    parts.extend(
-        command
-            .get_args()
-            .map(|arg| arg.to_string_lossy().to_string()),
-    );
-    parts.join(" ")
 }
 
 // Select forest roots or validate the requested subtree root.
@@ -818,70 +586,20 @@ fn render_registry_table(
     role_kinds: &BTreeMap<String, String>,
     readiness: &BTreeMap<String, ReadyStatus>,
 ) -> String {
-    let role_width = rows
-        .iter()
-        .map(|row| display_width(&role_label(row)))
-        .chain([display_width(ROLE_HEADER)])
-        .max()
-        .unwrap_or_else(|| display_width(ROLE_HEADER));
-    let canister_width = rows
-        .iter()
-        .map(|row| display_width(&canister_label(row)))
-        .chain([display_width(CANISTER_HEADER)])
-        .max()
-        .unwrap_or_else(|| display_width(CANISTER_HEADER));
-    let kind_width = rows
-        .iter()
-        .map(|row| display_width(&kind_label(row, role_kinds)))
-        .chain([display_width(KIND_HEADER)])
-        .max()
-        .unwrap_or_else(|| display_width(KIND_HEADER));
-
-    let mut lines = Vec::new();
-    lines.push(registry_table_row(
-        CANISTER_HEADER,
-        ROLE_HEADER,
-        KIND_HEADER,
-        READY_HEADER,
-        canister_width,
-        role_width,
-        kind_width,
-    ));
-
+    let mut table = WhitespaceTable::new([CANISTER_HEADER, ROLE_HEADER, KIND_HEADER, READY_HEADER]);
     for row in rows {
         let ready = readiness
             .get(&row.entry.pid)
             .map_or("unknown", |status| status.label());
-        lines.push(registry_table_row(
-            &canister_label(row),
-            &role_label(row),
-            &kind_label(row, role_kinds),
-            ready,
-            canister_width,
-            role_width,
-            kind_width,
-        ));
+        table.push_row([
+            canister_label(row),
+            role_label(row),
+            kind_label(row, role_kinds),
+            ready.to_string(),
+        ]);
     }
 
-    lines.join("\n")
-}
-
-// Render one whitespace-aligned table row.
-fn registry_table_row(
-    canister: &str,
-    role: &str,
-    kind: &str,
-    ready: &str,
-    canister_width: usize,
-    role_width: usize,
-    kind_width: usize,
-) -> String {
-    format!("{canister:<canister_width$}  {role:<role_width$}  {kind:<kind_width$}  {ready}")
-}
-
-// Count characters so Unicode tree prefixes do not over-pad columns.
-fn display_width(value: &str) -> usize {
-    value.chars().count()
+    table.render()
 }
 
 // Format one canister principal label with its box-drawing tree branch.
@@ -927,157 +645,6 @@ fn parse_ready_value(data: &serde_json::Value) -> bool {
 }
 
 ///
-/// QueryEnvelope
-///
-
-#[derive(Serialize)]
-struct QueryEnvelope<'a> {
-    content: QueryContent<'a>,
-}
-
-///
-/// QueryContent
-///
-
-#[derive(Serialize)]
-struct QueryContent<'a> {
-    request_type: &'static str,
-    #[serde(with = "serde_bytes")]
-    canister_id: &'a [u8],
-    method_name: &'a str,
-    #[serde(with = "serde_bytes")]
-    arg: &'a [u8],
-    #[serde(with = "serde_bytes")]
-    sender: &'a [u8],
-    ingress_expiry: u64,
-}
-
-///
-/// QueryResponse
-///
-
-#[derive(Deserialize)]
-struct QueryResponse {
-    status: String,
-    reply: Option<QueryReply>,
-    reject_code: Option<u64>,
-    reject_message: Option<String>,
-}
-
-///
-/// QueryReply
-///
-
-#[derive(Deserialize)]
-struct QueryReply {
-    #[serde(with = "serde_bytes")]
-    arg: Vec<u8>,
-}
-
-///
-/// SubnetRegistryResponseWire
-///
-
-#[derive(CandidType, Deserialize)]
-struct SubnetRegistryResponseWire(Vec<SubnetRegistryEntryWire>);
-
-impl SubnetRegistryResponseWire {
-    // Convert direct Candid query output into the DFX JSON shape the discovery parser accepts.
-    fn to_dfx_json(&self) -> serde_json::Value {
-        serde_json::json!({
-            "Ok": self.0.iter().map(SubnetRegistryEntryWire::to_dfx_json).collect::<Vec<_>>()
-        })
-    }
-}
-
-///
-/// SubnetRegistryEntryWire
-///
-
-#[derive(CandidType, Deserialize)]
-struct SubnetRegistryEntryWire {
-    pid: Principal,
-    role: String,
-    record: CanisterInfoWire,
-}
-
-impl SubnetRegistryEntryWire {
-    // Convert one registry entry into the DFX JSON shape used by existing list rendering.
-    fn to_dfx_json(&self) -> serde_json::Value {
-        serde_json::json!({
-            "pid": self.pid.to_text(),
-            "role": self.role,
-            "record": self.record.to_dfx_json(),
-        })
-    }
-}
-
-///
-/// CanisterInfoWire
-///
-
-#[derive(CandidType, Deserialize)]
-struct CanisterInfoWire {
-    pid: Principal,
-    role: String,
-    parent_pid: Option<Principal>,
-    module_hash: Option<Vec<u8>>,
-    created_at: u64,
-}
-
-impl CanisterInfoWire {
-    // Convert one canister info record into a DFX-like JSON object.
-    fn to_dfx_json(&self) -> serde_json::Value {
-        serde_json::json!({
-            "pid": self.pid.to_text(),
-            "role": self.role,
-            "parent_pid": self.parent_pid.as_ref().map(Principal::to_text),
-            "module_hash": self.module_hash,
-            "created_at": self.created_at.to_string(),
-        })
-    }
-}
-
-///
-/// CanicErrorWire
-///
-
-#[derive(CandidType, Deserialize)]
-struct CanicErrorWire {
-    code: ErrorCodeWire,
-    message: String,
-}
-
-impl std::fmt::Display for CanicErrorWire {
-    // Render a compact public API error from a direct local replica query.
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(formatter, "{:?}: {}", self.code, self.message)
-    }
-}
-
-///
-/// ErrorCodeWire
-///
-
-#[derive(CandidType, Debug, Deserialize)]
-enum ErrorCodeWire {
-    Conflict,
-    Forbidden,
-    Internal,
-    InvalidInput,
-    InvariantViolation,
-    NotFound,
-    PolicyInstanceRequiresSingletonWithDirectory,
-    PolicyReplicaRequiresSingletonWithScaling,
-    PolicyRoleAlreadyRegistered,
-    PolicyShardRequiresSingletonWithSharding,
-    PolicySingletonAlreadyRegisteredUnderParent,
-    ResourceExhausted,
-    Unauthorized,
-    Unavailable,
-}
-
-///
 /// ReadyStatus
 ///
 
@@ -1097,16 +664,6 @@ impl ReadyStatus {
             Self::Error => "error",
         }
     }
-}
-
-// Read the next required option value.
-fn next_value<I>(args: &mut I, option: &'static str) -> Result<String, ListCommandError>
-where
-    I: Iterator<Item = OsString>,
-{
-    args.next()
-        .and_then(|value| value.into_string().ok())
-        .ok_or(ListCommandError::MissingValue(option))
 }
 
 // Return list command usage text.
@@ -1162,15 +719,6 @@ mod tests {
         assert_eq!(options.anchor, None);
         assert_eq!(options.network, Some("local".to_string()));
         assert_eq!(options.dfx, "dfx");
-    }
-
-    // Ensure the old root-tree flag is no longer part of the list surface.
-    #[test]
-    fn rejects_root_tree_list_options() {
-        let err = ListOptions::parse([OsString::from("--root-tree")])
-            .expect_err("root-tree should not parse");
-
-        assert!(matches!(err, ListCommandError::UnknownOption(option) if option == "--root-tree"));
     }
 
     // Ensure conflicting registry sources are still rejected.

@@ -27,12 +27,11 @@ fn in_place_plan_orders_parent_before_child() {
     assert_eq!(plan.verification_summary.member_checks, 2);
     assert_eq!(plan.verification_summary.members_with_checks, 2);
     assert_eq!(plan.verification_summary.total_checks, 2);
-    assert_eq!(plan.ordering_summary.phase_count, 1);
+    assert_eq!(plan.ordering_summary.ordered_members, 2);
     assert_eq!(plan.ordering_summary.dependency_free_members, 1);
-    assert_eq!(plan.ordering_summary.in_group_parent_edges, 1);
-    assert_eq!(plan.ordering_summary.cross_group_parent_edges, 0);
-    assert_eq!(ordered[0].phase_order, 0);
-    assert_eq!(ordered[1].phase_order, 1);
+    assert_eq!(plan.ordering_summary.parent_edges, 1);
+    assert_eq!(ordered[0].member_order, 0);
+    assert_eq!(ordered[1].member_order, 1);
     assert_eq!(ordered[0].source_canister, ROOT);
     assert_eq!(ordered[1].source_canister, CHILD);
     assert_eq!(
@@ -40,52 +39,9 @@ fn in_place_plan_orders_parent_before_child() {
         Some(RestoreOrderingDependency {
             source_canister: ROOT.to_string(),
             target_canister: ROOT.to_string(),
-            relationship: RestoreOrderingRelationship::ParentInSameGroup,
+            relationship: RestoreOrderingRelationship::ParentBeforeChild,
         })
     );
-}
-
-// Ensure cross-group parent dependencies are exposed when the parent phase is earlier.
-#[test]
-fn plan_reports_parent_dependency_from_earlier_group() {
-    let mut manifest = valid_manifest(IdentityMode::Relocatable);
-    manifest.fleet.members[0].restore_group = 2;
-    manifest.fleet.members[1].restore_group = 1;
-
-    let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
-    let ordered = plan.ordered_members();
-
-    assert_eq!(plan.phases.len(), 2);
-    assert_eq!(plan.ordering_summary.phase_count, 2);
-    assert_eq!(plan.ordering_summary.dependency_free_members, 1);
-    assert_eq!(plan.ordering_summary.in_group_parent_edges, 0);
-    assert_eq!(plan.ordering_summary.cross_group_parent_edges, 1);
-    assert_eq!(ordered[0].source_canister, ROOT);
-    assert_eq!(ordered[1].source_canister, CHILD);
-    assert_eq!(
-        ordered[1].ordering_dependency,
-        Some(RestoreOrderingDependency {
-            source_canister: ROOT.to_string(),
-            target_canister: ROOT.to_string(),
-            relationship: RestoreOrderingRelationship::ParentInEarlierGroup,
-        })
-    );
-}
-
-// Ensure restore planning fails when groups would restore a child before its parent.
-#[test]
-fn plan_rejects_parent_in_later_restore_group() {
-    let mut manifest = valid_manifest(IdentityMode::Relocatable);
-    manifest.fleet.members[0].restore_group = 1;
-    manifest.fleet.members[1].restore_group = 2;
-
-    let err = RestorePlanner::plan(&manifest, None)
-        .expect_err("parent-after-child group ordering should fail");
-
-    assert!(matches!(
-        err,
-        RestorePlanError::ParentRestoreGroupAfterChild { .. }
-    ));
 }
 
 // Ensure fixed identities cannot be remapped.
@@ -144,7 +100,7 @@ fn relocatable_member_can_be_mapped() {
     assert_eq!(child.parent_target_canister, Some(ROOT.to_string()));
 }
 
-// Ensure restore plans carry enough metadata for operator preflight.
+// Ensure restore plans carry enough metadata for operator dry-runs.
 #[test]
 fn plan_members_include_snapshot_and_verification_metadata() {
     let manifest = valid_manifest(IdentityMode::Relocatable);
@@ -157,8 +113,7 @@ fn plan_members_include_snapshot_and_verification_metadata() {
         .expect("root member should be planned");
 
     assert_eq!(root.identity_mode, IdentityMode::Fixed);
-    assert_eq!(root.verification_class, "basic");
-    assert_eq!(root.verification_checks[0].kind, "call");
+    assert_eq!(root.verification_checks[0].kind, "status");
     assert_eq!(root.source_snapshot.snapshot_id, "snap-root");
     assert_eq!(root.source_snapshot.artifact_path, "artifacts/root");
 }
@@ -214,11 +169,7 @@ fn plan_includes_snapshot_summary() {
     assert!(!plan.readiness_summary.ready);
     assert_eq!(
         plan.readiness_summary.reasons,
-        [
-            "missing-module-hash",
-            "missing-wasm-hash",
-            "missing-snapshot-checksum"
-        ]
+        ["missing-snapshot-checksum"]
     );
 }
 
@@ -227,8 +178,7 @@ fn plan_includes_snapshot_summary() {
 fn plan_includes_verification_summary() {
     let mut manifest = valid_manifest(IdentityMode::Relocatable);
     manifest.verification.fleet_checks.push(VerificationCheck {
-        kind: "fleet-ready".to_string(),
-        method: None,
+        kind: "status".to_string(),
         roles: Vec::new(),
     });
     manifest
@@ -237,8 +187,7 @@ fn plan_includes_verification_summary() {
         .push(MemberVerificationChecks {
             role: "app".to_string(),
             checks: vec![VerificationCheck {
-                kind: "app-ready".to_string(),
-                method: Some("ready".to_string()),
+                kind: "status".to_string(),
                 roles: Vec::new(),
             }],
         });
@@ -254,7 +203,7 @@ fn plan_includes_verification_summary() {
         .expect("app member should be planned");
     assert_eq!(app.verification_checks.len(), 2);
     assert_eq!(plan.fleet_verification_checks.len(), 1);
-    assert_eq!(plan.fleet_verification_checks[0].kind, "fleet-ready");
+    assert_eq!(plan.fleet_verification_checks[0].kind, "status");
     assert_eq!(plan.verification_summary.fleet_checks, 1);
     assert_eq!(plan.verification_summary.member_check_groups, 1);
     assert_eq!(plan.verification_summary.member_checks, 3);
@@ -271,71 +220,10 @@ fn plan_includes_operation_summary() {
 
     assert_eq!(plan.operation_summary.planned_snapshot_uploads, 2);
     assert_eq!(plan.operation_summary.planned_snapshot_loads, 2);
-    assert_eq!(plan.operation_summary.planned_code_reinstalls, 0);
     assert_eq!(plan.operation_summary.planned_verification_checks, 2);
     assert_eq!(plan.operation_summary.planned_operations, 6);
-    assert_eq!(plan.operation_summary.planned_phases, 1);
 }
 
-// Ensure restore plans carry manifest design conformance for smoke checks.
-#[test]
-fn plan_includes_design_conformance_report() {
-    let manifest = valid_manifest(IdentityMode::Relocatable);
-
-    let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
-    let design = plan
-        .design_conformance
-        .as_ref()
-        .expect("new plans should carry design conformance");
-
-    assert!(design.design_v1_ready);
-    assert!(design.topology.design_v1_ready);
-    assert!(design.backup_units.design_v1_ready);
-    assert!(design.quiescence.design_v1_ready);
-    assert!(design.verification.design_v1_ready);
-    assert!(design.snapshot_provenance.design_v1_ready);
-    assert!(design.restore_order.design_v1_ready);
-}
-
-// Ensure older restore plan JSON remains readable after adding newer fields.
-#[test]
-fn restore_plan_defaults_missing_newer_restore_fields() {
-    let manifest = valid_manifest(IdentityMode::Relocatable);
-    let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
-    let mut value = serde_json::to_value(&plan).expect("serialize plan");
-    value
-        .as_object_mut()
-        .expect("plan should serialize as an object")
-        .remove("fleet_verification_checks");
-    value
-        .as_object_mut()
-        .expect("plan should serialize as an object")
-        .remove("design_conformance");
-    let operation_summary = value
-        .get_mut("operation_summary")
-        .and_then(serde_json::Value::as_object_mut)
-        .expect("operation summary should serialize as an object");
-    operation_summary.remove("planned_snapshot_uploads");
-    operation_summary.remove("planned_operations");
-
-    let decoded: RestorePlan = serde_json::from_value(value).expect("decode old plan shape");
-    let status = RestoreStatus::from_plan(&decoded);
-    let dry_run =
-        RestoreApplyDryRun::try_from_plan(&decoded, None).expect("old plan should dry-run");
-
-    assert!(decoded.fleet_verification_checks.is_empty());
-    assert_eq!(decoded.design_conformance, None);
-    assert_eq!(decoded.operation_summary.planned_snapshot_uploads, 0);
-    assert_eq!(decoded.operation_summary.planned_operations, 0);
-    assert_eq!(status.planned_snapshot_uploads, 2);
-    assert_eq!(status.planned_operations, 6);
-    assert_eq!(dry_run.planned_snapshot_uploads, 2);
-    assert_eq!(dry_run.planned_operations, 6);
-    assert_eq!(decoded.backup_id, plan.backup_id);
-    assert_eq!(decoded.member_count, plan.member_count);
-}
-
-// Ensure initial restore status mirrors the no-mutation restore plan.
 // Ensure role-level verification checks are counted once per matching member.
 #[test]
 fn plan_expands_role_verification_checks_per_matching_member() {
@@ -345,7 +233,6 @@ fn plan_expands_role_verification_checks_per_matching_member() {
         CHILD_TWO,
         Some(ROOT),
         IdentityMode::Relocatable,
-        1,
     ));
     manifest
         .verification
@@ -353,8 +240,7 @@ fn plan_expands_role_verification_checks_per_matching_member() {
         .push(MemberVerificationChecks {
             role: "app".to_string(),
             checks: vec![VerificationCheck {
-                kind: "app-ready".to_string(),
-                method: Some("ready".to_string()),
+                kind: "status".to_string(),
                 roles: Vec::new(),
             }],
         });
@@ -375,8 +261,7 @@ fn plan_applies_member_verification_role_filters() {
     manifest.fleet.members[0]
         .verification_checks
         .push(VerificationCheck {
-            kind: "root-only-inline".to_string(),
-            method: Some("wrong_member".to_string()),
+            kind: "status".to_string(),
             roles: vec!["root".to_string()],
         });
     manifest
@@ -386,13 +271,11 @@ fn plan_applies_member_verification_role_filters() {
             role: "app".to_string(),
             checks: vec![
                 VerificationCheck {
-                    kind: "app-role-check".to_string(),
-                    method: Some("app_ready".to_string()),
+                    kind: "status".to_string(),
                     roles: vec!["app".to_string()],
                 },
                 VerificationCheck {
-                    kind: "root-filtered-check".to_string(),
-                    method: Some("wrong_role".to_string()),
+                    kind: "status".to_string(),
                     roles: vec!["root".to_string()],
                 },
             ],
@@ -404,15 +287,15 @@ fn plan_applies_member_verification_role_filters() {
         .into_iter()
         .find(|member| member.role == "app")
         .expect("app member should be planned");
-    let dry_run = RestoreApplyDryRun::try_from_plan(&plan, None).expect("dry-run should build");
-    let app_verification_methods = dry_run.phases[0]
+    let dry_run = RestoreApplyDryRun::from_plan(&plan);
+    let app_verification_kinds = dry_run
         .operations
         .iter()
         .filter(|operation| {
             operation.source_canister == CHILD
                 && operation.operation == RestoreApplyOperationKind::VerifyMember
         })
-        .filter_map(|operation| operation.verification_method.as_deref())
+        .filter_map(|operation| operation.verification_kind.as_deref())
         .collect::<Vec<_>>();
 
     assert_eq!(app.verification_checks.len(), 2);
@@ -421,12 +304,12 @@ fn plan_applies_member_verification_role_filters() {
             .iter()
             .map(|check| check.kind.as_str())
             .collect::<Vec<_>>(),
-        ["call", "app-role-check"]
+        ["status", "status"]
     );
     assert_eq!(plan.verification_summary.member_checks, 3);
     assert_eq!(plan.verification_summary.total_checks, 3);
     assert_eq!(dry_run.rendered_operations, 7);
-    assert_eq!(app_verification_methods, ["canic_ready", "app_ready"]);
+    assert_eq!(app_verification_kinds, ["status", "status"]);
 }
 
 // Ensure mapped restores must cover every source member.

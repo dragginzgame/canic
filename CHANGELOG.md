@@ -7,9 +7,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.31.x] - 2026-05-06 - Snapshot Cleanup
 
-- `0.31.0` cleans up snapshot restore safety, moves more backup/restore logic into `canic-backup`, and trims the restore CLI around `restore run`.
-- It also adds `canic install`, named project-local fleets, numbered config selection, compact install progress output, `canic --version`, and tree-shaped readiness-aware `canic list`.
-- It adds generated standalone build config for sandbox/probe canisters so experiments no longer need throwaway `canic.toml` files.
+- `0.31.2` finishes CLI parser and host-tool cleanup by moving command parsing onto shared Clap helpers, adding `canic build` and `canic release-set`, and renaming `canic-installer` to `canic-host`.
+- `0.31.1` trims the backup/restore v1 surface to the current snapshot workflow, removes retired report/preflight/assertion commands, and makes restore execution rely on ordered journals, stopped-canister checks, and concrete state markers.
+- `0.31.0` starts the snapshot cleanup line with safer snapshot restore planning, `canic install` and fleet-aware listing flows, compact install progress, and standalone build config for sandbox/probe canisters.
 
 See detailed breakdown:
 [docs/changelog/0.31.md](docs/changelog/0.31.md)
@@ -19,23 +19,14 @@ See detailed breakdown:
 ## [0.30.x] - 2026-05-03 - Fleet Snapshot Backups
 
 - `0.30.39` trims the `canic` CLI and root README docs into operator-focused guides, removes duplicated installer detail, drops stale canister-layout wording, adds a full 0.30 release audit, and drafts the 0.31 snapshot cleanup plan.
-
 - `0.30.38` adds `canic list`, `canic backup smoke`, easier `canic` binary installs, trimmed CLI help, groups repo-owned canisters by purpose, and removes the old shared reference-support crate.
-
 - `0.30.37` adds manifest design-conformance reporting plus manifest, preflight, and restore-plan `--require-design-v1` gates so smoke checks can fail closed on topology, unit, quiescence, verification, provenance, or restore-order gaps.
-
 - `0.30.36` adds restore runner batch summaries, delta counters, and fail-closed batch gates so automation can see and require how a native runner batch started, changed, and stopped.
-
 - `0.30.35` lets `canic restore run` accept, echo, and require `--updated-at <text>` markers on runner summaries and receipts so native runner transitions can carry operator-supplied comparable state markers instead of always using `unknown`.
-
 - `0.30.34` adds restore pending-work summaries, runner operation receipts/summaries, and fail-closed progress/stale-pending/receipt gates so automation can require claimed-work freshness and execution audit events without recomputing counters.
-
 - `0.30.33` adds restore apply progress summaries to status, report, and runner output so automation can read remaining, transitionable, attention-needed, and integer completion progress without recomputing counters.
-
 - `0.30.32` persists restore apply journal operation-kind counts and validates supplied counts against concrete journal operations, while keeping older journals readable.
-
 - `0.30.31` makes restore planning expand role-level member verification checks into concrete member operations, honors verification role filters before dry-runs or runner previews are generated, and carries operation-kind counts through dry-runs, apply journals, and runner summaries.
-
 - `0.30.30` makes restore apply dry-runs render declared fleet-level verification checks as final `verify-fleet` operations, so restore plans, operation counts, and runner previews agree before execution.
 
 - `0.30.29` centralizes native restore-runner state strings without changing JSON output, adds generated ingress payload limits for `canic_update` endpoints, and adds a local sandbox canister with `start_local!` for quick manual experiments.
@@ -55,12 +46,7 @@ canic restore run \
   --execute \
   --network local \
   --max-steps 1 \
-  --out restore-run.json \
-  --require-run-mode execute \
-  --require-stopped-reason max-steps-reached \
-  --require-next-action rerun \
-  --require-executed-count 1 \
-  --require-no-attention
+  --out restore-run.json
 ```
 
 - `0.30.27` moves guarded restore journal execution into `canic restore run --execute`, keeps `--dry-run` previews, adds pending-operation recovery, writes summaries with `stopped_reason` and `next_action`, adds CI gates, and adds a maintained script wrapper for operators who still want the shell flow.

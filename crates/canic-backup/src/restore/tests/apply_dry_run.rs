@@ -6,31 +6,24 @@ fn apply_dry_run_renders_ordered_member_operations() {
     let manifest = valid_manifest(IdentityMode::Relocatable);
 
     let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
-    let status = RestoreStatus::from_plan(&plan);
-    let dry_run =
-        RestoreApplyDryRun::try_from_plan(&plan, Some(&status)).expect("dry-run should build");
+    let dry_run = RestoreApplyDryRun::from_plan(&plan);
 
     assert_eq!(dry_run.dry_run_version, 1);
     assert_eq!(dry_run.backup_id.as_str(), "fbk_test_001");
     assert!(dry_run.ready);
-    assert!(dry_run.status_supplied);
     assert_eq!(dry_run.member_count, 2);
-    assert_eq!(dry_run.phase_count, 1);
     assert_eq!(dry_run.planned_snapshot_uploads, 2);
     assert_eq!(dry_run.planned_snapshot_loads, 2);
-    assert_eq!(dry_run.planned_code_reinstalls, 0);
     assert_eq!(dry_run.planned_verification_checks, 2);
     assert_eq!(dry_run.planned_operations, 6);
     assert_eq!(dry_run.rendered_operations, 6);
     assert_eq!(dry_run.operation_counts.snapshot_uploads, 2);
     assert_eq!(dry_run.operation_counts.snapshot_loads, 2);
-    assert_eq!(dry_run.operation_counts.code_reinstalls, 0);
     assert_eq!(dry_run.operation_counts.member_verifications, 2);
     assert_eq!(dry_run.operation_counts.fleet_verifications, 0);
     assert_eq!(dry_run.operation_counts.verification_operations, 2);
-    assert_eq!(dry_run.phases.len(), 1);
 
-    let operations = &dry_run.phases[0].operations;
+    let operations = &dry_run.operations;
     assert_eq!(operations[0].sequence, 0);
     assert_eq!(
         operations[0].operation,
@@ -51,16 +44,7 @@ fn apply_dry_run_renders_ordered_member_operations() {
         operations[2].operation,
         RestoreApplyOperationKind::VerifyMember
     );
-    assert_eq!(operations[2].verification_kind, Some("call".to_string()));
-    assert_eq!(
-        operations[2].verification_method,
-        Some("canic_ready".to_string())
-    );
-    assert!(
-        !operations
-            .iter()
-            .any(|operation| operation.operation == RestoreApplyOperationKind::ReinstallCode)
-    );
+    assert_eq!(operations[2].verification_kind, Some("status".to_string()));
     assert_eq!(operations[3].source_canister, CHILD);
     assert_eq!(
         operations[5].operation,
@@ -73,17 +57,16 @@ fn apply_dry_run_renders_ordered_member_operations() {
 fn apply_dry_run_renders_fleet_verification_operations() {
     let mut manifest = valid_manifest(IdentityMode::Relocatable);
     manifest.verification.fleet_checks.push(VerificationCheck {
-        kind: "fleet-ready".to_string(),
-        method: Some("canic_fleet_ready".to_string()),
+        kind: "status".to_string(),
         roles: Vec::new(),
     });
 
     let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
-    let dry_run = RestoreApplyDryRun::try_from_plan(&plan, None).expect("dry-run should build");
+    let dry_run = RestoreApplyDryRun::from_plan(&plan);
 
     assert_eq!(plan.operation_summary.planned_verification_checks, 3);
     assert_eq!(dry_run.rendered_operations, 7);
-    let operation = dry_run.phases[0]
+    let operation = dry_run
         .operations
         .last()
         .expect("fleet verification operation should be rendered");
@@ -94,28 +77,21 @@ fn apply_dry_run_renders_fleet_verification_operations() {
     assert_eq!(operation.role, "fleet");
     assert_eq!(operation.snapshot_id, None);
     assert_eq!(operation.artifact_path, None);
-    assert_eq!(operation.verification_kind, Some("fleet-ready".to_string()));
-    assert_eq!(
-        operation.verification_method,
-        Some("canic_fleet_ready".to_string())
-    );
+    assert_eq!(operation.verification_kind, Some("status".to_string()));
 }
 
-// Ensure apply dry-run operation sequences remain unique across phases.
+// Ensure apply dry-run operation sequences remain unique in topology order.
 #[test]
-fn apply_dry_run_sequences_operations_across_phases() {
-    let mut manifest = valid_manifest(IdentityMode::Relocatable);
-    manifest.fleet.members[0].restore_group = 2;
-
+fn apply_dry_run_sequences_operations_in_topology_order() {
+    let manifest = valid_manifest(IdentityMode::Relocatable);
     let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
-    let dry_run = RestoreApplyDryRun::try_from_plan(&plan, None).expect("dry-run should build");
+    let dry_run = RestoreApplyDryRun::from_plan(&plan);
 
-    assert_eq!(dry_run.phases.len(), 2);
     assert_eq!(dry_run.rendered_operations, 6);
-    assert_eq!(dry_run.phases[0].operations[0].sequence, 0);
-    assert_eq!(dry_run.phases[0].operations[2].sequence, 2);
-    assert_eq!(dry_run.phases[1].operations[0].sequence, 3);
-    assert_eq!(dry_run.phases[1].operations[2].sequence, 5);
+    assert_eq!(dry_run.operations[0].sequence, 0);
+    assert_eq!(dry_run.operations[2].sequence, 2);
+    assert_eq!(dry_run.operations[3].sequence, 3);
+    assert_eq!(dry_run.operations[5].sequence, 5);
 }
 
 // Ensure apply dry-runs can prove referenced artifacts exist and match checksums.
@@ -140,7 +116,7 @@ fn apply_dry_run_validates_artifacts_under_backup_root() {
     );
 
     let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
-    let dry_run = RestoreApplyDryRun::try_from_plan_with_artifacts(&plan, None, &root)
+    let dry_run = RestoreApplyDryRun::try_from_plan_with_artifacts(&plan, &root)
         .expect("dry-run should validate artifacts");
 
     let validation = dry_run
@@ -164,7 +140,7 @@ fn apply_dry_run_rejects_missing_artifacts() {
     manifest.fleet.members[0].source_snapshot.artifact_path = "missing-child".to_string();
 
     let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
-    let err = RestoreApplyDryRun::try_from_plan_with_artifacts(&plan, None, &root)
+    let err = RestoreApplyDryRun::try_from_plan_with_artifacts(&plan, &root)
         .expect_err("missing artifact should fail");
 
     fs::remove_dir_all(root).expect("remove temp root");
@@ -183,33 +159,12 @@ fn apply_dry_run_rejects_artifact_path_traversal() {
     manifest.fleet.members[1].source_snapshot.artifact_path = "../outside".to_string();
 
     let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
-    let err = RestoreApplyDryRun::try_from_plan_with_artifacts(&plan, None, &root)
+    let err = RestoreApplyDryRun::try_from_plan_with_artifacts(&plan, &root)
         .expect_err("path traversal should fail");
 
     fs::remove_dir_all(root).expect("remove temp root");
     assert!(matches!(
         err,
         RestoreApplyDryRunError::ArtifactPathEscapesBackup { .. }
-    ));
-}
-
-// Ensure apply dry-runs reject status files that do not match the plan.
-#[test]
-fn apply_dry_run_rejects_mismatched_status() {
-    let manifest = valid_manifest(IdentityMode::Relocatable);
-
-    let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
-    let mut status = RestoreStatus::from_plan(&plan);
-    status.backup_id = "other-backup".to_string();
-
-    let err = RestoreApplyDryRun::try_from_plan(&plan, Some(&status))
-        .expect_err("mismatched status should fail");
-
-    assert!(matches!(
-        err,
-        RestoreApplyDryRunError::StatusPlanMismatch {
-            field: "backup_id",
-            ..
-        }
     ));
 }

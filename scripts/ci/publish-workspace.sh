@@ -19,9 +19,9 @@ PUBLISH_ORDER=(
     canic-control-plane
     canic-macros
     canic
+    canic-host
     canic-cli
     canic-wasm-store
-    canic-installer
     canic-testkit
 )
 

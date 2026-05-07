@@ -64,8 +64,8 @@ fn snapshot_manifest_includes_selection_and_artifacts() {
         Some("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
     );
     assert_eq!(
-        manifest.consistency.backup_units[0].topology_validation,
-        "registry-subtree-selection"
+        manifest.consistency.backup_units[0].kind,
+        BackupUnitKind::Subtree
     );
 }
 
@@ -254,7 +254,7 @@ fn single_snapshot_config(out: PathBuf) -> SnapshotDownloadConfig {
         include_children: false,
         recursive: false,
         dry_run: false,
-        lifecycle: SnapshotLifecycleMode::SnapshotOnly,
+        lifecycle: SnapshotLifecycleMode::StopBeforeSnapshot,
         backup_id: "backup-test".to_string(),
         created_at: "unknown".to_string(),
         tool_name: "canic-test".to_string(),

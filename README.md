@@ -19,22 +19,46 @@ The crate was historically known as **ICU** (Internet Computer Utilities). All c
 * **Layered runtime APIs**: endpoint guards delegate into `workflow`, `policy`, `ops`, and storage-owned model state instead of mixing orchestration into canister methods.
 * **Self-validating delegated auth**: root signs shard certificates, shards mint user tokens, and verifiers validate token + embedded proof with local root/shard key material. Verifiers do not require proof fanout or proof caches.
 * **Stable memory helpers**: `ic_memory!`, `ic_memory_range!`, and `eager_static!` wrap stable structures and upgrade-safe runtime state.
-* **Thin-root release flow**: `canic-installer` builds child WASMs, stages release sets through the implicit `wasm_store`, and keeps ordinary child artifacts out of the root Wasm.
-* **Operator CLI**: the `canic` binary lists registered fleets, captures topology-aware canister snapshots, validates backup manifests, and drives guarded restore planning/journals.
+* **Thin-root release flow**: the `canic` CLI builds child WASMs, stages release sets through the implicit `wasm_store`, and keeps ordinary child artifacts out of the root Wasm.
+* **Operator CLI**: the `canic` binary builds Canic artifacts, lists registered fleets, captures topology-aware canister snapshots, validates backup manifests, and drives guarded restore planning/journals.
 * **CI-oriented tooling**: Rust 2024, repo toolchain pinned to Rust `1.95.0`, published MSRV `1.91.0`, and standard `make` targets for format, lint, check, test, and build.
 
 ## 📁 Repository Layout
 
+All Rust workspace crates live under `crates/`, but they fall into separate
+roles:
+
+**Canister author/runtime crates**
+
 * `crates/canic/` – public facade crate, macros, endpoint bundles, and protocol constants.
-* `crates/canic-core/` – runtime orchestration, config validation, auth, storage, workflow, and endpoint-adjacent APIs.
+* `crates/canic-core/` – shared canister runtime foundation: config, lifecycle, ingress limits, auth, storage, workflow, DTOs, and IDs.
 * `crates/canic-cdk/` – curated IC CDK facade used by Canic runtime crates.
 * `crates/canic-memory/` – standalone stable-memory helpers.
-* `crates/canic-cli/` – published `canic` operator binary for fleet listing, snapshot, backup, manifest, and restore workflows.
-* `crates/canic-installer/` – published build/install/release-set CLIs.
-* `crates/canic-control-plane/` – root/control-plane runtime support.
+* `crates/canic-macros/` – proc macros behind the public `canic` facade.
+
+**Control-plane canister crates**
+
+* `crates/canic-control-plane/` – root/control-plane runtime support built on `canic-core`.
 * `crates/canic-wasm-store/` – canonical implicit bootstrap `wasm_store` canister crate.
+
+**Host/operator crates**
+
+* `crates/canic-cli/` – published `canic` operator binary for build, install, fleet listing, snapshot, backup, manifest, and restore workflows.
+* `crates/canic-host/` – host-side build/install/fleet/release-set library used by `canic` and scripts.
+* `crates/canic-backup/` – backup/restore domain library for manifests, journals, topology snapshots, layout verification, and restore planning.
+
+**Testing crates**
+
 * `crates/canic-testkit/` – public PocketIC helpers for downstream tests.
 * `crates/canic-testing-internal/` and `crates/canic-tests/` – repo-only PocketIC harnesses and integration tests.
+
+The crate directory is intentionally still flat. Cargo, publishing, and
+`[patch.crates-io]` paths stay simpler this way, while crate names and this
+taxonomy carry the role boundary. If the workspace grows enough that scanning
+`crates/` becomes painful, the next step would be a deliberate directory split
+such as `crates/runtime/`, `crates/host/`, and `crates/testing/`; that should be
+treated as a repo-structure migration rather than a naming cleanup.
+
 * `canisters/demo/` – local reference topology for root, app, user shard/hub, scaling, and minimal baselines.
 * `canisters/test/` and `canisters/audit/` – repo-only correctness canisters and audit probes.
 * `canisters/sandbox/minimal/` – manual local sandbox canister for temporary endpoint experiments.
@@ -155,24 +179,16 @@ curl -fsSL https://raw.githubusercontent.com/dragginzgame/canic/v0.31.1/scripts/
 
 The script installs Rust when needed, the repo-local Rust `1.95.0` toolchain, `wasm32-unknown-unknown`, `rustfmt`, `clippy`, Candid/wasm utilities, `actionlint`, common Cargo helper tools, and `dfx` when missing.
 
-It also installs:
-
-- `canic-cli` as the `canic` command
-- `canic-installer` `0.31.1`
+It also installs `canic-cli` as the `canic` command.
 
 Published crates still declare MSRV `1.91.0` for downstream source builds.
 
 The setup script installs tools only; it does not start a local `dfx` replica. When run from a repo checkout, it also configures `.githooks/` if present.
 
-If you only want the thin-root helper without the broader setup path, you can still install it directly:
+The normal interface is the `canic` binary:
 
 ```bash
-cargo install --locked canic-installer --version <same-version-as-canic>
-```
-
-Then, from your workspace root:
-
-```bash
+canic build root
 canic install
 ```
 
@@ -211,20 +227,22 @@ canic fleets --network local
 canic use demo --network local
 ```
 
-For `DFX_NETWORK=local`, the installer attempts one clean local `dfx` recovery if `dfx ping local` fails. Nonlocal targets must be managed externally.
+For `DFX_NETWORK=local`, the install flow attempts one clean local `dfx`
+recovery if `dfx ping local` fails. Nonlocal targets must be managed
+externally.
 
 `root` embeds only the bootstrap `wasm_store.wasm.gz`; ordinary child releases stay outside `root` and are staged after install. Visible canister Candid files are generated under `.dfx/local/canisters/<role>/<role>.did`. The checked-in exception is `crates/canic-wasm-store/wasm_store.did`, the canonical interface for the implicit bootstrap `wasm_store` crate.
 
 For build profiles, split workspace/DFX roots, custom canister roots, role
 metadata, and lower-level build/install commands, see
-`crates/canic-installer/README.md`.
+`crates/canic-host/README.md`.
 
 ### 6. Operator Snapshot and Restore Flow
 
 The `canic` binary is the operator entry point for fleet backup/restore work.
 It still uses `dfx` for live IC snapshot operations, but it owns the higher-level
-topology selection, manifests, journals, verification reports, and restore
-readiness checks.
+topology selection, manifests, journals, backup verification, and restore
+planning.
 
 Show local demo canisters that already have ids:
 
@@ -263,26 +281,25 @@ canic snapshot download \
 Use `--recursive` for all descendants. Non-dry-run captures recompute the
 selected topology immediately before snapshot creation and fail if the topology
 hash changed since discovery. Because `dfx` creates snapshots only for stopped
-canisters, pass `--stop-before-snapshot --resume-after-snapshot` when the CLI
-should wrap that local lifecycle step.
+canisters, Canic stops each canister before snapshot creation; pass
+`--resume-after-snapshot` when the CLI should start each canister again after
+capture.
 
 Validate a captured backup before restore planning:
 
 ```bash
-canic backup smoke \
-  --dir backups/<run-id> \
-  --out-dir smoke/<run-id> \
-  --require-design \
-  --require-restore-ready
+canic backup verify \
+  --dir backups/<run-id>
 ```
 
-Restore work is manifest/journal driven. `restore plan`, `restore status`,
-`restore apply --dry-run`, and `restore run --dry-run` are no-mutation paths for
-checking mappings, ordering, checksums, verification coverage, and runner
-commands before execution.
+Restore work is manifest/journal driven. `restore plan`, `restore apply
+--dry-run`, and `restore run --dry-run` are no-mutation paths for checking
+mappings, ordering, checksums, verification coverage, and runner commands
+before execution.
 
 See `crates/canic-cli/README.md` for the operator guide and
-`docs/operations/0.30-backup-restore-smoke.md` for the release smoke checklist.
+`docs/operations/0.31-backup-restore-checklist.md` for the current
+backup/restore checklist.
 
 If you are writing host-side PocketIC tests against Canic, prefer
 `crates/canic-testkit/` for the public wrapper surface. The unpublished

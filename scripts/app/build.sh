@@ -10,4 +10,15 @@ if [ $# -eq 0 ]; then
 fi
 
 CANISTER_NAME="$1"
-"$SCRIPT_DIR/canic_installer.sh" canic-build-canister-artifact "$CANISTER_NAME"
+
+if [ -f "$ROOT_DIR/crates/canic-cli/Cargo.toml" ]; then
+  cd "$ROOT_DIR"
+  exec cargo run -q -p canic-cli --bin canic -- build "$CANISTER_NAME"
+fi
+
+if command -v canic >/dev/null 2>&1; then
+  exec canic build "$CANISTER_NAME"
+fi
+
+echo "missing canic binary: install canic or run from a Canic workspace" >&2
+exit 1

@@ -152,13 +152,19 @@ See detailed breakdown:
 ```
 assets/                     # Documentation assets
 crates/
-├─ canic/                   # Public facade crate
-├─ canic-core/              # Core orchestration/runtime crate
+├─ canic/                   # Public facade crate for canister authors
+├─ canic-core/              # Shared canister runtime foundation
 ├─ canic-cdk/               # Curated IC CDK facade
 ├─ canic-memory/            # Stable-memory helpers/runtime
+├─ canic-macros/            # Proc macros behind the public facade
 ├─ canic-control-plane/     # Root/store control-plane runtime
 ├─ canic-wasm-store/        # Canonical publishable implicit wasm_store canister
-└─ ...                      # Other supporting workspace crates
+├─ canic-cli/               # Published operator CLI
+├─ canic-host/              # Host-side build/install/fleet/release-set library
+├─ canic-backup/            # Backup/restore domain library
+├─ canic-testkit/           # Public PocketIC helpers
+├─ canic-testing-internal/  # Repo-only test harness helpers
+└─ canic-tests/             # Repo-only integration tests
 canisters/                  # Runnable canister crates grouped by purpose
 ├─ demo/                    # Reference dfx topology
 │  ├─ root/                 # Root orchestrator
@@ -179,6 +185,20 @@ dfx.json                    # Local IC topology
 Makefile                    # Dev shortcuts
 AGENTS.md, CONFIG.md        # Contributor docs
 ```
+
+Workspace crates are intentionally kept in a flat `crates/` directory. Their
+names define the boundary:
+
+* runtime/facade crates: `canic`, `canic-core`, `canic-cdk`, `canic-memory`,
+  `canic-macros`
+* control-plane canister crates: `canic-control-plane`, `canic-wasm-store`
+* host/operator crates: `canic-cli`, `canic-host`, `canic-backup`
+* testing crates: `canic-testkit`, `canic-testing-internal`, `canic-tests`
+
+Do not move crates into nested role directories casually. A physical split such
+as `crates/runtime/`, `crates/host/`, and `crates/testing/` is allowed only as a
+deliberate repo-structure migration that updates Cargo workspace paths,
+publish/patch scripts, docs, and CI together.
 
 ---
 

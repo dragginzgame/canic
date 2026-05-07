@@ -1,9 +1,9 @@
 use super::*;
 use crate::artifacts::ArtifactChecksum;
 use crate::manifest::{
-    BackupUnit, BackupUnitKind, ConsistencyMode, ConsistencySection, FleetBackupManifest,
-    FleetMember, FleetSection, IdentityMode, MemberVerificationChecks, SourceMetadata,
-    SourceSnapshot, ToolMetadata, VerificationCheck, VerificationPlan,
+    BackupUnit, BackupUnitKind, ConsistencySection, FleetBackupManifest, FleetMember, FleetSection,
+    IdentityMode, MemberVerificationChecks, SourceMetadata, SourceSnapshot, ToolMetadata,
+    VerificationCheck, VerificationPlan,
 };
 use std::{
     env, fs,
@@ -21,9 +21,8 @@ const HASH: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789ab
 fn command_preview_journal(
     operation: RestoreApplyOperationKind,
     verification_kind: Option<&str>,
-    verification_method: Option<&str>,
 ) -> RestoreApplyJournal {
-    let journal = RestoreApplyJournal {
+    let mut journal = RestoreApplyJournal {
         journal_version: 1,
         backup_id: "fbk_test_001".to_string(),
         ready: true,
@@ -42,24 +41,24 @@ fn command_preview_journal(
             state: RestoreApplyOperationState::Ready,
             state_updated_at: None,
             blocking_reasons: Vec::new(),
-            restore_group: 1,
-            phase_order: 0,
+            member_order: 0,
             source_canister: ROOT.to_string(),
             target_canister: ROOT.to_string(),
             role: "root".to_string(),
             snapshot_id: Some("snap-root".to_string()),
             artifact_path: Some("artifacts/root".to_string()),
             verification_kind: verification_kind.map(str::to_string),
-            verification_method: verification_method.map(str::to_string),
         }],
         operation_receipts: Vec::new(),
     };
+    journal.operation_counts =
+        RestoreApplyOperationKindCounts::from_operations(&journal.operations);
 
     journal.validate().expect("journal should validate");
     journal
 }
 
-// Build one valid manifest with a parent and child in the same restore group.
+// Build one valid manifest with a parent and child that restore in topology order.
 fn valid_manifest(identity_mode: IdentityMode) -> FleetBackupManifest {
     FleetBackupManifest {
         manifest_version: 1,
@@ -74,15 +73,10 @@ fn valid_manifest(identity_mode: IdentityMode) -> FleetBackupManifest {
             root_canister: ROOT.to_string(),
         },
         consistency: ConsistencySection {
-            mode: ConsistencyMode::CrashConsistent,
             backup_units: vec![BackupUnit {
-                unit_id: "whole-fleet".to_string(),
-                kind: BackupUnitKind::WholeFleet,
+                unit_id: "subtree".to_string(),
+                kind: BackupUnitKind::Subtree,
                 roles: vec!["root".to_string(), "app".to_string()],
-                consistency_reason: None,
-                dependency_closure: Vec::new(),
-                topology_validation: "subtree-closed".to_string(),
-                quiescence_strategy: None,
             }],
         },
         fleet: FleetSection {
@@ -92,8 +86,8 @@ fn valid_manifest(identity_mode: IdentityMode) -> FleetBackupManifest {
             pre_snapshot_topology_hash: HASH.to_string(),
             topology_hash: HASH.to_string(),
             members: vec![
-                fleet_member("app", CHILD, Some(ROOT), identity_mode, 1),
-                fleet_member("root", ROOT, None, IdentityMode::Fixed, 1),
+                fleet_member("app", CHILD, Some(ROOT), identity_mode),
+                fleet_member("root", ROOT, None, IdentityMode::Fixed),
             ],
         },
         verification: VerificationPlan {
@@ -109,7 +103,6 @@ fn fleet_member(
     canister_id: &str,
     parent_canister_id: Option<&str>,
     identity_mode: IdentityMode,
-    restore_group: u16,
 ) -> FleetMember {
     FleetMember {
         role: role.to_string(),
@@ -118,11 +111,8 @@ fn fleet_member(
         subnet_canister_id: None,
         controller_hint: Some(ROOT.to_string()),
         identity_mode,
-        restore_group,
-        verification_class: "basic".to_string(),
         verification_checks: vec![VerificationCheck {
-            kind: "call".to_string(),
-            method: Some("canic_ready".to_string()),
+            kind: "status".to_string(),
             roles: Vec::new(),
         }],
         source_snapshot: SourceSnapshot {
@@ -170,4 +160,3 @@ fn temp_dir(name: &str) -> PathBuf {
 mod apply_dry_run;
 mod apply_journal;
 mod plan;
-mod status;

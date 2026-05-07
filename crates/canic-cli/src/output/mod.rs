@@ -1,4 +1,4 @@
-use serde::Serialize;
+use serde::{Serialize, de::DeserializeOwned};
 use std::{
     fs,
     io::{self, Write},
@@ -37,4 +37,14 @@ where
     let data = serde_json::to_vec_pretty(value)?;
     fs::write(path, data)?;
     Ok(())
+}
+
+// Read and decode one JSON file.
+pub fn read_json_file<T, E>(path: &PathBuf) -> Result<T, E>
+where
+    T: DeserializeOwned,
+    E: From<io::Error> + From<serde_json::Error>,
+{
+    let data = fs::read_to_string(path)?;
+    serde_json::from_str(&data).map_err(E::from)
 }

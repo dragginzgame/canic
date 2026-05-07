@@ -1,6 +1,7 @@
 use super::{RestoreApplyJournal, RestoreApplyJournalOperation, RestoreApplyOperationKind};
+use crate::persistence::resolve_backup_artifact_path;
 use serde::{Deserialize, Serialize};
-use std::path::{Component, Path};
+use std::path::Path;
 
 ///
 /// RestoreApplyCommandPreview
@@ -134,23 +135,6 @@ impl RestoreApplyRunnerCommand {
                     note: "loads the uploaded snapshot into the target canister".to_string(),
                 })
             }
-            RestoreApplyOperationKind::ReinstallCode => Some(Self {
-                program: config.program.clone(),
-                args: dfx_canister_args(
-                    config,
-                    vec![
-                        "install".to_string(),
-                        "--mode".to_string(),
-                        "reinstall".to_string(),
-                        "--yes".to_string(),
-                        operation.target_canister.clone(),
-                    ],
-                ),
-                mutates: true,
-                requires_stopped_canister: false,
-                note: "reinstalls target canister code using the local dfx project configuration"
-                    .to_string(),
-            }),
             RestoreApplyOperationKind::VerifyMember | RestoreApplyOperationKind::VerifyFleet => {
                 match operation.verification_kind.as_deref() {
                     Some("status") => Some(Self {
@@ -168,30 +152,7 @@ impl RestoreApplyRunnerCommand {
                         )
                         .to_string(),
                     }),
-                    Some(_) => {
-                        let method = operation.verification_method.as_ref()?;
-                        Some(Self {
-                            program: config.program.clone(),
-                            args: dfx_canister_args(
-                                config,
-                                vec![
-                                    "call".to_string(),
-                                    "--query".to_string(),
-                                    operation.target_canister.clone(),
-                                    method.clone(),
-                                ],
-                            ),
-                            mutates: false,
-                            requires_stopped_canister: false,
-                            note: verification_command_note(
-                                &operation.operation,
-                                "runs the declared verification method as a query call",
-                                "runs the declared fleet verification method as a query call",
-                            )
-                            .to_string(),
-                        })
-                    }
-                    None => None,
+                    Some(_) | None => None,
                 }
             }
         }
@@ -208,7 +169,6 @@ const fn verification_command_note(
         RestoreApplyOperationKind::VerifyFleet => fleet_note,
         RestoreApplyOperationKind::UploadSnapshot
         | RestoreApplyOperationKind::LoadSnapshot
-        | RestoreApplyOperationKind::ReinstallCode
         | RestoreApplyOperationKind::VerifyMember => member_note,
     }
 }
@@ -230,23 +190,7 @@ fn upload_artifact_command_path(
     journal: &RestoreApplyJournal,
 ) -> Option<String> {
     let artifact_path = operation.artifact_path.as_ref()?;
-    let path = Path::new(artifact_path);
-    if path.is_absolute() {
-        return Some(artifact_path.clone());
-    }
-
     let backup_root = journal.backup_root.as_ref()?;
-    let is_safe = path
-        .components()
-        .all(|component| matches!(component, Component::Normal(_) | Component::CurDir));
-    if !is_safe {
-        return None;
-    }
-
-    Some(
-        Path::new(backup_root)
-            .join(path)
-            .to_string_lossy()
-            .to_string(),
-    )
+    resolve_backup_artifact_path(Path::new(backup_root), artifact_path)
+        .map(|path| path.to_string_lossy().to_string())
 }

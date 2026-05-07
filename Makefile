@@ -1,6 +1,6 @@
 .PHONY: help version tags patch patch-quick minor major package publish \
         test-packaged-downstream-wasm-store \
-        test-packaged-downstream-installer test-installed-canic-installer \
+        test-packaged-downstream-cli test-installed-canic-cli \
         test test-wasm test-bump build check clippy fmt fmt-check clean \
         install install-dev update-dev demo-install \
         ensure-clean ensure-hooks test-unit test-unit-fast \
@@ -69,8 +69,8 @@ help:
 	@echo "  package          Build a publishable crate tarball"
 	@echo "  publish          Publish workspace crates to registry in dependency order"
 	@echo "  test-packaged-downstream-wasm-store  Verify the hidden packaged-downstream wasm_store build path"
-	@echo "  test-packaged-downstream-installer  Verify the packaged-downstream installer manifest path"
-	@echo "  test-installed-canic-installer  Verify the installed-binary canic-installer path"
+	@echo "  test-packaged-downstream-cli  Verify the packaged-downstream canic CLI manifest path"
+	@echo "  test-installed-canic-cli  Verify the installed-binary canic CLI path"
 	@echo ""
 	@echo "Development:"
 	@echo "  demo-install    Install the full local reference topology with fast wasm by default (fails if dfx is not already running)"
@@ -163,11 +163,11 @@ publish: ensure-clean
 test-packaged-downstream-wasm-store:
 	$(CARGO_ENV) scripts/ci/verify-packaged-downstream-wasm-store.sh
 
-test-packaged-downstream-installer:
-	$(CARGO_ENV) scripts/ci/verify-packaged-downstream-installer.sh
+test-packaged-downstream-cli:
+	$(CARGO_ENV) scripts/ci/verify-packaged-downstream-cli.sh
 
-test-installed-canic-installer:
-	$(CARGO_ENV) scripts/ci/verify-installed-canic-installer.sh
+test-installed-canic-cli:
+	$(CARGO_ENV) scripts/ci/verify-installed-canic-cli.sh
 
 #
 # Tests

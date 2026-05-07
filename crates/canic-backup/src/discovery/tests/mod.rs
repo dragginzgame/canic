@@ -150,11 +150,8 @@ fn discovered_member(
         subnet_canister_id: None,
         controller_hint: Some(ROOT.to_string()),
         identity_mode: IdentityMode::Fixed,
-        restore_group: 1,
-        verification_class: "basic".to_string(),
         verification_checks: vec![VerificationCheck {
-            kind: "call".to_string(),
-            method: Some("canic_ready".to_string()),
+            kind: "status".to_string(),
             roles: Vec::new(),
         }],
         snapshot_plan: SnapshotPlan {

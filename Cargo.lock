@@ -329,11 +329,9 @@ dependencies = [
  "candid",
  "canic",
  "canic-backup",
- "canic-installer",
+ "canic-host",
  "clap",
  "serde",
- "serde_bytes",
- "serde_cbor",
  "serde_json",
  "thiserror 2.0.18",
 ]
@@ -375,13 +373,16 @@ dependencies = [
 ]
 
 [[package]]
-name = "canic-installer"
+name = "canic-host"
 version = "0.31.1"
 dependencies = [
+ "candid",
  "canic",
  "canic-core",
  "flate2",
  "serde",
+ "serde_bytes",
+ "serde_cbor",
  "serde_json",
  "sha2",
  "toml",

@@ -1,13 +1,12 @@
-use crate::version_text;
+use crate::{
+    args::{parse_matches, path_option, value_arg},
+    output, version_text,
+};
 use canic_backup::manifest::{
     FleetBackupManifest, ManifestValidationError, manifest_validation_summary,
 };
-use std::{
-    ffi::OsString,
-    fs,
-    io::{self, Write},
-    path::PathBuf,
-};
+use clap::Command as ClapCommand;
+use std::{ffi::OsString, fs, path::PathBuf};
 use thiserror::Error as ThisError;
 
 ///
@@ -25,9 +24,6 @@ pub enum ManifestCommandError {
     #[error("unknown option {0}")]
     UnknownOption(String),
 
-    #[error("option {0} requires a value")]
-    MissingValue(&'static str),
-
     #[error(transparent)]
     Io(#[from] std::io::Error),
 
@@ -36,9 +32,6 @@ pub enum ManifestCommandError {
 
     #[error(transparent)]
     InvalidManifest(#[from] ManifestValidationError),
-
-    #[error("manifest {backup_id} is not design ready")]
-    DesignConformanceNotReady { backup_id: String },
 }
 
 ///
@@ -49,7 +42,6 @@ pub enum ManifestCommandError {
 pub struct ManifestValidateOptions {
     pub manifest: PathBuf,
     pub out: Option<PathBuf>,
-    pub require_design_v1: bool,
 }
 
 impl ManifestValidateOptions {
@@ -58,32 +50,23 @@ impl ManifestValidateOptions {
     where
         I: IntoIterator<Item = OsString>,
     {
-        let mut manifest = None;
-        let mut out = None;
-        let mut require_design_v1 = false;
-
-        let mut args = args.into_iter();
-        while let Some(arg) = args.next() {
-            let arg = arg
-                .into_string()
-                .map_err(|_| ManifestCommandError::Usage(usage()))?;
-            match arg.as_str() {
-                "--manifest" => {
-                    manifest = Some(PathBuf::from(next_value(&mut args, "--manifest")?));
-                }
-                "--out" => out = Some(PathBuf::from(next_value(&mut args, "--out")?)),
-                "--require-design" => require_design_v1 = true,
-                "--help" | "-h" => return Err(ManifestCommandError::Usage(usage())),
-                _ => return Err(ManifestCommandError::UnknownOption(arg)),
-            }
-        }
+        let matches = parse_matches(manifest_validate_command(), args)
+            .map_err(|_| ManifestCommandError::Usage(usage()))?;
 
         Ok(Self {
-            manifest: manifest.ok_or(ManifestCommandError::MissingOption("--manifest"))?,
-            out,
-            require_design_v1,
+            manifest: path_option(&matches, "manifest")
+                .ok_or(ManifestCommandError::MissingOption("--manifest"))?,
+            out: path_option(&matches, "out"),
         })
     }
+}
+
+// Build the manifest validation parser.
+fn manifest_validate_command() -> ClapCommand {
+    ClapCommand::new("manifest-validate")
+        .disable_help_flag(true)
+        .arg(value_arg("manifest").long("manifest"))
+        .arg(value_arg("out").long("out"))
 }
 
 /// Run a manifest subcommand.
@@ -101,7 +84,6 @@ where
             let options = ManifestValidateOptions::parse(args)?;
             let manifest = validate_manifest(&options)?;
             write_validation_summary(&options, &manifest)?;
-            require_design_conformance(&options, &manifest)?;
             Ok(())
         }
         "help" | "--help" | "-h" => {
@@ -133,60 +115,20 @@ fn write_validation_summary(
 ) -> Result<(), ManifestCommandError> {
     let summary = manifest_validation_summary(manifest);
 
-    if let Some(path) = &options.out {
-        let data = serde_json::to_vec_pretty(&summary)?;
-        fs::write(path, data)?;
-        return Ok(());
-    }
-
-    let stdout = io::stdout();
-    let mut handle = stdout.lock();
-    serde_json::to_writer_pretty(&mut handle, &summary)?;
-    writeln!(handle)?;
-    Ok(())
-}
-
-// Fail closed when callers require the v1 backup/restore design contract.
-fn require_design_conformance(
-    options: &ManifestValidateOptions,
-    manifest: &FleetBackupManifest,
-) -> Result<(), ManifestCommandError> {
-    if !options.require_design_v1 {
-        return Ok(());
-    }
-
-    let report = manifest.design_conformance_report();
-    if report.design_v1_ready {
-        Ok(())
-    } else {
-        Err(ManifestCommandError::DesignConformanceNotReady {
-            backup_id: manifest.backup_id.clone(),
-        })
-    }
-}
-
-// Read the next required option value.
-fn next_value<I>(args: &mut I, option: &'static str) -> Result<String, ManifestCommandError>
-where
-    I: Iterator<Item = OsString>,
-{
-    args.next()
-        .and_then(|value| value.into_string().ok())
-        .ok_or(ManifestCommandError::MissingValue(option))
+    output::write_pretty_json(options.out.as_ref(), &summary)
 }
 
 // Return manifest command usage text.
 const fn usage() -> &'static str {
-    "usage: canic manifest validate --manifest <file> [--out <file>] [--require-design]"
+    "usage: canic manifest validate --manifest <file> [--out <file>]"
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use canic_backup::manifest::{
-        BackupUnit, BackupUnitKind, ConsistencyMode, ConsistencySection, FleetMember, FleetSection,
-        IdentityMode, SourceMetadata, SourceSnapshot, ToolMetadata, VerificationCheck,
-        VerificationPlan,
+        BackupUnit, BackupUnitKind, ConsistencySection, FleetMember, FleetSection, IdentityMode,
+        SourceMetadata, SourceSnapshot, ToolMetadata, VerificationCheck, VerificationPlan,
     };
     use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -201,13 +143,11 @@ mod tests {
             OsString::from("manifest.json"),
             OsString::from("--out"),
             OsString::from("summary.json"),
-            OsString::from("--require-design"),
         ])
         .expect("parse options");
 
         assert_eq!(options.manifest, PathBuf::from("manifest.json"));
         assert_eq!(options.out, Some(PathBuf::from("summary.json")));
-        assert!(options.require_design_v1);
     }
 
     // Ensure manifest validation loads JSON and runs the manifest contract.
@@ -226,7 +166,6 @@ mod tests {
         let options = ManifestValidateOptions {
             manifest: manifest_path,
             out: None,
-            require_design_v1: false,
         };
 
         let manifest = validate_manifest(&options).expect("validate manifest");
@@ -245,7 +184,6 @@ mod tests {
         let options = ManifestValidateOptions {
             manifest: root.join("manifest.json"),
             out: Some(out.clone()),
-            require_design_v1: false,
         };
 
         write_validation_summary(&options, &valid_manifest()).expect("write summary");
@@ -257,53 +195,11 @@ mod tests {
         assert_eq!(summary["backup_id"], "backup-test");
         assert_eq!(summary["members"], 1);
         assert_eq!(summary["backup_unit_count"], 1);
-        assert_eq!(summary["consistency_mode"], "crash-consistent");
         assert_eq!(summary["topology_validation_status"], "validated");
-        assert_eq!(summary["backup_unit_kinds"]["subtree_rooted"], 1);
+        assert_eq!(summary["backup_unit_kinds"]["subtree"], 1);
         assert_eq!(summary["backup_units"][0]["unit_id"], "fleet");
-        assert_eq!(summary["backup_units"][0]["kind"], "subtree-rooted");
+        assert_eq!(summary["backup_units"][0]["kind"], "subtree");
         assert_eq!(summary["backup_units"][0]["role_count"], 1);
-        assert_eq!(summary["design_conformance"]["design_v1_ready"], true);
-        assert_eq!(
-            summary["design_conformance"]["topology"]["canonical_input"],
-            true
-        );
-        assert_eq!(
-            summary["design_conformance"]["snapshot_provenance"]["all_members_have_checksum"],
-            true
-        );
-    }
-
-    // Ensure manifest validation can fail closed after writing conformance output.
-    #[test]
-    fn require_design_v1_fails_after_writing_summary() {
-        let root = temp_dir("canic-cli-manifest-design");
-        fs::create_dir_all(&root).expect("create temp root");
-        let out = root.join("summary.json");
-        let mut manifest = valid_manifest();
-        manifest.fleet.topology_hash_input = "legacy-input".to_string();
-        let options = ManifestValidateOptions {
-            manifest: root.join("manifest.json"),
-            out: Some(out.clone()),
-            require_design_v1: true,
-        };
-
-        write_validation_summary(&options, &manifest).expect("write summary");
-        let err =
-            require_design_conformance(&options, &manifest).expect_err("design gate should fail");
-        let summary: serde_json::Value =
-            serde_json::from_slice(&fs::read(&out).expect("read summary")).expect("parse summary");
-
-        fs::remove_dir_all(root).expect("remove temp root");
-        assert!(matches!(
-            err,
-            ManifestCommandError::DesignConformanceNotReady { .. }
-        ));
-        assert_eq!(summary["design_conformance"]["design_v1_ready"], false);
-        assert_eq!(
-            summary["design_conformance"]["topology"]["canonical_input"],
-            false
-        );
     }
 
     // Build one valid manifest for validation tests.
@@ -321,15 +217,10 @@ mod tests {
                 root_canister: ROOT.to_string(),
             },
             consistency: ConsistencySection {
-                mode: ConsistencyMode::CrashConsistent,
                 backup_units: vec![BackupUnit {
                     unit_id: "fleet".to_string(),
-                    kind: BackupUnitKind::SubtreeRooted,
+                    kind: BackupUnitKind::Subtree,
                     roles: vec!["root".to_string()],
-                    consistency_reason: None,
-                    dependency_closure: Vec::new(),
-                    topology_validation: "subtree-closed".to_string(),
-                    quiescence_strategy: None,
                 }],
             },
             fleet: FleetSection {
@@ -353,11 +244,8 @@ mod tests {
             subnet_canister_id: Some(ROOT.to_string()),
             controller_hint: None,
             identity_mode: IdentityMode::Fixed,
-            restore_group: 1,
-            verification_class: "basic".to_string(),
             verification_checks: vec![VerificationCheck {
                 kind: "status".to_string(),
-                method: None,
                 roles: vec!["root".to_string()],
             }],
             source_snapshot: SourceSnapshot {

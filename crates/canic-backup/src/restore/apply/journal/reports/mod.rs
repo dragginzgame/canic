@@ -5,79 +5,11 @@ use super::{
 use serde::{Deserialize, Serialize};
 
 ///
-/// RestoreApplyJournalStatus
-///
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct RestoreApplyJournalStatus {
-    pub status_version: u16,
-    pub backup_id: String,
-    pub ready: bool,
-    pub complete: bool,
-    pub blocked_reasons: Vec<String>,
-    pub operation_count: usize,
-    #[serde(default)]
-    pub operation_counts: RestoreApplyOperationKindCounts,
-    pub operation_counts_supplied: bool,
-    pub progress: RestoreApplyProgressSummary,
-    pub pending_summary: RestoreApplyPendingSummary,
-    pub pending_operations: usize,
-    pub ready_operations: usize,
-    pub blocked_operations: usize,
-    pub completed_operations: usize,
-    pub failed_operations: usize,
-    pub next_ready_sequence: Option<usize>,
-    pub next_ready_operation: Option<RestoreApplyOperationKind>,
-    pub next_transition_sequence: Option<usize>,
-    pub next_transition_state: Option<RestoreApplyOperationState>,
-    pub next_transition_operation: Option<RestoreApplyOperationKind>,
-    pub next_transition_updated_at: Option<String>,
-}
-
-impl RestoreApplyJournalStatus {
-    /// Build a compact status projection from a restore apply journal.
-    #[must_use]
-    pub fn from_journal(journal: &RestoreApplyJournal) -> Self {
-        let next_ready = journal.next_ready_operation();
-        let next_transition = journal.next_transition_operation();
-
-        Self {
-            status_version: 1,
-            backup_id: journal.backup_id.clone(),
-            ready: journal.ready,
-            complete: journal.is_complete(),
-            blocked_reasons: journal.blocked_reasons.clone(),
-            operation_count: journal.operation_count,
-            operation_counts: journal.operation_kind_counts(),
-            operation_counts_supplied: journal.operation_counts_supplied(),
-            progress: RestoreApplyProgressSummary::from_journal(journal),
-            pending_summary: RestoreApplyPendingSummary::from_journal(journal),
-            pending_operations: journal.pending_operations,
-            ready_operations: journal.ready_operations,
-            blocked_operations: journal.blocked_operations,
-            completed_operations: journal.completed_operations,
-            failed_operations: journal.failed_operations,
-            next_ready_sequence: next_ready.map(|operation| operation.sequence),
-            next_ready_operation: next_ready.map(|operation| operation.operation.clone()),
-            next_transition_sequence: next_transition.map(|operation| operation.sequence),
-            next_transition_state: next_transition.map(|operation| operation.state.clone()),
-            next_transition_operation: next_transition.map(|operation| operation.operation.clone()),
-            next_transition_updated_at: next_transition
-                .and_then(|operation| operation.state_updated_at.clone()),
-        }
-    }
-}
-
-///
 /// RestoreApplyJournalReport
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[expect(
-    clippy::struct_excessive_bools,
-    reason = "apply reports intentionally expose stable JSON flags for operators and CI"
-)]
-pub struct RestoreApplyJournalReport {
+pub(in crate::restore) struct RestoreApplyJournalReport {
     pub report_version: u16,
     pub backup_id: String,
     pub outcome: RestoreApplyReportOutcome,
@@ -86,9 +18,7 @@ pub struct RestoreApplyJournalReport {
     pub complete: bool,
     pub blocked_reasons: Vec<String>,
     pub operation_count: usize,
-    #[serde(default)]
     pub operation_counts: RestoreApplyOperationKindCounts,
-    pub operation_counts_supplied: bool,
     pub progress: RestoreApplyProgressSummary,
     pub pending_summary: RestoreApplyPendingSummary,
     pub pending_operations: usize,
@@ -105,7 +35,7 @@ pub struct RestoreApplyJournalReport {
 impl RestoreApplyJournalReport {
     /// Build a compact operator report from a restore apply journal.
     #[must_use]
-    pub fn from_journal(journal: &RestoreApplyJournal) -> Self {
+    pub(in crate::restore) fn from_journal(journal: &RestoreApplyJournal) -> Self {
         let complete = journal.is_complete();
         let outcome = RestoreApplyReportOutcome::from_journal(journal, complete);
         let pending = report_operations_with_state(journal, RestoreApplyOperationState::Pending);
@@ -122,7 +52,6 @@ impl RestoreApplyJournalReport {
             blocked_reasons: journal.blocked_reasons.clone(),
             operation_count: journal.operation_count,
             operation_counts: journal.operation_kind_counts(),
-            operation_counts_supplied: journal.operation_counts_supplied(),
             progress: RestoreApplyProgressSummary::from_journal(journal),
             pending_summary: RestoreApplyPendingSummary::from_journal(journal),
             pending_operations: journal.pending_operations,
@@ -282,8 +211,7 @@ pub struct RestoreApplyReportOperation {
     pub sequence: usize,
     pub operation: RestoreApplyOperationKind,
     pub state: RestoreApplyOperationState,
-    pub restore_group: u16,
-    pub phase_order: usize,
+    pub member_order: usize,
     pub role: String,
     pub source_canister: String,
     pub target_canister: String,
@@ -298,8 +226,7 @@ impl RestoreApplyReportOperation {
             sequence: operation.sequence,
             operation: operation.operation.clone(),
             state: operation.state.clone(),
-            restore_group: operation.restore_group,
-            phase_order: operation.phase_order,
+            member_order: operation.member_order,
             role: operation.role.clone(),
             source_canister: operation.source_canister.clone(),
             target_canister: operation.target_canister.clone(),
@@ -320,37 +247,4 @@ fn report_operations_with_state(
         .filter(|operation| operation.state == state)
         .map(RestoreApplyReportOperation::from_journal_operation)
         .collect()
-}
-
-///
-/// RestoreApplyNextOperation
-///
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct RestoreApplyNextOperation {
-    pub response_version: u16,
-    pub backup_id: String,
-    pub ready: bool,
-    pub complete: bool,
-    pub operation_available: bool,
-    pub blocked_reasons: Vec<String>,
-    pub operation: Option<RestoreApplyJournalOperation>,
-}
-
-impl RestoreApplyNextOperation {
-    /// Build a compact next-operation response from a restore apply journal.
-    #[must_use]
-    pub fn from_journal(journal: &RestoreApplyJournal) -> Self {
-        let operation = journal.next_transition_operation().cloned();
-
-        Self {
-            response_version: 1,
-            backup_id: journal.backup_id.clone(),
-            ready: journal.ready,
-            complete: journal.is_complete(),
-            operation_available: operation.is_some(),
-            blocked_reasons: journal.blocked_reasons.clone(),
-            operation,
-        }
-    }
 }

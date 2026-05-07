@@ -44,14 +44,13 @@ fn tagged_install_script_url() -> String {
     )
 }
 
-// Keeps the curlable installer pinned to the same version as the current workspace release.
+// Keeps the curlable setup script pinned to the same CLI version as the workspace release.
 #[test]
-fn install_script_default_installer_version_matches_workspace_version() {
+fn install_script_default_cli_version_matches_workspace_version() {
     let install_script_path = workspace_root().join("scripts/dev/install_dev.sh");
     let install_script = read_text(&install_script_path);
     let workspace_version = workspace_version();
-    let expected =
-        format!("CANIC_INSTALLER_VERSION=\"${{CANIC_INSTALLER_VERSION:-{workspace_version}}}\"");
+    let expected = format!("CANIC_CLI_VERSION=\"${{CANIC_CLI_VERSION:-{workspace_version}}}\"");
 
     assert!(
         install_script.contains(&expected),
@@ -74,27 +73,12 @@ fn root_readme_install_url_matches_workspace_version() {
     );
 }
 
-// Keeps the installer crate README setup curl command aligned with the current release tag.
+// Keeps the host crate README setup curl command aligned with the current release tag.
 #[test]
-fn installer_readme_install_url_matches_workspace_version() {
-    let readme_path = workspace_root().join("crates/canic-installer/README.md");
+fn host_readme_install_url_matches_workspace_version() {
+    let readme_path = workspace_root().join("crates/canic-host/README.md");
     let readme = read_text(&readme_path);
     let expected = tagged_install_script_url();
-
-    assert!(
-        readme.contains(&expected),
-        "expected {} to contain `{expected}`",
-        readme_path.display()
-    );
-}
-
-// Keeps the root README's explicit installer version example aligned with the current release.
-#[test]
-fn root_readme_installer_version_matches_workspace_version() {
-    let readme_path = workspace_root().join("README.md");
-    let readme = read_text(&readme_path);
-    let workspace_version = workspace_version();
-    let expected = format!("- `canic-installer` `{workspace_version}`");
 
     assert!(
         readme.contains(&expected),

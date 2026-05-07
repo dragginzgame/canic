@@ -31,7 +31,7 @@ scripts/ci/sync-release-surface-version.sh "$NEW"
 cargo test -p canic --test install_script_surface -- --test-threads=1 --nocapture >/dev/null
 cargo test -p canic --test protocol_surface -- --test-threads=1 --nocapture >/dev/null
 
-git add Cargo.toml Cargo.lock README.md crates/canic-installer/README.md scripts/dev/install_dev.sh \
+git add Cargo.toml Cargo.lock README.md crates/canic-host/README.md scripts/dev/install_dev.sh \
   scripts/ci/sync-release-surface-version.sh $(git ls-files -m -- */Cargo.toml || true)
 
 if git rev-parse "v$NEW" >/dev/null 2>&1; then

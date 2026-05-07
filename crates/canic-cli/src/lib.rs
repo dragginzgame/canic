@@ -1,13 +1,17 @@
 pub mod backup;
+pub mod build;
 pub mod fleets;
 pub mod install;
 pub mod list;
 pub mod manifest;
+pub mod release_set;
 pub mod restore;
 pub mod snapshot;
 
+mod args;
 mod output;
 
+use crate::args::any_arg_is_version;
 use clap::{Arg, ArgAction, Command};
 use std::ffi::OsString;
 use thiserror::Error as ThisError;
@@ -27,6 +31,9 @@ pub enum CliError {
     Backup(#[from] backup::BackupCommandError),
 
     #[error(transparent)]
+    Build(#[from] build::BuildCommandError),
+
+    #[error(transparent)]
     Install(#[from] install::InstallCommandError),
 
     #[error(transparent)]
@@ -40,6 +47,9 @@ pub enum CliError {
 
     #[error(transparent)]
     Snapshot(#[from] snapshot::SnapshotCommandError),
+
+    #[error(transparent)]
+    ReleaseSet(#[from] release_set::ReleaseSetCommandError),
 
     #[error(transparent)]
     Restore(#[from] restore::RestoreCommandError),
@@ -56,11 +66,7 @@ where
     I: IntoIterator<Item = OsString>,
 {
     let args = args.into_iter().collect::<Vec<_>>();
-    if args
-        .iter()
-        .filter_map(|arg| arg.to_str())
-        .any(|arg| matches!(arg, "version" | "--version" | "-V"))
-    {
+    if any_arg_is_version(&args) {
         println!("{}", version_text());
         return Ok(());
     }
@@ -72,10 +78,12 @@ where
 
     match command.as_str() {
         "backup" => backup::run(args).map_err(CliError::from),
+        "build" => build::run(args).map_err(CliError::from),
         "fleets" => fleets::run(args).map_err(CliError::from),
         "install" => install::run(args).map_err(CliError::from),
         "list" => list::run(args).map_err(CliError::from),
         "manifest" => manifest::run(args).map_err(CliError::from),
+        "release-set" => release_set::run(args).map_err(CliError::from),
         "snapshot" => snapshot::run(args).map_err(CliError::from),
         "restore" => restore::run(args).map_err(CliError::from),
         "use" => fleets::run_use(args).map_err(CliError::from),
@@ -101,18 +109,17 @@ pub fn top_level_command() -> Command {
                 .help("Print version"),
         )
         .subcommand(Command::new("install").about("Install and bootstrap a Canic fleet"))
+        .subcommand(Command::new("build").about("Build one Canic canister artifact"))
         .subcommand(Command::new("fleets").about("List installed Canic fleets"))
         .subcommand(Command::new("use").about("Select the current Canic fleet"))
         .subcommand(Command::new("list").about("Show registry canisters as a tree table"))
         .subcommand(Command::new("snapshot").about("Capture and download canister snapshots"))
-        .subcommand(
-            Command::new("backup")
-                .about("Inspect, verify, preflight, or smoke-check a backup directory"),
-        )
+        .subcommand(Command::new("backup").about("Verify backup directories and journal status"))
         .subcommand(Command::new("manifest").about("Validate fleet backup manifests"))
         .subcommand(
-            Command::new("restore").about("Plan, preview, summarize, or run restore journals"),
+            Command::new("release-set").about("Inspect, emit, or stage root release-set artifacts"),
         )
+        .subcommand(Command::new("restore").about("Plan or run snapshot restores"))
         .after_help("Run `canic <command> help` for command-specific help.")
 }
 
@@ -139,12 +146,14 @@ mod tests {
 
         assert!(text.contains("Usage: canic"));
         assert!(text.contains("list"));
+        assert!(text.contains("build"));
         assert!(text.contains("fleets"));
         assert!(text.contains("use"));
         assert!(text.contains("install"));
         assert!(text.contains("snapshot"));
         assert!(text.contains("backup"));
         assert!(text.contains("manifest"));
+        assert!(text.contains("release-set"));
         assert!(text.contains("restore"));
         assert!(text.contains("canic <command> help"));
     }
@@ -153,11 +162,13 @@ mod tests {
     #[test]
     fn command_family_help_returns_ok() {
         assert!(run([OsString::from("backup"), OsString::from("help")]).is_ok());
+        assert!(run([OsString::from("build"), OsString::from("help")]).is_ok());
         assert!(run([OsString::from("install"), OsString::from("help")]).is_ok());
         assert!(run([OsString::from("fleets"), OsString::from("help")]).is_ok());
         assert!(run([OsString::from("list"), OsString::from("help")]).is_ok());
         assert!(run([OsString::from("restore"), OsString::from("help")]).is_ok());
         assert!(run([OsString::from("manifest"), OsString::from("help")]).is_ok());
+        assert!(run([OsString::from("release-set"), OsString::from("help")]).is_ok());
         assert!(run([OsString::from("snapshot"), OsString::from("help")]).is_ok());
         assert!(run([OsString::from("use"), OsString::from("help")]).is_ok());
     }
@@ -168,20 +179,14 @@ mod tests {
         assert_eq!(version_text(), concat!("canic ", env!("CARGO_PKG_VERSION")));
         assert!(run([OsString::from("--version")]).is_ok());
         assert!(run([OsString::from("backup"), OsString::from("--version")]).is_ok());
+        assert!(run([OsString::from("build"), OsString::from("--version")]).is_ok());
         assert!(run([OsString::from("install"), OsString::from("--version")]).is_ok());
         assert!(run([OsString::from("fleets"), OsString::from("--version")]).is_ok());
         assert!(run([OsString::from("list"), OsString::from("--version")]).is_ok());
         assert!(run([OsString::from("restore"), OsString::from("--version")]).is_ok());
         assert!(run([OsString::from("manifest"), OsString::from("--version")]).is_ok());
+        assert!(run([OsString::from("release-set"), OsString::from("--version")]).is_ok());
         assert!(run([OsString::from("snapshot"), OsString::from("--version")]).is_ok());
         assert!(run([OsString::from("use"), OsString::from("--version")]).is_ok());
-        assert!(
-            run([
-                OsString::from("backup"),
-                OsString::from("preflight"),
-                OsString::from("--version")
-            ])
-            .is_ok()
-        );
     }
 }

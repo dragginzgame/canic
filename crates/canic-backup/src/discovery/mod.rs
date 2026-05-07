@@ -51,8 +51,6 @@ pub struct DiscoveredMember {
     pub subnet_canister_id: Option<String>,
     pub controller_hint: Option<String>,
     pub identity_mode: IdentityMode,
-    pub restore_group: u16,
-    pub verification_class: String,
     pub verification_checks: Vec<VerificationCheck>,
     pub snapshot_plan: SnapshotPlan,
 }
@@ -67,8 +65,6 @@ impl DiscoveredMember {
             subnet_canister_id: self.subnet_canister_id,
             controller_hint: self.controller_hint,
             identity_mode: self.identity_mode,
-            restore_group: self.restore_group,
-            verification_class: self.verification_class,
             verification_checks: self.verification_checks,
             source_snapshot: SourceSnapshot {
                 snapshot_id: self.snapshot_plan.snapshot_id,

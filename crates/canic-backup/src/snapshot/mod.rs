@@ -6,11 +6,12 @@ use crate::{
         JournalValidationError,
     },
     manifest::{
-        BackupUnit, BackupUnitKind, ConsistencyMode, ConsistencySection, FleetBackupManifest,
-        FleetMember, FleetSection, IdentityMode, ManifestValidationError, SourceMetadata,
-        SourceSnapshot, ToolMetadata, VerificationCheck, VerificationPlan,
+        BackupUnit, BackupUnitKind, ConsistencySection, FleetBackupManifest, FleetMember,
+        FleetSection, IdentityMode, ManifestValidationError, SourceMetadata, SourceSnapshot,
+        ToolMetadata, VerificationCheck, VerificationPlan,
     },
     persistence::{BackupLayout, PersistenceError},
+    timestamp::current_timestamp_marker,
     topology::{TopologyHash, TopologyHasher, TopologyRecord},
 };
 use candid::Principal;
@@ -42,34 +43,31 @@ pub struct SnapshotArtifact {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum SnapshotLifecycleMode {
-    SnapshotOnly,
     StopBeforeSnapshot,
-    ResumeAfterSnapshot,
     StopAndResume,
 }
 
 impl SnapshotLifecycleMode {
-    /// Build the lifecycle mode from stop/resume flags.
+    /// Build the lifecycle mode from the optional post-snapshot resume flag.
     #[must_use]
-    pub const fn from_flags(stop_before_snapshot: bool, resume_after_snapshot: bool) -> Self {
-        match (stop_before_snapshot, resume_after_snapshot) {
-            (false, false) => Self::SnapshotOnly,
-            (true, false) => Self::StopBeforeSnapshot,
-            (false, true) => Self::ResumeAfterSnapshot,
-            (true, true) => Self::StopAndResume,
+    pub const fn from_resume_flag(resume_after_snapshot: bool) -> Self {
+        if resume_after_snapshot {
+            Self::StopAndResume
+        } else {
+            Self::StopBeforeSnapshot
         }
     }
 
     /// Return whether snapshot capture should stop the canister first.
     #[must_use]
     pub const fn stop_before_snapshot(self) -> bool {
-        matches!(self, Self::StopBeforeSnapshot | Self::StopAndResume)
+        true
     }
 
     /// Return whether snapshot capture should resume the canister afterward.
     #[must_use]
     pub const fn resume_after_snapshot(self) -> bool {
-        matches!(self, Self::ResumeAfterSnapshot | Self::StopAndResume)
+        matches!(self, Self::StopAndResume)
     }
 }
 
@@ -111,6 +109,9 @@ pub struct SnapshotDownloadResult {
 pub enum SnapshotDownloadError {
     #[error("missing --root when using --include-children")]
     MissingRegistrySource,
+
+    #[error("snapshot capture requires stopping each canister before snapshot create")]
+    SnapshotRequiresStoppedCanister,
 
     #[error("snapshot driver failed: {0}")]
     Driver(#[source] SnapshotDriverError),
@@ -250,6 +251,7 @@ pub fn download_snapshots(
     config: &SnapshotDownloadConfig,
     driver: &mut impl SnapshotDriver,
 ) -> Result<SnapshotDownloadResult, SnapshotDownloadError> {
+    validate_snapshot_lifecycle(config.lifecycle)?;
     let targets = resolve_snapshot_targets(config, driver)?;
     let discovery_topology_hash = topology_hash_for_targets(&config.canister, &targets)?;
     let pre_snapshot_topology_hash =
@@ -317,6 +319,17 @@ pub fn download_snapshots(
     })
 }
 
+// Enforce the IC snapshot precondition before any capture work is planned.
+const fn validate_snapshot_lifecycle(
+    lifecycle: SnapshotLifecycleMode,
+) -> Result<(), SnapshotDownloadError> {
+    if lifecycle.stop_before_snapshot() {
+        return Ok(());
+    }
+
+    Err(SnapshotDownloadError::SnapshotRequiresStoppedCanister)
+}
+
 /// Resolve the selected canister plus optional direct/recursive children.
 pub fn resolve_snapshot_targets(
     config: &SnapshotDownloadConfig,
@@ -368,27 +381,14 @@ pub fn build_snapshot_manifest(
             root_canister: input.root_canister.clone(),
         },
         consistency: ConsistencySection {
-            mode: ConsistencyMode::CrashConsistent,
             backup_units: vec![BackupUnit {
                 unit_id: "snapshot-selection".to_string(),
                 kind: if input.include_children {
-                    BackupUnitKind::SubtreeRooted
+                    BackupUnitKind::Subtree
                 } else {
-                    BackupUnitKind::Flat
+                    BackupUnitKind::Single
                 },
                 roles,
-                consistency_reason: if input.include_children {
-                    None
-                } else {
-                    Some("explicit single-canister snapshot selection".to_string())
-                },
-                dependency_closure: Vec::new(),
-                topology_validation: if input.include_children {
-                    "registry-subtree-selection".to_string()
-                } else {
-                    "explicit-selection".to_string()
-                },
-                quiescence_strategy: None,
             }],
         },
         fleet: FleetSection {
@@ -562,7 +562,7 @@ fn capture_snapshot_artifact_body(
         artifact_path: artifact_relative_path.display().to_string(),
         checksum_algorithm: "sha256".to_string(),
         checksum: None,
-        updated_at: "unknown".to_string(),
+        updated_at: current_timestamp_marker(),
     };
     journal.artifacts.push(entry.clone());
     layout.write_journal(journal)?;
@@ -577,7 +577,7 @@ fn capture_snapshot_artifact_body(
         .download_snapshot(&target.canister_id, &snapshot_id, &temp_path)
         .map_err(SnapshotDownloadError::Driver)?;
     journal.operation_metrics.snapshot_download_completed += 1;
-    entry.advance_to(ArtifactState::Downloaded, "unknown".to_string())?;
+    entry.advance_to(ArtifactState::Downloaded, current_timestamp_marker())?;
     entry.temp_path = Some(temp_path.display().to_string());
     update_journal_entry(journal, &entry);
     layout.write_journal(journal)?;
@@ -587,7 +587,7 @@ fn capture_snapshot_artifact_body(
     let checksum = ArtifactChecksum::from_path(&temp_path)?;
     journal.operation_metrics.checksum_verify_completed += 1;
     entry.checksum = Some(checksum.hash.clone());
-    entry.advance_to(ArtifactState::ChecksumVerified, "unknown".to_string())?;
+    entry.advance_to(ArtifactState::ChecksumVerified, current_timestamp_marker())?;
     update_journal_entry(journal, &entry);
     layout.write_journal(journal)?;
 
@@ -603,7 +603,7 @@ fn capture_snapshot_artifact_body(
     fs::rename(&temp_path, &artifact_path)?;
     journal.operation_metrics.artifact_finalize_completed += 1;
     entry.temp_path = None;
-    entry.advance_to(ArtifactState::Durable, "unknown".to_string())?;
+    entry.advance_to(ArtifactState::Durable, current_timestamp_marker())?;
     update_journal_entry(journal, &entry);
     layout.write_journal(journal)?;
 
@@ -653,15 +653,8 @@ fn fleet_member(
         } else {
             IdentityMode::Relocatable
         },
-        restore_group: if target.canister_id == selected_canister {
-            1
-        } else {
-            2
-        },
-        verification_class: "basic".to_string(),
         verification_checks: vec![VerificationCheck {
             kind: "status".to_string(),
-            method: None,
             roles: vec![role],
         }],
         source_snapshot: SourceSnapshot {

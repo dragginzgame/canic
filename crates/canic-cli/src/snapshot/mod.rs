@@ -1,13 +1,20 @@
-use crate::version_text;
-use canic_backup::snapshot::{
-    SnapshotDownloadConfig, SnapshotDownloadError, SnapshotDownloadResult, SnapshotDriver,
-    SnapshotDriverError, SnapshotLifecycleMode,
+use crate::{
+    args::{flag_arg, parse_matches, path_option, string_option, value_arg},
+    version_text,
 };
+use canic_backup::{
+    snapshot::{
+        SnapshotDownloadConfig, SnapshotDownloadError, SnapshotDownloadResult, SnapshotDriver,
+        SnapshotDriverError, SnapshotLifecycleMode,
+    },
+    timestamp::current_timestamp_marker,
+};
+use canic_host::dfx::{Dfx, DfxCommandError};
+use clap::Command as ClapCommand;
 use std::{
     collections::BTreeSet,
     ffi::OsString,
     path::{Path, PathBuf},
-    process::Command,
 };
 use thiserror::Error as ThisError;
 
@@ -25,9 +32,6 @@ pub enum SnapshotCommandError {
 
     #[error("unknown option {0}")]
     UnknownOption(String),
-
-    #[error("option {0} requires a value")]
-    MissingValue(&'static str),
 
     #[error("dfx command failed: {command}\n{stderr}")]
     DfxFailed { command: String, stderr: String },
@@ -65,56 +69,42 @@ impl SnapshotDownloadOptions {
     where
         I: IntoIterator<Item = OsString>,
     {
-        let mut canister = None;
-        let mut out = None;
-        let mut root = None;
-        let mut include_children = false;
-        let mut recursive = false;
-        let mut dry_run = false;
-        let mut stop_before_snapshot = false;
-        let mut resume_after_snapshot = false;
-        let mut network = None;
-        let mut dfx = "dfx".to_string();
-
-        let mut args = args.into_iter();
-        while let Some(arg) = args.next() {
-            let arg = arg
-                .into_string()
-                .map_err(|_| SnapshotCommandError::Usage(usage()))?;
-            match arg.as_str() {
-                "--canister" => canister = Some(next_value(&mut args, "--canister")?),
-                "--out" => out = Some(PathBuf::from(next_value(&mut args, "--out")?)),
-                "--root" => root = Some(next_value(&mut args, "--root")?),
-                "--include-children" => include_children = true,
-                "--recursive" => {
-                    recursive = true;
-                    include_children = true;
-                }
-                "--dry-run" => dry_run = true,
-                "--stop-before-snapshot" => stop_before_snapshot = true,
-                "--resume-after-snapshot" => resume_after_snapshot = true,
-                "--network" => network = Some(next_value(&mut args, "--network")?),
-                "--dfx" => dfx = next_value(&mut args, "--dfx")?,
-                "--help" | "-h" => return Err(SnapshotCommandError::Usage(usage())),
-                _ => return Err(SnapshotCommandError::UnknownOption(arg)),
-            }
-        }
+        let matches = parse_matches(snapshot_download_command(), args)
+            .map_err(|_| SnapshotCommandError::Usage(usage()))?;
+        let recursive = matches.get_flag("recursive");
+        let include_children = matches.get_flag("include-children") || recursive;
 
         Ok(Self {
-            canister: canister.ok_or(SnapshotCommandError::MissingOption("--canister"))?,
-            out: out.ok_or(SnapshotCommandError::MissingOption("--out"))?,
-            root,
+            canister: string_option(&matches, "canister")
+                .ok_or(SnapshotCommandError::MissingOption("--canister"))?,
+            out: path_option(&matches, "out")
+                .ok_or(SnapshotCommandError::MissingOption("--out"))?,
+            root: string_option(&matches, "root"),
             include_children,
             recursive,
-            dry_run,
-            lifecycle: SnapshotLifecycleMode::from_flags(
-                stop_before_snapshot,
-                resume_after_snapshot,
+            dry_run: matches.get_flag("dry-run"),
+            lifecycle: SnapshotLifecycleMode::from_resume_flag(
+                matches.get_flag("resume-after-snapshot"),
             ),
-            network,
-            dfx,
+            network: string_option(&matches, "network"),
+            dfx: string_option(&matches, "dfx").unwrap_or_else(|| "dfx".to_string()),
         })
     }
+}
+
+// Build the snapshot download parser.
+fn snapshot_download_command() -> ClapCommand {
+    ClapCommand::new("snapshot-download")
+        .disable_help_flag(true)
+        .arg(value_arg("canister").long("canister"))
+        .arg(value_arg("out").long("out"))
+        .arg(value_arg("root").long("root"))
+        .arg(flag_arg("include-children").long("include-children"))
+        .arg(flag_arg("recursive").long("recursive"))
+        .arg(flag_arg("dry-run").long("dry-run"))
+        .arg(flag_arg("resume-after-snapshot").long("resume-after-snapshot"))
+        .arg(value_arg("network").long("network"))
+        .arg(value_arg("dfx").long("dfx"))
 }
 
 /// Run a snapshot subcommand.
@@ -169,7 +159,7 @@ pub fn download_snapshots(
         dry_run: options.dry_run,
         lifecycle: options.lifecycle,
         backup_id: backup_id(options),
-        created_at: timestamp_placeholder(),
+        created_at: current_timestamp_marker(),
         tool_name: "canic-cli".to_string(),
         tool_version: env!("CARGO_PKG_VERSION").to_string(),
         environment: options
@@ -253,16 +243,29 @@ fn driver_error(error: SnapshotCommandError) -> SnapshotDriverError {
     Box::new(error)
 }
 
+// Build the shared host dfx context for snapshot commands.
+fn dfx(options: &SnapshotDownloadOptions) -> Dfx {
+    Dfx::new(&options.dfx, options.network.clone())
+}
+
+// Convert host dfx failures into the snapshot command's public error surface.
+fn snapshot_dfx_error(error: DfxCommandError) -> SnapshotCommandError {
+    match error {
+        DfxCommandError::Io(err) => SnapshotCommandError::Io(err),
+        DfxCommandError::Failed { command, stderr } => {
+            SnapshotCommandError::DfxFailed { command, stderr }
+        }
+    }
+}
+
 // Run `dfx canister call <root> canic_subnet_registry --output json`.
 fn call_subnet_registry(
     options: &SnapshotDownloadOptions,
     root: &str,
 ) -> Result<String, SnapshotCommandError> {
-    let mut command = Command::new(&options.dfx);
-    command.arg("canister");
-    add_canister_network_args(&mut command, options);
-    command.args(["call", root, "canic_subnet_registry", "--output", "json"]);
-    run_output(&mut command)
+    dfx(options)
+        .canister_call_output(root, "canic_subnet_registry", Some("json"))
+        .map_err(snapshot_dfx_error)
 }
 
 // Create one canister snapshot and parse the snapshot id from dfx output.
@@ -271,11 +274,9 @@ fn create_snapshot(
     canister_id: &str,
 ) -> Result<String, SnapshotCommandError> {
     let before = list_snapshot_ids(options, canister_id)?;
-    let mut command = Command::new(&options.dfx);
-    command.arg("canister");
-    add_canister_network_args(&mut command, options);
-    command.args(["snapshot", "create", canister_id]);
-    let output = run_output_with_stderr(&mut command)?;
+    let output = dfx(options)
+        .snapshot_create(canister_id)
+        .map_err(snapshot_dfx_error)?;
     if let Some(snapshot_id) = parse_snapshot_id(&output) {
         return Ok(snapshot_id);
     }
@@ -297,11 +298,9 @@ fn list_snapshot_ids(
     options: &SnapshotDownloadOptions,
     canister_id: &str,
 ) -> Result<Vec<String>, SnapshotCommandError> {
-    let mut command = Command::new(&options.dfx);
-    command.arg("canister");
-    add_canister_network_args(&mut command, options);
-    command.args(["snapshot", "list", canister_id]);
-    let output = run_output(&mut command)?;
+    let output = dfx(options)
+        .snapshot_list(canister_id)
+        .map_err(snapshot_dfx_error)?;
     Ok(parse_snapshot_list_ids(&output))
 }
 
@@ -310,11 +309,9 @@ fn stop_canister(
     options: &SnapshotDownloadOptions,
     canister_id: &str,
 ) -> Result<(), SnapshotCommandError> {
-    let mut command = Command::new(&options.dfx);
-    command.arg("canister");
-    add_canister_network_args(&mut command, options);
-    command.args(["stop", canister_id]);
-    run_status(&mut command)
+    dfx(options)
+        .stop_canister(canister_id)
+        .map_err(snapshot_dfx_error)
 }
 
 // Start a canister after snapshot capture when explicitly requested.
@@ -322,11 +319,9 @@ fn start_canister(
     options: &SnapshotDownloadOptions,
     canister_id: &str,
 ) -> Result<(), SnapshotCommandError> {
-    let mut command = Command::new(&options.dfx);
-    command.arg("canister");
-    add_canister_network_args(&mut command, options);
-    command.args(["start", canister_id]);
-    run_status(&mut command)
+    dfx(options)
+        .start_canister(canister_id)
+        .map_err(snapshot_dfx_error)
 }
 
 // Download one canister snapshot into the target artifact directory.
@@ -336,83 +331,14 @@ fn download_snapshot(
     snapshot_id: &str,
     artifact_path: &Path,
 ) -> Result<(), SnapshotCommandError> {
-    let mut command = Command::new(&options.dfx);
-    command.arg("canister");
-    add_canister_network_args(&mut command, options);
-    command.args(["snapshot", "download", canister_id, snapshot_id, "--dir"]);
-    command.arg(artifact_path);
-    run_status(&mut command)
-}
-
-// Add optional `dfx canister` network arguments.
-fn add_canister_network_args(command: &mut Command, options: &SnapshotDownloadOptions) {
-    if let Some(network) = &options.network {
-        command.args(["--network", network]);
-    }
-}
-
-// Execute a command and capture stdout.
-fn run_output(command: &mut Command) -> Result<String, SnapshotCommandError> {
-    let display = command_display(command);
-    let output = command.output()?;
-    if output.status.success() {
-        Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
-    } else {
-        Err(SnapshotCommandError::DfxFailed {
-            command: display,
-            stderr: String::from_utf8_lossy(&output.stderr).to_string(),
-        })
-    }
-}
-
-// Execute a command and capture stdout plus stderr on success.
-fn run_output_with_stderr(command: &mut Command) -> Result<String, SnapshotCommandError> {
-    let display = command_display(command);
-    let output = command.output()?;
-    if output.status.success() {
-        let mut text = String::from_utf8_lossy(&output.stdout).to_string();
-        text.push_str(&String::from_utf8_lossy(&output.stderr));
-        Ok(text.trim().to_string())
-    } else {
-        Err(SnapshotCommandError::DfxFailed {
-            command: display,
-            stderr: String::from_utf8_lossy(&output.stderr).to_string(),
-        })
-    }
-}
-
-// Execute a command and require a successful status.
-fn run_status(command: &mut Command) -> Result<(), SnapshotCommandError> {
-    let display = command_display(command);
-    let output = command.output()?;
-    if output.status.success() {
-        Ok(())
-    } else {
-        Err(SnapshotCommandError::DfxFailed {
-            command: display,
-            stderr: String::from_utf8_lossy(&output.stderr).to_string(),
-        })
-    }
-}
-
-// Render a command for diagnostics.
-fn command_display(command: &Command) -> String {
-    let mut parts = vec![command.get_program().to_string_lossy().to_string()];
-    parts.extend(
-        command
-            .get_args()
-            .map(|arg| arg.to_string_lossy().to_string()),
-    );
-    parts.join(" ")
+    dfx(options)
+        .snapshot_download(canister_id, snapshot_id, artifact_path)
+        .map_err(snapshot_dfx_error)
 }
 
 // Render one dry-run create command.
 fn create_snapshot_command_display(options: &SnapshotDownloadOptions, canister_id: &str) -> String {
-    let mut command = Command::new(&options.dfx);
-    command.arg("canister");
-    add_canister_network_args(&mut command, options);
-    command.args(["snapshot", "create", canister_id]);
-    command_display(&command)
+    dfx(options).snapshot_create_display(canister_id)
 }
 
 // Render one dry-run download command.
@@ -422,30 +348,17 @@ fn download_snapshot_command_display(
     snapshot_id: &str,
     artifact_path: &Path,
 ) -> String {
-    let mut command = Command::new(&options.dfx);
-    command.arg("canister");
-    add_canister_network_args(&mut command, options);
-    command.args(["snapshot", "download", canister_id, snapshot_id, "--dir"]);
-    command.arg(artifact_path);
-    command_display(&command)
+    dfx(options).snapshot_download_display(canister_id, snapshot_id, artifact_path)
 }
 
 // Render one dry-run stop command.
 fn stop_canister_command_display(options: &SnapshotDownloadOptions, canister_id: &str) -> String {
-    let mut command = Command::new(&options.dfx);
-    command.arg("canister");
-    add_canister_network_args(&mut command, options);
-    command.args(["stop", canister_id]);
-    command_display(&command)
+    dfx(options).stop_canister_display(canister_id)
 }
 
 // Render one dry-run start command.
 fn start_canister_command_display(options: &SnapshotDownloadOptions, canister_id: &str) -> String {
-    let mut command = Command::new(&options.dfx);
-    command.arg("canister");
-    add_canister_network_args(&mut command, options);
-    command.args(["start", canister_id]);
-    command_display(&command)
+    dfx(options).start_canister_display(canister_id)
 }
 
 // Parse a likely snapshot id from dfx output.
@@ -483,24 +396,9 @@ fn backup_id(options: &SnapshotDownloadOptions) -> String {
         .map_or_else(|| "snapshot-download".to_string(), str::to_string)
 }
 
-// Return a placeholder timestamp until the CLI owns a clock abstraction.
-fn timestamp_placeholder() -> String {
-    "unknown".to_string()
-}
-
-// Read the next required option value.
-fn next_value<I>(args: &mut I, option: &'static str) -> Result<String, SnapshotCommandError>
-where
-    I: Iterator<Item = OsString>,
-{
-    args.next()
-        .and_then(|value| value.into_string().ok())
-        .ok_or(SnapshotCommandError::MissingValue(option))
-}
-
 // Return snapshot command usage text.
 const fn usage() -> &'static str {
-    "usage: canic snapshot download --canister <id> --out <dir> [--root <id>] [--include-children] [--recursive] [--dry-run] [--stop-before-snapshot] [--resume-after-snapshot] [--network <name>]"
+    "usage: canic snapshot download --canister <id> --out <dir> [--root <id>] [--include-children] [--recursive] [--dry-run] [--resume-after-snapshot] [--network <name>]"
 }
 
 #[cfg(test)]
@@ -539,7 +437,6 @@ mod tests {
             OsString::from(ROOT),
             OsString::from("--recursive"),
             OsString::from("--dry-run"),
-            OsString::from("--stop-before-snapshot"),
             OsString::from("--resume-after-snapshot"),
         ])
         .expect("parse options");

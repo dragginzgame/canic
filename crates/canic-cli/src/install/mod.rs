@@ -1,6 +1,13 @@
-use crate::version_text;
+use crate::{
+    args::{
+        first_arg_is_help, first_arg_is_version, parse_matches, string_option, string_values,
+        value_arg,
+    },
+    version_text,
+};
 use candid::Principal;
-use canic_installer::install_root::{DEFAULT_FLEET_NAME, InstallRootOptions, install_root};
+use canic_host::install_root::{DEFAULT_FLEET_NAME, InstallRootOptions, install_root};
+use clap::{Arg, Command as ClapCommand};
 use std::{env, ffi::OsString};
 use thiserror::Error as ThisError;
 
@@ -15,12 +22,6 @@ const DEFAULT_READY_TIMEOUT_SECONDS: u64 = 120;
 pub enum InstallCommandError {
     #[error("{0}")]
     Usage(&'static str),
-
-    #[error("unknown option {0}")]
-    UnknownOption(String),
-
-    #[error("option {0} requires a value")]
-    MissingValue(&'static str),
 
     #[error("cannot provide both positional root target and --root")]
     ConflictingRootTarget,
@@ -52,90 +53,29 @@ impl InstallOptions {
     where
         I: IntoIterator<Item = OsString>,
     {
-        let mut root_target = None;
-        let mut root_build_target = None;
-        let mut fleet_name =
-            env::var("CANIC_FLEET").unwrap_or_else(|_| DEFAULT_FLEET_NAME.to_string());
-        let mut network = env::var("DFX_NETWORK").unwrap_or_else(|_| "local".to_string());
-        let mut config_path = None;
-        let mut ready_timeout_seconds = env::var("READY_TIMEOUT_SECONDS")
-            .ok()
-            .and_then(|value| value.parse::<u64>().ok())
-            .unwrap_or(DEFAULT_READY_TIMEOUT_SECONDS);
-
-        let mut args = args.into_iter();
-        while let Some(arg) = args.next() {
-            let arg = arg
-                .into_string()
-                .map_err(|_| InstallCommandError::Usage(usage()))?;
-
-            if let Some(value) = arg.strip_prefix("--root=") {
-                set_root_target(&mut root_target, value.to_string())?;
-                continue;
-            }
-            if let Some(value) = arg.strip_prefix("--root-build-target=") {
-                root_build_target = Some(value.to_string());
-                continue;
-            }
-            if let Some(value) = arg.strip_prefix("--fleet=") {
-                fleet_name = value.to_string();
-                continue;
-            }
-            if let Some(value) = arg.strip_prefix("--network=") {
-                network = value.to_string();
-                continue;
-            }
-            if let Some(value) = arg.strip_prefix("--config=") {
-                config_path = Some(value.to_string());
-                continue;
-            }
-            if let Some(value) = arg.strip_prefix("--ready-timeout-seconds=") {
-                ready_timeout_seconds = parse_ready_timeout(value)?;
-                continue;
-            }
-
-            match arg.as_str() {
-                "--root" => {
-                    let value = next_value(&mut args, "--root")?;
-                    set_root_target(&mut root_target, value)?;
-                }
-                "--root-build-target" => {
-                    root_build_target = Some(next_value(&mut args, "--root-build-target")?);
-                }
-                "--fleet" => {
-                    fleet_name = next_value(&mut args, "--fleet")?;
-                }
-                "--network" => {
-                    network = next_value(&mut args, "--network")?;
-                }
-                "--config" => {
-                    config_path = Some(next_value(&mut args, "--config")?);
-                }
-                "--ready-timeout-seconds" => {
-                    let value = next_value(&mut args, "--ready-timeout-seconds")?;
-                    ready_timeout_seconds = parse_ready_timeout(&value)?;
-                }
-                "--help" | "-h" => return Err(InstallCommandError::Usage(usage())),
-                _ if arg.starts_with('-') => return Err(InstallCommandError::UnknownOption(arg)),
-                _ => set_root_target(&mut root_target, arg)?,
-            }
-        }
-
-        let root_target = root_target.unwrap_or_else(|| DEFAULT_ROOT_TARGET.to_string());
-        let root_build_target =
-            root_build_target.unwrap_or_else(|| default_root_build_target(&root_target));
+        let matches = parse_matches(install_command(), args)
+            .map_err(|_| InstallCommandError::Usage(usage()))?;
+        let positional_targets = string_values(&matches, "root-target");
+        let flag_target = string_option(&matches, "root");
+        let root_target = resolve_root_target(positional_targets, flag_target)?;
+        let root_build_target = string_option(&matches, "root-build-target")
+            .unwrap_or_else(|| default_root_build_target(&root_target));
+        let ready_timeout_seconds = string_option(&matches, "ready-timeout-seconds")
+            .map(|value| parse_ready_timeout(&value))
+            .transpose()?
+            .unwrap_or_else(default_ready_timeout_seconds);
 
         Ok(Self {
-            fleet_name,
+            fleet_name: string_option(&matches, "fleet").unwrap_or_else(default_fleet_name),
             root_target,
             root_build_target,
-            network,
+            network: string_option(&matches, "network").unwrap_or_else(default_network),
             ready_timeout_seconds,
-            config_path,
+            config_path: string_option(&matches, "config"),
         })
     }
 
-    /// Convert parsed CLI options into installer options.
+    /// Convert parsed CLI options into host install options.
     #[must_use]
     pub fn into_install_root_options(self) -> InstallRootOptions {
         InstallRootOptions {
@@ -150,25 +90,30 @@ impl InstallOptions {
     }
 }
 
+// Build the install parser.
+fn install_command() -> ClapCommand {
+    ClapCommand::new("install")
+        .disable_help_flag(true)
+        .arg(Arg::new("root-target").num_args(0..))
+        .arg(value_arg("fleet").long("fleet"))
+        .arg(value_arg("root").long("root"))
+        .arg(value_arg("root-build-target").long("root-build-target"))
+        .arg(value_arg("config").long("config"))
+        .arg(value_arg("network").long("network"))
+        .arg(value_arg("ready-timeout-seconds").long("ready-timeout-seconds"))
+}
+
 /// Run the root install workflow.
 pub fn run<I>(args: I) -> Result<(), InstallCommandError>
 where
     I: IntoIterator<Item = OsString>,
 {
     let args = args.into_iter().collect::<Vec<_>>();
-    if args
-        .first()
-        .and_then(|arg| arg.to_str())
-        .is_some_and(|arg| matches!(arg, "help" | "--help" | "-h"))
-    {
+    if first_arg_is_help(&args) {
         println!("{}", usage());
         return Ok(());
     }
-    if args
-        .first()
-        .and_then(|arg| arg.to_str())
-        .is_some_and(|arg| matches!(arg, "version" | "--version" | "-V"))
-    {
+    if first_arg_is_version(&args) {
         println!("{}", version_text());
         return Ok(());
     }
@@ -177,23 +122,17 @@ where
     install_root(options.into_install_root_options()).map_err(InstallCommandError::from)
 }
 
-// Set the root target once, accepting either a canister name or principal text.
-fn set_root_target(target: &mut Option<String>, value: String) -> Result<(), InstallCommandError> {
-    if target.replace(value).is_some() {
-        return Err(InstallCommandError::ConflictingRootTarget);
+// Resolve the install root target from positional and flag forms.
+fn resolve_root_target(
+    positional_targets: Vec<String>,
+    flag_target: Option<String>,
+) -> Result<String, InstallCommandError> {
+    match (positional_targets.as_slice(), flag_target) {
+        ([], None) => Ok(DEFAULT_ROOT_TARGET.to_string()),
+        ([], Some(target)) => Ok(target),
+        ([target], None) => Ok(target.clone()),
+        _ => Err(InstallCommandError::ConflictingRootTarget),
     }
-
-    Ok(())
-}
-
-// Read the next required option value.
-fn next_value<I>(args: &mut I, option: &'static str) -> Result<String, InstallCommandError>
-where
-    I: Iterator<Item = OsString>,
-{
-    args.next()
-        .and_then(|value| value.into_string().ok())
-        .ok_or(InstallCommandError::MissingValue(option))
 }
 
 // Parse the operator-supplied readiness timeout.
@@ -201,6 +140,24 @@ fn parse_ready_timeout(value: &str) -> Result<u64, InstallCommandError> {
     value
         .parse::<u64>()
         .map_err(|_| InstallCommandError::InvalidReadyTimeout(value.to_string()))
+}
+
+// Resolve the install fleet name from environment defaults.
+fn default_fleet_name() -> String {
+    env::var("CANIC_FLEET").unwrap_or_else(|_| DEFAULT_FLEET_NAME.to_string())
+}
+
+// Resolve the DFX network from environment defaults.
+fn default_network() -> String {
+    env::var("DFX_NETWORK").unwrap_or_else(|_| "local".to_string())
+}
+
+// Resolve the readiness timeout from environment defaults.
+fn default_ready_timeout_seconds() -> u64 {
+    env::var("READY_TIMEOUT_SECONDS")
+        .ok()
+        .and_then(|value| value.parse::<u64>().ok())
+        .unwrap_or(DEFAULT_READY_TIMEOUT_SECONDS)
 }
 
 // Use the conventional root build target when the install target is a principal.

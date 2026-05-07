@@ -6,6 +6,7 @@ use super::{
     RestoreApplyProgressSummary, RestoreApplyReportOperation, RestoreApplyReportOutcome,
     RestoreApplyRunnerCommand,
 };
+use crate::timestamp::current_timestamp_marker;
 use serde::Serialize;
 use std::{
     fs,
@@ -42,6 +43,7 @@ const RESTORE_RUN_EXECUTED_COMPLETED: &str = "completed";
 const RESTORE_RUN_EXECUTED_FAILED: &str = "failed";
 const RESTORE_RUN_RECEIPT_STATE_READY: &str = "ready";
 const RESTORE_RUN_COMMAND_EXIT_PREFIX: &str = "runner-command-exit";
+const RESTORE_RUN_STOPPED_PRECONDITION_FAILED: &str = "stopped-precondition-failed";
 const RESTORE_RUN_RESPONSE_VERSION: u16 = 1;
 const RESTORE_RUN_OUTPUT_RECEIPT_LIMIT: usize = 64 * 1024;
 
@@ -153,14 +155,12 @@ pub struct RestoreRunResponse {
     pub executed_operation_count: Option<usize>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub recovered_operation: Option<RestoreApplyJournalOperation>,
-    pub batch_summary: RestoreRunBatchSummary,
     pub ready: bool,
     pub complete: bool,
     pub attention_required: bool,
     pub outcome: RestoreApplyReportOutcome,
     pub operation_count: usize,
     pub operation_counts: RestoreApplyOperationKindCounts,
-    pub operation_counts_supplied: bool,
     pub progress: RestoreApplyProgressSummary,
     pub pending_summary: RestoreApplyPendingSummary,
     pub pending_operations: usize,
@@ -202,25 +202,12 @@ impl RestoreRunResponse {
             operation_receipt_summary: RestoreRunReceiptSummary::default(),
             executed_operation_count: None,
             recovered_operation: None,
-            batch_summary: RestoreRunBatchSummary::from_counts(
-                RestoreRunBatchStart::new(
-                    None,
-                    report.ready_operations,
-                    report.progress.remaining_operations,
-                ),
-                0,
-                report.ready_operations,
-                report.progress.remaining_operations,
-                false,
-                report.complete,
-            ),
             ready: report.ready,
             complete: report.complete,
             attention_required: report.attention_required,
             outcome: report.outcome,
             operation_count: report.operation_count,
             operation_counts: report.operation_counts,
-            operation_counts_supplied: report.operation_counts_supplied,
             progress: report.progress,
             pending_summary: report.pending_summary,
             pending_operations: report.pending_operations,
@@ -247,41 +234,6 @@ impl RestoreRunResponse {
     fn set_requested_state_updated_at(&mut self, updated_at: Option<&String>) {
         self.requested_state_updated_at = updated_at.cloned();
     }
-
-    // Refresh batch counters after a dry-run, recovery, or execute pass.
-    const fn set_batch_summary(
-        &mut self,
-        batch_start: RestoreRunBatchStart,
-        executed_operations: usize,
-        stopped_by_max_steps: bool,
-    ) {
-        self.batch_summary = RestoreRunBatchSummary::from_counts(
-            batch_start,
-            executed_operations,
-            self.ready_operations,
-            self.progress.remaining_operations,
-            stopped_by_max_steps,
-            self.complete,
-        );
-    }
-}
-
-///
-/// RestoreRunBatchSummary
-///
-
-#[derive(Clone, Debug, Serialize)]
-pub struct RestoreRunBatchSummary {
-    pub requested_max_steps: Option<usize>,
-    pub initial_ready_operations: usize,
-    pub initial_remaining_operations: usize,
-    pub executed_operations: usize,
-    pub remaining_ready_operations: usize,
-    pub remaining_operations: usize,
-    pub ready_operations_delta: isize,
-    pub remaining_operations_delta: isize,
-    pub stopped_by_max_steps: bool,
-    pub complete: bool,
 }
 
 ///
@@ -349,56 +301,14 @@ impl RestoreRunnerOutcome {
 }
 
 ///
-/// RestoreRunBatchStart
+/// RestoreStoppedPreconditionFailure
 ///
 
-#[derive(Clone, Copy, Debug)]
-struct RestoreRunBatchStart {
-    requested_max_steps: Option<usize>,
-    initial_ready_operations: usize,
-    initial_remaining_operations: usize,
-}
-
-impl RestoreRunBatchStart {
-    // Capture the runner counters observed before a dry-run, recovery, or execute pass.
-    const fn new(
-        requested_max_steps: Option<usize>,
-        initial_ready_operations: usize,
-        initial_remaining_operations: usize,
-    ) -> Self {
-        Self {
-            requested_max_steps,
-            initial_ready_operations,
-            initial_remaining_operations,
-        }
-    }
-}
-
-impl RestoreRunBatchSummary {
-    // Build the compact batch counters shown in every native runner response.
-    const fn from_counts(
-        batch_start: RestoreRunBatchStart,
-        executed_operations: usize,
-        remaining_ready_operations: usize,
-        remaining_operations: usize,
-        stopped_by_max_steps: bool,
-        complete: bool,
-    ) -> Self {
-        Self {
-            requested_max_steps: batch_start.requested_max_steps,
-            initial_ready_operations: batch_start.initial_ready_operations,
-            initial_remaining_operations: batch_start.initial_remaining_operations,
-            executed_operations,
-            remaining_ready_operations,
-            remaining_operations,
-            ready_operations_delta: remaining_ready_operations.cast_signed()
-                - batch_start.initial_ready_operations.cast_signed(),
-            remaining_operations_delta: remaining_operations.cast_signed()
-                - batch_start.initial_remaining_operations.cast_signed(),
-            stopped_by_max_steps,
-            complete,
-        }
-    }
+struct RestoreStoppedPreconditionFailure {
+    command: RestoreApplyRunnerCommand,
+    status_label: String,
+    output: RestoreApplyCommandOutputPair,
+    failure_reason: String,
 }
 
 impl RestoreRunReceiptSummary {
@@ -601,14 +511,39 @@ impl RestoreRunResponseMode {
     }
 }
 
+///
+/// RestoreRunPreparedOperation
+///
+
+struct RestoreRunPreparedOperation {
+    operation: RestoreApplyJournalOperation,
+    command: RestoreApplyRunnerCommand,
+    sequence: usize,
+    attempt: usize,
+}
+
+///
+/// RestoreRunStepOutcome
+///
+
+enum RestoreRunStepOutcome {
+    Completed {
+        executed_operation: RestoreRunExecutedOperation,
+        operation_receipt: RestoreRunOperationReceipt,
+    },
+    Failed {
+        executed_operation: RestoreRunExecutedOperation,
+        operation_receipt: RestoreRunOperationReceipt,
+        status: String,
+    },
+}
+
 /// Build a no-mutation native restore runner preview from a journal file.
 pub fn restore_run_dry_run(
     config: &RestoreRunnerConfig,
 ) -> Result<RestoreRunResponse, RestoreRunnerError> {
     let journal = read_apply_journal_file(&config.journal)?;
     let report = journal.report();
-    let initial_ready_operations = report.ready_operations;
-    let initial_remaining_operations = report.progress.remaining_operations;
     let preview = journal.next_command_preview_with_config(&config.command);
     let stopped_reason = restore_run_stopped_reason(&report, false, false);
     let next_action = restore_run_next_action(&report, false);
@@ -619,15 +554,6 @@ pub fn restore_run_dry_run(
         RestoreRunResponseMode::dry_run(stopped_reason, next_action),
     );
     response.set_requested_state_updated_at(config.updated_at.as_ref());
-    response.set_batch_summary(
-        RestoreRunBatchStart::new(
-            config.max_steps,
-            initial_ready_operations,
-            initial_remaining_operations,
-        ),
-        0,
-        false,
-    );
     response.operation_available = Some(preview.operation_available);
     response.command_available = Some(preview.command_available);
     response.command = preview.command;
@@ -640,9 +566,6 @@ pub fn restore_run_unclaim_pending(
 ) -> Result<RestoreRunResponse, RestoreRunnerError> {
     let _lock = RestoreJournalLock::acquire(&config.journal)?;
     let mut journal = read_apply_journal_file(&config.journal)?;
-    let initial_report = journal.report();
-    let initial_ready_operations = initial_report.ready_operations;
-    let initial_remaining_operations = initial_report.progress.remaining_operations;
     let recovered_operation = journal
         .next_transition_operation()
         .filter(|operation| operation.state == RestoreApplyOperationState::Pending)
@@ -661,15 +584,6 @@ pub fn restore_run_unclaim_pending(
         RestoreRunResponseMode::unclaim_pending(next_action),
     );
     response.set_requested_state_updated_at(config.updated_at.as_ref());
-    response.set_batch_summary(
-        RestoreRunBatchStart::new(
-            config.max_steps,
-            initial_ready_operations,
-            initial_remaining_operations,
-        ),
-        0,
-        false,
-    );
     response.set_operation_receipts(vec![RestoreRunOperationReceipt::recovered_pending(
         recovered_operation.clone(),
         Some(recovered_updated_at),
@@ -690,22 +604,12 @@ pub fn restore_run_execute(
     Ok(run.response)
 }
 
-#[expect(
-    clippy::too_many_lines,
-    reason = "runner execution keeps claim, command, receipt, and journal commit steps together"
-)]
 // Execute ready restore apply operations and retain any deferred runner error.
 pub fn restore_run_execute_result(
     config: &RestoreRunnerConfig,
 ) -> Result<RestoreRunnerOutcome, RestoreRunnerError> {
     let _lock = RestoreJournalLock::acquire(&config.journal)?;
     let mut journal = read_apply_journal_file(&config.journal)?;
-    let initial_report = journal.report();
-    let batch_start = RestoreRunBatchStart::new(
-        config.max_steps,
-        initial_report.ready_operations,
-        initial_report.progress.remaining_operations,
-    );
     let mut executed_operations = Vec::new();
     let mut operation_receipts = Vec::new();
 
@@ -720,125 +624,306 @@ pub fn restore_run_execute_result(
                 operation_receipts,
                 max_steps_reached,
                 config.updated_at.as_ref(),
-                batch_start,
             )));
         }
 
         enforce_restore_run_executable(&journal, &report)?;
-        let preview = journal.next_command_preview_with_config(&config.command);
-        enforce_restore_run_command_available(&preview)?;
-
-        let operation = preview
-            .operation
-            .clone()
-            .ok_or_else(|| restore_command_unavailable_error(&preview))?;
-        let command = preview
-            .command
-            .clone()
-            .ok_or_else(|| restore_command_unavailable_error(&preview))?;
-        let sequence = operation.sequence;
-        let attempt = journal
-            .operation_receipts
-            .iter()
-            .filter(|receipt| receipt.sequence == sequence)
-            .count()
-            + 1;
-
-        enforce_apply_claim_sequence(sequence, &journal)?;
-        journal.mark_operation_pending_at(
-            sequence,
-            Some(state_updated_at(config.updated_at.as_ref())),
-        )?;
-        write_apply_journal_file(&config.journal, &journal)?;
-
-        let output = ProcessCommand::new(&command.program)
-            .args(&command.args)
-            .output()?;
-        let status_label = exit_status_label(output.status);
-        let output_pair = RestoreApplyCommandOutputPair::from_bytes(
-            &output.stdout,
-            &output.stderr,
-            RESTORE_RUN_OUTPUT_RECEIPT_LIMIT,
-        );
-        if output.status.success() {
-            let uploaded_snapshot_id =
-                parse_uploaded_snapshot_id(&String::from_utf8_lossy(&output.stdout));
-            let completed_updated_at = state_updated_at(config.updated_at.as_ref());
-            journal.mark_operation_completed_at(sequence, Some(completed_updated_at.clone()))?;
-            if operation.operation != RestoreApplyOperationKind::UploadSnapshot
-                || uploaded_snapshot_id.is_some()
-            {
-                journal.record_operation_receipt(
-                    RestoreApplyOperationReceipt::command_completed(
-                        &operation,
-                        command.clone(),
-                        status_label.clone(),
-                        Some(completed_updated_at.clone()),
-                        output_pair.clone(),
-                        attempt,
-                        uploaded_snapshot_id,
-                    ),
-                )?;
+        let prepared = restore_run_prepare_next_operation(config, &mut journal)?;
+        let sequence = prepared.sequence;
+        match restore_run_execute_prepared_operation(config, &mut journal, prepared)? {
+            RestoreRunStepOutcome::Completed {
+                executed_operation,
+                operation_receipt,
+            } => {
+                executed_operations.push(executed_operation);
+                operation_receipts.push(operation_receipt);
             }
-            write_apply_journal_file(&config.journal, &journal)?;
-            executed_operations.push(RestoreRunExecutedOperation::completed(
-                operation.clone(),
-                command.clone(),
-                status_label.clone(),
-            ));
-            operation_receipts.push(RestoreRunOperationReceipt::completed(
-                operation,
-                command,
-                status_label,
-                Some(completed_updated_at),
-            ));
-            continue;
+            RestoreRunStepOutcome::Failed {
+                executed_operation,
+                operation_receipt,
+                status,
+            } => {
+                executed_operations.push(executed_operation);
+                operation_receipts.push(operation_receipt);
+                let response = restore_run_execute_summary(
+                    &journal,
+                    executed_operations,
+                    operation_receipts,
+                    false,
+                    config.updated_at.as_ref(),
+                );
+                return Ok(RestoreRunnerOutcome {
+                    response,
+                    error: Some(RestoreRunnerError::CommandFailed { sequence, status }),
+                });
+            }
         }
+    }
+}
 
-        let failed_updated_at = state_updated_at(config.updated_at.as_ref());
-        let failure_reason = format!("{RESTORE_RUN_COMMAND_EXIT_PREFIX}-{status_label}");
-        journal.mark_operation_failed_at(
-            sequence,
-            failure_reason.clone(),
-            Some(failed_updated_at.clone()),
-        )?;
-        journal.record_operation_receipt(RestoreApplyOperationReceipt::command_failed(
-            &operation,
-            command.clone(),
-            status_label.clone(),
-            Some(failed_updated_at.clone()),
+// Claim the next renderable operation and persist the pending state.
+fn restore_run_prepare_next_operation(
+    config: &RestoreRunnerConfig,
+    journal: &mut RestoreApplyJournal,
+) -> Result<RestoreRunPreparedOperation, RestoreRunnerError> {
+    let preview = journal.next_command_preview_with_config(&config.command);
+    enforce_restore_run_command_available(&preview)?;
+
+    let operation = preview
+        .operation
+        .clone()
+        .ok_or_else(|| restore_command_unavailable_error(&preview))?;
+    let command = preview
+        .command
+        .clone()
+        .ok_or_else(|| restore_command_unavailable_error(&preview))?;
+    let sequence = operation.sequence;
+    let attempt = journal
+        .operation_receipts
+        .iter()
+        .filter(|receipt| receipt.sequence == sequence)
+        .count()
+        + 1;
+
+    enforce_apply_claim_sequence(sequence, journal)?;
+    journal
+        .mark_operation_pending_at(sequence, Some(state_updated_at(config.updated_at.as_ref())))?;
+    write_apply_journal_file(&config.journal, journal)?;
+
+    Ok(RestoreRunPreparedOperation {
+        operation,
+        command,
+        sequence,
+        attempt,
+    })
+}
+
+// Execute one claimed operation and commit either success or failure.
+fn restore_run_execute_prepared_operation(
+    config: &RestoreRunnerConfig,
+    journal: &mut RestoreApplyJournal,
+    prepared: RestoreRunPreparedOperation,
+) -> Result<RestoreRunStepOutcome, RestoreRunnerError> {
+    if prepared.command.requires_stopped_canister
+        && let Some(outcome) = enforce_stopped_canister_precondition(
+            config,
+            &prepared.operation,
+            prepared.attempt,
+            config.updated_at.as_ref(),
+        )?
+    {
+        return restore_run_commit_precondition_failure(config, journal, prepared, outcome);
+    }
+
+    let output = ProcessCommand::new(&prepared.command.program)
+        .args(&prepared.command.args)
+        .output()?;
+    let status_label = exit_status_label(output.status);
+    let output_pair = RestoreApplyCommandOutputPair::from_bytes(
+        &output.stdout,
+        &output.stderr,
+        RESTORE_RUN_OUTPUT_RECEIPT_LIMIT,
+    );
+
+    if output.status.success() {
+        let uploaded_snapshot_id =
+            parse_uploaded_snapshot_id(&String::from_utf8_lossy(&output.stdout));
+        return restore_run_commit_command_success(
+            config,
+            journal,
+            prepared,
+            status_label,
             output_pair,
-            attempt,
-            failure_reason,
-        ))?;
-        write_apply_journal_file(&config.journal, &journal)?;
-        executed_operations.push(RestoreRunExecutedOperation::failed(
-            operation.clone(),
-            command.clone(),
+            uploaded_snapshot_id,
+        );
+    }
+
+    restore_run_commit_command_failure(config, journal, prepared, status_label, output_pair)
+}
+
+// Commit a stopped-canister precondition failure for a claimed operation.
+fn restore_run_commit_precondition_failure(
+    config: &RestoreRunnerConfig,
+    journal: &mut RestoreApplyJournal,
+    prepared: RestoreRunPreparedOperation,
+    outcome: RestoreStoppedPreconditionFailure,
+) -> Result<RestoreRunStepOutcome, RestoreRunnerError> {
+    let failed_updated_at = state_updated_at(config.updated_at.as_ref());
+    journal.mark_operation_failed_at(
+        prepared.sequence,
+        outcome.failure_reason.clone(),
+        Some(failed_updated_at.clone()),
+    )?;
+    journal.record_operation_receipt(RestoreApplyOperationReceipt::command_failed(
+        &prepared.operation,
+        outcome.command.clone(),
+        outcome.status_label.clone(),
+        Some(failed_updated_at.clone()),
+        outcome.output,
+        prepared.attempt,
+        outcome.failure_reason,
+    ))?;
+    write_apply_journal_file(&config.journal, journal)?;
+
+    Ok(RestoreRunStepOutcome::Failed {
+        executed_operation: RestoreRunExecutedOperation::failed(
+            prepared.operation.clone(),
+            outcome.command.clone(),
+            outcome.status_label.clone(),
+        ),
+        operation_receipt: RestoreRunOperationReceipt::failed(
+            prepared.operation,
+            outcome.command,
+            outcome.status_label,
+            Some(failed_updated_at),
+        ),
+        status: RESTORE_RUN_STOPPED_PRECONDITION_FAILED.to_string(),
+    })
+}
+
+// Commit a successful process command for a claimed operation.
+fn restore_run_commit_command_success(
+    config: &RestoreRunnerConfig,
+    journal: &mut RestoreApplyJournal,
+    prepared: RestoreRunPreparedOperation,
+    status_label: String,
+    output_pair: RestoreApplyCommandOutputPair,
+    uploaded_snapshot_id: Option<String>,
+) -> Result<RestoreRunStepOutcome, RestoreRunnerError> {
+    let completed_updated_at = state_updated_at(config.updated_at.as_ref());
+    journal.mark_operation_completed_at(prepared.sequence, Some(completed_updated_at.clone()))?;
+    if prepared.operation.operation != RestoreApplyOperationKind::UploadSnapshot
+        || uploaded_snapshot_id.is_some()
+    {
+        journal.record_operation_receipt(RestoreApplyOperationReceipt::command_completed(
+            &prepared.operation,
+            prepared.command.clone(),
             status_label.clone(),
-        ));
-        operation_receipts.push(RestoreRunOperationReceipt::failed(
-            operation,
-            command,
+            Some(completed_updated_at.clone()),
+            output_pair,
+            prepared.attempt,
+            uploaded_snapshot_id,
+        ))?;
+    }
+    write_apply_journal_file(&config.journal, journal)?;
+
+    Ok(RestoreRunStepOutcome::Completed {
+        executed_operation: RestoreRunExecutedOperation::completed(
+            prepared.operation.clone(),
+            prepared.command.clone(),
+            status_label.clone(),
+        ),
+        operation_receipt: RestoreRunOperationReceipt::completed(
+            prepared.operation,
+            prepared.command,
+            status_label,
+            Some(completed_updated_at),
+        ),
+    })
+}
+
+// Commit a failed process command for a claimed operation.
+fn restore_run_commit_command_failure(
+    config: &RestoreRunnerConfig,
+    journal: &mut RestoreApplyJournal,
+    prepared: RestoreRunPreparedOperation,
+    status_label: String,
+    output_pair: RestoreApplyCommandOutputPair,
+) -> Result<RestoreRunStepOutcome, RestoreRunnerError> {
+    let failed_updated_at = state_updated_at(config.updated_at.as_ref());
+    let failure_reason = format!("{RESTORE_RUN_COMMAND_EXIT_PREFIX}-{status_label}");
+    journal.mark_operation_failed_at(
+        prepared.sequence,
+        failure_reason.clone(),
+        Some(failed_updated_at.clone()),
+    )?;
+    journal.record_operation_receipt(RestoreApplyOperationReceipt::command_failed(
+        &prepared.operation,
+        prepared.command.clone(),
+        status_label.clone(),
+        Some(failed_updated_at.clone()),
+        output_pair,
+        prepared.attempt,
+        failure_reason,
+    ))?;
+    write_apply_journal_file(&config.journal, journal)?;
+
+    Ok(RestoreRunStepOutcome::Failed {
+        executed_operation: RestoreRunExecutedOperation::failed(
+            prepared.operation.clone(),
+            prepared.command.clone(),
+            status_label.clone(),
+        ),
+        operation_receipt: RestoreRunOperationReceipt::failed(
+            prepared.operation,
+            prepared.command,
             status_label.clone(),
             Some(failed_updated_at),
-        ));
-        let response = restore_run_execute_summary(
-            &journal,
-            executed_operations,
-            operation_receipts,
-            false,
-            config.updated_at.as_ref(),
-            batch_start,
-        );
-        return Ok(RestoreRunnerOutcome {
-            response,
-            error: Some(RestoreRunnerError::CommandFailed {
-                sequence,
-                status: status_label,
-            }),
-        });
+        ),
+        status: status_label,
+    })
+}
+
+// Verify a stopped-canister command precondition before running a mutating load.
+fn enforce_stopped_canister_precondition(
+    config: &RestoreRunnerConfig,
+    operation: &RestoreApplyJournalOperation,
+    attempt: usize,
+    updated_at: Option<&String>,
+) -> Result<Option<RestoreStoppedPreconditionFailure>, RestoreRunnerError> {
+    let command = stopped_canister_status_command(config, operation);
+    let output = ProcessCommand::new(&command.program)
+        .args(&command.args)
+        .output()?;
+    let status_label = exit_status_label(output.status);
+    let output_pair = RestoreApplyCommandOutputPair::from_bytes(
+        &output.stdout,
+        &output.stderr,
+        RESTORE_RUN_OUTPUT_RECEIPT_LIMIT,
+    );
+    if output.status.success() && status_output_reports_stopped(&output_pair) {
+        return Ok(None);
     }
+
+    Ok(Some(RestoreStoppedPreconditionFailure {
+        command,
+        status_label,
+        output: output_pair,
+        failure_reason: format!(
+            "{RESTORE_RUN_STOPPED_PRECONDITION_FAILED}-attempt-{attempt}-{}",
+            state_updated_at(updated_at)
+        ),
+    }))
+}
+
+// Build the non-mutating status command used to prove stopped-canister state.
+fn stopped_canister_status_command(
+    config: &RestoreRunnerConfig,
+    operation: &RestoreApplyJournalOperation,
+) -> RestoreApplyRunnerCommand {
+    let mut args = vec!["canister".to_string()];
+    if let Some(network) = &config.command.network {
+        args.push("--network".to_string());
+        args.push(network.clone());
+    }
+    args.push("status".to_string());
+    args.push(operation.target_canister.clone());
+
+    RestoreApplyRunnerCommand {
+        program: config.command.program.clone(),
+        args,
+        mutates: false,
+        requires_stopped_canister: false,
+        note: "proves the target canister is stopped before snapshot load".to_string(),
+    }
+}
+
+// Detect stopped status from bounded dfx status output.
+fn status_output_reports_stopped(output: &RestoreApplyCommandOutputPair) -> bool {
+    output.stdout.text.contains("Status: Stopped")
+        || output.stdout.text.contains("status: stopped")
+        || output.stderr.text.contains("Status: Stopped")
+        || output.stderr.text.contains("status: stopped")
 }
 
 // Check whether execute mode has reached its requested operation batch size.
@@ -857,7 +942,6 @@ fn restore_run_execute_summary(
     operation_receipts: Vec<RestoreRunOperationReceipt>,
     max_steps_reached: bool,
     requested_state_updated_at: Option<&String>,
-    batch_start: RestoreRunBatchStart,
 ) -> RestoreRunResponse {
     let report = journal.report();
     let executed_operation_count = executed_operations.len();
@@ -870,7 +954,6 @@ fn restore_run_execute_summary(
         RestoreRunResponseMode::execute(stopped_reason, next_action),
     );
     response.set_requested_state_updated_at(requested_state_updated_at);
-    response.set_batch_summary(batch_start, executed_operation_count, max_steps_reached);
     response.max_steps_reached = Some(max_steps_reached);
     response.executed_operation_count = Some(executed_operation_count);
     response.executed_operations = executed_operations;
@@ -1022,14 +1105,9 @@ fn read_apply_journal_file(path: &Path) -> Result<RestoreApplyJournal, RestoreRu
     Ok(journal)
 }
 
-// Return the caller-supplied journal update marker or the current placeholder.
+// Return the caller-supplied journal update marker or the current timestamp.
 fn state_updated_at(updated_at: Option<&String>) -> String {
-    updated_at.cloned().unwrap_or_else(timestamp_placeholder)
-}
-
-// Return a placeholder timestamp until the runner owns a clock abstraction.
-fn timestamp_placeholder() -> String {
-    "unknown".to_string()
+    updated_at.cloned().unwrap_or_else(current_timestamp_marker)
 }
 
 // Persist the restore apply journal to its canonical runner path.
@@ -1085,4 +1163,25 @@ fn journal_lock_path(path: &Path) -> PathBuf {
     let mut lock_path = path.as_os_str().to_os_string();
     lock_path.push(".lock");
     PathBuf::from(lock_path)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Ensure stopped-canister status parsing accepts current dfx-style output.
+    #[test]
+    fn status_output_reports_stopped_status() {
+        let output = RestoreApplyCommandOutputPair::from_bytes(b"Status: Stopped\n", b"", 1024);
+
+        assert!(status_output_reports_stopped(&output));
+    }
+
+    // Ensure running status output does not satisfy snapshot-load preconditions.
+    #[test]
+    fn status_output_rejects_running_status() {
+        let output = RestoreApplyCommandOutputPair::from_bytes(b"Status: Running\n", b"", 1024);
+
+        assert!(!status_output_reports_stopped(&output));
+    }
 }

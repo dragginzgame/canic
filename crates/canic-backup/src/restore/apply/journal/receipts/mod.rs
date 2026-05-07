@@ -39,27 +39,9 @@ pub struct RestoreApplyOperationReceipt {
 }
 
 impl RestoreApplyOperationReceipt {
-    /// Build a completed upload receipt from the uploaded target-side snapshot ID.
-    #[must_use]
-    pub fn completed_upload(
-        operation: &RestoreApplyJournalOperation,
-        uploaded_snapshot_id: String,
-    ) -> Self {
-        Self::from_operation(
-            operation,
-            RestoreApplyOperationKind::UploadSnapshot,
-            RestoreApplyOperationReceiptOutcome::CommandCompleted,
-            RestoreApplyOperationReceiptDetails {
-                attempt: 1,
-                uploaded_snapshot_id: Some(uploaded_snapshot_id),
-                ..RestoreApplyOperationReceiptDetails::default()
-            },
-        )
-    }
-
     /// Build a durable completed-command receipt for the apply journal.
     #[must_use]
-    pub fn command_completed(
+    pub(in crate::restore) fn command_completed(
         operation: &RestoreApplyJournalOperation,
         command: RestoreApplyRunnerCommand,
         status: String,
@@ -87,7 +69,7 @@ impl RestoreApplyOperationReceipt {
 
     /// Build a durable failed-command receipt for the apply journal.
     #[must_use]
-    pub fn command_failed(
+    pub(in crate::restore) fn command_failed(
         operation: &RestoreApplyJournalOperation,
         command: RestoreApplyRunnerCommand,
         status: String,
@@ -243,7 +225,7 @@ pub struct RestoreApplyCommandOutput {
 impl RestoreApplyCommandOutput {
     /// Build a bounded UTF-8-ish command output payload for durable receipts.
     #[must_use]
-    pub fn from_bytes(bytes: &[u8], limit: usize) -> Self {
+    pub(in crate::restore) fn from_bytes(bytes: &[u8], limit: usize) -> Self {
         let original_bytes = bytes.len();
         let start = original_bytes.saturating_sub(limit);
         Self {
@@ -259,7 +241,7 @@ impl RestoreApplyCommandOutput {
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct RestoreApplyCommandOutputPair {
+pub(in crate::restore) struct RestoreApplyCommandOutputPair {
     pub stdout: RestoreApplyCommandOutput,
     pub stderr: RestoreApplyCommandOutput,
 }
@@ -267,7 +249,7 @@ pub struct RestoreApplyCommandOutputPair {
 impl RestoreApplyCommandOutputPair {
     /// Build bounded stdout/stderr command output payloads.
     #[must_use]
-    pub fn from_bytes(stdout: &[u8], stderr: &[u8], limit: usize) -> Self {
+    pub(in crate::restore) fn from_bytes(stdout: &[u8], stderr: &[u8], limit: usize) -> Self {
         Self {
             stdout: RestoreApplyCommandOutput::from_bytes(stdout, limit),
             stderr: RestoreApplyCommandOutput::from_bytes(stderr, limit),

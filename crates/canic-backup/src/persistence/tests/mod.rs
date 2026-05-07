@@ -2,9 +2,8 @@ use super::*;
 use crate::{
     journal::{ArtifactJournalEntry, ArtifactState},
     manifest::{
-        BackupUnit, BackupUnitKind, ConsistencyMode, ConsistencySection, FleetMember, FleetSection,
-        IdentityMode, SourceMetadata, SourceSnapshot, ToolMetadata, VerificationCheck,
-        VerificationPlan,
+        BackupUnit, BackupUnitKind, ConsistencySection, FleetMember, FleetSection, IdentityMode,
+        SourceMetadata, SourceSnapshot, ToolMetadata, VerificationCheck, VerificationPlan,
     },
 };
 use std::{
@@ -64,127 +63,6 @@ fn invalid_manifest_is_not_written() {
     fs::remove_dir_all(root).ok();
     assert!(matches!(err, PersistenceError::InvalidManifest(_)));
     assert!(!manifest_path.exists());
-}
-
-// Ensure inspection reports manifest and journal agreement without artifact IO.
-#[test]
-fn inspect_reports_ready_layout_metadata() {
-    let root = temp_dir("canic-backup-inspect-ready");
-    let layout = BackupLayout::new(root.clone());
-
-    layout
-        .write_manifest(&valid_manifest())
-        .expect("write manifest");
-    layout
-        .write_journal(&valid_journal())
-        .expect("write journal");
-
-    let report = layout.inspect().expect("inspect layout");
-
-    fs::remove_dir_all(root).expect("remove temp layout");
-    assert_eq!(report.backup_id, "fbk_test_001");
-    assert!(report.backup_id_matches);
-    assert!(report.journal_complete);
-    assert!(report.ready_for_verify);
-    assert_eq!(report.manifest_members, 1);
-    assert_eq!(report.journal_artifacts, 1);
-    assert_eq!(report.matched_artifacts, 1);
-    assert!(report.topology_receipt_mismatches.is_empty());
-    assert!(report.missing_journal_artifacts.is_empty());
-    assert!(report.unexpected_journal_artifacts.is_empty());
-    assert!(report.path_mismatches.is_empty());
-    assert!(report.checksum_mismatches.is_empty());
-}
-
-// Ensure inspection surfaces path and checksum drift before full verification.
-#[test]
-fn inspect_reports_manifest_journal_provenance_drift() {
-    let root = temp_dir("canic-backup-inspect-drift");
-    let layout = BackupLayout::new(root.clone());
-    let mut manifest = valid_manifest();
-    manifest.fleet.members[0].source_snapshot.artifact_path = "artifacts/manifest-root".to_string();
-    manifest.fleet.members[0].source_snapshot.checksum = Some(HASH.to_string());
-    let mut journal = journal_with_checksum(
-        "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff".to_string(),
-    );
-    journal.artifacts[0].artifact_path = "artifacts/journal-root".to_string();
-    journal.pre_snapshot_topology_hash =
-        Some("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff".to_string());
-
-    layout.write_manifest(&manifest).expect("write manifest");
-    layout.write_journal(&journal).expect("write journal");
-
-    let report = layout.inspect().expect("inspect layout");
-
-    fs::remove_dir_all(root).expect("remove temp layout");
-    assert!(!report.ready_for_verify);
-    assert_eq!(report.matched_artifacts, 1);
-    assert_eq!(report.topology_receipt_mismatches.len(), 1);
-    assert_eq!(report.path_mismatches.len(), 1);
-    assert_eq!(report.checksum_mismatches.len(), 1);
-}
-
-// Ensure inspection reports missing and unexpected artifact boundaries.
-#[test]
-fn inspect_reports_missing_and_unexpected_artifacts() {
-    let root = temp_dir("canic-backup-inspect-boundary");
-    let layout = BackupLayout::new(root.clone());
-    let mut journal = valid_journal();
-    journal.artifacts[0].snapshot_id = "other-snapshot".to_string();
-
-    layout
-        .write_manifest(&valid_manifest())
-        .expect("write manifest");
-    layout.write_journal(&journal).expect("write journal");
-
-    let report = layout.inspect().expect("inspect layout");
-
-    fs::remove_dir_all(root).expect("remove temp layout");
-    assert!(!report.ready_for_verify);
-    assert_eq!(report.matched_artifacts, 0);
-    assert_eq!(report.missing_journal_artifacts.len(), 1);
-    assert_eq!(report.unexpected_journal_artifacts.len(), 1);
-}
-
-// Ensure provenance reports source, topology, unit, and snapshot metadata.
-#[test]
-fn provenance_reports_manifest_and_journal_receipts() {
-    let root = temp_dir("canic-backup-provenance");
-    let layout = BackupLayout::new(root.clone());
-
-    layout
-        .write_manifest(&valid_manifest())
-        .expect("write manifest");
-    layout
-        .write_journal(&valid_journal())
-        .expect("write journal");
-
-    let report = layout.provenance().expect("read provenance");
-
-    fs::remove_dir_all(root).expect("remove temp layout");
-    assert_eq!(report.backup_id, "fbk_test_001");
-    assert_eq!(report.manifest_backup_id, "fbk_test_001");
-    assert_eq!(report.journal_backup_id, "fbk_test_001");
-    assert!(report.backup_id_matches);
-    assert_eq!(report.source_environment, "local");
-    assert_eq!(report.source_root_canister, ROOT);
-    assert_eq!(report.discovery_topology_hash, HASH);
-    assert_eq!(
-        report.journal_discovery_topology_hash,
-        Some(HASH.to_string())
-    );
-    assert!(report.topology_receipts_match);
-    assert!(report.topology_receipt_mismatches.is_empty());
-    assert_eq!(report.backup_unit_count, 1);
-    assert_eq!(report.member_count, 1);
-    assert_eq!(report.consistency_mode, "crash-consistent");
-    assert_eq!(report.backup_units[0].kind, "whole-fleet");
-    assert_eq!(report.members[0].canister_id, ROOT);
-    assert_eq!(report.members[0].identity_mode, "fixed");
-    assert_eq!(report.members[0].module_hash, Some(HASH.to_string()));
-    assert_eq!(report.members[0].wasm_hash, Some(HASH.to_string()));
-    assert_eq!(report.members[0].journal_state, Some("Durable".to_string()));
-    assert_eq!(report.members[0].journal_checksum, Some(HASH.to_string()));
 }
 
 // Ensure layout integrity verifies manifest, journal, and artifact checksums.
@@ -374,15 +252,10 @@ fn valid_manifest() -> FleetBackupManifest {
             root_canister: ROOT.to_string(),
         },
         consistency: ConsistencySection {
-            mode: ConsistencyMode::CrashConsistent,
             backup_units: vec![BackupUnit {
-                unit_id: "whole-fleet".to_string(),
-                kind: BackupUnitKind::WholeFleet,
+                unit_id: "single-root".to_string(),
+                kind: BackupUnitKind::Single,
                 roles: vec!["root".to_string()],
-                consistency_reason: None,
-                dependency_closure: Vec::new(),
-                topology_validation: "subtree-closed".to_string(),
-                quiescence_strategy: None,
             }],
         },
         fleet: FleetSection {
@@ -398,11 +271,8 @@ fn valid_manifest() -> FleetBackupManifest {
                 subnet_canister_id: Some(CHILD.to_string()),
                 controller_hint: Some(ROOT.to_string()),
                 identity_mode: IdentityMode::Fixed,
-                restore_group: 1,
-                verification_class: "basic".to_string(),
                 verification_checks: vec![VerificationCheck {
-                    kind: "call".to_string(),
-                    method: Some("canic_ready".to_string()),
+                    kind: "status".to_string(),
                     roles: Vec::new(),
                 }],
                 source_snapshot: SourceSnapshot {

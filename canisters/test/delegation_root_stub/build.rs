@@ -45,10 +45,12 @@ fn build_bootstrap_wasm_store(
         "run",
         "-q",
         "-p",
-        "canic-installer",
+        "canic-cli",
         "--bin",
-        "canic-build-wasm-store-artifact",
+        "canic",
         "--",
+        "build",
+        "wasm_store",
     ]);
 
     let bootstrap_output = bootstrap_cmd

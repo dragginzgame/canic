@@ -19,15 +19,10 @@ fn valid_manifest() -> FleetBackupManifest {
             root_canister: ROOT.to_string(),
         },
         consistency: ConsistencySection {
-            mode: ConsistencyMode::QuiescedUnit,
             backup_units: vec![BackupUnit {
                 unit_id: "core".to_string(),
-                kind: BackupUnitKind::Flat,
+                kind: BackupUnitKind::Subtree,
                 roles: vec!["root".to_string(), "app".to_string()],
-                consistency_reason: Some("root and app state are coordinated".to_string()),
-                dependency_closure: vec!["root".to_string(), "app".to_string()],
-                topology_validation: "operator-declared-flat".to_string(),
-                quiescence_strategy: Some("standard-canic-hooks@v1".to_string()),
             }],
         },
         fleet: FleetSection {
@@ -43,8 +38,7 @@ fn valid_manifest() -> FleetBackupManifest {
         },
         verification: VerificationPlan {
             fleet_checks: vec![VerificationCheck {
-                kind: "root_ready".to_string(),
-                method: None,
+                kind: "status".to_string(),
                 roles: Vec::new(),
             }],
             member_checks: Vec::new(),
@@ -89,11 +83,8 @@ fn fleet_member(
         subnet_canister_id: Some(CHILD.to_string()),
         controller_hint: Some(ROOT.to_string()),
         identity_mode,
-        restore_group: 1,
-        verification_class: "basic".to_string(),
         verification_checks: vec![VerificationCheck {
-            kind: "call".to_string(),
-            method: Some("canic_ready".to_string()),
+            kind: "status".to_string(),
             roles: Vec::new(),
         }],
         source_snapshot: SourceSnapshot {
@@ -138,18 +129,6 @@ fn missing_member_verification_checks_fail_validation() {
 }
 
 #[test]
-fn quiesced_unit_requires_quiescence_strategy() {
-    let mut manifest = valid_manifest();
-    manifest.consistency.backup_units[0].quiescence_strategy = None;
-
-    let err = manifest
-        .validate()
-        .expect_err("missing quiescence strategy should fail");
-
-    assert!(matches!(err, ManifestValidationError::EmptyField(_)));
-}
-
-#[test]
 fn backup_unit_roles_must_exist_in_fleet() {
     let mut manifest = valid_manifest();
     manifest.consistency.backup_units[0]
@@ -163,23 +142,6 @@ fn backup_unit_roles_must_exist_in_fleet() {
     assert!(matches!(
         err,
         ManifestValidationError::UnknownBackupUnitRole { .. }
-    ));
-}
-
-#[test]
-fn backup_unit_dependencies_must_exist_in_fleet() {
-    let mut manifest = valid_manifest();
-    manifest.consistency.backup_units[0]
-        .dependency_closure
-        .push("missing-dependency".to_string());
-
-    let err = manifest
-        .validate()
-        .expect_err("unknown backup unit dependency should fail");
-
-    assert!(matches!(
-        err,
-        ManifestValidationError::UnknownBackupUnitDependency { .. }
     ));
 }
 
@@ -219,27 +181,10 @@ fn backup_unit_roles_must_be_unique() {
 }
 
 #[test]
-fn backup_unit_dependencies_must_be_unique() {
-    let mut manifest = valid_manifest();
-    manifest.consistency.backup_units[0]
-        .dependency_closure
-        .push("root".to_string());
-
-    let err = manifest
-        .validate()
-        .expect_err("duplicate backup unit dependency should fail");
-
-    assert!(matches!(
-        err,
-        ManifestValidationError::DuplicateBackupUnitDependency { .. }
-    ));
-}
-
-#[test]
 fn every_fleet_role_must_be_covered_by_a_backup_unit() {
     let mut manifest = valid_manifest();
+    manifest.consistency.backup_units[0].kind = BackupUnitKind::Single;
     manifest.consistency.backup_units[0].roles = vec!["root".to_string()];
-    manifest.consistency.backup_units[0].dependency_closure = vec!["root".to_string()];
 
     let err = manifest
         .validate()
@@ -314,8 +259,7 @@ fn member_verification_group_roles_must_exist_in_fleet() {
         .push(MemberVerificationChecks {
             role: "missing-role".to_string(),
             checks: vec![VerificationCheck {
-                kind: "ready".to_string(),
-                method: None,
+                kind: "status".to_string(),
                 roles: Vec::new(),
             }],
         });
@@ -370,28 +314,10 @@ fn nested_member_verification_roles_must_exist_in_fleet() {
 }
 
 #[test]
-fn whole_fleet_unit_must_cover_all_roles() {
-    let mut manifest = valid_manifest();
-    manifest.consistency.backup_units[0].kind = BackupUnitKind::WholeFleet;
-    manifest.consistency.backup_units[0].roles = vec!["root".to_string()];
-    manifest.consistency.backup_units[0].consistency_reason = None;
-
-    let err = manifest
-        .validate()
-        .expect_err("whole-fleet unit missing app role should fail");
-
-    assert!(matches!(
-        err,
-        ManifestValidationError::WholeFleetUnitMissingRole { .. }
-    ));
-}
-
-#[test]
 fn subtree_unit_must_be_closed_under_descendants() {
     let mut manifest = valid_manifest();
-    manifest.consistency.backup_units[0].kind = BackupUnitKind::SubtreeRooted;
+    manifest.consistency.backup_units[0].kind = BackupUnitKind::Subtree;
     manifest.consistency.backup_units[0].roles = vec!["root".to_string()];
-    manifest.consistency.backup_units[0].consistency_reason = None;
 
     let err = manifest
         .validate()
@@ -412,12 +338,8 @@ fn subtree_unit_must_be_connected() {
         None,
         IdentityMode::Relocatable,
     ));
-    manifest.consistency.backup_units[0].kind = BackupUnitKind::SubtreeRooted;
+    manifest.consistency.backup_units[0].kind = BackupUnitKind::Subtree;
     manifest.consistency.backup_units[0].roles = vec!["app".to_string(), "worker".to_string()];
-    manifest.consistency.backup_units[0].consistency_reason = None;
-    manifest.consistency.backup_units[0]
-        .dependency_closure
-        .push("worker".to_string());
 
     let err = manifest
         .validate()
@@ -427,48 +349,6 @@ fn subtree_unit_must_be_connected() {
         err,
         ManifestValidationError::SubtreeBackupUnitNotConnected { .. }
     ));
-}
-
-#[test]
-fn design_conformance_report_accepts_ready_manifest() {
-    let manifest = valid_manifest();
-
-    let report = manifest.design_conformance_report();
-
-    assert!(report.design_v1_ready);
-    assert_eq!(report.design_version, DESIGN_V1);
-    assert!(report.topology.design_v1_ready);
-    assert!(report.topology.canonical_input);
-    assert!(report.backup_units.design_v1_ready);
-    assert_eq!(report.backup_units.flat_units, 1);
-    assert_eq!(report.backup_units.flat_units_with_reason, 1);
-    assert!(report.quiescence.design_v1_ready);
-    assert!(report.quiescence.quiescence_required);
-    assert_eq!(report.verification.members_with_checks, 2);
-    assert_eq!(report.identity.fixed_members, 1);
-    assert_eq!(report.identity.relocatable_members, 1);
-    assert!(report.snapshot_provenance.all_members_have_checksum);
-    assert!(report.restore_order.design_v1_ready);
-}
-
-#[test]
-fn design_conformance_report_flags_soft_gaps() {
-    let mut manifest = valid_manifest();
-    manifest.fleet.topology_hash_input = "legacy-input".to_string();
-    manifest.fleet.members[0].source_snapshot.checksum = None;
-    manifest.fleet.members[0].restore_group = 2;
-    manifest.fleet.members[1].restore_group = 1;
-
-    let report = manifest.design_conformance_report();
-
-    assert!(!report.design_v1_ready);
-    assert!(!report.topology.canonical_input);
-    assert!(!report.snapshot_provenance.all_members_have_checksum);
-    assert_eq!(report.restore_order.parent_group_violations.len(), 1);
-    assert_eq!(
-        report.restore_order.parent_group_violations[0].parent_canister_id,
-        ROOT
-    );
 }
 
 #[test]
@@ -489,8 +369,7 @@ fn member_verification_checks(role: &str) -> MemberVerificationChecks {
     MemberVerificationChecks {
         role: role.to_string(),
         checks: vec![VerificationCheck {
-            kind: "ready".to_string(),
-            method: None,
+            kind: "status".to_string(),
             roles: Vec::new(),
         }],
     }

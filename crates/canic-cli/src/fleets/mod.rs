@@ -1,7 +1,15 @@
-use crate::version_text;
-use canic_installer::install_root::{
+use crate::{
+    args::{
+        first_arg_is_help, first_arg_is_version, parse_matches, string_option, string_values,
+        value_arg,
+    },
+    version_text,
+};
+use canic_host::install_root::{
     FleetSummary, InstallState, list_current_fleets, select_current_fleet,
 };
+use canic_host::table::WhitespaceTable;
+use clap::{Arg, Command as ClapCommand};
 use std::{env, ffi::OsString};
 use thiserror::Error as ThisError;
 
@@ -19,12 +27,6 @@ const CONFIG_HEADER: &str = "CONFIG";
 pub enum FleetCommandError {
     #[error("{0}")]
     Usage(&'static str),
-
-    #[error("unknown option {0}")]
-    UnknownOption(String),
-
-    #[error("option {0} requires a value")]
-    MissingValue(&'static str),
 
     #[error("missing fleet name")]
     MissingFleetName,
@@ -64,19 +66,11 @@ where
     I: IntoIterator<Item = OsString>,
 {
     let args = args.into_iter().collect::<Vec<_>>();
-    if args
-        .first()
-        .and_then(|arg| arg.to_str())
-        .is_some_and(|arg| matches!(arg, "help" | "--help" | "-h"))
-    {
+    if first_arg_is_help(&args) {
         println!("{}", usage());
         return Ok(());
     }
-    if args
-        .first()
-        .and_then(|arg| arg.to_str())
-        .is_some_and(|arg| matches!(arg, "version" | "--version" | "-V"))
-    {
+    if first_arg_is_version(&args) {
         println!("{}", version_text());
         return Ok(());
     }
@@ -96,19 +90,11 @@ where
     I: IntoIterator<Item = OsString>,
 {
     let args = args.into_iter().collect::<Vec<_>>();
-    if args
-        .first()
-        .and_then(|arg| arg.to_str())
-        .is_some_and(|arg| matches!(arg, "help" | "--help" | "-h"))
-    {
+    if first_arg_is_help(&args) {
         println!("{}", use_usage());
         return Ok(());
     }
-    if args
-        .first()
-        .and_then(|arg| arg.to_str())
-        .is_some_and(|arg| matches!(arg, "version" | "--version" | "-V"))
-    {
+    if first_arg_is_version(&args) {
         println!("{}", version_text());
         return Ok(());
     }
@@ -125,24 +111,12 @@ impl FleetOptions {
     where
         I: IntoIterator<Item = OsString>,
     {
-        let mut network = default_network();
-        let mut args = args.into_iter();
-        while let Some(arg) = args.next() {
-            let arg = arg
-                .into_string()
-                .map_err(|_| FleetCommandError::Usage(usage()))?;
-            if let Some(value) = arg.strip_prefix("--network=") {
-                network = value.to_string();
-                continue;
-            }
-            match arg.as_str() {
-                "--network" => network = next_value(&mut args, "--network")?,
-                "--help" | "-h" => return Err(FleetCommandError::Usage(usage())),
-                _ => return Err(FleetCommandError::UnknownOption(arg)),
-            }
-        }
+        let matches =
+            parse_matches(fleets_command(), args).map_err(|_| FleetCommandError::Usage(usage()))?;
 
-        Ok(Self { network })
+        Ok(Self {
+            network: string_option(&matches, "network").unwrap_or_else(default_network),
+        })
     }
 }
 
@@ -152,30 +126,35 @@ impl UseFleetOptions {
     where
         I: IntoIterator<Item = OsString>,
     {
-        let mut fleet = None;
-        let mut network = default_network();
-        let mut args = args.into_iter();
-        while let Some(arg) = args.next() {
-            let arg = arg
-                .into_string()
-                .map_err(|_| FleetCommandError::Usage(use_usage()))?;
-            if let Some(value) = arg.strip_prefix("--network=") {
-                network = value.to_string();
-                continue;
-            }
-            match arg.as_str() {
-                "--network" => network = next_value(&mut args, "--network")?,
-                "--help" | "-h" => return Err(FleetCommandError::Usage(use_usage())),
-                _ if arg.starts_with('-') => return Err(FleetCommandError::UnknownOption(arg)),
-                _ => set_fleet_name(&mut fleet, arg)?,
-            }
-        }
+        let matches = parse_matches(use_fleet_command(), args)
+            .map_err(|_| FleetCommandError::Usage(use_usage()))?;
+        let fleet_names = string_values(&matches, "fleet");
+        let fleet = match fleet_names.as_slice() {
+            [] => return Err(FleetCommandError::MissingFleetName),
+            [fleet] => fleet.clone(),
+            _ => return Err(FleetCommandError::ConflictingFleetName),
+        };
 
         Ok(Self {
-            fleet: fleet.ok_or(FleetCommandError::MissingFleetName)?,
-            network,
+            fleet,
+            network: string_option(&matches, "network").unwrap_or_else(default_network),
         })
     }
+}
+
+// Build the fleet list parser.
+fn fleets_command() -> ClapCommand {
+    ClapCommand::new("fleets")
+        .disable_help_flag(true)
+        .arg(value_arg("network").long("network"))
+}
+
+// Build the current-fleet selection parser.
+fn use_fleet_command() -> ClapCommand {
+    ClapCommand::new("use")
+        .disable_help_flag(true)
+        .arg(Arg::new("fleet").num_args(0..))
+        .arg(value_arg("network").long("network"))
 }
 
 // Render installed fleets as a compact whitespace table.
@@ -192,69 +171,31 @@ fn render_fleets(fleets: &[FleetSummary]) -> String {
             )
         })
         .collect::<Vec<_>>();
-    let current_width = CURRENT_HEADER.len();
-    let fleet_width = max_width(rows.iter().map(|row| row.1), FLEET_HEADER);
-    let network_width = max_width(rows.iter().map(|row| row.2), NETWORK_HEADER);
-    let root_width = max_width(rows.iter().map(|row| row.3), ROOT_HEADER);
-
-    let mut lines = Vec::new();
-    lines.push(format!(
-        "{CURRENT_HEADER:<current_width$}  {FLEET_HEADER:<fleet_width$}  {NETWORK_HEADER:<network_width$}  {ROOT_HEADER:<root_width$}  {CONFIG_HEADER}"
-    ));
+    let mut table = WhitespaceTable::new([
+        CURRENT_HEADER,
+        FLEET_HEADER,
+        NETWORK_HEADER,
+        ROOT_HEADER,
+        CONFIG_HEADER,
+    ]);
     for row in rows {
-        lines.push(format!(
-            "{:<current_width$}  {:<fleet_width$}  {:<network_width$}  {:<root_width$}  {}",
-            row.0, row.1, row.2, row.3, row.4
-        ));
+        table.push_row([row.0, row.1, row.2, row.3, row.4]);
     }
-    lines.join("\n")
+    table.render()
 }
 
 // Render the newly selected fleet.
 fn render_selected_fleet(state: &InstallState) -> String {
-    let fleet_width = FLEET_HEADER.len().max(state.fleet.len());
-    let network_width = NETWORK_HEADER.len().max(state.network.len());
-    let root_width = ROOT_HEADER.len().max(state.root_canister_id.len());
-    [
-        "Current fleet:".to_string(),
-        format!("{FLEET_HEADER:<fleet_width$}  {NETWORK_HEADER:<network_width$}  {ROOT_HEADER:<root_width$}"),
-        format!(
-            "{:<fleet_width$}  {:<network_width$}  {:<root_width$}",
-            state.fleet, state.network, state.root_canister_id
-        ),
-    ]
-    .join("\n")
+    let mut table = WhitespaceTable::new([FLEET_HEADER, NETWORK_HEADER, ROOT_HEADER]);
+    table.push_row([
+        state.fleet.as_str(),
+        state.network.as_str(),
+        state.root_canister_id.as_str(),
+    ]);
+    ["Current fleet:".to_string(), table.render()].join("\n")
 }
 
-// Return the maximum display width for one table column.
-fn max_width<'a>(values: impl Iterator<Item = &'a str>, header: &str) -> usize {
-    values
-        .map(str::len)
-        .chain([header.len()])
-        .max()
-        .unwrap_or(header.len())
-}
-
-// Set the selected fleet once.
-fn set_fleet_name(target: &mut Option<String>, value: String) -> Result<(), FleetCommandError> {
-    if target.replace(value).is_some() {
-        return Err(FleetCommandError::ConflictingFleetName);
-    }
-
-    Ok(())
-}
-
-// Read the next required option value.
-fn next_value<I>(args: &mut I, option: &'static str) -> Result<String, FleetCommandError>
-where
-    I: Iterator<Item = OsString>,
-{
-    args.next()
-        .and_then(|value| value.into_string().ok())
-        .ok_or(FleetCommandError::MissingValue(option))
-}
-
-// Resolve the network using the same local default as installer commands.
+// Resolve the network using the same local default as host install commands.
 fn default_network() -> String {
     env::var("DFX_NETWORK").unwrap_or_else(|_| "local".to_string())
 }

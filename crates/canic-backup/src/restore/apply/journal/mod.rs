@@ -1,4 +1,4 @@
-use super::{RestoreApplyDryRun, RestoreApplyDryRunOperation, RestoreApplyDryRunPhase};
+use super::{RestoreApplyDryRun, RestoreApplyDryRunOperation};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 use thiserror::Error as ThisError;
@@ -10,12 +10,12 @@ mod reports;
 pub use commands::{
     RestoreApplyCommandConfig, RestoreApplyCommandPreview, RestoreApplyRunnerCommand,
 };
+pub(in crate::restore) use receipts::RestoreApplyCommandOutputPair;
 pub use receipts::{
-    RestoreApplyCommandOutput, RestoreApplyCommandOutputPair, RestoreApplyOperationReceipt,
-    RestoreApplyOperationReceiptOutcome,
+    RestoreApplyCommandOutput, RestoreApplyOperationReceipt, RestoreApplyOperationReceiptOutcome,
 };
+pub(in crate::restore) use reports::RestoreApplyJournalReport;
 pub use reports::{
-    RestoreApplyJournalReport, RestoreApplyJournalStatus, RestoreApplyNextOperation,
     RestoreApplyPendingSummary, RestoreApplyProgressSummary, RestoreApplyReportOperation,
     RestoreApplyReportOutcome,
 };
@@ -33,7 +33,6 @@ pub struct RestoreApplyJournal {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub backup_root: Option<String>,
     pub operation_count: usize,
-    #[serde(default)]
     pub operation_counts: RestoreApplyOperationKindCounts,
     pub pending_operations: usize,
     pub ready_operations: usize,
@@ -56,9 +55,8 @@ impl RestoreApplyJournal {
             RestoreApplyOperationState::Blocked
         };
         let operations = dry_run
-            .phases
+            .operations
             .iter()
-            .flat_map(|phase| phase.operations.iter())
             .map(|operation| {
                 RestoreApplyJournalOperation::from_dry_run_operation(
                     operation,
@@ -113,8 +111,7 @@ impl RestoreApplyJournal {
 
         let state_counts = RestoreApplyJournalStateCounts::from_operations(&self.operations);
         let operation_counts = RestoreApplyOperationKindCounts::from_operations(&self.operations);
-        self.operation_counts
-            .validate_matches_if_supplied(&operation_counts)?;
+        self.operation_counts.validate_matches(&operation_counts)?;
         validate_apply_journal_count(
             "pending_operations",
             self.pending_operations,
@@ -156,30 +153,17 @@ impl RestoreApplyJournal {
         Ok(())
     }
 
-    /// Summarize this apply journal for operators and automation.
-    #[must_use]
-    pub fn status(&self) -> RestoreApplyJournalStatus {
-        RestoreApplyJournalStatus::from_journal(self)
-    }
-
     /// Build an operator-oriented report from this apply journal.
     #[must_use]
-    pub fn report(&self) -> RestoreApplyJournalReport {
+    pub(in crate::restore) fn report(&self) -> RestoreApplyJournalReport {
         RestoreApplyJournalReport::from_journal(self)
-    }
-
-    /// Return the full next ready operation row, if one is available.
-    #[must_use]
-    pub fn next_ready_operation(&self) -> Option<&RestoreApplyJournalOperation> {
-        self.operations
-            .iter()
-            .filter(|operation| operation.state == RestoreApplyOperationState::Ready)
-            .min_by_key(|operation| operation.sequence)
     }
 
     /// Return the next ready or pending operation that controls runner progress.
     #[must_use]
-    pub fn next_transition_operation(&self) -> Option<&RestoreApplyJournalOperation> {
+    pub(in crate::restore) fn next_transition_operation(
+        &self,
+    ) -> Option<&RestoreApplyJournalOperation> {
         self.operations
             .iter()
             .filter(|operation| {
@@ -193,12 +177,6 @@ impl RestoreApplyJournal {
             .min_by_key(|operation| operation.sequence)
     }
 
-    /// Render the next transitionable operation as a compact runner response.
-    #[must_use]
-    pub fn next_operation(&self) -> RestoreApplyNextOperation {
-        RestoreApplyNextOperation::from_journal(self)
-    }
-
     /// Render the next transitionable operation as a no-execute command preview.
     #[must_use]
     pub fn next_command_preview(&self) -> RestoreApplyCommandPreview {
@@ -207,7 +185,7 @@ impl RestoreApplyJournal {
 
     /// Render the next transitionable operation with a configured command preview.
     #[must_use]
-    pub fn next_command_preview_with_config(
+    pub(in crate::restore) fn next_command_preview_with_config(
         &self,
         config: &RestoreApplyCommandConfig,
     ) -> RestoreApplyCommandPreview {
@@ -215,7 +193,7 @@ impl RestoreApplyJournal {
     }
 
     /// Store one durable operation receipt/output and revalidate the journal.
-    pub fn record_operation_receipt(
+    pub(in crate::restore) fn record_operation_receipt(
         &mut self,
         receipt: RestoreApplyOperationReceipt,
     ) -> Result<(), RestoreApplyJournalError> {
@@ -226,11 +204,6 @@ impl RestoreApplyJournal {
         }
 
         Ok(())
-    }
-
-    /// Mark the next transitionable operation pending and refresh journal counts.
-    pub fn mark_next_operation_pending(&mut self) -> Result<(), RestoreApplyJournalError> {
-        self.mark_next_operation_pending_at(None)
     }
 
     /// Mark the next transitionable operation pending with an update marker.
@@ -244,16 +217,8 @@ impl RestoreApplyJournal {
         self.mark_operation_pending_at(sequence, updated_at)
     }
 
-    /// Mark one restore apply operation pending and refresh journal counts.
-    pub fn mark_operation_pending(
-        &mut self,
-        sequence: usize,
-    ) -> Result<(), RestoreApplyJournalError> {
-        self.mark_operation_pending_at(sequence, None)
-    }
-
     /// Mark one restore apply operation pending with an update marker.
-    pub fn mark_operation_pending_at(
+    pub(in crate::restore) fn mark_operation_pending_at(
         &mut self,
         sequence: usize,
         updated_at: Option<String>,
@@ -266,13 +231,8 @@ impl RestoreApplyJournal {
         )
     }
 
-    /// Mark the current pending operation ready again and refresh counts.
-    pub fn mark_next_operation_ready(&mut self) -> Result<(), RestoreApplyJournalError> {
-        self.mark_next_operation_ready_at(None)
-    }
-
     /// Mark the current pending operation ready again with an update marker.
-    pub fn mark_next_operation_ready_at(
+    pub(in crate::restore) fn mark_next_operation_ready_at(
         &mut self,
         updated_at: Option<String>,
     ) -> Result<(), RestoreApplyJournalError> {
@@ -286,16 +246,8 @@ impl RestoreApplyJournal {
         self.mark_operation_ready_at(operation.sequence, updated_at)
     }
 
-    /// Mark one restore apply operation ready again and refresh journal counts.
-    pub fn mark_operation_ready(
-        &mut self,
-        sequence: usize,
-    ) -> Result<(), RestoreApplyJournalError> {
-        self.mark_operation_ready_at(sequence, None)
-    }
-
     /// Mark one restore apply operation ready again with an update marker.
-    pub fn mark_operation_ready_at(
+    pub(in crate::restore) fn mark_operation_ready_at(
         &mut self,
         sequence: usize,
         updated_at: Option<String>,
@@ -322,16 +274,8 @@ impl RestoreApplyJournal {
         )
     }
 
-    /// Mark one restore apply operation completed and refresh journal counts.
-    pub fn mark_operation_completed(
-        &mut self,
-        sequence: usize,
-    ) -> Result<(), RestoreApplyJournalError> {
-        self.mark_operation_completed_at(sequence, None)
-    }
-
     /// Mark one restore apply operation completed with an update marker.
-    pub fn mark_operation_completed_at(
+    pub(in crate::restore) fn mark_operation_completed_at(
         &mut self,
         sequence: usize,
         updated_at: Option<String>,
@@ -344,17 +288,8 @@ impl RestoreApplyJournal {
         )
     }
 
-    /// Mark one restore apply operation failed and refresh journal counts.
-    pub fn mark_operation_failed(
-        &mut self,
-        sequence: usize,
-        reason: String,
-    ) -> Result<(), RestoreApplyJournalError> {
-        self.mark_operation_failed_at(sequence, reason, None)
-    }
-
     /// Mark one restore apply operation failed with an update marker.
-    pub fn mark_operation_failed_at(
+    pub(in crate::restore) fn mark_operation_failed_at(
         &mut self,
         sequence: usize,
         reason: String,
@@ -445,11 +380,6 @@ impl RestoreApplyJournal {
         self.blocked_operations = state_counts.blocked;
         self.completed_operations = state_counts.completed;
         self.failed_operations = state_counts.failed;
-    }
-
-    // Return whether this journal carried a persisted operation-kind receipt.
-    pub(super) const fn operation_counts_supplied(&self) -> bool {
-        !self.operation_counts.is_empty() || self.operations.is_empty()
     }
 
     // Return whether every planned operation has completed.
@@ -579,7 +509,6 @@ impl RestoreApplyJournalStateCounts {
 pub struct RestoreApplyOperationKindCounts {
     pub snapshot_uploads: usize,
     pub snapshot_loads: usize,
-    pub code_reinstalls: usize,
     pub member_verifications: usize,
     pub fleet_verifications: usize,
     pub verification_operations: usize,
@@ -596,15 +525,8 @@ impl RestoreApplyOperationKindCounts {
         counts
     }
 
-    /// Validate this count object against concrete operations when it was supplied.
-    pub fn validate_matches_if_supplied(
-        &self,
-        expected: &Self,
-    ) -> Result<(), RestoreApplyJournalError> {
-        if self.is_empty() && !expected.is_empty() {
-            return Ok(());
-        }
-
+    /// Validate this count object against concrete operations.
+    pub fn validate_matches(&self, expected: &Self) -> Result<(), RestoreApplyJournalError> {
         validate_apply_journal_count(
             "operation_counts.snapshot_uploads",
             self.snapshot_uploads,
@@ -614,11 +536,6 @@ impl RestoreApplyOperationKindCounts {
             "operation_counts.snapshot_loads",
             self.snapshot_loads,
             expected.snapshot_loads,
-        )?;
-        validate_apply_journal_count(
-            "operation_counts.code_reinstalls",
-            self.code_reinstalls,
-            expected.code_reinstalls,
         )?;
         validate_apply_journal_count(
             "operation_counts.member_verifications",
@@ -637,27 +554,12 @@ impl RestoreApplyOperationKindCounts {
         )
     }
 
-    // Return whether no operation-kind counts are present.
-    const fn is_empty(&self) -> bool {
-        self.snapshot_uploads == 0
-            && self.snapshot_loads == 0
-            && self.code_reinstalls == 0
-            && self.member_verifications == 0
-            && self.fleet_verifications == 0
-            && self.verification_operations == 0
-    }
-
     /// Count restore apply dry-run operations by runner operation kind.
     #[must_use]
-    pub fn from_dry_run_phases(phases: &[RestoreApplyDryRunPhase]) -> Self {
+    pub fn from_dry_run_operations(operations: &[RestoreApplyDryRunOperation]) -> Self {
         let mut counts = Self::default();
-        for operation in phases.iter().flat_map(|phase| {
-            phase
-                .operations
-                .iter()
-                .map(|operation| &operation.operation)
-        }) {
-            counts.record(operation);
+        for operation in operations {
+            counts.record(&operation.operation);
         }
         counts
     }
@@ -667,7 +569,6 @@ impl RestoreApplyOperationKindCounts {
         match operation {
             RestoreApplyOperationKind::UploadSnapshot => self.snapshot_uploads += 1,
             RestoreApplyOperationKind::LoadSnapshot => self.snapshot_loads += 1,
-            RestoreApplyOperationKind::ReinstallCode => self.code_reinstalls += 1,
             RestoreApplyOperationKind::VerifyMember => {
                 self.member_verifications += 1;
                 self.verification_operations += 1;
@@ -713,15 +614,13 @@ pub struct RestoreApplyJournalOperation {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub state_updated_at: Option<String>,
     pub blocking_reasons: Vec<String>,
-    pub restore_group: u16,
-    pub phase_order: usize,
+    pub member_order: usize,
     pub source_canister: String,
     pub target_canister: String,
     pub role: String,
     pub snapshot_id: Option<String>,
     pub artifact_path: Option<String>,
     pub verification_kind: Option<String>,
-    pub verification_method: Option<String>,
 }
 
 impl RestoreApplyJournalOperation {
@@ -741,15 +640,13 @@ impl RestoreApplyJournalOperation {
             } else {
                 Vec::new()
             },
-            restore_group: operation.restore_group,
-            phase_order: operation.phase_order,
+            member_order: operation.member_order,
             source_canister: operation.source_canister.clone(),
             target_canister: operation.target_canister.clone(),
             role: operation.role.clone(),
             snapshot_id: operation.snapshot_id.clone(),
             artifact_path: operation.artifact_path.clone(),
             verification_kind: operation.verification_kind.clone(),
-            verification_method: operation.verification_method.clone(),
         }
     }
 
@@ -796,20 +693,18 @@ impl RestoreApplyJournalOperation {
             RestoreApplyOperationKind::LoadSnapshot => self
                 .validate_required_field("operations[].snapshot_id", self.snapshot_id.as_ref())
                 .map(|_| ()),
-            RestoreApplyOperationKind::ReinstallCode => Ok(()),
             RestoreApplyOperationKind::VerifyMember | RestoreApplyOperationKind::VerifyFleet => {
                 let kind = self.validate_required_field(
                     "operations[].verification_kind",
                     self.verification_kind.as_ref(),
                 )?;
-                if kind == "status" {
-                    return Ok(());
+                if kind != "status" {
+                    return Err(RestoreApplyJournalError::UnsupportedVerificationKind {
+                        sequence: self.sequence,
+                        kind: kind.to_string(),
+                    });
                 }
-                self.validate_required_field(
-                    "operations[].verification_method",
-                    self.verification_method.as_ref(),
-                )
-                .map(|_| ())
+                Ok(())
             }
         }
     }
@@ -928,6 +823,9 @@ pub enum RestoreApplyJournalError {
         field: &'static str,
     },
 
+    #[error("restore apply journal operation {sequence} uses unsupported verification kind {kind}")]
+    UnsupportedVerificationKind { sequence: usize, kind: String },
+
     #[error("restore apply journal operation {0} was not found")]
     OperationNotFound(usize),
 
@@ -965,7 +863,6 @@ pub enum RestoreApplyJournalError {
 pub enum RestoreApplyOperationKind {
     UploadSnapshot,
     LoadSnapshot,
-    ReinstallCode,
     VerifyMember,
     VerifyFleet,
 }

@@ -1,0 +1,29 @@
+[package]
+name = "canic-host"
+edition = { workspace = true }
+rust-version = { workspace = true }
+version = { workspace = true }
+license = { workspace = true }
+description = "Host-side build, install, fleet, and release-set library for Canic workspaces"
+readme = "README.md"
+documentation = "https://docs.rs/canic-host"
+homepage = { workspace = true }
+repository = { workspace = true }
+keywords = { workspace = true }
+categories = { workspace = true }
+publish = true
+
+[dependencies]
+candid = { workspace = true }
+canic = { workspace = true }
+canic-core = { workspace = true }
+flate2 = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_bytes = { workspace = true }
+serde_cbor = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+toml = { workspace = true }
+
+[lints]
+workspace = true

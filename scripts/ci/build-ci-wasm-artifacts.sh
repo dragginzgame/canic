@@ -54,11 +54,11 @@ done
 # can emit once the full root-subnet release set exists. Root itself builds the
 # implicit bootstrap `wasm_store` artifact internally.
 for canister in "${NON_ROOT_CANISTERS[@]}"; do
-    CANIC_WASM_PROFILE="$BUILD_WASM_PROFILE" scripts/app/canic_installer.sh canic-build-canister-artifact "$canister"
+    CANIC_WASM_PROFILE="$BUILD_WASM_PROFILE" scripts/app/build.sh "$canister"
 done
 
 if [ "$BUILD_ROOT" -eq 1 ]; then
-    CANIC_WASM_PROFILE="$BUILD_WASM_PROFILE" scripts/app/canic_installer.sh canic-build-canister-artifact root
+    CANIC_WASM_PROFILE="$BUILD_WASM_PROFILE" scripts/app/build.sh root
 
     ROOT_WASM_GZ_PATH=".dfx/local/canisters/root/root.wasm.gz"
     ROOT_WASM_GZ_BYTES="$(stat -c%s "$ROOT_WASM_GZ_PATH")"

@@ -1,13 +1,10 @@
 use crate::manifest::{
-    FleetBackupManifest, FleetMember, IdentityMode, ManifestDesignConformanceReport,
-    ManifestValidationError, SourceSnapshot, VerificationCheck, VerificationPlan,
+    FleetBackupManifest, FleetMember, IdentityMode, ManifestValidationError, SourceSnapshot,
+    VerificationCheck, VerificationPlan,
 };
 use candid::Principal;
 use serde::{Deserialize, Serialize};
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    str::FromStr,
-};
+use std::{collections::BTreeSet, str::FromStr};
 use thiserror::Error as ThisError;
 
 ///
@@ -57,20 +54,15 @@ pub struct RestorePlan {
     pub operation_summary: RestoreOperationSummary,
     pub ordering_summary: RestoreOrderingSummary,
     #[serde(default)]
-    pub design_conformance: Option<ManifestDesignConformanceReport>,
-    #[serde(default)]
     pub fleet_verification_checks: Vec<VerificationCheck>,
-    pub phases: Vec<RestorePhase>,
+    pub members: Vec<RestorePlanMember>,
 }
 
 impl RestorePlan {
     /// Return all planned members in execution order.
     #[must_use]
     pub fn ordered_members(&self) -> Vec<&RestorePlanMember> {
-        self.phases
-            .iter()
-            .flat_map(|phase| phase.members.iter())
-            .collect()
+        self.members.iter().collect()
     }
 }
 
@@ -140,39 +132,10 @@ pub struct RestoreReadinessSummary {
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct RestoreOperationSummary {
-    #[serde(default)]
     pub planned_snapshot_uploads: usize,
     pub planned_snapshot_loads: usize,
-    pub planned_code_reinstalls: usize,
     pub planned_verification_checks: usize,
-    #[serde(default)]
     pub planned_operations: usize,
-    pub planned_phases: usize,
-}
-
-impl RestoreOperationSummary {
-    /// Return planned snapshot uploads, deriving the value for older plan JSON.
-    #[must_use]
-    pub const fn effective_planned_snapshot_uploads(&self, member_count: usize) -> usize {
-        if self.planned_snapshot_uploads == 0 && member_count > 0 {
-            return member_count;
-        }
-
-        self.planned_snapshot_uploads
-    }
-
-    /// Return total planned operations, deriving the value for older plan JSON.
-    #[must_use]
-    pub const fn effective_planned_operations(&self, member_count: usize) -> usize {
-        if self.planned_operations == 0 {
-            return self.effective_planned_snapshot_uploads(member_count)
-                + self.planned_snapshot_loads
-                + self.planned_code_reinstalls
-                + self.planned_verification_checks;
-        }
-
-        self.planned_operations
-    }
 }
 
 ///
@@ -181,20 +144,9 @@ impl RestoreOperationSummary {
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct RestoreOrderingSummary {
-    pub phase_count: usize,
+    pub ordered_members: usize,
     pub dependency_free_members: usize,
-    pub in_group_parent_edges: usize,
-    pub cross_group_parent_edges: usize,
-}
-
-///
-/// RestorePhase
-///
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct RestorePhase {
-    pub restore_group: u16,
-    pub members: Vec<RestorePlanMember>,
+    pub parent_edges: usize,
 }
 
 ///
@@ -209,10 +161,8 @@ pub struct RestorePlanMember {
     pub parent_source_canister: Option<String>,
     pub parent_target_canister: Option<String>,
     pub ordering_dependency: Option<RestoreOrderingDependency>,
-    pub phase_order: usize,
-    pub restore_group: u16,
+    pub member_order: usize,
     pub identity_mode: IdentityMode,
-    pub verification_class: String,
     pub verification_checks: Vec<VerificationCheck>,
     pub source_snapshot: SourceSnapshot,
 }
@@ -235,8 +185,7 @@ pub struct RestoreOrderingDependency {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum RestoreOrderingRelationship {
-    ParentInSameGroup,
-    ParentInEarlierGroup,
+    ParentBeforeChild,
 }
 
 ///
@@ -262,11 +211,10 @@ impl RestorePlanner {
         let snapshot_summary = restore_snapshot_summary(&members);
         let verification_summary = restore_verification_summary(manifest, &members);
         let readiness_summary = restore_readiness_summary(&snapshot_summary, &verification_summary);
-        validate_restore_group_dependencies(&members)?;
-        let phases = group_and_order_members(members)?;
-        let ordering_summary = restore_ordering_summary(&phases);
+        let members = order_members(members)?;
+        let ordering_summary = restore_ordering_summary(&members);
         let operation_summary =
-            restore_operation_summary(manifest.fleet.members.len(), &verification_summary, &phases);
+            restore_operation_summary(manifest.fleet.members.len(), &verification_summary);
 
         Ok(RestorePlan {
             backup_id: manifest.backup_id.clone(),
@@ -280,9 +228,8 @@ impl RestorePlanner {
             readiness_summary,
             operation_summary,
             ordering_summary,
-            design_conformance: Some(manifest.design_conformance_report()),
             fleet_verification_checks: manifest.verification.fleet_checks.clone(),
-            phases,
+            members,
         })
     }
 }
@@ -320,18 +267,8 @@ pub enum RestorePlanError {
     #[error("restore plan contains duplicate target canister {0}")]
     DuplicatePlanTarget(String),
 
-    #[error("restore group {0} contains a parent cycle or unresolved dependency")]
-    RestoreOrderCycle(u16),
-
-    #[error(
-        "restore plan places parent {parent_source_canister} in group {parent_restore_group} after child {child_source_canister} in group {child_restore_group}"
-    )]
-    ParentRestoreGroupAfterChild {
-        child_source_canister: String,
-        parent_source_canister: String,
-        child_restore_group: u16,
-        parent_restore_group: u16,
-    },
+    #[error("restore plan contains a parent cycle or unresolved dependency")]
+    RestoreOrderCycle,
 }
 
 // Validate a user-supplied restore mapping before applying it to the manifest.
@@ -389,7 +326,7 @@ fn resolve_members(
 ) -> Result<Vec<RestorePlanMember>, RestorePlanError> {
     let mut plan_members = Vec::with_capacity(manifest.fleet.members.len());
     let mut targets = BTreeSet::new();
-    let mut source_to_target = BTreeMap::new();
+    let mut source_to_target = std::collections::BTreeMap::new();
 
     for member in &manifest.fleet.members {
         let target = resolve_target(member, mapping)?;
@@ -405,10 +342,8 @@ fn resolve_members(
             parent_source_canister: member.parent_canister_id.clone(),
             parent_target_canister: None,
             ordering_dependency: None,
-            phase_order: 0,
-            restore_group: member.restore_group,
+            member_order: 0,
             identity_mode: member.identity_mode.clone(),
-            verification_class: member.verification_class.clone(),
             verification_checks: concrete_member_verification_checks(
                 member,
                 &manifest.verification,
@@ -485,7 +420,7 @@ fn resolve_target(
     Ok(target)
 }
 
-// Summarize identity and mapping decisions before grouping restore phases.
+// Summarize identity and mapping decisions before ordering restore members.
 fn restore_identity_summary(
     members: &[RestorePlanMember],
     mapping_supplied: bool,
@@ -521,7 +456,7 @@ fn restore_identity_summary(
     summary
 }
 
-// Summarize snapshot provenance completeness before grouping restore phases.
+// Summarize snapshot provenance completeness before ordering restore members.
 fn restore_snapshot_summary(members: &[RestorePlanMember]) -> RestoreSnapshotSummary {
     let members_with_module_hash = members
         .iter()
@@ -552,22 +487,13 @@ fn restore_snapshot_summary(members: &[RestorePlanMember]) -> RestoreSnapshotSum
     }
 }
 
-// Summarize whether restore planning has the metadata required for automation.
+// Summarize whether restore planning has the minimum metadata required to execute.
 fn restore_readiness_summary(
     snapshot: &RestoreSnapshotSummary,
     verification: &RestoreVerificationSummary,
 ) -> RestoreReadinessSummary {
     let mut reasons = Vec::new();
 
-    if !snapshot.all_members_have_module_hash {
-        reasons.push("missing-module-hash".to_string());
-    }
-    if !snapshot.all_members_have_wasm_hash {
-        reasons.push("missing-wasm-hash".to_string());
-    }
-    if !snapshot.all_members_have_code_version {
-        reasons.push("missing-code-version".to_string());
-    }
     if !snapshot.all_members_have_checksum {
         reasons.push("missing-snapshot-checksum".to_string());
     }
@@ -612,72 +538,17 @@ fn restore_verification_summary(
 const fn restore_operation_summary(
     member_count: usize,
     verification_summary: &RestoreVerificationSummary,
-    phases: &[RestorePhase],
 ) -> RestoreOperationSummary {
     RestoreOperationSummary {
         planned_snapshot_uploads: member_count,
         planned_snapshot_loads: member_count,
-        planned_code_reinstalls: 0,
         planned_verification_checks: verification_summary.total_checks,
         planned_operations: member_count + member_count + verification_summary.total_checks,
-        planned_phases: phases.len(),
     }
 }
 
-// Reject group assignments that would restore a child before its parent.
-fn validate_restore_group_dependencies(
-    members: &[RestorePlanMember],
-) -> Result<(), RestorePlanError> {
-    let groups_by_source = members
-        .iter()
-        .map(|member| (member.source_canister.as_str(), member.restore_group))
-        .collect::<BTreeMap<_, _>>();
-
-    for member in members {
-        let Some(parent) = &member.parent_source_canister else {
-            continue;
-        };
-        let Some(parent_group) = groups_by_source.get(parent.as_str()) else {
-            continue;
-        };
-
-        if *parent_group > member.restore_group {
-            return Err(RestorePlanError::ParentRestoreGroupAfterChild {
-                child_source_canister: member.source_canister.clone(),
-                parent_source_canister: parent.clone(),
-                child_restore_group: member.restore_group,
-                parent_restore_group: *parent_group,
-            });
-        }
-    }
-
-    Ok(())
-}
-
-// Group members and apply parent-before-child ordering inside each group.
-fn group_and_order_members(
-    members: Vec<RestorePlanMember>,
-) -> Result<Vec<RestorePhase>, RestorePlanError> {
-    let mut groups = BTreeMap::<u16, Vec<RestorePlanMember>>::new();
-    for member in members {
-        groups.entry(member.restore_group).or_default().push(member);
-    }
-
-    groups
-        .into_iter()
-        .map(|(restore_group, members)| {
-            let members = order_group(restore_group, members)?;
-            Ok(RestorePhase {
-                restore_group,
-                members,
-            })
-        })
-        .collect()
-}
-
-// Topologically order one group using manifest parent relationships.
-fn order_group(
-    restore_group: u16,
+// Topologically order members using manifest parent relationships.
+fn order_members(
     members: Vec<RestorePlanMember>,
 ) -> Result<Vec<RestorePlanMember>, RestorePlanError> {
     let mut remaining = members;
@@ -693,12 +564,12 @@ fn order_group(
             .iter()
             .position(|member| parent_satisfied(member, &group_sources, &emitted))
         else {
-            return Err(RestorePlanError::RestoreOrderCycle(restore_group));
+            return Err(RestorePlanError::RestoreOrderCycle);
         };
 
         let mut member = remaining.remove(index);
-        member.phase_order = ordered.len();
-        member.ordering_dependency = ordering_dependency(&member, &group_sources);
+        member.member_order = ordered.len();
+        member.ordering_dependency = ordering_dependency(&member);
         emitted.insert(member.source_canister.clone());
         ordered.push(member);
     }
@@ -707,17 +578,10 @@ fn order_group(
 }
 
 // Describe the topology dependency that controlled a member's restore ordering.
-fn ordering_dependency(
-    member: &RestorePlanMember,
-    group_sources: &BTreeSet<String>,
-) -> Option<RestoreOrderingDependency> {
+fn ordering_dependency(member: &RestorePlanMember) -> Option<RestoreOrderingDependency> {
     let parent_source = member.parent_source_canister.as_ref()?;
     let parent_target = member.parent_target_canister.as_ref()?;
-    let relationship = if group_sources.contains(parent_source) {
-        RestoreOrderingRelationship::ParentInSameGroup
-    } else {
-        RestoreOrderingRelationship::ParentInEarlierGroup
-    };
+    let relationship = RestoreOrderingRelationship::ParentBeforeChild;
 
     Some(RestoreOrderingDependency {
         source_canister: parent_source.clone(),
@@ -727,28 +591,18 @@ fn ordering_dependency(
 }
 
 // Summarize the dependency ordering metadata exposed in the restore plan.
-fn restore_ordering_summary(phases: &[RestorePhase]) -> RestoreOrderingSummary {
+fn restore_ordering_summary(members: &[RestorePlanMember]) -> RestoreOrderingSummary {
     let mut summary = RestoreOrderingSummary {
-        phase_count: phases.len(),
+        ordered_members: members.len(),
         dependency_free_members: 0,
-        in_group_parent_edges: 0,
-        cross_group_parent_edges: 0,
+        parent_edges: 0,
     };
 
-    for member in phases.iter().flat_map(|phase| phase.members.iter()) {
-        match &member.ordering_dependency {
-            Some(dependency)
-                if dependency.relationship == RestoreOrderingRelationship::ParentInSameGroup =>
-            {
-                summary.in_group_parent_edges += 1;
-            }
-            Some(dependency)
-                if dependency.relationship == RestoreOrderingRelationship::ParentInEarlierGroup =>
-            {
-                summary.cross_group_parent_edges += 1;
-            }
-            Some(_) => {}
-            None => summary.dependency_free_members += 1,
+    for member in members {
+        if member.ordering_dependency.is_some() {
+            summary.parent_edges += 1;
+        } else {
+            summary.dependency_free_members += 1;
         }
     }
 
