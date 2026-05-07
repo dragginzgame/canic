@@ -206,7 +206,7 @@ operator style, you may pass either a canister name or a principal:
 canic install root
 canic install uxrrr-q7777-77774-qaaaq-cai
 canic install --root uxrrr-q7777-77774-qaaaq-cai
-canic install --fleet demo --config canisters/demo/canic.toml
+canic install --config canisters/demo/canic.toml
 ```
 
 Config selection is explicit when more than one topology could apply.
@@ -216,6 +216,14 @@ Otherwise it prints the discovered config choices and asks you to pass
 
 ```bash
 canic install --config canisters/demo/canic.toml
+```
+
+Install configs must declare the fleet identity that will be written to
+project-local state:
+
+```toml
+[fleet]
+name = "demo"
 ```
 
 Use `canic fleets` to list installed fleets for the current network, and

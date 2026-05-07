@@ -17,7 +17,7 @@ struct ConfigChoiceRow {
     canisters: String,
 }
 
-const CONFIG_CHOICE_ROLE_PREVIEW_LIMIT: usize = 5;
+const CONFIG_CHOICE_ROLE_PREVIEW_LIMIT: usize = 6;
 
 // Resolve install config selection without silently choosing among demo/test configs.
 pub(super) fn resolve_install_config_path(

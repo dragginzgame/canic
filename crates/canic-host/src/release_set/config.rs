@@ -24,6 +24,13 @@ pub fn configured_install_targets(
     Ok(targets)
 }
 
+// Read the required operator fleet name from an install config.
+pub fn configured_fleet_name(config_path: &Path) -> Result<String, Box<dyn std::error::Error>> {
+    let config_source = fs::read_to_string(config_path)?;
+    configured_fleet_name_from_source(&config_source)
+        .map_err(|err| format!("invalid {}: {err}", config_path.display()).into())
+}
+
 // Enumerate configured role kinds across all subnets for operator-facing tables.
 pub fn configured_role_kinds(
     config_path: &Path,
@@ -57,6 +64,18 @@ pub(super) fn configured_role_kinds_from_source(
     }
 
     Ok(kinds)
+}
+
+// Read the required operator fleet name from raw config source.
+pub(super) fn configured_fleet_name_from_source(
+    config_source: &str,
+) -> Result<String, Box<dyn std::error::Error>> {
+    let config = parse_config_model(config_source).map_err(|err| err.to_string())?;
+    let name = config
+        .fleet
+        .and_then(|fleet| fleet.name)
+        .ok_or_else(|| "missing required [fleet].name in canic.toml".to_string())?;
+    Ok(name)
 }
 
 // Enumerate the configured ordinary roles for the single subnet that owns `root`.

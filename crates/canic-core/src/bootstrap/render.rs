@@ -2,10 +2,11 @@ use crate::{
     cdk::candid::Principal,
     config::schema::{
         AppConfig, AppInitMode, AuthConfig, CanisterAuthConfig, CanisterConfig, CanisterKind,
-        CanisterPool, ConfigModel, DelegatedTokenConfig, DirectoryConfig, DirectoryPool, LogConfig,
-        PoolImport, RandomnessConfig, RandomnessSource, RoleAttestationConfig, ScalePool,
-        ScalePoolPolicy, ScalingConfig, ShardPool, ShardPoolPolicy, ShardingConfig, Standards,
-        StandardsCanisterConfig, SubnetConfig, TopupPolicy, Whitelist,
+        CanisterPool, ConfigModel, DelegatedTokenConfig, DirectoryConfig, DirectoryPool,
+        FleetConfig, LogConfig, PoolImport, RandomnessConfig, RandomnessSource,
+        RoleAttestationConfig, ScalePool, ScalePoolPolicy, ScalingConfig, ShardPool,
+        ShardPoolPolicy, ShardingConfig, Standards, StandardsCanisterConfig, SubnetConfig,
+        TopupPolicy, Whitelist,
     },
     ids::{CanisterRole, SubnetRole},
 };
@@ -21,6 +22,7 @@ pub fn config_model(config: &ConfigModel) -> String {
 
 // Render the top-level configuration model into a portable Rust expression.
 fn render_config_model(config: &ConfigModel) -> TokenStream {
+    let fleet = render_option(config.fleet.as_ref(), render_fleet_config);
     let controllers = render_vec(config.controllers.iter(), render_principal);
     let standards = render_option(config.standards.as_ref(), render_standards);
     let log = render_log_config(&config.log);
@@ -35,6 +37,7 @@ fn render_config_model(config: &ConfigModel) -> TokenStream {
 
     quote! {
         ::canic::__internal::core::bootstrap::compiled::ConfigModel {
+            fleet: #fleet,
             controllers: #controllers,
             standards: #standards,
             log: #log,
@@ -42,6 +45,16 @@ fn render_config_model(config: &ConfigModel) -> TokenStream {
             app: #app,
             app_index: #app_index,
             subnets: #subnets,
+        }
+    }
+}
+
+// Render operator-facing fleet identity metadata.
+fn render_fleet_config(config: &FleetConfig) -> TokenStream {
+    let name = render_option(config.name.as_ref(), |name| render_owned_string(name));
+    quote! {
+        ::canic::__internal::core::bootstrap::compiled::FleetConfig {
+            name: #name,
         }
     }
 }

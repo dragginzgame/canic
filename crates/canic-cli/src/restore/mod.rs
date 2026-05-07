@@ -16,7 +16,6 @@ use io::{
     write_apply_dry_run, write_apply_journal_if_requested, write_plan, write_restore_run,
 };
 
-pub use canic_backup::restore::parse_uploaded_snapshot_id;
 pub use error::RestoreCommandError;
 pub use options::{RestoreApplyOptions, RestorePlanOptions, RestoreRunOptions};
 

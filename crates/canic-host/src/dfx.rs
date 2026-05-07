@@ -259,6 +259,34 @@ pub fn canister_id_missing(stderr: &str) -> bool {
     stderr.contains("Cannot find canister id")
 }
 
+/// Parse a likely snapshot id from `dfx canister snapshot create` output.
+#[must_use]
+pub fn parse_snapshot_id(output: &str) -> Option<String> {
+    output
+        .split(|c: char| c.is_whitespace() || matches!(c, '"' | '\'' | ':' | ','))
+        .filter(|part| !part.is_empty())
+        .rev()
+        .find(|part| {
+            part.chars()
+                .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
+        })
+        .map(str::to_string)
+}
+
+/// Parse `dfx canister snapshot list` output into snapshot ids.
+#[must_use]
+pub fn parse_snapshot_list_ids(output: &str) -> Vec<String> {
+    output
+        .lines()
+        .filter_map(|line| {
+            line.split_once(':')
+                .map(|(snapshot_id, _)| snapshot_id.trim())
+        })
+        .filter(|snapshot_id| !snapshot_id.is_empty())
+        .map(str::to_string)
+        .collect()
+}
+
 // Prefer stderr, but keep stdout diagnostics for dfx commands that report there.
 fn command_stderr(output: &std::process::Output) -> String {
     let stderr = String::from_utf8_lossy(&output.stderr);
@@ -266,5 +294,35 @@ fn command_stderr(output: &std::process::Output) -> String {
         String::from_utf8_lossy(&output.stdout).to_string()
     } else {
         stderr.to_string()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Ensure snapshot ids can be extracted from common dfx create output.
+    #[test]
+    fn parses_snapshot_id_from_output() {
+        let snapshot_id = parse_snapshot_id("Created snapshot: snap_abc-123\n");
+
+        assert_eq!(snapshot_id.as_deref(), Some("snap_abc-123"));
+    }
+
+    // Ensure snapshot list output is reduced to ordered snapshot ids.
+    #[test]
+    fn parses_snapshot_ids_from_list_output() {
+        let snapshot_ids = parse_snapshot_list_ids(
+            "0000000000000000ffffffffff9000050101: size 10\n\
+             0000000000000000ffffffffff9000050102: size 12\n",
+        );
+
+        assert_eq!(
+            snapshot_ids,
+            vec![
+                "0000000000000000ffffffffff9000050101",
+                "0000000000000000ffffffffff9000050102"
+            ]
+        );
     }
 }

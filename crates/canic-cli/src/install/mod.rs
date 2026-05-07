@@ -6,7 +6,7 @@ use crate::{
     version_text,
 };
 use candid::Principal;
-use canic_host::install_root::{DEFAULT_FLEET_NAME, InstallRootOptions, install_root};
+use canic_host::install_root::{InstallRootOptions, install_root};
 use clap::{Arg, Command as ClapCommand};
 use std::{env, ffi::OsString};
 use thiserror::Error as ThisError;
@@ -39,7 +39,6 @@ pub enum InstallCommandError {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct InstallOptions {
-    pub fleet_name: String,
     pub root_target: String,
     pub root_build_target: String,
     pub network: String,
@@ -66,7 +65,6 @@ impl InstallOptions {
             .unwrap_or_else(default_ready_timeout_seconds);
 
         Ok(Self {
-            fleet_name: string_option(&matches, "fleet").unwrap_or_else(default_fleet_name),
             root_target,
             root_build_target,
             network: string_option(&matches, "network").unwrap_or_else(default_network),
@@ -79,7 +77,6 @@ impl InstallOptions {
     #[must_use]
     pub fn into_install_root_options(self) -> InstallRootOptions {
         InstallRootOptions {
-            fleet_name: self.fleet_name,
             root_canister: self.root_target,
             root_build_target: self.root_build_target,
             network: self.network,
@@ -95,7 +92,6 @@ fn install_command() -> ClapCommand {
     ClapCommand::new("install")
         .disable_help_flag(true)
         .arg(Arg::new("root-target").num_args(0..))
-        .arg(value_arg("fleet").long("fleet"))
         .arg(value_arg("root").long("root"))
         .arg(value_arg("root-build-target").long("root-build-target"))
         .arg(value_arg("config").long("config"))
@@ -142,11 +138,6 @@ fn parse_ready_timeout(value: &str) -> Result<u64, InstallCommandError> {
         .map_err(|_| InstallCommandError::InvalidReadyTimeout(value.to_string()))
 }
 
-// Resolve the install fleet name from environment defaults.
-fn default_fleet_name() -> String {
-    env::var("CANIC_FLEET").unwrap_or_else(|_| DEFAULT_FLEET_NAME.to_string())
-}
-
 // Resolve the DFX network from environment defaults.
 fn default_network() -> String {
     env::var("DFX_NETWORK").unwrap_or_else(|_| "local".to_string())
@@ -171,7 +162,7 @@ fn default_root_build_target(root_target: &str) -> String {
 
 // Return install command usage text.
 const fn usage() -> &'static str {
-    "usage: canic install [root-target] [--fleet <name>] [--root <name-or-principal>] [--root-build-target <dfx-canister-name>] [--config <canic.toml>] [--network <name>] [--ready-timeout-seconds <seconds>]"
+    "usage: canic install [root-target] [--root <name-or-principal>] [--root-build-target <dfx-canister-name>] [--config <canic.toml>] [--network <name>] [--ready-timeout-seconds <seconds>]"
 }
 
 #[cfg(test)]
@@ -187,7 +178,6 @@ mod tests {
 
         assert_eq!(options.root_target, "root");
         assert_eq!(options.root_build_target, "root");
-        assert_eq!(options.fleet_name, DEFAULT_FLEET_NAME);
         assert_eq!(options.network, "local");
         assert_eq!(options.ready_timeout_seconds, DEFAULT_READY_TIMEOUT_SECONDS);
         assert_eq!(options.config_path, None);
@@ -238,8 +228,6 @@ mod tests {
         let options = InstallOptions::parse([
             OsString::from("--config"),
             OsString::from("canisters/demo/canic.toml"),
-            OsString::from("--fleet"),
-            OsString::from("demo"),
         ])
         .expect("parse config path");
 
@@ -247,7 +235,15 @@ mod tests {
             options.config_path,
             Some("canisters/demo/canic.toml".to_string())
         );
-        assert_eq!(options.fleet_name, "demo");
+    }
+
+    // Ensure install fleet identity is not supplied through CLI flags.
+    #[test]
+    fn install_rejects_fleet_flag() {
+        let err = InstallOptions::parse([OsString::from("--fleet"), OsString::from("demo")])
+            .expect_err("install fleet flag should fail");
+
+        assert!(matches!(err, InstallCommandError::Usage(_)));
     }
 
     // Ensure custom principal installs can override the build target explicitly.

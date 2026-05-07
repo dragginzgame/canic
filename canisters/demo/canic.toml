@@ -8,6 +8,9 @@
 controllers = []
 app_index = ["user_hub", "scale_hub"]
 
+[fleet]
+name = "demo"
+
 [app]
 init_mode = "enabled"
 [app.whitelist]

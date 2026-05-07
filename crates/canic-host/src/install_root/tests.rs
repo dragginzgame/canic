@@ -398,6 +398,51 @@ kind = "singleton"
 }
 
 #[test]
+fn config_selection_preview_lists_six_canisters_before_ellipsis() {
+    let root = unique_temp_dir("canic-install-config-preview-limit");
+    let config = root.join("canisters/demo/canic.toml");
+    fs::create_dir_all(config.parent().expect("config parent")).expect("create config parent");
+    fs::write(
+        &config,
+        r#"
+[subnets.prime.canisters.root]
+kind = "root"
+
+[subnets.prime.canisters.app]
+kind = "singleton"
+
+[subnets.prime.canisters.minimal]
+kind = "singleton"
+
+[subnets.prime.canisters.scale]
+kind = "singleton"
+
+[subnets.prime.canisters.scale_hub]
+kind = "singleton"
+
+[subnets.prime.canisters.user_hub]
+kind = "singleton"
+
+[subnets.prime.canisters.user_shard]
+kind = "singleton"
+
+[subnets.prime.canisters.worker]
+kind = "singleton"
+"#,
+    )
+    .expect("write config");
+
+    let message = config_selection_error(
+        &root,
+        &root.join("canisters/canic.toml"),
+        std::slice::from_ref(&config),
+    );
+
+    assert!(message.contains("7 (app, minimal, scale, scale_hub, user_hub, user_shard, ...)"));
+    fs::remove_dir_all(root).expect("clean temp dir");
+}
+
+#[test]
 fn discovered_install_config_choices_are_path_sorted() {
     let root = unique_temp_dir("canic-install-config-sorted");
     let alpha = root.join("alpha/canic.toml");
@@ -474,6 +519,61 @@ fn install_state_round_trips_from_project_state_dir() {
     assert_eq!(fleets.len(), 1);
     assert_eq!(fleets[0].name, "demo");
     assert!(fleets[0].current);
+
+    fs::remove_dir_all(root).expect("clean temp dir");
+}
+
+#[test]
+fn legacy_install_state_without_fleet_name_is_rejected() {
+    let root = unique_temp_dir("canic-install-legacy-state-missing-fleet-name");
+    let config = root.join("canisters/demo/canic.toml");
+    fs::create_dir_all(config.parent().expect("config parent")).expect("create config parent");
+    fs::create_dir_all(root.join(".canic/local")).expect("create state dir");
+    fs::write(
+        &config,
+        r#"
+controllers = []
+app_index = []
+
+[fleet]
+name = "demo"
+
+[app]
+init_mode = "enabled"
+[app.whitelist]
+
+[subnets.prime.canisters.root]
+kind = "root"
+"#,
+    )
+    .expect("write config");
+    fs::write(
+        root.join(".canic/local/install-state.json"),
+        format!(
+            r#"{{
+  "schema_version": 1,
+  "installed_at_unix_secs": 42,
+  "network": "local",
+  "root_target": "root",
+  "root_canister_id": "uxrrr-q7777-77774-qaaaq-cai",
+  "root_build_target": "root",
+  "workspace_root": "{}",
+  "dfx_root": "{}",
+  "config_path": "{}",
+  "release_set_manifest_path": "{}"
+}}"#,
+            root.display(),
+            root.display(),
+            config.display(),
+            root.join(".dfx/local/canisters/root/root.release-set.json")
+                .display()
+        ),
+    )
+    .expect("write legacy state");
+
+    let err = read_install_state(&root, "local").expect_err("legacy state should fail");
+
+    assert!(err.to_string().contains("missing required fleet name"));
 
     fs::remove_dir_all(root).expect("clean temp dir");
 }

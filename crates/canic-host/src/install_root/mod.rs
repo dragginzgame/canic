@@ -1,7 +1,8 @@
 use crate::dfx;
 use crate::release_set::{
-    configured_install_targets, dfx_call, dfx_root, emit_root_release_set_manifest_with_config,
-    load_root_release_set_manifest, resume_root_bootstrap, stage_root_release_set, workspace_root,
+    configured_fleet_name, configured_install_targets, dfx_call, dfx_root,
+    emit_root_release_set_manifest_with_config, load_root_release_set_manifest,
+    resume_root_bootstrap, stage_root_release_set, workspace_root,
 };
 use canic_core::{cdk::types::Principal, protocol};
 use config_selection::resolve_install_config_path;
@@ -19,8 +20,8 @@ mod config_selection;
 mod state;
 
 pub use state::{
-    DEFAULT_FLEET_NAME, FleetSummary, InstallState, list_current_fleets,
-    read_current_install_state, read_current_or_fleet_install_state, select_current_fleet,
+    FleetSummary, InstallState, list_current_fleets, read_current_install_state,
+    read_current_or_fleet_install_state, select_current_fleet,
 };
 use state::{INSTALL_STATE_SCHEMA_VERSION, validate_fleet_name, write_install_state};
 
@@ -41,7 +42,6 @@ use state::{
 
 #[derive(Clone, Debug)]
 pub struct InstallRootOptions {
-    pub fleet_name: String,
     pub root_canister: String,
     pub root_build_target: String,
     pub network: String,
@@ -82,7 +82,6 @@ const LOCAL_DFX_READY_TIMEOUT_SECONDS: u64 = 30;
 
 // Execute the local thin-root install flow against an already running replica.
 pub fn install_root(options: InstallRootOptions) -> Result<(), Box<dyn std::error::Error>> {
-    validate_fleet_name(&options.fleet_name)?;
     let workspace_root = workspace_root()?;
     let dfx_root = dfx_root()?;
     let config_path = resolve_install_config_path(
@@ -90,12 +89,14 @@ pub fn install_root(options: InstallRootOptions) -> Result<(), Box<dyn std::erro
         options.config_path.as_deref(),
         options.interactive_config_selection,
     )?;
+    let fleet_name = configured_fleet_name(&config_path)?;
+    validate_fleet_name(&fleet_name)?;
     let total_started_at = Instant::now();
     let mut timings = InstallTimingSummary::default();
 
     println!(
         "Installing fleet {} against DFX_NETWORK={}",
-        options.fleet_name, options.network
+        fleet_name, options.network
     );
     ensure_dfx_running(&dfx_root, &options.network)?;
     let mut create = Command::new("dfx");
@@ -160,6 +161,7 @@ pub fn install_root(options: InstallRootOptions) -> Result<(), Box<dyn std::erro
         &dfx_root,
         &config_path,
         &manifest_path,
+        &fleet_name,
     )?;
     let state_path = write_install_state(&dfx_root, &options.network, &state)?;
     print_install_result_summary(&options.network, &state.fleet, &state_path);
@@ -173,10 +175,11 @@ fn build_install_state(
     dfx_root: &Path,
     config_path: &Path,
     release_set_manifest_path: &Path,
+    fleet_name: &str,
 ) -> Result<InstallState, Box<dyn std::error::Error>> {
     Ok(InstallState {
         schema_version: INSTALL_STATE_SCHEMA_VERSION,
-        fleet: options.fleet_name.clone(),
+        fleet: fleet_name.to_string(),
         installed_at_unix_secs: current_unix_secs()?,
         network: options.network.clone(),
         root_target: options.root_canister.clone(),

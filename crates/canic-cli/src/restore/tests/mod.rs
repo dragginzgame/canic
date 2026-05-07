@@ -8,7 +8,7 @@ use canic_backup::{
         VerificationCheck, VerificationPlan,
     },
     persistence::BackupLayout,
-    restore::{RestoreApplyJournal, RestoreApplyOperationState},
+    restore::{RestoreApplyJournal, RestoreApplyOperationState, parse_uploaded_snapshot_id},
 };
 use serde_json::json;
 use std::{

@@ -1,15 +1,14 @@
+mod args;
 pub mod backup;
 pub mod build;
 pub mod fleets;
 pub mod install;
 pub mod list;
 pub mod manifest;
+mod output;
 pub mod release_set;
 pub mod restore;
 pub mod snapshot;
-
-mod args;
-mod output;
 
 use crate::args::any_arg_is_version;
 use clap::{Arg, ArgAction, Command};
@@ -17,6 +16,93 @@ use std::ffi::OsString;
 use thiserror::Error as ThisError;
 
 const VERSION_TEXT: &str = concat!("canic ", env!("CARGO_PKG_VERSION"));
+const TOP_LEVEL_HELP_TEMPLATE: &str = "{about-with-newline}\n{usage-heading} {usage}\n\n{before-help}Options:\n{options}{after-help}\n";
+
+///
+/// CommandScope
+///
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum CommandScope {
+    MultiFleet,
+    SingleFleet,
+    SingleCanister,
+}
+
+impl CommandScope {
+    // Return the heading used in grouped top-level help.
+    const fn heading(self) -> &'static str {
+        match self {
+            Self::MultiFleet => "Multi-fleet commands",
+            Self::SingleFleet => "Single-fleet commands",
+            Self::SingleCanister => "Single-canister commands",
+        }
+    }
+}
+
+///
+/// CommandSpec
+///
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct CommandSpec {
+    name: &'static str,
+    about: &'static str,
+    scope: CommandScope,
+}
+
+const COMMAND_SPECS: &[CommandSpec] = &[
+    CommandSpec {
+        name: "fleets",
+        about: "List installed Canic fleets",
+        scope: CommandScope::MultiFleet,
+    },
+    CommandSpec {
+        name: "use",
+        about: "Select the current Canic fleet",
+        scope: CommandScope::MultiFleet,
+    },
+    CommandSpec {
+        name: "install",
+        about: "Install and bootstrap a Canic fleet",
+        scope: CommandScope::SingleFleet,
+    },
+    CommandSpec {
+        name: "list",
+        about: "Show registry canisters as a tree table",
+        scope: CommandScope::SingleFleet,
+    },
+    CommandSpec {
+        name: "backup",
+        about: "Verify backup directories and journal status",
+        scope: CommandScope::SingleFleet,
+    },
+    CommandSpec {
+        name: "manifest",
+        about: "Validate fleet backup manifests",
+        scope: CommandScope::SingleFleet,
+    },
+    CommandSpec {
+        name: "release-set",
+        about: "Inspect, emit, or stage root release-set artifacts",
+        scope: CommandScope::SingleFleet,
+    },
+    CommandSpec {
+        name: "restore",
+        about: "Plan or run snapshot restores",
+        scope: CommandScope::SingleFleet,
+    },
+    CommandSpec {
+        name: "build",
+        about: "Build one Canic canister artifact",
+        scope: CommandScope::SingleCanister,
+    },
+    CommandSpec {
+        name: "snapshot",
+        about: "Capture and download canister snapshots",
+        scope: CommandScope::SingleCanister,
+    },
+];
 
 ///
 /// CliError
@@ -98,7 +184,7 @@ where
 /// Build the top-level command metadata.
 #[must_use]
 pub fn top_level_command() -> Command {
-    Command::new("canic")
+    let command = Command::new("canic")
         .about("Operator CLI for Canic install, backup, and restore workflows")
         .disable_version_flag(true)
         .arg(
@@ -108,19 +194,14 @@ pub fn top_level_command() -> Command {
                 .action(ArgAction::SetTrue)
                 .help("Print version"),
         )
-        .subcommand(Command::new("install").about("Install and bootstrap a Canic fleet"))
-        .subcommand(Command::new("build").about("Build one Canic canister artifact"))
-        .subcommand(Command::new("fleets").about("List installed Canic fleets"))
-        .subcommand(Command::new("use").about("Select the current Canic fleet"))
-        .subcommand(Command::new("list").about("Show registry canisters as a tree table"))
-        .subcommand(Command::new("snapshot").about("Capture and download canister snapshots"))
-        .subcommand(Command::new("backup").about("Verify backup directories and journal status"))
-        .subcommand(Command::new("manifest").about("Validate fleet backup manifests"))
-        .subcommand(
-            Command::new("release-set").about("Inspect, emit, or stage root release-set artifacts"),
-        )
-        .subcommand(Command::new("restore").about("Plan or run snapshot restores"))
-        .after_help("Run `canic <command> help` for command-specific help.")
+        .subcommand_help_heading("Commands")
+        .help_template(TOP_LEVEL_HELP_TEMPLATE)
+        .before_help(grouped_command_section(COMMAND_SPECS))
+        .after_help("Run `canic <command> help` for command-specific help.");
+
+    COMMAND_SPECS.iter().fold(command, |command, spec| {
+        command.subcommand(Command::new(spec.name).about(spec.about))
+    })
 }
 
 /// Return the CLI version banner.
@@ -135,6 +216,26 @@ fn usage() -> String {
     command.render_help().to_string()
 }
 
+// Render grouped command rows from the same metadata used to build Clap subcommands.
+fn grouped_command_section(specs: &[CommandSpec]) -> String {
+    let mut lines = Vec::new();
+    let scopes = [
+        CommandScope::MultiFleet,
+        CommandScope::SingleFleet,
+        CommandScope::SingleCanister,
+    ];
+    for (index, scope) in scopes.into_iter().enumerate() {
+        lines.push(format!("{}:", scope.heading()));
+        for spec in specs.iter().filter(|spec| spec.scope == scope) {
+            lines.push(format!("  {:<11} {}", spec.name, spec.about));
+        }
+        if index + 1 < scopes.len() {
+            lines.push(String::new());
+        }
+    }
+    lines.join("\n")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -145,6 +246,12 @@ mod tests {
         let text = usage();
 
         assert!(text.contains("Usage: canic"));
+        assert!(text.contains("Multi-fleet commands"));
+        assert!(text.contains("Single-fleet commands"));
+        assert!(text.contains("Single-canister commands"));
+        assert!(!text.contains("\nCommands:\n"));
+        assert!(text.find("Multi-fleet commands") < text.find("Single-fleet commands"));
+        assert!(text.find("Single-fleet commands") < text.find("Single-canister commands"));
         assert!(text.contains("list"));
         assert!(text.contains("build"));
         assert!(text.contains("fleets"));

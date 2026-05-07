@@ -5,6 +5,20 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.32.x] - 2026-05-07 - Fleet Identity
+
+- `0.32.0` makes fleet identity explicit in `canic.toml`, removes install-time fleet defaults, and makes `canic list` plus top-level help clearer for multi-fleet operator workflows.
+
+```toml
+[fleet]
+name = "demo"
+```
+
+See detailed breakdown:
+[docs/changelog/0.32.md](docs/changelog/0.32.md)
+
+---
+
 ## [0.31.x] - 2026-05-06 - Snapshot Cleanup
 
 - `0.31.2` finishes CLI parser and host-tool cleanup by moving command parsing onto shared Clap helpers, adding `canic build` and `canic release-set`, and renaming `canic-installer` to `canic-host`.

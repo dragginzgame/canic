@@ -121,6 +121,10 @@ pub trait Validate {
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct ConfigModel {
+    /// Operator-facing fleet identity for host install state.
+    #[serde(default)]
+    pub fleet: Option<FleetConfig>,
+
     /// Controllers for the canister.
     /// Stored as a Vec because they are appended directly to controller args.
     #[serde(default)]
@@ -215,6 +219,9 @@ impl Validate for ConfigModel {
         self.log.validate()?;
         self.auth.validate()?;
         self.app.validate()?;
+        if let Some(fleet) = &self.fleet {
+            fleet.validate()?;
+        }
 
         // PRIME subnet must exist
         let prime = SubnetRole::PRIME;
@@ -274,6 +281,37 @@ impl Validate for ConfigModel {
         }
 
         Ok(())
+    }
+}
+
+///
+/// FleetConfig
+///
+
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct FleetConfig {
+    #[serde(default)]
+    pub name: Option<String>,
+}
+
+#[cfg(any(not(target_arch = "wasm32"), test))]
+impl Validate for FleetConfig {
+    fn validate(&self) -> Result<(), ConfigSchemaError> {
+        let Some(name) = self.name.as_deref() else {
+            return Ok(());
+        };
+        let valid = !name.is_empty()
+            && name
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'));
+        if valid {
+            Ok(())
+        } else {
+            Err(ConfigSchemaError::ValidationError(format!(
+                "invalid fleet name {name:?}; use letters, numbers, '-' or '_'"
+            )))
+        }
     }
 }
 
@@ -556,6 +594,26 @@ mod tests {
 
         cfg.validate()
             .expect_err("expected missing root canister to fail validation");
+    }
+
+    #[test]
+    fn fleet_name_is_accepted_when_configured() {
+        let mut cfg = ConfigModel::test_default();
+        cfg.fleet = Some(FleetConfig {
+            name: Some("demo".to_string()),
+        });
+
+        cfg.validate().expect("fleet name should be valid");
+    }
+
+    #[test]
+    fn fleet_name_must_be_filesystem_safe() {
+        let mut cfg = ConfigModel::test_default();
+        cfg.fleet = Some(FleetConfig {
+            name: Some("demo fleet".to_string()),
+        });
+
+        cfg.validate().expect_err("fleet name should fail");
     }
 
     #[test]

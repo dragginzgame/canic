@@ -7,7 +7,10 @@ mod manifest;
 mod paths;
 mod stage;
 
-pub use config::{configured_install_targets, configured_release_roles, configured_role_kinds};
+pub use config::{
+    configured_fleet_name, configured_install_targets, configured_release_roles,
+    configured_role_kinds,
+};
 pub use manifest::{
     ReleaseSetEntry, RootReleaseSetManifest, emit_root_release_set_manifest,
     emit_root_release_set_manifest_if_ready, emit_root_release_set_manifest_with_config,
@@ -26,7 +29,10 @@ pub use stage::{resume_root_bootstrap, stage_root_release_set};
 use stage::read_release_artifact;
 
 #[cfg(test)]
-use config::{configured_release_roles_from_source, configured_role_kinds_from_source};
+use config::{
+    configured_fleet_name_from_source, configured_release_roles_from_source,
+    configured_role_kinds_from_source,
+};
 
 pub(super) const CANISTERS_ROOT_RELATIVE: &str = "canisters";
 pub(super) const ROOT_CONFIG_FILE: &str = "canic.toml";
@@ -48,9 +54,9 @@ pub(super) fn root_time_secs(root_canister: &str) -> Result<u64, Box<dyn std::er
 #[cfg(test)]
 mod tests {
     use super::{
-        canister_manifest_path, canisters_root, config_path, configured_install_targets,
-        configured_release_roles_from_source, configured_role_kinds_from_source,
-        read_release_artifact, root_manifest_path,
+        canister_manifest_path, canisters_root, config_path, configured_fleet_name_from_source,
+        configured_install_targets, configured_release_roles_from_source,
+        configured_role_kinds_from_source, read_release_artifact, root_manifest_path,
     };
     use flate2::{Compression, write::GzEncoder};
     use std::{
@@ -65,6 +71,9 @@ mod tests {
     const REAL_CONFIG: &str = r#"
 controllers = []
 app_index = ["user_hub", "scale_hub"]
+
+[fleet]
+name = "demo"
 
 [app]
 init_mode = "enabled"
@@ -182,6 +191,37 @@ kind = "singleton"
         assert_eq!(
             kinds.get("scale_hub").map(String::as_str),
             Some("singleton")
+        );
+    }
+
+    #[test]
+    fn configured_fleet_name_reads_required_config_identity() {
+        let name = configured_fleet_name_from_source(REAL_CONFIG).expect("fleet name");
+
+        assert_eq!(name, "demo");
+    }
+
+    #[test]
+    fn configured_fleet_name_rejects_missing_config_identity() {
+        let err = configured_fleet_name_from_source(
+            r#"
+controllers = []
+app_index = []
+
+[app]
+init_mode = "enabled"
+[app.whitelist]
+
+[subnets.prime.canisters.root]
+kind = "root"
+"#,
+        )
+        .unwrap_err();
+
+        assert!(
+            err.to_string()
+                .contains("missing required [fleet].name in canic.toml"),
+            "unexpected error: {err}"
         );
     }
 

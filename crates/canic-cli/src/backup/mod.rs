@@ -98,9 +98,7 @@ pub fn verify_backup(
 }
 
 // Ensure a journal status report has no remaining resume work.
-pub(super) fn ensure_complete_status(
-    report: &JournalResumeReport,
-) -> Result<(), BackupCommandError> {
+fn ensure_complete_status(report: &JournalResumeReport) -> Result<(), BackupCommandError> {
     if report.is_complete {
         return Ok(());
     }

@@ -9,7 +9,7 @@ use canic_backup::{
     },
     timestamp::current_timestamp_marker,
 };
-use canic_host::dfx::{Dfx, DfxCommandError};
+use canic_host::dfx::{Dfx, DfxCommandError, parse_snapshot_id, parse_snapshot_list_ids};
 use clap::Command as ClapCommand;
 use std::{
     collections::BTreeSet,
@@ -361,32 +361,6 @@ fn start_canister_command_display(options: &SnapshotDownloadOptions, canister_id
     dfx(options).start_canister_display(canister_id)
 }
 
-// Parse a likely snapshot id from dfx output.
-fn parse_snapshot_id(output: &str) -> Option<String> {
-    output
-        .split(|c: char| c.is_whitespace() || matches!(c, '"' | '\'' | ':' | ','))
-        .filter(|part| !part.is_empty())
-        .rev()
-        .find(|part| {
-            part.chars()
-                .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
-        })
-        .map(str::to_string)
-}
-
-// Parse dfx snapshot list output into snapshot ids.
-fn parse_snapshot_list_ids(output: &str) -> Vec<String> {
-    output
-        .lines()
-        .filter_map(|line| {
-            line.split_once(':')
-                .map(|(snapshot_id, _)| snapshot_id.trim())
-        })
-        .filter(|snapshot_id| !snapshot_id.is_empty())
-        .map(str::to_string)
-        .collect()
-}
-
 // Build a stable backup id for this command's output directory.
 fn backup_id(options: &SnapshotDownloadOptions) -> String {
     options
@@ -406,24 +380,6 @@ mod tests {
     use super::*;
 
     const ROOT: &str = "aaaaa-aa";
-
-    // Ensure snapshot ids can be extracted from common command output.
-    #[test]
-    fn parses_snapshot_id_from_output() {
-        let snapshot_id = parse_snapshot_id("Created snapshot: snap_abc-123\n");
-
-        assert_eq!(snapshot_id.as_deref(), Some("snap_abc-123"));
-    }
-
-    // Ensure dfx snapshot list output can be used when create is quiet.
-    #[test]
-    fn parses_snapshot_ids_from_list_output() {
-        let snapshot_ids = parse_snapshot_list_ids(
-            "0000000000000000ffffffffff9000050101: 213.76 MiB, taken at 2026-05-03 12:20:53 UTC\n",
-        );
-
-        assert_eq!(snapshot_ids, vec!["0000000000000000ffffffffff9000050101"]);
-    }
 
     // Ensure option parsing covers the intended dry-run command.
     #[test]

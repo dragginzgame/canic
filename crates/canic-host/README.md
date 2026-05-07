@@ -30,7 +30,7 @@ for standard Canic root/bootstrap/store flows. For normal operator use, prefer
 It is also separate from:
 
 - `canic-backup`, which owns backup/restore manifests, journals, topology
-  snapshots, preflight checks, and restore planning.
+  snapshots, backup layout validation, and restore planning.
 - `canic-core` and `canic-control-plane`, which run inside canisters or provide
   canister-runtime support. `canic-host` runs on the operator machine and may
   call Cargo, `dfx`, and the local filesystem.

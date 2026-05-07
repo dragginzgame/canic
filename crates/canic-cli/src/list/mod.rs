@@ -12,7 +12,6 @@ use canic_host::{
     install_root::{InstallState, read_current_or_fleet_install_state},
     release_set::{config_path as default_config_path, configured_role_kinds},
     replica_query,
-    table::WhitespaceTable,
 };
 use clap::Command as ClapCommand;
 use std::{
@@ -35,6 +34,7 @@ const ROLE_HEADER: &str = "ROLE";
 const KIND_HEADER: &str = "KIND";
 const CANISTER_HEADER: &str = "CANISTER_ID";
 const READY_HEADER: &str = "READY";
+const LIST_COLUMN_GAP: &str = "   ";
 const TREE_BRANCH: &str = "├─ ";
 const TREE_LAST: &str = "└─ ";
 const TREE_PIPE: &str = "│  ";
@@ -175,9 +175,16 @@ where
     let anchor = resolve_tree_anchor(&options)?;
     let role_kinds = resolve_role_kinds(&options);
     let readiness = list_ready_statuses(&options, &registry, anchor.as_deref())?;
+    let title = list_title(&options);
     println!(
         "{}",
-        render_registry_tree(&registry, anchor.as_deref(), &role_kinds, &readiness)?
+        render_list_output(
+            &title,
+            &registry,
+            anchor.as_deref(),
+            &role_kinds,
+            &readiness
+        )?
     );
     if let Some(hint) = standalone_next_step_hint(&options, &registry) {
         eprintln!("Hint: {hint}");
@@ -210,6 +217,39 @@ pub fn render_registry_tree(
 ) -> Result<String, ListCommandError> {
     let rows = visible_rows(registry, canister)?;
     Ok(render_registry_table(&rows, role_kinds, readiness))
+}
+
+/// Render a named list view with a fleet/source title above the registry table.
+pub fn render_list_output(
+    title: &ListTitle,
+    registry: &[RegistryEntry],
+    canister: Option<&str>,
+    role_kinds: &BTreeMap<String, String>,
+    readiness: &BTreeMap<String, ReadyStatus>,
+) -> Result<String, ListCommandError> {
+    Ok(format!(
+        "{}\n\n{}",
+        title.render(),
+        render_registry_tree(registry, canister, role_kinds, readiness)?
+    ))
+}
+
+// Return the operator-facing title for the selected list source.
+fn list_title(options: &ListOptions) -> ListTitle {
+    let fleet = match options.source {
+        ListSource::Standalone => "standalone".to_string(),
+        ListSource::Auto | ListSource::RootRegistry => read_selected_install_state(options)
+            .ok()
+            .flatten()
+            .map(|state| state.fleet)
+            .or_else(|| options.fleet.clone())
+            .unwrap_or_else(|| "root-registry".to_string()),
+    };
+
+    ListTitle {
+        fleet,
+        network: state_network(options),
+    }
 }
 
 // Resolve role kind labels from the selected project config when it is available.
@@ -580,26 +620,109 @@ struct RegistryRow<'a> {
     tree_prefix: String,
 }
 
+///
+/// ListTitle
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ListTitle {
+    pub fleet: String,
+    pub network: String,
+}
+
+impl ListTitle {
+    /// Render the compact title block shown above `canic list` tables.
+    #[must_use]
+    pub fn render(&self) -> String {
+        format!("Fleet: {}\nNetwork: {}", self.fleet, self.network)
+    }
+}
+
 // Render registry rows as stable whitespace-aligned columns.
 fn render_registry_table(
     rows: &[RegistryRow<'_>],
     role_kinds: &BTreeMap<String, String>,
     readiness: &BTreeMap<String, ReadyStatus>,
 ) -> String {
-    let mut table = WhitespaceTable::new([CANISTER_HEADER, ROLE_HEADER, KIND_HEADER, READY_HEADER]);
+    let table_rows = registry_table_rows(rows, role_kinds, readiness);
+    let widths = registry_table_widths(&table_rows);
+    let header = render_registry_table_row(
+        &[CANISTER_HEADER, ROLE_HEADER, KIND_HEADER, READY_HEADER],
+        &widths,
+    );
+    let separator = render_registry_separator(&widths);
+    let mut lines = Vec::with_capacity(table_rows.len() + 2);
+    lines.push(header);
+    lines.push(separator);
+    lines.extend(
+        table_rows
+            .iter()
+            .map(|row| render_registry_table_row(row, &widths)),
+    );
+    lines.join("\n")
+}
+
+// Collect rendered cell values before width calculation.
+fn registry_table_rows(
+    rows: &[RegistryRow<'_>],
+    role_kinds: &BTreeMap<String, String>,
+    readiness: &BTreeMap<String, ReadyStatus>,
+) -> Vec<[String; 4]> {
+    let mut table_rows = Vec::with_capacity(rows.len());
     for row in rows {
         let ready = readiness
             .get(&row.entry.pid)
             .map_or("unknown", |status| status.label());
-        table.push_row([
+        table_rows.push([
             canister_label(row),
             role_label(row),
             kind_label(row, role_kinds),
             ready.to_string(),
         ]);
     }
+    table_rows
+}
 
-    table.render()
+// Compute display widths for the list table, including headers.
+fn registry_table_widths(rows: &[[String; 4]]) -> [usize; 4] {
+    let mut widths = [
+        CANISTER_HEADER.chars().count(),
+        ROLE_HEADER.chars().count(),
+        KIND_HEADER.chars().count(),
+        READY_HEADER.chars().count(),
+    ];
+
+    for row in rows {
+        for (index, cell) in row.iter().enumerate() {
+            widths[index] = widths[index].max(cell.chars().count());
+        }
+    }
+
+    widths
+}
+
+// Render one padded list table row with the wider list-specific column gap.
+fn render_registry_table_row(row: &[impl AsRef<str>], widths: &[usize; 4]) -> String {
+    widths
+        .iter()
+        .enumerate()
+        .map(|(index, width)| {
+            let value = row.get(index).map_or("", AsRef::as_ref);
+            format!("{value:<width$}")
+        })
+        .collect::<Vec<_>>()
+        .join(LIST_COLUMN_GAP)
+        .trim_end()
+        .to_string()
+}
+
+// Render the line under the table headers.
+fn render_registry_separator(widths: &[usize; 4]) -> String {
+    widths
+        .iter()
+        .map(|width| "-".repeat(*width))
+        .collect::<Vec<_>>()
+        .join(LIST_COLUMN_GAP)
 }
 
 // Format one canister principal label with its box-drawing tree branch.
@@ -809,32 +932,31 @@ mod tests {
         let readiness = readiness_map();
         let tree =
             render_registry_tree(&registry, None, &role_kinds, &readiness).expect("render tree");
+        let widths = [33, 7, 9, 5];
 
         assert_eq!(
             tree,
-            format!(
-                "{:<33}  {:<7}  {:<9}  {}\n{:<33}  {:<7}  {:<9}  {}\n{:<33}  {:<7}  {:<9}  {}\n{:<33}  {:<7}  {:<9}  {}\n{:<33}  {:<7}  {:<9}  {}",
-                "CANISTER_ID",
-                "ROLE",
-                "KIND",
-                "READY",
-                ROOT,
-                "root",
-                "root",
-                "yes",
-                format!("├─ {APP}"),
-                "app",
-                "singleton",
-                "no",
-                format!("│  └─ {WORKER}"),
-                "worker",
-                "replica",
-                "error",
-                format!("└─ {MINIMAL}"),
-                "minimal",
-                "singleton",
-                "yes"
-            )
+            [
+                render_registry_table_row(
+                    &[CANISTER_HEADER, ROLE_HEADER, KIND_HEADER, READY_HEADER],
+                    &widths
+                ),
+                render_registry_separator(&widths),
+                render_registry_table_row(&[ROOT, "root", "root", "yes"], &widths),
+                render_registry_table_row(
+                    &[&format!("├─ {APP}"), "app", "singleton", "no"],
+                    &widths
+                ),
+                render_registry_table_row(
+                    &[&format!("│  └─ {WORKER}"), "worker", "replica", "error"],
+                    &widths
+                ),
+                render_registry_table_row(
+                    &[&format!("└─ {MINIMAL}"), "minimal", "singleton", "yes"],
+                    &widths
+                )
+            ]
+            .join("\n")
         );
     }
 
@@ -846,24 +968,23 @@ mod tests {
         let readiness = readiness_map();
         let tree = render_registry_tree(&registry, Some(APP), &role_kinds, &readiness)
             .expect("render subtree");
+        let widths = [30, 6, 9, 5];
 
         assert_eq!(
             tree,
-            format!(
-                "{:<30}  {:<6}  {:<9}  {}\n{:<30}  {:<6}  {:<9}  {}\n{:<30}  {:<6}  {:<9}  {}",
-                "CANISTER_ID",
-                "ROLE",
-                "KIND",
-                "READY",
-                APP,
-                "app",
-                "singleton",
-                "no",
-                format!("└─ {WORKER}"),
-                "worker",
-                "replica",
-                "error"
-            )
+            [
+                render_registry_table_row(
+                    &[CANISTER_HEADER, ROLE_HEADER, KIND_HEADER, READY_HEADER],
+                    &widths
+                ),
+                render_registry_separator(&widths),
+                render_registry_table_row(&[APP, "app", "singleton", "no"], &widths),
+                render_registry_table_row(
+                    &[&format!("└─ {WORKER}"), "worker", "replica", "error"],
+                    &widths
+                )
+            ]
+            .join("\n")
         );
     }
 
@@ -883,33 +1004,53 @@ mod tests {
         let readiness = readiness_map();
         let tree =
             render_registry_tree(&registry, None, &role_kinds, &readiness).expect("render tree");
+        let widths = [33, 7, 9, 5];
 
         assert_eq!(
             tree,
-            format!(
-                "{:<33}  {:<7}  {:<9}  {}\n{:<33}  {:<7}  {:<9}  {}\n{:<33}  {:<7}  {:<9}  {}\n{:<33}  {:<7}  {:<9}  {}\n{:<33}  {:<7}  {:<9}  {}",
-                "CANISTER_ID",
-                "ROLE",
-                "KIND",
-                "READY",
-                ROOT,
-                "root",
-                "root",
-                "yes",
-                format!("├─ {APP}"),
-                "app",
-                "singleton",
-                "no",
-                format!("│  └─ {WORKER}"),
-                "worker",
-                "replica",
-                "error",
-                format!("└─ {MINIMAL}"),
-                "minimal",
-                "singleton",
-                "yes"
-            )
+            [
+                render_registry_table_row(
+                    &[CANISTER_HEADER, ROLE_HEADER, KIND_HEADER, READY_HEADER],
+                    &widths
+                ),
+                render_registry_separator(&widths),
+                render_registry_table_row(&[ROOT, "root", "root", "yes"], &widths),
+                render_registry_table_row(
+                    &[&format!("├─ {APP}"), "app", "singleton", "no"],
+                    &widths
+                ),
+                render_registry_table_row(
+                    &[&format!("│  └─ {WORKER}"), "worker", "replica", "error"],
+                    &widths
+                ),
+                render_registry_table_row(
+                    &[&format!("└─ {MINIMAL}"), "minimal", "singleton", "yes"],
+                    &widths
+                )
+            ]
+            .join("\n")
         );
+    }
+
+    // Ensure the full list output names the selected fleet before the tree table.
+    #[test]
+    fn renders_list_output_with_fleet_title() {
+        let registry = parse_registry_entries(&registry_json()).expect("parse registry");
+        let title = ListTitle {
+            fleet: "demo".to_string(),
+            network: "local".to_string(),
+        };
+        let output = render_list_output(
+            &title,
+            &registry,
+            Some(APP),
+            &BTreeMap::new(),
+            &readiness_map(),
+        )
+        .expect("render list output");
+
+        assert!(output.starts_with("Fleet: demo\nNetwork: local\n\nCANISTER_ID"));
+        assert!(output.contains("\n------------------------------"));
     }
 
     // Ensure the implicit wasm store role has a concrete kind even though config omits it.

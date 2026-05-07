@@ -4,7 +4,6 @@ use std::{fs, path::Path, path::PathBuf};
 
 pub(super) const INSTALL_STATE_SCHEMA_VERSION: u32 = 1;
 const INSTALL_STATE_FILE: &str = "install-state.json";
-pub const DEFAULT_FLEET_NAME: &str = "default";
 const CURRENT_FLEET_FILE: &str = "current-fleet";
 
 ///
@@ -224,9 +223,13 @@ fn read_legacy_install_state(
     }
 
     let bytes = fs::read(&path)?;
-    let mut state: InstallState = serde_json::from_slice(&bytes)?;
+    let state: InstallState = serde_json::from_slice(&bytes)?;
     if state.fleet.is_empty() {
-        state.fleet = DEFAULT_FLEET_NAME.to_string();
+        return Err(format!(
+            "install state at {} is missing required fleet name; reinstall from a config with [fleet].name",
+            path.display()
+        )
+        .into());
     }
     Ok(Some(state))
 }
@@ -271,8 +274,8 @@ fn write_current_fleet_name(
 }
 
 // Return the serde default for legacy install-state records.
-fn default_fleet_name() -> String {
-    DEFAULT_FLEET_NAME.to_string()
+const fn default_fleet_name() -> String {
+    String::new()
 }
 
 // Keep fleet names filesystem-safe and easy to type in commands.

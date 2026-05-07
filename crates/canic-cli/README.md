@@ -9,6 +9,11 @@ The CLI currently wraps `dfx` for live snapshot and restore mutations. Canic
 owns the topology selection, manifests, journals, readiness checks, restore
 ordering, and runner state around those `dfx` calls.
 
+`canic-cli` intentionally keeps a narrow Rust library surface: external callers
+should treat the installed `canic` binary as the operator interface. Host-side
+build/install/fleet helpers live in `canic-host`, and backup/restore contracts
+live in `canic-backup`.
+
 ## Install
 
 Install from a checkout:
@@ -75,7 +80,7 @@ dfx canister name or an IC principal as the root target:
 canic install root
 canic install uxrrr-q7777-77774-qaaaq-cai
 canic install --root uxrrr-q7777-77774-qaaaq-cai
-canic install --fleet demo --config canisters/demo/canic.toml
+canic install --config canisters/demo/canic.toml
 ```
 
 When the root target is a principal, the CLI still builds the conventional
@@ -85,6 +90,13 @@ when the local root canister is named differently in `dfx.json`.
 `canic install` uses `canisters/canic.toml` when that project default exists.
 If it does not, and other `canic.toml` files are present, the command prints a
 small choices table and requires `--config <path>`.
+
+The selected install config must include a fleet identity:
+
+```toml
+[fleet]
+name = "demo"
+```
 
 Successful installs write `.canic/<network>/fleets/<fleet>.json` with the root
 target, resolved root principal, build target, config path, and release-set
