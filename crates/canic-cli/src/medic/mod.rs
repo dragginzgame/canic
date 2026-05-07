@@ -1,0 +1,366 @@
+use crate::{
+    args::{
+        default_dfx, default_network, first_arg_is_help, first_arg_is_version, parse_matches,
+        string_option, value_arg,
+    },
+    version_text,
+};
+use canic_host::{
+    dfx::Dfx,
+    install_root::{InstallState, read_current_or_fleet_install_state},
+    replica_query,
+    table::WhitespaceTable,
+};
+use clap::Command as ClapCommand;
+use std::{ffi::OsString, fs};
+use thiserror::Error as ThisError;
+
+const CHECK_HEADER: &str = "CHECK";
+const STATUS_HEADER: &str = "STATUS";
+const DETAIL_HEADER: &str = "DETAIL";
+const NEXT_HEADER: &str = "NEXT";
+const MEDIC_HELP_AFTER: &str = "\
+Examples:
+  canic medic
+  canic medic --fleet demo
+  canic medic --network local --dfx dfx";
+
+///
+/// MedicCommandError
+///
+
+#[derive(Debug, ThisError)]
+pub enum MedicCommandError {
+    #[error("{0}")]
+    Usage(String),
+}
+
+///
+/// MedicOptions
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct MedicOptions {
+    pub fleet: Option<String>,
+    pub network: String,
+    pub dfx: String,
+}
+
+impl MedicOptions {
+    /// Parse medic options from CLI arguments and environment defaults.
+    pub fn parse<I>(args: I) -> Result<Self, MedicCommandError>
+    where
+        I: IntoIterator<Item = OsString>,
+    {
+        let matches =
+            parse_matches(medic_command(), args).map_err(|_| MedicCommandError::Usage(usage()))?;
+
+        Ok(Self {
+            fleet: string_option(&matches, "fleet"),
+            network: string_option(&matches, "network").unwrap_or_else(default_network),
+            dfx: string_option(&matches, "dfx").unwrap_or_else(default_dfx),
+        })
+    }
+}
+
+/// Run read-only local Canic setup diagnostics.
+pub fn run<I>(args: I) -> Result<(), MedicCommandError>
+where
+    I: IntoIterator<Item = OsString>,
+{
+    let args = args.into_iter().collect::<Vec<_>>();
+    if first_arg_is_help(&args) {
+        println!("{}", usage());
+        return Ok(());
+    }
+    if first_arg_is_version(&args) {
+        println!("{}", version_text());
+        return Ok(());
+    }
+
+    let options = MedicOptions::parse(args)?;
+    println!("{}", render_medic_report(&run_medic_checks(&options)));
+    Ok(())
+}
+
+// Build the medic parser and help metadata.
+fn medic_command() -> ClapCommand {
+    ClapCommand::new("medic")
+        .bin_name("canic medic")
+        .about("Diagnose local Canic fleet setup")
+        .disable_help_flag(true)
+        .arg(
+            value_arg("fleet")
+                .long("fleet")
+                .value_name("name")
+                .help("Inspect a named installed fleet instead of the current fleet"),
+        )
+        .arg(
+            value_arg("network")
+                .long("network")
+                .value_name("name")
+                .help("DFX network to inspect"),
+        )
+        .arg(
+            value_arg("dfx")
+                .long("dfx")
+                .value_name("path")
+                .help("Path to the dfx executable"),
+        )
+        .after_help(MEDIC_HELP_AFTER)
+}
+
+// Run each diagnostic in dependency order so later checks can reuse fleet state.
+fn run_medic_checks(options: &MedicOptions) -> Vec<MedicCheck> {
+    let mut checks = Vec::new();
+    checks.push(MedicCheck::ok(
+        "network",
+        options.network.clone(),
+        "override with --network <name>",
+    ));
+    checks.push(check_dfx_ping(options));
+
+    let state =
+        match read_current_or_fleet_install_state(&options.network, options.fleet.as_deref()) {
+            Ok(Some(state)) => {
+                checks.push(MedicCheck::ok(
+                    "fleet state",
+                    format!("{} installed", state.fleet),
+                    "run canic fleets",
+                ));
+                Some(state)
+            }
+            Ok(None) => {
+                checks.push(MedicCheck::warn(
+                    "fleet state",
+                    "no installed fleet found",
+                    "run canic install --config <path>",
+                ));
+                None
+            }
+            Err(err) => {
+                checks.push(MedicCheck::error(
+                    "fleet state",
+                    err.to_string(),
+                    "reinstall from a config with [fleet].name",
+                ));
+                None
+            }
+        };
+
+    if let Some(state) = state {
+        checks.push(check_config_path(&state));
+        checks.push(check_root_ready(options, &state));
+    }
+
+    checks
+}
+
+// Check whether the selected dfx network is reachable.
+fn check_dfx_ping(options: &MedicOptions) -> MedicCheck {
+    match Dfx::new(&options.dfx, Some(options.network.clone())).ping() {
+        Ok(()) => MedicCheck::ok("dfx ping", "replica reachable", "-"),
+        Err(err) => MedicCheck::error(
+            "dfx ping",
+            err.to_string(),
+            "install dfx or pass --dfx <path>",
+        ),
+    }
+}
+
+// Check whether the saved install config still exists.
+fn check_config_path(state: &InstallState) -> MedicCheck {
+    if fs::metadata(&state.config_path).is_ok_and(|metadata| metadata.is_file()) {
+        MedicCheck::ok("config", state.config_path.clone(), "-")
+    } else {
+        MedicCheck::error(
+            "config",
+            format!("missing {}", state.config_path),
+            "restore the config or reinstall the fleet",
+        )
+    }
+}
+
+// Query the root readiness endpoint without mutating the canister.
+fn check_root_ready(options: &MedicOptions, state: &InstallState) -> MedicCheck {
+    let ready = if replica_query::should_use_local_replica_query(Some(&options.network)) {
+        replica_query::query_ready(
+            &options.dfx,
+            Some(&options.network),
+            &state.root_canister_id,
+        )
+        .map_err(|err| err.to_string())
+    } else {
+        query_ready_with_dfx(options, &state.root_canister_id)
+    };
+
+    match ready {
+        Ok(true) => MedicCheck::ok("root ready", "canic_ready=true", "run canic list"),
+        Ok(false) => MedicCheck::warn(
+            "root ready",
+            "canic_ready=false",
+            "wait briefly, then run canic medic",
+        ),
+        Err(err) => MedicCheck::error("root ready", err, "run canic install"),
+    }
+}
+
+// Query readiness through dfx for non-local networks.
+fn query_ready_with_dfx(options: &MedicOptions, canister: &str) -> Result<bool, String> {
+    let output = Dfx::new(&options.dfx, Some(options.network.clone()))
+        .canister_call_output(canister, "canic_ready", Some("json"))
+        .map_err(|err| err.to_string())?;
+    let data = serde_json::from_str::<serde_json::Value>(&output).map_err(|err| err.to_string())?;
+    Ok(replica_query::parse_ready_json_value(&data))
+}
+
+// Render medic checks as an operator-facing whitespace table.
+fn render_medic_report(checks: &[MedicCheck]) -> String {
+    let mut table = WhitespaceTable::new([CHECK_HEADER, STATUS_HEADER, DETAIL_HEADER, NEXT_HEADER]);
+    for check in checks {
+        table.push_row([
+            check.name.as_str(),
+            check.status.label(),
+            check.detail.as_str(),
+            check.next.as_str(),
+        ]);
+    }
+    table.render()
+}
+
+// Return medic command help text.
+fn usage() -> String {
+    let mut command = medic_command();
+    command.render_help().to_string()
+}
+
+///
+/// MedicCheck
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct MedicCheck {
+    name: String,
+    status: MedicStatus,
+    detail: String,
+    next: String,
+}
+
+impl MedicCheck {
+    // Build a successful diagnostic row.
+    fn ok(name: impl Into<String>, detail: impl Into<String>, next: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            status: MedicStatus::Ok,
+            detail: detail.into(),
+            next: next.into(),
+        }
+    }
+
+    // Build a warning diagnostic row.
+    fn warn(name: impl Into<String>, detail: impl Into<String>, next: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            status: MedicStatus::Warn,
+            detail: detail.into(),
+            next: next.into(),
+        }
+    }
+
+    // Build a failed diagnostic row.
+    fn error(name: impl Into<String>, detail: impl Into<String>, next: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            status: MedicStatus::Error,
+            detail: detail.into(),
+            next: next.into(),
+        }
+    }
+}
+
+///
+/// MedicStatus
+///
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum MedicStatus {
+    Ok,
+    Warn,
+    Error,
+}
+
+impl MedicStatus {
+    // Return the stable table label for one diagnostic status.
+    const fn label(self) -> &'static str {
+        match self {
+            Self::Ok => "ok",
+            Self::Warn => "warn",
+            Self::Error => "error",
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Ensure medic options parse the fleet, network, and dfx selectors.
+    #[test]
+    fn parses_medic_options() {
+        let options = MedicOptions::parse([
+            OsString::from("--fleet"),
+            OsString::from("demo"),
+            OsString::from("--network"),
+            OsString::from("local"),
+            OsString::from("--dfx"),
+            OsString::from("/tmp/dfx"),
+        ])
+        .expect("parse medic options");
+
+        assert_eq!(options.fleet.as_deref(), Some("demo"));
+        assert_eq!(options.network, "local");
+        assert_eq!(options.dfx, "/tmp/dfx");
+    }
+
+    // Ensure medic help explains the diagnostic command rather than printing a one-liner.
+    #[test]
+    fn medic_usage_includes_examples() {
+        let text = usage();
+
+        assert!(text.contains("Diagnose local Canic fleet setup"));
+        assert!(text.contains("--fleet <name>"));
+        assert!(text.contains("Examples:"));
+    }
+
+    // Ensure the medic report is a stable whitespace table.
+    #[test]
+    fn renders_medic_report() {
+        let report = render_medic_report(&[
+            MedicCheck::ok("network", "local", "-"),
+            MedicCheck::warn(
+                "fleet state",
+                "no installed fleet found",
+                "run canic install",
+            ),
+        ]);
+
+        assert!(report.starts_with("CHECK"));
+        assert!(report.contains("network"));
+        assert!(report.contains("fleet state"));
+        assert!(report.contains("warn"));
+    }
+
+    // Ensure common dfx JSON shapes are accepted for readiness.
+    #[test]
+    fn parses_ready_json_shapes() {
+        assert!(replica_query::parse_ready_json_value(&serde_json::json!(
+            true
+        )));
+        assert!(replica_query::parse_ready_json_value(
+            &serde_json::json!([{"Ok": true}])
+        ));
+        assert!(!replica_query::parse_ready_json_value(
+            &serde_json::json!([{"Ok": false}])
+        ));
+    }
+}

@@ -38,3 +38,5 @@ perf.data.old
 .tmp
 /artifacts/
 target/*
+.canic
+.backups

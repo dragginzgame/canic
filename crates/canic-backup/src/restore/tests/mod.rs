@@ -5,11 +5,8 @@ use crate::manifest::{
     IdentityMode, MemberVerificationChecks, SourceMetadata, SourceSnapshot, ToolMetadata,
     VerificationCheck, VerificationPlan,
 };
-use std::{
-    env, fs,
-    path::{Path, PathBuf},
-    time::{SystemTime, UNIX_EPOCH},
-};
+use crate::test_support::temp_dir;
+use std::{fs, path::Path};
 
 const ROOT: &str = "aaaaa-aa";
 const CHILD: &str = "renrk-eyaaa-aaaaa-aaada-cai";
@@ -146,15 +143,6 @@ fn set_member_artifact(
         .expect("member should exist");
     member.source_snapshot.artifact_path = artifact_path.to_string();
     member.source_snapshot.checksum = Some(checksum.hash);
-}
-
-// Return a unique temporary directory for restore tests.
-fn temp_dir(name: &str) -> PathBuf {
-    let nanos = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .expect("system time should be after epoch")
-        .as_nanos();
-    env::temp_dir().join(format!("{name}-{nanos}"))
 }
 
 mod apply_dry_run;

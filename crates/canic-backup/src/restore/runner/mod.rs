@@ -12,7 +12,6 @@ use std::{
     fs,
     io::{self, Write},
     path::{Path, PathBuf},
-    process::Command as ProcessCommand,
 };
 use thiserror::Error as ThisError;
 
@@ -57,6 +56,30 @@ pub struct RestoreRunnerConfig {
     pub command: RestoreApplyCommandConfig,
     pub max_steps: Option<usize>,
     pub updated_at: Option<String>,
+}
+
+///
+/// RestoreRunnerCommandExecutor
+///
+
+pub trait RestoreRunnerCommandExecutor {
+    /// Execute one rendered restore runner command.
+    fn execute(
+        &mut self,
+        command: &RestoreApplyRunnerCommand,
+    ) -> Result<RestoreRunnerCommandOutput, io::Error>;
+}
+
+///
+/// RestoreRunnerCommandOutput
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RestoreRunnerCommandOutput {
+    pub success: bool,
+    pub status: String,
+    pub stdout: Vec<u8>,
+    pub stderr: Vec<u8>,
 }
 
 ///
@@ -592,11 +615,12 @@ pub fn restore_run_unclaim_pending(
     Ok(response)
 }
 
-/// Execute ready restore apply journal operations through generated runner commands.
-pub fn restore_run_execute(
+/// Execute ready restore apply journal operations through an injected command executor.
+pub fn restore_run_execute_with_executor(
     config: &RestoreRunnerConfig,
+    executor: &mut impl RestoreRunnerCommandExecutor,
 ) -> Result<RestoreRunResponse, RestoreRunnerError> {
-    let run = restore_run_execute_result(config)?;
+    let run = restore_run_execute_result_with_executor(config, executor)?;
     if let Some(error) = run.error {
         return Err(error);
     }
@@ -605,8 +629,9 @@ pub fn restore_run_execute(
 }
 
 // Execute ready restore apply operations and retain any deferred runner error.
-pub fn restore_run_execute_result(
+pub fn restore_run_execute_result_with_executor(
     config: &RestoreRunnerConfig,
+    executor: &mut impl RestoreRunnerCommandExecutor,
 ) -> Result<RestoreRunnerOutcome, RestoreRunnerError> {
     let _lock = RestoreJournalLock::acquire(&config.journal)?;
     let mut journal = read_apply_journal_file(&config.journal)?;
@@ -630,7 +655,7 @@ pub fn restore_run_execute_result(
         enforce_restore_run_executable(&journal, &report)?;
         let prepared = restore_run_prepare_next_operation(config, &mut journal)?;
         let sequence = prepared.sequence;
-        match restore_run_execute_prepared_operation(config, &mut journal, prepared)? {
+        match restore_run_execute_prepared_operation(config, executor, &mut journal, prepared)? {
             RestoreRunStepOutcome::Completed {
                 executed_operation,
                 operation_receipt,
@@ -701,12 +726,14 @@ fn restore_run_prepare_next_operation(
 // Execute one claimed operation and commit either success or failure.
 fn restore_run_execute_prepared_operation(
     config: &RestoreRunnerConfig,
+    executor: &mut impl RestoreRunnerCommandExecutor,
     journal: &mut RestoreApplyJournal,
     prepared: RestoreRunPreparedOperation,
 ) -> Result<RestoreRunStepOutcome, RestoreRunnerError> {
     if prepared.command.requires_stopped_canister
         && let Some(outcome) = enforce_stopped_canister_precondition(
             config,
+            executor,
             &prepared.operation,
             prepared.attempt,
             config.updated_at.as_ref(),
@@ -715,17 +742,15 @@ fn restore_run_execute_prepared_operation(
         return restore_run_commit_precondition_failure(config, journal, prepared, outcome);
     }
 
-    let output = ProcessCommand::new(&prepared.command.program)
-        .args(&prepared.command.args)
-        .output()?;
-    let status_label = exit_status_label(output.status);
+    let output = executor.execute(&prepared.command)?;
+    let status_label = output.status;
     let output_pair = RestoreApplyCommandOutputPair::from_bytes(
         &output.stdout,
         &output.stderr,
         RESTORE_RUN_OUTPUT_RECEIPT_LIMIT,
     );
 
-    if output.status.success() {
+    if output.success {
         let uploaded_snapshot_id =
             parse_uploaded_snapshot_id(&String::from_utf8_lossy(&output.stdout));
         return restore_run_commit_command_success(
@@ -867,21 +892,20 @@ fn restore_run_commit_command_failure(
 // Verify a stopped-canister command precondition before running a mutating load.
 fn enforce_stopped_canister_precondition(
     config: &RestoreRunnerConfig,
+    executor: &mut impl RestoreRunnerCommandExecutor,
     operation: &RestoreApplyJournalOperation,
     attempt: usize,
     updated_at: Option<&String>,
 ) -> Result<Option<RestoreStoppedPreconditionFailure>, RestoreRunnerError> {
     let command = stopped_canister_status_command(config, operation);
-    let output = ProcessCommand::new(&command.program)
-        .args(&command.args)
-        .output()?;
-    let status_label = exit_status_label(output.status);
+    let output = executor.execute(&command)?;
+    let status_label = output.status;
     let output_pair = RestoreApplyCommandOutputPair::from_bytes(
         &output.stdout,
         &output.stderr,
         RESTORE_RUN_OUTPUT_RECEIPT_LIMIT,
     );
-    if output.status.success() && status_output_reports_stopped(&output_pair) {
+    if output.success && status_output_reports_stopped(&output_pair) {
         return Ok(None);
     }
 
@@ -1063,13 +1087,6 @@ fn restore_command_unavailable_error(preview: &RestoreApplyCommandPreview) -> Re
         complete: preview.complete,
         blocked_reasons: preview.blocked_reasons.clone(),
     }
-}
-
-// Render process exit status without relying on platform-specific internals.
-fn exit_status_label(status: std::process::ExitStatus) -> String {
-    status
-        .code()
-        .map_or_else(|| "signal".to_string(), |code| code.to_string())
 }
 
 // Extract the uploaded target snapshot ID from dfx upload output.

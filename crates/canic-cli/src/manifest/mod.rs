@@ -16,7 +16,7 @@ use thiserror::Error as ThisError;
 #[derive(Debug, ThisError)]
 pub enum ManifestCommandError {
     #[error("{0}")]
-    Usage(&'static str),
+    Usage(String),
 
     #[error("missing required option {0}")]
     MissingOption(&'static str),
@@ -63,10 +63,12 @@ impl ManifestValidateOptions {
 
 // Build the manifest validation parser.
 fn manifest_validate_command() -> ClapCommand {
-    ClapCommand::new("manifest-validate")
+    ClapCommand::new("validate")
+        .bin_name("canic manifest validate")
+        .about("Validate a fleet backup manifest")
         .disable_help_flag(true)
-        .arg(value_arg("manifest").long("manifest"))
-        .arg(value_arg("out").long("out"))
+        .arg(value_arg("manifest").long("manifest").value_name("file"))
+        .arg(value_arg("out").long("out").value_name("file"))
 }
 
 /// Run a manifest subcommand.
@@ -119,18 +121,32 @@ fn write_validation_summary(
 }
 
 // Return manifest command usage text.
-const fn usage() -> &'static str {
-    "usage: canic manifest validate --manifest <file> [--out <file>]"
+fn usage() -> String {
+    let mut command = manifest_command();
+    command.render_help().to_string()
+}
+
+// Build the manifest command-family parser for help rendering.
+fn manifest_command() -> ClapCommand {
+    ClapCommand::new("manifest")
+        .bin_name("canic manifest")
+        .about("Validate fleet backup manifests")
+        .disable_help_flag(true)
+        .subcommand(
+            ClapCommand::new("validate")
+                .about("Validate a fleet backup manifest")
+                .disable_help_flag(true),
+        )
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_support::temp_dir;
     use canic_backup::manifest::{
         BackupUnit, BackupUnitKind, ConsistencySection, FleetMember, FleetSection, IdentityMode,
         SourceMetadata, SourceSnapshot, ToolMetadata, VerificationCheck, VerificationPlan,
     };
-    use std::time::{SystemTime, UNIX_EPOCH};
 
     const ROOT: &str = "aaaaa-aa";
     const HASH: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
@@ -258,14 +274,5 @@ mod tests {
                 checksum: Some(HASH.to_string()),
             },
         }
-    }
-
-    // Build a unique temporary directory.
-    fn temp_dir(prefix: &str) -> PathBuf {
-        let nanos = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("system time after epoch")
-            .as_nanos();
-        std::env::temp_dir().join(format!("{prefix}-{}-{nanos}", std::process::id()))
     }
 }

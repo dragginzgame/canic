@@ -1,4 +1,5 @@
 use super::*;
+use crate::test_support::temp_dir;
 use crate::{
     journal::{ArtifactJournalEntry, ArtifactState},
     manifest::{
@@ -6,10 +7,7 @@ use crate::{
         SourceMetadata, SourceSnapshot, ToolMetadata, VerificationCheck, VerificationPlan,
     },
 };
-use std::{
-    fs,
-    time::{SystemTime, UNIX_EPOCH},
-};
+use std::fs;
 
 const ROOT: &str = "aaaaa-aa";
 const CHILD: &str = "renrk-eyaaa-aaaaa-aaada-cai";
@@ -325,13 +323,4 @@ fn write_artifact(root: &Path, bytes: &[u8]) -> ArtifactChecksum {
     fs::create_dir_all(path.parent().expect("artifact has parent")).expect("create artifacts");
     fs::write(&path, bytes).expect("write artifact");
     ArtifactChecksum::from_bytes(bytes)
-}
-
-// Build a unique temporary layout directory.
-fn temp_dir(prefix: &str) -> PathBuf {
-    let nanos = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .expect("system time after epoch")
-        .as_nanos();
-    std::env::temp_dir().join(format!("{prefix}-{}-{nanos}", std::process::id()))
 }

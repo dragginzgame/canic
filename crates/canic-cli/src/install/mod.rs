@@ -1,7 +1,7 @@
 use crate::{
     args::{
-        first_arg_is_help, first_arg_is_version, parse_matches, string_option, string_values,
-        value_arg,
+        default_network, first_arg_is_help, first_arg_is_version, parse_matches, string_option,
+        string_values, value_arg,
     },
     version_text,
 };
@@ -13,6 +13,16 @@ use thiserror::Error as ThisError;
 
 const DEFAULT_ROOT_TARGET: &str = "root";
 const DEFAULT_READY_TIMEOUT_SECONDS: u64 = 120;
+const INSTALL_HELP_AFTER: &str = "\
+Examples:
+  canic install
+  canic install root
+  canic install uxrrr-q7777-77774-qaaaq-cai
+  canic install --config canisters/demo/canic.toml
+
+The selected canic.toml must include:
+  [fleet]
+  name = \"demo\"";
 
 ///
 /// InstallCommandError
@@ -21,7 +31,7 @@ const DEFAULT_READY_TIMEOUT_SECONDS: u64 = 120;
 #[derive(Debug, ThisError)]
 pub enum InstallCommandError {
     #[error("{0}")]
-    Usage(&'static str),
+    Usage(String),
 
     #[error("cannot provide both positional root target and --root")]
     ConflictingRootTarget,
@@ -90,13 +100,46 @@ impl InstallOptions {
 // Build the install parser.
 fn install_command() -> ClapCommand {
     ClapCommand::new("install")
+        .bin_name("canic install")
+        .about("Install and bootstrap a Canic fleet")
         .disable_help_flag(true)
-        .arg(Arg::new("root-target").num_args(0..))
-        .arg(value_arg("root").long("root"))
-        .arg(value_arg("root-build-target").long("root-build-target"))
-        .arg(value_arg("config").long("config"))
-        .arg(value_arg("network").long("network"))
-        .arg(value_arg("ready-timeout-seconds").long("ready-timeout-seconds"))
+        .arg(
+            Arg::new("root-target")
+                .num_args(0..)
+                .value_name("name-or-principal")
+                .help("Root canister name or principal to install"),
+        )
+        .arg(
+            value_arg("root")
+                .long("root")
+                .value_name("name-or-principal")
+                .help("Root canister name or principal to install"),
+        )
+        .arg(
+            value_arg("root-build-target")
+                .long("root-build-target")
+                .value_name("dfx-canister-name")
+                .help("DFX canister name used to build the root wasm"),
+        )
+        .arg(
+            value_arg("config")
+                .long("config")
+                .value_name("canic.toml")
+                .help("Canic install config to use"),
+        )
+        .arg(
+            value_arg("network")
+                .long("network")
+                .value_name("name")
+                .help("DFX network to install against"),
+        )
+        .arg(
+            value_arg("ready-timeout-seconds")
+                .long("ready-timeout-seconds")
+                .value_name("seconds")
+                .help("Seconds to wait for root canic_ready"),
+        )
+        .after_help(INSTALL_HELP_AFTER)
 }
 
 /// Run the root install workflow.
@@ -138,11 +181,6 @@ fn parse_ready_timeout(value: &str) -> Result<u64, InstallCommandError> {
         .map_err(|_| InstallCommandError::InvalidReadyTimeout(value.to_string()))
 }
 
-// Resolve the DFX network from environment defaults.
-fn default_network() -> String {
-    env::var("DFX_NETWORK").unwrap_or_else(|_| "local".to_string())
-}
-
 // Resolve the readiness timeout from environment defaults.
 fn default_ready_timeout_seconds() -> u64 {
     env::var("READY_TIMEOUT_SECONDS")
@@ -161,8 +199,9 @@ fn default_root_build_target(root_target: &str) -> String {
 }
 
 // Return install command usage text.
-const fn usage() -> &'static str {
-    "usage: canic install [root-target] [--root <name-or-principal>] [--root-build-target <dfx-canister-name>] [--config <canic.toml>] [--network <name>] [--ready-timeout-seconds <seconds>]"
+fn usage() -> String {
+    let mut command = install_command();
+    command.render_help().to_string()
 }
 
 #[cfg(test)]
@@ -244,6 +283,17 @@ mod tests {
             .expect_err("install fleet flag should fail");
 
         assert!(matches!(err, InstallCommandError::Usage(_)));
+    }
+
+    // Ensure install help documents config-owned fleet identity.
+    #[test]
+    fn install_usage_explains_fleet_config() {
+        let text = usage();
+
+        assert!(text.contains("Install and bootstrap a Canic fleet"));
+        assert!(text.contains("Usage: canic install"));
+        assert!(text.contains("[fleet]"));
+        assert!(text.contains("name = \"demo\""));
     }
 
     // Ensure custom principal installs can override the build target explicitly.

@@ -17,7 +17,7 @@ use thiserror::Error as ThisError;
 #[derive(Debug, ThisError)]
 pub enum BuildCommandError {
     #[error("{0}")]
-    Usage(&'static str),
+    Usage(String),
 
     #[error(transparent)]
     Build(#[from] Box<dyn std::error::Error>),
@@ -52,8 +52,14 @@ impl BuildOptions {
 // Build the canister-artifact parser.
 fn build_command() -> ClapCommand {
     ClapCommand::new("build")
+        .bin_name("canic build")
+        .about("Build one Canic canister artifact for dfx")
         .disable_help_flag(true)
-        .arg(Arg::new("canister-name").required(true))
+        .arg(
+            Arg::new("canister-name")
+                .value_name("canister-name")
+                .required(true),
+        )
 }
 
 /// Run one Canic canister artifact build.
@@ -99,8 +105,9 @@ fn build_canister(options: BuildOptions) -> Result<(), Box<dyn std::error::Error
 }
 
 // Return build command usage text.
-const fn usage() -> &'static str {
-    "usage: canic build <canister-name>"
+fn usage() -> String {
+    let mut command = build_command();
+    command.render_help().to_string()
 }
 
 #[cfg(test)]

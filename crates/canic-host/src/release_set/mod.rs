@@ -58,13 +58,13 @@ mod tests {
         configured_install_targets, configured_release_roles_from_source,
         configured_role_kinds_from_source, read_release_artifact, root_manifest_path,
     };
+    use crate::test_support::temp_dir;
     use flate2::{Compression, write::GzEncoder};
     use std::{
-        env, fs,
+        fs,
         io::Write,
         path::{Path, PathBuf},
         sync::{Mutex, OnceLock},
-        time::{SystemTime, UNIX_EPOCH},
     };
 
     static ENV_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
@@ -135,13 +135,7 @@ kind = "singleton"
 
     impl TempWorkspace {
         fn new() -> Self {
-            let unique = SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .map_or(0, |duration| duration.as_nanos());
-            let path = env::temp_dir().join(format!(
-                "canic-host-release-set-tests-{}-{unique}",
-                std::process::id()
-            ));
+            let path = temp_dir("canic-host-release-set-tests");
             fs::create_dir_all(&path).expect("create temp workspace");
             Self { path }
         }

@@ -7,7 +7,7 @@ use crate::{
         BootstrapWasmStoreBuildOutput, BootstrapWasmStoreBuildProfile,
         build_bootstrap_wasm_store_artifact,
     },
-    cargo_command,
+    cargo_command, default_network,
     release_set::{
         canister_manifest_path, dfx_root, emit_root_release_set_manifest_if_ready, workspace_root,
     },
@@ -102,7 +102,7 @@ pub fn print_current_workspace_build_context_once(
     fs::create_dir_all(&marker_dir)?;
 
     let requested_profile = env::var("CANIC_WASM_PROFILE").unwrap_or_else(|_| "unset".to_string());
-    let network = env::var("DFX_NETWORK").unwrap_or_else(|_| "local".to_string());
+    let network = default_network();
     let marker_key = env::var("CANIC_BUILD_CONTEXT_SESSION")
         .ok()
         .unwrap_or_else(|| {
@@ -188,7 +188,7 @@ fn build_canister_artifact(
     )?;
     extract_candid(&debug_wasm_path, &did_path)?;
 
-    let network = std::env::var("DFX_NETWORK").unwrap_or_else(|_| "local".to_string());
+    let network = default_network();
     let manifest_path =
         emit_root_release_set_manifest_if_ready(workspace_root, dfx_root, &network)?;
 
@@ -376,6 +376,7 @@ fn parse_parent_process_id(stat: &str) -> Option<u32> {
 #[cfg(test)]
 mod tests {
     use super::{parse_parent_process_id, remove_stale_dfx_candid_sidecars};
+    use crate::test_support::temp_dir;
     use std::fs;
 
     #[test]
@@ -386,10 +387,7 @@ mod tests {
 
     #[test]
     fn remove_stale_dfx_candid_sidecars_keeps_primary_role_did() {
-        let temp_root = std::env::temp_dir().join(format!(
-            "canic-canister-build-sidecars-{}",
-            std::process::id()
-        ));
+        let temp_root = temp_dir("canic-canister-build-sidecars");
         let _ = fs::remove_dir_all(&temp_root);
         fs::create_dir_all(&temp_root).unwrap();
 

@@ -91,6 +91,17 @@ pub fn query_ready(
     Decode!(&bytes, bool).map_err(|err| ReplicaQueryError::Query(err.to_string()))
 }
 
+/// Parse common JSON shapes returned by dfx for `canic_ready`.
+#[must_use]
+pub fn parse_ready_json_value(data: &serde_json::Value) -> bool {
+    match data {
+        serde_json::Value::Bool(value) => *value,
+        serde_json::Value::Array(values) => values.iter().any(parse_ready_json_value),
+        serde_json::Value::Object(map) => map.values().any(parse_ready_json_value),
+        _ => false,
+    }
+}
+
 /// Query `canic_subnet_registry` and render DFX-compatible JSON.
 pub fn query_subnet_registry_json(
     dfx: &str,
@@ -373,4 +384,25 @@ enum ErrorCodeWire {
     ResourceExhausted,
     Unauthorized,
     Unavailable,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Ensure readiness parsing accepts the common dfx JSON result shapes.
+    #[test]
+    fn parse_ready_json_value_accepts_nested_true_shapes() {
+        assert!(parse_ready_json_value(&serde_json::json!(true)));
+        assert!(parse_ready_json_value(&serde_json::json!({ "Ok": true })));
+        assert!(parse_ready_json_value(&serde_json::json!([{ "Ok": true }])));
+    }
+
+    // Ensure readiness parsing rejects false and non-boolean result shapes.
+    #[test]
+    fn parse_ready_json_value_rejects_false_shapes() {
+        assert!(!parse_ready_json_value(&serde_json::json!(false)));
+        assert!(!parse_ready_json_value(&serde_json::json!({ "Ok": false })));
+        assert!(!parse_ready_json_value(&serde_json::json!("true")));
+    }
 }

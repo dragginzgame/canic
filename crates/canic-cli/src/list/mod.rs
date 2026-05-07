@@ -1,10 +1,12 @@
 use crate::{
-    args::{
-        first_arg_is_help, first_arg_is_version, flag_arg, parse_matches, string_option, value_arg,
-    },
+    args::{default_network, first_arg_is_help, first_arg_is_version},
     version_text,
 };
+mod options;
+mod render;
+
 use candid::Principal;
+#[cfg(test)]
 use canic::ids::CanisterRole;
 use canic_backup::discovery::{DiscoveryError, RegistryEntry, parse_registry_entries};
 use canic_host::{
@@ -13,12 +15,14 @@ use canic_host::{
     release_set::{config_path as default_config_path, configured_role_kinds},
     replica_query,
 };
-use clap::Command as ClapCommand;
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    env,
-    ffi::OsString,
+use options::{ListOptions, ListSource, usage};
+#[cfg(test)]
+use render::{
+    CANISTER_HEADER, KIND_HEADER, READY_HEADER, ROLE_HEADER, RegistryRow, kind_label,
+    render_registry_separator, render_registry_table_row, render_registry_tree,
 };
+use render::{ListTitle, ReadyStatus, render_list_output, visible_entries};
+use std::{collections::BTreeMap, ffi::OsString};
 use thiserror::Error as ThisError;
 
 const DEMO_CANISTER_NAMES: &[&str] = &[
@@ -30,15 +34,6 @@ const DEMO_CANISTER_NAMES: &[&str] = &[
     "scale",
     "root",
 ];
-const ROLE_HEADER: &str = "ROLE";
-const KIND_HEADER: &str = "KIND";
-const CANISTER_HEADER: &str = "CANISTER_ID";
-const READY_HEADER: &str = "READY";
-const LIST_COLUMN_GAP: &str = "   ";
-const TREE_BRANCH: &str = "├─ ";
-const TREE_LAST: &str = "└─ ";
-const TREE_PIPE: &str = "│  ";
-const TREE_SPACE: &str = "   ";
 
 ///
 /// ListCommandError
@@ -47,7 +42,7 @@ const TREE_SPACE: &str = "   ";
 #[derive(Debug, ThisError)]
 pub enum ListCommandError {
     #[error("{0}")]
-    Usage(&'static str),
+    Usage(String),
 
     #[error("unknown option {0}")]
     UnknownOption(String),
@@ -69,6 +64,15 @@ pub enum ListCommandError {
     #[error("local replica query failed: {0}")]
     ReplicaQuery(String),
 
+    #[error(
+        "saved fleet {fleet} points to root {root}, but that canister is not present on network {network}. Local dfx state was probably restarted or reset. Run `canic install` to recreate the fleet, `canic list --standalone` to see local dfx canister ids, or `canic use <fleet>` after reinstalling."
+    )]
+    StaleLocalFleet {
+        fleet: String,
+        network: String,
+        root: String,
+    },
+
     #[error("failed to read canic fleet state: {0}")]
     InstallState(String),
 
@@ -80,78 +84,6 @@ pub enum ListCommandError {
 
     #[error(transparent)]
     Discovery(#[from] DiscoveryError),
-}
-
-///
-/// ListOptions
-///
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ListOptions {
-    pub source: ListSource,
-    pub fleet: Option<String>,
-    pub root: Option<String>,
-    pub anchor: Option<String>,
-    pub network: Option<String>,
-    pub dfx: String,
-}
-
-///
-/// ListSource
-///
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum ListSource {
-    Auto,
-    Standalone,
-    RootRegistry,
-}
-
-impl ListOptions {
-    /// Parse canister listing options from CLI arguments.
-    pub fn parse<I>(args: I) -> Result<Self, ListCommandError>
-    where
-        I: IntoIterator<Item = OsString>,
-    {
-        let args = args.into_iter().collect::<Vec<_>>();
-        let matches =
-            parse_matches(list_command(), args).map_err(|_| ListCommandError::Usage(usage()))?;
-        let standalone = matches.get_flag("standalone");
-        let root = string_option(&matches, "root");
-
-        if standalone && root.is_some() {
-            return Err(ListCommandError::ConflictingListSources);
-        }
-
-        let source = if root.is_some() {
-            ListSource::RootRegistry
-        } else if standalone {
-            ListSource::Standalone
-        } else {
-            ListSource::Auto
-        };
-
-        Ok(Self {
-            source,
-            fleet: string_option(&matches, "fleet"),
-            root,
-            anchor: string_option(&matches, "from"),
-            network: string_option(&matches, "network"),
-            dfx: string_option(&matches, "dfx").unwrap_or_else(|| "dfx".to_string()),
-        })
-    }
-}
-
-// Build the list parser.
-fn list_command() -> ClapCommand {
-    ClapCommand::new("list")
-        .disable_help_flag(true)
-        .arg(flag_arg("standalone").long("standalone"))
-        .arg(value_arg("fleet").long("fleet"))
-        .arg(value_arg("root").long("root"))
-        .arg(value_arg("from").long("from"))
-        .arg(value_arg("network").long("network"))
-        .arg(value_arg("dfx").long("dfx"))
 }
 
 /// Run a list subcommand or the default tree listing.
@@ -208,32 +140,6 @@ fn resolve_effective_source(options: &ListOptions) -> Result<ListSource, ListCom
     }
 }
 
-/// Render all registry entries, or one selected subtree, as a whitespace table.
-pub fn render_registry_tree(
-    registry: &[RegistryEntry],
-    canister: Option<&str>,
-    role_kinds: &BTreeMap<String, String>,
-    readiness: &BTreeMap<String, ReadyStatus>,
-) -> Result<String, ListCommandError> {
-    let rows = visible_rows(registry, canister)?;
-    Ok(render_registry_table(&rows, role_kinds, readiness))
-}
-
-/// Render a named list view with a fleet/source title above the registry table.
-pub fn render_list_output(
-    title: &ListTitle,
-    registry: &[RegistryEntry],
-    canister: Option<&str>,
-    role_kinds: &BTreeMap<String, String>,
-    readiness: &BTreeMap<String, ReadyStatus>,
-) -> Result<String, ListCommandError> {
-    Ok(format!(
-        "{}\n\n{}",
-        title.render(),
-        render_registry_tree(registry, canister, role_kinds, readiness)?
-    ))
-}
-
 // Return the operator-facing title for the selected list source.
 fn list_title(options: &ListOptions) -> ListTitle {
     let fleet = match options.source {
@@ -268,7 +174,7 @@ fn role_kind_config_candidates(options: &ListOptions) -> Vec<std::path::PathBuf>
         paths.push(std::path::PathBuf::from(state.config_path));
     }
 
-    if let Ok(workspace_root) = env::current_dir() {
+    if let Ok(workspace_root) = std::env::current_dir() {
         paths.push(default_config_path(&workspace_root));
     }
 
@@ -311,7 +217,7 @@ fn check_ready_status(
         return Ok(ReadyStatus::Error);
     };
     let data = serde_json::from_str::<serde_json::Value>(&output)?;
-    Ok(if parse_ready_value(&data) {
+    Ok(if replica_query::parse_ready_json_value(&data) {
         ReadyStatus::Ready
     } else {
         ReadyStatus::NotReady
@@ -418,11 +324,7 @@ fn resolve_canister_identifier(
 
 // Resolve the state network using the same local default as host install commands.
 fn state_network(options: &ListOptions) -> String {
-    options
-        .network
-        .clone()
-        .or_else(|| env::var("DFX_NETWORK").ok())
-        .unwrap_or_else(|| "local".to_string())
+    options.network.clone().unwrap_or_else(default_network)
 }
 
 // Run `dfx canister call <root> canic_subnet_registry --output json`.
@@ -433,13 +335,34 @@ fn call_subnet_registry(options: &ListOptions, root: &str) -> Result<String, Lis
             options.network.as_deref(),
             root,
         )
-        .map_err(|err| ListCommandError::ReplicaQuery(err.to_string()));
+        .map_err(|err| list_replica_query_error(options, root, err.to_string()));
     }
 
     Dfx::new(&options.dfx, options.network.clone())
         .canister_call_output(root, "canic_subnet_registry", Some("json"))
         .map_err(list_dfx_error)
         .map_err(add_root_registry_hint)
+}
+
+// Convert local replica query failures into operator-facing setup guidance.
+fn list_replica_query_error(options: &ListOptions, root: &str, error: String) -> ListCommandError {
+    if is_canister_not_found_error(&error)
+        && let Ok(Some(state)) = read_selected_install_state(options)
+        && state.root_canister_id == root
+    {
+        return ListCommandError::StaleLocalFleet {
+            fleet: state.fleet,
+            network: state_network(options),
+            root: root.to_string(),
+        };
+    }
+
+    ListCommandError::ReplicaQuery(error)
+}
+
+// Detect the local replica's missing-canister query diagnostic.
+fn is_canister_not_found_error(error: &str) -> bool {
+    error.contains("Canister ") && error.contains(" not found")
 }
 
 // Add a next-step hint for common root registry setup mistakes.
@@ -465,6 +388,10 @@ fn list_dfx_error(error: DfxCommandError) -> ListCommandError {
         DfxCommandError::Failed { command, stderr } => {
             ListCommandError::DfxFailed { command, stderr }
         }
+        DfxCommandError::SnapshotIdUnavailable { output } => ListCommandError::DfxFailed {
+            command: "dfx canister snapshot create".to_string(),
+            stderr: output,
+        },
     }
 }
 
@@ -505,293 +432,6 @@ fn standalone_next_step_hint(
     Some(
         "only the local root id exists. Run `canic install` to build, install, stage, and bootstrap the tree; then run `canic list`.",
     )
-}
-
-// Select forest roots or validate the requested subtree root.
-fn root_entries<'a>(
-    registry: &'a [RegistryEntry],
-    by_pid: &BTreeMap<&str, &'a RegistryEntry>,
-    canister: Option<&str>,
-) -> Result<Vec<&'a RegistryEntry>, ListCommandError> {
-    if let Some(canister) = canister {
-        return by_pid
-            .get(canister)
-            .copied()
-            .map(|entry| vec![entry])
-            .ok_or_else(|| ListCommandError::CanisterNotInRegistry(canister.to_string()));
-    }
-
-    let ids = registry
-        .iter()
-        .map(|entry| entry.pid.as_str())
-        .collect::<BTreeSet<_>>();
-    Ok(registry
-        .iter()
-        .filter(|entry| {
-            entry
-                .parent_pid
-                .as_deref()
-                .is_none_or(|parent| !ids.contains(parent))
-        })
-        .collect())
-}
-
-// Group children by parent and keep each group sorted for stable output.
-fn child_entries(registry: &[RegistryEntry]) -> BTreeMap<&str, Vec<&RegistryEntry>> {
-    let mut children = BTreeMap::<&str, Vec<&RegistryEntry>>::new();
-    for entry in registry {
-        if let Some(parent) = entry.parent_pid.as_deref() {
-            children.entry(parent).or_default().push(entry);
-        }
-    }
-    for entries in children.values_mut() {
-        entries.sort_by_key(|entry| (entry.role.as_deref().unwrap_or(""), entry.pid.as_str()));
-    }
-    children
-}
-
-// Return the entries that would be rendered for the selected table.
-fn visible_entries<'a>(
-    registry: &'a [RegistryEntry],
-    canister: Option<&str>,
-) -> Result<Vec<&'a RegistryEntry>, ListCommandError> {
-    Ok(visible_rows(registry, canister)?
-        .into_iter()
-        .map(|row| row.entry)
-        .collect())
-}
-
-// Return visible rows with tree prefixes so canister ids carry hierarchy.
-fn visible_rows<'a>(
-    registry: &'a [RegistryEntry],
-    canister: Option<&str>,
-) -> Result<Vec<RegistryRow<'a>>, ListCommandError> {
-    let by_pid = registry
-        .iter()
-        .map(|entry| (entry.pid.as_str(), entry))
-        .collect::<BTreeMap<_, _>>();
-    let roots = root_entries(registry, &by_pid, canister)?;
-    let children = child_entries(registry);
-    let mut entries = Vec::new();
-
-    for root in roots {
-        collect_visible_entry(root, &children, "", "", &mut entries);
-    }
-
-    Ok(entries)
-}
-
-// Traverse one rendered branch in display order.
-fn collect_visible_entry<'a>(
-    entry: &'a RegistryEntry,
-    children: &BTreeMap<&str, Vec<&'a RegistryEntry>>,
-    tree_prefix: &str,
-    child_prefix: &str,
-    entries: &mut Vec<RegistryRow<'a>>,
-) {
-    entries.push(RegistryRow {
-        entry,
-        tree_prefix: tree_prefix.to_string(),
-    });
-    if let Some(child_entries) = children.get(entry.pid.as_str()) {
-        for (index, child) in child_entries.iter().enumerate() {
-            let is_last = index + 1 == child_entries.len();
-            let branch = if is_last { TREE_LAST } else { TREE_BRANCH };
-            let carry = if is_last { TREE_SPACE } else { TREE_PIPE };
-            let child_tree_prefix = format!("{child_prefix}{branch}");
-            let descendant_prefix = format!("{child_prefix}{carry}");
-            collect_visible_entry(
-                child,
-                children,
-                &child_tree_prefix,
-                &descendant_prefix,
-                entries,
-            );
-        }
-    }
-}
-
-///
-/// RegistryRow
-///
-
-struct RegistryRow<'a> {
-    entry: &'a RegistryEntry,
-    tree_prefix: String,
-}
-
-///
-/// ListTitle
-///
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ListTitle {
-    pub fleet: String,
-    pub network: String,
-}
-
-impl ListTitle {
-    /// Render the compact title block shown above `canic list` tables.
-    #[must_use]
-    pub fn render(&self) -> String {
-        format!("Fleet: {}\nNetwork: {}", self.fleet, self.network)
-    }
-}
-
-// Render registry rows as stable whitespace-aligned columns.
-fn render_registry_table(
-    rows: &[RegistryRow<'_>],
-    role_kinds: &BTreeMap<String, String>,
-    readiness: &BTreeMap<String, ReadyStatus>,
-) -> String {
-    let table_rows = registry_table_rows(rows, role_kinds, readiness);
-    let widths = registry_table_widths(&table_rows);
-    let header = render_registry_table_row(
-        &[CANISTER_HEADER, ROLE_HEADER, KIND_HEADER, READY_HEADER],
-        &widths,
-    );
-    let separator = render_registry_separator(&widths);
-    let mut lines = Vec::with_capacity(table_rows.len() + 2);
-    lines.push(header);
-    lines.push(separator);
-    lines.extend(
-        table_rows
-            .iter()
-            .map(|row| render_registry_table_row(row, &widths)),
-    );
-    lines.join("\n")
-}
-
-// Collect rendered cell values before width calculation.
-fn registry_table_rows(
-    rows: &[RegistryRow<'_>],
-    role_kinds: &BTreeMap<String, String>,
-    readiness: &BTreeMap<String, ReadyStatus>,
-) -> Vec<[String; 4]> {
-    let mut table_rows = Vec::with_capacity(rows.len());
-    for row in rows {
-        let ready = readiness
-            .get(&row.entry.pid)
-            .map_or("unknown", |status| status.label());
-        table_rows.push([
-            canister_label(row),
-            role_label(row),
-            kind_label(row, role_kinds),
-            ready.to_string(),
-        ]);
-    }
-    table_rows
-}
-
-// Compute display widths for the list table, including headers.
-fn registry_table_widths(rows: &[[String; 4]]) -> [usize; 4] {
-    let mut widths = [
-        CANISTER_HEADER.chars().count(),
-        ROLE_HEADER.chars().count(),
-        KIND_HEADER.chars().count(),
-        READY_HEADER.chars().count(),
-    ];
-
-    for row in rows {
-        for (index, cell) in row.iter().enumerate() {
-            widths[index] = widths[index].max(cell.chars().count());
-        }
-    }
-
-    widths
-}
-
-// Render one padded list table row with the wider list-specific column gap.
-fn render_registry_table_row(row: &[impl AsRef<str>], widths: &[usize; 4]) -> String {
-    widths
-        .iter()
-        .enumerate()
-        .map(|(index, width)| {
-            let value = row.get(index).map_or("", AsRef::as_ref);
-            format!("{value:<width$}")
-        })
-        .collect::<Vec<_>>()
-        .join(LIST_COLUMN_GAP)
-        .trim_end()
-        .to_string()
-}
-
-// Render the line under the table headers.
-fn render_registry_separator(widths: &[usize; 4]) -> String {
-    widths
-        .iter()
-        .map(|width| "-".repeat(*width))
-        .collect::<Vec<_>>()
-        .join(LIST_COLUMN_GAP)
-}
-
-// Format one canister principal label with its box-drawing tree branch.
-fn canister_label(row: &RegistryRow<'_>) -> String {
-    format!("{}{}", row.tree_prefix, row.entry.pid)
-}
-
-// Format one role label without adding hierarchy because role names are not unique.
-fn role_label(row: &RegistryRow<'_>) -> String {
-    let role = row.entry.role.as_deref().filter(|role| !role.is_empty());
-    match role {
-        Some(role) => role.to_string(),
-        None => "unknown".to_string(),
-    }
-}
-
-// Format one canister kind using registry data first, then config role metadata.
-fn kind_label(row: &RegistryRow<'_>, role_kinds: &BTreeMap<String, String>) -> String {
-    row.entry
-        .kind
-        .as_deref()
-        .or_else(|| {
-            row.entry
-                .role
-                .as_deref()
-                .and_then(|role| role_kinds.get(role).map(String::as_str))
-        })
-        .or_else(|| {
-            row.entry.role.as_deref().and_then(|role| {
-                CanisterRole::owned(role.to_string())
-                    .is_wasm_store()
-                    .then(|| CanisterRole::WASM_STORE.as_str())
-            })
-        })
-        .unwrap_or("unknown")
-        .to_string()
-}
-
-// Accept both plain-bool and wrapped-result JSON shapes from `dfx --output json`.
-fn parse_ready_value(data: &serde_json::Value) -> bool {
-    matches!(data, serde_json::Value::Bool(true))
-        || matches!(data.get("Ok"), Some(serde_json::Value::Bool(true)))
-}
-
-///
-/// ReadyStatus
-///
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum ReadyStatus {
-    Ready,
-    NotReady,
-    Error,
-}
-
-impl ReadyStatus {
-    // Return the compact label used in list output.
-    const fn label(self) -> &'static str {
-        match self {
-            Self::Ready => "yes",
-            Self::NotReady => "no",
-            Self::Error => "error",
-        }
-    }
-}
-
-// Return list command usage text.
-const fn usage() -> &'static str {
-    "usage: canic list [--standalone] [--fleet <name>] [--root <root-canister>] [--from <canister>] [--network <name>] [--dfx <path>]"
 }
 
 #[cfg(test)]
@@ -844,6 +484,18 @@ mod tests {
         assert_eq!(options.dfx, "dfx");
     }
 
+    // Ensure list help explains fleet selection and subtree rendering.
+    #[test]
+    fn list_usage_explains_fleet_and_subtree_options() {
+        let text = usage();
+
+        assert!(text.contains("Show registry canisters as a tree table"));
+        assert!(text.contains("Usage: canic list"));
+        assert!(text.contains("--fleet <name>"));
+        assert!(text.contains("--from <name-or-principal>"));
+        assert!(text.contains("Examples:"));
+    }
+
     // Ensure conflicting registry sources are still rejected.
     #[test]
     fn rejects_conflicting_registry_sources() {
@@ -882,6 +534,17 @@ mod tests {
 
         assert!(hint.contains("canic install"));
         assert!(hint.contains("`dfx canister create root` only reserves an id"));
+    }
+
+    // Ensure local replica missing-canister errors are recognized for stale fleet guidance.
+    #[test]
+    fn detects_local_canister_not_found_error() {
+        assert!(is_canister_not_found_error(
+            "local replica rejected query: code=3 message=Canister uxrrr-q7777-77774-qaaaq-cai not found"
+        ));
+        assert!(!is_canister_not_found_error(
+            "local replica rejected query: code=5 message=some other failure"
+        ));
     }
 
     // Ensure root-only standalone inventory explains the install/bootstrap command.
@@ -1076,10 +739,14 @@ mod tests {
     // Ensure readiness parsing accepts the JSON shapes emitted by dfx.
     #[test]
     fn parses_ready_json_shapes() {
-        assert!(parse_ready_value(&json!(true)));
-        assert!(parse_ready_value(&json!({ "Ok": true })));
-        assert!(!parse_ready_value(&json!(false)));
-        assert!(!parse_ready_value(&json!({ "Ok": false })));
+        assert!(replica_query::parse_ready_json_value(&json!(true)));
+        assert!(replica_query::parse_ready_json_value(
+            &json!({ "Ok": true })
+        ));
+        assert!(!replica_query::parse_ready_json_value(&json!(false)));
+        assert!(!replica_query::parse_ready_json_value(
+            &json!({ "Ok": false })
+        ));
     }
 
     // Build representative subnet registry JSON.

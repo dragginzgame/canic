@@ -1,4 +1,5 @@
 use super::*;
+use crate::test_support::temp_dir;
 use canic_backup::{
     artifacts::ArtifactChecksum,
     journal::{ArtifactJournalEntry, ArtifactState, DownloadJournal},
@@ -14,7 +15,6 @@ use serde_json::json;
 use std::{
     fs,
     path::{Path, PathBuf},
-    time::{SystemTime, UNIX_EPOCH},
 };
 
 const ROOT: &str = "aaaaa-aa";
@@ -138,7 +138,7 @@ fn parses_restore_plan_options() {
 fn restore_usage_lists_command_family() {
     let text = usage();
 
-    assert!(text.contains("usage: canic restore <command> [<args>]"));
+    assert!(text.contains("Usage: canic restore"));
     assert!(text.contains("plan"));
     assert!(text.contains("run"));
 }
@@ -1399,15 +1399,6 @@ fn write_manifest_artifacts(root: &Path, manifest: &mut FleetBackupManifest) {
         let checksum = ArtifactChecksum::from_bytes(bytes.as_bytes());
         member.source_snapshot.checksum = Some(checksum.hash);
     }
-}
-
-// Build a unique temporary directory.
-fn temp_dir(prefix: &str) -> PathBuf {
-    let nanos = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .expect("system time after epoch")
-        .as_nanos();
-    std::env::temp_dir().join(format!("{prefix}-{}-{nanos}", std::process::id()))
 }
 
 // Derive the runner sidecar lock path for assertions.

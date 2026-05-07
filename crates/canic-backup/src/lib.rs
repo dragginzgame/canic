@@ -11,5 +11,7 @@ pub mod manifest;
 pub mod persistence;
 pub mod restore;
 pub mod snapshot;
+#[cfg(test)]
+mod test_support;
 pub mod timestamp;
 pub mod topology;

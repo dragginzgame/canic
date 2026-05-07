@@ -235,6 +235,14 @@ canic fleets --network local
 canic use demo --network local
 ```
 
+Use `canic medic` when the local project state, replica, or selected fleet does
+not look right:
+
+```bash
+canic medic
+canic medic --fleet demo
+```
+
 For `DFX_NETWORK=local`, the install flow attempts one clean local `dfx`
 recovery if `dfx ping local` fails. Nonlocal targets must be managed
 externally.

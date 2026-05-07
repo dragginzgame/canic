@@ -1,7 +1,7 @@
 use crate::{
     args::{
-        first_arg_is_help, first_arg_is_version, parse_matches, string_option, string_values,
-        value_arg,
+        default_network, first_arg_is_help, first_arg_is_version, parse_matches, string_option,
+        string_values, value_arg,
     },
     version_text,
 };
@@ -10,7 +10,7 @@ use canic_host::install_root::{
 };
 use canic_host::table::WhitespaceTable;
 use clap::{Arg, Command as ClapCommand};
-use std::{env, ffi::OsString};
+use std::ffi::OsString;
 use thiserror::Error as ThisError;
 
 const CURRENT_HEADER: &str = "CURRENT";
@@ -18,6 +18,14 @@ const FLEET_HEADER: &str = "FLEET";
 const NETWORK_HEADER: &str = "NETWORK";
 const ROOT_HEADER: &str = "ROOT";
 const CONFIG_HEADER: &str = "CONFIG";
+const FLEETS_HELP_AFTER: &str = "\
+Examples:
+  canic fleets
+  canic fleets --network local";
+const USE_HELP_AFTER: &str = "\
+Examples:
+  canic use demo
+  canic use staging --network local";
 
 ///
 /// FleetCommandError
@@ -26,7 +34,7 @@ const CONFIG_HEADER: &str = "CONFIG";
 #[derive(Debug, ThisError)]
 pub enum FleetCommandError {
     #[error("{0}")]
-    Usage(&'static str),
+    Usage(String),
 
     #[error("missing fleet name")]
     MissingFleetName,
@@ -34,7 +42,7 @@ pub enum FleetCommandError {
     #[error("multiple fleet names provided")]
     ConflictingFleetName,
 
-    #[error("no Canic fleets are installed for network {0}")]
+    #[error("no Canic fleets are installed for network {0}; run canic install --config <path>")]
     NoFleets(String),
 
     #[error(transparent)]
@@ -145,16 +153,37 @@ impl UseFleetOptions {
 // Build the fleet list parser.
 fn fleets_command() -> ClapCommand {
     ClapCommand::new("fleets")
+        .bin_name("canic fleets")
+        .about("List installed Canic fleets")
         .disable_help_flag(true)
-        .arg(value_arg("network").long("network"))
+        .arg(
+            value_arg("network")
+                .long("network")
+                .value_name("name")
+                .help("DFX network to inspect"),
+        )
+        .after_help(FLEETS_HELP_AFTER)
 }
 
 // Build the current-fleet selection parser.
 fn use_fleet_command() -> ClapCommand {
     ClapCommand::new("use")
+        .bin_name("canic use")
+        .about("Select the current Canic fleet")
         .disable_help_flag(true)
-        .arg(Arg::new("fleet").num_args(0..))
-        .arg(value_arg("network").long("network"))
+        .arg(
+            Arg::new("fleet")
+                .num_args(0..=1)
+                .value_name("name")
+                .help("Installed fleet name to make current"),
+        )
+        .arg(
+            value_arg("network")
+                .long("network")
+                .value_name("name")
+                .help("DFX network to update"),
+        )
+        .after_help(USE_HELP_AFTER)
 }
 
 // Render installed fleets as a compact whitespace table.
@@ -195,19 +224,16 @@ fn render_selected_fleet(state: &InstallState) -> String {
     ["Current fleet:".to_string(), table.render()].join("\n")
 }
 
-// Resolve the network using the same local default as host install commands.
-fn default_network() -> String {
-    env::var("DFX_NETWORK").unwrap_or_else(|_| "local".to_string())
-}
-
 // Return fleet list usage text.
-const fn usage() -> &'static str {
-    "usage: canic fleets [--network <name>]"
+fn usage() -> String {
+    let mut command = fleets_command();
+    command.render_help().to_string()
 }
 
 // Return fleet selection usage text.
-const fn use_usage() -> &'static str {
-    "usage: canic use <fleet> [--network <name>]"
+fn use_usage() -> String {
+    let mut command = use_fleet_command();
+    command.render_help().to_string()
 }
 
 #[cfg(test)]
@@ -265,6 +291,28 @@ mod tests {
                 "canisters/staging/canic.toml",
             )
         );
+    }
+
+    // Ensure fleet command help is no longer a terse one-line usage string.
+    #[test]
+    fn fleet_usage_lists_options_and_examples() {
+        let text = usage();
+
+        assert!(text.contains("List installed Canic fleets"));
+        assert!(text.contains("Usage: canic fleets"));
+        assert!(text.contains("--network <name>"));
+        assert!(text.contains("Examples:"));
+    }
+
+    // Ensure current-fleet help renders the singular fleet argument.
+    #[test]
+    fn use_usage_lists_singular_fleet_argument() {
+        let text = use_usage();
+
+        assert!(text.contains("Select the current Canic fleet"));
+        assert!(text.contains("Usage: canic use"));
+        assert!(text.contains("[name]"));
+        assert!(!text.contains("[name]..."));
     }
 
     // Build a representative fleet summary.

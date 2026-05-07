@@ -1,7 +1,7 @@
 use crate::{
     args::{
-        first_arg_is_help, first_arg_is_version, flag_arg, parse_matches, path_option,
-        string_option, value_arg,
+        default_network, first_arg_is_help, first_arg_is_version, flag_arg, parse_matches,
+        path_option, string_option, value_arg,
     },
     version_text,
 };
@@ -11,7 +11,7 @@ use canic_host::release_set::{
     resume_root_bootstrap, root_release_set_manifest_path, stage_root_release_set, workspace_root,
 };
 use clap::{ArgMatches, Command as ClapCommand};
-use std::{env, ffi::OsString, path::PathBuf};
+use std::{ffi::OsString, path::PathBuf};
 use thiserror::Error as ThisError;
 
 const DEFAULT_ROOT_TARGET: &str = "root";
@@ -23,7 +23,7 @@ const DEFAULT_ROOT_TARGET: &str = "root";
 #[derive(Debug, ThisError)]
 pub enum ReleaseSetCommandError {
     #[error("{0}")]
-    Usage(&'static str),
+    Usage(String),
 
     #[error(transparent)]
     ReleaseSet(#[from] Box<dyn std::error::Error>),
@@ -117,7 +117,7 @@ impl TargetsOptions {
     where
         I: IntoIterator<Item = OsString>,
     {
-        let matches = parse_release_set_options(targets_command(), args, targets_usage())?;
+        let matches = parse_release_set_options(targets_command(), args, targets_usage)?;
 
         Ok(Self {
             config_path: path_option(&matches, "config"),
@@ -133,7 +133,7 @@ impl ManifestOptions {
     where
         I: IntoIterator<Item = OsString>,
     {
-        let matches = parse_release_set_options(manifest_command(), args, manifest_usage())?;
+        let matches = parse_release_set_options(manifest_command(), args, manifest_usage)?;
 
         Ok(Self {
             if_ready: matches.get_flag("if-ready"),
@@ -147,11 +147,11 @@ impl StageOptions {
     where
         I: IntoIterator<Item = OsString>,
     {
-        let matches = parse_release_set_options(stage_command(), args, stage_usage())?;
+        let matches = parse_release_set_options(stage_command(), args, stage_usage)?;
 
         Ok(Self {
             root_target: string_option(&matches, "root-canister")
-                .or_else(|| env::var("ROOT_CANISTER").ok())
+                .or_else(|| std::env::var("ROOT_CANISTER").ok())
                 .unwrap_or_else(|| DEFAULT_ROOT_TARGET.to_string()),
         })
     }
@@ -161,25 +161,33 @@ impl StageOptions {
 fn parse_release_set_options<I>(
     command: ClapCommand,
     args: I,
-    usage: &'static str,
+    usage: fn() -> String,
 ) -> Result<ArgMatches, ReleaseSetCommandError>
 where
     I: IntoIterator<Item = OsString>,
 {
-    parse_matches(command, args).map_err(|_| ReleaseSetCommandError::Usage(usage))
+    parse_matches(command, args).map_err(|_| ReleaseSetCommandError::Usage(usage()))
 }
 
 // Build the install-target parser.
 fn targets_command() -> ClapCommand {
     ClapCommand::new("targets")
+        .bin_name("canic release-set targets")
+        .about("List root plus ordinary install targets from canic.toml")
         .disable_help_flag(true)
-        .arg(value_arg("config").long("config"))
-        .arg(value_arg("root").long("root"))
+        .arg(value_arg("config").long("config").value_name("canic.toml"))
+        .arg(
+            value_arg("root")
+                .long("root")
+                .value_name("dfx-canister-name"),
+        )
 }
 
 // Build the manifest emission parser.
 fn manifest_command() -> ClapCommand {
     ClapCommand::new("manifest")
+        .bin_name("canic release-set manifest")
+        .about("Emit the current root release-set manifest from local build artifacts")
         .disable_help_flag(true)
         .arg(flag_arg("if-ready").long("if-ready"))
 }
@@ -187,8 +195,10 @@ fn manifest_command() -> ClapCommand {
 // Build the release staging parser.
 fn stage_command() -> ClapCommand {
     ClapCommand::new("stage")
+        .bin_name("canic release-set stage")
+        .about("Stage the current root release set and resume root bootstrap")
         .disable_help_flag(true)
-        .arg(value_arg("root-canister"))
+        .arg(value_arg("root-canister").value_name("root-canister"))
 }
 
 // Print configured install targets in the order the install flow uses.
@@ -209,7 +219,7 @@ fn run_targets(options: TargetsOptions) -> Result<(), Box<dyn std::error::Error>
 fn run_manifest(options: ManifestOptions) -> Result<(), Box<dyn std::error::Error>> {
     let workspace_root = workspace_root()?;
     let dfx_root = dfx_root()?;
-    let network = env::var("DFX_NETWORK").unwrap_or_else(|_| "local".to_string());
+    let network = default_network();
     let manifest_path = if options.if_ready {
         emit_root_release_set_manifest_if_ready(&workspace_root, &dfx_root, &network)?
     } else {
@@ -230,7 +240,7 @@ fn run_manifest(options: ManifestOptions) -> Result<(), Box<dyn std::error::Erro
 // Stage the current root release set and resume root bootstrap.
 fn run_stage(options: StageOptions) -> Result<(), Box<dyn std::error::Error>> {
     let dfx_root = dfx_root()?;
-    let network = env::var("DFX_NETWORK").unwrap_or_else(|_| "local".to_string());
+    let network = default_network();
     let artifact_root = resolve_artifact_root(&dfx_root, &network)?;
     let manifest_path = root_release_set_manifest_path(&artifact_root)?;
     let manifest = load_root_release_set_manifest(&manifest_path)?;
@@ -241,23 +251,50 @@ fn run_stage(options: StageOptions) -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // Return release-set command family usage.
-const fn usage() -> &'static str {
-    "usage: canic release-set <command> [<args>]\n\ncommands:\n  targets   List root plus ordinary install targets from canic.toml.\n  manifest  Emit the current root release-set manifest from local build artifacts.\n  stage     Stage the current root release set and resume root bootstrap."
+fn usage() -> String {
+    let mut command = release_set_command();
+    command.render_help().to_string()
 }
 
 // Return release-set target listing usage.
-const fn targets_usage() -> &'static str {
-    "usage: canic release-set targets [--config <canic.toml>] [--root <dfx-canister-name>]"
+fn targets_usage() -> String {
+    let mut command = targets_command();
+    command.render_help().to_string()
 }
 
 // Return release-set manifest usage.
-const fn manifest_usage() -> &'static str {
-    "usage: canic release-set manifest [--if-ready]"
+fn manifest_usage() -> String {
+    let mut command = manifest_command();
+    command.render_help().to_string()
 }
 
 // Return release-set stage usage.
-const fn stage_usage() -> &'static str {
-    "usage: canic release-set stage [root-canister]"
+fn stage_usage() -> String {
+    let mut command = stage_command();
+    command.render_help().to_string()
+}
+
+// Build the release-set command-family parser for help rendering.
+fn release_set_command() -> ClapCommand {
+    ClapCommand::new("release-set")
+        .bin_name("canic release-set")
+        .about("Inspect, emit, or stage root release-set artifacts")
+        .disable_help_flag(true)
+        .subcommand(
+            ClapCommand::new("targets")
+                .about("List root plus ordinary install targets from canic.toml")
+                .disable_help_flag(true),
+        )
+        .subcommand(
+            ClapCommand::new("manifest")
+                .about("Emit the current root release-set manifest from local build artifacts")
+                .disable_help_flag(true),
+        )
+        .subcommand(
+            ClapCommand::new("stage")
+                .about("Stage the current root release set and resume root bootstrap")
+                .disable_help_flag(true),
+        )
 }
 
 #[cfg(test)]

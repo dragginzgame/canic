@@ -13,7 +13,7 @@ use thiserror::Error as ThisError;
 #[derive(Debug, ThisError)]
 pub enum RestoreCommandError {
     #[error("{0}")]
-    Usage(&'static str),
+    Usage(String),
 
     #[error("missing required option {0}")]
     MissingOption(&'static str),

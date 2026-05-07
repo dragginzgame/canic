@@ -1,4 +1,17 @@
+use crate::default_network;
 use std::{error::Error, fmt, path::Path, process::Command};
+
+///
+/// DfxRawOutput
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct DfxRawOutput {
+    pub success: bool,
+    pub status: String,
+    pub stdout: Vec<u8>,
+    pub stderr: Vec<u8>,
+}
 
 ///
 /// DfxCommandError
@@ -8,6 +21,7 @@ use std::{error::Error, fmt, path::Path, process::Command};
 pub enum DfxCommandError {
     Io(std::io::Error),
     Failed { command: String, stderr: String },
+    SnapshotIdUnavailable { output: String },
 }
 
 impl fmt::Display for DfxCommandError {
@@ -18,6 +32,12 @@ impl fmt::Display for DfxCommandError {
             Self::Failed { command, stderr } => {
                 write!(formatter, "dfx command failed: {command}\n{stderr}")
             }
+            Self::SnapshotIdUnavailable { output } => {
+                write!(
+                    formatter,
+                    "could not parse snapshot id from dfx output: {output}"
+                )
+            }
         }
     }
 }
@@ -27,7 +47,7 @@ impl Error for DfxCommandError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
             Self::Io(err) => Some(err),
-            Self::Failed { .. } => None,
+            Self::Failed { .. } | Self::SnapshotIdUnavailable { .. } => None,
         }
     }
 }
@@ -72,6 +92,15 @@ impl Dfx {
         command.arg("canister");
         add_network_args(&mut command, self.network());
         command
+    }
+
+    /// Ping the selected dfx network.
+    pub fn ping(&self) -> Result<(), DfxCommandError> {
+        let mut command = Command::new(&self.executable);
+        command.arg("ping");
+        let network = self.network().map_or_else(default_network, str::to_string);
+        command.arg(network);
+        run_status(&mut command)
     }
 
     /// Resolve one project canister id, returning `None` when the id is absent.
@@ -122,6 +151,35 @@ impl Dfx {
         let mut command = self.canister_command();
         command.args(["snapshot", "create", canister]);
         run_output_with_stderr(&mut command)
+    }
+
+    /// Create one canister snapshot and resolve the resulting snapshot id.
+    pub fn snapshot_create_id(&self, canister: &str) -> Result<String, DfxCommandError> {
+        let before = self.snapshot_list_ids(canister)?;
+        let output = self.snapshot_create(canister)?;
+        if let Some(snapshot_id) = parse_snapshot_id(&output) {
+            return Ok(snapshot_id);
+        }
+
+        let before = before
+            .into_iter()
+            .collect::<std::collections::BTreeSet<_>>();
+        let mut new_ids = self
+            .snapshot_list_ids(canister)?
+            .into_iter()
+            .filter(|snapshot_id| !before.contains(snapshot_id))
+            .collect::<Vec<_>>();
+        if new_ids.len() == 1 {
+            Ok(new_ids.remove(0))
+        } else {
+            Err(DfxCommandError::SnapshotIdUnavailable { output })
+        }
+    }
+
+    /// List snapshot ids for one canister as parsed dfx identifiers.
+    pub fn snapshot_list_ids(&self, canister: &str) -> Result<Vec<String>, DfxCommandError> {
+        let output = self.snapshot_list(canister)?;
+        Ok(parse_snapshot_list_ids(&output))
     }
 
     /// Stop one canister.
@@ -241,6 +299,17 @@ pub fn run_status(command: &mut Command) -> Result<(), DfxCommandError> {
     }
 }
 
+/// Execute a rendered dfx-compatible command and return raw process output.
+pub fn run_raw_output(program: &str, args: &[String]) -> Result<DfxRawOutput, std::io::Error> {
+    let output = Command::new(program).args(args).output()?;
+    Ok(DfxRawOutput {
+        success: output.status.success(),
+        status: exit_status_label(output.status),
+        stdout: output.stdout,
+        stderr: output.stderr,
+    })
+}
+
 /// Render a command for diagnostics and dry-run previews.
 #[must_use]
 pub fn command_display(command: &Command) -> String {
@@ -295,6 +364,13 @@ fn command_stderr(output: &std::process::Output) -> String {
     } else {
         stderr.to_string()
     }
+}
+
+// Render process exit status without relying on platform-specific internals.
+fn exit_status_label(status: std::process::ExitStatus) -> String {
+    status
+        .code()
+        .map_or_else(|| "signal".to_string(), |code| code.to_string())
 }
 
 #[cfg(test)]

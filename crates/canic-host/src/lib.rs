@@ -11,6 +11,8 @@ pub mod install_root;
 pub mod release_set;
 pub mod replica_query;
 pub mod table;
+#[cfg(test)]
+mod test_support;
 mod workspace_discovery;
 
 pub(crate) fn cargo_command() -> Command {
@@ -22,4 +24,8 @@ pub(crate) fn cargo_command() -> Command {
     }
 
     command
+}
+
+pub(crate) fn default_network() -> String {
+    std::env::var("DFX_NETWORK").unwrap_or_else(|_| "local".to_string())
 }

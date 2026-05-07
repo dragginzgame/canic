@@ -5,13 +5,15 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## [0.32.x] - 2026-05-07 - Fleet Identity
+## [0.32.x] - 2026-05-07 - Canic Executable
 
-- `0.32.0` makes fleet identity explicit in `canic.toml`, removes install-time fleet defaults, and makes `canic list` plus top-level help clearer for multi-fleet operator workflows.
+- `0.32.0` focuses the `canic` executable into a clearer operator tool, with confirmation-guarded project scaffolding, fleet-aware install/list/medic flows, simpler snapshot backup commands, backup discovery, and cleaner help output.
 
-```toml
-[fleet]
-name = "demo"
+```bash
+canic scaffold my_app
+canic scaffold my_app --yes
+canic snapshot download --fleet demo
+canic backup list
 ```
 
 See detailed breakdown:

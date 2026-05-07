@@ -1,8 +1,6 @@
 use super::*;
-use std::{
-    fs,
-    time::{SystemTime, UNIX_EPOCH},
-};
+use crate::test_support::temp_path;
+use std::fs;
 
 const EMPTY_SHA256: &str = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
 
@@ -62,13 +60,4 @@ fn checksum_verify_rejects_mismatch() {
         err,
         ArtifactChecksumError::ChecksumMismatch { .. }
     ));
-}
-
-// Build a unique temp file path without adding test-only dependencies.
-fn temp_path(prefix: &str) -> std::path::PathBuf {
-    let nanos = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .expect("system time after epoch")
-        .as_nanos();
-    std::env::temp_dir().join(format!("{prefix}-{}-{nanos}", std::process::id()))
 }

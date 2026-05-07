@@ -1,3 +1,4 @@
+use crate::test_support::temp_dir;
 use canic_backup::{
     artifacts::ArtifactChecksum,
     journal::{ArtifactJournalEntry, ArtifactState, DownloadJournal},
@@ -10,7 +11,6 @@ use canic_backup::{
 use std::{
     fs,
     path::{Path, PathBuf},
-    time::{SystemTime, UNIX_EPOCH},
 };
 
 const ROOT: &str = "aaaaa-aa";
@@ -21,9 +21,28 @@ const HASH: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789ab
 fn backup_usage_lists_commands_without_nested_flag_dump() {
     let text = usage();
 
-    assert!(text.contains("usage: canic backup <command> [<args>]"));
+    assert!(text.contains("Usage: canic backup"));
+    assert!(text.contains("list"));
     assert!(text.contains("verify"));
     assert!(text.contains("status"));
+}
+
+// Ensure backup list options default to the conventional backup root.
+#[test]
+fn parses_backup_list_options() {
+    let options = BackupListOptions::parse([
+        OsString::from("--dir"),
+        OsString::from("snapshots"),
+        OsString::from("--out"),
+        OsString::from("backups.txt"),
+    ])
+    .expect("parse options");
+
+    assert_eq!(options.dir, PathBuf::from("snapshots"));
+    assert_eq!(options.out, Some(PathBuf::from("backups.txt")));
+
+    let default_options = BackupListOptions::parse([]).expect("parse default options");
+    assert_eq!(default_options.dir, PathBuf::from("backups"));
 }
 
 // Ensure backup verification options parse the intended command shape.
@@ -80,6 +99,54 @@ fn backup_status_reads_journal_resume_report() {
     assert!(report.is_complete);
     assert_eq!(report.pending_artifacts, 0);
     assert_eq!(report.counts.skip, 1);
+}
+
+// Ensure backup list scans manifest-bearing directories and renders reusable paths.
+#[test]
+fn backup_list_reads_backup_directories() {
+    let root = temp_dir("canic-cli-backup-list");
+    let first = root.join("fleet-demo-20260507-120000");
+    let second = root.join("fleet-demo-20260507-130000");
+    let ignored = root.join("not-a-backup");
+
+    BackupLayout::new(first)
+        .write_manifest(&valid_manifest_with("backup-old", "2026-05-07T12:00:00Z"))
+        .expect("write first manifest");
+    BackupLayout::new(second)
+        .write_manifest(&valid_manifest_with("backup-new", "2026-05-07T13:00:00Z"))
+        .expect("write second manifest");
+    fs::create_dir_all(&ignored).expect("create ignored dir");
+
+    let options = BackupListOptions {
+        dir: root.clone(),
+        out: None,
+    };
+    let entries = backup_list(&options).expect("list backups");
+    let rendered = render_backup_list(&entries);
+
+    fs::remove_dir_all(root).expect("remove temp root");
+    assert_eq!(entries.len(), 2);
+    assert_eq!(entries[0].backup_id, "backup-new");
+    assert_eq!(entries[1].backup_id, "backup-old");
+    assert!(rendered.contains("DIR"));
+    assert!(rendered.contains("backup-new"));
+    assert!(rendered.contains("fleet-demo-20260507-130000"));
+}
+
+// Ensure backup list hides machine timestamp markers in table output.
+#[test]
+fn backup_list_formats_unix_created_at() {
+    let entries = vec![BackupListEntry {
+        dir: PathBuf::from("backups/fleet-demo-20240507-140000"),
+        backup_id: "backup".to_string(),
+        created_at: "unix:1715090400".to_string(),
+        members: 7,
+        status: "ok".to_string(),
+    }];
+    let rendered = render_backup_list(&entries);
+
+    assert!(rendered.contains("07/05/2024 14:00"));
+    assert!(!rendered.contains("unix:"));
 }
 
 // Ensure require-complete accepts already durable backup journals.
@@ -147,10 +214,15 @@ fn verify_backup_reads_layout_and_artifacts() {
 
 // Build one valid manifest for CLI verification tests.
 fn valid_manifest() -> FleetBackupManifest {
+    valid_manifest_with("backup-test", "2026-05-03T00:00:00Z")
+}
+
+// Build one valid manifest with caller-provided summary fields.
+fn valid_manifest_with(backup_id: &str, created_at: &str) -> FleetBackupManifest {
     FleetBackupManifest {
         manifest_version: 1,
-        backup_id: "backup-test".to_string(),
-        created_at: "2026-05-03T00:00:00Z".to_string(),
+        backup_id: backup_id.to_string(),
+        created_at: created_at.to_string(),
         tool: ToolMetadata {
             name: "canic".to_string(),
             version: "0.30.3".to_string(),
@@ -253,12 +325,4 @@ fn write_artifact(root: &Path, bytes: &[u8]) -> ArtifactChecksum {
     ArtifactChecksum::from_bytes(bytes)
 }
 
-// Build a unique temporary directory.
-fn temp_dir(prefix: &str) -> PathBuf {
-    let nanos = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .expect("system time after epoch")
-        .as_nanos();
-    std::env::temp_dir().join(format!("{prefix}-{}-{nanos}", std::process::id()))
-}
 use super::*;

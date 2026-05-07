@@ -6,8 +6,10 @@ mod options;
 use crate::version_text;
 use canic_backup::restore::{
     RestoreApplyCommandConfig, RestoreApplyDryRun, RestorePlan, RestorePlanner, RestoreRunResponse,
-    RestoreRunnerConfig,
+    RestoreRunnerCommandExecutor, RestoreRunnerCommandOutput, RestoreRunnerConfig,
 };
+use canic_host::dfx;
+use clap::Command as ClapCommand;
 use std::ffi::OsString;
 
 use enforce::{enforce_restore_plan_requirements, enforce_restore_run_requirements};
@@ -121,8 +123,34 @@ pub fn restore_run_unclaim_pending(
 fn restore_run_execute_result(
     options: &RestoreRunOptions,
 ) -> Result<canic_backup::restore::RestoreRunnerOutcome, RestoreCommandError> {
-    canic_backup::restore::restore_run_execute_result(&restore_runner_config(options))
-        .map_err(RestoreCommandError::from)
+    let mut executor = HostRestoreCommandExecutor;
+    canic_backup::restore::restore_run_execute_result_with_executor(
+        &restore_runner_config(options),
+        &mut executor,
+    )
+    .map_err(RestoreCommandError::from)
+}
+
+///
+/// HostRestoreCommandExecutor
+///
+
+struct HostRestoreCommandExecutor;
+
+impl RestoreRunnerCommandExecutor for HostRestoreCommandExecutor {
+    /// Execute restore runner commands through the host-side dfx/process boundary.
+    fn execute(
+        &mut self,
+        command: &canic_backup::restore::RestoreApplyRunnerCommand,
+    ) -> Result<RestoreRunnerCommandOutput, std::io::Error> {
+        let output = dfx::run_raw_output(&command.program, &command.args)?;
+        Ok(RestoreRunnerCommandOutput {
+            success: output.success,
+            status: output.status,
+            stdout: output.stdout,
+            stderr: output.stderr,
+        })
+    }
 }
 
 // Build command-preview configuration from common dfx/network inputs.
@@ -144,8 +172,50 @@ fn restore_runner_config(options: &RestoreRunOptions) -> RestoreRunnerConfig {
 }
 
 // Return restore command usage text.
-const fn usage() -> &'static str {
-    "usage: canic restore <command> [<args>]\n\ncommands:\n  plan   Build a no-mutation restore plan.\n  apply  Render restore operations and optionally write an apply journal.\n  run    Preview, execute, or recover the native restore runner."
+fn usage() -> String {
+    let mut command = restore_command();
+    command.render_help().to_string()
+}
+
+// Return restore plan usage text.
+fn plan_usage() -> String {
+    let mut command = options::restore_plan_command();
+    command.render_help().to_string()
+}
+
+// Return restore apply usage text.
+fn apply_usage() -> String {
+    let mut command = options::restore_apply_command();
+    command.render_help().to_string()
+}
+
+// Return restore run usage text.
+fn run_usage() -> String {
+    let mut command = options::restore_run_command();
+    command.render_help().to_string()
+}
+
+// Build the restore command-family parser for help rendering.
+fn restore_command() -> ClapCommand {
+    ClapCommand::new("restore")
+        .bin_name("canic restore")
+        .about("Plan, apply, and run snapshot restores")
+        .disable_help_flag(true)
+        .subcommand(
+            ClapCommand::new("plan")
+                .about("Build a no-mutation restore plan")
+                .disable_help_flag(true),
+        )
+        .subcommand(
+            ClapCommand::new("apply")
+                .about("Render restore operations and optionally write an apply journal")
+                .disable_help_flag(true),
+        )
+        .subcommand(
+            ClapCommand::new("run")
+                .about("Preview, execute, or recover the native restore runner")
+                .disable_help_flag(true),
+        )
 }
 
 #[cfg(test)]

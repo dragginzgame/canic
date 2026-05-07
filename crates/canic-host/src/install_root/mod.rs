@@ -290,13 +290,6 @@ fn maybe_fabricate_local_cycles(
         return Ok(Duration::ZERO);
     };
 
-    println!(
-        "Fabricating {} cycles locally for {root_canister} to reach target {} (current balance {})",
-        format_cycles(fabricate_cycles),
-        format_cycles(LOCAL_ROOT_TARGET_CYCLES),
-        format_cycles(current_balance)
-    );
-
     let mut fabricate = Command::new("dfx");
     fabricate.current_dir(dfx_root);
     fabricate.args([
@@ -308,9 +301,30 @@ fn maybe_fabricate_local_cycles(
         &fabricate_cycles.to_string(),
     ]);
     let fabricate_started_at = Instant::now();
-    let _ = run_command_allow_failure(&mut fabricate)?;
+    let output = fabricate.output()?;
+    print_local_cycle_topup_summary(root_canister, current_balance, fabricate_cycles, &output);
 
     Ok(fabricate_started_at.elapsed())
+}
+
+// Print a compact, separated summary for the noisy local dfx cycle top-up.
+fn print_local_cycle_topup_summary(
+    root_canister: &str,
+    current_balance: u128,
+    fabricate_cycles: u128,
+    output: &std::process::Output,
+) {
+    let status = if output.status.success() {
+        "topped up"
+    } else {
+        "top-up requested"
+    };
+    println!(
+        "\n\x1b[33mcycles: {status} local root {root_canister} by {} toward target {} (was {})\x1b[0m\n",
+        format_cycles(fabricate_cycles),
+        format_cycles(LOCAL_ROOT_TARGET_CYCLES),
+        format_cycles(current_balance)
+    );
 }
 
 // Read the current root canister cycle balance from `dfx canister status`.

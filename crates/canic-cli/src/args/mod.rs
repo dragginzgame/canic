@@ -64,3 +64,13 @@ pub fn string_values(matches: &ArgMatches, id: &str) -> Vec<String> {
 pub fn path_option(matches: &ArgMatches, id: &str) -> Option<PathBuf> {
     string_option(matches, id).map(PathBuf::from)
 }
+
+/// Return the default DFX executable used by live host commands.
+pub fn default_dfx() -> String {
+    "dfx".to_string()
+}
+
+/// Return the default DFX network used by local fleet commands.
+pub fn default_network() -> String {
+    std::env::var("DFX_NETWORK").unwrap_or_else(|_| "local".to_string())
+}

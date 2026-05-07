@@ -1,10 +1,10 @@
 use super::*;
+use crate::test_support::temp_dir;
 use crate::{discovery::SnapshotTarget, journal::ArtifactState, persistence::BackupLayout};
 use std::{
     error::Error as StdError,
     fmt, fs,
     path::{Path, PathBuf},
-    time::{SystemTime, UNIX_EPOCH},
 };
 
 const ROOT: &str = "aaaaa-aa";
@@ -261,13 +261,4 @@ fn single_snapshot_config(out: PathBuf) -> SnapshotDownloadConfig {
         tool_version: "0.31.0".to_string(),
         environment: "local".to_string(),
     }
-}
-
-// Build a unique temporary directory.
-fn temp_dir(prefix: &str) -> PathBuf {
-    let nanos = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .expect("system time after epoch")
-        .as_nanos();
-    std::env::temp_dir().join(format!("{prefix}-{}-{nanos}", std::process::id()))
 }

@@ -1,14 +1,18 @@
 mod args;
-pub mod backup;
-pub mod build;
-pub mod fleets;
-pub mod install;
-pub mod list;
-pub mod manifest;
+mod backup;
+mod build;
+mod fleets;
+mod install;
+mod list;
+mod manifest;
+mod medic;
 mod output;
-pub mod release_set;
-pub mod restore;
-pub mod snapshot;
+mod release_set;
+mod restore;
+mod scaffold;
+mod snapshot;
+#[cfg(test)]
+mod test_support;
 
 use crate::args::any_arg_is_version;
 use clap::{Arg, ArgAction, Command};
@@ -16,7 +20,7 @@ use std::ffi::OsString;
 use thiserror::Error as ThisError;
 
 const VERSION_TEXT: &str = concat!("canic ", env!("CARGO_PKG_VERSION"));
-const TOP_LEVEL_HELP_TEMPLATE: &str = "{about-with-newline}\n{usage-heading} {usage}\n\n{before-help}Options:\n{options}{after-help}\n";
+const TOP_LEVEL_HELP_TEMPLATE: &str = "{name} {version}\n{about-with-newline}\n{usage-heading} {usage}\n\n{before-help}Options:\n{options}{after-help}\n";
 
 ///
 /// CommandScope
@@ -24,6 +28,7 @@ const TOP_LEVEL_HELP_TEMPLATE: &str = "{about-with-newline}\n{usage-heading} {us
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum CommandScope {
+    ProjectSetup,
     MultiFleet,
     SingleFleet,
     SingleCanister,
@@ -33,6 +38,7 @@ impl CommandScope {
     // Return the heading used in grouped top-level help.
     const fn heading(self) -> &'static str {
         match self {
+            Self::ProjectSetup => "Project setup commands",
             Self::MultiFleet => "Multi-fleet commands",
             Self::SingleFleet => "Single-fleet commands",
             Self::SingleCanister => "Single-canister commands",
@@ -52,6 +58,11 @@ struct CommandSpec {
 }
 
 const COMMAND_SPECS: &[CommandSpec] = &[
+    CommandSpec {
+        name: "scaffold",
+        about: "Create a minimal Canic fleet scaffold",
+        scope: CommandScope::ProjectSetup,
+    },
     CommandSpec {
         name: "fleets",
         about: "List installed Canic fleets",
@@ -80,6 +91,11 @@ const COMMAND_SPECS: &[CommandSpec] = &[
     CommandSpec {
         name: "manifest",
         about: "Validate fleet backup manifests",
+        scope: CommandScope::SingleFleet,
+    },
+    CommandSpec {
+        name: "medic",
+        about: "Diagnose local Canic fleet setup",
         scope: CommandScope::SingleFleet,
     },
     CommandSpec {
@@ -113,32 +129,115 @@ pub enum CliError {
     #[error("{0}")]
     Usage(String),
 
-    #[error(transparent)]
-    Backup(#[from] backup::BackupCommandError),
+    #[error("backup: {0}")]
+    Backup(String),
 
-    #[error(transparent)]
-    Build(#[from] build::BuildCommandError),
+    #[error("build: {0}")]
+    Build(String),
 
-    #[error(transparent)]
-    Install(#[from] install::InstallCommandError),
+    #[error("install: {0}")]
+    Install(String),
 
-    #[error(transparent)]
-    Fleets(#[from] fleets::FleetCommandError),
+    #[error("fleets: {0}")]
+    Fleets(String),
 
-    #[error(transparent)]
-    List(#[from] list::ListCommandError),
+    #[error("list: {0}")]
+    List(String),
 
-    #[error(transparent)]
-    Manifest(#[from] manifest::ManifestCommandError),
+    #[error("manifest: {0}")]
+    Manifest(String),
 
-    #[error(transparent)]
-    Snapshot(#[from] snapshot::SnapshotCommandError),
+    #[error("medic: {0}")]
+    Medic(String),
 
-    #[error(transparent)]
-    ReleaseSet(#[from] release_set::ReleaseSetCommandError),
+    #[error("snapshot: {0}")]
+    Snapshot(String),
 
-    #[error(transparent)]
-    Restore(#[from] restore::RestoreCommandError),
+    #[error("release-set: {0}")]
+    ReleaseSet(String),
+
+    #[error("restore: {0}")]
+    Restore(String),
+
+    #[error("scaffold: {0}")]
+    Scaffold(String),
+}
+
+impl From<backup::BackupCommandError> for CliError {
+    // Keep backup command internals private while preserving operator-facing messages.
+    fn from(err: backup::BackupCommandError) -> Self {
+        Self::Backup(err.to_string())
+    }
+}
+
+impl From<build::BuildCommandError> for CliError {
+    // Keep build command internals private while preserving operator-facing messages.
+    fn from(err: build::BuildCommandError) -> Self {
+        Self::Build(err.to_string())
+    }
+}
+
+impl From<install::InstallCommandError> for CliError {
+    // Keep install command internals private while preserving operator-facing messages.
+    fn from(err: install::InstallCommandError) -> Self {
+        Self::Install(err.to_string())
+    }
+}
+
+impl From<fleets::FleetCommandError> for CliError {
+    // Keep fleet command internals private while preserving operator-facing messages.
+    fn from(err: fleets::FleetCommandError) -> Self {
+        Self::Fleets(err.to_string())
+    }
+}
+
+impl From<list::ListCommandError> for CliError {
+    // Keep list command internals private while preserving operator-facing messages.
+    fn from(err: list::ListCommandError) -> Self {
+        Self::List(err.to_string())
+    }
+}
+
+impl From<manifest::ManifestCommandError> for CliError {
+    // Keep manifest command internals private while preserving operator-facing messages.
+    fn from(err: manifest::ManifestCommandError) -> Self {
+        Self::Manifest(err.to_string())
+    }
+}
+
+impl From<medic::MedicCommandError> for CliError {
+    // Keep medic command internals private while preserving operator-facing messages.
+    fn from(err: medic::MedicCommandError) -> Self {
+        Self::Medic(err.to_string())
+    }
+}
+
+impl From<snapshot::SnapshotCommandError> for CliError {
+    // Keep snapshot command internals private while preserving operator-facing messages.
+    fn from(err: snapshot::SnapshotCommandError) -> Self {
+        Self::Snapshot(err.to_string())
+    }
+}
+
+impl From<release_set::ReleaseSetCommandError> for CliError {
+    // Keep release-set command internals private while preserving operator-facing messages.
+    fn from(err: release_set::ReleaseSetCommandError) -> Self {
+        Self::ReleaseSet(err.to_string())
+    }
+}
+
+impl From<restore::RestoreCommandError> for CliError {
+    // Keep restore command internals private while preserving operator-facing messages.
+    fn from(err: restore::RestoreCommandError) -> Self {
+        Self::Restore(err.to_string())
+    }
+}
+
+impl From<scaffold::ScaffoldCommandError> for CliError {
+    // Keep scaffold command internals private while preserving operator-facing messages.
+    fn from(err: scaffold::ScaffoldCommandError) -> Self {
+        Self::Scaffold(err.to_string())
+    }
 }
 
 /// Run the CLI from process arguments.
@@ -169,7 +268,9 @@ where
         "install" => install::run(args).map_err(CliError::from),
         "list" => list::run(args).map_err(CliError::from),
         "manifest" => manifest::run(args).map_err(CliError::from),
+        "medic" => medic::run(args).map_err(CliError::from),
         "release-set" => release_set::run(args).map_err(CliError::from),
+        "scaffold" => scaffold::run(args).map_err(CliError::from),
         "snapshot" => snapshot::run(args).map_err(CliError::from),
         "restore" => restore::run(args).map_err(CliError::from),
         "use" => fleets::run_use(args).map_err(CliError::from),
@@ -185,6 +286,7 @@ where
 #[must_use]
 pub fn top_level_command() -> Command {
     let command = Command::new("canic")
+        .version(env!("CARGO_PKG_VERSION"))
         .about("Operator CLI for Canic install, backup, and restore workflows")
         .disable_version_flag(true)
         .arg(
@@ -220,6 +322,7 @@ fn usage() -> String {
 fn grouped_command_section(specs: &[CommandSpec]) -> String {
     let mut lines = Vec::new();
     let scopes = [
+        CommandScope::ProjectSetup,
         CommandScope::MultiFleet,
         CommandScope::SingleFleet,
         CommandScope::SingleCanister,
@@ -245,13 +348,17 @@ mod tests {
     fn usage_lists_command_families() {
         let text = usage();
 
+        assert!(text.contains(version_text()));
         assert!(text.contains("Usage: canic"));
+        assert!(text.contains("Project setup commands"));
         assert!(text.contains("Multi-fleet commands"));
         assert!(text.contains("Single-fleet commands"));
         assert!(text.contains("Single-canister commands"));
         assert!(!text.contains("\nCommands:\n"));
+        assert!(text.find("Project setup commands") < text.find("Multi-fleet commands"));
         assert!(text.find("Multi-fleet commands") < text.find("Single-fleet commands"));
         assert!(text.find("Single-fleet commands") < text.find("Single-canister commands"));
+        assert!(text.contains("scaffold"));
         assert!(text.contains("list"));
         assert!(text.contains("build"));
         assert!(text.contains("fleets"));
@@ -260,6 +367,7 @@ mod tests {
         assert!(text.contains("snapshot"));
         assert!(text.contains("backup"));
         assert!(text.contains("manifest"));
+        assert!(text.contains("medic"));
         assert!(text.contains("release-set"));
         assert!(text.contains("restore"));
         assert!(text.contains("canic <command> help"));
@@ -275,7 +383,9 @@ mod tests {
         assert!(run([OsString::from("list"), OsString::from("help")]).is_ok());
         assert!(run([OsString::from("restore"), OsString::from("help")]).is_ok());
         assert!(run([OsString::from("manifest"), OsString::from("help")]).is_ok());
+        assert!(run([OsString::from("medic"), OsString::from("help")]).is_ok());
         assert!(run([OsString::from("release-set"), OsString::from("help")]).is_ok());
+        assert!(run([OsString::from("scaffold"), OsString::from("help")]).is_ok());
         assert!(run([OsString::from("snapshot"), OsString::from("help")]).is_ok());
         assert!(run([OsString::from("use"), OsString::from("help")]).is_ok());
     }
@@ -292,7 +402,9 @@ mod tests {
         assert!(run([OsString::from("list"), OsString::from("--version")]).is_ok());
         assert!(run([OsString::from("restore"), OsString::from("--version")]).is_ok());
         assert!(run([OsString::from("manifest"), OsString::from("--version")]).is_ok());
+        assert!(run([OsString::from("medic"), OsString::from("--version")]).is_ok());
         assert!(run([OsString::from("release-set"), OsString::from("--version")]).is_ok());
+        assert!(run([OsString::from("scaffold"), OsString::from("--version")]).is_ok());
         assert!(run([OsString::from("snapshot"), OsString::from("--version")]).is_ok());
         assert!(run([OsString::from("use"), OsString::from("--version")]).is_ok());
     }

@@ -7,12 +7,12 @@ use super::{
     required_local_cycle_topup, resolve_install_config_path, write_install_state,
 };
 use crate::release_set::configured_install_targets;
+use crate::test_support::temp_dir;
 use serde_json::json;
 use std::{
     env, fs,
     path::{Path, PathBuf},
     sync::{Mutex, OnceLock},
-    time::{SystemTime, UNIX_EPOCH},
 };
 
 static ENV_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
@@ -232,7 +232,7 @@ kind = "singleton"
 #[test]
 fn install_config_defaults_to_project_config_when_present() {
     with_guarded_env(|| {
-        let root = unique_temp_dir("canic-install-config-default");
+        let root = temp_dir("canic-install-config-default");
         let config = root.join("canisters/canic.toml");
         fs::create_dir_all(config.parent().expect("config parent")).expect("create parent");
         fs::write(&config, "").expect("write config");
@@ -251,7 +251,7 @@ fn install_config_defaults_to_project_config_when_present() {
 
 #[test]
 fn install_config_accepts_explicit_path() {
-    let root = unique_temp_dir("canic-install-config-explicit");
+    let root = temp_dir("canic-install-config-explicit");
     let resolved = resolve_install_config_path(&root, Some("canisters/demo/canic.toml"), false)
         .expect("resolve config");
 
@@ -262,7 +262,7 @@ fn install_config_accepts_explicit_path() {
 #[test]
 fn install_config_error_lists_choices_when_project_default_missing() {
     with_guarded_env(|| {
-        let root = unique_temp_dir("canic-install-config-choices");
+        let root = temp_dir("canic-install-config-choices");
         let demo = root.join("canisters/demo/canic.toml");
         let test = root.join("canisters/test/runtime_probe/canic.toml");
         fs::create_dir_all(demo.parent().expect("demo parent")).expect("create demo parent");
@@ -309,7 +309,7 @@ kind = "singleton"
 
 #[test]
 fn config_selection_error_is_whitespace_table() {
-    let root = unique_temp_dir("canic-install-config-single-table");
+    let root = temp_dir("canic-install-config-single-table");
     let config = root.join("canisters/demo/canic.toml");
     fs::create_dir_all(config.parent().expect("config parent")).expect("create config parent");
     fs::write(
@@ -342,7 +342,7 @@ kind = "singleton"
 
 #[test]
 fn config_selection_error_lists_multiple_paths_with_numbered_options() {
-    let root = unique_temp_dir("canic-install-config-multiple-table");
+    let root = temp_dir("canic-install-config-multiple-table");
     let demo = root.join("canisters/demo/canic.toml");
     let example = root.join("canisters/example/canic.toml");
     fs::create_dir_all(demo.parent().expect("demo parent")).expect("create demo parent");
@@ -399,7 +399,7 @@ kind = "singleton"
 
 #[test]
 fn config_selection_preview_lists_six_canisters_before_ellipsis() {
-    let root = unique_temp_dir("canic-install-config-preview-limit");
+    let root = temp_dir("canic-install-config-preview-limit");
     let config = root.join("canisters/demo/canic.toml");
     fs::create_dir_all(config.parent().expect("config parent")).expect("create config parent");
     fs::write(
@@ -444,7 +444,7 @@ kind = "singleton"
 
 #[test]
 fn discovered_install_config_choices_are_path_sorted() {
-    let root = unique_temp_dir("canic-install-config-sorted");
+    let root = temp_dir("canic-install-config-sorted");
     let alpha = root.join("alpha/canic.toml");
     let zeta = root.join("zeta/canic.toml");
     fs::create_dir_all(alpha.parent().expect("alpha parent").join("root"))
@@ -486,7 +486,7 @@ fn install_state_path_is_scoped_by_network() {
 
 #[test]
 fn install_state_round_trips_from_project_state_dir() {
-    let root = unique_temp_dir("canic-install-state");
+    let root = temp_dir("canic-install-state");
     let state = InstallState {
         schema_version: INSTALL_STATE_SCHEMA_VERSION,
         fleet: "demo".to_string(),
@@ -525,7 +525,7 @@ fn install_state_round_trips_from_project_state_dir() {
 
 #[test]
 fn legacy_install_state_without_fleet_name_is_rejected() {
-    let root = unique_temp_dir("canic-install-legacy-state-missing-fleet-name");
+    let root = temp_dir("canic-install-legacy-state-missing-fleet-name");
     let config = root.join("canisters/demo/canic.toml");
     fs::create_dir_all(config.parent().expect("config parent")).expect("create config parent");
     fs::create_dir_all(root.join(".canic/local")).expect("create state dir");
@@ -579,19 +579,11 @@ kind = "root"
 }
 
 fn write_temp_workspace_config(config_source: &str) -> PathBuf {
-    let root = unique_temp_dir("canic-install-test");
+    let root = temp_dir("canic-install-test");
     fs::create_dir_all(root.join("canisters")).expect("temp canisters dir must be created");
     fs::write(root.join("canisters/canic.toml"), config_source)
         .expect("temp canic.toml must be written");
     root
-}
-
-fn unique_temp_dir(prefix: &str) -> PathBuf {
-    let unique = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .expect("clock must be monotonic enough for test temp dir")
-        .as_nanos();
-    std::env::temp_dir().join(format!("{prefix}-{}-{unique}", std::process::id()))
 }
 
 fn with_guarded_env(run: impl FnOnce()) {

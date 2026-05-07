@@ -111,15 +111,23 @@ canic fleets --network local
 canic use demo --network local
 ```
 
+Diagnose the selected fleet, replica reachability, saved config path, and root
+readiness:
+
+```bash
+canic medic
+canic medic --fleet demo
+```
+
 Run command-specific help when you need exact flags:
 
 ```bash
 canic <command> help
 ```
 
-Print the installed CLI version with `canic --version`. The flag is accepted
-at any command depth, so `canic backup verify --version` reports the binary
-version instead of running the command.
+The installed CLI version is visible in top-level help and from `canic
+--version`. The version flag is accepted at any command depth, so `canic backup
+verify --version` reports the binary version instead of running the command.
 
 ## Happy Path
 
