@@ -150,10 +150,6 @@ fn authorize_issue_role_attestation(
         .into());
     }
 
-    if req.audience.is_none() {
-        return Err(RpcWorkflowError::RoleAttestationAudienceRequired.into());
-    }
-
     let max_ttl_secs = max_role_attestation_ttl_seconds();
     if req.ttl_secs == 0 || req.ttl_secs > max_ttl_secs {
         return Err(RpcWorkflowError::RoleAttestationInvalidTtl {

@@ -151,6 +151,10 @@ where
 
     match command.as_str() {
         "download" => {
+            let args = args.collect::<Vec<_>>();
+            if crate::args::print_help_or_version(&args, download_usage, version_text()) {
+                return Ok(());
+            }
             let options = SnapshotDownloadOptions::parse(args)?;
             let result = download_snapshots(&options)?;
             for command in result.planned_commands {

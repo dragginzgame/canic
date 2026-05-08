@@ -1,5 +1,5 @@
 use crate::{
-    args::{first_arg_is_help, first_arg_is_version, parse_matches},
+    args::{parse_matches, print_help_or_version},
     version_text,
 };
 use canic_host::canister_build::{
@@ -68,12 +68,7 @@ where
     I: IntoIterator<Item = OsString>,
 {
     let args = args.into_iter().collect::<Vec<_>>();
-    if first_arg_is_help(&args) {
-        println!("{}", usage());
-        return Ok(());
-    }
-    if first_arg_is_version(&args) {
-        println!("{}", version_text());
+    if print_help_or_version(&args, usage, version_text()) {
         return Ok(());
     }
 

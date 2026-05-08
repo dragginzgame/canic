@@ -26,23 +26,23 @@ pub struct RootAuditProbeFixture {
 // Build one standalone internal leaf probe for shared query-floor audits.
 #[must_use]
 pub fn install_audit_leaf_probe(profile: WasmBuildProfile) -> StandaloneCanisterFixture {
-    install_standalone_canister("audit_leaf_probe", APP, profile)
+    install_standalone_canister("leaf_probe", APP, profile)
 }
 
 // Build one standalone internal scaling probe for dry-run placement audits.
 #[must_use]
 pub fn install_audit_scaling_probe(profile: WasmBuildProfile) -> StandaloneCanisterFixture {
-    install_standalone_canister("audit_scaling_probe", SCALE_HUB, profile)
+    install_standalone_canister("scaling_probe", SCALE_HUB, profile)
 }
 
 // Build one standalone internal root probe for root-only query audits.
 #[must_use]
 pub fn install_audit_root_probe(profile: WasmBuildProfile) -> RootAuditProbeFixture {
     let workspace_root = workspace_root();
-    let target_dir = test_target_dir(&workspace_root, "standalone-audit-root-probe");
-    ensure_probe_wasm_ready(&workspace_root, &target_dir, "audit_root_probe", profile);
+    let target_dir = test_target_dir(&workspace_root, "standalone-root-probe");
+    ensure_probe_wasm_ready(&workspace_root, &target_dir, "root_probe", profile);
 
-    let wasm = read_wasm(&target_dir, "audit_root_probe", profile);
+    let wasm = read_wasm(&target_dir, "root_probe", profile);
     let serial_guard = acquire_pic_serial_guard();
     let pic = pic();
     let canister_id = pic

@@ -2,18 +2,22 @@
 
 ## Purpose
 
-Ensure token acceptance requires a valid issuer trust chain from root authority to token issuer.
+Ensure token acceptance requires a valid issuer trust chain from root authority
+to shard authority to the delegated-token claims.
 
 ## Risk Model / Invariant
 
-A token must be rejected unless the complete issuer trust chain validates from root authority to shard authority to token issuer.
+A token must be rejected unless the complete issuer trust chain validates from
+root authority to shard authority to token claims.
 
 Chain validation must verify:
 
 - root authority identity
-- shard authority certification by root
-- token issuer certification by shard
-- token signature under issuer key
+- root public key trust anchor sourced from verifier-local state
+- shard authority certification by root signature over canonical cert hash
+- delegated-token claims bound to the signed cert
+- token claims signature under the certified shard key
+- shard key binding to Canic's configured signing key and derivation path
 
 Freshness checks are verified by the Expiry / Replay / Single-Use Invariant.
 
@@ -44,6 +48,14 @@ Every report generated from this audit must include:
 
 Locate root and shard verification code and confirm trust anchors are explicitly defined and not derived from untrusted input or dynamic request context.
 
+Current expected hotspots:
+
+- `crates/canic-core/src/ops/auth/token.rs`
+- `crates/canic-core/src/ops/auth/delegated/verify.rs`
+- `crates/canic-core/src/ops/auth/delegated/root_key.rs`
+- `crates/canic-core/src/access/auth/token.rs`
+- `crates/canic-core/src/ops/auth/attestation.rs`
+
 ### 2. Verify Chain Validation
 
 Search terms:
@@ -54,13 +66,22 @@ verify_shard
 issuer
 signature
 certificate
+cert_hash
+root_sig
+shard_sig
+RootTrustAnchor
+verify_delegated_token
+verify_token
 ```
 
 Confirm:
 
 - each trust layer is verified before token acceptance
-- cached trust objects retain cryptographic integrity and do not bypass required verification steps
+- verifier-local trust objects retain cryptographic integrity and do not bypass required verification steps
 - issuer identity is bound to expected authority
+- root key identity checks cover root pid, key id, key hash, algorithm, and time window
+- claims bind issuer shard pid and cert hash back to the signed cert
+- shard key binding matches configured key name and shard derivation path
 
 ### 3. Verify Negative Cases
 
@@ -71,12 +92,31 @@ Confirm rejection for:
 - invalid token signature
 - unexpected issuer relationship
 - expired or revoked issuer certificate
+- cert hash drift
+- noncanonical certificate or claims data
+- missing root or shard signature
 
 ### 4. Test Expectations
 
-- invalid shard under valid root => rejection
-- valid shard under invalid root => rejection
-- forged token under valid chain context => rejection
+- self-contained delegated token with valid root and shard signatures => acceptance
+- invalid root signature => rejection
+- invalid shard signature => rejection
+- cert hash drift => rejection
+- noncanonical cert or claims vectors => rejection
+- root pid mismatch => rejection
+- runtime root-key propagation path => acceptance
+
+Current suggested commands:
+
+```bash
+cargo test -p canic-core --lib verify_delegated_token_accepts_self_validating_token_without_proof_lookup -- --nocapture
+cargo test -p canic-core --lib verify_delegated_token_rejects_root_signature_failure -- --nocapture
+cargo test -p canic-core --lib verify_delegated_token_rejects_shard_signature_failure -- --nocapture
+cargo test -p canic-core --lib verify_delegated_token_rejects_cert_hash_drift -- --nocapture
+cargo test -p canic-core --lib verify_delegated_token_rejects_noncanonical_cert_vectors -- --nocapture
+cargo test -p canic-core --lib resolve_root_key_enforces_root_pid_binding_before_key_lookup -- --nocapture
+cargo test -p canic-tests --test root_suite delegated_token_verification_uses_cascaded_subnet_state_root_key -- --nocapture
+```
 
 ## Structural Hotspots
 
@@ -93,9 +133,11 @@ git log --name-only -n 20 -- crates/
 
 | File / Module | Struct / Function | Reason | Risk Contribution |
 | --- | --- | --- | --- |
-| `ops/auth/token.rs` | `verify_token`, structure checks | trust-chain orchestration entrypoint | High |
-| `ops/auth/verify.rs` | `verify_delegation_signature`, `verify_token_sig` | root/shard cryptographic verification | High |
-| `ops/storage/auth/*` | delegation key/proof state access | trust-anchor material sourcing | Medium |
+| `ops/auth/token.rs` | `verify_token`, `root_trust_anchor`, `verify_shard_key_binding` | runtime trust-chain orchestration entrypoint | High |
+| `ops/auth/delegated/verify.rs` | `verify_delegated_token`, `verify_claims` | pure root/shard/token verification order | High |
+| `ops/auth/delegated/root_key.rs` | `resolve_root_key` | root trust-anchor identity and validity checks | High |
+| `access/auth/token.rs` | `delegated_token_verified`, `enforce_subject_binding` | endpoint guard integration | Medium |
+| `ops/auth/attestation.rs` | `verify_role_attestation_cached` | role-attestation key and signature verification | Medium |
 
 If none are detected in a given run, state: No structural hotspots detected in this run.
 
@@ -117,8 +159,9 @@ Pressure score guidance:
 
 - trust chain step skipped on an internal path
 - token signature accepted without issuer-root linkage
-- cache hit bypasses mandatory integrity checks
-- issuer key accepted without verifying issuer authority
+- verifier-local trust anchor bypassed by token-provided key material
+- shard key accepted without checking configured key name and derivation path
+- claims accepted without matching issuer shard pid and cert hash
 - trust anchor loaded from runtime configuration without validation
 
 ## Severity

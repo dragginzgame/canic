@@ -1,6 +1,6 @@
 # Local Demo Workflow (`scripts/app/`)
 
-These scripts support the reference canisters under `canisters/demo/` and the local topology in `dfx.json`.
+These scripts support the reference canisters under `fleets/demo/` and the local topology in `dfx.json`.
 
 ## Prerequisites
 
@@ -57,10 +57,10 @@ CANIC_WASM_PROFILE=debug make demo-install
 This one command:
 - creates the reference canisters in `dfx`
 - builds the local canister artifacts
-- emits a build-produced root release-set manifest from the configured ordinary `.wasm.gz` artifacts
+- emits the build-produced root staging manifest from the configured ordinary `.wasm.gz` artifacts
 - reinstalls `root` in `Prime` mode
-- stages the configured ordinary release set into `root` through the `canic` CLI
-- resumes bootstrap so `root` can create the internal `wasm_store` and publish the staged release set
+- stages the configured ordinary fleet artifacts into `root` through the install flow
+- resumes bootstrap so `root` can create the internal `wasm_store` and publish the staged artifacts
 - waits for `root` to report `READY`
 
 This is a manual local fast flow, not part of `make test`.
@@ -123,7 +123,7 @@ Profile selection for the public builder is:
 `root.wasm` stays thin again. Only the bootstrap `wasm_store.wasm.gz` is
 embedded in `root`; the ordinary role `.wasm.gz` artifacts stay outside `root`
 and are staged after `root` install from the build-produced
-`.dfx/local/canisters/root/root.release-set.json` manifest by the `canic` CLI.
+`.dfx/local/canisters/root/root.release-set.json` manifest by `canic install`.
 
 During normal custom builds, `scripts/app/build.sh` now opportunistically emits
 that manifest as soon as the full root-subnet ordinary artifact set exists, so

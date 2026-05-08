@@ -175,7 +175,7 @@ impl RpcOps {
             subject: self_pid,
             role,
             subnet_id: None,
-            audience: Some(audience_pid),
+            audience: audience_pid,
             ttl_secs: cfg.max_ttl_secs,
             epoch,
             metadata: Some(new_root_attestation_request_metadata()),
@@ -342,7 +342,7 @@ fn cached_root_response_attestation(
             && cached.epoch == epoch
             && payload.subject == subject_pid
             && &payload.role == role
-            && payload.audience == Some(audience_pid)
+            && payload.audience == audience_pid
             && payload.epoch == epoch
             && now_secs <= payload.expires_at;
 
@@ -451,7 +451,7 @@ mod tests {
                 subject,
                 role: USER_HUB_ROLE,
                 subnet_id: None,
-                audience: Some(audience),
+                audience,
                 issued_at: 100,
                 expires_at,
                 epoch,

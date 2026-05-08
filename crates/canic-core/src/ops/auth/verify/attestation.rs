@@ -29,12 +29,10 @@ pub(super) fn verify_role_attestation_claims(
         .into());
     }
 
-    if let Some(audience) = payload.audience
-        && audience != self_pid
-    {
+    if payload.audience != self_pid {
         return Err(AuthScopeError::AttestationAudienceMismatch {
             expected: self_pid,
-            found: audience,
+            found: payload.audience,
         }
         .into());
     }

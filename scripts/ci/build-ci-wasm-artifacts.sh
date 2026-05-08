@@ -4,7 +4,6 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT_DIR"
-source "$ROOT_DIR/scripts/app/reference_canisters.sh"
 source "$ROOT_DIR/scripts/ci/require_dfx.sh"
 
 require_cmd() {
@@ -24,6 +23,21 @@ require_cmd candid-extractor
 require_cmd ic-wasm
 require_dfx_ready
 
+canic_fleet_canisters() {
+    if [ -f "$ROOT_DIR/crates/canic-cli/Cargo.toml" ]; then
+        cargo run -q -p canic-cli --bin canic -- fleet canisters --config fleets/demo/canic.toml --ci-order
+        return
+    fi
+
+    if command -v canic >/dev/null 2>&1; then
+        canic fleet canisters --config fleets/demo/canic.toml --ci-order
+        return
+    fi
+
+    echo "missing canic binary: install canic or run from a Canic workspace" >&2
+    exit 1
+}
+
 # Build the middle fast artifacts by default so PocketIC/test harnesses and
 # local demo flows get smaller faster wasm without paying full release cost.
 BUILD_WASM_PROFILE="${CANIC_WASM_PROFILE:-}"
@@ -34,36 +48,26 @@ fi
 # Keep PocketIC-oriented CI artifacts small.
 export RUSTFLAGS="${RUSTFLAGS:-} -C debuginfo=0"
 
-BUILD_CANISTERS=("${REFERENCE_CANISTERS[@]}")
 if [ -n "${CANIC_REFERENCE_CANISTERS:-}" ]; then
     # Allow focused harnesses to build only the canisters they actually stage.
     read -r -a BUILD_CANISTERS <<<"$CANIC_REFERENCE_CANISTERS"
+else
+    DEFAULT_BUILD_CANISTERS="$(canic_fleet_canisters)"
+    mapfile -t BUILD_CANISTERS <<<"$DEFAULT_BUILD_CANISTERS"
 fi
-
-NON_ROOT_CANISTERS=()
-BUILD_ROOT=0
-for canister in "${BUILD_CANISTERS[@]}"; do
-    if [ "$canister" = "root" ]; then
-        BUILD_ROOT=1
-    else
-        NON_ROOT_CANISTERS+=("$canister")
-    fi
-done
 
 # Build the ordinary reference artifacts first so the thin-root manifest path
-# can emit once the full root-subnet release set exists. Root itself builds the
+# can emit once the full root-subnet ordinary artifact set exists. Root itself builds the
 # implicit bootstrap `wasm_store` artifact internally.
-for canister in "${NON_ROOT_CANISTERS[@]}"; do
+for canister in "${BUILD_CANISTERS[@]}"; do
     CANIC_WASM_PROFILE="$BUILD_WASM_PROFILE" scripts/app/build.sh "$canister"
-done
 
-if [ "$BUILD_ROOT" -eq 1 ]; then
-    CANIC_WASM_PROFILE="$BUILD_WASM_PROFILE" scripts/app/build.sh root
-
-    ROOT_WASM_GZ_PATH=".dfx/local/canisters/root/root.wasm.gz"
-    ROOT_WASM_GZ_BYTES="$(stat -c%s "$ROOT_WASM_GZ_PATH")"
-    if [ "$ROOT_WASM_GZ_BYTES" -ge 100000000 ]; then
-        echo "root.wasm.gz too large for PocketIC chunk store: ${ROOT_WASM_GZ_BYTES} bytes" >&2
-        exit 1
+    if [ "$canister" = "root" ]; then
+        ROOT_WASM_GZ_PATH=".dfx/local/canisters/root/root.wasm.gz"
+        ROOT_WASM_GZ_BYTES="$(stat -c%s "$ROOT_WASM_GZ_PATH")"
+        if [ "$ROOT_WASM_GZ_BYTES" -ge 100000000 ]; then
+            echo "root.wasm.gz too large for PocketIC chunk store: ${ROOT_WASM_GZ_BYTES} bytes" >&2
+            exit 1
+        fi
     fi
-fi
+done

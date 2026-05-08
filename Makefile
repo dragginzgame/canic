@@ -98,13 +98,13 @@ help:
 # Installing
 #
 
-# Install the shared Rust/Cargo/Python/actionlint/Canic toolchain
-install-dev:
-	bash scripts/dev/install_dev.sh
-
 # Install only the local canic CLI binary.
 install:
 	cargo install --locked --path crates/canic-cli
+
+# Install the shared Rust/Cargo/Python/actionlint/Canic toolchain
+install-dev:
+	bash scripts/dev/install_dev.sh
 
 # Update the local Rust/Cargo/Python/actionlint/DFX development environment.
 update-dev:
@@ -175,7 +175,7 @@ test-installed-canic-cli:
 
 demo-install:
 	@mkdir -p "$(TEST_TMPDIR)"
-	TMPDIR="$(TEST_TMPDIR)" CANIC_WASM_PROFILE="$(if $(CANIC_WASM_PROFILE),$(CANIC_WASM_PROFILE),fast)" $(CARGO_ENV) cargo run -q -p canic-cli --bin canic -- install --config canisters/demo/canic.toml
+	TMPDIR="$(TEST_TMPDIR)" CANIC_WASM_PROFILE="$(if $(CANIC_WASM_PROFILE),$(CANIC_WASM_PROFILE),fast)" $(CARGO_ENV) cargo run -q -p canic-cli --bin canic -- install --config fleets/demo/canic.toml
 
 test: clippy test-unit
 

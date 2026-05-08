@@ -1,7 +1,11 @@
 use crate::{
-    args::{first_arg_is_help, first_arg_is_version, flag_arg, parse_matches, path_option},
+    args::{
+        default_network, flag_arg, parse_matches, path_option, print_help_or_version,
+        string_option, value_arg,
+    },
     version_text,
 };
+use canic_host::install_root::select_current_fleet_name;
 use clap::{Arg, Command as ClapCommand};
 use std::{
     ffi::OsString,
@@ -31,6 +35,9 @@ pub enum ScaffoldCommandError {
 
     #[error(transparent)]
     Io(#[from] io::Error),
+
+    #[error(transparent)]
+    Selection(#[from] Box<dyn std::error::Error>),
 }
 
 ///
@@ -40,7 +47,8 @@ pub enum ScaffoldCommandError {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ScaffoldOptions {
     pub name: String,
-    pub canisters_dir: PathBuf,
+    pub fleets_dir: PathBuf,
+    pub network: String,
     pub yes: bool,
 }
 
@@ -60,8 +68,8 @@ impl ScaffoldOptions {
 
         Ok(Self {
             name,
-            canisters_dir: path_option(&matches, "dir")
-                .unwrap_or_else(|| PathBuf::from("canisters")),
+            fleets_dir: path_option(&matches, "dir").unwrap_or_else(|| PathBuf::from("fleets")),
+            network: string_option(&matches, "network").unwrap_or_else(default_network),
             yes: matches.get_flag("yes"),
         })
     }
@@ -73,12 +81,7 @@ where
     I: IntoIterator<Item = OsString>,
 {
     let args = args.into_iter().collect::<Vec<_>>();
-    if first_arg_is_help(&args) {
-        println!("{}", usage());
-        return Ok(());
-    }
-    if first_arg_is_version(&args) {
-        println!("{}", version_text());
+    if print_help_or_version(&args, usage, version_text()) {
         return Ok(());
     }
 
@@ -88,12 +91,17 @@ where
     }
 
     let result = scaffold_project(&options)?;
+    select_current_fleet_name(&options.network, &options.name)?;
     println!("Created Canic scaffold:");
     println!("  {}", result.project_dir.display());
     println!("  {}", result.root_dir.display());
+    println!(
+        "Selected current fleet for {}: {}",
+        options.network, options.name
+    );
     println!();
     println!("Next:");
-    println!("  canic install --config {}", result.config_path.display());
+    println!("  canic install");
     Ok(())
 }
 
@@ -110,7 +118,7 @@ pub struct ScaffoldResult {
 
 /// Create a minimal root-canister project scaffold.
 pub fn scaffold_project(options: &ScaffoldOptions) -> Result<ScaffoldResult, ScaffoldCommandError> {
-    let project_dir = options.canisters_dir.join(&options.name);
+    let project_dir = options.fleets_dir.join(&options.name);
     if project_dir.exists() {
         return Err(ScaffoldCommandError::TargetExists(
             project_dir.display().to_string(),
@@ -154,7 +162,13 @@ fn scaffold_command() -> ClapCommand {
                 .long("dir")
                 .value_name("dir")
                 .num_args(1)
-                .help("Canisters directory to create under; defaults to canisters"),
+                .help("Fleets directory to create under; defaults to fleets"),
+        )
+        .arg(
+            value_arg("network")
+                .long("network")
+                .value_name("name")
+                .help("DFX network whose current fleet should be selected"),
         )
         .arg(
             flag_arg("yes")
@@ -180,7 +194,7 @@ where
     R: BufRead,
     W: Write,
 {
-    let project_dir = options.canisters_dir.join(&options.name);
+    let project_dir = options.fleets_dir.join(&options.name);
     if project_dir.exists() {
         return Err(ScaffoldCommandError::TargetExists(
             project_dir.display().to_string(),
@@ -190,6 +204,7 @@ where
     writeln!(writer, "Create Canic scaffold?")?;
     writeln!(writer, "  project: {}", options.name)?;
     writeln!(writer, "  target:  {}", project_dir.display())?;
+    writeln!(writer, "  current: {} on {}", options.name, options.network)?;
     write!(writer, "Continue? [y/N] ")?;
     writer.flush()?;
 
@@ -319,13 +334,27 @@ mod tests {
         let options = ScaffoldOptions::parse([
             OsString::from("my_app"),
             OsString::from("--dir"),
-            OsString::from("tmp_canisters"),
+            OsString::from("tmp_fleets"),
         ])
         .expect("parse scaffold options");
 
         assert_eq!(options.name, "my_app");
-        assert_eq!(options.canisters_dir, PathBuf::from("tmp_canisters"));
+        assert_eq!(options.fleets_dir, PathBuf::from("tmp_fleets"));
+        assert_eq!(options.network, default_network());
         assert!(!options.yes);
+    }
+
+    // Ensure scaffold can select the network whose current fleet pointer is updated.
+    #[test]
+    fn parses_scaffold_network_option() {
+        let options = ScaffoldOptions::parse([
+            OsString::from("my_app"),
+            OsString::from("--network"),
+            OsString::from("ic"),
+        ])
+        .expect("parse scaffold network option");
+
+        assert_eq!(options.network, "ic");
     }
 
     // Ensure scaffold accepts explicit noninteractive confirmation.
@@ -343,7 +372,8 @@ mod tests {
         let root = temp_dir("canic-cli-scaffold-confirm-yes");
         let options = ScaffoldOptions {
             name: "my_app".to_string(),
-            canisters_dir: root.join("canisters"),
+            fleets_dir: root.join("fleets"),
+            network: "local".to_string(),
             yes: false,
         };
         let mut output = Vec::new();
@@ -352,7 +382,8 @@ mod tests {
 
         let output = String::from_utf8(output).expect("utf8 prompt");
         assert!(output.contains("target:"));
-        assert!(output.contains("canisters/my_app"));
+        assert!(output.contains("fleets/my_app"));
+        assert!(output.contains("current: my_app on local"));
     }
 
     // Ensure confirmation defaults to no on empty input.
@@ -361,7 +392,8 @@ mod tests {
         let root = temp_dir("canic-cli-scaffold-confirm-no");
         let options = ScaffoldOptions {
             name: "my_app".to_string(),
-            canisters_dir: root.join("canisters"),
+            fleets_dir: root.join("fleets"),
+            network: "local".to_string(),
             yes: false,
         };
         let mut output = Vec::new();
@@ -389,7 +421,8 @@ mod tests {
         let root = temp_dir("canic-cli-scaffold");
         let options = ScaffoldOptions {
             name: "my_app".to_string(),
-            canisters_dir: root.join("canisters"),
+            fleets_dir: root.join("fleets"),
+            network: "local".to_string(),
             yes: true,
         };
 
@@ -415,10 +448,11 @@ mod tests {
         let root = temp_dir("canic-cli-scaffold-existing");
         let options = ScaffoldOptions {
             name: "my_app".to_string(),
-            canisters_dir: root.join("canisters"),
+            fleets_dir: root.join("fleets"),
+            network: "local".to_string(),
             yes: true,
         };
-        fs::create_dir_all(options.canisters_dir.join("my_app")).expect("create existing target");
+        fs::create_dir_all(options.fleets_dir.join("my_app")).expect("create existing target");
 
         let err = scaffold_project(&options).expect_err("existing scaffold should fail");
 

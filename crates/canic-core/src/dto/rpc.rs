@@ -364,7 +364,7 @@ mod tests {
                 subject: p(5),
                 role: CanisterRole::new("test"),
                 subnet_id: None,
-                audience: Some(p(6)),
+                audience: p(6),
                 ttl_secs: 60,
                 epoch: 0,
                 metadata: None,

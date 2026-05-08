@@ -21,7 +21,7 @@ fn capability_endpoint_role_attestation_proof_paths() {
         "valid cycles proof",
     );
     // A valid child caller with a root-audience attestation should authorize the cycles request.
-    let issued = issue_self_attestation_as(&pic, root_id, signer_id, 60, Some(root_id));
+    let issued = issue_self_attestation_as(&pic, root_id, signer_id, 60, root_id);
     let issued_at = issued.payload.issued_at;
     let envelope =
         cycles_role_attestation_envelope(root_id, request.clone(), issued, issued_at, 1, 9);
@@ -43,7 +43,7 @@ fn capability_endpoint_role_attestation_proof_paths() {
         "tampered signature rejection",
     );
     // Tampering with the signature must fail during attestation verification.
-    let mut issued = issue_self_attestation_as(&pic, root_id, signer_id, 60, Some(root_id));
+    let mut issued = issue_self_attestation_as(&pic, root_id, signer_id, 60, root_id);
     let issued_at = issued.payload.issued_at;
     if let Some(first) = issued.signature.first_mut() {
         *first ^= 0x01;
@@ -69,7 +69,7 @@ fn capability_endpoint_role_attestation_proof_paths() {
         "capability hash mismatch rejection",
     );
     // Capability hashes must match the request exactly.
-    let issued = issue_self_attestation_as(&pic, root_id, signer_id, 60, Some(root_id));
+    let issued = issue_self_attestation_as(&pic, root_id, signer_id, 60, root_id);
     let issued_at = issued.payload.issued_at;
     let envelope = RootCapabilityEnvelopeV1 {
         service: CapabilityService::Root,
@@ -102,7 +102,7 @@ fn capability_endpoint_role_attestation_proof_paths() {
     );
     // Audience mismatches must be enforced by the capability verifier.
     let wrong_audience = Principal::from_slice(&[9; 29]);
-    let issued = issue_self_attestation_as(&pic, root_id, signer_id, 60, Some(wrong_audience));
+    let issued = issue_self_attestation_as(&pic, root_id, signer_id, 60, wrong_audience);
     let issued_at = issued.payload.issued_at;
     let envelope =
         cycles_role_attestation_envelope(root_id, request.clone(), issued, issued_at, 3, 7);
@@ -125,7 +125,7 @@ fn capability_endpoint_role_attestation_proof_paths() {
         "expiry rejection",
     );
     // Expiry is time-sensitive, so keep it last after advancing the clock.
-    let issued = issue_self_attestation_as(&pic, root_id, signer_id, 1, Some(root_id));
+    let issued = issue_self_attestation_as(&pic, root_id, signer_id, 1, root_id);
     let issued_at = issued.payload.issued_at;
     pic.advance_time(Duration::from_secs(2));
     pic.tick();
@@ -157,7 +157,7 @@ fn capability_endpoint_policy_and_structural_paths() {
     let pic = PicBorrow(setup.pic.pic());
     let root_id = setup.root_id;
     let signer_id = setup.signer_id;
-    let issued = issue_self_attestation(&pic, root_id, 60, Some(root_id));
+    let issued = issue_self_attestation(&pic, root_id, 60, root_id);
     let issued_at = issued.payload.issued_at;
 
     test_progress(
@@ -169,7 +169,7 @@ fn capability_endpoint_policy_and_structural_paths() {
         subject: Principal::anonymous(),
         role: CanisterRole::ROOT,
         subnet_id: None,
-        audience: Some(root_id),
+        audience: root_id,
         ttl_secs: 60,
         epoch: 0,
         metadata: None,
@@ -223,7 +223,7 @@ fn capability_endpoint_policy_and_structural_paths() {
         proof: encode_role_attestation_capability_proof(RoleAttestationProof {
             proof_version: PROOF_VERSION_V1,
             capability_hash: subject_mismatch_hash,
-            attestation: issued.clone(),
+            attestation: issued,
         }),
         metadata: capability_metadata(issued_at, 4, 66, 60),
     };
@@ -256,45 +256,6 @@ fn capability_endpoint_policy_and_structural_paths() {
     assert!(
         !second_err.message.contains("duplicate replay request"),
         "policy denial should not be replay-cached, got: {second_err:?}"
-    );
-
-    test_progress(
-        "capability_endpoint_policy_and_structural_paths",
-        "missing audience rejection",
-    );
-    // Missing audiences must be rejected by the policy layer.
-    let missing_audience_request = Request::IssueRoleAttestation(RoleAttestationRequest {
-        subject: root_id,
-        role: CanisterRole::ROOT,
-        subnet_id: None,
-        audience: None,
-        ttl_secs: 60,
-        epoch: 0,
-        metadata: None,
-    });
-    let envelope = RootCapabilityEnvelopeV1 {
-        service: CapabilityService::Root,
-        capability_version: CAPABILITY_VERSION_V1,
-        capability: missing_audience_request.clone(),
-        proof: encode_role_attestation_capability_proof(RoleAttestationProof {
-            proof_version: PROOF_VERSION_V1,
-            capability_hash: root_capability_hash(root_id, &missing_audience_request),
-            attestation: issued,
-        }),
-        metadata: capability_metadata(issued_at, 5, 5, 60),
-    };
-    let response: Result<RootCapabilityResponseV1, Error> = update_call_as(
-        &pic,
-        root_id,
-        root_id,
-        "canic_response_capability_v1",
-        (envelope,),
-    );
-    let err = response.expect_err("missing audience policy must fail");
-    assert_eq!(err.code, ErrorCode::Internal);
-    assert!(
-        err.message.contains("audience is required"),
-        "expected audience-required policy error, got: {err:?}"
     );
 
     test_progress(
@@ -334,7 +295,7 @@ fn capability_endpoint_policy_and_structural_paths() {
         subject: root_id,
         role: CanisterRole::ROOT,
         subnet_id: None,
-        audience: Some(root_id),
+        audience: root_id,
         ttl_secs: 60,
         epoch: 0,
         metadata: None,

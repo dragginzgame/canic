@@ -1,4 +1,5 @@
-use crate::release_set::configured_release_roles;
+use super::state::{read_install_state, read_selected_fleet_name};
+use crate::release_set::{configured_fleet_name, configured_fleet_roles};
 use crate::table::WhitespaceTable;
 use crate::workspace_discovery::normalize_workspace_path;
 use std::{
@@ -18,10 +19,14 @@ struct ConfigChoiceRow {
 }
 
 const CONFIG_CHOICE_ROLE_PREVIEW_LIMIT: usize = 6;
+const FLEETS_ROOT: &str = "fleets";
+const ROOT_CONFIG_RELATIVE: &str = "canic.toml";
 
 // Resolve install config selection without silently choosing among demo/test configs.
 pub(super) fn resolve_install_config_path(
     workspace_root: &Path,
+    dfx_root: &Path,
+    network: &str,
     explicit_config_path: Option<&str>,
     interactive: bool,
 ) -> Result<PathBuf, Box<dyn std::error::Error>> {
@@ -39,12 +44,16 @@ pub(super) fn resolve_install_config_path(
         ));
     }
 
-    let default = workspace_root.join("canisters/canic.toml");
+    if let Some(path) = selected_install_config_path(workspace_root, dfx_root, network)? {
+        return Ok(path);
+    }
+
+    let default = workspace_root.join(FLEETS_ROOT).join(ROOT_CONFIG_RELATIVE);
     if default.is_file() {
         return Ok(default);
     }
 
-    let choices = discover_canic_config_choices(&workspace_root.join("canisters"))?;
+    let choices = discover_workspace_canic_config_choices(workspace_root)?;
     if interactive
         && let Some(path) = prompt_install_config_choice(workspace_root, &default, &choices)?
     {
@@ -54,8 +63,59 @@ pub(super) fn resolve_install_config_path(
     Err(config_selection_error(workspace_root, &default, &choices).into())
 }
 
-// Discover candidate `canic.toml` files under the conventional canisters tree.
-pub(super) fn discover_canic_config_choices(
+// Resolve the selected fleet's config path before falling back to project defaults.
+fn selected_install_config_path(
+    workspace_root: &Path,
+    dfx_root: &Path,
+    network: &str,
+) -> Result<Option<PathBuf>, Box<dyn std::error::Error>> {
+    if let Some(state) = read_install_state(dfx_root, network)? {
+        let path = normalize_workspace_path(workspace_root, PathBuf::from(state.config_path));
+        if path.is_file() {
+            return Ok(Some(path));
+        }
+    }
+
+    let Some(fleet) = read_selected_fleet_name(dfx_root, network)? else {
+        return Ok(None);
+    };
+    let mut matches = Vec::new();
+    for path in discover_workspace_canic_config_choices(workspace_root)? {
+        if let Some(path) = selected_config_match(path, &fleet) {
+            matches.push(path);
+        }
+    }
+
+    match matches.as_slice() {
+        [] => Err(format!(
+            "selected fleet {fleet} is not declared by any install config under fleets; run canic fleet list or canic fleet use <name>"
+        )
+        .into()),
+        [path] => Ok(Some(path.clone())),
+        _ => Err(format!(
+            "multiple install configs declare selected fleet {fleet}; run canic install --config <path>"
+        )
+        .into()),
+    }
+}
+
+// Return one config path when its declared fleet identity matches the selection.
+fn selected_config_match(path: PathBuf, fleet: &str) -> Option<PathBuf> {
+    match configured_fleet_name(&path) {
+        Ok(name) if name == fleet => Some(path),
+        Ok(_) | Err(_) => None,
+    }
+}
+
+// Discover installable Canic config choices from the fleet root.
+pub(super) fn discover_workspace_canic_config_choices(
+    workspace_root: &Path,
+) -> Result<Vec<PathBuf>, Box<dyn std::error::Error>> {
+    discover_canic_config_choices(&workspace_root.join(FLEETS_ROOT))
+}
+
+// Discover candidate `canic.toml` files under one fleet config root.
+pub fn discover_canic_config_choices(
     root: &Path,
 ) -> Result<Vec<PathBuf>, Box<dyn std::error::Error>> {
     let mut choices = Vec::new();
@@ -75,10 +135,15 @@ fn collect_canic_config_choices(
 
     for entry in fs::read_dir(root)? {
         let entry = entry?;
+        let file_type = entry.file_type()?;
         let path = entry.path();
-        if path.is_dir() {
+        if file_type.is_symlink() {
+            continue;
+        }
+        if file_type.is_dir() {
             collect_canic_config_choices(&path, choices)?;
-        } else if path.file_name().and_then(|name| name.to_str()) == Some("canic.toml")
+        } else if file_type.is_file()
+            && path.file_name().and_then(|name| name.to_str()) == Some("canic.toml")
             && is_install_project_config(&path)
         {
             choices.push(path);
@@ -106,7 +171,7 @@ pub(super) fn config_selection_error(
     )];
 
     if choices.is_empty() {
-        lines.push("create canisters/canic.toml or run canic install --config <path>".to_string());
+        lines.push("create fleets/canic.toml or run canic install --config <path>".to_string());
         return lines.join("\n");
     }
 
@@ -184,10 +249,10 @@ fn config_choice_table(workspace_root: &Path, choices: &[PathBuf]) -> Vec<String
     table.render().lines().map(str::to_string).collect()
 }
 
-// Summarize the root-subnet release roles for one install config choice.
+// Summarize the root-subnet fleet roles for one install config choice.
 fn config_choice_row(workspace_root: &Path, option: usize, path: &Path) -> ConfigChoiceRow {
     let config = display_workspace_path(workspace_root, path);
-    match configured_release_roles(path) {
+    match configured_fleet_roles(path) {
         Ok(roles) => ConfigChoiceRow {
             option: option.to_string(),
             config,

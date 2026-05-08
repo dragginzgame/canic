@@ -133,9 +133,14 @@ git log --name-only -n 20 -- crates/
 
 | File / Module | Struct / Function | Reason | Risk Contribution |
 | --- | --- | --- | --- |
-| `ops/auth/verify.rs` | `verify_self_audience` | delegated-token audience binding check | High |
+| `ops/auth/delegated/audience.rs` | `validate_audience_shape`, `audience_subset`, `verifier_is_in_audience` | delegated-token audience shape, subset, and verifier membership checks | High |
+| `ops/auth/delegated/verify.rs` | `verify_audience` | delegated-token cert/claim audience and local verifier checks | High |
+| `ops/auth/verify/attestation.rs` | `verify_role_attestation_claims` | role-attestation subject, timing, audience, subnet, and epoch checks | High |
+| `api/rpc/capability/proof.rs` | `verify_capability_hash_binding` | root capability hash binding to target canister and canonical payload | High |
+| `api/rpc/capability/verifier.rs` | `verify_root_capability_proof` | proof-mode routing and target-binding verification before proof-specific checks | High |
 | `api/rpc/capability/grant.rs` | delegated grant claim verifier | target/issuer/subject binding enforcement | High |
-| `dto/auth.rs`, `dto/capability.rs` | delegated claim structs | audience and target field definitions | Medium |
+| `ops/rpc/mod.rs` | outbound root-attestation request/cache helpers | request-time target audience selection and cache audience matching | Medium |
+| `dto/auth.rs`, `dto/capability/proof.rs` | delegated claim structs | audience and target field definitions | Medium |
 
 If none are detected in a given run, state: No structural hotspots detected in this run.
 
@@ -219,6 +224,19 @@ Thresholds:
 - `20+` = risk
 
 If no predictive signals are detected, state: No predictive architectural signals detected in this run.
+
+## Recommended Verification Commands
+
+Use current targeted tests rather than historical test names from older reports.
+
+```bash
+cargo test -p canic-core --lib verify_root_delegated_grant_claims_rejects_audience_mismatch -- --nocapture
+cargo test -p canic-core --lib verify_delegated_token_rejects_audience_subset_drift -- --nocapture
+cargo test -p canic-core --lib verify_delegated_token_rejects_missing_local_role_for_role_audience -- --nocapture
+cargo test -p canic-core --lib mint_delegated_token_rejects_audience_expansion -- --nocapture
+cargo test -p canic-tests --test pic_role_attestation role_attestation_verification_paths -- --test-threads=1 --nocapture
+cargo test -p canic-tests --test pic_role_attestation capability_endpoint_role_attestation_proof_paths -- --test-threads=1 --nocapture
+```
 
 ## Dependency Fan-In Pressure
 

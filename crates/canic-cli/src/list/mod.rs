@@ -1,5 +1,5 @@
 use crate::{
-    args::{default_network, first_arg_is_help, first_arg_is_version},
+    args::{default_network, print_help_or_version},
     version_text,
 };
 mod options;
@@ -65,7 +65,7 @@ pub enum ListCommandError {
     ReplicaQuery(String),
 
     #[error(
-        "saved fleet {fleet} points to root {root}, but that canister is not present on network {network}. Local dfx state was probably restarted or reset. Run `canic install` to recreate the fleet, `canic list --standalone` to see local dfx canister ids, or `canic use <fleet>` after reinstalling."
+        "saved fleet {fleet} points to root {root}, but that canister is not present on network {network}. Local dfx state was probably restarted or reset. Run `canic install` to recreate the fleet, `canic list --standalone` to see local dfx canister ids, or `canic fleet use <fleet>` after reinstalling."
     )]
     StaleLocalFleet {
         fleet: String,
@@ -92,12 +92,7 @@ where
     I: IntoIterator<Item = OsString>,
 {
     let args = args.into_iter().collect::<Vec<_>>();
-    if first_arg_is_help(&args) {
-        println!("{}", usage());
-        return Ok(());
-    }
-    if first_arg_is_version(&args) {
-        println!("{}", version_text());
+    if print_help_or_version(&args, usage, version_text()) {
         return Ok(());
     }
 

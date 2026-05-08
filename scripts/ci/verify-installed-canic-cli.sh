@@ -26,8 +26,6 @@ main() {
             "$BIN_ROOT/canic" build app >/dev/null
         CANIC_WORKSPACE_ROOT="$ROOT" CANIC_WASM_PROFILE=fast DFX_NETWORK=local \
             "$BIN_ROOT/canic" build root >/dev/null
-        CANIC_WORKSPACE_ROOT="$ROOT" DFX_NETWORK=local \
-            "$BIN_ROOT/canic" release-set manifest --if-ready >/dev/null
     )
 
     [ -s "$ROOT/.dfx/local/canisters/app/app.wasm.gz" ] || {

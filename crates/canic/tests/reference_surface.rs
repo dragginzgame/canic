@@ -20,43 +20,6 @@ fn read_text(path: &Path) -> String {
         .unwrap_or_else(|err| panic!("failed to read {}: {err}", path.display()))
 }
 
-// Parse one shell array assignment from the reference canister roster script.
-fn parse_shell_array(source: &str, name: &str) -> Vec<String> {
-    let start = source
-        .find(&format!("{name}=("))
-        .unwrap_or_else(|| panic!("missing shell array `{name}`"));
-    let rest = &source[start..];
-    let body_start = rest
-        .find('(')
-        .unwrap_or_else(|| panic!("missing array body for `{name}`"))
-        + 1;
-    let body_end = rest[body_start..]
-        .find(')')
-        .unwrap_or_else(|| panic!("unterminated array body for `{name}`"))
-        + body_start;
-
-    rest[body_start..body_end]
-        .lines()
-        .map(str::trim)
-        .filter(|line| !line.is_empty())
-        .map(|line| line.trim_matches('"').to_string())
-        .collect()
-}
-
-// Read the static reference canister roster from the repo-local shell helper.
-fn reference_canisters() -> Vec<String> {
-    let path = workspace_root().join("scripts/app/reference_canisters.sh");
-    let source = read_text(&path);
-    parse_shell_array(&source, "REFERENCE_CANISTERS")
-}
-
-// Read the static root release-set roster from the repo-local shell helper.
-fn root_release_set_canisters() -> Vec<String> {
-    let path = workspace_root().join("scripts/app/reference_canisters.sh");
-    let source = read_text(&path);
-    parse_shell_array(&source, "ROOT_RELEASE_SET_CANISTERS")
-}
-
 // Read the visible canister keys from the checked-in reference dfx topology.
 fn dfx_canister_keys() -> Vec<String> {
     let path = workspace_root().join("dfx.json");
@@ -72,31 +35,43 @@ fn dfx_canister_keys() -> Vec<String> {
         .collect()
 }
 
-// Keep the visible dfx canister list aligned with the explicit reference roster helper.
+// Read the root-subnet canister keys from the checked-in demo Canic config.
+fn demo_root_subnet_canister_keys() -> Vec<String> {
+    let path = workspace_root().join("fleets/demo/canic.toml");
+    let source = read_text(&path);
+    let parsed: toml::Value = toml::from_str(&source)
+        .unwrap_or_else(|err| panic!("failed to parse {}: {err}", path.display()));
+
+    parsed["subnets"]["prime"]["canisters"]
+        .as_table()
+        .expect("demo root subnet canisters must be a table")
+        .keys()
+        .cloned()
+        .collect()
+}
+
+// Keep the visible dfx canister list aligned with the demo root subnet.
 #[test]
-fn dfx_visible_canisters_match_reference_roster() {
+fn dfx_visible_canisters_match_demo_root_subnet() {
     let dfx_keys = dfx_canister_keys().into_iter().collect::<BTreeSet<_>>();
-    let reference = reference_canisters().into_iter().collect::<BTreeSet<_>>();
+    let demo_root_subnet = demo_root_subnet_canister_keys()
+        .into_iter()
+        .collect::<BTreeSet<_>>();
 
     assert_eq!(
-        dfx_keys, reference,
-        "dfx.json canister keys must stay aligned with scripts/app/reference_canisters.sh"
+        dfx_keys, demo_root_subnet,
+        "dfx.json canister keys must stay aligned with fleets/demo/canic.toml root subnet"
     );
 }
 
-// Keep the staged root release set aligned with the reference roster minus `root`.
+// Keep the staged root release set derivable from the demo root subnet.
 #[test]
-fn root_release_set_matches_reference_roster_without_root() {
-    let release_set = root_release_set_canisters()
-        .into_iter()
-        .collect::<BTreeSet<_>>();
-    let expected = reference_canisters()
+fn demo_root_subnet_has_derivable_release_set() {
+    let release_set = demo_root_subnet_canister_keys()
         .into_iter()
         .filter(|name| name != "root")
         .collect::<BTreeSet<_>>();
 
-    assert_eq!(
-        release_set, expected,
-        "ROOT_RELEASE_SET_CANISTERS must stay aligned with the reference roster minus root"
-    );
+    assert!(!release_set.is_empty());
+    assert!(!release_set.contains("root"));
 }

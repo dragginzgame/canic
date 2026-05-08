@@ -17,7 +17,7 @@ pub fn issue_self_attestation(
     pic: &Pic,
     root_id: Principal,
     ttl_secs: u64,
-    audience: Option<Principal>,
+    audience: Principal,
 ) -> SignedRoleAttestation {
     issue_self_attestation_as(pic, root_id, root_id, ttl_secs, audience)
 }
@@ -28,7 +28,7 @@ pub fn issue_self_attestation_as(
     root_id: Principal,
     caller: Principal,
     ttl_secs: u64,
-    audience: Option<Principal>,
+    audience: Principal,
 ) -> SignedRoleAttestation {
     let issued: Result<SignedRoleAttestation, Error> = update_call_as(
         pic,

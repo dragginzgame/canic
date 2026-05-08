@@ -316,9 +316,9 @@ pub fn generate_instruction_footprint_report() {
         run_timestamp_utc: metadata.run_timestamp_utc.clone(),
         execution_environment: "PocketIC".to_string(),
         target_canisters_in_scope: vec![
-            "audit_leaf_probe".to_string(),
-            "audit_root_probe".to_string(),
-            "audit_scaling_probe".to_string(),
+            "leaf_probe".to_string(),
+            "root_probe".to_string(),
+            "scaling_probe".to_string(),
             "test".to_string(),
             "root".to_string(),
         ],

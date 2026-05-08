@@ -1,6 +1,6 @@
 use crate::dfx;
 use crate::release_set::{
-    configured_fleet_name, configured_install_targets, dfx_call, dfx_root,
+    configured_fleet_name, configured_install_targets, dfx_call_on_network, dfx_root,
     emit_root_release_set_manifest_with_config, load_root_release_set_manifest,
     resume_root_bootstrap, stage_root_release_set, workspace_root,
 };
@@ -10,7 +10,7 @@ use serde::Deserialize;
 use serde_json::Value;
 use std::{
     env,
-    path::Path,
+    path::{Path, PathBuf},
     process::Command,
     thread,
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
@@ -19,9 +19,12 @@ use std::{
 mod config_selection;
 mod state;
 
+pub use config_selection::discover_canic_config_choices;
 pub use state::{
-    FleetSummary, InstallState, list_current_fleets, read_current_install_state,
-    read_current_or_fleet_install_state, select_current_fleet,
+    FleetSummary, InstallState, clear_current_fleet_name_if_matches, list_current_fleets,
+    read_current_fleet_name, read_current_install_state, read_current_network_name,
+    read_current_or_fleet_install_state, select_current_fleet, select_current_fleet_name,
+    select_current_network_name,
 };
 use state::{INSTALL_STATE_SCHEMA_VERSION, validate_fleet_name, write_install_state};
 
@@ -29,11 +32,11 @@ use state::{INSTALL_STATE_SCHEMA_VERSION, validate_fleet_name, write_install_sta
 mod tests;
 
 #[cfg(test)]
-use config_selection::{config_selection_error, discover_canic_config_choices};
+use config_selection::config_selection_error;
 #[cfg(test)]
 use state::{
-    current_fleet_path, fleet_install_state_path, list_fleets, read_fleet_install_state,
-    read_install_state,
+    clear_selected_fleet_name_if_matches, current_fleet_path, current_network_path,
+    fleet_install_state_path, list_fleets, read_fleet_install_state, read_install_state,
 };
 
 ///
@@ -80,12 +83,20 @@ struct InstallTimingSummary {
 const LOCAL_ROOT_TARGET_CYCLES: u128 = 9_000_000_000_000_000;
 const LOCAL_DFX_READY_TIMEOUT_SECONDS: u64 = 30;
 
+/// Discover installable Canic config choices under the current workspace.
+pub fn discover_current_canic_config_choices() -> Result<Vec<PathBuf>, Box<dyn std::error::Error>> {
+    let workspace_root = workspace_root()?;
+    config_selection::discover_workspace_canic_config_choices(&workspace_root)
+}
+
 // Execute the local thin-root install flow against an already running replica.
 pub fn install_root(options: InstallRootOptions) -> Result<(), Box<dyn std::error::Error>> {
     let workspace_root = workspace_root()?;
     let dfx_root = dfx_root()?;
     let config_path = resolve_install_config_path(
         &workspace_root,
+        &dfx_root,
+        &options.network,
         options.config_path.as_deref(),
         options.interactive_config_selection,
     )?;
@@ -99,10 +110,8 @@ pub fn install_root(options: InstallRootOptions) -> Result<(), Box<dyn std::erro
         fleet_name, options.network
     );
     ensure_dfx_running(&dfx_root, &options.network)?;
-    let mut create = Command::new("dfx");
-    create
-        .current_dir(&dfx_root)
-        .args(["canister", "create", "--all", "-qq"]);
+    let mut create = dfx_canister_command_in_network(&dfx_root, &options.network);
+    create.args(["create", "--all", "-qq"]);
     let create_started_at = Instant::now();
     run_command(&mut create)?;
     timings.create_canisters = create_started_at.elapsed();
@@ -110,7 +119,13 @@ pub fn install_root(options: InstallRootOptions) -> Result<(), Box<dyn std::erro
     let build_targets = configured_install_targets(&config_path, &options.root_build_target)?;
     let build_session_id = install_build_session_id();
     let build_started_at = Instant::now();
-    run_dfx_build_targets(&dfx_root, &build_targets, &build_session_id, &config_path)?;
+    run_dfx_build_targets(
+        &dfx_root,
+        &options.network,
+        &build_targets,
+        &build_session_id,
+        &config_path,
+    )?;
     timings.build_all = build_started_at.elapsed();
 
     let emit_manifest_started_at = Instant::now();
@@ -125,9 +140,8 @@ pub fn install_root(options: InstallRootOptions) -> Result<(), Box<dyn std::erro
     timings.fabricate_cycles =
         maybe_fabricate_local_cycles(&dfx_root, &options.root_canister, &options.network)?;
 
-    let mut install = Command::new("dfx");
-    install.current_dir(&dfx_root).args([
-        "canister",
+    let mut install = dfx_canister_command_in_network(&dfx_root, &options.network);
+    install.args([
         "install",
         &options.root_canister,
         "--mode=reinstall",
@@ -141,13 +155,22 @@ pub fn install_root(options: InstallRootOptions) -> Result<(), Box<dyn std::erro
 
     let manifest = load_root_release_set_manifest(&manifest_path)?;
     let stage_started_at = Instant::now();
-    stage_root_release_set(&dfx_root, &options.root_canister, &manifest)?;
+    stage_root_release_set(
+        &dfx_root,
+        &options.network,
+        &options.root_canister,
+        &manifest,
+    )?;
     timings.stage_release_set = stage_started_at.elapsed();
     let resume_started_at = Instant::now();
-    resume_root_bootstrap(&options.root_canister)?;
+    resume_root_bootstrap(&options.network, &options.root_canister)?;
     timings.resume_bootstrap = resume_started_at.elapsed();
     let ready_started_at = Instant::now();
-    let ready_result = wait_for_root_ready(&options.root_canister, options.ready_timeout_seconds);
+    let ready_result = wait_for_root_ready(
+        &options.network,
+        &options.root_canister,
+        options.ready_timeout_seconds,
+    );
     timings.wait_ready = ready_started_at.elapsed();
     if let Err(err) = ready_result {
         print_install_timing_summary(&timings, total_started_at.elapsed());
@@ -183,7 +206,11 @@ fn build_install_state(
         installed_at_unix_secs: current_unix_secs()?,
         network: options.network.clone(),
         root_target: options.root_canister.clone(),
-        root_canister_id: resolve_root_canister_id(dfx_root, &options.root_canister)?,
+        root_canister_id: resolve_root_canister_id(
+            dfx_root,
+            &options.network,
+            &options.root_canister,
+        )?,
         root_build_target: options.root_build_target.clone(),
         workspace_root: workspace_root.display().to_string(),
         dfx_root: dfx_root.display().to_string(),
@@ -195,16 +222,15 @@ fn build_install_state(
 // Resolve the installed root id, accepting principal targets without a dfx lookup.
 fn resolve_root_canister_id(
     dfx_root: &Path,
+    network: &str,
     root_canister: &str,
 ) -> Result<String, Box<dyn std::error::Error>> {
     if Principal::from_text(root_canister).is_ok() {
         return Ok(root_canister.to_string());
     }
 
-    let mut command = Command::new("dfx");
-    command
-        .current_dir(dfx_root)
-        .args(["canister", "id", root_canister]);
+    let mut command = dfx_canister_command_in_network(dfx_root, network);
+    command.args(["id", root_canister]);
     Ok(run_command_stdout(&mut command)?.trim().to_string())
 }
 
@@ -216,6 +242,7 @@ fn current_unix_secs() -> Result<u64, Box<dyn std::error::Error>> {
 // Run one `dfx build <canister>` call per configured local install target.
 fn run_dfx_build_targets(
     dfx_root: &Path,
+    network: &str,
     targets: &[String],
     build_session_id: &str,
     config_path: &Path,
@@ -224,7 +251,7 @@ fn run_dfx_build_targets(
     println!("{:<16} {:<18} {:>10}", "CANISTER", "PROGRESS", "ELAPSED");
 
     for (index, target) in targets.iter().enumerate() {
-        let mut command = dfx_build_target_command(dfx_root, target, build_session_id);
+        let mut command = dfx_build_target_command(dfx_root, network, target, build_session_id);
         command.env("CANIC_CONFIG_PATH", config_path);
         let started_at = Instant::now();
         let output = command.output()?;
@@ -254,10 +281,14 @@ fn run_dfx_build_targets(
 
 // Spawn one local `dfx build <canister>` step without overriding the caller's
 // selected build profile environment.
-fn dfx_build_target_command(dfx_root: &Path, target: &str, build_session_id: &str) -> Command {
-    let mut command = Command::new("dfx");
+fn dfx_build_target_command(
+    dfx_root: &Path,
+    network: &str,
+    target: &str,
+    build_session_id: &str,
+) -> Command {
+    let mut command = dfx_command_in_network(dfx_root, network);
     command
-        .current_dir(dfx_root)
         .env("CANIC_BUILD_CONTEXT_SESSION", build_session_id)
         .args(["build", "-qq", target]);
     command
@@ -280,7 +311,7 @@ fn maybe_fabricate_local_cycles(
         return Ok(Duration::ZERO);
     }
 
-    let current_balance = root_cycle_balance(dfx_root, root_canister)?;
+    let current_balance = root_cycle_balance(dfx_root, network, root_canister)?;
     let Some(fabricate_cycles) = required_local_cycle_topup(current_balance) else {
         println!(
             "Skipping local cycle fabrication for {root_canister}; balance {} already meets target {}",
@@ -290,8 +321,7 @@ fn maybe_fabricate_local_cycles(
         return Ok(Duration::ZERO);
     };
 
-    let mut fabricate = Command::new("dfx");
-    fabricate.current_dir(dfx_root);
+    let mut fabricate = dfx_command_in_network(dfx_root, network);
     fabricate.args([
         "ledger",
         "fabricate-cycles",
@@ -330,12 +360,11 @@ fn print_local_cycle_topup_summary(
 // Read the current root canister cycle balance from `dfx canister status`.
 fn root_cycle_balance(
     dfx_root: &Path,
+    network: &str,
     root_canister: &str,
 ) -> Result<u128, Box<dyn std::error::Error>> {
-    let mut command = Command::new("dfx");
-    command
-        .current_dir(dfx_root)
-        .args(["canister", "status", root_canister]);
+    let mut command = dfx_canister_command_in_network(dfx_root, network);
+    command.args(["status", root_canister]);
     let stdout = dfx::run_output(&mut command)?;
     parse_canister_status_cycles(&stdout)
         .ok_or_else(|| "could not parse cycle balance from `dfx canister status` output".into())
@@ -427,7 +456,7 @@ fn ensure_dfx_running(dfx_root: &Path, network: &str) -> Result<(), Box<dyn std:
 
 // Check whether `dfx ping <network>` currently succeeds.
 fn dfx_ping(network: &str) -> Result<bool, Box<dyn std::error::Error>> {
-    Ok(Command::new("dfx")
+    Ok(dfx::default_command()
         .args(["ping", network])
         .output()?
         .status
@@ -448,17 +477,15 @@ fn parse_local_dfx_autostart(value: Option<&str>) -> bool {
 
 // Spawn one local `dfx stop` command for cleanup before a clean restart.
 fn dfx_stop_command(dfx_root: &Path) -> Command {
-    let mut command = Command::new("dfx");
-    command.current_dir(dfx_root).arg("stop");
+    let mut command = dfx_command_in_network(dfx_root, "local");
+    command.arg("stop");
     command
 }
 
 // Spawn one clean background `dfx start` command for local install/test flows.
 fn dfx_start_local_command(dfx_root: &Path) -> Command {
-    let mut command = Command::new("dfx");
-    command
-        .current_dir(dfx_root)
-        .args(["start", "--background", "--clean", "--system-canisters"]);
+    let mut command = dfx_command_in_network(dfx_root, "local");
+    command.args(["start", "--background", "--clean", "--system-canisters"]);
     command
 }
 
@@ -481,6 +508,7 @@ fn wait_for_dfx_ping(network: &str, timeout: Duration) -> Result<(), Box<dyn std
 
 // Wait until root reports ready, printing periodic progress and diagnostics.
 fn wait_for_root_ready(
+    network: &str,
     root_canister: &str,
     timeout_seconds: u64,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -490,7 +518,7 @@ fn wait_for_root_ready(
     println!("Waiting for {root_canister} to report canic_ready (timeout {timeout_seconds}s)");
 
     loop {
-        if root_ready(root_canister)? {
+        if root_ready(network, root_canister)? {
             println!(
                 "{root_canister} reported canic_ready after {}s",
                 start.elapsed().as_secs()
@@ -498,25 +526,33 @@ fn wait_for_root_ready(
             return Ok(());
         }
 
-        if let Some(status) = root_bootstrap_status(root_canister)?
+        if let Some(status) = root_bootstrap_status(network, root_canister)?
             && let Some(last_error) = status.last_error.as_deref()
         {
             eprintln!(
                 "root bootstrap reported failure during phase '{}' : {}",
                 status.phase, last_error
             );
-            eprintln!("Diagnostic: dfx canister call {root_canister} canic_bootstrap_status");
-            print_raw_call(root_canister, protocol::CANIC_BOOTSTRAP_STATUS);
-            eprintln!("Diagnostic: dfx canister call {root_canister} canic_subnet_registry");
-            print_raw_call(root_canister, "canic_subnet_registry");
             eprintln!(
-                "Diagnostic: dfx canister call {root_canister} canic_wasm_store_bootstrap_debug"
+                "Diagnostic: dfx canister --network {network} call {root_canister} canic_bootstrap_status"
             );
-            print_raw_call(root_canister, "canic_wasm_store_bootstrap_debug");
-            eprintln!("Diagnostic: dfx canister call {root_canister} canic_wasm_store_overview");
-            print_raw_call(root_canister, "canic_wasm_store_overview");
-            eprintln!("Diagnostic: dfx canister call {root_canister} canic_log");
-            print_recent_root_logs(root_canister);
+            print_raw_call(network, root_canister, protocol::CANIC_BOOTSTRAP_STATUS);
+            eprintln!(
+                "Diagnostic: dfx canister --network {network} call {root_canister} canic_subnet_registry"
+            );
+            print_raw_call(network, root_canister, "canic_subnet_registry");
+            eprintln!(
+                "Diagnostic: dfx canister --network {network} call {root_canister} canic_wasm_store_bootstrap_debug"
+            );
+            print_raw_call(network, root_canister, "canic_wasm_store_bootstrap_debug");
+            eprintln!(
+                "Diagnostic: dfx canister --network {network} call {root_canister} canic_wasm_store_overview"
+            );
+            print_raw_call(network, root_canister, "canic_wasm_store_overview");
+            eprintln!(
+                "Diagnostic: dfx canister --network {network} call {root_canister} canic_log"
+            );
+            print_recent_root_logs(network, root_canister);
             return Err(format!(
                 "root bootstrap failed during phase '{}' : {}",
                 status.phase, last_error
@@ -527,24 +563,32 @@ fn wait_for_root_ready(
         let elapsed = start.elapsed().as_secs();
         if elapsed >= timeout_seconds {
             eprintln!("root did not report canic_ready within {timeout_seconds}s");
-            eprintln!("Diagnostic: dfx canister call {root_canister} canic_bootstrap_status");
-            print_raw_call(root_canister, protocol::CANIC_BOOTSTRAP_STATUS);
-            eprintln!("Diagnostic: dfx canister call {root_canister} canic_subnet_registry");
-            print_raw_call(root_canister, "canic_subnet_registry");
             eprintln!(
-                "Diagnostic: dfx canister call {root_canister} canic_wasm_store_bootstrap_debug"
+                "Diagnostic: dfx canister --network {network} call {root_canister} canic_bootstrap_status"
             );
-            print_raw_call(root_canister, "canic_wasm_store_bootstrap_debug");
-            eprintln!("Diagnostic: dfx canister call {root_canister} canic_wasm_store_overview");
-            print_raw_call(root_canister, "canic_wasm_store_overview");
-            eprintln!("Diagnostic: dfx canister call {root_canister} canic_log");
-            print_recent_root_logs(root_canister);
+            print_raw_call(network, root_canister, protocol::CANIC_BOOTSTRAP_STATUS);
+            eprintln!(
+                "Diagnostic: dfx canister --network {network} call {root_canister} canic_subnet_registry"
+            );
+            print_raw_call(network, root_canister, "canic_subnet_registry");
+            eprintln!(
+                "Diagnostic: dfx canister --network {network} call {root_canister} canic_wasm_store_bootstrap_debug"
+            );
+            print_raw_call(network, root_canister, "canic_wasm_store_bootstrap_debug");
+            eprintln!(
+                "Diagnostic: dfx canister --network {network} call {root_canister} canic_wasm_store_overview"
+            );
+            print_raw_call(network, root_canister, "canic_wasm_store_overview");
+            eprintln!(
+                "Diagnostic: dfx canister --network {network} call {root_canister} canic_log"
+            );
+            print_recent_root_logs(network, root_canister);
             return Err("root did not become ready".into());
         }
 
         if elapsed >= next_report {
             println!("Still waiting for {root_canister} canic_ready ({elapsed}s elapsed)");
-            if let Some(status) = root_bootstrap_status(root_canister)? {
+            if let Some(status) = root_bootstrap_status(network, root_canister)? {
                 match status.last_error.as_deref() {
                     Some(last_error) => println!(
                         "Current bootstrap status: phase={} ready={} error={}",
@@ -556,9 +600,13 @@ fn wait_for_root_ready(
                     ),
                 }
             }
-            if let Ok(registry_json) =
-                dfx_call(root_canister, "canic_subnet_registry", None, Some("json"))
-            {
+            if let Ok(registry_json) = dfx_call_on_network(
+                network,
+                root_canister,
+                "canic_subnet_registry",
+                None,
+                Some("json"),
+            ) {
                 println!("Current subnet registry roles:");
                 println!("  {}", registry_roles(&registry_json));
             }
@@ -570,17 +618,19 @@ fn wait_for_root_ready(
 }
 
 // Return true once root reports `canic_ready == true`.
-fn root_ready(root_canister: &str) -> Result<bool, Box<dyn std::error::Error>> {
-    let output = dfx_call(root_canister, "canic_ready", None, Some("json"))?;
+fn root_ready(network: &str, root_canister: &str) -> Result<bool, Box<dyn std::error::Error>> {
+    let output = dfx_call_on_network(network, root_canister, "canic_ready", None, Some("json"))?;
     let data = serde_json::from_str::<Value>(&output)?;
     Ok(parse_root_ready_value(&data))
 }
 
 // Return the current root bootstrap diagnostic state when the query is available.
 fn root_bootstrap_status(
+    network: &str,
     root_canister: &str,
 ) -> Result<Option<BootstrapStatusSnapshot>, Box<dyn std::error::Error>> {
-    let output = match dfx_call(
+    let output = match dfx_call_on_network(
+        network,
         root_canister,
         protocol::CANIC_BOOTSTRAP_STATUS,
         None,
@@ -646,9 +696,15 @@ fn print_install_result_summary(network: &str, fleet: &str, state_path: &Path) {
 }
 
 // Print recent structured root log entries without raw byte dumps.
-fn print_recent_root_logs(root_canister: &str) {
+fn print_recent_root_logs(network: &str, root_canister: &str) {
     let page_args = r"(null, null, null, record { limit = 8; offset = 0 })";
-    let Ok(logs_json) = dfx_call(root_canister, "canic_log", Some(page_args), Some("json")) else {
+    let Ok(logs_json) = dfx_call_on_network(
+        network,
+        root_canister,
+        "canic_log",
+        Some(page_args),
+        Some("json"),
+    ) else {
         return;
     };
     let Ok(data) = serde_json::from_str::<Value>(&logs_json) else {
@@ -730,12 +786,37 @@ fn run_command_allow_failure(
 }
 
 // Print one raw fallback `dfx canister call` result to stderr for diagnostics.
-fn print_raw_call(root_canister: &str, method: &str) {
-    let mut command = Command::new("dfx");
-    if let Ok(root) = dfx_root() {
-        command.current_dir(root);
-    }
+fn print_raw_call(network: &str, root_canister: &str, method: &str) {
+    let mut command = dfx_root().map_or_else(
+        |_| dfx_command_on_network(network),
+        |root| dfx_command_in_network(&root, network),
+    );
     let _ = command
-        .args(["canister", "call", root_canister, method])
+        .arg("canister")
+        .args(["--network", network, "call", root_canister, method])
         .status();
+}
+
+// Build a dfx command with the selected install network exported for dfx and
+// for Rust build scripts that inspect DFX_NETWORK at compile time.
+fn dfx_command_on_network(network: &str) -> Command {
+    let mut command = dfx::default_command();
+    command.env("DFX_NETWORK", network);
+    command
+}
+
+// Build a dfx command in one project directory with DFX_NETWORK applied.
+fn dfx_command_in_network(dfx_root: &Path, network: &str) -> Command {
+    let mut command = dfx::default_command_in(dfx_root);
+    command.env("DFX_NETWORK", network);
+    command
+}
+
+// Build a dfx canister command in one project directory with the network both
+// exported and passed explicitly to the canister subcommand.
+fn dfx_canister_command_in_network(dfx_root: &Path, network: &str) -> Command {
+    let mut command = dfx_command_in_network(dfx_root, network);
+    command.arg("canister");
+    dfx::add_network_args(&mut command, Some(network));
+    command
 }

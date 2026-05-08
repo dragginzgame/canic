@@ -144,9 +144,6 @@ pub enum RpcWorkflowError {
         local: Principal,
     },
 
-    #[error("role attestation audience is required for inter-service authorization")]
-    RoleAttestationAudienceRequired,
-
     #[error(
         "role attestation ttl_secs must satisfy 0 < ttl_secs <= {max_ttl_secs} (got {ttl_secs})"
     )]

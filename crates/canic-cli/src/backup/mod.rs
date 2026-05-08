@@ -1,4 +1,4 @@
-use crate::{output, version_text};
+use crate::{args::print_help_or_version, output, version_text};
 use canic_backup::{
     journal::JournalResumeReport,
     persistence::{BackupIntegrityReport, BackupLayout, PersistenceError},
@@ -76,12 +76,20 @@ where
 
     match command.as_str() {
         "list" => {
+            let args = args.collect::<Vec<_>>();
+            if print_help_or_version(&args, list_usage, version_text()) {
+                return Ok(());
+            }
             let options = BackupListOptions::parse(args)?;
             let entries = backup_list(&options)?;
             write_list_report(&options, &entries)?;
             Ok(())
         }
         "status" => {
+            let args = args.collect::<Vec<_>>();
+            if print_help_or_version(&args, status_usage, version_text()) {
+                return Ok(());
+            }
             let options = BackupStatusOptions::parse(args)?;
             let report = backup_status(&options)?;
             write_status_report(&options, &report)?;
@@ -89,6 +97,10 @@ where
             Ok(())
         }
         "verify" => {
+            let args = args.collect::<Vec<_>>();
+            if print_help_or_version(&args, verify_usage, version_text()) {
+                return Ok(());
+            }
             let options = BackupVerifyOptions::parse(args)?;
             let report = verify_backup(&options)?;
             write_report(&options, &report)?;

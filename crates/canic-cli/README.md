@@ -1,8 +1,8 @@
 # canic-cli
 
 `canic-cli` publishes the `canic` operator binary. It is the command-line
-surface for building Canic artifacts, installing local Canic fleets, listing a
-Canic fleet, capturing canister snapshots, validating backup artifacts, and
+surface for building Canic artifacts, installing local Canic fleets, selecting
+the current fleet, capturing canister snapshots, validating backup artifacts, and
 preparing guarded restores.
 
 The CLI currently wraps `dfx` for live snapshot and restore mutations. Canic
@@ -67,12 +67,6 @@ Build one Canic canister artifact through the same public CLI surface used by
 canic build root
 ```
 
-Inspect the install target set that backs the thin-root release flow:
-
-```bash
-canic release-set targets
-```
-
 `canic install` defaults to the `root` dfx canister name. You may pass either a
 dfx canister name or an IC principal as the root target:
 
@@ -80,16 +74,18 @@ dfx canister name or an IC principal as the root target:
 canic install root
 canic install uxrrr-q7777-77774-qaaaq-cai
 canic install --root uxrrr-q7777-77774-qaaaq-cai
-canic install --config canisters/demo/canic.toml
+canic install --config fleets/demo/canic.toml
 ```
 
 When the root target is a principal, the CLI still builds the conventional
 `root` canister artifact by default. Use `--root-build-target <dfx-name>` only
 when the local root canister is named differently in `dfx.json`.
 
-`canic install` uses `canisters/canic.toml` when that project default exists.
-If it does not, and other `canic.toml` files are present, the command prints a
-small choices table and requires `--config <path>`.
+When no `--config` is provided, `canic install` first uses the selected current
+fleet config when a matching scaffold exists under `fleets/`. If no selected
+fleet config is available, it falls back to `fleets/canic.toml`. Otherwise, if
+other `canic.toml` files are present, the command prints a small choices table
+and requires `--config <path>`.
 
 The selected install config must include a fleet identity:
 
@@ -99,16 +95,37 @@ name = "demo"
 ```
 
 Successful installs write `.canic/<network>/fleets/<fleet>.json` with the root
-target, resolved root principal, build target, config path, and release-set
-manifest path. `canic list` uses the current fleet when `--root` and `--fleet`
-are not provided; pass `--fleet <name>` to query another saved fleet or
-`--root <name-or-principal>` to override it.
+target, resolved root principal, build target, config path, and staging
+manifest path. `canic list` uses the current default network plus that
+network's current fleet when `--root` and `--fleet` are not provided; pass
+`--network <name>` or `--fleet <name>` for one command without changing saved
+defaults.
+
+Show the current default context, or print just the high-level network default:
+
+```bash
+canic status
+canic network
+canic network use local
+canic network use ic
+```
 
 List and switch saved fleets:
 
 ```bash
-canic fleets --network local
-canic use demo --network local
+canic fleet
+canic fleet list
+canic fleet use demo
+canic fleet delete demo
+canic fleet list --network ic
+```
+
+Create a new scaffold and select it as the current fleet for the current
+network:
+
+```bash
+canic scaffold my_app --yes
+canic install
 ```
 
 Diagnose the selected fleet, replica reachability, saved config path, and root

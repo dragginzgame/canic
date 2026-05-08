@@ -75,7 +75,7 @@ prepare_downstream_root() {
     mkdir -p \
         "$DOWNSTREAM_ROOT/.dfx/local/canisters/app" \
         "$DOWNSTREAM_ROOT/.dfx/local/canisters/root" \
-        "$DOWNSTREAM_ROOT/canisters/root"
+        "$DOWNSTREAM_ROOT/fleets/root"
 
     cat > "$DOWNSTREAM_ROOT/Cargo.toml" <<'EOF'
 [workspace]
@@ -86,14 +86,14 @@ resolver = "2"
 version = "0.0.0"
 EOF
 
-    cat > "$DOWNSTREAM_ROOT/canisters/root/Cargo.toml" <<'EOF'
+    cat > "$DOWNSTREAM_ROOT/fleets/root/Cargo.toml" <<'EOF'
 [package]
 name = "downstream-root"
 version = { workspace = true }
 edition = "2024"
 EOF
 
-    cat > "$DOWNSTREAM_ROOT/canisters/canic.toml" <<'EOF'
+    cat > "$DOWNSTREAM_ROOT/fleets/canic.toml" <<'EOF'
 controllers = []
 app_index = []
 
@@ -127,24 +127,15 @@ run_probe() {
     (
         cd "$TOOL_ROOT"
         CANIC_WORKSPACE_ROOT="$DOWNSTREAM_ROOT" \
-            cargo run --offline -q -p canic-cli --bin canic -- release-set manifest >/dev/null
+            cargo run --offline -q -p canic-cli --bin canic -- fleet canisters --exclude-root > "$TMP_ROOT/fleet-canisters.out"
     )
 }
 
 assert_probe_outputs() {
-    local manifest_path="$DOWNSTREAM_ROOT/.dfx/local/canisters/root/root.release-set.json"
-
-    [ -s "$manifest_path" ] || {
-        echo "expected emitted release-set manifest at $manifest_path" >&2
+    grep -qx 'app' "$TMP_ROOT/fleet-canisters.out" || {
+        echo "expected packaged canic CLI to derive app as the ordinary fleet canister" >&2
         exit 1
     }
-
-    jq -e '
-        .release_version == "0.0.0" and
-        (.entries | length) == 1 and
-        .entries[0].role == "app" and
-        .entries[0].artifact_relative_path == ".dfx/local/canisters/app/app.wasm.gz"
-    ' "$manifest_path" >/dev/null
 }
 
 main() {

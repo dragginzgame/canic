@@ -8,8 +8,8 @@ mod paths;
 mod stage;
 
 pub use config::{
-    configured_fleet_name, configured_install_targets, configured_release_roles,
-    configured_role_kinds,
+    configured_fleet_name, configured_fleet_roles, configured_install_targets,
+    configured_release_roles, configured_role_kinds,
 };
 pub use manifest::{
     ReleaseSetEntry, RootReleaseSetManifest, emit_root_release_set_manifest,
@@ -22,7 +22,7 @@ pub use paths::{
     root_release_set_manifest_path, workspace_manifest_path, workspace_root,
 };
 use stage::build_release_set_entry;
-pub(crate) use stage::dfx_call;
+pub(crate) use stage::dfx_call_on_network;
 pub use stage::{resume_root_bootstrap, stage_root_release_set};
 
 #[cfg(test)]
@@ -30,11 +30,11 @@ use stage::read_release_artifact;
 
 #[cfg(test)]
 use config::{
-    configured_fleet_name_from_source, configured_release_roles_from_source,
-    configured_role_kinds_from_source,
+    configured_fleet_name_from_source, configured_fleet_roles_from_source,
+    configured_release_roles_from_source, configured_role_kinds_from_source,
 };
 
-pub(super) const CANISTERS_ROOT_RELATIVE: &str = "canisters";
+pub(super) const CANISTERS_ROOT_RELATIVE: &str = "fleets";
 pub(super) const ROOT_CONFIG_FILE: &str = "canic.toml";
 pub(super) const WORKSPACE_MANIFEST_RELATIVE: &str = "Cargo.toml";
 pub const ROOT_RELEASE_SET_MANIFEST_FILE: &str = "root.release-set.json";
@@ -55,8 +55,9 @@ pub(super) fn root_time_secs(root_canister: &str) -> Result<u64, Box<dyn std::er
 mod tests {
     use super::{
         canister_manifest_path, canisters_root, config_path, configured_fleet_name_from_source,
-        configured_install_targets, configured_release_roles_from_source,
-        configured_role_kinds_from_source, read_release_artifact, root_manifest_path,
+        configured_fleet_roles_from_source, configured_install_targets,
+        configured_release_roles_from_source, configured_role_kinds_from_source,
+        read_release_artifact, root_manifest_path,
     };
     use crate::test_support::temp_dir;
     use flate2::{Compression, write::GzEncoder};
@@ -177,6 +178,15 @@ kind = "singleton"
     }
 
     #[test]
+    fn configured_fleet_roles_include_root_first() {
+        let roles = configured_fleet_roles_from_source(REAL_CONFIG).expect("fleet roles");
+
+        assert_eq!(roles.first().map(String::as_str), Some("root"));
+        assert!(roles.contains(&"user_hub".to_string()));
+        assert!(roles.contains(&"scale_hub".to_string()));
+    }
+
+    #[test]
     fn configured_role_kinds_lists_configured_roles() {
         let kinds = configured_role_kinds_from_source(REAL_CONFIG).expect("role kinds");
 
@@ -284,13 +294,13 @@ kind = "root"
     }
 
     #[test]
-    fn config_path_defaults_under_canisters_root() {
+    fn config_path_defaults_under_fleets_root() {
         with_guarded_env(|| {
             let temp = TempWorkspace::new();
             let workspace_root = temp.path();
-            let canisters_dir = workspace_root.join("canisters");
-            fs::create_dir_all(&canisters_dir).expect("create canisters dir");
-            let expected = canisters_dir.join("canic.toml");
+            let fleets_dir = workspace_root.join("fleets");
+            fs::create_dir_all(&fleets_dir).expect("create fleets dir");
+            let expected = fleets_dir.join("canic.toml");
 
             let previous = std::env::var_os("CANIC_CONFIG_PATH");
             unsafe {
@@ -311,25 +321,24 @@ kind = "root"
     fn root_manifest_path_prefers_canister_manifest_metadata() {
         let temp = TempWorkspace::new();
         let workspace_root = temp.path();
-        fs::create_dir_all(workspace_root.join("canisters/demo/root")).expect("create root dir");
-        fs::create_dir_all(workspace_root.join("canisters/demo/root/src"))
+        fs::create_dir_all(workspace_root.join("fleets/demo/root")).expect("create root dir");
+        fs::create_dir_all(workspace_root.join("fleets/demo/root/src"))
             .expect("create root src dir");
         fs::write(
             workspace_root.join("Cargo.toml"),
-            "[workspace]\nmembers = [\"canisters/demo/root\"]\n",
+            "[workspace]\nmembers = [\"fleets/demo/root\"]\n",
         )
         .expect("write workspace manifest");
         fs::write(
-            workspace_root.join("canisters/demo/root/Cargo.toml"),
+            workspace_root.join("fleets/demo/root/Cargo.toml"),
             "[package]\nname = \"canister_root\"\nversion = \"0.1.0\"\nedition = \"2024\"\n",
         )
         .expect("write root manifest");
-        fs::write(workspace_root.join("canisters/demo/root/src/lib.rs"), "")
-            .expect("write root lib");
+        fs::write(workspace_root.join("fleets/demo/root/src/lib.rs"), "").expect("write root lib");
 
         assert_eq!(
             root_manifest_path(workspace_root),
-            workspace_root.join("canisters/demo/root/Cargo.toml")
+            workspace_root.join("fleets/demo/root/Cargo.toml")
         );
     }
 
@@ -337,29 +346,26 @@ kind = "root"
     fn canister_manifest_path_prefers_canister_manifest_metadata() {
         let temp = TempWorkspace::new();
         let workspace_root = temp.path();
-        fs::create_dir_all(workspace_root.join("canisters/demo/user_hub"))
+        fs::create_dir_all(workspace_root.join("fleets/demo/user_hub"))
             .expect("create user hub dir");
-        fs::create_dir_all(workspace_root.join("canisters/demo/user_hub/src"))
+        fs::create_dir_all(workspace_root.join("fleets/demo/user_hub/src"))
             .expect("create user hub src dir");
         fs::write(
             workspace_root.join("Cargo.toml"),
-            "[workspace]\nmembers = [\"canisters/demo/user_hub\"]\n",
+            "[workspace]\nmembers = [\"fleets/demo/user_hub\"]\n",
         )
         .expect("write workspace manifest");
         fs::write(
-            workspace_root.join("canisters/demo/user_hub/Cargo.toml"),
+            workspace_root.join("fleets/demo/user_hub/Cargo.toml"),
             "[package]\nname = \"canister_user_hub\"\nversion = \"0.1.0\"\nedition = \"2024\"\n",
         )
         .expect("write user hub manifest");
-        fs::write(
-            workspace_root.join("canisters/demo/user_hub/src/lib.rs"),
-            "",
-        )
-        .expect("write user hub lib");
+        fs::write(workspace_root.join("fleets/demo/user_hub/src/lib.rs"), "")
+            .expect("write user hub lib");
 
         assert_eq!(
             canister_manifest_path(workspace_root, "user_hub"),
-            workspace_root.join("canisters/demo/user_hub/Cargo.toml")
+            workspace_root.join("fleets/demo/user_hub/Cargo.toml")
         );
     }
 
@@ -410,25 +416,25 @@ kind = "root"
     }
 
     #[test]
-    fn canister_manifest_path_falls_back_to_canisters_root() {
+    fn canister_manifest_path_falls_back_to_fleets_root() {
         let temp = TempWorkspace::new();
         let workspace_root = temp.path();
-        fs::create_dir_all(workspace_root.join("canisters")).expect("create canisters dir");
+        fs::create_dir_all(workspace_root.join("fleets")).expect("create fleets dir");
 
         assert_eq!(
             canister_manifest_path(workspace_root, "user_hub"),
-            workspace_root.join("canisters/user_hub/Cargo.toml")
+            workspace_root.join("fleets/user_hub/Cargo.toml")
         );
     }
 
     #[test]
-    fn canisters_root_defaults_to_workspace_canisters_dir() {
+    fn canisters_root_defaults_to_workspace_fleets_dir() {
         let temp = TempWorkspace::new();
         let workspace_root = temp.path();
 
         assert_eq!(
             canisters_root(workspace_root),
-            workspace_root.join("canisters")
+            workspace_root.join("fleets")
         );
     }
 

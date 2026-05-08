@@ -1,11 +1,11 @@
 use crate::{
-    args::{parse_matches, path_option, value_arg},
+    args::{parse_matches, path_option, print_help_or_version, value_arg},
     output, version_text,
 };
 use canic_backup::manifest::{
     FleetBackupManifest, ManifestValidationError, manifest_validation_summary,
 };
-use clap::Command as ClapCommand;
+use clap::{ArgMatches, Command as ClapCommand, error::ErrorKind};
 use std::{ffi::OsString, fs, path::PathBuf};
 use thiserror::Error as ThisError;
 
@@ -18,8 +18,8 @@ pub enum ManifestCommandError {
     #[error("{0}")]
     Usage(String),
 
-    #[error("missing required option {0}")]
-    MissingOption(&'static str),
+    #[error("manifest validate requires --manifest <file>\n\n{0}")]
+    MissingManifest(String),
 
     #[error("unknown option {0}")]
     UnknownOption(String),
@@ -50,12 +50,11 @@ impl ManifestValidateOptions {
     where
         I: IntoIterator<Item = OsString>,
     {
-        let matches = parse_matches(manifest_validate_command(), args)
-            .map_err(|_| ManifestCommandError::Usage(usage()))?;
+        let matches =
+            parse_matches(manifest_validate_command(), args).map_err(parse_usage_error)?;
 
         Ok(Self {
-            manifest: path_option(&matches, "manifest")
-                .ok_or(ManifestCommandError::MissingOption("--manifest"))?,
+            manifest: required_manifest_option(&matches)?,
             out: path_option(&matches, "out"),
         })
     }
@@ -67,8 +66,28 @@ fn manifest_validate_command() -> ClapCommand {
         .bin_name("canic manifest validate")
         .about("Validate a fleet backup manifest")
         .disable_help_flag(true)
-        .arg(value_arg("manifest").long("manifest").value_name("file"))
+        .arg(
+            value_arg("manifest")
+                .long("manifest")
+                .value_name("file")
+                .required(true),
+        )
         .arg(value_arg("out").long("out").value_name("file"))
+}
+
+// Map Clap parser failures into command-specific operator messages.
+fn parse_usage_error(err: clap::Error) -> ManifestCommandError {
+    if err.kind() == ErrorKind::MissingRequiredArgument {
+        ManifestCommandError::MissingManifest(validate_usage())
+    } else {
+        ManifestCommandError::Usage(validate_usage())
+    }
+}
+
+// Read the manifest path required by the validation command.
+fn required_manifest_option(matches: &ArgMatches) -> Result<PathBuf, ManifestCommandError> {
+    path_option(matches, "manifest")
+        .ok_or_else(|| ManifestCommandError::MissingManifest(validate_usage()))
 }
 
 /// Run a manifest subcommand.
@@ -83,6 +102,10 @@ where
 
     match command.as_str() {
         "validate" => {
+            let args = args.collect::<Vec<_>>();
+            if print_help_or_version(&args, validate_usage, version_text()) {
+                return Ok(());
+            }
             let options = ManifestValidateOptions::parse(args)?;
             let manifest = validate_manifest(&options)?;
             write_validation_summary(&options, &manifest)?;
@@ -126,6 +149,12 @@ fn usage() -> String {
     command.render_help().to_string()
 }
 
+// Return manifest validation usage text.
+fn validate_usage() -> String {
+    let mut command = manifest_validate_command();
+    command.render_help().to_string()
+}
+
 // Build the manifest command-family parser for help rendering.
 fn manifest_command() -> ClapCommand {
     ClapCommand::new("manifest")
@@ -164,6 +193,16 @@ mod tests {
 
         assert_eq!(options.manifest, PathBuf::from("manifest.json"));
         assert_eq!(options.out, Some(PathBuf::from("summary.json")));
+    }
+
+    // Ensure a missing manifest path points operators to the concrete flag shape.
+    #[test]
+    fn missing_manifest_validate_option_names_required_path() {
+        let err = ManifestValidateOptions::parse([]).expect_err("missing manifest option");
+
+        assert!(matches!(err, ManifestCommandError::MissingManifest(_)));
+        assert!(err.to_string().contains("--manifest <file>"));
+        assert!(err.to_string().contains("canic manifest validate"));
     }
 
     // Ensure manifest validation loads JSON and runs the manifest contract.

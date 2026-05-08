@@ -9,10 +9,27 @@ DEFAULT_PROFILE="release"
 
 ROOT_DIR="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 cd "$ROOT_DIR"
-source "$ROOT_DIR/scripts/app/reference_canisters.sh"
 source "$ROOT_DIR/scripts/ci/require_dfx.sh"
 
-DEFAULT_CANISTERS=("${REFERENCE_CANISTERS[@]}")
+canic_fleet_canisters() {
+    if [ -f "$ROOT_DIR/crates/canic-cli/Cargo.toml" ]; then
+        cargo run -q -p canic-cli --bin canic -- fleet canisters --config fleets/demo/canic.toml "$@"
+        return
+    fi
+
+    if command -v canic >/dev/null 2>&1; then
+        canic fleet canisters --config fleets/demo/canic.toml "$@"
+        return
+    fi
+
+    echo "missing canic binary: install canic or run from a Canic workspace" >&2
+    exit 1
+}
+
+DEFAULT_AUDIT_CANISTERS="$(canic_fleet_canisters --ci-order)"
+mapfile -t DEFAULT_CANISTERS <<<"$DEFAULT_AUDIT_CANISTERS"
+DEFAULT_RELEASE_SET_TARGETS="$(canic_fleet_canisters --exclude-root)"
+mapfile -t DEFAULT_RELEASE_SET_CANISTERS <<<"$DEFAULT_RELEASE_SET_TARGETS"
 
 declare -a VERIFICATION_ROWS=()
 declare -A BUILT_WASM_BYTES=()
@@ -206,7 +223,7 @@ build_and_cache_artifacts() {
     done
 
     if [ "$include_root" -eq 1 ]; then
-        for canister in "${ROOT_RELEASE_SET_CANISTERS[@]}"; do
+        for canister in "${DEFAULT_RELEASE_SET_CANISTERS[@]}"; do
             ensure_raw_canister "$canister"
         done
     fi

@@ -88,7 +88,7 @@ pub(super) fn log_attestation_verifier_rejection(
         attestation.payload.subject,
         attestation.payload.role,
         attestation.key_id,
-        display_optional(attestation.payload.audience),
+        attestation.payload.audience,
         display_optional(attestation.payload.subnet_id),
         attestation.payload.issued_at,
         attestation.payload.expires_at,

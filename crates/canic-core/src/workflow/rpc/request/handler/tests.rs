@@ -211,7 +211,7 @@ fn map_request_maps_issue_role_attestation() {
         subject: p(2),
         role: CanisterRole::new("test"),
         subnet_id: Some(p(7)),
-        audience: Some(p(8)),
+        audience: p(8),
         ttl_secs: 120,
         epoch: 1,
         metadata: None,
@@ -491,7 +491,7 @@ fn authorize_rejects_role_attestation_when_subject_mismatches_caller() {
         subject: p(3),
         role: CanisterRole::new("test"),
         subnet_id: None,
-        audience: None,
+        audience: p(8),
         ttl_secs: 60,
         epoch: 0,
         metadata: None,
@@ -518,7 +518,7 @@ fn authorize_rejects_role_attestation_when_subject_not_registered() {
         subject,
         role: CanisterRole::new("test"),
         subnet_id: None,
-        audience: Some(p(8)),
+        audience: p(8),
         ttl_secs: 60,
         epoch: 0,
         metadata: None,
@@ -547,7 +547,7 @@ fn authorize_rejects_role_attestation_when_requested_role_differs_from_registry(
         subject,
         role: CanisterRole::new("test"),
         subnet_id: None,
-        audience: Some(p(8)),
+        audience: p(8),
         ttl_secs: 60,
         epoch: 0,
         metadata: None,
@@ -557,35 +557,6 @@ fn authorize_rejects_role_attestation_when_requested_role_differs_from_registry(
     assert!(
         err.to_string().contains("role mismatch"),
         "expected role mismatch error, got: {err}"
-    );
-}
-
-#[test]
-fn authorize_rejects_role_attestation_when_audience_missing() {
-    let subject = p(43);
-    SubnetRegistryOps::register_root(subject, 1);
-
-    let ctx = RootContext {
-        caller: subject,
-        self_pid: p(9),
-        is_root_env: true,
-        subnet_id: p(2),
-        now: 5,
-    };
-    let capability = RootCapability::IssueRoleAttestation(RoleAttestationRequest {
-        subject,
-        role: CanisterRole::ROOT,
-        subnet_id: None,
-        audience: None,
-        ttl_secs: 60,
-        epoch: 0,
-        metadata: None,
-    });
-
-    let err = RootResponseWorkflow::authorize(&ctx, &capability).expect_err("must deny");
-    assert!(
-        err.to_string().contains("audience is required"),
-        "expected audience-required error, got: {err}"
     );
 }
 
@@ -605,7 +576,7 @@ fn authorize_rejects_role_attestation_when_subnet_mismatch() {
         subject,
         role: CanisterRole::ROOT,
         subnet_id: Some(p(7)),
-        audience: Some(p(8)),
+        audience: p(8),
         ttl_secs: 60,
         epoch: 0,
         metadata: None,
@@ -631,7 +602,7 @@ fn build_role_attestation_uses_root_generated_time_window() {
         subject: p(1),
         role: CanisterRole::new("test"),
         subnet_id: Some(p(7)),
-        audience: Some(p(8)),
+        audience: p(8),
         ttl_secs: 120,
         epoch: 5,
         metadata: None,
@@ -660,7 +631,7 @@ fn build_role_attestation_rejects_invalid_ttl() {
         subject: p(1),
         role: CanisterRole::new("test"),
         subnet_id: Some(p(7)),
-        audience: Some(p(8)),
+        audience: p(8),
         ttl_secs: 0,
         epoch: 5,
         metadata: None,

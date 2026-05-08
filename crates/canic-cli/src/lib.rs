@@ -6,21 +6,27 @@ mod install;
 mod list;
 mod manifest;
 mod medic;
+mod network;
 mod output;
-mod release_set;
 mod restore;
 mod scaffold;
 mod snapshot;
+mod status;
 #[cfg(test)]
 mod test_support;
 
-use crate::args::any_arg_is_version;
+use crate::args::first_arg_is_version;
 use clap::{Arg, ArgAction, Command};
 use std::ffi::OsString;
 use thiserror::Error as ThisError;
 
 const VERSION_TEXT: &str = concat!("canic ", env!("CARGO_PKG_VERSION"));
 const TOP_LEVEL_HELP_TEMPLATE: &str = "{name} {version}\n{about-with-newline}\n{usage-heading} {usage}\n\n{before-help}Options:\n{options}{after-help}\n";
+const COLOR_RESET: &str = "\x1b[0m";
+const COLOR_HEADING: &str = "\x1b[1m";
+const COLOR_GROUP: &str = "\x1b[38;5;245m";
+const COLOR_COMMAND: &str = "\x1b[38;5;109m";
+const COLOR_TIP: &str = "\x1b[38;5;245m";
 
 ///
 /// CommandScope
@@ -28,20 +34,18 @@ const TOP_LEVEL_HELP_TEMPLATE: &str = "{name} {version}\n{about-with-newline}\n{
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum CommandScope {
-    ProjectSetup,
-    MultiFleet,
-    SingleFleet,
-    SingleCanister,
+    Defaults,
+    FleetContext,
+    WorkspaceFiles,
 }
 
 impl CommandScope {
     // Return the heading used in grouped top-level help.
     const fn heading(self) -> &'static str {
         match self {
-            Self::ProjectSetup => "Project setup commands",
-            Self::MultiFleet => "Multi-fleet commands",
-            Self::SingleFleet => "Single-fleet commands",
-            Self::SingleCanister => "Single-canister commands",
+            Self::Defaults => "Default context commands",
+            Self::FleetContext => "Current network + fleet commands",
+            Self::WorkspaceFiles => "Workspace and file commands",
         }
     }
 }
@@ -59,64 +63,64 @@ struct CommandSpec {
 
 const COMMAND_SPECS: &[CommandSpec] = &[
     CommandSpec {
+        name: "status",
+        about: "Show current Canic defaults",
+        scope: CommandScope::Defaults,
+    },
+    CommandSpec {
+        name: "network",
+        about: "Show or select the current default network",
+        scope: CommandScope::Defaults,
+    },
+    CommandSpec {
+        name: "fleet",
+        about: "Show, list, select, or delete Canic fleets",
+        scope: CommandScope::Defaults,
+    },
+    CommandSpec {
         name: "scaffold",
         about: "Create a minimal Canic fleet scaffold",
-        scope: CommandScope::ProjectSetup,
-    },
-    CommandSpec {
-        name: "fleets",
-        about: "List installed Canic fleets",
-        scope: CommandScope::MultiFleet,
-    },
-    CommandSpec {
-        name: "use",
-        about: "Select the current Canic fleet",
-        scope: CommandScope::MultiFleet,
+        scope: CommandScope::Defaults,
     },
     CommandSpec {
         name: "install",
         about: "Install and bootstrap a Canic fleet",
-        scope: CommandScope::SingleFleet,
+        scope: CommandScope::FleetContext,
     },
     CommandSpec {
         name: "list",
         about: "Show registry canisters as a tree table",
-        scope: CommandScope::SingleFleet,
-    },
-    CommandSpec {
-        name: "backup",
-        about: "Verify backup directories and journal status",
-        scope: CommandScope::SingleFleet,
-    },
-    CommandSpec {
-        name: "manifest",
-        about: "Validate fleet backup manifests",
-        scope: CommandScope::SingleFleet,
+        scope: CommandScope::FleetContext,
     },
     CommandSpec {
         name: "medic",
         about: "Diagnose local Canic fleet setup",
-        scope: CommandScope::SingleFleet,
-    },
-    CommandSpec {
-        name: "release-set",
-        about: "Inspect, emit, or stage root release-set artifacts",
-        scope: CommandScope::SingleFleet,
-    },
-    CommandSpec {
-        name: "restore",
-        about: "Plan or run snapshot restores",
-        scope: CommandScope::SingleFleet,
-    },
-    CommandSpec {
-        name: "build",
-        about: "Build one Canic canister artifact",
-        scope: CommandScope::SingleCanister,
+        scope: CommandScope::FleetContext,
     },
     CommandSpec {
         name: "snapshot",
         about: "Capture and download canister snapshots",
-        scope: CommandScope::SingleCanister,
+        scope: CommandScope::FleetContext,
+    },
+    CommandSpec {
+        name: "build",
+        about: "Build one Canic canister artifact",
+        scope: CommandScope::WorkspaceFiles,
+    },
+    CommandSpec {
+        name: "backup",
+        about: "Verify backup directories and journal status",
+        scope: CommandScope::WorkspaceFiles,
+    },
+    CommandSpec {
+        name: "manifest",
+        about: "Validate fleet backup manifests",
+        scope: CommandScope::WorkspaceFiles,
+    },
+    CommandSpec {
+        name: "restore",
+        about: "Plan or run snapshot restores",
+        scope: CommandScope::WorkspaceFiles,
     },
 ];
 
@@ -138,7 +142,7 @@ pub enum CliError {
     #[error("install: {0}")]
     Install(String),
 
-    #[error("fleets: {0}")]
+    #[error("fleet: {0}")]
     Fleets(String),
 
     #[error("list: {0}")]
@@ -150,11 +154,14 @@ pub enum CliError {
     #[error("medic: {0}")]
     Medic(String),
 
+    #[error("network: {0}")]
+    Network(String),
+
     #[error("snapshot: {0}")]
     Snapshot(String),
 
-    #[error("release-set: {0}")]
-    ReleaseSet(String),
+    #[error("status: {0}")]
+    Status(String),
 
     #[error("restore: {0}")]
     Restore(String),
@@ -212,6 +219,13 @@ impl From<medic::MedicCommandError> for CliError {
     }
 }
 
+impl From<network::NetworkCommandError> for CliError {
+    // Keep network command internals private while preserving operator-facing messages.
+    fn from(err: network::NetworkCommandError) -> Self {
+        Self::Network(err.to_string())
+    }
+}
+
 impl From<snapshot::SnapshotCommandError> for CliError {
     // Keep snapshot command internals private while preserving operator-facing messages.
     fn from(err: snapshot::SnapshotCommandError) -> Self {
@@ -219,10 +233,10 @@ impl From<snapshot::SnapshotCommandError> for CliError {
     }
 }
 
-impl From<release_set::ReleaseSetCommandError> for CliError {
-    // Keep release-set command internals private while preserving operator-facing messages.
-    fn from(err: release_set::ReleaseSetCommandError) -> Self {
-        Self::ReleaseSet(err.to_string())
+impl From<status::StatusCommandError> for CliError {
+    // Keep status command internals private while preserving operator-facing messages.
+    fn from(err: status::StatusCommandError) -> Self {
+        Self::Status(err.to_string())
     }
 }
 
@@ -251,7 +265,7 @@ where
     I: IntoIterator<Item = OsString>,
 {
     let args = args.into_iter().collect::<Vec<_>>();
-    if any_arg_is_version(&args) {
+    if first_arg_is_version(&args) {
         println!("{}", version_text());
         return Ok(());
     }
@@ -264,16 +278,16 @@ where
     match command.as_str() {
         "backup" => backup::run(args).map_err(CliError::from),
         "build" => build::run(args).map_err(CliError::from),
-        "fleets" => fleets::run(args).map_err(CliError::from),
+        "fleet" => fleets::run(args).map_err(CliError::from),
         "install" => install::run(args).map_err(CliError::from),
         "list" => list::run(args).map_err(CliError::from),
         "manifest" => manifest::run(args).map_err(CliError::from),
         "medic" => medic::run(args).map_err(CliError::from),
-        "release-set" => release_set::run(args).map_err(CliError::from),
+        "network" => network::run(args).map_err(CliError::from),
         "scaffold" => scaffold::run(args).map_err(CliError::from),
         "snapshot" => snapshot::run(args).map_err(CliError::from),
+        "status" => status::run(args).map_err(CliError::from),
         "restore" => restore::run(args).map_err(CliError::from),
-        "use" => fleets::run_use(args).map_err(CliError::from),
         "help" | "--help" | "-h" => {
             println!("{}", usage());
             Ok(())
@@ -298,7 +312,7 @@ pub fn top_level_command() -> Command {
         )
         .subcommand_help_heading("Commands")
         .help_template(TOP_LEVEL_HELP_TEMPLATE)
-        .before_help(grouped_command_section(COMMAND_SPECS))
+        .before_help(grouped_command_section(COMMAND_SPECS).join("\n"))
         .after_help("Run `canic <command> help` for command-specific help.");
 
     COMMAND_SPECS.iter().fold(command, |command, spec| {
@@ -314,29 +328,61 @@ pub const fn version_text() -> &'static str {
 
 // Return the top-level usage text.
 fn usage() -> String {
-    let mut command = top_level_command();
-    command.render_help().to_string()
+    let mut lines = vec![
+        color(
+            COLOR_HEADING,
+            &format!("Canic Operator CLI v{}", env!("CARGO_PKG_VERSION")),
+        ),
+        String::new(),
+        "Usage: canic [OPTIONS] <COMMAND>".to_string(),
+        String::new(),
+        color(COLOR_HEADING, "Commands:"),
+    ];
+    lines.extend(grouped_command_section(COMMAND_SPECS));
+    lines.extend([
+        String::new(),
+        color(COLOR_HEADING, "Options:"),
+        "  -V, --version  Print version".to_string(),
+        "  -h, --help     Print help".to_string(),
+        String::new(),
+        format!(
+            "{}Tip:{} Run {} for command-specific help.",
+            COLOR_TIP,
+            COLOR_RESET,
+            color(COLOR_COMMAND, "`canic <command> help`")
+        ),
+    ]);
+    lines.join("\n")
 }
 
 // Render grouped command rows from the same metadata used to build Clap subcommands.
-fn grouped_command_section(specs: &[CommandSpec]) -> String {
+fn grouped_command_section(specs: &[CommandSpec]) -> Vec<String> {
     let mut lines = Vec::new();
     let scopes = [
-        CommandScope::ProjectSetup,
-        CommandScope::MultiFleet,
-        CommandScope::SingleFleet,
-        CommandScope::SingleCanister,
+        CommandScope::Defaults,
+        CommandScope::FleetContext,
+        CommandScope::WorkspaceFiles,
     ];
     for (index, scope) in scopes.into_iter().enumerate() {
-        lines.push(format!("{}:", scope.heading()));
+        lines.push(format!("  {}", color(COLOR_GROUP, scope.heading())));
         for spec in specs.iter().filter(|spec| spec.scope == scope) {
-            lines.push(format!("  {:<11} {}", spec.name, spec.about));
+            let command = format!("{:<12}", spec.name);
+            lines.push(format!(
+                "    {} {}",
+                color(COLOR_COMMAND, &command),
+                spec.about
+            ));
         }
         if index + 1 < scopes.len() {
             lines.push(String::new());
         }
     }
-    lines.join("\n")
+    lines
+}
+
+// Wrap one help fragment in an ANSI color sequence.
+fn color(code: &str, text: &str) -> String {
+    format!("{code}{text}{COLOR_RESET}")
 }
 
 #[cfg(test)]
@@ -347,47 +393,150 @@ mod tests {
     #[test]
     fn usage_lists_command_families() {
         let text = usage();
+        let plain = strip_ansi(&text);
 
-        assert!(text.contains(version_text()));
-        assert!(text.contains("Usage: canic"));
-        assert!(text.contains("Project setup commands"));
-        assert!(text.contains("Multi-fleet commands"));
-        assert!(text.contains("Single-fleet commands"));
-        assert!(text.contains("Single-canister commands"));
-        assert!(!text.contains("\nCommands:\n"));
-        assert!(text.find("Project setup commands") < text.find("Multi-fleet commands"));
-        assert!(text.find("Multi-fleet commands") < text.find("Single-fleet commands"));
-        assert!(text.find("Single-fleet commands") < text.find("Single-canister commands"));
-        assert!(text.contains("scaffold"));
-        assert!(text.contains("list"));
-        assert!(text.contains("build"));
-        assert!(text.contains("fleets"));
-        assert!(text.contains("use"));
-        assert!(text.contains("install"));
-        assert!(text.contains("snapshot"));
-        assert!(text.contains("backup"));
-        assert!(text.contains("manifest"));
-        assert!(text.contains("medic"));
-        assert!(text.contains("release-set"));
-        assert!(text.contains("restore"));
-        assert!(text.contains("canic <command> help"));
+        assert!(plain.contains(&format!(
+            "Canic Operator CLI v{}",
+            env!("CARGO_PKG_VERSION")
+        )));
+        assert!(plain.contains("Usage: canic [OPTIONS] <COMMAND>"));
+        assert!(plain.contains("\nCommands:\n"));
+        assert!(plain.contains("Default context commands"));
+        assert!(plain.contains("Current network + fleet commands"));
+        assert!(plain.contains("Workspace and file commands"));
+        assert!(
+            plain.find("Default context commands") < plain.find("Current network + fleet commands")
+        );
+        assert!(
+            plain.find("Current network + fleet commands")
+                < plain.find("Workspace and file commands")
+        );
+        assert!(plain.find("    status") < plain.find("    network"));
+        assert!(plain.find("    network") < plain.find("    fleet"));
+        assert!(plain.find("    fleet") < plain.find("    scaffold"));
+        assert!(plain.find("    scaffold") < plain.find("    install"));
+        assert!(plain.contains("Options:"));
+        assert!(plain.contains("scaffold"));
+        assert!(plain.contains("list"));
+        assert!(plain.contains("build"));
+        assert!(plain.contains("network"));
+        assert!(plain.contains("status"));
+        assert!(plain.contains("fleet"));
+        assert!(plain.contains("install"));
+        assert!(plain.contains("snapshot"));
+        assert!(plain.contains("backup"));
+        assert!(plain.contains("manifest"));
+        assert!(plain.contains("medic"));
+        assert!(plain.contains("restore"));
+        assert!(plain.contains("Tip: Run `canic <command> help`"));
+        assert!(text.contains(COLOR_HEADING));
+        assert!(text.contains(COLOR_GROUP));
+        assert!(text.contains(COLOR_COMMAND));
     }
 
     // Ensure command-family help paths return successfully instead of erroring.
     #[test]
     fn command_family_help_returns_ok() {
         assert!(run([OsString::from("backup"), OsString::from("help")]).is_ok());
+        assert!(
+            run([
+                OsString::from("backup"),
+                OsString::from("list"),
+                OsString::from("help")
+            ])
+            .is_ok()
+        );
+        assert!(
+            run([
+                OsString::from("backup"),
+                OsString::from("status"),
+                OsString::from("help")
+            ])
+            .is_ok()
+        );
+        assert!(
+            run([
+                OsString::from("backup"),
+                OsString::from("verify"),
+                OsString::from("help")
+            ])
+            .is_ok()
+        );
         assert!(run([OsString::from("build"), OsString::from("help")]).is_ok());
         assert!(run([OsString::from("install"), OsString::from("help")]).is_ok());
-        assert!(run([OsString::from("fleets"), OsString::from("help")]).is_ok());
+        assert!(run([OsString::from("fleet"), OsString::from("help")]).is_ok());
+        assert!(
+            run([
+                OsString::from("fleet"),
+                OsString::from("list"),
+                OsString::from("help")
+            ])
+            .is_ok()
+        );
+        assert!(
+            run([
+                OsString::from("fleet"),
+                OsString::from("use"),
+                OsString::from("help")
+            ])
+            .is_ok()
+        );
+        assert!(
+            run([
+                OsString::from("fleet"),
+                OsString::from("delete"),
+                OsString::from("help")
+            ])
+            .is_ok()
+        );
         assert!(run([OsString::from("list"), OsString::from("help")]).is_ok());
         assert!(run([OsString::from("restore"), OsString::from("help")]).is_ok());
+        assert!(
+            run([
+                OsString::from("restore"),
+                OsString::from("plan"),
+                OsString::from("help")
+            ])
+            .is_ok()
+        );
+        assert!(
+            run([
+                OsString::from("restore"),
+                OsString::from("apply"),
+                OsString::from("help")
+            ])
+            .is_ok()
+        );
+        assert!(
+            run([
+                OsString::from("restore"),
+                OsString::from("run"),
+                OsString::from("help")
+            ])
+            .is_ok()
+        );
         assert!(run([OsString::from("manifest"), OsString::from("help")]).is_ok());
+        assert!(
+            run([
+                OsString::from("manifest"),
+                OsString::from("validate"),
+                OsString::from("help")
+            ])
+            .is_ok()
+        );
         assert!(run([OsString::from("medic"), OsString::from("help")]).is_ok());
-        assert!(run([OsString::from("release-set"), OsString::from("help")]).is_ok());
+        assert!(run([OsString::from("network"), OsString::from("help")]).is_ok());
         assert!(run([OsString::from("scaffold"), OsString::from("help")]).is_ok());
         assert!(run([OsString::from("snapshot"), OsString::from("help")]).is_ok());
-        assert!(run([OsString::from("use"), OsString::from("help")]).is_ok());
+        assert!(
+            run([
+                OsString::from("snapshot"),
+                OsString::from("download"),
+                OsString::from("help")
+            ])
+            .is_ok()
+        );
+        assert!(run([OsString::from("status"), OsString::from("help")]).is_ok());
     }
 
     // Ensure version flags are accepted at the top level and command-family level.
@@ -395,17 +544,61 @@ mod tests {
     fn version_flags_return_ok() {
         assert_eq!(version_text(), concat!("canic ", env!("CARGO_PKG_VERSION")));
         assert!(run([OsString::from("--version")]).is_ok());
+        assert!(
+            run([
+                OsString::from("backup"),
+                OsString::from("list"),
+                OsString::from("--dir"),
+                OsString::from("version")
+            ])
+            .is_ok()
+        );
         assert!(run([OsString::from("backup"), OsString::from("--version")]).is_ok());
+        assert!(
+            run([
+                OsString::from("backup"),
+                OsString::from("list"),
+                OsString::from("--version")
+            ])
+            .is_ok()
+        );
         assert!(run([OsString::from("build"), OsString::from("--version")]).is_ok());
         assert!(run([OsString::from("install"), OsString::from("--version")]).is_ok());
-        assert!(run([OsString::from("fleets"), OsString::from("--version")]).is_ok());
+        assert!(run([OsString::from("fleet"), OsString::from("--version")]).is_ok());
         assert!(run([OsString::from("list"), OsString::from("--version")]).is_ok());
         assert!(run([OsString::from("restore"), OsString::from("--version")]).is_ok());
         assert!(run([OsString::from("manifest"), OsString::from("--version")]).is_ok());
         assert!(run([OsString::from("medic"), OsString::from("--version")]).is_ok());
-        assert!(run([OsString::from("release-set"), OsString::from("--version")]).is_ok());
+        assert!(run([OsString::from("network"), OsString::from("--version")]).is_ok());
         assert!(run([OsString::from("scaffold"), OsString::from("--version")]).is_ok());
         assert!(run([OsString::from("snapshot"), OsString::from("--version")]).is_ok());
-        assert!(run([OsString::from("use"), OsString::from("--version")]).is_ok());
+        assert!(
+            run([
+                OsString::from("snapshot"),
+                OsString::from("download"),
+                OsString::from("--version")
+            ])
+            .is_ok()
+        );
+        assert!(run([OsString::from("status"), OsString::from("--version")]).is_ok());
+    }
+
+    // Remove ANSI color sequences so tests can assert help structure.
+    fn strip_ansi(text: &str) -> String {
+        let mut plain = String::new();
+        let mut chars = text.chars().peekable();
+        while let Some(ch) = chars.next() {
+            if ch == '\x1b' && chars.peek() == Some(&'[') {
+                chars.next();
+                for ch in chars.by_ref() {
+                    if ch == 'm' {
+                        break;
+                    }
+                }
+                continue;
+            }
+            plain.push(ch);
+        }
+        plain
     }
 }

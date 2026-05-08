@@ -1,3 +1,4 @@
+use crate::dfx;
 use canic::protocol;
 use canic_core::CANIC_WASM_CHUNK_BYTES;
 use flate2::read::GzDecoder;
@@ -7,7 +8,6 @@ use std::{
     fs,
     io::{self, IsTerminal, Read, Write as IoWrite},
     path::{Path, PathBuf},
-    process::Command,
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
@@ -18,6 +18,7 @@ use super::{
 // Stage one emitted release-set manifest into root and resume bootstrap-ready state.
 pub fn stage_root_release_set(
     dfx_root: &Path,
+    network: &str,
     root_canister: &str,
     manifest: &RootReleaseSetManifest,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -29,6 +30,7 @@ pub fn stage_root_release_set(
     for entry in &manifest.entries {
         stage_release_entry(
             dfx_root,
+            network,
             root_canister,
             &manifest.release_version,
             entry,
@@ -42,8 +44,12 @@ pub fn stage_root_release_set(
 }
 
 // Trigger root bootstrap resume after the ordinary release set is fully staged.
-pub fn resume_root_bootstrap(root_canister: &str) -> Result<(), Box<dyn std::error::Error>> {
-    let _ = dfx_call(
+pub fn resume_root_bootstrap(
+    network: &str,
+    root_canister: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let _ = dfx_call_on_network(
+        network,
         root_canister,
         protocol::CANIC_WASM_STORE_BOOTSTRAP_RESUME_ROOT_ADMIN,
         None,
@@ -53,16 +59,18 @@ pub fn resume_root_bootstrap(root_canister: &str) -> Result<(), Box<dyn std::err
 }
 
 // Run one `dfx canister call` and return stdout, preserving stderr on failure.
-pub fn dfx_call(
+pub fn dfx_call_on_network(
+    network: &str,
     canister: &str,
     method: &str,
     argument: Option<&str>,
     output: Option<&str>,
 ) -> Result<String, Box<dyn std::error::Error>> {
     let dfx_root = dfx_root()?;
-    let mut command = Command::new("dfx");
-    command.current_dir(&dfx_root);
-    command.args(["canister", "call", canister, method]);
+    let mut command = dfx::default_command_in(&dfx_root);
+    command.env("DFX_NETWORK", network).arg("canister");
+    dfx::add_network_args(&mut command, Some(network));
+    command.args(["call", canister, method]);
 
     if let Some(output) = output {
         command.args(["--output", output]);
@@ -174,6 +182,7 @@ pub(super) fn build_release_set_entry(
 // Stage one manifest, prepare its chunk set, and publish all chunk bytes into root.
 fn stage_release_entry(
     dfx_root: &Path,
+    network: &str,
     root_canister: &str,
     release_version: &str,
     entry: &ReleaseSetEntry,
@@ -209,6 +218,7 @@ fn stage_release_entry(
     let payload_hash = decode_hex(&entry.payload_sha256_hex)?;
 
     stage_release_manifest(
+        network,
         root_canister,
         release_version,
         entry,
@@ -218,6 +228,7 @@ fn stage_release_entry(
     )?;
 
     prepare_release_chunks(
+        network,
         root_canister,
         release_version,
         entry,
@@ -227,6 +238,7 @@ fn stage_release_entry(
 
     progress.start_entry(entry, chunk_count)?;
     publish_release_chunks(
+        network,
         root_canister,
         release_version,
         entry,
@@ -240,6 +252,7 @@ fn stage_release_entry(
 
 // Stage one approved manifest into root before any chunk preparation/upload begins.
 fn stage_release_manifest(
+    network: &str,
     root_canister: &str,
     release_version: &str,
     entry: &ReleaseSetEntry,
@@ -260,7 +273,8 @@ fn stage_release_manifest(
         now_secs,
         now_secs,
     );
-    let _ = dfx_call(
+    let _ = dfx_call_on_network(
+        network,
         root_canister,
         protocol::CANIC_TEMPLATE_STAGE_MANIFEST_ADMIN,
         Some(&manifest),
@@ -271,6 +285,7 @@ fn stage_release_manifest(
 
 // Prepare the root-local chunk set metadata before sending any chunk bytes.
 fn prepare_release_chunks(
+    network: &str,
     root_canister: &str,
     release_version: &str,
     entry: &ReleaseSetEntry,
@@ -293,7 +308,8 @@ fn prepare_release_chunks(
         payload_size_bytes,
         chunk_hash_literals,
     );
-    let _ = dfx_call(
+    let _ = dfx_call_on_network(
+        network,
         root_canister,
         protocol::CANIC_TEMPLATE_PREPARE_ADMIN,
         Some(&prepare),
@@ -304,6 +320,7 @@ fn prepare_release_chunks(
 
 // Upload every prepared chunk and print live progress before and after each call.
 fn publish_release_chunks(
+    network: &str,
     root_canister: &str,
     release_version: &str,
     entry: &ReleaseSetEntry,
@@ -319,7 +336,8 @@ fn publish_release_chunks(
             chunk_index,
             idl_blob(chunk),
         );
-        let _ = dfx_call(
+        let _ = dfx_call_on_network(
+            network,
             root_canister,
             protocol::CANIC_TEMPLATE_PUBLISH_CHUNK_ADMIN,
             Some(&request),

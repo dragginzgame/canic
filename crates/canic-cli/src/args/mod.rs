@@ -1,3 +1,4 @@
+use canic_host::install_root::read_current_network_name;
 use clap::{Arg, ArgAction, ArgMatches, Command};
 use std::{ffi::OsString, path::PathBuf};
 
@@ -23,9 +24,21 @@ pub fn first_arg_is_version(args: &[OsString]) -> bool {
     args.first().is_some_and(is_version_arg)
 }
 
-/// Return whether any argument is a version request.
-pub fn any_arg_is_version(args: &[OsString]) -> bool {
-    args.iter().any(is_version_arg)
+/// Print command help/version prelude output and return whether it was handled.
+pub fn print_help_or_version(
+    args: &[OsString],
+    usage: impl FnOnce() -> String,
+    version_text: &str,
+) -> bool {
+    if first_arg_is_help(args) {
+        println!("{}", usage());
+        return true;
+    }
+    if first_arg_is_version(args) {
+        println!("{version_text}");
+        return true;
+    }
+    false
 }
 
 /// Parse one command-family option set with the binary name injected for Clap.
@@ -72,5 +85,8 @@ pub fn default_dfx() -> String {
 
 /// Return the default DFX network used by local fleet commands.
 pub fn default_network() -> String {
-    std::env::var("DFX_NETWORK").unwrap_or_else(|_| "local".to_string())
+    std::env::var("DFX_NETWORK")
+        .ok()
+        .or_else(|| read_current_network_name().ok().flatten())
+        .unwrap_or_else(|| "local".to_string())
 }

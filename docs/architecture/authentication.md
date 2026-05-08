@@ -412,7 +412,7 @@ pub struct RoleAttestation {
     pub subject: Principal,
     pub role: CanisterRole,
     pub subnet_id: Option<Principal>,
-    pub audience: Option<Principal>,
+    pub audience: Principal,
     pub issued_at: u64,
     pub expires_at: u64,
     pub epoch: u64,

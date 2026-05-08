@@ -8,7 +8,7 @@
 [![Docs.rs](https://docs.rs/canic/badge.svg)](https://docs.rs/canic)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-Canic is a Rust toolkit for orchestrating Internet Computer (IC) canister fleets. It provides lifecycle macros, validated topology config, stable-memory helpers, endpoint guards, release-set tooling, and root/bootstrap workflows for multi-canister systems.
+Canic is a Rust toolkit for orchestrating Internet Computer (IC) canister fleets. It provides lifecycle macros, validated topology config, stable-memory helpers, endpoint guards, thin-root build tooling, and root/bootstrap workflows for multi-canister systems.
 
 The crate was historically known as **ICU** (Internet Computer Utilities). All core APIs have been renamed to **Canic** for the crates.io release.
 
@@ -19,7 +19,7 @@ The crate was historically known as **ICU** (Internet Computer Utilities). All c
 * **Layered runtime APIs**: endpoint guards delegate into `workflow`, `policy`, `ops`, and storage-owned model state instead of mixing orchestration into canister methods.
 * **Self-validating delegated auth**: root signs shard certificates, shards mint user tokens, and verifiers validate token + embedded proof with local root/shard key material. Verifiers do not require proof fanout or proof caches.
 * **Stable memory helpers**: `ic_memory!`, `ic_memory_range!`, and `eager_static!` wrap stable structures and upgrade-safe runtime state.
-* **Thin-root release flow**: the `canic` CLI builds child WASMs, stages release sets through the implicit `wasm_store`, and keeps ordinary child artifacts out of the root Wasm.
+* **Thin-root install flow**: the `canic` CLI builds child WASMs, stages ordinary fleet artifacts through the implicit `wasm_store`, and keeps child artifacts out of the root Wasm.
 * **Operator CLI**: the `canic` binary builds Canic artifacts, lists registered fleets, captures topology-aware canister snapshots, validates backup manifests, and drives guarded restore planning/journals.
 * **CI-oriented tooling**: Rust 2024, repo toolchain pinned to Rust `1.95.0`, published MSRV `1.91.0`, and standard `make` targets for format, lint, check, test, and build.
 
@@ -44,7 +44,7 @@ roles:
 **Host/operator crates**
 
 * `crates/canic-cli/` – published `canic` operator binary for build, install, fleet listing, snapshot, backup, manifest, and restore workflows.
-* `crates/canic-host/` – host-side build/install/fleet/release-set library used by `canic` and scripts.
+* `crates/canic-host/` – host-side build, install, fleet, and thin-root staging library used by `canic` and scripts.
 * `crates/canic-backup/` – backup/restore domain library for manifests, journals, topology snapshots, layout verification, and restore planning.
 
 **Testing crates**
@@ -59,9 +59,9 @@ taxonomy carry the role boundary. If the workspace grows enough that scanning
 such as `crates/runtime/`, `crates/host/`, and `crates/testing/`; that should be
 treated as a repo-structure migration rather than a naming cleanup.
 
-* `canisters/demo/` – local reference topology for root, app, user shard/hub, scaling, and minimal baselines.
-* `canisters/test/` and `canisters/audit/` – repo-only correctness canisters and audit probes.
-* `canisters/sandbox/minimal/` – manual local sandbox canister for temporary endpoint experiments.
+* `fleets/demo/` – local reference topology for root, app, user shard/hub, scaling, and minimal baselines.
+* `fleets/test/` and `fleets/audit/` – repo-only correctness canisters and audit probes.
+* `fleets/sandbox/minimal/` – manual local sandbox canister for temporary endpoint experiments.
 * `scripts/` – dev setup, CI, release, wasm, and audit helpers.
 * `assets/`, `docs/`, `.github/workflows/` – documentation assets, design/audit notes, and CI.
 
@@ -140,7 +140,7 @@ async fn canic_install(_: Option<Vec<u8>>) {}
 async fn canic_upgrade() {}
 ```
 
-See `canisters/demo/root` and the reference canisters under `canisters/demo/*` for end‑to‑end patterns, including managed `wasm_store` publication and endpoint exports.
+See `fleets/demo/root` and the reference canisters under `fleets/demo/*` for end‑to‑end patterns, including managed `wasm_store` publication and endpoint exports.
 
 ### 4. Define your topology
 
@@ -192,11 +192,11 @@ canic build root
 canic install
 ```
 
-`canic install` owns the local thin-root flow: create local canisters, build `root` plus ordinary roles from the subnet that owns `root`, emit `.dfx/local/canisters/root/root.release-set.json`, reinstall `root`, stage the ordinary release set, resume bootstrap, and wait for `canic_ready`.
+`canic install` owns the local thin-root flow: create local canisters, build `root` plus ordinary roles from the subnet that owns `root`, emit the root staging manifest, reinstall `root`, stage the ordinary fleet artifacts, resume bootstrap, and wait for `canic_ready`.
 After a successful install, Canic writes project-local fleet state under
 `.canic/<network>/fleets/<fleet>.json` and marks that fleet current for the
 network. That state records the selected root target, resolved root principal,
-build target, config path, and release-set manifest path so later commands know
+build target, config path, and staging manifest path so later commands know
 which installed Canic fleet this project is using.
 
 The root target defaults to the `root` dfx canister name. To follow normal IC
@@ -206,16 +206,16 @@ operator style, you may pass either a canister name or a principal:
 canic install root
 canic install uxrrr-q7777-77774-qaaaq-cai
 canic install --root uxrrr-q7777-77774-qaaaq-cai
-canic install --config canisters/demo/canic.toml
+canic install --config fleets/demo/canic.toml
 ```
 
 Config selection is explicit when more than one topology could apply.
-`canic install` uses `canisters/canic.toml` when that project default exists.
+`canic install` uses `fleets/canic.toml` when that project default exists.
 Otherwise it prints the discovered config choices and asks you to pass
 `--config <path>`:
 
 ```bash
-canic install --config canisters/demo/canic.toml
+canic install --config fleets/demo/canic.toml
 ```
 
 Install configs must declare the fleet identity that will be written to
@@ -226,13 +226,16 @@ project-local state:
 name = "demo"
 ```
 
-Use `canic fleets` to list installed fleets for the current network, and
-`canic use <fleet>` to switch the default fleet used by commands such as
-`canic list`:
+Use `canic fleet list` to list config-defined fleets for the current network, and
+`canic fleet use <fleet>` to switch the default fleet used by commands such as
+`canic list`. Use `canic fleet delete <fleet>` to remove a config-defined fleet
+directory after confirming the exact fleet name:
 
 ```bash
-canic fleets --network local
-canic use demo --network local
+canic status
+canic fleet list --network local
+canic fleet use demo --network local
+canic fleet delete demo
 ```
 
 Use `canic medic` when the local project state, replica, or selected fleet does

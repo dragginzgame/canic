@@ -85,10 +85,24 @@ impl Dfx {
         self.network.as_deref()
     }
 
+    /// Build a base dfx command from this context.
+    #[must_use]
+    pub fn command(&self) -> Command {
+        Command::new(&self.executable)
+    }
+
+    /// Build a base dfx command rooted at one dfx project directory.
+    #[must_use]
+    pub fn command_in(&self, cwd: &Path) -> Command {
+        let mut command = self.command();
+        command.current_dir(cwd);
+        command
+    }
+
     /// Build a `dfx canister ...` command with optional network args applied.
     #[must_use]
     pub fn canister_command(&self) -> Command {
-        let mut command = Command::new(&self.executable);
+        let mut command = self.command();
         command.arg("canister");
         add_network_args(&mut command, self.network());
         command
@@ -96,7 +110,7 @@ impl Dfx {
 
     /// Ping the selected dfx network.
     pub fn ping(&self) -> Result<(), DfxCommandError> {
-        let mut command = Command::new(&self.executable);
+        let mut command = self.command();
         command.arg("ping");
         let network = self.network().map_or_else(default_network, str::to_string);
         command.arg(network);
@@ -246,6 +260,18 @@ impl Dfx {
         command.args(["start", canister]);
         command_display(&command)
     }
+}
+
+/// Build a base `dfx` command with the default executable.
+#[must_use]
+pub fn default_command() -> Command {
+    Dfx::new("dfx", None).command()
+}
+
+/// Build a base `dfx` command rooted at one dfx project directory.
+#[must_use]
+pub fn default_command_in(cwd: &Path) -> Command {
+    Dfx::new("dfx", None).command_in(cwd)
 }
 
 /// Add optional `--network` arguments after `dfx canister`.

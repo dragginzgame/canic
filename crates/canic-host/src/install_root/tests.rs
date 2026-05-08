@@ -1,10 +1,12 @@
 use super::{
-    INSTALL_STATE_SCHEMA_VERSION, InstallState, LOCAL_ROOT_TARGET_CYCLES, config_selection_error,
-    current_fleet_path, dfx_build_target_command, dfx_start_local_command, dfx_stop_command,
-    discover_canic_config_choices, fleet_install_state_path, install_build_session_id, list_fleets,
-    parse_bootstrap_status_value, parse_canister_status_cycles, parse_local_dfx_autostart,
-    parse_root_ready_value, read_fleet_install_state, read_install_state,
-    required_local_cycle_topup, resolve_install_config_path, write_install_state,
+    INSTALL_STATE_SCHEMA_VERSION, InstallState, LOCAL_ROOT_TARGET_CYCLES,
+    clear_selected_fleet_name_if_matches, config_selection_error, current_fleet_path,
+    current_network_path, dfx_build_target_command, dfx_canister_command_in_network,
+    dfx_start_local_command, dfx_stop_command, discover_canic_config_choices,
+    fleet_install_state_path, install_build_session_id, list_fleets, parse_bootstrap_status_value,
+    parse_canister_status_cycles, parse_local_dfx_autostart, parse_root_ready_value,
+    read_fleet_install_state, read_install_state, required_local_cycle_topup,
+    resolve_install_config_path, write_install_state,
 };
 use crate::release_set::configured_install_targets;
 use crate::test_support::temp_dir;
@@ -110,6 +112,7 @@ fn required_local_cycle_topup_returns_missing_delta_only() {
 fn dfx_build_command_targets_one_canister_per_call() {
     let command = dfx_build_target_command(
         Path::new("/tmp/canic-dfx-root"),
+        "ic",
         "user_hub",
         "install-root-test",
     );
@@ -134,6 +137,22 @@ fn dfx_build_command_targets_one_canister_per_call() {
             .any(|(key, value)| key == "CANIC_BUILD_CONTEXT_SESSION" && value.is_some()),
         "dfx build must carry the shared build-session marker"
     );
+    assert_eq!(command_env(&command, "DFX_NETWORK").as_deref(), Some("ic"));
+}
+
+#[test]
+fn dfx_canister_command_carries_selected_network() {
+    let command = dfx_canister_command_in_network(Path::new("/tmp/canic-dfx-root"), "ic");
+
+    assert_eq!(command.get_program(), "dfx");
+    assert_eq!(
+        command
+            .get_args()
+            .map(|arg| arg.to_string_lossy().into_owned())
+            .collect::<Vec<_>>(),
+        ["canister", "--network", "ic"]
+    );
+    assert_eq!(command_env(&command, "DFX_NETWORK").as_deref(), Some("ic"));
 }
 
 #[test]
@@ -176,6 +195,10 @@ fn local_dfx_start_command_uses_clean_background_mode() {
             .map(|path| path.to_string_lossy().into_owned()),
         Some("/tmp/canic-dfx-root".to_string())
     );
+    assert_eq!(
+        command_env(&command, "DFX_NETWORK").as_deref(),
+        Some("local")
+    );
 }
 
 #[test]
@@ -195,6 +218,10 @@ fn local_dfx_stop_command_targets_project_root() {
             .get_current_dir()
             .map(|path| path.to_string_lossy().into_owned()),
         Some("/tmp/canic-dfx-root".to_string())
+    );
+    assert_eq!(
+        command_env(&command, "DFX_NETWORK").as_deref(),
+        Some("local")
     );
 }
 
@@ -216,7 +243,7 @@ kind = "singleton"
 "#,
     );
 
-    let targets = configured_install_targets(&workspace_root.join("canisters/canic.toml"), "root")
+    let targets = configured_install_targets(&workspace_root.join("fleets/canic.toml"), "root")
         .expect("targets must resolve");
 
     assert_eq!(
@@ -233,7 +260,7 @@ kind = "singleton"
 fn install_config_defaults_to_project_config_when_present() {
     with_guarded_env(|| {
         let root = temp_dir("canic-install-config-default");
-        let config = root.join("canisters/canic.toml");
+        let config = root.join("fleets/canic.toml");
         fs::create_dir_all(config.parent().expect("config parent")).expect("create parent");
         fs::write(&config, "").expect("write config");
         let previous = env::var_os("CANIC_CONFIG_PATH");
@@ -241,7 +268,8 @@ fn install_config_defaults_to_project_config_when_present() {
             env::remove_var("CANIC_CONFIG_PATH");
         }
 
-        let resolved = resolve_install_config_path(&root, None, false).expect("resolve config");
+        let resolved = resolve_install_config_path(&root, &root, "local", None, false)
+            .expect("resolve config");
 
         assert_eq!(resolved, config);
         restore_env_var("CANIC_CONFIG_PATH", previous);
@@ -252,22 +280,109 @@ fn install_config_defaults_to_project_config_when_present() {
 #[test]
 fn install_config_accepts_explicit_path() {
     let root = temp_dir("canic-install-config-explicit");
-    let resolved = resolve_install_config_path(&root, Some("canisters/demo/canic.toml"), false)
-        .expect("resolve config");
+    let resolved =
+        resolve_install_config_path(&root, &root, "local", Some("fleets/demo/canic.toml"), false)
+            .expect("resolve config");
 
-    assert_eq!(resolved, root.join("canisters/demo/canic.toml"));
+    assert_eq!(resolved, root.join("fleets/demo/canic.toml"));
     let _ = fs::remove_dir_all(root);
+}
+
+#[test]
+fn install_config_uses_selected_scaffold_config() {
+    with_guarded_env(|| {
+        let root = temp_dir("canic-install-config-selected-scaffold");
+        let broken = root.join("fleets/broken/canic.toml");
+        let demo = root.join("fleets/demo/canic.toml");
+        let staging = root.join("fleets/staging/canic.toml");
+        fs::create_dir_all(broken.parent().expect("broken parent").join("root"))
+            .expect("create broken root");
+        fs::create_dir_all(demo.parent().expect("demo parent").join("root"))
+            .expect("create demo root");
+        fs::create_dir_all(staging.parent().expect("staging parent").join("root"))
+            .expect("create staging root");
+        fs::write(&broken, "[fleet\n").expect("write broken config");
+        fs::write(&demo, fleet_config("demo")).expect("write demo config");
+        fs::write(&staging, fleet_config("staging")).expect("write staging config");
+        fs::write(
+            broken
+                .parent()
+                .expect("broken parent")
+                .join("root/Cargo.toml"),
+            "",
+        )
+        .expect("write broken root manifest");
+        fs::write(
+            demo.parent().expect("demo parent").join("root/Cargo.toml"),
+            "",
+        )
+        .expect("write demo root manifest");
+        fs::write(
+            staging
+                .parent()
+                .expect("staging parent")
+                .join("root/Cargo.toml"),
+            "",
+        )
+        .expect("write staging root manifest");
+        fs::create_dir_all(root.join(".canic/local")).expect("create current dir");
+        fs::write(current_fleet_path(&root, "local"), "staging\n").expect("write current fleet");
+        let previous = env::var_os("CANIC_CONFIG_PATH");
+        unsafe {
+            env::remove_var("CANIC_CONFIG_PATH");
+        }
+
+        let resolved = resolve_install_config_path(&root, &root, "local", None, false)
+            .expect("resolve selected config");
+
+        assert_eq!(resolved, staging);
+        restore_env_var("CANIC_CONFIG_PATH", previous);
+        fs::remove_dir_all(root).expect("clean temp dir");
+    });
+}
+
+#[test]
+fn install_config_rejects_stale_selected_fleet() {
+    with_guarded_env(|| {
+        let root = temp_dir("canic-install-config-stale-selected-fleet");
+        let demo = root.join("fleets/demo/canic.toml");
+        fs::create_dir_all(demo.parent().expect("demo parent").join("root"))
+            .expect("create demo root");
+        fs::write(&demo, fleet_config("demo")).expect("write demo config");
+        fs::write(
+            demo.parent().expect("demo parent").join("root/Cargo.toml"),
+            "",
+        )
+        .expect("write demo root manifest");
+        fs::create_dir_all(root.join(".canic/local")).expect("create current dir");
+        fs::write(current_fleet_path(&root, "local"), "missing\n").expect("write current fleet");
+        let previous = env::var_os("CANIC_CONFIG_PATH");
+        unsafe {
+            env::remove_var("CANIC_CONFIG_PATH");
+        }
+
+        let err = resolve_install_config_path(&root, &root, "local", None, false)
+            .expect_err("stale selected fleet should fail");
+
+        assert!(
+            err.to_string()
+                .contains("selected fleet missing is not declared"),
+            "unexpected error: {err}"
+        );
+        restore_env_var("CANIC_CONFIG_PATH", previous);
+        fs::remove_dir_all(root).expect("clean temp dir");
+    });
 }
 
 #[test]
 fn install_config_error_lists_choices_when_project_default_missing() {
     with_guarded_env(|| {
         let root = temp_dir("canic-install-config-choices");
-        let demo = root.join("canisters/demo/canic.toml");
-        let test = root.join("canisters/test/runtime_probe/canic.toml");
+        let demo = root.join("fleets/demo/canic.toml");
+        let test = root.join("fleets/test/runtime_probe/canic.toml");
         fs::create_dir_all(demo.parent().expect("demo parent")).expect("create demo parent");
         fs::create_dir_all(test.parent().expect("test parent")).expect("create test parent");
-        fs::create_dir_all(root.join("canisters/demo/root")).expect("create demo root");
+        fs::create_dir_all(root.join("fleets/demo/root")).expect("create demo root");
         fs::write(
             &demo,
             r#"
@@ -283,24 +398,24 @@ kind = "singleton"
         )
         .expect("write demo config");
         fs::write(&test, "").expect("write test config");
-        fs::write(root.join("canisters/demo/root/Cargo.toml"), "")
-            .expect("write demo root manifest");
+        fs::write(root.join("fleets/demo/root/Cargo.toml"), "").expect("write demo root manifest");
         let previous = env::var_os("CANIC_CONFIG_PATH");
         unsafe {
             env::remove_var("CANIC_CONFIG_PATH");
         }
 
-        let err = resolve_install_config_path(&root, None, false).expect_err("selection must fail");
+        let err = resolve_install_config_path(&root, &root, "local", None, false)
+            .expect_err("selection must fail");
         let message = err.to_string();
 
-        assert!(message.contains("missing default Canic config at canisters/canic.toml"));
+        assert!(message.contains("missing default Canic config at fleets/canic.toml"));
         assert!(!message.contains("found one install config:"));
-        assert!(message.contains("canisters/demo/canic.toml"));
-        assert!(message.contains("2 (app, user_hub)"));
-        assert!(message.contains("canisters/canic.toml\n\n#"));
-        assert!(message.contains("2 (app, user_hub)\n\nrun:"));
-        assert!(!message.contains("canisters/test/runtime_probe/canic.toml"));
-        assert!(message.contains("run: canic install --config canisters/demo/canic.toml"));
+        assert!(message.contains("fleets/demo/canic.toml"));
+        assert!(message.contains("3 (root, app, user_hub)"));
+        assert!(message.contains("fleets/canic.toml\n\n#"));
+        assert!(message.contains("3 (root, app, user_hub)\n\nrun:"));
+        assert!(!message.contains("fleets/test/runtime_probe/canic.toml"));
+        assert!(message.contains("run: canic install --config fleets/demo/canic.toml"));
 
         restore_env_var("CANIC_CONFIG_PATH", previous);
         fs::remove_dir_all(root).expect("clean temp dir");
@@ -310,7 +425,7 @@ kind = "singleton"
 #[test]
 fn config_selection_error_is_whitespace_table() {
     let root = temp_dir("canic-install-config-single-table");
-    let config = root.join("canisters/demo/canic.toml");
+    let config = root.join("fleets/demo/canic.toml");
     fs::create_dir_all(config.parent().expect("config parent")).expect("create config parent");
     fs::write(
         &config,
@@ -325,26 +440,26 @@ kind = "singleton"
     .expect("write config");
     let message = config_selection_error(
         &root,
-        &root.join("canisters/canic.toml"),
+        &root.join("fleets/canic.toml"),
         std::slice::from_ref(&config),
     );
 
     assert!(message.contains('#'));
     assert!(message.contains("CONFIG"));
     assert!(message.contains("CANISTERS"));
-    assert!(message.contains("canisters/demo/canic.toml"));
-    assert!(message.contains("1 (app)"));
-    assert!(message.contains("canisters/canic.toml\n\n#"));
-    assert!(message.contains("1 (app)\n\nrun:"));
-    assert!(message.contains("run: canic install --config canisters/demo/canic.toml"));
+    assert!(message.contains("fleets/demo/canic.toml"));
+    assert!(message.contains("2 (root, app)"));
+    assert!(message.contains("fleets/canic.toml\n\n#"));
+    assert!(message.contains("2 (root, app)\n\nrun:"));
+    assert!(message.contains("run: canic install --config fleets/demo/canic.toml"));
     fs::remove_dir_all(root).expect("clean temp dir");
 }
 
 #[test]
 fn config_selection_error_lists_multiple_paths_with_numbered_options() {
     let root = temp_dir("canic-install-config-multiple-table");
-    let demo = root.join("canisters/demo/canic.toml");
-    let example = root.join("canisters/example/canic.toml");
+    let demo = root.join("fleets/demo/canic.toml");
+    let example = root.join("fleets/example/canic.toml");
     fs::create_dir_all(demo.parent().expect("demo parent")).expect("create demo parent");
     fs::create_dir_all(example.parent().expect("example parent")).expect("create example parent");
     fs::write(
@@ -378,21 +493,20 @@ kind = "singleton"
 "#,
     )
     .expect("write example config");
-    let message =
-        config_selection_error(&root, &root.join("canisters/canic.toml"), &[demo, example]);
+    let message = config_selection_error(&root, &root.join("fleets/canic.toml"), &[demo, example]);
 
     assert!(message.contains("choose a config path explicitly:"));
     assert!(message.contains("choose a config path explicitly:\n\n#"));
     assert!(message.contains('#'));
     assert!(message.contains("CONFIG"));
     assert!(message.contains("CANISTERS"));
-    assert!(message.contains("1  canisters/demo/canic.toml"));
-    assert!(message.contains("2  canisters/example/canic.toml"));
-    assert!(message.contains("canisters/demo/canic.toml"));
-    assert!(message.contains("1 (app)"));
-    assert!(message.contains("canisters/example/canic.toml"));
-    assert!(message.contains("4 (scale, scale_hub, user_hub, user_shard)"));
-    assert!(message.contains("4 (scale, scale_hub, user_hub, user_shard)\n\nrun:"));
+    assert!(message.contains("1  fleets/demo/canic.toml"));
+    assert!(message.contains("2  fleets/example/canic.toml"));
+    assert!(message.contains("fleets/demo/canic.toml"));
+    assert!(message.contains("2 (root, app)"));
+    assert!(message.contains("fleets/example/canic.toml"));
+    assert!(message.contains("5 (root, scale, scale_hub, user_hub, user_shard)"));
+    assert!(message.contains("5 (root, scale, scale_hub, user_hub, user_shard)\n\nrun:"));
     assert!(message.contains("run: canic install --config <path>"));
     fs::remove_dir_all(root).expect("clean temp dir");
 }
@@ -400,7 +514,7 @@ kind = "singleton"
 #[test]
 fn config_selection_preview_lists_six_canisters_before_ellipsis() {
     let root = temp_dir("canic-install-config-preview-limit");
-    let config = root.join("canisters/demo/canic.toml");
+    let config = root.join("fleets/demo/canic.toml");
     fs::create_dir_all(config.parent().expect("config parent")).expect("create config parent");
     fs::write(
         &config,
@@ -434,11 +548,11 @@ kind = "singleton"
 
     let message = config_selection_error(
         &root,
-        &root.join("canisters/canic.toml"),
+        &root.join("fleets/canic.toml"),
         std::slice::from_ref(&config),
     );
 
-    assert!(message.contains("7 (app, minimal, scale, scale_hub, user_hub, user_shard, ...)"));
+    assert!(message.contains("8 (root, app, minimal, scale, scale_hub, user_hub, ...)"));
     fs::remove_dir_all(root).expect("clean temp dir");
 }
 
@@ -475,6 +589,10 @@ fn discovered_install_config_choices_are_path_sorted() {
 #[test]
 fn install_state_path_is_scoped_by_network() {
     assert_eq!(
+        current_network_path(Path::new("/tmp/canic-project")),
+        PathBuf::from("/tmp/canic-project/.canic/current-network")
+    );
+    assert_eq!(
         fleet_install_state_path(Path::new("/tmp/canic-project"), "local", "demo"),
         PathBuf::from("/tmp/canic-project/.canic/local/fleets/demo.json")
     );
@@ -482,6 +600,23 @@ fn install_state_path_is_scoped_by_network() {
         current_fleet_path(Path::new("/tmp/canic-project"), "local"),
         PathBuf::from("/tmp/canic-project/.canic/local/current-fleet")
     );
+}
+
+#[test]
+fn clears_current_fleet_markers_that_match_deleted_fleet() {
+    let root = temp_dir("canic-clear-current-fleet");
+    fs::create_dir_all(root.join(".canic/ic")).expect("create ic state dir");
+    fs::create_dir_all(root.join(".canic/local")).expect("create local state dir");
+    fs::write(current_fleet_path(&root, "ic"), "demo\n").expect("write ic fleet marker");
+    fs::write(current_fleet_path(&root, "local"), "other\n").expect("write local fleet marker");
+
+    let cleared =
+        clear_selected_fleet_name_if_matches(&root, "demo").expect("clear matching markers");
+
+    assert_eq!(cleared, vec!["ic".to_string()]);
+    assert!(!current_fleet_path(&root, "ic").exists());
+    assert!(current_fleet_path(&root, "local").exists());
+    fs::remove_dir_all(root).expect("clean temp dir");
 }
 
 #[test]
@@ -497,7 +632,7 @@ fn install_state_round_trips_from_project_state_dir() {
         root_build_target: "root".to_string(),
         workspace_root: root.display().to_string(),
         dfx_root: root.display().to_string(),
-        config_path: root.join("canisters/canic.toml").display().to_string(),
+        config_path: root.join("fleets/canic.toml").display().to_string(),
         release_set_manifest_path: root
             .join(".dfx/local/canisters/root/root.release-set.json")
             .display()
@@ -523,67 +658,32 @@ fn install_state_round_trips_from_project_state_dir() {
     fs::remove_dir_all(root).expect("clean temp dir");
 }
 
-#[test]
-fn legacy_install_state_without_fleet_name_is_rejected() {
-    let root = temp_dir("canic-install-legacy-state-missing-fleet-name");
-    let config = root.join("canisters/demo/canic.toml");
-    fs::create_dir_all(config.parent().expect("config parent")).expect("create config parent");
-    fs::create_dir_all(root.join(".canic/local")).expect("create state dir");
-    fs::write(
-        &config,
+fn write_temp_workspace_config(config_source: &str) -> PathBuf {
+    let root = temp_dir("canic-install-test");
+    fs::create_dir_all(root.join("fleets")).expect("temp fleets dir must be created");
+    fs::write(root.join("fleets/canic.toml"), config_source)
+        .expect("temp canic.toml must be written");
+    root
+}
+
+fn fleet_config(name: &str) -> String {
+    format!(
         r#"
-controllers = []
-app_index = []
-
 [fleet]
-name = "demo"
-
-[app]
-init_mode = "enabled"
-[app.whitelist]
+name = "{name}"
 
 [subnets.prime.canisters.root]
 kind = "root"
-"#,
+"#
     )
-    .expect("write config");
-    fs::write(
-        root.join(".canic/local/install-state.json"),
-        format!(
-            r#"{{
-  "schema_version": 1,
-  "installed_at_unix_secs": 42,
-  "network": "local",
-  "root_target": "root",
-  "root_canister_id": "uxrrr-q7777-77774-qaaaq-cai",
-  "root_build_target": "root",
-  "workspace_root": "{}",
-  "dfx_root": "{}",
-  "config_path": "{}",
-  "release_set_manifest_path": "{}"
-}}"#,
-            root.display(),
-            root.display(),
-            config.display(),
-            root.join(".dfx/local/canisters/root/root.release-set.json")
-                .display()
-        ),
-    )
-    .expect("write legacy state");
-
-    let err = read_install_state(&root, "local").expect_err("legacy state should fail");
-
-    assert!(err.to_string().contains("missing required fleet name"));
-
-    fs::remove_dir_all(root).expect("clean temp dir");
 }
 
-fn write_temp_workspace_config(config_source: &str) -> PathBuf {
-    let root = temp_dir("canic-install-test");
-    fs::create_dir_all(root.join("canisters")).expect("temp canisters dir must be created");
-    fs::write(root.join("canisters/canic.toml"), config_source)
-        .expect("temp canic.toml must be written");
-    root
+fn command_env(command: &std::process::Command, name: &str) -> Option<String> {
+    command
+        .get_envs()
+        .find_map(|(key, value)| (key == name).then_some(value))
+        .flatten()
+        .map(|value| value.to_string_lossy().into_owned())
 }
 
 fn with_guarded_env(run: impl FnOnce()) {

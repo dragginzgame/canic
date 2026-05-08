@@ -1,7 +1,7 @@
 use crate::{
     args::{
-        default_network, first_arg_is_help, first_arg_is_version, parse_matches, string_option,
-        string_values, value_arg,
+        default_network, parse_matches, print_help_or_version, string_option, string_values,
+        value_arg,
     },
     version_text,
 };
@@ -18,7 +18,10 @@ Examples:
   canic install
   canic install root
   canic install uxrrr-q7777-77774-qaaaq-cai
-  canic install --config canisters/demo/canic.toml
+  canic install --config fleets/demo/canic.toml
+
+Without --config, canic install uses the selected current fleet config when one
+matches under fleets/.
 
 The selected canic.toml must include:
   [fleet]
@@ -148,12 +151,7 @@ where
     I: IntoIterator<Item = OsString>,
 {
     let args = args.into_iter().collect::<Vec<_>>();
-    if first_arg_is_help(&args) {
-        println!("{}", usage());
-        return Ok(());
-    }
-    if first_arg_is_version(&args) {
-        println!("{}", version_text());
+    if print_help_or_version(&args, usage, version_text()) {
         return Ok(());
     }
 
@@ -217,7 +215,7 @@ mod tests {
 
         assert_eq!(options.root_target, "root");
         assert_eq!(options.root_build_target, "root");
-        assert_eq!(options.network, "local");
+        assert_eq!(options.network, default_network());
         assert_eq!(options.ready_timeout_seconds, DEFAULT_READY_TIMEOUT_SECONDS);
         assert_eq!(options.config_path, None);
     }
@@ -266,13 +264,13 @@ mod tests {
     fn install_accepts_config_path() {
         let options = InstallOptions::parse([
             OsString::from("--config"),
-            OsString::from("canisters/demo/canic.toml"),
+            OsString::from("fleets/demo/canic.toml"),
         ])
         .expect("parse config path");
 
         assert_eq!(
             options.config_path,
-            Some("canisters/demo/canic.toml".to_string())
+            Some("fleets/demo/canic.toml".to_string())
         );
     }
 

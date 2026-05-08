@@ -1,7 +1,7 @@
 use crate::{
     args::{
-        default_dfx, default_network, first_arg_is_help, first_arg_is_version, parse_matches,
-        string_option, value_arg,
+        default_dfx, default_network, parse_matches, print_help_or_version, string_option,
+        value_arg,
     },
     version_text,
 };
@@ -69,12 +69,7 @@ where
     I: IntoIterator<Item = OsString>,
 {
     let args = args.into_iter().collect::<Vec<_>>();
-    if first_arg_is_help(&args) {
-        println!("{}", usage());
-        return Ok(());
-    }
-    if first_arg_is_version(&args) {
-        println!("{}", version_text());
+    if print_help_or_version(&args, usage, version_text()) {
         return Ok(());
     }
 
@@ -126,7 +121,7 @@ fn run_medic_checks(options: &MedicOptions) -> Vec<MedicCheck> {
                 checks.push(MedicCheck::ok(
                     "fleet state",
                     format!("{} installed", state.fleet),
-                    "run canic fleets",
+                    "run canic fleet list",
                 ));
                 Some(state)
             }

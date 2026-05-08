@@ -172,8 +172,7 @@ pub struct RoleAttestationRequest {
     pub role: CanisterRole,
     #[serde(default)]
     pub subnet_id: Option<Principal>,
-    #[serde(default)]
-    pub audience: Option<Principal>,
+    pub audience: Principal,
     pub ttl_secs: u64,
     pub epoch: u64,
     #[serde(default)]
@@ -190,8 +189,7 @@ pub struct RoleAttestation {
     pub role: CanisterRole,
     #[serde(default)]
     pub subnet_id: Option<Principal>,
-    #[serde(default)]
-    pub audience: Option<Principal>,
+    pub audience: Principal,
     pub issued_at: u64,
     pub expires_at: u64,
     pub epoch: u64,

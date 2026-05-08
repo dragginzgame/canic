@@ -121,33 +121,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1505bd5d3d116872e7271a6d4e16d81d0c8570876c8de68093a09ac269d8aac0"
 
 [[package]]
-name = "audit_leaf_probe"
-version = "0.32.3"
-dependencies = [
- "candid",
- "canic",
- "ic-cdk",
-]
-
-[[package]]
-name = "audit_root_probe"
-version = "0.32.3"
-dependencies = [
- "candid",
- "canic",
- "ic-cdk",
-]
-
-[[package]]
-name = "audit_scaling_probe"
-version = "0.32.3"
-dependencies = [
- "candid",
- "canic",
- "ic-cdk",
-]
-
-[[package]]
 name = "autocfg"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1726,6 +1699,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bbd2bcb4c963f2ddae06a2efc7e9f3591312473c50c6685e1f298068316e66fe"
 
 [[package]]
+name = "leaf_probe"
+version = "0.32.3"
+dependencies = [
+ "candid",
+ "canic",
+ "ic-cdk",
+]
+
+[[package]]
 name = "leb128"
 version = "0.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2421,6 +2403,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "root_probe"
+version = "0.32.3"
+dependencies = [
+ "candid",
+ "canic",
+ "ic-cdk",
+]
+
+[[package]]
 name = "runtime_probe"
 version = "0.32.3"
 dependencies = [
@@ -2515,6 +2506,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "93fc1dc3aaa9bfed95e02e6eadabb4baf7e3078b0bd1b4d7b6b0b68378900502"
 dependencies = [
  "winapi-util",
+]
+
+[[package]]
+name = "scaling_probe"
+version = "0.32.3"
+dependencies = [
+ "candid",
+ "canic",
+ "ic-cdk",
 ]
 
 [[package]]

@@ -1,9 +1,17 @@
 use canic_core::{bootstrap::parse_config_model, ids::CanisterRole};
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    fs,
-    path::Path,
-};
+use std::{collections::BTreeMap, fs, path::Path};
+
+#[derive(Clone, Copy)]
+enum RootSubnetRoleScope {
+    Release,
+    Fleet,
+}
+
+impl RootSubnetRoleScope {
+    const fn includes_root(self) -> bool {
+        matches!(self, Self::Fleet)
+    }
+}
 
 // Enumerate the configured ordinary roles that root must publish before bootstrap resumes.
 pub fn configured_release_roles(
@@ -11,6 +19,15 @@ pub fn configured_release_roles(
 ) -> Result<Vec<String>, Box<dyn std::error::Error>> {
     let config_source = fs::read_to_string(config_path)?;
     configured_release_roles_from_source(&config_source)
+        .map_err(|err| format!("invalid {}: {err}", config_path.display()).into())
+}
+
+// Enumerate the configured fleet roles in the single subnet that owns `root`.
+pub fn configured_fleet_roles(
+    config_path: &Path,
+) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+    let config_source = fs::read_to_string(config_path)?;
+    configured_fleet_roles_from_source(&config_source)
         .map_err(|err| format!("invalid {}: {err}", config_path.display()).into())
 }
 
@@ -82,8 +99,23 @@ pub(super) fn configured_fleet_name_from_source(
 pub(super) fn configured_release_roles_from_source(
     config_source: &str,
 ) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+    configured_root_subnet_roles_from_source(config_source, RootSubnetRoleScope::Release)
+}
+
+// Enumerate all configured roles for the single subnet that owns `root`, except
+// the implicit `wasm_store` bootstrap canister.
+pub(super) fn configured_fleet_roles_from_source(
+    config_source: &str,
+) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+    configured_root_subnet_roles_from_source(config_source, RootSubnetRoleScope::Fleet)
+}
+
+// Enumerate roles for the single configured subnet that owns `root`.
+fn configured_root_subnet_roles_from_source(
+    config_source: &str,
+    scope: RootSubnetRoleScope,
+) -> Result<Vec<String>, Box<dyn std::error::Error>> {
     let config = parse_config_model(config_source).map_err(|err| err.to_string())?;
-    let mut roles = BTreeSet::new();
     let mut root_subnet_roles = None;
 
     for (subnet_role, subnet) in &config.subnets {
@@ -93,7 +125,7 @@ pub(super) fn configured_release_roles_from_source(
 
         if root_subnet_roles.is_some() {
             return Err(format!(
-                "multiple subnets define a root canister; release-set staging requires exactly one root subnet (found at least '{subnet_role}')"
+                "multiple subnets define a root canister; expected exactly one root subnet (found at least '{subnet_role}')"
             )
             .into());
         }
@@ -102,20 +134,31 @@ pub(super) fn configured_release_roles_from_source(
             subnet
                 .canisters
                 .keys()
-                .filter(|role| !role.is_root() && !role.is_wasm_store())
+                .filter(|role| !role.is_wasm_store())
+                .filter(|role| scope.includes_root() || !role.is_root())
                 .map(|role| role.as_str().to_string())
                 .collect::<Vec<_>>(),
         );
     }
 
     let root_subnet_roles = root_subnet_roles.ok_or_else(|| {
-        "no subnet defines a root canister; release-set staging requires exactly one root subnet"
-            .to_string()
+        "no subnet defines a root canister; expected exactly one root subnet".to_string()
     })?;
 
-    for role in root_subnet_roles {
-        roles.insert(role);
-    }
+    Ok(sort_root_subnet_roles(root_subnet_roles))
+}
 
-    Ok(roles.into_iter().collect())
+// Sort display/build roles deterministically, keeping `root` first when present.
+fn sort_root_subnet_roles(mut roles: Vec<String>) -> Vec<String> {
+    roles.sort_by(|left, right| {
+        match (
+            left == CanisterRole::ROOT.as_str(),
+            right == CanisterRole::ROOT.as_str(),
+        ) {
+            (true, false) => std::cmp::Ordering::Less,
+            (false, true) => std::cmp::Ordering::Greater,
+            _ => left.cmp(right),
+        }
+    });
+    roles
 }

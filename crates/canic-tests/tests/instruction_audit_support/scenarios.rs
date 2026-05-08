@@ -6,7 +6,7 @@ pub(super) fn scenarios() -> Vec<AuditScenario> {
     let mut scenarios = vec![
         AuditScenario {
             key: "app:canic_time:minimal-valid",
-            canister: "audit_leaf_probe",
+            canister: "leaf_probe",
             endpoint_or_flow: "audit_time_probe",
             transport_mode: "query",
             subject_kind: "endpoint",
@@ -22,7 +22,7 @@ pub(super) fn scenarios() -> Vec<AuditScenario> {
         },
         AuditScenario {
             key: "app:canic_env:minimal-valid",
-            canister: "audit_leaf_probe",
+            canister: "leaf_probe",
             endpoint_or_flow: "audit_env_probe",
             transport_mode: "query",
             subject_kind: "endpoint",
@@ -38,7 +38,7 @@ pub(super) fn scenarios() -> Vec<AuditScenario> {
         },
         AuditScenario {
             key: "app:canic_log:empty-page",
-            canister: "audit_leaf_probe",
+            canister: "leaf_probe",
             endpoint_or_flow: "audit_log_probe",
             transport_mode: "query",
             subject_kind: "endpoint",
@@ -54,7 +54,7 @@ pub(super) fn scenarios() -> Vec<AuditScenario> {
         },
         AuditScenario {
             key: "root:canic_subnet_registry:full-registry",
-            canister: "audit_root_probe",
+            canister: "root_probe",
             endpoint_or_flow: "audit_subnet_registry_probe",
             transport_mode: "query",
             subject_kind: "endpoint",
@@ -70,7 +70,7 @@ pub(super) fn scenarios() -> Vec<AuditScenario> {
         },
         AuditScenario {
             key: "root:canic_subnet_state:empty-struct",
-            canister: "audit_root_probe",
+            canister: "root_probe",
             endpoint_or_flow: "audit_subnet_state_probe",
             transport_mode: "query",
             subject_kind: "endpoint",
@@ -86,7 +86,7 @@ pub(super) fn scenarios() -> Vec<AuditScenario> {
         },
         AuditScenario {
             key: "scale_hub:plan_create_worker:empty-pool",
-            canister: "audit_scaling_probe",
+            canister: "scaling_probe",
             endpoint_or_flow: "audit_plan_create_worker_probe",
             transport_mode: "query",
             subject_kind: "endpoint",

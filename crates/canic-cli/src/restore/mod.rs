@@ -3,7 +3,7 @@ mod error;
 mod io;
 mod options;
 
-use crate::version_text;
+use crate::{args::print_help_or_version, version_text};
 use canic_backup::restore::{
     RestoreApplyCommandConfig, RestoreApplyDryRun, RestorePlan, RestorePlanner, RestoreRunResponse,
     RestoreRunnerCommandExecutor, RestoreRunnerCommandOutput, RestoreRunnerConfig,
@@ -33,6 +33,10 @@ where
 
     match command.as_str() {
         "plan" => {
+            let args = args.collect::<Vec<_>>();
+            if print_help_or_version(&args, plan_usage, version_text()) {
+                return Ok(());
+            }
             let options = RestorePlanOptions::parse(args)?;
             let plan = plan_restore(&options)?;
             write_plan(&options, &plan)?;
@@ -40,6 +44,10 @@ where
             Ok(())
         }
         "apply" => {
+            let args = args.collect::<Vec<_>>();
+            if print_help_or_version(&args, apply_usage, version_text()) {
+                return Ok(());
+            }
             let options = RestoreApplyOptions::parse(args)?;
             let dry_run = restore_apply_dry_run(&options)?;
             write_apply_dry_run(&options, &dry_run)?;
@@ -47,6 +55,10 @@ where
             Ok(())
         }
         "run" => {
+            let args = args.collect::<Vec<_>>();
+            if print_help_or_version(&args, run_usage, version_text()) {
+                return Ok(());
+            }
             let options = RestoreRunOptions::parse(args)?;
             let run = if options.execute {
                 restore_run_execute_result(&options)?

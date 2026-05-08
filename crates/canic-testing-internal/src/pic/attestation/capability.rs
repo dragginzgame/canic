@@ -22,7 +22,7 @@ pub(super) fn create_verifier_canister(pic: &Pic, root_id: Principal) -> Princip
         root_id,
         root_id,
         "root_issue_self_attestation_test",
-        (60u64, Some(root_id), 0u64),
+        (60u64, root_id, 0u64),
     );
     let issued = issued.expect("attestation issuance failed");
     let issued_at = issued.payload.issued_at;

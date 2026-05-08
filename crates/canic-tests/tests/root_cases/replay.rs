@@ -78,7 +78,7 @@ fn unauthorized_caller_is_denied_for_each_root_capability_variant() {
             subject: unauthorized,
             role: canister::TEST,
             subnet_id: None,
-            audience: Some(setup.root_id),
+            audience: setup.root_id,
             ttl_secs: 60,
             epoch: 0,
             metadata: Some(metadata([33u8; 32], 120)),

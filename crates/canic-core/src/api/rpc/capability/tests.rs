@@ -132,7 +132,7 @@ fn sample_signed_attestation() -> SignedRoleAttestation {
             subject: p(1),
             role: crate::ids::CanisterRole::ROOT,
             subnet_id: None,
-            audience: Some(p(2)),
+            audience: p(2),
             issued_at: 1_000,
             expires_at: 2_000,
             epoch: 1,

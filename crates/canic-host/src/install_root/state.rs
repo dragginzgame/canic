@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::{fs, path::Path, path::PathBuf};
 
 pub(super) const INSTALL_STATE_SCHEMA_VERSION: u32 = 1;
-const INSTALL_STATE_FILE: &str = "install-state.json";
+const CURRENT_NETWORK_FILE: &str = "current-network";
 const CURRENT_FLEET_FILE: &str = "current-fleet";
 
 ///
@@ -13,7 +13,6 @@ const CURRENT_FLEET_FILE: &str = "current-fleet";
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct InstallState {
     pub schema_version: u32,
-    #[serde(default = "default_fleet_name")]
     pub fleet: String,
     pub installed_at_unix_secs: u64,
     pub network: String,
@@ -46,7 +45,7 @@ pub(super) fn read_install_state(
         return read_fleet_install_state(dfx_root, network, &fleet);
     }
 
-    read_legacy_install_state(dfx_root, network)
+    Ok(None)
 }
 
 /// Read a named fleet install state for one project/network when present.
@@ -62,10 +61,7 @@ pub(super) fn read_fleet_install_state(
     }
 
     let bytes = fs::read(&path)?;
-    let mut state: InstallState = serde_json::from_slice(&bytes)?;
-    if state.fleet.is_empty() {
-        state.fleet = fleet.to_string();
-    }
+    let state: InstallState = serde_json::from_slice(&bytes)?;
     Ok(Some(state))
 }
 
@@ -75,6 +71,26 @@ pub fn read_current_install_state(
 ) -> Result<Option<InstallState>, Box<dyn std::error::Error>> {
     let dfx_root = dfx_root()?;
     read_install_state(&dfx_root, network)
+}
+
+/// Read the selected default network for the discovered current project.
+pub fn read_current_network_name() -> Result<Option<String>, Box<dyn std::error::Error>> {
+    let dfx_root = dfx_root()?;
+    read_selected_network_name(&dfx_root)
+}
+
+/// Select the current default network for the discovered current project.
+pub fn select_current_network_name(network: &str) -> Result<(), Box<dyn std::error::Error>> {
+    let dfx_root = dfx_root()?;
+    write_current_network_name(&dfx_root, network)
+}
+
+/// Read the selected fleet name for the discovered current project/network.
+pub fn read_current_fleet_name(
+    network: &str,
+) -> Result<Option<String>, Box<dyn std::error::Error>> {
+    let dfx_root = dfx_root()?;
+    read_selected_fleet_name(&dfx_root, network)
 }
 
 /// Read either a named fleet state or the selected current fleet state.
@@ -123,16 +139,6 @@ pub(super) fn list_fleets(
         }
     }
 
-    if fleets.is_empty()
-        && let Some(state) = read_legacy_install_state(dfx_root, network)?
-    {
-        fleets.push(FleetSummary {
-            name: state.fleet.clone(),
-            current: true,
-            state,
-        });
-    }
-
     fleets.sort_by(|left, right| left.name.cmp(&right.name));
     Ok(fleets)
 }
@@ -146,34 +152,40 @@ pub fn select_current_fleet(
     select_fleet(&dfx_root, network, fleet)
 }
 
+/// Select one fleet name as the current project/network default before install.
+pub fn select_current_fleet_name(
+    network: &str,
+    fleet: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let dfx_root = dfx_root()?;
+    write_current_fleet_name(&dfx_root, network, fleet)
+}
+
+/// Clear current-fleet markers that point at one deleted fleet.
+pub fn clear_current_fleet_name_if_matches(
+    fleet: &str,
+) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+    let dfx_root = dfx_root()?;
+    clear_selected_fleet_name_if_matches(&dfx_root, fleet)
+}
+
 /// Select one installed fleet for one project/network.
 fn select_fleet(
     dfx_root: &Path,
     network: &str,
     fleet: &str,
 ) -> Result<InstallState, Box<dyn std::error::Error>> {
-    let Some(state) = read_fleet_install_state(dfx_root, network, fleet)?.or_else(|| {
-        matching_legacy_fleet_state(dfx_root, network, fleet)
-            .ok()
-            .flatten()
-    }) else {
+    let Some(state) = read_fleet_install_state(dfx_root, network, fleet)? else {
         return Err(format!("unknown fleet {fleet} on network {network}").into());
     };
-    if fleet_install_state_path(dfx_root, network, fleet).is_file() {
-        write_current_fleet_name(dfx_root, network, fleet)?;
-    } else {
-        write_install_state(dfx_root, network, &state)?;
-    }
+    write_current_fleet_name(dfx_root, network, fleet)?;
     Ok(state)
 }
 
-/// Return the legacy project-local install state path for one network.
+/// Return the project-local current-network pointer path.
 #[must_use]
-fn install_state_path(dfx_root: &Path, network: &str) -> PathBuf {
-    dfx_root
-        .join(".canic")
-        .join(network)
-        .join(INSTALL_STATE_FILE)
+pub(super) fn current_network_path(dfx_root: &Path) -> PathBuf {
+    dfx_root.join(".canic").join(CURRENT_NETWORK_FILE)
 }
 
 /// Return the project-local state path for one named fleet.
@@ -212,39 +224,36 @@ pub(super) fn write_install_state(
     Ok(path)
 }
 
-// Read a legacy single-slot install state when no named fleet pointer exists.
-fn read_legacy_install_state(
+// Read the selected default network for one project.
+fn read_selected_network_name(
     dfx_root: &Path,
-    network: &str,
-) -> Result<Option<InstallState>, Box<dyn std::error::Error>> {
-    let path = install_state_path(dfx_root, network);
+) -> Result<Option<String>, Box<dyn std::error::Error>> {
+    let path = current_network_path(dfx_root);
     if !path.is_file() {
         return Ok(None);
     }
 
-    let bytes = fs::read(&path)?;
-    let state: InstallState = serde_json::from_slice(&bytes)?;
-    if state.fleet.is_empty() {
-        return Err(format!(
-            "install state at {} is missing required fleet name; reinstall from a config with [fleet].name",
-            path.display()
-        )
-        .into());
-    }
-    Ok(Some(state))
+    let name = fs::read_to_string(path)?.trim().to_string();
+    validate_network_name(&name)?;
+    Ok(Some(name))
 }
 
-// Return the legacy single-slot state only when it matches the requested fleet.
-fn matching_legacy_fleet_state(
+// Write the selected default network for one project.
+fn write_current_network_name(
     dfx_root: &Path,
     network: &str,
-    fleet: &str,
-) -> Result<Option<InstallState>, Box<dyn std::error::Error>> {
-    Ok(read_legacy_install_state(dfx_root, network)?.filter(|state| state.fleet == fleet))
+) -> Result<(), Box<dyn std::error::Error>> {
+    validate_network_name(network)?;
+    let path = current_network_path(dfx_root);
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    fs::write(path, format!("{network}\n"))?;
+    Ok(())
 }
 
 // Read the selected fleet name for one project/network.
-fn read_selected_fleet_name(
+pub(super) fn read_selected_fleet_name(
     dfx_root: &Path,
     network: &str,
 ) -> Result<Option<String>, Box<dyn std::error::Error>> {
@@ -273,9 +282,37 @@ fn write_current_fleet_name(
     Ok(())
 }
 
-// Return the serde default for legacy install-state records.
-const fn default_fleet_name() -> String {
-    String::new()
+// Remove selected-fleet marker files that point at a deleted fleet.
+pub(super) fn clear_selected_fleet_name_if_matches(
+    dfx_root: &Path,
+    fleet: &str,
+) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+    let canic_dir = dfx_root.join(".canic");
+    if !canic_dir.is_dir() {
+        return Ok(Vec::new());
+    }
+
+    let mut cleared = Vec::new();
+    for entry in fs::read_dir(canic_dir)? {
+        let entry = entry?;
+        if !entry.file_type()?.is_dir() {
+            continue;
+        }
+        let Some(network) = entry.file_name().to_str().map(str::to_string) else {
+            continue;
+        };
+        if validate_network_name(&network).is_err() {
+            continue;
+        }
+        let marker = current_fleet_path(dfx_root, &network);
+        if marker.is_file() && fs::read_to_string(&marker)?.trim() == fleet {
+            fs::remove_file(marker)?;
+            cleared.push(network);
+        }
+    }
+
+    cleared.sort();
+    Ok(cleared)
 }
 
 // Keep fleet names filesystem-safe and easy to type in commands.
@@ -288,5 +325,18 @@ pub(super) fn validate_fleet_name(name: &str) -> Result<(), Box<dyn std::error::
         Ok(())
     } else {
         Err(format!("invalid fleet name {name:?}; use letters, numbers, '-' or '_'").into())
+    }
+}
+
+// Keep network names safe for `.canic/<network>` state paths.
+fn validate_network_name(name: &str) -> Result<(), Box<dyn std::error::Error>> {
+    let valid = !name.is_empty()
+        && name
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'));
+    if valid {
+        Ok(())
+    } else {
+        Err(format!("invalid network name {name:?}; use letters, numbers, '-' or '_'").into())
     }
 }

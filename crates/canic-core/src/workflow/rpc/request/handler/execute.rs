@@ -120,7 +120,7 @@ async fn execute_issue_role_attestation(
         "role attestation issued subject={} role={} audience={} subnet={} issued_at={} expires_at={} epoch={}",
         signed.payload.subject,
         signed.payload.role,
-        display_optional(signed.payload.audience),
+        signed.payload.audience,
         display_optional(signed.payload.subnet_id),
         signed.payload.issued_at,
         signed.payload.expires_at,
