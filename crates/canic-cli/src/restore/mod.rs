@@ -8,7 +8,7 @@ use canic_backup::restore::{
     RestoreApplyCommandConfig, RestoreApplyDryRun, RestorePlan, RestorePlanner, RestoreRunResponse,
     RestoreRunnerCommandExecutor, RestoreRunnerCommandOutput, RestoreRunnerConfig,
 };
-use canic_host::dfx;
+use canic_host::icp;
 use clap::Command as ClapCommand;
 use std::ffi::OsString;
 
@@ -150,12 +150,12 @@ fn restore_run_execute_result(
 struct HostRestoreCommandExecutor;
 
 impl RestoreRunnerCommandExecutor for HostRestoreCommandExecutor {
-    /// Execute restore runner commands through the host-side dfx/process boundary.
+    /// Execute restore runner commands through the host-side ICP CLI/process boundary.
     fn execute(
         &mut self,
         command: &canic_backup::restore::RestoreApplyRunnerCommand,
     ) -> Result<RestoreRunnerCommandOutput, std::io::Error> {
-        let output = dfx::run_raw_output(&command.program, &command.args)?;
+        let output = icp::run_raw_output(&command.program, &command.args)?;
         Ok(RestoreRunnerCommandOutput {
             success: output.success,
             status: output.status,
@@ -165,7 +165,7 @@ impl RestoreRunnerCommandExecutor for HostRestoreCommandExecutor {
     }
 }
 
-// Build command-preview configuration from common dfx/network inputs.
+// Build command-preview configuration from common ICP CLI/network inputs.
 fn restore_command_config(program: &str, network: Option<&str>) -> RestoreApplyCommandConfig {
     RestoreApplyCommandConfig {
         program: program.to_string(),
@@ -177,7 +177,7 @@ fn restore_command_config(program: &str, network: Option<&str>) -> RestoreApplyC
 fn restore_runner_config(options: &RestoreRunOptions) -> RestoreRunnerConfig {
     RestoreRunnerConfig {
         journal: options.journal.clone(),
-        command: restore_command_config(&options.dfx, options.network.as_deref()),
+        command: restore_command_config(&options.icp, options.network.as_deref()),
         max_steps: options.max_steps,
         updated_at: None,
     }

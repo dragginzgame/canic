@@ -1,4 +1,4 @@
-//! Workspace and DFX root discovery helpers for downstream install tooling.
+//! Workspace and ICP CLI root discovery helpers for downstream install tooling.
 
 use serde_json::Value as JsonValue;
 use std::{
@@ -9,7 +9,7 @@ use std::{
 use crate::cargo_metadata::{CargoMetadataPackage, cargo_metadata_no_deps_cached};
 
 const WORKSPACE_MANIFEST_RELATIVE: &str = "Cargo.toml";
-const DFX_CONFIG_FILE: &str = "dfx.json";
+const ICP_CONFIG_FILE: &str = "icp.yaml";
 
 // Resolve the nearest Cargo workspace root from a starting file or directory path.
 pub fn discover_workspace_root_from(path: &Path) -> Option<PathBuf> {
@@ -30,13 +30,13 @@ pub fn discover_workspace_root_from(path: &Path) -> Option<PathBuf> {
     None
 }
 
-// Resolve the nearest DFX root from a starting file or directory path.
-pub fn discover_dfx_root_from(path: &Path) -> Option<PathBuf> {
+// Resolve the nearest ICP CLI root from a starting file or directory path.
+pub fn discover_icp_root_from(path: &Path) -> Option<PathBuf> {
     let start = if path.is_file() { path.parent()? } else { path };
 
     for candidate in start.ancestors() {
-        let dfx_config = candidate.join(DFX_CONFIG_FILE);
-        if dfx_config.is_file() {
+        let icp_config = candidate.join(ICP_CONFIG_FILE);
+        if icp_config.is_file() {
             return candidate.canonicalize().ok();
         }
     }

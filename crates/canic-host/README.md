@@ -17,7 +17,7 @@ curl -fsSL https://raw.githubusercontent.com/dragginzgame/canic/v0.32.6/scripts/
 ```
 
 That script bootstraps Rust when needed and installs the pinned internal
-toolchain, the `canic` CLI, wasm/Candid utilities, and `dfx` when missing.
+toolchain, the `canic` CLI, wasm/Candid utilities, and `icp` when missing.
 This README documents the lower-level host library surface.
 
 ## What this crate is not
@@ -33,16 +33,16 @@ It is also separate from:
   snapshots, backup layout validation, and restore planning.
 - `canic-core` and `canic-control-plane`, which run inside canisters or provide
   canister-runtime support. `canic-host` runs on the operator machine and may
-  call Cargo, `dfx`, and the local filesystem.
+  call Cargo, `icp`, and the local filesystem.
 
 Public thin-root flow:
 
 - build visible canister artifacts through the backend builder used by `canic build`
 - build the implicit bootstrap `wasm_store` through the backend builder used by `canic build wasm_store`
-- emit the root staging manifest under `.dfx/<network>/canisters/root/`
+- emit the root staging manifest under `.icp/<network>/canisters/root/`
 - stage the ordinary fleet artifacts into `root`
 - resume root bootstrap
-- drive local root install, including one clean local `dfx` restart attempt when `dfx ping local` fails
+- drive local root install, including one clean local `icp` restart attempt when `icp ping local` fails
 
 Build profile selection:
 
@@ -52,10 +52,10 @@ Build profile selection:
 
 If unset, backend builds default to `release`.
 
-When the Rust workspace root and DFX/project root differ, set both:
+When the Rust workspace root and ICP CLI/project root differ, set both:
 
 - `CANIC_WORKSPACE_ROOT` for Cargo, `canic.toml`, and canister manifests
-- `CANIC_DFX_ROOT` for `dfx.json`, `.dfx`, and emitted artifacts
+- `CANIC_ICP_ROOT` for `icp.yaml`, `.icp`, and emitted artifacts
 
 If canister crates live outside the default `fleets/` directory, host
 discovery first tries Cargo workspace metadata. No extra config is needed when

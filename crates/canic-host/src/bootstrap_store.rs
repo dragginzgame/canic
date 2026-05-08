@@ -12,8 +12,8 @@ use std::{
 };
 
 const WASM_STORE_ROLE: &str = "wasm_store";
-const WASM_STORE_ARTIFACTS_RELATIVE: &str = ".dfx/local/canisters/wasm_store";
-const GENERATED_WRAPPER_RELATIVE: &str = ".dfx/local/generated/canic-wasm-store";
+const WASM_STORE_ARTIFACTS_RELATIVE: &str = ".icp/local/canisters/wasm_store";
+const GENERATED_WRAPPER_RELATIVE: &str = ".icp/local/generated/canic-wasm-store";
 const CANONICAL_WASM_STORE_MANIFEST_RELATIVE: &str = "crates/canic-wasm-store/Cargo.toml";
 const CANONICAL_WASM_STORE_DID_FILE: &str = "wasm_store.did";
 const CANONICAL_WASM_STORE_CRATE_NAME: &str = "canister_wasm_store";
@@ -81,14 +81,14 @@ struct BootstrapWasmStoreSource {
 }
 
 // Build the implicit bootstrap `wasm_store` artifact and populate the canonical
-// local DFX artifact paths for downstream/root builds.
+// local ICP artifact paths for downstream/root builds.
 pub fn build_bootstrap_wasm_store_artifact(
     workspace_root: &Path,
-    dfx_root: &Path,
+    icp_root: &Path,
     profile: BootstrapWasmStoreBuildProfile,
 ) -> Result<BootstrapWasmStoreBuildOutput, Box<dyn std::error::Error>> {
-    let source = resolve_bootstrap_wasm_store_source(workspace_root, dfx_root)?;
-    let artifact_root = dfx_root.join(WASM_STORE_ARTIFACTS_RELATIVE);
+    let source = resolve_bootstrap_wasm_store_source(workspace_root, icp_root)?;
+    let artifact_root = icp_root.join(WASM_STORE_ARTIFACTS_RELATIVE);
     fs::create_dir_all(&artifact_root)?;
 
     run_wasm_store_cargo_build(
@@ -128,7 +128,7 @@ pub fn build_bootstrap_wasm_store_artifact(
 // back to a generated wrapper when downstreams only depend on `canic`.
 fn resolve_bootstrap_wasm_store_source(
     workspace_root: &Path,
-    dfx_root: &Path,
+    icp_root: &Path,
 ) -> Result<BootstrapWasmStoreSource, Box<dyn std::error::Error>> {
     let metadata = cargo_metadata(workspace_root, true)?;
     let canic_manifest_path = metadata
@@ -150,7 +150,7 @@ fn resolve_bootstrap_wasm_store_source(
     }
 
     let wrapper_root =
-        ensure_generated_wasm_store_wrapper(dfx_root, workspace_root, &canic_manifest_path)?;
+        ensure_generated_wasm_store_wrapper(icp_root, workspace_root, &canic_manifest_path)?;
     Ok(BootstrapWasmStoreSource {
         manifest_path: wrapper_root.join("Cargo.toml"),
         source_root: wrapper_root.clone(),
@@ -234,13 +234,13 @@ fn resolve_canonical_bootstrap_wasm_store_source(
     None
 }
 
-// Render the generated wrapper under `.dfx/local/generated/canic-wasm-store`.
+// Render the generated wrapper under `.icp/local/generated/canic-wasm-store`.
 fn ensure_generated_wasm_store_wrapper(
-    dfx_root: &Path,
+    icp_root: &Path,
     workspace_root: &Path,
     canic_manifest_path: &Path,
 ) -> Result<PathBuf, Box<dyn std::error::Error>> {
-    let wrapper_root = dfx_root.join(GENERATED_WRAPPER_RELATIVE);
+    let wrapper_root = icp_root.join(GENERATED_WRAPPER_RELATIVE);
     fs::create_dir_all(wrapper_root.join("src"))?;
 
     let canic_root = canic_manifest_path

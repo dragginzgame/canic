@@ -88,7 +88,7 @@ pub fn build_wasm_canisters(
     let mut cmd = cargo_command();
     cmd.current_dir(workspace_root);
     cmd.env("CARGO_TARGET_DIR", target_dir);
-    cmd.env("DFX_NETWORK", "local");
+    cmd.env("ICP_ENVIRONMENT", "local");
     cmd.args(["build", "--target", "wasm32-unknown-unknown"]);
     cmd.args(profile.cargo_args());
 

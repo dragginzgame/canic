@@ -1,12 +1,12 @@
 //! Host-side artifact discovery and build helpers for PocketIC tests.
 
-mod dfx;
+mod icp;
 mod wasm;
 mod workspace;
 
-pub use dfx::{
-    WatchedInputSnapshot, build_dfx_all_with_env, dfx_artifact_ready_for_build,
-    dfx_artifact_ready_with_snapshot,
+pub use icp::{
+    WatchedInputSnapshot, build_icp_all_with_env, icp_artifact_ready_for_build,
+    icp_artifact_ready_with_snapshot,
 };
 pub use wasm::{
     INTERNAL_TEST_ENDPOINTS_ENV, WasmBuildProfile, build_internal_test_wasm_canisters,

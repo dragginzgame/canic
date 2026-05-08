@@ -35,21 +35,21 @@ pub struct ReleaseSetEntry {
 // Build and persist the current root release-set manifest from built `.wasm.gz` artifacts.
 pub fn emit_root_release_set_manifest(
     workspace_root: &Path,
-    dfx_root: &Path,
+    icp_root: &Path,
     network: &str,
 ) -> Result<std::path::PathBuf, Box<dyn std::error::Error>> {
     let config_path = config_path(workspace_root);
-    emit_root_release_set_manifest_with_config(workspace_root, dfx_root, network, &config_path)
+    emit_root_release_set_manifest_with_config(workspace_root, icp_root, network, &config_path)
 }
 
 // Build and persist the current root release-set manifest with an explicit config path.
 pub fn emit_root_release_set_manifest_with_config(
     workspace_root: &Path,
-    dfx_root: &Path,
+    icp_root: &Path,
     network: &str,
     config_path: &Path,
 ) -> Result<std::path::PathBuf, Box<dyn std::error::Error>> {
-    let artifact_root = resolve_artifact_root(dfx_root, network)?;
+    let artifact_root = resolve_artifact_root(icp_root, network)?;
     let manifest_path = root_release_set_manifest_path(&artifact_root)?;
     let release_version = load_root_package_version(
         &root_manifest_path(workspace_root),
@@ -57,7 +57,7 @@ pub fn emit_root_release_set_manifest_with_config(
     )?;
     let entries = configured_release_roles(config_path)?
         .into_iter()
-        .map(|role_name| build_release_set_entry(dfx_root, &artifact_root, &role_name))
+        .map(|role_name| build_release_set_entry(icp_root, &artifact_root, &role_name))
         .collect::<Result<Vec<_>, _>>()?;
     let manifest = RootReleaseSetManifest {
         release_version,
@@ -71,10 +71,10 @@ pub fn emit_root_release_set_manifest_with_config(
 // Emit the root release-set manifest only once every required ordinary artifact exists.
 pub fn emit_root_release_set_manifest_if_ready(
     workspace_root: &Path,
-    dfx_root: &Path,
+    icp_root: &Path,
     network: &str,
 ) -> Result<Option<std::path::PathBuf>, Box<dyn std::error::Error>> {
-    let artifact_root = resolve_artifact_root(dfx_root, network)?;
+    let artifact_root = resolve_artifact_root(icp_root, network)?;
     let roles = configured_release_roles(&config_path(workspace_root))?;
 
     for role_name in roles {
@@ -86,7 +86,7 @@ pub fn emit_root_release_set_manifest_if_ready(
         }
     }
 
-    emit_root_release_set_manifest(workspace_root, dfx_root, network).map(Some)
+    emit_root_release_set_manifest(workspace_root, icp_root, network).map(Some)
 }
 
 // Load one previously emitted root release-set manifest from disk.

@@ -1,6 +1,6 @@
 use crate::{
     args::{
-        default_dfx, flag_arg, local_network, parse_matches, path_option, string_option, value_arg,
+        default_icp, flag_arg, local_network, parse_matches, path_option, string_option, value_arg,
     },
     version_text,
 };
@@ -13,7 +13,7 @@ use canic_backup::{
     timestamp::current_timestamp_marker,
 };
 use canic_host::{
-    dfx::{Dfx, DfxCommandError},
+    icp::{IcpCli, IcpCommandError},
     install_root::read_named_fleet_install_state,
 };
 use clap::Command as ClapCommand;
@@ -48,13 +48,13 @@ pub enum SnapshotCommandError {
     #[error("canister {canister} is not a member of fleet {fleet}")]
     CanisterNotInFleet { fleet: String, canister: String },
 
-    #[error("dfx command failed: {command}\n{stderr}")]
-    DfxFailed { command: String, stderr: String },
+    #[error("icp command failed: {command}\n{stderr}")]
+    IcpFailed { command: String, stderr: String },
 
     #[error("failed to read canic fleet state: {0}")]
     InstallState(String),
 
-    #[error("could not parse snapshot id from dfx output: {0}")]
+    #[error("could not parse snapshot id from icp output: {0}")]
     SnapshotIdUnavailable(String),
 
     #[error(transparent)]
@@ -79,7 +79,7 @@ pub struct SnapshotDownloadOptions {
     pub dry_run: bool,
     pub lifecycle: SnapshotLifecycleMode,
     pub network: Option<String>,
-    pub dfx: String,
+    pub icp: String,
 }
 
 impl SnapshotDownloadOptions {
@@ -105,7 +105,7 @@ impl SnapshotDownloadOptions {
                 matches.get_flag("resume-after-snapshot"),
             ),
             network: string_option(&matches, "network"),
-            dfx: string_option(&matches, "dfx").unwrap_or_else(default_dfx),
+            icp: string_option(&matches, "icp").unwrap_or_else(default_icp),
         })
     }
 }
@@ -135,7 +135,7 @@ fn snapshot_download_command() -> ClapCommand {
         .arg(flag_arg("dry-run").long("dry-run"))
         .arg(flag_arg("resume-after-snapshot").long("resume-after-snapshot"))
         .arg(value_arg("network").long("network").value_name("name"))
-        .arg(value_arg("dfx").long("dfx").value_name("path"))
+        .arg(value_arg("icp").long("icp").value_name("path"))
 }
 
 /// Run a snapshot subcommand.
@@ -205,7 +205,7 @@ pub fn download_snapshots(
             .clone()
             .unwrap_or_else(|| "local".to_string()),
     };
-    let mut driver = DfxSnapshotDriver { request: &request };
+    let mut driver = IcpSnapshotDriver { request: &request };
     canic_backup::snapshot::download_snapshots(&config, &mut driver)
         .map_err(SnapshotCommandError::from)
 }
@@ -229,7 +229,7 @@ struct ResolvedSnapshotDownload {
     dry_run: bool,
     lifecycle: SnapshotLifecycleMode,
     network: Option<String>,
-    dfx: String,
+    icp: String,
 }
 
 // Resolve the named fleet into the explicit backup contract used downstream.
@@ -271,7 +271,7 @@ fn resolve_snapshot_download_request(
         dry_run: options.dry_run,
         lifecycle: options.lifecycle,
         network: options.network.clone(),
-        dfx: options.dfx.clone(),
+        icp: options.icp.clone(),
     })
 }
 
@@ -402,35 +402,35 @@ fn file_safe_component(value: &str) -> String {
 }
 
 ///
-/// DfxSnapshotDriver
+/// IcpSnapshotDriver
 ///
 
-struct DfxSnapshotDriver<'a> {
+struct IcpSnapshotDriver<'a> {
     request: &'a ResolvedSnapshotDownload,
 }
 
-impl SnapshotDriver for DfxSnapshotDriver<'_> {
-    /// Load the root registry JSON via `dfx canister call`.
+impl SnapshotDriver for IcpSnapshotDriver<'_> {
+    /// Load the root registry JSON via `icp canister call`.
     fn registry_json(&mut self, root: &str) -> Result<String, SnapshotDriverError> {
         call_subnet_registry(self.request, root).map_err(driver_error)
     }
 
-    /// Create a canister snapshot via DFX.
+    /// Create a canister snapshot via ICP CLI.
     fn create_snapshot(&mut self, canister_id: &str) -> Result<String, SnapshotDriverError> {
         create_snapshot(self.request, canister_id).map_err(driver_error)
     }
 
-    /// Stop a canister via DFX.
+    /// Stop a canister via ICP CLI.
     fn stop_canister(&mut self, canister_id: &str) -> Result<(), SnapshotDriverError> {
         stop_canister(self.request, canister_id).map_err(driver_error)
     }
 
-    /// Start a canister via DFX.
+    /// Start a canister via ICP CLI.
     fn start_canister(&mut self, canister_id: &str) -> Result<(), SnapshotDriverError> {
         start_canister(self.request, canister_id).map_err(driver_error)
     }
 
-    /// Download a canister snapshot via DFX.
+    /// Download a canister snapshot via ICP CLI.
     fn download_snapshot(
         &mut self,
         canister_id: &str,
@@ -472,32 +472,32 @@ fn driver_error(error: SnapshotCommandError) -> SnapshotDriverError {
     Box::new(error)
 }
 
-// Build the shared host dfx context for snapshot commands.
-fn dfx(request: &ResolvedSnapshotDownload) -> Dfx {
-    Dfx::new(&request.dfx, request.network.clone())
+// Build the shared host ICP CLI context for snapshot commands.
+fn icp(request: &ResolvedSnapshotDownload) -> IcpCli {
+    IcpCli::new(&request.icp, None, request.network.clone())
 }
 
-// Convert host dfx failures into the snapshot command's public error surface.
-fn snapshot_dfx_error(error: DfxCommandError) -> SnapshotCommandError {
+// Convert host ICP CLI failures into the snapshot command's public error surface.
+fn snapshot_icp_error(error: IcpCommandError) -> SnapshotCommandError {
     match error {
-        DfxCommandError::Io(err) => SnapshotCommandError::Io(err),
-        DfxCommandError::Failed { command, stderr } => {
-            SnapshotCommandError::DfxFailed { command, stderr }
+        IcpCommandError::Io(err) => SnapshotCommandError::Io(err),
+        IcpCommandError::Failed { command, stderr } => {
+            SnapshotCommandError::IcpFailed { command, stderr }
         }
-        DfxCommandError::SnapshotIdUnavailable { output } => {
+        IcpCommandError::SnapshotIdUnavailable { output } => {
             SnapshotCommandError::SnapshotIdUnavailable(output)
         }
     }
 }
 
-// Run `dfx canister call <root> canic_subnet_registry --output json`.
+// Run `icp canister call <root> canic_subnet_registry --output json`.
 fn call_subnet_registry(
     request: &ResolvedSnapshotDownload,
     root: &str,
 ) -> Result<String, SnapshotCommandError> {
-    dfx(request)
+    icp(request)
         .canister_call_output(root, "canic_subnet_registry", Some("json"))
-        .map_err(snapshot_dfx_error)
+        .map_err(snapshot_icp_error)
 }
 
 // Create one canister snapshot and return the host-resolved snapshot id.
@@ -505,9 +505,9 @@ fn create_snapshot(
     request: &ResolvedSnapshotDownload,
     canister_id: &str,
 ) -> Result<String, SnapshotCommandError> {
-    dfx(request)
+    icp(request)
         .snapshot_create_id(canister_id)
-        .map_err(snapshot_dfx_error)
+        .map_err(snapshot_icp_error)
 }
 
 // Stop a canister before taking a snapshot when explicitly requested.
@@ -515,9 +515,9 @@ fn stop_canister(
     request: &ResolvedSnapshotDownload,
     canister_id: &str,
 ) -> Result<(), SnapshotCommandError> {
-    dfx(request)
+    icp(request)
         .stop_canister(canister_id)
-        .map_err(snapshot_dfx_error)
+        .map_err(snapshot_icp_error)
 }
 
 // Start a canister after snapshot capture when explicitly requested.
@@ -525,9 +525,9 @@ fn start_canister(
     request: &ResolvedSnapshotDownload,
     canister_id: &str,
 ) -> Result<(), SnapshotCommandError> {
-    dfx(request)
+    icp(request)
         .start_canister(canister_id)
-        .map_err(snapshot_dfx_error)
+        .map_err(snapshot_icp_error)
 }
 
 // Download one canister snapshot into the target artifact directory.
@@ -537,9 +537,9 @@ fn download_snapshot(
     snapshot_id: &str,
     artifact_path: &Path,
 ) -> Result<(), SnapshotCommandError> {
-    dfx(request)
+    icp(request)
         .snapshot_download(canister_id, snapshot_id, artifact_path)
-        .map_err(snapshot_dfx_error)
+        .map_err(snapshot_icp_error)
 }
 
 // Render one dry-run create command.
@@ -547,7 +547,7 @@ fn create_snapshot_command_display(
     request: &ResolvedSnapshotDownload,
     canister_id: &str,
 ) -> String {
-    dfx(request).snapshot_create_display(canister_id)
+    icp(request).snapshot_create_display(canister_id)
 }
 
 // Render one dry-run download command.
@@ -557,17 +557,17 @@ fn download_snapshot_command_display(
     snapshot_id: &str,
     artifact_path: &Path,
 ) -> String {
-    dfx(request).snapshot_download_display(canister_id, snapshot_id, artifact_path)
+    icp(request).snapshot_download_display(canister_id, snapshot_id, artifact_path)
 }
 
 // Render one dry-run stop command.
 fn stop_canister_command_display(request: &ResolvedSnapshotDownload, canister_id: &str) -> String {
-    dfx(request).stop_canister_display(canister_id)
+    icp(request).stop_canister_display(canister_id)
 }
 
 // Render one dry-run start command.
 fn start_canister_command_display(request: &ResolvedSnapshotDownload, canister_id: &str) -> String {
-    dfx(request).start_canister_display(canister_id)
+    icp(request).start_canister_display(canister_id)
 }
 
 // Build a stable backup id for this command's output directory.
@@ -647,8 +647,8 @@ mod tests {
             OsString::from("--recursive"),
         ])
         .expect("parse options");
-        let request = resolve_snapshot_download_request(&options).expect("resolve request");
-        let out = request.out.to_string_lossy();
+        let out = default_snapshot_output_path(&options.fleet);
+        let out = out.to_string_lossy();
 
         assert!(out.starts_with("backups/fleet-"));
         assert!(out.chars().last().is_some_and(|last| last.is_ascii_digit()));

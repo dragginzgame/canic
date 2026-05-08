@@ -10,7 +10,7 @@ use candid::Principal;
 use canic::ids::CanisterRole;
 use canic_backup::discovery::{DiscoveryError, RegistryEntry, parse_registry_entries};
 use canic_host::{
-    dfx::{Dfx, DfxCommandError},
+    icp::{IcpCli, IcpCommandError},
     install_root::{
         InstallState, discover_current_canic_config_choices, read_named_fleet_install_state,
     },
@@ -49,14 +49,14 @@ pub enum ListCommandError {
     #[error("registry JSON did not contain the requested canister {0}")]
     CanisterNotInRegistry(String),
 
-    #[error("dfx command failed: {command}\n{stderr}")]
-    DfxFailed { command: String, stderr: String },
+    #[error("icp command failed: {command}\n{stderr}")]
+    IcpFailed { command: String, stderr: String },
 
     #[error("local replica query failed: {0}")]
     ReplicaQuery(String),
 
     #[error(
-        "fleet {fleet} points to root {root}, but that canister is not present on network {network}. Local dfx state was probably restarted or reset. Run `canic install {fleet}` to recreate it."
+        "fleet {fleet} points to root {root}, but that canister is not present on network {network}. Local replica state was probably restarted or reset. Run `canic install {fleet}` to recreate it."
     )]
     StaleLocalFleet {
         fleet: String,
@@ -189,7 +189,7 @@ fn check_ready_status(
 ) -> Result<ReadyStatus, ListCommandError> {
     if replica_query::should_use_local_replica_query(options.network.as_deref()) {
         return Ok(
-            match replica_query::query_ready(&options.dfx, options.network.as_deref(), canister) {
+            match replica_query::query_ready(options.network.as_deref(), canister) {
                 Ok(true) => ReadyStatus::Ready,
                 Ok(false) => ReadyStatus::NotReady,
                 Err(_) => ReadyStatus::Error,
@@ -197,7 +197,7 @@ fn check_ready_status(
         );
     }
 
-    let Ok(output) = Dfx::new(&options.dfx, options.network.clone()).canister_call_output(
+    let Ok(output) = IcpCli::new(&options.icp, None, options.network.clone()).canister_call_output(
         canister,
         "canic_ready",
         Some("json"),
@@ -287,17 +287,16 @@ fn auto_create_label(role: &str, auto_create: &std::collections::BTreeSet<String
     }
 }
 
-// Resolve one local project canister id, returning None when it has not been created yet.
+// Resolve one explicit canister identifier.
 fn resolve_project_canister_id(
     options: &ListOptions,
     name: &str,
 ) -> Result<Option<String>, ListCommandError> {
-    Dfx::new(&options.dfx, options.network.clone())
-        .canister_id_optional(name)
-        .map_err(list_dfx_error)
+    let _ = options;
+    Ok(Some(name.to_string()))
 }
 
-// Resolve the explicit root id or the current dfx project's `root` canister id.
+// Resolve the explicit root id or the selected fleet install state root.
 fn resolve_root_canister(options: &ListOptions) -> Result<String, ListCommandError> {
     if let Some(root) = &options.root {
         return resolve_canister_identifier(options, root);
@@ -343,7 +342,7 @@ fn selected_config_path(options: &ListOptions) -> Result<PathBuf, ListCommandErr
     }
 }
 
-// Resolve the selected tree anchor as a principal when a local dfx name is supplied.
+// Resolve the selected tree anchor as a principal or operator-supplied identifier.
 fn resolve_tree_anchor(options: &ListOptions) -> Result<Option<String>, ListCommandError> {
     options
         .anchor
@@ -352,7 +351,7 @@ fn resolve_tree_anchor(options: &ListOptions) -> Result<Option<String>, ListComm
         .transpose()
 }
 
-// Accept either an IC principal or a local dfx canister name for list inputs.
+// Accept either an IC principal or an operator-supplied canister identifier for list inputs.
 fn resolve_canister_identifier(
     options: &ListOptions,
     identifier: &str,
@@ -370,20 +369,16 @@ fn state_network(options: &ListOptions) -> String {
     options.network.clone().unwrap_or_else(local_network)
 }
 
-// Run `dfx canister call <root> canic_subnet_registry --output json`.
+// Run `icp canister call <root> canic_subnet_registry --output json`.
 fn call_subnet_registry(options: &ListOptions, root: &str) -> Result<String, ListCommandError> {
     if replica_query::should_use_local_replica_query(options.network.as_deref()) {
-        return replica_query::query_subnet_registry_json(
-            &options.dfx,
-            options.network.as_deref(),
-            root,
-        )
-        .map_err(|err| list_replica_query_error(options, root, err.to_string()));
+        return replica_query::query_subnet_registry_json(options.network.as_deref(), root)
+            .map_err(|err| list_replica_query_error(options, root, err.to_string()));
     }
 
-    Dfx::new(&options.dfx, options.network.clone())
+    IcpCli::new(&options.icp, None, options.network.clone())
         .canister_call_output(root, "canic_subnet_registry", Some("json"))
-        .map_err(list_dfx_error)
+        .map_err(list_icp_error)
         .map_err(add_root_registry_hint)
 }
 
@@ -410,29 +405,29 @@ fn is_canister_not_found_error(error: &str) -> bool {
 
 // Add a next-step hint for common root registry setup mistakes.
 fn add_root_registry_hint(error: ListCommandError) -> ListCommandError {
-    let ListCommandError::DfxFailed { command, stderr } = error else {
+    let ListCommandError::IcpFailed { command, stderr } = error else {
         return error;
     };
 
     let Some(hint) = root_registry_hint(&stderr) else {
-        return ListCommandError::DfxFailed { command, stderr };
+        return ListCommandError::IcpFailed { command, stderr };
     };
 
-    ListCommandError::DfxFailed {
+    ListCommandError::IcpFailed {
         command,
         stderr: format!("{stderr}\nHint: {hint}\n"),
     }
 }
 
-// Convert host dfx failures into the list command's public error surface.
-fn list_dfx_error(error: DfxCommandError) -> ListCommandError {
+// Convert host ICP CLI failures into the list command's public error surface.
+fn list_icp_error(error: IcpCommandError) -> ListCommandError {
     match error {
-        DfxCommandError::Io(err) => ListCommandError::Io(err),
-        DfxCommandError::Failed { command, stderr } => {
-            ListCommandError::DfxFailed { command, stderr }
+        IcpCommandError::Io(err) => ListCommandError::Io(err),
+        IcpCommandError::Failed { command, stderr } => {
+            ListCommandError::IcpFailed { command, stderr }
         }
-        DfxCommandError::SnapshotIdUnavailable { output } => ListCommandError::DfxFailed {
-            command: "dfx canister snapshot create".to_string(),
+        IcpCommandError::SnapshotIdUnavailable { output } => ListCommandError::IcpFailed {
+            command: "icp canister snapshot create".to_string(),
             stderr: output,
         },
     }
@@ -442,13 +437,13 @@ fn list_dfx_error(error: DfxCommandError) -> ListCommandError {
 fn root_registry_hint(stderr: &str) -> Option<&'static str> {
     if stderr.contains("Cannot find canister id") {
         return Some(
-            "no root canister id exists in this dfx project. Use `canic config <name>` for the selected fleet config, or run `canic install <name>` before querying the root registry.",
+            "no root canister id exists for this fleet. Use `canic config <name>` for the selected fleet config, or run `canic install <name>` before querying the root registry.",
         );
     }
 
     if stderr.contains("contains no Wasm module") || stderr.contains("wasm-module-not-found") {
         return Some(
-            "`dfx canister create root` only reserves an id; it does not install Canic root code. Run `canic install <name>`, then use `canic list <name>`.",
+            "the root canister id exists but no Canic root code is installed. Run `canic install <name>`, then use `canic list <name>`.",
         );
     }
 
@@ -512,8 +507,8 @@ mod tests {
             OsString::from(APP),
             OsString::from("--network"),
             OsString::from("local"),
-            OsString::from("--dfx"),
-            OsString::from("/bin/dfx"),
+            OsString::from("--icp"),
+            OsString::from("/bin/icp"),
         ])
         .expect("parse list options");
 
@@ -522,7 +517,7 @@ mod tests {
         assert_eq!(options.root, Some(ROOT.to_string()));
         assert_eq!(options.anchor, Some(APP.to_string()));
         assert_eq!(options.network, Some("local".to_string()));
-        assert_eq!(options.dfx, "/bin/dfx");
+        assert_eq!(options.icp, "/bin/icp");
         assert!(!options.verbose);
     }
 
@@ -542,7 +537,7 @@ mod tests {
         assert_eq!(options.root, None);
         assert_eq!(options.anchor, None);
         assert_eq!(options.network, Some("local".to_string()));
-        assert_eq!(options.dfx, "dfx");
+        assert_eq!(options.icp, "icp");
         assert!(options.verbose);
     }
 
@@ -566,14 +561,14 @@ mod tests {
         assert!(config.contains("Examples:"));
     }
 
-    // Ensure empty-root dfx errors explain root registry setup.
+    // Ensure empty-root command errors explain root registry setup.
     #[test]
     fn root_registry_hint_explains_empty_root_canister() {
         let hint = root_registry_hint("the canister contains no Wasm module")
             .expect("empty wasm hint should be available");
 
         assert!(hint.contains("canic install"));
-        assert!(hint.contains("`dfx canister create root` only reserves an id"));
+        assert!(hint.contains("no Canic root code is installed"));
     }
 
     // Ensure local replica missing-canister errors are recognized for stale fleet guidance.
@@ -716,7 +711,7 @@ mod tests {
         assert!(output.contains("\n------------------------------"));
     }
 
-    // Ensure config-only fleets render their declared roles instead of raw dfx inventory.
+    // Ensure config-only fleets render their declared roles instead of deployed inventory.
     #[test]
     fn renders_config_output_with_fleet_roles() {
         let title = ListTitle {
@@ -782,7 +777,7 @@ mod tests {
         );
     }
 
-    // Ensure readiness parsing accepts the JSON shapes emitted by dfx.
+    // Ensure readiness parsing accepts common command-line JSON shapes.
     #[test]
     fn parses_ready_json_shapes() {
         assert!(replica_query::parse_ready_json_value(&json!(true)));

@@ -6,7 +6,7 @@ use std::{
     time::SystemTime,
 };
 
-const DFX_BUILD_ENV_STAMP_RELATIVE: &str = ".dfx/canic-build-env.stamp";
+const ICP_BUILD_ENV_STAMP_RELATIVE: &str = ".icp/canic-build-env.stamp";
 
 ///
 /// WatchedInputSnapshot
@@ -32,9 +32,9 @@ impl WatchedInputSnapshot {
     }
 }
 
-/// Check whether a `dfx` artifact exists, is fresh, and matches the expected build env.
+/// Check whether an ICP artifact exists, is fresh, and matches the expected build env.
 #[must_use]
-pub fn dfx_artifact_ready_for_build(
+pub fn icp_artifact_ready_for_build(
     workspace_root: &Path,
     artifact_relative_path: &str,
     watched_relative_paths: &[&str],
@@ -47,7 +47,7 @@ pub fn dfx_artifact_ready_for_build(
         return false;
     };
 
-    dfx_artifact_ready_with_snapshot(
+    icp_artifact_ready_with_snapshot(
         workspace_root,
         artifact_relative_path,
         watched_inputs,
@@ -57,9 +57,9 @@ pub fn dfx_artifact_ready_for_build(
     )
 }
 
-/// Check one `dfx` artifact against one already-captured watched-input snapshot.
+/// Check one ICP artifact against one already-captured watched-input snapshot.
 #[must_use]
-pub fn dfx_artifact_ready_with_snapshot(
+pub fn icp_artifact_ready_with_snapshot(
     workspace_root: &Path,
     artifact_relative_path: &str,
     watched_inputs: WatchedInputSnapshot,
@@ -80,9 +80,9 @@ pub fn dfx_artifact_ready_with_snapshot(
     }
 }
 
-/// Build all local `.dfx` canister artifacts while holding a file lock around the build and
+/// Build all local `.icp` canister artifacts while holding a file lock around the build and
 /// applying additional environment overrides.
-pub fn build_dfx_all_with_env(
+pub fn build_icp_all_with_env(
     workspace_root: &Path,
     lock_relative_path: &str,
     network: &str,
@@ -141,7 +141,7 @@ fn build_stamp_matches(
     profile: WasmBuildProfile,
     extra_env: &[(&str, &str)],
 ) -> bool {
-    fs::read_to_string(workspace_root.join(DFX_BUILD_ENV_STAMP_RELATIVE))
+    fs::read_to_string(workspace_root.join(ICP_BUILD_ENV_STAMP_RELATIVE))
         .is_ok_and(|current| current == build_stamp_contents(network, profile, extra_env))
 }
 
@@ -151,7 +151,7 @@ fn write_build_stamp(
     profile: WasmBuildProfile,
     extra_env: &[(&str, &str)],
 ) -> io::Result<()> {
-    let stamp_path = workspace_root.join(DFX_BUILD_ENV_STAMP_RELATIVE);
+    let stamp_path = workspace_root.join(ICP_BUILD_ENV_STAMP_RELATIVE);
     if let Some(parent) = stamp_path.parent() {
         fs::create_dir_all(parent)?;
     }
@@ -167,7 +167,7 @@ fn build_stamp_contents(
     extra_env: &[(&str, &str)],
 ) -> String {
     let mut lines = vec![
-        format!("DFX_NETWORK={network}"),
+        format!("ICP_ENVIRONMENT={network}"),
         format!("CANIC_WASM_PROFILE={}", profile.canic_wasm_profile_value()),
     ];
 
@@ -191,7 +191,7 @@ fn run_local_artifact_build_with_lock(
     extra_env: &[(&str, &str)],
 ) -> Output {
     let lock_file = workspace_root.join(lock_relative_path);
-    let target_dir = workspace_root.join("target/dfx-build");
+    let target_dir = workspace_root.join("target/icp-build");
     if let Some(parent) = lock_file.parent() {
         let _ = fs::create_dir_all(parent);
     }
@@ -202,7 +202,7 @@ fn run_local_artifact_build_with_lock(
         .current_dir(workspace_root)
         .arg(lock_file.as_os_str())
         .arg("bash")
-        .env("DFX_NETWORK", network)
+        .env("ICP_ENVIRONMENT", network)
         .env("CANIC_WASM_PROFILE", profile.canic_wasm_profile_value())
         .env("CARGO_TARGET_DIR", &target_dir)
         .arg("scripts/ci/build-ci-wasm-artifacts.sh");
@@ -226,13 +226,13 @@ fn run_local_artifact_build(
     profile: WasmBuildProfile,
     extra_env: &[(&str, &str)],
 ) -> Output {
-    let target_dir = workspace_root.join("target/dfx-build");
+    let target_dir = workspace_root.join("target/icp-build");
     let _ = fs::create_dir_all(&target_dir);
 
     let mut build = Command::new("bash");
     build
         .current_dir(workspace_root)
-        .env("DFX_NETWORK", network)
+        .env("ICP_ENVIRONMENT", network)
         .env("CANIC_WASM_PROFILE", profile.canic_wasm_profile_value())
         .env("CARGO_TARGET_DIR", &target_dir)
         .arg("scripts/ci/build-ci-wasm-artifacts.sh");
@@ -247,7 +247,7 @@ fn run_local_artifact_build(
 
 #[cfg(test)]
 mod tests {
-    use super::{build_stamp_contents, dfx_artifact_ready_for_build};
+    use super::{build_stamp_contents, icp_artifact_ready_for_build};
     use crate::artifacts::WasmBuildProfile;
     use std::{
         fs,
@@ -262,26 +262,26 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .expect("system time before epoch")
             .as_nanos();
-        let path = std::env::temp_dir().join(format!("canic-dfx-artifact-test-{unique}"));
-        fs::create_dir_all(path.join(".dfx/local/canisters/root")).expect("create temp workspace");
+        let path = std::env::temp_dir().join(format!("canic-icp-artifact-test-{unique}"));
+        fs::create_dir_all(path.join(".icp/local/canisters/root")).expect("create temp workspace");
         path
     }
 
     #[test]
-    fn dfx_artifact_ready_requires_matching_build_env_stamp() {
+    fn icp_artifact_ready_requires_matching_build_env_stamp() {
         let workspace_root = temp_workspace();
-        let artifact_relative_path = ".dfx/local/canisters/root/root.wasm.gz";
+        let artifact_relative_path = ".icp/local/canisters/root/root.wasm.gz";
         let artifact_path = workspace_root.join(artifact_relative_path);
         fs::write(workspace_root.join("Cargo.toml"), "workspace").expect("write watched input");
         sleep(Duration::from_millis(20));
         fs::write(&artifact_path, b"wasm").expect("write artifact");
         fs::write(
-            workspace_root.join(".dfx/canic-build-env.stamp"),
+            workspace_root.join(".icp/canic-build-env.stamp"),
             build_stamp_contents("local", WasmBuildProfile::Debug, &[]),
         )
         .expect("write build stamp");
 
-        assert!(dfx_artifact_ready_for_build(
+        assert!(icp_artifact_ready_for_build(
             &workspace_root,
             artifact_relative_path,
             &["Cargo.toml"],
@@ -289,7 +289,7 @@ mod tests {
             WasmBuildProfile::Debug,
             &[],
         ));
-        assert!(!dfx_artifact_ready_for_build(
+        assert!(!icp_artifact_ready_for_build(
             &workspace_root,
             artifact_relative_path,
             &["Cargo.toml"],

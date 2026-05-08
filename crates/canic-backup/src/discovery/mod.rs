@@ -142,7 +142,7 @@ pub enum DiscoveryError {
     Json(#[from] serde_json::Error),
 }
 
-/// Parse the `dfx --output json` subnet registry shape.
+/// Parse the wrapped subnet registry JSON shape.
 pub fn parse_registry_entries(registry_json: &str) -> Result<Vec<RegistryEntry>, DiscoveryError> {
     let data = serde_json::from_str::<Value>(registry_json)?;
     let entries = data
@@ -200,7 +200,7 @@ pub fn targets_from_registry(
     Ok(targets)
 }
 
-// Parse one registry entry from dfx JSON.
+// Parse one registry entry from registry JSON.
 fn parse_registry_entry(value: &Value) -> Option<RegistryEntry> {
     let pid = value.get("pid").and_then(Value::as_str)?.to_string();
     let role = value

@@ -77,12 +77,12 @@ pub fn path_option(matches: &ArgMatches, id: &str) -> Option<PathBuf> {
     string_option(matches, id).map(PathBuf::from)
 }
 
-/// Return the default DFX executable used by live host commands.
-pub fn default_dfx() -> String {
-    "dfx".to_string()
+/// Return the default ICP CLI executable used by live host commands.
+pub fn default_icp() -> String {
+    "icp".to_string()
 }
 
-/// Return the local DFX network name used when --network is omitted.
+/// Return the local network name used when --network is omitted.
 pub fn local_network() -> String {
     "local".to_string()
 }

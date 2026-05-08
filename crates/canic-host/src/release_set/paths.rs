@@ -1,5 +1,5 @@
 use crate::workspace_discovery::{
-    discover_canister_manifest_from_metadata, discover_dfx_root_from, discover_workspace_root_from,
+    discover_canister_manifest_from_metadata, discover_icp_root_from, discover_workspace_root_from,
     normalize_workspace_path,
 };
 use std::{
@@ -41,21 +41,21 @@ pub fn workspace_root() -> Result<PathBuf, Box<dyn std::error::Error>> {
     Ok(std::env::current_dir()?.canonicalize()?)
 }
 
-// Resolve the downstream DFX/project root from the current directory or an
+// Resolve the downstream ICP CLI/project root from the current directory or an
 // explicit override.
-pub fn dfx_root() -> Result<PathBuf, Box<dyn std::error::Error>> {
-    if let Ok(path) = std::env::var("CANIC_DFX_ROOT") {
+pub fn icp_root() -> Result<PathBuf, Box<dyn std::error::Error>> {
+    if let Ok(path) = std::env::var("CANIC_ICP_ROOT") {
         return Ok(PathBuf::from(path).canonicalize()?);
     }
 
     let current_dir = std::env::current_dir()?.canonicalize()?;
-    if let Some(root) = discover_dfx_root_from(&current_dir) {
+    if let Some(root) = discover_icp_root_from(&current_dir) {
         return Ok(root);
     }
 
     if let Ok(path) = std::env::var("CANIC_WORKSPACE_ROOT") {
         let workspace_root = PathBuf::from(path).canonicalize()?;
-        if let Some(root) = discover_dfx_root_from(&workspace_root) {
+        if let Some(root) = discover_icp_root_from(&workspace_root) {
             return Ok(root);
         }
         return Ok(workspace_root);
@@ -130,23 +130,23 @@ pub fn workspace_manifest_path(workspace_root: &Path) -> PathBuf {
     )
 }
 
-// Prefer the selected DFX network artifact root and fall back to local when present.
+// Prefer the selected ICP environment artifact root and fall back to local when present.
 pub fn resolve_artifact_root(
-    dfx_root: &Path,
+    icp_root: &Path,
     network: &str,
 ) -> Result<PathBuf, Box<dyn std::error::Error>> {
-    let preferred = dfx_root.join(".dfx").join(network).join("canisters");
+    let preferred = icp_root.join(".icp").join(network).join("canisters");
     if preferred.is_dir() {
         return Ok(preferred);
     }
 
-    let fallback = dfx_root.join(".dfx/local/canisters");
+    let fallback = icp_root.join(".icp/local/canisters");
     if fallback.is_dir() {
         return Ok(fallback);
     }
 
     Err(format!(
-        "missing built DFX artifacts under {} or {}",
+        "missing built ICP artifacts under {} or {}",
         preferred.display(),
         fallback.display()
     )

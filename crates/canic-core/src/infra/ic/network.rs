@@ -9,7 +9,7 @@ pub struct NetworkInfra;
 impl NetworkInfra {
     ///
     /// build_network
-    /// Returns the network inferred at *build time* from `DFX_NETWORK`.
+    /// Returns the network inferred at *build time* from `ICP_ENVIRONMENT`.
     /// This value is baked into the Wasm and does not reflect runtime state.
     ///
     /// ChatGPT 5.2 Final, Precise Verdict
@@ -24,19 +24,19 @@ impl NetworkInfra {
 
     #[must_use]
     pub fn build_network() -> Option<BuildNetwork> {
-        Self::build_network_from_dfx_network(option_env!("DFX_NETWORK"))
+        Self::build_network_from_icp_environment(option_env!("ICP_ENVIRONMENT"))
     }
 
     ///
-    /// build_network_from_dfx_network
+    /// build_network_from_icp_environment
     /// Pure helper for `build_network()`
     ///
 
     #[must_use]
-    pub fn build_network_from_dfx_network(
-        dfx_network: Option<&'static str>,
+    pub fn build_network_from_icp_environment(
+        icp_environment: Option<&'static str>,
     ) -> Option<BuildNetwork> {
-        match dfx_network {
+        match icp_environment {
             Some("local") | None => Some(BuildNetwork::Local),
             Some("ic") => Some(BuildNetwork::Ic),
             _ => None,
@@ -53,33 +53,33 @@ mod tests {
     use super::*;
 
     #[test]
-    fn build_network_from_dfx_network_parses_ic() {
+    fn build_network_from_icp_environment_parses_ic() {
         assert_eq!(
-            NetworkInfra::build_network_from_dfx_network(Some("ic")),
+            NetworkInfra::build_network_from_icp_environment(Some("ic")),
             Some(BuildNetwork::Ic)
         );
     }
 
     #[test]
-    fn build_network_from_dfx_network_parses_local() {
+    fn build_network_from_icp_environment_parses_local() {
         assert_eq!(
-            NetworkInfra::build_network_from_dfx_network(Some("local")),
+            NetworkInfra::build_network_from_icp_environment(Some("local")),
             Some(BuildNetwork::Local)
         );
     }
 
     #[test]
-    fn build_network_from_dfx_network_rejects_unknown() {
+    fn build_network_from_icp_environment_rejects_unknown() {
         assert_eq!(
-            NetworkInfra::build_network_from_dfx_network(Some("nope")),
+            NetworkInfra::build_network_from_icp_environment(Some("nope")),
             None
         );
     }
 
     #[test]
-    fn build_network_from_dfx_network_handles_missing() {
+    fn build_network_from_icp_environment_handles_missing() {
         assert_eq!(
-            NetworkInfra::build_network_from_dfx_network(None),
+            NetworkInfra::build_network_from_icp_environment(None),
             Some(BuildNetwork::Local)
         );
     }

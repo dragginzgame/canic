@@ -22,7 +22,8 @@ impl EnvWorkflow {
         let network = NetworkOps::build_network().ok_or_else(|| {
             InternalError::invariant(
                 InternalErrorOrigin::Workflow,
-                "runtime network unavailable; set DFX_NETWORK=local|ic at build time".to_string(),
+                "runtime network unavailable; set ICP_ENVIRONMENT=local|ic at build time"
+                    .to_string(),
             )
         })?;
 

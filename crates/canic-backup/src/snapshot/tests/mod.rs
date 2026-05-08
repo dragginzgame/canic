@@ -151,10 +151,10 @@ fn dry_run_returns_planned_commands_without_writing_manifest() {
     assert_eq!(
         result.planned_commands,
         vec![
-            "dfx canister stop aaaaa-aa",
-            "dfx canister snapshot create aaaaa-aa",
-            "dfx canister snapshot download aaaaa-aa <snapshot-id>",
-            "dfx canister start aaaaa-aa"
+            "icp canister stop aaaaa-aa",
+            "icp canister snapshot create aaaaa-aa",
+            "icp canister snapshot download aaaaa-aa <snapshot-id>",
+            "icp canister start aaaaa-aa"
         ]
     );
     assert!(!out.join("fleet-backup-manifest.json").exists());
@@ -205,17 +205,17 @@ impl SnapshotDriver for FakeSnapshotDriver {
 
     /// Render the fake dry-run create command.
     fn create_snapshot_command(&self, canister_id: &str) -> String {
-        format!("dfx canister snapshot create {canister_id}")
+        format!("icp canister snapshot create {canister_id}")
     }
 
     /// Render the fake dry-run stop command.
     fn stop_canister_command(&self, canister_id: &str) -> String {
-        format!("dfx canister stop {canister_id}")
+        format!("icp canister stop {canister_id}")
     }
 
     /// Render the fake dry-run start command.
     fn start_canister_command(&self, canister_id: &str) -> String {
-        format!("dfx canister start {canister_id}")
+        format!("icp canister start {canister_id}")
     }
 
     /// Render the fake dry-run download command.
@@ -225,7 +225,7 @@ impl SnapshotDriver for FakeSnapshotDriver {
         snapshot_id: &str,
         _artifact_path: &Path,
     ) -> String {
-        format!("dfx canister snapshot download {canister_id} {snapshot_id}")
+        format!("icp canister snapshot download {canister_id} {snapshot_id}")
     }
 }
 

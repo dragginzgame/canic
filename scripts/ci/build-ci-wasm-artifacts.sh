@@ -4,7 +4,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT_DIR"
-source "$ROOT_DIR/scripts/ci/require_dfx.sh"
+source "$ROOT_DIR/scripts/ci/require_icp.sh"
 
 require_cmd() {
     local cmd="$1"
@@ -21,7 +21,7 @@ require_cmd() {
 require_cmd cargo
 require_cmd candid-extractor
 require_cmd ic-wasm
-require_dfx_ready
+require_icp_tools
 
 # Build the middle fast artifacts by default so PocketIC/test harnesses and
 # local demo flows get smaller faster wasm without paying full release cost.
@@ -48,7 +48,7 @@ for canister in "${BUILD_CANISTERS[@]}"; do
     CANIC_WASM_PROFILE="$BUILD_WASM_PROFILE" scripts/app/build.sh "$canister"
 
     if [ "$canister" = "root" ]; then
-        ROOT_WASM_GZ_PATH=".dfx/local/canisters/root/root.wasm.gz"
+        ROOT_WASM_GZ_PATH=".icp/local/canisters/root/root.wasm.gz"
         ROOT_WASM_GZ_BYTES="$(stat -c%s "$ROOT_WASM_GZ_PATH")"
         if [ "$ROOT_WASM_GZ_BYTES" -ge 100000000 ]; then
             echo "root.wasm.gz too large for PocketIC chunk store: ${ROOT_WASM_GZ_BYTES} bytes" >&2

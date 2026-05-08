@@ -5,6 +5,8 @@ env:
   CANIC_INTERNAL_TOOLCHAIN: 1.95.0
   POCKET_IC_VERSION: 13.0.0
   ACTIONLINT_VERSION: 1.7.8
+  ICP_CLI_VERSION: 0.2.5
+  ICP_WASM_VERSION: 0.9.10
 
 permissions:
   contents: read
@@ -49,6 +51,9 @@ jobs:
         with:
           toolchain: 1.95.0
           components: rustfmt, clippy
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 'lts/*'
       - uses: Swatinem/rust-cache@v2
       - name: Install fmt tools
         run: cargo install cargo-sort cargo-sort-derives --locked
@@ -63,13 +68,13 @@ jobs:
         shell: bash
         run: "$ACTIONLINT_BIN"
       - name: Install canister build tools
-        run: cargo install --locked candid-extractor ic-wasm
-      - name: Install dfx
-        uses: dfinity/setup-dfx@main
-      - name: Check dfx
-        run: dfx --version
-      - name: Start local dfx
-        run: dfx start --background --clean --system-canisters
+        run: cargo install --locked candid-extractor
+      - name: Install ICP CLI tools
+        run: npm install -g "@icp-sdk/icp-cli@$ICP_CLI_VERSION" "@icp-sdk/ic-wasm@$ICP_WASM_VERSION"
+      - name: Check ICP CLI tools
+        run: |
+          icp --version
+          ic-wasm --version
       - name: Cache PocketIC server
         uses: actions/cache@v4
         with:
@@ -109,6 +114,9 @@ jobs:
         with:
           toolchain: 1.95.0
           components: rustfmt, clippy
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 'lts/*'
       - uses: Swatinem/rust-cache@v2
       - name: Install fmt tools
         run: cargo install cargo-sort cargo-sort-derives --locked
@@ -123,13 +131,13 @@ jobs:
         shell: bash
         run: "$ACTIONLINT_BIN"
       - name: Install canister build tools
-        run: cargo install --locked candid-extractor ic-wasm
-      - name: Install dfx
-        uses: dfinity/setup-dfx@main
-      - name: Check dfx
-        run: dfx --version
-      - name: Start local dfx
-        run: dfx start --background --clean --system-canisters
+        run: cargo install --locked candid-extractor
+      - name: Install ICP CLI tools
+        run: npm install -g "@icp-sdk/icp-cli@$ICP_CLI_VERSION" "@icp-sdk/ic-wasm@$ICP_WASM_VERSION"
+      - name: Check ICP CLI tools
+        run: |
+          icp --version
+          ic-wasm --version
       - name: Cache PocketIC server
         uses: actions/cache@v4
         with:

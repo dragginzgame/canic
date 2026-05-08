@@ -70,7 +70,7 @@ impl Default for RestoreApplyCommandConfig {
     /// Build the default restore apply command preview configuration.
     fn default() -> Self {
         Self {
-            program: "dfx".to_string(),
+            program: "icp".to_string(),
             network: None,
         }
     }
@@ -90,7 +90,7 @@ pub struct RestoreApplyRunnerCommand {
 }
 
 impl RestoreApplyRunnerCommand {
-    // Build a no-execute dfx command preview for one ready operation.
+    // Build a no-execute ICP CLI command preview for one ready operation.
     fn from_operation(
         operation: &RestoreApplyJournalOperation,
         journal: &RestoreApplyJournal,
@@ -101,14 +101,15 @@ impl RestoreApplyRunnerCommand {
                 let artifact_path = upload_artifact_command_path(operation, journal)?;
                 Some(Self {
                     program: config.program.clone(),
-                    args: dfx_canister_args(
+                    args: icp_canister_args(
                         config,
                         vec![
                             "snapshot".to_string(),
                             "upload".to_string(),
-                            "--dir".to_string(),
-                            artifact_path,
                             operation.target_canister.clone(),
+                            "--input".to_string(),
+                            artifact_path,
+                            "--resume".to_string(),
                         ],
                     ),
                     mutates: true,
@@ -121,11 +122,11 @@ impl RestoreApplyRunnerCommand {
                 let snapshot_id = journal.uploaded_snapshot_id_for_load(operation)?;
                 Some(Self {
                     program: config.program.clone(),
-                    args: dfx_canister_args(
+                    args: icp_canister_args(
                         config,
                         vec![
                             "snapshot".to_string(),
-                            "load".to_string(),
+                            "restore".to_string(),
                             operation.target_canister.clone(),
                             snapshot_id.to_string(),
                         ],
@@ -139,7 +140,7 @@ impl RestoreApplyRunnerCommand {
                 match operation.verification_kind.as_deref() {
                     Some("status") => Some(Self {
                         program: config.program.clone(),
-                        args: dfx_canister_args(
+                        args: icp_canister_args(
                             config,
                             vec!["status".to_string(), operation.target_canister.clone()],
                         ),
@@ -173,11 +174,11 @@ const fn verification_command_note(
     }
 }
 
-// Build `dfx canister` arguments with the optional network selector.
-fn dfx_canister_args(config: &RestoreApplyCommandConfig, mut tail: Vec<String>) -> Vec<String> {
+// Build `icp canister` arguments with the optional network selector.
+fn icp_canister_args(config: &RestoreApplyCommandConfig, mut tail: Vec<String>) -> Vec<String> {
     let mut args = vec!["canister".to_string()];
     if let Some(network) = &config.network {
-        args.push("--network".to_string());
+        args.push("-n".to_string());
         args.push(network.clone());
     }
     args.append(&mut tail);

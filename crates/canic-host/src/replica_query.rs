@@ -5,11 +5,8 @@ use std::{
     fmt,
     io::{Read, Write},
     net::TcpStream,
-    process::Command,
     time::{SystemTime, UNIX_EPOCH},
 };
-
-use crate::dfx::run_output;
 
 ///
 /// ReplicaQueryError
@@ -82,42 +79,37 @@ pub fn should_use_local_replica_query(network: Option<&str>) -> bool {
 }
 
 /// Query `canic_ready` directly through the local replica HTTP API.
-pub fn query_ready(
-    dfx: &str,
-    network: Option<&str>,
-    canister: &str,
-) -> Result<bool, ReplicaQueryError> {
-    let bytes = local_query(dfx, network, canister, "canic_ready")?;
+pub fn query_ready(network: Option<&str>, canister: &str) -> Result<bool, ReplicaQueryError> {
+    let bytes = local_query(network, canister, "canic_ready")?;
     Decode!(&bytes, bool).map_err(|err| ReplicaQueryError::Query(err.to_string()))
 }
 
-/// Parse common JSON shapes returned by dfx for `canic_ready`.
+/// Parse common JSON shapes returned by command-line calls for `canic_ready`.
 #[must_use]
 pub fn parse_ready_json_value(data: &serde_json::Value) -> bool {
     match data {
         serde_json::Value::Bool(value) => *value,
+        serde_json::Value::String(value) => value.trim() == "(true)",
         serde_json::Value::Array(values) => values.iter().any(parse_ready_json_value),
         serde_json::Value::Object(map) => map.values().any(parse_ready_json_value),
         _ => false,
     }
 }
 
-/// Query `canic_subnet_registry` and render DFX-compatible JSON.
+/// Query `canic_subnet_registry` and render ICP-compatible JSON.
 pub fn query_subnet_registry_json(
-    dfx: &str,
     network: Option<&str>,
     root: &str,
 ) -> Result<String, ReplicaQueryError> {
-    let bytes = local_query(dfx, network, root, "canic_subnet_registry")?;
+    let bytes = local_query(network, root, "canic_subnet_registry")?;
     let result = Decode!(&bytes, Result<SubnetRegistryResponseWire, CanicErrorWire>)
         .map_err(|err| ReplicaQueryError::Query(err.to_string()))?;
     let response = result.map_err(|err| ReplicaQueryError::Query(err.to_string()))?;
-    serde_json::to_string(&response.to_dfx_json()).map_err(ReplicaQueryError::from)
+    serde_json::to_string(&response.to_cli_json()).map_err(ReplicaQueryError::from)
 }
 
 // Execute one anonymous query call against the local replica.
 fn local_query(
-    dfx: &str,
     network: Option<&str>,
     canister: &str,
     method: &str,
@@ -137,7 +129,7 @@ fn local_query(
         },
     };
     let body = serde_cbor::to_vec(&envelope)?;
-    let endpoint = local_replica_endpoint(dfx, network);
+    let endpoint = local_replica_endpoint(network);
     let response = post_cbor(
         &endpoint,
         &format!("/api/v2/canister/{canister}/query"),
@@ -158,16 +150,13 @@ fn local_query(
     })
 }
 
-// Resolve the local replica endpoint from explicit URL or the current DFX port.
-fn local_replica_endpoint(dfx: &str, network: Option<&str>) -> String {
+// Resolve the local replica endpoint from explicit URL or the conventional ICP CLI local port.
+fn local_replica_endpoint(network: Option<&str>) -> String {
     if let Some(network) = network.filter(|network| network.starts_with("http://")) {
         return network.trim_end_matches('/').to_string();
     }
 
-    let mut command = Command::new(dfx);
-    command.args(["info", "webserver-port"]);
-    let port = run_output(&mut command).unwrap_or_else(|_| "4943".to_string());
-    format!("http://127.0.0.1:{port}")
+    "http://127.0.0.1:8000".to_string()
 }
 
 // Return an ingress expiry comfortably in the near future for local queries.
@@ -291,10 +280,10 @@ struct QueryReply {
 struct SubnetRegistryResponseWire(Vec<SubnetRegistryEntryWire>);
 
 impl SubnetRegistryResponseWire {
-    // Convert direct Candid query output into the DFX JSON shape the discovery parser accepts.
-    fn to_dfx_json(&self) -> serde_json::Value {
+    // Convert direct Candid query output into the command JSON shape the discovery parser accepts.
+    fn to_cli_json(&self) -> serde_json::Value {
         serde_json::json!({
-            "Ok": self.0.iter().map(SubnetRegistryEntryWire::to_dfx_json).collect::<Vec<_>>()
+            "Ok": self.0.iter().map(SubnetRegistryEntryWire::to_cli_json).collect::<Vec<_>>()
         })
     }
 }
@@ -311,12 +300,12 @@ struct SubnetRegistryEntryWire {
 }
 
 impl SubnetRegistryEntryWire {
-    // Convert one registry entry into the DFX JSON shape used by existing list rendering.
-    fn to_dfx_json(&self) -> serde_json::Value {
+    // Convert one registry entry into the command JSON shape used by existing list rendering.
+    fn to_cli_json(&self) -> serde_json::Value {
         serde_json::json!({
             "pid": self.pid.to_text(),
             "role": self.role,
-            "record": self.record.to_dfx_json(),
+            "record": self.record.to_cli_json(),
         })
     }
 }
@@ -335,8 +324,8 @@ struct CanisterInfoWire {
 }
 
 impl CanisterInfoWire {
-    // Convert one canister info record into a DFX-like JSON object.
-    fn to_dfx_json(&self) -> serde_json::Value {
+    // Convert one canister info record into a CLI-like JSON object.
+    fn to_cli_json(&self) -> serde_json::Value {
         serde_json::json!({
             "pid": self.pid.to_text(),
             "role": self.role,
@@ -390,12 +379,15 @@ enum ErrorCodeWire {
 mod tests {
     use super::*;
 
-    // Ensure readiness parsing accepts the common dfx JSON result shapes.
+    // Ensure readiness parsing accepts common command-line JSON result shapes.
     #[test]
     fn parse_ready_json_value_accepts_nested_true_shapes() {
         assert!(parse_ready_json_value(&serde_json::json!(true)));
         assert!(parse_ready_json_value(&serde_json::json!({ "Ok": true })));
         assert!(parse_ready_json_value(&serde_json::json!([{ "Ok": true }])));
+        assert!(parse_ready_json_value(&serde_json::json!({
+            "response_candid": "(true)"
+        })));
     }
 
     // Ensure readiness parsing rejects false and non-boolean result shapes.
@@ -404,5 +396,15 @@ mod tests {
         assert!(!parse_ready_json_value(&serde_json::json!(false)));
         assert!(!parse_ready_json_value(&serde_json::json!({ "Ok": false })));
         assert!(!parse_ready_json_value(&serde_json::json!("true")));
+    }
+
+    // Ensure direct local queries use the ICP CLI local endpoint by default.
+    #[test]
+    fn local_replica_endpoint_defaults_to_icp_cli_port() {
+        assert_eq!(local_replica_endpoint(None), "http://127.0.0.1:8000");
+        assert_eq!(
+            local_replica_endpoint(Some("http://127.0.0.1:9000/")),
+            "http://127.0.0.1:9000"
+        );
     }
 }

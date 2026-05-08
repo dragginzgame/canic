@@ -7,15 +7,16 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.32.x] - 2026-05-07 - Canic Executable
 
-- `0.32.6` finishes the positional fleet CLI cleanup for install, medic, and snapshot download commands, with docs and local helper output updated to match.
+- `0.32.6` finishes the positional fleet CLI cleanup and starts the hard ICP CLI cutover by moving public read-only, snapshot, and restore-runner surfaces from `--dfx` to `--icp`, adding `icp.yaml`, moving live artifact state to `.icp`, and making local ICP smoke commands use the fleet-specific list flow.
 
 ```bash
 canic install test
+canic list demo --network local
 canic medic test --network local
 canic snapshot download test --canister <canister-id> --dry-run
 ```
 
-- `0.32.5` clarifies repo fleet layout by making `fleets/test` the dfx/CI-backed reference fleet, keeping `fleets/demo` as a minimal root-plus-app example, moving isolated test fixture canisters under `canisters/test`, changing fleet-scoped commands to use positional fleet arguments, adding compact capability/top-up and verbose config output, and removing the public `canic network` command plus persisted current-network/current-fleet marker state.
+- `0.32.5` clarifies repo fleet layout by making `fleets/test` the CI-backed reference fleet, keeping `fleets/demo` as a minimal root-plus-app example, moving isolated test fixture canisters under `canisters/test`, changing fleet-scoped commands to use positional fleet arguments, adding compact capability/top-up and verbose config output, and removing the public `canic network` command plus persisted current-network/current-fleet marker state.
 - `0.32.4` removes stale reference/release-set CLI surfaces, tightens CLI/host command boundaries, requires explicit fleet selection on fleet-scoped commands, separates non-fleet canisters back under `canisters/`, moves fleet creation to `canic fleet create`, splits config inspection from deployed canister listing, removes saved default-context reads, and makes role-attestation audiences required at the DTO boundary.
 - `0.32.3` records a short release-bookkeeping recovery after a git hiccup; the tree was checked for deleted files and the 0.32 changelog is back in order.
 - `0.32.2` adds a pre-commit large-file guard so accidentally staged files over 20 MiB are rejected before they reach the repo.

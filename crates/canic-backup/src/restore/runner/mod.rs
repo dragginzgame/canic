@@ -927,7 +927,7 @@ fn stopped_canister_status_command(
 ) -> RestoreApplyRunnerCommand {
     let mut args = vec!["canister".to_string()];
     if let Some(network) = &config.command.network {
-        args.push("--network".to_string());
+        args.push("-n".to_string());
         args.push(network.clone());
     }
     args.push("status".to_string());
@@ -942,7 +942,7 @@ fn stopped_canister_status_command(
     }
 }
 
-// Detect stopped status from bounded dfx status output.
+// Detect stopped status from bounded command output.
 fn status_output_reports_stopped(output: &RestoreApplyCommandOutputPair) -> bool {
     output.stdout.text.contains("Status: Stopped")
         || output.stdout.text.contains("status: stopped")
@@ -1089,7 +1089,7 @@ fn restore_command_unavailable_error(preview: &RestoreApplyCommandPreview) -> Re
     }
 }
 
-// Extract the uploaded target snapshot ID from dfx upload output.
+// Extract the uploaded target snapshot ID from command output.
 pub fn parse_uploaded_snapshot_id(output: &str) -> Option<String> {
     output
         .lines()
@@ -1186,7 +1186,7 @@ fn journal_lock_path(path: &Path) -> PathBuf {
 mod tests {
     use super::*;
 
-    // Ensure stopped-canister status parsing accepts current dfx-style output.
+    // Ensure stopped-canister status parsing accepts current command-style output.
     #[test]
     fn status_output_reports_stopped_status() {
         let output = RestoreApplyCommandOutputPair::from_bytes(b"Status: Stopped\n", b"", 1024);

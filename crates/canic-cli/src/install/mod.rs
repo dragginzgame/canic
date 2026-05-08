@@ -130,8 +130,8 @@ fn install_command() -> ClapCommand {
         .arg(
             value_arg("root-build-target")
                 .long("root-build-target")
-                .value_name("dfx-canister-name")
-                .help("DFX canister name used to build the root wasm"),
+                .value_name("canister-name")
+                .help("Canister name used to build the root wasm"),
         )
         .arg(
             value_arg("config")
@@ -143,7 +143,7 @@ fn install_command() -> ClapCommand {
             value_arg("network")
                 .long("network")
                 .value_name("name")
-                .help("DFX network to install against"),
+                .help("ICP CLI network to install against"),
         )
         .arg(
             value_arg("ready-timeout-seconds")

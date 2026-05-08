@@ -73,8 +73,8 @@ EOF
 
 prepare_downstream_root() {
     mkdir -p \
-        "$DOWNSTREAM_ROOT/.dfx/local/canisters/app" \
-        "$DOWNSTREAM_ROOT/.dfx/local/canisters/root" \
+        "$DOWNSTREAM_ROOT/.icp/local/canisters/app" \
+        "$DOWNSTREAM_ROOT/.icp/local/canisters/root" \
         "$DOWNSTREAM_ROOT/fleets/root"
 
     cat > "$DOWNSTREAM_ROOT/Cargo.toml" <<'EOF'
@@ -123,7 +123,7 @@ kind = "root"
 kind = "singleton"
 EOF
 
-    printf '\x00asm\x01\x00\x00\x00' | gzip -n > "$DOWNSTREAM_ROOT/.dfx/local/canisters/app/app.wasm.gz"
+    printf '\x00asm\x01\x00\x00\x00' | gzip -n > "$DOWNSTREAM_ROOT/.icp/local/canisters/app/app.wasm.gz"
 }
 
 run_probe() {

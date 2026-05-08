@@ -2,8 +2,6 @@ use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use serde_json::Value;
-
 // Return the repository root so release-surface fixtures can be read from disk.
 fn workspace_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -20,19 +18,23 @@ fn read_text(path: &Path) -> String {
         .unwrap_or_else(|err| panic!("failed to read {}: {err}", path.display()))
 }
 
-// Read the visible canister keys from the checked-in reference dfx topology.
-fn dfx_canister_keys() -> Vec<String> {
-    let path = workspace_root().join("dfx.json");
+// Read the visible canister keys from the checked-in ICP project topology.
+fn icp_canister_keys() -> Vec<String> {
+    let path = workspace_root().join("icp.yaml");
     let source = read_text(&path);
-    let parsed: Value = serde_json::from_str(&source)
-        .unwrap_or_else(|err| panic!("failed to parse {}: {err}", path.display()));
 
-    parsed["canisters"]
-        .as_object()
-        .expect("dfx.json canisters must be an object")
-        .keys()
-        .cloned()
-        .collect()
+    let mut names = Vec::new();
+    for line in source.lines() {
+        let trimmed = line.trim();
+        if trimmed == "environments:" {
+            break;
+        }
+        if let Some(name) = trimmed.strip_prefix("- name: ") {
+            names.push(name.to_string());
+        }
+    }
+    assert!(!names.is_empty(), "icp.yaml must define canisters");
+    names
 }
 
 // Read the root-subnet canister keys from the checked-in test Canic config.
@@ -50,17 +52,17 @@ fn test_root_subnet_canister_keys() -> Vec<String> {
         .collect()
 }
 
-// Keep the visible dfx canister list aligned with the test root subnet.
+// Keep the visible ICP canister list aligned with the test root subnet.
 #[test]
-fn dfx_visible_canisters_match_test_root_subnet() {
-    let dfx_keys = dfx_canister_keys().into_iter().collect::<BTreeSet<_>>();
+fn icp_visible_canisters_match_test_root_subnet() {
+    let icp_keys = icp_canister_keys().into_iter().collect::<BTreeSet<_>>();
     let test_root_subnet = test_root_subnet_canister_keys()
         .into_iter()
         .collect::<BTreeSet<_>>();
 
     assert_eq!(
-        dfx_keys, test_root_subnet,
-        "dfx.json canister keys must stay aligned with fleets/test/canic.toml root subnet"
+        icp_keys, test_root_subnet,
+        "icp.yaml canister keys must stay aligned with fleets/test/canic.toml root subnet"
     );
 }
 

@@ -1,4 +1,4 @@
-use crate::dfx;
+use crate::icp;
 use canic::protocol;
 use canic_core::CANIC_WASM_CHUNK_BYTES;
 use flate2::read::GzDecoder;
@@ -12,12 +12,12 @@ use std::{
 };
 
 use super::{
-    GZIP_MAGIC, ReleaseSetEntry, RootReleaseSetManifest, WASM_MAGIC, dfx_root, root_time_secs,
+    GZIP_MAGIC, ReleaseSetEntry, RootReleaseSetManifest, WASM_MAGIC, icp_root, root_time_secs,
 };
 
 // Stage one emitted release-set manifest into root and resume bootstrap-ready state.
 pub fn stage_root_release_set(
-    dfx_root: &Path,
+    icp_root: &Path,
     network: &str,
     root_canister: &str,
     manifest: &RootReleaseSetManifest,
@@ -29,7 +29,7 @@ pub fn stage_root_release_set(
 
     for entry in &manifest.entries {
         stage_release_entry(
-            dfx_root,
+            icp_root,
             network,
             root_canister,
             &manifest.release_version,
@@ -48,7 +48,7 @@ pub fn resume_root_bootstrap(
     network: &str,
     root_canister: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let _ = dfx_call_on_network(
+    let _ = icp_call_on_network(
         network,
         root_canister,
         protocol::CANIC_WASM_STORE_BOOTSTRAP_RESUME_ROOT_ADMIN,
@@ -58,28 +58,30 @@ pub fn resume_root_bootstrap(
     Ok(())
 }
 
-// Run one `dfx canister call` and return stdout, preserving stderr on failure.
-pub fn dfx_call_on_network(
+// Run one `icp canister call` and return stdout, preserving stderr on failure.
+pub fn icp_call_on_network(
     network: &str,
     canister: &str,
     method: &str,
     argument: Option<&str>,
     output: Option<&str>,
 ) -> Result<String, Box<dyn std::error::Error>> {
-    let dfx_root = dfx_root()?;
-    let mut command = dfx::default_command_in(&dfx_root);
-    command.env("DFX_NETWORK", network).arg("canister");
-    dfx::add_network_args(&mut command, Some(network));
+    let icp_root = icp_root()?;
+    let mut command = icp::default_command_in(&icp_root);
+    command.env("ICP_ENVIRONMENT", network).arg("canister");
     command.args(["call", canister, method]);
 
     if let Some(output) = output {
-        command.args(["--output", output]);
+        icp::add_output_arg(&mut command, output);
     }
 
     let temp_argument_path = argument.map(write_argument_file).transpose()?;
     if let Some(path) = temp_argument_path.as_ref() {
-        command.arg("--argument-file").arg(path);
+        command.arg("--args-file").arg(path);
+    } else {
+        command.arg("()");
     }
+    icp::add_target_args(&mut command, Some(network), None);
 
     let result = command.output()?;
 
@@ -91,7 +93,7 @@ pub fn dfx_call_on_network(
         let stderr = String::from_utf8_lossy(&result.stderr);
         let stdout = String::from_utf8_lossy(&result.stdout);
         return Err(format!(
-            "dfx canister call {} {} failed: {}\n{}",
+            "icp canister call {} {} failed: {}\n{}",
             canister,
             method,
             result.status,
@@ -143,7 +145,7 @@ fn idl_blob(bytes: &[u8]) -> String {
 
 // Build one release-set entry from one built ordinary role artifact.
 pub(super) fn build_release_set_entry(
-    dfx_root: &Path,
+    icp_root: &Path,
     artifact_root: &Path,
     role_name: &str,
 ) -> Result<ReleaseSetEntry, Box<dyn std::error::Error>> {
@@ -151,12 +153,12 @@ pub(super) fn build_release_set_entry(
         .join(role_name)
         .join(format!("{role_name}.wasm.gz"));
     let artifact_relative_path = artifact_path
-        .strip_prefix(dfx_root)
+        .strip_prefix(icp_root)
         .map_err(|_| {
             format!(
-                "artifact {} is not under DFX root {}",
+                "artifact {} is not under ICP root {}",
                 artifact_path.display(),
-                dfx_root.display()
+                icp_root.display()
             )
         })?
         .to_string_lossy()
@@ -181,7 +183,7 @@ pub(super) fn build_release_set_entry(
 
 // Stage one manifest, prepare its chunk set, and publish all chunk bytes into root.
 fn stage_release_entry(
-    dfx_root: &Path,
+    icp_root: &Path,
     network: &str,
     root_canister: &str,
     release_version: &str,
@@ -190,7 +192,7 @@ fn stage_release_entry(
     progress: &mut StageProgress,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let started_at = Instant::now();
-    let artifact_path = dfx_root.join(&entry.artifact_relative_path);
+    let artifact_path = icp_root.join(&entry.artifact_relative_path);
     let wasm_module = read_release_artifact(&artifact_path)?;
 
     if wasm_module.len() as u64 != entry.payload_size_bytes {
@@ -273,7 +275,7 @@ fn stage_release_manifest(
         now_secs,
         now_secs,
     );
-    let _ = dfx_call_on_network(
+    let _ = icp_call_on_network(
         network,
         root_canister,
         protocol::CANIC_TEMPLATE_STAGE_MANIFEST_ADMIN,
@@ -308,7 +310,7 @@ fn prepare_release_chunks(
         payload_size_bytes,
         chunk_hash_literals,
     );
-    let _ = dfx_call_on_network(
+    let _ = icp_call_on_network(
         network,
         root_canister,
         protocol::CANIC_TEMPLATE_PREPARE_ADMIN,
@@ -336,7 +338,7 @@ fn publish_release_chunks(
             chunk_index,
             idl_blob(chunk),
         );
-        let _ = dfx_call_on_network(
+        let _ = icp_call_on_network(
             network,
             root_canister,
             protocol::CANIC_TEMPLATE_PUBLISH_CHUNK_ADMIN,
@@ -502,7 +504,7 @@ pub(super) fn read_release_artifact(path: &Path) -> Result<Vec<u8>, Box<dyn std:
     Ok(artifact)
 }
 
-// Persist one temporary Candid argument file for `dfx --argument-file`.
+// Persist one temporary Candid argument file for `icp --args-file`.
 fn write_argument_file(argument: &str) -> Result<PathBuf, Box<dyn std::error::Error>> {
     let unique = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
     let path = std::env::temp_dir().join(format!(

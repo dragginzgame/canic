@@ -1,11 +1,11 @@
 use crate::{
     args::{
-        default_dfx, local_network, parse_matches, print_help_or_version, string_option, value_arg,
+        default_icp, local_network, parse_matches, print_help_or_version, string_option, value_arg,
     },
     version_text,
 };
 use canic_host::{
-    dfx::Dfx,
+    icp::IcpCli,
     install_root::{InstallState, read_named_fleet_install_state},
     replica_query,
     table::WhitespaceTable,
@@ -21,7 +21,7 @@ const NEXT_HEADER: &str = "NEXT";
 const MEDIC_HELP_AFTER: &str = "\
 Examples:
   canic medic test
-  canic medic test --network local --dfx dfx";
+  canic medic test --network local --icp icp";
 
 ///
 /// MedicCommandError
@@ -41,7 +41,7 @@ pub enum MedicCommandError {
 pub struct MedicOptions {
     pub fleet: String,
     pub network: String,
-    pub dfx: String,
+    pub icp: String,
 }
 
 impl MedicOptions {
@@ -56,7 +56,7 @@ impl MedicOptions {
         Ok(Self {
             fleet: string_option(&matches, "fleet").expect("clap requires fleet"),
             network: string_option(&matches, "network").unwrap_or_else(local_network),
-            dfx: string_option(&matches, "dfx").unwrap_or_else(default_dfx),
+            icp: string_option(&matches, "icp").unwrap_or_else(default_icp),
         })
     }
 }
@@ -92,13 +92,13 @@ fn medic_command() -> ClapCommand {
             value_arg("network")
                 .long("network")
                 .value_name("name")
-                .help("DFX network to inspect"),
+                .help("ICP CLI network to inspect"),
         )
         .arg(
-            value_arg("dfx")
-                .long("dfx")
+            value_arg("icp")
+                .long("icp")
                 .value_name("path")
-                .help("Path to the dfx executable"),
+                .help("Path to the icp executable"),
         )
         .after_help(MEDIC_HELP_AFTER)
 }
@@ -111,7 +111,7 @@ fn run_medic_checks(options: &MedicOptions) -> Vec<MedicCheck> {
         options.network.clone(),
         "override with --network <name>",
     ));
-    checks.push(check_dfx_ping(options));
+    checks.push(check_icp_cli(options));
 
     let state = match read_named_fleet_install_state(&options.network, &options.fleet) {
         Ok(Some(state)) => {
@@ -148,14 +148,14 @@ fn run_medic_checks(options: &MedicOptions) -> Vec<MedicCheck> {
     checks
 }
 
-// Check whether the selected dfx network is reachable.
-fn check_dfx_ping(options: &MedicOptions) -> MedicCheck {
-    match Dfx::new(&options.dfx, Some(options.network.clone())).ping() {
-        Ok(()) => MedicCheck::ok("dfx ping", "replica reachable", "-"),
+// Check whether the selected ICP CLI is available.
+fn check_icp_cli(options: &MedicOptions) -> MedicCheck {
+    match IcpCli::new(&options.icp, None, Some(options.network.clone())).version() {
+        Ok(version) => MedicCheck::ok("icp cli", version, "-"),
         Err(err) => MedicCheck::error(
-            "dfx ping",
+            "icp cli",
             err.to_string(),
-            "install dfx or pass --dfx <path>",
+            "install icp-cli or pass --icp <path>",
         ),
     }
 }
@@ -176,18 +176,18 @@ fn check_config_path(state: &InstallState) -> MedicCheck {
 // Query the root readiness endpoint without mutating the canister.
 fn check_root_ready(options: &MedicOptions, state: &InstallState) -> MedicCheck {
     let ready = if replica_query::should_use_local_replica_query(Some(&options.network)) {
-        replica_query::query_ready(
-            &options.dfx,
-            Some(&options.network),
-            &state.root_canister_id,
-        )
-        .map_err(|err| err.to_string())
+        replica_query::query_ready(Some(&options.network), &state.root_canister_id)
+            .map_err(|err| err.to_string())
     } else {
-        query_ready_with_dfx(options, &state.root_canister_id)
+        query_ready_with_icp(options, &state.root_canister_id)
     };
 
     match ready {
-        Ok(true) => MedicCheck::ok("root ready", "canic_ready=true", "run canic list"),
+        Ok(true) => MedicCheck::ok(
+            "root ready",
+            "canic_ready=true",
+            format!("run canic list {}", options.fleet),
+        ),
         Ok(false) => MedicCheck::warn(
             "root ready",
             "canic_ready=false",
@@ -197,9 +197,9 @@ fn check_root_ready(options: &MedicOptions, state: &InstallState) -> MedicCheck 
     }
 }
 
-// Query readiness through dfx for non-local networks.
-fn query_ready_with_dfx(options: &MedicOptions, canister: &str) -> Result<bool, String> {
-    let output = Dfx::new(&options.dfx, Some(options.network.clone()))
+// Query readiness through ICP CLI for non-local networks.
+fn query_ready_with_icp(options: &MedicOptions, canister: &str) -> Result<bool, String> {
+    let output = IcpCli::new(&options.icp, None, Some(options.network.clone()))
         .canister_call_output(canister, "canic_ready", Some("json"))
         .map_err(|err| err.to_string())?;
     let data = serde_json::from_str::<serde_json::Value>(&output).map_err(|err| err.to_string())?;
@@ -296,21 +296,21 @@ impl MedicStatus {
 mod tests {
     use super::*;
 
-    // Ensure medic options parse the fleet, network, and dfx selectors.
+    // Ensure medic options parse the fleet, network, and ICP CLI selectors.
     #[test]
     fn parses_medic_options() {
         let options = MedicOptions::parse([
             OsString::from("demo"),
             OsString::from("--network"),
             OsString::from("local"),
-            OsString::from("--dfx"),
-            OsString::from("/tmp/dfx"),
+            OsString::from("--icp"),
+            OsString::from("/tmp/icp"),
         ])
         .expect("parse medic options");
 
         assert_eq!(options.fleet, "demo");
         assert_eq!(options.network, "local");
-        assert_eq!(options.dfx, "/tmp/dfx");
+        assert_eq!(options.icp, "/tmp/icp");
     }
 
     // Ensure medic help explains the diagnostic command rather than printing a one-liner.
@@ -343,7 +343,7 @@ mod tests {
         assert!(report.contains("warn"));
     }
 
-    // Ensure common dfx JSON shapes are accepted for readiness.
+    // Ensure common command-line JSON shapes are accepted for readiness.
     #[test]
     fn parses_ready_json_shapes() {
         assert!(replica_query::parse_ready_json_value(&serde_json::json!(

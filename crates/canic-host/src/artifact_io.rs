@@ -32,7 +32,7 @@ pub fn maybe_shrink_wasm_artifact(wasm_path: &Path) -> Result<(), Box<dyn std::e
     Ok(())
 }
 
-// Copy one `.wasm` artifact atomically into the DFX artifact tree.
+// Copy one `.wasm` artifact atomically into the local ICP artifact tree.
 pub fn write_wasm_artifact(
     source_path: &Path,
     target_path: &Path,

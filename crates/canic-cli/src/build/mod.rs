@@ -53,7 +53,7 @@ impl BuildOptions {
 fn build_command() -> ClapCommand {
     ClapCommand::new("build")
         .bin_name("canic build")
-        .about("Build one Canic canister artifact for dfx")
+        .about("Build one Canic canister artifact")
         .disable_help_flag(true)
         .arg(
             Arg::new("canister-name")
@@ -76,7 +76,7 @@ where
     build_canister(options).map_err(BuildCommandError::from)
 }
 
-// Build the requested canister and print the artifact path for dfx custom builds.
+// Build the requested canister and print the artifact path for caller build scripts.
 fn build_canister(options: BuildOptions) -> Result<(), Box<dyn std::error::Error>> {
     let profile = CanisterBuildProfile::current();
     print_current_workspace_build_context_once(profile)?;

@@ -13,7 +13,7 @@ from the resolved `canic` package automatically.
 
 ## Layout
 
-- `test/` – local reference topology wired through `dfx.json` and used by CI wasm/audit workflows.
+- `test/` – local reference topology wired through `icp.yaml` and used by CI wasm/audit workflows.
   - `root/` – root orchestrator canister (`canic::start_root!`) that wires topology, bootstraps the internal `wasm_store`, stages/publishes ordinary child releases, and exposes root admin endpoints.
   - `app/` – minimal application canister used as a placeholder service.
   - `user_hub/` + `user_shard/` – sharding placement plus delegated signing flow.
@@ -28,19 +28,17 @@ from the resolved `canic` package automatically.
 
 ## Local Workflow
 
-The test canisters are wired through `dfx.json`; custom build steps call
+The test canisters are wired through `icp.yaml`; custom build steps call
 `scripts/app/build.sh`, which is a thin wrapper around `canic build`.
 
 - Install the full local reference topology: `make test-fleet-install`
-- `root` stays thin: only the bootstrap `wasm_store` artifact is embedded, and the ordinary configured release set is staged after install from `.dfx/local/canisters/root/root.release-set.json`.
-- Create/build test canisters manually: `dfx canister create --all` then `dfx build --all`
+- `root` stays thin: only the bootstrap `wasm_store` artifact is embedded, and the ordinary configured release set is staged after install from `.icp/local/canisters/root/root.release-set.json`.
+- Create/build test canisters manually: `icp deploy -e test`
 - Run the scripted local smoke flow: `make test-canisters`
 
-The demo fleet is intentionally small and does not try to solve multi-fleet
-`dfx.json` switching. Isolated test probes and PocketIC fixtures live under
-`canisters/test/`.
+The demo fleet is intentionally small. Isolated test probes and PocketIC
+fixtures live under `canisters/test/`.
 
-Note: `make test-fleet-install` and `make test-canisters` try one clean local `dfx`
-restart automatically when `dfx ping local` fails. They are manual local smoke
-helpers, not part of `make test`, and nonlocal targets expect their replica to
-be managed externally.
+Note: `make test-fleet-install` and `make test-canisters` are manual local smoke
+helpers, not part of `make test`, and nonlocal targets expect their environment
+to be managed externally.

@@ -21,17 +21,17 @@ use std::{
     sync::{Mutex, MutexGuard},
 };
 
-const ROOT_WASM_RELATIVE: &str = ".dfx/local/canisters/root/root.wasm.gz";
-const ROOT_WASM_ARTIFACT_RELATIVE: &str = ".dfx/local/canisters/root/root.wasm.gz";
-const ROOT_RELEASE_ARTIFACTS_RELATIVE: &str = ".dfx/local/canisters";
-const DFX_BUILD_LOCK_RELATIVE: &str = ".dfx/canic-tests-build.lock";
+const ROOT_WASM_RELATIVE: &str = ".icp/local/canisters/root/root.wasm.gz";
+const ROOT_WASM_ARTIFACT_RELATIVE: &str = ".icp/local/canisters/root/root.wasm.gz";
+const ROOT_RELEASE_ARTIFACTS_RELATIVE: &str = ".icp/local/canisters";
+const ICP_BUILD_LOCK_RELATIVE: &str = ".icp/canic-tests-build.lock";
 const BOOTSTRAP_TICK_LIMIT: usize = 120;
 const ROOT_SETUP_MAX_ATTEMPTS: usize = 2;
 const ROOT_WASM_WATCH_PATHS: &[&str] = &[
     "Cargo.toml",
     "Cargo.lock",
     "canisters",
-    "dfx.json",
+    "icp.yaml",
     "crates",
     "scripts/app/build.sh",
 ];
@@ -132,7 +132,7 @@ pub fn baseline_spec_for_roles_owned_env(
         root_release_artifacts_relative: ROOT_RELEASE_ARTIFACTS_RELATIVE,
         artifact_watch_paths: ROOT_WASM_WATCH_PATHS,
         release_roles,
-        dfx_build_lock_relative: DFX_BUILD_LOCK_RELATIVE,
+        icp_build_lock_relative: ICP_BUILD_LOCK_RELATIVE,
         build_network: "local",
         build_profile,
         build_extra_env,

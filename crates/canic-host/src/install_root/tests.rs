@@ -1,10 +1,11 @@
 use super::{
-    INSTALL_STATE_SCHEMA_VERSION, InstallState, LOCAL_ROOT_TARGET_CYCLES, config_selection_error,
-    dfx_build_target_command, dfx_canister_command_in_network, dfx_start_local_command,
-    dfx_stop_command, discover_canic_config_choices, fleet_install_state_path,
-    install_build_session_id, parse_bootstrap_status_value, parse_canister_status_cycles,
-    parse_local_dfx_autostart, parse_root_ready_value, read_fleet_install_state,
-    required_local_cycle_topup, resolve_install_config_path, write_install_state,
+    INSTALL_STATE_SCHEMA_VERSION, InstallState, LOCAL_ROOT_TARGET_CYCLES,
+    add_icp_environment_target, canic_build_target_command, config_selection_error,
+    discover_canic_config_choices, fleet_install_state_path, icp_canister_command_in_network,
+    icp_start_local_command, icp_stop_command, install_build_session_id,
+    parse_bootstrap_status_value, parse_canister_status_cycles, parse_local_icp_autostart,
+    parse_root_ready_value, read_fleet_install_state, required_local_cycle_topup,
+    resolve_install_config_path, write_install_state,
 };
 use crate::release_set::configured_install_targets;
 use crate::test_support::temp_dir;
@@ -25,6 +26,13 @@ fn parse_root_ready_accepts_plain_true() {
 #[test]
 fn parse_root_ready_accepts_wrapped_ok_true() {
     assert!(parse_root_ready_value(&json!({ "Ok": true })));
+}
+
+#[test]
+fn parse_root_ready_accepts_icp_cli_response_candid_true() {
+    assert!(parse_root_ready_value(&json!({
+        "response_candid": "(true)"
+    })));
 }
 
 #[test]
@@ -65,6 +73,24 @@ fn parse_bootstrap_status_accepts_wrapped_ok_record() {
 }
 
 #[test]
+fn parse_bootstrap_status_accepts_icp_cli_response_candid() {
+    let status = parse_bootstrap_status_value(&json!({
+        "response_candid": r#"(
+  record {
+    89_620_959 = opt "registry phase failed";
+    3_253_282_875 = "failed";
+    3_870_990_435 = false;
+  },
+)"#
+    }))
+    .expect("icp cli response_candid bootstrap status must parse");
+
+    assert!(!status.ready);
+    assert_eq!(status.phase, "failed");
+    assert_eq!(status.last_error.as_deref(), Some("registry phase failed"));
+}
+
+#[test]
 fn parse_canister_status_cycles_accepts_balance_line() {
     let output = "\
 Canister status call result for root.
@@ -90,6 +116,21 @@ Cycle balance: 12_345 Cycles
 }
 
 #[test]
+fn parse_canister_status_cycles_accepts_icp_cli_cycles_line() {
+    let output = "\
+Canister Status Report:
+  Cycles: 1_499_993_904_000
+  Reserved cycles: 0
+  Idle cycles burned per day: 5_671
+";
+
+    assert_eq!(
+        parse_canister_status_cycles(output),
+        Some(1_499_993_904_000)
+    );
+}
+
+#[test]
 fn required_local_cycle_topup_skips_when_balance_already_meets_target() {
     assert_eq!(required_local_cycle_topup(LOCAL_ROOT_TARGET_CYCLES), None);
     assert_eq!(
@@ -107,50 +148,47 @@ fn required_local_cycle_topup_returns_missing_delta_only() {
 }
 
 #[test]
-fn dfx_build_command_targets_one_canister_per_call() {
-    let command = dfx_build_target_command(
-        Path::new("/tmp/canic-dfx-root"),
+fn canic_build_command_targets_one_canister_per_call() {
+    let command = canic_build_target_command(
+        Path::new("/tmp/canic-icp-root"),
         "ic",
         "user_hub",
         "install-root-test",
     );
 
-    assert_eq!(command.get_program(), "dfx");
     assert_eq!(
         command
             .get_args()
             .map(|arg| arg.to_string_lossy().into_owned())
             .collect::<Vec<_>>(),
-        ["build", "-qq", "user_hub"]
-    );
-    assert_eq!(
-        command
-            .get_current_dir()
-            .map(|path| path.to_string_lossy().into_owned()),
-        Some("/tmp/canic-dfx-root".to_string())
+        ["build", "user_hub"]
     );
     assert!(
         command
             .get_envs()
             .any(|(key, value)| key == "CANIC_BUILD_CONTEXT_SESSION" && value.is_some()),
-        "dfx build must carry the shared build-session marker"
+        "canic build must carry the shared build-session marker"
     );
-    assert_eq!(command_env(&command, "DFX_NETWORK").as_deref(), Some("ic"));
+    assert_eq!(
+        command_env(&command, "ICP_ENVIRONMENT").as_deref(),
+        Some("ic")
+    );
 }
 
 #[test]
-fn dfx_canister_command_carries_selected_network() {
-    let command = dfx_canister_command_in_network(Path::new("/tmp/canic-dfx-root"), "ic");
+fn icp_canister_command_carries_selected_network() {
+    let mut command = icp_canister_command_in_network(Path::new("/tmp/canic-icp-root"));
+    command.args(["status", "root"]);
+    add_icp_environment_target(&mut command, "ic");
 
-    assert_eq!(command.get_program(), "dfx");
+    assert_eq!(command.get_program(), "icp");
     assert_eq!(
         command
             .get_args()
             .map(|arg| arg.to_string_lossy().into_owned())
             .collect::<Vec<_>>(),
-        ["canister", "--network", "ic"]
+        ["canister", "status", "root", "-e", "ic"]
     );
-    assert_eq!(command_env(&command, "DFX_NETWORK").as_deref(), Some("ic"));
 }
 
 #[test]
@@ -160,65 +198,65 @@ fn install_build_session_id_is_prefixed_for_logs() {
 }
 
 #[test]
-fn local_dfx_autostart_defaults_to_enabled() {
-    assert!(parse_local_dfx_autostart(None));
-    assert!(parse_local_dfx_autostart(Some("")));
-    assert!(parse_local_dfx_autostart(Some("1")));
-    assert!(parse_local_dfx_autostart(Some("true")));
+fn local_icp_autostart_defaults_to_enabled() {
+    assert!(parse_local_icp_autostart(None));
+    assert!(parse_local_icp_autostart(Some("")));
+    assert!(parse_local_icp_autostart(Some("1")));
+    assert!(parse_local_icp_autostart(Some("true")));
 }
 
 #[test]
-fn local_dfx_autostart_accepts_explicit_disable_values() {
-    assert!(!parse_local_dfx_autostart(Some("0")));
-    assert!(!parse_local_dfx_autostart(Some("false")));
-    assert!(!parse_local_dfx_autostart(Some("no")));
-    assert!(!parse_local_dfx_autostart(Some("off")));
+fn local_icp_autostart_accepts_explicit_disable_values() {
+    assert!(!parse_local_icp_autostart(Some("0")));
+    assert!(!parse_local_icp_autostart(Some("false")));
+    assert!(!parse_local_icp_autostart(Some("no")));
+    assert!(!parse_local_icp_autostart(Some("off")));
 }
 
 #[test]
-fn local_dfx_start_command_uses_clean_background_mode() {
-    let command = dfx_start_local_command(Path::new("/tmp/canic-dfx-root"));
+fn local_icp_start_command_uses_background_mode() {
+    let command = icp_start_local_command(Path::new("/tmp/canic-icp-root"));
 
-    assert_eq!(command.get_program(), "dfx");
+    assert_eq!(command.get_program(), "icp");
     assert_eq!(
         command
             .get_args()
             .map(|arg| arg.to_string_lossy().into_owned())
             .collect::<Vec<_>>(),
-        ["start", "--background", "--clean", "--system-canisters"]
+        ["network", "start", "local", "--background"]
     );
     assert_eq!(
         command
             .get_current_dir()
             .map(|path| path.to_string_lossy().into_owned()),
-        Some("/tmp/canic-dfx-root".to_string())
+        Some("/tmp/canic-icp-root".to_string())
     );
     assert_eq!(
-        command_env(&command, "DFX_NETWORK").as_deref(),
+        command_env(&command, "ICP_ENVIRONMENT").as_deref(),
         Some("local")
     );
 }
 
 #[test]
-fn local_dfx_stop_command_targets_project_root() {
-    let command = dfx_stop_command(Path::new("/tmp/canic-dfx-root"));
+fn local_icp_stop_command_targets_project_root() {
+    let command = icp_stop_command(Path::new("/tmp/canic-icp-root"));
 
-    assert_eq!(command.get_program(), "dfx");
+    assert_eq!(command.get_program(), "icp");
     assert_eq!(
         command
             .get_args()
             .map(|arg| arg.to_string_lossy().into_owned())
             .collect::<Vec<_>>(),
-        ["stop"]
+        ["network", "stop", "local"]
     );
     assert_eq!(
         command
             .get_current_dir()
             .map(|path| path.to_string_lossy().into_owned()),
-        Some("/tmp/canic-dfx-root".to_string())
+        Some("/tmp/canic-icp-root".to_string())
     );
     assert_eq!(
-        command_env(&command, "DFX_NETWORK").as_deref(),
+        command_env(&command, "ICP_ENVIRONMENT").as_deref(),
         Some("local")
     );
 }
@@ -515,10 +553,10 @@ fn install_state_round_trips_from_project_state_dir() {
         root_canister_id: "uxrrr-q7777-77774-qaaaq-cai".to_string(),
         root_build_target: "root".to_string(),
         workspace_root: root.display().to_string(),
-        dfx_root: root.display().to_string(),
+        icp_root: root.display().to_string(),
         config_path: root.join("fleets/canic.toml").display().to_string(),
         release_set_manifest_path: root
-            .join(".dfx/local/canisters/root/root.release-set.json")
+            .join(".icp/local/canisters/root/root.release-set.json")
             .display()
             .to_string(),
     };

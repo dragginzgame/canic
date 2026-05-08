@@ -59,7 +59,7 @@ taxonomy carry the role boundary. If the workspace grows enough that scanning
 such as `crates/runtime/`, `crates/host/`, and `crates/testing/`; that should be
 treated as a repo-structure migration rather than a naming cleanup.
 
-* `fleets/test/` – config-defined reference topology used by local dfx, CI wasm builds, and repo tests.
+* `fleets/test/` – config-defined reference topology used by local ICP CLI, CI wasm builds, and repo tests.
 * `fleets/demo/` – minimal root-plus-app fleet for quick experiments.
 * `canisters/audit/`, `canisters/sandbox/`, and `canisters/test/` – runnable canisters that are not Canic fleets, including audit probes, manual sandbox experiments, and isolated PocketIC fixtures.
 * `scripts/` – dev setup, CI, release, wasm, and audit helpers.
@@ -171,19 +171,19 @@ Use `canic help` or `canic <command> help` for command-specific options, and
 `canic --version` to print the installed CLI version. The first operational
 commands are covered in the snapshot/restore flow below.
 
-For local DFX workflows, prefer the shared setup script:
+For local ICP CLI workflows, prefer the shared setup script:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/dragginzgame/canic/v0.32.6/scripts/dev/install_dev.sh | bash
 ```
 
-The script installs Rust when needed, the repo-local Rust `1.95.0` toolchain, `wasm32-unknown-unknown`, `rustfmt`, `clippy`, Candid/wasm utilities, `actionlint`, common Cargo helper tools, and `dfx` when missing.
+The script installs Rust when needed, the repo-local Rust `1.95.0` toolchain, `wasm32-unknown-unknown`, `rustfmt`, `clippy`, Candid/wasm utilities, `actionlint`, common Cargo helper tools, and pinned ICP CLI tooling when missing.
 
 It also installs `canic-cli` as the `canic` command.
 
 Published crates still declare MSRV `1.91.0` for downstream source builds.
 
-The setup script installs tools only; it does not start a local `dfx` replica. When run from a repo checkout, it also configures `.githooks/` if present.
+The setup script installs tools only; it does not start a local ICP CLI network. When run from a repo checkout, it also configures `.githooks/` if present.
 
 The normal interface is the `canic` binary:
 
@@ -198,7 +198,7 @@ After a successful install, Canic writes project-local fleet state under
 target, resolved root principal, build target, config path, and staging
 manifest path so later commands can inspect the explicitly named fleet.
 
-The root target defaults to the `root` dfx canister name. To follow normal IC
+The root target defaults to the `root` ICP canister name. To follow normal IC
 operator style, you may pass either a canister name or a principal:
 
 ```bash
@@ -245,20 +245,19 @@ not look right:
 canic medic test
 ```
 
-For `DFX_NETWORK=local`, the install flow attempts one clean local `dfx`
-recovery if `dfx ping local` fails. Nonlocal targets must be managed
-externally.
+For `ICP_ENVIRONMENT=local`, the install flow uses the local ICP CLI network.
+Nonlocal targets must be managed externally.
 
-`root` embeds only the bootstrap `wasm_store.wasm.gz`; ordinary child releases stay outside `root` and are staged after install. Visible canister Candid files are generated under `.dfx/local/canisters/<role>/<role>.did`. The checked-in exception is `crates/canic-wasm-store/wasm_store.did`, the canonical interface for the implicit bootstrap `wasm_store` crate.
+`root` embeds only the bootstrap `wasm_store.wasm.gz`; ordinary child releases stay outside `root` and are staged after install. Visible canister Candid files are generated under `.icp/local/canisters/<role>/<role>.did`. The checked-in exception is `crates/canic-wasm-store/wasm_store.did`, the canonical interface for the implicit bootstrap `wasm_store` crate.
 
-For build profiles, split workspace/DFX roots, custom canister roots, role
+For build profiles, split workspace/ICP roots, custom canister roots, role
 metadata, and lower-level build/install commands, see
 `crates/canic-host/README.md`.
 
 ### 6. Operator Snapshot and Restore Flow
 
 The `canic` binary is the operator entry point for fleet backup/restore work.
-It still uses `dfx` for live IC snapshot operations, but it owns the higher-level
+It uses ICP CLI for live IC snapshot operations, while Canic owns the higher-level
 topology selection, manifests, journals, backup verification, and restore
 planning.
 
@@ -268,7 +267,7 @@ Show local test-fleet canisters that already have ids:
 canic list test --network local
 ```
 
-If this only prints the `root` row, `dfx` has reserved the root id but the Canic
+If this only prints the `root` row, ICP CLI has reserved the root id but the Canic
 tree is not installed yet. Run `canic install test`, then query the installed
 registry with `canic list test --network local`. List output uses the canister
 principal as the first column and renders parent/child relationships with
@@ -298,7 +297,7 @@ canic snapshot download test \
 
 Use `--recursive` for all descendants. Non-dry-run captures recompute the
 selected topology immediately before snapshot creation and fail if the topology
-hash changed since discovery. Because `dfx` creates snapshots only for stopped
+hash changed since discovery. Because ICP CLI creates snapshots only for stopped
 canisters, Canic stops each canister before snapshot creation; pass
 `--resume-after-snapshot` when the CLI should start each canister again after
 capture.
@@ -405,7 +404,7 @@ Use `PageRequest { limit, offset }` to avoid passing raw integers into queries.
 * Lint: `make clippy`
 * Test: `make test`
 * Build workspace release artifacts: `make build`
-* Build local canister WASMs through `dfx`: `dfx build --all`
+* Build local canister WASMs through ICP CLI: `icp build -e test`
 * Build example targets: `cargo build -p canic --examples`
 * Role-attestation PocketIC flow: `cargo test -p canic-core --test pic_role_attestation capability_endpoint_policy_and_structural_paths -- --nocapture`
 * Root replay dispatcher coverage: `cargo test -p canic-tests --test root_suite --locked upgrade_routes_through_dispatcher_non_skip_path -- --nocapture --test-threads=1`

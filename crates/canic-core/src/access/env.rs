@@ -34,13 +34,13 @@ pub fn is_prime_subnet() -> Result<(), AccessError> {
 }
 
 /// build_network_ic
-/// Permits access only when `DFX_NETWORK=ic` was set at build time.
+/// Permits access only when `ICP_ENVIRONMENT=ic` was set at build time.
 pub fn build_network_ic() -> Result<(), AccessError> {
     check_build_network(BuildNetwork::Ic)
 }
 
 /// build_network_local
-/// Permits access only when `DFX_NETWORK=local` was set at build time.
+/// Permits access only when `ICP_ENVIRONMENT=local` was set at build time.
 pub fn build_network_local() -> Result<(), AccessError> {
     check_build_network(BuildNetwork::Local)
 }
@@ -55,10 +55,10 @@ pub fn check_build_network(expected: BuildNetwork) -> Result<(), AccessError> {
     match actual {
         Some(actual) if actual == expected => Ok(()),
         Some(actual) => Err(AccessError::Denied(format!(
-            "this endpoint is only available when built for '{expected}' (DFX_NETWORK), but was built for '{actual}'"
+            "this endpoint is only available when built for '{expected}' (ICP_ENVIRONMENT), but was built for '{actual}'"
         ))),
         None => Err(AccessError::Denied(
-            "this endpoint requires a build-time network (DFX_NETWORK) of either 'ic' or 'local'"
+            "this endpoint requires a build-time network (ICP_ENVIRONMENT) of either 'ic' or 'local'"
                 .to_string(),
         )),
     }
@@ -77,10 +77,10 @@ mod tests {
         match actual {
             Some(actual) if actual == expected => Ok(()),
             Some(actual) => Err(AccessError::Denied(format!(
-                "this endpoint is only available when built for '{expected}' (DFX_NETWORK), but was built for '{actual}'"
+                "this endpoint is only available when built for '{expected}' (ICP_ENVIRONMENT), but was built for '{actual}'"
             ))),
             None => Err(AccessError::Denied(
-                "this endpoint requires a build-time network (DFX_NETWORK) of either 'ic' or 'local'"
+                "this endpoint requires a build-time network (ICP_ENVIRONMENT) of either 'ic' or 'local'"
                     .to_string(),
             )),
         }
@@ -98,7 +98,7 @@ mod tests {
             .unwrap_err()
             .to_string();
         assert!(
-            err.contains("this endpoint is only available when built for 'ic' (DFX_NETWORK)"),
+            err.contains("this endpoint is only available when built for 'ic' (ICP_ENVIRONMENT)"),
             "unexpected error: {err}"
         );
     }
@@ -107,7 +107,7 @@ mod tests {
     fn build_network_unknown_errors() {
         let err = check(BuildNetwork::Ic, None).unwrap_err().to_string();
         assert!(
-            err.contains("this endpoint requires a build-time network (DFX_NETWORK)"),
+            err.contains("this endpoint requires a build-time network (ICP_ENVIRONMENT)"),
             "unexpected error: {err}"
         );
     }

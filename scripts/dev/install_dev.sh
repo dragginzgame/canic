@@ -5,10 +5,11 @@ CANIC_CLI_VERSION="${CANIC_CLI_VERSION:-0.32.6}"
 CANIC_RUST_TOOLCHAIN="${CANIC_RUST_TOOLCHAIN:-1.95.0}"
 ACTIONLINT_VERSION="${ACTIONLINT_VERSION:-1.7.8}"
 ACTIONLINT_INSTALL_DIR="${ACTIONLINT_INSTALL_DIR:-$HOME/.local/bin}"
+ICP_CLI_VERSION="${ICP_CLI_VERSION:-0.2.5}"
+ICP_WASM_VERSION="${ICP_WASM_VERSION:-0.9.10}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 RUSTUP_INIT_URL="https://sh.rustup.rs"
-DFX_INSTALL_URL="https://internetcomputer.org/install.sh"
 CANIC_DEV_TOOLS=(
     cargo-watch
     cargo-edit
@@ -18,7 +19,6 @@ CANIC_DEV_TOOLS=(
 )
 CANIC_WASM_TOOLS=(
     candid-extractor
-    ic-wasm
 )
 CANIC_PYTHON_PACKAGE_BREW="${CANIC_PYTHON_PACKAGE_BREW:-python}"
 CANIC_PYTHON_PACKAGE_APT="${CANIC_PYTHON_PACKAGE_APT:-python3}"
@@ -98,6 +98,17 @@ install_or_update_actionlint() {
     else
         yellow "actionlint installed at $ACTIONLINT_INSTALL_DIR/actionlint; add $ACTIONLINT_INSTALL_DIR to PATH to run it directly."
     fi
+}
+
+install_or_update_icp_cli() {
+    yellow "ICP CLI:"
+    require_command npm
+    cyan_command "npm install -g @icp-sdk/icp-cli@$ICP_CLI_VERSION @icp-sdk/ic-wasm@$ICP_WASM_VERSION"
+    npm install -g "@icp-sdk/icp-cli@$ICP_CLI_VERSION" "@icp-sdk/ic-wasm@$ICP_WASM_VERSION"
+    require_command icp
+    require_command ic-wasm
+    green "icp ready: $(icp --version 2>&1)"
+    green "ic-wasm ready: $(ic-wasm --version 2>&1)"
 }
 
 detect_python_package_manager() {
@@ -186,10 +197,11 @@ configure_git_hooks_if_present() {
 
 main() {
     if [ "${1:-}" = "--update-python" ]; then
-        blue "Updating Python and workflow lint prerequisites"
+        blue "Updating Python, workflow lint, and ICP CLI prerequisites"
         install_or_update_python update
         install_or_update_actionlint
-        green "Python and workflow lint update complete."
+        install_or_update_icp_cli
+        green "Python, workflow lint, and ICP CLI update complete."
         return 0
     fi
 
@@ -223,29 +235,13 @@ main() {
     install_cargo_tools "Rust development tools" "${CANIC_DEV_TOOLS[@]}"
     install_cargo_tools "Wasm and Candid tools" "${CANIC_WASM_TOOLS[@]}"
     install_or_update_actionlint
+    install_or_update_icp_cli
 
     yellow "Canic CLI:"
     cyan_command "cargo +$CANIC_RUST_TOOLCHAIN install --locked canic-cli --version $CANIC_CLI_VERSION"
     cargo_toolchain install --locked canic-cli --version "$CANIC_CLI_VERSION"
 
     configure_git_hooks_if_present
-
-    if ! command -v dfx >/dev/null 2>&1; then
-        echo >&2
-        require_command curl
-        yellow "dfx:"
-        cyan_command "sh -ci \"\$(curl -fsSL $DFX_INSTALL_URL)\""
-        sh -ci "$(curl -fsSL "$DFX_INSTALL_URL")"
-        export PATH="$HOME/bin:$HOME/.local/bin:$HOME/.local/share/dfx/bin:$PATH"
-
-        if command -v dfx >/dev/null 2>&1; then
-            green "dfx installed: $(command -v dfx)"
-        else
-            yellow "dfx installed, but your current shell may need a PATH refresh before \`dfx\` is visible."
-        fi
-    else
-        green "dfx already installed: $(command -v dfx)"
-    fi
 
     echo >&2
     green "Canic setup complete."

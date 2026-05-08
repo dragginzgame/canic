@@ -27,7 +27,7 @@ use reconcile_root_harness::setup_cached_root;
 use std::{fs, path::PathBuf};
 
 const STORE_ROLLOVER_SAFETY_BYTES: u64 = 64 * 1024;
-const ROOT_WASM_RELATIVE: &str = ".dfx/local/canisters/root/root.wasm.gz";
+const ROOT_WASM_RELATIVE: &str = ".icp/local/canisters/root/root.wasm.gz";
 const UPGRADE_READY_TICK_LIMIT: usize = 120;
 
 ///

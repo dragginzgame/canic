@@ -18,8 +18,8 @@ use std::{fs, path::PathBuf, time::Duration};
 const READY_TICK_LIMIT: usize = 120;
 const INSTALL_CODE_RETRY_LIMIT: usize = 4;
 const INSTALL_CODE_COOLDOWN: Duration = Duration::from_mins(5);
-const TEST_WASM_RELATIVE: &str = ".dfx/local/canisters/test/test.wasm.gz";
-const USER_SHARD_WASM_RELATIVE: &str = ".dfx/local/canisters/user_shard/user_shard.wasm.gz";
+const TEST_WASM_RELATIVE: &str = ".icp/local/canisters/test/test.wasm.gz";
+const USER_SHARD_WASM_RELATIVE: &str = ".icp/local/canisters/user_shard/user_shard.wasm.gz";
 
 /// Reinstall the verifier at its existing principal to simulate local verifier
 /// proof-cache loss while preserving topology identity.
@@ -108,7 +108,7 @@ fn encode_test_reinstall_args(setup: &RootSetup) -> Vec<u8> {
         .expect("encode test verifier reinstall args")
 }
 
-// Read one DFX-built release wasm artifact by workspace-relative path.
+// Read one ICP-built release wasm artifact by workspace-relative path.
 fn read_release_wasm(relative: &str) -> Vec<u8> {
     let path = workspace_root().join(relative);
     fs::read(&path).unwrap_or_else(|err| panic!("read {} failed: {err}", path.display()))

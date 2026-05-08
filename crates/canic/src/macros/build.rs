@@ -91,7 +91,7 @@ macro_rules! __canic_build_internal {
             }
         });
         println!("cargo:rerun-if-changed={}", $cfg_path.display());
-        println!("cargo:rerun-if-env-changed=DFX_NETWORK");
+        println!("cargo:rerun-if-env-changed=ICP_ENVIRONMENT");
         println!("cargo:rerun-if-env-changed=CANIC_CONFIG_PATH");
         println!("cargo:rerun-if-env-changed=CANIC_INTERNAL_TEST_ENDPOINTS");
 

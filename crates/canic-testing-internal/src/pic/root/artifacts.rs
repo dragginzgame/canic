@@ -10,8 +10,8 @@ use canic_control_plane::{
 };
 use canic_testkit::{
     artifacts::{
-        INTERNAL_TEST_ENDPOINTS_ENV, WatchedInputSnapshot, build_dfx_all_with_env,
-        dfx_artifact_ready_with_snapshot,
+        INTERNAL_TEST_ENDPOINTS_ENV, WatchedInputSnapshot, build_icp_all_with_env,
+        icp_artifact_ready_with_snapshot,
     },
     pic::Pic,
 };
@@ -19,23 +19,23 @@ use std::{fs, io};
 
 use super::{RootBaselineSpec, progress, progress_elapsed};
 
-/// Build the local `.dfx` root artifacts once unless all required outputs are already fresh.
+/// Build the local `.icp` root artifacts once unless all required outputs are already fresh.
 pub fn ensure_root_release_artifacts_built(spec: &RootBaselineSpec<'_>) {
     if root_release_artifacts_ready(spec) {
         progress(spec, "reusing existing root release artifacts");
         return;
     }
 
-    progress(spec, "building local DFX artifacts for root baseline");
+    progress(spec, "building local ICP artifacts for root baseline");
     let started_at = std::time::Instant::now();
-    build_dfx_all_with_env(
+    build_icp_all_with_env(
         &spec.workspace_root,
-        spec.dfx_build_lock_relative,
+        spec.icp_build_lock_relative,
         spec.build_network,
         spec.build_profile,
         &effective_build_env(spec),
     );
-    progress_elapsed(spec, "finished local DFX artifact build", started_at);
+    progress_elapsed(spec, "finished local ICP artifact build", started_at);
 }
 
 /// Load the built `root.wasm.gz` artifact used for PocketIC root installs.
@@ -152,7 +152,7 @@ fn root_release_artifacts_ready(spec: &RootBaselineSpec<'_>) -> bool {
         return false;
     };
 
-    if !dfx_artifact_ready_with_snapshot(
+    if !icp_artifact_ready_with_snapshot(
         &spec.workspace_root,
         spec.root_wasm_artifact_relative,
         watched_inputs,
@@ -169,7 +169,7 @@ fn root_release_artifacts_ready(spec: &RootBaselineSpec<'_>) -> bool {
             "{}/{role_name}/{role_name}.wasm.gz",
             spec.root_release_artifacts_relative
         );
-        dfx_artifact_ready_with_snapshot(
+        icp_artifact_ready_with_snapshot(
             &spec.workspace_root,
             &artifact_relative_path,
             watched_inputs,

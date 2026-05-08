@@ -197,7 +197,7 @@ fn apply_journal_command_preview_reports_blocked_state() {
     );
 }
 
-// Ensure command previews expose the dfx upload command without executing it.
+// Ensure command previews expose the ICP CLI upload command without executing it.
 #[test]
 fn apply_journal_command_preview_reports_upload_command() {
     let root = temp_dir("canic-restore-apply-command-upload");
@@ -230,23 +230,24 @@ fn apply_journal_command_preview_reports_upload_command() {
     assert!(preview.operation_available);
     assert!(preview.command_available);
     let command = preview.command.expect("command preview");
-    assert_eq!(command.program, "dfx");
+    assert_eq!(command.program, "icp");
     assert_eq!(
         command.args,
         vec![
             "canister".to_string(),
             "snapshot".to_string(),
             "upload".to_string(),
-            "--dir".to_string(),
-            expected_artifact_path,
             ROOT.to_string(),
+            "--input".to_string(),
+            expected_artifact_path,
+            "--resume".to_string(),
         ]
     );
     assert!(command.mutates);
     assert!(!command.requires_stopped_canister);
 }
 
-// Ensure command previews carry configured dfx program and network.
+// Ensure command previews carry configured ICP CLI program and network.
 #[test]
 fn apply_journal_command_preview_honors_command_config() {
     let root = temp_dir("canic-restore-apply-command-config");
@@ -272,25 +273,26 @@ fn apply_journal_command_preview_honors_command_config() {
         .expect("dry-run should validate artifacts");
     let journal = RestoreApplyJournal::from_dry_run(&dry_run);
     let preview = journal.next_command_preview_with_config(&RestoreApplyCommandConfig {
-        program: "/tmp/dfx".to_string(),
+        program: "/tmp/icp".to_string(),
         network: Some("local".to_string()),
     });
     let expected_artifact_path = root.join("artifacts/root").to_string_lossy().to_string();
 
     fs::remove_dir_all(root).expect("remove temp root");
     let command = preview.command.expect("command preview");
-    assert_eq!(command.program, "/tmp/dfx");
+    assert_eq!(command.program, "/tmp/icp");
     assert_eq!(
         command.args,
         vec![
             "canister".to_string(),
-            "--network".to_string(),
+            "-n".to_string(),
             "local".to_string(),
             "snapshot".to_string(),
             "upload".to_string(),
-            "--dir".to_string(),
-            expected_artifact_path,
             ROOT.to_string(),
+            "--input".to_string(),
+            expected_artifact_path,
+            "--resume".to_string(),
         ]
     );
 }
@@ -327,7 +329,7 @@ fn apply_journal_command_preview_reports_load_command() {
         .record_operation_receipt(RestoreApplyOperationReceipt::command_completed(
             &journal.operations[0],
             RestoreApplyRunnerCommand {
-                program: "dfx".to_string(),
+                program: "icp".to_string(),
                 args: vec![
                     "canister".to_string(),
                     "snapshot".to_string(),
@@ -355,7 +357,7 @@ fn apply_journal_command_preview_reports_load_command() {
         vec![
             "canister".to_string(),
             "snapshot".to_string(),
-            "load".to_string(),
+            "restore".to_string(),
             ROOT.to_string(),
             "target-snap-root".to_string(),
         ]
@@ -406,7 +408,7 @@ fn apply_journal_load_command_requires_uploaded_snapshot_receipt() {
     );
 }
 
-// Ensure status verification previews use `dfx canister status`.
+// Ensure status verification previews use `icp canister status`.
 #[test]
 fn apply_journal_command_preview_reports_status_verification_command() {
     let journal = command_preview_journal(RestoreApplyOperationKind::VerifyMember, Some("status"));
@@ -941,7 +943,7 @@ fn apply_journal_mark_failed_records_reason() {
     let mut journal = RestoreApplyJournal::from_dry_run(&dry_run);
 
     journal
-        .mark_operation_failed_at(0, "dfx-load-failed".to_string(), None)
+        .mark_operation_failed_at(0, "icp-load-failed".to_string(), None)
         .expect("mark operation failed");
 
     fs::remove_dir_all(root).expect("remove temp root");
@@ -951,7 +953,7 @@ fn apply_journal_mark_failed_records_reason() {
     );
     assert_eq!(
         journal.operations[0].blocking_reasons,
-        vec!["dfx-load-failed".to_string()]
+        vec!["icp-load-failed".to_string()]
     );
     assert_eq!(journal.failed_operations, 1);
     assert_eq!(journal.ready_operations, 5);
@@ -983,7 +985,7 @@ fn apply_journal_retry_failed_operation_marks_ready() {
         .expect("dry-run should validate artifacts");
     let mut journal = RestoreApplyJournal::from_dry_run(&dry_run);
     journal
-        .mark_operation_failed_at(0, "dfx-upload-failed".to_string(), None)
+        .mark_operation_failed_at(0, "icp-upload-failed".to_string(), None)
         .expect("mark failed operation");
     journal
         .retry_failed_operation_at(0, Some("2026-05-04T12:03:00Z".to_string()))

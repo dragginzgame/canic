@@ -105,10 +105,10 @@ run_probe() {
 }
 
 assert_probe_outputs() {
-    local wrapper_manifest="$DOWNSTREAM_ROOT/.dfx/local/generated/canic-wasm-store/Cargo.toml"
-    local wasm_path="$DOWNSTREAM_ROOT/.dfx/local/canisters/wasm_store/wasm_store.wasm"
-    local wasm_gz_path="$DOWNSTREAM_ROOT/.dfx/local/canisters/wasm_store/wasm_store.wasm.gz"
-    local did_path="$DOWNSTREAM_ROOT/.dfx/local/canisters/wasm_store/wasm_store.did"
+    local wrapper_manifest="$DOWNSTREAM_ROOT/.icp/local/generated/canic-wasm-store/Cargo.toml"
+    local wasm_path="$DOWNSTREAM_ROOT/.icp/local/canisters/wasm_store/wasm_store.wasm"
+    local wasm_gz_path="$DOWNSTREAM_ROOT/.icp/local/canisters/wasm_store/wasm_store.wasm.gz"
+    local did_path="$DOWNSTREAM_ROOT/.icp/local/canisters/wasm_store/wasm_store.did"
 
     [ ! -d "$PACKAGE_ROOT/canic-wasm-store-$VERSION" ] || {
         echo "expected isolated package root to exclude canic-wasm-store so the generated wrapper path is exercised" >&2

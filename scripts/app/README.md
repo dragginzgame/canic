@@ -1,19 +1,19 @@
 # Local Demo Workflow (`scripts/app/`)
 
-These scripts support the reference canisters under `fleets/test/` and the local topology in `dfx.json`.
+These scripts support the reference canisters under `fleets/test/` and the local topology in `icp.yaml`.
 
 ## Prerequisites
 
 - Canic/Rust tooling installed:
   - `make install-dev`
   - or `bash scripts/dev/install_dev.sh`
-  - the shared setup script bootstraps Rust when needed, installs Python 3 when it is missing, installs the pinned internal Rust toolchain, `rustfmt`, `clippy`, `wasm32-unknown-unknown`, `candid-extractor`, `ic-wasm`, common cargo helper tools, the matching `canic` CLI, and `dfx` if it is missing
+  - the shared setup script bootstraps Rust when needed, installs Python 3 when it is missing, installs the pinned internal Rust toolchain, `rustfmt`, `clippy`, `wasm32-unknown-unknown`, `candid-extractor`, `ic-wasm`, common cargo helper tools, the matching `canic` CLI, and `icp` if it is missing
   - the same script also configures `.githooks/` automatically when run from a Canic checkout
 
 ## Local Replica Contract
 
-The local install commands below now auto-restart a clean local `dfx` replica
-once when `dfx ping local` fails. Nonlocal targets still fail fast and expect
+The local install commands below now auto-restart a clean local `icp` replica
+once when `icp ping local` fails. Nonlocal targets still fail fast and expect
 their target replica to be managed externally.
 
 If you want a manual convenience helper for local work, use:
@@ -23,7 +23,7 @@ scripts/app/dfx_start.sh
 ```
 
 That helper is still optional and repo-local only. The local install/test flows
-can recover the local `dfx` replica themselves, but the wrapper is still useful
+can recover the local `icp` replica themselves, but the wrapper is still useful
 when you want interactive startup logs.
 
 ## Install the Reference Topology
@@ -55,7 +55,7 @@ CANIC_WASM_PROFILE=debug make test-fleet-install
 ```
 
 This one command:
-- creates the reference canisters in `dfx`
+- creates the reference canisters in `icp`
 - builds the local canister artifacts
 - emits the build-produced root staging manifest from the configured ordinary `.wasm.gz` artifacts
 - reinstalls `root` in `Prime` mode
@@ -83,23 +83,23 @@ make test-wasm
 From the repo root:
 
 ```bash
-dfx canister create --all
-dfx build --all
+icp canister create --all
+icp build --all
 ```
 
-`dfx.json` uses custom build commands which call `scripts/app/build.sh <canister>`. That script:
+`icp.yaml` uses custom build commands which call `scripts/app/build.sh <canister>`. That script:
 - is now just a thin wrapper around `canic build <canister>`
-- prints the workspace/DFX roots once per `dfx build` parent process and a short elapsed-time line per canister build so long downstream/custom-build runs stay readable
+- prints the workspace/ICP roots once per `icp build` parent process and a short elapsed-time line per canister build so long downstream/custom-build runs stay readable
 
 That public builder:
 - builds the requested Rust canister crate for `wasm32-unknown-unknown`
 - refreshes the implicit bootstrap `wasm_store` artifact automatically when building `root`
-- keeps `wasm_store` out of downstream `dfx.json` and delegates the implicit bootstrap build through the Canic backend builder
+- keeps `wasm_store` out of downstream `icp.yaml` and delegates the implicit bootstrap build through the Canic backend builder
 - lets the public bootstrap builder resolve the canonical `canic-wasm-store` source automatically from the current `canic` checkout or published registry source, and if that canonical crate is not present it synthesizes a wrapper directly from the resolved `canic` source, so downstreams do not need their own `wasm_store` crate or extra `wasm_store` build config
-- copies the resulting WASM into `.dfx/local/canisters/<name>/<name>.wasm`
-- runs `candid-extractor` to produce `.dfx/local/canisters/<name>/<name>.did`
+- copies the resulting WASM into `.icp/local/canisters/<name>/<name>.wasm`
+- runs `candid-extractor` to produce `.icp/local/canisters/<name>/<name>.did`
 
-The visible reference canister `.did` files now live only under `.dfx/local`.
+The visible reference canister `.did` files now live only under `.icp/local`.
 They are generated build artifacts, not committed source files.
 
 The one checked-in exception is:
@@ -108,7 +108,7 @@ The one checked-in exception is:
 That file remains the canonical published interface for the implicit bootstrap
 `wasm_store` crate and the packaged downstream CLI path.
 
-Ordinary bootstrap builds copy that checked-in DID into `.dfx/local`; they do
+Ordinary bootstrap builds copy that checked-in DID into `.icp/local`; they do
 not rewrite the checked-in source file unless
 `CANIC_REFRESH_WASM_STORE_DID=1` is set intentionally.
 
@@ -117,18 +117,18 @@ Profile selection for the public builder is:
 
 ## Why `.wasm.gz` Exists
 
-`dfx.json` sets `"gzip": true`, so dfx 0.30.2 also writes a gzipped artifact:
-`.dfx/local/canisters/<name>/<name>.wasm.gz`.
+`icp.yaml` sets `"gzip": true`, so icp 0.30.2 also writes a gzipped artifact:
+`.icp/local/canisters/<name>/<name>.wasm.gz`.
 
 `root.wasm` stays thin again. Only the bootstrap `wasm_store.wasm.gz` is
 embedded in `root`; the ordinary role `.wasm.gz` artifacts stay outside `root`
 and are staged after `root` install from the build-produced
-`.dfx/local/canisters/root/root.release-set.json` manifest by `canic install`.
+`.icp/local/canisters/root/root.release-set.json` manifest by `canic install`.
 
 During normal custom builds, `scripts/app/build.sh` now opportunistically emits
 that manifest as soon as the full root-subnet ordinary artifact set exists, so
 downstreams do not need a local copy of the manifest-emission logic just to
-keep `.dfx/local/canisters/root/root.release-set.json` in sync.
+keep `.icp/local/canisters/root/root.release-set.json` in sync.
 
 If you do not want the repo-local wrapper at all, use the `canic` CLI directly:
 
@@ -137,12 +137,12 @@ canic build root
 canic install test root
 ```
 
-In split repos where the Rust workspace lives under `backend/` but `dfx.json`
-and `.dfx` live at the repo root, set:
+In split repos where the Rust workspace lives under `backend/` but `icp.yaml`
+and `.icp` live at the repo root, set:
 
 ```bash
 CANIC_WORKSPACE_ROOT=/path/to/repo/backend
-CANIC_DFX_ROOT=/path/to/repo
+CANIC_ICP_ROOT=/path/to/repo
 ```
 
 The first root drives Cargo and config discovery; the second root owns emitted

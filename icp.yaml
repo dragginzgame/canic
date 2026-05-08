@@ -1,0 +1,58 @@
+canisters:
+  - name: root
+    build:
+      steps:
+        - type: script
+          commands:
+            - scripts/app/build.sh root
+
+  - name: app
+    build:
+      steps:
+        - type: script
+          commands:
+            - scripts/app/build.sh app
+
+  - name: minimal
+    build:
+      steps:
+        - type: script
+          commands:
+            - scripts/app/build.sh minimal
+
+  - name: user_hub
+    build:
+      steps:
+        - type: script
+          commands:
+            - scripts/app/build.sh user_hub
+
+  - name: user_shard
+    build:
+      steps:
+        - type: script
+          commands:
+            - scripts/app/build.sh user_shard
+
+  - name: scale_hub
+    build:
+      steps:
+        - type: script
+          commands:
+            - scripts/app/build.sh scale_hub
+
+  - name: scale
+    build:
+      steps:
+        - type: script
+          commands:
+            - scripts/app/build.sh scale
+
+environments:
+  - name: demo
+    network: local
+    canisters: [root, app]
+
+  - name: test
+    network: local
+    canisters: [root, app, minimal, user_hub, user_shard, scale_hub, scale]

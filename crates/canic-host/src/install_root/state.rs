@@ -1,4 +1,4 @@
-use crate::release_set::dfx_root;
+use crate::release_set::icp_root;
 use serde::{Deserialize, Serialize};
 use std::{fs, path::Path, path::PathBuf};
 
@@ -18,20 +18,20 @@ pub struct InstallState {
     pub root_canister_id: String,
     pub root_build_target: String,
     pub workspace_root: String,
-    pub dfx_root: String,
+    pub icp_root: String,
     pub config_path: String,
     pub release_set_manifest_path: String,
 }
 
 /// Read a named fleet install state for one project/network when present.
 pub(super) fn read_fleet_install_state(
-    dfx_root: &Path,
+    icp_root: &Path,
     network: &str,
     fleet: &str,
 ) -> Result<Option<InstallState>, Box<dyn std::error::Error>> {
     validate_network_name(network)?;
     validate_fleet_name(fleet)?;
-    let path = fleet_install_state_path(dfx_root, network, fleet);
+    let path = fleet_install_state_path(icp_root, network, fleet);
     if !path.is_file() {
         return Ok(None);
     }
@@ -46,30 +46,30 @@ pub fn read_named_fleet_install_state(
     network: &str,
     fleet: &str,
 ) -> Result<Option<InstallState>, Box<dyn std::error::Error>> {
-    let dfx_root = dfx_root()?;
-    read_fleet_install_state(&dfx_root, network, fleet)
+    let icp_root = icp_root()?;
+    read_fleet_install_state(&icp_root, network, fleet)
 }
 
 /// Return the project-local state path for one named fleet.
 #[must_use]
-pub(super) fn fleet_install_state_path(dfx_root: &Path, network: &str, fleet: &str) -> PathBuf {
-    fleets_dir(dfx_root, network).join(format!("{fleet}.json"))
+pub(super) fn fleet_install_state_path(icp_root: &Path, network: &str, fleet: &str) -> PathBuf {
+    fleets_dir(icp_root, network).join(format!("{fleet}.json"))
 }
 
 // Return the directory that owns named fleet state files.
-fn fleets_dir(dfx_root: &Path, network: &str) -> PathBuf {
-    dfx_root.join(".canic").join(network).join("fleets")
+fn fleets_dir(icp_root: &Path, network: &str) -> PathBuf {
+    icp_root.join(".canic").join(network).join("fleets")
 }
 
 // Persist the completed install state under the project-local `.canic` directory.
 pub(super) fn write_install_state(
-    dfx_root: &Path,
+    icp_root: &Path,
     network: &str,
     state: &InstallState,
 ) -> Result<PathBuf, Box<dyn std::error::Error>> {
     validate_network_name(network)?;
     validate_fleet_name(&state.fleet)?;
-    let path = fleet_install_state_path(dfx_root, network, &state.fleet);
+    let path = fleet_install_state_path(icp_root, network, &state.fleet);
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
     }

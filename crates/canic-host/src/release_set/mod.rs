@@ -18,12 +18,12 @@ pub use manifest::{
     load_root_release_set_manifest,
 };
 pub use paths::{
-    canister_manifest_path, canisters_root, config_path, dfx_root, load_root_package_version,
+    canister_manifest_path, canisters_root, config_path, icp_root, load_root_package_version,
     load_workspace_package_version, resolve_artifact_root, root_manifest_path,
     root_release_set_manifest_path, workspace_manifest_path, workspace_root,
 };
 use stage::build_release_set_entry;
-pub(crate) use stage::dfx_call_on_network;
+pub(crate) use stage::icp_call_on_network;
 pub use stage::{resume_root_bootstrap, stage_root_release_set};
 
 #[cfg(test)]

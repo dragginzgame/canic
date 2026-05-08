@@ -49,10 +49,10 @@ Tags are immutable.
 
 ## Network Selection
 
-- `DFX_NETWORK` selects the target network (`local` or `ic`).
+- `ICP_ENVIRONMENT` selects the target ICP CLI environment.
 - If unset, it defaults to `local`.
-- For scripts and make targets, `NETWORK=local|mainnet|staging` maps to the
-  appropriate `DFX_NETWORK`.
+- Canic automation should use `icp-cli`/`icp.yaml` environments rather than
+  `icp` networks or `icp.yaml`.
 
 ## Automation Language Boundary
 

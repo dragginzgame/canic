@@ -35,7 +35,7 @@ macro_rules! sns_table {
 fn main() {
     // Re-run this build script if the build-time network changes.
     // This ensures downstream code sees the correct value via env!/option_env!.
-    println!("cargo:rerun-if-env-changed=DFX_NETWORK");
+    println!("cargo:rerun-if-env-changed=ICP_ENVIRONMENT");
     println!("cargo:rerun-if-changed=src/env/ck.inc.rs");
     println!("cargo:rerun-if-changed=src/env/nns.inc.rs");
     println!("cargo:rerun-if-changed=src/env/sns.inc.rs");

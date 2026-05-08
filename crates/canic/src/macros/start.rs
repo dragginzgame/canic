@@ -338,7 +338,7 @@ macro_rules! start {
 ///
 /// `start_local!` is intentionally for standalone dev canisters such as a
 /// sandbox. It synthesizes a minimal local environment during `init`, so
-/// `dfx deploy <canister>` can run without entering the full CANIC bootstrap
+/// `icp deploy <canister>` can run without entering the full CANIC bootstrap
 /// payload by hand.
 ///
 /// Do not use this macro for production canisters, root-managed child

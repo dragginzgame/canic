@@ -39,7 +39,7 @@ fn build_bootstrap_wasm_store(
     bootstrap_cmd.env("CANIC_WORKSPACE_ROOT", workspace_root);
     bootstrap_cmd.env("CANIC_CONFIG_PATH", manifest_dir.join("canic.toml"));
     bootstrap_cmd.env("CARGO_TARGET_DIR", &bootstrap_target_dir);
-    bootstrap_cmd.env("DFX_NETWORK", "local");
+    bootstrap_cmd.env("ICP_ENVIRONMENT", "local");
     bootstrap_cmd.env("CANIC_WASM_PROFILE", "fast");
     bootstrap_cmd.args([
         "run",

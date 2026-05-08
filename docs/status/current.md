@@ -27,6 +27,14 @@ inspect only the files needed for the current task.
 - Removed persisted fleet/network defaults; fleet-scoped commands take the fleet
   name as a positional argument, and network selection is per-command via
   `--network <name>` with local replica behavior when omitted.
+- Started the 0.33 hard cut toward `icp-cli`/`icp.yaml`; dev setup and CI
+  install pinned `icp` and `ic-wasm` binaries.
+- Confirmed the ICP-only local demo install smoke with `icp 0.2.5`, including
+  `canic install demo`, `canic config demo`, `canic list demo`, and
+  `canic medic demo`.
+- Moved the public read-only/snapshot/restore-runner CLI surfaces toward ICP
+  CLI: `list`, `config`, `medic`, `snapshot download`, and `restore run` now
+  expose `--icp <path>` where a tool override is needed.
 - Added `canic fleet delete <name>` for confirmed deletion of config-defined
   fleet directories.
 - Hard-cut fleet scaffolds to top-level `fleets/`.
@@ -42,6 +50,10 @@ inspect only the files needed for the current task.
 - `cargo test -p canic-cli --lib -- --nocapture`
 - `cargo test -p canic-host --lib -- --nocapture`
 - `cargo test -p canic-host --lib install_state_round_trips_from_project_state_dir -- --nocapture`
+- `cargo run -q -p canic-cli --bin canic -- install demo --ready-timeout-seconds 60`
+- `cargo run -q -p canic-cli --bin canic -- config demo`
+- `cargo run -q -p canic-cli --bin canic -- list demo`
+- `cargo run -q -p canic-cli --bin canic -- medic demo`
 - targeted `canic-core` auth tests
 - targeted PocketIC role-attestation/root-key tests
 - `git diff --check` on touched files
@@ -69,5 +81,7 @@ inspect only the files needed for the current task.
    `canic fleet create`, `canic install`, `canic fleet`, `canic config`,
    `canic list`, `canic backup`, `canic snapshot`, and `canic restore`.
 3. Keep `canic-cli`, `canic-host`, and `canic-backup` boundaries sharp: CLI owns
-   UX, host owns local `dfx`/filesystem/build/install mechanics, backup owns
+   UX, host owns ICP CLI/filesystem/build/install mechanics, backup owns
    backup/restore domain logic.
+4. Continue the ICP-only 0.33 hard cut across remaining backup/restore docs and
+   any deeper CI smoke paths that still mention DFX.

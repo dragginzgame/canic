@@ -10,33 +10,11 @@
 CARGO_ENV :=
 TEST_TMPDIR ?= $(CURDIR)/.tmp/test-runtime
 
-# Network defaults and mapping for build-time DFX_NETWORK
-NETWORK ?= local
-DFX_NETWORK ?=
-
-ifeq ($(DFX_NETWORK),)
-  ifeq ($(NETWORK),local)
-    DFX_NETWORK := local
-  else ifeq ($(NETWORK),ic)
-    DFX_NETWORK := ic
-  else ifeq ($(NETWORK),mainnet)
-    DFX_NETWORK := ic
-  else ifeq ($(NETWORK),staging)
-    DFX_NETWORK := ic
-  endif
-endif
-
-ifeq ($(DFX_NETWORK),)
-  $(error DFX_NETWORK must be set to 'local' or 'ic')
-endif
-ifneq ($(DFX_NETWORK),local)
-  ifneq ($(DFX_NETWORK),ic)
-    $(error DFX_NETWORK must be set to 'local' or 'ic' (got $(DFX_NETWORK)))
-  endif
-endif
-
-export DFX_NETWORK
-CARGO_ENV := DFX_NETWORK=$(DFX_NETWORK) $(CARGO_ENV)
+ICP_ENVIRONMENT ?= local
+ICP_CLI_VERSION ?= 0.2.5
+ICP_WASM_VERSION ?= 0.9.11
+export ICP_ENVIRONMENT
+CARGO_ENV := ICP_ENVIRONMENT=$(ICP_ENVIRONMENT) $(CARGO_ENV)
 ifneq ($(CANIC_WASM_PROFILE),)
 export CANIC_WASM_PROFILE
 CARGO_ENV := CANIC_WASM_PROFILE=$(CANIC_WASM_PROFILE) $(CARGO_ENV)
@@ -56,7 +34,7 @@ help:
 	@echo "Setup / Installation:"
 	@echo "  install          Install only the local canic CLI binary"
 	@echo "  install-dev      Install the shared Rust/Cargo/Python/actionlint/Canic toolchain"
-	@echo "  update-dev       Update the local Rust/Cargo/Python/actionlint/DFX development environment"
+	@echo "  update-dev       Update the local Rust/Cargo/Python/actionlint/ICP CLI development environment"
 	@echo "  ensure-hooks     Configure git hooks"
 	@echo ""
 	@echo "Version Management:"
@@ -106,7 +84,7 @@ install:
 install-dev:
 	bash scripts/dev/install_dev.sh
 
-# Update the local Rust/Cargo/Python/actionlint/DFX development environment.
+# Update the local Rust/Cargo/Python/actionlint/ICP CLI development environment.
 update-dev:
 	bash scripts/dev/install_dev.sh --update-python
 	rustup update
@@ -114,10 +92,12 @@ update-dev:
 		cargo-audit cargo-bloat cargo-deny cargo-expand cargo-machete \
 		cargo-llvm-lines cargo-sort cargo-tarpaulin cargo-sort-derives \
 		ripgrep \
-		candid-extractor ic-wasm
+		candid-extractor
+	npm install -g @icp-sdk/icp-cli@$(ICP_CLI_VERSION) @icp-sdk/ic-wasm@$(ICP_WASM_VERSION)
+	icp --version
+	ic-wasm --version
 	cargo audit
 	cargo update --verbose
-	dfxvm self update
 
 
 # Optional explicit install target (idempotent)
@@ -186,7 +166,7 @@ test-wasm: clippy test-unit-fast
 
 # Version-bump gate.
 # Keeps clippy plus the fast unit/lib/bin workspace run, while leaving the
-# local `dfx` fast path as an explicit manual target.
+# local ICP CLI fast path as an explicit manual target.
 test-bump: clippy test-unit-fast
 
 # Keep rust test execution single-threaded inside each test binary for PocketIC
@@ -204,8 +184,8 @@ test-unit-fast:
 	TMPDIR="$(TEST_TMPDIR)" $(CARGO_ENV) bash scripts/ci/run-workspace-tests.sh fast
 
 test-canisters: test-fleet-install
-	test_pid="$$(TMPDIR="$(TEST_TMPDIR)" dfx canister call root canic_subnet_registry --output json | jq -er '.Ok[] | select(.role == "test") | .pid' | head -n1)"; \
-	TMPDIR="$(TEST_TMPDIR)" dfx canister call "$$test_pid" test
+	test_pid="$$(TMPDIR="$(TEST_TMPDIR)" icp canister -n "$(ICP_ENVIRONMENT)" call root canic_subnet_registry --output json | jq -er '.Ok[] | select(.role == "test") | .pid' | head -n1)"; \
+	TMPDIR="$(TEST_TMPDIR)" icp canister -n "$(ICP_ENVIRONMENT)" call "$$test_pid" test
 
 #
 # Development commands

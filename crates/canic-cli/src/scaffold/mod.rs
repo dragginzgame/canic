@@ -275,6 +275,9 @@ app_index = []
 [fleet]
 name = "{name}"
 
+[auth.delegated_tokens]
+enabled = false
+
 [subnets.prime]
 auto_create = ["app"]
 subnet_index = ["app"]
@@ -487,6 +490,8 @@ mod tests {
 
         fs::remove_dir_all(root).expect("remove scaffold temp root");
         assert!(config.contains("name = \"my_app\""));
+        assert!(config.contains("[auth.delegated_tokens]"));
+        assert!(config.contains("enabled = false"));
         assert!(config.contains("auto_create = [\"app\"]"));
         assert!(config.contains("subnet_index = [\"app\"]"));
         assert!(config.contains("[subnets.prime.canisters.root]"));

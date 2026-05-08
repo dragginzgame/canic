@@ -7,9 +7,9 @@ use crate::{
         BootstrapWasmStoreBuildOutput, BootstrapWasmStoreBuildProfile,
         build_bootstrap_wasm_store_artifact,
     },
-    cargo_command, dfx_network_from_env,
+    cargo_command, icp_environment_from_env,
     release_set::{
-        canister_manifest_path, dfx_root, emit_root_release_set_manifest_if_ready, workspace_root,
+        canister_manifest_path, emit_root_release_set_manifest_if_ready, icp_root, workspace_root,
     },
 };
 use std::{
@@ -21,7 +21,7 @@ use toml::Value as TomlValue;
 
 const ROOT_ROLE: &str = "root";
 const WASM_STORE_ROLE: &str = "wasm_store";
-const LOCAL_ARTIFACT_ROOT_RELATIVE: &str = ".dfx/local/canisters";
+const LOCAL_ARTIFACT_ROOT_RELATIVE: &str = ".icp/local/canisters";
 const WASM_TARGET: &str = "wasm32-unknown-unknown";
 
 ///
@@ -91,22 +91,22 @@ pub struct CanisterArtifactBuildOutput {
     pub manifest_path: Option<PathBuf>,
 }
 
-// Print the current build context once per caller session so dfx custom builds
+// Print the current build context once per caller session so caller builds
 // stay readable without repeating root/profile diagnostics for every canister.
 pub fn print_current_workspace_build_context_once(
     profile: CanisterBuildProfile,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let workspace_root = workspace_root()?;
-    let dfx_root = dfx_root()?;
-    let marker_dir = dfx_root.join(".dfx");
+    let icp_root = icp_root()?;
+    let marker_dir = icp_root.join(".icp");
     fs::create_dir_all(&marker_dir)?;
 
     let requested_profile = env::var("CANIC_WASM_PROFILE").unwrap_or_else(|_| "unset".to_string());
-    let network = dfx_network_from_env();
+    let network = icp_environment_from_env();
     let marker_key = env::var("CANIC_BUILD_CONTEXT_SESSION")
         .ok()
         .unwrap_or_else(|| {
-            dfx_ancestor_process_id()
+            icp_ancestor_process_id()
                 .or_else(parent_process_id)
                 .unwrap_or_else(std::process::id)
                 .to_string()
@@ -116,12 +116,12 @@ pub fn print_current_workspace_build_context_once(
     if !marker_file.exists() {
         fs::write(&marker_file, [])?;
         eprintln!(
-            "Canic build context: profile={} requested_profile={} DFX_NETWORK={} CANIC_WORKSPACE_ROOT={} CANIC_DFX_ROOT={}",
+            "Canic build context: profile={} requested_profile={} ICP_ENVIRONMENT={} CANIC_WORKSPACE_ROOT={} CANIC_ICP_ROOT={}",
             profile.target_dir_name(),
             requested_profile,
             network,
             workspace_root.display(),
-            dfx_root.display()
+            icp_root.display()
         );
     }
 
@@ -134,24 +134,24 @@ pub fn build_current_workspace_canister_artifact(
     profile: CanisterBuildProfile,
 ) -> Result<CanisterArtifactBuildOutput, Box<dyn std::error::Error>> {
     let workspace_root = workspace_root()?;
-    let dfx_root = dfx_root()?;
-    build_canister_artifact(&workspace_root, &dfx_root, canister_name, profile)
+    let icp_root = icp_root()?;
+    build_canister_artifact(&workspace_root, &icp_root, canister_name, profile)
 }
 
 // Build one visible Canic canister artifact and keep the thin-root special cases.
 fn build_canister_artifact(
     workspace_root: &Path,
-    dfx_root: &Path,
+    icp_root: &Path,
     canister_name: &str,
     profile: CanisterBuildProfile,
 ) -> Result<CanisterArtifactBuildOutput, Box<dyn std::error::Error>> {
     if canister_name == WASM_STORE_ROLE {
-        return build_hidden_wasm_store_artifact(workspace_root, dfx_root, profile);
+        return build_hidden_wasm_store_artifact(workspace_root, icp_root, profile);
     }
 
     let canister_manifest_path = canister_manifest_path(workspace_root, canister_name);
     let canister_package_name = load_canister_package_name(&canister_manifest_path)?;
-    let artifact_root = dfx_root
+    let artifact_root = icp_root
         .join(LOCAL_ARTIFACT_ROOT_RELATIVE)
         .join(canister_name);
     let wasm_path = artifact_root.join(format!("{canister_name}.wasm"));
@@ -160,15 +160,15 @@ fn build_canister_artifact(
     let require_embedded_release_artifacts = canister_name == ROOT_ROLE;
 
     if require_embedded_release_artifacts {
-        build_bootstrap_wasm_store_artifact(workspace_root, dfx_root, profile.into())?;
+        build_bootstrap_wasm_store_artifact(workspace_root, icp_root, profile.into())?;
     }
 
     fs::create_dir_all(&artifact_root)?;
-    remove_stale_dfx_candid_sidecars(&artifact_root)?;
+    remove_stale_icp_candid_sidecars(&artifact_root)?;
 
     let release_wasm_path = run_canister_build(
         workspace_root,
-        dfx_root,
+        icp_root,
         &canister_manifest_path,
         &canister_package_name,
         profile,
@@ -180,7 +180,7 @@ fn build_canister_artifact(
 
     let debug_wasm_path = run_canister_build(
         workspace_root,
-        dfx_root,
+        icp_root,
         &canister_manifest_path,
         &canister_package_name,
         CanisterBuildProfile::Debug,
@@ -188,9 +188,9 @@ fn build_canister_artifact(
     )?;
     extract_candid(&debug_wasm_path, &did_path)?;
 
-    let network = dfx_network_from_env();
+    let network = icp_environment_from_env();
     let manifest_path =
-        emit_root_release_set_manifest_if_ready(workspace_root, dfx_root, &network)?;
+        emit_root_release_set_manifest_if_ready(workspace_root, icp_root, &network)?;
 
     Ok(CanisterArtifactBuildOutput {
         artifact_root,
@@ -219,7 +219,7 @@ fn load_canister_package_name(manifest_path: &Path) -> Result<String, Box<dyn st
 // Run one wasm-target cargo build for the requested canister manifest/profile.
 fn run_canister_build(
     workspace_root: &Path,
-    dfx_root: &Path,
+    icp_root: &Path,
     manifest_path: &Path,
     package_name: &str,
     profile: CanisterBuildProfile,
@@ -231,7 +231,7 @@ fn run_canister_build(
     command
         .current_dir(workspace_root)
         .env("CARGO_TARGET_DIR", &target_root)
-        .env("CANIC_DFX_ROOT", dfx_root)
+        .env("CANIC_ICP_ROOT", icp_root)
         .args([
             "build",
             "--manifest-path",
@@ -289,9 +289,9 @@ fn extract_candid(
     Ok(())
 }
 
-// Remove stale DFX-generated Candid sidecars so local surface scans match the
+// Remove stale ICP-generated Candid sidecars so local surface scans match the
 // extracted `<role>.did` artifact we actually ship and verify.
-fn remove_stale_dfx_candid_sidecars(artifact_root: &Path) -> std::io::Result<()> {
+fn remove_stale_icp_candid_sidecars(artifact_root: &Path) -> std::io::Result<()> {
     for relative in [
         "constructor.did",
         "service.did",
@@ -312,10 +312,10 @@ fn remove_stale_dfx_candid_sidecars(artifact_root: &Path) -> std::io::Result<()>
 // Route the implicit bootstrap store through the published public builder.
 fn build_hidden_wasm_store_artifact(
     workspace_root: &Path,
-    dfx_root: &Path,
+    icp_root: &Path,
     profile: CanisterBuildProfile,
 ) -> Result<CanisterArtifactBuildOutput, Box<dyn std::error::Error>> {
-    let output = build_bootstrap_wasm_store_artifact(workspace_root, dfx_root, profile.into())?;
+    let output = build_bootstrap_wasm_store_artifact(workspace_root, icp_root, profile.into())?;
     Ok(map_bootstrap_output(output))
 }
 
@@ -336,11 +336,11 @@ fn parent_process_id() -> Option<u32> {
     parse_parent_process_id(&stat)
 }
 
-// Walk ancestor processes until the wrapping `dfx` process is found.
-fn dfx_ancestor_process_id() -> Option<u32> {
+// Walk ancestor processes until the wrapping `icp` process is found.
+fn icp_ancestor_process_id() -> Option<u32> {
     let mut pid = parent_process_id()?;
     loop {
-        if process_comm(pid).as_deref() == Some("dfx") {
+        if process_comm(pid).as_deref() == Some("icp") {
             return Some(pid);
         }
 
@@ -375,7 +375,7 @@ fn parse_parent_process_id(stat: &str) -> Option<u32> {
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_parent_process_id, remove_stale_dfx_candid_sidecars};
+    use super::{parse_parent_process_id, remove_stale_icp_candid_sidecars};
     use crate::test_support::temp_dir;
     use std::fs;
 
@@ -386,7 +386,7 @@ mod tests {
     }
 
     #[test]
-    fn remove_stale_dfx_candid_sidecars_keeps_primary_role_did() {
+    fn remove_stale_icp_candid_sidecars_keeps_primary_role_did() {
         let temp_root = temp_dir("canic-canister-build-sidecars");
         let _ = fs::remove_dir_all(&temp_root);
         fs::create_dir_all(&temp_root).unwrap();
@@ -401,7 +401,7 @@ mod tests {
             fs::write(temp_root.join(name), "x").unwrap();
         }
 
-        remove_stale_dfx_candid_sidecars(&temp_root).unwrap();
+        remove_stale_icp_candid_sidecars(&temp_root).unwrap();
 
         assert!(!temp_root.join("constructor.did").exists());
         assert!(!temp_root.join("service.did").exists());

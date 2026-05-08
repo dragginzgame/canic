@@ -1,5 +1,5 @@
 use super::ListCommandError;
-use crate::args::{default_dfx, flag_arg, parse_matches, value_arg};
+use crate::args::{default_icp, flag_arg, parse_matches, value_arg};
 use clap::Command as ClapCommand;
 use std::ffi::OsString;
 
@@ -25,7 +25,7 @@ pub(super) struct ListOptions {
     pub(super) root: Option<String>,
     pub(super) anchor: Option<String>,
     pub(super) network: Option<String>,
-    pub(super) dfx: String,
+    pub(super) icp: String,
     pub(super) verbose: bool,
 }
 
@@ -58,7 +58,7 @@ impl ListOptions {
             root: optional_string(matches, "root"),
             anchor: optional_string(matches, "from"),
             network: optional_string(matches, "network"),
-            dfx: optional_string(matches, "dfx").unwrap_or_else(default_dfx),
+            icp: optional_string(matches, "icp").unwrap_or_else(default_icp),
             verbose: optional_bool(matches, "verbose"),
         }
     }
@@ -112,10 +112,10 @@ fn list_command() -> ClapCommand {
                 .help("Render a subtree anchored at one canister"),
         )
         .arg(
-            value_arg("dfx")
-                .long("dfx")
+            value_arg("icp")
+                .long("icp")
                 .value_name("path")
-                .help("Path to the dfx executable"),
+                .help("Path to the icp executable"),
         )
         .after_help(LIST_HELP_AFTER)
 }
@@ -150,7 +150,7 @@ fn base_list_options(command: ClapCommand) -> ClapCommand {
         value_arg("network")
             .long("network")
             .value_name("name")
-            .help("DFX network to inspect"),
+            .help("ICP CLI network to inspect"),
     )
 }
 

@@ -92,22 +92,22 @@ impl Drop for RestoreCliFixture {
     }
 }
 
-// Write a tiny fake dfx executable that reports one uploaded snapshot ID.
+// Write a tiny fake icp executable that reports one uploaded snapshot ID.
 #[cfg(unix)]
-fn write_fake_dfx_upload(root: &Path, uploaded_snapshot_id: &str) -> PathBuf {
+fn write_fake_icp_upload(root: &Path, uploaded_snapshot_id: &str) -> PathBuf {
     use std::os::unix::fs::PermissionsExt;
 
-    let path = root.join("dfx-upload-ok");
+    let path = root.join("icp-upload-ok");
     fs::write(
         &path,
         format!("#!/bin/sh\nprintf 'Uploaded snapshot: {uploaded_snapshot_id}\\n'\n"),
     )
-    .expect("write fake dfx");
+    .expect("write fake icp");
     let mut permissions = fs::metadata(&path)
-        .expect("fake dfx metadata")
+        .expect("fake icp metadata")
         .permissions();
     permissions.set_mode(0o755);
-    fs::set_permissions(&path, permissions).expect("make fake dfx executable");
+    fs::set_permissions(&path, permissions).expect("make fake icp executable");
     path
 }
 
@@ -143,9 +143,9 @@ fn restore_usage_lists_command_family() {
     assert!(text.contains("run"));
 }
 
-// Ensure uploaded snapshot IDs are parsed from dfx upload output.
+// Ensure uploaded snapshot IDs are parsed from command upload output.
 #[test]
-fn parses_uploaded_snapshot_id_from_dfx_output() {
+fn parses_uploaded_snapshot_id_from_icp_output() {
     let snapshot_id = parse_uploaded_snapshot_id("Uploaded snapshot: target-snap-001\n");
 
     assert_eq!(snapshot_id.as_deref(), Some("target-snap-001"));
@@ -205,8 +205,8 @@ fn parses_restore_run_dry_run_options() {
         OsString::from("--journal"),
         OsString::from("restore-apply-journal.json"),
         OsString::from("--dry-run"),
-        OsString::from("--dfx"),
-        OsString::from("/tmp/dfx"),
+        OsString::from("--icp"),
+        OsString::from("/tmp/icp"),
         OsString::from("--network"),
         OsString::from("local"),
         OsString::from("--out"),
@@ -219,7 +219,7 @@ fn parses_restore_run_dry_run_options() {
     .expect("parse restore run options");
 
     assert_eq!(options.journal, PathBuf::from("restore-apply-journal.json"));
-    assert_eq!(options.dfx, "/tmp/dfx");
+    assert_eq!(options.icp, "/tmp/icp");
     assert_eq!(options.network.as_deref(), Some("local"));
     assert_eq!(options.out, Some(PathBuf::from("restore-run-dry-run.json")));
     assert!(options.dry_run);
@@ -237,7 +237,7 @@ fn parses_restore_run_execute_options() {
         OsString::from("--journal"),
         OsString::from("restore-apply-journal.json"),
         OsString::from("--execute"),
-        OsString::from("--dfx"),
+        OsString::from("--icp"),
         OsString::from("/bin/true"),
         OsString::from("--max-steps"),
         OsString::from("4"),
@@ -245,7 +245,7 @@ fn parses_restore_run_execute_options() {
     .expect("parse restore run execute options");
 
     assert_eq!(options.journal, PathBuf::from("restore-apply-journal.json"));
-    assert_eq!(options.dfx, "/bin/true");
+    assert_eq!(options.icp, "/bin/true");
     assert_eq!(options.network, None);
     assert_eq!(options.out, None);
     assert!(!options.dry_run);
@@ -691,8 +691,8 @@ fn run_restore_run_dry_run_writes_native_runner_preview() {
         OsString::from("--journal"),
         OsString::from(journal_path.as_os_str()),
         OsString::from("--dry-run"),
-        OsString::from("--dfx"),
-        OsString::from("/tmp/dfx"),
+        OsString::from("--icp"),
+        OsString::from("/tmp/icp"),
         OsString::from("--network"),
         OsString::from("local"),
         OsString::from("--out"),
@@ -743,18 +743,19 @@ fn run_restore_run_dry_run_writes_native_runner_preview() {
     assert_eq!(dry_run["operation_available"], true);
     assert_eq!(dry_run["command_available"], true);
     assert_eq!(dry_run["next_transition"]["sequence"], 0);
-    assert_eq!(dry_run["command"]["program"], "/tmp/dfx");
+    assert_eq!(dry_run["command"]["program"], "/tmp/icp");
     assert_eq!(
         dry_run["command"]["args"],
         json!([
             "canister",
-            "--network",
+            "-n",
             "local",
             "snapshot",
             "upload",
-            "--dir",
+            ROOT,
+            "--input",
             "/tmp/canic-cli-restore-artifacts/artifacts/root",
-            ROOT
+            "--resume"
         ])
     );
     assert_eq!(dry_run["command"]["mutates"], true);
@@ -872,7 +873,7 @@ fn run_restore_run_execute_marks_completed_operation() {
         OsString::from("--journal"),
         OsString::from(journal_path.as_os_str()),
         OsString::from("--execute"),
-        OsString::from("--dfx"),
+        OsString::from("--icp"),
         OsString::from("/bin/true"),
         OsString::from("--max-steps"),
         OsString::from("1"),
@@ -962,7 +963,7 @@ fn run_restore_run_execute_records_uploaded_snapshot_receipt() {
     fs::create_dir_all(&root).expect("create temp root");
     let journal_path = root.join("restore-apply-journal.json");
     let out_path = root.join("restore-run.json");
-    let fake_dfx = write_fake_dfx_upload(&root, "target-snap-root");
+    let fake_icp = write_fake_icp_upload(&root, "target-snap-root");
     let journal = ready_apply_journal();
 
     fs::write(
@@ -976,8 +977,8 @@ fn run_restore_run_execute_records_uploaded_snapshot_receipt() {
         OsString::from("--journal"),
         OsString::from(journal_path.as_os_str()),
         OsString::from("--execute"),
-        OsString::from("--dfx"),
-        OsString::from(fake_dfx.as_os_str()),
+        OsString::from("--icp"),
+        OsString::from(fake_icp.as_os_str()),
         OsString::from("--max-steps"),
         OsString::from("1"),
         OsString::from("--out"),
@@ -1012,7 +1013,7 @@ fn run_restore_run_execute_records_uploaded_snapshot_receipt() {
         vec![
             "canister".to_string(),
             "snapshot".to_string(),
-            "load".to_string(),
+            "restore".to_string(),
             ROOT.to_string(),
             "target-snap-root".to_string(),
         ]
@@ -1030,7 +1031,7 @@ fn run_restore_run_execute_rejects_locked_journal() {
     fs::write(&lock_path, "pid=other\n").expect("write existing lock");
 
     let err = fixture
-        .run_restore_run(&["--execute", "--dfx", "/bin/true", "--max-steps", "1"])
+        .run_restore_run(&["--execute", "--icp", "/bin/true", "--max-steps", "1"])
         .expect_err("locked journal should reject execution");
 
     assert!(matches!(
@@ -1060,7 +1061,7 @@ fn run_restore_run_require_complete_writes_summary_then_fails() {
         OsString::from("--journal"),
         OsString::from(journal_path.as_os_str()),
         OsString::from("--execute"),
-        OsString::from("--dfx"),
+        OsString::from("--icp"),
         OsString::from("/bin/true"),
         OsString::from("--max-steps"),
         OsString::from("1"),
@@ -1111,7 +1112,7 @@ fn run_restore_run_execute_marks_failed_operation() {
         OsString::from("--journal"),
         OsString::from(journal_path.as_os_str()),
         OsString::from("--execute"),
-        OsString::from("--dfx"),
+        OsString::from("--icp"),
         OsString::from("/bin/false"),
         OsString::from("--max-steps"),
         OsString::from("1"),

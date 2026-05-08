@@ -26,7 +26,7 @@ pub struct RootBaselineSpec<'a> {
     pub root_release_artifacts_relative: &'a str,
     pub artifact_watch_paths: &'a [&'a str],
     pub release_roles: &'a [&'a str],
-    pub dfx_build_lock_relative: &'a str,
+    pub icp_build_lock_relative: &'a str,
     pub build_network: &'a str,
     pub build_profile: WasmBuildProfile,
     pub build_extra_env: Vec<(String, String)>,

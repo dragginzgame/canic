@@ -5,9 +5,9 @@ surface for building Canic artifacts, installing local Canic fleets, selecting
 fleet configs, capturing canister snapshots, validating backup artifacts, and
 preparing guarded restores.
 
-The CLI currently wraps `dfx` for live snapshot and restore mutations. Canic
+The CLI wraps ICP CLI for live snapshot and restore mutations. Canic
 owns the topology selection, manifests, journals, readiness checks, restore
-ordering, and runner state around those `dfx` calls.
+ordering, and runner state around those `icp` calls.
 
 `canic-cli` intentionally keeps a narrow Rust library surface: external callers
 should treat the installed `canic` binary as the operator interface. Host-side
@@ -29,7 +29,7 @@ Install from crates.io after a release:
 cargo install --locked canic-cli --version <version>
 ```
 
-For a full local development setup, including `dfx`, helper tools, and the
+For a full local development setup, including ICP CLI, helper tools, and the
 `canic` CLI, use the install script in the root README.
 
 ## First Commands
@@ -58,14 +58,14 @@ canic install test
 ```
 
 Build one Canic canister artifact through the same public CLI surface used by
-`dfx` custom build hooks:
+ICP CLI build hooks:
 
 ```bash
 canic build root
 ```
 
-`canic install` defaults to the `root` dfx canister name. You may pass either a
-dfx canister name or an IC principal as the root target:
+`canic install` defaults to the `root` ICP canister name. You may pass either a
+project canister name or an IC principal as the root target:
 
 ```bash
 canic install test
@@ -76,8 +76,8 @@ canic install test --config fleets/test/canic.toml
 ```
 
 When the root target is a principal, the CLI still builds the conventional
-`root` canister artifact by default. Use `--root-build-target <dfx-name>` only
-when the local root canister is named differently in `dfx.json`.
+`root` canister artifact by default. Use `--root-build-target <name>` only
+when the local root canister is named differently in `icp.yaml`.
 
 When no `--config` is provided, `canic install <name>` uses
 `fleets/<name>/canic.toml`.
@@ -148,7 +148,7 @@ Non-dry-run captures recompute the selected topology immediately before
 snapshot creation and fail if the topology hash changed since discovery. This
 keeps subtree backups from silently crossing a registry change.
 
-`dfx` creates snapshots only for stopped canisters. Canic stops each canister
+ICP CLI creates snapshots only for stopped canisters. Canic stops each canister
 before snapshot creation; pass `--resume-after-snapshot` when the CLI should
 start each canister again after its artifact is captured.
 
@@ -210,7 +210,7 @@ guarded runner.
 
 ## Guarded Runner
 
-Preview the maintained runner path without calling `dfx`:
+Preview the maintained runner path without calling `icp`:
 
 ```bash
 canic restore run \
@@ -233,10 +233,10 @@ canic restore run \
 ```
 
 The native runner checks journal readiness, claims the next operation, runs the
-generated `dfx` command, marks the operation completed or failed, and persists
+generated `icp` command, marks the operation completed or failed, and persists
 the journal after each transition. `--max-steps 1` is the safest operational
 mode while validating a new restore path. Snapshot load operations first run
-`dfx canister status` and fail before loading unless the target is visibly
+`icp canister status` and fail before loading unless the target is visibly
 stopped.
 
 If a previous runner stopped after claiming work, release the pending operation

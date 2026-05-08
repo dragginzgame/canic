@@ -71,7 +71,7 @@ fn discovery_requires_verification_checks() {
     assert!(matches!(err, DiscoveryError::MissingVerificationChecks(_)));
 }
 
-// Ensure registry parsing accepts the wrapped dfx JSON shape.
+// Ensure registry parsing accepts the wrapped registry JSON shape.
 #[test]
 fn registry_entries_parse_wrapped_dfx_json() {
     let entries = parse_registry_entries(&registry_json()).expect("parse registry");

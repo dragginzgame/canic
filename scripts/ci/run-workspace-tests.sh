@@ -51,7 +51,7 @@ run_test() {
 }
 
 prebuild_root_test_artifacts() {
-    local label="prebuild local DFX artifacts for PocketIC root suites"
+    local label="prebuild local ICP artifacts for PocketIC root suites"
     echo "==> $label"
     local started_at="$SECONDS"
     bash scripts/ci/build-ci-wasm-artifacts.sh

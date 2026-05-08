@@ -6,7 +6,7 @@ mod artifact_io;
 mod bootstrap_store;
 pub mod canister_build;
 mod cargo_metadata;
-pub mod dfx;
+pub mod icp;
 pub mod install_root;
 pub mod release_set;
 pub mod replica_query;
@@ -26,6 +26,6 @@ pub(crate) fn cargo_command() -> Command {
     command
 }
 
-pub(crate) fn dfx_network_from_env() -> String {
-    std::env::var("DFX_NETWORK").unwrap_or_else(|_| "local".to_string())
+pub(crate) fn icp_environment_from_env() -> String {
+    std::env::var("ICP_ENVIRONMENT").unwrap_or_else(|_| "local".to_string())
 }

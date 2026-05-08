@@ -30,7 +30,7 @@ the normal entry surface for application canisters.
 
 [`wasm_store.did`](wasm_store.did) is the checked-in canonical interface for
 this crate. Ordinary local/bootstrap artifact builds copy that file into
-`.dfx/local/canisters/wasm_store/wasm_store.did`; they do not rewrite the
+`.icp/local/canisters/wasm_store/wasm_store.did`; they do not rewrite the
 checked-in source file as a side effect of unrelated workspace changes.
 
 If you intentionally need to refresh the canonical checked-in DID from the

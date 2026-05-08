@@ -15,6 +15,7 @@
 # IC
 deps/
 .dfx
+.icp
 *.wasm
 
 # MS

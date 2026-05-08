@@ -1,7 +1,7 @@
 # Canisters
 
 This directory contains runnable canister crates that are not config-defined
-Canic fleets. They may still be Cargo workspace members, dfx build targets, or
+Canic fleets. They may still be Cargo workspace members, ICP build targets, or
 PocketIC fixtures, but `canic fleet list` must not discover them as fleets.
 
 ## Layout
@@ -10,7 +10,7 @@ PocketIC fixtures, but `canic fleet list` must not discover them as fleets.
   and capability-surface audits.
 - `sandbox/minimal/` – manual local sandbox for temporary endpoint experiments.
   It uses `canic::start_local!()` with generated standalone config and is not
-  part of `dfx.json`, the demo topology, the reference release set, or automated
+  part of `icp.yaml`, the demo topology, the reference release set, or automated
   test fixtures.
 - `test/` – isolated PocketIC and integration-test fixture canisters that are
   not themselves a config-defined fleet.

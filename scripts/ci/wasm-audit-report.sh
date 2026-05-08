@@ -9,7 +9,7 @@ DEFAULT_PROFILE="release"
 
 ROOT_DIR="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 cd "$ROOT_DIR"
-source "$ROOT_DIR/scripts/ci/require_dfx.sh"
+source "$ROOT_DIR/scripts/ci/require_icp.sh"
 
 DEFAULT_AUDIT_CANISTERS="$(bash scripts/ci/list-config-canisters.sh --config fleets/test/canic.toml --ci-order)"
 mapfile -t DEFAULT_CANISTERS <<<"$DEFAULT_AUDIT_CANISTERS"
@@ -177,7 +177,7 @@ ensure_raw_canister() {
         return
     fi
 
-    mkdir -p ".dfx/local/canisters/$canister"
+    mkdir -p ".icp/local/canisters/$canister"
     cargo build --target wasm32-unknown-unknown -p "canister_${canister}" $CARGO_PROFILE_FLAG --locked
 
     local source_wasm="target/wasm32-unknown-unknown/$PROFILE_DIR/canister_${canister}.wasm"
@@ -188,8 +188,8 @@ ensure_raw_canister() {
     gzip_deterministic "$raw_wasm" "$raw_gz"
 
     if [ "$canister" != "root" ]; then
-        cp -f "$raw_wasm" ".dfx/local/canisters/$canister/$canister.wasm"
-        cp -f "$raw_gz" ".dfx/local/canisters/$canister/$canister.wasm.gz"
+        cp -f "$raw_wasm" ".icp/local/canisters/$canister/$canister.wasm"
+        cp -f "$raw_gz" ".icp/local/canisters/$canister/$canister.wasm.gz"
     fi
 
     BUILT_ALREADY["$canister"]=1
@@ -197,7 +197,7 @@ ensure_raw_canister() {
 
 build_and_cache_artifacts() {
     mkdir -p "$CACHE_RAW_DIR" "$CACHE_SHRUNK_DIR" "$CACHE_ANALYSIS_DIR"
-    mkdir -p .dfx/local/canisters
+    mkdir -p .icp/local/canisters
 
     local include_root=0
     local canister
@@ -228,7 +228,7 @@ build_and_cache_artifacts() {
     done
 
     for canister in "${CANISTERS[@]}"; do
-        local shrunk_wasm_src=".dfx/local/canisters/$canister/$canister.wasm"
+        local shrunk_wasm_src=".icp/local/canisters/$canister/$canister.wasm"
         local shrunk_wasm="$CACHE_SHRUNK_DIR/$canister.wasm"
         local shrunk_gz="$CACHE_SHRUNK_DIR/$canister.wasm.gz"
         local analysis_wasm="$CACHE_ANALYSIS_DIR/$canister.wasm"
@@ -379,11 +379,11 @@ write_aggregate_json() {
 
 profile_command_note() {
     if [ "$PROFILE_NAME" = "release" ]; then
-        printf 'cargo/dfx release builds'
+        printf 'cargo/icp release builds'
     elif [ "$PROFILE_NAME" = "fast" ]; then
-        printf 'cargo/dfx fast builds'
+        printf 'cargo/icp fast builds'
     else
-        printf 'cargo/dfx debug builds'
+        printf 'cargo/icp debug builds'
     fi
 }
 
@@ -564,7 +564,7 @@ render_report() {
 - Worktree: \`$WORKTREE\`
 - Profile: \`$PROFILE_NAME\`
 - Target canisters in scope: $(printf '`%s` ' "${CANISTERS[@]}")
-- Analysis artifact note: \`twiggy\` ran against cached raw Cargo wasm to preserve readable symbol names; built/shrunk byte metrics still use the canonical built and \`dfx\`-shrunk artifacts.
+- Analysis artifact note: \`twiggy\` ran against cached raw Cargo wasm to preserve readable symbol names; built/shrunk byte metrics still use the canonical built and \`icp\`-shrunk artifacts.
 
 ## Findings / Checklist
 
@@ -805,9 +805,9 @@ else
         echo "cargo is required unless WASM_AUDIT_SKIP_BUILD=1" >&2
         exit 1
     fi
-    require_dfx_ready
+    require_icp_tools
     build_and_cache_artifacts
-    record_verification "cargo build --target wasm32-unknown-unknown ... && dfx build ..." "PASS" "built and cached raw/shrunk artifacts for $(profile_command_note)"
+    record_verification "cargo build --target wasm32-unknown-unknown ... && canic build ..." "PASS" "built and cached raw/shrunk artifacts for $(profile_command_note)"
 fi
 
 if [ "$IC_WASM_AVAILABLE" -eq 1 ]; then
