@@ -1,8 +1,5 @@
 use crate::{
-    args::{
-        default_network, flag_arg, parse_matches, path_option, print_help_or_version,
-        string_option, value_arg,
-    },
+    args::{flag_arg, parse_matches, path_option, print_help_or_version},
     version_text,
 };
 use clap::{Arg, Command as ClapCommand};
@@ -17,8 +14,7 @@ use thiserror::Error as ThisError;
 const FLEET_CREATE_HELP_AFTER: &str = "\
 Examples:
   canic fleet create demo
-  canic fleet create demo --yes
-  canic fleet create demo --network local";
+  canic fleet create demo --yes";
 
 ///
 /// ScaffoldCommandError
@@ -50,7 +46,6 @@ pub enum ScaffoldCommandError {
 pub struct ScaffoldOptions {
     pub name: String,
     pub fleets_dir: PathBuf,
-    pub network: String,
     pub yes: bool,
 }
 
@@ -84,7 +79,6 @@ impl ScaffoldOptions {
         Ok(Self {
             name,
             fleets_dir: path_option(&matches, "dir").unwrap_or_else(|| PathBuf::from("fleets")),
-            network: string_option(&matches, "network").unwrap_or_else(default_network),
             yes: matches.get_flag("yes"),
         })
     }
@@ -187,12 +181,6 @@ fn fleet_create_command() -> ClapCommand {
                 .value_name("dir")
                 .num_args(1)
                 .help("Fleets directory to create under; defaults to fleets"),
-        )
-        .arg(
-            value_arg("network")
-                .long("network")
-                .value_name("name")
-                .help("DFX network to use in the next install command example"),
         )
         .arg(
             flag_arg("yes")
@@ -418,21 +406,7 @@ mod tests {
 
         assert_eq!(options.name, "my_app");
         assert_eq!(options.fleets_dir, PathBuf::from("tmp_fleets"));
-        assert_eq!(options.network, default_network());
         assert!(!options.yes);
-    }
-
-    // Ensure scaffold can record the network used for the next install hint.
-    #[test]
-    fn parses_scaffold_network_option() {
-        let options = ScaffoldOptions::parse([
-            OsString::from("my_app"),
-            OsString::from("--network"),
-            OsString::from("ic"),
-        ])
-        .expect("parse scaffold network option");
-
-        assert_eq!(options.network, "ic");
     }
 
     // Ensure scaffold accepts explicit noninteractive confirmation.
@@ -451,7 +425,6 @@ mod tests {
         let options = ScaffoldOptions {
             name: "my_app".to_string(),
             fleets_dir: root.join("fleets"),
-            network: "local".to_string(),
             yes: false,
         };
         let mut output = Vec::new();
@@ -471,7 +444,6 @@ mod tests {
         let options = ScaffoldOptions {
             name: "my_app".to_string(),
             fleets_dir: root.join("fleets"),
-            network: "local".to_string(),
             yes: false,
         };
         let mut output = Vec::new();
@@ -500,7 +472,6 @@ mod tests {
         let options = ScaffoldOptions {
             name: "my_app".to_string(),
             fleets_dir: root.join("fleets"),
-            network: "local".to_string(),
             yes: true,
         };
 
@@ -538,7 +509,6 @@ mod tests {
         let options = ScaffoldOptions {
             name: "my_app".to_string(),
             fleets_dir: root.join("fleets"),
-            network: "local".to_string(),
             yes: true,
         };
         fs::create_dir_all(options.fleets_dir.join("my_app")).expect("create existing target");

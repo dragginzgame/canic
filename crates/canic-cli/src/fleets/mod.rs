@@ -573,7 +573,7 @@ mod tests {
 
         assert!(text.contains("Create a minimal Canic fleet"));
         assert!(text.contains("Usage: canic fleet create"));
-        assert!(text.contains("--network <name>"));
+        assert!(!text.contains("--network <name>"));
         assert!(text.contains("--yes"));
         assert!(text.contains("Examples:"));
     }
