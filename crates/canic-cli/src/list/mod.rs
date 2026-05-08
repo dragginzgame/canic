@@ -97,7 +97,7 @@ where
 
     let options = ListOptions::parse_list(args)?;
     let registry = load_registry_entries(&options)?;
-    let anchor = resolve_tree_anchor(&options)?;
+    let anchor = resolve_tree_anchor(&options);
     let role_kinds = resolve_role_kinds(&options);
     let readiness = list_ready_statuses(&options, &registry, anchor.as_deref())?;
     let title = list_title(&options);
@@ -287,19 +287,10 @@ fn auto_create_label(role: &str, auto_create: &std::collections::BTreeSet<String
     }
 }
 
-// Resolve one explicit canister identifier.
-fn resolve_project_canister_id(
-    options: &ListOptions,
-    name: &str,
-) -> Result<Option<String>, ListCommandError> {
-    let _ = options;
-    Ok(Some(name.to_string()))
-}
-
 // Resolve the explicit root id or the selected fleet install state root.
 fn resolve_root_canister(options: &ListOptions) -> Result<String, ListCommandError> {
     if let Some(root) = &options.root {
-        return resolve_canister_identifier(options, root);
+        return Ok(resolve_canister_identifier(root));
     }
 
     if let Some(state) = read_selected_install_state(options)
@@ -343,25 +334,17 @@ fn selected_config_path(options: &ListOptions) -> Result<PathBuf, ListCommandErr
 }
 
 // Resolve the selected tree anchor as a principal or operator-supplied identifier.
-fn resolve_tree_anchor(options: &ListOptions) -> Result<Option<String>, ListCommandError> {
-    options
-        .anchor
-        .as_deref()
-        .map(|anchor| resolve_canister_identifier(options, anchor))
-        .transpose()
+fn resolve_tree_anchor(options: &ListOptions) -> Option<String> {
+    options.anchor.as_deref().map(resolve_canister_identifier)
 }
 
 // Accept either an IC principal or an operator-supplied canister identifier for list inputs.
-fn resolve_canister_identifier(
-    options: &ListOptions,
-    identifier: &str,
-) -> Result<String, ListCommandError> {
+fn resolve_canister_identifier(identifier: &str) -> String {
     if Principal::from_text(identifier).is_ok() {
-        return Ok(identifier.to_string());
+        return identifier.to_string();
     }
 
-    resolve_project_canister_id(options, identifier)
-        .map(|id| id.unwrap_or_else(|| identifier.to_string()))
+    identifier.to_string()
 }
 
 // Resolve the state network for commands that omit --network.
