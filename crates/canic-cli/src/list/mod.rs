@@ -261,11 +261,7 @@ fn load_config_role_rows(options: &ListOptions) -> Result<Vec<ConfigRoleRow>, Li
                 .get(&role)
                 .filter(|capabilities| !capabilities.is_empty())
                 .map_or_else(|| "-".to_string(), |capabilities| capabilities.join(", ")),
-            auto_create: if auto_create.contains(&role) {
-                "yes".to_string()
-            } else {
-                "no".to_string()
-            },
+            auto_create: auto_create_label(&role, &auto_create),
             topup: topups
                 .get(&role)
                 .cloned()
@@ -278,6 +274,17 @@ fn load_config_role_rows(options: &ListOptions) -> Result<Vec<ConfigRoleRow>, Li
             role,
         })
         .collect())
+}
+
+// Render auto-create membership; root is the parent canister, so this setting is not applicable.
+fn auto_create_label(role: &str, auto_create: &std::collections::BTreeSet<String>) -> String {
+    if role == "root" {
+        "-".to_string()
+    } else if auto_create.contains(role) {
+        "yes".to_string()
+    } else {
+        "no".to_string()
+    }
 }
 
 // Resolve one local project canister id, returning None when it has not been created yet.
@@ -721,7 +728,7 @@ mod tests {
                 role: "root".to_string(),
                 kind: "root".to_string(),
                 capabilities: "-".to_string(),
-                auto_create: "no".to_string(),
+                auto_create: "-".to_string(),
                 topup: "-".to_string(),
                 details: Vec::new(),
             },
@@ -746,7 +753,7 @@ mod tests {
                 "",
                 "ROLE   KIND        CAPABILITIES     AUTO   TOPUP",
                 "----   ---------   --------------   ----   --------------",
-                "root   root        -                no     -",
+                "root   root        -                -      -",
                 "app    singleton   auth, sharding   yes    4.0TC @ 10.0TC",
                 "  - app_index",
                 "  - sharding user_shards->user_shard cap=100 initial=1 max=4",
