@@ -24,9 +24,10 @@ inspect only the files needed for the current task.
 - Left detailed changelog policy in `docs/governance/changelog.md`.
 - Removed the public `canic release-set` CLI surface.
 - Continued CLI simplification around fleet/list/scaffold/install flows.
-- Added `canic network`, `canic status`, and `canic fleet {list,use}` defaults;
-  `canic install` now passes the selected network through dfx subprocesses and
-  build scripts instead of relying on the caller's ambient `DFX_NETWORK`.
+- Added `canic network`, explicit `--fleet <name>` fleet-scoped commands, and
+  local-by-default network handling; `canic install` now passes the selected
+  network through dfx subprocesses and build scripts instead of relying on the
+  caller's ambient `DFX_NETWORK`.
 - Added `canic fleet delete <name>` for confirmed deletion of config-defined
   fleet directories.
 - Hard-cut fleet scaffolds and implicit install defaults to top-level `fleets/`.
@@ -66,8 +67,8 @@ inspect only the files needed for the current task.
 1. Continue reducing `AGENTS.md` by moving any remaining detailed architecture
    rules into focused governance/architecture docs if useful.
 2. Keep removing stale public CLI surfaces and ensuring the operator flow is
-   `canic scaffold`, `canic install`, `canic fleet`, `canic list`, `canic backup`,
-   `canic snapshot`, and `canic restore`.
+   `canic fleet create`, `canic install`, `canic fleet`, `canic config`,
+   `canic list`, `canic backup`, `canic snapshot`, and `canic restore`.
 3. Keep `canic-cli`, `canic-host`, and `canic-backup` boundaries sharp: CLI owns
    UX, host owns local `dfx`/filesystem/build/install mechanics, backup owns
    backup/restore domain logic.

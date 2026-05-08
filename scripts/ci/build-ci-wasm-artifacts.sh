@@ -23,21 +23,6 @@ require_cmd candid-extractor
 require_cmd ic-wasm
 require_dfx_ready
 
-canic_fleet_canisters() {
-    if [ -f "$ROOT_DIR/crates/canic-cli/Cargo.toml" ]; then
-        cargo run -q -p canic-cli --bin canic -- fleet canisters --config fleets/demo/canic.toml --ci-order
-        return
-    fi
-
-    if command -v canic >/dev/null 2>&1; then
-        canic fleet canisters --config fleets/demo/canic.toml --ci-order
-        return
-    fi
-
-    echo "missing canic binary: install canic or run from a Canic workspace" >&2
-    exit 1
-}
-
 # Build the middle fast artifacts by default so PocketIC/test harnesses and
 # local demo flows get smaller faster wasm without paying full release cost.
 BUILD_WASM_PROFILE="${CANIC_WASM_PROFILE:-}"
@@ -52,7 +37,7 @@ if [ -n "${CANIC_REFERENCE_CANISTERS:-}" ]; then
     # Allow focused harnesses to build only the canisters they actually stage.
     read -r -a BUILD_CANISTERS <<<"$CANIC_REFERENCE_CANISTERS"
 else
-    DEFAULT_BUILD_CANISTERS="$(canic_fleet_canisters)"
+    DEFAULT_BUILD_CANISTERS="$(bash scripts/ci/list-config-canisters.sh --config fleets/demo/canic.toml --ci-order)"
     mapfile -t BUILD_CANISTERS <<<"$DEFAULT_BUILD_CANISTERS"
 fi
 

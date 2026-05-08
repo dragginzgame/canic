@@ -68,11 +68,10 @@ If you need to override discovery explicitly, set:
 or point `CANIC_CONFIG_PATH` at the real `canic.toml` path and host discovery
 will infer the canister-manifest root from that config location.
 
-For `canic install`, the selected current network and that network's current
-fleet provide the first default. A matching scaffold under `fleets/` wins;
-otherwise the project default is `fleets/canic.toml`. If no selected or default
-config is available and multiple nested `canic.toml` files exist, the command
-prints a choices table and requires `--config <path>` instead of guessing.
+For `canic install`, the implicit network default is always `local`; use
+`--network <name>` for one command against another network. The public CLI
+requires `--fleet <name>` and uses `fleets/<name>/canic.toml` unless `--config
+<path>` is passed.
 
 If a package name does not follow `canister_<role>`, declare the role mapping
 in `Cargo.toml`:

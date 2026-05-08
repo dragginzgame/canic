@@ -15,13 +15,12 @@ const DEFAULT_ROOT_TARGET: &str = "root";
 const DEFAULT_READY_TIMEOUT_SECONDS: u64 = 120;
 const INSTALL_HELP_AFTER: &str = "\
 Examples:
-  canic install
-  canic install root
-  canic install uxrrr-q7777-77774-qaaaq-cai
-  canic install --config fleets/demo/canic.toml
+  canic install --fleet demo
+  canic install --fleet demo root
+  canic install --fleet demo uxrrr-q7777-77774-qaaaq-cai
+  canic install --fleet demo --config fleets/demo/canic.toml
 
-Without --config, canic install uses the selected current fleet config when one
-matches under fleets/.
+Without --config, canic install uses fleets/<fleet>/canic.toml.
 
 The selected canic.toml must include:
   [fleet]
@@ -52,6 +51,7 @@ pub enum InstallCommandError {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct InstallOptions {
+    pub fleet: String,
     pub root_target: String,
     pub root_build_target: String,
     pub network: String,
@@ -68,6 +68,7 @@ impl InstallOptions {
         let matches = parse_matches(install_command(), args)
             .map_err(|_| InstallCommandError::Usage(usage()))?;
         let positional_targets = string_values(&matches, "root-target");
+        let fleet = string_option(&matches, "fleet").expect("clap requires fleet");
         let flag_target = string_option(&matches, "root");
         let root_target = resolve_root_target(positional_targets, flag_target)?;
         let root_build_target = string_option(&matches, "root-build-target")
@@ -78,11 +79,13 @@ impl InstallOptions {
             .unwrap_or_else(default_ready_timeout_seconds);
 
         Ok(Self {
+            config_path: string_option(&matches, "config")
+                .or_else(|| Some(default_fleet_config_path(&fleet))),
+            fleet,
             root_target,
             root_build_target,
             network: string_option(&matches, "network").unwrap_or_else(default_network),
             ready_timeout_seconds,
-            config_path: string_option(&matches, "config"),
         })
     }
 
@@ -95,7 +98,7 @@ impl InstallOptions {
             network: self.network,
             ready_timeout_seconds: self.ready_timeout_seconds,
             config_path: self.config_path,
-            interactive_config_selection: true,
+            interactive_config_selection: false,
         }
     }
 }
@@ -111,6 +114,13 @@ fn install_command() -> ClapCommand {
                 .num_args(0..)
                 .value_name("name-or-principal")
                 .help("Root canister name or principal to install"),
+        )
+        .arg(
+            value_arg("fleet")
+                .long("fleet")
+                .value_name("name")
+                .required(true)
+                .help("Config-defined fleet name to install"),
         )
         .arg(
             value_arg("root")
@@ -196,6 +206,11 @@ fn default_root_build_target(root_target: &str) -> String {
     }
 }
 
+// Resolve the conventional config path for an explicitly named fleet.
+fn default_fleet_config_path(fleet: &str) -> String {
+    format!("fleets/{fleet}/canic.toml")
+}
+
 // Return install command usage text.
 fn usage() -> String {
     let mut command = install_command();
@@ -211,20 +226,29 @@ mod tests {
     // Ensure install defaults to the conventional local root canister target.
     #[test]
     fn install_defaults_to_root_target() {
-        let options = InstallOptions::parse([]).expect("parse defaults");
+        let options = InstallOptions::parse([OsString::from("--fleet"), OsString::from("demo")])
+            .expect("parse defaults");
 
+        assert_eq!(options.fleet, "demo");
         assert_eq!(options.root_target, "root");
         assert_eq!(options.root_build_target, "root");
         assert_eq!(options.network, default_network());
         assert_eq!(options.ready_timeout_seconds, DEFAULT_READY_TIMEOUT_SECONDS);
-        assert_eq!(options.config_path, None);
+        assert_eq!(
+            options.config_path,
+            Some("fleets/demo/canic.toml".to_string())
+        );
     }
 
     // Ensure canister names are used for both build and install by default.
     #[test]
     fn install_accepts_positional_canister_name() {
-        let options =
-            InstallOptions::parse([OsString::from("custom_root")]).expect("parse root name");
+        let options = InstallOptions::parse([
+            OsString::from("--fleet"),
+            OsString::from("demo"),
+            OsString::from("custom_root"),
+        ])
+        .expect("parse root name");
 
         assert_eq!(options.root_target, "custom_root");
         assert_eq!(options.root_build_target, "custom_root");
@@ -233,8 +257,12 @@ mod tests {
     // Ensure principal targets still build the conventional root artifact.
     #[test]
     fn install_accepts_principal_target() {
-        let options =
-            InstallOptions::parse([OsString::from(ROOT_PRINCIPAL)]).expect("parse principal");
+        let options = InstallOptions::parse([
+            OsString::from("--fleet"),
+            OsString::from("demo"),
+            OsString::from(ROOT_PRINCIPAL),
+        ])
+        .expect("parse principal");
 
         assert_eq!(options.root_target, ROOT_PRINCIPAL);
         assert_eq!(options.root_build_target, "root");
@@ -244,6 +272,8 @@ mod tests {
     #[test]
     fn install_accepts_root_flag() {
         let options = InstallOptions::parse([
+            OsString::from("--fleet"),
+            OsString::from("demo"),
             OsString::from("--root"),
             OsString::from(ROOT_PRINCIPAL),
             OsString::from("--network"),
@@ -263,6 +293,8 @@ mod tests {
     #[test]
     fn install_accepts_config_path() {
         let options = InstallOptions::parse([
+            OsString::from("--fleet"),
+            OsString::from("demo"),
             OsString::from("--config"),
             OsString::from("fleets/demo/canic.toml"),
         ])
@@ -274,11 +306,10 @@ mod tests {
         );
     }
 
-    // Ensure install fleet identity is not supplied through CLI flags.
+    // Ensure install requires an explicit fleet selector.
     #[test]
-    fn install_rejects_fleet_flag() {
-        let err = InstallOptions::parse([OsString::from("--fleet"), OsString::from("demo")])
-            .expect_err("install fleet flag should fail");
+    fn install_requires_fleet_flag() {
+        let err = InstallOptions::parse([]).expect_err("missing fleet should fail");
 
         assert!(matches!(err, InstallCommandError::Usage(_)));
     }
@@ -290,6 +321,7 @@ mod tests {
 
         assert!(text.contains("Install and bootstrap a Canic fleet"));
         assert!(text.contains("Usage: canic install"));
+        assert!(text.contains("--fleet <name>"));
         assert!(text.contains("[fleet]"));
         assert!(text.contains("name = \"demo\""));
     }
@@ -298,6 +330,8 @@ mod tests {
     #[test]
     fn install_accepts_explicit_root_build_target() {
         let options = InstallOptions::parse([
+            OsString::from("--fleet"),
+            OsString::from("demo"),
             OsString::from("--root"),
             OsString::from(ROOT_PRINCIPAL),
             OsString::from("--root-build-target"),
@@ -312,8 +346,13 @@ mod tests {
     // Ensure duplicate root target forms are rejected before mutation starts.
     #[test]
     fn install_rejects_duplicate_root_targets() {
-        let err = InstallOptions::parse([OsString::from("root"), OsString::from("--root=root")])
-            .expect_err("duplicate root target should fail");
+        let err = InstallOptions::parse([
+            OsString::from("--fleet"),
+            OsString::from("demo"),
+            OsString::from("root"),
+            OsString::from("--root=root"),
+        ])
+        .expect_err("duplicate root target should fail");
 
         assert!(matches!(err, InstallCommandError::ConflictingRootTarget));
     }

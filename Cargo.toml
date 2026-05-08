@@ -1,6 +1,10 @@
 
 [workspace]
 members = [
+    "canisters/audit/leaf_probe",
+    "canisters/audit/root_probe",
+    "canisters/audit/scaling_probe",
+    "canisters/sandbox/minimal",
     "crates/canic",
     "crates/canic-backup",
     "crates/canic-cdk",
@@ -14,9 +18,6 @@ members = [
     "crates/canic-testkit",
     "crates/canic-tests",
     "crates/canic-wasm-store",
-    "fleets/audit/leaf_probe",
-    "fleets/audit/root_probe",
-    "fleets/audit/scaling_probe",
     "fleets/demo/app",
     "fleets/demo/minimal",
     "fleets/demo/root",
@@ -24,7 +25,6 @@ members = [
     "fleets/demo/scale_hub",
     "fleets/demo/user_hub",
     "fleets/demo/user_shard",
-    "fleets/sandbox/minimal",
     "fleets/test/delegation_root_stub",
     "fleets/test/delegation_signer_stub",
     "fleets/test/intent_authority",

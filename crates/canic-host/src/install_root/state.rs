@@ -220,7 +220,6 @@ pub(super) fn write_install_state(
         fs::create_dir_all(parent)?;
     }
     fs::write(&path, serde_json::to_vec_pretty(state)?)?;
-    write_current_fleet_name(dfx_root, network, &state.fleet)?;
     Ok(path)
 }
 

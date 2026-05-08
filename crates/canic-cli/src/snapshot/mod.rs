@@ -37,7 +37,7 @@ pub enum SnapshotCommandError {
     #[error("missing required option {0}")]
     MissingOption(&'static str),
 
-    #[error("snapshot download needs --canister, --fleet, or a selected current fleet")]
+    #[error("snapshot download needs an installed --fleet <name>")]
     MissingSnapshotSource,
 
     #[error("unknown option {0}")]
@@ -73,7 +73,7 @@ pub enum SnapshotCommandError {
 pub struct SnapshotDownloadOptions {
     pub canister: Option<String>,
     pub out: Option<PathBuf>,
-    pub fleet: Option<String>,
+    pub fleet: String,
     pub root: Option<String>,
     pub include_children: bool,
     pub recursive: bool,
@@ -97,7 +97,7 @@ impl SnapshotDownloadOptions {
         Ok(Self {
             canister: string_option(&matches, "canister"),
             out: path_option(&matches, "out"),
-            fleet: string_option(&matches, "fleet"),
+            fleet: string_option(&matches, "fleet").expect("clap requires fleet"),
             root: string_option(&matches, "root"),
             include_children,
             recursive,
@@ -122,7 +122,8 @@ fn snapshot_download_command() -> ClapCommand {
             value_arg("fleet")
                 .long("fleet")
                 .value_name("name")
-                .help("Backup a named installed fleet; omit to use the current fleet"),
+                .required(true)
+                .help("Installed fleet name to snapshot"),
         )
         .arg(
             value_arg("out")
@@ -233,17 +234,13 @@ struct ResolvedSnapshotDownload {
     dfx: String,
 }
 
-// Resolve fleet-aware defaults into the explicit backup contract used downstream.
+// Resolve the named fleet into the explicit backup contract used downstream.
 fn resolve_snapshot_download_request(
     options: &SnapshotDownloadOptions,
 ) -> Result<ResolvedSnapshotDownload, SnapshotCommandError> {
     let network = state_network(options.network.as_deref());
-    let state = if options.fleet.is_some() || options.canister.is_none() {
-        read_current_or_fleet_install_state(&network, options.fleet.as_deref())
-            .map_err(|err| SnapshotCommandError::InstallState(err.to_string()))?
-    } else {
-        None
-    };
+    let state = read_current_or_fleet_install_state(&network, Some(&options.fleet))
+        .map_err(|err| SnapshotCommandError::InstallState(err.to_string()))?;
     let explicit_canister = options.canister.is_some();
     let canister = options
         .canister
@@ -252,8 +249,7 @@ fn resolve_snapshot_download_request(
         .ok_or(SnapshotCommandError::MissingSnapshotSource)?;
     let fleet = state
         .as_ref()
-        .map(|state| state.fleet.clone())
-        .or_else(|| options.fleet.clone());
+        .map_or_else(|| options.fleet.clone(), |state| state.fleet.clone());
     let root = resolved_snapshot_root(options, state.as_ref())?;
     let recursive = if !explicit_canister && state.is_some() {
         true
@@ -264,12 +260,12 @@ fn resolve_snapshot_download_request(
     let out = options
         .out
         .clone()
-        .unwrap_or_else(|| default_snapshot_output_path(fleet.as_deref().unwrap_or(&canister)));
+        .unwrap_or_else(|| default_snapshot_output_path(&fleet));
 
     Ok(ResolvedSnapshotDownload {
         canister,
         out,
-        fleet,
+        fleet: Some(fleet),
         explicit_canister,
         root,
         include_children,
@@ -338,7 +334,7 @@ fn validate_fleet_membership_json(
     })
 }
 
-// Build the default snapshot output path from current fleet state or the selected canister.
+// Build the default snapshot output path from the selected fleet.
 fn default_snapshot_output_path(label: &str) -> PathBuf {
     let marker = current_backup_directory_stamp();
 
@@ -620,6 +616,8 @@ mod tests {
     #[test]
     fn parses_download_options() {
         let options = SnapshotDownloadOptions::parse([
+            OsString::from("--fleet"),
+            OsString::from("demo"),
             OsString::from("--canister"),
             OsString::from(ROOT),
             OsString::from("--out"),
@@ -633,6 +631,7 @@ mod tests {
         .expect("parse options");
 
         assert_eq!(options.canister.as_deref(), Some(ROOT));
+        assert_eq!(options.fleet, "demo");
         assert_eq!(options.out.as_deref(), Some(Path::new("backups/test")));
         assert!(options.include_children);
         assert!(options.recursive);
@@ -645,6 +644,8 @@ mod tests {
     #[test]
     fn download_options_default_output_directory() {
         let options = SnapshotDownloadOptions::parse([
+            OsString::from("--fleet"),
+            OsString::from("demo"),
             OsString::from("--canister"),
             OsString::from(ROOT),
             OsString::from("--recursive"),
@@ -667,7 +668,7 @@ mod tests {
         ])
         .expect("parse options");
 
-        assert_eq!(options.fleet.as_deref(), Some("demo"));
+        assert_eq!(options.fleet, "demo");
         assert_eq!(options.canister, None);
         assert!(options.dry_run);
     }

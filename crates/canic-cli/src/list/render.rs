@@ -19,7 +19,8 @@ const TREE_SPACE: &str = "   ";
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(super) struct ListTitle {
-    pub(super) fleet: String,
+    pub(super) label: String,
+    pub(super) value: String,
     pub(super) network: String,
 }
 
@@ -27,7 +28,7 @@ impl ListTitle {
     /// Render the compact title block shown above `canic list` tables.
     #[must_use]
     pub(super) fn render(&self) -> String {
-        format!("Fleet: {}\nNetwork: {}", self.fleet, self.network)
+        format!("{}: {}\nNetwork: {}", self.label, self.value, self.network)
     }
 }
 
@@ -77,6 +78,11 @@ pub(super) fn render_list_output(
         title.render(),
         render_registry_tree(registry, canister, role_kinds, readiness)?
     ))
+}
+
+/// Render config-defined roles for a selected fleet that has not been installed yet.
+pub(super) fn render_config_output(title: &ListTitle, rows: &[ConfigRoleRow]) -> String {
+    format!("{}\n\n{}", title.render(), render_config_table(rows))
 }
 
 // Return the entries that would be rendered for the selected table.
@@ -190,6 +196,77 @@ fn collect_visible_entry<'a>(
 pub(super) struct RegistryRow<'a> {
     pub(super) entry: &'a RegistryEntry,
     pub(super) tree_prefix: String,
+}
+
+///
+/// ConfigRoleRow
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(super) struct ConfigRoleRow {
+    pub(super) role: String,
+    pub(super) kind: String,
+}
+
+// Render config-defined role rows as a compact whitespace table.
+fn render_config_table(rows: &[ConfigRoleRow]) -> String {
+    let table_rows = config_table_rows(rows);
+    let widths = config_table_widths(&table_rows);
+    let header = render_config_table_row(&[ROLE_HEADER, KIND_HEADER], &widths);
+    let separator = render_config_separator(&widths);
+    let mut lines = Vec::with_capacity(table_rows.len() + 2);
+    lines.push(header);
+    lines.push(separator);
+    lines.extend(
+        table_rows
+            .iter()
+            .map(|row| render_config_table_row(row, &widths)),
+    );
+    lines.join("\n")
+}
+
+// Collect rendered config cell values before width calculation.
+fn config_table_rows(rows: &[ConfigRoleRow]) -> Vec<[String; 2]> {
+    rows.iter()
+        .map(|row| [row.role.clone(), row.kind.clone()])
+        .collect()
+}
+
+// Compute display widths for config role output, including headers.
+fn config_table_widths(rows: &[[String; 2]]) -> [usize; 2] {
+    let mut widths = [ROLE_HEADER.chars().count(), KIND_HEADER.chars().count()];
+
+    for row in rows {
+        for (index, cell) in row.iter().enumerate() {
+            widths[index] = widths[index].max(cell.chars().count());
+        }
+    }
+
+    widths
+}
+
+// Render one padded config table row with the list-specific column gap.
+fn render_config_table_row(row: &[impl AsRef<str>], widths: &[usize; 2]) -> String {
+    widths
+        .iter()
+        .enumerate()
+        .map(|(index, width)| {
+            let value = row.get(index).map_or("", AsRef::as_ref);
+            format!("{value:<width$}")
+        })
+        .collect::<Vec<_>>()
+        .join(LIST_COLUMN_GAP)
+        .trim_end()
+        .to_string()
+}
+
+// Render the line under the config table headers.
+fn render_config_separator(widths: &[usize; 2]) -> String {
+    widths
+        .iter()
+        .map(|width| "-".repeat(*width))
+        .collect::<Vec<_>>()
+        .join(LIST_COLUMN_GAP)
 }
 
 // Render registry rows as stable whitespace-aligned columns.

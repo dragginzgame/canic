@@ -1,4 +1,3 @@
-use canic_host::install_root::read_current_network_name;
 use clap::{Arg, ArgAction, ArgMatches, Command};
 use std::{ffi::OsString, path::PathBuf};
 
@@ -85,8 +84,16 @@ pub fn default_dfx() -> String {
 
 /// Return the default DFX network used by local fleet commands.
 pub fn default_network() -> String {
-    std::env::var("DFX_NETWORK")
-        .ok()
-        .or_else(|| read_current_network_name().ok().flatten())
-        .unwrap_or_else(|| "local".to_string())
+    "local".to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Ensure implicit command defaults never drift away from the local replica.
+    #[test]
+    fn default_network_is_always_local() {
+        assert_eq!(default_network(), "local");
+    }
 }

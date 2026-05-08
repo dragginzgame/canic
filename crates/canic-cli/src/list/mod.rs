@@ -11,29 +11,27 @@ use canic::ids::CanisterRole;
 use canic_backup::discovery::{DiscoveryError, RegistryEntry, parse_registry_entries};
 use canic_host::{
     dfx::{Dfx, DfxCommandError},
-    install_root::{InstallState, read_current_or_fleet_install_state},
-    release_set::{config_path as default_config_path, configured_role_kinds},
+    install_root::{
+        InstallState, discover_current_canic_config_choices, read_current_or_fleet_install_state,
+    },
+    release_set::{
+        config_path as default_config_path, configured_fleet_name, configured_fleet_roles,
+        configured_role_kinds,
+    },
     replica_query,
 };
-use options::{ListOptions, ListSource, usage};
+use options::{ListOptions, ListSource, config_usage, usage};
 #[cfg(test)]
 use render::{
-    CANISTER_HEADER, KIND_HEADER, READY_HEADER, ROLE_HEADER, RegistryRow, kind_label,
-    render_registry_separator, render_registry_table_row, render_registry_tree,
+    CANISTER_HEADER, ConfigRoleRow, KIND_HEADER, READY_HEADER, ROLE_HEADER, RegistryRow,
+    kind_label, render_config_output, render_registry_separator, render_registry_table_row,
+    render_registry_tree,
 };
+#[cfg(not(test))]
+use render::{ConfigRoleRow, render_config_output};
 use render::{ListTitle, ReadyStatus, render_list_output, visible_entries};
-use std::{collections::BTreeMap, ffi::OsString};
+use std::{collections::BTreeMap, ffi::OsString, path::PathBuf};
 use thiserror::Error as ThisError;
-
-const DEMO_CANISTER_NAMES: &[&str] = &[
-    "app",
-    "minimal",
-    "user_hub",
-    "user_shard",
-    "scale_hub",
-    "scale",
-    "root",
-];
 
 ///
 /// ListCommandError
@@ -47,14 +45,6 @@ pub enum ListCommandError {
     #[error("unknown option {0}")]
     UnknownOption(String),
 
-    #[error("cannot combine --standalone with --root")]
-    ConflictingListSources,
-
-    #[error(
-        "no local canister ids are available yet; run dfx canister create <name>, or use make demo-install for the full reference topology"
-    )]
-    NoStandaloneCanisters,
-
     #[error("registry JSON did not contain the requested canister {0}")]
     CanisterNotInRegistry(String),
 
@@ -65,7 +55,7 @@ pub enum ListCommandError {
     ReplicaQuery(String),
 
     #[error(
-        "saved fleet {fleet} points to root {root}, but that canister is not present on network {network}. Local dfx state was probably restarted or reset. Run `canic install` to recreate the fleet, `canic list --standalone` to see local dfx canister ids, or `canic fleet use <fleet>` after reinstalling."
+        "fleet {fleet} points to root {root}, but that canister is not present on network {network}. Local dfx state was probably restarted or reset. Run `canic install --fleet {fleet}` to recreate it."
     )]
     StaleLocalFleet {
         fleet: String,
@@ -75,6 +65,14 @@ pub enum ListCommandError {
 
     #[error("failed to read canic fleet state: {0}")]
     InstallState(String),
+
+    #[error(
+        "fleet {fleet} is not installed on network {network}; run `canic install --fleet {fleet}` to deploy it or `canic config --fleet {fleet}` to inspect its config"
+    )]
+    NoInstalledFleet { network: String, fleet: String },
+
+    #[error("fleet {0} is not declared by any config under fleets; run `canic fleet list`")]
+    UnknownFleet(String),
 
     #[error(transparent)]
     Io(#[from] std::io::Error),
@@ -86,7 +84,7 @@ pub enum ListCommandError {
     Discovery(#[from] DiscoveryError),
 }
 
-/// Run a list subcommand or the default tree listing.
+/// Run the deployed canister listing command.
 pub fn run<I>(args: I) -> Result<(), ListCommandError>
 where
     I: IntoIterator<Item = OsString>,
@@ -96,8 +94,7 @@ where
         return Ok(());
     }
 
-    let mut options = ListOptions::parse(args)?;
-    options.source = resolve_effective_source(&options)?;
+    let options = ListOptions::parse_list(args)?;
     let registry = load_registry_entries(&options)?;
     let anchor = resolve_tree_anchor(&options)?;
     let role_kinds = resolve_role_kinds(&options);
@@ -113,42 +110,39 @@ where
             &readiness
         )?
     );
-    if let Some(hint) = standalone_next_step_hint(&options, &registry) {
+    if let Some(hint) = deployed_config_gap_hint(&options, &registry) {
         eprintln!("Hint: {hint}");
     }
     Ok(())
 }
 
-// Pick the current installed fleet when the project has Canic fleet state.
-fn resolve_effective_source(options: &ListOptions) -> Result<ListSource, ListCommandError> {
-    if !matches!(options.source, ListSource::Auto) {
-        return Ok(options.source);
+/// Run the selected fleet config listing command.
+pub fn run_config<I>(args: I) -> Result<(), ListCommandError>
+where
+    I: IntoIterator<Item = OsString>,
+{
+    let args = args.into_iter().collect::<Vec<_>>();
+    if print_help_or_version(&args, config_usage, version_text()) {
+        return Ok(());
     }
 
-    if read_selected_install_state(options)
-        .map_err(|err| ListCommandError::InstallState(err.to_string()))?
-        .is_some()
-    {
-        Ok(ListSource::RootRegistry)
-    } else {
-        Ok(ListSource::Standalone)
-    }
+    let options = ListOptions::parse_config(args)?;
+    let title = list_title(&options);
+    let rows = load_config_role_rows(&options)?;
+    println!("{}", render_config_output(&title, &rows));
+    Ok(())
 }
 
 // Return the operator-facing title for the selected list source.
 fn list_title(options: &ListOptions) -> ListTitle {
-    let fleet = match options.source {
-        ListSource::Standalone => "standalone".to_string(),
-        ListSource::Auto | ListSource::RootRegistry => read_selected_install_state(options)
-            .ok()
-            .flatten()
-            .map(|state| state.fleet)
-            .or_else(|| options.fleet.clone())
-            .unwrap_or_else(|| "root-registry".to_string()),
+    let (label, value) = match options.source {
+        ListSource::Config => ("Fleet config", options.fleet.clone()),
+        ListSource::RootRegistry => ("Deployed fleet", options.fleet.clone()),
     };
 
     ListTitle {
-        fleet,
+        label: label.to_string(),
+        value,
         network: state_network(options),
     }
 }
@@ -164,6 +158,10 @@ fn resolve_role_kinds(options: &ListOptions) -> BTreeMap<String, String> {
 // Return likely config paths in preference order without making list depend on them.
 fn role_kind_config_candidates(options: &ListOptions) -> Vec<std::path::PathBuf> {
     let mut paths = Vec::new();
+
+    if let Ok(path) = selected_config_path(options) {
+        paths.push(path);
+    }
 
     if let Ok(Some(state)) = read_selected_install_state(options) {
         paths.push(std::path::PathBuf::from(state.config_path));
@@ -219,46 +217,46 @@ fn check_ready_status(
     })
 }
 
-// Load registry entries from standalone dfx ids or a live root canister query.
+// Load registry entries from a live root canister query.
 fn load_registry_entries(options: &ListOptions) -> Result<Vec<RegistryEntry>, ListCommandError> {
-    if matches!(options.source, ListSource::Standalone | ListSource::Auto) {
-        return load_standalone_entries(options);
-    }
-
     let registry_json = match options.source {
         ListSource::RootRegistry => {
             let root = resolve_root_canister(options)?;
             call_subnet_registry(options, &root)?
         }
-        ListSource::Standalone | ListSource::Auto => {
-            unreachable!("standalone source returned above")
+        ListSource::Config => {
+            unreachable!("config source does not use registry entries")
         }
     };
 
     parse_registry_entries(&registry_json).map_err(ListCommandError::from)
 }
 
-// Load created canisters from the current dfx project without requiring a Canic root.
-fn load_standalone_entries(options: &ListOptions) -> Result<Vec<RegistryEntry>, ListCommandError> {
-    let mut entries = Vec::new();
-
-    for name in DEMO_CANISTER_NAMES {
-        let Some(pid) = resolve_project_canister_id(options, name)? else {
-            continue;
-        };
-        entries.push(RegistryEntry {
-            pid,
-            role: Some((*name).to_string()),
-            kind: None,
-            parent_pid: None,
-        });
+// Load the selected fleet directly from config when it has no installed root registry yet.
+fn load_config_role_rows(options: &ListOptions) -> Result<Vec<ConfigRoleRow>, ListCommandError> {
+    let config_path = selected_config_path(options)?;
+    let roles = configured_fleet_roles(&config_path)
+        .map_err(|err| ListCommandError::InstallState(err.to_string()))?;
+    let kinds = configured_role_kinds(&config_path)
+        .map_err(|err| ListCommandError::InstallState(err.to_string()))?;
+    let anchor = options.anchor.as_deref();
+    if let Some(anchor) = anchor
+        && !roles.iter().any(|role| role == anchor)
+    {
+        return Err(ListCommandError::CanisterNotInRegistry(anchor.to_string()));
     }
 
-    if entries.is_empty() {
-        return Err(ListCommandError::NoStandaloneCanisters);
-    }
-
-    Ok(entries)
+    Ok(roles
+        .into_iter()
+        .filter(|role| anchor.is_none_or(|anchor| anchor == role))
+        .map(|role| ConfigRoleRow {
+            kind: kinds
+                .get(&role)
+                .cloned()
+                .unwrap_or_else(|| "unknown".to_string()),
+            role,
+        })
+        .collect())
 }
 
 // Resolve one local project canister id, returning None when it has not been created yet.
@@ -283,16 +281,38 @@ fn resolve_root_canister(options: &ListOptions) -> Result<String, ListCommandErr
         return Ok(state.root_canister_id);
     }
 
-    Dfx::new(&options.dfx, options.network.clone())
-        .canister_id("root")
-        .map_err(list_dfx_error)
+    Err(ListCommandError::NoInstalledFleet {
+        network: state_network(options),
+        fleet: options.fleet.clone(),
+    })
 }
 
-// Read the current or explicitly selected fleet install state.
+// Read the explicitly selected fleet install state.
 fn read_selected_install_state(
     options: &ListOptions,
 ) -> Result<Option<InstallState>, Box<dyn std::error::Error>> {
-    read_current_or_fleet_install_state(&state_network(options), options.fleet.as_deref())
+    read_current_or_fleet_install_state(&state_network(options), Some(&options.fleet))
+}
+
+// Resolve the config path for the selected fleet, if that fleet is declared.
+fn selected_config_path(options: &ListOptions) -> Result<PathBuf, ListCommandError> {
+    let fleet = &options.fleet;
+    let matches = discover_current_canic_config_choices()
+        .map_err(|err| ListCommandError::InstallState(err.to_string()))?
+        .into_iter()
+        .filter_map(|path| match configured_fleet_name(&path) {
+            Ok(name) if name == *fleet => Some(path),
+            Ok(_) | Err(_) => None,
+        })
+        .collect::<Vec<_>>();
+
+    match matches.as_slice() {
+        [] => Err(ListCommandError::UnknownFleet(fleet.clone())),
+        [path] => Ok(path.clone()),
+        _ => Err(ListCommandError::InstallState(format!(
+            "multiple configs declare fleet {fleet}"
+        ))),
+    }
 }
 
 // Resolve the selected tree anchor as a principal when a local dfx name is supplied.
@@ -394,7 +414,7 @@ fn list_dfx_error(error: DfxCommandError) -> ListCommandError {
 fn root_registry_hint(stderr: &str) -> Option<&'static str> {
     if stderr.contains("Cannot find canister id") {
         return Some(
-            "no root canister id exists in this dfx project. Use plain `canic list` for local standalone inventory, or run `canic install` before querying the root registry.",
+            "no root canister id exists in this dfx project. Use `canic config` for the selected fleet config, or run `canic install` before querying the root registry.",
         );
     }
 
@@ -407,26 +427,37 @@ fn root_registry_hint(stderr: &str) -> Option<&'static str> {
     None
 }
 
-// Explain the next setup step when standalone inventory only finds a reserved root id.
-fn standalone_next_step_hint(
-    options: &ListOptions,
-    registry: &[RegistryEntry],
-) -> Option<&'static str> {
-    if !matches!(options.source, ListSource::Standalone) {
+// Explain when deployed root state is missing roles declared by the selected config.
+fn deployed_config_gap_hint(options: &ListOptions, registry: &[RegistryEntry]) -> Option<String> {
+    if !matches!(options.source, ListSource::RootRegistry) {
         return None;
     }
 
-    let [entry] = registry else {
+    let config_path = selected_config_path(options).ok()?;
+    let declared = configured_fleet_roles(&config_path).ok()?;
+    let deployed = registry
+        .iter()
+        .filter_map(|entry| entry.role.as_deref())
+        .collect::<std::collections::BTreeSet<_>>();
+    let missing = declared
+        .iter()
+        .filter(|role| !deployed.contains(role.as_str()))
+        .cloned()
+        .collect::<Vec<_>>();
+    if missing.is_empty() {
         return None;
+    }
+
+    let shown = missing.iter().take(4).cloned().collect::<Vec<_>>();
+    let suffix = if missing.len() > shown.len() {
+        ", and more"
+    } else {
+        ""
     };
-
-    if entry.role.as_deref() != Some("root") {
-        return None;
-    }
-
-    Some(
-        "only the local root id exists. Run `canic install` to build, install, stage, and bootstrap the tree; then run `canic list`.",
-    )
+    Some(format!(
+        "deployed registry is missing configured roles: {}{suffix}. Run `canic config` to inspect the config or `canic install` to bootstrap them.",
+        shown.join(", ")
+    ))
 }
 
 #[cfg(test)]
@@ -443,7 +474,7 @@ mod tests {
     // Ensure list options parse live registry queries.
     #[test]
     fn parses_live_list_options() {
-        let options = ListOptions::parse([
+        let options = ListOptions::parse_list([
             OsString::from("--root"),
             OsString::from(ROOT),
             OsString::from("--fleet"),
@@ -458,70 +489,50 @@ mod tests {
         .expect("parse list options");
 
         assert_eq!(options.source, ListSource::RootRegistry);
-        assert_eq!(options.fleet, Some("demo".to_string()));
+        assert_eq!(options.fleet, "demo");
         assert_eq!(options.root, Some(ROOT.to_string()));
         assert_eq!(options.anchor, Some(APP.to_string()));
         assert_eq!(options.network, Some("local".to_string()));
         assert_eq!(options.dfx, "/bin/dfx");
     }
 
-    // Ensure list defaults to automatic source selection.
+    // Ensure config options parse declared fleet inspection.
     #[test]
-    fn parses_default_auto_list_options() {
-        let options = ListOptions::parse([OsString::from("--network"), OsString::from("local")])
-            .expect("parse default standalone options");
+    fn parses_config_options() {
+        let options = ListOptions::parse_config([
+            OsString::from("--fleet"),
+            OsString::from("demo"),
+            OsString::from("--network"),
+            OsString::from("local"),
+        ])
+        .expect("parse config options");
 
-        assert_eq!(options.source, ListSource::Auto);
-        assert_eq!(options.fleet, None);
+        assert_eq!(options.source, ListSource::Config);
+        assert_eq!(options.fleet, "demo");
         assert_eq!(options.root, None);
         assert_eq!(options.anchor, None);
         assert_eq!(options.network, Some("local".to_string()));
         assert_eq!(options.dfx, "dfx");
     }
 
-    // Ensure list help explains fleet selection and subtree rendering.
+    // Ensure list and config help explain fleet selection and subtree rendering.
     #[test]
-    fn list_usage_explains_fleet_and_subtree_options() {
-        let text = usage();
+    fn list_and_config_usage_explain_fleet_and_subtree_options() {
+        let list = usage();
+        let config = config_usage();
 
-        assert!(text.contains("Show registry canisters as a tree table"));
-        assert!(text.contains("Usage: canic list"));
-        assert!(text.contains("--fleet <name>"));
-        assert!(text.contains("--from <name-or-principal>"));
-        assert!(text.contains("Examples:"));
+        assert!(list.contains("List canisters registered by the deployed root"));
+        assert!(list.contains("Usage: canic list"));
+        assert!(list.contains("--fleet <name>"));
+        assert!(list.contains("--from <name-or-principal>"));
+        assert!(list.contains("--root <name-or-principal>"));
+        assert!(config.contains("Usage: canic config"));
+        assert!(config.contains("--fleet <name>"));
+        assert!(config.contains("--from <role>"));
+        assert!(config.contains("Examples:"));
     }
 
-    // Ensure conflicting registry sources are still rejected.
-    #[test]
-    fn rejects_conflicting_registry_sources() {
-        let err = ListOptions::parse([
-            OsString::from("--standalone"),
-            OsString::from("--root"),
-            OsString::from(ROOT),
-        ])
-        .expect_err("conflicting sources should fail");
-
-        assert!(matches!(err, ListCommandError::ConflictingListSources));
-    }
-
-    // Ensure standalone inventory uses the hardcoded demo canister roster.
-    #[test]
-    fn standalone_inventory_uses_static_demo_canister_names() {
-        assert_eq!(
-            DEMO_CANISTER_NAMES,
-            &[
-                "app",
-                "minimal",
-                "user_hub",
-                "user_shard",
-                "scale_hub",
-                "scale",
-                "root",
-            ]
-        );
-    }
-
-    // Ensure empty-root dfx errors explain the standalone/root split.
+    // Ensure empty-root dfx errors explain root registry setup.
     #[test]
     fn root_registry_hint_explains_empty_root_canister() {
         let hint = root_registry_hint("the canister contains no Wasm module")
@@ -540,46 +551,6 @@ mod tests {
         assert!(!is_canister_not_found_error(
             "local replica rejected query: code=5 message=some other failure"
         ));
-    }
-
-    // Ensure root-only standalone inventory explains the install/bootstrap command.
-    #[test]
-    fn standalone_next_step_hint_explains_root_only_inventory() {
-        let options = ListOptions {
-            source: ListSource::Standalone,
-            fleet: None,
-            root: None,
-            anchor: None,
-            network: Some("local".to_string()),
-            dfx: "dfx".to_string(),
-        };
-        let registry = vec![RegistryEntry {
-            pid: ROOT.to_string(),
-            role: Some("root".to_string()),
-            kind: None,
-            parent_pid: None,
-        }];
-
-        let hint = standalone_next_step_hint(&options, &registry)
-            .expect("root-only standalone hint should be available");
-
-        assert!(hint.contains("canic install"));
-        assert!(hint.contains("canic list"));
-    }
-
-    // Ensure non-standalone sources do not get local setup hints.
-    #[test]
-    fn standalone_next_step_hint_skips_root_registry_source() {
-        let options = ListOptions::parse([OsString::from("--root"), OsString::from(ROOT)])
-            .expect("parse root options");
-        let registry = vec![RegistryEntry {
-            pid: ROOT.to_string(),
-            role: Some("root".to_string()),
-            kind: None,
-            parent_pid: None,
-        }];
-
-        assert!(standalone_next_step_hint(&options, &registry).is_none());
     }
 
     // Ensure registry entries render as a stable whitespace table.
@@ -695,7 +666,8 @@ mod tests {
     fn renders_list_output_with_fleet_title() {
         let registry = parse_registry_entries(&registry_json()).expect("parse registry");
         let title = ListTitle {
-            fleet: "demo".to_string(),
+            label: "Fleet".to_string(),
+            value: "demo".to_string(),
             network: "local".to_string(),
         };
         let output = render_list_output(
@@ -709,6 +681,41 @@ mod tests {
 
         assert!(output.starts_with("Fleet: demo\nNetwork: local\n\nCANISTER_ID"));
         assert!(output.contains("\n------------------------------"));
+    }
+
+    // Ensure config-only fleets render their declared roles instead of raw dfx inventory.
+    #[test]
+    fn renders_config_output_with_fleet_roles() {
+        let title = ListTitle {
+            label: "Fleet config".to_string(),
+            value: "test_me".to_string(),
+            network: "local".to_string(),
+        };
+        let rows = vec![
+            ConfigRoleRow {
+                role: "root".to_string(),
+                kind: "root".to_string(),
+            },
+            ConfigRoleRow {
+                role: "app".to_string(),
+                kind: "singleton".to_string(),
+            },
+        ];
+        let output = render_config_output(&title, &rows);
+
+        assert_eq!(
+            output,
+            [
+                "Fleet config: test_me",
+                "Network: local",
+                "",
+                "ROLE   KIND",
+                "----   ---------",
+                "root   root",
+                "app    singleton",
+            ]
+            .join("\n")
+        );
     }
 
     // Ensure the implicit wasm store role has a concrete kind even though config omits it.

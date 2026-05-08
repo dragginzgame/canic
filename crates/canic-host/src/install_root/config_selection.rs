@@ -88,7 +88,7 @@ fn selected_install_config_path(
 
     match matches.as_slice() {
         [] => Err(format!(
-            "selected fleet {fleet} is not declared by any install config under fleets; run canic fleet list or canic fleet use <name>"
+            "selected fleet {fleet} is not declared by any install config under fleets; run canic fleet list"
         )
         .into()),
         [path] => Ok(Some(path.clone())),

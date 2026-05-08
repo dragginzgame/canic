@@ -11,24 +11,9 @@ ROOT_DIR="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 cd "$ROOT_DIR"
 source "$ROOT_DIR/scripts/ci/require_dfx.sh"
 
-canic_fleet_canisters() {
-    if [ -f "$ROOT_DIR/crates/canic-cli/Cargo.toml" ]; then
-        cargo run -q -p canic-cli --bin canic -- fleet canisters --config fleets/demo/canic.toml "$@"
-        return
-    fi
-
-    if command -v canic >/dev/null 2>&1; then
-        canic fleet canisters --config fleets/demo/canic.toml "$@"
-        return
-    fi
-
-    echo "missing canic binary: install canic or run from a Canic workspace" >&2
-    exit 1
-}
-
-DEFAULT_AUDIT_CANISTERS="$(canic_fleet_canisters --ci-order)"
+DEFAULT_AUDIT_CANISTERS="$(bash scripts/ci/list-config-canisters.sh --config fleets/demo/canic.toml --ci-order)"
 mapfile -t DEFAULT_CANISTERS <<<"$DEFAULT_AUDIT_CANISTERS"
-DEFAULT_RELEASE_SET_TARGETS="$(canic_fleet_canisters --exclude-root)"
+DEFAULT_RELEASE_SET_TARGETS="$(bash scripts/ci/list-config-canisters.sh --config fleets/demo/canic.toml --exclude-root)"
 mapfile -t DEFAULT_RELEASE_SET_CANISTERS <<<"$DEFAULT_RELEASE_SET_TARGETS"
 
 declare -a VERIFICATION_ROWS=()

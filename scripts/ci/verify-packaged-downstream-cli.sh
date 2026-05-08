@@ -97,6 +97,9 @@ EOF
 controllers = []
 app_index = []
 
+[fleet]
+name = "downstream"
+
 [app]
 init_mode = "enabled"
 [app.whitelist]
@@ -127,13 +130,17 @@ run_probe() {
     (
         cd "$TOOL_ROOT"
         CANIC_WORKSPACE_ROOT="$DOWNSTREAM_ROOT" \
-            cargo run --offline -q -p canic-cli --bin canic -- fleet canisters --exclude-root > "$TMP_ROOT/fleet-canisters.out"
+            cargo run --offline -q -p canic-cli --bin canic -- fleet list > "$TMP_ROOT/fleet-list.out"
     )
 }
 
 assert_probe_outputs() {
-    grep -qx 'app' "$TMP_ROOT/fleet-canisters.out" || {
-        echo "expected packaged canic CLI to derive app as the ordinary fleet canister" >&2
+    grep -q 'downstream' "$TMP_ROOT/fleet-list.out" || {
+        echo "expected packaged canic CLI to list downstream fleet" >&2
+        exit 1
+    }
+    grep -q '2 (root, app)' "$TMP_ROOT/fleet-list.out" || {
+        echo "expected packaged canic CLI to summarize root and app canisters" >&2
         exit 1
     }
 }

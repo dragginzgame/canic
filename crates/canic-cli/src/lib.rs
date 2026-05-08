@@ -11,7 +11,6 @@ mod output;
 mod restore;
 mod scaffold;
 mod snapshot;
-mod status;
 #[cfg(test)]
 mod test_support;
 
@@ -34,7 +33,7 @@ const COLOR_TIP: &str = "\x1b[38;5;245m";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum CommandScope {
-    Defaults,
+    Global,
     FleetContext,
     WorkspaceFiles,
 }
@@ -43,8 +42,8 @@ impl CommandScope {
     // Return the heading used in grouped top-level help.
     const fn heading(self) -> &'static str {
         match self {
-            Self::Defaults => "Default context commands",
-            Self::FleetContext => "Current network + fleet commands",
+            Self::Global => "Global commands",
+            Self::FleetContext => "Fleet commands",
             Self::WorkspaceFiles => "Workspace and file commands",
         }
     }
@@ -63,24 +62,14 @@ struct CommandSpec {
 
 const COMMAND_SPECS: &[CommandSpec] = &[
     CommandSpec {
-        name: "status",
-        about: "Show current Canic defaults",
-        scope: CommandScope::Defaults,
-    },
-    CommandSpec {
         name: "network",
-        about: "Show or select the current default network",
-        scope: CommandScope::Defaults,
+        about: "Show network command guidance",
+        scope: CommandScope::Global,
     },
     CommandSpec {
         name: "fleet",
-        about: "Show, list, select, or delete Canic fleets",
-        scope: CommandScope::Defaults,
-    },
-    CommandSpec {
-        name: "scaffold",
-        about: "Create a minimal Canic fleet scaffold",
-        scope: CommandScope::Defaults,
+        about: "Manage Canic fleets",
+        scope: CommandScope::Global,
     },
     CommandSpec {
         name: "install",
@@ -88,8 +77,13 @@ const COMMAND_SPECS: &[CommandSpec] = &[
         scope: CommandScope::FleetContext,
     },
     CommandSpec {
+        name: "config",
+        about: "Inspect selected fleet config",
+        scope: CommandScope::FleetContext,
+    },
+    CommandSpec {
         name: "list",
-        about: "Show registry canisters as a tree table",
+        about: "List deployed fleet canisters",
         scope: CommandScope::FleetContext,
     },
     CommandSpec {
@@ -139,6 +133,9 @@ pub enum CliError {
     #[error("build: {0}")]
     Build(String),
 
+    #[error("config: {0}")]
+    Config(String),
+
     #[error("install: {0}")]
     Install(String),
 
@@ -160,14 +157,8 @@ pub enum CliError {
     #[error("snapshot: {0}")]
     Snapshot(String),
 
-    #[error("status: {0}")]
-    Status(String),
-
     #[error("restore: {0}")]
     Restore(String),
-
-    #[error("scaffold: {0}")]
-    Scaffold(String),
 }
 
 impl From<backup::BackupCommandError> for CliError {
@@ -233,24 +224,10 @@ impl From<snapshot::SnapshotCommandError> for CliError {
     }
 }
 
-impl From<status::StatusCommandError> for CliError {
-    // Keep status command internals private while preserving operator-facing messages.
-    fn from(err: status::StatusCommandError) -> Self {
-        Self::Status(err.to_string())
-    }
-}
-
 impl From<restore::RestoreCommandError> for CliError {
     // Keep restore command internals private while preserving operator-facing messages.
     fn from(err: restore::RestoreCommandError) -> Self {
         Self::Restore(err.to_string())
-    }
-}
-
-impl From<scaffold::ScaffoldCommandError> for CliError {
-    // Keep scaffold command internals private while preserving operator-facing messages.
-    fn from(err: scaffold::ScaffoldCommandError) -> Self {
-        Self::Scaffold(err.to_string())
     }
 }
 
@@ -278,15 +255,14 @@ where
     match command.as_str() {
         "backup" => backup::run(args).map_err(CliError::from),
         "build" => build::run(args).map_err(CliError::from),
+        "config" => list::run_config(args).map_err(|err| CliError::Config(err.to_string())),
         "fleet" => fleets::run(args).map_err(CliError::from),
         "install" => install::run(args).map_err(CliError::from),
         "list" => list::run(args).map_err(CliError::from),
         "manifest" => manifest::run(args).map_err(CliError::from),
         "medic" => medic::run(args).map_err(CliError::from),
         "network" => network::run(args).map_err(CliError::from),
-        "scaffold" => scaffold::run(args).map_err(CliError::from),
         "snapshot" => snapshot::run(args).map_err(CliError::from),
-        "status" => status::run(args).map_err(CliError::from),
         "restore" => restore::run(args).map_err(CliError::from),
         "help" | "--help" | "-h" => {
             println!("{}", usage());
@@ -359,7 +335,7 @@ fn usage() -> String {
 fn grouped_command_section(specs: &[CommandSpec]) -> Vec<String> {
     let mut lines = Vec::new();
     let scopes = [
-        CommandScope::Defaults,
+        CommandScope::Global,
         CommandScope::FleetContext,
         CommandScope::WorkspaceFiles,
     ];
@@ -401,26 +377,21 @@ mod tests {
         )));
         assert!(plain.contains("Usage: canic [OPTIONS] <COMMAND>"));
         assert!(plain.contains("\nCommands:\n"));
-        assert!(plain.contains("Default context commands"));
-        assert!(plain.contains("Current network + fleet commands"));
+        assert!(plain.contains("Global commands"));
+        assert!(plain.contains("Fleet commands"));
         assert!(plain.contains("Workspace and file commands"));
-        assert!(
-            plain.find("Default context commands") < plain.find("Current network + fleet commands")
-        );
-        assert!(
-            plain.find("Current network + fleet commands")
-                < plain.find("Workspace and file commands")
-        );
-        assert!(plain.find("    status") < plain.find("    network"));
         assert!(plain.find("    network") < plain.find("    fleet"));
-        assert!(plain.find("    fleet") < plain.find("    scaffold"));
-        assert!(plain.find("    scaffold") < plain.find("    install"));
+        assert!(plain.find("    fleet") < plain.find("    install"));
+        assert!(plain.find("    install") < plain.find("    config"));
+        assert!(plain.find("    config") < plain.find("    list"));
         assert!(plain.contains("Options:"));
-        assert!(plain.contains("scaffold"));
+        assert!(!plain.contains("    scaffold"));
+        assert!(plain.contains("config"));
         assert!(plain.contains("list"));
         assert!(plain.contains("build"));
         assert!(plain.contains("network"));
-        assert!(plain.contains("status"));
+        assert!(!plain.contains("    defaults"));
+        assert!(!plain.contains("    status"));
         assert!(plain.contains("fleet"));
         assert!(plain.contains("install"));
         assert!(plain.contains("snapshot"));
@@ -437,106 +408,35 @@ mod tests {
     // Ensure command-family help paths return successfully instead of erroring.
     #[test]
     fn command_family_help_returns_ok() {
-        assert!(run([OsString::from("backup"), OsString::from("help")]).is_ok());
-        assert!(
-            run([
-                OsString::from("backup"),
-                OsString::from("list"),
-                OsString::from("help")
-            ])
-            .is_ok()
-        );
-        assert!(
-            run([
-                OsString::from("backup"),
-                OsString::from("status"),
-                OsString::from("help")
-            ])
-            .is_ok()
-        );
-        assert!(
-            run([
-                OsString::from("backup"),
-                OsString::from("verify"),
-                OsString::from("help")
-            ])
-            .is_ok()
-        );
-        assert!(run([OsString::from("build"), OsString::from("help")]).is_ok());
-        assert!(run([OsString::from("install"), OsString::from("help")]).is_ok());
-        assert!(run([OsString::from("fleet"), OsString::from("help")]).is_ok());
-        assert!(
-            run([
-                OsString::from("fleet"),
-                OsString::from("list"),
-                OsString::from("help")
-            ])
-            .is_ok()
-        );
-        assert!(
-            run([
-                OsString::from("fleet"),
-                OsString::from("use"),
-                OsString::from("help")
-            ])
-            .is_ok()
-        );
-        assert!(
-            run([
-                OsString::from("fleet"),
-                OsString::from("delete"),
-                OsString::from("help")
-            ])
-            .is_ok()
-        );
-        assert!(run([OsString::from("list"), OsString::from("help")]).is_ok());
-        assert!(run([OsString::from("restore"), OsString::from("help")]).is_ok());
-        assert!(
-            run([
-                OsString::from("restore"),
-                OsString::from("plan"),
-                OsString::from("help")
-            ])
-            .is_ok()
-        );
-        assert!(
-            run([
-                OsString::from("restore"),
-                OsString::from("apply"),
-                OsString::from("help")
-            ])
-            .is_ok()
-        );
-        assert!(
-            run([
-                OsString::from("restore"),
-                OsString::from("run"),
-                OsString::from("help")
-            ])
-            .is_ok()
-        );
-        assert!(run([OsString::from("manifest"), OsString::from("help")]).is_ok());
-        assert!(
-            run([
-                OsString::from("manifest"),
-                OsString::from("validate"),
-                OsString::from("help")
-            ])
-            .is_ok()
-        );
-        assert!(run([OsString::from("medic"), OsString::from("help")]).is_ok());
-        assert!(run([OsString::from("network"), OsString::from("help")]).is_ok());
-        assert!(run([OsString::from("scaffold"), OsString::from("help")]).is_ok());
-        assert!(run([OsString::from("snapshot"), OsString::from("help")]).is_ok());
-        assert!(
-            run([
-                OsString::from("snapshot"),
-                OsString::from("download"),
-                OsString::from("help")
-            ])
-            .is_ok()
-        );
-        assert!(run([OsString::from("status"), OsString::from("help")]).is_ok());
+        for args in [
+            &["backup", "help"][..],
+            &["backup", "list", "help"],
+            &["backup", "status", "help"],
+            &["backup", "verify", "help"],
+            &["build", "help"],
+            &["config", "help"],
+            &["install", "help"],
+            &["fleet"],
+            &["fleet", "help"],
+            &["fleet", "create", "help"],
+            &["fleet", "list", "help"],
+            &["fleet", "delete", "help"],
+            &["list", "help"],
+            &["restore", "help"],
+            &["restore", "plan", "help"],
+            &["restore", "apply", "help"],
+            &["restore", "run", "help"],
+            &["manifest", "help"],
+            &["manifest", "validate", "help"],
+            &["medic", "help"],
+            &["network"],
+            &["network", "help"],
+            &["network", "current", "help"],
+            &["snapshot", "help"],
+            &["snapshot", "download", "help"],
+        ] {
+            assert_run_ok(args);
+        }
     }
 
     // Ensure version flags are accepted at the top level and command-family level.
@@ -563,14 +463,30 @@ mod tests {
             .is_ok()
         );
         assert!(run([OsString::from("build"), OsString::from("--version")]).is_ok());
+        assert!(run([OsString::from("config"), OsString::from("--version")]).is_ok());
         assert!(run([OsString::from("install"), OsString::from("--version")]).is_ok());
         assert!(run([OsString::from("fleet"), OsString::from("--version")]).is_ok());
+        assert!(
+            run([
+                OsString::from("fleet"),
+                OsString::from("create"),
+                OsString::from("--version")
+            ])
+            .is_ok()
+        );
         assert!(run([OsString::from("list"), OsString::from("--version")]).is_ok());
         assert!(run([OsString::from("restore"), OsString::from("--version")]).is_ok());
         assert!(run([OsString::from("manifest"), OsString::from("--version")]).is_ok());
         assert!(run([OsString::from("medic"), OsString::from("--version")]).is_ok());
         assert!(run([OsString::from("network"), OsString::from("--version")]).is_ok());
-        assert!(run([OsString::from("scaffold"), OsString::from("--version")]).is_ok());
+        assert!(
+            run([
+                OsString::from("network"),
+                OsString::from("current"),
+                OsString::from("--version")
+            ])
+            .is_ok()
+        );
         assert!(run([OsString::from("snapshot"), OsString::from("--version")]).is_ok());
         assert!(
             run([
@@ -580,7 +496,6 @@ mod tests {
             ])
             .is_ok()
         );
-        assert!(run([OsString::from("status"), OsString::from("--version")]).is_ok());
     }
 
     // Remove ANSI color sequences so tests can assert help structure.
@@ -600,5 +515,14 @@ mod tests {
             plain.push(ch);
         }
         plain
+    }
+
+    // Assert that a CLI argv slice returns successfully.
+    fn assert_run_ok(raw_args: &[&str]) {
+        let args = raw_args.iter().map(OsString::from).collect::<Vec<_>>();
+        assert!(
+            run(args).is_ok(),
+            "expected successful run for {raw_args:?}"
+        );
     }
 }

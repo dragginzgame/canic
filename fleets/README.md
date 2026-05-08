@@ -1,8 +1,9 @@
-# Canisters
+# Fleets
 
-This directory contains every runnable canister crate in the repository, grouped
-by purpose. The split keeps the shipped local demo topology separate from
-manual sandbox work, PocketIC fixtures, and audit probes.
+This directory contains config-defined Canic fleets. A directory belongs here
+when it has a `canic.toml` that describes a fleet topology and should be
+discoverable by `canic fleet list`, `canic fleet use`, and implicit
+`canic install` config selection.
 
 The implicit `wasm_store` is not sourced from this directory. Its canonical
 canister crate lives at `crates/canic-wasm-store/` so downstreams build the same
@@ -20,9 +21,7 @@ from the resolved `canic` package automatically.
   - `minimal/` – shared runtime baseline canister.
   - `canic.toml` – shared demo topology referenced by each demo canister `build.rs`.
   - `test-configs/` – config fixtures used by local/demo checks.
-- `sandbox/minimal/` – manual local sandbox for temporary endpoint experiments. It uses `canic::start_local!()` with generated standalone config and is not part of `dfx.json`, the demo topology, the reference release set, or automated test fixtures.
 - `test/` – internal correctness and PocketIC canister fixtures. `runtime_probe/` replaces the older `canister_test` name.
-- `audit/` – internal audit/perf probe canisters used by instruction and capability-surface audits.
 
 ## Local Workflow
 
@@ -33,7 +32,6 @@ The demo canisters are wired through `dfx.json`; custom build steps call
 - `root` stays thin: only the bootstrap `wasm_store` artifact is embedded, and the ordinary configured release set is staged after install from `.dfx/local/canisters/root/root.release-set.json`.
 - Create/build demo canisters manually: `dfx canister create --all` then `dfx build --all`
 - Run the scripted local smoke flow: `make test-canisters`
-- Build the standalone sandbox manually: `scripts/app/build.sh sandbox_minimal`
 
 Note: `make demo-install` and `make test-canisters` try one clean local `dfx`
 restart automatically when `dfx ping local` fails. They are manual local smoke

@@ -5,7 +5,6 @@ use crate::{
     },
     version_text,
 };
-use canic_host::install_root::select_current_fleet_name;
 use clap::{Arg, Command as ClapCommand};
 use std::{
     ffi::OsString,
@@ -14,6 +13,12 @@ use std::{
     path::{Path, PathBuf},
 };
 use thiserror::Error as ThisError;
+
+const FLEET_CREATE_HELP_AFTER: &str = "\
+Examples:
+  canic fleet create demo
+  canic fleet create demo --yes
+  canic fleet create demo --network local";
 
 ///
 /// ScaffoldCommandError
@@ -27,17 +32,14 @@ pub enum ScaffoldCommandError {
     #[error("project name must be snake_case: {0}")]
     InvalidProjectName(String),
 
-    #[error("scaffold target already exists: {0}")]
+    #[error("fleet target already exists: {0}")]
     TargetExists(String),
 
-    #[error("scaffold cancelled")]
+    #[error("fleet create cancelled")]
     Cancelled,
 
     #[error(transparent)]
     Io(#[from] io::Error),
-
-    #[error(transparent)]
-    Selection(#[from] Box<dyn std::error::Error>),
 }
 
 ///
@@ -53,13 +55,26 @@ pub struct ScaffoldOptions {
 }
 
 impl ScaffoldOptions {
-    /// Parse scaffold options from CLI arguments.
+    /// Parse fleet creation options from CLI arguments.
+    #[cfg(test)]
     pub fn parse<I>(args: I) -> Result<Self, ScaffoldCommandError>
     where
         I: IntoIterator<Item = OsString>,
     {
-        let matches = parse_matches(scaffold_command(), args)
-            .map_err(|_| ScaffoldCommandError::Usage(usage()))?;
+        Self::parse_with(args, fleet_create_command(), fleet_create_usage)
+    }
+
+    // Parse fleet creation options with a caller-specific command surface.
+    fn parse_with<I>(
+        args: I,
+        command: ClapCommand,
+        usage: fn() -> String,
+    ) -> Result<Self, ScaffoldCommandError>
+    where
+        I: IntoIterator<Item = OsString>,
+    {
+        let matches =
+            parse_matches(command, args).map_err(|_| ScaffoldCommandError::Usage(usage()))?;
         let name = matches
             .get_one::<String>("name")
             .expect("clap requires name")
@@ -75,33 +90,34 @@ impl ScaffoldOptions {
     }
 }
 
-/// Run the scaffold command.
-pub fn run<I>(args: I) -> Result<(), ScaffoldCommandError>
+/// Run the fleet create command.
+pub fn run_fleet_create<I>(args: I) -> Result<(), ScaffoldCommandError>
 where
     I: IntoIterator<Item = OsString>,
 {
     let args = args.into_iter().collect::<Vec<_>>();
-    if print_help_or_version(&args, usage, version_text()) {
+    if print_help_or_version(&args, fleet_create_usage, version_text()) {
         return Ok(());
     }
 
-    let options = ScaffoldOptions::parse(args)?;
+    let options = ScaffoldOptions::parse_with(args, fleet_create_command(), fleet_create_usage)?;
+    run_scaffold(options)
+}
+
+// Create the fleet files after parsing the target fleet.
+fn run_scaffold(options: ScaffoldOptions) -> Result<(), ScaffoldCommandError> {
     if !options.yes {
         confirm_scaffold(&options, io::stdin().lock(), io::stdout())?;
     }
 
     let result = scaffold_project(&options)?;
-    select_current_fleet_name(&options.network, &options.name)?;
-    println!("Created Canic scaffold:");
+    println!("Created Canic fleet:");
     println!("  {}", result.project_dir.display());
     println!("  {}", result.root_dir.display());
-    println!(
-        "Selected current fleet for {}: {}",
-        options.network, options.name
-    );
+    println!("  {}", result.app_dir.display());
     println!();
     println!("Next:");
-    println!("  canic install");
+    println!("  canic install --fleet {}", options.name);
     Ok(())
 }
 
@@ -113,10 +129,11 @@ where
 pub struct ScaffoldResult {
     pub project_dir: PathBuf,
     pub root_dir: PathBuf,
+    pub app_dir: PathBuf,
     pub config_path: PathBuf,
 }
 
-/// Create a minimal root-canister project scaffold.
+/// Create a minimal root plus app canister fleet scaffold.
 pub fn scaffold_project(options: &ScaffoldOptions) -> Result<ScaffoldResult, ScaffoldCommandError> {
     let project_dir = options.fleets_dir.join(&options.name);
     if project_dir.exists() {
@@ -126,8 +143,11 @@ pub fn scaffold_project(options: &ScaffoldOptions) -> Result<ScaffoldResult, Sca
     }
 
     let root_dir = project_dir.join("root");
-    let src_dir = root_dir.join("src");
-    fs::create_dir_all(&src_dir)?;
+    let root_src_dir = root_dir.join("src");
+    let app_dir = project_dir.join("app");
+    let app_src_dir = app_dir.join("src");
+    fs::create_dir_all(&root_src_dir)?;
+    fs::create_dir_all(&app_src_dir)?;
 
     let config_path = project_dir.join("canic.toml");
     write_new_file(&config_path, &canic_toml(&options.name))?;
@@ -136,26 +156,30 @@ pub fn scaffold_project(options: &ScaffoldOptions) -> Result<ScaffoldResult, Sca
         &root_cargo_toml(&options.name),
     )?;
     write_new_file(&root_dir.join("build.rs"), ROOT_BUILD_RS)?;
-    write_new_file(&src_dir.join("lib.rs"), ROOT_LIB_RS)?;
+    write_new_file(&root_src_dir.join("lib.rs"), ROOT_LIB_RS)?;
+    write_new_file(&app_dir.join("Cargo.toml"), &app_cargo_toml(&options.name))?;
+    write_new_file(&app_dir.join("build.rs"), APP_BUILD_RS)?;
+    write_new_file(&app_src_dir.join("lib.rs"), APP_LIB_RS)?;
 
     Ok(ScaffoldResult {
         project_dir,
         root_dir,
+        app_dir,
         config_path,
     })
 }
 
-// Build the scaffold parser.
-fn scaffold_command() -> ClapCommand {
-    ClapCommand::new("scaffold")
-        .bin_name("canic scaffold")
-        .about("Create a minimal Canic fleet scaffold")
+// Build the fleet create parser.
+fn fleet_create_command() -> ClapCommand {
+    ClapCommand::new("create")
+        .bin_name("canic fleet create")
+        .about("Create a minimal Canic fleet")
         .disable_help_flag(true)
         .arg(
             Arg::new("name")
                 .value_name("name")
                 .required(true)
-                .help("Snake-case project and fleet name to create"),
+                .help("Snake-case fleet name to create"),
         )
         .arg(
             Arg::new("dir")
@@ -168,19 +192,20 @@ fn scaffold_command() -> ClapCommand {
             value_arg("network")
                 .long("network")
                 .value_name("name")
-                .help("DFX network whose current fleet should be selected"),
+                .help("DFX network to use in the next install command example"),
         )
         .arg(
             flag_arg("yes")
                 .long("yes")
                 .short('y')
-                .help("Create the scaffold without prompting for confirmation"),
+                .help("Create the fleet without prompting for confirmation"),
         )
+        .after_help(FLEET_CREATE_HELP_AFTER)
 }
 
-// Return scaffold command usage text.
-fn usage() -> String {
-    let mut command = scaffold_command();
+// Return fleet create usage text.
+pub fn fleet_create_usage() -> String {
+    let mut command = fleet_create_command();
     command.render_help().to_string()
 }
 
@@ -201,10 +226,10 @@ where
         ));
     }
 
-    writeln!(writer, "Create Canic scaffold?")?;
+    writeln!(writer, "Create Canic fleet?")?;
     writeln!(writer, "  project: {}", options.name)?;
     writeln!(writer, "  target:  {}", project_dir.display())?;
-    writeln!(writer, "  current: {} on {}", options.name, options.network)?;
+    writeln!(writer, "  install: canic install --fleet {}", options.name)?;
     write!(writer, "Continue? [y/N] ")?;
     writer.flush()?;
 
@@ -263,11 +288,14 @@ app_index = []
 name = "{name}"
 
 [subnets.prime]
-auto_create = []
-subnet_index = []
+auto_create = ["app"]
+subnet_index = ["app"]
 
 [subnets.prime.canisters.root]
 kind = "root"
+
+[subnets.prime.canisters.app]
+kind = "singleton"
 "#
     )
 }
@@ -298,8 +326,38 @@ canic = "{canic_version}"
     )
 }
 
+// Render the scaffolded app canister package manifest.
+fn app_cargo_toml(name: &str) -> String {
+    let canic_version = env!("CARGO_PKG_VERSION");
+    format!(
+        r#"[package]
+name = "canister_{name}_app"
+edition = "2024"
+rust-version = "1.91.0"
+version = "0.1.0"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+candid = {{ version = "0.10", default-features = false }}
+canic = "{canic_version}"
+ic-cdk = "0.20"
+
+[build-dependencies]
+canic = "{canic_version}"
+"#
+    )
+}
+
 const ROOT_BUILD_RS: &str = r#"fn main() {
     canic::build_root!("../canic.toml");
+}
+"#;
+
+const APP_BUILD_RS: &str = r#"fn main() {
+    canic::build!("../canic.toml");
 }
 "#;
 
@@ -323,6 +381,26 @@ pub async fn canic_upgrade() {}
 canic::cdk::export_candid_debug!();
 ";
 
+const APP_LIB_RS: &str = r#"#![allow(clippy::unused_async)]
+
+use canic::ids::CanisterRole;
+
+const APP: CanisterRole = CanisterRole::new("app");
+
+/// Run no-op setup for this scaffolded app.
+pub async fn canic_setup() {}
+
+/// Accept no install payload for this scaffolded app.
+pub async fn canic_install(_: Option<Vec<u8>>) {}
+
+/// Run no-op upgrade handling for this scaffolded app.
+pub async fn canic_upgrade() {}
+
+canic::start!(APP);
+
+canic::cdk::export_candid_debug!();
+"#;
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -344,7 +422,7 @@ mod tests {
         assert!(!options.yes);
     }
 
-    // Ensure scaffold can select the network whose current fleet pointer is updated.
+    // Ensure scaffold can record the network used for the next install hint.
     #[test]
     fn parses_scaffold_network_option() {
         let options = ScaffoldOptions::parse([
@@ -383,7 +461,7 @@ mod tests {
         let output = String::from_utf8(output).expect("utf8 prompt");
         assert!(output.contains("target:"));
         assert!(output.contains("fleets/my_app"));
-        assert!(output.contains("current: my_app on local"));
+        assert!(output.contains("install: canic install --fleet my_app"));
     }
 
     // Ensure confirmation defaults to no on empty input.
@@ -415,9 +493,9 @@ mod tests {
         }
     }
 
-    // Ensure scaffold writes the expected minimal root files.
+    // Ensure scaffold writes the expected minimal root and app files.
     #[test]
-    fn scaffold_project_writes_root_files() {
+    fn scaffold_project_writes_root_and_app_files() {
         let root = temp_dir("canic-cli-scaffold");
         let options = ScaffoldOptions {
             name: "my_app".to_string(),
@@ -432,14 +510,25 @@ mod tests {
             fs::read_to_string(result.root_dir.join("src/lib.rs")).expect("read root lib");
         let root_manifest =
             fs::read_to_string(result.root_dir.join("Cargo.toml")).expect("read root manifest");
+        let app_lib = fs::read_to_string(result.app_dir.join("src/lib.rs")).expect("read app lib");
+        let app_manifest =
+            fs::read_to_string(result.app_dir.join("Cargo.toml")).expect("read app manifest");
 
         fs::remove_dir_all(root).expect("remove scaffold temp root");
         assert!(config.contains("name = \"my_app\""));
+        assert!(config.contains("auto_create = [\"app\"]"));
+        assert!(config.contains("subnet_index = [\"app\"]"));
         assert!(config.contains("[subnets.prime.canisters.root]"));
+        assert!(config.contains("[subnets.prime.canisters.app]"));
         assert!(root_manifest.contains("version = \"0.1.0\""));
         assert!(root_manifest.contains("canic = { version = \""));
         assert!(!root_manifest.contains("workspace = true"));
         assert!(root_lib.contains("canic::start_root!();"));
+        assert!(app_manifest.contains("name = \"canister_my_app_app\""));
+        assert!(app_manifest.contains("canic = \""));
+        assert!(!app_manifest.contains("workspace = true"));
+        assert!(app_lib.contains("CanisterRole::new(\"app\")"));
+        assert!(app_lib.contains("canic::start!(APP);"));
     }
 
     // Ensure scaffold refuses to overwrite an existing project directory.

@@ -59,9 +59,8 @@ taxonomy carry the role boundary. If the workspace grows enough that scanning
 such as `crates/runtime/`, `crates/host/`, and `crates/testing/`; that should be
 treated as a repo-structure migration rather than a naming cleanup.
 
-* `fleets/demo/` – local reference topology for root, app, user shard/hub, scaling, and minimal baselines.
-* `fleets/test/` and `fleets/audit/` – repo-only correctness canisters and audit probes.
-* `fleets/sandbox/minimal/` – manual local sandbox canister for temporary endpoint experiments.
+* `fleets/demo/` and `fleets/test/` – config-defined Canic fleets used for the local reference topology and repo-only correctness fixtures.
+* `canisters/audit/` and `canisters/sandbox/` – runnable canisters that are not Canic fleets, including audit probes and manual local sandbox experiments.
 * `scripts/` – dev setup, CI, release, wasm, and audit helpers.
 * `assets/`, `docs/`, `.github/workflows/` – documentation assets, design/audit notes, and CI.
 
@@ -189,33 +188,32 @@ The normal interface is the `canic` binary:
 
 ```bash
 canic build root
-canic install
+canic install --fleet demo
 ```
 
 `canic install` owns the local thin-root flow: create local canisters, build `root` plus ordinary roles from the subnet that owns `root`, emit the root staging manifest, reinstall `root`, stage the ordinary fleet artifacts, resume bootstrap, and wait for `canic_ready`.
 After a successful install, Canic writes project-local fleet state under
-`.canic/<network>/fleets/<fleet>.json` and marks that fleet current for the
-network. That state records the selected root target, resolved root principal,
-build target, config path, and staging manifest path so later commands know
-which installed Canic fleet this project is using.
+`.canic/<network>/fleets/<fleet>.json`. That state records the selected root
+target, resolved root principal, build target, config path, and staging
+manifest path so later commands can inspect the explicitly named fleet.
 
 The root target defaults to the `root` dfx canister name. To follow normal IC
 operator style, you may pass either a canister name or a principal:
 
 ```bash
-canic install root
-canic install uxrrr-q7777-77774-qaaaq-cai
-canic install --root uxrrr-q7777-77774-qaaaq-cai
-canic install --config fleets/demo/canic.toml
+canic install --fleet demo
+canic install --fleet demo root
+canic install --fleet demo uxrrr-q7777-77774-qaaaq-cai
+canic install --fleet demo --root uxrrr-q7777-77774-qaaaq-cai
+canic install --fleet demo --config fleets/demo/canic.toml
 ```
 
-Config selection is explicit when more than one topology could apply.
-`canic install` uses `fleets/canic.toml` when that project default exists.
-Otherwise it prints the discovered config choices and asks you to pass
-`--config <path>`:
+Fleet selection is explicit. Without `--config`, `canic install --fleet demo`
+uses `fleets/demo/canic.toml`; pass `--config <path>` only when the config is
+somewhere else:
 
 ```bash
-canic install --config fleets/demo/canic.toml
+canic install --fleet demo --config fleets/demo/canic.toml
 ```
 
 Install configs must declare the fleet identity that will be written to
@@ -226,23 +224,22 @@ project-local state:
 name = "demo"
 ```
 
-Use `canic fleet list` to list config-defined fleets for the current network, and
-`canic fleet use <fleet>` to switch the default fleet used by commands such as
-`canic list`. Use `canic fleet delete <fleet>` to remove a config-defined fleet
-directory after confirming the exact fleet name:
+Use `canic fleet list` to list config-defined fleets, and use `--fleet <name>`
+on commands that operate on one fleet. Use `canic fleet delete <fleet>` to
+remove a config-defined fleet directory after confirming the exact fleet name:
 
 ```bash
-canic status
+canic config --fleet demo
+canic list --fleet demo
 canic fleet list --network local
-canic fleet use demo --network local
+canic fleet create demo --yes
 canic fleet delete demo
 ```
 
-Use `canic medic` when the local project state, replica, or selected fleet does
+Use `canic medic` when the local project state, replica, or named fleet does
 not look right:
 
 ```bash
-canic medic
 canic medic --fleet demo
 ```
 

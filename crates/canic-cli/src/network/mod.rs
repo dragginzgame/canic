@@ -2,16 +2,19 @@ use crate::{
     args::{default_network, parse_matches, print_help_or_version},
     version_text,
 };
-use canic_host::install_root::select_current_network_name;
-use clap::{Arg, Command as ClapCommand};
+use clap::Command as ClapCommand;
 use std::ffi::OsString;
 use thiserror::Error as ThisError;
 
 const NETWORK_HELP_AFTER: &str = "\
 Examples:
-  canic network
-  canic network use local
-  canic network use ic";
+  canic network current
+
+Canic uses local by default. Pass --network ic to a fleet command when you
+intentionally want one command to target mainnet.";
+const NETWORK_CURRENT_HELP_AFTER: &str = "\
+Examples:
+  canic network current";
 
 ///
 /// NetworkCommandError
@@ -24,15 +27,6 @@ pub enum NetworkCommandError {
 
     #[error(transparent)]
     Host(#[from] Box<dyn std::error::Error>),
-}
-
-///
-/// NetworkUseOptions
-///
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-struct NetworkUseOptions {
-    network: String,
 }
 
 /// Run the network default command family.
@@ -52,42 +46,29 @@ where
         .as_deref()
     {
         None => {
-            print_current_network(&default_network());
+            println!("{}", usage());
             Ok(())
         }
-        Some("use") => {
-            let options = NetworkUseOptions::parse(args)?;
-            select_current_network_name(&options.network)?;
-            print_current_network(&options.network);
+        Some("current") => {
+            let args = args.collect::<Vec<_>>();
+            if print_help_or_version(&args, current_usage, version_text()) {
+                return Ok(());
+            }
+            parse_matches(network_current_command(), args)
+                .map_err(|_| NetworkCommandError::Usage(current_usage()))?;
+            print_current_network(&default_network());
             Ok(())
         }
         _ => Err(NetworkCommandError::Usage(usage())),
     }
 }
 
-impl NetworkUseOptions {
-    // Parse the selected default network name.
-    fn parse<I>(args: I) -> Result<Self, NetworkCommandError>
-    where
-        I: IntoIterator<Item = OsString>,
-    {
-        let matches = parse_matches(network_use_command(), args)
-            .map_err(|_| NetworkCommandError::Usage(use_usage()))?;
-        let network = matches
-            .get_one::<String>("network")
-            .expect("clap requires network")
-            .clone();
-
-        Ok(Self { network })
-    }
-}
-
-// Print the current default network context.
+// Print the implicit network context.
 fn print_current_network(network: &str) {
     println!("{}", render_current_network(network));
 }
 
-// Render the current default network as a shell-friendly scalar value.
+// Render the implicit network as a shell-friendly scalar value.
 fn render_current_network(network: &str) -> String {
     network.to_string()
 }
@@ -96,28 +77,19 @@ fn render_current_network(network: &str) -> String {
 fn network_command() -> ClapCommand {
     ClapCommand::new("network")
         .bin_name("canic network")
-        .about("Show or select the current default network")
+        .about("Show Canic network context")
         .disable_help_flag(true)
-        .subcommand(
-            ClapCommand::new("use")
-                .about("Select the current default network")
-                .disable_help_flag(true),
-        )
+        .subcommand(ClapCommand::new("current").about("Print the implicit network"))
         .after_help(NETWORK_HELP_AFTER)
 }
 
-// Build the network selection parser.
-fn network_use_command() -> ClapCommand {
-    ClapCommand::new("use")
-        .bin_name("canic network use")
-        .about("Select the current default network")
+// Build the current-network parser.
+fn network_current_command() -> ClapCommand {
+    ClapCommand::new("current")
+        .bin_name("canic network current")
+        .about("Print the implicit network")
         .disable_help_flag(true)
-        .arg(
-            Arg::new("network")
-                .value_name("name")
-                .required(true)
-                .help("DFX network name to make current"),
-        )
+        .after_help(NETWORK_CURRENT_HELP_AFTER)
 }
 
 // Return network command-family usage text.
@@ -126,9 +98,9 @@ fn usage() -> String {
     command.render_help().to_string()
 }
 
-// Return network selection usage text.
-fn use_usage() -> String {
-    let mut command = network_use_command();
+// Return current network usage text.
+fn current_usage() -> String {
+    let mut command = network_current_command();
     command.render_help().to_string()
 }
 
@@ -136,21 +108,26 @@ fn use_usage() -> String {
 mod tests {
     use super::*;
 
-    // Ensure network selection parses the network name.
-    #[test]
-    fn parses_network_use_options() {
-        let options = NetworkUseOptions::parse([OsString::from("ic")]).expect("parse network");
-
-        assert_eq!(options.network, "ic");
-    }
-
     // Ensure network help explains the persistent default.
     #[test]
     fn network_usage_lists_use_command() {
         let text = usage();
 
-        assert!(text.contains("Show or select the current default network"));
-        assert!(text.contains("canic network use ic"));
+        assert!(text.contains("Show Canic network context"));
+        assert!(text.contains("current"));
+        assert!(text.contains("canic network current"));
+        assert!(!text.contains("canic network use"));
+        assert!(text.contains("Pass --network ic"));
+    }
+
+    // Ensure current network help renders the scalar command.
+    #[test]
+    fn current_usage_lists_examples() {
+        let text = current_usage();
+
+        assert!(text.contains("Print the implicit network"));
+        assert!(text.contains("Usage: canic network current"));
+        assert!(text.contains("canic network current"));
     }
 
     // Ensure current network output is just the selected scalar value.
