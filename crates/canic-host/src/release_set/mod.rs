@@ -9,7 +9,8 @@ mod stage;
 
 pub use config::{
     configured_fleet_name, configured_fleet_roles, configured_install_targets,
-    configured_release_roles, configured_role_kinds,
+    configured_release_roles, configured_role_auto_create, configured_role_capabilities,
+    configured_role_details, configured_role_kinds, configured_role_topups,
 };
 pub use manifest::{
     ReleaseSetEntry, RootReleaseSetManifest, emit_root_release_set_manifest,
@@ -31,7 +32,9 @@ use stage::read_release_artifact;
 #[cfg(test)]
 use config::{
     configured_fleet_name_from_source, configured_fleet_roles_from_source,
-    configured_release_roles_from_source, configured_role_kinds_from_source,
+    configured_release_roles_from_source, configured_role_auto_create_from_source,
+    configured_role_capabilities_from_source, configured_role_details_from_source,
+    configured_role_kinds_from_source, configured_role_topups_from_source,
 };
 
 pub(super) const CANISTERS_ROOT_RELATIVE: &str = "fleets";
@@ -56,7 +59,9 @@ mod tests {
     use super::{
         canister_manifest_path, canisters_root, config_path, configured_fleet_name_from_source,
         configured_fleet_roles_from_source, configured_install_targets,
-        configured_release_roles_from_source, configured_role_kinds_from_source,
+        configured_release_roles_from_source, configured_role_auto_create_from_source,
+        configured_role_capabilities_from_source, configured_role_details_from_source,
+        configured_role_kinds_from_source, configured_role_topups_from_source,
         read_release_artifact, root_manifest_path,
     };
     use crate::test_support::temp_dir;
@@ -199,6 +204,197 @@ kind = "singleton"
     }
 
     #[test]
+    fn configured_role_capabilities_lists_enabled_role_features() {
+        let config = r#"
+controllers = []
+app_index = ["user_hub", "scale_hub"]
+
+[fleet]
+name = "demo"
+
+[app]
+init_mode = "enabled"
+[app.whitelist]
+
+[subnets.prime.canisters.root]
+kind = "root"
+
+[subnets.prime.canisters.user_hub]
+kind = "singleton"
+
+[subnets.prime.canisters.user_hub.sharding.pools.user_shards]
+canister_role = "user_shard"
+policy.capacity = 100
+policy.max_shards = 4
+
+[subnets.prime.canisters.user_shard]
+kind = "shard"
+
+[subnets.prime.canisters.user_shard.auth]
+delegated_token_signer = true
+
+[subnets.prime.canisters.scale_hub]
+kind = "singleton"
+
+[subnets.prime.canisters.scale_hub.scaling.pools.scales]
+canister_role = "scale"
+
+[subnets.prime.canisters.scale]
+kind = "replica"
+"#;
+        let capabilities =
+            configured_role_capabilities_from_source(config).expect("role capabilities");
+
+        assert_eq!(
+            capabilities.get("user_hub"),
+            Some(&vec!["sharding".to_string()])
+        );
+        assert_eq!(
+            capabilities.get("user_shard"),
+            Some(&vec!["auth".to_string()])
+        );
+        assert_eq!(
+            capabilities.get("scale_hub"),
+            Some(&vec!["scaling".to_string()])
+        );
+        assert!(!capabilities.contains_key("root"));
+    }
+
+    #[test]
+    fn configured_role_details_lists_verbose_config_features() {
+        let config = r#"
+controllers = []
+app_index = ["user_hub", "scale_hub"]
+
+[fleet]
+name = "demo"
+
+[app]
+init_mode = "enabled"
+[app.whitelist]
+
+[subnets.prime]
+auto_create = ["user_hub"]
+subnet_index = ["scale_hub"]
+
+[subnets.prime.canisters.root]
+kind = "root"
+
+[subnets.prime.canisters.user_hub]
+kind = "singleton"
+topup_policy.threshold = "10T"
+topup_policy.amount = "4T"
+
+[subnets.prime.canisters.user_hub.sharding.pools.user_shards]
+canister_role = "user_shard"
+policy.capacity = 100
+policy.max_shards = 4
+
+[subnets.prime.canisters.user_shard]
+kind = "shard"
+randomness.enabled = false
+
+[subnets.prime.canisters.user_shard.auth]
+delegated_token_signer = true
+role_attestation_cache = true
+
+[subnets.prime.canisters.scale_hub]
+kind = "singleton"
+
+[subnets.prime.canisters.scale_hub.scaling.pools.scales]
+canister_role = "scale"
+policy.initial_workers = 2
+policy.min_workers = 2
+
+[subnets.prime.canisters.scale]
+kind = "replica"
+"#;
+        let details = configured_role_details_from_source(config).expect("role details");
+
+        assert!(
+            details
+                .get("user_hub")
+                .is_some_and(|details| details.contains(&"app_index".to_string()))
+        );
+        assert!(details.get("user_hub").is_some_and(|details| {
+            details
+                .iter()
+                .any(|detail| detail == "sharding user_shards->user_shard cap=100 initial=1 max=4")
+        }));
+        assert!(
+            details
+                .get("user_shard")
+                .is_some_and(|details| details.contains(&"auth delegated-token-signer".to_string()))
+        );
+        assert!(details.get("scale_hub").is_some_and(|details| {
+            details.contains(&"scaling scales->scale initial=2 min=2 max=32".to_string())
+        }));
+    }
+
+    #[test]
+    fn configured_role_topups_lists_configured_policy_summaries() {
+        let config = r#"
+controllers = []
+app_index = []
+
+[fleet]
+name = "demo"
+
+[app]
+init_mode = "enabled"
+[app.whitelist]
+
+[subnets.prime.canisters.root]
+kind = "root"
+
+[subnets.prime.canisters.scale_hub]
+kind = "singleton"
+topup_policy.threshold = "10T"
+topup_policy.amount = "4T"
+"#;
+        let topups = configured_role_topups_from_source(config).expect("role topups");
+
+        assert_eq!(
+            topups.get("scale_hub").map(String::as_str),
+            Some("4.0TC @ 10.0TC")
+        );
+        assert!(!topups.contains_key("root"));
+    }
+
+    #[test]
+    fn configured_role_auto_create_lists_subnet_auto_create_roles() {
+        let config = r#"
+controllers = []
+app_index = []
+
+[fleet]
+name = "demo"
+
+[app]
+init_mode = "enabled"
+[app.whitelist]
+
+[subnets.prime]
+auto_create = ["app", "user_hub"]
+
+[subnets.prime.canisters.root]
+kind = "root"
+
+[subnets.prime.canisters.app]
+kind = "singleton"
+
+[subnets.prime.canisters.user_hub]
+kind = "singleton"
+"#;
+        let auto_create =
+            configured_role_auto_create_from_source(config).expect("auto create roles");
+
+        assert!(auto_create.contains("app"));
+        assert!(auto_create.contains("user_hub"));
+        assert!(!auto_create.contains("root"));
+    }
+
+    #[test]
     fn configured_fleet_name_reads_required_config_identity() {
         let name = configured_fleet_name_from_source(REAL_CONFIG).expect("fleet name");
 
@@ -321,24 +517,24 @@ kind = "root"
     fn root_manifest_path_prefers_canister_manifest_metadata() {
         let temp = TempWorkspace::new();
         let workspace_root = temp.path();
-        fs::create_dir_all(workspace_root.join("fleets/demo/root")).expect("create root dir");
-        fs::create_dir_all(workspace_root.join("fleets/demo/root/src"))
+        fs::create_dir_all(workspace_root.join("fleets/test/root")).expect("create root dir");
+        fs::create_dir_all(workspace_root.join("fleets/test/root/src"))
             .expect("create root src dir");
         fs::write(
             workspace_root.join("Cargo.toml"),
-            "[workspace]\nmembers = [\"fleets/demo/root\"]\n",
+            "[workspace]\nmembers = [\"fleets/test/root\"]\n",
         )
         .expect("write workspace manifest");
         fs::write(
-            workspace_root.join("fleets/demo/root/Cargo.toml"),
+            workspace_root.join("fleets/test/root/Cargo.toml"),
             "[package]\nname = \"canister_root\"\nversion = \"0.1.0\"\nedition = \"2024\"\n",
         )
         .expect("write root manifest");
-        fs::write(workspace_root.join("fleets/demo/root/src/lib.rs"), "").expect("write root lib");
+        fs::write(workspace_root.join("fleets/test/root/src/lib.rs"), "").expect("write root lib");
 
         assert_eq!(
             root_manifest_path(workspace_root),
-            workspace_root.join("fleets/demo/root/Cargo.toml")
+            workspace_root.join("fleets/test/root/Cargo.toml")
         );
     }
 
@@ -346,26 +542,26 @@ kind = "root"
     fn canister_manifest_path_prefers_canister_manifest_metadata() {
         let temp = TempWorkspace::new();
         let workspace_root = temp.path();
-        fs::create_dir_all(workspace_root.join("fleets/demo/user_hub"))
+        fs::create_dir_all(workspace_root.join("fleets/test/user_hub"))
             .expect("create user hub dir");
-        fs::create_dir_all(workspace_root.join("fleets/demo/user_hub/src"))
+        fs::create_dir_all(workspace_root.join("fleets/test/user_hub/src"))
             .expect("create user hub src dir");
         fs::write(
             workspace_root.join("Cargo.toml"),
-            "[workspace]\nmembers = [\"fleets/demo/user_hub\"]\n",
+            "[workspace]\nmembers = [\"fleets/test/user_hub\"]\n",
         )
         .expect("write workspace manifest");
         fs::write(
-            workspace_root.join("fleets/demo/user_hub/Cargo.toml"),
+            workspace_root.join("fleets/test/user_hub/Cargo.toml"),
             "[package]\nname = \"canister_user_hub\"\nversion = \"0.1.0\"\nedition = \"2024\"\n",
         )
         .expect("write user hub manifest");
-        fs::write(workspace_root.join("fleets/demo/user_hub/src/lib.rs"), "")
+        fs::write(workspace_root.join("fleets/test/user_hub/src/lib.rs"), "")
             .expect("write user hub lib");
 
         assert_eq!(
             canister_manifest_path(workspace_root, "user_hub"),
-            workspace_root.join("fleets/demo/user_hub/Cargo.toml")
+            workspace_root.join("fleets/test/user_hub/Cargo.toml")
         );
     }
 

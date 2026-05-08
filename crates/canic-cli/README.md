@@ -34,13 +34,13 @@ For a full local development setup, including `dfx`, helper tools, and the
 
 ## First Commands
 
-Show local demo canisters that already have ids:
+Show local test-fleet canisters that already have ids:
 
 ```bash
-canic list --fleet demo --network local
+canic list test --network local
 ```
 
-`canic list --fleet <name>` reads the installed root registry for that fleet.
+`canic list <name>` reads the installed root registry for that fleet.
 Use `--root <name-or-principal>` to point at a specific installed root, or
 `--from <name-or-principal>` to print one subtree with that node as the rendered
 root.
@@ -48,13 +48,13 @@ Live list sources call `canic_ready` for each listed canister and include a
 `READY` column with `yes`, `no`, or `error`.
 
 If the list only shows the `root` row, the project has reserved a local root id
-but has not installed the tree. Run `canic install --fleet demo`, then use `canic list
---fleet demo --network local` to read the installed root registry.
+but has not installed the tree. Run `canic install test`, then use
+`canic list test --network local` to read the installed root registry.
 
 Install and bootstrap the local fleet:
 
 ```bash
-canic install --fleet demo
+canic install test
 ```
 
 Build one Canic canister artifact through the same public CLI surface used by
@@ -68,42 +68,33 @@ canic build root
 dfx canister name or an IC principal as the root target:
 
 ```bash
-canic install --fleet demo
-canic install --fleet demo root
-canic install --fleet demo uxrrr-q7777-77774-qaaaq-cai
-canic install --fleet demo --root uxrrr-q7777-77774-qaaaq-cai
-canic install --fleet demo --config fleets/demo/canic.toml
+canic install test
+canic install test root
+canic install test uxrrr-q7777-77774-qaaaq-cai
+canic install test --root uxrrr-q7777-77774-qaaaq-cai
+canic install test --config fleets/test/canic.toml
 ```
 
 When the root target is a principal, the CLI still builds the conventional
 `root` canister artifact by default. Use `--root-build-target <dfx-name>` only
 when the local root canister is named differently in `dfx.json`.
 
-When no `--config` is provided, `canic install --fleet <name>` uses
+When no `--config` is provided, `canic install <name>` uses
 `fleets/<name>/canic.toml`.
 
 The selected install config must include a fleet identity:
 
 ```toml
 [fleet]
-name = "demo"
+name = "test"
 ```
 
 Successful installs write `.canic/<network>/fleets/<fleet>.json` with the root
 target, resolved root principal, build target, config path, and staging
-manifest path. `canic config --fleet <name>` shows the selected fleet
-declaration, while `canic list --fleet <name>` queries the deployed root
-registry for that fleet. Commands use network `local` unless you pass
+manifest path. `canic config <name>` shows the selected fleet declaration,
+while `canic list <name>` queries the deployed root registry for that fleet.
+Commands use network `local` unless you pass
 `--network <name>`.
-
-Print the high-level network default:
-
-```bash
-canic network current
-```
-
-The implicit network default is always `local`; use command-specific
-`--network ic` when you intentionally want to target mainnet.
 
 List saved fleet configs:
 
@@ -117,14 +108,14 @@ Create a new root-plus-app fleet:
 
 ```bash
 canic fleet create my_app --yes
-canic install --fleet my_app
+canic install my_app
 ```
 
 Diagnose the named fleet, replica reachability, saved config path, and root
 readiness:
 
 ```bash
-canic medic --fleet demo
+canic medic test
 ```
 
 Run command-specific help when you need exact flags:
@@ -142,7 +133,7 @@ verify --version` reports the binary version instead of running the command.
 Capture a canister and its direct registered children:
 
 ```bash
-canic snapshot download \
+canic snapshot download test \
   --canister <canister-id> \
   --root <root-canister-id> \
   --include-children \

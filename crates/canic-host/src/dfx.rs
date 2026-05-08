@@ -1,4 +1,4 @@
-use crate::default_network;
+use crate::dfx_network_from_env;
 use std::{error::Error, fmt, path::Path, process::Command};
 
 ///
@@ -112,7 +112,9 @@ impl Dfx {
     pub fn ping(&self) -> Result<(), DfxCommandError> {
         let mut command = self.command();
         command.arg("ping");
-        let network = self.network().map_or_else(default_network, str::to_string);
+        let network = self
+            .network()
+            .map_or_else(dfx_network_from_env, str::to_string);
         command.arg(network);
         run_status(&mut command)
     }

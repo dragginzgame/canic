@@ -82,8 +82,8 @@ pub fn default_dfx() -> String {
     "dfx".to_string()
 }
 
-/// Return the default DFX network used by local fleet commands.
-pub fn default_network() -> String {
+/// Return the local DFX network name used when --network is omitted.
+pub fn local_network() -> String {
     "local".to_string()
 }
 
@@ -91,9 +91,9 @@ pub fn default_network() -> String {
 mod tests {
     use super::*;
 
-    // Ensure implicit command defaults never drift away from the local replica.
+    // Keep omitted --network behavior tied to the local replica.
     #[test]
-    fn default_network_is_always_local() {
-        assert_eq!(default_network(), "local");
+    fn local_network_is_always_local() {
+        assert_eq!(local_network(), "local");
     }
 }

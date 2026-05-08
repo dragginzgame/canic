@@ -37,7 +37,7 @@ if [ -n "${CANIC_REFERENCE_CANISTERS:-}" ]; then
     # Allow focused harnesses to build only the canisters they actually stage.
     read -r -a BUILD_CANISTERS <<<"$CANIC_REFERENCE_CANISTERS"
 else
-    DEFAULT_BUILD_CANISTERS="$(bash scripts/ci/list-config-canisters.sh --config fleets/demo/canic.toml --ci-order)"
+    DEFAULT_BUILD_CANISTERS="$(bash scripts/ci/list-config-canisters.sh --config fleets/test/canic.toml --ci-order)"
     mapfile -t BUILD_CANISTERS <<<"$DEFAULT_BUILD_CANISTERS"
 fi
 

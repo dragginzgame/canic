@@ -1,13 +1,12 @@
 use crate::{
     args::{
-        default_dfx, default_network, parse_matches, print_help_or_version, string_option,
-        value_arg,
+        default_dfx, local_network, parse_matches, print_help_or_version, string_option, value_arg,
     },
     version_text,
 };
 use canic_host::{
     dfx::Dfx,
-    install_root::{InstallState, read_current_or_fleet_install_state},
+    install_root::{InstallState, read_named_fleet_install_state},
     replica_query,
     table::WhitespaceTable,
 };
@@ -21,8 +20,8 @@ const DETAIL_HEADER: &str = "DETAIL";
 const NEXT_HEADER: &str = "NEXT";
 const MEDIC_HELP_AFTER: &str = "\
 Examples:
-  canic medic --fleet demo
-  canic medic --fleet demo --network local --dfx dfx";
+  canic medic test
+  canic medic test --network local --dfx dfx";
 
 ///
 /// MedicCommandError
@@ -46,7 +45,7 @@ pub struct MedicOptions {
 }
 
 impl MedicOptions {
-    /// Parse medic options from CLI arguments and environment defaults.
+    /// Parse medic options from CLI arguments.
     pub fn parse<I>(args: I) -> Result<Self, MedicCommandError>
     where
         I: IntoIterator<Item = OsString>,
@@ -56,7 +55,7 @@ impl MedicOptions {
 
         Ok(Self {
             fleet: string_option(&matches, "fleet").expect("clap requires fleet"),
-            network: string_option(&matches, "network").unwrap_or_else(default_network),
+            network: string_option(&matches, "network").unwrap_or_else(local_network),
             dfx: string_option(&matches, "dfx").unwrap_or_else(default_dfx),
         })
     }
@@ -85,8 +84,7 @@ fn medic_command() -> ClapCommand {
         .disable_help_flag(true)
         .arg(
             value_arg("fleet")
-                .long("fleet")
-                .value_name("name")
+                .value_name("fleet")
                 .required(true)
                 .help("Installed fleet name to inspect"),
         )
@@ -115,7 +113,7 @@ fn run_medic_checks(options: &MedicOptions) -> Vec<MedicCheck> {
     ));
     checks.push(check_dfx_ping(options));
 
-    let state = match read_current_or_fleet_install_state(&options.network, Some(&options.fleet)) {
+    let state = match read_named_fleet_install_state(&options.network, &options.fleet) {
         Ok(Some(state)) => {
             checks.push(MedicCheck::ok(
                 "fleet state",
@@ -128,7 +126,7 @@ fn run_medic_checks(options: &MedicOptions) -> Vec<MedicCheck> {
             checks.push(MedicCheck::warn(
                 "fleet state",
                 "no installed fleet found",
-                "run canic install --fleet <name>",
+                "run canic install <name>",
             ));
             None
         }
@@ -302,7 +300,6 @@ mod tests {
     #[test]
     fn parses_medic_options() {
         let options = MedicOptions::parse([
-            OsString::from("--fleet"),
             OsString::from("demo"),
             OsString::from("--network"),
             OsString::from("local"),
@@ -322,7 +319,9 @@ mod tests {
         let text = usage();
 
         assert!(text.contains("Diagnose local Canic fleet setup"));
-        assert!(text.contains("--fleet <name>"));
+        assert!(text.contains("Usage: canic medic [OPTIONS] <fleet>"));
+        assert!(text.contains("<fleet>"));
+        assert!(!text.contains("--fleet <name>"));
         assert!(text.contains("Examples:"));
     }
 

@@ -1,0 +1,99 @@
+# ================================================================
+#  CANIC CONFIGURATION
+# ================================================================
+
+# ----------------------------------------------------------------
+# Global Settings
+# ----------------------------------------------------------------
+controllers = []
+app_index = ["user_hub", "scale_hub"]
+
+[fleet]
+name = "test"
+
+[app]
+init_mode = "enabled"
+[app.whitelist]
+
+[auth.delegated_tokens]
+# Root-signed delegated token auth (cert -> proof -> token).
+enabled = true
+ecdsa_key_name = "test_key_1"
+
+
+# ----------------------------------------------------------------
+# Standards
+# ----------------------------------------------------------------
+
+[standards]
+icrc21 = true # Enable ICRC-21 capability
+
+# ----------------------------------------------------------------
+# Subnet Definitions
+# ----------------------------------------------------------------
+# Each subnet defines how its canisters behave and when they top up.
+# ----------------------------------------------------------------
+
+# ================================================================
+#  PRIME SUBNET
+# ================================================================
+[subnets.prime]
+auto_create = ["app", "user_hub", "scale_hub"]
+subnet_index = ["app", "user_hub", "scale_hub"]
+pool.minimum_size = 3
+
+# --- Root ---
+[subnets.prime.canisters.root]
+kind = "root"
+
+# --- App ---
+[subnets.prime.canisters.app]
+kind = "singleton"
+
+# --- User Hub ---
+[subnets.prime.canisters.user_hub]
+kind = "singleton"
+
+# --- User Hub Pools ---
+[subnets.prime.canisters.user_hub.sharding.pools.user_shards]
+canister_role = "user_shard"
+policy.capacity = 100
+policy.initial_shards = 1
+policy.max_shards = 4
+
+# --- User Shard ---
+[subnets.prime.canisters.user_shard]
+kind = "shard"
+
+[subnets.prime.canisters.user_shard.auth]
+delegated_token_signer = true
+role_attestation_cache = true
+
+# --- Minimal ---
+[subnets.prime.canisters.minimal]
+kind = "replica"
+
+# --- Scale Hub ---
+[subnets.prime.canisters.scale_hub]
+kind = "singleton"
+topup_policy.threshold = "10T"
+topup_policy.amount = "4T"
+
+# --- Scale Hub Pools ---
+[subnets.prime.canisters.scale_hub.scaling.pools.scales]
+canister_role = "scale"
+policy.initial_workers = 1
+policy.min_workers = 2
+
+# --- Scale ---
+[subnets.prime.canisters.scale]
+kind = "replica"
+
+# ================================================================
+#  GENERAL SUBNET
+# ================================================================
+[subnets.general]
+
+# --- Minimal Canister ---
+[subnets.general.canisters.minimal]
+kind = "replica"

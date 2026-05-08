@@ -1,6 +1,6 @@
 use crate::{
     args::{
-        default_network, parse_matches, print_help_or_version, string_option, string_values,
+        local_network, parse_matches, print_help_or_version, string_option, string_values,
         value_arg,
     },
     version_text,
@@ -15,16 +15,16 @@ const DEFAULT_ROOT_TARGET: &str = "root";
 const DEFAULT_READY_TIMEOUT_SECONDS: u64 = 120;
 const INSTALL_HELP_AFTER: &str = "\
 Examples:
-  canic install --fleet demo
-  canic install --fleet demo root
-  canic install --fleet demo uxrrr-q7777-77774-qaaaq-cai
-  canic install --fleet demo --config fleets/demo/canic.toml
+  canic install test
+  canic install test root
+  canic install test uxrrr-q7777-77774-qaaaq-cai
+  canic install test --config fleets/test/canic.toml
 
 Without --config, canic install uses fleets/<fleet>/canic.toml.
 
 The selected canic.toml must include:
   [fleet]
-  name = \"demo\"";
+  name = \"test\"";
 
 ///
 /// InstallCommandError
@@ -60,7 +60,7 @@ pub struct InstallOptions {
 }
 
 impl InstallOptions {
-    /// Parse install options from CLI arguments and environment defaults.
+    /// Parse install options from CLI arguments.
     pub fn parse<I>(args: I) -> Result<Self, InstallCommandError>
     where
         I: IntoIterator<Item = OsString>,
@@ -84,7 +84,7 @@ impl InstallOptions {
             fleet,
             root_target,
             root_build_target,
-            network: string_option(&matches, "network").unwrap_or_else(default_network),
+            network: string_option(&matches, "network").unwrap_or_else(local_network),
             ready_timeout_seconds,
         })
     }
@@ -110,17 +110,16 @@ fn install_command() -> ClapCommand {
         .about("Install and bootstrap a Canic fleet")
         .disable_help_flag(true)
         .arg(
+            value_arg("fleet")
+                .value_name("fleet")
+                .required(true)
+                .help("Config-defined fleet name to install"),
+        )
+        .arg(
             Arg::new("root-target")
                 .num_args(0..)
                 .value_name("name-or-principal")
                 .help("Root canister name or principal to install"),
-        )
-        .arg(
-            value_arg("fleet")
-                .long("fleet")
-                .value_name("name")
-                .required(true)
-                .help("Config-defined fleet name to install"),
         )
         .arg(
             value_arg("root")
@@ -226,13 +225,12 @@ mod tests {
     // Ensure install defaults to the conventional local root canister target.
     #[test]
     fn install_defaults_to_root_target() {
-        let options = InstallOptions::parse([OsString::from("--fleet"), OsString::from("demo")])
-            .expect("parse defaults");
+        let options = InstallOptions::parse([OsString::from("demo")]).expect("parse defaults");
 
         assert_eq!(options.fleet, "demo");
         assert_eq!(options.root_target, "root");
         assert_eq!(options.root_build_target, "root");
-        assert_eq!(options.network, default_network());
+        assert_eq!(options.network, local_network());
         assert_eq!(options.ready_timeout_seconds, DEFAULT_READY_TIMEOUT_SECONDS);
         assert_eq!(
             options.config_path,
@@ -243,12 +241,9 @@ mod tests {
     // Ensure canister names are used for both build and install by default.
     #[test]
     fn install_accepts_positional_canister_name() {
-        let options = InstallOptions::parse([
-            OsString::from("--fleet"),
-            OsString::from("demo"),
-            OsString::from("custom_root"),
-        ])
-        .expect("parse root name");
+        let options =
+            InstallOptions::parse([OsString::from("demo"), OsString::from("custom_root")])
+                .expect("parse root name");
 
         assert_eq!(options.root_target, "custom_root");
         assert_eq!(options.root_build_target, "custom_root");
@@ -257,12 +252,9 @@ mod tests {
     // Ensure principal targets still build the conventional root artifact.
     #[test]
     fn install_accepts_principal_target() {
-        let options = InstallOptions::parse([
-            OsString::from("--fleet"),
-            OsString::from("demo"),
-            OsString::from(ROOT_PRINCIPAL),
-        ])
-        .expect("parse principal");
+        let options =
+            InstallOptions::parse([OsString::from("demo"), OsString::from(ROOT_PRINCIPAL)])
+                .expect("parse principal");
 
         assert_eq!(options.root_target, ROOT_PRINCIPAL);
         assert_eq!(options.root_build_target, "root");
@@ -272,7 +264,6 @@ mod tests {
     #[test]
     fn install_accepts_root_flag() {
         let options = InstallOptions::parse([
-            OsString::from("--fleet"),
             OsString::from("demo"),
             OsString::from("--root"),
             OsString::from(ROOT_PRINCIPAL),
@@ -293,7 +284,6 @@ mod tests {
     #[test]
     fn install_accepts_config_path() {
         let options = InstallOptions::parse([
-            OsString::from("--fleet"),
             OsString::from("demo"),
             OsString::from("--config"),
             OsString::from("fleets/demo/canic.toml"),
@@ -306,9 +296,9 @@ mod tests {
         );
     }
 
-    // Ensure install requires an explicit fleet selector.
+    // Ensure install requires an explicit fleet argument.
     #[test]
-    fn install_requires_fleet_flag() {
+    fn install_requires_fleet_argument() {
         let err = InstallOptions::parse([]).expect_err("missing fleet should fail");
 
         assert!(matches!(err, InstallCommandError::Usage(_)));
@@ -320,17 +310,17 @@ mod tests {
         let text = usage();
 
         assert!(text.contains("Install and bootstrap a Canic fleet"));
-        assert!(text.contains("Usage: canic install"));
-        assert!(text.contains("--fleet <name>"));
+        assert!(text.contains("Usage: canic install [OPTIONS] <fleet>"));
+        assert!(text.contains("<fleet>"));
+        assert!(!text.contains("--fleet <name>"));
         assert!(text.contains("[fleet]"));
-        assert!(text.contains("name = \"demo\""));
+        assert!(text.contains("name = \"test\""));
     }
 
     // Ensure custom principal installs can override the build target explicitly.
     #[test]
     fn install_accepts_explicit_root_build_target() {
         let options = InstallOptions::parse([
-            OsString::from("--fleet"),
             OsString::from("demo"),
             OsString::from("--root"),
             OsString::from(ROOT_PRINCIPAL),
@@ -347,7 +337,6 @@ mod tests {
     #[test]
     fn install_rejects_duplicate_root_targets() {
         let err = InstallOptions::parse([
-            OsString::from("--fleet"),
             OsString::from("demo"),
             OsString::from("root"),
             OsString::from("--root=root"),

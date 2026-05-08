@@ -59,8 +59,9 @@ taxonomy carry the role boundary. If the workspace grows enough that scanning
 such as `crates/runtime/`, `crates/host/`, and `crates/testing/`; that should be
 treated as a repo-structure migration rather than a naming cleanup.
 
-* `fleets/demo/` and `fleets/test/` – config-defined Canic fleets used for the local reference topology and repo-only correctness fixtures.
-* `canisters/audit/` and `canisters/sandbox/` – runnable canisters that are not Canic fleets, including audit probes and manual local sandbox experiments.
+* `fleets/test/` – config-defined reference topology used by local dfx, CI wasm builds, and repo tests.
+* `fleets/demo/` – minimal root-plus-app fleet for quick experiments.
+* `canisters/audit/`, `canisters/sandbox/`, and `canisters/test/` – runnable canisters that are not Canic fleets, including audit probes, manual sandbox experiments, and isolated PocketIC fixtures.
 * `scripts/` – dev setup, CI, release, wasm, and audit helpers.
 * `assets/`, `docs/`, `.github/workflows/` – documentation assets, design/audit notes, and CI.
 
@@ -139,7 +140,7 @@ async fn canic_install(_: Option<Vec<u8>>) {}
 async fn canic_upgrade() {}
 ```
 
-See `fleets/demo/root` and the reference canisters under `fleets/demo/*` for end‑to‑end patterns, including managed `wasm_store` publication and endpoint exports.
+See `fleets/test/root` and the reference canisters under `fleets/test/*` for end-to-end patterns, including managed `wasm_store` publication and endpoint exports.
 
 ### 4. Define your topology
 
@@ -188,7 +189,7 @@ The normal interface is the `canic` binary:
 
 ```bash
 canic build root
-canic install --fleet demo
+canic install test
 ```
 
 `canic install` owns the local thin-root flow: create local canisters, build `root` plus ordinary roles from the subnet that owns `root`, emit the root staging manifest, reinstall `root`, stage the ordinary fleet artifacts, resume bootstrap, and wait for `canic_ready`.
@@ -201,19 +202,19 @@ The root target defaults to the `root` dfx canister name. To follow normal IC
 operator style, you may pass either a canister name or a principal:
 
 ```bash
-canic install --fleet demo
-canic install --fleet demo root
-canic install --fleet demo uxrrr-q7777-77774-qaaaq-cai
-canic install --fleet demo --root uxrrr-q7777-77774-qaaaq-cai
-canic install --fleet demo --config fleets/demo/canic.toml
+canic install test
+canic install test root
+canic install test uxrrr-q7777-77774-qaaaq-cai
+canic install test --root uxrrr-q7777-77774-qaaaq-cai
+canic install test --config fleets/test/canic.toml
 ```
 
-Fleet selection is explicit. Without `--config`, `canic install --fleet demo`
-uses `fleets/demo/canic.toml`; pass `--config <path>` only when the config is
+Fleet selection is explicit. Without `--config`, `canic install test`
+uses `fleets/test/canic.toml`; pass `--config <path>` only when the config is
 somewhere else:
 
 ```bash
-canic install --fleet demo --config fleets/demo/canic.toml
+canic install test --config fleets/test/canic.toml
 ```
 
 Install configs must declare the fleet identity that will be written to
@@ -221,16 +222,17 @@ project-local state:
 
 ```toml
 [fleet]
-name = "demo"
+name = "test"
 ```
 
-Use `canic fleet list` to list config-defined fleets, and use `--fleet <name>`
-on commands that operate on one fleet. Use `canic fleet delete <fleet>` to
-remove a config-defined fleet directory after confirming the exact fleet name:
+Use `canic fleet list` to list config-defined fleets. Use `canic config <fleet>`
+for declared config, and pass `<fleet>` as the first argument to deployed-fleet
+commands. Use `canic fleet delete <fleet>` to remove a config-defined fleet
+directory after confirming the exact fleet name:
 
 ```bash
-canic config --fleet demo
-canic list --fleet demo
+canic config test
+canic list test
 canic fleet list --network local
 canic fleet create demo --yes
 canic fleet delete demo
@@ -240,7 +242,7 @@ Use `canic medic` when the local project state, replica, or named fleet does
 not look right:
 
 ```bash
-canic medic --fleet demo
+canic medic test
 ```
 
 For `DFX_NETWORK=local`, the install flow attempts one clean local `dfx`
@@ -260,15 +262,15 @@ It still uses `dfx` for live IC snapshot operations, but it owns the higher-leve
 topology selection, manifests, journals, backup verification, and restore
 planning.
 
-Show local demo canisters that already have ids:
+Show local test-fleet canisters that already have ids:
 
 ```bash
-canic list --network local
+canic list test --network local
 ```
 
 If this only prints the `root` row, `dfx` has reserved the root id but the Canic
-tree is not installed yet. Run `canic install`, then query the installed
-registry with `canic list --network local`. List output uses the canister
+tree is not installed yet. Run `canic install test`, then query the installed
+registry with `canic list test --network local`. List output uses the canister
 principal as the first column and renders parent/child relationships with
 box-drawing tree branches.
 
@@ -276,8 +278,8 @@ Use `--root` to query a specific installed Canic root, and `--from` to render a
 subtree with the selected node as the displayed root:
 
 ```bash
-canic list --root root --from app --network local
-canic list --fleet demo --from app --network local
+canic list test --root root --from app --network local
+canic list test --from app --network local
 ```
 
 The CLI calls `canic_ready` on each listed canister and includes a `READY`
@@ -286,7 +288,7 @@ column without failing the whole list for one unavailable canister.
 Plan or capture a canister plus its registered children:
 
 ```bash
-canic snapshot download \
+canic snapshot download test \
   --canister <canister-id> \
   --root <root-canister-id> \
   --include-children \

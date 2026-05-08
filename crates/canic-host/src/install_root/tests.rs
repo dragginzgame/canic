@@ -1,12 +1,10 @@
 use super::{
-    INSTALL_STATE_SCHEMA_VERSION, InstallState, LOCAL_ROOT_TARGET_CYCLES,
-    clear_selected_fleet_name_if_matches, config_selection_error, current_fleet_path,
-    current_network_path, dfx_build_target_command, dfx_canister_command_in_network,
-    dfx_start_local_command, dfx_stop_command, discover_canic_config_choices,
-    fleet_install_state_path, install_build_session_id, list_fleets, parse_bootstrap_status_value,
-    parse_canister_status_cycles, parse_local_dfx_autostart, parse_root_ready_value,
-    read_fleet_install_state, read_install_state, required_local_cycle_topup,
-    resolve_install_config_path, write_install_state,
+    INSTALL_STATE_SCHEMA_VERSION, InstallState, LOCAL_ROOT_TARGET_CYCLES, config_selection_error,
+    dfx_build_target_command, dfx_canister_command_in_network, dfx_start_local_command,
+    dfx_stop_command, discover_canic_config_choices, fleet_install_state_path,
+    install_build_session_id, parse_bootstrap_status_value, parse_canister_status_cycles,
+    parse_local_dfx_autostart, parse_root_ready_value, read_fleet_install_state,
+    required_local_cycle_topup, resolve_install_config_path, write_install_state,
 };
 use crate::release_set::configured_install_targets;
 use crate::test_support::temp_dir;
@@ -268,8 +266,7 @@ fn install_config_defaults_to_project_config_when_present() {
             env::remove_var("CANIC_CONFIG_PATH");
         }
 
-        let resolved = resolve_install_config_path(&root, &root, "local", None, false)
-            .expect("resolve config");
+        let resolved = resolve_install_config_path(&root, None, false).expect("resolve config");
 
         assert_eq!(resolved, config);
         restore_env_var("CANIC_CONFIG_PATH", previous);
@@ -280,98 +277,11 @@ fn install_config_defaults_to_project_config_when_present() {
 #[test]
 fn install_config_accepts_explicit_path() {
     let root = temp_dir("canic-install-config-explicit");
-    let resolved =
-        resolve_install_config_path(&root, &root, "local", Some("fleets/demo/canic.toml"), false)
-            .expect("resolve config");
+    let resolved = resolve_install_config_path(&root, Some("fleets/demo/canic.toml"), false)
+        .expect("resolve config");
 
     assert_eq!(resolved, root.join("fleets/demo/canic.toml"));
     let _ = fs::remove_dir_all(root);
-}
-
-#[test]
-fn install_config_uses_selected_scaffold_config() {
-    with_guarded_env(|| {
-        let root = temp_dir("canic-install-config-selected-scaffold");
-        let broken = root.join("fleets/broken/canic.toml");
-        let demo = root.join("fleets/demo/canic.toml");
-        let staging = root.join("fleets/staging/canic.toml");
-        fs::create_dir_all(broken.parent().expect("broken parent").join("root"))
-            .expect("create broken root");
-        fs::create_dir_all(demo.parent().expect("demo parent").join("root"))
-            .expect("create demo root");
-        fs::create_dir_all(staging.parent().expect("staging parent").join("root"))
-            .expect("create staging root");
-        fs::write(&broken, "[fleet\n").expect("write broken config");
-        fs::write(&demo, fleet_config("demo")).expect("write demo config");
-        fs::write(&staging, fleet_config("staging")).expect("write staging config");
-        fs::write(
-            broken
-                .parent()
-                .expect("broken parent")
-                .join("root/Cargo.toml"),
-            "",
-        )
-        .expect("write broken root manifest");
-        fs::write(
-            demo.parent().expect("demo parent").join("root/Cargo.toml"),
-            "",
-        )
-        .expect("write demo root manifest");
-        fs::write(
-            staging
-                .parent()
-                .expect("staging parent")
-                .join("root/Cargo.toml"),
-            "",
-        )
-        .expect("write staging root manifest");
-        fs::create_dir_all(root.join(".canic/local")).expect("create current dir");
-        fs::write(current_fleet_path(&root, "local"), "staging\n").expect("write current fleet");
-        let previous = env::var_os("CANIC_CONFIG_PATH");
-        unsafe {
-            env::remove_var("CANIC_CONFIG_PATH");
-        }
-
-        let resolved = resolve_install_config_path(&root, &root, "local", None, false)
-            .expect("resolve selected config");
-
-        assert_eq!(resolved, staging);
-        restore_env_var("CANIC_CONFIG_PATH", previous);
-        fs::remove_dir_all(root).expect("clean temp dir");
-    });
-}
-
-#[test]
-fn install_config_rejects_stale_selected_fleet() {
-    with_guarded_env(|| {
-        let root = temp_dir("canic-install-config-stale-selected-fleet");
-        let demo = root.join("fleets/demo/canic.toml");
-        fs::create_dir_all(demo.parent().expect("demo parent").join("root"))
-            .expect("create demo root");
-        fs::write(&demo, fleet_config("demo")).expect("write demo config");
-        fs::write(
-            demo.parent().expect("demo parent").join("root/Cargo.toml"),
-            "",
-        )
-        .expect("write demo root manifest");
-        fs::create_dir_all(root.join(".canic/local")).expect("create current dir");
-        fs::write(current_fleet_path(&root, "local"), "missing\n").expect("write current fleet");
-        let previous = env::var_os("CANIC_CONFIG_PATH");
-        unsafe {
-            env::remove_var("CANIC_CONFIG_PATH");
-        }
-
-        let err = resolve_install_config_path(&root, &root, "local", None, false)
-            .expect_err("stale selected fleet should fail");
-
-        assert!(
-            err.to_string()
-                .contains("selected fleet missing is not declared"),
-            "unexpected error: {err}"
-        );
-        restore_env_var("CANIC_CONFIG_PATH", previous);
-        fs::remove_dir_all(root).expect("clean temp dir");
-    });
 }
 
 #[test]
@@ -379,7 +289,7 @@ fn install_config_error_lists_choices_when_project_default_missing() {
     with_guarded_env(|| {
         let root = temp_dir("canic-install-config-choices");
         let demo = root.join("fleets/demo/canic.toml");
-        let test = root.join("fleets/test/runtime_probe/canic.toml");
+        let test = root.join("canisters/test/runtime_probe/canic.toml");
         fs::create_dir_all(demo.parent().expect("demo parent")).expect("create demo parent");
         fs::create_dir_all(test.parent().expect("test parent")).expect("create test parent");
         fs::create_dir_all(root.join("fleets/demo/root")).expect("create demo root");
@@ -404,8 +314,7 @@ kind = "singleton"
             env::remove_var("CANIC_CONFIG_PATH");
         }
 
-        let err = resolve_install_config_path(&root, &root, "local", None, false)
-            .expect_err("selection must fail");
+        let err = resolve_install_config_path(&root, None, false).expect_err("selection must fail");
         let message = err.to_string();
 
         assert!(message.contains("missing default Canic config at fleets/canic.toml"));
@@ -414,7 +323,7 @@ kind = "singleton"
         assert!(message.contains("3 (root, app, user_hub)"));
         assert!(message.contains("fleets/canic.toml\n\n#"));
         assert!(message.contains("3 (root, app, user_hub)\n\nrun:"));
-        assert!(!message.contains("fleets/test/runtime_probe/canic.toml"));
+        assert!(!message.contains("canisters/test/runtime_probe/canic.toml"));
         assert!(message.contains("run: canic install --config fleets/demo/canic.toml"));
 
         restore_env_var("CANIC_CONFIG_PATH", previous);
@@ -589,34 +498,9 @@ fn discovered_install_config_choices_are_path_sorted() {
 #[test]
 fn install_state_path_is_scoped_by_network() {
     assert_eq!(
-        current_network_path(Path::new("/tmp/canic-project")),
-        PathBuf::from("/tmp/canic-project/.canic/current-network")
-    );
-    assert_eq!(
-        fleet_install_state_path(Path::new("/tmp/canic-project"), "local", "demo"),
+        fleet_install_state_path(&PathBuf::from("/tmp/canic-project"), "local", "demo"),
         PathBuf::from("/tmp/canic-project/.canic/local/fleets/demo.json")
     );
-    assert_eq!(
-        current_fleet_path(Path::new("/tmp/canic-project"), "local"),
-        PathBuf::from("/tmp/canic-project/.canic/local/current-fleet")
-    );
-}
-
-#[test]
-fn clears_current_fleet_markers_that_match_deleted_fleet() {
-    let root = temp_dir("canic-clear-current-fleet");
-    fs::create_dir_all(root.join(".canic/ic")).expect("create ic state dir");
-    fs::create_dir_all(root.join(".canic/local")).expect("create local state dir");
-    fs::write(current_fleet_path(&root, "ic"), "demo\n").expect("write ic fleet marker");
-    fs::write(current_fleet_path(&root, "local"), "other\n").expect("write local fleet marker");
-
-    let cleared =
-        clear_selected_fleet_name_if_matches(&root, "demo").expect("clear matching markers");
-
-    assert_eq!(cleared, vec!["ic".to_string()]);
-    assert!(!current_fleet_path(&root, "ic").exists());
-    assert!(current_fleet_path(&root, "local").exists());
-    fs::remove_dir_all(root).expect("clean temp dir");
 }
 
 #[test]
@@ -643,17 +527,9 @@ fn install_state_round_trips_from_project_state_dir() {
     let named = read_fleet_install_state(&root, "local", "demo")
         .expect("read named fleet")
         .expect("named fleet exists");
-    let fleets = list_fleets(&root, "local").expect("list fleets");
 
     assert_eq!(path, root.join(".canic/local/fleets/demo.json"));
-    assert_eq!(
-        read_install_state(&root, "local").expect("read state"),
-        None
-    );
     assert_eq!(named, state);
-    assert_eq!(fleets.len(), 1);
-    assert_eq!(fleets[0].name, "demo");
-    assert!(!fleets[0].current);
 
     fs::remove_dir_all(root).expect("clean temp dir");
 }
@@ -664,18 +540,6 @@ fn write_temp_workspace_config(config_source: &str) -> PathBuf {
     fs::write(root.join("fleets/canic.toml"), config_source)
         .expect("temp canic.toml must be written");
     root
-}
-
-fn fleet_config(name: &str) -> String {
-    format!(
-        r#"
-[fleet]
-name = "{name}"
-
-[subnets.prime.canisters.root]
-kind = "root"
-"#
-    )
 }
 
 fn command_env(command: &std::process::Command, name: &str) -> Option<String> {

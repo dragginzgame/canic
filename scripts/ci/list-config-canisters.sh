@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-CONFIG="fleets/demo/canic.toml"
+CONFIG="fleets/test/canic.toml"
 MODE="default"
 
 while [ "$#" -gt 0 ]; do

@@ -1,6 +1,6 @@
 # Local Demo Workflow (`scripts/app/`)
 
-These scripts support the reference canisters under `fleets/demo/` and the local topology in `dfx.json`.
+These scripts support the reference canisters under `fleets/test/` and the local topology in `dfx.json`.
 
 ## Prerequisites
 
@@ -31,7 +31,7 @@ when you want interactive startup logs.
 From the repo root:
 
 ```bash
-make demo-install
+make test-fleet-install
 ```
 
 Canic now supports three wasm build profiles:
@@ -39,19 +39,19 @@ Canic now supports three wasm build profiles:
 - `fast`: the middle local/test profile, smaller and faster than debug without paying full release cost
 - `release`: the shipping/install profile
 
-`make demo-install` and `make test-canisters` default to the middle `fast`
+`make test-fleet-install` and `make test-canisters` default to the middle `fast`
 profile, and `CANIC_WASM_PROFILE` is the explicit selector.
 
 If you want to force release wasm artifacts for the same flow, run:
 
 ```bash
-CANIC_WASM_PROFILE=release make demo-install
+CANIC_WASM_PROFILE=release make test-fleet-install
 ```
 
 If you want the raw debug wasm lane instead, run:
 
 ```bash
-CANIC_WASM_PROFILE=debug make demo-install
+CANIC_WASM_PROFILE=debug make test-fleet-install
 ```
 
 This one command:
@@ -134,7 +134,7 @@ If you do not want the repo-local wrapper at all, use the `canic` CLI directly:
 
 ```bash
 canic build root
-canic install root
+canic install test root
 ```
 
 In split repos where the Rust workspace lives under `backend/` but `dfx.json`

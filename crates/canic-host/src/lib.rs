@@ -26,6 +26,6 @@ pub(crate) fn cargo_command() -> Command {
     command
 }
 
-pub(crate) fn default_network() -> String {
+pub(crate) fn dfx_network_from_env() -> String {
     std::env::var("DFX_NETWORK").unwrap_or_else(|_| "local".to_string())
 }

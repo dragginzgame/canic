@@ -1,5 +1,4 @@
-use super::state::{read_install_state, read_selected_fleet_name};
-use crate::release_set::{configured_fleet_name, configured_fleet_roles};
+use crate::release_set::configured_fleet_roles;
 use crate::table::WhitespaceTable;
 use crate::workspace_discovery::normalize_workspace_path;
 use std::{
@@ -25,8 +24,6 @@ const ROOT_CONFIG_RELATIVE: &str = "canic.toml";
 // Resolve install config selection without silently choosing among demo/test configs.
 pub(super) fn resolve_install_config_path(
     workspace_root: &Path,
-    dfx_root: &Path,
-    network: &str,
     explicit_config_path: Option<&str>,
     interactive: bool,
 ) -> Result<PathBuf, Box<dyn std::error::Error>> {
@@ -44,10 +41,6 @@ pub(super) fn resolve_install_config_path(
         ));
     }
 
-    if let Some(path) = selected_install_config_path(workspace_root, dfx_root, network)? {
-        return Ok(path);
-    }
-
     let default = workspace_root.join(FLEETS_ROOT).join(ROOT_CONFIG_RELATIVE);
     if default.is_file() {
         return Ok(default);
@@ -61,50 +54,6 @@ pub(super) fn resolve_install_config_path(
     }
 
     Err(config_selection_error(workspace_root, &default, &choices).into())
-}
-
-// Resolve the selected fleet's config path before falling back to project defaults.
-fn selected_install_config_path(
-    workspace_root: &Path,
-    dfx_root: &Path,
-    network: &str,
-) -> Result<Option<PathBuf>, Box<dyn std::error::Error>> {
-    if let Some(state) = read_install_state(dfx_root, network)? {
-        let path = normalize_workspace_path(workspace_root, PathBuf::from(state.config_path));
-        if path.is_file() {
-            return Ok(Some(path));
-        }
-    }
-
-    let Some(fleet) = read_selected_fleet_name(dfx_root, network)? else {
-        return Ok(None);
-    };
-    let mut matches = Vec::new();
-    for path in discover_workspace_canic_config_choices(workspace_root)? {
-        if let Some(path) = selected_config_match(path, &fleet) {
-            matches.push(path);
-        }
-    }
-
-    match matches.as_slice() {
-        [] => Err(format!(
-            "selected fleet {fleet} is not declared by any install config under fleets; run canic fleet list"
-        )
-        .into()),
-        [path] => Ok(Some(path.clone())),
-        _ => Err(format!(
-            "multiple install configs declare selected fleet {fleet}; run canic install --config <path>"
-        )
-        .into()),
-    }
-}
-
-// Return one config path when its declared fleet identity matches the selection.
-fn selected_config_match(path: PathBuf, fleet: &str) -> Option<PathBuf> {
-    match configured_fleet_name(&path) {
-        Ok(name) if name == fleet => Some(path),
-        Ok(_) | Err(_) => None,
-    }
 }
 
 // Discover installable Canic config choices from the fleet root.

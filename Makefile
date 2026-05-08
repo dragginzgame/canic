@@ -2,7 +2,7 @@
         test-packaged-downstream-wasm-store \
         test-packaged-downstream-cli test-installed-canic-cli \
         test test-wasm test-bump build check clippy fmt fmt-check clean \
-        install install-dev update-dev demo-install \
+        install install-dev update-dev test-fleet-install \
         ensure-clean ensure-hooks test-unit test-unit-fast \
         test-canisters fmt-core cloc
 
@@ -73,7 +73,7 @@ help:
 	@echo "  test-installed-canic-cli  Verify the installed-binary canic CLI path"
 	@echo ""
 	@echo "Development:"
-	@echo "  demo-install    Install the full local reference topology with fast wasm by default (fails if dfx is not already running)"
+	@echo "  test-fleet-install  Install the full local test/reference topology with fast wasm by default"
 	@echo "  test             Run clippy + workspace tests (PocketIC/Cargo only)"
 	@echo "  test-wasm        Run clippy + fast non-PocketIC tests for wasm iteration"
 	@echo "  build            Build all crates"
@@ -89,7 +89,7 @@ help:
 	@echo "Examples:"
 	@echo "  make patch       # Bump patch version"
 	@echo "  make patch-quick # Fast patch bump using cargo check"
-	@echo "  make demo-install # Fast local install using fast wasm (override with CANIC_WASM_PROFILE=debug|fast|release)"
+	@echo "  make test-fleet-install # Fast local install using fast wasm (override with CANIC_WASM_PROFILE=debug|fast|release)"
 	@echo "  make test        # Run clippy and workspace tests"
 	@echo "  make test-wasm   # Fast wasm iteration path without PocketIC/e2e"
 	@echo "  make build       # Build project"
@@ -173,9 +173,9 @@ test-installed-canic-cli:
 # Tests
 #
 
-demo-install:
+test-fleet-install:
 	@mkdir -p "$(TEST_TMPDIR)"
-	TMPDIR="$(TEST_TMPDIR)" CANIC_WASM_PROFILE="$(if $(CANIC_WASM_PROFILE),$(CANIC_WASM_PROFILE),fast)" $(CARGO_ENV) cargo run -q -p canic-cli --bin canic -- install --config fleets/demo/canic.toml
+	TMPDIR="$(TEST_TMPDIR)" CANIC_WASM_PROFILE="$(if $(CANIC_WASM_PROFILE),$(CANIC_WASM_PROFILE),fast)" $(CARGO_ENV) cargo run -q -p canic-cli --bin canic -- install test --config fleets/test/canic.toml
 
 test: clippy test-unit
 
@@ -203,7 +203,7 @@ test-unit-fast:
 	@mkdir -p "$(TEST_TMPDIR)"
 	TMPDIR="$(TEST_TMPDIR)" $(CARGO_ENV) bash scripts/ci/run-workspace-tests.sh fast
 
-test-canisters: demo-install
+test-canisters: test-fleet-install
 	test_pid="$$(TMPDIR="$(TEST_TMPDIR)" dfx canister call root canic_subnet_registry --output json | jq -er '.Ok[] | select(.role == "test") | .pid' | head -n1)"; \
 	TMPDIR="$(TEST_TMPDIR)" dfx canister call "$$test_pid" test
 

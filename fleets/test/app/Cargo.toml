@@ -1,5 +1,5 @@
 [package]
-name = "demo_fleet_app"
+name = "canister_app"
 edition = { workspace = true }
 rust-version = { workspace = true }
 version = { workspace = true }

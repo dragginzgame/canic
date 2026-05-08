@@ -1,7 +1,6 @@
 use crate::{
     args::{
-        default_dfx, default_network, flag_arg, parse_matches, path_option, string_option,
-        value_arg,
+        default_dfx, flag_arg, local_network, parse_matches, path_option, string_option, value_arg,
     },
     version_text,
 };
@@ -15,7 +14,7 @@ use canic_backup::{
 };
 use canic_host::{
     dfx::{Dfx, DfxCommandError},
-    install_root::read_current_or_fleet_install_state,
+    install_root::read_named_fleet_install_state,
 };
 use clap::Command as ClapCommand;
 use std::{
@@ -37,13 +36,13 @@ pub enum SnapshotCommandError {
     #[error("missing required option {0}")]
     MissingOption(&'static str),
 
-    #[error("snapshot download needs an installed --fleet <name>")]
+    #[error("snapshot download needs an installed fleet name")]
     MissingSnapshotSource,
 
     #[error("unknown option {0}")]
     UnknownOption(String),
 
-    #[error("cannot combine --fleet root {fleet_root} with --root {root}")]
+    #[error("cannot combine fleet root {fleet_root} with --root {root}")]
     ConflictingFleetRoot { fleet_root: String, root: String },
 
     #[error("canister {canister} is not a member of fleet {fleet}")]
@@ -117,14 +116,13 @@ fn snapshot_download_command() -> ClapCommand {
         .bin_name("canic snapshot download")
         .about("Download canister snapshots for one canister or subtree")
         .disable_help_flag(true)
-        .arg(value_arg("canister").long("canister").value_name("id"))
         .arg(
             value_arg("fleet")
-                .long("fleet")
-                .value_name("name")
+                .value_name("fleet")
                 .required(true)
                 .help("Installed fleet name to snapshot"),
         )
+        .arg(value_arg("canister").long("canister").value_name("id"))
         .arg(
             value_arg("out")
                 .long("out")
@@ -239,7 +237,7 @@ fn resolve_snapshot_download_request(
     options: &SnapshotDownloadOptions,
 ) -> Result<ResolvedSnapshotDownload, SnapshotCommandError> {
     let network = state_network(options.network.as_deref());
-    let state = read_current_or_fleet_install_state(&network, Some(&options.fleet))
+    let state = read_named_fleet_install_state(&network, &options.fleet)
         .map_err(|err| SnapshotCommandError::InstallState(err.to_string()))?;
     let explicit_canister = options.canister.is_some();
     let canister = options
@@ -341,9 +339,9 @@ fn default_snapshot_output_path(label: &str) -> PathBuf {
     PathBuf::from("backups").join(format!("fleet-{}-{marker}", file_safe_component(label)))
 }
 
-// Resolve the selected state network consistently with other fleet commands.
+// Resolve the state network for commands that omit --network.
 fn state_network(network: Option<&str>) -> String {
-    network.map_or_else(default_network, str::to_string)
+    network.map_or_else(local_network, str::to_string)
 }
 
 // Return a compact UTC timestamp for human-readable backup directories.
@@ -616,7 +614,6 @@ mod tests {
     #[test]
     fn parses_download_options() {
         let options = SnapshotDownloadOptions::parse([
-            OsString::from("--fleet"),
             OsString::from("demo"),
             OsString::from("--canister"),
             OsString::from(ROOT),
@@ -640,11 +637,10 @@ mod tests {
         assert_eq!(options.lifecycle, SnapshotLifecycleMode::StopAndResume);
     }
 
-    // Ensure --out can be omitted for the common current-fleet backup flow.
+    // Ensure --out can be omitted for the common named-fleet backup flow.
     #[test]
     fn download_options_default_output_directory() {
         let options = SnapshotDownloadOptions::parse([
-            OsString::from("--fleet"),
             OsString::from("demo"),
             OsString::from("--canister"),
             OsString::from(ROOT),
@@ -661,12 +657,9 @@ mod tests {
     // Ensure a named fleet can be selected without spelling out its root canister.
     #[test]
     fn parses_download_fleet_options_without_canister() {
-        let options = SnapshotDownloadOptions::parse([
-            OsString::from("--fleet"),
-            OsString::from("demo"),
-            OsString::from("--dry-run"),
-        ])
-        .expect("parse options");
+        let options =
+            SnapshotDownloadOptions::parse([OsString::from("demo"), OsString::from("--dry-run")])
+                .expect("parse options");
 
         assert_eq!(options.fleet, "demo");
         assert_eq!(options.canister, None);

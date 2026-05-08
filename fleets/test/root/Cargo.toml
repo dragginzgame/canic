@@ -1,5 +1,5 @@
 [package]
-name = "demo_fleet_app"
+name = "canister_root"
 edition = { workspace = true }
 rust-version = { workspace = true }
 version = { workspace = true }
@@ -10,11 +10,16 @@ crate-type = ["cdylib"]
 
 [dependencies]
 candid = { workspace = true }
-canic = { workspace = true }
+canic = { workspace = true, features = ["control-plane", "auth-crypto"] }
 ic-cdk = { workspace = true }
+serde = { workspace = true }
 
 [build-dependencies]
 canic = { workspace = true }
+sha2 = { workspace = true }
+
+[dev-dependencies]
+pocket-ic = { workspace = true }
 
 [lints]
 workspace = true

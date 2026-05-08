@@ -7,19 +7,20 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.32.x] - 2026-05-07 - Canic Executable
 
-- `0.32.4` removes stale reference/release-set CLI surfaces, tightens CLI/host command boundaries, keeps implicit network defaults on `local`, requires explicit `--fleet <name>` on fleet-scoped commands, separates non-fleet canisters back under `canisters/`, moves fleet creation to `canic fleet create`, splits config inspection from deployed canister listing, removes saved default-context reads, and makes role-attestation audiences required at the DTO boundary.
+- `0.32.6` finishes the positional fleet CLI cleanup for install, medic, and snapshot download commands, with docs and local helper output updated to match.
+
+```bash
+canic install test
+canic medic test --network local
+canic snapshot download test --canister <canister-id> --dry-run
+```
+
+- `0.32.5` clarifies repo fleet layout by making `fleets/test` the dfx/CI-backed reference fleet, keeping `fleets/demo` as a minimal root-plus-app example, moving isolated test fixture canisters under `canisters/test`, changing fleet-scoped commands to use positional fleet arguments, adding compact capability/top-up and verbose config output, and removing the public `canic network` command plus persisted current-network/current-fleet marker state.
+- `0.32.4` removes stale reference/release-set CLI surfaces, tightens CLI/host command boundaries, requires explicit fleet selection on fleet-scoped commands, separates non-fleet canisters back under `canisters/`, moves fleet creation to `canic fleet create`, splits config inspection from deployed canister listing, removes saved default-context reads, and makes role-attestation audiences required at the DTO boundary.
 - `0.32.3` records a short release-bookkeeping recovery after a git hiccup; the tree was checked for deleted files and the 0.32 changelog is back in order.
 - `0.32.2` adds a pre-commit large-file guard so accidentally staged files over 20 MiB are rejected before they reach the repo.
 - `0.32.1` focuses the `canic` executable into a clearer operator tool, with confirmation-guarded project scaffolding, fleet-aware install/list/medic flows, simpler snapshot backup commands, backup discovery, and cleaner help output.
 - `0.32.0` makes fleet identity explicit in `canic.toml`, removes install-time fleet defaults, and makes `canic list` plus top-level help clearer for multi-fleet operator workflows.
-
-```bash
-canic fleet create my_app
-canic fleet create my_app --yes
-canic install --fleet my_app
-canic snapshot download --fleet demo
-canic backup list
-```
 
 See detailed breakdown:
 [docs/changelog/0.32.md](docs/changelog/0.32.md)

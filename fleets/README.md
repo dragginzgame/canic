@@ -2,8 +2,8 @@
 
 This directory contains config-defined Canic fleets. A directory belongs here
 when it has a `canic.toml` that describes a fleet topology and should be
-discoverable by `canic fleet list`, `canic fleet use`, and implicit
-`canic install` config selection.
+discoverable by `canic fleet list` and usable through commands that take the
+fleet name as a positional argument.
 
 The implicit `wasm_store` is not sourced from this directory. Its canonical
 canister crate lives at `crates/canic-wasm-store/` so downstreams build the same
@@ -13,27 +13,34 @@ from the resolved `canic` package automatically.
 
 ## Layout
 
-- `demo/` – local reference topology wired through `dfx.json`.
+- `test/` – local reference topology wired through `dfx.json` and used by CI wasm/audit workflows.
   - `root/` – root orchestrator canister (`canic::start_root!`) that wires topology, bootstraps the internal `wasm_store`, stages/publishes ordinary child releases, and exposes root admin endpoints.
   - `app/` – minimal application canister used as a placeholder service.
   - `user_hub/` + `user_shard/` – sharding placement plus delegated signing flow.
   - `scale_hub/` + `scale/` – scaling pool demo.
   - `minimal/` – shared runtime baseline canister.
-  - `canic.toml` – shared demo topology referenced by each demo canister `build.rs`.
-  - `test-configs/` – config fixtures used by local/demo checks.
-- `test/` – internal correctness and PocketIC canister fixtures. `runtime_probe/` replaces the older `canister_test` name.
+  - `canic.toml` – shared test topology referenced by each reference canister `build.rs`.
+  - `test-configs/` – config fixtures used by local checks.
+- `demo/` – minimal root-plus-app fleet for quick experiments.
+  - `root/` – root canister for the demo topology.
+  - `app/` – simple application canister auto-created by the root.
+  - `canic.toml` – shared demo topology referenced by each demo fleet canister `build.rs`.
 
 ## Local Workflow
 
-The demo canisters are wired through `dfx.json`; custom build steps call
+The test canisters are wired through `dfx.json`; custom build steps call
 `scripts/app/build.sh`, which is a thin wrapper around `canic build`.
 
-- Install the full local reference topology: `make demo-install`
+- Install the full local reference topology: `make test-fleet-install`
 - `root` stays thin: only the bootstrap `wasm_store` artifact is embedded, and the ordinary configured release set is staged after install from `.dfx/local/canisters/root/root.release-set.json`.
-- Create/build demo canisters manually: `dfx canister create --all` then `dfx build --all`
+- Create/build test canisters manually: `dfx canister create --all` then `dfx build --all`
 - Run the scripted local smoke flow: `make test-canisters`
 
-Note: `make demo-install` and `make test-canisters` try one clean local `dfx`
+The demo fleet is intentionally small and does not try to solve multi-fleet
+`dfx.json` switching. Isolated test probes and PocketIC fixtures live under
+`canisters/test/`.
+
+Note: `make test-fleet-install` and `make test-canisters` try one clean local `dfx`
 restart automatically when `dfx ping local` fails. They are manual local smoke
 helpers, not part of `make test`, and nonlocal targets expect their replica to
 be managed externally.

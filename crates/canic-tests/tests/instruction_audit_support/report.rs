@@ -579,7 +579,7 @@ fn hotspot_hint(subject_label: &str) -> (&'static str, &'static str) {
         ),
         "test" => (
             "Local/dev update floor on the test helper canister",
-            "[runtime_probe/lib](/home/adam/projects/canic/fleets/test/runtime_probe/src/lib.rs)",
+            "[runtime_probe/lib](/home/adam/projects/canic/canisters/test/runtime_probe/src/lib.rs)",
         ),
         "canic_subnet_registry" => (
             "Root topology registry query",

@@ -70,8 +70,8 @@ will infer the canister-manifest root from that config location.
 
 For `canic install`, the implicit network default is always `local`; use
 `--network <name>` for one command against another network. The public CLI
-requires `--fleet <name>` and uses `fleets/<name>/canic.toml` unless `--config
-<path>` is passed.
+requires the fleet name as the first positional argument and uses
+`fleets/<name>/canic.toml` unless `--config <path>` is passed.
 
 If a package name does not follow `canister_<role>`, declare the role mapping
 in `Cargo.toml`:

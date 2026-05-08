@@ -5,6 +5,9 @@ use std::collections::{BTreeMap, BTreeSet};
 
 pub(super) const ROLE_HEADER: &str = "ROLE";
 pub(super) const KIND_HEADER: &str = "KIND";
+pub(super) const CAPABILITIES_HEADER: &str = "CAPABILITIES";
+pub(super) const AUTO_HEADER: &str = "AUTO";
+pub(super) const TOPUP_HEADER: &str = "TOPUP";
 pub(super) const CANISTER_HEADER: &str = "CANISTER_ID";
 pub(super) const READY_HEADER: &str = "READY";
 const LIST_COLUMN_GAP: &str = "   ";
@@ -19,8 +22,7 @@ const TREE_SPACE: &str = "   ";
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(super) struct ListTitle {
-    pub(super) label: String,
-    pub(super) value: String,
+    pub(super) fleet: String,
     pub(super) network: String,
 }
 
@@ -28,7 +30,7 @@ impl ListTitle {
     /// Render the compact title block shown above `canic list` tables.
     #[must_use]
     pub(super) fn render(&self) -> String {
-        format!("{}: {}\nNetwork: {}", self.label, self.value, self.network)
+        format!("Fleet: {} (network {})", self.fleet, self.network)
     }
 }
 
@@ -81,8 +83,16 @@ pub(super) fn render_list_output(
 }
 
 /// Render config-defined roles for a selected fleet that has not been installed yet.
-pub(super) fn render_config_output(title: &ListTitle, rows: &[ConfigRoleRow]) -> String {
-    format!("{}\n\n{}", title.render(), render_config_table(rows))
+pub(super) fn render_config_output(
+    title: &ListTitle,
+    rows: &[ConfigRoleRow],
+    verbose: bool,
+) -> String {
+    format!(
+        "{}\n\n{}",
+        title.render(),
+        render_config_table(rows, verbose)
+    )
 }
 
 // Return the entries that would be rendered for the selected table.
@@ -206,35 +216,63 @@ pub(super) struct RegistryRow<'a> {
 pub(super) struct ConfigRoleRow {
     pub(super) role: String,
     pub(super) kind: String,
+    pub(super) capabilities: String,
+    pub(super) auto_create: String,
+    pub(super) topup: String,
+    pub(super) details: Vec<String>,
 }
 
 // Render config-defined role rows as a compact whitespace table.
-fn render_config_table(rows: &[ConfigRoleRow]) -> String {
+fn render_config_table(rows: &[ConfigRoleRow], verbose: bool) -> String {
     let table_rows = config_table_rows(rows);
     let widths = config_table_widths(&table_rows);
-    let header = render_config_table_row(&[ROLE_HEADER, KIND_HEADER], &widths);
+    let header = render_config_table_row(
+        &[
+            ROLE_HEADER,
+            KIND_HEADER,
+            CAPABILITIES_HEADER,
+            AUTO_HEADER,
+            TOPUP_HEADER,
+        ],
+        &widths,
+    );
     let separator = render_config_separator(&widths);
-    let mut lines = Vec::with_capacity(table_rows.len() + 2);
+    let mut lines = Vec::new();
     lines.push(header);
     lines.push(separator);
-    lines.extend(
-        table_rows
-            .iter()
-            .map(|row| render_config_table_row(row, &widths)),
-    );
+    for (row, table_row) in rows.iter().zip(table_rows.iter()) {
+        lines.push(render_config_table_row(table_row, &widths));
+        if verbose {
+            lines.extend(row.details.iter().map(|detail| format!("  - {detail}")));
+        }
+    }
     lines.join("\n")
 }
 
 // Collect rendered config cell values before width calculation.
-fn config_table_rows(rows: &[ConfigRoleRow]) -> Vec<[String; 2]> {
+fn config_table_rows(rows: &[ConfigRoleRow]) -> Vec<[String; 5]> {
     rows.iter()
-        .map(|row| [row.role.clone(), row.kind.clone()])
+        .map(|row| {
+            [
+                row.role.clone(),
+                row.kind.clone(),
+                row.capabilities.clone(),
+                row.auto_create.clone(),
+                row.topup.clone(),
+            ]
+        })
         .collect()
 }
 
 // Compute display widths for config role output, including headers.
-fn config_table_widths(rows: &[[String; 2]]) -> [usize; 2] {
-    let mut widths = [ROLE_HEADER.chars().count(), KIND_HEADER.chars().count()];
+fn config_table_widths(rows: &[[String; 5]]) -> [usize; 5] {
+    let mut widths = [
+        ROLE_HEADER.chars().count(),
+        KIND_HEADER.chars().count(),
+        CAPABILITIES_HEADER.chars().count(),
+        AUTO_HEADER.chars().count(),
+        TOPUP_HEADER.chars().count(),
+    ];
 
     for row in rows {
         for (index, cell) in row.iter().enumerate() {
@@ -246,7 +284,7 @@ fn config_table_widths(rows: &[[String; 2]]) -> [usize; 2] {
 }
 
 // Render one padded config table row with the list-specific column gap.
-fn render_config_table_row(row: &[impl AsRef<str>], widths: &[usize; 2]) -> String {
+fn render_config_table_row(row: &[impl AsRef<str>], widths: &[usize; 5]) -> String {
     widths
         .iter()
         .enumerate()
@@ -261,7 +299,7 @@ fn render_config_table_row(row: &[impl AsRef<str>], widths: &[usize; 2]) -> Stri
 }
 
 // Render the line under the config table headers.
-fn render_config_separator(widths: &[usize; 2]) -> String {
+fn render_config_separator(widths: &[usize; 5]) -> String {
     widths
         .iter()
         .map(|width| "-".repeat(*width))

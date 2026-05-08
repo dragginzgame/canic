@@ -1,5 +1,5 @@
 use crate::{
-    args::{default_network, print_help_or_version},
+    args::{local_network, print_help_or_version},
     version_text,
 };
 mod options;
@@ -12,11 +12,12 @@ use canic_backup::discovery::{DiscoveryError, RegistryEntry, parse_registry_entr
 use canic_host::{
     dfx::{Dfx, DfxCommandError},
     install_root::{
-        InstallState, discover_current_canic_config_choices, read_current_or_fleet_install_state,
+        InstallState, discover_current_canic_config_choices, read_named_fleet_install_state,
     },
     release_set::{
         config_path as default_config_path, configured_fleet_name, configured_fleet_roles,
-        configured_role_kinds,
+        configured_role_auto_create, configured_role_capabilities, configured_role_details,
+        configured_role_kinds, configured_role_topups,
     },
     replica_query,
 };
@@ -55,7 +56,7 @@ pub enum ListCommandError {
     ReplicaQuery(String),
 
     #[error(
-        "fleet {fleet} points to root {root}, but that canister is not present on network {network}. Local dfx state was probably restarted or reset. Run `canic install --fleet {fleet}` to recreate it."
+        "fleet {fleet} points to root {root}, but that canister is not present on network {network}. Local dfx state was probably restarted or reset. Run `canic install {fleet}` to recreate it."
     )]
     StaleLocalFleet {
         fleet: String,
@@ -67,7 +68,7 @@ pub enum ListCommandError {
     InstallState(String),
 
     #[error(
-        "fleet {fleet} is not installed on network {network}; run `canic install --fleet {fleet}` to deploy it or `canic config --fleet {fleet}` to inspect its config"
+        "fleet {fleet} is not installed on network {network}; run `canic install {fleet}` to deploy it or `canic config {fleet}` to inspect its config"
     )]
     NoInstalledFleet { network: String, fleet: String },
 
@@ -129,20 +130,14 @@ where
     let options = ListOptions::parse_config(args)?;
     let title = list_title(&options);
     let rows = load_config_role_rows(&options)?;
-    println!("{}", render_config_output(&title, &rows));
+    println!("{}", render_config_output(&title, &rows, options.verbose));
     Ok(())
 }
 
 // Return the operator-facing title for the selected list source.
 fn list_title(options: &ListOptions) -> ListTitle {
-    let (label, value) = match options.source {
-        ListSource::Config => ("Fleet config", options.fleet.clone()),
-        ListSource::RootRegistry => ("Deployed fleet", options.fleet.clone()),
-    };
-
     ListTitle {
-        label: label.to_string(),
-        value,
+        fleet: options.fleet.clone(),
         network: state_network(options),
     }
 }
@@ -239,6 +234,18 @@ fn load_config_role_rows(options: &ListOptions) -> Result<Vec<ConfigRoleRow>, Li
         .map_err(|err| ListCommandError::InstallState(err.to_string()))?;
     let kinds = configured_role_kinds(&config_path)
         .map_err(|err| ListCommandError::InstallState(err.to_string()))?;
+    let capabilities = configured_role_capabilities(&config_path)
+        .map_err(|err| ListCommandError::InstallState(err.to_string()))?;
+    let auto_create = configured_role_auto_create(&config_path)
+        .map_err(|err| ListCommandError::InstallState(err.to_string()))?;
+    let topups = configured_role_topups(&config_path)
+        .map_err(|err| ListCommandError::InstallState(err.to_string()))?;
+    let details = if options.verbose {
+        configured_role_details(&config_path)
+            .map_err(|err| ListCommandError::InstallState(err.to_string()))?
+    } else {
+        BTreeMap::new()
+    };
     let anchor = options.anchor.as_deref();
     if let Some(anchor) = anchor
         && !roles.iter().any(|role| role == anchor)
@@ -250,6 +257,20 @@ fn load_config_role_rows(options: &ListOptions) -> Result<Vec<ConfigRoleRow>, Li
         .into_iter()
         .filter(|role| anchor.is_none_or(|anchor| anchor == role))
         .map(|role| ConfigRoleRow {
+            capabilities: capabilities
+                .get(&role)
+                .filter(|capabilities| !capabilities.is_empty())
+                .map_or_else(|| "-".to_string(), |capabilities| capabilities.join(", ")),
+            auto_create: if auto_create.contains(&role) {
+                "yes".to_string()
+            } else {
+                "no".to_string()
+            },
+            topup: topups
+                .get(&role)
+                .cloned()
+                .unwrap_or_else(|| "-".to_string()),
+            details: details.get(&role).cloned().unwrap_or_default(),
             kind: kinds
                 .get(&role)
                 .cloned()
@@ -291,7 +312,7 @@ fn resolve_root_canister(options: &ListOptions) -> Result<String, ListCommandErr
 fn read_selected_install_state(
     options: &ListOptions,
 ) -> Result<Option<InstallState>, Box<dyn std::error::Error>> {
-    read_current_or_fleet_install_state(&state_network(options), Some(&options.fleet))
+    read_named_fleet_install_state(&state_network(options), &options.fleet)
 }
 
 // Resolve the config path for the selected fleet, if that fleet is declared.
@@ -337,9 +358,9 @@ fn resolve_canister_identifier(
         .map(|id| id.unwrap_or_else(|| identifier.to_string()))
 }
 
-// Resolve the state network using the same local default as host install commands.
+// Resolve the state network for commands that omit --network.
 fn state_network(options: &ListOptions) -> String {
-    options.network.clone().unwrap_or_else(default_network)
+    options.network.clone().unwrap_or_else(local_network)
 }
 
 // Run `dfx canister call <root> canic_subnet_registry --output json`.
@@ -414,13 +435,13 @@ fn list_dfx_error(error: DfxCommandError) -> ListCommandError {
 fn root_registry_hint(stderr: &str) -> Option<&'static str> {
     if stderr.contains("Cannot find canister id") {
         return Some(
-            "no root canister id exists in this dfx project. Use `canic config` for the selected fleet config, or run `canic install` before querying the root registry.",
+            "no root canister id exists in this dfx project. Use `canic config <name>` for the selected fleet config, or run `canic install <name>` before querying the root registry.",
         );
     }
 
     if stderr.contains("contains no Wasm module") || stderr.contains("wasm-module-not-found") {
         return Some(
-            "`dfx canister create root` only reserves an id; it does not install Canic root code. Run `canic install`, then use `canic list`.",
+            "`dfx canister create root` only reserves an id; it does not install Canic root code. Run `canic install <name>`, then use `canic list <name>`.",
         );
     }
 
@@ -455,8 +476,10 @@ fn deployed_config_gap_hint(options: &ListOptions, registry: &[RegistryEntry]) -
         ""
     };
     Some(format!(
-        "deployed registry is missing configured roles: {}{suffix}. Run `canic config` to inspect the config or `canic install` to bootstrap them.",
-        shown.join(", ")
+        "deployed registry is missing configured roles: {}{suffix}. Run `canic config {}` to inspect the config or `canic install {}` to bootstrap them.",
+        shown.join(", "),
+        options.fleet,
+        options.fleet
     ))
 }
 
@@ -475,10 +498,9 @@ mod tests {
     #[test]
     fn parses_live_list_options() {
         let options = ListOptions::parse_list([
+            OsString::from("demo"),
             OsString::from("--root"),
             OsString::from(ROOT),
-            OsString::from("--fleet"),
-            OsString::from("demo"),
             OsString::from("--from"),
             OsString::from(APP),
             OsString::from("--network"),
@@ -494,16 +516,17 @@ mod tests {
         assert_eq!(options.anchor, Some(APP.to_string()));
         assert_eq!(options.network, Some("local".to_string()));
         assert_eq!(options.dfx, "/bin/dfx");
+        assert!(!options.verbose);
     }
 
     // Ensure config options parse declared fleet inspection.
     #[test]
     fn parses_config_options() {
         let options = ListOptions::parse_config([
-            OsString::from("--fleet"),
             OsString::from("demo"),
             OsString::from("--network"),
             OsString::from("local"),
+            OsString::from("--verbose"),
         ])
         .expect("parse config options");
 
@@ -513,6 +536,7 @@ mod tests {
         assert_eq!(options.anchor, None);
         assert_eq!(options.network, Some("local".to_string()));
         assert_eq!(options.dfx, "dfx");
+        assert!(options.verbose);
     }
 
     // Ensure list and config help explain fleet selection and subtree rendering.
@@ -522,13 +546,16 @@ mod tests {
         let config = config_usage();
 
         assert!(list.contains("List canisters registered by the deployed root"));
-        assert!(list.contains("Usage: canic list"));
-        assert!(list.contains("--fleet <name>"));
+        assert!(list.contains("Usage: canic list [OPTIONS] <fleet>"));
+        assert!(list.contains("<fleet>"));
+        assert!(!list.contains("--fleet <name>"));
         assert!(list.contains("--from <name-or-principal>"));
         assert!(list.contains("--root <name-or-principal>"));
-        assert!(config.contains("Usage: canic config"));
-        assert!(config.contains("--fleet <name>"));
+        assert!(config.contains("Usage: canic config [OPTIONS] <fleet>"));
+        assert!(config.contains("<fleet>"));
+        assert!(!config.contains("--fleet <name>"));
         assert!(config.contains("--from <role>"));
+        assert!(config.contains("--verbose"));
         assert!(config.contains("Examples:"));
     }
 
@@ -666,8 +693,7 @@ mod tests {
     fn renders_list_output_with_fleet_title() {
         let registry = parse_registry_entries(&registry_json()).expect("parse registry");
         let title = ListTitle {
-            label: "Fleet".to_string(),
-            value: "demo".to_string(),
+            fleet: "demo".to_string(),
             network: "local".to_string(),
         };
         let output = render_list_output(
@@ -679,7 +705,7 @@ mod tests {
         )
         .expect("render list output");
 
-        assert!(output.starts_with("Fleet: demo\nNetwork: local\n\nCANISTER_ID"));
+        assert!(output.starts_with("Fleet: demo (network local)\n\nCANISTER_ID"));
         assert!(output.contains("\n------------------------------"));
     }
 
@@ -687,32 +713,43 @@ mod tests {
     #[test]
     fn renders_config_output_with_fleet_roles() {
         let title = ListTitle {
-            label: "Fleet config".to_string(),
-            value: "test_me".to_string(),
+            fleet: "test_me".to_string(),
             network: "local".to_string(),
         };
         let rows = vec![
             ConfigRoleRow {
                 role: "root".to_string(),
                 kind: "root".to_string(),
+                capabilities: "-".to_string(),
+                auto_create: "no".to_string(),
+                topup: "-".to_string(),
+                details: Vec::new(),
             },
             ConfigRoleRow {
                 role: "app".to_string(),
                 kind: "singleton".to_string(),
+                capabilities: "auth, sharding".to_string(),
+                auto_create: "yes".to_string(),
+                topup: "4.0TC @ 10.0TC".to_string(),
+                details: vec![
+                    "app_index".to_string(),
+                    "sharding user_shards->user_shard cap=100 initial=1 max=4".to_string(),
+                ],
             },
         ];
-        let output = render_config_output(&title, &rows);
+        let output = render_config_output(&title, &rows, true);
 
         assert_eq!(
             output,
             [
-                "Fleet config: test_me",
-                "Network: local",
+                "Fleet: test_me (network local)",
                 "",
-                "ROLE   KIND",
-                "----   ---------",
-                "root   root",
-                "app    singleton",
+                "ROLE   KIND        CAPABILITIES     AUTO   TOPUP",
+                "----   ---------   --------------   ----   --------------",
+                "root   root        -                no     -",
+                "app    singleton   auth, sharding   yes    4.0TC @ 10.0TC",
+                "  - app_index",
+                "  - sharding user_shards->user_shard cap=100 initial=1 max=4",
             ]
             .join("\n")
         );

@@ -20,13 +20,8 @@ mod config_selection;
 mod state;
 
 pub use config_selection::discover_canic_config_choices;
-pub use state::{
-    FleetSummary, InstallState, clear_current_fleet_name_if_matches, list_current_fleets,
-    read_current_fleet_name, read_current_install_state, read_current_network_name,
-    read_current_or_fleet_install_state, select_current_fleet, select_current_fleet_name,
-    select_current_network_name,
-};
 use state::{INSTALL_STATE_SCHEMA_VERSION, validate_fleet_name, write_install_state};
+pub use state::{InstallState, read_named_fleet_install_state};
 
 #[cfg(test)]
 mod tests;
@@ -34,10 +29,7 @@ mod tests;
 #[cfg(test)]
 use config_selection::config_selection_error;
 #[cfg(test)]
-use state::{
-    clear_selected_fleet_name_if_matches, current_fleet_path, current_network_path,
-    fleet_install_state_path, list_fleets, read_fleet_install_state, read_install_state,
-};
+use state::{fleet_install_state_path, read_fleet_install_state};
 
 ///
 /// InstallRootOptions
@@ -95,8 +87,6 @@ pub fn install_root(options: InstallRootOptions) -> Result<(), Box<dyn std::erro
     let dfx_root = dfx_root()?;
     let config_path = resolve_install_config_path(
         &workspace_root,
-        &dfx_root,
-        &options.network,
         options.config_path.as_deref(),
         options.interactive_config_selection,
     )?;

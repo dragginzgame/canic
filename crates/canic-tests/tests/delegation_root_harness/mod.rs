@@ -34,7 +34,7 @@ fn baseline_spec() -> canic_testing_internal::pic::RootBaselineSpec<'static> {
     let build_extra_env = vec![(
         "CANIC_CONFIG_PATH".to_string(),
         workspace_root
-            .join("fleets/demo/test-configs/root-sharding.toml")
+            .join("fleets/test/test-configs/root-sharding.toml")
             .display()
             .to_string(),
     )];

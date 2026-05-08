@@ -111,7 +111,7 @@ fn run_scaffold(options: ScaffoldOptions) -> Result<(), ScaffoldCommandError> {
     println!("  {}", result.app_dir.display());
     println!();
     println!("Next:");
-    println!("  canic install --fleet {}", options.name);
+    println!("  canic install {}", options.name);
     Ok(())
 }
 
@@ -217,7 +217,7 @@ where
     writeln!(writer, "Create Canic fleet?")?;
     writeln!(writer, "  project: {}", options.name)?;
     writeln!(writer, "  target:  {}", project_dir.display())?;
-    writeln!(writer, "  install: canic install --fleet {}", options.name)?;
+    writeln!(writer, "  install: canic install {}", options.name)?;
     write!(writer, "Continue? [y/N] ")?;
     writer.flush()?;
 
@@ -434,7 +434,7 @@ mod tests {
         let output = String::from_utf8(output).expect("utf8 prompt");
         assert!(output.contains("target:"));
         assert!(output.contains("fleets/my_app"));
-        assert!(output.contains("install: canic install --fleet my_app"));
+        assert!(output.contains("install: canic install my_app"));
     }
 
     // Ensure confirmation defaults to no on empty input.

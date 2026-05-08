@@ -1,17 +1,18 @@
 use super::ListCommandError;
-use crate::args::{default_dfx, parse_matches, value_arg};
+use crate::args::{default_dfx, flag_arg, parse_matches, value_arg};
 use clap::Command as ClapCommand;
 use std::ffi::OsString;
 
 const LIST_HELP_AFTER: &str = "\
 Examples:
-  canic list --fleet demo
-  canic list --fleet demo --from user_hub
-  canic list --fleet demo --root uzt4z-lp777-77774-qaabq-cai";
+  canic list test
+  canic list test --from user_hub
+  canic list test --root uzt4z-lp777-77774-qaabq-cai";
 const CONFIG_HELP_AFTER: &str = "\
 Examples:
-  canic config --fleet demo
-  canic config --fleet demo --from user_hub";
+  canic config test
+  canic config test --from user_hub
+  canic config test --verbose";
 
 ///
 /// ListOptions
@@ -25,6 +26,7 @@ pub(super) struct ListOptions {
     pub(super) anchor: Option<String>,
     pub(super) network: Option<String>,
     pub(super) dfx: String,
+    pub(super) verbose: bool,
 }
 
 impl ListOptions {
@@ -57,6 +59,7 @@ impl ListOptions {
             anchor: optional_string(matches, "from"),
             network: optional_string(matches, "network"),
             dfx: optional_string(matches, "dfx").unwrap_or_else(default_dfx),
+            verbose: optional_bool(matches, "verbose"),
         }
     }
 }
@@ -64,6 +67,16 @@ impl ListOptions {
 // Read a string option if the subcommand declares it.
 fn optional_string(matches: &clap::ArgMatches, id: &str) -> Option<String> {
     matches.try_get_one::<String>(id).ok().flatten().cloned()
+}
+
+// Read a boolean flag if the subcommand declares it.
+fn optional_bool(matches: &clap::ArgMatches, id: &str) -> bool {
+    matches
+        .try_get_one::<bool>(id)
+        .ok()
+        .flatten()
+        .copied()
+        .unwrap_or(false)
 }
 
 ///
@@ -80,6 +93,12 @@ pub(super) enum ListSource {
 fn list_command() -> ClapCommand {
     base_list_options(ClapCommand::new("list").bin_name("canic list"))
         .about("List canisters registered by the deployed root")
+        .arg(
+            value_arg("fleet")
+                .value_name("fleet")
+                .required(true)
+                .help("Fleet name to inspect"),
+        )
         .arg(
             value_arg("root")
                 .long("root")
@@ -106,31 +125,33 @@ fn config_command() -> ClapCommand {
     base_list_options(ClapCommand::new("config").bin_name("canic config"))
         .about("List canisters declared by the selected fleet config")
         .arg(
+            value_arg("fleet")
+                .value_name("fleet")
+                .required(true)
+                .help("Fleet name to inspect"),
+        )
+        .arg(
             value_arg("from")
                 .long("from")
                 .value_name("role")
                 .help("Show one declared role"),
+        )
+        .arg(
+            flag_arg("verbose")
+                .long("verbose")
+                .help("Show indented declared config details under each role"),
         )
         .after_help(CONFIG_HELP_AFTER)
 }
 
 // Add options shared by all list subcommands.
 fn base_list_options(command: ClapCommand) -> ClapCommand {
-    command
-        .disable_help_flag(true)
-        .arg(
-            value_arg("fleet")
-                .long("fleet")
-                .value_name("name")
-                .required(true)
-                .help("Fleet name to inspect"),
-        )
-        .arg(
-            value_arg("network")
-                .long("network")
-                .value_name("name")
-                .help("DFX network to inspect"),
-        )
+    command.disable_help_flag(true).arg(
+        value_arg("network")
+            .long("network")
+            .value_name("name")
+            .help("DFX network to inspect"),
+    )
 }
 
 // Return list command usage text.

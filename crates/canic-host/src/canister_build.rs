@@ -7,7 +7,7 @@ use crate::{
         BootstrapWasmStoreBuildOutput, BootstrapWasmStoreBuildProfile,
         build_bootstrap_wasm_store_artifact,
     },
-    cargo_command, default_network,
+    cargo_command, dfx_network_from_env,
     release_set::{
         canister_manifest_path, dfx_root, emit_root_release_set_manifest_if_ready, workspace_root,
     },
@@ -102,7 +102,7 @@ pub fn print_current_workspace_build_context_once(
     fs::create_dir_all(&marker_dir)?;
 
     let requested_profile = env::var("CANIC_WASM_PROFILE").unwrap_or_else(|_| "unset".to_string());
-    let network = default_network();
+    let network = dfx_network_from_env();
     let marker_key = env::var("CANIC_BUILD_CONTEXT_SESSION")
         .ok()
         .unwrap_or_else(|| {
@@ -188,7 +188,7 @@ fn build_canister_artifact(
     )?;
     extract_candid(&debug_wasm_path, &did_path)?;
 
-    let network = default_network();
+    let network = dfx_network_from_env();
     let manifest_path =
         emit_root_release_set_manifest_if_ready(workspace_root, dfx_root, &network)?;
 

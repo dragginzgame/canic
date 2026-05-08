@@ -11,9 +11,9 @@ ROOT_DIR="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 cd "$ROOT_DIR"
 source "$ROOT_DIR/scripts/ci/require_dfx.sh"
 
-DEFAULT_AUDIT_CANISTERS="$(bash scripts/ci/list-config-canisters.sh --config fleets/demo/canic.toml --ci-order)"
+DEFAULT_AUDIT_CANISTERS="$(bash scripts/ci/list-config-canisters.sh --config fleets/test/canic.toml --ci-order)"
 mapfile -t DEFAULT_CANISTERS <<<"$DEFAULT_AUDIT_CANISTERS"
-DEFAULT_RELEASE_SET_TARGETS="$(bash scripts/ci/list-config-canisters.sh --config fleets/demo/canic.toml --exclude-root)"
+DEFAULT_RELEASE_SET_TARGETS="$(bash scripts/ci/list-config-canisters.sh --config fleets/test/canic.toml --exclude-root)"
 mapfile -t DEFAULT_RELEASE_SET_CANISTERS <<<"$DEFAULT_RELEASE_SET_TARGETS"
 
 declare -a VERIFICATION_ROWS=()

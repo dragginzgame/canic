@@ -35,39 +35,39 @@ fn dfx_canister_keys() -> Vec<String> {
         .collect()
 }
 
-// Read the root-subnet canister keys from the checked-in demo Canic config.
-fn demo_root_subnet_canister_keys() -> Vec<String> {
-    let path = workspace_root().join("fleets/demo/canic.toml");
+// Read the root-subnet canister keys from the checked-in test Canic config.
+fn test_root_subnet_canister_keys() -> Vec<String> {
+    let path = workspace_root().join("fleets/test/canic.toml");
     let source = read_text(&path);
     let parsed: toml::Value = toml::from_str(&source)
         .unwrap_or_else(|err| panic!("failed to parse {}: {err}", path.display()));
 
     parsed["subnets"]["prime"]["canisters"]
         .as_table()
-        .expect("demo root subnet canisters must be a table")
+        .expect("test root subnet canisters must be a table")
         .keys()
         .cloned()
         .collect()
 }
 
-// Keep the visible dfx canister list aligned with the demo root subnet.
+// Keep the visible dfx canister list aligned with the test root subnet.
 #[test]
-fn dfx_visible_canisters_match_demo_root_subnet() {
+fn dfx_visible_canisters_match_test_root_subnet() {
     let dfx_keys = dfx_canister_keys().into_iter().collect::<BTreeSet<_>>();
-    let demo_root_subnet = demo_root_subnet_canister_keys()
+    let test_root_subnet = test_root_subnet_canister_keys()
         .into_iter()
         .collect::<BTreeSet<_>>();
 
     assert_eq!(
-        dfx_keys, demo_root_subnet,
-        "dfx.json canister keys must stay aligned with fleets/demo/canic.toml root subnet"
+        dfx_keys, test_root_subnet,
+        "dfx.json canister keys must stay aligned with fleets/test/canic.toml root subnet"
     );
 }
 
-// Keep the staged root release set derivable from the demo root subnet.
+// Keep the staged root release set derivable from the test root subnet.
 #[test]
-fn demo_root_subnet_has_derivable_release_set() {
-    let release_set = demo_root_subnet_canister_keys()
+fn test_root_subnet_has_derivable_release_set() {
+    let release_set = test_root_subnet_canister_keys()
         .into_iter()
         .filter(|name| name != "root")
         .collect::<BTreeSet<_>>();

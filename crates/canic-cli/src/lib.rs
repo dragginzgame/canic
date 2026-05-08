@@ -6,7 +6,6 @@ mod install;
 mod list;
 mod manifest;
 mod medic;
-mod network;
 mod output;
 mod restore;
 mod scaffold;
@@ -61,11 +60,6 @@ struct CommandSpec {
 }
 
 const COMMAND_SPECS: &[CommandSpec] = &[
-    CommandSpec {
-        name: "network",
-        about: "Show network command guidance",
-        scope: CommandScope::Global,
-    },
     CommandSpec {
         name: "fleet",
         about: "Manage Canic fleets",
@@ -151,9 +145,6 @@ pub enum CliError {
     #[error("medic: {0}")]
     Medic(String),
 
-    #[error("network: {0}")]
-    Network(String),
-
     #[error("snapshot: {0}")]
     Snapshot(String),
 
@@ -210,13 +201,6 @@ impl From<medic::MedicCommandError> for CliError {
     }
 }
 
-impl From<network::NetworkCommandError> for CliError {
-    // Keep network command internals private while preserving operator-facing messages.
-    fn from(err: network::NetworkCommandError) -> Self {
-        Self::Network(err.to_string())
-    }
-}
-
 impl From<snapshot::SnapshotCommandError> for CliError {
     // Keep snapshot command internals private while preserving operator-facing messages.
     fn from(err: snapshot::SnapshotCommandError) -> Self {
@@ -261,7 +245,6 @@ where
         "list" => list::run(args).map_err(CliError::from),
         "manifest" => manifest::run(args).map_err(CliError::from),
         "medic" => medic::run(args).map_err(CliError::from),
-        "network" => network::run(args).map_err(CliError::from),
         "snapshot" => snapshot::run(args).map_err(CliError::from),
         "restore" => restore::run(args).map_err(CliError::from),
         "help" | "--help" | "-h" => {
@@ -380,7 +363,6 @@ mod tests {
         assert!(plain.contains("Global commands"));
         assert!(plain.contains("Fleet commands"));
         assert!(plain.contains("Workspace and file commands"));
-        assert!(plain.find("    network") < plain.find("    fleet"));
         assert!(plain.find("    fleet") < plain.find("    install"));
         assert!(plain.find("    install") < plain.find("    config"));
         assert!(plain.find("    config") < plain.find("    list"));
@@ -389,7 +371,7 @@ mod tests {
         assert!(plain.contains("config"));
         assert!(plain.contains("list"));
         assert!(plain.contains("build"));
-        assert!(plain.contains("network"));
+        assert!(!plain.contains("    network"));
         assert!(!plain.contains("    defaults"));
         assert!(!plain.contains("    status"));
         assert!(plain.contains("fleet"));
@@ -429,9 +411,6 @@ mod tests {
             &["manifest", "help"],
             &["manifest", "validate", "help"],
             &["medic", "help"],
-            &["network"],
-            &["network", "help"],
-            &["network", "current", "help"],
             &["snapshot", "help"],
             &["snapshot", "download", "help"],
         ] {
@@ -478,15 +457,6 @@ mod tests {
         assert!(run([OsString::from("restore"), OsString::from("--version")]).is_ok());
         assert!(run([OsString::from("manifest"), OsString::from("--version")]).is_ok());
         assert!(run([OsString::from("medic"), OsString::from("--version")]).is_ok());
-        assert!(run([OsString::from("network"), OsString::from("--version")]).is_ok());
-        assert!(
-            run([
-                OsString::from("network"),
-                OsString::from("current"),
-                OsString::from("--version")
-            ])
-            .is_ok()
-        );
         assert!(run([OsString::from("snapshot"), OsString::from("--version")]).is_ok());
         assert!(
             run([

@@ -24,13 +24,12 @@ inspect only the files needed for the current task.
 - Left detailed changelog policy in `docs/governance/changelog.md`.
 - Removed the public `canic release-set` CLI surface.
 - Continued CLI simplification around fleet/list/scaffold/install flows.
-- Added `canic network`, explicit `--fleet <name>` fleet-scoped commands, and
-  local-by-default network handling; `canic install` now passes the selected
-  network through dfx subprocesses and build scripts instead of relying on the
-  caller's ambient `DFX_NETWORK`.
+- Removed persisted fleet/network defaults; fleet-scoped commands take the fleet
+  name as a positional argument, and network selection is per-command via
+  `--network <name>` with local replica behavior when omitted.
 - Added `canic fleet delete <name>` for confirmed deletion of config-defined
   fleet directories.
-- Hard-cut fleet scaffolds and implicit install defaults to top-level `fleets/`.
+- Hard-cut fleet scaffolds to top-level `fleets/`.
 - Hard-cut role-attestation audience from optional to required.
 - Added/updated recurring audit reports for audience target binding and token
   trust-chain invariants.

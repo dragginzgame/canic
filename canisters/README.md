@@ -2,8 +2,7 @@
 
 This directory contains runnable canister crates that are not config-defined
 Canic fleets. They may still be Cargo workspace members, dfx build targets, or
-PocketIC fixtures, but `canic fleet list` and implicit install config selection
-must not discover them as fleets.
+PocketIC fixtures, but `canic fleet list` must not discover them as fleets.
 
 ## Layout
 
@@ -13,9 +12,13 @@ must not discover them as fleets.
   It uses `canic::start_local!()` with generated standalone config and is not
   part of `dfx.json`, the demo topology, the reference release set, or automated
   test fixtures.
+- `test/` – isolated PocketIC and integration-test fixture canisters that are
+  not themselves a config-defined fleet.
 
 ## Local Workflow
 
 - Build the sandbox manually: `scripts/app/build.sh sandbox_minimal`
 - Build audit probes through Cargo, for example:
   `cargo check -p audit_leaf_probe -p audit_root_probe -p audit_scaling_probe`
+- Build isolated test fixtures through Cargo, for example:
+  `cargo check -p runtime_probe -p payload_limit_probe`

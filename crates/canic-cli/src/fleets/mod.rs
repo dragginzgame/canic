@@ -1,6 +1,6 @@
 use crate::{
     args::{
-        default_network, parse_matches, print_help_or_version, string_option, string_values,
+        local_network, parse_matches, print_help_or_version, string_option, string_values,
         value_arg,
     },
     scaffold, version_text,
@@ -34,7 +34,7 @@ Examples:
   canic fleet list
   canic fleet list --network local
 
-Commands that operate on one fleet require --fleet <name>.";
+Commands that operate on one fleet take the fleet name as a positional argument.";
 const FLEET_DELETE_HELP_AFTER: &str = "\
 Examples:
   canic fleet delete demo
@@ -215,7 +215,7 @@ impl FleetOptions {
             .map_err(|_| FleetCommandError::Usage(list_usage()))?;
 
         Ok(Self {
-            network: string_option(&matches, "network").unwrap_or_else(default_network),
+            network: string_option(&matches, "network").unwrap_or_else(local_network),
         })
     }
 }
