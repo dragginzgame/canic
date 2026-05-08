@@ -640,20 +640,20 @@ fn install_state_round_trips_from_project_state_dir() {
     };
 
     let path = write_install_state(&root, "local", &state).expect("write state");
-    let read_back = read_install_state(&root, "local")
-        .expect("read state")
-        .expect("state exists");
     let named = read_fleet_install_state(&root, "local", "demo")
         .expect("read named fleet")
         .expect("named fleet exists");
     let fleets = list_fleets(&root, "local").expect("list fleets");
 
     assert_eq!(path, root.join(".canic/local/fleets/demo.json"));
-    assert_eq!(read_back, state);
+    assert_eq!(
+        read_install_state(&root, "local").expect("read state"),
+        None
+    );
     assert_eq!(named, state);
     assert_eq!(fleets.len(), 1);
     assert_eq!(fleets[0].name, "demo");
-    assert!(fleets[0].current);
+    assert!(!fleets[0].current);
 
     fs::remove_dir_all(root).expect("clean temp dir");
 }
