@@ -9,6 +9,7 @@ mod render;
 use canic::ids::CanisterRole;
 use canic_backup::discovery::{DiscoveryError, RegistryEntry, parse_registry_entries};
 use canic_host::{
+    format::byte_size,
     icp::{IcpCli, IcpCommandError},
     install_root::{
         InstallState, discover_current_canic_config_choices, read_named_fleet_install_state,
@@ -369,7 +370,7 @@ fn resolve_wasm_sizes(
                 .join(format!("{role}.wasm.gz"));
             fs::metadata(path)
                 .ok()
-                .map(|metadata| (role.to_string(), format_bytes(metadata.len())))
+                .map(|metadata| (role.to_string(), byte_size(metadata.len())))
         })
         .collect()
 }
@@ -379,19 +380,6 @@ fn resolve_icp_artifact_root(options: &ListOptions) -> Option<PathBuf> {
         return Some(PathBuf::from(state.icp_root));
     }
     icp_root().ok()
-}
-
-fn format_bytes(bytes: u64) -> String {
-    const KIB: f64 = 1024.0;
-    const MIB: f64 = 1024.0 * 1024.0;
-
-    if bytes >= 1024 * 1024 {
-        format!("{:.1}MiB", bytes as f64 / MIB)
-    } else if bytes >= 1024 {
-        format!("{:.1}KiB", bytes as f64 / KIB)
-    } else {
-        format!("{bytes}B")
-    }
 }
 
 fn missing_config_roles(options: &ListOptions, registry: &[RegistryEntry]) -> Vec<String> {
@@ -749,7 +737,7 @@ mod tests {
             fleet: "demo".to_string(),
             network: "local".to_string(),
         };
-        let wasm_sizes = BTreeMap::from([("app".to_string(), "811.2KiB".to_string())]);
+        let wasm_sizes = BTreeMap::from([("app".to_string(), "811.20 KiB".to_string())]);
         let output = render_list_output(
             &title,
             &registry,
@@ -762,15 +750,8 @@ mod tests {
         .expect("render list output");
 
         assert!(output.contains("WASM_GZ"));
-        assert!(output.contains("811.2KiB"));
+        assert!(output.contains("811.20 KiB"));
         assert!(output.contains("Missing roles: audit"));
-    }
-
-    #[test]
-    fn format_bytes_uses_compact_binary_units() {
-        assert_eq!(format_bytes(9), "9B");
-        assert_eq!(format_bytes(1536), "1.5KiB");
-        assert_eq!(format_bytes(2 * 1024 * 1024), "2.0MiB");
     }
 
     // Ensure config-only fleets render their declared roles instead of deployed inventory.

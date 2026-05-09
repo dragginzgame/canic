@@ -6,6 +6,7 @@ mod artifact_io;
 mod bootstrap_store;
 pub mod canister_build;
 mod cargo_metadata;
+pub mod format;
 pub mod icp;
 pub mod install_root;
 pub mod release_set;

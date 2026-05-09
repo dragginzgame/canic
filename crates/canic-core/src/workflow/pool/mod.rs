@@ -9,7 +9,7 @@ use crate::{
     cdk::types::TC,
     domain::policy::pool::authority::require_pool_admin,
     dto::pool::{CanisterPoolStatus, PoolBatchResult},
-    ids::IntentResourceKey,
+    ids::{IntentId, IntentResourceKey},
     ops::{
         ic::{
             IcOps,
@@ -380,9 +380,7 @@ fn pool_import_intent_key(pid: Principal) -> Result<IntentResourceKey, InternalE
 }
 
 // Reserve the import intent before resetting an external canister into the pool.
-fn reserve_pool_import_intent(
-    intent_key: IntentResourceKey,
-) -> Result<crate::storage::stable::intent::IntentId, InternalError> {
+fn reserve_pool_import_intent(intent_key: IntentResourceKey) -> Result<IntentId, InternalError> {
     let intent_id = match IntentStoreOps::allocate_intent_id() {
         Ok(intent_id) => intent_id,
         Err(err) => {
@@ -418,10 +416,7 @@ fn reserve_pool_import_intent(
 }
 
 // Commit the import intent after the canister has been reset and registered.
-fn commit_pool_import_intent(
-    intent_id: crate::storage::stable::intent::IntentId,
-    pid: Principal,
-) -> Result<(), InternalError> {
+fn commit_pool_import_intent(intent_id: IntentId, pid: Principal) -> Result<(), InternalError> {
     if let Err(err) = IntentStoreOps::commit_at(intent_id, IcOps::now_secs()) {
         record_pool_intent(
             IntentMetricOperation::Commit,
@@ -445,7 +440,7 @@ fn commit_pool_import_intent(
 }
 
 // Abort the import intent after reset fails; the reset error remains authoritative.
-fn abort_pool_import_intent(intent_id: crate::storage::stable::intent::IntentId, pid: Principal) {
+fn abort_pool_import_intent(intent_id: IntentId, pid: Principal) {
     if let Err(abort_err) = IntentStoreOps::abort(intent_id) {
         record_pool_intent(
             IntentMetricOperation::Abort,

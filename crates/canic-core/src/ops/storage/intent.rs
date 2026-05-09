@@ -2,10 +2,10 @@
 
 use crate::{
     InternalError,
-    ids::IntentResourceKey,
+    ids::{IntentId, IntentResourceKey},
     ops::storage::StorageOpsError,
     storage::stable::intent::{
-        INTENT_STORE_SCHEMA_VERSION, IntentId, IntentPendingEntryRecord, IntentRecord,
+        INTENT_STORE_SCHEMA_VERSION, IntentPendingEntryRecord, IntentRecord,
         IntentResourceTotalsRecord, IntentState, IntentStore, IntentStoreMetaRecord,
     },
 };

@@ -2,14 +2,14 @@
 //! Test-only intent store wrappers for PocketIC canisters.
 
 use crate::{
-    ids::IntentResourceKey, ops::storage::intent::IntentStoreOps,
+    ids::{IntentId, IntentResourceKey},
+    ops::storage::intent::IntentStoreOps,
     storage::stable::intent::IntentStore,
 };
 
 #[doc(hidden)]
 pub(crate) use crate::storage::stable::intent::{
-    IntentId, IntentPendingEntryRecord, IntentRecord, IntentResourceTotalsRecord,
-    IntentStoreMetaRecord,
+    IntentPendingEntryRecord, IntentRecord, IntentResourceTotalsRecord, IntentStoreMetaRecord,
 };
 
 ///

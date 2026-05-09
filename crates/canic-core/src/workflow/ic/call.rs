@@ -1,6 +1,6 @@
 use crate::{
     InternalError, InternalErrorOrigin,
-    ids::IntentResourceKey,
+    ids::{IntentId, IntentResourceKey},
     ops::{
         ic::{
             IcOps,
@@ -226,7 +226,7 @@ fn reserve_call_intent(
     resource_key: &IntentResourceKey,
     intent: &IntentSpec,
     now: u64,
-) -> Result<crate::storage::stable::intent::IntentId, InternalError> {
+) -> Result<IntentId, InternalError> {
     let intent_id = match IntentStoreOps::allocate_intent_id() {
         Ok(intent_id) => intent_id,
         Err(err) => {
@@ -268,11 +268,7 @@ fn reserve_call_intent(
 }
 
 // Commit a call intent after successful execution; call results remain authoritative.
-fn commit_call_intent(
-    intent_id: crate::storage::stable::intent::IntentId,
-    resource_key: &IntentResourceKey,
-    now: u64,
-) {
+fn commit_call_intent(intent_id: IntentId, resource_key: &IntentResourceKey, now: u64) {
     if let Err(err) = IntentStoreOps::commit_at(intent_id, now) {
         record_call_intent(
             IntentMetricOperation::Commit,
@@ -294,7 +290,7 @@ fn commit_call_intent(
 
 // Abort a call intent after failed execution and attach abort errors to the result.
 fn abort_call_intent(
-    intent_id: crate::storage::stable::intent::IntentId,
+    intent_id: IntentId,
     call_err: InternalError,
 ) -> Result<CallResult, InternalError> {
     if let Err(abort_err) = IntentStoreOps::abort(intent_id) {

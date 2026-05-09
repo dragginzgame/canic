@@ -8,7 +8,7 @@ use crate::{
     cdk::structures::{
         BTreeMap, DefaultMemoryImpl, Storable, cell::Cell, memory::VirtualMemory, storable::Bound,
     },
-    ids::IntentResourceKey,
+    ids::{IntentId, IntentResourceKey},
     storage::{
         prelude::*,
         stable::memory::intent::{
@@ -16,11 +16,7 @@ use crate::{
         },
     },
 };
-use std::{
-    borrow::Cow,
-    cell::RefCell,
-    fmt::{self, Display},
-};
+use std::{borrow::Cow, cell::RefCell};
 
 //
 // INTENT STORE
@@ -60,13 +56,6 @@ eager_static! {
     );
 }
 
-///
-/// IntentId
-///
-
-#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
-pub struct IntentId(pub u64);
-
 impl Storable for IntentId {
     const BOUND: Bound = Bound::Bounded {
         max_size: 8,
@@ -92,12 +81,6 @@ impl Storable for IntentId {
         arr.copy_from_slice(b);
 
         Self(u64::from_be_bytes(arr))
-    }
-}
-
-impl Display for IntentId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.0)
     }
 }
 
