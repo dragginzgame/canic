@@ -1,8 +1,7 @@
-use crate::{
-    cdk::types::Principal,
-    dto::{capability::CapabilityProof, error::Error, rpc::Request},
-};
+use crate::{cdk::types::Principal, dto::error::Error, dto::rpc::Request};
 use async_trait::async_trait;
+
+use super::RootCapabilityProof;
 
 /// VerifiedCapability
 ///
@@ -15,7 +14,6 @@ pub(super) struct VerifiedCapability;
 pub(super) struct VerificationInput<'a> {
     pub(super) capability: &'a Request,
     pub(super) capability_version: u16,
-    pub(super) proof: &'a CapabilityProof,
     pub(super) caller: Principal,
     pub(super) target_canister: Principal,
     pub(super) now_secs: u64,
@@ -47,18 +45,15 @@ impl CapabilityProofVerifier for StructuralVerifier {
 /// RoleAttestationVerifier
 ///
 /// Verifies attestation proof with capability hash binding.
-struct RoleAttestationVerifier;
+struct RoleAttestationVerifier<'a> {
+    blob: &'a crate::dto::capability::CapabilityProofBlob,
+}
 
 #[async_trait]
-impl CapabilityProofVerifier for RoleAttestationVerifier {
+impl CapabilityProofVerifier for RoleAttestationVerifier<'_> {
     /// Verify hash binding first, then run delegated attestation verification.
     async fn verify(&self, input: &VerificationInput<'_>) -> Result<VerifiedCapability, Error> {
-        let CapabilityProof::RoleAttestation(blob) = input.proof else {
-            return Err(Error::internal(
-                "role attestation verifier received non-attestation proof",
-            ));
-        };
-        let proof = super::proof::decode_role_attestation_blob(blob)?;
+        let proof = super::proof::decode_role_attestation_blob(self.blob)?;
 
         super::proof::verify_capability_hash_binding(
             input.target_canister,
@@ -75,18 +70,15 @@ impl CapabilityProofVerifier for RoleAttestationVerifier {
 /// DelegatedGrantVerifier
 ///
 /// Verifies grant hash binding, claims, and signature for delegated grants.
-struct DelegatedGrantVerifier;
+struct DelegatedGrantVerifier<'a> {
+    blob: &'a crate::dto::capability::CapabilityProofBlob,
+}
 
 #[async_trait]
-impl CapabilityProofVerifier for DelegatedGrantVerifier {
+impl CapabilityProofVerifier for DelegatedGrantVerifier<'_> {
     /// Keep existing delegated-grant verification ordering unchanged.
     async fn verify(&self, input: &VerificationInput<'_>) -> Result<VerifiedCapability, Error> {
-        let CapabilityProof::DelegatedGrant(blob) = input.proof else {
-            return Err(Error::internal(
-                "delegated grant verifier received non-grant proof",
-            ));
-        };
-        let proof = super::proof::decode_delegated_grant_blob(blob)?;
+        let proof = super::proof::decode_delegated_grant_blob(self.blob)?;
 
         super::proof::verify_capability_hash_binding(
             input.target_canister,
@@ -113,20 +105,23 @@ impl CapabilityProofVerifier for DelegatedGrantVerifier {
 pub(super) async fn verify_root_capability_proof(
     capability: &Request,
     capability_version: u16,
-    proof: &CapabilityProof,
+    proof: RootCapabilityProof<'_>,
 ) -> Result<VerifiedCapability, Error> {
     let input = VerificationInput {
         capability,
         capability_version,
-        proof,
         caller: crate::ops::ic::IcOps::msg_caller(),
         target_canister: crate::ops::ic::IcOps::canister_self(),
         now_secs: crate::ops::ic::IcOps::now_secs(),
     };
 
     match proof {
-        CapabilityProof::Structural => StructuralVerifier.verify(&input).await,
-        CapabilityProof::RoleAttestation(_) => RoleAttestationVerifier.verify(&input).await,
-        CapabilityProof::DelegatedGrant(_) => DelegatedGrantVerifier.verify(&input).await,
+        RootCapabilityProof::Structural => StructuralVerifier.verify(&input).await,
+        RootCapabilityProof::RoleAttestation(blob) => {
+            RoleAttestationVerifier { blob }.verify(&input).await
+        }
+        RootCapabilityProof::DelegatedGrant(blob) => {
+            DelegatedGrantVerifier { blob }.verify(&input).await
+        }
     }
 }

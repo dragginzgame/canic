@@ -32,9 +32,14 @@ macro_rules! __canic_start_nonroot_lifecycle_core {
                 cfg!(canic_role_attestation_refresh),
             );
 
-            $crate::__canic_run_start_init_hook!($($init)?);
-            $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::schedule_init_nonroot_bootstrap(args.clone());
-            $crate::__canic_start_nonroot_user_timers!(args);
+            $crate::__canic_after_optional_start_init_hook!(
+                "canic:user:init_block",
+                {
+                    $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::schedule_init_nonroot_bootstrap(args.clone());
+                    $crate::__canic_start_nonroot_user_timers!(args);
+                }
+                $(, $init)?
+            );
         }
 
         #[::canic::cdk::post_upgrade]
@@ -49,9 +54,14 @@ macro_rules! __canic_start_nonroot_lifecycle_core {
                 cfg!(canic_role_attestation_refresh),
             );
 
-            $crate::__canic_run_start_init_hook!($($init)?);
-            $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::schedule_post_upgrade_nonroot_bootstrap();
-            $crate::__canic_start_nonroot_upgrade_timers!();
+            $crate::__canic_after_optional_start_init_hook!(
+                "canic:user:post_upgrade_block",
+                {
+                    $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::schedule_post_upgrade_nonroot_bootstrap();
+                    $crate::__canic_start_nonroot_upgrade_timers!();
+                }
+                $(, $init)?
+            );
         }
     };
 }
@@ -113,9 +123,14 @@ macro_rules! __canic_start_local_lifecycle_core {
                 cfg!(canic_role_attestation_refresh),
             );
 
-            $crate::__canic_run_start_init_hook!($($init)?);
-            $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::schedule_init_nonroot_bootstrap(args.clone());
-            $crate::__canic_start_nonroot_user_timers!(args);
+            $crate::__canic_after_optional_start_init_hook!(
+                "canic:user:init_block",
+                {
+                    $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::schedule_init_nonroot_bootstrap(args.clone());
+                    $crate::__canic_start_nonroot_user_timers!(args);
+                }
+                $(, $init)?
+            );
         }
 
         #[::canic::cdk::post_upgrade]
@@ -130,9 +145,14 @@ macro_rules! __canic_start_local_lifecycle_core {
                 cfg!(canic_role_attestation_refresh),
             );
 
-            $crate::__canic_run_start_init_hook!($($init)?);
-            $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::schedule_post_upgrade_nonroot_bootstrap();
-            $crate::__canic_start_nonroot_upgrade_timers!();
+            $crate::__canic_after_optional_start_init_hook!(
+                "canic:user:post_upgrade_block",
+                {
+                    $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::schedule_post_upgrade_nonroot_bootstrap();
+                    $crate::__canic_start_nonroot_upgrade_timers!();
+                }
+                $(, $init)?
+            );
         }
     };
 }
@@ -182,9 +202,14 @@ macro_rules! __canic_start_root_lifecycle_core {
                 embedded_wasm_store_bootstrap_release_set,
             );
 
-            $crate::__canic_run_start_init_hook!($($init)?);
-            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::schedule_init_root_bootstrap();
-            $crate::__canic_start_root_user_timers!();
+            $crate::__canic_after_optional_start_init_hook!(
+                "canic:user:init_block",
+                {
+                    $crate::__internal::control_plane::api::lifecycle::LifecycleApi::schedule_init_root_bootstrap();
+                    $crate::__canic_start_root_user_timers!();
+                }
+                $(, $init)?
+            );
         }
 
         #[::canic::cdk::post_upgrade]
@@ -200,19 +225,35 @@ macro_rules! __canic_start_root_lifecycle_core {
                 embedded_wasm_store_bootstrap_release_set,
             );
 
-            $crate::__canic_run_start_init_hook!($($init)?);
-            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::schedule_post_upgrade_root_bootstrap();
-            $crate::__canic_start_root_upgrade_timers!();
+            $crate::__canic_after_optional_start_init_hook!(
+                "canic:user:post_upgrade_block",
+                {
+                    $crate::__internal::control_plane::api::lifecycle::LifecycleApi::schedule_post_upgrade_root_bootstrap();
+                    $crate::__canic_start_root_upgrade_timers!();
+                }
+                $(, $init)?
+            );
         }
     };
 }
 
-// Run the optional synchronous init hook embedded in `start!` / `start_root!`.
+// Run the optional init block from a lifecycle timer, then schedule continuation timers.
 #[doc(hidden)]
 #[macro_export]
-macro_rules! __canic_run_start_init_hook {
-    () => {};
-    ($init:block) => {{ $init }};
+macro_rules! __canic_after_optional_start_init_hook {
+    ($label:expr, $after:block) => {{
+        $after
+    }};
+    ($label:expr, $after:block, $init:block) => {{
+        $crate::__internal::core::api::timer::TimerApi::set_lifecycle_timer(
+            ::core::time::Duration::ZERO,
+            $label,
+            async move {
+                $init
+                $after
+            },
+        );
+    }};
 }
 
 // User lifecycle timer bundle for non-root init.

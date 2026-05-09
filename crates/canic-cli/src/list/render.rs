@@ -5,11 +5,12 @@ use std::collections::{BTreeMap, BTreeSet};
 
 pub(super) const ROLE_HEADER: &str = "ROLE";
 pub(super) const KIND_HEADER: &str = "KIND";
-pub(super) const CAPABILITIES_HEADER: &str = "CAPABILITIES";
+pub(super) const FEATURES_HEADER: &str = "FEATURES";
 pub(super) const AUTO_HEADER: &str = "AUTO";
 pub(super) const TOPUP_HEADER: &str = "TOPUP";
 pub(super) const CANISTER_HEADER: &str = "CANISTER_ID";
 pub(super) const READY_HEADER: &str = "READY";
+pub(super) const WASM_HEADER: &str = "WASM_GZ";
 const LIST_COLUMN_GAP: &str = "   ";
 const TREE_BRANCH: &str = "├─ ";
 const TREE_LAST: &str = "└─ ";
@@ -60,9 +61,12 @@ pub(super) fn render_registry_tree(
     canister: Option<&str>,
     role_kinds: &BTreeMap<String, String>,
     readiness: &BTreeMap<String, ReadyStatus>,
+    wasm_sizes: &BTreeMap<String, String>,
 ) -> Result<String, ListCommandError> {
     let rows = visible_rows(registry, canister)?;
-    Ok(render_registry_table(&rows, role_kinds, readiness))
+    Ok(render_registry_table(
+        &rows, role_kinds, readiness, wasm_sizes,
+    ))
 }
 
 /// Render a named list view with a fleet/source title above the registry table.
@@ -72,12 +76,19 @@ pub(super) fn render_list_output(
     canister: Option<&str>,
     role_kinds: &BTreeMap<String, String>,
     readiness: &BTreeMap<String, ReadyStatus>,
+    wasm_sizes: &BTreeMap<String, String>,
+    missing_roles: &[String],
 ) -> Result<String, ListCommandError> {
-    Ok(format!(
+    let mut output = format!(
         "{}\n\n{}",
         title.render(),
-        render_registry_tree(registry, canister, role_kinds, readiness)?
-    ))
+        render_registry_tree(registry, canister, role_kinds, readiness, wasm_sizes)?
+    );
+    if !missing_roles.is_empty() {
+        output.push_str("\n\nMissing roles: ");
+        output.push_str(&missing_roles.join(", "));
+    }
+    Ok(output)
 }
 
 /// Render config-defined roles for a selected fleet that has not been installed yet.
@@ -222,7 +233,7 @@ fn render_config_table(rows: &[ConfigRoleRow], verbose: bool) -> String {
         &[
             ROLE_HEADER,
             KIND_HEADER,
-            CAPABILITIES_HEADER,
+            FEATURES_HEADER,
             AUTO_HEADER,
             TOPUP_HEADER,
         ],
@@ -259,7 +270,7 @@ fn config_table_widths(rows: &[[String; 5]]) -> [usize; 5] {
     let mut widths = [
         ROLE_HEADER.chars().count(),
         KIND_HEADER.chars().count(),
-        CAPABILITIES_HEADER.chars().count(),
+        FEATURES_HEADER.chars().count(),
         AUTO_HEADER.chars().count(),
         TOPUP_HEADER.chars().count(),
     ];
@@ -299,11 +310,18 @@ fn render_registry_table(
     rows: &[RegistryRow<'_>],
     role_kinds: &BTreeMap<String, String>,
     readiness: &BTreeMap<String, ReadyStatus>,
+    wasm_sizes: &BTreeMap<String, String>,
 ) -> String {
-    let table_rows = registry_table_rows(rows, role_kinds, readiness);
+    let table_rows = registry_table_rows(rows, role_kinds, readiness, wasm_sizes);
     let widths = registry_table_widths(&table_rows);
     let header = render_registry_table_row(
-        &[CANISTER_HEADER, ROLE_HEADER, KIND_HEADER, READY_HEADER],
+        &[
+            CANISTER_HEADER,
+            ROLE_HEADER,
+            KIND_HEADER,
+            READY_HEADER,
+            WASM_HEADER,
+        ],
         &widths,
     );
     let separator = render_registry_separator(&widths);
@@ -322,28 +340,38 @@ fn registry_table_rows(
     rows: &[RegistryRow<'_>],
     role_kinds: &BTreeMap<String, String>,
     readiness: &BTreeMap<String, ReadyStatus>,
-) -> Vec<[String; 4]> {
+    wasm_sizes: &BTreeMap<String, String>,
+) -> Vec<[String; 5]> {
     let mut table_rows = Vec::with_capacity(rows.len());
     for row in rows {
         let ready = readiness
             .get(&row.entry.pid)
             .map_or("unknown", |status| status.label());
+        let wasm_size = row
+            .entry
+            .role
+            .as_deref()
+            .and_then(|role| wasm_sizes.get(role))
+            .cloned()
+            .unwrap_or_else(|| "-".to_string());
         table_rows.push([
             canister_label(row),
             role_label(row),
             kind_label(row, role_kinds),
             ready.to_string(),
+            wasm_size,
         ]);
     }
     table_rows
 }
 
-fn registry_table_widths(rows: &[[String; 4]]) -> [usize; 4] {
+fn registry_table_widths(rows: &[[String; 5]]) -> [usize; 5] {
     let mut widths = [
         CANISTER_HEADER.chars().count(),
         ROLE_HEADER.chars().count(),
         KIND_HEADER.chars().count(),
         READY_HEADER.chars().count(),
+        WASM_HEADER.chars().count(),
     ];
 
     for row in rows {
@@ -355,7 +383,7 @@ fn registry_table_widths(rows: &[[String; 4]]) -> [usize; 4] {
     widths
 }
 
-pub(super) fn render_registry_table_row(row: &[impl AsRef<str>], widths: &[usize; 4]) -> String {
+pub(super) fn render_registry_table_row(row: &[impl AsRef<str>], widths: &[usize; 5]) -> String {
     widths
         .iter()
         .enumerate()
@@ -369,7 +397,7 @@ pub(super) fn render_registry_table_row(row: &[impl AsRef<str>], widths: &[usize
         .to_string()
 }
 
-pub(super) fn render_registry_separator(widths: &[usize; 4]) -> String {
+pub(super) fn render_registry_separator(widths: &[usize; 5]) -> String {
     widths
         .iter()
         .map(|width| "-".repeat(*width))

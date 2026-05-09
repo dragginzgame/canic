@@ -86,9 +86,9 @@ install-dev:
 
 # Update the local Rust/Cargo/actionlint/ICP CLI development environment.
 update-dev:
-	bash scripts/dev/install_dev.sh --update-prereqs
+	CANIC_AUTO_BUMP_ICP_TOOLS=1 bash scripts/dev/install_dev.sh --update-prereqs
 	rustup update
-	cargo install \
+	cargo install --quiet \
 		cargo-audit cargo-bloat cargo-deny cargo-expand cargo-machete \
 		cargo-llvm-lines cargo-sort cargo-tarpaulin cargo-sort-derives \
 		ripgrep \
@@ -96,7 +96,7 @@ update-dev:
 	icp --version
 	ic-wasm --version
 	cargo audit
-	cargo update --verbose
+	cargo update --quiet
 
 
 # Optional explicit install target (idempotent)

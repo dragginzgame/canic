@@ -103,7 +103,7 @@ fn resolve_existing(
     payload_hash: [u8; 32],
     existing: crate::storage::stable::replay::RootReplayRecord,
 ) -> ReplayDecision {
-    if now > existing.expires_at {
+    if now >= existing.expires_at {
         return ReplayDecision::Expired;
     }
 
@@ -243,6 +243,28 @@ mod tests {
                 issued_at: 900,
                 expires_at: 1_200,
                 response_bytes: vec![],
+            },
+        );
+
+        let decision = evaluate_root_replay(input).expect("decision");
+        assert_eq!(decision, ReplayDecision::Expired);
+    }
+
+    #[test]
+    fn evaluate_root_replay_returns_expired_at_expiry_boundary() {
+        RootReplayOps::reset_for_tests();
+
+        let mut input = base_input();
+        input.now = 1_200;
+        let slot_key = key::root_slot_key(input.caller, input.target_canister, input.request_id);
+        slot::upsert_root_slot(
+            slot_key,
+            RootReplayRecord {
+                caller: input.caller,
+                payload_hash: input.payload_hash,
+                issued_at: 900,
+                expires_at: 1_200,
+                response_bytes: vec![1, 2, 3],
             },
         );
 

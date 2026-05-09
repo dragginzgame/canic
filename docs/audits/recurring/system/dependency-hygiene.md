@@ -248,17 +248,19 @@ Use this map for top-level ownership and package judgment:
 | `crates/canic-testkit`                 | public generic PocketIC/test infrastructure |
 | `crates/canic-testing-internal`        | Canic-only internal test harnesses          |
 | `crates/canic-tests`                   | integration test entrypoints                |
-| `canisters/**`                         | demo/reference canisters only               |
-| `crates/canic-core/test-canisters/**`  | internal correctness/integration canisters  |
-| `crates/canic-core/audit-canisters/**` | internal audit/perf probe canisters         |
+| `fleets/**`                            | config-defined operator fleets              |
+| `canisters/test/**`                    | internal correctness/integration fixtures   |
+| `canisters/audit/**`                   | internal audit/perf probe canisters         |
+| `canisters/sandbox/**`                 | manual sandbox canisters                    |
 
 Rules:
 
 * `canic`, `canic-cdk`, `canic-memory`, and `canic-testkit` are expected public
   support crates.
-* `canic-testing-internal`, `canic-tests`, `test-canisters`, and
-  `audit-canisters` are not public product API.
-* Demo canisters are not generic reusable infrastructure.
+* `canic-testing-internal`, `canic-tests`, `canisters/test`, and
+  `canisters/audit` are not public product API.
+* Fleet canisters are not generic reusable infrastructure.
+* `canisters/sandbox/**` is manual scratch space and must not become product API.
 * Published crates must not silently depend on internal crates.
 * Public support crates must not become alternate general-purpose facades for
   internal runtime ownership without that being explicitly stated.
@@ -271,8 +273,8 @@ Default scope for this audit includes:
 
 * workspace root manifest
 * all crate manifests under `crates/**`
-* demo/reference canister manifests under `canisters/**`
-* internal test/audit canister manifests under `crates/canic-core/**`
+* fleet manifests under `fleets/**`
+* internal test/audit/sandbox canister manifests under `canisters/**`
 
 If the workspace root manifest is excluded, publish/package judgments that rely
 on shared dependency policy must be marked `BLOCKED` or explicitly narrowed.

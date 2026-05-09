@@ -92,6 +92,7 @@ name = "test"
 Successful installs write `.canic/<network>/fleets/<fleet>.json` with the root
 target, resolved root principal, build target, config path, and staging
 manifest path. `canic config <name>` shows the selected fleet declaration,
+including opt-in role features such as auth, sharding, and scaling,
 while `canic list <name>` queries the deployed root registry for that fleet.
 Commands use network `local` unless you pass
 `--network <name>`.

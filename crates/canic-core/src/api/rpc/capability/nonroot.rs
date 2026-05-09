@@ -1,6 +1,6 @@
 use super::{
-    capability_proof_mode_label, capability_proof_mode_metric_key, project_replay_metadata,
-    validate_nonroot_cycles_envelope, verify_nonroot_cycles_proof,
+    RootCapabilityProofMode, project_replay_metadata, validate_nonroot_cycles_envelope,
+    verify_nonroot_cycles_proof,
 };
 use crate::{
     dto::{
@@ -31,37 +31,45 @@ pub(super) async fn response_capability_v1_nonroot(
     } = envelope;
 
     let capability_key = RootCapabilityMetricKey::RequestCycles;
-    let proof_mode = capability_proof_mode_metric_key(&proof);
-    if let Err(err) = validate_nonroot_cycles_envelope(service, capability_version, &proof) {
-        RootCapabilityMetrics::record_envelope(
-            capability_key,
-            RootCapabilityMetricOutcome::Rejected,
-            proof_mode,
-        );
-        log!(
-            Topic::Rpc,
-            Warn,
-            "non-root capability envelope rejected (capability={}, caller={}, service={:?}, capability_version={}, proof_mode={}): {}",
-            "RequestCycles",
-            IcOps::msg_caller(),
-            service,
-            capability_version,
-            capability_proof_mode_label(&proof),
-            err
-        );
-        return Err(err);
-    }
+    let proof_mode = RootCapabilityProofMode::from_proof(&proof);
+    let validated_proof = match validate_nonroot_cycles_envelope(
+        service,
+        capability_version,
+        &proof,
+    ) {
+        Ok(proof) => proof,
+        Err(err) => {
+            RootCapabilityMetrics::record_envelope(
+                capability_key,
+                RootCapabilityMetricOutcome::Rejected,
+                proof_mode.metric_key(),
+            );
+            log!(
+                Topic::Rpc,
+                Warn,
+                "non-root capability envelope rejected (capability={}, caller={}, service={:?}, capability_version={}, proof_mode={}): {}",
+                "RequestCycles",
+                IcOps::msg_caller(),
+                service,
+                capability_version,
+                proof_mode.label(),
+                err
+            );
+            return Err(err);
+        }
+    };
+    let proof_mode = validated_proof.mode();
     RootCapabilityMetrics::record_envelope(
         capability_key,
         RootCapabilityMetricOutcome::Accepted,
-        proof_mode,
+        proof_mode.metric_key(),
     );
 
     if let Err(err) = verify_nonroot_cycles_proof() {
         RootCapabilityMetrics::record_proof(
             capability_key,
             RootCapabilityMetricOutcome::Rejected,
-            proof_mode,
+            proof_mode.metric_key(),
         );
         log!(
             Topic::Rpc,
@@ -71,7 +79,7 @@ pub(super) async fn response_capability_v1_nonroot(
             IcOps::msg_caller(),
             service,
             capability_version,
-            capability_proof_mode_label(&proof),
+            proof_mode.label(),
             err
         );
         return Err(err);
@@ -79,7 +87,7 @@ pub(super) async fn response_capability_v1_nonroot(
     RootCapabilityMetrics::record_proof(
         capability_key,
         RootCapabilityMetricOutcome::Accepted,
-        proof_mode,
+        proof_mode.metric_key(),
     );
 
     let replay_metadata = project_replay_metadata(metadata, IcOps::now_secs())?;

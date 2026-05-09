@@ -32,7 +32,7 @@ pub(super) fn project_replay_metadata(
         .issued_at
         .checked_add(u64::from(metadata.ttl_seconds))
         .ok_or_else(|| Error::invalid("capability metadata expiry overflow"))?;
-    if now_secs > expires_at {
+    if now_secs >= expires_at {
         return Err(Error::conflict("capability metadata has expired"));
     }
 

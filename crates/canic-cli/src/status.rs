@@ -4,6 +4,7 @@ use crate::{
     },
     version_text,
 };
+use canic_backup::discovery::{RegistryEntry, parse_registry_entries};
 use canic_host::{
     icp::IcpCli,
     install_root::{discover_current_canic_config_choices, read_named_fleet_install_state},
@@ -12,7 +13,7 @@ use canic_host::{
     table::WhitespaceTable,
 };
 use clap::Command as ClapCommand;
-use std::{ffi::OsString, path::Path};
+use std::{collections::BTreeSet, ffi::OsString, path::Path};
 use thiserror::Error as ThisError;
 
 const FLEET_HEADER: &str = "FLEET";
@@ -57,6 +58,7 @@ struct StatusOptions {
 struct StatusReport {
     network: String,
     replica: ReplicaStatus,
+    icp_cli: String,
     fleets: Vec<StatusFleetRow>,
 }
 
@@ -117,6 +119,7 @@ impl StatusOptions {
 fn load_status_report(options: &StatusOptions) -> Result<StatusReport, StatusCommandError> {
     let workspace_root = workspace_root()?;
     let choices = discover_current_canic_config_choices()?;
+    let icp_cli = load_icp_cli_version(options);
     let replica = load_replica_status(options);
     let verify_local_roots = replica_query::should_use_local_replica_query(Some(&options.network))
         && matches!(replica, ReplicaStatus::Running);
@@ -129,8 +132,16 @@ fn load_status_report(options: &StatusOptions) -> Result<StatusReport, StatusCom
     Ok(StatusReport {
         network: options.network.clone(),
         replica,
+        icp_cli,
         fleets,
     })
+}
+
+fn load_icp_cli_version(options: &StatusOptions) -> String {
+    match IcpCli::new(&options.icp, None, None).version() {
+        Ok(version) => version,
+        Err(err) => format!("unavailable ({err})"),
+    }
 }
 
 fn load_replica_status(options: &StatusOptions) -> ReplicaStatus {
@@ -157,9 +168,15 @@ fn status_fleet_row(
         };
     };
     let install_state = read_named_fleet_install_state(network, &fleet);
+    let configured_roles = configured_fleet_roles(path);
     let (deployed, root) = match install_state {
         Ok(Some(state)) => (
-            deployed_label(network, &state.root_canister_id, verify_local_root),
+            deployed_label(
+                network,
+                &state.root_canister_id,
+                verify_local_root,
+                configured_roles.as_deref().unwrap_or(&[]),
+            ),
             state.root_canister_id,
         ),
         Ok(None) => ("no".to_string(), "-".to_string()),
@@ -167,7 +184,7 @@ fn status_fleet_row(
     };
 
     StatusFleetRow {
-        canisters: configured_fleet_roles(path)
+        canisters: configured_roles
             .map_or_else(|_| "invalid".to_string(), |roles| roles.len().to_string()),
         config: display_workspace_path(workspace_root, path),
         deployed,
@@ -176,7 +193,12 @@ fn status_fleet_row(
     }
 }
 
-fn deployed_label(network: &str, root: &str, verify_local_root: bool) -> String {
+fn deployed_label(
+    network: &str,
+    root: &str,
+    verify_local_root: bool,
+    configured_roles: &[String],
+) -> String {
     if !replica_query::should_use_local_replica_query(Some(network)) {
         return "yes".to_string();
     }
@@ -184,10 +206,32 @@ fn deployed_label(network: &str, root: &str, verify_local_root: bool) -> String 
         return "unknown".to_string();
     }
 
-    match replica_query::query_ready(Some(network), root) {
-        Ok(_) => "yes".to_string(),
+    match replica_query::query_subnet_registry_json(Some(network), root) {
+        Ok(registry_json) => match parse_registry_entries(&registry_json) {
+            Ok(registry) => classify_local_deployment(configured_roles, &registry).to_string(),
+            Err(_) => "error".to_string(),
+        },
         Err(err) if is_canister_not_found_error(&err.to_string()) => "stale".to_string(),
         Err(_) => "error".to_string(),
+    }
+}
+
+fn classify_local_deployment(
+    configured_roles: &[String],
+    registry: &[RegistryEntry],
+) -> &'static str {
+    let deployed_roles = registry
+        .iter()
+        .filter_map(|entry| entry.role.as_deref())
+        .collect::<BTreeSet<_>>();
+
+    if configured_roles
+        .iter()
+        .all(|role| deployed_roles.contains(role.as_str()))
+    {
+        "yes"
+    } else {
+        "partial"
     }
 }
 
@@ -200,6 +244,7 @@ fn render_status_report(report: &StatusReport) -> String {
     let deployed = deployed_count(&report.fleets);
     let mut lines = vec![
         format!("Replica: {}", report.replica.label()),
+        format!("ICP CLI: {}", report.icp_cli),
         format!(
             "Fleets:  {deployed}/{configured} deployed (network {})",
             report.network
@@ -311,6 +356,7 @@ mod tests {
         let report = StatusReport {
             network: "local".to_string(),
             replica: ReplicaStatus::Running,
+            icp_cli: "icp 0.2.5".to_string(),
             fleets: vec![
                 StatusFleetRow {
                     fleet: "demo".to_string(),
@@ -333,6 +379,7 @@ mod tests {
             render_status_report(&report),
             format!(
                 "Replica: running (local)\n\
+                 ICP CLI: icp 0.2.5\n\
                  Fleets:  1/2 deployed (network local)\n\
                  \n\
                  {:<5}  {:<8}  {:<22}  {:<9}  {}\n\
@@ -363,20 +410,52 @@ mod tests {
         let report = StatusReport {
             network: "local".to_string(),
             replica: ReplicaStatus::Stopped,
+            icp_cli: "icp 0.2.5".to_string(),
             fleets: Vec::new(),
         };
 
         assert_eq!(
             render_status_report(&report),
-            "Replica: stopped (local)\nFleets:  0/0 deployed (network local)"
+            "Replica: stopped (local)\nICP CLI: icp 0.2.5\nFleets:  0/0 deployed (network local)"
         );
     }
 
     // Ensure local installed-state rows are not reported as deployed when live roots are unchecked.
     #[test]
     fn local_deployed_label_is_unknown_without_replica_verification() {
-        assert_eq!(deployed_label("local", "aaaaa-aa", false), "unknown");
-        assert_eq!(deployed_label("ic", "aaaaa-aa", false), "yes");
+        assert_eq!(
+            deployed_label("local", "aaaaa-aa", false, &["root".to_string()]),
+            "unknown"
+        );
+        assert_eq!(
+            deployed_label("ic", "aaaaa-aa", false, &["root".to_string()]),
+            "yes"
+        );
+    }
+
+    #[test]
+    fn local_deployment_is_partial_when_registry_is_missing_configured_roles() {
+        let configured_roles = vec!["root".to_string(), "app".to_string()];
+        let registry = vec![registry_entry("aaaaa-aa", "root")];
+
+        assert_eq!(
+            classify_local_deployment(&configured_roles, &registry),
+            "partial"
+        );
+    }
+
+    #[test]
+    fn local_deployment_is_yes_when_registry_contains_configured_roles() {
+        let configured_roles = vec!["root".to_string(), "app".to_string()];
+        let registry = vec![
+            registry_entry("aaaaa-aa", "root"),
+            registry_entry("uxrrr-q7777-77774-qaaaq-cai", "app"),
+        ];
+
+        assert_eq!(
+            classify_local_deployment(&configured_roles, &registry),
+            "yes"
+        );
     }
 
     // Ensure stale local-root diagnostics match the list command's canister-not-found shape.
@@ -398,5 +477,14 @@ mod tests {
         assert!(text.contains("--network <name>"));
         assert!(text.contains("--icp <path>"));
         assert!(text.contains("Examples:"));
+    }
+
+    fn registry_entry(pid: &str, role: &str) -> RegistryEntry {
+        RegistryEntry {
+            pid: pid.to_string(),
+            role: Some(role.to_string()),
+            kind: None,
+            parent_pid: None,
+        }
     }
 }

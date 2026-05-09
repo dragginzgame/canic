@@ -10,7 +10,12 @@ docs/audits/
 ├─ META-AUDIT.md
 ├─ recurring/
 │  ├─ README.md
-│  └─ <focus>.md
+│  ├─ invariants/
+│  │  ├─ README.md
+│  │  └─ <focus>.md
+│  └─ system/
+│     ├─ README.md
+│     └─ <focus>.md
 └─ reports/
    └─ YYYY-MM/
       ├─ summary.md
@@ -25,9 +30,13 @@ docs/audits/
 Recurring audits are stable, repeatable audit definitions that run on a schedule and enforce architectural contracts.
 
 Location:
-- `docs/audits/recurring/<focus>.md`
+- `docs/audits/recurring/<domain>/<focus>.md`
 
-All recurring definitions should follow the flat recurring layout.
+All new recurring definitions should use the domain-scoped recurring layout.
+Current domains include:
+
+- `docs/audits/recurring/invariants/`
+- `docs/audits/recurring/system/`
 
 ### Audit reports
 Reports are historical outputs from audit runs.
@@ -42,7 +51,7 @@ All reports must use the month/day layout.
 ## 2. Naming Conventions
 
 Use these file patterns:
-- Recurring definitions: `<focus>.md`
+- Recurring definitions: `docs/audits/recurring/<domain>/<focus>.md`
 - Reports (inside day directory): `<scope>.md`
 - Same-day reruns for a scope: `<scope>-2.md`, `<scope>-3.md`, ...
 - Required report directory: `docs/audits/reports/YYYY-MM/YYYY-MM-DD/`

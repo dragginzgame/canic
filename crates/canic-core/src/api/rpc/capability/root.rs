@@ -1,7 +1,7 @@
 use super::{
-    capability_proof_mode_label, capability_proof_mode_metric_key, project_replay_metadata,
-    root_capability_family, root_capability_metric_key, validate_root_capability_envelope,
-    verify_root_capability_proof, with_root_request_metadata,
+    RootCapabilityProofMode, project_replay_metadata, root_capability_family,
+    root_capability_metric_key, validate_root_capability_envelope, verify_root_capability_proof,
+    with_root_request_metadata,
 };
 use crate::{
     dto::{
@@ -32,37 +32,47 @@ pub(super) async fn response_capability_v1_root(
     } = envelope;
 
     let capability_key = root_capability_metric_key(&capability);
-    let proof_mode = capability_proof_mode_metric_key(&proof);
-    if let Err(err) = validate_root_capability_envelope(service, capability_version, &proof) {
-        RootCapabilityMetrics::record_envelope(
-            capability_key,
-            RootCapabilityMetricOutcome::Rejected,
-            proof_mode,
-        );
-        log!(
-            Topic::Rpc,
-            Warn,
-            "root capability envelope rejected (capability={}, caller={}, service={:?}, capability_version={}, proof_mode={}): {}",
-            root_capability_family(&capability),
-            IcOps::msg_caller(),
-            service,
-            capability_version,
-            capability_proof_mode_label(&proof),
-            err
-        );
-        return Err(err);
-    }
+    let proof_mode = RootCapabilityProofMode::from_proof(&proof);
+    let validated_proof = match validate_root_capability_envelope(
+        service,
+        capability_version,
+        &proof,
+    ) {
+        Ok(proof) => proof,
+        Err(err) => {
+            RootCapabilityMetrics::record_envelope(
+                capability_key,
+                RootCapabilityMetricOutcome::Rejected,
+                proof_mode.metric_key(),
+            );
+            log!(
+                Topic::Rpc,
+                Warn,
+                "root capability envelope rejected (capability={}, caller={}, service={:?}, capability_version={}, proof_mode={}): {}",
+                root_capability_family(&capability),
+                IcOps::msg_caller(),
+                service,
+                capability_version,
+                proof_mode.label(),
+                err
+            );
+            return Err(err);
+        }
+    };
+    let proof_mode = validated_proof.mode();
     RootCapabilityMetrics::record_envelope(
         capability_key,
         RootCapabilityMetricOutcome::Accepted,
-        proof_mode,
+        proof_mode.metric_key(),
     );
 
-    if let Err(err) = verify_root_capability_proof(&capability, capability_version, &proof).await {
+    if let Err(err) =
+        verify_root_capability_proof(&capability, capability_version, validated_proof).await
+    {
         RootCapabilityMetrics::record_proof(
             capability_key,
             RootCapabilityMetricOutcome::Rejected,
-            proof_mode,
+            proof_mode.metric_key(),
         );
         log!(
             Topic::Rpc,
@@ -72,7 +82,7 @@ pub(super) async fn response_capability_v1_root(
             IcOps::msg_caller(),
             service,
             capability_version,
-            capability_proof_mode_label(&proof),
+            proof_mode.label(),
             err
         );
         return Err(err);
@@ -80,7 +90,7 @@ pub(super) async fn response_capability_v1_root(
     RootCapabilityMetrics::record_proof(
         capability_key,
         RootCapabilityMetricOutcome::Accepted,
-        proof_mode,
+        proof_mode.metric_key(),
     );
 
     let replay_metadata = project_replay_metadata(metadata, IcOps::now_secs())?;

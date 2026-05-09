@@ -16,7 +16,7 @@ use canic_host::{
     release_set::{
         config_path as default_config_path, configured_fleet_name, configured_fleet_roles,
         configured_role_auto_create, configured_role_capabilities, configured_role_details,
-        configured_role_kinds, configured_role_topups,
+        configured_role_kinds, configured_role_topups, icp_root,
     },
     replica_query,
 };
@@ -24,13 +24,18 @@ use options::{ListOptions, ListSource, config_usage, usage};
 #[cfg(test)]
 use render::{
     CANISTER_HEADER, ConfigRoleRow, KIND_HEADER, READY_HEADER, ROLE_HEADER, RegistryRow,
-    kind_label, render_config_output, render_registry_separator, render_registry_table_row,
-    render_registry_tree,
+    WASM_HEADER, kind_label, render_config_output, render_registry_separator,
+    render_registry_table_row, render_registry_tree,
 };
 #[cfg(not(test))]
 use render::{ConfigRoleRow, render_config_output};
 use render::{ListTitle, ReadyStatus, render_list_output, visible_entries};
-use std::{collections::BTreeMap, ffi::OsString, path::PathBuf};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    ffi::OsString,
+    fs,
+    path::PathBuf,
+};
 use thiserror::Error as ThisError;
 
 ///
@@ -99,6 +104,8 @@ where
     let anchor = resolve_tree_anchor(&options);
     let role_kinds = resolve_role_kinds(&options);
     let readiness = list_ready_statuses(&options, &registry, anchor.as_deref())?;
+    let wasm_sizes = resolve_wasm_sizes(&options, &registry);
+    let missing_roles = missing_config_roles(&options, &registry);
     let title = list_title(&options);
     println!(
         "{}",
@@ -107,12 +114,11 @@ where
             &registry,
             anchor.as_deref(),
             &role_kinds,
-            &readiness
+            &readiness,
+            &wasm_sizes,
+            &missing_roles
         )?
     );
-    if let Some(hint) = deployed_config_gap_hint(&options, &registry) {
-        eprintln!("Hint: {hint}");
-    }
     Ok(())
 }
 
@@ -341,6 +347,74 @@ fn call_subnet_registry(options: &ListOptions, root: &str) -> Result<String, Lis
         .map_err(add_root_registry_hint)
 }
 
+fn resolve_wasm_sizes(
+    options: &ListOptions,
+    registry: &[RegistryEntry],
+) -> BTreeMap<String, String> {
+    let Some(root) = resolve_icp_artifact_root(options) else {
+        return BTreeMap::new();
+    };
+    let network = state_network(options);
+    registry
+        .iter()
+        .filter_map(|entry| entry.role.as_deref())
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .filter_map(|role| {
+            let path = root
+                .join(".icp")
+                .join(&network)
+                .join("canisters")
+                .join(role)
+                .join(format!("{role}.wasm.gz"));
+            fs::metadata(path)
+                .ok()
+                .map(|metadata| (role.to_string(), format_bytes(metadata.len())))
+        })
+        .collect()
+}
+
+fn resolve_icp_artifact_root(options: &ListOptions) -> Option<PathBuf> {
+    if let Ok(Some(state)) = read_selected_install_state(options) {
+        return Some(PathBuf::from(state.icp_root));
+    }
+    icp_root().ok()
+}
+
+fn format_bytes(bytes: u64) -> String {
+    const KIB: f64 = 1024.0;
+    const MIB: f64 = 1024.0 * 1024.0;
+
+    if bytes >= 1024 * 1024 {
+        format!("{:.1}MiB", bytes as f64 / MIB)
+    } else if bytes >= 1024 {
+        format!("{:.1}KiB", bytes as f64 / KIB)
+    } else {
+        format!("{bytes}B")
+    }
+}
+
+fn missing_config_roles(options: &ListOptions, registry: &[RegistryEntry]) -> Vec<String> {
+    if !matches!(options.source, ListSource::RootRegistry) || options.anchor.is_some() {
+        return Vec::new();
+    }
+
+    let Ok(config_path) = selected_config_path(options) else {
+        return Vec::new();
+    };
+    let Ok(expected) = configured_fleet_roles(&config_path) else {
+        return Vec::new();
+    };
+    let deployed = registry
+        .iter()
+        .filter_map(|entry| entry.role.as_deref())
+        .collect::<BTreeSet<_>>();
+    expected
+        .into_iter()
+        .filter(|role| !deployed.contains(role.as_str()))
+        .collect()
+}
+
 fn list_replica_query_error(options: &ListOptions, root: &str, error: String) -> ListCommandError {
     if is_canister_not_found_error(&error)
         && let Ok(Some(state)) = read_selected_install_state(options)
@@ -402,42 +476,6 @@ fn root_registry_hint(stderr: &str) -> Option<&'static str> {
     }
 
     None
-}
-
-// Explain when deployed root state is missing roles declared by the selected config.
-fn deployed_config_gap_hint(options: &ListOptions, registry: &[RegistryEntry]) -> Option<String> {
-    if !matches!(options.source, ListSource::RootRegistry) {
-        return None;
-    }
-
-    let config_path = selected_config_path(options).ok()?;
-    let mut expected = configured_role_auto_create(&config_path).ok()?;
-    expected.insert("root".to_string());
-    let deployed = registry
-        .iter()
-        .filter_map(|entry| entry.role.as_deref())
-        .collect::<std::collections::BTreeSet<_>>();
-    let missing = expected
-        .iter()
-        .filter(|role| !deployed.contains(role.as_str()))
-        .cloned()
-        .collect::<Vec<_>>();
-    if missing.is_empty() {
-        return None;
-    }
-
-    let shown = missing.iter().take(4).cloned().collect::<Vec<_>>();
-    let suffix = if missing.len() > shown.len() {
-        ", and more"
-    } else {
-        ""
-    };
-    Some(format!(
-        "deployed registry is missing configured roles: {}{suffix}. Run `canic config {}` to inspect the config or `canic install {}` to bootstrap them.",
-        shown.join(", "),
-        options.fleet,
-        options.fleet
-    ))
 }
 
 #[cfg(test)]
@@ -543,29 +581,41 @@ mod tests {
         let registry = parse_registry_entries(&registry_json()).expect("parse registry");
         let role_kinds = BTreeMap::new();
         let readiness = readiness_map();
-        let tree =
-            render_registry_tree(&registry, None, &role_kinds, &readiness).expect("render tree");
-        let widths = [33, 7, 9, 5];
+        let tree = render_registry_tree(&registry, None, &role_kinds, &readiness, &BTreeMap::new())
+            .expect("render tree");
+        let widths = [33, 7, 9, 5, 7];
 
         assert_eq!(
             tree,
             [
                 render_registry_table_row(
-                    &[CANISTER_HEADER, ROLE_HEADER, KIND_HEADER, READY_HEADER],
+                    &[
+                        CANISTER_HEADER,
+                        ROLE_HEADER,
+                        KIND_HEADER,
+                        READY_HEADER,
+                        WASM_HEADER,
+                    ],
                     &widths
                 ),
                 render_registry_separator(&widths),
-                render_registry_table_row(&[ROOT, "root", "root", "yes"], &widths),
+                render_registry_table_row(&[ROOT, "root", "root", "yes", "-"], &widths),
                 render_registry_table_row(
-                    &[&format!("├─ {APP}"), "app", "singleton", "no"],
+                    &[&format!("├─ {APP}"), "app", "singleton", "no", "-"],
                     &widths
                 ),
                 render_registry_table_row(
-                    &[&format!("│  └─ {WORKER}"), "worker", "replica", "error"],
+                    &[
+                        &format!("│  └─ {WORKER}"),
+                        "worker",
+                        "replica",
+                        "error",
+                        "-"
+                    ],
                     &widths
                 ),
                 render_registry_table_row(
-                    &[&format!("└─ {MINIMAL}"), "minimal", "singleton", "yes"],
+                    &[&format!("└─ {MINIMAL}"), "minimal", "singleton", "yes", "-"],
                     &widths
                 )
             ]
@@ -579,21 +629,33 @@ mod tests {
         let registry = parse_registry_entries(&registry_json()).expect("parse registry");
         let role_kinds = BTreeMap::new();
         let readiness = readiness_map();
-        let tree = render_registry_tree(&registry, Some(APP), &role_kinds, &readiness)
-            .expect("render subtree");
-        let widths = [30, 6, 9, 5];
+        let tree = render_registry_tree(
+            &registry,
+            Some(APP),
+            &role_kinds,
+            &readiness,
+            &BTreeMap::new(),
+        )
+        .expect("render subtree");
+        let widths = [30, 6, 9, 5, 7];
 
         assert_eq!(
             tree,
             [
                 render_registry_table_row(
-                    &[CANISTER_HEADER, ROLE_HEADER, KIND_HEADER, READY_HEADER],
+                    &[
+                        CANISTER_HEADER,
+                        ROLE_HEADER,
+                        KIND_HEADER,
+                        READY_HEADER,
+                        WASM_HEADER,
+                    ],
                     &widths
                 ),
                 render_registry_separator(&widths),
-                render_registry_table_row(&[APP, "app", "singleton", "no"], &widths),
+                render_registry_table_row(&[APP, "app", "singleton", "no", "-"], &widths),
                 render_registry_table_row(
-                    &[&format!("└─ {WORKER}"), "worker", "replica", "error"],
+                    &[&format!("└─ {WORKER}"), "worker", "replica", "error", "-"],
                     &widths
                 )
             ]
@@ -615,29 +677,41 @@ mod tests {
             ("worker".to_string(), "replica".to_string()),
         ]);
         let readiness = readiness_map();
-        let tree =
-            render_registry_tree(&registry, None, &role_kinds, &readiness).expect("render tree");
-        let widths = [33, 7, 9, 5];
+        let tree = render_registry_tree(&registry, None, &role_kinds, &readiness, &BTreeMap::new())
+            .expect("render tree");
+        let widths = [33, 7, 9, 5, 7];
 
         assert_eq!(
             tree,
             [
                 render_registry_table_row(
-                    &[CANISTER_HEADER, ROLE_HEADER, KIND_HEADER, READY_HEADER],
+                    &[
+                        CANISTER_HEADER,
+                        ROLE_HEADER,
+                        KIND_HEADER,
+                        READY_HEADER,
+                        WASM_HEADER,
+                    ],
                     &widths
                 ),
                 render_registry_separator(&widths),
-                render_registry_table_row(&[ROOT, "root", "root", "yes"], &widths),
+                render_registry_table_row(&[ROOT, "root", "root", "yes", "-"], &widths),
                 render_registry_table_row(
-                    &[&format!("├─ {APP}"), "app", "singleton", "no"],
+                    &[&format!("├─ {APP}"), "app", "singleton", "no", "-"],
                     &widths
                 ),
                 render_registry_table_row(
-                    &[&format!("│  └─ {WORKER}"), "worker", "replica", "error"],
+                    &[
+                        &format!("│  └─ {WORKER}"),
+                        "worker",
+                        "replica",
+                        "error",
+                        "-"
+                    ],
                     &widths
                 ),
                 render_registry_table_row(
-                    &[&format!("└─ {MINIMAL}"), "minimal", "singleton", "yes"],
+                    &[&format!("└─ {MINIMAL}"), "minimal", "singleton", "yes", "-"],
                     &widths
                 )
             ]
@@ -659,11 +733,44 @@ mod tests {
             Some(APP),
             &BTreeMap::new(),
             &readiness_map(),
+            &BTreeMap::new(),
+            &[],
         )
         .expect("render list output");
 
         assert!(output.starts_with("Fleet: demo (network local)\n\nCANISTER_ID"));
         assert!(output.contains("\n------------------------------"));
+    }
+
+    #[test]
+    fn renders_list_output_with_wasm_size_and_missing_roles() {
+        let registry = parse_registry_entries(&registry_json()).expect("parse registry");
+        let title = ListTitle {
+            fleet: "demo".to_string(),
+            network: "local".to_string(),
+        };
+        let wasm_sizes = BTreeMap::from([("app".to_string(), "811.2KiB".to_string())]);
+        let output = render_list_output(
+            &title,
+            &registry,
+            None,
+            &BTreeMap::new(),
+            &readiness_map(),
+            &wasm_sizes,
+            &["audit".to_string()],
+        )
+        .expect("render list output");
+
+        assert!(output.contains("WASM_GZ"));
+        assert!(output.contains("811.2KiB"));
+        assert!(output.contains("Missing roles: audit"));
+    }
+
+    #[test]
+    fn format_bytes_uses_compact_binary_units() {
+        assert_eq!(format_bytes(9), "9B");
+        assert_eq!(format_bytes(1536), "1.5KiB");
+        assert_eq!(format_bytes(2 * 1024 * 1024), "2.0MiB");
     }
 
     // Ensure config-only fleets render their declared roles instead of deployed inventory.
@@ -701,7 +808,7 @@ mod tests {
             [
                 "Fleet: test_me (network local)",
                 "",
-                "ROLE   KIND        CAPABILITIES     AUTO   TOPUP",
+                "ROLE   KIND        FEATURES         AUTO   TOPUP",
                 "----   ---------   --------------   ----   --------------",
                 "root   root        -                -      -",
                 "app    singleton   auth, sharding   yes    4.0TC @ 10.0TC",

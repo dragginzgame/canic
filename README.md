@@ -61,7 +61,7 @@ treated as a repo-structure migration rather than a naming cleanup.
 
 * `fleets/test/` – config-defined reference topology used by local ICP CLI, CI wasm builds, and repo tests.
 * `fleets/demo/` – minimal root-plus-app fleet for quick experiments.
-* `canisters/audit/`, `canisters/sandbox/`, and `canisters/test/` – runnable canisters that are not Canic fleets, including audit probes, manual sandbox experiments, and isolated PocketIC fixtures.
+* `canisters/audit/`, `canisters/sandbox/`, and `canisters/test/` – runnable canisters that are not Canic fleets. See `TESTING.md` for placement rules.
 * `scripts/` – dev setup, CI, release, wasm, and audit helpers.
 * `assets/`, `docs/`, `.github/workflows/` – documentation assets, design/audit notes, and CI.
 

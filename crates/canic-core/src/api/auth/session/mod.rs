@@ -4,11 +4,11 @@ use crate::{
     cdk::types::Principal,
     dto::{auth::DelegatedToken, error::Error},
     ops::{
-        auth::{AuthOps, DelegatedSessionExpiryClamp, VerifyDelegatedTokenRuntimeInput},
+        auth::{AuthOps, DelegatedSessionExpiryClamp},
         config::ConfigOps,
         ic::IcOps,
         runtime::metrics::auth::{
-            record_session_bootstrap_rejected_disabled,
+            record_session_bootstrap_rejected_capacity, record_session_bootstrap_rejected_disabled,
             record_session_bootstrap_rejected_replay_conflict,
             record_session_bootstrap_rejected_replay_reused,
             record_session_bootstrap_rejected_subject_mismatch,
@@ -19,7 +19,10 @@ use crate::{
             record_session_bootstrap_replay_idempotent, record_session_cleared,
             record_session_created, record_session_pruned, record_session_replaced,
         },
-        storage::auth::{AuthStateOps, DelegatedSession, DelegatedSessionBootstrapBinding},
+        storage::auth::{
+            AuthStateOps, DelegatedSession, DelegatedSessionBootstrapBinding,
+            DelegatedSessionUpsertResult,
+        },
     },
 };
 use sha2::{Digest, Sha256};
@@ -54,23 +57,19 @@ impl AuthApi {
 
         let issued_at = IcOps::now_secs();
         let max_ttl_secs = Self::delegated_token_max_ttl_secs()?;
-        let verified = AuthOps::verify_token(VerifyDelegatedTokenRuntimeInput {
-            token: &bootstrap_token,
-            max_cert_ttl_secs: max_ttl_secs,
-            max_token_ttl_secs: max_ttl_secs,
-            required_scopes: &[],
-            now_secs: issued_at,
-        })
-        .map_err(|err| {
-            record_session_bootstrap_rejected_token_invalid();
-            Self::map_auth_error(err)
-        })?;
+        let verified_subject = Self::verify_token_material(
+            &bootstrap_token,
+            max_ttl_secs,
+            max_ttl_secs,
+            &[],
+            issued_at,
+        )
+        .inspect_err(|_| record_session_bootstrap_rejected_token_invalid())?;
 
-        if verified.subject != delegated_subject {
+        if verified_subject != delegated_subject {
             record_session_bootstrap_rejected_subject_mismatch();
             return Err(Error::forbidden(format!(
-                "delegated session subject mismatch: requested={} token_subject={}",
-                delegated_subject, verified.subject
+                "delegated session subject mismatch: requested={delegated_subject} token_subject={verified_subject}"
             )));
         }
 
@@ -101,7 +100,7 @@ impl AuthApi {
         let had_active_session =
             AuthStateOps::delegated_session(wallet_caller, issued_at).is_some();
 
-        AuthStateOps::upsert_delegated_session(
+        let upsert_result = AuthStateOps::upsert_delegated_session_with_bootstrap_binding(
             DelegatedSession {
                 wallet_pid: wallet_caller,
                 delegated_pid: delegated_subject,
@@ -109,9 +108,6 @@ impl AuthApi {
                 expires_at,
                 bootstrap_token_fingerprint: Some(token_fingerprint),
             },
-            issued_at,
-        );
-        AuthStateOps::upsert_delegated_session_bootstrap_binding(
             DelegatedSessionBootstrapBinding {
                 wallet_pid: wallet_caller,
                 delegated_pid: delegated_subject,
@@ -121,6 +117,12 @@ impl AuthApi {
             },
             issued_at,
         );
+        if !matches!(upsert_result, DelegatedSessionUpsertResult::Upserted) {
+            record_session_bootstrap_rejected_capacity();
+            return Err(Error::exhausted(delegated_session_capacity_message(
+                upsert_result,
+            )));
+        }
 
         if had_active_session {
             record_session_replaced();
@@ -236,5 +238,29 @@ impl AuthApi {
                 "delegated session bootstrap token is expired",
             )),
         }
+    }
+}
+
+fn delegated_session_capacity_message(result: DelegatedSessionUpsertResult) -> String {
+    match result {
+        DelegatedSessionUpsertResult::Upserted => {
+            "delegated session state was already updated".to_string()
+        }
+        DelegatedSessionUpsertResult::SessionCapacityReached { capacity } => {
+            format!("delegated session capacity reached ({capacity})")
+        }
+        DelegatedSessionUpsertResult::SessionSubjectCapacityReached {
+            delegated_pid,
+            capacity,
+        } => format!("delegated session subject capacity reached for {delegated_pid} ({capacity})"),
+        DelegatedSessionUpsertResult::BootstrapBindingCapacityReached { capacity } => {
+            format!("delegated session bootstrap binding capacity reached ({capacity})")
+        }
+        DelegatedSessionUpsertResult::BootstrapBindingSubjectCapacityReached {
+            delegated_pid,
+            capacity,
+        } => format!(
+            "delegated session bootstrap binding subject capacity reached for {delegated_pid} ({capacity})"
+        ),
     }
 }

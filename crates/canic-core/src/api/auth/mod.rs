@@ -1,4 +1,5 @@
 use crate::{
+    cdk::types::Principal,
     dto::{
         auth::{
             AttestationKeySet, DelegatedToken, DelegatedTokenIssueRequest,
@@ -59,6 +60,28 @@ impl AuthApi {
         }
     }
 
+    // Verify delegated-token material and return the token subject.
+    //
+    // This is intentionally private: endpoint authorization must also bind the
+    // verified subject to the caller and consume update tokens once.
+    fn verify_token_material(
+        token: &DelegatedToken,
+        max_cert_ttl_secs: u64,
+        max_token_ttl_secs: u64,
+        required_scopes: &[String],
+        now_secs: u64,
+    ) -> Result<Principal, Error> {
+        AuthOps::verify_token(VerifyDelegatedTokenRuntimeInput {
+            token,
+            max_cert_ttl_secs,
+            max_token_ttl_secs,
+            required_scopes,
+            now_secs,
+        })
+        .map(|verified| verified.subject)
+        .map_err(Self::map_auth_error)
+    }
+
     /// Resolve the local shard public key in SEC1 encoding.
     pub async fn local_shard_public_key_sec1() -> Result<Vec<u8>, Error> {
         AuthOps::local_shard_public_key_sec1(IcOps::canister_self())
@@ -99,25 +122,6 @@ impl AuthApi {
             nonce: request.nonce,
         })
         .await
-    }
-
-    /// Full delegated token verification without verifier-local proof lookup.
-    pub fn verify_token(
-        token: &DelegatedToken,
-        max_cert_ttl_secs: u64,
-        max_token_ttl_secs: u64,
-        required_scopes: &[String],
-        now_secs: u64,
-    ) -> Result<(), Error> {
-        AuthOps::verify_token(VerifyDelegatedTokenRuntimeInput {
-            token,
-            max_cert_ttl_secs,
-            max_token_ttl_secs,
-            required_scopes,
-            now_secs,
-        })
-        .map(|_| ())
-        .map_err(Self::map_auth_error)
     }
 
     /// Request a self-contained delegation proof from root over RPC.

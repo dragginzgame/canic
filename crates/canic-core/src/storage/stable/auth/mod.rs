@@ -15,10 +15,13 @@ pub use records::{
     AttestationKeyStatusRecord, AttestationPublicKeyRecord, AuthStateRecord,
     DelegatedSessionBootstrapBindingRecord, DelegatedSessionRecord, DelegatedTokenUseRecord,
 };
+pub use sessions::DelegatedSessionUpsertResult;
 pub use token_uses::DelegatedTokenUseConsumeResult;
 
 const DELEGATED_SESSION_CAPACITY: usize = 2_048;
+const DELEGATED_SESSION_SUBJECT_CAPACITY: usize = 128;
 const DELEGATED_SESSION_BOOTSTRAP_BINDING_CAPACITY: usize = 4_096;
+const DELEGATED_SESSION_BOOTSTRAP_BINDING_SUBJECT_CAPACITY: usize = 256;
 const DELEGATED_TOKEN_USE_CAPACITY: usize = 8_192;
 
 eager_static! {
@@ -59,17 +62,52 @@ impl AuthState {
     }
 
     // Upsert a delegated session for a wallet caller.
-    pub(crate) fn upsert_delegated_session(session: DelegatedSessionRecord, now_secs: u64) {
+    #[cfg(test)]
+    pub(crate) fn upsert_delegated_session(
+        session: DelegatedSessionRecord,
+        now_secs: u64,
+    ) -> DelegatedSessionUpsertResult {
         AUTH_STATE.with_borrow_mut(|cell| {
             let mut data = cell.get().clone();
-            sessions::upsert_delegated_session(
+            let result = sessions::upsert_delegated_session(
                 &mut data.delegated_sessions,
                 session,
                 now_secs,
                 DELEGATED_SESSION_CAPACITY,
+                DELEGATED_SESSION_SUBJECT_CAPACITY,
             );
-            cell.set(data);
-        });
+            if matches!(result, DelegatedSessionUpsertResult::Upserted) {
+                cell.set(data);
+            }
+            result
+        })
+    }
+
+    pub(crate) fn upsert_delegated_session_with_bootstrap_binding(
+        session: DelegatedSessionRecord,
+        binding: DelegatedSessionBootstrapBindingRecord,
+        now_secs: u64,
+    ) -> DelegatedSessionUpsertResult {
+        AUTH_STATE.with_borrow_mut(|cell| {
+            let mut data = cell.get().clone();
+            let result = sessions::upsert_delegated_session_with_bootstrap_binding(
+                &mut data.delegated_sessions,
+                &mut data.delegated_session_bootstrap_bindings,
+                session,
+                binding,
+                now_secs,
+                sessions::DelegatedSessionCapacityLimits {
+                    session: DELEGATED_SESSION_CAPACITY,
+                    session_subject: DELEGATED_SESSION_SUBJECT_CAPACITY,
+                    binding: DELEGATED_SESSION_BOOTSTRAP_BINDING_CAPACITY,
+                    binding_subject: DELEGATED_SESSION_BOOTSTRAP_BINDING_SUBJECT_CAPACITY,
+                },
+            );
+            if matches!(result, DelegatedSessionUpsertResult::Upserted) {
+                cell.set(data);
+            }
+            result
+        })
     }
 
     // Clear the delegated session for a wallet caller.
@@ -112,23 +150,6 @@ impl AuthState {
             }
             binding
         })
-    }
-
-    // Upsert a delegated-session bootstrap binding by token fingerprint.
-    pub(crate) fn upsert_delegated_session_bootstrap_binding(
-        binding: DelegatedSessionBootstrapBindingRecord,
-        now_secs: u64,
-    ) {
-        AUTH_STATE.with_borrow_mut(|cell| {
-            let mut data = cell.get().clone();
-            sessions::upsert_delegated_session_bootstrap_binding(
-                &mut data.delegated_session_bootstrap_bindings,
-                binding,
-                now_secs,
-                DELEGATED_SESSION_BOOTSTRAP_BINDING_CAPACITY,
-            );
-            cell.set(data);
-        });
     }
 
     // Prune expired delegated-session bootstrap bindings and report the removal count.

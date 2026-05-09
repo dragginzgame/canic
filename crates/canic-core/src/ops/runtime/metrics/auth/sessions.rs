@@ -1,6 +1,7 @@
 use super::{
     AuthMetricOperation, AuthMetricOutcome, AuthMetricReason, AuthMetricSurface, AuthMetrics,
-    auth_session_endpoint, session_bootstrap_rejected_disabled_predicate,
+    auth_session_endpoint, session_bootstrap_rejected_capacity_predicate,
+    session_bootstrap_rejected_disabled_predicate,
     session_bootstrap_rejected_replay_conflict_predicate,
     session_bootstrap_rejected_replay_reused_predicate,
     session_bootstrap_rejected_subject_mismatch_predicate,
@@ -21,6 +22,16 @@ pub fn record_session_bootstrap_rejected_disabled() {
         AuthMetricOutcome::Rejected,
         AuthMetricReason::Disabled,
         session_bootstrap_rejected_disabled_predicate(),
+    );
+}
+
+/// Record a rejected session bootstrap when session state capacity is exhausted.
+pub fn record_session_bootstrap_rejected_capacity() {
+    record_session_metric(
+        AuthMetricOperation::Bootstrap,
+        AuthMetricOutcome::Rejected,
+        AuthMetricReason::Capacity,
+        session_bootstrap_rejected_capacity_predicate(),
     );
 }
 

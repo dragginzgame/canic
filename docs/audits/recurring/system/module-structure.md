@@ -32,7 +32,7 @@ Determine whether crate topology, module topology, and visibility scopes still e
 * widening internal coordination surfaces
 * cross-responsibility coupling
 * facade leakage
-* demo/test/audit seam erosion
+* fleet/test/audit seam erosion
 * hub concentration that increases future drift risk
 
 This is a **structure-and-containment audit**, not a correctness audit.
@@ -46,10 +46,10 @@ Primary structural risks:
 * `pub` exposure creates durable external commitments
 * wide `pub(crate)` surfaces increase internal coordination cost
 * broad `mod.rs` or root modules become gravity wells for unrelated work
-* public/internal seam drift weakens demo, test, and audit containment
+* public/internal seam drift weakens fleet, test, and audit containment
 * upward or cross-responsibility dependencies reduce architectural clarity
 * facade crates may re-export implementation details by convenience
-* test or audit support may leak into runtime or demo/reference surfaces
+* test or audit support may leak into runtime or fleet surfaces
 
 Structural invariant:
 
@@ -76,7 +76,7 @@ This audit exists to catch that drift before it hardens.
 * facade or crate-topology changes
 * public API cleanup passes
 * large module splits or consolidations
-* demo/test/audit boundary changes
+* fleet/test/audit boundary changes
 * pre-release architecture review windows
 * introduction of a new support crate
 * major `pub use` additions at crate roots
@@ -204,15 +204,17 @@ Use this crate map for top-level ownership and boundary assessment:
 | `crates/canic-testkit`                 | public generic PocketIC/test infrastructure  |
 | `crates/canic-testing-internal`        | Canic-only internal test harnesses           |
 | `crates/canic-tests`                   | integration test entrypoints                 |
-| `canisters/**`                         | demo/reference canisters only                |
-| `crates/canic-core/test-canisters/**`  | internal correctness/integration canisters   |
-| `crates/canic-core/audit-canisters/**` | internal audit/perf probe canisters          |
+| `fleets/**`                            | config-defined operator fleets               |
+| `canisters/test/**`                    | internal correctness/integration fixtures    |
+| `canisters/audit/**`                   | internal audit/perf probe canisters          |
+| `canisters/sandbox/**`                 | manual sandbox canisters                     |
 
 Rules:
 
 * `canic` is the only intended broad public facade unless a crate is explicitly designed as standalone public infrastructure (`canic-testkit`, `canic-cdk`, `canic-memory`).
-* `canic-testing-internal`, `test-canisters`, and `audit-canisters` are not public product API.
-* `canisters/**` is demo/reference surface, not generic test or audit plumbing.
+* `canic-testing-internal`, `canisters/test`, and `canisters/audit` are not public product API.
+* `fleets/**` is operator fleet surface, not generic test or audit plumbing.
+* `canisters/sandbox/**` is manual scratch space and must not become product API.
 * `canic-tests` is a consumer/test entry layer, not reusable runtime infrastructure.
 * Public support crates must not silently become alternate facades for `canic-core`.
 
@@ -296,9 +298,10 @@ Default audit scope:
 * `crates/canic-testkit`
 * `crates/canic-testing-internal`
 * `crates/canic-tests`
-* `canisters/**`
-* `crates/canic-core/test-canisters/**`
-* `crates/canic-core/audit-canisters/**`
+* `fleets/**`
+* `canisters/test/**`
+* `canisters/audit/**`
+* `canisters/sandbox/**`
 
 If a run excludes any of these, that must appear in the preamble and the verification outcome may become `BLOCKED` if the missing scope affects seam judgment.
 
@@ -395,7 +398,7 @@ Evaluate:
 * crate-to-crate direction
 * `canic-core` subsystem direction
 * public/internal seam direction (`canic-testkit` vs `canic-testing-internal`)
-* demo/test/audit canister ownership
+* fleet/test/audit canister ownership
 * re-export ownership and whether re-exports preserve or blur responsibility
 
 ## 2A. Dependency Direction
@@ -415,12 +418,12 @@ Minimum checks:
 
 * `canic` must not depend upward on testing crates
 * `canic-testkit` must not depend on `canic-testing-internal`
-* demo canisters must not depend on audit canisters
-* audit canisters must not become demo/reference dependencies
+* fleet canisters must not depend on audit canisters
+* audit canisters must not become fleet dependencies
 * `workflow` must not reach into storage internals directly
 * `policy` must not depend on ops, workflow, or runtime side effects
 * `storage` must not depend upward on `ops`, `policy`, or `workflow`
-* support crates must not depend on demo/reference canisters
+* support crates must not depend on fleet canisters
 
 Judgment rules:
 
@@ -450,9 +453,9 @@ Explicitly check:
 * planner/policy-like files referencing executor or transport internals
 * workflow referencing storage implementation details instead of ops facades
 * testkit exposing Canic-only harness concepts
-* internal test harness depending on demo canister-only assumptions where a test or audit canister should own the behavior
+* internal test harness depending on fleet canister-only assumptions where a test or audit canister should own the behavior
 * facade crates exposing implementation-owned core internals
-* demo/reference crates re-exporting audit/test-only helpers
+* fleet crates re-exporting audit/test-only helpers
 * public constructors or traits in facade crates that require internal core types
 
 Produce:
@@ -524,7 +527,7 @@ Check:
 * test-only modules or helpers exposed outside `#[cfg(test)]`
 * runtime modules importing test utilities
 * test helper re-exports leaking into non-test builds
-* audit-only helpers leaking into demo/reference crates
+* audit-only helpers leaking into fleet crates
 * `canic-testing-internal` concepts surfacing through `canic-testkit`
 * test canister support re-used by runtime/demo code
 
@@ -733,7 +736,7 @@ Typical Canic examples:
 
 * `canic` facade re-exports of stable DTOs and macros
 * `canic-testkit` exposing generic PocketIC helpers
-* demo canisters carrying tiny local role constants and no-op lifecycle hooks
+* fleet canisters carrying tiny local role constants and no-op lifecycle hooks
 * `dto` types being publicly reachable where they are intended contract surface
 
 Produce:
@@ -819,7 +822,7 @@ The auditor must, at minimum:
 4. classify `canic-core` files into the declared subsystem map
 5. check directionality against the fixed layer model
 6. separate runtime API from macro API
-7. inspect demo/test/audit seam boundaries
+7. inspect fleet/test/audit seam boundaries
 8. compute hub pressure for required hub modules
 9. compare against a comparable baseline where available
 10. distinguish pressure from violation in every non-trivial finding

@@ -89,7 +89,7 @@ Every report generated from this audit must include:
 - Run timestamp (UTC)
 - Branch
 - Worktree
-- Execution environment (`PocketIC`, local `dfx`, mixed)
+- Execution environment (`PocketIC`, local ICP CLI replica, mixed)
 - Target canisters in scope
 - Target endpoints/flows in scope
 
@@ -244,7 +244,8 @@ Measure and report:
 
 ### Default Canister Scope
 
-Default scope is the full reference topology in `dfx.json`:
+Default scope is the full `test` fleet from `icp.yaml` plus the implicit
+`wasm_store` canister:
 
 - `app`
 - `minimal`
@@ -252,7 +253,6 @@ Default scope is the full reference topology in `dfx.json`:
 - `user_shard`
 - `scale_hub`
 - `scale`
-- `test`
 - `wasm_store`
 - `root`
 
@@ -512,8 +512,8 @@ Preferred execution environment:
 
 - PocketIC integration tests for repeatable endpoint and flow measurement
 
-Use local `dfx` only when a scenario cannot be represented in PocketIC and the
-report explains why.
+Use the local ICP CLI replica only when a scenario cannot be represented in
+PocketIC and the report explains why.
 
 No canonical runner script exists yet.
 

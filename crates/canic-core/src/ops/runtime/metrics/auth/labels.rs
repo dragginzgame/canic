@@ -15,6 +15,7 @@ const PRED_SESSION_BOOTSTRAP_REJECTED_TOKEN_INVALID: &str =
 const PRED_SESSION_BOOTSTRAP_REJECTED_TTL_INVALID: &str = "session_bootstrap_rejected_ttl_invalid";
 const PRED_SESSION_BOOTSTRAP_REJECTED_WALLET_CALLER_REJECTED: &str =
     "session_bootstrap_rejected_wallet_caller_rejected";
+const PRED_SESSION_BOOTSTRAP_REJECTED_CAPACITY: &str = "session_bootstrap_rejected_capacity";
 const PRED_SESSION_BOOTSTRAP_REPLAY_IDEMPOTENT: &str = "session_bootstrap_replay_idempotent";
 const PRED_SESSION_CLEARED: &str = "session_cleared";
 const PRED_SESSION_CREATED: &str = "session_created";
@@ -65,6 +66,10 @@ pub(super) const fn session_bootstrap_rejected_ttl_invalid_predicate() -> &'stat
 
 pub(super) const fn session_bootstrap_rejected_wallet_caller_rejected_predicate() -> &'static str {
     PRED_SESSION_BOOTSTRAP_REJECTED_WALLET_CALLER_REJECTED
+}
+
+pub(super) const fn session_bootstrap_rejected_capacity_predicate() -> &'static str {
+    PRED_SESSION_BOOTSTRAP_REJECTED_CAPACITY
 }
 
 pub(super) const fn session_bootstrap_replay_idempotent_predicate() -> &'static str {

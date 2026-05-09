@@ -92,6 +92,13 @@ fn project_replay_metadata_rejects_expired_metadata() {
 }
 
 #[test]
+fn project_replay_metadata_rejects_expiry_boundary() {
+    let err = project_replay_metadata(sample_metadata(1, 2, 900, 50), 950)
+        .expect_err("metadata at expiry boundary must fail");
+    assert!(err.message.contains("expired"));
+}
+
+#[test]
 fn project_replay_metadata_rejects_future_metadata_beyond_skew() {
     let err = project_replay_metadata(sample_metadata(1, 2, 1_031, 60), 1_000)
         .expect_err("future metadata must fail");
@@ -257,6 +264,45 @@ fn validate_root_capability_envelope_rejects_capability_version_mismatch() {
     )
     .expect_err("unsupported capability version must fail");
     assert!(err.message.contains("capability_version"));
+}
+
+#[test]
+fn validate_root_capability_envelope_returns_structural_mode() {
+    let proof = validate_root_capability_envelope(
+        CapabilityService::Root,
+        CAPABILITY_VERSION_V1,
+        &CapabilityProof::Structural,
+    )
+    .expect("valid structural proof must validate");
+
+    assert_eq!(proof.mode(), RootCapabilityProofMode::Structural);
+}
+
+#[test]
+fn validate_root_capability_envelope_returns_delegated_grant_mode() {
+    let request = sample_request(10);
+    let proof = sample_delegated_grant_proof(&request, p(2), p(1), 100);
+    let capability_proof = delegated_grant_capability_proof(proof);
+    let proof = validate_root_capability_envelope(
+        CapabilityService::Root,
+        CAPABILITY_VERSION_V1,
+        &capability_proof,
+    )
+    .expect("valid delegated grant proof header must validate");
+
+    assert_eq!(proof.mode(), RootCapabilityProofMode::DelegatedGrant);
+}
+
+#[test]
+fn validate_nonroot_cycles_envelope_returns_structural_mode() {
+    let proof = validate_nonroot_cycles_envelope(
+        CapabilityService::Root,
+        CAPABILITY_VERSION_V1,
+        &CapabilityProof::Structural,
+    )
+    .expect("valid non-root structural proof must validate");
+
+    assert_eq!(proof.mode(), RootCapabilityProofMode::Structural);
 }
 
 #[test]

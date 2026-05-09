@@ -10,6 +10,8 @@ use crate::{
 };
 use mapper::AttestationPublicKeyRecordMapper;
 
+pub use crate::storage::stable::auth::DelegatedSessionUpsertResult;
+
 ///
 /// DelegatedSession
 ///
@@ -88,8 +90,24 @@ impl AuthStateOps {
     }
 
     /// Upsert the delegated session for the provided wallet caller.
-    pub fn upsert_delegated_session(session: DelegatedSession, now_secs: u64) {
-        AuthState::upsert_delegated_session(delegated_session_view_to_record(session), now_secs);
+    #[cfg(test)]
+    pub fn upsert_delegated_session(
+        session: DelegatedSession,
+        now_secs: u64,
+    ) -> DelegatedSessionUpsertResult {
+        AuthState::upsert_delegated_session(delegated_session_view_to_record(session), now_secs)
+    }
+
+    pub fn upsert_delegated_session_with_bootstrap_binding(
+        session: DelegatedSession,
+        binding: DelegatedSessionBootstrapBinding,
+        now_secs: u64,
+    ) -> DelegatedSessionUpsertResult {
+        AuthState::upsert_delegated_session_with_bootstrap_binding(
+            delegated_session_view_to_record(session),
+            delegated_session_bootstrap_binding_view_to_record(binding),
+            now_secs,
+        )
     }
 
     /// Remove the delegated session for the provided wallet caller.
@@ -111,17 +129,6 @@ impl AuthStateOps {
     ) -> Option<DelegatedSessionBootstrapBinding> {
         AuthState::get_active_delegated_session_bootstrap_binding(token_fingerprint, now_secs)
             .map(delegated_session_bootstrap_binding_record_to_view)
-    }
-
-    /// Upsert delegated-session bootstrap binding metadata by token fingerprint.
-    pub fn upsert_delegated_session_bootstrap_binding(
-        binding: DelegatedSessionBootstrapBinding,
-        now_secs: u64,
-    ) {
-        AuthState::upsert_delegated_session_bootstrap_binding(
-            delegated_session_bootstrap_binding_view_to_record(binding),
-            now_secs,
-        );
     }
 
     /// Remove expired delegated-session bootstrap bindings and return removed count.

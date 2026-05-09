@@ -14,6 +14,15 @@ Architecture drift audit.
 
 This is **not** a security invariant audit.
 
+## Non-Goals
+
+This audit does not verify:
+
+* correctness of bootstrap business behavior
+* security properties of bootstrap tasks
+* downstream workflow internals after scheduling
+* general architectural quality outside lifecycle-boundary relevance
+
 ## Core Invariant
 
 > Lifecycle hooks synchronously restore environment/runtime state and schedule bootstrap orchestration asynchronously. Lifecycle hooks do not execute orchestration directly.
@@ -125,6 +134,16 @@ Use normalized command outcomes in the verification readout:
 * `FAIL`
 * `BLOCKED`
 
+## Evidence Standard
+
+Every finding must use this shape:
+
+* `(path:line-range) observed behavior -> implication`
+
+Example:
+
+* `crates/canic-core/src/lifecycle/upgrade.rs:42-56 bootstrap timer set before runtime restore -> violates restore-before-bootstrap ordering`
+
 ---
 
 ## Audit Procedure
@@ -210,8 +229,7 @@ Checklist:
 
 Findings:
 
-* `(file:line) behavior`
-* `(file:line) behavior`
+* `(path:line-range) observed behavior -> implication`
 
 ## 2. Lifecycle API Boundary Is Pure Delegation
 
@@ -235,7 +253,7 @@ Checklist:
 
 Findings:
 
-* `(file:line) behavior`
+* `(path:line-range) observed behavior -> implication`
 
 ## 3. Init and Post-Upgrade Structure Is Symmetric
 
@@ -267,7 +285,7 @@ Checklist:
 
 Findings:
 
-* `(file:line) behavior`
+* `(path:line-range) observed behavior -> implication`
 
 ## 4. Lifecycle Adapters Remain Synchronous
 
@@ -295,7 +313,7 @@ Checklist:
 
 Findings:
 
-* `(file:line) behavior`
+* `(path:line-range) observed behavior -> implication`
 
 ## 5. Environment Restoration Happens Before Bootstrap Scheduling
 
@@ -323,7 +341,7 @@ Checklist:
 
 Findings:
 
-* `(file:line) behavior`
+* `(path:line-range) observed behavior -> implication`
 
 ## 6. Lifecycle-to-Workflow Boundary Discipline
 
@@ -349,7 +367,7 @@ Checklist:
 
 Findings:
 
-* `(file:line) behavior`
+* `(path:line-range) observed behavior -> implication`
 
 ## 7. Timer and Bootstrap Coverage
 
@@ -630,167 +648,3 @@ If none: `No follow-up actions required.`
 * Risk Score:
 * Verification Readout:
 * Follow-up actions:
-
----
-
-## What I would improve in your current version
-
-### 1. Separate primary contract checks from advisory architecture signals
-
-Right now the audit blends:
-
-* mandatory lifecycle contract checks
-* trend signals
-* architecture pressure heuristics
-
-That makes scoring harder and invites inconsistent reports. The revised structure fixes that by making sections 1-7 the **only primary pass/fail contract gates**.
-
-### 2. Define pass/fail conditions explicitly
-
-Several existing checks say “verify X” but do not define what constitutes failure. For example:
-
-* “API layer is glue only”
-* “structurally aligned”
-* “workflow/bootstrap remains orchestration owner”
-
-Those are good goals, but auditors need sharper decision rules. I added explicit fail conditions so two different auditors are more likely to reach the same result.
-
-### 3. Make symmetry operational, not rhetorical
-
-Your current symmetry section is conceptually right, but auditors may disagree about what “aligned” means. I tightened it to:
-
-* same high-level phases
-* same order
-* only documented restore-specific differences allowed
-
-That turns “symmetry” into something inspectable.
-
-### 4. Restrict scoring to confirmed evidence
-
-Your risk score is good, but it can overreact to generic architecture noise. For this audit, the score should be driven primarily by:
-
-* confirmed lifecycle contract breaks
-* implicated lifecycle hotspots
-* then advisory coupling signals
-
-Otherwise a broadly-coupled enum elsewhere in the codebase can distort a lifecycle audit.
-
-### 5. Add comparability rules
-
-This is a strong missing piece. Drift audits are only useful if runs are comparable over time. You already had the seeds of this with:
-
-* baseline report path
-* code snapshot identifier
-* method tag/version
-* comparability status
-
-I would keep those, but formalize the rules. That makes future reports materially more useful.
-
-### 6. Tighten result semantics
-
-You currently have checklist markers and verification statuses, but not a single top-level resolution rule. I added:
-
-* `PASS`
-* `PARTIAL`
-* `FAIL`
-* `BLOCKED`
-
-with deterministic rules.
-
-That prevents “soft-fail but still pass” ambiguity.
-
-### 7. Reduce duplication across hotspot / warning / fan-in sections
-
-You currently have:
-
-* Structural Hotspots
-* Hub Module Pressure
-* Early Warning Signals
-* Dependency Fan-In Pressure
-
-These are all valid, but they partially overlap. Keep them, but explicitly classify them as **secondary/advisory**. That prevents them from drowning the actual lifecycle contract audit.
-
-### 8. Add evidence expectations for findings
-
-Your findings sections currently use:
-
-* `(file, line, behavior)`
-
-That is good. I would standardize to:
-
-* `(path:line-range) observed behavior -> implication`
-
-Example:
-
-* `crates/canic-core/src/lifecycle/upgrade.rs:42-56 bootstrap timer set before runtime restore -> violates restore-before-bootstrap ordering`
-
-That makes reports much more legible.
-
----
-
-## A few targeted wording improvements
-
-I would change these phrases:
-
-### Current
-
-“schedule orchestration asynchronously”
-
-### Better
-
-“schedule bootstrap orchestration asynchronously through the lifecycle timer boundary”
-
-Reason: more specific and ties directly to the contract.
-
----
-
-### Current
-
-“macros are thin and contain no business logic”
-
-### Better
-
-“macros are hook-wiring adapters only and do not embed policy, storage, workflow, or model logic”
-
-Reason: more auditable.
-
----
-
-### Current
-
-“environment and runtime state are restored before bootstrap scheduling”
-
-### Better
-
-“all required environment and runtime restoration completes before lifecycle code schedules bootstrap continuation”
-
-Reason: makes partial restoration ambiguity less likely.
-
----
-
-### Current
-
-“Lifecycle adapters must not perform orchestration directly.”
-
-### Better
-
-“Lifecycle adapters must not execute bootstrap workflow logic directly; they may only restore state, arm the lifecycle timer, and exit.”
-
-Reason: stronger boundary statement.
-
----
-
-## One structural addition I recommend
-
-Add a short **Non-goals** section:
-
-## Non-goals
-
-This audit does not attempt to verify:
-
-* correctness of bootstrap business behavior
-* security properties of bootstrap tasks
-* correctness of downstream workflow internals after scheduling
-* general architectural quality outside lifecycle-boundary relevance
-
-That helps keep the audit from expanding every time someone finds a general code smell.

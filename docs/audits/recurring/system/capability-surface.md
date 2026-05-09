@@ -84,7 +84,7 @@ Primary code areas:
 - `crates/canic-core/src/dto/capability/**`
 - `crates/canic-core/src/dto/rpc.rs`
 - `crates/canic-core/src/api/rpc/**`
-- generated `.did` files under `.dfx/local/canisters/**`
+- generated `.did` files under `.icp/<environment>/canisters/**`
 
 ## False-Positive Filters (Required)
 
@@ -92,8 +92,8 @@ Exclude these from counts unless the audit explicitly says otherwise:
 
 - `tests/`
 - generated code outside canonical generated `.did` outputs
-- internal test-only canisters that are present under `.dfx/local/canisters/**` but not part of the
-  current demo/reference roster
+- internal test-only canisters that are present under `.icp/<environment>/canisters/**`
+  but not part of the current fleet/environment roster
 - comments / docstrings
 - deprecated or legacy modules explicitly marked as such
 
@@ -161,7 +161,7 @@ Suggested scans:
 ```bash
 rg -n '^macro_rules! canic_endpoints' crates/canic/src/macros/endpoints.rs
 rg -n 'canic_response_capability_v1|canic_wasm_store_|canic_delegation_' crates/canic/src/macros/endpoints.rs
-rg -n '^  canic_.*_admin :' .dfx/local/canisters -g '*.did'
+rg -n '^  canic_.*_admin :' .icp/local/canisters -g '*.did'
 rg -n 'cfg\\(canic_' crates/canic/src/macros/endpoints.rs
 ```
 
@@ -248,7 +248,7 @@ roles.
 Suggested scans:
 
 ```bash
-rg -n 'canic_response_capability_v1|canic_delegation_|canic_wasm_store_|canic_sync_' .dfx/local/canisters -g '*.did'
+rg -n 'canic_response_capability_v1|canic_delegation_|canic_wasm_store_|canic_sync_' .icp/local/canisters -g '*.did'
 rg -n 'cfg\\(canic_' crates/canic/src/macros/endpoints.rs
 rg -n 'canic_response_capability_v1|canic_delegation_|canic_wasm_store_|canic_sync_' crates/canic-core/src crates/canic/src -g '*.rs'
 ```
@@ -286,18 +286,19 @@ Rule:
 
 ### 7. DID Surface Growth
 
-Use generated `.did` files for the current demo/reference roster as the
-consumer-facing surface proxy.
+Use generated `.did` files for the current fleet/environment roster as the
+consumer-facing surface proxy. See
+`docs/architecture/build-artifacts.md` for the current artifact vocabulary.
 
-If `.dfx/local/canisters/**` also contains internal test or audit canisters,
-filter them out explicitly and name the retained roster in the report
-preamble.
+If `.icp/<environment>/canisters/**` also contains internal test or audit
+canisters, filter them out explicitly and name the retained roster in the
+report preamble.
 
 Suggested scans:
 
 ```bash
-rg -n '^service :' canisters -g '*.did'
-rg -n '^  canic_' canisters -g '*.did'
+rg -n '^service :' .icp/local/canisters -g '*.did'
+rg -n '^  canic_' .icp/local/canisters -g '*.did'
 ```
 
 Required output:

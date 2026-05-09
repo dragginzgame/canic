@@ -24,10 +24,10 @@ look better.
 
 Canic is not a single-canister product.
 
-The workspace ships a family of reference canisters with two structural
+The workspace ships a family of fleet and fixture canisters with two structural
 properties that change how a wasm audit must work:
 
-1. `dfx` is the canonical canister builder and shrink/gzip owner.
+1. ICP CLI plus Canic build scripts own the supported canister build path.
 2. `root` remains a special control-plane outlier because it embeds the
    bootstrap `wasm_store.wasm.gz` artifact and carries the thin-root install
    boundary, so it must still be evaluated separately from normal leaf
@@ -60,7 +60,7 @@ Optimization constraint:
 - release hardening windows
 - major auth/runtime/macro feature lines
 - dependency bumps affecting `candid`, crypto, or IC/CDK crates
-- changes to `dfx.json`, `scripts/app/build.sh`, or workspace release profile
+- changes to `icp.yaml`, `scripts/app/build.sh`, or workspace release profile
 - any PR explicitly claiming wasm-size reduction
 
 ## Report Preamble (Required)
@@ -86,7 +86,7 @@ Measure and report:
 
 - raw built wasm size (`built .wasm`) from direct Cargo canister builds
 - deterministic gzip of the raw built wasm (`built .wasm.gz`) as secondary context
-- canonical shrunk wasm size (`shrunk .wasm`) from `dfx build`
+- canonical shrunk wasm size (`shrunk .wasm`) from the supported ICP CLI/Canic build flow
 - deterministic gzip of the shrunk wasm (`shrunk .wasm.gz`) as secondary context
 - raw debug/dev wasm size (`wasm-debug built .wasm`) for comparison against the audit profile
 - optional debug/dev deterministic gzip (`wasm-debug built .wasm.gz`) when captured by the runner
@@ -98,7 +98,8 @@ Measure and report:
 
 ### Default Canister Scope
 
-Default scope is the full reference canister set in `dfx.json`:
+Default scope is the full `test` fleet from `icp.yaml` plus the implicit
+`wasm_store` canister:
 
 - `app`
 - `minimal`
@@ -106,7 +107,7 @@ Default scope is the full reference canister set in `dfx.json`:
 - `user_shard`
 - `scale_hub`
 - `scale`
-- `test`
+- `wasm_store`
 - `root`
 
 ### Default Profile
@@ -152,7 +153,7 @@ addition on top of the shared runtime floor.
 
 ### Built Artifact
 
-The built artifact is the direct Cargo output before `dfx` shrinking:
+The built artifact is the direct Cargo output before post-processing:
 
 - `target/wasm32-unknown-unknown/<profile>/canister_<name>.wasm`
 
@@ -161,9 +162,9 @@ post-processing".
 
 ### Canonical Shrunk Artifact
 
-The canonical shrunk artifact is the `dfx build` output:
+The canonical shrunk artifact is the ICP CLI-visible Canic build output:
 
-- `.dfx/local/canisters/<name>/<name>.wasm`
+- `.icp/local/canisters/<name>/<name>.wasm`
 
 This is the primary baseline for "what Canic would actually ship/install via
 its normal canister build flow".
@@ -335,7 +336,7 @@ Every report must include command outcomes with:
 
 `BLOCKED` must include a concrete reason, such as:
 
-- missing `dfx`
+- missing `icp`
 - missing `ic-wasm`
 - missing `twiggy`
 - missing cached artifacts for `WASM_AUDIT_SKIP_BUILD=1`

@@ -9,7 +9,8 @@ pub use attestation::{
     record_attestation_unknown_key_id, record_attestation_verify_failed,
 };
 pub use sessions::{
-    record_session_bootstrap_rejected_disabled, record_session_bootstrap_rejected_replay_conflict,
+    record_session_bootstrap_rejected_capacity, record_session_bootstrap_rejected_disabled,
+    record_session_bootstrap_rejected_replay_conflict,
     record_session_bootstrap_rejected_replay_reused,
     record_session_bootstrap_rejected_subject_mismatch,
     record_session_bootstrap_rejected_subject_rejected,
@@ -24,7 +25,7 @@ use labels::{
     attestation_epoch_rejected_predicate, attestation_refresh_failed_predicate,
     attestation_unknown_key_id_predicate, attestation_verify_failed_predicate,
     auth_attestation_verifier_endpoint, auth_session_endpoint,
-    session_bootstrap_rejected_disabled_predicate,
+    session_bootstrap_rejected_capacity_predicate, session_bootstrap_rejected_disabled_predicate,
     session_bootstrap_rejected_replay_conflict_predicate,
     session_bootstrap_rejected_replay_reused_predicate,
     session_bootstrap_rejected_subject_mismatch_predicate,
@@ -124,6 +125,7 @@ impl AuthMetricOutcome {
 #[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[remain::sorted]
 pub enum AuthMetricReason {
+    Capacity,
     Cleared,
     Created,
     Disabled,
@@ -150,6 +152,7 @@ impl AuthMetricReason {
     #[must_use]
     pub const fn metric_label(self) -> &'static str {
         match self {
+            Self::Capacity => "capacity",
             Self::Cleared => "cleared",
             Self::Created => "created",
             Self::Disabled => "disabled",
@@ -299,6 +302,7 @@ mod tests {
             record_session_cleared,
             record_session_fallback_raw_caller,
             record_session_fallback_invalid_subject,
+            record_session_bootstrap_rejected_capacity,
             record_session_bootstrap_rejected_disabled,
             record_session_bootstrap_rejected_wallet_caller_rejected,
             record_session_bootstrap_rejected_subject_rejected,
@@ -320,6 +324,7 @@ mod tests {
             (session_pruned_predicate(), 2),
             (session_fallback_raw_caller_predicate(), 1),
             (session_fallback_invalid_subject_predicate(), 1),
+            (session_bootstrap_rejected_capacity_predicate(), 1),
             (session_bootstrap_rejected_disabled_predicate(), 1),
             (
                 session_bootstrap_rejected_wallet_caller_rejected_predicate(),
@@ -355,6 +360,13 @@ mod tests {
             AuthMetricOperation::Bootstrap,
             AuthMetricOutcome::Rejected,
             AuthMetricReason::TokenInvalid,
+            1,
+        );
+        assert_metric_count(
+            AuthMetricSurface::Session,
+            AuthMetricOperation::Bootstrap,
+            AuthMetricOutcome::Rejected,
+            AuthMetricReason::Capacity,
             1,
         );
         assert_metric_count(

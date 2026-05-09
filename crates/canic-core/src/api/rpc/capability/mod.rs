@@ -2,8 +2,9 @@ use crate::{
     cdk::types::Principal,
     dto::{
         capability::{
-            CapabilityProof, CapabilityRequestMetadata, CapabilityService, DelegatedGrantProof,
-            NonrootCyclesCapabilityEnvelopeV1, NonrootCyclesCapabilityResponseV1,
+            CapabilityProof, CapabilityProofBlob, CapabilityRequestMetadata, CapabilityService,
+            DelegatedGrantProof, NonrootCyclesCapabilityEnvelopeV1,
+            NonrootCyclesCapabilityResponseV1, PROOF_VERSION_V1,
         },
         error::Error,
         rpc::{Request, RequestFamily, RootRequestMetadata},
@@ -31,6 +32,91 @@ const REPLAY_REQUEST_ID_DOMAIN_V1: &[u8] = b"CANIC_REPLAY_REQUEST_ID_V1";
 const MAX_CAPABILITY_CLOCK_SKEW_SECONDS: u64 = 30;
 const DELEGATED_GRANT_KEY_ID_V1: u32 = 1;
 
+/// RootCapabilityProofMode
+///
+/// Canonical classification for capability proof logging and metrics.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum RootCapabilityProofMode {
+    Structural,
+    RoleAttestation,
+    DelegatedGrant,
+}
+
+impl RootCapabilityProofMode {
+    /// Classify a raw proof without validating its payload header.
+    const fn from_proof(proof: &CapabilityProof) -> Self {
+        match proof {
+            CapabilityProof::Structural => Self::Structural,
+            CapabilityProof::RoleAttestation(_) => Self::RoleAttestation,
+            CapabilityProof::DelegatedGrant(_) => Self::DelegatedGrant,
+        }
+    }
+
+    /// Human-readable label used in capability logs.
+    const fn label(self) -> &'static str {
+        match self {
+            Self::Structural => "Structural",
+            Self::RoleAttestation => "RoleAttestation",
+            Self::DelegatedGrant => "DelegatedGrant",
+        }
+    }
+
+    /// Metrics dimension matching the canonical proof classification.
+    const fn metric_key(self) -> RootCapabilityMetricProofMode {
+        match self {
+            Self::Structural => RootCapabilityMetricProofMode::Structural,
+            Self::RoleAttestation => RootCapabilityMetricProofMode::RoleAttestation,
+            Self::DelegatedGrant => RootCapabilityMetricProofMode::DelegatedGrant,
+        }
+    }
+}
+
+/// RootCapabilityProof
+///
+/// Validated proof view used after envelope checks and before verification.
+#[derive(Clone, Copy, Debug)]
+pub(super) enum RootCapabilityProof<'a> {
+    Structural,
+    RoleAttestation(&'a CapabilityProofBlob),
+    DelegatedGrant(&'a CapabilityProofBlob),
+}
+
+impl<'a> RootCapabilityProof<'a> {
+    /// Validate the proof wire header and expose the typed proof view.
+    fn validate(proof: &'a CapabilityProof) -> Result<Self, Error> {
+        match proof {
+            CapabilityProof::Structural => Ok(Self::Structural),
+            CapabilityProof::RoleAttestation(proof) => {
+                if proof.proof_version != PROOF_VERSION_V1 {
+                    return Err(Error::invalid(format!(
+                        "unsupported role attestation proof_version: {}",
+                        proof.proof_version
+                    )));
+                }
+                Ok(Self::RoleAttestation(proof))
+            }
+            CapabilityProof::DelegatedGrant(proof) => {
+                if proof.proof_version != PROOF_VERSION_V1 {
+                    return Err(Error::invalid(format!(
+                        "unsupported delegated grant proof_version: {}",
+                        proof.proof_version
+                    )));
+                }
+                Ok(Self::DelegatedGrant(proof))
+            }
+        }
+    }
+
+    /// Return the canonical proof mode for this validated proof.
+    const fn mode(self) -> RootCapabilityProofMode {
+        match self {
+            Self::Structural => RootCapabilityProofMode::Structural,
+            Self::RoleAttestation(_) => RootCapabilityProofMode::RoleAttestation,
+            Self::DelegatedGrant(_) => RootCapabilityProofMode::DelegatedGrant,
+        }
+    }
+}
+
 pub(super) async fn response_capability_v1_nonroot(
     envelope: NonrootCyclesCapabilityEnvelopeV1,
 ) -> Result<NonrootCyclesCapabilityResponseV1, Error> {
@@ -47,7 +133,7 @@ fn validate_root_capability_envelope(
     service: CapabilityService,
     capability_version: u16,
     proof: &CapabilityProof,
-) -> Result<(), Error> {
+) -> Result<RootCapabilityProof<'_>, Error> {
     envelope::validate_root_capability_envelope(service, capability_version, proof)
 }
 
@@ -55,22 +141,22 @@ fn validate_nonroot_cycles_envelope(
     service: CapabilityService,
     capability_version: u16,
     proof: &CapabilityProof,
-) -> Result<(), Error> {
-    envelope::validate_root_capability_envelope(service, capability_version, proof)?;
+) -> Result<RootCapabilityProof<'_>, Error> {
+    let proof = envelope::validate_root_capability_envelope(service, capability_version, proof)?;
 
-    if !matches!(proof, CapabilityProof::Structural) {
+    if proof.mode() != RootCapabilityProofMode::Structural {
         return Err(Error::forbidden(
             "non-root capability endpoint only supports structural proof mode",
         ));
     }
 
-    Ok(())
+    Ok(proof)
 }
 
 async fn verify_root_capability_proof(
     capability: &Request,
     capability_version: u16,
-    proof: &CapabilityProof,
+    proof: RootCapabilityProof<'_>,
 ) -> Result<(), Error> {
     verifier::verify_root_capability_proof(capability, capability_version, proof)
         .await
@@ -103,24 +189,6 @@ const fn root_capability_metric_key(capability: &Request) -> RootCapabilityMetri
         RequestFamily::RecycleCanister => RootCapabilityMetricKey::RecycleCanister,
         RequestFamily::RequestCycles => RootCapabilityMetricKey::RequestCycles,
         RequestFamily::IssueRoleAttestation => RootCapabilityMetricKey::IssueRoleAttestation,
-    }
-}
-
-const fn capability_proof_mode_label(proof: &CapabilityProof) -> &'static str {
-    match proof {
-        CapabilityProof::Structural => "Structural",
-        CapabilityProof::RoleAttestation(_) => "RoleAttestation",
-        CapabilityProof::DelegatedGrant(_) => "DelegatedGrant",
-    }
-}
-
-const fn capability_proof_mode_metric_key(
-    proof: &CapabilityProof,
-) -> RootCapabilityMetricProofMode {
-    match proof {
-        CapabilityProof::Structural => RootCapabilityMetricProofMode::Structural,
-        CapabilityProof::RoleAttestation(_) => RootCapabilityMetricProofMode::RoleAttestation,
-        CapabilityProof::DelegatedGrant(_) => RootCapabilityMetricProofMode::DelegatedGrant,
     }
 }
 

@@ -17,7 +17,9 @@ Credentials must be rejected when:
 - replayed where replay protection applies (for credentials/requests with nonce, request-id, or `jti`-style identifiers)
 - reused after single-use consumption (if applicable)
 
-Single-use credentials must be marked as consumed at the time the protected action succeeds.
+Single-use update credentials must be consumed before protected mutation so a
+second active use fails closed. Query credentials remain stateless unless a
+specific endpoint opts into durable replay protection.
 
 ## Why This Matters
 
@@ -35,6 +37,8 @@ The Token Trust Chain Invariant verifies issuer authenticity and chain validity.
 - replay store/nonce model changes
 - request-id/jti changes
 - clock skew policy changes
+- update/query authentication boundary changes
+- replay capacity or per-caller reservation limit changes
 
 ## Report Preamble (Required)
 
@@ -58,6 +62,7 @@ nbf
 nonce
 replay
 used_token
+token_uses
 seen_jti
 issued_at
 ```
@@ -67,11 +72,20 @@ Confirm:
 - expiry is enforced centrally
 - replay/nonce checks are enforced where required
 - replay protection is enforced for credentials/requests carrying nonce, request-id, or `jti` identifiers
+- update-call delegated tokens are consumed once by `(issuer_shard_pid, subject, cert_hash, nonce)`
+- query-call delegated tokens do not write durable consumed-token state
 - freshness logic is not optional in production paths
 
 ### 2. Verify State Interaction
 
 Confirm replay markers or nonce records are updated atomically with the protected action they guard.
+
+For update-call delegated tokens, confirm active consumed-token markers are
+written before protected mutation and expire at the token expiry boundary.
+
+For root capability requests, confirm per-caller replay reservation limits are
+checked before global capacity so one caller cannot fill the shared replay
+table.
 
 ### 3. Verify Clock Assumptions
 
@@ -83,8 +97,21 @@ When applicable, verify skew tolerance does not exceed token TTL.
 
 - expired token => rejection
 - reused token or nonce => rejection
+- reused update delegated token => rejection
+- repeated query delegated token => success without durable consumption
 - token used before `nbf` => rejection (if applicable)
 - fresh token / nonce => success
+
+Current suggested commands:
+
+```bash
+cargo test -p canic-core --lib update_token_consume_rejects_active_replay -- --nocapture
+cargo test -p canic-core --lib query_token_consume_is_stateless -- --nocapture
+cargo test -p canic-core --lib consume_rejects_active_replay -- --nocapture
+cargo test -p canic-core --lib consume_allows_nonce_after_expiry_prune -- --nocapture
+cargo test -p canic-core --lib consume_fails_closed_at_capacity -- --nocapture
+cargo test -p canic-core --lib reserve_root_replay_rejects_caller_capacity_before_global_capacity -- --nocapture
+```
 
 ## Structural Hotspots
 
@@ -102,8 +129,11 @@ git log --name-only -n 20 -- crates/
 | File / Module | Struct / Function | Reason | Risk Contribution |
 | --- | --- | --- | --- |
 | `ops/auth/verify.rs` | `verify_time_bounds` | canonical expiry/nbf checks | High |
+| `access/auth/token.rs` | `consume_update_token_once` | update/query delegated-token consumption boundary | High |
+| `storage/stable/auth/token_uses.rs` | `consume_delegated_token_use` | durable consumed-token marker insertion/pruning | High |
+| `ops/auth/token.rs` | `consume_delegated_token_use` | ops boundary for delegated-token replay consumption | High |
 | `ops/replay/guard.rs` | replay guard decision surface | duplicate/conflict/ttl handling | High |
-| `ops/replay/mod.rs` | reserve/commit/abort replay markers | freshness state transitions | Medium |
+| `ops/replay/mod.rs` | reserve/commit/abort replay markers and per-caller cap | root replay freshness state transitions | Medium |
 | `workflow/rpc/request/handler/replay.rs` | replay preflight orchestration | replay gate integration point | Medium |
 
 If none are detected in a given run, state: No structural hotspots detected in this run.
@@ -129,6 +159,8 @@ Pressure score guidance:
 - broad/unbounded clock skew acceptance
 - freshness checks implemented outside canonical verifier path
 - replay store or nonce mechanism disabled/bypassed in production configuration
+- consumed-token state keyed without issuer, subject, cert hash, or nonce
+- root replay global capacity checked before per-caller capacity
 
 ## Severity
 

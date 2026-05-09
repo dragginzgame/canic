@@ -40,7 +40,7 @@ These audits cover:
 - Use `bootstrap-lifecycle-symmetry` after lifecycle/bootstrap changes.
 - Use `change-friction` during refactor planning or release-hardening windows.
 - Use `module-structure` when reviewing public surface drift, crate topology,
-  or demo/test/audit boundary cleanliness.
+  or fleet/test/audit boundary cleanliness.
 - Use `dependency-hygiene` when reviewing Cargo graph drift, feature-flag sprawl,
   or publish/package surface cleanliness.
 - Use `publish-surface` when reviewing README/docs.rs posture, published binary
