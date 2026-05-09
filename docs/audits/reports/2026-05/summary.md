@@ -50,3 +50,7 @@ May has day summaries for the currently recorded audit days.
     delegated-session resolution, or delegated-token verification.
 13. Lifecycle maintainers: keep optional macro `init = { ... }` support behind
     zero-delay lifecycle timers so generated IC hooks stay restore/schedule-only.
+14. Layering maintainers: keep pure cross-layer identifiers in `ids`, with
+    storage-specific persistence implementations kept in storage modules.
+15. Workflow maintainers: keep test-only replay harness storage imports from
+    expanding into production workflow code.

@@ -7,11 +7,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.33.x] - 2026-05-08 - dfx -> icp-cli
 
-- `0.33.2` hardens delegated auth, subject-caller binding, lifecycle timer symmetry, capability proof dispatch, and root replay expiry/capacity behavior after the recurring audit pass, including removal of the public partial `AuthApi::verify_token` helper.
+- `0.33.2` hardens delegated auth, subject-caller binding, lifecycle timer symmetry, layer boundaries, capability proof dispatch, and root replay expiry/capacity behavior after the recurring audit pass, including removal of the public partial `AuthApi::verify_token` helper.
 
 ```bash
 cargo test -p canic-core --lib api::rpc::capability::tests
 cargo test -p canic-core --lib evaluate_root_replay_returns_expired
+bash scripts/ci/run-layering-guards.sh
 ```
 
 - `0.33.1` adds native local replica controls, makes project status detect stale local installs, funds local root creation through ICP CLI, and adds ICP CLI debug/status workflows for local development.

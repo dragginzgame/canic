@@ -11,6 +11,7 @@
 | `canonical-auth-boundary.md` | Recurring invariant | generated auth wrappers, canonical verifier ordering, public auth helper surfaces | `518f57dd` | dirty | complete |
 | `capability-scope-enforcement.md` | Recurring invariant | delegated-token scopes, capability proofs, delegated grants, workflow authorization | `518f57dd` | dirty | complete |
 | `expiry-replay-single-use.md` | Recurring invariant | delegated-token freshness, update-token single-use, capability replay metadata, root replay cache expiry | `518f57dd` | dirty | complete |
+| `layer-violations.md` | Recurring system | core layer imports, policy purity, DTO boundaries, workflow storage coupling, macro boundary | `53476764` | dirty | complete |
 | `subject-caller-binding.md` | Recurring invariant | delegated-token subject binding, generated auth context, delegated sessions, role-attestation caller checks | `518f57dd` | dirty | complete |
 
 ## Risk Index Summary
@@ -24,6 +25,7 @@
 | `canonical-auth-boundary.md` | 3 / 10 | Generated endpoint auth still reaches the full canonical boundary; the public partial `AuthApi::verify_token` helper found during the audit was removed in follow-up. |
 | `capability-scope-enforcement.md` | 3 / 10 | Invariant holds after remediation; proof validation, verifier dispatch, logs, and metrics now share a validated proof view, with residual risk in broad capability DTO/workflow surfaces. |
 | `expiry-replay-single-use.md` | 3 / 10 | Invariant holds after remediation; capability replay metadata and root replay cache records now expire at the same exclusive boundary as delegated tokens. |
+| `layer-violations.md` | 1 / 10 | Layer direction holds after remediation; pure `IntentId` now lives in `ids`, while storage keeps the stable-memory encoding implementation. |
 | `subject-caller-binding.md` | 3 / 10 | Invariant holds; delegated-token subject binding remains canonical, and generated access context preserves separate transport-caller and authenticated-subject lanes. |
 
 ## Key Findings by Severity
@@ -49,6 +51,9 @@
 - `bootstrap-lifecycle-symmetry.md`: optional `start!` / `start_root!`
   `init = { ... }` blocks previously ran synchronously inside lifecycle hook
   bodies; follow-up remediation moved them behind zero-delay lifecycle timers.
+- `layer-violations.md`: production workflow code previously referenced
+  `storage::stable::intent::IntentId`; follow-up remediation moved the pure
+  identifier into `ids` and kept stable-memory encoding in storage.
 
 ### Low
 
@@ -78,6 +83,7 @@
 | `canonical-auth-boundary.md` | 17 | 0 | 0 | 8 targeted cargo test commands, 7 entrypoint/fan-in/edit-pressure/remediation scans, and 2 post-remediation build checks passed. |
 | `capability-scope-enforcement.md` | 19 | 0 | 0 | 8 original targeted cargo test commands, 6 scope/capability/fan-in/edit-pressure scans, capability module tests, auth identity tests, storage helper tests, and `canic-core` clippy passed for lib and all targets. |
 | `expiry-replay-single-use.md` | 17 | 0 | 0 | 10 targeted cargo test commands, `canic-core` clippy, and 6 freshness/replay fan-in/edit-pressure scans passed. |
+| `layer-violations.md` | 18 | 0 | 0 | Import, policy-purity, DTO, API, workflow-storage, and macro scans passed; layering guards, formatting, focused request-handler/intent tests, and `canic-core` clippy passed after remediation. |
 | `subject-caller-binding.md` | 11 | 0 | 0 | 7 targeted cargo test commands and 4 subject/caller lane scans passed. |
 
 ## Follow-up Actions
@@ -122,3 +128,7 @@ Status: docs cleanup items completed; auth items are standing watchpoints.
 14. `subject-caller-binding.md`: keep private
     `AuthApi::verify_token_material(...)` private unless a future public helper
     performs subject binding, scope enforcement, and update replay consumption.
+15. `layer-violations.md`: keep pure cross-layer identifiers in `ids`, with
+    storage-specific persistence implementations kept in storage modules.
+16. `layer-violations.md`: keep test-only replay harness storage imports from
+    expanding into production workflow code.
