@@ -963,7 +963,7 @@ fn check_replay_rejects_when_capacity_reached() {
         RootReplayOps::upsert(
             ReplaySlotKey(key),
             RootReplayRecord {
-                caller: p((i % 250) as u8),
+                caller: p(u8::try_from(i % 250).expect("modulo keeps caller byte below u8 max")),
                 payload_hash: [0u8; 32],
                 issued_at: 0,
                 expires_at: 5_000,
