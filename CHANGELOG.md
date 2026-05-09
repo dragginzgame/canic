@@ -5,13 +5,40 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.33.x] - 2026-05-08 - dfx -> icp-cli
+
+- `0.33.1` adds native local replica controls, makes project status detect stale local installs, funds local root creation through ICP CLI, and hardens auth replay handling by consuming delegated-token nonces and capping root replay reservations per caller.
+
+```bash
+canic replica start
+canic replica start --debug
+canic replica status
+canic replica stop
+canic status
+canic status --network local
+```
+
+- `0.33.0` hard-cuts Canic from DFX project tooling to ICP CLI project tooling, replacing `dfx.json` with `icp.yaml`, moving live local artifacts to `.icp`, and routing install, list, medic, snapshot, restore, CI, and dev setup through ICP CLI.
+
+```bash
+icp environment list
+icp build root -e demo
+canic install demo
+canic list demo --network local
+canic medic demo
+```
+
+See detailed breakdown:
+[docs/changelog/0.33.md](docs/changelog/0.33.md)
+
+---
+
 ## [0.32.x] - 2026-05-07 - Canic Executable
 
-- `0.32.6` finishes the positional fleet CLI cleanup and starts the hard ICP CLI cutover by moving public read-only, snapshot, and restore-runner surfaces from `--dfx` to `--icp`, adding `icp.yaml`, moving live artifact state to `.icp`, and making local ICP smoke commands use the fleet-specific list flow.
+- `0.32.6` finishes the positional fleet CLI cleanup for install, medic, and snapshot download commands, with docs and local helper output updated to match.
 
 ```bash
 canic install test
-canic list demo --network local
 canic medic test --network local
 canic snapshot download test --canister <canister-id> --dry-run
 ```

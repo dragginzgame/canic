@@ -25,9 +25,13 @@ use crate::{
             env::EnvOps,
             metrics::delegated_auth::{DelegatedAuthMetricReason, DelegatedAuthMetrics},
         },
+        storage::auth::{AuthStateOps, DelegatedTokenUse},
         storage::state::subnet::SubnetStateOps,
     },
+    storage::stable::auth::DelegatedTokenUseConsumeResult,
 };
+
+const DELEGATED_TOKEN_USE_CAPACITY: usize = 8_192;
 
 impl AuthOps {
     /// Sign a self-contained delegated token with local shard threshold ECDSA material.
@@ -128,6 +132,36 @@ impl AuthOps {
 
         DelegatedAuthMetrics::record_verify_completed();
         Ok(verified)
+    }
+
+    /// Consume one verified delegated token for a state-changing endpoint call.
+    pub fn consume_delegated_token_use(
+        token: &DelegatedToken,
+        now_secs: u64,
+    ) -> Result<(), InternalError> {
+        let claims = &token.claims;
+        match AuthStateOps::consume_delegated_token_use(
+            DelegatedTokenUse {
+                issuer_shard_pid: claims.issuer_shard_pid,
+                subject: claims.subject,
+                cert_hash: claims.cert_hash,
+                nonce: claims.nonce,
+                used_at: now_secs,
+                expires_at: claims.expires_at,
+            },
+            now_secs,
+        ) {
+            DelegatedTokenUseConsumeResult::Consumed => Ok(()),
+            DelegatedTokenUseConsumeResult::Replayed => {
+                Err(AuthValidationError::DelegatedTokenReplay.into())
+            }
+            DelegatedTokenUseConsumeResult::CapacityReached => Err(
+                AuthValidationError::DelegatedTokenReplayStoreCapacityReached {
+                    capacity: DELEGATED_TOKEN_USE_CAPACITY,
+                }
+                .into(),
+            ),
+        }
     }
 
     fn root_trust_anchor(

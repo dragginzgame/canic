@@ -1,5 +1,6 @@
 use super::{
-    MAX_ROOT_REPLAY_ENTRIES, MAX_ROOT_TTL_SECONDS, REPLAY_PURGE_SCAN_LIMIT, RootContext, funding,
+    MAX_ROOT_REPLAY_ENTRIES, MAX_ROOT_REPLAY_ENTRIES_PER_CALLER, MAX_ROOT_TTL_SECONDS,
+    REPLAY_PURGE_SCAN_LIMIT, RootContext, funding,
 };
 use crate::{
     InternalError,
@@ -390,8 +391,12 @@ fn check_cycles_replay(
                 ReplayMetricOutcome::Completed,
                 ReplayMetricReason::Fresh,
             );
-            replay_ops::reserve_root_replay(pending, MAX_ROOT_REPLAY_ENTRIES)
-                .map_err(map_replay_reserve_error)?;
+            replay_ops::reserve_root_replay(
+                pending,
+                MAX_ROOT_REPLAY_ENTRIES,
+                MAX_ROOT_REPLAY_ENTRIES_PER_CALLER,
+            )
+            .map_err(map_replay_reserve_error)?;
             ReplayMetrics::record(
                 ReplayMetricOperation::Reserve,
                 ReplayMetricOutcome::Completed,
@@ -489,6 +494,21 @@ fn map_replay_reserve_error(err: ReplayReserveError) -> InternalError {
                 ReplayMetricReason::Capacity,
             );
             RpcWorkflowError::ReplayStoreCapacityReached(max_entries).into()
+        }
+        ReplayReserveError::CallerCapacityReached {
+            caller,
+            max_entries,
+        } => {
+            ReplayMetrics::record(
+                ReplayMetricOperation::Reserve,
+                ReplayMetricOutcome::Failed,
+                ReplayMetricReason::Capacity,
+            );
+            RpcWorkflowError::ReplayStoreCallerCapacityReached {
+                caller,
+                max_entries,
+            }
+            .into()
         }
     }
 }

@@ -73,8 +73,46 @@ pub(super) fn write_install_state(
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
     }
+    remove_conflicting_fleet_states(icp_root, network, state)?;
     fs::write(&path, serde_json::to_vec_pretty(state)?)?;
     Ok(path)
+}
+
+// A named ICP canister belongs to one installed fleet at a time. When a new
+// install reuses that root, older fleet state would otherwise point at the new
+// deployment and make `canic list <old-fleet>` show the wrong topology.
+fn remove_conflicting_fleet_states(
+    icp_root: &Path,
+    network: &str,
+    state: &InstallState,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let dir = fleets_dir(icp_root, network);
+    if !dir.is_dir() {
+        return Ok(());
+    }
+
+    for entry in fs::read_dir(dir)? {
+        let entry = entry?;
+        let path = entry.path();
+        if !path.is_file() || path == fleet_install_state_path(icp_root, network, &state.fleet) {
+            continue;
+        }
+
+        let Ok(bytes) = fs::read(&path) else {
+            continue;
+        };
+        let Ok(existing) = serde_json::from_slice::<InstallState>(&bytes) else {
+            continue;
+        };
+        if existing.network == state.network
+            && (existing.root_target == state.root_target
+                || existing.root_canister_id == state.root_canister_id)
+        {
+            fs::remove_file(path)?;
+        }
+    }
+
+    Ok(())
 }
 
 // Keep fleet names filesystem-safe and easy to type in commands.

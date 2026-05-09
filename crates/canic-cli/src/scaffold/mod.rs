@@ -50,7 +50,6 @@ pub struct ScaffoldOptions {
 }
 
 impl ScaffoldOptions {
-    /// Parse fleet creation options from CLI arguments.
     #[cfg(test)]
     pub fn parse<I>(args: I) -> Result<Self, ScaffoldCommandError>
     where
@@ -59,7 +58,6 @@ impl ScaffoldOptions {
         Self::parse_with(args, fleet_create_command(), fleet_create_usage)
     }
 
-    // Parse fleet creation options with a caller-specific command surface.
     fn parse_with<I>(
         args: I,
         command: ClapCommand,
@@ -98,7 +96,6 @@ where
     run_scaffold(options)
 }
 
-// Create the fleet files after parsing the target fleet.
 fn run_scaffold(options: ScaffoldOptions) -> Result<(), ScaffoldCommandError> {
     if !options.yes {
         confirm_scaffold(&options, io::stdin().lock(), io::stdout())?;
@@ -163,7 +160,6 @@ pub fn scaffold_project(options: &ScaffoldOptions) -> Result<ScaffoldResult, Sca
     })
 }
 
-// Build the fleet create parser.
 fn fleet_create_command() -> ClapCommand {
     ClapCommand::new("create")
         .bin_name("canic fleet create")
@@ -191,13 +187,11 @@ fn fleet_create_command() -> ClapCommand {
         .after_help(FLEET_CREATE_HELP_AFTER)
 }
 
-// Return fleet create usage text.
 pub fn fleet_create_usage() -> String {
     let mut command = fleet_create_command();
     command.render_help().to_string()
 }
 
-// Ask the operator to confirm the target before creating multiple files.
 fn confirm_scaffold<R, W>(
     options: &ScaffoldOptions,
     mut reader: R,
@@ -230,7 +224,6 @@ where
     Err(ScaffoldCommandError::Cancelled)
 }
 
-// Validate project names before they become directory and package identifiers.
 fn validate_project_name(name: &str) -> Result<(), ScaffoldCommandError> {
     let mut previous_underscore = false;
     for (index, ch) in name.chars().enumerate() {
@@ -254,7 +247,6 @@ fn validate_project_name(name: &str) -> Result<(), ScaffoldCommandError> {
     Ok(())
 }
 
-// Write one scaffold file without overwriting any user-owned file.
 fn write_new_file(path: &Path, contents: &str) -> Result<(), ScaffoldCommandError> {
     if path.exists() {
         return Err(ScaffoldCommandError::TargetExists(
@@ -264,7 +256,6 @@ fn write_new_file(path: &Path, contents: &str) -> Result<(), ScaffoldCommandErro
     fs::write(path, contents).map_err(ScaffoldCommandError::from)
 }
 
-// Render the minimal Canic config for one scaffolded fleet.
 fn canic_toml(name: &str) -> String {
     format!(
         r#"# Minimal Canic fleet config.
@@ -291,7 +282,6 @@ kind = "singleton"
     )
 }
 
-// Render the scaffolded root canister package manifest.
 fn root_cargo_toml(name: &str) -> String {
     let canic_version = env!("CARGO_PKG_VERSION");
     format!(
@@ -317,7 +307,6 @@ canic = "{canic_version}"
     )
 }
 
-// Render the scaffolded app canister package manifest.
 fn app_cargo_toml(name: &str) -> String {
     let canic_version = env!("CARGO_PKG_VERSION");
     format!(

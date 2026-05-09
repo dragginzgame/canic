@@ -33,7 +33,6 @@ pub struct BuildOptions {
 }
 
 impl BuildOptions {
-    /// Parse build options from CLI arguments.
     pub fn parse<I>(args: I) -> Result<Self, BuildCommandError>
     where
         I: IntoIterator<Item = OsString>,
@@ -49,7 +48,6 @@ impl BuildOptions {
     }
 }
 
-// Build the canister-artifact parser.
 fn build_command() -> ClapCommand {
     ClapCommand::new("build")
         .bin_name("canic build")
@@ -76,7 +74,6 @@ where
     build_canister(options).map_err(BuildCommandError::from)
 }
 
-// Build the requested canister and print the artifact path for caller build scripts.
 fn build_canister(options: BuildOptions) -> Result<(), Box<dyn std::error::Error>> {
     let profile = CanisterBuildProfile::current();
     print_current_workspace_build_context_once(profile)?;
@@ -99,7 +96,6 @@ fn build_canister(options: BuildOptions) -> Result<(), Box<dyn std::error::Error
     Ok(())
 }
 
-// Return build command usage text.
 fn usage() -> String {
     let mut command = build_command();
     command.render_help().to_string()

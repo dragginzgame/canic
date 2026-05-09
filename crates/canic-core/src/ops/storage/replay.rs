@@ -74,6 +74,11 @@ impl RootReplayOps {
         RootReplayStore::len()
     }
 
+    #[must_use]
+    pub fn active_len_for_caller(caller: Principal, now: u64) -> usize {
+        RootReplayStore::active_len_for_caller(caller, now)
+    }
+
     pub fn purge_expired(now: u64, limit: usize) -> usize {
         let expired = RootReplayStore::collect_expired(now, limit);
         for key in &expired {

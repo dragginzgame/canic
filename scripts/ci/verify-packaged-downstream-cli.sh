@@ -106,7 +106,7 @@ init_mode = "enabled"
 
 [auth.delegated_tokens]
 enabled = false
-ecdsa_key_name = "test_key_1"
+ecdsa_key_name = "key_1"
 
 [standards]
 icrc21 = false

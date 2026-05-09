@@ -1,11 +1,10 @@
 use super::{
-    INSTALL_STATE_SCHEMA_VERSION, InstallState, LOCAL_ROOT_TARGET_CYCLES,
-    add_icp_environment_target, canic_build_target_command, config_selection_error,
+    INSTALL_STATE_SCHEMA_VERSION, InstallState, add_icp_environment_target,
+    add_local_root_create_cycles_arg, canic_build_target_command, config_selection_error,
     discover_canic_config_choices, fleet_install_state_path, icp_canister_command_in_network,
     icp_start_local_command, icp_stop_command, install_build_session_id,
-    parse_bootstrap_status_value, parse_canister_status_cycles, parse_local_icp_autostart,
-    parse_root_ready_value, read_fleet_install_state, required_local_cycle_topup,
-    resolve_install_config_path, write_install_state,
+    parse_bootstrap_status_value, parse_local_icp_autostart, parse_root_ready_value,
+    read_fleet_install_state, resolve_install_config_path, write_install_state,
 };
 use crate::release_set::configured_install_targets;
 use crate::test_support::temp_dir;
@@ -88,63 +87,6 @@ fn parse_bootstrap_status_accepts_icp_cli_response_candid() {
     assert!(!status.ready);
     assert_eq!(status.phase, "failed");
     assert_eq!(status.last_error.as_deref(), Some("registry phase failed"));
-}
-
-#[test]
-fn parse_canister_status_cycles_accepts_balance_line() {
-    let output = "\
-Canister status call result for root.
-Status: Running
-Balance: 9_002_999_998_056_000 Cycles
-Memory Size: 1_234_567 Bytes
-";
-
-    assert_eq!(
-        parse_canister_status_cycles(output),
-        Some(9_002_999_998_056_000)
-    );
-}
-
-#[test]
-fn parse_canister_status_cycles_accepts_cycle_balance_line() {
-    let output = "\
-Canister status call result for root.
-Cycle balance: 12_345 Cycles
-";
-
-    assert_eq!(parse_canister_status_cycles(output), Some(12_345));
-}
-
-#[test]
-fn parse_canister_status_cycles_accepts_icp_cli_cycles_line() {
-    let output = "\
-Canister Status Report:
-  Cycles: 1_499_993_904_000
-  Reserved cycles: 0
-  Idle cycles burned per day: 5_671
-";
-
-    assert_eq!(
-        parse_canister_status_cycles(output),
-        Some(1_499_993_904_000)
-    );
-}
-
-#[test]
-fn required_local_cycle_topup_skips_when_balance_already_meets_target() {
-    assert_eq!(required_local_cycle_topup(LOCAL_ROOT_TARGET_CYCLES), None);
-    assert_eq!(
-        required_local_cycle_topup(LOCAL_ROOT_TARGET_CYCLES + 1_000),
-        None
-    );
-}
-
-#[test]
-fn required_local_cycle_topup_returns_missing_delta_only() {
-    assert_eq!(
-        required_local_cycle_topup(3_000_000_000_000),
-        Some(8_997_000_000_000_000)
-    );
 }
 
 #[test]
@@ -289,6 +231,73 @@ kind = "singleton"
             "project_registry".to_string(),
             "user_hub".to_string()
         ]
+    );
+}
+
+#[test]
+fn local_root_create_adds_configured_cycle_funding() {
+    let workspace_root = write_temp_workspace_config(
+        r#"
+[subnets.prime]
+auto_create = ["app"]
+
+[subnets.prime.canisters.root]
+kind = "root"
+
+[subnets.prime.canisters.app]
+kind = "singleton"
+"#,
+    );
+    let mut command = std::process::Command::new("icp");
+    command.args(["canister", "create", "root", "-q"]);
+
+    add_local_root_create_cycles_arg(
+        &mut command,
+        &workspace_root.join("fleets/canic.toml"),
+        "local",
+    )
+    .expect("local cycles arg");
+
+    assert_eq!(
+        command
+            .get_args()
+            .map(|arg| arg.to_string_lossy().into_owned())
+            .collect::<Vec<_>>(),
+        [
+            "canister",
+            "create",
+            "root",
+            "-q",
+            "--cycles",
+            "60000000000000"
+        ]
+    );
+}
+
+#[test]
+fn nonlocal_root_create_does_not_add_cycle_funding() {
+    let workspace_root = write_temp_workspace_config(
+        r#"
+[subnets.prime.canisters.root]
+kind = "root"
+"#,
+    );
+    let mut command = std::process::Command::new("icp");
+    command.args(["canister", "create", "root", "-q"]);
+
+    add_local_root_create_cycles_arg(
+        &mut command,
+        &workspace_root.join("fleets/canic.toml"),
+        "ic",
+    )
+    .expect("nonlocal cycles arg");
+
+    assert_eq!(
+        command
+            .get_args()
+            .map(|arg| arg.to_string_lossy().into_owned())
+            .collect::<Vec<_>>(),
+        ["canister", "create", "root", "-q"]
     );
 }
 
@@ -568,6 +577,49 @@ fn install_state_round_trips_from_project_state_dir() {
 
     assert_eq!(path, root.join(".canic/local/fleets/demo.json"));
     assert_eq!(named, state);
+
+    fs::remove_dir_all(root).expect("clean temp dir");
+}
+
+#[test]
+fn install_state_replaces_other_fleets_that_share_root() {
+    let root = temp_dir("canic-install-state-replace");
+    let demo = InstallState {
+        schema_version: INSTALL_STATE_SCHEMA_VERSION,
+        fleet: "demo".to_string(),
+        installed_at_unix_secs: 42,
+        network: "local".to_string(),
+        root_target: "root".to_string(),
+        root_canister_id: "uxrrr-q7777-77774-qaaaq-cai".to_string(),
+        root_build_target: "root".to_string(),
+        workspace_root: root.display().to_string(),
+        icp_root: root.display().to_string(),
+        config_path: root.join("fleets/demo/canic.toml").display().to_string(),
+        release_set_manifest_path: root
+            .join(".icp/local/canisters/root/root.release-set.json")
+            .display()
+            .to_string(),
+    };
+    let test = InstallState {
+        fleet: "test".to_string(),
+        config_path: root.join("fleets/test/canic.toml").display().to_string(),
+        ..demo.clone()
+    };
+
+    write_install_state(&root, "local", &demo).expect("write demo state");
+    write_install_state(&root, "local", &test).expect("write test state");
+
+    assert!(
+        read_fleet_install_state(&root, "local", "demo")
+            .expect("read demo")
+            .is_none()
+    );
+    assert_eq!(
+        read_fleet_install_state(&root, "local", "test")
+            .expect("read test")
+            .expect("test state exists"),
+        test
+    );
 
     fs::remove_dir_all(root).expect("clean temp dir");
 }

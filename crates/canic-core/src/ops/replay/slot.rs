@@ -27,6 +27,7 @@ pub fn reserve_root_slot(pending: ReplayPending) {
     RootReplayOps::upsert(
         pending.slot_key,
         RootReplayRecord {
+            caller: pending.caller,
             payload_hash: pending.payload_hash,
             issued_at: pending.issued_at,
             expires_at: pending.expires_at,
@@ -42,6 +43,7 @@ pub fn commit_root_slot(pending: ReplayPending, response_bytes: Vec<u8>) {
     RootReplayOps::upsert(
         pending.slot_key,
         RootReplayRecord {
+            caller: pending.caller,
             payload_hash: pending.payload_hash,
             issued_at: pending.issued_at,
             expires_at: pending.expires_at,
@@ -56,6 +58,14 @@ pub fn commit_root_slot(pending: ReplayPending, response_bytes: Vec<u8>) {
 #[must_use]
 pub fn root_slot_len() -> usize {
     RootReplayOps::len()
+}
+
+/// active_root_slot_len_for_caller
+///
+/// Return the number of non-expired replay entries currently stored for a caller.
+#[must_use]
+pub fn active_root_slot_len_for_caller(caller: crate::cdk::types::Principal, now: u64) -> usize {
+    RootReplayOps::active_len_for_caller(caller, now)
 }
 
 /// has_root_slot

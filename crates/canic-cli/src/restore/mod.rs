@@ -21,7 +21,6 @@ use io::{
 pub use error::RestoreCommandError;
 pub use options::{RestoreApplyOptions, RestorePlanOptions, RestoreRunOptions};
 
-/// Run a restore subcommand.
 pub fn run<I>(args: I) -> Result<(), RestoreCommandError>
 where
     I: IntoIterator<Item = OsString>,
@@ -92,7 +91,6 @@ where
     }
 }
 
-/// Build a no-mutation restore plan from a manifest and optional mapping.
 pub fn plan_restore(options: &RestorePlanOptions) -> Result<RestorePlan, RestoreCommandError> {
     verify_backup_layout_if_required(options)?;
 
@@ -102,7 +100,6 @@ pub fn plan_restore(options: &RestorePlanOptions) -> Result<RestorePlan, Restore
     RestorePlanner::plan(&manifest, mapping.as_ref()).map_err(RestoreCommandError::from)
 }
 
-/// Build a no-mutation restore apply dry-run from a restore plan.
 pub fn restore_apply_dry_run(
     options: &RestoreApplyOptions,
 ) -> Result<RestoreApplyDryRun, RestoreCommandError> {
@@ -115,7 +112,6 @@ pub fn restore_apply_dry_run(
     Ok(RestoreApplyDryRun::from_plan(&plan))
 }
 
-/// Build a no-mutation native restore runner preview from a journal file.
 pub fn restore_run_dry_run(
     options: &RestoreRunOptions,
 ) -> Result<RestoreRunResponse, RestoreCommandError> {
@@ -123,7 +119,6 @@ pub fn restore_run_dry_run(
         .map_err(RestoreCommandError::from)
 }
 
-/// Recover an interrupted restore runner by unclaiming the pending operation.
 pub fn restore_run_unclaim_pending(
     options: &RestoreRunOptions,
 ) -> Result<RestoreRunResponse, RestoreCommandError> {
@@ -150,7 +145,6 @@ fn restore_run_execute_result(
 struct HostRestoreCommandExecutor;
 
 impl RestoreRunnerCommandExecutor for HostRestoreCommandExecutor {
-    /// Execute restore runner commands through the host-side ICP CLI/process boundary.
     fn execute(
         &mut self,
         command: &canic_backup::restore::RestoreApplyRunnerCommand,
@@ -165,7 +159,6 @@ impl RestoreRunnerCommandExecutor for HostRestoreCommandExecutor {
     }
 }
 
-// Build command-preview configuration from common ICP CLI/network inputs.
 fn restore_command_config(program: &str, network: Option<&str>) -> RestoreApplyCommandConfig {
     RestoreApplyCommandConfig {
         program: program.to_string(),
@@ -173,7 +166,6 @@ fn restore_command_config(program: &str, network: Option<&str>) -> RestoreApplyC
     }
 }
 
-// Build the lower-level restore runner configuration from CLI flags.
 fn restore_runner_config(options: &RestoreRunOptions) -> RestoreRunnerConfig {
     RestoreRunnerConfig {
         journal: options.journal.clone(),
@@ -183,31 +175,26 @@ fn restore_runner_config(options: &RestoreRunOptions) -> RestoreRunnerConfig {
     }
 }
 
-// Return restore command usage text.
 fn usage() -> String {
     let mut command = restore_command();
     command.render_help().to_string()
 }
 
-// Return restore plan usage text.
 fn plan_usage() -> String {
     let mut command = options::restore_plan_command();
     command.render_help().to_string()
 }
 
-// Return restore apply usage text.
 fn apply_usage() -> String {
     let mut command = options::restore_apply_command();
     command.render_help().to_string()
 }
 
-// Return restore run usage text.
 fn run_usage() -> String {
     let mut command = options::restore_run_command();
     command.render_help().to_string()
 }
 
-// Build the restore command-family parser for help rendering.
 fn restore_command() -> ClapCommand {
     ClapCommand::new("restore")
         .bin_name("canic restore")

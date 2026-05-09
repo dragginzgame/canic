@@ -45,7 +45,6 @@ pub struct MedicOptions {
 }
 
 impl MedicOptions {
-    /// Parse medic options from CLI arguments.
     pub fn parse<I>(args: I) -> Result<Self, MedicCommandError>
     where
         I: IntoIterator<Item = OsString>,
@@ -76,7 +75,6 @@ where
     Ok(())
 }
 
-// Build the medic parser and help metadata.
 fn medic_command() -> ClapCommand {
     ClapCommand::new("medic")
         .bin_name("canic medic")
@@ -103,7 +101,6 @@ fn medic_command() -> ClapCommand {
         .after_help(MEDIC_HELP_AFTER)
 }
 
-// Run each diagnostic in dependency order so later checks can reuse fleet state.
 fn run_medic_checks(options: &MedicOptions) -> Vec<MedicCheck> {
     let mut checks = Vec::new();
     checks.push(MedicCheck::ok(
@@ -148,7 +145,6 @@ fn run_medic_checks(options: &MedicOptions) -> Vec<MedicCheck> {
     checks
 }
 
-// Check whether the selected ICP CLI is available.
 fn check_icp_cli(options: &MedicOptions) -> MedicCheck {
     match IcpCli::new(&options.icp, None, Some(options.network.clone())).version() {
         Ok(version) => MedicCheck::ok("icp cli", version, "-"),
@@ -160,7 +156,6 @@ fn check_icp_cli(options: &MedicOptions) -> MedicCheck {
     }
 }
 
-// Check whether the saved install config still exists.
 fn check_config_path(state: &InstallState) -> MedicCheck {
     if fs::metadata(&state.config_path).is_ok_and(|metadata| metadata.is_file()) {
         MedicCheck::ok("config", state.config_path.clone(), "-")
@@ -173,7 +168,6 @@ fn check_config_path(state: &InstallState) -> MedicCheck {
     }
 }
 
-// Query the root readiness endpoint without mutating the canister.
 fn check_root_ready(options: &MedicOptions, state: &InstallState) -> MedicCheck {
     let ready = if replica_query::should_use_local_replica_query(Some(&options.network)) {
         replica_query::query_ready(Some(&options.network), &state.root_canister_id)
@@ -197,7 +191,6 @@ fn check_root_ready(options: &MedicOptions, state: &InstallState) -> MedicCheck 
     }
 }
 
-// Query readiness through ICP CLI for non-local networks.
 fn query_ready_with_icp(options: &MedicOptions, canister: &str) -> Result<bool, String> {
     let output = IcpCli::new(&options.icp, None, Some(options.network.clone()))
         .canister_call_output(canister, "canic_ready", Some("json"))
@@ -206,7 +199,6 @@ fn query_ready_with_icp(options: &MedicOptions, canister: &str) -> Result<bool, 
     Ok(replica_query::parse_ready_json_value(&data))
 }
 
-// Render medic checks as an operator-facing whitespace table.
 fn render_medic_report(checks: &[MedicCheck]) -> String {
     let mut table = WhitespaceTable::new([CHECK_HEADER, STATUS_HEADER, DETAIL_HEADER, NEXT_HEADER]);
     for check in checks {
@@ -220,7 +212,6 @@ fn render_medic_report(checks: &[MedicCheck]) -> String {
     table.render()
 }
 
-// Return medic command help text.
 fn usage() -> String {
     let mut command = medic_command();
     command.render_help().to_string()
@@ -239,7 +230,6 @@ struct MedicCheck {
 }
 
 impl MedicCheck {
-    // Build a successful diagnostic row.
     fn ok(name: impl Into<String>, detail: impl Into<String>, next: impl Into<String>) -> Self {
         Self {
             name: name.into(),
@@ -249,7 +239,6 @@ impl MedicCheck {
         }
     }
 
-    // Build a warning diagnostic row.
     fn warn(name: impl Into<String>, detail: impl Into<String>, next: impl Into<String>) -> Self {
         Self {
             name: name.into(),
@@ -259,7 +248,6 @@ impl MedicCheck {
         }
     }
 
-    // Build a failed diagnostic row.
     fn error(name: impl Into<String>, detail: impl Into<String>, next: impl Into<String>) -> Self {
         Self {
             name: name.into(),
@@ -282,7 +270,6 @@ enum MedicStatus {
 }
 
 impl MedicStatus {
-    // Return the stable table label for one diagnostic status.
     const fn label(self) -> &'static str {
         match self {
             Self::Ok => "ok",

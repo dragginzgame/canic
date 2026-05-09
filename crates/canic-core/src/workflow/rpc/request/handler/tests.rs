@@ -774,6 +774,7 @@ fn check_replay_rejects_expired_entry_when_purge_limit_exceeded() {
     RootReplayOps::upsert(
         target_key,
         RootReplayRecord {
+            caller: ctx.caller,
             payload_hash,
             issued_at: 9_900,
             expires_at: 9_999,
@@ -802,6 +803,7 @@ fn check_replay_rejects_expired_entry_when_purge_limit_exceeded() {
         RootReplayOps::upsert(
             ReplaySlotKey(candidate),
             RootReplayRecord {
+                caller: ctx.caller,
                 payload_hash: [0u8; 32],
                 issued_at: 9_000,
                 expires_at: 9_100,
@@ -906,6 +908,7 @@ fn replay_purge_respects_limit_and_keeps_unexpired_entries() {
         RootReplayOps::upsert(
             ReplaySlotKey([i; 32]),
             RootReplayRecord {
+                caller: p(i),
                 payload_hash: [i; 32],
                 issued_at: 0,
                 expires_at: 10,
@@ -918,6 +921,7 @@ fn replay_purge_respects_limit_and_keeps_unexpired_entries() {
         RootReplayOps::upsert(
             ReplaySlotKey([i; 32]),
             RootReplayRecord {
+                caller: p(i),
                 payload_hash: [i; 32],
                 issued_at: 0,
                 expires_at: 999,
@@ -959,6 +963,7 @@ fn check_replay_rejects_when_capacity_reached() {
         RootReplayOps::upsert(
             ReplaySlotKey(key),
             RootReplayRecord {
+                caller: p((i % 250) as u8),
                 payload_hash: [0u8; 32],
                 issued_at: 0,
                 expires_at: 5_000,
@@ -984,5 +989,53 @@ fn check_replay_rejects_when_capacity_reached() {
     assert!(
         err.to_string().contains("replay store capacity reached"),
         "expected capacity error, got: {err}"
+    );
+}
+
+#[test]
+fn check_replay_rejects_when_caller_capacity_reached() {
+    RootReplayOps::reset_for_tests();
+
+    let caller = p(9);
+    let response_bytes = encode_one(Response::Cycles(CyclesResponse {
+        cycles_transferred: 1,
+    }))
+    .expect("encode");
+
+    for i in 0..MAX_ROOT_REPLAY_ENTRIES_PER_CALLER {
+        let mut key = [0u8; 32];
+        key[..8].copy_from_slice(&(i as u64).to_be_bytes());
+        key[31] = 200;
+
+        RootReplayOps::upsert(
+            ReplaySlotKey(key),
+            RootReplayRecord {
+                caller,
+                payload_hash: [0u8; 32],
+                issued_at: 0,
+                expires_at: 5_000,
+                response_bytes: response_bytes.clone(),
+            },
+        );
+    }
+
+    let ctx = RootContext {
+        caller,
+        self_pid: p(42),
+        is_root_env: true,
+        subnet_id: p(2),
+        now: 1_000,
+    };
+    let capability = RootCapability::RequestCycles(CyclesRequest {
+        cycles: 77,
+        metadata: Some(meta(7, 60)),
+    });
+    let err = RootResponseWorkflow::check_replay(&ctx, &capability)
+        .expect_err("reservation must fail when caller is at capacity");
+
+    assert!(
+        err.to_string()
+            .contains("replay store caller capacity reached"),
+        "expected caller capacity error, got: {err}"
     );
 }

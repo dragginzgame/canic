@@ -12,7 +12,7 @@ TEST_TMPDIR ?= $(CURDIR)/.tmp/test-runtime
 
 ICP_ENVIRONMENT ?= local
 ICP_CLI_VERSION ?= 0.2.5
-ICP_WASM_VERSION ?= 0.9.11
+ICP_WASM_VERSION ?= 0.9.10
 export ICP_ENVIRONMENT
 CARGO_ENV := ICP_ENVIRONMENT=$(ICP_ENVIRONMENT) $(CARGO_ENV)
 ifneq ($(CANIC_WASM_PROFILE),)
@@ -33,8 +33,8 @@ help:
 	@echo ""
 	@echo "Setup / Installation:"
 	@echo "  install          Install only the local canic CLI binary"
-	@echo "  install-dev      Install the shared Rust/Cargo/Python/actionlint/Canic toolchain"
-	@echo "  update-dev       Update the local Rust/Cargo/Python/actionlint/ICP CLI development environment"
+	@echo "  install-dev      Install the shared Rust/Cargo/actionlint/Canic toolchain"
+	@echo "  update-dev       Update the local Rust/Cargo/actionlint/ICP CLI development environment"
 	@echo "  ensure-hooks     Configure git hooks"
 	@echo ""
 	@echo "Version Management:"
@@ -80,20 +80,19 @@ help:
 install:
 	cargo install --locked --path crates/canic-cli
 
-# Install the shared Rust/Cargo/Python/actionlint/Canic toolchain
+# Install the shared Rust/Cargo/actionlint/Canic toolchain
 install-dev:
 	bash scripts/dev/install_dev.sh
 
-# Update the local Rust/Cargo/Python/actionlint/ICP CLI development environment.
+# Update the local Rust/Cargo/actionlint/ICP CLI development environment.
 update-dev:
-	bash scripts/dev/install_dev.sh --update-python
+	bash scripts/dev/install_dev.sh --update-prereqs
 	rustup update
 	cargo install \
 		cargo-audit cargo-bloat cargo-deny cargo-expand cargo-machete \
 		cargo-llvm-lines cargo-sort cargo-tarpaulin cargo-sort-derives \
 		ripgrep \
 		candid-extractor
-	npm install -g @icp-sdk/icp-cli@$(ICP_CLI_VERSION) @icp-sdk/ic-wasm@$(ICP_WASM_VERSION)
 	icp --version
 	ic-wasm --version
 	cargo audit

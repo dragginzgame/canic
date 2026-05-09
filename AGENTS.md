@@ -55,6 +55,9 @@ Dependency direction is strict: `endpoints -> workflow -> policy -> ops -> model
 - Rust edition is 2024.
 - Prefer existing local patterns; keep imports at file top.
 - Use directory modules with `mod.rs`; never keep both `foo.rs` and `foo/`.
+- Use triple-line `///` section markers above structs, enums, and traits to
+  improve scanability:
+  `///`, `/// TypeName`, `///`.
 - Comment intent/invariants only. See `docs/governance/code-hygiene.md`.
 - Shipped `CandidType` types should avoid `///` unless metadata is intentional.
 

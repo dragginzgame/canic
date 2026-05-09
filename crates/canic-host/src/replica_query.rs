@@ -96,7 +96,7 @@ pub fn parse_ready_json_value(data: &serde_json::Value) -> bool {
     }
 }
 
-/// Query `canic_subnet_registry` and render ICP-compatible JSON.
+/// Query `canic_subnet_registry` and render JSON in the CLI response shape.
 pub fn query_subnet_registry_json(
     network: Option<&str>,
     root: &str,

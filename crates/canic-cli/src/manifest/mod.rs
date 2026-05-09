@@ -45,7 +45,6 @@ pub struct ManifestValidateOptions {
 }
 
 impl ManifestValidateOptions {
-    /// Parse manifest validation options from CLI arguments.
     pub fn parse<I>(args: I) -> Result<Self, ManifestCommandError>
     where
         I: IntoIterator<Item = OsString>,
@@ -60,7 +59,6 @@ impl ManifestValidateOptions {
     }
 }
 
-// Build the manifest validation parser.
 fn manifest_validate_command() -> ClapCommand {
     ClapCommand::new("validate")
         .bin_name("canic manifest validate")
@@ -75,7 +73,6 @@ fn manifest_validate_command() -> ClapCommand {
         .arg(value_arg("out").long("out").value_name("file"))
 }
 
-// Map Clap parser failures into command-specific operator messages.
 fn parse_usage_error(err: clap::Error) -> ManifestCommandError {
     if err.kind() == ErrorKind::MissingRequiredArgument {
         ManifestCommandError::MissingManifest(validate_usage())
@@ -84,7 +81,6 @@ fn parse_usage_error(err: clap::Error) -> ManifestCommandError {
     }
 }
 
-// Read the manifest path required by the validation command.
 fn required_manifest_option(matches: &ArgMatches) -> Result<PathBuf, ManifestCommandError> {
     path_option(matches, "manifest")
         .ok_or_else(|| ManifestCommandError::MissingManifest(validate_usage()))
@@ -133,7 +129,6 @@ pub fn validate_manifest(
     Ok(manifest)
 }
 
-// Write a concise validation summary for shell use.
 fn write_validation_summary(
     options: &ManifestValidateOptions,
     manifest: &FleetBackupManifest,
@@ -143,19 +138,16 @@ fn write_validation_summary(
     output::write_pretty_json(options.out.as_ref(), &summary)
 }
 
-// Return manifest command usage text.
 fn usage() -> String {
     let mut command = manifest_command();
     command.render_help().to_string()
 }
 
-// Return manifest validation usage text.
 fn validate_usage() -> String {
     let mut command = manifest_validate_command();
     command.render_help().to_string()
 }
 
-// Build the manifest command-family parser for help rendering.
 fn manifest_command() -> ClapCommand {
     ClapCommand::new("manifest")
         .bin_name("canic manifest")

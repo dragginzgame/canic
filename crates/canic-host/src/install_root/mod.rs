@@ -1,8 +1,9 @@
 use crate::icp;
 use crate::release_set::{
-    configured_fleet_name, configured_install_targets, emit_root_release_set_manifest_with_config,
-    icp_call_on_network, icp_root, load_root_release_set_manifest, resolve_artifact_root,
-    resume_root_bootstrap, stage_root_release_set, workspace_root,
+    configured_fleet_name, configured_install_targets, configured_local_root_create_cycles,
+    emit_root_release_set_manifest_with_config, icp_call_on_network, icp_root,
+    load_root_release_set_manifest, resolve_artifact_root, resume_root_bootstrap,
+    stage_root_release_set, workspace_root,
 };
 use canic_core::{cdk::types::Principal, protocol};
 use config_selection::resolve_install_config_path;
@@ -65,14 +66,12 @@ struct InstallTimingSummary {
     create_canisters: Duration,
     build_all: Duration,
     emit_manifest: Duration,
-    fabricate_cycles: Duration,
     install_root: Duration,
     stage_release_set: Duration,
     resume_bootstrap: Duration,
     wait_ready: Duration,
 }
 
-const LOCAL_ROOT_TARGET_CYCLES: u128 = 9_000_000_000_000_000;
 const LOCAL_ICP_READY_TIMEOUT_SECONDS: u64 = 30;
 
 /// Discover installable Canic config choices under the current workspace.
@@ -104,6 +103,7 @@ pub fn install_root(options: InstallRootOptions) -> Result<(), Box<dyn std::erro
     if Principal::from_text(&options.root_canister).is_err() {
         let mut create = icp_canister_command_in_network(&icp_root);
         create.args(["create", &options.root_canister, "-q"]);
+        add_local_root_create_cycles_arg(&mut create, &config_path, &options.network)?;
         add_icp_environment_target(&mut create, &options.network);
         run_command(&mut create)?;
     }
@@ -129,9 +129,6 @@ pub fn install_root(options: InstallRootOptions) -> Result<(), Box<dyn std::erro
         &config_path,
     )?;
     timings.emit_manifest = emit_manifest_started_at.elapsed();
-
-    timings.fabricate_cycles =
-        maybe_fabricate_local_cycles(&icp_root, &options.root_canister, &options.network)?;
 
     let root_wasm = resolve_artifact_root(&icp_root, &options.network)?
         .join(&options.root_build_target)
@@ -307,117 +304,18 @@ fn install_build_session_id() -> String {
     format!("install-root-{}-{unique}", std::process::id())
 }
 
-// Top up local root cycles only when the current balance is below the target floor.
-fn maybe_fabricate_local_cycles(
-    icp_root: &Path,
-    root_canister: &str,
+fn add_local_root_create_cycles_arg(
+    command: &mut Command,
+    config_path: &Path,
     network: &str,
-) -> Result<Duration, Box<dyn std::error::Error>> {
+) -> Result<(), Box<dyn std::error::Error>> {
     if network != "local" {
-        return Ok(Duration::ZERO);
+        return Ok(());
     }
 
-    let current_balance = root_cycle_balance(icp_root, network, root_canister)?;
-    let Some(fabricate_cycles) = required_local_cycle_topup(current_balance) else {
-        println!(
-            "Skipping local cycle fabrication for {root_canister}; balance {} already meets target {}",
-            format_cycles(current_balance),
-            format_cycles(LOCAL_ROOT_TARGET_CYCLES)
-        );
-        return Ok(Duration::ZERO);
-    };
-
-    let mut fabricate = icp_canister_command_in_network(icp_root);
-    fabricate.args([
-        "top-up",
-        root_canister,
-        "--amount",
-        &fabricate_cycles.to_string(),
-    ]);
-    add_icp_environment_target(&mut fabricate, network);
-    let fabricate_started_at = Instant::now();
-    let output = fabricate.output()?;
-    print_local_cycle_topup_summary(root_canister, current_balance, fabricate_cycles, &output);
-
-    Ok(fabricate_started_at.elapsed())
-}
-
-// Print a compact, separated summary for the noisy local icp cycle top-up.
-fn print_local_cycle_topup_summary(
-    root_canister: &str,
-    current_balance: u128,
-    fabricate_cycles: u128,
-    output: &std::process::Output,
-) {
-    let status = if output.status.success() {
-        "topped up"
-    } else {
-        "top-up requested"
-    };
-    println!(
-        "\n\x1b[33mcycles: {status} local root {root_canister} by {} toward target {} (was {})\x1b[0m\n",
-        format_cycles(fabricate_cycles),
-        format_cycles(LOCAL_ROOT_TARGET_CYCLES),
-        format_cycles(current_balance)
-    );
-}
-
-// Read the current root canister cycle balance from `icp canister status`.
-fn root_cycle_balance(
-    icp_root: &Path,
-    network: &str,
-    root_canister: &str,
-) -> Result<u128, Box<dyn std::error::Error>> {
-    let mut command = icp_canister_command_in_network(icp_root);
-    command.args(["status", root_canister]);
-    add_icp_environment_target(&mut command, network);
-    let stdout = icp::run_output(&mut command)?;
-    parse_canister_status_cycles(&stdout)
-        .ok_or_else(|| "could not parse cycle balance from `icp canister status` output".into())
-}
-
-// Parse the cycle balance from the human-readable `icp canister status` output.
-fn parse_canister_status_cycles(status_output: &str) -> Option<u128> {
-    status_output
-        .lines()
-        .find_map(parse_canister_status_balance_line)
-}
-
-fn parse_canister_status_balance_line(line: &str) -> Option<u128> {
-    let (label, value) = line.trim().split_once(':')?;
-    let label = label.trim().to_ascii_lowercase();
-    if label != "balance" && label != "cycle balance" && label != "cycles" {
-        return None;
-    }
-
-    let digits = value
-        .chars()
-        .filter(char::is_ascii_digit)
-        .collect::<String>();
-    if digits.is_empty() {
-        return None;
-    }
-
-    digits.parse::<u128>().ok()
-}
-
-// Return the local top-up delta needed to bring root up to the target cycle floor.
-fn required_local_cycle_topup(current_balance: u128) -> Option<u128> {
-    (current_balance < LOCAL_ROOT_TARGET_CYCLES)
-        .then_some(LOCAL_ROOT_TARGET_CYCLES.saturating_sub(current_balance))
-        .filter(|cycles| *cycles > 0)
-}
-
-fn format_cycles(value: u128) -> String {
-    let digits = value.to_string();
-    let mut out = String::with_capacity(digits.len() + (digits.len().saturating_sub(1) / 3));
-    for (index, ch) in digits.chars().enumerate() {
-        if index > 0 && (digits.len() - index).is_multiple_of(3) {
-            out.push('_');
-        }
-        out.push(ch);
-    }
-    out
+    let cycles = configured_local_root_create_cycles(config_path)?;
+    command.args(["--cycles", &cycles.to_string()]);
+    Ok(())
 }
 
 fn progress_bar(current: usize, total: usize, width: usize) -> String {
@@ -743,7 +641,6 @@ fn print_install_timing_summary(timings: &InstallTimingSummary, total: Duration)
     print_timing_row("create_canisters", timings.create_canisters);
     print_timing_row("build_all", timings.build_all);
     print_timing_row("emit_manifest", timings.emit_manifest);
-    print_timing_row("fabricate_cycles", timings.fabricate_cycles);
     print_timing_row("install_root", timings.install_root);
     print_timing_row("stage_release_set", timings.stage_release_set);
     print_timing_row("resume_bootstrap", timings.resume_bootstrap);
@@ -857,7 +754,7 @@ fn run_command_allow_failure(
     Ok(command.status()?)
 }
 
-// Print one raw fallback `icp canister call` result to stderr for diagnostics.
+// Print one raw `icp canister call` result to stderr for diagnostics.
 fn print_raw_call(network: &str, root_canister: &str, method: &str) {
     let mut command = icp_root().map_or_else(
         |_| icp_command_on_network(network),

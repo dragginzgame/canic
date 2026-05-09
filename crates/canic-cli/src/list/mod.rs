@@ -5,7 +5,6 @@ use crate::{
 mod options;
 mod render;
 
-use candid::Principal;
 #[cfg(test)]
 use canic::ids::CanisterRole;
 use canic_backup::discovery::{DiscoveryError, RegistryEntry, parse_registry_entries};
@@ -134,7 +133,6 @@ where
     Ok(())
 }
 
-// Return the operator-facing title for the selected list source.
 fn list_title(options: &ListOptions) -> ListTitle {
     ListTitle {
         fleet: options.fleet.clone(),
@@ -142,7 +140,6 @@ fn list_title(options: &ListOptions) -> ListTitle {
     }
 }
 
-// Resolve role kind labels from the selected project config when it is available.
 fn resolve_role_kinds(options: &ListOptions) -> BTreeMap<String, String> {
     role_kind_config_candidates(options)
         .into_iter()
@@ -150,7 +147,6 @@ fn resolve_role_kinds(options: &ListOptions) -> BTreeMap<String, String> {
         .unwrap_or_default()
 }
 
-// Return likely config paths in preference order without making list depend on them.
 fn role_kind_config_candidates(options: &ListOptions) -> Vec<std::path::PathBuf> {
     let mut paths = Vec::new();
 
@@ -169,7 +165,6 @@ fn role_kind_config_candidates(options: &ListOptions) -> Vec<std::path::PathBuf>
     paths
 }
 
-// Return ready statuses for the visible live list.
 fn list_ready_statuses(
     options: &ListOptions,
     registry: &[RegistryEntry],
@@ -182,7 +177,6 @@ fn list_ready_statuses(
     Ok(statuses)
 }
 
-// Query one canister's generated Canic readiness endpoint.
 fn check_ready_status(
     options: &ListOptions,
     canister: &str,
@@ -212,7 +206,6 @@ fn check_ready_status(
     })
 }
 
-// Load registry entries from a live root canister query.
 fn load_registry_entries(options: &ListOptions) -> Result<Vec<RegistryEntry>, ListCommandError> {
     let registry_json = match options.source {
         ListSource::RootRegistry => {
@@ -227,7 +220,6 @@ fn load_registry_entries(options: &ListOptions) -> Result<Vec<RegistryEntry>, Li
     parse_registry_entries(&registry_json).map_err(ListCommandError::from)
 }
 
-// Load the selected fleet directly from config when it has no installed root registry yet.
 fn load_config_role_rows(options: &ListOptions) -> Result<Vec<ConfigRoleRow>, ListCommandError> {
     let config_path = selected_config_path(options)?;
     let roles = configured_fleet_roles(&config_path)
@@ -276,7 +268,6 @@ fn load_config_role_rows(options: &ListOptions) -> Result<Vec<ConfigRoleRow>, Li
         .collect())
 }
 
-// Render auto-create membership; root is the parent canister, so this setting is not applicable.
 fn auto_create_label(role: &str, auto_create: &std::collections::BTreeSet<String>) -> String {
     if role == "root" {
         "-".to_string()
@@ -287,10 +278,9 @@ fn auto_create_label(role: &str, auto_create: &std::collections::BTreeSet<String
     }
 }
 
-// Resolve the explicit root id or the selected fleet install state root.
 fn resolve_root_canister(options: &ListOptions) -> Result<String, ListCommandError> {
     if let Some(root) = &options.root {
-        return Ok(resolve_canister_identifier(root));
+        return Ok(root.clone());
     }
 
     if let Some(state) = read_selected_install_state(options)
@@ -305,14 +295,12 @@ fn resolve_root_canister(options: &ListOptions) -> Result<String, ListCommandErr
     })
 }
 
-// Read the explicitly selected fleet install state.
 fn read_selected_install_state(
     options: &ListOptions,
 ) -> Result<Option<InstallState>, Box<dyn std::error::Error>> {
     read_named_fleet_install_state(&state_network(options), &options.fleet)
 }
 
-// Resolve the config path for the selected fleet, if that fleet is declared.
 fn selected_config_path(options: &ListOptions) -> Result<PathBuf, ListCommandError> {
     let fleet = &options.fleet;
     let matches = discover_current_canic_config_choices()
@@ -333,26 +321,14 @@ fn selected_config_path(options: &ListOptions) -> Result<PathBuf, ListCommandErr
     }
 }
 
-// Resolve the selected tree anchor as a principal or operator-supplied identifier.
 fn resolve_tree_anchor(options: &ListOptions) -> Option<String> {
-    options.anchor.as_deref().map(resolve_canister_identifier)
+    options.anchor.clone()
 }
 
-// Accept either an IC principal or an operator-supplied canister identifier for list inputs.
-fn resolve_canister_identifier(identifier: &str) -> String {
-    if Principal::from_text(identifier).is_ok() {
-        return identifier.to_string();
-    }
-
-    identifier.to_string()
-}
-
-// Resolve the state network for commands that omit --network.
 fn state_network(options: &ListOptions) -> String {
     options.network.clone().unwrap_or_else(local_network)
 }
 
-// Run `icp canister call <root> canic_subnet_registry --output json`.
 fn call_subnet_registry(options: &ListOptions, root: &str) -> Result<String, ListCommandError> {
     if replica_query::should_use_local_replica_query(options.network.as_deref()) {
         return replica_query::query_subnet_registry_json(options.network.as_deref(), root)
@@ -365,7 +341,6 @@ fn call_subnet_registry(options: &ListOptions, root: &str) -> Result<String, Lis
         .map_err(add_root_registry_hint)
 }
 
-// Convert local replica query failures into operator-facing setup guidance.
 fn list_replica_query_error(options: &ListOptions, root: &str, error: String) -> ListCommandError {
     if is_canister_not_found_error(&error)
         && let Ok(Some(state)) = read_selected_install_state(options)
@@ -381,12 +356,10 @@ fn list_replica_query_error(options: &ListOptions, root: &str, error: String) ->
     ListCommandError::ReplicaQuery(error)
 }
 
-// Detect the local replica's missing-canister query diagnostic.
 fn is_canister_not_found_error(error: &str) -> bool {
     error.contains("Canister ") && error.contains(" not found")
 }
 
-// Add a next-step hint for common root registry setup mistakes.
 fn add_root_registry_hint(error: ListCommandError) -> ListCommandError {
     let ListCommandError::IcpFailed { command, stderr } = error else {
         return error;
@@ -402,7 +375,6 @@ fn add_root_registry_hint(error: ListCommandError) -> ListCommandError {
     }
 }
 
-// Convert host ICP CLI failures into the list command's public error surface.
 fn list_icp_error(error: IcpCommandError) -> ListCommandError {
     match error {
         IcpCommandError::Io(err) => ListCommandError::Io(err),
@@ -416,7 +388,6 @@ fn list_icp_error(error: IcpCommandError) -> ListCommandError {
     }
 }
 
-// Return guidance for root registry calls that cannot reach an installed Canic root.
 fn root_registry_hint(stderr: &str) -> Option<&'static str> {
     if stderr.contains("Cannot find canister id") {
         return Some(
@@ -440,12 +411,13 @@ fn deployed_config_gap_hint(options: &ListOptions, registry: &[RegistryEntry]) -
     }
 
     let config_path = selected_config_path(options).ok()?;
-    let declared = configured_fleet_roles(&config_path).ok()?;
+    let mut expected = configured_role_auto_create(&config_path).ok()?;
+    expected.insert("root".to_string());
     let deployed = registry
         .iter()
         .filter_map(|entry| entry.role.as_deref())
         .collect::<std::collections::BTreeSet<_>>();
-    let missing = declared
+    let missing = expected
         .iter()
         .filter(|role| !deployed.contains(role.as_str()))
         .cloned()

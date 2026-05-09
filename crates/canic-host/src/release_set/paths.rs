@@ -130,7 +130,7 @@ pub fn workspace_manifest_path(workspace_root: &Path) -> PathBuf {
     )
 }
 
-// Prefer the selected ICP environment artifact root and fall back to local when present.
+// Resolve the built artifact directory for the selected ICP environment.
 pub fn resolve_artifact_root(
     icp_root: &Path,
     network: &str,
@@ -140,15 +140,15 @@ pub fn resolve_artifact_root(
         return Ok(preferred);
     }
 
-    let fallback = icp_root.join(".icp/local/canisters");
-    if fallback.is_dir() {
-        return Ok(fallback);
+    let local_artifact_root = icp_root.join(".icp/local/canisters");
+    if local_artifact_root.is_dir() {
+        return Ok(local_artifact_root);
     }
 
     Err(format!(
         "missing built ICP artifacts under {} or {}",
         preferred.display(),
-        fallback.display()
+        local_artifact_root.display()
     )
     .into())
 }

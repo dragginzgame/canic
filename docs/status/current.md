@@ -32,6 +32,8 @@ inspect only the files needed for the current task.
 - Confirmed the ICP-only local demo install smoke with `icp 0.2.5`, including
   `canic install demo`, `canic config demo`, `canic list demo`, and
   `canic medic demo`.
+- Confirmed the auth-enabled `test` fleet install smoke after moving active
+  threshold ECDSA key defaults from the old local key name to ICP CLI's `key_1`.
 - Moved the public read-only/snapshot/restore-runner CLI surfaces toward ICP
   CLI: `list`, `config`, `medic`, `snapshot download`, and `restore run` now
   expose `--icp <path>` where a tool override is needed.
@@ -54,6 +56,9 @@ inspect only the files needed for the current task.
 - `cargo run -q -p canic-cli --bin canic -- config demo`
 - `cargo run -q -p canic-cli --bin canic -- list demo`
 - `cargo run -q -p canic-cli --bin canic -- medic demo`
+- `cargo run -q -p canic-cli --bin canic -- install test --ready-timeout-seconds 120`
+- `cargo run -q -p canic-cli --bin canic -- list test`
+- `cargo run -q -p canic-cli --bin canic -- medic test`
 - targeted `canic-core` auth tests
 - targeted PocketIC role-attestation/root-key tests
 - `git diff --check` on touched files
@@ -84,4 +89,4 @@ inspect only the files needed for the current task.
    UX, host owns ICP CLI/filesystem/build/install mechanics, backup owns
    backup/restore domain logic.
 4. Continue the ICP-only 0.33 hard cut across remaining backup/restore docs and
-   any deeper CI smoke paths that still mention DFX.
+   any deeper CI smoke paths that still mention the old host-tool provider.

@@ -12,6 +12,7 @@ enum RootSubnetRoleScope {
 }
 
 const DEFAULT_INITIAL_CYCLES: u128 = 5_000_000_000_000;
+const LOCAL_ROOT_BOOTSTRAP_RESERVE_CYCLES: u128 = 50_000_000_000_000;
 const DEFAULT_RANDOMNESS_RESEED_INTERVAL_SECS: u64 = 3600;
 const TENTH_TC: u128 = 100_000_000_000;
 
@@ -47,6 +48,15 @@ pub fn configured_install_targets(
     let mut targets = vec![root_canister.to_string()];
     targets.extend(configured_release_roles(config_path)?);
     Ok(targets)
+}
+
+// Estimate local root cycles needed to create bootstrap-owned canisters.
+pub fn configured_local_root_create_cycles(
+    config_path: &Path,
+) -> Result<u128, Box<dyn std::error::Error>> {
+    let config_source = fs::read_to_string(config_path)?;
+    configured_local_root_create_cycles_from_source(&config_source)
+        .map_err(|err| format!("invalid {}: {err}", config_path.display()).into())
 }
 
 // Read the required operator fleet name from an install config.
@@ -209,6 +219,45 @@ pub(super) fn configured_role_topups_from_source(
     }
 
     Ok(topups)
+}
+
+// Estimate local root create funding from the root subnet bootstrap obligations.
+pub(super) fn configured_local_root_create_cycles_from_source(
+    config_source: &str,
+) -> Result<u128, Box<dyn std::error::Error>> {
+    let config = parse_config_model(config_source).map_err(|err| err.to_string())?;
+    let mut root_subnet = None;
+
+    for (subnet_role, subnet) in &config.subnets {
+        if !subnet.canisters.keys().any(CanisterRole::is_root) {
+            continue;
+        }
+        if root_subnet.is_some() {
+            return Err(format!(
+                "multiple subnets define a root canister; expected exactly one root subnet (found at least '{subnet_role}')"
+            )
+            .into());
+        }
+        root_subnet = Some(subnet);
+    }
+
+    let subnet = root_subnet.ok_or_else(|| {
+        "no subnet defines a root canister; expected exactly one root subnet".to_string()
+    })?;
+
+    let mut cycles = subnet
+        .get_canister(&CanisterRole::WASM_STORE)
+        .map_or(DEFAULT_INITIAL_CYCLES, |cfg| cfg.initial_cycles.to_u128());
+    for role in &subnet.auto_create {
+        if let Some(cfg) = subnet.get_canister(role) {
+            cycles = cycles.saturating_add(cfg.initial_cycles.to_u128());
+        }
+    }
+    cycles = cycles.saturating_add(
+        u128::from(subnet.pool.minimum_size).saturating_mul(DEFAULT_INITIAL_CYCLES),
+    );
+
+    Ok(cycles.saturating_add(LOCAL_ROOT_BOOTSTRAP_RESERVE_CYCLES))
 }
 
 // Enumerate verbose configured details from raw config source.

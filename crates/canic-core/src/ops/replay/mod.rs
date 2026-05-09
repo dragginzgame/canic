@@ -1,3 +1,4 @@
+use crate::cdk::types::Principal;
 use crate::dto::rpc::{CyclesResponse, Response};
 use candid::{decode_one, encode_one};
 
@@ -17,7 +18,13 @@ const ROOT_REPLAY_COMPACT_CYCLES_V1: u8 = 0;
 ///
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ReplayReserveError {
-    CapacityReached { max_entries: usize },
+    CapacityReached {
+        max_entries: usize,
+    },
+    CallerCapacityReached {
+        caller: Principal,
+        max_entries: usize,
+    },
 }
 
 ///
@@ -44,10 +51,21 @@ pub enum ReplayDecodeError {
 pub fn reserve_root_replay(
     pending: ReplayPending,
     max_entries: usize,
+    max_entries_per_caller: usize,
 ) -> Result<(), ReplayReserveError> {
-    if !replay_slot::has_root_slot(pending.slot_key) && replay_slot::root_slot_len() >= max_entries
-    {
-        return Err(ReplayReserveError::CapacityReached { max_entries });
+    if !replay_slot::has_root_slot(pending.slot_key) {
+        if replay_slot::active_root_slot_len_for_caller(pending.caller, pending.issued_at)
+            >= max_entries_per_caller
+        {
+            return Err(ReplayReserveError::CallerCapacityReached {
+                caller: pending.caller,
+                max_entries: max_entries_per_caller,
+            });
+        }
+
+        if replay_slot::root_slot_len() >= max_entries {
+            return Err(ReplayReserveError::CapacityReached { max_entries });
+        }
     }
 
     replay_slot::reserve_root_slot(pending);
@@ -193,6 +211,30 @@ fn take_exact<'a>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{
+        cdk::types::Principal,
+        ops::storage::replay::{ReplayService, RootReplayOps},
+    };
+
+    fn p(id: u8) -> Principal {
+        Principal::from_slice(&[id; 29])
+    }
+
+    fn pending(caller: Principal, request_id: [u8; 32]) -> ReplayPending {
+        ReplayPending {
+            caller,
+            slot_key: RootReplayOps::slot_key(
+                caller,
+                p(9),
+                ReplayService::Root,
+                &request_id,
+                [0u8; 16],
+            ),
+            payload_hash: [7u8; 32],
+            issued_at: 1_000,
+            expires_at: 1_300,
+        }
+    }
 
     #[test]
     fn compact_root_replay_round_trips_cycles_response() {
@@ -213,5 +255,26 @@ mod tests {
             }
             _ => panic!("expected cycles replay response"),
         }
+    }
+
+    #[test]
+    fn reserve_root_replay_rejects_caller_capacity_before_global_capacity() {
+        RootReplayOps::reset_for_tests();
+
+        let caller = p(1);
+        reserve_root_replay(pending(caller, [1u8; 32]), 10, 1).expect("first reservation");
+
+        let err = reserve_root_replay(pending(caller, [2u8; 32]), 10, 1)
+            .expect_err("same caller should hit caller cap");
+        assert_eq!(
+            err,
+            ReplayReserveError::CallerCapacityReached {
+                caller,
+                max_entries: 1,
+            }
+        );
+
+        reserve_root_replay(pending(p(2), [3u8; 32]), 10, 1)
+            .expect("other caller should still reserve");
     }
 }

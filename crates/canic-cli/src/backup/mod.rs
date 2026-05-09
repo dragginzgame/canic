@@ -64,7 +64,6 @@ pub struct BackupListEntry {
     pub status: String,
 }
 
-/// Run a backup subcommand.
 pub fn run<I>(args: I) -> Result<(), BackupCommandError>
 where
     I: IntoIterator<Item = OsString>,
@@ -118,7 +117,6 @@ where
     }
 }
 
-/// List backup directories under the selected backup root.
 pub fn backup_list(
     options: &BackupListOptions,
 ) -> Result<Vec<BackupListEntry>, BackupCommandError> {
@@ -143,7 +141,6 @@ pub fn backup_list(
     Ok(entries)
 }
 
-/// Summarize a backup journal's resumable state.
 pub fn backup_status(
     options: &BackupStatusOptions,
 ) -> Result<JournalResumeReport, BackupCommandError> {
@@ -152,7 +149,6 @@ pub fn backup_status(
     Ok(journal.resume_report())
 }
 
-/// Verify a backup directory's manifest, journal, and durable artifacts.
 pub fn verify_backup(
     options: &BackupVerifyOptions,
 ) -> Result<BackupIntegrityReport, BackupCommandError> {
@@ -160,7 +156,6 @@ pub fn verify_backup(
     layout.verify_integrity().map_err(BackupCommandError::from)
 }
 
-// Build one list entry from a candidate backup directory.
 fn backup_list_entry(dir: PathBuf) -> Option<BackupListEntry> {
     let layout = BackupLayout::new(dir.clone());
     if !layout.manifest_path().is_file() {
@@ -186,7 +181,6 @@ fn backup_list_entry(dir: PathBuf) -> Option<BackupListEntry> {
     })
 }
 
-// Ensure a journal status report has no remaining resume work.
 fn ensure_complete_status(report: &JournalResumeReport) -> Result<(), BackupCommandError> {
     if report.is_complete {
         return Ok(());
@@ -199,7 +193,6 @@ fn ensure_complete_status(report: &JournalResumeReport) -> Result<(), BackupComm
     })
 }
 
-// Enforce caller-requested status requirements after the JSON report is written.
 fn enforce_status_requirements(
     options: &BackupStatusOptions,
     report: &JournalResumeReport,
@@ -211,7 +204,6 @@ fn enforce_status_requirements(
     ensure_complete_status(report)
 }
 
-// Write the journal status report to stdout or a requested output file.
 fn write_status_report(
     options: &BackupStatusOptions,
     report: &JournalResumeReport,
@@ -244,7 +236,6 @@ fn write_list_report(
     Ok(())
 }
 
-// Render backup list entries with the path first for easy command reuse.
 fn render_backup_list(entries: &[BackupListEntry]) -> String {
     let mut table = WhitespaceTable::new(["DIR", "BACKUP_ID", "CREATED_AT", "MEMBERS", "STATUS"]);
     for entry in entries {
@@ -259,7 +250,6 @@ fn render_backup_list(entries: &[BackupListEntry]) -> String {
     table.render()
 }
 
-// Render machine timestamp markers as operator-friendly calendar labels.
 fn display_created_at(created_at: &str) -> String {
     created_at
         .strip_prefix("unix:")
@@ -267,7 +257,6 @@ fn display_created_at(created_at: &str) -> String {
         .map_or_else(|| created_at.to_string(), backup_list_timestamp)
 }
 
-// Format unix seconds as a compact UTC timestamp for backup list output.
 fn backup_list_timestamp(seconds: u64) -> String {
     let days = i64::try_from(seconds / 86_400).unwrap_or(i64::MAX);
     let seconds_of_day = seconds % 86_400;
@@ -294,31 +283,26 @@ const fn civil_from_days(days: i64) -> (i64, i64, i64) {
     (year, month, day)
 }
 
-// Return backup command usage text.
 fn usage() -> String {
     let mut command = backup_command();
     command.render_help().to_string()
 }
 
-// Return backup status usage text.
 fn status_usage() -> String {
     let mut command = options::backup_status_command();
     command.render_help().to_string()
 }
 
-// Return backup list usage text.
 fn list_usage() -> String {
     let mut command = options::backup_list_command();
     command.render_help().to_string()
 }
 
-// Return backup verify usage text.
 fn verify_usage() -> String {
     let mut command = options::backup_verify_command();
     command.render_help().to_string()
 }
 
-// Build the backup command-family parser for help rendering.
 fn backup_command() -> ClapCommand {
     ClapCommand::new("backup")
         .bin_name("canic backup")

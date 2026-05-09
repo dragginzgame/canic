@@ -27,6 +27,20 @@ pub struct DelegatedSessionBootstrapBindingRecord {
 }
 
 ///
+/// DelegatedTokenUseRecord
+///
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct DelegatedTokenUseRecord {
+    pub issuer_shard_pid: Principal,
+    pub subject: Principal,
+    pub cert_hash: [u8; 32],
+    pub nonce: [u8; 16],
+    pub used_at: u64,
+    pub expires_at: u64,
+}
+
+///
 /// AttestationKeyStatusRecord
 ///
 
@@ -60,6 +74,8 @@ pub struct AuthStateRecord {
     pub delegated_sessions: Vec<DelegatedSessionRecord>,
 
     pub delegated_session_bootstrap_bindings: Vec<DelegatedSessionBootstrapBindingRecord>,
+
+    pub delegated_token_uses: Vec<DelegatedTokenUseRecord>,
 
     pub attestation_public_keys: Vec<AttestationPublicKeyRecord>,
 }

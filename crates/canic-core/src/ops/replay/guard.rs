@@ -22,6 +22,7 @@ pub struct RootReplayGuardInput {
 /// Fresh replay reservation metadata for later commit.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ReplayPending {
+    pub caller: Principal,
     pub slot_key: ReplaySlotKey,
     pub payload_hash: [u8; 32],
     pub issued_at: u64,
@@ -86,6 +87,7 @@ pub fn evaluate_root_replay(
     let issued_at = input.now;
     let expires_at = issued_at.saturating_add(input.ttl_seconds);
     Ok(ReplayDecision::Fresh(ReplayPending {
+        caller: input.caller,
         slot_key,
         payload_hash: input.payload_hash,
         issued_at,
@@ -167,6 +169,7 @@ mod tests {
         slot::upsert_root_slot(
             slot_key,
             RootReplayRecord {
+                caller: input.caller,
                 payload_hash: input.payload_hash,
                 issued_at: 900,
                 expires_at: 1_200,
@@ -192,6 +195,7 @@ mod tests {
         slot::upsert_root_slot(
             slot_key,
             RootReplayRecord {
+                caller: input.caller,
                 payload_hash: input.payload_hash,
                 issued_at: 900,
                 expires_at: 1_200,
@@ -212,6 +216,7 @@ mod tests {
         slot::upsert_root_slot(
             slot_key,
             RootReplayRecord {
+                caller: input.caller,
                 payload_hash: [8u8; 32],
                 issued_at: 900,
                 expires_at: 1_200,
@@ -233,6 +238,7 @@ mod tests {
         slot::upsert_root_slot(
             slot_key,
             RootReplayRecord {
+                caller: input.caller,
                 payload_hash: input.payload_hash,
                 issued_at: 900,
                 expires_at: 1_200,

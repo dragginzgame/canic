@@ -50,6 +50,12 @@ pub enum AuthValidationError {
     #[error("delegated token auth disabled (set auth.delegated_tokens.enabled=true in canic.toml)")]
     DelegatedTokenAuthDisabled,
 
+    #[error("delegated token replay rejected; use a fresh token")]
+    DelegatedTokenReplay,
+
+    #[error("delegated token replay store capacity reached ({capacity})")]
+    DelegatedTokenReplayStoreCapacityReached { capacity: usize },
+
     #[error("auth validation failed: {0}")]
     Auth(String),
 }

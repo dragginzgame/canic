@@ -19,7 +19,6 @@ pub struct RestorePlanOptions {
 }
 
 impl RestorePlanOptions {
-    /// Parse restore planning options from CLI arguments.
     pub fn parse<I>(args: I) -> Result<Self, RestoreCommandError>
     where
         I: IntoIterator<Item = OsString>,
@@ -56,7 +55,6 @@ impl RestorePlanOptions {
     }
 }
 
-// Build the restore plan parser.
 pub(super) fn restore_plan_command() -> ClapCommand {
     ClapCommand::new("plan")
         .bin_name("canic restore plan")
@@ -84,7 +82,6 @@ pub struct RestoreApplyOptions {
 }
 
 impl RestoreApplyOptions {
-    /// Parse restore apply options from CLI arguments.
     pub fn parse<I>(args: I) -> Result<Self, RestoreCommandError>
     where
         I: IntoIterator<Item = OsString>,
@@ -108,7 +105,6 @@ impl RestoreApplyOptions {
     }
 }
 
-// Build the restore apply dry-run parser.
 pub(super) fn restore_apply_command() -> ClapCommand {
     ClapCommand::new("apply")
         .bin_name("canic restore apply")
@@ -148,7 +144,6 @@ pub struct RestoreRunOptions {
 }
 
 impl RestoreRunOptions {
-    /// Parse restore run options from CLI arguments.
     pub fn parse<I>(args: I) -> Result<Self, RestoreCommandError>
     where
         I: IntoIterator<Item = OsString>,
@@ -178,7 +173,6 @@ impl RestoreRunOptions {
     }
 }
 
-// Build the native restore runner parser.
 pub(super) fn restore_run_command() -> ClapCommand {
     ClapCommand::new("run")
         .bin_name("canic restore run")
@@ -196,7 +190,6 @@ pub(super) fn restore_run_command() -> ClapCommand {
         .arg(flag_arg("require-no-attention").long("require-no-attention"))
 }
 
-// Read one positive integer option from Clap matches.
 fn positive_integer_option(
     matches: &ArgMatches,
     id: &str,
@@ -207,7 +200,6 @@ fn positive_integer_option(
         .transpose()
 }
 
-// Validate that restore run received exactly one execution mode.
 fn validate_restore_run_mode_selection(
     dry_run: bool,
     execute: bool,
@@ -228,14 +220,12 @@ fn validate_restore_run_mode_selection(
     Ok(())
 }
 
-// Parse a restore apply journal operation sequence value.
 fn parse_sequence(value: String) -> Result<usize, RestoreCommandError> {
     value
         .parse::<usize>()
         .map_err(|_| RestoreCommandError::InvalidSequence)
 }
 
-// Parse a positive integer CLI value for options where zero is not meaningful.
 fn parse_positive_integer(
     option: &'static str,
     value: String,

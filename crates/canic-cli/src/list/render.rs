@@ -27,7 +27,6 @@ pub(super) struct ListTitle {
 }
 
 impl ListTitle {
-    /// Render the compact title block shown above `canic list` tables.
     #[must_use]
     pub(super) fn render(&self) -> String {
         format!("Fleet: {} (network {})", self.fleet, self.network)
@@ -46,7 +45,6 @@ pub(super) enum ReadyStatus {
 }
 
 impl ReadyStatus {
-    // Return the compact label used in list output.
     const fn label(self) -> &'static str {
         match self {
             Self::Ready => "yes",
@@ -95,7 +93,6 @@ pub(super) fn render_config_output(
     )
 }
 
-// Return the entries that would be rendered for the selected table.
 pub(super) fn visible_entries<'a>(
     registry: &'a [RegistryEntry],
     canister: Option<&str>,
@@ -106,7 +103,6 @@ pub(super) fn visible_entries<'a>(
         .collect())
 }
 
-// Select forest roots or validate the requested subtree root.
 fn root_entries<'a>(
     registry: &'a [RegistryEntry],
     by_pid: &BTreeMap<&str, &'a RegistryEntry>,
@@ -135,7 +131,6 @@ fn root_entries<'a>(
         .collect())
 }
 
-// Group children by parent and keep each group sorted for stable output.
 fn child_entries(registry: &[RegistryEntry]) -> BTreeMap<&str, Vec<&RegistryEntry>> {
     let mut children = BTreeMap::<&str, Vec<&RegistryEntry>>::new();
     for entry in registry {
@@ -149,7 +144,6 @@ fn child_entries(registry: &[RegistryEntry]) -> BTreeMap<&str, Vec<&RegistryEntr
     children
 }
 
-// Return visible rows with tree prefixes so canister ids carry hierarchy.
 fn visible_rows<'a>(
     registry: &'a [RegistryEntry],
     canister: Option<&str>,
@@ -169,7 +163,6 @@ fn visible_rows<'a>(
     Ok(entries)
 }
 
-// Traverse one rendered branch in display order.
 fn collect_visible_entry<'a>(
     entry: &'a RegistryEntry,
     children: &BTreeMap<&str, Vec<&'a RegistryEntry>>,
@@ -222,7 +215,6 @@ pub(super) struct ConfigRoleRow {
     pub(super) details: Vec<String>,
 }
 
-// Render config-defined role rows as a compact whitespace table.
 fn render_config_table(rows: &[ConfigRoleRow], verbose: bool) -> String {
     let table_rows = config_table_rows(rows);
     let widths = config_table_widths(&table_rows);
@@ -249,7 +241,6 @@ fn render_config_table(rows: &[ConfigRoleRow], verbose: bool) -> String {
     lines.join("\n")
 }
 
-// Collect rendered config cell values before width calculation.
 fn config_table_rows(rows: &[ConfigRoleRow]) -> Vec<[String; 5]> {
     rows.iter()
         .map(|row| {
@@ -264,7 +255,6 @@ fn config_table_rows(rows: &[ConfigRoleRow]) -> Vec<[String; 5]> {
         .collect()
 }
 
-// Compute display widths for config role output, including headers.
 fn config_table_widths(rows: &[[String; 5]]) -> [usize; 5] {
     let mut widths = [
         ROLE_HEADER.chars().count(),
@@ -283,7 +273,6 @@ fn config_table_widths(rows: &[[String; 5]]) -> [usize; 5] {
     widths
 }
 
-// Render one padded config table row with the list-specific column gap.
 fn render_config_table_row(row: &[impl AsRef<str>], widths: &[usize; 5]) -> String {
     widths
         .iter()
@@ -298,7 +287,6 @@ fn render_config_table_row(row: &[impl AsRef<str>], widths: &[usize; 5]) -> Stri
         .to_string()
 }
 
-// Render the line under the config table headers.
 fn render_config_separator(widths: &[usize; 5]) -> String {
     widths
         .iter()
@@ -307,7 +295,6 @@ fn render_config_separator(widths: &[usize; 5]) -> String {
         .join(LIST_COLUMN_GAP)
 }
 
-// Render registry rows as stable whitespace-aligned columns.
 fn render_registry_table(
     rows: &[RegistryRow<'_>],
     role_kinds: &BTreeMap<String, String>,
@@ -331,7 +318,6 @@ fn render_registry_table(
     lines.join("\n")
 }
 
-// Collect rendered cell values before width calculation.
 fn registry_table_rows(
     rows: &[RegistryRow<'_>],
     role_kinds: &BTreeMap<String, String>,
@@ -352,7 +338,6 @@ fn registry_table_rows(
     table_rows
 }
 
-// Compute display widths for the list table, including headers.
 fn registry_table_widths(rows: &[[String; 4]]) -> [usize; 4] {
     let mut widths = [
         CANISTER_HEADER.chars().count(),
@@ -370,7 +355,6 @@ fn registry_table_widths(rows: &[[String; 4]]) -> [usize; 4] {
     widths
 }
 
-// Render one padded list table row with the wider list-specific column gap.
 pub(super) fn render_registry_table_row(row: &[impl AsRef<str>], widths: &[usize; 4]) -> String {
     widths
         .iter()
@@ -385,7 +369,6 @@ pub(super) fn render_registry_table_row(row: &[impl AsRef<str>], widths: &[usize
         .to_string()
 }
 
-// Render the line under the table headers.
 pub(super) fn render_registry_separator(widths: &[usize; 4]) -> String {
     widths
         .iter()
@@ -394,12 +377,10 @@ pub(super) fn render_registry_separator(widths: &[usize; 4]) -> String {
         .join(LIST_COLUMN_GAP)
 }
 
-// Format one canister principal label with its box-drawing tree branch.
 fn canister_label(row: &RegistryRow<'_>) -> String {
     format!("{}{}", row.tree_prefix, row.entry.pid)
 }
 
-// Format one role label without adding hierarchy because role names are not unique.
 fn role_label(row: &RegistryRow<'_>) -> String {
     let role = row.entry.role.as_deref().filter(|role| !role.is_empty());
     match role {
@@ -408,7 +389,6 @@ fn role_label(row: &RegistryRow<'_>) -> String {
     }
 }
 
-// Format one canister kind using registry data first, then config role metadata.
 pub(super) fn kind_label(row: &RegistryRow<'_>, role_kinds: &BTreeMap<String, String>) -> String {
     row.entry
         .kind

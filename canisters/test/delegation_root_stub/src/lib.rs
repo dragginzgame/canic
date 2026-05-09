@@ -26,7 +26,7 @@ use sha2::{Digest, Sha256};
 const TEST_ATTESTATION_DOMAIN: &[u8] = b"CANIC_ROLE_ATTESTATION_V1";
 const TEST_ATTESTATION_KEY_ID: u32 = 4_242;
 const TEST_ATTESTATION_KEY_SEED: [u8; 32] = [7u8; 32];
-const TEST_ATTESTATION_KEY_NAME: &str = "test_key_1";
+const TEST_ATTESTATION_KEY_NAME: &str = "key_1";
 type TestAttestationKeyEntry = (u32, u8, AttestationKeyStatus, Option<u64>, Option<u64>);
 
 canic::start_root!(

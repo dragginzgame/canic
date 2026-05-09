@@ -421,7 +421,7 @@ const fn default_delegated_tokens_enabled() -> bool {
 }
 
 fn default_delegated_tokens_ecdsa_key_name() -> String {
-    "test_key_1".to_string()
+    "key_1".to_string()
 }
 
 impl Default for DelegatedTokenConfig {
@@ -475,7 +475,7 @@ pub struct RoleAttestationConfig {
 }
 
 fn default_role_attestation_ecdsa_key_name() -> String {
-    "test_key_1".to_string()
+    "key_1".to_string()
 }
 
 const fn default_role_attestation_max_ttl_secs() -> u64 {

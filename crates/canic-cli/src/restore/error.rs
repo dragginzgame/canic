@@ -130,7 +130,6 @@ pub enum RestoreCommandError {
 }
 
 impl From<RestoreRunnerError> for RestoreCommandError {
-    // Preserve the CLI-facing error variants while delegating runner ownership downward.
     fn from(error: RestoreRunnerError) -> Self {
         match error {
             RestoreRunnerError::CommandFailed { sequence, status } => {

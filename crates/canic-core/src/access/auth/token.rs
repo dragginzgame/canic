@@ -7,6 +7,7 @@ use crate::{
         types::Principal,
     },
     dto::auth::DelegatedToken,
+    ids::EndpointCallKind,
     ops::{
         auth::{AuthOps, VerifyDelegatedTokenRuntimeInput},
         config::ConfigOps,
@@ -21,12 +22,19 @@ const DEFAULT_DELEGATED_AUTH_MAX_TTL_SECS: u64 = 24 * 60 * 60;
 pub(super) fn delegated_token_verified(
     authenticated_subject: Principal,
     required_scope: Option<&str>,
+    call_kind: EndpointCallKind,
 ) -> Result<VerifiedAccessToken, AccessError> {
     let token = delegated_token_from_args()?;
 
     let now_secs = IcOps::now_secs();
 
-    verify_token(token, authenticated_subject, now_secs, required_scope)
+    verify_token(
+        token,
+        authenticated_subject,
+        now_secs,
+        required_scope,
+        call_kind,
+    )
 }
 
 // Verify a delegated token without local proof-cache lookup.
@@ -35,6 +43,7 @@ fn verify_token(
     caller: Principal,
     now_secs: u64,
     required_scope: Option<&str>,
+    call_kind: EndpointCallKind,
 ) -> Result<VerifiedAccessToken, AccessError> {
     let max_ttl_secs = delegated_token_max_ttl_secs()?;
     let required_scopes = required_scope
@@ -51,10 +60,24 @@ fn verify_token(
 
     enforce_subject_binding(verified.subject, caller)?;
     enforce_required_scope(required_scope, &verified.scopes)?;
+    consume_update_token_once(&token, now_secs, call_kind)?;
 
     Ok(VerifiedAccessToken {
         issuer_shard_pid: verified.issuer_shard_pid,
     })
+}
+
+fn consume_update_token_once(
+    token: &DelegatedToken,
+    now_secs: u64,
+    call_kind: EndpointCallKind,
+) -> Result<(), AccessError> {
+    if !matches!(call_kind, EndpointCallKind::Update) {
+        return Ok(());
+    }
+
+    AuthOps::consume_delegated_token_use(token, now_secs)
+        .map_err(|err| AccessError::Denied(err.to_string()))
 }
 
 pub(super) fn enforce_subject_binding(
@@ -133,7 +156,7 @@ fn delegated_token_max_ttl_secs() -> Result<u64, AccessError> {
 
 #[cfg(test)]
 mod tests {
-    use super::delegated_token_from_ingress_bytes;
+    use super::{consume_update_token_once, delegated_token_from_ingress_bytes};
     use crate::{
         cdk::{
             candid::{Principal, encode_args},
@@ -143,6 +166,7 @@ mod tests {
             DelegatedToken, DelegatedTokenClaims, DelegationAudience, DelegationCert,
             DelegationProof, ShardKeyBinding, SignatureAlgorithm,
         },
+        ids::EndpointCallKind,
     };
 
     // Decode auth calls with large non-token arguments after the token.
@@ -168,6 +192,32 @@ mod tests {
             delegated_token_from_ingress_bytes(&bytes).expect_err("oversized token must fail");
 
         assert!(err.to_string().contains("failed to decode DelegatedToken"));
+    }
+
+    // Reject a second update use of the same delegated token nonce while active.
+    #[test]
+    fn update_token_consume_rejects_active_replay() {
+        let mut token = token_with_scopes(vec!["transfer".to_string()]);
+        token.claims.nonce = [44; 16];
+
+        consume_update_token_once(&token, 10, EndpointCallKind::Update)
+            .expect("first update token use should be consumed");
+        let err = consume_update_token_once(&token, 11, EndpointCallKind::Update)
+            .expect_err("second update token use should reject");
+
+        assert!(err.to_string().contains("delegated token replay rejected"));
+    }
+
+    // Query calls do not get durable replay protection, so they must not consume tokens.
+    #[test]
+    fn query_token_consume_is_stateless() {
+        let mut token = token_with_scopes(vec!["read".to_string()]);
+        token.claims.nonce = [45; 16];
+
+        consume_update_token_once(&token, 10, EndpointCallKind::Query)
+            .expect("query token use should not consume");
+        consume_update_token_once(&token, 11, EndpointCallKind::Query)
+            .expect("query token use should remain stateless");
     }
 
     // Build one structurally complete delegated token for access decode tests.

@@ -15,7 +15,6 @@ pub struct BackupListOptions {
 }
 
 impl BackupListOptions {
-    /// Parse backup listing options from CLI arguments.
     pub fn parse<I>(args: I) -> Result<Self, BackupCommandError>
     where
         I: IntoIterator<Item = OsString>,
@@ -29,7 +28,6 @@ impl BackupListOptions {
     }
 }
 
-// Build the backup list parser.
 pub(super) fn backup_list_command() -> ClapCommand {
     ClapCommand::new("list")
         .bin_name("canic backup list")
@@ -55,7 +53,6 @@ pub struct BackupVerifyOptions {
 }
 
 impl BackupVerifyOptions {
-    /// Parse backup verification options from CLI arguments.
     pub fn parse<I>(args: I) -> Result<Self, BackupCommandError>
     where
         I: IntoIterator<Item = OsString>,
@@ -69,7 +66,6 @@ impl BackupVerifyOptions {
     }
 }
 
-// Build the backup verify parser.
 pub(super) fn backup_verify_command() -> ClapCommand {
     backup_dir_out_command(
         "verify",
@@ -90,7 +86,6 @@ pub struct BackupStatusOptions {
 }
 
 impl BackupStatusOptions {
-    /// Parse backup status options from CLI arguments.
     pub fn parse<I>(args: I) -> Result<Self, BackupCommandError>
     where
         I: IntoIterator<Item = OsString>,
@@ -105,7 +100,6 @@ impl BackupStatusOptions {
     }
 }
 
-// Build the backup status parser.
 pub(super) fn backup_status_command() -> ClapCommand {
     backup_dir_out_command(
         "status",
@@ -115,7 +109,6 @@ pub(super) fn backup_status_command() -> ClapCommand {
     .arg(flag_arg("require-complete").long("require-complete"))
 }
 
-// Parse one backup command option set.
 fn parse_backup_options<I>(
     command: ClapCommand,
     usage: fn() -> String,
@@ -127,7 +120,6 @@ where
     parse_matches(command, args).map_err(|_| BackupCommandError::Usage(usage()))
 }
 
-// Build the common --dir/--out parser shape.
 fn backup_dir_out_command(
     name: &'static str,
     bin_name: &'static str,
@@ -141,7 +133,6 @@ fn backup_dir_out_command(
         .arg(value_arg("out").long("out").value_name("file"))
 }
 
-// Read one required path from Clap matches.
 fn required_path_option(
     matches: &ArgMatches,
     id: &str,

@@ -60,7 +60,6 @@ pub struct InstallOptions {
 }
 
 impl InstallOptions {
-    /// Parse install options from CLI arguments.
     pub fn parse<I>(args: I) -> Result<Self, InstallCommandError>
     where
         I: IntoIterator<Item = OsString>,
@@ -89,7 +88,6 @@ impl InstallOptions {
         })
     }
 
-    /// Convert parsed CLI options into host install options.
     #[must_use]
     pub fn into_install_root_options(self) -> InstallRootOptions {
         InstallRootOptions {
@@ -103,7 +101,6 @@ impl InstallOptions {
     }
 }
 
-// Build the install parser.
 fn install_command() -> ClapCommand {
     ClapCommand::new("install")
         .bin_name("canic install")
@@ -168,7 +165,6 @@ where
     install_root(options.into_install_root_options()).map_err(InstallCommandError::from)
 }
 
-// Resolve the install root target from positional and flag forms.
 fn resolve_root_target(
     positional_targets: Vec<String>,
     flag_target: Option<String>,
@@ -181,14 +177,12 @@ fn resolve_root_target(
     }
 }
 
-// Parse the operator-supplied readiness timeout.
 fn parse_ready_timeout(value: &str) -> Result<u64, InstallCommandError> {
     value
         .parse::<u64>()
         .map_err(|_| InstallCommandError::InvalidReadyTimeout(value.to_string()))
 }
 
-// Resolve the readiness timeout from environment defaults.
 fn default_ready_timeout_seconds() -> u64 {
     env::var("READY_TIMEOUT_SECONDS")
         .ok()
@@ -196,7 +190,6 @@ fn default_ready_timeout_seconds() -> u64 {
         .unwrap_or(DEFAULT_READY_TIMEOUT_SECONDS)
 }
 
-// Use the conventional root build target when the install target is a principal.
 fn default_root_build_target(root_target: &str) -> String {
     if Principal::from_text(root_target).is_ok() {
         DEFAULT_ROOT_TARGET.to_string()
@@ -205,12 +198,10 @@ fn default_root_build_target(root_target: &str) -> String {
     }
 }
 
-// Resolve the conventional config path for an explicitly named fleet.
 fn default_fleet_config_path(fleet: &str) -> String {
     format!("fleets/{fleet}/canic.toml")
 }
 
-// Return install command usage text.
 fn usage() -> String {
     let mut command = install_command();
     command.render_help().to_string()

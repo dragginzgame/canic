@@ -20,7 +20,7 @@ The crate was historically known as **ICU** (Internet Computer Utilities). All c
 * **Self-validating delegated auth**: root signs shard certificates, shards mint user tokens, and verifiers validate token + embedded proof with local root/shard key material. Verifiers do not require proof fanout or proof caches.
 * **Stable memory helpers**: `ic_memory!`, `ic_memory_range!`, and `eager_static!` wrap stable structures and upgrade-safe runtime state.
 * **Thin-root install flow**: the `canic` CLI builds child WASMs, stages ordinary fleet artifacts through the implicit `wasm_store`, and keeps child artifacts out of the root Wasm.
-* **Operator CLI**: the `canic` binary builds Canic artifacts, lists registered fleets, captures topology-aware canister snapshots, validates backup manifests, and drives guarded restore planning/journals.
+* **Operator CLI**: the `canic` binary builds Canic artifacts, manages local fleet configs and replica status, captures topology-aware canister snapshots, validates backup manifests, and drives guarded restore planning/journals.
 * **CI-oriented tooling**: Rust 2024, repo toolchain pinned to Rust `1.95.0`, published MSRV `1.91.0`, and standard `make` targets for format, lint, check, test, and build.
 
 ## 📁 Repository Layout
@@ -43,7 +43,7 @@ roles:
 
 **Host/operator crates**
 
-* `crates/canic-cli/` – published `canic` operator binary for build, install, fleet listing, snapshot, backup, manifest, and restore workflows.
+* `crates/canic-cli/` – published `canic` operator binary for build, install, fleet, replica/status, snapshot, backup, manifest, and restore workflows.
 * `crates/canic-host/` – host-side build, install, fleet, and thin-root staging library used by `canic` and scripts.
 * `crates/canic-backup/` – backup/restore domain library for manifests, journals, topology snapshots, layout verification, and restore planning.
 
@@ -168,8 +168,7 @@ cargo install --locked canic-cli --version <same-version-as-canic>
 ```
 
 Use `canic help` or `canic <command> help` for command-specific options, and
-`canic --version` to print the installed CLI version. The first operational
-commands are covered in the snapshot/restore flow below.
+`canic --version` to print the installed CLI version.
 
 For local ICP CLI workflows, prefer the shared setup script:
 
@@ -183,11 +182,20 @@ It also installs `canic-cli` as the `canic` command.
 
 Published crates still declare MSRV `1.91.0` for downstream source builds.
 
-The setup script installs tools only; it does not start a local ICP CLI network. When run from a repo checkout, it also configures `.githooks/` if present.
+The setup script installs tools only; it does not start a local ICP CLI
+replica. When run from a repo checkout, it also configures `.githooks/` if
+present. Use the `canic replica` commands when you want explicit local replica
+control:
+
+```bash
+canic replica status
+canic replica start --background
+```
 
 The normal interface is the `canic` binary:
 
 ```bash
+canic status
 canic build root
 canic install test
 ```
@@ -233,6 +241,7 @@ directory after confirming the exact fleet name:
 ```bash
 canic config test
 canic list test
+canic status
 canic fleet list --network local
 canic fleet create demo --yes
 canic fleet delete demo
@@ -245,8 +254,9 @@ not look right:
 canic medic test
 ```
 
-For `ICP_ENVIRONMENT=local`, the install flow uses the local ICP CLI network.
-Nonlocal targets must be managed externally.
+Named-fleet commands default to the local ICP CLI environment. Pass
+`--network <name>` for one command against another configured ICP CLI
+environment. Nonlocal targets must be managed externally.
 
 `root` embeds only the bootstrap `wasm_store.wasm.gz`; ordinary child releases stay outside `root` and are staged after install. Visible canister Candid files are generated under `.icp/local/canisters/<role>/<role>.did`. The checked-in exception is `crates/canic-wasm-store/wasm_store.did`, the canonical interface for the implicit bootstrap `wasm_store` crate.
 
@@ -289,18 +299,19 @@ Plan or capture a canister plus its registered children:
 ```bash
 canic snapshot download test \
   --canister <canister-id> \
-  --root <root-canister-id> \
   --include-children \
   --out backups/<run-id> \
   --dry-run
 ```
 
-Use `--recursive` for all descendants. Non-dry-run captures recompute the
-selected topology immediately before snapshot creation and fail if the topology
-hash changed since discovery. Because ICP CLI creates snapshots only for stopped
-canisters, Canic stops each canister before snapshot creation; pass
-`--resume-after-snapshot` when the CLI should start each canister again after
-capture.
+The installed fleet state supplies the root canister automatically; pass
+`--root <root-canister-id>` only when you need to override it. Omit
+`--canister` to snapshot the fleet root. Use `--recursive` for all descendants.
+Non-dry-run captures recompute the selected topology immediately before
+snapshot creation and fail if the topology hash changed since discovery.
+Because ICP CLI creates snapshots only for stopped canisters, Canic stops each
+canister before snapshot creation; pass `--resume-after-snapshot` when the CLI
+should start each canister again after capture.
 
 Validate a captured backup before restore planning:
 
@@ -404,10 +415,11 @@ Use `PageRequest { limit, offset }` to avoid passing raw integers into queries.
 * Lint: `make clippy`
 * Test: `make test`
 * Build workspace release artifacts: `make build`
-* Build local canister WASMs through ICP CLI: `icp build -e test`
+* Build one local canister WASM: `canic build root`
+* Build local canister WASMs through ICP CLI hooks: `icp build --all`
 * Build example targets: `cargo build -p canic --examples`
-* Role-attestation PocketIC flow: `cargo test -p canic-core --test pic_role_attestation capability_endpoint_policy_and_structural_paths -- --nocapture`
-* Root replay dispatcher coverage: `cargo test -p canic-tests --test root_suite --locked upgrade_routes_through_dispatcher_non_skip_path -- --nocapture --test-threads=1`
+* Role-attestation PocketIC flow: `cargo test -p canic-tests --test pic_role_attestation capability_endpoint_policy_and_structural_paths -- --nocapture --test-threads=1`
+* Root replay dispatcher coverage: `cargo test -p canic-tests --test root_suite upgrade_routes_through_dispatcher_non_skip_path -- --nocapture --test-threads=1`
 
 `rust-toolchain.toml` pins the internal toolchain so CI and local builds stay in sync.
 Published crates declare MSRV `1.91.0` separately through `workspace.package.rust-version`.

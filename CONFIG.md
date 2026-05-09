@@ -17,7 +17,7 @@ All fields are validated when `canic::build!` or `canic::build_root!` run, so co
 
 Canic treats config/env identity as startup invariants. Missing env data is a fatal error.
 
-- Build time: `CANIC_CONFIG_PATH` is embedded into the Wasm and `DFX_NETWORK` is baked in (`local` or `ic`), defaulting to `local` when unset.
+- Build time: `CANIC_CONFIG_PATH` is embedded into the Wasm and `ICP_ENVIRONMENT` is baked in (`local` or `ic`), defaulting to `local` when unset.
 - Init/post-upgrade: generated lifecycle code loads the embedded TOML and parsed config model; `ConfigOps::current_*` is infallible.
 - Root env: `root_init(identity)` sets base env fields directly from `SubnetIdentity` (no registry lookup).
   - `Prime` means root == subnet == prime root.
@@ -57,8 +57,8 @@ Controls the warm canister pool for a subnet.
 
 - `minimum_size: u8` – minimum number of spare canisters to keep on hand (default `0` when the table is omitted; required when the table is present).
 - `import.initial: u16` – number of canisters to import immediately before queuing the rest (defaults to `minimum_size`).
-- `import.local = ["aaaaa-aa", ...]` – canister IDs to import when built with `DFX_NETWORK=local` (also used when unset).
-- `import.ic = ["aaaaa-aa", ...]` – canister IDs to import when built with `DFX_NETWORK=ic`.
+- `import.local = ["aaaaa-aa", ...]` – canister IDs to import when built with `ICP_ENVIRONMENT=local` (also used when unset).
+- `import.ic = ["aaaaa-aa", ...]` – canister IDs to import when built with `ICP_ENVIRONMENT=ic`.
   Import is destructive (controllers reset, code uninstalled); failures are logged and skipped.
 If `pool.import.initial` is `0` and `auto_create` is non-empty, root bootstrap may create new canisters before queued imports are ready.
 
@@ -76,14 +76,14 @@ Configure log retention for every canister.
 Root-signed delegated token authentication (cert -> proof -> token).
 
 - `enabled: bool` – enable delegated token auth (default `true`).
-- `ecdsa_key_name: string` – signing key name for delegated-token proofs and tokens (default `"test_key_1"`).
+- `ecdsa_key_name: string` – signing key name for delegated-token proofs and tokens (default `"key_1"`).
 - `max_ttl_secs: u64` – optional upper bound on delegated cert/token/session TTL in seconds (default `null` = runtime default cap; must be > 0 when set).
 
 ### `[auth.role_attestation]`
 
 Root-signed role-attestation settings for root capability RPC proofs.
 
-- `ecdsa_key_name: string` – signing key name for role-attestation proofs (default `"test_key_1"`).
+- `ecdsa_key_name: string` – signing key name for role-attestation proofs (default `"key_1"`).
 - `max_ttl_secs: u64` – maximum role-attestation lifetime in seconds (default `900`, must be > 0).
 - `min_accepted_epoch_by_role.<role>: u64` – optional per-role epoch floor for rejecting older attestations.
 

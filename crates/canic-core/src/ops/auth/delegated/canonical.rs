@@ -447,6 +447,6 @@ mod tests {
         let right = vec![b"a".to_vec(), b"bc".to_vec()];
 
         assert_ne!(derivation_path_hash(&left), derivation_path_hash(&right));
-        assert_eq!(key_name_hash("dfx_test_key"), key_name_hash("dfx_test_key"));
+        assert_eq!(key_name_hash("icp_test_key"), key_name_hash("icp_test_key"));
     }
 }

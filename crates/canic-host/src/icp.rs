@@ -125,6 +125,77 @@ impl IcpCli {
         run_output(&mut command)
     }
 
+    /// Start the local ICP replica.
+    pub fn local_replica_start(
+        &self,
+        background: bool,
+        debug: bool,
+    ) -> Result<String, IcpCommandError> {
+        let mut command = self.command();
+        command.args(["network", "start", "local"]);
+        add_debug_arg(&mut command, debug);
+        if background {
+            command.arg("--background");
+            return run_output_with_stderr(&mut command);
+        }
+        run_status_inherit(&mut command)?;
+        Ok(String::new())
+    }
+
+    /// Return local ICP replica status.
+    pub fn local_replica_status(&self, debug: bool) -> Result<String, IcpCommandError> {
+        let mut command = self.command();
+        command.args(["network", "status", "local"]);
+        add_debug_arg(&mut command, debug);
+        run_output_with_stderr(&mut command)
+    }
+
+    /// Return whether the local ICP replica responds to ping.
+    pub fn local_replica_ping(&self, debug: bool) -> Result<bool, IcpCommandError> {
+        let mut command = self.command();
+        command.args(["network", "ping", "local"]);
+        add_debug_arg(&mut command, debug);
+        run_success(&mut command)
+    }
+
+    /// Stop the local ICP replica.
+    pub fn local_replica_stop(&self, debug: bool) -> Result<String, IcpCommandError> {
+        let mut command = self.command();
+        command.args(["network", "stop", "local"]);
+        add_debug_arg(&mut command, debug);
+        run_output_with_stderr(&mut command)
+    }
+
+    /// Render a local replica start command.
+    #[must_use]
+    pub fn local_replica_start_display(&self, background: bool, debug: bool) -> String {
+        let mut command = self.command();
+        command.args(["network", "start", "local"]);
+        add_debug_arg(&mut command, debug);
+        if background {
+            command.arg("--background");
+        }
+        command_display(&command)
+    }
+
+    /// Render a local replica status command.
+    #[must_use]
+    pub fn local_replica_status_display(&self, debug: bool) -> String {
+        let mut command = self.command();
+        command.args(["network", "status", "local"]);
+        add_debug_arg(&mut command, debug);
+        command_display(&command)
+    }
+
+    /// Render a local replica stop command.
+    #[must_use]
+    pub fn local_replica_stop_display(&self, debug: bool) -> String {
+        let mut command = self.command();
+        command.args(["network", "stop", "local"]);
+        add_debug_arg(&mut command, debug);
+        command_display(&command)
+    }
+
     /// Call one canister method with optional JSON output.
     pub fn canister_call_output(
         &self,
@@ -319,6 +390,13 @@ pub fn add_output_arg(command: &mut Command, output: &str) {
     }
 }
 
+/// Add ICP CLI debug logging when requested.
+pub fn add_debug_arg(command: &mut Command, debug: bool) {
+    if debug {
+        command.arg("--debug");
+    }
+}
+
 /// Execute a command and capture trimmed stdout.
 pub fn run_output(command: &mut Command) -> Result<String, IcpCommandError> {
     let display = command_display(command);
@@ -363,7 +441,26 @@ pub fn run_status(command: &mut Command) -> Result<(), IcpCommandError> {
     }
 }
 
-/// Execute a rendered ICP CLI-compatible command and return raw process output.
+/// Execute a command with inherited terminal I/O and require a successful status.
+pub fn run_status_inherit(command: &mut Command) -> Result<(), IcpCommandError> {
+    let display = command_display(command);
+    let status = command.status()?;
+    if status.success() {
+        Ok(())
+    } else {
+        Err(IcpCommandError::Failed {
+            command: display,
+            stderr: format!("command exited with status {}", exit_status_label(status)),
+        })
+    }
+}
+
+/// Execute a command and return whether it exits successfully.
+pub fn run_success(command: &mut Command) -> Result<bool, IcpCommandError> {
+    Ok(command.output()?.status.success())
+}
+
+/// Execute a rendered ICP CLI command and return raw process output.
 pub fn run_raw_output(program: &str, args: &[String]) -> Result<IcpRawOutput, std::io::Error> {
     let output = Command::new(program).args(args).output()?;
     Ok(IcpRawOutput {
@@ -440,6 +537,41 @@ mod tests {
         assert_eq!(
             icp.snapshot_create_display("aaaaa-aa"),
             "icp canister snapshot create aaaaa-aa -n ic"
+        );
+    }
+
+    // Keep local replica lifecycle commands explicit and project-scoped.
+    #[test]
+    fn renders_local_replica_commands() {
+        let icp = IcpCli::new("icp", None, None);
+
+        assert_eq!(
+            icp.local_replica_start_display(true, false),
+            "icp network start local --background"
+        );
+        assert_eq!(
+            icp.local_replica_start_display(false, false),
+            "icp network start local"
+        );
+        assert_eq!(
+            icp.local_replica_start_display(false, true),
+            "icp network start local --debug"
+        );
+        assert_eq!(
+            icp.local_replica_status_display(false),
+            "icp network status local"
+        );
+        assert_eq!(
+            icp.local_replica_status_display(true),
+            "icp network status local --debug"
+        );
+        assert_eq!(
+            icp.local_replica_stop_display(false),
+            "icp network stop local"
+        );
+        assert_eq!(
+            icp.local_replica_stop_display(true),
+            "icp network stop local --debug"
         );
     }
 

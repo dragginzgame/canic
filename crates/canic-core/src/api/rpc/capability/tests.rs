@@ -492,7 +492,7 @@ fn verify_root_delegated_grant_signature_accepts_valid_signature() {
     let capability = sample_request(10);
     let proof = sample_delegated_grant_proof(&capability, p(2), p(1), 100);
     let (public_key, signature) = sign_delegated_grant(7, &proof.grant);
-    SubnetStateOps::set_delegated_root_public_key("test_key_1".to_string(), public_key);
+    SubnetStateOps::set_delegated_root_public_key("key_1".to_string(), public_key);
 
     verify_root_delegated_grant_signature(&proof.grant, &signature)
         .expect("valid delegated grant signature must verify");
@@ -504,7 +504,7 @@ fn verify_root_delegated_grant_signature_rejects_invalid_signature() {
     let proof = sample_delegated_grant_proof(&capability, p(2), p(1), 100);
     let (public_key, _signature) = sign_delegated_grant(7, &proof.grant);
     let (_, wrong_signature) = sign_delegated_grant(8, &proof.grant);
-    SubnetStateOps::set_delegated_root_public_key("test_key_1".to_string(), public_key);
+    SubnetStateOps::set_delegated_root_public_key("key_1".to_string(), public_key);
 
     let err = verify_root_delegated_grant_signature(&proof.grant, &wrong_signature)
         .expect_err("invalid signature must fail");

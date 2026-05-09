@@ -10,6 +10,7 @@
 //! - Delegated tokens are self-validating and must not require verifier-local proof cache state.
 //! - All temporal validation (iat/exp/now) is enforced before access is granted.
 //! - Endpoint-required scopes are enforced against delegated token claims.
+//! - Update-call tokens are consumed once by `(issuer_shard_pid, subject, cert_hash, nonce)`.
 
 mod identity;
 mod predicates;
@@ -18,7 +19,7 @@ mod token;
 use crate::{
     access::AccessError,
     cdk::types::Principal,
-    ids::CanisterRole,
+    ids::{CanisterRole, EndpointCallKind},
     ops::{runtime::env::EnvOps, storage::registry::subnet::SubnetRegistryOps},
 };
 use std::fmt;
@@ -116,8 +117,9 @@ pub fn validate_delegated_session_subject(
 pub(crate) fn delegated_token_verified(
     authenticated_subject: Principal,
     required_scope: Option<&str>,
+    call_kind: EndpointCallKind,
 ) -> Result<VerifiedAccessToken, AccessError> {
-    token::delegated_token_verified(authenticated_subject, required_scope)
+    token::delegated_token_verified(authenticated_subject, required_scope, call_kind)
 }
 
 #[cfg(test)]

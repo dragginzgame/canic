@@ -391,8 +391,11 @@ impl BuiltinPredicateEvaluator for AuthenticatedEvaluator {
         let BuiltinPredicate::Authenticated { required_scope } = pred else {
             unreachable!("authenticated evaluator only handles authenticated predicates");
         };
-        let verified =
-            access::auth::delegated_token_verified(ctx.authenticated_caller, required_scope)?;
+        let verified = access::auth::delegated_token_verified(
+            ctx.authenticated_caller,
+            required_scope,
+            ctx.call.kind,
+        )?;
         DelegatedAuthMetrics::record_authority(verified.issuer_shard_pid);
         Ok(())
     }

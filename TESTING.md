@@ -77,7 +77,7 @@ to avoid PocketIC startup races under parallel harness execution.
 
 **Definition**
 - Tests that rely on build-time embedded configuration (e.g. `canic.toml`).
-- Tests that load `.dfx`-built or production-layout WASM artifacts.
+- Tests that load `.icp`-built or production-layout WASM artifacts.
 
 **Rules**
 - MUST live under `crates/canic-core/tests/` or other explicit integration locations.

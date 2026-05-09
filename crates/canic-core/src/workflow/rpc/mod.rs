@@ -76,6 +76,12 @@ pub enum RpcWorkflowError {
     #[error("replay store capacity reached ({0})")]
     ReplayStoreCapacityReached(usize),
 
+    #[error("replay store caller capacity reached for {caller} ({max_entries})")]
+    ReplayStoreCallerCapacityReached {
+        caller: Principal,
+        max_entries: usize,
+    },
+
     #[error("delegated token auth disabled; set auth.delegated_tokens.enabled=true in canic.toml")]
     DelegatedTokensDisabled,
 

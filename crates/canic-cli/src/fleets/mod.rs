@@ -117,7 +117,6 @@ struct FleetListRow {
     canisters: String,
 }
 
-/// Run the fleet default command family.
 pub fn run<I>(args: I) -> Result<(), FleetCommandError>
 where
     I: IntoIterator<Item = OsString>,
@@ -144,7 +143,6 @@ where
     }
 }
 
-// Run the config-defined fleet creation subcommand.
 fn run_create<I>(args: I) -> Result<(), FleetCommandError>
 where
     I: IntoIterator<Item = OsString>,
@@ -157,7 +155,6 @@ where
     scaffold::run_fleet_create(args).map_err(|err| FleetCommandError::Create(err.to_string()))
 }
 
-// Run the config-defined fleet listing subcommand.
 fn run_list<I>(args: I) -> Result<(), FleetCommandError>
 where
     I: IntoIterator<Item = OsString>,
@@ -180,7 +177,6 @@ where
     Ok(())
 }
 
-// Run the destructive config-defined fleet deletion subcommand.
 fn run_delete<I>(args: I) -> Result<(), FleetCommandError>
 where
     I: IntoIterator<Item = OsString>,
@@ -206,7 +202,6 @@ where
 }
 
 impl FleetOptions {
-    // Parse fleet listing options.
     fn parse<I>(args: I) -> Result<Self, FleetCommandError>
     where
         I: IntoIterator<Item = OsString>,
@@ -221,7 +216,6 @@ impl FleetOptions {
 }
 
 impl DeleteFleetOptions {
-    // Parse fleet deletion options.
     fn parse<I>(args: I) -> Result<Self, FleetCommandError>
     where
         I: IntoIterator<Item = OsString>,
@@ -239,13 +233,11 @@ impl DeleteFleetOptions {
     }
 }
 
-// Resolve the directory that owns the selected fleet config.
 fn delete_target_dir(workspace_root: &Path, fleet: &str) -> Result<PathBuf, FleetCommandError> {
     let choices = discover_current_canic_config_choices()?;
     delete_target_dir_from_choices(workspace_root, &choices, fleet)
 }
 
-// Resolve the target directory from pre-discovered config choices.
 fn delete_target_dir_from_choices(
     workspace_root: &Path,
     choices: &[PathBuf],
@@ -324,7 +316,6 @@ where
     Err(FleetCommandError::DeleteCancelled)
 }
 
-// Build the fleet command-family parser for help rendering.
 fn fleet_command() -> ClapCommand {
     ClapCommand::new("fleet")
         .bin_name("canic fleet")
@@ -336,7 +327,6 @@ fn fleet_command() -> ClapCommand {
         .after_help(FLEET_HELP_AFTER)
 }
 
-// Build the fleet list parser.
 fn fleet_list_command() -> ClapCommand {
     ClapCommand::new("list")
         .bin_name("canic fleet list")
@@ -351,7 +341,6 @@ fn fleet_list_command() -> ClapCommand {
         .after_help(FLEET_LIST_HELP_AFTER)
 }
 
-// Build the fleet delete parser.
 fn fleet_delete_command() -> ClapCommand {
     ClapCommand::new("delete")
         .bin_name("canic fleet delete")
@@ -366,7 +355,6 @@ fn fleet_delete_command() -> ClapCommand {
         .after_help(FLEET_DELETE_HELP_AFTER)
 }
 
-// Render config-defined fleets as a compact whitespace table.
 fn render_fleet_list(workspace_root: &Path, choices: &[PathBuf], network: &str) -> String {
     let mut table = WhitespaceTable::new([
         FLEET_HEADER,
@@ -380,7 +368,6 @@ fn render_fleet_list(workspace_root: &Path, choices: &[PathBuf], network: &str) 
     table.render()
 }
 
-// Build operator-facing rows for config-defined fleets.
 fn fleet_list_rows(workspace_root: &Path, choices: &[PathBuf], network: &str) -> Vec<FleetListRow> {
     choices
         .iter()
@@ -388,7 +375,6 @@ fn fleet_list_rows(workspace_root: &Path, choices: &[PathBuf], network: &str) ->
         .collect()
 }
 
-// Build one operator-facing row for an installable config.
 fn fleet_list_row(workspace_root: &Path, path: &Path, network: &str) -> FleetListRow {
     let fleet = configured_fleet_name(path).unwrap_or_else(|_| "invalid config".to_string());
     FleetListRow {
@@ -402,7 +388,6 @@ fn fleet_list_row(workspace_root: &Path, path: &Path, network: &str) -> FleetLis
     }
 }
 
-// Format the root-subnet canister count with a bounded role preview.
 fn format_canister_summary(roles: &[String]) -> String {
     if roles.is_empty() {
         return "0".to_string();
@@ -423,7 +408,6 @@ fn format_canister_summary(roles: &[String]) -> String {
     format!("{} ({preview}{suffix})", roles.len())
 }
 
-// Render a workspace-relative path where possible for concise output.
 fn display_workspace_path(workspace_root: &Path, path: &Path) -> String {
     path.strip_prefix(workspace_root)
         .unwrap_or(path)
@@ -431,24 +415,20 @@ fn display_workspace_path(workspace_root: &Path, path: &Path) -> String {
         .to_string()
 }
 
-// Return fleet command-family usage text.
 fn usage() -> String {
     let mut command = fleet_command();
     command.render_help().to_string()
 }
 
-// Return fleet list usage text.
 fn list_usage() -> String {
     let mut command = fleet_list_command();
     command.render_help().to_string()
 }
 
-// Return create fleet usage text.
 fn create_usage() -> String {
     scaffold::fleet_create_usage()
 }
 
-// Return fleet delete usage text.
 fn delete_usage() -> String {
     let mut command = fleet_delete_command();
     command.render_help().to_string()

@@ -29,6 +29,7 @@ pub use nonroot_cycles::NonrootCyclesCapabilityWorkflow;
 
 const REPLAY_PURGE_SCAN_LIMIT: usize = 256;
 const MAX_ROOT_REPLAY_ENTRIES: usize = 10_000;
+const MAX_ROOT_REPLAY_ENTRIES_PER_CALLER: usize = 512;
 const MAX_ROOT_TTL_SECONDS: u64 = 300;
 const DEFAULT_MAX_ROLE_ATTESTATION_TTL_SECONDS: u64 = 900;
 const REPLAY_PAYLOAD_HASH_DOMAIN: &[u8] = b"root-replay-payload-hash:v1";

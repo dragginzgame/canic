@@ -9,14 +9,17 @@ use std::cell::RefCell;
 mod key_state;
 mod records;
 mod sessions;
+mod token_uses;
 
 pub use records::{
     AttestationKeyStatusRecord, AttestationPublicKeyRecord, AuthStateRecord,
-    DelegatedSessionBootstrapBindingRecord, DelegatedSessionRecord,
+    DelegatedSessionBootstrapBindingRecord, DelegatedSessionRecord, DelegatedTokenUseRecord,
 };
+pub use token_uses::DelegatedTokenUseConsumeResult;
 
 const DELEGATED_SESSION_CAPACITY: usize = 2_048;
 const DELEGATED_SESSION_BOOTSTRAP_BINDING_CAPACITY: usize = 4_096;
+const DELEGATED_TOKEN_USE_CAPACITY: usize = 8_192;
 
 eager_static! {
     pub(super) static AUTH_STATE: RefCell<Cell<AuthStateRecord, VirtualMemory<DefaultMemoryImpl>>> =
@@ -140,6 +143,29 @@ impl AuthState {
                 cell.set(data);
             }
             removed
+        })
+    }
+
+    // Atomically consume one delegated token use and reject active replays.
+    pub(crate) fn consume_delegated_token_use(
+        token_use: DelegatedTokenUseRecord,
+        now_secs: u64,
+    ) -> DelegatedTokenUseConsumeResult {
+        AUTH_STATE.with_borrow_mut(|cell| {
+            let mut data = cell.get().clone();
+            let previous_uses = data.delegated_token_uses.clone();
+            let result = token_uses::consume_delegated_token_use(
+                &mut data.delegated_token_uses,
+                token_use,
+                now_secs,
+                DELEGATED_TOKEN_USE_CAPACITY,
+            );
+            if matches!(result, DelegatedTokenUseConsumeResult::Consumed)
+                || data.delegated_token_uses != previous_uses
+            {
+                cell.set(data);
+            }
+            result
         })
     }
 

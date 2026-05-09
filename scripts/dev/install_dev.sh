@@ -5,6 +5,7 @@ CANIC_CLI_VERSION="${CANIC_CLI_VERSION:-0.33.0}"
 CANIC_RUST_TOOLCHAIN="${CANIC_RUST_TOOLCHAIN:-1.95.0}"
 ACTIONLINT_VERSION="${ACTIONLINT_VERSION:-1.7.8}"
 ACTIONLINT_INSTALL_DIR="${ACTIONLINT_INSTALL_DIR:-$HOME/.local/bin}"
+CANIC_NPM_PREFIX="${CANIC_NPM_PREFIX:-$HOME/.local}"
 ICP_CLI_VERSION="${ICP_CLI_VERSION:-0.2.5}"
 ICP_WASM_VERSION="${ICP_WASM_VERSION:-0.9.10}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -20,12 +21,6 @@ CANIC_DEV_TOOLS=(
 CANIC_WASM_TOOLS=(
     candid-extractor
 )
-CANIC_PYTHON_PACKAGE_BREW="${CANIC_PYTHON_PACKAGE_BREW:-python}"
-CANIC_PYTHON_PACKAGE_APT="${CANIC_PYTHON_PACKAGE_APT:-python3}"
-CANIC_PYTHON_PACKAGE_DNF="${CANIC_PYTHON_PACKAGE_DNF:-python3}"
-CANIC_PYTHON_PACKAGE_YUM="${CANIC_PYTHON_PACKAGE_YUM:-python3}"
-CANIC_PYTHON_PACKAGE_PACMAN="${CANIC_PYTHON_PACKAGE_PACMAN:-python}"
-CANIC_PYTHON_PACKAGE_ZYPPER="${CANIC_PYTHON_PACKAGE_ZYPPER:-python3}"
 
 blue() {
     printf '\033[1;34m%s\033[0m\n' "$1" >&2
@@ -49,17 +44,6 @@ cyan_command() {
 
 cargo_toolchain() {
     cargo +"$CANIC_RUST_TOOLCHAIN" "$@"
-}
-
-run_with_optional_sudo() {
-    if [ "$(id -u)" -eq 0 ]; then
-        "$@"
-    elif command -v sudo >/dev/null 2>&1; then
-        sudo "$@"
-    else
-        red "missing required privilege helper: sudo"
-        exit 1
-    fi
 }
 
 require_command() {
@@ -100,88 +84,59 @@ install_or_update_actionlint() {
     fi
 }
 
+clean_icp_npm_staging_dirs() {
+    local npm_scope_dir="$CANIC_NPM_PREFIX/lib/node_modules/@icp-sdk"
+    local staging_dirs=()
+    local staging_dir
+
+    if [ ! -d "$npm_scope_dir" ]; then
+        return 0
+    fi
+
+    shopt -s nullglob
+    staging_dirs=(
+        "$npm_scope_dir/.icp-cli-"*
+        "$npm_scope_dir/.ic-wasm-"*
+    )
+    shopt -u nullglob
+
+    if [ "${#staging_dirs[@]}" -eq 0 ]; then
+        return 0
+    fi
+
+    yellow "Cleaning stale ICP npm staging directories:"
+    for staging_dir in "${staging_dirs[@]}"; do
+        cyan_command "rm -rf $staging_dir"
+        rm -rf "$staging_dir"
+    done
+}
+
 install_or_update_icp_cli() {
+    local npm_bin_dir="$CANIC_NPM_PREFIX/bin"
+    local path_had_npm_bin=0
+
+    if [[ ":$PATH:" == *":$npm_bin_dir:"* ]]; then
+        path_had_npm_bin=1
+    fi
+
     yellow "ICP CLI:"
     require_command npm
-    cyan_command "npm install -g @icp-sdk/icp-cli@$ICP_CLI_VERSION @icp-sdk/ic-wasm@$ICP_WASM_VERSION"
-    npm install -g "@icp-sdk/icp-cli@$ICP_CLI_VERSION" "@icp-sdk/ic-wasm@$ICP_WASM_VERSION"
+    mkdir -p "$npm_bin_dir"
+    clean_icp_npm_staging_dirs
+    export PATH="$npm_bin_dir:$PATH"
+    cyan_command "npm install -g --prefix $CANIC_NPM_PREFIX @icp-sdk/icp-cli@$ICP_CLI_VERSION @icp-sdk/ic-wasm@$ICP_WASM_VERSION"
+    npm install -g --prefix "$CANIC_NPM_PREFIX" "@icp-sdk/icp-cli@$ICP_CLI_VERSION" "@icp-sdk/ic-wasm@$ICP_WASM_VERSION"
     require_command icp
     require_command ic-wasm
     green "icp ready: $(icp --version 2>&1)"
     green "ic-wasm ready: $(ic-wasm --version 2>&1)"
-}
-
-detect_python_package_manager() {
-    if command -v brew >/dev/null 2>&1; then
-        printf 'brew\n'
-    elif command -v apt-get >/dev/null 2>&1; then
-        printf 'apt-get\n'
-    elif command -v dnf >/dev/null 2>&1; then
-        printf 'dnf\n'
-    elif command -v yum >/dev/null 2>&1; then
-        printf 'yum\n'
-    elif command -v pacman >/dev/null 2>&1; then
-        printf 'pacman\n'
-    elif command -v zypper >/dev/null 2>&1; then
-        printf 'zypper\n'
-    else
-        printf 'none\n'
+    if [ "$path_had_npm_bin" -eq 0 ]; then
+        yellow "ICP CLI tools installed under $npm_bin_dir; add it to PATH to run them directly."
     fi
 }
 
-install_or_update_python() {
-    local mode="$1"
-    local manager
-
-    if command -v python3 >/dev/null 2>&1; then
-        green "python3 already installed: $(command -v python3)"
-        if [ "$mode" = "install" ]; then
-            return 0
-        fi
-    fi
-
-    manager="$(detect_python_package_manager)"
-    if [ "$manager" = "none" ]; then
-        red "unable to install python3 automatically: no supported package manager found"
-        exit 1
-    fi
-
+require_python() {
     yellow "Python 3:"
-
-    case "$manager" in
-    brew)
-        if [ "$mode" = "update" ]; then
-            cyan_command "brew upgrade $CANIC_PYTHON_PACKAGE_BREW || brew install $CANIC_PYTHON_PACKAGE_BREW"
-            brew upgrade "$CANIC_PYTHON_PACKAGE_BREW" || brew install "$CANIC_PYTHON_PACKAGE_BREW"
-        else
-            cyan_command "brew install $CANIC_PYTHON_PACKAGE_BREW"
-            brew install "$CANIC_PYTHON_PACKAGE_BREW"
-        fi
-        ;;
-    apt-get)
-        cyan_command "sudo apt-get update"
-        run_with_optional_sudo apt-get update
-        cyan_command "sudo apt-get install -y $CANIC_PYTHON_PACKAGE_APT"
-        run_with_optional_sudo apt-get install -y "$CANIC_PYTHON_PACKAGE_APT"
-        ;;
-    dnf)
-        cyan_command "sudo dnf install -y $CANIC_PYTHON_PACKAGE_DNF"
-        run_with_optional_sudo dnf install -y "$CANIC_PYTHON_PACKAGE_DNF"
-        ;;
-    yum)
-        cyan_command "sudo yum install -y $CANIC_PYTHON_PACKAGE_YUM"
-        run_with_optional_sudo yum install -y "$CANIC_PYTHON_PACKAGE_YUM"
-        ;;
-    pacman)
-        cyan_command "sudo pacman -Sy --needed $CANIC_PYTHON_PACKAGE_PACMAN"
-        run_with_optional_sudo pacman -Sy --needed "$CANIC_PYTHON_PACKAGE_PACMAN"
-        ;;
-    zypper)
-        cyan_command "sudo zypper install -y $CANIC_PYTHON_PACKAGE_ZYPPER"
-        run_with_optional_sudo zypper install -y "$CANIC_PYTHON_PACKAGE_ZYPPER"
-        ;;
-    esac
-
     require_command python3
     green "python3 ready: $(python3 --version 2>&1)"
 }
@@ -196,12 +151,12 @@ configure_git_hooks_if_present() {
 }
 
 main() {
-    if [ "${1:-}" = "--update-python" ]; then
-        blue "Updating Python, workflow lint, and ICP CLI prerequisites"
-        install_or_update_python update
+    if [ "${1:-}" = "--update-prereqs" ]; then
+        blue "Checking Python, workflow lint, and ICP CLI prerequisites"
+        require_python
         install_or_update_actionlint
         install_or_update_icp_cli
-        green "Python, workflow lint, and ICP CLI update complete."
+        green "Python, workflow lint, and ICP CLI prerequisites ready."
         return 0
     fi
 
@@ -230,7 +185,7 @@ main() {
     cyan_command "rustup target add --toolchain $CANIC_RUST_TOOLCHAIN wasm32-unknown-unknown"
     rustup target add --toolchain "$CANIC_RUST_TOOLCHAIN" wasm32-unknown-unknown
 
-    install_or_update_python install
+    require_python
 
     install_cargo_tools "Rust development tools" "${CANIC_DEV_TOOLS[@]}"
     install_cargo_tools "Wasm and Candid tools" "${CANIC_WASM_TOOLS[@]}"

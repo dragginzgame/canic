@@ -5,6 +5,7 @@ use crate::{
     dto::auth::{AttestationKey, AttestationKeySet},
     storage::stable::auth::{
         AuthState, DelegatedSessionBootstrapBindingRecord, DelegatedSessionRecord,
+        DelegatedTokenUseConsumeResult, DelegatedTokenUseRecord,
     },
 };
 use mapper::AttestationPublicKeyRecordMapper;
@@ -32,6 +33,20 @@ pub struct DelegatedSessionBootstrapBinding {
     pub delegated_pid: Principal,
     pub token_fingerprint: [u8; 32],
     pub bound_at: u64,
+    pub expires_at: u64,
+}
+
+///
+/// DelegatedTokenUse
+///
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct DelegatedTokenUse {
+    pub issuer_shard_pid: Principal,
+    pub subject: Principal,
+    pub cert_hash: [u8; 32],
+    pub nonce: [u8; 16],
+    pub used_at: u64,
     pub expires_at: u64,
 }
 
@@ -115,6 +130,18 @@ impl AuthStateOps {
         AuthState::prune_expired_delegated_session_bootstrap_bindings(now_secs)
     }
 
+    /// Atomically consume a delegated token use marker.
+    #[must_use]
+    pub fn consume_delegated_token_use(
+        token_use: DelegatedTokenUse,
+        now_secs: u64,
+    ) -> DelegatedTokenUseConsumeResult {
+        AuthState::consume_delegated_token_use(
+            delegated_token_use_view_to_record(token_use),
+            now_secs,
+        )
+    }
+
     #[must_use]
     pub fn attestation_public_key(key_id: u32, key_name: &str) -> Option<AttestationKey> {
         AuthState::get_attestation_public_key(key_id, key_name)
@@ -190,6 +217,17 @@ const fn delegated_session_bootstrap_binding_view_to_record(
         delegated_pid: view.delegated_pid,
         token_fingerprint: view.token_fingerprint,
         bound_at: view.bound_at,
+        expires_at: view.expires_at,
+    }
+}
+
+const fn delegated_token_use_view_to_record(view: DelegatedTokenUse) -> DelegatedTokenUseRecord {
+    DelegatedTokenUseRecord {
+        issuer_shard_pid: view.issuer_shard_pid,
+        subject: view.subject,
+        cert_hash: view.cert_hash,
+        nonce: view.nonce,
+        used_at: view.used_at,
         expires_at: view.expires_at,
     }
 }

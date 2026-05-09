@@ -78,7 +78,7 @@ mod tests {
             auth: SubnetAuthStateRecord {
                 delegated_root_public_key: Some(RootPublicKeyRecord {
                     public_key_sec1: vec![1, 2, 3],
-                    key_name: "test_key_1".to_string(),
+                    key_name: "key_1".to_string(),
                     key_hash: [7; 32],
                 }),
             },

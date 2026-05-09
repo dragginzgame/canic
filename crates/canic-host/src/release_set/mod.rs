@@ -9,8 +9,9 @@ mod stage;
 
 pub use config::{
     configured_fleet_name, configured_fleet_roles, configured_install_targets,
-    configured_release_roles, configured_role_auto_create, configured_role_capabilities,
-    configured_role_details, configured_role_kinds, configured_role_topups,
+    configured_local_root_create_cycles, configured_release_roles, configured_role_auto_create,
+    configured_role_capabilities, configured_role_details, configured_role_kinds,
+    configured_role_topups,
 };
 pub use manifest::{
     ReleaseSetEntry, RootReleaseSetManifest, emit_root_release_set_manifest,
@@ -32,9 +33,10 @@ use stage::read_release_artifact;
 #[cfg(test)]
 use config::{
     configured_fleet_name_from_source, configured_fleet_roles_from_source,
-    configured_release_roles_from_source, configured_role_auto_create_from_source,
-    configured_role_capabilities_from_source, configured_role_details_from_source,
-    configured_role_kinds_from_source, configured_role_topups_from_source,
+    configured_local_root_create_cycles_from_source, configured_release_roles_from_source,
+    configured_role_auto_create_from_source, configured_role_capabilities_from_source,
+    configured_role_details_from_source, configured_role_kinds_from_source,
+    configured_role_topups_from_source,
 };
 
 pub(super) const CANISTERS_ROOT_RELATIVE: &str = "fleets";
@@ -59,10 +61,10 @@ mod tests {
     use super::{
         canister_manifest_path, canisters_root, config_path, configured_fleet_name_from_source,
         configured_fleet_roles_from_source, configured_install_targets,
-        configured_release_roles_from_source, configured_role_auto_create_from_source,
-        configured_role_capabilities_from_source, configured_role_details_from_source,
-        configured_role_kinds_from_source, configured_role_topups_from_source,
-        read_release_artifact, root_manifest_path,
+        configured_local_root_create_cycles_from_source, configured_release_roles_from_source,
+        configured_role_auto_create_from_source, configured_role_capabilities_from_source,
+        configured_role_details_from_source, configured_role_kinds_from_source,
+        configured_role_topups_from_source, read_release_artifact, root_manifest_path,
     };
     use crate::test_support::temp_dir;
     use flate2::{Compression, write::GzEncoder};
@@ -87,7 +89,7 @@ init_mode = "enabled"
 
 [auth.delegated_tokens]
 enabled = true
-ecdsa_key_name = "test_key_1"
+ecdsa_key_name = "key_1"
 
 [standards]
 icrc21 = true
@@ -359,6 +361,35 @@ topup_policy.amount = "4T"
             Some("4.0TC @ 10.0TC")
         );
         assert!(!topups.contains_key("root"));
+    }
+
+    #[test]
+    fn configured_local_root_create_cycles_estimates_bootstrap_funding() {
+        let config = r#"
+controllers = []
+app_index = []
+
+[fleet]
+name = "demo"
+
+[subnets.prime]
+auto_create = ["app", "user_hub"]
+pool.minimum_size = 2
+
+[subnets.prime.canisters.root]
+kind = "root"
+
+[subnets.prime.canisters.app]
+kind = "singleton"
+initial_cycles = "7T"
+
+[subnets.prime.canisters.user_hub]
+kind = "singleton"
+"#;
+
+        let cycles = configured_local_root_create_cycles_from_source(config).expect("cycles");
+
+        assert_eq!(cycles, 77_000_000_000_000);
     }
 
     #[test]

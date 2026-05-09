@@ -73,7 +73,7 @@ fn discovery_requires_verification_checks() {
 
 // Ensure registry parsing accepts the wrapped registry JSON shape.
 #[test]
-fn registry_entries_parse_wrapped_dfx_json() {
+fn registry_entries_parse_wrapped_cli_json() {
     let entries = parse_registry_entries(&registry_json()).expect("parse registry");
 
     assert_eq!(

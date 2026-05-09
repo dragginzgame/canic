@@ -7,7 +7,7 @@ These scripts support the reference canisters under `fleets/test/` and the local
 - Canic/Rust tooling installed:
   - `make install-dev`
   - or `bash scripts/dev/install_dev.sh`
-  - the shared setup script bootstraps Rust when needed, installs Python 3 when it is missing, installs the pinned internal Rust toolchain, `rustfmt`, `clippy`, `wasm32-unknown-unknown`, `candid-extractor`, `ic-wasm`, common cargo helper tools, the matching `canic` CLI, and `icp` if it is missing
+  - the shared setup script bootstraps Rust when needed, checks Python 3, installs the pinned internal Rust toolchain, `rustfmt`, `clippy`, `wasm32-unknown-unknown`, `candid-extractor`, `ic-wasm`, common cargo helper tools, the matching `canic` CLI, and `icp` if it is missing
   - the same script also configures `.githooks/` automatically when run from a Canic checkout
 
 ## Local Replica Contract
@@ -16,15 +16,15 @@ The local install commands below now auto-restart a clean local `icp` replica
 once when `icp ping local` fails. Nonlocal targets still fail fast and expect
 their target replica to be managed externally.
 
-If you want a manual convenience helper for local work, use:
+If you want a manual convenience command for local work, use:
 
 ```bash
-scripts/app/dfx_start.sh
+canic replica start
+canic replica status
 ```
 
-That helper is still optional and repo-local only. The local install/test flows
-can recover the local `icp` replica themselves, but the wrapper is still useful
-when you want interactive startup logs.
+The local install/test flows can recover the local `icp` replica themselves.
+To detach the replica, run `canic replica start --background`.
 
 ## Install the Reference Topology
 

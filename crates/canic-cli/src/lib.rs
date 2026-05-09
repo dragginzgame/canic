@@ -7,9 +7,11 @@ mod list;
 mod manifest;
 mod medic;
 mod output;
+mod replica;
 mod restore;
 mod scaffold;
 mod snapshot;
+mod status;
 #[cfg(test)]
 mod test_support;
 
@@ -38,7 +40,6 @@ enum CommandScope {
 }
 
 impl CommandScope {
-    // Return the heading used in grouped top-level help.
     const fn heading(self) -> &'static str {
         match self {
             Self::Global => "Global commands",
@@ -61,8 +62,18 @@ struct CommandSpec {
 
 const COMMAND_SPECS: &[CommandSpec] = &[
     CommandSpec {
+        name: "status",
+        about: "Show quick Canic project status",
+        scope: CommandScope::Global,
+    },
+    CommandSpec {
         name: "fleet",
         about: "Manage Canic fleets",
+        scope: CommandScope::Global,
+    },
+    CommandSpec {
+        name: "replica",
+        about: "Manage the local ICP replica",
         scope: CommandScope::Global,
     },
     CommandSpec {
@@ -150,68 +161,77 @@ pub enum CliError {
 
     #[error("restore: {0}")]
     Restore(String),
+
+    #[error("replica: {0}")]
+    Replica(String),
+
+    #[error("status: {0}")]
+    Status(String),
 }
 
 impl From<backup::BackupCommandError> for CliError {
-    // Keep backup command internals private while preserving operator-facing messages.
     fn from(err: backup::BackupCommandError) -> Self {
         Self::Backup(err.to_string())
     }
 }
 
 impl From<build::BuildCommandError> for CliError {
-    // Keep build command internals private while preserving operator-facing messages.
     fn from(err: build::BuildCommandError) -> Self {
         Self::Build(err.to_string())
     }
 }
 
 impl From<install::InstallCommandError> for CliError {
-    // Keep install command internals private while preserving operator-facing messages.
     fn from(err: install::InstallCommandError) -> Self {
         Self::Install(err.to_string())
     }
 }
 
 impl From<fleets::FleetCommandError> for CliError {
-    // Keep fleet command internals private while preserving operator-facing messages.
     fn from(err: fleets::FleetCommandError) -> Self {
         Self::Fleets(err.to_string())
     }
 }
 
 impl From<list::ListCommandError> for CliError {
-    // Keep list command internals private while preserving operator-facing messages.
     fn from(err: list::ListCommandError) -> Self {
         Self::List(err.to_string())
     }
 }
 
 impl From<manifest::ManifestCommandError> for CliError {
-    // Keep manifest command internals private while preserving operator-facing messages.
     fn from(err: manifest::ManifestCommandError) -> Self {
         Self::Manifest(err.to_string())
     }
 }
 
 impl From<medic::MedicCommandError> for CliError {
-    // Keep medic command internals private while preserving operator-facing messages.
     fn from(err: medic::MedicCommandError) -> Self {
         Self::Medic(err.to_string())
     }
 }
 
 impl From<snapshot::SnapshotCommandError> for CliError {
-    // Keep snapshot command internals private while preserving operator-facing messages.
     fn from(err: snapshot::SnapshotCommandError) -> Self {
         Self::Snapshot(err.to_string())
     }
 }
 
 impl From<restore::RestoreCommandError> for CliError {
-    // Keep restore command internals private while preserving operator-facing messages.
     fn from(err: restore::RestoreCommandError) -> Self {
         Self::Restore(err.to_string())
+    }
+}
+
+impl From<replica::ReplicaCommandError> for CliError {
+    fn from(err: replica::ReplicaCommandError) -> Self {
+        Self::Replica(err.to_string())
+    }
+}
+
+impl From<status::StatusCommandError> for CliError {
+    fn from(err: status::StatusCommandError) -> Self {
+        Self::Status(err.to_string())
     }
 }
 
@@ -245,7 +265,9 @@ where
         "list" => list::run(args).map_err(CliError::from),
         "manifest" => manifest::run(args).map_err(CliError::from),
         "medic" => medic::run(args).map_err(CliError::from),
+        "replica" => replica::run(args).map_err(CliError::from),
         "snapshot" => snapshot::run(args).map_err(CliError::from),
+        "status" => status::run(args).map_err(CliError::from),
         "restore" => restore::run(args).map_err(CliError::from),
         "help" | "--help" | "-h" => {
             println!("{}", usage());
@@ -255,7 +277,6 @@ where
     }
 }
 
-/// Build the top-level command metadata.
 #[must_use]
 pub fn top_level_command() -> Command {
     let command = Command::new("canic")
@@ -279,13 +300,11 @@ pub fn top_level_command() -> Command {
     })
 }
 
-/// Return the CLI version banner.
 #[must_use]
 pub const fn version_text() -> &'static str {
     VERSION_TEXT
 }
 
-// Return the top-level usage text.
 fn usage() -> String {
     let mut lines = vec![
         color(
@@ -314,7 +333,6 @@ fn usage() -> String {
     lines.join("\n")
 }
 
-// Render grouped command rows from the same metadata used to build Clap subcommands.
 fn grouped_command_section(specs: &[CommandSpec]) -> Vec<String> {
     let mut lines = Vec::new();
     let scopes = [
@@ -339,7 +357,6 @@ fn grouped_command_section(specs: &[CommandSpec]) -> Vec<String> {
     lines
 }
 
-// Wrap one help fragment in an ANSI color sequence.
 fn color(code: &str, text: &str) -> String {
     format!("{code}{text}{COLOR_RESET}")
 }
@@ -363,7 +380,9 @@ mod tests {
         assert!(plain.contains("Global commands"));
         assert!(plain.contains("Fleet commands"));
         assert!(plain.contains("Workspace and file commands"));
-        assert!(plain.find("    fleet") < plain.find("    install"));
+        assert!(plain.find("    status") < plain.find("    fleet"));
+        assert!(plain.find("    fleet") < plain.find("    replica"));
+        assert!(plain.find("    replica") < plain.find("    install"));
         assert!(plain.find("    install") < plain.find("    config"));
         assert!(plain.find("    config") < plain.find("    list"));
         assert!(plain.contains("Options:"));
@@ -373,8 +392,9 @@ mod tests {
         assert!(plain.contains("build"));
         assert!(!plain.contains("    network"));
         assert!(!plain.contains("    defaults"));
-        assert!(!plain.contains("    status"));
+        assert!(plain.contains("    status"));
         assert!(plain.contains("fleet"));
+        assert!(plain.contains("replica"));
         assert!(plain.contains("install"));
         assert!(plain.contains("snapshot"));
         assert!(plain.contains("backup"));
@@ -403,6 +423,11 @@ mod tests {
             &["fleet", "create", "help"],
             &["fleet", "list", "help"],
             &["fleet", "delete", "help"],
+            &["replica"],
+            &["replica", "help"],
+            &["replica", "start", "help"],
+            &["replica", "status", "help"],
+            &["replica", "stop", "help"],
             &["list", "help"],
             &["restore", "help"],
             &["restore", "plan", "help"],
@@ -413,6 +438,7 @@ mod tests {
             &["medic", "help"],
             &["snapshot", "help"],
             &["snapshot", "download", "help"],
+            &["status", "help"],
         ] {
             assert_run_ok(args);
         }
@@ -445,10 +471,20 @@ mod tests {
         assert!(run([OsString::from("config"), OsString::from("--version")]).is_ok());
         assert!(run([OsString::from("install"), OsString::from("--version")]).is_ok());
         assert!(run([OsString::from("fleet"), OsString::from("--version")]).is_ok());
+        assert!(run([OsString::from("replica"), OsString::from("--version")]).is_ok());
+        assert!(run([OsString::from("status"), OsString::from("--version")]).is_ok());
         assert!(
             run([
                 OsString::from("fleet"),
                 OsString::from("create"),
+                OsString::from("--version")
+            ])
+            .is_ok()
+        );
+        assert!(
+            run([
+                OsString::from("replica"),
+                OsString::from("start"),
                 OsString::from("--version")
             ])
             .is_ok()
