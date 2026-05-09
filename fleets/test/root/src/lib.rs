@@ -3,7 +3,7 @@
 //! topology.
 //!
 
-#![allow(clippy::unused_async)]
+#![expect(clippy::unused_async)]
 
 use canic::api::auth::AuthApi;
 

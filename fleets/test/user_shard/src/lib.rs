@@ -6,7 +6,7 @@
 //! production-grade auth because they are exercised only in controlled tests.
 //!
 
-#![allow(clippy::unused_async)]
+#![expect(clippy::unused_async)]
 
 use canic::{
     Error,

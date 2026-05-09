@@ -6,7 +6,7 @@
 //! a public-facing deployment target.
 //!
 
-#![allow(clippy::unused_async)]
+#![expect(clippy::unused_async)]
 
 use canic::{
     Error, api::canister::placement::ScalingApi, cdk::types::Principal, ids::CanisterRole,

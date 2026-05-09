@@ -52,7 +52,7 @@ thread_local! {
 /// For fine-grained, single-slice profiling (e.g., hot loops), use
 /// `ic0.performance_counter(0)` instead.
 #[must_use]
-#[allow(clippy::missing_const_for_fn)]
+#[cfg_attr(not(target_arch = "wasm32"), expect(clippy::missing_const_for_fn))]
 pub fn perf_counter() -> u64 {
     #[cfg(target_arch = "wasm32")]
     {

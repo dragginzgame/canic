@@ -1,5 +1,8 @@
 use crate::{
-    args::{default_icp, flag_arg, parse_matches, print_help_or_version, string_option, value_arg},
+    args::{
+        default_icp, flag_arg, parse_matches, parse_subcommand, passthrough_subcommand,
+        print_help_or_version, string_option, value_arg,
+    },
     version_text,
 };
 use canic_host::icp::{IcpCli, IcpCommandError};
@@ -108,20 +111,19 @@ where
         return Ok(());
     }
 
-    let mut args = args.into_iter();
-    match args
-        .next()
-        .and_then(|arg| arg.into_string().ok())
-        .as_deref()
+    match parse_subcommand(replica_command(), args)
+        .map_err(|_| ReplicaCommandError::Usage(usage()))?
     {
         None => {
             println!("{}", usage());
             Ok(())
         }
-        Some("start") => run_start(args),
-        Some("status") => run_status(args),
-        Some("stop") => run_stop(args),
-        _ => Err(ReplicaCommandError::Usage(usage())),
+        Some((command, args)) => match command.as_str() {
+            "start" => run_start(args),
+            "status" => run_status(args),
+            "stop" => run_stop(args),
+            _ => unreachable!("replica dispatch command only defines known commands"),
+        },
     }
 }
 
@@ -214,9 +216,21 @@ fn replica_command() -> ClapCommand {
         .bin_name("canic replica")
         .about("Manage the local ICP replica")
         .disable_help_flag(true)
-        .subcommand(ClapCommand::new("start").about("Start the local ICP replica"))
-        .subcommand(ClapCommand::new("status").about("Show local ICP replica status"))
-        .subcommand(ClapCommand::new("stop").about("Stop the local ICP replica"))
+        .subcommand(passthrough_subcommand(
+            ClapCommand::new("start")
+                .about("Start the local ICP replica")
+                .disable_help_flag(true),
+        ))
+        .subcommand(passthrough_subcommand(
+            ClapCommand::new("status")
+                .about("Show local ICP replica status")
+                .disable_help_flag(true),
+        ))
+        .subcommand(passthrough_subcommand(
+            ClapCommand::new("stop")
+                .about("Stop the local ICP replica")
+                .disable_help_flag(true),
+        ))
         .after_help(REPLICA_HELP_AFTER)
 }
 

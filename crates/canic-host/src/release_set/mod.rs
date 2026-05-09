@@ -11,7 +11,7 @@ pub use config::{
     configured_fleet_name, configured_fleet_roles, configured_install_targets,
     configured_local_root_create_cycles, configured_release_roles, configured_role_auto_create,
     configured_role_capabilities, configured_role_details, configured_role_kinds,
-    configured_role_topups,
+    configured_role_topups, matching_fleet_config_paths,
 };
 pub use manifest::{
     ReleaseSetEntry, RootReleaseSetManifest, emit_root_release_set_manifest,
@@ -19,9 +19,9 @@ pub use manifest::{
     load_root_release_set_manifest,
 };
 pub use paths::{
-    canister_manifest_path, canisters_root, config_path, icp_root, load_root_package_version,
-    load_workspace_package_version, resolve_artifact_root, root_manifest_path,
-    root_release_set_manifest_path, workspace_manifest_path, workspace_root,
+    canister_manifest_path, canisters_root, config_path, display_workspace_path, icp_root,
+    load_root_package_version, load_workspace_package_version, resolve_artifact_root,
+    root_manifest_path, root_release_set_manifest_path, workspace_manifest_path, workspace_root,
 };
 use stage::build_release_set_entry;
 pub(crate) use stage::icp_call_on_network;

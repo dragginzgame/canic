@@ -1,11 +1,11 @@
 pub mod query;
+mod state;
 
 use crate::{
     InternalError, InternalErrorOrigin,
     cdk::types::Principal,
-    config::schema::{DirectoryConfig, DirectoryPool},
+    config::schema::DirectoryPool,
     dto::placement::directory::{DirectoryEntryStatusResponse, DirectoryRecoveryResponse},
-    ids::CanisterRole,
     ops::{
         config::ConfigOps,
         ic::IcOps,
@@ -16,74 +16,19 @@ use crate::{
             },
             recording::DirectoryMetricEvent as MetricEvent,
         },
-        storage::{
-            children::CanisterChildrenOps,
-            placement::directory::{
-                DirectoryClaimResult, DirectoryEntryState, DirectoryPendingClaim,
-                DirectoryRegistryOps, DirectoryReleaseResult,
-            },
-            registry::subnet::SubnetRegistryOps,
+        storage::placement::directory::{
+            DirectoryClaimResult, DirectoryEntryState, DirectoryPendingClaim, DirectoryRegistryOps,
+            DirectoryReleaseResult,
         },
+        storage::registry::subnet::SubnetRegistryOps,
     },
 };
-use std::sync::atomic::{AtomicU64, Ordering};
-use thiserror::Error as ThisError;
-
-#[derive(Debug, ThisError)]
-enum DirectoryWorkflowError {
-    #[error("directory placement is not configured for the current canister")]
-    DirectoryDisabled,
-
-    #[error("unknown directory pool '{requested}': configured pools: {available}")]
-    UnknownPool {
-        requested: String,
-        available: String,
-    },
-
-    #[error("instance {0} is not a direct child of the current canister")]
-    InstanceNotDirectChild(Principal),
-
-    #[error("directory instance {pid} has role '{actual}', expected '{expected}'")]
-    InstanceRoleMismatch {
-        pid: Principal,
-        expected: CanisterRole,
-        actual: CanisterRole,
-    },
-
-    #[error("directory instance {0} is not present in the subnet registry")]
-    RegistryEntryMissing(Principal),
-}
-
-impl From<DirectoryWorkflowError> for InternalError {
-    fn from(err: DirectoryWorkflowError) -> Self {
-        Self::domain(InternalErrorOrigin::Workflow, err.to_string())
-    }
-}
-
-#[derive(Debug, Eq, PartialEq)]
-enum DirectoryEntryClassification {
-    Bound {
-        instance_pid: Principal,
-        bound_at: u64,
-    },
-    PendingFresh {
-        owner_pid: Principal,
-        created_at: u64,
-        provisional_pid: Option<Principal>,
-    },
-    Repairable {
-        claim_id: u64,
-        provisional_pid: Principal,
-    },
-    NeedsCleanup {
-        claim_id: u64,
-        provisional_pid: Option<Principal>,
-    },
-}
+use state::{
+    DirectoryEntryClassification, DirectoryWorkflowError, available_pool_names, new_claim_id,
+    pending_is_stale, validate_bind_target_with_reason,
+};
 
 pub struct DirectoryWorkflow;
-
-static DIRECTORY_CLAIM_NONCE: AtomicU64 = AtomicU64::new(1);
 
 impl DirectoryWorkflow {
     /// Resolve a bound instance for one key or create and bind a new one.
@@ -277,9 +222,7 @@ impl DirectoryWorkflow {
                 return Err(err);
             }
         };
-        if let Err((err, reason)) =
-            Self::validate_bind_target_with_reason(pid, &pool_cfg.canister_role)
-        {
+        if let Err((err, reason)) = validate_bind_target_with_reason(pid, &pool_cfg.canister_role) {
             MetricEvent::failed_reason(MetricOperation::Bind, reason);
             return Err(err);
         }
@@ -553,7 +496,7 @@ impl DirectoryWorkflow {
                 claim_id,
                 provisional_pid: Some(pid),
                 ..
-            } if Self::validate_bind_target_with_reason(pid, &pool_cfg.canister_role).is_ok() => {
+            } if validate_bind_target_with_reason(pid, &pool_cfg.canister_role).is_ok() => {
                 DirectoryEntryClassification::Repairable {
                     claim_id,
                     provisional_pid: pid,
@@ -624,44 +567,6 @@ impl DirectoryWorkflow {
         })
     }
 
-    // Validate a bind target while preserving a bounded metric reason for callers.
-    fn validate_bind_target_with_reason(
-        pid: Principal,
-        expected_role: &CanisterRole,
-    ) -> Result<(), (InternalError, MetricReason)> {
-        if !CanisterChildrenOps::data()
-            .entries
-            .iter()
-            .any(|(child_pid, _)| *child_pid == pid)
-        {
-            return Err((
-                DirectoryWorkflowError::InstanceNotDirectChild(pid).into(),
-                MetricReason::InvalidChild,
-            ));
-        }
-
-        let Some(record) = SubnetRegistryOps::get(pid) else {
-            return Err((
-                DirectoryWorkflowError::RegistryEntryMissing(pid).into(),
-                MetricReason::RegistryMissing,
-            ));
-        };
-
-        if record.role != *expected_role {
-            return Err((
-                DirectoryWorkflowError::InstanceRoleMismatch {
-                    pid,
-                    expected: expected_role.clone(),
-                    actual: record.role,
-                }
-                .into(),
-                MetricReason::RoleMismatch,
-            ));
-        }
-
-        Ok(())
-    }
-
     // Resolve the configured pool definition for the current directory-bearing parent.
     fn get_directory_pool_cfg(pool: &str) -> Result<DirectoryPool, InternalError> {
         let directory = ConfigOps::current_directory_config()?
@@ -680,441 +585,5 @@ impl DirectoryWorkflow {
     }
 }
 
-fn available_pool_names(directory: &DirectoryConfig) -> String {
-    if directory.pools.is_empty() {
-        return "none".to_string();
-    }
-
-    let mut names: Vec<_> = directory.pools.keys().cloned().collect();
-    names.sort();
-    names.join(", ")
-}
-
-fn new_claim_id() -> u64 {
-    let nonce = DIRECTORY_CLAIM_NONCE.fetch_add(1, Ordering::Relaxed);
-    IcOps::now_millis().rotate_left(21) ^ nonce
-}
-
-const fn pending_is_stale(now: u64, created_at: u64) -> bool {
-    now.saturating_sub(created_at) > DirectoryRegistryOps::PENDING_TTL_SECS
-}
-
-///
-/// TESTS
-///
-
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::{
-        cdk::types::Cycles,
-        config::schema::{
-            CanisterAuthConfig, CanisterConfig, CanisterKind, DirectoryConfig, DirectoryPool,
-            RandomnessConfig, StandardsCanisterConfig,
-        },
-        ids::SubnetRole,
-        ops::{
-            storage::children::CanisterChildrenOps,
-            storage::placement::directory::{DirectoryClaimResult, DirectoryRegistryOps},
-            storage::registry::subnet::SubnetRegistryOps,
-        },
-        test::{
-            config::ConfigTestBuilder,
-            seams::{lock, p},
-            support::import_test_env,
-        },
-    };
-    use futures::executor::block_on;
-
-    fn claim_id(id: u64) -> u64 {
-        id
-    }
-
-    fn directory_hub_config(instance_role: &CanisterRole) -> CanisterConfig {
-        let mut directory = DirectoryConfig::default();
-        directory.pools.insert(
-            "projects".to_string(),
-            DirectoryPool {
-                canister_role: instance_role.clone(),
-                key_name: "project".to_string(),
-            },
-        );
-
-        CanisterConfig {
-            kind: CanisterKind::Singleton,
-            initial_cycles: Cycles::new(0),
-            topup_policy: None,
-            randomness: RandomnessConfig::default(),
-            scaling: None,
-            sharding: None,
-            directory: Some(directory),
-            auth: CanisterAuthConfig::default(),
-            standards: StandardsCanisterConfig::default(),
-        }
-    }
-
-    fn clear_subnet_registry() {
-        for (pid, _) in SubnetRegistryOps::data().entries {
-            let _ = SubnetRegistryOps::remove(&pid);
-        }
-    }
-
-    fn install_directory_test_context(child_role: &CanisterRole, child_pid: Principal) {
-        let root_pid = p(1);
-        let hub_pid = p(2);
-
-        let _cfg = ConfigTestBuilder::new()
-            .with_prime_canister("project_hub", directory_hub_config(child_role))
-            .with_prime_canister(
-                "project_instance",
-                ConfigTestBuilder::canister_config(CanisterKind::Instance),
-            )
-            .install();
-
-        import_test_env(
-            CanisterRole::new("project_hub"),
-            SubnetRole::PRIME,
-            root_pid,
-        );
-
-        clear_subnet_registry();
-        DirectoryRegistryOps::clear_for_test();
-        CanisterChildrenOps::import_direct_children(hub_pid, vec![(child_pid, child_role.clone())]);
-
-        let created_at = 0;
-        SubnetRegistryOps::register_root(root_pid, created_at);
-        SubnetRegistryOps::register_unchecked(
-            hub_pid,
-            &CanisterRole::new("project_hub"),
-            root_pid,
-            vec![],
-            created_at,
-        )
-        .expect("register hub");
-        SubnetRegistryOps::register_unchecked(child_pid, child_role, hub_pid, vec![], created_at)
-            .expect("register child");
-    }
-
-    #[test]
-    fn bind_instance_persists_assignment_for_matching_direct_child() {
-        let _guard = lock();
-        let child_role = CanisterRole::new("project_instance");
-        let child_pid = p(3);
-        install_directory_test_context(&child_role, child_pid);
-
-        DirectoryWorkflow::bind_instance("projects", "alpha", child_pid)
-            .expect("bind should succeed");
-
-        assert_eq!(
-            query::DirectoryQuery::lookup_key("projects", "alpha"),
-            Some(child_pid)
-        );
-    }
-
-    #[test]
-    fn bind_instance_rejects_non_child_pid() {
-        let _guard = lock();
-        let child_role = CanisterRole::new("project_instance");
-        let child_pid = p(3);
-        install_directory_test_context(&child_role, child_pid);
-        CanisterChildrenOps::import_direct_children(p(2), vec![]);
-
-        let err = DirectoryWorkflow::bind_instance("projects", "alpha", child_pid)
-            .expect_err("bind should reject non-child pid");
-
-        assert!(err.to_string().contains("not a direct child"));
-    }
-
-    #[test]
-    fn bind_instance_rejects_role_mismatch() {
-        let _guard = lock();
-        let configured_role = CanisterRole::new("project_instance");
-        let actual_role = CanisterRole::new("wrong_instance_role");
-        let child_pid = p(3);
-        install_directory_test_context(&configured_role, child_pid);
-        clear_subnet_registry();
-
-        let root_pid = p(1);
-        let hub_pid = p(2);
-        let created_at = 0;
-        SubnetRegistryOps::register_root(root_pid, created_at);
-        SubnetRegistryOps::register_unchecked(
-            hub_pid,
-            &CanisterRole::new("project_hub"),
-            root_pid,
-            vec![],
-            created_at,
-        )
-        .expect("register hub");
-        SubnetRegistryOps::register_unchecked(child_pid, &actual_role, hub_pid, vec![], created_at)
-            .expect("register mismatched child");
-
-        let err = DirectoryWorkflow::bind_instance("projects", "alpha", child_pid)
-            .expect_err("bind should reject mismatched child role");
-
-        assert!(err.to_string().contains("expected"));
-    }
-
-    #[test]
-    fn resolve_or_create_returns_existing_bound_entry_without_create() {
-        let _guard = lock();
-        let child_role = CanisterRole::new("project_instance");
-        let child_pid = p(3);
-        install_directory_test_context(&child_role, child_pid);
-        DirectoryRegistryOps::bind("projects", "alpha", child_pid, 10).expect("seed bound entry");
-
-        let result = block_on(DirectoryWorkflow::resolve_or_create("projects", "alpha"))
-            .expect("bound entry should resolve without create");
-
-        assert_eq!(
-            result,
-            DirectoryEntryStatusResponse::Bound {
-                instance_pid: child_pid,
-                bound_at: 10,
-            }
-        );
-    }
-
-    #[test]
-    fn resolve_or_create_returns_fresh_pending_entry_without_create() {
-        let _guard = lock();
-        let child_role = CanisterRole::new("project_instance");
-        let child_pid = p(3);
-        install_directory_test_context(&child_role, child_pid);
-
-        let owner_pid = p(7);
-        let created_at = IcOps::now_secs();
-        let claim = DirectoryRegistryOps::claim_pending(
-            "projects",
-            "alpha",
-            owner_pid,
-            claim_id(1),
-            created_at,
-        )
-        .expect("seed pending entry");
-        assert_eq!(
-            claim,
-            DirectoryClaimResult::Claimed(DirectoryPendingClaim {
-                claim_id: claim_id(1),
-                owner_pid,
-                created_at,
-            })
-        );
-
-        let result = block_on(DirectoryWorkflow::resolve_or_create("projects", "alpha"))
-            .expect("fresh pending should be surfaced");
-
-        assert_eq!(
-            result,
-            DirectoryEntryStatusResponse::Pending {
-                owner_pid,
-                created_at,
-                provisional_pid: None,
-            }
-        );
-    }
-
-    #[test]
-    fn resolve_or_create_repairs_stale_pending_with_valid_provisional_child() {
-        let _guard = lock();
-        let child_role = CanisterRole::new("project_instance");
-        let child_pid = p(3);
-        install_directory_test_context(&child_role, child_pid);
-
-        let claim = DirectoryRegistryOps::claim_pending("projects", "alpha", p(7), claim_id(1), 1)
-            .expect("seed stale pending entry");
-        let DirectoryClaimResult::Claimed(claim) = claim else {
-            panic!("expected stale claim");
-        };
-        DirectoryRegistryOps::set_provisional_pid_if_claim_matches(
-            "projects",
-            "alpha",
-            claim.claim_id,
-            child_pid,
-        )
-        .expect("seed provisional child");
-
-        let result = block_on(DirectoryWorkflow::resolve_or_create("projects", "alpha"))
-            .expect("stale pending should repair to bound");
-
-        match result {
-            DirectoryEntryStatusResponse::Bound { instance_pid, .. } => {
-                assert_eq!(instance_pid, child_pid);
-            }
-            other @ DirectoryEntryStatusResponse::Pending { .. } => {
-                panic!("expected bound result, got {other:?}")
-            }
-        }
-    }
-
-    #[test]
-    fn classify_entry_returns_none_for_missing_key() {
-        let _guard = lock();
-        let child_role = CanisterRole::new("project_instance");
-        let child_pid = p(3);
-        install_directory_test_context(&child_role, child_pid);
-
-        let pool_cfg = DirectoryWorkflow::get_directory_pool_cfg("projects")
-            .expect("pool config should exist");
-        let classification =
-            DirectoryWorkflow::classify_entry("projects", "alpha", &pool_cfg, IcOps::now_secs());
-
-        assert_eq!(classification, None);
-    }
-
-    #[test]
-    fn classify_entry_marks_stale_pending_without_provisional_for_cleanup() {
-        let _guard = lock();
-        let child_role = CanisterRole::new("project_instance");
-        let child_pid = p(3);
-        install_directory_test_context(&child_role, child_pid);
-        DirectoryRegistryOps::claim_pending("projects", "alpha", p(7), claim_id(1), 1)
-            .expect("seed stale pending entry");
-
-        let pool_cfg = DirectoryWorkflow::get_directory_pool_cfg("projects")
-            .expect("pool config should exist");
-        let classification =
-            DirectoryWorkflow::classify_entry("projects", "alpha", &pool_cfg, IcOps::now_secs());
-
-        assert_eq!(
-            classification,
-            Some(DirectoryEntryClassification::NeedsCleanup {
-                claim_id: claim_id(1),
-                provisional_pid: None
-            })
-        );
-    }
-
-    #[test]
-    fn classify_entry_marks_invalid_provisional_child_for_cleanup() {
-        let _guard = lock();
-        let child_role = CanisterRole::new("project_instance");
-        let child_pid = p(3);
-        install_directory_test_context(&child_role, child_pid);
-        let claim = DirectoryRegistryOps::claim_pending("projects", "alpha", p(7), claim_id(1), 1)
-            .expect("seed stale pending entry");
-        let DirectoryClaimResult::Claimed(claim) = claim else {
-            panic!("expected stale claim");
-        };
-        DirectoryRegistryOps::set_provisional_pid_if_claim_matches(
-            "projects",
-            "alpha",
-            claim.claim_id,
-            p(8),
-        )
-        .expect("seed invalid provisional child");
-
-        let pool_cfg = DirectoryWorkflow::get_directory_pool_cfg("projects")
-            .expect("pool config should exist");
-        let classification =
-            DirectoryWorkflow::classify_entry("projects", "alpha", &pool_cfg, IcOps::now_secs());
-
-        assert_eq!(
-            classification,
-            Some(DirectoryEntryClassification::NeedsCleanup {
-                claim_id: claim_id(1),
-                provisional_pid: Some(p(8))
-            })
-        );
-    }
-
-    #[test]
-    fn recover_entry_releases_stale_pending_without_provisional_child() {
-        let _guard = lock();
-        let child_role = CanisterRole::new("project_instance");
-        let child_pid = p(3);
-        install_directory_test_context(&child_role, child_pid);
-        DirectoryRegistryOps::claim_pending("projects", "alpha", p(7), claim_id(1), 1)
-            .expect("seed stale pending entry");
-
-        let result = block_on(DirectoryWorkflow::recover_entry("projects", "alpha"))
-            .expect("stale dead key should be released");
-
-        assert_eq!(
-            result,
-            DirectoryRecoveryResponse::ReleasedStalePending {
-                owner_pid: p(7),
-                created_at: 1,
-                provisional_pid: None,
-                released_at: IcOps::now_secs(),
-            }
-        );
-        assert_eq!(
-            DirectoryRegistryOps::lookup_entry("projects", "alpha"),
-            None
-        );
-    }
-
-    #[test]
-    fn recover_entry_repairs_valid_stale_provisional_child() {
-        let _guard = lock();
-        let child_role = CanisterRole::new("project_instance");
-        let child_pid = p(3);
-        install_directory_test_context(&child_role, child_pid);
-        let claim = DirectoryRegistryOps::claim_pending("projects", "alpha", p(7), claim_id(1), 1)
-            .expect("seed stale pending entry");
-        let DirectoryClaimResult::Claimed(claim) = claim else {
-            panic!("expected stale claim");
-        };
-        DirectoryRegistryOps::set_provisional_pid_if_claim_matches(
-            "projects",
-            "alpha",
-            claim.claim_id,
-            child_pid,
-        )
-        .expect("seed provisional child");
-
-        let result = block_on(DirectoryWorkflow::recover_entry("projects", "alpha"))
-            .expect("valid provisional child should be repaired");
-
-        assert_eq!(
-            result,
-            DirectoryRecoveryResponse::RepairedToBound {
-                instance_pid: child_pid,
-                bound_at: IcOps::now_secs(),
-            }
-        );
-        assert!(matches!(
-            DirectoryRegistryOps::lookup_entry("projects", "alpha"),
-            Some(DirectoryEntryStatusResponse::Bound { instance_pid, .. }) if instance_pid == child_pid
-        ));
-    }
-
-    #[test]
-    fn recover_entry_releases_stale_pending_when_provisional_child_is_missing() {
-        let _guard = lock();
-        let child_role = CanisterRole::new("project_instance");
-        let child_pid = p(3);
-        install_directory_test_context(&child_role, child_pid);
-
-        let claim = DirectoryRegistryOps::claim_pending("projects", "alpha", p(7), claim_id(1), 1)
-            .expect("seed stale pending entry");
-        let DirectoryClaimResult::Claimed(claim) = claim else {
-            panic!("expected stale claim");
-        };
-        DirectoryRegistryOps::set_provisional_pid_if_claim_matches(
-            "projects",
-            "alpha",
-            claim.claim_id,
-            p(8),
-        )
-        .expect("seed missing provisional child");
-
-        let result = block_on(DirectoryWorkflow::recover_entry("projects", "alpha"))
-            .expect("missing provisional child should still release stale key");
-
-        assert_eq!(
-            result,
-            DirectoryRecoveryResponse::ReleasedStalePending {
-                owner_pid: p(7),
-                created_at: 1,
-                provisional_pid: Some(p(8)),
-                released_at: IcOps::now_secs(),
-            }
-        );
-        assert_eq!(
-            DirectoryRegistryOps::lookup_entry("projects", "alpha"),
-            None
-        );
-    }
-}
+mod tests;

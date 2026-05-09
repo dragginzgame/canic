@@ -1,6 +1,6 @@
 //! Minimal non-root canister for delegation proof tests.
 
-#![allow(clippy::unused_async)]
+#![expect(clippy::unused_async)]
 
 use canic::{
     Error,

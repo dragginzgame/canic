@@ -45,7 +45,7 @@ pub enum RootSetupProfile {
     Capability,
     Scaling,
     Sharding,
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     ReconcileSmallStore,
 }
 

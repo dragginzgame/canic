@@ -15,8 +15,6 @@
 //! - Business or access rules
 //! - Metrics or logging
 
-#![allow(dead_code)]
-
 use crate::{
     cdk::{
         env::ck::{CKUSDC_LEDGER_CANISTER, CKUSDT_LEDGER_CANISTER},

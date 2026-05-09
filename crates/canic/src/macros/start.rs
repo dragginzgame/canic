@@ -426,13 +426,13 @@ macro_rules! start_root {
 #[macro_export]
 macro_rules! start_wasm_store {
     ($(init = $init:block)? $(,)?) => {
-        #[allow(clippy::unused_async)]
+        #[expect(clippy::unused_async)]
         async fn canic_setup() {}
 
-        #[allow(clippy::unused_async)]
+        #[expect(clippy::unused_async)]
         async fn canic_install(_: Option<Vec<u8>>) {}
 
-        #[allow(clippy::unused_async)]
+        #[expect(clippy::unused_async)]
         async fn canic_upgrade() {}
 
         $crate::__canic_start_nonroot_lifecycle_core!(

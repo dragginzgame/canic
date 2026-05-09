@@ -2,8 +2,6 @@
 //! Minimal authority canister for intent reservation tests.
 //!
 
-#![allow(clippy::unused_async)]
-
 use candid::Principal;
 use canic_core::api::ic::call::{Call, IntentKey, IntentReservation};
 use ic_cdk::update;

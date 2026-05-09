@@ -3,7 +3,10 @@ mod error;
 mod io;
 mod options;
 
-use crate::{args::print_help_or_version, version_text};
+use crate::{
+    args::{parse_subcommand, passthrough_subcommand, print_help_or_version},
+    version_text,
+};
 use canic_backup::restore::{
     RestoreApplyCommandConfig, RestoreApplyDryRun, RestorePlan, RestorePlanner, RestoreRunResponse,
     RestoreRunnerCommandExecutor, RestoreRunnerCommandOutput, RestoreRunnerConfig,
@@ -25,14 +28,19 @@ pub fn run<I>(args: I) -> Result<(), RestoreCommandError>
 where
     I: IntoIterator<Item = OsString>,
 {
-    let mut args = args.into_iter();
-    let Some(command) = args.next().and_then(|arg| arg.into_string().ok()) else {
+    let args = args.into_iter().collect::<Vec<_>>();
+    if print_help_or_version(&args, usage, version_text()) {
+        return Ok(());
+    }
+
+    let Some((command, args)) = parse_subcommand(restore_command(), args)
+        .map_err(|_| RestoreCommandError::Usage(usage()))?
+    else {
         return Err(RestoreCommandError::Usage(usage()));
     };
 
     match command.as_str() {
         "plan" => {
-            let args = args.collect::<Vec<_>>();
             if print_help_or_version(&args, plan_usage, version_text()) {
                 return Ok(());
             }
@@ -43,7 +51,6 @@ where
             Ok(())
         }
         "apply" => {
-            let args = args.collect::<Vec<_>>();
             if print_help_or_version(&args, apply_usage, version_text()) {
                 return Ok(());
             }
@@ -54,7 +61,6 @@ where
             Ok(())
         }
         "run" => {
-            let args = args.collect::<Vec<_>>();
             if print_help_or_version(&args, run_usage, version_text()) {
                 return Ok(());
             }
@@ -79,15 +85,7 @@ where
             enforce_restore_run_requirements(&options, &run.response)?;
             Ok(())
         }
-        "help" | "--help" | "-h" => {
-            println!("{}", usage());
-            Ok(())
-        }
-        "version" | "--version" | "-V" => {
-            println!("{}", version_text());
-            Ok(())
-        }
-        _ => Err(RestoreCommandError::UnknownOption(command)),
+        _ => unreachable!("restore dispatch command only defines known commands"),
     }
 }
 
@@ -200,21 +198,21 @@ fn restore_command() -> ClapCommand {
         .bin_name("canic restore")
         .about("Plan, apply, and run snapshot restores")
         .disable_help_flag(true)
-        .subcommand(
+        .subcommand(passthrough_subcommand(
             ClapCommand::new("plan")
                 .about("Build a no-mutation restore plan")
                 .disable_help_flag(true),
-        )
-        .subcommand(
+        ))
+        .subcommand(passthrough_subcommand(
             ClapCommand::new("apply")
                 .about("Render restore operations and optionally write an apply journal")
                 .disable_help_flag(true),
-        )
-        .subcommand(
+        ))
+        .subcommand(passthrough_subcommand(
             ClapCommand::new("run")
                 .about("Preview, execute, or recover the native restore runner")
                 .disable_help_flag(true),
-        )
+        ))
 }
 
 #[cfg(test)]

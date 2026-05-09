@@ -60,7 +60,7 @@ impl BackupVerifyOptions {
         let matches = parse_backup_options(backup_verify_command(), verify_usage, args)?;
 
         Ok(Self {
-            dir: required_path_option(&matches, "dir", "--dir")?,
+            dir: path_option(&matches, "dir").expect("clap requires dir"),
             out: path_option(&matches, "out"),
         })
     }
@@ -93,7 +93,7 @@ impl BackupStatusOptions {
         let matches = parse_backup_options(backup_status_command(), status_usage, args)?;
 
         Ok(Self {
-            dir: required_path_option(&matches, "dir", "--dir")?,
+            dir: path_option(&matches, "dir").expect("clap requires dir"),
             out: path_option(&matches, "out"),
             require_complete: matches.get_flag("require-complete"),
         })
@@ -129,14 +129,11 @@ fn backup_dir_out_command(
         .bin_name(bin_name)
         .about(about)
         .disable_help_flag(true)
-        .arg(value_arg("dir").long("dir").value_name("dir"))
+        .arg(
+            value_arg("dir")
+                .long("dir")
+                .value_name("dir")
+                .required(true),
+        )
         .arg(value_arg("out").long("out").value_name("file"))
-}
-
-fn required_path_option(
-    matches: &ArgMatches,
-    id: &str,
-    option: &'static str,
-) -> Result<PathBuf, BackupCommandError> {
-    path_option(matches, id).ok_or(BackupCommandError::MissingOption(option))
 }

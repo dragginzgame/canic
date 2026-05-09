@@ -1,4 +1,6 @@
 pub mod schema;
+#[cfg(any(not(target_arch = "wasm32"), test))]
+mod validation;
 
 use crate::{InternalError, InternalErrorOrigin};
 use schema::ConfigSchemaError;

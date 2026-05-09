@@ -2,7 +2,7 @@
 //! App demo canister in the reference topology.
 //!
 
-#![allow(clippy::unused_async)]
+#![expect(clippy::unused_async)]
 
 use canic::ids::CanisterRole;
 

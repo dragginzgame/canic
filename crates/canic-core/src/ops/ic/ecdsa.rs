@@ -134,7 +134,7 @@ impl EcdsaOps {
 #[cfg(not(feature = "auth-crypto"))]
 impl EcdsaOps {
     // Fail closed when threshold ECDSA management support is not compiled in.
-    #[allow(clippy::unused_async)]
+    #[expect(clippy::unused_async)]
     pub async fn sign_bytes(
         _key_name: &str,
         _derivation_path: Vec<Vec<u8>>,
@@ -149,7 +149,7 @@ impl EcdsaOps {
     }
 
     // Fail closed when threshold ECDSA public-key fetch support is not compiled in.
-    #[allow(clippy::unused_async)]
+    #[expect(clippy::unused_async)]
     pub async fn public_key_sec1(
         _key_name: &str,
         _derivation_path: Vec<Vec<u8>>,

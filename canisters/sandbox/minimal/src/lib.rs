@@ -6,7 +6,7 @@
 //! `fleets/test/runtime_probe`.
 //!
 
-#![allow(clippy::unused_async)]
+#![expect(clippy::unused_async)]
 
 use canic::{Error, ids::CanisterRole, prelude::*};
 

@@ -30,7 +30,7 @@ pub mod icrc21;
 use crate::{ids::EndpointCall, perf};
 use std::future::Future;
 
-#[allow(clippy::missing_const_for_fn)]
+#[cfg_attr(not(target_arch = "wasm32"), expect(clippy::missing_const_for_fn))]
 fn ensure_memory_bootstrap() {
     #[cfg(target_arch = "wasm32")]
     {

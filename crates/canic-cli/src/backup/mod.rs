@@ -1,4 +1,7 @@
-use crate::{args::print_help_or_version, output, version_text};
+use crate::{
+    args::{parse_subcommand, passthrough_subcommand, print_help_or_version},
+    output, version_text,
+};
 use canic_backup::{
     journal::JournalResumeReport,
     persistence::{BackupIntegrityReport, BackupLayout, PersistenceError},
@@ -25,12 +28,6 @@ pub use options::{BackupListOptions, BackupStatusOptions, BackupVerifyOptions};
 pub enum BackupCommandError {
     #[error("{0}")]
     Usage(String),
-
-    #[error("missing required option {0}")]
-    MissingOption(&'static str),
-
-    #[error("unknown option {0}")]
-    UnknownOption(String),
 
     #[error(
         "backup journal {backup_id} is incomplete: {pending_artifacts}/{total_artifacts} artifacts still require resume work"
@@ -68,14 +65,19 @@ pub fn run<I>(args: I) -> Result<(), BackupCommandError>
 where
     I: IntoIterator<Item = OsString>,
 {
-    let mut args = args.into_iter();
-    let Some(command) = args.next().and_then(|arg| arg.into_string().ok()) else {
+    let args = args.into_iter().collect::<Vec<_>>();
+    if print_help_or_version(&args, usage, version_text()) {
+        return Ok(());
+    }
+
+    let Some((command, args)) =
+        parse_subcommand(backup_command(), args).map_err(|_| BackupCommandError::Usage(usage()))?
+    else {
         return Err(BackupCommandError::Usage(usage()));
     };
 
     match command.as_str() {
         "list" => {
-            let args = args.collect::<Vec<_>>();
             if print_help_or_version(&args, list_usage, version_text()) {
                 return Ok(());
             }
@@ -85,7 +87,6 @@ where
             Ok(())
         }
         "status" => {
-            let args = args.collect::<Vec<_>>();
             if print_help_or_version(&args, status_usage, version_text()) {
                 return Ok(());
             }
@@ -96,7 +97,6 @@ where
             Ok(())
         }
         "verify" => {
-            let args = args.collect::<Vec<_>>();
             if print_help_or_version(&args, verify_usage, version_text()) {
                 return Ok(());
             }
@@ -105,15 +105,7 @@ where
             write_report(&options, &report)?;
             Ok(())
         }
-        "help" | "--help" | "-h" => {
-            println!("{}", usage());
-            Ok(())
-        }
-        "version" | "--version" | "-V" => {
-            println!("{}", version_text());
-            Ok(())
-        }
-        _ => Err(BackupCommandError::UnknownOption(command)),
+        _ => unreachable!("backup dispatch command only defines known commands"),
     }
 }
 
@@ -308,21 +300,21 @@ fn backup_command() -> ClapCommand {
         .bin_name("canic backup")
         .about("Inspect and verify backup artifacts")
         .disable_help_flag(true)
-        .subcommand(
+        .subcommand(passthrough_subcommand(
             ClapCommand::new("list")
                 .about("List backup directories under a backup root")
                 .disable_help_flag(true),
-        )
-        .subcommand(
+        ))
+        .subcommand(passthrough_subcommand(
             ClapCommand::new("verify")
                 .about("Verify layout, journal agreement, and durable artifact checksums")
                 .disable_help_flag(true),
-        )
-        .subcommand(
+        ))
+        .subcommand(passthrough_subcommand(
             ClapCommand::new("status")
                 .about("Summarize resumable download journal state")
                 .disable_help_flag(true),
-        )
+        ))
 }
 
 #[cfg(test)]

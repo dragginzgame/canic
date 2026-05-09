@@ -15,7 +15,7 @@ mod status;
 #[cfg(test)]
 mod test_support;
 
-use crate::args::first_arg_is_version;
+use crate::args::{first_arg_is_help, parse_matches};
 use clap::{Arg, ArgAction, Command};
 use std::ffi::OsString;
 use thiserror::Error as ThisError;
@@ -27,6 +27,7 @@ const COLOR_HEADING: &str = "\x1b[1m";
 const COLOR_GROUP: &str = "\x1b[38;5;245m";
 const COLOR_COMMAND: &str = "\x1b[38;5;109m";
 const COLOR_TIP: &str = "\x1b[38;5;245m";
+const DISPATCH_ARGS: &str = "args";
 
 ///
 /// CommandScope
@@ -246,34 +247,41 @@ where
     I: IntoIterator<Item = OsString>,
 {
     let args = args.into_iter().collect::<Vec<_>>();
-    if first_arg_is_version(&args) {
+    if first_arg_is_help(&args) {
+        println!("{}", usage());
+        return Ok(());
+    }
+
+    let matches =
+        parse_matches(top_level_dispatch_command(), args).map_err(|_| CliError::Usage(usage()))?;
+    if matches.get_flag("version") {
         println!("{}", version_text());
         return Ok(());
     }
 
-    let mut args = args.into_iter();
-    let Some(command) = args.next().and_then(|arg| arg.into_string().ok()) else {
+    let Some((command, subcommand_matches)) = matches.subcommand() else {
         return Err(CliError::Usage(usage()));
     };
+    let tail = subcommand_matches
+        .get_many::<OsString>(DISPATCH_ARGS)
+        .map(|values| values.cloned().collect::<Vec<_>>())
+        .unwrap_or_default()
+        .into_iter();
 
-    match command.as_str() {
-        "backup" => backup::run(args).map_err(CliError::from),
-        "build" => build::run(args).map_err(CliError::from),
-        "config" => list::run_config(args).map_err(|err| CliError::Config(err.to_string())),
-        "fleet" => fleets::run(args).map_err(CliError::from),
-        "install" => install::run(args).map_err(CliError::from),
-        "list" => list::run(args).map_err(CliError::from),
-        "manifest" => manifest::run(args).map_err(CliError::from),
-        "medic" => medic::run(args).map_err(CliError::from),
-        "replica" => replica::run(args).map_err(CliError::from),
-        "snapshot" => snapshot::run(args).map_err(CliError::from),
-        "status" => status::run(args).map_err(CliError::from),
-        "restore" => restore::run(args).map_err(CliError::from),
-        "help" | "--help" | "-h" => {
-            println!("{}", usage());
-            Ok(())
-        }
-        _ => Err(CliError::Usage(usage())),
+    match command {
+        "backup" => backup::run(tail).map_err(CliError::from),
+        "build" => build::run(tail).map_err(CliError::from),
+        "config" => list::run_config(tail).map_err(|err| CliError::Config(err.to_string())),
+        "fleet" => fleets::run(tail).map_err(CliError::from),
+        "install" => install::run(tail).map_err(CliError::from),
+        "list" => list::run(tail).map_err(CliError::from),
+        "manifest" => manifest::run(tail).map_err(CliError::from),
+        "medic" => medic::run(tail).map_err(CliError::from),
+        "replica" => replica::run(tail).map_err(CliError::from),
+        "snapshot" => snapshot::run(tail).map_err(CliError::from),
+        "status" => status::run(tail).map_err(CliError::from),
+        "restore" => restore::run(tail).map_err(CliError::from),
+        _ => unreachable!("top-level dispatch command only defines known commands"),
     }
 }
 
@@ -297,6 +305,30 @@ pub fn top_level_command() -> Command {
 
     COMMAND_SPECS.iter().fold(command, |command, spec| {
         command.subcommand(Command::new(spec.name).about(spec.about))
+    })
+}
+
+fn top_level_dispatch_command() -> Command {
+    let command = Command::new("canic")
+        .disable_help_flag(true)
+        .disable_version_flag(true)
+        .arg(
+            Arg::new("version")
+                .short('V')
+                .long("version")
+                .action(ArgAction::SetTrue),
+        );
+
+    COMMAND_SPECS.iter().fold(command, |command, spec| {
+        command.subcommand(
+            Command::new(spec.name).arg(
+                Arg::new(DISPATCH_ARGS)
+                    .num_args(0..)
+                    .allow_hyphen_values(true)
+                    .trailing_var_arg(true)
+                    .value_parser(clap::value_parser!(OsString)),
+            ),
+        )
     })
 }
 

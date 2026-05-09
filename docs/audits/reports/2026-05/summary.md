@@ -54,3 +54,14 @@ May has day summaries for the currently recorded audit days.
     storage-specific persistence implementations kept in storage modules.
 15. Workflow maintainers: keep test-only replay harness storage imports from
     expanding into production workflow code.
+16. Surface-governance maintainers: keep generated DID surface scans pointed at
+    refreshed `.icp` artifacts and exclude internal `test` canisters from
+    consumer-facing counts.
+17. Facade maintainers: keep default-on `canic_metrics` documented as
+    intentional surface whenever endpoint bundle defaults change.
+18. Complexity maintainers: keep the remediated metrics, directory placement,
+    config schema, and intent storage modules decomposed; new metric families,
+    placement states, and schema validation cases should land in focused
+    support/test modules rather than re-growing production hubs.
+19. Complexity maintainers: watch remaining large config/IC facade files only
+    when they become active edit centers.

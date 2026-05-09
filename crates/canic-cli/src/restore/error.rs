@@ -18,20 +18,8 @@ pub enum RestoreCommandError {
     #[error("missing required option {0}")]
     MissingOption(&'static str),
 
-    #[error("use either --manifest or --backup-dir, not both")]
-    ConflictingManifestSources,
-
     #[error("--require-verified requires --backup-dir")]
     RequireVerifiedNeedsBackupDir,
-
-    #[error("restore apply currently requires --dry-run")]
-    ApplyRequiresDryRun,
-
-    #[error("restore run requires --dry-run, --execute, or --unclaim-pending")]
-    RestoreRunRequiresMode,
-
-    #[error("use only one restore run mode: --dry-run, --execute, or --unclaim-pending")]
-    RestoreRunConflictingModes,
 
     #[error("restore run command failed for operation {sequence}: status={status}")]
     RestoreRunCommandFailed { sequence: usize, status: String },
@@ -100,15 +88,6 @@ pub enum RestoreCommandError {
         expected: usize,
         actual: Option<usize>,
     },
-
-    #[error("unknown option {0}")]
-    UnknownOption(String),
-
-    #[error("option --sequence requires a non-negative integer value")]
-    InvalidSequence,
-
-    #[error("option {option} requires a positive integer value")]
-    InvalidPositiveInteger { option: &'static str },
 
     #[error(transparent)]
     Io(#[from] std::io::Error),

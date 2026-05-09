@@ -2,7 +2,7 @@ use canic_core::{bootstrap::parse_config_model, ids::CanisterRole};
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs,
-    path::Path,
+    path::{Path, PathBuf},
 };
 
 #[derive(Clone, Copy)]
@@ -64,6 +64,18 @@ pub fn configured_fleet_name(config_path: &Path) -> Result<String, Box<dyn std::
     let config_source = fs::read_to_string(config_path)?;
     configured_fleet_name_from_source(&config_source)
         .map_err(|err| format!("invalid {}: {err}", config_path.display()).into())
+}
+
+// Select config paths whose required [fleet].name matches the requested fleet.
+#[must_use]
+pub fn matching_fleet_config_paths(choices: &[PathBuf], fleet: &str) -> Vec<PathBuf> {
+    choices
+        .iter()
+        .filter_map(|path| match configured_fleet_name(path) {
+            Ok(name) if name == fleet => Some(path.clone()),
+            Ok(_) | Err(_) => None,
+        })
+        .collect()
 }
 
 // Enumerate configured role kinds across all subnets for operator-facing tables.

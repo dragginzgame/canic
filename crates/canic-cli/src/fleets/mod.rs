@@ -1,16 +1,19 @@
 use crate::{
     args::{
-        local_network, parse_matches, print_help_or_version, string_option, string_values,
-        value_arg,
+        local_network, parse_matches, parse_subcommand, passthrough_subcommand,
+        print_help_or_version, string_option, value_arg,
     },
     scaffold, version_text,
 };
 use canic_host::{
     install_root::discover_current_canic_config_choices,
-    release_set::{configured_fleet_name, configured_fleet_roles, workspace_root},
+    release_set::{
+        configured_fleet_name, configured_fleet_roles, display_workspace_path,
+        matching_fleet_config_paths, workspace_root,
+    },
     table::WhitespaceTable,
 };
-use clap::{Arg, Command as ClapCommand};
+use clap::Command as ClapCommand;
 use std::{
     ffi::OsString,
     fs,
@@ -50,12 +53,6 @@ fleet name exactly.";
 pub enum FleetCommandError {
     #[error("{0}")]
     Usage(String),
-
-    #[error("missing fleet name")]
-    MissingFleetName,
-
-    #[error("multiple fleet names provided")]
-    ConflictingFleetName,
 
     #[error("no Canic fleet configs found under fleets; run canic fleet create <name>")]
     NoConfigChoices,
@@ -126,20 +123,17 @@ where
         return Ok(());
     }
 
-    let mut args = args.into_iter();
-    match args
-        .next()
-        .and_then(|arg| arg.into_string().ok())
-        .as_deref()
-    {
+    match parse_subcommand(fleet_command(), args).map_err(|_| FleetCommandError::Usage(usage()))? {
         None => {
             println!("{}", usage());
             Ok(())
         }
-        Some("create") => run_create(args),
-        Some("delete") => run_delete(args),
-        Some("list") => run_list(args),
-        _ => Err(FleetCommandError::Usage(usage())),
+        Some((command, args)) => match command.as_str() {
+            "create" => run_create(args),
+            "delete" => run_delete(args),
+            "list" => run_list(args),
+            _ => unreachable!("fleet dispatch command only defines known commands"),
+        },
     }
 }
 
@@ -222,14 +216,10 @@ impl DeleteFleetOptions {
     {
         let matches = parse_matches(fleet_delete_command(), args)
             .map_err(|_| FleetCommandError::Usage(delete_usage()))?;
-        let fleet_names = string_values(&matches, "fleet");
-        let fleet = match fleet_names.as_slice() {
-            [] => return Err(FleetCommandError::MissingFleetName),
-            [fleet] => fleet.clone(),
-            _ => return Err(FleetCommandError::ConflictingFleetName),
-        };
 
-        Ok(Self { fleet })
+        Ok(Self {
+            fleet: string_option(&matches, "fleet").expect("clap requires fleet"),
+        })
     }
 }
 
@@ -243,14 +233,7 @@ fn delete_target_dir_from_choices(
     choices: &[PathBuf],
     fleet: &str,
 ) -> Result<PathBuf, FleetCommandError> {
-    let matches = choices
-        .iter()
-        .cloned()
-        .filter_map(|path| match configured_fleet_name(&path) {
-            Ok(name) if name == fleet => Some(path),
-            Ok(_) | Err(_) => None,
-        })
-        .collect::<Vec<_>>();
+    let matches = matching_fleet_config_paths(choices, fleet);
 
     let config_path = match matches.as_slice() {
         [] => return Err(FleetCommandError::UnknownFleet(fleet.to_string())),
@@ -321,9 +304,21 @@ fn fleet_command() -> ClapCommand {
         .bin_name("canic fleet")
         .about("Manage Canic fleets")
         .disable_help_flag(true)
-        .subcommand(ClapCommand::new("create").about("Create a minimal Canic fleet"))
-        .subcommand(ClapCommand::new("list").about("List config-defined Canic fleets"))
-        .subcommand(ClapCommand::new("delete").about("Delete a config-defined Canic fleet"))
+        .subcommand(passthrough_subcommand(
+            ClapCommand::new("create")
+                .about("Create a minimal Canic fleet")
+                .disable_help_flag(true),
+        ))
+        .subcommand(passthrough_subcommand(
+            ClapCommand::new("list")
+                .about("List config-defined Canic fleets")
+                .disable_help_flag(true),
+        ))
+        .subcommand(passthrough_subcommand(
+            ClapCommand::new("delete")
+                .about("Delete a config-defined Canic fleet")
+                .disable_help_flag(true),
+        ))
         .after_help(FLEET_HELP_AFTER)
 }
 
@@ -347,9 +342,9 @@ fn fleet_delete_command() -> ClapCommand {
         .about("Delete a config-defined Canic fleet directory")
         .disable_help_flag(true)
         .arg(
-            Arg::new("fleet")
-                .num_args(0..=1)
+            value_arg("fleet")
                 .value_name("name")
+                .required(true)
                 .help("Config-defined fleet name to delete"),
         )
         .after_help(FLEET_DELETE_HELP_AFTER)
@@ -406,13 +401,6 @@ fn format_canister_summary(roles: &[String]) -> String {
     };
 
     format!("{} ({preview}{suffix})", roles.len())
-}
-
-fn display_workspace_path(workspace_root: &Path, path: &Path) -> String {
-    path.strip_prefix(workspace_root)
-        .unwrap_or(path)
-        .display()
-        .to_string()
 }
 
 fn usage() -> String {
@@ -576,7 +564,7 @@ mod tests {
 
         assert!(text.contains("Delete a config-defined Canic fleet directory"));
         assert!(text.contains("Usage: canic fleet delete"));
-        assert!(text.contains("[name]"));
+        assert!(text.contains("<name>"));
         assert!(text.contains("type the"));
     }
 

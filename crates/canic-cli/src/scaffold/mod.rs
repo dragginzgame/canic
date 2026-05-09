@@ -25,9 +25,6 @@ pub enum ScaffoldCommandError {
     #[error("{0}")]
     Usage(String),
 
-    #[error("project name must be snake_case: {0}")]
-    InvalidProjectName(String),
-
     #[error("fleet target already exists: {0}")]
     TargetExists(String),
 
@@ -68,14 +65,11 @@ impl ScaffoldOptions {
     {
         let matches =
             parse_matches(command, args).map_err(|_| ScaffoldCommandError::Usage(usage()))?;
-        let name = matches
-            .get_one::<String>("name")
-            .expect("clap requires name")
-            .clone();
-        validate_project_name(&name)?;
-
         Ok(Self {
-            name,
+            name: matches
+                .get_one::<String>("name")
+                .expect("clap requires name")
+                .clone(),
             fleets_dir: path_option(&matches, "dir").unwrap_or_else(|| PathBuf::from("fleets")),
             yes: matches.get_flag("yes"),
         })
@@ -169,6 +163,7 @@ fn fleet_create_command() -> ClapCommand {
             Arg::new("name")
                 .value_name("name")
                 .required(true)
+                .value_parser(clap::builder::ValueParser::new(parse_project_name))
                 .help("Snake-case fleet name to create"),
         )
         .arg(
@@ -224,27 +219,27 @@ where
     Err(ScaffoldCommandError::Cancelled)
 }
 
-fn validate_project_name(name: &str) -> Result<(), ScaffoldCommandError> {
+fn parse_project_name(name: &str) -> Result<String, String> {
     let mut previous_underscore = false;
     for (index, ch) in name.chars().enumerate() {
         let valid = ch.is_ascii_lowercase() || ch.is_ascii_digit() || ch == '_';
         if !valid {
-            return Err(ScaffoldCommandError::InvalidProjectName(name.to_string()));
+            return Err(format!("project name must be snake_case: {name}"));
         }
         if index == 0 && !ch.is_ascii_lowercase() {
-            return Err(ScaffoldCommandError::InvalidProjectName(name.to_string()));
+            return Err(format!("project name must be snake_case: {name}"));
         }
         if ch == '_' && previous_underscore {
-            return Err(ScaffoldCommandError::InvalidProjectName(name.to_string()));
+            return Err(format!("project name must be snake_case: {name}"));
         }
         previous_underscore = ch == '_';
     }
 
     if name.is_empty() || name.ends_with('_') {
-        return Err(ScaffoldCommandError::InvalidProjectName(name.to_string()));
+        return Err(format!("project name must be snake_case: {name}"));
     }
 
-    Ok(())
+    Ok(name.to_string())
 }
 
 fn write_new_file(path: &Path, contents: &str) -> Result<(), ScaffoldCommandError> {
@@ -341,7 +336,7 @@ const APP_BUILD_RS: &str = r#"fn main() {
 }
 "#;
 
-const ROOT_LIB_RS: &str = r"#![allow(clippy::unused_async)]
+const ROOT_LIB_RS: &str = r"#![expect(clippy::unused_async)]
 
 //
 // CANIC
@@ -361,7 +356,7 @@ pub async fn canic_upgrade() {}
 canic::cdk::export_candid_debug!();
 ";
 
-const APP_LIB_RS: &str = r#"#![allow(clippy::unused_async)]
+const APP_LIB_RS: &str = r#"#![expect(clippy::unused_async)]
 
 use canic::ids::CanisterRole;
 
@@ -452,7 +447,7 @@ mod tests {
         for name in ["MyApp", "my-app", "_app", "app_", "app__one", "1app"] {
             assert!(matches!(
                 ScaffoldOptions::parse([OsString::from(name)]),
-                Err(ScaffoldCommandError::InvalidProjectName(_))
+                Err(ScaffoldCommandError::Usage(_))
             ));
         }
     }

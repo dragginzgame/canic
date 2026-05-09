@@ -7,18 +7,13 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.33.x] - 2026-05-08 - dfx -> icp-cli
 
-- `0.33.2` hardens delegated auth, subject-caller binding, lifecycle timer symmetry, layer boundaries, capability proof dispatch, and root replay expiry/capacity behavior after the recurring audit pass, including removal of the public partial `AuthApi::verify_token` helper.
+- `0.33.3` cleans up `canic-cli` parser and command-family internals by moving routing and validation further onto Clap, sharing host helpers, and splitting restore CLI tests without changing command shapes.
 
-```bash
-cargo test -p canic-core --lib api::rpc::capability::tests
-cargo test -p canic-core --lib evaluate_root_replay_returns_expired
-bash scripts/ci/run-layering-guards.sh
-```
+- `0.33.2` is a cleanup/audit slice that hardens delegated auth, subject-caller binding, lifecycle timer symmetry, layer boundaries, capability proof dispatch, root replay expiry/capacity behavior, and audit baselines, including removal of the public partial `AuthApi::verify_token` helper, reducing the complexity audit residual score to `3/10`, replacing stale lint allowances with checked expectations, and starting the config validation ownership refactor.
 
 - `0.33.1` adds native local replica controls, makes project status detect stale local installs, funds local root creation through ICP CLI, and adds ICP CLI debug/status workflows for local development.
 
 ```bash
-canic replica start
 canic replica start --debug
 canic replica status
 canic replica stop
@@ -29,8 +24,6 @@ canic status --network local
 - `0.33.0` hard-cuts Canic from DFX project tooling to ICP CLI project tooling, replacing `dfx.json` with `icp.yaml`, moving live local artifacts to `.icp`, and routing install, list, medic, snapshot, restore, CI, and dev setup through ICP CLI.
 
 ```bash
-icp environment list
-icp build root -e demo
 canic install demo
 canic list demo --network local
 canic medic demo

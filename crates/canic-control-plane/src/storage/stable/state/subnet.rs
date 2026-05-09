@@ -218,7 +218,6 @@ impl SubnetState {
     }
 
     #[must_use]
-    #[allow(clippy::missing_const_for_fn)]
     pub(crate) fn publication_store_binding() -> Option<WasmStoreBinding> {
         Self::export().publication_store.active_binding
     }
@@ -355,8 +354,6 @@ impl SubnetState {
         )
         .changed
     }
-
-    #[allow(clippy::missing_const_for_fn)]
     pub(crate) fn clear_publication_store_binding(changed_at: u64) -> bool {
         Self::apply_publication_store_transition(
             PublicationStoreTransition::ClearActive,

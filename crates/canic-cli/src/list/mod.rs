@@ -2,6 +2,7 @@ use crate::{
     args::{local_network, print_help_or_version},
     version_text,
 };
+mod config;
 mod options;
 mod render;
 
@@ -11,25 +12,20 @@ use canic_backup::discovery::{DiscoveryError, RegistryEntry, parse_registry_entr
 use canic_host::{
     format::byte_size,
     icp::{IcpCli, IcpCommandError},
-    install_root::{
-        InstallState, discover_current_canic_config_choices, read_named_fleet_install_state,
-    },
-    release_set::{
-        config_path as default_config_path, configured_fleet_name, configured_fleet_roles,
-        configured_role_auto_create, configured_role_capabilities, configured_role_details,
-        configured_role_kinds, configured_role_topups, icp_root,
-    },
+    install_root::{InstallState, read_named_fleet_install_state},
+    release_set::icp_root,
     replica_query,
 };
+use config::{load_config_role_rows, missing_config_roles, resolve_role_kinds};
 use options::{ListOptions, ListSource, config_usage, usage};
+#[cfg(not(test))]
+use render::render_config_output;
 #[cfg(test)]
 use render::{
     CANISTER_HEADER, ConfigRoleRow, KIND_HEADER, READY_HEADER, ROLE_HEADER, RegistryRow,
     WASM_HEADER, kind_label, render_config_output, render_registry_separator,
     render_registry_table_row, render_registry_tree,
 };
-#[cfg(not(test))]
-use render::{ConfigRoleRow, render_config_output};
 use render::{ListTitle, ReadyStatus, render_list_output, visible_entries};
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -47,9 +43,6 @@ use thiserror::Error as ThisError;
 pub enum ListCommandError {
     #[error("{0}")]
     Usage(String),
-
-    #[error("unknown option {0}")]
-    UnknownOption(String),
 
     #[error("registry JSON did not contain the requested canister {0}")]
     CanisterNotInRegistry(String),
@@ -147,31 +140,6 @@ fn list_title(options: &ListOptions) -> ListTitle {
     }
 }
 
-fn resolve_role_kinds(options: &ListOptions) -> BTreeMap<String, String> {
-    role_kind_config_candidates(options)
-        .into_iter()
-        .find_map(|path| configured_role_kinds(&path).ok())
-        .unwrap_or_default()
-}
-
-fn role_kind_config_candidates(options: &ListOptions) -> Vec<std::path::PathBuf> {
-    let mut paths = Vec::new();
-
-    if let Ok(path) = selected_config_path(options) {
-        paths.push(path);
-    }
-
-    if let Ok(Some(state)) = read_selected_install_state(options) {
-        paths.push(std::path::PathBuf::from(state.config_path));
-    }
-
-    if let Ok(workspace_root) = std::env::current_dir() {
-        paths.push(default_config_path(&workspace_root));
-    }
-
-    paths
-}
-
 fn list_ready_statuses(
     options: &ListOptions,
     registry: &[RegistryEntry],
@@ -227,64 +195,6 @@ fn load_registry_entries(options: &ListOptions) -> Result<Vec<RegistryEntry>, Li
     parse_registry_entries(&registry_json).map_err(ListCommandError::from)
 }
 
-fn load_config_role_rows(options: &ListOptions) -> Result<Vec<ConfigRoleRow>, ListCommandError> {
-    let config_path = selected_config_path(options)?;
-    let roles = configured_fleet_roles(&config_path)
-        .map_err(|err| ListCommandError::InstallState(err.to_string()))?;
-    let kinds = configured_role_kinds(&config_path)
-        .map_err(|err| ListCommandError::InstallState(err.to_string()))?;
-    let capabilities = configured_role_capabilities(&config_path)
-        .map_err(|err| ListCommandError::InstallState(err.to_string()))?;
-    let auto_create = configured_role_auto_create(&config_path)
-        .map_err(|err| ListCommandError::InstallState(err.to_string()))?;
-    let topups = configured_role_topups(&config_path)
-        .map_err(|err| ListCommandError::InstallState(err.to_string()))?;
-    let details = if options.verbose {
-        configured_role_details(&config_path)
-            .map_err(|err| ListCommandError::InstallState(err.to_string()))?
-    } else {
-        BTreeMap::new()
-    };
-    let anchor = options.anchor.as_deref();
-    if let Some(anchor) = anchor
-        && !roles.iter().any(|role| role == anchor)
-    {
-        return Err(ListCommandError::CanisterNotInRegistry(anchor.to_string()));
-    }
-
-    Ok(roles
-        .into_iter()
-        .filter(|role| anchor.is_none_or(|anchor| anchor == role))
-        .map(|role| ConfigRoleRow {
-            capabilities: capabilities
-                .get(&role)
-                .filter(|capabilities| !capabilities.is_empty())
-                .map_or_else(|| "-".to_string(), |capabilities| capabilities.join(", ")),
-            auto_create: auto_create_label(&role, &auto_create),
-            topup: topups
-                .get(&role)
-                .cloned()
-                .unwrap_or_else(|| "-".to_string()),
-            details: details.get(&role).cloned().unwrap_or_default(),
-            kind: kinds
-                .get(&role)
-                .cloned()
-                .unwrap_or_else(|| "unknown".to_string()),
-            role,
-        })
-        .collect())
-}
-
-fn auto_create_label(role: &str, auto_create: &std::collections::BTreeSet<String>) -> String {
-    if role == "root" {
-        "-".to_string()
-    } else if auto_create.contains(role) {
-        "yes".to_string()
-    } else {
-        "no".to_string()
-    }
-}
-
 fn resolve_root_canister(options: &ListOptions) -> Result<String, ListCommandError> {
     if let Some(root) = &options.root {
         return Ok(root.clone());
@@ -306,26 +216,6 @@ fn read_selected_install_state(
     options: &ListOptions,
 ) -> Result<Option<InstallState>, Box<dyn std::error::Error>> {
     read_named_fleet_install_state(&state_network(options), &options.fleet)
-}
-
-fn selected_config_path(options: &ListOptions) -> Result<PathBuf, ListCommandError> {
-    let fleet = &options.fleet;
-    let matches = discover_current_canic_config_choices()
-        .map_err(|err| ListCommandError::InstallState(err.to_string()))?
-        .into_iter()
-        .filter_map(|path| match configured_fleet_name(&path) {
-            Ok(name) if name == *fleet => Some(path),
-            Ok(_) | Err(_) => None,
-        })
-        .collect::<Vec<_>>();
-
-    match matches.as_slice() {
-        [] => Err(ListCommandError::UnknownFleet(fleet.clone())),
-        [path] => Ok(path.clone()),
-        _ => Err(ListCommandError::InstallState(format!(
-            "multiple configs declare fleet {fleet}"
-        ))),
-    }
 }
 
 fn resolve_tree_anchor(options: &ListOptions) -> Option<String> {
@@ -380,27 +270,6 @@ fn resolve_icp_artifact_root(options: &ListOptions) -> Option<PathBuf> {
         return Some(PathBuf::from(state.icp_root));
     }
     icp_root().ok()
-}
-
-fn missing_config_roles(options: &ListOptions, registry: &[RegistryEntry]) -> Vec<String> {
-    if !matches!(options.source, ListSource::RootRegistry) || options.anchor.is_some() {
-        return Vec::new();
-    }
-
-    let Ok(config_path) = selected_config_path(options) else {
-        return Vec::new();
-    };
-    let Ok(expected) = configured_fleet_roles(&config_path) else {
-        return Vec::new();
-    };
-    let deployed = registry
-        .iter()
-        .filter_map(|entry| entry.role.as_deref())
-        .collect::<BTreeSet<_>>();
-    expected
-        .into_iter()
-        .filter(|role| !deployed.contains(role.as_str()))
-        .collect()
 }
 
 fn list_replica_query_error(options: &ListOptions, root: &str, error: String) -> ListCommandError {

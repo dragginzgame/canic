@@ -1,11 +1,14 @@
 use crate::{
-    args::{parse_matches, path_option, print_help_or_version, value_arg},
+    args::{
+        parse_matches, parse_subcommand, passthrough_subcommand, path_option,
+        print_help_or_version, value_arg,
+    },
     output, version_text,
 };
 use canic_backup::manifest::{
     FleetBackupManifest, ManifestValidationError, manifest_validation_summary,
 };
-use clap::{ArgMatches, Command as ClapCommand, error::ErrorKind};
+use clap::Command as ClapCommand;
 use std::{ffi::OsString, fs, path::PathBuf};
 use thiserror::Error as ThisError;
 
@@ -17,12 +20,6 @@ use thiserror::Error as ThisError;
 pub enum ManifestCommandError {
     #[error("{0}")]
     Usage(String),
-
-    #[error("manifest validate requires --manifest <file>\n\n{0}")]
-    MissingManifest(String),
-
-    #[error("unknown option {0}")]
-    UnknownOption(String),
 
     #[error(transparent)]
     Io(#[from] std::io::Error),
@@ -49,11 +46,11 @@ impl ManifestValidateOptions {
     where
         I: IntoIterator<Item = OsString>,
     {
-        let matches =
-            parse_matches(manifest_validate_command(), args).map_err(parse_usage_error)?;
+        let matches = parse_matches(manifest_validate_command(), args)
+            .map_err(|_| ManifestCommandError::Usage(validate_usage()))?;
 
         Ok(Self {
-            manifest: required_manifest_option(&matches)?,
+            manifest: path_option(&matches, "manifest").expect("clap requires manifest"),
             out: path_option(&matches, "out"),
         })
     }
@@ -73,32 +70,24 @@ fn manifest_validate_command() -> ClapCommand {
         .arg(value_arg("out").long("out").value_name("file"))
 }
 
-fn parse_usage_error(err: clap::Error) -> ManifestCommandError {
-    if err.kind() == ErrorKind::MissingRequiredArgument {
-        ManifestCommandError::MissingManifest(validate_usage())
-    } else {
-        ManifestCommandError::Usage(validate_usage())
-    }
-}
-
-fn required_manifest_option(matches: &ArgMatches) -> Result<PathBuf, ManifestCommandError> {
-    path_option(matches, "manifest")
-        .ok_or_else(|| ManifestCommandError::MissingManifest(validate_usage()))
-}
-
 /// Run a manifest subcommand.
 pub fn run<I>(args: I) -> Result<(), ManifestCommandError>
 where
     I: IntoIterator<Item = OsString>,
 {
-    let mut args = args.into_iter();
-    let Some(command) = args.next().and_then(|arg| arg.into_string().ok()) else {
+    let args = args.into_iter().collect::<Vec<_>>();
+    if print_help_or_version(&args, usage, version_text()) {
+        return Ok(());
+    }
+
+    let Some((command, args)) = parse_subcommand(manifest_command(), args)
+        .map_err(|_| ManifestCommandError::Usage(usage()))?
+    else {
         return Err(ManifestCommandError::Usage(usage()));
     };
 
     match command.as_str() {
         "validate" => {
-            let args = args.collect::<Vec<_>>();
             if print_help_or_version(&args, validate_usage, version_text()) {
                 return Ok(());
             }
@@ -107,15 +96,7 @@ where
             write_validation_summary(&options, &manifest)?;
             Ok(())
         }
-        "help" | "--help" | "-h" => {
-            println!("{}", usage());
-            Ok(())
-        }
-        "version" | "--version" | "-V" => {
-            println!("{}", version_text());
-            Ok(())
-        }
-        _ => Err(ManifestCommandError::UnknownOption(command)),
+        _ => unreachable!("manifest dispatch command only defines known commands"),
     }
 }
 
@@ -153,11 +134,11 @@ fn manifest_command() -> ClapCommand {
         .bin_name("canic manifest")
         .about("Validate fleet backup manifests")
         .disable_help_flag(true)
-        .subcommand(
+        .subcommand(passthrough_subcommand(
             ClapCommand::new("validate")
                 .about("Validate a fleet backup manifest")
                 .disable_help_flag(true),
-        )
+        ))
 }
 
 #[cfg(test)]
@@ -192,7 +173,7 @@ mod tests {
     fn missing_manifest_validate_option_names_required_path() {
         let err = ManifestValidateOptions::parse([]).expect_err("missing manifest option");
 
-        assert!(matches!(err, ManifestCommandError::MissingManifest(_)));
+        assert!(matches!(err, ManifestCommandError::Usage(_)));
         assert!(err.to_string().contains("--manifest <file>"));
         assert!(err.to_string().contains("canic manifest validate"));
     }

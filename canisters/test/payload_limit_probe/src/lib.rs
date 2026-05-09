@@ -1,4 +1,4 @@
-#![allow(clippy::unnecessary_wraps, clippy::unused_async)]
+#![expect(clippy::unused_async)]
 use canic::{Error, ids::CanisterRole, prelude::*};
 
 const TEST_ROLE: CanisterRole = CanisterRole::new("test");

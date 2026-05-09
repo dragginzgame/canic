@@ -55,6 +55,8 @@ Dependency direction is strict: `endpoints -> workflow -> policy -> ops -> model
 - Rust edition is 2024.
 - Prefer existing local patterns; keep imports at file top.
 - Use directory modules with `mod.rs`; never keep both `foo.rs` and `foo/`.
+- Do not use `#[path = "..."]` for module layout. Rename files/directories so
+  Rust's normal module discovery works.
 - Use triple-line `///` section markers above structs, enums, and traits to
   improve scanability:
   `///`, `/// TypeName`, `///`.

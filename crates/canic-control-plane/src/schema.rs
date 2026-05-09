@@ -27,7 +27,7 @@ pub struct WasmStoreConfig {
 impl WasmStoreConfig {
     /// Build the one implicit wasm-store preset used on every subnet.
     #[must_use]
-    #[allow(clippy::missing_const_for_fn)]
+    #[expect(clippy::missing_const_for_fn)]
     pub fn implicit() -> Self {
         Self {
             canister_role: IMPLICIT_WASM_STORE_ROLE,

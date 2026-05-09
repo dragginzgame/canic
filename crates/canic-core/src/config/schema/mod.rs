@@ -59,26 +59,6 @@ pub enum ConfigSchemaError {
 #[cfg(any(not(target_arch = "wasm32"), test))]
 pub const NAME_MAX_BYTES: usize = 40;
 
-#[cfg(any(not(target_arch = "wasm32"), test))]
-fn validate_canister_role_len(role: &CanisterRole, context: &str) -> Result<(), ConfigSchemaError> {
-    if role.as_ref().len() > NAME_MAX_BYTES {
-        return Err(ConfigSchemaError::ValidationError(format!(
-            "{context} '{role}' exceeds {NAME_MAX_BYTES} bytes",
-        )));
-    }
-    Ok(())
-}
-
-#[cfg(any(not(target_arch = "wasm32"), test))]
-fn validate_subnet_role_len(role: &SubnetRole, context: &str) -> Result<(), ConfigSchemaError> {
-    if role.as_ref().len() > NAME_MAX_BYTES {
-        return Err(ConfigSchemaError::ValidationError(format!(
-            "{context} '{role}' exceeds {NAME_MAX_BYTES} bytes",
-        )));
-    }
-    Ok(())
-}
-
 ///
 /// Config schema errors are internal configuration failures.
 /// They are surfaced as InternalError with origin = Config.
@@ -206,84 +186,6 @@ impl ConfigModel {
     }
 }
 
-#[cfg(any(not(target_arch = "wasm32"), test))]
-impl Validate for ConfigModel {
-    fn validate(&self) -> Result<(), ConfigSchemaError> {
-        // Validation order is intentional to surface the most meaningful
-        // errors first and avoid cascaded failures.
-
-        for subnet_role in self.subnets.keys() {
-            validate_subnet_role_len(subnet_role, "subnet")?;
-        }
-
-        self.log.validate()?;
-        self.auth.validate()?;
-        self.app.validate()?;
-        if let Some(fleet) = &self.fleet {
-            fleet.validate()?;
-        }
-
-        // PRIME subnet must exist
-        let prime = SubnetRole::PRIME;
-        let prime_subnet = self
-            .subnets
-            .get(&prime)
-            .ok_or_else(|| ConfigSchemaError::ValidationError("prime subnet not found".into()))?;
-
-        // ROOT canister must exist in PRIME and be kind=Root
-        let root_role = CanisterRole::ROOT;
-        let root_cfg = prime_subnet.canisters.get(&root_role).ok_or_else(|| {
-            ConfigSchemaError::ValidationError("root canister not defined in prime subnet".into())
-        })?;
-
-        if root_cfg.kind != CanisterKind::Root {
-            return Err(ConfigSchemaError::ValidationError(
-                "root canister must have kind = \"root\"".into(),
-            ));
-        }
-
-        // App index canisters must exist in PRIME and be SINGLETONs
-        for canister_role in &self.app_index {
-            validate_canister_role_len(canister_role, "app index canister")?;
-
-            let canister_cfg = prime_subnet.canisters.get(canister_role).ok_or_else(|| {
-                ConfigSchemaError::ValidationError(format!(
-                    "app index canister '{canister_role}' is not in prime subnet",
-                ))
-            })?;
-
-            if canister_cfg.kind != CanisterKind::Singleton {
-                return Err(ConfigSchemaError::ValidationError(format!(
-                    "app index canister '{canister_role}' must have kind = \"singleton\"",
-                )));
-            }
-        }
-
-        // Exactly one ROOT canister must exist globally
-        let mut root_roles = Vec::new();
-        for (subnet_role, subnet) in &self.subnets {
-            for (canister_role, canister_cfg) in &subnet.canisters {
-                if canister_cfg.kind == CanisterKind::Root {
-                    root_roles.push(format!("{subnet_role}:{canister_role}"));
-                }
-            }
-        }
-
-        if root_roles.len() > 1 {
-            return Err(ConfigSchemaError::ValidationError(format!(
-                "root kind must be unique globally (found {})",
-                root_roles.join(", "),
-            )));
-        }
-
-        for subnet in self.subnets.values() {
-            subnet.validate()?;
-        }
-
-        Ok(())
-    }
-}
-
 ///
 /// FleetConfig
 ///
@@ -293,26 +195,6 @@ impl Validate for ConfigModel {
 pub struct FleetConfig {
     #[serde(default)]
     pub name: Option<String>,
-}
-
-#[cfg(any(not(target_arch = "wasm32"), test))]
-impl Validate for FleetConfig {
-    fn validate(&self) -> Result<(), ConfigSchemaError> {
-        let Some(name) = self.name.as_deref() else {
-            return Ok(());
-        };
-        let valid = !name.is_empty()
-            && name
-                .bytes()
-                .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'));
-        if valid {
-            Ok(())
-        } else {
-            Err(ConfigSchemaError::ValidationError(format!(
-                "invalid fleet name {name:?}; use letters, numbers, '-' or '_'"
-            )))
-        }
-    }
 }
 
 ///
@@ -340,16 +222,6 @@ impl Default for AppConfig {
             init_mode: AppInitMode::Enabled,
             whitelist: None,
         }
-    }
-}
-
-#[cfg(any(not(target_arch = "wasm32"), test))]
-impl Validate for AppConfig {
-    fn validate(&self) -> Result<(), ConfigSchemaError> {
-        if let Some(list) = &self.whitelist {
-            list.validate()?;
-        }
-        Ok(())
     }
 }
 
@@ -382,14 +254,6 @@ pub struct AuthConfig {
 
     #[serde(default)]
     pub role_attestation: RoleAttestationConfig,
-}
-
-#[cfg(any(not(target_arch = "wasm32"), test))]
-impl Validate for AuthConfig {
-    fn validate(&self) -> Result<(), ConfigSchemaError> {
-        self.delegated_tokens.validate()?;
-        self.role_attestation.validate()
-    }
 }
 
 ///
@@ -434,27 +298,6 @@ impl Default for DelegatedTokenConfig {
     }
 }
 
-#[cfg(any(not(target_arch = "wasm32"), test))]
-impl Validate for DelegatedTokenConfig {
-    fn validate(&self) -> Result<(), ConfigSchemaError> {
-        if self.ecdsa_key_name.trim().is_empty() {
-            return Err(ConfigSchemaError::ValidationError(
-                "auth.delegated_tokens.ecdsa_key_name must not be empty".into(),
-            ));
-        }
-
-        if let Some(max_ttl_secs) = self.max_ttl_secs
-            && max_ttl_secs == 0
-        {
-            return Err(ConfigSchemaError::ValidationError(
-                "auth.delegated_tokens.max_ttl_secs must be greater than zero".into(),
-            ));
-        }
-
-        Ok(())
-    }
-}
-
 ///
 /// RoleAttestationConfig
 ///
@@ -492,34 +335,6 @@ impl Default for RoleAttestationConfig {
     }
 }
 
-#[cfg(any(not(target_arch = "wasm32"), test))]
-impl Validate for RoleAttestationConfig {
-    fn validate(&self) -> Result<(), ConfigSchemaError> {
-        if self.ecdsa_key_name.trim().is_empty() {
-            return Err(ConfigSchemaError::ValidationError(
-                "auth.role_attestation.ecdsa_key_name must not be empty".into(),
-            ));
-        }
-
-        if self.max_ttl_secs == 0 {
-            return Err(ConfigSchemaError::ValidationError(
-                "auth.role_attestation.max_ttl_secs must be greater than zero".into(),
-            ));
-        }
-
-        for role in self.min_accepted_epoch_by_role.keys() {
-            if role.trim().is_empty() {
-                return Err(ConfigSchemaError::ValidationError(
-                    "auth.role_attestation.min_accepted_epoch_by_role keys must not be empty"
-                        .into(),
-                ));
-            }
-        }
-
-        Ok(())
-    }
-}
-
 ///
 /// Whitelist
 ///
@@ -531,20 +346,6 @@ impl Validate for RoleAttestationConfig {
 pub struct Whitelist {
     #[serde(default)]
     pub principals: BTreeSet<String>,
-}
-
-#[cfg(any(not(target_arch = "wasm32"), test))]
-impl Validate for Whitelist {
-    fn validate(&self) -> Result<(), ConfigSchemaError> {
-        for (i, s) in self.principals.iter().enumerate() {
-            if Principal::from_text(s).is_err() {
-                return Err(ConfigSchemaError::ValidationError(format!(
-                    "principal #{i} {s} is invalid"
-                )));
-            }
-        }
-        Ok(())
-    }
 }
 
 ///
@@ -562,130 +363,5 @@ pub struct Standards {
     pub icrc103: bool,
 }
 
-///
-/// TESTS
-///
-
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::cdk::types::Cycles;
-    use std::collections::BTreeMap;
-
-    fn base_canister_config(kind: CanisterKind) -> CanisterConfig {
-        CanisterConfig {
-            kind,
-            initial_cycles: Cycles::new(0),
-            topup_policy: None,
-            randomness: RandomnessConfig::default(),
-            scaling: None,
-            sharding: None,
-            directory: None,
-            auth: CanisterAuthConfig::default(),
-            standards: StandardsCanisterConfig::default(),
-        }
-    }
-
-    #[test]
-    fn root_canister_must_exist_in_prime_subnet() {
-        let mut cfg = ConfigModel::default();
-        cfg.subnets
-            .insert(SubnetRole::PRIME, SubnetConfig::default());
-
-        cfg.validate()
-            .expect_err("expected missing root canister to fail validation");
-    }
-
-    #[test]
-    fn fleet_name_is_accepted_when_configured() {
-        let mut cfg = ConfigModel::test_default();
-        cfg.fleet = Some(FleetConfig {
-            name: Some("demo".to_string()),
-        });
-
-        cfg.validate().expect("fleet name should be valid");
-    }
-
-    #[test]
-    fn fleet_name_must_be_filesystem_safe() {
-        let mut cfg = ConfigModel::test_default();
-        cfg.fleet = Some(FleetConfig {
-            name: Some("demo fleet".to_string()),
-        });
-
-        cfg.validate().expect_err("fleet name should fail");
-    }
-
-    #[test]
-    fn root_canister_must_be_kind_root() {
-        let mut cfg = ConfigModel::test_default();
-        let mut canisters = BTreeMap::new();
-
-        canisters.insert(
-            CanisterRole::ROOT,
-            base_canister_config(CanisterKind::Singleton),
-        );
-
-        cfg.subnets.get_mut(&SubnetRole::PRIME).unwrap().canisters = canisters;
-
-        cfg.validate().expect_err("expected non-root kind to fail");
-    }
-
-    #[test]
-    fn multiple_root_canisters_are_rejected() {
-        let mut cfg = ConfigModel::test_default();
-
-        cfg.subnets.insert(
-            SubnetRole::new("aux"),
-            SubnetConfig {
-                canisters: {
-                    let mut m = BTreeMap::new();
-                    m.insert(CanisterRole::ROOT, base_canister_config(CanisterKind::Root));
-                    m
-                },
-                ..Default::default()
-            },
-        );
-
-        cfg.validate().expect_err("expected multiple roots to fail");
-    }
-
-    #[test]
-    fn delegated_tokens_max_ttl_zero_is_invalid() {
-        let mut cfg = ConfigModel::test_default();
-        cfg.auth.delegated_tokens.max_ttl_secs = Some(0);
-
-        cfg.validate().expect_err("expected zero ttl to fail");
-    }
-
-    #[test]
-    fn role_attestation_max_ttl_zero_is_invalid() {
-        let mut cfg = ConfigModel::test_default();
-        cfg.auth.role_attestation.max_ttl_secs = 0;
-
-        cfg.validate().expect_err("expected zero ttl to fail");
-    }
-
-    #[test]
-    fn role_attestation_empty_min_epoch_role_key_is_invalid() {
-        let mut cfg = ConfigModel::test_default();
-        cfg.auth
-            .role_attestation
-            .min_accepted_epoch_by_role
-            .insert("   ".to_string(), 1);
-
-        cfg.validate()
-            .expect_err("expected empty min epoch role key to fail");
-    }
-
-    #[test]
-    fn invalid_whitelist_principal_is_rejected() {
-        let mut cfg = ConfigModel::test_default();
-        cfg.app.whitelist = Some(Whitelist {
-            principals: std::iter::once("not-a-principal".into()).collect(),
-        });
-
-        cfg.validate()
-            .expect_err("expected invalid principal to fail");
-    }
-}
+mod tests;

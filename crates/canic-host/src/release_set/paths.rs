@@ -130,6 +130,15 @@ pub fn workspace_manifest_path(workspace_root: &Path) -> PathBuf {
     )
 }
 
+// Render a path relative to the workspace root when possible.
+#[must_use]
+pub fn display_workspace_path(workspace_root: &Path, path: &Path) -> String {
+    path.strip_prefix(workspace_root)
+        .unwrap_or(path)
+        .display()
+        .to_string()
+}
+
 // Resolve the built artifact directory for the selected ICP environment.
 pub fn resolve_artifact_root(
     icp_root: &Path,

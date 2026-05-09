@@ -44,11 +44,9 @@ pub enum TemplateManifestOpsError {
     TemplateChunkSetEmpty(TemplateReleaseKey),
 
     #[error("chunk set '{0}' payload hash mismatch")]
-    #[allow(dead_code)]
     PayloadHashMismatch(TemplateReleaseKey),
 
     #[error("chunk set '{0}' payload size mismatch")]
-    #[allow(dead_code)]
     PayloadSizeMismatch(TemplateReleaseKey),
 
     #[error("chunk set '{0}' exceeds chunk index bounds")]

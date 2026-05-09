@@ -2,8 +2,6 @@
 //! Minimal client canister that calls the authority buy endpoint.
 //!
 
-#![allow(clippy::unused_async)]
-
 use candid::Principal;
 use ic_cdk::call::Call;
 use ic_cdk::update;

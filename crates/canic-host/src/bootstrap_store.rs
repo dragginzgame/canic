@@ -297,7 +297,7 @@ incremental = true\n",
     )?;
     fs::write(
         wrapper_root.join("src/lib.rs"),
-        "#![allow(clippy::unused_async)]\n\ncanic::start_wasm_store!();\ncanic::cdk::export_candid_debug!();\n",
+        "#![expect(clippy::unused_async)]\n\ncanic::start_wasm_store!();\ncanic::cdk::export_candid_debug!();\n",
     )?;
 
     let workspace_lock = workspace_root.join("Cargo.lock");

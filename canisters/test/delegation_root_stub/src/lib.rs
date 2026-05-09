@@ -1,6 +1,6 @@
 //! Minimal root stub for delegation access tests.
 
-#![allow(clippy::unused_async)]
+#![expect(clippy::unused_async)]
 
 use canic::{
     CANIC_WASM_CHUNK_BYTES, Error,

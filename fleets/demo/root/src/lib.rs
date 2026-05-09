@@ -1,4 +1,4 @@
-#![allow(clippy::unused_async)]
+#![expect(clippy::unused_async)]
 
 canic::start_root!();
 

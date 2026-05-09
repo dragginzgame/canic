@@ -1,6 +1,6 @@
 //! Minimal dedicated instance canister for directory placement tests.
 
-#![allow(clippy::unused_async)]
+#![expect(clippy::unused_async)]
 
 use canic::{
     Error, api::canister::CanisterRole, cdk::types::Principal, dto::auth::DelegatedToken, ids::cap,

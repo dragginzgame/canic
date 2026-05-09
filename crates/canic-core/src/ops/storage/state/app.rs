@@ -129,7 +129,7 @@ impl AppStateOps {
     /// Import application state from an operational snapshot.
     ///
     /// Validation occurs during snapshot → data conversion.
-    #[allow(dead_code)]
+    #[cfg_attr(not(test), expect(dead_code))]
     pub fn import(data: AppStateRecord) {
         AppState::import(data);
     }

@@ -129,7 +129,7 @@ pub fn expand(kind: EndpointKind, args: ValidatedArgs, mut func: ItemFn) -> Toke
         #payload_registration
 
         #(#attrs)*
-        #[allow(clippy::missing_const_for_fn, clippy::unnecessary_wraps)]
+        #[expect(clippy::missing_const_for_fn, clippy::unnecessary_wraps)]
         #cdk_attr
         #vis #wrapper_sig {
             #call_decl
@@ -137,7 +137,7 @@ pub fn expand(kind: EndpointKind, args: ValidatedArgs, mut func: ItemFn) -> Toke
             #dispatch_call
         }
 
-        #[allow(clippy::missing_const_for_fn, clippy::unnecessary_wraps)]
+        #[expect(clippy::missing_const_for_fn, clippy::unnecessary_wraps)]
         #func
     }
 }

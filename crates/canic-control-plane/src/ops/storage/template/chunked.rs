@@ -173,7 +173,6 @@ impl TemplateChunkedOps {
     }
 
     // Replace the approved manifest for a local wasm store with capacity enforcement.
-    #[allow(dead_code)]
     pub fn replace_approved_in_store_from_input(
         input: TemplateManifestInput,
         limits: WasmStoreLimits,
@@ -192,7 +191,6 @@ impl TemplateChunkedOps {
     }
 
     // Publish one complete chunk set into the local wasm store.
-    #[allow(dead_code)]
     pub fn publish_chunk_set_from_input(
         input: TemplateChunkSetInput,
         created_at: u64,
@@ -249,7 +247,7 @@ impl TemplateChunkedOps {
     }
 
     // Publish one complete chunk set into a local store with capacity enforcement.
-    #[allow(dead_code)]
+    #[cfg_attr(not(test), expect(dead_code))]
     pub fn publish_chunk_set_in_store_from_input(
         input: TemplateChunkSetInput,
         created_at: u64,
@@ -664,8 +662,6 @@ fn projected_template_versions(
 
     template_versions
 }
-
-#[allow(dead_code)]
 fn projected_manifests_after_replace(
     input: &TemplateManifestInput,
 ) -> Vec<(TemplateReleaseKey, TemplateManifestRecord)> {

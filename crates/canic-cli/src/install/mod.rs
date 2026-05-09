@@ -1,8 +1,5 @@
 use crate::{
-    args::{
-        local_network, parse_matches, print_help_or_version, string_option, string_values,
-        value_arg,
-    },
+    args::{local_network, parse_matches, print_help_or_version, string_option, value_arg},
     version_text,
 };
 use candid::Principal;
@@ -35,12 +32,6 @@ pub enum InstallCommandError {
     #[error("{0}")]
     Usage(String),
 
-    #[error("cannot provide both positional root target and --root")]
-    ConflictingRootTarget,
-
-    #[error("invalid --ready-timeout-seconds value {0}")]
-    InvalidReadyTimeout(String),
-
     #[error(transparent)]
     Install(#[from] Box<dyn std::error::Error>),
 }
@@ -66,15 +57,15 @@ impl InstallOptions {
     {
         let matches = parse_matches(install_command(), args)
             .map_err(|_| InstallCommandError::Usage(usage()))?;
-        let positional_targets = string_values(&matches, "root-target");
         let fleet = string_option(&matches, "fleet").expect("clap requires fleet");
-        let flag_target = string_option(&matches, "root");
-        let root_target = resolve_root_target(positional_targets, flag_target)?;
+        let root_target = string_option(&matches, "root")
+            .or_else(|| string_option(&matches, "root-target"))
+            .unwrap_or_else(|| DEFAULT_ROOT_TARGET.to_string());
         let root_build_target = string_option(&matches, "root-build-target")
             .unwrap_or_else(|| default_root_build_target(&root_target));
-        let ready_timeout_seconds = string_option(&matches, "ready-timeout-seconds")
-            .map(|value| parse_ready_timeout(&value))
-            .transpose()?
+        let ready_timeout_seconds = matches
+            .get_one::<u64>("ready-timeout-seconds")
+            .copied()
             .unwrap_or_else(default_ready_timeout_seconds);
 
         Ok(Self {
@@ -114,8 +105,9 @@ fn install_command() -> ClapCommand {
         )
         .arg(
             Arg::new("root-target")
-                .num_args(0..)
+                .num_args(0..=1)
                 .value_name("name-or-principal")
+                .conflicts_with("root")
                 .help("Root canister name or principal to install"),
         )
         .arg(
@@ -146,6 +138,7 @@ fn install_command() -> ClapCommand {
             value_arg("ready-timeout-seconds")
                 .long("ready-timeout-seconds")
                 .value_name("seconds")
+                .value_parser(clap::value_parser!(u64))
                 .help("Seconds to wait for root canic_ready"),
         )
         .after_help(INSTALL_HELP_AFTER)
@@ -163,24 +156,6 @@ where
 
     let options = InstallOptions::parse(args)?;
     install_root(options.into_install_root_options()).map_err(InstallCommandError::from)
-}
-
-fn resolve_root_target(
-    positional_targets: Vec<String>,
-    flag_target: Option<String>,
-) -> Result<String, InstallCommandError> {
-    match (positional_targets.as_slice(), flag_target) {
-        ([], None) => Ok(DEFAULT_ROOT_TARGET.to_string()),
-        ([], Some(target)) => Ok(target),
-        ([target], None) => Ok(target.clone()),
-        _ => Err(InstallCommandError::ConflictingRootTarget),
-    }
-}
-
-fn parse_ready_timeout(value: &str) -> Result<u64, InstallCommandError> {
-    value
-        .parse::<u64>()
-        .map_err(|_| InstallCommandError::InvalidReadyTimeout(value.to_string()))
 }
 
 fn default_ready_timeout_seconds() -> u64 {
@@ -334,6 +309,6 @@ mod tests {
         ])
         .expect_err("duplicate root target should fail");
 
-        assert!(matches!(err, InstallCommandError::ConflictingRootTarget));
+        assert!(matches!(err, InstallCommandError::Usage(_)));
     }
 }

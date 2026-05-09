@@ -8,7 +8,9 @@ use canic_backup::discovery::{RegistryEntry, parse_registry_entries};
 use canic_host::{
     icp::IcpCli,
     install_root::{discover_current_canic_config_choices, read_named_fleet_install_state},
-    release_set::{configured_fleet_name, configured_fleet_roles, workspace_root},
+    release_set::{
+        configured_fleet_name, configured_fleet_roles, display_workspace_path, workspace_root,
+    },
     replica_query,
     table::WhitespaceTable,
 };
@@ -294,13 +296,6 @@ impl ReplicaStatus {
             Self::Error(err) => format!("unknown (local): {err}"),
         }
     }
-}
-
-fn display_workspace_path(workspace_root: &Path, path: &Path) -> String {
-    path.strip_prefix(workspace_root)
-        .unwrap_or(path)
-        .display()
-        .to_string()
 }
 
 fn status_command() -> ClapCommand {
