@@ -5,7 +5,9 @@ use crate::{
 mod config;
 mod live;
 mod options;
+mod parse;
 mod render;
+mod tree;
 
 use canic_backup::discovery::DiscoveryError;
 use config::{load_config_role_rows, missing_config_roles};
@@ -13,7 +15,7 @@ use live::{
     list_canic_versions, list_cycle_balances, list_ready_statuses, load_registry_entries,
     resolve_tree_anchor, resolve_wasm_sizes,
 };
-use options::{ListOptions, ListSource, config_usage, usage};
+use options::{ListOptions, config_usage, usage};
 use render::RegistryColumnData;
 #[cfg(not(test))]
 use render::render_config_output;
@@ -23,7 +25,7 @@ use render::{
     WASM_HEADER, render_config_output, render_registry_separator, render_registry_table_row,
     render_registry_tree,
 };
-use render::{ListTitle, ReadyStatus, render_list_output, visible_entries};
+use render::{ListTitle, render_list_output};
 use std::ffi::OsString;
 use thiserror::Error as ThisError;
 
@@ -137,14 +139,17 @@ fn list_title(options: &ListOptions) -> ListTitle {
     }
 }
 
-pub(super) fn state_network(options: &ListOptions) -> String {
+fn state_network(options: &ListOptions) -> String {
     options.network.clone().unwrap_or_else(local_network)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use canic_host::format::cycles_tc;
+    use canic_backup::discovery::parse_registry_entries;
+    use canic_host::replica_query;
+    use options::ListSource;
+    use render::ReadyStatus;
     use serde_json::json;
     use std::collections::BTreeMap;
 
@@ -247,27 +252,6 @@ mod tests {
         assert!(config.contains("--verbose"));
         assert!(config.contains("-v"));
         assert!(config.contains("Examples:"));
-    }
-
-    // Ensure empty-root command errors explain root registry setup.
-    #[test]
-    fn root_registry_hint_explains_empty_root_canister() {
-        let hint = root_registry_hint("the canister contains no Wasm module")
-            .expect("empty wasm hint should be available");
-
-        assert!(hint.contains("canic install"));
-        assert!(hint.contains("no Canic root code is installed"));
-    }
-
-    // Ensure local replica missing-canister errors are recognized for stale fleet guidance.
-    #[test]
-    fn detects_local_canister_not_found_error() {
-        assert!(is_canister_not_found_error(
-            "local replica rejected query: code=3 message=Canister uxrrr-q7777-77774-qaaaq-cai not found"
-        ));
-        assert!(!is_canister_not_found_error(
-            "local replica rejected query: code=5 message=some other failure"
-        ));
     }
 
     // Ensure registry entries render as a stable whitespace table.
@@ -449,44 +433,6 @@ mod tests {
             ]
             .join("\n")
         );
-    }
-
-    // Ensure cycle balances parse from canic_cycle_balance command output.
-    #[test]
-    fn parses_cycle_balance_from_endpoint_output() {
-        assert_eq!(
-            parse_cycle_balance_response("(variant { 17_724 = 4_487_280_757_485 : nat })"),
-            Some(4_487_280_757_485)
-        );
-        assert_eq!(
-            parse_cycle_balance_response("(variant { 17_725 = record { code = 1 : nat } })"),
-            None
-        );
-        assert_eq!(cycles_tc(12_345_678_900_000), "12.35 TC");
-    }
-
-    // Ensure metadata responses provide the Canic framework version for list output.
-    #[test]
-    fn parses_canic_version_from_metadata_output() {
-        assert_eq!(
-            parse_canic_metadata_version_response(
-                r#"{"package_name":"app","canic_version":"0.33.6"}"#
-            ),
-            Some("0.33.6".to_string())
-        );
-        assert_eq!(
-            parse_canic_metadata_version_response(
-                r#"[{"package_name":"app","canic_version":"0.33.7"}]"#
-            ),
-            Some("0.33.7".to_string())
-        );
-        assert_eq!(
-            parse_canic_metadata_version_response(
-                r#"(record { package_name = "app"; canic_version = "0.33.8" })"#
-            ),
-            Some("0.33.8".to_string())
-        );
-        assert_eq!(parse_canic_metadata_version_response("{}"), None);
     }
 
     // Ensure readiness parsing accepts common command-line JSON shapes.

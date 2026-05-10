@@ -14,7 +14,7 @@ use canic_host::{
         display_workspace_path, workspace_root,
     },
     replica_query,
-    table::WhitespaceTable,
+    table::{ColumnAlign, render_table},
 };
 use clap::Command as ClapCommand;
 use std::{collections::BTreeSet, ffi::OsString, path::Path};
@@ -270,23 +270,29 @@ fn deployed_count(fleets: &[StatusFleetRow]) -> usize {
 }
 
 fn render_fleet_table(fleets: &[StatusFleetRow]) -> String {
-    let mut table = WhitespaceTable::new([
-        FLEET_HEADER,
-        DEPLOYED_HEADER,
-        CONFIG_HEADER,
-        CANISTERS_HEADER,
-        ROOT_HEADER,
-    ]);
-    for fleet in fleets {
-        table.push_row([
-            fleet.fleet.clone(),
-            fleet.deployed.clone(),
-            fleet.config.clone(),
-            fleet.canisters.clone(),
-            fleet.root.clone(),
-        ]);
-    }
-    table.render()
+    let rows = fleets
+        .iter()
+        .map(|fleet| {
+            [
+                fleet.fleet.clone(),
+                fleet.deployed.clone(),
+                fleet.config.clone(),
+                fleet.canisters.clone(),
+                fleet.root.clone(),
+            ]
+        })
+        .collect::<Vec<_>>();
+    render_table(
+        &[
+            FLEET_HEADER,
+            DEPLOYED_HEADER,
+            CONFIG_HEADER,
+            CANISTERS_HEADER,
+            ROOT_HEADER,
+        ],
+        &rows,
+        &[ColumnAlign::Left; 5],
+    )
 }
 
 impl ReplicaStatus {
@@ -363,30 +369,17 @@ mod tests {
 
         assert_eq!(
             render_status_report(&report),
-            format!(
-                "Replica: running (local)\n\
-                 ICP CLI: icp 0.2.5\n\
-                 Fleets:  1/2 deployed (network local)\n\
-                 \n\
-                 {:<5}  {:<8}  {:<22}  {:<9}  {}\n\
-                 {:<5}  {:<8}  {:<22}  {:<9}  {}\n\
-                 {:<5}  {:<8}  {:<22}  {:<9}  {}",
-                "FLEET",
-                "DEPLOYED",
-                "CONFIG",
-                "CANISTERS",
-                "ROOT",
-                "demo",
-                "no",
-                "fleets/demo/canic.toml",
-                "2",
-                "-",
-                "test",
-                "yes",
-                "fleets/test/canic.toml",
-                "7",
-                "aaaaa-aa",
-            )
+            [
+                "Replica: running (local)",
+                "ICP CLI: icp 0.2.5",
+                "Fleets:  1/2 deployed (network local)",
+                "",
+                "FLEET   DEPLOYED   CONFIG                   CANISTERS   ROOT",
+                "-----   --------   ----------------------   ---------   --------",
+                "demo    no         fleets/demo/canic.toml   2           -",
+                "test    yes        fleets/test/canic.toml   7           aaaaa-aa",
+            ]
+            .join("\n")
         );
     }
 

@@ -1,8 +1,71 @@
-use crate::args::{flag_arg, parse_matches, path_option, value_arg};
+use crate::args::{
+    default_icp, flag_arg, internal_icp_arg, internal_network_arg, local_network, parse_matches,
+    path_option, string_option, value_arg,
+};
 
-use super::{BackupCommandError, list_usage, status_usage, verify_usage};
+use super::{BackupCommandError, create_usage, list_usage, status_usage, verify_usage};
 use clap::{ArgMatches, Command as ClapCommand};
 use std::{ffi::OsString, path::PathBuf};
+
+///
+/// BackupCreateOptions
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct BackupCreateOptions {
+    pub fleet: String,
+    pub subtree: Option<String>,
+    pub out: Option<PathBuf>,
+    pub dry_run: bool,
+    pub network: String,
+    pub icp: String,
+}
+
+impl BackupCreateOptions {
+    pub fn parse<I>(args: I) -> Result<Self, BackupCommandError>
+    where
+        I: IntoIterator<Item = OsString>,
+    {
+        let matches = parse_backup_options(backup_create_command(), create_usage, args)?;
+
+        Ok(Self {
+            fleet: string_option(&matches, "fleet").expect("clap requires fleet"),
+            subtree: string_option(&matches, "subtree"),
+            out: path_option(&matches, "out"),
+            dry_run: matches.get_flag("dry-run"),
+            network: string_option(&matches, "network").unwrap_or_else(local_network),
+            icp: string_option(&matches, "icp").unwrap_or_else(default_icp),
+        })
+    }
+}
+
+pub(super) fn backup_create_command() -> ClapCommand {
+    ClapCommand::new("create")
+        .bin_name("canic backup create")
+        .about("Plan a topology-aware fleet backup")
+        .disable_help_flag(true)
+        .arg(
+            value_arg("fleet")
+                .value_name("fleet")
+                .required(true)
+                .help("Installed fleet name to plan"),
+        )
+        .arg(
+            value_arg("subtree")
+                .long("subtree")
+                .value_name("role-or-principal")
+                .help("Plan only one connected subtree"),
+        )
+        .arg(
+            value_arg("out")
+                .long("out")
+                .value_name("dir")
+                .help("Plan output directory; defaults to backups/fleet-<name>-YYYYMMDD-HHMMSS"),
+        )
+        .arg(flag_arg("dry-run").long("dry-run"))
+        .arg(internal_network_arg())
+        .arg(internal_icp_arg())
+}
 
 ///
 /// BackupListOptions

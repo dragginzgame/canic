@@ -1,6 +1,7 @@
 use crate::test_support::temp_dir;
 use canic_backup::{
     artifacts::ArtifactChecksum,
+    execution::BackupExecutionJournal,
     journal::{ArtifactJournalEntry, ArtifactState, DownloadJournal},
     manifest::{
         BackupUnit, BackupUnitKind, ConsistencySection, FleetBackupManifest, FleetMember,
@@ -14,6 +15,7 @@ use std::{
 };
 
 const ROOT: &str = "aaaaa-aa";
+const CHILD: &str = "renrk-eyaaa-aaaaa-aaada-cai";
 const HASH: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 
 // Ensure backup help stays at command-family level.
@@ -22,9 +24,75 @@ fn backup_usage_lists_commands_without_nested_flag_dump() {
     let text = usage();
 
     assert!(text.contains("Usage: canic backup"));
+    assert!(text.contains("create"));
     assert!(text.contains("list"));
     assert!(text.contains("verify"));
     assert!(text.contains("status"));
+}
+
+// Ensure backup create options keep live execution behind an explicit dry-run.
+#[test]
+fn parses_backup_create_options() {
+    let options = BackupCreateOptions::parse([
+        OsString::from("demo"),
+        OsString::from("--subtree"),
+        OsString::from("app"),
+        OsString::from("--out"),
+        OsString::from("backups/plan"),
+        OsString::from("--dry-run"),
+        OsString::from(crate::args::INTERNAL_NETWORK_OPTION),
+        OsString::from("local"),
+        OsString::from(crate::args::INTERNAL_ICP_OPTION),
+        OsString::from("/bin/icp"),
+    ])
+    .expect("parse options");
+
+    assert_eq!(options.fleet, "demo");
+    assert_eq!(options.subtree, Some("app".to_string()));
+    assert_eq!(options.out, Some(PathBuf::from("backups/plan")));
+    assert!(options.dry_run);
+    assert_eq!(options.network, "local");
+    assert_eq!(options.icp, "/bin/icp");
+}
+
+// Ensure create without dry-run remains fail-closed until authority execution exists.
+#[test]
+fn backup_create_requires_dry_run() {
+    let options = BackupCreateOptions {
+        fleet: "demo".to_string(),
+        subtree: None,
+        out: None,
+        dry_run: false,
+        network: "local".to_string(),
+        icp: "icp".to_string(),
+    };
+
+    let err = backup_create(&options).expect_err("non-dry-run create rejects");
+
+    assert!(matches!(err, BackupCommandError::CreateRequiresDryRun));
+}
+
+// Ensure dry-run persistence writes a plan and matching execution journal.
+#[test]
+fn backup_create_dry_run_persists_plan_and_execution_journal() {
+    let root = temp_dir("canic-cli-backup-create-plan");
+    let plan = valid_backup_plan();
+
+    persist_backup_create_dry_run(&root, &plan).expect("persist dry-run plan");
+
+    let layout = BackupLayout::new(root.clone());
+    let read_plan = layout.read_backup_plan().expect("read backup plan");
+    let journal = layout
+        .read_execution_journal()
+        .expect("read execution journal");
+    let report = layout
+        .verify_execution_integrity()
+        .expect("verify execution integrity");
+
+    fs::remove_dir_all(root).expect("remove temp root");
+    assert_eq!(read_plan.plan_id, plan.plan_id);
+    assert_eq!(journal.plan_id, plan.plan_id);
+    assert!(report.verified);
 }
 
 // Ensure backup list options default to the conventional backup root.
@@ -107,6 +175,7 @@ fn backup_list_reads_backup_directories() {
     let root = temp_dir("canic-cli-backup-list");
     let first = root.join("fleet-demo-20260507-120000");
     let second = root.join("fleet-demo-20260507-130000");
+    let planned = root.join("fleet-demo-20260511-001234");
     let ignored = root.join("not-a-backup");
 
     BackupLayout::new(first)
@@ -115,6 +184,18 @@ fn backup_list_reads_backup_directories() {
     BackupLayout::new(second)
         .write_manifest(&valid_manifest_with("backup-new", "2026-05-07T13:00:00Z"))
         .expect("write second manifest");
+    let mut plan = valid_backup_plan();
+    plan.plan_id = "plan-demo-20260511-001234".to_string();
+    plan.run_id = "run-demo-20260511-001234".to_string();
+    let planned_layout = BackupLayout::new(planned);
+    planned_layout
+        .write_backup_plan(&plan)
+        .expect("write planned backup");
+    planned_layout
+        .write_execution_journal(
+            &BackupExecutionJournal::from_plan(&plan).expect("execution journal"),
+        )
+        .expect("write planned journal");
     fs::create_dir_all(&ignored).expect("create ignored dir");
 
     let options = BackupListOptions {
@@ -125,11 +206,19 @@ fn backup_list_reads_backup_directories() {
     let rendered = render_backup_list(&entries);
 
     fs::remove_dir_all(root).expect("remove temp root");
-    assert_eq!(entries.len(), 2);
-    assert_eq!(entries[0].backup_id, "backup-new");
-    assert_eq!(entries[1].backup_id, "backup-old");
+    assert_eq!(entries.len(), 3);
+    assert!(entries.iter().any(|entry| entry.backup_id == "backup-new"));
+    assert!(entries.iter().any(|entry| entry.backup_id == "backup-old"));
+    let dry_run = entries
+        .iter()
+        .find(|entry| entry.backup_id == "plan-demo-20260511-001234")
+        .expect("dry-run entry");
+    assert_eq!(dry_run.status, "dry-run");
+    assert_eq!(dry_run.members, 1);
+    assert_eq!(dry_run.created_at, "20260511-001234");
     assert!(rendered.contains("DIR"));
     assert!(rendered.contains("backup-new"));
+    assert!(rendered.contains("dry-run"));
     assert!(rendered.contains("fleet-demo-20260507-130000"));
 }
 
@@ -273,6 +362,42 @@ fn fleet_member() -> FleetMember {
             checksum: None,
         },
     }
+}
+
+// Build one backup plan for create dry-run persistence tests.
+fn valid_backup_plan() -> BackupPlan {
+    build_backup_plan(BackupPlanBuildInput {
+        plan_id: "plan-test".to_string(),
+        run_id: "run-test".to_string(),
+        fleet: "demo".to_string(),
+        network: "local".to_string(),
+        root_canister_id: ROOT.to_string(),
+        selected_canister_id: Some(CHILD.to_string()),
+        selected_scope_kind: BackupScopeKind::Subtree,
+        include_descendants: true,
+        topology_hash_before_quiesce: HASH.to_string(),
+        registry: &[
+            RegistryEntry {
+                pid: ROOT.to_string(),
+                role: Some("root".to_string()),
+                kind: Some("root".to_string()),
+                parent_pid: None,
+            },
+            RegistryEntry {
+                pid: CHILD.to_string(),
+                role: Some("app".to_string()),
+                kind: Some("singleton".to_string()),
+                parent_pid: Some(ROOT.to_string()),
+            },
+        ],
+        control_authority: ControlAuthority::root_controller(AuthorityEvidence::Declared),
+        snapshot_read_authority: SnapshotReadAuthority::root_configured_read(
+            AuthorityEvidence::Declared,
+        ),
+        quiescence_policy: canic_backup::plan::QuiescencePolicy::RootCoordinated,
+        identity_mode: IdentityMode::Relocatable,
+    })
+    .expect("backup plan")
 }
 
 // Build one durable journal with a caller-provided checksum.

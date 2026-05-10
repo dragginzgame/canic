@@ -5,9 +5,18 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.34.x] - 2026-05-10 - Backup/restore rework
+
+- `0.34.0` starts the topology-aware backup/restore rework by adding the typed backup plan, authority preflight, `Proven`/`Declared`/`Unknown` authority evidence, target-scoped authority receipts with preflight ids and validity windows, topology/quiescence preflight receipts, a full execution preflight receipt bundle with journal-side plan binding, execution journal, persisted plan/execution-journal layout with cross-file integrity checks, quiescence policy, operation, and receipt model in `canic-backup`, plus the first `canic backup create <fleet> --dry-run` CLI planner that writes `backup-plan.json` and `backup-execution-journal.json` without live mutation and makes `canic backup list` show plan-only directories as `dry-run`.
+
+See detailed breakdown:
+[docs/changelog/0.34.md](docs/changelog/0.34.md)
+
+---
+
 ## [0.33.x] - 2026-05-08 - dfx -> icp-cli
 
-- `0.33.7` combines `canic_canister_version` and `canic_standards` into `canic_metadata` with package metadata, Canic version, and IC canister version, adds a `CANIC` column to `canic list` using parallel metadata endpoint reads, keeps local root installs funded to at least `100.00 TC`, groups backup/restore command families under their own main-help heading, makes local `canic snapshot download <fleet>` resolve registry targets through the decoded local replica query path, uses quiet ICP snapshot creation output so size units cannot be mistaken for snapshot ids, removes fresh-download misuse of `--resume`, and adds the 0.34 backup/restore redesign plan.
+- `0.33.7` combines `canic_canister_version` and `canic_standards` into `canic_metadata` with package metadata, Canic version, and IC canister version, adds a `CANIC` column to `canic list` using parallel metadata endpoint reads, keeps local root installs funded to at least `100.00 TC`, groups backup/restore command families under their own main-help heading, makes local `canic snapshot download <fleet>` resolve registry targets through the decoded local replica query path, uses quiet ICP snapshot creation output so size units cannot be mistaken for snapshot ids, removes fresh-download misuse of `--resume`, splits `canic list` live registry projection, response parsing, and tree traversal out of the command root, centralizes host/operator table rendering for headers and underlines, splits host root readiness diagnostics out of install orchestration, deduplicates live-list threaded query collection and config-loader error mapping, and adds the 0.34 backup/restore redesign plan.
 
 - `0.33.6` adds fleet-scoped `canic endpoints` for Candid method and argument inspection, makes `--icp <path>` and `--network <name>` top-level-only options, removes low-value list/config/install/endpoints selectors by replacing `canic list --from` with `--subtree` and removing `canic list --root`, `canic config --from`, `canic endpoints --did`, `canic endpoints --role`, and every public `canic install` override so install is now just `canic install <fleet>`, rejects duplicate discovered fleet names and install config identity mismatches, removes the `KIND` column from `canic list`, adds a `CYCLES` column with parallel endpoint reads, hard-cuts Candid finalization to required trailing `canic::finish!()`, restricts generated Candid artifacts/metadata to local builds, moves the `minimal` baseline canister under `canisters/audit`, keeps `icp.yaml` aligned with the test fleet after that move, and makes `canic status` judge local deployment against bootstrap-required roles.
 

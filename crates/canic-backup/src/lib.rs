@@ -6,9 +6,11 @@
 
 pub mod artifacts;
 pub mod discovery;
+pub mod execution;
 pub mod journal;
 pub mod manifest;
 pub mod persistence;
+pub mod plan;
 pub mod restore;
 pub mod snapshot;
 #[cfg(test)]

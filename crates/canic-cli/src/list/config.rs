@@ -14,6 +14,7 @@ use canic_host::{
 };
 use std::{
     collections::{BTreeMap, BTreeSet},
+    fmt::Display,
     path::PathBuf,
 };
 
@@ -21,21 +22,14 @@ pub(super) fn load_config_role_rows(
     options: &ListOptions,
 ) -> Result<Vec<ConfigRoleRow>, ListCommandError> {
     let config_path = selected_config_path(options)?;
-    let roles = configured_fleet_roles(&config_path)
-        .map_err(|err| ListCommandError::InstallState(err.to_string()))?;
-    let kinds = configured_role_kinds(&config_path)
-        .map_err(|err| ListCommandError::InstallState(err.to_string()))?;
-    let capabilities = configured_role_capabilities(&config_path)
-        .map_err(|err| ListCommandError::InstallState(err.to_string()))?;
-    let auto_create = configured_role_auto_create(&config_path)
-        .map_err(|err| ListCommandError::InstallState(err.to_string()))?;
-    let topups = configured_role_topups(&config_path)
-        .map_err(|err| ListCommandError::InstallState(err.to_string()))?;
-    let metrics = configured_role_metrics_profiles(&config_path)
-        .map_err(|err| ListCommandError::InstallState(err.to_string()))?;
+    let roles = load_config_value(|| configured_fleet_roles(&config_path))?;
+    let kinds = load_config_value(|| configured_role_kinds(&config_path))?;
+    let capabilities = load_config_value(|| configured_role_capabilities(&config_path))?;
+    let auto_create = load_config_value(|| configured_role_auto_create(&config_path))?;
+    let topups = load_config_value(|| configured_role_topups(&config_path))?;
+    let metrics = load_config_value(|| configured_role_metrics_profiles(&config_path))?;
     let details = if options.verbose {
-        configured_role_details(&config_path)
-            .map_err(|err| ListCommandError::InstallState(err.to_string()))?
+        load_config_value(|| configured_role_details(&config_path))?
     } else {
         BTreeMap::new()
     };
@@ -75,6 +69,17 @@ fn auto_create_label(role: &str, auto_create: &BTreeSet<String>) -> String {
     }
 }
 
+fn load_config_value<T, E>(load: impl FnOnce() -> Result<T, E>) -> Result<T, ListCommandError>
+where
+    E: Display,
+{
+    load().map_err(config_error)
+}
+
+fn config_error(error: impl Display) -> ListCommandError {
+    ListCommandError::InstallState(error.to_string())
+}
+
 pub(super) fn missing_config_roles(
     options: &ListOptions,
     registry: &[RegistryEntry],
@@ -101,8 +106,7 @@ pub(super) fn missing_config_roles(
 
 pub(super) fn selected_config_path(options: &ListOptions) -> Result<PathBuf, ListCommandError> {
     let fleet = &options.fleet;
-    let choices = discover_current_canic_config_choices()
-        .map_err(|err| ListCommandError::InstallState(err.to_string()))?;
+    let choices = load_config_value(discover_current_canic_config_choices)?;
     let matches = matching_fleet_config_paths(&choices, fleet);
 
     match matches.as_slice() {

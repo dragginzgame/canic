@@ -1,5 +1,5 @@
 use crate::release_set::{configured_fleet_name, configured_fleet_roles};
-use crate::table::WhitespaceTable;
+use crate::table::{ColumnAlign, render_table};
 use crate::workspace_discovery::normalize_workspace_path;
 use std::{
     collections::BTreeMap,
@@ -218,12 +218,16 @@ fn config_choice_table(workspace_root: &Path, choices: &[PathBuf]) -> Vec<String
         .iter()
         .enumerate()
         .map(|(index, path)| config_choice_row(workspace_root, index + 1, path))
+        .map(|row| [row.option, row.config, row.canisters])
         .collect::<Vec<_>>();
-    let mut table = WhitespaceTable::new(["#", "CONFIG", "CANISTERS"]);
-    for row in rows {
-        table.push_row([row.option, row.config, row.canisters]);
-    }
-    table.render().lines().map(str::to_string).collect()
+    render_table(
+        &["#", "CONFIG", "CANISTERS"],
+        &rows,
+        &[ColumnAlign::Right, ColumnAlign::Left, ColumnAlign::Left],
+    )
+    .lines()
+    .map(str::to_string)
+    .collect()
 }
 
 // Summarize the root-subnet fleet roles for one install config choice.

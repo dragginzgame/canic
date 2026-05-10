@@ -9,10 +9,10 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
-- Active minor: `0.33.x`
-- Theme: hard-cut DFX support in favor of ICP CLI, then reduce 0.33 structural
-  hotspots without changing behavior.
-- Current release-work area: `0.33.7` Canic metadata list visibility slice.
+- Active minor: `0.34.x`
+- Theme: rework backup/restore around topology-aware subtree planning and
+  root-stays-running coordination.
+- Current release-work area: `0.34.0` backup/restore rework foundation.
 
 ## Recent Work
 
@@ -73,6 +73,78 @@ inspect only the files needed for the current task.
   DFX-to-ICP CLI hard cut raised patch radius, but no cross-layer leakage was
   confirmed. The rerun after reloading ICP CLI used `icp 0.2.6`, clean snapshot
   `09f5d238`, and included the committed `0.33.7` metadata/list slice.
+- Started remediating the change-friction follow-up by splitting `canic list`
+  live registry projection into `crates/canic-cli/src/list/live.rs`, reducing
+  the command root from the audited `902` lines to `506` lines.
+- Deduplicated `canic list` table width/separator/alignment rendering through
+  `crates/canic-cli/src/list/table.rs` for both config and registry tables.
+- Deduplicated the live-list threaded query collector used by local readiness,
+  `canic_metadata` version reads, and `canic_cycle_balance` reads.
+- Centralized list config-loader host-config error mapping so adding config
+  table columns does not repeat install-state conversion boilerplate.
+- Split list endpoint response parsing into `crates/canic-cli/src/list/parse.rs`
+  so metadata and cycle-balance response-shape tests live beside the parsers
+  rather than the live transport code.
+- Promoted table rendering to `canic-host::table` and routed list, status,
+  fleet-list, backup-list, medic, and install config-choice tables through one
+  host/operator header/underline/spacing/alignment helper.
+- Split deployed-registry tree traversal into `crates/canic-cli/src/list/tree.rs`
+  so `list/render.rs` no longer owns hierarchy selection and presentation at
+  the same time.
+- Split host root readiness polling and diagnostics into
+  `crates/canic-host/src/install_root/readiness.rs`, reducing
+  `install_root/mod.rs` from `901` to `586` lines while preserving the install
+  orchestration flow.
+- Started the 0.34 backup/restore rework by adding `canic-backup::plan` with
+  typed backup plans, targets, operations, authority/read preflights,
+  quiescence policy, and operation receipts. This is a model-only slice; live
+  snapshot execution is unchanged.
+- Split backup plan validation from execution readiness: plans can represent
+  `Proven`, `Declared`, or `Unknown` control/read authority for dry-run output,
+  while mutating backup execution requires proven authority for every selected
+  target.
+- Added target-scoped control and snapshot-read authority preflight receipts so
+  future execution can upgrade a plan only after proof covers every selected
+  target.
+- Added typed authority preflight request DTOs derived from `BackupPlan`, giving
+  root coordination and host-side authority adapters a stable input contract.
+- Added typed topology and quiescence preflight request/receipt DTOs plus
+  execution-gate validation for topology drift, target-set changes, policy
+  mismatches, and rejected quiescence.
+- Added a full execution preflight receipt bundle so future backup execution can
+  apply authority receipts and validate topology/quiescence gates through one
+  typed boundary.
+- Added `preflight_id`, `validated_at`, and `expires_at` to preflight receipts
+  and the execution preflight bundle so stale or cross-preflight evidence cannot
+  authorize later mutation.
+- Added `canic-backup::execution` with a model-only backup execution journal
+  built from `BackupPlan` phases, including preflight acceptance, ordered
+  operation transitions, durable operation receipts, retryable failures, resume
+  summaries, and `restart_required` tracking after stops.
+- Added typed preflight receipt-bundle acceptance to the execution journal so
+  mutation cannot be unblocked by a bundle from a different plan.
+- Added `BackupLayout` read/write support for
+  `backup-execution-journal.json`, keeping phase execution progress separate
+  from the existing artifact download journal.
+- Added `BackupLayout` read/write support for `backup-plan.json` so future
+  backup runners can resume against the exact validated plan instead of
+  reconstructing the operation graph.
+- Added execution-layout integrity verification that rejects a persisted
+  execution journal when its plan/run ids or operation graph no longer match
+  the stored `backup-plan.json`.
+- Added the first `canic backup create <fleet> --dry-run` CLI path, including
+  optional `--subtree <role-or-principal>` planning, installed-fleet registry
+  discovery, persisted `backup-plan.json`, persisted
+  `backup-execution-journal.json`, and a compact dry-run summary table while
+  keeping real mutation disabled.
+- Made `canic backup list` include plan-only dry-run directories as
+  `STATUS=dry-run`, using the persisted plan id as `BACKUP_ID` and planned
+  target count as `MEMBERS`.
+- Added registry-backed backup plan construction for explicit subtrees and
+  non-root fleet scopes, including top-down stop/snapshot phases, bottom-up
+  start phases, and post-restart download/verify/finalize phases.
+- Added backup selector resolution for explicit principals and unambiguous
+  roles, rejecting missing or ambiguous role selectors before planning.
 
 ## Validation Recently Run
 
@@ -111,6 +183,16 @@ inspect only the files needed for the current task.
 - `cargo check -p canic-backup`
 - `cargo clippy -p canic-backup --all-targets -- -D warnings`
 - `cargo test -p canic-backup --lib -- --nocapture`
+- `cargo test -p canic-backup plan -- --nocapture`
+- `cargo test -p canic-backup execution -- --nocapture`
+- `cargo test -p canic-backup persistence -- --nocapture`
+- `cargo test -p canic-cli backup -- --nocapture`
+- `cargo test -p canic-cli command_family_help_returns_ok -- --nocapture`
+- `cargo test -p canic-cli --lib -- --nocapture`
+- `cargo clippy -p canic-cli --all-targets -- -D warnings`
+- `cargo run -q -p canic-cli --bin canic -- backup create demo --dry-run --out /tmp/canic-backup-plan-demo`
+- `cargo run -q -p canic-cli --bin canic -- backup create demo --subtree app --dry-run --out /tmp/canic-backup-plan-demo-app`
+- `cargo run -q -p canic-cli --bin canic -- backup list`
 - `git show --stat --name-only --format=fuller 8a5814fd`
 - `git show --stat --name-only --format=fuller cf24f77e`
 - `git show --stat --name-only --format=fuller 53476764`
@@ -119,6 +201,12 @@ inspect only the files needed for the current task.
 - `icp --version`
 - `icp project show`
 - `git show --stat --name-only --format=fuller 09f5d238`
+- `cargo test -p canic-cli list:: -- --nocapture`
+- `cargo check -p canic-cli`
+- `cargo clippy -p canic-cli --all-targets -- -D warnings`
+- `cargo test -p canic-host install_root::tests -- --nocapture`
+- `cargo check -p canic-host`
+- `cargo clippy -p canic-host --all-targets -- -D warnings`
 
 ## Known Worktree Notes
 

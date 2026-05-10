@@ -11,7 +11,7 @@ use canic_host::{
         configured_fleet_name, configured_fleet_roles, display_workspace_path,
         matching_fleet_config_paths, workspace_root,
     },
-    table::WhitespaceTable,
+    table::{ColumnAlign, render_table},
 };
 use clap::Command as ClapCommand;
 use std::{
@@ -345,16 +345,24 @@ fn fleet_delete_command() -> ClapCommand {
 }
 
 fn render_fleet_list(workspace_root: &Path, choices: &[PathBuf], network: &str) -> String {
-    let mut table = WhitespaceTable::new([
-        FLEET_HEADER,
-        NETWORK_HEADER,
-        CONFIG_HEADER,
-        CANISTERS_HEADER,
-    ]);
-    for row in fleet_list_rows(workspace_root, choices, network) {
-        table.push_row([row.fleet, row.network, row.config, row.canisters]);
-    }
-    table.render()
+    render_fleet_rows(fleet_list_rows(workspace_root, choices, network))
+}
+
+fn render_fleet_rows(rows: Vec<FleetListRow>) -> String {
+    let rows = rows
+        .into_iter()
+        .map(|row| [row.fleet, row.network, row.config, row.canisters])
+        .collect::<Vec<_>>();
+    render_table(
+        &[
+            FLEET_HEADER,
+            NETWORK_HEADER,
+            CONFIG_HEADER,
+            CANISTERS_HEADER,
+        ],
+        &rows,
+        &[ColumnAlign::Left; 4],
+    )
 }
 
 fn fleet_list_rows(workspace_root: &Path, choices: &[PathBuf], network: &str) -> Vec<FleetListRow> {
@@ -497,21 +505,13 @@ mod tests {
 
         assert_eq!(
             table,
-            format!(
-                "{:<7}  {:<7}  {:<25}  {}\n{:<7}  {:<7}  {:<25}  {}\n{:<7}  {:<7}  {:<25}  {}",
-                "FLEET",
-                "NETWORK",
-                "CONFIG",
-                "CANISTERS",
-                "demo",
-                "local",
-                "fleets/demo/canic.toml",
-                "3 (root, app, user_hub)",
-                "staging",
-                "local",
-                "fleets/staging/canic.toml",
-                "2 (root, app)",
-            )
+            [
+                "FLEET     NETWORK   CONFIG                      CANISTERS",
+                "-------   -------   -------------------------   -----------------------",
+                "demo      local     fleets/demo/canic.toml      3 (root, app, user_hub)",
+                "staging   local     fleets/staging/canic.toml   2 (root, app)",
+            ]
+            .join("\n")
         );
     }
 
@@ -567,16 +567,7 @@ mod tests {
 
     // Render precomputed config rows for focused table tests.
     fn render_fleet_list_from_rows(rows: Vec<FleetListRow>) -> String {
-        let mut table = WhitespaceTable::new([
-            FLEET_HEADER,
-            NETWORK_HEADER,
-            CONFIG_HEADER,
-            CANISTERS_HEADER,
-        ]);
-        for row in rows {
-            table.push_row([row.fleet, row.network, row.config, row.canisters]);
-        }
-        table.render()
+        render_fleet_rows(rows)
     }
 
     fn write_fleet_config(root: &Path, name: &str) -> PathBuf {

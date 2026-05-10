@@ -481,8 +481,8 @@ kind = "singleton"
     assert!(message.contains('#'));
     assert!(message.contains("CONFIG"));
     assert!(message.contains("CANISTERS"));
-    assert!(message.contains("1  fleets/demo/canic.toml"));
-    assert!(message.contains("2  fleets/example/canic.toml"));
+    assert!(message.contains("1   fleets/demo/canic.toml"));
+    assert!(message.contains("2   fleets/example/canic.toml"));
     assert!(message.contains("fleets/demo/canic.toml"));
     assert!(message.contains("2 (root, app)"));
     assert!(message.contains("fleets/example/canic.toml"));

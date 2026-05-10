@@ -9,7 +9,7 @@ use canic_host::{
     icp::IcpCli,
     install_root::{InstallState, read_named_fleet_install_state},
     replica_query,
-    table::WhitespaceTable,
+    table::{ColumnAlign, render_table},
 };
 use clap::Command as ClapCommand;
 use std::{ffi::OsString, fs};
@@ -190,16 +190,22 @@ fn query_ready_with_icp(options: &MedicOptions, canister: &str) -> Result<bool, 
 }
 
 fn render_medic_report(checks: &[MedicCheck]) -> String {
-    let mut table = WhitespaceTable::new([CHECK_HEADER, STATUS_HEADER, DETAIL_HEADER, NEXT_HEADER]);
-    for check in checks {
-        table.push_row([
-            check.name.as_str(),
-            check.status.label(),
-            check.detail.as_str(),
-            check.next.as_str(),
-        ]);
-    }
-    table.render()
+    let rows = checks
+        .iter()
+        .map(|check| {
+            [
+                check.name.clone(),
+                check.status.label().to_string(),
+                check.detail.clone(),
+                check.next.clone(),
+            ]
+        })
+        .collect::<Vec<_>>();
+    render_table(
+        &[CHECK_HEADER, STATUS_HEADER, DETAIL_HEADER, NEXT_HEADER],
+        &rows,
+        &[ColumnAlign::Left; 4],
+    )
 }
 
 fn usage() -> String {

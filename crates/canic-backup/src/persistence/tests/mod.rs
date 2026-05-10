@@ -1,10 +1,16 @@
 use super::*;
 use crate::test_support::temp_dir;
 use crate::{
+    discovery::RegistryEntry,
+    execution::BackupExecutionJournal,
     journal::{ArtifactJournalEntry, ArtifactState},
     manifest::{
         BackupUnit, BackupUnitKind, ConsistencySection, FleetMember, FleetSection, IdentityMode,
         SourceMetadata, SourceSnapshot, ToolMetadata, VerificationCheck, VerificationPlan,
+    },
+    plan::{
+        AuthorityEvidence, BackupPlan, BackupPlanBuildInput, BackupScopeKind, ControlAuthority,
+        SnapshotReadAuthority, build_backup_plan,
     },
 };
 use std::fs;
@@ -43,6 +49,126 @@ fn journal_round_trips_through_layout() {
 
     fs::remove_dir_all(root).expect("remove temp layout");
     assert_eq!(read.backup_id, journal.backup_id);
+}
+
+// Ensure backup plans write atomically and round-trip through validation.
+#[test]
+fn backup_plan_round_trips_through_layout() {
+    let root = temp_dir("canic-backup-plan-layout");
+    let layout = BackupLayout::new(root.clone());
+    let plan = valid_backup_plan();
+
+    layout
+        .write_backup_plan(&plan)
+        .expect("write backup plan atomically");
+    let read = layout.read_backup_plan().expect("read backup plan");
+
+    fs::remove_dir_all(root).expect("remove temp layout");
+    assert_eq!(read.plan_id, plan.plan_id);
+    assert_eq!(read.phases, plan.phases);
+}
+
+// Ensure invalid backup plans are rejected before writing.
+#[test]
+fn invalid_backup_plan_is_not_written() {
+    let root = temp_dir("canic-backup-invalid-plan");
+    let layout = BackupLayout::new(root.clone());
+    let mut plan = valid_backup_plan();
+    plan.plan_id.clear();
+
+    let err = layout
+        .write_backup_plan(&plan)
+        .expect_err("invalid backup plan should fail");
+
+    let plan_path = layout.backup_plan_path();
+    fs::remove_dir_all(root).ok();
+    assert!(matches!(err, PersistenceError::InvalidBackupPlan(_)));
+    assert!(!plan_path.exists());
+}
+
+// Ensure execution journal writes create parent dirs and round-trip through validation.
+#[test]
+fn execution_journal_round_trips_through_layout() {
+    let root = temp_dir("canic-backup-execution-journal-layout");
+    let layout = BackupLayout::new(root.clone());
+    let journal = valid_execution_journal();
+
+    layout
+        .write_execution_journal(&journal)
+        .expect("write execution journal atomically");
+    let read = layout
+        .read_execution_journal()
+        .expect("read execution journal");
+
+    fs::remove_dir_all(root).expect("remove temp layout");
+    assert_eq!(read.plan_id, journal.plan_id);
+    assert_eq!(read.operations.len(), journal.operations.len());
+}
+
+// Ensure invalid execution journals are rejected before writing.
+#[test]
+fn invalid_execution_journal_is_not_written() {
+    let root = temp_dir("canic-backup-invalid-execution-journal");
+    let layout = BackupLayout::new(root.clone());
+    let mut journal = valid_execution_journal();
+    journal.plan_id.clear();
+
+    let err = layout
+        .write_execution_journal(&journal)
+        .expect_err("invalid execution journal should fail");
+
+    let journal_path = layout.execution_journal_path();
+    fs::remove_dir_all(root).ok();
+    assert!(matches!(err, PersistenceError::InvalidExecutionJournal(_)));
+    assert!(!journal_path.exists());
+}
+
+// Ensure persisted plans and execution journals are checked together for resume.
+#[test]
+fn execution_integrity_verifies_plan_and_journal_match() {
+    let root = temp_dir("canic-backup-execution-integrity");
+    let layout = BackupLayout::new(root.clone());
+    let plan = valid_backup_plan();
+    let journal = BackupExecutionJournal::from_plan(&plan).expect("execution journal");
+
+    layout.write_backup_plan(&plan).expect("write backup plan");
+    layout
+        .write_execution_journal(&journal)
+        .expect("write execution journal");
+
+    let report = layout
+        .verify_execution_integrity()
+        .expect("verify execution integrity");
+
+    fs::remove_dir_all(root).expect("remove temp layout");
+    assert_eq!(report.plan_id, plan.plan_id);
+    assert!(report.verified);
+    assert_eq!(report.plan_operations, plan.phases.len());
+}
+
+// Ensure resume cannot pair a plan with an unrelated execution journal.
+#[test]
+fn execution_integrity_rejects_plan_journal_operation_mismatch() {
+    let root = temp_dir("canic-backup-execution-integrity-mismatch");
+    let layout = BackupLayout::new(root.clone());
+    let plan = valid_backup_plan();
+    let mut journal = BackupExecutionJournal::from_plan(&plan).expect("execution journal");
+    journal.operations[0].operation_id = "different-operation".to_string();
+
+    layout.write_backup_plan(&plan).expect("write backup plan");
+    layout
+        .write_execution_journal(&journal)
+        .expect("write execution journal");
+
+    let err = layout
+        .verify_execution_integrity()
+        .expect_err("operation mismatch should fail");
+
+    fs::remove_dir_all(root).expect("remove temp layout");
+    assert!(matches!(
+        err,
+        PersistenceError::PlanJournalOperationMismatch { .. }
+    ));
 }
 
 // Ensure invalid manifests are rejected before writing.
@@ -289,6 +415,49 @@ fn valid_manifest() -> FleetBackupManifest {
             member_checks: Vec::new(),
         },
     }
+}
+
+// Build one valid execution journal for persistence tests.
+fn valid_execution_journal() -> BackupExecutionJournal {
+    let plan = valid_backup_plan();
+
+    BackupExecutionJournal::from_plan(&plan).expect("execution journal")
+}
+
+// Build one valid backup plan for persistence tests.
+fn valid_backup_plan() -> BackupPlan {
+    build_backup_plan(BackupPlanBuildInput {
+        plan_id: "plan-001".to_string(),
+        run_id: "run-001".to_string(),
+        fleet: "demo".to_string(),
+        network: "local".to_string(),
+        root_canister_id: ROOT.to_string(),
+        selected_canister_id: Some(CHILD.to_string()),
+        selected_scope_kind: BackupScopeKind::Subtree,
+        include_descendants: true,
+        topology_hash_before_quiesce: HASH.to_string(),
+        registry: &[
+            RegistryEntry {
+                pid: ROOT.to_string(),
+                role: Some("root".to_string()),
+                kind: Some("root".to_string()),
+                parent_pid: None,
+            },
+            RegistryEntry {
+                pid: CHILD.to_string(),
+                role: Some("app".to_string()),
+                kind: Some("singleton".to_string()),
+                parent_pid: Some(ROOT.to_string()),
+            },
+        ],
+        control_authority: ControlAuthority::root_controller(AuthorityEvidence::Proven),
+        snapshot_read_authority: SnapshotReadAuthority::root_configured_read(
+            AuthorityEvidence::Proven,
+        ),
+        quiescence_policy: crate::plan::QuiescencePolicy::RootCoordinated,
+        identity_mode: IdentityMode::Relocatable,
+    })
+    .expect("backup plan")
 }
 
 // Build one valid durable journal for persistence tests.

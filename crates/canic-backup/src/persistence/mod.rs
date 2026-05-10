@@ -1,7 +1,9 @@
 use crate::{
     artifacts::{ArtifactChecksum, ArtifactChecksumError},
+    execution::{BackupExecutionJournal, BackupExecutionJournalError},
     journal::{ArtifactState, DownloadJournal},
     manifest::{FleetBackupManifest, ManifestValidationError},
+    plan::{BackupPlan, BackupPlanError},
 };
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use std::{
@@ -13,7 +15,9 @@ use std::{
 use thiserror::Error as ThisError;
 
 const MANIFEST_FILE_NAME: &str = "fleet-backup-manifest.json";
+const BACKUP_PLAN_FILE_NAME: &str = "backup-plan.json";
 const JOURNAL_FILE_NAME: &str = "download-journal.json";
+const EXECUTION_JOURNAL_FILE_NAME: &str = "backup-execution-journal.json";
 
 ///
 /// BackupLayout
@@ -43,10 +47,22 @@ impl BackupLayout {
         self.root.join(MANIFEST_FILE_NAME)
     }
 
+    /// Return the canonical backup plan path for this layout.
+    #[must_use]
+    pub fn backup_plan_path(&self) -> PathBuf {
+        self.root.join(BACKUP_PLAN_FILE_NAME)
+    }
+
     /// Return the canonical mutable journal path for this backup layout.
     #[must_use]
     pub fn journal_path(&self) -> PathBuf {
         self.root.join(JOURNAL_FILE_NAME)
+    }
+
+    /// Return the canonical backup execution journal path for this layout.
+    #[must_use]
+    pub fn execution_journal_path(&self) -> PathBuf {
+        self.root.join(EXECUTION_JOURNAL_FILE_NAME)
     }
 
     /// Write a validated manifest with atomic replace semantics.
@@ -62,6 +78,19 @@ impl BackupLayout {
         Ok(manifest)
     }
 
+    /// Write a validated backup plan with atomic replace semantics.
+    pub fn write_backup_plan(&self, plan: &BackupPlan) -> Result<(), PersistenceError> {
+        plan.validate()?;
+        write_json_atomic(&self.backup_plan_path(), plan)
+    }
+
+    /// Read and validate a backup plan from this layout.
+    pub fn read_backup_plan(&self) -> Result<BackupPlan, PersistenceError> {
+        let plan = read_json(&self.backup_plan_path())?;
+        BackupPlan::validate(&plan)?;
+        Ok(plan)
+    }
+
     /// Write a validated download journal with atomic replace semantics.
     pub fn write_journal(&self, journal: &DownloadJournal) -> Result<(), PersistenceError> {
         journal.validate()?;
@@ -75,11 +104,36 @@ impl BackupLayout {
         Ok(journal)
     }
 
+    /// Write a validated backup execution journal with atomic replace semantics.
+    pub fn write_execution_journal(
+        &self,
+        journal: &BackupExecutionJournal,
+    ) -> Result<(), PersistenceError> {
+        journal.validate()?;
+        write_json_atomic(&self.execution_journal_path(), journal)
+    }
+
+    /// Read and validate a backup execution journal from this layout.
+    pub fn read_execution_journal(&self) -> Result<BackupExecutionJournal, PersistenceError> {
+        let journal = read_json(&self.execution_journal_path())?;
+        BackupExecutionJournal::validate(&journal)?;
+        Ok(journal)
+    }
+
     /// Validate the manifest, journal, and durable artifact checksums.
     pub fn verify_integrity(&self) -> Result<BackupIntegrityReport, PersistenceError> {
         let manifest = self.read_manifest()?;
         let journal = self.read_journal()?;
         verify_layout_integrity(self, &manifest, &journal)
+    }
+
+    /// Validate the persisted backup plan and execution journal agree.
+    pub fn verify_execution_integrity(
+        &self,
+    ) -> Result<BackupExecutionIntegrityReport, PersistenceError> {
+        let plan = self.read_backup_plan()?;
+        let journal = self.read_execution_journal()?;
+        verify_execution_integrity(&plan, &journal)
     }
 }
 
@@ -106,6 +160,19 @@ pub struct BackupIntegrityReport {
     pub journal_artifacts: usize,
     pub durable_artifacts: usize,
     pub artifacts: Vec<ArtifactIntegrityReport>,
+}
+
+///
+/// BackupExecutionIntegrityReport
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct BackupExecutionIntegrityReport {
+    pub plan_id: String,
+    pub run_id: String,
+    pub verified: bool,
+    pub plan_operations: usize,
+    pub journal_operations: usize,
 }
 
 ///
@@ -137,6 +204,12 @@ pub enum PersistenceError {
 
     #[error(transparent)]
     InvalidJournal(#[from] crate::journal::JournalValidationError),
+
+    #[error(transparent)]
+    InvalidBackupPlan(#[from] BackupPlanError),
+
+    #[error(transparent)]
+    InvalidExecutionJournal(#[from] BackupExecutionJournalError),
 
     #[error(transparent)]
     Checksum(#[from] ArtifactChecksumError),
@@ -187,6 +260,21 @@ pub enum PersistenceError {
         field: String,
         manifest: String,
         journal: Option<String>,
+    },
+
+    #[error("backup plan {field} does not match execution journal")]
+    PlanJournalMismatch {
+        field: &'static str,
+        plan: String,
+        journal: String,
+    },
+
+    #[error("backup plan operation {sequence} {field} does not match execution journal")]
+    PlanJournalOperationMismatch {
+        sequence: usize,
+        field: &'static str,
+        plan: String,
+        journal: String,
     },
 
     #[error("artifact path escapes backup root: {artifact_path}")]
@@ -306,6 +394,78 @@ fn verify_layout_integrity(
         journal_artifacts: journal.artifacts.len(),
         durable_artifacts: artifacts.len(),
         artifacts,
+    })
+}
+
+// Verify the execution journal is bound to the exact persisted backup plan.
+fn verify_execution_integrity(
+    plan: &BackupPlan,
+    journal: &BackupExecutionJournal,
+) -> Result<BackupExecutionIntegrityReport, PersistenceError> {
+    if plan.plan_id != journal.plan_id {
+        return Err(PersistenceError::PlanJournalMismatch {
+            field: "plan_id",
+            plan: plan.plan_id.clone(),
+            journal: journal.plan_id.clone(),
+        });
+    }
+    if plan.run_id != journal.run_id {
+        return Err(PersistenceError::PlanJournalMismatch {
+            field: "run_id",
+            plan: plan.run_id.clone(),
+            journal: journal.run_id.clone(),
+        });
+    }
+    if plan.phases.len() != journal.operations.len() {
+        return Err(PersistenceError::PlanJournalMismatch {
+            field: "operation_count",
+            plan: plan.phases.len().to_string(),
+            journal: journal.operations.len().to_string(),
+        });
+    }
+
+    for (phase, operation) in plan.phases.iter().zip(&journal.operations) {
+        let expected_sequence = usize::try_from(phase.order).unwrap_or(usize::MAX);
+        if expected_sequence != operation.sequence {
+            return Err(PersistenceError::PlanJournalOperationMismatch {
+                sequence: operation.sequence,
+                field: "sequence",
+                plan: expected_sequence.to_string(),
+                journal: operation.sequence.to_string(),
+            });
+        }
+        if phase.operation_id != operation.operation_id {
+            return Err(PersistenceError::PlanJournalOperationMismatch {
+                sequence: operation.sequence,
+                field: "operation_id",
+                plan: phase.operation_id.clone(),
+                journal: operation.operation_id.clone(),
+            });
+        }
+        if phase.kind != operation.kind {
+            return Err(PersistenceError::PlanJournalOperationMismatch {
+                sequence: operation.sequence,
+                field: "kind",
+                plan: format!("{:?}", phase.kind),
+                journal: format!("{:?}", operation.kind),
+            });
+        }
+        if phase.target_canister_id != operation.target_canister_id {
+            return Err(PersistenceError::PlanJournalOperationMismatch {
+                sequence: operation.sequence,
+                field: "target_canister_id",
+                plan: phase.target_canister_id.clone().unwrap_or_default(),
+                journal: operation.target_canister_id.clone().unwrap_or_default(),
+            });
+        }
+    }
+
+    Ok(BackupExecutionIntegrityReport {
+        plan_id: plan.plan_id.clone(),
+        run_id: plan.run_id.clone(),
+        verified: true,
+        plan_operations: plan.phases.len(),
+        journal_operations: journal.operations.len(),
     })
 }
 

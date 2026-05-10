@@ -435,6 +435,7 @@ fn command_accepts_global_icp(command: &str, tail: &[OsString]) -> bool {
             Some("start" | "status" | "stop")
         ),
         "snapshot" => tail.first().and_then(|arg| arg.to_str()) == Some("download"),
+        "backup" => tail.first().and_then(|arg| arg.to_str()) == Some("create"),
         "restore" => tail.first().and_then(|arg| arg.to_str()) == Some("run"),
         _ => false,
     }
@@ -445,6 +446,7 @@ fn command_accepts_global_network(command: &str, tail: &[OsString]) -> bool {
         "endpoints" | "install" | "list" | "medic" | "status" => true,
         "fleet" => tail.first().and_then(|arg| arg.to_str()) == Some("list"),
         "snapshot" => tail.first().and_then(|arg| arg.to_str()) == Some("download"),
+        "backup" => tail.first().and_then(|arg| arg.to_str()) == Some("create"),
         "restore" => tail.first().and_then(|arg| arg.to_str()) == Some("run"),
         _ => false,
     }
@@ -579,6 +581,7 @@ mod tests {
     fn command_family_help_returns_ok() {
         for args in [
             &["backup", "help"][..],
+            &["backup", "create", "help"],
             &["backup", "list", "help"],
             &["backup", "status", "help"],
             &["backup", "verify", "help"],
