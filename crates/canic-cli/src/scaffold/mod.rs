@@ -480,7 +480,7 @@ mod tests {
         assert!(config.contains("[subnets.prime.canisters.root]"));
         assert!(config.contains("[subnets.prime.canisters.app]"));
         assert!(root_manifest.contains("version = \"0.1.0\""));
-        assert!(root_manifest.contains("canic = { version = \""));
+        assert!(root_manifest.contains("canic = \""));
         assert!(!root_manifest.contains("workspace = true"));
         assert!(root_lib.contains("canic::start_root!();"));
         assert!(app_manifest.contains("name = \"canister_my_app_app\""));
