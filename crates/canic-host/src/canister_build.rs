@@ -1,7 +1,7 @@
 use crate::{
     artifact_io::{
-        maybe_shrink_wasm_artifact, write_bytes_atomically, write_gzip_artifact,
-        write_wasm_artifact,
+        embed_candid_metadata, maybe_shrink_wasm_artifact, write_bytes_atomically,
+        write_gzip_artifact, write_wasm_artifact,
     },
     bootstrap_store::{
         BootstrapWasmStoreBuildOutput, BootstrapWasmStoreBuildProfile,
@@ -11,6 +11,7 @@ use crate::{
     release_set::{
         canister_manifest_path, emit_root_release_set_manifest_if_ready, icp_root, workspace_root,
     },
+    remove_optional_file, should_export_candid_artifacts,
 };
 use std::{
     env, fs,
@@ -176,19 +177,24 @@ fn build_canister_artifact(
     )?;
     write_wasm_artifact(&release_wasm_path, &wasm_path)?;
     maybe_shrink_wasm_artifact(&wasm_path)?;
-    write_gzip_artifact(&wasm_path, &wasm_gz_path)?;
-
-    let debug_wasm_path = run_canister_build(
-        workspace_root,
-        icp_root,
-        &canister_manifest_path,
-        &canister_package_name,
-        CanisterBuildProfile::Debug,
-        require_embedded_release_artifacts,
-    )?;
-    extract_candid(&debug_wasm_path, &did_path)?;
 
     let network = icp_environment_from_env();
+    if should_export_candid_artifacts(&network) {
+        let debug_wasm_path = run_canister_build(
+            workspace_root,
+            icp_root,
+            &canister_manifest_path,
+            &canister_package_name,
+            CanisterBuildProfile::Debug,
+            require_embedded_release_artifacts,
+        )?;
+        extract_candid(&debug_wasm_path, &did_path)?;
+        embed_candid_metadata(&wasm_path, &did_path)?;
+    } else {
+        remove_optional_file(&did_path)?;
+    }
+    write_gzip_artifact(&wasm_path, &wasm_gz_path)?;
+
     let manifest_path =
         emit_root_release_set_manifest_if_ready(workspace_root, icp_root, &network)?;
 

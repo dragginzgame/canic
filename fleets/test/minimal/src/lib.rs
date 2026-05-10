@@ -27,4 +27,4 @@ pub async fn canic_upgrade() {}
 
 canic::start!(MINIMAL);
 
-canic::cdk::export_candid_debug!();
+canic::finish!();

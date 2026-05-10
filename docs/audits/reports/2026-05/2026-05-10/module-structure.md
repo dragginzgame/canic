@@ -10,7 +10,7 @@
   `canisters/audit/**`, and `canisters/sandbox/**`.
 - Compared baseline report path:
   `docs/audits/reports/2026-04/2026-04-06/module-structure.md`
-- Code snapshot identifier: `d6ea5e3b`
+- Code snapshot identifier: `7e0ec893` plus current 0.33.5 cleanup worktree
 - Method tag/version: `module-structure-v2`
 - Comparability status: non-comparable: scope expanded to include the 0.33
   operator crates (`canic-host`, `canic-cli`, `canic-backup`) and top-level
@@ -26,9 +26,11 @@
 
 | Area | Evidence | Pressure or Violation | Risk |
 | --- | --- | --- | --- |
-| `canic-control-plane` publication workflow hub | `crates/canic-control-plane/src/workflow/runtime/template/publication/mod.rs` is `1509` lines; sibling files include `fleet.rs` at `704` lines. | Pressure: behavior-heavy publication coordination remains concentrated, but no public/internal seam breach was confirmed. | Medium |
-| `canic-core` provisioning and IC facade hubs | `crates/canic-core/src/workflow/ic/provision.rs` is `697` lines; `crates/canic-core/src/infra/ic/mgmt.rs` is `612` lines. | Pressure: known follow-up area from the 0.33 refactor addendum; direction remains `workflow -> ops/infra`, not a confirmed violation. | Medium |
-| `canic` macro/build support hubs | `crates/canic/src/macros/endpoints.rs` is `656` lines and `crates/canic/src/build_support.rs` is `507` lines. | Pressure: hidden macro/build seams are necessarily root-reachable through `__internal`/`__build`, but accumulated build support should stay contained. | Medium |
+| `canic-control-plane` publication workflow phase files | `publication/mod.rs` is now `153` lines and the old `publication/release.rs = 845`, `publication/fleet.rs = 704`, and `publication/lifecycle.rs = 540` files are split. Current largest production files are `release/managed.rs = 275`, `lifecycle/binding.rs = 206`, `lifecycle/gc.rs = 194`, and `fleet/placement.rs = 191`. | Remediated: release, fleet placement, and lifecycle/GC coordination now use focused modules with ordinary Rust module discovery. | Low |
+| `canic-core` provisioning and IC management splits | The old `workflow/ic/provision.rs = 697` and `infra/ic/mgmt.rs = 612` files are gone. Current largest split files are `provision/allocation.rs = 193`, `provision/install.rs = 138`, `infra/ic/mgmt/types.rs = 296`, and `infra/ic/mgmt/lifecycle.rs = 186`. | Remediated: planned directory-module split completed with ordinary Rust module discovery and no new public API shape. | Low |
+| `canic-backup` restore runner/apply journal splits | The old `restore/runner/mod.rs = 1204` file is split into runner modules topped by `types.rs = 525` and `execute.rs = 337`. `restore/apply/journal/mod.rs` is down to `422` lines, with operation/error types in `types.rs = 353` and counters in `counts.rs = 109`. | Remediated: restore runner execution, preview, IO/locking, status, and preconditions now use normal focused modules; apply journal root now owns state transitions instead of all operation DTOs. | Low |
+| `canic` macro/build support splits | The old `macros/endpoints.rs` and `build_support.rs` hubs are gone. Current roots are dispatch-only: `macros/endpoints/mod.rs = 6` and `build_support/mod.rs = 10`. | Remediated: hidden macro/build support remains root-reachable but is now decomposed into focused files. | Low |
+| `canic-host` operator phase files | `install_root/mod.rs = 793`, `release_set/mod.rs = 741`, `icp.rs = 600`, `release_set/stage.rs = 540`, and `release_set/config.rs = 527`. | Pressure: host package surface is role-aligned and facade-free, but its install/release helpers are now the main operator-code hubs. | Medium |
 | Auth access boundary state touch | `crates/canic-core/src/access/auth/identity.rs` resolves delegated sessions through `AuthStateOps`, clears invalid sessions, records metrics, and reads `EnvOps`. | Pressure: this is an intentional endpoint-auth boundary, but it mixes access evaluation with lower-layer state cleanup and should not spread to general policy modules. | Medium |
 
 ## Hub Module Pressure
@@ -36,10 +38,10 @@
 | Hub Module | Top Imported Sibling Subsystems / Surfaces | Unique Sibling Subsystems Imported | Cross-Layer Dependency Count | Delta vs Previous Report | HIP | Pressure Band | Risk |
 | --- | --- | ---: | ---: | --- | ---: | --- | --- |
 | `crates/canic-core/src/lib.rs` | public `api`, `dto`, `ids`, `log`, `perf`, `protocol`; hidden `access`, `bootstrap`, `dispatch`, `error`, `ingress`; `canic_memory` re-exports | 6 | 1 | Stable/improved shape from the April report: support roots remain `#[doc(hidden)]`, internal roots remain `pub(crate)`. | 0.25 | low | Low |
-| `crates/canic/src/lib.rs` | facade modules `access`, `api`, `dto`, `ids`, `prelude`, `protocol`; hidden `__internal`, `__build`; `cdk`, `memory`, macros, `Error` re-exports | 6 | 1 | Broader than April because build support now includes metrics-profile cfg helpers, but still hidden behind `__build`. | 0.33 | medium | Medium |
+| `crates/canic/src/lib.rs` | facade modules `access`, `api`, `dto`, `ids`, `prelude`, `protocol`; hidden `__internal`, `__build`; `cdk`, `memory`, macros, `Error` re-exports | 6 | 1 | Build and endpoint macro support are now decomposed under hidden roots; root surface remains intentional facade API. | 0.25 | low | Low |
 | `crates/canic-testkit/src/pic/mod.rs` | `baseline`, `errors`, `process_lock`, `readiness`, `startup`, `standalone` re-exports; `candid`, `canic`, `pocket_ic` imports | 6 | 1 | Improved vs April: root file is now `285` lines, down from `349`; still the intended public PocketIC seam. | 0.17 | low | Low |
 | `crates/canic-host/src/lib.rs` | public modules `canister_build`, `format`, `icp`, `install_root`, `release_set`, `replica_query`, `table`; private artifact/workspace helpers | 7 | 1 | New in scope for this method version; host is now a real published operator support library. | 0.42 | medium | Medium |
-| `crates/canic-backup/src/lib.rs` | public modules `artifacts`, `discovery`, `journal`, `manifest`, `persistence`, `restore`, `snapshot`, `timestamp`, `topology` | 9 | 1 | New in scope for this method version; broad by domain, but package role is manifest/restore primitives. | 0.33 | medium | Low |
+| `crates/canic-backup/src/lib.rs` | public modules `artifacts`, `discovery`, `journal`, `manifest`, `persistence`, `restore`, `snapshot`, `timestamp`, `topology` | 9 | 1 | New in scope for this method version; restore runner/apply-journal internals are now decomposed, while the package root remains broad by domain. | 0.33 | medium | Low |
 
 ## Public Surface Map
 
@@ -106,10 +108,10 @@ Notable pressure:
   resolving authenticated identity. This is still inside the endpoint access
   boundary, but it should remain isolated there and should not become a pattern
   for general policy modules.
-- `crates/canic/src/build_support.rs` imports
+- `crates/canic/src/build_support/metrics.rs` imports
   `canic_core::bootstrap::compiled::MetricsProfile` for build-time metrics
-  profile cfg emission. That is acceptable hidden build support, but it makes
-  `__build` a sensitive macro/build contract.
+  profile cfg emission. That is acceptable hidden build support, and the
+  surrounding `__build` root now delegates through focused modules.
 
 ## Visibility Hygiene
 
@@ -120,16 +122,18 @@ Notable pressure:
 | core hidden support roots | `crates/canic-core/src/lib.rs` | `#[doc(hidden)] pub mod` | keep current | macro/build/control-plane support still needs root reachability. | Low |
 | memory backend roots | `crates/canic-memory/src/lib.rs` | `#[doc(hidden)] pub mod manager/runtime` | keep current | macros/bootstrap require paths; ordinary root re-exports remain absent. | Low |
 | host operator modules | `crates/canic-host/src/lib.rs` | `pub mod canister_build`, `icp`, `install_root`, `release_set`, `replica_query`, `table` | review only after package docs settle | CLI consumes these as a host library; no narrower call graph judgment without a package-contract decision. | Medium |
-| control-plane publication workflow | `crates/canic-control-plane/src/workflow/runtime/template/publication/mod.rs` | internal module, broad file | split by phase when touched | file size and coordination load support future decomposition, but visibility is not public. | Medium |
+| control-plane publication workflow | `crates/canic-control-plane/src/workflow/runtime/template/publication/mod.rs` | internal module, decomposed phase files | keep current | release, fleet, and lifecycle coordination are now split by concern; visibility is not public. | Low |
 
 ### Under-Containment Signals
 
 | Area | Signal | Evidence | Pressure or Violation | Risk |
 | --- | --- | --- | --- | --- |
-| `canic-control-plane` publication | publication workflow remains a large coordination hub | `publication/mod.rs = 1509` lines, `publication/fleet.rs = 704` lines | Pressure | Medium |
-| `canic-core` provisioning | install/create/register propagation flow still concentrated | `workflow/ic/provision.rs = 697` lines | Pressure | Medium |
-| `canic` endpoint macro bundle | one generated endpoint macro file remains a coordination hub | `crates/canic/src/macros/endpoints.rs = 656` lines | Pressure | Medium |
+| `canic-control-plane` publication | release, fleet, and lifecycle publication phases split into focused modules | largest production files are `publication/release/managed.rs = 275`, `publication/lifecycle/binding.rs = 206`, `publication/lifecycle/gc.rs = 194`, and `publication/fleet/placement.rs = 191` | Remediated | Low |
+| `canic-core` provisioning | install/create/register propagation flow split into phase modules | largest provision files are `allocation.rs = 193` and `install.rs = 138` | Remediated | Low |
+| `canic-core` IC management | management canister adapter split into request types plus lifecycle/cycles/snapshot/status/settings modules | largest management files are `types.rs = 296` and `lifecycle.rs = 186` | Remediated | Low |
+| `canic` endpoint macro bundle | generated endpoint macro support split into directory modules | root `macros/endpoints/mod.rs = 6`; implementation files remain hidden macro support | Remediated | Low |
 | `canic-host` package surface | host root exposes seven public modules | `crates/canic-host/src/lib.rs` public module scan | Pressure | Medium |
+| `canic-backup` restore state machine | restore runner/apply-journal hubs split into focused modules | largest implementation files are now `restore/runner/types.rs = 525`, `restore/apply/journal/mod.rs = 422`, and `restore/runner/execute.rs = 337` | Remediated | Low |
 | `canic-testkit` public PocketIC seam | public root remains centralized but smaller than baseline | `crates/canic-testkit/src/pic/mod.rs = 285` lines, down from `349` in the April report | Pressure | Low |
 
 ### Test Leakage
@@ -158,7 +162,7 @@ confirmed.
 | --- | --- | --- |
 | enum shock radius | active metrics-profile work added `MetricsProfile` and build cfg routing, but the endpoint Candid enum stayed stable; no broad enum fan-out beyond metrics/build/render/config was observed. | Low |
 | cross-layer struct spread | `MetricsProfile` appears in config schema, bootstrap render/re-export, and build support; this is expected config/build flow, not storage/workflow leakage. | Low |
-| hub growth | largest current production file is `canic-control-plane` publication at `1509` lines; macro/build support also grew in the active metrics slice. | Medium |
+| hub growth | largest current production files are now template storage, backup manifest/snapshot planning, and `canic-host` install/release helpers; `canic-core` IC management/provisioning, `canic` macro/build support, control-plane publication, and backup restore runner/apply-journal internals were split. | Medium |
 | capability surface growth | no new capability endpoint family was observed in this module-structure run. | Low |
 | operator package surface growth | `canic-host`, `canic-cli`, and `canic-backup` are now visible published package roots and should stay in future module-structure scope. | Medium |
 
@@ -178,17 +182,19 @@ confirmed.
 | Public Surface Discipline | 4 / 10 | core/facade support roots remain hidden, but operator support crates are now in published scope and need continued package-boundary discipline. |
 | Layer Directionality | 2 / 10 | no crate cycle or clear upward dependency was confirmed. |
 | Circularity Safety | 1 / 10 | no real crate/subsystem cycle found. |
-| Visibility Hygiene | 4 / 10 | broad but mostly intentional public roots; control-plane and macro/build hubs are the main containment pressure. |
-| Facade Containment | 3 / 10 | `canic` and `canic-core` stay disciplined, and operator host/CLI code now avoids linking the canister facade. |
+| Visibility Hygiene | 3 / 10 | broad but mostly intentional public roots; host phase files and backup manifest/snapshot planning are the main containment pressure after the `canic-core`, `canic-control-plane`, and `canic` splits. |
+| Facade Containment | 2 / 10 | `canic` hidden macro/build support is decomposed, `canic-core` IC provisioning adapters are contained, and operator host/CLI code avoids linking the canister facade. |
 
-Overall structural risk index: **4 / 10**.
+Overall structural risk index: **3 / 10**.
 
 Interpretation:
 
 - no high or critical structural violation was confirmed
-- risk is up from the April `3 / 10` mainly because this run includes the
-  now-published operator crates and active 0.33 metrics/build-support changes
-- the main structural pressure is hub containment, not dependency direction
+- risk is back at the April `3 / 10` level after the module splits, despite the
+  expanded 0.33 operator-crate scope
+- the main structural pressure is now host phase-file containment and remaining
+  backup manifest/snapshot planning, not dependency direction or core/control-plane
+  provisioning shape
 
 ## Known Intentional Exceptions
 
@@ -208,9 +214,11 @@ Interpretation:
 | scope expansion | operator crates | excluded or not materially assessed | `canic-host`, `canic-cli`, `canic-backup` included | method changed; future module-structure runs should keep them in scope |
 | retained containment | `canic-core` root | hidden support roots after April cleanup | hidden support roots still present; internal roots remain `pub(crate)` | no regression |
 | reduced testkit hub | `canic-testkit/src/pic/mod.rs` | `349` lines | `285` lines | lower public testkit hub pressure |
-| new build-support pressure | `canic/src/build_support.rs` | not a highlighted hotspot | `507` lines with metrics-profile cfg helpers | hidden build support should be watched if more config/build roles accumulate |
+| remediated build-support pressure | `canic/src/build_support.rs` | not a highlighted hotspot | split into `build_support/mod.rs`, `config.rs`, `metrics.rs`, and `bootstrap.rs` | hidden build support remains focused |
 | new operator-surface pressure | `canic-host/src/lib.rs` | not in baseline | seven public modules | package-boundary watchpoint for future CLI/host work |
-| persistent control-plane hub | `canic-control-plane` publication | not highlighted in prior narrower report | `publication/mod.rs = 1509` lines | strongest current structural hotspot |
+| remediated control-plane phase pressure | `canic-control-plane` publication | `publication/release.rs = 845`, `publication/fleet.rs = 704`, `publication/lifecycle.rs = 540` | split into normal directory modules with max production file `release/managed.rs = 275` | publication workflow is now decomposed by release, placement, binding, creation, inventory, and GC concerns |
+| remediated IC management/provisioning pressure | `canic-core` IC workflow/infra | `workflow/ic/provision.rs = 697`, `infra/ic/mgmt.rs = 612` | split into normal directory modules, max focused file `296` lines in management types and `193` lines in provisioning allocation | planned 0.33 addendum cleanup completed |
+| remediated backup restore pressure | `canic-backup` restore runner/apply journal | `restore/runner/mod.rs = 1204`, `restore/apply/journal/mod.rs = 868` | split into normal directory modules; runner max focused file is `types.rs = 525`, apply journal root is `422`, and all backup crate tests still pass | operator backup/restore domain remains broad but the runner and journal state machine are easier to review |
 
 ## Verification Readout
 
@@ -223,22 +231,24 @@ Interpretation:
 | hub size scan | PASS | `wc -l` over runtime/support Rust files identified current hotspots. |
 | cross-layer import scan | PASS | searched access/domain/config/workflow imports for storage/ops/infra pressure; no high-confidence production layer violation found. |
 | test/fleet/audit seam scan | PASS | searched manifests and source references for `canic-testing-internal`, `canic-testkit`, `fleets`, `canisters/test`, `canisters/audit`, and `canisters/sandbox`. |
-| build verification | PASS | `cargo check -p canic -p canic-core -p canic-control-plane -p canic-memory -p canic-testkit -p canic-testing-internal -p canic-host -p canic-cli -p canic-backup`. |
+| build verification | PASS | `cargo check -p canic-core`, `cargo clippy -p canic-core --all-targets -- -D warnings`, and `cargo test -p canic-core --lib -- --nocapture` after the `infra/ic/mgmt` and `workflow/ic/provision` splits; `cargo check -p canic-control-plane`, `cargo clippy -p canic-control-plane --all-targets -- -D warnings`, and `cargo test -p canic-control-plane --lib -- --nocapture` after both the publication release split and the publication fleet/lifecycle split; `cargo check -p canic-backup`, `cargo clippy -p canic-backup --all-targets -- -D warnings`, and `cargo test -p canic-backup --lib -- --nocapture` after the backup restore runner/apply-journal split. |
 
 ## Follow-up Actions
 
-1. Control-plane maintainers: when publication behavior changes next, split
-   `crates/canic-control-plane/src/workflow/runtime/template/publication/mod.rs`
-   by phase or responsibility before adding more branches.
-2. Core/runtime maintainers: keep the IC management/provisioning refactor
-   tracked in `docs/design/0.33-icp-cli/refactor-addendum.md`; do not add new
-   management flows to `workflow/ic/provision.rs` or `infra/ic/mgmt.rs` without
-   considering the planned split.
+1. Control-plane maintainers: keep new publication behavior in the focused
+   `publication/release/*`, `publication/fleet/*`, and `publication/lifecycle/*`
+   modules instead of rebuilding broad phase files.
+2. Core/runtime maintainers: keep new management canister calls inside
+   `infra/ic/mgmt/*` by concern, and keep root provisioning behavior in the
+   focused `workflow/ic/provision/*` phase modules instead of rebuilding a
+   monolithic workflow file.
 3. Facade/build maintainers: keep metrics/config build helpers contained behind
    hidden `__build`; do not promote build-support types into ordinary public
    API.
 4. Operator maintainers: keep `canic-cli` UX logic out of `canic-host`, and keep
-   `canic-host` filesystem/build/install mechanics out of `canic-backup`.
+   `canic-host` filesystem/build/install mechanics out of `canic-backup`;
+   keep restore runner state transitions inside the focused runner/apply-journal
+   modules instead of rebuilding monolithic restore helpers.
 5. Auth maintainers: keep delegated-session cleanup and metrics side effects
    isolated to the endpoint access boundary; do not copy that pattern into
    general policy modules.

@@ -4,14 +4,14 @@
 
 | Report | Type | Scope | Snapshot | Worktree | Status |
 | --- | --- | --- | --- | --- | --- |
-| `module-structure.md` | Recurring system | facade/core/control-plane/memory/testkit/operator crates, fleets, test/audit/sandbox canisters | `d6ea5e3b` | dirty | complete |
+| `module-structure.md` | Recurring system | facade/core/control-plane/memory/testkit/operator crates, fleets, test/audit/sandbox canisters | `7e0ec893` plus current 0.33.5 cleanup worktree | dirty | complete |
 | `dependency-hygiene.md` | Recurring system | workspace manifests, published/support crates, operator crates, fleets, test/audit/sandbox canisters | `d6ea5e3b` | dirty | complete |
 
 ## Risk Index Summary
 
 | Report | Risk | Readout |
 | --- | ---: | --- |
-| `module-structure.md` | 4 / 10 | No high or critical structural violation was confirmed. Risk is mostly hub containment and the expanded 0.33 operator-crate package surface rather than dependency direction or cycles. |
+| `module-structure.md` | 3 / 10 | No high or critical structural violation was confirmed. The stale core provisioning/IC-management, facade macro/build, and control-plane release publication hotspots were split; remaining risk is mostly control-plane fleet/lifecycle and host phase-file containment. |
 | `dependency-hygiene.md` | 2 / 10 | No high or critical dependency hygiene violation was confirmed. The host and CLI package graphs were narrowed off the canister facade, leaving mostly intentional facade/support-package pressure. |
 
 ## Method / Comparability Notes
@@ -30,12 +30,11 @@
 ### Medium
 
 - `canic-control-plane` publication workflow remains the largest current
-  structural hotspot: `publication/mod.rs = 1509` lines and
-  `publication/fleet.rs = 704` lines.
-- `canic-core` provisioning and IC management remain known refactor pressure:
-  `workflow/ic/provision.rs = 697` lines and `infra/ic/mgmt.rs = 612` lines.
-- `canic` hidden macro/build support has grown with the metrics-profile work:
-  `macros/endpoints.rs = 656` lines and `build_support.rs = 507` lines.
+  structural hotspot by phase, but release publication is now split. Remaining
+  publication pressure is `publication/fleet.rs = 704` and
+  `publication/lifecycle.rs = 540`.
+- `canic-host` install/release support files are the next operator hotspot:
+  `install_root/mod.rs = 793`, `release_set/mod.rs = 741`, and `icp.rs = 600`.
 - `canic-host` now exposes seven public host/operator modules and should remain
   in future module-structure scope.
 - `access/auth/identity.rs` intentionally resolves delegated sessions at the
@@ -49,6 +48,17 @@
 
 - `canic-core` root containment stayed stable: support roots remain
   `#[doc(hidden)]`, and internal implementation roots remain `pub(crate)`.
+- `canic-core` IC management and provisioning were split from monolithic files
+  into normal directory modules. The largest focused files are now
+  `infra/ic/mgmt/types.rs = 296`, `infra/ic/mgmt/lifecycle.rs = 186`,
+  `workflow/ic/provision/allocation.rs = 193`, and
+  `workflow/ic/provision/install.rs = 138`.
+- `canic` hidden macro/build support has already been split into focused
+  modules, leaving dispatch roots of `6` and `10` lines.
+- `canic-control-plane` release publication was split from
+  `publication/release.rs = 845` into focused modules, with the largest now
+  `release/managed.rs = 275`, `release/chunks.rs = 189`, and
+  `release/catalog.rs = 132`.
 - `canic-testkit::pic` root pressure improved from the April report:
   `349 -> 285` lines.
 - No crate-level or subsystem-level cycle was confirmed.
@@ -71,10 +81,11 @@
 
 ## Follow-up Actions
 
-1. Control-plane maintainers: split publication workflow by phase or
-   responsibility when publication behavior changes next.
-2. Core/runtime maintainers: keep IC management/provisioning decomposition
-   tracked in `docs/design/0.33-icp-cli/refactor-addendum.md`.
+1. Control-plane maintainers: keep release publication behavior in the focused
+   `publication/release/*` modules, and split `publication/fleet.rs` or
+   `publication/lifecycle.rs` before adding more phase branches there.
+2. Core/runtime maintainers: keep new IC management and provisioning behavior
+   in the focused `infra/ic/mgmt/*` and `workflow/ic/provision/*` modules.
 3. Facade/build maintainers: keep metrics/config build helpers behind hidden
    `__build`.
 4. Operator maintainers: preserve CLI/host/backup ownership boundaries as the

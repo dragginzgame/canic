@@ -30,3 +30,27 @@ pub(crate) fn cargo_command() -> Command {
 pub(crate) fn icp_environment_from_env() -> String {
     std::env::var("ICP_ENVIRONMENT").unwrap_or_else(|_| "local".to_string())
 }
+
+pub(crate) fn should_export_candid_artifacts(environment: &str) -> bool {
+    environment == "local"
+}
+
+pub(crate) fn remove_optional_file(path: &std::path::Path) -> std::io::Result<()> {
+    match std::fs::remove_file(path) {
+        Ok(()) => Ok(()),
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(err) => Err(err),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::should_export_candid_artifacts;
+
+    // Keep public Candid export restricted to local/development environments.
+    #[test]
+    fn candid_artifact_export_is_dev_only() {
+        assert!(should_export_candid_artifacts("local"));
+        assert!(!should_export_candid_artifacts("ic"));
+    }
+}

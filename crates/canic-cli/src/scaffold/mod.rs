@@ -352,7 +352,7 @@ pub async fn canic_install() {}
 /// Run no-op upgrade handling for this scaffolded root.
 pub async fn canic_upgrade() {}
 
-canic::cdk::export_candid_debug!();
+canic::finish!();
 ";
 
 const APP_LIB_RS: &str = r#"#![expect(clippy::unused_async)]
@@ -372,7 +372,7 @@ pub async fn canic_upgrade() {}
 
 canic::start!(APP);
 
-canic::cdk::export_candid_debug!();
+canic::finish!();
 "#;
 
 #[cfg(test)]

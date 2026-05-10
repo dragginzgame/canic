@@ -1,8 +1,10 @@
 use crate::{
-    artifact_io::{maybe_shrink_wasm_artifact, write_gzip_artifact},
+    artifact_io::{embed_candid_metadata, maybe_shrink_wasm_artifact, write_gzip_artifact},
     cargo_command,
     cargo_metadata::{CargoMetadata, cargo_metadata},
+    icp_environment_from_env,
     release_set::config_path,
+    remove_optional_file, should_export_candid_artifacts,
 };
 use std::{
     fmt::Write as _,
@@ -109,12 +111,18 @@ pub fn build_bootstrap_wasm_store_artifact(
     let wasm_gz_path = artifact_root.join(format!("{WASM_STORE_ROLE}.wasm.gz"));
     let did_path = artifact_root.join(format!("{WASM_STORE_ROLE}.did"));
     let profile_path = artifact_root.join(".build-profile");
+    let environment = icp_environment_from_env();
 
     fs::copy(&built_wasm_path, &wasm_path)?;
     maybe_shrink_wasm_artifact(&wasm_path)?;
-    write_gzip_artifact(&wasm_path, &wasm_gz_path)?;
     fs::write(profile_path, profile.profile_marker())?;
-    ensure_wasm_store_did(workspace_root, &source, profile, &did_path)?;
+    if should_export_candid_artifacts(&environment) {
+        ensure_wasm_store_did(workspace_root, &source, profile, &did_path)?;
+        embed_candid_metadata(&wasm_path, &did_path)?;
+    } else {
+        remove_optional_file(&did_path)?;
+    }
+    write_gzip_artifact(&wasm_path, &wasm_gz_path)?;
 
     Ok(BootstrapWasmStoreBuildOutput {
         artifact_root,
@@ -297,7 +305,7 @@ incremental = true\n",
     )?;
     fs::write(
         wrapper_root.join("src/lib.rs"),
-        "#![expect(clippy::unused_async)]\n\ncanic::start_wasm_store!();\ncanic::cdk::export_candid_debug!();\n",
+        "#![expect(clippy::unused_async)]\n\ncanic::start_wasm_store!();\ncanic::finish!();\n",
     )?;
 
     let workspace_lock = workspace_root.join("Cargo.lock");

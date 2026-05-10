@@ -12,4 +12,4 @@ pub async fn canic_upgrade() {}
 
 canic::start!(APP);
 
-canic::cdk::export_candid_debug!();
+canic::finish!();

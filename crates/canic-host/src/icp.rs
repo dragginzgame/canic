@@ -213,6 +213,18 @@ impl IcpCli {
         run_output(&mut command)
     }
 
+    /// Read one canister metadata section.
+    pub fn canister_metadata_output(
+        &self,
+        canister: &str,
+        metadata_name: &str,
+    ) -> Result<String, IcpCommandError> {
+        let mut command = self.canister_command();
+        command.args(["metadata", canister, metadata_name]);
+        self.add_target_args(&mut command);
+        run_output(&mut command)
+    }
+
     /// Return one canister status report.
     pub fn canister_status(&self, canister: &str) -> Result<String, IcpCommandError> {
         let mut command = self.canister_command();

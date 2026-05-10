@@ -36,4 +36,4 @@ async fn request_cycles_from_parent(cycles: u128) -> Result<u128, Error> {
         .map(|response| response.cycles_transferred)
 }
 
-canic::cdk::export_candid_debug!();
+canic::finish!();

@@ -8,4 +8,4 @@ pub async fn canic_install() {}
 
 pub async fn canic_upgrade() {}
 
-canic::cdk::export_candid_debug!();
+canic::finish!();

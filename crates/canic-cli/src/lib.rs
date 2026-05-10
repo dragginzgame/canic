@@ -1,6 +1,7 @@
 mod args;
 mod backup;
 mod build;
+mod endpoints;
 mod fleets;
 mod install;
 mod list;
@@ -93,6 +94,11 @@ const COMMAND_SPECS: &[CommandSpec] = &[
         scope: CommandScope::FleetContext,
     },
     CommandSpec {
+        name: "endpoints",
+        about: "List canister Candid endpoints",
+        scope: CommandScope::FleetContext,
+    },
+    CommandSpec {
         name: "medic",
         about: "Diagnose local Canic fleet setup",
         scope: CommandScope::FleetContext,
@@ -142,6 +148,9 @@ pub enum CliError {
     #[error("config: {0}")]
     Config(String),
 
+    #[error("endpoints: {0}")]
+    Endpoints(String),
+
     #[error("install: {0}")]
     Install(String),
 
@@ -179,6 +188,12 @@ impl From<backup::BackupCommandError> for CliError {
 impl From<build::BuildCommandError> for CliError {
     fn from(err: build::BuildCommandError) -> Self {
         Self::Build(err.to_string())
+    }
+}
+
+impl From<endpoints::EndpointsCommandError> for CliError {
+    fn from(err: endpoints::EndpointsCommandError) -> Self {
+        Self::Endpoints(err.to_string())
     }
 }
 
@@ -272,6 +287,7 @@ where
         "backup" => backup::run(tail).map_err(CliError::from),
         "build" => build::run(tail).map_err(CliError::from),
         "config" => list::run_config(tail).map_err(|err| CliError::Config(err.to_string())),
+        "endpoints" => endpoints::run(tail).map_err(CliError::from),
         "fleet" => fleets::run(tail).map_err(CliError::from),
         "install" => install::run(tail).map_err(CliError::from),
         "list" => list::run(tail).map_err(CliError::from),
@@ -417,10 +433,12 @@ mod tests {
         assert!(plain.find("    replica") < plain.find("    install"));
         assert!(plain.find("    install") < plain.find("    config"));
         assert!(plain.find("    config") < plain.find("    list"));
+        assert!(plain.find("    list") < plain.find("    endpoints"));
         assert!(plain.contains("Options:"));
         assert!(!plain.contains("    scaffold"));
         assert!(plain.contains("config"));
         assert!(plain.contains("list"));
+        assert!(plain.contains("endpoints"));
         assert!(plain.contains("build"));
         assert!(!plain.contains("    network"));
         assert!(!plain.contains("    defaults"));
@@ -449,6 +467,7 @@ mod tests {
             &["backup", "verify", "help"],
             &["build", "help"],
             &["config", "help"],
+            &["endpoints", "help"],
             &["install", "help"],
             &["fleet"],
             &["fleet", "help"],
@@ -501,6 +520,7 @@ mod tests {
         );
         assert!(run([OsString::from("build"), OsString::from("--version")]).is_ok());
         assert!(run([OsString::from("config"), OsString::from("--version")]).is_ok());
+        assert!(run([OsString::from("endpoints"), OsString::from("--version")]).is_ok());
         assert!(run([OsString::from("install"), OsString::from("--version")]).is_ok());
         assert!(run([OsString::from("fleet"), OsString::from("--version")]).is_ok());
         assert!(run([OsString::from("replica"), OsString::from("--version")]).is_ok());

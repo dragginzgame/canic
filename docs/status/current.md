@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-05-08
+Last updated: 2026-05-10
 
 ## Purpose
 
@@ -9,59 +9,43 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
-- Active minor: `0.32.x`
-- Theme: simplify the `canic` executable, reduce stale CLI surfaces, and lower
-  repeated agent context cost.
-- Last user-stated publish point in this thread: work is continuing after
-  `0.32.4`-area cleanup; verify exact published tag with read-only git if it
-  matters.
+- Active minor: `0.33.x`
+- Theme: hard-cut DFX support in favor of ICP CLI, then reduce 0.33 structural
+  hotspots without changing behavior.
+- Current release-work area: `0.33.5` cleanup/audit slice.
 
 ## Recent Work
 
-- Shrunk `AGENTS.md` from a long embedded rulebook into a compact routing file.
-- Added `docs/governance/ci-deployment.md` for command, git, versioning,
-  release, network, and automation-language rules.
-- Left detailed changelog policy in `docs/governance/changelog.md`.
-- Removed the public `canic release-set` CLI surface.
-- Continued CLI simplification around fleet/list/scaffold/install flows.
-- Removed persisted fleet/network defaults; fleet-scoped commands take the fleet
-  name as a positional argument, and network selection is per-command via
-  `--network <name>` with local replica behavior when omitted.
-- Started the 0.33 hard cut toward `icp-cli`/`icp.yaml`; dev setup and CI
-  install pinned `icp` and `ic-wasm` binaries.
-- Confirmed the ICP-only local demo install smoke with `icp 0.2.5`, including
-  `canic install demo`, `canic config demo`, `canic list demo`, and
-  `canic medic demo`.
-- Confirmed the auth-enabled `test` fleet install smoke after moving active
-  threshold ECDSA key defaults from the old local key name to ICP CLI's `key_1`.
-- Moved the public read-only/snapshot/restore-runner CLI surfaces toward ICP
-  CLI: `list`, `config`, `medic`, `snapshot download`, and `restore run` now
-  expose `--icp <path>` where a tool override is needed.
-- Added `canic fleet delete <name>` for confirmed deletion of config-defined
-  fleet directories.
-- Hard-cut fleet scaffolds to top-level `fleets/`.
-- Hard-cut role-attestation audience from optional to required.
-- Added/updated recurring audit reports for audience target binding and token
-  trust-chain invariants.
+- Completed the 0.33 ICP CLI hard cut: `icp.yaml`, `.icp`, ICP CLI install/list/
+  medic/snapshot/restore flows, native replica controls, and project status.
+- Removed default fleet/network state and the old public `canic network`
+  command; fleet-scoped commands take positional fleet names.
+- Made the standard pre-1.0 `canic` facade capabilities default so fleet
+  canisters no longer choose Canic feature flags manually.
+- Trimmed the public metrics surface into role-inferred profiles and tiered
+  selectors while keeping metrics enabled by default before 1.0.
+- Added `canic endpoints` and changed generated Candid finalization to require
+  a trailing `canic::finish!()`.
+- Refreshed the module-structure audit and reduced the current structural risk
+  readout to `3/10`.
+- Split current 0.33 hotspots in `canic-core` IC management/provisioning,
+  `canic-control-plane` publication, and `canic-backup` restore
+  runner/apply-journal internals into normal directory modules.
 
 ## Validation Recently Run
 
 - `cargo fmt --all`
-- `cargo check -p canic-cli`
-- `cargo check -p canic-host`
-- `cargo test -p canic-cli --lib -- --nocapture`
-- `cargo test -p canic-host --lib -- --nocapture`
-- `cargo test -p canic-host --lib install_state_round_trips_from_project_state_dir -- --nocapture`
-- `cargo run -q -p canic-cli --bin canic -- install demo --ready-timeout-seconds 60`
-- `cargo run -q -p canic-cli --bin canic -- config demo`
-- `cargo run -q -p canic-cli --bin canic -- list demo`
-- `cargo run -q -p canic-cli --bin canic -- medic demo`
-- `cargo run -q -p canic-cli --bin canic -- install test --ready-timeout-seconds 120`
-- `cargo run -q -p canic-cli --bin canic -- list test`
-- `cargo run -q -p canic-cli --bin canic -- medic test`
-- targeted `canic-core` auth tests
-- targeted PocketIC role-attestation/root-key tests
-- `git diff --check` on touched files
+- `cargo check -p canic-core`
+- `cargo clippy -p canic-core --all-targets -- -D warnings`
+- `cargo test -p canic-core --lib -- --nocapture`
+- `cargo test -p canic-core --lib workflow::ic -- --nocapture`
+- `cargo test -p canic-core --lib ops::ic -- --nocapture`
+- `cargo check -p canic-control-plane`
+- `cargo clippy -p canic-control-plane --all-targets -- -D warnings`
+- `cargo test -p canic-control-plane --lib -- --nocapture`
+- `cargo check -p canic-backup`
+- `cargo clippy -p canic-backup --all-targets -- -D warnings`
+- `cargo test -p canic-backup --lib -- --nocapture`
 
 ## Known Worktree Notes
 
@@ -80,13 +64,11 @@ inspect only the files needed for the current task.
 
 ## Good Next Tasks
 
-1. Continue reducing `AGENTS.md` by moving any remaining detailed architecture
-   rules into focused governance/architecture docs if useful.
-2. Keep removing stale public CLI surfaces and ensuring the operator flow is
-   `canic fleet create`, `canic install`, `canic fleet`, `canic config`,
-   `canic list`, `canic backup`, `canic snapshot`, and `canic restore`.
-3. Keep `canic-cli`, `canic-host`, and `canic-backup` boundaries sharp: CLI owns
+1. Continue the module-structure cleanup with host install/release helpers or
+   backup manifest/snapshot planning, while avoiding active `canic-cli` edits.
+2. Keep `canic-cli`, `canic-host`, and `canic-backup` boundaries sharp: CLI owns
    UX, host owns ICP CLI/filesystem/build/install mechanics, backup owns
    backup/restore domain logic.
-4. Continue the ICP-only 0.33 hard cut across remaining backup/restore docs and
-   any deeper CI smoke paths that still mention the old host-tool provider.
+3. Keep new modules on normal Rust directory discovery; do not add `#[path]`.
+4. Update `CHANGELOG.md`, `docs/changelog/0.33.md`, and
+   `docs/status/0.33-refactor.md` for each cleanup slice.

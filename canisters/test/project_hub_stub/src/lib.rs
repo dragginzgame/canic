@@ -84,4 +84,4 @@ async fn lookup_project_entry(
     Ok(DirectoryApi::lookup_entry(PROJECTS_POOL, &project_key))
 }
 
-canic::cdk::export_candid_debug!();
+canic::finish!();

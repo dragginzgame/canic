@@ -4,7 +4,7 @@ use crate::{
         InfraCanisterInstallMode, InfraCanisterSettings, InfraCanisterSnapshot,
         InfraCanisterStatusResult, InfraCanisterStatusType, InfraDefiniteCanisterSettings,
         InfraEnvironmentVariable, InfraLogVisibility, InfraMemoryMetrics, InfraQueryStats,
-        InfraUpdateSettingsArgs, InfraUpgradeFlags,
+        InfraUpdateSettingsArgs, InfraUpgradeFlags, InfraWasmMemoryPersistence,
     },
     ops::prelude::*,
 };
@@ -266,7 +266,7 @@ pub(super) fn install_mode_to_infra(mode: CanisterInstallMode) -> InfraCanisterI
 const fn upgrade_flags_to_infra(flags: UpgradeFlags) -> InfraUpgradeFlags {
     InfraUpgradeFlags {
         skip_pre_upgrade: flags.skip_pre_upgrade,
-        wasm_memory_persistence: None,
+        wasm_memory_persistence: Option::<InfraWasmMemoryPersistence>::None,
     }
 }
 

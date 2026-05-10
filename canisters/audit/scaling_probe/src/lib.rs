@@ -28,4 +28,4 @@ async fn audit_plan_create_worker_probe() -> Result<QueryPerfSample<bool>, Error
     Ok(MetricsQuery::sample_query(value))
 }
 
-canic::cdk::export_candid_debug!();
+canic::finish!();

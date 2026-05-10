@@ -4,7 +4,7 @@ use canic::{Error, ids::CanisterRole, prelude::*};
 const TEST_ROLE: CanisterRole = CanisterRole::new("test");
 
 canic::start!(TEST_ROLE);
-canic::cdk::export_candid_debug!();
+canic::finish!();
 
 // Provide an empty setup hook so `start!` can schedule user lifecycle work.
 async fn canic_setup() {}

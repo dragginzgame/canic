@@ -303,4 +303,4 @@ const CHUNKED_BOOTSTRAP_RELEASE_SET: &[(CanisterRole, &[u8])] = &[
     (PROJECT_INSTANCE_ROLE, PROJECT_INSTANCE_WASM),
 ];
 
-canic::cdk::export_candid_debug!();
+canic::finish!();

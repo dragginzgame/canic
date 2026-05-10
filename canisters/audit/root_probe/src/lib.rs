@@ -25,4 +25,4 @@ async fn audit_subnet_state_probe() -> Result<QueryPerfSample<SubnetStateRespons
     Ok(MetricsQuery::sample_query(SubnetStateQuery::snapshot()))
 }
 
-canic::cdk::export_candid_debug!();
+canic::finish!();

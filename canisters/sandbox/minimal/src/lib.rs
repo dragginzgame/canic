@@ -39,4 +39,4 @@ fn sandbox_minimal_echo(payload: String) -> Result<String, Error> {
     Ok(payload)
 }
 
-canic::cdk::export_candid_debug!();
+canic::finish!();

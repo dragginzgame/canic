@@ -59,6 +59,39 @@ pub fn write_gzip_artifact(
     Ok(())
 }
 
+// Embed the extracted service interface so deployed canisters support live
+// `icp canister metadata <canister> candid:service` introspection.
+pub fn embed_candid_metadata(
+    wasm_path: &Path,
+    did_path: &Path,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let output = Command::new("ic-wasm")
+        .arg(wasm_path)
+        .args(["-o"])
+        .arg(wasm_path)
+        .args(["metadata", "candid:service", "-f"])
+        .arg(did_path)
+        .args(["-v", "public"])
+        .output()
+        .map_err(|err| {
+            format!(
+                "failed to run ic-wasm metadata for {}: {err}",
+                wasm_path.display()
+            )
+        })?;
+
+    if !output.status.success() {
+        return Err(format!(
+            "ic-wasm metadata failed for {}: {}",
+            wasm_path.display(),
+            String::from_utf8_lossy(&output.stderr)
+        )
+        .into());
+    }
+
+    Ok(())
+}
+
 // Persist one file through a sibling temp path so readers never observe a partial write.
 pub fn write_bytes_atomically(
     target_path: &Path,

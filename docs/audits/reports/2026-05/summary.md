@@ -66,10 +66,11 @@ May has day summaries for the currently recorded audit days.
     support/test modules rather than re-growing production hubs.
 19. Complexity maintainers: watch remaining large config/IC facade files only
     when they become active edit centers.
-20. Control-plane maintainers: split publication workflow by phase or
-    responsibility when publication behavior changes next.
-21. Core/runtime maintainers: keep IC management/provisioning decomposition
-    tracked in `docs/design/0.33-icp-cli/refactor-addendum.md`.
+20. Control-plane maintainers: keep release publication behavior in the focused
+    `publication/release/*` modules, and split `publication/fleet.rs` or
+    `publication/lifecycle.rs` before adding more phase branches there.
+21. Core/runtime maintainers: keep new IC management and provisioning behavior
+    in the focused `infra/ic/mgmt/*` and `workflow/ic/provision/*` modules.
 22. Facade/build maintainers: keep metrics/config build helpers behind hidden
     `__build`.
 23. Operator maintainers: preserve CLI/host/backup ownership boundaries as the

@@ -22,7 +22,7 @@ mod canister {
         Ok("pong".to_string())
     }
 
-    canic::cdk::export_candid_debug!();
+    canic::finish!();
 }
 
 #[cfg(feature = "control-plane")]

@@ -69,4 +69,4 @@ async fn hello(_token: DelegatedToken) -> Result<(), Error> {
     Ok(())
 }
 
-canic::cdk::export_candid_debug!();
+canic::finish!();

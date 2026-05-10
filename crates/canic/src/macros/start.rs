@@ -352,6 +352,37 @@ macro_rules! __canic_start_ingress_payload_inspect {
     };
 }
 
+// Require canisters using the Canic lifecycle macros to close the file with
+// `canic::finish!()`. Rust item order does not affect this marker lookup, while
+// Candid export order still requires the finish macro to appear after endpoints.
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __canic_require_finish {
+    () => {
+        #[doc(hidden)]
+        const _: fn() = __canic_missing_finish_macro_add_canic_finish_at_end;
+    };
+}
+
+/// Finish a Canic canister module.
+///
+/// Place this macro at the end of the canister's crate root after
+/// `start!`, `start_root!`, or `start_wasm_store!` and after any extra
+/// endpoint definitions. In debug builds it exports Candid for local `.did`
+/// generation; in non-debug builds it only satisfies the required Canic finish
+/// marker.
+#[macro_export]
+macro_rules! finish {
+    () => {
+        #[doc(hidden)]
+        #[allow(dead_code)]
+        fn __canic_missing_finish_macro_add_canic_finish_at_end() {}
+
+        #[cfg(debug_assertions)]
+        $crate::cdk::export_candid!();
+    };
+}
+
 /// Configure lifecycle hooks for **non-root** Canic canisters.
 ///
 /// This macro defines the IC-required `init` and `post_upgrade` entry points
@@ -369,6 +400,7 @@ macro_rules! __canic_start_ingress_payload_inspect {
 #[macro_export]
 macro_rules! start {
     ($canister_role:expr $(, init = $init:block)? $(,)?) => {
+        $crate::__canic_require_finish!();
         $crate::__canic_start_nonroot_lifecycle_core!($canister_role $(, $init)?);
         $crate::__canic_start_ingress_payload_inspect!();
         $crate::__canic_start_nonroot_capability_bundles!();
@@ -388,6 +420,7 @@ macro_rules! start {
 #[macro_export]
 macro_rules! start_local {
     ($canister_role:expr $(, init = $init:block)? $(,)?) => {
+        $crate::__canic_require_finish!();
         $crate::__canic_start_local_lifecycle_core!($canister_role $(, $init)?);
         $crate::__canic_start_ingress_payload_inspect!();
         $crate::__canic_start_nonroot_capability_bundles!();
@@ -408,6 +441,7 @@ macro_rules! start_local {
 #[macro_export]
 macro_rules! start_root {
     ($(init = $init:block)? $(,)?) => {
+        $crate::__canic_require_finish!();
         $crate::__canic_start_root_lifecycle_core!($($init)?);
         $crate::__canic_start_ingress_payload_inspect!();
         $crate::__canic_start_root_capability_bundles!();
@@ -426,6 +460,7 @@ macro_rules! start_root {
 #[macro_export]
 macro_rules! start_wasm_store {
     ($(init = $init:block)? $(,)?) => {
+        $crate::__canic_require_finish!();
         #[expect(clippy::unused_async)]
         async fn canic_setup() {}
 

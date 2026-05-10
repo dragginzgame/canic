@@ -20,4 +20,4 @@ async fn canic_setup() {
 async fn canic_install() {}
 async fn canic_upgrade() {}
 
-canic::cdk::export_candid_debug!();
+canic::finish!();

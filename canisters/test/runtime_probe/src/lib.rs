@@ -47,4 +47,4 @@ async fn timer_interval() {
     let _ = 1 + 1;
 }
 
-canic::cdk::export_candid_debug!();
+canic::finish!();

@@ -60,4 +60,4 @@ async fn plan_create_account(pid: Principal) -> Result<String, Error> {
     Ok(format!("{plan:?}"))
 }
 
-canic::cdk::export_candid_debug!();
+canic::finish!();

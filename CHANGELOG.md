@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.33.x] - 2026-05-08 - dfx -> icp-cli
 
+- `0.33.5` refreshes the module-structure audit after the 0.33.4 cleanup, splits core IC management/provisioning, control-plane publication, and backup/restore runner/apply-journal internals into focused Rust directory modules, adds `canic endpoints` for Candid method inspection, hard-cuts Candid finalization to required trailing `canic::finish!()`, and reduces the structural risk readout back to `3/10`.
+
+```bash
+canic endpoints app --environment demo
+icp canister metadata -e demo app candid:service
+```
+
 - `0.33.4` keeps default metrics enabled on all canisters, makes the standard pre-1.0 root/auth/sharding runtime capabilities default on the `canic` facade so canister manifests no longer choose Canic features manually, trims the public metrics selector into tiered surfaces, folds redundant low-level management/provisioning/system rows behind higher-level operator metrics, and compiles role-inferred metrics profiles per canister.
 
 - `0.33.3` cleans up `canic-cli` parser and command-family internals by moving routing and validation further onto Clap, sharing host helpers, and splitting restore CLI tests without changing command shapes.

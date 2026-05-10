@@ -32,4 +32,4 @@ async fn instance_verify_token(_token: DelegatedToken) -> Result<(), Error> {
     Ok(())
 }
 
-canic::cdk::export_candid_debug!();
+canic::finish!();
