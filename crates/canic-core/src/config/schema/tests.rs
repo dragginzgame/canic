@@ -13,6 +13,7 @@ fn base_canister_config(kind: CanisterKind) -> CanisterConfig {
         directory: None,
         auth: CanisterAuthConfig::default(),
         standards: StandardsCanisterConfig::default(),
+        metrics: MetricsCanisterConfig::default(),
     }
 }
 

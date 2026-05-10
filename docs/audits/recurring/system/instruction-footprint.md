@@ -25,7 +25,7 @@ look better.
 Canic already has two instruction-observability mechanisms:
 
 1. endpoint/timer aggregation in `canic-core::perf`, surfaced through
-   `canic_metrics(MetricsKind::Perf, ...)`
+   `canic_metrics(MetricsKind::Runtime, ...)` `perf` rows
 2. manual `perf!` checkpoints that now both record structured checkpoint rows
    and log `Topic::Perf` entries inside a single call context
 
@@ -124,7 +124,7 @@ The transport may change.
 
 Current likely source transport is:
 
-- `canic_metrics(MetricsKind::Perf, PageRequest { ... })`
+- `canic_metrics(MetricsKind::Runtime, PageRequest { ... })`
 
 But reports must compare canonical row fields, not concrete response enum names,
 DTO variants, or label vector layout.

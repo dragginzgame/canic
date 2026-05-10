@@ -5,6 +5,9 @@ rust-version = { workspace = true }
 version = { workspace = true }
 publish = false
 
+[package.metadata.cargo-machete]
+ignored = ["candid", "ic-cdk"]
+
 [package.metadata.canic]
 role = "test"
 
@@ -13,7 +16,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 candid = { workspace = true }
-canic = { workspace = true, features = ["auth-crypto"] }
+canic = { workspace = true }
 ic-cdk = { workspace = true }
 
 [build-dependencies]

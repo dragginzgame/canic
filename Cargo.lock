@@ -300,8 +300,8 @@ name = "canic-cli"
 version = "0.33.3"
 dependencies = [
  "candid",
- "canic",
  "canic-backup",
+ "canic-core",
  "canic-host",
  "clap",
  "serde",
@@ -350,7 +350,6 @@ name = "canic-host"
 version = "0.33.3"
 dependencies = [
  "candid",
- "canic",
  "canic-core",
  "flate2",
  "serde",
@@ -374,7 +373,6 @@ dependencies = [
 name = "canic-memory"
 version = "0.33.3"
 dependencies = [
- "candid",
  "canic-cdk",
  "ctor",
  "serde",
@@ -391,9 +389,7 @@ dependencies = [
  "canic-control-plane",
  "canic-core",
  "canic-testkit",
- "pocket-ic",
  "serde",
- "sha2",
 ]
 
 [[package]]
@@ -456,7 +452,6 @@ dependencies = [
  "canic",
  "ic-cdk",
  "pocket-ic",
- "serde",
  "sha2",
 ]
 
@@ -789,7 +784,6 @@ dependencies = [
  "canic-control-plane",
  "ic-cdk",
  "k256",
- "serde",
  "sha2",
 ]
 
@@ -818,7 +812,6 @@ dependencies = [
  "candid",
  "canic",
  "ic-cdk",
- "serde",
 ]
 
 [[package]]

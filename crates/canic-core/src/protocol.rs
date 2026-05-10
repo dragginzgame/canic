@@ -29,6 +29,9 @@ pub const CANIC_WASM_STORE_BOOTSTRAP_DEBUG: &str = "canic_wasm_store_bootstrap_d
 pub const CANIC_WASM_STORE_OVERVIEW: &str = "canic_wasm_store_overview";
 pub const CANIC_WASM_STORE_PUBLICATION_STATUS: &str = "canic_wasm_store_publication_status";
 pub const CANIC_WASM_STORE_RETIRED_STATUS: &str = "canic_wasm_store_retired_status";
+pub const CANIC_TEMPLATE_PREPARE_ADMIN: &str = "canic_template_prepare_admin";
+pub const CANIC_TEMPLATE_PUBLISH_CHUNK_ADMIN: &str = "canic_template_publish_chunk_admin";
+pub const CANIC_TEMPLATE_STAGE_MANIFEST_ADMIN: &str = "canic_template_stage_manifest_admin";
 
 pub const CANIC_SYNC_STATE: &str = "canic_sync_state";
 pub const CANIC_SYNC_TOPOLOGY: &str = "canic_sync_topology";

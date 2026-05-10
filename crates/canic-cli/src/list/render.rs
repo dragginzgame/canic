@@ -1,6 +1,6 @@
 use super::ListCommandError;
-use canic::ids::CanisterRole;
 use canic_backup::discovery::RegistryEntry;
+use canic_core::ids::CanisterRole;
 use std::collections::{BTreeMap, BTreeSet};
 
 pub(super) const ROLE_HEADER: &str = "ROLE";
@@ -8,6 +8,7 @@ pub(super) const KIND_HEADER: &str = "KIND";
 pub(super) const FEATURES_HEADER: &str = "FEATURES";
 pub(super) const AUTO_HEADER: &str = "AUTO";
 pub(super) const TOPUP_HEADER: &str = "TOPUP";
+pub(super) const METRICS_HEADER: &str = "METRICS";
 pub(super) const CANISTER_HEADER: &str = "CANISTER_ID";
 pub(super) const READY_HEADER: &str = "READY";
 pub(super) const WASM_HEADER: &str = "WASM_GZ";
@@ -223,6 +224,7 @@ pub(super) struct ConfigRoleRow {
     pub(super) capabilities: String,
     pub(super) auto_create: String,
     pub(super) topup: String,
+    pub(super) metrics: String,
     pub(super) details: Vec<String>,
 }
 
@@ -233,8 +235,9 @@ fn render_config_table(rows: &[ConfigRoleRow], verbose: bool) -> String {
         &[
             ROLE_HEADER,
             KIND_HEADER,
-            FEATURES_HEADER,
             AUTO_HEADER,
+            FEATURES_HEADER,
+            METRICS_HEADER,
             TOPUP_HEADER,
         ],
         &widths,
@@ -252,26 +255,28 @@ fn render_config_table(rows: &[ConfigRoleRow], verbose: bool) -> String {
     lines.join("\n")
 }
 
-fn config_table_rows(rows: &[ConfigRoleRow]) -> Vec<[String; 5]> {
+fn config_table_rows(rows: &[ConfigRoleRow]) -> Vec<[String; 6]> {
     rows.iter()
         .map(|row| {
             [
                 row.role.clone(),
                 row.kind.clone(),
-                row.capabilities.clone(),
                 row.auto_create.clone(),
+                row.capabilities.clone(),
+                row.metrics.clone(),
                 row.topup.clone(),
             ]
         })
         .collect()
 }
 
-fn config_table_widths(rows: &[[String; 5]]) -> [usize; 5] {
+fn config_table_widths(rows: &[[String; 6]]) -> [usize; 6] {
     let mut widths = [
         ROLE_HEADER.chars().count(),
         KIND_HEADER.chars().count(),
-        FEATURES_HEADER.chars().count(),
         AUTO_HEADER.chars().count(),
+        FEATURES_HEADER.chars().count(),
+        METRICS_HEADER.chars().count(),
         TOPUP_HEADER.chars().count(),
     ];
 
@@ -284,7 +289,7 @@ fn config_table_widths(rows: &[[String; 5]]) -> [usize; 5] {
     widths
 }
 
-fn render_config_table_row(row: &[impl AsRef<str>], widths: &[usize; 5]) -> String {
+fn render_config_table_row(row: &[impl AsRef<str>], widths: &[usize; 6]) -> String {
     widths
         .iter()
         .enumerate()
@@ -298,7 +303,7 @@ fn render_config_table_row(row: &[impl AsRef<str>], widths: &[usize; 5]) -> Stri
         .to_string()
 }
 
-fn render_config_separator(widths: &[usize; 5]) -> String {
+fn render_config_separator(widths: &[usize; 6]) -> String {
     widths
         .iter()
         .map(|width| "-".repeat(*width))

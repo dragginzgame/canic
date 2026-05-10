@@ -24,22 +24,6 @@ pub enum ProvisioningMetricOperation {
     Upgrade,
 }
 
-impl ProvisioningMetricOperation {
-    /// Return the stable public metrics label for this operation.
-    #[must_use]
-    pub const fn metric_label(self) -> &'static str {
-        match self {
-            Self::Allocate => "allocate",
-            Self::Create => "create",
-            Self::Install => "install",
-            Self::PropagateState => "propagate_state",
-            Self::PropagateTopology => "propagate_topology",
-            Self::ResolveModule => "resolve_module",
-            Self::Upgrade => "upgrade",
-        }
-    }
-}
-
 ///
 /// ProvisioningMetricOutcome
 ///
@@ -51,19 +35,6 @@ pub enum ProvisioningMetricOutcome {
     Failed,
     Skipped,
     Started,
-}
-
-impl ProvisioningMetricOutcome {
-    /// Return the stable public metrics label for this outcome.
-    #[must_use]
-    pub const fn metric_label(self) -> &'static str {
-        match self {
-            Self::Completed => "completed",
-            Self::Failed => "failed",
-            Self::Skipped => "skipped",
-            Self::Started => "started",
-        }
-    }
 }
 
 ///
@@ -90,27 +61,6 @@ pub enum ProvisioningMetricReason {
 }
 
 impl ProvisioningMetricReason {
-    /// Return the stable public metrics label for this reason.
-    #[must_use]
-    pub const fn metric_label(self) -> &'static str {
-        match self {
-            Self::AlreadyCurrent => "already_current",
-            Self::InvalidState => "invalid_state",
-            Self::ManagementCall => "management_call",
-            Self::MissingWasm => "missing_wasm",
-            Self::NewAllocation => "new_allocation",
-            Self::NotFound => "not_found",
-            Self::Ok => "ok",
-            Self::PolicyDenied => "policy_denied",
-            Self::PoolReuse => "pool_reuse",
-            Self::PoolTopup => "pool_topup",
-            Self::StatePropagation => "state_propagation",
-            Self::Topology => "topology",
-            Self::TopologyPropagation => "topology_propagation",
-            Self::Unknown => "unknown",
-        }
-    }
-
     /// Classify one internal error into a bounded provisioning metric reason.
     #[must_use]
     pub(crate) const fn from_error(err: &InternalError) -> Self {
@@ -189,6 +139,7 @@ impl ProvisioningMetrics {
 
     /// Snapshot the current provisioning metric table as stable rows.
     #[must_use]
+    #[cfg(test)]
     pub fn snapshot() -> Vec<(ProvisioningMetricKey, u64)> {
         PROVISIONING_METRICS
             .with_borrow(std::clone::Clone::clone)

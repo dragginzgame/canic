@@ -2,7 +2,7 @@ use super::*;
 
 // Query rows only count as unobservable if the same-call probe path failed.
 // Query calls do not commit shared perf-table state, so they cannot rely on
-// post-call `canic_metrics(MetricsKind::Perf, ...)` reads the way updates do.
+// post-call `canic_metrics(MetricsKind::Runtime, ...)` reads the way updates do.
 pub(super) fn query_perf_is_unobservable(scenario: &AuditScenario, row: &CanonicalPerfRow) -> bool {
     scenario.transport_mode == "query" && row.count == 0
 }
@@ -575,7 +575,7 @@ fn perf_entries(pic: &Pic, canister_id: Principal) -> Vec<MetricEntry> {
             canister_id,
             protocol::CANIC_METRICS,
             (
-                MetricsKind::Perf,
+                MetricsKind::Runtime,
                 PageRequest {
                     limit: PERF_PAGE_LIMIT,
                     offset: 0,
@@ -610,13 +610,14 @@ fn perf_slot(entries: &[MetricEntry], subject_kind: &str, subject_label: &str) -
     entries
         .iter()
         .find_map(|entry| {
-            if entry
-                .labels
-                .first()
-                .is_some_and(|label| label == subject_kind)
+            if entry.labels.first().is_some_and(|label| label == "perf")
                 && entry
                     .labels
                     .get(1)
+                    .is_some_and(|label| label == subject_kind)
+                && entry
+                    .labels
+                    .get(2)
                     .is_some_and(|label| label == subject_label)
             {
                 Some(match entry.value {
@@ -640,10 +641,10 @@ fn checkpoint_deltas(
     let mut rows = after
         .iter()
         .filter_map(|entry| {
-            let [kind, scope, label] = entry.labels.as_slice() else {
+            let [family, kind, scope, label] = entry.labels.as_slice() else {
                 return None;
             };
-            if kind != "checkpoint" {
+            if family != "perf" || kind != "checkpoint" {
                 return None;
             }
 
@@ -682,10 +683,14 @@ fn perf_checkpoint_slot(entries: &[MetricEntry], scope: &str, label: &str) -> (u
     entries
         .iter()
         .find_map(|entry| {
-            let [kind, entry_scope, entry_label] = entry.labels.as_slice() else {
+            let [family, kind, entry_scope, entry_label] = entry.labels.as_slice() else {
                 return None;
             };
-            if kind == "checkpoint" && entry_scope == scope && entry_label == label {
+            if family == "perf"
+                && kind == "checkpoint"
+                && entry_scope == scope
+                && entry_label == label
+            {
                 Some(match entry.value {
                     MetricValue::CountAndU64 { count, value_u64 } => (count, value_u64),
                     MetricValue::Count(count) => (count, 0),

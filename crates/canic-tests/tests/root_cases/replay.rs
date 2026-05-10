@@ -637,7 +637,7 @@ fn canister_cycle_balance(setup: &RootSetup, canister_id: Principal) -> u128 {
 }
 
 fn root_capability_metrics(setup: &RootSetup) -> Vec<MetricEntry> {
-    query_metrics(&setup.pic, setup.root_id, MetricsKind::RootCapability)
+    query_metrics(&setup.pic, setup.root_id, MetricsKind::Security)
 }
 
 // Read one canister's cached subnet-index page through the public query surface.
@@ -682,7 +682,7 @@ fn query_metrics(
 
 // Read one canister's cycles-funding metrics page.
 fn cycles_funding_metrics(setup: &RootSetup, canister_id: Principal) -> Vec<MetricEntry> {
-    query_metrics(&setup.pic, canister_id, MetricsKind::CyclesFunding)
+    query_metrics(&setup.pic, canister_id, MetricsKind::Core)
 }
 
 // Sum one cycles-funding `U128` metric for a specific child principal.
@@ -690,7 +690,11 @@ fn cycles_funding_amount(entries: &[MetricEntry], label: &str, child: Principal)
     entries
         .iter()
         .filter(|entry| {
-            entry.labels.first().is_some_and(|value| value == label)
+            entry
+                .labels
+                .first()
+                .is_some_and(|value| value == "cycles_funding")
+                && entry.labels.get(1).is_some_and(|value| value == label)
                 && entry.principal == Some(child)
         })
         .map(|entry| match entry.value {
@@ -708,9 +712,10 @@ fn metric_count(entries: &[MetricEntry], capability: &str, event: &str) -> u64 {
             entry
                 .labels
                 .first()
-                .is_some_and(|label| label == capability)
-                && entry.labels.get(1).is_some_and(|label| label == event_type)
-                && entry.labels.get(2).is_some_and(|label| label == outcome)
+                .is_some_and(|label| label == "root_capability")
+                && entry.labels.get(1).is_some_and(|label| label == capability)
+                && entry.labels.get(2).is_some_and(|label| label == event_type)
+                && entry.labels.get(3).is_some_and(|label| label == outcome)
         })
         .map(|entry| match entry.value {
             MetricValue::Count(count) | MetricValue::CountAndU64 { count, .. } => count,

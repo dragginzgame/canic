@@ -19,8 +19,8 @@ path = "src/main.rs"
 
 [dependencies]
 candid = { workspace = true }
-canic = { workspace = true }
 canic-backup = { workspace = true }
+canic-core = { workspace = true }
 canic-host = { workspace = true }
 clap = { workspace = true }
 serde = { workspace = true }

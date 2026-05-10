@@ -41,14 +41,11 @@ use {
     intent::IntentMetrics,
     inter_canister_call::InterCanisterCallMetrics,
     lifecycle::LifecycleMetrics,
-    management_call::ManagementCallMetrics,
     platform_call::PlatformCallMetrics,
     pool::PoolMetrics,
-    provisioning::ProvisioningMetrics,
     replay::ReplayMetrics,
     root_capability::RootCapabilityMetrics,
     scaling::ScalingMetrics,
-    system::SystemMetrics,
     timer::{TimerMetrics, TimerMode},
     wasm_store::WasmStoreMetrics,
 };
@@ -56,36 +53,88 @@ use {
 #[cfg(feature = "sharding")]
 use sharding::ShardingMetrics;
 
-/// Project one metrics family into the unified public metrics row shape.
+#[cfg(test)]
+use {
+    management_call::ManagementCallMetrics, provisioning::ProvisioningMetrics,
+    system::SystemMetrics,
+};
+
+/// Project one public metrics tier into the unified row shape.
 #[must_use]
 pub fn entries(kind: MetricsKind) -> Vec<MetricEntry> {
     match kind {
-        MetricsKind::Access => access_entries(),
-        MetricsKind::Auth => auth_entries(),
-        MetricsKind::CanisterOps => canister_ops_entries(),
-        MetricsKind::Cascade => cascade_entries(),
-        MetricsKind::CyclesFunding => cycles_funding_entries(),
-        MetricsKind::CyclesTopup => cycles_topup_entries(),
-        MetricsKind::DelegatedAuth => delegated_auth_entries(),
-        MetricsKind::Directory => directory_entries(),
-        MetricsKind::Http => http_entries(),
-        MetricsKind::Intent => intent_entries(),
-        MetricsKind::InterCanisterCall => inter_canister_call_entries(),
-        MetricsKind::Lifecycle => lifecycle_entries(),
-        MetricsKind::ManagementCall => management_call_entries(),
-        MetricsKind::Perf => perf_entries(),
-        MetricsKind::PlatformCall => platform_call_entries(),
-        MetricsKind::Pool => pool_entries(),
-        MetricsKind::Provisioning => provisioning_entries(),
-        MetricsKind::Replay => replay_entries(),
-        MetricsKind::RootCapability => root_capability_entries(),
-        MetricsKind::Scaling => scaling_entries(),
-        #[cfg(feature = "sharding")]
-        MetricsKind::Sharding => sharding_entries(),
-        MetricsKind::System => system_entries(),
-        MetricsKind::Timer => timer_entries(),
-        MetricsKind::WasmStore => wasm_store_entries(),
+        MetricsKind::Core => core_entries(),
+        MetricsKind::Placement => placement_entries(),
+        MetricsKind::Platform => platform_entries(),
+        MetricsKind::Runtime => runtime_entries(),
+        MetricsKind::Security => security_entries(),
+        MetricsKind::Storage => storage_entries(),
     }
+}
+
+#[must_use]
+pub fn core_entries() -> Vec<MetricEntry> {
+    let mut entries = prefix_entries("lifecycle", lifecycle_entries());
+    entries.extend(prefix_entries("canister_ops", canister_ops_entries()));
+    entries.extend(prefix_entries("cycles_funding", cycles_funding_entries()));
+    entries.extend(prefix_entries("cycles_topup", cycles_topup_entries()));
+    entries
+}
+
+#[must_use]
+pub fn placement_entries() -> Vec<MetricEntry> {
+    let mut entries = prefix_entries("cascade", cascade_entries());
+    entries.extend(prefix_entries("directory", directory_entries()));
+    entries.extend(prefix_entries("pool", pool_entries()));
+    entries.extend(prefix_entries("scaling", scaling_entries()));
+    #[cfg(feature = "sharding")]
+    entries.extend(prefix_entries("sharding", sharding_entries()));
+    entries
+}
+
+#[must_use]
+pub fn platform_entries() -> Vec<MetricEntry> {
+    let mut entries = prefix_entries("platform_call", platform_call_entries());
+    entries.extend(prefix_entries("http", http_entries()));
+    entries.extend(prefix_entries(
+        "inter_canister_call",
+        inter_canister_call_entries(),
+    ));
+    entries
+}
+
+#[must_use]
+pub fn runtime_entries() -> Vec<MetricEntry> {
+    let mut entries = prefix_entries("intent", intent_entries());
+    entries.extend(prefix_entries("perf", perf_entries()));
+    entries.extend(prefix_entries("timer", timer_entries()));
+    entries
+}
+
+#[must_use]
+pub fn security_entries() -> Vec<MetricEntry> {
+    let mut entries = prefix_entries("access", access_entries());
+    entries.extend(prefix_entries("auth", auth_entries()));
+    entries.extend(prefix_entries("delegated_auth", delegated_auth_entries()));
+    entries.extend(prefix_entries("replay", replay_entries()));
+    entries.extend(prefix_entries("root_capability", root_capability_entries()));
+    entries
+}
+
+#[must_use]
+pub fn storage_entries() -> Vec<MetricEntry> {
+    prefix_entries("wasm_store", wasm_store_entries())
+}
+
+#[must_use]
+fn prefix_entries(family: &'static str, entries: Vec<MetricEntry>) -> Vec<MetricEntry> {
+    entries
+        .into_iter()
+        .map(|mut entry| {
+            entry.labels.insert(0, family.to_string());
+            entry
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -117,23 +166,6 @@ pub fn reset_for_tests() {
     perf::reset();
 }
 
-/// Project management-canister call outcome counters into public metrics rows.
-#[must_use]
-fn management_call_entries() -> Vec<MetricEntry> {
-    ManagementCallMetrics::snapshot()
-        .into_iter()
-        .map(|(key, count)| MetricEntry {
-            labels: vec![
-                key.operation.metric_label().to_string(),
-                key.outcome.metric_label().to_string(),
-                key.reason.metric_label().to_string(),
-            ],
-            principal: None,
-            value: MetricValue::Count(count),
-        })
-        .collect()
-}
-
 /// Project low-cardinality platform call outcome counters into public metrics rows.
 #[must_use]
 fn platform_call_entries() -> Vec<MetricEntry> {
@@ -161,24 +193,6 @@ fn intent_entries() -> Vec<MetricEntry> {
             labels: vec![
                 key.surface.metric_label().to_string(),
                 key.operation.metric_label().to_string(),
-                key.outcome.metric_label().to_string(),
-                key.reason.metric_label().to_string(),
-            ],
-            principal: None,
-            value: MetricValue::Count(count),
-        })
-        .collect()
-}
-
-/// Project provisioning workflow counters into the unified public metrics row shape.
-#[must_use]
-fn provisioning_entries() -> Vec<MetricEntry> {
-    ProvisioningMetrics::snapshot()
-        .into_iter()
-        .map(|(key, count)| MetricEntry {
-            labels: vec![
-                key.operation.metric_label().to_string(),
-                key.role,
                 key.outcome.metric_label().to_string(),
                 key.reason.metric_label().to_string(),
             ],
@@ -339,36 +353,6 @@ fn wasm_store_entries() -> Vec<MetricEntry> {
                 key.source.metric_label().to_string(),
                 key.outcome.metric_label().to_string(),
                 key.reason.metric_label().to_string(),
-            ],
-            principal: None,
-            value: MetricValue::Count(count),
-        })
-        .collect()
-}
-
-/// Project system counters into the unified public metrics row shape.
-#[must_use]
-fn system_entries() -> Vec<MetricEntry> {
-    SystemMetrics::snapshot()
-        .into_iter()
-        .map(|(kind, count)| MetricEntry {
-            labels: vec![
-                match kind {
-                    crate::ids::SystemMetricKind::CanisterCall => "CanisterCall",
-                    crate::ids::SystemMetricKind::CanisterStatus => "CanisterStatus",
-                    crate::ids::SystemMetricKind::CreateCanister => "CreateCanister",
-                    crate::ids::SystemMetricKind::DeleteCanister => "DeleteCanister",
-                    crate::ids::SystemMetricKind::DepositCycles => "DepositCycles",
-                    crate::ids::SystemMetricKind::HttpOutcall => "HttpOutcall",
-                    crate::ids::SystemMetricKind::InstallCode => "InstallCode",
-                    crate::ids::SystemMetricKind::RawRand => "RawRand",
-                    crate::ids::SystemMetricKind::ReinstallCode => "ReinstallCode",
-                    crate::ids::SystemMetricKind::TimerScheduled => "TimerScheduled",
-                    crate::ids::SystemMetricKind::UninstallCode => "UninstallCode",
-                    crate::ids::SystemMetricKind::UpdateSettings => "UpdateSettings",
-                    crate::ids::SystemMetricKind::UpgradeCode => "UpgradeCode",
-                }
-                .to_string(),
             ],
             principal: None,
             value: MetricValue::Count(count),

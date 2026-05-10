@@ -132,6 +132,7 @@ fn config_command() -> ClapCommand {
         .arg(
             flag_arg("verbose")
                 .long("verbose")
+                .short('v')
                 .help("Show indented declared config details under each role"),
         )
         .after_help(CONFIG_HELP_AFTER)

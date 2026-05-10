@@ -4,6 +4,9 @@ edition = { workspace = true }
 version = { workspace = true }
 publish = false
 
+[package.metadata.cargo-machete]
+ignored = ["candid", "ic-cdk"]
+
 [lib]
 crate-type = ["cdylib"]
 

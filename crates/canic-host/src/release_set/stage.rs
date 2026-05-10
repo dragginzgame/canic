@@ -1,6 +1,5 @@
 use crate::icp;
-use canic::protocol;
-use canic_core::CANIC_WASM_CHUNK_BYTES;
+use canic_core::{CANIC_WASM_CHUNK_BYTES, protocol};
 use flate2::read::GzDecoder;
 use sha2::{Digest, Sha256};
 use std::{

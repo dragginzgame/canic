@@ -3,10 +3,10 @@ use crate::{
     config::schema::{
         AppConfig, AppInitMode, AuthConfig, CanisterAuthConfig, CanisterConfig, CanisterKind,
         CanisterPool, ConfigModel, DelegatedTokenConfig, DirectoryConfig, DirectoryPool,
-        FleetConfig, LogConfig, PoolImport, RandomnessConfig, RandomnessSource,
-        RoleAttestationConfig, ScalePool, ScalePoolPolicy, ScalingConfig, ShardPool,
-        ShardPoolPolicy, ShardingConfig, Standards, StandardsCanisterConfig, SubnetConfig,
-        TopupPolicy, Whitelist,
+        FleetConfig, LogConfig, MetricsCanisterConfig, MetricsProfile, PoolImport,
+        RandomnessConfig, RandomnessSource, RoleAttestationConfig, ScalePool, ScalePoolPolicy,
+        ScalingConfig, ShardPool, ShardPoolPolicy, ShardingConfig, Standards,
+        StandardsCanisterConfig, SubnetConfig, TopupPolicy, Whitelist,
     },
     ids::{CanisterRole, SubnetRole},
 };
@@ -337,6 +337,7 @@ fn render_canister_config(config: &CanisterConfig) -> TokenStream {
     let directory = render_option(config.directory.as_ref(), render_directory_config);
     let auth = render_canister_auth_config(&config.auth);
     let standards = render_standards_canister_config(&config.standards);
+    let metrics = render_metrics_canister_config(config.metrics);
 
     quote! {
         ::canic::__internal::core::bootstrap::compiled::CanisterConfig {
@@ -349,6 +350,41 @@ fn render_canister_config(config: &CanisterConfig) -> TokenStream {
             directory: #directory,
             auth: #auth,
             standards: #standards,
+            metrics: #metrics,
+        }
+    }
+}
+
+// Render per-canister metrics profile configuration.
+fn render_metrics_canister_config(config: MetricsCanisterConfig) -> TokenStream {
+    let profile = render_option(config.profile.as_ref(), |profile| {
+        render_metrics_profile(*profile)
+    });
+
+    quote! {
+        ::canic::__internal::core::bootstrap::compiled::MetricsCanisterConfig {
+            profile: #profile,
+        }
+    }
+}
+
+// Render a metrics profile enum.
+fn render_metrics_profile(profile: MetricsProfile) -> TokenStream {
+    match profile {
+        MetricsProfile::Leaf => {
+            quote!(::canic::__internal::core::bootstrap::compiled::MetricsProfile::Leaf)
+        }
+        MetricsProfile::Hub => {
+            quote!(::canic::__internal::core::bootstrap::compiled::MetricsProfile::Hub)
+        }
+        MetricsProfile::Storage => {
+            quote!(::canic::__internal::core::bootstrap::compiled::MetricsProfile::Storage)
+        }
+        MetricsProfile::Root => {
+            quote!(::canic::__internal::core::bootstrap::compiled::MetricsProfile::Root)
+        }
+        MetricsProfile::Full => {
+            quote!(::canic::__internal::core::bootstrap::compiled::MetricsProfile::Full)
         }
     }
 }

@@ -9,11 +9,10 @@ crate-type = ["cdylib"]
 
 [dependencies]
 candid = { workspace = true }
-canic = { workspace = true, features = ["control-plane", "auth-crypto"] }
+canic = { workspace = true }
 canic-control-plane = { workspace = true }
 ic-cdk = { workspace = true }
 k256 = { workspace = true }
-serde = { workspace = true }
 sha2 = { workspace = true }
 
 [build-dependencies]

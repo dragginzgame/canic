@@ -13,9 +13,11 @@ keywords = { workspace = true }
 categories = { workspace = true }
 publish = true
 
+[package.metadata.cargo-machete]
+ignored = ["serde_bytes"]
+
 [dependencies]
 candid = { workspace = true }
-canic = { workspace = true }
 canic-core = { workspace = true }
 flate2 = { workspace = true }
 serde = { workspace = true, features = ["derive"] }

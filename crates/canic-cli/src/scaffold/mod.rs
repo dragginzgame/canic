@@ -292,9 +292,8 @@ crate-type = ["cdylib"]
 
 [dependencies]
 candid = {{ version = "0.10", default-features = false }}
-canic = {{ version = "{canic_version}", features = ["control-plane"] }}
+canic = "{canic_version}"
 ic-cdk = "0.20"
-serde = {{ version = "1", default-features = false }}
 
 [build-dependencies]
 canic = "{canic_version}"

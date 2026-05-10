@@ -140,9 +140,13 @@ pub mod metrics {
                 CanisterOpsMetricReason::MissingWasm,
             );
 
-            let entries = metrics::entries(MetricsKind::CanisterOps);
+            let entries = metrics::entries(MetricsKind::Core);
 
-            assert_count(&entries, &["install", "app", "failed", "missing_wasm"], 1);
+            assert_count(
+                &entries,
+                &["canister_ops", "install", "app", "failed", "missing_wasm"],
+                1,
+            );
         }
 
         // Verify the facade records wasm-store metrics with public labels.
@@ -157,11 +161,17 @@ pub mod metrics {
                 WasmStoreMetricReason::StoreCall,
             );
 
-            let entries = metrics::entries(MetricsKind::WasmStore);
+            let entries = metrics::entries(MetricsKind::Storage);
 
             assert_count(
                 &entries,
-                &["source_resolve", "store", "failed", "store_call"],
+                &[
+                    "wasm_store",
+                    "source_resolve",
+                    "store",
+                    "failed",
+                    "store_call",
+                ],
                 1,
             );
         }
@@ -182,12 +192,22 @@ pub mod metrics {
                 LifecycleMetricOutcome::Scheduled,
             );
 
-            let entries = metrics::entries(MetricsKind::Lifecycle);
+            let entries = metrics::entries(MetricsKind::Core);
 
-            assert_count(&entries, &["init", "root", "runtime", "completed"], 1);
             assert_count(
                 &entries,
-                &["post_upgrade", "nonroot", "bootstrap", "scheduled"],
+                &["lifecycle", "init", "root", "runtime", "completed"],
+                1,
+            );
+            assert_count(
+                &entries,
+                &[
+                    "lifecycle",
+                    "post_upgrade",
+                    "nonroot",
+                    "bootstrap",
+                    "scheduled",
+                ],
                 1,
             );
         }

@@ -138,6 +138,12 @@ macro_rules! __canic_build_internal {
         println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_observability_env)");
         println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_observability_log)");
         println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_metrics)");
+        println!("cargo:rustc-check-cfg=cfg(canic_metrics_core)");
+        println!("cargo:rustc-check-cfg=cfg(canic_metrics_placement)");
+        println!("cargo:rustc-check-cfg=cfg(canic_metrics_platform)");
+        println!("cargo:rustc-check-cfg=cfg(canic_metrics_runtime)");
+        println!("cargo:rustc-check-cfg=cfg(canic_metrics_security)");
+        println!("cargo:rustc-check-cfg=cfg(canic_metrics_storage)");
         println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_auth_attestation)");
         println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_topology_state)");
         println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_topology_index)");
@@ -185,6 +191,12 @@ macro_rules! __canic_build_internal {
                 let mut has_icrc21 = false;
                 let mut has_scaling = false;
                 let mut has_sharding = false;
+                let mut metrics_core = false;
+                let mut metrics_placement = false;
+                let mut metrics_platform = false;
+                let mut metrics_runtime = false;
+                let mut metrics_security = false;
+                let mut metrics_storage = false;
                 let role_id: $crate::__internal::core::ids::CanisterRole =
                     role_name.to_string().into();
 
@@ -195,6 +207,17 @@ macro_rules! __canic_build_internal {
                         has_icrc21 |= canister_cfg.standards.icrc21;
                         has_scaling |= canister_cfg.scaling.is_some();
                         has_sharding |= canister_cfg.sharding.is_some();
+                        let profile = canister_cfg.resolved_metrics_profile(&role_id);
+                        let tier_mask = $crate::__build::metrics_profile_tier_mask(profile);
+                        metrics_core |= tier_mask & $crate::__build::METRICS_TIER_CORE != 0;
+                        metrics_placement |=
+                            tier_mask & $crate::__build::METRICS_TIER_PLACEMENT != 0;
+                        metrics_platform |=
+                            tier_mask & $crate::__build::METRICS_TIER_PLATFORM != 0;
+                        metrics_runtime |= tier_mask & $crate::__build::METRICS_TIER_RUNTIME != 0;
+                        metrics_security |=
+                            tier_mask & $crate::__build::METRICS_TIER_SECURITY != 0;
+                        metrics_storage |= tier_mask & $crate::__build::METRICS_TIER_STORAGE != 0;
                     }
                 }
 
@@ -218,6 +241,30 @@ macro_rules! __canic_build_internal {
 
                     if has_sharding {
                         println!("cargo:rustc-cfg=canic_has_sharding");
+                    }
+
+                    if metrics_core {
+                        println!("cargo:rustc-cfg=canic_metrics_core");
+                    }
+
+                    if metrics_placement {
+                        println!("cargo:rustc-cfg=canic_metrics_placement");
+                    }
+
+                    if metrics_platform {
+                        println!("cargo:rustc-cfg=canic_metrics_platform");
+                    }
+
+                    if metrics_runtime {
+                        println!("cargo:rustc-cfg=canic_metrics_runtime");
+                    }
+
+                    if metrics_security {
+                        println!("cargo:rustc-cfg=canic_metrics_security");
+                    }
+
+                    if metrics_storage {
+                        println!("cargo:rustc-cfg=canic_metrics_storage");
                     }
                 } else if package_name.starts_with("canister_") && role_name != "root" {
                     panic!(

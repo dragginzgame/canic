@@ -20,8 +20,8 @@ Most ordinary Canic canister projects should start with `canic`, not
 ## What this crate owns
 
 This crate is intentionally narrow. It owns the published source for the
-canonical `wasm_store` role and depends on `canic` with `control-plane`
-enabled so the role stays aligned with the rest of the root/store runtime.
+canonical `wasm_store` role and depends on the standard `canic` facade so the
+role stays aligned with the rest of the root/store runtime.
 
 It is not a general facade crate and it is not intended to replace `canic` as
 the normal entry surface for application canisters.

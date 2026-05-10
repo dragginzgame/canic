@@ -1,4 +1,7 @@
-use canic_core::{bootstrap::parse_config_model, ids::CanisterRole};
+use canic_core::{
+    bootstrap::{compiled::MetricsProfile, parse_config_model},
+    ids::CanisterRole,
+};
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs,
@@ -111,6 +114,15 @@ pub fn configured_role_topups(
 ) -> Result<BTreeMap<String, String>, Box<dyn std::error::Error>> {
     let config_source = fs::read_to_string(config_path)?;
     configured_role_topups_from_source(&config_source)
+        .map_err(|err| format!("invalid {}: {err}", config_path.display()).into())
+}
+
+// Enumerate resolved metrics profiles across all configured roles.
+pub fn configured_role_metrics_profiles(
+    config_path: &Path,
+) -> Result<BTreeMap<String, String>, Box<dyn std::error::Error>> {
+    let config_source = fs::read_to_string(config_path)?;
+    configured_role_metrics_profiles_from_source(&config_source)
         .map_err(|err| format!("invalid {}: {err}", config_path.display()).into())
 }
 
@@ -233,6 +245,32 @@ pub(super) fn configured_role_topups_from_source(
     Ok(topups)
 }
 
+// Enumerate resolved metrics profiles from raw config source.
+pub(super) fn configured_role_metrics_profiles_from_source(
+    config_source: &str,
+) -> Result<BTreeMap<String, String>, Box<dyn std::error::Error>> {
+    let config = parse_config_model(config_source).map_err(|err| err.to_string())?;
+    let mut profiles = BTreeMap::<String, String>::new();
+
+    for subnet in config.subnets.values() {
+        for (role, canister) in &subnet.canisters {
+            let role_name = role.as_str().to_string();
+            let profile = metrics_profile_label(canister.resolved_metrics_profile(role));
+            match profiles.get(&role_name) {
+                Some(existing) if existing != profile => {
+                    profiles.insert(role_name, "mixed".to_string());
+                }
+                Some(_) => {}
+                None => {
+                    profiles.insert(role_name, profile.to_string());
+                }
+            }
+        }
+    }
+
+    Ok(profiles)
+}
+
 // Estimate local root create funding from the root subnet bootstrap obligations.
 pub(super) fn configured_local_root_create_cycles_from_source(
     config_source: &str,
@@ -302,6 +340,17 @@ pub(super) fn configured_role_details_from_source(
 
         for (role, canister) in &subnet.canisters {
             let role_details = details.entry(role.as_str().to_string()).or_default();
+            let profile = canister.resolved_metrics_profile(role);
+            let profile_source = if canister.metrics.profile.is_some() {
+                "configured"
+            } else {
+                "inferred"
+            };
+            role_details.insert(format!(
+                "metrics profile={} tiers={} ({profile_source})",
+                metrics_profile_label(profile),
+                metrics_profile_tiers_label(profile)
+            ));
             if canister.initial_cycles.to_u128() != DEFAULT_INITIAL_CYCLES {
                 role_details.insert(format!("initial_cycles={}", canister.initial_cycles));
             }
@@ -369,6 +418,27 @@ pub(super) fn configured_role_details_from_source(
 
 fn randomness_source_label(source: impl std::fmt::Debug) -> String {
     format!("{source:?}").to_ascii_lowercase()
+}
+
+const fn metrics_profile_label(profile: MetricsProfile) -> &'static str {
+    match profile {
+        MetricsProfile::Leaf => "leaf",
+        MetricsProfile::Hub => "hub",
+        MetricsProfile::Storage => "storage",
+        MetricsProfile::Root => "root",
+        MetricsProfile::Full => "full",
+    }
+}
+
+const fn metrics_profile_tiers_label(profile: MetricsProfile) -> &'static str {
+    match profile {
+        MetricsProfile::Leaf => "core,runtime,security",
+        MetricsProfile::Hub => "core,placement,runtime,security",
+        MetricsProfile::Storage => "core,runtime,storage",
+        MetricsProfile::Root | MetricsProfile::Full => {
+            "core,placement,platform,runtime,security,storage"
+        }
+    }
 }
 
 fn format_cycles_tenths(cycles: u128) -> String {

@@ -107,6 +107,7 @@ fn implicit_wasm_store_canister_config() -> CanisterConfig {
         directory: None,
         auth: CanisterAuthConfig::default(),
         standards: StandardsCanisterConfig::default(),
+        metrics: MetricsCanisterConfig::default(),
     }
 }
 
@@ -167,6 +168,57 @@ pub struct CanisterConfig {
 
     #[serde(default)]
     pub standards: StandardsCanisterConfig,
+
+    #[serde(default)]
+    pub metrics: MetricsCanisterConfig,
+}
+
+impl CanisterConfig {
+    #[must_use]
+    pub fn resolved_metrics_profile(&self, role: &CanisterRole) -> MetricsProfile {
+        if let Some(profile) = self.metrics.profile {
+            return profile;
+        }
+
+        if self.kind == CanisterKind::Root || role.is_root() {
+            return MetricsProfile::Root;
+        }
+
+        if role.is_wasm_store() {
+            return MetricsProfile::Storage;
+        }
+
+        if self.scaling.is_some() || self.sharding.is_some() || self.directory.is_some() {
+            return MetricsProfile::Hub;
+        }
+
+        MetricsProfile::Leaf
+    }
+}
+
+///
+/// MetricsCanisterConfig
+///
+
+#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct MetricsCanisterConfig {
+    #[serde(default)]
+    pub profile: Option<MetricsProfile>,
+}
+
+///
+/// MetricsProfile
+///
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum MetricsProfile {
+    Leaf,
+    Hub,
+    Storage,
+    Root,
+    Full,
 }
 
 ///

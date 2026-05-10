@@ -5,8 +5,8 @@ use crate::{
     cdk::types::Cycles,
     config::schema::{
         CanisterAuthConfig, CanisterConfig, CanisterKind, DirectoryConfig, DirectoryPool,
-        RandomnessConfig, ScalePool, ScalePoolPolicy, ScalingConfig, ShardingConfig,
-        StandardsCanisterConfig,
+        MetricsCanisterConfig, RandomnessConfig, ScalePool, ScalePoolPolicy, ScalingConfig,
+        ShardingConfig, StandardsCanisterConfig,
     },
     domain::policy::topology::registry::{
         RegistryPolicy, RegistryPolicyError, RegistryRegistrationObservation,
@@ -29,6 +29,7 @@ fn root_canister_config() -> CanisterConfig {
         directory: None,
         auth: CanisterAuthConfig::default(),
         standards: StandardsCanisterConfig::default(),
+        metrics: MetricsCanisterConfig::default(),
     }
 }
 
@@ -43,6 +44,7 @@ fn singleton_canister_config() -> CanisterConfig {
         directory: None,
         auth: CanisterAuthConfig::default(),
         standards: StandardsCanisterConfig::default(),
+        metrics: MetricsCanisterConfig::default(),
     }
 }
 
@@ -66,6 +68,7 @@ fn singleton_scaling_parent_config() -> CanisterConfig {
         directory: None,
         auth: CanisterAuthConfig::default(),
         standards: StandardsCanisterConfig::default(),
+        metrics: MetricsCanisterConfig::default(),
     }
 }
 
@@ -80,6 +83,7 @@ fn singleton_sharding_parent_config() -> CanisterConfig {
         directory: None,
         auth: CanisterAuthConfig::default(),
         standards: StandardsCanisterConfig::default(),
+        metrics: MetricsCanisterConfig::default(),
     }
 }
 
@@ -104,6 +108,7 @@ fn singleton_directory_parent_config() -> CanisterConfig {
         directory: Some(directory),
         auth: CanisterAuthConfig::default(),
         standards: StandardsCanisterConfig::default(),
+        metrics: MetricsCanisterConfig::default(),
     }
 }
 
@@ -118,6 +123,7 @@ fn replica_canister_config() -> CanisterConfig {
         directory: None,
         auth: CanisterAuthConfig::default(),
         standards: StandardsCanisterConfig::default(),
+        metrics: MetricsCanisterConfig::default(),
     }
 }
 
@@ -132,6 +138,7 @@ fn shard_canister_config() -> CanisterConfig {
         directory: None,
         auth: CanisterAuthConfig::default(),
         standards: StandardsCanisterConfig::default(),
+        metrics: MetricsCanisterConfig::default(),
     }
 }
 
@@ -146,6 +153,7 @@ fn instance_canister_config() -> CanisterConfig {
         directory: None,
         auth: CanisterAuthConfig::default(),
         standards: StandardsCanisterConfig::default(),
+        metrics: MetricsCanisterConfig::default(),
     }
 }
 

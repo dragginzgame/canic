@@ -22,6 +22,7 @@ impl SystemMetrics {
     }
 
     #[must_use]
+    #[cfg(test)]
     pub fn snapshot() -> Vec<(SystemMetricKind, u64)> {
         SYSTEM_METRICS
             .with_borrow(std::clone::Clone::clone)

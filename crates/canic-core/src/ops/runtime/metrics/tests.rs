@@ -78,17 +78,21 @@ fn auth_metrics_are_exposed_with_stable_labels() {
         AuthMetricReason::UnknownKeyId,
     );
 
-    let entries = entries(MetricsKind::Auth);
+    let entries = entries(MetricsKind::Security);
 
     assert_metric_count(
         &entries,
-        &["session", "bootstrap", "rejected", "token_invalid"],
+        &["auth", "session", "bootstrap", "rejected", "token_invalid"],
         1,
     );
-    assert_metric_count(&entries, &["session", "session", "completed", "created"], 2);
     assert_metric_count(
         &entries,
-        &["attestation", "verify", "failed", "unknown_key_id"],
+        &["auth", "session", "session", "completed", "created"],
+        2,
+    );
+    assert_metric_count(
+        &entries,
+        &["auth", "attestation", "verify", "failed", "unknown_key_id"],
         1,
     );
 }
@@ -128,22 +132,44 @@ fn canister_ops_metrics_are_exposed_with_stable_labels() {
         CanisterOpsMetricReason::StatePropagation,
     );
 
-    let entries = entries(MetricsKind::CanisterOps);
+    let entries = entries(MetricsKind::Core);
 
-    assert_metric_count(&entries, &["create", "app", "started", "ok"], 1);
     assert_metric_count(
         &entries,
-        &["upgrade", "worker", "failed", "management_call"],
-        2,
-    );
-    assert_metric_count(
-        &entries,
-        &["create", "worker", "completed", "pool_reuse"],
+        &["canister_ops", "create", "app", "started", "ok"],
         1,
     );
     assert_metric_count(
         &entries,
-        &["create", "worker", "failed", "state_propagation"],
+        &[
+            "canister_ops",
+            "upgrade",
+            "worker",
+            "failed",
+            "management_call",
+        ],
+        2,
+    );
+    assert_metric_count(
+        &entries,
+        &[
+            "canister_ops",
+            "create",
+            "worker",
+            "completed",
+            "pool_reuse",
+        ],
+        1,
+    );
+    assert_metric_count(
+        &entries,
+        &[
+            "canister_ops",
+            "create",
+            "worker",
+            "failed",
+            "state_propagation",
+        ],
         1,
     );
 }
@@ -171,12 +197,16 @@ fn cascade_metrics_are_exposed_with_stable_labels() {
         CascadeMetricReason::SendFailed,
     );
 
-    let entries = entries(MetricsKind::Cascade);
+    let entries = entries(MetricsKind::Placement);
 
-    assert_metric_count(&entries, &["root_fanout", "state", "started", "ok"], 1);
     assert_metric_count(
         &entries,
-        &["child_send", "topology", "failed", "send_failed"],
+        &["cascade", "root_fanout", "state", "started", "ok"],
+        1,
+    );
+    assert_metric_count(
+        &entries,
+        &["cascade", "child_send", "topology", "failed", "send_failed"],
         2,
     );
 }
@@ -201,10 +231,14 @@ fn directory_metrics_are_exposed_with_stable_labels() {
         DirectoryMetricReason::PendingFresh,
     );
 
-    let entries = entries(MetricsKind::Directory);
+    let entries = entries(MetricsKind::Placement);
 
-    assert_metric_count(&entries, &["resolve", "started", "ok"], 1);
-    assert_metric_count(&entries, &["classify", "completed", "pending_fresh"], 2);
+    assert_metric_count(&entries, &["directory", "resolve", "started", "ok"], 1);
+    assert_metric_count(
+        &entries,
+        &["directory", "classify", "completed", "pending_fresh"],
+        2,
+    );
 }
 
 #[test]
@@ -230,16 +264,28 @@ fn wasm_store_metrics_are_exposed_with_stable_labels() {
         WasmStoreMetricReason::CacheHit,
     );
 
-    let entries = entries(MetricsKind::WasmStore);
+    let entries = entries(MetricsKind::Storage);
 
     assert_metric_count(
         &entries,
-        &["source_resolve", "bootstrap", "completed", "ok"],
+        &[
+            "wasm_store",
+            "source_resolve",
+            "bootstrap",
+            "completed",
+            "ok",
+        ],
         1,
     );
     assert_metric_count(
         &entries,
-        &["chunk_upload", "store", "skipped", "cache_hit"],
+        &[
+            "wasm_store",
+            "chunk_upload",
+            "store",
+            "skipped",
+            "cache_hit",
+        ],
         2,
     );
 }
@@ -264,18 +310,18 @@ fn pool_metrics_are_exposed_with_stable_labels() {
         PoolMetricReason::AlreadyPresent,
     );
 
-    let entries = entries(MetricsKind::Pool);
+    let entries = entries(MetricsKind::Placement);
 
-    assert_metric_count(&entries, &["reset", "started", "ok"], 1);
+    assert_metric_count(&entries, &["pool", "reset", "started", "ok"], 1);
     assert_metric_count(
         &entries,
-        &["import_queued", "skipped", "already_present"],
+        &["pool", "import_queued", "skipped", "already_present"],
         2,
     );
 }
 
 #[test]
-fn provisioning_metrics_are_exposed_with_stable_labels() {
+fn provisioning_metrics_remain_internal_workflow_counters() {
     reset_for_tests();
 
     ProvisioningMetrics::record(
@@ -297,14 +343,20 @@ fn provisioning_metrics_are_exposed_with_stable_labels() {
         ProvisioningMetricReason::MissingWasm,
     );
 
-    let entries = entries(MetricsKind::Provisioning);
-
-    assert_metric_count(&entries, &["resolve_module", "app", "started", "ok"], 1);
-    assert_metric_count(
-        &entries,
-        &["install", "worker", "failed", "missing_wasm"],
-        2,
-    );
+    let snapshot = ProvisioningMetrics::snapshot();
+    assert_eq!(snapshot.len(), 2);
+    assert!(snapshot.iter().any(|(key, count)| key.operation
+        == ProvisioningMetricOperation::ResolveModule
+        && key.role == "app"
+        && key.outcome == ProvisioningMetricOutcome::Started
+        && key.reason == ProvisioningMetricReason::Ok
+        && *count == 1));
+    assert!(snapshot.iter().any(|(key, count)| key.operation
+        == ProvisioningMetricOperation::Install
+        && key.role == "worker"
+        && key.outcome == ProvisioningMetricOutcome::Failed
+        && key.reason == ProvisioningMetricReason::MissingWasm
+        && *count == 2));
 }
 
 #[test]
@@ -327,16 +379,16 @@ fn scaling_metrics_are_exposed_with_stable_labels() {
         ScalingMetricReason::TargetSatisfied,
     );
 
-    let entries = entries(MetricsKind::Scaling);
+    let entries = entries(MetricsKind::Placement);
 
     assert_metric_count(
         &entries,
-        &["plan_create", "completed", "below_min_workers"],
+        &["scaling", "plan_create", "completed", "below_min_workers"],
         1,
     );
     assert_metric_count(
         &entries,
-        &["bootstrap_pool", "skipped", "target_satisfied"],
+        &["scaling", "bootstrap_pool", "skipped", "target_satisfied"],
         2,
     );
 }
@@ -362,16 +414,16 @@ fn sharding_metrics_are_exposed_with_stable_labels() {
         ShardingMetricReason::TargetSatisfied,
     );
 
-    let entries = entries(MetricsKind::Sharding);
+    let entries = entries(MetricsKind::Placement);
 
     assert_metric_count(
         &entries,
-        &["plan_assign", "completed", "existing_capacity"],
+        &["sharding", "plan_assign", "completed", "existing_capacity"],
         1,
     );
     assert_metric_count(
         &entries,
-        &["bootstrap_pool", "skipped", "target_satisfied"],
+        &["sharding", "bootstrap_pool", "skipped", "target_satisfied"],
         2,
     );
 }
@@ -399,18 +451,28 @@ fn lifecycle_metrics_are_exposed_with_stable_labels() {
         LifecycleMetricOutcome::Completed,
     );
 
-    let entries = entries(MetricsKind::Lifecycle);
+    let entries = entries(MetricsKind::Core);
 
-    assert_metric_count(&entries, &["init", "root", "runtime", "started"], 2);
     assert_metric_count(
         &entries,
-        &["post_upgrade", "nonroot", "bootstrap", "completed"],
+        &["lifecycle", "init", "root", "runtime", "started"],
+        2,
+    );
+    assert_metric_count(
+        &entries,
+        &[
+            "lifecycle",
+            "post_upgrade",
+            "nonroot",
+            "bootstrap",
+            "completed",
+        ],
         1,
     );
 }
 
 #[test]
-fn management_call_metrics_are_exposed_with_stable_labels() {
+fn management_call_metrics_remain_internal_platform_counters() {
     reset_for_tests();
 
     ManagementCallMetrics::record(
@@ -429,10 +491,18 @@ fn management_call_metrics_are_exposed_with_stable_labels() {
         ManagementCallMetricReason::Infra,
     );
 
-    let entries = entries(MetricsKind::ManagementCall);
-
-    assert_metric_count(&entries, &["install_code", "started", "ok"], 1);
-    assert_metric_count(&entries, &["install_code", "failed", "infra"], 2);
+    let snapshot = ManagementCallMetrics::snapshot();
+    assert_eq!(snapshot.len(), 2);
+    assert!(snapshot.iter().any(|(key, count)| key.operation
+        == ManagementCallMetricOperation::InstallCode
+        && key.outcome == ManagementCallMetricOutcome::Started
+        && key.reason == ManagementCallMetricReason::Ok
+        && *count == 1));
+    assert!(snapshot.iter().any(|(key, count)| key.operation
+        == ManagementCallMetricOperation::InstallCode
+        && key.outcome == ManagementCallMetricOutcome::Failed
+        && key.reason == ManagementCallMetricReason::Infra
+        && *count == 2));
 }
 
 #[test]
@@ -443,10 +513,10 @@ fn cycles_topup_metrics_are_exposed() {
     CyclesTopupMetrics::record_request_scheduled();
     CyclesTopupMetrics::record_request_scheduled();
 
-    let entries = entries(MetricsKind::CyclesTopup);
+    let entries = entries(MetricsKind::Core);
 
-    assert_metric_count(&entries, &["policy_missing"], 1);
-    assert_metric_count(&entries, &["request_scheduled"], 2);
+    assert_metric_count(&entries, &["cycles_topup", "policy_missing"], 1);
+    assert_metric_count(&entries, &["cycles_topup", "request_scheduled"], 2);
 }
 
 #[test]
@@ -472,12 +542,22 @@ fn platform_call_metrics_are_exposed_with_stable_labels() {
         PlatformCallMetricReason::LedgerRejected,
     );
 
-    let entries = entries(MetricsKind::PlatformCall);
+    let entries = entries(MetricsKind::Platform);
 
-    assert_metric_count(&entries, &["generic", "bounded_wait", "started", "ok"], 1);
     assert_metric_count(
         &entries,
-        &["ledger", "update", "failed", "ledger_rejected"],
+        &["platform_call", "generic", "bounded_wait", "started", "ok"],
+        1,
+    );
+    assert_metric_count(
+        &entries,
+        &[
+            "platform_call",
+            "ledger",
+            "update",
+            "failed",
+            "ledger_rejected",
+        ],
         2,
     );
 }
@@ -505,10 +585,18 @@ fn intent_metrics_are_exposed_with_stable_labels() {
         IntentMetricReason::StorageFailed,
     );
 
-    let entries = entries(MetricsKind::Intent);
+    let entries = entries(MetricsKind::Runtime);
 
-    assert_metric_count(&entries, &["call", "reserve", "completed", "ok"], 1);
-    assert_metric_count(&entries, &["call", "commit", "failed", "storage_failed"], 2);
+    assert_metric_count(
+        &entries,
+        &["intent", "call", "reserve", "completed", "ok"],
+        1,
+    );
+    assert_metric_count(
+        &entries,
+        &["intent", "call", "commit", "failed", "storage_failed"],
+        2,
+    );
 }
 
 #[test]
@@ -531,10 +619,10 @@ fn replay_metrics_are_exposed_with_stable_labels() {
         ReplayMetricReason::Conflict,
     );
 
-    let entries = entries(MetricsKind::Replay);
+    let entries = entries(MetricsKind::Security);
 
-    assert_metric_count(&entries, &["check", "completed", "fresh"], 1);
-    assert_metric_count(&entries, &["check", "failed", "conflict"], 2);
+    assert_metric_count(&entries, &["replay", "check", "completed", "fresh"], 1);
+    assert_metric_count(&entries, &["replay", "check", "failed", "conflict"], 2);
 }
 
 #[test]
@@ -556,12 +644,24 @@ fn delegated_auth_metrics_are_exposed_with_stable_labels() {
         DelegatedAuthMetricReason::TokenExpired,
     );
 
-    let entries = entries(MetricsKind::DelegatedAuth);
+    let entries = entries(MetricsKind::Security);
 
-    assert_metric_count(&entries, &["delegated_auth_authority"], 1);
-    assert_metric_count(&entries, &["verify_token", "started", "ok"], 1);
-    assert_metric_count(&entries, &["verify_token", "completed", "ok"], 1);
-    assert_metric_count(&entries, &["verify_token", "failed", "token_expired"], 2);
+    assert_metric_count(&entries, &["delegated_auth", "delegated_auth_authority"], 1);
+    assert_metric_count(
+        &entries,
+        &["delegated_auth", "verify_token", "started", "ok"],
+        1,
+    );
+    assert_metric_count(
+        &entries,
+        &["delegated_auth", "verify_token", "completed", "ok"],
+        1,
+    );
+    assert_metric_count(
+        &entries,
+        &["delegated_auth", "verify_token", "failed", "token_expired"],
+        2,
+    );
 }
 
 #[test]
@@ -710,31 +810,12 @@ fn metrics_docs_cover_all_metric_families() {
 
 fn all_metric_kinds() -> &'static [MetricsKind] {
     &[
-        MetricsKind::Access,
-        MetricsKind::Auth,
-        MetricsKind::CanisterOps,
-        MetricsKind::Cascade,
-        MetricsKind::CyclesFunding,
-        MetricsKind::CyclesTopup,
-        MetricsKind::DelegatedAuth,
-        MetricsKind::Directory,
-        MetricsKind::Http,
-        MetricsKind::Intent,
-        MetricsKind::InterCanisterCall,
-        MetricsKind::Lifecycle,
-        MetricsKind::ManagementCall,
-        MetricsKind::Perf,
-        MetricsKind::PlatformCall,
-        MetricsKind::Pool,
-        MetricsKind::Provisioning,
-        MetricsKind::Replay,
-        MetricsKind::RootCapability,
-        MetricsKind::Scaling,
-        #[cfg(feature = "sharding")]
-        MetricsKind::Sharding,
-        MetricsKind::System,
-        MetricsKind::Timer,
-        MetricsKind::WasmStore,
+        MetricsKind::Core,
+        MetricsKind::Placement,
+        MetricsKind::Platform,
+        MetricsKind::Runtime,
+        MetricsKind::Security,
+        MetricsKind::Storage,
     ]
 }
 
@@ -745,31 +826,12 @@ trait MetricsKindTestName {
 impl MetricsKindTestName for MetricsKind {
     fn metric_family_name_for_tests(self) -> &'static str {
         match self {
-            Self::Access => "Access",
-            Self::Auth => "Auth",
-            Self::CanisterOps => "CanisterOps",
-            Self::Cascade => "Cascade",
-            Self::CyclesFunding => "CyclesFunding",
-            Self::CyclesTopup => "CyclesTopup",
-            Self::DelegatedAuth => "DelegatedAuth",
-            Self::Directory => "Directory",
-            Self::Http => "Http",
-            Self::Intent => "Intent",
-            Self::InterCanisterCall => "InterCanisterCall",
-            Self::Lifecycle => "Lifecycle",
-            Self::ManagementCall => "ManagementCall",
-            Self::Perf => "Perf",
-            Self::PlatformCall => "PlatformCall",
-            Self::Pool => "Pool",
-            Self::Provisioning => "Provisioning",
-            Self::Replay => "Replay",
-            Self::RootCapability => "RootCapability",
-            Self::Scaling => "Scaling",
-            #[cfg(feature = "sharding")]
-            Self::Sharding => "Sharding",
-            Self::System => "System",
-            Self::Timer => "Timer",
-            Self::WasmStore => "WasmStore",
+            Self::Core => "Core",
+            Self::Placement => "Placement",
+            Self::Platform => "Platform",
+            Self::Runtime => "Runtime",
+            Self::Security => "Security",
+            Self::Storage => "Storage",
         }
     }
 }

@@ -15,6 +15,7 @@
 | `expiry-replay-single-use.md` | Recurring invariant | delegated-token freshness, update-token single-use, capability replay metadata, root replay cache expiry | `518f57dd` | dirty | complete |
 | `layer-violations.md` | Recurring system | core layer imports, policy purity, DTO boundaries, workflow storage coupling, macro boundary | `53476764` | dirty | complete |
 | `subject-caller-binding.md` | Recurring invariant | delegated-token subject binding, generated auth context, delegated sessions, role-attestation caller checks | `518f57dd` | dirty | complete |
+| `wasm-footprint.md` | Recurring system | Canic wasm footprint for the test fleet release profile | `ed6bfe9c` | dirty | complete |
 
 ## Risk Index Summary
 
@@ -31,6 +32,7 @@
 | `expiry-replay-single-use.md` | 3 / 10 | Invariant holds after remediation; capability replay metadata and root replay cache records now expire at the same exclusive boundary as delegated tokens. |
 | `layer-violations.md` | 1 / 10 | Layer direction holds after remediation; pure `IntentId` now lives in `ids`, while storage keeps the stable-memory encoding implementation. |
 | `subject-caller-binding.md` | 3 / 10 | Invariant holds; delegated-token subject binding remains canonical, and generated access context preserves separate transport-caller and authenticated-subject lanes. |
+| `wasm-footprint.md` | 4 / 10 | Release artifact capture completed for the test fleet; the shared leaf floor is `minimal = 1,683,461` shrunk bytes and `root = 3,588,379` remains the bundle outlier. |
 
 ## Key Findings by Severity
 
@@ -57,6 +59,10 @@
   follow-up remediation split the metrics all-family tests out of production
   projection and reduced directory workflow/storage, config schema, and intent
   storage files below the production large-file threshold.
+- `wasm-footprint.md`: release wasm artifacts were captured for `app`,
+  `minimal`, `user_hub`, `user_shard`, `scale_hub`, `scale`, and `root`;
+  compared manually to the previous May wasm run, the shared leaf floor is up
+  about `99.8 KiB` and `root` is up about `142.7 KiB`.
 - `expiry-replay-single-use.md`: capability replay metadata and existing root
   replay records previously accepted `now == expires_at`; follow-up remediation
   changed both paths to the exclusive expiry boundary used by delegated tokens.
@@ -99,6 +105,7 @@
 | `expiry-replay-single-use.md` | 17 | 0 | 0 | 10 targeted cargo test commands, `canic-core` clippy, and 6 freshness/replay fan-in/edit-pressure scans passed. |
 | `layer-violations.md` | 18 | 0 | 0 | Import, policy-purity, DTO, API, workflow-storage, and macro scans passed; layering guards, formatting, focused request-handler/intent tests, and `canic-core` clippy passed after remediation. |
 | `subject-caller-binding.md` | 11 | 0 | 0 | 7 targeted cargo test commands and 4 subject/caller lane scans passed. |
+| `wasm-footprint.md` | 6 | 1 | 0 | Baseline delta was partial because this was the first same-day wasm-footprint run. |
 
 ## Follow-up Actions
 
@@ -156,3 +163,6 @@ Status: docs cleanup items completed; auth items are standing watchpoints.
     intent storage test split; keep future edits similarly decomposed.
 20. `complexity-accretion.md`: watch remaining large config/IC facade files only
     when they become active edit centers.
+21. `wasm-footprint.md`: compare `minimal` retained hotspots against a feature
+    canister in the next wasm run and keep tracking `root` separately from leaf
+    canisters.

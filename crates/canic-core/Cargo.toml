@@ -13,6 +13,9 @@ keywords = { workspace = true }
 categories = { workspace = true }
 publish = true
 
+[package.metadata.cargo-machete]
+ignored = ["serde_bytes"]
+
 [features]
 default = []
 sharding = []

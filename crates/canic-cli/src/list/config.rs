@@ -10,7 +10,7 @@ use canic_host::{
     release_set::{
         config_path as default_config_path, configured_fleet_roles, configured_role_auto_create,
         configured_role_capabilities, configured_role_details, configured_role_kinds,
-        configured_role_topups, matching_fleet_config_paths,
+        configured_role_metrics_profiles, configured_role_topups, matching_fleet_config_paths,
     },
 };
 use std::{
@@ -57,6 +57,8 @@ pub(super) fn load_config_role_rows(
         .map_err(|err| ListCommandError::InstallState(err.to_string()))?;
     let topups = configured_role_topups(&config_path)
         .map_err(|err| ListCommandError::InstallState(err.to_string()))?;
+    let metrics = configured_role_metrics_profiles(&config_path)
+        .map_err(|err| ListCommandError::InstallState(err.to_string()))?;
     let details = if options.verbose {
         configured_role_details(&config_path)
             .map_err(|err| ListCommandError::InstallState(err.to_string()))?
@@ -80,6 +82,10 @@ pub(super) fn load_config_role_rows(
                 .map_or_else(|| "-".to_string(), |capabilities| capabilities.join(", ")),
             auto_create: auto_create_label(&role, &auto_create),
             topup: topups
+                .get(&role)
+                .cloned()
+                .unwrap_or_else(|| "-".to_string()),
+            metrics: metrics
                 .get(&role)
                 .cloned()
                 .unwrap_or_else(|| "-".to_string()),

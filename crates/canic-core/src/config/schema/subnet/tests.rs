@@ -13,6 +13,7 @@ fn base_canister_config(kind: CanisterKind) -> CanisterConfig {
         directory: None,
         auth: CanisterAuthConfig::default(),
         standards: StandardsCanisterConfig::default(),
+        metrics: MetricsCanisterConfig::default(),
     }
 }
 
@@ -32,6 +33,45 @@ fn randomness_source_parses_ic_and_time() {
 
     let cfg: RandomnessConfig = toml::from_str("source = \"time\"").unwrap();
     assert_eq!(cfg.source, RandomnessSource::Time);
+}
+
+#[test]
+fn metrics_profile_defaults_follow_canister_role() {
+    let root = base_canister_config(CanisterKind::Root);
+    assert_eq!(
+        root.resolved_metrics_profile(&CanisterRole::ROOT),
+        MetricsProfile::Root
+    );
+
+    let wasm_store = base_canister_config(CanisterKind::Singleton);
+    assert_eq!(
+        wasm_store.resolved_metrics_profile(&CanisterRole::WASM_STORE),
+        MetricsProfile::Storage
+    );
+
+    let mut hub = base_canister_config(CanisterKind::Singleton);
+    hub.directory = Some(DirectoryConfig::default());
+    assert_eq!(
+        hub.resolved_metrics_profile(&CanisterRole::from("user_hub")),
+        MetricsProfile::Hub
+    );
+
+    let leaf = base_canister_config(CanisterKind::Shard);
+    assert_eq!(
+        leaf.resolved_metrics_profile(&CanisterRole::from("user_shard")),
+        MetricsProfile::Leaf
+    );
+}
+
+#[test]
+fn metrics_profile_override_wins_over_default() {
+    let mut cfg = base_canister_config(CanisterKind::Singleton);
+    cfg.metrics.profile = Some(MetricsProfile::Full);
+
+    assert_eq!(
+        cfg.resolved_metrics_profile(&CanisterRole::from("app")),
+        MetricsProfile::Full
+    );
 }
 
 #[test]

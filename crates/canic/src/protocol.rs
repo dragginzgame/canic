@@ -5,7 +5,9 @@
 /// table for tests, tooling, and downstream callers.
 pub use canic_core::protocol::{
     CANIC_ATTESTATION_KEY_SET, CANIC_REQUEST_DELEGATION, CANIC_REQUEST_ROLE_ATTESTATION,
-    CANIC_RESPONSE_CAPABILITY_V1, CANIC_SYNC_STATE, CANIC_SYNC_TOPOLOGY, CANIC_WASM_STORE_BEGIN_GC,
+    CANIC_RESPONSE_CAPABILITY_V1, CANIC_SYNC_STATE, CANIC_SYNC_TOPOLOGY,
+    CANIC_TEMPLATE_PREPARE_ADMIN, CANIC_TEMPLATE_PUBLISH_CHUNK_ADMIN,
+    CANIC_TEMPLATE_STAGE_MANIFEST_ADMIN, CANIC_WASM_STORE_BEGIN_GC,
     CANIC_WASM_STORE_BOOTSTRAP_DEBUG, CANIC_WASM_STORE_BOOTSTRAP_PREPARE_ADMIN,
     CANIC_WASM_STORE_BOOTSTRAP_PUBLISH_CHUNK_ADMIN, CANIC_WASM_STORE_BOOTSTRAP_RESUME_ROOT_ADMIN,
     CANIC_WASM_STORE_BOOTSTRAP_STAGE_MANIFEST_ADMIN, CANIC_WASM_STORE_CATALOG,
@@ -23,11 +25,8 @@ pub const CANIC_APP_REGISTRY: &str = "canic_app_registry";
 pub const CANIC_SUBNET_REGISTRY: &str = "canic_subnet_registry";
 pub const CANIC_POOL_LIST: &str = "canic_pool_list";
 pub const CANIC_POOL_ADMIN: &str = "canic_pool_admin";
-pub const CANIC_TEMPLATE_PREPARE_ADMIN: &str = "canic_template_prepare_admin";
-pub const CANIC_TEMPLATE_PUBLISH_CHUNK_ADMIN: &str = "canic_template_publish_chunk_admin";
 pub const CANIC_TEMPLATE_PUBLISH_TO_CURRENT_STORE_ADMIN: &str =
     "canic_template_publish_to_current_store_admin";
-pub const CANIC_TEMPLATE_STAGE_MANIFEST_ADMIN: &str = "canic_template_stage_manifest_admin";
 pub const CANIC_WASM_STORE_ADMIN: &str = "canic_wasm_store_admin";
 pub const ICRC10_SUPPORTED_STANDARDS: &str = "icrc10_supported_standards";
 pub const ICRC21_CANISTER_CALL_CONSENT_MESSAGE: &str = "icrc21_canister_call_consent_message";

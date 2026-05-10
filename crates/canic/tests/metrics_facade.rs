@@ -17,7 +17,7 @@ fn metrics_query_sample_query_is_public_facade_usable() {
 #[test]
 fn metrics_query_page_is_public_facade_usable() {
     let page = MetricsQuery::page(
-        MetricsKind::Access,
+        MetricsKind::Security,
         PageRequest {
             limit: 10,
             offset: 0,
@@ -32,31 +32,12 @@ fn metrics_query_page_is_public_facade_usable() {
 #[test]
 fn all_metric_families_are_public_facade_usable() {
     for kind in [
-        MetricsKind::Access,
-        MetricsKind::Auth,
-        MetricsKind::CanisterOps,
-        MetricsKind::Cascade,
-        MetricsKind::CyclesFunding,
-        MetricsKind::CyclesTopup,
-        MetricsKind::DelegatedAuth,
-        MetricsKind::Directory,
-        MetricsKind::Http,
-        MetricsKind::Intent,
-        MetricsKind::InterCanisterCall,
-        MetricsKind::Lifecycle,
-        MetricsKind::ManagementCall,
-        MetricsKind::Perf,
-        MetricsKind::PlatformCall,
-        MetricsKind::Pool,
-        MetricsKind::Provisioning,
-        MetricsKind::Replay,
-        MetricsKind::RootCapability,
-        MetricsKind::Scaling,
-        #[cfg(feature = "sharding")]
-        MetricsKind::Sharding,
-        MetricsKind::System,
-        MetricsKind::Timer,
-        MetricsKind::WasmStore,
+        MetricsKind::Core,
+        MetricsKind::Placement,
+        MetricsKind::Platform,
+        MetricsKind::Runtime,
+        MetricsKind::Security,
+        MetricsKind::Storage,
     ] {
         let page = MetricsQuery::page(
             kind,

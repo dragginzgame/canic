@@ -258,7 +258,7 @@ publish = false\n\n\
 name = \"{CANONICAL_WASM_STORE_CRATE_NAME}\"\n\
 crate-type = [\"cdylib\", \"rlib\"]\n\n\
 [dependencies]\n\
-canic = {{ path = \"{}\", features = [\"control-plane\"] }}\n\
+canic = {{ path = \"{}\" }}\n\
 ic-cdk = \"0.20.0\"\n\
 candid = {{ version = \"0.10\", default-features = false }}\n\n\
 [build-dependencies]\n\

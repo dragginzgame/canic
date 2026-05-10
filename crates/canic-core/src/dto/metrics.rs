@@ -7,37 +7,18 @@ use crate::dto::prelude::*;
 //
 // MetricsKind
 //
-// Metric family selector.
+// Metric tier selector.
 //
 
 #[derive(CandidType, Clone, Copy, Deserialize)]
 #[remain::sorted]
 pub enum MetricsKind {
-    Access,
-    Auth,
-    CanisterOps,
-    Cascade,
-    CyclesFunding,
-    CyclesTopup,
-    DelegatedAuth,
-    Directory,
-    Http,
-    Intent,
-    InterCanisterCall,
-    Lifecycle,
-    ManagementCall,
-    Perf,
-    PlatformCall,
-    Pool,
-    Provisioning,
-    Replay,
-    RootCapability,
-    Scaling,
-    #[cfg(feature = "sharding")]
-    Sharding,
-    System,
-    Timer,
-    WasmStore,
+    Core,
+    Placement,
+    Platform,
+    Runtime,
+    Security,
+    Storage,
 }
 
 //

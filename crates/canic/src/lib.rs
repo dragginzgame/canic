@@ -39,7 +39,9 @@ pub mod __internal {
 #[cfg(any(not(target_arch = "wasm32"), test))]
 pub mod __build {
     pub use crate::build_support::{
-        emit_root_wasm_store_bootstrap_release_set, read_config_source_or_default,
+        METRICS_TIER_CORE, METRICS_TIER_PLACEMENT, METRICS_TIER_PLATFORM, METRICS_TIER_RUNTIME,
+        METRICS_TIER_SECURITY, METRICS_TIER_STORAGE, emit_root_wasm_store_bootstrap_release_set,
+        metrics_profile_tier_mask, read_config_source_or_default,
     };
 }
 

@@ -113,7 +113,7 @@ pub(super) fn verification_rows(
                     .to_string(),
         },
         VerificationRow {
-            command: "canic_metrics(MetricsKind::Perf, PageRequest { limit=512, offset=0 })"
+            command: "canic_metrics(MetricsKind::Runtime, PageRequest { limit=512, offset=0 })"
                 .to_string(),
             status: "PASS".to_string(),
             notes: format!("Update scenarios were sampled before/after through persisted perf rows, and query scenarios used local-only `QueryPerfSample` probe endpoints because query-side perf rows are not committed; normalized rows saved under `{}`.", paths.artifacts_dir.join("perf-rows.json").display()),

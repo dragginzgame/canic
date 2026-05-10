@@ -7,6 +7,7 @@
 | `2026-05-01` | `docs/audits/reports/2026-05/2026-05-01/summary.md` | complete |
 | `2026-05-07` | `docs/audits/reports/2026-05/2026-05-07/summary.md` | complete |
 | `2026-05-09` | `docs/audits/reports/2026-05/2026-05-09/summary.md` | complete |
+| `2026-05-10` | `docs/audits/reports/2026-05/2026-05-10/summary.md` | complete |
 
 ## Month-Level Status
 
@@ -65,3 +66,20 @@ May has day summaries for the currently recorded audit days.
     support/test modules rather than re-growing production hubs.
 19. Complexity maintainers: watch remaining large config/IC facade files only
     when they become active edit centers.
+20. Control-plane maintainers: split publication workflow by phase or
+    responsibility when publication behavior changes next.
+21. Core/runtime maintainers: keep IC management/provisioning decomposition
+    tracked in `docs/design/0.33-icp-cli/refactor-addendum.md`.
+22. Facade/build maintainers: keep metrics/config build helpers behind hidden
+    `__build`.
+23. Operator maintainers: preserve CLI/host/backup ownership boundaries as the
+    ICP CLI flow continues.
+24. Auth maintainers: keep delegated-session cleanup side effects isolated to
+    endpoint access-boundary code.
+25. Operator maintainers: keep `canic-cli`, `canic-host`, and `canic-backup`
+    dependency direction one-way and facade-free as the operator package
+    surface grows.
+26. Host maintainers: keep host features on `canic-core`/data dependencies
+    unless a future facade dependency is deliberately justified.
+27. Package maintainers: keep all fleets and test/audit/sandbox canisters
+    explicitly unpublished.

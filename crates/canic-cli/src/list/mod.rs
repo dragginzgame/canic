@@ -6,9 +6,9 @@ mod config;
 mod options;
 mod render;
 
-#[cfg(test)]
-use canic::ids::CanisterRole;
 use canic_backup::discovery::{DiscoveryError, RegistryEntry, parse_registry_entries};
+#[cfg(test)]
+use canic_core::ids::CanisterRole;
 use canic_host::{
     format::byte_size,
     icp::{IcpCli, IcpCommandError},
@@ -378,7 +378,7 @@ mod tests {
             OsString::from("demo"),
             OsString::from("--network"),
             OsString::from("local"),
-            OsString::from("--verbose"),
+            OsString::from("-v"),
         ])
         .expect("parse config options");
 
@@ -408,6 +408,7 @@ mod tests {
         assert!(!config.contains("--fleet <name>"));
         assert!(config.contains("--from <role>"));
         assert!(config.contains("--verbose"));
+        assert!(config.contains("-v"));
         assert!(config.contains("Examples:"));
     }
 
@@ -637,6 +638,7 @@ mod tests {
                 capabilities: "-".to_string(),
                 auto_create: "-".to_string(),
                 topup: "-".to_string(),
+                metrics: "root".to_string(),
                 details: Vec::new(),
             },
             ConfigRoleRow {
@@ -645,8 +647,11 @@ mod tests {
                 capabilities: "auth, sharding".to_string(),
                 auto_create: "yes".to_string(),
                 topup: "4.0TC @ 10.0TC".to_string(),
+                metrics: "hub".to_string(),
                 details: vec![
                     "app_index".to_string(),
+                    "metrics profile=hub tiers=core,placement,runtime,security (inferred)"
+                        .to_string(),
                     "sharding user_shards->user_shard cap=100 initial=1 max=4".to_string(),
                 ],
             },
@@ -658,11 +663,12 @@ mod tests {
             [
                 "Fleet: test_me (network local)",
                 "",
-                "ROLE   KIND        FEATURES         AUTO   TOPUP",
-                "----   ---------   --------------   ----   --------------",
-                "root   root        -                -      -",
-                "app    singleton   auth, sharding   yes    4.0TC @ 10.0TC",
+                "ROLE   KIND        AUTO   FEATURES         METRICS   TOPUP",
+                "----   ---------   ----   --------------   -------   --------------",
+                "root   root        -      -                root      -",
+                "app    singleton   yes    auth, sharding   hub       4.0TC @ 10.0TC",
                 "  - app_index",
+                "  - metrics profile=hub tiers=core,placement,runtime,security (inferred)",
                 "  - sharding user_shards->user_shard cap=100 initial=1 max=4",
             ]
             .join("\n")

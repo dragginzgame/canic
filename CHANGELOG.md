@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.33.x] - 2026-05-08 - dfx -> icp-cli
 
+- `0.33.4` keeps default metrics enabled on all canisters, makes the standard pre-1.0 root/auth/sharding runtime capabilities default on the `canic` facade so canister manifests no longer choose Canic features manually, trims the public metrics selector into tiered surfaces, folds redundant low-level management/provisioning/system rows behind higher-level operator metrics, and compiles role-inferred metrics profiles per canister.
+
+```bash
+canic config demo --verbose
+```
+
+```toml
+canic = { workspace = true }
+```
+
 - `0.33.3` cleans up `canic-cli` parser and command-family internals by moving routing and validation further onto Clap, sharing host helpers, and splitting restore CLI tests without changing command shapes.
 
 - `0.33.2` is a cleanup/audit slice that hardens delegated auth, subject-caller binding, lifecycle timer symmetry, layer boundaries, capability proof dispatch, root replay expiry/capacity behavior, and audit baselines, including removal of the public partial `AuthApi::verify_token` helper, reducing the complexity audit residual score to `3/10`, replacing stale lint allowances with checked expectations, and starting the config validation ownership refactor.

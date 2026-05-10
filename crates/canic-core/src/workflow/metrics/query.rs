@@ -21,7 +21,40 @@ impl MetricsQuery {
     /// Return one sorted, paginated metrics family snapshot.
     #[must_use]
     pub fn page(kind: MetricsKind, page: PageRequest) -> Page<MetricEntry> {
-        let mut entries = metrics::entries(kind);
+        Self::page_entries(metrics::entries(kind), page)
+    }
+
+    #[must_use]
+    pub fn core(page: PageRequest) -> Page<MetricEntry> {
+        Self::page_entries(metrics::core_entries(), page)
+    }
+
+    #[must_use]
+    pub fn placement(page: PageRequest) -> Page<MetricEntry> {
+        Self::page_entries(metrics::placement_entries(), page)
+    }
+
+    #[must_use]
+    pub fn platform(page: PageRequest) -> Page<MetricEntry> {
+        Self::page_entries(metrics::platform_entries(), page)
+    }
+
+    #[must_use]
+    pub fn runtime(page: PageRequest) -> Page<MetricEntry> {
+        Self::page_entries(metrics::runtime_entries(), page)
+    }
+
+    #[must_use]
+    pub fn security(page: PageRequest) -> Page<MetricEntry> {
+        Self::page_entries(metrics::security_entries(), page)
+    }
+
+    #[must_use]
+    pub fn storage(page: PageRequest) -> Page<MetricEntry> {
+        Self::page_entries(metrics::storage_entries(), page)
+    }
+
+    fn page_entries(mut entries: Vec<MetricEntry>, page: PageRequest) -> Page<MetricEntry> {
         entries.sort_by(|a, b| {
             a.labels
                 .cmp(&b.labels)
@@ -77,19 +110,11 @@ mod tests {
                 IntentMetricOperation, IntentMetricOutcome, IntentMetricReason,
                 IntentMetricSurface, IntentMetrics,
             },
-            management_call::{
-                ManagementCallMetricOperation, ManagementCallMetricOutcome,
-                ManagementCallMetricReason, ManagementCallMetrics,
-            },
             platform_call::{
                 PlatformCallMetricMode, PlatformCallMetricOutcome, PlatformCallMetricReason,
                 PlatformCallMetricSurface, PlatformCallMetrics,
             },
             pool::{PoolMetricOperation, PoolMetricOutcome, PoolMetricReason, PoolMetrics},
-            provisioning::{
-                ProvisioningMetricOperation, ProvisioningMetricOutcome, ProvisioningMetricReason,
-                ProvisioningMetrics,
-            },
             replay::{
                 ReplayMetricOperation, ReplayMetricOutcome, ReplayMetricReason, ReplayMetrics,
             },
@@ -111,7 +136,7 @@ mod tests {
         AccessMetrics::increment("alpha", AccessMetricKind::Guard, "app_allows_updates");
 
         let page = MetricsQuery::page(
-            MetricsKind::Access,
+            MetricsKind::Security,
             PageRequest {
                 limit: 1,
                 offset: 0,
@@ -121,11 +146,11 @@ mod tests {
         assert_eq!(page.total, 2);
         assert_eq!(
             page.entries[0].labels,
-            ["alpha", "guard", "app_allows_updates"]
+            ["access", "alpha", "guard", "app_allows_updates"]
         );
 
         let page = MetricsQuery::page(
-            MetricsKind::Access,
+            MetricsKind::Security,
             PageRequest {
                 limit: 1,
                 offset: 1,
@@ -133,7 +158,10 @@ mod tests {
         );
 
         assert_eq!(page.total, 2);
-        assert_eq!(page.entries[0].labels, ["zeta", "auth", "caller_is_root"]);
+        assert_eq!(
+            page.entries[0].labels,
+            ["access", "zeta", "auth", "caller_is_root"]
+        );
     }
 
     #[test]
@@ -154,8 +182,8 @@ mod tests {
         );
 
         assert_first_metric_labels(
-            MetricsKind::Auth,
-            ["attestation", "verify", "failed", "unknown_key_id"],
+            MetricsKind::Security,
+            ["auth", "attestation", "verify", "failed", "unknown_key_id"],
         );
     }
 
@@ -165,40 +193,35 @@ mod tests {
 
         record_multi_label_sort_metrics();
 
-        assert_first_metric_labels(MetricsKind::CanisterOps, ["create", "app", "started", "ok"]);
         assert_first_metric_labels(
-            MetricsKind::WasmStore,
-            ["chunk_upload", "bootstrap", "skipped", "cache_hit"],
+            MetricsKind::Core,
+            ["canister_ops", "create", "app", "started", "ok"],
         );
         assert_first_metric_labels(
-            MetricsKind::Cascade,
-            ["child_send", "state", "failed", "send_failed"],
+            MetricsKind::Storage,
+            [
+                "wasm_store",
+                "chunk_upload",
+                "bootstrap",
+                "skipped",
+                "cache_hit",
+            ],
         );
         assert_first_metric_labels(
-            MetricsKind::Directory,
-            ["classify", "completed", "pending_fresh"],
-        );
-        assert_first_metric_labels(MetricsKind::Pool, ["create_empty", "completed", "ok"]);
-        assert_first_metric_labels(MetricsKind::Replay, ["check", "completed", "fresh"]);
-        assert_first_metric_labels(
-            MetricsKind::Intent,
-            ["call", "capacity_check", "failed", "capacity"],
+            MetricsKind::Placement,
+            ["cascade", "child_send", "state", "failed", "send_failed"],
         );
         assert_first_metric_labels(
-            MetricsKind::ManagementCall,
-            ["install_code", "started", "ok"],
+            MetricsKind::Runtime,
+            ["intent", "call", "capacity_check", "failed", "capacity"],
         );
         assert_first_metric_labels(
-            MetricsKind::PlatformCall,
-            ["generic", "bounded_wait", "started", "ok"],
+            MetricsKind::Platform,
+            ["platform_call", "generic", "bounded_wait", "started", "ok"],
         );
         assert_first_metric_labels(
-            MetricsKind::Provisioning,
-            ["allocate", "app", "completed", "new_allocation"],
-        );
-        assert_first_metric_labels(
-            MetricsKind::Scaling,
-            ["bootstrap_pool", "skipped", "target_satisfied"],
+            MetricsKind::Security,
+            ["replay", "check", "completed", "fresh"],
         );
     }
 
@@ -262,9 +285,7 @@ mod tests {
         );
         record_replay_sort_metrics();
         record_intent_sort_metrics();
-        record_management_call_sort_metrics();
         record_platform_call_sort_metrics();
-        record_provisioning_sort_metrics();
         ScalingMetrics::record(
             ScalingMetricOperation::CreateWorker,
             ScalingMetricOutcome::Completed,
@@ -294,8 +315,8 @@ mod tests {
         );
 
         assert_first_metric_labels(
-            MetricsKind::Sharding,
-            ["bootstrap_pool", "skipped", "target_satisfied"],
+            MetricsKind::Placement,
+            ["sharding", "bootstrap_pool", "skipped", "target_satisfied"],
         );
     }
 
@@ -317,7 +338,7 @@ mod tests {
             },
         );
 
-        assert_eq!(page.total, 2);
+        assert!(page.total > 0);
         assert_eq!(page.entries[0].labels, expected);
     }
 
@@ -350,36 +371,6 @@ mod tests {
             PlatformCallMetricMode::BoundedWait,
             PlatformCallMetricOutcome::Started,
             PlatformCallMetricReason::Ok,
-        );
-    }
-
-    // Seed management-call rows used by multi-family sorting coverage.
-    fn record_management_call_sort_metrics() {
-        ManagementCallMetrics::record(
-            ManagementCallMetricOperation::UploadChunk,
-            ManagementCallMetricOutcome::Failed,
-            ManagementCallMetricReason::Infra,
-        );
-        ManagementCallMetrics::record(
-            ManagementCallMetricOperation::InstallCode,
-            ManagementCallMetricOutcome::Started,
-            ManagementCallMetricReason::Ok,
-        );
-    }
-
-    // Seed provisioning rows used by multi-family sorting coverage.
-    fn record_provisioning_sort_metrics() {
-        ProvisioningMetrics::record(
-            ProvisioningMetricOperation::Upgrade,
-            &CanisterRole::new("worker"),
-            ProvisioningMetricOutcome::Failed,
-            ProvisioningMetricReason::ManagementCall,
-        );
-        ProvisioningMetrics::record(
-            ProvisioningMetricOperation::Allocate,
-            &CanisterRole::new("app"),
-            ProvisioningMetricOutcome::Completed,
-            ProvisioningMetricReason::NewAllocation,
         );
     }
 

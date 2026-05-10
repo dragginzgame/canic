@@ -6,9 +6,9 @@ fn signer_guard_denial_records_access_metric() {
     let setup = install_test_root_cached();
     let pic = PicBorrow(setup.pic.pic());
     let signer_id = setup.signer_id;
-    let labels = ["signer_guard_is_root", "auth", "caller_is_root"];
+    let labels = ["access", "signer_guard_is_root", "auth", "caller_is_root"];
 
-    let before = metric_count_for_labels(&pic, signer_id, MetricsKind::Access, &labels);
+    let before = metric_count_for_labels(&pic, signer_id, MetricsKind::Security, &labels);
 
     let denied: Result<(), Error> = update_call_as(
         &pic,
@@ -20,7 +20,7 @@ fn signer_guard_denial_records_access_metric() {
     let err = denied.expect_err("anonymous caller must fail the root guard");
     assert_eq!(err.code, ErrorCode::Unauthorized);
 
-    let after = metric_count_for_labels(&pic, signer_id, MetricsKind::Access, &labels);
+    let after = metric_count_for_labels(&pic, signer_id, MetricsKind::Security, &labels);
     assert_eq!(
         after,
         before.saturating_add(1),
@@ -35,22 +35,22 @@ fn signer_guard_success_records_perf_metric() {
     let pic = PicBorrow(setup.pic.pic());
     let root_id = setup.root_id;
     let signer_id = setup.signer_id;
-    let labels = ["endpoint", "signer_guard_is_root"];
+    let labels = ["perf", "endpoint", "signer_guard_is_root"];
 
-    let before = metric_count_for_labels(&pic, signer_id, MetricsKind::Perf, &labels);
+    let before = metric_count_for_labels(&pic, signer_id, MetricsKind::Runtime, &labels);
 
     let allowed: Result<(), Error> =
         update_call_as(&pic, signer_id, root_id, "signer_guard_is_root", ());
     allowed.expect("root caller should satisfy the root guard");
 
-    let after = metric_count_for_labels(&pic, signer_id, MetricsKind::Perf, &labels);
+    let after = metric_count_for_labels(&pic, signer_id, MetricsKind::Runtime, &labels);
     assert_eq!(
         after,
         before.saturating_add(1),
         "expected exactly one new endpoint perf metric row"
     );
 
-    let row = query_metric_entries(&pic, signer_id, MetricsKind::Perf)
+    let row = query_metric_entries(&pic, signer_id, MetricsKind::Runtime)
         .into_iter()
         .find(|entry| {
             entry.labels.len() == labels.len()

@@ -13,13 +13,16 @@ keywords = { workspace = true }
 categories = { workspace = true }
 publish = true
 
+[package.metadata.cargo-machete]
+ignored = ["candid", "ic-cdk"]
+
 [lib]
 name = "canister_wasm_store"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 candid = { workspace = true }
-canic = { workspace = true, features = ["control-plane"] }
+canic = { workspace = true }
 ic-cdk = { workspace = true }
 
 [build-dependencies]

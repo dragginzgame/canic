@@ -30,31 +30,6 @@ pub enum ManagementCallMetricOperation {
     UploadChunk,
 }
 
-impl ManagementCallMetricOperation {
-    /// Return the stable public metrics label for this operation.
-    #[must_use]
-    pub const fn metric_label(self) -> &'static str {
-        match self {
-            Self::CanisterStatus => "canister_status",
-            Self::ClearChunkStore => "clear_chunk_store",
-            Self::CreateCanister => "create_canister",
-            Self::DeleteCanister => "delete_canister",
-            Self::DepositCycles => "deposit_cycles",
-            Self::GetCycles => "get_cycles",
-            Self::InstallChunkedCode => "install_chunked_code",
-            Self::InstallCode => "install_code",
-            Self::LoadCanisterSnapshot => "load_canister_snapshot",
-            Self::RawRand => "raw_rand",
-            Self::StopCanister => "stop_canister",
-            Self::StoredChunks => "stored_chunks",
-            Self::TakeCanisterSnapshot => "take_canister_snapshot",
-            Self::UninstallCode => "uninstall_code",
-            Self::UpdateSettings => "update_settings",
-            Self::UploadChunk => "upload_chunk",
-        }
-    }
-}
-
 ///
 /// ManagementCallMetricOutcome
 ///
@@ -67,18 +42,6 @@ pub enum ManagementCallMetricOutcome {
     Started,
 }
 
-impl ManagementCallMetricOutcome {
-    /// Return the stable public metrics label for this outcome.
-    #[must_use]
-    pub const fn metric_label(self) -> &'static str {
-        match self {
-            Self::Completed => "completed",
-            Self::Failed => "failed",
-            Self::Started => "started",
-        }
-    }
-}
-
 ///
 /// ManagementCallMetricReason
 ///
@@ -88,17 +51,6 @@ impl ManagementCallMetricOutcome {
 pub enum ManagementCallMetricReason {
     Infra,
     Ok,
-}
-
-impl ManagementCallMetricReason {
-    /// Return the stable public metrics label for this reason.
-    #[must_use]
-    pub const fn metric_label(self) -> &'static str {
-        match self {
-            Self::Infra => "infra",
-            Self::Ok => "ok",
-        }
-    }
 }
 
 ///
@@ -138,6 +90,7 @@ impl ManagementCallMetrics {
 
     /// Snapshot the current management-call metric table as stable rows.
     #[must_use]
+    #[cfg(test)]
     pub fn snapshot() -> Vec<(ManagementCallMetricKey, u64)> {
         MANAGEMENT_CALL_METRICS
             .with_borrow(std::clone::Clone::clone)

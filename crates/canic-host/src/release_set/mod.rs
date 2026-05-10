@@ -11,7 +11,7 @@ pub use config::{
     configured_fleet_name, configured_fleet_roles, configured_install_targets,
     configured_local_root_create_cycles, configured_release_roles, configured_role_auto_create,
     configured_role_capabilities, configured_role_details, configured_role_kinds,
-    configured_role_topups, matching_fleet_config_paths,
+    configured_role_metrics_profiles, configured_role_topups, matching_fleet_config_paths,
 };
 pub use manifest::{
     ReleaseSetEntry, RootReleaseSetManifest, emit_root_release_set_manifest,
@@ -36,7 +36,7 @@ use config::{
     configured_local_root_create_cycles_from_source, configured_release_roles_from_source,
     configured_role_auto_create_from_source, configured_role_capabilities_from_source,
     configured_role_details_from_source, configured_role_kinds_from_source,
-    configured_role_topups_from_source,
+    configured_role_metrics_profiles_from_source, configured_role_topups_from_source,
 };
 
 pub(super) const CANISTERS_ROOT_RELATIVE: &str = "fleets";
@@ -64,7 +64,8 @@ mod tests {
         configured_local_root_create_cycles_from_source, configured_release_roles_from_source,
         configured_role_auto_create_from_source, configured_role_capabilities_from_source,
         configured_role_details_from_source, configured_role_kinds_from_source,
-        configured_role_topups_from_source, read_release_artifact, root_manifest_path,
+        configured_role_metrics_profiles_from_source, configured_role_topups_from_source,
+        read_release_artifact, root_manifest_path,
     };
     use crate::test_support::temp_dir;
     use flate2::{Compression, write::GzEncoder};
@@ -263,6 +264,42 @@ kind = "replica"
     }
 
     #[test]
+    fn configured_role_metrics_profiles_lists_resolved_profiles() {
+        let config = r#"
+controllers = []
+app_index = []
+
+[fleet]
+name = "demo"
+
+[subnets.prime.canisters.root]
+kind = "root"
+
+[subnets.prime.canisters.user_hub]
+kind = "singleton"
+
+[subnets.prime.canisters.user_hub.sharding.pools.user_shards]
+canister_role = "user_shard"
+
+[subnets.prime.canisters.user_shard]
+kind = "shard"
+
+[subnets.prime.canisters.scale]
+kind = "replica"
+
+[subnets.prime.canisters.scale.metrics]
+profile = "full"
+"#;
+        let profiles =
+            configured_role_metrics_profiles_from_source(config).expect("metrics profiles");
+
+        assert_eq!(profiles.get("root").map(String::as_str), Some("root"));
+        assert_eq!(profiles.get("user_hub").map(String::as_str), Some("hub"));
+        assert_eq!(profiles.get("user_shard").map(String::as_str), Some("leaf"));
+        assert_eq!(profiles.get("scale").map(String::as_str), Some("full"));
+    }
+
+    #[test]
     fn configured_role_details_lists_verbose_config_features() {
         let config = r#"
 controllers = []
@@ -310,6 +347,9 @@ policy.min_workers = 2
 
 [subnets.prime.canisters.scale]
 kind = "replica"
+
+[subnets.prime.canisters.scale.metrics]
+profile = "full"
 "#;
         let details = configured_role_details_from_source(config).expect("role details");
 
@@ -330,6 +370,17 @@ kind = "replica"
         );
         assert!(details.get("scale_hub").is_some_and(|details| {
             details.contains(&"scaling scales->scale initial=2 min=2 max=32".to_string())
+        }));
+        assert!(details.get("user_hub").is_some_and(|details| {
+            details.contains(
+                &"metrics profile=hub tiers=core,placement,runtime,security (inferred)".to_string(),
+            )
+        }));
+        assert!(details.get("scale").is_some_and(|details| {
+            details.contains(
+                &"metrics profile=full tiers=core,placement,platform,runtime,security,storage (configured)"
+                    .to_string()
+            )
         }));
     }
 

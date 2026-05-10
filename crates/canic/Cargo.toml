@@ -14,7 +14,7 @@ categories = { workspace = true }
 publish = true
 
 [features]
-default = ["metrics"]
+default = ["metrics", "control-plane", "sharding", "auth-crypto"]
 metrics = []
 control-plane = ["dep:canic-control-plane"]
 sharding = ["canic-core/sharding"]
@@ -27,7 +27,6 @@ canic-control-plane = { workspace = true, optional = true }
 canic-core = { workspace = true }
 canic-macros = { workspace = true }
 canic-memory = { workspace = true }
-ic-cdk = { workspace = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 flate2 = { workspace = true }
@@ -37,6 +36,7 @@ sha2 = { workspace = true }
 canic-core = { workspace = true }
 
 [dev-dependencies]
+ic-cdk = { workspace = true }
 serde_json = { workspace = true }
 toml = { workspace = true }
 
