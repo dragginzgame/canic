@@ -71,7 +71,8 @@ inspect only the files needed for the current task.
 - Ran the oldest outstanding recurring audit, `change-friction`, against the
   current 0.33 line. It reports medium friction risk at `5/10`: the broad
   DFX-to-ICP CLI hard cut raised patch radius, but no cross-layer leakage was
-  confirmed.
+  confirmed. The rerun after reloading ICP CLI used `icp 0.2.6`, clean snapshot
+  `09f5d238`, and included the committed `0.33.7` metadata/list slice.
 
 ## Validation Recently Run
 
@@ -115,6 +116,9 @@ inspect only the files needed for the current task.
 - `git show --stat --name-only --format=fuller 53476764`
 - `git show --stat --name-only --format=fuller 6ea85fdb`
 - `git show --stat --name-only --format=fuller 5b474986`
+- `icp --version`
+- `icp project show`
+- `git show --stat --name-only --format=fuller 09f5d238`
 
 ## Known Worktree Notes
 

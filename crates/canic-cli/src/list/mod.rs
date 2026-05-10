@@ -3,18 +3,16 @@ use crate::{
     version_text,
 };
 mod config;
+mod live;
 mod options;
 mod render;
 
-use canic_backup::discovery::{DiscoveryError, RegistryEntry, parse_registry_entries};
-use canic_host::{
-    format::{byte_size, cycles_tc},
-    icp::{IcpCli, IcpCommandError},
-    install_root::{InstallState, read_named_fleet_install_state},
-    release_set::icp_root,
-    replica_query,
-};
+use canic_backup::discovery::DiscoveryError;
 use config::{load_config_role_rows, missing_config_roles};
+use live::{
+    list_canic_versions, list_cycle_balances, list_ready_statuses, load_registry_entries,
+    resolve_tree_anchor, resolve_wasm_sizes,
+};
 use options::{ListOptions, ListSource, config_usage, usage};
 use render::RegistryColumnData;
 #[cfg(not(test))]
@@ -26,13 +24,7 @@ use render::{
     render_registry_tree,
 };
 use render::{ListTitle, ReadyStatus, render_list_output, visible_entries};
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    ffi::OsString,
-    fs,
-    path::PathBuf,
-    thread,
-};
+use std::ffi::OsString;
 use thiserror::Error as ThisError;
 
 ///
@@ -145,348 +137,16 @@ fn list_title(options: &ListOptions) -> ListTitle {
     }
 }
 
-fn list_ready_statuses(
-    options: &ListOptions,
-    registry: &[RegistryEntry],
-    canister: Option<&str>,
-) -> Result<BTreeMap<String, ReadyStatus>, ListCommandError> {
-    if replica_query::should_use_local_replica_query(options.network.as_deref()) {
-        return local_ready_statuses(options, registry, canister);
-    }
-
-    let mut statuses = BTreeMap::new();
-    for entry in visible_entries(registry, canister)? {
-        statuses.insert(entry.pid.clone(), check_ready_status(options, &entry.pid)?);
-    }
-    Ok(statuses)
-}
-
-fn check_ready_status(
-    options: &ListOptions,
-    canister: &str,
-) -> Result<ReadyStatus, ListCommandError> {
-    let Ok(output) = IcpCli::new(&options.icp, None, options.network.clone()).canister_call_output(
-        canister,
-        "canic_ready",
-        Some("json"),
-    ) else {
-        return Ok(ReadyStatus::Error);
-    };
-    let data = serde_json::from_str::<serde_json::Value>(&output)?;
-    Ok(if replica_query::parse_ready_json_value(&data) {
-        ReadyStatus::Ready
-    } else {
-        ReadyStatus::NotReady
-    })
-}
-
-fn local_ready_statuses(
-    options: &ListOptions,
-    registry: &[RegistryEntry],
-    canister: Option<&str>,
-) -> Result<BTreeMap<String, ReadyStatus>, ListCommandError> {
-    let network = options.network.clone();
-    let mut handles = Vec::new();
-    for entry in visible_entries(registry, canister)? {
-        let pid = entry.pid.clone();
-        let network = network.clone();
-        handles.push(thread::spawn(move || {
-            let status = match replica_query::query_ready(network.as_deref(), &pid) {
-                Ok(true) => ReadyStatus::Ready,
-                Ok(false) => ReadyStatus::NotReady,
-                Err(_) => ReadyStatus::Error,
-            };
-            (pid, status)
-        }));
-    }
-
-    Ok(handles
-        .into_iter()
-        .filter_map(|handle| handle.join().ok())
-        .collect())
-}
-
-fn list_cycle_balances(
-    options: &ListOptions,
-    registry: &[RegistryEntry],
-    canister: Option<&str>,
-) -> Result<BTreeMap<String, String>, ListCommandError> {
-    let icp = options.icp.clone();
-    let network = options.network.clone();
-    let mut handles = Vec::new();
-    for entry in visible_entries(registry, canister)? {
-        let pid = entry.pid.clone();
-        let icp = icp.clone();
-        let network = network.clone();
-        handles.push(thread::spawn(move || {
-            let label = query_cycle_balance_endpoint(&icp, network, &pid).map(cycles_tc);
-            (pid, label)
-        }));
-    }
-
-    Ok(handles
-        .into_iter()
-        .filter_map(|handle| {
-            let (pid, label) = handle.join().ok()?;
-            label.map(|label| (pid, label))
-        })
-        .collect())
-}
-
-fn query_cycle_balance_endpoint(
-    icp: &str,
-    network: Option<String>,
-    canister: &str,
-) -> Option<u128> {
-    IcpCli::new(icp, None, network)
-        .canister_call_output(canister, canic_core::protocol::CANIC_CYCLE_BALANCE, None)
-        .ok()
-        .and_then(|output| parse_cycle_balance_response(&output))
-}
-
-fn list_canic_versions(
-    options: &ListOptions,
-    registry: &[RegistryEntry],
-    canister: Option<&str>,
-) -> Result<BTreeMap<String, String>, ListCommandError> {
-    let icp = options.icp.clone();
-    let network = options.network.clone();
-    let mut handles = Vec::new();
-    for entry in visible_entries(registry, canister)? {
-        let pid = entry.pid.clone();
-        let icp = icp.clone();
-        let network = network.clone();
-        handles.push(thread::spawn(move || {
-            let version = query_canic_metadata_version(&icp, network, &pid);
-            (pid, version)
-        }));
-    }
-
-    Ok(handles
-        .into_iter()
-        .filter_map(|handle| {
-            let (pid, version) = handle.join().ok()?;
-            version.map(|version| (pid, version))
-        })
-        .collect())
-}
-
-fn query_canic_metadata_version(
-    icp: &str,
-    network: Option<String>,
-    canister: &str,
-) -> Option<String> {
-    IcpCli::new(icp, None, network)
-        .canister_call_output(canister, canic_core::protocol::CANIC_METADATA, None)
-        .ok()
-        .and_then(|output| parse_canic_metadata_version_response(&output))
-}
-
-fn parse_canic_metadata_version_response(output: &str) -> Option<String> {
-    serde_json::from_str::<serde_json::Value>(output)
-        .ok()
-        .and_then(|value| find_string_field(&value, "canic_version"))
-        .or_else(|| parse_candid_text_field(output, "canic_version"))
-}
-
-fn find_string_field(value: &serde_json::Value, field: &str) -> Option<String> {
-    match value {
-        serde_json::Value::Object(map) => map
-            .get(field)
-            .and_then(|value| value.as_str().map(ToString::to_string))
-            .or_else(|| {
-                map.values()
-                    .find_map(|value| find_string_field(value, field))
-            }),
-        serde_json::Value::Array(values) => values
-            .iter()
-            .find_map(|value| find_string_field(value, field)),
-        _ => None,
-    }
-}
-
-fn parse_candid_text_field(output: &str, field: &str) -> Option<String> {
-    let (_, after_field) = output.split_once(field)?;
-    let (_, after_eq) = after_field.split_once('=')?;
-    let after_quote = after_eq.trim_start().strip_prefix('"')?;
-    let (value, _) = after_quote.split_once('"')?;
-    Some(value.to_string())
-}
-
-fn parse_cycle_balance_response(output: &str) -> Option<u128> {
-    output
-        .split_once('=')
-        .map_or(output, |(_, cycles)| cycles)
-        .lines()
-        .find_map(parse_leading_integer)
-}
-
-fn parse_leading_integer(line: &str) -> Option<u128> {
-    let digits = line
-        .trim_start_matches(|ch: char| ch == '(' || ch.is_whitespace())
-        .chars()
-        .take_while(|ch| ch.is_ascii_digit() || *ch == '_' || *ch == ',')
-        .filter(char::is_ascii_digit)
-        .collect::<String>();
-    (!digits.is_empty())
-        .then_some(digits)
-        .and_then(|digits| digits.parse::<u128>().ok())
-}
-
-fn load_registry_entries(options: &ListOptions) -> Result<Vec<RegistryEntry>, ListCommandError> {
-    let registry_json = match options.source {
-        ListSource::RootRegistry => {
-            let root = resolve_root_canister(options)?;
-            call_subnet_registry(options, &root)?
-        }
-        ListSource::Config => {
-            unreachable!("config source does not use registry entries")
-        }
-    };
-
-    parse_registry_entries(&registry_json).map_err(ListCommandError::from)
-}
-
-fn resolve_root_canister(options: &ListOptions) -> Result<String, ListCommandError> {
-    if let Some(state) = read_selected_install_state(options)
-        .map_err(|err| ListCommandError::InstallState(err.to_string()))?
-    {
-        return Ok(state.root_canister_id);
-    }
-
-    Err(ListCommandError::NoInstalledFleet {
-        network: state_network(options),
-        fleet: options.fleet.clone(),
-    })
-}
-
-fn read_selected_install_state(
-    options: &ListOptions,
-) -> Result<Option<InstallState>, Box<dyn std::error::Error>> {
-    read_named_fleet_install_state(&state_network(options), &options.fleet)
-}
-
-fn resolve_tree_anchor(options: &ListOptions) -> Option<String> {
-    options.subtree.clone()
-}
-
-fn state_network(options: &ListOptions) -> String {
+pub(super) fn state_network(options: &ListOptions) -> String {
     options.network.clone().unwrap_or_else(local_network)
-}
-
-fn call_subnet_registry(options: &ListOptions, root: &str) -> Result<String, ListCommandError> {
-    if replica_query::should_use_local_replica_query(options.network.as_deref()) {
-        return replica_query::query_subnet_registry_json(options.network.as_deref(), root)
-            .map_err(|err| list_replica_query_error(options, root, err.to_string()));
-    }
-
-    IcpCli::new(&options.icp, None, options.network.clone())
-        .canister_call_output(root, "canic_subnet_registry", Some("json"))
-        .map_err(list_icp_error)
-        .map_err(add_root_registry_hint)
-}
-
-fn resolve_wasm_sizes(
-    options: &ListOptions,
-    registry: &[RegistryEntry],
-) -> BTreeMap<String, String> {
-    let Some(root) = resolve_icp_artifact_root(options) else {
-        return BTreeMap::new();
-    };
-    let network = state_network(options);
-    registry
-        .iter()
-        .filter_map(|entry| entry.role.as_deref())
-        .collect::<BTreeSet<_>>()
-        .into_iter()
-        .filter_map(|role| {
-            let path = root
-                .join(".icp")
-                .join(&network)
-                .join("canisters")
-                .join(role)
-                .join(format!("{role}.wasm.gz"));
-            fs::metadata(path)
-                .ok()
-                .map(|metadata| (role.to_string(), byte_size(metadata.len())))
-        })
-        .collect()
-}
-
-fn resolve_icp_artifact_root(options: &ListOptions) -> Option<PathBuf> {
-    if let Ok(Some(state)) = read_selected_install_state(options) {
-        return Some(PathBuf::from(state.icp_root));
-    }
-    icp_root().ok()
-}
-
-fn list_replica_query_error(options: &ListOptions, root: &str, error: String) -> ListCommandError {
-    if is_canister_not_found_error(&error)
-        && let Ok(Some(state)) = read_selected_install_state(options)
-        && state.root_canister_id == root
-    {
-        return ListCommandError::StaleLocalFleet {
-            fleet: state.fleet,
-            network: state_network(options),
-            root: root.to_string(),
-        };
-    }
-
-    ListCommandError::ReplicaQuery(error)
-}
-
-fn is_canister_not_found_error(error: &str) -> bool {
-    error.contains("Canister ") && error.contains(" not found")
-}
-
-fn add_root_registry_hint(error: ListCommandError) -> ListCommandError {
-    let ListCommandError::IcpFailed { command, stderr } = error else {
-        return error;
-    };
-
-    let Some(hint) = root_registry_hint(&stderr) else {
-        return ListCommandError::IcpFailed { command, stderr };
-    };
-
-    ListCommandError::IcpFailed {
-        command,
-        stderr: format!("{stderr}\nHint: {hint}\n"),
-    }
-}
-
-fn list_icp_error(error: IcpCommandError) -> ListCommandError {
-    match error {
-        IcpCommandError::Io(err) => ListCommandError::Io(err),
-        IcpCommandError::Failed { command, stderr } => {
-            ListCommandError::IcpFailed { command, stderr }
-        }
-        IcpCommandError::SnapshotIdUnavailable { output } => ListCommandError::IcpFailed {
-            command: "icp canister snapshot create".to_string(),
-            stderr: output,
-        },
-    }
-}
-
-fn root_registry_hint(stderr: &str) -> Option<&'static str> {
-    if stderr.contains("Cannot find canister id") {
-        return Some(
-            "no root canister id exists for this fleet. Use `canic config <name>` for the selected fleet config, or run `canic install <name>` before querying the root registry.",
-        );
-    }
-
-    if stderr.contains("contains no Wasm module") || stderr.contains("wasm-module-not-found") {
-        return Some(
-            "the root canister id exists but no Canic root code is installed. Run `canic install <name>`, then use `canic list <name>`.",
-        );
-    }
-
-    None
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use canic_host::format::cycles_tc;
     use serde_json::json;
+    use std::collections::BTreeMap;
 
     const ROOT: &str = "aaaaa-aa";
     const APP: &str = "renrk-eyaaa-aaaaa-aaada-cai";
