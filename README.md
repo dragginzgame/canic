@@ -173,7 +173,7 @@ Use `canic help` or `canic <command> help` for command-specific options, and
 For local ICP CLI workflows, prefer the shared setup script:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/dragginzgame/canic/v0.33.7/scripts/dev/install_dev.sh | bash
+curl -fsSL https://raw.githubusercontent.com/dragginzgame/canic/v0.34.0/scripts/dev/install_dev.sh | bash
 ```
 
 The script installs Rust when needed, the repo-local Rust `1.95.0` toolchain, `wasm32-unknown-unknown`, `rustfmt`, `clippy`, Candid/wasm utilities, `actionlint`, common Cargo helper tools, and pinned ICP CLI tooling when missing.
