@@ -11,7 +11,7 @@ pub mod config {
 }
 
 pub mod format {
-    pub use crate::format::{byte_size, truncate};
+    pub use crate::format::{byte_size, cycles_tc, truncate};
 }
 
 pub mod dto {

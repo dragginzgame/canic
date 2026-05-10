@@ -7,6 +7,7 @@ pub const CANIC_REQUEST_DELEGATION: &str = "canic_request_delegation";
 pub const CANIC_REQUEST_ROLE_ATTESTATION: &str = "canic_request_role_attestation";
 pub const CANIC_ATTESTATION_KEY_SET: &str = "canic_attestation_key_set";
 pub const CANIC_BOOTSTRAP_STATUS: &str = "canic_bootstrap_status";
+pub const CANIC_CYCLE_BALANCE: &str = "canic_cycle_balance";
 pub const CANIC_WASM_STORE_CATALOG: &str = "canic_wasm_store_catalog";
 pub const CANIC_WASM_STORE_INFO: &str = "canic_wasm_store_info";
 pub const CANIC_WASM_STORE_STATUS: &str = "canic_wasm_store_status";

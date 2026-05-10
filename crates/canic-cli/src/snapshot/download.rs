@@ -1,6 +1,7 @@
 use super::SnapshotCommandError;
 use crate::args::{
-    default_icp, flag_arg, local_network, parse_matches, path_option, string_option, value_arg,
+    default_icp, flag_arg, internal_icp_arg, internal_network_arg, local_network, parse_matches,
+    path_option, string_option, value_arg,
 };
 use canic_backup::{
     discovery::parse_registry_entries,
@@ -89,8 +90,8 @@ pub(super) fn snapshot_download_command() -> ClapCommand {
         .arg(flag_arg("recursive").long("recursive"))
         .arg(flag_arg("dry-run").long("dry-run"))
         .arg(flag_arg("resume-after-snapshot").long("resume-after-snapshot"))
-        .arg(value_arg("network").long("network").value_name("name"))
-        .arg(value_arg("icp").long("icp").value_name("path"))
+        .arg(internal_network_arg())
+        .arg(internal_icp_arg())
 }
 
 pub(super) fn download_usage() -> String {

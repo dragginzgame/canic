@@ -1,6 +1,6 @@
 //!
 //! Minimal demo canister used as the smallest Canic reference baseline.
-//! Lives in `fleets` solely as a lightweight shell for audit and test flows.
+//! Lives under `canisters/audit` solely as a lightweight shell for audit flows.
 //!
 //! Test-only helper: this canister is intended for local/dev flows and is not
 //! a public-facing deployment target.

@@ -1,6 +1,7 @@
 use crate::{
     args::{
-        default_icp, local_network, parse_matches, print_help_or_version, string_option, value_arg,
+        default_icp, internal_icp_arg, internal_network_arg, local_network, parse_matches,
+        print_help_or_version, string_option, value_arg,
     },
     version_text,
 };
@@ -20,8 +21,7 @@ const DETAIL_HEADER: &str = "DETAIL";
 const NEXT_HEADER: &str = "NEXT";
 const MEDIC_HELP_AFTER: &str = "\
 Examples:
-  canic medic test
-  canic medic test --network local --icp icp";
+  canic medic test";
 
 ///
 /// MedicCommandError
@@ -86,18 +86,8 @@ fn medic_command() -> ClapCommand {
                 .required(true)
                 .help("Installed fleet name to inspect"),
         )
-        .arg(
-            value_arg("network")
-                .long("network")
-                .value_name("name")
-                .help("ICP CLI network to inspect"),
-        )
-        .arg(
-            value_arg("icp")
-                .long("icp")
-                .value_name("path")
-                .help("Path to the icp executable"),
-        )
+        .arg(internal_network_arg())
+        .arg(internal_icp_arg())
         .after_help(MEDIC_HELP_AFTER)
 }
 
@@ -106,7 +96,7 @@ fn run_medic_checks(options: &MedicOptions) -> Vec<MedicCheck> {
     checks.push(MedicCheck::ok(
         "network",
         options.network.clone(),
-        "override with --network <name>",
+        "override with top-level --network <name>",
     ));
     checks.push(check_icp_cli(options));
 
@@ -151,7 +141,7 @@ fn check_icp_cli(options: &MedicOptions) -> MedicCheck {
         Err(err) => MedicCheck::error(
             "icp cli",
             err.to_string(),
-            "install icp-cli or pass --icp <path>",
+            "install icp-cli or pass top-level --icp <path>",
         ),
     }
 }
@@ -288,9 +278,9 @@ mod tests {
     fn parses_medic_options() {
         let options = MedicOptions::parse([
             OsString::from("demo"),
-            OsString::from("--network"),
+            OsString::from(crate::args::INTERNAL_NETWORK_OPTION),
             OsString::from("local"),
-            OsString::from("--icp"),
+            OsString::from(crate::args::INTERNAL_ICP_OPTION),
             OsString::from("/tmp/icp"),
         ])
         .expect("parse medic options");
@@ -306,9 +296,11 @@ mod tests {
         let text = usage();
 
         assert!(text.contains("Diagnose local Canic fleet setup"));
-        assert!(text.contains("Usage: canic medic [OPTIONS] <fleet>"));
+        assert!(text.contains("Usage: canic medic <fleet>"));
         assert!(text.contains("<fleet>"));
         assert!(!text.contains("--fleet <name>"));
+        assert!(!text.contains("--network"));
+        assert!(!text.contains("--icp"));
         assert!(text.contains("Examples:"));
     }
 

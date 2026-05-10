@@ -1,7 +1,7 @@
 use crate::{
     args::{
-        local_network, parse_matches, parse_subcommand, passthrough_subcommand,
-        print_help_or_version, string_option, value_arg,
+        internal_network_arg, local_network, parse_matches, parse_subcommand,
+        passthrough_subcommand, print_help_or_version, string_option, value_arg,
     },
     scaffold, version_text,
 };
@@ -35,7 +35,6 @@ Examples:
 const FLEET_LIST_HELP_AFTER: &str = "\
 Examples:
   canic fleet list
-  canic fleet list --network local
 
 Commands that operate on one fleet take the fleet name as a positional argument.";
 const FLEET_DELETE_HELP_AFTER: &str = "\
@@ -327,12 +326,7 @@ fn fleet_list_command() -> ClapCommand {
         .bin_name("canic fleet list")
         .about("List config-defined Canic fleets")
         .disable_help_flag(true)
-        .arg(
-            value_arg("network")
-                .long("network")
-                .value_name("name")
-                .help("Network to show in the fleet list"),
-        )
+        .arg(internal_network_arg())
         .after_help(FLEET_LIST_HELP_AFTER)
 }
 
@@ -431,8 +425,11 @@ mod tests {
     // Ensure fleet listing options accept network selection.
     #[test]
     fn parses_fleet_options() {
-        let options = FleetOptions::parse([OsString::from("--network"), OsString::from("ic")])
-            .expect("parse fleet options");
+        let options = FleetOptions::parse([
+            OsString::from(crate::args::INTERNAL_NETWORK_OPTION),
+            OsString::from("ic"),
+        ])
+        .expect("parse fleet options");
 
         assert_eq!(options.network, "ic");
     }
@@ -541,7 +538,7 @@ mod tests {
 
         assert!(text.contains("Create a minimal Canic fleet"));
         assert!(text.contains("Usage: canic fleet create"));
-        assert!(!text.contains("--network <name>"));
+        assert!(!text.contains("--network"));
         assert!(text.contains("--yes"));
         assert!(text.contains("Examples:"));
     }
@@ -553,7 +550,7 @@ mod tests {
 
         assert!(text.contains("List config-defined Canic fleets"));
         assert!(text.contains("Usage: canic fleet list"));
-        assert!(text.contains("--network <name>"));
+        assert!(!text.contains("--network"));
         assert!(text.contains("Examples:"));
     }
 

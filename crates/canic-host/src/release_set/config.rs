@@ -1,3 +1,4 @@
+use crate::format::cycles_tc;
 use canic_core::{
     bootstrap::{compiled::MetricsProfile, parse_config_model},
     ids::CanisterRole,
@@ -17,7 +18,6 @@ enum RootSubnetRoleScope {
 const DEFAULT_INITIAL_CYCLES: u128 = 5_000_000_000_000;
 const LOCAL_ROOT_BOOTSTRAP_RESERVE_CYCLES: u128 = 50_000_000_000_000;
 const DEFAULT_RANDOMNESS_RESEED_INTERVAL_SECS: u64 = 3600;
-const TENTH_TC: u128 = 100_000_000_000;
 
 impl RootSubnetRoleScope {
     const fn includes_root(self) -> bool {
@@ -40,6 +40,15 @@ pub fn configured_fleet_roles(
 ) -> Result<Vec<String>, Box<dyn std::error::Error>> {
     let config_source = fs::read_to_string(config_path)?;
     configured_fleet_roles_from_source(&config_source)
+        .map_err(|err| format!("invalid {}: {err}", config_path.display()).into())
+}
+
+// Enumerate roles expected to exist after root bootstrap for status checks.
+pub fn configured_bootstrap_roles(
+    config_path: &Path,
+) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+    let config_source = fs::read_to_string(config_path)?;
+    configured_bootstrap_roles_from_source(&config_source)
         .map_err(|err| format!("invalid {}: {err}", config_path.display()).into())
 }
 
@@ -234,8 +243,8 @@ pub(super) fn configured_role_topups_from_source(
                     role.as_str().to_string(),
                     format!(
                         "{} @ {}",
-                        format_cycles_tenths(policy.amount.to_u128()),
-                        format_cycles_tenths(policy.threshold.to_u128())
+                        cycles_tc(policy.amount.to_u128()),
+                        cycles_tc(policy.threshold.to_u128())
                     ),
                 );
             }
@@ -441,11 +450,6 @@ const fn metrics_profile_tiers_label(profile: MetricsProfile) -> &'static str {
     }
 }
 
-fn format_cycles_tenths(cycles: u128) -> String {
-    let tenths = cycles.saturating_add(TENTH_TC / 2) / TENTH_TC;
-    format!("{}.{}TC", tenths / 10, tenths % 10)
-}
-
 // Read the required operator fleet name from raw config source.
 pub(super) fn configured_fleet_name_from_source(
     config_source: &str,
@@ -471,6 +475,66 @@ pub(super) fn configured_fleet_roles_from_source(
     config_source: &str,
 ) -> Result<Vec<String>, Box<dyn std::error::Error>> {
     configured_root_subnet_roles_from_source(config_source, RootSubnetRoleScope::Fleet)
+}
+
+// Enumerate roles expected to be present once root bootstrap has completed.
+pub(super) fn configured_bootstrap_roles_from_source(
+    config_source: &str,
+) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+    let config = parse_config_model(config_source).map_err(|err| err.to_string())?;
+    let mut root_subnet = None;
+
+    for (subnet_role, subnet) in &config.subnets {
+        if !subnet.canisters.keys().any(CanisterRole::is_root) {
+            continue;
+        }
+
+        if root_subnet.is_some() {
+            return Err(format!(
+                "multiple subnets define a root canister; expected exactly one root subnet (found at least '{subnet_role}')"
+            )
+            .into());
+        }
+
+        root_subnet = Some(subnet);
+    }
+
+    let subnet = root_subnet.ok_or_else(|| {
+        "no subnet defines a root canister; expected exactly one root subnet".to_string()
+    })?;
+
+    let mut roles = BTreeSet::<String>::new();
+    roles.insert(CanisterRole::ROOT.as_str().to_string());
+    roles.extend(
+        subnet
+            .auto_create
+            .iter()
+            .map(|role| role.as_str().to_string()),
+    );
+
+    for role in &subnet.auto_create {
+        let Some(canister) = subnet.get_canister(role) else {
+            continue;
+        };
+
+        if let Some(sharding) = &canister.sharding {
+            for pool in sharding.pools.values() {
+                if pool.policy.initial_shards > 0 {
+                    roles.insert(pool.canister_role.as_str().to_string());
+                }
+            }
+        }
+
+        if let Some(scaling) = &canister.scaling {
+            for pool in scaling.pools.values() {
+                if pool.policy.initial_workers > 0 {
+                    roles.insert(pool.canister_role.as_str().to_string());
+                }
+            }
+        }
+    }
+
+    Ok(sort_root_subnet_roles(roles.into_iter().collect()))
 }
 
 // Enumerate roles for the single configured subnet that owns `root`.

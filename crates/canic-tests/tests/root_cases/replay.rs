@@ -631,7 +631,7 @@ fn capability_response_as(
 fn canister_cycle_balance(setup: &RootSetup, canister_id: Principal) -> u128 {
     let balance: Result<u128, Error> = setup
         .pic
-        .query_call(canister_id, protocol::CANIC_CANISTER_CYCLE_BALANCE, ())
+        .query_call(canister_id, protocol::CANIC_CYCLE_BALANCE, ())
         .expect("cycle balance transport query must succeed");
     balance.expect("cycle balance query must succeed")
 }

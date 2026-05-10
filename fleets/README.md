@@ -18,7 +18,6 @@ from the resolved `canic` package automatically.
   - `app/` – minimal application canister used as a placeholder service.
   - `user_hub/` + `user_shard/` – sharding placement plus delegated signing flow.
   - `scale_hub/` + `scale/` – scaling pool demo.
-  - `minimal/` – shared runtime baseline canister.
   - `canic.toml` – shared test topology referenced by each reference canister `build.rs`.
   - `test-configs/` – config fixtures used by local checks.
 - `demo/` – minimal root-plus-app fleet for quick experiments.

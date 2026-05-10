@@ -1,7 +1,7 @@
 use crate::{
     args::{
-        default_icp, flag_arg, parse_matches, parse_subcommand, passthrough_subcommand,
-        print_help_or_version, string_option, value_arg,
+        default_icp, flag_arg, internal_icp_arg, parse_matches, parse_subcommand,
+        passthrough_subcommand, print_help_or_version, string_option,
     },
     version_text,
 };
@@ -21,18 +21,15 @@ const REPLICA_START_HELP_AFTER: &str = "\
 Examples:
   canic replica start
   canic replica start --background
-  canic replica start --debug
-  canic replica start --icp /path/to/icp";
+  canic replica start --debug";
 const REPLICA_STATUS_HELP_AFTER: &str = "\
 Examples:
   canic replica status
-  canic replica status --debug
-  canic replica status --icp /path/to/icp";
+  canic replica status --debug";
 const REPLICA_STOP_HELP_AFTER: &str = "\
 Examples:
   canic replica stop
-  canic replica stop --debug
-  canic replica stop --icp /path/to/icp";
+  canic replica stop --debug";
 
 ///
 /// ReplicaCommandError
@@ -271,12 +268,7 @@ fn replica_leaf_command(
         .bin_name(bin_name)
         .about(about)
         .disable_help_flag(true)
-        .arg(
-            value_arg("icp")
-                .long("icp")
-                .value_name("path")
-                .help("Path to the icp executable"),
-        )
+        .arg(internal_icp_arg())
         .arg(
             flag_arg("debug")
                 .long("debug")
@@ -313,7 +305,7 @@ mod tests {
     fn parses_replica_start_options() {
         let options = ReplicaOptions::parse_start([
             OsString::from("--background"),
-            OsString::from("--icp"),
+            OsString::from(crate::args::INTERNAL_ICP_OPTION),
             OsString::from("/tmp/icp"),
         ])
         .expect("parse replica start");
@@ -377,7 +369,7 @@ mod tests {
 
         assert!(text.contains("--background"));
         assert!(text.contains("--debug"));
-        assert!(text.contains("--icp <path>"));
+        assert!(!text.contains("--icp"));
         assert!(text.contains("canic replica start --background"));
         assert!(text.contains("canic replica start --debug"));
     }

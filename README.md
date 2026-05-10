@@ -206,23 +206,12 @@ After a successful install, Canic writes project-local fleet state under
 target, resolved root principal, build target, config path, and staging
 manifest path so later commands can inspect the explicitly named fleet.
 
-The root target defaults to the `root` ICP canister name. To follow normal IC
-operator style, you may pass either a canister name or a principal:
+Fleet selection is explicit. `canic install <fleet>` uses
+`fleets/<fleet>/canic.toml`, the conventional `root` ICP canister name, and
+Canic's built-in readiness timeout:
 
 ```bash
 canic install test
-canic install test root
-canic install test uxrrr-q7777-77774-qaaaq-cai
-canic install test --root uxrrr-q7777-77774-qaaaq-cai
-canic install test --config fleets/test/canic.toml
-```
-
-Fleet selection is explicit. Without `--config`, `canic install test`
-uses `fleets/test/canic.toml`; pass `--config <path>` only when the config is
-somewhere else:
-
-```bash
-canic install test --config fleets/test/canic.toml
 ```
 
 Install configs must declare the fleet identity that will be written to

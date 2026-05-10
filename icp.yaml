@@ -55,4 +55,4 @@ environments:
 
   - name: test
     network: local
-    canisters: [root, app, minimal, user_hub, user_shard, scale_hub, scale]
+    canisters: [root, app, user_hub, user_shard, scale_hub, scale]

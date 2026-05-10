@@ -69,10 +69,6 @@ kind = "shard"
 delegated_token_signer = true
 role_attestation_cache = true
 
-# --- Minimal ---
-[subnets.prime.canisters.minimal]
-kind = "replica"
-
 # --- Scale Hub ---
 [subnets.prime.canisters.scale_hub]
 kind = "singleton"
@@ -93,7 +89,3 @@ kind = "replica"
 #  GENERAL SUBNET
 # ================================================================
 [subnets.general]
-
-# --- Minimal Canister ---
-[subnets.general.canisters.minimal]
-kind = "replica"

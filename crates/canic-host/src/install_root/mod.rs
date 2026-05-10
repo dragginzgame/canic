@@ -43,6 +43,7 @@ pub struct InstallRootOptions {
     pub network: String,
     pub ready_timeout_seconds: u64,
     pub config_path: Option<String>,
+    pub expected_fleet: Option<String>,
     pub interactive_config_selection: bool,
 }
 
@@ -90,6 +91,7 @@ pub fn install_root(options: InstallRootOptions) -> Result<(), Box<dyn std::erro
         options.interactive_config_selection,
     )?;
     let fleet_name = configured_fleet_name(&config_path)?;
+    validate_expected_fleet_name(options.expected_fleet.as_deref(), &fleet_name, &config_path)?;
     validate_fleet_name(&fleet_name)?;
     let total_started_at = Instant::now();
     let mut timings = InstallTimingSummary::default();
@@ -184,6 +186,24 @@ pub fn install_root(options: InstallRootOptions) -> Result<(), Box<dyn std::erro
     let state_path = write_install_state(&icp_root, &options.network, &state)?;
     print_install_result_summary(&options.network, &state.fleet, &state_path);
     Ok(())
+}
+
+fn validate_expected_fleet_name(
+    expected: Option<&str>,
+    actual: &str,
+    config_path: &Path,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let Some(expected) = expected else {
+        return Ok(());
+    };
+    if expected == actual {
+        return Ok(());
+    }
+    Err(format!(
+        "install requested fleet {expected}, but {} declares [fleet].name = {actual:?}",
+        config_path.display()
+    )
+    .into())
 }
 
 // Build the persisted project-local install state from a completed install.

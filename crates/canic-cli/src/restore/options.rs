@@ -1,4 +1,7 @@
-use crate::args::{default_icp, flag_arg, parse_matches, path_option, string_option, value_arg};
+use crate::args::{
+    default_icp, flag_arg, internal_icp_arg, internal_network_arg, parse_matches, path_option,
+    string_option, value_arg,
+};
 use clap::{ArgGroup, Command as ClapCommand};
 use std::{ffi::OsString, path::PathBuf};
 
@@ -175,8 +178,8 @@ pub(super) fn restore_run_command() -> ClapCommand {
                 .value_name("file")
                 .required(true),
         )
-        .arg(value_arg("icp").long("icp").value_name("path"))
-        .arg(value_arg("network").long("network").value_name("name"))
+        .arg(internal_icp_arg())
+        .arg(internal_network_arg())
         .arg(value_arg("out").long("out").value_name("file"))
         .arg(flag_arg("dry-run").long("dry-run"))
         .arg(flag_arg("execute").long("execute"))

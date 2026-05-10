@@ -7,12 +7,14 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.33.x] - 2026-05-08 - dfx -> icp-cli
 
-- `0.33.5` refreshes the module-structure audit after the 0.33.4 cleanup, splits core IC management/provisioning, control-plane publication, and backup/restore runner/apply-journal internals into focused Rust directory modules, adds `canic endpoints` for Candid method inspection, hard-cuts Candid finalization to required trailing `canic::finish!()`, and reduces the structural risk readout back to `3/10`.
+- `0.33.6` adds fleet-scoped `canic endpoints` for Candid method and argument inspection, makes `--icp <path>` and `--network <name>` top-level-only options, removes low-value list/config/install/endpoints selectors by replacing `canic list --from` with `--subtree` and removing `canic list --root`, `canic config --from`, `canic endpoints --did`, `canic endpoints --role`, and every public `canic install` override so install is now just `canic install <fleet>`, rejects duplicate discovered fleet names and install config identity mismatches, removes the `KIND` column from `canic list`, adds `CYCLES` as the final column with parallel `icp canister call` balance reads, hard-cuts Candid finalization to required trailing `canic::finish!()`, restricts generated Candid artifacts/metadata to local builds, moves the `minimal` baseline canister under `canisters/audit`, and makes `canic status` judge local deployment against bootstrap-required roles.
 
 ```bash
-canic endpoints app --environment demo
-icp canister metadata -e demo app candid:service
+canic endpoints test app
+canic endpoints test tl4x7-vh777-77776-aaacq-cai
 ```
+
+- `0.33.5` refreshes the module-structure audit after the 0.33.4 cleanup, splits core IC management/provisioning, control-plane publication, and backup/restore runner/apply-journal internals into focused Rust directory modules, and reduces the structural risk readout back to `3/10`.
 
 - `0.33.4` keeps default metrics enabled on all canisters, makes the standard pre-1.0 root/auth/sharding runtime capabilities default on the `canic` facade so canister manifests no longer choose Canic features manually, trims the public metrics selector into tiered surfaces, folds redundant low-level management/provisioning/system rows behind higher-level operator metrics, and compiles role-inferred metrics profiles per canister.
 
@@ -27,14 +29,14 @@ canic replica start --debug
 canic replica status
 canic replica stop
 canic status
-canic status --network local
+canic --network local status
 ```
 
 - `0.33.0` hard-cuts Canic from DFX project tooling to ICP CLI project tooling, replacing `dfx.json` with `icp.yaml`, moving live local artifacts to `.icp`, and routing install, list, medic, snapshot, restore, CI, and dev setup through ICP CLI.
 
 ```bash
 canic install demo
-canic list demo --network local
+canic --network local list demo
 canic medic demo
 ```
 
@@ -49,7 +51,7 @@ See detailed breakdown:
 
 ```bash
 canic install test
-canic medic test --network local
+canic --network local medic test
 canic snapshot download test --canister <canister-id> --dry-run
 ```
 

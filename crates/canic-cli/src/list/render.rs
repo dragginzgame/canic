@@ -1,6 +1,5 @@
 use super::ListCommandError;
 use canic_backup::discovery::RegistryEntry;
-use canic_core::ids::CanisterRole;
 use std::collections::{BTreeMap, BTreeSet};
 
 pub(super) const ROLE_HEADER: &str = "ROLE";
@@ -12,6 +11,7 @@ pub(super) const METRICS_HEADER: &str = "METRICS";
 pub(super) const CANISTER_HEADER: &str = "CANISTER_ID";
 pub(super) const READY_HEADER: &str = "READY";
 pub(super) const WASM_HEADER: &str = "WASM_GZ";
+pub(super) const CYCLES_HEADER: &str = "CYCLES";
 const LIST_COLUMN_GAP: &str = "   ";
 const TREE_BRANCH: &str = "├─ ";
 const TREE_LAST: &str = "└─ ";
@@ -60,14 +60,12 @@ impl ReadyStatus {
 pub(super) fn render_registry_tree(
     registry: &[RegistryEntry],
     canister: Option<&str>,
-    role_kinds: &BTreeMap<String, String>,
     readiness: &BTreeMap<String, ReadyStatus>,
     wasm_sizes: &BTreeMap<String, String>,
+    cycles: &BTreeMap<String, String>,
 ) -> Result<String, ListCommandError> {
     let rows = visible_rows(registry, canister)?;
-    Ok(render_registry_table(
-        &rows, role_kinds, readiness, wasm_sizes,
-    ))
+    Ok(render_registry_table(&rows, readiness, wasm_sizes, cycles))
 }
 
 /// Render a named list view with a fleet/source title above the registry table.
@@ -75,15 +73,15 @@ pub(super) fn render_list_output(
     title: &ListTitle,
     registry: &[RegistryEntry],
     canister: Option<&str>,
-    role_kinds: &BTreeMap<String, String>,
     readiness: &BTreeMap<String, ReadyStatus>,
     wasm_sizes: &BTreeMap<String, String>,
+    cycles: &BTreeMap<String, String>,
     missing_roles: &[String],
 ) -> Result<String, ListCommandError> {
     let mut output = format!(
         "{}\n\n{}",
         title.render(),
-        render_registry_tree(registry, canister, role_kinds, readiness, wasm_sizes)?
+        render_registry_tree(registry, canister, readiness, wasm_sizes, cycles)?
     );
     if !missing_roles.is_empty() {
         output.push_str("\n\nMissing roles: ");
@@ -313,19 +311,19 @@ fn render_config_separator(widths: &[usize; 6]) -> String {
 
 fn render_registry_table(
     rows: &[RegistryRow<'_>],
-    role_kinds: &BTreeMap<String, String>,
     readiness: &BTreeMap<String, ReadyStatus>,
     wasm_sizes: &BTreeMap<String, String>,
+    cycles: &BTreeMap<String, String>,
 ) -> String {
-    let table_rows = registry_table_rows(rows, role_kinds, readiness, wasm_sizes);
+    let table_rows = registry_table_rows(rows, readiness, wasm_sizes, cycles);
     let widths = registry_table_widths(&table_rows);
     let header = render_registry_table_row(
         &[
-            CANISTER_HEADER,
             ROLE_HEADER,
-            KIND_HEADER,
+            CANISTER_HEADER,
             READY_HEADER,
             WASM_HEADER,
+            CYCLES_HEADER,
         ],
         &widths,
     );
@@ -343,9 +341,9 @@ fn render_registry_table(
 
 fn registry_table_rows(
     rows: &[RegistryRow<'_>],
-    role_kinds: &BTreeMap<String, String>,
     readiness: &BTreeMap<String, ReadyStatus>,
     wasm_sizes: &BTreeMap<String, String>,
+    cycles: &BTreeMap<String, String>,
 ) -> Vec<[String; 5]> {
     let mut table_rows = Vec::with_capacity(rows.len());
     for row in rows {
@@ -359,12 +357,16 @@ fn registry_table_rows(
             .and_then(|role| wasm_sizes.get(role))
             .cloned()
             .unwrap_or_else(|| "-".to_string());
+        let cycle_balance = cycles
+            .get(&row.entry.pid)
+            .cloned()
+            .unwrap_or_else(|| "-".to_string());
         table_rows.push([
-            canister_label(row),
             role_label(row),
-            kind_label(row, role_kinds),
+            canister_label(row),
             ready.to_string(),
             wasm_size,
+            cycle_balance,
         ]);
     }
     table_rows
@@ -372,11 +374,11 @@ fn registry_table_rows(
 
 fn registry_table_widths(rows: &[[String; 5]]) -> [usize; 5] {
     let mut widths = [
-        CANISTER_HEADER.chars().count(),
         ROLE_HEADER.chars().count(),
-        KIND_HEADER.chars().count(),
+        CANISTER_HEADER.chars().count(),
         READY_HEADER.chars().count(),
         WASM_HEADER.chars().count(),
+        CYCLES_HEADER.chars().count(),
     ];
 
     for row in rows {
@@ -394,7 +396,11 @@ pub(super) fn render_registry_table_row(row: &[impl AsRef<str>], widths: &[usize
         .enumerate()
         .map(|(index, width)| {
             let value = row.get(index).map_or("", AsRef::as_ref);
-            format!("{value:<width$}")
+            if matches!(index, 3 | 4) {
+                format!("{value:>width$}")
+            } else {
+                format!("{value:<width$}")
+            }
         })
         .collect::<Vec<_>>()
         .join(LIST_COLUMN_GAP)
@@ -411,34 +417,14 @@ pub(super) fn render_registry_separator(widths: &[usize; 5]) -> String {
 }
 
 fn canister_label(row: &RegistryRow<'_>) -> String {
-    format!("{}{}", row.tree_prefix, row.entry.pid)
+    row.entry.pid.clone()
 }
 
 fn role_label(row: &RegistryRow<'_>) -> String {
     let role = row.entry.role.as_deref().filter(|role| !role.is_empty());
-    match role {
+    let label = match role {
         Some(role) => role.to_string(),
         None => "unknown".to_string(),
-    }
-}
-
-pub(super) fn kind_label(row: &RegistryRow<'_>, role_kinds: &BTreeMap<String, String>) -> String {
-    row.entry
-        .kind
-        .as_deref()
-        .or_else(|| {
-            row.entry
-                .role
-                .as_deref()
-                .and_then(|role| role_kinds.get(role).map(String::as_str))
-        })
-        .or_else(|| {
-            row.entry.role.as_deref().and_then(|role| {
-                CanisterRole::owned(role.to_string())
-                    .is_wasm_store()
-                    .then(|| CanisterRole::WASM_STORE.as_str())
-            })
-        })
-        .unwrap_or("unknown")
-        .to_string()
+    };
+    format!("{}{}", row.tree_prefix, label)
 }

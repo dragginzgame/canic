@@ -60,6 +60,19 @@ pub fn byte_size(bytes: u64) -> String {
 }
 
 ///
+/// Format a cycle balance in trillions with two decimal places.
+///
+/// Examples: `4.49 TC`, `12.35 TC`.
+///
+#[must_use]
+pub fn cycles_tc(cycles: u128) -> String {
+    const HUNDREDTH_TC: u128 = 10_000_000_000;
+
+    let hundredths = cycles.saturating_add(HUNDREDTH_TC / 2) / HUNDREDTH_TC;
+    format!("{}.{:02} TC", hundredths / 100, hundredths % 100)
+}
+
+///
 /// Format one optional display value for logs and status output.
 ///
 #[must_use]
@@ -76,7 +89,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::{byte_size, display_optional, truncate};
+    use super::{byte_size, cycles_tc, display_optional, truncate};
     use crate::cdk::types::Principal;
 
     #[test]
@@ -104,6 +117,12 @@ mod tests {
         assert_eq!(byte_size(720_795), "703.90 KiB");
         assert_eq!(byte_size(13_936_529), "13.29 MiB");
         assert_eq!(byte_size(9_102_643), "8.68 MiB");
+    }
+
+    #[test]
+    fn formats_cycles_in_tc() {
+        assert_eq!(cycles_tc(4_487_280_757_485), "4.49 TC");
+        assert_eq!(cycles_tc(12_345_678_900_000), "12.35 TC");
     }
 
     #[test]

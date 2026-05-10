@@ -1,17 +1,17 @@
 use super::ListCommandError;
-use crate::args::{default_icp, flag_arg, parse_matches, value_arg};
+use crate::args::{
+    default_icp, flag_arg, internal_icp_arg, internal_network_arg, parse_matches, value_arg,
+};
 use clap::Command as ClapCommand;
 use std::ffi::OsString;
 
 const LIST_HELP_AFTER: &str = "\
 Examples:
   canic list test
-  canic list test --from user_hub
-  canic list test --root uzt4z-lp777-77774-qaabq-cai";
+  canic list test --subtree user_hub";
 const CONFIG_HELP_AFTER: &str = "\
 Examples:
   canic config test
-  canic config test --from user_hub
   canic config test --verbose";
 
 ///
@@ -22,8 +22,7 @@ Examples:
 pub(super) struct ListOptions {
     pub(super) source: ListSource,
     pub(super) fleet: String,
-    pub(super) root: Option<String>,
-    pub(super) anchor: Option<String>,
+    pub(super) subtree: Option<String>,
     pub(super) network: Option<String>,
     pub(super) icp: String,
     pub(super) verbose: bool,
@@ -52,8 +51,7 @@ impl ListOptions {
         Self {
             source,
             fleet: optional_string(matches, "fleet").expect("clap requires fleet"),
-            root: optional_string(matches, "root"),
-            anchor: optional_string(matches, "from"),
+            subtree: optional_string(matches, "subtree"),
             network: optional_string(matches, "network"),
             icp: optional_string(matches, "icp").unwrap_or_else(default_icp),
             verbose: optional_bool(matches, "verbose"),
@@ -94,23 +92,12 @@ fn list_command() -> ClapCommand {
                 .help("Fleet name to inspect"),
         )
         .arg(
-            value_arg("root")
-                .long("root")
-                .value_name("name-or-principal")
-                .help("Query a specific root canister registry"),
-        )
-        .arg(
-            value_arg("from")
-                .long("from")
+            value_arg("subtree")
+                .long("subtree")
                 .value_name("name-or-principal")
                 .help("Render a subtree anchored at one canister"),
         )
-        .arg(
-            value_arg("icp")
-                .long("icp")
-                .value_name("path")
-                .help("Path to the icp executable"),
-        )
+        .arg(internal_icp_arg())
         .after_help(LIST_HELP_AFTER)
 }
 
@@ -124,12 +111,6 @@ fn config_command() -> ClapCommand {
                 .help("Fleet name to inspect"),
         )
         .arg(
-            value_arg("from")
-                .long("from")
-                .value_name("role")
-                .help("Show one declared role"),
-        )
-        .arg(
             flag_arg("verbose")
                 .long("verbose")
                 .short('v')
@@ -139,12 +120,7 @@ fn config_command() -> ClapCommand {
 }
 
 fn base_list_options(command: ClapCommand) -> ClapCommand {
-    command.disable_help_flag(true).arg(
-        value_arg("network")
-            .long("network")
-            .value_name("name")
-            .help("ICP CLI network to inspect"),
-    )
+    command.disable_help_flag(true).arg(internal_network_arg())
 }
 
 pub(super) fn usage() -> String {

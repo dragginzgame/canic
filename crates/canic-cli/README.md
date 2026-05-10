@@ -37,19 +37,18 @@ For a full local development setup, including ICP CLI, helper tools, and the
 Show local test-fleet canisters that already have ids:
 
 ```bash
-canic list test --network local
+canic --network local list test
 ```
 
 `canic list <name>` reads the installed root registry for that fleet.
-Use `--root <name-or-principal>` to point at a specific installed root, or
-`--from <name-or-principal>` to print one subtree with that node as the rendered
-root.
+Use `--subtree <name-or-principal>` to print one subtree with that node as the
+rendered root.
 Live list sources call `canic_ready` for each listed canister and include a
-`READY` column with `yes`, `no`, or `error`.
+`READY` column with `yes`, `no`, or `error`, plus a `CYCLES` balance column.
 
 If the list only shows the `root` row, the project has reserved a local root id
 but has not installed the tree. Run `canic install test`, then use
-`canic list test --network local` to read the installed root registry.
+`canic --network local list test` to read the installed root registry.
 
 Install and bootstrap the local fleet:
 
@@ -64,23 +63,12 @@ ICP CLI build hooks:
 canic build root
 ```
 
-`canic install` defaults to the `root` ICP canister name. You may pass either a
-project canister name or an IC principal as the root target:
+`canic install <fleet>` uses `fleets/<fleet>/canic.toml`, the conventional
+`root` ICP canister name, and Canic's built-in readiness timeout:
 
 ```bash
 canic install test
-canic install test root
-canic install test uxrrr-q7777-77774-qaaaq-cai
-canic install test --root uxrrr-q7777-77774-qaaaq-cai
-canic install test --config fleets/test/canic.toml
 ```
-
-When the root target is a principal, the CLI still builds the conventional
-`root` canister artifact by default. Use `--root-build-target <name>` only
-when the local root canister is named differently in `icp.yaml`.
-
-When no `--config` is provided, `canic install <name>` uses
-`fleets/<name>/canic.toml`.
 
 The selected install config must include a fleet identity:
 

@@ -6,8 +6,9 @@ PocketIC fixtures, but `canic fleet list` must not discover them as fleets.
 
 ## Layout
 
-- `audit/` – internal audit and performance probe canisters used by instruction
-  and capability-surface audits.
+- `audit/` – internal audit and performance probe canisters used by instruction,
+  wasm-size, and capability-surface audits, including the `minimal` shared
+  runtime baseline.
 - `sandbox/minimal/` – manual local sandbox for temporary endpoint experiments.
   It uses `canic::start_local!()` with generated standalone config and is not
   part of `icp.yaml`, the demo topology, the reference release set, or automated
@@ -19,6 +20,6 @@ PocketIC fixtures, but `canic fleet list` must not discover them as fleets.
 
 - Build the sandbox manually: `scripts/app/build.sh sandbox_minimal`
 - Build audit probes through Cargo, for example:
-  `cargo check -p audit_leaf_probe -p audit_root_probe -p audit_scaling_probe`
+  `cargo check -p canister_minimal -p audit_leaf_probe -p audit_root_probe -p audit_scaling_probe`
 - Build isolated test fixtures through Cargo, for example:
   `cargo check -p runtime_probe -p payload_limit_probe`

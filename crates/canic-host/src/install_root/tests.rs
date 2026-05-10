@@ -4,7 +4,8 @@ use super::{
     discover_canic_config_choices, fleet_install_state_path, icp_canister_command_in_network,
     icp_start_local_command, icp_stop_command, install_build_session_id,
     parse_bootstrap_status_value, parse_local_icp_autostart, parse_root_ready_value,
-    read_fleet_install_state, resolve_install_config_path, write_install_state,
+    read_fleet_install_state, resolve_install_config_path, validate_expected_fleet_name,
+    write_install_state,
 };
 use crate::release_set::configured_install_targets;
 use crate::test_support::temp_dir;
@@ -371,7 +372,7 @@ kind = "singleton"
         assert!(message.contains("fleets/canic.toml\n\n#"));
         assert!(message.contains("3 (root, app, user_hub)\n\nrun:"));
         assert!(!message.contains("canisters/test/runtime_probe/canic.toml"));
-        assert!(message.contains("run: canic install --config fleets/demo/canic.toml"));
+        assert!(message.contains("run: canic install demo"));
 
         restore_env_var("CANIC_CONFIG_PATH", previous);
         fs::remove_dir_all(root).expect("clean temp dir");
@@ -407,7 +408,7 @@ kind = "singleton"
     assert!(message.contains("2 (root, app)"));
     assert!(message.contains("fleets/canic.toml\n\n#"));
     assert!(message.contains("2 (root, app)\n\nrun:"));
-    assert!(message.contains("run: canic install --config fleets/demo/canic.toml"));
+    assert!(message.contains("run: canic install demo"));
     fs::remove_dir_all(root).expect("clean temp dir");
 }
 
@@ -451,8 +452,8 @@ kind = "singleton"
     .expect("write example config");
     let message = config_selection_error(&root, &root.join("fleets/canic.toml"), &[demo, example]);
 
-    assert!(message.contains("choose a config path explicitly:"));
-    assert!(message.contains("choose a config path explicitly:\n\n#"));
+    assert!(message.contains("choose a fleet explicitly:"));
+    assert!(message.contains("choose a fleet explicitly:\n\n#"));
     assert!(message.contains('#'));
     assert!(message.contains("CONFIG"));
     assert!(message.contains("CANISTERS"));
@@ -463,7 +464,7 @@ kind = "singleton"
     assert!(message.contains("fleets/example/canic.toml"));
     assert!(message.contains("5 (root, scale, scale_hub, user_hub, user_shard)"));
     assert!(message.contains("5 (root, scale, scale_hub, user_hub, user_shard)\n\nrun:"));
-    assert!(message.contains("run: canic install --config <path>"));
+    assert!(message.contains("run: canic install <fleet>"));
     fs::remove_dir_all(root).expect("clean temp dir");
 }
 
@@ -540,6 +541,56 @@ fn discovered_install_config_choices_are_path_sorted() {
 
     assert_eq!(choices, vec![alpha, zeta]);
     fs::remove_dir_all(root).expect("clean temp dir");
+}
+
+#[test]
+fn discovered_install_config_choices_reject_duplicate_fleet_names() {
+    let root = temp_dir("canic-install-config-duplicate-fleet");
+    let demo = root.join("demo/canic.toml");
+    let copy = root.join("copy/canic.toml");
+    fs::create_dir_all(demo.parent().expect("demo parent").join("root")).expect("create demo root");
+    fs::create_dir_all(copy.parent().expect("copy parent").join("root")).expect("create copy root");
+    fs::write(
+        demo.parent().expect("demo parent").join("root/Cargo.toml"),
+        "",
+    )
+    .expect("write demo root manifest");
+    fs::write(
+        copy.parent().expect("copy parent").join("root/Cargo.toml"),
+        "",
+    )
+    .expect("write copy root manifest");
+    let config = r#"
+controllers = []
+app_index = []
+
+[fleet]
+name = "demo"
+
+[subnets.prime.canisters.root]
+kind = "root"
+"#;
+    fs::write(&demo, config).expect("write demo config");
+    fs::write(&copy, config).expect("write copy config");
+
+    let err = discover_canic_config_choices(&root).expect_err("duplicate fleet names should fail");
+    let message = err.to_string();
+
+    assert!(message.contains("multiple configs declare fleet demo"));
+    assert!(message.contains("demo/canic.toml"));
+    assert!(message.contains("copy/canic.toml"));
+    fs::remove_dir_all(root).expect("clean temp dir");
+}
+
+#[test]
+fn install_rejects_config_identity_mismatch() {
+    let err =
+        validate_expected_fleet_name(Some("demo"), "test", Path::new("fleets/demo/canic.toml"))
+            .expect_err("mismatched fleet identity should fail");
+
+    assert!(err.to_string().contains(
+        "install requested fleet demo, but fleets/demo/canic.toml declares [fleet].name = \"test\""
+    ));
 }
 
 #[test]

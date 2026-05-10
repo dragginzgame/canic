@@ -2,6 +2,7 @@
 [workspace]
 members = [
     "canisters/audit/leaf_probe",
+    "canisters/audit/minimal",
     "canisters/audit/root_probe",
     "canisters/audit/scaling_probe",
     "canisters/sandbox/minimal",
@@ -31,7 +32,6 @@ members = [
     "fleets/demo/app",
     "fleets/demo/root",
     "fleets/test/app",
-    "fleets/test/minimal",
     "fleets/test/root",
     "fleets/test/scale",
     "fleets/test/scale_hub",

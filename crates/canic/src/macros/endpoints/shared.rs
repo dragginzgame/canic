@@ -7,7 +7,7 @@
 macro_rules! canic_emit_lifecycle_core_endpoints {
     () => {
         #[$crate::canic_query]
-        fn canic_canister_cycle_balance() -> Result<u128, ::canic::Error> {
+        fn canic_cycle_balance() -> Result<u128, ::canic::Error> {
             Ok($crate::cdk::api::canister_cycle_balance())
         }
 

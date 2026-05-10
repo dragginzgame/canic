@@ -177,7 +177,7 @@ type WasmStoreTemplateStatusResponse = record {
 };
 service : (CanisterInitPayload, opt blob) -> {
   canic_bootstrap_status : () -> (BootstrapStatusResponse) query;
-  canic_canister_cycle_balance : () -> (Result) query;
+  canic_cycle_balance : () -> (Result) query;
   canic_canister_version : () -> (Result_1) query;
   canic_ready : () -> (bool) query;
   canic_response_capability_v1 : (NonrootCyclesCapabilityEnvelopeV1) -> (

@@ -1,6 +1,7 @@
 use crate::{
     args::{
-        default_icp, local_network, parse_matches, print_help_or_version, string_option, value_arg,
+        default_icp, internal_icp_arg, internal_network_arg, local_network, parse_matches,
+        print_help_or_version, string_option,
     },
     version_text,
 };
@@ -9,7 +10,8 @@ use canic_host::{
     icp::IcpCli,
     install_root::{discover_current_canic_config_choices, read_named_fleet_install_state},
     release_set::{
-        configured_fleet_name, configured_fleet_roles, display_workspace_path, workspace_root,
+        configured_bootstrap_roles, configured_fleet_name, configured_fleet_roles,
+        display_workspace_path, workspace_root,
     },
     replica_query,
     table::WhitespaceTable,
@@ -25,9 +27,7 @@ const CANISTERS_HEADER: &str = "CANISTERS";
 const ROOT_HEADER: &str = "ROOT";
 const STATUS_HELP_AFTER: &str = "\
 Examples:
-  canic status
-  canic status --network local
-  canic status --icp /path/to/icp";
+  canic status";
 
 ///
 /// StatusCommandError
@@ -171,13 +171,14 @@ fn status_fleet_row(
     };
     let install_state = read_named_fleet_install_state(network, &fleet);
     let configured_roles = configured_fleet_roles(path);
+    let bootstrap_roles = configured_bootstrap_roles(path);
     let (deployed, root) = match install_state {
         Ok(Some(state)) => (
             deployed_label(
                 network,
                 &state.root_canister_id,
                 verify_local_root,
-                configured_roles.as_deref().unwrap_or(&[]),
+                bootstrap_roles.as_deref().unwrap_or(&[]),
             ),
             state.root_canister_id,
         ),
@@ -303,18 +304,8 @@ fn status_command() -> ClapCommand {
         .bin_name("canic status")
         .about("Show quick Canic project status")
         .disable_help_flag(true)
-        .arg(
-            value_arg("network")
-                .long("network")
-                .value_name("name")
-                .help("Network to use when checking deployed fleet state"),
-        )
-        .arg(
-            value_arg("icp")
-                .long("icp")
-                .value_name("path")
-                .help("Path to the icp executable"),
-        )
+        .arg(internal_network_arg())
+        .arg(internal_icp_arg())
         .after_help(STATUS_HELP_AFTER)
 }
 
@@ -335,9 +326,9 @@ mod tests {
         assert_eq!(default_options.icp, "icp");
 
         let options = StatusOptions::parse([
-            OsString::from("--network"),
+            OsString::from(crate::args::INTERNAL_NETWORK_OPTION),
             OsString::from("ic"),
-            OsString::from("--icp"),
+            OsString::from(crate::args::INTERNAL_ICP_OPTION),
             OsString::from("/tmp/icp"),
         ])
         .expect("parse explicit options");
@@ -469,8 +460,8 @@ mod tests {
 
         assert!(text.contains("Show quick Canic project status"));
         assert!(text.contains("Usage: canic status"));
-        assert!(text.contains("--network <name>"));
-        assert!(text.contains("--icp <path>"));
+        assert!(!text.contains("--network"));
+        assert!(!text.contains("--icp"));
         assert!(text.contains("Examples:"));
     }
 

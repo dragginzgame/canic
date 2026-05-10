@@ -1,47 +1,21 @@
 use super::{
     ListCommandError,
     options::{ListOptions, ListSource},
-    read_selected_install_state,
     render::ConfigRoleRow,
 };
 use canic_backup::discovery::RegistryEntry;
 use canic_host::{
     install_root::discover_current_canic_config_choices,
     release_set::{
-        config_path as default_config_path, configured_fleet_roles, configured_role_auto_create,
-        configured_role_capabilities, configured_role_details, configured_role_kinds,
-        configured_role_metrics_profiles, configured_role_topups, matching_fleet_config_paths,
+        configured_fleet_roles, configured_role_auto_create, configured_role_capabilities,
+        configured_role_details, configured_role_kinds, configured_role_metrics_profiles,
+        configured_role_topups, matching_fleet_config_paths,
     },
 };
 use std::{
     collections::{BTreeMap, BTreeSet},
     path::PathBuf,
 };
-
-pub(super) fn resolve_role_kinds(options: &ListOptions) -> BTreeMap<String, String> {
-    role_kind_config_candidates(options)
-        .into_iter()
-        .find_map(|path| configured_role_kinds(&path).ok())
-        .unwrap_or_default()
-}
-
-fn role_kind_config_candidates(options: &ListOptions) -> Vec<PathBuf> {
-    let mut paths = Vec::new();
-
-    if let Ok(path) = selected_config_path(options) {
-        paths.push(path);
-    }
-
-    if let Ok(Some(state)) = read_selected_install_state(options) {
-        paths.push(PathBuf::from(state.config_path));
-    }
-
-    if let Ok(workspace_root) = std::env::current_dir() {
-        paths.push(default_config_path(&workspace_root));
-    }
-
-    paths
-}
 
 pub(super) fn load_config_role_rows(
     options: &ListOptions,
@@ -65,16 +39,8 @@ pub(super) fn load_config_role_rows(
     } else {
         BTreeMap::new()
     };
-    let anchor = options.anchor.as_deref();
-    if let Some(anchor) = anchor
-        && !roles.iter().any(|role| role == anchor)
-    {
-        return Err(ListCommandError::CanisterNotInRegistry(anchor.to_string()));
-    }
-
     Ok(roles
         .into_iter()
-        .filter(|role| anchor.is_none_or(|anchor| anchor == role))
         .map(|role| ConfigRoleRow {
             capabilities: capabilities
                 .get(&role)
@@ -113,7 +79,7 @@ pub(super) fn missing_config_roles(
     options: &ListOptions,
     registry: &[RegistryEntry],
 ) -> Vec<String> {
-    if !matches!(options.source, ListSource::RootRegistry) || options.anchor.is_some() {
+    if !matches!(options.source, ListSource::RootRegistry) || options.subtree.is_some() {
         return Vec::new();
     }
 

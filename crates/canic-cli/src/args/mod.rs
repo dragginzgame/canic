@@ -77,6 +77,31 @@ pub fn value_arg(id: &'static str) -> Arg {
     Arg::new(id).num_args(1)
 }
 
+pub fn icp_arg() -> Arg {
+    value_arg("icp")
+        .long("icp")
+        .value_name("path")
+        .help("Path to the icp executable for ICP-backed commands")
+}
+
+pub const INTERNAL_ICP_OPTION: &str = "--__canic-icp";
+pub const INTERNAL_NETWORK_OPTION: &str = "--__canic-network";
+
+pub fn internal_icp_arg() -> Arg {
+    value_arg("icp").long("__canic-icp").hide(true)
+}
+
+pub fn network_arg() -> Arg {
+    value_arg("network")
+        .long("network")
+        .value_name("name")
+        .help("ICP CLI network for networked commands")
+}
+
+pub fn internal_network_arg() -> Arg {
+    value_arg("network").long("__canic-network").hide(true)
+}
+
 pub fn flag_arg(id: &'static str) -> Arg {
     Arg::new(id).action(ArgAction::SetTrue)
 }

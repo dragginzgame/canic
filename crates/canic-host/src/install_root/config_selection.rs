@@ -1,7 +1,8 @@
-use crate::release_set::configured_fleet_roles;
+use crate::release_set::{configured_fleet_name, configured_fleet_roles};
 use crate::table::WhitespaceTable;
 use crate::workspace_discovery::normalize_workspace_path;
 use std::{
+    collections::BTreeMap,
     env, fs,
     io::{self, IsTerminal, Write},
     path::{Path, PathBuf},
@@ -70,7 +71,30 @@ pub fn discover_canic_config_choices(
     let mut choices = Vec::new();
     collect_canic_config_choices(root, &mut choices)?;
     choices.sort();
+    reject_duplicate_fleet_names(&choices)?;
     Ok(choices)
+}
+
+fn reject_duplicate_fleet_names(choices: &[PathBuf]) -> Result<(), Box<dyn std::error::Error>> {
+    let mut by_fleet = BTreeMap::<String, Vec<&PathBuf>>::new();
+    for path in choices {
+        if let Ok(fleet) = configured_fleet_name(path) {
+            by_fleet.entry(fleet).or_default().push(path);
+        }
+    }
+
+    for (fleet, paths) in by_fleet {
+        if paths.len() > 1 {
+            let configs = paths
+                .into_iter()
+                .map(|path| path.display().to_string())
+                .collect::<Vec<_>>()
+                .join(", ");
+            return Err(format!("multiple configs declare fleet {fleet}: {configs}").into());
+        }
+    }
+
+    Ok(())
 }
 
 // Recursively collect candidate config paths.
@@ -120,25 +144,29 @@ pub(super) fn config_selection_error(
     )];
 
     if choices.is_empty() {
-        lines.push("create fleets/canic.toml or run canic install --config <path>".to_string());
+        lines.push("create fleets/<fleet>/canic.toml and run canic install <fleet>".to_string());
         return lines.join("\n");
     }
 
     if choices.len() == 1 {
-        let choice = display_workspace_path(workspace_root, &choices[0]);
+        let fleet = fleet_name_from_config_path(&choices[0]).unwrap_or("<fleet>");
         lines.push(String::new());
         lines.extend(config_choice_table(workspace_root, choices));
         lines.push(String::new());
-        lines.push(format!("run: canic install --config {choice}"));
+        lines.push(format!("run: canic install {fleet}"));
         return lines.join("\n");
     }
 
-    lines.push("choose a config path explicitly:".to_string());
+    lines.push("choose a fleet explicitly:".to_string());
     lines.push(String::new());
     lines.extend(config_choice_table(workspace_root, choices));
     lines.push(String::new());
-    lines.push("run: canic install --config <path>".to_string());
+    lines.push("run: canic install <fleet>".to_string());
     lines.join("\n")
+}
+
+fn fleet_name_from_config_path(path: &Path) -> Option<&str> {
+    path.parent()?.file_name()?.to_str()
 }
 
 // Prompt interactively for one discovered config when running in a terminal.

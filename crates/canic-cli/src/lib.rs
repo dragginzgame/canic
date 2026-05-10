@@ -16,7 +16,10 @@ mod status;
 #[cfg(test)]
 mod test_support;
 
-use crate::args::{first_arg_is_help, parse_matches};
+use crate::args::{
+    INTERNAL_ICP_OPTION, INTERNAL_NETWORK_OPTION, first_arg_is_help, icp_arg, network_arg,
+    parse_matches,
+};
 use clap::{Arg, ArgAction, Command};
 use std::ffi::OsString;
 use thiserror::Error as ThisError;
@@ -266,6 +269,12 @@ where
         println!("{}", usage());
         return Ok(());
     }
+    if let Some(option) = command_local_global_option(&args) {
+        return Err(CliError::Usage(format!(
+            "{option} is a top-level option; put it before the command\n\n{}",
+            usage()
+        )));
+    }
 
     let matches =
         parse_matches(top_level_dispatch_command(), args).map_err(|_| CliError::Usage(usage()))?;
@@ -273,15 +282,19 @@ where
         println!("{}", version_text());
         return Ok(());
     }
+    let global_icp = matches.get_one::<String>("icp").cloned();
+    let global_network = matches.get_one::<String>("network").cloned();
 
     let Some((command, subcommand_matches)) = matches.subcommand() else {
         return Err(CliError::Usage(usage()));
     };
-    let tail = subcommand_matches
+    let mut tail = subcommand_matches
         .get_many::<OsString>(DISPATCH_ARGS)
         .map(|values| values.cloned().collect::<Vec<_>>())
-        .unwrap_or_default()
-        .into_iter();
+        .unwrap_or_default();
+    apply_global_icp(command, &mut tail, global_icp);
+    apply_global_network(command, &mut tail, global_network);
+    let tail = tail.into_iter();
 
     match command {
         "backup" => backup::run(tail).map_err(CliError::from),
@@ -314,6 +327,8 @@ pub fn top_level_command() -> Command {
                 .action(ArgAction::SetTrue)
                 .help("Print version"),
         )
+        .arg(icp_arg().global(true))
+        .arg(network_arg().global(true))
         .subcommand_help_heading("Commands")
         .help_template(TOP_LEVEL_HELP_TEMPLATE)
         .before_help(grouped_command_section(COMMAND_SPECS).join("\n"))
@@ -334,6 +349,9 @@ fn top_level_dispatch_command() -> Command {
                 .long("version")
                 .action(ArgAction::SetTrue),
         );
+    let command = command
+        .arg(icp_arg().global(true))
+        .arg(network_arg().global(true));
 
     COMMAND_SPECS.iter().fold(command, |command, spec| {
         command.subcommand(
@@ -346,6 +364,92 @@ fn top_level_dispatch_command() -> Command {
             ),
         )
     })
+}
+
+fn command_local_global_option(args: &[OsString]) -> Option<&'static str> {
+    let mut index = 0;
+    while index < args.len() {
+        let arg = args[index].to_str()?;
+        if COMMAND_SPECS.iter().any(|spec| spec.name == arg) {
+            return args[index + 1..]
+                .iter()
+                .filter_map(|arg| arg.to_str())
+                .find_map(global_option_name);
+        }
+        index += if matches!(arg, "--icp" | "--network") {
+            2
+        } else {
+            1
+        };
+    }
+    None
+}
+
+fn global_option_name(arg: &str) -> Option<&'static str> {
+    match arg {
+        "--icp" => Some("--icp"),
+        "--network" => Some("--network"),
+        _ if arg.starts_with("--icp=") => Some("--icp"),
+        _ if arg.starts_with("--network=") => Some("--network"),
+        _ => None,
+    }
+}
+
+fn apply_global_icp(command: &str, tail: &mut Vec<OsString>, global_icp: Option<String>) {
+    let Some(global_icp) = global_icp else {
+        return;
+    };
+    if tail_has_option(tail, INTERNAL_ICP_OPTION) {
+        return;
+    }
+    if !command_accepts_global_icp(command, tail) {
+        return;
+    }
+
+    tail.push(OsString::from(INTERNAL_ICP_OPTION));
+    tail.push(OsString::from(global_icp));
+}
+
+fn apply_global_network(command: &str, tail: &mut Vec<OsString>, global_network: Option<String>) {
+    let Some(global_network) = global_network else {
+        return;
+    };
+    if tail_has_option(tail, INTERNAL_NETWORK_OPTION) {
+        return;
+    }
+    if !command_accepts_global_network(command, tail) {
+        return;
+    }
+
+    tail.push(OsString::from(INTERNAL_NETWORK_OPTION));
+    tail.push(OsString::from(global_network));
+}
+
+fn command_accepts_global_icp(command: &str, tail: &[OsString]) -> bool {
+    match command {
+        "endpoints" | "list" | "medic" | "status" => true,
+        "replica" => matches!(
+            tail.first().and_then(|arg| arg.to_str()),
+            Some("start" | "status" | "stop")
+        ),
+        "snapshot" => tail.first().and_then(|arg| arg.to_str()) == Some("download"),
+        "restore" => tail.first().and_then(|arg| arg.to_str()) == Some("run"),
+        _ => false,
+    }
+}
+
+fn command_accepts_global_network(command: &str, tail: &[OsString]) -> bool {
+    match command {
+        "endpoints" | "install" | "list" | "medic" | "status" => true,
+        "fleet" => tail.first().and_then(|arg| arg.to_str()) == Some("list"),
+        "snapshot" => tail.first().and_then(|arg| arg.to_str()) == Some("download"),
+        "restore" => tail.first().and_then(|arg| arg.to_str()) == Some("run"),
+        _ => false,
+    }
+}
+
+fn tail_has_option(tail: &[OsString], name: &str) -> bool {
+    tail.iter().any(|arg| arg.to_str() == Some(name))
 }
 
 #[must_use]
@@ -368,6 +472,8 @@ fn usage() -> String {
     lines.extend([
         String::new(),
         color(COLOR_HEADING, "Options:"),
+        "      --icp <path>      Path to the icp executable for ICP-backed commands".to_string(),
+        "      --network <name>  ICP CLI network for networked commands".to_string(),
         "  -V, --version  Print version".to_string(),
         "  -h, --help     Print help".to_string(),
         String::new(),
@@ -435,6 +541,8 @@ mod tests {
         assert!(plain.find("    config") < plain.find("    list"));
         assert!(plain.find("    list") < plain.find("    endpoints"));
         assert!(plain.contains("Options:"));
+        assert!(plain.contains("--icp <path>"));
+        assert!(plain.contains("--network <name>"));
         assert!(!plain.contains("    scaffold"));
         assert!(plain.contains("config"));
         assert!(plain.contains("list"));
@@ -554,6 +662,175 @@ mod tests {
             ])
             .is_ok()
         );
+    }
+
+    #[test]
+    fn global_icp_is_forwarded_to_commands_that_use_icp() {
+        let mut tail = vec![OsString::from("test")];
+
+        apply_global_icp("medic", &mut tail, Some("/tmp/icp".to_string()));
+
+        assert_eq!(
+            tail,
+            vec![
+                OsString::from("test"),
+                OsString::from(INTERNAL_ICP_OPTION),
+                OsString::from("/tmp/icp")
+            ]
+        );
+    }
+
+    #[test]
+    fn global_icp_does_not_override_internal_forwarded_icp() {
+        let mut tail = vec![
+            OsString::from("test"),
+            OsString::from(INTERNAL_ICP_OPTION),
+            OsString::from("/bin/icp"),
+        ];
+
+        apply_global_icp("medic", &mut tail, Some("/tmp/icp".to_string()));
+
+        assert_eq!(
+            tail,
+            vec![
+                OsString::from("test"),
+                OsString::from(INTERNAL_ICP_OPTION),
+                OsString::from("/bin/icp")
+            ]
+        );
+    }
+
+    #[test]
+    fn global_icp_is_forwarded_only_to_restore_run() {
+        let mut plan_tail = vec![OsString::from("plan")];
+        let mut run_tail = vec![OsString::from("run")];
+
+        apply_global_icp("restore", &mut plan_tail, Some("/tmp/icp".to_string()));
+        apply_global_icp("restore", &mut run_tail, Some("/tmp/icp".to_string()));
+
+        assert_eq!(plan_tail, vec![OsString::from("plan")]);
+        assert_eq!(
+            run_tail,
+            vec![
+                OsString::from("run"),
+                OsString::from(INTERNAL_ICP_OPTION),
+                OsString::from("/tmp/icp")
+            ]
+        );
+    }
+
+    #[test]
+    fn global_icp_is_forwarded_only_to_replica_leaf_commands() {
+        let mut family_tail = Vec::new();
+        let mut start_tail = vec![OsString::from("start")];
+
+        apply_global_icp("replica", &mut family_tail, Some("/tmp/icp".to_string()));
+        apply_global_icp("replica", &mut start_tail, Some("/tmp/icp".to_string()));
+
+        assert!(family_tail.is_empty());
+        assert_eq!(
+            start_tail,
+            vec![
+                OsString::from("start"),
+                OsString::from(INTERNAL_ICP_OPTION),
+                OsString::from("/tmp/icp")
+            ]
+        );
+    }
+
+    #[test]
+    fn global_network_is_forwarded_to_commands_that_use_network() {
+        let mut tail = vec![OsString::from("test")];
+
+        apply_global_network("install", &mut tail, Some("ic".to_string()));
+
+        assert_eq!(
+            tail,
+            vec![
+                OsString::from("test"),
+                OsString::from(INTERNAL_NETWORK_OPTION),
+                OsString::from("ic")
+            ]
+        );
+    }
+
+    #[test]
+    fn global_network_does_not_override_internal_forwarded_network() {
+        let mut tail = vec![
+            OsString::from("test"),
+            OsString::from(INTERNAL_NETWORK_OPTION),
+            OsString::from("local"),
+        ];
+
+        apply_global_network("install", &mut tail, Some("ic".to_string()));
+
+        assert_eq!(
+            tail,
+            vec![
+                OsString::from("test"),
+                OsString::from(INTERNAL_NETWORK_OPTION),
+                OsString::from("local")
+            ]
+        );
+    }
+
+    #[test]
+    fn global_network_is_forwarded_only_to_restore_run() {
+        let mut plan_tail = vec![OsString::from("plan")];
+        let mut run_tail = vec![OsString::from("run")];
+
+        apply_global_network("restore", &mut plan_tail, Some("ic".to_string()));
+        apply_global_network("restore", &mut run_tail, Some("ic".to_string()));
+
+        assert_eq!(plan_tail, vec![OsString::from("plan")]);
+        assert_eq!(
+            run_tail,
+            vec![
+                OsString::from("run"),
+                OsString::from(INTERNAL_NETWORK_OPTION),
+                OsString::from("ic")
+            ]
+        );
+    }
+
+    #[test]
+    fn global_network_is_forwarded_only_to_fleet_list() {
+        let mut create_tail = vec![OsString::from("create")];
+        let mut list_tail = vec![OsString::from("list")];
+
+        apply_global_network("fleet", &mut create_tail, Some("local".to_string()));
+        apply_global_network("fleet", &mut list_tail, Some("local".to_string()));
+
+        assert_eq!(create_tail, vec![OsString::from("create")]);
+        assert_eq!(
+            list_tail,
+            vec![
+                OsString::from("list"),
+                OsString::from(INTERNAL_NETWORK_OPTION),
+                OsString::from("local")
+            ]
+        );
+    }
+
+    #[test]
+    fn command_local_global_options_are_hard_rejected() {
+        assert!(matches!(
+            run([
+                OsString::from("status"),
+                OsString::from("--network"),
+                OsString::from("local")
+            ]),
+            Err(CliError::Usage(_))
+        ));
+        assert!(matches!(
+            run([
+                OsString::from("medic"),
+                OsString::from("test"),
+                OsString::from("--icp"),
+                OsString::from("icp")
+            ]),
+            Err(CliError::Usage(_))
+        ));
     }
 
     // Remove ANSI color sequences so tests can assert help structure.

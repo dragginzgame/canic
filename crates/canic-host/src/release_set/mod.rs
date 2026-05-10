@@ -8,10 +8,11 @@ mod paths;
 mod stage;
 
 pub use config::{
-    configured_fleet_name, configured_fleet_roles, configured_install_targets,
-    configured_local_root_create_cycles, configured_release_roles, configured_role_auto_create,
-    configured_role_capabilities, configured_role_details, configured_role_kinds,
-    configured_role_metrics_profiles, configured_role_topups, matching_fleet_config_paths,
+    configured_bootstrap_roles, configured_fleet_name, configured_fleet_roles,
+    configured_install_targets, configured_local_root_create_cycles, configured_release_roles,
+    configured_role_auto_create, configured_role_capabilities, configured_role_details,
+    configured_role_kinds, configured_role_metrics_profiles, configured_role_topups,
+    matching_fleet_config_paths,
 };
 pub use manifest::{
     ReleaseSetEntry, RootReleaseSetManifest, emit_root_release_set_manifest,
@@ -32,11 +33,12 @@ use stage::read_release_artifact;
 
 #[cfg(test)]
 use config::{
-    configured_fleet_name_from_source, configured_fleet_roles_from_source,
-    configured_local_root_create_cycles_from_source, configured_release_roles_from_source,
-    configured_role_auto_create_from_source, configured_role_capabilities_from_source,
-    configured_role_details_from_source, configured_role_kinds_from_source,
-    configured_role_metrics_profiles_from_source, configured_role_topups_from_source,
+    configured_bootstrap_roles_from_source, configured_fleet_name_from_source,
+    configured_fleet_roles_from_source, configured_local_root_create_cycles_from_source,
+    configured_release_roles_from_source, configured_role_auto_create_from_source,
+    configured_role_capabilities_from_source, configured_role_details_from_source,
+    configured_role_kinds_from_source, configured_role_metrics_profiles_from_source,
+    configured_role_topups_from_source,
 };
 
 pub(super) const CANISTERS_ROOT_RELATIVE: &str = "fleets";
@@ -59,7 +61,8 @@ pub(super) fn root_time_secs(root_canister: &str) -> Result<u64, Box<dyn std::er
 #[cfg(test)]
 mod tests {
     use super::{
-        canister_manifest_path, canisters_root, config_path, configured_fleet_name_from_source,
+        canister_manifest_path, canisters_root, config_path,
+        configured_bootstrap_roles_from_source, configured_fleet_name_from_source,
         configured_fleet_roles_from_source, configured_install_targets,
         configured_local_root_create_cycles_from_source, configured_release_roles_from_source,
         configured_role_auto_create_from_source, configured_role_capabilities_from_source,
@@ -409,7 +412,7 @@ topup_policy.amount = "4T"
 
         assert_eq!(
             topups.get("scale_hub").map(String::as_str),
-            Some("4.0TC @ 10.0TC")
+            Some("4.00 TC @ 10.00 TC")
         );
         assert!(!topups.contains_key("root"));
     }
@@ -474,6 +477,56 @@ kind = "singleton"
         assert!(auto_create.contains("app"));
         assert!(auto_create.contains("user_hub"));
         assert!(!auto_create.contains("root"));
+    }
+
+    #[test]
+    fn configured_bootstrap_roles_include_only_bootstrap_obligations() {
+        let config = r#"
+controllers = []
+app_index = []
+
+[fleet]
+name = "demo"
+
+[app]
+init_mode = "enabled"
+[app.whitelist]
+
+[subnets.prime]
+auto_create = ["app", "user_hub"]
+
+[subnets.prime.canisters.root]
+kind = "root"
+
+[subnets.prime.canisters.app]
+kind = "singleton"
+
+[subnets.prime.canisters.user_hub]
+kind = "singleton"
+
+[subnets.prime.canisters.user_hub.sharding.pools.user_shards]
+canister_role = "user_shard"
+policy.capacity = 100
+policy.initial_shards = 1
+policy.max_shards = 4
+
+[subnets.prime.canisters.user_shard]
+kind = "shard"
+
+[subnets.prime.canisters.minimal]
+kind = "replica"
+"#;
+        let roles = configured_bootstrap_roles_from_source(config).expect("bootstrap roles");
+
+        assert_eq!(
+            roles,
+            vec![
+                "root".to_string(),
+                "app".to_string(),
+                "user_hub".to_string(),
+                "user_shard".to_string()
+            ]
+        );
     }
 
     #[test]
