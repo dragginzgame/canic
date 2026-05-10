@@ -13,13 +13,6 @@ canisters:
           commands:
             - scripts/app/build.sh app
 
-  - name: minimal
-    build:
-      steps:
-        - type: script
-          commands:
-            - scripts/app/build.sh minimal
-
   - name: user_hub
     build:
       steps:
