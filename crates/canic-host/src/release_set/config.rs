@@ -16,7 +16,7 @@ enum RootSubnetRoleScope {
 }
 
 const DEFAULT_INITIAL_CYCLES: u128 = 5_000_000_000_000;
-const LOCAL_ROOT_BOOTSTRAP_RESERVE_CYCLES: u128 = 50_000_000_000_000;
+pub const LOCAL_ROOT_MIN_READY_CYCLES: u128 = 100_000_000_000_000;
 const DEFAULT_RANDOMNESS_RESEED_INTERVAL_SECS: u64 = 3600;
 
 impl RootSubnetRoleScope {
@@ -316,7 +316,7 @@ pub(super) fn configured_local_root_create_cycles_from_source(
         u128::from(subnet.pool.minimum_size).saturating_mul(DEFAULT_INITIAL_CYCLES),
     );
 
-    Ok(cycles.saturating_add(LOCAL_ROOT_BOOTSTRAP_RESERVE_CYCLES))
+    Ok(cycles.saturating_add(LOCAL_ROOT_MIN_READY_CYCLES))
 }
 
 // Enumerate verbose configured details from raw config source.

@@ -8,11 +8,11 @@ mod paths;
 mod stage;
 
 pub use config::{
-    configured_bootstrap_roles, configured_fleet_name, configured_fleet_roles,
-    configured_install_targets, configured_local_root_create_cycles, configured_release_roles,
-    configured_role_auto_create, configured_role_capabilities, configured_role_details,
-    configured_role_kinds, configured_role_metrics_profiles, configured_role_topups,
-    matching_fleet_config_paths,
+    LOCAL_ROOT_MIN_READY_CYCLES, configured_bootstrap_roles, configured_fleet_name,
+    configured_fleet_roles, configured_install_targets, configured_local_root_create_cycles,
+    configured_release_roles, configured_role_auto_create, configured_role_capabilities,
+    configured_role_details, configured_role_kinds, configured_role_metrics_profiles,
+    configured_role_topups, matching_fleet_config_paths,
 };
 pub use manifest::{
     ReleaseSetEntry, RootReleaseSetManifest, emit_root_release_set_manifest,
@@ -443,7 +443,7 @@ kind = "singleton"
 
         let cycles = configured_local_root_create_cycles_from_source(config).expect("cycles");
 
-        assert_eq!(cycles, 77_000_000_000_000);
+        assert_eq!(cycles, 127_000_000_000_000);
     }
 
     #[test]

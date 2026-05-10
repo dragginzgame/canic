@@ -6,6 +6,7 @@
 | --- | --- | --- | --- | --- | --- |
 | `module-structure.md` | Recurring system | facade/core/control-plane/memory/testkit/operator crates, fleets, test/audit/sandbox canisters | `7e0ec893` plus current 0.33.5 cleanup worktree | dirty | complete |
 | `dependency-hygiene.md` | Recurring system | workspace manifests, published/support crates, operator crates, fleets, test/audit/sandbox canisters | `d6ea5e3b` | dirty | complete |
+| `change-friction.md` | Recurring system | 0.33.x feature slices across runtime, operator crates, fleets, canisters, ICP config, scripts, and docs | `0aef61ed` plus current 0.33.7 metadata/list worktree | dirty | complete |
 
 ## Risk Index Summary
 
@@ -13,6 +14,7 @@
 | --- | ---: | --- |
 | `module-structure.md` | 3 / 10 | No high or critical structural violation was confirmed. The stale core provisioning/IC-management, facade macro/build, and control-plane release publication hotspots were split; remaining risk is mostly control-plane fleet/lifecycle and host phase-file containment. |
 | `dependency-hygiene.md` | 2 / 10 | No high or critical dependency hygiene violation was confirmed. The host and CLI package graphs were narrowed off the canister facade, leaving mostly intentional facade/support-package pressure. |
+| `change-friction.md` | 5 / 10 | Change friction is materially higher than the April baseline because 0.33 hard-cut slices touch many operator, host, runtime, fleet, docs, and CI surfaces. No cross-layer leakage was confirmed. |
 
 ## Method / Comparability Notes
 
@@ -24,6 +26,10 @@
 - The dependency-hygiene run is marked non-comparable with the April baseline
   because the 0.33 package graph added published operator crates and replaced
   older installer/proc-macro package names in the audited surface.
+- `change-friction.md` uses `change-friction-v4.1`.
+- The change-friction run is marked partially comparable with the April
+  baseline because the method is unchanged but the active 0.33 line is a broad
+  DFX-to-ICP CLI hard cut rather than a routine runtime/testkit slice set.
 
 ## Key Findings by Severity
 
@@ -43,6 +49,10 @@
 - `canic-cli`, `canic-host`, and `canic-backup` are now published package
   surfaces. Their dependency direction is clean, but CLI/host/backup ownership
   boundaries need continued discipline.
+- 0.33 change friction is elevated: sampled committed slices touch `46` to
+  `88` files, averaging `69.4` files versus `19.25` in the April baseline.
+- `canic-cli` list/status/install paths and `canic-host` install/release-set
+  paths are the main repeat-touch operator hubs after the hard cut.
 
 ### Low
 
@@ -71,6 +81,8 @@
 - `canic-cli` now depends on `canic-core`, `canic-host`, and `canic-backup`,
   without linking the `canic` facade.
 - `canic-backup` stays independent of `canic`, `canic-host`, and `canic-cli`.
+- No sampled 0.33 change-friction slice showed a crate cycle, host-to-CLI
+  reverse edge, or policy/storage/platform layering breach.
 
 ## Verification Rollup
 
@@ -78,6 +90,7 @@
 | --- | ---: | ---: | ---: | --- |
 | `module-structure.md` | 8 | 0 | 0 | Definition/baseline review, root surface scan, manifest/metadata scan, hub-size scan, cross-layer import scan, test/fleet/audit seam scan, and package build check passed. |
 | `dependency-hygiene.md` | 8 | 0 | 0 | Definition/baseline review, metadata scan, direct manifest inspection, internal seam grep, feature scan, focused `cargo tree` checks, and operator package check passed. |
+| `change-friction.md` | 9 | 0 | 0 | Definition/baseline review, recent git-log sampling, five sampled `git show` slices, dirty-worktree scan, and hotspot line-count scan passed. |
 
 ## Follow-up Actions
 
@@ -96,3 +109,8 @@
    unless a future facade dependency is deliberately justified.
 7. Package maintainers: keep all fleets and test/audit/sandbox canisters
    explicitly unpublished.
+8. Operator maintainers: keep routine post-hard-cut command changes narrower
+   than the broad 0.33 release sweeps by deciding early whether the behavior
+   belongs to CLI UX, host mechanics, or backup domain logic.
+9. CLI maintainers: split or isolate `list` responsibilities before adding more
+   live projection columns, fallback logic, or rendering modes.

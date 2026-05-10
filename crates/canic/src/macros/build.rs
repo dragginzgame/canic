@@ -132,8 +132,8 @@ macro_rules! __canic_build_internal {
         println!("cargo:rustc-check-cfg=cfg(canic_is_root)");
         println!("cargo:rustc-check-cfg=cfg(canic_has_scaling)");
         println!("cargo:rustc-check-cfg=cfg(canic_has_sharding)");
-        println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_standards_icrc)");
-        println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_standards_canic)");
+        println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_icrc_standards)");
+        println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_metadata)");
         println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_observability_memory)");
         println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_observability_env)");
         println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_observability_log)");

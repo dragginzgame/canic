@@ -84,3 +84,8 @@ May has day summaries for the currently recorded audit days.
     unless a future facade dependency is deliberately justified.
 27. Package maintainers: keep all fleets and test/audit/sandbox canisters
     explicitly unpublished.
+28. Operator maintainers: keep routine post-hard-cut command changes narrower
+    than the broad 0.33 release sweeps by deciding early whether the behavior
+    belongs to CLI UX, host mechanics, or backup domain logic.
+29. CLI maintainers: split or isolate `list` responsibilities before adding
+    more live projection columns, fallback logic, or rendering modes.

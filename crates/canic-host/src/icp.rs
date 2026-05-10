@@ -237,8 +237,9 @@ impl IcpCli {
     pub fn snapshot_create(&self, canister: &str) -> Result<String, IcpCommandError> {
         let mut command = self.canister_command();
         command.args(["snapshot", "create", canister]);
+        command.arg("--quiet");
         self.add_target_args(&mut command);
-        run_output_with_stderr(&mut command)
+        run_output(&mut command)
     }
 
     /// Create one canister snapshot and resolve the resulting snapshot id.
@@ -273,7 +274,6 @@ impl IcpCli {
         let mut command = self.canister_command();
         command.args(["snapshot", "download", canister, snapshot_id, "--output"]);
         command.arg(artifact_path);
-        command.arg("--resume");
         self.add_target_args(&mut command);
         run_status(&mut command)
     }
@@ -309,6 +309,7 @@ impl IcpCli {
     pub fn snapshot_create_display(&self, canister: &str) -> String {
         let mut command = self.canister_command();
         command.args(["snapshot", "create", canister]);
+        command.arg("--quiet");
         self.add_target_args(&mut command);
         command_display(&command)
     }
@@ -324,7 +325,6 @@ impl IcpCli {
         let mut command = self.canister_command();
         command.args(["snapshot", "download", canister, snapshot_id, "--output"]);
         command.arg(artifact_path);
-        command.arg("--resume");
         self.add_target_args(&mut command);
         command_display(&command)
     }
@@ -498,15 +498,25 @@ pub fn command_display(command: &Command) -> String {
 /// Parse a likely snapshot id from `icp canister snapshot create` output.
 #[must_use]
 pub fn parse_snapshot_id(output: &str) -> Option<String> {
+    let trimmed = output.trim();
+    if is_snapshot_id_token(trimmed) {
+        return Some(trimmed.to_string());
+    }
+
     output
-        .split(|c: char| c.is_whitespace() || matches!(c, '"' | '\'' | ':' | ','))
-        .filter(|part| !part.is_empty())
-        .rev()
-        .find(|part| {
-            part.chars()
-                .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
+        .lines()
+        .flat_map(|line| {
+            line.split(|c: char| c.is_whitespace() || matches!(c, '"' | '\'' | ':' | ','))
         })
+        .find(|part| is_snapshot_id_token(part))
         .map(str::to_string)
+}
+
+// ICP snapshot ids are rendered as even-length hexadecimal blobs.
+fn is_snapshot_id_token(value: &str) -> bool {
+    !value.is_empty()
+        && value.len().is_multiple_of(2)
+        && value.chars().all(|c| c.is_ascii_hexdigit())
 }
 
 // Prefer stderr, but keep stdout diagnostics for CLI commands that report there.
@@ -537,7 +547,7 @@ mod tests {
 
         assert_eq!(
             icp.snapshot_download_display("root", "snap-1", Path::new("backups/root")),
-            "icp canister snapshot download root snap-1 --output backups/root --resume -e staging"
+            "icp canister snapshot download root snap-1 --output backups/root -e staging"
         );
     }
 
@@ -548,7 +558,7 @@ mod tests {
 
         assert_eq!(
             icp.snapshot_create_display("aaaaa-aa"),
-            "icp canister snapshot create aaaaa-aa -n ic"
+            "icp canister snapshot create aaaaa-aa --quiet -n ic"
         );
     }
 
@@ -605,8 +615,21 @@ mod tests {
     // Ensure snapshot ids can be extracted from common create output.
     #[test]
     fn parses_snapshot_id_from_output() {
-        let snapshot_id = parse_snapshot_id("Created snapshot: snap_abc-123\n");
+        let snapshot_id = parse_snapshot_id("Created snapshot: 0a0b0c0d\n");
 
-        assert_eq!(snapshot_id.as_deref(), Some("snap_abc-123"));
+        assert_eq!(snapshot_id.as_deref(), Some("0a0b0c0d"));
+    }
+
+    // Ensure table units are not mistaken for snapshot ids.
+    #[test]
+    fn parses_snapshot_id_from_table_output() {
+        let output = "\
+ID         SIZE       CREATED_AT
+0a0b0c0d   1.37 MiB   2026-05-10T17:04:19Z
+";
+
+        let snapshot_id = parse_snapshot_id(output);
+
+        assert_eq!(snapshot_id.as_deref(), Some("0a0b0c0d"));
     }
 }

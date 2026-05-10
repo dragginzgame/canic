@@ -1,9 +1,9 @@
 use crate::icp;
 use crate::release_set::{
-    configured_fleet_name, configured_install_targets, configured_local_root_create_cycles,
-    emit_root_release_set_manifest_with_config, icp_call_on_network, icp_root,
-    load_root_release_set_manifest, resolve_artifact_root, resume_root_bootstrap,
-    stage_root_release_set, workspace_root,
+    LOCAL_ROOT_MIN_READY_CYCLES, configured_fleet_name, configured_install_targets,
+    configured_local_root_create_cycles, emit_root_release_set_manifest_with_config,
+    icp_call_on_network, icp_root, load_root_release_set_manifest, resolve_artifact_root,
+    resume_root_bootstrap, stage_root_release_set, workspace_root,
 };
 use canic_core::{cdk::types::Principal, protocol};
 use config_selection::resolve_install_config_path;
@@ -68,9 +68,11 @@ struct InstallTimingSummary {
     build_all: Duration,
     emit_manifest: Duration,
     install_root: Duration,
+    fund_root: Duration,
     stage_release_set: Duration,
     resume_bootstrap: Duration,
     wait_ready: Duration,
+    finalize_root_funding: Duration,
 }
 
 const LOCAL_ICP_READY_TIMEOUT_SECONDS: u64 = 30;
@@ -135,20 +137,17 @@ pub fn install_root(options: InstallRootOptions) -> Result<(), Box<dyn std::erro
     let root_wasm = resolve_artifact_root(&icp_root, &options.network)?
         .join(&options.root_build_target)
         .join(format!("{}.wasm", options.root_build_target));
-    let mut install = icp_canister_command_in_network(&icp_root);
-    install.args([
-        "install",
-        &options.root_canister,
-        "--mode=reinstall",
-        "-y",
-        "--wasm",
-    ]);
-    install.arg(&root_wasm);
-    install.args(["--args", "(variant { Prime })"]);
-    add_icp_environment_target(&mut install, &options.network);
     let install_started_at = Instant::now();
-    run_command(&mut install)?;
+    reinstall_root_wasm(
+        &icp_root,
+        &options.network,
+        &options.root_canister,
+        &root_wasm,
+    )?;
     timings.install_root = install_started_at.elapsed();
+    let fund_root_started_at = Instant::now();
+    ensure_local_root_min_cycles(&icp_root, &options.network, &options.root_canister)?;
+    timings.fund_root = fund_root_started_at.elapsed();
 
     let manifest = load_root_release_set_manifest(&manifest_path)?;
     let stage_started_at = Instant::now();
@@ -173,6 +172,9 @@ pub fn install_root(options: InstallRootOptions) -> Result<(), Box<dyn std::erro
         print_install_timing_summary(&timings, total_started_at.elapsed());
         return Err(err);
     }
+    let finalize_funding_started_at = Instant::now();
+    ensure_local_root_min_cycles(&icp_root, &options.network, &options.root_canister)?;
+    timings.finalize_root_funding = finalize_funding_started_at.elapsed();
 
     print_install_timing_summary(&timings, total_started_at.elapsed());
     let state = build_install_state(
@@ -204,6 +206,20 @@ fn validate_expected_fleet_name(
         config_path.display()
     )
     .into())
+}
+
+fn reinstall_root_wasm(
+    icp_root: &Path,
+    network: &str,
+    root_canister: &str,
+    root_wasm: &Path,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let mut install = icp_canister_command_in_network(icp_root);
+    install.args(["install", root_canister, "--mode=reinstall", "-y", "--wasm"]);
+    install.arg(root_wasm);
+    install.args(["--args", "(variant { Prime })"]);
+    add_icp_environment_target(&mut install, network);
+    run_command(&mut install)
 }
 
 // Build the persisted project-local install state from a completed install.
@@ -336,6 +352,76 @@ fn add_local_root_create_cycles_arg(
     let cycles = configured_local_root_create_cycles(config_path)?;
     command.args(["--cycles", &cycles.to_string()]);
     Ok(())
+}
+
+fn ensure_local_root_min_cycles(
+    icp_root: &Path,
+    network: &str,
+    root_canister: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    if network != "local" {
+        return Ok(());
+    }
+
+    let current = query_root_cycle_balance(network, root_canister)?;
+    if current >= LOCAL_ROOT_MIN_READY_CYCLES {
+        return Ok(());
+    }
+
+    let amount = LOCAL_ROOT_MIN_READY_CYCLES.saturating_sub(current);
+    let mut command = icp_canister_command_in_network(icp_root);
+    command
+        .args(["top-up", "--amount"])
+        .arg(amount.to_string())
+        .arg(root_canister);
+    add_icp_environment_target(&mut command, network);
+    run_command(&mut command)?;
+    println!(
+        "Topped up local root from {} to at least {}",
+        crate::format::cycles_tc(current),
+        crate::format::cycles_tc(LOCAL_ROOT_MIN_READY_CYCLES)
+    );
+    Ok(())
+}
+
+fn query_root_cycle_balance(
+    network: &str,
+    root_canister: &str,
+) -> Result<u128, Box<dyn std::error::Error>> {
+    let output = icp_call_on_network(
+        network,
+        root_canister,
+        protocol::CANIC_CYCLE_BALANCE,
+        None,
+        None,
+    )?;
+    parse_cycle_balance_response(&output).ok_or_else(|| {
+        format!(
+            "could not parse {root_canister} {} response: {output}",
+            protocol::CANIC_CYCLE_BALANCE
+        )
+        .into()
+    })
+}
+
+fn parse_cycle_balance_response(output: &str) -> Option<u128> {
+    output
+        .split_once('=')
+        .map_or(output, |(_, cycles)| cycles)
+        .lines()
+        .find_map(parse_leading_integer)
+}
+
+fn parse_leading_integer(line: &str) -> Option<u128> {
+    let digits = line
+        .trim_start_matches(|ch: char| ch == '(' || ch.is_whitespace())
+        .chars()
+        .take_while(|ch| ch.is_ascii_digit() || *ch == '_' || *ch == ',')
+        .filter(char::is_ascii_digit)
+        .collect::<String>();
+    (!digits.is_empty())
+        .then_some(digits)
+        .and_then(|digits| digits.parse::<u128>().ok())
 }
 
 fn progress_bar(current: usize, total: usize, width: usize) -> String {
@@ -662,9 +748,11 @@ fn print_install_timing_summary(timings: &InstallTimingSummary, total: Duration)
     print_timing_row("build_all", timings.build_all);
     print_timing_row("emit_manifest", timings.emit_manifest);
     print_timing_row("install_root", timings.install_root);
+    print_timing_row("fund_root", timings.fund_root);
     print_timing_row("stage_release_set", timings.stage_release_set);
     print_timing_row("resume_bootstrap", timings.resume_bootstrap);
     print_timing_row("wait_ready", timings.wait_ready);
+    print_timing_row("finalize_root_funding", timings.finalize_root_funding);
     print_timing_row("total", total);
 }
 

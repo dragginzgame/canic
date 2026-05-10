@@ -10,6 +10,7 @@ pub(super) const TOPUP_HEADER: &str = "TOPUP";
 pub(super) const METRICS_HEADER: &str = "METRICS";
 pub(super) const CANISTER_HEADER: &str = "CANISTER_ID";
 pub(super) const READY_HEADER: &str = "READY";
+pub(super) const CANIC_HEADER: &str = "CANIC";
 pub(super) const WASM_HEADER: &str = "WASM_GZ";
 pub(super) const CYCLES_HEADER: &str = "CYCLES";
 const LIST_COLUMN_GAP: &str = "   ";
@@ -56,16 +57,25 @@ impl ReadyStatus {
     }
 }
 
+///
+/// RegistryColumnData
+///
+
+pub(super) struct RegistryColumnData<'a> {
+    pub(super) readiness: &'a BTreeMap<String, ReadyStatus>,
+    pub(super) canic_versions: &'a BTreeMap<String, String>,
+    pub(super) wasm_sizes: &'a BTreeMap<String, String>,
+    pub(super) cycles: &'a BTreeMap<String, String>,
+}
+
 /// Render all registry entries, or one selected subtree, as a whitespace table.
 pub(super) fn render_registry_tree(
     registry: &[RegistryEntry],
     canister: Option<&str>,
-    readiness: &BTreeMap<String, ReadyStatus>,
-    wasm_sizes: &BTreeMap<String, String>,
-    cycles: &BTreeMap<String, String>,
+    columns: &RegistryColumnData<'_>,
 ) -> Result<String, ListCommandError> {
     let rows = visible_rows(registry, canister)?;
-    Ok(render_registry_table(&rows, readiness, wasm_sizes, cycles))
+    Ok(render_registry_table(&rows, columns))
 }
 
 /// Render a named list view with a fleet/source title above the registry table.
@@ -73,15 +83,13 @@ pub(super) fn render_list_output(
     title: &ListTitle,
     registry: &[RegistryEntry],
     canister: Option<&str>,
-    readiness: &BTreeMap<String, ReadyStatus>,
-    wasm_sizes: &BTreeMap<String, String>,
-    cycles: &BTreeMap<String, String>,
+    columns: &RegistryColumnData<'_>,
     missing_roles: &[String],
 ) -> Result<String, ListCommandError> {
     let mut output = format!(
         "{}\n\n{}",
         title.render(),
-        render_registry_tree(registry, canister, readiness, wasm_sizes, cycles)?
+        render_registry_tree(registry, canister, columns)?
     );
     if !missing_roles.is_empty() {
         output.push_str("\n\nMissing roles: ");
@@ -309,19 +317,15 @@ fn render_config_separator(widths: &[usize; 6]) -> String {
         .join(LIST_COLUMN_GAP)
 }
 
-fn render_registry_table(
-    rows: &[RegistryRow<'_>],
-    readiness: &BTreeMap<String, ReadyStatus>,
-    wasm_sizes: &BTreeMap<String, String>,
-    cycles: &BTreeMap<String, String>,
-) -> String {
-    let table_rows = registry_table_rows(rows, readiness, wasm_sizes, cycles);
+fn render_registry_table(rows: &[RegistryRow<'_>], columns: &RegistryColumnData<'_>) -> String {
+    let table_rows = registry_table_rows(rows, columns);
     let widths = registry_table_widths(&table_rows);
     let header = render_registry_table_row(
         &[
             ROLE_HEADER,
             CANISTER_HEADER,
             READY_HEADER,
+            CANIC_HEADER,
             WASM_HEADER,
             CYCLES_HEADER,
         ],
@@ -341,23 +345,28 @@ fn render_registry_table(
 
 fn registry_table_rows(
     rows: &[RegistryRow<'_>],
-    readiness: &BTreeMap<String, ReadyStatus>,
-    wasm_sizes: &BTreeMap<String, String>,
-    cycles: &BTreeMap<String, String>,
-) -> Vec<[String; 5]> {
+    columns: &RegistryColumnData<'_>,
+) -> Vec<[String; 6]> {
     let mut table_rows = Vec::with_capacity(rows.len());
     for row in rows {
-        let ready = readiness
+        let ready = columns
+            .readiness
             .get(&row.entry.pid)
             .map_or("unknown", |status| status.label());
+        let canic_version = columns
+            .canic_versions
+            .get(&row.entry.pid)
+            .cloned()
+            .unwrap_or_else(|| "-".to_string());
         let wasm_size = row
             .entry
             .role
             .as_deref()
-            .and_then(|role| wasm_sizes.get(role))
+            .and_then(|role| columns.wasm_sizes.get(role))
             .cloned()
             .unwrap_or_else(|| "-".to_string());
-        let cycle_balance = cycles
+        let cycle_balance = columns
+            .cycles
             .get(&row.entry.pid)
             .cloned()
             .unwrap_or_else(|| "-".to_string());
@@ -365,6 +374,7 @@ fn registry_table_rows(
             role_label(row),
             canister_label(row),
             ready.to_string(),
+            canic_version,
             wasm_size,
             cycle_balance,
         ]);
@@ -372,11 +382,12 @@ fn registry_table_rows(
     table_rows
 }
 
-fn registry_table_widths(rows: &[[String; 5]]) -> [usize; 5] {
+fn registry_table_widths(rows: &[[String; 6]]) -> [usize; 6] {
     let mut widths = [
         ROLE_HEADER.chars().count(),
         CANISTER_HEADER.chars().count(),
         READY_HEADER.chars().count(),
+        CANIC_HEADER.chars().count(),
         WASM_HEADER.chars().count(),
         CYCLES_HEADER.chars().count(),
     ];
@@ -390,13 +401,13 @@ fn registry_table_widths(rows: &[[String; 5]]) -> [usize; 5] {
     widths
 }
 
-pub(super) fn render_registry_table_row(row: &[impl AsRef<str>], widths: &[usize; 5]) -> String {
+pub(super) fn render_registry_table_row(row: &[impl AsRef<str>], widths: &[usize; 6]) -> String {
     widths
         .iter()
         .enumerate()
         .map(|(index, width)| {
             let value = row.get(index).map_or("", AsRef::as_ref);
-            if matches!(index, 3 | 4) {
+            if matches!(index, 4 | 5) {
                 format!("{value:>width$}")
             } else {
                 format!("{value:<width$}")
@@ -408,7 +419,7 @@ pub(super) fn render_registry_table_row(row: &[impl AsRef<str>], widths: &[usize
         .to_string()
 }
 
-pub(super) fn render_registry_separator(widths: &[usize; 5]) -> String {
+pub(super) fn render_registry_separator(widths: &[usize; 6]) -> String {
     widths
         .iter()
         .map(|width| "-".repeat(*width))

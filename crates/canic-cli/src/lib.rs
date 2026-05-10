@@ -41,6 +41,7 @@ const DISPATCH_ARGS: &str = "args";
 enum CommandScope {
     Global,
     FleetContext,
+    BackupRestore,
     WorkspaceFiles,
 }
 
@@ -49,6 +50,7 @@ impl CommandScope {
         match self {
             Self::Global => "Global commands",
             Self::FleetContext => "Fleet commands",
+            Self::BackupRestore => "Backup and restore commands",
             Self::WorkspaceFiles => "Workspace and file commands",
         }
     }
@@ -109,26 +111,26 @@ const COMMAND_SPECS: &[CommandSpec] = &[
     CommandSpec {
         name: "snapshot",
         about: "Capture and download canister snapshots",
-        scope: CommandScope::FleetContext,
-    },
-    CommandSpec {
-        name: "build",
-        about: "Build one Canic canister artifact",
-        scope: CommandScope::WorkspaceFiles,
+        scope: CommandScope::BackupRestore,
     },
     CommandSpec {
         name: "backup",
         about: "Verify backup directories and journal status",
-        scope: CommandScope::WorkspaceFiles,
+        scope: CommandScope::BackupRestore,
     },
     CommandSpec {
         name: "manifest",
         about: "Validate fleet backup manifests",
-        scope: CommandScope::WorkspaceFiles,
+        scope: CommandScope::BackupRestore,
     },
     CommandSpec {
         name: "restore",
         about: "Plan or run snapshot restores",
+        scope: CommandScope::BackupRestore,
+    },
+    CommandSpec {
+        name: "build",
+        about: "Build one Canic canister artifact",
         scope: CommandScope::WorkspaceFiles,
     },
 ];
@@ -492,6 +494,7 @@ fn grouped_command_section(specs: &[CommandSpec]) -> Vec<String> {
     let scopes = [
         CommandScope::Global,
         CommandScope::FleetContext,
+        CommandScope::BackupRestore,
         CommandScope::WorkspaceFiles,
     ];
     for (index, scope) in scopes.into_iter().enumerate() {
@@ -533,6 +536,7 @@ mod tests {
         assert!(plain.contains("\nCommands:\n"));
         assert!(plain.contains("Global commands"));
         assert!(plain.contains("Fleet commands"));
+        assert!(plain.contains("Backup and restore commands"));
         assert!(plain.contains("Workspace and file commands"));
         assert!(plain.find("    status") < plain.find("    fleet"));
         assert!(plain.find("    fleet") < plain.find("    replica"));
@@ -540,6 +544,11 @@ mod tests {
         assert!(plain.find("    install") < plain.find("    config"));
         assert!(plain.find("    config") < plain.find("    list"));
         assert!(plain.find("    list") < plain.find("    endpoints"));
+        assert!(plain.find("    endpoints") < plain.find("    snapshot"));
+        assert!(plain.find("    snapshot") < plain.find("    backup"));
+        assert!(plain.find("    backup") < plain.find("    manifest"));
+        assert!(plain.find("    manifest") < plain.find("    restore"));
+        assert!(plain.find("    restore") < plain.find("    build"));
         assert!(plain.contains("Options:"));
         assert!(plain.contains("--icp <path>"));
         assert!(plain.contains("--network <name>"));

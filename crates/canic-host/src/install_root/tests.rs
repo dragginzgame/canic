@@ -3,9 +3,9 @@ use super::{
     add_local_root_create_cycles_arg, canic_build_target_command, config_selection_error,
     discover_canic_config_choices, fleet_install_state_path, icp_canister_command_in_network,
     icp_start_local_command, icp_stop_command, install_build_session_id,
-    parse_bootstrap_status_value, parse_local_icp_autostart, parse_root_ready_value,
-    read_fleet_install_state, resolve_install_config_path, validate_expected_fleet_name,
-    write_install_state,
+    parse_bootstrap_status_value, parse_cycle_balance_response, parse_local_icp_autostart,
+    parse_root_ready_value, read_fleet_install_state, resolve_install_config_path,
+    validate_expected_fleet_name, write_install_state,
 };
 use crate::release_set::configured_install_targets;
 use crate::test_support::temp_dir;
@@ -270,8 +270,32 @@ kind = "singleton"
             "root",
             "-q",
             "--cycles",
-            "60000000000000"
+            "110000000000000"
         ]
+    );
+}
+
+#[test]
+fn parses_root_cycle_balance_response() {
+    assert_eq!(
+        parse_cycle_balance_response("(variant { 17_724 = 4_487_280_757_485 : nat })"),
+        Some(4_487_280_757_485)
+    );
+    assert_eq!(
+        parse_cycle_balance_response(
+            r"
+(
+  variant {
+    Ok = 99_999_000_000_000 : nat;
+  },
+)
+"
+        ),
+        Some(99_999_000_000_000)
+    );
+    assert_eq!(
+        parse_cycle_balance_response("(variant { Err = record { code = 1 : nat } })"),
+        None
     );
 }
 

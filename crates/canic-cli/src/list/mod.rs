@@ -16,12 +16,13 @@ use canic_host::{
 };
 use config::{load_config_role_rows, missing_config_roles};
 use options::{ListOptions, ListSource, config_usage, usage};
+use render::RegistryColumnData;
 #[cfg(not(test))]
 use render::render_config_output;
 #[cfg(test)]
 use render::{
-    CANISTER_HEADER, CYCLES_HEADER, ConfigRoleRow, READY_HEADER, ROLE_HEADER, WASM_HEADER,
-    render_config_output, render_registry_separator, render_registry_table_row,
+    CANIC_HEADER, CANISTER_HEADER, CYCLES_HEADER, ConfigRoleRow, READY_HEADER, ROLE_HEADER,
+    WASM_HEADER, render_config_output, render_registry_separator, render_registry_table_row,
     render_registry_tree,
 };
 use render::{ListTitle, ReadyStatus, render_list_output, visible_entries};
@@ -96,19 +97,24 @@ where
     let registry = load_registry_entries(&options)?;
     let anchor = resolve_tree_anchor(&options);
     let readiness = list_ready_statuses(&options, &registry, anchor.as_deref())?;
+    let canic_versions = list_canic_versions(&options, &registry, anchor.as_deref())?;
     let wasm_sizes = resolve_wasm_sizes(&options, &registry);
     let cycles = list_cycle_balances(&options, &registry, anchor.as_deref())?;
     let missing_roles = missing_config_roles(&options, &registry);
     let title = list_title(&options);
+    let columns = RegistryColumnData {
+        readiness: &readiness,
+        canic_versions: &canic_versions,
+        wasm_sizes: &wasm_sizes,
+        cycles: &cycles,
+    };
     println!(
         "{}",
         render_list_output(
             &title,
             &registry,
             anchor.as_deref(),
-            &readiness,
-            &wasm_sizes,
-            &cycles,
+            &columns,
             &missing_roles
         )?
     );
@@ -236,6 +242,75 @@ fn query_cycle_balance_endpoint(
         .canister_call_output(canister, canic_core::protocol::CANIC_CYCLE_BALANCE, None)
         .ok()
         .and_then(|output| parse_cycle_balance_response(&output))
+}
+
+fn list_canic_versions(
+    options: &ListOptions,
+    registry: &[RegistryEntry],
+    canister: Option<&str>,
+) -> Result<BTreeMap<String, String>, ListCommandError> {
+    let icp = options.icp.clone();
+    let network = options.network.clone();
+    let mut handles = Vec::new();
+    for entry in visible_entries(registry, canister)? {
+        let pid = entry.pid.clone();
+        let icp = icp.clone();
+        let network = network.clone();
+        handles.push(thread::spawn(move || {
+            let version = query_canic_metadata_version(&icp, network, &pid);
+            (pid, version)
+        }));
+    }
+
+    Ok(handles
+        .into_iter()
+        .filter_map(|handle| {
+            let (pid, version) = handle.join().ok()?;
+            version.map(|version| (pid, version))
+        })
+        .collect())
+}
+
+fn query_canic_metadata_version(
+    icp: &str,
+    network: Option<String>,
+    canister: &str,
+) -> Option<String> {
+    IcpCli::new(icp, None, network)
+        .canister_call_output(canister, canic_core::protocol::CANIC_METADATA, None)
+        .ok()
+        .and_then(|output| parse_canic_metadata_version_response(&output))
+}
+
+fn parse_canic_metadata_version_response(output: &str) -> Option<String> {
+    serde_json::from_str::<serde_json::Value>(output)
+        .ok()
+        .and_then(|value| find_string_field(&value, "canic_version"))
+        .or_else(|| parse_candid_text_field(output, "canic_version"))
+}
+
+fn find_string_field(value: &serde_json::Value, field: &str) -> Option<String> {
+    match value {
+        serde_json::Value::Object(map) => map
+            .get(field)
+            .and_then(|value| value.as_str().map(ToString::to_string))
+            .or_else(|| {
+                map.values()
+                    .find_map(|value| find_string_field(value, field))
+            }),
+        serde_json::Value::Array(values) => values
+            .iter()
+            .find_map(|value| find_string_field(value, field)),
+        _ => None,
+    }
+}
+
+fn parse_candid_text_field(output: &str, field: &str) -> Option<String> {
+    let (_, after_field) = output.split_once(field)?;
+    let (_, after_eq) = after_field.split_once('=')?;
+    let after_quote = after_eq.trim_start().strip_prefix('"')?;
+    let (value, _) = after_quote.split_once('"')?;
+    Some(value.to_string())
 }
 
 fn parse_cycle_balance_response(output: &str) -> Option<u128> {
@@ -540,15 +615,15 @@ mod tests {
     fn renders_registry_table() {
         let registry = parse_registry_entries(&registry_json()).expect("parse registry");
         let readiness = readiness_map();
-        let tree = render_registry_tree(
-            &registry,
-            None,
-            &readiness,
-            &BTreeMap::new(),
-            &BTreeMap::new(),
-        )
-        .expect("render tree");
-        let widths = [12, 27, 5, 7, 6];
+        let empty = BTreeMap::new();
+        let columns = RegistryColumnData {
+            readiness: &readiness,
+            canic_versions: &empty,
+            wasm_sizes: &empty,
+            cycles: &empty,
+        };
+        let tree = render_registry_tree(&registry, None, &columns).expect("render tree");
+        let widths = [12, 27, 5, 5, 7, 6];
 
         assert_eq!(
             tree,
@@ -558,16 +633,20 @@ mod tests {
                         ROLE_HEADER,
                         CANISTER_HEADER,
                         READY_HEADER,
+                        CANIC_HEADER,
                         WASM_HEADER,
                         CYCLES_HEADER,
                     ],
                     &widths
                 ),
                 render_registry_separator(&widths),
-                render_registry_table_row(&["root", ROOT, "yes", "-", "-"], &widths),
-                render_registry_table_row(&["├─ app", APP, "no", "-", "-"], &widths),
-                render_registry_table_row(&["│  └─ worker", WORKER, "error", "-", "-"], &widths),
-                render_registry_table_row(&["└─ minimal", MINIMAL, "yes", "-", "-"], &widths)
+                render_registry_table_row(&["root", ROOT, "yes", "-", "-", "-"], &widths),
+                render_registry_table_row(&["├─ app", APP, "no", "-", "-", "-"], &widths),
+                render_registry_table_row(
+                    &["│  └─ worker", WORKER, "error", "-", "-", "-"],
+                    &widths
+                ),
+                render_registry_table_row(&["└─ minimal", MINIMAL, "yes", "-", "-", "-"], &widths)
             ]
             .join("\n")
         );
@@ -578,15 +657,15 @@ mod tests {
     fn renders_selected_subtree() {
         let registry = parse_registry_entries(&registry_json()).expect("parse registry");
         let readiness = readiness_map();
-        let tree = render_registry_tree(
-            &registry,
-            Some(APP),
-            &readiness,
-            &BTreeMap::new(),
-            &BTreeMap::new(),
-        )
-        .expect("render subtree");
-        let widths = [9, 27, 5, 7, 6];
+        let empty = BTreeMap::new();
+        let columns = RegistryColumnData {
+            readiness: &readiness,
+            canic_versions: &empty,
+            wasm_sizes: &empty,
+            cycles: &empty,
+        };
+        let tree = render_registry_tree(&registry, Some(APP), &columns).expect("render subtree");
+        let widths = [9, 27, 5, 5, 7, 6];
 
         assert_eq!(
             tree,
@@ -596,14 +675,15 @@ mod tests {
                         ROLE_HEADER,
                         CANISTER_HEADER,
                         READY_HEADER,
+                        CANIC_HEADER,
                         WASM_HEADER,
                         CYCLES_HEADER,
                     ],
                     &widths
                 ),
                 render_registry_separator(&widths),
-                render_registry_table_row(&["app", APP, "no", "-", "-"], &widths),
-                render_registry_table_row(&["└─ worker", WORKER, "error", "-", "-"], &widths)
+                render_registry_table_row(&["app", APP, "no", "-", "-", "-"], &widths),
+                render_registry_table_row(&["└─ worker", WORKER, "error", "-", "-", "-"], &widths)
             ]
             .join("\n")
         );
@@ -617,16 +697,16 @@ mod tests {
             fleet: "demo".to_string(),
             network: "local".to_string(),
         };
-        let output = render_list_output(
-            &title,
-            &registry,
-            Some(APP),
-            &readiness_map(),
-            &BTreeMap::new(),
-            &BTreeMap::new(),
-            &[],
-        )
-        .expect("render list output");
+        let readiness = readiness_map();
+        let empty = BTreeMap::new();
+        let columns = RegistryColumnData {
+            readiness: &readiness,
+            canic_versions: &empty,
+            wasm_sizes: &empty,
+            cycles: &empty,
+        };
+        let output = render_list_output(&title, &registry, Some(APP), &columns, &[])
+            .expect("render list output");
 
         assert!(output.starts_with("Fleet: demo (network local)\n\nROLE"));
         assert!(output.contains("CANISTER_ID"));
@@ -639,21 +719,22 @@ mod tests {
             fleet: "demo".to_string(),
             network: "local".to_string(),
         };
+        let canic_versions = BTreeMap::from([(APP.to_string(), "0.33.6".to_string())]);
         let wasm_sizes = BTreeMap::from([("app".to_string(), "811.20 KiB".to_string())]);
         let cycles = BTreeMap::from([(APP.to_string(), "12.35 TC".to_string())]);
-        let output = render_list_output(
-            &title,
-            &registry,
-            None,
-            &readiness_map(),
-            &wasm_sizes,
-            &cycles,
-            &["audit".to_string()],
-        )
-        .expect("render list output");
+        let readiness = readiness_map();
+        let columns = RegistryColumnData {
+            readiness: &readiness,
+            canic_versions: &canic_versions,
+            wasm_sizes: &wasm_sizes,
+            cycles: &cycles,
+        };
+        let output = render_list_output(&title, &registry, None, &columns, &["audit".to_string()])
+            .expect("render list output");
 
         assert!(output.contains("WASM_GZ"));
         assert!(output.contains("CYCLES"));
+        assert!(output.contains("0.33.6"));
         assert!(output.contains("811.20 KiB"));
         assert!(output.contains("12.35 TC"));
         assert!(output.contains("Missing roles: audit"));
@@ -722,6 +803,30 @@ mod tests {
             None
         );
         assert_eq!(cycles_tc(12_345_678_900_000), "12.35 TC");
+    }
+
+    // Ensure metadata responses provide the Canic framework version for list output.
+    #[test]
+    fn parses_canic_version_from_metadata_output() {
+        assert_eq!(
+            parse_canic_metadata_version_response(
+                r#"{"package_name":"app","canic_version":"0.33.6"}"#
+            ),
+            Some("0.33.6".to_string())
+        );
+        assert_eq!(
+            parse_canic_metadata_version_response(
+                r#"[{"package_name":"app","canic_version":"0.33.7"}]"#
+            ),
+            Some("0.33.7".to_string())
+        );
+        assert_eq!(
+            parse_canic_metadata_version_response(
+                r#"(record { package_name = "app"; canic_version = "0.33.8" })"#
+            ),
+            Some("0.33.8".to_string())
+        );
+        assert_eq!(parse_canic_metadata_version_response("{}"), None);
     }
 
     // Ensure readiness parsing accepts common command-line JSON shapes.

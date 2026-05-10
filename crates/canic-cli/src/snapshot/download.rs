@@ -14,6 +14,7 @@ use canic_backup::{
 use canic_host::{
     icp::{IcpCli, IcpCommandError},
     install_root::read_named_fleet_install_state,
+    replica_query,
 };
 use clap::Command as ClapCommand;
 use std::{
@@ -392,6 +393,11 @@ fn call_subnet_registry(
     request: &ResolvedSnapshotDownload,
     root: &str,
 ) -> Result<String, SnapshotCommandError> {
+    if replica_query::should_use_local_replica_query(request.network.as_deref()) {
+        return replica_query::query_subnet_registry_json(request.network.as_deref(), root)
+            .map_err(SnapshotCommandError::from);
+    }
+
     icp(request)
         .canister_call_output(root, "canic_subnet_registry", Some("json"))
         .map_err(snapshot_icp_error)

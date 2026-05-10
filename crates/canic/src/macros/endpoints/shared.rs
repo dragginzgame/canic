@@ -11,11 +11,6 @@ macro_rules! canic_emit_lifecycle_core_endpoints {
             Ok($crate::cdk::api::canister_cycle_balance())
         }
 
-        #[$crate::canic_query]
-        fn canic_canister_version() -> Result<u64, ::canic::Error> {
-            Ok($crate::cdk::api::canister_version())
-        }
-
         #[$crate::canic_query(internal)]
         fn canic_ready() -> bool {
             $crate::__internal::core::api::ready::ReadyApi::is_ready()
@@ -52,23 +47,25 @@ macro_rules! canic_emit_icrc_standards_endpoints {
 macro_rules! canic_emit_canic_metadata_endpoints {
     () => {
         #[$crate::canic_query(internal)]
-        fn canic_standards() -> ::canic::dto::standards::CanicStandardsResponse {
-            $crate::__internal::core::api::standards::CanicStandardsApi::metadata_for(
+        fn canic_metadata() -> ::canic::dto::metadata::CanicMetadataResponse {
+            $crate::__internal::core::api::metadata::CanicMetadataApi::metadata_for(
                 env!("CARGO_PKG_NAME"),
                 env!("CARGO_PKG_VERSION"),
                 env!("CARGO_PKG_DESCRIPTION"),
+                $crate::VERSION,
+                $crate::cdk::api::canister_version(),
             )
         }
     };
 }
 
-// Bundle composer for the standards-facing surface preserved by the default runtime.
+// Bundle composer for the discovery surface preserved by the default runtime.
 #[macro_export]
-macro_rules! canic_bundle_standards_endpoints {
+macro_rules! canic_bundle_discovery_endpoints {
     () => {
-        #[cfg(not(canic_disable_bundle_standards_icrc))]
+        #[cfg(not(canic_disable_bundle_icrc_standards))]
         $crate::canic_emit_icrc_standards_endpoints!();
-        #[cfg(not(canic_disable_bundle_standards_canic))]
+        #[cfg(not(canic_disable_bundle_metadata))]
         $crate::canic_emit_canic_metadata_endpoints!();
     };
 }

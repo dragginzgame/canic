@@ -5,6 +5,7 @@ use crate::{
     version_text,
 };
 use canic_backup::snapshot::SnapshotDownloadError;
+use canic_host::replica_query::ReplicaQueryError;
 use clap::Command as ClapCommand;
 use std::ffi::OsString;
 use thiserror::Error as ThisError;
@@ -37,6 +38,9 @@ pub enum SnapshotCommandError {
 
     #[error("could not parse snapshot id from icp output: {0}")]
     SnapshotIdUnavailable(String),
+
+    #[error("local replica query failed: {0}")]
+    LocalReplicaQuery(#[from] ReplicaQueryError),
 
     #[error(transparent)]
     Io(#[from] std::io::Error),

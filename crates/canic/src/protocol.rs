@@ -4,7 +4,7 @@
 /// used by orchestration code. This facade module keeps the wider convenience
 /// table for tests, tooling, and downstream callers.
 pub use canic_core::protocol::{
-    CANIC_ATTESTATION_KEY_SET, CANIC_CYCLE_BALANCE, CANIC_REQUEST_DELEGATION,
+    CANIC_ATTESTATION_KEY_SET, CANIC_CYCLE_BALANCE, CANIC_METADATA, CANIC_REQUEST_DELEGATION,
     CANIC_REQUEST_ROLE_ATTESTATION, CANIC_RESPONSE_CAPABILITY_V1, CANIC_SYNC_STATE,
     CANIC_SYNC_TOPOLOGY, CANIC_TEMPLATE_PREPARE_ADMIN, CANIC_TEMPLATE_PUBLISH_CHUNK_ADMIN,
     CANIC_TEMPLATE_STAGE_MANIFEST_ADMIN, CANIC_WASM_STORE_BEGIN_GC,
@@ -30,7 +30,6 @@ pub const CANIC_TEMPLATE_PUBLISH_TO_CURRENT_STORE_ADMIN: &str =
 pub const CANIC_WASM_STORE_ADMIN: &str = "canic_wasm_store_admin";
 pub const ICRC10_SUPPORTED_STANDARDS: &str = "icrc10_supported_standards";
 pub const ICRC21_CANISTER_CALL_CONSENT_MESSAGE: &str = "icrc21_canister_call_consent_message";
-pub const CANIC_CANISTER_VERSION: &str = "canic_canister_version";
 pub const CANIC_MEMORY_REGISTRY: &str = "canic_memory_registry";
 pub const CANIC_ENV: &str = "canic_env";
 pub const CANIC_LOG: &str = "canic_log";
@@ -45,4 +44,3 @@ pub const CANIC_CYCLE_TRACKER: &str = "canic_cycle_tracker";
 pub const CANIC_SCALING_REGISTRY: &str = "canic_scaling_registry";
 pub const CANIC_SHARDING_REGISTRY: &str = "canic_sharding_registry";
 pub const CANIC_SHARDING_PARTITION_KEYS: &str = "canic_sharding_partition_keys";
-pub const CANIC_STANDARDS: &str = "canic_standards";
