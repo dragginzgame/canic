@@ -26,6 +26,7 @@ fn backup_usage_lists_commands_without_nested_flag_dump() {
     assert!(text.contains("Usage: canic backup"));
     assert!(text.contains("create"));
     assert!(text.contains("list"));
+    assert!(text.contains("inspect"));
     assert!(text.contains("verify"));
     assert!(text.contains("status"));
 }
@@ -124,8 +125,13 @@ fn parses_backup_verify_options() {
     ])
     .expect("parse options");
 
-    assert_eq!(options.dir, PathBuf::from("backups/run"));
+    assert_eq!(options.backup_ref, None);
+    assert_eq!(options.dir, Some(PathBuf::from("backups/run")));
     assert_eq!(options.out, Some(PathBuf::from("report.json")));
+
+    let referenced = BackupVerifyOptions::parse([OsString::from("1")]).expect("parse reference");
+    assert_eq!(referenced.backup_ref, Some("1".to_string()));
+    assert_eq!(referenced.dir, None);
 }
 
 // Ensure backup status options parse the intended command shape.
@@ -140,9 +146,57 @@ fn parses_backup_status_options() {
     ])
     .expect("parse options");
 
-    assert_eq!(options.dir, PathBuf::from("backups/run"));
+    assert_eq!(options.backup_ref, None);
+    assert_eq!(options.dir, Some(PathBuf::from("backups/run")));
     assert_eq!(options.out, Some(PathBuf::from("status.json")));
     assert!(options.require_complete);
+
+    let referenced = BackupStatusOptions::parse([OsString::from("plan-demo-20260511-001234")])
+        .expect("parse reference");
+    assert_eq!(
+        referenced.backup_ref,
+        Some("plan-demo-20260511-001234".to_string())
+    );
+    assert_eq!(referenced.dir, None);
+}
+
+// Ensure backup inspect options parse the intended command shape.
+#[test]
+fn parses_backup_inspect_options() {
+    let options = BackupInspectOptions::parse([
+        OsString::from("--dir"),
+        OsString::from("backups/run"),
+        OsString::from("--out"),
+        OsString::from("inspect.txt"),
+        OsString::from("--json"),
+    ])
+    .expect("parse options");
+
+    assert_eq!(options.backup_ref, None);
+    assert_eq!(options.dir, Some(PathBuf::from("backups/run")));
+    assert_eq!(options.out, Some(PathBuf::from("inspect.txt")));
+    assert!(options.json);
+
+    let referenced =
+        BackupInspectOptions::parse([OsString::from("backup-test"), OsString::from("--json")])
+            .expect("parse reference");
+    assert_eq!(referenced.backup_ref, Some("backup-test".to_string()));
+    assert_eq!(referenced.dir, None);
+}
+
+// Ensure commands require one backup selector path, either by reference or explicit dir.
+#[test]
+fn backup_target_options_reject_missing_or_duplicate_selectors() {
+    let missing = BackupInspectOptions::parse([]).expect_err("missing selector rejects");
+    assert!(matches!(missing, BackupCommandError::Usage(_)));
+
+    let duplicate = BackupInspectOptions::parse([
+        OsString::from("1"),
+        OsString::from("--dir"),
+        OsString::from("backups/run"),
+    ])
+    .expect_err("duplicate selector rejects");
+    assert!(matches!(duplicate, BackupCommandError::Usage(_)));
 }
 
 // Ensure backup status reads the journal and reports resume actions.
@@ -155,18 +209,77 @@ fn backup_status_reads_journal_resume_report() {
         .expect("write journal");
 
     let options = BackupStatusOptions {
-        dir: root.clone(),
+        backup_ref: None,
+        dir: Some(root.clone()),
         out: None,
         require_complete: false,
     };
     let report = backup_status(&options).expect("read backup status");
 
     fs::remove_dir_all(root).expect("remove temp root");
+    let BackupStatusReport::Download(report) = report else {
+        panic!("expected download status");
+    };
     assert_eq!(report.backup_id, "backup-test");
     assert_eq!(report.total_artifacts, 1);
     assert!(report.is_complete);
     assert_eq!(report.pending_artifacts, 0);
     assert_eq!(report.counts.skip, 1);
+}
+
+// Ensure backup status can summarize dry-run plan/execution layouts.
+#[test]
+fn backup_status_reads_dry_run_execution_summary() {
+    let root = temp_dir("canic-cli-backup-status-dry-run");
+    let plan = valid_backup_plan();
+    persist_backup_create_dry_run(&root, &plan).expect("persist dry-run plan");
+
+    let options = BackupStatusOptions {
+        backup_ref: None,
+        dir: Some(root.clone()),
+        out: None,
+        require_complete: false,
+    };
+    let report = backup_status(&options).expect("read dry-run status");
+
+    fs::remove_dir_all(root).expect("remove temp root");
+    let BackupStatusReport::DryRun(report) = report else {
+        panic!("expected dry-run status");
+    };
+    assert_eq!(report.layout_status, "dry-run");
+    assert_eq!(report.plan_id, plan.plan_id);
+    assert_eq!(report.targets, 1);
+    assert_eq!(report.execution.plan_id, plan.plan_id);
+    assert!(!report.execution.preflight_accepted);
+    assert!(report.execution.blocked_operations > 0);
+}
+
+// Ensure backup inspect reads dry-run plan and execution details.
+#[test]
+fn backup_inspect_reads_dry_run_details() {
+    let root = temp_dir("canic-cli-backup-inspect-dry-run");
+    let plan = valid_backup_plan();
+    persist_backup_create_dry_run(&root, &plan).expect("persist dry-run plan");
+
+    let options = BackupInspectOptions {
+        backup_ref: None,
+        dir: Some(root.clone()),
+        out: None,
+        json: false,
+    };
+    let report = backup_inspect(&options).expect("inspect dry-run");
+    let rendered = render_inspect_report(&report);
+
+    fs::remove_dir_all(root).expect("remove temp root");
+    assert_eq!(report.layout_status, "dry-run");
+    assert_eq!(report.plan_id, plan.plan_id);
+    assert_eq!(report.targets.len(), 1);
+    assert_eq!(report.operations.len(), 10);
+    assert!(rendered.contains("Plan: plan-test"));
+    assert!(rendered.contains("Targets"));
+    assert!(rendered.contains("Operations"));
+    assert!(rendered.contains(CHILD));
+    assert!(rendered.contains("validate-topology"));
 }
 
 // Ensure backup list scans manifest-bearing directories and renders reusable paths.
@@ -216,10 +329,62 @@ fn backup_list_reads_backup_directories() {
     assert_eq!(dry_run.status, "dry-run");
     assert_eq!(dry_run.members, 1);
     assert_eq!(dry_run.created_at, "20260511-001234");
+    assert!(rendered.contains('#'));
     assert!(rendered.contains("DIR"));
+    assert!(rendered.contains(" 1"));
     assert!(rendered.contains("backup-new"));
     assert!(rendered.contains("dry-run"));
     assert!(rendered.contains("fleet-demo-20260507-130000"));
+}
+
+// Ensure short backup references resolve through the same ordering as backup list.
+#[test]
+fn backup_reference_resolves_rows_and_backup_ids() {
+    let root = temp_dir("canic-cli-backup-reference");
+    let first = root.join("fleet-demo-20260507-120000");
+    let second = root.join("fleet-demo-20260507-130000");
+
+    BackupLayout::new(first.clone())
+        .write_manifest(&valid_manifest_with("backup-old", "2026-05-07T12:00:00Z"))
+        .expect("write first manifest");
+    BackupLayout::new(second.clone())
+        .write_manifest(&valid_manifest_with("backup-new", "2026-05-07T13:00:00Z"))
+        .expect("write second manifest");
+
+    let by_row = resolve_backup_reference_in(&root, "1").expect("resolve row");
+    let by_id = resolve_backup_reference_in(&root, "backup-old").expect("resolve id");
+    let missing = resolve_backup_reference_in(&root, "99").expect_err("missing row rejects");
+
+    fs::remove_dir_all(root).expect("remove temp root");
+    assert_eq!(by_row, second);
+    assert_eq!(by_id, first);
+    assert!(matches!(
+        missing,
+        BackupCommandError::BackupReferenceNotFound { .. }
+    ));
+}
+
+// Ensure duplicate backup ids fail closed instead of resolving arbitrarily.
+#[test]
+fn backup_reference_rejects_ambiguous_backup_ids() {
+    let root = temp_dir("canic-cli-backup-reference-ambiguous");
+    let first = root.join("fleet-demo-20260507-120000");
+    let second = root.join("fleet-demo-20260507-130000");
+
+    BackupLayout::new(first)
+        .write_manifest(&valid_manifest_with("backup-same", "2026-05-07T12:00:00Z"))
+        .expect("write first manifest");
+    BackupLayout::new(second)
+        .write_manifest(&valid_manifest_with("backup-same", "2026-05-07T13:00:00Z"))
+        .expect("write second manifest");
+
+    let err = resolve_backup_reference_in(&root, "backup-same").expect_err("ambiguous rejects");
+
+    fs::remove_dir_all(root).expect("remove temp root");
+    assert!(matches!(
+        err,
+        BackupCommandError::BackupReferenceAmbiguous { .. }
+    ));
 }
 
 // Ensure backup list hides machine timestamp markers in table output.
@@ -242,27 +407,30 @@ fn backup_list_formats_unix_created_at() {
 #[test]
 fn require_complete_accepts_complete_status() {
     let options = BackupStatusOptions {
-        dir: PathBuf::from("unused"),
+        backup_ref: None,
+        dir: Some(PathBuf::from("unused")),
         out: None,
         require_complete: true,
     };
     let report = journal_with_checksum(HASH.to_string()).resume_report();
 
-    enforce_status_requirements(&options, &report).expect("complete status should pass");
+    enforce_status_requirements(&options, &BackupStatusReport::Download(report))
+        .expect("complete status should pass");
 }
 
 // Ensure require-complete rejects journals that still need resume work.
 #[test]
 fn require_complete_rejects_incomplete_status() {
     let options = BackupStatusOptions {
-        dir: PathBuf::from("unused"),
+        backup_ref: None,
+        dir: Some(PathBuf::from("unused")),
         out: None,
         require_complete: true,
     };
     let report = created_journal().resume_report();
 
-    let err =
-        enforce_status_requirements(&options, &report).expect_err("incomplete status should fail");
+    let err = enforce_status_requirements(&options, &BackupStatusReport::Download(report))
+        .expect_err("incomplete status should fail");
 
     assert!(matches!(
         err,
@@ -271,6 +439,59 @@ fn require_complete_rejects_incomplete_status() {
             total_artifacts: 1,
             ..
         }
+    ));
+}
+
+// Ensure require-complete rejects dry-run layouts.
+#[test]
+fn require_complete_rejects_dry_run_status() {
+    let options = BackupStatusOptions {
+        backup_ref: None,
+        dir: Some(PathBuf::from("unused")),
+        out: None,
+        require_complete: true,
+    };
+    let plan = valid_backup_plan();
+    let report = BackupStatusReport::DryRun(BackupDryRunStatusReport {
+        layout_status: "dry-run".to_string(),
+        plan_id: plan.plan_id.clone(),
+        run_id: plan.run_id.clone(),
+        fleet: plan.fleet.clone(),
+        network: plan.network.clone(),
+        targets: plan.targets.len(),
+        operations: plan.phases.len(),
+        execution: BackupExecutionJournal::from_plan(&plan)
+            .expect("execution journal")
+            .resume_summary(),
+    });
+
+    let err =
+        enforce_status_requirements(&options, &report).expect_err("dry-run status should fail");
+
+    assert!(matches!(
+        err,
+        BackupCommandError::DryRunNotComplete { plan_id } if plan_id == "plan-test"
+    ));
+}
+
+// Ensure verification rejects dry-run plans with a backup-specific error.
+#[test]
+fn verify_backup_rejects_dry_run_layout() {
+    let root = temp_dir("canic-cli-backup-verify-dry-run");
+    let plan = valid_backup_plan();
+    persist_backup_create_dry_run(&root, &plan).expect("persist dry-run plan");
+
+    let options = BackupVerifyOptions {
+        backup_ref: None,
+        dir: Some(root.clone()),
+        out: None,
+    };
+    let err = verify_backup(&options).expect_err("dry-run verify rejects");
+
+    fs::remove_dir_all(root).expect("remove temp root");
+    assert!(matches!(
+        err,
+        BackupCommandError::DryRunNotComplete { plan_id } if plan_id == "plan-test"
     ));
 }
 
@@ -289,7 +510,8 @@ fn verify_backup_reads_layout_and_artifacts() {
         .expect("write journal");
 
     let options = BackupVerifyOptions {
-        dir: root.clone(),
+        backup_ref: None,
+        dir: Some(root.clone()),
         out: None,
     };
     let report = verify_backup(&options).expect("verify backup");

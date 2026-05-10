@@ -22,6 +22,7 @@ use canic_host::{
     table::{ColumnAlign, render_table},
 };
 use clap::Command as ClapCommand;
+use serde::Serialize;
 use std::{
     ffi::OsString,
     fs,
@@ -34,7 +35,8 @@ use thiserror::Error as ThisError;
 mod options;
 
 pub use options::{
-    BackupCreateOptions, BackupListOptions, BackupStatusOptions, BackupVerifyOptions,
+    BackupCreateOptions, BackupInspectOptions, BackupListOptions, BackupStatusOptions,
+    BackupVerifyOptions,
 };
 
 ///
@@ -54,6 +56,15 @@ pub enum BackupCommandError {
         total_artifacts: usize,
         pending_artifacts: usize,
     },
+
+    #[error("backup plan {plan_id} is a dry-run layout, not a complete backup")]
+    DryRunNotComplete { plan_id: String },
+
+    #[error("backup reference {reference} was not found under backups; run `canic backup list`")]
+    BackupReferenceNotFound { reference: String },
+
+    #[error("backup reference {reference} is ambiguous under backups; use `--dir <dir>`")]
+    BackupReferenceAmbiguous { reference: String },
 
     #[error("backup create currently supports planning only; pass --dry-run")]
     CreateRequiresDryRun,
@@ -123,6 +134,77 @@ pub struct BackupListEntry {
     pub status: String,
 }
 
+///
+/// BackupStatusReport
+///
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[serde(untagged)]
+pub enum BackupStatusReport {
+    Download(JournalResumeReport),
+    DryRun(BackupDryRunStatusReport),
+}
+
+///
+/// BackupDryRunStatusReport
+///
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+pub struct BackupDryRunStatusReport {
+    pub layout_status: String,
+    pub plan_id: String,
+    pub run_id: String,
+    pub fleet: String,
+    pub network: String,
+    pub targets: usize,
+    pub operations: usize,
+    pub execution: canic_backup::execution::BackupExecutionResumeSummary,
+}
+
+///
+/// BackupInspectReport
+///
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+pub struct BackupInspectReport {
+    pub layout_status: String,
+    pub plan_id: String,
+    pub run_id: String,
+    pub fleet: String,
+    pub network: String,
+    pub scope: String,
+    pub targets: Vec<BackupInspectTarget>,
+    pub operations: Vec<BackupInspectOperation>,
+    pub execution: canic_backup::execution::BackupExecutionResumeSummary,
+}
+
+///
+/// BackupInspectTarget
+///
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+pub struct BackupInspectTarget {
+    pub role: String,
+    pub canister_id: String,
+    pub parent_canister_id: String,
+    pub depth: u32,
+    pub control_authority: String,
+    pub snapshot_read_authority: String,
+}
+
+///
+/// BackupInspectOperation
+///
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+pub struct BackupInspectOperation {
+    pub sequence: usize,
+    pub kind: String,
+    pub target_canister_id: String,
+    pub state: String,
+    pub blocking_reasons: Vec<String>,
+}
+
 pub fn run<I>(args: I) -> Result<(), BackupCommandError>
 where
     I: IntoIterator<Item = OsString>,
@@ -155,6 +237,15 @@ where
             let options = BackupListOptions::parse(args)?;
             let entries = backup_list(&options)?;
             write_list_report(&options, &entries)?;
+            Ok(())
+        }
+        "inspect" => {
+            if print_help_or_version(&args, inspect_usage, version_text()) {
+                return Ok(());
+            }
+            let options = BackupInspectOptions::parse(args)?;
+            let report = backup_inspect(&options)?;
+            write_inspect_report(&options, &report)?;
             Ok(())
         }
         "status" => {
@@ -270,17 +361,129 @@ pub fn backup_list(
 
 pub fn backup_status(
     options: &BackupStatusOptions,
-) -> Result<JournalResumeReport, BackupCommandError> {
-    let layout = BackupLayout::new(options.dir.clone());
+) -> Result<BackupStatusReport, BackupCommandError> {
+    let layout = BackupLayout::new(resolve_backup_dir(
+        options.dir.as_deref(),
+        options.backup_ref.as_deref(),
+    )?);
+    if layout.journal_path().is_file() {
+        let journal = layout.read_journal()?;
+        return Ok(BackupStatusReport::Download(journal.resume_report()));
+    }
+    if layout.backup_plan_path().is_file() {
+        let plan = layout.read_backup_plan()?;
+        let journal = layout.read_execution_journal()?;
+        layout.verify_execution_integrity()?;
+        return Ok(BackupStatusReport::DryRun(BackupDryRunStatusReport {
+            layout_status: "dry-run".to_string(),
+            plan_id: plan.plan_id.clone(),
+            run_id: plan.run_id.clone(),
+            fleet: plan.fleet,
+            network: plan.network,
+            targets: plan.targets.len(),
+            operations: plan.phases.len(),
+            execution: journal.resume_summary(),
+        }));
+    }
+
     let journal = layout.read_journal()?;
-    Ok(journal.resume_report())
+    Ok(BackupStatusReport::Download(journal.resume_report()))
+}
+
+pub fn backup_inspect(
+    options: &BackupInspectOptions,
+) -> Result<BackupInspectReport, BackupCommandError> {
+    let layout = BackupLayout::new(resolve_backup_dir(
+        options.dir.as_deref(),
+        options.backup_ref.as_deref(),
+    )?);
+    let plan = layout.read_backup_plan()?;
+    let journal = layout.read_execution_journal()?;
+    layout.verify_execution_integrity()?;
+
+    Ok(BackupInspectReport {
+        layout_status: "dry-run".to_string(),
+        plan_id: plan.plan_id.clone(),
+        run_id: plan.run_id.clone(),
+        fleet: plan.fleet.clone(),
+        network: plan.network.clone(),
+        scope: backup_scope_label(&plan),
+        targets: plan.targets.iter().map(inspect_target).collect(),
+        operations: journal.operations.iter().map(inspect_operation).collect(),
+        execution: journal.resume_summary(),
+    })
 }
 
 pub fn verify_backup(
     options: &BackupVerifyOptions,
 ) -> Result<BackupIntegrityReport, BackupCommandError> {
-    let layout = BackupLayout::new(options.dir.clone());
+    let layout = BackupLayout::new(resolve_backup_dir(
+        options.dir.as_deref(),
+        options.backup_ref.as_deref(),
+    )?);
+    if !layout.manifest_path().is_file() && layout.backup_plan_path().is_file() {
+        let plan = layout.read_backup_plan()?;
+        return Err(BackupCommandError::DryRunNotComplete {
+            plan_id: plan.plan_id,
+        });
+    }
+
     layout.verify_integrity().map_err(BackupCommandError::from)
+}
+
+fn resolve_backup_dir(
+    dir: Option<&Path>,
+    backup_ref: Option<&str>,
+) -> Result<PathBuf, BackupCommandError> {
+    if let Some(dir) = dir {
+        return Ok(dir.to_path_buf());
+    }
+    if let Some(backup_ref) = backup_ref {
+        return resolve_backup_reference(backup_ref);
+    }
+
+    Err(BackupCommandError::Usage(
+        "backup target required; pass <backup-ref> or --dir <dir>".to_string(),
+    ))
+}
+
+fn resolve_backup_reference(reference: &str) -> Result<PathBuf, BackupCommandError> {
+    resolve_backup_reference_in(Path::new("backups"), reference)
+}
+
+fn resolve_backup_reference_in(
+    root: &Path,
+    reference: &str,
+) -> Result<PathBuf, BackupCommandError> {
+    let entries = backup_list(&BackupListOptions {
+        dir: root.to_path_buf(),
+        out: None,
+    })?;
+
+    if reference.bytes().all(|byte| byte.is_ascii_digit()) {
+        let index = reference.parse::<usize>().unwrap_or(0);
+        return entries
+            .get(index.saturating_sub(1))
+            .map(|entry| entry.dir.clone())
+            .ok_or_else(|| BackupCommandError::BackupReferenceNotFound {
+                reference: reference.to_string(),
+            });
+    }
+
+    let mut matches = entries
+        .into_iter()
+        .filter(|entry| entry.backup_id == reference)
+        .map(|entry| entry.dir)
+        .collect::<Vec<_>>();
+    match matches.len() {
+        0 => Err(BackupCommandError::BackupReferenceNotFound {
+            reference: reference.to_string(),
+        }),
+        1 => Ok(matches.remove(0)),
+        _ => Err(BackupCommandError::BackupReferenceAmbiguous {
+            reference: reference.to_string(),
+        }),
+    }
 }
 
 fn backup_list_entry(dir: PathBuf) -> Option<BackupListEntry> {
@@ -342,21 +545,23 @@ fn planned_backup_list_entry(dir: PathBuf, layout: &BackupLayout) -> BackupListE
     }
 }
 
-fn ensure_complete_status(report: &JournalResumeReport) -> Result<(), BackupCommandError> {
-    if report.is_complete {
-        return Ok(());
+fn ensure_complete_status(report: &BackupStatusReport) -> Result<(), BackupCommandError> {
+    match report {
+        BackupStatusReport::Download(report) if report.is_complete => Ok(()),
+        BackupStatusReport::Download(report) => Err(BackupCommandError::IncompleteJournal {
+            backup_id: report.backup_id.clone(),
+            total_artifacts: report.total_artifacts,
+            pending_artifacts: report.pending_artifacts,
+        }),
+        BackupStatusReport::DryRun(report) => Err(BackupCommandError::DryRunNotComplete {
+            plan_id: report.plan_id.clone(),
+        }),
     }
-
-    Err(BackupCommandError::IncompleteJournal {
-        backup_id: report.backup_id.clone(),
-        total_artifacts: report.total_artifacts,
-        pending_artifacts: report.pending_artifacts,
-    })
 }
 
 fn enforce_status_requirements(
     options: &BackupStatusOptions,
-    report: &JournalResumeReport,
+    report: &BackupStatusReport,
 ) -> Result<(), BackupCommandError> {
     if !options.require_complete {
         return Ok(());
@@ -367,9 +572,29 @@ fn enforce_status_requirements(
 
 fn write_status_report(
     options: &BackupStatusOptions,
-    report: &JournalResumeReport,
+    report: &BackupStatusReport,
 ) -> Result<(), BackupCommandError> {
     output::write_pretty_json(options.out.as_ref(), report)
+}
+
+fn write_inspect_report(
+    options: &BackupInspectOptions,
+    report: &BackupInspectReport,
+) -> Result<(), BackupCommandError> {
+    if options.json {
+        return output::write_pretty_json(options.out.as_ref(), report);
+    }
+
+    let text = render_inspect_report(report);
+    if let Some(path) = &options.out {
+        fs::write(path, text)?;
+        return Ok(());
+    }
+
+    let stdout = io::stdout();
+    let mut handle = stdout.lock();
+    writeln!(handle, "{text}")?;
+    Ok(())
 }
 
 // Write the backup-create dry-run summary as a compact table.
@@ -420,8 +645,10 @@ fn write_list_report(
 fn render_backup_list(entries: &[BackupListEntry]) -> String {
     let rows = entries
         .iter()
-        .map(|entry| {
+        .enumerate()
+        .map(|(index, entry)| {
             [
+                (index + 1).to_string(),
                 entry.dir.display().to_string(),
                 entry.backup_id.clone(),
                 display_created_at(&entry.created_at),
@@ -431,10 +658,106 @@ fn render_backup_list(entries: &[BackupListEntry]) -> String {
         })
         .collect::<Vec<_>>();
     render_table(
-        &["DIR", "BACKUP_ID", "CREATED_AT", "MEMBERS", "STATUS"],
+        &["#", "DIR", "BACKUP_ID", "CREATED_AT", "MEMBERS", "STATUS"],
         &rows,
-        &[ColumnAlign::Left; 5],
+        &[
+            ColumnAlign::Right,
+            ColumnAlign::Left,
+            ColumnAlign::Left,
+            ColumnAlign::Left,
+            ColumnAlign::Left,
+            ColumnAlign::Left,
+        ],
     )
+}
+
+fn render_inspect_report(report: &BackupInspectReport) -> String {
+    let summary_rows = [[
+        report.layout_status.clone(),
+        report.fleet.clone(),
+        report.network.clone(),
+        report.scope.clone(),
+        report.targets.len().to_string(),
+        report.operations.len().to_string(),
+        report.execution.next_operation.as_ref().map_or_else(
+            || "-".to_string(),
+            |operation| operation.operation_id.clone(),
+        ),
+    ]];
+    let target_rows = report
+        .targets
+        .iter()
+        .map(|target| {
+            [
+                target.role.clone(),
+                target.canister_id.clone(),
+                target.parent_canister_id.clone(),
+                target.depth.to_string(),
+                target.control_authority.clone(),
+                target.snapshot_read_authority.clone(),
+            ]
+        })
+        .collect::<Vec<_>>();
+    let operation_rows = report
+        .operations
+        .iter()
+        .map(|operation| {
+            [
+                operation.sequence.to_string(),
+                operation.kind.clone(),
+                operation.target_canister_id.clone(),
+                operation.state.clone(),
+                operation.blocking_reasons.join("; "),
+            ]
+        })
+        .collect::<Vec<_>>();
+
+    [
+        format!("Plan: {}", report.plan_id),
+        format!("Run:  {}", report.run_id),
+        String::new(),
+        render_table(
+            &[
+                "STATUS",
+                "FLEET",
+                "NETWORK",
+                "SCOPE",
+                "TARGETS",
+                "OPERATIONS",
+                "NEXT",
+            ],
+            &summary_rows,
+            &[ColumnAlign::Left; 7],
+        ),
+        String::new(),
+        "Targets".to_string(),
+        render_table(
+            &[
+                "ROLE",
+                "CANISTER_ID",
+                "PARENT",
+                "DEPTH",
+                "CONTROL",
+                "SNAPSHOT_READ",
+            ],
+            &target_rows,
+            &[ColumnAlign::Left; 6],
+        ),
+        String::new(),
+        "Operations".to_string(),
+        render_table(
+            &["SEQ", "KIND", "TARGET", "STATE", "REASONS"],
+            &operation_rows,
+            &[
+                ColumnAlign::Right,
+                ColumnAlign::Left,
+                ColumnAlign::Left,
+                ColumnAlign::Left,
+                ColumnAlign::Left,
+            ],
+        ),
+    ]
+    .join("\n")
 }
 
 fn display_created_at(created_at: &str) -> String {
@@ -480,6 +803,120 @@ fn persist_backup_create_dry_run(out: &Path, plan: &BackupPlan) -> Result<(), Ba
     layout.write_execution_journal(&journal)?;
     layout.verify_execution_integrity()?;
     Ok(())
+}
+
+fn inspect_target(target: &canic_backup::plan::BackupTarget) -> BackupInspectTarget {
+    BackupInspectTarget {
+        role: target.role.clone().unwrap_or_else(|| "-".to_string()),
+        canister_id: target.canister_id.clone(),
+        parent_canister_id: target
+            .parent_canister_id
+            .clone()
+            .unwrap_or_else(|| "-".to_string()),
+        depth: target.depth,
+        control_authority: format_authority(
+            control_authority_source_label(&target.control_authority.source),
+            &target.control_authority.evidence,
+        ),
+        snapshot_read_authority: format_authority(
+            snapshot_read_authority_source_label(&target.snapshot_read_authority.source),
+            &target.snapshot_read_authority.evidence,
+        ),
+    }
+}
+
+fn inspect_operation(
+    operation: &canic_backup::execution::BackupExecutionJournalOperation,
+) -> BackupInspectOperation {
+    BackupInspectOperation {
+        sequence: operation.sequence,
+        kind: operation_kind_label(&operation.kind).to_string(),
+        target_canister_id: operation
+            .target_canister_id
+            .clone()
+            .unwrap_or_else(|| "-".to_string()),
+        state: operation_state_label(&operation.state).to_string(),
+        blocking_reasons: operation.blocking_reasons.clone(),
+    }
+}
+
+fn format_authority(source: &str, evidence: &canic_backup::plan::AuthorityEvidence) -> String {
+    format!("{source}/{}", authority_evidence_label(evidence))
+}
+
+const fn control_authority_source_label(
+    source: &canic_backup::plan::ControlAuthoritySource,
+) -> &str {
+    match source {
+        canic_backup::plan::ControlAuthoritySource::Unknown => "unknown",
+        canic_backup::plan::ControlAuthoritySource::RootController => "root-controller",
+        canic_backup::plan::ControlAuthoritySource::OperatorController => "operator-controller",
+        canic_backup::plan::ControlAuthoritySource::AlternateController { .. } => {
+            "alternate-controller"
+        }
+    }
+}
+
+const fn snapshot_read_authority_source_label(
+    source: &canic_backup::plan::SnapshotReadAuthoritySource,
+) -> &str {
+    match source {
+        canic_backup::plan::SnapshotReadAuthoritySource::Unknown => "unknown",
+        canic_backup::plan::SnapshotReadAuthoritySource::OperatorController => {
+            "operator-controller"
+        }
+        canic_backup::plan::SnapshotReadAuthoritySource::SnapshotVisibility => {
+            "snapshot-visibility"
+        }
+        canic_backup::plan::SnapshotReadAuthoritySource::RootConfiguredRead => {
+            "root-configured-read"
+        }
+        canic_backup::plan::SnapshotReadAuthoritySource::RootMediatedTransfer => {
+            "root-mediated-transfer"
+        }
+    }
+}
+
+const fn authority_evidence_label(evidence: &canic_backup::plan::AuthorityEvidence) -> &str {
+    match evidence {
+        canic_backup::plan::AuthorityEvidence::Proven => "proven",
+        canic_backup::plan::AuthorityEvidence::Declared => "declared",
+        canic_backup::plan::AuthorityEvidence::Unknown => "unknown",
+    }
+}
+
+const fn operation_kind_label(kind: &canic_backup::plan::BackupOperationKind) -> &str {
+    match kind {
+        canic_backup::plan::BackupOperationKind::ValidateTopology => "validate-topology",
+        canic_backup::plan::BackupOperationKind::ValidateControlAuthority => {
+            "validate-control-authority"
+        }
+        canic_backup::plan::BackupOperationKind::ValidateSnapshotReadAuthority => {
+            "validate-snapshot-read-authority"
+        }
+        canic_backup::plan::BackupOperationKind::ValidateQuiescencePolicy => {
+            "validate-quiescence-policy"
+        }
+        canic_backup::plan::BackupOperationKind::Stop => "stop",
+        canic_backup::plan::BackupOperationKind::CreateSnapshot => "create-snapshot",
+        canic_backup::plan::BackupOperationKind::Start => "start",
+        canic_backup::plan::BackupOperationKind::DownloadSnapshot => "download-snapshot",
+        canic_backup::plan::BackupOperationKind::VerifyArtifact => "verify-artifact",
+        canic_backup::plan::BackupOperationKind::FinalizeManifest => "finalize-manifest",
+    }
+}
+
+const fn operation_state_label(
+    state: &canic_backup::execution::BackupExecutionOperationState,
+) -> &str {
+    match state {
+        canic_backup::execution::BackupExecutionOperationState::Ready => "ready",
+        canic_backup::execution::BackupExecutionOperationState::Pending => "pending",
+        canic_backup::execution::BackupExecutionOperationState::Blocked => "blocked",
+        canic_backup::execution::BackupExecutionOperationState::Completed => "completed",
+        canic_backup::execution::BackupExecutionOperationState::Failed => "failed",
+        canic_backup::execution::BackupExecutionOperationState::Skipped => "skipped",
+    }
 }
 
 fn call_subnet_registry(
@@ -641,6 +1078,11 @@ fn create_usage() -> String {
     command.render_help().to_string()
 }
 
+fn inspect_usage() -> String {
+    let mut command = options::backup_inspect_command();
+    command.render_help().to_string()
+}
+
 fn verify_usage() -> String {
     let mut command = options::backup_verify_command();
     command.render_help().to_string()
@@ -659,6 +1101,11 @@ fn backup_command() -> ClapCommand {
         .subcommand(passthrough_subcommand(
             ClapCommand::new("list")
                 .about("List backup directories under a backup root")
+                .disable_help_flag(true),
+        ))
+        .subcommand(passthrough_subcommand(
+            ClapCommand::new("inspect")
+                .about("Inspect a backup or dry-run plan layout")
                 .disable_help_flag(true),
         ))
         .subcommand(passthrough_subcommand(

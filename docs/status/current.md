@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-05-10
+Last updated: 2026-05-11
 
 ## Purpose
 
@@ -140,11 +140,33 @@ inspect only the files needed for the current task.
 - Made `canic backup list` include plan-only dry-run directories as
   `STATUS=dry-run`, using the persisted plan id as `BACKUP_ID` and planned
   target count as `MEMBERS`.
+- Made `canic backup status --dir <dry-run-dir>` understand dry-run
+  `backup-plan.json` plus `backup-execution-journal.json` layouts and report
+  execution-journal progress while `--require-complete` still rejects them as
+  non-backups.
+- Added `canic backup inspect --dir <dry-run-dir>` with table and JSON output
+  for plan metadata, selected targets, authority evidence, operation order, and
+  execution-journal state.
+- Added a `#` column to `canic backup list` so operators can refer to visible
+  backup rows by a short ordinal as well as by `BACKUP_ID`.
+- Made `canic backup inspect`, `canic backup status`, and
+  `canic backup verify` accept either the `canic backup list` row number or
+  `BACKUP_ID` as a positional backup reference, with `--dir <dir>` kept for
+  explicit paths and ambiguous backup ids rejected fail-closed.
+- Made `canic backup verify` reject dry-run plan layouts with the typed
+  `DryRunNotComplete` error instead of falling through to a missing-manifest
+  filesystem error.
 - Added registry-backed backup plan construction for explicit subtrees and
   non-root fleet scopes, including top-down stop/snapshot phases, bottom-up
   start phases, and post-restart download/verify/finalize phases.
 - Added backup selector resolution for explicit principals and unambiguous
   roles, rejecting missing or ambiguous role selectors before planning.
+- Reran the oldest latest-run lightweight recurring audit, `publish-surface`,
+  at `docs/audits/reports/2026-05/2026-05-11/publish-surface.md`. It reports
+  package-surface risk `3/10`: all 11 publishable crates package and verify.
+- Completed the publish-surface follow-up by aligning `crates/canic/README.md`
+  with the default facade features and refreshing the recurring audit's
+  canonical published crate map.
 
 ## Validation Recently Run
 
@@ -193,6 +215,17 @@ inspect only the files needed for the current task.
 - `cargo run -q -p canic-cli --bin canic -- backup create demo --dry-run --out /tmp/canic-backup-plan-demo`
 - `cargo run -q -p canic-cli --bin canic -- backup create demo --subtree app --dry-run --out /tmp/canic-backup-plan-demo-app`
 - `cargo run -q -p canic-cli --bin canic -- backup list`
+- `cargo package -p canic -p canic-backup -p canic-cdk -p canic-cli -p canic-control-plane -p canic-core -p canic-host -p canic-macros -p canic-memory -p canic-testkit -p canic-wasm-store --locked --allow-dirty`
+- `cargo metadata --no-deps --format-version 1`
+- `cargo run -q -p canic-cli --bin canic -- backup status --dir backups/fleet-demo-20260510-222116`
+- `cargo run -q -p canic-cli --bin canic -- backup inspect --dir backups/fleet-demo-20260510-222116`
+- `cargo run -q -p canic-cli --bin canic -- backup inspect --dir backups/fleet-demo-20260510-222116 --json`
+- `cargo run -q -p canic-cli --bin canic -- backup list`
+- `cargo run -q -p canic-cli --bin canic -- backup inspect 1`
+- `cargo run -q -p canic-cli --bin canic -- backup status 1`
+- `cargo run -q -p canic-cli --bin canic -- backup verify 1`
+- `cargo run -q -p canic-cli --bin canic -- backup inspect plan-demo-20260510-222116 --json`
+- `cargo run -q -p canic-cli --bin canic -- backup status plan-demo-20260510-222116`
 - `git show --stat --name-only --format=fuller 8a5814fd`
 - `git show --stat --name-only --format=fuller cf24f77e`
 - `git show --stat --name-only --format=fuller 53476764`

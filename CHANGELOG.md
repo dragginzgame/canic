@@ -7,7 +7,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.34.x] - 2026-05-10 - Backup/restore rework
 
-- `0.34.0` starts the topology-aware backup/restore rework by adding the typed backup plan, authority preflight, `Proven`/`Declared`/`Unknown` authority evidence, target-scoped authority receipts with preflight ids and validity windows, topology/quiescence preflight receipts, a full execution preflight receipt bundle with journal-side plan binding, execution journal, persisted plan/execution-journal layout with cross-file integrity checks, quiescence policy, operation, and receipt model in `canic-backup`, plus the first `canic backup create <fleet> --dry-run` CLI planner that writes `backup-plan.json` and `backup-execution-journal.json` without live mutation and makes `canic backup list` show plan-only directories as `dry-run`.
+- `0.34.1` lets `canic backup inspect`, `canic backup status`, and `canic backup verify` target a backup by `canic backup list` row number or `BACKUP_ID`, while keeping `--dir <dir>` for explicit paths and returning a typed dry-run rejection from `verify`.
+
+- `0.34.0` starts the topology-aware backup/restore rework by adding the typed backup plan, authority preflight, `Proven`/`Declared`/`Unknown` authority evidence, target-scoped authority receipts with preflight ids and validity windows, topology/quiescence preflight receipts, a full execution preflight receipt bundle with journal-side plan binding, execution journal, persisted plan/execution-journal layout with cross-file integrity checks, quiescence policy, operation, and receipt model in `canic-backup`, plus the first `canic backup create <fleet> --dry-run` CLI planner that writes `backup-plan.json` and `backup-execution-journal.json` without live mutation and makes `canic backup list`/`status`/`inspect` understand plan-only directories as dry-run layouts with numbered list rows.
 
 See detailed breakdown:
 [docs/changelog/0.34.md](docs/changelog/0.34.md)

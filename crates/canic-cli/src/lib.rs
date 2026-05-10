@@ -582,6 +582,7 @@ mod tests {
         for args in [
             &["backup", "help"][..],
             &["backup", "create", "help"],
+            &["backup", "inspect", "help"],
             &["backup", "list", "help"],
             &["backup", "status", "help"],
             &["backup", "verify", "help"],

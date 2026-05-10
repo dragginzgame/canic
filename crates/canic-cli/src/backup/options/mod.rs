@@ -3,9 +3,13 @@ use crate::args::{
     path_option, string_option, value_arg,
 };
 
-use super::{BackupCommandError, create_usage, list_usage, status_usage, verify_usage};
+use super::{
+    BackupCommandError, create_usage, inspect_usage, list_usage, status_usage, verify_usage,
+};
 use clap::{ArgMatches, Command as ClapCommand};
 use std::{ffi::OsString, path::PathBuf};
+
+const BACKUP_REF: &str = "backup-ref";
 
 ///
 /// BackupCreateOptions
@@ -106,12 +110,51 @@ pub(super) fn backup_list_command() -> ClapCommand {
 }
 
 ///
+/// BackupInspectOptions
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct BackupInspectOptions {
+    pub backup_ref: Option<String>,
+    pub dir: Option<PathBuf>,
+    pub out: Option<PathBuf>,
+    pub json: bool,
+}
+
+impl BackupInspectOptions {
+    pub fn parse<I>(args: I) -> Result<Self, BackupCommandError>
+    where
+        I: IntoIterator<Item = OsString>,
+    {
+        let matches = parse_backup_options(backup_inspect_command(), inspect_usage, args)?;
+        let (backup_ref, dir) = parse_backup_target(&matches, inspect_usage)?;
+
+        Ok(Self {
+            backup_ref,
+            dir,
+            out: path_option(&matches, "out"),
+            json: matches.get_flag("json"),
+        })
+    }
+}
+
+pub(super) fn backup_inspect_command() -> ClapCommand {
+    backup_dir_out_command(
+        "inspect",
+        "canic backup inspect",
+        "Inspect a backup or dry-run plan layout",
+    )
+    .arg(flag_arg("json").long("json"))
+}
+
+///
 /// BackupVerifyOptions
 ///
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct BackupVerifyOptions {
-    pub dir: PathBuf,
+    pub backup_ref: Option<String>,
+    pub dir: Option<PathBuf>,
     pub out: Option<PathBuf>,
 }
 
@@ -121,9 +164,11 @@ impl BackupVerifyOptions {
         I: IntoIterator<Item = OsString>,
     {
         let matches = parse_backup_options(backup_verify_command(), verify_usage, args)?;
+        let (backup_ref, dir) = parse_backup_target(&matches, verify_usage)?;
 
         Ok(Self {
-            dir: path_option(&matches, "dir").expect("clap requires dir"),
+            backup_ref,
+            dir,
             out: path_option(&matches, "out"),
         })
     }
@@ -143,7 +188,8 @@ pub(super) fn backup_verify_command() -> ClapCommand {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct BackupStatusOptions {
-    pub dir: PathBuf,
+    pub backup_ref: Option<String>,
+    pub dir: Option<PathBuf>,
     pub out: Option<PathBuf>,
     pub require_complete: bool,
 }
@@ -154,9 +200,11 @@ impl BackupStatusOptions {
         I: IntoIterator<Item = OsString>,
     {
         let matches = parse_backup_options(backup_status_command(), status_usage, args)?;
+        let (backup_ref, dir) = parse_backup_target(&matches, status_usage)?;
 
         Ok(Self {
-            dir: path_option(&matches, "dir").expect("clap requires dir"),
+            backup_ref,
+            dir,
             out: path_option(&matches, "out"),
             require_complete: matches.get_flag("require-complete"),
         })
@@ -193,10 +241,27 @@ fn backup_dir_out_command(
         .about(about)
         .disable_help_flag(true)
         .arg(
+            value_arg(BACKUP_REF)
+                .value_name("backup-ref")
+                .help("Backup row number or BACKUP_ID from `canic backup list`"),
+        )
+        .arg(
             value_arg("dir")
                 .long("dir")
                 .value_name("dir")
-                .required(true),
+                .help("Explicit backup directory path"),
         )
         .arg(value_arg("out").long("out").value_name("file"))
+}
+
+fn parse_backup_target(
+    matches: &ArgMatches,
+    usage: fn() -> String,
+) -> Result<(Option<String>, Option<PathBuf>), BackupCommandError> {
+    let backup_ref = string_option(matches, BACKUP_REF);
+    let dir = path_option(matches, "dir");
+    match (&backup_ref, &dir) {
+        (Some(_), Some(_)) | (None, None) => Err(BackupCommandError::Usage(usage())),
+        _ => Ok((backup_ref, dir)),
+    }
 }

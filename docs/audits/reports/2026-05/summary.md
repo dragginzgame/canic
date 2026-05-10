@@ -8,6 +8,7 @@
 | `2026-05-07` | `docs/audits/reports/2026-05/2026-05-07/summary.md` | complete |
 | `2026-05-09` | `docs/audits/reports/2026-05/2026-05-09/summary.md` | complete |
 | `2026-05-10` | `docs/audits/reports/2026-05/2026-05-10/summary.md` | complete |
+| `2026-05-11` | `docs/audits/reports/2026-05/2026-05-11/summary.md` | complete |
 
 ## Month-Level Status
 

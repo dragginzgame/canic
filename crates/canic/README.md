@@ -18,18 +18,24 @@ Use the explicit module paths for the larger bundled surfaces:
 
 ## Default surface
 
-The default feature set includes:
+The pre-1.0 default feature set includes the standard Canic runtime bundle:
 
 - `metrics` — exports `canic_metrics` in ordinary builds unless you opt out
+- `control-plane` — enables root/`wasm_store` control-plane support
+- `sharding` — enables sharding-oriented runtime support from `canic-core`
+- `auth-crypto` — enables crypto-backed auth/runtime helpers from `canic-core`
 
-If you want a narrower facade dependency, disable default features in your
-`Cargo.toml`.
+Disable default features in `Cargo.toml` when you need a narrower facade
+dependency and want to opt out of the standard runtime bundle.
 
 ## Optional features
 
-- `control-plane` — enable root/`wasm_store` control-plane support
-- `sharding` — enable sharding-oriented runtime support from `canic-core`
-- `auth-crypto` — enable crypto-backed auth/runtime helpers from `canic-core`
+These features can also be selected explicitly when default features are off:
+
+- `metrics`
+- `control-plane`
+- `sharding`
+- `auth-crypto`
 
 ## Typical use
 
