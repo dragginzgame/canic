@@ -9,6 +9,7 @@
 | `2026-05-09` | `docs/audits/reports/2026-05/2026-05-09/summary.md` | complete |
 | `2026-05-10` | `docs/audits/reports/2026-05/2026-05-10/summary.md` | complete |
 | `2026-05-11` | `docs/audits/reports/2026-05/2026-05-11/summary.md` | complete |
+| `2026-05-12` | `docs/audits/reports/2026-05/2026-05-12/summary.md` | complete |
 
 ## Month-Level Status
 
@@ -90,3 +91,25 @@ May has day summaries for the currently recorded audit days.
     belongs to CLI UX, host mechanics, or backup domain logic.
 29. CLI maintainers: split or isolate `list` responsibilities before adding
     more live projection columns, fallback logic, or rendering modes.
+30. CLI/host maintainers: continue routing fleet-scoped live commands through
+    the shared installed-fleet resolver. `list`, `cycles`, `metrics`, and
+    `endpoints` use it; `snapshot download`, `backup`, and `status` remain
+    candidates.
+31. Host/CLI maintainers: move shared ICP response parsing primitives needed by
+    both host and CLI into `canic-host`, starting with cycle-balance parsing.
+    Initial parser ownership is complete in `canic-host::response_parse`; keep
+    future ICP response normalization there instead of adding CLI-local parsers.
+32. CLI maintainers: continue splitting large command modules into options,
+    transport, parse, and render modules before adding more behavior.
+    `endpoints`, `cycles`, `metrics`, and top-level CLI help/global-option
+    dispatch are split; backup remains the largest command module but should
+    wait for the backup/restore flow to stabilize further.
+33. Backup/CLI maintainers: after 0.34 backup/restore functionality stabilizes,
+    consolidate repeated fixture builders into crate-local test support modules.
+34. Host/backup maintainers: before promoting installed-fleet resolution into
+    `canic-host`, move the live registry DTO/parser out of
+    `canic-backup::discovery` so host can own environment-aware registry
+    resolution without depending on backup-domain APIs.
+35. Host/backup maintainers: add receipt convention guidance before receipt
+    models grow further: naming, timestamps, truncation, provider metadata, and
+    serialization shape should be normalized.

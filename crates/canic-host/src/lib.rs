@@ -10,8 +10,11 @@ mod cargo_metadata;
 pub mod format;
 pub mod icp;
 pub mod install_root;
+pub mod installed_fleet;
+pub mod registry;
 pub mod release_set;
 pub mod replica_query;
+pub mod response_parse;
 pub mod table;
 #[cfg(test)]
 mod test_support;

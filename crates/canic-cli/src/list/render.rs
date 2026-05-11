@@ -1,8 +1,8 @@
 use super::ListCommandError;
-use crate::registry_tree::{RegistryRow, visible_rows};
-use canic_backup::discovery::RegistryEntry;
-use canic_host::table::{
-    ColumnAlign, render_separator, render_table, render_table_row, table_widths,
+use crate::support::registry_tree::{RegistryRow, visible_rows};
+use canic_host::{
+    registry::RegistryEntry,
+    table::{ColumnAlign, render_separator, render_table, render_table_row, table_widths},
 };
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -14,7 +14,7 @@ const MODULE_COLUMN_INDEX: usize = 1;
 
 pub(super) const ROLE_HEADER: &str = "ROLE";
 pub(super) const KIND_HEADER: &str = "KIND";
-pub(super) const FEATURES_HEADER: &str = "FEATURES";
+pub(super) const CAPS_HEADER: &str = "CAPS";
 pub(super) const AUTO_HEADER: &str = "AUTO";
 pub(super) const TOPUP_HEADER: &str = "TOPUP";
 pub(super) const METRICS_HEADER: &str = "METRICS";
@@ -29,7 +29,7 @@ const CONFIG_HEADERS: [&str; 6] = [
     ROLE_HEADER,
     KIND_HEADER,
     AUTO_HEADER,
-    FEATURES_HEADER,
+    CAPS_HEADER,
     METRICS_HEADER,
     TOPUP_HEADER,
 ];

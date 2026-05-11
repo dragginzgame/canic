@@ -1,5 +1,6 @@
 use super::*;
 use candid::Principal;
+use canic_host::registry::{RegistryEntry, parse_registry_entries};
 use serde_json::json;
 
 const ROOT: Principal = Principal::from_slice(&[]);

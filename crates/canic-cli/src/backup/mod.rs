@@ -1,12 +1,12 @@
 use crate::{
-    args::{parse_subcommand, passthrough_subcommand, print_help_or_version},
-    output,
-    path_stamp::{backup_list_timestamp, current_backup_directory_stamp, file_safe_component},
+    cli::clap::parse_subcommand,
+    cli::help::print_help_or_version,
+    support::path_stamp::{current_backup_directory_stamp, file_safe_component},
     version_text,
 };
 use candid::Principal;
 use canic_backup::{
-    discovery::{DiscoveryError, RegistryEntry, parse_registry_entries},
+    discovery::DiscoveryError,
     execution::{BackupExecutionJournal, BackupExecutionJournalError},
     journal::JournalResumeReport,
     manifest::IdentityMode,
@@ -27,10 +27,9 @@ use canic_backup::{
 use canic_host::{
     icp::{IcpCli, IcpCommandError},
     install_root::read_named_fleet_install_state,
+    registry::{RegistryEntry, RegistryParseError, parse_registry_entries},
     replica_query,
-    table::{ColumnAlign, render_table},
 };
-use clap::Command as ClapCommand;
 use serde::Serialize;
 use std::{
     ffi::OsString,
@@ -39,11 +38,22 @@ use std::{
 };
 use thiserror::Error as ThisError;
 
+mod command;
 mod options;
+mod render;
 
+use command::{
+    backup_command, create_usage, inspect_usage, list_usage, status_usage, usage, verify_usage,
+};
 pub use options::{
     BackupCreateOptions, BackupInspectOptions, BackupListOptions, BackupStatusOptions,
     BackupVerifyOptions,
+};
+#[cfg(test)]
+use render::{render_backup_list, render_inspect_report};
+use render::{
+    write_create_report, write_inspect_report, write_list_report, write_status_report,
+    write_verify_report,
 };
 
 ///
@@ -95,6 +105,9 @@ pub enum BackupCommandError {
 
     #[error(transparent)]
     Json(#[from] serde_json::Error),
+
+    #[error(transparent)]
+    Registry(#[from] RegistryParseError),
 
     #[error(transparent)]
     Persistence(#[from] PersistenceError),
@@ -275,7 +288,7 @@ where
             }
             let options = BackupVerifyOptions::parse(args)?;
             let report = verify_backup(&options)?;
-            write_report(&options, &report)?;
+            write_verify_report(&options, &report)?;
             Ok(())
         }
         _ => unreachable!("backup dispatch command only defines known commands"),
@@ -615,200 +628,6 @@ fn enforce_status_requirements(
     }
 
     ensure_complete_status(report)
-}
-
-fn write_status_report(
-    options: &BackupStatusOptions,
-    report: &BackupStatusReport,
-) -> Result<(), BackupCommandError> {
-    output::write_pretty_json(options.out.as_ref(), report)
-}
-
-fn write_inspect_report(
-    options: &BackupInspectOptions,
-    report: &BackupInspectReport,
-) -> Result<(), BackupCommandError> {
-    if options.json {
-        return output::write_pretty_json(options.out.as_ref(), report);
-    }
-
-    output::write_text::<BackupCommandError>(options.out.as_ref(), &render_inspect_report(report))
-}
-
-// Write the backup-create dry-run summary as a compact table.
-fn write_create_report(report: &BackupCreateReport) {
-    let rows = [[
-        report.fleet.clone(),
-        report.network.clone(),
-        report.mode.clone(),
-        report.status.clone(),
-        report.scope.clone(),
-        report.targets.to_string(),
-        report.operations.to_string(),
-        report.executed_operations.to_string(),
-        report.out.display().to_string(),
-    ]];
-    println!(
-        "{}",
-        render_table(
-            &[
-                "FLEET",
-                "NETWORK",
-                "MODE",
-                "STATUS",
-                "SCOPE",
-                "TARGETS",
-                "OPERATIONS",
-                "EXECUTED",
-                "OUT",
-            ],
-            &rows,
-            &[ColumnAlign::Left; 9],
-        )
-    );
-}
-
-// Write the integrity report to stdout or a requested output file.
-fn write_report(
-    options: &BackupVerifyOptions,
-    report: &BackupIntegrityReport,
-) -> Result<(), BackupCommandError> {
-    output::write_pretty_json(options.out.as_ref(), report)
-}
-
-// Write the backup directory list as a compact whitespace table.
-fn write_list_report(
-    options: &BackupListOptions,
-    entries: &[BackupListEntry],
-) -> Result<(), BackupCommandError> {
-    output::write_text::<BackupCommandError>(options.out.as_ref(), &render_backup_list(entries))
-}
-
-fn render_backup_list(entries: &[BackupListEntry]) -> String {
-    let rows = entries
-        .iter()
-        .enumerate()
-        .map(|(index, entry)| {
-            [
-                (index + 1).to_string(),
-                entry.dir.display().to_string(),
-                entry.backup_id.clone(),
-                display_created_at(&entry.created_at),
-                entry.members.to_string(),
-                entry.status.clone(),
-            ]
-        })
-        .collect::<Vec<_>>();
-    render_table(
-        &["#", "DIR", "BACKUP_ID", "CREATED_AT", "MEMBERS", "STATUS"],
-        &rows,
-        &[
-            ColumnAlign::Right,
-            ColumnAlign::Left,
-            ColumnAlign::Left,
-            ColumnAlign::Left,
-            ColumnAlign::Left,
-            ColumnAlign::Left,
-        ],
-    )
-}
-
-fn render_inspect_report(report: &BackupInspectReport) -> String {
-    let summary_rows = [[
-        report.layout_status.clone(),
-        report.fleet.clone(),
-        report.network.clone(),
-        report.scope.clone(),
-        report.targets.len().to_string(),
-        report.operations.len().to_string(),
-        report.execution.next_operation.as_ref().map_or_else(
-            || "-".to_string(),
-            |operation| operation.operation_id.clone(),
-        ),
-    ]];
-    let target_rows = report
-        .targets
-        .iter()
-        .map(|target| {
-            [
-                target.role.clone(),
-                target.canister_id.clone(),
-                target.parent_canister_id.clone(),
-                target.expected_module_hash.clone(),
-                target.depth.to_string(),
-                target.control_authority.clone(),
-                target.snapshot_read_authority.clone(),
-            ]
-        })
-        .collect::<Vec<_>>();
-    let operation_rows = report
-        .operations
-        .iter()
-        .map(|operation| {
-            [
-                operation.sequence.to_string(),
-                operation.kind.clone(),
-                operation.target_canister_id.clone(),
-                operation.state.clone(),
-                operation.blocking_reasons.join("; "),
-            ]
-        })
-        .collect::<Vec<_>>();
-
-    [
-        format!("Plan: {}", report.plan_id),
-        format!("Run:  {}", report.run_id),
-        String::new(),
-        render_table(
-            &[
-                "STATUS",
-                "FLEET",
-                "NETWORK",
-                "SCOPE",
-                "TARGETS",
-                "OPERATIONS",
-                "NEXT",
-            ],
-            &summary_rows,
-            &[ColumnAlign::Left; 7],
-        ),
-        String::new(),
-        "Targets".to_string(),
-        render_table(
-            &[
-                "ROLE",
-                "CANISTER_ID",
-                "PARENT",
-                "MODULE_HASH",
-                "DEPTH",
-                "CONTROL",
-                "SNAPSHOT_READ",
-            ],
-            &target_rows,
-            &[ColumnAlign::Left; 7],
-        ),
-        String::new(),
-        "Operations".to_string(),
-        render_table(
-            &["SEQ", "KIND", "TARGET", "STATE", "REASONS"],
-            &operation_rows,
-            &[
-                ColumnAlign::Right,
-                ColumnAlign::Left,
-                ColumnAlign::Left,
-                ColumnAlign::Left,
-                ColumnAlign::Left,
-            ],
-        ),
-    ]
-    .join("\n")
-}
-
-fn display_created_at(created_at: &str) -> String {
-    created_at
-        .strip_prefix("unix:")
-        .and_then(|seconds| seconds.parse::<u64>().ok())
-        .map_or_else(|| created_at.to_string(), backup_list_timestamp)
 }
 
 fn planned_backup_created_at(run_id: &str) -> String {
@@ -1226,68 +1045,6 @@ fn default_backup_output_path(fleet: &str) -> PathBuf {
         file_safe_component(fleet),
         current_backup_directory_stamp()
     ))
-}
-
-fn usage() -> String {
-    let mut command = backup_command();
-    command.render_help().to_string()
-}
-
-fn status_usage() -> String {
-    let mut command = options::backup_status_command();
-    command.render_help().to_string()
-}
-
-fn list_usage() -> String {
-    let mut command = options::backup_list_command();
-    command.render_help().to_string()
-}
-
-fn create_usage() -> String {
-    let mut command = options::backup_create_command();
-    command.render_help().to_string()
-}
-
-fn inspect_usage() -> String {
-    let mut command = options::backup_inspect_command();
-    command.render_help().to_string()
-}
-
-fn verify_usage() -> String {
-    let mut command = options::backup_verify_command();
-    command.render_help().to_string()
-}
-
-fn backup_command() -> ClapCommand {
-    ClapCommand::new("backup")
-        .bin_name("canic backup")
-        .about("Plan, inspect, and verify backup artifacts")
-        .disable_help_flag(true)
-        .subcommand(passthrough_subcommand(
-            ClapCommand::new("create")
-                .about("Plan a topology-aware fleet backup")
-                .disable_help_flag(true),
-        ))
-        .subcommand(passthrough_subcommand(
-            ClapCommand::new("list")
-                .about("List backup directories under a backup root")
-                .disable_help_flag(true),
-        ))
-        .subcommand(passthrough_subcommand(
-            ClapCommand::new("inspect")
-                .about("Inspect a backup or dry-run plan layout")
-                .disable_help_flag(true),
-        ))
-        .subcommand(passthrough_subcommand(
-            ClapCommand::new("verify")
-                .about("Verify layout, journal agreement, and durable artifact checksums")
-                .disable_help_flag(true),
-        ))
-        .subcommand(passthrough_subcommand(
-            ClapCommand::new("status")
-                .about("Summarize resumable download journal state")
-                .disable_help_flag(true),
-        ))
 }
 
 #[cfg(test)]

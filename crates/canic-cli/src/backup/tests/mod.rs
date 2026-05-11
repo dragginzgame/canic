@@ -41,9 +41,9 @@ fn parses_backup_create_options() {
         OsString::from("--out"),
         OsString::from("backups/plan"),
         OsString::from("--dry-run"),
-        OsString::from(crate::args::INTERNAL_NETWORK_OPTION),
+        OsString::from(crate::cli::globals::INTERNAL_NETWORK_OPTION),
         OsString::from("local"),
-        OsString::from(crate::args::INTERNAL_ICP_OPTION),
+        OsString::from(crate::cli::globals::INTERNAL_ICP_OPTION),
         OsString::from("/bin/icp"),
     ])
     .expect("parse options");

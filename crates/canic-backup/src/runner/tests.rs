@@ -1,6 +1,5 @@
 use super::*;
 use crate::{
-    discovery::RegistryEntry,
     manifest::IdentityMode,
     persistence::BackupLayout,
     plan::{
@@ -12,6 +11,7 @@ use crate::{
     },
     test_support::temp_dir,
 };
+use canic_host::registry::RegistryEntry;
 use std::{fs, path::Path};
 
 const ROOT: &str = "aaaaa-aa";

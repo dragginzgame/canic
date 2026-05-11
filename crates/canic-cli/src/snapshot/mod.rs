@@ -1,7 +1,8 @@
 mod download;
 
 use crate::{
-    args::{parse_subcommand, passthrough_subcommand, print_help_or_version},
+    cli::clap::{parse_subcommand, passthrough_subcommand},
+    cli::help::print_help_or_version,
     version_text,
 };
 use canic_backup::snapshot::SnapshotDownloadError;

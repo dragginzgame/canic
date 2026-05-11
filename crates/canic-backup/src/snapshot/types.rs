@@ -2,6 +2,7 @@ use crate::{
     artifacts::ArtifactChecksumError, discovery::DiscoveryError, journal::JournalValidationError,
     manifest::ManifestValidationError, persistence::PersistenceError, topology::TopologyHash,
 };
+use canic_host::registry::RegistryParseError;
 use std::{
     error::Error as StdError,
     path::{Path, PathBuf},
@@ -115,6 +116,9 @@ pub enum SnapshotDownloadError {
 
     #[error(transparent)]
     Discovery(#[from] DiscoveryError),
+
+    #[error(transparent)]
+    Registry(#[from] RegistryParseError),
 
     #[error(transparent)]
     Manifest(#[from] SnapshotManifestError),

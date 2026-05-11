@@ -9,6 +9,7 @@ use crate::release_set::{
     icp_call_on_network, icp_root, load_root_release_set_manifest, resolve_artifact_root,
     resume_root_bootstrap, stage_root_release_set, workspace_root,
 };
+use crate::response_parse::parse_cycle_balance_response;
 use canic_core::{
     cdk::{types::Principal, utils::hash::wasm_hash},
     protocol,
@@ -434,26 +435,6 @@ fn query_root_cycle_balance(
         )
         .into()
     })
-}
-
-fn parse_cycle_balance_response(output: &str) -> Option<u128> {
-    output
-        .split_once('=')
-        .map_or(output, |(_, cycles)| cycles)
-        .lines()
-        .find_map(parse_leading_integer)
-}
-
-fn parse_leading_integer(line: &str) -> Option<u128> {
-    let digits = line
-        .trim_start_matches(|ch: char| ch == '(' || ch.is_whitespace())
-        .chars()
-        .take_while(|ch| ch.is_ascii_digit() || *ch == '_' || *ch == ',')
-        .filter(char::is_ascii_digit)
-        .collect::<String>();
-    (!digits.is_empty())
-        .then_some(digits)
-        .and_then(|digits| digits.parse::<u128>().ok())
 }
 
 fn progress_bar(current: usize, total: usize, width: usize) -> String {

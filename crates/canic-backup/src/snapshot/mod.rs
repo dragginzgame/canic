@@ -4,7 +4,7 @@ pub use types::*;
 
 use crate::{
     artifacts::ArtifactChecksum,
-    discovery::{SnapshotTarget, parse_registry_entries, targets_from_registry},
+    discovery::{SnapshotTarget, targets_from_registry},
     journal::{ArtifactJournalEntry, ArtifactState, DownloadJournal, DownloadOperationMetrics},
     manifest::{
         BackupUnit, BackupUnitKind, ConsistencySection, FleetBackupManifest, FleetMember,
@@ -16,6 +16,7 @@ use crate::{
     topology::{TopologyHash, TopologyHasher, TopologyRecord},
 };
 use candid::Principal;
+use canic_host::registry::parse_registry_entries;
 use std::{
     collections::BTreeSet,
     fs,

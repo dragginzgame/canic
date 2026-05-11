@@ -1,6 +1,7 @@
-use crate::args::{
-    default_icp, flag_arg, internal_icp_arg, internal_network_arg, parse_matches, path_option,
-    string_option, value_arg,
+use crate::{
+    cli::clap::{flag_arg, parse_matches, path_option, string_option, value_arg},
+    cli::defaults::default_icp,
+    cli::globals::{internal_icp_arg, internal_network_arg},
 };
 use clap::{ArgGroup, Command as ClapCommand};
 use std::{ffi::OsString, path::PathBuf};

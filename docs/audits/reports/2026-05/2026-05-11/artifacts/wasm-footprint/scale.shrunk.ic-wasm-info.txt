@@ -1,0 +1,71 @@
+Number of types: 73
+Number of globals: 3
+
+Number of data sections: 3
+Size of data sections: 147680 bytes
+
+Number of functions: 4092
+Number of callbacks: 1
+Start function: None
+Exported methods: [
+    "canister_init (func_4059)",
+    "canister_inspect_message (func_4060)",
+    "canister_post_upgrade (func_4061)",
+    "canister_query canic_bootstrap_status (func_4062)",
+    "canister_query canic_canister_children (func_4063)",
+    "canister_query canic_cycle_balance (func_4064)",
+    "canister_query canic_cycle_topups (func_4065)",
+    "canister_query canic_cycle_tracker (func_4066)",
+    "canister_query canic_log (func_4067)",
+    "canister_query canic_metadata (func_4068)",
+    "canister_query canic_metrics (func_4069)",
+    "canister_query canic_ready (func_4070)",
+    "canister_query icrc10_supported_standards (func_4071)",
+    "canister_update canic_response_capability_v1 (func_4072)",
+    "canister_update canic_sync_state (func_4073)",
+    "canister_update canic_sync_topology (func_4074)",
+    "canister_update request_cycles_from_parent (func_4075)",
+    "canister_global_timer (func_4076)",
+    "canister_update <ic-cdk internal> timer_executor (func_4077)",
+]
+
+Imported IC0 System API: [
+    "msg_reply_data_append",
+    "msg_reply",
+    "msg_method_name_size",
+    "msg_method_name_copy",
+    "accept_message",
+    "canister_version",
+    "time",
+    "stable64_read",
+    "stable64_size",
+    "stable64_grow",
+    "stable64_write",
+    "debug_print",
+    "trap",
+    "performance_counter",
+    "is_controller",
+    "msg_caller_size",
+    "msg_caller_copy",
+    "msg_arg_data_size",
+    "msg_arg_data_copy",
+    "canister_self_size",
+    "canister_self_copy",
+    "canister_cycle_balance128",
+    "msg_reject_code",
+    "msg_reject_msg_size",
+    "msg_reject_msg_copy",
+    "cost_call",
+    "canister_liquid_cycle_balance128",
+    "call_new",
+    "call_on_cleanup",
+    "call_data_append",
+    "call_cycles_add128",
+    "call_with_best_effort_response",
+    "call_perform",
+    "global_timer_set",
+]
+
+Custom sections with size: [
+    "icp:public candid:service (5843 bytes)",
+]

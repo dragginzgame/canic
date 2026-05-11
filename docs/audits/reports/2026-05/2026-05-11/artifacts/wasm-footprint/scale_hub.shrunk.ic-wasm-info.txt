@@ -1,0 +1,73 @@
+Number of types: 73
+Number of globals: 3
+
+Number of data sections: 3
+Size of data sections: 150552 bytes
+
+Number of functions: 4125
+Number of callbacks: 1
+Start function: None
+Exported methods: [
+    "canister_init (func_4090)",
+    "canister_inspect_message (func_4091)",
+    "canister_post_upgrade (func_4092)",
+    "canister_query canic_bootstrap_status (func_4093)",
+    "canister_query canic_canister_children (func_4094)",
+    "canister_query canic_cycle_balance (func_4095)",
+    "canister_query canic_cycle_topups (func_4096)",
+    "canister_query canic_cycle_tracker (func_4097)",
+    "canister_query canic_log (func_4098)",
+    "canister_query canic_metadata (func_4099)",
+    "canister_query canic_metrics (func_4100)",
+    "canister_query canic_ready (func_4101)",
+    "canister_query canic_scaling_registry (func_4102)",
+    "canister_query icrc10_supported_standards (func_4103)",
+    "canister_query plan_create_worker (func_4104)",
+    "canister_update canic_response_capability_v1 (func_4105)",
+    "canister_update canic_sync_state (func_4106)",
+    "canister_update canic_sync_topology (func_4107)",
+    "canister_update create_worker (func_4108)",
+    "canister_global_timer (func_4109)",
+    "canister_update <ic-cdk internal> timer_executor (func_4110)",
+]
+
+Imported IC0 System API: [
+    "msg_reply_data_append",
+    "msg_reply",
+    "msg_method_name_size",
+    "msg_method_name_copy",
+    "accept_message",
+    "canister_version",
+    "time",
+    "stable64_read",
+    "stable64_size",
+    "stable64_grow",
+    "stable64_write",
+    "debug_print",
+    "trap",
+    "performance_counter",
+    "is_controller",
+    "msg_caller_size",
+    "msg_caller_copy",
+    "msg_arg_data_size",
+    "msg_arg_data_copy",
+    "canister_self_size",
+    "canister_self_copy",
+    "canister_cycle_balance128",
+    "msg_reject_code",
+    "msg_reject_msg_size",
+    "msg_reject_msg_copy",
+    "cost_call",
+    "canister_liquid_cycle_balance128",
+    "call_new",
+    "call_on_cleanup",
+    "call_data_append",
+    "call_cycles_add128",
+    "call_with_best_effort_response",
+    "call_perform",
+    "global_timer_set",
+]
+
+Custom sections with size: [
+    "icp:public candid:service (6486 bytes)",
+]

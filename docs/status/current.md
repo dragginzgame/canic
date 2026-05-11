@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-05-11
+Last updated: 2026-05-12
 
 ## Purpose
 
@@ -167,6 +167,43 @@ inspect only the files needed for the current task.
 - Completed the publish-surface follow-up by aligning `crates/canic/README.md`
   with the default facade features and refreshing the recurring audit's
   canonical published crate map.
+- Ran the full-codebase DRY consolidation audit for 2026-05-12. It reports
+  medium consolidation risk at `5/10`, with installed-fleet resolution and
+  large CLI command modules as the highest-value follow-ups.
+- Added `canic-host::installed_fleet` with `InstalledFleetResolution`,
+  `InstalledFleetSource`, `InstalledFleetRegistry`, and
+  `ResolvedFleetTopology`, then routed `canic list`, `canic cycles`,
+  `canic metrics`, and `canic endpoints` through the shared installed-fleet
+  resolver.
+- Split `canic endpoints` into command orchestration, endpoint model, Candid
+  parsing, transport, and rendering modules while keeping behavior unchanged.
+- Split `canic cycles` into command orchestration, options, response parsing,
+  transport/report collection, rendering, and model modules while keeping
+  behavior unchanged.
+- Split `canic metrics` into command orchestration, options, response parsing,
+  transport/report collection, rendering, and model modules while keeping
+  behavior unchanged.
+- Split top-level CLI command catalog/help rendering and global option
+  forwarding out of `canic-cli::lib`, leaving the root focused on command
+  dispatch and error mapping.
+- Moved shared ICP response parsing primitives from `canic-cli` to
+  `canic-host::response_parse`, and switched CLI list/cycles/metrics parsers to
+  import the host-owned helpers directly.
+- Moved the live subnet registry DTO/parser from `canic-backup::discovery` to
+  `canic-host::registry`.
+- Promoted the shared installed-fleet resolver to
+  `canic-host::installed_fleet`; CLI list/cycles/metrics/endpoints now consume
+  host-owned install-state lookup, local replica preference, ICP CLI fallback,
+  registry parsing, and topology projection.
+- Split the old `canic-cli::args` module into the `canic-cli::cli` directory
+  with `clap`, `defaults`, `help`, and `globals` modules, removing the broad
+  argument-helper drawer while preserving command behavior.
+- Moved `path_stamp` and `registry_tree` under `canic-cli::support` to keep the
+  `canic-cli` crate root focused on command families and explicit support
+  modules.
+- Split `canic-cli::backup` command-family help and report rendering into
+  `backup::command` and `backup::render`; `backup::mod` is down to about
+  `1050` lines.
 
 ## Validation Recently Run
 
@@ -218,6 +255,31 @@ inspect only the files needed for the current task.
 - `cargo package -p canic -p canic-backup -p canic-cdk -p canic-cli -p canic-control-plane -p canic-core -p canic-host -p canic-macros -p canic-memory -p canic-testkit -p canic-wasm-store --locked --allow-dirty`
 - `cargo metadata --no-deps --format-version 1`
 - `cargo run -q -p canic-cli --bin canic -- backup status --dir backups/fleet-demo-20260510-222116`
+- `cargo test -p canic-cli endpoints -- --nocapture`
+- `cargo test -p canic-cli cycles::tests -- --nocapture`
+- `cargo test -p canic-cli metrics::tests -- --nocapture`
+- `cargo test -p canic-cli usage_lists_command_families -- --nocapture`
+- `cargo test -p canic-cli command_family_help_returns_ok -- --nocapture`
+- `cargo test -p canic-cli version_flags_return_ok -- --nocapture`
+- `cargo test -p canic-cli global_ -- --nocapture`
+- `cargo test -p canic-host install_root -- --nocapture`
+- `cargo test -p canic-cli list::parse -- --nocapture`
+- `cargo clippy -p canic-host -p canic-cli --all-targets -- -D warnings`
+- `cargo test -p canic-cli installed_fleet -- --nocapture`
+- `cargo test -p canic-cli --lib -- --nocapture`
+- `cargo clippy -p canic-cli --all-targets -- -D warnings`
+- `cargo check -p canic-host -p canic-backup -p canic-cli`
+- `cargo test -p canic-host registry -- --nocapture`
+- `cargo test -p canic-host installed_fleet -- --nocapture`
+- `cargo test -p canic-backup --lib -- --nocapture`
+- `cargo test -p canic-cli --lib -- --nocapture`
+- `cargo clippy -p canic-host -p canic-backup -p canic-cli --all-targets -- -D warnings`
+- `cargo check -p canic-cli`
+- `cargo test -p canic-cli command_family_help_returns_ok -- --nocapture`
+- `cargo test -p canic-cli --lib -- --nocapture`
+- `cargo clippy -p canic-cli --all-targets -- -D warnings`
+- `git diff --check`
+- `cargo test -p canic-cli backup -- --nocapture`
 - `cargo run -q -p canic-cli --bin canic -- backup inspect --dir backups/fleet-demo-20260510-222116`
 - `cargo run -q -p canic-cli --bin canic -- backup inspect --dir backups/fleet-demo-20260510-222116 --json`
 - `cargo run -q -p canic-cli --bin canic -- backup list`
@@ -258,11 +320,12 @@ inspect only the files needed for the current task.
 
 ## Good Next Tasks
 
-1. Continue the module-structure cleanup with host install/release helpers or
-   backup manifest/snapshot planning, while avoiding active `canic-cli` edits.
+1. Continue the module-structure cleanup with host install/release helpers,
+   backup manifest/snapshot planning, or the remaining direct registry-loading
+   callers in `snapshot download`, `backup`, and `status`.
 2. Keep `canic-cli`, `canic-host`, and `canic-backup` boundaries sharp: CLI owns
    UX, host owns ICP CLI/filesystem/build/install mechanics, backup owns
    backup/restore domain logic.
 3. Keep new modules on normal Rust directory discovery; do not add `#[path]`.
-4. Update `CHANGELOG.md`, `docs/changelog/0.33.md`, and
-   `docs/status/0.33-refactor.md` for each cleanup slice.
+4. Update `CHANGELOG.md`, `docs/changelog/0.34.md`, and this status file for
+   each cleanup slice.

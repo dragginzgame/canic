@@ -7,7 +7,15 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.34.x] - 2026-05-10 - Backup/restore rework
 
-- `0.34.5` splits cycle-balance history from live runtime telemetry, adds timestamped cycle top-up history, tightens list/cycles table rendering, removes install-time local replica autostart, and separates version bumps from release staging/commit/push targets.
+- `0.34.6` is a CLI boundary cleanup slice that moves shared ICP response parsing, live registry parsing, and installed-fleet resolution into `canic-host`, splits endpoints/cycles/metrics/top-level CLI glue into focused modules, replaces the old `canic-cli::args` helper drawer with focused `canic-cli::cli` and `canic-cli::support` module trees, and continues shrinking large CLI command modules such as backup.
+
+```bash
+canic list test --subtree user_hub
+canic endpoints test app --json
+canic backup inspect 1
+```
+
+- `0.34.5` splits cycle-balance history from live runtime telemetry, adds timestamped cycle top-up history, tightens list/cycles table rendering, removes install-time local replica autostart, separates version bumps from release staging/commit/push targets, and narrows `canic` facade defaults back to metrics-only so plain app canisters do not carry root/control-plane code.
 
 ```bash
 canic cycles test --since 1h --limit 5

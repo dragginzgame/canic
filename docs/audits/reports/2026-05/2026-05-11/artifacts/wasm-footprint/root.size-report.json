@@ -1,0 +1,25 @@
+{
+  "canister": "root",
+  "kind": "bundle-canister",
+  "profile": "release",
+  "built": {
+    "wasm_bytes": 3939208,
+    "wasm_gz_bytes": 1592096,
+    "functions": 6128,
+    "data_sections": 3,
+    "data_bytes": 785868,
+    "exports": 42
+  },
+  "shrunk": {
+    "wasm_bytes": 3708496,
+    "wasm_gz_bytes": 1478124,
+    "functions": 6128,
+    "data_sections": 3,
+    "data_bytes": 765260,
+    "exports": 42
+  },
+  "shrink_delta_bytes": 230712,
+  "shrink_delta_percent": 5.86,
+  "baseline_delta_bytes": "N/A",
+  "baseline_delta_percent": "N/A"
+}

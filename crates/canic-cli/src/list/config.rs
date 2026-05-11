@@ -3,9 +3,9 @@ use super::{
     options::{ListOptions, ListSource},
     render::ConfigRoleRow,
 };
-use canic_backup::discovery::RegistryEntry;
 use canic_host::{
     install_root::discover_current_canic_config_choices,
+    registry::RegistryEntry,
     release_set::{
         configured_fleet_roles, configured_role_auto_create, configured_role_capabilities,
         configured_role_details, configured_role_kinds, configured_role_metrics_profiles,

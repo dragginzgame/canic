@@ -4,10 +4,11 @@ use super::{
     SnapshotReadAuthority,
 };
 use crate::{
-    discovery::{RegistryEntry, SnapshotTarget, targets_from_registry},
+    discovery::{SnapshotTarget, targets_from_registry},
     manifest::IdentityMode,
 };
 use candid::Principal;
+use canic_host::registry::RegistryEntry;
 use std::{
     collections::{BTreeMap, BTreeSet},
     str::FromStr,

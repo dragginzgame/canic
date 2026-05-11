@@ -2,8 +2,7 @@ use crate::{
     manifest::{FleetMember, FleetSection, IdentityMode, SourceSnapshot, VerificationCheck},
     topology::{TopologyHasher, TopologyRecord},
 };
-use canic_cdk::utils::hash::hex_bytes;
-use serde_json::Value;
+use canic_host::registry::RegistryEntry;
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use thiserror::Error as ThisError;
 
@@ -94,19 +93,6 @@ pub struct SnapshotPlan {
 }
 
 ///
-/// RegistryEntry
-///
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct RegistryEntry {
-    pub pid: String,
-    pub role: Option<String>,
-    pub kind: Option<String>,
-    pub parent_pid: Option<String>,
-    pub module_hash: Option<String>,
-}
-
-///
 /// SnapshotTarget
 ///
 
@@ -133,26 +119,11 @@ pub enum DiscoveryError {
     #[error("discovered member {0} has no verification checks")]
     MissingVerificationChecks(String),
 
-    #[error("registry JSON must be an array or {{\"Ok\": [...]}}")]
-    InvalidRegistryJsonShape,
-
     #[error("registry JSON did not contain the requested canister {0}")]
     CanisterNotInRegistry(String),
 
     #[error(transparent)]
     Json(#[from] serde_json::Error),
-}
-
-/// Parse the wrapped subnet registry JSON shape.
-pub fn parse_registry_entries(registry_json: &str) -> Result<Vec<RegistryEntry>, DiscoveryError> {
-    let data = serde_json::from_str::<Value>(registry_json)?;
-    let entries = data
-        .get("Ok")
-        .and_then(Value::as_array)
-        .or_else(|| data.as_array())
-        .ok_or(DiscoveryError::InvalidRegistryJsonShape)?;
-
-    Ok(entries.iter().filter_map(parse_registry_entry).collect())
 }
 
 /// Resolve selected target and children from registry entries.
@@ -201,70 +172,6 @@ pub fn targets_from_registry(
     }
 
     Ok(targets)
-}
-
-// Parse one registry entry from registry JSON.
-fn parse_registry_entry(value: &Value) -> Option<RegistryEntry> {
-    let pid = value.get("pid").and_then(Value::as_str)?.to_string();
-    let role = value
-        .get("role")
-        .and_then(Value::as_str)
-        .map(str::to_string);
-    let parent_pid = value
-        .get("record")
-        .and_then(|record| record.get("parent_pid"))
-        .and_then(parse_optional_principal);
-    let kind = value
-        .get("kind")
-        .or_else(|| value.get("record").and_then(|record| record.get("kind")))
-        .and_then(Value::as_str)
-        .map(str::to_string);
-    let module_hash = value
-        .get("record")
-        .and_then(|record| record.get("module_hash"))
-        .and_then(parse_module_hash);
-
-    Some(RegistryEntry {
-        pid,
-        role,
-        kind,
-        parent_pid,
-        module_hash,
-    })
-}
-
-// Parse optional wasm module hash JSON emitted as bytes or text.
-fn parse_module_hash(value: &Value) -> Option<String> {
-    if value.is_null() {
-        return None;
-    }
-    if let Some(text) = value.as_str() {
-        return Some(text.to_string());
-    }
-    let bytes = value
-        .as_array()?
-        .iter()
-        .map(|item| {
-            let value = item.as_u64()?;
-            u8::try_from(value).ok()
-        })
-        .collect::<Option<Vec<_>>>()?;
-    Some(hex_bytes(bytes))
-}
-
-// Parse optional principal JSON emitted as null, string, or optional vector form.
-fn parse_optional_principal(value: &Value) -> Option<String> {
-    if value.is_null() {
-        return None;
-    }
-    if let Some(text) = value.as_str() {
-        return Some(text.to_string());
-    }
-    value
-        .as_array()
-        .and_then(|items| items.first())
-        .and_then(Value::as_str)
-        .map(str::to_string)
 }
 
 // Validate discovery output before building a manifest projection.

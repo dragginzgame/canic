@@ -1,6 +1,5 @@
 use super::*;
 use crate::{
-    discovery::RegistryEntry,
     manifest::IdentityMode,
     plan::{
         AuthorityEvidence, BackupExecutionPreflightReceipts, BackupPlanBuildInput, BackupScopeKind,
@@ -9,6 +8,7 @@ use crate::{
         build_backup_plan,
     },
 };
+use canic_host::registry::RegistryEntry;
 
 const ROOT: &str = "aaaaa-aa";
 const APP: &str = "renrk-eyaaa-aaaaa-aaada-cai";

@@ -6,10 +6,10 @@ pub use types::*;
 
 use crate::discovery::DiscoveryError;
 #[cfg(test)]
-use crate::discovery::RegistryEntry;
-#[cfg(test)]
 use crate::manifest::IdentityMode;
 use candid::Principal;
+#[cfg(test)]
+use canic_host::registry::RegistryEntry;
 use std::{collections::BTreeMap, collections::BTreeSet, str::FromStr};
 use thiserror::Error as ThisError;
 

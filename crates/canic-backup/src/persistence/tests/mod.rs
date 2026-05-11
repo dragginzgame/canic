@@ -1,7 +1,6 @@
 use super::*;
 use crate::test_support::temp_dir;
 use crate::{
-    discovery::RegistryEntry,
     execution::BackupExecutionJournal,
     journal::{ArtifactJournalEntry, ArtifactState},
     manifest::{
@@ -13,6 +12,7 @@ use crate::{
         SnapshotReadAuthority, build_backup_plan,
     },
 };
+use canic_host::registry::RegistryEntry;
 use std::fs;
 
 const ROOT: &str = "aaaaa-aa";
