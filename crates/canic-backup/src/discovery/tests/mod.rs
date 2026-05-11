@@ -84,18 +84,21 @@ fn registry_entries_parse_wrapped_cli_json() {
                 role: Some("root".to_string()),
                 kind: Some("root".to_string()),
                 parent_pid: None,
+                module_hash: None,
             },
             RegistryEntry {
                 pid: APP_TEXT.to_string(),
                 role: Some("app".to_string()),
                 kind: Some("singleton".to_string()),
                 parent_pid: Some(ROOT_TEXT.to_string()),
+                module_hash: Some("01ab".to_string()),
             },
             RegistryEntry {
                 pid: WORKER_TEXT.to_string(),
                 role: Some("worker".to_string()),
                 kind: Some("replica".to_string()),
                 parent_pid: Some(APP_TEXT.to_string()),
+                module_hash: Some(HASH.to_string()),
             },
         ]
     );
@@ -157,7 +160,6 @@ fn discovered_member(
         snapshot_plan: SnapshotPlan {
             snapshot_id: format!("snap-{role}"),
             module_hash: Some(HASH.to_string()),
-            wasm_hash: Some(HASH.to_string()),
             code_version: Some("v0.30.0".to_string()),
             artifact_path: format!("artifacts/{role}"),
             checksum_algorithm: "sha256".to_string(),
@@ -187,7 +189,8 @@ fn registry_json() -> String {
                     "pid": APP_TEXT,
                     "role": "app",
                     "kind": "singleton",
-                    "parent_pid": ROOT_TEXT
+                    "parent_pid": ROOT_TEXT,
+                    "module_hash": [1, 171]
                 }
             },
             {
@@ -197,7 +200,8 @@ fn registry_json() -> String {
                     "pid": WORKER_TEXT,
                     "role": "worker",
                     "kind": "replica",
-                    "parent_pid": [APP_TEXT]
+                    "parent_pid": [APP_TEXT],
+                    "module_hash": HASH
                 }
             }
         ]

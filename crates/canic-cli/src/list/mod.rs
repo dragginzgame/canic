@@ -12,8 +12,8 @@ mod tree;
 use canic_backup::discovery::DiscoveryError;
 use config::{load_config_role_rows, missing_config_roles};
 use live::{
-    list_canic_versions, list_cycle_balances, list_ready_statuses, load_registry_entries,
-    resolve_tree_anchor, resolve_wasm_sizes,
+    list_canic_versions, list_cycle_balances, list_module_hashes, list_ready_statuses,
+    load_registry_entries, resolve_tree_anchor, resolve_wasm_sizes,
 };
 use options::{ListOptions, config_usage, usage};
 use render::RegistryColumnData;
@@ -21,12 +21,15 @@ use render::RegistryColumnData;
 use render::render_config_output;
 #[cfg(test)]
 use render::{
-    CANIC_HEADER, CANISTER_HEADER, CYCLES_HEADER, ConfigRoleRow, READY_HEADER, ROLE_HEADER,
-    WASM_HEADER, render_config_output, render_registry_separator, render_registry_table_row,
-    render_registry_tree,
+    CANIC_HEADER, CANISTER_HEADER, CYCLES_HEADER, ConfigRoleRow, MODULE_HASH_HEADER, MODULE_HEADER,
+    READY_HEADER, ROLE_HEADER, WASM_HEADER, render_config_output, render_registry_separator,
+    render_registry_table_row, render_registry_tree,
 };
 use render::{ListTitle, render_list_output};
-use std::ffi::OsString;
+use std::{
+    ffi::OsString,
+    io::{self, IsTerminal},
+};
 use thiserror::Error as ThisError;
 
 ///
@@ -92,6 +95,7 @@ where
     let anchor = resolve_tree_anchor(&options);
     let readiness = list_ready_statuses(&options, &registry, anchor.as_deref())?;
     let canic_versions = list_canic_versions(&options, &registry, anchor.as_deref())?;
+    let module_hashes = list_module_hashes(&registry, anchor.as_deref())?;
     let wasm_sizes = resolve_wasm_sizes(&options, &registry);
     let cycles = list_cycle_balances(&options, &registry, anchor.as_deref())?;
     let missing_roles = missing_config_roles(&options, &registry);
@@ -99,8 +103,11 @@ where
     let columns = RegistryColumnData {
         readiness: &readiness,
         canic_versions: &canic_versions,
+        module_hashes: &module_hashes,
         wasm_sizes: &wasm_sizes,
         cycles: &cycles,
+        full_module_hashes: options.verbose,
+        color_module_variants: should_color_list_output(),
     };
     println!(
         "{}",
@@ -143,6 +150,10 @@ fn state_network(options: &ListOptions) -> String {
     options.network.clone().unwrap_or_else(local_network)
 }
 
+fn should_color_list_output() -> bool {
+    io::stdout().is_terminal() && std::env::var_os("NO_COLOR").is_none()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -157,6 +168,10 @@ mod tests {
     const APP: &str = "renrk-eyaaa-aaaaa-aaada-cai";
     const MINIMAL: &str = "rrkah-fqaaa-aaaaa-aaaaq-cai";
     const WORKER: &str = "rno2w-sqaaa-aaaaa-aaacq-cai";
+    const HASH: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+    const HASH_PREFIX: &str = "01234567";
+    const VARIANT_HASH: &str = "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789";
+    const VARIANT_HASH_PREFIX: &str = "abcdef01";
     // Ensure list options parse live registry queries.
     #[test]
     fn parses_live_list_options() {
@@ -242,6 +257,7 @@ mod tests {
         assert!(list.contains("<fleet>"));
         assert!(!list.contains("--fleet <name>"));
         assert!(list.contains("--subtree <name-or-principal>"));
+        assert!(list.contains("--verbose"));
         assert!(!list.contains("--from"));
         assert!(!list.contains("--root"));
         assert!(config.contains("Usage: canic config [OPTIONS] <fleet>"));
@@ -259,15 +275,19 @@ mod tests {
     fn renders_registry_table() {
         let registry = parse_registry_entries(&registry_json()).expect("parse registry");
         let readiness = readiness_map();
+        let module_hashes = module_hash_map();
         let empty = BTreeMap::new();
         let columns = RegistryColumnData {
             readiness: &readiness,
             canic_versions: &empty,
+            module_hashes: &module_hashes,
             wasm_sizes: &empty,
             cycles: &empty,
+            full_module_hashes: false,
+            color_module_variants: false,
         };
         let tree = render_registry_tree(&registry, None, &columns).expect("render tree");
-        let widths = [12, 27, 5, 5, 7, 6];
+        let widths = [12, 8, 27, 5, 5, 7, 6];
 
         assert_eq!(
             tree,
@@ -275,6 +295,7 @@ mod tests {
                 render_registry_table_row(
                     &[
                         ROLE_HEADER,
+                        MODULE_HEADER,
                         CANISTER_HEADER,
                         READY_HEADER,
                         CANIC_HEADER,
@@ -284,16 +305,72 @@ mod tests {
                     &widths
                 ),
                 render_registry_separator(&widths),
-                render_registry_table_row(&["root", ROOT, "yes", "-", "-", "-"], &widths),
-                render_registry_table_row(&["├─ app", APP, "no", "-", "-", "-"], &widths),
                 render_registry_table_row(
-                    &["│  └─ worker", WORKER, "error", "-", "-", "-"],
+                    &["root", HASH_PREFIX, ROOT, "yes", "-", "-", "-"],
                     &widths
                 ),
-                render_registry_table_row(&["└─ minimal", MINIMAL, "yes", "-", "-", "-"], &widths)
+                render_registry_table_row(
+                    &["├─ app", HASH_PREFIX, APP, "no", "-", "-", "-"],
+                    &widths
+                ),
+                render_registry_table_row(
+                    &["│  └─ worker", HASH_PREFIX, WORKER, "error", "-", "-", "-"],
+                    &widths
+                ),
+                render_registry_table_row(
+                    &["└─ minimal", HASH_PREFIX, MINIMAL, "yes", "-", "-", "-"],
+                    &widths
+                )
             ]
             .join("\n")
         );
+    }
+
+    // Ensure verbose registry output shows full module hashes.
+    #[test]
+    fn renders_verbose_registry_table_with_full_module_hashes() {
+        let registry = parse_registry_entries(&registry_json()).expect("parse registry");
+        let readiness = readiness_map();
+        let module_hashes = module_hash_map();
+        let empty = BTreeMap::new();
+        let columns = RegistryColumnData {
+            readiness: &readiness,
+            canic_versions: &empty,
+            module_hashes: &module_hashes,
+            wasm_sizes: &empty,
+            cycles: &empty,
+            full_module_hashes: true,
+            color_module_variants: false,
+        };
+        let tree = render_registry_tree(&registry, Some(APP), &columns).expect("render tree");
+
+        assert!(tree.contains(MODULE_HASH_HEADER));
+        assert!(tree.contains(HASH));
+    }
+
+    // Ensure infra module hashes are compared against the first app/service hash.
+    #[test]
+    fn colors_infra_module_hashes_against_first_service_baseline() {
+        let registry = parse_registry_entries(&registry_json()).expect("parse registry");
+        let readiness = readiness_map();
+        let module_hashes = BTreeMap::from([
+            (ROOT.to_string(), VARIANT_HASH.to_string()),
+            (APP.to_string(), HASH.to_string()),
+        ]);
+        let empty = BTreeMap::new();
+        let columns = RegistryColumnData {
+            readiness: &readiness,
+            canic_versions: &empty,
+            module_hashes: &module_hashes,
+            wasm_sizes: &empty,
+            cycles: &empty,
+            full_module_hashes: false,
+            color_module_variants: true,
+        };
+        let tree = render_registry_tree(&registry, None, &columns).expect("render tree");
+
+        assert!(tree.contains(&format!("\x1b[38;5;179m{VARIANT_HASH_PREFIX}")));
+        assert!(!tree.contains(&format!("\x1b[38;5;179m{HASH_PREFIX}")));
     }
 
     // Ensure one selected subtree can be rendered without siblings.
@@ -301,15 +378,19 @@ mod tests {
     fn renders_selected_subtree() {
         let registry = parse_registry_entries(&registry_json()).expect("parse registry");
         let readiness = readiness_map();
+        let module_hashes = module_hash_map();
         let empty = BTreeMap::new();
         let columns = RegistryColumnData {
             readiness: &readiness,
             canic_versions: &empty,
+            module_hashes: &module_hashes,
             wasm_sizes: &empty,
             cycles: &empty,
+            full_module_hashes: false,
+            color_module_variants: false,
         };
         let tree = render_registry_tree(&registry, Some(APP), &columns).expect("render subtree");
-        let widths = [9, 27, 5, 5, 7, 6];
+        let widths = [9, 8, 27, 5, 5, 7, 6];
 
         assert_eq!(
             tree,
@@ -317,6 +398,7 @@ mod tests {
                 render_registry_table_row(
                     &[
                         ROLE_HEADER,
+                        MODULE_HEADER,
                         CANISTER_HEADER,
                         READY_HEADER,
                         CANIC_HEADER,
@@ -326,8 +408,11 @@ mod tests {
                     &widths
                 ),
                 render_registry_separator(&widths),
-                render_registry_table_row(&["app", APP, "no", "-", "-", "-"], &widths),
-                render_registry_table_row(&["└─ worker", WORKER, "error", "-", "-", "-"], &widths)
+                render_registry_table_row(&["app", HASH_PREFIX, APP, "no", "-", "-", "-"], &widths),
+                render_registry_table_row(
+                    &["└─ worker", HASH_PREFIX, WORKER, "error", "-", "-", "-"],
+                    &widths
+                )
             ]
             .join("\n")
         );
@@ -342,12 +427,16 @@ mod tests {
             network: "local".to_string(),
         };
         let readiness = readiness_map();
+        let module_hashes = module_hash_map();
         let empty = BTreeMap::new();
         let columns = RegistryColumnData {
             readiness: &readiness,
             canic_versions: &empty,
+            module_hashes: &module_hashes,
             wasm_sizes: &empty,
             cycles: &empty,
+            full_module_hashes: false,
+            color_module_variants: false,
         };
         let output = render_list_output(&title, &registry, Some(APP), &columns, &[])
             .expect("render list output");
@@ -367,11 +456,15 @@ mod tests {
         let wasm_sizes = BTreeMap::from([("app".to_string(), "811.20 KiB".to_string())]);
         let cycles = BTreeMap::from([(APP.to_string(), "12.35 TC".to_string())]);
         let readiness = readiness_map();
+        let module_hashes = module_hash_map();
         let columns = RegistryColumnData {
             readiness: &readiness,
             canic_versions: &canic_versions,
+            module_hashes: &module_hashes,
             wasm_sizes: &wasm_sizes,
             cycles: &cycles,
+            full_module_hashes: false,
+            color_module_variants: false,
         };
         let output = render_list_output(&title, &registry, None, &columns, &["audit".to_string()])
             .expect("render list output");
@@ -459,7 +552,8 @@ mod tests {
                         "pid": ROOT,
                         "role": "root",
                         "kind": "root",
-                        "parent_pid": null
+                        "parent_pid": null,
+                        "module_hash": HASH
                     }
                 },
                 {
@@ -469,7 +563,8 @@ mod tests {
                         "pid": APP,
                         "role": "app",
                         "kind": "singleton",
-                        "parent_pid": ROOT
+                        "parent_pid": ROOT,
+                        "module_hash": HASH
                     }
                 },
                 {
@@ -479,7 +574,8 @@ mod tests {
                         "pid": MINIMAL,
                         "role": "minimal",
                         "kind": "singleton",
-                        "parent_pid": ROOT
+                        "parent_pid": ROOT,
+                        "module_hash": HASH
                     }
                 },
                 {
@@ -489,7 +585,8 @@ mod tests {
                         "pid": WORKER,
                         "role": "worker",
                         "kind": "replica",
-                        "parent_pid": [APP]
+                        "parent_pid": [APP],
+                        "module_hash": HASH
                     }
                 }
             ]
@@ -503,6 +600,15 @@ mod tests {
             (APP.to_string(), ReadyStatus::NotReady),
             (MINIMAL.to_string(), ReadyStatus::Ready),
             (WORKER.to_string(), ReadyStatus::Error),
+        ])
+    }
+
+    fn module_hash_map() -> BTreeMap<String, String> {
+        BTreeMap::from([
+            (ROOT.to_string(), HASH.to_string()),
+            (APP.to_string(), HASH.to_string()),
+            (MINIMAL.to_string(), HASH.to_string()),
+            (WORKER.to_string(), HASH.to_string()),
         ])
     }
 }

@@ -1,4 +1,4 @@
-use crate::hash::{digest_hex, sha256_hex};
+use canic_cdk::utils::hash::{hex_bytes, sha256_hex};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
@@ -46,7 +46,7 @@ impl ArtifactChecksum {
 
         Ok(Self {
             algorithm: SHA256_ALGORITHM.to_string(),
-            hash: digest_hex(hasher.finalize()),
+            hash: hex_bytes(hasher.finalize()),
         })
     }
 
@@ -77,7 +77,7 @@ impl ArtifactChecksum {
 
         Ok(Self {
             algorithm: SHA256_ALGORITHM.to_string(),
-            hash: digest_hex(hasher.finalize()),
+            hash: hex_bytes(hasher.finalize()),
         })
     }
 

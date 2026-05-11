@@ -77,7 +77,7 @@ pub(super) fn stage_managed_release_set(
         );
         let wasm_module = load_release_wasm_gz(spec, &role_name);
         let template_id = TemplateId::owned(format!("embedded:{role}"));
-        let payload_hash = canic::cdk::utils::wasm::get_wasm_hash(&wasm_module);
+        let payload_hash = canic::cdk::utils::hash::wasm_hash(&wasm_module);
         let payload_size_bytes = wasm_module.len() as u64;
         let chunks = wasm_module
             .chunks(spec.root_release_chunk_bytes)
@@ -105,7 +105,7 @@ pub(super) fn stage_managed_release_set(
             payload_size_bytes,
             chunk_hashes: chunks
                 .iter()
-                .map(|chunk| canic::cdk::utils::wasm::get_wasm_hash(chunk))
+                .map(|chunk| canic::cdk::utils::hash::wasm_hash(chunk))
                 .collect(),
         };
         prepare_chunk_set(pic, root_id, prepare);

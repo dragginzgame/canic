@@ -115,7 +115,6 @@ fn fleet_member(
         source_snapshot: SourceSnapshot {
             snapshot_id: format!("snap-{role}"),
             module_hash: Some(HASH.to_string()),
-            wasm_hash: Some(HASH.to_string()),
             code_version: Some("v0.30.0".to_string()),
             artifact_path: format!("artifacts/{role}"),
             checksum_algorithm: "sha256".to_string(),

@@ -48,6 +48,11 @@ For example: [docs/changelog/0.33.md](docs/changelog/0.33.md)
   - Migration commentary
 - This is the preferred place for code examples, LoC snapshots, and fenced blocks (` ``` `) that improve scanability.
 - Detailed minor notes may be substantially more verbose than root changelog entries.
+- When a patch adds or changes a CLI query, command result, JSON shape, or
+  visible output column, record that operator-facing surface under that patch
+  section in the detailed minor notes. Keep implementation cleanup separate from
+  those CLI surface bullets so readers can quickly find new automation inputs
+  and outputs.
 
 All patch releases in the same minor line share one detailed notes file.
 Example: `0.33.0`, `0.33.1`, and `0.33.2` all map to [docs/changelog/0.33.md](docs/changelog/0.33.md).

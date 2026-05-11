@@ -346,7 +346,6 @@ pub enum IdentityMode {
 pub struct SourceSnapshot {
     pub snapshot_id: String,
     pub module_hash: Option<String>,
-    pub wasm_hash: Option<String>,
     pub code_version: Option<String>,
     pub artifact_path: String,
     pub checksum_algorithm: String,
@@ -364,10 +363,6 @@ impl SourceSnapshot {
         validate_optional_nonempty(
             "fleet.members[].source_snapshot.module_hash",
             self.module_hash.as_deref(),
-        )?;
-        validate_optional_nonempty(
-            "fleet.members[].source_snapshot.wasm_hash",
-            self.wasm_hash.as_deref(),
         )?;
         validate_optional_nonempty(
             "fleet.members[].source_snapshot.code_version",

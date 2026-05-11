@@ -402,7 +402,6 @@ fn valid_manifest() -> FleetBackupManifest {
                 source_snapshot: SourceSnapshot {
                     snapshot_id: "snap-root".to_string(),
                     module_hash: Some(HASH.to_string()),
-                    wasm_hash: Some(HASH.to_string()),
                     code_version: Some("v0.30.0".to_string()),
                     artifact_path: "artifacts/root".to_string(),
                     checksum_algorithm: "sha256".to_string(),
@@ -442,12 +441,14 @@ fn valid_backup_plan() -> BackupPlan {
                 role: Some("root".to_string()),
                 kind: Some("root".to_string()),
                 parent_pid: None,
+                module_hash: None,
             },
             RegistryEntry {
                 pid: CHILD.to_string(),
                 role: Some("app".to_string()),
                 kind: Some("singleton".to_string()),
                 parent_pid: Some(ROOT.to_string()),
+                module_hash: None,
             },
         ],
         control_authority: ControlAuthority::root_controller(AuthorityEvidence::Proven),

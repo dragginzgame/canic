@@ -145,6 +145,7 @@ fn snapshot_targets(
                 canister_id: entry.pid.clone(),
                 role: entry.role.clone(),
                 parent_canister_id: entry.parent_pid.clone(),
+                module_hash: entry.module_hash.clone(),
             })
             .collect()),
     }
@@ -168,7 +169,7 @@ fn backup_target(
         control_authority,
         snapshot_read_authority,
         identity_mode,
-        expected_module_hash: None,
+        expected_module_hash: target.module_hash,
     }
 }
 

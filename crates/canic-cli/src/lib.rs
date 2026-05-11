@@ -8,6 +8,7 @@ mod list;
 mod manifest;
 mod medic;
 mod output;
+mod path_stamp;
 mod replica;
 mod restore;
 mod scaffold;

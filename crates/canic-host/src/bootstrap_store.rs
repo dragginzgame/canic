@@ -1,5 +1,6 @@
 use crate::{
     artifact_io::{embed_candid_metadata, maybe_shrink_wasm_artifact, write_gzip_artifact},
+    build_profile::CanisterBuildProfile,
     cargo_command,
     cargo_metadata::{CargoMetadata, cargo_metadata},
     icp_environment_from_env,
@@ -29,42 +30,6 @@ const CANIC_FAMILY_CRATES: &[&str] = &[
 ];
 
 ///
-/// BootstrapWasmStoreBuildProfile
-///
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum BootstrapWasmStoreBuildProfile {
-    Debug,
-    Fast,
-    Release,
-}
-
-impl BootstrapWasmStoreBuildProfile {
-    #[must_use]
-    pub const fn cargo_args(self) -> &'static [&'static str] {
-        match self {
-            Self::Debug => &[],
-            Self::Fast => &["--profile", "fast"],
-            Self::Release => &["--release"],
-        }
-    }
-
-    #[must_use]
-    pub const fn target_dir_name(self) -> &'static str {
-        match self {
-            Self::Debug => "debug",
-            Self::Fast => "fast",
-            Self::Release => "release",
-        }
-    }
-
-    #[must_use]
-    pub const fn profile_marker(self) -> &'static str {
-        self.target_dir_name()
-    }
-}
-
-///
 /// BootstrapWasmStoreBuildOutput
 ///
 
@@ -87,7 +52,7 @@ struct BootstrapWasmStoreSource {
 pub fn build_bootstrap_wasm_store_artifact(
     workspace_root: &Path,
     icp_root: &Path,
-    profile: BootstrapWasmStoreBuildProfile,
+    profile: CanisterBuildProfile,
 ) -> Result<BootstrapWasmStoreBuildOutput, Box<dyn std::error::Error>> {
     let source = resolve_bootstrap_wasm_store_source(workspace_root, icp_root)?;
     let artifact_root = icp_root.join(WASM_STORE_ARTIFACTS_RELATIVE);
@@ -115,7 +80,7 @@ pub fn build_bootstrap_wasm_store_artifact(
 
     fs::copy(&built_wasm_path, &wasm_path)?;
     maybe_shrink_wasm_artifact(&wasm_path)?;
-    fs::write(profile_path, profile.profile_marker())?;
+    fs::write(profile_path, profile.target_dir_name())?;
     if should_export_candid_artifacts(&environment) {
         ensure_wasm_store_did(workspace_root, &source, profile, &did_path)?;
         embed_candid_metadata(&wasm_path, &did_path)?;
@@ -400,7 +365,7 @@ fn run_wasm_store_cargo_build(
     workspace_root: &Path,
     manifest_path: &Path,
     config_path: &Path,
-    profile: BootstrapWasmStoreBuildProfile,
+    profile: CanisterBuildProfile,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut command = cargo_command();
     command
@@ -436,7 +401,7 @@ fn run_wasm_store_cargo_build(
 fn ensure_wasm_store_did(
     workspace_root: &Path,
     source: &BootstrapWasmStoreSource,
-    profile: BootstrapWasmStoreBuildProfile,
+    profile: CanisterBuildProfile,
     artifact_did_path: &Path,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let source_did_path = source.source_root.join(CANONICAL_WASM_STORE_DID_FILE);
@@ -453,14 +418,14 @@ fn ensure_wasm_store_did(
         workspace_root,
         &source.manifest_path,
         &config_path(workspace_root),
-        BootstrapWasmStoreBuildProfile::Debug,
+        CanisterBuildProfile::Debug,
     )?;
 
     let target_root = std::env::var_os("CARGO_TARGET_DIR")
         .map_or_else(|| workspace_root.join("target"), PathBuf::from);
     let debug_wasm_path = target_root
         .join("wasm32-unknown-unknown")
-        .join(BootstrapWasmStoreBuildProfile::Debug.target_dir_name())
+        .join(CanisterBuildProfile::Debug.target_dir_name())
         .join(format!("{CANONICAL_WASM_STORE_CRATE_NAME}.wasm"));
     let output = Command::new("candid-extractor")
         .arg(&debug_wasm_path)
@@ -482,7 +447,7 @@ fn ensure_wasm_store_did(
         fs::write(&source_did_path, &output.stdout)?;
     }
     fs::copy(source_did_path, artifact_did_path)?;
-    if profile == BootstrapWasmStoreBuildProfile::Debug {
+    if profile == CanisterBuildProfile::Debug {
         let artifact_root = artifact_did_path
             .parent()
             .expect("artifact did path must have parent");

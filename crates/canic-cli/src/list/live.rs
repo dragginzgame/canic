@@ -84,6 +84,21 @@ pub(super) fn list_canic_versions(
     })
 }
 
+pub(super) fn list_module_hashes(
+    registry: &[RegistryEntry],
+    canister: Option<&str>,
+) -> Result<BTreeMap<String, String>, ListCommandError> {
+    Ok(visible_entries(registry, canister)?
+        .into_iter()
+        .filter_map(|entry| {
+            entry
+                .module_hash
+                .as_ref()
+                .map(|hash| (entry.pid.clone(), hash.clone()))
+        })
+        .collect())
+}
+
 pub(super) fn resolve_wasm_sizes(
     options: &ListOptions,
     registry: &[RegistryEntry],

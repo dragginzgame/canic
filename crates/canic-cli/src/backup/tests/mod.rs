@@ -274,11 +274,14 @@ fn backup_inspect_reads_dry_run_details() {
     assert_eq!(report.layout_status, "dry-run");
     assert_eq!(report.plan_id, plan.plan_id);
     assert_eq!(report.targets.len(), 1);
+    assert_eq!(report.targets[0].expected_module_hash, HASH);
     assert_eq!(report.operations.len(), 10);
     assert!(rendered.contains("Plan: plan-test"));
     assert!(rendered.contains("Targets"));
     assert!(rendered.contains("Operations"));
     assert!(rendered.contains(CHILD));
+    assert!(rendered.contains("MODULE_HASH"));
+    assert!(rendered.contains(HASH));
     assert!(rendered.contains("validate-topology"));
 }
 
@@ -577,7 +580,6 @@ fn fleet_member() -> FleetMember {
         source_snapshot: SourceSnapshot {
             snapshot_id: "root-snapshot".to_string(),
             module_hash: None,
-            wasm_hash: None,
             code_version: Some("v0.30.3".to_string()),
             artifact_path: "artifacts/root".to_string(),
             checksum_algorithm: "sha256".to_string(),
@@ -604,12 +606,14 @@ fn valid_backup_plan() -> BackupPlan {
                 role: Some("root".to_string()),
                 kind: Some("root".to_string()),
                 parent_pid: None,
+                module_hash: None,
             },
             RegistryEntry {
                 pid: CHILD.to_string(),
                 role: Some("app".to_string()),
                 kind: Some("singleton".to_string()),
                 parent_pid: Some(ROOT.to_string()),
+                module_hash: Some(HASH.to_string()),
             },
         ],
         control_authority: ControlAuthority::root_controller(AuthorityEvidence::Declared),

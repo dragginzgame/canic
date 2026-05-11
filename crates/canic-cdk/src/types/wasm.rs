@@ -1,4 +1,4 @@
-use crate::utils::wasm::get_wasm_hash;
+use crate::utils::hash::wasm_hash;
 
 ///
 /// WasmModule
@@ -18,7 +18,7 @@ impl WasmModule {
 
     #[must_use]
     pub fn module_hash(&self) -> Vec<u8> {
-        get_wasm_hash(self.bytes)
+        wasm_hash(self.bytes)
     }
 
     #[must_use]

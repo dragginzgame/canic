@@ -5,7 +5,10 @@ use crate::release_set::{
     icp_call_on_network, icp_root, load_root_release_set_manifest, resolve_artifact_root,
     resume_root_bootstrap, stage_root_release_set, workspace_root,
 };
-use canic_core::{cdk::types::Principal, protocol};
+use canic_core::{
+    cdk::{types::Principal, utils::hash::wasm_hash},
+    protocol,
+};
 use config_selection::resolve_install_config_path;
 use std::{
     env,
@@ -208,9 +211,27 @@ fn reinstall_root_wasm(
     let mut install = icp_canister_command_in_network(icp_root);
     install.args(["install", root_canister, "--mode=reinstall", "-y", "--wasm"]);
     install.arg(root_wasm);
-    install.args(["--args", "(variant { Prime })"]);
+    install.args(["--args", &root_init_args(root_wasm)?]);
     add_icp_environment_target(&mut install, network);
     run_command(&mut install)
+}
+
+fn root_init_args(root_wasm: &Path) -> Result<String, Box<dyn std::error::Error>> {
+    let wasm = std::fs::read(root_wasm)?;
+    Ok(format!(
+        "(variant {{ PrimeWithModuleHash = {} }})",
+        idl_blob(&wasm_hash(&wasm))
+    ))
+}
+
+fn idl_blob(bytes: &[u8]) -> String {
+    let mut encoded = String::from("blob \"");
+    for byte in bytes {
+        use std::fmt::Write as _;
+        let _ = write!(encoded, "\\{byte:02X}");
+    }
+    encoded.push('"');
+    encoded
 }
 
 // Build the persisted project-local install state from a completed install.

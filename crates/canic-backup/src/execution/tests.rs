@@ -294,12 +294,14 @@ fn registry() -> Vec<RegistryEntry> {
             role: Some("root".to_string()),
             kind: Some("root".to_string()),
             parent_pid: None,
+            module_hash: None,
         },
         RegistryEntry {
             pid: APP.to_string(),
             role: Some("app".to_string()),
             kind: Some("singleton".to_string()),
             parent_pid: Some(ROOT.to_string()),
+            module_hash: None,
         },
     ]
 }

@@ -5,6 +5,11 @@ use crate::{
     },
     version_text,
 };
+use candid::{
+    TypeEnv,
+    types::{FuncMode, Function, Label, Type, TypeInner},
+};
+use candid_parser::utils::CandidSource;
 use canic_backup::discovery::{RegistryEntry, parse_registry_entries};
 use canic_host::{
     icp::IcpCli, install_root::read_named_fleet_install_state, release_set::icp_root, replica_query,
@@ -36,6 +41,9 @@ pub enum EndpointsCommandError {
 
     #[error("canister interface did not contain a service block")]
     MissingService,
+
+    #[error("failed to parse Candid interface: {0}")]
+    InvalidCandid(String),
 
     #[error(
         "live metadata was unavailable for {canister} in fleet {fleet} and no local Candid artifact could be resolved"
@@ -102,13 +110,121 @@ struct EndpointReport {
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 struct EndpointEntry {
     name: String,
-    arguments: Vec<String>,
+    candid: String,
+    modes: Vec<EndpointMode>,
+    arguments: Vec<EndpointType>,
+    returns: Vec<EndpointType>,
 }
 
 impl EndpointEntry {
     fn render(&self) -> String {
-        format!("{}({})", self.name, self.arguments.join(", "))
+        self.candid.clone()
     }
+}
+
+///
+/// EndpointMode
+///
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+enum EndpointMode {
+    Update,
+    Query,
+    CompositeQuery,
+    Oneway,
+}
+
+///
+/// EndpointCardinality
+///
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+enum EndpointCardinality {
+    Single,
+    Optional,
+    Many,
+}
+
+///
+/// EndpointType
+///
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+enum EndpointType {
+    Primitive {
+        candid: String,
+        cardinality: EndpointCardinality,
+        name: String,
+    },
+    Named {
+        candid: String,
+        cardinality: EndpointCardinality,
+        name: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        resolved: Option<Box<Self>>,
+    },
+    Optional {
+        candid: String,
+        cardinality: EndpointCardinality,
+        inner: Box<Self>,
+    },
+    Vector {
+        candid: String,
+        cardinality: EndpointCardinality,
+        inner: Box<Self>,
+    },
+    Record {
+        candid: String,
+        cardinality: EndpointCardinality,
+        fields: Vec<EndpointField>,
+    },
+    Variant {
+        candid: String,
+        cardinality: EndpointCardinality,
+        cases: Vec<EndpointField>,
+    },
+    Function {
+        candid: String,
+        cardinality: EndpointCardinality,
+        modes: Vec<EndpointMode>,
+        arguments: Vec<Self>,
+        returns: Vec<Self>,
+    },
+    Service {
+        candid: String,
+        cardinality: EndpointCardinality,
+        methods: Vec<EndpointServiceMethod>,
+    },
+    Class {
+        candid: String,
+        cardinality: EndpointCardinality,
+        initializers: Vec<Self>,
+        service: Box<Self>,
+    },
+}
+
+///
+/// EndpointField
+///
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+struct EndpointField {
+    label: String,
+    id: u32,
+    ty: EndpointType,
+}
+
+///
+/// EndpointServiceMethod
+///
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+struct EndpointServiceMethod {
+    name: String,
+    ty: EndpointType,
 }
 
 ///
@@ -293,203 +409,261 @@ fn read_did(path: &Path) -> Result<String, EndpointsCommandError> {
 fn parse_candid_service_endpoints(
     candid: &str,
 ) -> Result<Vec<EndpointEntry>, EndpointsCommandError> {
-    let Some(service_start) = find_service_body_start(candid) else {
+    let (env, actor) = CandidSource::Text(candid)
+        .load()
+        .map_err(|err| EndpointsCommandError::InvalidCandid(err.to_string()))?;
+    let Some(actor) = actor else {
         return Err(EndpointsCommandError::MissingService);
     };
-
-    let mut endpoints = Vec::new();
-    let mut depth = 0usize;
-    let mut declaration = String::new();
-    for (index, ch) in candid[service_start..].char_indices() {
-        match ch {
-            '{' => {
-                depth += 1;
-                if depth > 1 {
-                    declaration.push(ch);
-                }
-            }
-            '}' => {
-                if depth == 0 {
-                    break;
-                }
-                if depth > 1 {
-                    declaration.push(ch);
-                }
-                depth -= 1;
-                if depth == 0 {
-                    break;
-                }
-            }
-            ';' if depth == 1 => {
-                if let Some(endpoint) = parse_service_method_declaration(&declaration) {
-                    endpoints.push(endpoint);
-                }
-                declaration.clear();
-            }
-            _ if depth >= 1 => {
-                let absolute = service_start + index;
-                if candid.is_char_boundary(absolute) {
-                    declaration.push(ch);
-                }
-            }
-            _ => {}
-        }
-    }
-
-    Ok(endpoints)
+    let service = env
+        .as_service(&actor)
+        .map_err(|_| EndpointsCommandError::MissingService)?;
+    service
+        .iter()
+        .map(|(name, ty)| endpoint_entry(&env, name, ty))
+        .collect()
 }
 
-fn find_service_body_start(candid: &str) -> Option<usize> {
-    let mut brace_depth = 0usize;
-    for (service_index, ch) in candid.char_indices() {
-        match ch {
-            '{' => brace_depth += 1,
-            '}' => brace_depth = brace_depth.saturating_sub(1),
-            's' if brace_depth == 0
-                && candid[service_index..].starts_with("service")
-                && is_word_boundary(candid, service_index, "service") =>
-            {
-                let service_tail_start = service_index + "service".len();
-                let service_tail = &candid[service_tail_start..];
-                if !service_tail.trim_start().starts_with(':') {
-                    continue;
-                }
-
-                if let Some(body_start) = find_service_body_brace(service_tail) {
-                    return Some(service_tail_start + body_start);
-                }
-            }
-            _ => {}
-        }
-    }
-    None
-}
-
-fn find_service_body_brace(service_tail: &str) -> Option<usize> {
-    let mut paren_depth = 0usize;
-    for (index, ch) in service_tail.char_indices() {
-        match ch {
-            '(' => paren_depth += 1,
-            ')' => paren_depth = paren_depth.saturating_sub(1),
-            '{' if paren_depth == 0 => return Some(index),
-            _ => {}
-        }
-    }
-    None
-}
-
-fn is_word_boundary(text: &str, index: usize, word: &str) -> bool {
-    let before = text[..index].chars().next_back();
-    let after = text[index + word.len()..].chars().next();
-    before.is_none_or(|ch| !is_identifier_char(ch))
-        && after.is_none_or(|ch| !is_identifier_char(ch))
-}
-
-const fn is_identifier_char(ch: char) -> bool {
-    ch.is_ascii_alphanumeric() || ch == '_'
-}
-
-fn parse_service_method_declaration(declaration: &str) -> Option<EndpointEntry> {
-    let trimmed = declaration.trim_start();
-    if trimmed.starts_with("//") || trimmed.starts_with('}') {
-        return None;
-    }
-    let (name, after_name) = if let Some(stripped) = trimmed.strip_prefix('"') {
-        let end = stripped.find('"')?;
-        let name = &stripped[..end];
-        let after = stripped[end + 1..].trim_start();
-        (name, after)
-    } else {
-        let end = trimmed
-            .char_indices()
-            .find_map(|(index, ch)| (ch.is_whitespace() || ch == ':').then_some(index))?;
-        (&trimmed[..end], trimmed[end..].trim_start())
-    };
-    if name.is_empty() || !after_name.starts_with(':') {
-        return None;
-    }
-    let signature = after_name[1..].trim_start();
-    let arguments = parse_argument_list(extract_parenthesized(signature)?)?;
-    Some(EndpointEntry {
+fn endpoint_entry(
+    env: &TypeEnv,
+    name: &str,
+    ty: &Type,
+) -> Result<EndpointEntry, EndpointsCommandError> {
+    let function = env
+        .as_func(ty)
+        .map_err(|err| EndpointsCommandError::InvalidCandid(err.to_string()))?;
+    Ok(EndpointEntry {
         name: name.to_string(),
-        arguments,
+        candid: format!("{} : {};", render_candid_method_name(name), function),
+        modes: endpoint_modes(function),
+        arguments: endpoint_types(env, &function.args),
+        returns: endpoint_types(env, &function.rets),
     })
 }
 
-fn extract_parenthesized(signature: &str) -> Option<&str> {
-    let mut depth = 0usize;
-    let mut end = None;
-    for (index, ch) in signature.char_indices() {
-        match ch {
-            '(' => depth += 1,
-            ')' => {
-                depth = depth.checked_sub(1)?;
-                if depth == 0 {
-                    end = Some(index + ch.len_utf8());
-                    break;
-                }
-            }
-            _ if depth == 0 && !ch.is_whitespace() => return None,
-            _ => {}
-        }
+fn endpoint_types(env: &TypeEnv, types: &[Type]) -> Vec<EndpointType> {
+    types
+        .iter()
+        .map(|ty| endpoint_type(env, ty, &mut Vec::new()))
+        .collect()
+}
+
+fn endpoint_type(env: &TypeEnv, ty: &Type, named_stack: &mut Vec<String>) -> EndpointType {
+    match ty.as_ref() {
+        TypeInner::Null => primitive_type(ty, "null"),
+        TypeInner::Bool => primitive_type(ty, "bool"),
+        TypeInner::Nat => primitive_type(ty, "nat"),
+        TypeInner::Int => primitive_type(ty, "int"),
+        TypeInner::Nat8 => primitive_type(ty, "nat8"),
+        TypeInner::Nat16 => primitive_type(ty, "nat16"),
+        TypeInner::Nat32 => primitive_type(ty, "nat32"),
+        TypeInner::Nat64 => primitive_type(ty, "nat64"),
+        TypeInner::Int8 => primitive_type(ty, "int8"),
+        TypeInner::Int16 => primitive_type(ty, "int16"),
+        TypeInner::Int32 => primitive_type(ty, "int32"),
+        TypeInner::Int64 => primitive_type(ty, "int64"),
+        TypeInner::Float32 => primitive_type(ty, "float32"),
+        TypeInner::Float64 => primitive_type(ty, "float64"),
+        TypeInner::Text => primitive_type(ty, "text"),
+        TypeInner::Reserved => primitive_type(ty, "reserved"),
+        TypeInner::Empty => primitive_type(ty, "empty"),
+        TypeInner::Principal => primitive_type(ty, "principal"),
+        TypeInner::Future => primitive_type(ty, "future"),
+        TypeInner::Unknown => primitive_type(ty, "unknown"),
+        TypeInner::Knot(id) => EndpointType::Named {
+            candid: ty.to_string(),
+            cardinality: EndpointCardinality::Single,
+            name: id.to_string(),
+            resolved: None,
+        },
+        TypeInner::Var(name) => named_type(env, ty, name, named_stack),
+        TypeInner::Opt(inner) => EndpointType::Optional {
+            candid: ty.to_string(),
+            cardinality: EndpointCardinality::Optional,
+            inner: Box::new(endpoint_type(env, inner, named_stack)),
+        },
+        TypeInner::Vec(inner) => EndpointType::Vector {
+            candid: ty.to_string(),
+            cardinality: EndpointCardinality::Many,
+            inner: Box::new(endpoint_type(env, inner, named_stack)),
+        },
+        TypeInner::Record(fields) => EndpointType::Record {
+            candid: ty.to_string(),
+            cardinality: EndpointCardinality::Single,
+            fields: endpoint_fields(env, fields, named_stack),
+        },
+        TypeInner::Variant(fields) => EndpointType::Variant {
+            candid: ty.to_string(),
+            cardinality: EndpointCardinality::Single,
+            cases: endpoint_fields(env, fields, named_stack),
+        },
+        TypeInner::Func(function) => EndpointType::Function {
+            candid: ty.to_string(),
+            cardinality: EndpointCardinality::Single,
+            modes: endpoint_modes(function),
+            arguments: endpoint_types(env, &function.args),
+            returns: endpoint_types(env, &function.rets),
+        },
+        TypeInner::Service(methods) => EndpointType::Service {
+            candid: ty.to_string(),
+            cardinality: EndpointCardinality::Single,
+            methods: methods
+                .iter()
+                .map(|(name, ty)| EndpointServiceMethod {
+                    name: name.clone(),
+                    ty: endpoint_type(env, ty, named_stack),
+                })
+                .collect(),
+        },
+        TypeInner::Class(initializers, service) => EndpointType::Class {
+            candid: ty.to_string(),
+            cardinality: EndpointCardinality::Single,
+            initializers: endpoint_types(env, initializers),
+            service: Box::new(endpoint_type(env, service, named_stack)),
+        },
     }
-    end.map(|end| &signature[..end])
 }
 
-fn parse_argument_list(parenthesized: &str) -> Option<Vec<String>> {
-    let inner = parenthesized.strip_prefix('(')?.strip_suffix(')')?;
-    Some(split_top_level_candid_arguments(inner))
-}
-
-fn split_top_level_candid_arguments(fragment: &str) -> Vec<String> {
-    let mut arguments = Vec::new();
-    let mut start = 0usize;
-    let mut paren_depth = 0usize;
-    let mut brace_depth = 0usize;
-    let mut bracket_depth = 0usize;
-    let mut in_string = false;
-    let mut escaped = false;
-
-    for (index, ch) in fragment.char_indices() {
-        if in_string {
-            escaped = ch == '\\' && !escaped;
-            if ch == '"' && !escaped {
-                in_string = false;
-            }
-            if ch != '\\' {
-                escaped = false;
-            }
-            continue;
-        }
-
-        match ch {
-            '"' => in_string = true,
-            '(' => paren_depth += 1,
-            ')' => paren_depth = paren_depth.saturating_sub(1),
-            '{' => brace_depth += 1,
-            '}' => brace_depth = brace_depth.saturating_sub(1),
-            '[' => bracket_depth += 1,
-            ']' => bracket_depth = bracket_depth.saturating_sub(1),
-            ',' if paren_depth == 0 && brace_depth == 0 && bracket_depth == 0 => {
-                push_candid_argument(&mut arguments, &fragment[start..index]);
-                start = index + ch.len_utf8();
-            }
-            _ => {}
-        }
-    }
-    push_candid_argument(&mut arguments, &fragment[start..]);
-    arguments
-}
-
-fn push_candid_argument(arguments: &mut Vec<String>, fragment: &str) {
-    let argument = normalize_candid_fragment(fragment.trim());
-    if !argument.is_empty() {
-        arguments.push(argument);
+fn primitive_type(ty: &Type, name: &str) -> EndpointType {
+    EndpointType::Primitive {
+        candid: ty.to_string(),
+        cardinality: EndpointCardinality::Single,
+        name: name.to_string(),
     }
 }
 
-fn normalize_candid_fragment(fragment: &str) -> String {
-    fragment.split_whitespace().collect::<Vec<_>>().join(" ")
+fn named_type(env: &TypeEnv, ty: &Type, name: &str, named_stack: &mut Vec<String>) -> EndpointType {
+    let (cardinality, resolved) = if named_stack.iter().any(|seen| seen == name) {
+        (EndpointCardinality::Single, None)
+    } else if let Ok(resolved) = env.find_type(name) {
+        named_stack.push(name.to_string());
+        let cardinality = endpoint_cardinality(env, resolved, named_stack);
+        let resolved = endpoint_type(env, resolved, named_stack);
+        named_stack.pop();
+        (cardinality, Some(Box::new(resolved)))
+    } else {
+        (EndpointCardinality::Single, None)
+    };
+    EndpointType::Named {
+        candid: ty.to_string(),
+        cardinality,
+        name: name.to_string(),
+        resolved,
+    }
+}
+
+fn endpoint_cardinality(
+    env: &TypeEnv,
+    ty: &Type,
+    named_stack: &mut Vec<String>,
+) -> EndpointCardinality {
+    match ty.as_ref() {
+        TypeInner::Opt(_) => EndpointCardinality::Optional,
+        TypeInner::Vec(_) => EndpointCardinality::Many,
+        TypeInner::Var(name) if !named_stack.iter().any(|seen| seen == name) => {
+            if let Ok(resolved) = env.find_type(name) {
+                named_stack.push(name.clone());
+                let cardinality = endpoint_cardinality(env, resolved, named_stack);
+                named_stack.pop();
+                cardinality
+            } else {
+                EndpointCardinality::Single
+            }
+        }
+        _ => EndpointCardinality::Single,
+    }
+}
+
+fn endpoint_fields(
+    env: &TypeEnv,
+    fields: &[candid::types::Field],
+    named_stack: &mut Vec<String>,
+) -> Vec<EndpointField> {
+    fields
+        .iter()
+        .map(|field| EndpointField {
+            label: field_label(&field.id),
+            id: field.id.get_id(),
+            ty: endpoint_type(env, &field.ty, named_stack),
+        })
+        .collect()
+}
+
+fn field_label(label: &Label) -> String {
+    match label {
+        Label::Named(name) => name.clone(),
+        Label::Id(id) | Label::Unnamed(id) => id.to_string(),
+    }
+}
+
+fn endpoint_modes(function: &Function) -> Vec<EndpointMode> {
+    if function.modes.is_empty() {
+        return vec![EndpointMode::Update];
+    }
+    function
+        .modes
+        .iter()
+        .map(|mode| match mode {
+            FuncMode::Query => EndpointMode::Query,
+            FuncMode::CompositeQuery => EndpointMode::CompositeQuery,
+            FuncMode::Oneway => EndpointMode::Oneway,
+        })
+        .collect()
+}
+
+fn render_candid_method_name(name: &str) -> String {
+    if is_candid_identifier(name) && !is_candid_reserved_word(name) {
+        name.to_string()
+    } else {
+        format!("{name:?}")
+    }
+}
+
+fn is_candid_identifier(name: &str) -> bool {
+    let mut chars = name.chars();
+    let Some(first) = chars.next() else {
+        return false;
+    };
+    (first.is_ascii_alphabetic() || first == '_')
+        && chars.all(|ch| ch.is_ascii_alphanumeric() || ch == '_')
+}
+
+fn is_candid_reserved_word(name: &str) -> bool {
+    matches!(
+        name,
+        "blob"
+            | "bool"
+            | "composite_query"
+            | "empty"
+            | "false"
+            | "float32"
+            | "float64"
+            | "func"
+            | "import"
+            | "int"
+            | "int8"
+            | "int16"
+            | "int32"
+            | "int64"
+            | "nat"
+            | "nat8"
+            | "nat16"
+            | "nat32"
+            | "nat64"
+            | "null"
+            | "oneway"
+            | "opt"
+            | "principal"
+            | "query"
+            | "record"
+            | "reserved"
+            | "service"
+            | "text"
+            | "true"
+            | "type"
+            | "variant"
+            | "vec"
+    )
 }
 
 fn is_principal_like(value: &str) -> bool {
@@ -550,54 +724,79 @@ service : (record { init : text }) -> {
     #[test]
     fn parses_candid_service_endpoints() {
         let endpoints = super::parse_candid_service_endpoints(CANDID).expect("parse endpoints");
+        let canic_ready = endpoints
+            .iter()
+            .find(|endpoint| endpoint.name == "canic_ready")
+            .expect("canic_ready endpoint");
+        let icrc10 = endpoints
+            .iter()
+            .find(|endpoint| endpoint.name == "icrc10-supported-standards")
+            .expect("icrc10 endpoint");
+        let canic_update = endpoints
+            .iter()
+            .find(|endpoint| endpoint.name == "canic_update")
+            .expect("canic_update endpoint");
 
+        assert_eq!(endpoints.len(), 3);
+        assert_eq!(canic_ready.candid, "canic_ready : () -> (bool) query;");
+        assert_eq!(canic_ready.modes, vec![EndpointMode::Query]);
         assert_eq!(
-            endpoints,
-            vec![
-                EndpointEntry {
-                    name: "canic_ready".to_string(),
-                    arguments: Vec::new(),
-                },
-                EndpointEntry {
-                    name: "icrc10-supported-standards".to_string(),
-                    arguments: Vec::new(),
-                },
-                EndpointEntry {
-                    name: "canic_update".to_string(),
-                    arguments: vec!["Nested".to_string()],
-                },
-            ]
+            icrc10.candid,
+            "\"icrc10-supported-standards\" : () -> (vec record { text; text }) query;"
         );
+        assert_eq!(canic_update.modes, vec![EndpointMode::Update]);
+        assert_eq!(canic_update.arguments.len(), 1);
+        assert!(matches!(
+            &canic_update.arguments[0],
+            EndpointType::Named {
+                name,
+                resolved: Some(_),
+                ..
+            } if name == "Nested"
+        ));
+        assert!(matches!(
+            &canic_update.returns[0],
+            EndpointType::Variant { cases, .. } if cases.len() == 2
+        ));
     }
 
-    // Ensure multiline argument lists remain attached to the endpoint.
+    // Ensure multiline argument lists are parsed as structured endpoint types.
     #[test]
     fn parses_multiline_endpoint_arguments() {
-        let candid = r"
+        let candid = r#"
 service : {
-  import : (
+  "import" : (
     record {
       payload : text;
     },
   ) -> (variant { Ok; Err : text });
 }
-";
+"#;
 
         let endpoints = super::parse_candid_service_endpoints(candid).expect("parse endpoints");
 
-        assert_eq!(
-            endpoints,
-            vec![EndpointEntry {
-                name: "import".to_string(),
-                arguments: vec!["record { payload : text; }".to_string()],
-            }]
-        );
+        assert_eq!(endpoints.len(), 1);
+        assert_eq!(endpoints[0].name, "import");
+        assert!(endpoints[0].candid.starts_with("\"import\" : "));
+        assert_eq!(endpoints[0].arguments.len(), 1);
+        assert!(matches!(
+            &endpoints[0].arguments[0],
+            EndpointType::Record { fields, .. }
+                if fields.len() == 1 && fields[0].label == "payload"
+        ));
+        assert!(matches!(
+            &endpoints[0].returns[0],
+            EndpointType::Variant { cases, .. }
+                if cases.iter().any(|case| case.label == "Ok")
+                    && cases.iter().any(|case| case.label == "Err")
+        ));
     }
 
-    // Ensure multiple arguments are split without breaking nested Candid types.
+    // Ensure multiple arguments retain cardinality and named type structure.
     #[test]
     fn parses_multiple_endpoint_arguments() {
         let candid = r"
+type PageRequest = record { cursor : opt text };
 service : {
   update : (opt text, record { items : vec record { id : nat; label : text } }, PageRequest) -> ();
 }
@@ -605,17 +804,35 @@ service : {
 
         let endpoints = super::parse_candid_service_endpoints(candid).expect("parse endpoints");
 
-        assert_eq!(
-            endpoints,
-            vec![EndpointEntry {
-                name: "update".to_string(),
-                arguments: vec![
-                    "opt text".to_string(),
-                    "record { items : vec record { id : nat; label : text } }".to_string(),
-                    "PageRequest".to_string(),
-                ],
-            }]
-        );
+        assert_eq!(endpoints.len(), 1);
+        assert_eq!(endpoints[0].arguments.len(), 3);
+        assert!(matches!(
+            &endpoints[0].arguments[0],
+            EndpointType::Optional {
+                cardinality: EndpointCardinality::Optional,
+                inner,
+                ..
+            } if matches!(inner.as_ref(), EndpointType::Primitive { name, .. } if name == "text")
+        ));
+        assert!(matches!(
+            &endpoints[0].arguments[1],
+            EndpointType::Record { fields, .. }
+                if fields.iter().any(|field| matches!(
+                    &field.ty,
+                    EndpointType::Vector {
+                        cardinality: EndpointCardinality::Many,
+                        ..
+                    }
+                ))
+        ));
+        assert!(matches!(
+            &endpoints[0].arguments[2],
+            EndpointType::Named {
+                name,
+                resolved: Some(_),
+                ..
+            } if name == "PageRequest"
+        ));
     }
 
     // Ensure fields named service before the top-level service do not confuse discovery.
@@ -633,32 +850,49 @@ service : {
 
         let endpoints = super::parse_candid_service_endpoints(candid).expect("parse endpoints");
 
-        assert_eq!(
-            endpoints,
-            vec![EndpointEntry {
-                name: "ready".to_string(),
-                arguments: Vec::new(),
-            }]
-        );
+        assert_eq!(endpoints.len(), 1);
+        assert_eq!(endpoints[0].name, "ready");
+        assert_eq!(endpoints[0].candid, "ready : () -> (bool) query;");
     }
 
-    // Ensure plain output still renders a compact method signature.
+    // Ensure plain output renders one Candid method declaration.
     #[test]
     fn renders_plain_endpoint_signature() {
         let endpoint = EndpointEntry {
             name: "canic_log".to_string(),
-            arguments: vec![
-                "opt text".to_string(),
-                "opt text".to_string(),
-                "Level".to_string(),
-                "PageRequest".to_string(),
-            ],
+            candid: "canic_log : (opt text, opt text, Level, PageRequest) -> ();".to_string(),
+            modes: vec![EndpointMode::Update],
+            arguments: Vec::new(),
+            returns: Vec::new(),
         };
 
         assert_eq!(
             endpoint.render(),
-            "canic_log(opt text, opt text, Level, PageRequest)"
+            "canic_log : (opt text, opt text, Level, PageRequest) -> ();"
         );
+    }
+
+    // Ensure JSON exposes structured types instead of requiring callers to parse strings.
+    #[test]
+    fn serializes_structured_endpoint_json() {
+        let candid = r"
+type MaybeText = opt text;
+type Level = variant { Debug; Info; Error : text };
+service : {
+  canic_log : (MaybeText, Level) -> ();
+}
+";
+
+        let endpoints = super::parse_candid_service_endpoints(candid).expect("parse endpoints");
+        let json = serde_json::to_string(&endpoints[0]).expect("serialize endpoint");
+
+        assert!(json.contains(r#""kind":"optional""#));
+        assert!(json.contains(r#""cardinality":"optional""#));
+        assert!(json.contains(r#""kind":"named""#));
+        assert!(json.contains(r#""name":"MaybeText""#));
+        assert!(json.contains(r#""name":"Level""#));
+        assert!(json.contains(r#""kind":"variant""#));
+        assert!(json.contains(r#""label":"Error""#));
     }
 
     // Ensure endpoint options parse local and live lookup controls.

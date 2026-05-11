@@ -274,6 +274,7 @@ fn rejects_ambiguous_role_selector() {
         role: Some("worker".to_string()),
         kind: Some("replica".to_string()),
         parent_pid: Some(APP.to_string()),
+        module_hash: None,
     });
 
     let err =
@@ -807,18 +808,21 @@ fn registry() -> Vec<RegistryEntry> {
             role: Some("root".to_string()),
             kind: Some("root".to_string()),
             parent_pid: None,
+            module_hash: None,
         },
         RegistryEntry {
             pid: APP.to_string(),
             role: Some("app".to_string()),
             kind: Some("singleton".to_string()),
             parent_pid: Some(ROOT.to_string()),
+            module_hash: None,
         },
         RegistryEntry {
             pid: WORKER.to_string(),
             role: Some("worker".to_string()),
             kind: Some("replica".to_string()),
             parent_pid: Some(APP.to_string()),
+            module_hash: None,
         },
     ]
 }

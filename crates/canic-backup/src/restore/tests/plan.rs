@@ -153,17 +153,14 @@ fn plan_includes_mapping_summary() {
 fn plan_includes_snapshot_summary() {
     let mut manifest = valid_manifest(IdentityMode::Relocatable);
     manifest.fleet.members[1].source_snapshot.module_hash = None;
-    manifest.fleet.members[1].source_snapshot.wasm_hash = None;
     manifest.fleet.members[1].source_snapshot.checksum = None;
 
     let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
 
     assert!(!plan.snapshot_summary.all_members_have_module_hash);
-    assert!(!plan.snapshot_summary.all_members_have_wasm_hash);
     assert!(plan.snapshot_summary.all_members_have_code_version);
     assert!(!plan.snapshot_summary.all_members_have_checksum);
     assert_eq!(plan.snapshot_summary.members_with_module_hash, 1);
-    assert_eq!(plan.snapshot_summary.members_with_wasm_hash, 1);
     assert_eq!(plan.snapshot_summary.members_with_code_version, 2);
     assert_eq!(plan.snapshot_summary.members_with_checksum, 1);
     assert!(!plan.readiness_summary.ready);

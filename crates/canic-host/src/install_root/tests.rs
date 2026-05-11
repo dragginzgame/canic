@@ -4,7 +4,7 @@ use super::{
     discover_canic_config_choices, fleet_install_state_path, icp_canister_command_in_network,
     icp_start_local_command, icp_stop_command, install_build_session_id,
     parse_bootstrap_status_value, parse_cycle_balance_response, parse_local_icp_autostart,
-    parse_root_ready_value, read_fleet_install_state, resolve_install_config_path,
+    parse_root_ready_value, read_fleet_install_state, resolve_install_config_path, root_init_args,
     validate_expected_fleet_name, write_install_state,
 };
 use crate::release_set::configured_install_targets;
@@ -138,6 +138,21 @@ fn icp_canister_command_carries_selected_network() {
 fn install_build_session_id_is_prefixed_for_logs() {
     let session_id = install_build_session_id();
     assert!(session_id.starts_with("install-root-"));
+}
+
+#[test]
+fn root_init_args_include_wasm_module_hash() {
+    let root = temp_dir("canic-root-init-args");
+    fs::create_dir_all(&root).expect("create temp root");
+    let wasm = root.join("root.wasm");
+    fs::write(&wasm, b"\0asm\x01\0\0\0").expect("write wasm");
+
+    let args = root_init_args(&wasm).expect("build init args");
+
+    fs::remove_dir_all(root).expect("remove temp root");
+    assert!(args.starts_with("(variant { PrimeWithModuleHash = blob \""));
+    assert!(args.ends_with("\" })"));
+    assert!(args.contains("\\93\\A4\\4B\\BB"));
 }
 
 #[test]

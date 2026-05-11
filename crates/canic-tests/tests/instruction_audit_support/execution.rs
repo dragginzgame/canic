@@ -498,8 +498,8 @@ fn execute_query_perf_probe(pic: &Pic, scenario: &AuditScenario, target_pid: Pri
 fn audit_template_fixture(scenario: &AuditScenario) -> AuditTemplateFixture {
     let slug = scenario.key.replace(':', "-");
     let bytes = format!("canic-instruction-audit-{slug}").into_bytes();
-    let payload_hash = get_wasm_hash(&bytes);
-    let chunk_hashes = vec![get_wasm_hash(&bytes)];
+    let payload_hash = wasm_hash(&bytes);
+    let chunk_hashes = vec![wasm_hash(&bytes)];
     let template_id = TemplateId::from(format!("audit:{slug}"));
     let version = TemplateVersion::from(format!("0.20-audit-{slug}"));
 

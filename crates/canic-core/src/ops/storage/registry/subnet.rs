@@ -124,6 +124,14 @@ impl SubnetRegistryOps {
         SubnetRegistry::register_root(pid, created_at);
     }
 
+    pub fn register_root_with_module_hash(
+        pid: Principal,
+        created_at: u64,
+        module_hash: Option<Vec<u8>>,
+    ) {
+        SubnetRegistry::register_root_with_module_hash(pid, created_at, module_hash);
+    }
+
     pub(crate) fn update_module_hash(pid: Principal, module_hash: Vec<u8>) -> bool {
         SubnetRegistry::update_module_hash(pid, module_hash)
     }

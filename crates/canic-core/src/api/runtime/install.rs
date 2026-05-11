@@ -1,6 +1,6 @@
 use crate::{
     InternalError, InternalErrorOrigin,
-    cdk::{types::Principal, utils::wasm::get_wasm_hash},
+    cdk::{types::Principal, utils::hash::wasm_hash},
     dto::error::Error,
     format::byte_size,
     ids::CanisterRole,
@@ -71,7 +71,7 @@ impl ApprovedModuleSource {
 
         Self {
             source_label,
-            module_hash: get_wasm_hash(wasm_module),
+            module_hash: wasm_hash(wasm_module),
             payload_size_bytes,
             payload: ApprovedModulePayload::Embedded {
                 wasm_module: Cow::Borrowed(wasm_module),

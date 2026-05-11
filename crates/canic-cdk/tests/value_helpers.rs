@@ -2,7 +2,7 @@ use canic_cdk::{
     spec::system::http::{HttpResponse, HttpStatus},
     structures::Storable,
     types::{Cycles, WasmModule},
-    utils::wasm::get_wasm_hash,
+    utils::hash::wasm_hash,
 };
 use std::borrow::Cow;
 
@@ -54,7 +54,7 @@ fn wasm_module_exposes_bytes_and_hash() {
     assert_eq!(module.to_vec(), WASM_BYTES);
     assert_eq!(module.len(), WASM_BYTES.len());
     assert!(!module.is_empty());
-    assert_eq!(module.module_hash(), get_wasm_hash(WASM_BYTES));
+    assert_eq!(module.module_hash(), wasm_hash(WASM_BYTES));
 }
 
 // Verify HTTP error responses carry the selected status and text body.

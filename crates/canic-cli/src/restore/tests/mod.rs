@@ -176,7 +176,6 @@ fn restore_ready_manifest() -> FleetBackupManifest {
     let mut manifest = valid_manifest();
     for member in &mut manifest.fleet.members {
         member.source_snapshot.module_hash = Some(HASH.to_string());
-        member.source_snapshot.wasm_hash = Some(HASH.to_string());
         member.source_snapshot.checksum = Some(HASH.to_string());
     }
     manifest
@@ -203,7 +202,6 @@ fn fleet_member(
         source_snapshot: SourceSnapshot {
             snapshot_id: format!("{role}-snapshot"),
             module_hash: None,
-            wasm_hash: None,
             code_version: Some("v0.30.1".to_string()),
             artifact_path: format!("artifacts/{role}"),
             checksum_algorithm: "sha256".to_string(),

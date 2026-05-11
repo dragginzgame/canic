@@ -1,6 +1,8 @@
 use crate::{
     args::{parse_subcommand, passthrough_subcommand, print_help_or_version},
-    output, version_text,
+    output,
+    path_stamp::{backup_list_timestamp, current_backup_directory_stamp, file_safe_component},
+    version_text,
 };
 use candid::Principal;
 use canic_backup::{
@@ -28,7 +30,6 @@ use std::{
     fs,
     io::{self, Write},
     path::{Path, PathBuf},
-    time::{SystemTime, UNIX_EPOCH},
 };
 use thiserror::Error as ThisError;
 
@@ -187,6 +188,7 @@ pub struct BackupInspectTarget {
     pub role: String,
     pub canister_id: String,
     pub parent_canister_id: String,
+    pub expected_module_hash: String,
     pub depth: u32,
     pub control_authority: String,
     pub snapshot_read_authority: String,
@@ -692,6 +694,7 @@ fn render_inspect_report(report: &BackupInspectReport) -> String {
                 target.role.clone(),
                 target.canister_id.clone(),
                 target.parent_canister_id.clone(),
+                target.expected_module_hash.clone(),
                 target.depth.to_string(),
                 target.control_authority.clone(),
                 target.snapshot_read_authority.clone(),
@@ -736,12 +739,13 @@ fn render_inspect_report(report: &BackupInspectReport) -> String {
                 "ROLE",
                 "CANISTER_ID",
                 "PARENT",
+                "MODULE_HASH",
                 "DEPTH",
                 "CONTROL",
                 "SNAPSHOT_READ",
             ],
             &target_rows,
-            &[ColumnAlign::Left; 6],
+            &[ColumnAlign::Left; 7],
         ),
         String::new(),
         "Operations".to_string(),
@@ -786,16 +790,6 @@ fn planned_backup_created_at(run_id: &str) -> String {
     }
 }
 
-fn backup_list_timestamp(seconds: u64) -> String {
-    let days = i64::try_from(seconds / 86_400).unwrap_or(i64::MAX);
-    let seconds_of_day = seconds % 86_400;
-    let (year, month, day) = civil_from_days(days);
-    let hour = seconds_of_day / 3_600;
-    let minute = (seconds_of_day % 3_600) / 60;
-
-    format!("{day:02}/{month:02}/{year:04} {hour:02}:{minute:02}")
-}
-
 fn persist_backup_create_dry_run(out: &Path, plan: &BackupPlan) -> Result<(), BackupCommandError> {
     let journal = BackupExecutionJournal::from_plan(plan)?;
     let layout = BackupLayout::new(out.to_path_buf());
@@ -811,6 +805,10 @@ fn inspect_target(target: &canic_backup::plan::BackupTarget) -> BackupInspectTar
         canister_id: target.canister_id.clone(),
         parent_canister_id: target
             .parent_canister_id
+            .clone()
+            .unwrap_or_else(|| "-".to_string()),
+        expected_module_hash: target
+            .expected_module_hash
             .clone()
             .unwrap_or_else(|| "-".to_string()),
         depth: target.depth,
@@ -965,7 +963,7 @@ fn registry_topology_hash(registry: &[RegistryEntry]) -> Result<String, BackupCo
                         canister_id: entry.parent_pid.clone().unwrap_or_default(),
                     })?,
                 role: entry.role.clone().unwrap_or_default(),
-                module_hash: None,
+                module_hash: entry.module_hash.clone(),
             })
         })
         .collect::<Result<Vec<_>, BackupCommandError>>()?;
@@ -1002,60 +1000,6 @@ fn default_backup_output_path(fleet: &str) -> PathBuf {
         file_safe_component(fleet),
         current_backup_directory_stamp()
     ))
-}
-
-fn current_backup_directory_stamp() -> String {
-    let seconds = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_or(0, |duration| duration.as_secs());
-
-    backup_directory_stamp_from_unix(seconds)
-}
-
-fn backup_directory_stamp_from_unix(seconds: u64) -> String {
-    let days = i64::try_from(seconds / 86_400).unwrap_or(i64::MAX);
-    let seconds_of_day = seconds % 86_400;
-    let (year, month, day) = civil_from_days(days);
-    let hour = seconds_of_day / 3_600;
-    let minute = (seconds_of_day % 3_600) / 60;
-    let second = seconds_of_day % 60;
-
-    format!("{year:04}{month:02}{day:02}-{hour:02}{minute:02}{second:02}")
-}
-
-fn file_safe_component(value: &str) -> String {
-    let cleaned = value
-        .chars()
-        .map(|ch| {
-            if ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_' | '.') {
-                ch
-            } else {
-                '-'
-            }
-        })
-        .collect::<String>();
-    let cleaned = cleaned.trim_matches('-');
-    if cleaned.is_empty() {
-        "unknown".to_string()
-    } else {
-        cleaned.to_string()
-    }
-}
-
-// Convert days since 1970-01-01 into a proleptic Gregorian UTC date.
-const fn civil_from_days(days: i64) -> (i64, i64, i64) {
-    let z = days + 719_468;
-    let era = if z >= 0 { z } else { z - 146_096 } / 146_097;
-    let doe = z - era * 146_097;
-    let yoe = (doe - doe / 1_460 + doe / 36_524 - doe / 146_096) / 365;
-    let year = yoe + era * 400;
-    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
-    let mp = (5 * doy + 2) / 153;
-    let day = doy - (153 * mp + 2) / 5 + 1;
-    let month = mp + if mp < 10 { 3 } else { -9 };
-    let year = year + (month <= 2) as i64;
-
-    (year, month, day)
 }
 
 fn usage() -> String {

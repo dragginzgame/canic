@@ -464,6 +464,7 @@ mod tests {
             role: Some(role.to_string()),
             kind: None,
             parent_pid: None,
+            module_hash: None,
         }
     }
 }

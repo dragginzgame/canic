@@ -30,7 +30,6 @@ canic-memory = { workspace = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 flate2 = { workspace = true }
-sha2 = { workspace = true }
 
 [build-dependencies]
 canic-core = { workspace = true }

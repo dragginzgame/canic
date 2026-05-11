@@ -53,6 +53,28 @@ fn valid_manifest_passes_validation() {
     manifest.validate().expect("manifest should validate");
 }
 
+// Ensure older manifests with the removed wasm_hash field still deserialize.
+#[test]
+fn legacy_wasm_hash_field_is_ignored() {
+    let mut value = serde_json::to_value(valid_manifest()).expect("serialize manifest");
+    value["fleet"]["members"][0]["source_snapshot"]["wasm_hash"] =
+        serde_json::Value::String(HASH.to_string());
+
+    let manifest: FleetBackupManifest =
+        serde_json::from_value(value).expect("deserialize legacy manifest");
+
+    manifest
+        .validate()
+        .expect("legacy manifest should validate");
+    assert_eq!(
+        manifest.fleet.members[0]
+            .source_snapshot
+            .module_hash
+            .as_deref(),
+        Some(HASH)
+    );
+}
+
 // Ensure snapshot checksum provenance stays canonical when present.
 #[test]
 fn invalid_snapshot_checksum_fails_validation() {
@@ -90,7 +112,6 @@ fn fleet_member(
         source_snapshot: SourceSnapshot {
             snapshot_id: format!("snap-{role}"),
             module_hash: Some(HASH.to_string()),
-            wasm_hash: Some(HASH.to_string()),
             code_version: Some("v0.30.0".to_string()),
             artifact_path: format!("artifacts/{role}"),
             checksum_algorithm: "sha256".to_string(),

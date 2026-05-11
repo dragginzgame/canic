@@ -380,7 +380,7 @@ mod tests {
         ids::{TemplateChunkingMode, TemplateVersion, WasmStoreBinding, WasmStoreGcMode},
         storage::stable::template::{TemplateChunkSetStateStore, TemplateChunkStore},
     };
-    use canic_core::cdk::utils::wasm::get_wasm_hash;
+    use canic_core::cdk::utils::hash::wasm_hash;
 
     fn approved_input(template_id: &'static str, role: &'static str) -> TemplateManifestInput {
         TemplateManifestInput {
@@ -404,7 +404,7 @@ mod tests {
         TemplateChunkSetInput {
             template_id: TemplateId::new("embedded:app"),
             version: TemplateVersion::new("0.18.0"),
-            payload_hash: get_wasm_hash(&payload),
+            payload_hash: wasm_hash(&payload),
             payload_size_bytes: payload.len() as u64,
             chunks,
         }
@@ -530,9 +530,9 @@ mod tests {
             TemplateChunkSetPrepareInput {
                 template_id: TemplateId::new("embedded:app"),
                 version: TemplateVersion::new("0.18.0"),
-                payload_hash: get_wasm_hash(&payload),
+                payload_hash: wasm_hash(&payload),
                 payload_size_bytes: payload.len() as u64,
-                chunk_hashes: vec![get_wasm_hash(&payload)],
+                chunk_hashes: vec![wasm_hash(&payload)],
             },
             77,
         )

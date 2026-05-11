@@ -279,7 +279,6 @@ mod tests {
             source_snapshot: SourceSnapshot {
                 snapshot_id: "root-snapshot".to_string(),
                 module_hash: None,
-                wasm_hash: None,
                 code_version: Some("v0.30.1".to_string()),
                 artifact_path: "artifacts/root".to_string(),
                 checksum_algorithm: "sha256".to_string(),

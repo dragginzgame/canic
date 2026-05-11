@@ -2,6 +2,7 @@ use crate::{
     manifest::{FleetMember, FleetSection, IdentityMode, SourceSnapshot, VerificationCheck},
     topology::{TopologyHasher, TopologyRecord},
 };
+use canic_cdk::utils::hash::hex_bytes;
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use thiserror::Error as ThisError;
@@ -69,7 +70,6 @@ impl DiscoveredMember {
             source_snapshot: SourceSnapshot {
                 snapshot_id: self.snapshot_plan.snapshot_id,
                 module_hash: self.snapshot_plan.module_hash,
-                wasm_hash: self.snapshot_plan.wasm_hash,
                 code_version: self.snapshot_plan.code_version,
                 artifact_path: self.snapshot_plan.artifact_path,
                 checksum_algorithm: self.snapshot_plan.checksum_algorithm,
@@ -87,7 +87,6 @@ impl DiscoveredMember {
 pub struct SnapshotPlan {
     pub snapshot_id: String,
     pub module_hash: Option<String>,
-    pub wasm_hash: Option<String>,
     pub code_version: Option<String>,
     pub artifact_path: String,
     pub checksum_algorithm: String,
@@ -104,6 +103,7 @@ pub struct RegistryEntry {
     pub role: Option<String>,
     pub kind: Option<String>,
     pub parent_pid: Option<String>,
+    pub module_hash: Option<String>,
 }
 
 ///
@@ -115,6 +115,7 @@ pub struct SnapshotTarget {
     pub canister_id: String,
     pub role: Option<String>,
     pub parent_canister_id: Option<String>,
+    pub module_hash: Option<String>,
 }
 
 ///
@@ -175,6 +176,7 @@ pub fn targets_from_registry(
         canister_id: root.pid.clone(),
         role: root.role.clone(),
         parent_canister_id: root.parent_pid.clone(),
+        module_hash: root.module_hash.clone(),
     });
     seen.insert(root.pid.clone());
 
@@ -189,6 +191,7 @@ pub fn targets_from_registry(
                     canister_id: child.pid.clone(),
                     role: child.role.clone(),
                     parent_canister_id: child.parent_pid.clone(),
+                    module_hash: child.module_hash.clone(),
                 });
                 if recursive {
                     queue.push_back(child.pid.clone());
@@ -216,13 +219,37 @@ fn parse_registry_entry(value: &Value) -> Option<RegistryEntry> {
         .or_else(|| value.get("record").and_then(|record| record.get("kind")))
         .and_then(Value::as_str)
         .map(str::to_string);
+    let module_hash = value
+        .get("record")
+        .and_then(|record| record.get("module_hash"))
+        .and_then(parse_module_hash);
 
     Some(RegistryEntry {
         pid,
         role,
         kind,
         parent_pid,
+        module_hash,
     })
+}
+
+// Parse optional wasm module hash JSON emitted as bytes or text.
+fn parse_module_hash(value: &Value) -> Option<String> {
+    if value.is_null() {
+        return None;
+    }
+    if let Some(text) = value.as_str() {
+        return Some(text.to_string());
+    }
+    let bytes = value
+        .as_array()?
+        .iter()
+        .map(|item| {
+            let value = item.as_u64()?;
+            u8::try_from(value).ok()
+        })
+        .collect::<Option<Vec<_>>>()?;
+    Some(hex_bytes(bytes))
 }
 
 // Parse optional principal JSON emitted as null, string, or optional vector form.

@@ -1,5 +1,5 @@
+use canic_cdk::utils::hash::sha256_hex;
 use flate2::read::GzDecoder;
-use sha2::{Digest, Sha256};
 use std::{
     env,
     fmt::Write as _,
@@ -308,17 +308,6 @@ fn decompress_gzip(bytes: &[u8], artifact_path: &Path) -> Vec<u8> {
             )
         });
     decompressed
-}
-
-fn sha256_hex(bytes: &[u8]) -> String {
-    let mut hasher = Sha256::new();
-    hasher.update(bytes);
-    let digest = hasher.finalize();
-    let mut rendered = String::with_capacity(digest.len() * 2);
-    for byte in digest {
-        let _ = write!(rendered, "{byte:02x}");
-    }
-    rendered
 }
 
 fn render_u64_literal(value: u64) -> String {

@@ -1,5 +1,5 @@
-use crate::hash::sha256_hex;
 use candid::Principal;
+use canic_cdk::utils::hash::sha256_hex;
 use serde::{Deserialize, Serialize};
 
 ///

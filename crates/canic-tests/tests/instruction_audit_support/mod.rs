@@ -2,7 +2,7 @@ use crate::root_harness::{self, RootSetupProfile, setup_root};
 use canic::{
     Error,
     api::ic::network::NetworkApi,
-    cdk::{types::Principal, utils::wasm::get_wasm_hash},
+    cdk::{types::Principal, utils::hash::wasm_hash},
     dto::{
         auth::{DelegatedToken, DelegationAudience},
         capability::{

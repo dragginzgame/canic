@@ -86,10 +86,19 @@ impl SubnetRegistry {
 
     /// Registers the root canister.
     pub(crate) fn register_root(pid: Principal, created_at: u64) {
+        Self::register_root_with_module_hash(pid, created_at, None);
+    }
+
+    /// Registers the root canister with optional installed module identity.
+    pub(crate) fn register_root_with_module_hash(
+        pid: Principal,
+        created_at: u64,
+        module_hash: Option<Vec<u8>>,
+    ) {
         let record = CanisterRecord {
             role: CanisterRole::ROOT,
             parent_pid: None,
-            module_hash: None,
+            module_hash,
             created_at,
         };
 
@@ -301,6 +310,18 @@ mod tests {
 
         let record = SubnetRegistry::get(p(2)).unwrap();
         assert_eq!(record.module_hash, Some(vec![1, 2, 3]));
+    }
+
+    #[test]
+    fn register_root_with_module_hash_records_hash() {
+        clear_registry();
+
+        SubnetRegistry::register_root_with_module_hash(p(1), 1, Some(vec![9, 8, 7]));
+
+        let record = SubnetRegistry::get(p(1)).expect("root exists");
+        assert_eq!(record.role, CanisterRole::ROOT);
+        assert_eq!(record.parent_pid, None);
+        assert_eq!(record.module_hash, Some(vec![9, 8, 7]));
     }
 
     #[test]

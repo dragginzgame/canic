@@ -21,7 +21,7 @@ use crate::{
 use canic_core::__control_plane_core as cp_core;
 use cp_core::{
     InternalError,
-    cdk::{api::canister_self, structures::storable::Storable, utils::wasm::get_wasm_hash},
+    cdk::{api::canister_self, structures::storable::Storable, utils::hash::wasm_hash},
     format::byte_size,
     ops::ic::mgmt::MgmtOps,
 };
@@ -214,7 +214,7 @@ impl TemplateChunkedOps {
 
         for chunk in &input.chunks {
             payload_hasher.update(chunk);
-            chunk_hashes.push(get_wasm_hash(chunk));
+            chunk_hashes.push(wasm_hash(chunk));
         }
 
         if payload_hasher.finalize().to_vec() != input.payload_hash {
@@ -272,7 +272,7 @@ impl TemplateChunkedOps {
 
         for chunk in &input.chunks {
             payload_hasher.update(chunk);
-            chunk_hashes.push(get_wasm_hash(chunk));
+            chunk_hashes.push(wasm_hash(chunk));
         }
 
         if payload_hasher.finalize().to_vec() != input.payload_hash {
@@ -402,7 +402,7 @@ impl TemplateChunkedOps {
         }
 
         let expected_hash = &info.chunk_hashes[input.chunk_index as usize];
-        let actual_hash = get_wasm_hash(&input.bytes);
+        let actual_hash = wasm_hash(&input.bytes);
         let chunk_key = TemplateChunkKey::new(release, input.chunk_index);
 
         if actual_hash != *expected_hash {
@@ -434,7 +434,7 @@ impl TemplateChunkedOps {
         }
 
         let expected_hash = &info.chunk_hashes[input.chunk_index as usize];
-        let actual_hash = get_wasm_hash(&input.bytes);
+        let actual_hash = wasm_hash(&input.bytes);
         let chunk_key = TemplateChunkKey::new(release, input.chunk_index);
 
         if actual_hash != *expected_hash {
@@ -517,7 +517,7 @@ impl TemplateChunkedOps {
                 .map_err(|_| TemplateManifestOpsError::ChunkIndexOverflow(release.clone()))?;
             let response =
                 Self::chunk_response(&manifest.template_id, &manifest.version, chunk_index)?;
-            let actual_hash = get_wasm_hash(&response.bytes);
+            let actual_hash = wasm_hash(&response.bytes);
             let chunk_key = TemplateChunkKey::new(release.clone(), chunk_index);
 
             if &actual_hash != expected_hash {
@@ -750,7 +750,7 @@ mod tests {
 
         let chunk_zero = vec![1_u8; 8];
         let chunk_one = vec![2_u8; 8];
-        let payload_hash = get_wasm_hash(&[chunk_zero.clone(), chunk_one.clone()].concat());
+        let payload_hash = wasm_hash(&[chunk_zero.clone(), chunk_one.clone()].concat());
         let release = TemplateReleaseKey::new(
             TemplateId::new("embedded:app"),
             TemplateVersion::new("0.18.0"),
@@ -772,7 +772,7 @@ mod tests {
                 version: release.version.clone(),
                 payload_hash,
                 payload_size_bytes: 16,
-                chunk_hashes: vec![get_wasm_hash(&chunk_zero), get_wasm_hash(&chunk_one)],
+                chunk_hashes: vec![wasm_hash(&chunk_zero), wasm_hash(&chunk_one)],
             },
             77,
             WasmStoreLimits {

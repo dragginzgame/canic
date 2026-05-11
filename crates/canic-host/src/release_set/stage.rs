@@ -1,7 +1,10 @@
 use crate::icp;
-use canic_core::{CANIC_WASM_CHUNK_BYTES, protocol};
+use canic_core::{
+    CANIC_WASM_CHUNK_BYTES,
+    cdk::utils::hash::{decode_hex, wasm_hash_hex},
+    protocol,
+};
 use flate2::read::GzDecoder;
-use sha2::{Digest, Sha256};
 use std::{
     fmt::Write,
     fs,
@@ -107,20 +110,6 @@ pub fn icp_call_on_network(
 
     let stdout = String::from_utf8(result.stdout)?;
     Ok(stdout)
-}
-
-// Compute the canonical SHA-256 hash used by the template staging APIs.
-#[must_use]
-fn wasm_hash(bytes: &[u8]) -> Vec<u8> {
-    let mut hasher = Sha256::new();
-    hasher.update(bytes);
-    hasher.finalize().to_vec()
-}
-
-// Compute the canonical SHA-256 hash and render it as lowercase hex.
-#[must_use]
-fn wasm_hash_hex(bytes: &[u8]) -> String {
-    hex_bytes(&wasm_hash(bytes))
 }
 
 // Encode one string as a Candid text literal.
@@ -296,7 +285,11 @@ fn prepare_release_chunks(
     let chunk_hash_literals = entry
         .chunk_sha256_hex
         .iter()
-        .map(|hash| decode_hex(hash).map(|bytes| idl_blob(&bytes)))
+        .map(|hash| {
+            decode_hex(hash)
+                .map(|bytes| idl_blob(&bytes))
+                .map_err(|err| -> Box<dyn std::error::Error> { Box::new(err) })
+        })
         .collect::<Result<Vec<_>, Box<dyn std::error::Error>>>()?
         .join("; ");
 
@@ -512,29 +505,4 @@ fn write_argument_file(argument: &str) -> Result<PathBuf, Box<dyn std::error::Er
     ));
     fs::write(&path, argument)?;
     Ok(path)
-}
-
-// Render one byte slice as lowercase hexadecimal.
-fn hex_bytes(bytes: &[u8]) -> String {
-    let mut encoded = String::with_capacity(bytes.len() * 2);
-
-    for byte in bytes {
-        let _ = write!(encoded, "{byte:02x}");
-    }
-
-    encoded
-}
-
-// Decode one lowercase hex string back into bytes.
-fn decode_hex(hex: &str) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
-    if !hex.len().is_multiple_of(2) {
-        return Err(format!("invalid hex length: {}", hex.len()).into());
-    }
-
-    let mut bytes = Vec::with_capacity(hex.len() / 2);
-    for index in (0..hex.len()).step_by(2) {
-        bytes.push(u8::from_str_radix(&hex[index..index + 2], 16)?);
-    }
-
-    Ok(bytes)
 }

@@ -42,10 +42,15 @@ pub fn init_root_canister(identity: SubnetIdentity) -> Result<(), InternalError>
     log_memory_summary(&memory_summary);
 
     let self_pid = IcOps::canister_self();
-    let (subnet_pid, subnet_role, prime_root_pid) = match identity {
-        SubnetIdentity::Prime => (self_pid, SubnetRole::PRIME, self_pid),
-        SubnetIdentity::Standard(params) => (self_pid, params.subnet_type, params.prime_root_pid),
-        SubnetIdentity::Manual => (IcOps::canister_self(), SubnetRole::PRIME, self_pid),
+    let (subnet_pid, subnet_role, prime_root_pid, module_hash) = match identity {
+        SubnetIdentity::Prime => (self_pid, SubnetRole::PRIME, self_pid, None),
+        SubnetIdentity::PrimeWithModuleHash(module_hash) => {
+            (self_pid, SubnetRole::PRIME, self_pid, Some(module_hash))
+        }
+        SubnetIdentity::Standard(params) => {
+            (self_pid, params.subnet_type, params.prime_root_pid, None)
+        }
+        SubnetIdentity::Manual => (IcOps::canister_self(), SubnetRole::PRIME, self_pid, None),
     };
 
     let input = EnvInput {
@@ -91,7 +96,7 @@ pub fn init_root_canister(identity: SubnetIdentity) -> Result<(), InternalError>
     RuntimeAuthWorkflow::ensure_root_crypto_contract()?;
 
     let created_at = IcOps::now_secs();
-    SubnetRegistryOps::register_root(self_pid, created_at);
+    SubnetRegistryOps::register_root_with_module_hash(self_pid, created_at, module_hash);
 
     // --- Phase 3: Service startup ---
     RuntimeWorkflow::start_all_root().map_err(|err| {

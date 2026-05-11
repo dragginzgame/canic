@@ -9,6 +9,7 @@ use std::{
 
 const ROOT: &str = "aaaaa-aa";
 const CHILD: &str = "renrk-eyaaa-aaaaa-aaada-cai";
+const HASH: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 
 // Ensure snapshot manifest construction stays in the backup domain crate.
 #[test]
@@ -18,11 +19,13 @@ fn snapshot_manifest_includes_selection_and_artifacts() {
             canister_id: ROOT.to_string(),
             role: Some("root".to_string()),
             parent_canister_id: None,
+            module_hash: None,
         },
         SnapshotTarget {
             canister_id: CHILD.to_string(),
             role: Some("app".to_string()),
             parent_canister_id: Some(ROOT.to_string()),
+            module_hash: Some(HASH.to_string()),
         },
     ];
     let artifacts = targets
@@ -31,8 +34,7 @@ fn snapshot_manifest_includes_selection_and_artifacts() {
             canister_id: target.canister_id.clone(),
             snapshot_id: format!("snapshot-{}", target.role.as_deref().unwrap_or("unknown")),
             path: std::path::PathBuf::from(target.canister_id.clone()),
-            checksum: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
-                .to_string(),
+            checksum: HASH.to_string(),
         })
         .collect::<Vec<_>>();
     let topology_hash =
@@ -61,7 +63,14 @@ fn snapshot_manifest_includes_selection_and_artifacts() {
             .source_snapshot
             .checksum
             .as_deref(),
-        Some("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
+        Some(HASH)
+    );
+    assert_eq!(
+        manifest.fleet.members[1]
+            .source_snapshot
+            .module_hash
+            .as_deref(),
+        Some(HASH)
     );
     assert_eq!(
         manifest.consistency.backup_units[0].kind,
@@ -78,6 +87,7 @@ fn topology_stability_rejects_drift() {
             canister_id: ROOT.to_string(),
             role: Some("root".to_string()),
             parent_canister_id: None,
+            module_hash: None,
         }],
     )
     .expect("topology hash should build");

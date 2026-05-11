@@ -5,7 +5,7 @@ mod reconcile_root_harness;
 
 use candid::encode_one;
 use canic::{
-    CANIC_WASM_CHUNK_BYTES, Error, cdk::utils::wasm::get_wasm_hash, dto::error::ErrorCode, protocol,
+    CANIC_WASM_CHUNK_BYTES, Error, cdk::utils::hash::wasm_hash, dto::error::ErrorCode, protocol,
 };
 use canic_control_plane::{
     dto::template::{
@@ -889,10 +889,10 @@ fn rollover_release_payload_len(remaining_store_bytes: u64, max_store_bytes: u64
 fn release_fixture(template_id: &TemplateId, version: &str, payload_len: usize) -> ReleaseFixture {
     let version = TemplateVersion::from(version.to_string());
     let payload = vec![0xA5; payload_len];
-    let payload_hash = get_wasm_hash(&payload);
+    let payload_hash = wasm_hash(&payload);
     let chunk_hashes = payload
         .chunks(CANIC_WASM_CHUNK_BYTES)
-        .map(get_wasm_hash)
+        .map(wasm_hash)
         .collect::<Vec<_>>();
     let chunks = payload
         .chunks(CANIC_WASM_CHUNK_BYTES)

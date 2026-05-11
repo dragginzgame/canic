@@ -11,6 +11,8 @@ use crate::dto::prelude::*;
 pub enum SubnetIdentity {
     Prime,
 
+    PrimeWithModuleHash(Vec<u8>),
+
     // this subnet is general-purpose subnet that syncs from Prime
     Standard(SubnetContextParams),
 

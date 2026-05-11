@@ -4,6 +4,7 @@ use std::process::Command;
 
 mod artifact_io;
 mod bootstrap_store;
+mod build_profile;
 pub mod canister_build;
 mod cargo_metadata;
 pub mod format;

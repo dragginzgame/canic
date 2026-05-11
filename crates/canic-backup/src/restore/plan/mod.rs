@@ -86,17 +86,11 @@ pub struct RestoreIdentitySummary {
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[expect(
-    clippy::struct_excessive_bools,
-    reason = "restore summaries intentionally expose machine-readable readiness flags"
-)]
 pub struct RestoreSnapshotSummary {
     pub all_members_have_module_hash: bool,
-    pub all_members_have_wasm_hash: bool,
     pub all_members_have_code_version: bool,
     pub all_members_have_checksum: bool,
     pub members_with_module_hash: usize,
-    pub members_with_wasm_hash: usize,
     pub members_with_code_version: usize,
     pub members_with_checksum: usize,
 }
@@ -462,10 +456,6 @@ fn restore_snapshot_summary(members: &[RestorePlanMember]) -> RestoreSnapshotSum
         .iter()
         .filter(|member| member.source_snapshot.module_hash.is_some())
         .count();
-    let members_with_wasm_hash = members
-        .iter()
-        .filter(|member| member.source_snapshot.wasm_hash.is_some())
-        .count();
     let members_with_code_version = members
         .iter()
         .filter(|member| member.source_snapshot.code_version.is_some())
@@ -477,11 +467,9 @@ fn restore_snapshot_summary(members: &[RestorePlanMember]) -> RestoreSnapshotSum
 
     RestoreSnapshotSummary {
         all_members_have_module_hash: members_with_module_hash == members.len(),
-        all_members_have_wasm_hash: members_with_wasm_hash == members.len(),
         all_members_have_code_version: members_with_code_version == members.len(),
         all_members_have_checksum: members_with_checksum == members.len(),
         members_with_module_hash,
-        members_with_wasm_hash,
         members_with_code_version,
         members_with_checksum,
     }

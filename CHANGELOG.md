@@ -7,7 +7,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.34.x] - 2026-05-10 - Backup/restore rework
 
-- `0.34.2` aligns the root replay unauthorized-caller test with the current security metrics surface by checking root-capability dispatch metrics directly.
+- `0.34.3` makes `canic endpoints` print Candid method declarations by default and structured endpoint type JSON for automation, exposes module hashes in `canic list`, backup inspect plans, and manifests while removing the unused `wasm_hash` snapshot field, centralizes wasm/hash helpers, and keeps backup artifact checksums distinct from IC module hashes.
+
+- `0.34.2` aligns the root replay unauthorized-caller test with the current security metrics surface.
 
 - `0.34.1` lets `canic backup inspect`, `canic backup status`, and `canic backup verify` target a backup by `canic backup list` row number or `BACKUP_ID`, while keeping `--dir <dir>` for explicit paths and returning a typed dry-run rejection from `verify`.
 

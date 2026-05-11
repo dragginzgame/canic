@@ -141,6 +141,7 @@ pub fn resolve_snapshot_targets(
             canister_id: config.canister.clone(),
             role: None,
             parent_canister_id: None,
+            module_hash: None,
         }]);
     }
 
@@ -460,8 +461,7 @@ fn fleet_member(
         }],
         source_snapshot: SourceSnapshot {
             snapshot_id: artifact.snapshot_id.clone(),
-            module_hash: None,
-            wasm_hash: None,
+            module_hash: target.module_hash.clone(),
             code_version: None,
             artifact_path: safe_path_segment(&target.canister_id),
             checksum_algorithm: "sha256".to_string(),
@@ -484,7 +484,7 @@ fn topology_record(
             .map(|parent| parse_principal("fleet.members[].parent_canister_id", parent))
             .transpose()?,
         role: target_role(selected_canister, index, target),
-        module_hash: None,
+        module_hash: target.module_hash.clone(),
     })
 }
 

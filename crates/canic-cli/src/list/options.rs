@@ -8,7 +8,8 @@ use std::ffi::OsString;
 const LIST_HELP_AFTER: &str = "\
 Examples:
   canic list test
-  canic list test --subtree user_hub";
+  canic list test --subtree user_hub
+  canic list test --verbose";
 const CONFIG_HELP_AFTER: &str = "\
 Examples:
   canic config test
@@ -96,6 +97,12 @@ fn list_command() -> ClapCommand {
                 .long("subtree")
                 .value_name("name-or-principal")
                 .help("Render a subtree anchored at one canister"),
+        )
+        .arg(
+            flag_arg("verbose")
+                .long("verbose")
+                .short('v')
+                .help("Show full module hashes instead of 12-character prefixes"),
         )
         .arg(internal_icp_arg())
         .after_help(LIST_HELP_AFTER)

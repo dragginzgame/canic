@@ -3,10 +3,7 @@ use crate::{
         embed_candid_metadata, maybe_shrink_wasm_artifact, write_bytes_atomically,
         write_gzip_artifact, write_wasm_artifact,
     },
-    bootstrap_store::{
-        BootstrapWasmStoreBuildOutput, BootstrapWasmStoreBuildProfile,
-        build_bootstrap_wasm_store_artifact,
-    },
+    bootstrap_store::{BootstrapWasmStoreBuildOutput, build_bootstrap_wasm_store_artifact},
     cargo_command, icp_environment_from_env,
     release_set::{
         canister_manifest_path, emit_root_release_set_manifest_if_ready, icp_root, workspace_root,
@@ -20,64 +17,12 @@ use std::{
 };
 use toml::Value as TomlValue;
 
+pub use crate::build_profile::CanisterBuildProfile;
+
 const ROOT_ROLE: &str = "root";
 const WASM_STORE_ROLE: &str = "wasm_store";
 const LOCAL_ARTIFACT_ROOT_RELATIVE: &str = ".icp/local/canisters";
 const WASM_TARGET: &str = "wasm32-unknown-unknown";
-
-///
-/// CanisterBuildProfile
-///
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum CanisterBuildProfile {
-    Debug,
-    Fast,
-    Release,
-}
-
-impl CanisterBuildProfile {
-    // Resolve the current requested build profile from the explicit Canic wasm selector.
-    #[must_use]
-    pub fn current() -> Self {
-        match std::env::var("CANIC_WASM_PROFILE").ok().as_deref() {
-            Some("debug") => Self::Debug,
-            Some("fast") => Self::Fast,
-            _ => Self::Release,
-        }
-    }
-
-    // Return the cargo profile flags for one Canic canister build.
-    #[must_use]
-    pub const fn cargo_args(self) -> &'static [&'static str] {
-        match self {
-            Self::Debug => &[],
-            Self::Fast => &["--profile", "fast"],
-            Self::Release => &["--release"],
-        }
-    }
-
-    // Return the target-profile directory name for one Canic canister build.
-    #[must_use]
-    pub const fn target_dir_name(self) -> &'static str {
-        match self {
-            Self::Debug => "debug",
-            Self::Fast => "fast",
-            Self::Release => "release",
-        }
-    }
-}
-
-impl From<CanisterBuildProfile> for BootstrapWasmStoreBuildProfile {
-    // Reuse the same profile selection for the implicit bootstrap store build.
-    fn from(value: CanisterBuildProfile) -> Self {
-        match value {
-            CanisterBuildProfile::Debug => Self::Debug,
-            CanisterBuildProfile::Fast => Self::Fast,
-            CanisterBuildProfile::Release => Self::Release,
-        }
-    }
-}
 
 ///
 /// CanisterArtifactBuildOutput
@@ -161,7 +106,7 @@ fn build_canister_artifact(
     let require_embedded_release_artifacts = canister_name == ROOT_ROLE;
 
     if require_embedded_release_artifacts {
-        build_bootstrap_wasm_store_artifact(workspace_root, icp_root, profile.into())?;
+        build_bootstrap_wasm_store_artifact(workspace_root, icp_root, profile)?;
     }
 
     fs::create_dir_all(&artifact_root)?;
@@ -321,7 +266,7 @@ fn build_hidden_wasm_store_artifact(
     icp_root: &Path,
     profile: CanisterBuildProfile,
 ) -> Result<CanisterArtifactBuildOutput, Box<dyn std::error::Error>> {
-    let output = build_bootstrap_wasm_store_artifact(workspace_root, icp_root, profile.into())?;
+    let output = build_bootstrap_wasm_store_artifact(workspace_root, icp_root, profile)?;
     Ok(map_bootstrap_output(output))
 }
 
