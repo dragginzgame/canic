@@ -1,9 +1,8 @@
 use super::{
     INSTALL_STATE_SCHEMA_VERSION, InstallState, add_icp_environment_target,
     add_local_root_create_cycles_arg, config_selection_error, discover_canic_config_choices,
-    fleet_install_state_path, icp_canister_command_in_network, icp_start_local_command,
-    icp_stop_command, install_build_session_id, parse_bootstrap_status_value,
-    parse_cycle_balance_response, parse_local_icp_autostart, parse_root_ready_value,
+    fleet_install_state_path, icp_canister_command_in_network, install_build_session_id,
+    parse_bootstrap_status_value, parse_cycle_balance_response, parse_root_ready_value,
     read_fleet_install_state, resolve_install_config_path, root_init_args,
     validate_expected_fleet_name, write_install_state,
 };
@@ -125,70 +124,6 @@ fn root_init_args_include_wasm_module_hash() {
     assert!(args.starts_with("(variant { PrimeWithModuleHash = blob \""));
     assert!(args.ends_with("\" })"));
     assert!(args.contains("\\93\\A4\\4B\\BB"));
-}
-
-#[test]
-fn local_icp_autostart_defaults_to_enabled() {
-    assert!(parse_local_icp_autostart(None));
-    assert!(parse_local_icp_autostart(Some("")));
-    assert!(parse_local_icp_autostart(Some("1")));
-    assert!(parse_local_icp_autostart(Some("true")));
-}
-
-#[test]
-fn local_icp_autostart_accepts_explicit_disable_values() {
-    assert!(!parse_local_icp_autostart(Some("0")));
-    assert!(!parse_local_icp_autostart(Some("false")));
-    assert!(!parse_local_icp_autostart(Some("no")));
-    assert!(!parse_local_icp_autostart(Some("off")));
-}
-
-#[test]
-fn local_icp_start_command_uses_background_mode() {
-    let command = icp_start_local_command(Path::new("/tmp/canic-icp-root"));
-
-    assert_eq!(command.get_program(), "icp");
-    assert_eq!(
-        command
-            .get_args()
-            .map(|arg| arg.to_string_lossy().into_owned())
-            .collect::<Vec<_>>(),
-        ["network", "start", "local", "--background"]
-    );
-    assert_eq!(
-        command
-            .get_current_dir()
-            .map(|path| path.to_string_lossy().into_owned()),
-        Some("/tmp/canic-icp-root".to_string())
-    );
-    assert_eq!(
-        command_env(&command, "ICP_ENVIRONMENT").as_deref(),
-        Some("local")
-    );
-}
-
-#[test]
-fn local_icp_stop_command_targets_project_root() {
-    let command = icp_stop_command(Path::new("/tmp/canic-icp-root"));
-
-    assert_eq!(command.get_program(), "icp");
-    assert_eq!(
-        command
-            .get_args()
-            .map(|arg| arg.to_string_lossy().into_owned())
-            .collect::<Vec<_>>(),
-        ["network", "stop", "local"]
-    );
-    assert_eq!(
-        command
-            .get_current_dir()
-            .map(|path| path.to_string_lossy().into_owned()),
-        Some("/tmp/canic-icp-root".to_string())
-    );
-    assert_eq!(
-        command_env(&command, "ICP_ENVIRONMENT").as_deref(),
-        Some("local")
-    );
 }
 
 #[test]
@@ -692,14 +627,6 @@ fn write_temp_workspace_config(config_source: &str) -> PathBuf {
     fs::write(root.join("fleets/canic.toml"), config_source)
         .expect("temp canic.toml must be written");
     root
-}
-
-fn command_env(command: &std::process::Command, name: &str) -> Option<String> {
-    command
-        .get_envs()
-        .find_map(|(key, value)| (key == name).then_some(value))
-        .flatten()
-        .map(|value| value.to_string_lossy().into_owned())
 }
 
 fn with_guarded_env(run: impl FnOnce()) {

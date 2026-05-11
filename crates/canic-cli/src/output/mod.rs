@@ -42,6 +42,22 @@ where
     Ok(())
 }
 
+// Write a plain text payload to a requested file or stdout.
+pub fn write_text<E>(out: Option<&PathBuf>, text: &str) -> Result<(), E>
+where
+    E: From<io::Error>,
+{
+    if let Some(path) = out {
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        fs::write(path, text)?;
+    } else {
+        println!("{text}");
+    }
+    Ok(())
+}
+
 // Read and decode one JSON file.
 pub fn read_json_file<T, E>(path: &PathBuf) -> Result<T, E>
 where

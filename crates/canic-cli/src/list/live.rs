@@ -4,8 +4,8 @@ use super::{
     parse::{parse_canic_metadata_version_response, parse_cycle_balance_response},
     render::ReadyStatus,
     state_network,
-    tree::visible_entries,
 };
+use crate::registry_tree::visible_entries;
 use canic_backup::discovery::{RegistryEntry, parse_registry_entries};
 use canic_host::{
     format::{byte_size, cycles_tc},

@@ -1,12 +1,10 @@
-use super::{
-    ListCommandError,
-    tree::{RegistryRow, visible_rows},
-};
+use super::ListCommandError;
+use crate::registry_tree::{RegistryRow, visible_rows};
 use canic_backup::discovery::RegistryEntry;
 use canic_host::table::{
     ColumnAlign, render_separator, render_table, render_table_row, table_widths,
 };
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 const COLUMN_GAP: &str = "   ";
 const MODULE_PREFIX_CHARS: usize = 8;
@@ -300,27 +298,56 @@ fn module_variant_flags(
     rows: &[RegistryRow<'_>],
     module_hashes: &BTreeMap<String, String>,
 ) -> Vec<bool> {
-    let baseline = module_variant_baseline(rows, module_hashes);
+    let baselines = role_module_baselines(rows, module_hashes);
+    let distinct = role_distinct_module_hashes(rows, module_hashes);
     rows.iter()
         .map(|row| {
-            row_module_hash(row, module_hashes)
-                .zip(baseline)
-                .is_some_and(|(hash, baseline)| hash != baseline)
+            row_role(row)
+                .and_then(|role| {
+                    row_module_hash(row, module_hashes)
+                        .zip(baselines.get(role).map(String::as_str))
+                        .zip(distinct.get(role))
+                })
+                .is_some_and(|((hash, baseline), role_hashes)| {
+                    role_hashes.len() > 1 && hash != baseline
+                })
         })
         .collect()
 }
 
-fn module_variant_baseline<'a>(
+fn role_module_baselines(
     rows: &[RegistryRow<'_>],
-    module_hashes: &'a BTreeMap<String, String>,
-) -> Option<&'a str> {
-    rows.iter()
-        .filter(|row| is_module_baseline_role(row.entry.role.as_deref()))
-        .find_map(|row| row_module_hash(row, module_hashes))
-        .or_else(|| {
-            rows.iter()
-                .find_map(|row| row_module_hash(row, module_hashes))
-        })
+    module_hashes: &BTreeMap<String, String>,
+) -> BTreeMap<String, String> {
+    let mut baselines = BTreeMap::new();
+    for row in rows {
+        if let Some((role, hash)) = row_role(row).zip(row_module_hash(row, module_hashes)) {
+            baselines
+                .entry(role.to_string())
+                .or_insert_with(|| hash.to_string());
+        }
+    }
+    baselines
+}
+
+fn role_distinct_module_hashes(
+    rows: &[RegistryRow<'_>],
+    module_hashes: &BTreeMap<String, String>,
+) -> BTreeMap<String, BTreeSet<String>> {
+    let mut distinct = BTreeMap::<String, BTreeSet<String>>::new();
+    for row in rows {
+        if let Some((role, hash)) = row_role(row).zip(row_module_hash(row, module_hashes)) {
+            distinct
+                .entry(role.to_string())
+                .or_default()
+                .insert(hash.to_string());
+        }
+    }
+    distinct
+}
+
+fn row_role<'a>(row: &RegistryRow<'a>) -> Option<&'a str> {
+    row.entry.role.as_deref().filter(|role| !role.is_empty())
 }
 
 fn row_module_hash<'a>(
@@ -331,10 +358,6 @@ fn row_module_hash<'a>(
         .get(&row.entry.pid)
         .map(String::as_str)
         .filter(|hash| !hash.is_empty())
-}
-
-fn is_module_baseline_role(role: Option<&str>) -> bool {
-    !matches!(role, Some("root" | "wasm_store"))
 }
 
 #[cfg(test)]

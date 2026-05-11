@@ -31,16 +31,13 @@ scripts/ci/sync-release-surface-version.sh "$NEW"
 cargo test -p canic --test install_script_surface -- --test-threads=1 --nocapture >/dev/null
 cargo test -p canic --test protocol_surface -- --test-threads=1 --nocapture >/dev/null
 
-git add Cargo.toml Cargo.lock README.md crates/canic-host/README.md scripts/dev/install_dev.sh \
-  scripts/ci/sync-release-surface-version.sh $(git ls-files -m -- */Cargo.toml || true)
-
 if git rev-parse "v$NEW" >/dev/null 2>&1; then
   echo "❌ Tag v$NEW already exists. Aborting." >&2
   exit 1
 fi
 
-git commit -m "Release $NEW"
-git tag -a "v$NEW" -m "Release $NEW"
-git push --follow-tags
-
 echo "✅ Bumped: $PREV → $NEW"
+echo "Review changes, then run:"
+echo "  make release-stage"
+echo "  make release-commit"
+echo "  make release-push"

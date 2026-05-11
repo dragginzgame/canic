@@ -1,5 +1,6 @@
 mod args;
 mod backup;
+mod cycles;
 mod endpoints;
 mod fleets;
 mod install;
@@ -9,7 +10,9 @@ mod medic;
 mod metrics;
 mod output;
 mod path_stamp;
+mod registry_tree;
 mod replica;
+mod response_parse;
 mod restore;
 mod scaffold;
 mod snapshot;
@@ -108,8 +111,13 @@ const COMMAND_SPECS: &[CommandSpec] = &[
         scope: CommandScope::FleetContext,
     },
     CommandSpec {
+        name: "cycles",
+        about: "Summarize fleet cycle history",
+        scope: CommandScope::FleetContext,
+    },
+    CommandSpec {
         name: "metrics",
-        about: "Summarize fleet cycle tracker history",
+        about: "Query Canic runtime telemetry",
         scope: CommandScope::FleetContext,
     },
     CommandSpec {
@@ -149,6 +157,9 @@ pub enum CliError {
     #[error("config: {0}")]
     Config(String),
 
+    #[error("cycles: {0}")]
+    Cycles(String),
+
     #[error("endpoints: {0}")]
     Endpoints(String),
 
@@ -186,6 +197,12 @@ pub enum CliError {
 impl From<backup::BackupCommandError> for CliError {
     fn from(err: backup::BackupCommandError) -> Self {
         Self::Backup(err.to_string())
+    }
+}
+
+impl From<cycles::CyclesCommandError> for CliError {
+    fn from(err: cycles::CyclesCommandError) -> Self {
+        Self::Cycles(err.to_string())
     }
 }
 
@@ -300,6 +317,7 @@ where
     match command {
         "backup" => backup::run(tail).map_err(CliError::from),
         "config" => list::run_config(tail).map_err(|err| CliError::Config(err.to_string())),
+        "cycles" => cycles::run(tail).map_err(CliError::from),
         "endpoints" => endpoints::run(tail).map_err(CliError::from),
         "fleet" => fleets::run(tail).map_err(CliError::from),
         "install" => install::run(tail).map_err(CliError::from),
@@ -430,7 +448,7 @@ fn apply_global_network(command: &str, tail: &mut Vec<OsString>, global_network:
 
 fn command_accepts_global_icp(command: &str, tail: &[OsString]) -> bool {
     match command {
-        "endpoints" | "list" | "medic" | "metrics" | "status" => true,
+        "cycles" | "endpoints" | "list" | "medic" | "metrics" | "status" => true,
         "replica" => matches!(
             tail.first().and_then(|arg| arg.to_str()),
             Some("start" | "status" | "stop")
@@ -444,7 +462,7 @@ fn command_accepts_global_icp(command: &str, tail: &[OsString]) -> bool {
 
 fn command_accepts_global_network(command: &str, tail: &[OsString]) -> bool {
     match command {
-        "endpoints" | "install" | "list" | "medic" | "metrics" | "status" => true,
+        "cycles" | "endpoints" | "install" | "list" | "medic" | "metrics" | "status" => true,
         "fleet" => tail.first().and_then(|arg| arg.to_str()) == Some("list"),
         "snapshot" => tail.first().and_then(|arg| arg.to_str()) == Some("download"),
         "backup" => tail.first().and_then(|arg| arg.to_str()) == Some("create"),
@@ -552,7 +570,10 @@ mod tests {
         assert!(plain.find("    install") < plain.find("    config"));
         assert!(plain.find("    config") < plain.find("    list"));
         assert!(plain.find("    list") < plain.find("    endpoints"));
-        assert!(plain.find("    endpoints") < plain.find("    snapshot"));
+        assert!(plain.find("    endpoints") < plain.find("    medic"));
+        assert!(plain.find("    medic") < plain.find("    cycles"));
+        assert!(plain.find("    cycles") < plain.find("    metrics"));
+        assert!(plain.find("    metrics") < plain.find("    snapshot"));
         assert!(plain.find("    snapshot") < plain.find("    backup"));
         assert!(plain.find("    backup") < plain.find("    manifest"));
         assert!(plain.find("    manifest") < plain.find("    restore"));
@@ -563,6 +584,8 @@ mod tests {
         assert!(plain.contains("config"));
         assert!(plain.contains("list"));
         assert!(plain.contains("endpoints"));
+        assert!(plain.contains("cycles"));
+        assert!(plain.contains("metrics"));
         assert!(!plain.contains("    build"));
         assert!(!plain.contains("    network"));
         assert!(!plain.contains("    defaults"));
@@ -592,6 +615,7 @@ mod tests {
             &["backup", "status", "help"],
             &["backup", "verify", "help"],
             &["config", "help"],
+            &["cycles", "help"],
             &["endpoints", "help"],
             &["install", "help"],
             &["fleet"],
@@ -612,6 +636,7 @@ mod tests {
             &["manifest", "help"],
             &["manifest", "validate", "help"],
             &["medic", "help"],
+            &["metrics", "help"],
             &["snapshot", "help"],
             &["snapshot", "download", "help"],
             &["status", "help"],
@@ -644,6 +669,7 @@ mod tests {
             .is_ok()
         );
         assert!(run([OsString::from("config"), OsString::from("--version")]).is_ok());
+        assert!(run([OsString::from("cycles"), OsString::from("--version")]).is_ok());
         assert!(run([OsString::from("endpoints"), OsString::from("--version")]).is_ok());
         assert!(run([OsString::from("install"), OsString::from("--version")]).is_ok());
         assert!(run([OsString::from("fleet"), OsString::from("--version")]).is_ok());
@@ -669,6 +695,7 @@ mod tests {
         assert!(run([OsString::from("restore"), OsString::from("--version")]).is_ok());
         assert!(run([OsString::from("manifest"), OsString::from("--version")]).is_ok());
         assert!(run([OsString::from("medic"), OsString::from("--version")]).is_ok());
+        assert!(run([OsString::from("metrics"), OsString::from("--version")]).is_ok());
         assert!(run([OsString::from("snapshot"), OsString::from("--version")]).is_ok());
         assert!(
             run([

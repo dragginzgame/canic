@@ -3,11 +3,15 @@ use crate::{
         default_icp, flag_arg, internal_icp_arg, internal_network_arg, local_network,
         parse_matches, path_option, print_help_or_version, string_option, value_arg,
     },
-    output, version_text,
+    output,
+    response_parse::{
+        RECORD_MARKER, candid_record_blocks, find_field, parse_json_u64, parse_json_u128,
+        parse_u64_digits, parse_u128_digits, quoted_strings, text_after,
+    },
+    version_text,
 };
 use canic_backup::discovery::{DiscoveryError, RegistryEntry, parse_registry_entries};
 use canic_host::{
-    format::cycles_tc,
     icp::{IcpCli, IcpCommandError},
     install_root::read_named_fleet_install_state,
     replica_query,
@@ -15,18 +19,11 @@ use canic_host::{
 };
 use clap::Command as ClapCommand;
 use serde::Serialize;
-use std::{
-    ffi::OsString,
-    fs,
-    path::PathBuf,
-    sync::Arc,
-    thread,
-    time::{SystemTime, UNIX_EPOCH},
-};
+use std::{ffi::OsString, path::PathBuf, sync::Arc, thread};
 use thiserror::Error as ThisError;
 
-const DEFAULT_SINCE_SECONDS: u64 = 24 * 60 * 60;
 const DEFAULT_LIMIT: u64 = 1_000;
+pub const CANIC_METRICS_METHOD: &str = "canic_metrics";
 
 ///
 /// MetricsCommandError
@@ -51,8 +48,10 @@ pub enum MetricsCommandError {
     #[error("icp command failed: {command}\n{stderr}")]
     IcpFailed { command: String, stderr: String },
 
-    #[error("invalid duration {0}; use values like 1h, 6h, 24h, 7d, or 30m")]
-    InvalidDuration(String),
+    #[error(
+        "invalid metrics kind {0}; use core, placement, platform, runtime, security, or storage"
+    )]
+    InvalidKind(String),
 
     #[error(transparent)]
     Io(#[from] std::io::Error),
@@ -65,13 +64,67 @@ pub enum MetricsCommandError {
 }
 
 ///
+/// MetricsKind
+///
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum MetricsKind {
+    Core,
+    Placement,
+    Platform,
+    Runtime,
+    Security,
+    Storage,
+}
+
+impl MetricsKind {
+    fn parse(value: &str) -> Result<Self, MetricsCommandError> {
+        match value {
+            "core" => Ok(Self::Core),
+            "placement" => Ok(Self::Placement),
+            "platform" => Ok(Self::Platform),
+            "runtime" => Ok(Self::Runtime),
+            "security" => Ok(Self::Security),
+            "storage" => Ok(Self::Storage),
+            _ => Err(MetricsCommandError::InvalidKind(value.to_string())),
+        }
+    }
+
+    const fn as_str(self) -> &'static str {
+        match self {
+            Self::Core => "core",
+            Self::Placement => "placement",
+            Self::Platform => "platform",
+            Self::Runtime => "runtime",
+            Self::Security => "security",
+            Self::Storage => "storage",
+        }
+    }
+
+    const fn candid_variant(self) -> &'static str {
+        match self {
+            Self::Core => "Core",
+            Self::Placement => "Placement",
+            Self::Platform => "Platform",
+            Self::Runtime => "Runtime",
+            Self::Security => "Security",
+            Self::Storage => "Storage",
+        }
+    }
+}
+
+///
 /// MetricsOptions
 ///
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct MetricsOptions {
     pub fleet: String,
-    pub since_seconds: u64,
+    pub kind: MetricsKind,
+    pub role: Option<String>,
+    pub canister: Option<String>,
+    pub nonzero: bool,
     pub limit: u64,
     pub json: bool,
     pub out: Option<PathBuf>,
@@ -87,8 +140,7 @@ pub struct MetricsOptions {
 pub struct MetricsReport {
     pub fleet: String,
     pub network: String,
-    pub since_seconds: u64,
-    pub generated_at_secs: u64,
+    pub kind: MetricsKind,
     pub canisters: Vec<MetricsCanisterReport>,
 }
 
@@ -101,38 +153,41 @@ pub struct MetricsCanisterReport {
     pub role: String,
     pub canister_id: String,
     pub status: String,
-    pub sample_count: usize,
-    pub total_samples: u64,
-    pub requested_since_secs: u64,
-    pub coverage_seconds: Option<u64>,
-    pub coverage_status: String,
-    pub latest_timestamp_secs: Option<u64>,
-    pub latest_cycles: Option<u128>,
-    pub baseline_timestamp_secs: Option<u64>,
-    pub baseline_cycles: Option<u128>,
-    pub delta_cycles: Option<i128>,
-    pub rate_cycles_per_hour: Option<i128>,
+    pub entries: Vec<MetricEntry>,
     pub error: Option<String>,
 }
 
 ///
-/// CycleTrackerPage
+/// MetricEntry
 ///
 
-#[derive(Clone, Debug, Eq, PartialEq)]
-struct CycleTrackerPage {
-    entries: Vec<CycleTrackerSample>,
-    total: u64,
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+pub struct MetricEntry {
+    pub labels: Vec<String>,
+    pub principal: Option<String>,
+    pub value: MetricValue,
 }
 
 ///
-/// CycleTrackerSample
+/// MetricValue
 ///
 
-#[derive(Clone, Debug, Eq, PartialEq)]
-struct CycleTrackerSample {
-    timestamp_secs: u64,
-    cycles: u128,
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case", tag = "type")]
+pub enum MetricValue {
+    Count { count: u64 },
+    CountAndU64 { count: u64, value_u64: u64 },
+    U128 { value: u128 },
+}
+
+impl MetricValue {
+    const fn is_zero(&self) -> bool {
+        match self {
+            Self::Count { count } => *count == 0,
+            Self::CountAndU64 { count, value_u64 } => *count == 0 && *value_u64 == 0,
+            Self::U128 { value } => *value == 0,
+        }
+    }
 }
 
 pub fn run<I>(args: I) -> Result<(), MetricsCommandError>
@@ -156,10 +211,10 @@ impl MetricsOptions {
     {
         let matches = parse_matches(metrics_command(), args)
             .map_err(|_| MetricsCommandError::Usage(usage()))?;
-        let since_seconds = string_option(&matches, "since")
-            .map(|value| parse_duration(&value))
+        let kind = string_option(&matches, "kind")
+            .map(|value| MetricsKind::parse(&value))
             .transpose()?
-            .unwrap_or(DEFAULT_SINCE_SECONDS);
+            .unwrap_or(MetricsKind::Core);
         let limit = string_option(&matches, "limit")
             .and_then(|value| value.parse::<u64>().ok())
             .filter(|limit| *limit > 0)
@@ -167,7 +222,10 @@ impl MetricsOptions {
 
         Ok(Self {
             fleet: string_option(&matches, "fleet").expect("clap requires fleet"),
-            since_seconds,
+            kind,
+            role: string_option(&matches, "role"),
+            canister: string_option(&matches, "canister"),
+            nonzero: matches.get_flag("nonzero"),
             limit,
             json: matches.get_flag("json"),
             out: path_option(&matches, "out"),
@@ -179,15 +237,12 @@ impl MetricsOptions {
 
 pub fn metrics_report(options: &MetricsOptions) -> Result<MetricsReport, MetricsCommandError> {
     let registry = load_registry(options)?;
-    let generated_at_secs = current_unix_seconds();
-    let requested_since_secs = generated_at_secs.saturating_sub(options.since_seconds);
-    let canisters = collect_cycle_tracker_reports(options, &registry, requested_since_secs);
+    let canisters = collect_metrics_reports(options, &registry);
 
     Ok(MetricsReport {
         fleet: options.fleet.clone(),
         network: options.network.clone(),
-        since_seconds: options.since_seconds,
-        generated_at_secs,
+        kind: options.kind,
         canisters,
     })
 }
@@ -200,13 +255,28 @@ fn load_registry(options: &MetricsOptions) -> Result<Vec<RegistryEntry>, Metrics
             fleet: options.fleet.clone(),
         })?;
     let registry_json = call_subnet_registry(options, &state.root_canister_id)?;
-    Ok(parse_registry_entries(&registry_json)?)
+    let mut registry = parse_registry_entries(&registry_json)?;
+    registry.retain(|entry| matches_metrics_filter(options, entry));
+    Ok(registry)
 }
 
-fn collect_cycle_tracker_reports(
+fn matches_metrics_filter(options: &MetricsOptions, entry: &RegistryEntry) -> bool {
+    if let Some(role) = &options.role
+        && entry.role.as_deref() != Some(role.as_str())
+    {
+        return false;
+    }
+    if let Some(canister) = &options.canister
+        && entry.pid != *canister
+    {
+        return false;
+    }
+    true
+}
+
+fn collect_metrics_reports(
     options: &MetricsOptions,
     registry: &[RegistryEntry],
-    requested_since_secs: u64,
 ) -> Vec<MetricsCanisterReport> {
     let query = Arc::new(options.clone());
     let mut handles = Vec::new();
@@ -214,7 +284,7 @@ fn collect_cycle_tracker_reports(
         let entry = entry.clone();
         let query = Arc::clone(&query);
         handles.push(thread::spawn(move || {
-            cycle_tracker_report(&query, &entry, requested_since_secs)
+            metrics_canister_report(&query, &entry)
         }));
     }
 
@@ -224,228 +294,172 @@ fn collect_cycle_tracker_reports(
         .collect()
 }
 
-fn cycle_tracker_report(
+fn metrics_canister_report(
     options: &MetricsOptions,
     entry: &RegistryEntry,
-    requested_since_secs: u64,
 ) -> MetricsCanisterReport {
-    let result = query_cycle_tracker(options, &entry.pid);
-    match result {
-        Ok(page) => summarize_cycle_tracker(entry, page, requested_since_secs),
-        Err(error) => MetricsCanisterReport {
-            role: entry.role.clone().unwrap_or_else(|| "-".to_string()),
-            canister_id: entry.pid.clone(),
-            status: "error".to_string(),
-            sample_count: 0,
-            total_samples: 0,
-            requested_since_secs,
-            coverage_seconds: None,
-            coverage_status: "none".to_string(),
-            latest_timestamp_secs: None,
-            latest_cycles: None,
-            baseline_timestamp_secs: None,
-            baseline_cycles: None,
-            delta_cycles: None,
-            rate_cycles_per_hour: None,
-            error: Some(error),
-        },
+    match query_metrics(options, &entry.pid) {
+        Ok(mut entries) => {
+            if options.nonzero {
+                entries.retain(|entry| !entry.value.is_zero());
+            }
+            MetricsCanisterReport {
+                role: entry.role.clone().unwrap_or_else(|| "-".to_string()),
+                canister_id: entry.pid.clone(),
+                status: "ok".to_string(),
+                entries,
+                error: None,
+            }
+        }
+        Err(error) => metrics_error_report(entry, &error),
     }
 }
 
-fn summarize_cycle_tracker(
-    entry: &RegistryEntry,
-    mut page: CycleTrackerPage,
-    requested_since_secs: u64,
-) -> MetricsCanisterReport {
-    page.entries.sort_by_key(|entry| entry.timestamp_secs);
-    let latest = page.entries.last().cloned();
-    let baseline = latest.as_ref().and_then(|_| {
-        page.entries
-            .iter()
-            .rev()
-            .find(|sample| sample.timestamp_secs <= requested_since_secs)
-            .or_else(|| page.entries.first())
-            .cloned()
-    });
-    let delta = latest
-        .as_ref()
-        .zip(baseline.as_ref())
-        .map(|(latest, baseline)| signed_delta(latest.cycles, baseline.cycles));
-    let coverage_seconds = latest
-        .as_ref()
-        .zip(baseline.as_ref())
-        .map(|(latest, baseline)| {
-            latest
-                .timestamp_secs
-                .saturating_sub(baseline.timestamp_secs)
-        });
-    let rate_cycles_per_hour = delta
-        .zip(coverage_seconds)
-        .and_then(|(delta, coverage)| hourly_rate(delta, coverage));
-    let coverage_status = coverage_status(baseline.as_ref(), requested_since_secs);
-    let status = if latest.is_some() { "ok" } else { "empty" };
+fn metrics_error_report(entry: &RegistryEntry, error: &str) -> MetricsCanisterReport {
+    let (status, error) = if error.contains("has no query method 'canic_metrics'") {
+        ("unavailable", "canic_metrics unavailable")
+    } else {
+        ("error", error.lines().next().unwrap_or(error))
+    };
 
     MetricsCanisterReport {
         role: entry.role.clone().unwrap_or_else(|| "-".to_string()),
         canister_id: entry.pid.clone(),
         status: status.to_string(),
-        sample_count: page.entries.len(),
-        total_samples: page.total,
-        requested_since_secs,
-        coverage_seconds,
-        coverage_status,
-        latest_timestamp_secs: latest.as_ref().map(|sample| sample.timestamp_secs),
-        latest_cycles: latest.as_ref().map(|sample| sample.cycles),
-        baseline_timestamp_secs: baseline.as_ref().map(|sample| sample.timestamp_secs),
-        baseline_cycles: baseline.as_ref().map(|sample| sample.cycles),
-        delta_cycles: delta,
-        rate_cycles_per_hour,
-        error: None,
+        entries: Vec::new(),
+        error: Some(error.to_string()),
     }
 }
 
-fn query_cycle_tracker(
-    options: &MetricsOptions,
-    canister_id: &str,
-) -> Result<CycleTrackerPage, String> {
-    let mut page = query_cycle_tracker_page(options, canister_id, 0, options.limit)?;
-    if page.total > options.limit {
-        let offset = page.total.saturating_sub(options.limit);
-        page = query_cycle_tracker_page(options, canister_id, offset, options.limit)?;
-    }
-    Ok(page)
-}
-
-fn query_cycle_tracker_page(
-    options: &MetricsOptions,
-    canister_id: &str,
-    offset: u64,
-    limit: u64,
-) -> Result<CycleTrackerPage, String> {
-    let arg = format!("(record {{ offset = {offset} : nat64; limit = {limit} : nat64 }})");
+fn query_metrics(options: &MetricsOptions, canister_id: &str) -> Result<Vec<MetricEntry>, String> {
+    let arg = format!(
+        "(variant {{ {} }}, record {{ offset = 0 : nat64; limit = {} : nat64 }})",
+        options.kind.candid_variant(),
+        options.limit
+    );
     let output = IcpCli::new(&options.icp, None, Some(options.network.clone()))
-        .canister_query_arg_output(
-            canister_id,
-            canic_core::protocol::CANIC_CYCLE_TRACKER,
-            &arg,
-            Some("json"),
-        )
+        .canister_query_arg_output(canister_id, CANIC_METRICS_METHOD, &arg, Some("json"))
         .map_err(|err| err.to_string())?;
 
-    parse_cycle_tracker_page(&output)
-        .or_else(|| parse_cycle_tracker_page_text(&output))
-        .ok_or_else(|| "could not parse canic_cycle_tracker response".to_string())
+    parse_metrics_page(&output).ok_or_else(|| "could not parse canic_metrics response".to_string())
 }
 
-fn parse_cycle_tracker_page(output: &str) -> Option<CycleTrackerPage> {
+pub fn parse_metrics_page(output: &str) -> Option<Vec<MetricEntry>> {
     let value = serde_json::from_str::<serde_json::Value>(output).ok()?;
-    let entries_value = find_field(&value, "entries")?;
-    let entries = entries_value
-        .as_array()?
-        .iter()
-        .filter_map(parse_cycle_tracker_sample_json)
-        .collect::<Vec<_>>();
-    let total = find_field(&value, "total")
-        .and_then(parse_json_u64)
-        .unwrap_or(entries.len() as u64);
-
-    Some(CycleTrackerPage { entries, total })
+    if let Some(entries) = parse_metrics_page_json(&value) {
+        return Some(entries);
+    }
+    find_field(&value, "response_candid")
+        .and_then(serde_json::Value::as_str)
+        .and_then(parse_metrics_page_text)
 }
 
-fn parse_cycle_tracker_sample_json(value: &serde_json::Value) -> Option<CycleTrackerSample> {
-    Some(CycleTrackerSample {
-        timestamp_secs: find_field(value, "timestamp_secs").and_then(parse_json_u64)?,
-        cycles: find_field(value, "cycles").and_then(parse_json_u128)?,
+fn parse_metrics_page_json(value: &serde_json::Value) -> Option<Vec<MetricEntry>> {
+    Some(
+        find_field(value, "entries")?
+            .as_array()?
+            .iter()
+            .filter_map(parse_metric_entry_json)
+            .collect::<Vec<_>>(),
+    )
+}
+
+fn parse_metric_entry_json(value: &serde_json::Value) -> Option<MetricEntry> {
+    Some(MetricEntry {
+        labels: find_field(value, "labels")?
+            .as_array()?
+            .iter()
+            .filter_map(|value| value.as_str().map(str::to_string))
+            .collect(),
+        principal: find_field(value, "principal").and_then(parse_principal_json),
+        value: find_field(value, "value").and_then(parse_metric_value_json)?,
     })
 }
 
-fn find_field<'a>(value: &'a serde_json::Value, field: &str) -> Option<&'a serde_json::Value> {
-    match value {
-        serde_json::Value::Object(map) => map
-            .get(field)
-            .or_else(|| map.values().find_map(|value| find_field(value, field))),
-        serde_json::Value::Array(values) => {
-            values.iter().find_map(|value| find_field(value, field))
+fn parse_metrics_page_text(output: &str) -> Option<Vec<MetricEntry>> {
+    let mut entries = Vec::new();
+    for chunk in candid_record_blocks(output) {
+        if !(chunk[RECORD_MARKER.len()..]
+            .trim_start()
+            .starts_with("\"principal\" =")
+            && chunk.contains("labels = vec")
+            && chunk.contains("value = variant"))
+        {
+            continue;
         }
+        entries.push(MetricEntry {
+            labels: parse_candid_labels(chunk)?,
+            principal: parse_candid_principal(chunk),
+            value: parse_candid_metric_value(chunk)?,
+        });
+    }
+    Some(entries)
+}
+
+fn parse_candid_labels(chunk: &str) -> Option<Vec<String>> {
+    let (_, after_field) = chunk.split_once("labels = vec")?;
+    let (_, after_open) = after_field.split_once('{')?;
+    let (labels, _) = after_open.split_once("};")?;
+    Some(quoted_strings(labels))
+}
+
+fn parse_candid_principal(chunk: &str) -> Option<String> {
+    let (_, after_field) = chunk.split_once("\"principal\" =")?;
+    let value = after_field.trim_start();
+    if value.starts_with("null") {
+        return None;
+    }
+    quoted_strings(value).into_iter().next()
+}
+
+fn parse_candid_metric_value(chunk: &str) -> Option<MetricValue> {
+    if let Some(value) = text_after(chunk, "Count =").and_then(parse_u64_digits) {
+        return Some(MetricValue::Count { count: value });
+    }
+    if let Some(value) = text_after(chunk, "U128 =").and_then(parse_u128_digits) {
+        return Some(MetricValue::U128 { value });
+    }
+    if chunk.contains("CountAndU64") {
+        let count = text_after(chunk, "count =").and_then(parse_u64_digits)?;
+        let value_u64 = text_after(chunk, "value_u64 =").and_then(parse_u64_digits)?;
+        return Some(MetricValue::CountAndU64 { count, value_u64 });
+    }
+    None
+}
+
+fn parse_principal_json(value: &serde_json::Value) -> Option<String> {
+    match value {
+        serde_json::Value::String(value) => Some(value.clone()),
+        serde_json::Value::Object(map) => map.values().find_map(parse_principal_json),
+        serde_json::Value::Array(values) => values.iter().find_map(parse_principal_json),
         _ => None,
     }
 }
 
-fn parse_json_u64(value: &serde_json::Value) -> Option<u64> {
-    value
-        .as_u64()
-        .or_else(|| value.as_str().and_then(parse_u64_digits))
-}
-
-fn parse_json_u128(value: &serde_json::Value) -> Option<u128> {
-    value
-        .as_u64()
-        .map(u128::from)
-        .or_else(|| value.as_str().and_then(parse_u128_digits))
-}
-
-fn parse_cycle_tracker_page_text(output: &str) -> Option<CycleTrackerPage> {
-    let mut entries = Vec::new();
-    for chunk in output.split("record") {
-        if !(chunk.contains("timestamp_secs") && chunk.contains("cycles")) {
-            continue;
+fn parse_metric_value_json(value: &serde_json::Value) -> Option<MetricValue> {
+    match value {
+        serde_json::Value::Object(map) => {
+            if let Some(value) = map.get("Count").and_then(parse_json_u64) {
+                return Some(MetricValue::Count { count: value });
+            }
+            if let Some(value) = map.get("U128").and_then(parse_json_u128) {
+                return Some(MetricValue::U128 { value });
+            }
+            if let Some(value) = map.get("CountAndU64") {
+                let count = find_field(value, "count").and_then(parse_json_u64)?;
+                let value_u64 = find_field(value, "value_u64").and_then(parse_json_u64)?;
+                return Some(MetricValue::CountAndU64 { count, value_u64 });
+            }
+            if let (Some(count), Some(value_u64)) = (
+                map.get("count").and_then(parse_json_u64),
+                map.get("value_u64").and_then(parse_json_u64),
+            ) {
+                return Some(MetricValue::CountAndU64 { count, value_u64 });
+            }
+            map.values().find_map(parse_metric_value_json)
         }
-        let timestamp_secs =
-            field_number_after(chunk, "timestamp_secs").and_then(parse_u64_digits)?;
-        let cycles = field_number_after(chunk, "cycles").and_then(parse_u128_digits)?;
-        entries.push(CycleTrackerSample {
-            timestamp_secs,
-            cycles,
-        });
-    }
-    let total = field_number_after(output, "total")
-        .and_then(parse_u64_digits)
-        .unwrap_or(entries.len() as u64);
-    Some(CycleTrackerPage { entries, total })
-}
-
-fn field_number_after<'a>(text: &'a str, field: &str) -> Option<&'a str> {
-    let (_, after_field) = text.split_once(field)?;
-    let (_, after_eq) = after_field.split_once('=')?;
-    Some(after_eq.trim_start())
-}
-
-fn parse_u64_digits(text: &str) -> Option<u64> {
-    number_digits(text).parse().ok()
-}
-
-fn parse_u128_digits(text: &str) -> Option<u128> {
-    number_digits(text).parse().ok()
-}
-
-fn number_digits(text: &str) -> String {
-    text.chars()
-        .skip_while(|ch| !ch.is_ascii_digit())
-        .take_while(|ch| ch.is_ascii_digit() || *ch == '_' || *ch == ',')
-        .filter(char::is_ascii_digit)
-        .collect()
-}
-
-fn signed_delta(latest: u128, baseline: u128) -> i128 {
-    if latest >= baseline {
-        i128::try_from(latest - baseline).unwrap_or(i128::MAX)
-    } else {
-        -i128::try_from(baseline - latest).unwrap_or(i128::MAX)
-    }
-}
-
-fn hourly_rate(delta: i128, coverage_seconds: u64) -> Option<i128> {
-    if coverage_seconds == 0 {
-        return None;
-    }
-    Some(delta.saturating_mul(3_600) / i128::from(coverage_seconds))
-}
-
-fn coverage_status(baseline: Option<&CycleTrackerSample>, requested_since_secs: u64) -> String {
-    match baseline {
-        Some(sample) if sample.timestamp_secs <= requested_since_secs => "covered".to_string(),
-        Some(_) => "partial".to_string(),
-        None => "none".to_string(),
+        serde_json::Value::Array(values) => values.iter().find_map(parse_metric_value_json),
+        _ => None,
     }
 }
 
@@ -457,67 +471,64 @@ fn write_metrics_report(
         return output::write_pretty_json::<_, MetricsCommandError>(options.out.as_ref(), report);
     }
 
-    let text = render_metrics_report(report);
-    if let Some(path) = &options.out {
-        fs::write(path, text)?;
-    } else {
-        println!("{text}");
-    }
-    Ok(())
+    output::write_text::<MetricsCommandError>(options.out.as_ref(), &render_metrics_report(report))
 }
 
 fn render_metrics_report(report: &MetricsReport) -> String {
-    let rows = report
-        .canisters
-        .iter()
-        .map(|row| {
-            [
-                row.role.clone(),
-                row.canister_id.clone(),
-                row.status.clone(),
-                row.sample_count.to_string(),
-                row.coverage_seconds
-                    .map_or_else(|| "-".to_string(), format_duration),
-                row.coverage_status.clone(),
-                row.latest_cycles.map_or_else(|| "-".to_string(), cycles_tc),
-                row.delta_cycles
-                    .map_or_else(|| "-".to_string(), format_signed_cycles),
-                row.rate_cycles_per_hour
-                    .map_or_else(|| "-".to_string(), format_signed_cycles),
-            ]
-        })
-        .collect::<Vec<_>>();
+    let mut rows = Vec::new();
+    for canister in &report.canisters {
+        if canister.entries.is_empty() {
+            rows.push([
+                canister.role.clone(),
+                canister.canister_id.clone(),
+                report.kind.as_str().to_string(),
+                canister.status.clone(),
+                canister.error.clone().unwrap_or_else(|| "-".to_string()),
+                "-".to_string(),
+                "-".to_string(),
+            ]);
+            continue;
+        }
+
+        for entry in &canister.entries {
+            rows.push([
+                canister.role.clone(),
+                canister.canister_id.clone(),
+                report.kind.as_str().to_string(),
+                canister.status.clone(),
+                entry.labels.join("/"),
+                entry.principal.clone().unwrap_or_else(|| "-".to_string()),
+                metric_value_label(&entry.value),
+            ]);
+        }
+    }
 
     [
         format!(
-            "Fleet: {} (network {}, since {})",
+            "Fleet: {} (network {}, metrics {})",
             report.fleet,
             report.network,
-            format_duration(report.since_seconds)
+            report.kind.as_str()
         ),
         String::new(),
         render_table(
             &[
                 "ROLE",
                 "CANISTER_ID",
+                "KIND",
                 "STATUS",
-                "SAMPLES",
-                "COVERAGE",
-                "WINDOW",
-                "LATEST",
-                "DELTA",
-                "PER_H",
+                "LABELS",
+                "PRINCIPAL",
+                "VALUE",
             ],
             &rows,
             &[
                 ColumnAlign::Left,
                 ColumnAlign::Left,
                 ColumnAlign::Left,
-                ColumnAlign::Right,
-                ColumnAlign::Right,
                 ColumnAlign::Left,
-                ColumnAlign::Right,
-                ColumnAlign::Right,
+                ColumnAlign::Left,
+                ColumnAlign::Left,
                 ColumnAlign::Right,
             ],
         ),
@@ -525,53 +536,12 @@ fn render_metrics_report(report: &MetricsReport) -> String {
     .join("\n")
 }
 
-fn format_signed_cycles(value: i128) -> String {
-    if value < 0 {
-        format!("-{}", cycles_tc(value.unsigned_abs()))
-    } else {
-        format!("+{}", cycles_tc(value.cast_unsigned()))
+fn metric_value_label(value: &MetricValue) -> String {
+    match value {
+        MetricValue::Count { count } => count.to_string(),
+        MetricValue::CountAndU64 { count, value_u64 } => format!("{count}/{value_u64}"),
+        MetricValue::U128 { value } => value.to_string(),
     }
-}
-
-fn format_duration(seconds: u64) -> String {
-    if seconds.is_multiple_of(24 * 60 * 60) {
-        format!("{}d", seconds / (24 * 60 * 60))
-    } else if seconds.is_multiple_of(60 * 60) {
-        format!("{}h", seconds / (60 * 60))
-    } else if seconds.is_multiple_of(60) {
-        format!("{}m", seconds / 60)
-    } else {
-        format!("{seconds}s")
-    }
-}
-
-fn parse_duration(value: &str) -> Result<u64, MetricsCommandError> {
-    let value = value.trim();
-    let digits = value
-        .chars()
-        .take_while(char::is_ascii_digit)
-        .collect::<String>();
-    let suffix = value[digits.len()..].trim();
-    let amount = digits
-        .parse::<u64>()
-        .map_err(|_| MetricsCommandError::InvalidDuration(value.to_string()))?;
-    let multiplier = match suffix {
-        "s" | "" => 1,
-        "m" => 60,
-        "h" => 60 * 60,
-        "d" => 24 * 60 * 60,
-        _ => return Err(MetricsCommandError::InvalidDuration(value.to_string())),
-    };
-    amount
-        .checked_mul(multiplier)
-        .filter(|seconds| *seconds > 0)
-        .ok_or_else(|| MetricsCommandError::InvalidDuration(value.to_string()))
-}
-
-fn current_unix_seconds() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_or(0, |duration| duration.as_secs())
 }
 
 fn call_subnet_registry(
@@ -609,7 +579,7 @@ fn usage() -> String {
 fn metrics_command() -> ClapCommand {
     ClapCommand::new("metrics")
         .bin_name("canic metrics")
-        .about("Summarize fleet cycle tracker history")
+        .about("Query Canic runtime telemetry")
         .disable_help_flag(true)
         .arg(
             value_arg("fleet")
@@ -618,17 +588,30 @@ fn metrics_command() -> ClapCommand {
                 .help("Installed fleet name to inspect"),
         )
         .arg(
-            value_arg("since")
-                .long("since")
-                .value_name("duration")
-                .help("Cycle history window; defaults to 24h"),
+            value_arg("kind")
+                .long("kind")
+                .value_name("kind")
+                .help("Metrics tier to query; defaults to core"),
+        )
+        .arg(
+            value_arg("role")
+                .long("role")
+                .value_name("role")
+                .help("Only query one registry role"),
+        )
+        .arg(
+            value_arg("canister")
+                .long("canister")
+                .value_name("id")
+                .help("Only query one canister principal"),
         )
         .arg(
             value_arg("limit")
                 .long("limit")
                 .value_name("entries")
-                .help("Maximum tracker samples to fetch per canister; defaults to 1000"),
+                .help("Maximum metric rows to fetch per canister; defaults to 1000"),
         )
+        .arg(flag_arg("nonzero").long("nonzero"))
         .arg(flag_arg("json").long("json"))
         .arg(value_arg("out").long("out").value_name("file"))
         .arg(internal_network_arg())
@@ -639,74 +622,98 @@ fn metrics_command() -> ClapCommand {
 mod tests {
     use super::*;
 
-    // Ensure common duration selectors parse into seconds.
+    // Ensure the public kind selector maps to Candid variant names.
     #[test]
-    fn parses_duration_selectors() {
-        assert_eq!(parse_duration("30m").expect("30m"), 1_800);
-        assert_eq!(parse_duration("6h").expect("6h"), 21_600);
-        assert_eq!(parse_duration("7d").expect("7d"), 604_800);
+    fn parses_metric_kind_selectors() {
+        assert_eq!(MetricsKind::parse("core").expect("core"), MetricsKind::Core);
+        assert_eq!(
+            MetricsKind::parse("security")
+                .expect("security")
+                .candid_variant(),
+            "Security"
+        );
         assert!(matches!(
-            parse_duration("0h"),
-            Err(MetricsCommandError::InvalidDuration(_))
+            MetricsKind::parse("cycles"),
+            Err(MetricsCommandError::InvalidKind(_))
         ));
     }
 
-    // Ensure cycle tracker JSON output can be parsed from wrapped result shapes.
+    // Ensure named JSON metric pages parse into the CLI row shape.
     #[test]
-    fn parses_cycle_tracker_json() {
-        let page = parse_cycle_tracker_page(
-            r#"{"Ok":{"entries":[{"timestamp_secs":10,"cycles":"1000"},{"timestamp_secs":"20","cycles":750}],"total":2}}"#,
+    fn parses_metrics_json_page() {
+        let entries = parse_metrics_page(
+            r#"{"Ok":{"entries":[{"labels":["lifecycle","init","started"],"principal":null,"value":{"Count":2}},{"labels":["cycles_funding","minted"],"principal":"aaaaa-aa","value":{"U128":"1000"}},{"labels":["timer","tick"],"principal":null,"value":{"CountAndU64":{"count":3,"value_u64":12}}}],"total":3}}"#,
         )
-        .expect("parse page");
+        .expect("parse metrics page");
 
-        assert_eq!(page.total, 2);
-        assert_eq!(page.entries[0].timestamp_secs, 10);
-        assert_eq!(page.entries[1].cycles, 750);
+        assert_eq!(entries.len(), 3);
+        assert_eq!(entries[0].labels, ["lifecycle", "init", "started"]);
+        assert_eq!(entries[0].value, MetricValue::Count { count: 2 });
+        assert_eq!(entries[1].principal.as_deref(), Some("aaaaa-aa"));
+        assert_eq!(entries[1].value, MetricValue::U128 { value: 1_000 });
+        assert_eq!(
+            entries[2].value,
+            MetricValue::CountAndU64 {
+                count: 3,
+                value_u64: 12
+            }
+        );
     }
 
-    // Ensure Candid text output remains usable when JSON formatting is unavailable.
+    // Ensure ICP CLI response wrappers without did metadata still parse.
     #[test]
-    fn parses_cycle_tracker_candid_text() {
-        let page = parse_cycle_tracker_page_text(
-            "(variant { 17_724 = record { entries = vec { record { cycles = 1_000 : nat; timestamp_secs = 10 : nat64 }; record { cycles = 750 : nat; timestamp_secs = 20 : nat64 } }; total = 2 : nat64 } })",
+    fn parses_metrics_response_candid_text() {
+        let entries = parse_metrics_page(
+            r#"{"response_candid":"(\n  variant {\n    Ok = record {\n      total = 2 : nat64;\n      entries = vec {\n        record {\n          \"principal\" = null;\n          value = variant { Count = 1 : nat64 };\n          labels = vec { \"canister_ops\"; \"create\"; \"app\"; \"completed\"; \"ok\" };\n        };\n        record {\n          \"principal\" = opt principal \"aaaaa-aa\";\n          value = variant { CountAndU64 = record { count = 3 : nat64; value_u64 = 12 : nat64 } };\n          labels = vec { \"timer\"; \"tick\" };\n        };\n      };\n    }\n  },\n)"}"#,
         )
-        .expect("parse candid page");
+        .expect("parse response_candid metrics page");
 
-        assert_eq!(page.total, 2);
-        assert_eq!(page.entries.len(), 2);
-        assert_eq!(page.entries[0].cycles, 1_000);
+        assert_eq!(entries.len(), 2);
+        assert_eq!(
+            entries[0].labels,
+            ["canister_ops", "create", "app", "completed", "ok"]
+        );
+        assert_eq!(entries[0].value, MetricValue::Count { count: 1 });
+        assert_eq!(entries[1].principal.as_deref(), Some("aaaaa-aa"));
+        assert_eq!(
+            entries[1].value,
+            MetricValue::CountAndU64 {
+                count: 3,
+                value_u64: 12
+            }
+        );
     }
 
-    // Ensure summaries report partial windows when no sample exists before the cutoff.
+    // Ensure zero filtering treats every payload shape consistently.
     #[test]
-    fn summarizes_partial_cycle_window() {
+    fn detects_zero_metric_values() {
+        assert!(MetricValue::Count { count: 0 }.is_zero());
+        assert!(
+            MetricValue::CountAndU64 {
+                count: 0,
+                value_u64: 0
+            }
+            .is_zero()
+        );
+        assert!(!MetricValue::U128 { value: 1 }.is_zero());
+    }
+
+    // Ensure method-missing responses do not stretch the table with raw ICP output.
+    #[test]
+    fn shortens_metrics_unavailable_errors() {
         let entry = RegistryEntry {
             pid: "aaaaa-aa".to_string(),
-            role: Some("root".to_string()),
-            kind: Some("root".to_string()),
+            role: Some("wasm_store".to_string()),
+            kind: Some("wasm_store".to_string()),
             parent_pid: None,
             module_hash: None,
         };
-        let report = summarize_cycle_tracker(
+        let report = metrics_error_report(
             &entry,
-            CycleTrackerPage {
-                total: 2,
-                entries: vec![
-                    CycleTrackerSample {
-                        timestamp_secs: 100,
-                        cycles: 1_000,
-                    },
-                    CycleTrackerSample {
-                        timestamp_secs: 200,
-                        cycles: 700,
-                    },
-                ],
-            },
-            50,
+            "icp command failed\nCanister has no query method 'canic_metrics'.",
         );
 
-        assert_eq!(report.coverage_status, "partial");
-        assert_eq!(report.delta_cycles, Some(-300));
-        assert_eq!(report.rate_cycles_per_hour, Some(-10_800));
+        assert_eq!(report.status, "unavailable");
+        assert_eq!(report.error.as_deref(), Some("canic_metrics unavailable"));
     }
 }

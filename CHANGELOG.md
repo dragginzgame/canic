@@ -7,13 +7,16 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.34.x] - 2026-05-10 - Backup/restore rework
 
-- `0.34.4` fixes the new `canic metrics <fleet>` cycle-tracker path so non-root top-up policy checks cannot issue IC calls from init mode, standardizes delayed background workflow startup on 30 seconds, and separates the standard cycle-tracker endpoint wiring from topology views.
+- `0.34.5` splits cycle-balance history from live runtime telemetry, adds timestamped cycle top-up history, tightens list/cycles table rendering, removes install-time local replica autostart, and separates version bumps from release staging/commit/push targets.
 
 ```bash
-canic metrics demo
-canic metrics demo --since 6h
-canic metrics demo --json
+canic cycles test --since 1h --limit 5
+canic metrics test --kind core --nonzero --role app
+canic metrics test --kind runtime --nonzero --json
+make release-patch
 ```
+
+- `0.34.4` fixes the new `canic metrics <fleet>` cycle-tracker path so non-root top-up policy checks cannot issue IC calls from init mode, standardizes delayed background workflow startup on 30 seconds, and separates the standard cycle-tracker endpoint wiring from topology views.
 
 - `0.34.3` makes endpoint output structured for automation, exposes IC module hashes in list/backup surfaces, adds fleet cycle-tracker metrics including the canonical `wasm_store`, removes the raw `canic build` wrapper, centralizes wasm/hash helpers, keeps artifact checksums distinct from module hashes, and adds the first executable `canic backup create` flow.
 

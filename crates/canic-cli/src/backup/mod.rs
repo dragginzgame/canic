@@ -35,7 +35,6 @@ use serde::Serialize;
 use std::{
     ffi::OsString,
     fs,
-    io::{self, Write},
     path::{Path, PathBuf},
 };
 use thiserror::Error as ThisError;
@@ -633,16 +632,7 @@ fn write_inspect_report(
         return output::write_pretty_json(options.out.as_ref(), report);
     }
 
-    let text = render_inspect_report(report);
-    if let Some(path) = &options.out {
-        fs::write(path, text)?;
-        return Ok(());
-    }
-
-    let stdout = io::stdout();
-    let mut handle = stdout.lock();
-    writeln!(handle, "{text}")?;
-    Ok(())
+    output::write_text::<BackupCommandError>(options.out.as_ref(), &render_inspect_report(report))
 }
 
 // Write the backup-create dry-run summary as a compact table.
@@ -691,16 +681,7 @@ fn write_list_report(
     options: &BackupListOptions,
     entries: &[BackupListEntry],
 ) -> Result<(), BackupCommandError> {
-    let text = render_backup_list(entries);
-    if let Some(path) = &options.out {
-        fs::write(path, text)?;
-        return Ok(());
-    }
-
-    let stdout = io::stdout();
-    let mut handle = stdout.lock();
-    writeln!(handle, "{text}")?;
-    Ok(())
+    output::write_text::<BackupCommandError>(options.out.as_ref(), &render_backup_list(entries))
 }
 
 fn render_backup_list(entries: &[BackupListEntry]) -> String {

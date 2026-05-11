@@ -1,52 +1,12 @@
+use crate::response_parse::{find_string_field, parse_candid_text_field};
+
+pub(super) use crate::response_parse::parse_cycle_balance_response;
+
 pub(super) fn parse_canic_metadata_version_response(output: &str) -> Option<String> {
     serde_json::from_str::<serde_json::Value>(output)
         .ok()
         .and_then(|value| find_string_field(&value, "canic_version"))
         .or_else(|| parse_candid_text_field(output, "canic_version"))
-}
-
-fn find_string_field(value: &serde_json::Value, field: &str) -> Option<String> {
-    match value {
-        serde_json::Value::Object(map) => map
-            .get(field)
-            .and_then(|value| value.as_str().map(ToString::to_string))
-            .or_else(|| {
-                map.values()
-                    .find_map(|value| find_string_field(value, field))
-            }),
-        serde_json::Value::Array(values) => values
-            .iter()
-            .find_map(|value| find_string_field(value, field)),
-        _ => None,
-    }
-}
-
-fn parse_candid_text_field(output: &str, field: &str) -> Option<String> {
-    let (_, after_field) = output.split_once(field)?;
-    let (_, after_eq) = after_field.split_once('=')?;
-    let after_quote = after_eq.trim_start().strip_prefix('"')?;
-    let (value, _) = after_quote.split_once('"')?;
-    Some(value.to_string())
-}
-
-pub(super) fn parse_cycle_balance_response(output: &str) -> Option<u128> {
-    output
-        .split_once('=')
-        .map_or(output, |(_, cycles)| cycles)
-        .lines()
-        .find_map(parse_leading_integer)
-}
-
-fn parse_leading_integer(line: &str) -> Option<u128> {
-    let digits = line
-        .trim_start_matches(|ch: char| ch == '(' || ch.is_whitespace())
-        .chars()
-        .take_while(|ch| ch.is_ascii_digit() || *ch == '_' || *ch == ',')
-        .filter(char::is_ascii_digit)
-        .collect::<String>();
-    (!digits.is_empty())
-        .then_some(digits)
-        .and_then(|digits| digits.parse::<u128>().ok())
 }
 
 #[cfg(test)]

@@ -103,10 +103,11 @@ pub mod memory {
 
     pub mod observability {
         pub const CYCLE_TRACKER_ID: u8 = 26;
-        pub const LOG_INDEX_ID: u8 = 27;
-        pub const LOG_DATA_ID: u8 = 28;
+        pub const CYCLE_TOPUP_EVENTS_ID: u8 = 27;
+        pub const LOG_INDEX_ID: u8 = 28;
+        pub const LOG_DATA_ID: u8 = 29;
 
-        // Reserved: 29–35
+        // Reserved: 30–35
     }
 
     // ---------------------------------------------------------------------

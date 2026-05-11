@@ -51,4 +51,10 @@ fn wasm_store_exposes_standard_cycle_tracker() {
         "missing `canic_cycle_tracker` method in {}",
         did_path.display()
     );
+    assert!(
+        did.contains("type CycleTopupEvent = record")
+            && did.contains("  canic_cycle_topups : (PageRequest) -> ("),
+        "missing `canic_cycle_topups` method in {}",
+        did_path.display()
+    );
 }

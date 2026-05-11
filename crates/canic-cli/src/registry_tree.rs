@@ -1,6 +1,9 @@
-use super::ListCommandError;
 use canic_backup::discovery::RegistryEntry;
-use std::collections::{BTreeMap, BTreeSet};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    error::Error,
+    fmt,
+};
 
 const TREE_BRANCH: &str = "├─ ";
 const TREE_LAST: &str = "└─ ";
@@ -8,33 +11,40 @@ const TREE_PIPE: &str = "│  ";
 const TREE_SPACE: &str = "   ";
 
 ///
+/// RegistryTreeError
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum RegistryTreeError {
+    CanisterNotInRegistry(String),
+}
+
+impl fmt::Display for RegistryTreeError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::CanisterNotInRegistry(canister) => {
+                write!(
+                    f,
+                    "registry JSON did not contain the requested canister {canister}"
+                )
+            }
+        }
+    }
+}
+
+impl Error for RegistryTreeError {}
+
+///
 /// RegistryRow
 ///
 
-pub(super) struct RegistryRow<'a> {
-    pub(super) entry: &'a RegistryEntry,
-    pub(super) tree_prefix: String,
+pub struct RegistryRow<'a> {
+    pub entry: &'a RegistryEntry,
+    pub tree_prefix: String,
 }
 
-pub(super) fn visible_entries<'a>(
-    registry: &'a [RegistryEntry],
-    canister: Option<&str>,
-) -> Result<Vec<&'a RegistryEntry>, ListCommandError> {
-    Ok(visible_rows(registry, canister)?
-        .into_iter()
-        .map(|row| row.entry)
-        .collect())
-}
-
-pub(super) fn visible_rows<'a>(
-    registry: &'a [RegistryEntry],
-    canister: Option<&str>,
-) -> Result<Vec<RegistryRow<'a>>, ListCommandError> {
-    let by_pid = registry
-        .iter()
-        .map(|entry| (entry.pid.as_str(), entry))
-        .collect::<BTreeMap<_, _>>();
-    let roots = root_entries(registry, &by_pid, canister)?;
+pub fn registry_rows(registry: &[RegistryEntry]) -> Vec<RegistryRow<'_>> {
+    let roots = root_entries(registry);
     let children = child_entries(registry);
     let mut entries = Vec::new();
 
@@ -42,27 +52,47 @@ pub(super) fn visible_rows<'a>(
         collect_visible_entry(root, &children, "", "", &mut entries);
     }
 
+    entries
+}
+
+pub fn visible_entries<'a>(
+    registry: &'a [RegistryEntry],
+    canister: Option<&str>,
+) -> Result<Vec<&'a RegistryEntry>, RegistryTreeError> {
+    Ok(visible_rows(registry, canister)?
+        .into_iter()
+        .map(|row| row.entry)
+        .collect())
+}
+
+pub fn visible_rows<'a>(
+    registry: &'a [RegistryEntry],
+    canister: Option<&str>,
+) -> Result<Vec<RegistryRow<'a>>, RegistryTreeError> {
+    let Some(canister) = canister else {
+        return Ok(registry_rows(registry));
+    };
+
+    let by_pid = registry
+        .iter()
+        .map(|entry| (entry.pid.as_str(), entry))
+        .collect::<BTreeMap<_, _>>();
+    let root = by_pid
+        .get(canister)
+        .copied()
+        .ok_or_else(|| RegistryTreeError::CanisterNotInRegistry(canister.to_string()))?;
+    let children = child_entries(registry);
+    let mut entries = Vec::new();
+    collect_visible_entry(root, &children, "", "", &mut entries);
     Ok(entries)
 }
 
-fn root_entries<'a>(
-    registry: &'a [RegistryEntry],
-    by_pid: &BTreeMap<&str, &'a RegistryEntry>,
-    canister: Option<&str>,
-) -> Result<Vec<&'a RegistryEntry>, ListCommandError> {
-    if let Some(canister) = canister {
-        return by_pid
-            .get(canister)
-            .copied()
-            .map(|entry| vec![entry])
-            .ok_or_else(|| ListCommandError::CanisterNotInRegistry(canister.to_string()));
-    }
-
+fn root_entries(registry: &[RegistryEntry]) -> Vec<&RegistryEntry> {
     let ids = registry
         .iter()
         .map(|entry| entry.pid.as_str())
         .collect::<BTreeSet<_>>();
-    Ok(registry
+    registry
         .iter()
         .filter(|entry| {
             entry
@@ -70,7 +100,7 @@ fn root_entries<'a>(
                 .as_deref()
                 .is_none_or(|parent| !ids.contains(parent))
         })
-        .collect())
+        .collect()
 }
 
 fn child_entries(registry: &[RegistryEntry]) -> BTreeMap<&str, Vec<&RegistryEntry>> {

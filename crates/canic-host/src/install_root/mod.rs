@@ -19,7 +19,6 @@ use std::{
     ffi::OsString,
     path::{Path, PathBuf},
     process::Command,
-    thread,
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
@@ -74,8 +73,6 @@ struct InstallTimingSummary {
     finalize_root_funding: Duration,
 }
 
-const LOCAL_ICP_READY_TIMEOUT_SECONDS: u64 = 30;
-
 /// Discover installable Canic config choices under the current workspace.
 pub fn discover_current_canic_config_choices() -> Result<Vec<PathBuf>, Box<dyn std::error::Error>> {
     let workspace_root = workspace_root()?;
@@ -101,7 +98,7 @@ pub fn install_root(options: InstallRootOptions) -> Result<(), Box<dyn std::erro
         "Installing fleet {} against ICP_ENVIRONMENT={}",
         fleet_name, options.network
     );
-    ensure_icp_environment_ready(&icp_root, &options.network)?;
+    ensure_icp_environment_ready(&options.network)?;
     let create_started_at = Instant::now();
     if Principal::from_text(&options.root_canister).is_err() {
         let mut create = icp_canister_command_in_network(&icp_root);
@@ -474,30 +471,13 @@ fn progress_bar(current: usize, total: usize, width: usize) -> String {
 }
 
 // Ensure the requested replica is reachable before the local install flow begins.
-fn ensure_icp_environment_ready(
-    icp_root: &Path,
-    network: &str,
-) -> Result<(), Box<dyn std::error::Error>> {
+fn ensure_icp_environment_ready(network: &str) -> Result<(), Box<dyn std::error::Error>> {
     if icp_ping(network)? {
         return Ok(());
     }
 
-    if network == "local" && local_icp_autostart_enabled() {
-        println!("Local icp environment is not reachable; starting a clean local replica");
-        let mut stop = icp_stop_command(icp_root);
-        let _ = run_command_allow_failure(&mut stop)?;
-
-        let mut start = icp_start_local_command(icp_root);
-        run_command(&mut start)?;
-        wait_for_icp_ping(
-            network,
-            Duration::from_secs(LOCAL_ICP_READY_TIMEOUT_SECONDS),
-        )?;
-        return Ok(());
-    }
-
     Err(format!(
-        "icp environment is not running for network '{network}'\nStart the target replica externally and rerun."
+        "icp environment is not running for network '{network}'\nStart the target replica in another terminal with `canic replica start` and rerun."
     )
     .into())
 }
@@ -509,49 +489,6 @@ fn icp_ping(network: &str) -> Result<bool, Box<dyn std::error::Error>> {
         .output()?
         .status
         .success())
-}
-
-// Return true when the local install flow should auto-start a clean local replica.
-fn local_icp_autostart_enabled() -> bool {
-    parse_local_icp_autostart(env::var("CANIC_AUTO_START_LOCAL_ICP").ok().as_deref())
-}
-
-fn parse_local_icp_autostart(value: Option<&str>) -> bool {
-    !matches!(
-        value.map(str::trim).map(str::to_ascii_lowercase).as_deref(),
-        Some("0" | "false" | "no" | "off")
-    )
-}
-
-// Spawn one local `icp network stop` command for cleanup before a restart.
-fn icp_stop_command(icp_root: &Path) -> Command {
-    let mut command = icp_command_in_network(icp_root, "local");
-    command.args(["network", "stop", "local"]);
-    command
-}
-
-// Spawn one background `icp network start` command for local install/test flows.
-fn icp_start_local_command(icp_root: &Path) -> Command {
-    let mut command = icp_command_in_network(icp_root, "local");
-    command.args(["network", "start", "local", "--background"]);
-    command
-}
-
-// Poll `icp network ping` until the requested network responds or the timeout expires.
-fn wait_for_icp_ping(network: &str, timeout: Duration) -> Result<(), Box<dyn std::error::Error>> {
-    let start = Instant::now();
-    while start.elapsed() < timeout {
-        if icp_ping(network)? {
-            return Ok(());
-        }
-        thread::sleep(Duration::from_millis(500));
-    }
-
-    Err(format!(
-        "icp environment did not become ready for network '{network}' within {}s",
-        timeout.as_secs()
-    )
-    .into())
 }
 
 fn print_install_timing_summary(timings: &InstallTimingSummary, total: Duration) {
@@ -594,13 +531,6 @@ fn run_command(command: &mut Command) -> Result<(), Box<dyn std::error::Error>> 
 // Run one command, require success, and return stdout.
 fn run_command_stdout(command: &mut Command) -> Result<String, Box<dyn std::error::Error>> {
     icp::run_output(command).map_err(Into::into)
-}
-
-// Run one command and return its status without failing the caller on non-zero exit.
-fn run_command_allow_failure(
-    command: &mut Command,
-) -> Result<std::process::ExitStatus, Box<dyn std::error::Error>> {
-    Ok(command.status()?)
 }
 
 // Build an icp command with the selected install environment exported

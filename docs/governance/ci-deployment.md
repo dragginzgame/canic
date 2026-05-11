@@ -38,12 +38,19 @@ Do not run:
 - `scripts/ci/sync-release-surface-version.sh`
 - `scripts/ci/bump-version.sh`
 - `make patch`
+- `make release-patch`
 - `make minor`
+- `make release-minor`
 - `make major`
+- `make release-major`
 
 Release bumps are human-owned. The normal human release path is `make patch`,
-`make minor`, or `make major`, followed by review of generated changes, commit,
-tag, and intentional push.
+`make minor`, or `make major`, followed by review of generated changes. Once
+reviewed, humans finish the release with `make release-stage`,
+`make release-commit`, and `make release-push`.
+For one-shot releases, humans may run `make release-patch`,
+`make release-minor`, or `make release-major`, which perform those steps in
+order.
 
 Tags are immutable.
 

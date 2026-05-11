@@ -7,7 +7,6 @@ mod live;
 mod options;
 mod parse;
 mod render;
-mod tree;
 
 use canic_backup::discovery::DiscoveryError;
 use config::{load_config_role_rows, missing_config_roles};
@@ -41,8 +40,8 @@ pub enum ListCommandError {
     #[error("{0}")]
     Usage(String),
 
-    #[error("registry JSON did not contain the requested canister {0}")]
-    CanisterNotInRegistry(String),
+    #[error(transparent)]
+    RegistryTree(#[from] crate::registry_tree::RegistryTreeError),
 
     #[error("icp command failed: {command}\n{stderr}")]
     IcpFailed { command: String, stderr: String },
@@ -166,6 +165,7 @@ mod tests {
 
     const ROOT: &str = "aaaaa-aa";
     const APP: &str = "renrk-eyaaa-aaaaa-aaada-cai";
+    const APP_VARIANT: &str = "ryjl3-tyaaa-aaaaa-aaaba-cai";
     const MINIMAL: &str = "rrkah-fqaaa-aaaaa-aaaaq-cai";
     const WORKER: &str = "rno2w-sqaaa-aaaaa-aaacq-cai";
     const HASH: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
@@ -348,14 +348,39 @@ mod tests {
         assert!(tree.contains(HASH));
     }
 
-    // Ensure infra module hashes are compared against the first app/service hash.
+    // Ensure different roles are not colored just because they use different modules.
     #[test]
-    fn colors_infra_module_hashes_against_first_service_baseline() {
+    fn module_hash_color_ignores_cross_role_differences() {
         let registry = parse_registry_entries(&registry_json()).expect("parse registry");
         let readiness = readiness_map();
         let module_hashes = BTreeMap::from([
             (ROOT.to_string(), VARIANT_HASH.to_string()),
             (APP.to_string(), HASH.to_string()),
+        ]);
+        let empty = BTreeMap::new();
+        let columns = RegistryColumnData {
+            readiness: &readiness,
+            canic_versions: &empty,
+            module_hashes: &module_hashes,
+            wasm_sizes: &empty,
+            cycles: &empty,
+            full_module_hashes: false,
+            color_module_variants: true,
+        };
+        let tree = render_registry_tree(&registry, None, &columns).expect("render tree");
+
+        assert!(!tree.contains("\x1b[38;5;179m"));
+    }
+
+    // Ensure module coloring flags drift only within one repeated role.
+    #[test]
+    fn module_hash_color_flags_same_role_differences() {
+        let registry = parse_registry_entries(&same_role_variant_registry_json())
+            .expect("parse same-role registry");
+        let readiness = readiness_map();
+        let module_hashes = BTreeMap::from([
+            (APP.to_string(), HASH.to_string()),
+            (APP_VARIANT.to_string(), VARIANT_HASH.to_string()),
         ]);
         let empty = BTreeMap::new();
         let columns = RegistryColumnData {
@@ -587,6 +612,47 @@ mod tests {
                         "kind": "replica",
                         "parent_pid": [APP],
                         "module_hash": HASH
+                    }
+                }
+            ]
+        })
+        .to_string()
+    }
+
+    fn same_role_variant_registry_json() -> String {
+        json!({
+            "Ok": [
+                {
+                    "pid": ROOT,
+                    "role": "root",
+                    "record": {
+                        "pid": ROOT,
+                        "role": "root",
+                        "kind": "root",
+                        "parent_pid": null,
+                        "module_hash": HASH
+                    }
+                },
+                {
+                    "pid": APP,
+                    "role": "app",
+                    "record": {
+                        "pid": APP,
+                        "role": "app",
+                        "kind": "singleton",
+                        "parent_pid": ROOT,
+                        "module_hash": HASH
+                    }
+                },
+                {
+                    "pid": APP_VARIANT,
+                    "role": "app",
+                    "record": {
+                        "pid": APP_VARIANT,
+                        "role": "app",
+                        "kind": "singleton",
+                        "parent_pid": ROOT,
+                        "module_hash": VARIANT_HASH
                     }
                 }
             ]

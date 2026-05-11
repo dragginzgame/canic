@@ -7,7 +7,7 @@ use crate::{
         ic::{IcOps, mgmt::MgmtOps},
         rpc::request::RequestOps,
         runtime::{env::EnvOps, metrics::cycles_topup::CyclesTopupMetrics, timer::TimerId},
-        storage::cycles::CycleTrackerOps,
+        storage::cycles::{CycleTopupEventOps, CycleTrackerOps},
     },
     workflow::{
         config::{WORKFLOW_CYCLE_TRACK_INTERVAL, WORKFLOW_INIT_DELAY},
@@ -184,8 +184,10 @@ impl CycleTrackerWorkflow {
         }
 
         CyclesTopupMetrics::record_request_scheduled();
+        let requested_cycles = plan.amount;
+        CycleTopupEventOps::record_scheduled(IcOps::now_secs(), requested_cycles.clone());
         IcOps::spawn(async move {
-            let result = RequestOps::request_cycles(plan.amount.to_u128()).await;
+            let result = RequestOps::request_cycles(requested_cycles.to_u128()).await;
 
             TOPUP_IN_FLIGHT.with_borrow_mut(|in_flight| {
                 *in_flight = false;
@@ -194,17 +196,27 @@ impl CycleTrackerWorkflow {
             match result {
                 Ok(res) => {
                     CyclesTopupMetrics::record_request_ok();
+                    CycleTopupEventOps::record_ok(
+                        IcOps::now_secs(),
+                        requested_cycles.clone(),
+                        Cycles::from(res.cycles_transferred),
+                    );
                     log!(
                         Topic::Cycles,
                         Ok,
                         "requested {}, topped up by {}, now {}",
-                        plan.amount,
+                        requested_cycles,
                         Cycles::from(res.cycles_transferred),
                         MgmtOps::canister_cycle_balance()
                     );
                 }
                 Err(e) => {
                     CyclesTopupMetrics::record_request_err();
+                    CycleTopupEventOps::record_err(
+                        IcOps::now_secs(),
+                        requested_cycles,
+                        e.to_string(),
+                    );
                     log!(Topic::Cycles, Error, "failed to request cycles: {e}");
                 }
             }
@@ -217,12 +229,13 @@ impl CycleTrackerWorkflow {
         let now = IcOps::now_secs();
         let cutoff = policy::cycles::retention_cutoff(now);
         let purged = CycleTrackerOps::purge_before(cutoff);
+        let purged_topups = CycleTopupEventOps::purge_before(cutoff);
 
-        if purged > 0 {
+        if purged > 0 || purged_topups > 0 {
             log!(
                 Topic::Cycles,
                 Info,
-                "cycle_tracker: purged {purged} old entries"
+                "cycle_tracker: purged {purged} balance entries and {purged_topups} topup events"
             );
         }
 

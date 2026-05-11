@@ -34,6 +34,19 @@ type CapabilityRequestMetadata = record {
   nonce : blob;
 };
 type CapabilityService = variant { Root };
+type CycleTopupEvent = record {
+  status : CycleTopupEventStatus;
+  transferred_cycles : opt nat;
+  requested_cycles : nat;
+  error : opt text;
+  timestamp_secs : nat64;
+  sequence : nat32;
+};
+type CycleTopupEventStatus = variant {
+  RequestErr;
+  RequestOk;
+  RequestScheduled;
+};
 type CycleTrackerEntry = record { cycles : nat; timestamp_secs : nat64 };
 type CyclesRequest = record {
   metadata : opt RootRequestMetadata;
@@ -74,16 +87,18 @@ type NonrootCyclesCapabilityEnvelopeV1 = record {
   capability : CyclesRequest;
 };
 type NonrootCyclesCapabilityResponseV1 = record { response : CyclesResponse };
-type Page = record { total : nat64; entries : vec CycleTrackerEntry };
+type Page = record { total : nat64; entries : vec CycleTopupEvent };
+type Page_1 = record { total : nat64; entries : vec CycleTrackerEntry };
 type PageRequest = record { offset : nat64; limit : nat64 };
 type Result = variant { Ok : nat; Err : Error };
 type Result_1 = variant { Ok : Page; Err : Error };
-type Result_2 = variant { Ok : NonrootCyclesCapabilityResponseV1; Err : Error };
-type Result_3 = variant { Ok; Err : Error };
-type Result_4 = variant { Ok : vec WasmStoreCatalogEntryResponse; Err : Error };
-type Result_5 = variant { Ok : TemplateChunkResponse; Err : Error };
-type Result_6 = variant { Ok : TemplateChunkSetInfoResponse; Err : Error };
-type Result_7 = variant { Ok : WasmStoreStatusResponse; Err : Error };
+type Result_2 = variant { Ok : Page_1; Err : Error };
+type Result_3 = variant { Ok : NonrootCyclesCapabilityResponseV1; Err : Error };
+type Result_4 = variant { Ok; Err : Error };
+type Result_5 = variant { Ok : vec WasmStoreCatalogEntryResponse; Err : Error };
+type Result_6 = variant { Ok : TemplateChunkResponse; Err : Error };
+type Result_7 = variant { Ok : TemplateChunkSetInfoResponse; Err : Error };
+type Result_8 = variant { Ok : WasmStoreStatusResponse; Err : Error };
 type RootRequestMetadata = record { request_id : blob; ttl_seconds : nat64 };
 type StateSnapshotInput = record {
   subnet_state : opt SubnetStateInput;
@@ -191,23 +206,24 @@ type WasmStoreTemplateStatusResponse = record {
 service : (CanisterInitPayload, opt blob) -> {
   canic_bootstrap_status : () -> (BootstrapStatusResponse) query;
   canic_cycle_balance : () -> (Result) query;
-  canic_cycle_tracker : (PageRequest) -> (Result_1) query;
+  canic_cycle_topups : (PageRequest) -> (Result_1) query;
+  canic_cycle_tracker : (PageRequest) -> (Result_2) query;
   canic_metadata : () -> (CanicMetadataResponse) query;
   canic_ready : () -> (bool) query;
   canic_response_capability_v1 : (NonrootCyclesCapabilityEnvelopeV1) -> (
-      Result_2,
+      Result_3,
     );
-  canic_sync_state : (StateSnapshotInput) -> (Result_3);
-  canic_sync_topology : (TopologySnapshotInput) -> (Result_3);
-  canic_wasm_store_begin_gc : () -> (Result_3);
-  canic_wasm_store_catalog : () -> (Result_4) query;
-  canic_wasm_store_chunk : (text, text, nat32) -> (Result_5);
-  canic_wasm_store_complete_gc : () -> (Result_3);
-  canic_wasm_store_info : (text, text) -> (Result_6);
-  canic_wasm_store_prepare : (TemplateChunkSetPrepareInput) -> (Result_6);
-  canic_wasm_store_prepare_gc : () -> (Result_3);
-  canic_wasm_store_publish_chunk : (TemplateChunkInput) -> (Result_3);
-  canic_wasm_store_stage_manifest : (TemplateManifestInput) -> (Result_3);
-  canic_wasm_store_status : () -> (Result_7) query;
+  canic_sync_state : (StateSnapshotInput) -> (Result_4);
+  canic_sync_topology : (TopologySnapshotInput) -> (Result_4);
+  canic_wasm_store_begin_gc : () -> (Result_4);
+  canic_wasm_store_catalog : () -> (Result_5) query;
+  canic_wasm_store_chunk : (text, text, nat32) -> (Result_6);
+  canic_wasm_store_complete_gc : () -> (Result_4);
+  canic_wasm_store_info : (text, text) -> (Result_7);
+  canic_wasm_store_prepare : (TemplateChunkSetPrepareInput) -> (Result_7);
+  canic_wasm_store_prepare_gc : () -> (Result_4);
+  canic_wasm_store_publish_chunk : (TemplateChunkInput) -> (Result_4);
+  canic_wasm_store_stage_manifest : (TemplateManifestInput) -> (Result_4);
+  canic_wasm_store_status : () -> (Result_8) query;
   icrc10_supported_standards : () -> (vec record { text; text }) query;
 }

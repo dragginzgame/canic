@@ -1,4 +1,6 @@
-.PHONY: help version tags patch patch-quick minor major package publish \
+.PHONY: help version tags patch minor major \
+        release-patch release-minor release-major \
+        release-stage release-commit release-push package publish \
         test-packaged-downstream-wasm-store \
         test-packaged-downstream-cli test-installed-canic-cli \
         test test-wasm test-bump build check clippy fmt fmt-check clean \
@@ -41,9 +43,14 @@ help:
 	@echo "  version          Show current version"
 	@echo "  tags             List available git tags"
 	@echo "  patch            Bump patch version (0.0.x)"
-	@echo "  patch-quick      Bump patch version with cargo check instead of test-bump"
 	@echo "  minor            Bump minor version (0.x.0)"
 	@echo "  major            Bump major version (x.0.0)"
+	@echo "  release-patch    Bump, stage, commit, tag, and push a patch release"
+	@echo "  release-minor    Bump, stage, commit, tag, and push a minor release"
+	@echo "  release-major    Bump, stage, commit, tag, and push a major release"
+	@echo "  release-stage    Stage release version files after review"
+	@echo "  release-commit   Commit and tag the staged release"
+	@echo "  release-push     Push the release commit and tags"
 	@echo "  package          Build a publishable crate tarball"
 	@echo "  publish          Publish workspace crates to registry in dependency order"
 	@echo "  test-packaged-downstream-wasm-store  Verify the hidden packaged-downstream wasm_store build path"
@@ -66,7 +73,8 @@ help:
 	@echo ""
 	@echo "Examples:"
 	@echo "  make patch       # Bump patch version"
-	@echo "  make patch-quick # Fast patch bump using cargo check"
+	@echo "  make release-patch # Bump, stage, commit, tag, and push patch release"
+	@echo "  make release-stage release-commit release-push # Finish reviewed manual bump"
 	@echo "  make test-fleet-install # Fast local install using fast wasm (override with CANIC_WASM_PROFILE=debug|fast|release)"
 	@echo "  make test        # Run clippy and workspace tests"
 	@echo "  make test-wasm   # Fast wasm iteration path without PocketIC/e2e"
@@ -123,15 +131,33 @@ tags:
 patch: ensure-clean fmt test-bump
 	@scripts/ci/bump-version.sh patch
 
-patch-quick: ensure-clean fmt
-	$(CARGO_ENV) cargo check --workspace
-	@scripts/ci/bump-version.sh patch
-
 minor: ensure-clean fmt test-bump
 	@scripts/ci/bump-version.sh minor
 
 major: ensure-clean fmt test
 	@scripts/ci/bump-version.sh major
+
+release-patch: patch release-stage release-commit release-push
+
+release-minor: minor release-stage release-commit release-push
+
+release-major: major release-stage release-commit release-push
+
+release-stage:
+	git add Cargo.toml Cargo.lock README.md crates/canic-host/README.md scripts/dev/install_dev.sh \
+		scripts/ci/sync-release-surface-version.sh $$(git ls-files -m -- '*/Cargo.toml' || true)
+
+release-commit:
+	@version="$$(cargo get workspace.package.version)"; \
+	if git rev-parse "v$$version" >/dev/null 2>&1; then \
+		echo "❌ Tag v$$version already exists. Aborting." >&2; \
+		exit 1; \
+	fi; \
+	git commit -m "Release $$version"; \
+	git tag -a "v$$version" -m "Release $$version"
+
+release-push:
+	git push --follow-tags
 
 package: ensure-clean
 	$(CARGO_ENV) cargo package

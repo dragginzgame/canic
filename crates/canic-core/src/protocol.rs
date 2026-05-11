@@ -9,6 +9,7 @@ pub const CANIC_ATTESTATION_KEY_SET: &str = "canic_attestation_key_set";
 pub const CANIC_BOOTSTRAP_STATUS: &str = "canic_bootstrap_status";
 pub const CANIC_CYCLE_BALANCE: &str = "canic_cycle_balance";
 pub const CANIC_CYCLE_TRACKER: &str = "canic_cycle_tracker";
+pub const CANIC_CYCLE_TOPUPS: &str = "canic_cycle_topups";
 pub const CANIC_METADATA: &str = "canic_metadata";
 pub const CANIC_WASM_STORE_CATALOG: &str = "canic_wasm_store_catalog";
 pub const CANIC_WASM_STORE_INFO: &str = "canic_wasm_store_info";
