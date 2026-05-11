@@ -735,7 +735,7 @@ fn root_capability_count_total(entries: &[MetricEntry]) -> u64 {
         .sum()
 }
 
-fn metric_entry_count(entry: &MetricEntry) -> u64 {
+const fn metric_entry_count(entry: &MetricEntry) -> u64 {
     match entry.value {
         MetricValue::Count(count) | MetricValue::CountAndU64 { count, .. } => count,
         MetricValue::U128(_) => 0,
