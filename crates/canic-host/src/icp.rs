@@ -213,6 +213,43 @@ impl IcpCli {
         run_output(&mut command)
     }
 
+    /// Call one canister method with an explicit Candid argument and optional JSON output.
+    pub fn canister_call_arg_output(
+        &self,
+        canister: &str,
+        method: &str,
+        arg: &str,
+        output: Option<&str>,
+    ) -> Result<String, IcpCommandError> {
+        let mut command = self.canister_command();
+        command.args(["call", canister, method]);
+        command.arg(arg);
+        if let Some(output) = output {
+            add_output_arg(&mut command, output);
+        }
+        self.add_target_args(&mut command);
+        run_output(&mut command)
+    }
+
+    /// Query one canister method with an explicit Candid argument and optional JSON output.
+    pub fn canister_query_arg_output(
+        &self,
+        canister: &str,
+        method: &str,
+        arg: &str,
+        output: Option<&str>,
+    ) -> Result<String, IcpCommandError> {
+        let mut command = self.canister_command();
+        command.args(["call", canister, method]);
+        command.arg(arg);
+        command.arg("--query");
+        if let Some(output) = output {
+            add_output_arg(&mut command, output);
+        }
+        self.add_target_args(&mut command);
+        run_output(&mut command)
+    }
+
     /// Read one canister metadata section.
     pub fn canister_metadata_output(
         &self,

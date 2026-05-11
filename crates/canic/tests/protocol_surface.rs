@@ -39,3 +39,16 @@ fn removed_cycles_accept_surface_stays_absent() {
         did_path.display()
     );
 }
+
+#[test]
+fn wasm_store_exposes_standard_cycle_tracker() {
+    let did_path = workspace_root().join("crates/canic-wasm-store/wasm_store.did");
+    let did = read_text(&did_path);
+
+    assert!(
+        did.contains("type PageRequest = record { offset : nat64; limit : nat64 };")
+            && did.contains("  canic_cycle_tracker : (PageRequest) -> ("),
+        "missing `canic_cycle_tracker` method in {}",
+        did_path.display()
+    );
+}

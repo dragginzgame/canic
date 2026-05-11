@@ -88,14 +88,14 @@ icp build --all
 ```
 
 `icp.yaml` uses custom build commands which call `scripts/app/build.sh <canister>`. That script:
-- is now just a thin wrapper around `canic build <canister>`
+- invokes the same host artifact builder used by `canic install`
 - prints the workspace/ICP roots once per `icp build` parent process and a short elapsed-time line per canister build so long downstream/custom-build runs stay readable
 
-That public builder:
+That builder:
 - builds the requested Rust canister crate for `wasm32-unknown-unknown`
 - refreshes the implicit bootstrap `wasm_store` artifact automatically when building `root`
 - keeps `wasm_store` out of downstream `icp.yaml` and delegates the implicit bootstrap build through the Canic backend builder
-- lets the public bootstrap builder resolve the canonical `canic-wasm-store` source automatically from the current `canic` checkout or published registry source, and if that canonical crate is not present it synthesizes a wrapper directly from the resolved `canic` source, so downstreams do not need their own `wasm_store` crate or extra `wasm_store` build config
+- lets the bootstrap builder resolve the canonical `canic-wasm-store` source automatically from the current `canic` checkout or published registry source, and if that canonical crate is not present it synthesizes a wrapper directly from the resolved `canic` source, so downstreams do not need their own `wasm_store` crate or extra `wasm_store` build config
 - copies the resulting WASM into `.icp/local/canisters/<name>/<name>.wasm`
 - runs `candid-extractor` to produce `.icp/local/canisters/<name>/<name>.did`
 
@@ -112,7 +112,7 @@ Ordinary bootstrap builds copy that checked-in DID into `.icp/local`; they do
 not rewrite the checked-in source file unless
 `CANIC_REFRESH_WASM_STORE_DID=1` is set intentionally.
 
-Profile selection for the public builder is:
+Profile selection for the builder is:
 - `CANIC_WASM_PROFILE=debug|fast|release`
 
 ## Why `.wasm.gz` Exists
@@ -130,11 +130,11 @@ that manifest as soon as the full root-subnet ordinary artifact set exists, so
 downstreams do not need a local copy of the manifest-emission logic just to
 keep `.icp/local/canisters/root/root.release-set.json` in sync.
 
-If you do not want the repo-local wrapper at all, use the `canic` CLI directly:
+For normal fleet work, use the fleet-aware installer instead of a per-role
+builder command:
 
 ```bash
-canic build root
-canic install test root
+canic install test
 ```
 
 In split repos where the Rust workspace lives under `backend/` but `icp.yaml`

@@ -46,13 +46,13 @@ impl BackupCreateOptions {
 pub(super) fn backup_create_command() -> ClapCommand {
     ClapCommand::new("create")
         .bin_name("canic backup create")
-        .about("Plan a topology-aware fleet backup")
+        .about("Create a topology-aware fleet backup")
         .disable_help_flag(true)
         .arg(
             value_arg("fleet")
                 .value_name("fleet")
                 .required(true)
-                .help("Installed fleet name to plan"),
+                .help("Installed fleet name to back up"),
         )
         .arg(
             value_arg("subtree")
@@ -64,9 +64,13 @@ pub(super) fn backup_create_command() -> ClapCommand {
             value_arg("out")
                 .long("out")
                 .value_name("dir")
-                .help("Plan output directory; defaults to backups/fleet-<name>-YYYYMMDD-HHMMSS"),
+                .help("Backup output directory; defaults to backups/fleet-<name>-YYYYMMDD-HHMMSS"),
         )
-        .arg(flag_arg("dry-run").long("dry-run"))
+        .arg(
+            flag_arg("dry-run")
+                .long("dry-run")
+                .help("Write the backup plan and execution journal without running it"),
+        )
         .arg(internal_network_arg())
         .arg(internal_icp_arg())
 }

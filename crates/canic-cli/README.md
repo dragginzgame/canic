@@ -1,9 +1,9 @@
 # canic-cli
 
 `canic-cli` publishes the `canic` operator binary. It is the command-line
-surface for building Canic artifacts, installing local Canic fleets, selecting
-fleet configs, capturing canister snapshots, validating backup artifacts, and
-preparing guarded restores.
+surface for installing local Canic fleets, selecting fleet configs, capturing
+canister snapshots, validating backup artifacts, and preparing guarded
+restores.
 
 The CLI wraps ICP CLI for live snapshot and restore mutations. Canic
 owns the topology selection, manifests, journals, readiness checks, restore
@@ -54,13 +54,6 @@ Install and bootstrap the local fleet:
 
 ```bash
 canic install test
-```
-
-Build one Canic canister artifact through the same public CLI surface used by
-ICP CLI build hooks:
-
-```bash
-canic build root
 ```
 
 `canic install <fleet>` uses `fleets/<fleet>/canic.toml`, the conventional

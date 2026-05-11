@@ -12,8 +12,15 @@ use canic_backup::{
     manifest::IdentityMode,
     persistence::{BackupIntegrityReport, BackupLayout, PersistenceError},
     plan::{
-        AuthorityEvidence, BackupPlan, BackupPlanBuildInput, BackupPlanError, BackupScopeKind,
-        ControlAuthority, SnapshotReadAuthority, build_backup_plan, resolve_backup_selector,
+        AuthorityEvidence, AuthorityProofSource, BackupExecutionPreflightReceipts, BackupPlan,
+        BackupPlanBuildInput, BackupPlanError, BackupScopeKind, ControlAuthority,
+        ControlAuthorityReceipt, QuiescencePreflightReceipt, QuiescencePreflightTarget,
+        SnapshotReadAuthority, SnapshotReadAuthorityReceipt, TopologyPreflightReceipt,
+        TopologyPreflightTarget, build_backup_plan, resolve_backup_selector,
+    },
+    runner::{
+        BackupRunResponse, BackupRunnerCommandError, BackupRunnerConfig, BackupRunnerError,
+        BackupRunnerExecutor, backup_run_execute_with_executor,
     },
     topology::{TopologyHasher, TopologyRecord},
 };
@@ -67,9 +74,6 @@ pub enum BackupCommandError {
     #[error("backup reference {reference} is ambiguous under backups; use `--dir <dir>`")]
     BackupReferenceAmbiguous { reference: String },
 
-    #[error("backup create currently supports planning only; pass --dry-run")]
-    CreateRequiresDryRun,
-
     #[error(
         "fleet {fleet} is not installed on network {network}; run `canic install {fleet}` before planning a backup"
     )]
@@ -104,22 +108,28 @@ pub enum BackupCommandError {
 
     #[error(transparent)]
     BackupExecutionJournal(#[from] BackupExecutionJournalError),
+
+    #[error(transparent)]
+    BackupRunner(#[from] BackupRunnerError),
 }
 
 ///
-/// BackupCreateDryRunReport
+/// BackupCreateReport
 ///
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct BackupCreateDryRunReport {
+pub struct BackupCreateReport {
     pub fleet: String,
     pub network: String,
     pub out: PathBuf,
     pub plan_id: String,
     pub run_id: String,
+    pub mode: String,
+    pub status: String,
     pub scope: String,
     pub targets: usize,
     pub operations: usize,
+    pub executed_operations: usize,
 }
 
 ///
@@ -275,11 +285,7 @@ where
 
 pub fn backup_create(
     options: &BackupCreateOptions,
-) -> Result<BackupCreateDryRunReport, BackupCommandError> {
-    if !options.dry_run {
-        return Err(BackupCommandError::CreateRequiresDryRun);
-    }
-
+) -> Result<BackupCreateReport, BackupCommandError> {
     let state = read_named_fleet_install_state(&options.network, &options.fleet)
         .map_err(|err| BackupCommandError::InstallState(err.to_string()))?
         .ok_or_else(|| BackupCommandError::NoInstalledFleet {
@@ -316,24 +322,48 @@ pub fn backup_create(
         include_descendants: true,
         topology_hash_before_quiesce: topology_hash,
         registry: &registry,
-        control_authority: ControlAuthority::root_controller(AuthorityEvidence::Declared),
-        snapshot_read_authority: SnapshotReadAuthority::root_configured_read(
-            AuthorityEvidence::Declared,
-        ),
-        quiescence_policy: canic_backup::plan::QuiescencePolicy::RootCoordinated,
+        control_authority: backup_control_authority(options.dry_run),
+        snapshot_read_authority: backup_snapshot_read_authority(options.dry_run),
+        quiescence_policy: backup_quiescence_policy(options.dry_run),
         identity_mode: IdentityMode::Relocatable,
     })?;
-    persist_backup_create_dry_run(&out, &plan)?;
+    persist_backup_create_layout(&out, &plan)?;
 
-    Ok(BackupCreateDryRunReport {
+    let run = if options.dry_run {
+        None
+    } else {
+        let mut executor = BackupIcpRunnerExecutor::new(options);
+        Some(backup_run_execute_with_executor(
+            &BackupRunnerConfig {
+                out: out.clone(),
+                max_steps: None,
+                updated_at: None,
+                tool_name: "canic".to_string(),
+                tool_version: env!("CARGO_PKG_VERSION").to_string(),
+            },
+            &mut executor,
+        )?)
+    };
+
+    Ok(BackupCreateReport {
         fleet: plan.fleet.clone(),
         network: plan.network.clone(),
         out,
         plan_id: plan.plan_id.clone(),
         run_id: plan.run_id.clone(),
+        mode: if options.dry_run {
+            "dry-run"
+        } else {
+            "execute"
+        }
+        .to_string(),
+        status: run
+            .as_ref()
+            .map_or_else(|| "planned".to_string(), backup_run_status),
         scope: backup_scope_label(&plan),
         targets: plan.targets.len(),
         operations: plan.phases.len(),
+        executed_operations: run.as_ref().map_or(0, |run| run.executed_operation_count),
     })
 }
 
@@ -368,16 +398,12 @@ pub fn backup_status(
         options.dir.as_deref(),
         options.backup_ref.as_deref(),
     )?);
-    if layout.journal_path().is_file() {
-        let journal = layout.read_journal()?;
-        return Ok(BackupStatusReport::Download(journal.resume_report()));
-    }
     if layout.backup_plan_path().is_file() {
         let plan = layout.read_backup_plan()?;
         let journal = layout.read_execution_journal()?;
         layout.verify_execution_integrity()?;
         return Ok(BackupStatusReport::DryRun(BackupDryRunStatusReport {
-            layout_status: "dry-run".to_string(),
+            layout_status: execution_layout_status(&journal, layout.manifest_path().is_file()),
             plan_id: plan.plan_id.clone(),
             run_id: plan.run_id.clone(),
             fleet: plan.fleet,
@@ -386,6 +412,10 @@ pub fn backup_status(
             operations: plan.phases.len(),
             execution: journal.resume_summary(),
         }));
+    }
+    if layout.journal_path().is_file() {
+        let journal = layout.read_journal()?;
+        return Ok(BackupStatusReport::Download(journal.resume_report()));
     }
 
     let journal = layout.read_journal()?;
@@ -404,7 +434,7 @@ pub fn backup_inspect(
     layout.verify_execution_integrity()?;
 
     Ok(BackupInspectReport {
-        layout_status: "dry-run".to_string(),
+        layout_status: execution_layout_status(&journal, layout.manifest_path().is_file()),
         plan_id: plan.plan_id.clone(),
         run_id: plan.run_id.clone(),
         fleet: plan.fleet.clone(),
@@ -533,9 +563,11 @@ fn planned_backup_list_entry(dir: PathBuf, layout: &BackupLayout) -> BackupListE
     let status = if layout.execution_journal_path().is_file()
         && layout.verify_execution_integrity().is_err()
     {
-        "invalid-plan-journal"
+        "invalid-plan-journal".to_string()
+    } else if let Ok(journal) = layout.read_execution_journal() {
+        execution_layout_status(&journal, layout.manifest_path().is_file())
     } else {
-        "dry-run"
+        "dry-run".to_string()
     };
 
     BackupListEntry {
@@ -543,7 +575,20 @@ fn planned_backup_list_entry(dir: PathBuf, layout: &BackupLayout) -> BackupListE
         backup_id: plan.plan_id,
         created_at: planned_backup_created_at(&plan.run_id),
         members: plan.targets.len(),
-        status: status.to_string(),
+        status,
+    }
+}
+
+fn execution_layout_status(journal: &BackupExecutionJournal, has_manifest: bool) -> String {
+    let summary = journal.resume_summary();
+    if has_manifest && execution_is_complete(&summary) {
+        "complete".to_string()
+    } else if summary.failed_operations > 0 {
+        "failed".to_string()
+    } else if journal.preflight_accepted || summary.completed_operations > 0 {
+        "running".to_string()
+    } else {
+        "dry-run".to_string()
     }
 }
 
@@ -555,6 +600,7 @@ fn ensure_complete_status(report: &BackupStatusReport) -> Result<(), BackupComma
             total_artifacts: report.total_artifacts,
             pending_artifacts: report.pending_artifacts,
         }),
+        BackupStatusReport::DryRun(report) if execution_is_complete(&report.execution) => Ok(()),
         BackupStatusReport::DryRun(report) => Err(BackupCommandError::DryRunNotComplete {
             plan_id: report.plan_id.clone(),
         }),
@@ -600,21 +646,34 @@ fn write_inspect_report(
 }
 
 // Write the backup-create dry-run summary as a compact table.
-fn write_create_report(report: &BackupCreateDryRunReport) {
+fn write_create_report(report: &BackupCreateReport) {
     let rows = [[
         report.fleet.clone(),
         report.network.clone(),
+        report.mode.clone(),
+        report.status.clone(),
         report.scope.clone(),
         report.targets.to_string(),
         report.operations.to_string(),
+        report.executed_operations.to_string(),
         report.out.display().to_string(),
     ]];
     println!(
         "{}",
         render_table(
-            &["FLEET", "NETWORK", "SCOPE", "TARGETS", "OPERATIONS", "OUT"],
+            &[
+                "FLEET",
+                "NETWORK",
+                "MODE",
+                "STATUS",
+                "SCOPE",
+                "TARGETS",
+                "OPERATIONS",
+                "EXECUTED",
+                "OUT",
+            ],
             &rows,
-            &[ColumnAlign::Left; 6],
+            &[ColumnAlign::Left; 9],
         )
     );
 }
@@ -790,13 +849,199 @@ fn planned_backup_created_at(run_id: &str) -> String {
     }
 }
 
+#[cfg(test)]
 fn persist_backup_create_dry_run(out: &Path, plan: &BackupPlan) -> Result<(), BackupCommandError> {
+    persist_backup_create_layout(out, plan)
+}
+
+fn persist_backup_create_layout(out: &Path, plan: &BackupPlan) -> Result<(), BackupCommandError> {
     let journal = BackupExecutionJournal::from_plan(plan)?;
     let layout = BackupLayout::new(out.to_path_buf());
     layout.write_backup_plan(plan)?;
     layout.write_execution_journal(&journal)?;
     layout.verify_execution_integrity()?;
     Ok(())
+}
+
+const fn backup_control_authority(dry_run: bool) -> ControlAuthority {
+    if dry_run {
+        ControlAuthority::root_controller(AuthorityEvidence::Declared)
+    } else {
+        ControlAuthority::operator_controller(AuthorityEvidence::Proven)
+    }
+}
+
+const fn backup_snapshot_read_authority(dry_run: bool) -> SnapshotReadAuthority {
+    if dry_run {
+        SnapshotReadAuthority::root_configured_read(AuthorityEvidence::Declared)
+    } else {
+        SnapshotReadAuthority::operator_controller(AuthorityEvidence::Proven)
+    }
+}
+
+const fn backup_quiescence_policy(dry_run: bool) -> canic_backup::plan::QuiescencePolicy {
+    if dry_run {
+        canic_backup::plan::QuiescencePolicy::RootCoordinated
+    } else {
+        canic_backup::plan::QuiescencePolicy::CrashConsistent
+    }
+}
+
+fn backup_run_status(run: &BackupRunResponse) -> String {
+    if run.complete {
+        "complete"
+    } else if run.max_steps_reached {
+        "paused"
+    } else {
+        "running"
+    }
+    .to_string()
+}
+
+const fn execution_is_complete(
+    execution: &canic_backup::execution::BackupExecutionResumeSummary,
+) -> bool {
+    execution.completed_operations + execution.skipped_operations == execution.total_operations
+}
+
+///
+/// BackupIcpRunnerExecutor
+///
+
+struct BackupIcpRunnerExecutor {
+    options: BackupCreateOptions,
+    icp: IcpCli,
+}
+
+impl BackupIcpRunnerExecutor {
+    fn new(options: &BackupCreateOptions) -> Self {
+        Self {
+            options: options.clone(),
+            icp: IcpCli::new(&options.icp, None, Some(options.network.clone())),
+        }
+    }
+}
+
+impl BackupRunnerExecutor for BackupIcpRunnerExecutor {
+    fn preflight_receipts(
+        &mut self,
+        plan: &BackupPlan,
+        preflight_id: &str,
+        validated_at: &str,
+        expires_at: &str,
+    ) -> Result<BackupExecutionPreflightReceipts, BackupRunnerCommandError> {
+        let registry_json =
+            call_subnet_registry(&self.options, &plan.root_canister_id).map_err(preflight_error)?;
+        let registry = parse_registry_entries(&registry_json).map_err(preflight_error)?;
+        let topology_hash = registry_topology_hash(&registry).map_err(preflight_error)?;
+        for target in &plan.targets {
+            self.icp
+                .canister_status(&target.canister_id)
+                .map_err(runner_icp_error)?;
+        }
+
+        Ok(BackupExecutionPreflightReceipts {
+            plan_id: plan.plan_id.clone(),
+            preflight_id: preflight_id.to_string(),
+            validated_at: validated_at.to_string(),
+            expires_at: expires_at.to_string(),
+            topology: TopologyPreflightReceipt {
+                plan_id: plan.plan_id.clone(),
+                preflight_id: preflight_id.to_string(),
+                topology_hash_before_quiesce: plan.topology_hash_before_quiesce.clone(),
+                topology_hash_at_preflight: topology_hash,
+                targets: plan
+                    .targets
+                    .iter()
+                    .map(TopologyPreflightTarget::from)
+                    .collect(),
+                validated_at: validated_at.to_string(),
+                expires_at: expires_at.to_string(),
+                message: Some("root registry matched planned topology".to_string()),
+            },
+            control_authority: plan
+                .targets
+                .iter()
+                .map(|target| ControlAuthorityReceipt {
+                    plan_id: plan.plan_id.clone(),
+                    preflight_id: preflight_id.to_string(),
+                    target_canister_id: target.canister_id.clone(),
+                    authority: ControlAuthority::operator_controller(AuthorityEvidence::Proven),
+                    proof_source: AuthorityProofSource::ManagementStatus,
+                    validated_at: validated_at.to_string(),
+                    expires_at: expires_at.to_string(),
+                    message: Some("icp canister status succeeded".to_string()),
+                })
+                .collect(),
+            snapshot_read_authority: plan
+                .targets
+                .iter()
+                .map(|target| SnapshotReadAuthorityReceipt {
+                    plan_id: plan.plan_id.clone(),
+                    preflight_id: preflight_id.to_string(),
+                    target_canister_id: target.canister_id.clone(),
+                    authority: SnapshotReadAuthority::operator_controller(
+                        AuthorityEvidence::Proven,
+                    ),
+                    proof_source: AuthorityProofSource::ManagementStatus,
+                    validated_at: validated_at.to_string(),
+                    expires_at: expires_at.to_string(),
+                    message: Some("operator control permits snapshot read".to_string()),
+                })
+                .collect(),
+            quiescence: QuiescencePreflightReceipt {
+                plan_id: plan.plan_id.clone(),
+                preflight_id: preflight_id.to_string(),
+                quiescence_policy: plan.quiescence_policy.clone(),
+                accepted: true,
+                targets: plan
+                    .targets
+                    .iter()
+                    .map(QuiescencePreflightTarget::from)
+                    .collect(),
+                validated_at: validated_at.to_string(),
+                expires_at: expires_at.to_string(),
+                message: Some("crash-consistent operator backup accepted".to_string()),
+            },
+        })
+    }
+
+    fn stop_canister(&mut self, canister_id: &str) -> Result<(), BackupRunnerCommandError> {
+        self.icp
+            .stop_canister(canister_id)
+            .map_err(runner_icp_error)
+    }
+
+    fn start_canister(&mut self, canister_id: &str) -> Result<(), BackupRunnerCommandError> {
+        self.icp
+            .start_canister(canister_id)
+            .map_err(runner_icp_error)
+    }
+
+    fn create_snapshot(&mut self, canister_id: &str) -> Result<String, BackupRunnerCommandError> {
+        self.icp
+            .snapshot_create_id(canister_id)
+            .map_err(runner_icp_error)
+    }
+
+    fn download_snapshot(
+        &mut self,
+        canister_id: &str,
+        snapshot_id: &str,
+        artifact_path: &Path,
+    ) -> Result<(), BackupRunnerCommandError> {
+        self.icp
+            .snapshot_download(canister_id, snapshot_id, artifact_path)
+            .map_err(runner_icp_error)
+    }
+}
+
+fn preflight_error(error: impl std::error::Error) -> BackupRunnerCommandError {
+    BackupRunnerCommandError::failed("preflight", error.to_string())
+}
+
+fn runner_icp_error(error: IcpCommandError) -> BackupRunnerCommandError {
+    BackupRunnerCommandError::failed("icp", error.to_string())
 }
 
 fn inspect_target(target: &canic_backup::plan::BackupTarget) -> BackupInspectTarget {

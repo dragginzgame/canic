@@ -1,12 +1,12 @@
 mod args;
 mod backup;
-mod build;
 mod endpoints;
 mod fleets;
 mod install;
 mod list;
 mod manifest;
 mod medic;
+mod metrics;
 mod output;
 mod path_stamp;
 mod replica;
@@ -43,7 +43,6 @@ enum CommandScope {
     Global,
     FleetContext,
     BackupRestore,
-    WorkspaceFiles,
 }
 
 impl CommandScope {
@@ -52,7 +51,6 @@ impl CommandScope {
             Self::Global => "Global commands",
             Self::FleetContext => "Fleet commands",
             Self::BackupRestore => "Backup and restore commands",
-            Self::WorkspaceFiles => "Workspace and file commands",
         }
     }
 }
@@ -110,6 +108,11 @@ const COMMAND_SPECS: &[CommandSpec] = &[
         scope: CommandScope::FleetContext,
     },
     CommandSpec {
+        name: "metrics",
+        about: "Summarize fleet cycle tracker history",
+        scope: CommandScope::FleetContext,
+    },
+    CommandSpec {
         name: "snapshot",
         about: "Capture and download canister snapshots",
         scope: CommandScope::BackupRestore,
@@ -129,11 +132,6 @@ const COMMAND_SPECS: &[CommandSpec] = &[
         about: "Plan or run snapshot restores",
         scope: CommandScope::BackupRestore,
     },
-    CommandSpec {
-        name: "build",
-        about: "Build one Canic canister artifact",
-        scope: CommandScope::WorkspaceFiles,
-    },
 ];
 
 ///
@@ -147,9 +145,6 @@ pub enum CliError {
 
     #[error("backup: {0}")]
     Backup(String),
-
-    #[error("build: {0}")]
-    Build(String),
 
     #[error("config: {0}")]
     Config(String),
@@ -172,6 +167,9 @@ pub enum CliError {
     #[error("medic: {0}")]
     Medic(String),
 
+    #[error("metrics: {0}")]
+    Metrics(String),
+
     #[error("snapshot: {0}")]
     Snapshot(String),
 
@@ -188,12 +186,6 @@ pub enum CliError {
 impl From<backup::BackupCommandError> for CliError {
     fn from(err: backup::BackupCommandError) -> Self {
         Self::Backup(err.to_string())
-    }
-}
-
-impl From<build::BuildCommandError> for CliError {
-    fn from(err: build::BuildCommandError) -> Self {
-        Self::Build(err.to_string())
     }
 }
 
@@ -230,6 +222,12 @@ impl From<manifest::ManifestCommandError> for CliError {
 impl From<medic::MedicCommandError> for CliError {
     fn from(err: medic::MedicCommandError) -> Self {
         Self::Medic(err.to_string())
+    }
+}
+
+impl From<metrics::MetricsCommandError> for CliError {
+    fn from(err: metrics::MetricsCommandError) -> Self {
+        Self::Metrics(err.to_string())
     }
 }
 
@@ -301,7 +299,6 @@ where
 
     match command {
         "backup" => backup::run(tail).map_err(CliError::from),
-        "build" => build::run(tail).map_err(CliError::from),
         "config" => list::run_config(tail).map_err(|err| CliError::Config(err.to_string())),
         "endpoints" => endpoints::run(tail).map_err(CliError::from),
         "fleet" => fleets::run(tail).map_err(CliError::from),
@@ -309,6 +306,7 @@ where
         "list" => list::run(tail).map_err(CliError::from),
         "manifest" => manifest::run(tail).map_err(CliError::from),
         "medic" => medic::run(tail).map_err(CliError::from),
+        "metrics" => metrics::run(tail).map_err(CliError::from),
         "replica" => replica::run(tail).map_err(CliError::from),
         "snapshot" => snapshot::run(tail).map_err(CliError::from),
         "status" => status::run(tail).map_err(CliError::from),
@@ -357,16 +355,18 @@ fn top_level_dispatch_command() -> Command {
         .arg(network_arg().global(true));
 
     COMMAND_SPECS.iter().fold(command, |command, spec| {
-        command.subcommand(
-            Command::new(spec.name).arg(
-                Arg::new(DISPATCH_ARGS)
-                    .num_args(0..)
-                    .allow_hyphen_values(true)
-                    .trailing_var_arg(true)
-                    .value_parser(clap::value_parser!(OsString)),
-            ),
-        )
+        command.subcommand(dispatch_subcommand(spec.name))
     })
+}
+
+fn dispatch_subcommand(name: &'static str) -> Command {
+    Command::new(name).arg(
+        Arg::new(DISPATCH_ARGS)
+            .num_args(0..)
+            .allow_hyphen_values(true)
+            .trailing_var_arg(true)
+            .value_parser(clap::value_parser!(OsString)),
+    )
 }
 
 fn command_local_global_option(args: &[OsString]) -> Option<&'static str> {
@@ -430,7 +430,7 @@ fn apply_global_network(command: &str, tail: &mut Vec<OsString>, global_network:
 
 fn command_accepts_global_icp(command: &str, tail: &[OsString]) -> bool {
     match command {
-        "endpoints" | "list" | "medic" | "status" => true,
+        "endpoints" | "list" | "medic" | "metrics" | "status" => true,
         "replica" => matches!(
             tail.first().and_then(|arg| arg.to_str()),
             Some("start" | "status" | "stop")
@@ -444,7 +444,7 @@ fn command_accepts_global_icp(command: &str, tail: &[OsString]) -> bool {
 
 fn command_accepts_global_network(command: &str, tail: &[OsString]) -> bool {
     match command {
-        "endpoints" | "install" | "list" | "medic" | "status" => true,
+        "endpoints" | "install" | "list" | "medic" | "metrics" | "status" => true,
         "fleet" => tail.first().and_then(|arg| arg.to_str()) == Some("list"),
         "snapshot" => tail.first().and_then(|arg| arg.to_str()) == Some("download"),
         "backup" => tail.first().and_then(|arg| arg.to_str()) == Some("create"),
@@ -498,20 +498,26 @@ fn grouped_command_section(specs: &[CommandSpec]) -> Vec<String> {
         CommandScope::Global,
         CommandScope::FleetContext,
         CommandScope::BackupRestore,
-        CommandScope::WorkspaceFiles,
     ];
-    for (index, scope) in scopes.into_iter().enumerate() {
+    for scope in scopes {
+        let scope_specs = specs
+            .iter()
+            .filter(|spec| spec.scope == scope)
+            .collect::<Vec<_>>();
+        if scope_specs.is_empty() {
+            continue;
+        }
+        if !lines.is_empty() {
+            lines.push(String::new());
+        }
         lines.push(format!("  {}", color(COLOR_GROUP, scope.heading())));
-        for spec in specs.iter().filter(|spec| spec.scope == scope) {
+        for spec in scope_specs {
             let command = format!("{:<12}", spec.name);
             lines.push(format!(
                 "    {} {}",
                 color(COLOR_COMMAND, &command),
                 spec.about
             ));
-        }
-        if index + 1 < scopes.len() {
-            lines.push(String::new());
         }
     }
     lines
@@ -540,7 +546,6 @@ mod tests {
         assert!(plain.contains("Global commands"));
         assert!(plain.contains("Fleet commands"));
         assert!(plain.contains("Backup and restore commands"));
-        assert!(plain.contains("Workspace and file commands"));
         assert!(plain.find("    status") < plain.find("    fleet"));
         assert!(plain.find("    fleet") < plain.find("    replica"));
         assert!(plain.find("    replica") < plain.find("    install"));
@@ -551,7 +556,6 @@ mod tests {
         assert!(plain.find("    snapshot") < plain.find("    backup"));
         assert!(plain.find("    backup") < plain.find("    manifest"));
         assert!(plain.find("    manifest") < plain.find("    restore"));
-        assert!(plain.find("    restore") < plain.find("    build"));
         assert!(plain.contains("Options:"));
         assert!(plain.contains("--icp <path>"));
         assert!(plain.contains("--network <name>"));
@@ -559,7 +563,7 @@ mod tests {
         assert!(plain.contains("config"));
         assert!(plain.contains("list"));
         assert!(plain.contains("endpoints"));
-        assert!(plain.contains("build"));
+        assert!(!plain.contains("    build"));
         assert!(!plain.contains("    network"));
         assert!(!plain.contains("    defaults"));
         assert!(plain.contains("    status"));
@@ -587,7 +591,6 @@ mod tests {
             &["backup", "list", "help"],
             &["backup", "status", "help"],
             &["backup", "verify", "help"],
-            &["build", "help"],
             &["config", "help"],
             &["endpoints", "help"],
             &["install", "help"],
@@ -640,7 +643,6 @@ mod tests {
             ])
             .is_ok()
         );
-        assert!(run([OsString::from("build"), OsString::from("--version")]).is_ok());
         assert!(run([OsString::from("config"), OsString::from("--version")]).is_ok());
         assert!(run([OsString::from("endpoints"), OsString::from("--version")]).is_ok());
         assert!(run([OsString::from("install"), OsString::from("--version")]).is_ok());

@@ -102,7 +102,7 @@ fn list_command() -> ClapCommand {
             flag_arg("verbose")
                 .long("verbose")
                 .short('v')
-                .help("Show full module hashes instead of 12-character prefixes"),
+                .help("Show full module hashes instead of 8-character prefixes"),
         )
         .arg(internal_icp_arg())
         .after_help(LIST_HELP_AFTER)

@@ -138,6 +138,7 @@ macro_rules! __canic_build_internal {
         println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_observability_env)");
         println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_observability_log)");
         println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_metrics)");
+        println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_cycle_tracker)");
         println!("cargo:rustc-check-cfg=cfg(canic_metrics_core)");
         println!("cargo:rustc-check-cfg=cfg(canic_metrics_placement)");
         println!("cargo:rustc-check-cfg=cfg(canic_metrics_platform)");
@@ -148,7 +149,6 @@ macro_rules! __canic_build_internal {
         println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_topology_state)");
         println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_topology_index)");
         println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_topology_children)");
-        println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_topology_cycles)");
         println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_topology_placement)");
         println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_nonroot_sync_topology)");
         if std::env::var_os("CANIC_INTERNAL_TEST_ENDPOINTS").is_none() {

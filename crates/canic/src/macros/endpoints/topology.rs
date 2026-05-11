@@ -61,20 +61,6 @@ macro_rules! canic_emit_topology_children_endpoints {
     };
 }
 
-// Leaf emitter for the shared cycle-tracker view.
-#[macro_export]
-macro_rules! canic_emit_topology_cycles_endpoints {
-    () => {
-        #[$crate::canic_query]
-        fn canic_cycle_tracker(
-            page: ::canic::dto::page::PageRequest,
-        ) -> Result<::canic::dto::page::Page<::canic::dto::cycles::CycleTrackerEntry>, ::canic::Error>
-        {
-            Ok($crate::__internal::core::api::cycles::CycleTrackerQuery::page(page))
-        }
-    };
-}
-
 // Leaf emitter for shared scaling/sharding placement views.
 #[macro_export]
 macro_rules! canic_emit_topology_placement_endpoints {
@@ -114,8 +100,6 @@ macro_rules! canic_bundle_topology_views_endpoints {
         $crate::canic_emit_topology_index_endpoints!();
         #[cfg(not(canic_disable_bundle_topology_children))]
         $crate::canic_emit_topology_children_endpoints!();
-        #[cfg(not(canic_disable_bundle_topology_cycles))]
-        $crate::canic_emit_topology_cycles_endpoints!();
         #[cfg(not(canic_disable_bundle_topology_placement))]
         $crate::canic_emit_topology_placement_endpoints!();
     };

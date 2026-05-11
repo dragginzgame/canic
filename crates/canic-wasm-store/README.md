@@ -34,8 +34,8 @@ this crate. Ordinary local/bootstrap artifact builds copy that file into
 checked-in source file as a side effect of unrelated workspace changes.
 
 If you intentionally need to refresh the canonical checked-in DID from the
-built crate, run the Canic build command with:
+built crate, run the host artifact builder from the Canic workspace with:
 
 ```bash
-CANIC_REFRESH_WASM_STORE_DID=1 canic build wasm_store
+CANIC_REFRESH_WASM_STORE_DID=1 cargo run -q -p canic-host --example build_artifact -- wasm_store
 ```

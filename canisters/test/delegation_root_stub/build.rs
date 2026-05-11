@@ -45,11 +45,10 @@ fn build_bootstrap_wasm_store(
         "run",
         "-q",
         "-p",
-        "canic-cli",
-        "--bin",
-        "canic",
+        "canic-host",
+        "--example",
+        "build_artifact",
         "--",
-        "build",
         "wasm_store",
     ]);
 

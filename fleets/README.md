@@ -28,7 +28,8 @@ from the resolved `canic` package automatically.
 ## Local Workflow
 
 The test canisters are wired through `icp.yaml`; custom build steps call
-`scripts/app/build.sh`, which is a thin wrapper around `canic build`.
+`scripts/app/build.sh`, which invokes the host artifact builder used by
+`canic install`.
 
 - Install the full local reference topology: `make test-fleet-install`
 - `root` stays thin: only the bootstrap `wasm_store` artifact is embedded, and the ordinary configured release set is staged after install from `.icp/local/canisters/root/root.release-set.json`.

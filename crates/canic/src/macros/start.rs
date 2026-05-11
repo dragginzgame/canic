@@ -454,9 +454,10 @@ macro_rules! start_root {
 /// This specialized macro exists so downstreams can use the built-in Canic
 /// `wasm_store` role without copying the reference canister implementation.
 ///
-/// Unlike the ordinary non-root bundle, this surface intentionally excludes the
+/// Unlike the ordinary non-root bundle, this surface intentionally excludes most
 /// generic observability and topology-view queries that are not part of the
-/// canonical `wasm_store` contract.
+/// canonical `wasm_store` contract. It still exposes the standard cycle tracker
+/// so fleet metrics can treat the store like every other managed canister.
 #[macro_export]
 macro_rules! start_wasm_store {
     ($(init = $init:block)? $(,)?) => {

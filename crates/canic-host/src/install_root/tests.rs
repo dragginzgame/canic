@@ -1,10 +1,10 @@
 use super::{
     INSTALL_STATE_SCHEMA_VERSION, InstallState, add_icp_environment_target,
-    add_local_root_create_cycles_arg, canic_build_target_command, config_selection_error,
-    discover_canic_config_choices, fleet_install_state_path, icp_canister_command_in_network,
-    icp_start_local_command, icp_stop_command, install_build_session_id,
-    parse_bootstrap_status_value, parse_cycle_balance_response, parse_local_icp_autostart,
-    parse_root_ready_value, read_fleet_install_state, resolve_install_config_path, root_init_args,
+    add_local_root_create_cycles_arg, config_selection_error, discover_canic_config_choices,
+    fleet_install_state_path, icp_canister_command_in_network, icp_start_local_command,
+    icp_stop_command, install_build_session_id, parse_bootstrap_status_value,
+    parse_cycle_balance_response, parse_local_icp_autostart, parse_root_ready_value,
+    read_fleet_install_state, resolve_install_config_path, root_init_args,
     validate_expected_fleet_name, write_install_state,
 };
 use crate::release_set::configured_install_targets;
@@ -88,34 +88,6 @@ fn parse_bootstrap_status_accepts_icp_cli_response_candid() {
     assert!(!status.ready);
     assert_eq!(status.phase, "failed");
     assert_eq!(status.last_error.as_deref(), Some("registry phase failed"));
-}
-
-#[test]
-fn canic_build_command_targets_one_canister_per_call() {
-    let command = canic_build_target_command(
-        Path::new("/tmp/canic-icp-root"),
-        "ic",
-        "user_hub",
-        "install-root-test",
-    );
-
-    assert_eq!(
-        command
-            .get_args()
-            .map(|arg| arg.to_string_lossy().into_owned())
-            .collect::<Vec<_>>(),
-        ["build", "user_hub"]
-    );
-    assert!(
-        command
-            .get_envs()
-            .any(|(key, value)| key == "CANIC_BUILD_CONTEXT_SESSION" && value.is_some()),
-        "canic build must carry the shared build-session marker"
-    );
-    assert_eq!(
-        command_env(&command, "ICP_ENVIRONMENT").as_deref(),
-        Some("ic")
-    );
 }
 
 #[test]

@@ -5,8 +5,8 @@ use std::time::Duration;
 /// Workflow scheduling constants.
 ///
 
-/// Shared initial delay for workflow timers to allow init work to settle.
-pub const WORKFLOW_INIT_DELAY: Duration = Duration::from_secs(10);
+/// Shared initial delay for background workflow timers to allow init work to settle.
+pub const WORKFLOW_INIT_DELAY: Duration = Duration::from_secs(30);
 
 /// Shared cadence for cycle tracking (60 minutes).
 pub const WORKFLOW_CYCLE_TRACK_INTERVAL: Duration = Duration::from_hours(1);
@@ -16,9 +16,6 @@ pub const WORKFLOW_LOG_RETENTION_INTERVAL: Duration = Duration::from_mins(10);
 
 /// Shared cadence for intent cleanup (1 hour).
 pub const WORKFLOW_INTENT_CLEANUP_INTERVAL: Duration = Duration::from_hours(1);
-
-/// Pool timer initial delay (30 seconds) before first check.
-pub const WORKFLOW_POOL_INIT_DELAY: Duration = Duration::from_secs(30);
 
 /// Pool check cadence (30 minutes).
 pub const WORKFLOW_POOL_CHECK_INTERVAL: Duration = Duration::from_mins(30);

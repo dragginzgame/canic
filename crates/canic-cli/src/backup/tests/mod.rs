@@ -31,7 +31,7 @@ fn backup_usage_lists_commands_without_nested_flag_dump() {
     assert!(text.contains("status"));
 }
 
-// Ensure backup create options keep live execution behind an explicit dry-run.
+// Ensure backup create options parse planning and live-execution controls.
 #[test]
 fn parses_backup_create_options() {
     let options = BackupCreateOptions::parse([
@@ -54,23 +54,6 @@ fn parses_backup_create_options() {
     assert!(options.dry_run);
     assert_eq!(options.network, "local");
     assert_eq!(options.icp, "/bin/icp");
-}
-
-// Ensure create without dry-run remains fail-closed until authority execution exists.
-#[test]
-fn backup_create_requires_dry_run() {
-    let options = BackupCreateOptions {
-        fleet: "demo".to_string(),
-        subtree: None,
-        out: None,
-        dry_run: false,
-        network: "local".to_string(),
-        icp: "icp".to_string(),
-    };
-
-    let err = backup_create(&options).expect_err("non-dry-run create rejects");
-
-    assert!(matches!(err, BackupCommandError::CreateRequiresDryRun));
 }
 
 // Ensure dry-run persistence writes a plan and matching execution journal.

@@ -25,6 +25,31 @@ thread_local! {
 const TRACKER_INTERVAL: Duration = WORKFLOW_CYCLE_TRACK_INTERVAL;
 
 ///
+/// CycleTrackingMode
+///
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum CycleTrackingMode {
+    StandardOnly,
+    StandardWithAutoTopup,
+}
+
+impl CycleTrackingMode {
+    const fn auto_topup_enabled(self) -> bool {
+        matches!(self, Self::StandardWithAutoTopup)
+    }
+}
+
+///
+/// CycleBalanceSample
+///
+
+struct CycleBalanceSample {
+    timestamp_secs: u64,
+    cycles: Cycles,
+}
+
+///
 /// CycleTrackerWorkflow
 ///
 
@@ -34,37 +59,91 @@ impl CycleTrackerWorkflow {
     /// Start recurring cycle tracking.
     /// Safe to call multiple times.
     pub fn start() {
-        Self::start_internal(true);
+        Self::start_internal(CycleTrackingMode::StandardWithAutoTopup);
+    }
+
+    /// Record recurring cycle balance snapshots without top-up decisions.
+    /// Safe to call multiple times.
+    pub(crate) fn start_standard_only() {
+        Self::start_internal(CycleTrackingMode::StandardOnly);
     }
 
     // Start the recurring cycle tracker with the requested policy surface.
-    fn start_internal(with_auto_topup: bool) {
-        let _ = TimerWorkflow::set_guarded_interval(
+    fn start_internal(mode: CycleTrackingMode) {
+        let scheduled = match mode {
+            CycleTrackingMode::StandardOnly => Self::schedule_standard_interval(mode),
+            CycleTrackingMode::StandardWithAutoTopup => Self::schedule_topup_interval(mode),
+        };
+
+        if scheduled {
+            Self::record_standard_sample();
+        }
+    }
+
+    fn schedule_standard_interval(mode: CycleTrackingMode) -> bool {
+        TimerWorkflow::set_guarded_interval(
             &TIMER,
-            WORKFLOW_INIT_DELAY,
-            "cycles:init",
+            TRACKER_INTERVAL,
+            "cycles:interval:first",
             move || async move {
-                Self::track_internal(with_auto_topup);
+                Self::track_internal(mode);
+                let _ = Self::purge();
             },
             TRACKER_INTERVAL,
             "cycles:interval",
             move || async move {
-                Self::track_internal(with_auto_topup);
+                Self::track_internal(mode);
                 let _ = Self::purge();
             },
-        );
+        )
+    }
+
+    fn schedule_topup_interval(mode: CycleTrackingMode) -> bool {
+        TimerWorkflow::set_guarded_interval(
+            &TIMER,
+            WORKFLOW_INIT_DELAY,
+            "cycles:topup:first",
+            move || async move {
+                Self::evaluate_current_topup_policy();
+            },
+            TRACKER_INTERVAL,
+            "cycles:interval",
+            move || async move {
+                Self::track_internal(mode);
+                let _ = Self::purge();
+            },
+        )
     }
 
     // Record cycle balance and optionally evaluate auto-top-up policy.
-    fn track_internal(with_auto_topup: bool) {
-        let ts = IcOps::now_secs();
-        let cycles = MgmtOps::canister_cycle_balance();
+    fn track_internal(mode: CycleTrackingMode) {
+        let sample = Self::read_standard_sample();
 
-        if with_auto_topup && !EnvOps::is_root() {
-            Self::evaluate_policies(cycles.clone());
+        if mode.auto_topup_enabled() && !EnvOps::is_root() {
+            Self::evaluate_policies(sample.cycles.clone());
         }
 
-        CycleTrackerOps::record(ts, cycles);
+        CycleTrackerOps::record(sample.timestamp_secs, sample.cycles);
+    }
+
+    fn record_standard_sample() {
+        let sample = Self::read_standard_sample();
+        CycleTrackerOps::record(sample.timestamp_secs, sample.cycles);
+    }
+
+    fn read_standard_sample() -> CycleBalanceSample {
+        CycleBalanceSample {
+            timestamp_secs: IcOps::now_secs(),
+            cycles: MgmtOps::canister_cycle_balance(),
+        }
+    }
+
+    fn evaluate_current_topup_policy() {
+        if EnvOps::is_root() {
+            return;
+        }
+
+        Self::evaluate_policies(MgmtOps::canister_cycle_balance());
     }
 
     fn evaluate_policies(cycles: Cycles) {

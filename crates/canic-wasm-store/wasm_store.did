@@ -6,16 +6,16 @@ type BootstrapStatusResponse = record {
   ready : bool;
 };
 type CanicMetadataResponse = record {
-  package_name : text;
   package_description : text;
-  package_version : text;
-  canic_version : text;
   canister_version : nat64;
+  canic_version : text;
+  package_version : text;
+  package_name : text;
 };
 type CanisterInitPayload = record {
   env : EnvBootstrapArgs;
-  subnet_index : vec TopologyDirectChild;
-  app_index : vec TopologyDirectChild;
+  subnet_index : vec IndexEntryInput;
+  app_index : vec IndexEntryInput;
 };
 type CapabilityProof = variant {
   Structural;
@@ -34,12 +34,12 @@ type CapabilityRequestMetadata = record {
   nonce : blob;
 };
 type CapabilityService = variant { Root };
+type CycleTrackerEntry = record { cycles : nat; timestamp_secs : nat64 };
 type CyclesRequest = record {
   metadata : opt RootRequestMetadata;
   cycles : nat;
 };
 type CyclesResponse = record { cycles_transferred : nat };
-type IndexEntryInput = record { pid : principal; role : text };
 type EnvBootstrapArgs = record {
   prime_root_pid : opt principal;
   canister_role : opt text;
@@ -54,10 +54,10 @@ type ErrorCode = variant {
   PolicyRoleAlreadyRegistered;
   InvalidInput;
   InvariantViolation;
-  PolicyInstanceRequiresSingletonWithDirectory;
   PolicyShardRequiresSingletonWithSharding;
   NotFound;
   PolicySingletonAlreadyRegisteredUnderParent;
+  PolicyInstanceRequiresSingletonWithDirectory;
   Unauthorized;
   PolicyReplicaRequiresSingletonWithScaling;
   ResourceExhausted;
@@ -65,6 +65,7 @@ type ErrorCode = variant {
   Forbidden;
   Conflict;
 };
+type IndexEntryInput = record { pid : principal; role : text };
 type NonrootCyclesCapabilityEnvelopeV1 = record {
   "service" : CapabilityService;
   metadata : CapabilityRequestMetadata;
@@ -73,20 +74,32 @@ type NonrootCyclesCapabilityEnvelopeV1 = record {
   capability : CyclesRequest;
 };
 type NonrootCyclesCapabilityResponseV1 = record { response : CyclesResponse };
+type Page = record { total : nat64; entries : vec CycleTrackerEntry };
+type PageRequest = record { offset : nat64; limit : nat64 };
 type Result = variant { Ok : nat; Err : Error };
-type Result_1 = variant { Ok : NonrootCyclesCapabilityResponseV1; Err : Error };
-type Result_2 = variant { Ok; Err : Error };
-type Result_3 = variant { Ok : vec WasmStoreCatalogEntryResponse; Err : Error };
-type Result_4 = variant { Ok : TemplateChunkResponse; Err : Error };
-type Result_5 = variant { Ok : TemplateChunkSetInfoResponse; Err : Error };
-type Result_6 = variant { Ok : WasmStoreStatusResponse; Err : Error };
+type Result_1 = variant { Ok : Page; Err : Error };
+type Result_2 = variant { Ok : NonrootCyclesCapabilityResponseV1; Err : Error };
+type Result_3 = variant { Ok; Err : Error };
+type Result_4 = variant { Ok : vec WasmStoreCatalogEntryResponse; Err : Error };
+type Result_5 = variant { Ok : TemplateChunkResponse; Err : Error };
+type Result_6 = variant { Ok : TemplateChunkSetInfoResponse; Err : Error };
+type Result_7 = variant { Ok : WasmStoreStatusResponse; Err : Error };
 type RootRequestMetadata = record { request_id : blob; ttl_seconds : nat64 };
 type StateSnapshotInput = record {
-  subnet_state : opt null;
+  subnet_state : opt SubnetStateInput;
   app_state : opt AppStateInput;
   subnet_index : opt vec IndexEntryInput;
   app_index : opt vec IndexEntryInput;
 };
+type SubnetAuthStateInput = record {
+  delegated_root_public_key : opt SubnetRootPublicKeyInput;
+};
+type SubnetRootPublicKeyInput = record {
+  key_hash : blob;
+  key_name : text;
+  public_key_sec1 : blob;
+};
+type SubnetStateInput = record { auth : SubnetAuthStateInput };
 type TemplateChunkInput = record {
   chunk_index : nat32;
   template_id : text;
@@ -123,10 +136,9 @@ type TemplateManifestInput = record {
 // 
 type TemplateManifestState = variant { Blocked; Staged; Approved; Deprecated };
 type TopologyChildren = record {
-  children : vec TopologyDirectChild;
+  children : vec IndexEntryInput;
   parent_pid : principal;
 };
-type TopologyDirectChild = record { pid : principal; role : text };
 type TopologyPathNode = record {
   pid : principal;
   role : text;
@@ -179,22 +191,23 @@ type WasmStoreTemplateStatusResponse = record {
 service : (CanisterInitPayload, opt blob) -> {
   canic_bootstrap_status : () -> (BootstrapStatusResponse) query;
   canic_cycle_balance : () -> (Result) query;
+  canic_cycle_tracker : (PageRequest) -> (Result_1) query;
   canic_metadata : () -> (CanicMetadataResponse) query;
   canic_ready : () -> (bool) query;
   canic_response_capability_v1 : (NonrootCyclesCapabilityEnvelopeV1) -> (
-      Result_1,
+      Result_2,
     );
-  canic_sync_state : (StateSnapshotInput) -> (Result_2);
-  canic_sync_topology : (TopologySnapshotInput) -> (Result_2);
-  canic_wasm_store_begin_gc : () -> (Result_2);
-  canic_wasm_store_catalog : () -> (Result_3) query;
-  canic_wasm_store_chunk : (text, text, nat32) -> (Result_4);
-  canic_wasm_store_complete_gc : () -> (Result_2);
-  canic_wasm_store_info : (text, text) -> (Result_5);
-  canic_wasm_store_prepare : (TemplateChunkSetPrepareInput) -> (Result_5);
-  canic_wasm_store_prepare_gc : () -> (Result_2);
-  canic_wasm_store_publish_chunk : (TemplateChunkInput) -> (Result_2);
-  canic_wasm_store_stage_manifest : (TemplateManifestInput) -> (Result_2);
-  canic_wasm_store_status : () -> (Result_6) query;
+  canic_sync_state : (StateSnapshotInput) -> (Result_3);
+  canic_sync_topology : (TopologySnapshotInput) -> (Result_3);
+  canic_wasm_store_begin_gc : () -> (Result_3);
+  canic_wasm_store_catalog : () -> (Result_4) query;
+  canic_wasm_store_chunk : (text, text, nat32) -> (Result_5);
+  canic_wasm_store_complete_gc : () -> (Result_3);
+  canic_wasm_store_info : (text, text) -> (Result_6);
+  canic_wasm_store_prepare : (TemplateChunkSetPrepareInput) -> (Result_6);
+  canic_wasm_store_prepare_gc : () -> (Result_3);
+  canic_wasm_store_publish_chunk : (TemplateChunkInput) -> (Result_3);
+  canic_wasm_store_stage_manifest : (TemplateManifestInput) -> (Result_3);
+  canic_wasm_store_status : () -> (Result_7) query;
   icrc10_supported_standards : () -> (vec record { text; text }) query;
 }

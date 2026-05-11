@@ -1,3 +1,7 @@
+use crate::canister_build::{
+    CanisterBuildProfile, build_current_workspace_canister_artifact,
+    print_current_workspace_build_context_once,
+};
 use crate::icp;
 use crate::release_set::{
     LOCAL_ROOT_MIN_READY_CYCLES, configured_fleet_name, configured_install_targets,
@@ -12,6 +16,7 @@ use canic_core::{
 use config_selection::resolve_install_config_path;
 use std::{
     env,
+    ffi::OsString,
     path::{Path, PathBuf},
     process::Command,
     thread,
@@ -111,7 +116,6 @@ pub fn install_root(options: InstallRootOptions) -> Result<(), Box<dyn std::erro
     let build_session_id = install_build_session_id();
     let build_started_at = Instant::now();
     run_canic_build_targets(
-        &icp_root,
         &options.network,
         &build_targets,
         &build_session_id,
@@ -283,9 +287,8 @@ fn current_unix_secs() -> Result<u64, Box<dyn std::error::Error>> {
     Ok(SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs())
 }
 
-// Run one `canic build <canister>` call per configured local install target.
+// Build each configured local install target through the host builder.
 fn run_canic_build_targets(
-    icp_root: &Path,
     network: &str,
     targets: &[String],
     build_session_id: &str,
@@ -294,22 +297,14 @@ fn run_canic_build_targets(
     println!("Build artifacts:");
     println!("{:<16} {:<18} {:>10}", "CANISTER", "PROGRESS", "ELAPSED");
 
+    let _env = BuildEnvGuard::apply(network, build_session_id, config_path);
+    let profile = CanisterBuildProfile::current();
+    print_current_workspace_build_context_once(profile)?;
     for (index, target) in targets.iter().enumerate() {
-        let mut command = canic_build_target_command(icp_root, network, target, build_session_id);
-        command.env("CANIC_CONFIG_PATH", config_path);
         let started_at = Instant::now();
-        let output = command.output()?;
+        build_current_workspace_canister_artifact(target, profile)
+            .map_err(|err| format!("artifact build failed for {target}: {err}"))?;
         let elapsed = started_at.elapsed();
-
-        if !output.status.success() {
-            return Err(format!(
-                "canic build failed for {target}: {}\nstdout:\n{}\nstderr:\n{}",
-                output.status,
-                String::from_utf8_lossy(&output.stdout).trim(),
-                String::from_utf8_lossy(&output.stderr).trim()
-            )
-            .into());
-        }
 
         println!(
             "{:<16} {:<18} {:>9.2}s",
@@ -323,26 +318,54 @@ fn run_canic_build_targets(
     Ok(())
 }
 
-// Spawn one local `canic build <canister>` step without overriding the caller's
-// selected build profile environment.
-fn canic_build_target_command(
-    _icp_root: &Path,
-    network: &str,
-    target: &str,
-    build_session_id: &str,
-) -> Command {
-    let mut command = canic_command();
-    command
-        .env("CANIC_BUILD_CONTEXT_SESSION", build_session_id)
-        .env("ICP_ENVIRONMENT", network)
-        .args(["build", target]);
-    command
+struct BuildEnvGuard {
+    previous_network: Option<OsString>,
+    previous_session: Option<OsString>,
+    previous_config_path: Option<OsString>,
 }
 
-// Re-enter the current Canic CLI binary so install builds use the same public
-// build path operators can run directly.
-fn canic_command() -> Command {
-    std::env::current_exe().map_or_else(|_| Command::new("canic"), Command::new)
+impl BuildEnvGuard {
+    fn apply(network: &str, build_session_id: &str, config_path: &Path) -> Self {
+        let guard = Self {
+            previous_network: env::var_os("ICP_ENVIRONMENT"),
+            previous_session: env::var_os("CANIC_BUILD_CONTEXT_SESSION"),
+            previous_config_path: env::var_os("CANIC_CONFIG_PATH"),
+        };
+        set_env("ICP_ENVIRONMENT", network);
+        set_env("CANIC_BUILD_CONTEXT_SESSION", build_session_id);
+        set_env("CANIC_CONFIG_PATH", config_path);
+        guard
+    }
+}
+
+impl Drop for BuildEnvGuard {
+    fn drop(&mut self) {
+        restore_env("ICP_ENVIRONMENT", self.previous_network.take());
+        restore_env("CANIC_BUILD_CONTEXT_SESSION", self.previous_session.take());
+        restore_env("CANIC_CONFIG_PATH", self.previous_config_path.take());
+    }
+}
+
+fn set_env<K, V>(key: K, value: V)
+where
+    K: AsRef<std::ffi::OsStr>,
+    V: AsRef<std::ffi::OsStr>,
+{
+    // Install builds are single-threaded host orchestration. The environment is
+    // scoped by BuildEnvGuard so Cargo build scripts see the selected fleet.
+    unsafe {
+        env::set_var(key, value);
+    }
+}
+
+fn restore_env(key: &str, value: Option<OsString>) {
+    // See set_env: this restores the single-threaded install build context.
+    unsafe {
+        match value {
+            Some(value) => env::set_var(key, value),
+            None => env::remove_var(key),
+        }
+    }
 }
 
 fn install_build_session_id() -> String {

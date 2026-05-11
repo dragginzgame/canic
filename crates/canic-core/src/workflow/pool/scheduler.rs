@@ -31,7 +31,7 @@ use crate::{
         storage::pool::PoolOps,
     },
     workflow::{
-        config::{WORKFLOW_POOL_CHECK_INTERVAL, WORKFLOW_POOL_INIT_DELAY},
+        config::{WORKFLOW_INIT_DELAY, WORKFLOW_POOL_CHECK_INTERVAL},
         pool::{PoolWorkflow, admissibility::check_can_enter_pool},
         prelude::*,
         runtime::timer::TimerWorkflow,
@@ -73,7 +73,7 @@ impl PoolSchedulerWorkflow {
     pub fn start() {
         let _ = TimerWorkflow::set_guarded_interval(
             &TIMER,
-            WORKFLOW_POOL_INIT_DELAY,
+            WORKFLOW_INIT_DELAY,
             "pool:init",
             || async {
                 Self::schedule_if_pending();

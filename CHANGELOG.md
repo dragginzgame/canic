@@ -7,7 +7,15 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.34.x] - 2026-05-10 - Backup/restore rework
 
-- `0.34.3` makes `canic endpoints` print Candid method declarations by default and structured endpoint type JSON for automation, exposes module hashes in `canic list`, backup inspect plans, and manifests while removing the unused `wasm_hash` snapshot field, centralizes wasm/hash helpers, and keeps backup artifact checksums distinct from IC module hashes.
+- `0.34.4` fixes the new `canic metrics <fleet>` cycle-tracker path so non-root top-up policy checks cannot issue IC calls from init mode, standardizes delayed background workflow startup on 30 seconds, and separates the standard cycle-tracker endpoint wiring from topology views.
+
+```bash
+canic metrics demo
+canic metrics demo --since 6h
+canic metrics demo --json
+```
+
+- `0.34.3` makes endpoint output structured for automation, exposes IC module hashes in list/backup surfaces, adds fleet cycle-tracker metrics including the canonical `wasm_store`, removes the raw `canic build` wrapper, centralizes wasm/hash helpers, keeps artifact checksums distinct from module hashes, and adds the first executable `canic backup create` flow.
 
 - `0.34.2` aligns the root replay unauthorized-caller test with the current security metrics surface.
 

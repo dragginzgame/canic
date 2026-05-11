@@ -49,8 +49,9 @@ impl RuntimeWorkflow {
             )
         })?;
 
-        // start shared timers too
-        Self::start_all();
+        // start shared timers too, but root only records cycle balance samples
+        workflow::runtime::log::LogRetentionWorkflow::start();
+        workflow::runtime::cycles::CycleTrackerWorkflow::start_standard_only();
 
         // root-only services
         workflow::pool::scheduler::PoolSchedulerWorkflow::start();

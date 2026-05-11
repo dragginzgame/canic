@@ -20,7 +20,7 @@ The crate was historically known as **ICU** (Internet Computer Utilities). All c
 * **Self-validating delegated auth**: root signs shard certificates, shards mint user tokens, and verifiers validate token + embedded proof with local root/shard key material. Verifiers do not require proof fanout or proof caches.
 * **Stable memory helpers**: `ic_memory!`, `ic_memory_range!`, and `eager_static!` wrap stable structures and upgrade-safe runtime state.
 * **Thin-root install flow**: the `canic` CLI builds child WASMs, stages ordinary fleet artifacts through the implicit `wasm_store`, and keeps child artifacts out of the root Wasm.
-* **Operator CLI**: the `canic` binary builds Canic artifacts, manages local fleet configs and replica status, captures topology-aware canister snapshots, validates backup manifests, and drives guarded restore planning/journals.
+* **Operator CLI**: the `canic` binary manages local fleet configs and replica status, installs fleets, captures topology-aware canister snapshots, validates backup manifests, and drives guarded restore planning/journals.
 * **CI-oriented tooling**: Rust 2024, repo toolchain pinned to Rust `1.95.0`, published MSRV `1.91.0`, and standard `make` targets for format, lint, check, test, and build.
 
 ## 📁 Repository Layout
@@ -43,7 +43,7 @@ roles:
 
 **Host/operator crates**
 
-* `crates/canic-cli/` – published `canic` operator binary for build, install, fleet, replica/status, snapshot, backup, manifest, and restore workflows.
+* `crates/canic-cli/` – published `canic` operator binary for install, fleet, replica/status, snapshot, backup, manifest, and restore workflows.
 * `crates/canic-host/` – host-side build, install, fleet, and thin-root staging library used by `canic` and scripts.
 * `crates/canic-backup/` – backup/restore domain library for manifests, journals, topology snapshots, layout verification, and restore planning.
 
@@ -196,7 +196,6 @@ The normal interface is the `canic` binary:
 
 ```bash
 canic status
-canic build root
 canic install test
 ```
 
@@ -404,7 +403,6 @@ Use `PageRequest { limit, offset }` to avoid passing raw integers into queries.
 * Lint: `make clippy`
 * Test: `make test`
 * Build workspace release artifacts: `make build`
-* Build one local canister WASM: `canic build root`
 * Build local canister WASMs through ICP CLI hooks: `icp build --all`
 * Build example targets: `cargo build -p canic --examples`
 * Role-attestation PocketIC flow: `cargo test -p canic-tests --test pic_role_attestation capability_endpoint_policy_and_structural_paths -- --nocapture --test-threads=1`

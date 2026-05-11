@@ -807,7 +807,7 @@ else
     fi
     require_icp_tools
     build_and_cache_artifacts
-    record_verification "cargo build --target wasm32-unknown-unknown ... && canic build ..." "PASS" "built and cached raw/shrunk artifacts for $(profile_command_note)"
+    record_verification "cargo build --target wasm32-unknown-unknown ... && scripts/app/build.sh ..." "PASS" "built and cached raw/shrunk artifacts for $(profile_command_note)"
 fi
 
 if [ "$IC_WASM_AVAILABLE" -eq 1 ]; then

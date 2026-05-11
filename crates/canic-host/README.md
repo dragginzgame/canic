@@ -25,7 +25,7 @@ This README documents the lower-level host library surface.
 This crate is not a general deployment framework and it is not the main Canic
 application facade. It owns host-side build/install/fleet/staging utilities
 for standard Canic root/bootstrap/store flows. For normal operator use, prefer
-`canic build`, `canic install`, and other `canic` commands.
+`canic install` and other `canic` commands.
 
 It is also separate from:
 
@@ -37,8 +37,8 @@ It is also separate from:
 
 Public thin-root flow:
 
-- build visible canister artifacts through the backend builder used by `canic build`
-- build the implicit bootstrap `wasm_store` through the backend builder used by `canic build wasm_store`
+- build visible canister artifacts through the backend builder used by install
+- build the implicit bootstrap `wasm_store` through the same backend builder
 - emit the root staging manifest under `.icp/<network>/canisters/root/`
 - stage the ordinary fleet artifacts into `root`
 - resume root bootstrap
