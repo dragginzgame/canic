@@ -4,7 +4,10 @@ pub use integrity::{
     ArtifactIntegrityReport, BackupExecutionIntegrityReport, BackupIntegrityReport,
     resolve_backup_artifact_path,
 };
+use integrity::{verify_execution_integrity, verify_layout_integrity};
 
+#[cfg(test)]
+use crate::artifacts::ArtifactChecksum;
 use crate::{
     artifacts::ArtifactChecksumError,
     execution::{BackupExecutionJournal, BackupExecutionJournalError},
@@ -176,6 +179,12 @@ pub enum PersistenceError {
 
     #[error("journal artifact {canister_id} snapshot {snapshot_id} is not durable")]
     NonDurableArtifact {
+        canister_id: String,
+        snapshot_id: String,
+    },
+
+    #[error("journal artifact {canister_id} snapshot {snapshot_id} has no checksum")]
+    MissingJournalArtifactChecksum {
         canister_id: String,
         snapshot_id: String,
     },

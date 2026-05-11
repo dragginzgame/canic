@@ -1,6 +1,6 @@
+use crate::hash::sha256_hex;
 use candid::Principal;
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
 
 ///
 /// TopologyRecord
@@ -73,26 +73,6 @@ fn optional_principal(value: Option<Principal>) -> String {
 // Encode optional string fields with a stable null marker.
 fn optional_str(value: Option<&str>) -> &str {
     value.unwrap_or("null")
-}
-
-// Compute lowercase hexadecimal SHA-256 without adding another dependency.
-fn sha256_hex(bytes: &[u8]) -> String {
-    let digest = Sha256::digest(bytes);
-    let mut out = String::with_capacity(digest.len() * 2);
-    for byte in digest {
-        out.push(hex_char(byte >> 4));
-        out.push(hex_char(byte & 0x0f));
-    }
-    out
-}
-
-// Convert one four-bit nibble to lowercase hexadecimal.
-const fn hex_char(nibble: u8) -> char {
-    match nibble {
-        0..=9 => (b'0' + nibble) as char,
-        10..=15 => (b'a' + (nibble - 10)) as char,
-        _ => unreachable!(),
-    }
 }
 
 #[cfg(test)]

@@ -92,9 +92,10 @@ fn unauthorized_caller_is_denied_for_each_root_capability_variant() {
     }
 
     let metrics = root_capability_metrics(&setup);
-    assert!(
-        metrics.is_empty(),
-        "root capability metrics must stay empty when endpoint auth rejects calls before dispatch"
+    assert_eq!(
+        root_capability_count_total(&metrics),
+        0,
+        "root capability metrics must stay zero when endpoint auth rejects calls before dispatch"
     );
 }
 
@@ -717,11 +718,28 @@ fn metric_count(entries: &[MetricEntry], capability: &str, event: &str) -> u64 {
                 && entry.labels.get(2).is_some_and(|label| label == event_type)
                 && entry.labels.get(3).is_some_and(|label| label == outcome)
         })
-        .map(|entry| match entry.value {
-            MetricValue::Count(count) | MetricValue::CountAndU64 { count, .. } => count,
-            MetricValue::U128(_) => 0,
-        })
+        .map(metric_entry_count)
         .sum()
+}
+
+fn root_capability_count_total(entries: &[MetricEntry]) -> u64 {
+    entries
+        .iter()
+        .filter(|entry| {
+            entry
+                .labels
+                .first()
+                .is_some_and(|label| label == "root_capability")
+        })
+        .map(metric_entry_count)
+        .sum()
+}
+
+fn metric_entry_count(entry: &MetricEntry) -> u64 {
+    match entry.value {
+        MetricValue::Count(count) | MetricValue::CountAndU64 { count, .. } => count,
+        MetricValue::U128(_) => 0,
+    }
 }
 
 fn metric_event_parts(event: &str) -> (&'static str, &'static str) {

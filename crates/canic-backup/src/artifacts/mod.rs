@@ -1,3 +1,4 @@
+use crate::hash::{digest_hex, sha256_hex};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
@@ -135,31 +136,6 @@ fn collect_files(
         }
     }
     Ok(())
-}
-
-// Compute lowercase hexadecimal SHA-256 from in-memory bytes.
-fn sha256_hex(bytes: &[u8]) -> String {
-    digest_hex(Sha256::digest(bytes))
-}
-
-// Encode a finalized digest as lowercase hexadecimal.
-fn digest_hex(bytes: impl AsRef<[u8]>) -> String {
-    let bytes = bytes.as_ref();
-    let mut out = String::with_capacity(bytes.len() * 2);
-    for byte in bytes {
-        out.push(hex_char(byte >> 4));
-        out.push(hex_char(byte & 0x0f));
-    }
-    out
-}
-
-// Convert one four-bit nibble to lowercase hexadecimal.
-const fn hex_char(nibble: u8) -> char {
-    match nibble {
-        0..=9 => (b'0' + nibble) as char,
-        10..=15 => (b'a' + (nibble - 10)) as char,
-        _ => unreachable!(),
-    }
 }
 
 #[cfg(test)]
