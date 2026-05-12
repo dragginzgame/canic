@@ -7,7 +7,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.35.x] - 2026-05-12 - TBD
 
-- `0.35.1` hard-cuts managed child controller policy so every newly allocated child canister is controlled by its configured controllers, root, and its direct parent, including canisters reused from the pool.
+- `0.35.2` retains the installing/upgrading root controller in the runtime controller set used for newly allocated managed children.
+
+- `0.35.1` hard-cuts managed child controller policy so every newly allocated child canister is controlled by its configured controllers, root, and its direct parent, and tightens install build output with clearer context, per-canister artifact sizes, and explicit root top-up phase/amount messages.
 
 - `0.35.0` is a shiny new 35.0: it adds executable restore stop/start phases, cleans install build-context output, tightens local ICP network commands, and splits the backup domain planner, manifest, runner, restore planning, execution journal, and snapshot capture code into focused modules.
 

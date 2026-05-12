@@ -233,6 +233,7 @@ async fn create_canister_with_configured_controllers(
 }
 
 // Controller rule for non-root managed canisters: configured controllers + root + direct parent.
+// Root lifecycle appends the root controller principal to configured controllers at runtime.
 fn child_canister_controllers(parent_pid: Principal) -> Result<Vec<Principal>, InternalError> {
     Ok(child_canister_controllers_from_config(
         ConfigOps::controllers()?,
@@ -276,11 +277,18 @@ mod tests {
         assert_eq!(controllers, vec![p(1), p(2), p(3)]);
     }
 
-    // Enforce the 0.35.1 child-controller rule without disturbing configured order.
+    // Enforce the child-controller rule without disturbing configured order.
     #[test]
-    fn child_canister_controllers_include_root_and_direct_parent() {
+    fn child_canister_controllers_include_configured_root_and_direct_parent() {
         let controllers = child_canister_controllers_from_config(vec![p(7), p(2)], p(2), p(3));
 
         assert_eq!(controllers, vec![p(7), p(2), p(3)]);
+    }
+
+    #[test]
+    fn child_canister_controllers_deduplicate_parent_and_root_controller() {
+        let controllers = child_canister_controllers_from_config(vec![p(7), p(3)], p(2), p(3));
+
+        assert_eq!(controllers, vec![p(7), p(3), p(2)]);
     }
 }

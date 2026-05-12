@@ -2,6 +2,7 @@ use crate::canister_build::{
     CanisterBuildProfile, build_current_workspace_canister_artifact,
     current_workspace_build_context_once,
 };
+use crate::format::byte_size;
 use crate::icp;
 use crate::release_set::{
     LOCAL_ROOT_MIN_READY_CYCLES, configured_fleet_name, configured_install_targets,
@@ -95,11 +96,11 @@ pub fn install_root(options: InstallRootOptions) -> Result<(), Box<dyn std::erro
     validate_fleet_name(&fleet_name)?;
     let total_started_at = Instant::now();
     let mut timings = InstallTimingSummary::default();
+    let network = options.network.as_str();
+    let root_canister = options.root_canister.as_str();
 
-    println!(
-        "Installing fleet {} against ICP_ENVIRONMENT={}",
-        fleet_name, options.network
-    );
+    println!("Installing fleet {fleet_name}");
+    println!();
     ensure_icp_environment_ready(&options.network)?;
     let create_started_at = Instant::now();
     if Principal::from_text(&options.root_canister).is_err() {
@@ -143,7 +144,7 @@ pub fn install_root(options: InstallRootOptions) -> Result<(), Box<dyn std::erro
     )?;
     timings.install_root = install_started_at.elapsed();
     let fund_root_started_at = Instant::now();
-    ensure_local_root_min_cycles(&icp_root, &options.network, &options.root_canister)?;
+    ensure_local_root_min_cycles(&icp_root, network, root_canister, "pre-bootstrap")?;
     timings.fund_root = fund_root_started_at.elapsed();
 
     let manifest = load_root_release_set_manifest(&manifest_path)?;
@@ -170,7 +171,7 @@ pub fn install_root(options: InstallRootOptions) -> Result<(), Box<dyn std::erro
         return Err(err);
     }
     let finalize_funding_started_at = Instant::now();
-    ensure_local_root_min_cycles(&icp_root, &options.network, &options.root_canister)?;
+    ensure_local_root_min_cycles(&icp_root, network, root_canister, "post-ready")?;
     timings.finalize_root_funding = finalize_funding_started_at.elapsed();
 
     print_install_timing_summary(&timings, total_started_at.elapsed());
@@ -299,34 +300,46 @@ fn run_canic_build_targets(
         for line in context.lines() {
             println!("{line}");
         }
+        println!("config: {}", config_path.display());
+        println!("artifacts: {}", build_artifact_root(network)?.display());
         println!();
     }
 
-    let headers = ["CANISTER", "PROGRESS", "ELAPSED"];
+    println!("Building {} canisters", targets.len());
+    println!();
+    let headers = ["CANISTER", "PROGRESS", "WASM_GZ", "ELAPSED"];
     let planned_rows = targets
         .iter()
         .map(|target| {
             [
                 target.clone(),
                 progress_bar(targets.len(), targets.len(), 10),
+                "000.00 MiB".to_string(),
                 "0.00s".to_string(),
             ]
         })
         .collect::<Vec<_>>();
-    let alignments = [ColumnAlign::Left, ColumnAlign::Left, ColumnAlign::Right];
+    let alignments = [
+        ColumnAlign::Left,
+        ColumnAlign::Left,
+        ColumnAlign::Right,
+        ColumnAlign::Right,
+    ];
     let widths = table_widths(&headers, &planned_rows);
     println!("{}", render_table_row(&headers, &widths, &alignments));
     println!("{}", render_separator(&widths));
 
     for (index, target) in targets.iter().enumerate() {
         let started_at = Instant::now();
-        build_current_workspace_canister_artifact(target, profile)
+        let output = build_current_workspace_canister_artifact(target, profile)
             .map_err(|err| format!("artifact build failed for {target}: {err}"))?;
         let elapsed = started_at.elapsed();
+        let artifact_size = wasm_gz_size(&output.wasm_gz_path)?;
 
         let row = [
             target.clone(),
             progress_bar(index + 1, targets.len(), 10),
+            artifact_size,
             format!("{:.2}s", elapsed.as_secs_f64()),
         ];
         println!("{}", render_table_row(&row, &widths, &alignments));
@@ -334,6 +347,14 @@ fn run_canic_build_targets(
 
     println!();
     Ok(())
+}
+
+fn build_artifact_root(network: &str) -> Result<PathBuf, Box<dyn std::error::Error>> {
+    resolve_artifact_root(&icp_root()?, network)
+}
+
+fn wasm_gz_size(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
+    Ok(byte_size(std::fs::metadata(path)?.len()))
 }
 
 struct BuildEnvGuard {
@@ -411,6 +432,7 @@ fn ensure_local_root_min_cycles(
     icp_root: &Path,
     network: &str,
     root_canister: &str,
+    phase: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
     if network != "local" {
         return Ok(());
@@ -430,7 +452,8 @@ fn ensure_local_root_min_cycles(
     add_icp_environment_target(&mut command, network);
     run_command(&mut command)?;
     println!(
-        "Topped up local root from {} to at least {}",
+        "Local root cycles ({phase}): topped up {} ({} -> {} target)",
+        crate::format::cycles_tc(amount),
         crate::format::cycles_tc(current),
         crate::format::cycles_tc(LOCAL_ROOT_MIN_READY_CYCLES)
     );

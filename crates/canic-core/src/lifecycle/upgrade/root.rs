@@ -4,7 +4,7 @@ use crate::{
     },
     bootstrap,
     config::schema::ConfigModel,
-    lifecycle::{LifecyclePhase, lifecycle_trap},
+    lifecycle::{LifecyclePhase, config_with_current_root_controller, lifecycle_trap},
     ops::runtime::env::EnvOps,
     workflow,
 };
@@ -20,6 +20,7 @@ pub fn post_upgrade_root_canister_before_bootstrap(
         LifecycleMetricOutcome::Started,
     );
 
+    let config = config_with_current_root_controller(config);
     if let Err(err) = bootstrap::init_compiled_config(config, config_source) {
         LifecycleMetricsApi::record_runtime(
             LifecycleMetricPhase::PostUpgrade,

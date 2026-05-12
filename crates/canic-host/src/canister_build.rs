@@ -52,15 +52,22 @@ pub struct WorkspaceBuildContext {
 
 impl WorkspaceBuildContext {
     #[must_use]
-    pub fn lines(&self) -> [String; 6] {
-        [
-            "Canic build context:".to_string(),
+    pub fn lines(&self) -> Vec<String> {
+        let mut lines = vec![
+            "Canic build:".to_string(),
             format!("profile: {}", self.profile),
-            format!("requested_profile: {}", self.requested_profile),
-            format!("ICP_ENVIRONMENT: {}", self.network),
-            format!("CANIC_WORKSPACE_ROOT: {}", self.workspace_root.display()),
-            format!("CANIC_ICP_ROOT: {}", self.icp_root.display()),
-        ]
+            format!("network: {}", self.network),
+            format!("workspace: {}", self.workspace_root.display()),
+        ];
+
+        if self.requested_profile != "unset" {
+            lines.push(format!("requested profile: {}", self.requested_profile));
+        }
+        if self.icp_root != self.workspace_root {
+            lines.push(format!("icp root: {}", self.icp_root.display()));
+        }
+
+        lines
     }
 }
 

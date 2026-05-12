@@ -19,9 +19,16 @@ inspect only the files needed for the current task.
 - Moved the backup/restore design track forward to
   `docs/design/0.35-backup-restore/0.35-design.md` and marked the old 0.34
   draft as superseded.
+- Added the 0.35.2 controller-policy follow-up: root init and post-upgrade now
+  retain the installing or upgrading root controller in the runtime controller
+  set used for newly allocated managed children.
 - Hard-cut the managed child controller policy for 0.35.1: newly allocated
   non-root canisters now receive configured controllers, root, and their direct
   parent as controllers; pool reuse updates the controller set before install.
+- Tightened `canic install <fleet>` build output by hiding unset requested
+  profile noise, using operator labels for build context, omitting duplicate
+  ICP root context, adding `WASM_GZ` sizes to the build table, and making
+  local root top-up output show the checkpoint phase, exact amount, and target.
 - Added explicit restore-run stop/start phases so apply journals now schedule
   snapshot upload, target stop, snapshot load, target start, and verification
   operations instead of depending on manual canister state changes.
@@ -50,8 +57,9 @@ inspect only the files needed for the current task.
 - Replaced the separate generated `canic_canister_version` and
   `canic_standards` endpoints with a single `canic_metadata` endpoint that
   includes package metadata, Canic version, and IC canister version.
-- Local root installs now target at least `100.00 TC` on root, including
-  pre-bootstrap and post-ready top-ups for reused local root canisters.
+- Local root installs keep a `100.00 TC` root ready target, including
+  pre-bootstrap and post-ready top-up checkpoints for reused local root
+  canisters.
 - Grouped `snapshot`, `backup`, `manifest`, and `restore` under a dedicated
   backup/restore section in the top-level `canic help` output.
 - Fixed local `canic snapshot download <fleet>` target discovery to use decoded
@@ -220,6 +228,10 @@ inspect only the files needed for the current task.
 - `cargo test -p canic-core workflow::ic::provision::allocation -- --nocapture`
 - `cargo check -p canic-core`
 - `cargo clippy -p canic-core --all-targets -- -D warnings`
+- `cargo check -p canic-host`
+- `cargo test -p canic-host install_root -- --nocapture`
+- `cargo clippy -p canic-host --all-targets -- -D warnings`
+- `git diff --check`
 - `cargo test -p canic-backup restore -- --nocapture`
 - `cargo test -p canic-cli restore -- --nocapture`
 - `cargo check -p canic-backup -p canic-cli`
