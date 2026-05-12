@@ -89,7 +89,7 @@ impl ProvisionWorkflow {
             }
         };
 
-        let (pid, source) = allocate_canister(role).await?;
+        let (pid, source) = allocate_canister(role, parent_pid).await?;
 
         if let Err(err) = install_canister(pid, role, parent_pid, &module_source, extra_arg).await {
             log!(

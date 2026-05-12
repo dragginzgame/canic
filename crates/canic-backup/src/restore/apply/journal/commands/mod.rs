@@ -97,6 +97,26 @@ impl RestoreApplyRunnerCommand {
         config: &RestoreApplyCommandConfig,
     ) -> Option<Self> {
         match operation.operation {
+            RestoreApplyOperationKind::StopCanister => Some(Self {
+                program: config.program.clone(),
+                args: icp_canister_args(
+                    config,
+                    vec!["stop".to_string(), operation.target_canister.clone()],
+                ),
+                mutates: true,
+                requires_stopped_canister: false,
+                note: "stops the target canister before snapshot restore".to_string(),
+            }),
+            RestoreApplyOperationKind::StartCanister => Some(Self {
+                program: config.program.clone(),
+                args: icp_canister_args(
+                    config,
+                    vec!["start".to_string(), operation.target_canister.clone()],
+                ),
+                mutates: true,
+                requires_stopped_canister: false,
+                note: "starts the target canister after snapshot restore".to_string(),
+            }),
             RestoreApplyOperationKind::UploadSnapshot => {
                 let artifact_path = upload_artifact_command_path(operation, journal)?;
                 Some(Self {
@@ -168,7 +188,9 @@ const fn verification_command_note(
 ) -> &'static str {
     match operation {
         RestoreApplyOperationKind::VerifyFleet => fleet_note,
-        RestoreApplyOperationKind::UploadSnapshot
+        RestoreApplyOperationKind::StopCanister
+        | RestoreApplyOperationKind::StartCanister
+        | RestoreApplyOperationKind::UploadSnapshot
         | RestoreApplyOperationKind::LoadSnapshot
         | RestoreApplyOperationKind::VerifyMember => member_note,
     }

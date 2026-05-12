@@ -120,6 +120,10 @@ pub struct RestoreReadinessSummary {
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct RestoreOperationSummary {
+    #[serde(default)]
+    pub planned_canister_stops: usize,
+    #[serde(default)]
+    pub planned_canister_starts: usize,
     pub planned_snapshot_uploads: usize,
     pub planned_snapshot_loads: usize,
     pub planned_verification_checks: usize,

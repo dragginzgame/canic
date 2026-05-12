@@ -215,10 +215,12 @@ fn plan_includes_operation_summary() {
 
     let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
 
+    assert_eq!(plan.operation_summary.planned_canister_stops, 2);
+    assert_eq!(plan.operation_summary.planned_canister_starts, 2);
     assert_eq!(plan.operation_summary.planned_snapshot_uploads, 2);
     assert_eq!(plan.operation_summary.planned_snapshot_loads, 2);
     assert_eq!(plan.operation_summary.planned_verification_checks, 2);
-    assert_eq!(plan.operation_summary.planned_operations, 6);
+    assert_eq!(plan.operation_summary.planned_operations, 10);
 }
 
 // Ensure role-level verification checks are counted once per matching member.
@@ -305,7 +307,7 @@ fn plan_applies_member_verification_role_filters() {
     );
     assert_eq!(plan.verification_summary.member_checks, 3);
     assert_eq!(plan.verification_summary.total_checks, 3);
-    assert_eq!(dry_run.rendered_operations, 7);
+    assert_eq!(dry_run.rendered_operations, 11);
     assert_eq!(app_verification_kinds, ["status", "status"]);
 }
 

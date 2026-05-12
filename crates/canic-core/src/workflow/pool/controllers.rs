@@ -5,7 +5,7 @@ use crate::{
     workflow::prelude::*,
 };
 
-/// Return the controller set for pool canisters.
+/// Return the parked controller set for pool canisters.
 ///
 /// Mechanical helper used by workflow when creating or resetting
 /// pool canisters.
@@ -14,6 +14,7 @@ use crate::{
 /// - Includes all configured controllers from `Config`
 /// - Always includes the root canister as a controller
 /// - Deduplicates the root if already present
+/// - Does not include a direct parent until a pool canister is allocated
 ///
 /// This function:
 /// - Does NOT perform authorization checks

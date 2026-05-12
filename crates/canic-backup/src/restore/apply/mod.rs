@@ -32,6 +32,10 @@ pub struct RestoreApplyDryRun {
     pub ready: bool,
     pub readiness_reasons: Vec<String>,
     pub member_count: usize,
+    #[serde(default)]
+    pub planned_canister_stops: usize,
+    #[serde(default)]
+    pub planned_canister_starts: usize,
     pub planned_snapshot_uploads: usize,
     pub planned_snapshot_loads: usize,
     pub planned_verification_checks: usize,
@@ -63,11 +67,37 @@ impl RestoreApplyDryRun {
     // Build a no-mutation apply dry-run from a restore plan.
     fn from_validated_plan(plan: &RestorePlan) -> Self {
         let mut next_sequence = 0;
-        let mut operations = plan
-            .members
-            .iter()
-            .flat_map(|member| member_operations(member, &mut next_sequence))
-            .collect::<Vec<_>>();
+        let ordered_members = plan.ordered_members();
+        let mut operations = Vec::new();
+        append_member_phase(
+            &mut operations,
+            &mut next_sequence,
+            RestoreApplyOperationKind::UploadSnapshot,
+            ordered_members.iter().copied(),
+        );
+        append_member_phase(
+            &mut operations,
+            &mut next_sequence,
+            RestoreApplyOperationKind::StopCanister,
+            ordered_members.iter().copied(),
+        );
+        append_member_phase(
+            &mut operations,
+            &mut next_sequence,
+            RestoreApplyOperationKind::LoadSnapshot,
+            ordered_members.iter().copied(),
+        );
+        append_member_phase(
+            &mut operations,
+            &mut next_sequence,
+            RestoreApplyOperationKind::StartCanister,
+            ordered_members.iter().rev().copied(),
+        );
+        append_member_verification_operations(
+            &mut operations,
+            &mut next_sequence,
+            &ordered_members,
+        );
         append_fleet_verification_operations(plan, &mut operations, &mut next_sequence);
         let rendered_operations = operations.len();
         let operation_counts =
@@ -79,6 +109,8 @@ impl RestoreApplyDryRun {
             ready: plan.readiness_summary.ready,
             readiness_reasons: plan.readiness_summary.reasons.clone(),
             member_count: plan.member_count,
+            planned_canister_stops: plan.operation_summary.planned_canister_stops,
+            planned_canister_starts: plan.operation_summary.planned_canister_starts,
             planned_snapshot_uploads: plan.operation_summary.planned_snapshot_uploads,
             planned_snapshot_loads: plan.operation_summary.planned_snapshot_loads,
             planned_verification_checks: plan.operation_summary.planned_verification_checks,
@@ -222,38 +254,35 @@ pub struct RestoreApplyArtifactCheck {
     pub checksum_verified: bool,
 }
 
-// Build upload, load, and verification operations for one restore member.
-fn member_operations(
-    member: &RestorePlanMember,
+// Append a full member operation phase across the selected topology.
+fn append_member_phase<'a>(
+    operations: &mut Vec<RestoreApplyDryRunOperation>,
     next_sequence: &mut usize,
-) -> Vec<RestoreApplyDryRunOperation> {
-    let mut operations = Vec::new();
-    push_member_operation(
-        &mut operations,
-        next_sequence,
-        RestoreApplyOperationKind::UploadSnapshot,
-        member,
-        None,
-    );
-    push_member_operation(
-        &mut operations,
-        next_sequence,
-        RestoreApplyOperationKind::LoadSnapshot,
-        member,
-        None,
-    );
-
-    for check in &member.verification_checks {
-        push_member_operation(
-            &mut operations,
-            next_sequence,
-            RestoreApplyOperationKind::VerifyMember,
-            member,
-            Some(check),
-        );
+    operation: RestoreApplyOperationKind,
+    members: impl IntoIterator<Item = &'a RestorePlanMember>,
+) {
+    for member in members {
+        push_member_operation(operations, next_sequence, operation.clone(), member, None);
     }
+}
 
-    operations
+// Append member verification checks after restore mutations complete.
+fn append_member_verification_operations(
+    operations: &mut Vec<RestoreApplyDryRunOperation>,
+    next_sequence: &mut usize,
+    members: &[&RestorePlanMember],
+) {
+    for member in members {
+        for check in &member.verification_checks {
+            push_member_operation(
+                operations,
+                next_sequence,
+                RestoreApplyOperationKind::VerifyMember,
+                member,
+                Some(check),
+            );
+        }
+    }
 }
 
 // Append one member-level dry-run operation using the member's restore order.
@@ -267,6 +296,9 @@ fn push_member_operation(
     let sequence = *next_sequence;
     *next_sequence += 1;
 
+    let snapshot_id = operation_snapshot_id(&operation, member);
+    let artifact_path = operation_artifact_path(&operation, member);
+
     operations.push(RestoreApplyDryRunOperation {
         sequence,
         operation,
@@ -274,10 +306,32 @@ fn push_member_operation(
         source_canister: member.source_canister.clone(),
         target_canister: member.target_canister.clone(),
         role: member.role.clone(),
-        snapshot_id: Some(member.source_snapshot.snapshot_id.clone()),
-        artifact_path: Some(member.source_snapshot.artifact_path.clone()),
+        snapshot_id,
+        artifact_path,
         verification_kind: check.map(|check| check.kind.clone()),
     });
+}
+
+fn operation_snapshot_id(
+    operation: &RestoreApplyOperationKind,
+    member: &RestorePlanMember,
+) -> Option<String> {
+    matches!(
+        operation,
+        RestoreApplyOperationKind::UploadSnapshot | RestoreApplyOperationKind::LoadSnapshot
+    )
+    .then(|| member.source_snapshot.snapshot_id.clone())
+}
+
+fn operation_artifact_path(
+    operation: &RestoreApplyOperationKind,
+    member: &RestorePlanMember,
+) -> Option<String> {
+    matches!(
+        operation,
+        RestoreApplyOperationKind::UploadSnapshot | RestoreApplyOperationKind::LoadSnapshot
+    )
+    .then(|| member.source_snapshot.artifact_path.clone())
 }
 
 // Append fleet-level verification checks after all member operations.

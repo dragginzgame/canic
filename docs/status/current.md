@@ -9,13 +9,22 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
-- Active minor: `0.34.x`
-- Theme: rework backup/restore around topology-aware subtree planning and
-  root-stays-running coordination.
-- Current release-work area: `0.34.0` backup/restore rework foundation.
+- Active minor: `0.35.x`
+- Theme: get backup/restore working end-to-end around topology-aware plans,
+  executable journals, and clear host/backup boundaries.
+- Current release-work area: `0.35.0` backup/restore execution path.
 
 ## Recent Work
 
+- Moved the backup/restore design track forward to
+  `docs/design/0.35-backup-restore/0.35-design.md` and marked the old 0.34
+  draft as superseded.
+- Hard-cut the managed child controller policy for 0.35.1: newly allocated
+  non-root canisters now receive configured controllers, root, and their direct
+  parent as controllers; pool reuse updates the controller set before install.
+- Added explicit restore-run stop/start phases so apply journals now schedule
+  snapshot upload, target stop, snapshot load, target start, and verification
+  operations instead of depending on manual canister state changes.
 - Completed the 0.33 ICP CLI hard cut: `icp.yaml`, `.icp`, ICP CLI install/list/
   medic/snapshot/restore flows, native replica controls, and project status.
 - Removed default fleet/network state and the old public `canic network`
@@ -208,6 +217,13 @@ inspect only the files needed for the current task.
 ## Validation Recently Run
 
 - `cargo fmt --all`
+- `cargo test -p canic-core workflow::ic::provision::allocation -- --nocapture`
+- `cargo check -p canic-core`
+- `cargo clippy -p canic-core --all-targets -- -D warnings`
+- `cargo test -p canic-backup restore -- --nocapture`
+- `cargo test -p canic-cli restore -- --nocapture`
+- `cargo check -p canic-backup -p canic-cli`
+- `cargo clippy -p canic-backup -p canic-cli --all-targets -- -D warnings`
 - `cargo test -p canic-cli list::tests -- --nocapture`
 - `cargo test -p canic-cli snapshot -- --nocapture`
 - `cargo test -p canic-host snapshot_id -- --nocapture`

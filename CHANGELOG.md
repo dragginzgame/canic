@@ -5,9 +5,18 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## [0.34.x] - 2026-05-10 - Backup/restore rework
+## [0.35.x] - 2026-05-12 - TBD
 
-- `0.34.7` cleans install build-context output, tightens local ICP network commands, and splits the backup domain planner, manifest, runner, restore planning, execution journal, and snapshot capture code into focused modules.
+- `0.35.1` hard-cuts managed child controller policy so every newly allocated child canister is controlled by its configured controllers, root, and its direct parent, including canisters reused from the pool.
+
+- `0.35.0` is a shiny new 35.0: it adds executable restore stop/start phases, cleans install build-context output, tightens local ICP network commands, and splits the backup domain planner, manifest, runner, restore planning, execution journal, and snapshot capture code into focused modules.
+
+See detailed breakdown:
+[docs/changelog/0.35.md](docs/changelog/0.35.md)
+
+---
+
+## [0.34.x] - 2026-05-10 - Backup/restore rework
 
 - `0.34.6` is a CLI boundary cleanup slice that moves shared ICP response parsing, live registry parsing, and installed-fleet resolution into `canic-host`, removes the backup domain crate's dependency on host plumbing, splits endpoints/cycles/metrics/top-level CLI glue into focused modules, replaces the old `canic-cli::args` helper drawer with focused `canic-cli::cli` and `canic-cli::support` module trees, continues shrinking large CLI command modules such as backup, and clarifies local ICP replica state loss in `canic status`.
 

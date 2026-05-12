@@ -40,6 +40,10 @@ impl RestoreApplyJournalStateCounts {
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub struct RestoreApplyOperationKindCounts {
+    #[serde(default)]
+    pub canister_stops: usize,
+    #[serde(default)]
+    pub canister_starts: usize,
     pub snapshot_uploads: usize,
     pub snapshot_loads: usize,
     pub member_verifications: usize,
@@ -60,6 +64,16 @@ impl RestoreApplyOperationKindCounts {
 
     /// Validate this count object against concrete operations.
     pub fn validate_matches(&self, expected: &Self) -> Result<(), RestoreApplyJournalError> {
+        validate_apply_journal_count(
+            "operation_counts.canister_stops",
+            self.canister_stops,
+            expected.canister_stops,
+        )?;
+        validate_apply_journal_count(
+            "operation_counts.canister_starts",
+            self.canister_starts,
+            expected.canister_starts,
+        )?;
         validate_apply_journal_count(
             "operation_counts.snapshot_uploads",
             self.snapshot_uploads,
@@ -100,6 +114,8 @@ impl RestoreApplyOperationKindCounts {
     // Record one operation kind in the aggregate count object.
     const fn record(&mut self, operation: &RestoreApplyOperationKind) {
         match operation {
+            RestoreApplyOperationKind::StopCanister => self.canister_stops += 1,
+            RestoreApplyOperationKind::StartCanister => self.canister_starts += 1,
             RestoreApplyOperationKind::UploadSnapshot => self.snapshot_uploads += 1,
             RestoreApplyOperationKind::LoadSnapshot => self.snapshot_loads += 1,
             RestoreApplyOperationKind::VerifyMember => {

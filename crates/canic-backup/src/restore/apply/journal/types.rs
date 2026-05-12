@@ -94,6 +94,9 @@ impl RestoreApplyJournalOperation {
             RestoreApplyOperationKind::LoadSnapshot => self
                 .validate_required_field("operations[].snapshot_id", self.snapshot_id.as_ref())
                 .map(|_| ()),
+            RestoreApplyOperationKind::StopCanister | RestoreApplyOperationKind::StartCanister => {
+                Ok(())
+            }
             RestoreApplyOperationKind::VerifyMember | RestoreApplyOperationKind::VerifyFleet => {
                 let kind = self.validate_required_field(
                     "operations[].verification_kind",
@@ -263,6 +266,8 @@ pub enum RestoreApplyJournalError {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum RestoreApplyOperationKind {
+    StopCanister,
+    StartCanister,
     UploadSnapshot,
     LoadSnapshot,
     VerifyMember,

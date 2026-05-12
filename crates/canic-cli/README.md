@@ -78,6 +78,10 @@ while `canic list <name>` queries the deployed root registry for that fleet.
 Commands use network `local` unless you pass
 `--network <name>`.
 
+The local ICP CLI replica does not persist canister state across stop/start.
+If `canic status` reports a local fleet as `lost`, reinstall the fleet before
+running backup or restore commands against that local environment.
+
 List saved fleet configs:
 
 ```bash
@@ -112,27 +116,20 @@ verify --version` reports the binary version instead of running the command.
 
 ## Happy Path
 
-Capture a canister and its direct registered children:
+Create a topology-aware backup:
 
 ```bash
-canic snapshot download test \
-  --canister <canister-id> \
-  --root <root-canister-id> \
-  --include-children \
-  --out backups/<run-id>
+canic backup create test --dry-run
+canic backup create test --subtree app --out backups/<run-id>
 ```
-
-Use `--recursive` instead of `--include-children` to include all descendants.
-Use `--dry-run` to compute the target set without creating or downloading
-snapshots.
 
 Non-dry-run captures recompute the selected topology immediately before
 snapshot creation and fail if the topology hash changed since discovery. This
 keeps subtree backups from silently crossing a registry change.
 
-ICP CLI creates snapshots only for stopped canisters. Canic stops each canister
-before snapshot creation; pass `--resume-after-snapshot` when the CLI should
-start each canister again after its artifact is captured.
+ICP CLI creates snapshots only for stopped canisters. Canic stops selected
+members, creates snapshots, restarts them, downloads artifacts, verifies
+checksums, and writes manifest/journal state under the backup directory.
 
 Verify the captured backup directory:
 
@@ -216,10 +213,11 @@ canic restore run \
 
 The native runner checks journal readiness, claims the next operation, runs the
 generated `icp` command, marks the operation completed or failed, and persists
-the journal after each transition. `--max-steps 1` is the safest operational
-mode while validating a new restore path. Snapshot load operations first run
-`icp canister status` and fail before loading unless the target is visibly
-stopped.
+the journal after each transition. A normal ready journal includes snapshot
+upload, canister stop, snapshot load, canister start, and verification
+operations. `--max-steps 1` is the safest operational mode while validating a
+new restore path. Snapshot load operations first run `icp canister status` and
+fail before loading unless the target is visibly stopped.
 
 If a previous runner stopped after claiming work, release the pending operation
 back to ready:

@@ -49,15 +49,17 @@ fn run_restore_run_dry_run_writes_native_runner_preview() {
     assert_eq!(dry_run["ready"], true);
     assert_eq!(dry_run["complete"], false);
     assert_eq!(dry_run["attention_required"], false);
+    assert_eq!(dry_run["operation_counts"]["canister_stops"], 2);
+    assert_eq!(dry_run["operation_counts"]["canister_starts"], 2);
     assert_eq!(dry_run["operation_counts"]["snapshot_uploads"], 2);
     assert_eq!(dry_run["operation_counts"]["snapshot_loads"], 2);
     assert_eq!(dry_run["operation_counts"]["member_verifications"], 2);
     assert_eq!(dry_run["operation_counts"]["fleet_verifications"], 0);
     assert_eq!(dry_run["operation_counts"]["verification_operations"], 2);
-    assert_eq!(dry_run["progress"]["operation_count"], 6);
+    assert_eq!(dry_run["progress"]["operation_count"], 10);
     assert_eq!(dry_run["progress"]["completed_operations"], 0);
-    assert_eq!(dry_run["progress"]["remaining_operations"], 6);
-    assert_eq!(dry_run["progress"]["transitionable_operations"], 6);
+    assert_eq!(dry_run["progress"]["remaining_operations"], 10);
+    assert_eq!(dry_run["progress"]["transitionable_operations"], 10);
     assert_eq!(dry_run["progress"]["attention_operations"], 0);
     assert_eq!(dry_run["progress"]["completion_basis_points"], 0);
     assert_eq!(dry_run["pending_summary"]["pending_operations"], 0);
@@ -170,10 +172,10 @@ fn run_restore_run_unclaim_pending_marks_operation_ready() {
             .is_some_and(|updated_at| updated_at.starts_with("unix:"))
     );
     assert_eq!(run_summary["pending_operations"], 0);
-    assert_eq!(run_summary["ready_operations"], 6);
+    assert_eq!(run_summary["ready_operations"], 10);
     assert_eq!(run_summary["attention_required"], false);
     assert_eq!(updated.pending_operations, 0);
-    assert_eq!(updated.ready_operations, 6);
+    assert_eq!(updated.ready_operations, 10);
     assert_eq!(
         updated.operations[0].state,
         RestoreApplyOperationState::Ready
@@ -342,13 +344,15 @@ fn run_restore_run_execute_records_uploaded_snapshot_receipt() {
         Some("Uploaded snapshot: target-snap-root\n")
     );
     assert_eq!(
-        preview.command.expect("load command").args,
+        preview.command.expect("next upload command").args,
         vec![
             "canister".to_string(),
             "snapshot".to_string(),
-            "restore".to_string(),
-            ROOT.to_string(),
-            "target-snap-root".to_string(),
+            "upload".to_string(),
+            CHILD.to_string(),
+            "--input".to_string(),
+            "/tmp/canic-cli-restore-artifacts/artifacts/app".to_string(),
+            "--resume".to_string(),
         ]
     );
 }
@@ -421,7 +425,7 @@ fn run_restore_run_require_complete_writes_summary_then_fails() {
         err,
         RestoreCommandError::RestoreApplyIncomplete {
             completed_operations: 1,
-            operation_count: 6,
+            operation_count: 10,
             ..
         }
     ));

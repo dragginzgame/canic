@@ -38,9 +38,13 @@ fn run_restore_apply_dry_run_writes_operations() {
     assert_eq!(dry_run.backup_id.as_str(), "backup-test");
     assert!(dry_run.ready);
     assert_eq!(dry_run.member_count, 2);
+    assert_eq!(dry_run.planned_canister_stops, 2);
+    assert_eq!(dry_run.planned_canister_starts, 2);
     assert_eq!(dry_run.planned_snapshot_uploads, 2);
-    assert_eq!(dry_run.planned_operations, 6);
-    assert_eq!(dry_run.rendered_operations, 6);
+    assert_eq!(dry_run.planned_operations, 10);
+    assert_eq!(dry_run.rendered_operations, 10);
+    assert_eq!(dry_run_json["operation_counts"]["canister_stops"], 2);
+    assert_eq!(dry_run_json["operation_counts"]["canister_starts"], 2);
     assert_eq!(dry_run_json["operation_counts"]["snapshot_uploads"], 2);
     assert_eq!(dry_run_json["operation_counts"]["snapshot_loads"], 2);
     assert_eq!(dry_run_json["operation_counts"]["member_verifications"], 2);
@@ -53,8 +57,9 @@ fn run_restore_apply_dry_run_writes_operations() {
         dry_run_json["operations"][0]["operation"],
         "upload-snapshot"
     );
-    assert_eq!(dry_run_json["operations"][2]["operation"], "verify-member");
-    assert_eq!(dry_run_json["operations"][2]["verification_kind"], "status");
+    assert_eq!(dry_run_json["operations"][2]["operation"], "stop-canister");
+    assert_eq!(dry_run_json["operations"][8]["operation"], "verify-member");
+    assert_eq!(dry_run_json["operations"][8]["verification_kind"], "status");
 }
 
 // Ensure restore apply dry-run can validate artifacts under a backup directory.
@@ -103,7 +108,9 @@ fn run_restore_apply_dry_run_validates_backup_dir_artifacts() {
     assert!(validation.checksums_verified);
     assert_eq!(validation.members_with_expected_checksums, 2);
     assert_eq!(journal_json["ready"], true);
-    assert_eq!(journal_json["operation_count"], 6);
+    assert_eq!(journal_json["operation_count"], 10);
+    assert_eq!(journal_json["operation_counts"]["canister_stops"], 2);
+    assert_eq!(journal_json["operation_counts"]["canister_starts"], 2);
     assert_eq!(journal_json["operation_counts"]["snapshot_uploads"], 2);
     assert_eq!(journal_json["operation_counts"]["snapshot_loads"], 2);
     assert_eq!(journal_json["operation_counts"]["member_verifications"], 2);
@@ -112,7 +119,7 @@ fn run_restore_apply_dry_run_validates_backup_dir_artifacts() {
         journal_json["operation_counts"]["verification_operations"],
         2
     );
-    assert_eq!(journal_json["ready_operations"], 6);
+    assert_eq!(journal_json["ready_operations"], 10);
     assert_eq!(journal_json["blocked_operations"], 0);
     assert_eq!(journal_json["operations"][0]["state"], "ready");
 }

@@ -276,47 +276,40 @@ registry with `canic list test --network local`. List output uses the canister
 principal as the first column and renders parent/child relationships with
 box-drawing tree branches.
 
-Use `--root` to query a specific installed Canic root, and `--from` to render a
-subtree with the selected node as the displayed root:
+Use `--subtree` to render one live subtree with the selected node as the
+displayed root:
 
 ```bash
-canic list test --root root --from app --network local
-canic list test --from app --network local
+canic list test --subtree app --network local
 ```
 
 The CLI calls `canic_ready` on each listed canister and includes a `READY`
 column without failing the whole list for one unavailable canister.
 
-Plan or capture a canister plus its registered children:
+Plan or capture a topology-aware fleet backup:
 
 ```bash
-canic snapshot download test \
-  --canister <canister-id> \
-  --include-children \
-  --out backups/<run-id> \
-  --dry-run
+canic backup create test --dry-run
+canic backup create test --subtree app --out backups/<run-id>
 ```
 
-The installed fleet state supplies the root canister automatically; pass
-`--root <root-canister-id>` only when you need to override it. Omit
-`--canister` to snapshot the fleet root. Use `--recursive` for all descendants.
-Non-dry-run captures recompute the selected topology immediately before
-snapshot creation and fail if the topology hash changed since discovery.
-Because ICP CLI creates snapshots only for stopped canisters, Canic stops each
-canister before snapshot creation; pass `--resume-after-snapshot` when the CLI
-should start each canister again after capture.
+Non-dry-run backup creation recomputes the selected topology immediately before
+snapshot creation and fails if the topology hash changed since discovery.
+Because ICP CLI creates snapshots only for stopped canisters, Canic quiesces the
+selected members, captures snapshots, restarts them, downloads artifacts,
+verifies checksums, and writes the backup manifest plus execution journal.
 
 Validate a captured backup before restore planning:
 
 ```bash
-canic backup verify \
-  --dir backups/<run-id>
+canic backup verify backups/<run-id>
 ```
 
 Restore work is manifest/journal driven. `restore plan`, `restore apply
 --dry-run`, and `restore run --dry-run` are no-mutation paths for checking
 mappings, ordering, checksums, verification coverage, and runner commands
-before execution.
+before execution. `restore run --execute` advances the durable journal through
+upload, stop, snapshot load, start, and verification operations.
 
 See `crates/canic-cli/README.md` for the operator guide and
 `docs/operations/0.31-backup-restore-checklist.md` for the current

@@ -12,11 +12,15 @@ fn apply_dry_run_renders_ordered_member_operations() {
     assert_eq!(dry_run.backup_id.as_str(), "fbk_test_001");
     assert!(dry_run.ready);
     assert_eq!(dry_run.member_count, 2);
+    assert_eq!(dry_run.planned_canister_stops, 2);
+    assert_eq!(dry_run.planned_canister_starts, 2);
     assert_eq!(dry_run.planned_snapshot_uploads, 2);
     assert_eq!(dry_run.planned_snapshot_loads, 2);
     assert_eq!(dry_run.planned_verification_checks, 2);
-    assert_eq!(dry_run.planned_operations, 6);
-    assert_eq!(dry_run.rendered_operations, 6);
+    assert_eq!(dry_run.planned_operations, 10);
+    assert_eq!(dry_run.rendered_operations, 10);
+    assert_eq!(dry_run.operation_counts.canister_stops, 2);
+    assert_eq!(dry_run.operation_counts.canister_starts, 2);
     assert_eq!(dry_run.operation_counts.snapshot_uploads, 2);
     assert_eq!(dry_run.operation_counts.snapshot_loads, 2);
     assert_eq!(dry_run.operation_counts.member_verifications, 2);
@@ -37,17 +41,26 @@ fn apply_dry_run_renders_ordered_member_operations() {
         Some("artifacts/root".to_string())
     );
     assert_eq!(
-        operations[1].operation,
+        operations[2].operation,
+        RestoreApplyOperationKind::StopCanister
+    );
+    assert_eq!(
+        operations[4].operation,
         RestoreApplyOperationKind::LoadSnapshot
     );
     assert_eq!(
-        operations[2].operation,
+        operations[6].operation,
+        RestoreApplyOperationKind::StartCanister
+    );
+    assert_eq!(operations[6].source_canister, CHILD);
+    assert_eq!(
+        operations[8].operation,
         RestoreApplyOperationKind::VerifyMember
     );
-    assert_eq!(operations[2].verification_kind, Some("status".to_string()));
-    assert_eq!(operations[3].source_canister, CHILD);
+    assert_eq!(operations[8].verification_kind, Some("status".to_string()));
+    assert_eq!(operations[9].source_canister, CHILD);
     assert_eq!(
-        operations[5].operation,
+        operations[9].operation,
         RestoreApplyOperationKind::VerifyMember
     );
 }
@@ -65,12 +78,12 @@ fn apply_dry_run_renders_fleet_verification_operations() {
     let dry_run = RestoreApplyDryRun::from_plan(&plan);
 
     assert_eq!(plan.operation_summary.planned_verification_checks, 3);
-    assert_eq!(dry_run.rendered_operations, 7);
+    assert_eq!(dry_run.rendered_operations, 11);
     let operation = dry_run
         .operations
         .last()
         .expect("fleet verification operation should be rendered");
-    assert_eq!(operation.sequence, 6);
+    assert_eq!(operation.sequence, 10);
     assert_eq!(operation.operation, RestoreApplyOperationKind::VerifyFleet);
     assert_eq!(operation.source_canister, ROOT);
     assert_eq!(operation.target_canister, ROOT);
@@ -87,11 +100,11 @@ fn apply_dry_run_sequences_operations_in_topology_order() {
     let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
     let dry_run = RestoreApplyDryRun::from_plan(&plan);
 
-    assert_eq!(dry_run.rendered_operations, 6);
+    assert_eq!(dry_run.rendered_operations, 10);
     assert_eq!(dry_run.operations[0].sequence, 0);
     assert_eq!(dry_run.operations[2].sequence, 2);
-    assert_eq!(dry_run.operations[3].sequence, 3);
     assert_eq!(dry_run.operations[5].sequence, 5);
+    assert_eq!(dry_run.operations[9].sequence, 9);
 }
 
 // Ensure apply dry-runs can prove referenced artifacts exist and match checksums.

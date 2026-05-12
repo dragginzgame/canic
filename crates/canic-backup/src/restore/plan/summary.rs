@@ -113,9 +113,15 @@ pub(super) const fn restore_operation_summary(
     verification_summary: &RestoreVerificationSummary,
 ) -> RestoreOperationSummary {
     RestoreOperationSummary {
+        planned_canister_stops: member_count,
+        planned_canister_starts: member_count,
         planned_snapshot_uploads: member_count,
         planned_snapshot_loads: member_count,
         planned_verification_checks: verification_summary.total_checks,
-        planned_operations: member_count + member_count + verification_summary.total_checks,
+        planned_operations: member_count
+            + member_count
+            + member_count
+            + member_count
+            + verification_summary.total_checks,
     }
 }

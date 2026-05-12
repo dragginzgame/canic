@@ -40,8 +40,8 @@ fn apply_journal_marks_validated_operations_ready() {
     assert_eq!(journal.backup_id.as_str(), "fbk_test_001");
     assert!(journal.ready);
     assert!(journal.blocked_reasons.is_empty());
-    assert_eq!(journal.operation_count, 6);
-    assert_eq!(journal.ready_operations, 6);
+    assert_eq!(journal.operation_count, 10);
+    assert_eq!(journal.ready_operations, 10);
     assert_eq!(journal.blocked_operations, 0);
     assert_eq!(journal.operations[0].sequence, 0);
     assert_eq!(
@@ -62,7 +62,7 @@ fn apply_journal_blocks_without_artifact_validation() {
 
     assert!(!journal.ready);
     assert_eq!(journal.ready_operations, 0);
-    assert_eq!(journal.blocked_operations, 6);
+    assert_eq!(journal.blocked_operations, 10);
     assert!(
         journal
             .blocked_reasons
@@ -107,17 +107,19 @@ fn apply_journal_report_exposes_progress_and_next_transition() {
     assert_eq!(report.backup_id.as_str(), "fbk_test_001");
     assert!(report.ready);
     assert!(!report.complete);
-    assert_eq!(report.operation_count, 6);
+    assert_eq!(report.operation_count, 10);
+    assert_eq!(report.operation_counts.canister_stops, 2);
+    assert_eq!(report.operation_counts.canister_starts, 2);
     assert_eq!(report.operation_counts.snapshot_uploads, 2);
     assert_eq!(report.operation_counts.snapshot_loads, 2);
     assert_eq!(report.operation_counts.member_verifications, 2);
     assert_eq!(report.operation_counts.fleet_verifications, 0);
     assert_eq!(report.operation_counts.verification_operations, 2);
     assert_eq!(journal.operation_counts, report.operation_counts);
-    assert_eq!(report.progress.operation_count, 6);
+    assert_eq!(report.progress.operation_count, 10);
     assert_eq!(report.progress.completed_operations, 0);
-    assert_eq!(report.progress.remaining_operations, 6);
-    assert_eq!(report.progress.transitionable_operations, 6);
+    assert_eq!(report.progress.remaining_operations, 10);
+    assert_eq!(report.progress.transitionable_operations, 10);
     assert_eq!(report.progress.attention_operations, 0);
     assert_eq!(report.progress.completion_basis_points, 0);
     assert_eq!(report.pending_summary.pending_operations, 0);
@@ -126,7 +128,7 @@ fn apply_journal_report_exposes_progress_and_next_transition() {
     assert_eq!(report.pending_summary.pending_operation, None);
     assert_eq!(report.pending_summary.pending_updated_at, None);
     assert!(!report.pending_summary.pending_updated_at_known);
-    assert_eq!(report.ready_operations, 6);
+    assert_eq!(report.ready_operations, 10);
     let transition = report.next_transition.expect("next transition");
     assert_eq!(transition.sequence, 0);
     assert_eq!(transition.state, RestoreApplyOperationState::Ready);
@@ -173,8 +175,11 @@ fn apply_journal_command_preview_reports_full_ready_row() {
     let operation = preview.operation.expect("next operation");
     assert_eq!(operation.sequence, 1);
     assert_eq!(operation.state, RestoreApplyOperationState::Ready);
-    assert_eq!(operation.operation, RestoreApplyOperationKind::LoadSnapshot);
-    assert_eq!(operation.source_canister, ROOT);
+    assert_eq!(
+        operation.operation,
+        RestoreApplyOperationKind::UploadSnapshot
+    );
+    assert_eq!(operation.source_canister, CHILD);
 }
 
 // Ensure blocked journals report no preview operation.
@@ -324,7 +329,7 @@ fn apply_journal_command_preview_reports_load_command() {
     let mut journal = RestoreApplyJournal::from_dry_run(&dry_run);
     journal
         .mark_operation_completed_at(0, None)
-        .expect("mark upload completed");
+        .expect("mark root upload completed");
     journal
         .record_operation_receipt(RestoreApplyOperationReceipt::command_completed(
             &journal.operations[0],
@@ -347,7 +352,39 @@ fn apply_journal_command_preview_reports_load_command() {
             1,
             Some("target-snap-root".to_string()),
         ))
-        .expect("record upload receipt");
+        .expect("record root upload receipt");
+    journal
+        .mark_operation_completed_at(1, None)
+        .expect("mark child upload completed");
+    journal
+        .record_operation_receipt(RestoreApplyOperationReceipt::command_completed(
+            &journal.operations[1],
+            RestoreApplyRunnerCommand {
+                program: "icp".to_string(),
+                args: vec![
+                    "canister".to_string(),
+                    "snapshot".to_string(),
+                    "upload".to_string(),
+                    CHILD.to_string(),
+                    "artifacts/child".to_string(),
+                ],
+                mutates: true,
+                requires_stopped_canister: false,
+                note: "Upload snapshot artifact to target canister".to_string(),
+            },
+            "exit:0".to_string(),
+            Some("unix:1".to_string()),
+            RestoreApplyCommandOutputPair::from_bytes(b"target-snap-child\n", b"", 1024),
+            1,
+            Some("target-snap-child".to_string()),
+        ))
+        .expect("record child upload receipt");
+    journal
+        .mark_operation_completed_at(2, None)
+        .expect("mark root stop completed");
+    journal
+        .mark_operation_completed_at(3, None)
+        .expect("mark child stop completed");
     let preview = journal.next_command_preview();
 
     fs::remove_dir_all(root).expect("remove temp root");
@@ -393,7 +430,39 @@ fn apply_journal_load_command_requires_uploaded_snapshot_receipt() {
     let mut journal = RestoreApplyJournal::from_dry_run(&dry_run);
     journal
         .mark_operation_completed_at(0, None)
-        .expect("mark upload completed");
+        .expect("mark root upload completed");
+    journal
+        .mark_operation_completed_at(1, None)
+        .expect("mark child upload completed");
+    journal
+        .record_operation_receipt(RestoreApplyOperationReceipt::command_completed(
+            &journal.operations[1],
+            RestoreApplyRunnerCommand {
+                program: "icp".to_string(),
+                args: vec![
+                    "canister".to_string(),
+                    "snapshot".to_string(),
+                    "upload".to_string(),
+                    CHILD.to_string(),
+                    "artifacts/child".to_string(),
+                ],
+                mutates: true,
+                requires_stopped_canister: false,
+                note: "Upload snapshot artifact to target canister".to_string(),
+            },
+            "exit:0".to_string(),
+            Some("unix:1".to_string()),
+            RestoreApplyCommandOutputPair::from_bytes(b"target-snap-child\n", b"", 1024),
+            1,
+            Some("target-snap-child".to_string()),
+        ))
+        .expect("record child upload receipt");
+    journal
+        .mark_operation_completed_at(2, None)
+        .expect("mark root stop completed");
+    journal
+        .mark_operation_completed_at(3, None)
+        .expect("mark child stop completed");
     let preview = journal.next_command_preview();
 
     fs::remove_dir_all(root).expect("remove temp root");
@@ -532,6 +601,8 @@ fn apply_journal_validation_rejects_count_mismatch() {
 fn apply_journal_validation_rejects_operation_kind_count_mismatch() {
     let mut journal = command_preview_journal(RestoreApplyOperationKind::UploadSnapshot, None);
     journal.operation_counts = RestoreApplyOperationKindCounts {
+        canister_stops: 0,
+        canister_starts: 0,
         snapshot_uploads: 0,
         snapshot_loads: 1,
         member_verifications: 0,
@@ -819,7 +890,7 @@ fn apply_journal_mark_pending_rejects_out_of_order_operation() {
         }
     ));
     assert_eq!(journal.pending_operations, 0);
-    assert_eq!(journal.ready_operations, 6);
+    assert_eq!(journal.ready_operations, 10);
 }
 
 // Ensure completing a journal operation updates counts and advances status.
@@ -859,7 +930,7 @@ fn apply_journal_mark_completed_advances_next_ready_operation() {
         RestoreApplyOperationState::Completed
     );
     assert_eq!(journal.completed_operations, 1);
-    assert_eq!(journal.ready_operations, 5);
+    assert_eq!(journal.ready_operations, 9);
     assert_eq!(
         report
             .next_transition
@@ -868,10 +939,10 @@ fn apply_journal_mark_completed_advances_next_ready_operation() {
         Some(1)
     );
     assert_eq!(report.progress.completed_operations, 1);
-    assert_eq!(report.progress.remaining_operations, 5);
-    assert_eq!(report.progress.transitionable_operations, 5);
+    assert_eq!(report.progress.remaining_operations, 9);
+    assert_eq!(report.progress.transitionable_operations, 9);
     assert_eq!(report.progress.attention_operations, 0);
-    assert_eq!(report.progress.completion_basis_points, 1666);
+    assert_eq!(report.progress.completion_basis_points, 1000);
 }
 
 // Ensure journal transitions cannot skip earlier ready operations.
@@ -913,7 +984,7 @@ fn apply_journal_mark_completed_rejects_out_of_order_operation() {
         }
     ));
     assert_eq!(journal.completed_operations, 0);
-    assert_eq!(journal.ready_operations, 6);
+    assert_eq!(journal.ready_operations, 10);
 }
 
 // Ensure failed journal operations carry a reason and update counts.
@@ -956,7 +1027,7 @@ fn apply_journal_mark_failed_records_reason() {
         vec!["icp-load-failed".to_string()]
     );
     assert_eq!(journal.failed_operations, 1);
-    assert_eq!(journal.ready_operations, 5);
+    assert_eq!(journal.ready_operations, 9);
 }
 
 // Ensure failed operations can move back to ready for a retry.
@@ -993,7 +1064,7 @@ fn apply_journal_retry_failed_operation_marks_ready() {
 
     fs::remove_dir_all(root).expect("remove temp root");
     assert_eq!(journal.failed_operations, 0);
-    assert_eq!(journal.ready_operations, 6);
+    assert_eq!(journal.ready_operations, 10);
     assert_eq!(
         journal.operations[0].state,
         RestoreApplyOperationState::Ready
