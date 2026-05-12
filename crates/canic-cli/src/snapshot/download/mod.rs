@@ -6,6 +6,7 @@ use crate::{
     cli::globals::{internal_icp_arg, internal_network_arg},
 };
 use canic_backup::{
+    registry::RegistryEntry as BackupRegistryEntry,
     snapshot::{
         SnapshotDownloadConfig, SnapshotDownloadResult, SnapshotDriver, SnapshotDriverError,
         SnapshotLifecycleMode,
@@ -15,7 +16,7 @@ use canic_backup::{
 use canic_host::{
     icp::{IcpCli, IcpCommandError},
     install_root::read_named_fleet_install_state,
-    registry::parse_registry_entries,
+    registry::{RegistryEntry as HostRegistryEntry, parse_registry_entries},
     replica_query,
 };
 use clap::Command as ClapCommand;
@@ -236,8 +237,7 @@ fn validate_fleet_membership_json(
     canister: &str,
     registry_json: &str,
 ) -> Result<(), SnapshotCommandError> {
-    let entries = parse_registry_entries(registry_json)
-        .map_err(|err| SnapshotCommandError::SnapshotDownload(err.into()))?;
+    let entries = parse_registry_entries(registry_json).map_err(SnapshotCommandError::Registry)?;
     if entries.iter().any(|entry| entry.pid == canister) {
         return Ok(());
     }
@@ -267,8 +267,14 @@ struct IcpSnapshotDriver<'a> {
 }
 
 impl SnapshotDriver for IcpSnapshotDriver<'_> {
-    fn registry_json(&mut self, root: &str) -> Result<String, SnapshotDriverError> {
-        call_subnet_registry(self.request, root).map_err(driver_error)
+    fn registry_entries(
+        &mut self,
+        root: &str,
+    ) -> Result<Vec<BackupRegistryEntry>, SnapshotDriverError> {
+        let registry_json = call_subnet_registry(self.request, root).map_err(driver_error)?;
+        let entries = parse_registry_entries(&registry_json)
+            .map_err(|err| driver_error(SnapshotCommandError::Registry(err)))?;
+        Ok(backup_registry_entries(&entries))
     }
 
     fn create_snapshot(&mut self, canister_id: &str) -> Result<String, SnapshotDriverError> {
@@ -409,6 +415,19 @@ fn stop_canister_command_display(request: &ResolvedSnapshotDownload, canister_id
 
 fn start_canister_command_display(request: &ResolvedSnapshotDownload, canister_id: &str) -> String {
     icp(request).start_canister_display(canister_id)
+}
+
+fn backup_registry_entries(entries: &[HostRegistryEntry]) -> Vec<BackupRegistryEntry> {
+    entries
+        .iter()
+        .map(|entry| BackupRegistryEntry {
+            pid: entry.pid.clone(),
+            role: entry.role.clone(),
+            kind: entry.kind.clone(),
+            parent_pid: entry.parent_pid.clone(),
+            module_hash: entry.module_hash.clone(),
+        })
+        .collect()
 }
 
 fn backup_id(request: &ResolvedSnapshotDownload) -> String {

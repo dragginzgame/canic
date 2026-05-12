@@ -7,13 +7,16 @@ use crate::{
 };
 use canic_host::{
     icp::IcpCli,
-    install_root::{discover_current_canic_config_choices, read_named_fleet_install_state},
-    registry::{RegistryEntry, parse_registry_entries},
+    install_root::discover_current_canic_config_choices,
+    installed_fleet::{
+        InstalledFleetError, InstalledFleetRequest, read_installed_fleet_state,
+        resolve_installed_fleet,
+    },
+    registry::RegistryEntry,
     release_set::{
         configured_bootstrap_roles, configured_fleet_name, configured_fleet_roles,
         display_workspace_path, workspace_root,
     },
-    replica_query,
     table::{ColumnAlign, render_table},
 };
 use clap::Command as ClapCommand;
@@ -25,9 +28,15 @@ const DEPLOYED_HEADER: &str = "DEPLOYED";
 const CONFIG_HEADER: &str = "CONFIG";
 const CANISTERS_HEADER: &str = "CANISTERS";
 const ROOT_HEADER: &str = "ROOT";
+const LOCAL_LOST_DEPLOYMENT: &str = "lost";
+const LOCAL_LOST_NOTE: &str = "Note: local ICP CLI replica state is not persistent; a lost local fleet means the recorded root is gone. Run `canic install <fleet>` to recreate it.";
 const STATUS_HELP_AFTER: &str = "\
 Examples:
-  canic status";
+  canic status
+
+Note:
+  The local ICP CLI replica does not persist canister state across stop/start.
+  If a local fleet is shown as lost, run `canic install <fleet>` to recreate it.";
 
 ///
 /// StatusCommandError
@@ -123,11 +132,11 @@ fn load_status_report(options: &StatusOptions) -> Result<StatusReport, StatusCom
     let choices = discover_current_canic_config_choices()?;
     let icp_cli = load_icp_cli_version(options);
     let replica = load_replica_status(options);
-    let verify_local_roots = replica_query::should_use_local_replica_query(Some(&options.network))
-        && matches!(replica, ReplicaStatus::Running);
+    let verify_local_roots =
+        options.network == local_network() && matches!(replica, ReplicaStatus::Running);
     let mut fleets = choices
         .iter()
-        .map(|path| status_fleet_row(&workspace_root, path, &options.network, verify_local_roots))
+        .map(|path| status_fleet_row(&workspace_root, path, options, verify_local_roots))
         .collect::<Vec<_>>();
     fleets.sort_by(|left, right| left.fleet.cmp(&right.fleet));
 
@@ -157,7 +166,7 @@ fn load_replica_status(options: &StatusOptions) -> ReplicaStatus {
 fn status_fleet_row(
     workspace_root: &Path,
     path: &Path,
-    network: &str,
+    options: &StatusOptions,
     verify_local_root: bool,
 ) -> StatusFleetRow {
     let Ok(fleet) = configured_fleet_name(path) else {
@@ -169,20 +178,22 @@ fn status_fleet_row(
             root: "-".to_string(),
         };
     };
-    let install_state = read_named_fleet_install_state(network, &fleet);
+    let install_state = read_installed_fleet_state(&options.network, &fleet);
     let configured_roles = configured_fleet_roles(path);
     let bootstrap_roles = configured_bootstrap_roles(path);
     let (deployed, root) = match install_state {
-        Ok(Some(state)) => (
+        Ok(state) => (
             deployed_label(
-                network,
+                &fleet,
+                &options.network,
+                &options.icp,
                 &state.root_canister_id,
                 verify_local_root,
                 bootstrap_roles.as_deref().unwrap_or(&[]),
             ),
             state.root_canister_id,
         ),
-        Ok(None) => ("no".to_string(), "-".to_string()),
+        Err(InstalledFleetError::NoInstalledFleet { .. }) => ("no".to_string(), "-".to_string()),
         Err(_) => ("error".to_string(), "-".to_string()),
     };
 
@@ -197,25 +208,31 @@ fn status_fleet_row(
 }
 
 fn deployed_label(
+    fleet: &str,
     network: &str,
+    icp: &str,
     root: &str,
     verify_local_root: bool,
     configured_roles: &[String],
 ) -> String {
-    if !replica_query::should_use_local_replica_query(Some(network)) {
+    if network != local_network() {
         return "yes".to_string();
     }
     if !verify_local_root {
         return "unknown".to_string();
     }
 
-    match replica_query::query_subnet_registry_json(Some(network), root) {
-        Ok(registry_json) => match parse_registry_entries(&registry_json) {
-            Ok(registry) => classify_local_deployment(configured_roles, &registry).to_string(),
-            Err(_) => "error".to_string(),
-        },
-        Err(err) if is_canister_not_found_error(&err.to_string()) => "stale".to_string(),
-        Err(_) => "error".to_string(),
+    match resolve_installed_fleet(&InstalledFleetRequest {
+        fleet: fleet.to_string(),
+        network: network.to_string(),
+        icp: icp.to_string(),
+        detect_lost_local_root: true,
+    }) {
+        Ok(resolution) if resolution.state.root_canister_id == root => {
+            classify_local_deployment(configured_roles, &resolution.registry.entries).to_string()
+        }
+        Err(InstalledFleetError::LostLocalFleet { .. }) => LOCAL_LOST_DEPLOYMENT.to_string(),
+        Ok(_) | Err(_) => "error".to_string(),
     }
 }
 
@@ -238,10 +255,6 @@ fn classify_local_deployment(
     }
 }
 
-fn is_canister_not_found_error(error: &str) -> bool {
-    error.contains("Canister ") && error.contains(" not found")
-}
-
 fn render_status_report(report: &StatusReport) -> String {
     let configured = report.fleets.len();
     let deployed = deployed_count(&report.fleets);
@@ -258,8 +271,20 @@ fn render_status_report(report: &StatusReport) -> String {
         lines.push(String::new());
         lines.push(render_fleet_table(&report.fleets));
     }
+    if has_lost_local_fleet(report) {
+        lines.push(String::new());
+        lines.push(LOCAL_LOST_NOTE.to_string());
+    }
 
     lines.join("\n")
+}
+
+fn has_lost_local_fleet(report: &StatusReport) -> bool {
+    report.network == "local"
+        && report
+            .fleets
+            .iter()
+            .any(|fleet| fleet.deployed == LOCAL_LOST_DEPLOYMENT)
 }
 
 fn deployed_count(fleets: &[StatusFleetRow]) -> usize {

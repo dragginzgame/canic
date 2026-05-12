@@ -322,7 +322,7 @@ fn resolve_cycles_fleet(
         fleet: options.fleet.clone(),
         network: options.network.clone(),
         icp: options.icp.clone(),
-        detect_stale_local_root: false,
+        detect_lost_local_root: false,
     })
     .map_err(cycles_installed_fleet_error)
 }
@@ -337,7 +337,7 @@ fn cycles_installed_fleet_error(error: InstalledFleetError) -> CyclesCommandErro
         InstalledFleetError::IcpFailed { command, stderr } => {
             CyclesCommandError::IcpFailed { command, stderr }
         }
-        InstalledFleetError::StaleLocalFleet { root, .. } => {
+        InstalledFleetError::LostLocalFleet { root, .. } => {
             CyclesCommandError::ReplicaQuery(format!("root canister {root} is not present"))
         }
         InstalledFleetError::Registry(error) => CyclesCommandError::Registry(error),

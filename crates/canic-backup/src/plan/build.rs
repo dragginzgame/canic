@@ -6,9 +6,9 @@ use super::{
 use crate::{
     discovery::{SnapshotTarget, targets_from_registry},
     manifest::IdentityMode,
+    registry::RegistryEntry,
 };
 use candid::Principal;
-use canic_host::registry::RegistryEntry;
 use std::{
     collections::{BTreeMap, BTreeSet},
     str::FromStr,

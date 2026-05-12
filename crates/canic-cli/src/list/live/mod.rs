@@ -238,7 +238,7 @@ fn resolve_list_fleet(options: &ListOptions) -> Result<InstalledFleetResolution,
         fleet: options.fleet.clone(),
         network: state_network(options),
         icp: options.icp.clone(),
-        detect_stale_local_root: true,
+        detect_lost_local_root: true,
     })
     .map_err(list_installed_fleet_error)
     .map_err(add_root_registry_hint)
@@ -254,11 +254,11 @@ fn list_installed_fleet_error(error: InstalledFleetError) -> ListCommandError {
         InstalledFleetError::IcpFailed { command, stderr } => {
             ListCommandError::IcpFailed { command, stderr }
         }
-        InstalledFleetError::StaleLocalFleet {
+        InstalledFleetError::LostLocalFleet {
             fleet,
             network,
             root,
-        } => ListCommandError::StaleLocalFleet {
+        } => ListCommandError::LostLocalFleet {
             fleet,
             network,
             root,

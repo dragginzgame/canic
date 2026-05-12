@@ -123,7 +123,7 @@ fn resolve_metrics_fleet(
         fleet: options.fleet.clone(),
         network: options.network.clone(),
         icp: options.icp.clone(),
-        detect_stale_local_root: false,
+        detect_lost_local_root: false,
     })
     .map_err(metrics_installed_fleet_error)
 }
@@ -138,7 +138,7 @@ fn metrics_installed_fleet_error(error: InstalledFleetError) -> MetricsCommandEr
         InstalledFleetError::IcpFailed { command, stderr } => {
             MetricsCommandError::IcpFailed { command, stderr }
         }
-        InstalledFleetError::StaleLocalFleet { root, .. } => {
+        InstalledFleetError::LostLocalFleet { root, .. } => {
             MetricsCommandError::ReplicaQuery(format!("root canister {root} is not present"))
         }
         InstalledFleetError::Registry(error) => MetricsCommandError::Registry(error),

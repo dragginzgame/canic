@@ -1,8 +1,8 @@
 use crate::{
     manifest::{FleetMember, FleetSection, IdentityMode, SourceSnapshot, VerificationCheck},
+    registry::RegistryEntry,
     topology::{TopologyHasher, TopologyRecord},
 };
-use canic_host::registry::RegistryEntry;
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use thiserror::Error as ThisError;
 

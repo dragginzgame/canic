@@ -1,7 +1,6 @@
 use super::*;
+use crate::registry::RegistryEntry;
 use candid::Principal;
-use canic_host::registry::{RegistryEntry, parse_registry_entries};
-use serde_json::json;
 
 const ROOT: Principal = Principal::from_slice(&[]);
 const ROOT_TEXT: &str = "aaaaa-aa";
@@ -72,43 +71,10 @@ fn discovery_requires_verification_checks() {
     assert!(matches!(err, DiscoveryError::MissingVerificationChecks(_)));
 }
 
-// Ensure registry parsing accepts the wrapped registry JSON shape.
-#[test]
-fn registry_entries_parse_wrapped_cli_json() {
-    let entries = parse_registry_entries(&registry_json()).expect("parse registry");
-
-    assert_eq!(
-        entries,
-        vec![
-            RegistryEntry {
-                pid: ROOT_TEXT.to_string(),
-                role: Some("root".to_string()),
-                kind: Some("root".to_string()),
-                parent_pid: None,
-                module_hash: None,
-            },
-            RegistryEntry {
-                pid: APP_TEXT.to_string(),
-                role: Some("app".to_string()),
-                kind: Some("singleton".to_string()),
-                parent_pid: Some(ROOT_TEXT.to_string()),
-                module_hash: Some("01ab".to_string()),
-            },
-            RegistryEntry {
-                pid: WORKER_TEXT.to_string(),
-                role: Some("worker".to_string()),
-                kind: Some("replica".to_string()),
-                parent_pid: Some(APP_TEXT.to_string()),
-                module_hash: Some(HASH.to_string()),
-            },
-        ]
-    );
-}
-
 // Ensure non-recursive target resolution includes only direct children.
 #[test]
 fn registry_targets_include_direct_children() {
-    let entries = parse_registry_entries(&registry_json()).expect("parse registry");
+    let entries = registry_entries();
     let targets = targets_from_registry(&entries, ROOT_TEXT, false).expect("resolve targets");
     let ids = targets
         .iter()
@@ -121,7 +87,7 @@ fn registry_targets_include_direct_children() {
 // Ensure recursive target resolution walks the full subtree.
 #[test]
 fn registry_targets_include_recursive_children() {
-    let entries = parse_registry_entries(&registry_json()).expect("parse registry");
+    let entries = registry_entries();
     let targets = targets_from_registry(&entries, ROOT_TEXT, true).expect("resolve targets");
     let ids = targets
         .iter()
@@ -169,43 +135,29 @@ fn discovered_member(
     }
 }
 
-// Build representative subnet registry JSON.
-fn registry_json() -> String {
-    json!({
-        "Ok": [
-            {
-                "pid": ROOT_TEXT,
-                "role": "root",
-                "record": {
-                    "pid": ROOT_TEXT,
-                    "role": "root",
-                    "kind": "root",
-                    "parent_pid": null
-                }
-            },
-            {
-                "pid": APP_TEXT,
-                "role": "app",
-                "record": {
-                    "pid": APP_TEXT,
-                    "role": "app",
-                    "kind": "singleton",
-                    "parent_pid": ROOT_TEXT,
-                    "module_hash": [1, 171]
-                }
-            },
-            {
-                "pid": WORKER_TEXT,
-                "role": "worker",
-                "record": {
-                    "pid": WORKER_TEXT,
-                    "role": "worker",
-                    "kind": "replica",
-                    "parent_pid": [APP_TEXT],
-                    "module_hash": HASH
-                }
-            }
-        ]
-    })
-    .to_string()
+// Build representative subnet registry entries.
+fn registry_entries() -> Vec<RegistryEntry> {
+    vec![
+        RegistryEntry {
+            pid: ROOT_TEXT.to_string(),
+            role: Some("root".to_string()),
+            kind: Some("root".to_string()),
+            parent_pid: None,
+            module_hash: None,
+        },
+        RegistryEntry {
+            pid: APP_TEXT.to_string(),
+            role: Some("app".to_string()),
+            kind: Some("singleton".to_string()),
+            parent_pid: Some(ROOT_TEXT.to_string()),
+            module_hash: Some("01ab".to_string()),
+        },
+        RegistryEntry {
+            pid: WORKER_TEXT.to_string(),
+            role: Some("worker".to_string()),
+            kind: Some("replica".to_string()),
+            parent_pid: Some(APP_TEXT.to_string()),
+            module_hash: Some(HASH.to_string()),
+        },
+    ]
 }

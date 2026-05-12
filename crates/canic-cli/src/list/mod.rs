@@ -50,7 +50,7 @@ pub enum ListCommandError {
     #[error(
         "fleet {fleet} points to root {root}, but that canister is not present on network {network}. Local replica state was probably restarted or reset. Run `canic install {fleet}` to recreate it."
     )]
-    StaleLocalFleet {
+    LostLocalFleet {
         fleet: String,
         network: String,
         root: String,

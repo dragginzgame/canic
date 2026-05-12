@@ -75,15 +75,53 @@ fn renders_empty_status_report() {
     );
 }
 
+// Ensure local missing-root rows explain the non-persistent local ICP CLI replica.
+#[test]
+fn renders_lost_local_fleet_note() {
+    let report = StatusReport {
+        network: "local".to_string(),
+        replica: ReplicaStatus::Running,
+        icp_cli: "icp 0.2.6".to_string(),
+        fleets: vec![StatusFleetRow {
+            fleet: "test".to_string(),
+            deployed: LOCAL_LOST_DEPLOYMENT.to_string(),
+            config: "fleets/test/canic.toml".to_string(),
+            canisters: "6".to_string(),
+            root: "t63gs-up777-77776-aaaba-cai".to_string(),
+        }],
+    };
+
+    let rendered = render_status_report(&report);
+
+    assert!(rendered.contains("test"));
+    assert!(rendered.contains("lost"));
+    assert!(rendered.contains("local ICP CLI replica state is not persistent"));
+    assert!(rendered.contains("canic install <fleet>"));
+}
+
 // Ensure local installed-state rows are not reported as deployed when live roots are unchecked.
 #[test]
 fn local_deployed_label_is_unknown_without_replica_verification() {
     assert_eq!(
-        deployed_label("local", "aaaaa-aa", false, &["root".to_string()]),
+        deployed_label(
+            "demo",
+            "local",
+            "icp",
+            "aaaaa-aa",
+            false,
+            &["root".to_string()]
+        ),
         "unknown"
     );
     assert_eq!(
-        deployed_label("ic", "aaaaa-aa", false, &["root".to_string()]),
+        deployed_label(
+            "demo",
+            "ic",
+            "icp",
+            "aaaaa-aa",
+            false,
+            &["root".to_string()]
+        ),
         "yes"
     );
 }
@@ -113,15 +151,6 @@ fn local_deployment_is_yes_when_registry_contains_configured_roles() {
     );
 }
 
-// Ensure stale local-root diagnostics match the list command's canister-not-found shape.
-#[test]
-fn detects_canister_not_found_error() {
-    assert!(is_canister_not_found_error(
-        "local replica rejected query: code=3 message=Canister aaaaa-aa not found"
-    ));
-    assert!(!is_canister_not_found_error("connection refused"));
-}
-
 // Ensure status help points to the compact project summary command.
 #[test]
 fn status_usage_lists_options_and_examples() {
@@ -132,6 +161,7 @@ fn status_usage_lists_options_and_examples() {
     assert!(!text.contains("--network"));
     assert!(!text.contains("--icp"));
     assert!(text.contains("Examples:"));
+    assert!(text.contains("does not persist canister state"));
 }
 
 fn registry_entry(pid: &str, role: &str) -> RegistryEntry {

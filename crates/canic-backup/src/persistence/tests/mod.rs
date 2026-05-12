@@ -11,8 +11,8 @@ use crate::{
         AuthorityEvidence, BackupPlan, BackupPlanBuildInput, BackupScopeKind, ControlAuthority,
         SnapshotReadAuthority, build_backup_plan,
     },
+    registry::RegistryEntry,
 };
-use canic_host::registry::RegistryEntry;
 use std::fs;
 
 const ROOT: &str = "aaaaa-aa";

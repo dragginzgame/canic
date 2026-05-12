@@ -1,8 +1,8 @@
 use crate::{
     artifacts::ArtifactChecksumError, discovery::DiscoveryError, journal::JournalValidationError,
-    manifest::ManifestValidationError, persistence::PersistenceError, topology::TopologyHash,
+    manifest::ManifestValidationError, persistence::PersistenceError, registry::RegistryEntry,
+    topology::TopologyHash,
 };
-use canic_host::registry::RegistryParseError;
 use std::{
     error::Error as StdError,
     path::{Path, PathBuf},
@@ -118,9 +118,6 @@ pub enum SnapshotDownloadError {
     Discovery(#[from] DiscoveryError),
 
     #[error(transparent)]
-    Registry(#[from] RegistryParseError),
-
-    #[error(transparent)]
     Manifest(#[from] SnapshotManifestError),
 }
 
@@ -129,8 +126,8 @@ pub enum SnapshotDownloadError {
 ///
 
 pub trait SnapshotDriver {
-    /// Load the root registry JSON used to resolve child snapshot targets.
-    fn registry_json(&mut self, root: &str) -> Result<String, SnapshotDriverError>;
+    /// Load the root registry entries used to resolve child snapshot targets.
+    fn registry_entries(&mut self, root: &str) -> Result<Vec<RegistryEntry>, SnapshotDriverError>;
 
     /// Create one canister snapshot and return its snapshot id.
     fn create_snapshot(&mut self, canister_id: &str) -> Result<String, SnapshotDriverError>;

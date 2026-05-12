@@ -16,7 +16,7 @@ pub struct InstalledFleetRequest {
     pub fleet: String,
     pub network: String,
     pub icp: String,
-    pub detect_stale_local_root: bool,
+    pub detect_lost_local_root: bool,
 }
 
 ///
@@ -83,7 +83,7 @@ pub enum InstalledFleetError {
     #[error(
         "fleet {fleet} points to root {root}, but that canister is not present on network {network}"
     )]
-    StaleLocalFleet {
+    LostLocalFleet {
         fleet: String,
         network: String,
         root: String,
@@ -172,8 +172,8 @@ fn local_registry_error(
     root: &str,
     error: String,
 ) -> InstalledFleetError {
-    if request.detect_stale_local_root && is_canister_not_found_error(&error) {
-        return InstalledFleetError::StaleLocalFleet {
+    if request.detect_lost_local_root && is_canister_not_found_error(&error) {
+        return InstalledFleetError::LostLocalFleet {
             fleet: request.fleet.clone(),
             network: request.network.clone(),
             root: root.to_string(),
@@ -245,7 +245,7 @@ mod tests {
         assert_eq!(topology.root_canister_id, "root-id");
     }
 
-    // Ensure local replica missing-canister errors are recognized for stale fleet guidance.
+    // Ensure local replica missing-canister errors are recognized for lost fleet guidance.
     #[test]
     fn detects_local_canister_not_found_error() {
         assert!(is_canister_not_found_error(

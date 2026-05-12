@@ -37,11 +37,49 @@ pub struct CanisterArtifactBuildOutput {
     pub manifest_path: Option<PathBuf>,
 }
 
+///
+/// WorkspaceBuildContext
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct WorkspaceBuildContext {
+    pub profile: String,
+    pub requested_profile: String,
+    pub network: String,
+    pub workspace_root: PathBuf,
+    pub icp_root: PathBuf,
+}
+
+impl WorkspaceBuildContext {
+    #[must_use]
+    pub fn lines(&self) -> [String; 6] {
+        [
+            "Canic build context:".to_string(),
+            format!("profile: {}", self.profile),
+            format!("requested_profile: {}", self.requested_profile),
+            format!("ICP_ENVIRONMENT: {}", self.network),
+            format!("CANIC_WORKSPACE_ROOT: {}", self.workspace_root.display()),
+            format!("CANIC_ICP_ROOT: {}", self.icp_root.display()),
+        ]
+    }
+}
+
 // Print the current build context once per caller session so caller builds
 // stay readable without repeating root/profile diagnostics for every canister.
 pub fn print_current_workspace_build_context_once(
     profile: CanisterBuildProfile,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    if let Some(context) = current_workspace_build_context_once(profile)? {
+        eprintln!("{}", context.lines().join("\n"));
+    }
+
+    Ok(())
+}
+
+// Return the current build context once per caller session.
+pub fn current_workspace_build_context_once(
+    profile: CanisterBuildProfile,
+) -> Result<Option<WorkspaceBuildContext>, Box<dyn std::error::Error>> {
     let workspace_root = workspace_root()?;
     let icp_root = icp_root()?;
     let marker_dir = icp_root.join(".icp");
@@ -59,19 +97,18 @@ pub fn print_current_workspace_build_context_once(
         });
     let marker_file = marker_dir.join(format!(".canic-build-context-{marker_key}"));
 
-    if !marker_file.exists() {
-        fs::write(&marker_file, [])?;
-        eprintln!(
-            "Canic build context: profile={} requested_profile={} ICP_ENVIRONMENT={} CANIC_WORKSPACE_ROOT={} CANIC_ICP_ROOT={}",
-            profile.target_dir_name(),
-            requested_profile,
-            network,
-            workspace_root.display(),
-            icp_root.display()
-        );
+    if marker_file.exists() {
+        return Ok(None);
     }
 
-    Ok(())
+    fs::write(&marker_file, [])?;
+    Ok(Some(WorkspaceBuildContext {
+        profile: profile.target_dir_name().to_string(),
+        requested_profile,
+        network,
+        workspace_root,
+        icp_root,
+    }))
 }
 
 // Build one visible Canic canister artifact for the current workspace.

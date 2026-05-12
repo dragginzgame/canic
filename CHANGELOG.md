@@ -7,7 +7,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.34.x] - 2026-05-10 - Backup/restore rework
 
-- `0.34.6` is a CLI boundary cleanup slice that moves shared ICP response parsing, live registry parsing, and installed-fleet resolution into `canic-host`, splits endpoints/cycles/metrics/top-level CLI glue into focused modules, replaces the old `canic-cli::args` helper drawer with focused `canic-cli::cli` and `canic-cli::support` module trees, and continues shrinking large CLI command modules such as backup.
+- `0.34.7` cleans install build-context output, tightens local ICP network commands, and splits the backup domain planner, manifest, runner, restore planning, execution journal, and snapshot capture code into focused modules.
+
+- `0.34.6` is a CLI boundary cleanup slice that moves shared ICP response parsing, live registry parsing, and installed-fleet resolution into `canic-host`, removes the backup domain crate's dependency on host plumbing, splits endpoints/cycles/metrics/top-level CLI glue into focused modules, replaces the old `canic-cli::args` helper drawer with focused `canic-cli::cli` and `canic-cli::support` module trees, continues shrinking large CLI command modules such as backup, and clarifies local ICP replica state loss in `canic status`.
 
 ```bash
 canic list test --subtree user_hub

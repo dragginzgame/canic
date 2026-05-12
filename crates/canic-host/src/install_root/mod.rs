@@ -1,6 +1,6 @@
 use crate::canister_build::{
     CanisterBuildProfile, build_current_workspace_canister_artifact,
-    print_current_workspace_build_context_once,
+    current_workspace_build_context_once,
 };
 use crate::icp;
 use crate::release_set::{
@@ -10,6 +10,7 @@ use crate::release_set::{
     resume_root_bootstrap, stage_root_release_set, workspace_root,
 };
 use crate::response_parse::parse_cycle_balance_response;
+use crate::table::{ColumnAlign, render_separator, render_table_row, table_widths};
 use canic_core::{
     cdk::{types::Principal, utils::hash::wasm_hash},
     protocol,
@@ -292,24 +293,43 @@ fn run_canic_build_targets(
     build_session_id: &str,
     config_path: &Path,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    println!("Build artifacts:");
-    println!("{:<16} {:<18} {:>10}", "CANISTER", "PROGRESS", "ELAPSED");
-
     let _env = BuildEnvGuard::apply(network, build_session_id, config_path);
     let profile = CanisterBuildProfile::current();
-    print_current_workspace_build_context_once(profile)?;
+    if let Some(context) = current_workspace_build_context_once(profile)? {
+        for line in context.lines() {
+            println!("{line}");
+        }
+        println!();
+    }
+
+    let headers = ["CANISTER", "PROGRESS", "ELAPSED"];
+    let planned_rows = targets
+        .iter()
+        .map(|target| {
+            [
+                target.clone(),
+                progress_bar(targets.len(), targets.len(), 10),
+                "0.00s".to_string(),
+            ]
+        })
+        .collect::<Vec<_>>();
+    let alignments = [ColumnAlign::Left, ColumnAlign::Left, ColumnAlign::Right];
+    let widths = table_widths(&headers, &planned_rows);
+    println!("{}", render_table_row(&headers, &widths, &alignments));
+    println!("{}", render_separator(&widths));
+
     for (index, target) in targets.iter().enumerate() {
         let started_at = Instant::now();
         build_current_workspace_canister_artifact(target, profile)
             .map_err(|err| format!("artifact build failed for {target}: {err}"))?;
         let elapsed = started_at.elapsed();
 
-        println!(
-            "{:<16} {:<18} {:>9.2}s",
-            target,
+        let row = [
+            target.clone(),
             progress_bar(index + 1, targets.len(), 10),
-            elapsed.as_secs_f64()
-        );
+            format!("{:.2}s", elapsed.as_secs_f64()),
+        ];
+        println!("{}", render_table_row(&row, &widths, &alignments));
     }
 
     println!();

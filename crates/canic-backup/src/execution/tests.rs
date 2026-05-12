@@ -7,8 +7,8 @@ use crate::{
         SnapshotReadAuthority, TopologyPreflightReceipt, TopologyPreflightTarget,
         build_backup_plan,
     },
+    registry::RegistryEntry,
 };
-use canic_host::registry::RegistryEntry;
 
 const ROOT: &str = "aaaaa-aa";
 const APP: &str = "renrk-eyaaa-aaaaa-aaada-cai";

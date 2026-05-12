@@ -96,7 +96,7 @@ fn load_fleet_registry(
         fleet: options.fleet.clone(),
         network: state_network(options),
         icp: options.icp.clone(),
-        detect_stale_local_root: false,
+        detect_lost_local_root: false,
     };
     Ok(resolve_installed_fleet(&request)?.registry.entries)
 }

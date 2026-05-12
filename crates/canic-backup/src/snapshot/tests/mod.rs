@@ -1,6 +1,9 @@
 use super::*;
 use crate::test_support::temp_dir;
-use crate::{discovery::SnapshotTarget, journal::ArtifactState, persistence::BackupLayout};
+use crate::{
+    discovery::SnapshotTarget, journal::ArtifactState, manifest::BackupUnitKind,
+    persistence::BackupLayout,
+};
 use std::{
     error::Error as StdError,
     fmt, fs,
@@ -179,7 +182,10 @@ struct FakeSnapshotDriver;
 
 impl SnapshotDriver for FakeSnapshotDriver {
     /// Return no registry data because single-canister tests do not need it.
-    fn registry_json(&mut self, _root: &str) -> Result<String, SnapshotDriverError> {
+    fn registry_entries(
+        &mut self,
+        _root: &str,
+    ) -> Result<Vec<crate::registry::RegistryEntry>, SnapshotDriverError> {
         Err(Box::new(FakeDriverError("registry unavailable")))
     }
 

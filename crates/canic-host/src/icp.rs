@@ -1,5 +1,7 @@
 use std::{error::Error, fmt, path::Path, process::Command};
 
+const LOCAL_ENVIRONMENT: &str = "local";
+
 ///
 /// IcpRawOutput
 ///
@@ -131,8 +133,7 @@ impl IcpCli {
         background: bool,
         debug: bool,
     ) -> Result<String, IcpCommandError> {
-        let mut command = self.command();
-        command.args(["network", "start", "local"]);
+        let mut command = self.local_replica_command("start");
         add_debug_arg(&mut command, debug);
         if background {
             command.arg("--background");
@@ -144,24 +145,21 @@ impl IcpCli {
 
     /// Return local ICP replica status.
     pub fn local_replica_status(&self, debug: bool) -> Result<String, IcpCommandError> {
-        let mut command = self.command();
-        command.args(["network", "status", "local"]);
+        let mut command = self.local_replica_command("status");
         add_debug_arg(&mut command, debug);
         run_output_with_stderr(&mut command)
     }
 
     /// Return whether the local ICP replica responds to ping.
     pub fn local_replica_ping(&self, debug: bool) -> Result<bool, IcpCommandError> {
-        let mut command = self.command();
-        command.args(["network", "ping", "local"]);
+        let mut command = self.local_replica_command("ping");
         add_debug_arg(&mut command, debug);
         run_success(&mut command)
     }
 
     /// Stop the local ICP replica.
     pub fn local_replica_stop(&self, debug: bool) -> Result<String, IcpCommandError> {
-        let mut command = self.command();
-        command.args(["network", "stop", "local"]);
+        let mut command = self.local_replica_command("stop");
         add_debug_arg(&mut command, debug);
         run_output_with_stderr(&mut command)
     }
@@ -169,8 +167,7 @@ impl IcpCli {
     /// Render a local replica start command.
     #[must_use]
     pub fn local_replica_start_display(&self, background: bool, debug: bool) -> String {
-        let mut command = self.command();
-        command.args(["network", "start", "local"]);
+        let mut command = self.local_replica_command("start");
         add_debug_arg(&mut command, debug);
         if background {
             command.arg("--background");
@@ -181,8 +178,7 @@ impl IcpCli {
     /// Render a local replica status command.
     #[must_use]
     pub fn local_replica_status_display(&self, debug: bool) -> String {
-        let mut command = self.command();
-        command.args(["network", "status", "local"]);
+        let mut command = self.local_replica_command("status");
         add_debug_arg(&mut command, debug);
         command_display(&command)
     }
@@ -190,10 +186,15 @@ impl IcpCli {
     /// Render a local replica stop command.
     #[must_use]
     pub fn local_replica_stop_display(&self, debug: bool) -> String {
-        let mut command = self.command();
-        command.args(["network", "stop", "local"]);
+        let mut command = self.local_replica_command("stop");
         add_debug_arg(&mut command, debug);
         command_display(&command)
+    }
+
+    fn local_replica_command(&self, action: &str) -> Command {
+        let mut command = self.command();
+        command.args(["network", action, "-e", LOCAL_ENVIRONMENT]);
+        command
     }
 
     /// Call one canister method with optional JSON output.
@@ -606,31 +607,31 @@ mod tests {
 
         assert_eq!(
             icp.local_replica_start_display(true, false),
-            "icp network start local --background"
+            "icp network start -e local --background"
         );
         assert_eq!(
             icp.local_replica_start_display(false, false),
-            "icp network start local"
+            "icp network start -e local"
         );
         assert_eq!(
             icp.local_replica_start_display(false, true),
-            "icp network start local --debug"
+            "icp network start -e local --debug"
         );
         assert_eq!(
             icp.local_replica_status_display(false),
-            "icp network status local"
+            "icp network status -e local"
         );
         assert_eq!(
             icp.local_replica_status_display(true),
-            "icp network status local --debug"
+            "icp network status -e local --debug"
         );
         assert_eq!(
             icp.local_replica_stop_display(false),
-            "icp network stop local"
+            "icp network stop -e local"
         );
         assert_eq!(
             icp.local_replica_stop_display(true),
-            "icp network stop local --debug"
+            "icp network stop -e local --debug"
         );
     }
 

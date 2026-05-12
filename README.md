@@ -173,7 +173,7 @@ Use `canic help` or `canic <command> help` for command-specific options, and
 For local ICP CLI workflows, prefer the shared setup script:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/dragginzgame/canic/v0.34.5/scripts/dev/install_dev.sh | bash
+curl -fsSL https://raw.githubusercontent.com/dragginzgame/canic/v0.34.6/scripts/dev/install_dev.sh | bash
 ```
 
 The script installs Rust when needed, the repo-local Rust `1.95.0` toolchain, `wasm32-unknown-unknown`, `rustfmt`, `clippy`, Candid/wasm utilities, `actionlint`, common Cargo helper tools, and pinned ICP CLI tooling when missing.
@@ -204,6 +204,11 @@ After a successful install, Canic writes project-local fleet state under
 `.canic/<network>/fleets/<fleet>.json`. That state records the selected root
 target, resolved root principal, build target, config path, and staging
 manifest path so later commands can inspect the explicitly named fleet.
+
+The local ICP CLI replica does not persist canister state across stop/start.
+If `canic status` shows a local fleet as `lost`, the recorded root canister is
+gone from the restarted local replica; run `canic install <fleet>` to recreate
+the local deployment.
 
 Fleet selection is explicit. `canic install <fleet>` uses
 `fleets/<fleet>/canic.toml`, the conventional `root` ICP canister name, and

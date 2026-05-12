@@ -9,9 +9,9 @@ use crate::{
         SnapshotReadAuthority, SnapshotReadAuthorityReceipt, TopologyPreflightReceipt,
         TopologyPreflightTarget, build_backup_plan,
     },
+    registry::RegistryEntry,
     test_support::temp_dir,
 };
-use canic_host::registry::RegistryEntry;
 use std::{fs, path::Path};
 
 const ROOT: &str = "aaaaa-aa";

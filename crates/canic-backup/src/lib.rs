@@ -11,6 +11,7 @@ pub mod journal;
 pub mod manifest;
 pub mod persistence;
 pub mod plan;
+pub mod registry;
 pub mod restore;
 pub mod runner;
 pub mod snapshot;

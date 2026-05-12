@@ -1,4 +1,5 @@
 use super::*;
+use crate::{manifest::IdentityMode, registry::RegistryEntry};
 
 const ROOT: &str = "aaaaa-aa";
 const APP: &str = "renrk-eyaaa-aaaaa-aaada-cai";
