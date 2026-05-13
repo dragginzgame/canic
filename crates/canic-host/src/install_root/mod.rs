@@ -11,7 +11,7 @@ use crate::release_set::{
     resume_root_bootstrap, stage_root_release_set, workspace_root,
 };
 use crate::response_parse::parse_cycle_balance_response;
-use crate::table::{ColumnAlign, render_separator, render_table_row, table_widths};
+use crate::table::{ColumnAlign, render_separator, render_table, render_table_row, table_widths};
 use canic_core::{
     cdk::{types::Principal, utils::hash::wasm_hash},
     protocol,
@@ -517,22 +517,31 @@ fn icp_ping(network: &str) -> Result<bool, Box<dyn std::error::Error>> {
 
 fn print_install_timing_summary(timings: &InstallTimingSummary, total: Duration) {
     println!("Install timing summary:");
-    println!("{:<20} {:>10}", "phase", "elapsed");
-    println!("{:<20} {:>10}", "--------------------", "----------");
-    print_timing_row("create_canisters", timings.create_canisters);
-    print_timing_row("build_all", timings.build_all);
-    print_timing_row("emit_manifest", timings.emit_manifest);
-    print_timing_row("install_root", timings.install_root);
-    print_timing_row("fund_root", timings.fund_root);
-    print_timing_row("stage_release_set", timings.stage_release_set);
-    print_timing_row("resume_bootstrap", timings.resume_bootstrap);
-    print_timing_row("wait_ready", timings.wait_ready);
-    print_timing_row("finalize_root_funding", timings.finalize_root_funding);
-    print_timing_row("total", total);
+    println!("{}", render_install_timing_summary(timings, total));
 }
 
-fn print_timing_row(label: &str, duration: Duration) {
-    println!("{label:<20} {:>9.2}s", duration.as_secs_f64());
+fn render_install_timing_summary(timings: &InstallTimingSummary, total: Duration) -> String {
+    let rows = [
+        timing_row("create_canisters", timings.create_canisters),
+        timing_row("build_all", timings.build_all),
+        timing_row("emit_manifest", timings.emit_manifest),
+        timing_row("install_root", timings.install_root),
+        timing_row("fund_root", timings.fund_root),
+        timing_row("stage_release_set", timings.stage_release_set),
+        timing_row("resume_bootstrap", timings.resume_bootstrap),
+        timing_row("wait_ready", timings.wait_ready),
+        timing_row("finalize_root_funding", timings.finalize_root_funding),
+        timing_row("total", total),
+    ];
+    render_table(
+        &["PHASE", "ELAPSED"],
+        &rows,
+        &[ColumnAlign::Left, ColumnAlign::Right],
+    )
+}
+
+fn timing_row(label: &str, duration: Duration) -> [String; 2] {
+    [label.to_string(), format!("{:.2}s", duration.as_secs_f64())]
 }
 
 // Print the final install result as a compact whitespace table.

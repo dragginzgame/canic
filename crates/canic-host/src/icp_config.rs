@@ -1,7 +1,13 @@
-use crate::workspace_discovery::discover_icp_root_from;
+use crate::{
+    install_root::discover_canic_config_choices,
+    release_set::{configured_fleet_name, configured_fleet_roles, icp_root},
+    workspace_discovery::discover_icp_root_from,
+};
 use std::{
+    collections::{BTreeMap, BTreeSet},
     error::Error,
     fmt, fs,
+    io::ErrorKind,
     path::{Path, PathBuf},
 };
 
@@ -15,6 +21,7 @@ pub const DEFAULT_LOCAL_GATEWAY_PORT: u16 = 8000;
 #[derive(Debug)]
 pub enum IcpConfigError {
     NoIcpRoot { start: PathBuf },
+    Config(String),
     Io(std::io::Error),
 }
 
@@ -28,6 +35,7 @@ impl fmt::Display for IcpConfigError {
                     start.display()
                 )
             }
+            Self::Config(message) => write!(formatter, "{message}"),
             Self::Io(err) => write!(formatter, "{err}"),
         }
     }
@@ -37,7 +45,7 @@ impl Error for IcpConfigError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
             Self::Io(err) => Some(err),
-            Self::NoIcpRoot { .. } => None,
+            Self::Config(_) | Self::NoIcpRoot { .. } => None,
         }
     }
 }
@@ -46,6 +54,18 @@ impl From<std::io::Error> for IcpConfigError {
     fn from(err: std::io::Error) -> Self {
         Self::Io(err)
     }
+}
+
+///
+/// IcpProjectSyncReport
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct IcpProjectSyncReport {
+    pub path: PathBuf,
+    pub changed: bool,
+    pub canisters: Vec<String>,
+    pub environments: Vec<String>,
 }
 
 /// Return the configured local ICP gateway port, falling back to ICP's default.
@@ -64,14 +84,210 @@ pub fn set_configured_local_gateway_port(port: u16) -> Result<PathBuf, IcpConfig
     Ok(path)
 }
 
+/// Reconcile the Canic-managed canister and environment sections in `icp.yaml`.
+pub fn sync_canic_icp_yaml(
+    fleet_filter: Option<&str>,
+) -> Result<IcpProjectSyncReport, IcpConfigError> {
+    let root = current_project_root()?;
+    let path = root.join(ICP_CONFIG_FILE);
+    let source = match fs::read_to_string(&path) {
+        Ok(source) => source,
+        Err(err) if err.kind() == ErrorKind::NotFound => String::new(),
+        Err(err) => return Err(err.into()),
+    };
+    let spec = discover_project_spec(&root, fleet_filter)?;
+    let updated = sync_canic_sections(&source, &spec.canisters, &spec.environments);
+    let changed = updated != source;
+    if changed {
+        fs::write(&path, updated)?;
+    }
+
+    Ok(IcpProjectSyncReport {
+        path,
+        changed,
+        canisters: spec.canisters,
+        environments: spec.environments.into_keys().collect(),
+    })
+}
+
 fn current_icp_root() -> Result<PathBuf, IcpConfigError> {
     let start = std::env::current_dir()?;
     discover_icp_root_from(&start).ok_or(IcpConfigError::NoIcpRoot { start })
 }
 
+fn current_project_root() -> Result<PathBuf, IcpConfigError> {
+    let start = std::env::current_dir()?;
+    if let Some(root) = discover_icp_root_from(&start) {
+        return Ok(root);
+    }
+
+    icp_root().map_err(|err| IcpConfigError::Config(err.to_string()))
+}
+
+///
+/// CanicIcpSpec
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct CanicIcpSpec {
+    canisters: Vec<String>,
+    environments: BTreeMap<String, Vec<String>>,
+}
+
+fn discover_project_spec(
+    root: &Path,
+    fleet_filter: Option<&str>,
+) -> Result<CanicIcpSpec, IcpConfigError> {
+    let choices = discover_canic_config_choices(&root.join("fleets"))
+        .map_err(|err| IcpConfigError::Config(err.to_string()))?;
+    let mut canisters = Vec::<String>::new();
+    let mut seen_canisters = BTreeSet::<String>::new();
+    let mut environments = BTreeMap::<String, Vec<String>>::new();
+    let mut matched_filter = fleet_filter.is_none();
+
+    for config_path in choices {
+        let fleet = configured_fleet_name(&config_path)
+            .map_err(|err| IcpConfigError::Config(err.to_string()))?;
+        if fleet_filter.is_some_and(|filter| filter == fleet) {
+            matched_filter = true;
+        }
+
+        let roles = configured_fleet_roles(&config_path)
+            .map_err(|err| IcpConfigError::Config(err.to_string()))?;
+        for role in &roles {
+            if seen_canisters.insert(role.clone()) {
+                canisters.push(role.clone());
+            }
+        }
+        environments.insert(fleet, roles);
+    }
+
+    if let Some(fleet) = fleet_filter
+        && !matched_filter
+    {
+        return Err(IcpConfigError::Config(format!(
+            "no Canic fleet config found for {fleet}"
+        )));
+    }
+
+    Ok(CanicIcpSpec {
+        canisters,
+        environments,
+    })
+}
+
 fn configured_local_gateway_port_from_root(root: &Path) -> Result<u16, IcpConfigError> {
     let source = fs::read_to_string(root.join(ICP_CONFIG_FILE))?;
     Ok(configured_local_gateway_port_from_source(&source))
+}
+
+fn sync_canic_sections(
+    source: &str,
+    canisters: &[String],
+    environments: &BTreeMap<String, Vec<String>>,
+) -> String {
+    let without_canisters = remove_top_level_section(source, "canisters:");
+    let rest = remove_top_level_section(&without_canisters, "environments:");
+    let mut sections = vec![
+        render_canisters_section(canisters),
+        render_environments_section(environments),
+    ];
+    let rest = rest.trim();
+    if !rest.is_empty() {
+        sections.push(rest.to_string());
+    }
+
+    let mut updated = sections.join("\n\n");
+    updated.push('\n');
+    updated
+}
+
+fn render_canisters_section(canisters: &[String]) -> String {
+    if canisters.is_empty() {
+        return "canisters: []".to_string();
+    }
+
+    let mut lines = vec!["canisters:".to_string()];
+    for (index, canister) in canisters.iter().enumerate() {
+        if index > 0 {
+            lines.push(String::new());
+        }
+        lines.extend([
+            format!("  - name: {canister}"),
+            "    build:".to_string(),
+            "      steps:".to_string(),
+            "        - type: script".to_string(),
+            "          commands:".to_string(),
+            format!(
+                "            - cargo run -q -p canic-host --example build_artifact -- {canister}"
+            ),
+        ]);
+    }
+    lines.join("\n")
+}
+
+fn render_environments_section(environments: &BTreeMap<String, Vec<String>>) -> String {
+    if environments.is_empty() {
+        return "environments: []".to_string();
+    }
+
+    environments
+        .iter()
+        .enumerate()
+        .flat_map(|(index, (environment, canisters))| {
+            let mut lines = Vec::new();
+            if index > 0 {
+                lines.push(String::new());
+            }
+            if index == 0 {
+                lines.push("environments:".to_string());
+            }
+            lines.extend([
+                format!("  - name: {environment}"),
+                "    network: local".to_string(),
+                format!("    canisters: [{}]", canisters.join(", ")),
+            ]);
+            lines
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn remove_top_level_section(source: &str, header: &str) -> String {
+    let mut lines = source.lines().map(str::to_string).collect::<Vec<_>>();
+    let line_refs = lines.iter().map(String::as_str).collect::<Vec<_>>();
+    let Some((start, end)) = top_level_section(&line_refs, header) else {
+        return source.to_string();
+    };
+    lines.drain(start..end);
+
+    let mut compacted = Vec::<String>::new();
+    let mut previous_blank = false;
+    for line in lines {
+        let blank = line.trim().is_empty();
+        if blank && previous_blank {
+            continue;
+        }
+        compacted.push(line);
+        previous_blank = blank;
+    }
+
+    compacted.join("\n")
+}
+
+fn top_level_section(lines: &[&str], header: &str) -> Option<(usize, usize)> {
+    let start = lines
+        .iter()
+        .position(|line| line_indent(line) == 0 && line.trim() == header)?;
+    let end = lines
+        .iter()
+        .enumerate()
+        .skip(start + 1)
+        .find(|(_, line)| {
+            !line.trim().is_empty() && line_indent(line) == 0 && !line.trim_start().starts_with('#')
+        })
+        .map_or(lines.len(), |(index, _)| index);
+    Some((start, end))
 }
 
 fn configured_local_gateway_port_from_source(source: &str) -> u16 {
@@ -240,5 +456,36 @@ mod tests {
 
         assert!(updated.contains("      port: 8003"));
         assert!(!updated.contains("      port: 8001"));
+    }
+
+    #[test]
+    fn syncs_canic_sections_and_preserves_other_top_level_sections() {
+        let source = "canisters:\n  - name: old\n\nnetworks:\n  - name: local\n    mode: managed\n    gateway:\n      bind: 127.0.0.1\n      port: 8009\n\nenvironments:\n  - name: old\n    network: local\n    canisters: [old]\n";
+        let canisters = vec!["root".to_string(), "app".to_string()];
+        let environments = BTreeMap::from([(
+            "test".to_string(),
+            vec!["root".to_string(), "app".to_string()],
+        )]);
+
+        let updated = sync_canic_sections(source, &canisters, &environments);
+
+        assert!(updated.starts_with("canisters:\n  - name: root\n"));
+        assert!(
+            updated.contains(
+                "            - cargo run -q -p canic-host --example build_artifact -- app"
+            )
+        );
+        assert!(updated.contains(
+            "environments:\n  - name: test\n    network: local\n    canisters: [root, app]"
+        ));
+        assert!(updated.contains("networks:\n  - name: local\n    mode: managed"));
+        assert!(!updated.contains("- name: old"));
+    }
+
+    #[test]
+    fn renders_empty_canic_sections_for_empty_project_specs() {
+        let updated = sync_canic_sections("", &[], &BTreeMap::new());
+
+        assert_eq!(updated, "canisters: []\n\nenvironments: []\n");
     }
 }

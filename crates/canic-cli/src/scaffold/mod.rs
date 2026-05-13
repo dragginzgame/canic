@@ -3,6 +3,7 @@ use crate::{
     cli::help::print_help_or_version,
     version_text,
 };
+use canic_host::icp_config::{IcpConfigError, sync_canic_icp_yaml};
 use clap::{Arg, Command as ClapCommand};
 use std::{
     ffi::OsString,
@@ -31,6 +32,9 @@ pub enum ScaffoldCommandError {
 
     #[error("fleet create cancelled")]
     Cancelled,
+
+    #[error(transparent)]
+    IcpConfig(#[from] IcpConfigError),
 
     #[error(transparent)]
     Io(#[from] io::Error),
@@ -97,10 +101,12 @@ fn run_scaffold(options: ScaffoldOptions) -> Result<(), ScaffoldCommandError> {
     }
 
     let result = scaffold_project(&options)?;
+    let sync_report = sync_canic_icp_yaml(Some(&options.name))?;
     println!("Created Canic fleet:");
     println!("  {}", result.project_dir.display());
     println!("  {}", result.root_dir.display());
     println!("  {}", result.app_dir.display());
+    println!("  {}", sync_report.path.display());
     println!();
     println!("Next:");
     println!("  canic install {}", options.name);

@@ -12,8 +12,8 @@ inspect only the files needed for the current task.
 - Active minor: `0.35.x`
 - Theme: get backup/restore working end-to-end around topology-aware plans,
   executable journals, and clear host/backup boundaries.
-- Current release-work area: `0.35.3` local replica port/ownership polish and
-  explicit top-up config clarity.
+- Current release-work area: `0.35.3` local replica port/ownership polish,
+  explicit top-up config clarity, and Canic-managed ICP config sync.
 
 ## Recent Work
 
@@ -25,8 +25,9 @@ inspect only the files needed for the current task.
   set used for newly allocated managed children.
 - Added the 0.35.3 changelog entry covering local replica port visibility,
   `canic replica start --port <port>`, configured-port local queries, ownership
-  diagnostics, explicit `topup = {}` default top-up config blocks, and the
-  default top-up amount change from `4T` to `5T`.
+  diagnostics, `canic fleet sync`, automatic `icp.yaml` sync after
+  `canic fleet create <name>`, explicit `topup = {}` default top-up config
+  blocks, and the default top-up amount change from `4T` to `5T`.
 - Renamed the test fleet scaling worker role from `scale` to `scale_replica`,
   changed role cycle config from `topup_policy` to `topup`, and enabled explicit
   default `topup = {}` policy blocks for the main test app, hub, shard, and

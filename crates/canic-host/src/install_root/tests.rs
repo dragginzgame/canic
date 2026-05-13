@@ -1,10 +1,10 @@
 use super::{
-    INSTALL_STATE_SCHEMA_VERSION, InstallState, add_icp_environment_target,
+    INSTALL_STATE_SCHEMA_VERSION, InstallState, InstallTimingSummary, add_icp_environment_target,
     add_local_root_create_cycles_arg, config_selection_error, discover_canic_config_choices,
     fleet_install_state_path, icp_canister_command_in_network, install_build_session_id,
     parse_bootstrap_status_value, parse_cycle_balance_response, parse_root_ready_value,
-    read_fleet_install_state, resolve_install_config_path, root_init_args,
-    validate_expected_fleet_name, write_install_state,
+    read_fleet_install_state, render_install_timing_summary, resolve_install_config_path,
+    root_init_args, validate_expected_fleet_name, write_install_state,
 };
 use crate::release_set::configured_install_targets;
 use crate::test_support::temp_dir;
@@ -13,6 +13,7 @@ use std::{
     env, fs,
     path::{Path, PathBuf},
     sync::{Mutex, OnceLock},
+    time::Duration,
 };
 
 static ENV_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
@@ -109,6 +110,47 @@ fn icp_canister_command_carries_selected_network() {
 fn install_build_session_id_is_prefixed_for_logs() {
     let session_id = install_build_session_id();
     assert!(session_id.starts_with("install-root-"));
+}
+
+#[test]
+fn install_timing_summary_uses_standard_table_format() {
+    let timings = InstallTimingSummary {
+        create_canisters: Duration::from_millis(1200),
+        build_all: Duration::from_millis(2340),
+        emit_manifest: Duration::from_millis(10),
+        install_root: Duration::from_millis(20),
+        fund_root: Duration::from_millis(30),
+        stage_release_set: Duration::from_millis(40),
+        resume_bootstrap: Duration::from_millis(50),
+        wait_ready: Duration::from_millis(60),
+        finalize_root_funding: Duration::from_millis(70),
+    };
+
+    let table = render_install_timing_summary(&timings, Duration::from_millis(3900));
+
+    assert_eq!(
+        table.lines().take(2).collect::<Vec<_>>(),
+        vec![
+            "PHASE                   ELAPSED",
+            "---------------------   -------"
+        ]
+    );
+    assert!(
+        table.lines().any(
+            |line| line.split_whitespace().collect::<Vec<_>>() == ["create_canisters", "1.20s"]
+        )
+    );
+    assert!(
+        table
+            .lines()
+            .any(|line| line.split_whitespace().collect::<Vec<_>>()
+                == ["finalize_root_funding", "0.07s"])
+    );
+    assert!(
+        table
+            .lines()
+            .any(|line| line.split_whitespace().collect::<Vec<_>>() == ["total", "3.90s"])
+    );
 }
 
 #[test]

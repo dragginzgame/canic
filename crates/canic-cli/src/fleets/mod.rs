@@ -8,6 +8,7 @@ use crate::{
     scaffold, version_text,
 };
 use canic_host::{
+    icp_config::{IcpConfigError, IcpProjectSyncReport, sync_canic_icp_yaml},
     install_root::discover_current_canic_config_choices,
     release_set::{
         configured_fleet_name, configured_fleet_roles, display_workspace_path,
@@ -33,12 +34,17 @@ const FLEET_HELP_AFTER: &str = "\
 Examples:
   canic fleet list
   canic fleet create demo
+  canic fleet sync
   canic fleet delete demo";
 const FLEET_LIST_HELP_AFTER: &str = "\
 Examples:
   canic fleet list
 
 Commands that operate on one fleet take the fleet name as a positional argument.";
+const FLEET_SYNC_HELP_AFTER: &str = "\
+Examples:
+  canic fleet sync
+  canic fleet sync --fleet test";
 const FLEET_DELETE_HELP_AFTER: &str = "\
 Examples:
   canic fleet delete demo
@@ -79,6 +85,9 @@ pub enum FleetCommandError {
     Create(String),
 
     #[error(transparent)]
+    IcpConfig(#[from] IcpConfigError),
+
+    #[error(transparent)]
     Io(#[from] io::Error),
 
     #[error(transparent)]
@@ -101,6 +110,15 @@ struct FleetOptions {
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct DeleteFleetOptions {
     fleet: String,
+}
+
+///
+/// FleetSyncOptions
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct FleetSyncOptions {
+    fleet: Option<String>,
 }
 
 ///
@@ -133,6 +151,7 @@ where
             "create" => run_create(args),
             "delete" => run_delete(args),
             "list" => run_list(args),
+            "sync" => run_sync(args),
             _ => unreachable!("fleet dispatch command only defines known commands"),
         },
     }
@@ -196,6 +215,21 @@ where
     Ok(())
 }
 
+fn run_sync<I>(args: I) -> Result<(), FleetCommandError>
+where
+    I: IntoIterator<Item = OsString>,
+{
+    let args = args.into_iter().collect::<Vec<_>>();
+    if print_help_or_version(&args, sync_usage, version_text()) {
+        return Ok(());
+    }
+
+    let options = FleetSyncOptions::parse(args)?;
+    let report = sync_canic_icp_yaml(options.fleet.as_deref())?;
+    print_sync_report(&report);
+    Ok(())
+}
+
 impl FleetOptions {
     fn parse<I>(args: I) -> Result<Self, FleetCommandError>
     where
@@ -220,6 +254,28 @@ impl DeleteFleetOptions {
 
         Ok(Self {
             fleet: string_option(&matches, "fleet").expect("clap requires fleet"),
+        })
+    }
+}
+
+impl FleetSyncOptions {
+    #[cfg(test)]
+    fn parse_test<I>(args: I) -> Result<Self, FleetCommandError>
+    where
+        I: IntoIterator<Item = OsString>,
+    {
+        Self::parse(args)
+    }
+
+    fn parse<I>(args: I) -> Result<Self, FleetCommandError>
+    where
+        I: IntoIterator<Item = OsString>,
+    {
+        let matches = parse_matches(fleet_sync_command(), args)
+            .map_err(|_| FleetCommandError::Usage(sync_usage()))?;
+
+        Ok(Self {
+            fleet: string_option(&matches, "fleet"),
         })
     }
 }
@@ -316,6 +372,11 @@ fn fleet_command() -> ClapCommand {
                 .disable_help_flag(true),
         ))
         .subcommand(passthrough_subcommand(
+            ClapCommand::new("sync")
+                .about("Sync fleet configs into icp.yaml")
+                .disable_help_flag(true),
+        ))
+        .subcommand(passthrough_subcommand(
             ClapCommand::new("delete")
                 .about("Delete a config-defined Canic fleet")
                 .disable_help_flag(true),
@@ -330,6 +391,20 @@ fn fleet_list_command() -> ClapCommand {
         .disable_help_flag(true)
         .arg(internal_network_arg())
         .after_help(FLEET_LIST_HELP_AFTER)
+}
+
+fn fleet_sync_command() -> ClapCommand {
+    ClapCommand::new("sync")
+        .bin_name("canic fleet sync")
+        .about("Sync fleet configs into icp.yaml")
+        .disable_help_flag(true)
+        .arg(
+            value_arg("fleet")
+                .long("fleet")
+                .value_name("name")
+                .help("Require this fleet to exist before syncing"),
+        )
+        .after_help(FLEET_SYNC_HELP_AFTER)
 }
 
 fn fleet_delete_command() -> ClapCommand {
@@ -407,6 +482,14 @@ fn format_canister_summary(roles: &[String]) -> String {
     format!("{} ({preview}{suffix})", roles.len())
 }
 
+fn print_sync_report(report: &IcpProjectSyncReport) {
+    println!("Synced ICP project config:");
+    println!("  path: {}", report.path.display());
+    println!("  canisters: {}", report.canisters.len());
+    println!("  environments: {}", report.environments.len());
+    println!("  changed: {}", if report.changed { "yes" } else { "no" });
+}
+
 fn usage() -> String {
     let mut command = fleet_command();
     command.render_help().to_string()
@@ -414,6 +497,11 @@ fn usage() -> String {
 
 fn list_usage() -> String {
     let mut command = fleet_list_command();
+    command.render_help().to_string()
+}
+
+fn sync_usage() -> String {
+    let mut command = fleet_sync_command();
     command.render_help().to_string()
 }
 

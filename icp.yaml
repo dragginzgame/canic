@@ -13,20 +13,6 @@ canisters:
           commands:
             - cargo run -q -p canic-host --example build_artifact -- app
 
-  - name: user_hub
-    build:
-      steps:
-        - type: script
-          commands:
-            - cargo run -q -p canic-host --example build_artifact -- user_hub
-
-  - name: user_shard
-    build:
-      steps:
-        - type: script
-          commands:
-            - cargo run -q -p canic-host --example build_artifact -- user_shard
-
   - name: scale_hub
     build:
       steps:
@@ -41,6 +27,20 @@ canisters:
           commands:
             - cargo run -q -p canic-host --example build_artifact -- scale_replica
 
+  - name: user_hub
+    build:
+      steps:
+        - type: script
+          commands:
+            - cargo run -q -p canic-host --example build_artifact -- user_hub
+
+  - name: user_shard
+    build:
+      steps:
+        - type: script
+          commands:
+            - cargo run -q -p canic-host --example build_artifact -- user_shard
+
 environments:
   - name: demo
     network: local
@@ -48,4 +48,4 @@ environments:
 
   - name: test
     network: local
-    canisters: [root, app, user_hub, user_shard, scale_hub, scale_replica]
+    canisters: [root, app, scale_hub, scale_replica, user_hub, user_shard]

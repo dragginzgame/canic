@@ -77,6 +77,7 @@ fn command_family_help_returns_ok() {
         &["fleet", "help"],
         &["fleet", "create", "help"],
         &["fleet", "list", "help"],
+        &["fleet", "sync", "help"],
         &["fleet", "delete", "help"],
         &["replica"],
         &["replica", "help"],
@@ -134,6 +135,14 @@ fn version_flags_return_ok() {
         run([
             OsString::from("fleet"),
             OsString::from("create"),
+            OsString::from("--version")
+        ])
+        .is_ok()
+    );
+    assert!(
+        run([
+            OsString::from("fleet"),
+            OsString::from("sync"),
             OsString::from("--version")
         ])
         .is_ok()

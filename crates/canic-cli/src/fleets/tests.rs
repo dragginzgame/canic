@@ -23,6 +23,24 @@ fn parses_delete_fleet_options() {
     assert_eq!(options.fleet, "demo");
 }
 
+// Ensure fleet sync accepts an optional fleet existence guard.
+#[test]
+fn parses_sync_fleet_filter() {
+    let options = FleetSyncOptions::parse_test([OsString::from("--fleet"), OsString::from("test")])
+        .expect("parse sync options");
+
+    assert_eq!(options.fleet.as_deref(), Some("test"));
+}
+
+// Ensure unknown fleet sync options fail through usage.
+#[test]
+fn rejects_unknown_sync_option() {
+    let err =
+        FleetSyncOptions::parse_test([OsString::from("--unknown")]).expect_err("parse should fail");
+
+    assert!(matches!(err, FleetCommandError::Usage(_)));
+}
+
 // Ensure fleet deletion requires the exact fleet name as confirmation.
 #[test]
 fn confirm_delete_fleet_requires_exact_name() {
@@ -96,9 +114,21 @@ fn fleet_usage_lists_subcommands_and_examples() {
     assert!(text.contains("create"));
     assert!(text.contains("delete"));
     assert!(text.contains("list"));
+    assert!(text.contains("sync"));
     assert!(!text.contains("current"));
     assert!(!text.contains("use"));
     assert!(!text.contains("search"));
+    assert!(text.contains("Examples:"));
+}
+
+// Ensure fleet sync help explains ICP config reconciliation.
+#[test]
+fn fleet_sync_usage_lists_options_and_examples() {
+    let text = sync_usage();
+
+    assert!(text.contains("Sync fleet configs into icp.yaml"));
+    assert!(text.contains("Usage: canic fleet sync"));
+    assert!(text.contains("--fleet"));
     assert!(text.contains("Examples:"));
 }
 
