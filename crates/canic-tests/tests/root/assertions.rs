@@ -6,8 +6,11 @@ use canic::{
     dto::{
         canister::CanisterInfo,
         env::EnvSnapshotResponse,
+        error::ErrorCode,
+        log::LogEntry,
         page::{Page, PageRequest},
         state::{AppStateResponse, SubnetStateResponse},
+        topology::AppRegistryResponse,
     },
     ids::{CanisterRole, SubnetRole},
     protocol,
@@ -173,6 +176,23 @@ pub fn assert_state_endpoints_are_root_only(pic: &Pic, root_id: Principal, child
         .expect("root subnet state transport");
     subnet_state.expect("root subnet state application");
 
+    let non_controller = Principal::from_slice(&[251; 29]);
+    let denied_app_state: Result<Result<AppStateResponse, canic::Error>, canic::Error> =
+        pic.query_call_as(root_id, non_controller, protocol::CANIC_APP_STATE, ());
+    let denied_app_state = denied_app_state.expect("non-controller app state transport");
+    let Err(denied_app_state) = denied_app_state else {
+        panic!("non-controller app state query must be denied")
+    };
+    assert_eq!(denied_app_state.code, ErrorCode::Unauthorized);
+
+    let denied_subnet_state: Result<Result<SubnetStateResponse, canic::Error>, canic::Error> =
+        pic.query_call_as(root_id, non_controller, protocol::CANIC_SUBNET_STATE, ());
+    let denied_subnet_state = denied_subnet_state.expect("non-controller subnet state transport");
+    let Err(denied_subnet_state) = denied_subnet_state else {
+        panic!("non-controller subnet state query must be denied")
+    };
+    assert_eq!(denied_subnet_state.code, ErrorCode::Unauthorized);
+
     let child_app_state: Result<Result<AppStateResponse, canic::Error>, canic::Error> =
         pic.query_call(child_pid, protocol::CANIC_APP_STATE, ());
     let Err(err) = child_app_state else {
@@ -186,6 +206,60 @@ pub fn assert_state_endpoints_are_root_only(pic: &Pic, root_id: Principal, child
         panic!("child subnet state endpoint should be absent")
     };
     assert_missing_method(&err, protocol::CANIC_SUBNET_STATE);
+}
+
+/// Assert controller-gated root diagnostic endpoints reject non-controller callers.
+pub fn assert_root_diagnostics_are_controller_gated(pic: &Pic, root_id: Principal) {
+    let app_registry: Result<AppRegistryResponse, canic::Error> = pic
+        .query_call(root_id, protocol::CANIC_APP_REGISTRY, ())
+        .expect("root app registry transport");
+    app_registry.expect("root app registry application");
+
+    let logs: Result<Page<LogEntry>, canic::Error> = pic
+        .query_call(
+            root_id,
+            protocol::CANIC_LOG,
+            (
+                Option::<String>::None,
+                Option::<String>::None,
+                Option::<canic::__internal::core::log::Level>::None,
+                PageRequest {
+                    limit: 10,
+                    offset: 0,
+                },
+            ),
+        )
+        .expect("root log transport");
+    logs.expect("root log application");
+
+    let non_controller = Principal::from_slice(&[252; 29]);
+    let denied_app_registry: Result<Result<AppRegistryResponse, canic::Error>, canic::Error> =
+        pic.query_call_as(root_id, non_controller, protocol::CANIC_APP_REGISTRY, ());
+    let denied_app_registry = denied_app_registry.expect("non-controller app registry transport");
+    let Err(denied_app_registry) = denied_app_registry else {
+        panic!("non-controller app registry query must be denied")
+    };
+    assert_eq!(denied_app_registry.code, ErrorCode::Unauthorized);
+
+    let denied_log: Result<Result<Page<LogEntry>, canic::Error>, canic::Error> = pic.query_call_as(
+        root_id,
+        non_controller,
+        protocol::CANIC_LOG,
+        (
+            Option::<String>::None,
+            Option::<String>::None,
+            Option::<canic::__internal::core::log::Level>::None,
+            PageRequest {
+                limit: 10,
+                offset: 0,
+            },
+        ),
+    );
+    let denied_log = denied_log.expect("non-controller log transport");
+    let Err(denied_log) = denied_log else {
+        panic!("non-controller log query must be denied")
+    };
+    assert_eq!(denied_log.code, ErrorCode::Unauthorized);
 }
 
 // Match PocketIC missing-method failures without depending on one exact transport string.

@@ -21,18 +21,10 @@ pub const CANIC_WASM_STORE_PREPARE: &str = "canic_wasm_store_prepare";
 pub const CANIC_WASM_STORE_CHUNK: &str = "canic_wasm_store_chunk";
 pub const CANIC_WASM_STORE_PUBLISH_CHUNK: &str = "canic_wasm_store_publish_chunk";
 pub const CANIC_WASM_STORE_STAGE_MANIFEST: &str = "canic_wasm_store_stage_manifest";
-pub const CANIC_WASM_STORE_BOOTSTRAP_STAGE_MANIFEST_ADMIN: &str =
-    "canic_wasm_store_bootstrap_stage_manifest_admin";
-pub const CANIC_WASM_STORE_BOOTSTRAP_PREPARE_ADMIN: &str =
-    "canic_wasm_store_bootstrap_prepare_admin";
-pub const CANIC_WASM_STORE_BOOTSTRAP_PUBLISH_CHUNK_ADMIN: &str =
-    "canic_wasm_store_bootstrap_publish_chunk_admin";
 pub const CANIC_WASM_STORE_BOOTSTRAP_RESUME_ROOT_ADMIN: &str =
     "canic_wasm_store_bootstrap_resume_root_admin";
 pub const CANIC_WASM_STORE_BOOTSTRAP_DEBUG: &str = "canic_wasm_store_bootstrap_debug";
 pub const CANIC_WASM_STORE_OVERVIEW: &str = "canic_wasm_store_overview";
-pub const CANIC_WASM_STORE_PUBLICATION_STATUS: &str = "canic_wasm_store_publication_status";
-pub const CANIC_WASM_STORE_RETIRED_STATUS: &str = "canic_wasm_store_retired_status";
 pub const CANIC_TEMPLATE_PREPARE_ADMIN: &str = "canic_template_prepare_admin";
 pub const CANIC_TEMPLATE_PUBLISH_CHUNK_ADMIN: &str = "canic_template_publish_chunk_admin";
 pub const CANIC_TEMPLATE_STAGE_MANIFEST_ADMIN: &str = "canic_template_stage_manifest_admin";

@@ -469,7 +469,7 @@ pub(super) fn write_report(
     if checkpoint_sites.is_empty() {
         out.push_str("- There is currently no flow-stage attribution because `perf!` coverage is absent. That is itself a dependency-pressure signal: optimization work is bottlenecked by missing internal checkpoints.\n\n");
     } else {
-        out.push_str("- Flow-stage checkpoints now exist in the scaling, sharding, auth, and replay workflows. This matrix records non-zero checkpoint deltas for sampled update scenarios, so the next optimization pass can target concrete stages instead of endpoint totals alone.\n\n");
+        out.push_str("- Flow-stage checkpoints now exist in the scaling, sharding, publication, and replay workflows. This matrix records non-zero checkpoint deltas for sampled update scenarios, so the next optimization pass can target concrete stages instead of endpoint totals alone.\n\n");
     }
 
     out.push_str("## Early Warning Signals\n\n");
@@ -601,9 +601,19 @@ fn hotspot_hint(subject_label: &str) -> (&'static str, &'static str) {
             "Internal audit raw time probe",
             "[leaf_probe](/home/adam/projects/canic/canisters/audit/leaf_probe/src/lib.rs)",
         ),
+        "canic_request_delegation" => (
+            "Root delegated auth request path",
+            "[root endpoints](/home/adam/projects/canic/crates/canic/src/macros/endpoints/root.rs), [auth workflow](/home/adam/projects/canic/crates/canic-core/src/workflow/auth.rs)",
+        ),
+        "canic_template_stage_manifest_admin"
+        | "canic_template_prepare_admin"
+        | "canic_template_publish_chunk_admin" => (
+            "Root template publication admin path",
+            "[root endpoints](/home/adam/projects/canic/crates/canic/src/macros/endpoints/root.rs), [template storage ops](/home/adam/projects/canic/crates/canic-control-plane/src/ops/storage/template/chunked.rs)",
+        ),
         _ => (
             "Shared runtime surface",
-            "[endpoints](/home/adam/projects/canic/crates/canic/src/macros/endpoints.rs)",
+            "[root endpoints](/home/adam/projects/canic/crates/canic/src/macros/endpoints/root.rs)",
         ),
     }
 }

@@ -250,61 +250,6 @@ pub struct WasmStorePublicationStateResponse {
 }
 
 //
-// WasmStorePublicationFinalizationStatusResponse
-//
-
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-pub struct WasmStorePublicationFinalizationStatusResponse {
-    pub finalized_binding: Option<WasmStoreBinding>,
-    pub finalized_at: u64,
-}
-
-//
-// WasmStoreRetiredStoreStatusResponse
-//
-
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-pub struct WasmStoreRetiredStoreStatusResponse {
-    pub retired_binding: WasmStoreBinding,
-    pub generation: u64,
-    pub retired_at: u64,
-    pub gc_ready: bool,
-    pub reclaimable_store_bytes: u64,
-    pub store: WasmStoreStatusResponse,
-}
-
-//
-// WasmStorePublicationStoreStatusResponse
-//
-
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-pub struct WasmStorePublicationStoreStatusResponse {
-    pub binding: WasmStoreBinding,
-    pub pid: Principal,
-    pub created_at: u64,
-    pub publication_slot: Option<WasmStorePublicationSlotResponse>,
-    pub is_preferred_binding: bool,
-    pub is_reserved_for_publication: bool,
-    pub is_selectable_for_publication: bool,
-    pub publication_candidate_order: Option<u32>,
-    pub exact_managed_release_count: u32,
-    pub conflicting_managed_release_count: u32,
-    pub store: WasmStoreStatusResponse,
-}
-
-//
-// WasmStorePublicationStatusResponse
-//
-
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-pub struct WasmStorePublicationStatusResponse {
-    pub publication: WasmStorePublicationStateResponse,
-    pub preferred_binding: Option<WasmStoreBinding>,
-    pub managed_release_count: u32,
-    pub stores: Vec<WasmStorePublicationStoreStatusResponse>,
-}
-
-//
 // WasmStoreFinalizedStoreResponse
 //
 

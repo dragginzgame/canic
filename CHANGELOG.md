@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.35.x] - 2026-05-13 - TBD
 
+- `0.35.4` removes stale and duplicate root wasm-store endpoints, routes publication through `canic_wasm_store_admin` plus `canic_wasm_store_overview`, controller-gates root state/app-registry/log diagnostics, simplifies `canic_canister_status` to controller-only access, updates wasm-store reconcile coverage to the current managed release roles, records the first `0.35` instruction-footprint performance baseline, and reruns the audience-target-binding invariant audit.
+
 - `0.35.3` adds local replica port visibility and `canic replica start --port <port>`, makes local direct replica queries use the configured gateway port, improves project/environment ownership diagnostics for port conflicts, adds `canic fleet sync` plus automatic `icp.yaml` sync after `canic fleet create <name>`, standardizes install timing table formatting, clarifies default top-up opt-ins with explicit `topup = {}` config blocks, and raises the default top-up amount from `4T` to `5T`.
 
 - `0.35.2` retains the installing/upgrading root controller in the runtime controller set used for newly allocated managed children, renames the test scaling worker role to `scale_replica`, shortens role top-up config from `topup_policy` to `topup`, enables default role top-up policies, and removes the old `scripts/app/build.sh` wrapper now that `icp.yaml` calls the host builder directly.

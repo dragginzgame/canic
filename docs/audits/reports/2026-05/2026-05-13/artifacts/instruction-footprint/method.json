@@ -1,0 +1,6 @@
+{
+  "method_tag": "Method V1",
+  "normalization": "MetricsKind::Runtime perf rows are normalized into canonical endpoint rows. Update/timer lanes use persisted perf deltas; sampled query lanes use local-only QueryPerfSample probe endpoints because query-side perf rows are not committed, so the probe returns the measured local instruction counter alongside the real query result.",
+  "freshness_rule": "One fresh smallest-profile root harness per measured scenario (`topology`, `scaling`, or `sharding`); baseline and post-call perf tables were sampled inside that isolated topology.",
+  "checkpoint_rule": "Checkpoint deltas are diffed from `MetricsKind::Runtime` perf rows before/after sampled update scenarios. Query scenarios remain endpoint-only unless they traverse explicit checkpoint instrumentation."
+}

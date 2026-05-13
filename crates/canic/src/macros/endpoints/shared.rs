@@ -97,8 +97,8 @@ macro_rules! canic_emit_env_observability_endpoints {
 #[macro_export]
 macro_rules! canic_emit_log_observability_endpoints {
     () => {
-        #[$crate::canic_query]
-        fn canic_log(
+        #[$crate::canic_query(requires(caller::is_controller()))]
+        async fn canic_log(
             crate_name: Option<String>,
             topic: Option<String>,
             min_level: Option<::canic::__internal::core::log::Level>,

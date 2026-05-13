@@ -2,7 +2,7 @@ use crate::root::{
     RootSetupProfile,
     assertions::{
         assert_child_envs_match_registry, assert_children_match_registry, assert_registry_parents,
-        assert_state_endpoints_are_root_only,
+        assert_root_diagnostics_are_controller_gated, assert_state_endpoints_are_root_only,
     },
     harness::setup_root,
 };
@@ -66,5 +66,10 @@ fn root_reference_topology_is_consistent() {
         "assert state endpoints are root-only",
     );
     assert_state_endpoints_are_root_only(&setup.pic, setup.root_id, app_pid);
+    test_progress(
+        "root_reference_topology_is_consistent",
+        "assert root diagnostics are controller-gated",
+    );
+    assert_root_diagnostics_are_controller_gated(&setup.pic, setup.root_id);
     test_progress("root_reference_topology_is_consistent", "done");
 }

@@ -10,6 +10,7 @@
 | `2026-05-10` | `docs/audits/reports/2026-05/2026-05-10/summary.md` | complete |
 | `2026-05-11` | `docs/audits/reports/2026-05/2026-05-11/summary.md` | complete |
 | `2026-05-12` | `docs/audits/reports/2026-05/2026-05-12/summary.md` | complete |
+| `2026-05-13` | `docs/audits/reports/2026-05/2026-05-13/summary.md` | complete |
 
 ## Month-Level Status
 
@@ -113,3 +114,9 @@ May has day summaries for the currently recorded audit days.
 35. Host/backup maintainers: add receipt convention guidance before receipt
     models grow further: naming, timestamps, truncation, provider metadata, and
     serialization shape should be normalized.
+36. Runtime/performance maintainers: rerun `instruction-footprint` after the
+    next concrete performance change so the 0.35 baseline gains comparable
+    drift deltas.
+37. Auth docs maintainers: keep active config docs and examples focused on
+    `[auth.delegated_tokens]`, `[auth.role_attestation]`, and per-canister
+    `auth` flags.

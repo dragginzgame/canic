@@ -4,11 +4,7 @@ use super::super::{
     fleet::{PublicationStoreFleet, PublicationStoreSnapshot},
     store::{store_catalog, store_status},
 };
-use crate::{
-    dto::template::WasmStoreRetiredStoreStatusResponse,
-    ids::{WasmStoreBinding, WasmStoreGcMode},
-    ops::storage::state::subnet::SubnetStateOps,
-};
+use crate::{ids::WasmStoreBinding, ops::storage::state::subnet::SubnetStateOps};
 use canic_core::__control_plane_core as cp_core;
 use cp_core::{InternalError, ops::storage::registry::subnet::SubnetRegistryOps};
 
@@ -25,27 +21,6 @@ impl WasmStorePublicationWorkflow {
         }
 
         bindings
-    }
-
-    // Return the current retired runtime-managed publication store status, if one exists.
-    pub async fn retired_publication_store_status()
-    -> Result<Option<WasmStoreRetiredStoreStatusResponse>, InternalError> {
-        let state = SubnetStateOps::publication_store_state();
-        let Some(retired_binding) = state.retired_binding.clone() else {
-            return Ok(None);
-        };
-
-        let store_pid = store_pid_for_binding(&retired_binding)?;
-        let store = store_status(store_pid).await?;
-
-        Ok(Some(WasmStoreRetiredStoreStatusResponse {
-            retired_binding,
-            generation: state.generation,
-            retired_at: state.retired_at,
-            gc_ready: store.gc.mode == WasmStoreGcMode::Complete,
-            reclaimable_store_bytes: store.occupied_store_bytes,
-            store,
-        }))
     }
 
     // Snapshot the current writable store fleet and the current preferred write hint.

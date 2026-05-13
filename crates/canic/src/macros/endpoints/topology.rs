@@ -7,15 +7,16 @@
 macro_rules! canic_emit_topology_state_endpoints {
     () => {
         #[cfg(canic_is_root)]
-        #[$crate::canic_query]
-        fn canic_app_state() -> Result<::canic::dto::state::AppStateResponse, ::canic::Error> {
+        #[$crate::canic_query(requires(caller::is_controller()))]
+        async fn canic_app_state() -> Result<::canic::dto::state::AppStateResponse, ::canic::Error>
+        {
             Ok($crate::__internal::core::api::state::AppStateQuery::snapshot())
         }
 
         #[cfg(canic_is_root)]
-        #[$crate::canic_query]
-        fn canic_subnet_state() -> Result<::canic::dto::state::SubnetStateResponse, ::canic::Error>
-        {
+        #[$crate::canic_query(requires(caller::is_controller()))]
+        async fn canic_subnet_state()
+        -> Result<::canic::dto::state::SubnetStateResponse, ::canic::Error> {
             Ok($crate::__internal::core::api::state::SubnetStateQuery::snapshot())
         }
     };

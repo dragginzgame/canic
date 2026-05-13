@@ -12,16 +12,14 @@ use canic_control_plane::{
         TemplateChunkInput, TemplateChunkSetInfoResponse, TemplateChunkSetPrepareInput,
         TemplateManifestInput, WasmStoreAdminCommand, WasmStoreAdminResponse,
         WasmStoreOverviewResponse, WasmStoreOverviewStoreResponse,
-        WasmStorePublicationSlotResponse, WasmStorePublicationStatusResponse,
-        WasmStorePublicationStoreStatusResponse, WasmStoreRetiredStoreStatusResponse,
-        WasmStoreStatusResponse,
+        WasmStorePublicationSlotResponse, WasmStoreStatusResponse,
     },
     ids::{
-        TemplateChunkingMode, TemplateId, TemplateManifestState, TemplateVersion, WasmStoreBinding,
-        WasmStoreGcMode,
+        CanisterRole, TemplateChunkingMode, TemplateId, TemplateManifestState, TemplateVersion,
+        WasmStoreBinding, WasmStoreGcMode,
     },
 };
-use canic_testing_internal::canister::MINIMAL;
+use canic_testing_internal::canister::APP;
 use canic_testkit::{artifacts::workspace_root_for, pic::Pic};
 use reconcile_root_harness::setup_cached_root;
 use std::{fs, path::PathBuf};
@@ -54,13 +52,13 @@ struct RetiredStoreLifecycleFixture {
 #[test]
 fn root_post_upgrade_preserves_multi_store_current_release_binding() {
     let setup = setup_root_with_small_implicit_store();
-    let previous_minimal = TemplateId::from("embedded:minimal".to_string());
+    let previous_minimal = managed_app_template_id();
     let before = publication_overview(&setup.pic, setup.root_id);
     let previous_store = store_with_approved_template(&before, &previous_minimal);
     let status = live_store_status(&setup.pic, setup.root_id, previous_store.pid);
     let payload_len =
         rollover_release_payload_len(status.remaining_store_bytes, status.max_store_bytes);
-    let template_id = TemplateId::from("canary:minimal".to_string());
+    let template_id = TemplateId::from("canary:app".to_string());
     let fixture = release_fixture(&template_id, "99.0.0-reconcile", payload_len);
     stage_manifest(&setup.pic, setup.root_id, &fixture.manifest);
     prepare_chunk_set(&setup.pic, setup.root_id, &fixture.prepare);
@@ -119,7 +117,7 @@ fn root_post_upgrade_preserves_multi_store_current_release_binding() {
 #[test]
 fn root_republish_reuses_exact_release_without_allocating_another_store() {
     let setup = setup_root_with_small_implicit_store();
-    let template_id = TemplateId::from("embedded:minimal".to_string());
+    let template_id = managed_app_template_id();
     let before = publication_overview(&setup.pic, setup.root_id);
     let before_store = store_with_approved_template(&before, &template_id);
     let before_store_count = before.stores.len();
@@ -153,11 +151,9 @@ fn root_republish_reuses_exact_release_without_allocating_another_store() {
 #[test]
 fn root_conflicting_duplicate_release_is_rejected_without_fleet_mutation() {
     let setup = setup_root_with_small_implicit_store();
-    let fixture = release_fixture(
-        &TemplateId::from("embedded:minimal".to_string()),
-        "0.21.1",
-        128 * 1024,
-    );
+    let template_id = managed_app_template_id();
+    let fixture =
+        release_fixture_for_role(&template_id, APP, env!("CARGO_PKG_VERSION"), 128 * 1024);
     stage_manifest(&setup.pic, setup.root_id, &fixture.manifest);
     let before = publication_overview(&setup.pic, setup.root_id);
 
@@ -176,10 +172,11 @@ fn root_conflicting_duplicate_release_is_rejected_without_fleet_mutation() {
 #[test]
 fn root_fixed_target_conflicting_duplicate_is_rejected_without_fleet_mutation() {
     let setup = setup_root_with_small_implicit_store();
-    let template_id = TemplateId::from("embedded:minimal".to_string());
+    let template_id = managed_app_template_id();
     let overview = publication_overview(&setup.pic, setup.root_id);
     let target_store = store_with_approved_template(&overview, &template_id);
-    let fixture = release_fixture(&template_id, "0.21.1", 128 * 1024);
+    let fixture =
+        release_fixture_for_role(&template_id, APP, env!("CARGO_PKG_VERSION"), 128 * 1024);
     stage_manifest(&setup.pic, setup.root_id, &fixture.manifest);
     let before = publication_overview(&setup.pic, setup.root_id);
 
@@ -198,13 +195,13 @@ fn root_fixed_target_conflicting_duplicate_is_rejected_without_fleet_mutation() 
 #[test]
 fn root_fixed_target_capacity_failure_is_rejected_without_fleet_mutation() {
     let setup = setup_root_with_small_implicit_store();
-    let previous_minimal = TemplateId::from("embedded:minimal".to_string());
+    let previous_minimal = managed_app_template_id();
     let current = publication_overview(&setup.pic, setup.root_id);
     let target_store = store_with_approved_template(&current, &previous_minimal);
     let status = live_store_status(&setup.pic, setup.root_id, target_store.pid);
     let payload_len =
         rollover_release_payload_len(status.remaining_store_bytes, status.max_store_bytes);
-    let template_id = TemplateId::from("canary:minimal".to_string());
+    let template_id = TemplateId::from("canary:app".to_string());
     let fixture = release_fixture(&template_id, "99.0.0-fixed-target", payload_len);
     stage_manifest(&setup.pic, setup.root_id, &fixture.manifest);
     prepare_chunk_set(&setup.pic, setup.root_id, &fixture.prepare);
@@ -231,7 +228,6 @@ fn root_fixed_target_capacity_failure_is_rejected_without_fleet_mutation() {
 fn root_publication_binding_transitions_mark_active_detached_and_retired_slots() {
     let setup = setup_root_with_small_implicit_store();
     let before = publication_overview(&setup.pic, setup.root_id);
-    let before_status = publication_status(&setup.pic, setup.root_id);
     let first_store = before
         .stores
         .first()
@@ -243,7 +239,12 @@ fn root_publication_binding_transitions_mark_active_detached_and_retired_slots()
         .expect("small-store setup must produce another managed store");
     let previous_generation = before.publication.generation;
     assert_publication_state(&before, None, None, None, previous_generation);
-    assert_initial_publication_status(&before, &before_status);
+    assert!(
+        before
+            .stores
+            .iter()
+            .all(|store| store.publication_slot.is_none())
+    );
 
     pin_publication_binding(&setup.pic, setup.root_id, &first_store.binding);
 
@@ -285,7 +286,6 @@ fn root_publication_binding_transitions_mark_active_detached_and_retired_slots()
     retire_detached_publication_binding(&setup.pic, setup.root_id, &first_store.binding);
 
     let after_retire = publication_overview(&setup.pic, setup.root_id);
-    let after_retire_status = publication_status(&setup.pic, setup.root_id);
     assert_publication_state(
         &after_retire,
         Some(second_store.binding.clone()),
@@ -302,12 +302,6 @@ fn root_publication_binding_transitions_mark_active_detached_and_retired_slots()
         &after_retire,
         &first_store.binding,
         Some(WasmStorePublicationSlotResponse::Retired),
-    );
-    assert_retired_publication_status(
-        &after_retire,
-        &after_retire_status,
-        &second_store.binding,
-        &first_store.binding,
     );
 }
 
@@ -388,12 +382,15 @@ fn retire_one_publication_store(
         Some(retired_store.binding.clone()),
         previous_generation + 3,
     );
-    let retired_status = retired_store_status(pic, root_id)
-        .expect("retired store status must exist immediately after retirement");
-    assert_eq!(retired_status.retired_binding, retired_store.binding);
-    assert_eq!(retired_status.generation, previous_generation + 3);
-    assert!(!retired_status.gc_ready);
-    assert!(retired_status.reclaimable_store_bytes > 0);
+    let retired_view = store_by_binding(&after_retire, &retired_store.binding);
+    assert_eq!(
+        retired_view.publication_slot,
+        Some(WasmStorePublicationSlotResponse::Retired)
+    );
+    assert!(
+        retired_view.approved_payload_bytes > 0,
+        "retired store should still carry approved payload before GC"
+    );
 
     RetiredStoreLifecycleFixture {
         before,
@@ -418,13 +415,9 @@ fn run_retired_store_gc(
     );
     let prepared_status = live_store_status(pic, root_id, retired_store.pid);
     assert_eq!(prepared_status.gc.mode, WasmStoreGcMode::Prepared);
-    let prepared_retired_status =
-        retired_store_status(pic, root_id).expect("retired store status must still exist");
-    assert_eq!(
-        prepared_retired_status.store.gc.mode,
-        WasmStoreGcMode::Prepared
-    );
-    assert!(!prepared_retired_status.gc_ready);
+    let prepared_overview = publication_overview(pic, root_id);
+    let prepared_retired_status = store_by_binding(&prepared_overview, &retired_store.binding);
+    assert_eq!(prepared_retired_status.gc.mode, WasmStoreGcMode::Prepared);
 
     let began = admin_call(pic, root_id, WasmStoreAdminCommand::BeginRetiredStoreGc);
     assert_eq!(
@@ -435,13 +428,13 @@ fn run_retired_store_gc(
     );
     let in_progress_status = live_store_status(pic, root_id, retired_store.pid);
     assert_eq!(in_progress_status.gc.mode, WasmStoreGcMode::InProgress);
+    let in_progress_overview = publication_overview(pic, root_id);
     let in_progress_retired_status =
-        retired_store_status(pic, root_id).expect("retired store status must still exist");
+        store_by_binding(&in_progress_overview, &retired_store.binding);
     assert_eq!(
-        in_progress_retired_status.store.gc.mode,
+        in_progress_retired_status.gc.mode,
         WasmStoreGcMode::InProgress
     );
-    assert!(!in_progress_retired_status.gc_ready);
 
     let completed = admin_call(pic, root_id, WasmStoreAdminCommand::CompleteRetiredStoreGc);
     assert_eq!(
@@ -455,14 +448,9 @@ fn run_retired_store_gc(
     assert_eq!(completed_status.occupied_store_bytes, 0);
     assert_eq!(completed_status.template_count, 0);
     assert_eq!(completed_status.release_count, 0);
-    let completed_retired_status =
-        retired_store_status(pic, root_id).expect("retired store status must still exist");
-    assert_eq!(
-        completed_retired_status.store.gc.mode,
-        WasmStoreGcMode::Complete
-    );
-    assert!(completed_retired_status.gc_ready);
-    assert_eq!(completed_retired_status.reclaimable_store_bytes, 0);
+    let completed_overview = publication_overview(pic, root_id);
+    let completed_retired_status = store_by_binding(&completed_overview, &retired_store.binding);
+    assert_eq!(completed_retired_status.gc.mode, WasmStoreGcMode::Complete);
 }
 
 // Finalize one retired managed store after its local GC pass has completed.
@@ -500,11 +488,6 @@ fn finalize_retired_store_binding(
         Some(WasmStorePublicationSlotResponse::Active),
     );
     assert_store_slot(&after_finalize, &retired_store.binding, None);
-    assert_eq!(
-        retired_store_status(pic, root_id),
-        None,
-        "retired store status must disappear once the retired binding is finalized"
-    );
 }
 
 // Delete one finalized managed store and assert it disappears from the tracked fleet.
@@ -552,11 +535,6 @@ fn delete_finalized_store(
         None,
         previous_generation + 4,
     );
-    assert_eq!(
-        retired_store_status(pic, root_id),
-        None,
-        "retired store status must stay absent after deleting the finalized store"
-    );
 }
 
 // Pin one explicit publication binding and assert the typed admin result.
@@ -591,55 +569,6 @@ fn retire_detached_publication_binding(
     );
 }
 
-// Assert the initial live publication-status surface for the managed fleet.
-fn assert_initial_publication_status(
-    overview: &WasmStoreOverviewResponse,
-    status: &WasmStorePublicationStatusResponse,
-) {
-    assert_eq!(status.publication, overview.publication);
-    assert!(status.managed_release_count > 0);
-    let preferred_binding = status
-        .preferred_binding
-        .clone()
-        .expect("small-store setup must expose one preferred publication binding");
-    let preferred_store = publication_status_store_by_binding(status, &preferred_binding);
-    assert!(preferred_store.is_preferred_binding);
-    assert!(preferred_store.is_selectable_for_publication);
-    assert!(!preferred_store.is_reserved_for_publication);
-    assert_eq!(preferred_store.publication_candidate_order, Some(0));
-}
-
-// Assert the live publication-status surface after one store becomes active and another retired.
-fn assert_retired_publication_status(
-    overview: &WasmStoreOverviewResponse,
-    status: &WasmStorePublicationStatusResponse,
-    active_binding: &WasmStoreBinding,
-    retired_binding: &WasmStoreBinding,
-) {
-    assert_eq!(status.publication, overview.publication);
-    assert_eq!(status.preferred_binding, Some(active_binding.clone()));
-
-    let active_store = publication_status_store_by_binding(status, active_binding);
-    assert_eq!(
-        active_store.publication_slot,
-        Some(WasmStorePublicationSlotResponse::Active)
-    );
-    assert!(active_store.is_preferred_binding);
-    assert!(active_store.is_selectable_for_publication);
-    assert!(!active_store.is_reserved_for_publication);
-    assert_eq!(active_store.publication_candidate_order, Some(0));
-
-    let retired_store = publication_status_store_by_binding(status, retired_binding);
-    assert_eq!(
-        retired_store.publication_slot,
-        Some(WasmStorePublicationSlotResponse::Retired)
-    );
-    assert!(!retired_store.is_preferred_binding);
-    assert!(!retired_store.is_selectable_for_publication);
-    assert!(retired_store.is_reserved_for_publication);
-    assert_eq!(retired_store.publication_candidate_order, None);
-}
-
 // Query the root-owned approved-release overview for the tracked wasm_store fleet.
 fn publication_overview(pic: &Pic, root_id: candid::Principal) -> WasmStoreOverviewResponse {
     let response: Result<WasmStoreOverviewResponse, Error> = pic
@@ -647,27 +576,6 @@ fn publication_overview(pic: &Pic, root_id: candid::Principal) -> WasmStoreOverv
         .expect("wasm_store overview transport failed");
 
     response.expect("wasm_store overview application failed")
-}
-
-// Read the live root-owned publication placement status for the current managed fleet.
-fn publication_status(pic: &Pic, root_id: candid::Principal) -> WasmStorePublicationStatusResponse {
-    let response: Result<WasmStorePublicationStatusResponse, Error> = pic
-        .update_call(root_id, protocol::CANIC_WASM_STORE_PUBLICATION_STATUS, ())
-        .expect("wasm_store publication status transport failed");
-
-    response.expect("wasm_store publication status application failed")
-}
-
-// Read the root-owned retired-store lifecycle view for the current publication fleet.
-fn retired_store_status(
-    pic: &Pic,
-    root_id: candid::Principal,
-) -> Option<WasmStoreRetiredStoreStatusResponse> {
-    let response: Result<Option<WasmStoreRetiredStoreStatusResponse>, Error> = pic
-        .update_call(root_id, protocol::CANIC_WASM_STORE_RETIRED_STATUS, ())
-        .expect("wasm_store retired status transport failed");
-
-    response.expect("wasm_store retired status application failed")
 }
 
 // Return one tracked store by its logical binding.
@@ -680,18 +588,6 @@ fn store_by_binding<'a>(
         .iter()
         .find(|store| &store.binding == binding)
         .unwrap_or_else(|| panic!("missing overview store for binding {binding}"))
-}
-
-// Return one tracked publication-status row by its logical binding.
-fn publication_status_store_by_binding<'a>(
-    status: &'a WasmStorePublicationStatusResponse,
-    binding: &WasmStoreBinding,
-) -> &'a WasmStorePublicationStoreStatusResponse {
-    status
-        .stores
-        .iter()
-        .find(|store| &store.binding == binding)
-        .unwrap_or_else(|| panic!("missing publication status store for binding {binding}"))
 }
 
 // Return one tracked store that currently owns one approved template id.
@@ -807,26 +703,26 @@ fn publish_chunk(pic: &Pic, root_id: candid::Principal, chunk: &TemplateChunkInp
 
 // Publish the current approved release set through the managed store fleet.
 fn publish_current_release_set_to_current_store(pic: &Pic, root_id: candid::Principal) {
-    let published: Result<(), Error> = pic
-        .update_call(
-            root_id,
-            protocol::CANIC_TEMPLATE_PUBLISH_TO_CURRENT_STORE_ADMIN,
-            (),
-        )
-        .expect("publish current release set transport failed");
-
-    published.expect("publish current release set application failed");
+    let response = admin_call(
+        pic,
+        root_id,
+        WasmStoreAdminCommand::PublishCurrentReleaseToCurrentStore,
+    );
+    assert_eq!(
+        response,
+        WasmStoreAdminResponse::PublishedCurrentReleaseToCurrentStore
+    );
 }
 
 // Publish the current approved release set through the managed store fleet and return the typed result.
 fn publish_current_release_set_to_current_store_err(
     pic: &Pic,
     root_id: candid::Principal,
-) -> Result<(), Error> {
+) -> Result<WasmStoreAdminResponse, Error> {
     pic.update_call(
         root_id,
-        protocol::CANIC_TEMPLATE_PUBLISH_TO_CURRENT_STORE_ADMIN,
-        (),
+        protocol::CANIC_WASM_STORE_ADMIN,
+        (WasmStoreAdminCommand::PublishCurrentReleaseToCurrentStore,),
     )
     .expect("publish current release set transport failed")
 }
@@ -887,6 +783,16 @@ fn rollover_release_payload_len(remaining_store_bytes: u64, max_store_bytes: u64
 
 // Build one synthetic current release fixture for the managed rollover canary.
 fn release_fixture(template_id: &TemplateId, version: &str, payload_len: usize) -> ReleaseFixture {
+    release_fixture_for_role(template_id, APP, version, payload_len)
+}
+
+// Build one synthetic current release fixture for a specific managed role.
+fn release_fixture_for_role(
+    template_id: &TemplateId,
+    role: CanisterRole,
+    version: &str,
+    payload_len: usize,
+) -> ReleaseFixture {
     let version = TemplateVersion::from(version.to_string());
     let payload = vec![0xA5; payload_len];
     let payload_hash = wasm_hash(&payload);
@@ -908,7 +814,7 @@ fn release_fixture(template_id: &TemplateId, version: &str, payload_len: usize) 
     ReleaseFixture {
         manifest: TemplateManifestInput {
             template_id: template_id.clone(),
-            role: MINIMAL,
+            role,
             version: version.clone(),
             payload_hash: payload_hash.clone(),
             payload_size_bytes: payload_len as u64,
@@ -927,6 +833,11 @@ fn release_fixture(template_id: &TemplateId, version: &str, payload_len: usize) 
         },
         chunks,
     }
+}
+
+// Return one release that is actually staged by the reconcile small-store baseline.
+fn managed_app_template_id() -> TemplateId {
+    TemplateId::from("embedded:app".to_string())
 }
 
 // Resolve the currently built root wasm artifact used for PocketIC upgrades.

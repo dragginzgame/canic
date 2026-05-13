@@ -22,7 +22,7 @@ macro_rules! canic_emit_root_admin_endpoints {
             Ok(res)
         }
 
-        #[$crate::canic_update(requires(caller::is_root(), caller::is_controller()))]
+        #[$crate::canic_update(requires(caller::is_controller()))]
         async fn canic_canister_status(
             pid: ::canic::cdk::candid::Principal,
         ) -> Result<::canic::dto::canister::CanisterStatusResponse, ::canic::Error> {
@@ -34,8 +34,10 @@ macro_rules! canic_emit_root_admin_endpoints {
             $crate::__internal::core::api::config::ConfigApi::export_toml()
         }
 
-        #[$crate::canic_query]
-        fn canic_app_registry()
+        // TBD: future app-level topology contract; keep private to controllers until
+        // host/backup semantics are designed.
+        #[$crate::canic_query(requires(caller::is_controller()))]
+        async fn canic_app_registry()
         -> Result<::canic::dto::topology::AppRegistryResponse, ::canic::Error> {
             Ok($crate::__internal::core::api::topology::registry::AppRegistryApi::registry())
         }
@@ -93,29 +95,6 @@ macro_rules! canic_emit_root_auth_attestation_endpoints {
 macro_rules! canic_emit_root_wasm_store_endpoints {
     () => {
         #[$crate::canic_update(requires(caller::is_controller()))]
-        async fn canic_wasm_store_bootstrap_stage_manifest_admin(
-            request: ::canic::dto::template::TemplateManifestInput,
-        ) -> Result<(), ::canic::Error> {
-            ::canic::api::canister::template::WasmStoreBootstrapApi::stage_root_wasm_store_manifest(
-                request,
-            )
-        }
-
-        #[$crate::canic_update(requires(caller::is_controller()))]
-        async fn canic_wasm_store_bootstrap_prepare_admin(
-            request: ::canic::dto::template::TemplateChunkSetPrepareInput,
-        ) -> Result<::canic::dto::template::TemplateChunkSetInfoResponse, ::canic::Error> {
-            ::canic::api::canister::template::WasmStoreBootstrapApi::prepare_root_wasm_store_chunk_set(request)
-        }
-
-        #[$crate::canic_update(requires(caller::is_controller()), payload(max_bytes = ::canic::CANIC_WASM_CHUNK_BYTES + 64 * 1024))]
-        async fn canic_wasm_store_bootstrap_publish_chunk_admin(
-            request: ::canic::dto::template::TemplateChunkInput,
-        ) -> Result<(), ::canic::Error> {
-            ::canic::api::canister::template::WasmStoreBootstrapApi::publish_root_wasm_store_chunk(request)
-        }
-
-        #[$crate::canic_update(requires(caller::is_controller()))]
         async fn canic_wasm_store_bootstrap_resume_root_admin() -> Result<(), ::canic::Error> {
             $crate::__internal::control_plane::api::lifecycle::LifecycleApi::schedule_init_root_bootstrap();
             Ok(())
@@ -150,11 +129,6 @@ macro_rules! canic_emit_root_wasm_store_endpoints {
         }
 
         #[$crate::canic_update(requires(caller::is_controller()))]
-        async fn canic_template_publish_to_current_store_admin() -> Result<(), ::canic::Error> {
-            ::canic::api::canister::template::WasmStoreBootstrapApi::publish_staged_release_set_to_current_store().await
-        }
-
-        #[$crate::canic_update(requires(caller::is_controller()))]
         async fn canic_wasm_store_admin(
             cmd: ::canic::dto::template::WasmStoreAdminCommand,
         ) -> Result<::canic::dto::template::WasmStoreAdminResponse, ::canic::Error> {
@@ -165,18 +139,6 @@ macro_rules! canic_emit_root_wasm_store_endpoints {
         async fn canic_wasm_store_overview(
         ) -> Result<::canic::dto::template::WasmStoreOverviewResponse, ::canic::Error> {
             ::canic::api::canister::template::WasmStorePublicationApi::overview()
-        }
-
-        #[$crate::canic_update(requires(caller::is_controller()))]
-        async fn canic_wasm_store_publication_status(
-        ) -> Result<::canic::dto::template::WasmStorePublicationStatusResponse, ::canic::Error> {
-            ::canic::api::canister::template::WasmStorePublicationApi::status().await
-        }
-
-        #[$crate::canic_update(requires(caller::is_controller()))]
-        async fn canic_wasm_store_retired_status(
-        ) -> Result<Option<::canic::dto::template::WasmStoreRetiredStoreStatusResponse>, ::canic::Error> {
-            ::canic::api::canister::template::WasmStorePublicationApi::retired_store_status().await
         }
 
     };

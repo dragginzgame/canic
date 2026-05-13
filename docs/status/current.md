@@ -12,8 +12,7 @@ inspect only the files needed for the current task.
 - Active minor: `0.35.x`
 - Theme: get backup/restore working end-to-end around topology-aware plans,
   executable journals, and clear host/backup boundaries.
-- Current release-work area: `0.35.3` local replica port/ownership polish,
-  explicit top-up config clarity, and Canic-managed ICP config sync.
+- Current release-work area: `0.35.4` root endpoint/access-control cleanup.
 
 ## Recent Work
 
@@ -28,6 +27,27 @@ inspect only the files needed for the current task.
   diagnostics, `canic fleet sync`, automatic `icp.yaml` sync after
   `canic fleet create <name>`, explicit `topup = {}` default top-up config
   blocks, and the default top-up amount change from `4T` to `5T`.
+- Started the 0.35.4 endpoint cleanup by removing stale root wasm-store
+  bootstrap upload endpoints, controller-gating root state/app-registry/log
+  diagnostics, simplifying `canic_canister_status` to controller-only access,
+  and updating wasm-store reconcile coverage to current managed release roles.
+- Collapsed the root wasm-store endpoint surface by removing the duplicate
+  publish-to-current shortcut plus split publication/retired status endpoints;
+  current publication uses `canic_wasm_store_admin` and controller reads use
+  `canic_wasm_store_overview`.
+- Ran the 2026-05-13 recurring `instruction-footprint` performance audit as
+  the first `0.35` baseline. It reports risk `3 / 10`; root delegation is the
+  highest sampled endpoint at `800834` average local instructions, and the
+  first-run baseline deltas are intentionally `N/A`.
+- Reran the 2026-05-13 recurring `audience-target-binding` invariant audit. It
+  reports risk `3 / 10` and confirms role-attestation, delegated-token,
+  delegated-grant, and capability-proof audience/target binding still fails
+  closed.
+- Added a config-schema regression proving obsolete per-canister delegated-auth
+  verifier tables are rejected instead of accepted through compatibility shims.
+- Updated the internal audit scaling probe to use `scale_replica` and
+  `policy.initial_workers = 0` so the dry-run planning probe no longer tries
+  to allocate startup workers in a standalone PocketIC scenario.
 - Renamed the test fleet scaling worker role from `scale` to `scale_replica`,
   changed role cycle config from `topup_policy` to `topup`, and enabled explicit
   default `topup = {}` policy blocks for the main test app, hub, shard, and
@@ -373,6 +393,21 @@ inspect only the files needed for the current task.
 - `cargo test -p canic-host install_root::tests -- --nocapture`
 - `cargo check -p canic-host`
 - `cargo clippy -p canic-host --all-targets -- -D warnings`
+- `bash scripts/ci/instruction-audit-report.sh`
+- `cargo test -p canic-core --lib verify_root_delegated_grant_claims_rejects_audience_mismatch -- --nocapture`
+- `cargo test -p canic-core --lib verify_delegated_token_rejects_audience_subset_drift -- --nocapture`
+- `cargo test -p canic-core --lib verify_delegated_token_rejects_missing_local_role_for_role_audience -- --nocapture`
+- `cargo test -p canic-core --lib mint_delegated_token_rejects_audience_expansion -- --nocapture`
+- `cargo test -p canic-core config::schema::subnet::tests::canister_config_rejects_legacy_delegated_auth_table -- --nocapture`
+- `cargo test -p canic-core config::schema -- --nocapture`
+- `cargo check -p canic-control-plane -p canic -p canic-tests --tests`
+- `cargo test -p canic-control-plane publication -- --nocapture`
+- `cargo test -p canic-tests --test root_wasm_store_reconcile -- --test-threads=1 --nocapture`
+- `cargo test -p canic-tests --test pic_role_attestation role_attestation_verification_paths -- --test-threads=1 --nocapture`
+- `cargo test -p canic-tests --test pic_role_attestation capability_endpoint_role_attestation_proof_paths -- --test-threads=1 --nocapture`
+- `cargo fmt --all --check`
+- `cargo check -p canic-tests --tests`
+- `git diff --check`
 
 ## Known Worktree Notes
 

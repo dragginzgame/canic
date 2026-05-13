@@ -63,6 +63,22 @@ fn inline_empty_topup_table_enables_default_topup() {
 }
 
 #[test]
+fn canister_config_rejects_legacy_delegated_auth_table() {
+    let err = toml::from_str::<CanisterConfig>(
+        r#"
+kind = "singleton"
+delegated_auth = { verifier = true }
+"#,
+    )
+    .expect_err("legacy delegated auth config must not parse");
+
+    assert!(
+        err.to_string().contains("delegated_auth"),
+        "expected unknown delegated_auth field, got: {err}"
+    );
+}
+
+#[test]
 fn metrics_profile_defaults_follow_canister_role() {
     let root = base_canister_config(CanisterKind::Root);
     assert_eq!(
