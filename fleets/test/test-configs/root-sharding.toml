@@ -23,6 +23,7 @@ kind = "root"
 
 [subnets.prime.canisters.user_hub]
 kind = "singleton"
+topup = {}
 
 [subnets.prime.canisters.user_hub.sharding.pools.user_shards]
 canister_role = "user_shard"
@@ -31,6 +32,7 @@ policy.max_shards = 4
 
 [subnets.prime.canisters.user_shard]
 kind = "shard"
+topup = {}
 
 [subnets.prime.canisters.user_shard.auth]
 delegated_token_signer = true

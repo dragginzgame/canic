@@ -4,7 +4,7 @@ use canic::{
     ids::{CanisterRole, SubnetRole},
 };
 use canic_testing_internal::{
-    canister::{APP, MINIMAL, SCALE, SCALE_HUB, TEST, USER_HUB, USER_SHARD, WASM_STORE},
+    canister::{APP, MINIMAL, SCALE_HUB, SCALE_REPLICA, TEST, USER_HUB, USER_SHARD, WASM_STORE},
     pic::{invalid_init_args, upgrade_args},
 };
 
@@ -15,7 +15,7 @@ fn canister_role_constants_have_expected_names() {
         (APP, "app"),
         (MINIMAL, "minimal"),
         (SCALE_HUB, "scale_hub"),
-        (SCALE, "scale"),
+        (SCALE_REPLICA, "scale_replica"),
         (TEST, "test"),
         (WASM_STORE, "wasm_store"),
         (USER_HUB, "user_hub"),

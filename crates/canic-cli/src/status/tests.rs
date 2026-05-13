@@ -24,6 +24,7 @@ fn renders_status_report() {
     let report = StatusReport {
         network: "local".to_string(),
         replica: ReplicaStatus::Running,
+        replica_port: "8000".to_string(),
         icp_cli: "icp 0.2.5".to_string(),
         fleets: vec![
             StatusFleetRow {
@@ -46,7 +47,7 @@ fn renders_status_report() {
     assert_eq!(
         render_status_report(&report),
         [
-            "Replica: running (local)",
+            "Replica: running (local, port 8000)",
             "ICP CLI: icp 0.2.5",
             "Fleets:  1/2 deployed (network local)",
             "",
@@ -65,13 +66,14 @@ fn renders_empty_status_report() {
     let report = StatusReport {
         network: "local".to_string(),
         replica: ReplicaStatus::Stopped,
+        replica_port: "8001".to_string(),
         icp_cli: "icp 0.2.5".to_string(),
         fleets: Vec::new(),
     };
 
     assert_eq!(
         render_status_report(&report),
-        "Replica: stopped (local)\nICP CLI: icp 0.2.5\nFleets:  0/0 deployed (network local)"
+        "Replica: stopped (local, port 8001)\nICP CLI: icp 0.2.5\nFleets:  0/0 deployed (network local)"
     );
 }
 
@@ -81,6 +83,7 @@ fn renders_lost_local_fleet_note() {
     let report = StatusReport {
         network: "local".to_string(),
         replica: ReplicaStatus::Running,
+        replica_port: "8000".to_string(),
         icp_cli: "icp 0.2.6".to_string(),
         fleets: vec![StatusFleetRow {
             fleet: "test".to_string(),

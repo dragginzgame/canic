@@ -18,7 +18,8 @@ PocketIC fixtures, but `canic fleet list` must not discover them as fleets.
 
 ## Local Workflow
 
-- Build the sandbox manually: `scripts/app/build.sh sandbox_minimal`
+- Build the sandbox manually:
+  `cargo run -q -p canic-host --example build_artifact -- sandbox_minimal`
 - Build audit probes through Cargo, for example:
   `cargo check -p canister_minimal -p audit_leaf_probe -p audit_root_probe -p audit_scaling_probe`
 - Build isolated test fixtures through Cargo, for example:

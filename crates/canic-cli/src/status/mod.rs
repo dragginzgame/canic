@@ -7,6 +7,7 @@ use crate::{
 };
 use canic_host::{
     icp::IcpCli,
+    icp_config::{DEFAULT_LOCAL_GATEWAY_PORT, configured_local_gateway_port},
     install_root::discover_current_canic_config_choices,
     installed_fleet::{
         InstalledFleetError, InstalledFleetRequest, read_installed_fleet_state,
@@ -69,6 +70,7 @@ struct StatusOptions {
 struct StatusReport {
     network: String,
     replica: ReplicaStatus,
+    replica_port: String,
     icp_cli: String,
     fleets: Vec<StatusFleetRow>,
 }
@@ -143,6 +145,7 @@ fn load_status_report(options: &StatusOptions) -> Result<StatusReport, StatusCom
     Ok(StatusReport {
         network: options.network.clone(),
         replica,
+        replica_port: load_replica_port(),
         icp_cli,
         fleets,
     })
@@ -156,11 +159,17 @@ fn load_icp_cli_version(options: &StatusOptions) -> String {
 }
 
 fn load_replica_status(options: &StatusOptions) -> ReplicaStatus {
-    match IcpCli::new(&options.icp, None, None).local_replica_ping(false) {
+    match IcpCli::new(&options.icp, None, None).local_replica_project_running(false) {
         Ok(true) => ReplicaStatus::Running,
         Ok(false) => ReplicaStatus::Stopped,
         Err(err) => ReplicaStatus::Error(err.to_string()),
     }
+}
+
+fn load_replica_port() -> String {
+    configured_local_gateway_port()
+        .unwrap_or(DEFAULT_LOCAL_GATEWAY_PORT)
+        .to_string()
 }
 
 fn status_fleet_row(
@@ -259,7 +268,7 @@ fn render_status_report(report: &StatusReport) -> String {
     let configured = report.fleets.len();
     let deployed = deployed_count(&report.fleets);
     let mut lines = vec![
-        format!("Replica: {}", report.replica.label()),
+        format!("Replica: {}", report.replica.label(&report.replica_port)),
         format!("ICP CLI: {}", report.icp_cli),
         format!(
             "Fleets:  {deployed}/{configured} deployed (network {})",
@@ -321,11 +330,11 @@ fn render_fleet_table(fleets: &[StatusFleetRow]) -> String {
 }
 
 impl ReplicaStatus {
-    fn label(&self) -> String {
+    fn label(&self, port: &str) -> String {
         match self {
-            Self::Running => "running (local)".to_string(),
-            Self::Stopped => "stopped (local)".to_string(),
-            Self::Error(err) => format!("unknown (local): {err}"),
+            Self::Running => format!("running (local, port {port})"),
+            Self::Stopped => format!("stopped (local, port {port})"),
+            Self::Error(err) => format!("unknown (local, port {port}): {err}"),
         }
     }
 }

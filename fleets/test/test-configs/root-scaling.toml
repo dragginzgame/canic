@@ -23,16 +23,16 @@ kind = "root"
 
 [subnets.prime.canisters.scale_hub]
 kind = "singleton"
-topup_policy.threshold = "10T"
-topup_policy.amount = "4T"
+topup = {}
 
 [subnets.prime.canisters.scale_hub.scaling.pools.scales]
-canister_role = "scale"
+canister_role = "scale_replica"
 policy.initial_workers = 1
 policy.min_workers = 2
 
-[subnets.prime.canisters.scale]
+[subnets.prime.canisters.scale_replica]
 kind = "replica"
+topup = {}
 
 [subnets.general]
 

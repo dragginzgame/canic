@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-05-12
+Last updated: 2026-05-13
 
 ## Purpose
 
@@ -12,7 +12,8 @@ inspect only the files needed for the current task.
 - Active minor: `0.35.x`
 - Theme: get backup/restore working end-to-end around topology-aware plans,
   executable journals, and clear host/backup boundaries.
-- Current release-work area: `0.35.0` backup/restore execution path.
+- Current release-work area: `0.35.3` local replica port/ownership polish and
+  explicit top-up config clarity.
 
 ## Recent Work
 
@@ -22,6 +23,25 @@ inspect only the files needed for the current task.
 - Added the 0.35.2 controller-policy follow-up: root init and post-upgrade now
   retain the installing or upgrading root controller in the runtime controller
   set used for newly allocated managed children.
+- Added the 0.35.3 changelog entry covering local replica port visibility,
+  `canic replica start --port <port>`, configured-port local queries, ownership
+  diagnostics, explicit `topup = {}` default top-up config blocks, and the
+  default top-up amount change from `4T` to `5T`.
+- Renamed the test fleet scaling worker role from `scale` to `scale_replica`,
+  changed role cycle config from `topup_policy` to `topup`, and enabled explicit
+  default `topup = {}` policy blocks for the main test app, hub, shard, and
+  scaling roles.
+- Slimmed the ICP build hook path: `icp.yaml` now invokes
+  `cargo run -q -p canic-host --example build_artifact -- <role>` directly,
+  the Rust builder owns `ICP_WASM_OUTPUT_PATH` copying, and the old
+  `scripts/app/build.sh` wrapper has been removed.
+- Tightened local replica ownership checks so `canic replica start --background`
+  and `canic status` use project-scoped ICP network status instead of broad
+  local ping, while `canic replica stop` distinguishes "this project is already
+  stopped" from "port 8000 is owned by a different ICP network/project".
+- Added configured local gateway port output to `canic status` and
+  `canic replica status`, plus `canic replica start --port <port>` to update
+  this project's `icp.yaml` `gateway.port` before starting.
 - Hard-cut the managed child controller policy for 0.35.1: newly allocated
   non-root canisters now receive configured controllers, root, and their direct
   parent as controllers; pool reuse updates the controller set before install.
@@ -225,6 +245,20 @@ inspect only the files needed for the current task.
 ## Validation Recently Run
 
 - `cargo fmt --all`
+- `bash -n scripts/ci/build-ci-wasm-artifacts.sh scripts/ci/wasm-audit-report.sh`
+- `cargo check -p canic-host --examples`
+- `cargo check -p canic-host --examples -p canic-tests`
+- `cargo test -p canic-host canister_build -- --nocapture`
+- `cargo clippy -p canic-host --examples -- -D warnings`
+- `cargo check -p canic-core -p canic-host -p canic-testing-internal -p canister_scale`
+- `cargo test -p canic build_support -- --nocapture`
+- `cargo test -p canic-core config::schema -- --nocapture`
+- `cargo test -p canic-core config::schema::subnet -- --nocapture`
+- `cargo test -p canic-host release_set -- --nocapture`
+- `cargo test -p canic-host install_root::tests::config_selection -- --nocapture`
+- `cargo test -p canic-cli list::tests -- --nocapture`
+- `cargo clippy -p canic -p canic-core -p canic-host -p canic-testing-internal --all-targets -- -D warnings`
+- `git diff --check`
 - `cargo test -p canic-core workflow::ic::provision::allocation -- --nocapture`
 - `cargo check -p canic-core`
 - `cargo clippy -p canic-core --all-targets -- -D warnings`
@@ -238,6 +272,14 @@ inspect only the files needed for the current task.
 - `cargo clippy -p canic-backup -p canic-cli --all-targets -- -D warnings`
 - `cargo test -p canic-cli list::tests -- --nocapture`
 - `cargo test -p canic-cli snapshot -- --nocapture`
+- `cargo test -p canic-cli replica -- --nocapture`
+- `cargo test -p canic-cli status -- --nocapture`
+- `cargo test -p canic-host icp -- --nocapture`
+- `cargo test -p canic-host icp_config -- --nocapture`
+- `cargo test -p canic-host replica_query -- --nocapture`
+- `cargo clippy -p canic-cli -p canic-host --all-targets -- -D warnings`
+- `cargo run -p canic-cli -- status`
+- `cargo run -p canic-cli -- replica status`
 - `cargo test -p canic-host snapshot_id -- --nocapture`
 - `cargo test -p canic-host snapshot -- --nocapture`
 - `cargo test -p canic-backup discovery -- --nocapture`

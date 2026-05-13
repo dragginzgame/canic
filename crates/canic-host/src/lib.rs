@@ -9,6 +9,7 @@ pub mod canister_build;
 mod cargo_metadata;
 pub mod format;
 pub mod icp;
+pub mod icp_config;
 pub mod install_root;
 pub mod installed_fleet;
 pub mod registry;

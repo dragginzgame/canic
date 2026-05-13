@@ -30,7 +30,7 @@ pub fn init_sharding_test_config() {
     let root_cfg = CanisterConfig {
         kind: CanisterKind::Root,
         initial_cycles: Cycles::new(5_000_000_000_000),
-        topup_policy: None,
+        topup: None,
         randomness: RandomnessConfig::default(),
         scaling: None,
         sharding: None,
@@ -43,7 +43,7 @@ pub fn init_sharding_test_config() {
     let manager_cfg = CanisterConfig {
         kind: CanisterKind::Singleton,
         initial_cycles: Cycles::new(5_000_000_000_000),
-        topup_policy: None,
+        topup: None,
         randomness: RandomnessConfig::default(),
         scaling: None,
         sharding: Some(sharding),
@@ -56,7 +56,7 @@ pub fn init_sharding_test_config() {
     let shard_cfg = CanisterConfig {
         kind: CanisterKind::Shard,
         initial_cycles: Cycles::new(5_000_000_000_000),
-        topup_policy: None,
+        topup: None,
         randomness: RandomnessConfig::default(),
         scaling: None,
         sharding: None,

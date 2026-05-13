@@ -6,7 +6,7 @@ fn base_canister_config(kind: CanisterKind) -> CanisterConfig {
     CanisterConfig {
         kind,
         initial_cycles: Cycles::new(0),
-        topup_policy: None,
+        topup: None,
         randomness: RandomnessConfig::default(),
         scaling: None,
         sharding: None,

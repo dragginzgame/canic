@@ -224,7 +224,7 @@ build_and_cache_artifacts() {
     fi
 
     for canister in "${CANISTERS[@]}"; do
-        CANIC_WASM_PROFILE="$CANIC_BUILD_PROFILE" bash scripts/app/build.sh "$canister"
+        CANIC_WASM_PROFILE="$CANIC_BUILD_PROFILE" cargo run -q -p canic-host --example build_artifact -- "$canister"
     done
 
     for canister in "${CANISTERS[@]}"; do
@@ -807,7 +807,7 @@ else
     fi
     require_icp_tools
     build_and_cache_artifacts
-    record_verification "cargo build --target wasm32-unknown-unknown ... && scripts/app/build.sh ..." "PASS" "built and cached raw/shrunk artifacts for $(profile_command_note)"
+    record_verification "cargo build --target wasm32-unknown-unknown ... && cargo run -p canic-host --example build_artifact ..." "PASS" "built and cached raw/shrunk artifacts for $(profile_command_note)"
 fi
 
 if [ "$IC_WASM_AVAILABLE" -eq 1 ]; then

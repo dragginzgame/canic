@@ -49,10 +49,12 @@ kind = "root"
 # --- App ---
 [subnets.prime.canisters.app]
 kind = "singleton"
+topup = {}
 
 # --- User Hub ---
 [subnets.prime.canisters.user_hub]
 kind = "singleton"
+topup = {}
 
 # --- User Hub Pools ---
 [subnets.prime.canisters.user_hub.sharding.pools.user_shards]
@@ -64,6 +66,7 @@ policy.max_shards = 4
 # --- User Shard ---
 [subnets.prime.canisters.user_shard]
 kind = "shard"
+topup = {}
 
 [subnets.prime.canisters.user_shard.auth]
 delegated_token_signer = true
@@ -72,18 +75,18 @@ role_attestation_cache = true
 # --- Scale Hub ---
 [subnets.prime.canisters.scale_hub]
 kind = "singleton"
-topup_policy.threshold = "10T"
-topup_policy.amount = "4T"
+topup = {}
 
 # --- Scale Hub Pools ---
 [subnets.prime.canisters.scale_hub.scaling.pools.scales]
-canister_role = "scale"
+canister_role = "scale_replica"
 policy.initial_workers = 1
 policy.min_workers = 2
 
-# --- Scale ---
-[subnets.prime.canisters.scale]
+# --- Scale Replica ---
+[subnets.prime.canisters.scale_replica]
 kind = "replica"
+topup = {}
 
 # ================================================================
 #  GENERAL SUBNET

@@ -30,6 +30,7 @@ canic-memory = { workspace = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 flate2 = { workspace = true }
+toml = { workspace = true }
 
 [build-dependencies]
 canic-core = { workspace = true }
@@ -37,7 +38,6 @@ canic-core = { workspace = true }
 [dev-dependencies]
 ic-cdk = { workspace = true }
 serde_json = { workspace = true }
-toml = { workspace = true }
 
 [lints]
 workspace = true

@@ -80,7 +80,10 @@ Commands use network `local` unless you pass
 
 The local ICP CLI replica does not persist canister state across stop/start.
 If `canic status` reports a local fleet as `lost`, reinstall the fleet before
-running backup or restore commands against that local environment.
+running backup or restore commands against that local environment. `canic status`
+and `canic replica status` show the configured local gateway port; use
+`canic replica start --port <port>` to update this project's `icp.yaml`
+`gateway.port` before starting.
 
 List saved fleet configs:
 

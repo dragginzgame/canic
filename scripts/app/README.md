@@ -87,9 +87,12 @@ icp canister create --all
 icp build --all
 ```
 
-`icp.yaml` uses custom build commands which call `scripts/app/build.sh <canister>`. That script:
-- invokes the same host artifact builder used by `canic install`
-- prints the workspace/ICP roots once per `icp build` parent process and a short elapsed-time line per canister build so long downstream/custom-build runs stay readable
+`icp.yaml` uses custom build commands which call the host artifact builder
+directly:
+
+```bash
+cargo run -q -p canic-host --example build_artifact -- <canister>
+```
 
 That builder:
 - builds the requested Rust canister crate for `wasm32-unknown-unknown`
@@ -97,6 +100,8 @@ That builder:
 - keeps `wasm_store` out of downstream `icp.yaml` and delegates the implicit bootstrap build through the Canic backend builder
 - lets the bootstrap builder resolve the canonical `canic-wasm-store` source automatically from the current `canic` checkout or published registry source, and if that canonical crate is not present it synthesizes a wrapper directly from the resolved `canic` source, so downstreams do not need their own `wasm_store` crate or extra `wasm_store` build config
 - copies the resulting WASM into `.icp/local/canisters/<name>/<name>.wasm`
+- copies the uncompressed WASM to `ICP_WASM_OUTPUT_PATH` when invoked by ICP
+  CLI custom builds
 - runs `candid-extractor` to produce `.icp/local/canisters/<name>/<name>.did`
 
 The visible reference canister `.did` files now live only under `.icp/local`.
@@ -125,10 +130,10 @@ embedded in `root`; the ordinary role `.wasm.gz` artifacts stay outside `root`
 and are staged after `root` install from the build-produced
 `.icp/local/canisters/root/root.release-set.json` manifest by `canic install`.
 
-During normal custom builds, `scripts/app/build.sh` now opportunistically emits
-that manifest as soon as the full root-subnet ordinary artifact set exists, so
-downstreams do not need a local copy of the manifest-emission logic just to
-keep `.icp/local/canisters/root/root.release-set.json` in sync.
+During normal custom builds, the host builder opportunistically emits that
+manifest as soon as the full root-subnet ordinary artifact set exists, so
+downstreams do not need a local copy of the manifest-emission logic just to keep
+`.icp/local/canisters/root/root.release-set.json` in sync.
 
 For normal fleet work, use the fleet-aware installer instead of a per-role
 builder command:

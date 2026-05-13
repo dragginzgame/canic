@@ -23,9 +23,11 @@ kind = "root"
 
 [subnets.prime.canisters.app]
 kind = "singleton"
+topup = {}
 
 [subnets.prime.canisters.scale_hub]
 kind = "singleton"
+topup = {}
 
 [subnets.prime.canisters.test]
 kind = "singleton"

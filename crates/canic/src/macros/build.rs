@@ -163,27 +163,27 @@ macro_rules! __canic_build_internal {
         }
 
         if let Ok(package_name) = std::env::var("CARGO_PKG_NAME") {
-            let inferred_role_name = package_name
-                .strip_prefix("canister_")
-                .map(str::to_string)
-                .or_else(|| {
-                    let mut roles = Vec::new();
+            let inferred_role_name =
+                $crate::__build::declared_package_role(std::path::Path::new(&manifest_dir))
+                    .or_else(|| package_name.strip_prefix("canister_").map(str::to_string))
+                    .or_else(|| {
+                        let mut roles = Vec::new();
 
-                    for subnet in $cfg.subnets.values() {
-                        for role in subnet.canisters.keys() {
-                            if role.is_root() {
-                                continue;
-                            }
+                        for subnet in $cfg.subnets.values() {
+                            for role in subnet.canisters.keys() {
+                                if role.is_root() {
+                                    continue;
+                                }
 
-                            let role_name = role.as_str();
-                            if roles.iter().all(|existing| existing != role_name) {
-                                roles.push(role_name.to_string());
+                                let role_name = role.as_str();
+                                if roles.iter().all(|existing| existing != role_name) {
+                                    roles.push(role_name.to_string());
+                                }
                             }
                         }
-                    }
 
-                    (roles.len() == 1).then(|| roles.remove(0))
-                });
+                        (roles.len() == 1).then(|| roles.remove(0))
+                    });
 
             if let Some(role_name) = inferred_role_name.as_deref() {
                 let mut role_found = false;

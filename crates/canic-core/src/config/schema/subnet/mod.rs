@@ -1,8 +1,5 @@
 use crate::{
-    cdk::{
-        candid::Principal,
-        types::{Cycles, TC},
-    },
+    cdk::{candid::Principal, types::Cycles},
     ids::CanisterRole,
 };
 use serde::{Deserialize, Serialize};
@@ -13,9 +10,18 @@ use std::{
 
 mod defaults {
     use super::Cycles;
+    use crate::cdk::types::TC;
 
     pub const fn initial_cycles() -> Cycles {
         Cycles::new(5_000_000_000_000)
+    }
+
+    pub const fn topup_threshold() -> Cycles {
+        Cycles::new(10 * TC)
+    }
+
+    pub const fn topup_amount() -> Cycles {
+        Cycles::new(5 * TC)
     }
 }
 
@@ -100,7 +106,7 @@ fn implicit_wasm_store_canister_config() -> CanisterConfig {
     CanisterConfig {
         kind: CanisterKind::Singleton,
         initial_cycles: defaults::initial_cycles(),
-        topup_policy: None,
+        topup: None,
         randomness: RandomnessConfig::default(),
         scaling: None,
         sharding: None,
@@ -149,7 +155,7 @@ pub struct CanisterConfig {
     pub initial_cycles: Cycles,
 
     #[serde(default)]
-    pub topup_policy: Option<TopupPolicy>,
+    pub topup: Option<TopupPolicy>,
 
     #[serde(default)]
     pub randomness: RandomnessConfig,
@@ -259,18 +265,24 @@ impl fmt::Display for CanisterKind {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct TopupPolicy {
-    #[serde(default, deserialize_with = "Cycles::from_config")]
+    #[serde(
+        default = "defaults::topup_threshold",
+        deserialize_with = "Cycles::from_config"
+    )]
     pub threshold: Cycles,
 
-    #[serde(default, deserialize_with = "Cycles::from_config")]
+    #[serde(
+        default = "defaults::topup_amount",
+        deserialize_with = "Cycles::from_config"
+    )]
     pub amount: Cycles,
 }
 
 impl Default for TopupPolicy {
     fn default() -> Self {
         Self {
-            threshold: Cycles::new(10 * TC),
-            amount: Cycles::new(4 * TC),
+            threshold: defaults::topup_threshold(),
+            amount: defaults::topup_amount(),
         }
     }
 }

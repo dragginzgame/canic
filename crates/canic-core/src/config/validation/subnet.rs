@@ -59,7 +59,7 @@ impl Validate for SubnetConfig {
             }
 
             validate_kind(cfg, role)?;
-            validate_topup_policy(cfg, role)?;
+            validate_topup(cfg, role)?;
             validate_scaling(cfg, role, &self.canisters)?;
             validate_sharding(cfg, role, &self.canisters)?;
             validate_directory(cfg, role, &self.canisters)?;
@@ -69,20 +69,17 @@ impl Validate for SubnetConfig {
     }
 }
 
-fn validate_topup_policy(
-    cfg: &CanisterConfig,
-    canister: &CanisterRole,
-) -> Result<(), ConfigSchemaError> {
-    let Some(topup_policy) = &cfg.topup_policy else {
+fn validate_topup(cfg: &CanisterConfig, canister: &CanisterRole) -> Result<(), ConfigSchemaError> {
+    let Some(topup) = &cfg.topup else {
         return Ok(());
     };
 
-    let threshold = topup_policy.threshold.to_u128();
-    let amount = topup_policy.amount.to_u128();
+    let threshold = topup.threshold.to_u128();
+    let amount = topup.amount.to_u128();
 
     if amount.saturating_mul(2) > threshold {
         return Err(ConfigSchemaError::ValidationError(format!(
-            "canister '{canister}' topup_policy.amount must be <= 50% of topup_policy.threshold (got amount={amount}, threshold={threshold})",
+            "canister '{canister}' topup.amount must be <= 50% of topup.threshold (got amount={amount}, threshold={threshold})",
         )));
     }
 

@@ -1,4 +1,5 @@
 use super::*;
+use crate::cdk::types::TC;
 use crate::config::schema::{NAME_MAX_BYTES, Validate};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -6,7 +7,7 @@ fn base_canister_config(kind: CanisterKind) -> CanisterConfig {
     CanisterConfig {
         kind,
         initial_cycles: defaults::initial_cycles(),
-        topup_policy: None,
+        topup: None,
         randomness: RandomnessConfig::default(),
         scaling: None,
         sharding: None,
@@ -33,6 +34,32 @@ fn randomness_source_parses_ic_and_time() {
 
     let cfg: RandomnessConfig = toml::from_str("source = \"time\"").unwrap();
     assert_eq!(cfg.source, RandomnessSource::Time);
+}
+
+#[test]
+fn empty_topup_table_enables_default_topup() {
+    let cfg: CanisterConfig = toml::from_str(
+        r#"
+kind = "singleton"
+
+[topup]
+"#,
+    )
+    .expect("empty topup table should parse");
+
+    let topup = cfg.topup.expect("topup policy should be present");
+    assert_eq!(topup.threshold.to_u128(), 10 * TC);
+    assert_eq!(topup.amount.to_u128(), 5 * TC);
+}
+
+#[test]
+fn inline_empty_topup_table_enables_default_topup() {
+    let cfg: CanisterConfig =
+        toml::from_str("kind = \"singleton\"\ntopup = {}\n").expect("inline topup should parse");
+
+    let topup = cfg.topup.expect("topup policy should be present");
+    assert_eq!(topup.threshold.to_u128(), 10 * TC);
+    assert_eq!(topup.amount.to_u128(), 5 * TC);
 }
 
 #[test]
@@ -550,11 +577,11 @@ fn explicit_wasm_store_canister_config_is_rejected() {
 }
 
 #[test]
-fn topup_policy_amount_above_half_threshold_fails() {
+fn topup_amount_above_half_threshold_fails() {
     let mut canisters = BTreeMap::new();
 
     let cfg = CanisterConfig {
-        topup_policy: Some(TopupPolicy {
+        topup: Some(TopupPolicy {
             threshold: Cycles::new(10 * TC),
             amount: Cycles::new(6 * TC),
         }),
@@ -570,15 +597,15 @@ fn topup_policy_amount_above_half_threshold_fails() {
 
     subnet
         .validate()
-        .expect_err("expected topup_policy amount above half threshold to fail");
+        .expect_err("expected topup amount above half threshold to fail");
 }
 
 #[test]
-fn topup_policy_amount_equal_half_threshold_is_valid() {
+fn topup_amount_equal_half_threshold_is_valid() {
     let mut canisters = BTreeMap::new();
 
     let cfg = CanisterConfig {
-        topup_policy: Some(TopupPolicy {
+        topup: Some(TopupPolicy {
             threshold: Cycles::new(50 * TC),
             amount: Cycles::new(25 * TC),
         }),
@@ -594,15 +621,15 @@ fn topup_policy_amount_equal_half_threshold_is_valid() {
 
     subnet
         .validate()
-        .expect("expected topup_policy amount equal to half threshold to validate");
+        .expect("expected topup amount equal to half threshold to validate");
 }
 
 #[test]
-fn topup_policy_amount_below_half_threshold_is_valid() {
+fn topup_amount_below_half_threshold_is_valid() {
     let mut canisters = BTreeMap::new();
 
     let cfg = CanisterConfig {
-        topup_policy: Some(TopupPolicy {
+        topup: Some(TopupPolicy {
             threshold: Cycles::new(10 * TC),
             amount: Cycles::new(4 * TC),
         }),
@@ -618,15 +645,15 @@ fn topup_policy_amount_below_half_threshold_is_valid() {
 
     subnet
         .validate()
-        .expect("expected topup_policy amount below half threshold to validate");
+        .expect("expected topup amount below half threshold to validate");
 }
 
 #[test]
-fn default_topup_policy_is_below_half_threshold() {
+fn default_topup_satisfies_half_threshold_invariant() {
     let mut canisters = BTreeMap::new();
 
     let cfg = CanisterConfig {
-        topup_policy: Some(TopupPolicy::default()),
+        topup: Some(TopupPolicy::default()),
         ..base_canister_config(CanisterKind::Singleton)
     };
 
@@ -639,7 +666,7 @@ fn default_topup_policy_is_below_half_threshold() {
 
     subnet
         .validate()
-        .expect("expected default topup_policy to satisfy half-threshold invariant");
+        .expect("expected default topup to satisfy half-threshold invariant");
 }
 
 #[test]

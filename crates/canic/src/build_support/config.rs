@@ -1,5 +1,7 @@
 use std::{fmt::Write as _, fs, path::Path};
 
+use toml::Value as TomlValue;
+
 /// Read a Canic config source, or generate a minimal standalone config when allowed.
 #[must_use]
 pub fn read_config_source_or_default(
@@ -23,6 +25,20 @@ pub fn read_config_source_or_default(
         }
         Err(err) => panic!("Failed to read {}: {err}", config_path.display()),
     }
+}
+
+/// Read an optional Canic role declared in the package manifest metadata.
+#[must_use]
+pub fn declared_package_role(manifest_dir: &Path) -> Option<String> {
+    let manifest = fs::read_to_string(manifest_dir.join("Cargo.toml")).ok()?;
+    toml::from_str::<TomlValue>(&manifest)
+        .ok()?
+        .get("package")?
+        .get("metadata")?
+        .get("canic")?
+        .get("role")?
+        .as_str()
+        .map(str::to_string)
 }
 
 /// Render the minimal topology needed by a standalone non-root canister.
@@ -121,5 +137,29 @@ mod tests {
 
         assert!(generated);
         assert!(source.contains("[subnets.prime.canisters.\"test\"]"));
+    }
+
+    #[test]
+    fn declared_package_role_reads_canic_metadata() {
+        let dir = std::env::temp_dir().join(format!("canic-role-metadata-{}", std::process::id()));
+        fs::create_dir_all(&dir).expect("create temp manifest dir");
+        fs::write(
+            dir.join("Cargo.toml"),
+            r#"[package]
+name = "canister_scale"
+version = "0.1.0"
+edition = "2024"
+
+[package.metadata.canic]
+role = "scale_replica"
+"#,
+        )
+        .expect("write manifest");
+
+        assert_eq!(
+            declared_package_role(&dir).as_deref(),
+            Some("scale_replica")
+        );
+        fs::remove_dir_all(&dir).expect("remove temp manifest dir");
     }
 }

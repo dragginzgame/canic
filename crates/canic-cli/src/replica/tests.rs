@@ -11,8 +11,27 @@ fn parses_replica_start_options() {
     .expect("parse replica start");
 
     assert_eq!(options.icp, "/tmp/icp");
+    assert_eq!(options.port, None);
     assert!(options.background);
     assert!(!options.debug);
+}
+
+// Ensure replica start can set the project-local gateway port before launch.
+#[test]
+fn parses_replica_start_port() {
+    let options = ReplicaOptions::parse_start([OsString::from("--port"), OsString::from("8001")])
+        .expect("parse replica start");
+
+    assert_eq!(options.port, Some(8001));
+}
+
+// Ensure invalid ports fail at CLI parsing before touching icp.yaml.
+#[test]
+fn rejects_invalid_replica_start_port() {
+    let error = ReplicaOptions::parse_start([OsString::from("--port"), OsString::from("0")])
+        .expect_err("port 0 should be invalid");
+
+    assert!(matches!(error, ReplicaCommandError::InvalidPort { .. }));
 }
 
 // Ensure foreground mode is the default, matching ICP CLI.
@@ -21,6 +40,7 @@ fn replica_start_defaults_to_foreground() {
     let options = ReplicaOptions::parse_start([]).expect("parse replica start");
 
     assert_eq!(options.icp, "icp");
+    assert_eq!(options.port, None);
     assert!(!options.background);
     assert!(!options.debug);
 }
@@ -45,6 +65,7 @@ fn parses_replica_status_options() {
     let options = ReplicaOptions::parse_status([]).expect("parse replica status");
 
     assert_eq!(options.icp, "icp");
+    assert_eq!(options.port, None);
     assert!(!options.background);
     assert!(!options.debug);
 }
@@ -67,8 +88,65 @@ fn replica_leaf_usage_lists_options() {
     let text = start_usage();
 
     assert!(text.contains("--background"));
+    assert!(text.contains("--port"));
     assert!(text.contains("--debug"));
     assert!(!text.contains("--icp"));
     assert!(text.contains("canic replica start --background"));
+    assert!(text.contains("canic replica start --port 8001 --background"));
     assert!(text.contains("canic replica start --debug"));
+}
+
+// Ensure ICP's foreign-owner diagnostic is surfaced as an ownership problem.
+#[test]
+fn maps_foreign_local_replica_owner_error() {
+    let error = replica_icp_error(IcpCommandError::Failed {
+        command: "icp network start -e local --background".to_string(),
+        stderr: "Error: port 8000 is in use by the local network of the project at '/home/adam/projects/icydb'\n".to_string(),
+    });
+
+    assert!(matches!(
+        error,
+        ReplicaCommandError::ForeignLocalReplicaOwner { ref network, ref project }
+            if network == "local" && project == "/home/adam/projects/icydb"
+    ));
+    assert!(
+        error
+            .to_string()
+            .contains("owned by ICP network `local` for project: /home/adam/projects/icydb")
+    );
+}
+
+// Ensure owner parsing keeps the ICP network/environment separate from the project path.
+#[test]
+fn parses_foreign_local_replica_owner() {
+    let owner = extract_foreign_local_owner(
+        "Error: port 8000 is in use by the demo network of the project at '/home/adam/projects/toko'\n",
+    )
+    .expect("parse foreign owner");
+
+    assert_eq!(
+        owner,
+        LocalReplicaOwner {
+            network: "demo".to_string(),
+            project: "/home/adam/projects/toko".to_string(),
+        }
+    );
+}
+
+// Ensure stop can distinguish ICP's project-scoped not-running diagnostic.
+#[test]
+fn detects_project_local_network_not_running() {
+    let error = IcpCommandError::Failed {
+        command: "icp network stop -e local".to_string(),
+        stderr: "Error: network 'local' is not running\n".to_string(),
+    };
+
+    assert!(local_network_not_running(&error));
+
+    let status_error = IcpCommandError::Failed {
+        command: "icp network status -e local".to_string(),
+        stderr: "Error: unable to access network 'local', is it running?\n\nCaused by:\n    the local network for this project is not running\n".to_string(),
+    };
+
+    assert!(local_network_not_running(&status_error));
 }

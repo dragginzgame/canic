@@ -61,7 +61,7 @@ fn unauthorized_caller_is_denied_for_each_root_capability_variant() {
 
     let cases = vec![
         Request::CreateCanister(CreateCanisterRequest {
-            canister_role: canister::SCALE,
+            canister_role: canister::SCALE_REPLICA,
             parent: CreateCanisterParent::ThisCanister,
             extra_arg: None,
             metadata: Some(metadata([30u8; 32], 120)),

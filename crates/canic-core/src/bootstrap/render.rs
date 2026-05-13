@@ -330,7 +330,7 @@ fn render_canister_pool(config: &CanisterPool) -> TokenStream {
 fn render_canister_config(config: &CanisterConfig) -> TokenStream {
     let kind = render_canister_kind(config.kind);
     let initial_cycles = render_cycles(config.initial_cycles.to_u128());
-    let topup_policy = render_option(config.topup_policy.as_ref(), render_topup_policy);
+    let topup = render_option(config.topup.as_ref(), render_topup);
     let randomness = render_randomness_config(&config.randomness);
     let scaling = render_option(config.scaling.as_ref(), render_scaling_config);
     let sharding = render_option(config.sharding.as_ref(), render_sharding_config);
@@ -343,7 +343,7 @@ fn render_canister_config(config: &CanisterConfig) -> TokenStream {
         ::canic::__internal::core::bootstrap::compiled::CanisterConfig {
             kind: #kind,
             initial_cycles: #initial_cycles,
-            topup_policy: #topup_policy,
+            topup: #topup,
             randomness: #randomness,
             scaling: #scaling,
             sharding: #sharding,
@@ -440,7 +440,7 @@ fn render_u128_literal(value: u128) -> TokenStream {
 }
 
 // Render the automatic top-up policy.
-fn render_topup_policy(policy: &TopupPolicy) -> TokenStream {
+fn render_topup(policy: &TopupPolicy) -> TokenStream {
     let threshold = render_cycles(policy.threshold.to_u128());
     let amount = render_cycles(policy.amount.to_u128());
 

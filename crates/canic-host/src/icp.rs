@@ -1,4 +1,11 @@
-use std::{error::Error, fmt, path::Path, process::Command};
+use std::{
+    error::Error,
+    fmt,
+    io::{self, Read, Write},
+    path::Path,
+    process::{Command, Stdio},
+    thread,
+};
 
 const LOCAL_ENVIRONMENT: &str = "local";
 
@@ -148,6 +155,13 @@ impl IcpCli {
         let mut command = self.local_replica_command("status");
         add_debug_arg(&mut command, debug);
         run_output_with_stderr(&mut command)
+    }
+
+    /// Return whether this project owns a running local ICP replica.
+    pub fn local_replica_project_running(&self, debug: bool) -> Result<bool, IcpCommandError> {
+        let mut command = self.local_replica_command("status");
+        add_debug_arg(&mut command, debug);
+        run_success(&mut command)
     }
 
     /// Return whether the local ICP replica responds to ping.
@@ -494,15 +508,51 @@ pub fn run_status(command: &mut Command) -> Result<(), IcpCommandError> {
 /// Execute a command with inherited terminal I/O and require a successful status.
 pub fn run_status_inherit(command: &mut Command) -> Result<(), IcpCommandError> {
     let display = command_display(command);
-    let status = command.status()?;
+    let mut child = command
+        .stdout(Stdio::inherit())
+        .stderr(Stdio::piped())
+        .spawn()?;
+    let stderr_handle = child
+        .stderr
+        .take()
+        .map(|stderr| thread::spawn(move || stream_and_capture_stderr(stderr)));
+    let status = child.wait()?;
+    let stderr = match stderr_handle {
+        Some(handle) => match handle.join() {
+            Ok(result) => result?,
+            Err(_) => Vec::new(),
+        },
+        None => Vec::new(),
+    };
     if status.success() {
         Ok(())
     } else {
+        let stderr = if stderr.is_empty() {
+            format!("command exited with status {}", exit_status_label(status))
+        } else {
+            String::from_utf8_lossy(&stderr).to_string()
+        };
         Err(IcpCommandError::Failed {
             command: display,
-            stderr: format!("command exited with status {}", exit_status_label(status)),
+            stderr,
         })
     }
+}
+
+fn stream_and_capture_stderr(mut stderr: impl Read) -> io::Result<Vec<u8>> {
+    let mut captured = Vec::new();
+    let mut buffer = [0_u8; 8192];
+    let mut terminal = io::stderr().lock();
+    loop {
+        let read = stderr.read(&mut buffer)?;
+        if read == 0 {
+            break;
+        }
+        terminal.write_all(&buffer[..read])?;
+        captured.extend_from_slice(&buffer[..read]);
+    }
+    terminal.flush()?;
+    Ok(captured)
 }
 
 /// Execute a command and return whether it exits successfully.

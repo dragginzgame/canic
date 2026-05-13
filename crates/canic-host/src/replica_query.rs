@@ -1,3 +1,4 @@
+use crate::icp_config::{DEFAULT_LOCAL_GATEWAY_PORT, configured_local_gateway_port};
 use candid::{CandidType, Decode, Encode, Principal};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -150,13 +151,14 @@ fn local_query(
     })
 }
 
-// Resolve the local replica endpoint from explicit URL or the conventional ICP CLI local port.
+// Resolve the local replica endpoint from explicit URL or the configured ICP CLI local port.
 fn local_replica_endpoint(network: Option<&str>) -> String {
     if let Some(network) = network.filter(|network| network.starts_with("http://")) {
         return network.trim_end_matches('/').to_string();
     }
 
-    "http://127.0.0.1:8000".to_string()
+    let port = configured_local_gateway_port().unwrap_or(DEFAULT_LOCAL_GATEWAY_PORT);
+    format!("http://127.0.0.1:{port}")
 }
 
 // Return an ingress expiry comfortably in the near future for local queries.

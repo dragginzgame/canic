@@ -10,7 +10,7 @@
 
 use canic::{Error, api::rpc::RpcApi, ids::CanisterRole, prelude::*};
 
-const SCALE: CanisterRole = CanisterRole::new("scale");
+const SCALE_REPLICA: CanisterRole = CanisterRole::new("scale_replica");
 
 /// Run no-op setup for the scaling worker shell.
 pub async fn canic_setup() {}
@@ -25,7 +25,7 @@ pub async fn canic_upgrade() {}
 // CANIC
 //
 
-canic::start!(SCALE);
+canic::start!(SCALE_REPLICA);
 
 /// request_cycles_from_parent
 /// Ask the configured parent for a direct cycles top-up.

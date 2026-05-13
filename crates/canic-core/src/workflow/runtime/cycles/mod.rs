@@ -104,7 +104,7 @@ impl CycleTrackerWorkflow {
             WORKFLOW_INIT_DELAY,
             "cycles:topup:first",
             move || async move {
-                Self::evaluate_current_topup_policy();
+                Self::evaluate_current_topup();
             },
             TRACKER_INTERVAL,
             "cycles:interval",
@@ -138,7 +138,7 @@ impl CycleTrackerWorkflow {
         }
     }
 
-    fn evaluate_current_topup_policy() {
+    fn evaluate_current_topup() {
         if EnvOps::is_root() {
             return;
         }
@@ -159,7 +159,7 @@ impl CycleTrackerWorkflow {
                 return;
             }
         };
-        if canister_cfg.topup_policy.is_none() {
+        if canister_cfg.topup.is_none() {
             CyclesTopupMetrics::record_policy_missing();
             return;
         }

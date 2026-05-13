@@ -60,7 +60,8 @@ Optimization constraint:
 - release hardening windows
 - major auth/runtime/macro feature lines
 - dependency bumps affecting `candid`, crypto, or IC/CDK crates
-- changes to `icp.yaml`, `scripts/app/build.sh`, or workspace release profile
+- changes to `icp.yaml`, the host `build_artifact` builder, or workspace
+  release profile
 - any PR explicitly claiming wasm-size reduction
 
 ## Report Preamble (Required)

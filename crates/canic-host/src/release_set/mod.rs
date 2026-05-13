@@ -243,9 +243,9 @@ delegated_token_signer = true
 kind = "singleton"
 
 [subnets.prime.canisters.scale_hub.scaling.pools.scales]
-canister_role = "scale"
+canister_role = "scale_replica"
 
-[subnets.prime.canisters.scale]
+[subnets.prime.canisters.scale_replica]
 kind = "replica"
 "#;
         let capabilities =
@@ -287,10 +287,10 @@ canister_role = "user_shard"
 [subnets.prime.canisters.user_shard]
 kind = "shard"
 
-[subnets.prime.canisters.scale]
+[subnets.prime.canisters.scale_replica]
 kind = "replica"
 
-[subnets.prime.canisters.scale.metrics]
+[subnets.prime.canisters.scale_replica.metrics]
 profile = "full"
 "#;
         let profiles =
@@ -299,7 +299,10 @@ profile = "full"
         assert_eq!(profiles.get("root").map(String::as_str), Some("root"));
         assert_eq!(profiles.get("user_hub").map(String::as_str), Some("hub"));
         assert_eq!(profiles.get("user_shard").map(String::as_str), Some("leaf"));
-        assert_eq!(profiles.get("scale").map(String::as_str), Some("full"));
+        assert_eq!(
+            profiles.get("scale_replica").map(String::as_str),
+            Some("full")
+        );
     }
 
     #[test]
@@ -324,8 +327,8 @@ kind = "root"
 
 [subnets.prime.canisters.user_hub]
 kind = "singleton"
-topup_policy.threshold = "10T"
-topup_policy.amount = "4T"
+topup.threshold = "10T"
+topup.amount = "4T"
 
 [subnets.prime.canisters.user_hub.sharding.pools.user_shards]
 canister_role = "user_shard"
@@ -344,14 +347,14 @@ role_attestation_cache = true
 kind = "singleton"
 
 [subnets.prime.canisters.scale_hub.scaling.pools.scales]
-canister_role = "scale"
+canister_role = "scale_replica"
 policy.initial_workers = 2
 policy.min_workers = 2
 
-[subnets.prime.canisters.scale]
+[subnets.prime.canisters.scale_replica]
 kind = "replica"
 
-[subnets.prime.canisters.scale.metrics]
+[subnets.prime.canisters.scale_replica.metrics]
 profile = "full"
 "#;
         let details = configured_role_details_from_source(config).expect("role details");
@@ -372,14 +375,14 @@ profile = "full"
                 .is_some_and(|details| details.contains(&"auth delegated-token-signer".to_string()))
         );
         assert!(details.get("scale_hub").is_some_and(|details| {
-            details.contains(&"scaling scales->scale initial=2 min=2 max=32".to_string())
+            details.contains(&"scaling scales->scale_replica initial=2 min=2 max=32".to_string())
         }));
         assert!(details.get("user_hub").is_some_and(|details| {
             details.contains(
                 &"metrics profile=hub tiers=core,placement,runtime,security (inferred)".to_string(),
             )
         }));
-        assert!(details.get("scale").is_some_and(|details| {
+        assert!(details.get("scale_replica").is_some_and(|details| {
             details.contains(
                 &"metrics profile=full tiers=core,placement,platform,runtime,security,storage (configured)"
                     .to_string()
@@ -405,8 +408,8 @@ kind = "root"
 
 [subnets.prime.canisters.scale_hub]
 kind = "singleton"
-topup_policy.threshold = "10T"
-topup_policy.amount = "4T"
+topup.threshold = "10T"
+topup.amount = "4T"
 "#;
         let topups = configured_role_topups_from_source(config).expect("role topups");
 
@@ -697,6 +700,39 @@ kind = "root"
         assert_eq!(
             canister_manifest_path(workspace_root, "user_hub"),
             workspace_root.join("fleets/test/user_hub/Cargo.toml")
+        );
+    }
+
+    #[test]
+    fn canister_manifest_path_uses_declared_canic_role_metadata() {
+        let temp = TempWorkspace::new();
+        let workspace_root = temp.path();
+        fs::create_dir_all(workspace_root.join("fleets/test/scale")).expect("create scale dir");
+        fs::create_dir_all(workspace_root.join("fleets/test/scale/src"))
+            .expect("create scale src dir");
+        fs::write(
+            workspace_root.join("Cargo.toml"),
+            "[workspace]\nmembers = [\"fleets/test/scale\"]\n",
+        )
+        .expect("write workspace manifest");
+        fs::write(
+            workspace_root.join("fleets/test/scale/Cargo.toml"),
+            r#"[package]
+name = "canister_scale"
+version = "0.1.0"
+edition = "2024"
+
+[package.metadata.canic]
+role = "scale_replica"
+"#,
+        )
+        .expect("write scale manifest");
+        fs::write(workspace_root.join("fleets/test/scale/src/lib.rs"), "")
+            .expect("write scale lib");
+
+        assert_eq!(
+            canister_manifest_path(workspace_root, "scale_replica"),
+            workspace_root.join("fleets/test/scale/Cargo.toml")
         );
     }
 

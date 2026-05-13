@@ -33,7 +33,6 @@ const ROOT_WASM_WATCH_PATHS: &[&str] = &[
     "canisters",
     "icp.yaml",
     "crates",
-    "scripts/app/build.sh",
 ];
 
 static ROOT_SETUP_SERIAL: Mutex<()> = Mutex::new(());

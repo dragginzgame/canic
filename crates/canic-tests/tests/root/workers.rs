@@ -12,7 +12,7 @@ use canic::{
     },
     protocol,
 };
-use canic_testing_internal::canister::SCALE;
+use canic_testing_internal::canister::SCALE_REPLICA;
 use canic_testkit::pic::Pic;
 
 /// Create a worker canister via the given hub canister.
@@ -37,14 +37,14 @@ pub fn count_workers(pic: &Pic, root_id: Principal, parent_pid: Principal) -> us
     registry
         .iter()
         .filter(|entry: &&SubnetRegistryEntry| {
-            entry.role == SCALE && entry.record.parent_pid == Some(parent_pid)
+            entry.role == SCALE_REPLICA && entry.record.parent_pid == Some(parent_pid)
         })
         .count()
 }
 
 /// Wait until the parent's local child view includes the newly created worker.
 fn wait_for_worker_sync(pic: &Pic, hub_pid: Principal, worker_pid: Principal) {
-    pic.wait_for_ready(worker_pid, 50, "scale worker bootstrap");
+    pic.wait_for_ready(worker_pid, 50, "scale replica bootstrap");
 
     for _ in 0..50 {
         pic.tick();
@@ -70,6 +70,6 @@ fn wait_for_worker_sync(pic: &Pic, hub_pid: Principal, worker_pid: Principal) {
         }
     }
 
-    pic.dump_canister_debug(hub_pid, "scale worker sync");
+    pic.dump_canister_debug(hub_pid, "scale replica sync");
     panic!("parent {hub_pid} did not observe worker {worker_pid} in time");
 }

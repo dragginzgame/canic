@@ -388,7 +388,7 @@ kind = "singleton"
 [subnets.prime.canisters.user_shard]
 kind = "singleton"
 
-[subnets.prime.canisters.scale]
+[subnets.prime.canisters.scale_replica]
 kind = "singleton"
 
 [subnets.prime.canisters.scale_hub]
@@ -408,8 +408,8 @@ kind = "singleton"
     assert!(message.contains("fleets/demo/canic.toml"));
     assert!(message.contains("2 (root, app)"));
     assert!(message.contains("fleets/example/canic.toml"));
-    assert!(message.contains("5 (root, scale, scale_hub, user_hub, user_shard)"));
-    assert!(message.contains("5 (root, scale, scale_hub, user_hub, user_shard)\n\nrun:"));
+    assert!(message.contains("5 (root, scale_hub, scale_replica, user_hub, user_shard)"));
+    assert!(message.contains("5 (root, scale_hub, scale_replica, user_hub, user_shard)\n\nrun:"));
     assert!(message.contains("run: canic install <fleet>"));
     fs::remove_dir_all(root).expect("clean temp dir");
 }
@@ -431,7 +431,7 @@ kind = "singleton"
 [subnets.prime.canisters.minimal]
 kind = "singleton"
 
-[subnets.prime.canisters.scale]
+[subnets.prime.canisters.scale_replica]
 kind = "singleton"
 
 [subnets.prime.canisters.scale_hub]
@@ -455,7 +455,7 @@ kind = "singleton"
         std::slice::from_ref(&config),
     );
 
-    assert!(message.contains("8 (root, app, minimal, scale, scale_hub, user_hub, ...)"));
+    assert!(message.contains("8 (root, app, minimal, scale_hub, scale_replica, user_hub, ...)"));
     fs::remove_dir_all(root).expect("clean temp dir");
 }
 

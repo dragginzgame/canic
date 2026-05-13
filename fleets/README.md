@@ -17,7 +17,8 @@ from the resolved `canic` package automatically.
   - `root/` – root orchestrator canister (`canic::start_root!`) that wires topology, bootstraps the internal `wasm_store`, stages/publishes ordinary child releases, and exposes root admin endpoints.
   - `app/` – minimal application canister used as a placeholder service.
   - `user_hub/` + `user_shard/` – sharding placement plus delegated signing flow.
-  - `scale_hub/` + `scale/` – scaling pool demo.
+  - `scale_hub/` + `scale/` – scaling pool demo, with the worker role exposed
+    as `scale_replica`.
   - `canic.toml` – shared test topology referenced by each reference canister `build.rs`.
   - `test-configs/` – config fixtures used by local checks.
 - `demo/` – minimal root-plus-app fleet for quick experiments.
@@ -27,9 +28,8 @@ from the resolved `canic` package automatically.
 
 ## Local Workflow
 
-The test canisters are wired through `icp.yaml`; custom build steps call
-`scripts/app/build.sh`, which invokes the host artifact builder used by
-`canic install`.
+The test canisters are wired through `icp.yaml`; custom build steps invoke the
+host artifact builder used by `canic install` directly.
 
 - Install the full local reference topology: `make test-fleet-install`
 - `root` stays thin: only the bootstrap `wasm_store` artifact is embedded, and the ordinary configured release set is staged after install from `.icp/local/canisters/root/root.release-set.json`.

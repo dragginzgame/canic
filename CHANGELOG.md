@@ -5,9 +5,11 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## [0.35.x] - 2026-05-12 - TBD
+## [0.35.x] - 2026-05-13 - TBD
 
-- `0.35.2` retains the installing/upgrading root controller in the runtime controller set used for newly allocated managed children.
+- `0.35.3` adds local replica port visibility and `canic replica start --port <port>`, makes local direct replica queries use the configured gateway port, improves project/environment ownership diagnostics for port conflicts, clarifies default top-up opt-ins with explicit `topup = {}` config blocks, and raises the default top-up amount from `4T` to `5T`.
+
+- `0.35.2` retains the installing/upgrading root controller in the runtime controller set used for newly allocated managed children, renames the test scaling worker role to `scale_replica`, shortens role top-up config from `topup_policy` to `topup`, enables default role top-up policies, and removes the old `scripts/app/build.sh` wrapper now that `icp.yaml` calls the host builder directly.
 
 - `0.35.1` hard-cuts managed child controller policy so every newly allocated child canister is controlled by its configured controllers, root, and its direct parent, and tightens install build output with clearer context, per-canister artifact sizes, and explicit root top-up phase/amount messages.
 

@@ -190,6 +190,7 @@ control:
 ```bash
 canic replica status
 canic replica start --background
+canic replica start --port 8001 --background
 ```
 
 The normal interface is the `canic` binary:

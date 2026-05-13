@@ -238,7 +238,7 @@ pub(super) fn configured_role_topups_from_source(
 
     for subnet in config.subnets.values() {
         for (role, canister) in &subnet.canisters {
-            if let Some(policy) = &canister.topup_policy {
+            if let Some(policy) = &canister.topup {
                 topups.insert(
                     role.as_str().to_string(),
                     format!(
