@@ -24,12 +24,17 @@ fn icp_canister_keys() -> Vec<String> {
     let source = read_text(&path);
 
     let mut names = Vec::new();
+    let mut in_canisters = false;
     for line in source.lines() {
         let trimmed = line.trim();
-        if trimmed == "environments:" {
+        if trimmed == "canisters:" {
+            in_canisters = true;
+            continue;
+        }
+        if in_canisters && !line.starts_with(' ') && !trimmed.is_empty() {
             break;
         }
-        if let Some(name) = trimmed.strip_prefix("- name: ") {
+        if in_canisters && let Some(name) = trimmed.strip_prefix("- name: ") {
             names.push(name.to_string());
         }
     }
