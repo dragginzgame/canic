@@ -129,7 +129,7 @@ fn collect_canic_config_choices(
 // Treat checked-in fleet configs under the searched root as installable choices.
 // The canister crates may live elsewhere in split-source downstream repos and
 // are resolved separately.
-fn is_install_project_config(_path: &Path) -> bool {
+const fn is_install_project_config(_path: &Path) -> bool {
     true
 }
 
