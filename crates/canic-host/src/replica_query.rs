@@ -153,11 +153,16 @@ fn local_query(
 
 // Resolve the local replica endpoint from explicit URL or the configured ICP CLI local port.
 fn local_replica_endpoint(network: Option<&str>) -> String {
+    local_replica_endpoint_with_port(network, configured_local_gateway_port().ok())
+}
+
+// Format the local replica endpoint from an explicit URL, configured port, or ICP default.
+fn local_replica_endpoint_with_port(network: Option<&str>, configured_port: Option<u16>) -> String {
     if let Some(network) = network.filter(|network| network.starts_with("http://")) {
         return network.trim_end_matches('/').to_string();
     }
 
-    let port = configured_local_gateway_port().unwrap_or(DEFAULT_LOCAL_GATEWAY_PORT);
+    let port = configured_port.unwrap_or(DEFAULT_LOCAL_GATEWAY_PORT);
     format!("http://127.0.0.1:{port}")
 }
 
@@ -400,12 +405,19 @@ mod tests {
         assert!(!parse_ready_json_value(&serde_json::json!("true")));
     }
 
-    // Ensure direct local queries use the ICP CLI local endpoint by default.
+    // Ensure direct local queries use the ICP CLI local endpoint fallback when no project port is configured.
     #[test]
     fn local_replica_endpoint_defaults_to_icp_cli_port() {
-        assert_eq!(local_replica_endpoint(None), "http://127.0.0.1:8000");
         assert_eq!(
-            local_replica_endpoint(Some("http://127.0.0.1:9000/")),
+            local_replica_endpoint_with_port(None, None),
+            "http://127.0.0.1:8000"
+        );
+        assert_eq!(
+            local_replica_endpoint_with_port(None, Some(8001)),
+            "http://127.0.0.1:8001"
+        );
+        assert_eq!(
+            local_replica_endpoint_with_port(Some("http://127.0.0.1:9000/"), Some(8001)),
             "http://127.0.0.1:9000"
         );
     }
