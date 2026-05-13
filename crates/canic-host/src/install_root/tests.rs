@@ -526,6 +526,19 @@ fn discovered_install_config_choices_are_path_sorted() {
 }
 
 #[test]
+fn discovered_install_config_choices_accept_split_source_fleet_configs() {
+    let root = temp_dir("canic-install-config-split-source");
+    let config = root.join("toko/canic.toml");
+    fs::create_dir_all(config.parent().expect("config parent")).expect("create config parent");
+    fs::write(&config, "[fleet]\nname = \"toko\"\n").expect("write config");
+
+    let choices = discover_canic_config_choices(&root).expect("discover choices");
+
+    assert_eq!(choices, vec![config]);
+    fs::remove_dir_all(root).expect("clean temp dir");
+}
+
+#[test]
 fn discovered_install_config_choices_reject_duplicate_fleet_names() {
     let root = temp_dir("canic-install-config-duplicate-fleet");
     let demo = root.join("demo/canic.toml");

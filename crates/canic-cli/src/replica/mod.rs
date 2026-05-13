@@ -11,7 +11,7 @@ use canic_host::{
     icp::{IcpCli, IcpCommandError},
     icp_config::{
         DEFAULT_LOCAL_GATEWAY_PORT, IcpConfigError, configured_local_gateway_port,
-        set_configured_local_gateway_port,
+        set_configured_local_gateway_port, sync_canic_icp_yaml,
     },
 };
 use clap::Command as ClapCommand;
@@ -66,6 +66,11 @@ pub enum ReplicaCommandError {
         "this project's local ICP network is not running, but a local ICP replica is reachable. Canic could not identify the owner, so it will not stop it.\nRun `icp network start local --background` from this project to ask ICP for the owning project/network, then stop that exact network."
     )]
     ForeignLocalReplicaReachable,
+
+    #[error(
+        "ICP project config is missing for this directory.\n`canic replica start` creates icp.yaml from Canic fleet configs, so run it from the project root and keep a config at fleets/<fleet>/canic.toml.\nIf you want to prepare the file explicitly, run: canic fleet sync --fleet <fleet>"
+    )]
+    ProjectManifestMissing,
 
     #[error("icp command failed: {command}\n{stderr}")]
     IcpFailed { command: String, stderr: String },
@@ -168,6 +173,8 @@ where
     }
 
     let options = ReplicaOptions::parse_start(args)?;
+    sync_replica_project_config()?;
+    ensure_replica_port_config()?;
     let icp = IcpCli::new(options.icp, None, None);
     if icp
         .local_replica_project_running(options.debug)
@@ -188,6 +195,9 @@ where
     if let Some(port) = options.port {
         let path = set_configured_local_gateway_port(port)?;
         println!("Replica port configured: {port} ({})", path.display());
+    } else {
+        let port = configured_local_gateway_port().unwrap_or(DEFAULT_LOCAL_GATEWAY_PORT);
+        set_configured_local_gateway_port(port)?;
     }
 
     let output = icp
@@ -258,6 +268,20 @@ where
     Ok(())
 }
 
+fn sync_replica_project_config() -> Result<(), ReplicaCommandError> {
+    let report = sync_canic_icp_yaml(None)?;
+    if report.changed {
+        println!("Replica project config synced: {}", report.path.display());
+    }
+    Ok(())
+}
+
+fn ensure_replica_port_config() -> Result<(), ReplicaCommandError> {
+    let port = configured_local_gateway_port().unwrap_or(DEFAULT_LOCAL_GATEWAY_PORT);
+    set_configured_local_gateway_port(port)?;
+    Ok(())
+}
+
 fn print_command_output(output: &str) {
     if !output.trim().is_empty() {
         println!("{output}");
@@ -293,6 +317,9 @@ fn replica_icp_error(error: IcpCommandError) -> ReplicaCommandError {
                     project: owner.project,
                 };
             }
+            if project_manifest_missing(&stderr) {
+                return ReplicaCommandError::ProjectManifestMissing;
+            }
             ReplicaCommandError::IcpFailed { command, stderr }
         }
         IcpCommandError::SnapshotIdUnavailable { output } => ReplicaCommandError::IcpFailed {
@@ -300,6 +327,11 @@ fn replica_icp_error(error: IcpCommandError) -> ReplicaCommandError {
             stderr: output,
         },
     }
+}
+
+fn project_manifest_missing(stderr: &str) -> bool {
+    stderr.contains("failed to locate project directory")
+        || stderr.contains("project manifest not found")
 }
 
 fn local_network_not_running(error: &IcpCommandError) -> bool {

@@ -20,6 +20,7 @@ use config_selection::resolve_install_config_path;
 use std::{
     env,
     ffi::OsString,
+    fs,
     path::{Path, PathBuf},
     process::Command,
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
@@ -301,10 +302,11 @@ fn run_canic_build_targets(
             println!("{line}");
         }
         println!("config: {}", config_path.display());
-        println!("artifacts: {}", build_artifact_root(network)?.display());
+        println!("artifacts: {}", planned_build_artifact_root()?.display());
         println!();
     }
 
+    fs::create_dir_all(planned_build_artifact_root()?)?;
     println!("Building {} canisters", targets.len());
     println!();
     let headers = ["CANISTER", "PROGRESS", "WASM_GZ", "ELAPSED"];
@@ -349,8 +351,8 @@ fn run_canic_build_targets(
     Ok(())
 }
 
-fn build_artifact_root(network: &str) -> Result<PathBuf, Box<dyn std::error::Error>> {
-    resolve_artifact_root(&icp_root()?, network)
+fn planned_build_artifact_root() -> Result<PathBuf, Box<dyn std::error::Error>> {
+    Ok(icp_root()?.join(".icp/local/canisters"))
 }
 
 fn wasm_gz_size(path: &Path) -> Result<String, Box<dyn std::error::Error>> {

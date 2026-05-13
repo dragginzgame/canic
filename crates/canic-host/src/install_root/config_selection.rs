@@ -126,10 +126,11 @@ fn collect_canic_config_choices(
     Ok(())
 }
 
-// Treat only configs next to a root canister directory as installable choices.
-fn is_install_project_config(path: &Path) -> bool {
-    path.parent()
-        .is_some_and(|parent| parent.join("root/Cargo.toml").is_file())
+// Treat checked-in fleet configs under the searched root as installable choices.
+// The canister crates may live elsewhere in split-source downstream repos and
+// are resolved separately.
+fn is_install_project_config(_path: &Path) -> bool {
+    true
 }
 
 // Format an actionable config-selection error with whitespace-aligned choices.

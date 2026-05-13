@@ -140,6 +140,13 @@ fn discover_project_spec(
 ) -> Result<CanicIcpSpec, IcpConfigError> {
     let choices = discover_canic_config_choices(&root.join("fleets"))
         .map_err(|err| IcpConfigError::Config(err.to_string()))?;
+    if choices.is_empty() {
+        return Err(IcpConfigError::Config(format!(
+            "no Canic fleet configs found under {}\nCreate fleets/<fleet>/canic.toml, then rerun `canic replica start` or `canic fleet sync --fleet <fleet>`.",
+            root.join("fleets").display()
+        )));
+    }
+
     let mut canisters = Vec::<String>::new();
     let mut seen_canisters = BTreeSet::<String>::new();
     let mut environments = BTreeMap::<String, Vec<String>>::new();
@@ -166,7 +173,8 @@ fn discover_project_spec(
         && !matched_filter
     {
         return Err(IcpConfigError::Config(format!(
-            "no Canic fleet config found for {fleet}"
+            "no Canic fleet config found for {fleet}\nExpected a config under {} with `[fleet].name = \"{fleet}\"`.",
+            root.join("fleets").display()
         )));
     }
 
@@ -419,6 +427,8 @@ fn join_lines(lines: Vec<String>, had_trailing_newline: bool) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_support::temp_dir;
+    use std::fs;
 
     #[test]
     fn defaults_local_gateway_port_without_network_config() {
@@ -487,5 +497,51 @@ mod tests {
         let updated = sync_canic_sections("", &[], &BTreeMap::new());
 
         assert_eq!(updated, "canisters: []\n\nenvironments: []\n");
+    }
+
+    #[test]
+    fn discovers_split_source_fleet_configs_for_icp_sync() {
+        let root = temp_dir("canic-icp-sync-split-source");
+        let config = root.join("fleets/toko/canic.toml");
+        fs::create_dir_all(config.parent().expect("config parent")).expect("create config parent");
+        fs::write(
+            &config,
+            r#"
+[fleet]
+name = "toko"
+
+[subnets.prime.canisters.root]
+kind = "root"
+
+[subnets.prime.canisters.app]
+kind = "singleton"
+"#,
+        )
+        .expect("write config");
+
+        let spec = discover_project_spec(&root, Some("toko")).expect("discover spec");
+
+        assert_eq!(spec.canisters, vec!["root", "app"]);
+        assert_eq!(
+            spec.environments,
+            BTreeMap::from([(
+                "toko".to_string(),
+                vec!["root".to_string(), "app".to_string()]
+            )])
+        );
+        fs::remove_dir_all(root).expect("clean temp dir");
+    }
+
+    #[test]
+    fn icp_sync_rejects_missing_fleet_configs() {
+        let root = temp_dir("canic-icp-sync-missing");
+        fs::create_dir_all(&root).expect("create root");
+
+        let err = discover_project_spec(&root, None).expect_err("missing configs should fail");
+        let message = err.to_string();
+
+        assert!(message.contains("no Canic fleet configs found under"));
+        assert!(message.contains("fleets/<fleet>/canic.toml"));
+        fs::remove_dir_all(root).expect("clean temp dir");
     }
 }

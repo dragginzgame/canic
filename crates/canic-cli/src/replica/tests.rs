@@ -116,6 +116,23 @@ fn maps_foreign_local_replica_owner_error() {
     );
 }
 
+// Ensure ICP's raw missing-project error is replaced with a Canic setup hint.
+#[test]
+fn maps_missing_project_manifest_error() {
+    let error = replica_icp_error(IcpCommandError::Failed {
+        command: "icp network start local".to_string(),
+        stderr: "Error: failed to locate project directory\n\nCaused by:\n    project manifest not found in /home/adam/projects/toko/backend\n".to_string(),
+    });
+
+    assert!(matches!(error, ReplicaCommandError::ProjectManifestMissing));
+    assert!(error.to_string().contains("fleets/<fleet>/canic.toml"));
+    assert!(
+        error
+            .to_string()
+            .contains("canic fleet sync --fleet <fleet>")
+    );
+}
+
 // Ensure owner parsing keeps the ICP network/environment separate from the project path.
 #[test]
 fn parses_foreign_local_replica_owner() {

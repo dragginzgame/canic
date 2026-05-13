@@ -231,7 +231,7 @@ publish = false\n\n\
 name = \"{CANONICAL_WASM_STORE_CRATE_NAME}\"\n\
 crate-type = [\"cdylib\", \"rlib\"]\n\n\
 [dependencies]\n\
-canic = {{ path = \"{}\" }}\n\
+canic = {{ path = \"{}\", features = [\"control-plane\"] }}\n\
 ic-cdk = \"0.20.0\"\n\
 candid = {{ version = \"0.10\", default-features = false }}\n\n\
 [build-dependencies]\n\
@@ -470,4 +470,32 @@ fn refresh_canonical_wasm_store_did_enabled() -> bool {
             .as_deref(),
         Some("1" | "true" | "TRUE" | "yes" | "YES")
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_support::temp_dir;
+
+    #[test]
+    fn generated_wasm_store_wrapper_enables_control_plane_feature() {
+        let root = temp_dir("canic-generated-wasm-store-wrapper");
+        let canic_manifest = root.join("registry/canic-0.35.5/Cargo.toml");
+        fs::create_dir_all(canic_manifest.parent().expect("canic manifest parent"))
+            .expect("create canic package dir");
+        fs::write(
+            &canic_manifest,
+            "[package]\nname = \"canic\"\nversion = \"0.35.5\"\n",
+        )
+        .expect("write canic manifest");
+
+        let wrapper_root = ensure_generated_wasm_store_wrapper(&root, &root, &canic_manifest)
+            .expect("generate wrapper");
+        let manifest = fs::read_to_string(wrapper_root.join("Cargo.toml"))
+            .expect("read generated wrapper manifest");
+
+        assert!(manifest.contains("features = [\"control-plane\"]"));
+        assert!(manifest.contains("canic = { path = "));
+        fs::remove_dir_all(root).expect("clean temp dir");
+    }
 }
