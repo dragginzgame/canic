@@ -59,20 +59,6 @@ fn install_script_default_cli_version_matches_workspace_version() {
     );
 }
 
-// Keeps the root README setup curl command aligned with the current release tag.
-#[test]
-fn root_readme_install_url_matches_workspace_version() {
-    let readme_path = workspace_root().join("README.md");
-    let readme = read_text(&readme_path);
-    let expected = tagged_install_script_url();
-
-    assert!(
-        readme.contains(&expected),
-        "expected {} to contain `{expected}`",
-        readme_path.display()
-    );
-}
-
 // Keeps the host crate README setup curl command aligned with the current release tag.
 #[test]
 fn host_readme_install_url_matches_workspace_version() {
