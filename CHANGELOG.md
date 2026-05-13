@@ -7,7 +7,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.35.x] - 2026-05-13 - Gettin' it workin'
 
-- `0.35.5` adds the installed `canic build <role>` artifact-builder command, adds build/install `--profile` selection plus build `--workspace`, `--icp-root`, and `--config` flags for downstream repos, makes `canic replica start` auto-sync `icp.yaml` from fleet configs with clearer setup errors, supports split-source `fleets/<fleet>/canic.toml` layouts, fixes the generated bootstrap `wasm_store` wrapper so downstreams do not need their own wrapper crate, and removes the internal build-session environment bridge from install builds.
+- `0.35.7` shortens the root README getting-started flow, puts `canic-cli` installation first, and updates quick examples around `fleets/<fleet>/canic.toml` plus split-repo paths.
+
+- `0.35.6` makes `canic replica start` auto-sync `icp.yaml` from fleet configs with clearer setup errors, supports split-source `fleets/<fleet>/canic.toml` layouts, fixes the generated bootstrap `wasm_store` wrapper so downstreams do not need their own wrapper crate, and creates the local artifact root before first install builds.
+
+- `0.35.5` adds the installed `canic build <role>` artifact-builder command, adds build/install `--profile` selection plus build `--workspace`, `--icp-root`, and `--config` flags for downstream repos, and removes the internal build-session environment bridge from install builds.
 
 - `0.35.4` removes stale and duplicate root wasm-store endpoints, routes publication through `canic_wasm_store_admin` plus `canic_wasm_store_overview`, controller-gates root state/app-registry/log diagnostics, simplifies `canic_canister_status` to controller-only access, updates wasm-store reconcile coverage to the current managed release roles, records the first `0.35` instruction-footprint performance baseline, and reruns the audience-target-binding invariant audit.
 

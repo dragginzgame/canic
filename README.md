@@ -68,18 +68,44 @@ All Rust workspace crates live under `crates/`:
 
 ## Getting Started
 
-### 1. Install
+### 1. Install the Operator CLI
 
-Inside your workspace:
+```bash
+cargo install --locked canic-cli
+canic --version
+```
+
+For pinned projects:
+
+```bash
+cargo install --locked canic-cli --version <same-version-as-canic>
+```
+
+From this checkout:
+
+```bash
+make install
+```
+
+Full dev tooling:
+
+```bash
+make install-dev
+```
+
+### 2. Add Canic to canister crates
+
+Inside each canister crate that uses Canic:
 
 ```bash
 cargo add canic
 cargo add canic --build
 ```
 
-The `build.rs` macros (`canic::build!` / `canic::build_root!`) run in the build script, so `canic` must be present in both `[dependencies]` and `[build-dependencies]`.
+`canic` is needed in `[dependencies]` for runtime macros and
+`[build-dependencies]` for `build.rs`.
 
-Or reference the workspace path if you pulled the repository directly:
+Path checkout:
 
 ```toml
 [dependencies]
@@ -89,41 +115,29 @@ canic = { path = "/path/to/canic/crates/canic" }
 canic = { path = "/path/to/canic/crates/canic" }
 ```
 
-### 2. Configure `build.rs`
-
-Tree canisters should declare a config file, usually named `canic.toml`. Use one of the provided build macros:
+### 3. Configure `build.rs`
 
 ```rust
-// Root canister build.rs
 fn main() {
     canic::build_root!("../canic.toml");
 }
 ```
 
 ```rust
-// Non-root canister build.rs
 fn main() {
     canic::build!("../canic.toml");
 }
 ```
 
-The macro validates the TOML during compilation and embeds the canonical config
-path for runtime diagnostics.
-
-For a temporary sandbox, probe, or one-off local canister that is not the root
-of a configured tree, use a generated standalone config instead:
+Standalone probe:
 
 ```rust
-// Standalone non-root build.rs
 fn main() {
     canic::build_standalone!("sandbox_minimal");
 }
 ```
 
-`build_standalone!` generates a minimal topology containing `root` and the
-requested non-root role. If a local `canic.toml` exists, it is used instead.
-
-### 3. Bootstrap your canister
+### 4. Bootstrap your canister
 
 In `lib.rs`:
 
@@ -133,106 +147,66 @@ use canic::ids::CanisterRole;
 
 const APP: CanisterRole = CanisterRole::new("app");
 
-canic::start!(APP); // or canic::start_root!() for the orchestrator canister
+canic::start!(APP); // use canic::start_root!() for root
 
 async fn canic_setup() {}
 async fn canic_install(_: Option<Vec<u8>>) {}
 async fn canic_upgrade() {}
 ```
 
-See `fleets/test/root` and the reference canisters under `fleets/test/*` for end-to-end patterns, including managed `wasm_store` publication and endpoint exports.
+### 5. Define your topology
 
-### 4. Define your topology
+Create `fleets/<fleet>/canic.toml`:
 
-Populate `canic.toml` with subnet definitions, role policies, index exposure, and pool settings. Each `[subnets.<name>]` block lists bootstrap roles and subnet index roles, then nests `[subnets.<name>.canisters.<role>]` tables for cycles, randomness, sharding, scaling, directory pools, and delegated-auth role behavior. The full schema lives in `CONFIG.md`.
+```toml
+[fleet]
+name = "test"
 
-### 5. Install the Operator CLI
+[subnets.prime]
+auto_create = ["app"]
+subnet_index = ["app"]
 
-Install the `canic` binary from crates.io with the same version as your `canic`
-crate dependency:
+[subnets.prime.canisters.root]
+kind = "root"
 
-```bash
-cargo install --locked canic-cli --version <same-version-as-canic>
+[subnets.prime.canisters.app]
+kind = "singleton"
+topup = {}
 ```
 
-From this repository checkout, use:
+The full schema lives in `CONFIG.md`.
+
+### 6. Build and install a fleet
 
 ```bash
-make install
-```
-
-For the full repo development toolchain, including pinned ICP CLI tooling and
-wasm/Candid helpers, run:
-
-```bash
-make install-dev
-```
-
-The setup commands install tools only; they do not start a local replica. Use
-explicit replica commands when needed:
-
-```bash
-canic replica status
 canic replica start --background
-canic replica start --port 8001 --background
-```
-
-The common local loop is:
-
-```bash
+canic fleet sync --fleet test
 canic status
 canic install --profile fast test
 canic list test
 ```
 
-Build one canister artifact without a full install:
+Single artifact:
 
 ```bash
 canic build --profile fast app
 ```
 
-For split repos, pass paths as flags instead of exporting build environment
-variables:
+Split repo:
 
 ```bash
 canic --network local build \
   --profile fast \
   --workspace backend \
   --icp-root . \
-  --config backend/src/canisters/canic.toml \
+  --config backend/fleets/toko/canic.toml \
   root
 ```
-
-`canic install` owns the local thin-root flow: create local canisters, build
-`root` plus ordinary roles from the subnet that owns `root`, emit the root
-staging manifest, reinstall `root`, stage the ordinary fleet artifacts, resume
-bootstrap, and wait for `canic_ready`.
-
-Fleet selection is explicit. `canic install <fleet>` uses
-`fleets/<fleet>/canic.toml`, the conventional `root` ICP canister name, and
-Canic's built-in readiness timeout:
-
-```bash
-canic install test
-```
-
-After a successful install, Canic writes project-local fleet state under
-`.canic/<network>/fleets/<fleet>.json`. That state records the selected root
-target, resolved root principal, build target, config path, and staging
-manifest path so later commands can inspect the explicitly named fleet.
 
 The local ICP CLI replica does not persist canister state across stop/start.
 If `canic status` shows a local fleet as `lost`, the recorded root canister is
 gone from the restarted local replica; run `canic install <fleet>` to recreate
 the local deployment.
-
-Install configs must declare the fleet identity that will be written to
-project-local state:
-
-```toml
-[fleet]
-name = "test"
-```
 
 Use `canic fleet list` to list config-defined fleets. Use `canic config <fleet>`
 for declared config, and pass `<fleet>` as the first argument to deployed-fleet
