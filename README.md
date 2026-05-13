@@ -8,25 +8,36 @@
 [![Docs.rs](https://docs.rs/canic/badge.svg)](https://docs.rs/canic)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-Canic is a Rust toolkit for orchestrating Internet Computer (IC) canister fleets. It provides lifecycle macros, validated topology config, stable-memory helpers, endpoint guards, thin-root build tooling, and root/bootstrap workflows for multi-canister systems.
+Canic is a Rust toolkit and operator CLI for Internet Computer canister fleets.
+It gives canister crates lifecycle macros, validated topology config,
+stable-memory helpers, endpoint guards, thin-root artifact builds, local fleet
+install, snapshot, backup, and restore workflows.
 
-The crate was historically known as **ICU** (Internet Computer Utilities). All core APIs have been renamed to **Canic** for the crates.io release.
+Install the operator binary with Cargo:
+
+```bash
+cargo install --locked canic-cli --version <same-version-as-canic>
+canic --version
+```
+
+When working from this checkout:
+
+```bash
+make install
+```
 
 ## Highlights
 
 * **Lifecycle and build macros**: `canic::start!`, `canic::start_root!`, `canic::build!`, `canic::build_root!`, and `canic::build_standalone!` wire IC hooks, endpoint bundles, and compile-time config validation.
 * **Topology-aware config**: `canic.toml` describes subnets, roles, singleton/replica/shard/instance placement, warm pools, scaling pools, sharding pools, and directory pools.
-* **Layered runtime APIs**: endpoint guards delegate into `workflow`, `policy`, `ops`, and storage-owned model state instead of mixing orchestration into canister methods.
 * **Self-validating delegated auth**: root signs shard certificates, shards mint user tokens, and verifiers validate token + embedded proof with local root/shard key material. Verifiers do not require proof fanout or proof caches.
 * **Stable memory helpers**: `ic_memory!`, `ic_memory_range!`, and `eager_static!` wrap stable structures and upgrade-safe runtime state.
 * **Thin-root install flow**: the `canic` CLI builds child WASMs, stages ordinary fleet artifacts through the implicit `wasm_store`, and keeps child artifacts out of the root Wasm.
-* **Operator CLI**: the `canic` binary manages local fleet configs and replica status, installs fleets, captures topology-aware canister snapshots, validates backup manifests, and drives guarded restore planning/journals.
-* **CI-oriented tooling**: Rust 2024, repo toolchain pinned to Rust `1.95.0`, published MSRV `1.91.0`, and standard `make` targets for format, lint, check, test, and build.
+* **Operator CLI**: the `canic` binary builds artifacts, manages local fleet configs and replica status, installs fleets, captures topology-aware snapshots, validates backup manifests, and drives guarded restore planning/journals.
 
 ## 📁 Repository Layout
 
-All Rust workspace crates live under `crates/`, but they fall into separate
-roles:
+All Rust workspace crates live under `crates/`:
 
 **Canister author/runtime crates**
 
@@ -46,18 +57,8 @@ roles:
 * `crates/canic-cli/` – published `canic` operator binary for install, fleet, replica/status, snapshot, backup, manifest, and restore workflows.
 * `crates/canic-host/` – host-side build, install, fleet, and thin-root staging library used by `canic` and scripts.
 * `crates/canic-backup/` – backup/restore domain library for manifests, journals, topology snapshots, layout verification, and restore planning.
-
-**Testing crates**
-
 * `crates/canic-testkit/` – public PocketIC helpers for downstream tests.
 * `crates/canic-testing-internal/` and `crates/canic-tests/` – repo-only PocketIC harnesses and integration tests.
-
-The crate directory is intentionally still flat. Cargo, publishing, and
-`[patch.crates-io]` paths stay simpler this way, while crate names and this
-taxonomy carry the role boundary. If the workspace grows enough that scanning
-`crates/` becomes painful, the next step would be a deliberate directory split
-such as `crates/runtime/`, `crates/host/`, and `crates/testing/`; that should be
-treated as a repo-structure migration rather than a naming cleanup.
 
 * `fleets/test/` – config-defined reference topology used by local ICP CLI, CI wasm builds, and repo tests.
 * `fleets/demo/` – minimal root-plus-app fleet for quick experiments.
@@ -106,7 +107,8 @@ fn main() {
 }
 ```
 
-The macro validates the TOML during compilation and exposes the canonical config path via `CANIC_CONFIG_PATH`.
+The macro validates the TOML during compilation and embeds the canonical config
+path for runtime diagnostics.
 
 For a temporary sandbox, probe, or one-off local canister that is not the root
 of a configured tree, use a generated standalone config instead:
@@ -120,8 +122,6 @@ fn main() {
 
 `build_standalone!` generates a minimal topology containing `root` and the
 requested non-root role. If a local `canic.toml` exists, it is used instead.
-If `CANIC_CONFIG_PATH` is set, the build remains strict and the explicit
-config path must exist.
 
 ### 3. Bootstrap your canister
 
@@ -146,46 +146,30 @@ See `fleets/test/root` and the reference canisters under `fleets/test/*` for end
 
 Populate `canic.toml` with subnet definitions, role policies, index exposure, and pool settings. Each `[subnets.<name>]` block lists bootstrap roles and subnet index roles, then nests `[subnets.<name>.canisters.<role>]` tables for cycles, randomness, sharding, scaling, directory pools, and delegated-auth role behavior. The full schema lives in `CONFIG.md`.
 
-### 5. Local Build and Install
+### 5. Install the Operator CLI
 
-To get the `canic` operator binary from a checkout:
-
-```bash
-make install
-canic help
-```
-
-Without `make`, the equivalent command is:
-
-```bash
-cargo install --locked --path crates/canic-cli
-```
-
-After a release is published, install the same binary from crates.io with:
+Install the `canic` binary from crates.io with the same version as your `canic`
+crate dependency:
 
 ```bash
 cargo install --locked canic-cli --version <same-version-as-canic>
 ```
 
-Use `canic help` or `canic <command> help` for command-specific options, and
-`canic --version` to print the installed CLI version.
-
-For local ICP CLI workflows, prefer the shared setup script:
+From this repository checkout, use:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/dragginzgame/canic/v0.35.4/scripts/dev/install_dev.sh | bash
+make install
 ```
 
-The script installs Rust when needed, the repo-local Rust `1.95.0` toolchain, `wasm32-unknown-unknown`, `rustfmt`, `clippy`, Candid/wasm utilities, `actionlint`, common Cargo helper tools, and pinned ICP CLI tooling when missing.
+For the full repo development toolchain, including pinned ICP CLI tooling and
+wasm/Candid helpers, run:
 
-It also installs `canic-cli` as the `canic` command.
+```bash
+make install-dev
+```
 
-Published crates still declare MSRV `1.91.0` for downstream source builds.
-
-The setup script installs tools only; it does not start a local ICP CLI
-replica. When run from a repo checkout, it also configures `.githooks/` if
-present. Use the `canic replica` commands when you want explicit local replica
-control:
+The setup commands install tools only; they do not start a local replica. Use
+explicit replica commands when needed:
 
 ```bash
 canic replica status
@@ -193,14 +177,45 @@ canic replica start --background
 canic replica start --port 8001 --background
 ```
 
-The normal interface is the `canic` binary:
+The common local loop is:
 
 ```bash
 canic status
+canic install --profile fast test
+canic list test
+```
+
+Build one canister artifact without a full install:
+
+```bash
+canic build --profile fast app
+```
+
+For split repos, pass paths as flags instead of exporting build environment
+variables:
+
+```bash
+canic --network local build \
+  --profile fast \
+  --workspace backend \
+  --icp-root . \
+  --config backend/src/canisters/canic.toml \
+  root
+```
+
+`canic install` owns the local thin-root flow: create local canisters, build
+`root` plus ordinary roles from the subnet that owns `root`, emit the root
+staging manifest, reinstall `root`, stage the ordinary fleet artifacts, resume
+bootstrap, and wait for `canic_ready`.
+
+Fleet selection is explicit. `canic install <fleet>` uses
+`fleets/<fleet>/canic.toml`, the conventional `root` ICP canister name, and
+Canic's built-in readiness timeout:
+
+```bash
 canic install test
 ```
 
-`canic install` owns the local thin-root flow: create local canisters, build `root` plus ordinary roles from the subnet that owns `root`, emit the root staging manifest, reinstall `root`, stage the ordinary fleet artifacts, resume bootstrap, and wait for `canic_ready`.
 After a successful install, Canic writes project-local fleet state under
 `.canic/<network>/fleets/<fleet>.json`. That state records the selected root
 target, resolved root principal, build target, config path, and staging
@@ -210,14 +225,6 @@ The local ICP CLI replica does not persist canister state across stop/start.
 If `canic status` shows a local fleet as `lost`, the recorded root canister is
 gone from the restarted local replica; run `canic install <fleet>` to recreate
 the local deployment.
-
-Fleet selection is explicit. `canic install <fleet>` uses
-`fleets/<fleet>/canic.toml`, the conventional `root` ICP canister name, and
-Canic's built-in readiness timeout:
-
-```bash
-canic install test
-```
 
 Install configs must declare the fleet identity that will be written to
 project-local state:
@@ -236,7 +243,7 @@ directory after confirming the exact fleet name:
 canic config test
 canic list test
 canic status
-canic fleet list --network local
+canic --network local fleet list
 canic fleet create demo --yes
 canic fleet delete demo
 ```
@@ -248,11 +255,15 @@ not look right:
 canic medic test
 ```
 
-Named-fleet commands default to the local ICP CLI environment. Pass
+Named-fleet commands default to the local ICP CLI environment. Pass top-level
 `--network <name>` for one command against another configured ICP CLI
 environment. Nonlocal targets must be managed externally.
 
-`root` embeds only the bootstrap `wasm_store.wasm.gz`; ordinary child releases stay outside `root` and are staged after install. Visible canister Candid files are generated under `.icp/local/canisters/<role>/<role>.did`. The checked-in exception is `crates/canic-wasm-store/wasm_store.did`, the canonical interface for the implicit bootstrap `wasm_store` crate.
+`root` embeds only the bootstrap `wasm_store.wasm.gz`; ordinary child releases
+stay outside `root` and are staged after install. Visible canister Candid files
+are generated under `.icp/local/canisters/<role>/<role>.did`. The checked-in
+exception is `crates/canic-wasm-store/wasm_store.did`, the canonical interface
+for the implicit bootstrap `wasm_store` crate.
 
 For build profiles, split workspace/ICP roots, custom canister roots, role
 metadata, and lower-level build/install commands, see
@@ -265,23 +276,21 @@ It uses ICP CLI for live IC snapshot operations, while Canic owns the higher-lev
 topology selection, manifests, journals, backup verification, and restore
 planning.
 
-Show local test-fleet canisters that already have ids:
+Show local test-fleet canisters:
 
 ```bash
-canic list test --network local
+canic --network local list test
 ```
 
 If this only prints the `root` row, ICP CLI has reserved the root id but the Canic
 tree is not installed yet. Run `canic install test`, then query the installed
-registry with `canic list test --network local`. List output uses the canister
-principal as the first column and renders parent/child relationships with
-box-drawing tree branches.
+registry with `canic --network local list test`.
 
 Use `--subtree` to render one live subtree with the selected node as the
 displayed root:
 
 ```bash
-canic list test --subtree app --network local
+canic --network local list test --subtree app
 ```
 
 The CLI calls `canic_ready` on each listed canister and includes a `READY`
@@ -321,78 +330,19 @@ If you are writing host-side PocketIC tests against Canic, prefer
 `crates/canic-testing-internal/` crate owns Canic's heavier root/auth harnesses
 and other repo-only fixtures.
 
-## Layered Architecture
+## Architecture And Contracts
 
-Canic follows the layering rules in `AGENTS.md`. Dependencies flow downward, and endpoint/boundary code must not reach directly into authoritative state.
+Canic follows the layering rules in `AGENTS.md`: endpoints authenticate and
+delegate, workflow orchestrates, policy decides, ops performs approved state or
+platform actions, and model/storage own invariants.
 
-* `storage/` and runtime registries – authoritative persisted or in-memory state, including stable-memory layout and local invariants.
-* `view/` – internal read-only projections consumed by `ops`, `workflow`, and pure decision helpers.
-* `ops/` – deterministic application services plus approved single-step platform effects.
-* `policy/` and pure helpers – deterministic decision/value logic with no mutation or IC calls.
-* `workflow/` – orchestration and multi-step behavior over time.
-* `access/` plus macro-generated endpoints – request guards and system-boundary wiring that delegate immediately to `workflow` or `ops`.
+Reference docs:
 
-## Capabilities & Endpoints
-
-### Update Payload Limits 🧱
-
-Every `#[canic_update]` endpoint is registered with a generated ingress payload
-limit. The default limit is `16 KiB`, and `canic::start!`,
-`canic::start_root!`, and `canic::start_wasm_store!` wire the IC
-`inspect_message` hook that rejects oversized ingress before consensus.
-
-Use `payload(max_bytes = ...)` when an endpoint intentionally accepts a larger
-request body:
-
-```rust
-use canic::{Error, prelude::*};
-
-#[canic_update(payload(max_bytes = 32 * 1024))]
-fn import_blob(bytes: Vec<u8>) -> Result<usize, Error> {
-    Ok(bytes.len())
-}
-```
-
-The payload check applies to ingress update calls. It is a pre-consensus
-admission guard, not an in-canister audit log; rejected oversized ingress does
-not enter replicated execution.
-
-### Delegated Auth 🔐
-
-Delegated auth is self-validating. Root canisters issue signed shard delegation certificates, shard canisters mint user-bound `DelegatedToken` values, and verifier canisters validate the token plus embedded proof locally. Verification does not require verifier-local proof caches, proof fanout, or creation-time catch-up.
-
-Authenticated endpoints enforce:
-
-- caller-subject binding (`token.claims.subject == caller`)
-- explicit audience membership (`self in token.claims.aud`)
-- required scope binding (`required_scope in token.claims.scopes`)
-- root signature, shard signature, key-binding, and token/cert expiry checks
-
-Reference contracts:
-- `docs/contracts/AUTH_DELEGATED_SIGNATURES.md`
-- `docs/contracts/ACCESS_ARCHITECTURE.md`
-- `docs/architecture/authentication.md`
-
-### Sharding 📦
-
-Sharding is configured via `canic.toml` and executed through the ops layer. Canisters only export sharding registry endpoints when their validated role config includes sharding support.
-
-```rust
-canic_sharding_registry()
-    -> Result<canic::dto::placement::sharding::ShardingRegistryResponse, canic::Error>
-```
-
-### Scaling & Pool Capacity ⚖️
-
-* `canic_scaling_registry()` is exported only for roles whose config enables scaling.
-* `canic_pool_list()` and the controller‑only `canic_pool_admin(cmd)` are root-only endpoints for spare-capacity management.
-
-### Index Listings 📇
-
-* `canic_app_index(PageRequest)` returns the prime root index listing for operator dashboards.
-* `canic_subnet_index(PageRequest)` exposes the per-subnet index so children can discover peers.
-
-Use `PageRequest { limit, offset }` to avoid passing raw integers into queries.
+* Config schema: `CONFIG.md`
+* Build artifacts: `docs/architecture/build-artifacts.md`
+* Delegated auth: `docs/contracts/AUTH_DELEGATED_SIGNATURES.md`
+* Access architecture: `docs/contracts/ACCESS_ARCHITECTURE.md`
+* Authentication overview: `docs/architecture/authentication.md`
 
 ## Tooling & DX
 
@@ -402,7 +352,7 @@ Use `PageRequest { limit, offset }` to avoid passing raw integers into queries.
 * Lint: `make clippy`
 * Test: `make test`
 * Build workspace release artifacts: `make build`
-* Build local canister WASMs through ICP CLI hooks: `icp build --all`
+* Build local canister artifacts: `canic build --profile fast <role>`
 * Build example targets: `cargo build -p canic --examples`
 * Role-attestation PocketIC flow: `cargo test -p canic-tests --test pic_role_attestation capability_endpoint_policy_and_structural_paths -- --nocapture --test-threads=1`
 * Root replay dispatcher coverage: `cargo test -p canic-tests --test root_suite upgrade_routes_through_dispatcher_non_skip_path -- --nocapture --test-threads=1`

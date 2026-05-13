@@ -5,6 +5,7 @@ use crate::{
     cli::help::print_help_or_version,
     version_text,
 };
+use canic_host::canister_build::CanisterBuildProfile;
 use canic_host::install_root::{InstallRootOptions, install_root};
 use clap::Command as ClapCommand;
 use std::ffi::OsString;
@@ -15,6 +16,7 @@ const DEFAULT_READY_TIMEOUT_SECONDS: u64 = 120;
 const INSTALL_HELP_AFTER: &str = "\
 Examples:
   canic install test
+  canic install --profile fast test
 
 canic install uses fleets/<fleet>/canic.toml.
 
@@ -43,6 +45,7 @@ pub enum InstallCommandError {
 pub struct InstallOptions {
     pub fleet: String,
     pub network: String,
+    pub profile: Option<CanisterBuildProfile>,
 }
 
 impl InstallOptions {
@@ -57,6 +60,10 @@ impl InstallOptions {
         Ok(Self {
             fleet,
             network: string_option(&matches, "network").unwrap_or_else(local_network),
+            profile: string_option(&matches, "profile")
+                .as_deref()
+                .map(parse_profile)
+                .transpose()?,
         })
     }
 
@@ -66,6 +73,7 @@ impl InstallOptions {
             root_canister: DEFAULT_ROOT_TARGET.to_string(),
             root_build_target: DEFAULT_ROOT_TARGET.to_string(),
             network: self.network,
+            build_profile: self.profile,
             ready_timeout_seconds: DEFAULT_READY_TIMEOUT_SECONDS,
             config_path: Some(default_fleet_config_path(&self.fleet)),
             expected_fleet: Some(self.fleet),
@@ -85,6 +93,13 @@ fn install_command() -> ClapCommand {
                 .value_name("fleet")
                 .required(true)
                 .help("Config-defined fleet name to install"),
+        )
+        .arg(
+            value_arg("profile")
+                .long("profile")
+                .value_name("debug|fast|release")
+                .num_args(1)
+                .help("Canister wasm build profile; defaults to CANIC_WASM_PROFILE or release"),
         )
         .arg(internal_network_arg())
         .after_help(INSTALL_HELP_AFTER)
@@ -111,6 +126,18 @@ fn default_fleet_config_path(fleet: &str) -> String {
 fn usage() -> String {
     let mut command = install_command();
     command.render_help().to_string()
+}
+
+fn parse_profile(value: &str) -> Result<CanisterBuildProfile, InstallCommandError> {
+    match value {
+        "debug" => Ok(CanisterBuildProfile::Debug),
+        "fast" => Ok(CanisterBuildProfile::Fast),
+        "release" => Ok(CanisterBuildProfile::Release),
+        _ => Err(InstallCommandError::Usage(format!(
+            "invalid build profile: {value}\n\n{}",
+            usage()
+        ))),
+    }
 }
 
 #[cfg(test)]

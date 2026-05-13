@@ -22,7 +22,8 @@ fn usage_lists_command_families() {
     assert!(plain.find("    status") < plain.find("    fleet"));
     assert!(plain.find("    fleet") < plain.find("    replica"));
     assert!(plain.find("    replica") < plain.find("    install"));
-    assert!(plain.find("    install") < plain.find("    config"));
+    assert!(plain.find("    install") < plain.find("    build"));
+    assert!(plain.find("    build") < plain.find("    config"));
     assert!(plain.find("    config") < plain.find("    list"));
     assert!(plain.find("    list") < plain.find("    endpoints"));
     assert!(plain.find("    endpoints") < plain.find("    medic"));
@@ -41,7 +42,7 @@ fn usage_lists_command_families() {
     assert!(plain.contains("endpoints"));
     assert!(plain.contains("cycles"));
     assert!(plain.contains("metrics"));
-    assert!(!plain.contains("    build"));
+    assert!(plain.contains("    build"));
     assert!(!plain.contains("    network"));
     assert!(!plain.contains("    defaults"));
     assert!(plain.contains("    status"));
@@ -70,6 +71,7 @@ fn command_family_help_returns_ok() {
         &["backup", "status", "help"],
         &["backup", "verify", "help"],
         &["config", "help"],
+        &["build", "help"],
         &["cycles", "help"],
         &["endpoints", "help"],
         &["install", "help"],
@@ -125,6 +127,7 @@ fn version_flags_return_ok() {
         .is_ok()
     );
     assert!(run([OsString::from("config"), OsString::from("--version")]).is_ok());
+    assert!(run([OsString::from("build"), OsString::from("--version")]).is_ok());
     assert!(run([OsString::from("cycles"), OsString::from("--version")]).is_ok());
     assert!(run([OsString::from("endpoints"), OsString::from("--version")]).is_ok());
     assert!(run([OsString::from("install"), OsString::from("--version")]).is_ok());

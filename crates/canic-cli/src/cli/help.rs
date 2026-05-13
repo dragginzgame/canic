@@ -63,6 +63,11 @@ pub const COMMAND_SPECS: &[CommandSpec] = &[
         scope: CommandScope::FleetContext,
     },
     CommandSpec {
+        name: "build",
+        about: "Build one Canic canister artifact",
+        scope: CommandScope::FleetContext,
+    },
+    CommandSpec {
         name: "config",
         about: "Inspect selected fleet config",
         scope: CommandScope::FleetContext,

@@ -8,8 +8,10 @@ fn install_defaults_to_root_target() {
 
     assert_eq!(options.fleet, "demo");
     assert_eq!(options.network, local_network());
+    assert_eq!(options.profile, None);
     assert_eq!(install.root_canister, "root");
     assert_eq!(install.root_build_target, "root");
+    assert_eq!(install.build_profile, None);
     assert_eq!(install.ready_timeout_seconds, DEFAULT_READY_TIMEOUT_SECONDS);
     assert_eq!(
         install.config_path,
@@ -29,6 +31,31 @@ fn install_accepts_internal_network() {
     .expect("parse internal network");
 
     assert_eq!(options.network, "local");
+}
+
+#[test]
+fn install_accepts_build_profile() {
+    let options = InstallOptions::parse([
+        OsString::from("--profile"),
+        OsString::from("fast"),
+        OsString::from("demo"),
+    ])
+    .expect("parse profile");
+    let install = options.into_install_root_options();
+
+    assert_eq!(install.build_profile, Some(CanisterBuildProfile::Fast));
+}
+
+#[test]
+fn install_rejects_invalid_build_profile() {
+    let err = InstallOptions::parse([
+        OsString::from("--profile"),
+        OsString::from("tiny"),
+        OsString::from("demo"),
+    ])
+    .expect_err("invalid profile should fail");
+
+    assert!(matches!(err, InstallCommandError::Usage(_)));
 }
 
 // Ensure removed install target forms are rejected before mutation starts.
@@ -103,6 +130,7 @@ fn install_usage_explains_fleet_config() {
     assert!(!text.contains("--root <name-or-principal>"));
     assert!(!text.contains("--root-build-target"));
     assert!(!text.contains("--network"));
+    assert!(text.contains("--profile"));
     assert!(text.contains("[fleet]"));
     assert!(text.contains("name = \"test\""));
 }

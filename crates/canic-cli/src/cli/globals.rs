@@ -136,7 +136,9 @@ fn command_accepts_global_icp(command: &str, tail: &[OsString]) -> bool {
 
 fn command_accepts_global_network(command: &str, tail: &[OsString]) -> bool {
     match command {
-        "cycles" | "endpoints" | "install" | "list" | "medic" | "metrics" | "status" => true,
+        "build" | "cycles" | "endpoints" | "install" | "list" | "medic" | "metrics" | "status" => {
+            true
+        }
         "fleet" => tail.first().and_then(|arg| arg.to_str()) == Some("list"),
         "snapshot" => tail.first().and_then(|arg| arg.to_str()) == Some("download"),
         "backup" => tail.first().and_then(|arg| arg.to_str()) == Some("create"),

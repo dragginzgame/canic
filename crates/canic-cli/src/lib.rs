@@ -1,4 +1,5 @@
 mod backup;
+mod build;
 mod cli;
 mod cycles;
 mod endpoints;
@@ -43,6 +44,9 @@ pub enum CliError {
 
     #[error("backup: {0}")]
     Backup(#[from] backup::BackupCommandError),
+
+    #[error("build: {0}")]
+    Build(#[from] build::BuildCommandError),
 
     #[error("config: {0}")]
     Config(String),
@@ -128,6 +132,7 @@ where
 
     match command {
         "backup" => backup::run(tail).map_err(CliError::from),
+        "build" => build::run(tail).map_err(CliError::from),
         "config" => list::run_config(tail).map_err(|err| CliError::Config(err.to_string())),
         "cycles" => cycles::run(tail).map_err(CliError::from),
         "endpoints" => endpoints::run(tail).map_err(CliError::from),

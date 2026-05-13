@@ -63,7 +63,7 @@ pub enum ReplicaCommandError {
     PortChangeRequiresStopped { current: u16, requested: u16 },
 
     #[error(
-        "this project's local ICP network is not running, but a local ICP replica is reachable. Canic could not identify the owner, so it will not stop it.\nRun `icp network start -e local --background` from this project to ask ICP for the owning project/environment, then stop that exact network."
+        "this project's local ICP network is not running, but a local ICP replica is reachable. Canic could not identify the owner, so it will not stop it.\nRun `icp network start local --background` from this project to ask ICP for the owning project/network, then stop that exact network."
     )]
     ForeignLocalReplicaReachable,
 

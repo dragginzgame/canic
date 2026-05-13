@@ -40,18 +40,18 @@ Canic now supports three wasm build profiles:
 - `release`: the shipping/install profile
 
 `make test-fleet-install` and `make test-canisters` default to the middle `fast`
-profile, and `CANIC_WASM_PROFILE` is the explicit selector.
+profile. Prefer CLI selectors for direct commands:
 
 If you want to force release wasm artifacts for the same flow, run:
 
 ```bash
-CANIC_WASM_PROFILE=release make test-fleet-install
+canic install --profile release test
 ```
 
 If you want the raw debug wasm lane instead, run:
 
 ```bash
-CANIC_WASM_PROFILE=debug make test-fleet-install
+canic build --profile debug app
 ```
 
 This one command:
@@ -87,11 +87,18 @@ icp canister create --all
 icp build --all
 ```
 
-`icp.yaml` uses custom build commands which call the host artifact builder
-directly:
+This repo's `icp.yaml` uses custom build commands which call the host artifact
+builder directly from the checkout:
 
 ```bash
 cargo run -q -p canic-host --example build_artifact -- <canister>
+```
+
+Downstream repos that consume Canic from crates.io should use the installed CLI
+surface instead:
+
+```bash
+canic build <canister>
 ```
 
 That builder:
@@ -118,7 +125,10 @@ not rewrite the checked-in source file unless
 `CANIC_REFRESH_WASM_STORE_DID=1` is set intentionally.
 
 Profile selection for the builder is:
-- `CANIC_WASM_PROFILE=debug|fast|release`
+- `canic build --profile debug|fast|release <canister>` when using the
+  installed CLI
+- `CANIC_WASM_PROFILE=debug|fast|release` for lower-level host-library or
+  repo-local script paths
 
 ## Why `.wasm.gz` Exists
 
@@ -143,26 +153,23 @@ canic install test
 ```
 
 In split repos where the Rust workspace lives under `backend/` but `icp.yaml`
-and `.icp` live at the repo root, set:
+and `.icp` live at the repo root, pass the roots to the installed CLI:
 
 ```bash
-CANIC_WORKSPACE_ROOT=/path/to/repo/backend
-CANIC_ICP_ROOT=/path/to/repo
+canic build --workspace /path/to/repo/backend --icp-root /path/to/repo <canister>
 ```
 
 The first root drives Cargo and config discovery; the second root owns emitted
 artifacts and the generated bootstrap-store wrapper.
 
 If canister crates live under a different directory such as
-`backend/src/canisters`, also set:
+`backend/src/canisters`, point the command at the real config:
 
 ```bash
-CANIC_CANISTERS_ROOT=src/canisters
+canic build --workspace /path/to/repo/backend --icp-root /path/to/repo --config /path/to/repo/backend/src/canisters/canic.toml <canister>
 ```
 
-relative to `CANIC_WORKSPACE_ROOT`, or point `CANIC_CONFIG_PATH` at the real
-`canic.toml` path and let the builder infer the canister root from that config
-location.
+The builder infers the canister root from that config location.
 
 The builder also tries Cargo workspace metadata first, so nested paths like
 `src/canisters/project/ledger` work without extra config when package names

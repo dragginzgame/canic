@@ -100,7 +100,7 @@ fn replica_leaf_usage_lists_options() {
 #[test]
 fn maps_foreign_local_replica_owner_error() {
     let error = replica_icp_error(IcpCommandError::Failed {
-        command: "icp network start -e local --background".to_string(),
+        command: "icp network start local --background".to_string(),
         stderr: "Error: port 8000 is in use by the local network of the project at '/home/adam/projects/icydb'\n".to_string(),
     });
 
@@ -137,14 +137,14 @@ fn parses_foreign_local_replica_owner() {
 #[test]
 fn detects_project_local_network_not_running() {
     let error = IcpCommandError::Failed {
-        command: "icp network stop -e local".to_string(),
+        command: "icp network stop local".to_string(),
         stderr: "Error: network 'local' is not running\n".to_string(),
     };
 
     assert!(local_network_not_running(&error));
 
     let status_error = IcpCommandError::Failed {
-        command: "icp network status -e local".to_string(),
+        command: "icp network status local".to_string(),
         stderr: "Error: unable to access network 'local', is it running?\n\nCaused by:\n    the local network for this project is not running\n".to_string(),
     };
 

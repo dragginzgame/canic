@@ -8,6 +8,7 @@ use canic::{
         env::EnvSnapshotResponse,
         error::ErrorCode,
         log::LogEntry,
+        memory::MemoryRegistryResponse,
         page::{Page, PageRequest},
         state::{AppStateResponse, SubnetStateResponse},
         topology::AppRegistryResponse,
@@ -232,6 +233,11 @@ pub fn assert_root_diagnostics_are_controller_gated(pic: &Pic, root_id: Principa
         .expect("root log transport");
     logs.expect("root log application");
 
+    let memory_registry: Result<MemoryRegistryResponse, canic::Error> = pic
+        .query_call(root_id, protocol::CANIC_MEMORY_REGISTRY, ())
+        .expect("root memory registry transport");
+    memory_registry.expect("root memory registry application");
+
     let non_controller = Principal::from_slice(&[252; 29]);
     let denied_app_registry: Result<Result<AppRegistryResponse, canic::Error>, canic::Error> =
         pic.query_call_as(root_id, non_controller, protocol::CANIC_APP_REGISTRY, ());
@@ -260,6 +266,15 @@ pub fn assert_root_diagnostics_are_controller_gated(pic: &Pic, root_id: Principa
         panic!("non-controller log query must be denied")
     };
     assert_eq!(denied_log.code, ErrorCode::Unauthorized);
+
+    let denied_memory_registry: Result<Result<MemoryRegistryResponse, canic::Error>, canic::Error> =
+        pic.query_call_as(root_id, non_controller, protocol::CANIC_MEMORY_REGISTRY, ());
+    let denied_memory_registry =
+        denied_memory_registry.expect("non-controller memory registry transport");
+    let Err(denied_memory_registry) = denied_memory_registry else {
+        panic!("non-controller memory registry query must be denied")
+    };
+    assert_eq!(denied_memory_registry.code, ErrorCode::Unauthorized);
 }
 
 // Match PocketIC missing-method failures without depending on one exact transport string.

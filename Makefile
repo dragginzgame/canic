@@ -180,7 +180,7 @@ test-installed-canic-cli:
 
 test-fleet-install:
 	@mkdir -p "$(TEST_TMPDIR)"
-	TMPDIR="$(TEST_TMPDIR)" CANIC_WASM_PROFILE="$(if $(CANIC_WASM_PROFILE),$(CANIC_WASM_PROFILE),fast)" $(CARGO_ENV) cargo run -q -p canic-cli --bin canic -- install test --config fleets/test/canic.toml
+	TMPDIR="$(TEST_TMPDIR)" $(CARGO_ENV) cargo run -q -p canic-cli --bin canic -- install --profile "$(if $(CANIC_WASM_PROFILE),$(CANIC_WASM_PROFILE),fast)" test
 
 test: clippy test-unit
 

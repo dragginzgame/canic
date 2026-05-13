@@ -94,14 +94,10 @@ pub fn current_workspace_build_context_once(
 
     let requested_profile = env::var("CANIC_WASM_PROFILE").unwrap_or_else(|_| "unset".to_string());
     let network = icp_environment_from_env();
-    let marker_key = env::var("CANIC_BUILD_CONTEXT_SESSION")
-        .ok()
-        .unwrap_or_else(|| {
-            icp_ancestor_process_id()
-                .or_else(parent_process_id)
-                .unwrap_or_else(std::process::id)
-                .to_string()
-        });
+    let marker_key = icp_ancestor_process_id()
+        .or_else(parent_process_id)
+        .unwrap_or_else(std::process::id)
+        .to_string();
     let marker_file = marker_dir.join(format!(".canic-build-context-{marker_key}"));
 
     if marker_file.exists() {
@@ -126,6 +122,34 @@ pub fn build_current_workspace_canister_artifact(
     let workspace_root = workspace_root()?;
     let icp_root = icp_root()?;
     build_canister_artifact(&workspace_root, &icp_root, canister_name, profile)
+}
+
+/// Copy the uncompressed artifact to the path requested by ICP custom builds.
+///
+/// ICP CLI sets `ICP_WASM_OUTPUT_PATH` for script-backed canister builds. Normal
+/// direct `canic build <role>` calls leave it unset and only write Canic's
+/// canonical `.icp/local/canisters/<role>/` artifacts.
+pub fn copy_icp_wasm_output(
+    canister_name: &str,
+    output: &CanisterArtifactBuildOutput,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let Some(path) = env::var_os("ICP_WASM_OUTPUT_PATH").map(PathBuf::from) else {
+        return Ok(());
+    };
+
+    if !output.wasm_path.is_file() {
+        return Err(format!(
+            "missing ICP wasm output source for {canister_name}: {}",
+            output.wasm_path.display()
+        )
+        .into());
+    }
+
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    fs::copy(&output.wasm_path, Path::new(&path))?;
+    Ok(())
 }
 
 // Build one visible Canic canister artifact and keep the thin-root special cases.

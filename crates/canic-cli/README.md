@@ -29,6 +29,21 @@ Install from crates.io after a release:
 cargo install --locked canic-cli --version <version>
 ```
 
+Downstream projects should install the same `canic-cli` version as their
+`canic` crate dependency. The installed binary includes the artifact builder:
+
+```bash
+canic build <role>
+```
+
+For downstream repos where the Cargo workspace and ICP project root differ,
+pass paths as command options instead of exporting Canic build environment
+variables:
+
+```bash
+canic build --profile fast --workspace backend --icp-root . --config backend/src/canisters/canic.toml root
+```
+
 For a full local development setup, including ICP CLI, helper tools, and the
 `canic` CLI, use the install script in the root README.
 

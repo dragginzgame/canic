@@ -1,10 +1,10 @@
 use super::{
     INSTALL_STATE_SCHEMA_VERSION, InstallState, InstallTimingSummary, add_icp_environment_target,
     add_local_root_create_cycles_arg, config_selection_error, discover_canic_config_choices,
-    fleet_install_state_path, icp_canister_command_in_network, install_build_session_id,
-    parse_bootstrap_status_value, parse_cycle_balance_response, parse_root_ready_value,
-    read_fleet_install_state, render_install_timing_summary, resolve_install_config_path,
-    root_init_args, validate_expected_fleet_name, write_install_state,
+    fleet_install_state_path, icp_canister_command_in_network, parse_bootstrap_status_value,
+    parse_cycle_balance_response, parse_root_ready_value, read_fleet_install_state,
+    render_install_timing_summary, resolve_install_config_path, root_init_args,
+    validate_expected_fleet_name, write_install_state,
 };
 use crate::release_set::configured_install_targets;
 use crate::test_support::temp_dir;
@@ -104,12 +104,6 @@ fn icp_canister_command_carries_selected_network() {
             .collect::<Vec<_>>(),
         ["canister", "status", "root", "-e", "ic"]
     );
-}
-
-#[test]
-fn install_build_session_id_is_prefixed_for_logs() {
-    let session_id = install_build_session_id();
-    assert!(session_id.starts_with("install-root-"));
 }
 
 #[test]

@@ -12,6 +12,7 @@ use canic::api::auth::AuthApi;
 //
 
 canic::start_root!();
+canic::canic_emit_memory_observability_endpoints!();
 
 // Publish root auth material before the first live delegated-auth request path.
 async fn canic_setup() {

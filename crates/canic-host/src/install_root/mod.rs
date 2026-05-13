@@ -53,6 +53,7 @@ pub struct InstallRootOptions {
     pub root_canister: String,
     pub root_build_target: String,
     pub network: String,
+    pub build_profile: Option<CanisterBuildProfile>,
     pub ready_timeout_seconds: u64,
     pub config_path: Option<String>,
     pub expected_fleet: Option<String>,
@@ -113,12 +114,11 @@ pub fn install_root(options: InstallRootOptions) -> Result<(), Box<dyn std::erro
     timings.create_canisters = create_started_at.elapsed();
 
     let build_targets = configured_install_targets(&config_path, &options.root_build_target)?;
-    let build_session_id = install_build_session_id();
     let build_started_at = Instant::now();
     run_canic_build_targets(
         &options.network,
         &build_targets,
-        &build_session_id,
+        options.build_profile,
         &config_path,
     )?;
     timings.build_all = build_started_at.elapsed();
@@ -291,11 +291,11 @@ fn current_unix_secs() -> Result<u64, Box<dyn std::error::Error>> {
 fn run_canic_build_targets(
     network: &str,
     targets: &[String],
-    build_session_id: &str,
+    build_profile: Option<CanisterBuildProfile>,
     config_path: &Path,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let _env = BuildEnvGuard::apply(network, build_session_id, config_path);
-    let profile = CanisterBuildProfile::current();
+    let _env = BuildEnvGuard::apply(network, config_path);
+    let profile = build_profile.unwrap_or_else(CanisterBuildProfile::current);
     if let Some(context) = current_workspace_build_context_once(profile)? {
         for line in context.lines() {
             println!("{line}");
@@ -359,19 +359,16 @@ fn wasm_gz_size(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
 
 struct BuildEnvGuard {
     previous_network: Option<OsString>,
-    previous_session: Option<OsString>,
     previous_config_path: Option<OsString>,
 }
 
 impl BuildEnvGuard {
-    fn apply(network: &str, build_session_id: &str, config_path: &Path) -> Self {
+    fn apply(network: &str, config_path: &Path) -> Self {
         let guard = Self {
             previous_network: env::var_os("ICP_ENVIRONMENT"),
-            previous_session: env::var_os("CANIC_BUILD_CONTEXT_SESSION"),
             previous_config_path: env::var_os("CANIC_CONFIG_PATH"),
         };
         set_env("ICP_ENVIRONMENT", network);
-        set_env("CANIC_BUILD_CONTEXT_SESSION", build_session_id);
         set_env("CANIC_CONFIG_PATH", config_path);
         guard
     }
@@ -380,7 +377,6 @@ impl BuildEnvGuard {
 impl Drop for BuildEnvGuard {
     fn drop(&mut self) {
         restore_env("ICP_ENVIRONMENT", self.previous_network.take());
-        restore_env("CANIC_BUILD_CONTEXT_SESSION", self.previous_session.take());
         restore_env("CANIC_CONFIG_PATH", self.previous_config_path.take());
     }
 }
@@ -405,13 +401,6 @@ fn restore_env(key: &str, value: Option<OsString>) {
             None => env::remove_var(key),
         }
     }
-}
-
-fn install_build_session_id() -> String {
-    let unique = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_or(0, |duration| duration.as_nanos());
-    format!("install-root-{}-{unique}", std::process::id())
 }
 
 fn add_local_root_create_cycles_arg(

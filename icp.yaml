@@ -41,6 +41,13 @@ canisters:
           commands:
             - cargo run -q -p canic-host --example build_artifact -- user_shard
 
+networks:
+  - name: local
+    mode: managed
+    gateway:
+      bind: 127.0.0.1
+      port: 8001
+
 environments:
   - name: demo
     network: local

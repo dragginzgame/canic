@@ -22,10 +22,8 @@ main() {
 
     (
         cd "$ROOT"
-        CANIC_WORKSPACE_ROOT="$ROOT" CANIC_WASM_PROFILE=fast ICP_ENVIRONMENT=local \
-            "$BIN_ROOT/canic" build app >/dev/null
-        CANIC_WORKSPACE_ROOT="$ROOT" CANIC_WASM_PROFILE=fast ICP_ENVIRONMENT=local \
-            "$BIN_ROOT/canic" build root >/dev/null
+        "$BIN_ROOT/canic" --network local build --profile fast --workspace "$ROOT" app >/dev/null
+        "$BIN_ROOT/canic" --network local build --profile fast --workspace "$ROOT" root >/dev/null
     )
 
     [ -s "$ROOT/.icp/local/canisters/app/app.wasm.gz" ] || {
@@ -46,17 +44,16 @@ main() {
     mkdir -p "$SPLIT_ICP_ROOT"
     (
         cd "$ROOT"
-        CANIC_WORKSPACE_ROOT="$ROOT" CANIC_ICP_ROOT="$SPLIT_ICP_ROOT" CANIC_WASM_PROFILE=fast ICP_ENVIRONMENT=local \
-            "$BIN_ROOT/canic" build root >/dev/null
+        "$BIN_ROOT/canic" --network local build --profile fast --workspace "$ROOT" --icp-root "$SPLIT_ICP_ROOT" root >/dev/null
     )
 
     [ -s "$SPLIT_ICP_ROOT/.icp/local/canisters/wasm_store/wasm_store.wasm.gz" ] || {
-        echo "expected split-root probe to emit wasm_store.wasm.gz under CANIC_ICP_ROOT" >&2
+        echo "expected split-root probe to emit wasm_store.wasm.gz under --icp-root" >&2
         exit 1
     }
 
     [ -s "$SPLIT_ICP_ROOT/.icp/local/canisters/root/root.wasm.gz" ] || {
-        echo "expected split-root probe to emit root.wasm.gz under CANIC_ICP_ROOT" >&2
+        echo "expected split-root probe to emit root.wasm.gz under --icp-root" >&2
         exit 1
     }
 

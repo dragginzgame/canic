@@ -7,7 +7,7 @@ use std::{
     thread,
 };
 
-const LOCAL_ENVIRONMENT: &str = "local";
+const LOCAL_NETWORK: &str = "local";
 
 ///
 /// IcpRawOutput
@@ -207,7 +207,7 @@ impl IcpCli {
 
     fn local_replica_command(&self, action: &str) -> Command {
         let mut command = self.command();
-        command.args(["network", action, "-e", LOCAL_ENVIRONMENT]);
+        command.args(["network", action, LOCAL_NETWORK]);
         command
     }
 
@@ -657,31 +657,31 @@ mod tests {
 
         assert_eq!(
             icp.local_replica_start_display(true, false),
-            "icp network start -e local --background"
+            "icp network start local --background"
         );
         assert_eq!(
             icp.local_replica_start_display(false, false),
-            "icp network start -e local"
+            "icp network start local"
         );
         assert_eq!(
             icp.local_replica_start_display(false, true),
-            "icp network start -e local --debug"
+            "icp network start local --debug"
         );
         assert_eq!(
             icp.local_replica_status_display(false),
-            "icp network status -e local"
+            "icp network status local"
         );
         assert_eq!(
             icp.local_replica_status_display(true),
-            "icp network status -e local --debug"
+            "icp network status local --debug"
         );
         assert_eq!(
             icp.local_replica_stop_display(false),
-            "icp network stop -e local"
+            "icp network stop local"
         );
         assert_eq!(
             icp.local_replica_stop_display(true),
-            "icp network stop -e local --debug"
+            "icp network stop local --debug"
         );
     }
 

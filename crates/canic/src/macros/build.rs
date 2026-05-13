@@ -134,7 +134,6 @@ macro_rules! __canic_build_internal {
         println!("cargo:rustc-check-cfg=cfg(canic_has_sharding)");
         println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_icrc_standards)");
         println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_metadata)");
-        println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_observability_memory)");
         println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_observability_env)");
         println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_observability_log)");
         println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_metrics)");
@@ -153,8 +152,7 @@ macro_rules! __canic_build_internal {
         println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_nonroot_sync_topology)");
         if std::env::var_os("CANIC_INTERNAL_TEST_ENDPOINTS").is_none() {
             // Default builds ship the slimmer demo/reference surface; internal
-            // observability and test harness endpoints opt back in explicitly.
-            println!("cargo:rustc-cfg=canic_disable_bundle_observability_memory");
+            // observability and topology test endpoints opt back in explicitly.
             println!("cargo:rustc-cfg=canic_disable_bundle_observability_env");
             println!("cargo:rustc-cfg=canic_disable_bundle_topology_index");
         }

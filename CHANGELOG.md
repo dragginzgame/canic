@@ -5,7 +5,9 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## [0.35.x] - 2026-05-13 - TBD
+## [0.35.x] - 2026-05-13 - Gettin' it workin'
+
+- `0.35.5` adds the installed `canic build <role>` artifact-builder command, adds build/install `--profile` selection plus build `--workspace`, `--icp-root`, and `--config` flags for downstream repos, and removes the internal build-session environment bridge from install builds.
 
 - `0.35.4` removes stale and duplicate root wasm-store endpoints, routes publication through `canic_wasm_store_admin` plus `canic_wasm_store_overview`, controller-gates root state/app-registry/log diagnostics, simplifies `canic_canister_status` to controller-only access, updates wasm-store reconcile coverage to the current managed release roles, records the first `0.35` instruction-footprint performance baseline, and reruns the audience-target-binding invariant audit.
 
