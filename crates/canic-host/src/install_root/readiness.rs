@@ -1,5 +1,5 @@
 use super::{icp_command_in_network, icp_command_on_network};
-use crate::release_set::{icp_call_on_network, icp_root};
+use crate::release_set::{icp_query_on_network, icp_root};
 use canic_core::protocol;
 use serde::Deserialize;
 use serde_json::Value;
@@ -67,7 +67,7 @@ pub(super) fn wait_for_root_ready(
 
 // Return true once root reports `canic_ready == true`.
 fn root_ready(network: &str, root_canister: &str) -> Result<bool, Box<dyn std::error::Error>> {
-    let output = icp_call_on_network(network, root_canister, "canic_ready", None, Some("json"))?;
+    let output = icp_query_on_network(network, root_canister, "canic_ready", None, Some("json"))?;
     let data = serde_json::from_str::<Value>(&output)?;
     Ok(parse_root_ready_value(&data))
 }
@@ -77,7 +77,7 @@ fn root_bootstrap_status(
     network: &str,
     root_canister: &str,
 ) -> Result<Option<BootstrapStatusSnapshot>, Box<dyn std::error::Error>> {
-    let output = match icp_call_on_network(
+    let output = match icp_query_on_network(
         network,
         root_canister,
         protocol::CANIC_BOOTSTRAP_STATUS,
@@ -133,7 +133,7 @@ fn print_current_bootstrap_status(
 }
 
 fn print_current_registry_roles(network: &str, root_canister: &str) {
-    if let Ok(registry_json) = icp_call_on_network(
+    if let Ok(registry_json) = icp_query_on_network(
         network,
         root_canister,
         "canic_subnet_registry",
@@ -244,7 +244,7 @@ fn extract_candid_text_field(candid: &str, label: &str) -> Option<String> {
 // Print recent structured root log entries without raw byte dumps.
 fn print_recent_root_logs(network: &str, root_canister: &str) {
     let page_args = r"(null, null, null, record { limit = 8; offset = 0 })";
-    let Ok(logs_json) = icp_call_on_network(
+    let Ok(logs_json) = icp_query_on_network(
         network,
         root_canister,
         "canic_log",

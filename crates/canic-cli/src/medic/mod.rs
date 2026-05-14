@@ -213,7 +213,7 @@ fn query_ready_with_icp(
         icp = icp.with_cwd(root);
     }
     let output = icp
-        .canister_call_output(canister, "canic_ready", Some("json"))
+        .canister_query_output(canister, "canic_ready", Some("json"))
         .map_err(|err| err.to_string())?;
     let data = serde_json::from_str::<serde_json::Value>(&output).map_err(|err| err.to_string())?;
     Ok(replica_query::parse_ready_json_value(&data))

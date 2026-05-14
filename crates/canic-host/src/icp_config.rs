@@ -83,12 +83,6 @@ pub fn configured_local_gateway_port_from_root(root: &Path) -> Result<u16, IcpCo
     Ok(configured_local_gateway_port_from_source(&source))
 }
 
-/// Set the local ICP gateway port in this project's `icp.yaml`.
-pub fn set_configured_local_gateway_port(port: u16) -> Result<PathBuf, IcpConfigError> {
-    let root = current_icp_root()?;
-    set_configured_local_gateway_port_in_root(&root, port)
-}
-
 /// Set the local ICP gateway port in one ICP project root.
 pub fn set_configured_local_gateway_port_in_root(
     root: &Path,
@@ -395,7 +389,7 @@ fn upsert_local_gateway_port(source: &str, port: u16) -> String {
 
     let networks = {
         let line_refs = lines.iter().map(String::as_str).collect::<Vec<_>>();
-        networks_section(&line_refs)
+        top_level_section(&line_refs, "networks:")
     };
     if let Some((networks_start, networks_end)) = networks {
         let local_network = local_network_lines(port);
@@ -418,21 +412,8 @@ fn upsert_local_gateway_port(source: &str, port: u16) -> String {
     join_lines(lines, had_trailing_newline)
 }
 
-fn networks_section(lines: &[&str]) -> Option<(usize, usize)> {
-    let start = lines.iter().position(|line| line.trim() == "networks:")?;
-    let end = lines
-        .iter()
-        .enumerate()
-        .skip(start + 1)
-        .find(|(_, line)| {
-            !line.trim().is_empty() && line_indent(line) == 0 && !line.trim_start().starts_with('#')
-        })
-        .map_or(lines.len(), |(index, _)| index);
-    Some((start, end))
-}
-
 fn local_network_block(lines: &[&str]) -> Option<(usize, usize)> {
-    let (section_start, section_end) = networks_section(lines)?;
+    let (section_start, section_end) = top_level_section(lines, "networks:")?;
     let start = lines[section_start + 1..section_end]
         .iter()
         .position(|line| line_indent(line) == 2 && line.trim() == "- name: local")?
@@ -496,6 +477,13 @@ mod tests {
         let source = "networks:\n  - name: local\n    mode: managed\n    gateway:\n      bind: 127.0.0.1\n      port: 8001\n";
 
         assert_eq!(configured_local_gateway_port_from_source(source), 8001);
+    }
+
+    #[test]
+    fn ignores_nested_networks_keys_when_reading_local_gateway_port() {
+        let source = "canisters:\n  - name: root\n    metadata:\n      networks:\n        - local\n\nnetworks:\n  - name: local\n    mode: managed\n    gateway:\n      bind: 127.0.0.1\n      port: 8010\n";
+
+        assert_eq!(configured_local_gateway_port_from_source(source), 8010);
     }
 
     #[test]

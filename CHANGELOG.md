@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.35.x] - 2026-05-13 - Gettin' it workin'
 
+- `0.35.16` removes stale `icp project show` handoff guidance and trims the remaining `icp.yaml` parser surface by deduplicating top-level section scanning and dropping an unused gateway-port wrapper.
+
+- `0.35.15` hardens local replica status parsing, pins gateway discovery to top-level ICP network config, sends live-read probes through query calls, and tightens JSON receipt/response parsing.
+
 - `0.35.14` keeps foreground local-replica installs on the direct gateway path when replica status root-key data is returned as JSON or CBOR.
 
 - `0.35.13` keeps foreground local-replica installs working when ICP CLI reports the local environment stopped by targeting the reachable gateway/root key directly and using JSON root create/status receipts.

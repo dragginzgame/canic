@@ -9,6 +9,12 @@ fn parses_cycle_balance_from_endpoint_output() {
         Some(4_487_280_757_485)
     );
     assert_eq!(
+        parse_cycle_balance_response(
+            r#"{"response_bytes":"4449444c","response_text":null,"response_candid":"(variant { 17_724 = 4_487_280_757_485 : nat })"}"#
+        ),
+        Some(4_487_280_757_485)
+    );
+    assert_eq!(
         parse_cycle_balance_response("(variant { 17_725 = record { code = 1 : nat } })"),
         None
     );
@@ -33,6 +39,12 @@ fn parses_canic_version_from_metadata_output() {
             r#"(record { package_name = "app"; canic_version = "0.33.8" })"#
         ),
         Some("0.33.8".to_string())
+    );
+    assert_eq!(
+        parse_canic_metadata_version_response(
+            r#"{"response_candid":"(record { package_name = \"app\"; canic_version = \"0.33.9\" })"}"#
+        ),
+        Some("0.33.9".to_string())
     );
     assert_eq!(parse_canic_metadata_version_response("{}"), None);
 }

@@ -4,18 +4,25 @@ use crate::cycles::model::{
 };
 use canic_host::response_parse::{
     field_value_after_equals, find_field, parse_json_u64, parse_json_u128, parse_u64_digits,
-    parse_u128_digits,
+    parse_u128_digits, response_candid,
 };
 
 pub(super) fn parse_cycle_tracker_page(output: &str) -> Option<CycleTrackerPage> {
     let value = serde_json::from_str::<serde_json::Value>(output).ok()?;
-    let entries_value = find_field(&value, "entries")?;
+    if let Some(page) = parse_cycle_tracker_page_json(&value) {
+        return Some(page);
+    }
+    response_candid(&value).and_then(parse_cycle_tracker_page_text)
+}
+
+fn parse_cycle_tracker_page_json(value: &serde_json::Value) -> Option<CycleTrackerPage> {
+    let entries_value = find_field(value, "entries")?;
     let entries = entries_value
         .as_array()?
         .iter()
-        .filter_map(parse_cycle_tracker_sample_json)
-        .collect::<Vec<_>>();
-    let total = find_field(&value, "total")
+        .map(parse_cycle_tracker_sample_json)
+        .collect::<Option<Vec<_>>>()?;
+    let total = find_field(value, "total")
         .and_then(parse_json_u64)
         .unwrap_or(entries.len() as u64);
 
@@ -31,12 +38,19 @@ fn parse_cycle_tracker_sample_json(value: &serde_json::Value) -> Option<CycleTra
 
 pub(super) fn parse_topup_event_page(output: &str) -> Option<CycleTopupEventPage> {
     let value = serde_json::from_str::<serde_json::Value>(output).ok()?;
-    let entries = find_field(&value, "entries")?
+    if let Some(page) = parse_topup_event_page_json(&value) {
+        return Some(page);
+    }
+    response_candid(&value).and_then(parse_topup_event_page_text)
+}
+
+fn parse_topup_event_page_json(value: &serde_json::Value) -> Option<CycleTopupEventPage> {
+    let entries = find_field(value, "entries")?
         .as_array()?
         .iter()
-        .filter_map(parse_topup_event_json)
-        .collect::<Vec<_>>();
-    let total = find_field(&value, "total")
+        .map(parse_topup_event_json)
+        .collect::<Option<Vec<_>>>()?;
+    let total = find_field(value, "total")
         .and_then(parse_json_u64)
         .unwrap_or(entries.len() as u64);
 

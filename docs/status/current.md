@@ -385,7 +385,6 @@ inspect only the files needed for the current task.
 - `git show --stat --name-only --format=fuller 6ea85fdb`
 - `git show --stat --name-only --format=fuller 5b474986`
 - `icp --version`
-- `icp project show`
 - `git show --stat --name-only --format=fuller 09f5d238`
 - `cargo test -p canic-cli list:: -- --nocapture`
 - `cargo check -p canic-cli`

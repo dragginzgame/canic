@@ -68,6 +68,24 @@ fn parses_metrics_response_candid_text() {
     );
 }
 
+#[test]
+fn metrics_json_rejects_malformed_entries_before_response_candid_fallback() {
+    assert_eq!(
+        parse_metrics_page(
+            r#"{"Ok":{"entries":[{"labels":["timer"],"principal":null}],"total":1}}"#
+        ),
+        None
+    );
+
+    let entries = parse_metrics_page(
+        r#"{"Ok":{"entries":[{"labels":["timer"],"principal":null}],"total":1},"response_candid":"(\n  variant {\n    Ok = record {\n      total = 1 : nat64;\n      entries = vec {\n        record {\n          \"principal\" = null;\n          value = variant { Count = 1 : nat64 };\n          labels = vec { \"timer\"; \"tick\" };\n        };\n      };\n    }\n  },\n)"}"#,
+    )
+    .expect("fallback to response_candid metrics page");
+
+    assert_eq!(entries.len(), 1);
+    assert_eq!(entries[0].labels, ["timer", "tick"]);
+}
+
 // Ensure zero filtering treats every payload shape consistently.
 #[test]
 fn detects_zero_metric_values() {

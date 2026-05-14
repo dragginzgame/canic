@@ -76,12 +76,23 @@ fn status_json_reports_stopped(output: &str) -> bool {
     serde_json::from_str::<serde_json::Value>(output)
         .ok()
         .and_then(|value| {
-            value
-                .get("status")
+            find_json_field(&value, "status")
                 .and_then(serde_json::Value::as_str)
                 .map(str::to_string)
         })
         .is_some_and(|status| status.eq_ignore_ascii_case("stopped"))
+}
+
+fn find_json_field<'a>(value: &'a serde_json::Value, field: &str) -> Option<&'a serde_json::Value> {
+    match value {
+        serde_json::Value::Object(map) => map
+            .get(field)
+            .or_else(|| map.values().find_map(|value| find_json_field(value, field))),
+        serde_json::Value::Array(values) => values
+            .iter()
+            .find_map(|value| find_json_field(value, field)),
+        _ => None,
+    }
 }
 
 #[cfg(test)]
@@ -93,6 +104,14 @@ mod tests {
     fn status_output_reports_stopped_status() {
         let output =
             RestoreApplyCommandOutputPair::from_bytes(br#"{"status":"Stopped"}"#, b"", 1024);
+
+        assert!(status_output_reports_stopped(&output));
+
+        let output = RestoreApplyCommandOutputPair::from_bytes(
+            br#"{"canister":{"status":"Stopped"}}"#,
+            b"",
+            1024,
+        );
 
         assert!(status_output_reports_stopped(&output));
     }

@@ -45,6 +45,29 @@ fn parses_cycle_tracker_json() {
     assert_eq!(page.total, 2);
     assert_eq!(page.entries[0].timestamp_secs, 10);
     assert_eq!(page.entries[1].cycles, 750);
+
+    let page = parse_cycle_tracker_page(
+        r#"{"response_candid":"(variant { Ok = record { entries = vec { record { cycles = 1_000 : nat; timestamp_secs = 10 : nat64 } }; total = 1 : nat64 } })"}"#,
+    )
+    .expect("parse response_candid page");
+
+    assert_eq!(page.total, 1);
+    assert_eq!(page.entries[0].cycles, 1_000);
+}
+
+#[test]
+fn cycle_tracker_json_rejects_malformed_entries_before_response_candid_fallback() {
+    assert_eq!(
+        parse_cycle_tracker_page(r#"{"Ok":{"entries":[{"timestamp_secs":10}],"total":1}}"#),
+        None
+    );
+
+    let page = parse_cycle_tracker_page(
+        r#"{"Ok":{"entries":[{"timestamp_secs":10}],"total":1},"response_candid":"(variant { Ok = record { entries = vec { record { cycles = 1_000 : nat; timestamp_secs = 10 : nat64 } }; total = 1 : nat64 } })"}"#,
+    )
+    .expect("fallback to response_candid page");
+
+    assert_eq!(page.entries[0].cycles, 1_000);
 }
 
 // Ensure Candid text output remains usable when JSON formatting is unavailable.
@@ -68,6 +91,12 @@ fn parses_cycle_balance_response() {
         Some(8_200_000_000_000)
     );
     assert_eq!(
+        parse_cycle_balance_response(
+            r#"{"response_candid":"(variant { Ok = 8_200_000_000_000 : nat })"}"#
+        ),
+        Some(8_200_000_000_000)
+    );
+    assert_eq!(
         parse_cycle_balance_response("(variant { 17_725 = record { code = 1 : nat } })"),
         None
     );
@@ -85,6 +114,30 @@ fn parses_topup_event_json() {
     assert_eq!(page.entries[0].status, CycleTopupStatus::RequestOk);
     assert_eq!(page.entries[0].transferred_cycles, Some(4_000_000_000_000));
     assert_eq!(page.entries[1].status, CycleTopupStatus::RequestErr);
+
+    let page = parse_topup_event_page(
+        r#"{"response_candid":"(variant { Ok = record { entries = vec { record { timestamp_secs = 10 : nat64; transferred_cycles = opt (4_000_000_000_000 : nat); status = variant { RequestOk } } }; total = 1 : nat64 } })"}"#,
+    )
+    .expect("parse response_candid topup page");
+
+    assert_eq!(page.total, 1);
+    assert_eq!(page.entries[0].status, CycleTopupStatus::RequestOk);
+    assert_eq!(page.entries[0].transferred_cycles, Some(4_000_000_000_000));
+}
+
+#[test]
+fn topup_event_json_rejects_malformed_entries_before_response_candid_fallback() {
+    assert_eq!(
+        parse_topup_event_page(r#"{"Ok":{"entries":[{"timestamp_secs":10}],"total":1}}"#),
+        None
+    );
+
+    let page = parse_topup_event_page(
+        r#"{"Ok":{"entries":[{"timestamp_secs":10}],"total":1},"response_candid":"(variant { Ok = record { entries = vec { record { timestamp_secs = 10 : nat64; transferred_cycles = opt (4_000_000_000_000 : nat); status = variant { RequestOk } } }; total = 1 : nat64 } })"}"#,
+    )
+    .expect("fallback to response_candid topup page");
+
+    assert_eq!(page.entries[0].status, CycleTopupStatus::RequestOk);
 }
 
 // Ensure summaries report partial windows when no sample exists before the cutoff.

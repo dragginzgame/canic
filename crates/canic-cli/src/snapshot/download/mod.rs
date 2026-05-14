@@ -366,7 +366,7 @@ fn call_subnet_registry(
     }
 
     icp(request)
-        .canister_call_output(root, "canic_subnet_registry", Some("json"))
+        .canister_query_output(root, "canic_subnet_registry", Some("json"))
         .map_err(snapshot_icp_error)
 }
 

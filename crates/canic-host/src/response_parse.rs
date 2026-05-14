@@ -45,6 +45,17 @@ pub fn parse_candid_text_field(output: &str, field: &str) -> Option<String> {
 
 #[must_use]
 pub fn parse_cycle_balance_response(output: &str) -> Option<u128> {
+    serde_json::from_str::<serde_json::Value>(output)
+        .ok()
+        .and_then(|value| {
+            find_field(&value, "Ok")
+                .and_then(parse_json_u128)
+                .or_else(|| response_candid(&value).and_then(parse_cycle_balance_candid))
+        })
+        .or_else(|| parse_cycle_balance_candid(output))
+}
+
+fn parse_cycle_balance_candid(output: &str) -> Option<u128> {
     output
         .split_once('=')
         .map_or(output, |(_, cycles)| cycles)

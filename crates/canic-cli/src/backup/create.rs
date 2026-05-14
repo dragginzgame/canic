@@ -382,7 +382,7 @@ fn call_subnet_registry(
 
     IcpCli::new(&options.icp, None, Some(options.network.clone()))
         .with_cwd(icp_root)
-        .canister_call_output(root, "canic_subnet_registry", Some("json"))
+        .canister_query_output(root, "canic_subnet_registry", Some("json"))
         .map_err(backup_icp_error)
 }
 

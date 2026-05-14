@@ -378,6 +378,12 @@ fn parses_root_cycle_balance_response() {
         Some(99_999_000_000_000)
     );
     assert_eq!(
+        parse_cycle_balance_response(
+            r#"{"response_candid":"(variant { Ok = 99_999_000_000_000 : nat })"}"#
+        ),
+        Some(99_999_000_000_000)
+    );
+    assert_eq!(
         parse_cycle_balance_response("(variant { Err = record { code = 1 : nat } })"),
         None
     );

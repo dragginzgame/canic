@@ -190,7 +190,7 @@ fn query_live_cycle_balance(options: &CyclesOptions, canister_id: &str) -> Optio
     if let Some(root) = resolve_cycles_icp_root() {
         icp = icp.with_cwd(root);
     }
-    icp.canister_call_output(
+    icp.canister_query_output(
         canister_id,
         canic_core::protocol::CANIC_CYCLE_BALANCE,
         Some("json"),

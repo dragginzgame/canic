@@ -61,12 +61,34 @@ pub fn resume_root_bootstrap(
 }
 
 // Run one `icp canister call` and return stdout, preserving stderr on failure.
-pub fn icp_call_on_network(
+fn icp_call_on_network(
     network: &str,
     canister: &str,
     method: &str,
     argument: Option<&str>,
     output: Option<&str>,
+) -> Result<String, Box<dyn std::error::Error>> {
+    icp_call_on_network_with_mode(network, canister, method, argument, output, false)
+}
+
+// Run one query-only `icp canister call` and return stdout, preserving stderr on failure.
+pub fn icp_query_on_network(
+    network: &str,
+    canister: &str,
+    method: &str,
+    argument: Option<&str>,
+    output: Option<&str>,
+) -> Result<String, Box<dyn std::error::Error>> {
+    icp_call_on_network_with_mode(network, canister, method, argument, output, true)
+}
+
+fn icp_call_on_network_with_mode(
+    network: &str,
+    canister: &str,
+    method: &str,
+    argument: Option<&str>,
+    output: Option<&str>,
+    query: bool,
 ) -> Result<String, Box<dyn std::error::Error>> {
     let icp_root = icp_root()?;
     let mut command = icp::default_command_in(&icp_root);
@@ -82,6 +104,9 @@ pub fn icp_call_on_network(
         command.arg("--args-file").arg(path);
     } else {
         command.arg("()");
+    }
+    if query {
+        command.arg("--query");
     }
     icp::add_target_args(&mut command, Some(network), None);
 

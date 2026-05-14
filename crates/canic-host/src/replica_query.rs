@@ -149,7 +149,7 @@ fn root_key_from_json(value: &serde_json::Value) -> Option<String> {
 
 fn root_key_from_cbor(value: &serde_cbor::Value) -> Option<String> {
     match value {
-        serde_cbor::Value::Bytes(bytes) => Some(hex_bytes(bytes)),
+        serde_cbor::Value::Bytes(bytes) => (!bytes.is_empty()).then(|| hex_bytes(bytes)),
         serde_cbor::Value::Text(text) => nonempty_text(text),
         serde_cbor::Value::Array(values) => values.iter().find_map(root_key_from_cbor),
         serde_cbor::Value::Map(map) => map
@@ -164,7 +164,8 @@ fn root_key_from_cbor(value: &serde_cbor::Value) -> Option<String> {
 }
 
 fn nonempty_text(text: &str) -> Option<String> {
-    (!text.is_empty()).then(|| text.to_string())
+    let trimmed = text.trim();
+    (!trimmed.is_empty()).then(|| trimmed.to_string())
 }
 
 fn hex_bytes(bytes: &[u8]) -> String {
@@ -582,5 +583,21 @@ mod tests {
         let root_key = parse_local_replica_root_key(&body);
 
         assert_eq!(root_key.as_deref(), Some("308182"));
+    }
+
+    #[test]
+    fn rejects_blank_local_replica_root_key_status_values() {
+        #[derive(Serialize)]
+        struct Status {
+            #[serde(with = "serde_bytes")]
+            root_key: Vec<u8>,
+        }
+
+        assert_eq!(parse_local_replica_root_key(br#"{"root_key":"   "}"#), None);
+
+        let body = serde_cbor::to_vec(&Status { root_key: vec![] })
+            .expect("encode empty cbor status root key");
+
+        assert_eq!(parse_local_replica_root_key(&body), None);
     }
 }

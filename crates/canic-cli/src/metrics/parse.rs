@@ -1,7 +1,7 @@
 use crate::metrics::model::{MetricEntry, MetricValue};
 use canic_host::response_parse::{
     RECORD_MARKER, candid_record_blocks, find_field, parse_json_u64, parse_json_u128,
-    parse_u64_digits, parse_u128_digits, quoted_strings, text_after,
+    parse_u64_digits, parse_u128_digits, quoted_strings, response_candid, text_after,
 };
 
 pub fn parse_metrics_page(output: &str) -> Option<Vec<MetricEntry>> {
@@ -9,19 +9,15 @@ pub fn parse_metrics_page(output: &str) -> Option<Vec<MetricEntry>> {
     if let Some(entries) = parse_metrics_page_json(&value) {
         return Some(entries);
     }
-    find_field(&value, "response_candid")
-        .and_then(serde_json::Value::as_str)
-        .and_then(parse_metrics_page_text)
+    response_candid(&value).and_then(parse_metrics_page_text)
 }
 
 fn parse_metrics_page_json(value: &serde_json::Value) -> Option<Vec<MetricEntry>> {
-    Some(
-        find_field(value, "entries")?
-            .as_array()?
-            .iter()
-            .filter_map(parse_metric_entry_json)
-            .collect::<Vec<_>>(),
-    )
+    find_field(value, "entries")?
+        .as_array()?
+        .iter()
+        .map(parse_metric_entry_json)
+        .collect()
 }
 
 fn parse_metric_entry_json(value: &serde_json::Value) -> Option<MetricEntry> {
@@ -29,8 +25,8 @@ fn parse_metric_entry_json(value: &serde_json::Value) -> Option<MetricEntry> {
         labels: find_field(value, "labels")?
             .as_array()?
             .iter()
-            .filter_map(|value| value.as_str().map(str::to_string))
-            .collect(),
+            .map(|value| value.as_str().map(str::to_string))
+            .collect::<Option<Vec<_>>>()?,
         principal: find_field(value, "principal").and_then(parse_principal_json),
         value: find_field(value, "value").and_then(parse_metric_value_json)?,
     })

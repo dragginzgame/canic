@@ -149,7 +149,7 @@ fn check_ready_status(
     if let Some(root) = icp_root {
         icp = icp.with_cwd(root);
     }
-    let Ok(output) = icp.canister_call_output(canister, "canic_ready", Some("json")) else {
+    let Ok(output) = icp.canister_query_output(canister, "canic_ready", Some("json")) else {
         return Ok(ReadyStatus::Error);
     };
     let data = serde_json::from_str::<serde_json::Value>(&output)?;
@@ -231,7 +231,7 @@ fn query_cycle_balance_endpoint(
     if let Some(root) = icp_root {
         icp = icp.with_cwd(root);
     }
-    icp.canister_call_output(
+    icp.canister_query_output(
         canister,
         canic_core::protocol::CANIC_CYCLE_BALANCE,
         Some("json"),
@@ -250,7 +250,7 @@ fn query_canic_metadata_version(
     if let Some(root) = icp_root {
         icp = icp.with_cwd(root);
     }
-    icp.canister_call_output(canister, canic_core::protocol::CANIC_METADATA, Some("json"))
+    icp.canister_query_output(canister, canic_core::protocol::CANIC_METADATA, Some("json"))
         .ok()
         .and_then(|output| parse_canic_metadata_version_response(&output))
 }

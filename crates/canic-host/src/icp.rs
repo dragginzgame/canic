@@ -117,6 +117,15 @@ pub struct IcpSnapshotCreateReceipt {
 }
 
 ///
+/// IcpSnapshotUploadReceipt
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct IcpSnapshotUploadReceipt {
+    pub snapshot_id: String,
+}
+
+///
 /// IcpCanisterStatusReport
 ///
 
@@ -397,6 +406,24 @@ impl IcpCli {
         run_output(&mut command)
     }
 
+    /// Query one canister method with no arguments and optional JSON output.
+    pub fn canister_query_output(
+        &self,
+        canister: &str,
+        method: &str,
+        output: Option<&str>,
+    ) -> Result<String, IcpCommandError> {
+        let mut command = self.canister_command();
+        command.args(["call", canister, method]);
+        command.arg("()");
+        command.arg("--query");
+        if let Some(output) = output {
+            add_output_arg(&mut command, output);
+        }
+        self.add_target_args(&mut command);
+        run_output(&mut command)
+    }
+
     /// Query one canister method with an explicit Candid argument and optional JSON output.
     pub fn canister_query_arg_output(
         &self,
@@ -501,12 +528,24 @@ impl IcpCli {
         canister: &str,
         artifact_path: &Path,
     ) -> Result<String, IcpCommandError> {
+        Ok(self
+            .snapshot_upload_receipt(canister, artifact_path)?
+            .snapshot_id)
+    }
+
+    /// Upload one snapshot artifact and return the ICP CLI JSON receipt.
+    pub fn snapshot_upload_receipt(
+        &self,
+        canister: &str,
+        artifact_path: &Path,
+    ) -> Result<IcpSnapshotUploadReceipt, IcpCommandError> {
         let mut command = self.canister_command();
         command.args(["snapshot", "upload", canister, "--input"]);
         command.arg(artifact_path);
         command.arg("--resume");
+        command.arg("--json");
         self.add_target_args(&mut command);
-        run_output_with_stderr(&mut command)
+        run_json(&mut command)
     }
 
     /// Restore one uploaded snapshot onto a canister.
@@ -553,6 +592,7 @@ impl IcpCli {
         command.args(["snapshot", "upload", canister, "--input"]);
         command.arg(artifact_path);
         command.arg("--resume");
+        command.arg("--json");
         self.add_target_args(&mut command);
         command_display(&command)
     }
@@ -580,6 +620,25 @@ impl IcpCli {
     pub fn start_canister_display(&self, canister: &str) -> String {
         let mut command = self.canister_command();
         command.args(["start", canister]);
+        self.add_target_args(&mut command);
+        command_display(&command)
+    }
+
+    /// Render a dry-run no-argument query call.
+    #[must_use]
+    pub fn canister_query_output_display(
+        &self,
+        canister: &str,
+        method: &str,
+        output: Option<&str>,
+    ) -> String {
+        let mut command = self.canister_command();
+        command.args(["call", canister, method]);
+        command.arg("()");
+        command.arg("--query");
+        if let Some(output) = output {
+            add_output_arg(&mut command, output);
+        }
         self.add_target_args(&mut command);
         command_display(&command)
     }
@@ -903,11 +962,22 @@ mod tests {
 
         assert_eq!(
             icp.snapshot_upload_display("root", Path::new("artifact")),
-            "icp canister snapshot upload root --input artifact --resume -e prod"
+            "icp canister snapshot upload root --input artifact --resume --json -e prod"
         );
         assert_eq!(
             icp.snapshot_restore_display("root", "uploaded-1"),
             "icp canister snapshot restore root uploaded-1 -e prod"
+        );
+    }
+
+    // Ensure query helpers do not accidentally issue update calls for read-only endpoint probes.
+    #[test]
+    fn renders_no_argument_query_call() {
+        let icp = IcpCli::new("icp", None, Some("ic".to_string()));
+
+        assert_eq!(
+            icp.canister_query_output_display("root", "canic_ready", Some("json")),
+            "icp canister call root canic_ready () --query --json -n ic"
         );
     }
 
@@ -946,6 +1016,19 @@ ID         SIZE       CREATED_AT
 
         assert_eq!(receipt.snapshot_id, "0000000000000000ffffffffffc000020101");
         assert_eq!(receipt.total_size_bytes, Some(272_586_987));
+    }
+
+    // Ensure current ICP CLI snapshot upload JSON receipts parse into the typed host shape.
+    #[test]
+    fn parses_snapshot_upload_receipt_json() {
+        let receipt = serde_json::from_str::<IcpSnapshotUploadReceipt>(
+            r#"{
+  "snapshot_id": "0000000000000000ffffffffffc000020101"
+}"#,
+        )
+        .expect("parse snapshot upload receipt");
+
+        assert_eq!(receipt.snapshot_id, "0000000000000000ffffffffffc000020101");
     }
 
     // Ensure current ICP CLI status JSON parses into the typed host shape.

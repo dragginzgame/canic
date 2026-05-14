@@ -7,7 +7,7 @@ use crate::icp::{self, CANIC_ICP_LOCAL_NETWORK_URL_ENV, CANIC_ICP_LOCAL_ROOT_KEY
 use crate::release_set::{
     LOCAL_ROOT_MIN_READY_CYCLES, configured_fleet_name, configured_install_targets,
     configured_local_root_create_cycles, emit_root_release_set_manifest_with_config,
-    icp_call_on_network, icp_root, load_root_release_set_manifest, resolve_artifact_root,
+    icp_query_on_network, icp_root, load_root_release_set_manifest, resolve_artifact_root,
     resume_root_bootstrap, stage_root_release_set, workspace_root,
 };
 use crate::replica_query;
@@ -606,7 +606,7 @@ fn query_root_cycle_balance(
     network: &str,
     root_canister: &str,
 ) -> Result<u128, Box<dyn std::error::Error>> {
-    let output = icp_call_on_network(
+    let output = icp_query_on_network(
         network,
         root_canister,
         protocol::CANIC_CYCLE_BALANCE,

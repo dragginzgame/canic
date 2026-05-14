@@ -196,7 +196,7 @@ fn query_registry(
     }
 
     IcpCli::new(&request.icp, None, Some(request.network.clone()))
-        .canister_call_output(root, "canic_subnet_registry", Some("json"))
+        .canister_query_output(root, "canic_subnet_registry", Some("json"))
         .map(|registry| (InstalledFleetSource::IcpCli, registry))
         .map_err(installed_fleet_icp_error)
 }
@@ -218,7 +218,7 @@ fn query_registry_from_root(
 
     IcpCli::new(&request.icp, None, Some(request.network.clone()))
         .with_cwd(icp_root)
-        .canister_call_output(root, "canic_subnet_registry", Some("json"))
+        .canister_query_output(root, "canic_subnet_registry", Some("json"))
         .map(|registry| (InstalledFleetSource::IcpCli, registry))
         .map_err(installed_fleet_icp_error)
 }

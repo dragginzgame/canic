@@ -25,7 +25,7 @@ pub use paths::{
     root_manifest_path, root_release_set_manifest_path, workspace_manifest_path, workspace_root,
 };
 use stage::build_release_set_entry;
-pub(crate) use stage::icp_call_on_network;
+pub(crate) use stage::icp_query_on_network;
 pub use stage::{resume_root_bootstrap, stage_root_release_set};
 
 #[cfg(test)]

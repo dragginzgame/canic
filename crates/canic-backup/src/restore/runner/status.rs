@@ -121,8 +121,8 @@ pub(super) fn restore_command_unavailable_error(
 
 // Extract the uploaded target snapshot ID from command output.
 pub fn parse_uploaded_snapshot_id(output: &str) -> Option<String> {
-    if let Some(snapshot_id) = parse_uploaded_snapshot_id_json(output) {
-        return Some(snapshot_id);
+    if let Ok(value) = serde_json::from_str::<serde_json::Value>(output) {
+        return parse_uploaded_snapshot_id_json(&value);
     }
 
     output
@@ -132,8 +132,7 @@ pub fn parse_uploaded_snapshot_id(output: &str) -> Option<String> {
         .map(str::to_string)
 }
 
-fn parse_uploaded_snapshot_id_json(output: &str) -> Option<String> {
-    let value = serde_json::from_str::<serde_json::Value>(output).ok()?;
+fn parse_uploaded_snapshot_id_json(value: &serde_json::Value) -> Option<String> {
     value
         .get("snapshot_id")
         .and_then(serde_json::Value::as_str)
@@ -160,6 +159,21 @@ mod tests {
             snapshot_id.as_deref(),
             Some("0000000000000000ffffffffffc000020101")
         );
+    }
+
+    #[test]
+    fn parses_uploaded_snapshot_id_legacy_json_key() {
+        let snapshot_id =
+            parse_uploaded_snapshot_id(r#"{"uploaded_snapshot_id":"target-snapshot"}"#);
+
+        assert_eq!(snapshot_id.as_deref(), Some("target-snapshot"));
+    }
+
+    #[test]
+    fn rejects_json_without_uploaded_snapshot_id() {
+        let snapshot_id = parse_uploaded_snapshot_id(r#"{"message":"upload completed"}"#);
+
+        assert_eq!(snapshot_id, None);
     }
 
     // Keep older human output accepted for existing restore journals and tests.
