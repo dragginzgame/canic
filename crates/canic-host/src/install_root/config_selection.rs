@@ -20,6 +20,7 @@ struct ConfigChoiceRow {
 
 const CONFIG_CHOICE_ROLE_PREVIEW_LIMIT: usize = 6;
 const FLEETS_ROOT: &str = "fleets";
+const ICP_CONFIG_FILE: &str = "icp.yaml";
 const ROOT_CONFIG_RELATIVE: &str = "canic.toml";
 
 // Resolve the operator-facing Canic project root from the current directory.
@@ -31,13 +32,19 @@ pub fn current_canic_project_root() -> Result<PathBuf, Box<dyn std::error::Error
 pub fn discover_canic_project_root_from(
     start: &Path,
 ) -> Result<Option<PathBuf>, Box<dyn std::error::Error>> {
-    let mut discovered = None;
+    let mut nearest_fleets_root = None;
     for candidate in start.ancestors() {
         if !discover_project_canic_config_choices(candidate)?.is_empty() {
-            discovered = Some(candidate.canonicalize()?);
+            let root = candidate.canonicalize()?;
+            if candidate.join(ICP_CONFIG_FILE).is_file() {
+                return Ok(Some(root));
+            }
+            if nearest_fleets_root.is_none() {
+                nearest_fleets_root = Some(root);
+            }
         }
     }
-    Ok(discovered)
+    Ok(nearest_fleets_root)
 }
 
 // Resolve install config selection without silently choosing among demo/test configs.

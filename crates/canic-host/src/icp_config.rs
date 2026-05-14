@@ -590,13 +590,14 @@ kind = "singleton"
         let nested = root.join("backend/src");
         fs::create_dir_all(&nested).expect("create nested dir");
         fs::create_dir_all(config.parent().expect("config parent")).expect("create config parent");
+        fs::write(root.join("icp.yaml"), "").expect("write icp config");
         fs::write(&config, "[fleet]\nname = \"toko\"\n").expect("write config");
 
         let icp_root = crate::install_root::discover_canic_project_root_from(&nested)
             .expect("discover project root")
             .expect("project root is present");
 
-        assert_eq!(icp_root, root);
+        assert_eq!(icp_root, root.canonicalize().expect("canonical root"));
         fs::remove_dir_all(root).expect("clean temp dir");
     }
 
@@ -611,6 +612,7 @@ kind = "singleton"
         fs::create_dir_all(nested_config.parent().expect("nested config parent"))
             .expect("create nested config parent");
         fs::create_dir_all(&nested).expect("create nested dir");
+        fs::write(root.join("icp.yaml"), "").expect("write icp config");
         fs::write(&outer_config, "[fleet]\nname = \"toko\"\n").expect("write outer config");
         fs::write(&nested_config, "[fleet]\nname = \"toko\"\n").expect("write nested config");
 
@@ -618,7 +620,7 @@ kind = "singleton"
             .expect("discover project root")
             .expect("project root is present");
 
-        assert_eq!(icp_root, root);
+        assert_eq!(icp_root, root.canonicalize().expect("canonical root"));
         fs::remove_dir_all(root).expect("clean temp dir");
     }
 
