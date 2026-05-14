@@ -7,6 +7,8 @@ use std::{
     thread,
 };
 
+use serde::{Deserialize, Serialize};
+
 const LOCAL_NETWORK: &str = "local";
 
 ///
@@ -28,8 +30,18 @@ pub struct IcpRawOutput {
 #[derive(Debug)]
 pub enum IcpCommandError {
     Io(std::io::Error),
-    Failed { command: String, stderr: String },
-    SnapshotIdUnavailable { output: String },
+    Failed {
+        command: String,
+        stderr: String,
+    },
+    Json {
+        command: String,
+        output: String,
+        source: serde_json::Error,
+    },
+    SnapshotIdUnavailable {
+        output: String,
+    },
 }
 
 impl fmt::Display for IcpCommandError {
@@ -39,6 +51,16 @@ impl fmt::Display for IcpCommandError {
             Self::Io(err) => write!(formatter, "{err}"),
             Self::Failed { command, stderr } => {
                 write!(formatter, "icp command failed: {command}\n{stderr}")
+            }
+            Self::Json {
+                command,
+                output,
+                source,
+            } => {
+                write!(
+                    formatter,
+                    "could not parse icp json output for {command}: {source}\n{output}"
+                )
             }
             Self::SnapshotIdUnavailable { output } => {
                 write!(
@@ -55,6 +77,7 @@ impl Error for IcpCommandError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
             Self::Io(err) => Some(err),
+            Self::Json { source, .. } => Some(source),
             Self::Failed { .. } | Self::SnapshotIdUnavailable { .. } => None,
         }
     }
@@ -76,6 +99,51 @@ pub struct IcpCli {
     executable: String,
     environment: Option<String>,
     network: Option<String>,
+}
+
+///
+/// IcpSnapshotCreateReceipt
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct IcpSnapshotCreateReceipt {
+    pub snapshot_id: String,
+    pub taken_at_timestamp: Option<u64>,
+    pub total_size_bytes: Option<u64>,
+}
+
+///
+/// IcpCanisterStatusReport
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct IcpCanisterStatusReport {
+    pub id: String,
+    pub name: Option<String>,
+    pub status: String,
+    pub settings: Option<IcpCanisterStatusSettings>,
+    pub module_hash: Option<String>,
+    pub memory_size: Option<String>,
+    pub cycles: Option<String>,
+    pub reserved_cycles: Option<String>,
+    pub idle_cycles_burned_per_day: Option<String>,
+}
+
+///
+/// IcpCanisterStatusSettings
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct IcpCanisterStatusSettings {
+    #[serde(default)]
+    pub controllers: Vec<String>,
+    pub compute_allocation: Option<String>,
+    pub memory_allocation: Option<String>,
+    pub freezing_threshold: Option<String>,
+    pub reserved_cycles_limit: Option<String>,
+    pub wasm_memory_limit: Option<String>,
+    pub wasm_memory_threshold: Option<String>,
+    pub log_memory_limit: Option<String>,
 }
 
 impl IcpCli {
@@ -155,6 +223,17 @@ impl IcpCli {
         let mut command = self.local_replica_command("status");
         add_debug_arg(&mut command, debug);
         run_output_with_stderr(&mut command)
+    }
+
+    /// Return local ICP replica status as the ICP CLI JSON payload.
+    pub fn local_replica_status_json(
+        &self,
+        debug: bool,
+    ) -> Result<serde_json::Value, IcpCommandError> {
+        let mut command = self.local_replica_command("status");
+        add_debug_arg(&mut command, debug);
+        command.arg("--json");
+        run_json(&mut command)
     }
 
     /// Return whether this project owns a running local ICP replica.
@@ -285,19 +364,33 @@ impl IcpCli {
         run_output(&mut command)
     }
 
-    /// Create one canister snapshot and return combined stdout/stderr text.
-    pub fn snapshot_create(&self, canister: &str) -> Result<String, IcpCommandError> {
+    /// Return one canister status report from ICP CLI JSON output.
+    pub fn canister_status_report(
+        &self,
+        canister: &str,
+    ) -> Result<IcpCanisterStatusReport, IcpCommandError> {
+        let mut command = self.canister_command();
+        command.args(["status", canister]);
+        command.arg("--json");
+        self.add_target_args(&mut command);
+        run_json(&mut command)
+    }
+
+    /// Create one canister snapshot and return the ICP CLI JSON receipt.
+    pub fn snapshot_create_receipt(
+        &self,
+        canister: &str,
+    ) -> Result<IcpSnapshotCreateReceipt, IcpCommandError> {
         let mut command = self.canister_command();
         command.args(["snapshot", "create", canister]);
-        command.arg("--quiet");
+        command.arg("--json");
         self.add_target_args(&mut command);
-        run_output(&mut command)
+        run_json(&mut command)
     }
 
     /// Create one canister snapshot and resolve the resulting snapshot id.
     pub fn snapshot_create_id(&self, canister: &str) -> Result<String, IcpCommandError> {
-        let output = self.snapshot_create(canister)?;
-        parse_snapshot_id(&output).ok_or(IcpCommandError::SnapshotIdUnavailable { output })
+        Ok(self.snapshot_create_receipt(canister)?.snapshot_id)
     }
 
     /// Stop one canister.
@@ -361,7 +454,7 @@ impl IcpCli {
     pub fn snapshot_create_display(&self, canister: &str) -> String {
         let mut command = self.canister_command();
         command.args(["snapshot", "create", canister]);
-        command.arg("--quiet");
+        command.arg("--json");
         self.add_target_args(&mut command);
         command_display(&command)
     }
@@ -483,6 +576,28 @@ pub fn run_output_with_stderr(command: &mut Command) -> Result<String, IcpComman
         let mut text = String::from_utf8_lossy(&output.stdout).to_string();
         text.push_str(&String::from_utf8_lossy(&output.stderr));
         Ok(text.trim().to_string())
+    } else {
+        Err(IcpCommandError::Failed {
+            command: display,
+            stderr: command_stderr(&output),
+        })
+    }
+}
+
+/// Execute a command and parse successful stdout as JSON.
+pub fn run_json<T>(command: &mut Command) -> Result<T, IcpCommandError>
+where
+    T: serde::de::DeserializeOwned,
+{
+    let display = command_display(command);
+    let output = command.output()?;
+    if output.status.success() {
+        let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        serde_json::from_str(&stdout).map_err(|source| IcpCommandError::Json {
+            command: display,
+            output: stdout,
+            source,
+        })
     } else {
         Err(IcpCommandError::Failed {
             command: display,
@@ -646,7 +761,7 @@ mod tests {
 
         assert_eq!(
             icp.snapshot_create_display("aaaaa-aa"),
-            "icp canister snapshot create aaaaa-aa --quiet -n ic"
+            "icp canister snapshot create aaaaa-aa --json -n ic"
         );
     }
 
@@ -719,5 +834,46 @@ ID         SIZE       CREATED_AT
         let snapshot_id = parse_snapshot_id(output);
 
         assert_eq!(snapshot_id.as_deref(), Some("0a0b0c0d"));
+    }
+
+    // Ensure current ICP CLI snapshot JSON receipts parse into the typed host shape.
+    #[test]
+    fn parses_snapshot_create_receipt_json() {
+        let receipt = serde_json::from_str::<IcpSnapshotCreateReceipt>(
+            r#"{
+  "snapshot_id": "0000000000000000ffffffffffc000020101",
+  "taken_at_timestamp": 1778709681897818005,
+  "total_size_bytes": 272586987
+}"#,
+        )
+        .expect("parse snapshot receipt");
+
+        assert_eq!(receipt.snapshot_id, "0000000000000000ffffffffffc000020101");
+        assert_eq!(receipt.total_size_bytes, Some(272586987));
+    }
+
+    // Ensure current ICP CLI status JSON parses into the typed host shape.
+    #[test]
+    fn parses_canister_status_report_json() {
+        let report = serde_json::from_str::<IcpCanisterStatusReport>(
+            r#"{
+  "id": "t63gs-up777-77776-aaaba-cai",
+  "name": "motoko-ex",
+  "status": "Running",
+  "settings": {
+    "controllers": ["zbf4m-zw3nk-6owqc-qmluz-xhwxt-2pkky-xhjy2-kqxor-qzxsn-6d2bz-nae"],
+    "compute_allocation": "0"
+  },
+  "module_hash": "0x66ce5ddcd06f1135c1a04792a2f1b7c3d9e229b977a8fc9762c71ecc5314c9eb",
+  "cycles": "1_497_896_187_059"
+}"#,
+        )
+        .expect("parse status report");
+
+        assert_eq!(report.status, "Running");
+        assert_eq!(
+            report.settings.expect("settings").controllers.as_slice(),
+            &["zbf4m-zw3nk-6owqc-qmluz-xhwxt-2pkky-xhjy2-kqxor-qzxsn-6d2bz-nae"]
+        );
     }
 }

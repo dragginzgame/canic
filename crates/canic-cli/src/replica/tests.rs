@@ -14,6 +14,7 @@ fn parses_replica_start_options() {
     assert_eq!(options.port, None);
     assert!(options.background);
     assert!(!options.debug);
+    assert!(!options.json);
 }
 
 // Ensure replica start can set the project-local gateway port before launch.
@@ -43,6 +44,7 @@ fn replica_start_defaults_to_foreground() {
     assert_eq!(options.port, None);
     assert!(!options.background);
     assert!(!options.debug);
+    assert!(!options.json);
 }
 
 // Ensure replica lifecycle commands can enable ICP CLI debug logging.
@@ -57,6 +59,7 @@ fn parses_replica_debug_options() {
     assert!(start.debug);
     assert!(status.debug);
     assert!(stop.debug);
+    assert!(!status.json);
 }
 
 // Ensure status uses the default ICP executable when no override is provided.
@@ -68,6 +71,16 @@ fn parses_replica_status_options() {
     assert_eq!(options.port, None);
     assert!(!options.background);
     assert!(!options.debug);
+    assert!(!options.json);
+}
+
+// Ensure replica status can expose the underlying ICP status payload as JSON.
+#[test]
+fn parses_replica_status_json_option() {
+    let options =
+        ReplicaOptions::parse_status([OsString::from("--json")]).expect("parse replica status");
+
+    assert!(options.json);
 }
 
 // Ensure replica help exposes the native lifecycle commands.
@@ -90,10 +103,14 @@ fn replica_leaf_usage_lists_options() {
     assert!(text.contains("--background"));
     assert!(text.contains("--port"));
     assert!(text.contains("--debug"));
+    assert!(!text.contains("--json"));
     assert!(!text.contains("--icp"));
     assert!(text.contains("canic replica start --background"));
     assert!(text.contains("canic replica start --port 8001 --background"));
     assert!(text.contains("canic replica start --debug"));
+
+    let status = status_usage();
+    assert!(status.contains("--json"));
 }
 
 // Ensure ICP's foreign-owner diagnostic is surfaced as an ownership problem.
@@ -126,6 +143,11 @@ fn maps_missing_project_manifest_error() {
 
     assert!(matches!(error, ReplicaCommandError::ProjectManifestMissing));
     assert!(error.to_string().contains("fleets/<fleet>/canic.toml"));
+    assert!(
+        error
+            .to_string()
+            .contains("backend/fleets/<fleet>/canic.toml")
+    );
     assert!(
         error
             .to_string()

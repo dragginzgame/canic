@@ -39,8 +39,11 @@ pub trait BackupRunnerExecutor {
     /// Start one selected canister.
     fn start_canister(&mut self, canister_id: &str) -> Result<(), BackupRunnerCommandError>;
 
-    /// Create one selected canister snapshot and return the snapshot id.
-    fn create_snapshot(&mut self, canister_id: &str) -> Result<String, BackupRunnerCommandError>;
+    /// Create one selected canister snapshot and return the typed snapshot receipt.
+    fn create_snapshot(
+        &mut self,
+        canister_id: &str,
+    ) -> Result<BackupRunnerSnapshotReceipt, BackupRunnerCommandError>;
 
     /// Download one selected snapshot into a temporary artifact directory.
     fn download_snapshot(
@@ -49,6 +52,17 @@ pub trait BackupRunnerExecutor {
         snapshot_id: &str,
         artifact_path: &Path,
     ) -> Result<(), BackupRunnerCommandError>;
+}
+
+///
+/// BackupRunnerSnapshotReceipt
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct BackupRunnerSnapshotReceipt {
+    pub snapshot_id: String,
+    pub taken_at_timestamp: Option<u64>,
+    pub total_size_bytes: Option<u64>,
 }
 
 ///

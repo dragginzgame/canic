@@ -57,6 +57,8 @@ impl BackupExecutionOperationReceipt {
             outcome,
             updated_at,
             snapshot_id: None,
+            snapshot_taken_at_timestamp: None,
+            snapshot_total_size_bytes: None,
             artifact_path: None,
             checksum: None,
             failure_reason,

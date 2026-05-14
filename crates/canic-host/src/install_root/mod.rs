@@ -30,7 +30,11 @@ mod config_selection;
 mod readiness;
 mod state;
 
-pub use config_selection::discover_canic_config_choices;
+pub use config_selection::{
+    CANIC_FLEETS_ROOT_ENV, discover_canic_config_choices, discover_project_canic_config_choices,
+    discover_project_canic_config_choices_with_root, project_fleet_roots,
+    project_fleet_roots_with_override,
+};
 use readiness::wait_for_root_ready;
 use state::{INSTALL_STATE_SCHEMA_VERSION, validate_fleet_name, write_install_state};
 pub use state::{InstallState, read_named_fleet_install_state};

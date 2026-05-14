@@ -1,10 +1,10 @@
 use super::{
     INSTALL_STATE_SCHEMA_VERSION, InstallState, InstallTimingSummary, add_icp_environment_target,
     add_local_root_create_cycles_arg, config_selection_error, discover_canic_config_choices,
-    fleet_install_state_path, icp_canister_command_in_network, parse_bootstrap_status_value,
-    parse_cycle_balance_response, parse_root_ready_value, read_fleet_install_state,
-    render_install_timing_summary, resolve_install_config_path, root_init_args,
-    validate_expected_fleet_name, write_install_state,
+    discover_project_canic_config_choices, fleet_install_state_path,
+    icp_canister_command_in_network, parse_bootstrap_status_value, parse_cycle_balance_response,
+    parse_root_ready_value, read_fleet_install_state, render_install_timing_summary,
+    resolve_install_config_path, root_init_args, validate_expected_fleet_name, write_install_state,
 };
 use crate::release_set::configured_install_targets;
 use crate::test_support::temp_dir;
@@ -533,6 +533,19 @@ fn discovered_install_config_choices_accept_split_source_fleet_configs() {
     fs::write(&config, "[fleet]\nname = \"toko\"\n").expect("write config");
 
     let choices = discover_canic_config_choices(&root).expect("discover choices");
+
+    assert_eq!(choices, vec![config]);
+    fs::remove_dir_all(root).expect("clean temp dir");
+}
+
+#[test]
+fn discovered_workspace_config_choices_accept_backend_fleets() {
+    let root = temp_dir("canic-install-config-backend-fleets");
+    let config = root.join("backend/fleets/toko/canic.toml");
+    fs::create_dir_all(config.parent().expect("config parent")).expect("create config parent");
+    fs::write(&config, "[fleet]\nname = \"toko\"\n").expect("write config");
+
+    let choices = discover_project_canic_config_choices(&root).expect("discover choices");
 
     assert_eq!(choices, vec![config]);
     fs::remove_dir_all(root).expect("clean temp dir");

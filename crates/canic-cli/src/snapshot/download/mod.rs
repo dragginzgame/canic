@@ -335,6 +335,12 @@ fn snapshot_icp_error(error: IcpCommandError) -> SnapshotCommandError {
         IcpCommandError::Failed { command, stderr } => {
             SnapshotCommandError::IcpFailed { command, stderr }
         }
+        IcpCommandError::Json {
+            command, output, ..
+        } => SnapshotCommandError::IcpFailed {
+            command,
+            stderr: output,
+        },
         IcpCommandError::SnapshotIdUnavailable { output } => {
             SnapshotCommandError::SnapshotIdUnavailable(output)
         }

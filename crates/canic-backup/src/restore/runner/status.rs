@@ -121,9 +121,52 @@ pub(super) fn restore_command_unavailable_error(
 
 // Extract the uploaded target snapshot ID from command output.
 pub fn parse_uploaded_snapshot_id(output: &str) -> Option<String> {
+    if let Some(snapshot_id) = parse_uploaded_snapshot_id_json(output) {
+        return Some(snapshot_id);
+    }
+
     output
         .lines()
         .filter_map(|line| line.split_once(':').map(|(_, value)| value.trim()))
         .find(|value| !value.is_empty())
         .map(str::to_string)
+}
+
+fn parse_uploaded_snapshot_id_json(output: &str) -> Option<String> {
+    let value = serde_json::from_str::<serde_json::Value>(output).ok()?;
+    value
+        .get("snapshot_id")
+        .and_then(serde_json::Value::as_str)
+        .or_else(|| {
+            value
+                .get("uploaded_snapshot_id")
+                .and_then(serde_json::Value::as_str)
+        })
+        .filter(|value| !value.is_empty())
+        .map(str::to_string)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Prefer the current ICP CLI JSON snapshot-upload receipt when present.
+    #[test]
+    fn parses_uploaded_snapshot_id_json() {
+        let snapshot_id =
+            parse_uploaded_snapshot_id(r#"{"snapshot_id":"0000000000000000ffffffffffc000020101"}"#);
+
+        assert_eq!(
+            snapshot_id.as_deref(),
+            Some("0000000000000000ffffffffffc000020101")
+        );
+    }
+
+    // Keep older human output accepted for existing restore journals and tests.
+    #[test]
+    fn parses_uploaded_snapshot_id_legacy_text() {
+        let snapshot_id = parse_uploaded_snapshot_id("Uploaded snapshot: target-snapshot\n");
+
+        assert_eq!(snapshot_id.as_deref(), Some("target-snapshot"));
+    }
 }

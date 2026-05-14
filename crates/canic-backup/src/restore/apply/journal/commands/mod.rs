@@ -130,6 +130,7 @@ impl RestoreApplyRunnerCommand {
                             "--input".to_string(),
                             artifact_path,
                             "--resume".to_string(),
+                            "--json".to_string(),
                         ],
                     ),
                     mutates: true,
@@ -162,7 +163,11 @@ impl RestoreApplyRunnerCommand {
                         program: config.program.clone(),
                         args: icp_canister_args(
                             config,
-                            vec!["status".to_string(), operation.target_canister.clone()],
+                            vec![
+                                "status".to_string(),
+                                operation.target_canister.clone(),
+                                "--json".to_string(),
+                            ],
                         ),
                         mutates: false,
                         requires_stopped_canister: false,

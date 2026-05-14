@@ -20,7 +20,9 @@ struct ConfigChoiceRow {
 
 const CONFIG_CHOICE_ROLE_PREVIEW_LIMIT: usize = 6;
 const FLEETS_ROOT: &str = "fleets";
+const BACKEND_FLEETS_ROOT: &str = "backend/fleets";
 const ROOT_CONFIG_RELATIVE: &str = "canic.toml";
+pub const CANIC_FLEETS_ROOT_ENV: &str = "CANIC_FLEETS_ROOT";
 
 // Resolve install config selection without silently choosing among demo/test configs.
 pub(super) fn resolve_install_config_path(
@@ -61,7 +63,28 @@ pub(super) fn resolve_install_config_path(
 pub(super) fn discover_workspace_canic_config_choices(
     workspace_root: &Path,
 ) -> Result<Vec<PathBuf>, Box<dyn std::error::Error>> {
-    discover_canic_config_choices(&workspace_root.join(FLEETS_ROOT))
+    discover_project_canic_config_choices(workspace_root)
+}
+
+// Discover candidate `canic.toml` files under conventional project fleet roots.
+pub fn discover_project_canic_config_choices(
+    project_root: &Path,
+) -> Result<Vec<PathBuf>, Box<dyn std::error::Error>> {
+    discover_project_canic_config_choices_with_root(project_root, None)
+}
+
+pub fn discover_project_canic_config_choices_with_root(
+    project_root: &Path,
+    fleet_root_override: Option<&Path>,
+) -> Result<Vec<PathBuf>, Box<dyn std::error::Error>> {
+    let mut choices = Vec::new();
+    for root in project_fleet_roots_with_override(project_root, fleet_root_override) {
+        collect_canic_config_choices(&root, &mut choices)?;
+    }
+    choices.sort();
+    choices.dedup();
+    reject_duplicate_fleet_names(&choices)?;
+    Ok(choices)
 }
 
 // Discover candidate `canic.toml` files under one fleet config root.
@@ -73,6 +96,38 @@ pub fn discover_canic_config_choices(
     choices.sort();
     reject_duplicate_fleet_names(&choices)?;
     Ok(choices)
+}
+
+#[must_use]
+pub fn project_fleet_roots(project_root: &Path) -> Vec<PathBuf> {
+    project_fleet_roots_with_override(project_root, None)
+}
+
+#[must_use]
+pub fn project_fleet_roots_with_override(
+    project_root: &Path,
+    fleet_root_override: Option<&Path>,
+) -> Vec<PathBuf> {
+    if let Some(root) = fleet_root_override {
+        return vec![normalize_project_path(project_root, root)];
+    }
+
+    if let Some(root) = env::var_os(CANIC_FLEETS_ROOT_ENV) {
+        return vec![normalize_project_path(project_root, Path::new(&root))];
+    }
+
+    vec![
+        project_root.join(FLEETS_ROOT),
+        project_root.join(BACKEND_FLEETS_ROOT),
+    ]
+}
+
+fn normalize_project_path(project_root: &Path, path: &Path) -> PathBuf {
+    if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        project_root.join(path)
+    }
 }
 
 fn reject_duplicate_fleet_names(choices: &[PathBuf]) -> Result<(), Box<dyn std::error::Error>> {

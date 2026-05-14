@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.35.x] - 2026-05-13 - Gettin' it workin'
 
+- `0.35.8` makes fleet config discovery work from split repos by checking both `fleets/<fleet>/canic.toml` and `backend/fleets/<fleet>/canic.toml`, adds explicit `--fleets-dir <dir>` / `CANIC_FLEETS_ROOT=<dir>` overrides for nonstandard layouts, and keeps that override out of `.canic` and `icp.yaml` to avoid stale hidden state.
+
 - `0.35.7` shortens the root README getting-started flow, puts `canic-cli` installation first, and updates quick examples around `fleets/<fleet>/canic.toml` plus split-repo paths.
 
 - `0.35.6` makes `canic replica start` auto-sync `icp.yaml` from fleet configs with clearer setup errors, supports split-source `fleets/<fleet>/canic.toml` layouts, fixes the generated bootstrap `wasm_store` wrapper so downstreams do not need their own wrapper crate, and creates the local artifact root before first install builds.

@@ -98,7 +98,12 @@ If `canic status` reports a local fleet as `lost`, reinstall the fleet before
 running backup or restore commands against that local environment. `canic status`
 and `canic replica status` show the configured local gateway port; use
 `canic replica start --port <port>` to update this project's `icp.yaml`
-`gateway.port` before starting.
+`gateway.port` before starting. Use `canic replica status --json` when scripts
+need the structured ICP CLI local-network status payload.
+For split repos with fleet configs outside `fleets/` or `backend/fleets/`, pass
+`--fleets-dir <dir>` to `canic replica start` / `canic fleet sync`, or set
+`CANIC_FLEETS_ROOT=<dir>` in the shell environment. The directory is not stored
+in `icp.yaml`; rerun with the flag or keep the environment variable set.
 
 List saved fleet configs:
 

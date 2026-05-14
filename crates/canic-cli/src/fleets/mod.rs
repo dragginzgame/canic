@@ -1,6 +1,7 @@
 use crate::{
     cli::clap::{
-        parse_matches, parse_subcommand, passthrough_subcommand, string_option, value_arg,
+        parse_matches, parse_subcommand, passthrough_subcommand, path_option, string_option,
+        value_arg,
     },
     cli::defaults::local_network,
     cli::globals::internal_network_arg,
@@ -8,8 +9,11 @@ use crate::{
     scaffold, version_text,
 };
 use canic_host::{
-    icp_config::{IcpConfigError, IcpProjectSyncReport, sync_canic_icp_yaml},
-    install_root::discover_current_canic_config_choices,
+    icp_config::{IcpConfigError, IcpProjectSyncReport, sync_canic_icp_yaml_with_fleet_root},
+    install_root::{
+        discover_current_canic_config_choices, discover_project_canic_config_choices_with_root,
+        project_fleet_roots_with_override,
+    },
     release_set::{
         configured_fleet_name, configured_fleet_roles, display_workspace_path,
         matching_fleet_config_paths, workspace_root,
@@ -75,7 +79,7 @@ pub enum FleetCommandError {
     #[error("fleet delete cancelled")]
     DeleteCancelled,
 
-    #[error("refusing to delete fleet {fleet}; target {target} is not under fleets")]
+    #[error("refusing to delete fleet {fleet}; target {target} is not under a fleet config root")]
     UnsafeDeleteTarget { fleet: String, target: String },
 
     #[error("fleet {0} config does not have a parent directory")]
@@ -101,6 +105,7 @@ pub enum FleetCommandError {
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct FleetOptions {
     network: String,
+    fleets_dir: Option<PathBuf>,
 }
 
 ///
@@ -110,6 +115,7 @@ struct FleetOptions {
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct DeleteFleetOptions {
     fleet: String,
+    fleets_dir: Option<PathBuf>,
 }
 
 ///
@@ -119,6 +125,7 @@ struct DeleteFleetOptions {
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct FleetSyncOptions {
     fleet: Option<String>,
+    fleets_dir: Option<PathBuf>,
 }
 
 ///
@@ -180,7 +187,7 @@ where
 
     let options = FleetOptions::parse(args)?;
     let workspace_root = workspace_root()?;
-    let choices = discover_current_canic_config_choices()?;
+    let choices = discover_config_choices(options.fleets_dir.as_deref())?;
     if choices.is_empty() {
         return Err(FleetCommandError::NoConfigChoices);
     }
@@ -202,7 +209,11 @@ where
 
     let options = DeleteFleetOptions::parse(args)?;
     let workspace_root = workspace_root()?;
-    let target = delete_target_dir(&workspace_root, &options.fleet)?;
+    let target = delete_target_dir(
+        &workspace_root,
+        &options.fleet,
+        options.fleets_dir.as_deref(),
+    )?;
     confirm_delete_fleet(&options.fleet, &target, io::stdin().lock(), io::stdout())?;
     fs::remove_dir_all(&target)?;
 
@@ -225,7 +236,10 @@ where
     }
 
     let options = FleetSyncOptions::parse(args)?;
-    let report = sync_canic_icp_yaml(options.fleet.as_deref())?;
+    let report = sync_canic_icp_yaml_with_fleet_root(
+        options.fleet.as_deref(),
+        options.fleets_dir.as_deref(),
+    )?;
     print_sync_report(&report);
     Ok(())
 }
@@ -240,6 +254,7 @@ impl FleetOptions {
 
         Ok(Self {
             network: string_option(&matches, "network").unwrap_or_else(local_network),
+            fleets_dir: path_option(&matches, "fleets-dir"),
         })
     }
 }
@@ -254,6 +269,7 @@ impl DeleteFleetOptions {
 
         Ok(Self {
             fleet: string_option(&matches, "fleet").expect("clap requires fleet"),
+            fleets_dir: path_option(&matches, "fleets-dir"),
         })
     }
 }
@@ -276,19 +292,37 @@ impl FleetSyncOptions {
 
         Ok(Self {
             fleet: string_option(&matches, "fleet"),
+            fleets_dir: path_option(&matches, "fleets-dir"),
         })
     }
 }
 
-fn delete_target_dir(workspace_root: &Path, fleet: &str) -> Result<PathBuf, FleetCommandError> {
-    let choices = discover_current_canic_config_choices()?;
-    delete_target_dir_from_choices(workspace_root, &choices, fleet)
+fn discover_config_choices(
+    fleets_dir: Option<&Path>,
+) -> Result<Vec<PathBuf>, Box<dyn std::error::Error>> {
+    if let Some(fleets_dir) = fleets_dir {
+        return Ok(discover_project_canic_config_choices_with_root(
+            &workspace_root()?,
+            Some(fleets_dir),
+        )?);
+    }
+    discover_current_canic_config_choices()
+}
+
+fn delete_target_dir(
+    workspace_root: &Path,
+    fleet: &str,
+    fleets_dir: Option<&Path>,
+) -> Result<PathBuf, FleetCommandError> {
+    let choices = discover_config_choices(fleets_dir)?;
+    delete_target_dir_from_choices(workspace_root, &choices, fleet, fleets_dir)
 }
 
 fn delete_target_dir_from_choices(
     workspace_root: &Path,
     choices: &[PathBuf],
     fleet: &str,
+    fleets_dir: Option<&Path>,
 ) -> Result<PathBuf, FleetCommandError> {
     let matches = matching_fleet_config_paths(choices, fleet);
 
@@ -301,7 +335,7 @@ fn delete_target_dir_from_choices(
         .parent()
         .ok_or_else(|| FleetCommandError::MissingFleetDirectory(fleet.to_string()))?
         .to_path_buf();
-    if !is_safe_delete_target(workspace_root, &target) {
+    if !is_safe_delete_target(workspace_root, &target, fleets_dir) {
         return Err(FleetCommandError::UnsafeDeleteTarget {
             fleet: fleet.to_string(),
             target: target.display().to_string(),
@@ -312,7 +346,7 @@ fn delete_target_dir_from_choices(
 }
 
 // Restrict destructive delete targets to one fleet directory, never the fleet root.
-fn is_safe_delete_target(workspace_root: &Path, target: &Path) -> bool {
+fn is_safe_delete_target(workspace_root: &Path, target: &Path, fleets_dir: Option<&Path>) -> bool {
     let Ok(metadata) = fs::symlink_metadata(target) else {
         return false;
     };
@@ -320,13 +354,13 @@ fn is_safe_delete_target(workspace_root: &Path, target: &Path) -> bool {
         return false;
     }
 
-    let Ok(root) = workspace_root.join("fleets").canonicalize() else {
-        return false;
-    };
     let Ok(target) = target.canonicalize() else {
         return false;
     };
-    target != root && target.starts_with(root)
+    project_fleet_roots_with_override(workspace_root, fleets_dir)
+        .into_iter()
+        .filter_map(|root| root.canonicalize().ok())
+        .any(|root| target != root && target.starts_with(root))
 }
 
 // Confirm destructive fleet directory deletion by requiring the exact fleet name.
@@ -390,6 +424,7 @@ fn fleet_list_command() -> ClapCommand {
         .about("List config-defined Canic fleets")
         .disable_help_flag(true)
         .arg(internal_network_arg())
+        .arg(fleets_dir_arg())
         .after_help(FLEET_LIST_HELP_AFTER)
 }
 
@@ -404,6 +439,7 @@ fn fleet_sync_command() -> ClapCommand {
                 .value_name("name")
                 .help("Require this fleet to exist before syncing"),
         )
+        .arg(fleets_dir_arg())
         .after_help(FLEET_SYNC_HELP_AFTER)
 }
 
@@ -418,7 +454,15 @@ fn fleet_delete_command() -> ClapCommand {
                 .required(true)
                 .help("Config-defined fleet name to delete"),
         )
+        .arg(fleets_dir_arg())
         .after_help(FLEET_DELETE_HELP_AFTER)
+}
+
+fn fleets_dir_arg() -> clap::Arg {
+    value_arg("fleets-dir")
+        .long("fleets-dir")
+        .value_name("DIR")
+        .help("Read fleet configs from this directory")
 }
 
 fn render_fleet_list(workspace_root: &Path, choices: &[PathBuf], network: &str) -> String {

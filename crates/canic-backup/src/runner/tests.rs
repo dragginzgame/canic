@@ -153,9 +153,16 @@ impl BackupRunnerExecutor for FakeExecutor {
         Ok(())
     }
 
-    fn create_snapshot(&mut self, canister_id: &str) -> Result<String, BackupRunnerCommandError> {
+    fn create_snapshot(
+        &mut self,
+        canister_id: &str,
+    ) -> Result<BackupRunnerSnapshotReceipt, BackupRunnerCommandError> {
         self.commands.push(format!("snapshot:{canister_id}"));
-        Ok("snap-app".to_string())
+        Ok(BackupRunnerSnapshotReceipt {
+            snapshot_id: "snap-app".to_string(),
+            taken_at_timestamp: Some(1_778_709_681_897_818_005),
+            total_size_bytes: Some(272_586_987),
+        })
     }
 
     fn download_snapshot(

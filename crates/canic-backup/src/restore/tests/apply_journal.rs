@@ -246,6 +246,7 @@ fn apply_journal_command_preview_reports_upload_command() {
             "--input".to_string(),
             expected_artifact_path,
             "--resume".to_string(),
+            "--json".to_string(),
         ]
     );
     assert!(command.mutates);
@@ -298,6 +299,7 @@ fn apply_journal_command_preview_honors_command_config() {
             "--input".to_string(),
             expected_artifact_path,
             "--resume".to_string(),
+            "--json".to_string(),
         ]
     );
 }
@@ -490,7 +492,8 @@ fn apply_journal_command_preview_reports_status_verification_command() {
         vec![
             "canister".to_string(),
             "status".to_string(),
-            ROOT.to_string()
+            ROOT.to_string(),
+            "--json".to_string(),
         ]
     );
     assert!(!command.mutates);
@@ -522,7 +525,8 @@ fn apply_journal_command_preview_reports_fleet_verification_command() {
         vec![
             "canister".to_string(),
             "status".to_string(),
-            ROOT.to_string()
+            ROOT.to_string(),
+            "--json".to_string(),
         ]
     );
     assert!(!command.mutates);

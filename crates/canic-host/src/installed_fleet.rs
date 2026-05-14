@@ -192,6 +192,12 @@ fn installed_fleet_icp_error(error: IcpCommandError) -> InstalledFleetError {
         IcpCommandError::Failed { command, stderr } => {
             InstalledFleetError::IcpFailed { command, stderr }
         }
+        IcpCommandError::Json {
+            command, output, ..
+        } => InstalledFleetError::IcpFailed {
+            command,
+            stderr: output,
+        },
         IcpCommandError::SnapshotIdUnavailable { output } => InstalledFleetError::IcpFailed {
             command: "icp canister snapshot create".to_string(),
             stderr: output,

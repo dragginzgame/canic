@@ -1,6 +1,7 @@
 use crate::{
     cli::clap::{
-        flag_arg, parse_matches, parse_subcommand, passthrough_subcommand, string_option, value_arg,
+        flag_arg, parse_matches, parse_subcommand, passthrough_subcommand, path_option,
+        string_option, value_arg,
     },
     cli::defaults::default_icp,
     cli::globals::internal_icp_arg,
@@ -11,11 +12,12 @@ use canic_host::{
     icp::{IcpCli, IcpCommandError},
     icp_config::{
         DEFAULT_LOCAL_GATEWAY_PORT, IcpConfigError, configured_local_gateway_port,
-        set_configured_local_gateway_port, sync_canic_icp_yaml,
+        set_configured_local_gateway_port, sync_canic_icp_yaml_with_fleet_root,
     },
 };
 use clap::Command as ClapCommand;
-use std::ffi::OsString;
+use serde::Serialize;
+use std::{ffi::OsString, path::PathBuf};
 use thiserror::Error as ThisError;
 
 const REPLICA_HELP_AFTER: &str = "\
@@ -68,7 +70,7 @@ pub enum ReplicaCommandError {
     ForeignLocalReplicaReachable,
 
     #[error(
-        "ICP project config is missing for this directory.\n`canic replica start` creates icp.yaml from Canic fleet configs, so run it from the project root and keep a config at fleets/<fleet>/canic.toml.\nIf you want to prepare the file explicitly, run: canic fleet sync --fleet <fleet>"
+        "ICP project config is missing for this directory.\n`canic replica start` creates icp.yaml from Canic fleet configs, so run it from the project root and keep a config at fleets/<fleet>/canic.toml or backend/fleets/<fleet>/canic.toml.\nIf you want to prepare the file explicitly, run: canic fleet sync --fleet <fleet>"
     )]
     ProjectManifestMissing,
 
@@ -77,6 +79,9 @@ pub enum ReplicaCommandError {
 
     #[error(transparent)]
     IcpConfig(#[from] IcpConfigError),
+
+    #[error(transparent)]
+    Json(#[from] serde_json::Error),
 
     #[error(transparent)]
     Io(#[from] std::io::Error),
@@ -90,8 +95,10 @@ pub enum ReplicaCommandError {
 struct ReplicaOptions {
     icp: String,
     port: Option<u16>,
+    fleets_dir: Option<PathBuf>,
     background: bool,
     debug: bool,
+    json: bool,
 }
 
 impl ReplicaOptions {
@@ -104,8 +111,10 @@ impl ReplicaOptions {
         Ok(Self {
             icp: string_option(&matches, "icp").unwrap_or_else(default_icp),
             port: parse_port_option(&matches)?,
+            fleets_dir: path_option(&matches, "fleets-dir"),
             background: matches.get_flag("background"),
             debug: matches.get_flag("debug"),
+            json: false,
         })
     }
 
@@ -118,8 +127,10 @@ impl ReplicaOptions {
         Ok(Self {
             icp: string_option(&matches, "icp").unwrap_or_else(default_icp),
             port: None,
+            fleets_dir: None,
             background: false,
             debug: matches.get_flag("debug"),
+            json: matches.get_flag("json"),
         })
     }
 
@@ -132,10 +143,24 @@ impl ReplicaOptions {
         Ok(Self {
             icp: string_option(&matches, "icp").unwrap_or_else(default_icp),
             port: None,
+            fleets_dir: None,
             background: false,
             debug: matches.get_flag("debug"),
+            json: false,
         })
     }
+}
+
+///
+/// ReplicaStatusJsonReport
+///
+
+#[derive(Serialize)]
+struct ReplicaStatusJsonReport {
+    network: &'static str,
+    running: bool,
+    configured_gateway_port: String,
+    icp_status: Option<serde_json::Value>,
 }
 
 pub fn run<I>(args: I) -> Result<(), ReplicaCommandError>
@@ -173,7 +198,7 @@ where
     }
 
     let options = ReplicaOptions::parse_start(args)?;
-    sync_replica_project_config()?;
+    sync_replica_project_config(options.fleets_dir.as_deref())?;
     ensure_replica_port_config()?;
     let icp = IcpCli::new(options.icp, None, None);
     if icp
@@ -222,6 +247,9 @@ where
     let options = ReplicaOptions::parse_status(args)?;
     let port = replica_port_label();
     let icp = IcpCli::new(options.icp, None, None);
+    if options.json {
+        return run_status_json(&icp, &port, options.debug);
+    }
     match icp.local_replica_status(options.debug) {
         Ok(output) => {
             println!("Replica: running (local, port {port})");
@@ -232,6 +260,26 @@ where
         }
         Err(error) => return Err(replica_icp_error(error)),
     }
+    Ok(())
+}
+
+fn run_status_json(icp: &IcpCli, port: &str, debug: bool) -> Result<(), ReplicaCommandError> {
+    let report = match icp.local_replica_status_json(debug) {
+        Ok(status) => ReplicaStatusJsonReport {
+            network: "local",
+            running: true,
+            configured_gateway_port: port.to_string(),
+            icp_status: Some(status),
+        },
+        Err(error) if local_network_not_running(&error) => ReplicaStatusJsonReport {
+            network: "local",
+            running: false,
+            configured_gateway_port: port.to_string(),
+            icp_status: None,
+        },
+        Err(error) => return Err(replica_icp_error(error)),
+    };
+    println!("{}", serde_json::to_string_pretty(&report)?);
     Ok(())
 }
 
@@ -268,8 +316,10 @@ where
     Ok(())
 }
 
-fn sync_replica_project_config() -> Result<(), ReplicaCommandError> {
-    let report = sync_canic_icp_yaml(None)?;
+fn sync_replica_project_config(
+    fleets_dir: Option<&std::path::Path>,
+) -> Result<(), ReplicaCommandError> {
+    let report = sync_canic_icp_yaml_with_fleet_root(None, fleets_dir)?;
     if report.changed {
         println!("Replica project config synced: {}", report.path.display());
     }
@@ -322,6 +372,12 @@ fn replica_icp_error(error: IcpCommandError) -> ReplicaCommandError {
             }
             ReplicaCommandError::IcpFailed { command, stderr }
         }
+        IcpCommandError::Json {
+            command, output, ..
+        } => ReplicaCommandError::IcpFailed {
+            command,
+            stderr: output,
+        },
         IcpCommandError::SnapshotIdUnavailable { output } => ReplicaCommandError::IcpFailed {
             command: "icp canister snapshot".to_string(),
             stderr: output,
@@ -416,6 +472,12 @@ fn replica_start_command() -> ClapCommand {
             .value_name("PORT")
             .help("Set the local gateway port in icp.yaml before starting"),
     )
+    .arg(
+        value_arg("fleets-dir")
+            .long("fleets-dir")
+            .value_name("DIR")
+            .help("Read fleet configs from this directory for icp.yaml sync"),
+    )
     .after_help(REPLICA_START_HELP_AFTER)
 }
 
@@ -424,6 +486,11 @@ fn replica_status_command() -> ClapCommand {
         "status",
         "canic replica status",
         "Show local ICP replica status",
+    )
+    .arg(
+        flag_arg("json")
+            .long("json")
+            .help("Emit JSON status output"),
     )
     .after_help(REPLICA_STATUS_HELP_AFTER)
 }

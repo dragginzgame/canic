@@ -1,5 +1,8 @@
 use crate::{
-    install_root::discover_canic_config_choices,
+    install_root::{
+        CANIC_FLEETS_ROOT_ENV, discover_project_canic_config_choices_with_root,
+        project_fleet_roots_with_override,
+    },
     release_set::{configured_fleet_name, configured_fleet_roles, icp_root},
     workspace_discovery::discover_icp_root_from,
 };
@@ -88,6 +91,14 @@ pub fn set_configured_local_gateway_port(port: u16) -> Result<PathBuf, IcpConfig
 pub fn sync_canic_icp_yaml(
     fleet_filter: Option<&str>,
 ) -> Result<IcpProjectSyncReport, IcpConfigError> {
+    sync_canic_icp_yaml_with_fleet_root(fleet_filter, None)
+}
+
+/// Reconcile Canic-managed `icp.yaml` sections using an explicit fleet config root.
+pub fn sync_canic_icp_yaml_with_fleet_root(
+    fleet_filter: Option<&str>,
+    fleet_root_override: Option<&Path>,
+) -> Result<IcpProjectSyncReport, IcpConfigError> {
     let root = current_project_root()?;
     let path = root.join(ICP_CONFIG_FILE);
     let source = match fs::read_to_string(&path) {
@@ -95,7 +106,7 @@ pub fn sync_canic_icp_yaml(
         Err(err) if err.kind() == ErrorKind::NotFound => String::new(),
         Err(err) => return Err(err.into()),
     };
-    let spec = discover_project_spec(&root, fleet_filter)?;
+    let spec = discover_project_spec(&root, fleet_filter, fleet_root_override)?;
     let updated = sync_canic_sections(&source, &spec.canisters, &spec.environments);
     let changed = updated != source;
     if changed {
@@ -137,13 +148,14 @@ struct CanicIcpSpec {
 fn discover_project_spec(
     root: &Path,
     fleet_filter: Option<&str>,
+    fleet_root_override: Option<&Path>,
 ) -> Result<CanicIcpSpec, IcpConfigError> {
-    let choices = discover_canic_config_choices(&root.join("fleets"))
+    let choices = discover_project_canic_config_choices_with_root(root, fleet_root_override)
         .map_err(|err| IcpConfigError::Config(err.to_string()))?;
     if choices.is_empty() {
         return Err(IcpConfigError::Config(format!(
-            "no Canic fleet configs found under {}\nCreate fleets/<fleet>/canic.toml, then rerun `canic replica start` or `canic fleet sync --fleet <fleet>`.",
-            root.join("fleets").display()
+            "no Canic fleet configs found under {}\nCreate fleets/<fleet>/canic.toml or backend/fleets/<fleet>/canic.toml, then rerun `canic replica start` or `canic fleet sync --fleet <fleet>`.",
+            display_project_fleet_roots(root, fleet_root_override)
         )));
     }
 
@@ -174,7 +186,7 @@ fn discover_project_spec(
     {
         return Err(IcpConfigError::Config(format!(
             "no Canic fleet config found for {fleet}\nExpected a config under {} with `[fleet].name = \"{fleet}\"`.",
-            root.join("fleets").display()
+            display_project_fleet_roots(root, fleet_root_override)
         )));
     }
 
@@ -182,6 +194,17 @@ fn discover_project_spec(
         canisters,
         environments,
     })
+}
+
+fn display_project_fleet_roots(root: &Path, fleet_root_override: Option<&Path>) -> String {
+    let roots = project_fleet_roots_with_override(root, fleet_root_override)
+        .into_iter()
+        .map(|path| path.display().to_string())
+        .collect::<Vec<_>>()
+        .join(" or ");
+    format!(
+        "{roots}\nUse `--fleets-dir <dir>` or {CANIC_FLEETS_ROOT_ENV}=<dir> for a different layout."
+    )
 }
 
 fn configured_local_gateway_port_from_root(root: &Path) -> Result<u16, IcpConfigError> {
@@ -502,7 +525,7 @@ mod tests {
     #[test]
     fn discovers_split_source_fleet_configs_for_icp_sync() {
         let root = temp_dir("canic-icp-sync-split-source");
-        let config = root.join("fleets/toko/canic.toml");
+        let config = root.join("backend/fleets/toko/canic.toml");
         fs::create_dir_all(config.parent().expect("config parent")).expect("create config parent");
         fs::write(
             &config,
@@ -519,7 +542,7 @@ kind = "singleton"
         )
         .expect("write config");
 
-        let spec = discover_project_spec(&root, Some("toko")).expect("discover spec");
+        let spec = discover_project_spec(&root, Some("toko"), None).expect("discover spec");
 
         assert_eq!(spec.canisters, vec!["root", "app"]);
         assert_eq!(
@@ -537,11 +560,13 @@ kind = "singleton"
         let root = temp_dir("canic-icp-sync-missing");
         fs::create_dir_all(&root).expect("create root");
 
-        let err = discover_project_spec(&root, None).expect_err("missing configs should fail");
+        let err =
+            discover_project_spec(&root, None, None).expect_err("missing configs should fail");
         let message = err.to_string();
 
         assert!(message.contains("no Canic fleet configs found under"));
         assert!(message.contains("fleets/<fleet>/canic.toml"));
+        assert!(message.contains("backend/fleets/<fleet>/canic.toml"));
         fs::remove_dir_all(root).expect("clean temp dir");
     }
 }

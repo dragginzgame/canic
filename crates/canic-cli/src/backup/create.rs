@@ -18,7 +18,7 @@ use canic_backup::{
     registry::RegistryEntry as BackupRegistryEntry,
     runner::{
         BackupRunResponse, BackupRunnerCommandError, BackupRunnerConfig, BackupRunnerExecutor,
-        backup_run_execute_with_executor,
+        BackupRunnerSnapshotReceipt, backup_run_execute_with_executor,
     },
     topology::{TopologyHasher, TopologyRecord},
 };
@@ -198,9 +198,23 @@ impl BackupRunnerExecutor for BackupIcpRunnerExecutor {
         let registry = backup_registry_entries(&host_registry);
         let topology_hash = registry_topology_hash(&registry).map_err(preflight_error)?;
         for target in &plan.targets {
-            self.icp
-                .canister_status(&target.canister_id)
+            let status = self
+                .icp
+                .canister_status_report(&target.canister_id)
                 .map_err(runner_icp_error)?;
+            if !status
+                .settings
+                .as_ref()
+                .is_some_and(|settings| !settings.controllers.is_empty())
+            {
+                return Err(BackupRunnerCommandError::failed(
+                    "preflight",
+                    format!(
+                        "icp canister status --json for {} did not include controllers",
+                        target.canister_id
+                    ),
+                ));
+            }
         }
 
         Ok(BackupExecutionPreflightReceipts {
@@ -233,7 +247,9 @@ impl BackupRunnerExecutor for BackupIcpRunnerExecutor {
                     proof_source: AuthorityProofSource::ManagementStatus,
                     validated_at: validated_at.to_string(),
                     expires_at: expires_at.to_string(),
-                    message: Some("icp canister status succeeded".to_string()),
+                    message: Some(
+                        "icp canister status --json proved controller status access".to_string(),
+                    ),
                 })
                 .collect(),
             snapshot_read_authority: plan
@@ -281,9 +297,17 @@ impl BackupRunnerExecutor for BackupIcpRunnerExecutor {
             .map_err(runner_icp_error)
     }
 
-    fn create_snapshot(&mut self, canister_id: &str) -> Result<String, BackupRunnerCommandError> {
+    fn create_snapshot(
+        &mut self,
+        canister_id: &str,
+    ) -> Result<BackupRunnerSnapshotReceipt, BackupRunnerCommandError> {
         self.icp
-            .snapshot_create_id(canister_id)
+            .snapshot_create_receipt(canister_id)
+            .map(|receipt| BackupRunnerSnapshotReceipt {
+                snapshot_id: receipt.snapshot_id,
+                taken_at_timestamp: receipt.taken_at_timestamp,
+                total_size_bytes: receipt.total_size_bytes,
+            })
             .map_err(runner_icp_error)
     }
 
@@ -351,6 +375,12 @@ fn backup_icp_error(error: IcpCommandError) -> BackupCommandError {
         IcpCommandError::Failed { command, stderr } => {
             BackupCommandError::IcpFailed { command, stderr }
         }
+        IcpCommandError::Json {
+            command, output, ..
+        } => BackupCommandError::IcpFailed {
+            command,
+            stderr: output,
+        },
         IcpCommandError::SnapshotIdUnavailable { output } => BackupCommandError::IcpFailed {
             command: "icp canister snapshot create".to_string(),
             stderr: output,
