@@ -89,6 +89,16 @@ pub fn query_ready(network: Option<&str>, canister: &str) -> Result<bool, Replic
     Decode!(&bytes, bool).map_err(|err| ReplicaQueryError::Query(err.to_string()))
 }
 
+/// Query `canic_ready` using the configured port from one ICP root.
+pub fn query_ready_from_root(
+    network: Option<&str>,
+    canister: &str,
+    icp_root: &Path,
+) -> Result<bool, ReplicaQueryError> {
+    let bytes = local_query_from_root(network, canister, "canic_ready", icp_root)?;
+    Decode!(&bytes, bool).map_err(|err| ReplicaQueryError::Query(err.to_string()))
+}
+
 /// Parse common JSON shapes returned by command-line calls for `canic_ready`.
 #[must_use]
 pub fn parse_ready_json_value(data: &serde_json::Value) -> bool {

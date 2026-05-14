@@ -2,7 +2,7 @@ use std::{
     error::Error,
     fmt,
     io::{self, Read, Write},
-    path::Path,
+    path::{Path, PathBuf},
     process::{Command, Stdio},
     thread,
 };
@@ -99,6 +99,7 @@ pub struct IcpCli {
     executable: String,
     environment: Option<String>,
     network: Option<String>,
+    cwd: Option<PathBuf>,
 }
 
 ///
@@ -158,7 +159,15 @@ impl IcpCli {
             executable: executable.into(),
             environment,
             network,
+            cwd: None,
         }
+    }
+
+    /// Return a copy of this ICP CLI context rooted at one project directory.
+    #[must_use]
+    pub fn with_cwd(mut self, cwd: impl Into<PathBuf>) -> Self {
+        self.cwd = Some(cwd.into());
+        self
     }
 
     /// Return the optional ICP environment name carried by this command context.
@@ -176,7 +185,11 @@ impl IcpCli {
     /// Build a base ICP CLI command from this context.
     #[must_use]
     pub fn command(&self) -> Command {
-        Command::new(&self.executable)
+        let mut command = Command::new(&self.executable);
+        if let Some(cwd) = &self.cwd {
+            command.current_dir(cwd);
+        }
+        command
     }
 
     /// Build a base ICP CLI command rooted at one workspace directory.

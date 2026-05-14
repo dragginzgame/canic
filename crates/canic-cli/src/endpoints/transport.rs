@@ -8,9 +8,9 @@ use crate::{
 };
 use canic_host::{
     icp::IcpCli,
-    installed_fleet::{InstalledFleetRequest, resolve_installed_fleet},
+    icp_config::resolve_current_canic_icp_root,
+    installed_fleet::{InstalledFleetRequest, resolve_installed_fleet_from_root},
     registry::RegistryEntry,
-    release_set::icp_root,
 };
 use std::{
     fs,
@@ -52,7 +52,9 @@ fn read_live_candid(
     options: &EndpointsOptions,
     target: &EndpointTarget,
 ) -> Result<String, Box<dyn std::error::Error>> {
+    let root = resolve_endpoint_icp_root()?;
     Ok(IcpCli::new(&options.icp, None, options.network.clone())
+        .with_cwd(root)
         .canister_metadata_output(&target.canister, CANDID_SERVICE_METADATA)?)
 }
 
@@ -98,14 +100,17 @@ fn load_fleet_registry(
         icp: options.icp.clone(),
         detect_lost_local_root: false,
     };
-    Ok(resolve_installed_fleet(&request)?.registry.entries)
+    let root = resolve_endpoint_icp_root()?;
+    Ok(resolve_installed_fleet_from_root(&request, &root)?
+        .registry
+        .entries)
 }
 
 fn resolve_role_did(
     options: &EndpointsOptions,
     role: &str,
 ) -> Result<PathBuf, EndpointsCommandError> {
-    let root = icp_root().unwrap_or_else(|_| PathBuf::from("."));
+    let root = resolve_endpoint_icp_root().unwrap_or_else(|_| PathBuf::from("."));
     for network in artifact_network_candidates(options) {
         let path = root
             .join(".icp")
@@ -122,6 +127,10 @@ fn resolve_role_did(
         role: role.to_string(),
         root: root.display().to_string(),
     })
+}
+
+fn resolve_endpoint_icp_root() -> Result<PathBuf, Box<dyn std::error::Error>> {
+    resolve_current_canic_icp_root(None).map_err(Into::into)
 }
 
 fn artifact_network_candidates(options: &EndpointsOptions) -> Vec<String> {

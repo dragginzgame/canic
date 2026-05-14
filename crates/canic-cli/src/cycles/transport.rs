@@ -15,14 +15,16 @@ use crate::{
 };
 use canic_host::{
     icp::IcpCli,
+    icp_config::resolve_current_canic_icp_root,
     installed_fleet::{
         InstalledFleetError, InstalledFleetRequest, InstalledFleetResolution,
-        resolve_installed_fleet,
+        resolve_installed_fleet_from_root,
     },
     registry::RegistryEntry,
     response_parse::parse_cycle_balance_response,
 };
 use std::{
+    path::PathBuf,
     sync::Arc,
     thread,
     time::{SystemTime, UNIX_EPOCH},
@@ -184,8 +186,11 @@ pub(super) fn summarize_cycle_tracker(
 }
 
 fn query_live_cycle_balance(options: &CyclesOptions, canister_id: &str) -> Option<u128> {
-    IcpCli::new(&options.icp, None, Some(options.network.clone()))
-        .canister_call_output(canister_id, canic_core::protocol::CANIC_CYCLE_BALANCE, None)
+    let mut icp = IcpCli::new(&options.icp, None, Some(options.network.clone()));
+    if let Some(root) = resolve_cycles_icp_root() {
+        icp = icp.with_cwd(root);
+    }
+    icp.canister_call_output(canister_id, canic_core::protocol::CANIC_CYCLE_BALANCE, None)
         .ok()
         .and_then(|output| parse_cycle_balance_response(&output))
 }
@@ -239,7 +244,11 @@ fn query_topup_event_page(
     limit: u64,
 ) -> Result<crate::cycles::model::CycleTopupEventPage, String> {
     let arg = format!("(record {{ offset = {offset} : nat64; limit = {limit} : nat64 }})");
-    let output = IcpCli::new(&options.icp, None, Some(options.network.clone()))
+    let mut icp = IcpCli::new(&options.icp, None, Some(options.network.clone()));
+    if let Some(root) = resolve_cycles_icp_root() {
+        icp = icp.with_cwd(root);
+    }
+    let output = icp
         .canister_query_arg_output(
             canister_id,
             canic_core::protocol::CANIC_CYCLE_TOPUPS,
@@ -272,7 +281,11 @@ fn query_cycle_tracker_page(
     limit: u64,
 ) -> Result<CycleTrackerPage, String> {
     let arg = format!("(record {{ offset = {offset} : nat64; limit = {limit} : nat64 }})");
-    let output = IcpCli::new(&options.icp, None, Some(options.network.clone()))
+    let mut icp = IcpCli::new(&options.icp, None, Some(options.network.clone()));
+    if let Some(root) = resolve_cycles_icp_root() {
+        icp = icp.with_cwd(root);
+    }
+    let output = icp
         .canister_query_arg_output(
             canister_id,
             canic_core::protocol::CANIC_CYCLE_TRACKER,
@@ -318,13 +331,23 @@ fn current_unix_seconds() -> u64 {
 fn resolve_cycles_fleet(
     options: &CyclesOptions,
 ) -> Result<InstalledFleetResolution, CyclesCommandError> {
-    resolve_installed_fleet(&InstalledFleetRequest {
-        fleet: options.fleet.clone(),
-        network: options.network.clone(),
-        icp: options.icp.clone(),
-        detect_lost_local_root: false,
-    })
+    let root = resolve_cycles_icp_root().ok_or_else(|| {
+        CyclesCommandError::InstallState("could not resolve ICP root".to_string())
+    })?;
+    resolve_installed_fleet_from_root(
+        &InstalledFleetRequest {
+            fleet: options.fleet.clone(),
+            network: options.network.clone(),
+            icp: options.icp.clone(),
+            detect_lost_local_root: false,
+        },
+        &root,
+    )
     .map_err(cycles_installed_fleet_error)
+}
+
+fn resolve_cycles_icp_root() -> Option<PathBuf> {
+    resolve_current_canic_icp_root(None).ok()
 }
 
 fn cycles_installed_fleet_error(error: InstalledFleetError) -> CyclesCommandError {

@@ -7,12 +7,13 @@ use crate::{
 };
 use canic_host::{
     icp::IcpCli,
-    install_root::{InstallState, read_named_fleet_install_state},
+    icp_config::resolve_current_canic_icp_root,
+    install_root::{InstallState, read_named_fleet_install_state_from_root},
     replica_query,
     table::{ColumnAlign, render_table},
 };
 use clap::Command as ClapCommand;
-use std::{ffi::OsString, fs};
+use std::{ffi::OsString, fs, path::Path};
 use thiserror::Error as ThisError;
 
 const CHECK_HEADER: &str = "CHECK";
@@ -93,6 +94,7 @@ fn medic_command() -> ClapCommand {
 
 fn run_medic_checks(options: &MedicOptions) -> Vec<MedicCheck> {
     let mut checks = Vec::new();
+    let icp_root = resolve_current_canic_icp_root(None).ok();
     checks.push(MedicCheck::ok(
         "network",
         options.network.clone(),
@@ -100,7 +102,13 @@ fn run_medic_checks(options: &MedicOptions) -> Vec<MedicCheck> {
     ));
     checks.push(check_icp_cli(options));
 
-    let state = match read_named_fleet_install_state(&options.network, &options.fleet) {
+    let state = match icp_root.as_deref().map_or_else(
+        || Err("could not resolve ICP project root".to_string()),
+        |root| {
+            read_named_fleet_install_state_from_root(root, &options.network, &options.fleet)
+                .map_err(|err| err.to_string())
+        },
+    ) {
         Ok(Some(state)) => {
             checks.push(MedicCheck::ok(
                 "fleet state",
@@ -129,7 +137,7 @@ fn run_medic_checks(options: &MedicOptions) -> Vec<MedicCheck> {
 
     if let Some(state) = state {
         checks.push(check_config_path(&state));
-        checks.push(check_root_ready(options, &state));
+        checks.push(check_root_ready(options, icp_root.as_deref(), &state));
     }
 
     checks
@@ -158,12 +166,26 @@ fn check_config_path(state: &InstallState) -> MedicCheck {
     }
 }
 
-fn check_root_ready(options: &MedicOptions, state: &InstallState) -> MedicCheck {
+fn check_root_ready(
+    options: &MedicOptions,
+    icp_root: Option<&Path>,
+    state: &InstallState,
+) -> MedicCheck {
     let ready = if replica_query::should_use_local_replica_query(Some(&options.network)) {
-        replica_query::query_ready(Some(&options.network), &state.root_canister_id)
+        icp_root
+            .map_or_else(
+                || replica_query::query_ready(Some(&options.network), &state.root_canister_id),
+                |root| {
+                    replica_query::query_ready_from_root(
+                        Some(&options.network),
+                        &state.root_canister_id,
+                        root,
+                    )
+                },
+            )
             .map_err(|err| err.to_string())
     } else {
-        query_ready_with_icp(options, &state.root_canister_id)
+        query_ready_with_icp(options, icp_root, &state.root_canister_id)
     };
 
     match ready {
@@ -181,8 +203,16 @@ fn check_root_ready(options: &MedicOptions, state: &InstallState) -> MedicCheck 
     }
 }
 
-fn query_ready_with_icp(options: &MedicOptions, canister: &str) -> Result<bool, String> {
-    let output = IcpCli::new(&options.icp, None, Some(options.network.clone()))
+fn query_ready_with_icp(
+    options: &MedicOptions,
+    icp_root: Option<&Path>,
+    canister: &str,
+) -> Result<bool, String> {
+    let mut icp = IcpCli::new(&options.icp, None, Some(options.network.clone()));
+    if let Some(root) = icp_root {
+        icp = icp.with_cwd(root);
+    }
+    let output = icp
         .canister_call_output(canister, "canic_ready", Some("json"))
         .map_err(|err| err.to_string())?;
     let data = serde_json::from_str::<serde_json::Value>(&output).map_err(|err| err.to_string())?;

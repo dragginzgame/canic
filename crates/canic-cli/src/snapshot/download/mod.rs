@@ -15,7 +15,8 @@ use canic_backup::{
 };
 use canic_host::{
     icp::{IcpCli, IcpCommandError},
-    install_root::read_named_fleet_install_state,
+    icp_config::resolve_current_canic_icp_root,
+    install_root::read_named_fleet_install_state_from_root,
     registry::{RegistryEntry as HostRegistryEntry, parse_registry_entries},
     replica_query,
 };
@@ -150,6 +151,7 @@ struct ResolvedSnapshotDownload {
     lifecycle: SnapshotLifecycleMode,
     network: Option<String>,
     icp: String,
+    icp_root: PathBuf,
 }
 
 // Resolve the named fleet into the explicit backup contract used downstream.
@@ -157,7 +159,9 @@ fn resolve_snapshot_download_request(
     options: &SnapshotDownloadOptions,
 ) -> Result<ResolvedSnapshotDownload, SnapshotCommandError> {
     let network = state_network(options.network.as_deref());
-    let state = read_named_fleet_install_state(&network, &options.fleet)
+    let icp_root = resolve_current_canic_icp_root(None)
+        .map_err(|err| SnapshotCommandError::InstallState(err.to_string()))?;
+    let state = read_named_fleet_install_state_from_root(&icp_root, &network, &options.fleet)
         .map_err(|err| SnapshotCommandError::InstallState(err.to_string()))?;
     let explicit_canister = options.canister.is_some();
     let canister = options
@@ -192,6 +196,7 @@ fn resolve_snapshot_download_request(
         lifecycle: options.lifecycle,
         network: options.network.clone(),
         icp: options.icp.clone(),
+        icp_root,
     })
 }
 
@@ -326,7 +331,7 @@ fn driver_error(error: SnapshotCommandError) -> SnapshotDriverError {
 }
 
 fn icp(request: &ResolvedSnapshotDownload) -> IcpCli {
-    IcpCli::new(&request.icp, None, request.network.clone())
+    IcpCli::new(&request.icp, None, request.network.clone()).with_cwd(&request.icp_root)
 }
 
 fn snapshot_icp_error(error: IcpCommandError) -> SnapshotCommandError {
@@ -352,8 +357,12 @@ fn call_subnet_registry(
     root: &str,
 ) -> Result<String, SnapshotCommandError> {
     if replica_query::should_use_local_replica_query(request.network.as_deref()) {
-        return replica_query::query_subnet_registry_json(request.network.as_deref(), root)
-            .map_err(SnapshotCommandError::from);
+        return replica_query::query_subnet_registry_json_from_root(
+            request.network.as_deref(),
+            root,
+            &request.icp_root,
+        )
+        .map_err(SnapshotCommandError::from);
     }
 
     icp(request)

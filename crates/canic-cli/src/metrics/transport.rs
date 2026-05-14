@@ -6,13 +6,14 @@ use crate::metrics::{
 };
 use canic_host::{
     icp::IcpCli,
+    icp_config::resolve_current_canic_icp_root,
     installed_fleet::{
         InstalledFleetError, InstalledFleetRequest, InstalledFleetResolution,
-        resolve_installed_fleet,
+        resolve_installed_fleet_from_root,
     },
     registry::RegistryEntry,
 };
-use std::{sync::Arc, thread};
+use std::{path::PathBuf, sync::Arc, thread};
 
 pub fn metrics_report(options: &MetricsOptions) -> Result<MetricsReport, MetricsCommandError> {
     let registry = load_registry(options)?;
@@ -109,7 +110,11 @@ fn query_metrics(options: &MetricsOptions, canister_id: &str) -> Result<Vec<Metr
         options.kind.candid_variant(),
         options.limit
     );
-    let output = IcpCli::new(&options.icp, None, Some(options.network.clone()))
+    let mut icp = IcpCli::new(&options.icp, None, Some(options.network.clone()));
+    if let Some(root) = resolve_metrics_icp_root() {
+        icp = icp.with_cwd(root);
+    }
+    let output = icp
         .canister_query_arg_output(canister_id, CANIC_METRICS_METHOD, &arg, Some("json"))
         .map_err(|err| err.to_string())?;
 
@@ -119,13 +124,23 @@ fn query_metrics(options: &MetricsOptions, canister_id: &str) -> Result<Vec<Metr
 fn resolve_metrics_fleet(
     options: &MetricsOptions,
 ) -> Result<InstalledFleetResolution, MetricsCommandError> {
-    resolve_installed_fleet(&InstalledFleetRequest {
-        fleet: options.fleet.clone(),
-        network: options.network.clone(),
-        icp: options.icp.clone(),
-        detect_lost_local_root: false,
-    })
+    let root = resolve_metrics_icp_root().ok_or_else(|| {
+        MetricsCommandError::InstallState("could not resolve ICP root".to_string())
+    })?;
+    resolve_installed_fleet_from_root(
+        &InstalledFleetRequest {
+            fleet: options.fleet.clone(),
+            network: options.network.clone(),
+            icp: options.icp.clone(),
+            detect_lost_local_root: false,
+        },
+        &root,
+    )
     .map_err(metrics_installed_fleet_error)
+}
+
+fn resolve_metrics_icp_root() -> Option<PathBuf> {
+    resolve_current_canic_icp_root(None).ok()
 }
 
 fn metrics_installed_fleet_error(error: InstalledFleetError) -> MetricsCommandError {

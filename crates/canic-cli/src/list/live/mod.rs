@@ -9,12 +9,12 @@ use crate::support::registry_tree::visible_entries;
 use canic_host::{
     format::{byte_size, cycles_tc},
     icp::IcpCli,
+    icp_config::resolve_current_canic_icp_root,
     installed_fleet::{
         InstalledFleetError, InstalledFleetRequest, InstalledFleetResolution,
-        read_installed_fleet_state, resolve_installed_fleet,
+        read_installed_fleet_state_from_root, resolve_installed_fleet_from_root,
     },
     registry::RegistryEntry,
-    release_set::icp_root,
     replica_query,
 };
 use std::{
@@ -53,9 +53,13 @@ pub(super) fn list_ready_statuses(
         return local_ready_statuses(options, registry, canister);
     }
 
+    let icp_root = resolve_live_icp_root(options);
     let mut statuses = BTreeMap::new();
     for entry in visible_entries(registry, canister)? {
-        statuses.insert(entry.pid.clone(), check_ready_status(options, &entry.pid)?);
+        statuses.insert(
+            entry.pid.clone(),
+            check_ready_status(options, icp_root.as_deref(), &entry.pid)?,
+        );
     }
     Ok(statuses)
 }
@@ -67,8 +71,10 @@ pub(super) fn list_cycle_balances(
 ) -> Result<BTreeMap<String, String>, ListCommandError> {
     let icp = options.icp.clone();
     let network = options.network.clone();
+    let icp_root = resolve_live_icp_root(options);
     collect_visible_optional_values(registry, canister, move |pid| {
-        query_cycle_balance_endpoint(&icp, network.clone(), &pid).map(cycles_tc)
+        query_cycle_balance_endpoint(&icp, network.clone(), icp_root.as_deref(), &pid)
+            .map(cycles_tc)
     })
 }
 
@@ -79,8 +85,9 @@ pub(super) fn list_canic_versions(
 ) -> Result<BTreeMap<String, String>, ListCommandError> {
     let icp = options.icp.clone();
     let network = options.network.clone();
+    let icp_root = resolve_live_icp_root(options);
     collect_visible_optional_values(registry, canister, move |pid| {
-        query_canic_metadata_version(&icp, network.clone(), &pid)
+        query_canic_metadata_version(&icp, network.clone(), icp_root.as_deref(), &pid)
     })
 }
 
@@ -128,13 +135,14 @@ pub(super) fn resolve_wasm_sizes(
 
 fn check_ready_status(
     options: &ListOptions,
+    icp_root: Option<&std::path::Path>,
     canister: &str,
 ) -> Result<ReadyStatus, ListCommandError> {
-    let Ok(output) = IcpCli::new(&options.icp, None, options.network.clone()).canister_call_output(
-        canister,
-        "canic_ready",
-        Some("json"),
-    ) else {
+    let mut icp = IcpCli::new(&options.icp, None, options.network.clone());
+    if let Some(root) = icp_root {
+        icp = icp.with_cwd(root);
+    }
+    let Ok(output) = icp.canister_call_output(canister, "canic_ready", Some("json")) else {
         return Ok(ReadyStatus::Error);
     };
     let data = serde_json::from_str::<serde_json::Value>(&output)?;
@@ -151,15 +159,17 @@ fn local_ready_statuses(
     canister: Option<&str>,
 ) -> Result<BTreeMap<String, ReadyStatus>, ListCommandError> {
     let network = options.network.clone();
-    collect_visible_values(
-        registry,
-        canister,
-        move |pid| match replica_query::query_ready(network.as_deref(), &pid) {
+    let icp_root = resolve_live_icp_root(options);
+    collect_visible_values(registry, canister, move |pid| {
+        match icp_root.as_deref().map_or_else(
+            || replica_query::query_ready(network.as_deref(), &pid),
+            |root| replica_query::query_ready_from_root(network.as_deref(), &pid, root),
+        ) {
             Ok(true) => ReadyStatus::Ready,
             Ok(false) => ReadyStatus::NotReady,
             Err(_) => ReadyStatus::Error,
-        },
-    )
+        }
+    })
 }
 
 fn collect_visible_optional_values<T, F>(
@@ -207,10 +217,14 @@ where
 fn query_cycle_balance_endpoint(
     icp: &str,
     network: Option<String>,
+    icp_root: Option<&std::path::Path>,
     canister: &str,
 ) -> Option<u128> {
-    IcpCli::new(icp, None, network)
-        .canister_call_output(canister, canic_core::protocol::CANIC_CYCLE_BALANCE, None)
+    let mut icp = IcpCli::new(icp, None, network);
+    if let Some(root) = icp_root {
+        icp = icp.with_cwd(root);
+    }
+    icp.canister_call_output(canister, canic_core::protocol::CANIC_CYCLE_BALANCE, None)
         .ok()
         .and_then(|output| parse_cycle_balance_response(&output))
 }
@@ -218,30 +232,54 @@ fn query_cycle_balance_endpoint(
 fn query_canic_metadata_version(
     icp: &str,
     network: Option<String>,
+    icp_root: Option<&std::path::Path>,
     canister: &str,
 ) -> Option<String> {
-    IcpCli::new(icp, None, network)
-        .canister_call_output(canister, canic_core::protocol::CANIC_METADATA, None)
+    let mut icp = IcpCli::new(icp, None, network);
+    if let Some(root) = icp_root {
+        icp = icp.with_cwd(root);
+    }
+    icp.canister_call_output(canister, canic_core::protocol::CANIC_METADATA, None)
         .ok()
         .and_then(|output| parse_canic_metadata_version_response(&output))
 }
 
 fn resolve_icp_artifact_root(options: &ListOptions) -> Option<PathBuf> {
-    if let Ok(state) = read_installed_fleet_state(&state_network(options), &options.fleet) {
+    let icp_root = resolve_live_icp_root(options)?;
+    if let Ok(state) =
+        read_installed_fleet_state_from_root(&state_network(options), &options.fleet, &icp_root)
+    {
         return Some(PathBuf::from(state.icp_root));
     }
-    icp_root().ok()
+    Some(icp_root)
 }
 
 fn resolve_list_fleet(options: &ListOptions) -> Result<InstalledFleetResolution, ListCommandError> {
-    resolve_installed_fleet(&InstalledFleetRequest {
-        fleet: options.fleet.clone(),
-        network: state_network(options),
-        icp: options.icp.clone(),
-        detect_lost_local_root: true,
-    })
+    let icp_root = resolve_live_icp_root(options)
+        .ok_or_else(|| ListCommandError::InstallState("could not resolve ICP root".to_string()))?;
+    resolve_installed_fleet_from_root(
+        &InstalledFleetRequest {
+            fleet: options.fleet.clone(),
+            network: state_network(options),
+            icp: options.icp.clone(),
+            detect_lost_local_root: true,
+        },
+        &icp_root,
+    )
     .map_err(list_installed_fleet_error)
     .map_err(add_root_registry_hint)
+}
+
+fn resolve_live_icp_root(options: &ListOptions) -> Option<PathBuf> {
+    resolve_current_canic_icp_root(None).ok().or_else(|| {
+        read_installed_fleet_state_from_root(
+            &state_network(options),
+            &options.fleet,
+            &std::env::current_dir().ok()?,
+        )
+        .ok()
+        .map(|state| PathBuf::from(state.icp_root))
+    })
 }
 
 fn list_installed_fleet_error(error: InstalledFleetError) -> ListCommandError {

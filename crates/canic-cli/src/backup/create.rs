@@ -24,7 +24,10 @@ use canic_backup::{
 };
 use canic_host::{
     icp::{IcpCli, IcpCommandError},
-    installed_fleet::{InstalledFleetError, InstalledFleetRequest, resolve_installed_fleet},
+    icp_config::resolve_current_canic_icp_root,
+    installed_fleet::{
+        InstalledFleetError, InstalledFleetRequest, resolve_installed_fleet_from_root,
+    },
     registry::{RegistryEntry as HostRegistryEntry, parse_registry_entries},
     replica_query,
 };
@@ -33,12 +36,17 @@ use std::path::{Path, PathBuf};
 pub(super) fn backup_create(
     options: &BackupCreateOptions,
 ) -> Result<BackupCreateReport, BackupCommandError> {
-    let installed = resolve_installed_fleet(&InstalledFleetRequest {
-        fleet: options.fleet.clone(),
-        network: options.network.clone(),
-        icp: options.icp.clone(),
-        detect_lost_local_root: true,
-    })
+    let icp_root = resolve_current_canic_icp_root(None)
+        .map_err(|err| BackupCommandError::InstallState(err.to_string()))?;
+    let installed = resolve_installed_fleet_from_root(
+        &InstalledFleetRequest {
+            fleet: options.fleet.clone(),
+            network: options.network.clone(),
+            icp: options.icp.clone(),
+            detect_lost_local_root: true,
+        },
+        &icp_root,
+    )
     .map_err(backup_installed_fleet_error)?;
     let registry = backup_registry_entries(&installed.registry.entries);
     let topology_hash = registry_topology_hash(&registry)?;
@@ -79,7 +87,7 @@ pub(super) fn backup_create(
     let run = if options.dry_run {
         None
     } else {
-        let mut executor = BackupIcpRunnerExecutor::new(options);
+        let mut executor = BackupIcpRunnerExecutor::new(options, icp_root);
         Some(backup_run_execute_with_executor(
             &BackupRunnerConfig {
                 out: out.clone(),
@@ -172,14 +180,16 @@ fn backup_run_status(run: &BackupRunResponse) -> String {
 
 struct BackupIcpRunnerExecutor {
     options: BackupCreateOptions,
+    icp_root: PathBuf,
     icp: IcpCli,
 }
 
 impl BackupIcpRunnerExecutor {
-    fn new(options: &BackupCreateOptions) -> Self {
+    fn new(options: &BackupCreateOptions, icp_root: PathBuf) -> Self {
         Self {
             options: options.clone(),
-            icp: IcpCli::new(&options.icp, None, Some(options.network.clone())),
+            icp: IcpCli::new(&options.icp, None, Some(options.network.clone())).with_cwd(&icp_root),
+            icp_root,
         }
     }
 }
@@ -193,7 +203,8 @@ impl BackupRunnerExecutor for BackupIcpRunnerExecutor {
         expires_at: &str,
     ) -> Result<BackupExecutionPreflightReceipts, BackupRunnerCommandError> {
         let registry_json =
-            call_subnet_registry(&self.options, &plan.root_canister_id).map_err(preflight_error)?;
+            call_subnet_registry(&self.options, &self.icp_root, &plan.root_canister_id)
+                .map_err(preflight_error)?;
         let host_registry = parse_registry_entries(&registry_json).map_err(preflight_error)?;
         let registry = backup_registry_entries(&host_registry);
         let topology_hash = registry_topology_hash(&registry).map_err(preflight_error)?;
@@ -357,14 +368,20 @@ fn backup_installed_fleet_error(error: InstalledFleetError) -> BackupCommandErro
 
 fn call_subnet_registry(
     options: &BackupCreateOptions,
+    icp_root: &Path,
     root: &str,
 ) -> Result<String, BackupCommandError> {
     if replica_query::should_use_local_replica_query(Some(&options.network)) {
-        return replica_query::query_subnet_registry_json(Some(&options.network), root)
-            .map_err(|err| BackupCommandError::ReplicaQuery(err.to_string()));
+        return replica_query::query_subnet_registry_json_from_root(
+            Some(&options.network),
+            root,
+            icp_root,
+        )
+        .map_err(|err| BackupCommandError::ReplicaQuery(err.to_string()));
     }
 
     IcpCli::new(&options.icp, None, Some(options.network.clone()))
+        .with_cwd(icp_root)
         .canister_call_output(root, "canic_subnet_registry", Some("json"))
         .map_err(backup_icp_error)
 }
