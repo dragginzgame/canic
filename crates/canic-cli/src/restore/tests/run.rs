@@ -90,7 +90,8 @@ fn run_restore_run_dry_run_writes_native_runner_preview() {
             ROOT,
             "--input",
             "/tmp/canic-cli-restore-artifacts/artifacts/root",
-            "--resume"
+            "--resume",
+            "--json"
         ])
     );
     assert_eq!(dry_run["command"]["mutates"], true);
@@ -353,6 +354,7 @@ fn run_restore_run_execute_records_uploaded_snapshot_receipt() {
             "--input".to_string(),
             "/tmp/canic-cli-restore-artifacts/artifacts/app".to_string(),
             "--resume".to_string(),
+            "--json".to_string(),
         ]
     );
 }
