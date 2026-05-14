@@ -224,9 +224,13 @@ fn query_cycle_balance_endpoint(
     if let Some(root) = icp_root {
         icp = icp.with_cwd(root);
     }
-    icp.canister_call_output(canister, canic_core::protocol::CANIC_CYCLE_BALANCE, None)
-        .ok()
-        .and_then(|output| parse_cycle_balance_response(&output))
+    icp.canister_call_output(
+        canister,
+        canic_core::protocol::CANIC_CYCLE_BALANCE,
+        Some("json"),
+    )
+    .ok()
+    .and_then(|output| parse_cycle_balance_response(&output))
 }
 
 fn query_canic_metadata_version(
@@ -239,7 +243,7 @@ fn query_canic_metadata_version(
     if let Some(root) = icp_root {
         icp = icp.with_cwd(root);
     }
-    icp.canister_call_output(canister, canic_core::protocol::CANIC_METADATA, None)
+    icp.canister_call_output(canister, canic_core::protocol::CANIC_METADATA, Some("json"))
         .ok()
         .and_then(|output| parse_canic_metadata_version_response(&output))
 }

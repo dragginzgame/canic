@@ -10,6 +10,7 @@ use crate::release_set::{
     icp_call_on_network, icp_root, load_root_release_set_manifest, resolve_artifact_root,
     resume_root_bootstrap, stage_root_release_set, workspace_root,
 };
+use crate::replica_query;
 use crate::response_parse::parse_cycle_balance_response;
 use crate::table::{ColumnAlign, render_separator, render_table, render_table_row, table_widths};
 use canic_core::{
@@ -480,7 +481,7 @@ fn query_root_cycle_balance(
         root_canister,
         protocol::CANIC_CYCLE_BALANCE,
         None,
-        None,
+        Some("json"),
     )?;
     parse_cycle_balance_response(&output).ok_or_else(|| {
         format!(
@@ -511,6 +512,15 @@ fn ensure_icp_environment_ready(
     network: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
     if icp_ping(icp_root, network)? {
+        return Ok(());
+    }
+    if replica_query::should_use_local_replica_query(Some(network))
+        && replica_query::local_replica_status_reachable_from_root(Some(network), icp_root)
+    {
+        println!(
+            "Replica reachable via HTTP status endpoint even though ICP CLI reports network '{network}' stopped; continuing from ICP root {}.",
+            icp_root.display()
+        );
         return Ok(());
     }
 

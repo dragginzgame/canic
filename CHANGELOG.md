@@ -7,7 +7,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.35.x] - 2026-05-13 - Gettin' it workin'
 
-- `0.35.10` aligns `canic install <fleet>` readiness and helper calls with the resolved ICP project root, so split-repo `backend/fleets/` projects no longer report the backend replica as stopped after starting it from the same layout.
+- `0.35.11` keeps foreground local replicas usable when ICP CLI reports them stopped by checking the resolved HTTP status endpoint and surfacing that source in text and JSON status output.
+
+- `0.35.10` aligns install readiness plus fleet-aware read/backup commands with the resolved ICP project root and makes live cycle/metadata reads request ICP CLI JSON explicitly.
 
 - `0.35.9` runs replica, status, and install commands from the ICP project root implied by the resolved fleet config, preventing split-repo `backend/fleets/` layouts from creating repo-root `icp.yaml` / `.icp` split-brain state.
 

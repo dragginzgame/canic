@@ -83,6 +83,28 @@ fn parses_replica_status_json_option() {
     assert!(options.json);
 }
 
+// Ensure JSON can distinguish ICP CLI-managed status from direct HTTP fallback.
+#[test]
+fn replica_status_json_exposes_status_source() {
+    let report = ReplicaStatusJsonReport {
+        network: "local",
+        running: true,
+        configured_gateway_port: "8000".to_string(),
+        status_source: "http_status",
+        icp_cli_running: false,
+        local_gateway_reachable: true,
+        icp_status: None,
+    };
+
+    let value = serde_json::to_value(report).expect("serialize replica status");
+
+    assert_eq!(value["running"], true);
+    assert_eq!(value["status_source"], "http_status");
+    assert_eq!(value["icp_cli_running"], false);
+    assert_eq!(value["local_gateway_reachable"], true);
+    assert!(value["icp_status"].is_null());
+}
+
 // Ensure replica help exposes the native lifecycle commands.
 #[test]
 fn replica_usage_lists_commands() {

@@ -21,6 +21,7 @@ use canic_host::{
         configured_bootstrap_roles, configured_fleet_name, configured_fleet_roles,
         display_workspace_path, workspace_root,
     },
+    replica_query,
     table::{ColumnAlign, render_table},
 };
 use clap::Command as ClapCommand;
@@ -85,6 +86,7 @@ struct StatusReport {
 #[derive(Clone, Debug, Eq, PartialEq)]
 enum ReplicaStatus {
     Running,
+    RunningHttpFallback,
     Stopped,
     Error(String),
 }
@@ -139,8 +141,11 @@ fn load_status_report(options: &StatusOptions) -> Result<StatusReport, StatusCom
     let choices = discover_current_canic_config_choices()?;
     let icp_cli = load_icp_cli_version(options);
     let replica = load_replica_status(options, &icp_root);
-    let verify_local_roots =
-        options.network == local_network() && matches!(replica, ReplicaStatus::Running);
+    let verify_local_roots = options.network == local_network()
+        && matches!(
+            replica,
+            ReplicaStatus::Running | ReplicaStatus::RunningHttpFallback
+        );
     let mut fleets = choices
         .iter()
         .map(|path| {
@@ -174,6 +179,15 @@ fn load_icp_cli_version(options: &StatusOptions) -> String {
 fn load_replica_status(options: &StatusOptions, icp_root: &Path) -> ReplicaStatus {
     match IcpCli::new(&options.icp, None, None).local_replica_project_running_in(icp_root, false) {
         Ok(true) => ReplicaStatus::Running,
+        Ok(false)
+            if replica_query::should_use_local_replica_query(Some(&options.network))
+                && replica_query::local_replica_status_reachable_from_root(
+                    Some(&options.network),
+                    icp_root,
+                ) =>
+        {
+            ReplicaStatus::RunningHttpFallback
+        }
         Ok(false) => ReplicaStatus::Stopped,
         Err(err) => ReplicaStatus::Error(err.to_string()),
     }
@@ -352,6 +366,9 @@ impl ReplicaStatus {
     fn label(&self, port: &str) -> String {
         match self {
             Self::Running => format!("running (local, port {port})"),
+            Self::RunningHttpFallback => {
+                format!("running (local, port {port}, HTTP reachable; ICP CLI status stopped)")
+            }
             Self::Stopped => format!("stopped (local, port {port})"),
             Self::Error(err) => format!("unknown (local, port {port}): {err}"),
         }

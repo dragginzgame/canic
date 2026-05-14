@@ -15,6 +15,7 @@ use canic_host::{
         resolve_current_canic_icp_root, set_configured_local_gateway_port_in_root,
         sync_canic_icp_yaml_with_fleet_root,
     },
+    replica_query,
 };
 use clap::Command as ClapCommand;
 use serde::Serialize;
@@ -69,7 +70,7 @@ pub enum ReplicaCommandError {
     PortChangeRequiresStopped { current: u16, requested: u16 },
 
     #[error(
-        "this project's local ICP network is not running, but a local ICP replica is reachable. Canic could not identify the owner, so it will not stop it.\nRun `icp network start local --background` from this project to ask ICP for the owning project/network, then stop that exact network."
+        "this project's local ICP network is not running, but a local ICP replica is reachable. Canic could not identify the owner, so it will not stop an unknown foreground process.\nIf you started `canic replica start` without --background, stop it with Ctrl-C in that terminal. Otherwise stop the owning ICP project/network."
     )]
     ForeignLocalReplicaReachable,
 
@@ -164,6 +165,9 @@ struct ReplicaStatusJsonReport {
     network: &'static str,
     running: bool,
     configured_gateway_port: String,
+    status_source: &'static str,
+    icp_cli_running: bool,
+    local_gateway_reachable: bool,
     icp_status: Option<serde_json::Value>,
 }
 
@@ -205,16 +209,24 @@ where
     let icp_root = sync_replica_project_config(options.fleets_dir.as_deref())?;
     ensure_replica_port_config(&icp_root)?;
     let icp = IcpCli::new(options.icp, None, None);
-    if icp
+    let icp_cli_running = icp
         .local_replica_project_running_in(&icp_root, options.debug)
-        .map_err(replica_icp_error)?
-    {
+        .map_err(replica_icp_error)?;
+    let local_gateway_reachable = local_replica_http_reachable(&icp_root);
+    if icp_cli_running || local_gateway_reachable {
         if let Some(requested) = options.port {
             let current = configured_local_gateway_port_from_root(&icp_root)
                 .unwrap_or(DEFAULT_LOCAL_GATEWAY_PORT);
             if current != requested {
                 return Err(ReplicaCommandError::PortChangeRequiresStopped { current, requested });
             }
+        }
+        if !icp_cli_running && local_gateway_reachable {
+            println!(
+                "Replica already running: local (port {}, HTTP reachable; ICP CLI status stopped)",
+                replica_port_label(&icp_root)
+            );
+            return Ok(());
         }
         println!(
             "Replica already running: local (port {})",
@@ -263,7 +275,13 @@ where
             print_command_output(&output);
         }
         Err(error) if local_network_not_running(&error) => {
-            println!("Replica: stopped (local, port {port})");
+            if local_replica_http_reachable(&icp_root) {
+                println!(
+                    "Replica: running (local, port {port}, HTTP reachable; ICP CLI status stopped)"
+                );
+            } else {
+                println!("Replica: stopped (local, port {port})");
+            }
         }
         Err(error) => return Err(replica_icp_error(error)),
     }
@@ -281,14 +299,27 @@ fn run_status_json(
             network: "local",
             running: true,
             configured_gateway_port: port.to_string(),
+            status_source: "icp_cli",
+            icp_cli_running: true,
+            local_gateway_reachable: local_replica_http_reachable(icp_root),
             icp_status: Some(status),
         },
-        Err(error) if local_network_not_running(&error) => ReplicaStatusJsonReport {
-            network: "local",
-            running: false,
-            configured_gateway_port: port.to_string(),
-            icp_status: None,
-        },
+        Err(error) if local_network_not_running(&error) => {
+            let local_gateway_reachable = local_replica_http_reachable(icp_root);
+            ReplicaStatusJsonReport {
+                network: "local",
+                running: local_gateway_reachable,
+                configured_gateway_port: port.to_string(),
+                status_source: if local_gateway_reachable {
+                    "http_status"
+                } else {
+                    "none"
+                },
+                icp_cli_running: false,
+                local_gateway_reachable,
+                icp_status: None,
+            }
+        }
         Err(error) => return Err(replica_icp_error(error)),
     };
     println!("{}", serde_json::to_string_pretty(&report)?);
@@ -371,6 +402,10 @@ fn replica_port_label(icp_root: &Path) -> String {
     configured_local_gateway_port_from_root(icp_root)
         .unwrap_or(DEFAULT_LOCAL_GATEWAY_PORT)
         .to_string()
+}
+
+fn local_replica_http_reachable(icp_root: &Path) -> bool {
+    replica_query::local_replica_status_reachable_from_root(Some("local"), icp_root)
 }
 
 fn replica_icp_error(error: IcpCommandError) -> ReplicaCommandError {

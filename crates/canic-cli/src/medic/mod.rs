@@ -128,7 +128,7 @@ fn run_medic_checks(options: &MedicOptions) -> Vec<MedicCheck> {
         Err(err) => {
             checks.push(MedicCheck::error(
                 "fleet state",
-                err.to_string(),
+                err,
                 "reinstall from a config with [fleet].name",
             ));
             None

@@ -99,6 +99,12 @@ pub fn query_ready_from_root(
     Decode!(&bytes, bool).map_err(|err| ReplicaQueryError::Query(err.to_string()))
 }
 
+/// Return true when the local replica HTTP status endpoint is reachable.
+#[must_use]
+pub fn local_replica_status_reachable_from_root(network: Option<&str>, icp_root: &Path) -> bool {
+    get_http_status(&local_replica_endpoint_from_root(network, icp_root)).is_ok()
+}
+
 /// Parse common JSON shapes returned by command-line calls for `canic_ready`.
 #[must_use]
 pub fn parse_ready_json_value(data: &serde_json::Value) -> bool {
@@ -244,6 +250,18 @@ fn post_cbor(endpoint: &str, path: &str, body: &[u8]) -> Result<Vec<u8>, Replica
     );
     stream.write_all(request.as_bytes())?;
     stream.write_all(body)?;
+
+    let mut response = Vec::new();
+    stream.read_to_end(&mut response)?;
+    split_http_body(&response)
+}
+
+fn get_http_status(endpoint: &str) -> Result<Vec<u8>, ReplicaQueryError> {
+    let (host, port) = parse_http_endpoint(endpoint)?;
+    let mut stream = TcpStream::connect((host.as_str(), port))?;
+    let request =
+        format!("GET /api/v2/status HTTP/1.1\r\nHost: {host}:{port}\r\nConnection: close\r\n\r\n");
+    stream.write_all(request.as_bytes())?;
 
     let mut response = Vec::new();
     stream.read_to_end(&mut response)?;

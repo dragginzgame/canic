@@ -190,9 +190,13 @@ fn query_live_cycle_balance(options: &CyclesOptions, canister_id: &str) -> Optio
     if let Some(root) = resolve_cycles_icp_root() {
         icp = icp.with_cwd(root);
     }
-    icp.canister_call_output(canister_id, canic_core::protocol::CANIC_CYCLE_BALANCE, None)
-        .ok()
-        .and_then(|output| parse_cycle_balance_response(&output))
+    icp.canister_call_output(
+        canister_id,
+        canic_core::protocol::CANIC_CYCLE_BALANCE,
+        Some("json"),
+    )
+    .ok()
+    .and_then(|output| parse_cycle_balance_response(&output))
 }
 
 fn query_topup_summary(

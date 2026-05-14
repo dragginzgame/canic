@@ -77,6 +77,24 @@ fn renders_empty_status_report() {
     );
 }
 
+// Ensure foreground/untracked replicas are visible instead of being silently
+// collapsed into ordinary ICP CLI-managed status.
+#[test]
+fn renders_http_fallback_replica_status() {
+    let report = StatusReport {
+        network: "local".to_string(),
+        replica: ReplicaStatus::RunningHttpFallback,
+        replica_port: "8000".to_string(),
+        icp_cli: "icp 0.2.6".to_string(),
+        fleets: Vec::new(),
+    };
+
+    assert_eq!(
+        render_status_report(&report),
+        "Replica: running (local, port 8000, HTTP reachable; ICP CLI status stopped)\nICP CLI: icp 0.2.6\nFleets:  0/0 deployed (network local)"
+    );
+}
+
 // Ensure local missing-root rows explain the non-persistent local ICP CLI replica.
 #[test]
 fn renders_lost_local_fleet_note() {
