@@ -82,8 +82,10 @@ impl InstallOptions {
             .as_deref()
             .map(|root| root.join(default_fleet_config_path(&self.fleet)))
             .filter(|path| path.is_file())
-            .map(|path| path.display().to_string())
-            .unwrap_or_else(|| default_fleet_config_path(&self.fleet));
+            .map_or_else(
+                || default_fleet_config_path(&self.fleet),
+                |path| path.display().to_string(),
+            );
         InstallRootOptions {
             root_canister: DEFAULT_ROOT_TARGET.to_string(),
             root_build_target: DEFAULT_ROOT_TARGET.to_string(),
