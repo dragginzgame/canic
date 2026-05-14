@@ -1,4 +1,5 @@
 use std::{
+    env,
     error::Error,
     fmt,
     io::{self, Read, Write},
@@ -10,6 +11,8 @@ use std::{
 use serde::{Deserialize, Serialize};
 
 const LOCAL_NETWORK: &str = "local";
+pub(crate) const CANIC_ICP_LOCAL_NETWORK_URL_ENV: &str = "CANIC_ICP_LOCAL_NETWORK_URL";
+pub(crate) const CANIC_ICP_LOCAL_ROOT_KEY_ENV: &str = "CANIC_ICP_LOCAL_ROOT_KEY";
 
 ///
 /// IcpRawOutput
@@ -601,6 +604,16 @@ pub fn default_command_in(cwd: &Path) -> Command {
 /// Add optional ICP CLI target arguments, preferring named environments.
 pub fn add_target_args(command: &mut Command, environment: Option<&str>, network: Option<&str>) {
     if let Some(environment) = environment {
+        if environment == LOCAL_NETWORK
+            && let Some(url) = env::var_os(CANIC_ICP_LOCAL_NETWORK_URL_ENV)
+        {
+            command.env_remove("ICP_ENVIRONMENT");
+            command.arg("-n").arg(url);
+            if let Some(root_key) = env::var_os(CANIC_ICP_LOCAL_ROOT_KEY_ENV) {
+                command.arg("-k").arg(root_key);
+            }
+            return;
+        }
         command.args(["-e", environment]);
     } else if let Some(network) = network {
         command.args(["-n", network]);

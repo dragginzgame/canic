@@ -105,6 +105,30 @@ pub fn local_replica_status_reachable_from_root(network: Option<&str>, icp_root:
     get_http_status(&local_replica_endpoint_from_root(network, icp_root)).is_ok()
 }
 
+/// Return the HTTP endpoint Canic should use for a local replica under one ICP root.
+#[must_use]
+pub fn local_replica_endpoint_from_root(network: Option<&str>, icp_root: &Path) -> String {
+    local_replica_endpoint_with_port(
+        network,
+        configured_local_gateway_port_from_root(icp_root).ok(),
+    )
+}
+
+/// Return the replica root key advertised by the local status endpoint.
+pub fn local_replica_root_key_from_root(
+    network: Option<&str>,
+    icp_root: &Path,
+) -> Result<Option<String>, ReplicaQueryError> {
+    let endpoint = local_replica_endpoint_from_root(network, icp_root);
+    let body = get_http_status(&endpoint)?;
+    let value = serde_json::from_slice::<serde_json::Value>(&body)?;
+    Ok(value
+        .get("root_key")
+        .and_then(serde_json::Value::as_str)
+        .filter(|root_key| !root_key.is_empty())
+        .map(str::to_string))
+}
+
 /// Parse common JSON shapes returned by command-line calls for `canic_ready`.
 #[must_use]
 pub fn parse_ready_json_value(data: &serde_json::Value) -> bool {
@@ -209,13 +233,6 @@ fn local_query_with_endpoint(
 // Resolve the local replica endpoint from explicit URL or the configured ICP CLI local port.
 fn local_replica_endpoint(network: Option<&str>) -> String {
     local_replica_endpoint_with_port(network, configured_local_gateway_port().ok())
-}
-
-fn local_replica_endpoint_from_root(network: Option<&str>, icp_root: &Path) -> String {
-    local_replica_endpoint_with_port(
-        network,
-        configured_local_gateway_port_from_root(icp_root).ok(),
-    )
 }
 
 // Format the local replica endpoint from an explicit URL, configured port, or ICP default.

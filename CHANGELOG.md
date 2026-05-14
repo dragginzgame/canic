@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.35.x] - 2026-05-13 - Gettin' it workin'
 
+- `0.35.13` keeps foreground local-replica installs working when ICP CLI reports the local environment stopped by targeting the reachable gateway/root key directly and using JSON root create/status receipts.
+
 - `0.35.12` hard-cuts fleet configs to project-root `fleets/`, keeps generated ICP and Canic state at that discovered root from nested commands, changes CLI wasm size columns to report the uncompressed IC install size first, and makes install continue with the created root principal instead of relying on a later name lookup.
 
 - `0.35.11` keeps foreground local replicas usable when ICP CLI reports them stopped by checking the resolved HTTP status endpoint and surfacing that source in text and JSON status output.

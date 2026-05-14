@@ -1,12 +1,13 @@
 use super::{
-    INSTALL_STATE_SCHEMA_VERSION, InstallState, InstallTimingSummary, add_icp_environment_target,
-    add_local_root_create_cycles_arg, config_selection_error, discover_canic_config_choices,
-    discover_project_canic_config_choices, fleet_install_state_path,
+    INSTALL_STATE_SCHEMA_VERSION, InstallState, InstallTimingSummary, add_create_root_target,
+    add_icp_environment_target, add_local_root_create_cycles_arg, config_selection_error,
+    discover_canic_config_choices, discover_project_canic_config_choices, fleet_install_state_path,
     icp_canister_command_in_network, is_missing_canister_id_error, parse_bootstrap_status_value,
-    parse_created_canister_id, parse_cycle_balance_response, parse_root_ready_value,
-    read_fleet_install_state, render_install_timing_summary, resolve_install_config_path,
-    root_init_args, validate_expected_fleet_name, write_install_state,
+    parse_canister_id_json, parse_created_canister_id, parse_cycle_balance_response,
+    parse_root_ready_value, read_fleet_install_state, render_install_timing_summary,
+    resolve_install_config_path, root_init_args, validate_expected_fleet_name, write_install_state,
 };
+use crate::icp::{CANIC_ICP_LOCAL_NETWORK_URL_ENV, CANIC_ICP_LOCAL_ROOT_KEY_ENV};
 use crate::release_set::configured_install_targets;
 use crate::test_support::temp_dir;
 use serde_json::json;
@@ -93,6 +94,11 @@ fn parse_bootstrap_status_accepts_icp_cli_response_candid() {
 
 #[test]
 fn icp_canister_command_carries_selected_network() {
+    let _guard = ENV_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap();
+    unsafe {
+        env::remove_var(CANIC_ICP_LOCAL_NETWORK_URL_ENV);
+        env::remove_var(CANIC_ICP_LOCAL_ROOT_KEY_ENV);
+    }
     let mut command = icp_canister_command_in_network(Path::new("/tmp/canic-icp-root"));
     command.args(["status", "root"]);
     add_icp_environment_target(&mut command, "ic");
@@ -108,12 +114,109 @@ fn icp_canister_command_carries_selected_network() {
 }
 
 #[test]
+fn local_canister_command_uses_http_target_when_configured() {
+    let _guard = ENV_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap();
+    unsafe {
+        env::set_var(CANIC_ICP_LOCAL_NETWORK_URL_ENV, "http://127.0.0.1:8000");
+        env::set_var(CANIC_ICP_LOCAL_ROOT_KEY_ENV, "abcd");
+    }
+    let mut command = icp_canister_command_in_network(Path::new("/tmp/canic-icp-root"));
+    command.env("ICP_ENVIRONMENT", "local");
+    command.args(["status", "root"]);
+    add_icp_environment_target(&mut command, "local");
+    unsafe {
+        env::remove_var(CANIC_ICP_LOCAL_NETWORK_URL_ENV);
+        env::remove_var(CANIC_ICP_LOCAL_ROOT_KEY_ENV);
+    }
+
+    assert_eq!(
+        command
+            .get_args()
+            .map(|arg| arg.to_string_lossy().into_owned())
+            .collect::<Vec<_>>(),
+        [
+            "canister",
+            "status",
+            "root",
+            "-n",
+            "http://127.0.0.1:8000",
+            "-k",
+            "abcd"
+        ]
+    );
+    assert!(
+        command
+            .get_envs()
+            .any(|(key, value)| key == "ICP_ENVIRONMENT" && value.is_none())
+    );
+}
+
+#[test]
+fn local_http_fallback_creates_detached_root() {
+    let _guard = ENV_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap();
+    unsafe {
+        env::set_var(CANIC_ICP_LOCAL_NETWORK_URL_ENV, "http://127.0.0.1:8000");
+    }
+    let mut command = icp_canister_command_in_network(Path::new("/tmp/canic-icp-root"));
+    add_create_root_target(&mut command, "root");
+    unsafe {
+        env::remove_var(CANIC_ICP_LOCAL_NETWORK_URL_ENV);
+    }
+
+    assert_eq!(
+        command
+            .get_args()
+            .map(|arg| arg.to_string_lossy().into_owned())
+            .collect::<Vec<_>>(),
+        ["canister", "create", "--detached", "--json"]
+    );
+}
+
+#[test]
+fn environment_create_uses_named_root() {
+    let _guard = ENV_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap();
+    unsafe {
+        env::remove_var(CANIC_ICP_LOCAL_NETWORK_URL_ENV);
+    }
+    let mut command = icp_canister_command_in_network(Path::new("/tmp/canic-icp-root"));
+    add_create_root_target(&mut command, "root");
+
+    assert_eq!(
+        command
+            .get_args()
+            .map(|arg| arg.to_string_lossy().into_owned())
+            .collect::<Vec<_>>(),
+        ["canister", "create", "root", "--json"]
+    );
+}
+
+#[test]
 fn parses_quiet_canister_create_output() {
     assert_eq!(
         parse_created_canister_id("Created canister:\nt63gs-up777-77776-aaaba-cai\n"),
         Some("t63gs-up777-77776-aaaba-cai".to_string())
     );
     assert_eq!(parse_created_canister_id("created root\n"), None);
+}
+
+#[test]
+fn parses_json_canister_ids() {
+    assert_eq!(
+        parse_created_canister_id(r#"{"canister_id":"t63gs-up777-77776-aaaba-cai"}"#),
+        Some("t63gs-up777-77776-aaaba-cai".to_string())
+    );
+    assert_eq!(
+        parse_created_canister_id(r#"{"id":"t63gs-up777-77776-aaaba-cai","name":"root"}"#),
+        Some("t63gs-up777-77776-aaaba-cai".to_string())
+    );
+    assert_eq!(
+        parse_canister_id_json(&json!([{ "principal": "t63gs-up777-77776-aaaba-cai" }])),
+        Some("t63gs-up777-77776-aaaba-cai".to_string())
+    );
+    assert_eq!(
+        parse_created_canister_id(r#"{"canister_id":"not-a-principal"}"#),
+        None
+    );
 }
 
 #[test]

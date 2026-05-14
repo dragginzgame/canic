@@ -3,7 +3,7 @@ use crate::canister_build::{
     current_workspace_build_context_once,
 };
 use crate::format::wasm_size_label;
-use crate::icp;
+use crate::icp::{self, CANIC_ICP_LOCAL_NETWORK_URL_ENV, CANIC_ICP_LOCAL_ROOT_KEY_ENV};
 use crate::release_set::{
     LOCAL_ROOT_MIN_READY_CYCLES, configured_fleet_name, configured_install_targets,
     configured_local_root_create_cycles, emit_root_release_set_manifest_with_config,
@@ -18,6 +18,7 @@ use canic_core::{
     protocol,
 };
 use config_selection::resolve_install_config_path;
+use serde_json::Value as JsonValue;
 use std::{
     env,
     ffi::OsString,
@@ -236,7 +237,7 @@ fn ensure_root_canister_id(
     }
 
     let mut create = icp_canister_command_in_network(icp_root);
-    create.args(["create", root_canister, "-q"]);
+    add_create_root_target(&mut create, root_canister);
     add_local_root_create_cycles_arg(&mut create, config_path, network)?;
     add_icp_environment_target(&mut create, network);
     let output = run_command_stdout(&mut create)?;
@@ -255,11 +256,35 @@ fn ensure_root_canister_id(
 }
 
 fn parse_created_canister_id(output: &str) -> Option<String> {
+    if let Ok(value) = serde_json::from_str::<JsonValue>(output) {
+        return parse_canister_id_json(&value);
+    }
+
     output
         .lines()
         .map(str::trim)
         .find(|line| Principal::from_text(*line).is_ok())
         .map(ToString::to_string)
+}
+
+fn parse_canister_id_json(value: &JsonValue) -> Option<String> {
+    match value {
+        JsonValue::String(text) if Principal::from_text(text).is_ok() => Some(text.clone()),
+        JsonValue::Array(values) => values.iter().find_map(parse_canister_id_json),
+        JsonValue::Object(object) => ["canister_id", "id", "principal"]
+            .iter()
+            .filter_map(|key| object.get(*key))
+            .find_map(parse_canister_id_json),
+        _ => None,
+    }
+}
+
+fn add_create_root_target(command: &mut Command, root_canister: &str) {
+    if env::var_os(CANIC_ICP_LOCAL_NETWORK_URL_ENV).is_some() {
+        command.args(["create", "--detached", "--json"]);
+    } else {
+        command.args(["create", root_canister, "--json"]);
+    }
 }
 
 fn is_missing_canister_id_error(message: &str) -> bool {
@@ -336,9 +361,12 @@ fn resolve_root_canister_id(
     }
 
     let mut command = icp_canister_command_in_network(icp_root);
-    command.args(["status", root_canister, "-i"]);
+    command.args(["status", root_canister, "--json"]);
     add_icp_environment_target(&mut command, network);
-    Ok(run_command_stdout(&mut command)?.trim().to_string())
+    let output = run_command_stdout(&mut command)?;
+    parse_created_canister_id(&output).ok_or_else(|| {
+        format!("could not parse root canister id from ICP status JSON output: {output}").into()
+    })
 }
 
 // Read the current host clock as a unix timestamp for install state.
@@ -432,6 +460,8 @@ struct BuildEnvGuard {
     previous_network: Option<OsString>,
     previous_config_path: Option<OsString>,
     previous_icp_root: Option<OsString>,
+    previous_local_network_url: Option<OsString>,
+    previous_local_root_key: Option<OsString>,
 }
 
 impl BuildEnvGuard {
@@ -440,10 +470,19 @@ impl BuildEnvGuard {
             previous_network: env::var_os("ICP_ENVIRONMENT"),
             previous_config_path: env::var_os("CANIC_CONFIG_PATH"),
             previous_icp_root: env::var_os("CANIC_ICP_ROOT"),
+            previous_local_network_url: env::var_os(CANIC_ICP_LOCAL_NETWORK_URL_ENV),
+            previous_local_root_key: env::var_os(CANIC_ICP_LOCAL_ROOT_KEY_ENV),
         };
         set_env("ICP_ENVIRONMENT", network);
         set_env("CANIC_CONFIG_PATH", config_path);
         set_env("CANIC_ICP_ROOT", icp_root);
+        if let Some(target) = local_replica_icp_target(network, icp_root) {
+            set_env(CANIC_ICP_LOCAL_NETWORK_URL_ENV, target.url);
+            set_env(CANIC_ICP_LOCAL_ROOT_KEY_ENV, target.root_key);
+        } else {
+            remove_env(CANIC_ICP_LOCAL_NETWORK_URL_ENV);
+            remove_env(CANIC_ICP_LOCAL_ROOT_KEY_ENV);
+        }
         guard
     }
 }
@@ -453,7 +492,36 @@ impl Drop for BuildEnvGuard {
         restore_env("ICP_ENVIRONMENT", self.previous_network.take());
         restore_env("CANIC_CONFIG_PATH", self.previous_config_path.take());
         restore_env("CANIC_ICP_ROOT", self.previous_icp_root.take());
+        restore_env(
+            CANIC_ICP_LOCAL_NETWORK_URL_ENV,
+            self.previous_local_network_url.take(),
+        );
+        restore_env(
+            CANIC_ICP_LOCAL_ROOT_KEY_ENV,
+            self.previous_local_root_key.take(),
+        );
     }
+}
+
+struct LocalReplicaIcpTarget {
+    url: String,
+    root_key: String,
+}
+
+fn local_replica_icp_target(network: &str, icp_root: &Path) -> Option<LocalReplicaIcpTarget> {
+    if !replica_query::should_use_local_replica_query(Some(network)) {
+        return None;
+    }
+    if icp_ping(icp_root, network).unwrap_or(false) {
+        return None;
+    }
+    let root_key = replica_query::local_replica_root_key_from_root(Some(network), icp_root)
+        .ok()
+        .flatten()?;
+    Some(LocalReplicaIcpTarget {
+        url: replica_query::local_replica_endpoint_from_root(Some(network), icp_root),
+        root_key,
+    })
 }
 
 fn set_env<K, V>(key: K, value: V)
@@ -468,13 +536,23 @@ where
     }
 }
 
+fn remove_env<K>(key: K)
+where
+    K: AsRef<std::ffi::OsStr>,
+{
+    // Install builds are single-threaded host orchestration. The environment is
+    // scoped by BuildEnvGuard so Cargo build scripts see the selected fleet.
+    unsafe {
+        env::remove_var(key);
+    }
+}
+
 fn restore_env(key: &str, value: Option<OsString>) {
     // See set_env: this restores the single-threaded install build context.
-    unsafe {
-        match value {
-            Some(value) => env::set_var(key, value),
-            None => env::remove_var(key),
-        }
+    if let Some(value) = value {
+        set_env(key, value);
+    } else {
+        remove_env(key);
     }
 }
 
