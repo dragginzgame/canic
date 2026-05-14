@@ -1,4 +1,7 @@
-use crate::icp_config::{DEFAULT_LOCAL_GATEWAY_PORT, configured_local_gateway_port};
+use crate::icp_config::{
+    DEFAULT_LOCAL_GATEWAY_PORT, configured_local_gateway_port,
+    configured_local_gateway_port_from_root,
+};
 use candid::{CandidType, Decode, Encode, Principal};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -6,6 +9,7 @@ use std::{
     fmt,
     io::{Read, Write},
     net::TcpStream,
+    path::Path,
     time::{SystemTime, UNIX_EPOCH},
 };
 
@@ -109,11 +113,47 @@ pub fn query_subnet_registry_json(
     serde_json::to_string(&response.to_cli_json()).map_err(ReplicaQueryError::from)
 }
 
+/// Query `canic_subnet_registry` using the configured port from one ICP root.
+pub fn query_subnet_registry_json_from_root(
+    network: Option<&str>,
+    root: &str,
+    icp_root: &Path,
+) -> Result<String, ReplicaQueryError> {
+    let bytes = local_query_from_root(network, root, "canic_subnet_registry", icp_root)?;
+    let result = Decode!(&bytes, Result<SubnetRegistryResponseWire, CanicErrorWire>)
+        .map_err(|err| ReplicaQueryError::Query(err.to_string()))?;
+    let response = result.map_err(|err| ReplicaQueryError::Query(err.to_string()))?;
+    serde_json::to_string(&response.to_cli_json()).map_err(ReplicaQueryError::from)
+}
+
 // Execute one anonymous query call against the local replica.
 fn local_query(
     network: Option<&str>,
     canister: &str,
     method: &str,
+) -> Result<Vec<u8>, ReplicaQueryError> {
+    local_query_with_endpoint(network, canister, method, local_replica_endpoint(network))
+}
+
+fn local_query_from_root(
+    network: Option<&str>,
+    canister: &str,
+    method: &str,
+    icp_root: &Path,
+) -> Result<Vec<u8>, ReplicaQueryError> {
+    local_query_with_endpoint(
+        network,
+        canister,
+        method,
+        local_replica_endpoint_from_root(network, icp_root),
+    )
+}
+
+fn local_query_with_endpoint(
+    _network: Option<&str>,
+    canister: &str,
+    method: &str,
+    endpoint: String,
 ) -> Result<Vec<u8>, ReplicaQueryError> {
     let canister_id =
         Principal::from_text(canister).map_err(|err| ReplicaQueryError::Query(err.to_string()))?;
@@ -130,7 +170,6 @@ fn local_query(
         },
     };
     let body = serde_cbor::to_vec(&envelope)?;
-    let endpoint = local_replica_endpoint(network);
     let response = post_cbor(
         &endpoint,
         &format!("/api/v2/canister/{canister}/query"),
@@ -154,6 +193,13 @@ fn local_query(
 // Resolve the local replica endpoint from explicit URL or the configured ICP CLI local port.
 fn local_replica_endpoint(network: Option<&str>) -> String {
     local_replica_endpoint_with_port(network, configured_local_gateway_port().ok())
+}
+
+fn local_replica_endpoint_from_root(network: Option<&str>, icp_root: &Path) -> String {
+    local_replica_endpoint_with_port(
+        network,
+        configured_local_gateway_port_from_root(icp_root).ok(),
+    )
 }
 
 // Format the local replica endpoint from an explicit URL, configured port, or ICP default.

@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.35.x] - 2026-05-13 - Gettin' it workin'
 
+- `0.35.9` runs replica, status, and install commands from the ICP project root implied by the resolved fleet config, preventing split-repo `backend/fleets/` layouts from creating repo-root `icp.yaml` / `.icp` split-brain state.
+
 - `0.35.8` makes fleet config discovery work from split repos by checking both `fleets/<fleet>/canic.toml` and `backend/fleets/<fleet>/canic.toml`, adds explicit `--fleets-dir <dir>` / `CANIC_FLEETS_ROOT=<dir>` overrides for nonstandard layouts, and keeps that override out of `.canic` and `icp.yaml` to avoid stale hidden state.
 
 - `0.35.7` shortens the root README getting-started flow, puts `canic-cli` installation first, and updates quick examples around `fleets/<fleet>/canic.toml` plus split-repo paths.

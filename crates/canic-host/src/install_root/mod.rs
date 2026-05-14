@@ -37,7 +37,9 @@ pub use config_selection::{
 };
 use readiness::wait_for_root_ready;
 use state::{INSTALL_STATE_SCHEMA_VERSION, validate_fleet_name, write_install_state};
-pub use state::{InstallState, read_named_fleet_install_state};
+pub use state::{
+    InstallState, read_named_fleet_install_state, read_named_fleet_install_state_from_root,
+};
 
 #[cfg(test)]
 mod tests;
@@ -58,6 +60,7 @@ pub struct InstallRootOptions {
     pub root_canister: String,
     pub root_build_target: String,
     pub network: String,
+    pub icp_root: Option<PathBuf>,
     pub build_profile: Option<CanisterBuildProfile>,
     pub ready_timeout_seconds: u64,
     pub config_path: Option<String>,
@@ -91,7 +94,10 @@ pub fn discover_current_canic_config_choices() -> Result<Vec<PathBuf>, Box<dyn s
 // Execute the local thin-root install flow against an already running replica.
 pub fn install_root(options: InstallRootOptions) -> Result<(), Box<dyn std::error::Error>> {
     let workspace_root = workspace_root()?;
-    let icp_root = icp_root()?;
+    let icp_root = match &options.icp_root {
+        Some(path) => path.canonicalize()?,
+        None => icp_root()?,
+    };
     let config_path = resolve_install_config_path(
         &workspace_root,
         options.config_path.as_deref(),
@@ -125,6 +131,7 @@ pub fn install_root(options: InstallRootOptions) -> Result<(), Box<dyn std::erro
         &build_targets,
         options.build_profile,
         &config_path,
+        &icp_root,
     )?;
     timings.build_all = build_started_at.elapsed();
 
@@ -298,19 +305,23 @@ fn run_canic_build_targets(
     targets: &[String],
     build_profile: Option<CanisterBuildProfile>,
     config_path: &Path,
+    icp_root: &Path,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let _env = BuildEnvGuard::apply(network, config_path);
+    let _env = BuildEnvGuard::apply(network, config_path, icp_root);
     let profile = build_profile.unwrap_or_else(CanisterBuildProfile::current);
     if let Some(context) = current_workspace_build_context_once(profile)? {
         for line in context.lines() {
             println!("{line}");
         }
         println!("config: {}", config_path.display());
-        println!("artifacts: {}", planned_build_artifact_root()?.display());
+        println!(
+            "artifacts: {}",
+            planned_build_artifact_root(icp_root).display()
+        );
         println!();
     }
 
-    fs::create_dir_all(planned_build_artifact_root()?)?;
+    fs::create_dir_all(planned_build_artifact_root(icp_root))?;
     println!("Building {} canisters", targets.len());
     println!();
     let headers = ["CANISTER", "PROGRESS", "WASM_GZ", "ELAPSED"];
@@ -355,8 +366,8 @@ fn run_canic_build_targets(
     Ok(())
 }
 
-fn planned_build_artifact_root() -> Result<PathBuf, Box<dyn std::error::Error>> {
-    Ok(icp_root()?.join(".icp/local/canisters"))
+fn planned_build_artifact_root(icp_root: &Path) -> PathBuf {
+    icp_root.join(".icp/local/canisters")
 }
 
 fn wasm_gz_size(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
@@ -366,16 +377,19 @@ fn wasm_gz_size(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
 struct BuildEnvGuard {
     previous_network: Option<OsString>,
     previous_config_path: Option<OsString>,
+    previous_icp_root: Option<OsString>,
 }
 
 impl BuildEnvGuard {
-    fn apply(network: &str, config_path: &Path) -> Self {
+    fn apply(network: &str, config_path: &Path, icp_root: &Path) -> Self {
         let guard = Self {
             previous_network: env::var_os("ICP_ENVIRONMENT"),
             previous_config_path: env::var_os("CANIC_CONFIG_PATH"),
+            previous_icp_root: env::var_os("CANIC_ICP_ROOT"),
         };
         set_env("ICP_ENVIRONMENT", network);
         set_env("CANIC_CONFIG_PATH", config_path);
+        set_env("CANIC_ICP_ROOT", icp_root);
         guard
     }
 }
@@ -384,6 +398,7 @@ impl Drop for BuildEnvGuard {
     fn drop(&mut self) {
         restore_env("ICP_ENVIRONMENT", self.previous_network.take());
         restore_env("CANIC_CONFIG_PATH", self.previous_config_path.take());
+        restore_env("CANIC_ICP_ROOT", self.previous_icp_root.take());
     }
 }
 

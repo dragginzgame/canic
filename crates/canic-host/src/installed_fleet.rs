@@ -1,10 +1,12 @@
 use crate::{
     icp::{IcpCli, IcpCommandError},
-    install_root::{InstallState, read_named_fleet_install_state},
+    install_root::{
+        InstallState, read_named_fleet_install_state, read_named_fleet_install_state_from_root,
+    },
     registry::{RegistryEntry, RegistryParseError, parse_registry_entries},
     replica_query,
 };
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, path::Path};
 use thiserror::Error as ThisError;
 
 ///
@@ -101,6 +103,25 @@ pub fn resolve_installed_fleet(
 ) -> Result<InstalledFleetResolution, InstalledFleetError> {
     let state = read_installed_fleet_state(&request.network, &request.fleet)?;
     let (source, registry_json) = query_registry(request, &state.root_canister_id)?;
+    installed_fleet_resolution(request, state, source, registry_json)
+}
+
+pub fn resolve_installed_fleet_from_root(
+    request: &InstalledFleetRequest,
+    icp_root: &Path,
+) -> Result<InstalledFleetResolution, InstalledFleetError> {
+    let state = read_installed_fleet_state_from_root(&request.network, &request.fleet, icp_root)?;
+    let (source, registry_json) =
+        query_registry_from_root(request, &state.root_canister_id, icp_root)?;
+    installed_fleet_resolution(request, state, source, registry_json)
+}
+
+fn installed_fleet_resolution(
+    _request: &InstalledFleetRequest,
+    state: InstallState,
+    source: InstalledFleetSource,
+    registry_json: String,
+) -> Result<InstalledFleetResolution, InstalledFleetError> {
     let entries = parse_registry_entries(&registry_json)?;
     let registry = InstalledFleetRegistry {
         root_canister_id: state.root_canister_id.clone(),
@@ -120,6 +141,19 @@ pub fn read_installed_fleet_state(
     fleet: &str,
 ) -> Result<InstallState, InstalledFleetError> {
     read_named_fleet_install_state(network, fleet)
+        .map_err(|err| InstalledFleetError::InstallState(err.to_string()))?
+        .ok_or_else(|| InstalledFleetError::NoInstalledFleet {
+            network: network.to_string(),
+            fleet: fleet.to_string(),
+        })
+}
+
+pub fn read_installed_fleet_state_from_root(
+    network: &str,
+    fleet: &str,
+    icp_root: &Path,
+) -> Result<InstallState, InstalledFleetError> {
+    read_named_fleet_install_state_from_root(icp_root, network, fleet)
         .map_err(|err| InstalledFleetError::InstallState(err.to_string()))?
         .ok_or_else(|| InstalledFleetError::NoInstalledFleet {
             network: network.to_string(),
@@ -165,6 +199,24 @@ fn query_registry(
         .canister_call_output(root, "canic_subnet_registry", Some("json"))
         .map(|registry| (InstalledFleetSource::IcpCli, registry))
         .map_err(installed_fleet_icp_error)
+}
+
+fn query_registry_from_root(
+    request: &InstalledFleetRequest,
+    root: &str,
+    icp_root: &Path,
+) -> Result<(InstalledFleetSource, String), InstalledFleetError> {
+    if replica_query::should_use_local_replica_query(Some(&request.network)) {
+        return replica_query::query_subnet_registry_json_from_root(
+            Some(&request.network),
+            root,
+            icp_root,
+        )
+        .map(|registry| (InstalledFleetSource::LocalReplica, registry))
+        .map_err(|err| local_registry_error(request, root, err.to_string()));
+    }
+
+    query_registry(request, root)
 }
 
 fn local_registry_error(

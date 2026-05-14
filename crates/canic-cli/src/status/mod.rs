@@ -7,11 +7,14 @@ use crate::{
 };
 use canic_host::{
     icp::IcpCli,
-    icp_config::{DEFAULT_LOCAL_GATEWAY_PORT, configured_local_gateway_port},
+    icp_config::{
+        DEFAULT_LOCAL_GATEWAY_PORT, configured_local_gateway_port_from_root,
+        resolve_current_canic_icp_root,
+    },
     install_root::discover_current_canic_config_choices,
     installed_fleet::{
-        InstalledFleetError, InstalledFleetRequest, read_installed_fleet_state,
-        resolve_installed_fleet,
+        InstalledFleetError, InstalledFleetRequest, read_installed_fleet_state_from_root,
+        resolve_installed_fleet_from_root,
     },
     registry::RegistryEntry,
     release_set::{
@@ -131,21 +134,31 @@ impl StatusOptions {
 
 fn load_status_report(options: &StatusOptions) -> Result<StatusReport, StatusCommandError> {
     let workspace_root = workspace_root()?;
+    let icp_root = resolve_current_canic_icp_root(None)
+        .map_err(|err| StatusCommandError::Host(Box::new(err)))?;
     let choices = discover_current_canic_config_choices()?;
     let icp_cli = load_icp_cli_version(options);
-    let replica = load_replica_status(options);
+    let replica = load_replica_status(options, &icp_root);
     let verify_local_roots =
         options.network == local_network() && matches!(replica, ReplicaStatus::Running);
     let mut fleets = choices
         .iter()
-        .map(|path| status_fleet_row(&workspace_root, path, options, verify_local_roots))
+        .map(|path| {
+            status_fleet_row(
+                &workspace_root,
+                &icp_root,
+                path,
+                options,
+                verify_local_roots,
+            )
+        })
         .collect::<Vec<_>>();
     fleets.sort_by(|left, right| left.fleet.cmp(&right.fleet));
 
     Ok(StatusReport {
         network: options.network.clone(),
         replica,
-        replica_port: load_replica_port(),
+        replica_port: load_replica_port(&icp_root),
         icp_cli,
         fleets,
     })
@@ -158,22 +171,23 @@ fn load_icp_cli_version(options: &StatusOptions) -> String {
     }
 }
 
-fn load_replica_status(options: &StatusOptions) -> ReplicaStatus {
-    match IcpCli::new(&options.icp, None, None).local_replica_project_running(false) {
+fn load_replica_status(options: &StatusOptions, icp_root: &Path) -> ReplicaStatus {
+    match IcpCli::new(&options.icp, None, None).local_replica_project_running_in(icp_root, false) {
         Ok(true) => ReplicaStatus::Running,
         Ok(false) => ReplicaStatus::Stopped,
         Err(err) => ReplicaStatus::Error(err.to_string()),
     }
 }
 
-fn load_replica_port() -> String {
-    configured_local_gateway_port()
+fn load_replica_port(icp_root: &Path) -> String {
+    configured_local_gateway_port_from_root(icp_root)
         .unwrap_or(DEFAULT_LOCAL_GATEWAY_PORT)
         .to_string()
 }
 
 fn status_fleet_row(
     workspace_root: &Path,
+    icp_root: &Path,
     path: &Path,
     options: &StatusOptions,
     verify_local_root: bool,
@@ -187,7 +201,7 @@ fn status_fleet_row(
             root: "-".to_string(),
         };
     };
-    let install_state = read_installed_fleet_state(&options.network, &fleet);
+    let install_state = read_installed_fleet_state_from_root(&options.network, &fleet, icp_root);
     let configured_roles = configured_fleet_roles(path);
     let bootstrap_roles = configured_bootstrap_roles(path);
     let (deployed, root) = match install_state {
@@ -196,6 +210,7 @@ fn status_fleet_row(
                 &fleet,
                 &options.network,
                 &options.icp,
+                icp_root,
                 &state.root_canister_id,
                 verify_local_root,
                 bootstrap_roles.as_deref().unwrap_or(&[]),
@@ -220,6 +235,7 @@ fn deployed_label(
     fleet: &str,
     network: &str,
     icp: &str,
+    icp_root: &Path,
     root: &str,
     verify_local_root: bool,
     configured_roles: &[String],
@@ -231,12 +247,15 @@ fn deployed_label(
         return "unknown".to_string();
     }
 
-    match resolve_installed_fleet(&InstalledFleetRequest {
-        fleet: fleet.to_string(),
-        network: network.to_string(),
-        icp: icp.to_string(),
-        detect_lost_local_root: true,
-    }) {
+    match resolve_installed_fleet_from_root(
+        &InstalledFleetRequest {
+            fleet: fleet.to_string(),
+            network: network.to_string(),
+            icp: icp.to_string(),
+            detect_lost_local_root: true,
+        },
+        icp_root,
+    ) {
         Ok(resolution) if resolution.state.root_canister_id == root => {
             classify_local_deployment(configured_roles, &resolution.registry.entries).to_string()
         }

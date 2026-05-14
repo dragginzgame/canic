@@ -11,13 +11,17 @@ use crate::{
 use canic_host::{
     icp::{IcpCli, IcpCommandError},
     icp_config::{
-        DEFAULT_LOCAL_GATEWAY_PORT, IcpConfigError, configured_local_gateway_port,
-        set_configured_local_gateway_port, sync_canic_icp_yaml_with_fleet_root,
+        DEFAULT_LOCAL_GATEWAY_PORT, IcpConfigError, configured_local_gateway_port_from_root,
+        resolve_current_canic_icp_root, set_configured_local_gateway_port_in_root,
+        sync_canic_icp_yaml_with_fleet_root,
     },
 };
 use clap::Command as ClapCommand;
 use serde::Serialize;
-use std::{ffi::OsString, path::PathBuf};
+use std::{
+    ffi::OsString,
+    path::{Path, PathBuf},
+};
 use thiserror::Error as ThisError;
 
 const REPLICA_HELP_AFTER: &str = "\
@@ -198,35 +202,37 @@ where
     }
 
     let options = ReplicaOptions::parse_start(args)?;
-    sync_replica_project_config(options.fleets_dir.as_deref())?;
-    ensure_replica_port_config()?;
+    let icp_root = sync_replica_project_config(options.fleets_dir.as_deref())?;
+    ensure_replica_port_config(&icp_root)?;
     let icp = IcpCli::new(options.icp, None, None);
     if icp
-        .local_replica_project_running(options.debug)
+        .local_replica_project_running_in(&icp_root, options.debug)
         .map_err(replica_icp_error)?
     {
         if let Some(requested) = options.port {
-            let current = configured_local_gateway_port().unwrap_or(DEFAULT_LOCAL_GATEWAY_PORT);
+            let current = configured_local_gateway_port_from_root(&icp_root)
+                .unwrap_or(DEFAULT_LOCAL_GATEWAY_PORT);
             if current != requested {
                 return Err(ReplicaCommandError::PortChangeRequiresStopped { current, requested });
             }
         }
         println!(
             "Replica already running: local (port {})",
-            replica_port_label()
+            replica_port_label(&icp_root)
         );
         return Ok(());
     }
     if let Some(port) = options.port {
-        let path = set_configured_local_gateway_port(port)?;
+        let path = set_configured_local_gateway_port_in_root(&icp_root, port)?;
         println!("Replica port configured: {port} ({})", path.display());
     } else {
-        let port = configured_local_gateway_port().unwrap_or(DEFAULT_LOCAL_GATEWAY_PORT);
-        set_configured_local_gateway_port(port)?;
+        let port = configured_local_gateway_port_from_root(&icp_root)
+            .unwrap_or(DEFAULT_LOCAL_GATEWAY_PORT);
+        set_configured_local_gateway_port_in_root(&icp_root, port)?;
     }
 
     let output = icp
-        .local_replica_start(options.background, options.debug)
+        .local_replica_start_in(&icp_root, options.background, options.debug)
         .map_err(replica_icp_error)?;
     print_command_output(&output);
     if options.background {
@@ -245,12 +251,13 @@ where
     }
 
     let options = ReplicaOptions::parse_status(args)?;
-    let port = replica_port_label();
+    let icp_root = resolve_current_canic_icp_root(None)?;
+    let port = replica_port_label(&icp_root);
     let icp = IcpCli::new(options.icp, None, None);
     if options.json {
-        return run_status_json(&icp, &port, options.debug);
+        return run_status_json(&icp, &icp_root, &port, options.debug);
     }
-    match icp.local_replica_status(options.debug) {
+    match icp.local_replica_status_in(&icp_root, options.debug) {
         Ok(output) => {
             println!("Replica: running (local, port {port})");
             print_command_output(&output);
@@ -263,8 +270,13 @@ where
     Ok(())
 }
 
-fn run_status_json(icp: &IcpCli, port: &str, debug: bool) -> Result<(), ReplicaCommandError> {
-    let report = match icp.local_replica_status_json(debug) {
+fn run_status_json(
+    icp: &IcpCli,
+    icp_root: &Path,
+    port: &str,
+    debug: bool,
+) -> Result<(), ReplicaCommandError> {
+    let report = match icp.local_replica_status_json_in(icp_root, debug) {
         Ok(status) => ReplicaStatusJsonReport {
             network: "local",
             running: true,
@@ -293,15 +305,18 @@ where
     }
 
     let options = ReplicaOptions::parse_stop(args)?;
+    let icp_root = resolve_current_canic_icp_root(None)?;
     let icp = IcpCli::new(options.icp, None, None);
-    match icp.local_replica_stop(options.debug) {
+    match icp.local_replica_stop_in(&icp_root, options.debug) {
         Ok(output) => {
             print_command_output(&output);
             println!("Replica stopped: local");
         }
         Err(error) if local_network_not_running(&error) => {
             if icp.local_replica_ping(options.debug).unwrap_or(false) {
-                if let Some(owner) = probe_reachable_local_replica_owner(&icp, options.debug) {
+                if let Some(owner) =
+                    probe_reachable_local_replica_owner(&icp, &icp_root, options.debug)
+                {
                     return Err(ReplicaCommandError::ForeignLocalReplicaOwner {
                         network: owner.network,
                         project: owner.project,
@@ -318,17 +333,18 @@ where
 
 fn sync_replica_project_config(
     fleets_dir: Option<&std::path::Path>,
-) -> Result<(), ReplicaCommandError> {
+) -> Result<PathBuf, ReplicaCommandError> {
     let report = sync_canic_icp_yaml_with_fleet_root(None, fleets_dir)?;
     if report.changed {
         println!("Replica project config synced: {}", report.path.display());
     }
-    Ok(())
+    Ok(report.icp_root)
 }
 
-fn ensure_replica_port_config() -> Result<(), ReplicaCommandError> {
-    let port = configured_local_gateway_port().unwrap_or(DEFAULT_LOCAL_GATEWAY_PORT);
-    set_configured_local_gateway_port(port)?;
+fn ensure_replica_port_config(icp_root: &Path) -> Result<(), ReplicaCommandError> {
+    let port =
+        configured_local_gateway_port_from_root(icp_root).unwrap_or(DEFAULT_LOCAL_GATEWAY_PORT);
+    set_configured_local_gateway_port_in_root(icp_root, port)?;
     Ok(())
 }
 
@@ -351,8 +367,8 @@ fn parse_port_option(matches: &clap::ArgMatches) -> Result<Option<u16>, ReplicaC
     Ok(Some(port))
 }
 
-fn replica_port_label() -> String {
-    configured_local_gateway_port()
+fn replica_port_label(icp_root: &Path) -> String {
+    configured_local_gateway_port_from_root(icp_root)
         .unwrap_or(DEFAULT_LOCAL_GATEWAY_PORT)
         .to_string()
 }
@@ -399,8 +415,12 @@ fn local_network_not_running(error: &IcpCommandError) -> bool {
     )
 }
 
-fn probe_reachable_local_replica_owner(icp: &IcpCli, debug: bool) -> Option<LocalReplicaOwner> {
-    match icp.local_replica_start(true, debug) {
+fn probe_reachable_local_replica_owner(
+    icp: &IcpCli,
+    icp_root: &Path,
+    debug: bool,
+) -> Option<LocalReplicaOwner> {
+    match icp.local_replica_start_in(icp_root, true, debug) {
         Err(IcpCommandError::Failed { stderr, .. }) => extract_foreign_local_owner(&stderr),
         Err(_) | Ok(_) => None,
     }

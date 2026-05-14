@@ -110,6 +110,7 @@ fn local_deployed_label_is_unknown_without_replica_verification() {
             "demo",
             "local",
             "icp",
+            std::path::Path::new("."),
             "aaaaa-aa",
             false,
             &["root".to_string()]
@@ -121,6 +122,7 @@ fn local_deployed_label_is_unknown_without_replica_verification() {
             "demo",
             "ic",
             "icp",
+            std::path::Path::new("."),
             "aaaaa-aa",
             false,
             &["root".to_string()]

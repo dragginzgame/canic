@@ -100,6 +100,9 @@ and `canic replica status` show the configured local gateway port; use
 `canic replica start --port <port>` to update this project's `icp.yaml`
 `gateway.port` before starting. Use `canic replica status --json` when scripts
 need the structured ICP CLI local-network status payload.
+When fleet configs live under `backend/fleets/`, Canic treats `backend/` as
+the ICP project root for replica, status, and install commands even if the
+command is launched from the repository root.
 For split repos with fleet configs outside `fleets/` or `backend/fleets/`, pass
 `--fleets-dir <dir>` to `canic replica start` / `canic fleet sync`, or set
 `CANIC_FLEETS_ROOT=<dir>` in the shell environment. The directory is not stored

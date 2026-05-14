@@ -50,6 +50,15 @@ pub fn read_named_fleet_install_state(
     read_fleet_install_state(&icp_root, network, fleet)
 }
 
+/// Read a named fleet state for an explicit ICP project root.
+pub fn read_named_fleet_install_state_from_root(
+    icp_root: &Path,
+    network: &str,
+    fleet: &str,
+) -> Result<Option<InstallState>, Box<dyn std::error::Error>> {
+    read_fleet_install_state(icp_root, network, fleet)
+}
+
 /// Return the project-local state path for one named fleet.
 #[must_use]
 pub(super) fn fleet_install_state_path(icp_root: &Path, network: &str, fleet: &str) -> PathBuf {

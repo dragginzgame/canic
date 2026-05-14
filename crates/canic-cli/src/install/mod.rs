@@ -6,9 +6,10 @@ use crate::{
     version_text,
 };
 use canic_host::canister_build::CanisterBuildProfile;
+use canic_host::icp_config::resolve_current_canic_icp_root;
 use canic_host::install_root::{InstallRootOptions, install_root};
 use clap::Command as ClapCommand;
-use std::ffi::OsString;
+use std::{ffi::OsString, path::PathBuf};
 use thiserror::Error as ThisError;
 
 const DEFAULT_ROOT_TARGET: &str = "root";
@@ -68,14 +69,29 @@ impl InstallOptions {
     }
 
     #[must_use]
+    #[cfg(test)]
     pub fn into_install_root_options(self) -> InstallRootOptions {
+        self.into_install_root_options_with_icp_root(None)
+    }
+
+    pub fn into_install_root_options_with_icp_root(
+        self,
+        icp_root: Option<PathBuf>,
+    ) -> InstallRootOptions {
+        let config_path = icp_root
+            .as_deref()
+            .map(|root| root.join(default_fleet_config_path(&self.fleet)))
+            .filter(|path| path.is_file())
+            .map(|path| path.display().to_string())
+            .unwrap_or_else(|| default_fleet_config_path(&self.fleet));
         InstallRootOptions {
             root_canister: DEFAULT_ROOT_TARGET.to_string(),
             root_build_target: DEFAULT_ROOT_TARGET.to_string(),
             network: self.network,
+            icp_root,
             build_profile: self.profile,
             ready_timeout_seconds: DEFAULT_READY_TIMEOUT_SECONDS,
-            config_path: Some(default_fleet_config_path(&self.fleet)),
+            config_path: Some(config_path),
             expected_fleet: Some(self.fleet),
             interactive_config_selection: false,
         }
@@ -116,7 +132,9 @@ where
     }
 
     let options = InstallOptions::parse(args)?;
-    install_root(options.into_install_root_options()).map_err(InstallCommandError::from)
+    let icp_root = resolve_current_canic_icp_root(None).ok();
+    install_root(options.into_install_root_options_with_icp_root(icp_root))
+        .map_err(InstallCommandError::from)
 }
 
 fn default_fleet_config_path(fleet: &str) -> String {
