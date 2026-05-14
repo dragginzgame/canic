@@ -103,6 +103,7 @@ pub fn install_root(options: InstallRootOptions) -> Result<(), Box<dyn std::erro
         options.config_path.as_deref(),
         options.interactive_config_selection,
     )?;
+    let _install_env = BuildEnvGuard::apply(&options.network, &config_path, &icp_root);
     let fleet_name = configured_fleet_name(&config_path)?;
     validate_expected_fleet_name(options.expected_fleet.as_deref(), &fleet_name, &config_path)?;
     validate_fleet_name(&fleet_name)?;
@@ -113,7 +114,7 @@ pub fn install_root(options: InstallRootOptions) -> Result<(), Box<dyn std::erro
 
     println!("Installing fleet {fleet_name}");
     println!();
-    ensure_icp_environment_ready(&options.network)?;
+    ensure_icp_environment_ready(&icp_root, &options.network)?;
     let create_started_at = Instant::now();
     if Principal::from_text(&options.root_canister).is_err() {
         let mut create = icp_canister_command_in_network(&icp_root);
@@ -505,8 +506,11 @@ fn progress_bar(current: usize, total: usize, width: usize) -> String {
 }
 
 // Ensure the requested replica is reachable before the local install flow begins.
-fn ensure_icp_environment_ready(network: &str) -> Result<(), Box<dyn std::error::Error>> {
-    if icp_ping(network)? {
+fn ensure_icp_environment_ready(
+    icp_root: &Path,
+    network: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    if icp_ping(icp_root, network)? {
         return Ok(());
     }
 
@@ -517,8 +521,8 @@ fn ensure_icp_environment_ready(network: &str) -> Result<(), Box<dyn std::error:
 }
 
 // Check whether `icp network ping <network>` currently succeeds.
-fn icp_ping(network: &str) -> Result<bool, Box<dyn std::error::Error>> {
-    Ok(icp::default_command()
+fn icp_ping(icp_root: &Path, network: &str) -> Result<bool, Box<dyn std::error::Error>> {
+    Ok(icp::default_command_in(icp_root)
         .args(["network", "ping", network])
         .output()?
         .status
