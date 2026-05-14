@@ -1,9 +1,12 @@
 use crate::{
-    cli::clap::{flag_arg, parse_matches, path_option},
+    cli::clap::{flag_arg, parse_matches},
     cli::help::print_help_or_version,
     version_text,
 };
-use canic_host::icp_config::{IcpConfigError, sync_canic_icp_yaml};
+use canic_host::{
+    icp_config::{IcpConfigError, sync_canic_icp_yaml},
+    install_root::current_canic_project_root,
+};
 use clap::{Arg, Command as ClapCommand};
 use std::{
     ffi::OsString,
@@ -47,7 +50,8 @@ pub enum ScaffoldCommandError {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ScaffoldOptions {
     pub name: String,
-    pub fleets_dir: PathBuf,
+    #[cfg(test)]
+    pub project_root: Option<PathBuf>,
     pub yes: bool,
 }
 
@@ -75,7 +79,8 @@ impl ScaffoldOptions {
                 .get_one::<String>("name")
                 .expect("clap requires name")
                 .clone(),
-            fleets_dir: path_option(&matches, "dir").unwrap_or_else(|| PathBuf::from("fleets")),
+            #[cfg(test)]
+            project_root: None,
             yes: matches.get_flag("yes"),
         })
     }
@@ -127,7 +132,9 @@ pub struct ScaffoldResult {
 
 /// Create a minimal root plus app canister fleet scaffold.
 pub fn scaffold_project(options: &ScaffoldOptions) -> Result<ScaffoldResult, ScaffoldCommandError> {
-    let project_dir = options.fleets_dir.join(&options.name);
+    let project_dir = scaffold_project_root(options)?
+        .join("fleets")
+        .join(&options.name);
     if project_dir.exists() {
         return Err(ScaffoldCommandError::TargetExists(
             project_dir.display().to_string(),
@@ -174,13 +181,6 @@ fn fleet_create_command() -> ClapCommand {
                 .help("Snake-case fleet name to create"),
         )
         .arg(
-            Arg::new("dir")
-                .long("dir")
-                .value_name("dir")
-                .num_args(1)
-                .help("Fleets directory to create under; defaults to fleets"),
-        )
-        .arg(
             flag_arg("yes")
                 .long("yes")
                 .short('y')
@@ -203,7 +203,9 @@ where
     R: BufRead,
     W: Write,
 {
-    let project_dir = options.fleets_dir.join(&options.name);
+    let project_dir = scaffold_project_root(options)?
+        .join("fleets")
+        .join(&options.name);
     if project_dir.exists() {
         return Err(ScaffoldCommandError::TargetExists(
             project_dir.display().to_string(),
@@ -224,6 +226,18 @@ where
     }
 
     Err(ScaffoldCommandError::Cancelled)
+}
+
+fn scaffold_project_root(options: &ScaffoldOptions) -> Result<PathBuf, ScaffoldCommandError> {
+    #[cfg(not(test))]
+    let _ = options;
+
+    #[cfg(test)]
+    if let Some(root) = &options.project_root {
+        return Ok(root.clone());
+    }
+
+    current_canic_project_root().map_err(|err| ScaffoldCommandError::Usage(err.to_string()))
 }
 
 fn parse_project_name(name: &str) -> Result<String, String> {

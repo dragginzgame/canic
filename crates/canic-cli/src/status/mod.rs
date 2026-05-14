@@ -11,7 +11,7 @@ use canic_host::{
         DEFAULT_LOCAL_GATEWAY_PORT, configured_local_gateway_port_from_root,
         resolve_current_canic_icp_root,
     },
-    install_root::discover_current_canic_config_choices,
+    install_root::discover_project_canic_config_choices,
     installed_fleet::{
         InstalledFleetError, InstalledFleetRequest, read_installed_fleet_state_from_root,
         resolve_installed_fleet_from_root,
@@ -19,7 +19,7 @@ use canic_host::{
     registry::RegistryEntry,
     release_set::{
         configured_bootstrap_roles, configured_fleet_name, configured_fleet_roles,
-        display_workspace_path, workspace_root,
+        display_workspace_path,
     },
     replica_query,
     table::{ColumnAlign, render_table},
@@ -135,10 +135,9 @@ impl StatusOptions {
 }
 
 fn load_status_report(options: &StatusOptions) -> Result<StatusReport, StatusCommandError> {
-    let workspace_root = workspace_root()?;
-    let icp_root = resolve_current_canic_icp_root(None)
-        .map_err(|err| StatusCommandError::Host(Box::new(err)))?;
-    let choices = discover_current_canic_config_choices()?;
+    let icp_root =
+        resolve_current_canic_icp_root().map_err(|err| StatusCommandError::Host(Box::new(err)))?;
+    let choices = discover_project_canic_config_choices(&icp_root)?;
     let icp_cli = load_icp_cli_version(options);
     let replica = load_replica_status(options, &icp_root);
     let verify_local_roots = options.network == local_network()
@@ -148,15 +147,7 @@ fn load_status_report(options: &StatusOptions) -> Result<StatusReport, StatusCom
         );
     let mut fleets = choices
         .iter()
-        .map(|path| {
-            status_fleet_row(
-                &workspace_root,
-                &icp_root,
-                path,
-                options,
-                verify_local_roots,
-            )
-        })
+        .map(|path| status_fleet_row(&icp_root, &icp_root, path, options, verify_local_roots))
         .collect::<Vec<_>>();
     fleets.sort_by(|left, right| left.fleet.cmp(&right.fleet));
 

@@ -23,7 +23,7 @@ pub(super) const MODULE_HEADER: &str = "MODULE";
 pub(super) const MODULE_HASH_HEADER: &str = "MODULE_HASH";
 pub(super) const READY_HEADER: &str = "READY";
 pub(super) const CANIC_HEADER: &str = "CANIC";
-pub(super) const WASM_HEADER: &str = "WASM_GZ";
+pub(super) const WASM_HEADER: &str = "WASM";
 pub(super) const CYCLES_HEADER: &str = "CYCLES";
 const CONFIG_HEADERS: [&str; 6] = [
     ROLE_HEADER,

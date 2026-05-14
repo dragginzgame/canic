@@ -1,9 +1,8 @@
 use crate::{
     install_root::{
-        CANIC_FLEETS_ROOT_ENV, discover_project_canic_config_choices_with_root,
-        project_fleet_roots_with_override,
+        current_canic_project_root, discover_project_canic_config_choices, project_fleet_roots,
     },
-    release_set::{configured_fleet_name, configured_fleet_roles, icp_root, workspace_root},
+    release_set::{configured_fleet_name, configured_fleet_roles, icp_root},
     workspace_discovery::discover_icp_root_from,
 };
 use std::{
@@ -106,29 +105,14 @@ pub fn set_configured_local_gateway_port_in_root(
 pub fn sync_canic_icp_yaml(
     fleet_filter: Option<&str>,
 ) -> Result<IcpProjectSyncReport, IcpConfigError> {
-    sync_canic_icp_yaml_with_fleet_root(fleet_filter, None)
-}
-
-/// Reconcile Canic-managed `icp.yaml` sections using an explicit fleet config root.
-pub fn sync_canic_icp_yaml_with_fleet_root(
-    fleet_filter: Option<&str>,
-    fleet_root_override: Option<&Path>,
-) -> Result<IcpProjectSyncReport, IcpConfigError> {
-    let search_root = current_project_search_root()?;
-    let normalized_fleet_root_override =
-        fleet_root_override.map(|path| normalize_project_path(&search_root, path));
-    let root = resolve_current_canic_icp_root(normalized_fleet_root_override.as_deref())?;
+    let root = resolve_current_canic_icp_root()?;
     let path = root.join(ICP_CONFIG_FILE);
     let source = match fs::read_to_string(&path) {
         Ok(source) => source,
         Err(err) if err.kind() == ErrorKind::NotFound => String::new(),
         Err(err) => return Err(err.into()),
     };
-    let spec = discover_project_spec(
-        &root,
-        fleet_filter,
-        normalized_fleet_root_override.as_deref(),
-    )?;
+    let spec = discover_project_spec(&root, fleet_filter)?;
     let updated = sync_canic_sections(&source, &spec.canisters, &spec.environments);
     let changed = updated != source;
     if changed {
@@ -150,9 +134,7 @@ fn current_icp_root() -> Result<PathBuf, IcpConfigError> {
 }
 
 /// Resolve the ICP project root implied by the current Canic fleet layout.
-pub fn resolve_current_canic_icp_root(
-    fleet_root_override: Option<&Path>,
-) -> Result<PathBuf, IcpConfigError> {
+pub fn resolve_current_canic_icp_root() -> Result<PathBuf, IcpConfigError> {
     if let Ok(path) = std::env::var("CANIC_ICP_ROOT") {
         return PathBuf::from(path)
             .canonicalize()
@@ -160,57 +142,34 @@ pub fn resolve_current_canic_icp_root(
     }
 
     let search_root = current_project_search_root()?;
-    let choices =
-        discover_project_canic_config_choices_with_root(&search_root, fleet_root_override)
-            .map_err(|err| IcpConfigError::Config(err.to_string()))?;
-    let mut roots = choices
-        .iter()
-        .filter_map(|path| icp_root_from_canic_config(path, &search_root))
-        .collect::<BTreeSet<_>>();
-
-    match roots.len() {
-        0 => current_icp_root().or_else(|_| {
-            icp_root()
-                .map_err(|err| IcpConfigError::Config(err.to_string()))
-                .and_then(|path| path.canonicalize().map_err(IcpConfigError::from))
-        }),
-        1 => Ok(roots.pop_first().expect("one root is present")),
-        _ => Err(IcpConfigError::Config(format!(
-            "Canic fleet configs resolve to multiple ICP project roots: {}",
-            roots
-                .into_iter()
-                .map(|path| path.display().to_string())
-                .collect::<Vec<_>>()
-                .join(", ")
-        ))),
+    let choices = discover_project_canic_config_choices(&search_root)
+        .map_err(|err| IcpConfigError::Config(err.to_string()))?;
+    if !choices.is_empty() {
+        return Ok(search_root);
     }
+
+    current_icp_root().or_else(|_| {
+        icp_root()
+            .map_err(|err| IcpConfigError::Config(err.to_string()))
+            .and_then(|path| path.canonicalize().map_err(IcpConfigError::from))
+    })
 }
 
 fn current_project_search_root() -> Result<PathBuf, IcpConfigError> {
-    if let Ok(root) = workspace_root() {
+    let root = current_canic_project_root()
+        .map_err(|err| IcpConfigError::Config(err.to_string()))?
+        .canonicalize()?;
+    if !discover_project_canic_config_choices(&root)
+        .map_err(|err| IcpConfigError::Config(err.to_string()))?
+        .is_empty()
+    {
         return Ok(root);
     }
+
     if let Ok(root) = icp_root() {
         return Ok(root);
     }
     Ok(std::env::current_dir()?.canonicalize()?)
-}
-
-fn icp_root_from_canic_config(config_path: &Path, fallback_root: &Path) -> Option<PathBuf> {
-    let fleet_dir = config_path.parent()?;
-    let fleet_root = fleet_dir.parent()?;
-    if fleet_root.file_name().and_then(|name| name.to_str()) == Some("fleets") {
-        return fleet_root.parent()?.canonicalize().ok();
-    }
-    fallback_root.canonicalize().ok()
-}
-
-fn normalize_project_path(project_root: &Path, path: &Path) -> PathBuf {
-    if path.is_absolute() {
-        path.to_path_buf()
-    } else {
-        project_root.join(path)
-    }
 }
 
 ///
@@ -226,14 +185,13 @@ struct CanicIcpSpec {
 fn discover_project_spec(
     root: &Path,
     fleet_filter: Option<&str>,
-    fleet_root_override: Option<&Path>,
 ) -> Result<CanicIcpSpec, IcpConfigError> {
-    let choices = discover_project_canic_config_choices_with_root(root, fleet_root_override)
+    let choices = discover_project_canic_config_choices(root)
         .map_err(|err| IcpConfigError::Config(err.to_string()))?;
     if choices.is_empty() {
         return Err(IcpConfigError::Config(format!(
-            "no Canic fleet configs found under {}\nCreate fleets/<fleet>/canic.toml or backend/fleets/<fleet>/canic.toml, then rerun `canic replica start` or `canic fleet sync --fleet <fleet>`.",
-            display_project_fleet_roots(root, fleet_root_override)
+            "no Canic fleet configs found under {}\nCreate fleets/<fleet>/canic.toml, then rerun `canic replica start` or `canic fleet sync --fleet <fleet>`.",
+            display_project_fleet_roots(root)
         )));
     }
 
@@ -264,7 +222,7 @@ fn discover_project_spec(
     {
         return Err(IcpConfigError::Config(format!(
             "no Canic fleet config found for {fleet}\nExpected a config under {} with `[fleet].name = \"{fleet}\"`.",
-            display_project_fleet_roots(root, fleet_root_override)
+            display_project_fleet_roots(root)
         )));
     }
 
@@ -274,15 +232,12 @@ fn discover_project_spec(
     })
 }
 
-fn display_project_fleet_roots(root: &Path, fleet_root_override: Option<&Path>) -> String {
-    let roots = project_fleet_roots_with_override(root, fleet_root_override)
+fn display_project_fleet_roots(root: &Path) -> String {
+    project_fleet_roots(root)
         .into_iter()
         .map(|path| path.display().to_string())
         .collect::<Vec<_>>()
-        .join(" or ");
-    format!(
-        "{roots}\nUse `--fleets-dir <dir>` or {CANIC_FLEETS_ROOT_ENV}=<dir> for a different layout."
-    )
+        .join(" or ")
 }
 
 fn sync_canic_sections(
@@ -596,9 +551,9 @@ mod tests {
     }
 
     #[test]
-    fn discovers_split_source_fleet_configs_for_icp_sync() {
-        let root = temp_dir("canic-icp-sync-split-source");
-        let config = root.join("backend/fleets/toko/canic.toml");
+    fn discovers_root_fleet_configs_for_icp_sync() {
+        let root = temp_dir("canic-icp-sync-root-fleets");
+        let config = root.join("fleets/toko/canic.toml");
         fs::create_dir_all(config.parent().expect("config parent")).expect("create config parent");
         fs::write(
             &config,
@@ -615,7 +570,7 @@ kind = "singleton"
         )
         .expect("write config");
 
-        let spec = discover_project_spec(&root, Some("toko"), None).expect("discover spec");
+        let spec = discover_project_spec(&root, Some("toko")).expect("discover spec");
 
         assert_eq!(spec.canisters, vec!["root", "app"]);
         assert_eq!(
@@ -629,15 +584,41 @@ kind = "singleton"
     }
 
     #[test]
-    fn derives_icp_root_from_backend_fleets_config() {
-        let root = temp_dir("canic-icp-root-backend-fleets");
-        let config = root.join("backend/fleets/toko/canic.toml");
+    fn nested_commands_discover_outer_project_root_with_fleets() {
+        let root = temp_dir("canic-icp-root-nested");
+        let config = root.join("fleets/toko/canic.toml");
+        let nested = root.join("backend/src");
+        fs::create_dir_all(&nested).expect("create nested dir");
         fs::create_dir_all(config.parent().expect("config parent")).expect("create config parent");
         fs::write(&config, "[fleet]\nname = \"toko\"\n").expect("write config");
 
-        let icp_root = icp_root_from_canic_config(&config, &root).expect("derive root");
+        let icp_root = crate::install_root::discover_canic_project_root_from(&nested)
+            .expect("discover project root")
+            .expect("project root is present");
 
-        assert_eq!(icp_root, root.join("backend"));
+        assert_eq!(icp_root, root);
+        fs::remove_dir_all(root).expect("clean temp dir");
+    }
+
+    #[test]
+    fn outer_project_root_wins_over_nested_fleets() {
+        let root = temp_dir("canic-icp-root-outer-wins");
+        let outer_config = root.join("fleets/toko/canic.toml");
+        let nested_config = root.join("services/fleets/toko/canic.toml");
+        let nested = root.join("services/src");
+        fs::create_dir_all(outer_config.parent().expect("outer config parent"))
+            .expect("create outer config parent");
+        fs::create_dir_all(nested_config.parent().expect("nested config parent"))
+            .expect("create nested config parent");
+        fs::create_dir_all(&nested).expect("create nested dir");
+        fs::write(&outer_config, "[fleet]\nname = \"toko\"\n").expect("write outer config");
+        fs::write(&nested_config, "[fleet]\nname = \"toko\"\n").expect("write nested config");
+
+        let icp_root = crate::install_root::discover_canic_project_root_from(&nested)
+            .expect("discover project root")
+            .expect("project root is present");
+
+        assert_eq!(icp_root, root);
         fs::remove_dir_all(root).expect("clean temp dir");
     }
 
@@ -646,13 +627,11 @@ kind = "singleton"
         let root = temp_dir("canic-icp-sync-missing");
         fs::create_dir_all(&root).expect("create root");
 
-        let err =
-            discover_project_spec(&root, None, None).expect_err("missing configs should fail");
+        let err = discover_project_spec(&root, None).expect_err("missing configs should fail");
         let message = err.to_string();
 
         assert!(message.contains("no Canic fleet configs found under"));
         assert!(message.contains("fleets/<fleet>/canic.toml"));
-        assert!(message.contains("backend/fleets/<fleet>/canic.toml"));
         fs::remove_dir_all(root).expect("clean temp dir");
     }
 }

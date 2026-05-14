@@ -168,11 +168,6 @@ fn maps_missing_project_manifest_error() {
     assert!(
         error
             .to_string()
-            .contains("backend/fleets/<fleet>/canic.toml")
-    );
-    assert!(
-        error
-            .to_string()
             .contains("canic fleet sync --fleet <fleet>")
     );
 }

@@ -130,7 +130,7 @@ fn renders_registry_table() {
         color_module_variants: false,
     };
     let tree = render_registry_tree(&registry, None, &columns).expect("render tree");
-    let widths = [12, 8, 27, 5, 5, 7, 6];
+    let widths = [12, 8, 27, 5, 5, 4, 6];
 
     assert_eq!(
         tree,
@@ -252,7 +252,7 @@ fn renders_selected_subtree() {
         color_module_variants: false,
     };
     let tree = render_registry_tree(&registry, Some(APP), &columns).expect("render subtree");
-    let widths = [9, 8, 27, 5, 5, 7, 6];
+    let widths = [9, 8, 27, 5, 5, 4, 6];
 
     assert_eq!(
         tree,
@@ -315,7 +315,7 @@ fn renders_list_output_with_wasm_size_and_missing_roles() {
         network: "local".to_string(),
     };
     let canic_versions = BTreeMap::from([(APP.to_string(), "0.33.6".to_string())]);
-    let wasm_sizes = BTreeMap::from([("app".to_string(), "811.20 KiB".to_string())]);
+    let wasm_sizes = BTreeMap::from([("app".to_string(), "1.52 MiB (gz 811.20 KiB)".to_string())]);
     let cycles = BTreeMap::from([(APP.to_string(), "12.35 TC".to_string())]);
     let readiness = readiness_map();
     let module_hashes = module_hash_map();
@@ -331,9 +331,10 @@ fn renders_list_output_with_wasm_size_and_missing_roles() {
     let output = render_list_output(&title, &registry, None, &columns, &["audit".to_string()])
         .expect("render list output");
 
-    assert!(output.contains("WASM_GZ"));
+    assert!(output.contains("WASM"));
     assert!(output.contains("CYCLES"));
     assert!(output.contains("0.33.6"));
+    assert!(output.contains("1.52 MiB"));
     assert!(output.contains("811.20 KiB"));
     assert!(output.contains("12.35 TC"));
     assert!(output.contains("Missing roles: audit"));

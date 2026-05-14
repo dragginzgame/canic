@@ -2,7 +2,7 @@ use crate::canister_build::{
     CanisterBuildProfile, build_current_workspace_canister_artifact,
     current_workspace_build_context_once,
 };
-use crate::format::byte_size;
+use crate::format::wasm_size_label;
 use crate::icp;
 use crate::release_set::{
     LOCAL_ROOT_MIN_READY_CYCLES, configured_fleet_name, configured_install_targets,
@@ -32,9 +32,8 @@ mod readiness;
 mod state;
 
 pub use config_selection::{
-    CANIC_FLEETS_ROOT_ENV, discover_canic_config_choices, discover_project_canic_config_choices,
-    discover_project_canic_config_choices_with_root, project_fleet_roots,
-    project_fleet_roots_with_override,
+    current_canic_project_root, discover_canic_config_choices, discover_canic_project_root_from,
+    discover_project_canic_config_choices, project_fleet_roots,
 };
 use readiness::wait_for_root_ready;
 use state::{INSTALL_STATE_SCHEMA_VERSION, validate_fleet_name, write_install_state};
@@ -88,8 +87,19 @@ struct InstallTimingSummary {
 
 /// Discover installable Canic config choices under the current workspace.
 pub fn discover_current_canic_config_choices() -> Result<Vec<PathBuf>, Box<dyn std::error::Error>> {
-    let workspace_root = workspace_root()?;
-    config_selection::discover_workspace_canic_config_choices(&workspace_root)
+    let project_root = current_canic_project_root()?;
+    let choices = config_selection::discover_workspace_canic_config_choices(&project_root)?;
+    if !choices.is_empty() {
+        return Ok(choices);
+    }
+
+    if let Ok(icp_root) = icp_root()
+        && icp_root != project_root
+    {
+        return config_selection::discover_workspace_canic_config_choices(&icp_root);
+    }
+
+    Ok(choices)
 }
 
 // Execute the local thin-root install flow against an already running replica.
@@ -100,7 +110,7 @@ pub fn install_root(options: InstallRootOptions) -> Result<(), Box<dyn std::erro
         None => icp_root()?,
     };
     let config_path = resolve_install_config_path(
-        &workspace_root,
+        &icp_root,
         options.config_path.as_deref(),
         options.interactive_config_selection,
     )?;
@@ -111,19 +121,17 @@ pub fn install_root(options: InstallRootOptions) -> Result<(), Box<dyn std::erro
     let total_started_at = Instant::now();
     let mut timings = InstallTimingSummary::default();
     let network = options.network.as_str();
-    let root_canister = options.root_canister.as_str();
 
     println!("Installing fleet {fleet_name}");
     println!();
     ensure_icp_environment_ready(&icp_root, &options.network)?;
     let create_started_at = Instant::now();
-    if Principal::from_text(&options.root_canister).is_err() {
-        let mut create = icp_canister_command_in_network(&icp_root);
-        create.args(["create", &options.root_canister, "-q"]);
-        add_local_root_create_cycles_arg(&mut create, &config_path, &options.network)?;
-        add_icp_environment_target(&mut create, &options.network);
-        run_command(&mut create)?;
-    }
+    let root_canister_id = ensure_root_canister_id(
+        &icp_root,
+        &options.network,
+        &options.root_canister,
+        &config_path,
+    )?;
     timings.create_canisters = create_started_at.elapsed();
 
     let build_targets = configured_install_targets(&config_path, &options.root_build_target)?;
@@ -150,33 +158,23 @@ pub fn install_root(options: InstallRootOptions) -> Result<(), Box<dyn std::erro
         .join(&options.root_build_target)
         .join(format!("{}.wasm", options.root_build_target));
     let install_started_at = Instant::now();
-    reinstall_root_wasm(
-        &icp_root,
-        &options.network,
-        &options.root_canister,
-        &root_wasm,
-    )?;
+    reinstall_root_wasm(&icp_root, &options.network, &root_canister_id, &root_wasm)?;
     timings.install_root = install_started_at.elapsed();
     let fund_root_started_at = Instant::now();
-    ensure_local_root_min_cycles(&icp_root, network, root_canister, "pre-bootstrap")?;
+    ensure_local_root_min_cycles(&icp_root, network, &root_canister_id, "pre-bootstrap")?;
     timings.fund_root = fund_root_started_at.elapsed();
 
     let manifest = load_root_release_set_manifest(&manifest_path)?;
     let stage_started_at = Instant::now();
-    stage_root_release_set(
-        &icp_root,
-        &options.network,
-        &options.root_canister,
-        &manifest,
-    )?;
+    stage_root_release_set(&icp_root, &options.network, &root_canister_id, &manifest)?;
     timings.stage_release_set = stage_started_at.elapsed();
     let resume_started_at = Instant::now();
-    resume_root_bootstrap(&options.network, &options.root_canister)?;
+    resume_root_bootstrap(&options.network, &root_canister_id)?;
     timings.resume_bootstrap = resume_started_at.elapsed();
     let ready_started_at = Instant::now();
     let ready_result = wait_for_root_ready(
         &options.network,
-        &options.root_canister,
+        &root_canister_id,
         options.ready_timeout_seconds,
     );
     timings.wait_ready = ready_started_at.elapsed();
@@ -185,7 +183,7 @@ pub fn install_root(options: InstallRootOptions) -> Result<(), Box<dyn std::erro
         return Err(err);
     }
     let finalize_funding_started_at = Instant::now();
-    ensure_local_root_min_cycles(&icp_root, network, root_canister, "post-ready")?;
+    ensure_local_root_min_cycles(&icp_root, network, &root_canister_id, "post-ready")?;
     timings.finalize_root_funding = finalize_funding_started_at.elapsed();
 
     print_install_timing_summary(&timings, total_started_at.elapsed());
@@ -196,6 +194,7 @@ pub fn install_root(options: InstallRootOptions) -> Result<(), Box<dyn std::erro
         &config_path,
         &manifest_path,
         &fleet_name,
+        &root_canister_id,
     )?;
     let state_path = write_install_state(&icp_root, &options.network, &state)?;
     print_install_result_summary(&options.network, &state.fleet, &state_path);
@@ -218,6 +217,55 @@ fn validate_expected_fleet_name(
         config_path.display()
     )
     .into())
+}
+
+fn ensure_root_canister_id(
+    icp_root: &Path,
+    network: &str,
+    root_canister: &str,
+    config_path: &Path,
+) -> Result<String, Box<dyn std::error::Error>> {
+    if Principal::from_text(root_canister).is_ok() {
+        return Ok(root_canister.to_string());
+    }
+
+    match resolve_root_canister_id(icp_root, network, root_canister) {
+        Ok(canister_id) => return Ok(canister_id),
+        Err(err) if !is_missing_canister_id_error(&err.to_string()) => return Err(err),
+        Err(_) => {}
+    }
+
+    let mut create = icp_canister_command_in_network(icp_root);
+    create.args(["create", root_canister, "-q"]);
+    add_local_root_create_cycles_arg(&mut create, config_path, network)?;
+    add_icp_environment_target(&mut create, network);
+    let output = run_command_stdout(&mut create)?;
+    if let Some(canister_id) = parse_created_canister_id(&output) {
+        return Ok(canister_id);
+    }
+
+    resolve_root_canister_id(icp_root, network, root_canister).map_err(|_| {
+        format!(
+            "created root canister target '{root_canister}', but ICP CLI still has no canister ID for environment '{network}' under ICP root {}\nExpected project-local state under {}/.icp/{network}. If another foreground replica is reachable, stop it and restart with `canic replica start --background` from this Canic project.",
+            icp_root.display(),
+            icp_root.display(),
+        )
+        .into()
+    })
+}
+
+fn parse_created_canister_id(output: &str) -> Option<String> {
+    output
+        .lines()
+        .map(str::trim)
+        .find(|line| Principal::from_text(*line).is_ok())
+        .map(ToString::to_string)
+}
+
+fn is_missing_canister_id_error(message: &str) -> bool {
+    message.contains("failed to lookup canister ID")
+        || message.contains("could not find ID for canister")
+        || message.contains("Canister ID is missing")
 }
 
 fn reinstall_root_wasm(
@@ -260,6 +308,7 @@ fn build_install_state(
     config_path: &Path,
     release_set_manifest_path: &Path,
     fleet_name: &str,
+    root_canister_id: &str,
 ) -> Result<InstallState, Box<dyn std::error::Error>> {
     Ok(InstallState {
         schema_version: INSTALL_STATE_SCHEMA_VERSION,
@@ -267,11 +316,7 @@ fn build_install_state(
         installed_at_unix_secs: current_unix_secs()?,
         network: options.network.clone(),
         root_target: options.root_canister.clone(),
-        root_canister_id: resolve_root_canister_id(
-            icp_root,
-            &options.network,
-            &options.root_canister,
-        )?,
+        root_canister_id: root_canister_id.to_string(),
         root_build_target: options.root_build_target.clone(),
         workspace_root: workspace_root.display().to_string(),
         icp_root: icp_root.display().to_string(),
@@ -326,14 +371,14 @@ fn run_canic_build_targets(
     fs::create_dir_all(planned_build_artifact_root(icp_root))?;
     println!("Building {} canisters", targets.len());
     println!();
-    let headers = ["CANISTER", "PROGRESS", "WASM_GZ", "ELAPSED"];
+    let headers = ["CANISTER", "PROGRESS", "WASM", "ELAPSED"];
     let planned_rows = targets
         .iter()
         .map(|target| {
             [
                 target.clone(),
                 progress_bar(targets.len(), targets.len(), 10),
-                "000.00 MiB".to_string(),
+                "000.00 MiB (gz 000.00 MiB)".to_string(),
                 "0.00s".to_string(),
             ]
         })
@@ -353,7 +398,7 @@ fn run_canic_build_targets(
         let output = build_current_workspace_canister_artifact(target, profile)
             .map_err(|err| format!("artifact build failed for {target}: {err}"))?;
         let elapsed = started_at.elapsed();
-        let artifact_size = wasm_gz_size(&output.wasm_gz_path)?;
+        let artifact_size = wasm_artifact_size(&output.wasm_path, &output.wasm_gz_path)?;
 
         let row = [
             target.clone(),
@@ -372,8 +417,15 @@ fn planned_build_artifact_root(icp_root: &Path) -> PathBuf {
     icp_root.join(".icp/local/canisters")
 }
 
-fn wasm_gz_size(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
-    Ok(byte_size(std::fs::metadata(path)?.len()))
+fn wasm_artifact_size(
+    wasm_path: &Path,
+    wasm_gz_path: &Path,
+) -> Result<String, Box<dyn std::error::Error>> {
+    let wasm_bytes = Some(std::fs::metadata(wasm_path)?.len());
+    let gzip_bytes = std::fs::metadata(wasm_gz_path)
+        .ok()
+        .map(|metadata| metadata.len());
+    Ok(wasm_size_label(wasm_bytes, gzip_bytes))
 }
 
 struct BuildEnvGuard {

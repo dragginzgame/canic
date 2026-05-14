@@ -7,7 +7,7 @@ use super::{
 };
 use crate::support::registry_tree::visible_entries;
 use canic_host::{
-    format::{byte_size, cycles_tc},
+    format::{cycles_tc, wasm_size_label},
     icp::IcpCli,
     icp_config::resolve_current_canic_icp_root,
     installed_fleet::{
@@ -120,15 +120,22 @@ pub(super) fn resolve_wasm_sizes(
         .collect::<BTreeSet<_>>()
         .into_iter()
         .filter_map(|role| {
-            let path = root
+            let artifact_dir = root
                 .join(".icp")
                 .join(&network)
                 .join("canisters")
-                .join(role)
-                .join(format!("{role}.wasm.gz"));
-            fs::metadata(path)
+                .join(role);
+            let wasm_bytes = fs::metadata(artifact_dir.join(format!("{role}.wasm")))
                 .ok()
-                .map(|metadata| (role.to_string(), byte_size(metadata.len())))
+                .map(|metadata| metadata.len());
+            let gzip_bytes = fs::metadata(artifact_dir.join(format!("{role}.wasm.gz")))
+                .ok()
+                .map(|metadata| metadata.len());
+            if wasm_bytes.is_none() && gzip_bytes.is_none() {
+                None
+            } else {
+                Some((role.to_string(), wasm_size_label(wasm_bytes, gzip_bytes)))
+            }
         })
         .collect()
 }
@@ -275,7 +282,7 @@ fn resolve_list_fleet(options: &ListOptions) -> Result<InstalledFleetResolution,
 }
 
 fn resolve_live_icp_root(options: &ListOptions) -> Option<PathBuf> {
-    resolve_current_canic_icp_root(None).ok().or_else(|| {
+    resolve_current_canic_icp_root().ok().or_else(|| {
         read_installed_fleet_state_from_root(
             &state_network(options),
             &options.fleet,

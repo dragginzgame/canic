@@ -12,19 +12,6 @@ fn parses_fleet_options() {
     .expect("parse fleet options");
 
     assert_eq!(options.network, "ic");
-    assert_eq!(options.fleets_dir, None);
-}
-
-// Ensure fleet listing can target a nonstandard fleet config directory.
-#[test]
-fn parses_fleet_options_fleets_dir() {
-    let options = FleetOptions::parse([
-        OsString::from("--fleets-dir"),
-        OsString::from("deploy/fleets"),
-    ])
-    .expect("parse fleet options");
-
-    assert_eq!(options.fleets_dir, Some(PathBuf::from("deploy/fleets")));
 }
 
 // Ensure fleet delete options require exactly one fleet name.
@@ -34,7 +21,6 @@ fn parses_delete_fleet_options() {
         DeleteFleetOptions::parse([OsString::from("demo")]).expect("parse delete options");
 
     assert_eq!(options.fleet, "demo");
-    assert_eq!(options.fleets_dir, None);
 }
 
 // Ensure fleet sync accepts an optional fleet existence guard.
@@ -44,22 +30,6 @@ fn parses_sync_fleet_filter() {
         .expect("parse sync options");
 
     assert_eq!(options.fleet.as_deref(), Some("test"));
-    assert_eq!(options.fleets_dir, None);
-}
-
-// Ensure fleet sync can use a caller-supplied fleet config directory.
-#[test]
-fn parses_sync_fleets_dir() {
-    let options = FleetSyncOptions::parse_test([
-        OsString::from("--fleet"),
-        OsString::from("test"),
-        OsString::from("--fleets-dir"),
-        OsString::from("deploy/fleets"),
-    ])
-    .expect("parse sync options");
-
-    assert_eq!(options.fleet.as_deref(), Some("test"));
-    assert_eq!(options.fleets_dir, Some(PathBuf::from("deploy/fleets")));
 }
 
 // Ensure unknown fleet sync options fail through usage.
@@ -98,8 +68,7 @@ fn delete_target_resolves_config_parent() {
     let staging = write_fleet_config(&root, "staging");
     let choices = vec![demo.join("canic.toml"), staging.join("canic.toml")];
 
-    let target =
-        delete_target_dir_from_choices(&root, &choices, "staging", None).expect("delete target");
+    let target = delete_target_dir_from_choices(&root, &choices, "staging").expect("delete target");
 
     fs::remove_dir_all(&root).expect("remove temp root");
     assert_eq!(target, staging);

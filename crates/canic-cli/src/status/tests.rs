@@ -1,4 +1,6 @@
 use super::*;
+use crate::test_support::temp_dir;
+use std::fs;
 
 // Ensure status defaults to the local network and ordinary `icp` binary.
 #[test]
@@ -118,6 +120,39 @@ fn renders_lost_local_fleet_note() {
     assert!(rendered.contains("lost"));
     assert!(rendered.contains("local ICP CLI replica state is not persistent"));
     assert!(rendered.contains("canic install <fleet>"));
+}
+
+// Ensure status renders config paths relative to the resolved Canic project root.
+#[test]
+fn status_fleet_row_uses_project_root_for_config_paths() {
+    let root = temp_dir("canic-status-project-root");
+    let config = root.join("fleets/toko/canic.toml");
+    fs::create_dir_all(config.parent().expect("config parent")).expect("create config parent");
+    fs::write(
+        &config,
+        r#"
+[fleet]
+name = "toko"
+
+[subnets.prime.canisters.root]
+kind = "root"
+
+[subnets.prime.canisters.app]
+kind = "singleton"
+"#,
+    )
+    .expect("write config");
+    let options = StatusOptions {
+        network: "local".to_string(),
+        icp: "icp".to_string(),
+    };
+
+    let row = status_fleet_row(&root, &root, &config, &options, false);
+
+    fs::remove_dir_all(root).expect("remove temp root");
+    assert_eq!(row.fleet, "toko");
+    assert_eq!(row.config, "fleets/toko/canic.toml");
+    assert_eq!(row.canisters, "2");
 }
 
 // Ensure local installed-state rows are not reported as deployed when live roots are unchecked.

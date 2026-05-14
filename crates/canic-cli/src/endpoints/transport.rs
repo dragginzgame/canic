@@ -130,7 +130,7 @@ fn resolve_role_did(
 }
 
 fn resolve_endpoint_icp_root() -> Result<PathBuf, Box<dyn std::error::Error>> {
-    resolve_current_canic_icp_root(None).map_err(Into::into)
+    resolve_current_canic_icp_root().map_err(Into::into)
 }
 
 fn artifact_network_candidates(options: &EndpointsOptions) -> Vec<String> {

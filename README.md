@@ -199,7 +199,7 @@ canic --network local build \
   --profile fast \
   --workspace backend \
   --icp-root . \
-  --config backend/fleets/toko/canic.toml \
+  --config fleets/toko/canic.toml \
   root
 ```
 

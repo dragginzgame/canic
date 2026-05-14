@@ -2,9 +2,10 @@ use super::{
     INSTALL_STATE_SCHEMA_VERSION, InstallState, InstallTimingSummary, add_icp_environment_target,
     add_local_root_create_cycles_arg, config_selection_error, discover_canic_config_choices,
     discover_project_canic_config_choices, fleet_install_state_path,
-    icp_canister_command_in_network, parse_bootstrap_status_value, parse_cycle_balance_response,
-    parse_root_ready_value, read_fleet_install_state, render_install_timing_summary,
-    resolve_install_config_path, root_init_args, validate_expected_fleet_name, write_install_state,
+    icp_canister_command_in_network, is_missing_canister_id_error, parse_bootstrap_status_value,
+    parse_created_canister_id, parse_cycle_balance_response, parse_root_ready_value,
+    read_fleet_install_state, render_install_timing_summary, resolve_install_config_path,
+    root_init_args, validate_expected_fleet_name, write_install_state,
 };
 use crate::release_set::configured_install_targets;
 use crate::test_support::temp_dir;
@@ -104,6 +105,28 @@ fn icp_canister_command_carries_selected_network() {
             .collect::<Vec<_>>(),
         ["canister", "status", "root", "-e", "ic"]
     );
+}
+
+#[test]
+fn parses_quiet_canister_create_output() {
+    assert_eq!(
+        parse_created_canister_id("Created canister:\nt63gs-up777-77776-aaaba-cai\n"),
+        Some("t63gs-up777-77776-aaaba-cai".to_string())
+    );
+    assert_eq!(parse_created_canister_id("created root\n"), None);
+}
+
+#[test]
+fn detects_missing_canister_id_errors() {
+    assert!(is_missing_canister_id_error(
+        "Error: failed to lookup canister ID for canister 'root' in environment 'local'"
+    ));
+    assert!(is_missing_canister_id_error(
+        "could not find ID for canister 'root' in environment 'local'"
+    ));
+    assert!(!is_missing_canister_id_error(
+        "Error: failed to connect to replica"
+    ));
 }
 
 #[test]
@@ -539,9 +562,9 @@ fn discovered_install_config_choices_accept_split_source_fleet_configs() {
 }
 
 #[test]
-fn discovered_workspace_config_choices_accept_backend_fleets() {
-    let root = temp_dir("canic-install-config-backend-fleets");
-    let config = root.join("backend/fleets/toko/canic.toml");
+fn discovered_workspace_config_choices_accept_root_fleets() {
+    let root = temp_dir("canic-install-config-root-fleets");
+    let config = root.join("fleets/toko/canic.toml");
     fs::create_dir_all(config.parent().expect("config parent")).expect("create config parent");
     fs::write(&config, "[fleet]\nname = \"toko\"\n").expect("write config");
 

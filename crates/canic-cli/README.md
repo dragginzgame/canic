@@ -41,7 +41,7 @@ pass paths as command options instead of exporting Canic build environment
 variables:
 
 ```bash
-canic build --profile fast --workspace backend --icp-root . --config backend/src/canisters/canic.toml root
+canic build --profile fast --workspace backend --icp-root . --config fleets/toko/canic.toml root
 ```
 
 For a full local development setup, including ICP CLI, helper tools, and the
@@ -100,13 +100,9 @@ and `canic replica status` show the configured local gateway port; use
 `canic replica start --port <port>` to update this project's `icp.yaml`
 `gateway.port` before starting. Use `canic replica status --json` when scripts
 need the structured ICP CLI local-network status payload.
-When fleet configs live under `backend/fleets/`, Canic treats `backend/` as
-the ICP project root for replica, status, and install commands even if the
-command is launched from the repository root.
-For split repos with fleet configs outside `fleets/` or `backend/fleets/`, pass
-`--fleets-dir <dir>` to `canic replica start` / `canic fleet sync`, or set
-`CANIC_FLEETS_ROOT=<dir>` in the shell environment. The directory is not stored
-in `icp.yaml`; rerun with the flag or keep the environment variable set.
+Fleet configs live under the project-root `fleets/` directory. Commands
+launched from nested directories discover that outer project root and keep
+generated `icp.yaml`, `.icp/`, and `.canic/` state there.
 
 List saved fleet configs:
 

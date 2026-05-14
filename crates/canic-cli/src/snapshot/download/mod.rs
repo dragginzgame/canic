@@ -159,7 +159,7 @@ fn resolve_snapshot_download_request(
     options: &SnapshotDownloadOptions,
 ) -> Result<ResolvedSnapshotDownload, SnapshotCommandError> {
     let network = state_network(options.network.as_deref());
-    let icp_root = resolve_current_canic_icp_root(None)
+    let icp_root = resolve_current_canic_icp_root()
         .map_err(|err| SnapshotCommandError::InstallState(err.to_string()))?;
     let state = read_named_fleet_install_state_from_root(&icp_root, &network, &options.fleet)
         .map_err(|err| SnapshotCommandError::InstallState(err.to_string()))?;

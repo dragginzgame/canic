@@ -94,7 +94,7 @@ fn medic_command() -> ClapCommand {
 
 fn run_medic_checks(options: &MedicOptions) -> Vec<MedicCheck> {
     let mut checks = Vec::new();
-    let icp_root = resolve_current_canic_icp_root(None).ok();
+    let icp_root = resolve_current_canic_icp_root().ok();
     checks.push(MedicCheck::ok(
         "network",
         options.network.clone(),

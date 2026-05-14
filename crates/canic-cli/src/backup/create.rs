@@ -36,7 +36,7 @@ use std::path::{Path, PathBuf};
 pub(super) fn backup_create(
     options: &BackupCreateOptions,
 ) -> Result<BackupCreateReport, BackupCommandError> {
-    let icp_root = resolve_current_canic_icp_root(None)
+    let icp_root = resolve_current_canic_icp_root()
         .map_err(|err| BackupCommandError::InstallState(err.to_string()))?;
     let installed = resolve_installed_fleet_from_root(
         &InstalledFleetRequest {

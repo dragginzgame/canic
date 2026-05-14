@@ -2,6 +2,17 @@
 
 pub use canic_core::__control_plane_core::format::{byte_size, cycles_tc};
 
+/// Format the IC-relevant uncompressed wasm size, with gzip size as secondary.
+#[must_use]
+pub fn wasm_size_label(wasm_bytes: Option<u64>, gzip_bytes: Option<u64>) -> String {
+    match (wasm_bytes, gzip_bytes) {
+        (Some(wasm), Some(gzip)) => format!("{} (gz {})", byte_size(wasm), byte_size(gzip)),
+        (Some(wasm), None) => byte_size(wasm),
+        (None, Some(gzip)) => format!("n/a (gz {})", byte_size(gzip)),
+        (None, None) => "-".to_string(),
+    }
+}
+
 /// Format a duration in compact largest units for CLI tables and summaries.
 #[must_use]
 pub fn compact_duration(seconds: u64) -> String {
@@ -38,7 +49,22 @@ fn compact_duration_pair(
 
 #[cfg(test)]
 mod tests {
-    use super::compact_duration;
+    use super::{compact_duration, wasm_size_label};
+
+    // Prefer the IC-installed wasm size while retaining gzip as optional context.
+    #[test]
+    fn formats_wasm_size_labels() {
+        assert_eq!(
+            wasm_size_label(Some(2 * 1024 * 1024), Some(512 * 1024)),
+            "2.00 MiB (gz 512.00 KiB)"
+        );
+        assert_eq!(wasm_size_label(Some(2 * 1024 * 1024), None), "2.00 MiB");
+        assert_eq!(
+            wasm_size_label(None, Some(512 * 1024)),
+            "n/a (gz 512.00 KiB)"
+        );
+        assert_eq!(wasm_size_label(None, None), "-");
+    }
 
     // Keep human duration labels compact for CLI tables.
     #[test]

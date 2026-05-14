@@ -134,7 +134,7 @@ where
     }
 
     let options = InstallOptions::parse(args)?;
-    let icp_root = resolve_current_canic_icp_root(None).ok();
+    let icp_root = resolve_current_canic_icp_root().ok();
     install_root(options.into_install_root_options_with_icp_root(icp_root))
         .map_err(InstallCommandError::from)
 }

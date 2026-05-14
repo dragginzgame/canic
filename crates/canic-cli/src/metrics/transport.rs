@@ -140,7 +140,7 @@ fn resolve_metrics_fleet(
 }
 
 fn resolve_metrics_icp_root() -> Option<PathBuf> {
-    resolve_current_canic_icp_root(None).ok()
+    resolve_current_canic_icp_root().ok()
 }
 
 fn metrics_installed_fleet_error(error: InstalledFleetError) -> MetricsCommandError {

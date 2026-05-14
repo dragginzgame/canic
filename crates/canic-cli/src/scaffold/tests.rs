@@ -1,18 +1,14 @@
 use super::*;
 use crate::test_support::temp_dir;
 
-// Ensure scaffold options parse the project name and optional root directory.
+// Ensure scaffold options parse the project name.
 #[test]
 fn parses_scaffold_options() {
-    let options = ScaffoldOptions::parse([
-        OsString::from("my_app"),
-        OsString::from("--dir"),
-        OsString::from("tmp_fleets"),
-    ])
-    .expect("parse scaffold options");
+    let options =
+        ScaffoldOptions::parse([OsString::from("my_app")]).expect("parse scaffold options");
 
     assert_eq!(options.name, "my_app");
-    assert_eq!(options.fleets_dir, PathBuf::from("tmp_fleets"));
+    assert_eq!(options.project_root, None);
     assert!(!options.yes);
 }
 
@@ -31,7 +27,7 @@ fn confirm_scaffold_accepts_yes() {
     let root = temp_dir("canic-cli-scaffold-confirm-yes");
     let options = ScaffoldOptions {
         name: "my_app".to_string(),
-        fleets_dir: root.join("fleets"),
+        project_root: Some(root),
         yes: false,
     };
     let mut output = Vec::new();
@@ -50,7 +46,7 @@ fn confirm_scaffold_rejects_empty_response() {
     let root = temp_dir("canic-cli-scaffold-confirm-no");
     let options = ScaffoldOptions {
         name: "my_app".to_string(),
-        fleets_dir: root.join("fleets"),
+        project_root: Some(root),
         yes: false,
     };
     let mut output = Vec::new();
@@ -78,7 +74,7 @@ fn scaffold_project_writes_root_and_app_files() {
     let root = temp_dir("canic-cli-scaffold");
     let options = ScaffoldOptions {
         name: "my_app".to_string(),
-        fleets_dir: root.join("fleets"),
+        project_root: Some(root.clone()),
         yes: true,
     };
 
@@ -116,10 +112,10 @@ fn scaffold_project_rejects_existing_target() {
     let root = temp_dir("canic-cli-scaffold-existing");
     let options = ScaffoldOptions {
         name: "my_app".to_string(),
-        fleets_dir: root.join("fleets"),
+        project_root: Some(root.clone()),
         yes: true,
     };
-    fs::create_dir_all(options.fleets_dir.join("my_app")).expect("create existing target");
+    fs::create_dir_all(root.join("fleets/my_app")).expect("create existing target");
 
     let err = scaffold_project(&options).expect_err("existing scaffold should fail");
 
