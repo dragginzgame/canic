@@ -121,12 +121,59 @@ pub fn local_replica_root_key_from_root(
 ) -> Result<Option<String>, ReplicaQueryError> {
     let endpoint = local_replica_endpoint_from_root(network, icp_root);
     let body = get_http_status(&endpoint)?;
-    let value = serde_json::from_slice::<serde_json::Value>(&body)?;
-    Ok(value
-        .get("root_key")
-        .and_then(serde_json::Value::as_str)
-        .filter(|root_key| !root_key.is_empty())
-        .map(str::to_string))
+    Ok(parse_local_replica_root_key(&body))
+}
+
+fn parse_local_replica_root_key(body: &[u8]) -> Option<String> {
+    serde_json::from_slice::<serde_json::Value>(body)
+        .ok()
+        .and_then(|value| root_key_from_json(&value))
+        .or_else(|| {
+            serde_cbor::from_slice::<serde_cbor::Value>(body)
+                .ok()
+                .and_then(|value| root_key_from_cbor(&value))
+        })
+}
+
+fn root_key_from_json(value: &serde_json::Value) -> Option<String> {
+    match value {
+        serde_json::Value::String(text) => nonempty_text(text),
+        serde_json::Value::Array(values) => values.iter().find_map(root_key_from_json),
+        serde_json::Value::Object(map) => map
+            .get("root_key")
+            .and_then(root_key_from_json)
+            .or_else(|| map.values().find_map(root_key_from_json)),
+        _ => None,
+    }
+}
+
+fn root_key_from_cbor(value: &serde_cbor::Value) -> Option<String> {
+    match value {
+        serde_cbor::Value::Bytes(bytes) => Some(hex_bytes(bytes)),
+        serde_cbor::Value::Text(text) => nonempty_text(text),
+        serde_cbor::Value::Array(values) => values.iter().find_map(root_key_from_cbor),
+        serde_cbor::Value::Map(map) => map
+            .iter()
+            .find_map(|(key, value)| match key {
+                serde_cbor::Value::Text(key) if key == "root_key" => root_key_from_cbor(value),
+                _ => None,
+            })
+            .or_else(|| map.values().find_map(root_key_from_cbor)),
+        _ => None,
+    }
+}
+
+fn nonempty_text(text: &str) -> Option<String> {
+    (!text.is_empty()).then(|| text.to_string())
+}
+
+fn hex_bytes(bytes: &[u8]) -> String {
+    let mut encoded = String::with_capacity(bytes.len() * 2);
+    for byte in bytes {
+        use std::fmt::Write as _;
+        let _ = write!(encoded, "{byte:02x}");
+    }
+    encoded
 }
 
 /// Parse common JSON shapes returned by command-line calls for `canic_ready`.
@@ -511,5 +558,29 @@ mod tests {
             local_replica_endpoint_with_port(Some("http://127.0.0.1:9000/"), Some(8001)),
             "http://127.0.0.1:9000"
         );
+    }
+
+    #[test]
+    fn parses_local_replica_root_key_from_json_status() {
+        let root_key = parse_local_replica_root_key(br#"{"root_key":"308182"}"#);
+
+        assert_eq!(root_key.as_deref(), Some("308182"));
+    }
+
+    #[test]
+    fn parses_local_replica_root_key_from_cbor_status() {
+        #[derive(Serialize)]
+        struct Status {
+            #[serde(with = "serde_bytes")]
+            root_key: Vec<u8>,
+        }
+
+        let body = serde_cbor::to_vec(&Status {
+            root_key: vec![0x30, 0x81, 0x82],
+        })
+        .expect("encode cbor status");
+        let root_key = parse_local_replica_root_key(&body);
+
+        assert_eq!(root_key.as_deref(), Some("308182"));
     }
 }
