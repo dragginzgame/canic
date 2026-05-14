@@ -849,7 +849,7 @@ ID         SIZE       CREATED_AT
         .expect("parse snapshot receipt");
 
         assert_eq!(receipt.snapshot_id, "0000000000000000ffffffffffc000020101");
-        assert_eq!(receipt.total_size_bytes, Some(272586987));
+        assert_eq!(receipt.total_size_bytes, Some(272_586_987));
     }
 
     // Ensure current ICP CLI status JSON parses into the typed host shape.

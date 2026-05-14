@@ -202,10 +202,10 @@ impl BackupRunnerExecutor for BackupIcpRunnerExecutor {
                 .icp
                 .canister_status_report(&target.canister_id)
                 .map_err(runner_icp_error)?;
-            if !status
+            if status
                 .settings
                 .as_ref()
-                .is_some_and(|settings| !settings.controllers.is_empty())
+                .is_none_or(|settings| settings.controllers.is_empty())
             {
                 return Err(BackupRunnerCommandError::failed(
                     "preflight",

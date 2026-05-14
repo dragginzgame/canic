@@ -301,10 +301,10 @@ fn discover_config_choices(
     fleets_dir: Option<&Path>,
 ) -> Result<Vec<PathBuf>, Box<dyn std::error::Error>> {
     if let Some(fleets_dir) = fleets_dir {
-        return Ok(discover_project_canic_config_choices_with_root(
+        return discover_project_canic_config_choices_with_root(
             &workspace_root()?,
             Some(fleets_dir),
-        )?);
+        );
     }
     discover_current_canic_config_choices()
 }
