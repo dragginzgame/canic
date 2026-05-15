@@ -9,6 +9,7 @@ use crate::cycles::{
 use canic_host::format::compact_duration;
 use canic_host::registry::RegistryEntry;
 use canic_host::response_parse::parse_cycle_balance_response;
+use std::ffi::OsString;
 
 // Ensure common duration selectors parse into seconds.
 #[test]
@@ -20,6 +21,26 @@ fn parses_duration_selectors() {
         parse_duration("0h"),
         Err(CyclesCommandError::InvalidDuration(_))
     ));
+}
+
+// Ensure cycle summaries can target one deployed subtree by role or principal.
+#[test]
+fn parses_cycles_subtree_option() {
+    let options = options::CyclesOptions::parse([
+        OsString::from("test"),
+        OsString::from("--subtree"),
+        OsString::from("scale_hub"),
+        OsString::from("--since"),
+        OsString::from("6h"),
+        OsString::from("--limit"),
+        OsString::from("12"),
+    ])
+    .expect("parse cycles subtree options");
+
+    assert_eq!(options.fleet, "test");
+    assert_eq!(options.subtree.as_deref(), Some("scale_hub"));
+    assert_eq!(options.since_seconds, 21_600);
+    assert_eq!(options.limit, 12);
 }
 
 // Ensure cycle history windows render as compact human durations.

@@ -107,6 +107,15 @@ pub enum RestoreRunnerError {
         state: &'static str,
     },
 
+    #[error(
+        "restore apply journal for backup {backup_id} operation {sequence} is {state} but latest receipt is stale or mismatched"
+    )]
+    TerminalOperationReceiptMismatch {
+        backup_id: String,
+        sequence: usize,
+        state: &'static str,
+    },
+
     #[error(transparent)]
     Io(#[from] std::io::Error),
 

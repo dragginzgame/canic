@@ -11,7 +11,7 @@ use crate::{
             parse_topup_event_page_text,
         },
     },
-    support::registry_tree::registry_rows,
+    support::registry_tree::{RegistryRow, visible_rows},
 };
 use canic_host::{
     icp::IcpCli,
@@ -37,7 +37,7 @@ pub fn cycles_report(options: &CyclesOptions) -> Result<CyclesReport, CyclesComm
     let generated_at_secs = current_unix_seconds();
     let requested_since_secs = generated_at_secs.saturating_sub(options.since_seconds);
     let canisters =
-        collect_cycle_tracker_reports(options, &registry, requested_since_secs, generated_at_secs);
+        collect_cycle_tracker_reports(options, &registry, requested_since_secs, generated_at_secs)?;
 
     Ok(CyclesReport {
         fleet: options.fleet.clone(),
@@ -57,13 +57,13 @@ fn collect_cycle_tracker_reports(
     registry: &[RegistryEntry],
     requested_since_secs: u64,
     generated_at_secs: u64,
-) -> Vec<CyclesCanisterReport> {
+) -> Result<Vec<CyclesCanisterReport>, CyclesCommandError> {
     let query = Arc::new(options.clone());
     let mut handles = Vec::new();
-    let rows = registry_rows(registry);
+    let rows = visible_rows(registry, options.subtree.as_deref())?;
     for row in rows {
-        let entry = row.entry.clone();
-        let tree_prefix = row.tree_prefix;
+        let RegistryRow { entry, tree_prefix } = row;
+        let entry = entry.clone();
         let query = Arc::clone(&query);
         handles.push(thread::spawn(move || {
             cycle_tracker_report(
@@ -76,10 +76,10 @@ fn collect_cycle_tracker_reports(
         }));
     }
 
-    handles
+    Ok(handles
         .into_iter()
         .filter_map(|handle| handle.join().ok())
-        .collect()
+        .collect())
 }
 
 fn cycle_tracker_report(

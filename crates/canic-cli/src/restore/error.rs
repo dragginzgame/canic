@@ -98,6 +98,15 @@ pub enum RestoreCommandError {
         state: String,
     },
 
+    #[error(
+        "restore apply journal for backup {backup_id} operation {sequence} is {state} but latest receipt is stale or mismatched"
+    )]
+    RestoreRunTerminalOperationReceiptMismatch {
+        backup_id: String,
+        sequence: usize,
+        state: String,
+    },
+
     #[error(transparent)]
     Io(#[from] std::io::Error),
 
@@ -164,6 +173,15 @@ impl From<RestoreRunnerError> for RestoreCommandError {
                 sequence,
                 state,
             } => Self::RestoreRunTerminalOperationMissingReceipt {
+                backup_id,
+                sequence,
+                state: state.to_string(),
+            },
+            RestoreRunnerError::TerminalOperationReceiptMismatch {
+                backup_id,
+                sequence,
+                state,
+            } => Self::RestoreRunTerminalOperationReceiptMismatch {
                 backup_id,
                 sequence,
                 state: state.to_string(),

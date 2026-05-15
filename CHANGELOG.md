@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.36.x] - 2026-05-15 - Backup/restore proofing
 
+- `0.36.8` tightens restore-runner journal loading so terminal restore operations must be backed by the latest matching command receipt attempt with the same state timestamp, and lets `canic list --subtree` and `canic cycles --subtree` resolve unique role names while requiring principals for repeated roles.
+
 - `0.36.7` tightens restore apply-journal command receipts so persisted receipts must keep their timestamp, command, status, and bounded output audit fields, stops stale local replica status metadata from being treated as running unless the configured gateway port is reachable, and keeps `icp.yaml` fleet sync from churning `networks:` below `environments:`.
 
 - `0.36.6` tightens backup execution integrity so terminal operations and timestamps must match the latest durable receipt, persisted restart-required state must match the operation graph, and execution transitions must carry audit timestamps.

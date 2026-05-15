@@ -146,6 +146,15 @@ inspect only the files needed for the current task.
   status is now treated as stale unless the configured gateway port is
   actually reachable, so `canic replica start` no longer reports a dead
   configured port as already running.
+- Started `0.36.8` by tightening restore-runner journal loading so terminal
+  restore operations must be backed by the latest matching command receipt
+  attempt with the same state timestamp.
+- Folded a `canic list --subtree` role-anchor fix into `0.36.8`: unique role
+  names now resolve to their canister principal, while repeated roles require a
+  concrete principal.
+- Extended the same role-or-principal subtree selector to
+  `canic cycles --subtree`, filtering the registry before cycle history,
+  balance, and top-up queries run.
 - Added a config-schema regression proving obsolete per-canister delegated-auth
   verifier tables are rejected instead of accepted through compatibility shims.
 - Updated the internal audit scaling probe to use `scale_replica` and

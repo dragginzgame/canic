@@ -45,6 +45,9 @@ pub enum CyclesCommandError {
     InvalidDuration(String),
 
     #[error(transparent)]
+    RegistryTree(#[from] crate::support::registry_tree::RegistryTreeError),
+
+    #[error(transparent)]
     Io(#[from] std::io::Error),
 
     #[error(transparent)]

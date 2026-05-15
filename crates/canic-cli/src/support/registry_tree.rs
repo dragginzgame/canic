@@ -17,6 +17,10 @@ const TREE_SPACE: &str = "   ";
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum RegistryTreeError {
     CanisterNotInRegistry(String),
+    AmbiguousRole {
+        role: String,
+        canisters: Vec<String>,
+    },
 }
 
 impl fmt::Display for RegistryTreeError {
@@ -25,9 +29,14 @@ impl fmt::Display for RegistryTreeError {
             Self::CanisterNotInRegistry(canister) => {
                 write!(
                     f,
-                    "registry JSON did not contain the requested canister {canister}"
+                    "registry JSON did not contain the requested canister or role {canister}"
                 )
             }
+            Self::AmbiguousRole { role, canisters } => write!(
+                f,
+                "registry role {role} has multiple canisters; pass one canister principal: {}",
+                canisters.join(", ")
+            ),
         }
     }
 }
@@ -67,9 +76,9 @@ pub fn visible_entries<'a>(
 
 pub fn visible_rows<'a>(
     registry: &'a [RegistryEntry],
-    canister: Option<&str>,
+    anchor: Option<&str>,
 ) -> Result<Vec<RegistryRow<'a>>, RegistryTreeError> {
-    let Some(canister) = canister else {
+    let Some(anchor) = anchor else {
         return Ok(registry_rows(registry));
     };
 
@@ -78,13 +87,31 @@ pub fn visible_rows<'a>(
         .map(|entry| (entry.pid.as_str(), entry))
         .collect::<BTreeMap<_, _>>();
     let root = by_pid
-        .get(canister)
+        .get(anchor)
         .copied()
-        .ok_or_else(|| RegistryTreeError::CanisterNotInRegistry(canister.to_string()))?;
+        .map_or_else(|| unique_role_entry(registry, anchor), Ok)?;
     let children = child_entries(registry);
     let mut entries = Vec::new();
     collect_visible_entry(root, &children, "", "", &mut entries);
     Ok(entries)
+}
+
+fn unique_role_entry<'a>(
+    registry: &'a [RegistryEntry],
+    role: &str,
+) -> Result<&'a RegistryEntry, RegistryTreeError> {
+    let matches = registry
+        .iter()
+        .filter(|entry| entry.role.as_deref() == Some(role))
+        .collect::<Vec<_>>();
+    match matches.as_slice() {
+        [entry] => Ok(*entry),
+        [] => Err(RegistryTreeError::CanisterNotInRegistry(role.to_string())),
+        entries => Err(RegistryTreeError::AmbiguousRole {
+            role: role.to_string(),
+            canisters: entries.iter().map(|entry| entry.pid.clone()).collect(),
+        }),
+    }
 }
 
 fn root_entries(registry: &[RegistryEntry]) -> Vec<&RegistryEntry> {

@@ -98,7 +98,7 @@ fn list_command() -> ClapCommand {
             value_arg("subtree")
                 .long("subtree")
                 .value_name("name-or-principal")
-                .help("Render a subtree anchored at one canister"),
+                .help("Render a subtree anchored at a unique role name or canister principal"),
         )
         .arg(
             flag_arg("verbose")

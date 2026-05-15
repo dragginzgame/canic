@@ -280,6 +280,78 @@ fn renders_selected_subtree() {
     );
 }
 
+// Ensure selected subtrees can be anchored by a unique role name.
+#[test]
+fn renders_selected_subtree_by_role_name() {
+    let registry = parse_registry_entries(&registry_json()).expect("parse registry");
+    let readiness = readiness_map();
+    let module_hashes = module_hash_map();
+    let empty = BTreeMap::new();
+    let columns = RegistryColumnData {
+        readiness: &readiness,
+        canic_versions: &empty,
+        module_hashes: &module_hashes,
+        wasm_sizes: &empty,
+        cycles: &empty,
+        full_module_hashes: false,
+        color_module_variants: false,
+    };
+    let tree = render_registry_tree(&registry, Some("app"), &columns).expect("render subtree");
+    let widths = [9, 8, 27, 5, 5, 4, 6];
+
+    assert_eq!(
+        tree,
+        [
+            render_registry_table_row(
+                &[
+                    ROLE_HEADER,
+                    MODULE_HEADER,
+                    CANISTER_HEADER,
+                    READY_HEADER,
+                    CANIC_HEADER,
+                    WASM_HEADER,
+                    CYCLES_HEADER,
+                ],
+                &widths
+            ),
+            render_registry_separator(&widths),
+            render_registry_table_row(&["app", HASH_PREFIX, APP, "no", "-", "-", "-"], &widths),
+            render_registry_table_row(
+                &["└─ worker", HASH_PREFIX, WORKER, "error", "-", "-", "-"],
+                &widths
+            )
+        ]
+        .join("\n")
+    );
+}
+
+// Ensure repeated role names require a concrete principal.
+#[test]
+fn selected_subtree_rejects_ambiguous_role_name() {
+    let registry = parse_registry_entries(&same_role_variant_registry_json())
+        .expect("parse same-role registry");
+    let readiness = BTreeMap::new();
+    let empty = BTreeMap::new();
+    let columns = RegistryColumnData {
+        readiness: &readiness,
+        canic_versions: &empty,
+        module_hashes: &empty,
+        wasm_sizes: &empty,
+        cycles: &empty,
+        full_module_hashes: false,
+        color_module_variants: false,
+    };
+    let err = render_registry_tree(&registry, Some("app"), &columns)
+        .expect_err("repeated role should be ambiguous");
+
+    assert!(matches!(
+        err,
+        ListCommandError::RegistryTree(
+            crate::support::registry_tree::RegistryTreeError::AmbiguousRole { role, .. }
+        ) if role == "app"
+    ));
+}
+
 // Ensure the full list output names the selected fleet before the tree table.
 #[test]
 fn renders_list_output_with_fleet_title() {

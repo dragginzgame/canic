@@ -17,6 +17,7 @@ const DEFAULT_LIMIT: u64 = 1_000;
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CyclesOptions {
     pub fleet: String,
+    pub subtree: Option<String>,
     pub since_seconds: u64,
     pub limit: u64,
     pub json: bool,
@@ -43,6 +44,7 @@ impl CyclesOptions {
 
         Ok(Self {
             fleet: string_option(&matches, "fleet").expect("clap requires fleet"),
+            subtree: string_option(&matches, "subtree"),
             since_seconds,
             limit,
             json: matches.get_flag("json"),
@@ -97,6 +99,12 @@ fn cycles_command() -> ClapCommand {
                 .long("since")
                 .value_name("duration")
                 .help("Cycle history window; defaults to 24h"),
+        )
+        .arg(
+            value_arg("subtree")
+                .long("subtree")
+                .value_name("name-or-principal")
+                .help("Summarize one subtree anchored at a unique role name or canister principal"),
         )
         .arg(
             value_arg("limit")
