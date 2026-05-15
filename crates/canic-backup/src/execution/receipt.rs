@@ -72,9 +72,9 @@ impl BackupExecutionOperationReceipt {
         validate_nonempty("operation_receipts[].plan_id", &self.plan_id)?;
         validate_nonempty("operation_receipts[].run_id", &self.run_id)?;
         validate_nonempty("operation_receipts[].operation_id", &self.operation_id)?;
-        validate_optional_nonempty(
+        validate_nonempty(
             "operation_receipts[].updated_at",
-            self.updated_at.as_deref(),
+            self.updated_at.as_deref().unwrap_or_default(),
         )?;
         validate_optional_nonempty(
             "operation_receipts[].snapshot_id",

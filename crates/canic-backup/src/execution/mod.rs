@@ -221,6 +221,8 @@ impl BackupExecutionJournal {
             }
         };
         let failure_reason = receipt.failure_reason.clone();
+        let previous_operation = self.operations[index].clone();
+        let previous_restart_required = self.restart_required;
         self.operation_receipts.push(receipt);
 
         let operation = &mut self.operations[index];
@@ -233,6 +235,8 @@ impl BackupExecutionJournal {
         self.refresh_restart_required();
         if let Err(error) = self.validate() {
             self.operation_receipts.pop();
+            self.operations[index] = previous_operation;
+            self.restart_required = previous_restart_required;
             return Err(error);
         }
         Ok(())

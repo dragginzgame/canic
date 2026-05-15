@@ -122,6 +122,13 @@ inspect only the files needed for the current task.
   must have matching command receipts before any runner mode proceeds.
 - Started `0.36.4` by rejecting duplicate restore operation receipt attempts
   and adding an active-line changelog width check for root and detailed notes.
+- Started `0.36.5` by requiring backup execution operation receipts to carry
+  `updated_at` so terminal outcomes stay auditable in persisted journals.
+- Tightened backup execution receipt recording so invalid receipts roll back
+  the attempted operation transition instead of leaving partial in-memory
+  state.
+- Adjusted the changelog check so root `CHANGELOG.md` patch bullets stay on
+  one line while detailed changelog notes keep the 88-column prose wrap.
 - Added a config-schema regression proving obsolete per-canister delegated-auth
   verifier tables are rejected instead of accepted through compatibility shims.
 - Updated the internal audit scaling probe to use `scale_replica` and

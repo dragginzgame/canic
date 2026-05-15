@@ -8,26 +8,17 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.36.x] - 2026-05-15 - Backup/restore proofing
 
-- `0.36.4` rejects duplicate restore receipt attempts and adds an active-line
-  changelog width check for root and detailed release notes.
+- `0.36.5` tightens backup execution receipts so operation outcomes keep audit timestamps and invalid receipts cannot leave partial journal state behind.
 
-- `0.36.3` starts restore-runner hardening by failing upload steps that do not
-  return the uploaded snapshot id needed by later load steps, and adds explicit
-  failed-operation retry recovery, stricter legacy upload-id parsing, and
-  receipt checks for terminal apply-journal operations.
+- `0.36.4` rejects duplicate restore receipt attempts and adds an active-line changelog width check for root and detailed release notes.
 
-- `0.36.2` makes execution-backed backup layout errors consistent across
-  status, inspect, and verify, and tightens execution integrity so completed
-  mutating work must have matching receipts.
+- `0.36.3` starts restore-runner hardening by failing upload steps that do not return the uploaded snapshot id needed by later load steps, and adds explicit failed-operation retry recovery, stricter legacy upload-id parsing, and receipt checks for terminal apply-journal operations.
 
-- `0.36.1` hardens backup resume safety for existing `--out` layouts and makes
-  backup create/list report reused or invalid execution-backed layouts more
-  clearly.
+- `0.36.2` makes execution-backed backup layout errors consistent across status, inspect, and verify, and tightens execution integrity so completed mutating work must have matching receipts.
 
-- `0.36.0` starts the Backup/Restore V1 hardening line by documenting the
-  existing execution flow and proving backup create resume, runner retry,
-  list/status reporting, verification, completion gating, and manifest
-  finalization behavior against durable journals.
+- `0.36.1` hardens backup resume safety for existing `--out` layouts and makes backup create/list report reused or invalid execution-backed layouts more clearly.
+
+- `0.36.0` starts the Backup/Restore V1 hardening line by documenting the existing execution flow and proving backup create resume, runner retry, list/status reporting, verification, completion gating, and manifest finalization behavior against durable journals.
 
 See detailed breakdown:
 [docs/changelog/0.36.md](docs/changelog/0.36.md)

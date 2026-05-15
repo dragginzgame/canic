@@ -30,7 +30,7 @@ detail="docs/changelog/${minor}.md"
 failed=0
 
 check_root_current_minor() {
-  awk -v limit="$limit" -v minor="$minor" '
+  awk -v minor="$minor" '
     BEGIN {
       in_section = 0
       in_fence = 0
@@ -46,8 +46,8 @@ check_root_current_minor() {
       if ($0 ~ /^```/) {
         in_fence = !in_fence
       }
-      if (!in_fence && length($0) > limit) {
-        printf "%s:%d:%d:%s\n", FILENAME, FNR, length($0), $0
+      if (!in_fence && $0 ~ /^  [^[:space:]]/) {
+        printf "%s:%d:root patch bullets must stay on one line:%s\n", FILENAME, FNR, $0
       }
     }
   ' "$root"
@@ -85,4 +85,4 @@ if [ "$failed" -ne 0 ]; then
   exit 1
 fi
 
-echo "changelog line width OK: ${root} ${minor}.x and ${detail} <= ${limit}"
+echo "changelog OK: ${root} ${minor}.x single-line bullets; ${detail} <= ${limit}"

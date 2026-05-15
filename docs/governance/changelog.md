@@ -227,9 +227,9 @@ Bullet and detail rules:
 - Bullets do not need to be single-line if additional sentence context is needed.
 - In root minor-line summaries, prefer one short sentence per patch bullet; avoid long multi-clause bullets that enumerate every internal change.
 - Avoid deep implementation detail (module paths, helper names, routing internals) unless required for migration/debugging.
-- Active root minor-line prose and the matching detailed changelog prose must
-  wrap at 88 columns or less. Fenced examples are exempt. Run
-  `make changelog-check` before handoff.
+- Root minor-line patch bullets must stay on one physical line. The matching
+  detailed changelog prose must wrap at 88 columns or less, with fenced
+  examples exempt. Run `make changelog-check` before handoff.
 - In root `CHANGELOG.md`, avoid code examples/LoC dumps unless strictly necessary.
 - Prefer placing code examples, LoC snapshots, and fenced blocks in `docs/changelog/<major>.<minor>.md`.
 - Inline fenced examples are optional, not mandatory.
