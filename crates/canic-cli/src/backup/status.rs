@@ -57,7 +57,11 @@ fn ensure_complete_status(report: &BackupStatusReport) -> Result<(), BackupComma
             total_artifacts: report.total_artifacts,
             pending_artifacts: report.pending_artifacts,
         }),
-        BackupStatusReport::DryRun(report) if execution_is_complete(&report.execution) => Ok(()),
+        BackupStatusReport::DryRun(report)
+            if report.layout_status == "complete" && execution_is_complete(&report.execution) =>
+        {
+            Ok(())
+        }
         BackupStatusReport::DryRun(report) => Err(BackupCommandError::DryRunNotComplete {
             plan_id: report.plan_id.clone(),
         }),

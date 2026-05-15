@@ -220,6 +220,36 @@ mod tests {
             .expect("query token use should remain stateless");
     }
 
+    #[test]
+    fn delegated_auth_guard_preserves_verify_bind_scope_consume_order() {
+        let source = include_str!("token.rs");
+        let start = source
+            .find("fn verify_token(")
+            .expect("verify_token exists");
+        let end = source[start..]
+            .find("fn consume_update_token_once(")
+            .map(|offset| start + offset)
+            .expect("consume_update_token_once follows verify_token");
+        let body = &source[start..end];
+
+        let verify = body
+            .find("AuthOps::verify_token")
+            .expect("verifier call exists");
+        let bind = body
+            .find("enforce_subject_binding")
+            .expect("subject binding exists");
+        let scope = body
+            .find("enforce_required_scope")
+            .expect("scope check exists");
+        let consume = body
+            .find("consume_update_token_once")
+            .expect("update token consumption exists");
+
+        assert!(verify < bind);
+        assert!(bind < scope);
+        assert!(scope < consume);
+    }
+
     // Build one structurally complete delegated token for access decode tests.
     fn token_with_scopes(scopes: Vec<String>) -> DelegatedToken {
         DelegatedToken {

@@ -243,3 +243,34 @@ pub struct AttestationKeySet {
     pub generated_at: u64,
     pub keys: Vec<AttestationKey>,
 }
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn auth_dtos_remain_passive_boundary_types() {
+        let source = include_str!("auth.rs");
+        let production_source = source
+            .split("#[cfg(test)]")
+            .next()
+            .expect("production source exists");
+
+        for marker in [
+            "impl DelegatedToken",
+            "impl DelegatedTokenClaims",
+            "impl RoleAttestation",
+            "impl SignedRoleAttestation",
+            "fn verify",
+            "fn sign",
+            "fn resolve",
+            "fn replay",
+            "fn consume",
+            "fn policy",
+            "fn validate",
+        ] {
+            assert!(
+                !production_source.contains(marker),
+                "auth DTOs must stay passive; found marker `{marker}`"
+            );
+        }
+    }
+}

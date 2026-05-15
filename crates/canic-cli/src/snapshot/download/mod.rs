@@ -16,7 +16,10 @@ use canic_backup::{
 use canic_host::{
     icp::{IcpCli, IcpCommandError},
     icp_config::resolve_current_canic_icp_root,
-    install_root::read_named_fleet_install_state_from_root,
+    install_root::InstallState,
+    installed_fleet::{
+        InstalledFleetError, InstalledFleetRequest, resolve_installed_fleet_from_root,
+    },
     registry::{RegistryEntry as HostRegistryEntry, parse_registry_entries},
     replica_query,
 };
@@ -152,6 +155,7 @@ struct ResolvedSnapshotDownload {
     network: Option<String>,
     icp: String,
     icp_root: PathBuf,
+    registry_entries: Option<Vec<HostRegistryEntry>>,
 }
 
 // Resolve the named fleet into the explicit backup contract used downstream.
@@ -161,18 +165,28 @@ fn resolve_snapshot_download_request(
     let network = state_network(options.network.as_deref());
     let icp_root = resolve_current_canic_icp_root()
         .map_err(|err| SnapshotCommandError::InstallState(err.to_string()))?;
-    let state = read_named_fleet_install_state_from_root(&icp_root, &network, &options.fleet)
-        .map_err(|err| SnapshotCommandError::InstallState(err.to_string()))?;
+    let installed = match resolve_installed_fleet_from_root(
+        &InstalledFleetRequest {
+            fleet: options.fleet.clone(),
+            network,
+            icp: options.icp.clone(),
+            detect_lost_local_root: false,
+        },
+        &icp_root,
+    ) {
+        Ok(installed) => Some(installed),
+        Err(InstalledFleetError::NoInstalledFleet { .. }) => None,
+        Err(err) => return Err(snapshot_installed_fleet_error(err)),
+    };
+    let state = installed.as_ref().map(|installed| &installed.state);
     let explicit_canister = options.canister.is_some();
     let canister = options
         .canister
         .clone()
-        .or_else(|| state.as_ref().map(|state| state.root_canister_id.clone()))
+        .or_else(|| state.map(|state| state.root_canister_id.clone()))
         .ok_or(SnapshotCommandError::MissingSnapshotSource)?;
-    let fleet = state
-        .as_ref()
-        .map_or_else(|| options.fleet.clone(), |state| state.fleet.clone());
-    let root = resolved_snapshot_root(options, state.as_ref())?;
+    let fleet = state.map_or_else(|| options.fleet.clone(), |state| state.fleet.clone());
+    let root = resolved_snapshot_root(options, state)?;
     let recursive = if !explicit_canister && state.is_some() {
         true
     } else {
@@ -197,12 +211,13 @@ fn resolve_snapshot_download_request(
         network: options.network.clone(),
         icp: options.icp.clone(),
         icp_root,
+        registry_entries: installed.map(|installed| installed.registry.entries),
     })
 }
 
 fn resolved_snapshot_root(
     options: &SnapshotDownloadOptions,
-    state: Option<&canic_host::install_root::InstallState>,
+    state: Option<&InstallState>,
 ) -> Result<Option<String>, SnapshotCommandError> {
     let Some(state) = state else {
         return Ok(options.root.clone());
@@ -233,6 +248,10 @@ fn validate_fleet_selection_if_needed(
         return Ok(());
     };
 
+    if let Some(entries) = &request.registry_entries {
+        return validate_fleet_membership_entries(fleet, &request.canister, entries);
+    }
+
     let registry_json = call_subnet_registry(request, root)?;
     validate_fleet_membership_json(fleet, &request.canister, &registry_json)
 }
@@ -243,6 +262,21 @@ fn validate_fleet_membership_json(
     registry_json: &str,
 ) -> Result<(), SnapshotCommandError> {
     let entries = parse_registry_entries(registry_json).map_err(SnapshotCommandError::Registry)?;
+    if entries.iter().any(|entry| entry.pid == canister) {
+        return Ok(());
+    }
+
+    Err(SnapshotCommandError::CanisterNotInFleet {
+        fleet: fleet.to_string(),
+        canister: canister.to_string(),
+    })
+}
+
+fn validate_fleet_membership_entries(
+    fleet: &str,
+    canister: &str,
+    entries: &[HostRegistryEntry],
+) -> Result<(), SnapshotCommandError> {
     if entries.iter().any(|entry| entry.pid == canister) {
         return Ok(());
     }
@@ -276,6 +310,12 @@ impl SnapshotDriver for IcpSnapshotDriver<'_> {
         &mut self,
         root: &str,
     ) -> Result<Vec<BackupRegistryEntry>, SnapshotDriverError> {
+        if self.request.root.as_deref() == Some(root)
+            && let Some(entries) = &self.request.registry_entries
+        {
+            return Ok(backup_registry_entries(entries));
+        }
+
         let registry_json = call_subnet_registry(self.request, root).map_err(driver_error)?;
         let entries = parse_registry_entries(&registry_json)
             .map_err(|err| driver_error(SnapshotCommandError::Registry(err)))?;
@@ -349,6 +389,22 @@ fn snapshot_icp_error(error: IcpCommandError) -> SnapshotCommandError {
         IcpCommandError::SnapshotIdUnavailable { output } => {
             SnapshotCommandError::SnapshotIdUnavailable(output)
         }
+    }
+}
+
+fn snapshot_installed_fleet_error(error: InstalledFleetError) -> SnapshotCommandError {
+    match error {
+        InstalledFleetError::NoInstalledFleet { .. }
+        | InstalledFleetError::InstallState(_)
+        | InstalledFleetError::ReplicaQuery(_)
+        | InstalledFleetError::LostLocalFleet { .. } => {
+            SnapshotCommandError::InstallState(error.to_string())
+        }
+        InstalledFleetError::IcpFailed { command, stderr } => {
+            SnapshotCommandError::IcpFailed { command, stderr }
+        }
+        InstalledFleetError::Registry(err) => SnapshotCommandError::Registry(err),
+        InstalledFleetError::Io(err) => SnapshotCommandError::Io(err),
     }
 }
 

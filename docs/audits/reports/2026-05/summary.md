@@ -11,6 +11,7 @@
 | `2026-05-11` | `docs/audits/reports/2026-05/2026-05-11/summary.md` | complete |
 | `2026-05-12` | `docs/audits/reports/2026-05/2026-05-12/summary.md` | complete |
 | `2026-05-13` | `docs/audits/reports/2026-05/2026-05-13/summary.md` | complete |
+| `2026-05-14` | `docs/audits/reports/2026-05/2026-05-14/summary.md` | complete |
 
 ## Month-Level Status
 
@@ -25,8 +26,9 @@ May has day summaries for the currently recorded audit days.
    `audience-target-binding` recurring run.
 2. Audit maintenance: keep future `audience-target-binding` runbooks aligned
    with current test names and the required role-attestation audience DTO shape.
-3. Audit maintenance: keep `token-trust-chain` aligned with the current
-   self-contained delegated-token verifier and root-key cascade tests.
+3. Auth maintainers: keep `dto::auth` passive and rerun `token-trust-chain`
+   with `audience-target-binding` after delegated audience, role-attestation,
+   or endpoint auth macro changes.
 4. `canic-backup` and `canic-cli`: move duplicated backup/restore fixture
    builders into crate-local `test_support` modules after functional backup
    testing identifies the stable fixtures.

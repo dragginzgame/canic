@@ -5,6 +5,18 @@ All notable, and occasionally less notable changes to this project will be docum
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.36.x] - 2026-05-15 - Backup/restore proofing
+
+- `0.36.0` starts the Backup/Restore V1 hardening line by documenting the
+  existing execution flow and proving backup runner resume, retry, status,
+  completion gating, and manifest finalization behavior against durable
+  journals.
+
+See detailed breakdown:
+[docs/changelog/0.36.md](docs/changelog/0.36.md)
+
+---
+
 ## [0.35.x] - 2026-05-13 - Gettin' it workin'
 
 - `0.35.16` removes stale `icp project show` handoff guidance and trims the remaining `icp.yaml` parser surface by deduplicating top-level section scanning and dropping an unused gateway-port wrapper.

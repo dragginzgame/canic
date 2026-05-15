@@ -96,3 +96,134 @@ pub(super) fn log_attestation_verifier_rejection(
         err
     );
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{RoleAttestationVerifyFlowError, verify_role_attestation_with_single_refresh};
+    use crate::{
+        InternalError, InternalErrorOrigin,
+        ops::auth::{AuthOpsError, AuthSignatureError, AuthValidationError},
+    };
+    use futures::executor::block_on;
+    use std::cell::Cell;
+
+    #[test]
+    fn role_attestation_refreshes_once_for_unknown_key_id() {
+        let verify_calls = Cell::new(0);
+        let refresh_calls = Cell::new(0);
+
+        let result = block_on(verify_role_attestation_with_single_refresh(
+            || {
+                let call = verify_calls.get();
+                verify_calls.set(call + 1);
+                if call == 0 {
+                    Err(unknown_key())
+                } else {
+                    Ok(())
+                }
+            },
+            || {
+                refresh_calls.set(refresh_calls.get() + 1);
+                async { Ok(()) }
+            },
+        ));
+
+        assert!(result.is_ok());
+        assert_eq!(verify_calls.get(), 2);
+        assert_eq!(refresh_calls.get(), 1);
+    }
+
+    #[test]
+    fn role_attestation_does_not_refresh_signature_failures() {
+        let verify_calls = Cell::new(0);
+        let refresh_calls = Cell::new(0);
+
+        let result = block_on(verify_role_attestation_with_single_refresh(
+            || {
+                verify_calls.set(verify_calls.get() + 1);
+                Err(AuthOpsError::Signature(
+                    AuthSignatureError::AttestationSignatureUnavailable,
+                ))
+            },
+            || {
+                refresh_calls.set(refresh_calls.get() + 1);
+                async { Ok(()) }
+            },
+        ));
+
+        assert!(matches!(
+            result,
+            Err(RoleAttestationVerifyFlowError::Initial(
+                AuthOpsError::Signature(AuthSignatureError::AttestationSignatureUnavailable)
+            ))
+        ));
+        assert_eq!(verify_calls.get(), 1);
+        assert_eq!(refresh_calls.get(), 0);
+    }
+
+    #[test]
+    fn role_attestation_reports_post_refresh_failure_after_single_retry() {
+        let verify_calls = Cell::new(0);
+        let refresh_calls = Cell::new(0);
+
+        let result = block_on(verify_role_attestation_with_single_refresh(
+            || {
+                verify_calls.set(verify_calls.get() + 1);
+                Err(unknown_key())
+            },
+            || {
+                refresh_calls.set(refresh_calls.get() + 1);
+                async { Ok(()) }
+            },
+        ));
+
+        assert!(matches!(
+            result,
+            Err(RoleAttestationVerifyFlowError::PostRefresh(
+                AuthOpsError::Validation(AuthValidationError::AttestationUnknownKeyId {
+                    key_id: 7
+                })
+            ))
+        ));
+        assert_eq!(verify_calls.get(), 2);
+        assert_eq!(refresh_calls.get(), 1);
+    }
+
+    #[test]
+    fn role_attestation_reports_refresh_failure_without_second_verify() {
+        let verify_calls = Cell::new(0);
+        let refresh_calls = Cell::new(0);
+
+        let result = block_on(verify_role_attestation_with_single_refresh(
+            || {
+                verify_calls.set(verify_calls.get() + 1);
+                Err(unknown_key())
+            },
+            || {
+                refresh_calls.set(refresh_calls.get() + 1);
+                async {
+                    Err(InternalError::ops(
+                        InternalErrorOrigin::Ops,
+                        "refresh failed",
+                    ))
+                }
+            },
+        ));
+
+        assert!(matches!(
+            result,
+            Err(RoleAttestationVerifyFlowError::Refresh {
+                trigger: AuthOpsError::Validation(AuthValidationError::AttestationUnknownKeyId {
+                    key_id: 7
+                }),
+                ..
+            })
+        ));
+        assert_eq!(verify_calls.get(), 1);
+        assert_eq!(refresh_calls.get(), 1);
+    }
+
+    fn unknown_key() -> AuthOpsError {
+        AuthOpsError::Validation(AuthValidationError::AttestationUnknownKeyId { key_id: 7 })
+    }
+}

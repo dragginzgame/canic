@@ -20,6 +20,9 @@ Chain validation must verify:
 - shard key binding to Canic's configured signing key and derivation path
 
 Freshness checks are verified by the Expiry / Replay / Single-Use Invariant.
+This audit may cite freshness/replay checks as evidence only where they are
+part of the delegated-token acceptance path; do not score a freshness-only
+finding here unless it also lets an invalid trust chain pass.
 
 ## Why This Matters
 
@@ -82,6 +85,23 @@ Confirm:
 - root key identity checks cover root pid, key id, key hash, algorithm, and time window
 - claims bind issuer shard pid and cert hash back to the signed cert
 - shard key binding matches configured key name and shard derivation path
+- endpoint guard code verifies the token before subject binding, required-scope
+  checks, and update-call replay consumption
+- role-attestation verification uses cached trusted keys and only refreshes on
+  unknown key id
+
+Record the chain evidence as an ordered stage table. At minimum it must show:
+
+1. runtime config gate
+2. shard key binding
+3. verifier-local root trust anchor
+4. root key identity/window resolution
+5. canonical certificate hash
+6. root signature
+7. claims-to-cert binding
+8. canonical claims hash
+9. shard signature
+10. endpoint subject/scope/replay boundary
 
 ### 3. Verify Negative Cases
 
@@ -105,17 +125,18 @@ Confirm rejection for:
 - noncanonical cert or claims vectors => rejection
 - root pid mismatch => rejection
 - runtime root-key propagation path => acceptance
+- role-attestation subject/audience/epoch/expiry/signature rejection paths => rejection
+- stale proof-store/current-proof trace helpers are absent unless the verifier
+  model has deliberately changed again
 
 Current suggested commands:
 
 ```bash
-cargo test -p canic-core --lib verify_delegated_token_accepts_self_validating_token_without_proof_lookup -- --nocapture
-cargo test -p canic-core --lib verify_delegated_token_rejects_root_signature_failure -- --nocapture
-cargo test -p canic-core --lib verify_delegated_token_rejects_shard_signature_failure -- --nocapture
-cargo test -p canic-core --lib verify_delegated_token_rejects_cert_hash_drift -- --nocapture
-cargo test -p canic-core --lib verify_delegated_token_rejects_noncanonical_cert_vectors -- --nocapture
-cargo test -p canic-core --lib resolve_root_key_enforces_root_pid_binding_before_key_lookup -- --nocapture
+cargo test -p canic-core --lib verify_delegated_token -- --nocapture
+cargo test -p canic-core --lib resolve_root_key -- --nocapture
 cargo test -p canic-tests --test root_suite delegated_token_verification_uses_cascaded_subnet_state_root_key -- --nocapture
+cargo test -p canic-tests --test pic_role_attestation role_attestation_verification_paths -- --test-threads=1 --nocapture
+rg "trace_token_trust_chain|token_chain|proof_state|verify_delegation_signature|verify_token_sig|authenticated_guard_checks_current_proof" crates -n
 ```
 
 ## Structural Hotspots
@@ -145,6 +166,15 @@ If none are detected in a given run, state: No structural hotspots detected in t
 
 Detect modules trending toward gravity-well behavior from import fan-in, cross-layer coupling, and edit frequency.
 
+Treat DTO fan-in differently from verifier fan-in:
+
+- broad passive DTO fan-in is a watchpoint unless behavior, storage mutation, or
+  validation logic moves onto the DTO type
+- verifier/guard fan-in is scored as structural pressure because it can affect
+  acceptance order
+- tests and support canisters count as evidence, but do not by themselves make
+  a DTO a production hub
+
 | Module | Import Tokens | Unique Subsystems | Cross-Layer Count | Pressure Score |
 | --- | --- | ---: | ---: | ---: |
 | `<module>` | `<top import tokens>` | `<n>` | `<n>` | `<1-10>` |
@@ -163,6 +193,8 @@ Pressure score guidance:
 - shard key accepted without checking configured key name and derivation path
 - claims accepted without matching issuer shard pid and cert hash
 - trust anchor loaded from runtime configuration without validation
+- passive DTOs gaining behavior or validation methods
+- role-attestation refresh paths retrying on errors other than unknown key id
 
 ## Severity
 
@@ -279,21 +311,32 @@ Interpretation scale:
 - 7-8 = high risk
 - 9-10 = critical architectural risk
 
-Score must be justified using checklist findings and Structural Hotspots evidence.
+Score must be justified using checklist findings and Structural Hotspots
+evidence. Separate the security verdict from structural watchpoints: a PASS can
+still have structural pressure, but passive DTO fan-in alone must not dominate
+the score.
 
 Derivation guidance (deterministic):
 
 - start at `0`
 - add `+4` for any confirmed trust-chain validation break
-- add `+2` per medium/high hotspot contribution (max `+4`)
-- add `+2` if any hub module pressure score is `>= 7`
+- add `+3` if a required trust-chain stage is present but ordered after token
+  acceptance or endpoint execution
+- add `+2` if verifier-local trust-anchor evidence is missing or ambiguous
+- add `+2` if required unit verifier/root-key tests are not run or are blocked
+- add `+2` if the runtime root-key cascade or role-attestation PocketIC path is
+  not run or is blocked
+- add `+1` per medium/high verifier or endpoint-guard hotspot contribution
+  (max `+2`)
+- add `+1` if any verifier/guard hub module pressure score is `>= 7`
 - add `+1` if enum shock radius is detected (`> 6` reference files)
-- add `+1` if cross-layer struct spread is detected (`>= 3` architecture layers)
-- add `+2` if growing hub module signal is detected
+- add `+1` if active verifier/guard structs spread across `>= 3` architecture
+  layers
+- add `+1` if growing verifier/guard hub module signal is detected
 - add `+1` if capability public surface is `> 20` items
-- add `+1` for fan-in `6-8` across multiple subsystems
-- add `+2` for fan-in `9-12` across multiple subsystems
-- add `+3` for fan-in `12+` across multiple subsystems
+- add `+1` for passive DTO fan-in `12+` across multiple production subsystems
+  only if the DTO remains behavior-free; score higher under red flags if it
+  gains behavior
 - clamp to `0..10`
 
 If no confirmed findings and no hotspot/hub signals are present, score must remain `0-2`.

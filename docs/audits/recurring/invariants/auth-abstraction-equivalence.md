@@ -37,6 +37,9 @@ For any authenticated endpoint implemented via abstraction, the abstraction path
 - mismatched subject/caller
 - expired credentials
 - insufficient scope
+- update replay
+- query statelessness
+- delegated-session subject resolution
 
 ## Relationship to Canonical Auth Boundary
 
@@ -44,12 +47,20 @@ The Canonical Auth Boundary Invariant verifies that all authenticated paths conv
 
 This audit verifies semantic equivalence and failure-behavior parity between abstraction-generated and handwritten canonical authentication paths.
 
+This audit must also check the mechanical trust-chain guards that prevent a
+public material-only verifier from reappearing. The abstraction path is only
+equivalent if endpoint-level subject binding and update-token replay
+consumption remain part of the generated/helper boundary.
+
 ## Run This Audit After
 
 - macro / DSL changes
 - endpoint helper additions
 - dispatcher wrapper changes
 - auth abstraction refactors
+- `AccessContext` field or identity-lane changes
+- delegated-session bootstrap or resolution changes
+- delegated-token replay, scope, or verifier-ordering changes
 
 ## Report Preamble (Required)
 
@@ -68,11 +79,13 @@ Every report generated from this audit must include:
 Search terms:
 
 ```text
-macro_rules!
-authenticated(
-requires_scope(
 canic_update
 canic_query
+requires(auth::authenticated
+auth::authenticated(
+resolve_authenticated_identity
+delegated_token_verified
+AccessContext
 ```
 
 ### 2. Inspect Expansion or Equivalent Implementation
@@ -84,12 +97,40 @@ Confirm:
 - generated handlers route through canonical verification
 - no branch omits subject binding
 - no convenience path weakens failure behavior
+- the generated `AccessContext` preserves separate transport-caller and
+  authenticated-subject lanes
+- default app guards that do not use `authenticated(...)` keep
+  `AuthenticatedIdentitySource::RawCaller`
+- `authenticated(...)` endpoints require first argument type `DelegatedToken`
 
 ### 3. Verify Drift Risk
 
 Confirm handwritten and generated paths share tests or shared internal helpers for parity.
 
-### 4. Test Expectations
+### 4. Guardrail Expectations
+
+Run the auth trust-chain guard and record the result:
+
+```bash
+bash scripts/ci/run-auth-trust-chain-guards.sh
+```
+
+This guard is expected to reject:
+
+- public `AuthApi::verify_token` or public `verify_token_material` helpers
+- auth DTO verification/signing/key-resolution/replay behavior
+- delegated endpoint guard ordering drift
+- broad role-attestation refresh behavior
+
+Also scan for material-only verifier exposure:
+
+```bash
+rg -n 'pub(\([^)]*\))?\s+(async\s+)?fn\s+verify_token\b|pub(\([^)]*\))?\s+(async\s+)?fn\s+verify_token_material\b|AuthApi::verify_token\b' crates/canic-core/src/api/auth crates/canic/src -g '*.rs'
+```
+
+Expected result: no matches.
+
+### 5. Test Expectations
 
 At least one integration test must exercise an abstraction-generated authenticated endpoint and verify:
 
@@ -100,6 +141,21 @@ At least one integration test must exercise an abstraction-generated authenticat
 
 And parity tests must confirm handwritten and generated paths fail identically under the same invalid auth inputs.
 
+Current focused test bundle:
+
+```bash
+cargo test -p canic-macros authenticated -- --nocapture
+cargo test -p canic-macros access_stage_ -- --nocapture
+cargo test -p canic-core --lib access::auth -- --nocapture
+cargo test -p canic-core --lib verify_delegated_token -- --nocapture
+cargo test -p canic-core --lib caller_predicates_use_transport_caller_not_authenticated_subject -- --nocapture
+```
+
+The `access::auth` bundle must include
+`delegated_auth_guard_preserves_verify_bind_scope_consume_order`, subject
+binding, required scope, update replay, query statelessness, and delegated
+session resolution tests.
+
 ## Structural Hotspots
 
 List concrete files/modules/structs that carry abstraction-equivalence risk.
@@ -107,17 +163,21 @@ List concrete files/modules/structs that carry abstraction-equivalence risk.
 Detection commands (run and record output references):
 
 ```bash
-rg '^use ' crates/ -g '*.rs'
-rg 'crate::workflow|crate::ops|crate::api|crate::policy' crates/ -g '*.rs'
-rg 'pub struct|impl ' crates/ -g '*.rs'
-git log --name-only -n 20 -- crates/
+rg -l 'access::expr|eval_access|AccessExpr|AccessPredicate|BuiltinPredicate' crates canisters fleets -g '*.rs'
+rg -l 'access::auth|delegated_token_verified|resolve_authenticated_identity|AuthenticatedIdentitySource|ResolvedAuthenticatedIdentity' crates canisters fleets -g '*.rs'
+rg -l 'DelegationProof' crates canisters fleets -g '*.rs'
+rg -l 'DelegatedTokenClaims|VerifiedDelegatedToken|VerifyDelegatedToken' crates canisters fleets -g '*.rs'
+git log --name-only -n 20 -- crates/canic-macros crates/canic-core/src/access crates/canic-core/src/api/auth crates/canic-core/src/ops/auth crates/canic-core/src/dto/auth.rs
 ```
 
 | File / Module | Struct / Function | Reason | Risk Contribution |
 | --- | --- | --- | --- |
-| `canic-dsl-macros/src/endpoint/expand.rs` | access expansion block | abstraction wiring into auth runtime | High |
-| `access/expr.rs` | `eval_access` | canonical predicate dispatch surface | High |
-| `access/auth.rs` | `delegated_token_verified`, `verify_token` | canonical verifier behavior baseline | High |
+| `crates/canic-macros/src/endpoint/expand.rs` | `access_stage`, `build_access_plan` | abstraction wiring into auth runtime | High |
+| `crates/canic-macros/src/endpoint/validate.rs` | `validate_authenticated_args` | compile-time shape guard for token-bearing endpoints | Medium |
+| `crates/canic-core/src/access/expr/mod.rs` | `AccessContext`, `eval_access` | canonical predicate dispatch surface and caller-lane boundary | High |
+| `crates/canic-core/src/access/expr/evaluators.rs` | `AuthenticatedEvaluator` | dispatch from abstraction evaluator to canonical auth verifier | High |
+| `crates/canic-core/src/access/auth/token.rs` | `delegated_token_verified`, `verify_token` | canonical verifier behavior baseline | High |
+| `crates/canic-core/src/api/auth/session/mod.rs` | delegated session bootstrap | convenience path that must not replace endpoint auth semantics | Medium |
 
 If none are detected in a given run, state: No structural hotspots detected in this run.
 
@@ -140,6 +200,10 @@ Pressure score guidance:
 - generated path bypasses canonical verifier
 - generated failure mapping differs from handwritten behavior for same invalid input
 - abstraction-specific branch skips trust/scope ordering
+- generated access context collapses transport caller and authenticated subject
+- a public material-only verifier is exposed outside endpoint binding/replay
+- default app guard starts resolving delegated-session identity
+- DTO auth types gain verification, signing, replay, or policy behavior
 
 ## Severity
 

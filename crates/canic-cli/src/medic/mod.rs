@@ -8,7 +8,8 @@ use crate::{
 use canic_host::{
     icp::IcpCli,
     icp_config::resolve_current_canic_icp_root,
-    install_root::{InstallState, read_named_fleet_install_state_from_root},
+    install_root::InstallState,
+    installed_fleet::read_installed_fleet_state_from_root,
     replica_query,
     table::{ColumnAlign, render_table},
 };
@@ -105,11 +106,11 @@ fn run_medic_checks(options: &MedicOptions) -> Vec<MedicCheck> {
     let state = match icp_root.as_deref().map_or_else(
         || Err("could not resolve ICP project root".to_string()),
         |root| {
-            read_named_fleet_install_state_from_root(root, &options.network, &options.fleet)
+            read_installed_fleet_state_from_root(&options.network, &options.fleet, root)
                 .map_err(|err| err.to_string())
         },
     ) {
-        Ok(Some(state)) => {
+        Ok(state) => {
             checks.push(MedicCheck::ok(
                 "fleet state",
                 format!("{} installed", state.fleet),
@@ -117,7 +118,7 @@ fn run_medic_checks(options: &MedicOptions) -> Vec<MedicCheck> {
             ));
             Some(state)
         }
-        Ok(None) => {
+        Err(err) if is_missing_installed_fleet(&err) => {
             checks.push(MedicCheck::warn(
                 "fleet state",
                 "no installed fleet found",
@@ -141,6 +142,10 @@ fn run_medic_checks(options: &MedicOptions) -> Vec<MedicCheck> {
     }
 
     checks
+}
+
+fn is_missing_installed_fleet(error: &str) -> bool {
+    error.starts_with("fleet ") && error.contains(" is not installed on network ")
 }
 
 fn check_icp_cli(options: &MedicOptions) -> MedicCheck {

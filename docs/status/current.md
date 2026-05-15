@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-05-13
+Last updated: 2026-05-15
 
 ## Purpose
 
@@ -9,10 +9,12 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
-- Active minor: `0.35.x`
-- Theme: get backup/restore working end-to-end around topology-aware plans,
-  executable journals, and clear host/backup boundaries.
-- Current release-work area: `0.35.4` root endpoint/access-control cleanup.
+- Active minor: `0.36.x` prep
+- Theme: prove and harden the existing backup/restore execution code into an
+  operator-working flow with durable journals, resume/retry behavior, and
+  verification gates.
+- Current release-work area: first pushable `0.36.0` backup/restore proof
+  slice.
 
 ## Recent Work
 
@@ -43,6 +45,44 @@ inspect only the files needed for the current task.
   reports risk `3 / 10` and confirms role-attestation, delegated-token,
   delegated-grant, and capability-proof audience/target binding still fails
   closed.
+- Reran the 2026-05-14 oldest latest-run recurring audit,
+  `token-trust-chain`, at
+  `docs/audits/reports/2026-05/2026-05-14/token-trust-chain.md`. It reports
+  risk `4 / 10`, finds no trust-chain correctness break, and leaves only
+  structural watchpoints around `dto::auth` fan-in plus runtime verifier/guard
+  edit pressure.
+- Reran the next oldest latest-run recurring audit,
+  `auth-abstraction-equivalence`, at
+  `docs/audits/reports/2026-05/2026-05-14/auth-abstraction-equivalence.md`.
+  It reports risk `3 / 10`, finds no abstraction bypass, and the recurring
+  definition now uses current `crates/canic-macros` paths, targeted auth scans,
+  and the auth trust-chain guard as required evidence.
+- Promoted the repeated ad hoc `dry-consolidation` audit into the recurring
+  system suite and reran it at
+  `docs/audits/reports/2026-05/2026-05-14/dry-consolidation.md`. It reports
+  risk `4 / 10`, down from May 12 after installed-fleet resolution, registry
+  parsing, response parsing primitives, and major CLI command modules gained
+  clearer owners.
+- Applied a small dry-consolidation follow-up: `snapshot download` now uses the
+  host installed-fleet resolver/cache for installed fleets, and `medic` reads
+  installed-fleet state through the host installed-fleet boundary.
+- Added the proposed 0.36 backup/restore v1 design at
+  `docs/design/0.36-backup-restore/0.36-design.md`. The 0.36 release focus is
+  proving and hardening the existing backup/restore execution code into a full
+  operator-working backup and in-place restore flow with durable journals,
+  receipts, resume/retry behavior, and status/verify gates.
+- Started the first pushable 0.36.0 proof slice by adding backup runner tests
+  for max-step resume without replaying completed/preflight work and failed
+  snapshot retry from the recorded failed operation.
+- Kept backup resume proof at the runner/test layer instead of exposing a public
+  manual pause flag for `canic backup create`; 0.36 should start with the
+  smallest operator surface that works.
+- Added backup status coverage for execution layouts so durable
+  plan/journal/manifest state reports `running`, `failed`, and `complete`
+  without introducing new operator flags.
+- Tightened `canic backup status --require-complete` to require the complete
+  execution layout, including the finalized manifest, instead of accepting a
+  completed execution journal by itself.
 - Added a config-schema regression proving obsolete per-canister delegated-auth
   verifier tables are rejected instead of accepted through compatibility shims.
 - Updated the internal audit scaling probe to use `scale_replica` and

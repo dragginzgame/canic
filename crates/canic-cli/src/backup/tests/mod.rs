@@ -1,13 +1,14 @@
 use crate::test_support::temp_dir;
 use canic_backup::{
     artifacts::ArtifactChecksum,
-    execution::BackupExecutionJournal,
+    execution::{BackupExecutionJournal, BackupExecutionOperationReceipt},
     journal::{ArtifactJournalEntry, ArtifactState, DownloadJournal},
     manifest::{
         BackupUnit, BackupUnitKind, ConsistencySection, FleetBackupManifest, FleetMember,
         FleetSection, IdentityMode, SourceMetadata, SourceSnapshot, ToolMetadata,
         VerificationCheck, VerificationPlan,
     },
+    plan::BackupOperationKind,
 };
 use std::{
     fs,
@@ -235,6 +236,89 @@ fn backup_status_reads_dry_run_execution_summary() {
     assert_eq!(report.execution.plan_id, plan.plan_id);
     assert!(!report.execution.preflight_accepted);
     assert!(report.execution.blocked_operations > 0);
+}
+
+// Ensure backup status reports an execution layout as running once preflight is accepted.
+#[test]
+fn backup_status_reports_running_execution_layout() {
+    let report = backup_status_for_execution_journal(
+        "canic-cli-backup-status-running",
+        accepted_execution_journal(),
+        false,
+    );
+
+    assert_eq!(report.layout_status, "running");
+    assert!(report.execution.preflight_accepted);
+    assert_eq!(report.execution.failed_operations, 0);
+    assert!(report.execution.ready_operations > 0);
+}
+
+// Ensure backup status reports failed execution journals without requiring a manifest.
+#[test]
+fn backup_status_reports_failed_execution_layout() {
+    let mut journal = accepted_execution_journal();
+    complete_execution_operation(&mut journal, 4);
+    fail_execution_operation(&mut journal, 5, "snapshot failed");
+
+    let report =
+        backup_status_for_execution_journal("canic-cli-backup-status-failed", journal, false);
+
+    assert_eq!(report.layout_status, "failed");
+    assert_eq!(report.execution.failed_operations, 1);
+    assert_eq!(
+        report
+            .execution
+            .next_operation
+            .expect("failed operation")
+            .sequence,
+        5
+    );
+}
+
+// Ensure backup status reports complete only when the execution journal is complete and a manifest exists.
+#[test]
+fn backup_status_reports_complete_execution_layout() {
+    let mut journal = accepted_execution_journal();
+    for sequence in 4..=9 {
+        complete_execution_operation(&mut journal, sequence);
+    }
+
+    let report =
+        backup_status_for_execution_journal("canic-cli-backup-status-complete", journal, true);
+
+    assert_eq!(report.layout_status, "complete");
+    assert_eq!(
+        report.execution.completed_operations + report.execution.skipped_operations,
+        report.execution.total_operations
+    );
+}
+
+// Ensure require-complete does not accept completed execution state before manifest finalization.
+#[test]
+fn require_complete_rejects_complete_execution_without_manifest() {
+    let mut journal = accepted_execution_journal();
+    for sequence in 4..=9 {
+        complete_execution_operation(&mut journal, sequence);
+    }
+    let report = BackupStatusReport::DryRun(backup_status_for_execution_journal(
+        "canic-cli-backup-status-complete-no-manifest",
+        journal,
+        false,
+    ));
+    let options = BackupStatusOptions {
+        backup_ref: None,
+        dir: Some(PathBuf::from("unused")),
+        out: None,
+        require_complete: true,
+    };
+
+    let err = enforce_status_requirements(&options, &report)
+        .expect_err("complete execution without manifest should fail");
+
+    assert!(matches!(
+        err,
+        BackupCommandError::DryRunNotComplete { plan_id } if plan_id == "plan-test"
+    ));
 }
 
 // Ensure backup inspect reads dry-run plan and execution details.
@@ -607,6 +691,105 @@ fn valid_backup_plan() -> BackupPlan {
         identity_mode: IdentityMode::Relocatable,
     })
     .expect("backup plan")
+}
+
+// Read backup status from one caller-provided execution journal layout.
+fn backup_status_for_execution_journal(
+    name: &str,
+    journal: BackupExecutionJournal,
+    write_manifest: bool,
+) -> BackupDryRunStatusReport {
+    let root = temp_dir(name);
+    let layout = BackupLayout::new(root.clone());
+    layout
+        .write_backup_plan(&valid_backup_plan())
+        .expect("write backup plan");
+    layout
+        .write_execution_journal(&journal)
+        .expect("write execution journal");
+    if write_manifest {
+        layout
+            .write_manifest(&valid_manifest())
+            .expect("write manifest");
+    }
+    let options = BackupStatusOptions {
+        backup_ref: None,
+        dir: Some(root.clone()),
+        out: None,
+        require_complete: false,
+    };
+    let report = backup_status(&options).expect("read backup status");
+
+    fs::remove_dir_all(root).expect("remove temp root");
+    let BackupStatusReport::DryRun(report) = report else {
+        panic!("expected execution status");
+    };
+    report
+}
+
+// Build an execution journal after the preflight gate has been accepted.
+fn accepted_execution_journal() -> BackupExecutionJournal {
+    let mut journal =
+        BackupExecutionJournal::from_plan(&valid_backup_plan()).expect("execution journal");
+    journal
+        .accept_preflight_bundle_at("preflight-test".to_string(), Some("unix:10".to_string()))
+        .expect("accept preflight");
+    journal
+}
+
+// Complete one operation in an execution journal with the fields required by that operation kind.
+fn complete_execution_operation(journal: &mut BackupExecutionJournal, sequence: usize) {
+    journal
+        .mark_operation_pending_at(sequence, Some(format!("unix:{sequence}0")))
+        .expect("mark operation pending");
+    let operation = journal
+        .operations
+        .iter()
+        .find(|operation| operation.sequence == sequence)
+        .expect("operation exists")
+        .clone();
+    let mut receipt = BackupExecutionOperationReceipt::completed(
+        journal,
+        &operation,
+        Some(format!("unix:{sequence}1")),
+    );
+    match operation.kind {
+        BackupOperationKind::CreateSnapshot => {
+            receipt.snapshot_id = Some("snap-app".to_string());
+        }
+        BackupOperationKind::DownloadSnapshot => {
+            receipt.artifact_path = Some("artifacts/app".to_string());
+        }
+        BackupOperationKind::VerifyArtifact => {
+            receipt.checksum = Some(HASH.to_string());
+        }
+        _ => {}
+    }
+    journal
+        .record_operation_receipt(receipt)
+        .expect("record completed operation");
+}
+
+// Fail one operation in an execution journal.
+fn fail_execution_operation(journal: &mut BackupExecutionJournal, sequence: usize, reason: &str) {
+    journal
+        .mark_operation_pending_at(sequence, Some(format!("unix:{sequence}0")))
+        .expect("mark operation pending");
+    let operation = journal
+        .operations
+        .iter()
+        .find(|operation| operation.sequence == sequence)
+        .expect("operation exists")
+        .clone();
+    let receipt = BackupExecutionOperationReceipt::failed(
+        journal,
+        &operation,
+        Some(format!("unix:{sequence}1")),
+        reason.to_string(),
+    );
+    journal
+        .record_operation_receipt(receipt)
+        .expect("record failed operation");
 }
 
 // Build one durable journal with a caller-provided checksum.

@@ -1,0 +1,6 @@
+# Auth trust-chain hotspots require explicit security review.
+/crates/canic-core/src/ops/auth/token.rs @dragginzgame
+/crates/canic-core/src/access/auth/token.rs @dragginzgame
+/crates/canic-core/src/ops/auth/delegated/verify.rs @dragginzgame
+/crates/canic-core/src/ops/auth/delegated/root_key.rs @dragginzgame
+/crates/canic-core/src/dto/auth.rs @dragginzgame

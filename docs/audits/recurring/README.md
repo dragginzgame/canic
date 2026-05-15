@@ -37,6 +37,7 @@ For general architecture-health audit rounds, start with:
 - [system/layer-violations.md](system/layer-violations.md)
 - [system/capability-surface.md](system/capability-surface.md)
 - [system/complexity-accretion.md](system/complexity-accretion.md)
+- [system/dry-consolidation.md](system/dry-consolidation.md)
 - [system/wasm-footprint.md](system/wasm-footprint.md)
 
 See also:

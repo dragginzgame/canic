@@ -82,6 +82,20 @@ fn fleet_membership_rejects_unknown_canister() {
     ));
 }
 
+// Ensure cached installed-fleet registry entries can validate membership without reparsing.
+#[test]
+fn fleet_membership_entries_accept_known_canister() {
+    let entries = vec![HostRegistryEntry {
+        pid: ROOT.to_string(),
+        role: Some("root".to_string()),
+        kind: None,
+        parent_pid: None,
+        module_hash: None,
+    }];
+
+    validate_fleet_membership_entries("demo", ROOT, &entries).expect("root is a member");
+}
+
 // Ensure generated default path labels are filesystem-friendly.
 #[test]
 fn snapshot_default_path_sanitizes_labels() {

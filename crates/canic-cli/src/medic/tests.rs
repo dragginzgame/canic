@@ -49,6 +49,17 @@ fn renders_medic_report() {
     assert!(report.contains("warn"));
 }
 
+// Ensure host installed-fleet missing-state errors remain warnings, not failures.
+#[test]
+fn missing_installed_fleet_error_is_warnable() {
+    assert!(is_missing_installed_fleet(
+        "fleet demo is not installed on network local"
+    ));
+    assert!(!is_missing_installed_fleet(
+        "failed to read canic fleet state: bad json"
+    ));
+}
+
 // Ensure common command-line JSON shapes are accepted for readiness.
 #[test]
 fn parses_ready_json_shapes() {

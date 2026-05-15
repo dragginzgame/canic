@@ -15,6 +15,7 @@ rounds:
 5. [module-structure.md](module-structure.md)
 6. [dependency-hygiene.md](dependency-hygiene.md)
 7. [publish-surface.md](publish-surface.md)
+8. [dry-consolidation.md](dry-consolidation.md)
 
 These audits cover:
 
@@ -25,6 +26,8 @@ These audits cover:
 - crate/module topology, visibility hygiene, and facade containment
 - crate dependency direction, feature hygiene, and publish-surface discipline
 - published package posture, crate-local docs/examples alignment, and downstream contract clarity
+- avoidable behavior duplication, repeated parser/registry ownership, and
+  command-family DRY pressure
 
 ## Additional System Audits
 
@@ -45,6 +48,8 @@ These audits cover:
   or publish/package surface cleanliness.
 - Use `publish-surface` when reviewing README/docs.rs posture, published binary
   contracts, or whether crate-local package documentation matches intended downstream use.
+- Use `dry-consolidation` after broad CLI/host/backup changes or when a cleanup
+  pass should distinguish useful local duplication from behavior-bearing drift.
 
 ## Reporting Discipline
 
