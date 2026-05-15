@@ -14,6 +14,7 @@ pub struct BackupCreateReport {
     pub plan_id: String,
     pub run_id: String,
     pub mode: String,
+    pub layout: String,
     pub status: String,
     pub scope: String,
     pub targets: usize,

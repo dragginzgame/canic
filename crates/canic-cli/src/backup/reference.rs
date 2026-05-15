@@ -107,13 +107,18 @@ fn manifest_backup_list_entry(dir: PathBuf, layout: &BackupLayout) -> BackupList
             status: "invalid-manifest".to_string(),
         };
     };
+    let status = if layout.backup_plan_path().is_file() {
+        execution_backed_layout_status(layout)
+    } else {
+        "ok".to_string()
+    };
 
     BackupListEntry {
         dir,
         backup_id: manifest.backup_id,
         created_at: manifest.created_at,
         members: manifest.fleet.members.len(),
-        status: "ok".to_string(),
+        status,
     }
 }
 
@@ -127,15 +132,7 @@ fn planned_backup_list_entry(dir: PathBuf, layout: &BackupLayout) -> BackupListE
             status: "invalid-plan".to_string(),
         };
     };
-    let status = if layout.execution_journal_path().is_file()
-        && layout.verify_execution_integrity().is_err()
-    {
-        "invalid-plan-journal".to_string()
-    } else if let Ok(journal) = layout.read_execution_journal() {
-        execution_layout_status(&journal, layout.manifest_path().is_file())
-    } else {
-        "dry-run".to_string()
-    };
+    let status = execution_backed_layout_status(layout);
 
     BackupListEntry {
         dir,
@@ -143,6 +140,23 @@ fn planned_backup_list_entry(dir: PathBuf, layout: &BackupLayout) -> BackupListE
         created_at: planned_backup_created_at(&plan.run_id),
         members: plan.targets.len(),
         status,
+    }
+}
+
+fn execution_backed_layout_status(layout: &BackupLayout) -> String {
+    if layout.read_backup_plan().is_err() {
+        return "invalid-plan".to_string();
+    }
+    if layout.execution_journal_path().is_file() && layout.verify_execution_integrity().is_err() {
+        return "invalid-plan-journal".to_string();
+    }
+    if !layout.execution_journal_path().is_file() && layout.manifest_path().is_file() {
+        return "invalid-plan-journal".to_string();
+    }
+    if let Ok(journal) = layout.read_execution_journal() {
+        execution_layout_status(&journal, layout.manifest_path().is_file())
+    } else {
+        "dry-run".to_string()
     }
 }
 

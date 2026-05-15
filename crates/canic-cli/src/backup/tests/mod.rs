@@ -57,13 +57,37 @@ fn parses_backup_create_options() {
     assert_eq!(options.icp, "/bin/icp");
 }
 
+// Ensure backup create output makes reused output layouts visible.
+#[test]
+fn render_backup_create_report_shows_layout_source() {
+    let report = BackupCreateReport {
+        fleet: "demo".to_string(),
+        network: "local".to_string(),
+        out: PathBuf::from("backups/demo"),
+        plan_id: "plan-demo".to_string(),
+        run_id: "run-demo".to_string(),
+        mode: "dry-run".to_string(),
+        layout: "existing".to_string(),
+        status: "planned".to_string(),
+        scope: "fleet".to_string(),
+        targets: 2,
+        operations: 3,
+        executed_operations: 0,
+    };
+
+    let text = render_create_report(&report);
+
+    assert!(text.contains("LAYOUT"));
+    assert!(text.contains("existing"));
+}
+
 // Ensure dry-run persistence writes a plan and matching execution journal.
 #[test]
 fn backup_create_dry_run_persists_plan_and_execution_journal() {
     let root = temp_dir("canic-cli-backup-create-plan");
     let plan = valid_backup_plan();
 
-    persist_backup_create_dry_run(&root, &plan).expect("persist dry-run plan");
+    let persisted = persist_backup_create_dry_run(&root, &plan).expect("persist dry-run plan");
 
     let layout = BackupLayout::new(root.clone());
     let read_plan = layout.read_backup_plan().expect("read backup plan");
@@ -75,9 +99,127 @@ fn backup_create_dry_run_persists_plan_and_execution_journal() {
         .expect("verify execution integrity");
 
     fs::remove_dir_all(root).expect("remove temp root");
+    assert_eq!(persisted.plan_id, plan.plan_id);
     assert_eq!(read_plan.plan_id, plan.plan_id);
     assert_eq!(journal.plan_id, plan.plan_id);
     assert!(report.verified);
+}
+
+// Ensure dry-run persistence reports whether it created or reused a layout.
+#[test]
+fn backup_create_persistence_reports_layout_source() {
+    let root = temp_dir("canic-cli-backup-create-layout-source");
+    let plan = valid_backup_plan();
+
+    let (created, created_from_existing) =
+        persist_backup_create_dry_run_with_layout(&root, &plan).expect("persist new layout");
+    let (resumed, resumed_from_existing) =
+        persist_backup_create_dry_run_with_layout(&root, &plan).expect("reuse existing layout");
+
+    fs::remove_dir_all(root).expect("remove temp root");
+    assert_eq!(created.plan_id, plan.plan_id);
+    assert_eq!(resumed.plan_id, plan.plan_id);
+    assert!(!created_from_existing);
+    assert!(resumed_from_existing);
+}
+
+// Ensure backup create uses an existing output layout as the resume boundary.
+#[test]
+fn backup_create_persistence_preserves_existing_execution_layout() {
+    let root = temp_dir("canic-cli-backup-create-resume");
+    let plan = valid_backup_plan();
+    persist_backup_create_dry_run(&root, &plan).expect("persist initial plan");
+    let layout = BackupLayout::new(root.clone());
+    let mut journal = accepted_execution_journal();
+    complete_execution_operation(&mut journal, 4);
+    layout
+        .write_execution_journal(&journal)
+        .expect("write progressed execution journal");
+    let mut replacement = valid_backup_plan();
+    replacement.plan_id = "plan-replacement".to_string();
+    replacement.run_id = "run-replacement".to_string();
+
+    let resumed =
+        persist_backup_create_dry_run(&root, &replacement).expect("reuse existing layout");
+    let read_plan = layout.read_backup_plan().expect("read backup plan");
+    let read_journal = layout
+        .read_execution_journal()
+        .expect("read execution journal");
+    let summary = read_journal.resume_summary();
+
+    fs::remove_dir_all(root).expect("remove temp root");
+    assert_eq!(resumed.plan_id, plan.plan_id);
+    assert_eq!(read_plan.plan_id, plan.plan_id);
+    assert_eq!(summary.completed_operations, 5);
+    assert_eq!(summary.next_operation.expect("next operation").sequence, 5);
+}
+
+// Ensure backup create does not reuse an output layout for a different request.
+#[test]
+fn backup_create_persistence_rejects_incompatible_existing_layout() {
+    let root = temp_dir("canic-cli-backup-create-incompatible-resume");
+    let plan = valid_backup_plan();
+    persist_backup_create_dry_run(&root, &plan).expect("persist initial plan");
+    let mut requested = valid_backup_plan();
+    requested.network = "ic".to_string();
+
+    let err = persist_backup_create_dry_run(&root, &requested)
+        .expect_err("incompatible existing layout rejects");
+
+    fs::remove_dir_all(root).expect("remove temp root");
+    assert!(matches!(
+        err,
+        BackupCommandError::BackupLayoutMismatch {
+            field: "network",
+            existing,
+            requested,
+        } if existing == "local" && requested == "ic"
+    ));
+}
+
+// Ensure dry-run layouts cannot be reused as executable backup layouts.
+#[test]
+fn backup_create_persistence_rejects_dry_run_layout_for_execute_request() {
+    let root = temp_dir("canic-cli-backup-create-dry-run-execute-mismatch");
+    let plan = valid_backup_plan();
+    persist_backup_create_dry_run(&root, &plan).expect("persist dry-run plan");
+    let requested = valid_executable_backup_plan();
+
+    let err = persist_backup_create_dry_run(&root, &requested)
+        .expect_err("dry-run layout rejects execute request");
+
+    fs::remove_dir_all(root).expect("remove temp root");
+    assert!(matches!(
+        err,
+        BackupCommandError::BackupLayoutMismatch {
+            field: "requires_root_controller",
+            existing,
+            requested,
+        } if existing == "true" && requested == "false"
+    ));
+}
+
+// Ensure completed execution layouts do not synthesize a missing execution journal.
+#[test]
+fn backup_create_persistence_rejects_manifest_layout_missing_execution_journal() {
+    let root = temp_dir("canic-cli-backup-create-missing-execution-journal");
+    let plan = valid_backup_plan();
+    let layout = BackupLayout::new(root.clone());
+    layout.write_backup_plan(&plan).expect("write backup plan");
+    layout
+        .write_manifest(&valid_manifest())
+        .expect("write manifest");
+
+    let err = persist_backup_create_dry_run(&root, &plan)
+        .expect_err("manifest layout missing execution journal rejects");
+
+    fs::remove_dir_all(root).expect("remove temp root");
+    assert!(matches!(
+        err,
+        BackupCommandError::BackupLayoutIncomplete {
+            missing: "backup-execution-journal.json"
+        }
+    ));
 }
 
 // Ensure backup list options default to the conventional backup root.
@@ -407,6 +549,58 @@ fn backup_list_reads_backup_directories() {
     assert!(rendered.contains("fleet-demo-20260507-130000"));
 }
 
+// Ensure backup list reports execution-backed manifest layouts by execution state.
+#[test]
+fn backup_list_reports_execution_backed_manifest_status() {
+    let root = temp_dir("canic-cli-backup-list-execution-status");
+    let running = root.join("fleet-demo-20260507-140000");
+    let complete = root.join("fleet-demo-20260507-150000");
+    let invalid = root.join("fleet-demo-20260507-160000");
+    let missing_journal = root.join("fleet-demo-20260507-170000");
+    let checksum = write_artifact(&complete, b"root artifact");
+
+    write_manifest_plan_journal(&running, accepted_execution_journal());
+
+    let mut complete_journal = accepted_execution_journal();
+    for sequence in 4..=9 {
+        complete_execution_operation(&mut complete_journal, sequence);
+    }
+    write_manifest_plan_journal(&complete, complete_journal);
+    BackupLayout::new(complete.clone())
+        .write_journal(&journal_with_checksum(checksum.hash))
+        .expect("write download journal");
+
+    let mut invalid_journal = accepted_execution_journal();
+    invalid_journal.operations[0].operation_id = "different-operation".to_string();
+    write_manifest_plan_journal(&invalid, invalid_journal);
+    let missing_layout = BackupLayout::new(missing_journal.clone());
+    missing_layout
+        .write_manifest(&valid_manifest())
+        .expect("write missing-journal manifest");
+    missing_layout
+        .write_backup_plan(&valid_backup_plan())
+        .expect("write missing-journal plan");
+
+    let entries = backup_list(&BackupListOptions {
+        dir: root.clone(),
+        out: None,
+    })
+    .expect("list backups");
+
+    fs::remove_dir_all(root).expect("remove temp root");
+    let status_for = |dir: &Path| {
+        entries
+            .iter()
+            .find(|entry| entry.dir == dir)
+            .map(|entry| entry.status.as_str())
+            .expect("entry exists")
+    };
+    assert_eq!(status_for(&running), "running");
+    assert_eq!(status_for(&complete), "complete");
+    assert_eq!(status_for(&invalid), "invalid-plan-journal");
+    assert_eq!(status_for(&missing_journal), "invalid-plan-journal");
+}
+
 // Ensure short backup references resolve through the same ordering as backup list.
 #[test]
 fn backup_reference_resolves_rows_and_backup_ids() {
@@ -565,6 +759,81 @@ fn verify_backup_rejects_dry_run_layout() {
     ));
 }
 
+// Ensure verification rejects execution-backed layouts that finalized artifacts before execution completion.
+#[test]
+fn verify_backup_rejects_incomplete_execution_layout_with_manifest() {
+    let root = temp_dir("canic-cli-backup-verify-incomplete-execution");
+    let layout = BackupLayout::new(root.clone());
+    let checksum = write_artifact(&root, b"root artifact");
+
+    layout
+        .write_manifest(&valid_manifest())
+        .expect("write manifest");
+    layout
+        .write_journal(&journal_with_checksum(checksum.hash))
+        .expect("write journal");
+    layout
+        .write_backup_plan(&valid_backup_plan())
+        .expect("write backup plan");
+    layout
+        .write_execution_journal(&accepted_execution_journal())
+        .expect("write incomplete execution journal");
+
+    let options = BackupVerifyOptions {
+        backup_ref: None,
+        dir: Some(root.clone()),
+        out: None,
+    };
+    let err = verify_backup(&options).expect_err("incomplete execution rejects");
+
+    fs::remove_dir_all(root).expect("remove temp root");
+    assert!(matches!(
+        err,
+        BackupCommandError::DryRunNotComplete { plan_id } if plan_id == "plan-test"
+    ));
+}
+
+// Ensure verification rejects execution-backed layouts whose plan and execution journal drift.
+#[test]
+fn verify_backup_rejects_execution_plan_journal_mismatch() {
+    let root = temp_dir("canic-cli-backup-verify-execution-mismatch");
+    let layout = BackupLayout::new(root.clone());
+    let checksum = write_artifact(&root, b"root artifact");
+    let mut journal = accepted_execution_journal();
+    journal.operations[0].operation_id = "different-operation".to_string();
+
+    layout
+        .write_manifest(&valid_manifest())
+        .expect("write manifest");
+    layout
+        .write_journal(&journal_with_checksum(checksum.hash))
+        .expect("write journal");
+    layout
+        .write_backup_plan(&valid_backup_plan())
+        .expect("write backup plan");
+    layout
+        .write_execution_journal(&journal)
+        .expect("write mismatched execution journal");
+
+    let options = BackupVerifyOptions {
+        backup_ref: None,
+        dir: Some(root.clone()),
+        out: None,
+    };
+    let err = verify_backup(&options).expect_err("mismatched execution rejects");
+
+    fs::remove_dir_all(root).expect("remove temp root");
+    assert!(matches!(
+        err,
+        BackupCommandError::Persistence(
+            canic_backup::persistence::PersistenceError::PlanJournalOperationMismatch {
+                field: "operation_id",
+                ..
+            }
+        )
+    ));
+}
+
 // Ensure the CLI verification path reads a layout and returns an integrity report.
 #[test]
 fn verify_backup_reads_layout_and_artifacts() {
@@ -691,6 +960,58 @@ fn valid_backup_plan() -> BackupPlan {
         identity_mode: IdentityMode::Relocatable,
     })
     .expect("backup plan")
+}
+
+// Build the executable counterpart of the standard dry-run backup plan.
+fn valid_executable_backup_plan() -> BackupPlan {
+    build_backup_plan(BackupPlanBuildInput {
+        plan_id: "plan-test".to_string(),
+        run_id: "run-test".to_string(),
+        fleet: "demo".to_string(),
+        network: "local".to_string(),
+        root_canister_id: ROOT.to_string(),
+        selected_canister_id: Some(CHILD.to_string()),
+        selected_scope_kind: BackupScopeKind::Subtree,
+        include_descendants: true,
+        topology_hash_before_quiesce: HASH.to_string(),
+        registry: &[
+            RegistryEntry {
+                pid: ROOT.to_string(),
+                role: Some("root".to_string()),
+                kind: Some("root".to_string()),
+                parent_pid: None,
+                module_hash: None,
+            },
+            RegistryEntry {
+                pid: CHILD.to_string(),
+                role: Some("app".to_string()),
+                kind: Some("singleton".to_string()),
+                parent_pid: Some(ROOT.to_string()),
+                module_hash: Some(HASH.to_string()),
+            },
+        ],
+        control_authority: ControlAuthority::operator_controller(AuthorityEvidence::Proven),
+        snapshot_read_authority: SnapshotReadAuthority::operator_controller(
+            AuthorityEvidence::Proven,
+        ),
+        quiescence_policy: canic_backup::plan::QuiescencePolicy::CrashConsistent,
+        identity_mode: IdentityMode::Relocatable,
+    })
+    .expect("executable backup plan")
+}
+
+// Write a manifest plus matching plan and caller-provided execution journal.
+fn write_manifest_plan_journal(root: &Path, journal: BackupExecutionJournal) {
+    let layout = BackupLayout::new(root.to_path_buf());
+    layout
+        .write_manifest(&valid_manifest())
+        .expect("write manifest");
+    layout
+        .write_backup_plan(&valid_backup_plan())
+        .expect("write backup plan");
+    layout
+        .write_execution_journal(&journal)
+        .expect("write execution journal");
 }
 
 // Read backup status from one caller-provided execution journal layout.

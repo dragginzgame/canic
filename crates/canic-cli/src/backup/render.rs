@@ -26,10 +26,15 @@ pub(super) fn write_inspect_report(
 }
 
 pub(super) fn write_create_report(report: &BackupCreateReport) {
+    println!("{}", render_create_report(report));
+}
+
+pub(super) fn render_create_report(report: &BackupCreateReport) -> String {
     let rows = [[
         report.fleet.clone(),
         report.network.clone(),
         report.mode.clone(),
+        report.layout.clone(),
         report.status.clone(),
         report.scope.clone(),
         report.targets.to_string(),
@@ -37,24 +42,22 @@ pub(super) fn write_create_report(report: &BackupCreateReport) {
         report.executed_operations.to_string(),
         report.out.display().to_string(),
     ]];
-    println!(
-        "{}",
-        render_table(
-            &[
-                "FLEET",
-                "NETWORK",
-                "MODE",
-                "STATUS",
-                "SCOPE",
-                "TARGETS",
-                "OPERATIONS",
-                "EXECUTED",
-                "OUT",
-            ],
-            &rows,
-            &[ColumnAlign::Left; 9],
-        )
-    );
+    render_table(
+        &[
+            "FLEET",
+            "NETWORK",
+            "MODE",
+            "LAYOUT",
+            "STATUS",
+            "SCOPE",
+            "TARGETS",
+            "OPERATIONS",
+            "EXECUTED",
+            "OUT",
+        ],
+        &rows,
+        &[ColumnAlign::Left; 10],
+    )
 }
 
 pub(super) fn write_verify_report(

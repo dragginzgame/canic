@@ -32,7 +32,7 @@ use command::{
 };
 use create::backup_create;
 #[cfg(test)]
-use create::persist_backup_create_dry_run;
+use create::{persist_backup_create_dry_run, persist_backup_create_dry_run_with_layout};
 use inspect::backup_inspect;
 pub use model::{
     BackupCreateReport, BackupDryRunStatusReport, BackupInspectOperation, BackupInspectReport,
@@ -46,7 +46,7 @@ use reference::backup_list;
 #[cfg(test)]
 use reference::resolve_backup_reference_in;
 #[cfg(test)]
-use render::{render_backup_list, render_inspect_report};
+use render::{render_backup_list, render_create_report, render_inspect_report};
 use render::{
     write_create_report, write_inspect_report, write_list_report, write_status_report,
     write_verify_report,
@@ -80,6 +80,18 @@ pub enum BackupCommandError {
 
     #[error("backup reference {reference} is ambiguous under backups; use `--dir <dir>`")]
     BackupReferenceAmbiguous { reference: String },
+
+    #[error(
+        "backup layout at --out is for a different request: {field} existing={existing}, requested={requested}"
+    )]
+    BackupLayoutMismatch {
+        field: &'static str,
+        existing: String,
+        requested: String,
+    },
+
+    #[error("backup layout at --out is incomplete: missing {missing}")]
+    BackupLayoutIncomplete { missing: &'static str },
 
     #[error(
         "fleet {fleet} is not installed on network {network}; run `canic install {fleet}` before planning a backup"

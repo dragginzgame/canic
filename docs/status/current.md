@@ -83,6 +83,27 @@ inspect only the files needed for the current task.
 - Tightened `canic backup status --require-complete` to require the complete
   execution layout, including the finalized manifest, instead of accepting a
   completed execution journal by itself.
+- Tightened `canic backup verify` for execution-backed backups so manifest and
+  artifact verification also requires the persisted backup plan and execution
+  journal to match and be complete.
+- Changed backup create persistence to preserve an existing output layout and
+  its progressed execution journal, so the CLI wrapper now honors the same
+  resume boundary that the backup runner already supported.
+- Changed `canic backup list` to surface execution-backed manifest state
+  (`running`, `complete`, `failed`, or invalid plan/journal) instead of
+  reporting all manifest-bearing layouts as `ok`.
+- Started `0.36.1` by tightening `canic backup create --out <dir>` resume
+  safety: existing layouts are preserved only when the stored plan matches the
+  requested fleet, network, root, scope, target set, and operation graph.
+- Extended backup create resume compatibility to authority and quiescence
+  policy fields so dry-run layouts are not reused as executable backup layouts.
+- Added a `LAYOUT` column to `canic backup create` output so fresh and resumed
+  output layouts are visible to operators.
+- Tightened `canic backup list` so manifest-plus-plan layouts with no execution
+  journal report `invalid-plan-journal`, not `dry-run`.
+- Tightened `canic backup create --out <dir>` so manifest-backed layouts with a
+  missing execution journal are treated as incomplete instead of having a new
+  journal synthesized.
 - Added a config-schema regression proving obsolete per-canister delegated-auth
   verifier tables are rejected instead of accepted through compatibility shims.
 - Updated the internal audit scaling probe to use `scale_replica` and

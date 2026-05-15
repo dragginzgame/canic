@@ -1,16 +1,21 @@
 # Changelog
 
-All notable, and occasionally less notable changes to this project will be documented in this file.
+All notable, and occasionally less notable changes to this project will be
+documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.36.x] - 2026-05-15 - Backup/restore proofing
 
+- `0.36.1` hardens backup resume safety for existing `--out` layouts and makes
+  backup create/list report reused or invalid execution-backed layouts more
+  clearly.
+
 - `0.36.0` starts the Backup/Restore V1 hardening line by documenting the
-  existing execution flow and proving backup runner resume, retry, status,
-  completion gating, and manifest finalization behavior against durable
-  journals.
+  existing execution flow and proving backup create resume, runner retry,
+  list/status reporting, verification, completion gating, and manifest
+  finalization behavior against durable journals.
 
 See detailed breakdown:
 [docs/changelog/0.36.md](docs/changelog/0.36.md)
