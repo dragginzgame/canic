@@ -258,6 +258,11 @@ pub enum RestoreApplyJournalError {
     #[error("restore apply journal receipt references missing operation {0}")]
     OperationReceiptOperationNotFound(usize),
 
+    #[error(
+        "restore apply journal has duplicate receipt for operation {sequence} attempt {attempt}"
+    )]
+    DuplicateOperationReceiptAttempt { sequence: usize, attempt: usize },
+
     #[error("restore apply journal receipt does not match operation {sequence}")]
     OperationReceiptMismatch { sequence: usize },
 }

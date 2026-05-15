@@ -9,6 +9,56 @@ fn apply_command_output_bounds_to_tail_bytes() {
     assert!(output.truncated);
     assert_eq!(output.original_bytes, 6);
 }
+
+// Ensure hand-edited journals cannot duplicate one operation attempt outcome.
+#[test]
+fn apply_journal_rejects_duplicate_operation_receipt_attempts() {
+    let mut journal = command_preview_journal(RestoreApplyOperationKind::UploadSnapshot, None);
+    journal
+        .mark_operation_completed_at(0, None)
+        .expect("mark upload completed");
+    let receipt = RestoreApplyOperationReceipt::command_completed(
+        &journal.operations[0],
+        RestoreApplyRunnerCommand {
+            program: "icp".to_string(),
+            args: vec![
+                "canister".to_string(),
+                "snapshot".to_string(),
+                "upload".to_string(),
+                ROOT.to_string(),
+            ],
+            mutates: true,
+            requires_stopped_canister: false,
+            note: "Upload snapshot artifact to target canister".to_string(),
+        },
+        "exit:0".to_string(),
+        Some("unix:1".to_string()),
+        RestoreApplyCommandOutputPair::from_bytes(
+            b"Uploaded snapshot: target-snap-root\n",
+            b"",
+            1024,
+        ),
+        1,
+        Some("target-snap-root".to_string()),
+    );
+    journal
+        .record_operation_receipt(receipt.clone())
+        .expect("record first receipt");
+    journal.operation_receipts.push(receipt);
+
+    let err = journal
+        .validate()
+        .expect_err("duplicate receipt attempt should reject");
+
+    assert!(matches!(
+        err,
+        RestoreApplyJournalError::DuplicateOperationReceiptAttempt {
+            sequence: 0,
+            attempt: 1,
+        }
+    ));
+}
+
 // Ensure an artifact-validated apply dry-run produces a ready initial journal.
 #[test]
 fn apply_journal_marks_validated_operations_ready() {

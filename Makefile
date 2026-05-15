@@ -6,7 +6,7 @@
         test test-wasm test-bump build check clippy fmt fmt-check clean \
         install install-dev update-dev test-fleet-install \
         ensure-clean ensure-hooks test-unit test-unit-fast \
-        test-canisters fmt-core cloc
+        test-canisters fmt-core changelog-check cloc
 
 # in case we need to use this
 CARGO_ENV :=
@@ -66,6 +66,7 @@ help:
 	@echo "  clippy           Run clippy checks"
 	@echo "  fmt              Format code"
 	@echo "  fmt-check        Check formatting"
+	@echo "  changelog-check  Check active changelog line width"
 	@echo "  clean            Clean build artifacts"
 	@echo ""
 	@echo "Utilities:"
@@ -232,12 +233,15 @@ fmt-core:
 	cargo sort-derives
 	cargo fmt --all
 
-fmt-check: ensure-hooks fmt-check-core
+fmt-check: ensure-hooks fmt-check-core changelog-check
 
 fmt-check-core:
 	cargo sort --workspace --check
 	cargo sort-derives --check
 	cargo fmt --all -- --check
+
+changelog-check:
+	bash scripts/ci/check-changelog-line-width.sh
 
 clean:
 	cargo clean

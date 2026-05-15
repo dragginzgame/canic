@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.36.x] - 2026-05-15 - Backup/restore proofing
 
+- `0.36.4` rejects duplicate restore receipt attempts and adds an active-line
+  changelog width check for root and detailed release notes.
+
 - `0.36.3` starts restore-runner hardening by failing upload steps that do not
   return the uploaded snapshot id needed by later load steps, and adds explicit
   failed-operation retry recovery, stricter legacy upload-id parsing, and

@@ -120,6 +120,8 @@ inspect only the files needed for the current task.
   text can satisfy a successful upload command without structured JSON.
 - Tightened restore-runner journal loading so completed or failed operations
   must have matching command receipts before any runner mode proceeds.
+- Started `0.36.4` by rejecting duplicate restore operation receipt attempts
+  and adding an active-line changelog width check for root and detailed notes.
 - Added a config-schema regression proving obsolete per-canister delegated-auth
   verifier tables are rejected instead of accepted through compatibility shims.
 - Updated the internal audit scaling probe to use `scale_replica` and

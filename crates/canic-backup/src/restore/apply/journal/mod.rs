@@ -1,5 +1,6 @@
 use super::{RestoreApplyDryRun, RestoreApplyDryRunOperation};
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeSet;
 
 mod commands;
 mod counts;
@@ -156,6 +157,7 @@ impl RestoreApplyJournal {
         for operation in &self.operations {
             operation.validate()?;
         }
+        self.validate_operation_receipt_attempts()?;
         for receipt in &self.operation_receipts {
             receipt.validate_against(self)?;
         }
@@ -400,6 +402,21 @@ impl RestoreApplyJournal {
     // Recompute operation-kind counts from concrete operation rows.
     pub(super) fn operation_kind_counts(&self) -> RestoreApplyOperationKindCounts {
         RestoreApplyOperationKindCounts::from_operations(&self.operations)
+    }
+
+    // Ensure one operation attempt has exactly one durable command outcome.
+    fn validate_operation_receipt_attempts(&self) -> Result<(), RestoreApplyJournalError> {
+        let mut attempts = BTreeSet::new();
+        for receipt in &self.operation_receipts {
+            if !attempts.insert((receipt.sequence, receipt.attempt)) {
+                return Err(RestoreApplyJournalError::DuplicateOperationReceiptAttempt {
+                    sequence: receipt.sequence,
+                    attempt: receipt.attempt,
+                });
+            }
+        }
+
+        Ok(())
     }
 
     // Find the uploaded target snapshot ID required by one load operation.
