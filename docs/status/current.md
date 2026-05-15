@@ -104,6 +104,12 @@ inspect only the files needed for the current task.
 - Tightened `canic backup create --out <dir>` so manifest-backed layouts with a
   missing execution journal are treated as incomplete instead of having a new
   journal synthesized.
+- Tightened backup status, inspect, and verify so manifest-backed layouts with
+  missing execution journals use the same incomplete-layout error instead of
+  falling through to raw file-read failures.
+- Tightened backup execution integrity so terminal mutating operations require
+  matching operation receipts; preflight-completed validation operations remain
+  receiptless as intended.
 - Added a config-schema regression proving obsolete per-canister delegated-auth
   verifier tables are rejected instead of accepted through compatibility shims.
 - Updated the internal audit scaling probe to use `scale_replica` and

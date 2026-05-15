@@ -1,10 +1,13 @@
 use super::{BackupLayout, PersistenceError};
 use crate::{
     artifacts::ArtifactChecksum,
-    execution::BackupExecutionJournal,
+    execution::{
+        BackupExecutionJournal, BackupExecutionOperationReceiptOutcome,
+        BackupExecutionOperationState,
+    },
     journal::{ArtifactState, DownloadJournal},
     manifest::{FleetBackupManifest, FleetMember},
-    plan::BackupPlan,
+    plan::{BackupOperationKind, BackupPlan},
 };
 use serde::{Deserialize, Serialize};
 use std::{
@@ -271,6 +274,7 @@ pub(super) fn verify_execution_integrity(
             });
         }
     }
+    verify_terminal_mutation_receipts(journal)?;
 
     Ok(BackupExecutionIntegrityReport {
         plan_id: plan.plan_id.clone(),
@@ -279,6 +283,66 @@ pub(super) fn verify_execution_integrity(
         plan_operations: plan.phases.len(),
         journal_operations: journal.operations.len(),
     })
+}
+
+fn verify_terminal_mutation_receipts(
+    journal: &BackupExecutionJournal,
+) -> Result<(), PersistenceError> {
+    for operation in journal.operations.iter().filter(|operation| {
+        operation_kind_requires_receipt(&operation.kind)
+            && matches!(
+                operation.state,
+                BackupExecutionOperationState::Completed
+                    | BackupExecutionOperationState::Failed
+                    | BackupExecutionOperationState::Skipped
+            )
+    }) {
+        let expected_outcome = receipt_outcome_for_state(&operation.state);
+        let has_receipt = journal.operation_receipts.iter().any(|receipt| {
+            receipt.sequence == operation.sequence
+                && receipt.operation_id == operation.operation_id
+                && receipt.kind == operation.kind
+                && receipt.target_canister_id == operation.target_canister_id
+                && receipt.outcome == expected_outcome
+        });
+        if !has_receipt {
+            return Err(PersistenceError::ExecutionOperationMissingReceipt {
+                sequence: operation.sequence,
+                state: format!("{:?}", operation.state),
+            });
+        }
+    }
+
+    Ok(())
+}
+
+const fn operation_kind_requires_receipt(kind: &BackupOperationKind) -> bool {
+    matches!(
+        kind,
+        BackupOperationKind::Stop
+            | BackupOperationKind::CreateSnapshot
+            | BackupOperationKind::Start
+            | BackupOperationKind::DownloadSnapshot
+            | BackupOperationKind::VerifyArtifact
+            | BackupOperationKind::FinalizeManifest
+    )
+}
+
+fn receipt_outcome_for_state(
+    state: &BackupExecutionOperationState,
+) -> BackupExecutionOperationReceiptOutcome {
+    match state {
+        BackupExecutionOperationState::Completed => {
+            BackupExecutionOperationReceiptOutcome::Completed
+        }
+        BackupExecutionOperationState::Failed => BackupExecutionOperationReceiptOutcome::Failed,
+        BackupExecutionOperationState::Skipped => BackupExecutionOperationReceiptOutcome::Skipped,
+        BackupExecutionOperationState::Ready
+        | BackupExecutionOperationState::Pending
+        | BackupExecutionOperationState::Blocked => {
+            unreachable!("non-terminal operation state does not have a receipt outcome")
+        }
+    }
 }
 
 // Compare manifest and journal topology receipts for fail-closed verification.

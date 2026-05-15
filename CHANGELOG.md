@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ## [0.36.x] - 2026-05-15 - Backup/restore proofing
 
 - `0.36.1` hardens backup resume safety for existing `--out` layouts and makes
-  backup create/list report reused or invalid execution-backed layouts more
+  backup commands report reused or invalid execution-backed layouts more
   clearly.
 
 - `0.36.0` starts the Backup/Restore V1 hardening line by documenting the

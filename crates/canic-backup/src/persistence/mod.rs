@@ -243,6 +243,9 @@ pub enum PersistenceError {
         journal: String,
     },
 
+    #[error("backup execution operation {sequence} is {state} but has no matching receipt")]
+    ExecutionOperationMissingReceipt { sequence: usize, state: String },
+
     #[error("artifact path escapes backup root: {artifact_path}")]
     ArtifactPathEscapesBackup { artifact_path: String },
 

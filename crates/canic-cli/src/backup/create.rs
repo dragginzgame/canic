@@ -1,6 +1,6 @@
 use super::{BackupCommandError, BackupCreateOptions, BackupCreateReport};
 use crate::{
-    backup::labels::backup_scope_label,
+    backup::{labels::backup_scope_label, layout::ensure_execution_journal_exists},
     support::path_stamp::{current_backup_directory_stamp, file_safe_component},
 };
 use candid::Principal;
@@ -161,9 +161,7 @@ fn persist_backup_create_layout(
         ensure_resume_plan_compatible(&existing, plan)?;
         if !layout.execution_journal_path().is_file() {
             if layout.manifest_path().is_file() {
-                return Err(BackupCommandError::BackupLayoutIncomplete {
-                    missing: "backup-execution-journal.json",
-                });
+                ensure_execution_journal_exists(&layout)?;
             }
             let journal = BackupExecutionJournal::from_plan(&existing)?;
             layout.write_execution_journal(&journal)?;

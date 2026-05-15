@@ -204,11 +204,7 @@ fn backup_create_persistence_rejects_dry_run_layout_for_execute_request() {
 fn backup_create_persistence_rejects_manifest_layout_missing_execution_journal() {
     let root = temp_dir("canic-cli-backup-create-missing-execution-journal");
     let plan = valid_backup_plan();
-    let layout = BackupLayout::new(root.clone());
-    layout.write_backup_plan(&plan).expect("write backup plan");
-    layout
-        .write_manifest(&valid_manifest())
-        .expect("write manifest");
+    write_manifest_plan_without_execution_journal(&root);
 
     let err = persist_backup_create_dry_run(&root, &plan)
         .expect_err("manifest layout missing execution journal rejects");
@@ -380,6 +376,29 @@ fn backup_status_reads_dry_run_execution_summary() {
     assert!(report.execution.blocked_operations > 0);
 }
 
+// Ensure backup status reports incomplete execution-backed layouts clearly.
+#[test]
+fn backup_status_rejects_manifest_layout_missing_execution_journal() {
+    let root = temp_dir("canic-cli-backup-status-missing-execution-journal");
+    write_manifest_plan_without_execution_journal(&root);
+
+    let options = BackupStatusOptions {
+        backup_ref: None,
+        dir: Some(root.clone()),
+        out: None,
+        require_complete: false,
+    };
+    let err = backup_status(&options).expect_err("missing execution journal rejects");
+
+    fs::remove_dir_all(root).expect("remove temp root");
+    assert!(matches!(
+        err,
+        BackupCommandError::BackupLayoutIncomplete {
+            missing: "backup-execution-journal.json"
+        }
+    ));
+}
+
 // Ensure backup status reports an execution layout as running once preflight is accepted.
 #[test]
 fn backup_status_reports_running_execution_layout() {
@@ -492,6 +511,29 @@ fn backup_inspect_reads_dry_run_details() {
     assert!(rendered.contains("MODULE_HASH"));
     assert!(rendered.contains(HASH));
     assert!(rendered.contains("validate-topology"));
+}
+
+// Ensure backup inspect reports incomplete execution-backed layouts clearly.
+#[test]
+fn backup_inspect_rejects_manifest_layout_missing_execution_journal() {
+    let root = temp_dir("canic-cli-backup-inspect-missing-execution-journal");
+    write_manifest_plan_without_execution_journal(&root);
+
+    let options = BackupInspectOptions {
+        backup_ref: None,
+        dir: Some(root.clone()),
+        out: None,
+        json: false,
+    };
+    let err = backup_inspect(&options).expect_err("missing execution journal rejects");
+
+    fs::remove_dir_all(root).expect("remove temp root");
+    assert!(matches!(
+        err,
+        BackupCommandError::BackupLayoutIncomplete {
+            missing: "backup-execution-journal.json"
+        }
+    ));
 }
 
 // Ensure backup list scans manifest-bearing directories and renders reusable paths.
@@ -759,6 +801,28 @@ fn verify_backup_rejects_dry_run_layout() {
     ));
 }
 
+// Ensure verification reports incomplete execution-backed layouts clearly.
+#[test]
+fn verify_backup_rejects_manifest_layout_missing_execution_journal() {
+    let root = temp_dir("canic-cli-backup-verify-missing-execution-journal");
+    write_manifest_plan_without_execution_journal(&root);
+
+    let options = BackupVerifyOptions {
+        backup_ref: None,
+        dir: Some(root.clone()),
+        out: None,
+    };
+    let err = verify_backup(&options).expect_err("missing execution journal rejects");
+
+    fs::remove_dir_all(root).expect("remove temp root");
+    assert!(matches!(
+        err,
+        BackupCommandError::BackupLayoutIncomplete {
+            missing: "backup-execution-journal.json"
+        }
+    ));
+}
+
 // Ensure verification rejects execution-backed layouts that finalized artifacts before execution completion.
 #[test]
 fn verify_backup_rejects_incomplete_execution_layout_with_manifest() {
@@ -998,6 +1062,17 @@ fn valid_executable_backup_plan() -> BackupPlan {
         identity_mode: IdentityMode::Relocatable,
     })
     .expect("executable backup plan")
+}
+
+// Write a manifest plus matching plan but no execution journal.
+fn write_manifest_plan_without_execution_journal(root: &Path) {
+    let layout = BackupLayout::new(root.to_path_buf());
+    layout
+        .write_backup_plan(&valid_backup_plan())
+        .expect("write backup plan");
+    layout
+        .write_manifest(&valid_manifest())
+        .expect("write manifest");
 }
 
 // Write a manifest plus matching plan and caller-provided execution journal.

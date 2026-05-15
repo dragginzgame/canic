@@ -8,6 +8,7 @@ use crate::backup::{
         format_authority, operation_kind_label, operation_state_label,
         snapshot_read_authority_source_label,
     },
+    layout::ensure_execution_journal_exists,
     reference::resolve_backup_dir,
 };
 use canic_backup::{
@@ -22,6 +23,7 @@ pub(super) fn backup_inspect(
         options.backup_ref.as_deref(),
     )?);
     let plan = layout.read_backup_plan()?;
+    ensure_execution_journal_exists(&layout)?;
     let journal = layout.read_execution_journal()?;
     layout.verify_execution_integrity()?;
 

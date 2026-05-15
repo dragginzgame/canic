@@ -20,6 +20,7 @@ mod command;
 mod create;
 mod inspect;
 mod labels;
+mod layout;
 mod model;
 mod options;
 mod reference;
@@ -90,7 +91,7 @@ pub enum BackupCommandError {
         requested: String,
     },
 
-    #[error("backup layout at --out is incomplete: missing {missing}")]
+    #[error("backup layout is incomplete: missing {missing}")]
     BackupLayoutIncomplete { missing: &'static str },
 
     #[error(

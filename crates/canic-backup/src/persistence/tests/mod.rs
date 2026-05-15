@@ -1,7 +1,7 @@
 use super::*;
 use crate::test_support::temp_dir;
 use crate::{
-    execution::BackupExecutionJournal,
+    execution::{BackupExecutionJournal, BackupExecutionOperationState},
     journal::{ArtifactJournalEntry, ArtifactState},
     manifest::{
         BackupUnit, BackupUnitKind, ConsistencySection, FleetMember, FleetSection, IdentityMode,
@@ -168,6 +168,37 @@ fn execution_integrity_rejects_plan_journal_operation_mismatch() {
     assert!(matches!(
         err,
         PersistenceError::PlanJournalOperationMismatch { .. }
+    ));
+}
+
+// Ensure terminal mutating operations cannot be accepted without receipts.
+#[test]
+fn execution_integrity_rejects_completed_mutation_without_receipt() {
+    let root = temp_dir("canic-backup-execution-integrity-missing-receipt");
+    let layout = BackupLayout::new(root.clone());
+    let plan = valid_backup_plan();
+    let mut journal = BackupExecutionJournal::from_plan(&plan).expect("execution journal");
+    journal
+        .accept_preflight_bundle_at("preflight-run-001".to_string(), Some("unix:1".to_string()))
+        .expect("accept preflight");
+    journal.operations[4].state = BackupExecutionOperationState::Completed;
+
+    layout.write_backup_plan(&plan).expect("write backup plan");
+    layout
+        .write_execution_journal(&journal)
+        .expect("write execution journal");
+
+    let err = layout
+        .verify_execution_integrity()
+        .expect_err("missing mutation receipt should fail");
+
+    fs::remove_dir_all(root).expect("remove temp layout");
+    assert!(matches!(
+        err,
+        PersistenceError::ExecutionOperationMissingReceipt {
+            sequence: 4,
+            state,
+        } if state == "Completed"
     ));
 }
 

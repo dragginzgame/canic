@@ -3,6 +3,7 @@ use super::{
 };
 use crate::backup::{
     labels::{execution_is_complete, execution_layout_status},
+    layout::ensure_execution_journal_exists,
     reference::resolve_backup_dir,
 };
 use canic_backup::persistence::BackupLayout;
@@ -16,6 +17,7 @@ pub(super) fn backup_status(
     )?);
     if layout.backup_plan_path().is_file() {
         let plan = layout.read_backup_plan()?;
+        ensure_execution_journal_exists(&layout)?;
         let journal = layout.read_execution_journal()?;
         layout.verify_execution_integrity()?;
         return Ok(BackupStatusReport::DryRun(BackupDryRunStatusReport {

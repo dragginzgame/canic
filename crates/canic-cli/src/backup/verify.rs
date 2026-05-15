@@ -1,5 +1,8 @@
 use super::{BackupCommandError, BackupVerifyOptions};
-use crate::backup::{labels::execution_is_complete, reference::resolve_backup_dir};
+use crate::backup::{
+    labels::execution_is_complete, layout::ensure_execution_journal_exists,
+    reference::resolve_backup_dir,
+};
 use canic_backup::persistence::{BackupIntegrityReport, BackupLayout};
 
 pub(super) fn verify_backup(
@@ -17,6 +20,7 @@ pub(super) fn verify_backup(
     }
     if layout.backup_plan_path().is_file() {
         let plan = layout.read_backup_plan()?;
+        ensure_execution_journal_exists(&layout)?;
         let journal = layout.read_execution_journal()?;
         layout.verify_execution_integrity()?;
         if !execution_is_complete(&journal.resume_summary()) {
