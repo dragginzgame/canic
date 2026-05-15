@@ -26,6 +26,18 @@ impl BackupExecutionJournalOperation {
             "operations[].target_canister_id",
             self.target_canister_id.as_deref(),
         )?;
+        if matches!(
+            self.state,
+            BackupExecutionOperationState::Pending
+                | BackupExecutionOperationState::Completed
+                | BackupExecutionOperationState::Failed
+                | BackupExecutionOperationState::Skipped
+        ) && self.state_updated_at.is_none()
+        {
+            return Err(BackupExecutionJournalError::MissingField(
+                "operations[].state_updated_at",
+            ));
+        }
         match self.state {
             BackupExecutionOperationState::Blocked | BackupExecutionOperationState::Failed
                 if self.blocking_reasons.is_empty() =>

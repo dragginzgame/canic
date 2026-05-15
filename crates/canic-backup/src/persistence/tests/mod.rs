@@ -1,7 +1,9 @@
 use super::*;
 use crate::test_support::temp_dir;
 use crate::{
-    execution::{BackupExecutionJournal, BackupExecutionOperationState},
+    execution::{
+        BackupExecutionJournal, BackupExecutionOperationReceipt, BackupExecutionOperationState,
+    },
     journal::{ArtifactJournalEntry, ArtifactState},
     manifest::{
         BackupUnit, BackupUnitKind, ConsistencySection, FleetMember, FleetSection, IdentityMode,
@@ -182,6 +184,8 @@ fn execution_integrity_rejects_completed_mutation_without_receipt() {
         .accept_preflight_bundle_at("preflight-run-001".to_string(), Some("unix:1".to_string()))
         .expect("accept preflight");
     journal.operations[4].state = BackupExecutionOperationState::Completed;
+    journal.operations[4].state_updated_at = Some("unix:2".to_string());
+    journal.restart_required = true;
 
     layout.write_backup_plan(&plan).expect("write backup plan");
     layout
@@ -199,6 +203,108 @@ fn execution_integrity_rejects_completed_mutation_without_receipt() {
             sequence: 4,
             state,
         } if state == "Completed"
+    ));
+}
+
+// Ensure retry history cannot hide a stale terminal receipt/state mismatch.
+#[test]
+fn execution_integrity_requires_latest_mutation_receipt_to_match_state() {
+    let root = temp_dir("canic-backup-execution-integrity-latest-receipt");
+    let layout = BackupLayout::new(root.clone());
+    let plan = valid_backup_plan();
+    let mut journal = BackupExecutionJournal::from_plan(&plan).expect("execution journal");
+    journal
+        .accept_preflight_bundle_at("preflight-run-001".to_string(), Some("unix:1".to_string()))
+        .expect("accept preflight");
+    journal
+        .mark_operation_pending_at(4, Some("unix:40".to_string()))
+        .expect("mark stop pending");
+    let operation = journal.operations[4].clone();
+    let failed_receipt = BackupExecutionOperationReceipt::failed(
+        &journal,
+        &operation,
+        Some("unix:41".to_string()),
+        "stop failed".to_string(),
+    );
+    journal
+        .record_operation_receipt(failed_receipt)
+        .expect("record failed stop");
+    journal
+        .retry_failed_operation_at(4, Some("unix:42".to_string()))
+        .expect("retry stop");
+    journal
+        .mark_operation_pending_at(4, Some("unix:43".to_string()))
+        .expect("mark stop retry pending");
+    let operation = journal.operations[4].clone();
+    let completed_receipt = BackupExecutionOperationReceipt::completed(
+        &journal,
+        &operation,
+        Some("unix:44".to_string()),
+    );
+    journal
+        .record_operation_receipt(completed_receipt)
+        .expect("record completed stop");
+    journal.operations[4].state = BackupExecutionOperationState::Failed;
+    journal.operations[4].state_updated_at = Some("unix:45".to_string());
+    journal.operations[4].blocking_reasons = vec!["manual stale state".to_string()];
+    journal.restart_required = false;
+
+    layout.write_backup_plan(&plan).expect("write backup plan");
+    layout
+        .write_execution_journal(&journal)
+        .expect("write execution journal");
+
+    let err = layout
+        .verify_execution_integrity()
+        .expect_err("latest receipt mismatch should fail");
+
+    fs::remove_dir_all(root).expect("remove temp layout");
+    assert!(matches!(
+        err,
+        PersistenceError::ExecutionOperationMissingReceipt {
+            sequence: 4,
+            state,
+        } if state == "Failed"
+    ));
+}
+
+// Ensure terminal operation timestamps cannot drift from their durable receipts.
+#[test]
+fn execution_integrity_requires_terminal_timestamp_to_match_receipt() {
+    let root = temp_dir("canic-backup-execution-integrity-receipt-timestamp");
+    let layout = BackupLayout::new(root.clone());
+    let plan = valid_backup_plan();
+    let mut journal = BackupExecutionJournal::from_plan(&plan).expect("execution journal");
+    journal
+        .accept_preflight_bundle_at("preflight-run-001".to_string(), Some("unix:1".to_string()))
+        .expect("accept preflight");
+    journal
+        .mark_operation_pending_at(4, Some("unix:40".to_string()))
+        .expect("mark stop pending");
+    let operation = journal.operations[4].clone();
+    let completed_receipt = BackupExecutionOperationReceipt::completed(
+        &journal,
+        &operation,
+        Some("unix:41".to_string()),
+    );
+    journal
+        .record_operation_receipt(completed_receipt)
+        .expect("record completed stop");
+    journal.operations[4].state_updated_at = Some("unix:42".to_string());
+
+    layout.write_backup_plan(&plan).expect("write backup plan");
+    layout
+        .write_execution_journal(&journal)
+        .expect("write execution journal");
+
+    let err = layout
+        .verify_execution_integrity()
+        .expect_err("receipt timestamp mismatch should fail");
+
+    fs::remove_dir_all(root).expect("remove temp layout");
+    assert!(matches!(
+        err,
+        PersistenceError::ExecutionOperationReceiptTimestampMismatch { sequence: 4 }
     ));
 }
 

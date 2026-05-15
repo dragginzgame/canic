@@ -130,6 +130,9 @@ pub enum BackupExecutionJournalError {
     #[error("accepted preflight is missing preflight_id")]
     AcceptedPreflightMissingId,
 
+    #[error("restart_required does not match execution operation state")]
+    RestartRequiredMismatch,
+
     #[error("preflight already accepted as {existing}, cannot accept {attempted}")]
     PreflightAlreadyAccepted { existing: String, attempted: String },
 

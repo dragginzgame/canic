@@ -246,6 +246,9 @@ pub enum PersistenceError {
     #[error("backup execution operation {sequence} is {state} but has no matching receipt")]
     ExecutionOperationMissingReceipt { sequence: usize, state: String },
 
+    #[error("backup execution operation {sequence} timestamp does not match latest receipt")]
+    ExecutionOperationReceiptTimestampMismatch { sequence: usize },
+
     #[error("artifact path escapes backup root: {artifact_path}")]
     ArtifactPathEscapesBackup { artifact_path: String },
 

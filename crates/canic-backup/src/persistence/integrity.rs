@@ -298,18 +298,33 @@ fn verify_terminal_mutation_receipts(
             )
     }) {
         let expected_outcome = receipt_outcome_for_state(&operation.state);
-        let has_receipt = journal.operation_receipts.iter().any(|receipt| {
-            receipt.sequence == operation.sequence
-                && receipt.operation_id == operation.operation_id
-                && receipt.kind == operation.kind
-                && receipt.target_canister_id == operation.target_canister_id
-                && receipt.outcome == expected_outcome
-        });
-        if !has_receipt {
+        let latest_receipt = journal
+            .operation_receipts
+            .iter()
+            .rev()
+            .find(|receipt| receipt.sequence == operation.sequence);
+        let Some(latest_receipt) = latest_receipt else {
             return Err(PersistenceError::ExecutionOperationMissingReceipt {
                 sequence: operation.sequence,
                 state: format!("{:?}", operation.state),
             });
+        };
+        let latest_matches = latest_receipt.operation_id == operation.operation_id
+            && latest_receipt.kind == operation.kind
+            && latest_receipt.target_canister_id == operation.target_canister_id
+            && latest_receipt.outcome == expected_outcome;
+        if !latest_matches {
+            return Err(PersistenceError::ExecutionOperationMissingReceipt {
+                sequence: operation.sequence,
+                state: format!("{:?}", operation.state),
+            });
+        }
+        if latest_receipt.updated_at.as_deref() != operation.state_updated_at.as_deref() {
+            return Err(
+                PersistenceError::ExecutionOperationReceiptTimestampMismatch {
+                    sequence: operation.sequence,
+                },
+            );
         }
     }
 

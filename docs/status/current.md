@@ -129,6 +129,16 @@ inspect only the files needed for the current task.
   state.
 - Adjusted the changelog check so root `CHANGELOG.md` patch bullets stay on
   one line while detailed changelog notes keep the 88-column prose wrap.
+- Started `0.36.6` by making backup execution integrity compare terminal
+  mutating operation state with the latest matching receipt, so stale retry
+  history cannot hide a hand-edited journal state mismatch.
+- Folded persisted backup execution `restart_required` validation into the
+  `0.36.6` slice so edited journals cannot hide a required restart window.
+- Tightened `0.36.6` further by requiring backup execution transition
+  timestamps before mutation and rejecting persisted pending or terminal
+  operation states without `state_updated_at`.
+- Added `0.36.6` persistence integrity coverage that rejects terminal backup
+  operation timestamp drift from the latest durable operation receipt.
 - Added a config-schema regression proving obsolete per-canister delegated-auth
   verifier tables are rejected instead of accepted through compatibility shims.
 - Updated the internal audit scaling probe to use `scale_replica` and

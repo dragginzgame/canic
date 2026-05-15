@@ -8,7 +8,7 @@ pub use types::*;
 use crate::plan::{BackupExecutionPreflightReceipts, BackupOperationKind, BackupPlan};
 use validation::{
     operation_kind_is_mutating, operation_kind_is_preflight, validate_nonempty,
-    validate_operation_sequences, validate_optional_nonempty,
+    validate_operation_sequences,
 };
 
 const BACKUP_EXECUTION_JOURNAL_VERSION: u16 = 1;
@@ -53,6 +53,9 @@ impl BackupExecutionJournal {
         } else if self.preflight_accepted {
             return Err(BackupExecutionJournalError::AcceptedPreflightMissingId);
         }
+        if self.restart_required != self.derived_restart_required() {
+            return Err(BackupExecutionJournalError::RestartRequiredMismatch);
+        }
         validate_operation_sequences(&self.operations)?;
         for operation in &self.operations {
             operation.validate()?;
@@ -84,7 +87,7 @@ impl BackupExecutionJournal {
         updated_at: Option<String>,
     ) -> Result<(), BackupExecutionJournalError> {
         validate_nonempty("preflight_id", &preflight_id)?;
-        validate_optional_nonempty("updated_at", updated_at.as_deref())?;
+        validate_nonempty("updated_at", updated_at.as_deref().unwrap_or_default())?;
         if let Some(existing) = &self.preflight_id
             && existing != &preflight_id
         {
@@ -160,7 +163,7 @@ impl BackupExecutionJournal {
         sequence: usize,
         updated_at: Option<String>,
     ) -> Result<(), BackupExecutionJournalError> {
-        validate_optional_nonempty("updated_at", updated_at.as_deref())?;
+        validate_nonempty("updated_at", updated_at.as_deref().unwrap_or_default())?;
         let expected = self
             .next_ready_operation()
             .ok_or(BackupExecutionJournalError::NoTransitionableOperation)?
@@ -248,7 +251,7 @@ impl BackupExecutionJournal {
         sequence: usize,
         updated_at: Option<String>,
     ) -> Result<(), BackupExecutionJournalError> {
-        validate_optional_nonempty("updated_at", updated_at.as_deref())?;
+        validate_nonempty("updated_at", updated_at.as_deref().unwrap_or_default())?;
         let index = self.operation_index(sequence)?;
         if self.operations[index].state != BackupExecutionOperationState::Failed {
             return Err(BackupExecutionJournalError::OperationNotFailed(sequence));
@@ -311,6 +314,10 @@ impl BackupExecutionJournal {
     }
 
     fn refresh_restart_required(&mut self) {
+        self.restart_required = self.derived_restart_required();
+    }
+
+    fn derived_restart_required(&self) -> bool {
         let stopped = self.operations.iter().any(|operation| {
             operation.kind == BackupOperationKind::Stop
                 && operation.state == BackupExecutionOperationState::Completed
@@ -323,7 +330,7 @@ impl BackupExecutionJournal {
                         | BackupExecutionOperationState::Skipped
                 )
         });
-        self.restart_required = stopped && unstarted;
+        stopped && unstarted
     }
 }
 
