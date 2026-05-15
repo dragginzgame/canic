@@ -139,6 +139,13 @@ inspect only the files needed for the current task.
   operation states without `state_updated_at`.
 - Added `0.36.6` persistence integrity coverage that rejects terminal backup
   operation timestamp drift from the latest durable operation receipt.
+- Started `0.36.7` by requiring restore apply-journal command receipts to keep
+  their update timestamp, command preview, exit status, and bounded
+  stdout/stderr audit payloads.
+- Folded stale local-replica status handling into `0.36.7`: ICP CLI local
+  status is now treated as stale unless the configured gateway port is
+  actually reachable, so `canic replica start` no longer reports a dead
+  configured port as already running.
 - Added a config-schema regression proving obsolete per-canister delegated-auth
   verifier tables are rejected instead of accepted through compatibility shims.
 - Updated the internal audit scaling probe to use `scale_replica` and

@@ -240,11 +240,13 @@ fn sync_canic_sections(
     environments: &BTreeMap<String, Vec<String>>,
 ) -> String {
     let without_canisters = remove_top_level_section(source, "canisters:");
-    let rest = remove_top_level_section(&without_canisters, "environments:");
-    let mut sections = vec![
-        render_canisters_section(canisters),
-        render_environments_section(environments),
-    ];
+    let without_environments = remove_top_level_section(&without_canisters, "environments:");
+    let (networks, rest) = take_top_level_section(&without_environments, "networks:");
+    let mut sections = vec![render_canisters_section(canisters)];
+    if let Some(networks) = networks {
+        sections.push(networks);
+    }
+    sections.push(render_environments_section(environments));
     let rest = rest.trim();
     if !rest.is_empty() {
         sections.push(rest.to_string());
@@ -253,6 +255,20 @@ fn sync_canic_sections(
     let mut updated = sections.join("\n\n");
     updated.push('\n');
     updated
+}
+
+fn take_top_level_section(source: &str, header: &str) -> (Option<String>, String) {
+    let mut lines = source.lines().map(str::to_string).collect::<Vec<_>>();
+    let line_refs = lines.iter().map(String::as_str).collect::<Vec<_>>();
+    let Some((start, end)) = top_level_section(&line_refs, header) else {
+        return (None, source.to_string());
+    };
+
+    let section = lines[start..end].join("\n");
+    lines.drain(start..end);
+
+    let rest = compact_blank_lines(lines).join("\n");
+    (Some(section), rest)
 }
 
 fn render_canisters_section(canisters: &[String]) -> String {
@@ -314,6 +330,10 @@ fn remove_top_level_section(source: &str, header: &str) -> String {
     };
     lines.drain(start..end);
 
+    compact_blank_lines(lines).join("\n")
+}
+
+fn compact_blank_lines(lines: Vec<String>) -> Vec<String> {
     let mut compacted = Vec::<String>::new();
     let mut previous_blank = false;
     for line in lines {
@@ -325,7 +345,7 @@ fn remove_top_level_section(source: &str, header: &str) -> String {
         previous_blank = blank;
     }
 
-    compacted.join("\n")
+    compacted
 }
 
 fn top_level_section(lines: &[&str], header: &str) -> Option<(usize, usize)> {
@@ -528,6 +548,7 @@ mod tests {
             "environments:\n  - name: test\n    network: local\n    canisters: [root, app]"
         ));
         assert!(updated.contains("networks:\n  - name: local\n    mode: managed"));
+        assert!(updated.find("networks:") < updated.find("environments:"));
         assert!(!updated.contains("- name: old"));
     }
 

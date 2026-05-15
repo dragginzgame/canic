@@ -59,6 +59,113 @@ fn apply_journal_rejects_duplicate_operation_receipt_attempts() {
     ));
 }
 
+// Ensure command receipts preserve the durable command/output audit envelope.
+#[test]
+fn apply_journal_command_receipts_require_audit_fields() {
+    let mut journal = command_preview_journal(RestoreApplyOperationKind::UploadSnapshot, None);
+    journal
+        .mark_operation_completed_at(0, None)
+        .expect("mark upload completed");
+    let receipt = RestoreApplyOperationReceipt::command_completed(
+        &journal.operations[0],
+        RestoreApplyRunnerCommand {
+            program: "icp".to_string(),
+            args: vec![
+                "canister".to_string(),
+                "snapshot".to_string(),
+                "upload".to_string(),
+                ROOT.to_string(),
+            ],
+            mutates: true,
+            requires_stopped_canister: false,
+            note: "Upload snapshot artifact to target canister".to_string(),
+        },
+        "exit:0".to_string(),
+        Some("unix:1".to_string()),
+        RestoreApplyCommandOutputPair::from_bytes(
+            b"Uploaded snapshot: target-snap-root\n",
+            b"",
+            1024,
+        ),
+        1,
+        Some("target-snap-root".to_string()),
+    );
+
+    let mut missing_updated_at = receipt.clone();
+    missing_updated_at.updated_at = None;
+    assert_receipt_missing_field(
+        &mut journal,
+        missing_updated_at,
+        "operation_receipts[].updated_at",
+    );
+
+    let mut missing_command = receipt.clone();
+    missing_command.command = None;
+    assert_receipt_missing_field(
+        &mut journal,
+        missing_command,
+        "operation_receipts[].command",
+    );
+
+    let mut missing_status = receipt.clone();
+    missing_status.status = None;
+    assert_receipt_missing_field(&mut journal, missing_status, "operation_receipts[].status");
+
+    let mut missing_stdout = receipt.clone();
+    missing_stdout.stdout = None;
+    assert_receipt_missing_field(&mut journal, missing_stdout, "operation_receipts[].stdout");
+
+    let mut missing_stderr = receipt.clone();
+    missing_stderr.stderr = None;
+    assert_receipt_missing_field(&mut journal, missing_stderr, "operation_receipts[].stderr");
+
+    let mut empty_program = receipt.clone();
+    empty_program
+        .command
+        .as_mut()
+        .expect("command")
+        .program
+        .clear();
+    assert_receipt_missing_field(
+        &mut journal,
+        empty_program,
+        "operation_receipts[].command.program",
+    );
+
+    let mut empty_args = receipt.clone();
+    empty_args.command.as_mut().expect("command").args.clear();
+    assert_receipt_missing_field(
+        &mut journal,
+        empty_args,
+        "operation_receipts[].command.args",
+    );
+
+    let mut empty_note = receipt;
+    empty_note.command.as_mut().expect("command").note.clear();
+    assert_receipt_missing_field(
+        &mut journal,
+        empty_note,
+        "operation_receipts[].command.note",
+    );
+}
+
+fn assert_receipt_missing_field(
+    journal: &mut RestoreApplyJournal,
+    receipt: RestoreApplyOperationReceipt,
+    field: &'static str,
+) {
+    let receipt_count = journal.operation_receipts.len();
+    let err = journal
+        .record_operation_receipt(receipt)
+        .expect_err("receipt field should be required");
+
+    assert!(matches!(
+        err,
+        RestoreApplyJournalError::MissingField(missing) if missing == field
+    ));
+    assert_eq!(journal.operation_receipts.len(), receipt_count);
+}
+
 // Ensure an artifact-validated apply dry-run produces a ready initial journal.
 #[test]
 fn apply_journal_marks_validated_operations_ready() {

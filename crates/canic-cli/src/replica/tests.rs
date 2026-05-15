@@ -105,6 +105,30 @@ fn replica_status_json_exposes_status_source() {
     assert!(value["icp_status"].is_null());
 }
 
+// Ensure JSON can surface stale ICP status metadata without claiming the replica is usable.
+#[test]
+fn replica_status_json_exposes_stale_icp_status() {
+    let report = ReplicaStatusJsonReport {
+        network: "local",
+        running: false,
+        configured_gateway_port: "8001".to_string(),
+        status_source: "icp_cli_stale",
+        icp_cli_running: true,
+        local_gateway_reachable: false,
+        icp_status: Some(serde_json::json!({
+            "gateway_url": "http://localhost:8001/"
+        })),
+    };
+
+    let value = serde_json::to_value(report).expect("serialize replica status");
+
+    assert_eq!(value["running"], false);
+    assert_eq!(value["status_source"], "icp_cli_stale");
+    assert_eq!(value["icp_cli_running"], true);
+    assert_eq!(value["local_gateway_reachable"], false);
+    assert_eq!(value["icp_status"]["gateway_url"], "http://localhost:8001/");
+}
+
 // Ensure replica help exposes the native lifecycle commands.
 #[test]
 fn replica_usage_lists_commands() {

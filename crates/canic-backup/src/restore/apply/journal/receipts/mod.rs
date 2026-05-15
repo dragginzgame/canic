@@ -156,6 +156,25 @@ impl RestoreApplyOperationReceipt {
                 sequence: self.sequence,
             });
         }
+        validate_apply_journal_nonempty(
+            "operation_receipts[].updated_at",
+            self.updated_at.as_deref().unwrap_or_default(),
+        )?;
+        let command =
+            Self::validate_present("operation_receipts[].command", self.command.as_ref())?;
+        validate_apply_journal_nonempty("operation_receipts[].command.program", &command.program)?;
+        validate_apply_journal_nonempty("operation_receipts[].command.note", &command.note)?;
+        if command.args.is_empty() {
+            return Err(RestoreApplyJournalError::MissingField(
+                "operation_receipts[].command.args",
+            ));
+        }
+        validate_apply_journal_nonempty(
+            "operation_receipts[].status",
+            self.status.as_deref().unwrap_or_default(),
+        )?;
+        Self::validate_present("operation_receipts[].stdout", self.stdout.as_ref())?;
+        Self::validate_present("operation_receipts[].stderr", self.stderr.as_ref())?;
         if self.operation == RestoreApplyOperationKind::UploadSnapshot {
             validate_apply_journal_nonempty(
                 "operation_receipts[].source_snapshot_id",
@@ -180,6 +199,13 @@ impl RestoreApplyOperationReceipt {
         }
 
         Ok(())
+    }
+
+    fn validate_present<'a, T>(
+        field: &'static str,
+        value: Option<&'a T>,
+    ) -> Result<&'a T, RestoreApplyJournalError> {
+        value.ok_or(RestoreApplyJournalError::MissingField(field))
     }
 }
 

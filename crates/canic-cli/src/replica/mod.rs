@@ -205,7 +205,7 @@ where
         .local_replica_project_running_in(&icp_root, options.debug)
         .map_err(replica_icp_error)?;
     let local_gateway_reachable = local_replica_http_reachable(&icp_root);
-    if icp_cli_running || local_gateway_reachable {
+    if local_gateway_reachable {
         if let Some(requested) = options.port {
             let current = configured_local_gateway_port_from_root(&icp_root)
                 .unwrap_or(DEFAULT_LOCAL_GATEWAY_PORT);
@@ -225,6 +225,12 @@ where
             replica_port_label(&icp_root)
         );
         return Ok(());
+    }
+    if icp_cli_running {
+        println!(
+            "Replica status is stale: ICP CLI reports local running, but port {} is not reachable. Starting local replica again.",
+            replica_port_label(&icp_root)
+        );
     }
     if let Some(port) = options.port {
         let path = set_configured_local_gateway_port_in_root(&icp_root, port)?;
@@ -263,8 +269,14 @@ where
     }
     match icp.local_replica_status_in(&icp_root, options.debug) {
         Ok(output) => {
-            println!("Replica: running (local, port {port})");
-            print_command_output(&output);
+            if local_replica_http_reachable(&icp_root) {
+                println!("Replica: running (local, port {port})");
+                print_command_output(&output);
+            } else {
+                println!(
+                    "Replica: stopped (local, port {port}, ICP CLI status stale; HTTP not reachable)"
+                );
+            }
         }
         Err(error) if local_network_not_running(&error) => {
             if local_replica_http_reachable(&icp_root) {
@@ -287,15 +299,22 @@ fn run_status_json(
     debug: bool,
 ) -> Result<(), ReplicaCommandError> {
     let report = match icp.local_replica_status_json_in(icp_root, debug) {
-        Ok(status) => ReplicaStatusJsonReport {
-            network: "local",
-            running: true,
-            configured_gateway_port: port.to_string(),
-            status_source: "icp_cli",
-            icp_cli_running: true,
-            local_gateway_reachable: local_replica_http_reachable(icp_root),
-            icp_status: Some(status),
-        },
+        Ok(status) => {
+            let local_gateway_reachable = local_replica_http_reachable(icp_root);
+            ReplicaStatusJsonReport {
+                network: "local",
+                running: local_gateway_reachable,
+                configured_gateway_port: port.to_string(),
+                status_source: if local_gateway_reachable {
+                    "icp_cli"
+                } else {
+                    "icp_cli_stale"
+                },
+                icp_cli_running: true,
+                local_gateway_reachable,
+                icp_status: Some(status),
+            }
+        }
         Err(error) if local_network_not_running(&error) => {
             let local_gateway_reachable = local_replica_http_reachable(icp_root);
             ReplicaStatusJsonReport {
