@@ -116,6 +116,21 @@ fn write_fake_icp_upload(root: &Path, uploaded_snapshot_id: &str) -> PathBuf {
     path
 }
 
+// Write a fake icp executable that succeeds without reporting an uploaded snapshot ID.
+#[cfg(unix)]
+fn write_fake_icp_upload_without_id(root: &Path) -> PathBuf {
+    use std::os::unix::fs::PermissionsExt;
+
+    let path = root.join("icp-upload-missing-id");
+    fs::write(&path, "#!/bin/sh\nprintf 'Upload completed\\n'\n").expect("write fake icp");
+    let mut permissions = fs::metadata(&path)
+        .expect("fake icp metadata")
+        .permissions();
+    permissions.set_mode(0o755);
+    fs::set_permissions(&path, permissions).expect("make fake icp executable");
+    path
+}
+
 // Build one manually ready apply journal for runner-focused CLI tests.
 fn ready_apply_journal() -> RestoreApplyJournal {
     let plan = RestorePlanner::plan(&restore_ready_manifest(), None).expect("build plan");

@@ -133,6 +133,7 @@ pub struct RestoreRunOptions {
     pub out: Option<PathBuf>,
     pub dry_run: bool,
     pub execute: bool,
+    pub retry_failed: bool,
     pub unclaim_pending: bool,
     pub max_steps: Option<usize>,
     pub require_complete: bool,
@@ -154,6 +155,7 @@ impl RestoreRunOptions {
             out: path_option(&matches, "out"),
             dry_run: matches.get_flag("dry-run"),
             execute: matches.get_flag("execute"),
+            retry_failed: matches.get_flag("retry-failed"),
             unclaim_pending: matches.get_flag("unclaim-pending"),
             max_steps: matches.get_one::<usize>("max-steps").copied(),
             require_complete: matches.get_flag("require-complete"),
@@ -169,7 +171,7 @@ pub(super) fn restore_run_command() -> ClapCommand {
         .disable_help_flag(true)
         .group(
             ArgGroup::new("mode")
-                .args(["dry-run", "execute", "unclaim-pending"])
+                .args(["dry-run", "execute", "retry-failed", "unclaim-pending"])
                 .required(true)
                 .multiple(false),
         )
@@ -184,6 +186,7 @@ pub(super) fn restore_run_command() -> ClapCommand {
         .arg(value_arg("out").long("out").value_name("file"))
         .arg(flag_arg("dry-run").long("dry-run"))
         .arg(flag_arg("execute").long("execute"))
+        .arg(flag_arg("retry-failed").long("retry-failed"))
         .arg(flag_arg("unclaim-pending").long("unclaim-pending"))
         .arg(
             value_arg("max-steps")

@@ -115,6 +115,7 @@ fn parses_restore_run_dry_run_options() {
     assert_eq!(options.out, Some(PathBuf::from("restore-run-dry-run.json")));
     assert!(options.dry_run);
     assert!(!options.execute);
+    assert!(!options.retry_failed);
     assert!(!options.unclaim_pending);
     assert_eq!(options.max_steps, Some(1));
     assert!(options.require_complete);
@@ -141,6 +142,7 @@ fn parses_restore_run_execute_options() {
     assert_eq!(options.out, None);
     assert!(!options.dry_run);
     assert!(options.execute);
+    assert!(!options.retry_failed);
     assert!(!options.unclaim_pending);
     assert_eq!(options.max_steps, Some(4));
     assert!(!options.require_complete);
@@ -163,7 +165,28 @@ fn parses_restore_run_unclaim_pending_options() {
     assert_eq!(options.out, Some(PathBuf::from("restore-run.json")));
     assert!(!options.dry_run);
     assert!(!options.execute);
+    assert!(!options.retry_failed);
     assert!(options.unclaim_pending);
+}
+
+// Ensure restore run options parse the native failed-operation recovery mode.
+#[test]
+fn parses_restore_run_retry_failed_options() {
+    let options = RestoreRunOptions::parse([
+        OsString::from("--journal"),
+        OsString::from("restore-apply-journal.json"),
+        OsString::from("--retry-failed"),
+        OsString::from("--out"),
+        OsString::from("restore-run.json"),
+    ])
+    .expect("parse restore run retry options");
+
+    assert_eq!(options.journal, PathBuf::from("restore-apply-journal.json"));
+    assert_eq!(options.out, Some(PathBuf::from("restore-run.json")));
+    assert!(!options.dry_run);
+    assert!(!options.execute);
+    assert!(options.retry_failed);
+    assert!(!options.unclaim_pending);
 }
 
 // Ensure restore apply only renders no-mutation operation plans.
@@ -198,6 +221,7 @@ fn restore_run_rejects_conflicting_modes() {
         OsString::from("restore-apply-journal.json"),
         OsString::from("--dry-run"),
         OsString::from("--execute"),
+        OsString::from("--retry-failed"),
         OsString::from("--unclaim-pending"),
     ])
     .expect_err("restore run should reject conflicting modes");

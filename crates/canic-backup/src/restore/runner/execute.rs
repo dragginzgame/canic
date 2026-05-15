@@ -2,8 +2,8 @@ use super::{
     RestoreApplyCommandOutputPair, RestoreApplyJournal, RestoreApplyOperationKind,
     RestoreApplyOperationReceipt,
     constants::{
-        RESTORE_RUN_COMMAND_EXIT_PREFIX, RESTORE_RUN_OUTPUT_RECEIPT_LIMIT,
-        RESTORE_RUN_STOPPED_PRECONDITION_FAILED,
+        RESTORE_RUN_COMMAND_EXIT_PREFIX, RESTORE_RUN_MISSING_UPLOADED_SNAPSHOT_ID,
+        RESTORE_RUN_OUTPUT_RECEIPT_LIMIT, RESTORE_RUN_STOPPED_PRECONDITION_FAILED,
     },
     io::{RestoreJournalLock, read_apply_journal_file, state_updated_at, write_apply_journal_file},
     precondition::enforce_stopped_canister_precondition,
@@ -156,8 +156,20 @@ fn restore_run_execute_prepared_operation(
     );
 
     if output.success {
-        let uploaded_snapshot_id =
-            parse_uploaded_snapshot_id(&String::from_utf8_lossy(&output.stdout));
+        let is_upload_snapshot =
+            prepared.operation.operation == RestoreApplyOperationKind::UploadSnapshot;
+        let uploaded_snapshot_id = is_upload_snapshot
+            .then(|| parse_uploaded_snapshot_id(&String::from_utf8_lossy(&output.stdout)))
+            .flatten();
+        if is_upload_snapshot && uploaded_snapshot_id.is_none() {
+            return restore_run_commit_missing_uploaded_snapshot_id(
+                config,
+                journal,
+                prepared,
+                output_pair,
+            );
+        }
+
         return restore_run_commit_command_success(
             config,
             journal,
@@ -169,6 +181,47 @@ fn restore_run_execute_prepared_operation(
     }
 
     restore_run_commit_command_failure(config, journal, prepared, status_label, output_pair)
+}
+
+// Commit a successful upload command whose output is missing the required snapshot id.
+fn restore_run_commit_missing_uploaded_snapshot_id(
+    config: &RestoreRunnerConfig,
+    journal: &mut RestoreApplyJournal,
+    prepared: RestoreRunPreparedOperation,
+    output_pair: RestoreApplyCommandOutputPair,
+) -> Result<RestoreRunStepOutcome, RestoreRunnerError> {
+    let failed_updated_at = state_updated_at(config.updated_at.as_ref());
+    let status = RESTORE_RUN_MISSING_UPLOADED_SNAPSHOT_ID.to_string();
+    journal.mark_operation_failed_at(
+        prepared.sequence,
+        status.clone(),
+        Some(failed_updated_at.clone()),
+    )?;
+    journal.record_operation_receipt(RestoreApplyOperationReceipt::command_failed(
+        &prepared.operation,
+        prepared.command.clone(),
+        status.clone(),
+        Some(failed_updated_at.clone()),
+        output_pair,
+        prepared.attempt,
+        status.clone(),
+    ))?;
+    write_apply_journal_file(&config.journal, journal)?;
+
+    Ok(RestoreRunStepOutcome::Failed {
+        executed_operation: RestoreRunExecutedOperation::failed(
+            prepared.operation.clone(),
+            prepared.command.clone(),
+            RESTORE_RUN_MISSING_UPLOADED_SNAPSHOT_ID.to_string(),
+        ),
+        operation_receipt: RestoreRunOperationReceipt::failed(
+            prepared.operation,
+            prepared.command,
+            status.clone(),
+            Some(failed_updated_at),
+        ),
+        status,
+    })
 }
 
 // Commit a stopped-canister precondition failure for a claimed operation.
@@ -222,19 +275,15 @@ fn restore_run_commit_command_success(
 ) -> Result<RestoreRunStepOutcome, RestoreRunnerError> {
     let completed_updated_at = state_updated_at(config.updated_at.as_ref());
     journal.mark_operation_completed_at(prepared.sequence, Some(completed_updated_at.clone()))?;
-    if prepared.operation.operation != RestoreApplyOperationKind::UploadSnapshot
-        || uploaded_snapshot_id.is_some()
-    {
-        journal.record_operation_receipt(RestoreApplyOperationReceipt::command_completed(
-            &prepared.operation,
-            prepared.command.clone(),
-            status_label.clone(),
-            Some(completed_updated_at.clone()),
-            output_pair,
-            prepared.attempt,
-            uploaded_snapshot_id,
-        ))?;
-    }
+    journal.record_operation_receipt(RestoreApplyOperationReceipt::command_completed(
+        &prepared.operation,
+        prepared.command.clone(),
+        status_label.clone(),
+        Some(completed_updated_at.clone()),
+        output_pair,
+        prepared.attempt,
+        uploaded_snapshot_id,
+    ))?;
     write_apply_journal_file(&config.journal, journal)?;
 
     Ok(RestoreRunStepOutcome::Completed {
@@ -305,7 +354,7 @@ fn restore_run_execute_summary(
     let report = journal.report();
     let executed_operation_count = executed_operations.len();
     let stopped_reason = restore_run_stopped_reason(&report, max_steps_reached, true);
-    let next_action = restore_run_next_action(&report, false);
+    let next_action = restore_run_next_action(&report);
 
     let mut response = RestoreRunResponse::from_report(
         journal.backup_id.clone(),

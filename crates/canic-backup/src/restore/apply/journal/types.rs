@@ -249,6 +249,9 @@ pub enum RestoreApplyJournalError {
     #[error("restore apply journal has no pending operation to release")]
     NoPendingOperation,
 
+    #[error("restore apply journal has no failed operation to recover")]
+    NoFailedOperation,
+
     #[error("restore apply journal operation {requested} cannot advance before operation {next}")]
     OutOfOrderOperationTransition { requested: usize, next: usize },
 

@@ -89,6 +89,15 @@ pub enum RestoreCommandError {
         actual: Option<usize>,
     },
 
+    #[error(
+        "restore apply journal for backup {backup_id} operation {sequence} is {state} but has no matching receipt"
+    )]
+    RestoreRunTerminalOperationMissingReceipt {
+        backup_id: String,
+        sequence: usize,
+        state: String,
+    },
+
     #[error(transparent)]
     Io(#[from] std::io::Error),
 
@@ -150,6 +159,15 @@ impl From<RestoreRunnerError> for RestoreCommandError {
             RestoreRunnerError::ClaimSequenceMismatch { expected, actual } => {
                 Self::RestoreRunClaimSequenceMismatch { expected, actual }
             }
+            RestoreRunnerError::TerminalOperationMissingReceipt {
+                backup_id,
+                sequence,
+                state,
+            } => Self::RestoreRunTerminalOperationMissingReceipt {
+                backup_id,
+                sequence,
+                state: state.to_string(),
+            },
             RestoreRunnerError::Io(error) => Self::Io(error),
             RestoreRunnerError::Json(error) => Self::Json(error),
             RestoreRunnerError::Journal(error) => Self::RestoreApplyJournal(error),

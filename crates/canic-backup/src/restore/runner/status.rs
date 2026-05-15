@@ -41,24 +41,18 @@ pub(super) const fn restore_run_stopped_reason(
 }
 
 // Recommend the next operator action for the native runner summary.
-pub(super) const fn restore_run_next_action(
-    report: &RestoreApplyJournalReport,
-    recovered_pending: bool,
-) -> &'static str {
+pub(super) const fn restore_run_next_action(report: &RestoreApplyJournalReport) -> &'static str {
     if report.complete {
         return RESTORE_RUN_ACTION_DONE;
     }
     if report.failed_operations > 0 {
-        return RESTORE_RUN_ACTION_INSPECT_FAILED;
+        return RESTORE_RUN_ACTION_RETRY_FAILED;
     }
     if report.pending_operations > 0 {
         return RESTORE_RUN_ACTION_UNCLAIM_PENDING;
     }
     if !report.ready || report.blocked_operations > 0 {
         return RESTORE_RUN_ACTION_FIX_BLOCKED;
-    }
-    if recovered_pending {
-        return RESTORE_RUN_ACTION_RERUN;
     }
     RESTORE_RUN_ACTION_RERUN
 }
@@ -127,7 +121,11 @@ pub fn parse_uploaded_snapshot_id(output: &str) -> Option<String> {
 
     output
         .lines()
-        .filter_map(|line| line.split_once(':').map(|(_, value)| value.trim()))
+        .filter_map(|line| {
+            line.split_once(':')
+                .filter(|(label, _)| label.trim().eq_ignore_ascii_case("uploaded snapshot"))
+                .map(|(_, value)| value.trim())
+        })
         .find(|value| !value.is_empty())
         .map(str::to_string)
 }
@@ -141,6 +139,7 @@ fn parse_uploaded_snapshot_id_json(value: &serde_json::Value) -> Option<String> 
                 .get("uploaded_snapshot_id")
                 .and_then(serde_json::Value::as_str)
         })
+        .map(str::trim)
         .filter(|value| !value.is_empty())
         .map(str::to_string)
 }
@@ -172,6 +171,20 @@ mod tests {
     #[test]
     fn rejects_json_without_uploaded_snapshot_id() {
         let snapshot_id = parse_uploaded_snapshot_id(r#"{"message":"upload completed"}"#);
+
+        assert_eq!(snapshot_id, None);
+    }
+
+    #[test]
+    fn rejects_json_with_blank_uploaded_snapshot_id() {
+        let snapshot_id = parse_uploaded_snapshot_id(r#"{"snapshot_id":"   "}"#);
+
+        assert_eq!(snapshot_id, None);
+    }
+
+    #[test]
+    fn rejects_unrelated_colon_text() {
+        let snapshot_id = parse_uploaded_snapshot_id("Message: upload completed\n");
 
         assert_eq!(snapshot_id, None);
     }

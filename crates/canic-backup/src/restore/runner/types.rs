@@ -98,6 +98,15 @@ pub enum RestoreRunnerError {
         actual: Option<usize>,
     },
 
+    #[error(
+        "restore apply journal for backup {backup_id} operation {sequence} is {state} but has no matching receipt"
+    )]
+    TerminalOperationMissingReceipt {
+        backup_id: String,
+        sequence: usize,
+        state: &'static str,
+    },
+
     #[error(transparent)]
     Io(#[from] std::io::Error),
 
@@ -123,6 +132,7 @@ pub struct RestoreRunResponse {
     pub run_mode: &'static str,
     pub dry_run: bool,
     pub execute: bool,
+    pub retry_failed: bool,
     pub unclaim_pending: bool,
     pub stopped_reason: &'static str,
     pub next_action: &'static str,
@@ -177,6 +187,7 @@ impl RestoreRunResponse {
             run_mode: mode.run_mode,
             dry_run: mode.dry_run,
             execute: mode.execute,
+            retry_failed: mode.retry_failed,
             unclaim_pending: mode.unclaim_pending,
             stopped_reason: mode.stopped_reason,
             next_action: mode.next_action,
@@ -231,6 +242,7 @@ pub struct RestoreRunReceiptSummary {
     pub total_receipts: usize,
     pub command_completed: usize,
     pub command_failed: usize,
+    pub failed_recovered: usize,
     pub pending_recovered: usize,
 }
 
@@ -246,6 +258,7 @@ impl RestoreRunReceiptSummary {
             match receipt.event {
                 RESTORE_RUN_RECEIPT_COMPLETED => summary.command_completed += 1,
                 RESTORE_RUN_RECEIPT_FAILED => summary.command_failed += 1,
+                RESTORE_RUN_RECEIPT_RECOVERED_FAILED => summary.failed_recovered += 1,
                 RESTORE_RUN_RECEIPT_RECOVERED_PENDING => summary.pending_recovered += 1,
                 _ => {}
             }
@@ -316,6 +329,21 @@ impl RestoreRunOperationReceipt {
     ) -> Self {
         Self::from_operation(
             RESTORE_RUN_RECEIPT_RECOVERED_PENDING,
+            operation,
+            RESTORE_RUN_RECEIPT_STATE_READY,
+            updated_at,
+            None,
+            None,
+        )
+    }
+
+    // Build a receipt for a recovered failed operation.
+    pub(super) fn recovered_failed(
+        operation: RestoreApplyJournalOperation,
+        updated_at: Option<String>,
+    ) -> Self {
+        Self::from_operation(
+            RESTORE_RUN_RECEIPT_RECOVERED_FAILED,
             operation,
             RESTORE_RUN_RECEIPT_STATE_READY,
             updated_at,
@@ -431,10 +459,15 @@ pub(super) struct RestoreStoppedPreconditionFailure {
 /// RestoreRunResponseMode
 ///
 
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "Internal response mode maps directly to stable JSON mode flags"
+)]
 pub(super) struct RestoreRunResponseMode {
     run_mode: &'static str,
     dry_run: bool,
     execute: bool,
+    retry_failed: bool,
     unclaim_pending: bool,
     stopped_reason: &'static str,
     next_action: &'static str,
@@ -442,10 +475,15 @@ pub(super) struct RestoreRunResponseMode {
 
 impl RestoreRunResponseMode {
     // Build a response mode from the stable JSON mode flags and action labels.
+    #[expect(
+        clippy::fn_params_excessive_bools,
+        reason = "Internal constructor keeps stable JSON mode flags explicit"
+    )]
     const fn new(
         run_mode: &'static str,
         dry_run: bool,
         execute: bool,
+        retry_failed: bool,
         unclaim_pending: bool,
         stopped_reason: &'static str,
         next_action: &'static str,
@@ -454,6 +492,7 @@ impl RestoreRunResponseMode {
             run_mode,
             dry_run,
             execute,
+            retry_failed,
             unclaim_pending,
             stopped_reason,
             next_action,
@@ -465,6 +504,7 @@ impl RestoreRunResponseMode {
         Self::new(
             RESTORE_RUN_MODE_DRY_RUN,
             true,
+            false,
             false,
             false,
             stopped_reason,
@@ -479,7 +519,21 @@ impl RestoreRunResponseMode {
             false,
             true,
             false,
+            false,
             stopped_reason,
+            next_action,
+        )
+    }
+
+    // Build the failed-operation recovery response mode.
+    pub(super) const fn retry_failed(next_action: &'static str) -> Self {
+        Self::new(
+            RESTORE_RUN_MODE_RETRY_FAILED,
+            false,
+            false,
+            true,
+            false,
+            RESTORE_RUN_STOPPED_RECOVERED_FAILED,
             next_action,
         )
     }
@@ -488,6 +542,7 @@ impl RestoreRunResponseMode {
     pub(super) const fn unclaim_pending(next_action: &'static str) -> Self {
         Self::new(
             RESTORE_RUN_MODE_UNCLAIM_PENDING,
+            false,
             false,
             false,
             true,

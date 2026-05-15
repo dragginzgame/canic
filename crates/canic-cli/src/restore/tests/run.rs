@@ -4,6 +4,14 @@ use canic_backup::restore::{RestoreApplyJournal, RestoreApplyOperationState};
 use serde_json::json;
 use std::{ffi::OsString, fs};
 
+fn command_program_file_name(command: &serde_json::Value) -> Option<&str> {
+    command["program"]
+        .as_str()
+        .map(std::path::Path::new)
+        .and_then(std::path::Path::file_name)
+        .and_then(std::ffi::OsStr::to_str)
+}
+
 // Ensure restore run writes a native no-mutation runner preview.
 #[test]
 fn run_restore_run_dry_run_writes_native_runner_preview() {
@@ -190,12 +198,14 @@ fn run_restore_run_unclaim_pending_marks_operation_ready() {
 }
 
 // Ensure restore run execute claims and completes one generated command.
+#[cfg(unix)]
 #[test]
 fn run_restore_run_execute_marks_completed_operation() {
     let root = temp_dir("canic-cli-restore-run-execute");
     fs::create_dir_all(&root).expect("create temp root");
     let journal_path = root.join("restore-apply-journal.json");
     let out_path = root.join("restore-run.json");
+    let fake_icp = write_fake_icp_upload(&root, "target-snap-root");
     let journal = ready_apply_journal();
 
     fs::write(
@@ -210,7 +220,7 @@ fn run_restore_run_execute_marks_completed_operation() {
         OsString::from(journal_path.as_os_str()),
         OsString::from("--execute"),
         OsString::from(crate::cli::globals::INTERNAL_ICP_OPTION),
-        OsString::from("/bin/true"),
+        OsString::from(fake_icp.as_os_str()),
         OsString::from("--max-steps"),
         OsString::from("1"),
         OsString::from("--out"),
@@ -257,8 +267,8 @@ fn run_restore_run_execute_marks_completed_operation() {
     );
     assert_eq!(run_summary["executed_operations"][0]["sequence"], 0);
     assert_eq!(
-        run_summary["executed_operations"][0]["command"]["program"],
-        "/bin/true"
+        command_program_file_name(&run_summary["executed_operations"][0]["command"]),
+        Some("icp-upload-ok")
     );
     assert_eq!(
         run_summary["operation_receipts"][0]["event"],
@@ -267,8 +277,8 @@ fn run_restore_run_execute_marks_completed_operation() {
     assert_eq!(run_summary["operation_receipts"][0]["sequence"], 0);
     assert_eq!(run_summary["operation_receipts"][0]["state"], "completed");
     assert_eq!(
-        run_summary["operation_receipts"][0]["command"]["program"],
-        "/bin/true"
+        command_program_file_name(&run_summary["operation_receipts"][0]["command"]),
+        Some("icp-upload-ok")
     );
     assert_eq!(run_summary["operation_receipts"][0]["status"], "0");
     assert!(
@@ -359,6 +369,74 @@ fn run_restore_run_execute_records_uploaded_snapshot_receipt() {
     );
 }
 
+// Ensure successful upload commands still fail if the snapshot id is missing.
+#[cfg(unix)]
+#[test]
+fn run_restore_run_execute_rejects_upload_without_snapshot_id() {
+    let root = temp_dir("canic-cli-restore-run-upload-missing-id");
+    fs::create_dir_all(&root).expect("create temp root");
+    let journal_path = root.join("restore-apply-journal.json");
+    let out_path = root.join("restore-run.json");
+    let fake_icp = write_fake_icp_upload_without_id(&root);
+    let journal = ready_apply_journal();
+
+    fs::write(
+        &journal_path,
+        serde_json::to_vec(&journal).expect("serialize journal"),
+    )
+    .expect("write journal");
+
+    let err = run([
+        OsString::from("run"),
+        OsString::from("--journal"),
+        OsString::from(journal_path.as_os_str()),
+        OsString::from("--execute"),
+        OsString::from(crate::cli::globals::INTERNAL_ICP_OPTION),
+        OsString::from(fake_icp.as_os_str()),
+        OsString::from("--max-steps"),
+        OsString::from("1"),
+        OsString::from("--out"),
+        OsString::from(out_path.as_os_str()),
+    ])
+    .expect_err("missing uploaded snapshot id rejects");
+
+    let updated: RestoreApplyJournal =
+        serde_json::from_slice(&fs::read(&journal_path).expect("read updated journal"))
+            .expect("decode updated journal");
+    let run_summary: serde_json::Value =
+        serde_json::from_slice(&fs::read(&out_path).expect("read run summary"))
+            .expect("decode run summary");
+
+    fs::remove_dir_all(root).expect("remove temp root");
+    assert!(matches!(
+        err,
+        RestoreCommandError::RestoreRunCommandFailed {
+            sequence: 0,
+            status,
+        } if status == "missing-uploaded-snapshot-id"
+    ));
+    assert_eq!(updated.failed_operations, 1);
+    assert_eq!(updated.operation_receipts.len(), 1);
+    assert_eq!(
+        updated.operation_receipts[0].status.as_deref(),
+        Some("missing-uploaded-snapshot-id")
+    );
+    assert_eq!(
+        updated.operations[0].state,
+        RestoreApplyOperationState::Failed
+    );
+    assert_eq!(run_summary["complete"], false);
+    assert_eq!(run_summary["attention_required"], true);
+    assert_eq!(
+        run_summary["operation_receipts"][0]["event"],
+        "command-failed"
+    );
+    assert_eq!(
+        run_summary["operation_receipts"][0]["status"],
+        "missing-uploaded-snapshot-id"
+    );
+}
+
 // Ensure native runner execution refuses a journal that is already locked.
 #[test]
 fn run_restore_run_execute_rejects_locked_journal() {
@@ -386,13 +464,45 @@ fn run_restore_run_execute_rejects_locked_journal() {
     assert!(lock_path.exists());
 }
 
+// Ensure terminal restore-runner operations require durable command receipts.
+#[test]
+fn run_restore_run_rejects_terminal_operation_without_receipt() {
+    let fixture = RestoreCliFixture::new(
+        "canic-cli-restore-run-terminal-missing-receipt",
+        "restore-run.json",
+    );
+    let mut journal = ready_apply_journal();
+    journal.operations[0].state = RestoreApplyOperationState::Completed;
+    journal.ready_operations -= 1;
+    journal.completed_operations = 1;
+    journal
+        .validate()
+        .expect("tampered journal validates structurally");
+    fixture.write_journal(&journal);
+
+    let err = fixture
+        .run_restore_run(&["--dry-run"])
+        .expect_err("terminal operation without receipt should reject");
+
+    assert!(matches!(
+        err,
+        RestoreCommandError::RestoreRunTerminalOperationMissingReceipt {
+            sequence: 0,
+            state,
+            ..
+        } if state == "completed"
+    ));
+}
+
 // Ensure restore run can fail closed after writing an incomplete summary.
+#[cfg(unix)]
 #[test]
 fn run_restore_run_require_complete_writes_summary_then_fails() {
     let root = temp_dir("canic-cli-restore-run-require-complete");
     fs::create_dir_all(&root).expect("create temp root");
     let journal_path = root.join("restore-apply-journal.json");
     let out_path = root.join("restore-run.json");
+    let fake_icp = write_fake_icp_upload(&root, "target-snap-root");
     let journal = ready_apply_journal();
 
     fs::write(
@@ -407,7 +517,7 @@ fn run_restore_run_require_complete_writes_summary_then_fails() {
         OsString::from(journal_path.as_os_str()),
         OsString::from("--execute"),
         OsString::from(crate::cli::globals::INTERNAL_ICP_OPTION),
-        OsString::from("/bin/true"),
+        OsString::from(fake_icp.as_os_str()),
         OsString::from("--max-steps"),
         OsString::from("1"),
         OsString::from("--out"),
@@ -491,7 +601,7 @@ fn run_restore_run_execute_marks_failed_operation() {
     assert_eq!(run_summary["attention_required"], true);
     assert_eq!(run_summary["outcome"], "failed");
     assert_eq!(run_summary["stopped_reason"], "command-failed");
-    assert_eq!(run_summary["next_action"], "inspect-failed-operation");
+    assert_eq!(run_summary["next_action"], "retry-failed");
     assert_eq!(
         run_summary["requested_state_updated_at"],
         serde_json::Value::Null
@@ -509,6 +619,10 @@ fn run_restore_run_execute_marks_failed_operation() {
     assert_eq!(
         run_summary["operation_receipt_summary"]["command_failed"],
         1
+    );
+    assert_eq!(
+        run_summary["operation_receipt_summary"]["failed_recovered"],
+        0
     );
     assert_eq!(
         run_summary["operation_receipt_summary"]["pending_recovered"],
@@ -556,6 +670,55 @@ fn run_restore_run_execute_marks_failed_operation() {
         updated.operations[0].blocking_reasons,
         vec!["runner-command-exit-1".to_string()]
     );
+}
+
+// Ensure restore run can recover a failed operation for an explicit retry.
+#[test]
+fn run_restore_run_retry_failed_marks_operation_ready() {
+    let fixture = RestoreCliFixture::new("canic-cli-restore-run-retry-failed", "restore-run.json");
+    let journal = ready_apply_journal();
+    fixture.write_journal(&journal);
+
+    fixture
+        .run_restore_run(&[
+            "--execute",
+            crate::cli::globals::INTERNAL_ICP_OPTION,
+            "/bin/false",
+            "--max-steps",
+            "1",
+        ])
+        .expect_err("seed failed operation");
+    fixture
+        .run_restore_run(&["--retry-failed"])
+        .expect("retry failed operation");
+
+    let run_summary: serde_json::Value = fixture.read_out("read run summary");
+    let updated: RestoreApplyJournal =
+        serde_json::from_slice(&fs::read(&fixture.journal_path).expect("read updated journal"))
+            .expect("decode updated journal");
+
+    assert_eq!(run_summary["run_mode"], "retry-failed");
+    assert_eq!(run_summary["retry_failed"], true);
+    assert_eq!(run_summary["failed_operations"], 0);
+    assert_eq!(run_summary["ready_operations"], 10);
+    assert_eq!(run_summary["stopped_reason"], "recovered-failed");
+    assert_eq!(run_summary["next_action"], "rerun");
+    assert_eq!(
+        run_summary["operation_receipt_summary"]["failed_recovered"],
+        1
+    );
+    assert_eq!(
+        run_summary["operation_receipts"][0]["event"],
+        "failed-recovered"
+    );
+    assert_eq!(run_summary["operation_receipts"][0]["state"], "ready");
+    assert_eq!(updated.failed_operations, 0);
+    assert_eq!(updated.ready_operations, 10);
+    assert_eq!(
+        updated.operations[0].state,
+        RestoreApplyOperationState::Ready
+    );
+    assert!(updated.operations[0].blocking_reasons.is_empty());
 }
 
 // Ensure restore run can fail closed after writing an attention summary.

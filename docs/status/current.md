@@ -110,6 +110,16 @@ inspect only the files needed for the current task.
 - Tightened backup execution integrity so terminal mutating operations require
   matching operation receipts; preflight-completed validation operations remain
   receiptless as intended.
+- Started `0.36.3` restore-runner hardening by making upload-snapshot commands
+  fail if successful output does not include the uploaded snapshot id required
+  by later load-snapshot operations.
+- Added explicit `canic restore run --retry-failed` recovery so failed restore
+  operations can be moved back to ready after inspection without hand-editing
+  the apply journal.
+- Tightened legacy restore upload-id parsing so only uploaded-snapshot-labelled
+  text can satisfy a successful upload command without structured JSON.
+- Tightened restore-runner journal loading so completed or failed operations
+  must have matching command receipts before any runner mode proceeds.
 - Added a config-schema regression proving obsolete per-canister delegated-auth
   verifier tables are rejected instead of accepted through compatibility shims.
 - Updated the internal audit scaling probe to use `scale_replica` and

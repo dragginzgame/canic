@@ -68,6 +68,11 @@ where
             let options = RestoreRunOptions::parse(args)?;
             let run = if options.execute {
                 restore_run_execute_result(&options)?
+            } else if options.retry_failed {
+                canic_backup::restore::RestoreRunnerOutcome {
+                    response: restore_run_retry_failed(&options)?,
+                    error: None,
+                }
             } else if options.unclaim_pending {
                 canic_backup::restore::RestoreRunnerOutcome {
                     response: restore_run_unclaim_pending(&options)?,
@@ -122,6 +127,13 @@ pub fn restore_run_unclaim_pending(
     options: &RestoreRunOptions,
 ) -> Result<RestoreRunResponse, RestoreCommandError> {
     canic_backup::restore::restore_run_unclaim_pending(&restore_runner_config(options))
+        .map_err(RestoreCommandError::from)
+}
+
+pub fn restore_run_retry_failed(
+    options: &RestoreRunOptions,
+) -> Result<RestoreRunResponse, RestoreCommandError> {
+    canic_backup::restore::restore_run_retry_failed(&restore_runner_config(options))
         .map_err(RestoreCommandError::from)
 }
 

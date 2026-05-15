@@ -251,6 +251,16 @@ canic restore run \
   --out restore-run-recovery.json
 ```
 
+If an operation failed and you have inspected the failure, move it back to
+ready before rerunning execution:
+
+```bash
+canic restore run \
+  --journal restore-apply-journal.json \
+  --retry-failed \
+  --out restore-run-retry.json
+```
+
 ## Restore Journal Tools
 
 Use `canic restore run --dry-run` to inspect the journal produced by
