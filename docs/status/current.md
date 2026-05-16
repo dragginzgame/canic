@@ -211,6 +211,8 @@ inspect only the files needed for the current task.
   no boundary bypass and now explicitly checks current macro/core auth paths,
   required scopes, update replay consumption, and private token-material helper
   limits.
+- Exported `DelegatedToken` from `canic::prelude` so normal authenticated
+  endpoint modules do not need a separate DTO import.
 - Added a config-schema regression proving obsolete per-canister delegated-auth
   verifier tables are rejected instead of accepted through compatibility shims.
 - Updated the internal audit scaling probe to use `scale_replica` and

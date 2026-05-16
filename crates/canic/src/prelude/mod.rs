@@ -16,6 +16,7 @@ pub use crate::{
         api::{canister_self, msg_caller},
         candid::CandidType,
     },
+    dto::auth::DelegatedToken,
 };
 
 pub use canic_macros::{canic_query, canic_update};
