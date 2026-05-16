@@ -12,6 +12,91 @@ fn command_program_file_name(command: &serde_json::Value) -> Option<&str> {
         .and_then(std::ffi::OsStr::to_str)
 }
 
+// Ensure row-reference restore journals must point back at the selected backup.
+#[test]
+fn prepared_journal_backup_root_accepts_selected_backup_dir() {
+    let root = temp_dir("canic-cli-restore-journal-root-ok");
+    let backup_dir = root.join("backup");
+    fs::create_dir_all(&backup_dir).expect("create backup dir");
+    let journal_path = backup_dir.join("restore-apply-journal.json");
+    let mut journal = ready_apply_journal();
+    journal.backup_root = Some(backup_dir.display().to_string());
+
+    fs::write(
+        &journal_path,
+        serde_json::to_vec(&journal).expect("serialize journal"),
+    )
+    .expect("write journal");
+
+    verify_selected_journal_backup_root("1", &backup_dir, &journal_path)
+        .expect("matching backup root should pass");
+
+    fs::remove_dir_all(root).expect("remove temp root");
+}
+
+// Ensure copied row-reference restore journals cannot read artifacts elsewhere.
+#[test]
+fn prepared_journal_backup_root_rejects_mismatched_backup_dir() {
+    let root = temp_dir("canic-cli-restore-journal-root-mismatch");
+    let backup_dir = root.join("backup");
+    fs::create_dir_all(&backup_dir).expect("create backup dir");
+    let journal_path = backup_dir.join("restore-apply-journal.json");
+    let actual = root.join("other-backup");
+    let mut journal = ready_apply_journal();
+    journal.backup_root = Some(actual.display().to_string());
+
+    fs::write(
+        &journal_path,
+        serde_json::to_vec(&journal).expect("serialize journal"),
+    )
+    .expect("write journal");
+
+    let err = verify_selected_journal_backup_root("1", &backup_dir, &journal_path)
+        .expect_err("mismatched backup root should fail");
+
+    fs::remove_dir_all(root).expect("remove temp root");
+    assert!(matches!(
+        err,
+        RestoreCommandError::PreparedJournalBackupRootMismatch {
+            backup_ref,
+            expected,
+            actual: actual_path,
+            ..
+        } if backup_ref == "1"
+            && expected == backup_dir.display().to_string()
+            && actual_path == actual.display().to_string()
+    ));
+}
+
+// Ensure stale journals without a backup root cannot be used through row refs.
+#[test]
+fn prepared_journal_backup_root_requires_backup_root() {
+    let root = temp_dir("canic-cli-restore-journal-root-missing");
+    let backup_dir = root.join("backup");
+    fs::create_dir_all(&backup_dir).expect("create backup dir");
+    let journal_path = backup_dir.join("restore-apply-journal.json");
+    let mut journal = ready_apply_journal();
+    journal.backup_root = None;
+
+    fs::write(
+        &journal_path,
+        serde_json::to_vec(&journal).expect("serialize journal"),
+    )
+    .expect("write journal");
+
+    let err = verify_selected_journal_backup_root("1", &backup_dir, &journal_path)
+        .expect_err("missing backup root should fail");
+
+    fs::remove_dir_all(root).expect("remove temp root");
+    assert!(matches!(
+        err,
+        RestoreCommandError::PreparedJournalBackupRootMissing {
+            backup_ref,
+            ..
+        } if backup_ref == "1"
+    ));
+}
+
 // Ensure restore run writes a native no-mutation runner preview.
 #[test]
 fn run_restore_run_dry_run_writes_native_runner_preview() {

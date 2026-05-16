@@ -190,6 +190,10 @@ inspect only the files needed for the current task.
   command help and docs now lead with `restore prepare/status/run <backup-ref>`,
   and missing prepared plan or apply-journal defaults fail with explicit
   `canic restore prepare <backup-ref>` guidance instead of raw file IO errors.
+- Started `0.36.14` by making row-reference restore run/status verify that the
+  prepared apply journal's `backup_root` points back at the selected backup
+  directory, so copied or stale journals cannot silently read restore artifacts
+  from a different backup layout.
 - Added a config-schema regression proving obsolete per-canister delegated-auth
   verifier tables are rejected instead of accepted through compatibility shims.
 - Updated the internal audit scaling probe to use `scale_replica` and

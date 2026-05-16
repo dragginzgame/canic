@@ -3,7 +3,9 @@ mod options;
 mod plan;
 mod run;
 
-use super::io::{require_prepared_journal_path, require_prepared_plan_path};
+use super::io::{
+    require_prepared_journal_path, require_prepared_plan_path, verify_selected_journal_backup_root,
+};
 use super::*;
 use crate::test_support::temp_dir;
 use canic_backup::{

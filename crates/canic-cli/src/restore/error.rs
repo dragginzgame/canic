@@ -32,6 +32,21 @@ pub enum RestoreCommandError {
     )]
     PreparedJournalMissing { backup_ref: String, path: String },
 
+    #[error(
+        "restore backup reference {backup_ref} prepared journal at {path} has no backup_root; run `canic restore prepare {backup_ref}` again"
+    )]
+    PreparedJournalBackupRootMissing { backup_ref: String, path: String },
+
+    #[error(
+        "restore backup reference {backup_ref} prepared journal at {path} points at backup_root {actual}, expected {expected}; run `canic restore prepare {backup_ref}` again"
+    )]
+    PreparedJournalBackupRootMismatch {
+        backup_ref: String,
+        path: String,
+        expected: String,
+        actual: String,
+    },
+
     #[error("restore run command failed for operation {sequence}: status={status}")]
     RestoreRunCommandFailed { sequence: usize, status: String },
 

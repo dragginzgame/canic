@@ -32,9 +32,10 @@ use io::{
     RestorePrepareReport, default_restore_apply_journal_path, default_restore_plan_path,
     read_manifest_source, read_mapping, read_plan, restore_apply_backup_dir,
     restore_apply_plan_path, restore_prepare_backup_dir, restore_run_journal_path,
-    restore_status_journal_path, verify_backup_layout_if_required, write_apply_dry_run,
-    write_apply_journal_file, write_apply_journal_if_requested, write_plan, write_plan_file,
-    write_prepare_report, write_restore_run, write_restore_status,
+    restore_status_journal_path, verify_backup_layout_if_required,
+    verify_prepared_journal_backup_root, write_apply_dry_run, write_apply_journal_file,
+    write_apply_journal_if_requested, write_plan, write_plan_file, write_prepare_report,
+    write_restore_run, write_restore_status,
 };
 
 pub use error::RestoreCommandError;
@@ -264,8 +265,11 @@ fn restore_command_config(program: &str, network: Option<&str>) -> RestoreApplyC
 fn restore_runner_config(
     options: &RestoreRunOptions,
 ) -> Result<RestoreRunnerConfig, RestoreCommandError> {
+    let journal = restore_run_journal_path(options)?;
+    verify_prepared_journal_backup_root(options.backup_ref.as_deref(), &journal)?;
+
     Ok(RestoreRunnerConfig {
-        journal: restore_run_journal_path(options)?,
+        journal,
         command: restore_command_config(&options.icp, options.network.as_deref()),
         max_steps: options.max_steps,
         updated_at: None,
@@ -275,8 +279,11 @@ fn restore_runner_config(
 fn restore_status_runner_config(
     options: &RestoreStatusOptions,
 ) -> Result<RestoreRunnerConfig, RestoreCommandError> {
+    let journal = restore_status_journal_path(options)?;
+    verify_prepared_journal_backup_root(options.backup_ref.as_deref(), &journal)?;
+
     Ok(RestoreRunnerConfig {
-        journal: restore_status_journal_path(options)?,
+        journal,
         command: restore_command_config(&options.icp, options.network.as_deref()),
         max_steps: None,
         updated_at: None,
