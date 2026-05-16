@@ -2,13 +2,13 @@ mod propagation;
 
 use crate::{
     InternalError,
-    api::runtime::install::{ApprovedModuleSource, ModuleSourceRuntimeApi},
     domain::policy::{
         topology::{TopologyPolicy, TopologyPolicyError},
         upgrade::plan_upgrade,
     },
     ops::{
         ic::mgmt::{CanisterInstallMode, MgmtOps},
+        runtime::install_source::{ApprovedModuleSource, ModuleSourceRuntimeApi},
         runtime::metrics::canister_ops::{
             CanisterOpsMetricOperation, CanisterOpsMetricOutcome, CanisterOpsMetricReason,
             CanisterOpsMetrics,

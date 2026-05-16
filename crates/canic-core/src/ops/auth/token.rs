@@ -6,7 +6,7 @@ use super::{
     },
     delegated::{
         canonical::{derivation_path_hash, key_name_hash, public_key_hash},
-        policy::DelegatedAuthTtlPolicy,
+        cert_rules::DelegatedAuthTtlLimits,
         verify::{
             VerifiedDelegatedToken, VerifyDelegatedTokenError, VerifyDelegatedTokenInput,
             verify_delegated_token,
@@ -112,7 +112,7 @@ impl AuthOps {
                 root_trust: &root_trust,
                 local_principal: IcOps::canister_self(),
                 local_role: Some(&local_role),
-                ttl_policy: DelegatedAuthTtlPolicy {
+                ttl_limits: DelegatedAuthTtlLimits {
                     max_cert_ttl_secs: input.max_cert_ttl_secs,
                     max_token_ttl_secs: input.max_token_ttl_secs,
                 },
@@ -244,7 +244,7 @@ const fn delegated_auth_reason_from_verify_error(
         VerifyDelegatedTokenError::CertExpired => DelegatedAuthMetricReason::CertExpired,
         VerifyDelegatedTokenError::CertHashMismatch => DelegatedAuthMetricReason::CertHashMismatch,
         VerifyDelegatedTokenError::CertNotYetValid => DelegatedAuthMetricReason::CertNotYetValid,
-        VerifyDelegatedTokenError::CertPolicy(_) => DelegatedAuthMetricReason::CertPolicy,
+        VerifyDelegatedTokenError::CertRules(_) => DelegatedAuthMetricReason::CertPolicy,
         VerifyDelegatedTokenError::IssuerShardPidMismatch => {
             DelegatedAuthMetricReason::IssuerShardPidMismatch
         }

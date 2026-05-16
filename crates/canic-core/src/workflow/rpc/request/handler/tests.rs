@@ -11,8 +11,11 @@ use crate::{
     },
     ids::CanisterRole,
     ops::{
-        runtime::metrics::cycles_funding::{
-            CyclesFundingDeniedReason, CyclesFundingMetricKey, CyclesFundingMetrics,
+        runtime::{
+            cycles_funding::CyclesFundingLedgerOps,
+            metrics::cycles_funding::{
+                CyclesFundingDeniedReason, CyclesFundingMetricKey, CyclesFundingMetrics,
+            },
         },
         storage::{
             registry::subnet::SubnetRegistryOps, replay::RootReplayOps, state::app::AppStateOps,
@@ -360,7 +363,7 @@ fn preflight_replay_then_authorize_aborts_reserved_replay_on_policy_denial() {
 #[test]
 fn authorize_request_cycles_records_requested_and_child_not_found_denial_metrics() {
     CyclesFundingMetrics::reset();
-    funding::reset_for_tests();
+    CyclesFundingLedgerOps::reset_for_tests();
 
     let child = p(71);
     let ctx = RootContext {
@@ -415,7 +418,7 @@ fn authorize_request_cycles_records_requested_and_child_not_found_denial_metrics
 #[test]
 fn authorize_request_cycles_records_kill_switch_denial_metrics() {
     CyclesFundingMetrics::reset();
-    funding::reset_for_tests();
+    CyclesFundingLedgerOps::reset_for_tests();
 
     let self_pid = p(90);
     let child = p(91);

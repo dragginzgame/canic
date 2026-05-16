@@ -8,8 +8,8 @@ use crate::{
         api::{canister_self, is_controller as caller_is_controller},
         types::Principal,
     },
-    config::Config,
     ops::{
+        config::ConfigOps,
         runtime::env::EnvOps,
         storage::{children::CanisterChildrenOps, registry::subnet::SubnetRegistryOps},
     },
@@ -32,9 +32,9 @@ pub(super) async fn is_controller(caller: Principal) -> Result<(), AccessError> 
 /// No-op on local builds; enforces whitelist on IC.
 #[expect(clippy::unused_async)]
 pub(super) async fn is_whitelisted(caller: Principal) -> Result<(), AccessError> {
-    let cfg = Config::try_get().ok_or_else(|| dependency_unavailable("config not initialized"))?;
-
-    if !cfg.is_whitelisted(&caller) {
+    let whitelisted = ConfigOps::is_whitelisted(&caller)
+        .map_err(|_| dependency_unavailable("config not initialized"))?;
+    if !whitelisted {
         return Err(AccessError::Denied(format!(
             "caller '{caller}' is not on the whitelist"
         )));

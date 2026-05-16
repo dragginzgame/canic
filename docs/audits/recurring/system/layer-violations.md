@@ -1,8 +1,9 @@
-# Audit: Layer Violations
+# Audit: Layer Boundary
 
 ## Purpose
 
-Detect architectural drift against the Canic layering contract.
+Detect architectural drift against the Canic layering contract, with emphasis
+on workflow/policy/ops boundaries.
 
 ## Risk Model / Invariant
 
@@ -23,6 +24,20 @@ This audit verifies:
 - layer responsibilities
 - cross-layer data leakage
 - macro boundary correctness
+
+## 0.37 Focus Questions
+
+For the 0.37 cleanup line, this audit must explicitly check:
+
+- forbidden drift patterns;
+- workflow constructing storage records;
+- workflow performing serialization;
+- workflow performing conversion logic;
+- workflow bypassing policy;
+- ops calling workflow;
+- policy importing DTOs;
+- policy performing async, IC, or storage work;
+- endpoint macros bypassing access/auth guards.
 
 ## Run This Audit After
 
@@ -57,7 +72,9 @@ Canonical path ownership for this audit:
 - `workflow`:
   - `crates/canic-core/src/workflow/**`
 - `policy`:
+  - `crates/canic-core/src/policy/**` if it exists in a future tree
   - `crates/canic-core/src/domain/policy/**`
+- `access/auth guard boundary`:
   - `crates/canic-core/src/access/**`
 - `ops`:
   - `crates/canic-core/src/ops/**`
@@ -81,7 +98,11 @@ DTO types must not appear in:
 
 ### Policy Layer Naming
 
-For this audit, `policy layer` means `crates/canic-core/src/domain/policy/**`.
+For this audit, `policy layer` currently means
+`crates/canic-core/src/domain/policy/**`. A top-level
+`crates/canic-core/src/policy/**` path is also in scope if it exists in a
+future tree. `access/**` is not pure policy; it is the endpoint auth guard
+boundary and may contain async auth predicate evaluation.
 
 ### Model vs Storage Scope
 
@@ -164,7 +185,9 @@ Suggested scans:
 
 ```bash
 rg -n 'use crate::api|crate::api::' crates/canic-core/src/{workflow,ops,storage,domain} -g '*.rs'
+rg -n '(^|[^A-Za-z0-9_])api::|crate::api::' crates/canic-core/src/{workflow,ops,storage,domain} -g '*.rs'
 rg -n 'use crate::workflow|crate::workflow::' crates/canic-core/src/{ops,storage,domain} -g '*.rs'
+rg -n '(^|[^A-Za-z0-9_])workflow::|crate::workflow::' crates/canic-core/src/{ops,storage,domain} -g '*.rs'
 rg -n 'use crate::domain::policy|crate::domain::policy::' crates/canic-core/src/{ops,storage} -g '*.rs'
 rg -n 'use crate::ops|crate::ops::' crates/canic-core/src/storage -g '*.rs'
 ```
@@ -185,6 +208,7 @@ Suggested scans:
 ```bash
 rg -n 'ic_cdk|crate::ops|crate::workflow|crate::api|serde::|candid::' crates/canic-core/src/domain/policy -g '*.rs'
 rg -n 'async fn' crates/canic-core/src/domain/policy -g '*.rs'
+test ! -d crates/canic-core/src/policy || rg -n 'ic_cdk|crate::ops|crate::workflow|crate::api|serde::|candid::|async fn|\\.await|storage::' crates/canic-core/src/policy -g '*.rs'
 ```
 
 - [ ] Policy remains side-effect free and dependency-clean
@@ -204,6 +228,7 @@ Suggested scans:
 ```bash
 rg -n 'crate::dto::|use crate::dto' crates/canic-core/src/domain -g '*.rs'
 rg -n 'crate::dto::|use crate::dto' crates/canic-core/src/storage -g '*.rs'
+test ! -d crates/canic-core/src/policy || rg -n 'crate::dto::|use crate::dto' crates/canic-core/src/policy -g '*.rs'
 ```
 
 - [ ] `domain` does not depend on DTOs
@@ -271,6 +296,7 @@ Suggested scan:
 ```bash
 rg -n 'ic_cdk::|sign_with_ecdsa|ecdsa_public_key|set_certified_data|data_certificate' crates/canic-core/src/workflow -g '*.rs'
 rg -n 'storage::stable::|crate::storage::stable::' crates/canic-core/src/workflow -g '*.rs'
+rg -n 'storage::.*Record|Record\\b|impl From|impl TryFrom|serde::|serde_json|candid::|CandidType|ArgumentEncoder|ArgumentDecoder' crates/canic-core/src/workflow -g '*.rs'
 ```
 
 Findings:
@@ -400,7 +426,7 @@ Findings:
 
 - (file, line, why)
 
-## 5. Macro Boundary Check (`canic-dsl-macros`)
+## 5. Macro Boundary Check (`canic-macros`)
 
 Macros should generate boundary wiring, not business behavior.
 
@@ -412,13 +438,13 @@ Check:
 
 Manual review targets:
 
-- `crates/canic-dsl-macros/src/endpoint/*`
+- `crates/canic-macros/src/endpoint/*`
 - `crates/canic/src/macros/*`
 
 Expansion check example:
 
 ```bash
-cargo expand --lib endpoint_macro | rg -n 'policy'
+rg -n 'eval_access|resolve_authenticated_identity|authenticated_with_scope|requires\\(' crates/canic-macros/src/endpoint crates/canic/src/macros -g '*.rs'
 ```
 
 Findings:

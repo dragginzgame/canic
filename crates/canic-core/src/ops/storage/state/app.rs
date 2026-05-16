@@ -53,6 +53,21 @@ impl AppStateOps {
     }
 
     #[must_use]
+    pub(crate) fn is_query_allowed() -> bool {
+        matches!(Self::get_mode(), AppMode::Enabled | AppMode::Readonly)
+    }
+
+    #[must_use]
+    pub(crate) fn is_update_allowed() -> bool {
+        matches!(Self::get_mode(), AppMode::Enabled)
+    }
+
+    #[must_use]
+    pub(crate) fn is_readonly() -> bool {
+        matches!(Self::get_mode(), AppMode::Readonly)
+    }
+
+    #[must_use]
     pub(crate) fn cycles_funding_enabled() -> bool {
         AppState::cycles_funding_enabled()
     }

@@ -150,6 +150,11 @@ impl SubnetRegistryOps {
     }
 
     #[must_use]
+    pub fn role_parent(pid: Principal) -> Option<(CanisterRole, Option<Principal>)> {
+        Self::get(pid).map(|record| (record.role, record.parent_pid))
+    }
+
+    #[must_use]
     pub(crate) fn is_registered(pid: Principal) -> bool {
         SubnetRegistry::get(pid).is_some()
     }

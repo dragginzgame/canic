@@ -10,10 +10,12 @@ Use this crate directly when you need:
 - root staging from published backend APIs
 - the lower-level host library surface without cloning the full repo
 
-For normal local setup, use the tagged repo installer script:
+For normal local setup, prefer the root
+[`INSTALLING.md`](../../INSTALLING.md) guide or use the tagged repo installer
+script directly:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/dragginzgame/canic/v0.38.0/scripts/dev/install_dev.sh | bash
+curl -fsSL https://raw.githubusercontent.com/dragginzgame/canic/v0.37.0/scripts/dev/install_dev.sh | bash
 ```
 
 That script bootstraps Rust when needed and installs the pinned internal

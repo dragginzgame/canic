@@ -1,5 +1,3 @@
-pub mod adapter;
-
 use crate::{InternalError, dto::http, ops::ic::http::HttpOps};
 
 ///
@@ -16,7 +14,7 @@ impl HttpWorkflow {
         headers: &[(&str, &str)],
     ) -> Result<http::HttpRequestResult, InternalError> {
         let res = HttpOps::get(url, headers).await?;
-        Ok(adapter::HttpAdapter::result_to_dto(res))
+        Ok(HttpOps::result_to_dto(res))
     }
 
     /// Same as `get`, with an explicit metrics label.
@@ -27,7 +25,7 @@ impl HttpWorkflow {
         label: &str,
     ) -> Result<http::HttpRequestResult, InternalError> {
         let res = HttpOps::get_with_label(url, headers, Some(label)).await?;
-        Ok(adapter::HttpAdapter::result_to_dto(res))
+        Ok(HttpOps::result_to_dto(res))
     }
 
     pub async fn get_raw(
@@ -42,9 +40,9 @@ impl HttpWorkflow {
         args: http::HttpRequestArgs,
         label: Option<&str>,
     ) -> Result<http::HttpRequestResult, InternalError> {
-        let infra_args = adapter::HttpAdapter::request_args_from_dto(args);
+        let infra_args = HttpOps::request_args_from_dto(args);
         let res = HttpOps::get_raw_with_label(infra_args, label).await?;
 
-        Ok(adapter::HttpAdapter::result_to_dto(res))
+        Ok(HttpOps::result_to_dto(res))
     }
 }

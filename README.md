@@ -13,7 +13,8 @@ It gives canister crates lifecycle macros, validated topology config,
 stable-memory helpers, endpoint guards, thin-root artifact builds, local fleet
 install, snapshot, backup, and restore workflows.
 
-Install the operator binary with Cargo:
+Install the operator binary with Cargo, or see the full setup guide in
+[`INSTALLING.md`](INSTALLING.md):
 
 ```bash
 cargo install --locked canic-cli --version <same-version-as-canic>
@@ -66,56 +67,31 @@ All Rust workspace crates live under `crates/`:
 * `scripts/` – dev setup, CI, release, wasm, and audit helpers.
 * `assets/`, `docs/`, `.github/workflows/` – documentation assets, design/audit notes, and CI.
 
-## Getting Started
+## Quick Start
 
-### 1. Install the Operator CLI
-
-```bash
-cargo install --locked canic-cli
-canic --version
-```
-
-For pinned projects:
+Install the CLI, then start from a conventional root-plus-app fleet:
 
 ```bash
 cargo install --locked canic-cli --version <same-version-as-canic>
+canic --version
 ```
 
-From this checkout:
+From this checkout, use:
 
 ```bash
 make install
 ```
 
-Full dev tooling:
-
-```bash
-make install-dev
-```
-
-### 2. Add Canic to canister crates
-
-Inside each canister crate that uses Canic:
+Add Canic to each canister crate, both as a runtime dependency and as a
+`build.rs` dependency:
 
 ```bash
 cargo add canic
 cargo add canic --build
 ```
 
-`canic` is needed in `[dependencies]` for runtime macros and
-`[build-dependencies]` for `build.rs`.
-
-Path checkout:
-
-```toml
-[dependencies]
-canic = { path = "/path/to/canic/crates/canic" }
-
-[build-dependencies]
-canic = { path = "/path/to/canic/crates/canic" }
-```
-
-### 3. Configure `build.rs`
+Use `canic::build_root!` for the root canister and `canic::build!` for child
+canisters:
 
 ```rust
 fn main() {
@@ -123,23 +99,7 @@ fn main() {
 }
 ```
 
-```rust
-fn main() {
-    canic::build!("../canic.toml");
-}
-```
-
-Standalone probe:
-
-```rust
-fn main() {
-    canic::build_standalone!("sandbox_minimal");
-}
-```
-
-### 4. Bootstrap your canister
-
-In `lib.rs`:
+Bootstrap the canister in `lib.rs`:
 
 ```rust
 use canic::prelude::*;
@@ -154,9 +114,7 @@ async fn canic_install(_: Option<Vec<u8>>) {}
 async fn canic_upgrade() {}
 ```
 
-### 5. Define your topology
-
-Create `fleets/<fleet>/canic.toml`:
+Define a fleet under `fleets/<fleet>/canic.toml`:
 
 ```toml
 [fleet]
@@ -174,9 +132,7 @@ kind = "singleton"
 topup = {}
 ```
 
-The full schema lives in `CONFIG.md`.
-
-### 6. Build and install a fleet
+Build and install locally:
 
 ```bash
 canic replica start --background
@@ -186,21 +142,16 @@ canic install --profile fast test
 canic info list test
 ```
 
-Single artifact:
+For the full install guide, path dependency setup, split workspace flags, local
+replica notes, fleet management, and backup/restore operator flow, see
+[`INSTALLING.md`](INSTALLING.md).
+
+## Operator Commands
+
+Build one artifact:
 
 ```bash
 canic build --profile fast app
-```
-
-Split repo:
-
-```bash
-canic --network local build \
-  --profile fast \
-  --workspace backend \
-  --icp-root . \
-  --config fleets/toko/canic.toml \
-  root
 ```
 
 The local ICP CLI replica does not persist canister state across stop/start.
@@ -243,7 +194,7 @@ For build profiles, split workspace/ICP roots, custom canister roots, role
 metadata, and lower-level build/install commands, see
 `crates/canic-host/README.md`.
 
-### 6. Operator Snapshot and Restore Flow
+### Backup and Restore
 
 The `canic` binary is the operator entry point for fleet backup/restore work.
 It uses ICP CLI for live IC snapshot operations, while Canic owns the higher-level
@@ -253,18 +204,18 @@ planning.
 Show local test-fleet canisters:
 
 ```bash
-canic --network local list test
+canic --network local info list test
 ```
 
 If this only prints the `root` row, ICP CLI has reserved the root id but the Canic
 tree is not installed yet. Run `canic install test`, then query the installed
-registry with `canic --network local list test`.
+registry with `canic --network local info list test`.
 
 Use `--subtree` to render one live subtree with the selected node as the
 displayed root:
 
 ```bash
-canic --network local list test --subtree app
+canic --network local info list test --subtree app
 ```
 
 The CLI calls `canic_ready` on each listed canister and includes a `READY`

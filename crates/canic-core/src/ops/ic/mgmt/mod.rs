@@ -11,6 +11,11 @@ mod types;
 
 use crate::{
     InternalError,
+    dto::canister::{
+        CanisterSettings as CanisterSettingsDto, CanisterStatusResponse,
+        CanisterStatusType as CanisterStatusTypeDto, EnvironmentVariable as EnvironmentVariableDto,
+        LogVisibility as LogVisibilityDto, MemoryMetrics, QueryStats,
+    },
     ids::SystemMetricKind,
     infra::{InfraError, ic::mgmt::MgmtInfra},
     ops::{

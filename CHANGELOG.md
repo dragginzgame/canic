@@ -6,7 +6,9 @@ documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## [0.37.x] - 2026-05-16 - Cleanup minor
+## [0.37.x] - 2026-05-16 - Quis ipsos auditores audit?
+
+- `0.37.1` refreshes the layer boundary, workflow purity, ops purity, and access purity audits, moves module-source runtime ownership below workflow with API compatibility re-exports, removes workflow dependencies on storage canister records, policy definitions, mutable funding ledgers, and DTO conversion helpers, renames delegated-auth certificate validation from an ops-owned policy surface to explicit certificate rules and TTL limits, routes app-mode and whitelist access checks through ops helpers, preserves verifier behavior and the existing `cert_policy` metrics label, splits installation guidance into `INSTALLING.md`, refreshes README command examples, and tightens CI layering guards.
 
 - `0.37.0` starts a cleanup minor by rerunning the bootstrap lifecycle and canonical auth boundary audits, tightening non-root post-upgrade failures so runtime continuation errors return through the lifecycle adapter, refreshing the auth audit definition around the current macro/core verifier boundary, and exporting `DelegatedToken` from the prelude for authenticated endpoint authors.
 

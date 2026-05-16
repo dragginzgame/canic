@@ -1,7 +1,7 @@
 use super::{
     audience::{AudienceError, audience_subset, audience_uses_role, verifier_is_in_audience},
     canonical::{CanonicalAuthError, cert_hash, claims_hash, role_hash},
-    policy::{CertPolicyError, DelegatedAuthTtlPolicy, validate_cert_issuance_policy},
+    cert_rules::{CertRuleError, DelegatedAuthTtlLimits, validate_cert_issuance_rules},
     root_key::{RootKeyResolutionError, RootKeyResolveRequest, resolve_root_key},
 };
 use crate::{
@@ -16,7 +16,7 @@ pub struct VerifyDelegatedTokenInput<'a> {
     pub root_trust: &'a RootTrustAnchor,
     pub local_principal: Principal,
     pub local_role: Option<&'a CanisterRole>,
-    pub ttl_policy: DelegatedAuthTtlPolicy,
+    pub ttl_limits: DelegatedAuthTtlLimits,
     pub required_scopes: &'a [String],
     pub now_secs: u64,
 }
@@ -74,7 +74,7 @@ pub enum VerifyDelegatedTokenError {
     #[error(transparent)]
     Canonical(#[from] CanonicalAuthError),
     #[error(transparent)]
-    CertPolicy(#[from] CertPolicyError),
+    CertRules(#[from] CertRuleError),
     #[error(transparent)]
     RootKey(#[from] RootKeyResolutionError),
     #[error(transparent)]
@@ -91,7 +91,7 @@ where
     let cert = &input.token.proof.cert;
     let claims = &input.token.claims;
 
-    validate_cert_issuance_policy(cert, input.ttl_policy, input.root_trust.root_pid)?;
+    validate_cert_issuance_rules(cert, input.ttl_limits, input.root_trust.root_pid)?;
     verify_cert_time(cert.issued_at, cert.expires_at, input.now_secs)?;
 
     let actual_cert_hash = cert_hash(cert)?;
@@ -250,7 +250,7 @@ mod tests {
         },
         ops::auth::delegated::{
             canonical::{public_key_hash, role_hash},
-            policy::DELEGATED_AUTH_VERSION,
+            cert_rules::DELEGATED_AUTH_VERSION,
         },
     };
 
@@ -262,8 +262,8 @@ mod tests {
         CanisterRole::new("project_instance")
     }
 
-    fn ttl_policy() -> DelegatedAuthTtlPolicy {
-        DelegatedAuthTtlPolicy {
+    fn ttl_limits() -> DelegatedAuthTtlLimits {
+        DelegatedAuthTtlLimits {
             max_cert_ttl_secs: 600,
             max_token_ttl_secs: 120,
         }
@@ -352,7 +352,7 @@ mod tests {
             root_trust: trust,
             local_principal: p(99),
             local_role,
-            ttl_policy: ttl_policy(),
+            ttl_limits: ttl_limits(),
             required_scopes,
             now_secs: 150,
         }

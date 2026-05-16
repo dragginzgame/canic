@@ -97,6 +97,10 @@ impl ConfigOps {
         Ok(Config::get()?.controllers.clone())
     }
 
+    pub(crate) fn is_whitelisted(caller: &Principal) -> Result<bool, InternalError> {
+        Ok(Config::get()?.is_whitelisted(caller))
+    }
+
     pub(crate) fn log_config() -> Result<LogConfig, InternalError> {
         Ok(Config::get()?.log.clone())
     }

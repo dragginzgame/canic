@@ -18,7 +18,7 @@ mod policy;
 
 use crate::{
     InternalError, InternalErrorOrigin,
-    api::runtime::install::ModuleSourceRuntimeApi,
+    ops::runtime::install_source::ModuleSourceRuntimeApi,
     workflow::{
         ic::provision::{
             allocation::{AllocationSource, allocate_canister},

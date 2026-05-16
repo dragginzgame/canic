@@ -1,11 +1,13 @@
 use super::{
     MAX_ROOT_REPLAY_ENTRIES, MAX_ROOT_REPLAY_ENTRIES_PER_CALLER, MAX_ROOT_TTL_SECONDS,
-    REPLAY_PURGE_SCAN_LIMIT, RootContext, funding,
+    REPLAY_PURGE_SCAN_LIMIT, RootContext,
 };
 use crate::{
     InternalError,
     cdk::types::Principal,
+    domain::policy::cycles_funding::{self, FundingPolicyViolation},
     dto::rpc::{CyclesRequest, CyclesResponse},
+    ids::CanisterRole,
     log,
     log::Topic,
     ops::{
@@ -14,19 +16,21 @@ use crate::{
             self as replay_ops, ReplayDecodeError, ReplayReserveError,
             guard::{ReplayDecision, ReplayGuardError, ReplayPending, RootReplayGuardInput},
         },
-        runtime::env::EnvOps,
-        runtime::metrics::{
-            cycles_funding::{CyclesFundingDeniedReason, CyclesFundingMetrics},
-            replay::{
-                ReplayMetricOperation, ReplayMetricOutcome, ReplayMetricReason, ReplayMetrics,
-            },
-            root_capability::{
-                RootCapabilityMetricKey, RootCapabilityMetricOutcome, RootCapabilityMetrics,
+        runtime::{
+            cycles_funding::CyclesFundingLedgerOps,
+            env::EnvOps,
+            metrics::{
+                cycles_funding::{CyclesFundingDeniedReason, CyclesFundingMetrics},
+                replay::{
+                    ReplayMetricOperation, ReplayMetricOutcome, ReplayMetricReason, ReplayMetrics,
+                },
+                root_capability::{
+                    RootCapabilityMetricKey, RootCapabilityMetricOutcome, RootCapabilityMetrics,
+                },
             },
         },
         storage::{children::CanisterChildrenOps, registry::subnet::SubnetRegistryOps},
     },
-    storage::canister::CanisterRecord,
     workflow::rpc::RpcWorkflowError,
 };
 
@@ -39,6 +43,12 @@ pub struct NonrootCyclesCapabilityWorkflow;
 #[derive(Clone, Copy, Debug)]
 pub(super) struct AuthorizedCyclesGrant {
     approved_cycles: u128,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(super) struct ResolvedCyclesChild {
+    role: CanisterRole,
+    parent_pid: Option<Principal>,
 }
 
 impl NonrootCyclesCapabilityWorkflow {
@@ -162,7 +172,7 @@ pub(super) fn authorize_root_request_cycles_plan(
 fn authorize_request_cycles_with_resolver(
     ctx: &RootContext,
     req: &CyclesRequest,
-    resolve_child: fn(Principal) -> Option<CanisterRecord>,
+    resolve_child: fn(Principal) -> Option<ResolvedCyclesChild>,
 ) -> Result<AuthorizedCyclesGrant, InternalError> {
     let decision = authorize_request_cycles_inner(ctx, req, resolve_child);
 
@@ -204,7 +214,7 @@ fn authorize_request_cycles_with_resolver(
 pub(super) fn authorize_request_cycles_inner(
     ctx: &RootContext,
     req: &CyclesRequest,
-    resolve_child: fn(Principal) -> Option<CanisterRecord>,
+    resolve_child: fn(Principal) -> Option<ResolvedCyclesChild>,
 ) -> Result<AuthorizedCyclesGrant, InternalError> {
     CyclesFundingMetrics::record_requested(ctx.caller, req.cycles);
 
@@ -234,8 +244,9 @@ pub(super) fn authorize_request_cycles_inner(
         return Err(RpcWorkflowError::CyclesFundingDisabled.into());
     }
 
-    let policy = funding::policy_for_child_role(&child.role);
-    let decision = match policy.evaluate(ctx.caller, req.cycles, ctx.now) {
+    let policy = cycles_funding::policy_for_child_role(&child.role);
+    let ledger = CyclesFundingLedgerOps::snapshot(ctx.caller);
+    let decision = match policy.evaluate(ledger, req.cycles, ctx.now) {
         Ok(decision) => decision,
         Err(violation) => return Err(map_funding_policy_violation(ctx, req.cycles, violation)),
     };
@@ -305,7 +316,7 @@ pub(super) async fn execute_authorized_request_cycles(
     }
 
     CyclesFundingMetrics::record_granted(ctx.caller, grant.approved_cycles);
-    funding::record_child_grant(ctx.caller, grant.approved_cycles, ctx.now);
+    CyclesFundingLedgerOps::record_child_grant(ctx.caller, grant.approved_cycles, ctx.now);
 
     Ok(CyclesResponse {
         cycles_transferred: grant.approved_cycles,
@@ -313,23 +324,25 @@ pub(super) async fn execute_authorized_request_cycles(
 }
 
 // Resolve one direct child record from the locally cascaded children cache.
-fn direct_child_record(pid: Principal) -> Option<CanisterRecord> {
-    CanisterChildrenOps::get(pid)
+fn direct_child_record(pid: Principal) -> Option<ResolvedCyclesChild> {
+    CanisterChildrenOps::role_parent(pid)
+        .map(|(role, parent_pid)| ResolvedCyclesChild { role, parent_pid })
 }
 
 // Resolve one child record from the authoritative root subnet registry.
-fn registry_child_record(pid: Principal) -> Option<CanisterRecord> {
-    SubnetRegistryOps::get(pid)
+fn registry_child_record(pid: Principal) -> Option<ResolvedCyclesChild> {
+    SubnetRegistryOps::role_parent(pid)
+        .map(|(role, parent_pid)| ResolvedCyclesChild { role, parent_pid })
 }
 
 // Map pure funding policy failures into workflow errors with current metrics.
 fn map_funding_policy_violation(
     ctx: &RootContext,
     requested_cycles: u128,
-    violation: funding::FundingPolicyViolation,
+    violation: FundingPolicyViolation,
 ) -> InternalError {
     match violation {
-        funding::FundingPolicyViolation::MaxPerChild {
+        FundingPolicyViolation::MaxPerChild {
             requested,
             max_per_child,
             remaining_budget,
@@ -346,7 +359,7 @@ fn map_funding_policy_violation(
             }
             .into()
         }
-        funding::FundingPolicyViolation::CooldownActive { retry_after_secs } => {
+        FundingPolicyViolation::CooldownActive { retry_after_secs } => {
             CyclesFundingMetrics::record_denied(
                 ctx.caller,
                 requested_cycles,

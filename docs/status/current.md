@@ -218,6 +218,29 @@ inspect only the files needed for the current task.
 - Updated the internal audit scaling probe to use `scale_replica` and
   `policy.initial_workers = 0` so the dry-run planning probe no longer tries
   to allocate startup workers in a standalone PocketIC scenario.
+- Refreshed and reran the layer boundary audit at
+  `docs/audits/reports/2026-05/2026-05-16/layer-boundary.md`. It found and
+  fixed two core layering drifts: workflow no longer imports module-source
+  runtime types from the API layer, and cycles authorization no longer depends
+  on storage `CanisterRecord` shapes. The CI layering guard now catches both
+  regression classes.
+- Added and ran the workflow purity audit at
+  `docs/audits/reports/2026-05/2026-05-16/workflow-purity.md`. It moved
+  cycles-funding policy into `domain/policy`, moved the mutable funding ledger
+  into ops, moved HTTP and management DTO conversion helpers into ops, and
+  added a layering guard against workflow-defined policy types.
+- Added and ran the ops purity audit at
+  `docs/audits/reports/2026-05/2026-05-16/ops-purity.md`. It renamed delegated
+  auth certificate validation from an ops-owned policy surface to explicit
+  certificate rules and documented RPC, auth, metrics, and atomic storage ops
+  as accepted hotspots with watchpoints.
+- Added and ran the access purity audit at
+  `docs/audits/reports/2026-05/2026-05-16/access-purity.md`. It moved stable
+  app-mode facts and whitelist config reads behind ops helpers, added an
+  access storage/stable-type layering guard, and documented delegated-token
+  boundary decode plus delegated-session cleanup as watchpoints.
+- Split root install guidance into `INSTALLING.md` and refreshed README
+  examples around the current `canic info list` command group.
 - Renamed the test fleet scaling worker role from `scale` to `scale_replica`,
   changed role cycle config from `topup_policy` to `topup`, and enabled explicit
   default `topup = {}` policy blocks for the main test app, hub, shard, and

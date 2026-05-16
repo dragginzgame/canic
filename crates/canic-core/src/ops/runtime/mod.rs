@@ -1,5 +1,7 @@
 pub mod bootstrap;
+pub mod cycles_funding;
 pub mod env;
+pub mod install_source;
 pub mod log;
 pub mod memory;
 pub mod metrics;

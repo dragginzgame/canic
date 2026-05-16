@@ -41,11 +41,16 @@ pass paths as command options instead of exporting Canic build environment
 variables:
 
 ```bash
-canic build --profile fast --workspace backend --icp-root . --config fleets/toko/canic.toml root
+canic build \
+  --profile fast \
+  --workspace <cargo-workspace-dir> \
+  --icp-root <icp-project-dir> \
+  --config fleets/<fleet>/canic.toml \
+  root
 ```
 
 For a full local development setup, including ICP CLI, helper tools, and the
-`canic` CLI, use the install script in the root README.
+`canic` CLI, use the root `INSTALLING.md` guide.
 
 ## First Commands
 

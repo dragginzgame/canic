@@ -8,13 +8,13 @@ use thiserror::Error;
 pub const DELEGATED_AUTH_VERSION: u16 = 2;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct DelegatedAuthTtlPolicy {
+pub struct DelegatedAuthTtlLimits {
     pub max_cert_ttl_secs: u64,
     pub max_token_ttl_secs: u64,
 }
 
 #[derive(Debug, Eq, Error, PartialEq)]
-pub enum CertPolicyError {
+pub enum CertRuleError {
     #[error("delegated auth cert version mismatch (expected {expected}, found {found})")]
     VersionMismatch { expected: u16, found: u16 },
     #[error("delegated auth cert root pid mismatch (expected {expected}, found {found})")]
@@ -41,20 +41,20 @@ pub enum CertPolicyError {
     Audience(#[from] AudienceError),
 }
 
-pub fn validate_cert_issuance_policy(
+pub fn validate_cert_issuance_rules(
     cert: &DelegationCert,
-    policy: DelegatedAuthTtlPolicy,
+    limits: DelegatedAuthTtlLimits,
     expected_root_pid: Principal,
-) -> Result<(), CertPolicyError> {
+) -> Result<(), CertRuleError> {
     if cert.version != DELEGATED_AUTH_VERSION {
-        return Err(CertPolicyError::VersionMismatch {
+        return Err(CertRuleError::VersionMismatch {
             expected: DELEGATED_AUTH_VERSION,
             found: cert.version,
         });
     }
 
     if cert.root_pid != expected_root_pid {
-        return Err(CertPolicyError::RootPidMismatch {
+        return Err(CertRuleError::RootPidMismatch {
             expected: expected_root_pid,
             found: cert.root_pid,
         });
@@ -63,32 +63,32 @@ pub fn validate_cert_issuance_policy(
     let cert_ttl_secs = cert
         .expires_at
         .checked_sub(cert.issued_at)
-        .ok_or(CertPolicyError::InvalidCertWindow)?;
+        .ok_or(CertRuleError::InvalidCertWindow)?;
 
     if cert_ttl_secs == 0 {
-        return Err(CertPolicyError::InvalidCertWindow);
+        return Err(CertRuleError::InvalidCertWindow);
     }
 
-    if cert_ttl_secs > policy.max_cert_ttl_secs {
-        return Err(CertPolicyError::CertTtlExceeded {
+    if cert_ttl_secs > limits.max_cert_ttl_secs {
+        return Err(CertRuleError::CertTtlExceeded {
             ttl_secs: cert_ttl_secs,
-            max_ttl_secs: policy.max_cert_ttl_secs,
+            max_ttl_secs: limits.max_cert_ttl_secs,
         });
     }
 
     if cert.max_token_ttl_secs == 0 {
-        return Err(CertPolicyError::TokenTtlZero);
+        return Err(CertRuleError::TokenTtlZero);
     }
 
-    if cert.max_token_ttl_secs > policy.max_token_ttl_secs {
-        return Err(CertPolicyError::TokenTtlExceeded {
+    if cert.max_token_ttl_secs > limits.max_token_ttl_secs {
+        return Err(CertRuleError::TokenTtlExceeded {
             ttl_secs: cert.max_token_ttl_secs,
-            max_ttl_secs: policy.max_token_ttl_secs,
+            max_ttl_secs: limits.max_token_ttl_secs,
         });
     }
 
     if cert.max_token_ttl_secs > cert_ttl_secs {
-        return Err(CertPolicyError::TokenTtlOutlivesCert {
+        return Err(CertRuleError::TokenTtlOutlivesCert {
             token_ttl_secs: cert.max_token_ttl_secs,
             cert_ttl_secs,
         });
@@ -97,7 +97,7 @@ pub fn validate_cert_issuance_policy(
     validate_cert_role_hash(&cert.aud, cert.verifier_role_hash)?;
 
     if public_key_hash(&cert.shard_public_key_sec1) != cert.shard_key_hash {
-        return Err(CertPolicyError::ShardPublicKeyHashMismatch);
+        return Err(CertRuleError::ShardPublicKeyHashMismatch);
     }
 
     Ok(())
@@ -116,8 +116,8 @@ mod tests {
         Principal::from_slice(&[id; 29])
     }
 
-    fn policy() -> DelegatedAuthTtlPolicy {
-        DelegatedAuthTtlPolicy {
+    fn limits() -> DelegatedAuthTtlLimits {
+        DelegatedAuthTtlLimits {
             max_cert_ttl_secs: 600,
             max_token_ttl_secs: 120,
         }
@@ -152,19 +152,19 @@ mod tests {
     }
 
     #[test]
-    fn cert_policy_accepts_well_formed_cert() {
+    fn cert_rules_accept_well_formed_cert() {
         let cert = sample_cert();
 
-        validate_cert_issuance_policy(&cert, policy(), p(1)).unwrap();
+        validate_cert_issuance_rules(&cert, limits(), p(1)).unwrap();
     }
 
     #[test]
-    fn cert_policy_enforces_root_pid_binding() {
+    fn cert_rules_enforce_root_pid_binding() {
         let cert = sample_cert();
 
         assert_eq!(
-            validate_cert_issuance_policy(&cert, policy(), p(9)),
-            Err(CertPolicyError::RootPidMismatch {
+            validate_cert_issuance_rules(&cert, limits(), p(9)),
+            Err(CertRuleError::RootPidMismatch {
                 expected: p(9),
                 found: p(1),
             })
@@ -172,13 +172,13 @@ mod tests {
     }
 
     #[test]
-    fn cert_policy_enforces_cert_ttl_bound_at_root() {
+    fn cert_rules_enforce_cert_ttl_bound_at_root() {
         let mut cert = sample_cert();
         cert.expires_at = 900;
 
         assert_eq!(
-            validate_cert_issuance_policy(&cert, policy(), p(1)),
-            Err(CertPolicyError::CertTtlExceeded {
+            validate_cert_issuance_rules(&cert, limits(), p(1)),
+            Err(CertRuleError::CertTtlExceeded {
                 ttl_secs: 800,
                 max_ttl_secs: 600,
             })
@@ -186,13 +186,13 @@ mod tests {
     }
 
     #[test]
-    fn cert_policy_enforces_token_ttl_bound_at_root() {
+    fn cert_rules_enforce_token_ttl_bound_at_root() {
         let mut cert = sample_cert();
         cert.max_token_ttl_secs = 121;
 
         assert_eq!(
-            validate_cert_issuance_policy(&cert, policy(), p(1)),
-            Err(CertPolicyError::TokenTtlExceeded {
+            validate_cert_issuance_rules(&cert, limits(), p(1)),
+            Err(CertRuleError::TokenTtlExceeded {
                 ttl_secs: 121,
                 max_ttl_secs: 120,
             })
@@ -200,13 +200,13 @@ mod tests {
     }
 
     #[test]
-    fn cert_policy_rejects_token_ttl_outliving_cert() {
+    fn cert_rules_reject_token_ttl_outliving_cert() {
         let mut cert = sample_cert();
         cert.expires_at = 150;
 
         assert_eq!(
-            validate_cert_issuance_policy(&cert, policy(), p(1)),
-            Err(CertPolicyError::TokenTtlOutlivesCert {
+            validate_cert_issuance_rules(&cert, limits(), p(1)),
+            Err(CertRuleError::TokenTtlOutlivesCert {
                 token_ttl_secs: 120,
                 cert_ttl_secs: 50,
             })
@@ -214,24 +214,24 @@ mod tests {
     }
 
     #[test]
-    fn cert_policy_enforces_role_hash_binding() {
+    fn cert_rules_enforce_role_hash_binding() {
         let mut cert = sample_cert();
         cert.verifier_role_hash = Some([1; 32]);
 
         assert_eq!(
-            validate_cert_issuance_policy(&cert, policy(), p(1)),
-            Err(CertPolicyError::Audience(AudienceError::RoleHashMismatch))
+            validate_cert_issuance_rules(&cert, limits(), p(1)),
+            Err(CertRuleError::Audience(AudienceError::RoleHashMismatch))
         );
     }
 
     #[test]
-    fn cert_policy_enforces_shard_public_key_hash_binding() {
+    fn cert_rules_enforce_shard_public_key_hash_binding() {
         let mut cert = sample_cert();
         cert.shard_public_key_sec1 = vec![7, 8, 9];
 
         assert_eq!(
-            validate_cert_issuance_policy(&cert, policy(), p(1)),
-            Err(CertPolicyError::ShardPublicKeyHashMismatch)
+            validate_cert_issuance_rules(&cert, limits(), p(1)),
+            Err(CertRuleError::ShardPublicKeyHashMismatch)
         );
     }
 }

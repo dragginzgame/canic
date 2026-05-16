@@ -1,7 +1,7 @@
 use super::{
     audience::{AudienceError, expected_role_hash_for_cert_audience},
     canonical::{CanonicalAuthError, cert_hash, public_key_hash},
-    policy::{CertPolicyError, DELEGATED_AUTH_VERSION, DelegatedAuthTtlPolicy},
+    cert_rules::{CertRuleError, DELEGATED_AUTH_VERSION, DelegatedAuthTtlLimits},
 };
 use crate::{
     cdk::types::Principal,
@@ -24,7 +24,7 @@ pub struct IssueDelegationProofInput {
     pub max_token_ttl_secs: u64,
     pub scopes: Vec<String>,
     pub audience: DelegationAudience,
-    pub ttl_policy: DelegatedAuthTtlPolicy,
+    pub ttl_limits: DelegatedAuthTtlLimits,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -57,7 +57,7 @@ pub enum IssueDelegationProofError {
     #[error(transparent)]
     Canonical(#[from] CanonicalAuthError),
     #[error(transparent)]
-    Policy(#[from] CertPolicyError),
+    CertRules(#[from] CertRuleError),
 }
 
 /// Build and sign one self-validating delegation proof.
@@ -112,7 +112,7 @@ pub fn prepare_delegation_cert(
         verifier_role_hash,
     };
 
-    validate_cert_issuance_policy_for_built_cert(&cert, input.ttl_policy)?;
+    validate_cert_issuance_rules_for_built_cert(&cert, input.ttl_limits)?;
 
     let cert_hash = cert_hash(&cert)?;
 
@@ -133,11 +133,11 @@ pub fn finish_delegation_proof(
     }
 }
 
-fn validate_cert_issuance_policy_for_built_cert(
+fn validate_cert_issuance_rules_for_built_cert(
     cert: &DelegationCert,
-    ttl_policy: DelegatedAuthTtlPolicy,
-) -> Result<(), CertPolicyError> {
-    super::policy::validate_cert_issuance_policy(cert, ttl_policy, cert.root_pid)
+    ttl_limits: DelegatedAuthTtlLimits,
+) -> Result<(), CertRuleError> {
+    super::cert_rules::validate_cert_issuance_rules(cert, ttl_limits, cert.root_pid)
 }
 
 fn validate_scopes(scopes: &[String]) -> Result<(), IssueDelegationProofError> {
@@ -159,8 +159,8 @@ mod tests {
         Principal::from_slice(&[id; 29])
     }
 
-    fn ttl_policy() -> DelegatedAuthTtlPolicy {
-        DelegatedAuthTtlPolicy {
+    fn ttl_limits() -> DelegatedAuthTtlLimits {
+        DelegatedAuthTtlLimits {
             max_cert_ttl_secs: 600,
             max_token_ttl_secs: 120,
         }
@@ -183,7 +183,7 @@ mod tests {
             max_token_ttl_secs: 120,
             scopes: vec!["read".to_string(), "write".to_string()],
             audience: DelegationAudience::Roles(vec![CanisterRole::new("project_instance")]),
-            ttl_policy: ttl_policy(),
+            ttl_limits: ttl_limits(),
         }
     }
 
@@ -230,14 +230,14 @@ mod tests {
     }
 
     #[test]
-    fn issue_delegation_proof_rejects_policy_ttl_overflow() {
+    fn issue_delegation_proof_rejects_cert_ttl_above_limits() {
         let mut input = input();
         input.cert_ttl_secs = 601;
 
         assert_eq!(
             issue_delegation_proof(input, |hash| Ok(hash.to_vec())),
-            Err(IssueDelegationProofError::Policy(
-                CertPolicyError::CertTtlExceeded {
+            Err(IssueDelegationProofError::CertRules(
+                CertRuleError::CertTtlExceeded {
                     ttl_secs: 601,
                     max_ttl_secs: 600,
                 }

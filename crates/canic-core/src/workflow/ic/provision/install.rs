@@ -1,8 +1,8 @@
 use crate::{
     InternalError,
-    api::runtime::install::ApprovedModuleSource,
     ops::{
         ic::{IcOps, mgmt::CanisterInstallMode},
+        runtime::install_source::ApprovedModuleSource,
         runtime::metrics::{
             canister_ops::{
                 CanisterOpsMetricOperation, CanisterOpsMetricOutcome, CanisterOpsMetricReason,

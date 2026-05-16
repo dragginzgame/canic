@@ -3,10 +3,7 @@
 //! The app bucket only inspects the application mode and does not
 //! evaluate caller identity or environment predicates.
 
-use crate::{
-    access::AccessError, ops::storage::state::app::AppStateOps,
-    storage::stable::state::app::AppMode,
-};
+use crate::{access::AccessError, ops::storage::state::app::AppStateOps};
 
 /// Validate access for query calls.
 ///
@@ -14,11 +11,10 @@ use crate::{
 /// - Enabled and Readonly modes permit queries.
 /// - Disabled mode rejects queries.
 pub fn guard_app_query() -> Result<(), AccessError> {
-    let mode = AppStateOps::get_mode();
-
-    match mode {
-        AppMode::Enabled | AppMode::Readonly => Ok(()),
-        AppMode::Disabled => Err(AccessError::Denied("application is disabled".to_string())),
+    if AppStateOps::is_query_allowed() {
+        Ok(())
+    } else {
+        Err(AccessError::Denied("application is disabled".to_string()))
     }
 }
 
@@ -29,13 +25,15 @@ pub fn guard_app_query() -> Result<(), AccessError> {
 /// - Readonly rejects updates.
 /// - Disabled rejects updates.
 pub fn guard_app_update() -> Result<(), AccessError> {
-    let mode = AppStateOps::get_mode();
+    if AppStateOps::is_update_allowed() {
+        return Ok(());
+    }
 
-    match mode {
-        AppMode::Enabled => Ok(()),
-        AppMode::Readonly => Err(AccessError::Denied(
+    if AppStateOps::is_readonly() {
+        Err(AccessError::Denied(
             "application is in readonly mode".to_string(),
-        )),
-        AppMode::Disabled => Err(AccessError::Denied("application is disabled".to_string())),
+        ))
+    } else {
+        Err(AccessError::Denied("application is disabled".to_string()))
     }
 }

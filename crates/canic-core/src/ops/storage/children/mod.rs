@@ -35,6 +35,11 @@ impl CanisterChildrenOps {
     }
 
     #[must_use]
+    pub fn role_parent(pid: Principal) -> Option<(CanisterRole, Option<Principal>)> {
+        Self::get(pid).map(|record| (record.role, record.parent_pid))
+    }
+
+    #[must_use]
     pub fn contains_pid(pid: &Principal) -> bool {
         if EnvOps::is_root() {
             SubnetRegistryOps::children(IcOps::canister_self())

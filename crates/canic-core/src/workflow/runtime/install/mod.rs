@@ -1,11 +1,13 @@
 use crate::{
     InternalError,
-    api::runtime::install::{ApprovedModulePayload, ApprovedModuleSource},
     cdk::{
         candid::{CandidType, utils::ArgumentEncoder},
         types::Principal,
     },
-    ops::ic::mgmt::{CanisterInstallMode, MgmtOps},
+    ops::{
+        ic::mgmt::{CanisterInstallMode, MgmtOps},
+        runtime::install_source::{ApprovedModulePayload, ApprovedModuleSource},
+    },
 };
 
 ///

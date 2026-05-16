@@ -2,11 +2,11 @@ use super::{
     AuthOps, SignDelegationProofInput,
     delegated::{
         canonical::{derivation_path_hash, key_name_hash},
+        cert_rules::DelegatedAuthTtlLimits,
         issue::{
             IssueDelegationProofError, IssueDelegationProofInput, finish_delegation_proof,
             prepare_delegation_cert,
         },
-        policy::DelegatedAuthTtlPolicy,
     },
     keys,
 };
@@ -49,7 +49,7 @@ impl AuthOps {
             max_token_ttl_secs: input.max_token_ttl_secs,
             scopes: input.scopes,
             audience: input.audience,
-            ttl_policy: DelegatedAuthTtlPolicy {
+            ttl_limits: DelegatedAuthTtlLimits {
                 max_cert_ttl_secs: input.max_cert_ttl_secs,
                 max_token_ttl_secs: input.max_token_ttl_secs,
             },

@@ -20,7 +20,6 @@ mod tests;
 mod authorize;
 mod capability;
 mod execute;
-mod funding;
 mod nonroot_cycles;
 mod replay;
 use capability::RootCapability;

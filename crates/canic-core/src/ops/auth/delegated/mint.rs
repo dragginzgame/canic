@@ -1,7 +1,7 @@
 use super::{
     audience::{AudienceError, audience_subset, validate_audience_shape},
     canonical::{CanonicalAuthError, cert_hash, claims_hash},
-    policy::DELEGATED_AUTH_VERSION,
+    cert_rules::DELEGATED_AUTH_VERSION,
 };
 use crate::{
     cdk::types::Principal,
@@ -279,7 +279,7 @@ mod tests {
                 root_trust: &trust,
                 local_principal: p(99),
                 local_role: Some(&role),
-                ttl_policy: crate::ops::auth::delegated::policy::DelegatedAuthTtlPolicy {
+                ttl_limits: crate::ops::auth::delegated::cert_rules::DelegatedAuthTtlLimits {
                     max_cert_ttl_secs: 600,
                     max_token_ttl_secs: 120,
                 },
@@ -309,7 +309,7 @@ mod tests {
                     root_trust: &trust,
                     local_principal: p(99),
                     local_role: Some(&role),
-                    ttl_policy: crate::ops::auth::delegated::policy::DelegatedAuthTtlPolicy {
+                    ttl_limits: crate::ops::auth::delegated::cert_rules::DelegatedAuthTtlLimits {
                         max_cert_ttl_secs: 600,
                         max_token_ttl_secs: 120,
                     },
@@ -336,7 +336,7 @@ mod tests {
                     root_trust: &trust,
                     local_principal: p(99),
                     local_role: Some(&role),
-                    ttl_policy: crate::ops::auth::delegated::policy::DelegatedAuthTtlPolicy {
+                    ttl_limits: crate::ops::auth::delegated::cert_rules::DelegatedAuthTtlLimits {
                         max_cert_ttl_secs: 600,
                         max_token_ttl_secs: 120,
                     },

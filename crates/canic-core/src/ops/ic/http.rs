@@ -1,5 +1,6 @@
 use crate::{
     InternalError,
+    dto::http,
     ids::SystemMetricKind,
     infra::{InfraError, ic::http::HttpInfra},
     ops::{
@@ -165,6 +166,29 @@ impl HttpOps {
         Self::perform_request(args, label).await
     }
 
+    /// Convert public DTO request arguments into the ops HTTP request shape.
+    #[must_use]
+    pub fn request_args_from_dto(args: http::HttpRequestArgs) -> HttpRequestArgs {
+        HttpRequestArgs {
+            url: args.url,
+            max_response_bytes: args.max_response_bytes,
+            method: method_from_dto(args.method),
+            headers: args.headers.into_iter().map(header_from_dto).collect(),
+            body: args.body,
+            is_replicated: args.is_replicated,
+        }
+    }
+
+    /// Convert the ops HTTP result into the public DTO result shape.
+    #[must_use]
+    pub fn result_to_dto(result: HttpRequestResult) -> http::HttpRequestResult {
+        http::HttpRequestResult {
+            status: result.status,
+            headers: result.headers.into_iter().map(header_to_dto).collect(),
+            body: result.body,
+        }
+    }
+
     // -------------------------------------------------------------------------
     // Core execution
     // -------------------------------------------------------------------------
@@ -217,6 +241,28 @@ impl HttpOps {
                 value: (*value).to_string(),
             })
             .collect()
+    }
+}
+
+const fn method_from_dto(method: http::HttpMethod) -> HttpMethod {
+    match method {
+        http::HttpMethod::GET => HttpMethod::Get,
+        http::HttpMethod::POST => HttpMethod::Post,
+        http::HttpMethod::HEAD => HttpMethod::Head,
+    }
+}
+
+fn header_from_dto(header: http::HttpHeader) -> HttpHeader {
+    HttpHeader {
+        name: header.name,
+        value: header.value,
+    }
+}
+
+fn header_to_dto(header: HttpHeader) -> http::HttpHeader {
+    http::HttpHeader {
+        name: header.name,
+        value: header.value,
     }
 }
 

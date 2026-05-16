@@ -1,10 +1,4 @@
-use crate::{cdk::types::Principal, ids::CanisterRole};
-use std::{cell::RefCell, collections::HashMap};
-
-thread_local! {
-    static FUNDING_LEDGER: RefCell<HashMap<Principal, FundingLedger>> =
-        RefCell::new(HashMap::new());
-}
+use crate::ids::CanisterRole;
 
 ///
 /// FundingPolicy
@@ -12,21 +6,20 @@ thread_local! {
 ///
 
 #[derive(Clone, Copy, Debug)]
-pub(super) struct FundingPolicy {
+pub struct FundingPolicy {
     pub max_per_request: u128,
     pub max_per_child: u128,
     pub cooldown_secs: u64,
 }
 
 impl FundingPolicy {
-    // Evaluate a child request against role policy and child runtime ledger.
-    pub(super) fn evaluate(
+    /// Evaluate a child request against role policy and the observed grant ledger.
+    pub const fn evaluate(
         self,
-        child: Principal,
+        ledger: FundingLedgerSnapshot,
         requested_cycles: u128,
         now_secs: u64,
     ) -> Result<FundingDecision, FundingPolicyViolation> {
-        let ledger = child_ledger(child);
         if self.cooldown_secs > 0 {
             let earliest_next = ledger.last_granted_at.saturating_add(self.cooldown_secs);
             if now_secs < earliest_next {
@@ -72,10 +65,21 @@ impl FundingPolicy {
 ///
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(super) struct FundingDecision {
+pub struct FundingDecision {
     pub approved_cycles: u128,
     pub clamped_max_per_request: bool,
     pub clamped_max_per_child: bool,
+}
+
+///
+/// FundingLedgerSnapshot
+/// Read-only child funding ledger input for policy evaluation.
+///
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct FundingLedgerSnapshot {
+    pub granted_total: u128,
+    pub last_granted_at: u64,
 }
 
 ///
@@ -84,7 +88,7 @@ pub(super) struct FundingDecision {
 ///
 
 #[derive(Clone, Copy, Debug)]
-pub(super) enum FundingPolicyViolation {
+pub enum FundingPolicyViolation {
     MaxPerChild {
         requested: u128,
         max_per_child: u128,
@@ -95,33 +99,10 @@ pub(super) enum FundingPolicyViolation {
     },
 }
 
-///
-/// FundingLedger
-///
-
-#[derive(Clone, Copy, Debug, Default)]
-struct FundingLedger {
-    granted_total: u128,
-    last_granted_at: u64,
-}
-
-// Resolve the effective policy for a child role from current config.
-pub(super) const fn policy_for_child_role(_child_role: &CanisterRole) -> FundingPolicy {
+/// Resolve the effective policy for a child role from current config.
+#[must_use]
+pub const fn policy_for_child_role(_child_role: &CanisterRole) -> FundingPolicy {
     default_policy()
-}
-
-// Record a successful grant for cooldown and child-budget accounting.
-pub(super) fn record_child_grant(child: Principal, granted_cycles: u128, now_secs: u64) {
-    FUNDING_LEDGER.with_borrow_mut(|ledger| {
-        let entry = ledger.entry(child).or_default();
-        entry.granted_total = entry.granted_total.saturating_add(granted_cycles);
-        entry.last_granted_at = now_secs;
-    });
-}
-
-// Return the current ledger state for a child.
-fn child_ledger(child: Principal) -> FundingLedger {
-    FUNDING_LEDGER.with_borrow(|ledger| ledger.get(&child).copied().unwrap_or_default())
 }
 
 // Fail-open defaults preserve existing behavior when role policy is absent.
@@ -134,29 +115,20 @@ const fn default_policy() -> FundingPolicy {
 }
 
 #[cfg(test)]
-pub(super) fn reset_for_tests() {
-    FUNDING_LEDGER.with_borrow_mut(HashMap::clear);
-}
-
-#[cfg(test)]
 mod tests {
     use super::*;
 
-    fn p(id: u8) -> Principal {
-        Principal::from_slice(&[id; 29])
-    }
-
     #[test]
     fn evaluate_clamps_to_max_per_request() {
-        reset_for_tests();
-        let child = p(1);
         let policy = FundingPolicy {
             max_per_request: 100,
             max_per_child: 1_000,
             cooldown_secs: 0,
         };
 
-        let decision = policy.evaluate(child, 250, 10).expect("must clamp");
+        let decision = policy
+            .evaluate(FundingLedgerSnapshot::default(), 250, 10)
+            .expect("must clamp");
         assert_eq!(decision.approved_cycles, 100);
         assert!(decision.clamped_max_per_request);
         assert!(!decision.clamped_max_per_child);
@@ -164,16 +136,17 @@ mod tests {
 
     #[test]
     fn evaluate_clamps_to_remaining_budget() {
-        reset_for_tests();
-        let child = p(2);
-        record_child_grant(child, 950, 5);
         let policy = FundingPolicy {
             max_per_request: 200,
             max_per_child: 1_000,
             cooldown_secs: 0,
         };
+        let ledger = FundingLedgerSnapshot {
+            granted_total: 950,
+            last_granted_at: 5,
+        };
 
-        let decision = policy.evaluate(child, 200, 10).expect("must clamp");
+        let decision = policy.evaluate(ledger, 200, 10).expect("must clamp");
         assert_eq!(decision.approved_cycles, 50);
         assert!(!decision.clamped_max_per_request);
         assert!(decision.clamped_max_per_child);
@@ -181,17 +154,18 @@ mod tests {
 
     #[test]
     fn evaluate_denies_when_child_budget_exhausted() {
-        reset_for_tests();
-        let child = p(3);
-        record_child_grant(child, 1_000, 5);
         let policy = FundingPolicy {
             max_per_request: 200,
             max_per_child: 1_000,
             cooldown_secs: 0,
         };
+        let ledger = FundingLedgerSnapshot {
+            granted_total: 1_000,
+            last_granted_at: 5,
+        };
 
         let err = policy
-            .evaluate(child, 1, 10)
+            .evaluate(ledger, 1, 10)
             .expect_err("budget exhaustion must deny");
         match err {
             FundingPolicyViolation::MaxPerChild {
@@ -211,17 +185,18 @@ mod tests {
 
     #[test]
     fn evaluate_denies_when_cooldown_active() {
-        reset_for_tests();
-        let child = p(4);
-        record_child_grant(child, 100, 50);
         let policy = FundingPolicy {
             max_per_request: 1_000,
             max_per_child: 10_000,
             cooldown_secs: 20,
         };
+        let ledger = FundingLedgerSnapshot {
+            granted_total: 100,
+            last_granted_at: 50,
+        };
 
         let err = policy
-            .evaluate(child, 10, 60)
+            .evaluate(ledger, 10, 60)
             .expect_err("cooldown must deny");
         match err {
             FundingPolicyViolation::CooldownActive { retry_after_secs } => {
