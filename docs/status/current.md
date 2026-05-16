@@ -182,6 +182,10 @@ inspect only the files needed for the current task.
 - Added `canic backup prune` for explicit operator cleanup of backup
   directories. The first selectors are `--failed` and `--keep <count>`, with
   `--dry-run` previews and backup-list ordering.
+- Started `0.36.12` by removing the `/tmp` restore choreography: restore
+  plan/apply/run now accept backup-list row references, `restore prepare`
+  writes default plan and apply-journal files inside the backup layout, and
+  `restore status` exposes completion/attention gates for prepared restores.
 - Added a config-schema regression proving obsolete per-canister delegated-auth
   verifier tables are rejected instead of accepted through compatibility shims.
 - Updated the internal audit scaling probe to use `scale_replica` and

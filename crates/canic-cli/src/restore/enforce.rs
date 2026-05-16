@@ -1,10 +1,32 @@
 use canic_backup::restore::{RestorePlan, RestoreRunResponse};
 
-use super::{RestoreCommandError, RestorePlanOptions, RestoreRunOptions};
+use super::{RestoreCommandError, RestorePlanOptions, RestoreRunOptions, RestoreStatusOptions};
 
 // Enforce caller-requested native runner requirements after output is emitted.
 pub(super) fn enforce_restore_run_requirements(
     options: &RestoreRunOptions,
+    run: &RestoreRunResponse,
+) -> Result<(), RestoreCommandError> {
+    if options.require_complete && !run.complete {
+        return Err(RestoreCommandError::RestoreApplyIncomplete {
+            backup_id: run.backup_id.clone(),
+            completed_operations: run.completed_operations,
+            operation_count: run.operation_count,
+        });
+    }
+
+    if options.require_no_attention && run.attention_required {
+        return Err(RestoreCommandError::RestoreApplyReportNeedsAttention {
+            backup_id: run.backup_id.clone(),
+            outcome: run.outcome.clone(),
+        });
+    }
+
+    Ok(())
+}
+
+pub(super) fn enforce_restore_status_requirements(
+    options: &RestoreStatusOptions,
     run: &RestoreRunResponse,
 ) -> Result<(), RestoreCommandError> {
     if options.require_complete && !run.complete {

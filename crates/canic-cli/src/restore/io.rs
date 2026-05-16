@@ -1,4 +1,4 @@
-use crate::output;
+use crate::{backup::resolve_backup_reference, output};
 use canic_backup::{
     manifest::FleetBackupManifest,
     persistence::BackupLayout,
@@ -6,9 +6,32 @@ use canic_backup::{
         RestoreApplyDryRun, RestoreApplyJournal, RestoreMapping, RestorePlan, RestoreRunResponse,
     },
 };
-use std::path::PathBuf;
+use serde::Serialize;
+use std::path::{Path, PathBuf};
 
-use super::{RestoreApplyOptions, RestoreCommandError, RestorePlanOptions, RestoreRunOptions};
+use super::{
+    RestoreApplyOptions, RestoreCommandError, RestorePlanOptions, RestorePrepareOptions,
+    RestoreRunOptions, RestoreStatusOptions,
+};
+
+pub(super) const RESTORE_PLAN_FILE: &str = "restore-plan.json";
+pub(super) const RESTORE_APPLY_JOURNAL_FILE: &str = "restore-apply-journal.json";
+
+///
+/// RestorePrepareReport
+///
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+pub(super) struct RestorePrepareReport {
+    pub backup_dir: String,
+    pub plan_path: String,
+    pub journal_path: String,
+    pub backup_id: String,
+    pub ready: bool,
+    pub readiness_reasons: Vec<String>,
+    pub members: usize,
+    pub operations: usize,
+}
 
 // Verify backup layout integrity before restore planning when requested.
 pub(super) fn verify_backup_layout_if_required(
@@ -18,11 +41,11 @@ pub(super) fn verify_backup_layout_if_required(
         return Ok(());
     }
 
-    let Some(dir) = &options.backup_dir else {
+    let Some(dir) = restore_plan_backup_dir(options)? else {
         return Err(RestoreCommandError::RequireVerifiedNeedsBackupDir);
     };
 
-    BackupLayout::new(dir.clone()).verify_integrity()?;
+    BackupLayout::new(dir).verify_integrity()?;
     Ok(())
 }
 
@@ -34,14 +57,94 @@ pub(super) fn read_manifest_source(
         return read_manifest(path);
     }
 
-    let Some(dir) = &options.backup_dir else {
+    let Some(dir) = restore_plan_backup_dir(options)? else {
         return Err(RestoreCommandError::MissingOption(
             "--manifest or --backup-dir",
         ));
     };
 
-    BackupLayout::new(dir.clone())
+    BackupLayout::new(dir)
         .read_manifest()
+        .map_err(RestoreCommandError::from)
+}
+
+pub(super) fn restore_plan_backup_dir(
+    options: &RestorePlanOptions,
+) -> Result<Option<PathBuf>, RestoreCommandError> {
+    restore_backup_dir(options.backup_ref.as_deref(), options.backup_dir.as_deref())
+}
+
+pub(super) fn restore_prepare_backup_dir(
+    options: &RestorePrepareOptions,
+) -> Result<PathBuf, RestoreCommandError> {
+    restore_backup_dir(options.backup_ref.as_deref(), options.backup_dir.as_deref())?.ok_or(
+        RestoreCommandError::MissingOption("backup-ref or --backup-dir"),
+    )
+}
+
+pub(super) fn restore_apply_plan_path(
+    options: &RestoreApplyOptions,
+) -> Result<PathBuf, RestoreCommandError> {
+    if let Some(plan) = &options.plan {
+        return Ok(plan.clone());
+    }
+    let backup_dir = restore_backup_dir(options.backup_ref.as_deref(), None)?
+        .ok_or(RestoreCommandError::MissingOption("backup-ref or --plan"))?;
+    Ok(default_restore_plan_path(&backup_dir))
+}
+
+pub(super) fn restore_apply_backup_dir(
+    options: &RestoreApplyOptions,
+) -> Result<Option<PathBuf>, RestoreCommandError> {
+    if let Some(backup_dir) = &options.backup_dir {
+        return Ok(Some(backup_dir.clone()));
+    }
+    restore_backup_dir(options.backup_ref.as_deref(), None)
+}
+
+pub(super) fn restore_run_journal_path(
+    options: &RestoreRunOptions,
+) -> Result<PathBuf, RestoreCommandError> {
+    restore_journal_path(options.backup_ref.as_deref(), options.journal.as_deref())
+}
+
+pub(super) fn restore_status_journal_path(
+    options: &RestoreStatusOptions,
+) -> Result<PathBuf, RestoreCommandError> {
+    restore_journal_path(options.backup_ref.as_deref(), options.journal.as_deref())
+}
+
+pub(super) fn default_restore_plan_path(backup_dir: &Path) -> PathBuf {
+    backup_dir.join(RESTORE_PLAN_FILE)
+}
+
+pub(super) fn default_restore_apply_journal_path(backup_dir: &Path) -> PathBuf {
+    backup_dir.join(RESTORE_APPLY_JOURNAL_FILE)
+}
+
+fn restore_journal_path(
+    backup_ref: Option<&str>,
+    journal: Option<&Path>,
+) -> Result<PathBuf, RestoreCommandError> {
+    if let Some(journal) = journal {
+        return Ok(journal.to_path_buf());
+    }
+    let backup_dir = restore_backup_dir(backup_ref, None)?.ok_or(
+        RestoreCommandError::MissingOption("backup-ref or --journal"),
+    )?;
+    Ok(default_restore_apply_journal_path(&backup_dir))
+}
+
+fn restore_backup_dir(
+    backup_ref: Option<&str>,
+    backup_dir: Option<&Path>,
+) -> Result<Option<PathBuf>, RestoreCommandError> {
+    if let Some(backup_dir) = backup_dir {
+        return Ok(Some(backup_dir.to_path_buf()));
+    }
+    backup_ref
+        .map(resolve_backup_reference)
+        .transpose()
         .map_err(RestoreCommandError::from)
 }
 
@@ -58,6 +161,27 @@ pub(super) fn read_mapping(path: &PathBuf) -> Result<RestoreMapping, RestoreComm
 // Read and decode a restore plan from disk.
 pub(super) fn read_plan(path: &PathBuf) -> Result<RestorePlan, RestoreCommandError> {
     output::read_json_file::<RestorePlan, RestoreCommandError>(path)
+}
+
+pub(super) fn write_plan_file(
+    path: &PathBuf,
+    plan: &RestorePlan,
+) -> Result<(), RestoreCommandError> {
+    output::write_pretty_json_file(path, plan)
+}
+
+pub(super) fn write_apply_journal_file(
+    path: &PathBuf,
+    dry_run: &RestoreApplyDryRun,
+) -> Result<(), RestoreCommandError> {
+    output::write_pretty_json_file(path, &RestoreApplyJournal::from_dry_run(dry_run))
+}
+
+pub(super) fn write_prepare_report(
+    options: &RestorePrepareOptions,
+    report: &RestorePrepareReport,
+) -> Result<(), RestoreCommandError> {
+    output::write_pretty_json(options.out.as_ref(), report)
 }
 
 // Write the computed plan to stdout or a requested output file.
@@ -91,6 +215,13 @@ pub(super) fn write_apply_journal_if_requested(
 // Write the restore runner response to stdout or a requested output file.
 pub(super) fn write_restore_run(
     options: &RestoreRunOptions,
+    run: &RestoreRunResponse,
+) -> Result<(), RestoreCommandError> {
+    output::write_pretty_json(options.out.as_ref(), run)
+}
+
+pub(super) fn write_restore_status(
+    options: &RestoreStatusOptions,
     run: &RestoreRunResponse,
 ) -> Result<(), RestoreCommandError> {
     output::write_pretty_json(options.out.as_ref(), run)

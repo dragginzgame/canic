@@ -47,6 +47,7 @@ pub use options::{
 };
 use prune::backup_prune;
 use reference::backup_list;
+pub use reference::resolve_backup_reference;
 #[cfg(test)]
 use reference::resolve_backup_reference_in;
 #[cfg(test)]

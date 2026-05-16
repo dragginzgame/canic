@@ -50,7 +50,7 @@ pub(super) fn resolve_backup_dir(
     ))
 }
 
-fn resolve_backup_reference(reference: &str) -> Result<PathBuf, BackupCommandError> {
+pub fn resolve_backup_reference(reference: &str) -> Result<PathBuf, BackupCommandError> {
     resolve_backup_reference_in(Path::new("backups"), reference)
 }
 

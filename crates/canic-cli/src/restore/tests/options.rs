@@ -16,6 +16,7 @@ fn parses_restore_plan_options() {
     ])
     .expect("parse options");
 
+    assert_eq!(options.backup_ref, None);
     assert_eq!(options.manifest, Some(PathBuf::from("manifest.json")));
     assert_eq!(options.backup_dir, None);
     assert_eq!(options.mapping, Some(PathBuf::from("mapping.json")));
@@ -31,7 +32,9 @@ fn restore_usage_lists_command_family() {
 
     assert!(text.contains("Usage: canic restore"));
     assert!(text.contains("plan"));
+    assert!(text.contains("prepare"));
     assert!(text.contains("run"));
+    assert!(text.contains("status"));
 }
 
 // Ensure uploaded snapshot IDs are parsed from command upload output.
@@ -52,12 +55,57 @@ fn parses_verified_restore_plan_options() {
     ])
     .expect("parse verified options");
 
+    assert_eq!(options.backup_ref, None);
     assert_eq!(options.manifest, None);
     assert_eq!(options.backup_dir, Some(PathBuf::from("backups/run")));
     assert_eq!(options.mapping, None);
     assert_eq!(options.out, None);
     assert!(options.require_verified);
     assert!(!options.require_restore_ready);
+}
+
+// Ensure restore plan options accept a backup list reference.
+#[test]
+fn parses_restore_plan_backup_ref_options() {
+    let options = RestorePlanOptions::parse([
+        OsString::from("1"),
+        OsString::from("--require-verified"),
+        OsString::from("--require-restore-ready"),
+        OsString::from("--out"),
+        OsString::from("restore-plan.json"),
+    ])
+    .expect("parse backup ref plan options");
+
+    assert_eq!(options.backup_ref.as_deref(), Some("1"));
+    assert_eq!(options.manifest, None);
+    assert_eq!(options.backup_dir, None);
+    assert!(options.require_verified);
+    assert!(options.require_restore_ready);
+}
+
+// Ensure restore prepare options parse the operator shortcut.
+#[test]
+fn parses_restore_prepare_options() {
+    let options = RestorePrepareOptions::parse([
+        OsString::from("1"),
+        OsString::from("--require-verified"),
+        OsString::from("--require-restore-ready"),
+        OsString::from("--plan-out"),
+        OsString::from("restore-plan.json"),
+        OsString::from("--journal-out"),
+        OsString::from("restore-apply-journal.json"),
+    ])
+    .expect("parse prepare options");
+
+    assert_eq!(options.backup_ref.as_deref(), Some("1"));
+    assert_eq!(options.backup_dir, None);
+    assert_eq!(options.plan_out, Some(PathBuf::from("restore-plan.json")));
+    assert_eq!(
+        options.journal_out,
+        Some(PathBuf::from("restore-apply-journal.json"))
+    );
+    assert!(options.require_verified);
+    assert!(options.require_restore_ready);
 }
 
 // Ensure restore apply options require the explicit dry-run mode.
@@ -76,7 +124,8 @@ fn parses_restore_apply_dry_run_options() {
     ])
     .expect("parse apply options");
 
-    assert_eq!(options.plan, PathBuf::from("restore-plan.json"));
+    assert_eq!(options.backup_ref, None);
+    assert_eq!(options.plan, Some(PathBuf::from("restore-plan.json")));
     assert_eq!(options.backup_dir, Some(PathBuf::from("backups/run")));
     assert_eq!(
         options.out,
@@ -86,6 +135,18 @@ fn parses_restore_apply_dry_run_options() {
         options.journal_out,
         Some(PathBuf::from("restore-apply-journal.json"))
     );
+    assert!(options.dry_run);
+}
+
+// Ensure restore apply can use a prepared backup layout reference.
+#[test]
+fn parses_restore_apply_backup_ref_options() {
+    let options = RestoreApplyOptions::parse([OsString::from("1"), OsString::from("--dry-run")])
+        .expect("parse apply backup ref options");
+
+    assert_eq!(options.backup_ref.as_deref(), Some("1"));
+    assert_eq!(options.plan, None);
+    assert_eq!(options.backup_dir, None);
     assert!(options.dry_run);
 }
 
@@ -109,7 +170,11 @@ fn parses_restore_run_dry_run_options() {
     ])
     .expect("parse restore run options");
 
-    assert_eq!(options.journal, PathBuf::from("restore-apply-journal.json"));
+    assert_eq!(options.backup_ref, None);
+    assert_eq!(
+        options.journal,
+        Some(PathBuf::from("restore-apply-journal.json"))
+    );
     assert_eq!(options.icp, "/tmp/icp");
     assert_eq!(options.network.as_deref(), Some("local"));
     assert_eq!(options.out, Some(PathBuf::from("restore-run-dry-run.json")));
@@ -136,7 +201,10 @@ fn parses_restore_run_execute_options() {
     ])
     .expect("parse restore run execute options");
 
-    assert_eq!(options.journal, PathBuf::from("restore-apply-journal.json"));
+    assert_eq!(
+        options.journal,
+        Some(PathBuf::from("restore-apply-journal.json"))
+    );
     assert_eq!(options.icp, "/bin/true");
     assert_eq!(options.network, None);
     assert_eq!(options.out, None);
@@ -161,7 +229,10 @@ fn parses_restore_run_unclaim_pending_options() {
     ])
     .expect("parse restore run unclaim options");
 
-    assert_eq!(options.journal, PathBuf::from("restore-apply-journal.json"));
+    assert_eq!(
+        options.journal,
+        Some(PathBuf::from("restore-apply-journal.json"))
+    );
     assert_eq!(options.out, Some(PathBuf::from("restore-run.json")));
     assert!(!options.dry_run);
     assert!(!options.execute);
@@ -181,12 +252,47 @@ fn parses_restore_run_retry_failed_options() {
     ])
     .expect("parse restore run retry options");
 
-    assert_eq!(options.journal, PathBuf::from("restore-apply-journal.json"));
+    assert_eq!(
+        options.journal,
+        Some(PathBuf::from("restore-apply-journal.json"))
+    );
     assert_eq!(options.out, Some(PathBuf::from("restore-run.json")));
     assert!(!options.dry_run);
     assert!(!options.execute);
     assert!(options.retry_failed);
     assert!(!options.unclaim_pending);
+}
+
+// Ensure restore run can use a prepared backup layout reference.
+#[test]
+fn parses_restore_run_backup_ref_options() {
+    let options = RestoreRunOptions::parse([
+        OsString::from("1"),
+        OsString::from("--dry-run"),
+        OsString::from("--require-complete"),
+    ])
+    .expect("parse run backup ref options");
+
+    assert_eq!(options.backup_ref.as_deref(), Some("1"));
+    assert_eq!(options.journal, None);
+    assert!(options.dry_run);
+    assert!(options.require_complete);
+}
+
+// Ensure restore status can use a prepared backup layout reference.
+#[test]
+fn parses_restore_status_backup_ref_options() {
+    let options = RestoreStatusOptions::parse([
+        OsString::from("1"),
+        OsString::from("--require-complete"),
+        OsString::from("--require-no-attention"),
+    ])
+    .expect("parse status backup ref options");
+
+    assert_eq!(options.backup_ref.as_deref(), Some("1"));
+    assert_eq!(options.journal, None);
+    assert!(options.require_complete);
+    assert!(options.require_no_attention);
 }
 
 // Ensure restore apply only renders no-mutation operation plans.

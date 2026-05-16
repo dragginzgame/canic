@@ -14,6 +14,7 @@ fn plan_restore_reads_manifest_from_backup_dir() {
         .expect("write manifest");
 
     let options = RestorePlanOptions {
+        backup_ref: None,
         manifest: None,
         backup_dir: Some(root.clone()),
         mapping: None,
@@ -65,6 +66,7 @@ fn plan_restore_requires_verified_backup_layout() {
     write_verified_layout(&root, &layout, &manifest);
 
     let options = RestorePlanOptions {
+        backup_ref: None,
         manifest: None,
         backup_dir: Some(root.clone()),
         mapping: None,
@@ -90,6 +92,7 @@ fn plan_restore_rejects_unverified_backup_layout() {
         .expect("write manifest");
 
     let options = RestorePlanOptions {
+        backup_ref: None,
         manifest: None,
         backup_dir: Some(root.clone()),
         mapping: None,
@@ -130,6 +133,7 @@ fn plan_restore_reads_manifest_and_mapping() {
     .expect("write mapping");
 
     let options = RestorePlanOptions {
+        backup_ref: None,
         manifest: Some(manifest_path),
         backup_dir: None,
         mapping: Some(mapping_path),
@@ -216,4 +220,45 @@ fn run_restore_plan_require_restore_ready_accepts_ready_plan() {
     fs::remove_dir_all(root).expect("remove temp root");
     assert!(plan.readiness_summary.ready);
     assert!(plan.readiness_summary.reasons.is_empty());
+}
+
+// Ensure restore prepare writes the default plan and journal beside a backup layout.
+#[test]
+fn run_restore_prepare_writes_default_layout_artifacts() {
+    let root = temp_dir("canic-cli-restore-prepare");
+    let layout = BackupLayout::new(root.clone());
+    let mut manifest = restore_ready_manifest();
+    write_manifest_artifacts(&root, &mut manifest);
+    layout.write_manifest(&manifest).expect("write manifest");
+    let out_path = root.join("restore-prepare.json");
+
+    run([
+        OsString::from("prepare"),
+        OsString::from("--backup-dir"),
+        OsString::from(root.as_os_str()),
+        OsString::from("--require-restore-ready"),
+        OsString::from("--out"),
+        OsString::from(out_path.as_os_str()),
+    ])
+    .expect("prepare restore");
+
+    let report: serde_json::Value =
+        serde_json::from_slice(&fs::read(&out_path).expect("read prepare report"))
+            .expect("decode report");
+    let plan_path = root.join("restore-plan.json");
+    let journal_path = root.join("restore-apply-journal.json");
+    let plan: RestorePlan =
+        serde_json::from_slice(&fs::read(&plan_path).expect("read plan")).expect("decode plan");
+    let journal: serde_json::Value =
+        serde_json::from_slice(&fs::read(&journal_path).expect("read journal"))
+            .expect("decode journal");
+
+    fs::remove_dir_all(root).expect("remove temp root");
+    assert_eq!(report["backup_id"], "backup-test");
+    assert_eq!(report["ready"], true);
+    assert_eq!(report["members"], 2);
+    assert_eq!(report["operations"], 10);
+    assert!(plan.readiness_summary.ready);
+    assert_eq!(journal["ready"], true);
+    assert_eq!(journal["operation_count"], 10);
 }

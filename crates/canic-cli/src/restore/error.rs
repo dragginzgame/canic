@@ -1,3 +1,4 @@
+use crate::backup::BackupCommandError;
 use canic_backup::{
     persistence::PersistenceError,
     restore::{
@@ -115,6 +116,9 @@ pub enum RestoreCommandError {
 
     #[error(transparent)]
     Persistence(#[from] PersistenceError),
+
+    #[error(transparent)]
+    Backup(#[from] BackupCommandError),
 
     #[error(transparent)]
     RestorePlan(#[from] RestorePlanError),

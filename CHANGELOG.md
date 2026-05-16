@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.36.x] - 2026-05-15 - Backup/restore proofing
 
+- `0.36.12` removes the `/tmp` restore choreography by adding `canic restore prepare <backup-ref>`, backup-list row references for restore plan/apply/run/status, default restore plan and apply-journal files inside the backup layout, and `canic restore status <backup-ref>` for completion and attention gates.
+
 - `0.36.11` proves the full six-canister non-root fleet restore path from a verified backup through plan, apply, dry-run, max-step execute/resume, completion enforcement, and final readiness, and adds `canic backup prune` so operators can preview and remove failed backups or keep only the newest entries without manual directory deletion.
 
 - `0.36.10` proves the real backup/restore operator path for local subtree and full non-root fleet backups, fixes restore runner ICP snapshot commands so network flags are passed to the leaf command and fresh uploads do not incorrectly request resume state, fixes full fleet backup manifests so disconnected root-omitted branches become separate backup units, normalizes `canic backup list` timestamps for unfinished execution layouts, and makes `canic info cycles` show explicit burn and top-up rates in a compact default table with wider diagnostics behind `--verbose`.
