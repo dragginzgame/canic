@@ -23,13 +23,15 @@ mod labels;
 mod layout;
 mod model;
 mod options;
+mod prune;
 mod reference;
 mod render;
 mod status;
 mod verify;
 
 use command::{
-    backup_command, create_usage, inspect_usage, list_usage, status_usage, usage, verify_usage,
+    backup_command, create_usage, inspect_usage, list_usage, prune_usage, status_usage, usage,
+    verify_usage,
 };
 use create::backup_create;
 #[cfg(test)]
@@ -37,20 +39,21 @@ use create::{persist_backup_create_dry_run, persist_backup_create_dry_run_with_l
 use inspect::backup_inspect;
 pub use model::{
     BackupCreateReport, BackupDryRunStatusReport, BackupInspectOperation, BackupInspectReport,
-    BackupInspectTarget, BackupListEntry, BackupStatusReport,
+    BackupInspectTarget, BackupListEntry, BackupPruneEntry, BackupPruneReport, BackupStatusReport,
 };
 pub use options::{
-    BackupCreateOptions, BackupInspectOptions, BackupListOptions, BackupStatusOptions,
-    BackupVerifyOptions,
+    BackupCreateOptions, BackupInspectOptions, BackupListOptions, BackupPruneOptions,
+    BackupStatusOptions, BackupVerifyOptions,
 };
+use prune::backup_prune;
 use reference::backup_list;
 #[cfg(test)]
 use reference::resolve_backup_reference_in;
 #[cfg(test)]
 use render::{render_backup_list, render_create_report, render_inspect_report};
 use render::{
-    write_create_report, write_inspect_report, write_list_report, write_status_report,
-    write_verify_report,
+    write_create_report, write_inspect_report, write_list_report, write_prune_report,
+    write_status_report, write_verify_report,
 };
 use status::{backup_status, enforce_status_requirements};
 use verify::verify_backup;
@@ -186,6 +189,15 @@ where
             let options = BackupInspectOptions::parse(args)?;
             let report = backup_inspect(&options)?;
             write_inspect_report(&options, &report)?;
+            Ok(())
+        }
+        "prune" => {
+            if print_help_or_version(&args, prune_usage, version_text()) {
+                return Ok(());
+            }
+            let options = BackupPruneOptions::parse(args)?;
+            let report = backup_prune(&options)?;
+            write_prune_report(&options, &report)?;
             Ok(())
         }
         "status" => {

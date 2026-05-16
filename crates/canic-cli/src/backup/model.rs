@@ -36,6 +36,32 @@ pub struct BackupListEntry {
 }
 
 ///
+/// BackupPruneReport
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct BackupPruneReport {
+    pub dry_run: bool,
+    pub scanned: usize,
+    pub selected: usize,
+    pub pruned: usize,
+    pub entries: Vec<BackupPruneEntry>,
+}
+
+///
+/// BackupPruneEntry
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct BackupPruneEntry {
+    pub index: usize,
+    pub dir: PathBuf,
+    pub backup_id: String,
+    pub status: String,
+    pub action: String,
+}
+
+///
 /// BackupStatusReport
 ///
 

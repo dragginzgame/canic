@@ -1,6 +1,6 @@
 use super::{
     BackupCommandError, BackupCreateReport, BackupInspectOptions, BackupInspectReport,
-    BackupListEntry, BackupListOptions, BackupStatusOptions, BackupStatusReport,
+    BackupListEntry, BackupListOptions, BackupPruneReport, BackupStatusOptions, BackupStatusReport,
     BackupVerifyOptions,
 };
 use crate::{output, support::path_stamp::backup_list_timestamp};
@@ -74,6 +74,13 @@ pub(super) fn write_list_report(
     output::write_text::<BackupCommandError>(options.out.as_ref(), &render_backup_list(entries))
 }
 
+pub(super) fn write_prune_report(
+    options: &super::BackupPruneOptions,
+    report: &BackupPruneReport,
+) -> Result<(), BackupCommandError> {
+    output::write_text::<BackupCommandError>(options.out.as_ref(), &render_prune_report(report))
+}
+
 pub(super) fn render_backup_list(entries: &[BackupListEntry]) -> String {
     let rows = entries
         .iter()
@@ -101,6 +108,49 @@ pub(super) fn render_backup_list(entries: &[BackupListEntry]) -> String {
             ColumnAlign::Left,
         ],
     )
+}
+
+pub(super) fn render_prune_report(report: &BackupPruneReport) -> String {
+    let summary_rows = [[
+        if report.dry_run { "dry-run" } else { "execute" }.to_string(),
+        report.scanned.to_string(),
+        report.selected.to_string(),
+        report.pruned.to_string(),
+    ]];
+    let entry_rows = report
+        .entries
+        .iter()
+        .map(|entry| {
+            [
+                entry.index.to_string(),
+                entry.dir.display().to_string(),
+                entry.backup_id.clone(),
+                entry.status.clone(),
+                entry.action.clone(),
+            ]
+        })
+        .collect::<Vec<_>>();
+
+    [
+        render_table(
+            &["MODE", "SCANNED", "SELECTED", "PRUNED"],
+            &summary_rows,
+            &[ColumnAlign::Left; 4],
+        ),
+        String::new(),
+        render_table(
+            &["#", "DIR", "BACKUP_ID", "STATUS", "ACTION"],
+            &entry_rows,
+            &[
+                ColumnAlign::Right,
+                ColumnAlign::Left,
+                ColumnAlign::Left,
+                ColumnAlign::Left,
+                ColumnAlign::Left,
+            ],
+        ),
+    ]
+    .join("\n")
 }
 
 pub(super) fn render_inspect_report(report: &BackupInspectReport) -> String {

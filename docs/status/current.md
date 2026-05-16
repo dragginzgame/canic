@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-05-15
+Last updated: 2026-05-16
 
 ## Purpose
 
@@ -175,6 +175,13 @@ inspect only the files needed for the current task.
   legacy run-id stamps are converted to unix markers before display, and local
   stale backup artifact directories were removed so only the verified complete
   `test` backup remains.
+- Started `0.36.11` by proving the full six-canister `test` fleet restore path
+  from backup row `1`: verify backup, plan with readiness gates, apply journal,
+  dry-run, one-step execute/resume, full execute, require-complete, and final
+  `canic info list test` readiness.
+- Added `canic backup prune` for explicit operator cleanup of backup
+  directories. The first selectors are `--failed` and `--keep <count>`, with
+  `--dry-run` previews and backup-list ordering.
 - Added a config-schema regression proving obsolete per-canister delegated-auth
   verifier tables are rejected instead of accepted through compatibility shims.
 - Updated the internal audit scaling probe to use `scale_replica` and

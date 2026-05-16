@@ -27,6 +27,11 @@ pub(super) fn inspect_usage() -> String {
     command.render_help().to_string()
 }
 
+pub(super) fn prune_usage() -> String {
+    let mut command = options::backup_prune_command();
+    command.render_help().to_string()
+}
+
 pub(super) fn verify_usage() -> String {
     let mut command = options::backup_verify_command();
     command.render_help().to_string()
@@ -50,6 +55,11 @@ pub(super) fn backup_command() -> ClapCommand {
         .subcommand(passthrough_subcommand(
             ClapCommand::new("inspect")
                 .about("Inspect a backup or dry-run plan layout")
+                .disable_help_flag(true),
+        ))
+        .subcommand(passthrough_subcommand(
+            ClapCommand::new("prune")
+                .about("Remove selected backup directories")
                 .disable_help_flag(true),
         ))
         .subcommand(passthrough_subcommand(

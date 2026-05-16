@@ -5,7 +5,8 @@ use crate::{
 };
 
 use super::{
-    BackupCommandError, create_usage, inspect_usage, list_usage, status_usage, verify_usage,
+    BackupCommandError, create_usage, inspect_usage, list_usage, prune_usage, status_usage,
+    verify_usage,
 };
 use clap::{ArgMatches, Command as ClapCommand};
 use std::{ffi::OsString, path::PathBuf};
@@ -110,6 +111,73 @@ pub(super) fn backup_list_command() -> ClapCommand {
                 .long("dir")
                 .value_name("dir")
                 .help("Backup root to scan; defaults to backups"),
+        )
+        .arg(value_arg("out").long("out").value_name("file"))
+}
+
+///
+/// BackupPruneOptions
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct BackupPruneOptions {
+    pub dir: PathBuf,
+    pub failed: bool,
+    pub keep: Option<usize>,
+    pub dry_run: bool,
+    pub out: Option<PathBuf>,
+}
+
+impl BackupPruneOptions {
+    pub fn parse<I>(args: I) -> Result<Self, BackupCommandError>
+    where
+        I: IntoIterator<Item = OsString>,
+    {
+        let matches = parse_backup_options(backup_prune_command(), prune_usage, args)?;
+        let keep = string_option(&matches, "keep")
+            .map(|value| {
+                value
+                    .parse::<usize>()
+                    .map_err(|_| BackupCommandError::Usage(prune_usage()))
+            })
+            .transpose()?;
+
+        Ok(Self {
+            dir: path_option(&matches, "dir").unwrap_or_else(|| PathBuf::from("backups")),
+            failed: matches.get_flag("failed"),
+            keep,
+            dry_run: matches.get_flag("dry-run"),
+            out: path_option(&matches, "out"),
+        })
+    }
+}
+
+pub(super) fn backup_prune_command() -> ClapCommand {
+    ClapCommand::new("prune")
+        .bin_name("canic backup prune")
+        .about("Remove selected backup directories")
+        .disable_help_flag(true)
+        .arg(
+            value_arg("dir")
+                .long("dir")
+                .value_name("dir")
+                .help("Backup root to scan; defaults to backups"),
+        )
+        .arg(
+            flag_arg("failed")
+                .long("failed")
+                .help("Select failed backup execution layouts"),
+        )
+        .arg(
+            value_arg("keep")
+                .long("keep")
+                .value_name("count")
+                .help("Keep the newest count entries from `canic backup list`"),
+        )
+        .arg(
+            flag_arg("dry-run")
+                .long("dry-run")
+                .help("Preview selected backup directories without deleting them"),
         )
         .arg(value_arg("out").long("out").value_name("file"))
 }
