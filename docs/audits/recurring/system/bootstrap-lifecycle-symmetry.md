@@ -21,6 +21,8 @@ This audit does not verify:
 * correctness of bootstrap business behavior
 * security properties of bootstrap tasks
 * downstream workflow internals after scheduling
+* host/operator backup or restore workflows in `canic-backup`, `canic-cli`, or
+  `canic-host`
 * general architectural quality outside lifecycle-boundary relevance
 
 ## Core Invariant
@@ -57,6 +59,11 @@ Primary references:
 
 If either reference changes, record that in the report and treat comparability as potentially reduced.
 
+Terminology note: this audit uses `restore` only for IC canister lifecycle
+runtime/environment restoration. Snapshot backup/restore, restore apply
+journals, and host-side operator restore commands are out of scope unless they
+change canister lifecycle hooks or runtime restoration code directly.
+
 ---
 
 ## Canonical Contract
@@ -84,16 +91,18 @@ Lifecycle code must not perform bootstrap orchestration directly.
 Audit these modules first:
 
 * `crates/canic/src/macros/start.rs`
-* `crates/canic-core/src/api/lifecycle.rs`
-* `crates/canic-core/src/lifecycle/init.rs`
-* `crates/canic-core/src/lifecycle/upgrade.rs`
+* `crates/canic-core/src/api/lifecycle/{mod.rs,root.rs,nonroot.rs}`
+* `crates/canic-core/src/lifecycle/{init,upgrade}/{mod.rs,root.rs,nonroot.rs}`
+* `crates/canic-control-plane/src/api/lifecycle.rs`
 * `crates/canic-core/src/workflow/runtime/mod.rs`
+* `crates/canic-core/src/workflow/runtime/{root.rs,nonroot.rs}`
 * `crates/canic-core/src/workflow/bootstrap/*`
 
 Optional supporting scope:
 
 * lifecycle-related tests in `crates/canic-tests/tests`
 * lifecycle-related tests in `crates/canic-core/tests`
+* root fixture uses of `start_root!(init = { ... })`
 
 ---
 
@@ -142,7 +151,7 @@ Every finding must use this shape:
 
 Example:
 
-* `crates/canic-core/src/lifecycle/upgrade.rs:42-56 bootstrap timer set before runtime restore -> violates restore-before-bootstrap ordering`
+* `crates/canic-core/src/lifecycle/upgrade/nonroot.rs:42-56 bootstrap timer set before runtime restore -> violates restore-before-bootstrap ordering`
 
 ---
 
@@ -163,14 +172,14 @@ rg -n 'init\(|post_upgrade\(|LifecycleApi::|TimerApi::set_lifecycle_timer|Durati
 
 ```bash
 rg -n 'pub fn init_|pub fn post_upgrade_|lifecycle::' \
-  crates/canic-core/src/api/lifecycle.rs
+  crates/canic-core/src/api/lifecycle crates/canic-control-plane/src/api/lifecycle.rs -g '*.rs'
 ```
 
 #### Init/post-upgrade structure
 
 ```bash
 rg -n 'init_root_canister|init_nonroot_canister|post_upgrade_root_canister|post_upgrade_nonroot_canister|TimerWorkflow::set|TimerOps::set|Duration::ZERO' \
-  crates/canic-core/src/lifecycle/{init.rs,upgrade.rs}
+  crates/canic-core/src/lifecycle crates/canic-control-plane/src/api/lifecycle.rs -g '*.rs'
 ```
 
 #### Async behavior in lifecycle adapters
@@ -183,14 +192,15 @@ rg -n '\.await|async fn|spawn\(' crates/canic-core/src/lifecycle -g '*.rs'
 
 ```bash
 rg -n 'EnvOps::restore_|init_memory_registry_post_upgrade|workflow::runtime::init_|TimerOps::set|TimerWorkflow::set' \
-  crates/canic-core/src/lifecycle/{init.rs,upgrade.rs} crates/canic-core/src/workflow/runtime/mod.rs -g '*.rs'
+  crates/canic-core/src/lifecycle crates/canic-core/src/workflow/runtime \
+  crates/canic-control-plane/src/api/lifecycle.rs -g '*.rs'
 ```
 
 #### Layering discipline
 
 ```bash
 rg -n 'crate::ops::|crate::domain::policy|crate::storage::stable::' \
-  crates/canic-core/src/lifecycle -g '*.rs'
+  crates/canic-core/src/lifecycle crates/canic-control-plane/src/api/lifecycle.rs -g '*.rs'
 ```
 
 #### Test coverage
@@ -198,6 +208,12 @@ rg -n 'crate::ops::|crate::domain::policy|crate::storage::stable::' \
 ```bash
 rg -n 'lifecycle|post_upgrade|init|bootstrap|Timer' \
   crates/canic-tests/tests crates/canic-core/tests -g '*.rs'
+```
+
+#### Root fixture coverage
+
+```bash
+rg -n 'start_root!\(|init = \{' canisters crates/canic-tests -g '*.rs'
 ```
 
 ---
@@ -270,6 +286,8 @@ Allowed differences:
 
 * trusted-state restoration specific to post-upgrade
 * explicitly documented restore-path differences
+* root bootstrap scheduling split between `canic-core` runtime restoration and
+  `canic-control-plane` root orchestration, if the report records both halves
 
 Fail conditions:
 
@@ -282,6 +300,7 @@ Checklist:
 * [ ] Root init and root post-upgrade are structurally aligned
 * [ ] Non-root init and non-root post-upgrade are structurally aligned
 * [ ] Differences are limited to documented restoration differences
+* [ ] Root control-plane scheduling split is reviewed explicitly
 
 Findings:
 
@@ -369,6 +388,13 @@ Findings:
 
 * `(path:line-range) observed behavior -> implication`
 
+Additional check for root control-plane lifecycle:
+
+* root control-plane lifecycle may register bootstrap modules and schedule
+  timers, but must not perform the bootstrap work inline
+* root control-plane lifecycle must delegate runtime restoration to
+  `canic-core` before scheduling root bootstrap timers
+
 ## 7. Timer and Bootstrap Coverage
 
 Verify tests exercise lifecycle boundary behavior.
@@ -428,9 +454,11 @@ Record only modules that materially affect lifecycle drift risk.
 | File / Module                            | Struct / Function                | Reason                                    | Risk Contribution |
 | ---------------------------------------- | -------------------------------- | ----------------------------------------- | ----------------- |
 | `canic/src/macros/start.rs`              | lifecycle macro hooks            | hook wiring and timer scheduling boundary | High              |
-| `canic-core/src/lifecycle/init.rs`       | init adapters                    | startup ordering and scheduling boundary  | High              |
-| `canic-core/src/lifecycle/upgrade.rs`    | post-upgrade adapters            | restore-before-bootstrap sequencing       | High              |
+| `canic-core/src/lifecycle/init/*`        | init adapters                    | startup ordering and scheduling boundary  | High              |
+| `canic-core/src/lifecycle/upgrade/*`     | post-upgrade adapters            | restore-before-bootstrap sequencing       | High              |
+| `canic-control-plane/src/api/lifecycle.rs` | root lifecycle scheduling      | root bootstrap timer boundary             | High              |
 | `canic-core/src/workflow/runtime/mod.rs` | runtime init/restore entrypoints | lifecycle restore surface                 | Medium            |
+| `canic-core/src/workflow/runtime/{root,nonroot}.rs` | post-restore runtime continuation | role-specific runtime restore continuation | Medium |
 
 If none are identified, state: `No structural hotspots detected in this run.`
 
@@ -562,6 +590,10 @@ Any confirmed red flag must appear in findings and affect score:
 * lifecycle layer importing policy or storage mutation paths
 * lifecycle hook performing direct bootstrap orchestration
 * init/post-upgrade using materially different runtime initialization paths without documented rationale
+* `start_root!(init = { ... })` or `start!(init = { ... })` user code running
+  synchronously inside generated IC lifecycle hooks
+* root control-plane lifecycle scheduling bootstrap before `canic-core`
+  restoration completes
 
 ---
 
@@ -607,10 +639,11 @@ Use this format:
 | Check                          | Status    | Evidence                                          |
 | ------------------------------ | --------- | ------------------------------------------------- |
 | Macro hooks stay thin          | `PASS`    | `crates/canic/src/macros/start.rs:12-38`          |
-| API boundary pure delegation   | `PASS`    | `crates/canic-core/src/api/lifecycle.rs:5-22`     |
-| Init/post-upgrade symmetry     | `PASS`    | `init.rs:10-48`, `upgrade.rs:12-55`               |
+| API boundary pure delegation   | `PASS`    | `crates/canic-core/src/api/lifecycle/nonroot.rs:5-22` |
+| Root control-plane split       | `PASS`    | `crates/canic-control-plane/src/api/lifecycle.rs:18-93` |
+| Init/post-upgrade symmetry     | `PASS`    | `lifecycle/init/nonroot.rs:10-48`, `lifecycle/upgrade/nonroot.rs:12-55` |
 | Lifecycle adapters synchronous | `PASS`    | `rg async/await/spawn returned no violating hits` |
-| Restore before bootstrap       | `PASS`    | `init.rs:...`, `upgrade.rs:...`                   |
+| Restore before bootstrap       | `PASS`    | `lifecycle/init/...`, `lifecycle/upgrade/...`     |
 | Boundary discipline            | `PASS`    | `no forbidden imports in lifecycle/`              |
 | Test coverage                  | `PARTIAL` | `post-upgrade coverage present, timer gap in ...` |
 
