@@ -73,8 +73,8 @@ pub const COMMAND_SPECS: &[CommandSpec] = &[
         scope: CommandScope::FleetContext,
     },
     CommandSpec {
-        name: "list",
-        about: "List deployed fleet canisters",
+        name: "info",
+        about: "Query deployed fleet information",
         scope: CommandScope::FleetContext,
     },
     CommandSpec {
@@ -85,11 +85,6 @@ pub const COMMAND_SPECS: &[CommandSpec] = &[
     CommandSpec {
         name: "medic",
         about: "Diagnose local Canic fleet setup",
-        scope: CommandScope::FleetContext,
-    },
-    CommandSpec {
-        name: "cycles",
-        about: "Summarize fleet cycle history",
         scope: CommandScope::FleetContext,
     },
     CommandSpec {

@@ -183,7 +183,7 @@ canic replica start --background
 canic fleet sync --fleet test
 canic status
 canic install --profile fast test
-canic list test
+canic info list test
 ```
 
 Single artifact:
@@ -215,7 +215,7 @@ directory after confirming the exact fleet name:
 
 ```bash
 canic config test
-canic list test
+canic info list test
 canic status
 canic --network local fleet list
 canic fleet create demo --yes

@@ -18,7 +18,7 @@ const VARIANT_HASH_PREFIX: &str = "abcdef01";
 // Ensure list options parse live registry queries.
 #[test]
 fn parses_live_list_options() {
-    let options = ListOptions::parse_list([
+    let options = ListOptions::parse_info_list([
         OsString::from("demo"),
         OsString::from("--subtree"),
         OsString::from(APP),
@@ -72,13 +72,13 @@ fn config_rejects_subtree_option() {
 // Ensure removed list selectors are hard rejected.
 #[test]
 fn list_rejects_removed_root_and_from_options() {
-    let root_err = ListOptions::parse_list([
+    let root_err = ListOptions::parse_info_list([
         OsString::from("demo"),
         OsString::from("--root"),
         OsString::from("aaaaa-aa"),
     ])
     .expect_err("list --root should fail");
-    let from_err = ListOptions::parse_list([
+    let from_err = ListOptions::parse_info_list([
         OsString::from("demo"),
         OsString::from("--from"),
         OsString::from("user_hub"),
@@ -92,11 +92,11 @@ fn list_rejects_removed_root_and_from_options() {
 // Ensure list and config help explain fleet selection and subtree rendering.
 #[test]
 fn list_and_config_usage_explain_fleet_and_subtree_options() {
-    let list = usage();
+    let list = info_usage();
     let config = config_usage();
 
     assert!(list.contains("List canisters registered by the deployed root"));
-    assert!(list.contains("Usage: canic list [OPTIONS] <fleet>"));
+    assert!(list.contains("Usage: canic info list [OPTIONS] <fleet>"));
     assert!(list.contains("<fleet>"));
     assert!(!list.contains("--fleet <name>"));
     assert!(list.contains("--subtree <name-or-principal>"));

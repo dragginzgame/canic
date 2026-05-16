@@ -12,7 +12,7 @@ use live::{
     list_canic_versions, list_cycle_balances, list_module_hashes, list_ready_statuses,
     load_registry_entries, resolve_tree_anchor, resolve_wasm_sizes,
 };
-use options::{ListOptions, config_usage, usage};
+use options::{ListOptions, config_usage, info_usage};
 use render::RegistryColumnData;
 #[cfg(not(test))]
 use render::render_config_output;
@@ -80,17 +80,21 @@ pub enum ListCommandError {
     Registry(#[from] RegistryParseError),
 }
 
-/// Run the deployed canister listing command.
-pub fn run<I>(args: I) -> Result<(), ListCommandError>
+/// Run the deployed canister listing command under `canic info`.
+pub fn run_info<I>(args: I) -> Result<(), ListCommandError>
 where
     I: IntoIterator<Item = OsString>,
 {
     let args = args.into_iter().collect::<Vec<_>>();
-    if print_help_or_version(&args, usage, version_text()) {
+    if print_help_or_version(&args, info_usage, version_text()) {
         return Ok(());
     }
 
-    let options = ListOptions::parse_list(args)?;
+    let options = ListOptions::parse_info_list(args)?;
+    run_list_options(options)
+}
+
+fn run_list_options(options: ListOptions) -> Result<(), ListCommandError> {
     let registry = load_registry_entries(&options)?;
     let anchor = resolve_tree_anchor(&options);
     let readiness = list_ready_statuses(&options, &registry, anchor.as_deref())?;

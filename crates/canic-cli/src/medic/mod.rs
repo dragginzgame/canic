@@ -197,7 +197,7 @@ fn check_root_ready(
         Ok(true) => MedicCheck::ok(
             "root ready",
             "canic_ready=true",
-            format!("run canic list {}", options.fleet),
+            format!("run canic info list {}", options.fleet),
         ),
         Ok(false) => MedicCheck::warn(
             "root ready",

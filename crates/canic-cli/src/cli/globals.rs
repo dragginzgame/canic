@@ -122,7 +122,8 @@ pub fn apply_global_network(
 
 fn command_accepts_global_icp(command: &str, tail: &[OsString]) -> bool {
     match command {
-        "cycles" | "endpoints" | "list" | "medic" | "metrics" | "status" => true,
+        "endpoints" | "medic" | "metrics" | "status" => true,
+        "info" => info_leaf_accepts_globals(tail),
         "replica" => matches!(
             tail.first().and_then(|arg| arg.to_str()),
             Some("start" | "status" | "stop")
@@ -136,15 +137,21 @@ fn command_accepts_global_icp(command: &str, tail: &[OsString]) -> bool {
 
 fn command_accepts_global_network(command: &str, tail: &[OsString]) -> bool {
     match command {
-        "build" | "cycles" | "endpoints" | "install" | "list" | "medic" | "metrics" | "status" => {
-            true
-        }
+        "build" | "endpoints" | "install" | "medic" | "metrics" | "status" => true,
+        "info" => info_leaf_accepts_globals(tail),
         "fleet" => tail.first().and_then(|arg| arg.to_str()) == Some("list"),
         "snapshot" => tail.first().and_then(|arg| arg.to_str()) == Some("download"),
         "backup" => tail.first().and_then(|arg| arg.to_str()) == Some("create"),
         "restore" => tail.first().and_then(|arg| arg.to_str()) == Some("run"),
         _ => false,
     }
+}
+
+fn info_leaf_accepts_globals(tail: &[OsString]) -> bool {
+    matches!(
+        tail.first().and_then(|arg| arg.to_str()),
+        Some("cycles" | "list")
+    )
 }
 
 fn tail_has_option(tail: &[OsString], name: &str) -> bool {

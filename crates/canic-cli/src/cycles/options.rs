@@ -27,30 +27,34 @@ pub struct CyclesOptions {
 }
 
 impl CyclesOptions {
-    pub fn parse<I>(args: I) -> Result<Self, CyclesCommandError>
+    pub fn parse_info<I>(args: I) -> Result<Self, CyclesCommandError>
     where
         I: IntoIterator<Item = OsString>,
     {
-        let matches = parse_matches(cycles_command(), args)
-            .map_err(|_| CyclesCommandError::Usage(usage()))?;
-        let since_seconds = string_option(&matches, "since")
+        let matches = parse_matches(info_cycles_command(), args)
+            .map_err(|_| CyclesCommandError::Usage(info_usage()))?;
+        Self::from_matches(&matches)
+    }
+
+    fn from_matches(matches: &clap::ArgMatches) -> Result<Self, CyclesCommandError> {
+        let since_seconds = string_option(matches, "since")
             .map(|value| parse_duration(&value))
             .transpose()?
             .unwrap_or(DEFAULT_SINCE_SECONDS);
-        let limit = string_option(&matches, "limit")
+        let limit = string_option(matches, "limit")
             .and_then(|value| value.parse::<u64>().ok())
             .filter(|limit| *limit > 0)
             .unwrap_or(DEFAULT_LIMIT);
 
         Ok(Self {
-            fleet: string_option(&matches, "fleet").expect("clap requires fleet"),
-            subtree: string_option(&matches, "subtree"),
+            fleet: string_option(matches, "fleet").expect("clap requires fleet"),
+            subtree: string_option(matches, "subtree"),
             since_seconds,
             limit,
             json: matches.get_flag("json"),
-            out: path_option(&matches, "out"),
-            network: string_option(&matches, "network").unwrap_or_else(local_network),
-            icp: string_option(&matches, "icp").unwrap_or_else(default_icp),
+            out: path_option(matches, "out"),
+            network: string_option(matches, "network").unwrap_or_else(local_network),
+            icp: string_option(matches, "icp").unwrap_or_else(default_icp),
         })
     }
 }
@@ -78,14 +82,18 @@ pub(super) fn parse_duration(value: &str) -> Result<u64, CyclesCommandError> {
         .ok_or_else(|| CyclesCommandError::InvalidDuration(value.to_string()))
 }
 
-pub(super) fn usage() -> String {
-    let mut command = cycles_command();
+pub(super) fn info_usage() -> String {
+    let mut command = info_cycles_command();
     command.render_help().to_string()
 }
 
-fn cycles_command() -> ClapCommand {
+fn info_cycles_command() -> ClapCommand {
+    cycles_command_with_bin_name("canic info cycles")
+}
+
+fn cycles_command_with_bin_name(bin_name: &'static str) -> ClapCommand {
     ClapCommand::new("cycles")
-        .bin_name("canic cycles")
+        .bin_name(bin_name)
         .about("Summarize fleet cycle history")
         .disable_help_flag(true)
         .arg(

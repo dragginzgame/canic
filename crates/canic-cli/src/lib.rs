@@ -4,6 +4,7 @@ mod cli;
 mod cycles;
 mod endpoints;
 mod fleets;
+mod info;
 mod install;
 mod list;
 mod manifest;
@@ -51,20 +52,17 @@ pub enum CliError {
     #[error("config: {0}")]
     Config(String),
 
-    #[error("cycles: {0}")]
-    Cycles(#[from] cycles::CyclesCommandError),
-
     #[error("endpoints: {0}")]
     Endpoints(#[from] endpoints::EndpointsCommandError),
 
     #[error("install: {0}")]
     Install(#[from] install::InstallCommandError),
 
+    #[error("info: {0}")]
+    Info(#[from] info::InfoCommandError),
+
     #[error("fleet: {0}")]
     Fleets(#[from] fleets::FleetCommandError),
-
-    #[error("list: {0}")]
-    List(#[from] list::ListCommandError),
 
     #[error("manifest: {0}")]
     Manifest(#[from] manifest::ManifestCommandError),
@@ -134,11 +132,10 @@ where
         "backup" => backup::run(tail).map_err(CliError::from),
         "build" => build::run(tail).map_err(CliError::from),
         "config" => list::run_config(tail).map_err(|err| CliError::Config(err.to_string())),
-        "cycles" => cycles::run(tail).map_err(CliError::from),
         "endpoints" => endpoints::run(tail).map_err(CliError::from),
         "fleet" => fleets::run(tail).map_err(CliError::from),
+        "info" => info::run(tail).map_err(CliError::from),
         "install" => install::run(tail).map_err(CliError::from),
-        "list" => list::run(tail).map_err(CliError::from),
         "manifest" => manifest::run(tail).map_err(CliError::from),
         "medic" => medic::run(tail).map_err(CliError::from),
         "metrics" => metrics::run(tail).map_err(CliError::from),

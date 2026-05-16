@@ -24,11 +24,10 @@ fn usage_lists_command_families() {
     assert!(plain.find("    replica") < plain.find("    install"));
     assert!(plain.find("    install") < plain.find("    build"));
     assert!(plain.find("    build") < plain.find("    config"));
-    assert!(plain.find("    config") < plain.find("    list"));
-    assert!(plain.find("    list") < plain.find("    endpoints"));
+    assert!(plain.find("    config") < plain.find("    info"));
+    assert!(plain.find("    info") < plain.find("    endpoints"));
     assert!(plain.find("    endpoints") < plain.find("    medic"));
-    assert!(plain.find("    medic") < plain.find("    cycles"));
-    assert!(plain.find("    cycles") < plain.find("    metrics"));
+    assert!(plain.find("    medic") < plain.find("    metrics"));
     assert!(plain.find("    metrics") < plain.find("    snapshot"));
     assert!(plain.find("    snapshot") < plain.find("    backup"));
     assert!(plain.find("    backup") < plain.find("    manifest"));
@@ -38,9 +37,8 @@ fn usage_lists_command_families() {
     assert!(plain.contains("--network <name>"));
     assert!(!plain.contains("    scaffold"));
     assert!(plain.contains("config"));
-    assert!(plain.contains("list"));
+    assert!(plain.contains("info"));
     assert!(plain.contains("endpoints"));
-    assert!(plain.contains("cycles"));
     assert!(plain.contains("metrics"));
     assert!(plain.contains("    build"));
     assert!(!plain.contains("    network"));
@@ -72,7 +70,9 @@ fn command_family_help_returns_ok() {
         &["backup", "verify", "help"],
         &["config", "help"],
         &["build", "help"],
-        &["cycles", "help"],
+        &["info", "help"],
+        &["info", "list", "help"],
+        &["info", "cycles", "help"],
         &["endpoints", "help"],
         &["install", "help"],
         &["fleet"],
@@ -86,7 +86,6 @@ fn command_family_help_returns_ok() {
         &["replica", "start", "help"],
         &["replica", "status", "help"],
         &["replica", "stop", "help"],
-        &["list", "help"],
         &["restore", "help"],
         &["restore", "plan", "help"],
         &["restore", "apply", "help"],
@@ -101,6 +100,19 @@ fn command_family_help_returns_ok() {
     ] {
         assert_run_ok(args);
     }
+}
+
+// Ensure old read-only top-level aliases are removed in favor of canic info.
+#[test]
+fn top_level_info_aliases_are_removed() {
+    assert!(matches!(
+        run([OsString::from("list"), OsString::from("help")]),
+        Err(CliError::Usage(_))
+    ));
+    assert!(matches!(
+        run([OsString::from("cycles"), OsString::from("help")]),
+        Err(CliError::Usage(_))
+    ));
 }
 
 // Ensure version flags are accepted at the top level and command-family level.
@@ -128,7 +140,23 @@ fn version_flags_return_ok() {
     );
     assert!(run([OsString::from("config"), OsString::from("--version")]).is_ok());
     assert!(run([OsString::from("build"), OsString::from("--version")]).is_ok());
-    assert!(run([OsString::from("cycles"), OsString::from("--version")]).is_ok());
+    assert!(run([OsString::from("info"), OsString::from("--version")]).is_ok());
+    assert!(
+        run([
+            OsString::from("info"),
+            OsString::from("list"),
+            OsString::from("--version")
+        ])
+        .is_ok()
+    );
+    assert!(
+        run([
+            OsString::from("info"),
+            OsString::from("cycles"),
+            OsString::from("--version")
+        ])
+        .is_ok()
+    );
     assert!(run([OsString::from("endpoints"), OsString::from("--version")]).is_ok());
     assert!(run([OsString::from("install"), OsString::from("--version")]).is_ok());
     assert!(run([OsString::from("fleet"), OsString::from("--version")]).is_ok());
@@ -158,7 +186,6 @@ fn version_flags_return_ok() {
         ])
         .is_ok()
     );
-    assert!(run([OsString::from("list"), OsString::from("--version")]).is_ok());
     assert!(run([OsString::from("restore"), OsString::from("--version")]).is_ok());
     assert!(run([OsString::from("manifest"), OsString::from("--version")]).is_ok());
     assert!(run([OsString::from("medic"), OsString::from("--version")]).is_ok());
@@ -249,6 +276,37 @@ fn global_icp_is_forwarded_only_to_replica_leaf_commands() {
 }
 
 #[test]
+fn global_icp_is_forwarded_to_info_query_commands() {
+    let mut list_tail = vec![OsString::from("list"), OsString::from("test")];
+    let mut cycles_tail = vec![OsString::from("cycles"), OsString::from("test")];
+    let mut help_tail = vec![OsString::from("help")];
+
+    apply_global_icp("info", &mut list_tail, Some("/tmp/icp".to_string()));
+    apply_global_icp("info", &mut cycles_tail, Some("/tmp/icp".to_string()));
+    apply_global_icp("info", &mut help_tail, Some("/tmp/icp".to_string()));
+
+    assert_eq!(
+        list_tail,
+        vec![
+            OsString::from("list"),
+            OsString::from("test"),
+            OsString::from(INTERNAL_ICP_OPTION),
+            OsString::from("/tmp/icp")
+        ]
+    );
+    assert_eq!(
+        cycles_tail,
+        vec![
+            OsString::from("cycles"),
+            OsString::from("test"),
+            OsString::from(INTERNAL_ICP_OPTION),
+            OsString::from("/tmp/icp")
+        ]
+    );
+    assert_eq!(help_tail, vec![OsString::from("help")]);
+}
+
+#[test]
 fn global_network_is_forwarded_to_commands_that_use_network() {
     let mut tail = vec![OsString::from("test")];
 
@@ -320,6 +378,37 @@ fn global_network_is_forwarded_only_to_fleet_list() {
             OsString::from("local")
         ]
     );
+}
+
+#[test]
+fn global_network_is_forwarded_to_info_query_commands() {
+    let mut list_tail = vec![OsString::from("list"), OsString::from("test")];
+    let mut cycles_tail = vec![OsString::from("cycles"), OsString::from("test")];
+    let mut help_tail = vec![OsString::from("help")];
+
+    apply_global_network("info", &mut list_tail, Some("local".to_string()));
+    apply_global_network("info", &mut cycles_tail, Some("local".to_string()));
+    apply_global_network("info", &mut help_tail, Some("local".to_string()));
+
+    assert_eq!(
+        list_tail,
+        vec![
+            OsString::from("list"),
+            OsString::from("test"),
+            OsString::from(INTERNAL_NETWORK_OPTION),
+            OsString::from("local")
+        ]
+    );
+    assert_eq!(
+        cycles_tail,
+        vec![
+            OsString::from("cycles"),
+            OsString::from("test"),
+            OsString::from(INTERNAL_NETWORK_OPTION),
+            OsString::from("local")
+        ]
+    );
+    assert_eq!(help_tail, vec![OsString::from("help")]);
 }
 
 #[test]

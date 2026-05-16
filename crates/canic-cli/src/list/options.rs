@@ -7,11 +7,11 @@ use crate::{
 use clap::Command as ClapCommand;
 use std::ffi::OsString;
 
-const LIST_HELP_AFTER: &str = "\
+const INFO_LIST_HELP_AFTER: &str = "\
 Examples:
-  canic list test
-  canic list test --subtree user_hub
-  canic list test --verbose";
+  canic info list test
+  canic info list test --subtree user_hub
+  canic info list test --verbose";
 const CONFIG_HELP_AFTER: &str = "\
 Examples:
   canic config test
@@ -32,12 +32,12 @@ pub(super) struct ListOptions {
 }
 
 impl ListOptions {
-    pub(super) fn parse_list<I>(args: I) -> Result<Self, ListCommandError>
+    pub(super) fn parse_info_list<I>(args: I) -> Result<Self, ListCommandError>
     where
         I: IntoIterator<Item = OsString>,
     {
-        let matches =
-            parse_matches(list_command(), args).map_err(|_| ListCommandError::Usage(usage()))?;
+        let matches = parse_matches(info_list_command(), args)
+            .map_err(|_| ListCommandError::Usage(info_usage()))?;
         Ok(Self::from_matches(&matches, ListSource::RootRegistry))
     }
 
@@ -85,8 +85,8 @@ pub(super) enum ListSource {
     RootRegistry,
 }
 
-fn list_command() -> ClapCommand {
-    base_list_options(ClapCommand::new("list").bin_name("canic list"))
+fn list_command(bin_name: &'static str, help_after: &'static str) -> ClapCommand {
+    base_list_options(ClapCommand::new("list").bin_name(bin_name))
         .about("List canisters registered by the deployed root")
         .arg(
             value_arg("fleet")
@@ -107,7 +107,11 @@ fn list_command() -> ClapCommand {
                 .help("Show full module hashes instead of 8-character prefixes"),
         )
         .arg(internal_icp_arg())
-        .after_help(LIST_HELP_AFTER)
+        .after_help(help_after)
+}
+
+fn info_list_command() -> ClapCommand {
+    list_command("canic info list", INFO_LIST_HELP_AFTER)
 }
 
 fn config_command() -> ClapCommand {
@@ -132,8 +136,8 @@ fn base_list_options(command: ClapCommand) -> ClapCommand {
     command.disable_help_flag(true).arg(internal_network_arg())
 }
 
-pub(super) fn usage() -> String {
-    let mut command = list_command();
+pub(super) fn info_usage() -> String {
+    let mut command = info_list_command();
     command.render_help().to_string()
 }
 

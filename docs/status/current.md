@@ -155,6 +155,9 @@ inspect only the files needed for the current task.
 - Extended the same role-or-principal subtree selector to
   `canic cycles --subtree`, filtering the registry before cycle history,
   balance, and top-up queries run.
+- Started `0.36.9` by adding the `canic info` read-only command group with
+  `info list` and `info cycles` leaves, then removed the old top-level
+  `canic list` and `canic cycles` aliases.
 - Added a config-schema regression proving obsolete per-canister delegated-auth
   verifier tables are rejected instead of accepted through compatibility shims.
 - Updated the internal audit scaling probe to use `scale_replica` and

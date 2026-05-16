@@ -52,10 +52,10 @@ For a full local development setup, including ICP CLI, helper tools, and the
 Show local test-fleet canisters that already have ids:
 
 ```bash
-canic --network local list test
+canic --network local info list test
 ```
 
-`canic list <name>` reads the installed root registry for that fleet.
+`canic info list <name>` reads the installed root registry for that fleet.
 Use `--subtree <name-or-principal>` to print one subtree with that node as the
 rendered root.
 Live list sources call `canic_ready` for each listed canister and include a
@@ -63,7 +63,7 @@ Live list sources call `canic_ready` for each listed canister and include a
 
 If the list only shows the `root` row, the project has reserved a local root id
 but has not installed the tree. Run `canic install test`, then use
-`canic --network local list test` to read the installed root registry.
+`canic --network local info list test` to read the installed root registry.
 
 Install and bootstrap the local fleet:
 
@@ -89,7 +89,8 @@ Successful installs write `.canic/<network>/fleets/<fleet>.json` with the root
 target, resolved root principal, build target, config path, and staging
 manifest path. `canic config <name>` shows the selected fleet declaration,
 including opt-in role features such as auth, sharding, and scaling,
-while `canic list <name>` queries the deployed root registry for that fleet.
+while `canic info list <name>` queries the deployed root registry for that
+fleet.
 Commands use network `local` unless you pass
 `--network <name>`.
 

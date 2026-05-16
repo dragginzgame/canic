@@ -7,7 +7,7 @@ mod transport;
 use crate::{
     cli::help::print_help_or_version,
     cycles::{
-        options::{CyclesOptions, usage},
+        options::{CyclesOptions, info_usage},
         render::write_cycles_report,
         transport::cycles_report,
     },
@@ -60,18 +60,22 @@ pub enum CyclesCommandError {
     Registry(#[from] RegistryParseError),
 }
 
-pub fn run<I>(args: I) -> Result<(), CyclesCommandError>
+pub fn run_info<I>(args: I) -> Result<(), CyclesCommandError>
 where
     I: IntoIterator<Item = OsString>,
 {
     let args = args.into_iter().collect::<Vec<_>>();
-    if print_help_or_version(&args, usage, version_text()) {
+    if print_help_or_version(&args, info_usage, version_text()) {
         return Ok(());
     }
 
-    let options = CyclesOptions::parse(args)?;
-    let report = cycles_report(&options)?;
-    write_cycles_report(&options, &report)
+    let options = CyclesOptions::parse_info(args)?;
+    run_options(&options)
+}
+
+fn run_options(options: &CyclesOptions) -> Result<(), CyclesCommandError> {
+    let report = cycles_report(options)?;
+    write_cycles_report(options, &report)
 }
 
 #[cfg(test)]

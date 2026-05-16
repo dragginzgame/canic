@@ -341,7 +341,7 @@ fn root_registry_hint(stderr: &str) -> Option<&'static str> {
 
     if stderr.contains("contains no Wasm module") || stderr.contains("wasm-module-not-found") {
         return Some(
-            "the root canister id exists but no Canic root code is installed. Run `canic install <name>`, then use `canic list <name>`.",
+            "the root canister id exists but no Canic root code is installed. Run `canic install <name>`, then use `canic info list <name>`.",
         );
     }
 

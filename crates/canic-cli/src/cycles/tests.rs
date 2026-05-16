@@ -26,7 +26,7 @@ fn parses_duration_selectors() {
 // Ensure cycle summaries can target one deployed subtree by role or principal.
 #[test]
 fn parses_cycles_subtree_option() {
-    let options = options::CyclesOptions::parse([
+    let options = options::CyclesOptions::parse_info([
         OsString::from("test"),
         OsString::from("--subtree"),
         OsString::from("scale_hub"),
