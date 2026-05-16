@@ -9,12 +9,11 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
-- Active minor: `0.36.x` prep
-- Theme: prove and harden the existing backup/restore execution code into an
-  operator-working flow with durable journals, resume/retry behavior, and
-  verification gates.
-- Current release-work area: first pushable `0.36.0` backup/restore proof
-  slice.
+- Active minor: `0.36.x` close-out
+- Theme: backup/restore v1 is feature-frozen until real operator use exposes a
+  bug or missing workflow.
+- Current release-work area: final quality pass for the completed 0.36
+  backup/restore operator flow.
 
 ## Recent Work
 
@@ -194,6 +193,12 @@ inspect only the files needed for the current task.
   prepared apply journal's `backup_root` points back at the selected backup
   directory, so copied or stale journals cannot silently read restore artifacts
   from a different backup layout.
+- Started `0.36.15` by adding `restore status/run --require-ready`, giving
+  operators and CI a pre-mutation guard that writes the normal JSON summary and
+  then fails if the prepared apply journal is blocked or not ready.
+- Closed the active 0.36 implementation track after the `0.36.15` readiness
+  guard. Further backup/restore work should be bug fixes or changes proven by
+  real operator use, not additional v1 scope expansion.
 - Added a config-schema regression proving obsolete per-canister delegated-auth
   verifier tables are rejected instead of accepted through compatibility shims.
 - Updated the internal audit scaling probe to use `scale_replica` and

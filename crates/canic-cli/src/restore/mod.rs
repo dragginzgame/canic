@@ -21,7 +21,7 @@ Examples:
   canic backup create test
   canic backup list
   canic restore prepare 1 --require-verified --require-restore-ready
-  canic restore status 1
+  canic restore status 1 --require-ready --require-no-attention
   canic restore run 1 --execute --max-steps 1 --require-no-attention";
 
 use enforce::{

@@ -7,6 +7,7 @@ pub(super) fn enforce_restore_run_requirements(
     options: &RestoreRunOptions,
     run: &RestoreRunResponse,
 ) -> Result<(), RestoreCommandError> {
+    enforce_restore_ready(options.require_ready, run)?;
     if options.require_complete && !run.complete {
         return Err(RestoreCommandError::RestoreApplyIncomplete {
             backup_id: run.backup_id.clone(),
@@ -29,6 +30,7 @@ pub(super) fn enforce_restore_status_requirements(
     options: &RestoreStatusOptions,
     run: &RestoreRunResponse,
 ) -> Result<(), RestoreCommandError> {
+    enforce_restore_ready(options.require_ready, run)?;
     if options.require_complete && !run.complete {
         return Err(RestoreCommandError::RestoreApplyIncomplete {
             backup_id: run.backup_id.clone(),
@@ -41,6 +43,20 @@ pub(super) fn enforce_restore_status_requirements(
         return Err(RestoreCommandError::RestoreApplyReportNeedsAttention {
             backup_id: run.backup_id.clone(),
             outcome: run.outcome.clone(),
+        });
+    }
+
+    Ok(())
+}
+
+fn enforce_restore_ready(
+    require_ready: bool,
+    run: &RestoreRunResponse,
+) -> Result<(), RestoreCommandError> {
+    if require_ready && !run.ready {
+        return Err(RestoreCommandError::RestoreApplyNotReady {
+            backup_id: run.backup_id.clone(),
+            reasons: run.blocked_reasons.clone(),
         });
     }
 

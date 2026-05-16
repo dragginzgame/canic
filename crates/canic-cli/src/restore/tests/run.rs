@@ -840,3 +840,63 @@ fn run_restore_run_require_no_attention_writes_summary_then_fails() {
         }
     ));
 }
+
+// Ensure restore run can fail closed after writing a not-ready summary.
+#[test]
+fn run_restore_run_require_ready_writes_summary_then_fails() {
+    let fixture = RestoreCliFixture::new("canic-cli-restore-run-require-ready", "restore-run.json");
+    let mut journal = ready_apply_journal();
+    journal.ready = false;
+    journal.blocked_reasons = vec!["artifact-validation-missing".to_string()];
+    fixture.write_journal(&journal);
+
+    let err = fixture
+        .run_restore_run(&["--dry-run", "--require-ready"])
+        .expect_err("not-ready run should fail requirement");
+
+    let run_summary: serde_json::Value = fixture.read_out("read run summary");
+
+    assert_eq!(run_summary["ready"], false);
+    assert_eq!(run_summary["outcome"], "blocked");
+    assert_eq!(
+        run_summary["blocked_reasons"][0],
+        "artifact-validation-missing"
+    );
+    assert!(matches!(
+        err,
+        RestoreCommandError::RestoreApplyNotReady {
+            reasons,
+            ..
+        } if reasons == ["artifact-validation-missing"]
+    ));
+}
+
+// Ensure restore status can be used as a pre-execute readiness gate.
+#[test]
+fn run_restore_status_require_ready_writes_summary_then_fails() {
+    let fixture = RestoreCliFixture::new(
+        "canic-cli-restore-status-require-ready",
+        "restore-status.json",
+    );
+    let mut journal = ready_apply_journal();
+    journal.ready = false;
+    journal.blocked_reasons = vec!["artifact-validation-missing".to_string()];
+    fixture.write_journal(&journal);
+
+    let err = fixture
+        .run_journal_command("status", &["--require-ready"])
+        .expect_err("not-ready status should fail requirement");
+
+    let run_summary: serde_json::Value = fixture.read_out("read status summary");
+
+    assert_eq!(run_summary["run_mode"], "dry-run");
+    assert_eq!(run_summary["ready"], false);
+    assert_eq!(run_summary["outcome"], "blocked");
+    assert!(matches!(
+        err,
+        RestoreCommandError::RestoreApplyNotReady {
+            reasons,
+            ..
+        } if reasons == ["artifact-validation-missing"]
+    ));
+}

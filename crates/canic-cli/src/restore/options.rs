@@ -24,10 +24,12 @@ Examples:
 const RESTORE_RUN_HELP_AFTER: &str = "\
 Examples:
   canic restore run 1 --dry-run
+  canic restore run 1 --dry-run --require-ready --require-no-attention
   canic restore run 1 --execute --max-steps 1 --require-no-attention";
 const RESTORE_STATUS_HELP_AFTER: &str = "\
 Examples:
   canic restore status 1
+  canic restore status 1 --require-ready --require-no-attention
   canic restore status 1 --require-complete --require-no-attention";
 
 ///
@@ -218,7 +220,7 @@ pub(super) fn restore_apply_command() -> ClapCommand {
 #[derive(Clone, Debug, Eq, PartialEq)]
 #[expect(
     clippy::struct_excessive_bools,
-    reason = "CLI runner options mirror three mutually exclusive mode flags and two operator guard flags"
+    reason = "CLI runner options mirror mutually exclusive mode flags and operator guard flags"
 )]
 pub struct RestoreRunOptions {
     pub backup_ref: Option<String>,
@@ -231,6 +233,7 @@ pub struct RestoreRunOptions {
     pub retry_failed: bool,
     pub unclaim_pending: bool,
     pub max_steps: Option<usize>,
+    pub require_ready: bool,
     pub require_complete: bool,
     pub require_no_attention: bool,
 }
@@ -254,6 +257,7 @@ impl RestoreRunOptions {
             retry_failed: matches.get_flag("retry-failed"),
             unclaim_pending: matches.get_flag("unclaim-pending"),
             max_steps: matches.get_one::<usize>("max-steps").copied(),
+            require_ready: matches.get_flag("require-ready"),
             require_complete: matches.get_flag("require-complete"),
             require_no_attention: matches.get_flag("require-no-attention"),
         })
@@ -292,6 +296,7 @@ pub(super) fn restore_run_command() -> ClapCommand {
                 .value_name("count")
                 .value_parser(clap::builder::ValueParser::new(parse_positive_usize)),
         )
+        .arg(flag_arg("require-ready").long("require-ready"))
         .arg(flag_arg("require-complete").long("require-complete"))
         .arg(flag_arg("require-no-attention").long("require-no-attention"))
         .after_help(RESTORE_RUN_HELP_AFTER)
@@ -308,6 +313,7 @@ pub struct RestoreStatusOptions {
     pub icp: String,
     pub network: Option<String>,
     pub out: Option<PathBuf>,
+    pub require_ready: bool,
     pub require_complete: bool,
     pub require_no_attention: bool,
 }
@@ -326,6 +332,7 @@ impl RestoreStatusOptions {
             icp: string_option(&matches, "icp").unwrap_or_else(default_icp),
             network: string_option(&matches, "network"),
             out: path_option(&matches, "out"),
+            require_ready: matches.get_flag("require-ready"),
             require_complete: matches.get_flag("require-complete"),
             require_no_attention: matches.get_flag("require-no-attention"),
         })
@@ -348,6 +355,7 @@ pub(super) fn restore_status_command() -> ClapCommand {
         .arg(internal_icp_arg())
         .arg(internal_network_arg())
         .arg(value_arg("out").long("out").value_name("file"))
+        .arg(flag_arg("require-ready").long("require-ready"))
         .arg(flag_arg("require-complete").long("require-complete"))
         .arg(flag_arg("require-no-attention").long("require-no-attention"))
         .after_help(RESTORE_STATUS_HELP_AFTER)

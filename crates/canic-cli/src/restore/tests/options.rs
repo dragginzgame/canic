@@ -37,6 +37,7 @@ fn restore_usage_lists_command_family() {
     assert!(text.contains("status"));
     assert!(text.contains("Examples:"));
     assert!(text.contains("canic restore prepare 1 --require-verified --require-restore-ready"));
+    assert!(text.contains("canic restore status 1 --require-ready --require-no-attention"));
     assert!(text.contains("canic restore run 1 --execute --max-steps 1"));
 }
 
@@ -49,6 +50,7 @@ fn restore_leaf_usage_lists_row_reference_examples() {
 
     assert!(prepare.contains("canic restore prepare 1"));
     assert!(apply.contains("canic restore apply 1 --dry-run"));
+    assert!(status.contains("canic restore status 1 --require-ready"));
     assert!(status.contains("canic restore status 1 --require-complete"));
 }
 
@@ -284,6 +286,7 @@ fn parses_restore_run_backup_ref_options() {
     let options = RestoreRunOptions::parse([
         OsString::from("1"),
         OsString::from("--dry-run"),
+        OsString::from("--require-ready"),
         OsString::from("--require-complete"),
     ])
     .expect("parse run backup ref options");
@@ -291,6 +294,7 @@ fn parses_restore_run_backup_ref_options() {
     assert_eq!(options.backup_ref.as_deref(), Some("1"));
     assert_eq!(options.journal, None);
     assert!(options.dry_run);
+    assert!(options.require_ready);
     assert!(options.require_complete);
 }
 
@@ -299,6 +303,7 @@ fn parses_restore_run_backup_ref_options() {
 fn parses_restore_status_backup_ref_options() {
     let options = RestoreStatusOptions::parse([
         OsString::from("1"),
+        OsString::from("--require-ready"),
         OsString::from("--require-complete"),
         OsString::from("--require-no-attention"),
     ])
@@ -306,6 +311,7 @@ fn parses_restore_status_backup_ref_options() {
 
     assert_eq!(options.backup_ref.as_deref(), Some("1"));
     assert_eq!(options.journal, None);
+    assert!(options.require_ready);
     assert!(options.require_complete);
     assert!(options.require_no_attention);
 }

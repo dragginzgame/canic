@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.36.x] - 2026-05-15 - Backup/restore proofing
 
+- `0.36.15` adds `canic restore status/run --require-ready` so operators and CI can fail a prepared restore before mutation when the apply journal is blocked or not ready, while still writing the JSON status summary first.
+
+```bash
+canic restore status 1 --require-ready --require-no-attention
+canic restore run 1 --dry-run --require-ready --require-no-attention
+canic restore run 1 --execute --max-steps 1 --require-no-attention
+```
+
 - `0.36.14` makes row-reference restore execution fail closed when the prepared apply journal's `backup_root` is missing or points at a different backup directory, preventing copied or stale journals from loading artifacts outside the selected backup row.
 
 ```bash
