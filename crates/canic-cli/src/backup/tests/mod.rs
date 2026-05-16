@@ -1,4 +1,4 @@
-use crate::test_support::temp_dir;
+use crate::{support::path_stamp::backup_directory_stamp_to_unix, test_support::temp_dir};
 use canic_backup::{
     artifacts::ArtifactChecksum,
     execution::{BackupExecutionJournal, BackupExecutionOperationReceipt},
@@ -582,7 +582,7 @@ fn backup_list_reads_backup_directories() {
         .expect("dry-run entry");
     assert_eq!(dry_run.status, "dry-run");
     assert_eq!(dry_run.members, 1);
-    assert_eq!(dry_run.created_at, "20260511-001234");
+    assert_eq!(dry_run.created_at, unix_marker_for_stamp("20260511-001234"));
     assert!(rendered.contains('#'));
     assert!(rendered.contains("DIR"));
     assert!(rendered.contains(" 1"));
@@ -691,6 +691,31 @@ fn backup_reference_rejects_ambiguous_backup_ids() {
         err,
         BackupCommandError::BackupReferenceAmbiguous { .. }
     ));
+}
+
+// Ensure unfinished execution layouts use the journal timestamp, not a raw run-id stamp.
+#[test]
+fn backup_list_uses_execution_journal_timestamp_for_planned_layouts() {
+    let root = temp_dir("canic-cli-backup-list-created-at-journal");
+    let planned = root.join("fleet-demo-20260511-001234");
+    let mut plan = valid_backup_plan();
+    plan.plan_id = "plan-demo-20260511-001234".to_string();
+    plan.run_id = "run-demo-20260511-001234".to_string();
+    let layout = BackupLayout::new(planned);
+    layout.write_backup_plan(&plan).expect("write backup plan");
+    layout
+        .write_execution_journal(&accepted_execution_journal())
+        .expect("write execution journal");
+
+    let entries = backup_list(&BackupListOptions {
+        dir: root.clone(),
+        out: None,
+    })
+    .expect("list backups");
+
+    fs::remove_dir_all(root).expect("remove temp root");
+    assert_eq!(entries.len(), 1);
+    assert_eq!(entries[0].created_at, "unix:10");
 }
 
 // Ensure backup list hides machine timestamp markers in table output.
@@ -1236,6 +1261,13 @@ fn write_artifact(root: &Path, bytes: &[u8]) -> ArtifactChecksum {
     fs::create_dir_all(path.parent().expect("artifact has parent")).expect("create artifacts");
     fs::write(&path, bytes).expect("write artifact");
     ArtifactChecksum::from_bytes(bytes)
+}
+
+fn unix_marker_for_stamp(stamp: &str) -> String {
+    format!(
+        "unix:{}",
+        backup_directory_stamp_to_unix(stamp).expect("valid backup directory stamp")
+    )
 }
 
 use super::*;

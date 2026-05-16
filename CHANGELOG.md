@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.36.x] - 2026-05-15 - Backup/restore proofing
 
+- `0.36.10` proves the real backup/restore operator path for local subtree and full non-root fleet backups, fixes restore runner ICP snapshot commands so network flags are passed to the leaf command and fresh uploads do not incorrectly request resume state, fixes full fleet backup manifests so disconnected root-omitted branches become separate backup units, normalizes `canic backup list` timestamps for unfinished execution layouts, and makes `canic info cycles` show explicit burn and top-up rates in a compact default table with wider diagnostics behind `--verbose`.
+
 - `0.36.9` moves deployed-fleet read queries under the new `canic info` command group with `info list` and `info cycles` leaves, removing the old top-level `list` and `cycles` aliases.
 
 - `0.36.8` tightens restore-runner journal loading so terminal restore operations must be backed by the latest matching command receipt attempt with the same state timestamp, and lets `canic list --subtree` and `canic cycles --subtree` resolve unique role names while requiring principals for repeated roles.

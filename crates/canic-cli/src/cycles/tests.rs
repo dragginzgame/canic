@@ -41,6 +41,17 @@ fn parses_cycles_subtree_option() {
     assert_eq!(options.subtree.as_deref(), Some("scale_hub"));
     assert_eq!(options.since_seconds, 21_600);
     assert_eq!(options.limit, 12);
+    assert!(!options.verbose);
+}
+
+// Ensure verbose cycles output is an explicit opt-in for wider diagnostics.
+#[test]
+fn parses_cycles_verbose_option() {
+    let options =
+        options::CyclesOptions::parse_info([OsString::from("test"), OsString::from("--verbose")])
+            .expect("parse cycles verbose option");
+
+    assert!(options.verbose);
 }
 
 // Ensure cycle history windows render as compact human durations.
@@ -190,7 +201,7 @@ fn summarizes_partial_cycle_window() {
         50,
         250,
         Some(900),
-        None,
+        Some(Vec::new()),
     );
 
     assert_eq!(report.coverage_status, "partial");
@@ -198,6 +209,9 @@ fn summarizes_partial_cycle_window() {
     assert_eq!(report.latest_cycles, Some(900));
     assert_eq!(report.delta_cycles, Some(-300));
     assert_eq!(report.rate_cycles_per_hour, Some(-10_800));
+    assert_eq!(report.burn_cycles, Some(300));
+    assert_eq!(report.burn_cycles_per_hour, Some(10_800));
+    assert_eq!(report.topup_cycles_per_hour, Some(0));
 }
 
 // Ensure structured top-up events become compact top-up context for cycles output.
@@ -219,10 +233,58 @@ fn summarizes_topup_events() {
             transferred_cycles: Some(4_000_000_000_000),
             status: CycleTopupStatus::RequestOk,
         },
+        CycleTopupEventSample {
+            timestamp_secs: 300,
+            transferred_cycles: Some(4_000_000_000_000),
+            status: CycleTopupStatus::RequestOk,
+        },
     ];
-    let summary = topup_summary_from_events(&entries, 50);
+    let summary = topup_summary_from_events(&entries, 50, 250);
 
     assert_eq!(summary.request_ok, 2);
     assert_eq!(summary.transferred_cycles, 8_000_000_000_000);
     assert_eq!(format_topups(&summary), "8.00 TC (2)");
+}
+
+// Ensure burn and top-up rates are explicit instead of hidden inside net rate.
+#[test]
+fn summarizes_burn_and_topup_rates() {
+    let entry = RegistryEntry {
+        pid: "aaaaa-aa".to_string(),
+        role: Some("app".to_string()),
+        kind: Some("singleton".to_string()),
+        parent_pid: None,
+        module_hash: None,
+    };
+    let report = summarize_cycle_tracker(
+        &entry,
+        CycleTrackerPage {
+            total: 2,
+            entries: vec![
+                CycleTrackerSample {
+                    timestamp_secs: 100,
+                    cycles: 10_000_000_000_000,
+                },
+                CycleTrackerSample {
+                    timestamp_secs: 3_700,
+                    cycles: 8_000_000_000_000,
+                },
+            ],
+        },
+        String::new(),
+        100,
+        3_700,
+        None,
+        Some(vec![CycleTopupEventSample {
+            timestamp_secs: 1_000,
+            transferred_cycles: Some(5_000_000_000_000),
+            status: CycleTopupStatus::RequestOk,
+        }]),
+    );
+
+    assert_eq!(report.delta_cycles, Some(-2_000_000_000_000));
+    assert_eq!(report.rate_cycles_per_hour, Some(-2_000_000_000_000));
+    assert_eq!(report.topup_cycles_per_hour, Some(5_000_000_000_000));
+    assert_eq!(report.burn_cycles, Some(7_000_000_000_000));
+    assert_eq!(report.burn_cycles_per_hour, Some(7_000_000_000_000));
 }

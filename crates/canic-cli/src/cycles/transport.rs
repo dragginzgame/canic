@@ -99,9 +99,7 @@ fn cycle_tracker_report(
             requested_since_secs,
             generated_at_secs,
             live_cycles,
-            query_topup_summary(options, &entry.pid, requested_since_secs)
-                .ok()
-                .flatten(),
+            query_topup_events(options, &entry.pid).ok(),
         ),
         Err(error) => CyclesCanisterReport {
             role: entry.role.clone().unwrap_or_else(|| "-".to_string()),
@@ -119,6 +117,9 @@ fn cycle_tracker_report(
             baseline_cycles: None,
             delta_cycles: None,
             rate_cycles_per_hour: None,
+            burn_cycles: None,
+            burn_cycles_per_hour: None,
+            topup_cycles_per_hour: None,
             topups: None,
             error: Some(error),
         },
@@ -132,7 +133,7 @@ pub(super) fn summarize_cycle_tracker(
     requested_since_secs: u64,
     generated_at_secs: u64,
     live_cycles: Option<u128>,
-    topups: Option<CyclesTopupSummary>,
+    topup_events: Option<Vec<CycleTopupEventSample>>,
 ) -> CyclesCanisterReport {
     page.entries.sort_by_key(|entry| entry.timestamp_secs);
     let latest = page.entries.last().cloned();
@@ -159,6 +160,30 @@ pub(super) fn summarize_cycle_tracker(
     let rate_cycles_per_hour = delta
         .zip(coverage_seconds)
         .and_then(|(delta, coverage)| hourly_rate(delta, coverage));
+    let topup_summary = topup_events
+        .as_deref()
+        .zip(baseline.as_ref())
+        .zip(latest.as_ref())
+        .map(|((events, baseline), latest)| {
+            topup_summary_from_events(events, baseline.timestamp_secs, latest.timestamp_secs)
+        });
+    let topup_cycles = topup_summary
+        .as_ref()
+        .map_or(0, |summary| summary.transferred_cycles);
+    let topup_cycles_per_hour = topup_summary
+        .as_ref()
+        .zip(coverage_seconds)
+        .and_then(|(_, coverage)| unsigned_hourly_rate(topup_cycles, coverage));
+    let burn_cycles = topup_summary
+        .as_ref()
+        .zip(delta)
+        .and_then(|(_, delta)| inferred_burn_cycles(topup_cycles, delta));
+    let burn_cycles_per_hour = topup_summary
+        .as_ref()
+        .zip(burn_cycles)
+        .zip(coverage_seconds)
+        .and_then(|((_, burn), coverage)| unsigned_hourly_rate(burn, coverage));
+    let visible_topups = topup_summary.filter(|summary| !summary.is_empty());
     let coverage_status = coverage_status(baseline.as_ref(), requested_since_secs);
     let status = if latest.is_some() { "ok" } else { "empty" };
 
@@ -180,7 +205,10 @@ pub(super) fn summarize_cycle_tracker(
         baseline_cycles: baseline.as_ref().map(|sample| sample.cycles),
         delta_cycles: delta,
         rate_cycles_per_hour,
-        topups,
+        burn_cycles,
+        burn_cycles_per_hour,
+        topup_cycles_per_hour,
+        topups: visible_topups,
         error: None,
     }
 }
@@ -199,28 +227,26 @@ fn query_live_cycle_balance(options: &CyclesOptions, canister_id: &str) -> Optio
     .and_then(|output| parse_cycle_balance_response(&output))
 }
 
-fn query_topup_summary(
+fn query_topup_events(
     options: &CyclesOptions,
     canister_id: &str,
-    requested_since_secs: u64,
-) -> Result<Option<CyclesTopupSummary>, String> {
+) -> Result<Vec<CycleTopupEventSample>, String> {
     let mut page = query_topup_event_page(options, canister_id, 0, TOPUP_EVENTS_LIMIT)?;
     if page.total > TOPUP_EVENTS_LIMIT {
         let offset = page.total.saturating_sub(TOPUP_EVENTS_LIMIT);
         page = query_topup_event_page(options, canister_id, offset, TOPUP_EVENTS_LIMIT)?;
     }
-    let summary = topup_summary_from_events(&page.entries, requested_since_secs);
-
-    Ok((!summary.is_empty()).then_some(summary))
+    Ok(page.entries)
 }
 
 pub(super) fn topup_summary_from_events(
     entries: &[CycleTopupEventSample],
-    requested_since_secs: u64,
+    start_secs: u64,
+    end_secs: u64,
 ) -> CyclesTopupSummary {
     let mut summary = CyclesTopupSummary::default();
     for entry in entries {
-        if entry.timestamp_secs < requested_since_secs {
+        if entry.timestamp_secs < start_secs || entry.timestamp_secs > end_secs {
             continue;
         }
         match entry.status {
@@ -316,6 +342,22 @@ fn hourly_rate(delta: i128, coverage_seconds: u64) -> Option<i128> {
         return None;
     }
     Some(delta.saturating_mul(3_600) / i128::from(coverage_seconds))
+}
+
+fn unsigned_hourly_rate(value: u128, coverage_seconds: u64) -> Option<u128> {
+    if coverage_seconds == 0 {
+        return None;
+    }
+    Some(value.saturating_mul(3_600) / u128::from(coverage_seconds))
+}
+
+fn inferred_burn_cycles(topup_cycles: u128, delta_cycles: i128) -> Option<u128> {
+    if delta_cycles < 0 {
+        return Some(topup_cycles.saturating_add(delta_cycles.unsigned_abs()));
+    }
+
+    let delta = delta_cycles.cast_unsigned();
+    (topup_cycles >= delta).then_some(topup_cycles - delta)
 }
 
 fn coverage_status(baseline: Option<&CycleTrackerSample>, requested_since_secs: u64) -> String {

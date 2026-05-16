@@ -35,6 +35,9 @@ pub struct CyclesCanisterReport {
     pub baseline_cycles: Option<u128>,
     pub delta_cycles: Option<i128>,
     pub rate_cycles_per_hour: Option<i128>,
+    pub burn_cycles: Option<u128>,
+    pub burn_cycles_per_hour: Option<u128>,
+    pub topup_cycles_per_hour: Option<u128>,
     pub topups: Option<CyclesTopupSummary>,
     pub error: Option<String>,
 }

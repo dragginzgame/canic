@@ -129,7 +129,6 @@ impl RestoreApplyRunnerCommand {
                             operation.target_canister.clone(),
                             "--input".to_string(),
                             artifact_path,
-                            "--resume".to_string(),
                             "--json".to_string(),
                         ],
                     ),
@@ -204,11 +203,11 @@ const fn verification_command_note(
 // Build `icp canister` arguments with the optional network selector.
 fn icp_canister_args(config: &RestoreApplyCommandConfig, mut tail: Vec<String>) -> Vec<String> {
     let mut args = vec!["canister".to_string()];
+    args.append(&mut tail);
     if let Some(network) = &config.network {
         args.push("-n".to_string());
         args.push(network.clone());
     }
-    args.append(&mut tail);
     args
 }
 

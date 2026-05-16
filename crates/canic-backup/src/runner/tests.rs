@@ -1,7 +1,7 @@
 use super::*;
 use crate::{
     execution::BackupExecutionOperationState,
-    manifest::IdentityMode,
+    manifest::{BackupUnitKind, IdentityMode},
     persistence::BackupLayout,
     plan::{
         AuthorityEvidence, AuthorityProofSource, BackupExecutionPreflightReceipts,
@@ -20,6 +20,7 @@ use std::{
 
 const ROOT: &str = "aaaaa-aa";
 const APP: &str = "renrk-eyaaa-aaaaa-aaada-cai";
+const WORKER: &str = "rno2w-sqaaa-aaaaa-aaacq-cai";
 const HASH: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 
 // Ensure the backup runner executes a persisted plan into a verified backup layout.
@@ -54,6 +55,54 @@ fn runner_executes_plan_and_finalizes_manifest() {
             format!("start:{APP}"),
             format!("download:{APP}:snap-app"),
         ]
+    );
+}
+
+// Ensure root-omitted fleet backups describe each disconnected branch separately.
+#[test]
+fn runner_finalizes_non_root_fleet_plan_as_multiple_backup_units() {
+    let root = temp_dir("canic-backup-runner-non-root-fleet");
+    let layout = BackupLayout::new(root.clone());
+    let plan = non_root_fleet_plan();
+    let journal = BackupExecutionJournal::from_plan(&plan).expect("execution journal");
+    layout.write_backup_plan(&plan).expect("write plan");
+    layout
+        .write_execution_journal(&journal)
+        .expect("write execution journal");
+
+    let mut executor = FakeExecutor::default();
+    let response =
+        backup_run_execute_with_executor(&runner_config(root.clone(), None), &mut executor)
+            .expect("run backup");
+    let manifest = layout.read_manifest().expect("read manifest");
+    manifest.validate().expect("valid manifest");
+
+    fs::remove_dir_all(root).expect("remove temp root");
+    assert!(response.complete);
+    assert_eq!(manifest.consistency.backup_units.len(), 2);
+    assert_eq!(
+        manifest.consistency.backup_units[0].unit_id,
+        "backup-selection-1"
+    );
+    assert_eq!(
+        manifest.consistency.backup_units[0].kind,
+        BackupUnitKind::Single
+    );
+    assert_eq!(
+        manifest.consistency.backup_units[0].roles,
+        vec!["app".to_string()]
+    );
+    assert_eq!(
+        manifest.consistency.backup_units[1].unit_id,
+        "backup-selection-2"
+    );
+    assert_eq!(
+        manifest.consistency.backup_units[1].kind,
+        BackupUnitKind::Single
+    );
+    assert_eq!(
+        manifest.consistency.backup_units[1].roles,
+        vec!["worker".to_string()]
     );
 }
 
@@ -418,6 +467,50 @@ fn plan() -> BackupPlan {
             RegistryEntry {
                 pid: APP.to_string(),
                 role: Some("app".to_string()),
+                kind: Some("singleton".to_string()),
+                parent_pid: Some(ROOT.to_string()),
+                module_hash: Some(HASH.to_string()),
+            },
+        ],
+        control_authority: ControlAuthority::operator_controller(AuthorityEvidence::Proven),
+        snapshot_read_authority: SnapshotReadAuthority::operator_controller(
+            AuthorityEvidence::Proven,
+        ),
+        quiescence_policy: QuiescencePolicy::CrashConsistent,
+        identity_mode: IdentityMode::Relocatable,
+    })
+    .expect("backup plan")
+}
+
+fn non_root_fleet_plan() -> BackupPlan {
+    build_backup_plan(BackupPlanBuildInput {
+        plan_id: "plan-test".to_string(),
+        run_id: "run-test".to_string(),
+        fleet: "demo".to_string(),
+        network: "local".to_string(),
+        root_canister_id: ROOT.to_string(),
+        selected_canister_id: None,
+        selected_scope_kind: BackupScopeKind::NonRootFleet,
+        include_descendants: true,
+        topology_hash_before_quiesce: HASH.to_string(),
+        registry: &[
+            RegistryEntry {
+                pid: ROOT.to_string(),
+                role: Some("root".to_string()),
+                kind: Some("root".to_string()),
+                parent_pid: None,
+                module_hash: None,
+            },
+            RegistryEntry {
+                pid: APP.to_string(),
+                role: Some("app".to_string()),
+                kind: Some("singleton".to_string()),
+                parent_pid: Some(ROOT.to_string()),
+                module_hash: Some(HASH.to_string()),
+            },
+            RegistryEntry {
+                pid: WORKER.to_string(),
+                role: Some("worker".to_string()),
                 kind: Some("singleton".to_string()),
                 parent_pid: Some(ROOT.to_string()),
                 module_hash: Some(HASH.to_string()),

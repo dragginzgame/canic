@@ -21,6 +21,7 @@ pub struct CyclesOptions {
     pub since_seconds: u64,
     pub limit: u64,
     pub json: bool,
+    pub verbose: bool,
     pub out: Option<PathBuf>,
     pub network: String,
     pub icp: String,
@@ -52,6 +53,7 @@ impl CyclesOptions {
             since_seconds,
             limit,
             json: matches.get_flag("json"),
+            verbose: matches.get_flag("verbose"),
             out: path_option(matches, "out"),
             network: string_option(matches, "network").unwrap_or_else(local_network),
             icp: string_option(matches, "icp").unwrap_or_else(default_icp),
@@ -121,6 +123,11 @@ fn cycles_command_with_bin_name(bin_name: &'static str) -> ClapCommand {
                 .help("Maximum tracker samples to fetch per canister; defaults to 1000"),
         )
         .arg(flag_arg("json").long("json"))
+        .arg(
+            flag_arg("verbose").long("verbose").short('v').help(
+                "Show diagnostic columns such as canister id, history, topups, and net total",
+            ),
+        )
         .arg(value_arg("out").long("out").value_name("file"))
         .arg(internal_network_arg())
         .arg(internal_icp_arg())

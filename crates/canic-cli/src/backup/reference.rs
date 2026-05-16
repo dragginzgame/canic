@@ -1,5 +1,9 @@
 use super::{BackupCommandError, BackupListEntry, BackupListOptions};
-use crate::backup::labels::execution_layout_status;
+use crate::{
+    backup::labels::execution_layout_status,
+    support::path_stamp::unix_timestamp_marker_from_directory_stamp,
+};
+use canic_backup::execution::BackupExecutionJournal;
 use canic_backup::persistence::BackupLayout;
 use std::{
     fs,
@@ -22,9 +26,9 @@ pub(super) fn backup_list(
         .collect::<Vec<_>>();
 
     entries.sort_by(|left, right| {
-        right
-            .created_at
-            .cmp(&left.created_at)
+        created_at_sort_key(&right.created_at)
+            .cmp(&created_at_sort_key(&left.created_at))
+            .then_with(|| right.created_at.cmp(&left.created_at))
             .then_with(|| right.dir.cmp(&left.dir))
     });
     Ok(entries)
@@ -133,11 +137,17 @@ fn planned_backup_list_entry(dir: PathBuf, layout: &BackupLayout) -> BackupListE
         };
     };
     let status = execution_backed_layout_status(layout);
+    let created_at = layout
+        .read_execution_journal()
+        .ok()
+        .and_then(|journal| execution_journal_created_at(&journal))
+        .or_else(|| run_id_created_at(&plan.run_id))
+        .unwrap_or_else(|| "-".to_string());
 
     BackupListEntry {
         dir,
         backup_id: plan.plan_id,
-        created_at: planned_backup_created_at(&plan.run_id),
+        created_at,
         members: plan.targets.len(),
         status,
     }
@@ -160,21 +170,35 @@ fn execution_backed_layout_status(layout: &BackupLayout) -> String {
     }
 }
 
-fn planned_backup_created_at(run_id: &str) -> String {
+fn execution_journal_created_at(journal: &BackupExecutionJournal) -> Option<String> {
+    journal
+        .operations
+        .iter()
+        .filter_map(|operation| operation.state_updated_at.as_deref())
+        .chain(
+            journal
+                .operation_receipts
+                .iter()
+                .filter_map(|receipt| receipt.updated_at.as_deref()),
+        )
+        .filter_map(unix_timestamp_seconds)
+        .min()
+        .map(|seconds| format!("unix:{seconds}"))
+}
+
+fn run_id_created_at(run_id: &str) -> Option<String> {
     let mut parts = run_id.rsplit('-');
-    let Some(time) = parts.next() else {
-        return "-".to_string();
-    };
-    let Some(date) = parts.next() else {
-        return "-".to_string();
-    };
-    let valid = date.len() == 8
-        && time.len() == 6
-        && date.bytes().all(|byte| byte.is_ascii_digit())
-        && time.bytes().all(|byte| byte.is_ascii_digit());
-    if valid {
-        format!("{date}-{time}")
-    } else {
-        "-".to_string()
-    }
+    let time = parts.next()?;
+    let date = parts.next()?;
+    unix_timestamp_marker_from_directory_stamp(&format!("{date}-{time}"))
+}
+
+fn created_at_sort_key(created_at: &str) -> Option<u64> {
+    unix_timestamp_seconds(created_at)
+}
+
+fn unix_timestamp_seconds(marker: &str) -> Option<u64> {
+    marker
+        .strip_prefix("unix:")
+        .and_then(|seconds| seconds.parse::<u64>().ok())
 }

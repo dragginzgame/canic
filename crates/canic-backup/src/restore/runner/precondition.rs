@@ -45,13 +45,13 @@ fn stopped_canister_status_command(
     operation: &RestoreApplyJournalOperation,
 ) -> RestoreApplyRunnerCommand {
     let mut args = vec!["canister".to_string()];
+    args.push("status".to_string());
+    args.push(operation.target_canister.clone());
+    args.push("--json".to_string());
     if let Some(network) = &config.command.network {
         args.push("-n".to_string());
         args.push(network.clone());
     }
-    args.push("status".to_string());
-    args.push(operation.target_canister.clone());
-    args.push("--json".to_string());
 
     RestoreApplyRunnerCommand {
         program: config.command.program.clone(),

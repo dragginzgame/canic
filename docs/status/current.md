@@ -158,6 +158,23 @@ inspect only the files needed for the current task.
 - Started `0.36.9` by adding the `canic info` read-only command group with
   `info list` and `info cycles` leaves, then removed the old top-level
   `canic list` and `canic cycles` aliases.
+- Started `0.36.10` by proving the local `test` fleet `app` subtree
+  backup/restore operator path end to end. The run exposed and fixed restore
+  runner ICP command generation: network flags now sit on the concrete leaf
+  command, and fresh snapshot uploads no longer pass `--resume`.
+- Extended `0.36.10` cycle reporting so `canic info cycles` shows explicit
+  burn and top-up rates alongside net cycle movement in a compact default
+  table, keeps wider diagnostics behind `--verbose`, and includes JSON fields
+  for the derived burn and top-up per-hour values.
+- Fixed full non-root fleet backup manifest finalization so root-omitted
+  sibling branches are emitted as separate consistency units. The deployed
+  local `test` fleet now completes `canic backup create test` with six
+  non-root targets, and the resulting layout passes status and verification.
+- Normalized `canic backup list` timestamps for unfinished execution layouts:
+  failed/running rows use unix markers from execution journals when available,
+  legacy run-id stamps are converted to unix markers before display, and local
+  stale backup artifact directories were removed so only the verified complete
+  `test` backup remains.
 - Added a config-schema regression proving obsolete per-canister delegated-auth
   verifier tables are rejected instead of accepted through compatibility shims.
 - Updated the internal audit scaling probe to use `scale_replica` and

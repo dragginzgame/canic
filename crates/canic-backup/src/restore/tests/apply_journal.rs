@@ -402,7 +402,6 @@ fn apply_journal_command_preview_reports_upload_command() {
             ROOT.to_string(),
             "--input".to_string(),
             expected_artifact_path,
-            "--resume".to_string(),
             "--json".to_string(),
         ]
     );
@@ -448,15 +447,14 @@ fn apply_journal_command_preview_honors_command_config() {
         command.args,
         vec![
             "canister".to_string(),
-            "-n".to_string(),
-            "local".to_string(),
             "snapshot".to_string(),
             "upload".to_string(),
             ROOT.to_string(),
             "--input".to_string(),
             expected_artifact_path,
-            "--resume".to_string(),
             "--json".to_string(),
+            "-n".to_string(),
+            "local".to_string(),
         ]
     );
 }

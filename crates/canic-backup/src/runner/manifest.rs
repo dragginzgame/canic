@@ -8,18 +8,13 @@ use crate::{
     },
     plan::{BackupPlan, BackupTarget, ControlAuthoritySource},
 };
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 pub(super) fn build_manifest(
     config: &BackupRunnerConfig,
     plan: &BackupPlan,
     journal: &DownloadJournal,
 ) -> Result<FleetBackupManifest, BackupRunnerError> {
-    let roles = plan
-        .targets
-        .iter()
-        .enumerate()
-        .map(|(index, target)| target_role(index, target.role.as_deref()))
-        .collect::<Vec<_>>();
     let manifest = FleetBackupManifest {
         manifest_version: 1,
         backup_id: plan.run_id.clone(),
@@ -33,15 +28,7 @@ pub(super) fn build_manifest(
             root_canister: plan.root_canister_id.clone(),
         },
         consistency: ConsistencySection {
-            backup_units: vec![BackupUnit {
-                unit_id: "backup-selection".to_string(),
-                kind: if plan.targets.len() == 1 {
-                    BackupUnitKind::Single
-                } else {
-                    BackupUnitKind::Subtree
-                },
-                roles,
-            }],
+            backup_units: build_backup_units(plan),
         },
         fleet: FleetSection {
             topology_hash_algorithm: "sha256".to_string(),
@@ -60,6 +47,103 @@ pub(super) fn build_manifest(
     };
     manifest.validate()?;
     Ok(manifest)
+}
+
+fn build_backup_units(plan: &BackupPlan) -> Vec<BackupUnit> {
+    let target_ids = plan
+        .targets
+        .iter()
+        .map(|target| target.canister_id.as_str())
+        .collect::<BTreeSet<_>>();
+    let mut children_by_parent = BTreeMap::<&str, Vec<usize>>::new();
+    for (index, target) in plan.targets.iter().enumerate() {
+        if let Some(parent) = target.parent_canister_id.as_deref()
+            && target_ids.contains(parent)
+        {
+            children_by_parent.entry(parent).or_default().push(index);
+        }
+    }
+
+    let roots = plan
+        .targets
+        .iter()
+        .enumerate()
+        .filter_map(|(index, target)| {
+            let parent_in_selection = target
+                .parent_canister_id
+                .as_deref()
+                .is_some_and(|parent| target_ids.contains(parent));
+            (!parent_in_selection).then_some(index)
+        })
+        .collect::<Vec<_>>();
+    let mut visited = BTreeSet::new();
+    let mut components = Vec::new();
+    for root in roots {
+        if visited.contains(&root) {
+            continue;
+        }
+        components.push(collect_component(
+            root,
+            plan,
+            &children_by_parent,
+            &mut visited,
+        ));
+    }
+    for index in 0..plan.targets.len() {
+        if !visited.contains(&index) {
+            components.push(collect_component(
+                index,
+                plan,
+                &children_by_parent,
+                &mut visited,
+            ));
+        }
+    }
+
+    let multiple_units = components.len() > 1;
+    components
+        .into_iter()
+        .enumerate()
+        .map(|(unit_index, component)| {
+            let roles = component
+                .iter()
+                .map(|index| target_role(*index, plan.targets[*index].role.as_deref()))
+                .collect::<Vec<_>>();
+            BackupUnit {
+                unit_id: if multiple_units {
+                    format!("backup-selection-{}", unit_index + 1)
+                } else {
+                    "backup-selection".to_string()
+                },
+                kind: if roles.len() == 1 {
+                    BackupUnitKind::Single
+                } else {
+                    BackupUnitKind::Subtree
+                },
+                roles,
+            }
+        })
+        .collect()
+}
+
+fn collect_component(
+    root: usize,
+    plan: &BackupPlan,
+    children_by_parent: &BTreeMap<&str, Vec<usize>>,
+    visited: &mut BTreeSet<usize>,
+) -> Vec<usize> {
+    let mut queue = VecDeque::from([root]);
+    let mut component = Vec::new();
+    while let Some(index) = queue.pop_front() {
+        if !visited.insert(index) {
+            continue;
+        }
+        component.push(index);
+        if let Some(children) = children_by_parent.get(plan.targets[index].canister_id.as_str()) {
+            queue.extend(children.iter().copied());
+        }
+    }
+    component
 }
 
 fn manifest_member(

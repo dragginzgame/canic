@@ -1,5 +1,7 @@
 use super::*;
-use crate::support::path_stamp::backup_directory_stamp_from_unix;
+use crate::support::path_stamp::{
+    backup_directory_stamp_from_unix, backup_directory_stamp_to_unix,
+};
 
 const ROOT: &str = "aaaaa-aa";
 
@@ -110,4 +112,9 @@ fn backup_directory_stamp_uses_calendar_time() {
         backup_directory_stamp_from_unix(1_715_090_400),
         "20240507-140000"
     );
+    assert_eq!(
+        backup_directory_stamp_to_unix("20240507-140000"),
+        Some(1_715_090_400)
+    );
+    assert_eq!(backup_directory_stamp_to_unix("20240532-140000"), None);
 }

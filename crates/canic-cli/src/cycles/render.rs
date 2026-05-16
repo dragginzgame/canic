@@ -19,31 +19,13 @@ pub(super) fn write_cycles_report(
         return output::write_pretty_json::<_, CyclesCommandError>(options.out.as_ref(), report);
     }
 
-    output::write_text::<CyclesCommandError>(options.out.as_ref(), &render_cycles_report(report))
+    output::write_text::<CyclesCommandError>(
+        options.out.as_ref(),
+        &render_cycles_report(report, options.verbose),
+    )
 }
 
-fn render_cycles_report(report: &CyclesReport) -> String {
-    let rows = report
-        .canisters
-        .iter()
-        .map(|row| {
-            [
-                role_label(row),
-                row.canister_id.clone(),
-                row.status.clone(),
-                format_history(row),
-                row.latest_cycles.map_or_else(|| "-".to_string(), cycles_tc),
-                row.topups
-                    .as_ref()
-                    .map_or_else(|| "-".to_string(), format_topups),
-                row.delta_cycles
-                    .map_or_else(|| "-".to_string(), format_signed_cycles),
-                row.rate_cycles_per_hour
-                    .map_or_else(|| "-".to_string(), format_signed_cycles),
-            ]
-        })
-        .collect::<Vec<_>>();
-
+fn render_cycles_report(report: &CyclesReport, verbose: bool) -> String {
     [
         format!(
             "Fleet: {} (network {}, cycle balance since {})",
@@ -52,31 +34,113 @@ fn render_cycles_report(report: &CyclesReport) -> String {
             compact_duration(report.since_seconds)
         ),
         String::new(),
-        render_table(
-            &[
-                "ROLE",
-                "CANISTER_ID",
-                "STATUS",
-                "HISTORY",
-                "CURRENT",
-                "TOPUPS",
-                "NET",
-                "NET/H",
-            ],
-            &rows,
-            &[
-                ColumnAlign::Left,
-                ColumnAlign::Left,
-                ColumnAlign::Left,
-                ColumnAlign::Left,
-                ColumnAlign::Right,
-                ColumnAlign::Left,
-                ColumnAlign::Right,
-                ColumnAlign::Right,
-            ],
-        ),
+        if verbose {
+            render_verbose_cycles_table(report)
+        } else {
+            render_default_cycles_table(report)
+        },
     ]
     .join("\n")
+}
+
+fn render_default_cycles_table(report: &CyclesReport) -> String {
+    let rows = report
+        .canisters
+        .iter()
+        .map(default_cycle_report_row)
+        .collect::<Vec<_>>();
+    render_table(
+        &[
+            "ROLE",
+            "CANISTER_ID",
+            "STATUS",
+            "CURRENT",
+            "BURN/H",
+            "TOPUP/H",
+            "NET/H",
+        ],
+        &rows,
+        &[
+            ColumnAlign::Left,
+            ColumnAlign::Left,
+            ColumnAlign::Left,
+            ColumnAlign::Right,
+            ColumnAlign::Right,
+            ColumnAlign::Right,
+            ColumnAlign::Right,
+        ],
+    )
+}
+
+fn default_cycle_report_row(row: &CyclesCanisterReport) -> [String; 7] {
+    [
+        role_label(row),
+        row.canister_id.clone(),
+        row.status.clone(),
+        row.latest_cycles.map_or_else(|| "-".to_string(), cycles_tc),
+        row.burn_cycles_per_hour
+            .map_or_else(|| "-".to_string(), format_unsigned_rate),
+        row.topup_cycles_per_hour
+            .map_or_else(|| "-".to_string(), format_unsigned_rate),
+        row.rate_cycles_per_hour
+            .map_or_else(|| "-".to_string(), format_signed_rate),
+    ]
+}
+
+fn render_verbose_cycles_table(report: &CyclesReport) -> String {
+    let rows = report
+        .canisters
+        .iter()
+        .map(verbose_cycle_report_row)
+        .collect::<Vec<_>>();
+    render_table(
+        &[
+            "ROLE",
+            "CANISTER_ID",
+            "STATUS",
+            "CURRENT",
+            "BURN/H",
+            "TOPUP/H",
+            "NET/H",
+            "HISTORY",
+            "TOPUPS",
+            "NET",
+        ],
+        &rows,
+        &[
+            ColumnAlign::Left,
+            ColumnAlign::Left,
+            ColumnAlign::Left,
+            ColumnAlign::Right,
+            ColumnAlign::Right,
+            ColumnAlign::Right,
+            ColumnAlign::Right,
+            ColumnAlign::Left,
+            ColumnAlign::Left,
+            ColumnAlign::Right,
+        ],
+    )
+}
+
+fn verbose_cycle_report_row(row: &CyclesCanisterReport) -> [String; 10] {
+    [
+        role_label(row),
+        row.canister_id.clone(),
+        row.status.clone(),
+        row.latest_cycles.map_or_else(|| "-".to_string(), cycles_tc),
+        row.burn_cycles_per_hour
+            .map_or_else(|| "-".to_string(), format_unsigned_rate),
+        row.topup_cycles_per_hour
+            .map_or_else(|| "-".to_string(), format_unsigned_rate),
+        row.rate_cycles_per_hour
+            .map_or_else(|| "-".to_string(), format_signed_rate),
+        format_history(row),
+        row.topups
+            .as_ref()
+            .map_or_else(|| "-".to_string(), format_topups),
+        row.delta_cycles
+            .map_or_else(|| "-".to_string(), format_signed_cycles),
+    ]
 }
 
 fn role_label(row: &CyclesCanisterReport) -> String {
@@ -134,4 +198,12 @@ fn format_signed_cycles(value: i128) -> String {
     } else {
         format!("+{}", cycles_tc(value.cast_unsigned()))
     }
+}
+
+fn format_signed_rate(value: i128) -> String {
+    format!("{}/h", format_signed_cycles(value))
+}
+
+fn format_unsigned_rate(value: u128) -> String {
+    format!("{}/h", cycles_tc(value))
 }
