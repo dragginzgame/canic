@@ -312,7 +312,7 @@ dependencies = [
 
 [[package]]
 name = "canic"
-version = "0.36.13"
+version = "0.36.14"
 dependencies = [
  "candid",
  "canic-cdk",
@@ -328,7 +328,7 @@ dependencies = [
 
 [[package]]
 name = "canic-backup"
-version = "0.36.13"
+version = "0.36.14"
 dependencies = [
  "candid",
  "canic-cdk",
@@ -340,7 +340,7 @@ dependencies = [
 
 [[package]]
 name = "canic-cdk"
-version = "0.36.13"
+version = "0.36.14"
 dependencies = [
  "candid",
  "ic-cdk",
@@ -355,7 +355,7 @@ dependencies = [
 
 [[package]]
 name = "canic-cli"
-version = "0.36.13"
+version = "0.36.14"
 dependencies = [
  "candid",
  "candid_parser",
@@ -370,7 +370,7 @@ dependencies = [
 
 [[package]]
 name = "canic-control-plane"
-version = "0.36.13"
+version = "0.36.14"
 dependencies = [
  "async-trait",
  "candid",
@@ -384,7 +384,7 @@ dependencies = [
 
 [[package]]
 name = "canic-core"
-version = "0.36.13"
+version = "0.36.14"
 dependencies = [
  "async-trait",
  "candid",
@@ -406,7 +406,7 @@ dependencies = [
 
 [[package]]
 name = "canic-host"
-version = "0.36.13"
+version = "0.36.14"
 dependencies = [
  "candid",
  "canic-core",
@@ -421,7 +421,7 @@ dependencies = [
 
 [[package]]
 name = "canic-macros"
-version = "0.36.13"
+version = "0.36.14"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -430,7 +430,7 @@ dependencies = [
 
 [[package]]
 name = "canic-memory"
-version = "0.36.13"
+version = "0.36.14"
 dependencies = [
  "canic-cdk",
  "ctor",
@@ -441,7 +441,7 @@ dependencies = [
 
 [[package]]
 name = "canic-testing-internal"
-version = "0.36.13"
+version = "0.36.14"
 dependencies = [
  "candid",
  "canic",
@@ -453,7 +453,7 @@ dependencies = [
 
 [[package]]
 name = "canic-testkit"
-version = "0.36.13"
+version = "0.36.14"
 dependencies = [
  "candid",
  "canic",
@@ -463,7 +463,7 @@ dependencies = [
 
 [[package]]
 name = "canic-tests"
-version = "0.36.13"
+version = "0.36.14"
 dependencies = [
  "candid",
  "canic",
@@ -478,7 +478,7 @@ dependencies = [
 
 [[package]]
 name = "canic-wasm-store"
-version = "0.36.13"
+version = "0.36.14"
 dependencies = [
  "candid",
  "canic",
@@ -487,7 +487,7 @@ dependencies = [
 
 [[package]]
 name = "canister_app"
-version = "0.36.13"
+version = "0.36.14"
 dependencies = [
  "candid",
  "canic",
@@ -496,7 +496,7 @@ dependencies = [
 
 [[package]]
 name = "canister_minimal"
-version = "0.36.13"
+version = "0.36.14"
 dependencies = [
  "candid",
  "canic",
@@ -505,7 +505,7 @@ dependencies = [
 
 [[package]]
 name = "canister_root"
-version = "0.36.13"
+version = "0.36.14"
 dependencies = [
  "candid",
  "canic",
@@ -516,7 +516,7 @@ dependencies = [
 
 [[package]]
 name = "canister_sandbox_minimal"
-version = "0.36.13"
+version = "0.36.14"
 dependencies = [
  "candid",
  "canic",
@@ -525,7 +525,7 @@ dependencies = [
 
 [[package]]
 name = "canister_scale"
-version = "0.36.13"
+version = "0.36.14"
 dependencies = [
  "candid",
  "canic",
@@ -534,7 +534,7 @@ dependencies = [
 
 [[package]]
 name = "canister_scale_hub"
-version = "0.36.13"
+version = "0.36.14"
 dependencies = [
  "candid",
  "canic",
@@ -543,7 +543,7 @@ dependencies = [
 
 [[package]]
 name = "canister_user_hub"
-version = "0.36.13"
+version = "0.36.14"
 dependencies = [
  "candid",
  "canic",
@@ -552,7 +552,7 @@ dependencies = [
 
 [[package]]
 name = "canister_user_shard"
-version = "0.36.13"
+version = "0.36.14"
 dependencies = [
  "candid",
  "canic",
@@ -890,7 +890,7 @@ checksum = "a4ae5f15dda3c708c0ade84bfee31ccab44a3da4f88015ed22f63732abe300c8"
 
 [[package]]
 name = "delegation_root_stub"
-version = "0.36.13"
+version = "0.36.14"
 dependencies = [
  "candid",
  "canic",
@@ -902,7 +902,7 @@ dependencies = [
 
 [[package]]
 name = "delegation_signer_stub"
-version = "0.36.13"
+version = "0.36.14"
 dependencies = [
  "candid",
  "canic",
@@ -911,7 +911,7 @@ dependencies = [
 
 [[package]]
 name = "demo_fleet_app"
-version = "0.36.13"
+version = "0.36.14"
 dependencies = [
  "candid",
  "canic",
@@ -920,7 +920,7 @@ dependencies = [
 
 [[package]]
 name = "demo_fleet_root"
-version = "0.36.13"
+version = "0.36.14"
 dependencies = [
  "candid",
  "canic",
@@ -1827,7 +1827,7 @@ dependencies = [
 
 [[package]]
 name = "intent_authority"
-version = "0.36.13"
+version = "0.36.14"
 dependencies = [
  "candid",
  "canic-core",
@@ -1836,7 +1836,7 @@ dependencies = [
 
 [[package]]
 name = "intent_client"
-version = "0.36.13"
+version = "0.36.14"
 dependencies = [
  "candid",
  "ic-cdk",
@@ -1844,7 +1844,7 @@ dependencies = [
 
 [[package]]
 name = "intent_external"
-version = "0.36.13"
+version = "0.36.14"
 dependencies = [
  "candid",
  "ic-cdk",
@@ -1949,7 +1949,7 @@ checksum = "bbd2bcb4c963f2ddae06a2efc7e9f3591312473c50c6685e1f298068316e66fe"
 
 [[package]]
 name = "leaf_probe"
-version = "0.36.13"
+version = "0.36.14"
 dependencies = [
  "candid",
  "canic",
@@ -2279,7 +2279,7 @@ checksum = "57c0d7b74b563b49d38dae00a0c37d4d6de9b432382b2892f0574ddcae73fd0a"
 
 [[package]]
 name = "payload_limit_probe"
-version = "0.36.13"
+version = "0.36.14"
 dependencies = [
  "candid",
  "canic",
@@ -2489,7 +2489,7 @@ dependencies = [
 
 [[package]]
 name = "project_hub_stub"
-version = "0.36.13"
+version = "0.36.14"
 dependencies = [
  "candid",
  "canic",
@@ -2498,7 +2498,7 @@ dependencies = [
 
 [[package]]
 name = "project_instance_stub"
-version = "0.36.13"
+version = "0.36.14"
 dependencies = [
  "candid",
  "canic",
@@ -2801,7 +2801,7 @@ dependencies = [
 
 [[package]]
 name = "root_probe"
-version = "0.36.13"
+version = "0.36.14"
 dependencies = [
  "candid",
  "canic",
@@ -2810,7 +2810,7 @@ dependencies = [
 
 [[package]]
 name = "runtime_probe"
-version = "0.36.13"
+version = "0.36.14"
 dependencies = [
  "candid",
  "canic",
@@ -2907,7 +2907,7 @@ dependencies = [
 
 [[package]]
 name = "scaling_probe"
-version = "0.36.13"
+version = "0.36.14"
 dependencies = [
  "candid",
  "canic",
@@ -3136,7 +3136,7 @@ dependencies = [
 
 [[package]]
 name = "sharding_root_stub"
-version = "0.36.13"
+version = "0.36.14"
 dependencies = [
  "candid",
  "canic",
