@@ -15,7 +15,9 @@ The canonical boundary must perform or invoke verification stages for:
 - token signature validation
 - trust-chain validation
 - subject-caller binding
+- required-scope validation
 - freshness / expiry verification
+- update-token replay consumption for update calls
 
 ## Why This Matters
 
@@ -23,9 +25,15 @@ Auth fragmentation creates bypass risk when internal helpers, macros, or special
 
 ## Canonical Authentication Pipeline
 
-The canonical authentication pipeline must follow this structure:
+The canonical endpoint authentication pipeline must follow this structure:
 
-`token verification -> subject binding -> authorization -> handler execution`
+`token verification -> subject binding -> required-scope validation -> update replay consumption when needed -> authorization success -> handler execution`
+
+Token-material verification is not by itself the endpoint boundary. Any helper
+that verifies signatures, freshness, audience, or scopes without also binding
+the verified subject to the caller and consuming update tokens must remain
+private to a narrower workflow and must not be exported as endpoint
+authorization.
 
 ## Relationship to Other Invariants
 
@@ -52,7 +60,7 @@ Every report generated from this audit must include:
 - Scope
 - Compared baseline report path
 - Code snapshot identifier
-- Method tag/version
+- Method tag/version: `canonical-auth-boundary/current`
 - Comparability status
 
 ## Audit Checklist
@@ -62,23 +70,30 @@ Every report generated from this audit must include:
 Identify all authenticated start points:
 
 - public update/query endpoints
+- `#[canic_query]` / `#[canic_update]` generated wrappers
 - dispatcher helpers
 - internal/admin service endpoints
 - migration/recovery entrypoints
 - macro-generated authenticated handlers
+- delegated-session bootstrap ingress
 
 ### 2. Verify Convergence
 
 Search terms:
 
-```text
-authenticated(
-delegated_token_verified
-verify_token
-require_auth
-admin_
-internal_
-system_
+```bash
+rg -n 'authenticated\(|delegated_token_verified|resolve_authenticated_identity|verify_token|verify_token_material|require_auth|admin_|internal_|system_' \
+  crates/canic-core/src crates/canic-macros/src crates/canic/src -g '*.rs'
+```
+
+Current primary paths to inspect:
+
+```bash
+rg -n 'access_stage|resolve_authenticated_identity|eval_access|auth::authenticated' \
+  crates/canic-macros/src/endpoint -g '*.rs'
+
+rg -n 'delegated_token_verified|AuthOps::verify_token|enforce_subject_binding|enforce_required_scope|consume_update_token_once' \
+  crates/canic-core/src/access/auth crates/canic-core/src/ops/auth -g '*.rs'
 ```
 
 Confirm:
@@ -86,12 +101,18 @@ Confirm:
 - all authenticated paths call the canonical verifier directly, or through a thin wrapper that does not alter verification semantics
 - no special-case endpoint duplicates weaker auth logic
 - no internal-only path assumes prior verification without proof
+- no public helper exposes partial "verified token" semantics without caller
+  binding and update replay consumption
 
 ### 3. Verify Ordering
 
 Confirm canonical stage ordering:
 
-`token verification -> subject binding -> authorization -> handler execution`
+`token verification -> subject binding -> required-scope validation -> update replay consumption when needed -> authorization success -> handler execution`
+
+The generated endpoint wrapper must resolve transport caller and authenticated
+subject before access evaluation, and handler code must run only after
+`eval_access(...)` succeeds.
 
 ### 4. Verify Non-Production Paths
 
@@ -117,9 +138,12 @@ git log --name-only -n 20 -- crates/
 
 | File / Module | Struct / Function | Reason | Risk Contribution |
 | --- | --- | --- | --- |
-| `access/expr.rs` | `eval_access` | central auth dispatch boundary | High |
-| `access/auth.rs` | `delegated_token_verified`, `verify_token` | canonical verification path | High |
-| `canic-dsl-macros/src/endpoint/expand.rs` | access expansion block | macro entrypoint convergence wiring | Medium |
+| `crates/canic-macros/src/endpoint/expand.rs` | `access_stage`, `build_access_plan` | macro entrypoint convergence wiring | High |
+| `crates/canic-core/src/access/expr/mod.rs` | `AccessContext`, `eval_access` | central auth dispatch boundary | High |
+| `crates/canic-core/src/access/expr/evaluators.rs` | `AuthenticatedEvaluator` | routes authenticated predicates into delegated-token verification | High |
+| `crates/canic-core/src/access/auth/token.rs` | `delegated_token_verified`, `verify_token` | endpoint auth ordering owner | High |
+| `crates/canic-core/src/ops/auth/token.rs` | `AuthOps::verify_token`, `consume_delegated_token_use` | token-material verification and replay consumption | High |
+| `crates/canic-core/src/api/auth/mod.rs` | `verify_token_material` | private partial verifier for delegated-session bootstrap only | Medium |
 
 If none are detected in a given run, state: No structural hotspots detected in this run.
 
@@ -144,6 +168,12 @@ Pressure score guidance:
 - ordering drift where authorization can execute before identity binding
 - endpoint performs authorization without calling canonical verifier
 - internal service path trusts upstream verification without proof
+- public `AuthApi::verify_token`-style helper returning verified-token
+  semantics without caller binding and update replay consumption
+- `verify_token_material` becoming public or being used as endpoint
+  authorization
+- endpoint macro accepting authenticated endpoints without a first
+  `DelegatedToken` argument
 
 ## Severity
 
@@ -286,6 +316,18 @@ Use command outcomes with normalized statuses:
 - `PASS`
 - `FAIL`
 - `BLOCKED`
+
+Expected focused validation commands:
+
+```bash
+cargo test -p canic-macros authenticated -- --nocapture
+cargo test -p canic-core --lib verify_delegated_token -- --nocapture
+cargo test -p canic-core --lib resolve_authenticated_identity -- --nocapture
+cargo test -p canic-core --lib caller_predicates_use_transport_caller_not_authenticated_subject -- --nocapture
+cargo test -p canic-core --lib required_scope_rejects_when_scope_missing -- --nocapture
+cargo test -p canic-core --lib update_token_consume_rejects_active_replay -- --nocapture
+cargo test -p canic-core --lib subject_binding_rejects_mismatched_subject_and_caller -- --nocapture
+```
 
 ## Follow-up Actions
 

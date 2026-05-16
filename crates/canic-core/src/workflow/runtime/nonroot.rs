@@ -88,7 +88,7 @@ pub fn post_upgrade_nonroot_canister_after_memory_init(
     canister_role: CanisterRole,
     memory_summary: MemoryRegistryInitSummary,
     with_role_attestation_refresh: bool,
-) {
+) -> Result<(), InternalError> {
     crate::log::set_ready();
     crate::log!(
         Topic::Init,
@@ -99,11 +99,13 @@ pub fn post_upgrade_nonroot_canister_after_memory_init(
     log_memory_summary(&memory_summary);
 
     // --- Phase 2 intentionally omitted: post-upgrade does not re-import env or directories.
-    let canister_cfg = ConfigOps::current_canister().unwrap_or_else(|err| {
-        panic!("current canister config unavailable during post-upgrade runtime init: {err}")
-    });
-    RuntimeAuthWorkflow::ensure_nonroot_crypto_contract(&canister_role, &canister_cfg)
-        .unwrap_or_else(|err| panic!("non-root delegated auth runtime contract failed: {err}"));
+    let canister_cfg = ConfigOps::current_canister().map_err(|err| {
+        InternalError::invariant(
+            InternalErrorOrigin::Workflow,
+            format!("current canister config unavailable during post-upgrade runtime init: {err}"),
+        )
+    })?;
+    RuntimeAuthWorkflow::ensure_nonroot_crypto_contract(&canister_role, &canister_cfg)?;
 
     // --- Phase 3: Service startup ---
     if with_role_attestation_refresh {
@@ -111,4 +113,6 @@ pub fn post_upgrade_nonroot_canister_after_memory_init(
     } else {
         RuntimeWorkflow::start_all();
     }
+
+    Ok(())
 }

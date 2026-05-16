@@ -9,11 +9,11 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
-- Active minor: `0.36.x` close-out
-- Theme: backup/restore v1 is feature-frozen until real operator use exposes a
-  bug or missing workflow.
-- Current release-work area: final quality pass for the completed 0.36
-  backup/restore operator flow.
+- Active minor: `0.37.x` cleanup
+- Theme: cleanup-only minor after the completed 0.36 backup/restore operator
+  flow; avoid adding new backup/restore v1 scope until real operator use
+  exposes a bug or missing workflow.
+- Current release-work area: audit-driven cleanup and small correctness fixes.
 
 ## Recent Work
 
@@ -199,6 +199,18 @@ inspect only the files needed for the current task.
 - Closed the active 0.36 implementation track after the `0.36.15` readiness
   guard. Further backup/restore work should be bug fixes or changes proven by
   real operator use, not additional v1 scope expansion.
+- Started `0.37.0` by rerunning the refreshed `bootstrap-lifecycle-symmetry`
+  audit at
+  `docs/audits/reports/2026-05/2026-05-16/bootstrap-lifecycle-symmetry.md` and
+  fixed the non-root post-upgrade continuation path so config/auth continuation
+  failures return typed errors through the lifecycle adapter instead of
+  panicking inside workflow runtime.
+- Refreshed and reran the next oldest recurring audit,
+  `canonical-auth-boundary`, at
+  `docs/audits/reports/2026-05/2026-05-16/canonical-auth-boundary.md`. It found
+  no boundary bypass and now explicitly checks current macro/core auth paths,
+  required scopes, update replay consumption, and private token-material helper
+  limits.
 - Added a config-schema regression proving obsolete per-canister delegated-auth
   verifier tables are rejected instead of accepted through compatibility shims.
 - Updated the internal audit scaling probe to use `scale_replica` and

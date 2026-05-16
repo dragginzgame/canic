@@ -6,6 +6,15 @@ documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.37.x] - 2026-05-16 - Quis ipsos auditores audit?
+
+- `0.37.0` starts a cleanup minor by rerunning the bootstrap lifecycle and canonical auth boundary audits, tightening non-root post-upgrade failures so runtime continuation errors return through the lifecycle adapter, and refreshing the auth audit definition around the current macro/core verifier boundary.
+
+See detailed breakdown:
+[docs/changelog/0.37.md](docs/changelog/0.37.md)
+
+---
+
 ## [0.36.x] - 2026-05-15 - Backup/restore proofing
 
 - `0.36.15` adds `canic restore status/run --require-ready` so operators and CI can fail a prepared restore before mutation when the apply journal is blocked or not ready, while still writing the JSON status summary first.
