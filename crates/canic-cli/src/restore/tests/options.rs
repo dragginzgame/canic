@@ -35,6 +35,21 @@ fn restore_usage_lists_command_family() {
     assert!(text.contains("prepare"));
     assert!(text.contains("run"));
     assert!(text.contains("status"));
+    assert!(text.contains("Examples:"));
+    assert!(text.contains("canic restore prepare 1 --require-verified --require-restore-ready"));
+    assert!(text.contains("canic restore run 1 --execute --max-steps 1"));
+}
+
+// Ensure restore leaf help carries the row-reference operator flow.
+#[test]
+fn restore_leaf_usage_lists_row_reference_examples() {
+    let prepare = prepare_usage();
+    let apply = apply_usage();
+    let status = status_usage();
+
+    assert!(prepare.contains("canic restore prepare 1"));
+    assert!(apply.contains("canic restore apply 1 --dry-run"));
+    assert!(status.contains("canic restore status 1 --require-complete"));
 }
 
 // Ensure uploaded snapshot IDs are parsed from command upload output.

@@ -273,8 +273,8 @@ column without failing the whole list for one unavailable canister.
 Plan or capture a topology-aware fleet backup:
 
 ```bash
-canic backup create test --dry-run
-canic backup create test --subtree app --out backups/<run-id>
+canic backup create test
+canic backup list
 ```
 
 Non-dry-run backup creation recomputes the selected topology immediately before
@@ -286,14 +286,20 @@ verifies checksums, and writes the backup manifest plus execution journal.
 Validate a captured backup before restore planning:
 
 ```bash
-canic backup verify backups/<run-id>
+canic backup verify 1
 ```
 
-Restore work is manifest/journal driven. `restore plan`, `restore apply
---dry-run`, and `restore run --dry-run` are no-mutation paths for checking
-mappings, ordering, checksums, verification coverage, and runner commands
-before execution. `restore run --execute` advances the durable journal through
-upload, stop, snapshot load, start, and verification operations.
+Restore work is backup-row and journal driven. `restore prepare 1` writes the
+default plan and apply journal inside the backup layout, `restore status 1`
+checks progress and gates, and `restore run 1 --execute` advances the durable
+journal through upload, stop, snapshot load, start, and verification operations.
+
+```bash
+canic restore prepare 1 --require-verified --require-restore-ready
+canic restore status 1 --require-no-attention
+canic restore run 1 --execute --max-steps 1 --require-no-attention
+canic restore status 1 --require-complete --require-no-attention
+```
 
 See `crates/canic-cli/README.md` for the operator guide and
 `docs/operations/0.31-backup-restore-checklist.md` for the current

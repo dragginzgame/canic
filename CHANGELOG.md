@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.36.x] - 2026-05-15 - Backup/restore proofing
 
+- `0.36.13` polishes the row-reference restore operator path by adding prepare/status/run examples to CLI help and docs, making missing prepared plan or apply-journal defaults fail with actionable `canic restore prepare <backup-ref>` guidance, and refreshing the 0.36 restore design flow around backup-list references.
+
 - `0.36.12` removes the `/tmp` restore choreography by adding `canic restore prepare <backup-ref>`, backup-list row references for restore plan/apply/run/status, default restore plan and apply-journal files inside the backup layout, and `canic restore status <backup-ref>` for completion and attention gates.
 
 - `0.36.11` proves the full six-canister non-root fleet restore path from a verified backup through plan, apply, dry-run, max-step execute/resume, completion enforcement, and final readiness, and adds `canic backup prune` so operators can preview and remove failed backups or keep only the newest entries without manual directory deletion.

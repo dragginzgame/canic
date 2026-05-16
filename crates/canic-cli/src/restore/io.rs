@@ -90,7 +90,10 @@ pub(super) fn restore_apply_plan_path(
     }
     let backup_dir = restore_backup_dir(options.backup_ref.as_deref(), None)?
         .ok_or(RestoreCommandError::MissingOption("backup-ref or --plan"))?;
-    Ok(default_restore_plan_path(&backup_dir))
+    require_prepared_plan_path(
+        options.backup_ref.as_deref().unwrap_or_default(),
+        default_restore_plan_path(&backup_dir),
+    )
 }
 
 pub(super) fn restore_apply_backup_dir(
@@ -132,7 +135,38 @@ fn restore_journal_path(
     let backup_dir = restore_backup_dir(backup_ref, None)?.ok_or(
         RestoreCommandError::MissingOption("backup-ref or --journal"),
     )?;
-    Ok(default_restore_apply_journal_path(&backup_dir))
+    require_prepared_journal_path(
+        backup_ref.unwrap_or_default(),
+        default_restore_apply_journal_path(&backup_dir),
+    )
+}
+
+pub(super) fn require_prepared_plan_path(
+    backup_ref: &str,
+    path: PathBuf,
+) -> Result<PathBuf, RestoreCommandError> {
+    if !path.is_file() {
+        return Err(RestoreCommandError::PreparedPlanMissing {
+            backup_ref: backup_ref.to_string(),
+            path: path.display().to_string(),
+        });
+    }
+
+    Ok(path)
+}
+
+pub(super) fn require_prepared_journal_path(
+    backup_ref: &str,
+    path: PathBuf,
+) -> Result<PathBuf, RestoreCommandError> {
+    if !path.is_file() {
+        return Err(RestoreCommandError::PreparedJournalMissing {
+            backup_ref: backup_ref.to_string(),
+            path: path.display().to_string(),
+        });
+    }
+
+    Ok(path)
 }
 
 fn restore_backup_dir(

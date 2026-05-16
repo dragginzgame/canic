@@ -19,8 +19,18 @@ pub enum RestoreCommandError {
     #[error("missing required option {0}")]
     MissingOption(&'static str),
 
-    #[error("--require-verified requires --backup-dir")]
+    #[error("--require-verified requires a backup reference or --backup-dir")]
     RequireVerifiedNeedsBackupDir,
+
+    #[error(
+        "restore backup reference {backup_ref} has no prepared plan at {path}; run `canic restore prepare {backup_ref}` first"
+    )]
+    PreparedPlanMissing { backup_ref: String, path: String },
+
+    #[error(
+        "restore backup reference {backup_ref} has no prepared apply journal at {path}; run `canic restore prepare {backup_ref}` first"
+    )]
+    PreparedJournalMissing { backup_ref: String, path: String },
 
     #[error("restore run command failed for operation {sequence}: status={status}")]
     RestoreRunCommandFailed { sequence: usize, status: String },

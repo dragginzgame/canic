@@ -9,6 +9,26 @@ use std::{ffi::OsString, path::PathBuf};
 use super::{RestoreCommandError, apply_usage, plan_usage, prepare_usage, run_usage, status_usage};
 
 const BACKUP_REF: &str = "backup-ref";
+const RESTORE_PLAN_HELP_AFTER: &str = "\
+Examples:
+  canic restore plan 1 --require-verified --require-restore-ready
+  canic restore plan --backup-dir backups/fleet-test-YYYYMMDD-HHMMSS --out restore-plan.json";
+const RESTORE_PREPARE_HELP_AFTER: &str = "\
+Examples:
+  canic restore prepare 1 --require-verified --require-restore-ready
+  canic restore prepare 1 --mapping restore-map.json";
+const RESTORE_APPLY_HELP_AFTER: &str = "\
+Examples:
+  canic restore apply 1 --dry-run
+  canic restore apply --plan restore-plan.json --backup-dir backups/fleet-test-YYYYMMDD-HHMMSS --dry-run";
+const RESTORE_RUN_HELP_AFTER: &str = "\
+Examples:
+  canic restore run 1 --dry-run
+  canic restore run 1 --execute --max-steps 1 --require-no-attention";
+const RESTORE_STATUS_HELP_AFTER: &str = "\
+Examples:
+  canic restore status 1
+  canic restore status 1 --require-complete --require-no-attention";
 
 ///
 /// RestorePlanOptions
@@ -68,6 +88,7 @@ pub(super) fn restore_plan_command() -> ClapCommand {
         .arg(value_arg("out").long("out").value_name("file"))
         .arg(flag_arg("require-verified").long("require-verified"))
         .arg(flag_arg("require-restore-ready").long("require-restore-ready"))
+        .after_help(RESTORE_PLAN_HELP_AFTER)
 }
 
 ///
@@ -130,6 +151,7 @@ pub(super) fn restore_prepare_command() -> ClapCommand {
         )
         .arg(flag_arg("require-verified").long("require-verified"))
         .arg(flag_arg("require-restore-ready").long("require-restore-ready"))
+        .after_help(RESTORE_PREPARE_HELP_AFTER)
 }
 
 ///
@@ -186,6 +208,7 @@ pub(super) fn restore_apply_command() -> ClapCommand {
                 .value_name("file"),
         )
         .arg(flag_arg("dry-run").long("dry-run").required(true))
+        .after_help(RESTORE_APPLY_HELP_AFTER)
 }
 
 ///
@@ -271,6 +294,7 @@ pub(super) fn restore_run_command() -> ClapCommand {
         )
         .arg(flag_arg("require-complete").long("require-complete"))
         .arg(flag_arg("require-no-attention").long("require-no-attention"))
+        .after_help(RESTORE_RUN_HELP_AFTER)
 }
 
 ///
@@ -326,6 +350,7 @@ pub(super) fn restore_status_command() -> ClapCommand {
         .arg(value_arg("out").long("out").value_name("file"))
         .arg(flag_arg("require-complete").long("require-complete"))
         .arg(flag_arg("require-no-attention").long("require-no-attention"))
+        .after_help(RESTORE_STATUS_HELP_AFTER)
 }
 
 fn parse_positive_usize(value: &str) -> Result<usize, String> {

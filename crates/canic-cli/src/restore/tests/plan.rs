@@ -262,3 +262,40 @@ fn run_restore_prepare_writes_default_layout_artifacts() {
     assert_eq!(journal["ready"], true);
     assert_eq!(journal["operation_count"], 10);
 }
+
+// Ensure prepared backup references fail with an operator action, not raw IO.
+#[test]
+fn prepared_plan_path_reports_prepare_action_when_missing() {
+    let root = temp_dir("canic-cli-restore-missing-plan");
+    let path = root.join("restore-plan.json");
+
+    let err = require_prepared_plan_path("1", path.clone()).expect_err("missing plan rejects");
+
+    fs::remove_dir_all(root).ok();
+    assert!(matches!(
+        err,
+        RestoreCommandError::PreparedPlanMissing {
+            backup_ref,
+            path: missing_path,
+        } if backup_ref == "1" && missing_path == path.display().to_string()
+    ));
+}
+
+// Ensure prepared runner references fail with an operator action, not raw IO.
+#[test]
+fn prepared_journal_path_reports_prepare_action_when_missing() {
+    let root = temp_dir("canic-cli-restore-missing-journal");
+    let path = root.join("restore-apply-journal.json");
+
+    let err =
+        require_prepared_journal_path("1", path.clone()).expect_err("missing journal rejects");
+
+    fs::remove_dir_all(root).ok();
+    assert!(matches!(
+        err,
+        RestoreCommandError::PreparedJournalMissing {
+            backup_ref,
+            path: missing_path,
+        } if backup_ref == "1" && missing_path == path.display().to_string()
+    ));
+}

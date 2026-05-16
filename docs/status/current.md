@@ -186,6 +186,10 @@ inspect only the files needed for the current task.
   plan/apply/run now accept backup-list row references, `restore prepare`
   writes default plan and apply-journal files inside the backup layout, and
   `restore status` exposes completion/attention gates for prepared restores.
+- Started `0.36.13` by polishing the restore row-reference operator path:
+  command help and docs now lead with `restore prepare/status/run <backup-ref>`,
+  and missing prepared plan or apply-journal defaults fail with explicit
+  `canic restore prepare <backup-ref>` guidance instead of raw file IO errors.
 - Added a config-schema regression proving obsolete per-canister delegated-auth
   verifier tables are rejected instead of accepted through compatibility shims.
 - Updated the internal audit scaling probe to use `scale_replica` and

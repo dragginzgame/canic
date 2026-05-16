@@ -142,8 +142,8 @@ verify --version` reports the binary version instead of running the command.
 Create a topology-aware backup:
 
 ```bash
-canic backup create test --dry-run
-canic backup create test --subtree app --out backups/<run-id>
+canic backup create test
+canic backup list
 ```
 
 Non-dry-run captures recompute the selected topology immediately before
@@ -157,8 +157,7 @@ checksums, and writes manifest/journal state under the backup directory.
 Verify the captured backup directory:
 
 ```bash
-canic backup verify \
-  --dir backups/<run-id>
+canic backup verify 1
 ```
 
 Verification is no-mutation. It validates the manifest, journal agreement,
@@ -173,7 +172,21 @@ Use these commands after capture and before restore planning:
 - `canic backup status` summarizes resumable download journal progress.
 - `canic backup verify` validates the backup layout and artifact checksums.
 
-For deeper no-mutation restore checks, use `canic restore plan`,
+For the normal operator restore path, prepare the selected backup row once,
+inspect the prepared journal, then advance it with the guarded runner:
+
+```bash
+canic restore prepare 1 --require-verified --require-restore-ready
+canic restore status 1 --require-no-attention
+canic restore run 1 --dry-run
+canic restore run 1 --execute --max-steps 1 --require-no-attention
+canic restore status 1 --require-complete --require-no-attention
+```
+
+`restore prepare` writes `restore-plan.json` and
+`restore-apply-journal.json` inside the selected backup directory, so later
+restore commands can use the same backup row number from `canic backup list`.
+For deeper no-mutation checks, use `canic restore plan`,
 `canic restore apply --dry-run`, and `canic restore run --dry-run` directly.
 
 ## Restore Planning
@@ -182,7 +195,7 @@ Restore starts from a manifest, not from loose snapshot files:
 
 ```bash
 canic restore plan \
-  --backup-dir backups/<run-id> \
+  1 \
   --mapping restore-map.json \
   --out restore-plan.json \
   --require-verified \
@@ -198,15 +211,16 @@ target is touched.
 Render operations and create an apply journal:
 
 ```bash
-canic restore apply \
-  --plan restore-plan.json \
-  --backup-dir backups/<run-id> \
-  --dry-run \
-  --out restore-apply-dry-run.json \
-  --journal-out restore-apply-journal.json
+canic restore prepare \
+  1 \
+  --mapping restore-map.json \
+  --require-verified \
+  --require-restore-ready
 ```
 
-`restore apply` currently requires `--dry-run`; direct mutation through that
+`restore prepare` is a convenience wrapper around verified planning and apply
+journal creation. `restore apply` still exists for explicit plan-file
+workflows and currently requires `--dry-run`; direct mutation through that
 command is intentionally disabled. The generated journal is the input to the
 guarded runner.
 
@@ -216,7 +230,7 @@ Preview the maintained runner path without calling `icp`:
 
 ```bash
 canic restore run \
-  --journal restore-apply-journal.json \
+  1 \
   --dry-run \
   --network local \
   --out restore-run-dry-run.json
@@ -226,7 +240,7 @@ Execute a cautious one-step batch:
 
 ```bash
 canic restore run \
-  --journal restore-apply-journal.json \
+  1 \
   --execute \
   --network local \
   --max-steps 1 \
@@ -247,7 +261,7 @@ back to ready:
 
 ```bash
 canic restore run \
-  --journal restore-apply-journal.json \
+  1 \
   --unclaim-pending \
   --out restore-run-recovery.json
 ```
@@ -257,7 +271,7 @@ ready before rerunning execution:
 
 ```bash
 canic restore run \
-  --journal restore-apply-journal.json \
+  1 \
   --retry-failed \
   --out restore-run-retry.json
 ```

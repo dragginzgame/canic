@@ -16,6 +16,14 @@ use canic_host::icp;
 use clap::Command as ClapCommand;
 use std::ffi::OsString;
 
+const RESTORE_HELP_AFTER: &str = "\
+Examples:
+  canic backup create test
+  canic backup list
+  canic restore prepare 1 --require-verified --require-restore-ready
+  canic restore status 1
+  canic restore run 1 --execute --max-steps 1 --require-no-attention";
+
 use enforce::{
     enforce_restore_plan_requirements, enforce_restore_run_requirements,
     enforce_restore_status_requirements,
@@ -335,6 +343,7 @@ fn restore_command() -> ClapCommand {
                 .about("Summarize restore runner journal state")
                 .disable_help_flag(true),
         ))
+        .after_help(RESTORE_HELP_AFTER)
 }
 
 #[cfg(test)]
