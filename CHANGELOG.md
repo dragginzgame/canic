@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.38.x] - 2026-05-17 - Stable memory ABI hard cut
 
+- `0.38.5` makes `canic info cycles` include fresh auto-top-up events immediately and aligns stable-memory ABI documentation around the final Canic-managed memory contract.
+
 - `0.38.4` tightens stable-memory ABI guard coverage across the Canic-managed runtime surface and clarifies declaration/bootstrap/opening phase separation for startup-selected memory slots.
 
 - `0.38.3` moves the controller-only `canic_memory_ledger` recovery diagnostic into the default Canic runtime bundles, including `wasm_store`, while keeping the heavier live `canic_memory_registry` diagnostic opt-in.

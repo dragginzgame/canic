@@ -207,10 +207,10 @@ fn summarizes_partial_cycle_window() {
     assert_eq!(report.coverage_status, "partial");
     assert_eq!(report.latest_timestamp_secs, Some(250));
     assert_eq!(report.latest_cycles, Some(900));
-    assert_eq!(report.delta_cycles, Some(-300));
-    assert_eq!(report.rate_cycles_per_hour, Some(-10_800));
-    assert_eq!(report.burn_cycles, Some(300));
-    assert_eq!(report.burn_cycles_per_hour, Some(10_800));
+    assert_eq!(report.delta_cycles, Some(-100));
+    assert_eq!(report.rate_cycles_per_hour, Some(-2_400));
+    assert_eq!(report.burn_cycles, Some(100));
+    assert_eq!(report.burn_cycles_per_hour, Some(2_400));
     assert_eq!(report.topup_cycles_per_hour, Some(0));
 }
 
@@ -287,4 +287,82 @@ fn summarizes_burn_and_topup_rates() {
     assert_eq!(report.topup_cycles_per_hour, Some(5_000_000_000_000));
     assert_eq!(report.burn_cycles, Some(7_000_000_000_000));
     assert_eq!(report.burn_cycles_per_hour, Some(7_000_000_000_000));
+}
+
+// Ensure fresh top-ups are visible before the next hourly tracker sample.
+#[test]
+fn summarizes_post_sample_topup_events_against_live_balance() {
+    let entry = RegistryEntry {
+        pid: "aaaaa-aa".to_string(),
+        role: Some("app".to_string()),
+        kind: Some("singleton".to_string()),
+        parent_pid: None,
+        module_hash: None,
+    };
+    let report = summarize_cycle_tracker(
+        &entry,
+        CycleTrackerPage {
+            total: 1,
+            entries: vec![CycleTrackerSample {
+                timestamp_secs: 100,
+                cycles: 10_000_000_000_000,
+            }],
+        },
+        String::new(),
+        0,
+        200,
+        Some(14_000_000_000_000),
+        Some(vec![CycleTopupEventSample {
+            timestamp_secs: 150,
+            transferred_cycles: Some(5_000_000_000_000),
+            status: CycleTopupStatus::RequestOk,
+        }]),
+    );
+
+    assert_eq!(report.coverage_seconds, Some(100));
+    assert_eq!(report.latest_timestamp_secs, Some(200));
+    assert_eq!(report.delta_cycles, Some(4_000_000_000_000));
+    assert_eq!(
+        report.topups.expect("topup summary").transferred_cycles,
+        5_000_000_000_000
+    );
+    assert_eq!(report.topup_cycles_per_hour, Some(180_000_000_000_000));
+    assert_eq!(report.burn_cycles, Some(1_000_000_000_000));
+    assert_eq!(report.burn_cycles_per_hour, Some(36_000_000_000_000));
+}
+
+// Ensure burn inference stays absent when net gain exceeds recorded top-ups.
+#[test]
+fn omits_burn_when_positive_delta_exceeds_topups() {
+    let entry = RegistryEntry {
+        pid: "aaaaa-aa".to_string(),
+        role: Some("app".to_string()),
+        kind: Some("singleton".to_string()),
+        parent_pid: None,
+        module_hash: None,
+    };
+    let report = summarize_cycle_tracker(
+        &entry,
+        CycleTrackerPage {
+            total: 1,
+            entries: vec![CycleTrackerSample {
+                timestamp_secs: 100,
+                cycles: 10_000_000_000_000,
+            }],
+        },
+        String::new(),
+        0,
+        200,
+        Some(16_000_000_000_000),
+        Some(vec![CycleTopupEventSample {
+            timestamp_secs: 150,
+            transferred_cycles: Some(5_000_000_000_000),
+            status: CycleTopupStatus::RequestOk,
+        }]),
+    );
+
+    assert_eq!(report.delta_cycles, Some(6_000_000_000_000));
+    assert_eq!(report.topup_cycles_per_hour, Some(180_000_000_000_000));
+    assert_eq!(report.burn_cycles, None);
+    assert_eq!(report.burn_cycles_per_hour, None);
 }

@@ -257,9 +257,9 @@ inspect only the files needed for the current task.
   self-record, treating IDs `1-99` as Canic framework expansion budget,
   widening `canic-core` to `11-99`, and moving downstream application memory
   to `100-254`.
-- Added explicit stable-memory ABI keys for Canic-owned memory declarations so
-  package, module, type, or label renames do not silently allocate new stable
-  memories or strand old ones.
+- Added explicit stable-memory ABI keys for Canic-managed memory declarations
+  so package, module, type, or label renames do not silently allocate new
+  stable memories or strand old ones.
 - Started the 0.38 stable-memory ABI design at
   `docs/design/0.38-stable-memory-abi/0.38-design.md` so this work can move as
   an urgent minor instead of remaining a patch-level cleanup note.
@@ -317,9 +317,17 @@ inspect only the files needed for the current task.
   the Canic-managed runtime surface, including the canonical `wasm_store`, and
   clarifying `canic-memory` documentation around declaration, bootstrap, and
   post-validation opening phases.
+- Started `0.38.5` by aligning current stable-memory ABI documentation around
+  the final Canic-managed memory contract and clarifying that IDs `1-4` are
+  range-protected metadata expansion budget, not canonical per-ID reserved
+  records.
+- Folded a `canic info cycles` freshness fix into `0.38.5`: when live cycle
+  balance data is available, cycle summaries now derive deltas and rates
+  through the live balance timestamp so post-sample auto-top-up events are
+  visible before the next hourly tracker sample.
 - Added a source-level guard test that rejects implicit registration, direct
   raw stable-memory APIs, independent `MemoryManager` access, and
-  `RestrictedMemory` carve-outs in framework-owned crates.
+  `RestrictedMemory` carve-outs in Canic-managed runtime crates.
 - Split root install guidance into `INSTALLING.md` and refreshed README
   examples around the current `canic info list` command group.
 - Renamed the test fleet scaling worker role from `scale` to `scale_replica`,

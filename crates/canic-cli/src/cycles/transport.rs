@@ -136,7 +136,13 @@ pub(super) fn summarize_cycle_tracker(
     topup_events: Option<Vec<CycleTopupEventSample>>,
 ) -> CyclesCanisterReport {
     page.entries.sort_by_key(|entry| entry.timestamp_secs);
-    let latest = page.entries.last().cloned();
+    let tracker_latest = page.entries.last().cloned();
+    let latest = live_cycles
+        .map(|cycles| CycleTrackerSample {
+            timestamp_secs: generated_at_secs,
+            cycles,
+        })
+        .or(tracker_latest);
     let baseline = latest.as_ref().and_then(|_| {
         page.entries
             .iter()
@@ -197,10 +203,8 @@ pub(super) fn summarize_cycle_tracker(
         requested_since_secs,
         coverage_seconds,
         coverage_status,
-        latest_timestamp_secs: live_cycles
-            .map(|_| generated_at_secs)
-            .or_else(|| latest.as_ref().map(|sample| sample.timestamp_secs)),
-        latest_cycles: live_cycles.or_else(|| latest.as_ref().map(|sample| sample.cycles)),
+        latest_timestamp_secs: latest.as_ref().map(|sample| sample.timestamp_secs),
+        latest_cycles: latest.as_ref().map(|sample| sample.cycles),
         baseline_timestamp_secs: baseline.as_ref().map(|sample| sample.timestamp_secs),
         baseline_cycles: baseline.as_ref().map(|sample| sample.cycles),
         delta_cycles: delta,
@@ -357,7 +361,7 @@ fn inferred_burn_cycles(topup_cycles: u128, delta_cycles: i128) -> Option<u128> 
     }
 
     let delta = delta_cycles.cast_unsigned();
-    (topup_cycles >= delta).then_some(topup_cycles - delta)
+    topup_cycles.checked_sub(delta)
 }
 
 fn coverage_status(baseline: Option<&CycleTrackerSample>, requested_since_secs: u64) -> String {
