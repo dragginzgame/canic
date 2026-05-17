@@ -13,6 +13,7 @@
 macro_rules! canic_bundle_shared_runtime_endpoints {
     () => {
         $crate::canic_emit_lifecycle_core_endpoints!();
+        $crate::canic_emit_memory_ledger_diagnostic_endpoint!();
         $crate::canic_bundle_discovery_endpoints!();
         $crate::canic_bundle_observability_endpoints!();
         #[cfg(not(canic_disable_bundle_metrics))]
@@ -50,6 +51,7 @@ macro_rules! canic_bundle_nonroot_only_endpoints {
 macro_rules! canic_bundle_wasm_store_runtime_endpoints {
     () => {
         $crate::canic_emit_lifecycle_core_endpoints!();
+        $crate::canic_emit_memory_ledger_diagnostic_endpoint!();
         $crate::canic_bundle_discovery_endpoints!();
         #[cfg(not(canic_disable_bundle_cycle_tracker))]
         $crate::canic_emit_cycle_tracker_endpoints!();

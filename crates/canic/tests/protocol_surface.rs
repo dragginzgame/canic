@@ -1,6 +1,8 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use candid_parser::utils::CandidSource;
+
 // Returns the repository root so wire-surface fixtures can be read from disk.
 fn workspace_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -60,19 +62,41 @@ fn wasm_store_exposes_standard_cycle_tracker() {
 }
 
 #[test]
-fn wasm_store_keeps_memory_diagnostics_out_of_default_surface() {
+fn wasm_store_exposes_ledger_but_not_registry_memory_diagnostics() {
     let did_path = workspace_root().join("crates/canic-wasm-store/wasm_store.did");
     let did = read_text(&did_path);
 
+    assert!(
+        did.contains("type MemoryLedgerResponse = record")
+            && did.contains("  canic_memory_ledger : () -> (Result_"),
+        "missing `canic_memory_ledger` method in {}",
+        did_path.display()
+    );
     assert!(
         !did.contains("  canic_memory_registry :"),
         "unexpected `canic_memory_registry` method in {}",
         did_path.display()
     );
+}
+
+#[test]
+fn wasm_store_canonical_did_parses() {
+    let did_path = workspace_root().join("crates/canic-wasm-store/wasm_store.did");
+    let did = read_text(&did_path);
+    let (env, actor) = CandidSource::Text(&did)
+        .load()
+        .unwrap_or_else(|err| panic!("failed to parse {}: {err}", did_path.display()));
+
+    let actor = actor.unwrap_or_else(|| panic!("missing service in {}", did_path.display()));
+    let service = env
+        .as_service(&actor)
+        .unwrap_or_else(|err| panic!("invalid service in {}: {err}", did_path.display()));
+
     assert!(
-        !did.contains("  canic_memory_ledger :"),
-        "unexpected `canic_memory_ledger` method in {}",
-        did_path.display()
+        service
+            .iter()
+            .any(|(name, _)| name == "canic_memory_ledger"),
+        "parsed wasm_store service must include canic_memory_ledger"
     );
 }
 
@@ -108,5 +132,52 @@ fn memory_ledger_diagnostic_bypasses_normal_dispatch() {
         endpoint.contains("$crate::cdk::api::is_controller")
             && endpoint.contains("MemoryQuery::ledger()"),
         "memory ledger diagnostic must be controller-gated and read the restricted ledger path"
+    );
+}
+
+#[test]
+fn memory_ledger_is_default_and_registry_remains_opt_in() {
+    let bundle_path = workspace_root().join("crates/canic/src/macros/endpoints/bundles.rs");
+    let bundles = read_text(&bundle_path);
+    let shared_bundle = bundles
+        .split("macro_rules! canic_bundle_shared_runtime_endpoints")
+        .nth(1)
+        .and_then(|rest| {
+            rest.split("macro_rules! canic_bundle_root_only_endpoints")
+                .next()
+        })
+        .expect("shared runtime bundle should exist");
+    let wasm_store_bundle = bundles
+        .split("macro_rules! canic_bundle_wasm_store_runtime_endpoints")
+        .nth(1)
+        .expect("wasm_store runtime bundle should exist");
+
+    assert!(
+        shared_bundle.contains("canic_emit_memory_ledger_diagnostic_endpoint!"),
+        "default shared runtime bundle must include the ABI ledger recovery endpoint"
+    );
+    assert!(
+        wasm_store_bundle.contains("canic_emit_memory_ledger_diagnostic_endpoint!"),
+        "wasm_store runtime bundle must include the ABI ledger recovery endpoint"
+    );
+    assert!(
+        !shared_bundle.contains("canic_emit_memory_observability_endpoints!"),
+        "live memory registry diagnostics must remain opt-in"
+    );
+
+    let macro_path = workspace_root().join("crates/canic/src/macros/endpoints/shared.rs");
+    let shared = read_text(&macro_path);
+    let observability_macro = shared
+        .split("macro_rules! canic_emit_memory_observability_endpoints")
+        .nth(1)
+        .expect("memory observability macro should exist");
+
+    assert!(
+        !observability_macro.contains("fn canic_memory_ledger()"),
+        "opt-in registry diagnostics must not duplicate the default ledger endpoint"
+    );
+    assert!(
+        observability_macro.contains("fn canic_memory_registry()"),
+        "opt-in memory observability macro must still expose the live registry diagnostic"
     );
 }

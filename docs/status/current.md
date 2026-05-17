@@ -310,6 +310,9 @@ inspect only the files needed for the current task.
   Canic endpoint dispatch and exposes committed ID `0` ledger header fields,
   the authoritative committed generation, authorities, ranges, and memory
   records through a dedicated DTO.
+- Started `0.38.3` by moving `canic_memory_ledger` into the default Canic
+  runtime endpoint bundles, including the canonical `wasm_store` surface, while
+  keeping the heavier live `canic_memory_registry` diagnostic opt-in.
 - Added a source-level guard test that rejects implicit registration, direct
   raw stable-memory APIs, independent `MemoryManager` access, and
   `RestrictedMemory` carve-outs in framework-owned crates.

@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.38.x] - 2026-05-17 - Stable memory ABI hard cut
 
+- `0.38.3` moves the controller-only `canic_memory_ledger` recovery diagnostic into the default Canic runtime bundles, including `wasm_store`, while keeping the heavier live `canic_memory_registry` diagnostic opt-in.
+
 - `0.38.2` adds a controller-only `canic_memory_ledger` diagnostic query for opt-in memory observability builds, exposing committed ID `0` ABI ledger state without using normal Canic endpoint dispatch.
 
 - `0.38.1` adds optional schema-version and schema-fingerprint metadata, canonical range authority records, stricter physical-header validation, raw stable-memory bootstrap preflight, and restricted ID `0` diagnostic reads to the stable-memory ABI ledger and diagnostics.

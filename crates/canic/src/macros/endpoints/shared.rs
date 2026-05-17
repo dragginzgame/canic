@@ -70,9 +70,9 @@ macro_rules! canic_bundle_discovery_endpoints {
     };
 }
 
-// Leaf emitter for explicit test/probe runtime memory-registry diagnostics.
+// Leaf emitter for the minimal stable-memory ABI ledger recovery diagnostic.
 #[macro_export]
-macro_rules! canic_emit_memory_observability_endpoints {
+macro_rules! canic_emit_memory_ledger_diagnostic_endpoint {
     () => {
         #[$crate::cdk::query]
         fn canic_memory_ledger()
@@ -86,7 +86,13 @@ macro_rules! canic_emit_memory_observability_endpoints {
 
             $crate::__internal::core::api::memory::MemoryQuery::ledger()
         }
+    };
+}
 
+// Leaf emitter for explicit test/probe runtime memory-registry diagnostics.
+#[macro_export]
+macro_rules! canic_emit_memory_observability_endpoints {
+    () => {
         #[$crate::canic_query(requires(caller::is_controller()))]
         async fn canic_memory_registry()
         -> Result<::canic::dto::memory::MemoryRegistryResponse, ::canic::Error> {

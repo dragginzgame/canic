@@ -79,6 +79,32 @@ type ErrorCode = variant {
   Conflict;
 };
 type IndexEntryInput = record { pid : principal; role : text };
+type MemoryRangeAuthorityEntry = record {
+  start : nat8;
+  end : nat8;
+  owner : text;
+  purpose : text;
+};
+type MemoryRangeEntry = record { start : nat8; end : nat8; owner : text };
+type MemoryRegistryEntry = record {
+  id : nat8;
+  schema_version : opt nat32;
+  stable_key : text;
+  label : text;
+  crate_name : text;
+  schema_fingerprint : opt text;
+};
+type MemoryLedgerResponse = record {
+  ranges : vec MemoryRangeEntry;
+  header_len : nat32;
+  magic : nat64;
+  schema_version : nat32;
+  format_id : nat32;
+  header_checksum : nat64;
+  entries : vec MemoryRegistryEntry;
+  authorities : vec MemoryRangeAuthorityEntry;
+  current_generation : nat64;
+};
 type NonrootCyclesCapabilityEnvelopeV1 = record {
   "service" : CapabilityService;
   metadata : CapabilityRequestMetadata;
@@ -99,6 +125,7 @@ type Result_5 = variant { Ok : vec WasmStoreCatalogEntryResponse; Err : Error };
 type Result_6 = variant { Ok : TemplateChunkResponse; Err : Error };
 type Result_7 = variant { Ok : TemplateChunkSetInfoResponse; Err : Error };
 type Result_8 = variant { Ok : WasmStoreStatusResponse; Err : Error };
+type Result_9 = variant { Ok : MemoryLedgerResponse; Err : Error };
 type RootRequestMetadata = record { request_id : blob; ttl_seconds : nat64 };
 type StateSnapshotInput = record {
   subnet_state : opt SubnetStateInput;
@@ -208,6 +235,7 @@ service : (CanisterInitPayload, opt blob) -> {
   canic_cycle_balance : () -> (Result) query;
   canic_cycle_topups : (PageRequest) -> (Result_1) query;
   canic_cycle_tracker : (PageRequest) -> (Result_2) query;
+  canic_memory_ledger : () -> (Result_9) query;
   canic_metadata : () -> (CanicMetadataResponse) query;
   canic_ready : () -> (bool) query;
   canic_response_capability_v1 : (NonrootCyclesCapabilityEnvelopeV1) -> (

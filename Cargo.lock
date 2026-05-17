@@ -315,6 +315,7 @@ name = "canic"
 version = "0.38.2"
 dependencies = [
  "candid",
+ "candid_parser",
  "canic-cdk",
  "canic-control-plane",
  "canic-core",
