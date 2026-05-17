@@ -194,6 +194,7 @@ impl MemoryRegistryOps {
             magic: snapshot.magic,
             format_id: snapshot.format_id,
             schema_version: snapshot.schema_version,
+            layout_epoch: snapshot.layout_epoch,
             header_len: snapshot.header_len,
             header_checksum: snapshot.header_checksum,
             current_generation: snapshot.current_generation,

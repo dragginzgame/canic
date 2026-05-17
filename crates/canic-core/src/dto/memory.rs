@@ -9,6 +9,7 @@ pub struct MemoryLedgerResponse {
     pub magic: u64,
     pub format_id: u32,
     pub schema_version: u32,
+    pub layout_epoch: u32,
     pub header_len: u32,
     pub header_checksum: u64,
     pub current_generation: u64,

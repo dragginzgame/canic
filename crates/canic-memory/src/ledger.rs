@@ -21,6 +21,7 @@ pub const MEMORY_LAYOUT_RESERVED_MIN: u8 = 0;
 pub const MEMORY_LAYOUT_RESERVED_MAX: u8 = 0;
 
 const MEMORY_LAYOUT_LEDGER_SCHEMA_VERSION: u32 = 1;
+const MEMORY_LAYOUT_LEDGER_LAYOUT_EPOCH: u32 = 1;
 const MEMORY_LAYOUT_LEDGER_MAGIC: u64 = 0x4341_4E49_434D_454D;
 const MEMORY_LAYOUT_LEDGER_FORMAT_ID: u32 = 1;
 const MEMORY_LAYOUT_LEDGER_HEADER_LEN: u32 = 64;
@@ -55,6 +56,8 @@ struct MemoryLayoutLedgerRecord {
     magic: u64,
     format_id: u32,
     schema_version: u32,
+    #[serde(default = "default_layout_epoch")]
+    layout_epoch: u32,
     header_len: u32,
     header_checksum: u64,
     committed_slot: u8,
@@ -70,6 +73,7 @@ impl Default for MemoryLayoutLedgerRecord {
             magic: MEMORY_LAYOUT_LEDGER_MAGIC,
             format_id: MEMORY_LAYOUT_LEDGER_FORMAT_ID,
             schema_version: MEMORY_LAYOUT_LEDGER_SCHEMA_VERSION,
+            layout_epoch: MEMORY_LAYOUT_LEDGER_LAYOUT_EPOCH,
             header_len: MEMORY_LAYOUT_LEDGER_HEADER_LEN,
             header_checksum: 0,
             committed_slot: 0,
@@ -108,6 +112,7 @@ pub struct MemoryLayoutLedgerSnapshot {
     pub magic: u64,
     pub format_id: u32,
     pub schema_version: u32,
+    pub layout_epoch: u32,
     pub header_len: u32,
     pub header_checksum: u64,
     pub current_generation: u64,
@@ -574,6 +579,7 @@ fn snapshot_from_record(
         magic: data.magic,
         format_id: data.format_id,
         schema_version: data.schema_version,
+        layout_epoch: data.layout_epoch,
         header_len: data.header_len,
         header_checksum: data.header_checksum,
         current_generation: generation.generation,
@@ -673,6 +679,12 @@ const fn validate_header_fields(
         });
     }
 
+    if data.layout_epoch != MEMORY_LAYOUT_LEDGER_LAYOUT_EPOCH {
+        return Err(MemoryRegistryError::LedgerCorrupt {
+            reason: "unsupported ledger layout epoch",
+        });
+    }
+
     if data.header_len != MEMORY_LAYOUT_LEDGER_HEADER_LEN {
         return Err(MemoryRegistryError::LedgerCorrupt {
             reason: "invalid ledger header length",
@@ -690,6 +702,10 @@ const fn validate_header_fields(
 
 fn validate_header_checksum(data: &MemoryLayoutLedgerRecord) -> Result<(), MemoryRegistryError> {
     if data.header_checksum == header_checksum(data) {
+        return Ok(());
+    }
+
+    if data.header_checksum == legacy_header_checksum(data) {
         return Ok(());
     }
 
@@ -722,6 +738,7 @@ fn commit_generation(
     data.magic = MEMORY_LAYOUT_LEDGER_MAGIC;
     data.format_id = MEMORY_LAYOUT_LEDGER_FORMAT_ID;
     data.schema_version = MEMORY_LAYOUT_LEDGER_SCHEMA_VERSION;
+    data.layout_epoch = MEMORY_LAYOUT_LEDGER_LAYOUT_EPOCH;
     data.header_len = MEMORY_LAYOUT_LEDGER_HEADER_LEN;
     data.superblock_generation = generation.generation;
     data.header_checksum = header_checksum(data);
@@ -823,9 +840,24 @@ fn header_checksum(data: &MemoryLayoutLedgerRecord) -> u64 {
     hash = hash_u64(hash, data.magic);
     hash = hash_u32(hash, data.format_id);
     hash = hash_u32(hash, data.schema_version);
+    hash = hash_u32(hash, data.layout_epoch);
     hash = hash_u32(hash, data.header_len);
     hash = hash_u8(hash, data.committed_slot);
     hash_u64(hash, data.superblock_generation)
+}
+
+fn legacy_header_checksum(data: &MemoryLayoutLedgerRecord) -> u64 {
+    let mut hash = FNV_OFFSET;
+    hash = hash_u64(hash, data.magic);
+    hash = hash_u32(hash, data.format_id);
+    hash = hash_u32(hash, data.schema_version);
+    hash = hash_u32(hash, data.header_len);
+    hash = hash_u8(hash, data.committed_slot);
+    hash_u64(hash, data.superblock_generation)
+}
+
+const fn default_layout_epoch() -> u32 {
+    MEMORY_LAYOUT_LEDGER_LAYOUT_EPOCH
 }
 
 fn generation_checksum(generation: &MemoryLayoutGenerationRecord) -> u64 {
@@ -1030,6 +1062,7 @@ mod tests {
         assert_eq!(snapshot.magic, MEMORY_LAYOUT_LEDGER_MAGIC);
         assert_eq!(snapshot.format_id, MEMORY_LAYOUT_LEDGER_FORMAT_ID);
         assert_eq!(snapshot.schema_version, MEMORY_LAYOUT_LEDGER_SCHEMA_VERSION);
+        assert_eq!(snapshot.layout_epoch, MEMORY_LAYOUT_LEDGER_LAYOUT_EPOCH);
         assert_eq!(snapshot.header_len, MEMORY_LAYOUT_LEDGER_HEADER_LEN);
         assert_eq!(snapshot.current_generation, 1);
         assert!(snapshot.authorities.iter().any(|authority| {
@@ -1101,11 +1134,28 @@ mod tests {
         assert!(matches!(err, MemoryRegistryError::LedgerCorrupt { .. }));
 
         let record = MemoryLayoutLedgerRecord {
+            layout_epoch: 2,
+            ..MemoryLayoutLedgerRecord::default()
+        };
+        let err = authoritative_generation(&record).expect_err("invalid epoch must fail");
+        assert!(matches!(err, MemoryRegistryError::LedgerCorrupt { .. }));
+
+        let record = MemoryLayoutLedgerRecord {
             header_len: 0,
             ..MemoryLayoutLedgerRecord::default()
         };
         let err = authoritative_generation(&record).expect_err("invalid header len must fail");
         assert!(matches!(err, MemoryRegistryError::LedgerCorrupt { .. }));
+    }
+
+    #[test]
+    fn authoritative_generation_accepts_legacy_header_checksum() {
+        let mut record = MemoryLayoutLedgerRecord::default();
+        record.header_checksum = legacy_header_checksum(&record);
+
+        let generation = authoritative_generation(&record).expect("legacy checksum should pass");
+
+        assert_eq!(generation.generation, 0);
     }
 
     #[test]

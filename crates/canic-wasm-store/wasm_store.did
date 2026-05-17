@@ -99,6 +99,7 @@ type MemoryLedgerResponse = record {
   header_len : nat32;
   magic : nat64;
   schema_version : nat32;
+  layout_epoch : nat32;
   format_id : nat32;
   header_checksum : nat64;
   entries : vec MemoryRegistryEntry;

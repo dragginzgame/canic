@@ -325,6 +325,9 @@ inspect only the files needed for the current task.
   balance data is available, cycle summaries now derive deltas and rates
   through the live balance timestamp so post-sample auto-top-up events are
   visible before the next hourly tracker sample.
+- Started `0.38.6` by adding persisted ABI ledger `layout_epoch` validation
+  and exposing the compiled epoch through `MemoryApi::ledger_snapshot()`, core
+  memory DTOs, `canic_memory_ledger`, and the canonical `wasm_store` DID.
 - Added a source-level guard test that rejects implicit registration, direct
   raw stable-memory APIs, independent `MemoryManager` access, and
   `RestrictedMemory` carve-outs in Canic-managed runtime crates.

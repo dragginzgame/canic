@@ -79,6 +79,8 @@ pub struct LedgerSnapshot {
     pub format_id: u32,
     /// Ledger schema version from the header.
     pub schema_version: u32,
+    /// Compiled layout epoch validated against the persisted header.
+    pub layout_epoch: u32,
     /// Encoded ledger header length.
     pub header_len: u32,
     /// Header checksum covering the persisted header fields.
@@ -299,6 +301,7 @@ impl From<ledger::MemoryLayoutLedgerSnapshot> for LedgerSnapshot {
             magic: snapshot.magic,
             format_id: snapshot.format_id,
             schema_version: snapshot.schema_version,
+            layout_epoch: snapshot.layout_epoch,
             header_len: snapshot.header_len,
             header_checksum: snapshot.header_checksum,
             current_generation: snapshot.current_generation,
@@ -383,6 +386,7 @@ mod tests {
         let snapshot = MemoryApi::ledger_snapshot().expect("ledger snapshot");
         assert_eq!(snapshot.format_id, 1);
         assert_eq!(snapshot.schema_version, 1);
+        assert_eq!(snapshot.layout_epoch, 1);
         assert!(snapshot.current_generation > 0);
         let (_, entry) = snapshot
             .entries
@@ -619,6 +623,7 @@ mod tests {
         let snapshot = MemoryApi::ledger_snapshot().expect("ledger snapshot");
         assert_eq!(snapshot.format_id, 1);
         assert_eq!(snapshot.schema_version, 1);
+        assert_eq!(snapshot.layout_epoch, 1);
         assert!(snapshot.authorities.iter().any(|authority| {
             authority.owner == "canic.framework"
                 && authority.range == MemoryRange { start: 0, end: 99 }
