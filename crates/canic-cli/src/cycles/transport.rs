@@ -355,7 +355,7 @@ fn unsigned_hourly_rate(value: u128, coverage_seconds: u64) -> Option<u128> {
     Some(value.saturating_mul(3_600) / u128::from(coverage_seconds))
 }
 
-fn inferred_burn_cycles(topup_cycles: u128, delta_cycles: i128) -> Option<u128> {
+const fn inferred_burn_cycles(topup_cycles: u128, delta_cycles: i128) -> Option<u128> {
     if delta_cycles < 0 {
         return Some(topup_cycles.saturating_add(delta_cycles.unsigned_abs()));
     }
