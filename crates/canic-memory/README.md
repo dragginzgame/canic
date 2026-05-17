@@ -136,7 +136,7 @@ as a dynamic allocator.
 ```rust
 use canic_memory::api::MemoryApi;
 
-fn open_commit_marker(memory_id: u8) {
+fn declare_commit_marker(memory_id: u8) {
     MemoryApi::declare_with_key(
         memory_id,
         "my_crate",
@@ -144,29 +144,32 @@ fn open_commit_marker(memory_id: u8) {
         "my_crate.commit_marker.v1",
     )
         .expect("commit marker declaration must be valid");
+}
 
+fn bootstrap_memory() {
     MemoryApi::bootstrap_owner_range("my_crate", 100, 109)
         .expect("stable memory layout must be valid");
+}
 
-    let memory = MemoryApi::register_with_key(
+fn open_commit_marker(memory_id: u8) {
+    let _memory = MemoryApi::register_with_key(
         memory_id,
         "my_crate",
         "CommitMarker",
         "my_crate.commit_marker.v1",
     )
         .expect("commit marker slot must be in range");
-
-    let _ = memory;
 }
 ```
 
 `MemoryApi::declare_with_key(...)` is the allocation claim. It is accepted only
 before bootstrap seals the runtime declaration snapshot and it does not open the
 underlying virtual memory. `MemoryApi::register_with_key(...)` opens an
-already-validated slot; it is not a dynamic allocation API. Reusing the same ID
-for a different stable key or moving the same stable key to another ID remains
-fatal. Owner and label metadata may change across refactors; the stable key
-must not.
+already-validated slot after bootstrap has succeeded; it is not a dynamic
+allocation API and endpoint code must not use it to introduce new declarations.
+Reusing the same ID for a different stable key or moving the same stable key to
+another ID remains fatal. Owner and label metadata may change across refactors;
+the stable key must not.
 
 If a store wants diagnostic schema metadata in the ledger, use
 `declare_with_key_metadata(...)`:

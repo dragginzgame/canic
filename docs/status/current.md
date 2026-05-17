@@ -313,6 +313,10 @@ inspect only the files needed for the current task.
 - Started `0.38.3` by moving `canic_memory_ledger` into the default Canic
   runtime endpoint bundles, including the canonical `wasm_store` surface, while
   keeping the heavier live `canic_memory_registry` diagnostic opt-in.
+- Started `0.38.4` by extending the source-level stable-memory ABI guard across
+  the Canic-managed runtime surface, including the canonical `wasm_store`, and
+  clarifying `canic-memory` documentation around declaration, bootstrap, and
+  post-validation opening phases.
 - Added a source-level guard test that rejects implicit registration, direct
   raw stable-memory APIs, independent `MemoryManager` access, and
   `RestrictedMemory` carve-outs in framework-owned crates.

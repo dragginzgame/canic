@@ -5,14 +5,21 @@ use std::{
     path::{Path, PathBuf},
 };
 
-const FRAMEWORK_CRATES: &[&str] = &["canic", "canic-core", "canic-control-plane"];
+const CANIC_MANAGED_RUNTIME_CRATES: &[&str] = &[
+    "canic",
+    "canic-cdk",
+    "canic-core",
+    "canic-control-plane",
+    "canic-macros",
+    "canic-wasm-store",
+];
 
 #[test]
-fn framework_memory_code_uses_managed_explicit_stable_keys() {
+fn canic_managed_runtime_code_uses_managed_explicit_stable_keys() {
     let workspace_root = workspace_root();
     let mut violations = Vec::new();
 
-    for crate_name in FRAMEWORK_CRATES {
+    for crate_name in CANIC_MANAGED_RUNTIME_CRATES {
         scan_dir(
             &workspace_root.join("crates").join(crate_name).join("src"),
             &mut violations,
@@ -21,7 +28,7 @@ fn framework_memory_code_uses_managed_explicit_stable_keys() {
 
     assert!(
         violations.is_empty(),
-        "framework stable-memory code must not bypass the managed explicit-key ABI: {violations:?}"
+        "Canic-managed runtime code must not bypass the managed explicit-key ABI: {violations:?}"
     );
 }
 
