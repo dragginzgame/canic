@@ -18,7 +18,7 @@ use crate::{
         candid::Principal,
         structures::{BTreeMap, DefaultMemoryImpl, memory::VirtualMemory},
     },
-    eager_static, ic_memory,
+    eager_static,
     ids::CanisterRole,
     storage::{canister::CanisterRecord, stable::memory::topology::SUBNET_REGISTRY_ID},
 };
@@ -28,7 +28,7 @@ eager_static! {
     static SUBNET_REGISTRY: RefCell<
         BTreeMap<Principal, CanisterRecord, VirtualMemory<DefaultMemoryImpl>>
     > = RefCell::new(BTreeMap::init(
-        ic_memory!(SubnetRegistry, SUBNET_REGISTRY_ID)
+        canic_memory::ic_memory_key!("canic.core.subnet_registry.v1", SubnetRegistry, SUBNET_REGISTRY_ID)
     ));
 }
 

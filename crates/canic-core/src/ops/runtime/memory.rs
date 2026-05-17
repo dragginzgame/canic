@@ -74,6 +74,7 @@ impl MemoryRegistryInitSummary {
                 id,
                 crate_name: entry.crate_name,
                 label: entry.label,
+                stable_key: entry.stable_key,
             })
             .collect();
 
@@ -88,7 +89,7 @@ impl MemoryRegistryInitSummary {
 pub struct MemoryRegistryOps;
 
 impl MemoryRegistryOps {
-    // Run eager TLS touches before the registry initializes stable-memory slots.
+    // Run eager TLS touches after the registry validates stable-memory slots.
     pub fn init_eager_tls() {
         init_eager_tls();
     }
@@ -109,9 +110,10 @@ impl MemoryRegistryOps {
 
     // Run the full synchronous Canic memory bootstrap and return the committed layout.
     pub fn bootstrap_registry() -> Result<MemoryRegistryInitSummary, InternalError> {
-        Self::init_eager_tls();
         Self::run_registered_eager_init();
-        Self::init_registry()
+        let summary = Self::init_registry()?;
+        Self::init_eager_tls();
+        Ok(summary)
     }
 
     #[cfg(target_arch = "wasm32")]
@@ -138,6 +140,7 @@ impl MemoryRegistryOps {
                 id,
                 crate_name: entry.crate_name,
                 label: entry.label,
+                stable_key: entry.stable_key,
             })
             .collect()
     }

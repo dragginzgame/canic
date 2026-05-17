@@ -1,6 +1,6 @@
 use crate::{
     cdk::structures::{DefaultMemoryImpl, cell::Cell, memory::VirtualMemory},
-    eager_static, ic_memory,
+    eager_static,
     storage::{prelude::*, stable::memory::env::ENV_ID},
 };
 use std::cell::RefCell;
@@ -12,7 +12,7 @@ eager_static! {
     //
     static ENV: RefCell<Cell<EnvRecord, VirtualMemory<DefaultMemoryImpl>>> =
         RefCell::new(Cell::init(
-            ic_memory!(EnvRecord, ENV_ID),
+            canic_memory::ic_memory_key!("canic.core.env.v1", EnvRecord, ENV_ID),
             EnvRecord::default(),
         ));
 }

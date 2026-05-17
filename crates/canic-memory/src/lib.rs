@@ -8,6 +8,7 @@
 /// Supported high-level API for bootstrapping, registering, and inspecting
 /// stable-memory slots.
 pub mod api;
+mod ledger;
 mod macros;
 #[doc(hidden)]
 pub mod manager;

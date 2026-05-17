@@ -6,7 +6,7 @@ use crate::{
         log::{Log as StableLogImpl, WriteError},
         memory::VirtualMemory,
     },
-    eager_static, ic_memory,
+    eager_static,
     log::{Level, Topic},
     memory::impl_storable_unbounded,
     storage::{
@@ -55,8 +55,16 @@ struct LogMemory {
 impl LogMemory {
     fn new() -> Self {
         Self {
-            index: ic_memory!(LogIndexMemory, LOG_INDEX_ID),
-            data: ic_memory!(LogDataMemory, LOG_DATA_ID),
+            index: canic_memory::ic_memory_key!(
+                "canic.core.log_index.v1",
+                LogIndexMemory,
+                LOG_INDEX_ID
+            ),
+            data: canic_memory::ic_memory_key!(
+                "canic.core.log_data.v1",
+                LogDataMemory,
+                LOG_DATA_ID
+            ),
         }
     }
 }

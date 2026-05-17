@@ -3,11 +3,11 @@ use canic_cdk::{
     structures::{DefaultMemoryImpl, cell::Cell, memory::VirtualMemory},
     types::Principal,
 };
-use canic_memory::{eager_static, ic_memory, impl_storable_bounded};
+use canic_memory::{eager_static, impl_storable_bounded};
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 
-const SUBNET_STATE_ID: u8 = 60;
+const SUBNET_STATE_ID: u8 = 9;
 
 eager_static! {
     //
@@ -16,7 +16,7 @@ eager_static! {
     //
     static SUBNET_STATE: RefCell<Cell<SubnetStateRecord, VirtualMemory<DefaultMemoryImpl>>> =
         RefCell::new(Cell::init(
-            ic_memory!(SubnetState, SUBNET_STATE_ID),
+            canic_memory::ic_memory_key!("canic.control_plane.subnet_state.v1", SubnetState, SUBNET_STATE_ID),
             SubnetStateRecord::default(),
         ));
 }

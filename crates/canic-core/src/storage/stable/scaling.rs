@@ -4,7 +4,7 @@ use crate::{
         structures::{BTreeMap, DefaultMemoryImpl, memory::VirtualMemory},
         types::BoundedString64,
     },
-    eager_static, ic_memory,
+    eager_static,
     ids::CanisterRole,
     memory::impl_storable_bounded,
     storage::stable::memory::placement::SCALING_REGISTRY_ID,
@@ -16,7 +16,7 @@ eager_static! {
     static SCALING_REGISTRY: RefCell<
         BTreeMap<Principal, WorkerEntryRecord, VirtualMemory<DefaultMemoryImpl>>
     > = RefCell::new(
-        BTreeMap::init(ic_memory!(ScalingRegistry, SCALING_REGISTRY_ID)),
+        BTreeMap::init(canic_memory::ic_memory_key!("canic.core.scaling_registry.v1", ScalingRegistry, SCALING_REGISTRY_ID)),
     );
 }
 

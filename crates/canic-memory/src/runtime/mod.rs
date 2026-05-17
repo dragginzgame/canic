@@ -25,6 +25,8 @@ use std::sync::{
 static CANIC_EAGER_TLS: Mutex<Vec<fn()>> = Mutex::new(Vec::new());
 static CANIC_EAGER_TLS_RUNNING: AtomicBool = AtomicBool::new(false);
 static CANIC_EAGER_INIT: Mutex<Vec<fn()>> = Mutex::new(Vec::new());
+#[cfg(any(test, debug_assertions))]
+static TEST_BOOTSTRAP_HOOK: Mutex<Option<fn()>> = Mutex::new(None);
 
 /// Run all deferred TLS initializers and clear the registry.
 ///
@@ -76,8 +78,9 @@ pub fn init_eager_tls() {
 /// Run all registered eager-init hooks and clear the registry.
 ///
 /// This drains the internal queue of eager-init functions and invokes each
-/// exactly once. Canic uses this during synchronous lifecycle bootstrap after
-/// eager TLS initialization and before the memory registry is committed.
+/// exactly once. Canic uses this during synchronous lifecycle bootstrap before
+/// the memory registry is committed, so explicit range declarations can be
+/// collected without opening stable-memory handles.
 pub fn run_registered_eager_init() {
     let funcs = {
         let mut funcs = CANIC_EAGER_INIT.lock().expect("eager init queue poisoned");
@@ -106,13 +109,21 @@ pub fn is_eager_tls_initializing() -> bool {
 /// Return whether memory access is currently allowed during bootstrap.
 #[must_use]
 pub fn is_memory_bootstrap_ready() -> bool {
-    is_eager_tls_initializing() || registry::MemoryRegistryRuntime::is_initialized()
+    registry::MemoryRegistryRuntime::is_initialized()
 }
 
 /// Panic if a stable-memory slot is touched before memory bootstrap is ready.
 pub fn assert_memory_bootstrap_ready(label: &str, id: u8) {
     if is_memory_bootstrap_ready() {
         return;
+    }
+
+    #[cfg(any(test, debug_assertions))]
+    {
+        run_test_bootstrap_hook();
+        if is_memory_bootstrap_ready() {
+            return;
+        }
     }
 
     panic!(
@@ -140,6 +151,35 @@ pub fn defer_eager_init(f: fn()) {
         .push(f);
 }
 
+/// Install a test-only hook that can run the crate's normal memory bootstrap
+/// before host unit tests first touch macro-backed stable memory.
+#[cfg(any(test, debug_assertions))]
+pub fn install_test_bootstrap_hook(hook: fn()) {
+    *TEST_BOOTSTRAP_HOOK
+        .lock()
+        .expect("test bootstrap hook poisoned") = Some(hook);
+}
+
+/// Return whether a test bootstrap hook has been installed.
+#[cfg(any(test, debug_assertions))]
+#[must_use]
+pub fn has_test_bootstrap_hook() -> bool {
+    TEST_BOOTSTRAP_HOOK
+        .lock()
+        .expect("test bootstrap hook poisoned")
+        .is_some()
+}
+
+#[cfg(any(test, debug_assertions))]
+fn run_test_bootstrap_hook() {
+    let hook = *TEST_BOOTSTRAP_HOOK
+        .lock()
+        .expect("test bootstrap hook poisoned");
+    if let Some(hook) = hook {
+        hook();
+    }
+}
+
 ///
 /// MemoryRuntimeApi
 ///
@@ -148,24 +188,26 @@ pub fn defer_eager_init(f: fn()) {
 pub struct MemoryRuntimeApi;
 
 impl MemoryRuntimeApi {
-    /// Bootstrap eager TLS, eager-init hooks, and the memory registry for the given owner range.
+    /// Bootstrap eager-init hooks, the memory registry, and eager TLS for the given owner range.
     pub fn bootstrap_registry(
         crate_name: &'static str,
         start: u8,
         end: u8,
     ) -> Result<registry::MemoryRegistryInitSummary, MemoryRegistryError> {
-        init_eager_tls();
         run_registered_eager_init();
-        registry::MemoryRegistryRuntime::init(Some((crate_name, start, end)))
+        let summary = registry::MemoryRegistryRuntime::init(Some((crate_name, start, end)))?;
+        init_eager_tls();
+        Ok(summary)
     }
 
-    /// Bootstrap eager TLS, eager-init hooks, and flush deferred registry state
-    /// without reserving a new owner range.
+    /// Bootstrap eager-init hooks, flush deferred registry state, and then
+    /// initialize eager TLS without reserving a new owner range.
     pub fn bootstrap_registry_without_range()
     -> Result<registry::MemoryRegistryInitSummary, MemoryRegistryError> {
-        init_eager_tls();
         run_registered_eager_init();
-        registry::MemoryRegistryRuntime::init(None)
+        let summary = registry::MemoryRegistryRuntime::init(None)?;
+        init_eager_tls();
+        Ok(summary)
     }
 }
 
@@ -176,9 +218,13 @@ impl MemoryRuntimeApi {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::atomic::{AtomicU32, Ordering};
+    use std::sync::{
+        Mutex,
+        atomic::{AtomicU32, Ordering},
+    };
 
     static COUNT: AtomicU32 = AtomicU32::new(0);
+    static TEST_LOCK: Mutex<()> = Mutex::new(());
 
     fn bump() {
         COUNT.fetch_add(1, Ordering::SeqCst);
@@ -186,6 +232,7 @@ mod tests {
 
     #[test]
     fn init_eager_tls_runs_and_clears_queue() {
+        let _guard = TEST_LOCK.lock().expect("test lock poisoned");
         COUNT.store(0, Ordering::SeqCst);
         CANIC_EAGER_TLS
             .lock()
@@ -203,6 +250,7 @@ mod tests {
 
     #[test]
     fn run_registered_eager_init_runs_and_clears_queue() {
+        let _guard = TEST_LOCK.lock().expect("test lock poisoned");
         COUNT.store(0, Ordering::SeqCst);
         CANIC_EAGER_INIT
             .lock()

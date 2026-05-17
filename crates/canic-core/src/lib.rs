@@ -76,6 +76,29 @@ pub const CANIC_MEMORY_MAX: u8 = storage::stable::CANIC_MEMORY_MAX;
 // The management canister wasm chunk store rejects larger payloads.
 pub const CANIC_WASM_CHUNK_BYTES: usize = 1_048_576;
 
+#[cfg(test)]
+const _: () = {
+    use std::sync::Once;
+
+    fn __canic_memory_test_bootstrap() {
+        static ONCE: Once = Once::new();
+
+        ONCE.call_once(|| {
+            crate::api::runtime::MemoryRuntimeApi::bootstrap_registry()
+                .expect("test stable-memory bootstrap");
+        });
+    }
+
+    #[canic_memory::__reexports::ctor::ctor(
+        unsafe,
+        anonymous,
+        crate_path = canic_memory::__reexports::ctor
+    )]
+    fn __canic_install_memory_test_bootstrap_hook() {
+        canic_memory::runtime::install_test_bootstrap_hook(__canic_memory_test_bootstrap);
+    }
+};
+
 #[macro_export]
 macro_rules! perf {
     ($($label:tt)*) => {{
@@ -101,4 +124,12 @@ macro_rules! assert_err_variant {
             other => panic!("unexpected error variant: {other:?}"),
         }
     }};
+}
+
+#[cfg(test)]
+mod memory_bootstrap_tests {
+    #[test]
+    fn installs_host_test_bootstrap_hook() {
+        assert!(canic_memory::runtime::has_test_bootstrap_hook());
+    }
 }

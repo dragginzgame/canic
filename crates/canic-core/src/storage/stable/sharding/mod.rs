@@ -23,8 +23,8 @@ use std::cell::RefCell;
 eager_static! {
     static SHARDING_CORE: RefCell<ShardingCore<VirtualMemory<DefaultMemoryImpl>>> = RefCell::new(
         ShardingCore::new(
-            BTreeMap::init(ic_memory!(ShardingRegistry, SHARDING_REGISTRY_ID)),
-            BTreeMap::init(ic_memory!(ShardingRegistry, SHARDING_ASSIGNMENT_ID)),
+            BTreeMap::init(canic_memory::ic_memory_key!("canic.core.sharding_registry.v1", ShardingRegistry, SHARDING_REGISTRY_ID)),
+            BTreeMap::init(canic_memory::ic_memory_key!("canic.core.sharding_assignment.v1", ShardingRegistry, SHARDING_ASSIGNMENT_ID)),
         )
     );
 }

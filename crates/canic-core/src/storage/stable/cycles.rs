@@ -9,7 +9,6 @@ use crate::{
         stable::memory::observability::{CYCLE_TOPUP_EVENTS_ID, CYCLE_TRACKER_ID},
     },
 };
-use canic_memory::ic_memory;
 use std::{borrow::Cow, cell::RefCell};
 
 eager_static! {
@@ -18,7 +17,7 @@ eager_static! {
     //
     static CYCLE_TRACKER: RefCell<CycleTracker> =
         RefCell::new(CycleTracker::new(BTreeMap::init(
-            ic_memory!(CycleTracker, CYCLE_TRACKER_ID),
+            canic_memory::ic_memory_key!("canic.core.cycle_tracker.v1", CycleTracker, CYCLE_TRACKER_ID),
         )));
 }
 
@@ -28,7 +27,7 @@ eager_static! {
     //
     static CYCLE_TOPUP_EVENTS: RefCell<CycleTopupEvents> =
         RefCell::new(CycleTopupEvents::new(BTreeMap::init(
-            ic_memory!(CycleTopupEvents, CYCLE_TOPUP_EVENTS_ID),
+            canic_memory::ic_memory_key!("canic.core.cycle_topup_events.v1", CycleTopupEvents, CYCLE_TOPUP_EVENTS_ID),
         )));
 }
 

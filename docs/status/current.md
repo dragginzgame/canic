@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-05-16
+Last updated: 2026-05-17
 
 ## Purpose
 
@@ -9,11 +9,17 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
-- Active minor: `0.37.x` cleanup
-- Theme: cleanup-only minor after the completed 0.36 backup/restore operator
-  flow; avoid adding new backup/restore v1 scope until real operator use
-  exposes a bug or missing workflow.
-- Current release-work area: audit-driven cleanup and small correctness fixes.
+- Active minor: `0.38.x` stable-memory ABI hardening.
+- Theme: hard-cut stable-memory allocation ABI before more runtime storage
+  accretes around implicit owner/label identity.
+- Current release-work area: `canic-memory` ledger enforcement, explicit stable
+  keys, bootstrap declaration validation, and framework/application range
+  separation.
+- Design started at
+  `docs/design/0.38-stable-memory-abi/0.38-design.md`; the core issue is that
+  stable memory IDs are disk ABI, so Canic needs explicit stable keys,
+  persisted ledger enforcement, and a clear `0-99` framework / `100-254`
+  application boundary.
 
 ## Recent Work
 
@@ -239,6 +245,52 @@ inspect only the files needed for the current task.
   app-mode facts and whitelist config reads behind ops helpers, added an
   access storage/stable-type layering guard, and documented delegated-token
   boundary decode plus delegated-session cleanup as watchpoints.
+- Added and ran the security-boundary ordering audit at
+  `docs/audits/reports/2026-05/2026-05-16/security-boundary-ordering.md`. It
+  found no critical ordering violation and added guards for authenticated
+  endpoint macro access-before-dispatch ordering plus cached root response
+  attestation payload subject binding.
+- Started `0.37.2` by restoring stable-memory ABI tracking in `canic-memory`:
+  ID `0` now stores a persisted layout ledger, and historical range or ID drift
+  is rejected even if the old declaration is removed from the current binary.
+- Started the `0.38.0` hard-cut by making ID `0` the canonical ledger
+  self-record, treating IDs `1-99` as Canic framework expansion budget,
+  widening `canic-core` to `11-99`, and moving downstream application memory
+  to `100-254`.
+- Added explicit stable-memory ABI keys for Canic-owned memory declarations so
+  package, module, type, or label renames do not silently allocate new stable
+  memories or strand old ones.
+- Started the 0.38 stable-memory ABI design at
+  `docs/design/0.38-stable-memory-abi/0.38-design.md` so this work can move as
+  an urgent minor instead of remaining a patch-level cleanup note.
+- Added current declaration-snapshot validation so duplicate memory IDs,
+  duplicate stable keys, and exact duplicate declarations fail before user
+  ledger records are committed during bootstrap.
+- Added historical-ledger preflight for pending bootstrap claims so failed
+  bootstrap validation cannot persist earlier user claims from the same
+  snapshot before a later historical conflict is discovered.
+- Reworked the persisted layout ledger into a generation-framed store with two
+  committed slots, generation checksums, header metadata, and highest-valid
+  generation selection.
+- Ledger mutation, validation, and diagnostic snapshots now fail closed if no
+  committed generation validates.
+- Tightened namespace enforcement so non-Canic crates cannot claim `canic.*`
+  stable keys even if they choose IDs inside the framework range.
+- Split public `MemoryApi` declaration from opening: startup code can declare
+  explicit-key slots before bootstrap, and post-bootstrap calls only open
+  already-validated slots instead of creating new ledger claims.
+- Split `ic_memory_key!` macro declaration from opening as well: constructors
+  queue declaration descriptors before registry validation, and eager stable
+  stores open virtual memory only after the runtime registry is validated.
+- Made the macro open guard target-independent and added host-test bootstrap
+  hooks for core and control-plane tests so unit tests validate before opening
+  stable-store handles.
+- Added `MemoryApi::ledger_snapshot()` as a first diagnostic read path over
+  persisted ABI ledger history that does not depend on current registry
+  reconstruction.
+- Added a source-level guard test that rejects implicit registration, direct
+  raw stable-memory APIs, independent `MemoryManager` access, and
+  `RestrictedMemory` carve-outs in framework-owned crates.
 - Split root install guidance into `INSTALLING.md` and refreshed README
   examples around the current `canic info list` command group.
 - Renamed the test fleet scaling worker role from `scale` to `scale_replica`,

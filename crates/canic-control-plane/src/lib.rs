@@ -10,8 +10,22 @@ const _: () = {
         anonymous,
         crate_path = canic_memory::__reexports::ctor
     )]
-    fn __canic_reserve_template_memory_range() {
-        canic_memory::ic_memory_range!(10, 12);
+    fn __canic_reserve_control_plane_memory_range() {
+        canic_memory::ic_memory_range!(5, 10);
+    }
+};
+
+#[cfg(test)]
+const _: () = {
+    use std::sync::Once;
+
+    fn __canic_memory_test_bootstrap() {
+        static ONCE: Once = Once::new();
+
+        ONCE.call_once(|| {
+            canic_core::api::runtime::MemoryRuntimeApi::bootstrap_registry()
+                .expect("test stable-memory bootstrap");
+        });
     }
 
     #[canic_memory::__reexports::ctor::ctor(
@@ -19,8 +33,8 @@ const _: () = {
         anonymous,
         crate_path = canic_memory::__reexports::ctor
     )]
-    fn __canic_reserve_control_plane_memory_range() {
-        canic_memory::ic_memory_range!(60, 62);
+    fn __canic_install_memory_test_bootstrap_hook() {
+        canic_memory::runtime::install_test_bootstrap_hook(__canic_memory_test_bootstrap);
     }
 };
 

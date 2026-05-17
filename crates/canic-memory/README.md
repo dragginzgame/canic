@@ -14,7 +14,8 @@ source should only need Rust `1.91.0` or newer.
 - A shared `MemoryManager<DefaultMemoryImpl>` used by all helpers.
 - Per-crate memory ID range reservation and overlap validation.
 - `ic_memory!` and `ic_memory_range!` for declarative stable-memory slots.
-- `MemoryApi` for runtime-selected stable-memory IDs.
+- `MemoryApi` for declaring startup-selected stable-memory IDs and opening
+  validated slots.
 - `eager_static!` and `eager_init!` for deterministic startup initialization.
 - `impl_storable_bounded!` and `impl_storable_unbounded!` for CBOR-backed
   `Storable` implementations.
@@ -44,14 +45,16 @@ use canic_memory::cdk::structures::{
     BTreeMap, DefaultMemoryImpl,
     memory::VirtualMemory,
 };
-use canic_memory::{eager_static, ic_memory};
+use canic_memory::{eager_static, ic_memory_key};
 use std::cell::RefCell;
 
 struct Users;
 
 eager_static! {
     pub static USERS: RefCell<BTreeMap<u64, u64, VirtualMemory<DefaultMemoryImpl>>> =
-        RefCell::new(BTreeMap::init(ic_memory!(Users, 10)));
+        RefCell::new(BTreeMap::init(
+            ic_memory_key!("my_app.users.v1", Users, 100),
+        ));
 }
 ```
 
@@ -62,17 +65,21 @@ structures:
 use canic_memory::api::MemoryApi;
 
 fn init_memory() {
-    MemoryApi::bootstrap_owner_range(env!("CARGO_PKG_NAME"), 10, 19)
+    MemoryApi::bootstrap_owner_range(env!("CARGO_PKG_NAME"), 100, 109)
         .expect("stable memory layout must be valid");
 }
 ```
 
 `bootstrap_owner_range(...)` performs the standalone startup sequence:
 
-1. Touch every `eager_static!` thread-local.
-2. Run every registered `eager_init!` body.
-3. Reserve the caller's owner range.
-4. Flush pending `ic_memory_range!` and `ic_memory!` registrations.
+1. Collect constructor-registered `ic_memory_key!` and `ic_memory!`
+   declarations without opening their virtual memories.
+2. Run every registered `eager_init!` body so `ic_memory_range!` declarations
+   are collected.
+3. Reserve the caller's owner range and validate the sealed declaration
+   snapshot against the persisted ledger.
+4. Touch every `eager_static!` thread-local after validation so stable stores
+   can open their already-approved memory handles.
 
 When using the full Canic facade (`canic::start!` or `canic::start_root!`), Canic
 runs this lifecycle wiring for you.
@@ -97,33 +104,64 @@ Range validation catches:
 - duplicate IDs
 - IDs outside the owner's reserved range
 - IDs owned by another crate
-- ID `255`, which is reserved for stable-structures internals
+- historical reuse of an ID or range recorded by the persisted layout ledger
+- ID `255`, which is the unallocated-bucket sentinel and is not a usable
+  virtual memory ID
 
 Exact duplicate range reservations for the same crate are allowed so init and
 post-upgrade can share the same bootstrap path.
 
+`canic-memory` reserves ID `0` for the persisted layout ledger. ID `0` stores
+every owner range and memory ID that has been registered through the bootstrap
+path, so removed declarations remain historical reservations rather than
+becoming silently reusable. Canic framework keys (`canic.*`) must use IDs
+`0-99`; downstream application keys must use `100-254`. IDs `1-99` are Canic
+framework expansion budget, not application space. The full Canic runtime stack
+currently uses `5-10` for control-plane stores and `11-99` for core runtime
+stores and future framework allocation.
+
 ## Runtime-Selected Slots
 
-Use `MemoryApi` when the memory ID is chosen dynamically and `ic_memory!` is not
-a good fit.
+Use `MemoryApi` when the memory ID is chosen during startup and
+`ic_memory_key!` is not a good fit. Declaration and opening are separate:
+declare the slot before bootstrap, then open it only after bootstrap validates
+the sealed declaration snapshot. Endpoint code must not call declaration APIs
+as a dynamic allocator.
 
 ```rust
 use canic_memory::api::MemoryApi;
 
 fn open_commit_marker(memory_id: u8) {
-    MemoryApi::bootstrap_owner_range("my_crate", 10, 19)
+    MemoryApi::declare_with_key(
+        memory_id,
+        "my_crate",
+        "CommitMarker",
+        "my_crate.commit_marker.v1",
+    )
+        .expect("commit marker declaration must be valid");
+
+    MemoryApi::bootstrap_owner_range("my_crate", 100, 109)
         .expect("stable memory layout must be valid");
 
-    let memory = MemoryApi::register(memory_id, "my_crate", "CommitMarker")
+    let memory = MemoryApi::register_with_key(
+        memory_id,
+        "my_crate",
+        "CommitMarker",
+        "my_crate.commit_marker.v1",
+    )
         .expect("commit marker slot must be in range");
 
     let _ = memory;
 }
 ```
 
-`MemoryApi::register(...)` is idempotent for the same owner and label, but it
-returns `MemoryRegistryError::DuplicateId` if the same ID is reused for a
-different registration.
+`MemoryApi::declare_with_key(...)` is the allocation claim. It is accepted only
+before bootstrap seals the runtime declaration snapshot and it does not open the
+underlying virtual memory. `MemoryApi::register_with_key(...)` opens an
+already-validated slot; it is not a dynamic allocation API. Reusing the same ID
+for a different stable key or moving the same stable key to another ID remains
+fatal. Owner and label metadata may change across refactors; the stable key
+must not.
 
 ## Registry Introspection
 
@@ -150,6 +188,8 @@ fn validate_slots(memory_id: u8) {
 
 Lower-level registry snapshot helpers also exist for debugging and tests:
 
+- `MemoryApi::ledger_snapshot()` for a fallible persisted-ledger diagnostic
+  read
 - `MemoryRegistry::export_range_entries()`
 - `MemoryRegistry::export_ids_by_range()`
 
@@ -186,7 +226,7 @@ post-upgrade before handling user calls:
 use canic_memory::api::MemoryApi;
 
 fn bootstrap_memory() {
-    MemoryApi::bootstrap_owner_range(env!("CARGO_PKG_NAME"), 10, 19)
+    MemoryApi::bootstrap_owner_range(env!("CARGO_PKG_NAME"), 100, 109)
         .expect("stable memory layout must be valid");
 }
 ```
@@ -202,9 +242,10 @@ fn bootstrap_memory() {
 }
 ```
 
-Accessing an `ic_memory!` slot on `wasm32` before bootstrap will panic with a
-message pointing back to memory bootstrap. This is intentional: stable memory
-layout problems should fail during lifecycle startup, not during a user call.
+Accessing an `ic_memory!` or `ic_memory_key!` slot before bootstrap will panic
+with a message pointing back to memory bootstrap. This is intentional: stable
+memory layout problems should fail during lifecycle startup, not during a user
+call.
 
 ## Testing
 
@@ -215,9 +256,14 @@ Unit tests that touch the registry can reset global state with
 #[test]
 fn reserves_and_registers() {
     canic_memory::registry::reset_for_tests();
-    canic_memory::api::MemoryApi::bootstrap_owner_range("my_crate", 1, 2)
+    canic_memory::api::MemoryApi::bootstrap_owner_range("my_crate", 100, 101)
         .expect("bootstrap registry");
-    canic_memory::registry::MemoryRegistry::register(1, "my_crate", "Slot")
+    canic_memory::registry::MemoryRegistry::register_with_key(
+        100,
+        "my_crate",
+        "Slot",
+        "my_crate.slot.v1",
+    )
         .expect("register slot");
 }
 ```
@@ -235,9 +281,12 @@ fn reserves_and_registers() {
 
 ## Notes
 
-- Memory IDs are `u8` values. Application code may use `0..=254`; `255` is
-  reserved internally.
-- `ic_memory!` labels are type paths. Define a small marker type, such as
-  `struct Users;`, for each slot.
+- Memory IDs are `u8` values. Canic uses `0-99`; application code uses
+  `100-254`; ID `255` is the unallocated-bucket sentinel and is permanently
+  invalid as a virtual memory ID.
+- Prefer `ic_memory_key!` for every Canic-managed memory. The stable key is the
+  ABI identity and should not be renamed when packages, modules, or marker types
+  move. `ic_memory!` remains available for standalone explicit-ID users outside
+  the Canic runtime bootstrap contract.
 - Consumers outside Canic can import only `canic-memory` plus `canic-cdk`; the
   rest of the Canic stack is optional.

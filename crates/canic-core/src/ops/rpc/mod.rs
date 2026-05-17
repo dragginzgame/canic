@@ -555,4 +555,28 @@ mod tests {
             "expired cache entry must not be reused"
         );
     }
+
+    #[test]
+    fn cached_root_response_attestation_rejects_payload_subject_drift() {
+        let root_pid = p(7);
+        let audience_pid = p(8);
+        let subject_pid = p(9);
+        let mut attestation = sample_attestation(subject_pid, audience_pid, 500, 13);
+        attestation.payload.subject = p(10);
+
+        cache_root_response_attestation(root_pid, audience_pid, subject_pid, 13, attestation);
+
+        assert!(
+            cached_root_response_attestation(
+                root_pid,
+                audience_pid,
+                subject_pid,
+                &USER_HUB_ROLE,
+                13,
+                400,
+            )
+            .is_none(),
+            "cached attestation payload must still bind the requested subject"
+        );
+    }
 }

@@ -5,17 +5,17 @@ use crate::ids::{
 use canic_cdk::structures::{
     BTreeMap, DefaultMemoryImpl, memory::VirtualMemory, storable::Storable,
 };
-use canic_memory::{eager_static, ic_memory, impl_storable_bounded};
+use canic_memory::{eager_static, impl_storable_bounded};
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 
-const TEMPLATE_MANIFESTS_ID: u8 = 10;
+const TEMPLATE_MANIFESTS_ID: u8 = 5;
 
 eager_static! {
     static TEMPLATE_MANIFESTS: RefCell<
         BTreeMap<TemplateReleaseKey, TemplateManifestRecord, VirtualMemory<DefaultMemoryImpl>>
     > = RefCell::new(
-        BTreeMap::init(ic_memory!(TemplateManifestStateStore, TEMPLATE_MANIFESTS_ID)),
+        BTreeMap::init(canic_memory::ic_memory_key!("canic.control_plane.template_manifest.v1", TemplateManifestStateStore, TEMPLATE_MANIFESTS_ID)),
     );
 }
 

@@ -3,7 +3,7 @@ use crate::{
         structures::{BTreeMap, DefaultMemoryImpl, memory::VirtualMemory},
         types::{Cycles, Principal},
     },
-    eager_static, ic_memory,
+    eager_static,
     ids::CanisterRole,
     memory::impl_storable_unbounded,
     storage::stable::memory::pool::CANISTER_POOL_ID,
@@ -15,7 +15,7 @@ eager_static! {
     static POOL_STORE: RefCell<
         BTreeMap<Principal, PoolRecord, VirtualMemory<DefaultMemoryImpl>>
     > = RefCell::new(
-        BTreeMap::init(ic_memory!(PoolStore, CANISTER_POOL_ID)),
+        BTreeMap::init(canic_memory::ic_memory_key!("canic.core.canister_pool.v1", PoolStore, CANISTER_POOL_ID)),
     );
 }
 

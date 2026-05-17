@@ -783,4 +783,35 @@ mod tests {
         assert!(compact.contains("identity_source::canic::__internal::core::access::auth::AuthenticatedIdentitySource::RawCaller")
             || compact.contains("identity_source:::canic::__internal::core::access::auth::AuthenticatedIdentitySource::RawCaller"));
     }
+
+    #[test]
+    fn authenticated_endpoint_expansion_evaluates_access_before_dispatch() {
+        let args = make_args(vec![AccessExprAst::Pred(AccessPredicateAst::Builtin(
+            BuiltinPredicate::Authenticated {
+                required_scope: Some(AuthScopeArg::Literal(String::from("write"))),
+            },
+        ))]);
+        let func: ItemFn = syn::parse_quote!(
+            async fn write(
+                token: ::canic::dto::auth::DelegatedToken,
+            ) -> Result<(), ::canic::Error> {
+                Ok(())
+            }
+        );
+
+        let expanded = expand(EndpointKind::Update, args, func).to_string();
+
+        let access = expanded
+            .find("eval_access")
+            .expect("expanded endpoint must evaluate access");
+        let dispatch = expanded
+            .find("dispatch_update_async")
+            .expect("expanded endpoint must dispatch update after access");
+        let impl_call = expanded
+            .find("__canic_impl_write")
+            .expect("expanded endpoint must call implementation");
+
+        assert!(access < dispatch);
+        assert!(dispatch < impl_call);
+    }
 }

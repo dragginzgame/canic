@@ -18,4 +18,5 @@ pub struct MemoryRegistryEntry {
     pub id: u8,
     pub crate_name: String,
     pub label: String,
+    pub stable_key: String,
 }

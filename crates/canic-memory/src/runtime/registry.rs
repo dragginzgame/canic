@@ -1,12 +1,12 @@
+use crate::ledger;
 use crate::registry::{
     MemoryRange, MemoryRangeEntry, MemoryRangeSnapshot, MemoryRegistry, MemoryRegistryEntry,
     MemoryRegistryError, drain_pending_ranges, drain_pending_registrations,
 };
-use std::cell::Cell;
+use std::collections::BTreeSet;
+use std::sync::atomic::{AtomicBool, Ordering};
 
-thread_local! {
-    static MEMORY_REGISTRY_INITIALIZED: Cell<bool> = const { Cell::new(false) };
-}
+static MEMORY_REGISTRY_INITIALIZED: AtomicBool = AtomicBool::new(false);
 
 ///
 /// MemoryRegistryInitSummary
@@ -50,30 +50,36 @@ impl MemoryRegistryRuntime {
     pub fn init(
         initial_range: Option<(&str, u8, u8)>,
     ) -> Result<MemoryRegistryInitSummary, MemoryRegistryError> {
+        // Apply deferred range reservations deterministically
+        let mut ranges = drain_pending_ranges();
+        ranges.sort_by_key(|(_, start, _)| *start);
+
+        // Apply deferred registrations deterministically
+        let mut regs = drain_pending_registrations();
+        regs.sort_by_key(|(id, _, _, _)| *id);
+        validate_current_registration_snapshot(&regs)?;
+
+        MemoryRegistry::reserve_internal_layout_ledger()?;
+        validate_pending_ledger_claims(initial_range, &ranges, &regs)?;
+
         // Reserve the caller's initial range first (if provided)
         if let Some((crate_name, start, end)) = initial_range {
             MemoryRegistry::reserve_range(crate_name, start, end)?;
         }
 
-        // Apply deferred range reservations deterministically
-        let mut ranges = drain_pending_ranges();
-        ranges.sort_by_key(|(_, start, _)| *start);
         for (crate_name, start, end) in ranges {
             MemoryRegistry::reserve_range(&crate_name, start, end)?;
         }
 
-        // Apply deferred registrations deterministically
-        let mut regs = drain_pending_registrations();
-        regs.sort_by_key(|(id, _, _)| *id);
-        for (id, crate_name, label) in regs {
-            MemoryRegistry::register(id, &crate_name, &label)?;
+        for (id, crate_name, label, stable_key) in regs {
+            MemoryRegistry::register_with_key(id, &crate_name, &label, &stable_key)?;
         }
 
         let summary = MemoryRegistryInitSummary {
             ranges: MemoryRegistry::export_ranges(),
             entries: MemoryRegistry::export(),
         };
-        MEMORY_REGISTRY_INITIALIZED.with(|ready| ready.set(true));
+        MEMORY_REGISTRY_INITIALIZED.store(true, Ordering::SeqCst);
 
         Ok(summary)
     }
@@ -81,7 +87,7 @@ impl MemoryRegistryRuntime {
     /// Return whether the memory registry has completed initialization.
     #[must_use]
     pub fn is_initialized() -> bool {
-        MEMORY_REGISTRY_INITIALIZED.with(Cell::get)
+        MEMORY_REGISTRY_INITIALIZED.load(Ordering::SeqCst)
     }
 
     /// Snapshot all registry entries.
@@ -124,9 +130,67 @@ impl MemoryRegistryRuntime {
             return Ok(());
         }
 
-        let _ = Self::init(None)?;
-        Ok(())
+        let ranges = drain_pending_ranges();
+        let regs = drain_pending_registrations();
+
+        if ranges.is_empty() && regs.is_empty() {
+            return Ok(());
+        }
+
+        Err(MemoryRegistryError::RegistrationAfterBootstrap {
+            ranges: ranges.len(),
+            registrations: regs.len(),
+        })
     }
+}
+
+fn validate_current_registration_snapshot(
+    regs: &[(u8, String, String, String)],
+) -> Result<(), MemoryRegistryError> {
+    let mut ids = BTreeSet::new();
+    let mut stable_keys = BTreeSet::new();
+
+    for (id, _, _, stable_key) in regs {
+        if !ids.insert(*id) {
+            return Err(MemoryRegistryError::DuplicateId(*id));
+        }
+        if !stable_keys.insert(stable_key.clone()) {
+            return Err(MemoryRegistryError::DuplicateStableKey(stable_key.clone()));
+        }
+    }
+
+    Ok(())
+}
+
+fn validate_pending_ledger_claims(
+    initial_range: Option<(&str, u8, u8)>,
+    ranges: &[(String, u8, u8)],
+    regs: &[(u8, String, String, String)],
+) -> Result<(), MemoryRegistryError> {
+    if let Some((owner, start, end)) = initial_range {
+        ledger::validate_range(owner, MemoryRange { start, end })?;
+    }
+
+    for (owner, start, end) in ranges {
+        ledger::validate_range(
+            owner,
+            MemoryRange {
+                start: *start,
+                end: *end,
+            },
+        )?;
+    }
+
+    for (id, owner, label, stable_key) in regs {
+        ledger::validate_entry(*id, owner, label, stable_key)?;
+    }
+
+    Ok(())
+}
+
+#[cfg(test)]
+pub(crate) fn reset_initialized_for_tests() {
+    MEMORY_REGISTRY_INITIALIZED.store(false, Ordering::SeqCst);
 }
 
 ///
@@ -136,54 +200,149 @@ impl MemoryRegistryRuntime {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::registry::{defer_register, defer_reserve_range, reset_for_tests};
+    use crate::registry::{
+        defer_register, defer_register_with_key, defer_reserve_range, reset_for_tests,
+    };
 
     #[test]
     fn init_applies_initial_and_pending() {
         reset_for_tests();
-        defer_reserve_range("crate_b", 5, 6).expect("defer range");
-        defer_register(5, "crate_b", "B5").expect("defer register");
+        defer_reserve_range("crate_b", 110, 111).expect("defer range");
+        defer_register(110, "crate_b", "B110").expect("defer register");
 
         let summary =
-            MemoryRegistryRuntime::init(Some(("crate_a", 1, 3))).expect("init should succeed");
+            MemoryRegistryRuntime::init(Some(("crate_a", 100, 102))).expect("init should succeed");
 
-        assert_eq!(summary.ranges.len(), 2);
-        assert_eq!(summary.entries.len(), 1);
-        assert_eq!(summary.entries[0].0, 5);
-        assert_eq!(summary.entries[0].1.label, "B5");
+        assert_eq!(summary.ranges.len(), 3);
+        assert_eq!(summary.entries.len(), 2);
+        assert!(summary.entries.iter().any(|(id, entry)| {
+            *id == 110 && entry.crate_name == "crate_b" && entry.label == "B110"
+        }));
     }
 
     #[test]
     fn init_is_idempotent_for_same_initial_range() {
         reset_for_tests();
 
-        MemoryRegistryRuntime::init(Some(("crate_a", 1, 3))).expect("first init should succeed");
-        MemoryRegistryRuntime::init(Some(("crate_a", 1, 3))).expect("second init should succeed");
+        MemoryRegistryRuntime::init(Some(("crate_a", 100, 102)))
+            .expect("first init should succeed");
+        MemoryRegistryRuntime::init(Some(("crate_a", 100, 102)))
+            .expect("second init should succeed");
     }
 
     #[test]
     fn init_returns_error_on_conflict() {
         reset_for_tests();
-        defer_reserve_range("crate_a", 1, 3).expect("defer range A");
-        defer_reserve_range("crate_b", 3, 4).expect("defer range B");
+        defer_reserve_range("crate_a", 100, 102).expect("defer range A");
+        defer_reserve_range("crate_b", 102, 104).expect("defer range B");
 
         let err = MemoryRegistryRuntime::init(None).unwrap_err();
         assert!(matches!(err, MemoryRegistryError::Overlap { .. }));
     }
 
     #[test]
-    fn commit_pending_after_init_applies_late_deferred_items() {
+    fn init_rejects_duplicate_current_snapshot_id_before_user_ledger_mutation() {
+        reset_for_tests();
+        defer_reserve_range("crate_a", 100, 102).expect("defer range");
+        defer_register_with_key(100, "crate_a", "slot_a", "app.crate_a.slot_a.v1")
+            .expect("defer first register");
+        defer_register_with_key(100, "crate_a", "slot_b", "app.crate_a.slot_b.v1")
+            .expect("defer second register");
+
+        let err = MemoryRegistryRuntime::init(None)
+            .expect_err("duplicate id in one snapshot should fail");
+        assert!(matches!(err, MemoryRegistryError::DuplicateId(100)));
+        assert!(
+            !MemoryRegistry::export_historical()
+                .iter()
+                .any(|(id, _)| *id == 100)
+        );
+    }
+
+    #[test]
+    fn init_rejects_duplicate_current_snapshot_stable_key_before_user_ledger_mutation() {
+        reset_for_tests();
+        defer_reserve_range("crate_a", 100, 102).expect("defer range");
+        defer_register_with_key(100, "crate_a", "slot_a", "app.crate_a.slot.v1")
+            .expect("defer first register");
+        defer_register_with_key(101, "crate_a", "slot_b", "app.crate_a.slot.v1")
+            .expect("defer second register");
+
+        let err = MemoryRegistryRuntime::init(None)
+            .expect_err("duplicate stable key in one snapshot should fail");
+        assert!(
+            matches!(err, MemoryRegistryError::DuplicateStableKey(key) if key == "app.crate_a.slot.v1")
+        );
+        assert!(
+            !MemoryRegistry::export_historical()
+                .iter()
+                .any(|(_, entry)| entry.stable_key == "app.crate_a.slot.v1")
+        );
+    }
+
+    #[test]
+    fn init_rejects_exact_duplicate_current_snapshot_declaration() {
+        reset_for_tests();
+        defer_reserve_range("crate_a", 100, 102).expect("defer range");
+        defer_register_with_key(100, "crate_a", "slot", "app.crate_a.slot.v1")
+            .expect("defer first register");
+        defer_register_with_key(100, "crate_a", "slot", "app.crate_a.slot.v1")
+            .expect("defer second register");
+
+        let err = MemoryRegistryRuntime::init(None)
+            .expect_err("exact duplicate declaration in one snapshot should fail");
+        assert!(matches!(err, MemoryRegistryError::DuplicateId(100)));
+    }
+
+    #[test]
+    fn init_rejects_historical_conflict_before_user_ledger_mutation() {
+        reset_for_tests();
+        ledger::record_range(
+            "crate_a",
+            MemoryRange {
+                start: 100,
+                end: 102,
+            },
+        )
+        .expect("record historical range");
+        ledger::record_entry(100, "crate_a", "slot", "app.crate_a.slot.v1")
+            .expect("record historical entry");
+        defer_reserve_range("crate_a", 100, 102).expect("defer range");
+        defer_register_with_key(101, "crate_a", "new_slot", "app.crate_a.new_slot.v1")
+            .expect("defer non-conflicting register");
+        defer_register_with_key(102, "crate_a", "moved_slot", "app.crate_a.slot.v1")
+            .expect("defer conflicting register");
+
+        let err = MemoryRegistryRuntime::init(None)
+            .expect_err("historical stable key movement should fail before commit");
+        assert!(matches!(
+            err,
+            MemoryRegistryError::HistoricalStableKeyConflict { .. }
+        ));
+        assert!(
+            !MemoryRegistry::export_historical()
+                .iter()
+                .any(|(id, _)| *id == 101)
+        );
+    }
+
+    #[test]
+    fn commit_pending_after_init_rejects_late_deferred_items() {
         reset_for_tests();
 
-        MemoryRegistryRuntime::init(Some(("core", 1, 10))).expect("init should succeed");
-        defer_reserve_range("late", 20, 30).expect("defer late range");
-        defer_register(22, "late", "late_slot").expect("defer late register");
+        MemoryRegistryRuntime::init(Some(("core", 100, 109))).expect("init should succeed");
+        defer_reserve_range("late", 110, 120).expect("defer late range");
+        defer_register(112, "late", "late_slot").expect("defer late register");
 
-        MemoryRegistryRuntime::commit_pending_if_initialized()
-            .expect("late pending commit should succeed");
-
-        let entry = MemoryRegistryRuntime::get(22).expect("late entry should be registered");
-        assert_eq!(entry.crate_name, "late");
-        assert_eq!(entry.label, "late_slot");
+        let err = MemoryRegistryRuntime::commit_pending_if_initialized()
+            .expect_err("late pending commit should fail after bootstrap seal");
+        assert!(matches!(
+            err,
+            MemoryRegistryError::RegistrationAfterBootstrap {
+                ranges: 1,
+                registrations: 1,
+            }
+        ));
+        assert!(MemoryRegistryRuntime::get(112).is_none());
     }
 }

@@ -3,7 +3,7 @@ use crate::{
         structures::{BTreeMap, DefaultMemoryImpl, memory::VirtualMemory},
         types::{BoundedString64, BoundedString128},
     },
-    eager_static, ic_memory,
+    eager_static,
     storage::{prelude::*, stable::memory::placement::DIRECTORY_REGISTRY_ID},
 };
 use std::cell::RefCell;
@@ -12,7 +12,7 @@ eager_static! {
     static DIRECTORY_REGISTRY: RefCell<
         BTreeMap<DirectoryKey, DirectoryEntryRecord, VirtualMemory<DefaultMemoryImpl>>
     > = RefCell::new(
-        BTreeMap::init(ic_memory!(DirectoryRegistry, DIRECTORY_REGISTRY_ID)),
+        BTreeMap::init(canic_memory::ic_memory_key!("canic.core.directory_registry.v1", DirectoryRegistry, DIRECTORY_REGISTRY_ID)),
     );
 }
 

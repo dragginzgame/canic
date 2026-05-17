@@ -17,7 +17,7 @@ pub mod stable;
 pub mod prelude {
     pub use crate::{
         cdk::types::{Cycles, Principal},
-        eager_static, ic_memory,
+        eager_static,
         ids::{CanisterRole, SubnetRole},
         memory::impl_storable_bounded,
         storage::StorageError,

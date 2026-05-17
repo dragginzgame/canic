@@ -18,19 +18,8 @@ pub mod state;
 /// CANIC reserves its primary contiguous range during bootstrap.
 ///
 
-pub const CANIC_MEMORY_MIN: u8 = 13;
-pub const CANIC_MEMORY_MAX: u8 = 59;
-
-const _: () = {
-    #[canic_memory::__reexports::ctor::ctor(
-        unsafe,
-        anonymous,
-        crate_path = canic_memory::__reexports::ctor
-    )]
-    fn __canic_reserve_topology_memory_range() {
-        canic_memory::ic_memory_range!(5, 9);
-    }
-};
+pub const CANIC_MEMORY_MIN: u8 = 11;
+pub const CANIC_MEMORY_MAX: u8 = 99;
 
 ///
 /// CANIC stable memory IDs
@@ -54,127 +43,125 @@ pub mod memory {
     // =====================================================================
 
     // ---------------------------------------------------------------------
-    // Topology & discovery state (5–9)
+    // Topology & discovery state (11–15)
     //
     // Expected growth: low
     // ---------------------------------------------------------------------
 
     pub mod topology {
-        pub const CANISTER_CHILDREN_ID: u8 = 5;
-        pub const APP_INDEX_ID: u8 = 6;
-        pub const SUBNET_INDEX_ID: u8 = 7;
-        pub const APP_REGISTRY_ID: u8 = 8;
-        pub const SUBNET_REGISTRY_ID: u8 = 9;
-
-        // 10–12 are owned by `canic-control-plane`.
+        pub const CANISTER_CHILDREN_ID: u8 = 11;
+        pub const APP_INDEX_ID: u8 = 12;
+        pub const SUBNET_INDEX_ID: u8 = 13;
+        pub const APP_REGISTRY_ID: u8 = 14;
+        pub const SUBNET_REGISTRY_ID: u8 = 15;
     }
 
     // ---------------------------------------------------------------------
-    // Environment & configuration state (13–15)
+    // Environment & configuration state (16–18)
     //
     // Expected growth: very low
     // ---------------------------------------------------------------------
 
     pub mod env {
-        pub const ENV_ID: u8 = 13;
-        pub const SUBNET_STATE_ID: u8 = 14;
+        pub const ENV_ID: u8 = 16;
+        pub const SUBNET_STATE_ID: u8 = 17;
 
-        // Reserved: 15
+        // Reserved: 18
     }
 
     // ---------------------------------------------------------------------
-    // Auth & signing state (16–25)
+    // Auth & signing state (19–28)
     //
     // Expected growth: medium → high (structural, permanent)
     // ---------------------------------------------------------------------
 
     pub mod auth {
-        pub const AUTH_STATE_ID: u8 = 16;
-        pub const ROOT_REPLAY_ID: u8 = 17;
+        pub const AUTH_STATE_ID: u8 = 19;
+        pub const ROOT_REPLAY_ID: u8 = 20;
 
-        // Reserved: 18–25
+        // Reserved: 21–28
     }
 
     // ---------------------------------------------------------------------
-    // Observability & accounting (26–35)
+    // Observability & accounting (29–38)
     //
     // Expected growth: medium
     // ---------------------------------------------------------------------
 
     pub mod observability {
-        pub const CYCLE_TRACKER_ID: u8 = 26;
-        pub const CYCLE_TOPUP_EVENTS_ID: u8 = 27;
-        pub const LOG_INDEX_ID: u8 = 28;
-        pub const LOG_DATA_ID: u8 = 29;
+        pub const CYCLE_TRACKER_ID: u8 = 29;
+        pub const CYCLE_TOPUP_EVENTS_ID: u8 = 30;
+        pub const LOG_INDEX_ID: u8 = 31;
+        pub const LOG_DATA_ID: u8 = 32;
 
-        // Reserved: 30–35
+        // Reserved: 33–38
     }
 
     // ---------------------------------------------------------------------
-    // Intent & reservation state (36–45)
+    // Intent & reservation state (39–48)
     //
     // Expected growth: high
     // ---------------------------------------------------------------------
 
     pub mod intent {
-        pub const INTENT_META_ID: u8 = 36;
-        pub const INTENT_RECORDS_ID: u8 = 37;
-        pub const INTENT_TOTALS_ID: u8 = 38;
-        pub const INTENT_PENDING_ID: u8 = 39;
+        pub const INTENT_META_ID: u8 = 39;
+        pub const INTENT_RECORDS_ID: u8 = 40;
+        pub const INTENT_TOTALS_ID: u8 = 41;
+        pub const INTENT_PENDING_ID: u8 = 42;
 
-        // Reserved: 40–45
+        // Reserved: 43–48
     }
 
     // ---------------------------------------------------------------------
-    // Pool & capacity state (46–48)
+    // Pool & capacity state (49–51)
     //
     // Expected growth: medium
     // ---------------------------------------------------------------------
 
     pub mod pool {
-        pub const CANISTER_POOL_ID: u8 = 46;
+        pub const CANISTER_POOL_ID: u8 = 49;
 
-        // Reserved: 47–48
+        // Reserved: 50–51
     }
 
     // ---------------------------------------------------------------------
-    // Placement, scaling & sharding state (49–58)
+    // Placement, scaling & sharding state (52–61)
     //
     // Expected growth: high
     // ---------------------------------------------------------------------
 
     pub mod placement {
-        pub const SCALING_REGISTRY_ID: u8 = 49;
+        pub const SCALING_REGISTRY_ID: u8 = 52;
         #[cfg(feature = "sharding")]
-        pub const SHARDING_REGISTRY_ID: u8 = 50;
+        pub const SHARDING_REGISTRY_ID: u8 = 53;
         #[cfg(feature = "sharding")]
-        pub const SHARDING_ASSIGNMENT_ID: u8 = 51;
-        pub const DIRECTORY_REGISTRY_ID: u8 = 52;
+        pub const SHARDING_ASSIGNMENT_ID: u8 = 54;
+        pub const DIRECTORY_REGISTRY_ID: u8 = 55;
         #[cfg(feature = "sharding")]
-        pub const SHARDING_ACTIVE_SET_ID: u8 = 53;
+        pub const SHARDING_ACTIVE_SET_ID: u8 = 56;
 
         // Reserved for:
         // - placement policies
         // - shard health / liveness
         // - rebalance / drain state
         // - migration metadata
-        // 54–58
+        // 57–61
     }
 
     // ---------------------------------------------------------------------
-    // Application runtime boundary (59)
+    // Application runtime boundary (62-79)
     //
     // Ownership:
     // - CANIC-controlled runtime state
     // - Upper bound of CANIC ABI
     //
     // Expected growth: low
-    //
-    // 60 is owned by `canic-control-plane`.
     // ---------------------------------------------------------------------
 
     pub mod state {
-        pub const APP_STATE_ID: u8 = 59;
+        pub const APP_STATE_ID: u8 = 62;
+
+        // Reserved: 63-79
     }
 }
 

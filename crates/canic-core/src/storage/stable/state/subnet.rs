@@ -11,7 +11,7 @@ use std::cell::RefCell;
 eager_static! {
     static SUBNET_STATE: RefCell<Cell<SubnetStateRecord, VirtualMemory<DefaultMemoryImpl>>> =
         RefCell::new(Cell::init(
-            ic_memory!(SubnetState, SUBNET_STATE_ID),
+            canic_memory::ic_memory_key!("canic.core.subnet_state.v1", SubnetState, SUBNET_STATE_ID),
             SubnetStateRecord::default(),
         ));
 }
