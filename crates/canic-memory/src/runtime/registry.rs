@@ -1,12 +1,22 @@
 use crate::ledger;
+use crate::manager::{self, RawStableMemoryState};
 use crate::registry::{
     MemoryRange, MemoryRangeEntry, MemoryRangeSnapshot, MemoryRegistry, MemoryRegistryEntry,
-    MemoryRegistryError, drain_pending_ranges, drain_pending_registrations,
+    MemoryRegistryError, PendingRegistration, drain_pending_ranges, drain_pending_registrations,
 };
+#[cfg(test)]
+use std::cell::Cell;
 use std::collections::BTreeSet;
+#[cfg(not(test))]
 use std::sync::atomic::{AtomicBool, Ordering};
 
+#[cfg(not(test))]
 static MEMORY_REGISTRY_INITIALIZED: AtomicBool = AtomicBool::new(false);
+
+#[cfg(test)]
+thread_local! {
+    static MEMORY_REGISTRY_INITIALIZED: Cell<bool> = const { Cell::new(false) };
+}
 
 ///
 /// MemoryRegistryInitSummary
@@ -50,13 +60,17 @@ impl MemoryRegistryRuntime {
     pub fn init(
         initial_range: Option<(&str, u8, u8)>,
     ) -> Result<MemoryRegistryInitSummary, MemoryRegistryError> {
+        let raw_state = manager::classify_raw_stable_memory();
+        validate_raw_stable_memory_state(raw_state)?;
+        ledger::validate_bootstrap_state_before_cell_init(raw_state)?;
+
         // Apply deferred range reservations deterministically
         let mut ranges = drain_pending_ranges();
         ranges.sort_by_key(|(_, start, _)| *start);
 
         // Apply deferred registrations deterministically
         let mut regs = drain_pending_registrations();
-        regs.sort_by_key(|(id, _, _, _)| *id);
+        regs.sort_by_key(|registration| registration.id);
         validate_current_registration_snapshot(&regs)?;
 
         MemoryRegistry::reserve_internal_layout_ledger()?;
@@ -71,15 +85,22 @@ impl MemoryRegistryRuntime {
             MemoryRegistry::reserve_range(&crate_name, start, end)?;
         }
 
-        for (id, crate_name, label, stable_key) in regs {
-            MemoryRegistry::register_with_key(id, &crate_name, &label, &stable_key)?;
+        for registration in regs {
+            MemoryRegistry::register_with_key_metadata(
+                registration.id,
+                &registration.crate_name,
+                &registration.label,
+                &registration.stable_key,
+                registration.schema_version,
+                registration.schema_fingerprint.as_deref(),
+            )?;
         }
 
         let summary = MemoryRegistryInitSummary {
             ranges: MemoryRegistry::export_ranges(),
             entries: MemoryRegistry::export(),
         };
-        MEMORY_REGISTRY_INITIALIZED.store(true, Ordering::SeqCst);
+        set_initialized(true);
 
         Ok(summary)
     }
@@ -87,7 +108,7 @@ impl MemoryRegistryRuntime {
     /// Return whether the memory registry has completed initialization.
     #[must_use]
     pub fn is_initialized() -> bool {
-        MEMORY_REGISTRY_INITIALIZED.load(Ordering::SeqCst)
+        initialized()
     }
 
     /// Snapshot all registry entries.
@@ -144,18 +165,31 @@ impl MemoryRegistryRuntime {
     }
 }
 
+const fn validate_raw_stable_memory_state(
+    raw_state: RawStableMemoryState,
+) -> Result<(), MemoryRegistryError> {
+    match raw_state {
+        RawStableMemoryState::Empty | RawStableMemoryState::MemoryManager => Ok(()),
+        RawStableMemoryState::ForeignOrCorrupt => Err(MemoryRegistryError::LedgerCorrupt {
+            reason: "foreign or corrupt raw stable memory state",
+        }),
+    }
+}
+
 fn validate_current_registration_snapshot(
-    regs: &[(u8, String, String, String)],
+    regs: &[PendingRegistration],
 ) -> Result<(), MemoryRegistryError> {
     let mut ids = BTreeSet::new();
     let mut stable_keys = BTreeSet::new();
 
-    for (id, _, _, stable_key) in regs {
-        if !ids.insert(*id) {
-            return Err(MemoryRegistryError::DuplicateId(*id));
+    for registration in regs {
+        if !ids.insert(registration.id) {
+            return Err(MemoryRegistryError::DuplicateId(registration.id));
         }
-        if !stable_keys.insert(stable_key.clone()) {
-            return Err(MemoryRegistryError::DuplicateStableKey(stable_key.clone()));
+        if !stable_keys.insert(registration.stable_key.clone()) {
+            return Err(MemoryRegistryError::DuplicateStableKey(
+                registration.stable_key.clone(),
+            ));
         }
     }
 
@@ -165,7 +199,7 @@ fn validate_current_registration_snapshot(
 fn validate_pending_ledger_claims(
     initial_range: Option<(&str, u8, u8)>,
     ranges: &[(String, u8, u8)],
-    regs: &[(u8, String, String, String)],
+    regs: &[PendingRegistration],
 ) -> Result<(), MemoryRegistryError> {
     if let Some((owner, start, end)) = initial_range {
         ledger::validate_range(owner, MemoryRange { start, end })?;
@@ -181,8 +215,13 @@ fn validate_pending_ledger_claims(
         )?;
     }
 
-    for (id, owner, label, stable_key) in regs {
-        ledger::validate_entry(*id, owner, label, stable_key)?;
+    for registration in regs {
+        ledger::validate_entry(
+            registration.id,
+            &registration.crate_name,
+            &registration.label,
+            &registration.stable_key,
+        )?;
     }
 
     Ok(())
@@ -190,7 +229,27 @@ fn validate_pending_ledger_claims(
 
 #[cfg(test)]
 pub(crate) fn reset_initialized_for_tests() {
-    MEMORY_REGISTRY_INITIALIZED.store(false, Ordering::SeqCst);
+    set_initialized(false);
+}
+
+#[cfg(not(test))]
+fn initialized() -> bool {
+    MEMORY_REGISTRY_INITIALIZED.load(Ordering::SeqCst)
+}
+
+#[cfg(test)]
+fn initialized() -> bool {
+    MEMORY_REGISTRY_INITIALIZED.with(Cell::get)
+}
+
+#[cfg(not(test))]
+fn set_initialized(value: bool) {
+    MEMORY_REGISTRY_INITIALIZED.store(value, Ordering::SeqCst);
+}
+
+#[cfg(test)]
+fn set_initialized(value: bool) {
+    MEMORY_REGISTRY_INITIALIZED.with(|initialized| initialized.set(value));
 }
 
 ///
@@ -305,7 +364,7 @@ mod tests {
             },
         )
         .expect("record historical range");
-        ledger::record_entry(100, "crate_a", "slot", "app.crate_a.slot.v1")
+        ledger::record_entry(100, "crate_a", "slot", "app.crate_a.slot.v1", None, None)
             .expect("record historical entry");
         defer_reserve_range("crate_a", 100, 102).expect("defer range");
         defer_register_with_key(101, "crate_a", "new_slot", "app.crate_a.new_slot.v1")

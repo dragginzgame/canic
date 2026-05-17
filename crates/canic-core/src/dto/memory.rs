@@ -19,4 +19,6 @@ pub struct MemoryRegistryEntry {
     pub crate_name: String,
     pub label: String,
     pub stable_key: String,
+    pub schema_version: Option<u32>,
+    pub schema_fingerprint: Option<String>,
 }

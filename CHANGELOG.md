@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.38.x] - 2026-05-17 - Stable memory ABI hard cut
 
+- `0.38.1` adds optional schema-version and schema-fingerprint metadata, canonical range authority records, stricter physical-header validation, raw stable-memory bootstrap preflight, and restricted ID `0` diagnostic reads to the stable-memory ABI ledger and diagnostics.
+
 - `0.38.0` starts the stable-memory ABI hard cut by making explicit stable keys mandatory for Canic-managed memory identity, reserving Canic IDs `0-99` and application IDs `100-254`, making ID `255` permanently invalid, adding the canonical ID `0` ledger self-record, splitting startup declaration from memory opening, rejecting duplicate runtime declarations before user ledger mutation, and adding framework guard coverage for implicit memory registration.
 
 See detailed breakdown:

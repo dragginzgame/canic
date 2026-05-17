@@ -32,7 +32,7 @@ canic-memory = { workspace = true }
 From another crate, depend on the published crate:
 
 ```toml
-canic-memory = "0.29"
+canic-memory = "0.38"
 ```
 
 ## Quick Start
@@ -120,6 +120,11 @@ framework expansion budget, not application space. The full Canic runtime stack
 currently uses `5-10` for control-plane stores and `11-99` for core runtime
 stores and future framework allocation.
 
+Bootstrap distinguishes brand-new stable memory from existing state before
+mutating the declaration snapshot. Empty stable memory may initialize the
+genesis ledger. Foreign or corrupt raw stable memory fails closed, and existing
+`MemoryManager` state must already contain a valid ID `0` Canic ABI ledger.
+
 ## Runtime-Selected Slots
 
 Use `MemoryApi` when the memory ID is chosen during startup and
@@ -163,6 +168,28 @@ for a different stable key or moving the same stable key to another ID remains
 fatal. Owner and label metadata may change across refactors; the stable key
 must not.
 
+If a store wants diagnostic schema metadata in the ledger, use
+`declare_with_key_metadata(...)`:
+
+```rust
+MemoryApi::declare_with_key_metadata(
+    memory_id,
+    "my_crate",
+    "CommitMarker",
+    "my_crate.commit_marker.v1",
+    Some(1),
+    Some("sha256:abc123"),
+)
+    .expect("commit marker declaration must be valid");
+```
+
+Schema metadata is optional and informational in `0.38`. It does not change
+allocation ownership and is not fatal during bootstrap when it drifts for the
+same stable key and ID. The ledger records the latest values and preserves
+declaration history for diagnostics. When present, `schema_version` must be
+greater than zero. `schema_fingerprint` must be a non-empty ASCII string, must
+not contain ASCII control characters, and must fit within 256 bytes.
+
 ## Registry Introspection
 
 Use the supported `MemoryApi` reads for validation, diagnostics, or endpoint
@@ -189,7 +216,10 @@ fn validate_slots(memory_id: u8) {
 Lower-level registry snapshot helpers also exist for debugging and tests:
 
 - `MemoryApi::ledger_snapshot()` for a fallible persisted-ledger diagnostic
-  read
+  read, including the canonical `0-99` Canic and `100-254` application
+  authority ranges. On wasm this path decodes only the ID `0` ABI ledger from
+  raw stable memory so operators can inspect ledger state without opening
+  application or framework stores.
 - `MemoryRegistry::export_range_entries()`
 - `MemoryRegistry::export_ids_by_range()`
 

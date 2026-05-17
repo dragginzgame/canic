@@ -288,6 +288,23 @@ inspect only the files needed for the current task.
 - Added `MemoryApi::ledger_snapshot()` as a first diagnostic read path over
   persisted ABI ledger history that does not depend on current registry
   reconstruction.
+- Started the post-`0.38.0` ABI diagnostics follow-up by adding optional
+  `schema_version` and `schema_fingerprint` metadata to managed memory
+  declarations, registry DTOs, and ledger declaration history. Metadata remains
+  informational and is not part of allocation identity.
+- Added canonical allocation authority records to the ABI ledger for the hard
+  `0-99` Canic framework and `100-254` application boundary, exposed through
+  `MemoryApi::ledger_snapshot()` diagnostics.
+- Tightened ABI ledger physical-header validation so invalid magic, format,
+  schema version, header length, or committed slot metadata fails closed during
+  bootstrap instead of being repaired.
+- Added raw stable-memory preflight before declaration-snapshot mutation:
+  brand-new memory may initialize the genesis ledger, while foreign or corrupt
+  raw memory and existing `MemoryManager` state without a valid ID `0` Canic
+  ABI ledger fail closed.
+- Tightened the wasm `MemoryApi::ledger_snapshot()` diagnostic path so it
+  decodes only the ID `0` ABI ledger from raw stable memory and does not depend
+  on normal runtime registry reconstruction.
 - Added a source-level guard test that rejects implicit registration, direct
   raw stable-memory APIs, independent `MemoryManager` access, and
   `RestrictedMemory` carve-outs in framework-owned crates.

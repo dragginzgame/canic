@@ -1,3 +1,5 @@
+#[cfg(target_arch = "wasm32")]
+use crate::ledger;
 use crate::{
     cdk::structures::{
         DefaultMemoryImpl,
@@ -5,7 +7,8 @@ use crate::{
     },
     manager::MEMORY_MANAGER,
     registry::{
-        MemoryRange, MemoryRegistry, MemoryRegistryError, defer_register, defer_register_with_key,
+        MemoryRange, MemoryRangeAuthority, MemoryRegistry, MemoryRegistryError, defer_register,
+        defer_register_with_key_metadata,
     },
     runtime::{MemoryRuntimeApi, registry::MemoryRegistryRuntime},
 };
@@ -35,6 +38,10 @@ pub struct MemoryInspection {
     pub label: Option<String>,
     /// ABI-stable key for `id`, when the ID has already been registered.
     pub stable_key: Option<String>,
+    /// Optional in-place schema version metadata for diagnostics.
+    pub schema_version: Option<u32>,
+    /// Optional opaque schema fingerprint metadata for diagnostics.
+    pub schema_fingerprint: Option<String>,
 }
 
 ///
@@ -54,6 +61,10 @@ pub struct RegisteredMemory {
     pub label: String,
     /// ABI-stable key that owns this memory ID permanently.
     pub stable_key: String,
+    /// Optional in-place schema version metadata for diagnostics.
+    pub schema_version: Option<u32>,
+    /// Optional opaque schema fingerprint metadata for diagnostics.
+    pub schema_fingerprint: Option<String>,
 }
 
 ///
@@ -63,6 +74,8 @@ pub struct RegisteredMemory {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct LedgerSnapshot {
+    /// Canonical allocation authority ranges recorded by the persisted ABI ledger.
+    pub authorities: Vec<MemoryRangeAuthority>,
     /// Historical owner ranges recorded by the persisted ABI ledger.
     pub ranges: Vec<(String, MemoryRange)>,
     /// Historical memory ID records recorded by the persisted ABI ledger.
@@ -110,6 +123,21 @@ impl MemoryApi {
         label: &str,
         stable_key: &str,
     ) -> Result<(), MemoryRegistryError> {
+        Self::declare_with_key_metadata(id, crate_name, label, stable_key, None, None)
+    }
+
+    /// Declare one explicit-key stable-memory ID with optional schema metadata.
+    ///
+    /// Schema metadata is informational in 0.38 and does not affect allocation
+    /// ownership. This queues metadata only. It does not open virtual memory.
+    pub fn declare_with_key_metadata(
+        id: u8,
+        crate_name: &str,
+        label: &str,
+        stable_key: &str,
+        schema_version: Option<u32>,
+        schema_fingerprint: Option<&str>,
+    ) -> Result<(), MemoryRegistryError> {
         if MemoryRegistryRuntime::is_initialized() {
             return Err(MemoryRegistryError::RegistrationAfterBootstrap {
                 ranges: 0,
@@ -117,7 +145,14 @@ impl MemoryApi {
             });
         }
 
-        defer_register_with_key(id, crate_name, label, stable_key)
+        defer_register_with_key_metadata(
+            id,
+            crate_name,
+            label,
+            stable_key,
+            schema_version,
+            schema_fingerprint,
+        )
     }
 
     /// Open one already-validated stable-memory ID and return its virtual memory handle.
@@ -177,7 +212,9 @@ impl MemoryApi {
             .find(|entry| entry.range.contains(id))?;
         let entry = MemoryRegistry::get(id);
         let label = entry.as_ref().map(|entry| entry.label.clone());
-        let stable_key = entry.map(|entry| entry.stable_key);
+        let stable_key = entry.as_ref().map(|entry| entry.stable_key.clone());
+        let schema_version = entry.as_ref().and_then(|entry| entry.schema_version);
+        let schema_fingerprint = entry.and_then(|entry| entry.schema_fingerprint);
 
         Some(MemoryInspection {
             id,
@@ -185,6 +222,8 @@ impl MemoryApi {
             range: range.range,
             label,
             stable_key,
+            schema_version,
+            schema_fingerprint,
         })
     }
 
@@ -203,6 +242,8 @@ impl MemoryApi {
                         range: snapshot.range,
                         label: entry.label,
                         stable_key: entry.stable_key,
+                        schema_version: entry.schema_version,
+                        schema_fingerprint: entry.schema_fingerprint,
                     })
             })
             .collect()
@@ -227,10 +268,24 @@ impl MemoryApi {
 
     /// Read the persisted ABI ledger without relying on current registry reconstruction.
     pub fn ledger_snapshot() -> Result<LedgerSnapshot, MemoryRegistryError> {
-        Ok(LedgerSnapshot {
-            ranges: MemoryRegistry::try_export_historical_ranges()?,
-            entries: MemoryRegistry::try_export_historical()?,
-        })
+        #[cfg(target_arch = "wasm32")]
+        {
+            let snapshot = ledger::try_diagnostic_snapshot()?;
+            Ok(LedgerSnapshot {
+                authorities: snapshot.authorities,
+                ranges: snapshot.ranges,
+                entries: snapshot.entries,
+            })
+        }
+
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            Ok(LedgerSnapshot {
+                authorities: MemoryRegistry::try_export_historical_authorities()?,
+                ranges: MemoryRegistry::try_export_historical_ranges()?,
+                entries: MemoryRegistry::try_export_historical()?,
+            })
+        }
     }
 }
 
@@ -281,6 +336,38 @@ mod tests {
 
         let _memory = MemoryApi::register_with_key(101, "crate_a", "slot", "app.crate_a.slot.v1")
             .expect("open memory");
+    }
+
+    #[test]
+    fn declare_with_key_metadata_records_schema_metadata() {
+        reset_for_tests();
+        defer_reserve_range("crate_a", 100, 102).expect("defer range");
+        MemoryApi::declare_with_key_metadata(
+            101,
+            "crate_a",
+            "slot",
+            "app.crate_a.slot.v1",
+            Some(3),
+            Some("sha256:abc123"),
+        )
+        .expect("defer register");
+        MemoryApi::bootstrap_pending().expect("bootstrap registry");
+
+        let registered = MemoryApi::find("crate_a", "slot").expect("registered memory");
+        assert_eq!(registered.schema_version, Some(3));
+        assert_eq!(
+            registered.schema_fingerprint.as_deref(),
+            Some("sha256:abc123")
+        );
+
+        let snapshot = MemoryApi::ledger_snapshot().expect("ledger snapshot");
+        let (_, entry) = snapshot
+            .entries
+            .into_iter()
+            .find(|(id, _)| *id == 101)
+            .expect("ledger entry");
+        assert_eq!(entry.schema_version, Some(3));
+        assert_eq!(entry.schema_fingerprint.as_deref(), Some("sha256:abc123"));
     }
 
     #[test]
@@ -423,6 +510,8 @@ mod tests {
             },
             label: "slot_a".to_string(),
             stable_key: "legacy.crate_a.slot_a.v1".to_string(),
+            schema_version: None,
+            schema_fingerprint: None,
         }));
         assert!(registrations.contains(&RegisteredMemory {
             id: 111,
@@ -433,6 +522,8 @@ mod tests {
             },
             label: "slot_b".to_string(),
             stable_key: "legacy.crate_b.slot_b.v1".to_string(),
+            schema_version: None,
+            schema_fingerprint: None,
         }));
     }
 
@@ -457,6 +548,8 @@ mod tests {
                 },
                 label: "slot_a".to_string(),
                 stable_key: "legacy.crate_a.slot_a.v1".to_string(),
+                schema_version: None,
+                schema_fingerprint: None,
             }]
         );
     }
@@ -480,6 +573,8 @@ mod tests {
                 },
                 label: "slot_a".to_string(),
                 stable_key: "legacy.crate_a.slot_a.v1".to_string(),
+                schema_version: None,
+                schema_fingerprint: None,
             }
         );
     }
@@ -499,6 +594,18 @@ mod tests {
         MemoryApi::bootstrap_pending().expect("bootstrap registry");
 
         let snapshot = MemoryApi::ledger_snapshot().expect("ledger snapshot");
+        assert!(snapshot.authorities.iter().any(|authority| {
+            authority.owner == "canic.framework"
+                && authority.range == MemoryRange { start: 0, end: 99 }
+        }));
+        assert!(snapshot.authorities.iter().any(|authority| {
+            authority.owner == "applications"
+                && authority.range
+                    == MemoryRange {
+                        start: 100,
+                        end: 254,
+                    }
+        }));
         assert!(snapshot.ranges.iter().any(|(owner, range)| {
             owner == "crate_a"
                 && *range

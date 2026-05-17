@@ -36,6 +36,10 @@ pub struct MemoryRegistryEntry {
     pub label: String,
     /// Explicit ABI-stable key that owns this memory ID permanently.
     pub stable_key: String,
+    /// Optional in-place schema version metadata for diagnostics.
+    pub schema_version: Option<u32>,
+    /// Optional opaque schema fingerprint metadata for diagnostics.
+    pub schema_fingerprint: Option<String>,
 }
 
 ///
@@ -64,6 +68,36 @@ pub struct MemoryRangeSnapshot {
     pub range: MemoryRange,
     /// Registered entries whose IDs fall inside `range`.
     pub entries: Vec<(u8, MemoryRegistryEntry)>,
+}
+
+///
+/// MemoryRangeAuthority
+///
+/// Durable allocation-authority range recorded by the ABI ledger.
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct MemoryRangeAuthority {
+    /// Authority label for the range.
+    pub owner: String,
+    /// Inclusive stable-memory ID range controlled by this authority.
+    pub range: MemoryRange,
+    /// Stable diagnostic purpose for the authority record.
+    pub purpose: String,
+}
+
+///
+/// PendingRegistration
+///
+/// One stable-memory declaration collected before bootstrap validation.
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct PendingRegistration {
+    pub id: u8,
+    pub crate_name: String,
+    pub label: String,
+    pub stable_key: String,
+    pub schema_version: Option<u32>,
+    pub schema_fingerprint: Option<String>,
 }
 
 ///
@@ -217,6 +251,15 @@ conflicts with crate '{new_crate}' [{new_start}-{new_end}]"
         reason: &'static str,
     },
 
+    /// The schema metadata is not canonical.
+    #[error("memory schema metadata is invalid for stable key '{stable_key}': {reason}")]
+    InvalidSchemaMetadata {
+        /// Stable key whose schema metadata was rejected.
+        stable_key: String,
+        /// Human-readable reason for the rejection.
+        reason: &'static str,
+    },
+
     /// The stable key namespace and memory ID range do not match.
     #[error(
         "memory stable key '{stable_key}' with id {id} violates namespace/range authority: {reason}"
@@ -263,7 +306,7 @@ thread_local! {
 
     // Deferred registrations (used before init)
     static PENDING_RANGES: RefCell<Vec<(String, u8, u8)>> = const { RefCell::new(Vec::new()) };
-    static PENDING_REGISTRATIONS: RefCell<Vec<(u8, String, String, String)>> = const { RefCell::new(Vec::new()) };
+    static PENDING_REGISTRATIONS: RefCell<Vec<PendingRegistration>> = const { RefCell::new(Vec::new()) };
 }
 
 ///
@@ -367,10 +410,23 @@ impl MemoryRegistry {
         label: &str,
         stable_key: &str,
     ) -> Result<(), MemoryRegistryError> {
+        Self::register_with_key_metadata(id, crate_name, label, stable_key, None, None)
+    }
+
+    /// Register one memory ID with explicit ABI key and optional schema metadata.
+    pub fn register_with_key_metadata(
+        id: u8,
+        crate_name: &str,
+        label: &str,
+        stable_key: &str,
+        schema_version: Option<u32>,
+        schema_fingerprint: Option<&str>,
+    ) -> Result<(), MemoryRegistryError> {
         validate_non_internal_id(id)?;
         validate_id_excludes_layout_metadata(crate_name, id)?;
         validate_registration_range(crate_name, id)?;
         validate_stable_key(stable_key)?;
+        validate_schema_metadata(stable_key, schema_version, schema_fingerprint)?;
         validate_id_authority(id, crate_name, stable_key)?;
 
         REGISTRY.with_borrow(|reg| {
@@ -380,7 +436,14 @@ impl MemoryRegistry {
             Ok(())
         })?;
 
-        ledger::record_entry(id, crate_name, label, stable_key)?;
+        ledger::record_entry(
+            id,
+            crate_name,
+            label,
+            stable_key,
+            schema_version,
+            schema_fingerprint,
+        )?;
 
         REGISTRY.with_borrow_mut(|reg| {
             reg.insert(
@@ -389,6 +452,8 @@ impl MemoryRegistry {
                     crate_name: crate_name.to_string(),
                     label: label.to_string(),
                     stable_key: stable_key.to_string(),
+                    schema_version,
+                    schema_fingerprint: schema_fingerprint.map(str::to_string),
                 },
             );
         });
@@ -460,10 +525,22 @@ impl MemoryRegistry {
         ledger::export_ranges()
     }
 
+    /// Export canonical allocation authorities recorded in the stable memory layout ledger.
+    #[must_use]
+    pub fn export_historical_authorities() -> Vec<MemoryRangeAuthority> {
+        ledger::export_authorities()
+    }
+
     /// Fallibly export all ranges ever recorded in the stable memory layout ledger.
     pub fn try_export_historical_ranges() -> Result<Vec<(String, MemoryRange)>, MemoryRegistryError>
     {
         ledger::try_export_ranges()
+    }
+
+    /// Fallibly export canonical allocation authorities recorded in the stable memory layout ledger.
+    pub fn try_export_historical_authorities()
+    -> Result<Vec<MemoryRangeAuthority>, MemoryRegistryError> {
+        ledger::try_export_authorities()
     }
 
     /// Export all memory IDs ever recorded in the stable memory layout ledger.
@@ -522,19 +599,35 @@ pub fn defer_register_with_key(
     label: &str,
     stable_key: &str,
 ) -> Result<(), MemoryRegistryError> {
+    defer_register_with_key_metadata(id, crate_name, label, stable_key, None, None)
+}
+
+/// Queue an explicit-key ID registration with optional schema metadata.
+#[doc(hidden)]
+pub fn defer_register_with_key_metadata(
+    id: u8,
+    crate_name: &str,
+    label: &str,
+    stable_key: &str,
+    schema_version: Option<u32>,
+    schema_fingerprint: Option<&str>,
+) -> Result<(), MemoryRegistryError> {
     validate_non_internal_id(id)?;
     validate_id_excludes_layout_metadata(crate_name, id)?;
     validate_stable_key(stable_key)?;
+    validate_schema_metadata(stable_key, schema_version, schema_fingerprint)?;
     validate_id_authority(id, crate_name, stable_key)?;
 
     // Queue ID registrations for runtime init to apply after ranges are reserved.
     PENDING_REGISTRATIONS.with_borrow_mut(|regs| {
-        regs.push((
+        regs.push(PendingRegistration {
             id,
-            crate_name.to_string(),
-            label.to_string(),
-            stable_key.to_string(),
-        ));
+            crate_name: crate_name.to_string(),
+            label: label.to_string(),
+            stable_key: stable_key.to_string(),
+            schema_version,
+            schema_fingerprint: schema_fingerprint.map(str::to_string),
+        });
     });
 
     Ok(())
@@ -548,7 +641,7 @@ pub(crate) fn drain_pending_ranges() -> Vec<(String, u8, u8)> {
 
 /// Drain all queued ID registrations in insertion order.
 #[must_use]
-pub(crate) fn drain_pending_registrations() -> Vec<(u8, String, String, String)> {
+pub(crate) fn drain_pending_registrations() -> Vec<PendingRegistration> {
     PENDING_REGISTRATIONS.with_borrow_mut(std::mem::take)
 }
 
@@ -670,6 +763,50 @@ fn validate_stable_key_segment(stable_key: &str, segment: &str) -> Result<(), Me
             "segments may contain only lowercase letters, digits, and underscores",
         );
     }
+    Ok(())
+}
+
+fn validate_schema_metadata(
+    stable_key: &str,
+    schema_version: Option<u32>,
+    schema_fingerprint: Option<&str>,
+) -> Result<(), MemoryRegistryError> {
+    if schema_version == Some(0) {
+        return Err(MemoryRegistryError::InvalidSchemaMetadata {
+            stable_key: stable_key.to_string(),
+            reason: "schema_version must be greater than zero when present",
+        });
+    }
+
+    let Some(fingerprint) = schema_fingerprint else {
+        return Ok(());
+    };
+
+    if fingerprint.is_empty() {
+        return Err(MemoryRegistryError::InvalidSchemaMetadata {
+            stable_key: stable_key.to_string(),
+            reason: "schema_fingerprint must not be empty when present",
+        });
+    }
+    if fingerprint.len() > 256 {
+        return Err(MemoryRegistryError::InvalidSchemaMetadata {
+            stable_key: stable_key.to_string(),
+            reason: "schema_fingerprint must be at most 256 bytes",
+        });
+    }
+    if !fingerprint.is_ascii() {
+        return Err(MemoryRegistryError::InvalidSchemaMetadata {
+            stable_key: stable_key.to_string(),
+            reason: "schema_fingerprint must be ASCII",
+        });
+    }
+    if fingerprint.bytes().any(|byte| byte.is_ascii_control()) {
+        return Err(MemoryRegistryError::InvalidSchemaMetadata {
+            stable_key: stable_key.to_string(),
+            reason: "schema_fingerprint must not contain ASCII control characters",
+        });
+    }
+
     Ok(())
 }
 
@@ -916,8 +1053,15 @@ mod tests {
         reset_for_tests();
 
         MemoryRegistry::reserve_range("crate_a", 100, 102).expect("reserve range A");
-        MemoryRegistry::register_with_key(100, "crate_a", "slot", "app.crate_a.slot.v1")
-            .expect("register slot");
+        MemoryRegistry::register_with_key_metadata(
+            100,
+            "crate_a",
+            "slot",
+            "app.crate_a.slot.v1",
+            Some(1),
+            Some("sha256:aaa"),
+        )
+        .expect("register slot");
         reset_runtime_for_tests();
 
         MemoryRegistry::reserve_range("crate_a", 100, 102).expect("reserve range A again");
@@ -940,11 +1084,13 @@ mod tests {
         reset_runtime_for_tests();
 
         MemoryRegistry::reserve_range("crate_renamed", 100, 102).expect("reserve range A again");
-        MemoryRegistry::register_with_key(
+        MemoryRegistry::register_with_key_metadata(
             100,
             "crate_renamed",
             "SlotRenamed",
             "app.crate_a.slot.v1",
+            Some(2),
+            Some("sha256:bbb"),
         )
         .expect("stable key should survive owner/label drift");
 
@@ -952,6 +1098,42 @@ mod tests {
         assert_eq!(entry.crate_name, "crate_renamed");
         assert_eq!(entry.label, "SlotRenamed");
         assert_eq!(entry.stable_key, "app.crate_a.slot.v1");
+        assert_eq!(entry.schema_version, Some(2));
+        assert_eq!(entry.schema_fingerprint.as_deref(), Some("sha256:bbb"));
+    }
+
+    #[test]
+    fn rejects_invalid_schema_metadata() {
+        reset_for_tests();
+
+        MemoryRegistry::reserve_range("crate_a", 100, 102).expect("reserve range A");
+        let err = MemoryRegistry::register_with_key_metadata(
+            100,
+            "crate_a",
+            "slot",
+            "app.crate_a.slot.v1",
+            Some(0),
+            None,
+        )
+        .expect_err("zero schema version should fail");
+        assert!(matches!(
+            err,
+            MemoryRegistryError::InvalidSchemaMetadata { .. }
+        ));
+
+        let err = MemoryRegistry::register_with_key_metadata(
+            100,
+            "crate_a",
+            "slot",
+            "app.crate_a.slot.v1",
+            Some(1),
+            Some("fingerprint\nwith-control"),
+        )
+        .expect_err("control characters should fail");
+        assert!(matches!(
+            err,
+            MemoryRegistryError::InvalidSchemaMetadata { .. }
+        ));
     }
 
     #[test]

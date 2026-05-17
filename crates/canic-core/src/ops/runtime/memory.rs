@@ -75,6 +75,8 @@ impl MemoryRegistryInitSummary {
                 crate_name: entry.crate_name,
                 label: entry.label,
                 stable_key: entry.stable_key,
+                schema_version: entry.schema_version,
+                schema_fingerprint: entry.schema_fingerprint,
             })
             .collect();
 
@@ -141,6 +143,8 @@ impl MemoryRegistryOps {
                 crate_name: entry.crate_name,
                 label: entry.label,
                 stable_key: entry.stable_key,
+                schema_version: entry.schema_version,
+                schema_fingerprint: entry.schema_fingerprint,
             })
             .collect()
     }
