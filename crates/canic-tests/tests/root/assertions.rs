@@ -8,7 +8,7 @@ use canic::{
         env::EnvSnapshotResponse,
         error::ErrorCode,
         log::LogEntry,
-        memory::MemoryRegistryResponse,
+        memory::{MemoryLedgerResponse, MemoryRegistryResponse},
         page::{Page, PageRequest},
         state::{AppStateResponse, SubnetStateResponse},
         topology::AppRegistryResponse,
@@ -238,6 +238,21 @@ pub fn assert_root_diagnostics_are_controller_gated(pic: &Pic, root_id: Principa
         .expect("root memory registry transport");
     memory_registry.expect("root memory registry application");
 
+    let memory_ledger: Result<MemoryLedgerResponse, canic::Error> = pic
+        .query_call(root_id, protocol::CANIC_MEMORY_LEDGER, ())
+        .expect("root memory ledger transport");
+    let memory_ledger = memory_ledger.expect("root memory ledger application");
+    assert_eq!(memory_ledger.format_id, 1);
+    assert_eq!(memory_ledger.schema_version, 1);
+    assert!(memory_ledger.current_generation > 0);
+    assert!(
+        memory_ledger
+            .entries
+            .iter()
+            .any(|entry| entry.id == 0 && entry.stable_key == "canic.memory.abi_ledger.v1"),
+        "memory ledger diagnostic must expose the canonical ID 0 self-record"
+    );
+
     let non_controller = Principal::from_slice(&[252; 29]);
     let denied_app_registry: Result<Result<AppRegistryResponse, canic::Error>, canic::Error> =
         pic.query_call_as(root_id, non_controller, protocol::CANIC_APP_REGISTRY, ());
@@ -275,6 +290,15 @@ pub fn assert_root_diagnostics_are_controller_gated(pic: &Pic, root_id: Principa
         panic!("non-controller memory registry query must be denied")
     };
     assert_eq!(denied_memory_registry.code, ErrorCode::Unauthorized);
+
+    let denied_memory_ledger: Result<Result<MemoryLedgerResponse, canic::Error>, canic::Error> =
+        pic.query_call_as(root_id, non_controller, protocol::CANIC_MEMORY_LEDGER, ());
+    let denied_memory_ledger =
+        denied_memory_ledger.expect("non-controller memory ledger transport");
+    let Err(denied_memory_ledger) = denied_memory_ledger else {
+        panic!("non-controller memory ledger query must be denied")
+    };
+    assert_eq!(denied_memory_ledger.code, ErrorCode::Unauthorized);
 }
 
 // Match PocketIC missing-method failures without depending on one exact transport string.

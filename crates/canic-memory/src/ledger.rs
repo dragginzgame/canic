@@ -104,8 +104,13 @@ pub fn validate_bootstrap_state_before_cell_init(
 ///
 /// Diagnostic snapshot decoded from the durable ID `0` ABI ledger.
 
-#[cfg(any(target_arch = "wasm32", test))]
 pub struct MemoryLayoutLedgerSnapshot {
+    pub magic: u64,
+    pub format_id: u32,
+    pub schema_version: u32,
+    pub header_len: u32,
+    pub header_checksum: u64,
+    pub current_generation: u64,
     pub authorities: Vec<MemoryRangeAuthority>,
     pub ranges: Vec<(String, MemoryRange)>,
     pub entries: Vec<(u8, MemoryRegistryEntry)>,
@@ -480,6 +485,11 @@ pub fn try_export_entries() -> Result<Vec<(u8, MemoryRegistryEntry)>, MemoryRegi
     })
 }
 
+#[cfg(not(target_arch = "wasm32"))]
+pub fn try_snapshot() -> Result<MemoryLayoutLedgerSnapshot, MemoryRegistryError> {
+    MEMORY_LAYOUT_LEDGER.with_borrow(|cell| snapshot_from_record(cell.get()))
+}
+
 #[cfg(test)]
 pub fn reset_for_tests() {
     MEMORY_LAYOUT_LEDGER.with_borrow_mut(|cell| {
@@ -552,7 +562,6 @@ fn decode_existing_ledger_memory<M: Memory>(
     })
 }
 
-#[cfg(any(target_arch = "wasm32", test))]
 fn snapshot_from_record(
     data: &MemoryLayoutLedgerRecord,
 ) -> Result<MemoryLayoutLedgerSnapshot, MemoryRegistryError> {
@@ -562,6 +571,12 @@ fn snapshot_from_record(
     }
 
     Ok(MemoryLayoutLedgerSnapshot {
+        magic: data.magic,
+        format_id: data.format_id,
+        schema_version: data.schema_version,
+        header_len: data.header_len,
+        header_checksum: data.header_checksum,
+        current_generation: generation.generation,
         authorities: generation
             .authorities
             .iter()
@@ -1012,6 +1027,11 @@ mod tests {
         let snapshot =
             diagnostic_snapshot_from_existing_memory(&memory).expect("diagnostic snapshot");
 
+        assert_eq!(snapshot.magic, MEMORY_LAYOUT_LEDGER_MAGIC);
+        assert_eq!(snapshot.format_id, MEMORY_LAYOUT_LEDGER_FORMAT_ID);
+        assert_eq!(snapshot.schema_version, MEMORY_LAYOUT_LEDGER_SCHEMA_VERSION);
+        assert_eq!(snapshot.header_len, MEMORY_LAYOUT_LEDGER_HEADER_LEN);
+        assert_eq!(snapshot.current_generation, 1);
         assert!(snapshot.authorities.iter().any(|authority| {
             authority.owner == "canic.framework"
                 && authority.range == MemoryRange { start: 0, end: 99 }

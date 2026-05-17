@@ -27,6 +27,7 @@ pub const CANIC_WASM_STORE_ADMIN: &str = "canic_wasm_store_admin";
 pub const ICRC10_SUPPORTED_STANDARDS: &str = "icrc10_supported_standards";
 pub const ICRC21_CANISTER_CALL_CONSENT_MESSAGE: &str = "icrc21_canister_call_consent_message";
 pub const CANIC_MEMORY_REGISTRY: &str = "canic_memory_registry";
+pub const CANIC_MEMORY_LEDGER: &str = "canic_memory_ledger";
 pub const CANIC_ENV: &str = "canic_env";
 pub const CANIC_LOG: &str = "canic_log";
 pub const CANIC_METRICS: &str = "canic_metrics";

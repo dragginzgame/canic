@@ -1,4 +1,3 @@
-#[cfg(target_arch = "wasm32")]
 use crate::ledger;
 use crate::{
     cdk::structures::{
@@ -74,6 +73,18 @@ pub struct RegisteredMemory {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct LedgerSnapshot {
+    /// Ledger magic value from the physical header.
+    pub magic: u64,
+    /// Ledger physical format identifier from the header.
+    pub format_id: u32,
+    /// Ledger schema version from the header.
+    pub schema_version: u32,
+    /// Encoded ledger header length.
+    pub header_len: u32,
+    /// Header checksum covering the persisted header fields.
+    pub header_checksum: u64,
+    /// Authoritative committed generation selected by recovery validation.
+    pub current_generation: u64,
     /// Canonical allocation authority ranges recorded by the persisted ABI ledger.
     pub authorities: Vec<MemoryRangeAuthority>,
     /// Historical owner ranges recorded by the persisted ABI ledger.
@@ -271,20 +282,29 @@ impl MemoryApi {
         #[cfg(target_arch = "wasm32")]
         {
             let snapshot = ledger::try_diagnostic_snapshot()?;
-            Ok(LedgerSnapshot {
-                authorities: snapshot.authorities,
-                ranges: snapshot.ranges,
-                entries: snapshot.entries,
-            })
+            Ok(LedgerSnapshot::from(snapshot))
         }
 
         #[cfg(not(target_arch = "wasm32"))]
         {
-            Ok(LedgerSnapshot {
-                authorities: MemoryRegistry::try_export_historical_authorities()?,
-                ranges: MemoryRegistry::try_export_historical_ranges()?,
-                entries: MemoryRegistry::try_export_historical()?,
-            })
+            let snapshot = ledger::try_snapshot()?;
+            Ok(LedgerSnapshot::from(snapshot))
+        }
+    }
+}
+
+impl From<ledger::MemoryLayoutLedgerSnapshot> for LedgerSnapshot {
+    fn from(snapshot: ledger::MemoryLayoutLedgerSnapshot) -> Self {
+        Self {
+            magic: snapshot.magic,
+            format_id: snapshot.format_id,
+            schema_version: snapshot.schema_version,
+            header_len: snapshot.header_len,
+            header_checksum: snapshot.header_checksum,
+            current_generation: snapshot.current_generation,
+            authorities: snapshot.authorities,
+            ranges: snapshot.ranges,
+            entries: snapshot.entries,
         }
     }
 }
@@ -361,6 +381,9 @@ mod tests {
         );
 
         let snapshot = MemoryApi::ledger_snapshot().expect("ledger snapshot");
+        assert_eq!(snapshot.format_id, 1);
+        assert_eq!(snapshot.schema_version, 1);
+        assert!(snapshot.current_generation > 0);
         let (_, entry) = snapshot
             .entries
             .into_iter()
@@ -594,6 +617,8 @@ mod tests {
         MemoryApi::bootstrap_pending().expect("bootstrap registry");
 
         let snapshot = MemoryApi::ledger_snapshot().expect("ledger snapshot");
+        assert_eq!(snapshot.format_id, 1);
+        assert_eq!(snapshot.schema_version, 1);
         assert!(snapshot.authorities.iter().any(|authority| {
             authority.owner == "canic.framework"
                 && authority.range == MemoryRange { start: 0, end: 99 }

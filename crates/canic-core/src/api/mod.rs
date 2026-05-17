@@ -14,6 +14,7 @@ pub mod config;
 pub mod error;
 pub mod ic;
 pub mod lifecycle;
+pub mod memory;
 pub mod metadata;
 pub mod placement;
 pub mod pool;
@@ -50,9 +51,6 @@ pub mod icrc {
 }
 pub mod log {
     pub use crate::workflow::log::query::LogQuery;
-}
-pub mod memory {
-    pub use crate::workflow::memory::query::MemoryQuery;
 }
 pub mod metrics {
     pub use crate::workflow::metrics::query::MetricsQuery;

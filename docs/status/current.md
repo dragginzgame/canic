@@ -305,6 +305,11 @@ inspect only the files needed for the current task.
 - Tightened the wasm `MemoryApi::ledger_snapshot()` diagnostic path so it
   decodes only the ID `0` ABI ledger from raw stable memory and does not depend
   on normal runtime registry reconstruction.
+- Started `0.38.2` by adding a controller-only `canic_memory_ledger`
+  diagnostic query for opt-in memory observability builds. It bypasses normal
+  Canic endpoint dispatch and exposes committed ID `0` ledger header fields,
+  the authoritative committed generation, authorities, ranges, and memory
+  records through a dedicated DTO.
 - Added a source-level guard test that rejects implicit registration, direct
   raw stable-memory APIs, independent `MemoryManager` access, and
   `RestrictedMemory` carve-outs in framework-owned crates.

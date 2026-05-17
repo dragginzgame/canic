@@ -1,4 +1,8 @@
-use crate::{dto::memory::MemoryRegistryResponse, ops::runtime::memory::MemoryRegistryOps};
+use crate::{
+    InternalError,
+    dto::memory::{MemoryLedgerResponse, MemoryRegistryResponse},
+    ops::runtime::memory::MemoryRegistryOps,
+};
 
 ///
 /// MemoryQuery
@@ -11,5 +15,9 @@ impl MemoryQuery {
     pub fn registry() -> MemoryRegistryResponse {
         let entries = MemoryRegistryOps::snapshot_entries();
         MemoryRegistryResponse { entries }
+    }
+
+    pub fn ledger() -> Result<MemoryLedgerResponse, InternalError> {
+        MemoryRegistryOps::ledger_snapshot()
     }
 }

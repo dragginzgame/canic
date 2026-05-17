@@ -74,6 +74,19 @@ macro_rules! canic_bundle_discovery_endpoints {
 #[macro_export]
 macro_rules! canic_emit_memory_observability_endpoints {
     () => {
+        #[$crate::cdk::query]
+        fn canic_memory_ledger()
+        -> Result<::canic::dto::memory::MemoryLedgerResponse, ::canic::Error> {
+            let caller = $crate::cdk::api::msg_caller();
+            if !$crate::cdk::api::is_controller(&caller) {
+                return Err(::canic::Error::unauthorized(format!(
+                    "caller '{caller}' is not a controller of this canister"
+                )));
+            }
+
+            $crate::__internal::core::api::memory::MemoryQuery::ledger()
+        }
+
         #[$crate::canic_query(requires(caller::is_controller()))]
         async fn canic_memory_registry()
         -> Result<::canic::dto::memory::MemoryRegistryResponse, ::canic::Error> {

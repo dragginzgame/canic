@@ -3,11 +3,14 @@
 
 use crate::{
     CRATE_NAME, InternalError,
-    dto::memory::MemoryRegistryEntry,
+    dto::memory::{
+        MemoryLedgerResponse, MemoryRangeAuthorityEntry, MemoryRangeEntry, MemoryRegistryEntry,
+    },
     ops::runtime::RuntimeOpsError,
     storage::stable::{CANIC_MEMORY_MAX, CANIC_MEMORY_MIN},
 };
 use canic_memory::{
+    api::MemoryApi,
     registry::MemoryRegistryError,
     runtime::{
         init_eager_tls,
@@ -147,5 +150,56 @@ impl MemoryRegistryOps {
                 schema_fingerprint: entry.schema_fingerprint,
             })
             .collect()
+    }
+
+    // Read the committed ABI ledger using the restricted diagnostic path.
+    pub fn ledger_snapshot() -> Result<MemoryLedgerResponse, InternalError> {
+        let snapshot = MemoryApi::ledger_snapshot().map_err(MemoryRegistryOpsError::from)?;
+
+        let authorities = snapshot
+            .authorities
+            .into_iter()
+            .map(|authority| MemoryRangeAuthorityEntry {
+                owner: authority.owner,
+                start: authority.range.start,
+                end: authority.range.end,
+                purpose: authority.purpose,
+            })
+            .collect();
+
+        let ranges = snapshot
+            .ranges
+            .into_iter()
+            .map(|(owner, range)| MemoryRangeEntry {
+                owner,
+                start: range.start,
+                end: range.end,
+            })
+            .collect();
+
+        let entries = snapshot
+            .entries
+            .into_iter()
+            .map(|(id, entry)| MemoryRegistryEntry {
+                id,
+                crate_name: entry.crate_name,
+                label: entry.label,
+                stable_key: entry.stable_key,
+                schema_version: entry.schema_version,
+                schema_fingerprint: entry.schema_fingerprint,
+            })
+            .collect();
+
+        Ok(MemoryLedgerResponse {
+            magic: snapshot.magic,
+            format_id: snapshot.format_id,
+            schema_version: snapshot.schema_version,
+            header_len: snapshot.header_len,
+            header_checksum: snapshot.header_checksum,
+            current_generation: snapshot.current_generation,
+            authorities,
+            ranges,
+            entries,
+        })
     }
 }
