@@ -311,7 +311,7 @@ fn authoritative_generation(
 
     let generation = match (slot0, slot1) {
         (Some(left), Some(right)) if right.generation > left.generation => right,
-        (Some(left), Some(_)) | (Some(left), None) => left,
+        (Some(left), Some(_) | None) => left,
         (None, Some(right)) => right,
         (None, None) if data.slot0.is_none() && data.slot1.is_none() => {
             return Ok(MemoryLayoutGenerationRecord::default());
@@ -469,7 +469,7 @@ fn hash_usize(hash: u64, value: usize) -> u64 {
     hash_u64(hash, value as u64)
 }
 
-fn hash_u8(hash: u64, value: u8) -> u64 {
+const fn hash_u8(hash: u64, value: u8) -> u64 {
     hash_byte(hash, value)
 }
 

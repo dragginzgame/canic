@@ -226,7 +226,6 @@ impl MemoryApi {
     }
 
     /// Read the persisted ABI ledger without relying on current registry reconstruction.
-    #[must_use]
     pub fn ledger_snapshot() -> Result<LedgerSnapshot, MemoryRegistryError> {
         Ok(LedgerSnapshot {
             ranges: MemoryRegistry::try_export_historical_ranges()?,

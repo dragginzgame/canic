@@ -705,7 +705,7 @@ fn validate_id_authority(
         });
     }
 
-    if id >= APPLICATION_MIN_ID && id < INTERNAL_RESERVED_MEMORY_ID {
+    if (APPLICATION_MIN_ID..INTERNAL_RESERVED_MEMORY_ID).contains(&id) {
         return Ok(());
     }
 
