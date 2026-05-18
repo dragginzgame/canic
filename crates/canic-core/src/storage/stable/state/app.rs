@@ -1,6 +1,6 @@
 use crate::{
     cdk::structures::{DefaultMemoryImpl, cell::Cell, memory::VirtualMemory},
-    storage::{prelude::*, stable::memory::state::APP_STATE_ID},
+    storage::{prelude::*, stable::memory::env::APP_STATE_ID},
 };
 use std::{
     cell::RefCell,

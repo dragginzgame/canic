@@ -57,7 +57,7 @@ pub mod memory {
     }
 
     // ---------------------------------------------------------------------
-    // Environment & configuration state (16–18)
+    // Environment & runtime state (16–18)
     //
     // Expected growth: very low
     // ---------------------------------------------------------------------
@@ -65,8 +65,7 @@ pub mod memory {
     pub mod env {
         pub const ENV_ID: u8 = 16;
         pub const SUBNET_STATE_ID: u8 = 17;
-
-        // Reserved: 18
+        pub const APP_STATE_ID: u8 = 18;
     }
 
     // ---------------------------------------------------------------------
@@ -148,21 +147,7 @@ pub mod memory {
         // 57–61
     }
 
-    // ---------------------------------------------------------------------
-    // Application runtime boundary (62-79)
-    //
-    // Ownership:
-    // - CANIC-controlled runtime state
-    // - Upper bound of CANIC ABI
-    //
-    // Expected growth: low
-    // ---------------------------------------------------------------------
-
-    pub mod state {
-        pub const APP_STATE_ID: u8 = 62;
-
-        // Reserved: 63-79
-    }
+    // 62-79 remain long-horizon Canic framework reserve.
 }
 
 use crate::{InternalError, storage::prelude::*};

@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-05-17
+Last updated: 2026-05-18
 
 ## Purpose
 
@@ -328,6 +328,12 @@ inspect only the files needed for the current task.
 - Started `0.38.6` by adding persisted ABI ledger `layout_epoch` validation
   and exposing the compiled epoch through `MemoryApi::ledger_snapshot()`, core
   memory DTOs, `canic_memory_ledger`, and the canonical `wasm_store` DID.
+- Started `0.38.7` by hard-cut reallocating `canic.core.app_state.v1` from ID
+  `62` to ID `18`, colocating app runtime state with core env and subnet state
+  before the 0.38 stable-memory ABI layout is treated as frozen.
+- Reworked the PR #8 topology sync direction for `0.38.7`: local ICP network
+  settings such as `ii` and `nns` remain in `icp.yaml`, while Canic sync stays
+  limited to Canic-owned canister and environment sections.
 - Added a source-level guard test that rejects implicit registration, direct
   raw stable-memory APIs, independent `MemoryManager` access, and
   `RestrictedMemory` carve-outs in Canic-managed runtime crates.

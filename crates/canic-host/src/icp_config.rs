@@ -529,7 +529,7 @@ mod tests {
 
     #[test]
     fn syncs_canic_sections_and_preserves_other_top_level_sections() {
-        let source = "canisters:\n  - name: old\n\nnetworks:\n  - name: local\n    mode: managed\n    gateway:\n      bind: 127.0.0.1\n      port: 8009\n\nenvironments:\n  - name: old\n    network: local\n    canisters: [old]\n";
+        let source = "canisters:\n  - name: old\n\nnetworks:\n  - name: local\n    mode: managed\n    ii: true\n    nns: false\n    gateway:\n      bind: 127.0.0.1\n      port: 8009\n\nenvironments:\n  - name: old\n    network: local\n    canisters: [old]\n";
         let canisters = vec!["root".to_string(), "app".to_string()];
         let environments = BTreeMap::from([(
             "test".to_string(),
@@ -548,6 +548,8 @@ mod tests {
             "environments:\n  - name: test\n    network: local\n    canisters: [root, app]"
         ));
         assert!(updated.contains("networks:\n  - name: local\n    mode: managed"));
+        assert!(updated.contains("    ii: true"));
+        assert!(updated.contains("    nns: false"));
         assert!(updated.find("networks:") < updated.find("environments:"));
         assert!(!updated.contains("- name: old"));
     }

@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.38.x] - 2026-05-17 - Stable memory ABI hard cut
 
+- `0.38.7` defragments the Canic core memory map before the ABI layout is frozen and keeps ICP network settings such as `ii`/`nns` owned by `icp.yaml` during fleet sync.
+
 - `0.38.6` adds persisted ABI ledger `layout_epoch` validation and exposes the epoch through the controller-only ledger diagnostic.
 
 - `0.38.5` makes `canic info cycles` include fresh auto-top-up events immediately and aligns stable-memory ABI documentation around the final Canic-managed memory contract.
