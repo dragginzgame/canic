@@ -14,7 +14,7 @@ inspect only the files needed for the current task.
   standalone `ic-memory` source boundary.
 - Current release-work area: generic `stable_key -> allocation_slot forever`
   primitives, declaration/session boundaries, substrate and policy traits, and
-  explicit Canic adapter/migration planning.
+  explicit Canic adapter planning.
 - Design started at `docs/design/0.39-ic-memory/0.39-design.md`; the core issue is
   that Canic 0.38 proved stable allocation identity, but the standalone crate
   must govern allocation slots rather than hardcoding today's `MemoryManager`
@@ -60,6 +60,11 @@ inspect only the files needed for the current task.
   operations go through generic bootstrap helpers and the protected commit
   protocol instead of requiring adapters to hand-roll recover/stage/commit
   sequencing.
+- Started `0.39.7` by adding Canic-owned policy adapter coverage in the
+  unpublished `canic-tests` crate. The tests prove Canic's
+  `MemoryManagerId(u8)` rules against `ic-memory` traits without adding a
+  runtime/build dependency from publishable crates to the unpublished local
+  extraction crate.
 - Added a workspace manifest guard so explicitly publishable crates cannot add
   runtime or build dependencies on workspace crates marked `publish = false`.
 - Wired the same manifest-boundary guard into `scripts/ci/publish-workspace.sh`

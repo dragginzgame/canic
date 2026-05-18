@@ -15,6 +15,7 @@ canic-control-plane = { workspace = true }
 canic-core = { workspace = true }
 canic-testing-internal = { workspace = true }
 canic-testkit = { workspace = true }
+ic-memory = { workspace = true }
 pocket-ic = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
