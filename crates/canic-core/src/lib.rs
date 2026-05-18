@@ -78,15 +78,9 @@ pub const CANIC_WASM_CHUNK_BYTES: usize = 1_048_576;
 
 #[cfg(test)]
 const _: () = {
-    use std::sync::Once;
-
     fn __canic_memory_test_bootstrap() {
-        static ONCE: Once = Once::new();
-
-        ONCE.call_once(|| {
-            crate::api::runtime::MemoryRuntimeApi::bootstrap_registry()
-                .expect("test stable-memory bootstrap");
-        });
+        crate::api::runtime::MemoryRuntimeApi::bootstrap_registry()
+            .expect("test stable-memory bootstrap");
     }
 
     #[crate::__reexports::ctor::ctor(
