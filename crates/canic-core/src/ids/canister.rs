@@ -1,4 +1,5 @@
-use crate::{cdk::candid::CandidType, memory::impl_storable_bounded};
+use crate::cdk::candid::CandidType;
+use canic_cdk::impl_storable_bounded;
 use serde::{Deserialize, Serialize};
 use std::{borrow::Borrow, borrow::Cow, fmt, str::FromStr};
 

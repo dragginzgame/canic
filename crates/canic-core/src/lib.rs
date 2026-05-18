@@ -54,7 +54,7 @@ pub(crate) mod workflow;
 pub use {
     ::canic_cdk as cdk,
     ::canic_memory as memory,
-    ::canic_memory::{eager_init, eager_static, ic_memory, ic_memory_range},
+    ::canic_memory::{eager_init, eager_static, ic_memory, ic_memory_key, ic_memory_range},
 };
 
 pub(crate) use error::{InternalError, InternalErrorClass, InternalErrorOrigin};

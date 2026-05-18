@@ -5,13 +5,13 @@
 //! control-plane feature is enabled.
 
 const _: () = {
-    #[canic_memory::__reexports::ctor::ctor(
+    #[canic_core::__reexports::ctor::ctor(
         unsafe,
         anonymous,
-        crate_path = canic_memory::__reexports::ctor
+        crate_path = canic_core::__reexports::ctor
     )]
     fn __canic_reserve_control_plane_memory_range() {
-        canic_memory::ic_memory_range!(80, 85);
+        canic_core::ic_memory_range!(80, 85);
     }
 };
 
@@ -28,13 +28,13 @@ const _: () = {
         });
     }
 
-    #[canic_memory::__reexports::ctor::ctor(
+    #[canic_core::__reexports::ctor::ctor(
         unsafe,
         anonymous,
-        crate_path = canic_memory::__reexports::ctor
+        crate_path = canic_core::__reexports::ctor
     )]
     fn __canic_install_memory_test_bootstrap_hook() {
-        canic_memory::runtime::install_test_bootstrap_hook(__canic_memory_test_bootstrap);
+        canic_core::memory::runtime::install_test_bootstrap_hook(__canic_memory_test_bootstrap);
     }
 };
 

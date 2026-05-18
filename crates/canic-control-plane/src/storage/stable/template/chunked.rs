@@ -1,11 +1,12 @@
 use crate::ids::{TemplateChunkKey, TemplateReleaseKey};
+use canic_cdk::impl_storable_unbounded;
 use canic_cdk::structures::{
     BTreeMap, DefaultMemoryImpl, Vec as StableVec,
     memory::VirtualMemory,
     storable::{Bound, Storable},
 };
 use canic_core::CANIC_WASM_CHUNK_BYTES;
-use canic_memory::{eager_static, impl_storable_unbounded};
+use canic_core::eager_static;
 use serde::{Deserialize, Serialize};
 use std::{borrow::Cow, cell::RefCell, collections::BTreeMap as StdBTreeMap};
 
@@ -24,7 +25,7 @@ eager_static! {
     static TEMPLATE_CHUNK_SETS: RefCell<
         BTreeMap<TemplateReleaseKey, TemplateChunkSetRecord, VirtualMemory<DefaultMemoryImpl>>
     > = RefCell::new(
-        BTreeMap::init(canic_memory::ic_memory_key!("canic.control_plane.template_chunk_sets.v1", TemplateChunkSetStateStore, TEMPLATE_CHUNK_SETS_ID)),
+        BTreeMap::init(canic_core::ic_memory_key!("canic.control_plane.template_chunk_sets.v1", TemplateChunkSetStateStore, TEMPLATE_CHUNK_SETS_ID)),
     );
 }
 
@@ -36,13 +37,13 @@ eager_static! {
     static TEMPLATE_CHUNK_REFS: RefCell<
         BTreeMap<TemplateChunkKey, TemplateChunkRefRecord, VirtualMemory<DefaultMemoryImpl>>
     > = RefCell::new(
-        BTreeMap::init(canic_memory::ic_memory_key!("canic.control_plane.template_chunk_refs.v1", TemplateChunkRefStore, TEMPLATE_CHUNK_REFS_ID)),
+        BTreeMap::init(canic_core::ic_memory_key!("canic.control_plane.template_chunk_refs.v1", TemplateChunkRefStore, TEMPLATE_CHUNK_REFS_ID)),
     );
 }
 
 eager_static! {
     static TEMPLATE_CHUNK_PAYLOADS_MEMORY: VirtualMemory<DefaultMemoryImpl> =
-        canic_memory::ic_memory_key!("canic.control_plane.template_chunk_payloads.v1", TemplateChunkPayloadStore, TEMPLATE_CHUNK_PAYLOADS_ID);
+        canic_core::ic_memory_key!("canic.control_plane.template_chunk_payloads.v1", TemplateChunkPayloadStore, TEMPLATE_CHUNK_PAYLOADS_ID);
 }
 
 eager_static! {

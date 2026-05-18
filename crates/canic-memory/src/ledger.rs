@@ -83,7 +83,7 @@ impl Default for MemoryLayoutLedgerRecord {
     }
 }
 
-crate::impl_storable_unbounded!(MemoryLayoutLedgerRecord);
+canic_cdk::impl_storable_unbounded!(MemoryLayoutLedgerRecord);
 
 pub fn validate_bootstrap_state_before_cell_init(
     raw_state: RawStableMemoryState,

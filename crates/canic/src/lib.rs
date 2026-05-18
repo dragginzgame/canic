@@ -50,7 +50,7 @@ pub mod __build {
 // Sub-crates
 // -----------------------------------------------------------------------------
 pub use canic_cdk as cdk;
-pub use canic_memory as memory;
+pub use canic_core::memory;
 
 // -----------------------------------------------------------------------------
 // Re-exports

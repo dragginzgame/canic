@@ -80,6 +80,10 @@ inspect only the files needed for the current task.
 - Moved the CBOR serializer and `impl_storable_*` macros from `canic-memory`
   to `canic-cdk`; `canic-memory` now only re-exports them as compatibility
   glue while the memory crate is being retired.
+- Started `0.39.9` by removing direct `canic-memory` dependencies from the
+  top-level `canic` facade and `canic-control-plane`. `canic-core` is now the
+  remaining Canic runtime boundary that directly owns `canic-memory` bootstrap
+  glue while the extraction continues toward deleting the compatibility crate.
 - Added a workspace manifest guard so explicitly publishable crates cannot add
   runtime or build dependencies on workspace crates marked `publish = false`.
 - Wired the same manifest-boundary guard into `scripts/ci/publish-workspace.sh`

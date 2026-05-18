@@ -19,9 +19,9 @@ pub mod prelude {
         cdk::types::{Cycles, Principal},
         eager_static,
         ids::{CanisterRole, SubnetRole},
-        memory::impl_storable_bounded,
         storage::StorageError,
     };
+    pub use canic_cdk::impl_storable_bounded;
     pub use serde::{Deserialize, Serialize};
 }
 

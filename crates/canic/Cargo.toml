@@ -26,7 +26,6 @@ canic-cdk = { workspace = true }
 canic-control-plane = { workspace = true, optional = true }
 canic-core = { workspace = true }
 canic-macros = { workspace = true }
-canic-memory = { workspace = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 flate2 = { workspace = true }

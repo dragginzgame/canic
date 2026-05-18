@@ -1,9 +1,10 @@
 use crate::ids::{WasmStoreBinding, WasmStoreGcMode};
+use canic_cdk::impl_storable_bounded;
 use canic_cdk::{
     structures::{DefaultMemoryImpl, cell::Cell, memory::VirtualMemory},
     types::Principal,
 };
-use canic_memory::{eager_static, impl_storable_bounded};
+use canic_core::eager_static;
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 
@@ -16,7 +17,7 @@ eager_static! {
     //
     static SUBNET_STATE: RefCell<Cell<SubnetStateRecord, VirtualMemory<DefaultMemoryImpl>>> =
         RefCell::new(Cell::init(
-            canic_memory::ic_memory_key!("canic.control_plane.subnet_state.v1", SubnetState, SUBNET_STATE_ID),
+            canic_core::ic_memory_key!("canic.control_plane.subnet_state.v1", SubnetState, SUBNET_STATE_ID),
             SubnetStateRecord::default(),
         ));
 }

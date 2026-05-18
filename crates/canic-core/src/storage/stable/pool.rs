@@ -5,9 +5,9 @@ use crate::{
     },
     eager_static,
     ids::CanisterRole,
-    memory::impl_storable_unbounded,
     storage::stable::memory::pool::CANISTER_POOL_ID,
 };
+use canic_cdk::impl_storable_unbounded;
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 

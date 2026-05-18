@@ -8,7 +8,6 @@ use crate::{
     },
     eager_static,
     log::{Level, Topic},
-    memory::impl_storable_unbounded,
     storage::{
         prelude::*,
         stable::{
@@ -17,6 +16,7 @@ use crate::{
         },
     },
 };
+use canic_cdk::impl_storable_unbounded;
 use serde::{Deserialize, Serialize};
 use std::{cell::RefCell, collections::VecDeque};
 

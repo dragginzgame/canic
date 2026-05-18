@@ -6,9 +6,9 @@ use crate::{
     },
     eager_static,
     ids::CanisterRole,
-    memory::impl_storable_bounded,
     storage::stable::memory::placement::SCALING_REGISTRY_ID,
 };
+use canic_cdk::impl_storable_bounded;
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 
