@@ -32,6 +32,7 @@ fn fleet_name_is_accepted_when_configured() {
     let mut cfg = ConfigModel::test_default();
     cfg.fleet = Some(FleetConfig {
         name: Some("demo".to_string()),
+        ..Default::default()
     });
 
     cfg.validate().expect("fleet name should be valid");
@@ -42,9 +43,25 @@ fn fleet_name_must_be_filesystem_safe() {
     let mut cfg = ConfigModel::test_default();
     cfg.fleet = Some(FleetConfig {
         name: Some("demo fleet".to_string()),
+        ..Default::default()
     });
 
     cfg.validate().expect_err("fleet name should fail");
+}
+
+#[test]
+fn fleet_local_network_flags_are_accepted() {
+    let mut cfg = ConfigModel::test_default();
+    cfg.fleet = Some(FleetConfig {
+        name: Some("demo".to_string()),
+        local: FleetLocalConfig {
+            ii: Some(true),
+            nns: Some(false),
+        },
+    });
+
+    cfg.validate()
+        .expect("fleet-local network flags should be valid");
 }
 
 #[test]

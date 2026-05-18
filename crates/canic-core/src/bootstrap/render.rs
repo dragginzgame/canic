@@ -3,9 +3,9 @@ use crate::{
     config::schema::{
         AppConfig, AppInitMode, AuthConfig, CanisterAuthConfig, CanisterConfig, CanisterKind,
         CanisterPool, ConfigModel, DelegatedTokenConfig, DirectoryConfig, DirectoryPool,
-        FleetConfig, LogConfig, MetricsCanisterConfig, MetricsProfile, PoolImport,
-        RandomnessConfig, RandomnessSource, RoleAttestationConfig, ScalePool, ScalePoolPolicy,
-        ScalingConfig, ShardPool, ShardPoolPolicy, ShardingConfig, Standards,
+        FleetConfig, FleetLocalConfig, LogConfig, MetricsCanisterConfig, MetricsProfile,
+        PoolImport, RandomnessConfig, RandomnessSource, RoleAttestationConfig, ScalePool,
+        ScalePoolPolicy, ScalingConfig, ShardPool, ShardPoolPolicy, ShardingConfig, Standards,
         StandardsCanisterConfig, SubnetConfig, TopupPolicy, Whitelist,
     },
     ids::{CanisterRole, SubnetRole},
@@ -52,9 +52,23 @@ fn render_config_model(config: &ConfigModel) -> TokenStream {
 // Render operator-facing fleet identity metadata.
 fn render_fleet_config(config: &FleetConfig) -> TokenStream {
     let name = render_option(config.name.as_ref(), |name| render_owned_string(name));
+    let local = render_fleet_local_config(&config.local);
     quote! {
         ::canic::__internal::core::bootstrap::compiled::FleetConfig {
             name: #name,
+            local: #local,
+        }
+    }
+}
+
+// Render local ICP network sync settings for fleet-scoped project config.
+fn render_fleet_local_config(config: &FleetLocalConfig) -> TokenStream {
+    let ii = render_option(config.ii.as_ref(), |value| quote!(#value));
+    let nns = render_option(config.nns.as_ref(), |value| quote!(#value));
+    quote! {
+        ::canic::__internal::core::bootstrap::compiled::FleetLocalConfig {
+            ii: #ii,
+            nns: #nns,
         }
     }
 }

@@ -19,6 +19,16 @@ const DEFAULT_INITIAL_CYCLES: u128 = 5_000_000_000_000;
 pub const LOCAL_ROOT_MIN_READY_CYCLES: u128 = 100_000_000_000_000;
 const DEFAULT_RANDOMNESS_RESEED_INTERVAL_SECS: u64 = 3600;
 
+///
+/// ConfiguredLocalNetwork
+///
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct ConfiguredLocalNetwork {
+    pub ii: Option<bool>,
+    pub nns: Option<bool>,
+}
+
 impl RootSubnetRoleScope {
     const fn includes_root(self) -> bool {
         matches!(self, Self::Fleet)
@@ -75,6 +85,15 @@ pub fn configured_local_root_create_cycles(
 pub fn configured_fleet_name(config_path: &Path) -> Result<String, Box<dyn std::error::Error>> {
     let config_source = fs::read_to_string(config_path)?;
     configured_fleet_name_from_source(&config_source)
+        .map_err(|err| format!("invalid {}: {err}", config_path.display()).into())
+}
+
+// Read fleet-scoped local ICP network sync flags from an install config.
+pub fn configured_local_network(
+    config_path: &Path,
+) -> Result<ConfiguredLocalNetwork, Box<dyn std::error::Error>> {
+    let config_source = fs::read_to_string(config_path)?;
+    configured_local_network_from_source(&config_source)
         .map_err(|err| format!("invalid {}: {err}", config_path.display()).into())
 }
 
@@ -460,6 +479,18 @@ pub(super) fn configured_fleet_name_from_source(
         .and_then(|fleet| fleet.name)
         .ok_or_else(|| "missing required [fleet].name in canic.toml".to_string())?;
     Ok(name)
+}
+
+// Read fleet-scoped local ICP network sync flags from raw config source.
+pub(super) fn configured_local_network_from_source(
+    config_source: &str,
+) -> Result<ConfiguredLocalNetwork, Box<dyn std::error::Error>> {
+    let config = parse_config_model(config_source).map_err(|err| err.to_string())?;
+    let local = config.fleet.map(|fleet| fleet.local).unwrap_or_default();
+    Ok(ConfiguredLocalNetwork {
+        ii: local.ii,
+        nns: local.nns,
+    })
 }
 
 // Enumerate the configured ordinary roles for the single subnet that owns `root`.

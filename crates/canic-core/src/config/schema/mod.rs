@@ -196,6 +196,23 @@ impl ConfigModel {
 pub struct FleetConfig {
     #[serde(default)]
     pub name: Option<String>,
+
+    #[serde(default)]
+    pub local: FleetLocalConfig,
+}
+
+///
+/// FleetLocalConfig
+///
+
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct FleetLocalConfig {
+    #[serde(default)]
+    pub ii: Option<bool>,
+
+    #[serde(default)]
+    pub nns: Option<bool>,
 }
 
 ///

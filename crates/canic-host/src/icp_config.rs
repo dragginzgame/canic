@@ -2,7 +2,10 @@ use crate::{
     install_root::{
         current_canic_project_root, discover_project_canic_config_choices, project_fleet_roots,
     },
-    release_set::{configured_fleet_name, configured_fleet_roles, icp_root},
+    release_set::{
+        ConfiguredLocalNetwork, configured_fleet_name, configured_fleet_roles,
+        configured_local_network, icp_root,
+    },
     workspace_discovery::discover_icp_root_from,
 };
 use std::{
@@ -107,7 +110,12 @@ pub fn sync_canic_icp_yaml(
         Err(err) => return Err(err.into()),
     };
     let spec = discover_project_spec(&root, fleet_filter)?;
-    let updated = sync_canic_sections(&source, &spec.canisters, &spec.environments);
+    let updated = sync_canic_sections(
+        &source,
+        &spec.canisters,
+        &spec.environments,
+        spec.local_network,
+    );
     let changed = updated != source;
     if changed {
         fs::write(&path, updated)?;
@@ -174,6 +182,7 @@ fn current_project_search_root() -> Result<PathBuf, IcpConfigError> {
 struct CanicIcpSpec {
     canisters: Vec<String>,
     environments: BTreeMap<String, Vec<String>>,
+    local_network: ConfiguredLocalNetwork,
 }
 
 fn discover_project_spec(
@@ -192,6 +201,9 @@ fn discover_project_spec(
     let mut canisters = Vec::<String>::new();
     let mut seen_canisters = BTreeSet::<String>::new();
     let mut environments = BTreeMap::<String, Vec<String>>::new();
+    let mut local_network = ConfiguredLocalNetwork::default();
+    let mut ii_source = None::<PathBuf>;
+    let mut nns_source = None::<PathBuf>;
     let mut matched_filter = fleet_filter.is_none();
 
     for config_path in choices {
@@ -203,6 +215,22 @@ fn discover_project_spec(
 
         let roles = configured_fleet_roles(&config_path)
             .map_err(|err| IcpConfigError::Config(err.to_string()))?;
+        let network = configured_local_network(&config_path)
+            .map_err(|err| IcpConfigError::Config(err.to_string()))?;
+        merge_local_network_flag(
+            "ii",
+            &mut local_network.ii,
+            &mut ii_source,
+            network.ii,
+            &config_path,
+        )?;
+        merge_local_network_flag(
+            "nns",
+            &mut local_network.nns,
+            &mut nns_source,
+            network.nns,
+            &config_path,
+        )?;
         for role in &roles {
             if seen_canisters.insert(role.clone()) {
                 canisters.push(role.clone());
@@ -223,7 +251,39 @@ fn discover_project_spec(
     Ok(CanicIcpSpec {
         canisters,
         environments,
+        local_network,
     })
+}
+
+fn merge_local_network_flag(
+    name: &str,
+    current: &mut Option<bool>,
+    current_source: &mut Option<PathBuf>,
+    next: Option<bool>,
+    source_path: &Path,
+) -> Result<(), IcpConfigError> {
+    let Some(next) = next else {
+        return Ok(());
+    };
+
+    match current {
+        Some(existing) if *existing != next => {
+            let previous = current_source.as_ref().map_or_else(
+                || "<unknown>".to_string(),
+                |path| path.display().to_string(),
+            );
+            Err(IcpConfigError::Config(format!(
+                "conflicting [fleet.local].{name} values across fleet configs:\n- {previous} -> {existing}\n- {} -> {next}\nUse one shared value for the local ICP network or remove the duplicate override.",
+                source_path.display()
+            )))
+        }
+        Some(_) => Ok(()),
+        None => {
+            *current = Some(next);
+            *current_source = Some(source_path.to_path_buf());
+            Ok(())
+        }
+    }
 }
 
 fn display_project_fleet_roots(root: &Path) -> String {
@@ -238,10 +298,12 @@ fn sync_canic_sections(
     source: &str,
     canisters: &[String],
     environments: &BTreeMap<String, Vec<String>>,
+    local_network: ConfiguredLocalNetwork,
 ) -> String {
     let without_canisters = remove_top_level_section(source, "canisters:");
     let without_environments = remove_top_level_section(&without_canisters, "environments:");
-    let (networks, rest) = take_top_level_section(&without_environments, "networks:");
+    let synced_networks = sync_local_network_flags(&without_environments, local_network);
+    let (networks, rest) = take_top_level_section(&synced_networks, "networks:");
     let mut sections = vec![render_canisters_section(canisters)];
     if let Some(networks) = networks {
         sections.push(networks);
@@ -379,6 +441,17 @@ fn configured_local_gateway_port_from_source(source: &str) -> u16 {
         .unwrap_or(DEFAULT_LOCAL_GATEWAY_PORT)
 }
 
+fn sync_local_network_flags(source: &str, local_network: ConfiguredLocalNetwork) -> String {
+    let mut updated = source.to_string();
+    if let Some(ii) = local_network.ii {
+        updated = upsert_local_network_bool(&updated, "ii", ii);
+    }
+    if let Some(nns) = local_network.nns {
+        updated = upsert_local_network_bool(&updated, "nns", nns);
+    }
+    updated
+}
+
 fn upsert_local_gateway_port(source: &str, port: u16) -> String {
     let had_trailing_newline = source.ends_with('\n');
     let mut lines = source.lines().map(str::to_string).collect::<Vec<_>>();
@@ -429,6 +502,34 @@ fn upsert_local_gateway_port(source: &str, port: u16) -> String {
     insert.extend(local_network_lines(port));
     insert.push(String::new());
     lines.splice(insert_at..insert_at, insert);
+    join_lines(lines, had_trailing_newline)
+}
+
+fn upsert_local_network_bool(source: &str, key: &str, value: bool) -> String {
+    let port = configured_local_gateway_port_from_source(source);
+    let source = upsert_local_gateway_port(source, port);
+    let had_trailing_newline = source.ends_with('\n');
+    let mut lines = source.lines().map(str::to_string).collect::<Vec<_>>();
+
+    let local_block = {
+        let line_refs = lines.iter().map(String::as_str).collect::<Vec<_>>();
+        local_network_block(&line_refs)
+    };
+    let Some((start, end)) = local_block else {
+        return source;
+    };
+
+    let matcher = format!("{key}:");
+    if let Some(index) = (start..end).find(|index| lines[*index].trim().starts_with(&matcher)) {
+        let indent = line_indent(&lines[index]);
+        lines[index] = format!("{}{}: {value}", " ".repeat(indent), key);
+        return join_lines(lines, had_trailing_newline);
+    }
+
+    let insert_at = (start + 1..end)
+        .find(|index| lines[*index].trim() == "gateway:")
+        .unwrap_or(end);
+    lines.insert(insert_at, format!("    {key}: {value}"));
     join_lines(lines, had_trailing_newline)
 }
 
@@ -536,7 +637,12 @@ mod tests {
             vec!["root".to_string(), "app".to_string()],
         )]);
 
-        let updated = sync_canic_sections(source, &canisters, &environments);
+        let updated = sync_canic_sections(
+            source,
+            &canisters,
+            &environments,
+            ConfiguredLocalNetwork::default(),
+        );
 
         assert!(updated.starts_with("canisters:\n  - name: root\n"));
         assert!(
@@ -553,8 +659,30 @@ mod tests {
     }
 
     #[test]
+    fn syncs_requested_local_network_flags_into_local_icp_network() {
+        let source = "canisters:\n  - name: old\n\nnetworks:\n  - name: local\n    mode: managed\n    gateway:\n      bind: 127.0.0.1\n      port: 8009\n\nenvironments:\n  - name: old\n    network: local\n    canisters: [old]\n";
+        let canisters = vec!["root".to_string()];
+        let environments = BTreeMap::from([("test".to_string(), vec!["root".to_string()])]);
+
+        let updated = sync_canic_sections(
+            source,
+            &canisters,
+            &environments,
+            ConfiguredLocalNetwork {
+                ii: Some(true),
+                nns: Some(true),
+            },
+        );
+
+        assert!(updated.contains("    ii: true"));
+        assert!(updated.contains("    nns: true"));
+        assert!(updated.contains("      port: 8009"));
+    }
+
+    #[test]
     fn renders_empty_canic_sections_for_empty_project_specs() {
-        let updated = sync_canic_sections("", &[], &BTreeMap::new());
+        let updated =
+            sync_canic_sections("", &[], &BTreeMap::new(), ConfiguredLocalNetwork::default());
 
         assert_eq!(updated, "canisters: []\n\nenvironments: []\n");
     }
@@ -588,6 +716,86 @@ kind = "singleton"
                 "toko".to_string(),
                 vec!["root".to_string(), "app".to_string()]
             )])
+        );
+        assert_eq!(spec.local_network, ConfiguredLocalNetwork::default());
+        fs::remove_dir_all(root).expect("clean temp dir");
+    }
+
+    #[test]
+    fn discovers_local_network_flags_for_icp_sync() {
+        let root = temp_dir("canic-icp-sync-local-network");
+        let config = root.join("fleets/toko/canic.toml");
+        fs::create_dir_all(config.parent().expect("config parent")).expect("create config parent");
+        fs::write(
+            &config,
+            r#"
+[fleet]
+name = "toko"
+
+[fleet.local]
+ii = true
+nns = true
+
+[subnets.prime.canisters.root]
+kind = "root"
+"#,
+        )
+        .expect("write config");
+
+        let spec = discover_project_spec(&root, Some("toko")).expect("discover spec");
+
+        assert_eq!(
+            spec.local_network,
+            ConfiguredLocalNetwork {
+                ii: Some(true),
+                nns: Some(true),
+            }
+        );
+        fs::remove_dir_all(root).expect("clean temp dir");
+    }
+
+    #[test]
+    fn rejects_conflicting_local_network_flags_across_fleet_configs() {
+        let root = temp_dir("canic-icp-sync-conflicting-local-network");
+        let demo = root.join("fleets/demo/canic.toml");
+        let staging = root.join("fleets/staging/canic.toml");
+        fs::create_dir_all(demo.parent().expect("demo parent")).expect("create demo parent");
+        fs::create_dir_all(staging.parent().expect("staging parent"))
+            .expect("create staging parent");
+        fs::write(
+            &demo,
+            r#"
+[fleet]
+name = "demo"
+
+[fleet.local]
+ii = true
+
+[subnets.prime.canisters.root]
+kind = "root"
+"#,
+        )
+        .expect("write demo config");
+        fs::write(
+            &staging,
+            r#"
+[fleet]
+name = "staging"
+
+[fleet.local]
+ii = false
+
+[subnets.prime.canisters.root]
+kind = "root"
+"#,
+        )
+        .expect("write staging config");
+
+        let err = discover_project_spec(&root, None).expect_err("conflicting local network flags");
+
+        assert!(
+            err.to_string()
+                .contains("conflicting [fleet.local].ii values")
         );
         fs::remove_dir_all(root).expect("clean temp dir");
     }
