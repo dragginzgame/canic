@@ -74,13 +74,15 @@ pub struct IcpProjectConfigReport {
 }
 
 impl IcpProjectConfigReport {
-    pub fn is_ready(&self) -> bool {
+    #[must_use]
+    pub const fn is_ready(&self) -> bool {
         self.icp_yaml_present
             && self.local_network_present
             && self.missing_canisters.is_empty()
             && self.missing_environments.is_empty()
     }
 
+    #[must_use]
     pub fn issues(&self) -> Vec<String> {
         let mut issues = Vec::new();
         if !self.icp_yaml_present {
@@ -132,7 +134,7 @@ pub fn inspect_canic_icp_yaml_from_root(
 ) -> Result<IcpProjectConfigReport, IcpConfigError> {
     let path = root.join(ICP_CONFIG_FILE);
     let (source, icp_yaml_present) = read_optional_icp_yaml(&path)?;
-    let spec = discover_project_spec(&root, fleet_filter)?;
+    let spec = discover_project_spec(root, fleet_filter)?;
     let configured_canisters = top_level_named_items(&source, "canisters:");
     let configured_environments = top_level_named_items(&source, "environments:");
     let lines = source.lines().collect::<Vec<_>>();
@@ -406,7 +408,7 @@ kind = "singleton"
 "#,
         )
         .expect("write config");
-        let source = r#"
+        let source = r"
 canisters:
   - name: root
 
@@ -420,7 +422,7 @@ environments:
   - name: toko
     network: local
     canisters: [root]
-"#;
+";
         fs::write(root.join("icp.yaml"), source).expect("write icp yaml");
 
         let report = inspect_canic_icp_yaml_from_root(&root, Some("toko")).expect("inspect");
