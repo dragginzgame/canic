@@ -1,4 +1,4 @@
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -48,6 +48,21 @@ fn is_workspace_inherited(value: &Value) -> bool {
         .and_then(|table| table.get("workspace"))
         .and_then(Value::as_bool)
         .unwrap_or(false)
+}
+
+// Returns the package name declared by a member manifest.
+fn package_name(manifest: &Value) -> Option<&str> {
+    manifest["package"]["name"].as_str()
+}
+
+// Returns whether a member manifest is explicitly published.
+fn is_explicitly_publishable(manifest: &Value) -> bool {
+    manifest["package"]["publish"].as_bool() == Some(true)
+}
+
+// Returns whether a member manifest is explicitly unpublished.
+fn is_explicitly_unpublished(manifest: &Value) -> bool {
+    manifest["package"]["publish"].as_bool() == Some(false)
 }
 
 // Formats a path relative to the workspace root for stable test output.
@@ -127,6 +142,68 @@ fn collect_dependency_failures(
             &next_path,
             entry,
             workspace_dependencies,
+            failures,
+        );
+    }
+}
+
+// Collects runtime/build dependency tables from nested target-specific
+// manifest sections.
+fn collect_publish_dependency_failures(
+    root: &Path,
+    manifest_path: &Path,
+    table_path: &str,
+    value: &Value,
+    unpublished_workspace_members: &BTreeSet<String>,
+    failures: &mut Vec<String>,
+) {
+    let Some(table) = value.as_table() else {
+        return;
+    };
+
+    for (key, entry) in table {
+        if matches!(key.as_str(), "dependencies" | "build-dependencies") {
+            let Some(dependencies) = entry.as_table() else {
+                failures.push(format!(
+                    "{}: [{}] must be a table",
+                    relative_display(root, manifest_path),
+                    if table_path.is_empty() {
+                        key.clone()
+                    } else {
+                        format!("{table_path}.{key}")
+                    }
+                ));
+                continue;
+            };
+
+            let section_path = if table_path.is_empty() {
+                key.clone()
+            } else {
+                format!("{table_path}.{key}")
+            };
+            for name in dependencies.keys() {
+                if unpublished_workspace_members.contains(name) {
+                    failures.push(format!(
+                        "{}: [{section_path}] {name} is an unpublished workspace crate; publishable crates must not depend on it at runtime or build time",
+                        relative_display(root, manifest_path),
+                    ));
+                }
+            }
+            continue;
+        }
+
+        let next_path = if table_path.is_empty() {
+            key.clone()
+        } else {
+            format!("{table_path}.{key}")
+        };
+
+        collect_publish_dependency_failures(
+            root,
+            manifest_path,
+            &next_path,
+            entry,
+            unpublished_workspace_members,
             failures,
         );
     }
@@ -238,6 +315,60 @@ fn workspace_members_inherit_versions_from_root() {
         failures.sort();
         panic!(
             "workspace manifest drift detected:\n{}",
+            failures.join("\n")
+        );
+    }
+}
+
+// Verifies publishable crates do not compile against local unpublished crates.
+#[test]
+fn publishable_members_do_not_depend_on_unpublished_workspace_members() {
+    let root = workspace_root();
+    let root_manifest_path = root.join("Cargo.toml");
+    let root_manifest = read_manifest(&root_manifest_path);
+    let member_manifests = workspace_member_manifests(&root, &root_manifest);
+
+    let manifests = member_manifests
+        .into_iter()
+        .map(|manifest_path| {
+            let manifest = read_manifest(&manifest_path);
+            (manifest_path, manifest)
+        })
+        .collect::<Vec<_>>();
+
+    let mut publishability = BTreeMap::new();
+    for (_, manifest) in &manifests {
+        let Some(name) = package_name(manifest) else {
+            continue;
+        };
+        publishability.insert(name.to_string(), is_explicitly_unpublished(manifest));
+    }
+
+    let unpublished_workspace_members = publishability
+        .into_iter()
+        .filter_map(|(name, unpublished)| unpublished.then_some(name))
+        .collect::<BTreeSet<_>>();
+
+    let mut failures = Vec::new();
+    for (manifest_path, manifest) in manifests {
+        if !is_explicitly_publishable(&manifest) {
+            continue;
+        }
+
+        collect_publish_dependency_failures(
+            &root,
+            &manifest_path,
+            "",
+            &manifest,
+            &unpublished_workspace_members,
+            &mut failures,
+        );
+    }
+
+    if !failures.is_empty() {
+        failures.sort();
+        panic!(
+            "publishable workspace member depends on unpublished local crate:\n{}",
             failures.join("\n")
         );
     }

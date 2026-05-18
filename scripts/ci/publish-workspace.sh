@@ -25,6 +25,12 @@ PUBLISH_ORDER=(
     canic-testkit
 )
 
+# Fails before any publish attempt if an explicitly publishable workspace crate
+# depends at runtime or build time on a local crate marked `publish = false`.
+validate_publish_manifest_boundary() {
+    cargo test -p canic --test workspace_manifest publishable_members_do_not_depend_on_unpublished_workspace_members
+}
+
 # Extracts the current workspace version from the root manifest.
 workspace_version() {
     awk '
@@ -81,6 +87,8 @@ if [ -z "$version" ]; then
     echo "Failed to determine workspace version from Cargo.toml" >&2
     exit 1
 fi
+
+validate_publish_manifest_boundary
 
 started=0
 matched_from=0

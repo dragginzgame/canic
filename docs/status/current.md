@@ -35,6 +35,14 @@ inspect only the files needed for the current task.
 - Added a generic `ic-memory` diagnostic-export builder while deferring any
   `canic-memory` compile-time dependency on `ic-memory` until the standalone
   crate is ready to be published first.
+- Started `0.39.4` as the packaging correction after `0.39.3` was published out
+  of sequence: `ic-memory` is path-only local extraction scaffolding, and
+  `canic-memory` is self-contained for crates.io publishing until `ic-memory`
+  has an explicit publish order.
+- Added a workspace manifest guard so explicitly publishable crates cannot add
+  runtime or build dependencies on workspace crates marked `publish = false`.
+- Wired the same manifest-boundary guard into `scripts/ci/publish-workspace.sh`
+  before any publish attempt.
 - Drafted the proposed 0.40 attested Canic-call hard cut at
   `docs/design/0.40-attested-canic-calls/0.40-design.md`, replacing
   AppIndex-only sibling authorization with root-signed caller-role envelopes

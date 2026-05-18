@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.39.x] - 2026-05-18 - `ic-memory` extraction
 
+- `0.39.4` keeps `ic-memory` as unpublished local extraction scaffolding, restores `canic-memory` as a self-contained publishable crate, and blocks publishing when publishable manifests depend on unpublished local crates.
+
+- `0.39.3` was published out of sequence while the local `ic-memory` dependency boundary was still being corrected; use `0.39.4` as the packaging correction.
+
 - `0.39.2` keeps the `ic-memory` extraction local while tightening generic validated-session boundaries and preserving `canic-memory` as a publishable self-contained crate.
 
 - `0.39.1` adds an AppIndex-backed `caller::has_app_role(role)` access predicate for internal sibling checks.
