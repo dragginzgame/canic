@@ -3,13 +3,20 @@ use super::manager;
 use super::{
     manager::{MEMORY_MANAGER, RawStableMemoryState},
     policy,
-    registry::{MemoryRange, MemoryRangeAuthority, MemoryRegistryEntry, MemoryRegistryError},
+    registry::{
+        MemoryRange, MemoryRangeAuthority, MemoryRegistryEntry, MemoryRegistryError,
+        schema_metadata_reason,
+    },
 };
 use crate::cdk::structures::Memory;
 use crate::cdk::structures::{
     DefaultMemoryImpl,
     cell::Cell,
     memory::{MemoryId, VirtualMemory},
+};
+use ic_memory::{
+    AllocationHistory, AllocationLedger, AllocationRecord, AllocationSlotDescriptor,
+    AllocationState, GenerationRecord, SchemaMetadata, SchemaMetadataRecord, StableKey,
 };
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
@@ -487,6 +494,13 @@ pub fn try_export_entries() -> Result<Vec<(u8, MemoryRegistryEntry)>, MemoryRegi
     })
 }
 
+pub(super) fn try_allocation_ledger_snapshot() -> Result<AllocationLedger, MemoryRegistryError> {
+    MEMORY_LAYOUT_LEDGER.with_borrow(|cell| {
+        let generation = authoritative_generation(cell.get())?;
+        allocation_ledger_from_generation(generation)
+    })
+}
+
 #[cfg(not(target_arch = "wasm32"))]
 pub fn try_snapshot() -> Result<MemoryLayoutLedgerSnapshot, MemoryRegistryError> {
     MEMORY_LAYOUT_LEDGER.with_borrow(|cell| snapshot_from_record(cell.get()))
@@ -800,6 +814,136 @@ fn validate_entry_against_generation(
     }
 
     Ok(())
+}
+
+fn allocation_ledger_from_generation(
+    generation: MemoryLayoutGenerationRecord,
+) -> Result<AllocationLedger, MemoryRegistryError> {
+    let records = generation
+        .entries
+        .iter()
+        .map(|entry| allocation_record_from_entry(generation.generation, entry))
+        .collect::<Result<Vec<_>, _>>()?;
+
+    let ledger = AllocationLedger {
+        ledger_schema_version: ic_memory::CURRENT_LEDGER_SCHEMA_VERSION,
+        physical_format_id: ic_memory::CURRENT_PHYSICAL_FORMAT_ID,
+        current_generation: generation.generation,
+        allocation_history: AllocationHistory {
+            records,
+            generations: generation_history_from_entries(&generation.entries),
+        },
+    };
+    ledger
+        .validate_integrity()
+        .map_err(|_| MemoryRegistryError::LedgerCorrupt {
+            reason: "allocation ledger history is structurally invalid",
+        })?;
+    Ok(ledger)
+}
+
+fn allocation_record_from_entry(
+    current_generation: u64,
+    entry: &MemoryLayoutEntryRecord,
+) -> Result<AllocationRecord, MemoryRegistryError> {
+    let stable_key =
+        StableKey::parse(&entry.stable_key).map_err(|_| MemoryRegistryError::LedgerCorrupt {
+            reason: "allocation ledger contains an invalid stable key",
+        })?;
+    let slot = AllocationSlotDescriptor::memory_manager_checked(entry.id).map_err(|_| {
+        MemoryRegistryError::LedgerCorrupt {
+            reason: "allocation ledger contains an invalid MemoryManager slot",
+        }
+    })?;
+
+    let first_generation = entry
+        .declarations
+        .first()
+        .map_or(current_generation, |declaration| declaration.generation);
+    let last_seen_generation = entry
+        .declarations
+        .last()
+        .map_or(current_generation, |declaration| declaration.generation);
+    let schema_history = schema_history_from_entry(first_generation, entry)?;
+
+    Ok(AllocationRecord {
+        stable_key,
+        slot,
+        state: AllocationState::Active,
+        first_generation,
+        last_seen_generation,
+        retired_generation: None,
+        schema_history,
+    })
+}
+
+fn schema_history_from_entry(
+    first_generation: u64,
+    entry: &MemoryLayoutEntryRecord,
+) -> Result<Vec<SchemaMetadataRecord>, MemoryRegistryError> {
+    if entry.declarations.is_empty() {
+        return Ok(vec![SchemaMetadataRecord {
+            generation: first_generation,
+            schema: schema_metadata_from_parts(
+                &entry.stable_key,
+                entry.schema_version,
+                entry.schema_fingerprint.clone(),
+            )?,
+        }]);
+    }
+
+    entry
+        .declarations
+        .iter()
+        .map(|declaration| {
+            Ok(SchemaMetadataRecord {
+                generation: declaration.generation,
+                schema: schema_metadata_from_parts(
+                    &entry.stable_key,
+                    declaration.schema_version,
+                    declaration.schema_fingerprint.clone(),
+                )?,
+            })
+        })
+        .collect()
+}
+
+fn schema_metadata_from_parts(
+    stable_key: &str,
+    schema_version: Option<u32>,
+    schema_fingerprint: Option<String>,
+) -> Result<SchemaMetadata, MemoryRegistryError> {
+    SchemaMetadata::new(schema_version, schema_fingerprint).map_err(|err| {
+        MemoryRegistryError::InvalidSchemaMetadata {
+            stable_key: stable_key.to_string(),
+            reason: schema_metadata_reason(err),
+        }
+    })
+}
+
+fn generation_history_from_entries(entries: &[MemoryLayoutEntryRecord]) -> Vec<GenerationRecord> {
+    let mut generations = entries
+        .iter()
+        .flat_map(|entry| {
+            entry
+                .declarations
+                .iter()
+                .map(|declaration| declaration.generation)
+        })
+        .collect::<Vec<_>>();
+    generations.sort_unstable();
+    generations.dedup();
+
+    generations
+        .into_iter()
+        .map(|generation| GenerationRecord {
+            generation,
+            parent_generation: generation.checked_sub(1),
+            runtime_fingerprint: None,
+            declaration_count: 0,
+            committed_at: None,
+        })
+        .collect()
 }
 
 fn canonical_authority_records() -> Vec<MemoryLayoutAuthorityRecord> {
@@ -1209,5 +1353,52 @@ mod tests {
             assert_eq!(entry.declarations[0].schema_version, Some(1));
             assert_eq!(entry.declarations[1].schema_version, Some(2));
         });
+    }
+
+    #[test]
+    fn allocation_ledger_snapshot_projects_physical_history() {
+        reset_for_tests();
+
+        record_entry(
+            100,
+            "crate_a",
+            "slot",
+            "app.crate_a.slot.v1",
+            Some(1),
+            Some("sha256:aaa"),
+        )
+        .expect("record first declaration");
+        record_entry(
+            100,
+            "crate_a",
+            "slot",
+            "app.crate_a.slot.v1",
+            Some(2),
+            Some("sha256:bbb"),
+        )
+        .expect("record second declaration");
+
+        let allocation_ledger = try_allocation_ledger_snapshot().expect("allocation ledger");
+        let record = allocation_ledger
+            .allocation_history
+            .records
+            .iter()
+            .find(|record| record.stable_key.as_str() == "app.crate_a.slot.v1")
+            .expect("allocation record");
+
+        assert_eq!(allocation_ledger.current_generation, 2);
+        assert_eq!(record.slot.memory_manager_id().expect("memory id"), 100);
+        assert_eq!(record.state, ic_memory::AllocationState::Active);
+        assert_eq!(record.first_generation, 1);
+        assert_eq!(record.last_seen_generation, 2);
+        assert_eq!(record.schema_history.len(), 2);
+        assert_eq!(record.schema_history[0].schema.schema_version, Some(1));
+        assert_eq!(
+            record.schema_history[1]
+                .schema
+                .schema_fingerprint
+                .as_deref(),
+            Some("sha256:bbb")
+        );
     }
 }

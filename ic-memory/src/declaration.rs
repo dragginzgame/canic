@@ -149,14 +149,14 @@ fn reject_duplicates(
     let mut slots = BTreeSet::new();
 
     for declaration in declarations {
-        if !keys.insert(declaration.stable_key.clone()) {
-            return Err(DeclarationSnapshotError::DuplicateStableKey(
-                declaration.stable_key.clone(),
-            ));
-        }
         if !slots.insert(declaration.slot.clone()) {
             return Err(DeclarationSnapshotError::DuplicateSlot(
                 declaration.slot.clone(),
+            ));
+        }
+        if !keys.insert(declaration.stable_key.clone()) {
+            return Err(DeclarationSnapshotError::DuplicateStableKey(
+                declaration.stable_key.clone(),
             ));
         }
     }

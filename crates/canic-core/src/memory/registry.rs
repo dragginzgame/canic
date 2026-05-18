@@ -718,7 +718,7 @@ fn validate_schema_metadata(
     Ok(())
 }
 
-const fn schema_metadata_reason(error: SchemaMetadataError) -> &'static str {
+pub(super) const fn schema_metadata_reason(error: SchemaMetadataError) -> &'static str {
     match error {
         SchemaMetadataError::InvalidVersion => {
             "schema_version must be greater than zero when present"

@@ -94,6 +94,14 @@ inspect only the files needed for the current task.
   Its remaining backend modules now live under `canic-core::memory`, and
   `canic-core` depends directly on `ic-memory` for allocation-governance
   primitives.
+- Started `0.39.12` by routing Canic runtime memory declarations through
+  `ic-memory::DeclarationSnapshot`, adding a production Canic
+  `AllocationPolicy` adapter, projecting the existing Canic physical ABI ledger
+  into `ic-memory::AllocationLedger`, and running generic allocation-history
+  validation during bootstrap without changing the persisted ledger format.
+  The validated allocation set is now published from bootstrap, and Canic memory
+  opening uses `ic-memory::AllocationSession` over the current MemoryManager
+  substrate.
 - Added a workspace manifest guard so explicitly publishable crates cannot add
   runtime or build dependencies on workspace crates marked `publish = false`.
 - Wired the same manifest-boundary guard into `scripts/ci/publish-workspace.sh`

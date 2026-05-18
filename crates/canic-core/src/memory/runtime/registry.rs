@@ -1,14 +1,19 @@
-use super::super::ledger;
 use super::super::manager::{self, RawStableMemoryState};
 use super::super::registry::{
     MemoryRange, MemoryRangeEntry, MemoryRangeSnapshot, MemoryRegistry, MemoryRegistryEntry,
     MemoryRegistryError, PendingRegistration, drain_pending_ranges, drain_pending_registrations,
 };
+use super::super::{ledger, policy::CanicMemoryManagerPolicy};
+use ic_memory::{
+    AllocationDeclaration, AllocationPolicy, AllocationSlotDescriptor, AllocationValidationError,
+    DeclarationSnapshot, DeclarationSnapshotError, MemoryManagerSlotError, SchemaMetadata,
+    StableKey, ValidatedAllocations, validate_allocations,
+};
 #[cfg(test)]
 use std::cell::Cell;
-use std::collections::BTreeSet;
 #[cfg(not(test))]
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::{cell::RefCell, collections::BTreeMap};
 
 #[cfg(not(test))]
 static MEMORY_REGISTRY_INITIALIZED: AtomicBool = AtomicBool::new(false);
@@ -16,6 +21,12 @@ static MEMORY_REGISTRY_INITIALIZED: AtomicBool = AtomicBool::new(false);
 #[cfg(test)]
 thread_local! {
     static MEMORY_REGISTRY_INITIALIZED: Cell<bool> = const { Cell::new(false) };
+}
+
+thread_local! {
+    static VALIDATED_ALLOCATIONS: RefCell<Option<ValidatedAllocations>> = const {
+        RefCell::new(None)
+    };
 }
 
 ///
@@ -71,10 +82,12 @@ impl MemoryRegistryRuntime {
         // Apply deferred registrations deterministically
         let mut regs = drain_pending_registrations();
         regs.sort_by_key(|registration| registration.id);
-        validate_current_registration_snapshot(&regs)?;
+        let has_runtime_declarations = !regs.is_empty();
+        let declaration_snapshot = validate_current_registration_snapshot(&regs)?;
 
         MemoryRegistry::reserve_internal_layout_ledger()?;
-        validate_pending_ledger_claims(initial_range, &ranges, &regs)?;
+        let validated_allocations =
+            validate_pending_ledger_claims(initial_range, &ranges, &regs, declaration_snapshot)?;
 
         // Reserve the caller's initial range first (if provided)
         if let Some((crate_name, start, end)) = initial_range {
@@ -100,6 +113,9 @@ impl MemoryRegistryRuntime {
             ranges: MemoryRegistry::export_ranges(),
             entries: MemoryRegistry::export(),
         };
+        if !Self::is_initialized() || has_runtime_declarations {
+            set_validated_allocations(Some(validated_allocations));
+        }
         set_initialized(true);
 
         Ok(summary)
@@ -141,6 +157,19 @@ impl MemoryRegistryRuntime {
         MemoryRegistry::get(id)
     }
 
+    /// Return the sealed validated allocation set published by bootstrap.
+    pub fn validated_allocations() -> Result<ValidatedAllocations, MemoryRegistryError> {
+        if !Self::is_initialized() {
+            return Err(MemoryRegistryError::RegistryNotBootstrapped);
+        }
+
+        VALIDATED_ALLOCATIONS.with_borrow(|validated| {
+            validated
+                .clone()
+                .ok_or(MemoryRegistryError::RegistryNotBootstrapped)
+        })
+    }
+
     /// Apply any newly deferred registrations/ranges after runtime init.
     ///
     /// This is a no-op until initialization has completed. Once initialized,
@@ -178,29 +207,81 @@ const fn validate_raw_stable_memory_state(
 
 fn validate_current_registration_snapshot(
     regs: &[PendingRegistration],
-) -> Result<(), MemoryRegistryError> {
-    let mut ids = BTreeSet::new();
-    let mut stable_keys = BTreeSet::new();
+) -> Result<DeclarationSnapshot, MemoryRegistryError> {
+    let declarations = regs
+        .iter()
+        .map(allocation_declaration_from_pending)
+        .collect::<Result<Vec<_>, _>>()?;
 
-    for registration in regs {
-        if !ids.insert(registration.id) {
-            return Err(MemoryRegistryError::DuplicateId(registration.id));
+    DeclarationSnapshot::new(declarations).map_err(memory_registry_error_from_snapshot_error)
+}
+
+fn allocation_declaration_from_pending(
+    registration: &PendingRegistration,
+) -> Result<AllocationDeclaration, MemoryRegistryError> {
+    let slot = AllocationSlotDescriptor::memory_manager_checked(registration.id)
+        .map_err(memory_registry_error_from_slot_error)?;
+    let schema = SchemaMetadata::new(
+        registration.schema_version,
+        registration.schema_fingerprint.clone(),
+    )
+    .map_err(|err| MemoryRegistryError::InvalidSchemaMetadata {
+        stable_key: registration.stable_key.clone(),
+        reason: super::super::registry::schema_metadata_reason(err),
+    })?;
+
+    AllocationDeclaration::new(
+        &registration.stable_key,
+        slot,
+        Some(registration.label.clone()),
+        schema,
+    )
+    .map_err(memory_registry_error_from_snapshot_error)
+}
+
+fn memory_registry_error_from_snapshot_error(err: DeclarationSnapshotError) -> MemoryRegistryError {
+    match err {
+        DeclarationSnapshotError::Key(err) => MemoryRegistryError::InvalidStableKey {
+            stable_key: err.stable_key,
+            reason: err.reason,
+        },
+        DeclarationSnapshotError::SchemaMetadata(err) => {
+            MemoryRegistryError::InvalidSchemaMetadata {
+                stable_key: "<unknown>".to_string(),
+                reason: super::super::registry::schema_metadata_reason(err),
+            }
         }
-        if !stable_keys.insert(registration.stable_key.clone()) {
-            return Err(MemoryRegistryError::DuplicateStableKey(
-                registration.stable_key.clone(),
-            ));
+        DeclarationSnapshotError::DuplicateStableKey(key) => {
+            MemoryRegistryError::DuplicateStableKey(key.into_string())
+        }
+        DeclarationSnapshotError::DuplicateSlot(slot) => match slot.memory_manager_id() {
+            Ok(id) => MemoryRegistryError::DuplicateId(id),
+            Err(err) => memory_registry_error_from_slot_error(err),
+        },
+    }
+}
+
+fn memory_registry_error_from_slot_error(err: MemoryManagerSlotError) -> MemoryRegistryError {
+    match err {
+        MemoryManagerSlotError::InvalidMemoryManagerId { id } => {
+            MemoryRegistryError::ReservedInternalId { id }
+        }
+        MemoryManagerSlotError::UnsupportedSlot
+        | MemoryManagerSlotError::UnsupportedSubstrate { .. }
+        | MemoryManagerSlotError::UnsupportedDescriptorVersion { .. } => {
+            MemoryRegistryError::LedgerCorrupt {
+                reason: "unsupported MemoryManager allocation slot descriptor",
+            }
         }
     }
-
-    Ok(())
 }
 
 fn validate_pending_ledger_claims(
     initial_range: Option<(&str, u8, u8)>,
     ranges: &[(String, u8, u8)],
     regs: &[PendingRegistration],
-) -> Result<(), MemoryRegistryError> {
+    declaration_snapshot: DeclarationSnapshot,
+) -> Result<ValidatedAllocations, MemoryRegistryError> {
     if let Some((owner, start, end)) = initial_range {
         ledger::validate_range(owner, MemoryRange { start, end })?;
     }
@@ -224,12 +305,127 @@ fn validate_pending_ledger_claims(
         )?;
     }
 
-    Ok(())
+    let historical_ledger = ledger::try_allocation_ledger_snapshot()?;
+    let policy = RuntimeDeclarationPolicy::from_registrations(regs);
+    validate_allocations(&historical_ledger, declaration_snapshot, &policy)
+        .map_err(|err| memory_registry_error_from_allocation_validation(err, regs))
+}
+
+///
+/// RuntimeDeclarationPolicy
+///
+/// Adapter that lets generic `ic-memory` validation apply Canic's per-crate
+/// namespace/range policy to a sealed multi-crate declaration snapshot.
+struct RuntimeDeclarationPolicy {
+    declaring_crates: BTreeMap<String, String>,
+}
+
+impl RuntimeDeclarationPolicy {
+    fn from_registrations(regs: &[PendingRegistration]) -> Self {
+        let declaring_crates = regs
+            .iter()
+            .map(|registration| {
+                (
+                    registration.stable_key.clone(),
+                    registration.crate_name.clone(),
+                )
+            })
+            .collect();
+        Self { declaring_crates }
+    }
+}
+
+impl AllocationPolicy for RuntimeDeclarationPolicy {
+    type Error = MemoryRegistryError;
+
+    fn validate_key(&self, _key: &StableKey) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    fn validate_slot(
+        &self,
+        key: &StableKey,
+        slot: &AllocationSlotDescriptor,
+    ) -> Result<(), Self::Error> {
+        let declaring_crate =
+            self.declaring_crates
+                .get(key.as_str())
+                .ok_or(MemoryRegistryError::LedgerCorrupt {
+                    reason: "validated declaration is missing runtime crate ownership metadata",
+                })?;
+        let policy = CanicMemoryManagerPolicy::for_declaring_crate(declaring_crate);
+        AllocationPolicy::validate_slot(&policy, key, slot)
+    }
+
+    fn validate_reserved_slot(
+        &self,
+        key: &StableKey,
+        slot: &AllocationSlotDescriptor,
+    ) -> Result<(), Self::Error> {
+        let declaring_crate =
+            self.declaring_crates
+                .get(key.as_str())
+                .ok_or(MemoryRegistryError::LedgerCorrupt {
+                    reason: "validated declaration is missing runtime crate ownership metadata",
+                })?;
+        let policy = CanicMemoryManagerPolicy::for_declaring_crate(declaring_crate);
+        AllocationPolicy::validate_reserved_slot(&policy, key, slot)
+    }
+}
+
+fn memory_registry_error_from_allocation_validation(
+    err: AllocationValidationError<MemoryRegistryError>,
+    regs: &[PendingRegistration],
+) -> MemoryRegistryError {
+    match err {
+        AllocationValidationError::Policy(err) => err,
+        AllocationValidationError::StableKeySlotConflict {
+            stable_key,
+            historical_slot,
+            declared_slot,
+        } => MemoryRegistryError::HistoricalStableKeyConflict {
+            stable_key: stable_key.into_string(),
+            existing_id: memory_manager_id_from_allocation_slot(&historical_slot),
+            new_id: memory_manager_id_from_allocation_slot(&declared_slot),
+        },
+        AllocationValidationError::SlotStableKeyConflict {
+            slot,
+            historical_key,
+            declared_key,
+        } => {
+            let requested = regs
+                .iter()
+                .find(|registration| registration.stable_key == declared_key.as_str());
+            MemoryRegistryError::HistoricalIdConflict {
+                id: memory_manager_id_from_allocation_slot(&slot),
+                existing_crate: historical_key.as_str().to_string(),
+                existing_label: historical_key.as_str().to_string(),
+                new_crate: requested.map_or_else(
+                    || declared_key.as_str().to_string(),
+                    |reg| reg.crate_name.clone(),
+                ),
+                new_label: requested.map_or_else(
+                    || declared_key.as_str().to_string(),
+                    |reg| reg.label.clone(),
+                ),
+                new_stable_key: declared_key.into_string(),
+            }
+        }
+        AllocationValidationError::RetiredAllocation { .. } => MemoryRegistryError::LedgerCorrupt {
+            reason: "allocation was explicitly retired and cannot be redeclared",
+        },
+    }
+}
+
+fn memory_manager_id_from_allocation_slot(slot: &AllocationSlotDescriptor) -> u8 {
+    slot.memory_manager_id()
+        .unwrap_or(ic_memory::MEMORY_MANAGER_INVALID_ID)
 }
 
 #[cfg(test)]
 pub(crate) fn reset_initialized_for_tests() {
     set_initialized(false);
+    set_validated_allocations(None);
 }
 
 #[cfg(not(test))]
@@ -250,6 +446,12 @@ fn set_initialized(value: bool) {
 #[cfg(test)]
 fn set_initialized(value: bool) {
     MEMORY_REGISTRY_INITIALIZED.with(|initialized| initialized.set(value));
+}
+
+fn set_validated_allocations(value: Option<ValidatedAllocations>) {
+    VALIDATED_ALLOCATIONS.with_borrow_mut(|validated| {
+        *validated = value;
+    });
 }
 
 ///
