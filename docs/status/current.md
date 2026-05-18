@@ -39,6 +39,8 @@ inspect only the files needed for the current task.
   of sequence: `ic-memory` is path-only local extraction scaffolding, and
   `canic-memory` is self-contained for crates.io publishing until `ic-memory`
   has an explicit publish order.
+- Started `0.39.5` as the next local extraction slice for generic allocation
+  lifecycle mechanics inside `ic-memory`.
 - Added the first generic `ic-memory` physical commit model: dual protected
   generation slots with marker/checksum validation, highest-valid recovery,
   corrupt-newer-slot tolerance, and a `LedgerCommitStore`/`LedgerCodec`
