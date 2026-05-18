@@ -6,11 +6,13 @@
 //! authorization, endpoint lifecycle, schema migrations, or Canic-specific
 //! memory ID policy.
 
+pub mod bootstrap;
 pub mod declaration;
 pub mod diagnostics;
 pub mod generation;
 pub mod key;
 pub mod ledger;
+pub mod physical;
 pub mod policy;
 pub mod schema;
 pub mod session;
@@ -18,6 +20,7 @@ pub mod slot;
 pub mod substrate;
 pub mod validation;
 
+pub use bootstrap::{AllocationBootstrap, BootstrapCommit, BootstrapError};
 pub use declaration::{
     AllocationDeclaration, DeclarationCollector, DeclarationSnapshot, DeclarationSnapshotError,
 };
@@ -25,9 +28,11 @@ pub use diagnostics::{DiagnosticExport, DiagnosticGeneration, DiagnosticRecord};
 pub use generation::{GenerationCommit, GenerationMutation, StagedGeneration};
 pub use key::{StableKey, StableKeyError};
 pub use ledger::{
-    AllocationHistory, AllocationLedger, AllocationRecord, AllocationState, GenerationRecord,
-    SchemaMetadataRecord,
+    AllocationHistory, AllocationLedger, AllocationRecord, AllocationReservationError,
+    AllocationRetirement, AllocationRetirementError, AllocationState, GenerationRecord,
+    LedgerCodec, LedgerCommitError, LedgerCommitStore, SchemaMetadataRecord,
 };
+pub use physical::{CommitRecoveryError, CommittedGenerationBytes, DualCommitStore};
 pub use policy::{AllocationPolicy, NamespaceAuthority, RangeAuthority};
 pub use schema::{SchemaMetadata, SchemaMetadataError};
 pub use session::{AllocationSession, ValidatedAllocations};

@@ -15,7 +15,7 @@ inspect only the files needed for the current task.
 - Current release-work area: generic `stable_key -> allocation_slot forever`
   primitives, declaration/session boundaries, substrate and policy traits, and
   explicit Canic adapter/migration planning.
-- Design started at `docs/design/0.39-asd/0.39-design.md`; the core issue is
+- Design started at `docs/design/0.39-ic-memory/0.39-design.md`; the core issue is
   that Canic 0.38 proved stable allocation identity, but the standalone crate
   must govern allocation slots rather than hardcoding today's `MemoryManager`
   virtual ID substrate.
@@ -39,6 +39,14 @@ inspect only the files needed for the current task.
   of sequence: `ic-memory` is path-only local extraction scaffolding, and
   `canic-memory` is self-contained for crates.io publishing until `ic-memory`
   has an explicit publish order.
+- Added the first generic `ic-memory` physical commit model: dual protected
+  generation slots with marker/checksum validation, highest-valid recovery,
+  corrupt-newer-slot tolerance, and a `LedgerCommitStore`/`LedgerCodec`
+  boundary that keeps serialization and stable-memory IO outside the core.
+- Added generic `ic-memory` lifecycle mechanics for generation-scoped
+  reservations, explicit retirements, `reserved -> active` activation, and an
+  `AllocationBootstrap` pipeline that recovers, validates, stages, commits, and
+  publishes validated allocations without owning framework endpoint policy.
 - Added a workspace manifest guard so explicitly publishable crates cannot add
   runtime or build dependencies on workspace crates marked `publish = false`.
 - Wired the same manifest-boundary guard into `scripts/ci/publish-workspace.sh`

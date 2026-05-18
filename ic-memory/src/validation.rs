@@ -11,7 +11,7 @@ use crate::{
 /// AllocationValidationError
 ///
 /// Failure to validate declarations against policy and historical ledger facts.
-#[derive(Debug, Eq, thiserror::Error, PartialEq)]
+#[derive(Clone, Debug, Eq, thiserror::Error, PartialEq)]
 pub enum AllocationValidationError<P> {
     /// Policy adapter rejected the declaration.
     #[error("allocation policy rejected a declaration")]

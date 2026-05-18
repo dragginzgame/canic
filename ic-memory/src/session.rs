@@ -31,6 +31,11 @@ impl ValidatedAllocations {
         }
     }
 
+    pub(crate) const fn with_generation(mut self, generation: u64) -> Self {
+        self.generation = generation;
+        self
+    }
+
     /// Return the committed generation that validated these allocations.
     #[must_use]
     pub const fn generation(&self) -> u64 {

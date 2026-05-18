@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.39.x] - 2026-05-18 - `ic-memory` extraction
 
-- `0.39.4` keeps `ic-memory` as unpublished local extraction scaffolding, restores `canic-memory` as a self-contained publishable crate, and blocks publishing when publishable manifests depend on unpublished local crates.
+- `0.39.4` keeps `ic-memory` as unpublished local extraction scaffolding, adds generic protected ledger commit mechanics plus explicit reserve/retire/bootstrap lifecycle primitives, restores `canic-memory` as a self-contained publishable crate, and blocks publishing when publishable manifests depend on unpublished local crates.
 
 - `0.39.3` was published out of sequence while the local `ic-memory` dependency boundary was still being corrected; use `0.39.4` as the packaging correction.
 
