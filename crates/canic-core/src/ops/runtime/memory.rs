@@ -4,6 +4,7 @@
 use crate::{
     CRATE_NAME, InternalError,
     dto::memory::{
+        MemoryCommitRecoveryErrorResponse, MemoryCommitRecoveryResponse, MemoryCommitSlotResponse,
         MemoryLedgerResponse, MemoryRangeAuthorityEntry, MemoryRangeEntry, MemoryRegistryEntry,
     },
     memory::{
@@ -18,6 +19,7 @@ use crate::{
     ops::runtime::RuntimeOpsError,
     storage::stable::{CANIC_MEMORY_MAX, CANIC_MEMORY_MIN},
 };
+use ic_memory::{CommitRecoveryError, CommitSlotDiagnostic, CommitStoreDiagnostic};
 use thiserror::Error as ThisError;
 
 ///
@@ -198,9 +200,39 @@ impl MemoryRegistryOps {
             header_len: snapshot.header_len,
             header_checksum: snapshot.header_checksum,
             current_generation: snapshot.current_generation,
+            commit_recovery: commit_recovery_response(snapshot.commit_recovery),
             authorities,
             ranges,
             entries,
         })
+    }
+}
+
+fn commit_recovery_response(diagnostic: CommitStoreDiagnostic) -> MemoryCommitRecoveryResponse {
+    MemoryCommitRecoveryResponse {
+        slot0: commit_slot_response(diagnostic.slot0),
+        slot1: commit_slot_response(diagnostic.slot1),
+        authoritative_generation: diagnostic.authoritative_generation,
+        recovery_error: diagnostic
+            .recovery_error
+            .map(commit_recovery_error_response),
+    }
+}
+
+const fn commit_slot_response(slot: CommitSlotDiagnostic) -> MemoryCommitSlotResponse {
+    MemoryCommitSlotResponse {
+        present: slot.present,
+        generation: slot.generation,
+        valid: slot.valid,
+    }
+}
+
+const fn commit_recovery_error_response(
+    err: CommitRecoveryError,
+) -> MemoryCommitRecoveryErrorResponse {
+    match err {
+        CommitRecoveryError::NoValidGeneration => {
+            MemoryCommitRecoveryErrorResponse::NoValidGeneration
+        }
     }
 }

@@ -13,9 +13,42 @@ pub struct MemoryLedgerResponse {
     pub header_len: u32,
     pub header_checksum: u64,
     pub current_generation: u64,
+    pub commit_recovery: MemoryCommitRecoveryResponse,
     pub authorities: Vec<MemoryRangeAuthorityEntry>,
     pub ranges: Vec<MemoryRangeEntry>,
     pub entries: Vec<MemoryRegistryEntry>,
+}
+
+///
+/// MemoryCommitRecoveryResponse
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize)]
+pub struct MemoryCommitRecoveryResponse {
+    pub slot0: MemoryCommitSlotResponse,
+    pub slot1: MemoryCommitSlotResponse,
+    pub authoritative_generation: Option<u64>,
+    pub recovery_error: Option<MemoryCommitRecoveryErrorResponse>,
+}
+
+///
+/// MemoryCommitSlotResponse
+///
+
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+pub struct MemoryCommitSlotResponse {
+    pub present: bool,
+    pub generation: Option<u64>,
+    pub valid: bool,
+}
+
+///
+/// MemoryCommitRecoveryErrorResponse
+///
+
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+pub enum MemoryCommitRecoveryErrorResponse {
+    NoValidGeneration,
 }
 
 ///

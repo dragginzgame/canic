@@ -16,9 +16,9 @@ use crate::cdk::structures::{
 };
 use ic_memory::{
     AllocationHistory, AllocationLedger, AllocationRecord, AllocationSlotDescriptor,
-    AllocationState, CommitRecoveryError, CommitSlotIndex, GenerationRecord,
-    ProtectedGenerationSlot, SchemaMetadata, SchemaMetadataRecord, StableKey,
-    select_authoritative_slot,
+    AllocationState, CommitRecoveryError, CommitSlotIndex, CommitStoreDiagnostic,
+    DualProtectedCommitStore, GenerationRecord, ProtectedGenerationSlot, SchemaMetadata,
+    SchemaMetadataRecord, StableKey,
 };
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
@@ -92,6 +92,18 @@ impl Default for MemoryLayoutLedgerRecord {
     }
 }
 
+impl DualProtectedCommitStore for MemoryLayoutLedgerRecord {
+    type Slot = MemoryLayoutGenerationRecord;
+
+    fn slot0(&self) -> Option<&Self::Slot> {
+        self.slot0.as_ref()
+    }
+
+    fn slot1(&self) -> Option<&Self::Slot> {
+        self.slot1.as_ref()
+    }
+}
+
 canic_cdk::impl_storable_unbounded!(MemoryLayoutLedgerRecord);
 
 pub fn validate_bootstrap_state_before_cell_init(
@@ -122,6 +134,7 @@ pub struct MemoryLayoutLedgerSnapshot {
     pub header_len: u32,
     pub header_checksum: u64,
     pub current_generation: u64,
+    pub commit_recovery: CommitStoreDiagnostic,
     pub authorities: Vec<MemoryRangeAuthority>,
     pub ranges: Vec<(String, MemoryRange)>,
     pub entries: Vec<(u8, MemoryRegistryEntry)>,
@@ -606,6 +619,7 @@ fn snapshot_from_record(
         header_len: data.header_len,
         header_checksum: data.header_checksum,
         current_generation: generation.generation,
+        commit_recovery: CommitStoreDiagnostic::from_store(data),
         authorities: generation
             .authorities
             .iter()
@@ -665,7 +679,7 @@ fn authoritative_generation(
         return Ok(MemoryLayoutGenerationRecord::default());
     }
 
-    select_authoritative_slot(data.slot0.as_ref(), data.slot1.as_ref())
+    data.authoritative_slot()
         .map(|authoritative| authoritative.record.clone())
         .map_err(memory_registry_error_from_commit_recovery)
 }
@@ -739,10 +753,7 @@ fn commit_generation(
     generation.commit_marker = MEMORY_LAYOUT_LEDGER_COMMIT_MARKER;
     generation.checksum = generation_checksum(&generation);
 
-    let inactive_slot = match select_authoritative_slot(data.slot0.as_ref(), data.slot1.as_ref()) {
-        Ok(authoritative) => authoritative.index.opposite(),
-        Err(_) => CommitSlotIndex::Slot0,
-    };
+    let inactive_slot = data.inactive_slot_index();
 
     match inactive_slot {
         CommitSlotIndex::Slot0 => {
@@ -1239,6 +1250,8 @@ mod tests {
         assert_eq!(snapshot.layout_epoch, MEMORY_LAYOUT_LEDGER_LAYOUT_EPOCH);
         assert_eq!(snapshot.header_len, MEMORY_LAYOUT_LEDGER_HEADER_LEN);
         assert_eq!(snapshot.current_generation, 1);
+        assert_eq!(snapshot.commit_recovery.authoritative_generation, Some(1));
+        assert!(snapshot.commit_recovery.slot0.valid || snapshot.commit_recovery.slot1.valid);
         assert!(snapshot.authorities.iter().any(|authority| {
             authority.owner == "ic_memory.internal"
                 && authority.range == MemoryRange { start: 0, end: 9 }

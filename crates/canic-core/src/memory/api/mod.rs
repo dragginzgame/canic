@@ -12,8 +12,8 @@ use crate::cdk::structures::{
     memory::{MemoryId, VirtualMemory},
 };
 use ic_memory::{
-    AllocationSession, AllocationSessionError, AllocationSlotDescriptor, MemoryManagerSlotError,
-    StableKey, StorageSubstrate,
+    AllocationSession, AllocationSessionError, AllocationSlotDescriptor, CommitStoreDiagnostic,
+    MemoryManagerSlotError, StableKey, StorageSubstrate,
 };
 
 ///
@@ -91,6 +91,8 @@ pub struct LedgerSnapshot {
     pub header_checksum: u64,
     /// Authoritative committed generation selected by recovery validation.
     pub current_generation: u64,
+    /// Protected commit slot recovery diagnostic.
+    pub commit_recovery: CommitStoreDiagnostic,
     /// Canonical allocation authority ranges recorded by the persisted ABI ledger.
     pub authorities: Vec<MemoryRangeAuthority>,
     /// Historical owner ranges recorded by the persisted ABI ledger.
@@ -324,6 +326,7 @@ impl From<ledger::MemoryLayoutLedgerSnapshot> for LedgerSnapshot {
             header_len: snapshot.header_len,
             header_checksum: snapshot.header_checksum,
             current_generation: snapshot.current_generation,
+            commit_recovery: snapshot.commit_recovery,
             authorities: snapshot.authorities,
             ranges: snapshot.ranges,
             entries: snapshot.entries,

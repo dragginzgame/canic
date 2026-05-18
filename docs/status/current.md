@@ -107,6 +107,13 @@ inspect only the files needed for the current task.
   selector, and making Canic generation commits choose the inactive slot from
   validated recovery state instead of the unprotected `committed_slot` header
   field.
+- Started `0.39.14` by adding `ic-memory::DualProtectedCommitStore` and making
+  both `ic-memory::DualCommitStore` and Canic's physical ABI ledger record use
+  the same trait-provided authoritative-slot recovery and inactive-slot
+  selection mechanics.
+- Extended `0.39.14` so protected commit recovery diagnostics are generated
+  from the same generic `ic-memory` store trait and surfaced through Canic's
+  ledger snapshot response.
 - Added a workspace manifest guard so explicitly publishable crates cannot add
   runtime or build dependencies on workspace crates marked `publish = false`.
 - Wired the same manifest-boundary guard into `scripts/ci/publish-workspace.sh`

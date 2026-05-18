@@ -39,8 +39,8 @@ pub use ledger::{
 };
 pub use physical::{
     AuthoritativeSlot, CommitRecoveryError, CommitSlotDiagnostic, CommitSlotIndex,
-    CommitStoreDiagnostic, CommittedGenerationBytes, DualCommitStore, ProtectedGenerationSlot,
-    select_authoritative_slot,
+    CommitStoreDiagnostic, CommittedGenerationBytes, DualCommitStore, DualProtectedCommitStore,
+    ProtectedGenerationSlot, select_authoritative_slot,
 };
 pub use policy::{AllocationPolicy, NamespaceAuthority, RangeAuthority};
 pub use schema::{SchemaMetadata, SchemaMetadataError};

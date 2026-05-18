@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.39.x] - 2026-05-18 - `ic-memory` extraction
 
+- `0.39.14` turns dual-slot protected recovery and diagnostics into `ic-memory` store-trait mechanics and adds protected-slot recovery details to the Canic memory-ledger diagnostic response.
+
 - `0.39.13` moves reusable dual-slot recovery selection into `ic-memory` and makes Canic ledger commits choose the inactive slot from validated recovery state instead of an unprotected header pointer.
 
 - `0.39.12` routes Canic memory bootstrap and opening through `ic-memory` declaration snapshots, allocation-history validation, and validated sessions while keeping Canic namespace/range rules in a production policy adapter.

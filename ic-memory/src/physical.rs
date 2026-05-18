@@ -17,6 +17,42 @@ pub trait ProtectedGenerationSlot {
 }
 
 ///
+/// DualProtectedCommitStore
+///
+/// Physical store with two protected generation slots.
+pub trait DualProtectedCommitStore {
+    /// Protected slot record type.
+    type Slot: ProtectedGenerationSlot;
+
+    /// Borrow the first physical slot.
+    fn slot0(&self) -> Option<&Self::Slot>;
+
+    /// Borrow the second physical slot.
+    fn slot1(&self) -> Option<&Self::Slot>;
+
+    /// Return true when no commit slot has ever been written.
+    fn is_uninitialized(&self) -> bool {
+        self.slot0().is_none() && self.slot1().is_none()
+    }
+
+    /// Return the highest-generation valid physical slot.
+    fn authoritative_slot(&self) -> Result<AuthoritativeSlot<'_, Self::Slot>, CommitRecoveryError> {
+        select_authoritative_slot(self.slot0(), self.slot1())
+    }
+
+    /// Return the slot that should receive the next staged generation write.
+    ///
+    /// The result is derived from validated recovery state. It does not trust a
+    /// separate current-pointer/header field.
+    fn inactive_slot_index(&self) -> CommitSlotIndex {
+        match self.authoritative_slot() {
+            Ok(authoritative) => authoritative.index.opposite(),
+            Err(_) => CommitSlotIndex::Slot0,
+        }
+    }
+}
+
+///
 /// CommitSlotIndex
 ///
 /// Physical dual-slot index selected by protected recovery.
@@ -151,20 +187,14 @@ impl DualCommitStore {
 
     /// Return the highest-generation valid committed record.
     pub fn authoritative(&self) -> Result<&CommittedGenerationBytes, CommitRecoveryError> {
-        select_authoritative_slot(self.slot0.as_ref(), self.slot1.as_ref())
+        self.authoritative_slot()
             .map(|authoritative| authoritative.record)
     }
 
     /// Build a read-only recovery diagnostic for the protected commit slots.
     #[must_use]
     pub fn diagnostic(&self) -> CommitStoreDiagnostic {
-        let authoritative = self.authoritative();
-        CommitStoreDiagnostic {
-            slot0: CommitSlotDiagnostic::from_slot(self.slot0.as_ref()),
-            slot1: CommitSlotDiagnostic::from_slot(self.slot1.as_ref()),
-            authoritative_generation: authoritative.ok().map(|record| record.generation),
-            recovery_error: authoritative.err(),
-        }
+        CommitStoreDiagnostic::from_store(self)
     }
 
     /// Commit a new payload to the inactive slot.
@@ -181,7 +211,7 @@ impl DualCommitStore {
             .map_or(0, |record| record.generation.saturating_add(1));
         let next = CommittedGenerationBytes::new(next_generation, payload);
 
-        if self.inactive_slot_index() == 0 {
+        if self.inactive_slot_index() == CommitSlotIndex::Slot0 {
             self.slot0 = Some(next);
         } else {
             self.slot1 = Some(next);
@@ -198,18 +228,23 @@ impl DualCommitStore {
         let mut corrupt = CommittedGenerationBytes::new(generation, payload);
         corrupt.checksum = corrupt.checksum.wrapping_add(1);
 
-        if self.inactive_slot_index() == 0 {
+        if self.inactive_slot_index() == CommitSlotIndex::Slot0 {
             self.slot0 = Some(corrupt);
         } else {
             self.slot1 = Some(corrupt);
         }
     }
+}
 
-    fn inactive_slot_index(&self) -> u8 {
-        match select_authoritative_slot(self.slot0.as_ref(), self.slot1.as_ref()) {
-            Ok(authoritative) if authoritative.index == CommitSlotIndex::Slot0 => 1,
-            Ok(_) | Err(_) => 0,
-        }
+impl DualProtectedCommitStore for DualCommitStore {
+    type Slot = CommittedGenerationBytes;
+
+    fn slot0(&self) -> Option<&Self::Slot> {
+        self.slot0.as_ref()
+    }
+
+    fn slot1(&self) -> Option<&Self::Slot> {
+        self.slot1.as_ref()
     }
 }
 
@@ -229,6 +264,23 @@ pub struct CommitStoreDiagnostic {
     pub recovery_error: Option<CommitRecoveryError>,
 }
 
+impl CommitStoreDiagnostic {
+    /// Build a read-only recovery diagnostic from a dual protected commit store.
+    #[must_use]
+    pub fn from_store<S: DualProtectedCommitStore>(store: &S) -> Self {
+        let (authoritative_generation, recovery_error) = match store.authoritative_slot() {
+            Ok(slot) => (Some(slot.record.generation()), None),
+            Err(err) => (None, Some(err)),
+        };
+        Self {
+            slot0: CommitSlotDiagnostic::from_slot(store.slot0()),
+            slot1: CommitSlotDiagnostic::from_slot(store.slot1()),
+            authoritative_generation,
+            recovery_error,
+        }
+    }
+}
+
 ///
 /// CommitSlotDiagnostic
 ///
@@ -244,11 +296,11 @@ pub struct CommitSlotDiagnostic {
 }
 
 impl CommitSlotDiagnostic {
-    fn from_slot(slot: Option<&CommittedGenerationBytes>) -> Self {
+    fn from_slot<T: ProtectedGenerationSlot>(slot: Option<&T>) -> Self {
         match slot {
             Some(record) => Self {
                 present: true,
-                generation: Some(record.generation),
+                generation: Some(record.generation()),
                 valid: record.validates(),
             },
             None => Self {
@@ -381,6 +433,57 @@ mod tests {
         );
         assert!(!diagnostic.slot0.present);
         assert!(!diagnostic.slot1.present);
+    }
+
+    #[test]
+    fn diagnostic_builds_from_any_dual_protected_store() {
+        struct TestSlot {
+            generation: u64,
+            valid: bool,
+        }
+
+        impl ProtectedGenerationSlot for TestSlot {
+            fn generation(&self) -> u64 {
+                self.generation
+            }
+
+            fn validates(&self) -> bool {
+                self.valid
+            }
+        }
+
+        struct TestStore {
+            slot0: Option<TestSlot>,
+            slot1: Option<TestSlot>,
+        }
+
+        impl DualProtectedCommitStore for TestStore {
+            type Slot = TestSlot;
+
+            fn slot0(&self) -> Option<&Self::Slot> {
+                self.slot0.as_ref()
+            }
+
+            fn slot1(&self) -> Option<&Self::Slot> {
+                self.slot1.as_ref()
+            }
+        }
+
+        let diagnostic = CommitStoreDiagnostic::from_store(&TestStore {
+            slot0: Some(TestSlot {
+                generation: 8,
+                valid: true,
+            }),
+            slot1: Some(TestSlot {
+                generation: 9,
+                valid: false,
+            }),
+        });
+
+        assert_eq!(diagnostic.authoritative_generation, Some(8));
+        assert!(diagnostic.slot0.valid);
+        assert_eq!(diagnostic.slot1.generation, Some(9));
+        assert!(!diagnostic.slot1.valid);
     }
 
     #[test]
