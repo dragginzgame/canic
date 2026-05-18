@@ -7,6 +7,13 @@ use crate::{
     slot::AllocationSlotDescriptor,
 };
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeSet;
+
+/// Current allocation ledger schema version.
+pub const CURRENT_LEDGER_SCHEMA_VERSION: u32 = 1;
+
+/// Current protected physical ledger format identifier.
+pub const CURRENT_PHYSICAL_FORMAT_ID: u32 = 1;
 
 ///
 /// AllocationLedger
@@ -128,6 +135,200 @@ pub struct GenerationRecord {
 }
 
 ///
+/// LedgerCompatibility
+///
+/// Supported logical and physical ledger format versions.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct LedgerCompatibility {
+    /// Minimum supported ledger schema version.
+    pub min_ledger_schema_version: u32,
+    /// Maximum supported ledger schema version.
+    pub max_ledger_schema_version: u32,
+    /// Required physical encoding format identifier.
+    pub physical_format_id: u32,
+}
+
+impl LedgerCompatibility {
+    /// Return the compatibility supported by this crate version.
+    #[must_use]
+    pub const fn current() -> Self {
+        Self {
+            min_ledger_schema_version: CURRENT_LEDGER_SCHEMA_VERSION,
+            max_ledger_schema_version: CURRENT_LEDGER_SCHEMA_VERSION,
+            physical_format_id: CURRENT_PHYSICAL_FORMAT_ID,
+        }
+    }
+
+    /// Validate a decoded ledger before it is used as authoritative state.
+    pub const fn validate(
+        &self,
+        ledger: &AllocationLedger,
+    ) -> Result<(), LedgerCompatibilityError> {
+        if ledger.ledger_schema_version < self.min_ledger_schema_version {
+            return Err(LedgerCompatibilityError::UnsupportedLedgerSchemaVersion {
+                found: ledger.ledger_schema_version,
+                min_supported: self.min_ledger_schema_version,
+                max_supported: self.max_ledger_schema_version,
+            });
+        }
+        if ledger.ledger_schema_version > self.max_ledger_schema_version {
+            return Err(LedgerCompatibilityError::UnsupportedLedgerSchemaVersion {
+                found: ledger.ledger_schema_version,
+                min_supported: self.min_ledger_schema_version,
+                max_supported: self.max_ledger_schema_version,
+            });
+        }
+        if ledger.physical_format_id != self.physical_format_id {
+            return Err(LedgerCompatibilityError::UnsupportedPhysicalFormat {
+                found: ledger.physical_format_id,
+                supported: self.physical_format_id,
+            });
+        }
+        Ok(())
+    }
+}
+
+impl Default for LedgerCompatibility {
+    fn default() -> Self {
+        Self::current()
+    }
+}
+
+///
+/// LedgerCompatibilityError
+///
+/// Decoded ledger format is unsupported by this reader.
+#[derive(Clone, Copy, Debug, Eq, thiserror::Error, PartialEq)]
+pub enum LedgerCompatibilityError {
+    /// Ledger schema version is outside the supported range.
+    #[error(
+        "ledger_schema_version {found} is unsupported; supported range is {min_supported}-{max_supported}"
+    )]
+    UnsupportedLedgerSchemaVersion {
+        /// Version found in the ledger.
+        found: u32,
+        /// Minimum supported version.
+        min_supported: u32,
+        /// Maximum supported version.
+        max_supported: u32,
+    },
+    /// Physical format ID is not supported by this reader.
+    #[error("physical_format_id {found} is unsupported; supported format is {supported}")]
+    UnsupportedPhysicalFormat {
+        /// Format found in the ledger.
+        found: u32,
+        /// Supported format ID.
+        supported: u32,
+    },
+}
+
+///
+/// LedgerIntegrityError
+///
+/// Decoded ledger violates structural allocation-history invariants.
+#[derive(Clone, Debug, Eq, thiserror::Error, PartialEq)]
+pub enum LedgerIntegrityError {
+    /// Stable key appears in more than one allocation record.
+    #[error("stable key '{stable_key}' appears in more than one allocation record")]
+    DuplicateStableKey {
+        /// Duplicate stable key.
+        stable_key: StableKey,
+    },
+    /// Allocation slot appears in more than one allocation record.
+    #[error("allocation slot '{slot:?}' appears in more than one allocation record")]
+    DuplicateSlot {
+        /// Duplicate allocation slot.
+        slot: Box<AllocationSlotDescriptor>,
+    },
+    /// Allocation record generation ordering is invalid.
+    #[error("stable key '{stable_key}' has first_generation after last_seen_generation")]
+    InvalidRecordGenerationOrder {
+        /// Stable key whose record is invalid.
+        stable_key: StableKey,
+        /// First generation in the record.
+        first_generation: u64,
+        /// Last seen generation in the record.
+        last_seen_generation: u64,
+    },
+    /// Allocation record points past the current generation.
+    #[error(
+        "stable key '{stable_key}' references generation {generation} after current generation {current_generation}"
+    )]
+    FutureRecordGeneration {
+        /// Stable key whose record is invalid.
+        stable_key: StableKey,
+        /// Generation referenced by the record.
+        generation: u64,
+        /// Current ledger generation.
+        current_generation: u64,
+    },
+    /// Non-retired allocation carries retired metadata.
+    #[error("stable key '{stable_key}' is not retired but has retired_generation metadata")]
+    UnexpectedRetiredGeneration {
+        /// Stable key whose record is invalid.
+        stable_key: StableKey,
+    },
+    /// Retired allocation is missing retired metadata.
+    #[error("stable key '{stable_key}' is retired but retired_generation is missing")]
+    MissingRetiredGeneration {
+        /// Stable key whose record is invalid.
+        stable_key: StableKey,
+    },
+    /// Retired generation predates the allocation record.
+    #[error("stable key '{stable_key}' has retired_generation before first_generation")]
+    RetiredBeforeFirstGeneration {
+        /// Stable key whose record is invalid.
+        stable_key: StableKey,
+        /// First generation in the record.
+        first_generation: u64,
+        /// Retired generation in the record.
+        retired_generation: u64,
+    },
+    /// Allocation record has no schema metadata history.
+    #[error("stable key '{stable_key}' has empty schema metadata history")]
+    EmptySchemaHistory {
+        /// Stable key whose record is invalid.
+        stable_key: StableKey,
+    },
+    /// Schema metadata generation history is not strictly increasing.
+    #[error("stable key '{stable_key}' has non-increasing schema metadata generation history")]
+    NonIncreasingSchemaHistory {
+        /// Stable key whose record is invalid.
+        stable_key: StableKey,
+    },
+    /// Schema metadata generation is outside the allocation record lifetime.
+    #[error("stable key '{stable_key}' has schema metadata generation outside the ledger bounds")]
+    SchemaHistoryOutOfBounds {
+        /// Stable key whose record is invalid.
+        stable_key: StableKey,
+        /// Schema metadata generation.
+        generation: u64,
+    },
+    /// Generation record appears more than once.
+    #[error("generation {generation} appears more than once")]
+    DuplicateGeneration {
+        /// Duplicate generation.
+        generation: u64,
+    },
+    /// Generation record points past the current generation.
+    #[error("generation {generation} is after current generation {current_generation}")]
+    FutureGeneration {
+        /// Generation record value.
+        generation: u64,
+        /// Current ledger generation.
+        current_generation: u64,
+    },
+    /// Generation parent does not precede the child generation.
+    #[error("generation {generation} has invalid parent generation {parent_generation:?}")]
+    InvalidParentGeneration {
+        /// Generation record value.
+        generation: u64,
+        /// Invalid parent generation.
+        parent_generation: Option<u64>,
+    },
+}
+
+///
 /// LedgerCodec
 ///
 /// Integration-supplied encoding for persisted allocation ledgers.
@@ -162,13 +363,64 @@ impl LedgerCommitStore {
         &self,
         codec: &C,
     ) -> Result<AllocationLedger, LedgerCommitError<C::Error>> {
+        self.recover_with_compatibility(codec, LedgerCompatibility::current())
+    }
+
+    /// Recover the authoritative allocation ledger using explicit compatibility rules.
+    pub fn recover_with_compatibility<C: LedgerCodec>(
+        &self,
+        codec: &C,
+        compatibility: LedgerCompatibility,
+    ) -> Result<AllocationLedger, LedgerCommitError<C::Error>> {
         let committed = self
             .physical
             .authoritative()
             .map_err(LedgerCommitError::Recovery)?;
-        codec
+        let ledger = codec
             .decode(&committed.payload)
-            .map_err(LedgerCommitError::Codec)
+            .map_err(LedgerCommitError::Codec)?;
+        compatibility
+            .validate(&ledger)
+            .map_err(LedgerCommitError::Compatibility)?;
+        ledger
+            .validate_integrity()
+            .map_err(LedgerCommitError::Integrity)?;
+        Ok(ledger)
+    }
+
+    /// Recover the authoritative ledger, or explicitly initialize an empty store.
+    ///
+    /// Initialization is allowed only when no physical commit slot has ever
+    /// been written. Corrupt or partially written stores fail closed even when
+    /// a genesis ledger is supplied.
+    pub fn recover_or_initialize<C: LedgerCodec>(
+        &mut self,
+        codec: &C,
+        genesis: &AllocationLedger,
+    ) -> Result<AllocationLedger, LedgerCommitError<C::Error>> {
+        self.recover_or_initialize_with_compatibility(
+            codec,
+            genesis,
+            LedgerCompatibility::current(),
+        )
+    }
+
+    /// Recover the authoritative ledger, or initialize an empty store with explicit compatibility.
+    pub fn recover_or_initialize_with_compatibility<C: LedgerCodec>(
+        &mut self,
+        codec: &C,
+        genesis: &AllocationLedger,
+        compatibility: LedgerCompatibility,
+    ) -> Result<AllocationLedger, LedgerCommitError<C::Error>> {
+        match self.recover_with_compatibility(codec, compatibility) {
+            Ok(ledger) => Ok(ledger),
+            Err(LedgerCommitError::Recovery(CommitRecoveryError::NoValidGeneration))
+                if self.physical.is_uninitialized() =>
+            {
+                self.commit_with_compatibility(genesis, codec, compatibility)
+            }
+            Err(err) => Err(err),
+        }
     }
 
     /// Commit one logical allocation ledger generation through `codec`.
@@ -177,11 +429,27 @@ impl LedgerCommitStore {
         ledger: &AllocationLedger,
         codec: &C,
     ) -> Result<AllocationLedger, LedgerCommitError<C::Error>> {
+        self.commit_with_compatibility(ledger, codec, LedgerCompatibility::current())
+    }
+
+    /// Commit one logical allocation ledger generation through explicit compatibility.
+    pub fn commit_with_compatibility<C: LedgerCodec>(
+        &mut self,
+        ledger: &AllocationLedger,
+        codec: &C,
+        compatibility: LedgerCompatibility,
+    ) -> Result<AllocationLedger, LedgerCommitError<C::Error>> {
+        compatibility
+            .validate(ledger)
+            .map_err(LedgerCommitError::Compatibility)?;
+        ledger
+            .validate_integrity()
+            .map_err(LedgerCommitError::Integrity)?;
         let payload = codec.encode(ledger).map_err(LedgerCommitError::Codec)?;
         self.physical
             .commit_payload(payload)
             .map_err(LedgerCommitError::Recovery)?;
-        self.recover(codec)
+        self.recover_with_compatibility(codec, compatibility)
     }
 
     /// Simulate a torn write of a logical ledger payload into the inactive slot.
@@ -209,6 +477,12 @@ pub enum LedgerCommitError<E> {
     /// Integration-supplied codec failed.
     #[error("allocation ledger codec failed")]
     Codec(E),
+    /// Decoded ledger format is not compatible with this reader.
+    #[error(transparent)]
+    Compatibility(LedgerCompatibilityError),
+    /// Decoded ledger violates structural allocation-history invariants.
+    #[error(transparent)]
+    Integrity(LedgerIntegrityError),
 }
 
 ///
@@ -344,6 +618,52 @@ impl AllocationRecord {
 }
 
 impl AllocationLedger {
+    /// Validate structural ledger invariants before recovery or commit.
+    pub fn validate_integrity(&self) -> Result<(), LedgerIntegrityError> {
+        let mut stable_keys = BTreeSet::new();
+        let mut slots = BTreeSet::new();
+
+        for record in &self.allocation_history.records {
+            if !stable_keys.insert(record.stable_key.clone()) {
+                return Err(LedgerIntegrityError::DuplicateStableKey {
+                    stable_key: record.stable_key.clone(),
+                });
+            }
+            if !slots.insert(record.slot.clone()) {
+                return Err(LedgerIntegrityError::DuplicateSlot {
+                    slot: Box::new(record.slot.clone()),
+                });
+            }
+            validate_record_integrity(self.current_generation, record)?;
+        }
+
+        let mut generations = BTreeSet::new();
+        for generation in &self.allocation_history.generations {
+            if !generations.insert(generation.generation) {
+                return Err(LedgerIntegrityError::DuplicateGeneration {
+                    generation: generation.generation,
+                });
+            }
+            if generation.generation > self.current_generation {
+                return Err(LedgerIntegrityError::FutureGeneration {
+                    generation: generation.generation,
+                    current_generation: self.current_generation,
+                });
+            }
+            if generation
+                .parent_generation
+                .is_some_and(|parent| parent >= generation.generation)
+            {
+                return Err(LedgerIntegrityError::InvalidParentGeneration {
+                    generation: generation.generation,
+                    parent_generation: generation.parent_generation,
+                });
+            }
+        }
+
+        Ok(())
+    }
+
     /// Return a copy of the ledger with `validated` recorded as the next generation.
     ///
     /// This is a pure logical update. Physical atomicity is the responsibility of
@@ -528,6 +848,87 @@ fn record_reservation(
     Ok(())
 }
 
+fn validate_record_integrity(
+    current_generation: u64,
+    record: &AllocationRecord,
+) -> Result<(), LedgerIntegrityError> {
+    if record.first_generation > record.last_seen_generation {
+        return Err(LedgerIntegrityError::InvalidRecordGenerationOrder {
+            stable_key: record.stable_key.clone(),
+            first_generation: record.first_generation,
+            last_seen_generation: record.last_seen_generation,
+        });
+    }
+    if record.last_seen_generation > current_generation {
+        return Err(LedgerIntegrityError::FutureRecordGeneration {
+            stable_key: record.stable_key.clone(),
+            generation: record.last_seen_generation,
+            current_generation,
+        });
+    }
+
+    match (record.state, record.retired_generation) {
+        (AllocationState::Retired, Some(retired_generation)) => {
+            if retired_generation < record.first_generation {
+                return Err(LedgerIntegrityError::RetiredBeforeFirstGeneration {
+                    stable_key: record.stable_key.clone(),
+                    first_generation: record.first_generation,
+                    retired_generation,
+                });
+            }
+            if retired_generation > current_generation {
+                return Err(LedgerIntegrityError::FutureRecordGeneration {
+                    stable_key: record.stable_key.clone(),
+                    generation: retired_generation,
+                    current_generation,
+                });
+            }
+        }
+        (AllocationState::Retired, None) => {
+            return Err(LedgerIntegrityError::MissingRetiredGeneration {
+                stable_key: record.stable_key.clone(),
+            });
+        }
+        (AllocationState::Reserved | AllocationState::Active, Some(_)) => {
+            return Err(LedgerIntegrityError::UnexpectedRetiredGeneration {
+                stable_key: record.stable_key.clone(),
+            });
+        }
+        (AllocationState::Reserved | AllocationState::Active, None) => {}
+    }
+
+    validate_schema_history_integrity(current_generation, record)
+}
+
+fn validate_schema_history_integrity(
+    current_generation: u64,
+    record: &AllocationRecord,
+) -> Result<(), LedgerIntegrityError> {
+    if record.schema_history.is_empty() {
+        return Err(LedgerIntegrityError::EmptySchemaHistory {
+            stable_key: record.stable_key.clone(),
+        });
+    }
+
+    let mut previous = None;
+    for schema in &record.schema_history {
+        if previous.is_some_and(|generation| schema.generation <= generation) {
+            return Err(LedgerIntegrityError::NonIncreasingSchemaHistory {
+                stable_key: record.stable_key.clone(),
+            });
+        }
+        if schema.generation < record.first_generation || schema.generation > current_generation {
+            return Err(LedgerIntegrityError::SchemaHistoryOutOfBounds {
+                stable_key: record.stable_key.clone(),
+                generation: schema.generation,
+            });
+        }
+        previous = Some(schema.generation);
+    }
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -540,13 +941,25 @@ mod tests {
         type Error = &'static str;
 
         fn encode(&self, ledger: &AllocationLedger) -> Result<Vec<u8>, Self::Error> {
-            Ok(ledger.current_generation.to_le_bytes().to_vec())
+            let mut bytes = Vec::with_capacity(16);
+            bytes.extend_from_slice(&ledger.ledger_schema_version.to_le_bytes());
+            bytes.extend_from_slice(&ledger.physical_format_id.to_le_bytes());
+            bytes.extend_from_slice(&ledger.current_generation.to_le_bytes());
+            Ok(bytes)
         }
 
         fn decode(&self, bytes: &[u8]) -> Result<AllocationLedger, Self::Error> {
-            let bytes = <[u8; 8]>::try_from(bytes).map_err(|_| "invalid generation")?;
+            let bytes = <[u8; 16]>::try_from(bytes).map_err(|_| "invalid ledger")?;
+            let ledger_schema_version =
+                u32::from_le_bytes(bytes[0..4].try_into().map_err(|_| "invalid schema")?);
+            let physical_format_id =
+                u32::from_le_bytes(bytes[4..8].try_into().map_err(|_| "invalid format")?);
+            let current_generation =
+                u64::from_le_bytes(bytes[8..16].try_into().map_err(|_| "invalid generation")?);
             Ok(AllocationLedger {
-                current_generation: u64::from_le_bytes(bytes),
+                ledger_schema_version,
+                physical_format_id,
+                current_generation,
                 ..ledger()
             })
         }
@@ -567,11 +980,15 @@ mod tests {
 
     fn ledger() -> AllocationLedger {
         AllocationLedger {
-            ledger_schema_version: 1,
-            physical_format_id: 1,
+            ledger_schema_version: CURRENT_LEDGER_SCHEMA_VERSION,
+            physical_format_id: CURRENT_PHYSICAL_FORMAT_ID,
             current_generation: 3,
             allocation_history: AllocationHistory::default(),
         }
+    }
+
+    fn active_record(key: &str, id: u8) -> AllocationRecord {
+        AllocationRecord::from_declaration(1, declaration(key, id, None), AllocationState::Active)
     }
 
     fn validated(
@@ -765,6 +1182,108 @@ mod tests {
     }
 
     #[test]
+    fn validate_integrity_rejects_duplicate_stable_keys() {
+        let mut ledger = ledger();
+        ledger.allocation_history.records = vec![
+            active_record("app.users.v1", 100),
+            active_record("app.users.v1", 101),
+        ];
+
+        let err = ledger.validate_integrity().expect_err("duplicate key");
+
+        assert!(matches!(
+            err,
+            LedgerIntegrityError::DuplicateStableKey { .. }
+        ));
+    }
+
+    #[test]
+    fn validate_integrity_rejects_duplicate_slots() {
+        let mut ledger = ledger();
+        ledger.allocation_history.records = vec![
+            active_record("app.users.v1", 100),
+            active_record("app.orders.v1", 100),
+        ];
+
+        let err = ledger.validate_integrity().expect_err("duplicate slot");
+
+        assert!(matches!(err, LedgerIntegrityError::DuplicateSlot { .. }));
+    }
+
+    #[test]
+    fn validate_integrity_rejects_retired_record_without_retired_generation() {
+        let mut ledger = ledger();
+        let mut record = active_record("app.users.v1", 100);
+        record.state = AllocationState::Retired;
+        ledger.allocation_history.records = vec![record];
+
+        let err = ledger
+            .validate_integrity()
+            .expect_err("missing retired generation");
+
+        assert!(matches!(
+            err,
+            LedgerIntegrityError::MissingRetiredGeneration { .. }
+        ));
+    }
+
+    #[test]
+    fn validate_integrity_rejects_non_retired_record_with_retired_generation() {
+        let mut ledger = ledger();
+        let mut record = active_record("app.users.v1", 100);
+        record.retired_generation = Some(2);
+        ledger.allocation_history.records = vec![record];
+
+        let err = ledger
+            .validate_integrity()
+            .expect_err("unexpected retired generation");
+
+        assert!(matches!(
+            err,
+            LedgerIntegrityError::UnexpectedRetiredGeneration { .. }
+        ));
+    }
+
+    #[test]
+    fn validate_integrity_rejects_non_increasing_schema_history() {
+        let mut ledger = ledger();
+        let mut record = active_record("app.users.v1", 100);
+        record.schema_history.push(SchemaMetadataRecord {
+            generation: 1,
+            schema: SchemaMetadata::default(),
+        });
+        ledger.allocation_history.records = vec![record];
+
+        let err = ledger
+            .validate_integrity()
+            .expect_err("non-increasing schema history");
+
+        assert!(matches!(
+            err,
+            LedgerIntegrityError::NonIncreasingSchemaHistory { .. }
+        ));
+    }
+
+    #[test]
+    fn ledger_commit_store_rejects_invalid_ledger_before_write() {
+        let mut store = LedgerCommitStore::default();
+        let codec = TestCodec;
+        let mut invalid = ledger();
+        invalid.allocation_history.records = vec![
+            active_record("app.users.v1", 100),
+            active_record("app.orders.v1", 100),
+        ];
+
+        let err = store.commit(&invalid, &codec).expect_err("invalid ledger");
+
+        assert!(matches!(
+            err,
+            LedgerCommitError::Integrity(LedgerIntegrityError::DuplicateSlot { .. })
+        ));
+        assert!(store.physical.is_uninitialized());
+    }
+
+    #[test]
     fn ledger_commit_store_recovers_latest_committed_ledger() {
         let mut store = LedgerCommitStore::default();
         let codec = TestCodec;
@@ -804,5 +1323,105 @@ mod tests {
         let recovered = store.recover(&codec).expect("recovered ledger");
 
         assert_eq!(recovered.current_generation, 1);
+    }
+
+    #[test]
+    fn ledger_commit_store_initializes_empty_store_explicitly() {
+        let mut store = LedgerCommitStore::default();
+        let codec = TestCodec;
+        let genesis = ledger();
+
+        let recovered = store
+            .recover_or_initialize(&codec, &genesis)
+            .expect("initialized ledger");
+
+        assert_eq!(recovered.current_generation, 3);
+        assert!(!store.physical.is_uninitialized());
+    }
+
+    #[test]
+    fn ledger_commit_store_rejects_corrupt_store_even_with_genesis() {
+        let mut store = LedgerCommitStore::default();
+        let codec = TestCodec;
+        store
+            .write_corrupt_inactive_ledger(&ledger(), &codec)
+            .expect("corrupt write");
+
+        let err = store
+            .recover_or_initialize(&codec, &ledger())
+            .expect_err("corrupt state");
+
+        assert!(matches!(
+            err,
+            LedgerCommitError::Recovery(CommitRecoveryError::NoValidGeneration)
+        ));
+    }
+
+    #[test]
+    fn ledger_commit_store_rejects_incompatible_schema_before_write() {
+        let mut store = LedgerCommitStore::default();
+        let codec = TestCodec;
+        let incompatible = AllocationLedger {
+            ledger_schema_version: CURRENT_LEDGER_SCHEMA_VERSION + 1,
+            ..ledger()
+        };
+
+        let err = store
+            .commit(&incompatible, &codec)
+            .expect_err("incompatible schema");
+
+        assert!(matches!(
+            err,
+            LedgerCommitError::Compatibility(
+                LedgerCompatibilityError::UnsupportedLedgerSchemaVersion { .. }
+            )
+        ));
+        assert!(store.physical.is_uninitialized());
+    }
+
+    #[test]
+    fn ledger_commit_store_rejects_incompatible_schema_on_recovery() {
+        let mut store = LedgerCommitStore::default();
+        let codec = TestCodec;
+        let incompatible = AllocationLedger {
+            ledger_schema_version: CURRENT_LEDGER_SCHEMA_VERSION + 1,
+            ..ledger()
+        };
+        let payload = codec.encode(&incompatible).expect("payload");
+        store
+            .physical
+            .commit_payload(payload)
+            .expect("physical commit");
+
+        let err = store.recover(&codec).expect_err("incompatible schema");
+
+        assert!(matches!(
+            err,
+            LedgerCommitError::Compatibility(
+                LedgerCompatibilityError::UnsupportedLedgerSchemaVersion { .. }
+            )
+        ));
+    }
+
+    #[test]
+    fn ledger_commit_store_rejects_incompatible_physical_format() {
+        let mut store = LedgerCommitStore::default();
+        let codec = TestCodec;
+        let incompatible = AllocationLedger {
+            physical_format_id: CURRENT_PHYSICAL_FORMAT_ID + 1,
+            ..ledger()
+        };
+
+        let err = store
+            .recover_or_initialize(&codec, &incompatible)
+            .expect_err("incompatible format");
+
+        assert!(matches!(
+            err,
+            LedgerCommitError::Compatibility(
+                LedgerCompatibilityError::UnsupportedPhysicalFormat { .. }
+            )
+        ));
+        assert!(store.physical.is_uninitialized());
     }
 }

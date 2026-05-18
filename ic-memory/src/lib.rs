@@ -20,7 +20,10 @@ pub mod slot;
 pub mod substrate;
 pub mod validation;
 
-pub use bootstrap::{AllocationBootstrap, BootstrapCommit, BootstrapError};
+pub use bootstrap::{
+    AllocationBootstrap, BootstrapCommit, BootstrapError, BootstrapReservationError,
+    BootstrapRetirementError,
+};
 pub use declaration::{
     AllocationDeclaration, DeclarationCollector, DeclarationSnapshot, DeclarationSnapshotError,
 };
@@ -29,10 +32,15 @@ pub use generation::{GenerationCommit, GenerationMutation, StagedGeneration};
 pub use key::{StableKey, StableKeyError};
 pub use ledger::{
     AllocationHistory, AllocationLedger, AllocationRecord, AllocationReservationError,
-    AllocationRetirement, AllocationRetirementError, AllocationState, GenerationRecord,
-    LedgerCodec, LedgerCommitError, LedgerCommitStore, SchemaMetadataRecord,
+    AllocationRetirement, AllocationRetirementError, AllocationState,
+    CURRENT_LEDGER_SCHEMA_VERSION, CURRENT_PHYSICAL_FORMAT_ID, GenerationRecord, LedgerCodec,
+    LedgerCommitError, LedgerCommitStore, LedgerCompatibility, LedgerCompatibilityError,
+    LedgerIntegrityError, SchemaMetadataRecord,
 };
-pub use physical::{CommitRecoveryError, CommittedGenerationBytes, DualCommitStore};
+pub use physical::{
+    CommitRecoveryError, CommitSlotDiagnostic, CommitStoreDiagnostic, CommittedGenerationBytes,
+    DualCommitStore,
+};
 pub use policy::{AllocationPolicy, NamespaceAuthority, RangeAuthority};
 pub use schema::{SchemaMetadata, SchemaMetadataError};
 pub use session::{AllocationSession, ValidatedAllocations};

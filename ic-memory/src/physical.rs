@@ -58,6 +58,12 @@ pub struct DualCommitStore {
 }
 
 impl DualCommitStore {
+    /// Return true when no commit slot has ever been written.
+    #[must_use]
+    pub const fn is_uninitialized(&self) -> bool {
+        self.slot0.is_none() && self.slot1.is_none()
+    }
+
     /// Return the highest-generation valid committed record.
     pub fn authoritative(&self) -> Result<&CommittedGenerationBytes, CommitRecoveryError> {
         let slot0 = self.slot0.as_ref().filter(|slot| slot.validates());
@@ -68,6 +74,18 @@ impl DualCommitStore {
             (Some(left), Some(_) | None) => Ok(left),
             (None, Some(right)) => Ok(right),
             (None, None) => Err(CommitRecoveryError::NoValidGeneration),
+        }
+    }
+
+    /// Build a read-only recovery diagnostic for the protected commit slots.
+    #[must_use]
+    pub fn diagnostic(&self) -> CommitStoreDiagnostic {
+        let authoritative = self.authoritative();
+        CommitStoreDiagnostic {
+            slot0: CommitSlotDiagnostic::from_slot(self.slot0.as_ref()),
+            slot1: CommitSlotDiagnostic::from_slot(self.slot1.as_ref()),
+            authoritative_generation: authoritative.ok().map(|record| record.generation),
+            recovery_error: authoritative.err(),
         }
     }
 
@@ -118,10 +136,57 @@ impl DualCommitStore {
 }
 
 ///
+/// CommitStoreDiagnostic
+///
+/// Read-only diagnostic summary of protected commit recovery state.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct CommitStoreDiagnostic {
+    /// First physical commit slot diagnostic.
+    pub slot0: CommitSlotDiagnostic,
+    /// Second physical commit slot diagnostic.
+    pub slot1: CommitSlotDiagnostic,
+    /// Highest valid generation selected by recovery.
+    pub authoritative_generation: Option<u64>,
+    /// Recovery error when no authoritative generation can be selected.
+    pub recovery_error: Option<CommitRecoveryError>,
+}
+
+///
+/// CommitSlotDiagnostic
+///
+/// Read-only diagnostic summary for one protected commit slot.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct CommitSlotDiagnostic {
+    /// Whether a physical slot record is present.
+    pub present: bool,
+    /// Generation encoded by the slot, if present.
+    pub generation: Option<u64>,
+    /// Whether marker and checksum validation succeeded.
+    pub valid: bool,
+}
+
+impl CommitSlotDiagnostic {
+    fn from_slot(slot: Option<&CommittedGenerationBytes>) -> Self {
+        match slot {
+            Some(record) => Self {
+                present: true,
+                generation: Some(record.generation),
+                valid: record.validates(),
+            },
+            None => Self {
+                present: false,
+                generation: None,
+                valid: false,
+            },
+        }
+    }
+}
+
+///
 /// CommitRecoveryError
 ///
 /// Protected commit recovery failure.
-#[derive(Clone, Copy, Debug, Eq, thiserror::Error, PartialEq)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, thiserror::Error, PartialEq, Serialize)]
 pub enum CommitRecoveryError {
     /// No committed slot passed marker and checksum validation.
     #[error("no valid committed ledger generation")]
@@ -204,6 +269,45 @@ mod tests {
         let err = store.authoritative().expect_err("no valid slot");
 
         assert_eq!(err, CommitRecoveryError::NoValidGeneration);
+    }
+
+    #[test]
+    fn diagnostic_reports_authoritative_generation_and_corrupt_slots() {
+        let mut store = DualCommitStore::default();
+        store.commit_payload(payload(1)).expect("first commit");
+        store.write_corrupt_inactive_slot(1, payload(2));
+
+        let diagnostic = store.diagnostic();
+
+        assert_eq!(diagnostic.authoritative_generation, Some(0));
+        assert_eq!(diagnostic.recovery_error, None);
+        assert_eq!(diagnostic.slot0.generation, Some(0));
+        assert!(diagnostic.slot0.valid);
+        assert_eq!(diagnostic.slot1.generation, Some(1));
+        assert!(!diagnostic.slot1.valid);
+    }
+
+    #[test]
+    fn diagnostic_reports_no_valid_generation_for_empty_store() {
+        let diagnostic = DualCommitStore::default().diagnostic();
+
+        assert_eq!(diagnostic.authoritative_generation, None);
+        assert_eq!(
+            diagnostic.recovery_error,
+            Some(CommitRecoveryError::NoValidGeneration)
+        );
+        assert!(!diagnostic.slot0.present);
+        assert!(!diagnostic.slot1.present);
+    }
+
+    #[test]
+    fn uninitialized_distinguishes_empty_from_corrupt() {
+        let mut store = DualCommitStore::default();
+        assert!(store.is_uninitialized());
+
+        store.write_corrupt_inactive_slot(0, payload(1));
+
+        assert!(!store.is_uninitialized());
     }
 
     #[test]

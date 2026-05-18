@@ -49,6 +49,17 @@ inspect only the files needed for the current task.
   reservations, explicit retirements, `reserved -> active` activation, and an
   `AllocationBootstrap` pipeline that recovers, validates, stages, commits, and
   publishes validated allocations without owning framework endpoint policy.
+- Started `0.39.6` with explicit genesis recovery boundaries:
+  `ic-memory` can initialize from a supplied genesis ledger only when the
+  protected commit store is physically empty, exposes commit-slot recovery
+  diagnostics, validates `ledger_schema_version`/`physical_format_id`
+  compatibility and allocation-history integrity before recovery or commit, and
+  still fails closed on corrupt, incompatible, malformed, or partially written
+  stores.
+- Extended the same `0.39.6` slice so explicit reservation and retirement
+  operations go through generic bootstrap helpers and the protected commit
+  protocol instead of requiring adapters to hand-roll recover/stage/commit
+  sequencing.
 - Added a workspace manifest guard so explicitly publishable crates cannot add
   runtime or build dependencies on workspace crates marked `publish = false`.
 - Wired the same manifest-boundary guard into `scripts/ci/publish-workspace.sh`

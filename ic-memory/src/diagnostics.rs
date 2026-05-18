@@ -1,5 +1,6 @@
 use crate::{
     ledger::{AllocationLedger, AllocationRecord, GenerationRecord},
+    physical::CommitStoreDiagnostic,
     slot::AllocationSlotDescriptor,
 };
 use serde::{Deserialize, Serialize};
@@ -22,12 +23,24 @@ pub struct DiagnosticExport {
     pub records: Vec<DiagnosticRecord>,
     /// Generation records.
     pub generations: Vec<DiagnosticGeneration>,
+    /// Optional protected commit recovery diagnostic.
+    pub commit_recovery: Option<CommitStoreDiagnostic>,
 }
 
 impl DiagnosticExport {
     /// Build a read-only diagnostic export from an allocation ledger.
     #[must_use]
     pub fn from_ledger(ledger: &AllocationLedger, ledger_anchor: AllocationSlotDescriptor) -> Self {
+        Self::from_ledger_with_commit_recovery(ledger, ledger_anchor, None)
+    }
+
+    /// Build a read-only diagnostic export with protected commit recovery state.
+    #[must_use]
+    pub fn from_ledger_with_commit_recovery(
+        ledger: &AllocationLedger,
+        ledger_anchor: AllocationSlotDescriptor,
+        commit_recovery: Option<CommitStoreDiagnostic>,
+    ) -> Self {
         Self {
             ledger_schema_version: ledger.ledger_schema_version,
             physical_format_id: ledger.physical_format_id,
@@ -47,6 +60,7 @@ impl DiagnosticExport {
                 .cloned()
                 .map(|generation| DiagnosticGeneration { generation })
                 .collect(),
+            commit_recovery,
         }
     }
 }
@@ -77,6 +91,7 @@ mod tests {
     use crate::{
         declaration::AllocationDeclaration,
         ledger::{AllocationHistory, AllocationRecord, AllocationState},
+        physical::{CommitRecoveryError, CommitSlotDiagnostic, CommitStoreDiagnostic},
         schema::SchemaMetadata,
     };
 
@@ -118,6 +133,77 @@ mod tests {
         assert_eq!(
             export.ledger_anchor,
             AllocationSlotDescriptor::memory_manager(0)
+        );
+        assert_eq!(export.commit_recovery, None);
+    }
+
+    #[test]
+    fn diagnostic_export_can_include_commit_recovery_state() {
+        let ledger = AllocationLedger {
+            ledger_schema_version: 1,
+            physical_format_id: 1,
+            current_generation: 3,
+            allocation_history: AllocationHistory::default(),
+        };
+        let commit_recovery = CommitStoreDiagnostic {
+            slot0: CommitSlotDiagnostic {
+                present: true,
+                generation: Some(3),
+                valid: true,
+            },
+            slot1: CommitSlotDiagnostic {
+                present: false,
+                generation: None,
+                valid: false,
+            },
+            authoritative_generation: Some(3),
+            recovery_error: None,
+        };
+
+        let export = DiagnosticExport::from_ledger_with_commit_recovery(
+            &ledger,
+            AllocationSlotDescriptor::memory_manager(0),
+            Some(commit_recovery),
+        );
+
+        assert_eq!(export.commit_recovery, Some(commit_recovery));
+    }
+
+    #[test]
+    fn diagnostic_export_can_report_recovery_failure() {
+        let ledger = AllocationLedger {
+            ledger_schema_version: 1,
+            physical_format_id: 1,
+            current_generation: 0,
+            allocation_history: AllocationHistory::default(),
+        };
+        let commit_recovery = CommitStoreDiagnostic {
+            slot0: CommitSlotDiagnostic {
+                present: false,
+                generation: None,
+                valid: false,
+            },
+            slot1: CommitSlotDiagnostic {
+                present: false,
+                generation: None,
+                valid: false,
+            },
+            authoritative_generation: None,
+            recovery_error: Some(CommitRecoveryError::NoValidGeneration),
+        };
+
+        let export = DiagnosticExport::from_ledger_with_commit_recovery(
+            &ledger,
+            AllocationSlotDescriptor::memory_manager(0),
+            Some(commit_recovery),
+        );
+
+        assert_eq!(
+            export
+                .commit_recovery
+                .expect("commit recovery")
+                .recovery_error,
+            Some(CommitRecoveryError::NoValidGeneration)
         );
     }
 }

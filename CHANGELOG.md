@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.39.x] - 2026-05-18 - `ic-memory` extraction
 
+- `0.39.6` adds explicit empty-ledger genesis initialization, ledger format and integrity checks, protected commit recovery diagnostics, and generation-scoped reserve/retire bootstrap operations to the local `ic-memory` extraction crate, while corrupt, incompatible, malformed, or partially written stores still fail closed.
+
 - `0.39.5` adds generic protected ledger commit mechanics plus explicit reserve/retire/bootstrap lifecycle primitives to the local `ic-memory` extraction crate.
 
 - `0.39.4` keeps `ic-memory` as unpublished local extraction scaffolding, restores `canic-memory` as a self-contained publishable crate, and blocks publishing when publishable manifests depend on unpublished local crates.
