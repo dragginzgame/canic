@@ -22,6 +22,10 @@ inspect only the files needed for the current task.
 
 ## Recent Work
 
+- Started `0.39.1` by adding an AppIndex-backed
+  `caller::has_app_role(role)` internal access predicate, giving app hubs and
+  shards a first-class way to trust canonical sibling app canisters without
+  relying on root-only subnet-registry checks.
 - Moved the backup/restore design track forward to
   `docs/design/0.35-backup-restore/0.35-design.md` and marked the old 0.34
   draft as superseded.

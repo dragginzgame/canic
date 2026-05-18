@@ -59,10 +59,10 @@ pub fn validate(
         validate_authenticated_args(sig)?;
     }
 
-    if !parsed.internal && contains_registered_to_subnet(&parsed.requires) {
+    if !parsed.internal && contains_internal_only_caller_predicate(&parsed.requires) {
         return Err(syn::Error::new_spanned(
             &sig.ident,
-            "caller::is_registered_to_subnet() is internal-only; mark the endpoint as `internal` or use caller::is_parent()/caller::is_child()/caller::is_root()",
+            "caller topology predicates are internal-only; mark the endpoint as `internal` or use caller::is_parent()/caller::is_child()/caller::is_root()",
         ));
     }
 
@@ -109,24 +109,24 @@ fn access_expr_contains_authenticated(expr: &AccessExprAst) -> bool {
     }
 }
 
-fn contains_registered_to_subnet(requires: &[AccessExprAst]) -> bool {
+fn contains_internal_only_caller_predicate(requires: &[AccessExprAst]) -> bool {
     requires
         .iter()
-        .any(access_expr_contains_registered_to_subnet)
+        .any(access_expr_contains_internal_only_caller_predicate)
 }
 
-fn access_expr_contains_registered_to_subnet(expr: &AccessExprAst) -> bool {
+fn access_expr_contains_internal_only_caller_predicate(expr: &AccessExprAst) -> bool {
     match expr {
-        AccessExprAst::All(exprs) | AccessExprAst::Any(exprs) => {
-            exprs.iter().any(access_expr_contains_registered_to_subnet)
-        }
-        AccessExprAst::Not(expr) => access_expr_contains_registered_to_subnet(expr),
-        AccessExprAst::Pred(AccessPredicateAst::Builtin(
-            BuiltinPredicate::CallerIsRegisteredToSubnet,
-        )) => true,
-        AccessExprAst::Pred(AccessPredicateAst::Builtin(_) | AccessPredicateAst::Custom(_)) => {
-            false
-        }
+        AccessExprAst::All(exprs) | AccessExprAst::Any(exprs) => exprs
+            .iter()
+            .any(access_expr_contains_internal_only_caller_predicate),
+        AccessExprAst::Not(expr) => access_expr_contains_internal_only_caller_predicate(expr),
+        AccessExprAst::Pred(AccessPredicateAst::Builtin(builtin)) => matches!(
+            builtin,
+            BuiltinPredicate::CallerHasAppRole { .. }
+                | BuiltinPredicate::CallerIsRegisteredToSubnet
+        ),
+        AccessExprAst::Pred(AccessPredicateAst::Custom(_)) => false,
     }
 }
 
@@ -210,6 +210,24 @@ mod tests {
         }
     }
 
+    fn parsed_app_role(internal: bool) -> ParsedArgs {
+        ParsedArgs {
+            forwarded: Vec::new(),
+            export_name: None,
+            payload_max_bytes: None,
+            requires: vec![AccessExprAst::Pred(AccessPredicateAst::Builtin(
+                BuiltinPredicate::CallerHasAppRole {
+                    role: crate::endpoint::parse::CanisterRoleArg::Literal(
+                        "project_hub".to_string(),
+                    ),
+                },
+            ))],
+            requires_async: true,
+            requires_fallible: true,
+            internal,
+        }
+    }
+
     #[test]
     fn authenticated_requires_first_argument() {
         let sig: Signature = syn::parse_quote!(async fn hello() -> Result<(), ::canic::Error>);
@@ -253,7 +271,7 @@ mod tests {
         .unwrap_err();
         assert!(
             err.to_string()
-                .contains("caller::is_registered_to_subnet() is internal-only")
+                .contains("caller topology predicates are internal-only")
         );
     }
 
@@ -267,6 +285,23 @@ mod tests {
             true,
         )
         .expect("internal predicate ok");
+    }
+
+    #[test]
+    fn app_role_requires_internal_endpoint() {
+        let sig: Signature = syn::parse_quote!(async fn hello() -> Result<(), ::canic::Error>);
+        let err = validate(EndpointKind::Update, parsed_app_role(false), &sig, true).unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("caller topology predicates are internal-only")
+        );
+    }
+
+    #[test]
+    fn app_role_is_allowed_for_internal_endpoint() {
+        let sig: Signature = syn::parse_quote!(async fn hello() -> Result<(), ::canic::Error>);
+        validate(EndpointKind::Update, parsed_app_role(true), &sig, true)
+            .expect("internal app canister predicate ok");
     }
 
     #[test]

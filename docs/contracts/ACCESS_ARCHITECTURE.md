@@ -24,6 +24,16 @@ The macro DSL namespaces are:
 `caller::*` belongs to the auth family. It is a readability namespace, not a
 separate policy family.
 
+## Topology Caller Checks
+
+- Parent, child, root, self, controller, whitelist, subnet-registry, and
+  AppIndex role checks use the raw transport caller, not delegated user
+  identity.
+- `caller::has_app_role(role)` resolves `role` through the local AppIndex and
+  grants access only when the transport caller equals that canonical principal.
+- AppIndex and subnet-registry caller predicates are internal-only endpoint
+  rules. Public user ingress should use `auth::authenticated(...)`.
+
 ## Error Boundary
 
 - Access predicates return `Result<_, AccessError>`.

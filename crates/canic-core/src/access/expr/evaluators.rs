@@ -5,22 +5,22 @@ use crate::{
 };
 use async_trait::async_trait;
 
-pub(super) fn name(pred: BuiltinPredicate) -> &'static str {
+pub(super) fn name(pred: &BuiltinPredicate) -> &'static str {
     evaluator(pred).name()
 }
 
-pub(super) fn metric_kind(pred: BuiltinPredicate) -> AccessMetricKind {
+pub(super) fn metric_kind(pred: &BuiltinPredicate) -> AccessMetricKind {
     evaluator(pred).metric_kind()
 }
 
 pub(super) async fn evaluate(
-    pred: BuiltinPredicate,
+    pred: &BuiltinPredicate,
     ctx: &AccessContext,
 ) -> Result<(), AccessError> {
     evaluator(pred).evaluate(ctx, pred).await
 }
 
-fn evaluator(pred: BuiltinPredicate) -> &'static dyn BuiltinPredicateEvaluator {
+fn evaluator(pred: &BuiltinPredicate) -> &'static dyn BuiltinPredicateEvaluator {
     match pred {
         BuiltinPredicate::App(AppPredicate::AllowsUpdates) => &APP_ALLOWS_UPDATES_EVALUATOR,
         BuiltinPredicate::App(AppPredicate::IsQueryable) => &APP_IS_QUERYABLE_EVALUATOR,
@@ -30,6 +30,9 @@ fn evaluator(pred: BuiltinPredicate) -> &'static dyn BuiltinPredicateEvaluator {
         BuiltinPredicate::Caller(CallerPredicate::IsRoot) => &CALLER_IS_ROOT_EVALUATOR,
         BuiltinPredicate::Caller(CallerPredicate::IsSameCanister) => {
             &CALLER_IS_SAME_CANISTER_EVALUATOR
+        }
+        BuiltinPredicate::Caller(CallerPredicate::IsAppCanister { .. }) => {
+            &CALLER_HAS_APP_ROLE_EVALUATOR
         }
         BuiltinPredicate::Caller(CallerPredicate::IsRegisteredToSubnet) => {
             &CALLER_IS_REGISTERED_TO_SUBNET_EVALUATOR
@@ -61,7 +64,7 @@ trait BuiltinPredicateEvaluator: Send + Sync {
     async fn evaluate(
         &self,
         ctx: &AccessContext,
-        pred: BuiltinPredicate,
+        pred: &BuiltinPredicate,
     ) -> Result<(), AccessError>;
 
     // Return the stable label used for metrics and logs.
@@ -126,6 +129,12 @@ struct CallerIsRootEvaluator;
 struct CallerIsSameCanisterEvaluator;
 
 ///
+/// CallerHasAppRoleEvaluator
+///
+
+struct CallerHasAppRoleEvaluator;
+
+///
 /// CallerIsRegisteredToSubnetEvaluator
 ///
 
@@ -165,6 +174,7 @@ static CALLER_IS_CHILD_EVALUATOR: CallerIsChildEvaluator = CallerIsChildEvaluato
 static CALLER_IS_ROOT_EVALUATOR: CallerIsRootEvaluator = CallerIsRootEvaluator;
 static CALLER_IS_SAME_CANISTER_EVALUATOR: CallerIsSameCanisterEvaluator =
     CallerIsSameCanisterEvaluator;
+static CALLER_HAS_APP_ROLE_EVALUATOR: CallerHasAppRoleEvaluator = CallerHasAppRoleEvaluator;
 static CALLER_IS_REGISTERED_TO_SUBNET_EVALUATOR: CallerIsRegisteredToSubnetEvaluator =
     CallerIsRegisteredToSubnetEvaluator;
 static CALLER_IS_WHITELISTED_EVALUATOR: CallerIsWhitelistedEvaluator = CallerIsWhitelistedEvaluator;
@@ -177,7 +187,7 @@ impl BuiltinPredicateEvaluator for AppAllowsUpdatesEvaluator {
     async fn evaluate(
         &self,
         _ctx: &AccessContext,
-        _pred: BuiltinPredicate,
+        _pred: &BuiltinPredicate,
     ) -> Result<(), AccessError> {
         access::app::guard_app_update()
     }
@@ -196,7 +206,7 @@ impl BuiltinPredicateEvaluator for AppIsQueryableEvaluator {
     async fn evaluate(
         &self,
         _ctx: &AccessContext,
-        _pred: BuiltinPredicate,
+        _pred: &BuiltinPredicate,
     ) -> Result<(), AccessError> {
         access::app::guard_app_query()
     }
@@ -215,7 +225,7 @@ impl BuiltinPredicateEvaluator for SelfIsPrimeSubnetEvaluator {
     async fn evaluate(
         &self,
         _ctx: &AccessContext,
-        _pred: BuiltinPredicate,
+        _pred: &BuiltinPredicate,
     ) -> Result<(), AccessError> {
         access::env::is_prime_subnet()
     }
@@ -234,7 +244,7 @@ impl BuiltinPredicateEvaluator for SelfIsPrimeRootEvaluator {
     async fn evaluate(
         &self,
         _ctx: &AccessContext,
-        _pred: BuiltinPredicate,
+        _pred: &BuiltinPredicate,
     ) -> Result<(), AccessError> {
         access::env::is_prime_root()
     }
@@ -253,7 +263,7 @@ impl BuiltinPredicateEvaluator for CallerIsControllerEvaluator {
     async fn evaluate(
         &self,
         ctx: &AccessContext,
-        _pred: BuiltinPredicate,
+        _pred: &BuiltinPredicate,
     ) -> Result<(), AccessError> {
         access::auth::is_controller(ctx.caller).await
     }
@@ -272,7 +282,7 @@ impl BuiltinPredicateEvaluator for CallerIsParentEvaluator {
     async fn evaluate(
         &self,
         ctx: &AccessContext,
-        _pred: BuiltinPredicate,
+        _pred: &BuiltinPredicate,
     ) -> Result<(), AccessError> {
         access::auth::is_parent(ctx.caller).await
     }
@@ -291,7 +301,7 @@ impl BuiltinPredicateEvaluator for CallerIsChildEvaluator {
     async fn evaluate(
         &self,
         ctx: &AccessContext,
-        _pred: BuiltinPredicate,
+        _pred: &BuiltinPredicate,
     ) -> Result<(), AccessError> {
         access::auth::is_child(ctx.caller).await
     }
@@ -310,7 +320,7 @@ impl BuiltinPredicateEvaluator for CallerIsRootEvaluator {
     async fn evaluate(
         &self,
         ctx: &AccessContext,
-        _pred: BuiltinPredicate,
+        _pred: &BuiltinPredicate,
     ) -> Result<(), AccessError> {
         access::auth::is_root(ctx.caller).await
     }
@@ -329,7 +339,7 @@ impl BuiltinPredicateEvaluator for CallerIsSameCanisterEvaluator {
     async fn evaluate(
         &self,
         ctx: &AccessContext,
-        _pred: BuiltinPredicate,
+        _pred: &BuiltinPredicate,
     ) -> Result<(), AccessError> {
         access::auth::is_same_canister(ctx.caller).await
     }
@@ -344,11 +354,33 @@ impl BuiltinPredicateEvaluator for CallerIsSameCanisterEvaluator {
 }
 
 #[async_trait]
+impl BuiltinPredicateEvaluator for CallerHasAppRoleEvaluator {
+    async fn evaluate(
+        &self,
+        ctx: &AccessContext,
+        pred: &BuiltinPredicate,
+    ) -> Result<(), AccessError> {
+        let BuiltinPredicate::Caller(CallerPredicate::IsAppCanister { role }) = pred else {
+            unreachable!("app canister evaluator only handles app canister predicates");
+        };
+        access::auth::has_app_role(ctx.caller, role.clone()).await
+    }
+
+    fn name(&self) -> &'static str {
+        "caller_has_app_role"
+    }
+
+    fn metric_kind(&self) -> AccessMetricKind {
+        AccessMetricKind::Auth
+    }
+}
+
+#[async_trait]
 impl BuiltinPredicateEvaluator for CallerIsRegisteredToSubnetEvaluator {
     async fn evaluate(
         &self,
         ctx: &AccessContext,
-        _pred: BuiltinPredicate,
+        _pred: &BuiltinPredicate,
     ) -> Result<(), AccessError> {
         access::auth::is_registered_to_subnet(ctx.caller).await
     }
@@ -367,7 +399,7 @@ impl BuiltinPredicateEvaluator for CallerIsWhitelistedEvaluator {
     async fn evaluate(
         &self,
         ctx: &AccessContext,
-        _pred: BuiltinPredicate,
+        _pred: &BuiltinPredicate,
     ) -> Result<(), AccessError> {
         access::auth::is_whitelisted(ctx.caller).await
     }
@@ -386,14 +418,14 @@ impl BuiltinPredicateEvaluator for AuthenticatedEvaluator {
     async fn evaluate(
         &self,
         ctx: &AccessContext,
-        pred: BuiltinPredicate,
+        pred: &BuiltinPredicate,
     ) -> Result<(), AccessError> {
         let BuiltinPredicate::Authenticated { required_scope } = pred else {
             unreachable!("authenticated evaluator only handles authenticated predicates");
         };
         let verified = access::auth::delegated_token_verified(
             ctx.authenticated_caller,
-            required_scope,
+            *required_scope,
             ctx.call.kind,
         )?;
         DelegatedAuthMetrics::record_authority(verified.issuer_shard_pid);
@@ -414,7 +446,7 @@ impl BuiltinPredicateEvaluator for BuildIcOnlyEvaluator {
     async fn evaluate(
         &self,
         _ctx: &AccessContext,
-        _pred: BuiltinPredicate,
+        _pred: &BuiltinPredicate,
     ) -> Result<(), AccessError> {
         access::env::build_network_ic()
     }
@@ -433,7 +465,7 @@ impl BuiltinPredicateEvaluator for BuildLocalOnlyEvaluator {
     async fn evaluate(
         &self,
         _ctx: &AccessContext,
-        _pred: BuiltinPredicate,
+        _pred: &BuiltinPredicate,
     ) -> Result<(), AccessError> {
         access::env::build_network_local()
     }

@@ -8,10 +8,14 @@ use crate::{
         api::{canister_self, is_controller as caller_is_controller},
         types::Principal,
     },
+    ids::CanisterRole,
     ops::{
         config::ConfigOps,
         runtime::env::EnvOps,
-        storage::{children::CanisterChildrenOps, registry::subnet::SubnetRegistryOps},
+        storage::{
+            children::CanisterChildrenOps, index::app::AppIndexOps,
+            registry::subnet::SubnetRegistryOps,
+        },
     },
 };
 
@@ -95,6 +99,21 @@ pub(super) async fn is_same_canister(caller: Principal) -> Result<(), AccessErro
     } else {
         Err(AccessError::Denied(format!(
             "caller '{caller}' is not the current canister"
+        )))
+    }
+}
+
+/// Require that the caller is the canonical app canister for the expected role.
+#[expect(clippy::unused_async)]
+pub(super) async fn has_app_role(caller: Principal, role: CanisterRole) -> Result<(), AccessError> {
+    let expected = AppIndexOps::get(&role)
+        .ok_or_else(|| dependency_unavailable(&format!("app index role '{role}' unavailable")))?;
+
+    if caller == expected {
+        Ok(())
+    } else {
+        Err(AccessError::Denied(format!(
+            "authentication error: caller '{caller}' is not app canister '{role}'"
         )))
     }
 }

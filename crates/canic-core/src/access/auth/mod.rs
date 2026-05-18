@@ -171,6 +171,11 @@ pub async fn is_same_canister(caller: Principal) -> Result<(), AccessError> {
     predicates::is_same_canister(caller).await
 }
 
+/// Require that the caller is the canonical app canister for the expected role.
+pub async fn has_app_role(caller: Principal, role: Role) -> Result<(), AccessError> {
+    predicates::has_app_role(caller, role).await
+}
+
 // -----------------------------------------------------------------------------
 // Registry predicates
 // -----------------------------------------------------------------------------
@@ -210,8 +215,9 @@ fn caller_not_registered_denial(caller: Principal) -> AccessError {
 mod tests {
     use super::*;
     use crate::{
-        ids::{AccessMetricKind, cap},
+        ids::{AccessMetricKind, CanisterRole, cap},
         ops::runtime::metrics::access::AccessMetrics,
+        storage::stable::index::app::{AppIndex, AppIndexRecord},
         test::seams,
     };
 
@@ -234,6 +240,75 @@ mod tests {
                 }
             })
             .unwrap_or(0)
+    }
+
+    ///
+    /// AppIndexRestore
+    ///
+
+    struct AppIndexRestore(AppIndexRecord);
+
+    impl Drop for AppIndexRestore {
+        fn drop(&mut self) {
+            AppIndex::import(self.0.clone());
+        }
+    }
+
+    #[test]
+    fn app_role_allows_canonical_role_pid() {
+        let _guard = seams::lock();
+        let original = AppIndex::export();
+        let _restore = AppIndexRestore(original);
+
+        let project_hub = p(20);
+        AppIndex::import(AppIndexRecord {
+            entries: vec![(CanisterRole::new("project_hub"), project_hub)],
+        });
+
+        assert!(
+            futures::executor::block_on(has_app_role(
+                project_hub,
+                CanisterRole::new("project_hub")
+            ))
+            .is_ok()
+        );
+    }
+
+    #[test]
+    fn app_role_rejects_noncanonical_pid() {
+        let _guard = seams::lock();
+        let original = AppIndex::export();
+        let _restore = AppIndexRestore(original);
+
+        let project_hub = p(21);
+        let other = p(22);
+        AppIndex::import(AppIndexRecord {
+            entries: vec![(CanisterRole::new("project_hub"), project_hub)],
+        });
+
+        let err =
+            futures::executor::block_on(has_app_role(other, CanisterRole::new("project_hub")))
+                .expect_err("noncanonical caller must be rejected");
+        assert!(err.to_string().contains("is not app canister"));
+    }
+
+    #[test]
+    fn app_role_fails_closed_when_role_missing() {
+        let _guard = seams::lock();
+        let original = AppIndex::export();
+        let _restore = AppIndexRestore(original);
+
+        AppIndex::import(AppIndexRecord {
+            entries: Vec::new(),
+        });
+
+        let err =
+            futures::executor::block_on(has_app_role(p(23), CanisterRole::new("project_hub")))
+                .expect_err("missing role must be rejected");
+        assert!(
+            err.to_string()
+                .contains("app index role 'project_hub' unavailable")
+        );
     }
 
     #[test]

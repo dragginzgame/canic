@@ -44,7 +44,7 @@
 
 use crate::endpoint::{
     EndpointKind,
-    parse::{AccessExprAst, AccessPredicateAst, AuthScopeArg, BuiltinPredicate},
+    parse::{AccessExprAst, AccessPredicateAst, AuthScopeArg, BuiltinPredicate, CanisterRoleArg},
     validate::ValidatedArgs,
 };
 use proc_macro2::TokenStream as TokenStream2;
@@ -431,6 +431,16 @@ fn expr_from_builtin(pred: &BuiltinPredicate) -> TokenStream2 {
         BuiltinPredicate::CallerIsSameCanister => {
             quote!(::canic::__internal::core::access::expr::caller::is_same_canister())
         }
+        BuiltinPredicate::CallerHasAppRole { role } => match role {
+            CanisterRoleArg::Literal(role) => quote!(
+                ::canic::__internal::core::access::expr::caller::has_app_role(
+                    ::canic::__internal::core::ids::CanisterRole::new(#role)
+                )
+            ),
+            CanisterRoleArg::Expr(role) => quote!(
+                ::canic::__internal::core::access::expr::caller::has_app_role(#role)
+            ),
+        },
         BuiltinPredicate::CallerIsRegisteredToSubnet => {
             quote!(::canic::__internal::core::access::expr::caller::is_registered_to_subnet())
         }

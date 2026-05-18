@@ -8,7 +8,7 @@ mod evaluators;
 use crate::{
     access::{self, AccessError, metrics::AccessMetrics},
     cdk::types::Principal,
-    ids::{AccessMetricKind, EndpointCall},
+    ids::{AccessMetricKind, CanisterRole, EndpointCall},
     log,
     log::Topic,
 };
@@ -78,7 +78,7 @@ pub enum AccessPredicate {
 /// BuiltinPredicate
 ///
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub enum BuiltinPredicate {
     App(AppPredicate),
     Caller(CallerPredicate),
@@ -92,14 +92,14 @@ impl BuiltinPredicate {
     /// name
     ///
     /// Return the stable metrics/logging name for this builtin predicate.
-    fn name(self) -> &'static str {
+    fn name(&self) -> &'static str {
         evaluators::name(self)
     }
 
     /// metric_kind
     ///
     /// Return the metric family used to classify this builtin predicate.
-    fn metric_kind(self) -> AccessMetricKind {
+    fn metric_kind(&self) -> AccessMetricKind {
         evaluators::metric_kind(self)
     }
 }
@@ -118,13 +118,14 @@ pub enum AppPredicate {
 /// CallerPredicate
 ///
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub enum CallerPredicate {
     IsController,
     IsParent,
     IsChild,
     IsRoot,
     IsSameCanister,
+    IsAppCanister { role: CanisterRole },
     IsRegisteredToSubnet,
     IsWhitelisted,
 }
@@ -202,6 +203,7 @@ pub mod app {
 
 pub mod caller {
     use super::{AccessExpr, BuiltinPredicate, CallerPredicate, builtin};
+    use crate::ids::CanisterRole;
 
     #[must_use]
     pub const fn is_controller() -> AccessExpr {
@@ -226,6 +228,13 @@ pub mod caller {
     #[must_use]
     pub const fn is_same_canister() -> AccessExpr {
         builtin(BuiltinPredicate::Caller(CallerPredicate::IsSameCanister))
+    }
+
+    #[must_use]
+    pub const fn has_app_role(role: CanisterRole) -> AccessExpr {
+        builtin(BuiltinPredicate::Caller(CallerPredicate::IsAppCanister {
+            role,
+        }))
     }
 
     #[must_use]
@@ -316,7 +325,7 @@ pub fn eval_default_app_guard(
             };
             Err(record_access_failure(
                 ctx,
-                AccessFailure::from_builtin(predicate, err),
+                AccessFailure::from_builtin(&predicate, err),
             ))
         }
     }
@@ -354,9 +363,9 @@ fn eval_access_inner<'a>(expr: &'a AccessExpr, ctx: &'a AccessContext) -> Access
                 Err(_) => Ok(()),
             },
             AccessExpr::Pred(pred) => match pred {
-                AccessPredicate::Builtin(builtin) => evaluators::evaluate(*builtin, ctx)
+                AccessPredicate::Builtin(builtin) => evaluators::evaluate(builtin, ctx)
                     .await
-                    .map_err(|err| AccessFailure::from_builtin(*builtin, err)),
+                    .map_err(|err| AccessFailure::from_builtin(builtin, err)),
                 AccessPredicate::Custom(custom) => custom
                     .eval(ctx)
                     .await
@@ -383,7 +392,7 @@ struct AccessFailure {
 }
 
 impl AccessFailure {
-    fn from_builtin(pred: BuiltinPredicate, error: AccessError) -> Self {
+    fn from_builtin(pred: &BuiltinPredicate, error: AccessError) -> Self {
         Self {
             error,
             metric_kind: pred.metric_kind(),
@@ -448,8 +457,9 @@ mod tests {
     use super::*;
     use crate::{
         access,
-        ids::{EndpointCall, EndpointCallKind, EndpointId},
+        ids::{CanisterRole, EndpointCall, EndpointCallKind, EndpointId},
         storage::stable::env::{Env, EnvRecord},
+        storage::stable::index::app::{AppIndex, AppIndexRecord},
         storage::stable::state::app::{AppMode, AppState, AppStateRecord},
         test::seams,
     };
@@ -475,6 +485,18 @@ mod tests {
     impl Drop for AppRestore {
         fn drop(&mut self) {
             AppState::import(self.0);
+        }
+    }
+
+    ///
+    /// AppIndexRestore
+    ///
+
+    struct AppIndexRestore(AppIndexRecord);
+
+    impl Drop for AppIndexRestore {
+        fn drop(&mut self) {
+            AppIndex::import(self.0.clone());
         }
     }
 
@@ -569,6 +591,43 @@ mod tests {
                 "app::is_queryable parity mismatch for mode={mode:?}"
             );
         }
+    }
+
+    #[test]
+    fn caller_has_app_role_matches_access_auth() {
+        let _guard = seams::lock();
+        let original = AppIndex::export();
+        let _restore = AppIndexRestore(original);
+
+        let role = CanisterRole::new("project_hub");
+        let project_hub = seams::p(30);
+        let other = seams::p(31);
+        AppIndex::import(AppIndexRecord {
+            entries: vec![(role.clone(), project_hub)],
+        });
+
+        let expr = caller::has_app_role(role.clone());
+        let ctx_project_hub = AccessContext {
+            caller: project_hub,
+            authenticated_caller: project_hub,
+            identity_source: access::auth::AuthenticatedIdentitySource::RawCaller,
+            call: test_call(),
+        };
+        let ctx_other = AccessContext {
+            caller: other,
+            authenticated_caller: other,
+            identity_source: access::auth::AuthenticatedIdentitySource::RawCaller,
+            call: test_call(),
+        };
+
+        let expr_project_hub = futures::executor::block_on(eval_access(&expr, &ctx_project_hub));
+        let auth_project_hub =
+            futures::executor::block_on(access::auth::has_app_role(project_hub, role.clone()));
+        assert_eq!(expr_project_hub.is_ok(), auth_project_hub.is_ok());
+
+        let expr_other = futures::executor::block_on(eval_access(&expr, &ctx_other));
+        let auth_other = futures::executor::block_on(access::auth::has_app_role(other, role));
+        assert_eq!(expr_other.is_ok(), auth_other.is_ok());
     }
 
     #[test]

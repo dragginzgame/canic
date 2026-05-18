@@ -26,6 +26,16 @@ pub enum AuthScopeArg {
 }
 
 ///
+/// CanisterRoleArg
+///
+
+#[derive(Clone, Debug)]
+pub enum CanisterRoleArg {
+    Literal(String),
+    Expr(TokenStream2),
+}
+
+///
 /// BuiltinPredicate
 ///
 
@@ -40,6 +50,9 @@ pub enum BuiltinPredicate {
     CallerIsChild,
     CallerIsRoot,
     CallerIsSameCanister,
+    CallerHasAppRole {
+        role: CanisterRoleArg,
+    },
     CallerIsRegisteredToSubnet,
     CallerIsWhitelisted,
     Authenticated {
@@ -413,6 +426,13 @@ fn parse_call_expr(call: syn::ExprCall) -> syn::Result<AccessExprAst> {
                 )));
             }
 
+            if has_app_role_path(&path) {
+                let role = parse_canister_role_arg(&path, args)?;
+                return Ok(AccessExprAst::Pred(AccessPredicateAst::Builtin(
+                    BuiltinPredicate::CallerHasAppRole { role },
+                )));
+            }
+
             if args.next().is_some() {
                 return Err(syn::Error::new_spanned(
                     &path,
@@ -436,6 +456,48 @@ fn parse_call_expr(call: syn::ExprCall) -> syn::Result<AccessExprAst> {
             })?;
             Ok(AccessExprAst::Pred(AccessPredicateAst::Builtin(builtin)))
         }
+    }
+}
+
+fn parse_canister_role_arg<I>(path: &Path, mut args: I) -> syn::Result<CanisterRoleArg>
+where
+    I: Iterator<Item = Expr>,
+{
+    let role_expr = args.next().ok_or_else(|| {
+        syn::Error::new_spanned(
+            path,
+            "caller::has_app_role(...) requires one canister role argument",
+        )
+    })?;
+    if args.next().is_some() {
+        return Err(syn::Error::new_spanned(
+            path,
+            "caller::has_app_role(...) accepts exactly one canister role argument",
+        ));
+    }
+
+    match role_expr {
+        Expr::Lit(expr_lit) => match &expr_lit.lit {
+            syn::Lit::Str(role_lit) => {
+                let value = role_lit.value();
+                if value.trim().is_empty() {
+                    return Err(syn::Error::new_spanned(
+                        path,
+                        "caller::has_app_role(...) role must not be empty",
+                    ));
+                }
+                Ok(CanisterRoleArg::Literal(value))
+            }
+            _ => Err(syn::Error::new_spanned(
+                expr_lit,
+                "caller::has_app_role(...) role must be a string literal or canister role path",
+            )),
+        },
+        Expr::Path(expr_path) => Ok(CanisterRoleArg::Expr(quote::quote!(#expr_path))),
+        other => Err(syn::Error::new_spanned(
+            other,
+            "caller::has_app_role(...) role must be a string literal or canister role path",
+        )),
     }
 }
 
@@ -515,6 +577,24 @@ fn is_authenticated_path(path: &Path) -> bool {
     matches!(
         (module.as_deref(), last.as_deref()),
         (Some("auth"), Some("authenticated"))
+    )
+}
+
+fn has_app_role_path(path: &Path) -> bool {
+    if path.leading_colon.is_some() {
+        return false;
+    }
+
+    if path.segments.len() != 2 {
+        return false;
+    }
+
+    let mut names = path.segments.iter().map(|seg| seg.ident.to_string());
+    let last = names.next_back();
+    let module = names.next_back();
+    matches!(
+        (module.as_deref(), last.as_deref()),
+        (Some("caller"), Some("has_app_role"))
     )
 }
 
@@ -644,6 +724,60 @@ mod tests {
             panic!("expected expr scope");
         };
         assert_eq!(required_scope.to_string(), "cap :: VERIFY");
+    }
+
+    #[test]
+    fn app_role_allows_string_role_argument() {
+        let parsed = parse_args(quote!(
+            internal,
+            requires(caller::has_app_role("project_hub"))
+        ))
+        .expect("parse args");
+        let AccessExprAst::All(exprs) = &parsed.requires[0] else {
+            panic!("expected requires(all)");
+        };
+        let AccessExprAst::Pred(AccessPredicateAst::Builtin(BuiltinPredicate::CallerHasAppRole {
+            role,
+        })) = &exprs[0]
+        else {
+            panic!("expected app canister predicate");
+        };
+        let CanisterRoleArg::Literal(role) = role else {
+            panic!("expected literal role");
+        };
+        assert_eq!(role, "project_hub");
+    }
+
+    #[test]
+    fn app_role_allows_path_role_argument() {
+        let parsed = parse_args(quote!(
+            internal,
+            requires(caller::has_app_role(canister::PROJECT_HUB))
+        ))
+        .expect("parse args");
+        let AccessExprAst::All(exprs) = &parsed.requires[0] else {
+            panic!("expected requires(all)");
+        };
+        let AccessExprAst::Pred(AccessPredicateAst::Builtin(BuiltinPredicate::CallerHasAppRole {
+            role,
+        })) = &exprs[0]
+        else {
+            panic!("expected app canister predicate");
+        };
+        let CanisterRoleArg::Expr(role) = role else {
+            panic!("expected path role");
+        };
+        assert_eq!(role.to_string(), "canister :: PROJECT_HUB");
+    }
+
+    #[test]
+    fn app_role_rejects_missing_role_argument() {
+        let err = parse_args(quote!(requires(caller::has_app_role())))
+            .expect_err("missing role must fail");
+        assert!(
+            err.to_string()
+                .contains("caller::has_app_role(...) requires one canister role argument")
+        );
     }
 
     #[test]
