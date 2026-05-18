@@ -19,7 +19,7 @@ pub mod state;
 ///
 
 pub const CANIC_MEMORY_MIN: u8 = 11;
-pub const CANIC_MEMORY_MAX: u8 = 99;
+pub const CANIC_MEMORY_MAX: u8 = 79;
 
 ///
 /// CANIC stable memory IDs
@@ -147,7 +147,7 @@ pub mod memory {
         // 57–61
     }
 
-    // 62-79 remain long-horizon Canic framework reserve.
+    // 62-79 remain long-horizon Canic core reserve.
 }
 
 use crate::{InternalError, storage::prelude::*};

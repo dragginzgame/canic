@@ -9,7 +9,7 @@ use canic_memory::{eager_static, impl_storable_bounded};
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 
-const TEMPLATE_MANIFESTS_ID: u8 = 5;
+const TEMPLATE_MANIFESTS_ID: u8 = 80;
 
 eager_static! {
     static TEMPLATE_MANIFESTS: RefCell<

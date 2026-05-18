@@ -7,7 +7,7 @@ use canic_memory::{eager_static, impl_storable_bounded};
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 
-const SUBNET_STATE_ID: u8 = 9;
+const SUBNET_STATE_ID: u8 = 84;
 
 eager_static! {
     //

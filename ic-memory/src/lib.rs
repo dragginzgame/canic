@@ -44,6 +44,11 @@ pub use physical::{
 pub use policy::{AllocationPolicy, NamespaceAuthority, RangeAuthority};
 pub use schema::{SchemaMetadata, SchemaMetadataError};
 pub use session::{AllocationSession, ValidatedAllocations};
-pub use slot::{AllocationSlot, AllocationSlotDescriptor};
+pub use slot::{
+    AllocationSlot, AllocationSlotDescriptor, MEMORY_MANAGER_DESCRIPTOR_VERSION,
+    MEMORY_MANAGER_INVALID_ID, MEMORY_MANAGER_MAX_ID, MEMORY_MANAGER_MIN_ID,
+    MEMORY_MANAGER_SUBSTRATE, MemoryManagerIdRange, MemoryManagerRangeError,
+    MemoryManagerSlotError, validate_memory_manager_id,
+};
 pub use substrate::{LedgerAnchor, StorageSubstrate};
 pub use validation::{AllocationValidationError, validate_allocations};

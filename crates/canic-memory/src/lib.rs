@@ -12,11 +12,13 @@ mod ledger;
 mod macros;
 #[doc(hidden)]
 pub mod manager;
+mod policy;
 /// Stable-memory range and ID registry used by the public API and macros.
 pub mod registry;
 #[doc(hidden)]
 pub mod runtime;
-pub mod serialize;
+pub use canic_cdk::serialize;
+pub use canic_cdk::{impl_storable_bounded, impl_storable_unbounded};
 
 pub use ::canic_cdk as cdk;
 

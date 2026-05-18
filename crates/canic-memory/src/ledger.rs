@@ -8,6 +8,7 @@ use crate::{
         memory::{MemoryId, VirtualMemory},
     },
     manager::{MEMORY_MANAGER, RawStableMemoryState},
+    policy,
     registry::{MemoryRange, MemoryRangeAuthority, MemoryRegistryEntry, MemoryRegistryError},
 };
 use serde::{Deserialize, Serialize};
@@ -16,7 +17,7 @@ use std::cell::RefCell;
 pub const MEMORY_LAYOUT_LEDGER_ID: u8 = 0;
 pub const MEMORY_LAYOUT_LEDGER_OWNER: &str = "canic-memory";
 pub const MEMORY_LAYOUT_LEDGER_LABEL: &str = "MemoryLayoutLedger";
-pub const MEMORY_LAYOUT_LEDGER_STABLE_KEY: &str = "canic.memory.abi_ledger.v1";
+pub const MEMORY_LAYOUT_LEDGER_STABLE_KEY: &str = "ic_memory.ledger.v1";
 pub const MEMORY_LAYOUT_RESERVED_MIN: u8 = 0;
 pub const MEMORY_LAYOUT_RESERVED_MAX: u8 = 0;
 
@@ -31,10 +32,6 @@ const STABLE_CELL_LAYOUT_VERSION: u8 = 1;
 const STABLE_CELL_HEADER_SIZE: usize = 8;
 const STABLE_CELL_VALUE_OFFSET: u64 = 8;
 const WASM_PAGE_SIZE: u64 = 65_536;
-const CANIC_FRAMEWORK_AUTHORITY_OWNER: &str = "canic.framework";
-const CANIC_FRAMEWORK_AUTHORITY_PURPOSE: &str = "Canic framework allocation authority";
-const APPLICATION_AUTHORITY_OWNER: &str = "applications";
-const APPLICATION_AUTHORITY_PURPOSE: &str = "downstream application allocation authority";
 const FNV_OFFSET: u64 = 0xcbf2_9ce4_8422_2325;
 const FNV_PRIME: u64 = 0x0000_0100_0000_01b3;
 
@@ -806,21 +803,12 @@ fn validate_entry_against_generation(
 }
 
 fn canonical_authority_records() -> Vec<MemoryLayoutAuthorityRecord> {
-    vec![
-        MemoryLayoutAuthorityRecord::from_parts(
-            CANIC_FRAMEWORK_AUTHORITY_OWNER,
-            MemoryRange { start: 0, end: 99 },
-            CANIC_FRAMEWORK_AUTHORITY_PURPOSE,
-        ),
-        MemoryLayoutAuthorityRecord::from_parts(
-            APPLICATION_AUTHORITY_OWNER,
-            MemoryRange {
-                start: 100,
-                end: 254,
-            },
-            APPLICATION_AUTHORITY_PURPOSE,
-        ),
-    ]
+    policy::canonical_authority_ranges()
+        .into_iter()
+        .map(|(owner, range, purpose)| {
+            MemoryLayoutAuthorityRecord::from_parts(owner, range, purpose)
+        })
+        .collect()
 }
 
 fn validate_canonical_authorities(
@@ -1066,8 +1054,12 @@ mod tests {
         assert_eq!(snapshot.header_len, MEMORY_LAYOUT_LEDGER_HEADER_LEN);
         assert_eq!(snapshot.current_generation, 1);
         assert!(snapshot.authorities.iter().any(|authority| {
+            authority.owner == "ic_memory.internal"
+                && authority.range == MemoryRange { start: 0, end: 9 }
+        }));
+        assert!(snapshot.authorities.iter().any(|authority| {
             authority.owner == "canic.framework"
-                && authority.range == MemoryRange { start: 0, end: 99 }
+                && authority.range == MemoryRange { start: 10, end: 99 }
         }));
         assert_eq!(
             snapshot.ranges,

@@ -80,7 +80,7 @@ futures = "0.3"
 ic-cdk = "0.20.1"
 ic-cdk-management-canister = "0.1.0"
 ic-cdk-timers = "1.0"
-ic-memory = { path = "ic-memory" }
+ic-memory = { version = "0.39.7", path = "ic-memory" }
 ic-stable-structures = "0.7.2"
 icrc-ledger-types = { version = "0.2", default-features = false }
 k256 = { version = "0.13", default-features = false, features = ["ecdsa"] }

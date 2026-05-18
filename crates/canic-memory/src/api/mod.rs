@@ -625,8 +625,12 @@ mod tests {
         assert_eq!(snapshot.schema_version, 1);
         assert_eq!(snapshot.layout_epoch, 1);
         assert!(snapshot.authorities.iter().any(|authority| {
+            authority.owner == "ic_memory.internal"
+                && authority.range == MemoryRange { start: 0, end: 9 }
+        }));
+        assert!(snapshot.authorities.iter().any(|authority| {
             authority.owner == "canic.framework"
-                && authority.range == MemoryRange { start: 0, end: 99 }
+                && authority.range == MemoryRange { start: 10, end: 99 }
         }));
         assert!(snapshot.authorities.iter().any(|authority| {
             authority.owner == "applications"

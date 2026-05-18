@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.39.x] - 2026-05-18 - `ic-memory` extraction
 
+- `0.39.8` moves `MemoryManager` slot-shape validation into `ic-memory`, starts making `canic-memory` consume the local extraction crate directly, and reallocates Canic framework IDs so `0-9` belong to future `ic-memory` governance.
+
 - `0.39.7` adds Canic-owned policy adapter coverage for mapping `ic-memory` allocation slots to Canic's MemoryManager ID ranges without wiring publishable runtime crates to the unpublished extraction crate.
 
 - `0.39.6` adds explicit empty-ledger genesis initialization, ledger format and integrity checks, protected commit recovery diagnostics, and generation-scoped reserve/retire bootstrap operations to the local `ic-memory` extraction crate, while corrupt, incompatible, malformed, or partially written stores still fail closed.

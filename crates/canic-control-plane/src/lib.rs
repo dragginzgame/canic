@@ -11,7 +11,7 @@ const _: () = {
         crate_path = canic_memory::__reexports::ctor
     )]
     fn __canic_reserve_control_plane_memory_range() {
-        canic_memory::ic_memory_range!(5, 10);
+        canic_memory::ic_memory_range!(80, 85);
     }
 };
 

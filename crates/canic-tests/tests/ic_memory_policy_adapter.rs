@@ -1,15 +1,20 @@
 use ic_memory::{
     AllocationDeclaration, AllocationHistory, AllocationLedger, AllocationPolicy, AllocationSlot,
-    AllocationSlotDescriptor, DeclarationSnapshot, RangeAuthority, SchemaMetadata, StableKey,
-    validate_allocations,
+    AllocationSlotDescriptor, DeclarationSnapshot, MEMORY_MANAGER_INVALID_ID, MemoryManagerIdRange,
+    MemoryManagerSlotError, RangeAuthority, SchemaMetadata, StableKey, validate_allocations,
 };
 
-const IC_MEMORY_INTERNAL_MIN_ID: u8 = 0;
-const IC_MEMORY_INTERNAL_MAX_ID: u8 = 9;
-const CANIC_FRAMEWORK_MIN_ID: u8 = 10;
-const CANIC_FRAMEWORK_MAX_ID: u8 = 99;
-const APPLICATION_MIN_ID: u8 = 100;
-const INVALID_MEMORY_MANAGER_ID: u8 = u8::MAX;
+fn ic_memory_internal_range() -> MemoryManagerIdRange {
+    MemoryManagerIdRange::new(0, 9).expect("ic-memory internal range")
+}
+
+fn canic_framework_range() -> MemoryManagerIdRange {
+    MemoryManagerIdRange::new(10, 99).expect("Canic framework range")
+}
+
+fn application_range() -> MemoryManagerIdRange {
+    MemoryManagerIdRange::new(100, 254).expect("application range")
+}
 
 ///
 /// CanicMemoryManagerPolicy
@@ -46,10 +51,8 @@ impl RangeAuthority for CanicMemoryManagerPolicy {
     type Error = CanicMemoryPolicyError;
 
     fn validate_slot(&self, slot: &AllocationSlotDescriptor) -> Result<(), Self::Error> {
-        let id = memory_manager_id(slot)?;
-        if id == INVALID_MEMORY_MANAGER_ID {
-            return Err(CanicMemoryPolicyError::InvalidMemoryManagerId { id });
-        }
+        slot.memory_manager_id()
+            .map_err(CanicMemoryPolicyError::MemoryManagerSlot)?;
         Ok(())
     }
 }
@@ -58,15 +61,10 @@ impl RangeAuthority for CanicMemoryManagerPolicy {
 /// CanicMemoryPolicyError
 ///
 /// Canic allocation policy rejection.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 enum CanicMemoryPolicyError {
-    /// Slot is not a `MemoryManagerId` descriptor.
-    UnsupportedSlot,
-    /// MemoryManager ID 255 is permanently invalid.
-    InvalidMemoryManagerId {
-        /// Invalid ID.
-        id: u8,
-    },
+    /// Slot is not a usable `MemoryManager` descriptor.
+    MemoryManagerSlot(MemoryManagerSlotError),
     /// Stable-key namespace does not own the claimed MemoryManager ID.
     RangeAuthorityViolation,
     /// Application reservations are not part of the Canic framework plan.
@@ -78,35 +76,25 @@ fn validate_key_slot_claim(
     slot: &AllocationSlotDescriptor,
     reservation: bool,
 ) -> Result<(), CanicMemoryPolicyError> {
-    let id = memory_manager_id(slot)?;
-    if id == INVALID_MEMORY_MANAGER_ID {
-        return Err(CanicMemoryPolicyError::InvalidMemoryManagerId { id });
-    }
+    let id = slot
+        .memory_manager_id()
+        .map_err(CanicMemoryPolicyError::MemoryManagerSlot)?;
 
     let key = key.as_str();
     if key.starts_with("ic_memory.") {
-        return in_range(id, IC_MEMORY_INTERNAL_MIN_ID, IC_MEMORY_INTERNAL_MAX_ID);
+        return in_range(id, ic_memory_internal_range());
     }
     if key.starts_with("canic.") {
-        return in_range(id, CANIC_FRAMEWORK_MIN_ID, CANIC_FRAMEWORK_MAX_ID);
+        return in_range(id, canic_framework_range());
     }
     if reservation {
         return Err(CanicMemoryPolicyError::ApplicationReservation);
     }
-    in_range(id, APPLICATION_MIN_ID, INVALID_MEMORY_MANAGER_ID - 1)
+    in_range(id, application_range())
 }
 
-const fn memory_manager_id(slot: &AllocationSlotDescriptor) -> Result<u8, CanicMemoryPolicyError> {
-    match &slot.slot {
-        AllocationSlot::MemoryManagerId(id) => Ok(*id),
-        AllocationSlot::NamedPartition(_) | AllocationSlot::Custom { .. } => {
-            Err(CanicMemoryPolicyError::UnsupportedSlot)
-        }
-    }
-}
-
-fn in_range(id: u8, min: u8, max: u8) -> Result<(), CanicMemoryPolicyError> {
-    if (min..=max).contains(&id) {
+const fn in_range(id: u8, range: MemoryManagerIdRange) -> Result<(), CanicMemoryPolicyError> {
+    if range.contains(id) {
         return Ok(());
     }
     Err(CanicMemoryPolicyError::RangeAuthorityViolation)
@@ -208,11 +196,16 @@ fn canic_policy_rejects_id_255_for_all_namespaces() {
         "canic.core.app_state.v1",
         "app.users.v1",
     ] {
-        let err = validate_claim(policy, stable_key, 255).expect_err("invalid sentinel");
+        let err =
+            validate_claim(policy, stable_key, MEMORY_MANAGER_INVALID_ID).expect_err("sentinel");
 
         assert_eq!(
             err,
-            CanicMemoryPolicyError::InvalidMemoryManagerId { id: 255 }
+            CanicMemoryPolicyError::MemoryManagerSlot(
+                MemoryManagerSlotError::InvalidMemoryManagerId {
+                    id: MEMORY_MANAGER_INVALID_ID
+                }
+            )
         );
     }
 }
@@ -237,7 +230,7 @@ fn canic_policy_rejects_non_memory_manager_slots() {
         AllocationPolicy::validate_slot(&CanicMemoryManagerPolicy, &key("app.users.v1"), &slot)
             .expect_err("unsupported slot");
 
-    assert_eq!(err, CanicMemoryPolicyError::UnsupportedSlot);
+    assert!(matches!(err, CanicMemoryPolicyError::MemoryManagerSlot(_)));
 }
 
 #[test]

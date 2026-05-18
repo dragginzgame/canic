@@ -65,6 +65,21 @@ inspect only the files needed for the current task.
   `MemoryManagerId(u8)` rules against `ic-memory` traits without adding a
   runtime/build dependency from publishable crates to the unpublished local
   extraction crate.
+- Started `0.39.8` by moving generic `MemoryManager` slot-shape validation
+  into `ic-memory`: known substrate marker, descriptor version,
+  `MemoryManagerId`, usable IDs `0-254`, and ID `255` as the invalid sentinel.
+  Canic namespace and range ownership still live in the Canic policy adapter.
+- Extended `0.39.8` so `canic-memory` now directly depends on local
+  `ic-memory` for stable-key grammar and schema-metadata validation. Packaging
+  `canic-memory` as an independent crate is intentionally not the active
+  constraint while this extraction converges.
+- Continued `0.39.8` by making the Canic namespace/range policy an explicit
+  adapter module in `canic-memory`, moving the temporary ID `0` self-record key
+  to `ic_memory.ledger.v1`, reserving `0-9` for `ic-memory`, narrowing
+  `canic-core` to `11-79`, and moving control-plane stores to `80-85`.
+- Moved the CBOR serializer and `impl_storable_*` macros from `canic-memory`
+  to `canic-cdk`; `canic-memory` now only re-exports them as compatibility
+  glue while the memory crate is being retired.
 - Added a workspace manifest guard so explicitly publishable crates cannot add
   runtime or build dependencies on workspace crates marked `publish = false`.
 - Wired the same manifest-boundary guard into `scripts/ci/publish-workspace.sh`

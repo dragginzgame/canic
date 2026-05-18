@@ -9,9 +9,9 @@ use canic_memory::{eager_static, impl_storable_unbounded};
 use serde::{Deserialize, Serialize};
 use std::{borrow::Cow, cell::RefCell, collections::BTreeMap as StdBTreeMap};
 
-const TEMPLATE_CHUNK_SETS_ID: u8 = 6;
-const TEMPLATE_CHUNK_REFS_ID: u8 = 7;
-const TEMPLATE_CHUNK_PAYLOADS_ID: u8 = 8;
+const TEMPLATE_CHUNK_SETS_ID: u8 = 81;
+const TEMPLATE_CHUNK_REFS_ID: u8 = 82;
+const TEMPLATE_CHUNK_PAYLOADS_ID: u8 = 83;
 const TEMPLATE_CHUNK_REF_RECORD_BYTES: usize = 12;
 const TEMPLATE_CHUNK_REF_RECORD_MAX_BYTES: u32 = 12;
 const TEMPLATE_CHUNK_PAYLOAD_MAX_BYTES: u32 = 1_048_576;

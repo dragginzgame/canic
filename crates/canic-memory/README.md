@@ -17,8 +17,8 @@ source should only need Rust `1.91.0` or newer.
 - `MemoryApi` for declaring startup-selected stable-memory IDs and opening
   validated slots.
 - `eager_static!` and `eager_init!` for deterministic startup initialization.
-- `impl_storable_bounded!` and `impl_storable_unbounded!` for CBOR-backed
-  `Storable` implementations.
+- Compatibility re-exports of `impl_storable_bounded!` and
+  `impl_storable_unbounded!` from `canic-cdk`.
 - A `canic_cdk` re-export at `canic_memory::cdk`.
 
 ## Install
@@ -115,10 +115,10 @@ post-upgrade can share the same bootstrap path.
 every owner range and memory ID that has been registered through the bootstrap
 path, so removed declarations remain historical reservations rather than
 becoming silently reusable. Canic framework keys (`canic.*`) must use IDs
-`0-99`; downstream application keys must use `100-254`. IDs `1-99` are Canic
-framework expansion budget, not application space. The full Canic runtime stack
-currently uses `5-10` for control-plane stores and `11-99` for core runtime
-stores and future framework allocation.
+`10-99`; downstream application keys must use `100-254`. IDs `0-9` are
+reserved for `ic-memory` allocation-governance infrastructure, not application
+or Canic framework stores. The full Canic runtime stack currently uses `11-79`
+for core runtime stores and `80-85` for control-plane stores.
 
 Bootstrap distinguishes brand-new stable memory from existing state before
 mutating the declaration snapshot. Empty stable memory may initialize the
@@ -219,10 +219,10 @@ fn validate_slots(memory_id: u8) {
 Lower-level registry snapshot helpers also exist for debugging and tests:
 
 - `MemoryApi::ledger_snapshot()` for a fallible persisted-ledger diagnostic
-  read, including the canonical `0-99` Canic and `100-254` application
-  authority ranges. On wasm this path decodes only the ID `0` ABI ledger from
-  raw stable memory so operators can inspect ledger state without opening
-  application or framework stores.
+  read, including the canonical `0-9` `ic-memory`, `10-99` Canic, and
+  `100-254` application authority ranges. On wasm this path decodes only the
+  ID `0` ABI ledger from raw stable memory so operators can inspect ledger
+  state without opening application or framework stores.
 - `MemoryRegistry::export_range_entries()`
 - `MemoryRegistry::export_ids_by_range()`
 
@@ -231,10 +231,11 @@ Prefer `MemoryApi` for normal supported reads.
 ## Storable Helpers
 
 The storable macros implement `ic-stable-structures` `Storable` with Canic's
-shared CBOR serializer.
+shared CBOR serializer. They now live in `canic-cdk`; `canic-memory` re-exports
+them only as compatibility glue while this crate is being retired.
 
 ```rust
-use canic_memory::impl_storable_bounded;
+use canic_cdk::impl_storable_bounded;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -309,14 +310,15 @@ fn reserves_and_registers() {
 - `manager` - shared thread-local memory manager.
 - `registry` - range reservation, ID registration, pending queues, and errors.
 - `runtime` - eager TLS execution and registry startup glue.
-- `macros` - exported memory, runtime, and storable macros.
-- `serialize` - CBOR serialization helpers used by storable macros.
+- `macros` - exported memory and runtime macros.
+- `serialize` - compatibility re-export of `canic_cdk::serialize`.
 
 ## Notes
 
-- Memory IDs are `u8` values. Canic uses `0-99`; application code uses
-  `100-254`; ID `255` is the unallocated-bucket sentinel and is permanently
-  invalid as a virtual memory ID.
+- Memory IDs are `u8` values. `ic-memory` governance uses `0-9`, Canic
+  framework code uses `10-99`, application code uses `100-254`, and ID `255`
+  is the unallocated-bucket sentinel and is permanently invalid as a virtual
+  memory ID.
 - Prefer `ic_memory_key!` for every Canic-managed memory. The stable key is the
   ABI identity and should not be renamed when packages, modules, or marker types
   move. `ic_memory!` remains available for standalone explicit-ID users outside

@@ -6,16 +6,12 @@
 
 use serde::{Serialize, de::DeserializeOwned};
 use serde_cbor::{from_slice, to_vec};
-use std::fmt::Debug;
 use thiserror::Error as ThisError;
 
 ///
 /// SerializeError
 ///
-/// Error variants wrapping CBOR serialization or deserialization failures
-/// so callers can bubble them up uniformly.
-///
-
+/// Error variants wrapping CBOR serialization or deserialization failures.
 #[derive(Debug, ThisError)]
 pub enum SerializeError {
     /// CBOR serialization failed.
@@ -30,13 +26,11 @@ pub enum SerializeError {
 ///
 /// Serialize a value into CBOR bytes using serde_cbor.
 ///
-pub fn serialize<T>(t: &T) -> Result<Vec<u8>, SerializeError>
+pub fn serialize<T>(value: &T) -> Result<Vec<u8>, SerializeError>
 where
     T: Serialize,
 {
-    let bytes = to_vec(t).map_err(|e| SerializeError::Serialize(e.to_string()))?;
-
-    Ok(bytes)
+    to_vec(value).map_err(|err| SerializeError::Serialize(err.to_string()))
 }
 
 ///
@@ -46,7 +40,5 @@ pub fn deserialize<T>(bytes: &[u8]) -> Result<T, SerializeError>
 where
     T: DeserializeOwned,
 {
-    let t: T = from_slice(bytes).map_err(|e| SerializeError::Deserialize(e.to_string()))?;
-
-    Ok(t)
+    from_slice(bytes).map_err(|err| SerializeError::Deserialize(err.to_string()))
 }

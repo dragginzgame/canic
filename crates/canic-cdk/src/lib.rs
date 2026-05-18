@@ -25,7 +25,9 @@ pub use ic_cdk_timers as timers;
 pub use icrc_ledger_types;
 
 pub mod env;
+pub mod serialize;
 pub mod spec;
+pub mod storable;
 pub mod structures;
 pub mod types;
 pub mod utils;

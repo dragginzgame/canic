@@ -4,7 +4,7 @@ use canic_memory::{eager_static, impl_storable_bounded};
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 
-const WASM_STORE_GC_STATE_ID: u8 = 10;
+const WASM_STORE_GC_STATE_ID: u8 = 85;
 
 eager_static! {
     static WASM_STORE_GC_STATE: RefCell<
