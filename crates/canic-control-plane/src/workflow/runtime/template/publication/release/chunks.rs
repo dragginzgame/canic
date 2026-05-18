@@ -4,11 +4,15 @@ use crate::{
         WasmStorePublicationWorkflow, fleet::PublicationStoreSnapshot, store::TemplateChunkInputRef,
     },
 };
-use canic_core::__control_plane_core as cp_core;
 use canic_core::api::lifecycle::metrics::{
     WasmStoreMetricOperation, WasmStoreMetricOutcome, WasmStoreMetricReason, WasmStoreMetricSource,
 };
-use cp_core::{InternalError, InternalErrorOrigin, cdk::types::Principal};
+use canic_core::control_plane_support::{
+    cdk::types::Principal,
+    error::{InternalError, InternalErrorOrigin},
+    ops::ic::mgmt::MgmtOps,
+    protocol,
+};
 
 use super::metrics::{
     WasmStorePublicationError, record_wasm_store_metric, record_wasm_store_publish_failed,
@@ -85,7 +89,7 @@ impl WasmStorePublicationWorkflow {
 
         if let Err(err) = super::super::super::call_store_result::<(), _>(
             target_store_pid,
-            cp_core::protocol::CANIC_WASM_STORE_PUBLISH_CHUNK,
+            protocol::CANIC_WASM_STORE_PUBLISH_CHUNK,
             (TemplateChunkInputRef {
                 template_id: &manifest.template_id,
                 version: &manifest.version,
@@ -141,20 +145,19 @@ impl WasmStorePublicationWorkflow {
             WasmStoreMetricOutcome::Started,
             WasmStoreMetricReason::CacheMiss,
         );
-        let uploaded_hash =
-            match cp_core::ops::ic::mgmt::MgmtOps::upload_chunk(target_store.pid, bytes).await {
-                Ok(uploaded_hash) => uploaded_hash,
-                Err(err) => {
-                    record_wasm_store_metric(
-                        WasmStoreMetricOperation::ChunkUpload,
-                        WasmStoreMetricSource::TargetStore,
-                        WasmStoreMetricOutcome::Failed,
-                        WasmStoreMetricReason::ManagementCall,
-                    );
-                    record_wasm_store_publish_failed(WasmStoreMetricReason::ManagementCall);
-                    return Err(err);
-                }
-            };
+        let uploaded_hash = match MgmtOps::upload_chunk(target_store.pid, bytes).await {
+            Ok(uploaded_hash) => uploaded_hash,
+            Err(err) => {
+                record_wasm_store_metric(
+                    WasmStoreMetricOperation::ChunkUpload,
+                    WasmStoreMetricSource::TargetStore,
+                    WasmStoreMetricOutcome::Failed,
+                    WasmStoreMetricReason::ManagementCall,
+                );
+                record_wasm_store_publish_failed(WasmStoreMetricReason::ManagementCall);
+                return Err(err);
+            }
+        };
 
         if uploaded_hash != expected_hash {
             record_wasm_store_metric(

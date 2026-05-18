@@ -1,8 +1,19 @@
-pub use crate::{
-    cdk,
-    error::{InternalError, InternalErrorOrigin},
-    protocol,
-};
+pub mod cdk {
+    pub use crate::cdk::{api, structures, types, utils};
+}
+
+pub mod error {
+    pub use crate::error::{InternalError, InternalErrorOrigin};
+}
+
+pub mod protocol {
+    pub use crate::protocol::{
+        CANIC_WASM_STORE_BEGIN_GC, CANIC_WASM_STORE_CATALOG, CANIC_WASM_STORE_CHUNK,
+        CANIC_WASM_STORE_COMPLETE_GC, CANIC_WASM_STORE_INFO, CANIC_WASM_STORE_PREPARE,
+        CANIC_WASM_STORE_PREPARE_GC, CANIC_WASM_STORE_PUBLISH_CHUNK,
+        CANIC_WASM_STORE_STAGE_MANIFEST, CANIC_WASM_STORE_STATUS,
+    };
+}
 
 pub mod config {
     pub mod schema {
@@ -11,7 +22,7 @@ pub mod config {
 }
 
 pub mod format {
-    pub use crate::format::{byte_size, cycles_tc, truncate};
+    pub use crate::shared_support::format::{byte_size, cycles_tc, truncate};
 }
 
 pub mod dto {

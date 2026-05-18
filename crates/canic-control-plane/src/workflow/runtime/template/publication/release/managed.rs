@@ -12,12 +12,15 @@ use crate::{
         store::{store_binding_for_pid, store_catalog, store_status},
     },
 };
-use canic_core::__control_plane_core as cp_core;
 use canic_core::api::lifecycle::metrics::{
     WasmStoreMetricOperation, WasmStoreMetricOutcome, WasmStoreMetricReason, WasmStoreMetricSource,
 };
+use canic_core::control_plane_support::{
+    cdk::types::Principal,
+    error::{InternalError, InternalErrorOrigin},
+    ops::ic::IcOps,
+};
 use canic_core::{log, log::Topic};
-use cp_core::{InternalError, InternalErrorOrigin, cdk::types::Principal, ops::ic::IcOps};
 
 use super::super::super::WASM_STORE_BOOTSTRAP_BINDING;
 use super::metrics::record_wasm_store_metric;

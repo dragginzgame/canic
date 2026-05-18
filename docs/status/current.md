@@ -331,15 +331,21 @@ inspect only the files needed for the current task.
 - Started `0.38.7` by hard-cut reallocating `canic.core.app_state.v1` from ID
   `62` to ID `18`, colocating app runtime state with core env and subnet state
   before the 0.38 stable-memory ABI layout is treated as frozen.
-- Reworked the PR #8 topology sync direction for `0.38.7`: local ICP network
-  settings such as `ii` and `nns` remain in `icp.yaml`, while Canic sync stays
-  limited to Canic-owned canister and environment sections.
+- Reworked the PR #8 topology direction for `0.38.7`: local ICP network
+  settings such as `ii` and `nns` remain in `icp.yaml`; the later `0.38.8`
+  cleanup made Canic's ICP project config checks read-only.
 - Started `0.38.8` by stopping Canic from deriving or rewriting `icp.yaml` from
-  `canic.toml`, making `canic status` and the legacy `fleet sync` path check
-  ICP project config read-only, pinning the checked-in local ICP network
-  launcher to `v13.0.0-2026-05-07-04-27`, and adding an upstream watch workflow
-  that fails when a newer launcher tag appears, prompting a test for the
-  delegation certificate fix from upstream `dfinity/ic` commit `17524c56`.
+  `canic.toml`, making `canic status` check ICP project config read-only,
+  pinning the checked-in local ICP network launcher to
+  `v13.0.0-2026-05-07-04-27`, and adding an upstream watch workflow that fails
+  when a newer launcher tag appears, prompting a test for the delegation
+  certificate fix from upstream `dfinity/ic` commit `17524c56`.
+- Started `0.38.9` after `0.38.8` was published by removing the misleading
+  `canic fleet sync` command and replacing it with `canic fleet check <name>`.
+- Folded hidden-support cleanup into `0.38.9`: renamed the hidden `canic-core`
+  `__control_plane_core` bridge to `control_plane_support`, moved neutral
+  formatting to hidden `shared_support::format`, and removed the broad
+  `core_support` caller aliases from `canic-control-plane`.
 - Added a source-level guard test that rejects implicit registration, direct
   raw stable-memory APIs, independent `MemoryManager` access, and
   `RestrictedMemory` carve-outs in Canic-managed runtime crates.

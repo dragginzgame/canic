@@ -5,8 +5,9 @@ use super::super::{
     store::{store_catalog, store_status},
 };
 use crate::{ids::WasmStoreBinding, ops::storage::state::subnet::SubnetStateOps};
-use canic_core::__control_plane_core as cp_core;
-use cp_core::{InternalError, ops::storage::registry::subnet::SubnetRegistryOps};
+use canic_core::control_plane_support::{
+    error::InternalError, ops::storage::registry::subnet::SubnetRegistryOps,
+};
 
 impl WasmStorePublicationWorkflow {
     // Import any already-registered wasm stores into runtime subnet state.

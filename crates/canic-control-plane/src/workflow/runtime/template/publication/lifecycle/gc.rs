@@ -7,11 +7,13 @@ use crate::{
     ids::{WasmStoreBinding, WasmStoreGcMode},
     ops::storage::state::subnet::SubnetStateOps,
 };
-use canic_core::{__control_plane_core as cp_core, log, log::Topic};
-use cp_core::{
-    InternalError, InternalErrorOrigin, cdk::types::Principal, ops::ic::IcOps,
+use canic_core::control_plane_support::{
+    cdk::types::Principal,
+    error::{InternalError, InternalErrorOrigin},
+    ops::ic::IcOps,
     workflow::ic::provision::ProvisionWorkflow,
 };
+use canic_core::{log, log::Topic};
 
 impl WasmStorePublicationWorkflow {
     // Mark the current retired publication store as prepared for store-local GC execution.

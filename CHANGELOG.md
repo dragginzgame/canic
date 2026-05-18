@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.38.x] - 2026-05-17 - Stable memory ABI hard cut
 
+- `0.38.9` removes the misleading `canic fleet sync` surface, replaces it with `canic fleet check <name>`, and cleans up the hidden control-plane support boundary.
+
 - `0.38.8` stops deriving `icp.yaml` from `canic.toml`, makes `canic status` and the legacy `fleet sync` path check ICP project config read-only, pins the checked-in local ICP network to the current v13 launcher tag, and adds an upstream watch so CI flags the first candidate release after the delegation-certificate fix.
 
 - `0.38.7` defragments the Canic core memory map before the ABI layout is frozen and keeps ICP network settings such as `ii`/`nns` owned by `icp.yaml` during fleet sync.

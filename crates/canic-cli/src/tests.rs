@@ -77,9 +77,9 @@ fn command_family_help_returns_ok() {
         &["install", "help"],
         &["fleet"],
         &["fleet", "help"],
+        &["fleet", "check", "help"],
         &["fleet", "create", "help"],
         &["fleet", "list", "help"],
-        &["fleet", "sync", "help"],
         &["fleet", "delete", "help"],
         &["replica"],
         &["replica", "help"],
@@ -112,6 +112,15 @@ fn top_level_info_aliases_are_removed() {
     assert!(matches!(
         run([OsString::from("cycles"), OsString::from("help")]),
         Err(CliError::Usage(_))
+    ));
+}
+
+// Ensure the old fleet sync command is removed in favor of fleet check.
+#[test]
+fn fleet_sync_is_removed() {
+    assert!(matches!(
+        run([OsString::from("fleet"), OsString::from("sync")]),
+        Err(CliError::Fleets(_))
     ));
 }
 
@@ -173,7 +182,7 @@ fn version_flags_return_ok() {
     assert!(
         run([
             OsString::from("fleet"),
-            OsString::from("sync"),
+            OsString::from("check"),
             OsString::from("--version")
         ])
         .is_ok()

@@ -15,14 +15,13 @@ use canic_core::api::lifecycle::metrics::{
     LifecycleMetricsApi,
 };
 use canic_core::api::runtime::install::ModuleSourceRuntimeApi;
-use canic_core::{__control_plane_core as cp_core, log, log::Topic};
-use cp_core::{
-    InternalError,
+use canic_core::control_plane_support::{
     config::schema::SubnetConfig,
     dto::{
         pool::CanisterPoolStatus,
         validation::{ValidationIssue, ValidationReport},
     },
+    error::InternalError,
     ops::{
         config::ConfigOps,
         ic::{IcOps, network::NetworkOps},
@@ -41,6 +40,7 @@ use cp_core::{
         topology::guard::TopologyGuard,
     },
 };
+use canic_core::{log, log::Topic};
 use std::collections::BTreeMap;
 
 ///

@@ -6,12 +6,11 @@ use crate::{
         WasmStorePublicationWorkflow, fleet::PublicationStoreSnapshot,
     },
 };
-use canic_core::__control_plane_core as cp_core;
 use canic_core::api::lifecycle::metrics::{
     WasmStoreMetricOperation, WasmStoreMetricOutcome, WasmStoreMetricReason, WasmStoreMetricSource,
 };
+use canic_core::control_plane_support::{cdk::types::Principal, error::InternalError, protocol};
 use canic_core::{log, log::Topic};
-use cp_core::{InternalError, cdk::types::Principal};
 
 use super::metrics::{
     WasmStorePublicationError, record_wasm_store_metric, record_wasm_store_publish_failed,
@@ -73,7 +72,7 @@ impl WasmStorePublicationWorkflow {
         let result: Result<TemplateChunkSetInfoResponse, InternalError> =
             super::super::super::call_store_result(
                 target_store_pid,
-                cp_core::protocol::CANIC_WASM_STORE_PREPARE,
+                protocol::CANIC_WASM_STORE_PREPARE,
                 (TemplateChunkSetPrepareInput {
                     template_id: manifest.template_id.clone(),
                     version: manifest.version.clone(),

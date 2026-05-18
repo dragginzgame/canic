@@ -18,10 +18,9 @@ use crate::{
         TemplateChunkStore, TemplateManifestRecord, TemplateManifestStateStore,
     },
 };
-use canic_core::__control_plane_core as cp_core;
-use cp_core::{
-    InternalError,
+use canic_core::control_plane_support::{
     cdk::{api::canister_self, structures::storable::Storable, utils::hash::wasm_hash},
+    error::InternalError,
     format::byte_size,
     ops::ic::mgmt::MgmtOps,
 };

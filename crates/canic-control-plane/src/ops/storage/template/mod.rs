@@ -17,8 +17,10 @@ use crate::{
     },
     storage::stable::template::{TemplateManifestRecord, TemplateManifestStateStore},
 };
-use canic_core::__control_plane_core as cp_core;
-use cp_core::{InternalError, InternalErrorOrigin, format::byte_size};
+use canic_core::control_plane_support::{
+    error::{InternalError, InternalErrorOrigin},
+    format::byte_size,
+};
 use std::collections::{BTreeMap, BTreeSet};
 use thiserror::Error as ThisError;
 

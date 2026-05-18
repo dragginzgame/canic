@@ -16,8 +16,10 @@ use crate::{
     },
     workflow::runtime::template::WasmStorePublicationWorkflow,
 };
-use canic_core::{__control_plane_core as cp_core, dto::error::Error};
-use cp_core::{cdk::types::Principal, ops::ic::IcOps};
+use canic_core::{
+    control_plane_support::{cdk::types::Principal, ops::ic::IcOps},
+    dto::error::Error,
+};
 
 /// Return the current replica time in whole seconds.
 #[must_use]

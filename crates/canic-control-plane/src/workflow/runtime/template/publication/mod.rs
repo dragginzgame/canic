@@ -9,8 +9,7 @@ use crate::{
     },
     ids::CanisterRole,
 };
-use canic_core::__control_plane_core as cp_core;
-use cp_core::InternalError;
+use canic_core::control_plane_support::error::InternalError;
 
 const WASM_STORE_ROLE: CanisterRole = CanisterRole::WASM_STORE;
 

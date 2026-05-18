@@ -2,8 +2,9 @@ use crate::dto::template::{
     TemplateManifestResponse, WasmStoreCatalogEntryResponse, WasmStoreStatusResponse,
 };
 use crate::ids::{TemplateReleaseKey, WasmStoreBinding};
-use canic_core::__control_plane_core as cp_core;
-use cp_core::{InternalError, cdk::types::Principal};
+use canic_core::control_plane_support::{
+    cdk::types::Principal, error::InternalError, ops::ic::mgmt::MgmtOps,
+};
 use std::collections::{BTreeMap, BTreeSet};
 
 ///
@@ -108,7 +109,7 @@ impl PublicationStoreSnapshot {
     ) -> Result<(), InternalError> {
         if self.stored_chunk_hashes.is_none() {
             self.stored_chunk_hashes = Some(
-                cp_core::ops::ic::mgmt::MgmtOps::stored_chunks(self.pid)
+                MgmtOps::stored_chunks(self.pid)
                     .await?
                     .into_iter()
                     .collect::<BTreeSet<_>>(),

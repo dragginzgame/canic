@@ -248,7 +248,10 @@ fn discover_project_spec(
     for config_path in choices {
         let fleet = configured_fleet_name(&config_path)
             .map_err(|err| IcpConfigError::Config(err.to_string()))?;
-        if fleet_filter.is_some_and(|filter| filter == fleet) {
+        if let Some(filter) = fleet_filter {
+            if filter != fleet {
+                continue;
+            }
             matched_filter = true;
         }
 
@@ -363,6 +366,7 @@ fn line_indent(line: &str) -> usize {
 mod tests {
     use super::*;
     use crate::test_support::temp_dir;
+    use std::fmt::Write as _;
     use std::fs;
 
     #[test]
@@ -501,6 +505,33 @@ kind = "singleton"
     }
 
     #[test]
+    fn fleet_filter_limits_inspected_project_spec() {
+        let root = temp_dir("canic-icp-inspect-fleet-filter");
+        write_test_config(
+            &root.join("fleets/demo/canic.toml"),
+            "demo",
+            &["root", "app"],
+        );
+        write_test_config(
+            &root.join("fleets/test/canic.toml"),
+            "test",
+            &["root", "scale"],
+        );
+
+        let spec = discover_project_spec(&root, Some("test")).expect("discover spec");
+
+        assert_eq!(spec.canisters, vec!["root", "scale"]);
+        assert_eq!(
+            spec.environments,
+            BTreeMap::from([(
+                "test".to_string(),
+                vec!["root".to_string(), "scale".to_string()]
+            )])
+        );
+        fs::remove_dir_all(root).expect("clean temp dir");
+    }
+
+    #[test]
     fn nested_commands_discover_outer_project_root_with_fleets() {
         let root = temp_dir("canic-icp-root-nested");
         let config = root.join("fleets/toko/canic.toml");
@@ -552,5 +583,19 @@ kind = "singleton"
         assert!(message.contains("no Canic fleet configs found under"));
         assert!(message.contains("fleets/<fleet>/canic.toml"));
         fs::remove_dir_all(root).expect("clean temp dir");
+    }
+
+    fn write_test_config(path: &Path, fleet: &str, roles: &[&str]) {
+        fs::create_dir_all(path.parent().expect("config parent")).expect("create config parent");
+        let mut source = format!("[fleet]\nname = \"{fleet}\"\n");
+        for role in roles {
+            let kind = if *role == "root" { "root" } else { "singleton" };
+            write!(
+                source,
+                "\n[subnets.prime.canisters.{role}]\nkind = \"{kind}\"\n"
+            )
+            .expect("write config source");
+        }
+        fs::write(path, source).expect("write config");
     }
 }

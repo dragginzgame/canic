@@ -4,8 +4,12 @@ use crate::{
     ids::WasmStoreBinding, ops::storage::state::subnet::SubnetStateOps,
     storage::stable::state::subnet::PublicationStoreStateRecord,
 };
-use canic_core::{__control_plane_core as cp_core, log, log::Topic};
-use cp_core::{InternalError, InternalErrorOrigin, cdk::types::Principal, ops::ic::IcOps};
+use canic_core::control_plane_support::{
+    cdk::types::Principal,
+    error::{InternalError, InternalErrorOrigin},
+    ops::ic::IcOps,
+};
+use canic_core::{log, log::Topic};
 
 impl WasmStorePublicationWorkflow {
     // Build the canonical runtime-managed binding for one wasm store canister id.

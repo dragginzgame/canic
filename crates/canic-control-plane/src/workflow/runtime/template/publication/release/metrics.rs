@@ -1,10 +1,9 @@
 use crate::workflow::runtime::template::publication::WasmStorePublicationWorkflow;
-use canic_core::__control_plane_core as cp_core;
 use canic_core::api::lifecycle::metrics::{
     WasmStoreMetricOperation, WasmStoreMetricOutcome, WasmStoreMetricReason, WasmStoreMetricSource,
     WasmStoreMetricsApi,
 };
-use cp_core::InternalError;
+use canic_core::control_plane_support::error::InternalError;
 
 impl WasmStorePublicationWorkflow {
     // Return true when one failed store call represents store-capacity exhaustion.

@@ -6,11 +6,10 @@ use crate::{
         store::{local_chunk, store_chunk, store_chunk_set_info},
     },
 };
-use canic_core::__control_plane_core as cp_core;
 use canic_core::api::lifecycle::metrics::{
     WasmStoreMetricOperation, WasmStoreMetricOutcome, WasmStoreMetricReason, WasmStoreMetricSource,
 };
-use cp_core::{InternalError, cdk::types::Principal};
+use canic_core::control_plane_support::{cdk::types::Principal, error::InternalError};
 
 use super::super::super::{WASM_STORE_BOOTSTRAP_BINDING, store_pid_for_binding};
 use super::metrics::{

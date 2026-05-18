@@ -23,20 +23,20 @@ fn parses_delete_fleet_options() {
     assert_eq!(options.fleet, "demo");
 }
 
-// Ensure fleet sync accepts an optional fleet existence guard.
+// Ensure fleet check requires one fleet name.
 #[test]
-fn parses_sync_fleet_filter() {
-    let options = FleetSyncOptions::parse_test([OsString::from("--fleet"), OsString::from("test")])
-        .expect("parse sync options");
+fn parses_check_fleet() {
+    let options =
+        FleetCheckOptions::parse_test([OsString::from("test")]).expect("parse check options");
 
-    assert_eq!(options.fleet.as_deref(), Some("test"));
+    assert_eq!(options.fleet, "test");
 }
 
-// Ensure unknown fleet sync options fail through usage.
+// Ensure unknown fleet check options fail through usage.
 #[test]
-fn rejects_unknown_sync_option() {
-    let err =
-        FleetSyncOptions::parse_test([OsString::from("--unknown")]).expect_err("parse should fail");
+fn rejects_unknown_check_option() {
+    let err = FleetCheckOptions::parse_test([OsString::from("--unknown")])
+        .expect_err("parse should fail");
 
     assert!(matches!(err, FleetCommandError::Usage(_)));
 }
@@ -111,24 +111,25 @@ fn fleet_usage_lists_subcommands_and_examples() {
 
     assert!(text.contains("Manage Canic fleets"));
     assert!(text.contains("Usage: canic fleet"));
+    assert!(text.contains("check"));
     assert!(text.contains("create"));
     assert!(text.contains("delete"));
     assert!(text.contains("list"));
-    assert!(text.contains("sync"));
+    assert!(!text.contains("sync"));
     assert!(!text.contains("current"));
     assert!(!text.contains("use"));
     assert!(!text.contains("search"));
     assert!(text.contains("Examples:"));
 }
 
-// Ensure fleet sync help explains read-only ICP config checks.
+// Ensure fleet check help explains read-only ICP config checks.
 #[test]
-fn fleet_sync_usage_lists_options_and_examples() {
-    let text = sync_usage();
+fn fleet_check_usage_lists_options_and_examples() {
+    let text = check_usage();
 
-    assert!(text.contains("Check icp.yaml against Canic fleet configs"));
-    assert!(text.contains("Usage: canic fleet sync"));
-    assert!(text.contains("--fleet"));
+    assert!(text.contains("Check icp.yaml for one Canic fleet"));
+    assert!(text.contains("Usage: canic fleet check <name>"));
+    assert!(!text.contains("--fleet"));
     assert!(text.contains("Examples:"));
 }
 

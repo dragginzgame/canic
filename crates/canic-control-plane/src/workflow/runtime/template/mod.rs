@@ -16,13 +16,13 @@ use canic_core::api::lifecycle::metrics::{
     WasmStoreMetricsApi,
 };
 use canic_core::api::runtime::install::ApprovedModuleSource;
-use canic_core::{__control_plane_core as cp_core, dto::error::Error};
-use cp_core::{
-    InternalError, InternalErrorOrigin,
+use canic_core::control_plane_support::{
     cdk::types::Principal,
+    error::{InternalError, InternalErrorOrigin},
     ops::ic::{IcOps, call::CallOps, mgmt::MgmtOps},
     protocol,
 };
+use canic_core::dto::error::Error;
 use std::collections::BTreeSet;
 
 const WASM_STORE_BOOTSTRAP_BINDING: WasmStoreBinding = WasmStoreBinding::new("bootstrap");

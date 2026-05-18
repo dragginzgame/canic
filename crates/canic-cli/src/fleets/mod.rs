@@ -36,17 +36,16 @@ const FLEET_HELP_AFTER: &str = "\
 Examples:
   canic fleet list
   canic fleet create demo
-  canic fleet sync
+  canic fleet check test
   canic fleet delete demo";
 const FLEET_LIST_HELP_AFTER: &str = "\
 Examples:
   canic fleet list
 
 Commands that operate on one fleet take the fleet name as a positional argument.";
-const FLEET_SYNC_HELP_AFTER: &str = "\
+const FLEET_CHECK_HELP_AFTER: &str = "\
 Examples:
-  canic fleet sync
-  canic fleet sync --fleet test";
+  canic fleet check test";
 const FLEET_DELETE_HELP_AFTER: &str = "\
 Examples:
   canic fleet delete demo
@@ -115,12 +114,12 @@ struct DeleteFleetOptions {
 }
 
 ///
-/// FleetSyncOptions
+/// FleetCheckOptions
 ///
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-struct FleetSyncOptions {
-    fleet: Option<String>,
+struct FleetCheckOptions {
+    fleet: String,
 }
 
 ///
@@ -151,12 +150,27 @@ where
         }
         Some((command, args)) => match command.as_str() {
             "create" => run_create(args),
+            "check" => run_check(args),
             "delete" => run_delete(args),
             "list" => run_list(args),
-            "sync" => run_sync(args),
             _ => unreachable!("fleet dispatch command only defines known commands"),
         },
     }
+}
+
+fn run_check<I>(args: I) -> Result<(), FleetCommandError>
+where
+    I: IntoIterator<Item = OsString>,
+{
+    let args = args.into_iter().collect::<Vec<_>>();
+    if print_help_or_version(&args, check_usage, version_text()) {
+        return Ok(());
+    }
+
+    let options = FleetCheckOptions::parse(args)?;
+    let report = inspect_canic_icp_yaml(Some(&options.fleet))?;
+    print_config_report(&report);
+    Ok(())
 }
 
 fn run_create<I>(args: I) -> Result<(), FleetCommandError>
@@ -217,21 +231,6 @@ where
     Ok(())
 }
 
-fn run_sync<I>(args: I) -> Result<(), FleetCommandError>
-where
-    I: IntoIterator<Item = OsString>,
-{
-    let args = args.into_iter().collect::<Vec<_>>();
-    if print_help_or_version(&args, sync_usage, version_text()) {
-        return Ok(());
-    }
-
-    let options = FleetSyncOptions::parse(args)?;
-    let report = inspect_canic_icp_yaml(options.fleet.as_deref())?;
-    print_config_report(&report);
-    Ok(())
-}
-
 impl FleetOptions {
     fn parse<I>(args: I) -> Result<Self, FleetCommandError>
     where
@@ -260,7 +259,7 @@ impl DeleteFleetOptions {
     }
 }
 
-impl FleetSyncOptions {
+impl FleetCheckOptions {
     #[cfg(test)]
     fn parse_test<I>(args: I) -> Result<Self, FleetCommandError>
     where
@@ -273,11 +272,11 @@ impl FleetSyncOptions {
     where
         I: IntoIterator<Item = OsString>,
     {
-        let matches = parse_matches(fleet_sync_command(), args)
-            .map_err(|_| FleetCommandError::Usage(sync_usage()))?;
+        let matches = parse_matches(fleet_check_command(), args)
+            .map_err(|_| FleetCommandError::Usage(check_usage()))?;
 
         Ok(Self {
-            fleet: string_option(&matches, "fleet"),
+            fleet: string_option(&matches, "fleet").expect("clap requires fleet"),
         })
     }
 }
@@ -368,6 +367,11 @@ fn fleet_command() -> ClapCommand {
         .about("Manage Canic fleets")
         .disable_help_flag(true)
         .subcommand(passthrough_subcommand(
+            ClapCommand::new("check")
+                .about("Check icp.yaml for one Canic fleet")
+                .disable_help_flag(true),
+        ))
+        .subcommand(passthrough_subcommand(
             ClapCommand::new("create")
                 .about("Create a minimal Canic fleet")
                 .disable_help_flag(true),
@@ -375,11 +379,6 @@ fn fleet_command() -> ClapCommand {
         .subcommand(passthrough_subcommand(
             ClapCommand::new("list")
                 .about("List config-defined Canic fleets")
-                .disable_help_flag(true),
-        ))
-        .subcommand(passthrough_subcommand(
-            ClapCommand::new("sync")
-                .about("Check icp.yaml against Canic fleet configs")
                 .disable_help_flag(true),
         ))
         .subcommand(passthrough_subcommand(
@@ -399,18 +398,18 @@ fn fleet_list_command() -> ClapCommand {
         .after_help(FLEET_LIST_HELP_AFTER)
 }
 
-fn fleet_sync_command() -> ClapCommand {
-    ClapCommand::new("sync")
-        .bin_name("canic fleet sync")
-        .about("Check icp.yaml against Canic fleet configs")
+fn fleet_check_command() -> ClapCommand {
+    ClapCommand::new("check")
+        .bin_name("canic fleet check")
+        .about("Check icp.yaml for one Canic fleet")
         .disable_help_flag(true)
         .arg(
             value_arg("fleet")
-                .long("fleet")
                 .value_name("name")
-                .help("Require this fleet to exist before checking icp.yaml"),
+                .required(true)
+                .help("Config-defined fleet name to check"),
         )
-        .after_help(FLEET_SYNC_HELP_AFTER)
+        .after_help(FLEET_CHECK_HELP_AFTER)
 }
 
 fn fleet_delete_command() -> ClapCommand {
@@ -516,8 +515,8 @@ fn list_usage() -> String {
     command.render_help().to_string()
 }
 
-fn sync_usage() -> String {
-    let mut command = fleet_sync_command();
+fn check_usage() -> String {
+    let mut command = fleet_check_command();
     command.render_help().to_string()
 }
 

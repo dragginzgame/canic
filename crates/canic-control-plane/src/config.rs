@@ -1,9 +1,8 @@
 use crate::{ids::CanisterRole, schema::WasmStoreConfig};
-use canic_core::{
-    __control_plane_core as cp_core,
+use canic_core::control_plane_support::{
     error::{InternalError, InternalErrorOrigin},
+    ops::{config::ConfigOps, runtime::env::EnvOps},
 };
-use cp_core::ops::{config::ConfigOps, runtime::env::EnvOps};
 use std::collections::BTreeSet;
 
 /// Return the implicit store policy used by the current subnet.

@@ -6,8 +6,11 @@ use crate::{
     storage::stable::state::subnet::{PublicationStoreStateRecord, WasmStoreRecord},
     workflow::runtime::template::publication::WasmStorePublicationWorkflow,
 };
-use canic_core::__control_plane_core as cp_core;
-use cp_core::{InternalError, InternalErrorOrigin, cdk::types::Principal};
+use canic_core::control_plane_support::{
+    cdk::types::Principal,
+    error::{InternalError, InternalErrorOrigin},
+    format::byte_size,
+};
 use std::collections::BTreeSet;
 
 ///
@@ -172,11 +175,11 @@ impl PublicationStoreFleet {
                 occupied_store_bytes: 0,
                 occupied_store_size: "0.00 B".to_string(),
                 max_store_bytes: config.max_store_bytes(),
-                max_store_size: cp_core::format::byte_size(config.max_store_bytes()),
+                max_store_size: byte_size(config.max_store_bytes()),
                 remaining_store_bytes: config.max_store_bytes(),
-                remaining_store_size: cp_core::format::byte_size(config.max_store_bytes()),
+                remaining_store_size: byte_size(config.max_store_bytes()),
                 headroom_bytes: config.headroom_bytes(),
-                headroom_size: config.headroom_bytes().map(cp_core::format::byte_size),
+                headroom_size: config.headroom_bytes().map(byte_size),
                 within_headroom: false,
                 template_count: 0,
                 max_templates: config.max_templates(),

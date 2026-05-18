@@ -1,6 +1,6 @@
 //! Host-side formatting helpers shared by operator tools.
 
-pub use canic_core::__control_plane_core::format::{byte_size, cycles_tc};
+pub use canic_core::shared_support::format::{byte_size, cycles_tc};
 
 /// Format the IC-relevant uncompressed wasm size, with gzip size as secondary.
 #[must_use]

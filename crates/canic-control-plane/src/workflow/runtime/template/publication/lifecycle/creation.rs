@@ -4,12 +4,12 @@ use super::super::{
     fleet::{PublicationPlacement, PublicationPlacementAction, PublicationStoreFleet},
 };
 use crate::{config, ops::storage::state::subnet::SubnetStateOps};
-use canic_core::{__control_plane_core as cp_core, log, log::Topic};
-use cp_core::{
-    InternalError, InternalErrorOrigin,
+use canic_core::control_plane_support::{
+    error::{InternalError, InternalErrorOrigin},
     ops::{ic::IcOps, storage::registry::subnet::SubnetRegistryOps},
     workflow::canister_lifecycle::{CanisterLifecycleEvent, CanisterLifecycleWorkflow},
 };
+use canic_core::{log, log::Topic};
 
 impl WasmStorePublicationWorkflow {
     // Create one new wasm store canister and register its runtime-managed binding.

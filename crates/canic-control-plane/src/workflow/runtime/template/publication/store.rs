@@ -7,8 +7,11 @@ use crate::{
     ops::storage::{state::subnet::SubnetStateOps, template::TemplateChunkedOps},
 };
 use candid::CandidType;
-use canic_core::__control_plane_core as cp_core;
-use cp_core::{InternalError, InternalErrorOrigin, cdk::types::Principal, protocol};
+use canic_core::control_plane_support::{
+    cdk::types::Principal,
+    error::{InternalError, InternalErrorOrigin},
+    protocol,
+};
 
 use super::super::call_store_result;
 

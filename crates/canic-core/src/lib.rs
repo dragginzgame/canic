@@ -19,12 +19,12 @@
 //! The default flow is: endpoints → workflow → domain/decision helpers → ops → storage.
 
 #[doc(hidden)]
-pub mod __control_plane_core;
-#[doc(hidden)]
 pub mod access;
 pub mod api;
 #[doc(hidden)]
 pub mod bootstrap;
+#[doc(hidden)]
+pub mod control_plane_support;
 #[doc(hidden)]
 pub mod dispatch;
 pub mod dto;
@@ -37,6 +37,8 @@ pub mod ingress;
 pub mod log;
 pub mod perf;
 pub mod protocol;
+#[doc(hidden)]
+pub mod shared_support;
 #[cfg(test)]
 pub mod test;
 

@@ -8,8 +8,10 @@ use crate::{
         fleet::{PublicationStoreFleet, PublicationStoreSnapshot},
     },
 };
-use canic_core::__control_plane_core as cp_core;
-use cp_core::{InternalError, InternalErrorOrigin, ops::ic::IcOps};
+use canic_core::control_plane_support::{
+    error::{InternalError, InternalErrorOrigin},
+    ops::ic::IcOps,
+};
 
 impl WasmStorePublicationWorkflow {
     // Return the deterministic approved manifests that still belong to the configured managed fleet.
