@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.39.x] - 2026-05-18 - `ic-memory` extraction
 
-- `0.39.2` wires `canic-memory` through local `ic-memory` validation, tightens validated-session boundaries, and adds a generic allocation-ledger projection.
+- `0.39.2` keeps the `ic-memory` extraction local while tightening generic validated-session boundaries and preserving `canic-memory` as a publishable self-contained crate.
 
 - `0.39.1` adds an AppIndex-backed `caller::has_app_role(role)` access predicate for internal sibling checks.
 

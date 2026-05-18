@@ -293,29 +293,6 @@ impl MemoryApi {
             Ok(LedgerSnapshot::from(snapshot))
         }
     }
-
-    /// Project the persisted Canic ABI ledger into the generic `ic-memory`
-    /// allocation ledger model.
-    ///
-    /// This is a read-only diagnostic bridge. It does not change the persisted
-    /// Canic ledger format or open application/framework memory slots.
-    pub fn allocation_ledger_snapshot() -> Result<ic_memory::AllocationLedger, MemoryRegistryError>
-    {
-        ledger::try_allocation_ledger()
-    }
-
-    /// Export the persisted Canic ABI ledger through the generic `ic-memory`
-    /// diagnostic shape.
-    ///
-    /// Authorization for exposing this export is owned by the embedding runtime.
-    pub fn allocation_diagnostic_export() -> Result<ic_memory::DiagnosticExport, MemoryRegistryError>
-    {
-        let ledger = Self::allocation_ledger_snapshot()?;
-        Ok(ic_memory::DiagnosticExport::from_ledger(
-            &ledger,
-            ic_memory::AllocationSlotDescriptor::memory_manager(ledger::MEMORY_LAYOUT_LEDGER_ID),
-        ))
-    }
 }
 
 impl From<ledger::MemoryLayoutLedgerSnapshot> for LedgerSnapshot {
@@ -672,42 +649,6 @@ mod tests {
                 && entry.crate_name == "crate_a"
                 && entry.label == "slot"
                 && entry.stable_key == "legacy.crate_a.slot.v1"
-        }));
-    }
-
-    #[test]
-    fn allocation_ledger_snapshot_projects_generic_records() {
-        reset_for_tests();
-        defer_reserve_range("crate_a", 100, 102).expect("defer range");
-        defer_register(101, "crate_a", "slot").expect("defer register");
-        MemoryApi::bootstrap_pending().expect("bootstrap registry");
-
-        let snapshot = MemoryApi::allocation_ledger_snapshot().expect("allocation ledger snapshot");
-
-        assert!(snapshot.allocation_history.records.iter().any(|record| {
-            record.stable_key.as_str() == "legacy.crate_a.slot.v1"
-                && record.slot == ic_memory::AllocationSlotDescriptor::memory_manager(101)
-        }));
-    }
-
-    #[test]
-    fn allocation_diagnostic_export_uses_generic_shape() {
-        reset_for_tests();
-        defer_reserve_range("crate_a", 100, 102).expect("defer range");
-        defer_register(101, "crate_a", "slot").expect("defer register");
-        MemoryApi::bootstrap_pending().expect("bootstrap registry");
-
-        let export =
-            MemoryApi::allocation_diagnostic_export().expect("allocation diagnostic export");
-
-        assert_eq!(
-            export.ledger_anchor,
-            ic_memory::AllocationSlotDescriptor::memory_manager(ledger::MEMORY_LAYOUT_LEDGER_ID)
-        );
-        assert!(export.records.iter().any(|record| {
-            record.allocation.stable_key.as_str() == "legacy.crate_a.slot.v1"
-                && record.allocation.slot
-                    == ic_memory::AllocationSlotDescriptor::memory_manager(101)
         }));
     }
 }

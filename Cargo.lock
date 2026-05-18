@@ -435,7 +435,6 @@ version = "0.39.3"
 dependencies = [
  "canic-cdk",
  "ctor",
- "ic-memory",
  "serde",
  "serde_cbor",
  "thiserror 2.0.18",
