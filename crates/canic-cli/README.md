@@ -103,12 +103,12 @@ The local ICP CLI replica does not persist canister state across stop/start.
 If `canic status` reports a local fleet as `lost`, reinstall the fleet before
 running backup or restore commands against that local environment. `canic status`
 and `canic replica status` show the configured local gateway port; use
-`canic replica start --port <port>` to update this project's `icp.yaml`
-`gateway.port` before starting. Use `canic replica status --json` when scripts
-need the structured ICP CLI local-network status payload.
+`canic replica start --port <port>` to require this project's `icp.yaml`
+`gateway.port` to match before starting. Use `canic replica status --json` when
+scripts need the structured ICP CLI local-network status payload.
 Fleet configs live under the project-root `fleets/` directory. Commands
 launched from nested directories discover that outer project root and keep
-generated `icp.yaml`, `.icp/`, and `.canic/` state there.
+ICP project config plus `.icp/` and `.canic/` state there.
 
 List saved fleet configs:
 

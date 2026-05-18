@@ -28,6 +28,7 @@ fn renders_status_report() {
         replica: ReplicaStatus::Running,
         replica_port: "8000".to_string(),
         icp_cli: "icp 0.2.5".to_string(),
+        icp_project: "ok (icp.yaml)".to_string(),
         fleets: vec![
             StatusFleetRow {
                 fleet: "demo".to_string(),
@@ -51,6 +52,7 @@ fn renders_status_report() {
         [
             "Replica: running (local, port 8000)",
             "ICP CLI: icp 0.2.5",
+            "ICP project: ok (icp.yaml)",
             "Fleets:  1/2 deployed (network local)",
             "",
             "FLEET   DEPLOYED   CONFIG                   CANISTERS   ROOT",
@@ -70,12 +72,13 @@ fn renders_empty_status_report() {
         replica: ReplicaStatus::Stopped,
         replica_port: "8001".to_string(),
         icp_cli: "icp 0.2.5".to_string(),
+        icp_project: "not checked (no Canic fleet configs)".to_string(),
         fleets: Vec::new(),
     };
 
     assert_eq!(
         render_status_report(&report),
-        "Replica: stopped (local, port 8001)\nICP CLI: icp 0.2.5\nFleets:  0/0 deployed (network local)"
+        "Replica: stopped (local, port 8001)\nICP CLI: icp 0.2.5\nICP project: not checked (no Canic fleet configs)\nFleets:  0/0 deployed (network local)"
     );
 }
 
@@ -88,12 +91,13 @@ fn renders_http_fallback_replica_status() {
         replica: ReplicaStatus::RunningHttpFallback,
         replica_port: "8000".to_string(),
         icp_cli: "icp 0.2.6".to_string(),
+        icp_project: "ok (icp.yaml)".to_string(),
         fleets: Vec::new(),
     };
 
     assert_eq!(
         render_status_report(&report),
-        "Replica: running (local, port 8000, HTTP reachable; ICP CLI status stopped)\nICP CLI: icp 0.2.6\nFleets:  0/0 deployed (network local)"
+        "Replica: running (local, port 8000, HTTP reachable; ICP CLI status stopped)\nICP CLI: icp 0.2.6\nICP project: ok (icp.yaml)\nFleets:  0/0 deployed (network local)"
     );
 }
 
@@ -105,6 +109,7 @@ fn renders_lost_local_fleet_note() {
         replica: ReplicaStatus::Running,
         replica_port: "8000".to_string(),
         icp_cli: "icp 0.2.6".to_string(),
+        icp_project: "incomplete (missing canisters: app)".to_string(),
         fleets: vec![StatusFleetRow {
             fleet: "test".to_string(),
             deployed: LOCAL_LOST_DEPLOYMENT.to_string(),

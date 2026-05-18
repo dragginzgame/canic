@@ -134,13 +134,12 @@ The full schema lives in [`CONFIG.md`](CONFIG.md).
 
 ## Build And Install Locally
 
-Start the local ICP CLI replica, sync project config, install the fleet, then
-query the deployed root registry:
+Check that `icp.yaml` contains the matching project config, start the local ICP
+CLI replica, install the fleet, then query the deployed root registry:
 
 ```bash
-canic replica start --background
-canic fleet sync --fleet test
 canic status
+canic replica start --background
 canic install --profile fast test
 canic info list test
 ```
@@ -199,8 +198,8 @@ gone from the restarted local replica; run `canic install <fleet>` to recreate
 the local deployment.
 
 Fleet configs live under project-root `fleets/`. Commands launched from nested
-directories discover the outer project root and keep generated `icp.yaml`,
-`.icp/`, and `.canic/` state there.
+directories discover the outer project root and keep ICP project config plus
+`.icp/` and `.canic/` state there.
 
 ## Backup And Restore
 

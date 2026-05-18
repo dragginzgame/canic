@@ -334,6 +334,12 @@ inspect only the files needed for the current task.
 - Reworked the PR #8 topology sync direction for `0.38.7`: local ICP network
   settings such as `ii` and `nns` remain in `icp.yaml`, while Canic sync stays
   limited to Canic-owned canister and environment sections.
+- Started `0.38.8` by stopping Canic from deriving or rewriting `icp.yaml` from
+  `canic.toml`, making `canic status` and the legacy `fleet sync` path check
+  ICP project config read-only, pinning the checked-in local ICP network
+  launcher to `v13.0.0-2026-05-07-04-27`, and adding an upstream watch workflow
+  that fails when a newer launcher tag appears, prompting a test for the
+  delegation certificate fix from upstream `dfinity/ic` commit `17524c56`.
 - Added a source-level guard test that rejects implicit registration, direct
   raw stable-memory APIs, independent `MemoryManager` access, and
   `RestrictedMemory` carve-outs in Canic-managed runtime crates.

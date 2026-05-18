@@ -9,7 +9,7 @@ use canic_host::{
     icp::IcpCli,
     icp_config::{
         DEFAULT_LOCAL_GATEWAY_PORT, configured_local_gateway_port_from_root,
-        resolve_current_canic_icp_root,
+        inspect_canic_icp_yaml_from_root, resolve_current_canic_icp_root,
     },
     install_root::discover_project_canic_config_choices,
     installed_fleet::{
@@ -76,6 +76,7 @@ struct StatusReport {
     replica: ReplicaStatus,
     replica_port: String,
     icp_cli: String,
+    icp_project: String,
     fleets: Vec<StatusFleetRow>,
 }
 
@@ -139,6 +140,7 @@ fn load_status_report(options: &StatusOptions) -> Result<StatusReport, StatusCom
         resolve_current_canic_icp_root().map_err(|err| StatusCommandError::Host(Box::new(err)))?;
     let choices = discover_project_canic_config_choices(&icp_root)?;
     let icp_cli = load_icp_cli_version(options);
+    let icp_project = load_icp_project_config_status(&icp_root, &choices);
     let replica = load_replica_status(options, &icp_root);
     let verify_local_roots = options.network == local_network()
         && matches!(
@@ -156,6 +158,7 @@ fn load_status_report(options: &StatusOptions) -> Result<StatusReport, StatusCom
         replica,
         replica_port: load_replica_port(&icp_root),
         icp_cli,
+        icp_project,
         fleets,
     })
 }
@@ -188,6 +191,22 @@ fn load_replica_port(icp_root: &Path) -> String {
     configured_local_gateway_port_from_root(icp_root)
         .unwrap_or(DEFAULT_LOCAL_GATEWAY_PORT)
         .to_string()
+}
+
+fn load_icp_project_config_status(icp_root: &Path, choices: &[std::path::PathBuf]) -> String {
+    if choices.is_empty() {
+        return "not checked (no Canic fleet configs)".to_string();
+    }
+
+    match inspect_canic_icp_yaml_from_root(icp_root, None) {
+        Ok(report) if report.is_ready() => {
+            format!("ok ({})", display_workspace_path(icp_root, &report.path))
+        }
+        Ok(report) => {
+            format!("incomplete ({})", report.issues().join("; "))
+        }
+        Err(err) => format!("error ({err})"),
+    }
 }
 
 fn status_fleet_row(
@@ -294,6 +313,7 @@ fn render_status_report(report: &StatusReport) -> String {
     let mut lines = vec![
         format!("Replica: {}", report.replica.label(&report.replica_port)),
         format!("ICP CLI: {}", report.icp_cli),
+        format!("ICP project: {}", report.icp_project),
         format!(
             "Fleets:  {deployed}/{configured} deployed (network {})",
             report.network

@@ -121,12 +121,12 @@ fn fleet_usage_lists_subcommands_and_examples() {
     assert!(text.contains("Examples:"));
 }
 
-// Ensure fleet sync help explains ICP config reconciliation.
+// Ensure fleet sync help explains read-only ICP config checks.
 #[test]
 fn fleet_sync_usage_lists_options_and_examples() {
     let text = sync_usage();
 
-    assert!(text.contains("Sync fleet configs into icp.yaml"));
+    assert!(text.contains("Check icp.yaml against Canic fleet configs"));
     assert!(text.contains("Usage: canic fleet sync"));
     assert!(text.contains("--fleet"));
     assert!(text.contains("Examples:"));

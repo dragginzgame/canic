@@ -10,9 +10,9 @@ use crate::{
 use canic_host::{
     icp::{IcpCli, IcpCommandError},
     icp_config::{
-        DEFAULT_LOCAL_GATEWAY_PORT, IcpConfigError, configured_local_gateway_port_from_root,
-        resolve_current_canic_icp_root, set_configured_local_gateway_port_in_root,
-        sync_canic_icp_yaml,
+        DEFAULT_LOCAL_GATEWAY_PORT, IcpConfigError, IcpProjectConfigReport,
+        configured_local_gateway_port_from_root, inspect_canic_icp_yaml,
+        resolve_current_canic_icp_root,
     },
     replica_query,
 };
@@ -61,9 +61,9 @@ pub enum ReplicaCommandError {
     InvalidPort { value: String },
 
     #[error(
-        "cannot change local replica port while this project's local ICP network is running (current {current}, requested {requested}); stop it first, then retry"
+        "configured local replica port is {current}, but --port requested {requested}\nEdit icp.yaml networks.local.gateway.port, then retry."
     )]
-    PortChangeRequiresStopped { current: u16, requested: u16 },
+    PortMismatch { current: u16, requested: u16 },
 
     #[error(
         "this project's local ICP network is not running, but a local ICP replica is reachable. Canic could not identify the owner, so it will not stop an unknown foreground process.\nIf you started `canic replica start` without --background, stop it with Ctrl-C in that terminal. Otherwise stop the owning ICP project/network."
@@ -71,9 +71,14 @@ pub enum ReplicaCommandError {
     ForeignLocalReplicaReachable,
 
     #[error(
-        "ICP project config is missing for this directory.\n`canic replica start` creates icp.yaml from Canic fleet configs, so keep a config at fleets/<fleet>/canic.toml.\nIf you want to prepare the file explicitly, run: canic fleet sync --fleet <fleet>"
+        "ICP project config is missing for this directory.\nCreate or repair icp.yaml from the project root, then run `canic status` to check it."
     )]
     ProjectManifestMissing,
+
+    #[error(
+        "ICP project config is incomplete:\n{details}\nEdit icp.yaml, then run `canic status` to check it."
+    )]
+    ProjectConfigIncomplete { details: String },
 
     #[error("icp command failed: {command}\n{stderr}")]
     IcpFailed { command: String, stderr: String },
@@ -198,21 +203,16 @@ where
     }
 
     let options = ReplicaOptions::parse_start(args)?;
-    let icp_root = sync_replica_project_config()?;
-    ensure_replica_port_config(&icp_root)?;
+    let report = inspect_canic_icp_yaml(None)?;
+    ensure_replica_project_config(&report)?;
+    let icp_root = report.icp_root.clone();
+    ensure_requested_replica_port(&icp_root, options.port)?;
     let icp = IcpCli::new(options.icp, None, None);
     let icp_cli_running = icp
         .local_replica_project_running_in(&icp_root, options.debug)
         .map_err(replica_icp_error)?;
     let local_gateway_reachable = local_replica_http_reachable(&icp_root);
     if local_gateway_reachable {
-        if let Some(requested) = options.port {
-            let current = configured_local_gateway_port_from_root(&icp_root)
-                .unwrap_or(DEFAULT_LOCAL_GATEWAY_PORT);
-            if current != requested {
-                return Err(ReplicaCommandError::PortChangeRequiresStopped { current, requested });
-            }
-        }
         if !icp_cli_running && local_gateway_reachable {
             println!(
                 "Replica already running: local (port {}, HTTP reachable; ICP CLI status stopped)",
@@ -232,15 +232,6 @@ where
             replica_port_label(&icp_root)
         );
     }
-    if let Some(port) = options.port {
-        let path = set_configured_local_gateway_port_in_root(&icp_root, port)?;
-        println!("Replica port configured: {port} ({})", path.display());
-    } else {
-        let port = configured_local_gateway_port_from_root(&icp_root)
-            .unwrap_or(DEFAULT_LOCAL_GATEWAY_PORT);
-        set_configured_local_gateway_port_in_root(&icp_root, port)?;
-    }
-
     let output = icp
         .local_replica_start_in(&icp_root, options.background, options.debug)
         .map_err(replica_icp_error)?;
@@ -373,19 +364,41 @@ where
     Ok(())
 }
 
-fn sync_replica_project_config() -> Result<std::path::PathBuf, ReplicaCommandError> {
-    let report = sync_canic_icp_yaml(None)?;
-    if report.changed {
-        println!("Replica project config synced: {}", report.path.display());
+fn ensure_replica_project_config(
+    report: &IcpProjectConfigReport,
+) -> Result<(), ReplicaCommandError> {
+    if report.is_ready() {
+        return Ok(());
     }
-    Ok(report.icp_root)
+
+    Err(ReplicaCommandError::ProjectConfigIncomplete {
+        details: format_config_issues(report),
+    })
 }
 
-fn ensure_replica_port_config(icp_root: &Path) -> Result<(), ReplicaCommandError> {
-    let port =
+fn ensure_requested_replica_port(
+    icp_root: &Path,
+    requested: Option<u16>,
+) -> Result<(), ReplicaCommandError> {
+    let Some(requested) = requested else {
+        return Ok(());
+    };
+
+    let current =
         configured_local_gateway_port_from_root(icp_root).unwrap_or(DEFAULT_LOCAL_GATEWAY_PORT);
-    set_configured_local_gateway_port_in_root(icp_root, port)?;
+    if current != requested {
+        return Err(ReplicaCommandError::PortMismatch { current, requested });
+    }
     Ok(())
+}
+
+fn format_config_issues(report: &IcpProjectConfigReport) -> String {
+    report
+        .issues()
+        .into_iter()
+        .map(|issue| format!("  - {issue}"))
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 fn print_command_output(output: &str) {
@@ -534,7 +547,7 @@ fn replica_start_command() -> ClapCommand {
         value_arg("port")
             .long("port")
             .value_name("PORT")
-            .help("Set the local gateway port in icp.yaml before starting"),
+            .help("Require icp.yaml to use this local gateway port"),
     )
     .after_help(REPLICA_START_HELP_AFTER)
 }

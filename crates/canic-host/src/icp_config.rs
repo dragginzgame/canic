@@ -9,7 +9,6 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     error::Error,
     fmt, fs,
-    io::ErrorKind,
     path::{Path, PathBuf},
 };
 
@@ -59,16 +58,51 @@ impl From<std::io::Error> for IcpConfigError {
 }
 
 ///
-/// IcpProjectSyncReport
+/// IcpProjectConfigReport
 ///
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct IcpProjectSyncReport {
+pub struct IcpProjectConfigReport {
     pub path: PathBuf,
     pub icp_root: PathBuf,
-    pub changed: bool,
+    pub icp_yaml_present: bool,
     pub canisters: Vec<String>,
     pub environments: Vec<String>,
+    pub missing_canisters: Vec<String>,
+    pub missing_environments: Vec<String>,
+    pub local_network_present: bool,
+}
+
+impl IcpProjectConfigReport {
+    pub fn is_ready(&self) -> bool {
+        self.icp_yaml_present
+            && self.local_network_present
+            && self.missing_canisters.is_empty()
+            && self.missing_environments.is_empty()
+    }
+
+    pub fn issues(&self) -> Vec<String> {
+        let mut issues = Vec::new();
+        if !self.icp_yaml_present {
+            issues.push(format!("missing {}", self.path.display()));
+        }
+        if !self.local_network_present {
+            issues.push("missing local network entry".to_string());
+        }
+        if !self.missing_canisters.is_empty() {
+            issues.push(format!(
+                "missing canisters: {}",
+                self.missing_canisters.join(", ")
+            ));
+        }
+        if !self.missing_environments.is_empty() {
+            issues.push(format!(
+                "missing environments: {}",
+                self.missing_environments.join(", ")
+            ));
+        }
+        issues
+    }
 }
 
 /// Return the configured local ICP gateway port, falling back to ICP's default.
@@ -80,46 +114,61 @@ pub fn configured_local_gateway_port() -> Result<u16, IcpConfigError> {
 /// Return the configured local ICP gateway port for one ICP project root.
 pub fn configured_local_gateway_port_from_root(root: &Path) -> Result<u16, IcpConfigError> {
     let source = fs::read_to_string(root.join(ICP_CONFIG_FILE))?;
-    Ok(configured_local_gateway_port_from_source(&source))
+    Ok(local_gateway_port_from_yaml(&source))
 }
 
-/// Set the local ICP gateway port in one ICP project root.
-pub fn set_configured_local_gateway_port_in_root(
-    root: &Path,
-    port: u16,
-) -> Result<PathBuf, IcpConfigError> {
-    let path = root.join(ICP_CONFIG_FILE);
-    let source = fs::read_to_string(&path)?;
-    let updated = upsert_local_gateway_port(&source, port);
-    fs::write(&path, updated)?;
-    Ok(path)
-}
-
-/// Reconcile the Canic-managed canister and environment sections in `icp.yaml`.
-pub fn sync_canic_icp_yaml(
+/// Inspect whether `icp.yaml` contains the entries implied by Canic fleet configs.
+pub fn inspect_canic_icp_yaml(
     fleet_filter: Option<&str>,
-) -> Result<IcpProjectSyncReport, IcpConfigError> {
+) -> Result<IcpProjectConfigReport, IcpConfigError> {
     let root = resolve_current_canic_icp_root()?;
-    let path = root.join(ICP_CONFIG_FILE);
-    let source = match fs::read_to_string(&path) {
-        Ok(source) => source,
-        Err(err) if err.kind() == ErrorKind::NotFound => String::new(),
-        Err(err) => return Err(err.into()),
-    };
-    let spec = discover_project_spec(&root, fleet_filter)?;
-    let updated = sync_canic_sections(&source, &spec.canisters, &spec.environments);
-    let changed = updated != source;
-    if changed {
-        fs::write(&path, updated)?;
-    }
+    inspect_canic_icp_yaml_from_root(&root, fleet_filter)
+}
 
-    Ok(IcpProjectSyncReport {
+/// Inspect one ICP project root without mutating its `icp.yaml`.
+pub fn inspect_canic_icp_yaml_from_root(
+    root: &Path,
+    fleet_filter: Option<&str>,
+) -> Result<IcpProjectConfigReport, IcpConfigError> {
+    let path = root.join(ICP_CONFIG_FILE);
+    let (source, icp_yaml_present) = read_optional_icp_yaml(&path)?;
+    let spec = discover_project_spec(&root, fleet_filter)?;
+    let configured_canisters = top_level_named_items(&source, "canisters:");
+    let configured_environments = top_level_named_items(&source, "environments:");
+    let lines = source.lines().collect::<Vec<_>>();
+    let local_network_present = local_network_block(&lines).is_some();
+
+    let missing_canisters = spec
+        .canisters
+        .iter()
+        .filter(|name| !configured_canisters.contains(*name))
+        .cloned()
+        .collect::<Vec<_>>();
+    let missing_environments = spec
+        .environments
+        .keys()
+        .filter(|name| !configured_environments.contains(*name))
+        .cloned()
+        .collect::<Vec<_>>();
+
+    Ok(IcpProjectConfigReport {
         path,
-        icp_root: root,
-        changed,
+        icp_root: root.to_path_buf(),
+        icp_yaml_present,
         canisters: spec.canisters,
         environments: spec.environments.into_keys().collect(),
+        missing_canisters,
+        missing_environments,
+        local_network_present,
     })
+}
+
+fn read_optional_icp_yaml(path: &Path) -> Result<(String, bool), IcpConfigError> {
+    match fs::read_to_string(path) {
+        Ok(source) => Ok((source, true)),
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok((String::new(), false)),
+        Err(err) => Err(err.into()),
+    }
 }
 
 fn current_icp_root() -> Result<PathBuf, IcpConfigError> {
@@ -184,7 +233,7 @@ fn discover_project_spec(
         .map_err(|err| IcpConfigError::Config(err.to_string()))?;
     if choices.is_empty() {
         return Err(IcpConfigError::Config(format!(
-            "no Canic fleet configs found under {}\nCreate fleets/<fleet>/canic.toml, then rerun `canic replica start` or `canic fleet sync --fleet <fleet>`.",
+            "no Canic fleet configs found under {}\nCreate fleets/<fleet>/canic.toml, then add matching entries to icp.yaml and rerun `canic status`.",
             display_project_fleet_roots(root)
         )));
     }
@@ -234,120 +283,6 @@ fn display_project_fleet_roots(root: &Path) -> String {
         .join(" or ")
 }
 
-fn sync_canic_sections(
-    source: &str,
-    canisters: &[String],
-    environments: &BTreeMap<String, Vec<String>>,
-) -> String {
-    let without_canisters = remove_top_level_section(source, "canisters:");
-    let without_environments = remove_top_level_section(&without_canisters, "environments:");
-    let (networks, rest) = take_top_level_section(&without_environments, "networks:");
-    let mut sections = vec![render_canisters_section(canisters)];
-    if let Some(networks) = networks {
-        sections.push(networks);
-    }
-    sections.push(render_environments_section(environments));
-    let rest = rest.trim();
-    if !rest.is_empty() {
-        sections.push(rest.to_string());
-    }
-
-    let mut updated = sections.join("\n\n");
-    updated.push('\n');
-    updated
-}
-
-fn take_top_level_section(source: &str, header: &str) -> (Option<String>, String) {
-    let mut lines = source.lines().map(str::to_string).collect::<Vec<_>>();
-    let line_refs = lines.iter().map(String::as_str).collect::<Vec<_>>();
-    let Some((start, end)) = top_level_section(&line_refs, header) else {
-        return (None, source.to_string());
-    };
-
-    let section = lines[start..end].join("\n");
-    lines.drain(start..end);
-
-    let rest = compact_blank_lines(lines).join("\n");
-    (Some(section), rest)
-}
-
-fn render_canisters_section(canisters: &[String]) -> String {
-    if canisters.is_empty() {
-        return "canisters: []".to_string();
-    }
-
-    let mut lines = vec!["canisters:".to_string()];
-    for (index, canister) in canisters.iter().enumerate() {
-        if index > 0 {
-            lines.push(String::new());
-        }
-        lines.extend([
-            format!("  - name: {canister}"),
-            "    build:".to_string(),
-            "      steps:".to_string(),
-            "        - type: script".to_string(),
-            "          commands:".to_string(),
-            format!(
-                "            - cargo run -q -p canic-host --example build_artifact -- {canister}"
-            ),
-        ]);
-    }
-    lines.join("\n")
-}
-
-fn render_environments_section(environments: &BTreeMap<String, Vec<String>>) -> String {
-    if environments.is_empty() {
-        return "environments: []".to_string();
-    }
-
-    environments
-        .iter()
-        .enumerate()
-        .flat_map(|(index, (environment, canisters))| {
-            let mut lines = Vec::new();
-            if index > 0 {
-                lines.push(String::new());
-            }
-            if index == 0 {
-                lines.push("environments:".to_string());
-            }
-            lines.extend([
-                format!("  - name: {environment}"),
-                "    network: local".to_string(),
-                format!("    canisters: [{}]", canisters.join(", ")),
-            ]);
-            lines
-        })
-        .collect::<Vec<_>>()
-        .join("\n")
-}
-
-fn remove_top_level_section(source: &str, header: &str) -> String {
-    let mut lines = source.lines().map(str::to_string).collect::<Vec<_>>();
-    let line_refs = lines.iter().map(String::as_str).collect::<Vec<_>>();
-    let Some((start, end)) = top_level_section(&line_refs, header) else {
-        return source.to_string();
-    };
-    lines.drain(start..end);
-
-    compact_blank_lines(lines).join("\n")
-}
-
-fn compact_blank_lines(lines: Vec<String>) -> Vec<String> {
-    let mut compacted = Vec::<String>::new();
-    let mut previous_blank = false;
-    for line in lines {
-        let blank = line.trim().is_empty();
-        if blank && previous_blank {
-            continue;
-        }
-        compacted.push(line);
-        previous_blank = blank;
-    }
-
-    compacted
-}
-
 fn top_level_section(lines: &[&str], header: &str) -> Option<(usize, usize)> {
     let start = lines
         .iter()
@@ -363,7 +298,7 @@ fn top_level_section(lines: &[&str], header: &str) -> Option<(usize, usize)> {
     Some((start, end))
 }
 
-fn configured_local_gateway_port_from_source(source: &str) -> u16 {
+fn local_gateway_port_from_yaml(source: &str) -> u16 {
     let lines = source.lines().collect::<Vec<_>>();
     let Some((start, end)) = local_network_block(&lines) else {
         return DEFAULT_LOCAL_GATEWAY_PORT;
@@ -377,59 +312,6 @@ fn configured_local_gateway_port_from_source(source: &str) -> u16 {
                 .and_then(|value| value.trim().parse::<u16>().ok())
         })
         .unwrap_or(DEFAULT_LOCAL_GATEWAY_PORT)
-}
-
-fn upsert_local_gateway_port(source: &str, port: u16) -> String {
-    let had_trailing_newline = source.ends_with('\n');
-    let mut lines = source.lines().map(str::to_string).collect::<Vec<_>>();
-
-    let local_block = {
-        let line_refs = lines.iter().map(String::as_str).collect::<Vec<_>>();
-        local_network_block(&line_refs)
-    };
-    if let Some((start, end)) = local_block {
-        if let Some(index) = (start..end).find(|index| lines[*index].trim().starts_with("port:")) {
-            let indent = line_indent(&lines[index]);
-            lines[index] = format!("{}port: {port}", " ".repeat(indent));
-            return join_lines(lines, had_trailing_newline);
-        }
-
-        if let Some(gateway_index) = (start..end).find(|index| lines[*index].trim() == "gateway:") {
-            let indent = line_indent(&lines[gateway_index]) + 2;
-            lines.insert(
-                gateway_index + 1,
-                format!("{}port: {port}", " ".repeat(indent)),
-            );
-            return join_lines(lines, had_trailing_newline);
-        }
-
-        lines.splice(end..end, local_network_gateway_lines(port));
-        return join_lines(lines, had_trailing_newline);
-    }
-
-    let networks = {
-        let line_refs = lines.iter().map(String::as_str).collect::<Vec<_>>();
-        top_level_section(&line_refs, "networks:")
-    };
-    if let Some((networks_start, networks_end)) = networks {
-        let local_network = local_network_lines(port);
-        let inserted_len = local_network.len();
-        lines.splice(networks_end..networks_end, local_network);
-        if networks_end == networks_start + 1 {
-            lines.insert(networks_end + inserted_len, String::new());
-        }
-        return join_lines(lines, had_trailing_newline);
-    }
-
-    let insert_at = lines
-        .iter()
-        .position(|line| line.trim() == "environments:")
-        .unwrap_or(lines.len());
-    let mut insert = vec!["networks:".to_string()];
-    insert.extend(local_network_lines(port));
-    insert.push(String::new());
-    lines.splice(insert_at..insert_at, insert);
-    join_lines(lines, had_trailing_newline)
 }
 
 fn local_network_block(lines: &[&str]) -> Option<(usize, usize)> {
@@ -446,34 +328,33 @@ fn local_network_block(lines: &[&str]) -> Option<(usize, usize)> {
     Some((start, end))
 }
 
-fn local_network_lines(port: u16) -> Vec<String> {
-    vec![
-        "  - name: local".to_string(),
-        "    mode: managed".to_string(),
-        "    gateway:".to_string(),
-        "      bind: 127.0.0.1".to_string(),
-        format!("      port: {port}"),
-    ]
+fn top_level_named_items(source: &str, header: &str) -> BTreeSet<String> {
+    let lines = source.lines().collect::<Vec<_>>();
+    let Some((start, end)) = top_level_section(&lines, header) else {
+        return BTreeSet::new();
+    };
+
+    lines[start + 1..end]
+        .iter()
+        .filter_map(|line| {
+            if line_indent(line) != 2 {
+                return None;
+            }
+            line.trim()
+                .strip_prefix("- name:")
+                .map(trim_yaml_scalar)
+                .filter(|name| !name.is_empty())
+                .map(str::to_string)
+        })
+        .collect()
 }
 
-fn local_network_gateway_lines(port: u16) -> Vec<String> {
-    vec![
-        "    gateway:".to_string(),
-        "      bind: 127.0.0.1".to_string(),
-        format!("      port: {port}"),
-    ]
+fn trim_yaml_scalar(value: &str) -> &str {
+    value.trim().trim_matches('"').trim_matches('\'')
 }
 
 fn line_indent(line: &str) -> usize {
     line.chars().take_while(|c| *c == ' ').count()
-}
-
-fn join_lines(lines: Vec<String>, had_trailing_newline: bool) -> String {
-    let mut joined = lines.join("\n");
-    if had_trailing_newline {
-        joined.push('\n');
-    }
-    joined
 }
 
 #[cfg(test)]
@@ -487,7 +368,7 @@ mod tests {
         let source = "canisters: []\n";
 
         assert_eq!(
-            configured_local_gateway_port_from_source(source),
+            local_gateway_port_from_yaml(source),
             DEFAULT_LOCAL_GATEWAY_PORT
         );
     }
@@ -496,74 +377,97 @@ mod tests {
     fn reads_local_gateway_port_from_network_config() {
         let source = "networks:\n  - name: local\n    mode: managed\n    gateway:\n      bind: 127.0.0.1\n      port: 8001\n";
 
-        assert_eq!(configured_local_gateway_port_from_source(source), 8001);
+        assert_eq!(local_gateway_port_from_yaml(source), 8001);
     }
 
     #[test]
     fn ignores_nested_networks_keys_when_reading_local_gateway_port() {
         let source = "canisters:\n  - name: root\n    metadata:\n      networks:\n        - local\n\nnetworks:\n  - name: local\n    mode: managed\n    gateway:\n      bind: 127.0.0.1\n      port: 8010\n";
 
-        assert_eq!(configured_local_gateway_port_from_source(source), 8010);
+        assert_eq!(local_gateway_port_from_yaml(source), 8010);
     }
 
     #[test]
-    fn inserts_local_network_before_environments() {
-        let source = "canisters: []\n\nenvironments:\n  - name: local\n    network: local\n";
+    fn inspects_icp_yaml_without_mutating_it() {
+        let root = temp_dir("canic-icp-read-only");
+        let config = root.join("fleets/toko/canic.toml");
+        fs::create_dir_all(config.parent().expect("config parent")).expect("create config parent");
+        fs::write(
+            &config,
+            r#"
+[fleet]
+name = "toko"
 
-        let updated = upsert_local_gateway_port(source, 8002);
+[subnets.prime.canisters.root]
+kind = "root"
 
-        assert!(updated.contains("networks:\n  - name: local\n    mode: managed"));
-        assert!(updated.contains("      port: 8002"));
-        assert!(updated.find("networks:") < updated.find("environments:"));
-    }
+[subnets.prime.canisters.app]
+kind = "singleton"
+"#,
+        )
+        .expect("write config");
+        let source = r#"
+canisters:
+  - name: root
 
-    #[test]
-    fn replaces_existing_local_gateway_port() {
-        let source = "networks:\n  - name: local\n    mode: managed\n    gateway:\n      bind: 127.0.0.1\n      port: 8001\n";
+networks:
+  - name: local
+    mode: managed
+    gateway:
+      port: 8010
 
-        let updated = upsert_local_gateway_port(source, 8003);
+environments:
+  - name: toko
+    network: local
+    canisters: [root]
+"#;
+        fs::write(root.join("icp.yaml"), source).expect("write icp yaml");
 
-        assert!(updated.contains("      port: 8003"));
-        assert!(!updated.contains("      port: 8001"));
-    }
+        let report = inspect_canic_icp_yaml_from_root(&root, Some("toko")).expect("inspect");
 
-    #[test]
-    fn syncs_canic_sections_and_preserves_other_top_level_sections() {
-        let source = "canisters:\n  - name: old\n\nnetworks:\n  - name: local\n    mode: managed\n    ii: true\n    nns: false\n    gateway:\n      bind: 127.0.0.1\n      port: 8009\n\nenvironments:\n  - name: old\n    network: local\n    canisters: [old]\n";
-        let canisters = vec!["root".to_string(), "app".to_string()];
-        let environments = BTreeMap::from([(
-            "test".to_string(),
-            vec!["root".to_string(), "app".to_string()],
-        )]);
-
-        let updated = sync_canic_sections(source, &canisters, &environments);
-
-        assert!(updated.starts_with("canisters:\n  - name: root\n"));
-        assert!(
-            updated.contains(
-                "            - cargo run -q -p canic-host --example build_artifact -- app"
-            )
+        assert_eq!(report.canisters, vec!["root", "app"]);
+        assert_eq!(report.environments, vec!["toko"]);
+        assert_eq!(report.missing_canisters, vec!["app"]);
+        assert!(report.missing_environments.is_empty());
+        assert!(report.local_network_present);
+        assert!(!report.is_ready());
+        assert_eq!(
+            fs::read_to_string(root.join("icp.yaml")).expect("read icp yaml"),
+            source
         );
-        assert!(updated.contains(
-            "environments:\n  - name: test\n    network: local\n    canisters: [root, app]"
-        ));
-        assert!(updated.contains("networks:\n  - name: local\n    mode: managed"));
-        assert!(updated.contains("    ii: true"));
-        assert!(updated.contains("    nns: false"));
-        assert!(updated.find("networks:") < updated.find("environments:"));
-        assert!(!updated.contains("- name: old"));
+        fs::remove_dir_all(root).expect("clean temp dir");
     }
 
     #[test]
-    fn renders_empty_canic_sections_for_empty_project_specs() {
-        let updated = sync_canic_sections("", &[], &BTreeMap::new());
+    fn reports_missing_icp_yaml_as_incomplete() {
+        let root = temp_dir("canic-icp-missing-yaml");
+        let config = root.join("fleets/toko/canic.toml");
+        fs::create_dir_all(config.parent().expect("config parent")).expect("create config parent");
+        fs::write(
+            &config,
+            r#"
+[fleet]
+name = "toko"
 
-        assert_eq!(updated, "canisters: []\n\nenvironments: []\n");
+[subnets.prime.canisters.root]
+kind = "root"
+"#,
+        )
+        .expect("write config");
+
+        let report = inspect_canic_icp_yaml_from_root(&root, Some("toko")).expect("inspect");
+
+        assert!(!report.icp_yaml_present);
+        assert_eq!(report.missing_canisters, vec!["root"]);
+        assert_eq!(report.missing_environments, vec!["toko"]);
+        assert!(!report.local_network_present);
+        assert!(!report.is_ready());
+        fs::remove_dir_all(root).expect("clean temp dir");
     }
 
     #[test]
-    fn discovers_root_fleet_configs_for_icp_sync() {
-        let root = temp_dir("canic-icp-sync-root-fleets");
+    fn discovers_root_fleet_configs_for_icp_inspection() {
+        let root = temp_dir("canic-icp-inspect-root-fleets");
         let config = root.join("fleets/toko/canic.toml");
         fs::create_dir_all(config.parent().expect("config parent")).expect("create config parent");
         fs::write(
@@ -636,8 +540,8 @@ kind = "singleton"
     }
 
     #[test]
-    fn icp_sync_rejects_missing_fleet_configs() {
-        let root = temp_dir("canic-icp-sync-missing");
+    fn icp_inspection_rejects_missing_fleet_configs() {
+        let root = temp_dir("canic-icp-inspect-missing");
         fs::create_dir_all(&root).expect("create root");
 
         let err = discover_project_spec(&root, None).expect_err("missing configs should fail");

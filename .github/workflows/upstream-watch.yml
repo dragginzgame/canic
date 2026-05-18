@@ -1,0 +1,17 @@
+name: Upstream Watch
+
+permissions:
+  contents: read
+
+on:
+  schedule:
+    - cron: '17 8 * * *'
+  workflow_dispatch:
+
+jobs:
+  icp_network_launcher:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check ICP network launcher fix candidate
+        run: bash scripts/ci/check-icp-network-launcher-update.sh

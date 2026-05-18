@@ -17,7 +17,7 @@ fn parses_replica_start_options() {
     assert!(!options.json);
 }
 
-// Ensure replica start can set the project-local gateway port before launch.
+// Ensure replica start can require the project-local gateway port before launch.
 #[test]
 fn parses_replica_start_port() {
     let options = ReplicaOptions::parse_start([OsString::from("--port"), OsString::from("8001")])
@@ -26,7 +26,7 @@ fn parses_replica_start_port() {
     assert_eq!(options.port, Some(8001));
 }
 
-// Ensure invalid ports fail at CLI parsing before touching icp.yaml.
+// Ensure invalid ports fail at CLI parsing before running ICP commands.
 #[test]
 fn rejects_invalid_replica_start_port() {
     let error = ReplicaOptions::parse_start([OsString::from("--port"), OsString::from("0")])
@@ -188,12 +188,8 @@ fn maps_missing_project_manifest_error() {
     });
 
     assert!(matches!(error, ReplicaCommandError::ProjectManifestMissing));
-    assert!(error.to_string().contains("fleets/<fleet>/canic.toml"));
-    assert!(
-        error
-            .to_string()
-            .contains("canic fleet sync --fleet <fleet>")
-    );
+    assert!(error.to_string().contains("Create or repair icp.yaml"));
+    assert!(error.to_string().contains("canic status"));
 }
 
 // Ensure owner parsing keeps the ICP network/environment separate from the project path.

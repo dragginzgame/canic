@@ -132,12 +132,12 @@ kind = "singleton"
 topup = {}
 ```
 
-Build and install locally:
+Make sure `icp.yaml` contains the matching canisters and local environment, then
+build and install locally:
 
 ```bash
-canic replica start --background
-canic fleet sync --fleet test
 canic status
+canic replica start --background
 canic install --profile fast test
 canic info list test
 ```

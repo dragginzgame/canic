@@ -8,7 +8,7 @@ use crate::{
     scaffold, version_text,
 };
 use canic_host::{
-    icp_config::{IcpConfigError, IcpProjectSyncReport, sync_canic_icp_yaml},
+    icp_config::{IcpConfigError, IcpProjectConfigReport, inspect_canic_icp_yaml},
     install_root::{
         current_canic_project_root, discover_current_canic_config_choices, project_fleet_roots,
     },
@@ -227,8 +227,8 @@ where
     }
 
     let options = FleetSyncOptions::parse(args)?;
-    let report = sync_canic_icp_yaml(options.fleet.as_deref())?;
-    print_sync_report(&report);
+    let report = inspect_canic_icp_yaml(options.fleet.as_deref())?;
+    print_config_report(&report);
     Ok(())
 }
 
@@ -379,7 +379,7 @@ fn fleet_command() -> ClapCommand {
         ))
         .subcommand(passthrough_subcommand(
             ClapCommand::new("sync")
-                .about("Sync fleet configs into icp.yaml")
+                .about("Check icp.yaml against Canic fleet configs")
                 .disable_help_flag(true),
         ))
         .subcommand(passthrough_subcommand(
@@ -402,13 +402,13 @@ fn fleet_list_command() -> ClapCommand {
 fn fleet_sync_command() -> ClapCommand {
     ClapCommand::new("sync")
         .bin_name("canic fleet sync")
-        .about("Sync fleet configs into icp.yaml")
+        .about("Check icp.yaml against Canic fleet configs")
         .disable_help_flag(true)
         .arg(
             value_arg("fleet")
                 .long("fleet")
                 .value_name("name")
-                .help("Require this fleet to exist before syncing"),
+                .help("Require this fleet to exist before checking icp.yaml"),
         )
         .after_help(FLEET_SYNC_HELP_AFTER)
 }
@@ -488,12 +488,22 @@ fn format_canister_summary(roles: &[String]) -> String {
     format!("{} ({preview}{suffix})", roles.len())
 }
 
-fn print_sync_report(report: &IcpProjectSyncReport) {
-    println!("Synced ICP project config:");
+fn print_config_report(report: &IcpProjectConfigReport) {
+    println!("Checked ICP project config:");
     println!("  path: {}", report.path.display());
     println!("  canisters: {}", report.canisters.len());
     println!("  environments: {}", report.environments.len());
-    println!("  changed: {}", if report.changed { "yes" } else { "no" });
+    println!(
+        "  status: {}",
+        if report.is_ready() {
+            "ok"
+        } else {
+            "incomplete"
+        }
+    );
+    for issue in report.issues() {
+        println!("  issue: {issue}");
+    }
 }
 
 fn usage() -> String {
