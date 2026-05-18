@@ -124,6 +124,14 @@ inspect only the files needed for the current task.
   runtime or build dependencies on workspace crates marked `publish = false`.
 - Wired the same manifest-boundary guard into `scripts/ci/publish-workspace.sh`
   before any publish attempt.
+- Started `0.39.16` by making Canic's persisted `ic-memory` authority reserve
+  cover IDs `0-9` while leaving only the ID `0` ledger self-record active; the
+  remaining slots stay empty per-ID records until future `ic-memory`
+  allocation-governance work assigns them explicitly.
+- Continued `0.39.16` by thinning `canic-core::memory`: macro-backed memory
+  opens now validate by explicit stable key through `ic-memory::AllocationSession`,
+  the old implicit-key declaration/registration helpers are gone, and
+  `memory::api` is reduced to the ledger diagnostic facade.
 - Drafted the proposed 0.40 attested Canic-call hard cut at
   `docs/design/0.40-attested-canic-calls/0.40-design.md`, replacing
   AppIndex-only sibling authorization with root-signed caller-role envelopes

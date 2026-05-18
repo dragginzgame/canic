@@ -11,7 +11,7 @@ pub const CANIC_FRAMEWORK_MAX_ID: u8 = 99;
 pub const APPLICATION_MIN_ID: u8 = 100;
 pub const APPLICATION_MAX_ID: u8 = ic_memory::MEMORY_MANAGER_MAX_ID;
 
-pub const IC_MEMORY_AUTHORITY_OWNER: &str = "ic_memory.internal";
+pub const IC_MEMORY_AUTHORITY_OWNER: &str = "ic-memory";
 pub const IC_MEMORY_AUTHORITY_PURPOSE: &str = "ic-memory allocation-governance authority";
 pub const CANIC_FRAMEWORK_AUTHORITY_OWNER: &str = "canic.framework";
 pub const CANIC_FRAMEWORK_AUTHORITY_PURPOSE: &str = "Canic framework allocation authority";
@@ -137,7 +137,7 @@ fn validate_key_id_claim(
     stable_key: &str,
 ) -> Result<(), MemoryRegistryError> {
     if stable_key.starts_with("ic_memory.") {
-        return validate_ic_memory_claim(id, stable_key);
+        return validate_ic_memory_claim(id, crate_name, stable_key);
     }
 
     if stable_key.starts_with("canic.") {
@@ -147,7 +147,19 @@ fn validate_key_id_claim(
     validate_application_claim(id, stable_key)
 }
 
-fn validate_ic_memory_claim(id: u8, stable_key: &str) -> Result<(), MemoryRegistryError> {
+fn validate_ic_memory_claim(
+    id: u8,
+    crate_name: &str,
+    stable_key: &str,
+) -> Result<(), MemoryRegistryError> {
+    if crate_name != IC_MEMORY_AUTHORITY_OWNER {
+        return Err(MemoryRegistryError::RangeAuthorityViolation {
+            stable_key: stable_key.to_string(),
+            id,
+            reason: "ic_memory.* keys may only be declared by ic-memory",
+        });
+    }
+
     let range = MemoryManagerIdRange::new(IC_MEMORY_INTERNAL_MIN_ID, IC_MEMORY_INTERNAL_MAX_ID)
         .expect("valid ic-memory internal range");
     if range.contains(id) {

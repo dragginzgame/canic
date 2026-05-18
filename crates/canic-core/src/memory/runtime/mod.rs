@@ -226,6 +226,17 @@ mod tests {
     static COUNT: AtomicU32 = AtomicU32::new(0);
     static TEST_LOCK: Mutex<()> = Mutex::new(());
 
+    fn clear_test_queues() {
+        CANIC_EAGER_TLS
+            .lock()
+            .expect("eager tls queue poisoned")
+            .clear();
+        CANIC_EAGER_INIT
+            .lock()
+            .expect("eager init queue poisoned")
+            .clear();
+    }
+
     fn bump() {
         COUNT.fetch_add(1, Ordering::SeqCst);
     }
@@ -233,6 +244,7 @@ mod tests {
     #[test]
     fn init_eager_tls_runs_and_clears_queue() {
         let _guard = TEST_LOCK.lock().expect("test lock poisoned");
+        clear_test_queues();
         COUNT.store(0, Ordering::SeqCst);
         CANIC_EAGER_TLS
             .lock()
@@ -251,6 +263,7 @@ mod tests {
     #[test]
     fn run_registered_eager_init_runs_and_clears_queue() {
         let _guard = TEST_LOCK.lock().expect("test lock poisoned");
+        clear_test_queues();
         COUNT.store(0, Ordering::SeqCst);
         CANIC_EAGER_INIT
             .lock()

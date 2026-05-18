@@ -1,7 +1,7 @@
 use super::super::manager::{self, RawStableMemoryState};
 use super::super::registry::{
-    MemoryRange, MemoryRangeEntry, MemoryRangeSnapshot, MemoryRegistry, MemoryRegistryEntry,
-    MemoryRegistryError, PendingRegistration, drain_pending_ranges, drain_pending_registrations,
+    MemoryRange, MemoryRegistry, MemoryRegistryEntry, MemoryRegistryError, PendingRegistration,
+    drain_pending_ranges, drain_pending_registrations,
 };
 use super::super::{ledger, policy::CanicMemoryManagerPolicy};
 use ic_memory::{
@@ -131,30 +131,6 @@ impl MemoryRegistryRuntime {
     #[must_use]
     pub fn snapshot_entries() -> Vec<(u8, MemoryRegistryEntry)> {
         MemoryRegistry::export()
-    }
-
-    /// Snapshot all reserved memory ranges.
-    #[must_use]
-    pub fn snapshot_ranges() -> Vec<(String, MemoryRange)> {
-        MemoryRegistry::export_ranges()
-    }
-
-    /// Snapshot all reserved memory ranges with owners.
-    #[must_use]
-    pub fn snapshot_range_entries() -> Vec<MemoryRangeEntry> {
-        MemoryRegistry::export_range_entries()
-    }
-
-    /// Snapshot registry entries grouped by range.
-    #[must_use]
-    pub fn snapshot_ids_by_range() -> Vec<MemoryRangeSnapshot> {
-        MemoryRegistry::export_ids_by_range()
-    }
-
-    /// Retrieve a single registry entry by ID.
-    #[must_use]
-    pub fn get(id: u8) -> Option<MemoryRegistryEntry> {
-        MemoryRegistry::get(id)
     }
 
     /// Return the sealed validated allocation set published by bootstrap.
@@ -461,15 +437,14 @@ fn set_validated_allocations(value: Option<ValidatedAllocations>) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::memory::registry::{
-        defer_register, defer_register_with_key, defer_reserve_range, reset_for_tests,
-    };
+    use crate::memory::registry::{defer_register_with_key, defer_reserve_range, reset_for_tests};
 
     #[test]
     fn init_applies_initial_and_pending() {
         reset_for_tests();
         defer_reserve_range("crate_b", 110, 111).expect("defer range");
-        defer_register(110, "crate_b", "B110").expect("defer register");
+        defer_register_with_key(110, "crate_b", "B110", "app.crate_b.b110.v1")
+            .expect("defer register");
 
         let summary =
             MemoryRegistryRuntime::init(Some(("crate_a", 100, 102))).expect("init should succeed");
@@ -593,7 +568,8 @@ mod tests {
 
         MemoryRegistryRuntime::init(Some(("core", 100, 109))).expect("init should succeed");
         defer_reserve_range("late", 110, 120).expect("defer late range");
-        defer_register(112, "late", "late_slot").expect("defer late register");
+        defer_register_with_key(112, "late", "late_slot", "app.late.late_slot.v1")
+            .expect("defer late register");
 
         let err = MemoryRegistryRuntime::commit_pending_if_initialized()
             .expect_err("late pending commit should fail after bootstrap seal");
@@ -604,6 +580,6 @@ mod tests {
                 registrations: 1,
             }
         ));
-        assert!(MemoryRegistryRuntime::get(112).is_none());
+        assert!(MemoryRegistry::get(112).is_none());
     }
 }

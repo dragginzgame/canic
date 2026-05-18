@@ -28,7 +28,7 @@ pub const MEMORY_LAYOUT_LEDGER_OWNER: &str = "ic-memory";
 pub const MEMORY_LAYOUT_LEDGER_LABEL: &str = "MemoryLayoutLedger";
 pub const MEMORY_LAYOUT_LEDGER_STABLE_KEY: &str = "ic_memory.ledger.v1";
 pub const MEMORY_LAYOUT_RESERVED_MIN: u8 = 0;
-pub const MEMORY_LAYOUT_RESERVED_MAX: u8 = 0;
+pub const MEMORY_LAYOUT_RESERVED_MAX: u8 = 9;
 
 const MEMORY_LAYOUT_LEDGER_SCHEMA_VERSION: u32 = 1;
 const MEMORY_LAYOUT_LEDGER_LAYOUT_EPOCH: u32 = 1;
@@ -460,36 +460,6 @@ pub fn validate_entry(
     MEMORY_LAYOUT_LEDGER.with_borrow(|cell| {
         let generation = authoritative_generation(cell.get())?;
         validate_entry_against_generation(&generation, id, owner, label, stable_key)
-    })
-}
-
-pub fn export_ranges() -> Vec<(String, MemoryRange)> {
-    try_export_ranges().unwrap_or_default()
-}
-
-pub fn try_export_ranges() -> Result<Vec<(String, MemoryRange)>, MemoryRegistryError> {
-    MEMORY_LAYOUT_LEDGER.with_borrow(|cell| {
-        let generation = authoritative_generation(cell.get())?;
-        Ok(generation
-            .ranges
-            .iter()
-            .map(|entry| (entry.owner.clone(), entry.range()))
-            .collect())
-    })
-}
-
-pub fn export_authorities() -> Vec<MemoryRangeAuthority> {
-    try_export_authorities().unwrap_or_default()
-}
-
-pub fn try_export_authorities() -> Result<Vec<MemoryRangeAuthority>, MemoryRegistryError> {
-    MEMORY_LAYOUT_LEDGER.with_borrow(|cell| {
-        let generation = authoritative_generation(cell.get())?;
-        Ok(generation
-            .authorities
-            .iter()
-            .map(MemoryLayoutAuthorityRecord::to_snapshot)
-            .collect())
     })
 }
 
@@ -1253,8 +1223,7 @@ mod tests {
         assert_eq!(snapshot.commit_recovery.authoritative_generation, Some(1));
         assert!(snapshot.commit_recovery.slot0.valid || snapshot.commit_recovery.slot1.valid);
         assert!(snapshot.authorities.iter().any(|authority| {
-            authority.owner == "ic_memory.internal"
-                && authority.range == MemoryRange { start: 0, end: 9 }
+            authority.owner == "ic-memory" && authority.range == MemoryRange { start: 0, end: 9 }
         }));
         assert!(snapshot.authorities.iter().any(|authority| {
             authority.owner == "canic.framework"

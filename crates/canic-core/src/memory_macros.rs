@@ -20,7 +20,7 @@ macro_rules! ic_memory_key {
 
         let _type_check: Option<$label> = None;
 
-        $crate::memory::open_validated_memory(stringify!($label), $id)
+        $crate::memory::open_validated_memory($stable_key, stringify!($label), $id)
     }};
 }
 

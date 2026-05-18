@@ -45,34 +45,6 @@ pub struct MemoryRegistryEntry {
 }
 
 ///
-/// MemoryRangeEntry
-///
-/// Reserved stable-memory range with explicit owner context.
-
-#[derive(Clone, Debug)]
-pub struct MemoryRangeEntry {
-    /// Crate name that reserved the range.
-    pub owner: String,
-    /// Inclusive stable-memory ID range reserved by `owner`.
-    pub range: MemoryRange,
-}
-
-///
-/// MemoryRangeSnapshot
-///
-/// Registered stable-memory slots grouped under one reserved range.
-
-#[derive(Clone, Debug)]
-pub struct MemoryRangeSnapshot {
-    /// Crate name that reserved the range.
-    pub owner: String,
-    /// Inclusive stable-memory ID range reserved by `owner`.
-    pub range: MemoryRange,
-    /// Registered entries whose IDs fall inside `range`.
-    pub entries: Vec<(u8, MemoryRegistryEntry)>,
-}
-
-///
 /// MemoryRangeAuthority
 ///
 /// Durable allocation-authority range recorded by the ABI ledger.
@@ -395,16 +367,6 @@ impl MemoryRegistry {
         Ok(())
     }
 
-    /// Register one memory ID under an existing owner range.
-    pub fn register(id: u8, crate_name: &str, label: &str) -> Result<(), MemoryRegistryError> {
-        Self::register_with_key(
-            id,
-            crate_name,
-            label,
-            &fallback_stable_key(crate_name, label),
-        )
-    }
-
     /// Register one memory ID under an existing owner range using an explicit ABI key.
     pub fn register_with_key(
         id: u8,
@@ -475,74 +437,10 @@ impl MemoryRegistry {
         RESERVED_RANGES.with_borrow(std::clone::Clone::clone)
     }
 
-    /// Export all reserved ranges with explicit owners.
-    #[must_use]
-    pub fn export_range_entries() -> Vec<MemoryRangeEntry> {
-        RESERVED_RANGES.with_borrow(|ranges| {
-            ranges
-                .iter()
-                .map(|(owner, range)| MemoryRangeEntry {
-                    owner: owner.clone(),
-                    range: *range,
-                })
-                .collect()
-        })
-    }
-
-    /// Export registry entries grouped by reserved range.
-    #[must_use]
-    pub fn export_ids_by_range() -> Vec<MemoryRangeSnapshot> {
-        let mut ranges = RESERVED_RANGES.with_borrow(std::clone::Clone::clone);
-        let entries = REGISTRY.with_borrow(std::clone::Clone::clone);
-
-        ranges.sort_by_key(|(_, range)| range.start);
-
-        ranges
-            .into_iter()
-            .map(|(owner, range)| {
-                let entries = entries
-                    .iter()
-                    .filter(|(id, _)| range.contains(**id))
-                    .map(|(id, entry)| (*id, entry.clone()))
-                    .collect();
-
-                MemoryRangeSnapshot {
-                    owner,
-                    range,
-                    entries,
-                }
-            })
-            .collect()
-    }
-
     /// Retrieve a single registry entry.
     #[must_use]
     pub fn get(id: u8) -> Option<MemoryRegistryEntry> {
         REGISTRY.with_borrow(|reg| reg.get(&id).cloned())
-    }
-
-    /// Export all ranges ever recorded in the stable memory layout ledger.
-    #[must_use]
-    pub fn export_historical_ranges() -> Vec<(String, MemoryRange)> {
-        ledger::export_ranges()
-    }
-
-    /// Export canonical allocation authorities recorded in the stable memory layout ledger.
-    #[must_use]
-    pub fn export_historical_authorities() -> Vec<MemoryRangeAuthority> {
-        ledger::export_authorities()
-    }
-
-    /// Fallibly export all ranges ever recorded in the stable memory layout ledger.
-    pub fn try_export_historical_ranges() -> Result<Vec<(String, MemoryRange)>, MemoryRegistryError>
-    {
-        ledger::try_export_ranges()
-    }
-
-    /// Fallibly export canonical allocation authorities recorded in the stable memory layout ledger.
-    pub fn try_export_historical_authorities()
-    -> Result<Vec<MemoryRangeAuthority>, MemoryRegistryError> {
-        ledger::try_export_authorities()
     }
 
     /// Export all memory IDs ever recorded in the stable memory layout ledger.
@@ -580,17 +478,6 @@ pub fn defer_reserve_range(
     });
 
     Ok(())
-}
-
-/// Queue an ID registration for deterministic application during bootstrap.
-#[doc(hidden)]
-pub fn defer_register(id: u8, crate_name: &str, label: &str) -> Result<(), MemoryRegistryError> {
-    defer_register_with_key(
-        id,
-        crate_name,
-        label,
-        &fallback_stable_key(crate_name, label),
-    )
 }
 
 /// Queue an ID registration with an explicit ABI-stable key.
@@ -688,14 +575,6 @@ const fn validate_non_internal_id(id: u8) -> Result<(), MemoryRegistryError> {
     Ok(())
 }
 
-fn fallback_stable_key(crate_name: &str, label: &str) -> String {
-    format!(
-        "legacy.{}.{}.v1",
-        canonical_segment(crate_name),
-        canonical_segment(label)
-    )
-}
-
 fn validate_stable_key(stable_key: &str) -> Result<(), MemoryRegistryError> {
     StableKey::parse(stable_key).map_err(|err| MemoryRegistryError::InvalidStableKey {
         stable_key: err.stable_key,
@@ -740,30 +619,6 @@ fn validate_id_authority(
     stable_key: &str,
 ) -> Result<(), MemoryRegistryError> {
     policy::validate_stable_key_authority(id, crate_name, stable_key)
-}
-
-fn canonical_segment(value: &str) -> String {
-    let mut out = String::new();
-    let mut last_was_underscore = false;
-
-    for ch in value.chars().flat_map(char::to_lowercase) {
-        if ch.is_ascii_lowercase() || ch.is_ascii_digit() {
-            out.push(ch);
-            last_was_underscore = false;
-        } else if !last_was_underscore {
-            out.push('_');
-            last_was_underscore = true;
-        }
-    }
-
-    let trimmed = out.trim_matches('_');
-    if trimmed.is_empty() {
-        return "unnamed".to_string();
-    }
-    if trimmed.as_bytes()[0].is_ascii_digit() {
-        return format!("n_{trimmed}");
-    }
-    trimmed.to_string()
 }
 
 const fn validate_range_excludes_reserved_internal_id(
@@ -885,14 +740,16 @@ mod tests {
         reset_for_tests();
 
         MemoryRegistry::reserve_range("crate_a", 100, 102).expect("reserve range");
-        MemoryRegistry::register(101, "crate_a", "slot").expect("register in range");
+        MemoryRegistry::register_with_key(101, "crate_a", "slot", "app.crate_a.slot.v1")
+            .expect("register in range");
     }
 
     #[test]
     fn rejects_unreserved() {
         reset_for_tests();
 
-        let err = MemoryRegistry::register(100, "crate_a", "slot").expect_err("missing range");
+        let err = MemoryRegistry::register_with_key(100, "crate_a", "slot", "app.crate_a.slot.v1")
+            .expect_err("missing range");
         assert!(matches!(err, MemoryRegistryError::NoReservedRange { .. }));
     }
 
@@ -903,23 +760,9 @@ mod tests {
         MemoryRegistry::reserve_range("crate_a", 100, 102).expect("reserve range A");
         MemoryRegistry::reserve_range("crate_b", 110, 112).expect("reserve range B");
 
-        let err = MemoryRegistry::register(101, "crate_b", "slot").expect_err("owned by other");
+        let err = MemoryRegistry::register_with_key(101, "crate_b", "slot", "app.crate_b.slot.v1")
+            .expect_err("owned by other");
         assert!(matches!(err, MemoryRegistryError::IdOwnedByOther { .. }));
-    }
-
-    #[test]
-    fn export_ids_by_range_groups_entries() {
-        reset_for_tests();
-
-        MemoryRegistry::reserve_range("crate_a", 100, 102).expect("reserve range A");
-        MemoryRegistry::reserve_range("crate_b", 110, 112).expect("reserve range B");
-        MemoryRegistry::register(100, "crate_a", "a100").expect("register a100");
-        MemoryRegistry::register(111, "crate_b", "b111").expect("register b111");
-
-        let snapshots = MemoryRegistry::export_ids_by_range();
-        assert_eq!(snapshots.len(), 2);
-        assert_eq!(snapshots[0].entries.len(), 1);
-        assert_eq!(snapshots[1].entries.len(), 1);
     }
 
     #[test]
@@ -1029,8 +872,8 @@ mod tests {
     fn rejects_non_canic_key_below_application_range() {
         reset_for_tests();
 
-        MemoryRegistry::reserve_range("crate_a", 1, 4).expect("reserve low framework range");
-        let err = MemoryRegistry::register_with_key(1, "crate_a", "slot", "app.crate_a.slot.v1")
+        MemoryRegistry::reserve_range("crate_a", 10, 12).expect("reserve low framework range");
+        let err = MemoryRegistry::register_with_key(10, "crate_a", "slot", "app.crate_a.slot.v1")
             .expect_err("application key below 100 should fail");
         assert!(matches!(
             err,
@@ -1053,15 +896,14 @@ mod tests {
     }
 
     #[test]
-    fn rejects_canic_key_below_framework_range() {
+    fn rejects_canic_range_inside_ic_memory_range() {
         reset_for_tests();
 
-        MemoryRegistry::reserve_range("canic-core", 1, 4).expect("reserve internal range");
-        let err = MemoryRegistry::register_with_key(1, "canic-core", "slot", "canic.core.slot.v1")
-            .expect_err("canic key below 10 should fail");
+        let err = MemoryRegistry::reserve_range("canic-core", 1, 4)
+            .expect_err("Canic must not reserve the ic-memory range");
         assert!(matches!(
             err,
-            MemoryRegistryError::RangeAuthorityViolation { .. }
+            MemoryRegistryError::HistoricalRangeConflict { .. }
         ));
     }
 
@@ -1089,7 +931,7 @@ mod tests {
     }
 
     #[test]
-    fn internal_layout_ledger_uses_only_id_zero_self_record() {
+    fn internal_layout_ledger_reserves_ic_memory_range_with_id_zero_self_record() {
         reset_for_tests();
 
         MemoryRegistry::reserve_internal_layout_ledger().expect("reserve ledger");
@@ -1098,16 +940,28 @@ mod tests {
             MemoryRegistry::export_ranges(),
             vec![(
                 ledger::MEMORY_LAYOUT_LEDGER_OWNER.to_string(),
-                MemoryRange { start: 0, end: 0 },
+                MemoryRange { start: 0, end: 9 },
             )]
         );
         assert_eq!(
             MemoryRegistry::get(0).map(|entry| entry.stable_key),
             Some(ledger::MEMORY_LAYOUT_LEDGER_STABLE_KEY.to_string())
         );
-        for id in 1..=4 {
+        for id in 1..=9 {
             assert!(MemoryRegistry::get(id).is_none());
         }
+    }
+
+    #[test]
+    fn rejects_ic_memory_key_from_non_ic_memory_owner() {
+        reset_for_tests();
+
+        let err = defer_register_with_key(10, "canic-core", "slot", "ic_memory.future.v1")
+            .expect_err("only ic-memory may declare ic_memory keys");
+        assert!(matches!(
+            err,
+            MemoryRegistryError::RangeAuthorityViolation { .. }
+        ));
     }
 
     #[test]
@@ -1132,9 +986,10 @@ mod tests {
     fn rejects_internal_reserved_id_on_register() {
         reset_for_tests();
 
-        MemoryRegistry::reserve_range("crate_a", 5, 254).expect("reserve range");
-        let err = MemoryRegistry::register(u8::MAX, "crate_a", "slot")
-            .expect_err("reserved id should be rejected");
+        MemoryRegistry::reserve_range("crate_a", 100, 254).expect("reserve range");
+        let err =
+            MemoryRegistry::register_with_key(u8::MAX, "crate_a", "slot", "app.crate_a.slot.v1")
+                .expect_err("reserved id should be rejected");
         assert!(matches!(
             err,
             MemoryRegistryError::ReservedInternalId { .. }
@@ -1182,7 +1037,7 @@ mod tests {
         reset_for_tests();
 
         MemoryRegistry::reserve_range("crate_a", 100, 108).expect("reserve range");
-        let err = MemoryRegistry::register(0, "crate_a", "slot")
+        let err = MemoryRegistry::register_with_key(0, "crate_a", "slot", "app.crate_a.slot.v1")
             .expect_err("layout metadata ID must not be registrable by applications");
         assert!(matches!(err, MemoryRegistryError::IdOwnedByOther { .. }));
     }
@@ -1191,7 +1046,7 @@ mod tests {
     fn rejects_layout_metadata_id_on_deferred_register() {
         reset_for_tests();
 
-        let err = defer_register(0, "crate_a", "slot")
+        let err = defer_register_with_key(0, "crate_a", "slot", "app.crate_a.slot.v1")
             .expect_err("layout metadata ID should fail before init");
         assert!(matches!(err, MemoryRegistryError::IdOwnedByOther { .. }));
     }
@@ -1212,7 +1067,7 @@ mod tests {
     fn rejects_internal_reserved_id_on_deferred_register() {
         reset_for_tests();
 
-        let err = defer_register(u8::MAX, "crate_a", "slot")
+        let err = defer_register_with_key(u8::MAX, "crate_a", "slot", "app.crate_a.slot.v1")
             .expect_err("reserved id should fail before init");
         assert!(matches!(
             err,
