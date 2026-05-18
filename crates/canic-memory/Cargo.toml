@@ -16,6 +16,7 @@ publish = true
 [dependencies]
 canic-cdk = { workspace = true }
 ctor = { workspace = true }
+ic-memory = { workspace = true }
 serde = { workspace = true }
 serde_cbor = { workspace = true }
 thiserror = { workspace = true }

@@ -26,6 +26,7 @@ pub use generation::{GenerationCommit, GenerationMutation, StagedGeneration};
 pub use key::{StableKey, StableKeyError};
 pub use ledger::{
     AllocationHistory, AllocationLedger, AllocationRecord, AllocationState, GenerationRecord,
+    SchemaMetadataRecord,
 };
 pub use policy::{AllocationPolicy, NamespaceAuthority, RangeAuthority};
 pub use schema::{SchemaMetadata, SchemaMetadataError};

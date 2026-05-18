@@ -10,6 +10,10 @@ use crate::{
     manager::{MEMORY_MANAGER, RawStableMemoryState},
     registry::{MemoryRange, MemoryRangeAuthority, MemoryRegistryEntry, MemoryRegistryError},
 };
+use ic_memory::{
+    AllocationHistory, AllocationLedger, AllocationRecord, AllocationSlotDescriptor,
+    AllocationState, GenerationRecord, SchemaMetadata, SchemaMetadataRecord, StableKey,
+};
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 
@@ -495,6 +499,10 @@ pub fn try_snapshot() -> Result<MemoryLayoutLedgerSnapshot, MemoryRegistryError>
     MEMORY_LAYOUT_LEDGER.with_borrow(|cell| snapshot_from_record(cell.get()))
 }
 
+pub fn try_allocation_ledger() -> Result<AllocationLedger, MemoryRegistryError> {
+    MEMORY_LAYOUT_LEDGER.with_borrow(|cell| allocation_ledger_from_record(cell.get()))
+}
+
 #[cfg(test)]
 pub fn reset_for_tests() {
     MEMORY_LAYOUT_LEDGER.with_borrow_mut(|cell| {
@@ -610,6 +618,159 @@ fn snapshot_from_record(
             })
             .collect(),
     })
+}
+
+fn allocation_ledger_from_record(
+    data: &MemoryLayoutLedgerRecord,
+) -> Result<AllocationLedger, MemoryRegistryError> {
+    let generation = authoritative_generation(data)?;
+    if !generation.authorities.is_empty() {
+        validate_canonical_authorities(&generation)?;
+    }
+
+    let records = generation
+        .entries
+        .iter()
+        .map(allocation_record_from_entry)
+        .collect::<Result<Vec<_>, _>>()?;
+
+    Ok(AllocationLedger {
+        ledger_schema_version: data.schema_version,
+        physical_format_id: data.format_id,
+        current_generation: generation.generation,
+        allocation_history: AllocationHistory {
+            records,
+            generations: generation_records_from_entries(&generation),
+        },
+    })
+}
+
+fn allocation_record_from_entry(
+    entry: &MemoryLayoutEntryRecord,
+) -> Result<AllocationRecord, MemoryRegistryError> {
+    let stable_key = StableKey::parse(&entry.stable_key).map_err(|err| {
+        MemoryRegistryError::InvalidStableKey {
+            stable_key: err.stable_key,
+            reason: err.reason,
+        }
+    })?;
+    let schema_history = schema_history_from_entry(entry)?;
+    let first_generation = schema_history.first().map_or(0, |record| record.generation);
+    let last_seen_generation = schema_history
+        .last()
+        .map_or(first_generation, |record| record.generation);
+
+    Ok(AllocationRecord {
+        stable_key,
+        slot: AllocationSlotDescriptor::memory_manager(entry.id),
+        state: AllocationState::Active,
+        first_generation,
+        last_seen_generation,
+        retired_generation: None,
+        schema_history,
+    })
+}
+
+fn schema_history_from_entry(
+    entry: &MemoryLayoutEntryRecord,
+) -> Result<Vec<SchemaMetadataRecord>, MemoryRegistryError> {
+    let mut history = entry
+        .declarations
+        .iter()
+        .map(|declaration| {
+            schema_metadata_record(
+                &entry.stable_key,
+                declaration.generation,
+                declaration.schema_version,
+                declaration.schema_fingerprint.clone(),
+            )
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+
+    if history.is_empty() {
+        history.push(schema_metadata_record(
+            &entry.stable_key,
+            0,
+            entry.schema_version,
+            entry.schema_fingerprint.clone(),
+        )?);
+    }
+
+    Ok(history)
+}
+
+fn schema_metadata_record(
+    stable_key: &str,
+    generation: u64,
+    schema_version: Option<u32>,
+    schema_fingerprint: Option<String>,
+) -> Result<SchemaMetadataRecord, MemoryRegistryError> {
+    let schema = SchemaMetadata::new(schema_version, schema_fingerprint).map_err(|err| {
+        MemoryRegistryError::InvalidSchemaMetadata {
+            stable_key: stable_key.to_string(),
+            reason: schema_metadata_error_reason(err),
+        }
+    })?;
+
+    Ok(SchemaMetadataRecord { generation, schema })
+}
+
+fn generation_records_from_entries(
+    generation: &MemoryLayoutGenerationRecord,
+) -> Vec<GenerationRecord> {
+    let mut generations: Vec<GenerationRecord> = Vec::new();
+    for entry in &generation.entries {
+        for declaration in &entry.declarations {
+            if let Some(record) = generations
+                .iter_mut()
+                .find(|record| record.generation == declaration.generation)
+            {
+                record.declaration_count = record.declaration_count.saturating_add(1);
+            } else {
+                generations.push(GenerationRecord {
+                    generation: declaration.generation,
+                    parent_generation: None,
+                    runtime_fingerprint: None,
+                    declaration_count: 1,
+                    committed_at: None,
+                });
+            }
+        }
+    }
+
+    if !generations
+        .iter()
+        .any(|record| record.generation == generation.generation)
+    {
+        generations.push(GenerationRecord {
+            generation: generation.generation,
+            parent_generation: None,
+            runtime_fingerprint: None,
+            declaration_count: 0,
+            committed_at: None,
+        });
+    }
+
+    generations.sort_by_key(|record| record.generation);
+    generations
+}
+
+const fn schema_metadata_error_reason(err: ic_memory::SchemaMetadataError) -> &'static str {
+    match err {
+        ic_memory::SchemaMetadataError::InvalidVersion => {
+            "schema_version must be greater than zero when present"
+        }
+        ic_memory::SchemaMetadataError::EmptyFingerprint => {
+            "schema_fingerprint must not be empty when present"
+        }
+        ic_memory::SchemaMetadataError::FingerprintTooLong => {
+            "schema_fingerprint must be at most 256 bytes"
+        }
+        ic_memory::SchemaMetadataError::NonAsciiFingerprint => "schema_fingerprint must be ASCII",
+        ic_memory::SchemaMetadataError::ControlCharacterFingerprint => {
+            "schema_fingerprint must not contain ASCII control characters"
+        }
+    }
 }
 
 fn ensure_header(data: &mut MemoryLayoutLedgerRecord) -> Result<(), MemoryRegistryError> {
@@ -1217,5 +1378,61 @@ mod tests {
             assert_eq!(entry.declarations[0].schema_version, Some(1));
             assert_eq!(entry.declarations[1].schema_version, Some(2));
         });
+    }
+
+    #[test]
+    fn allocation_ledger_projection_preserves_schema_history() {
+        reset_for_tests();
+
+        record_entry(
+            100,
+            "crate_a",
+            "slot",
+            "app.crate_a.slot.v1",
+            Some(1),
+            Some("sha256:aaa"),
+        )
+        .expect("record first declaration");
+        record_entry(
+            100,
+            "crate_a",
+            "slot",
+            "app.crate_a.slot.v1",
+            Some(2),
+            Some("sha256:bbb"),
+        )
+        .expect("record second declaration");
+
+        let ledger = try_allocation_ledger().expect("allocation ledger projection");
+
+        assert_eq!(ledger.current_generation, 2);
+        assert_eq!(ledger.allocation_history.records.len(), 1);
+        assert_eq!(ledger.allocation_history.generations.len(), 2);
+
+        let record = &ledger.allocation_history.records[0];
+        assert_eq!(record.stable_key.as_str(), "app.crate_a.slot.v1");
+        assert_eq!(record.slot, AllocationSlotDescriptor::memory_manager(100));
+        assert_eq!(record.state, AllocationState::Active);
+        assert_eq!(record.first_generation, 1);
+        assert_eq!(record.last_seen_generation, 2);
+        assert_eq!(record.schema_history.len(), 2);
+        assert_eq!(record.schema_history[0].generation, 1);
+        assert_eq!(record.schema_history[0].schema.schema_version, Some(1));
+        assert_eq!(
+            record.schema_history[0]
+                .schema
+                .schema_fingerprint
+                .as_deref(),
+            Some("sha256:aaa")
+        );
+        assert_eq!(record.schema_history[1].generation, 2);
+        assert_eq!(record.schema_history[1].schema.schema_version, Some(2));
+        assert_eq!(
+            record.schema_history[1]
+                .schema
+                .schema_fingerprint
+                .as_deref(),
+            Some("sha256:bbb")
+        );
     }
 }

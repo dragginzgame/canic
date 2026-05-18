@@ -147,16 +147,16 @@ impl AllocationLedger {
         let next_generation = self.current_generation.saturating_add(1);
         let mut next = self.clone();
         next.current_generation = next_generation;
-        let declaration_count = u32::try_from(validated.declarations.len()).unwrap_or(u32::MAX);
+        let declaration_count = u32::try_from(validated.declarations().len()).unwrap_or(u32::MAX);
 
-        for declaration in &validated.declarations {
+        for declaration in validated.declarations() {
             record_declaration(&mut next, next_generation, declaration);
         }
 
         next.allocation_history.generations.push(GenerationRecord {
             generation: next_generation,
             parent_generation: Some(self.current_generation),
-            runtime_fingerprint: None,
+            runtime_fingerprint: validated.runtime_fingerprint().map(str::to_string),
             declaration_count,
             committed_at,
         });
@@ -193,9 +193,7 @@ fn record_declaration(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        declaration::DeclarationSnapshot, schema::SchemaMetadata, session::ValidatedAllocations,
-    };
+    use crate::{declaration::DeclarationSnapshot, schema::SchemaMetadata};
 
     fn declaration(key: &str, id: u8, schema_version: Option<u32>) -> AllocationDeclaration {
         AllocationDeclaration::new(
@@ -219,13 +217,17 @@ mod tests {
         }
     }
 
+    fn validated(
+        generation: u64,
+        declarations: Vec<AllocationDeclaration>,
+    ) -> crate::session::ValidatedAllocations {
+        crate::session::ValidatedAllocations::new(generation, declarations, None)
+    }
+
     #[test]
     fn stage_validated_generation_records_new_allocations() {
         let declarations = vec![declaration("app.users.v1", 100, Some(1))];
-        let validated = ValidatedAllocations {
-            generation: 3,
-            declarations,
-        };
+        let validated = validated(3, declarations);
 
         let staged = ledger().stage_validated_generation(&validated, Some(42));
 
@@ -241,17 +243,14 @@ mod tests {
 
     #[test]
     fn stage_validated_generation_preserves_omitted_records() {
-        let first = ValidatedAllocations {
-            generation: 3,
-            declarations: vec![
+        let first = validated(
+            3,
+            vec![
                 declaration("app.users.v1", 100, Some(1)),
                 declaration("app.orders.v1", 101, Some(1)),
             ],
-        };
-        let second = ValidatedAllocations {
-            generation: 4,
-            declarations: vec![declaration("app.users.v1", 100, Some(1))],
-        };
+        );
+        let second = validated(4, vec![declaration("app.users.v1", 100, Some(1))]);
 
         let staged = ledger().stage_validated_generation(&first, None);
         let staged = staged.stage_validated_generation(&second, None);
@@ -270,14 +269,8 @@ mod tests {
 
     #[test]
     fn stage_validated_generation_records_schema_metadata_history() {
-        let first = ValidatedAllocations {
-            generation: 3,
-            declarations: vec![declaration("app.users.v1", 100, Some(1))],
-        };
-        let second = ValidatedAllocations {
-            generation: 4,
-            declarations: vec![declaration("app.users.v1", 100, Some(2))],
-        };
+        let first = validated(3, vec![declaration("app.users.v1", 100, Some(1))]);
+        let second = validated(4, vec![declaration("app.users.v1", 100, Some(2))]);
 
         let staged = ledger().stage_validated_generation(&first, None);
         let staged = staged.stage_validated_generation(&second, None);
@@ -292,13 +285,28 @@ mod tests {
     fn snapshot_can_feed_validated_generation() {
         let snapshot = DeclarationSnapshot::new(vec![declaration("app.users.v1", 100, None)])
             .expect("snapshot");
-        let validated = ValidatedAllocations {
-            generation: 3,
-            declarations: snapshot.declarations,
-        };
+        let (declarations, runtime_fingerprint) = snapshot.into_parts();
+        let validated =
+            crate::session::ValidatedAllocations::new(3, declarations, runtime_fingerprint);
 
         let staged = ledger().stage_validated_generation(&validated, None);
 
         assert_eq!(staged.allocation_history.records.len(), 1);
+    }
+
+    #[test]
+    fn stage_validated_generation_records_runtime_fingerprint() {
+        let validated = crate::session::ValidatedAllocations::new(
+            3,
+            vec![declaration("app.users.v1", 100, None)],
+            Some("wasm:abc123".to_string()),
+        );
+
+        let staged = ledger().stage_validated_generation(&validated, None);
+
+        assert_eq!(
+            staged.allocation_history.generations[0].runtime_fingerprint,
+            Some("wasm:abc123".to_string())
+        );
     }
 }

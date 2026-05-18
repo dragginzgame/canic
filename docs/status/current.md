@@ -26,6 +26,23 @@ inspect only the files needed for the current task.
   `caller::has_app_role(role)` internal access predicate, giving app hubs and
   shards a first-class way to trust canonical sibling app canisters without
   relying on root-only subnet-registry checks.
+- Started `0.39.2` by making `canic-memory` depend on the local
+  `ic-memory` crate for generic stable-key and schema-metadata validation.
+  Canic-specific range and namespace authority rules remain in the
+  `canic-memory` adapter.
+- Tightened the `ic-memory` capability boundary so sealed declaration snapshots
+  and validated allocation sets cannot be fabricated by public struct literal,
+  and runtime fingerprints now flow into staged generation diagnostics.
+- Added a read-only `canic-memory` allocation-ledger projection into the
+  generic `ic-memory` model, preserving schema metadata history without moving
+  or rewriting the physical Canic ledger format.
+- Added a generic `ic-memory` diagnostic-export builder and a Canic API bridge
+  that exposes the projected allocation ledger in that machine-readable shape;
+  authorization remains an embedding-runtime concern.
+- Drafted the proposed 0.40 attested Canic-call hard cut at
+  `docs/design/0.40-attested-canic-calls/0.40-design.md`, replacing
+  AppIndex-only sibling authorization with root-signed caller-role envelopes
+  for Canic-to-Canic internal endpoints.
 - Moved the backup/restore design track forward to
   `docs/design/0.35-backup-restore/0.35-design.md` and marked the old 0.34
   draft as superseded.

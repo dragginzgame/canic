@@ -55,7 +55,7 @@ pub fn validate_allocations<P: AllocationPolicy>(
     snapshot: DeclarationSnapshot,
     policy: &P,
 ) -> Result<ValidatedAllocations, AllocationValidationError<P::Error>> {
-    for declaration in &snapshot.declarations {
+    for declaration in snapshot.declarations() {
         policy
             .validate_key(&declaration.stable_key)
             .map_err(AllocationValidationError::Policy)?;
@@ -66,10 +66,13 @@ pub fn validate_allocations<P: AllocationPolicy>(
         validate_declaration_history(ledger, declaration)?;
     }
 
-    Ok(ValidatedAllocations {
-        generation: ledger.current_generation,
-        declarations: snapshot.declarations,
-    })
+    let (declarations, runtime_fingerprint) = snapshot.into_parts();
+
+    Ok(ValidatedAllocations::new(
+        ledger.current_generation,
+        declarations,
+        runtime_fingerprint,
+    ))
 }
 
 fn validate_declaration_history<P>(
@@ -208,7 +211,7 @@ mod tests {
         )
         .expect("validated");
 
-        assert_eq!(validated.generation, 7);
+        assert_eq!(validated.generation(), 7);
     }
 
     #[test]

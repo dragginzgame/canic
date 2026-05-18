@@ -8,7 +8,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.39.x] - 2026-05-18 - `ic-memory` extraction
 
-- `0.39.1` adds an AppIndex-backed `caller::has_app_role(role)` access predicate so internal endpoints can trust canonical app canisters without falling back to root subnet-registry checks.
+- `0.39.2` wires `canic-memory` through local `ic-memory` validation, tightens validated-session boundaries, and adds a generic allocation-ledger projection.
+
+- `0.39.1` adds an AppIndex-backed `caller::has_app_role(role)` access predicate for internal sibling checks.
 
 - `0.39.0` starts the standalone `ic-memory` extraction by adding a generic allocation-governance crate built around `stable_key -> allocation_slot forever` while keeping Canic-specific range, namespace, controller, and lifecycle policy in Canic adapters.
 

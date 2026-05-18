@@ -1,4 +1,5 @@
 use crate::{ThisError, ledger};
+use ic_memory::{AllocationPolicy, AllocationSlot, AllocationSlotDescriptor, StableKey};
 use serde::{Deserialize, Serialize};
 use std::{cell::RefCell, collections::BTreeMap};
 
@@ -698,72 +699,12 @@ fn fallback_stable_key(crate_name: &str, label: &str) -> String {
 }
 
 fn validate_stable_key(stable_key: &str) -> Result<(), MemoryRegistryError> {
-    if stable_key.is_empty() {
-        return invalid_stable_key(stable_key, "must not be empty");
-    }
-    if stable_key.len() > 128 {
-        return invalid_stable_key(stable_key, "must be at most 128 bytes");
-    }
-    if !stable_key.is_ascii() {
-        return invalid_stable_key(stable_key, "must be ASCII");
-    }
-    if stable_key.bytes().any(|b| b.is_ascii_uppercase()) {
-        return invalid_stable_key(stable_key, "must be lowercase");
-    }
-    if stable_key.contains(char::is_whitespace) {
-        return invalid_stable_key(stable_key, "must not contain whitespace");
-    }
-    if stable_key.contains('/') || stable_key.contains('-') {
-        return invalid_stable_key(stable_key, "must not contain slashes or hyphens");
-    }
-    if stable_key.starts_with('.') || stable_key.ends_with('.') {
-        return invalid_stable_key(stable_key, "must not start or end with a dot");
-    }
-
-    let Some(version_index) = stable_key.rfind(".v") else {
-        return invalid_stable_key(stable_key, "must end with .vN");
-    };
-    let version = &stable_key[version_index + 2..];
-    if version.is_empty()
-        || version.starts_with('0')
-        || !version.bytes().all(|b| b.is_ascii_digit())
-    {
-        return invalid_stable_key(stable_key, "version suffix must be nonzero .vN");
-    }
-
-    let prefix = &stable_key[..version_index];
-    if prefix.is_empty() {
-        return invalid_stable_key(
-            stable_key,
-            "must contain at least one segment before version",
-        );
-    }
-
-    for segment in prefix.split('.') {
-        validate_stable_key_segment(stable_key, segment)?;
-    }
-
-    Ok(())
-}
-
-fn validate_stable_key_segment(stable_key: &str, segment: &str) -> Result<(), MemoryRegistryError> {
-    if segment.is_empty() {
-        return invalid_stable_key(stable_key, "must not contain empty segments");
-    }
-    let mut bytes = segment.bytes();
-    let Some(first) = bytes.next() else {
-        return invalid_stable_key(stable_key, "must not contain empty segments");
-    };
-    if !first.is_ascii_lowercase() {
-        return invalid_stable_key(stable_key, "segments must start with a lowercase letter");
-    }
-    if !bytes.all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_') {
-        return invalid_stable_key(
-            stable_key,
-            "segments may contain only lowercase letters, digits, and underscores",
-        );
-    }
-    Ok(())
+    ic_memory::StableKey::parse(stable_key)
+        .map(drop)
+        .map_err(|err| MemoryRegistryError::InvalidStableKey {
+            stable_key: err.stable_key,
+            reason: err.reason,
+        })
 }
 
 fn validate_schema_metadata(
@@ -771,50 +712,30 @@ fn validate_schema_metadata(
     schema_version: Option<u32>,
     schema_fingerprint: Option<&str>,
 ) -> Result<(), MemoryRegistryError> {
-    if schema_version == Some(0) {
-        return Err(MemoryRegistryError::InvalidSchemaMetadata {
+    ic_memory::SchemaMetadata::new(schema_version, schema_fingerprint.map(str::to_string))
+        .map(drop)
+        .map_err(|err| MemoryRegistryError::InvalidSchemaMetadata {
             stable_key: stable_key.to_string(),
-            reason: "schema_version must be greater than zero when present",
-        });
-    }
-
-    let Some(fingerprint) = schema_fingerprint else {
-        return Ok(());
-    };
-
-    if fingerprint.is_empty() {
-        return Err(MemoryRegistryError::InvalidSchemaMetadata {
-            stable_key: stable_key.to_string(),
-            reason: "schema_fingerprint must not be empty when present",
-        });
-    }
-    if fingerprint.len() > 256 {
-        return Err(MemoryRegistryError::InvalidSchemaMetadata {
-            stable_key: stable_key.to_string(),
-            reason: "schema_fingerprint must be at most 256 bytes",
-        });
-    }
-    if !fingerprint.is_ascii() {
-        return Err(MemoryRegistryError::InvalidSchemaMetadata {
-            stable_key: stable_key.to_string(),
-            reason: "schema_fingerprint must be ASCII",
-        });
-    }
-    if fingerprint.bytes().any(|byte| byte.is_ascii_control()) {
-        return Err(MemoryRegistryError::InvalidSchemaMetadata {
-            stable_key: stable_key.to_string(),
-            reason: "schema_fingerprint must not contain ASCII control characters",
-        });
-    }
-
-    Ok(())
+            reason: schema_metadata_error_reason(err),
+        })
 }
 
-fn invalid_stable_key<T>(stable_key: &str, reason: &'static str) -> Result<T, MemoryRegistryError> {
-    Err(MemoryRegistryError::InvalidStableKey {
-        stable_key: stable_key.to_string(),
-        reason,
-    })
+const fn schema_metadata_error_reason(err: ic_memory::SchemaMetadataError) -> &'static str {
+    match err {
+        ic_memory::SchemaMetadataError::InvalidVersion => {
+            "schema_version must be greater than zero when present"
+        }
+        ic_memory::SchemaMetadataError::EmptyFingerprint => {
+            "schema_fingerprint must not be empty when present"
+        }
+        ic_memory::SchemaMetadataError::FingerprintTooLong => {
+            "schema_fingerprint must be at most 256 bytes"
+        }
+        ic_memory::SchemaMetadataError::NonAsciiFingerprint => "schema_fingerprint must be ASCII",
+        ic_memory::SchemaMetadataError::ControlCharacterFingerprint => {
+            "schema_fingerprint must not contain ASCII control characters"
+        }
+    }
 }
 
 fn validate_id_authority(
@@ -822,35 +743,96 @@ fn validate_id_authority(
     crate_name: &str,
     stable_key: &str,
 ) -> Result<(), MemoryRegistryError> {
-    if stable_key.starts_with("canic.") {
-        if !crate_name.starts_with("canic") {
+    let stable_key =
+        StableKey::parse(stable_key).map_err(|err| MemoryRegistryError::InvalidStableKey {
+            stable_key: err.stable_key,
+            reason: err.reason,
+        })?;
+    CanicMemoryPolicy { crate_name }
+        .validate_slot(&stable_key, &AllocationSlotDescriptor::memory_manager(id))
+}
+
+///
+/// CanicMemoryPolicy
+///
+/// Canic-specific allocation authority adapter for the generic `ic-memory`
+/// policy boundary.
+struct CanicMemoryPolicy<'a> {
+    crate_name: &'a str,
+}
+
+impl AllocationPolicy for CanicMemoryPolicy<'_> {
+    type Error = MemoryRegistryError;
+
+    fn validate_key(&self, key: &StableKey) -> Result<(), Self::Error> {
+        if key.as_str().starts_with("canic.") && !self.crate_name.starts_with("canic") {
             return Err(MemoryRegistryError::RangeAuthorityViolation {
-                stable_key: stable_key.to_string(),
-                id,
+                stable_key: key.to_string(),
+                id: 0,
                 reason: "canic.* keys may only be declared by Canic framework crates",
             });
         }
 
-        if id <= CANIC_FRAMEWORK_MAX_ID {
+        Ok(())
+    }
+
+    fn validate_slot(
+        &self,
+        key: &StableKey,
+        slot: &AllocationSlotDescriptor,
+    ) -> Result<(), Self::Error> {
+        let Some(id) = memory_manager_slot_id(slot) else {
+            return Err(MemoryRegistryError::RangeAuthorityViolation {
+                stable_key: key.to_string(),
+                id: INTERNAL_RESERVED_MEMORY_ID,
+                reason: "Canic memory policy only supports MemoryManagerId slots",
+            });
+        };
+
+        if key.as_str().starts_with("canic.") {
+            if !self.crate_name.starts_with("canic") {
+                return Err(MemoryRegistryError::RangeAuthorityViolation {
+                    stable_key: key.to_string(),
+                    id,
+                    reason: "canic.* keys may only be declared by Canic framework crates",
+                });
+            }
+            if id <= CANIC_FRAMEWORK_MAX_ID {
+                return Ok(());
+            }
+
+            return Err(MemoryRegistryError::RangeAuthorityViolation {
+                stable_key: key.to_string(),
+                id,
+                reason: "canic.* keys must use ids 0-99",
+            });
+        }
+
+        if (APPLICATION_MIN_ID..INTERNAL_RESERVED_MEMORY_ID).contains(&id) {
             return Ok(());
         }
 
-        return Err(MemoryRegistryError::RangeAuthorityViolation {
-            stable_key: stable_key.to_string(),
+        Err(MemoryRegistryError::RangeAuthorityViolation {
+            stable_key: key.to_string(),
             id,
-            reason: "canic.* keys must use ids 0-99",
-        });
+            reason: "application keys must use ids 100-254",
+        })
     }
 
-    if (APPLICATION_MIN_ID..INTERNAL_RESERVED_MEMORY_ID).contains(&id) {
-        return Ok(());
+    fn validate_reserved_slot(
+        &self,
+        key: &StableKey,
+        slot: &AllocationSlotDescriptor,
+    ) -> Result<(), Self::Error> {
+        self.validate_slot(key, slot)
     }
+}
 
-    Err(MemoryRegistryError::RangeAuthorityViolation {
-        stable_key: stable_key.to_string(),
-        id,
-        reason: "application keys must use ids 100-254",
-    })
+const fn memory_manager_slot_id(slot: &AllocationSlotDescriptor) -> Option<u8> {
+    match &slot.slot {
+        AllocationSlot::MemoryManagerId(id) => Some(*id),
+        AllocationSlot::NamedPartition(_) | AllocationSlot::Custom { .. } => None,
+    }
 }
 
 fn canonical_segment(value: &str) -> String {

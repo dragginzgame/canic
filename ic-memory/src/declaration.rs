@@ -71,9 +71,9 @@ impl DeclarationCollector {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct DeclarationSnapshot {
     /// Runtime declarations.
-    pub declarations: Vec<AllocationDeclaration>,
+    declarations: Vec<AllocationDeclaration>,
     /// Optional binary/runtime identity for generation diagnostics.
-    pub runtime_fingerprint: Option<String>,
+    runtime_fingerprint: Option<String>,
 }
 
 impl DeclarationSnapshot {
@@ -103,6 +103,22 @@ impl DeclarationSnapshot {
     #[must_use]
     pub const fn len(&self) -> usize {
         self.declarations.len()
+    }
+
+    /// Borrow the sealed declarations.
+    #[must_use]
+    pub fn declarations(&self) -> &[AllocationDeclaration] {
+        &self.declarations
+    }
+
+    /// Borrow the optional runtime fingerprint.
+    #[must_use]
+    pub fn runtime_fingerprint(&self) -> Option<&str> {
+        self.runtime_fingerprint.as_deref()
+    }
+
+    pub(crate) fn into_parts(self) -> (Vec<AllocationDeclaration>, Option<String>) {
+        (self.declarations, self.runtime_fingerprint)
     }
 }
 

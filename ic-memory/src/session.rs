@@ -11,12 +11,44 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ValidatedAllocations {
     /// Committed generation that validated these allocations.
-    pub generation: u64,
+    generation: u64,
     /// Validated declarations.
-    pub declarations: Vec<AllocationDeclaration>,
+    declarations: Vec<AllocationDeclaration>,
+    /// Optional binary/runtime identity for generation diagnostics.
+    runtime_fingerprint: Option<String>,
 }
 
 impl ValidatedAllocations {
+    pub(crate) const fn new(
+        generation: u64,
+        declarations: Vec<AllocationDeclaration>,
+        runtime_fingerprint: Option<String>,
+    ) -> Self {
+        Self {
+            generation,
+            declarations,
+            runtime_fingerprint,
+        }
+    }
+
+    /// Return the committed generation that validated these allocations.
+    #[must_use]
+    pub const fn generation(&self) -> u64 {
+        self.generation
+    }
+
+    /// Borrow the validated declarations.
+    #[must_use]
+    pub fn declarations(&self) -> &[AllocationDeclaration] {
+        &self.declarations
+    }
+
+    /// Borrow the optional runtime fingerprint.
+    #[must_use]
+    pub fn runtime_fingerprint(&self) -> Option<&str> {
+        self.runtime_fingerprint.as_deref()
+    }
+
     /// Find a validated slot by stable key.
     #[must_use]
     pub fn slot_for(&self, key: &StableKey) -> Option<&AllocationSlotDescriptor> {
