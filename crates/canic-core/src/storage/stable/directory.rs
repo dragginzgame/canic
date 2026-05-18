@@ -12,7 +12,7 @@ eager_static! {
     static DIRECTORY_REGISTRY: RefCell<
         BTreeMap<DirectoryKey, DirectoryEntryRecord, VirtualMemory<DefaultMemoryImpl>>
     > = RefCell::new(
-        BTreeMap::init(canic_memory::ic_memory_key!("canic.core.directory_registry.v1", DirectoryRegistry, DIRECTORY_REGISTRY_ID)),
+        BTreeMap::init(crate::ic_memory_key!("canic.core.directory_registry.v1", DirectoryRegistry, DIRECTORY_REGISTRY_ID)),
     );
 }
 

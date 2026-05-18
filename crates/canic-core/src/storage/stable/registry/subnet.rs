@@ -28,7 +28,7 @@ eager_static! {
     static SUBNET_REGISTRY: RefCell<
         BTreeMap<Principal, CanisterRecord, VirtualMemory<DefaultMemoryImpl>>
     > = RefCell::new(BTreeMap::init(
-        canic_memory::ic_memory_key!("canic.core.subnet_registry.v1", SubnetRegistry, SUBNET_REGISTRY_ID)
+        crate::ic_memory_key!("canic.core.subnet_registry.v1", SubnetRegistry, SUBNET_REGISTRY_ID)
     ));
 }
 

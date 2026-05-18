@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.39.x] - 2026-05-18 - `ic-memory` extraction
 
+- `0.39.10` moves the Canic managed-memory macro surface into `canic-core`, removes the macro surface from `canic-memory`, and confines direct backend references to the temporary core adapter boundary.
+
 - `0.39.9` shrinks the remaining Canic memory boundary by removing direct `canic-memory` dependencies from the facade and control plane, routing managed-memory access through `canic-core` while `canic-memory` continues toward retirement.
 
 - `0.39.8` moves `MemoryManager` slot-shape validation into `ic-memory`, starts making `canic-memory` consume the local extraction crate directly, and reallocates Canic framework IDs so `0-9` belong to future `ic-memory` governance.

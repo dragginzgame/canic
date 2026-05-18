@@ -1,5 +1,6 @@
 pub mod mapper;
 
+use crate::memory::runtime::registry::MemoryRegistryRuntime;
 use crate::{
     InternalError,
     cdk::api::canister_self,
@@ -9,7 +10,6 @@ use crate::{
     view::env::ValidatedEnv,
 };
 use crate::{dto::env::EnvSnapshotResponse, ops::runtime::env::mapper::EnvRecordMapper};
-use canic_memory::runtime::registry::MemoryRegistryRuntime;
 use thiserror::Error as ThisError;
 
 ///

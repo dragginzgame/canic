@@ -14,7 +14,7 @@ eager_static! {
     static ROOT_REPLAY: RefCell<
         BTreeMap<ReplaySlotKey, RootReplayRecord, VirtualMemory<DefaultMemoryImpl>>
     > = RefCell::new(
-        BTreeMap::init(canic_memory::ic_memory_key!("canic.core.root_replay.v1", RootReplayStore, ROOT_REPLAY_ID)),
+        BTreeMap::init(crate::ic_memory_key!("canic.core.root_replay.v1", RootReplayStore, ROOT_REPLAY_ID)),
     );
 }
 

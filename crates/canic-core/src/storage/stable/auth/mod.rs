@@ -27,7 +27,7 @@ const DELEGATED_TOKEN_USE_CAPACITY: usize = 8_192;
 eager_static! {
     pub(super) static AUTH_STATE: RefCell<Cell<AuthStateRecord, VirtualMemory<DefaultMemoryImpl>>> =
         RefCell::new(Cell::init(
-            canic_memory::ic_memory_key!("canic.core.auth_state.v1", AuthState, AUTH_STATE_ID),
+            crate::ic_memory_key!("canic.core.auth_state.v1", AuthState, AUTH_STATE_ID),
             AuthStateRecord::default(),
         ));
 }

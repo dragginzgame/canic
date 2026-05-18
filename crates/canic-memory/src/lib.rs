@@ -1,15 +1,13 @@
 //! Core stable-memory utilities shared across Canic consumers.
 //!
-//! This crate hosts the shared memory manager, eager TLS helpers, registry
-//! (ID/range reservation), and ergonomics macros (`ic_memory!`, `ic_memory_range!`,
-//! `eager_static!`) so external crates can coordinate stable memory without
-//! depending on the full `canic` stack.
+//! This crate temporarily hosts the shared memory manager, eager TLS runtime,
+//! and registry backend while Canic memory ownership moves into `canic-core`
+//! and durable allocation-governance mechanics move into `ic-memory`.
 
 /// Supported high-level API for bootstrapping, registering, and inspecting
 /// stable-memory slots.
 pub mod api;
 mod ledger;
-mod macros;
 #[doc(hidden)]
 pub mod manager;
 mod policy;

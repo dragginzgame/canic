@@ -25,7 +25,7 @@ eager_static! {
     static CANISTER_CHILDREN: RefCell<
         BTreeMap<Principal, CanisterRecord, VirtualMemory<DefaultMemoryImpl>>
     > = RefCell::new(
-        BTreeMap::init(canic_memory::ic_memory_key!("canic.core.canister_children.v1", CanisterChildren, CANISTER_CHILDREN_ID)),
+        BTreeMap::init(crate::ic_memory_key!("canic.core.canister_children.v1", CanisterChildren, CANISTER_CHILDREN_ID)),
     );
 }
 

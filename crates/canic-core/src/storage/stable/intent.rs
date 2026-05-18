@@ -27,7 +27,7 @@ pub const INTENT_STORE_SCHEMA_VERSION: u32 = 1;
 eager_static! {
     static INTENT_META: RefCell<Cell<IntentStoreMetaRecord, VirtualMemory<DefaultMemoryImpl>>> =
         RefCell::new(Cell::init(
-            canic_memory::ic_memory_key!("canic.core.intent_meta.v1", IntentStoreMetaRecord, INTENT_META_ID),
+            crate::ic_memory_key!("canic.core.intent_meta.v1", IntentStoreMetaRecord, INTENT_META_ID),
             IntentStoreMetaRecord::default(),
         ));
 }
@@ -36,7 +36,7 @@ eager_static! {
     static INTENT_RECORDS: RefCell<
         BTreeMap<IntentId, IntentRecord, VirtualMemory<DefaultMemoryImpl>>
     > = RefCell::new(
-        BTreeMap::init(canic_memory::ic_memory_key!("canic.core.intent_records.v1", IntentRecord, INTENT_RECORDS_ID)),
+        BTreeMap::init(crate::ic_memory_key!("canic.core.intent_records.v1", IntentRecord, INTENT_RECORDS_ID)),
     );
 }
 
@@ -44,7 +44,7 @@ eager_static! {
     static INTENT_TOTALS: RefCell<
         BTreeMap<IntentResourceKey, IntentResourceTotalsRecord, VirtualMemory<DefaultMemoryImpl>>
     > = RefCell::new(
-        BTreeMap::init(canic_memory::ic_memory_key!("canic.core.intent_totals.v1", IntentResourceTotalsRecord, INTENT_TOTALS_ID)),
+        BTreeMap::init(crate::ic_memory_key!("canic.core.intent_totals.v1", IntentResourceTotalsRecord, INTENT_TOTALS_ID)),
     );
 }
 
@@ -52,7 +52,7 @@ eager_static! {
     static INTENT_PENDING: RefCell<
         BTreeMap<IntentId, IntentPendingEntryRecord, VirtualMemory<DefaultMemoryImpl>>
     > = RefCell::new(
-        BTreeMap::init(canic_memory::ic_memory_key!("canic.core.intent_pending.v1", IntentPendingEntryRecord, INTENT_PENDING_ID)),
+        BTreeMap::init(crate::ic_memory_key!("canic.core.intent_pending.v1", IntentPendingEntryRecord, INTENT_PENDING_ID)),
     );
 }
 

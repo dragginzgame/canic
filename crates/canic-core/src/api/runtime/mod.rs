@@ -3,10 +3,10 @@ pub mod install;
 use crate::{
     CRATE_NAME,
     dto::error::Error,
+    memory::runtime::MemoryRuntimeApi as MemoryBootstrapApi,
     ops::runtime::memory::MemoryRegistryOpsError,
     storage::stable::{CANIC_MEMORY_MAX, CANIC_MEMORY_MIN},
 };
-use canic_memory::runtime::MemoryRuntimeApi as MemoryBootstrapApi;
 
 ///
 /// MemoryRuntimeApi

@@ -35,6 +35,8 @@ pub mod ids;
 #[doc(hidden)]
 pub mod ingress;
 pub mod log;
+pub mod memory;
+mod memory_macros;
 pub mod perf;
 pub mod protocol;
 #[doc(hidden)]
@@ -51,11 +53,7 @@ pub(crate) mod storage;
 pub(crate) mod view;
 pub(crate) mod workflow;
 
-pub use {
-    ::canic_cdk as cdk,
-    ::canic_memory as memory,
-    ::canic_memory::{eager_init, eager_static, ic_memory, ic_memory_key, ic_memory_range},
-};
+pub use ::canic_cdk as cdk;
 
 pub(crate) use error::{InternalError, InternalErrorClass, InternalErrorOrigin};
 
@@ -91,13 +89,13 @@ const _: () = {
         });
     }
 
-    #[canic_memory::__reexports::ctor::ctor(
+    #[crate::__reexports::ctor::ctor(
         unsafe,
         anonymous,
-        crate_path = canic_memory::__reexports::ctor
+        crate_path = crate::__reexports::ctor
     )]
     fn __canic_install_memory_test_bootstrap_hook() {
-        canic_memory::runtime::install_test_bootstrap_hook(__canic_memory_test_bootstrap);
+        crate::memory::runtime::install_test_bootstrap_hook(__canic_memory_test_bootstrap);
     }
 };
 
@@ -132,6 +130,6 @@ macro_rules! assert_err_variant {
 mod memory_bootstrap_tests {
     #[test]
     fn installs_host_test_bootstrap_hook() {
-        assert!(canic_memory::runtime::has_test_bootstrap_hook());
+        assert!(crate::memory::runtime::has_test_bootstrap_hook());
     }
 }

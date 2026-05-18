@@ -13,7 +13,7 @@ const PRESENT: u8 = 1;
 eager_static! {
     static SHARDING_LIFECYCLE: RefCell<ShardingLifecycleCore<VirtualMemory<DefaultMemoryImpl>>> =
         RefCell::new(ShardingLifecycleCore::new(
-            BTreeMap::init(canic_memory::ic_memory_key!("canic.core.sharding_active_set.v1", ShardingActiveSet, SHARDING_ACTIVE_SET_ID)),
+            BTreeMap::init(crate::ic_memory_key!("canic.core.sharding_active_set.v1", ShardingActiveSet, SHARDING_ACTIVE_SET_ID)),
         ));
 }
 

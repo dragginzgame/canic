@@ -16,7 +16,7 @@ eager_static! {
     static SCALING_REGISTRY: RefCell<
         BTreeMap<Principal, WorkerEntryRecord, VirtualMemory<DefaultMemoryImpl>>
     > = RefCell::new(
-        BTreeMap::init(canic_memory::ic_memory_key!("canic.core.scaling_registry.v1", ScalingRegistry, SCALING_REGISTRY_ID)),
+        BTreeMap::init(crate::ic_memory_key!("canic.core.scaling_registry.v1", ScalingRegistry, SCALING_REGISTRY_ID)),
     );
 }
 

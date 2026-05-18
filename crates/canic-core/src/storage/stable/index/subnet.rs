@@ -6,7 +6,7 @@ use std::cell::RefCell;
 
 eager_static! {
     static SUBNET_INDEX: RefCell<BTreeMap<CanisterRole, Principal, VirtualMemory<DefaultMemoryImpl>>> =
-        RefCell::new(BTreeMap::init(canic_memory::ic_memory_key!("canic.core.subnet_index.v1", SubnetIndex, SUBNET_INDEX_ID)));
+        RefCell::new(BTreeMap::init(crate::ic_memory_key!("canic.core.subnet_index.v1", SubnetIndex, SUBNET_INDEX_ID)));
 }
 
 ///

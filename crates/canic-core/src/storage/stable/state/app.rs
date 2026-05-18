@@ -14,7 +14,7 @@ use std::{
 eager_static! {
     static APP_STATE: RefCell<Cell<AppStateRecord, VirtualMemory<DefaultMemoryImpl>>> =
         RefCell::new(Cell::init(
-            canic_memory::ic_memory_key!("canic.core.app_state.v1", AppState, APP_STATE_ID),
+            crate::ic_memory_key!("canic.core.app_state.v1", AppState, APP_STATE_ID),
             AppStateRecord::default(),
         ));
 }

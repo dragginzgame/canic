@@ -6,7 +6,7 @@ use std::cell::RefCell;
 
 eager_static! {
     static APP_INDEX: RefCell<BTreeMap<CanisterRole, Principal, VirtualMemory<DefaultMemoryImpl>>> =
-        RefCell::new(BTreeMap::init(canic_memory::ic_memory_key!("canic.core.app_index.v1", AppIndex, APP_INDEX_ID)));
+        RefCell::new(BTreeMap::init(crate::ic_memory_key!("canic.core.app_index.v1", AppIndex, APP_INDEX_ID)));
 }
 
 ///

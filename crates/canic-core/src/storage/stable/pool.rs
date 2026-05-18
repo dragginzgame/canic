@@ -15,7 +15,7 @@ eager_static! {
     static POOL_STORE: RefCell<
         BTreeMap<Principal, PoolRecord, VirtualMemory<DefaultMemoryImpl>>
     > = RefCell::new(
-        BTreeMap::init(canic_memory::ic_memory_key!("canic.core.canister_pool.v1", PoolStore, CANISTER_POOL_ID)),
+        BTreeMap::init(crate::ic_memory_key!("canic.core.canister_pool.v1", PoolStore, CANISTER_POOL_ID)),
     );
 }
 

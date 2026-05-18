@@ -48,6 +48,10 @@ fn scan_dir(root: &Path, violations: &mut Vec<PathBuf>) {
             continue;
         }
 
+        if is_managed_memory_runtime_boundary(&path) {
+            continue;
+        }
+
         let Ok(contents) = fs::read_to_string(&path) else {
             continue;
         };
@@ -73,6 +77,10 @@ fn has_forbidden_memory_pattern(contents: &str) -> bool {
     ];
 
     FORBIDDEN.iter().any(|pattern| contents.contains(pattern))
+}
+
+fn is_managed_memory_runtime_boundary(path: &Path) -> bool {
+    path.ends_with("crates/canic-core/src/memory/mod.rs")
 }
 
 fn workspace_root() -> PathBuf {

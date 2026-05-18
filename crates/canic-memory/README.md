@@ -1,9 +1,9 @@
 # canic-memory
 
-`canic-memory` provides stable-memory helpers for Internet Computer canisters. It
-can be used on its own, without the rest of Canic, when a crate needs one shared
-memory manager, deterministic thread-local initialization, and validation for
-stable-memory ID ownership.
+`canic-memory` is the temporary Canic memory backend being retired during the
+`ic-memory` extraction. New Canic-managed code should use the memory surface
+re-exported by `canic-core`; durable allocation-governance primitives are moving
+to the standalone `ic-memory` crate.
 
 The crate currently declares MSRV `1.91.0`. The Canic workspace may build with a
 newer pinned toolchain, but downstream crates compiling `canic-memory` from
@@ -11,15 +11,16 @@ source should only need Rust `1.91.0` or newer.
 
 ## What It Provides
 
-- A shared `MemoryManager<DefaultMemoryImpl>` used by all helpers.
+- A shared `MemoryManager<DefaultMemoryImpl>` backend.
 - Per-crate memory ID range reservation and overlap validation.
-- `ic_memory!` and `ic_memory_range!` for declarative stable-memory slots.
 - `MemoryApi` for declaring startup-selected stable-memory IDs and opening
   validated slots.
-- `eager_static!` and `eager_init!` for deterministic startup initialization.
 - Compatibility re-exports of `impl_storable_bounded!` and
   `impl_storable_unbounded!` from `canic-cdk`.
 - A `canic_cdk` re-export at `canic_memory::cdk`.
+
+The Canic-managed macro surface now lives in `canic-core`, not this backend
+crate.
 
 ## Install
 
@@ -37,15 +38,15 @@ canic-memory = "0.38"
 
 ## Quick Start
 
-Declare stable structures with `eager_static!` so they are touched during
-startup, not lazily during the first endpoint call.
+In Canic-managed crates, declare stable structures through `canic-core` so they
+are touched during startup, not lazily during the first endpoint call.
 
 ```rust
-use canic_memory::cdk::structures::{
+use canic_core::cdk::structures::{
     BTreeMap, DefaultMemoryImpl,
     memory::VirtualMemory,
 };
-use canic_memory::{eager_static, ic_memory_key};
+use canic_core::{eager_static, ic_memory_key};
 use std::cell::RefCell;
 
 struct Users;
@@ -72,8 +73,8 @@ fn init_memory() {
 
 `bootstrap_owner_range(...)` performs the standalone startup sequence:
 
-1. Collect constructor-registered `ic_memory_key!` and `ic_memory!`
-   declarations without opening their virtual memories.
+1. Collect constructor-registered `ic_memory_key!` declarations without opening
+   their virtual memories.
 2. Run every registered `eager_init!` body so `ic_memory_range!` declarations
    are collected.
 3. Reserve the caller's owner range and validate the sealed declaration
@@ -90,7 +91,7 @@ Stable-memory IDs are global inside one canister. Reserve a range for each crate
 that owns stable structures, then keep that crate's IDs inside the range.
 
 ```rust
-use canic_memory::{eager_init, ic_memory_range};
+use canic_core::{eager_init, ic_memory_range};
 
 eager_init!({
     ic_memory_range!(20, 29);
@@ -265,8 +266,8 @@ fn bootstrap_memory() {
 }
 ```
 
-If all owner ranges are already queued through `ic_memory_range!`, and the
-caller does not need to reserve an additional initial range, use:
+If all owner ranges are already queued by the embedding runtime and the caller
+does not need to reserve an additional initial range, use:
 
 ```rust
 use canic_memory::api::MemoryApi;
@@ -276,10 +277,9 @@ fn bootstrap_memory() {
 }
 ```
 
-Accessing an `ic_memory!` or `ic_memory_key!` slot before bootstrap will panic
-with a message pointing back to memory bootstrap. This is intentional: stable
-memory layout problems should fail during lifecycle startup, not during a user
-call.
+Opening a declared memory slot before bootstrap will panic with a message
+pointing back to memory bootstrap. This is intentional: stable memory layout
+problems should fail during lifecycle startup, not during a user call.
 
 ## Testing
 
@@ -310,7 +310,6 @@ fn reserves_and_registers() {
 - `manager` - shared thread-local memory manager.
 - `registry` - range reservation, ID registration, pending queues, and errors.
 - `runtime` - eager TLS execution and registry startup glue.
-- `macros` - exported memory and runtime macros.
 - `serialize` - compatibility re-export of `canic_cdk::serialize`.
 
 ## Notes
@@ -319,9 +318,9 @@ fn reserves_and_registers() {
   framework code uses `10-99`, application code uses `100-254`, and ID `255`
   is the unallocated-bucket sentinel and is permanently invalid as a virtual
   memory ID.
-- Prefer `ic_memory_key!` for every Canic-managed memory. The stable key is the
-  ABI identity and should not be renamed when packages, modules, or marker types
-  move. `ic_memory!` remains available for standalone explicit-ID users outside
-  the Canic runtime bootstrap contract.
-- Consumers outside Canic can import only `canic-memory` plus `canic-cdk`; the
-  rest of the Canic stack is optional.
+- Prefer `canic_core::ic_memory_key!` for every Canic-managed memory. The
+  stable key is the ABI identity and should not be renamed when packages,
+  modules, or marker types move.
+- `canic-memory` is no longer the macro-owning surface. It remains only as a
+  temporary backend while Canic moves the remaining runtime glue into
+  `canic-core` and generic allocation governance into `ic-memory`.

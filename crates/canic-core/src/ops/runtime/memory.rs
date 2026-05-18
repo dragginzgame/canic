@@ -6,17 +6,17 @@ use crate::{
     dto::memory::{
         MemoryLedgerResponse, MemoryRangeAuthorityEntry, MemoryRangeEntry, MemoryRegistryEntry,
     },
+    memory::{
+        api::MemoryApi,
+        registry::MemoryRegistryError,
+        runtime::{
+            init_eager_tls,
+            registry::{MemoryRegistryInitSummary as RawInitSummary, MemoryRegistryRuntime},
+            run_registered_eager_init,
+        },
+    },
     ops::runtime::RuntimeOpsError,
     storage::stable::{CANIC_MEMORY_MAX, CANIC_MEMORY_MIN},
-};
-use canic_memory::{
-    api::MemoryApi,
-    registry::MemoryRegistryError,
-    runtime::{
-        init_eager_tls,
-        registry::{MemoryRegistryInitSummary as RawInitSummary, MemoryRegistryRuntime},
-        run_registered_eager_init,
-    },
 };
 use thiserror::Error as ThisError;
 

@@ -84,6 +84,12 @@ inspect only the files needed for the current task.
   top-level `canic` facade and `canic-control-plane`. `canic-core` is now the
   remaining Canic runtime boundary that directly owns `canic-memory` bootstrap
   glue while the extraction continues toward deleting the compatibility crate.
+- Started `0.39.10` by moving the Canic managed-memory macro surface into
+  `canic-core`: explicit-key memory declarations, range reservations, and
+  eager-init helpers now expand through the core adapter, while the legacy
+  implicit `ic_memory!` macro is not part of the core surface. The duplicated
+  macro module has also been removed from `canic-memory`, leaving that crate as
+  temporary backend glue.
 - Added a workspace manifest guard so explicitly publishable crates cannot add
   runtime or build dependencies on workspace crates marked `publish = false`.
 - Wired the same manifest-boundary guard into `scripts/ci/publish-workspace.sh`
