@@ -114,6 +114,12 @@ inspect only the files needed for the current task.
 - Extended `0.39.14` so protected commit recovery diagnostics are generated
   from the same generic `ic-memory` store trait and surfaced through Canic's
   ledger snapshot response.
+- Started `0.39.15` by pointing Canic's workspace dependency at the standalone
+  crates.io `ic-memory 0.0.1` package and removing the stale in-tree
+  `ic-memory` workspace member/source copy.
+- Removed the remaining current `canic-memory` references from README and the
+  packaged-downstream publish verification scripts; historical changelog/audit
+  references still describe older releases.
 - Added a workspace manifest guard so explicitly publishable crates cannot add
   runtime or build dependencies on workspace crates marked `publish = false`.
 - Wired the same manifest-boundary guard into `scripts/ci/publish-workspace.sh`

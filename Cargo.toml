@@ -36,7 +36,6 @@ members = [
     "fleets/test/scale_hub",
     "fleets/test/user_hub",
     "fleets/test/user_shard",
-    "ic-memory",
 ]
 resolver = "2"
 
@@ -78,7 +77,7 @@ futures = "0.3"
 ic-cdk = "0.20.1"
 ic-cdk-management-canister = "0.1.0"
 ic-cdk-timers = "1.0"
-ic-memory = { version = "0.39.14", path = "ic-memory" }
+ic-memory = "0.0.1"
 ic-stable-structures = "0.7.2"
 icrc-ledger-types = { version = "0.2", default-features = false }
 k256 = { version = "0.13", default-features = false, features = ["ecdsa"] }

@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.39.x] - 2026-05-18 - `ic-memory` extraction
 
+- `0.39.15` points Canic at the standalone crates.io `ic-memory 0.0.1` package and removes the in-tree `ic-memory` workspace member.
+
 - `0.39.14` turns dual-slot protected recovery and diagnostics into `ic-memory` store-trait mechanics and adds protected-slot recovery details to the Canic memory-ledger diagnostic response.
 
 - `0.39.13` moves reusable dual-slot recovery selection into `ic-memory` and makes Canic ledger commits choose the inactive slot from validated recovery state instead of an unprotected header pointer.

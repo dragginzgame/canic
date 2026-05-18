@@ -41,7 +41,6 @@ populate_isolated_package_root() {
         "$PACKAGE_STAGING_ROOT/canic-core-$VERSION.crate" \
         "$PACKAGE_STAGING_ROOT/canic-macros-$VERSION.crate" \
         "$PACKAGE_STAGING_ROOT/canic-host-$VERSION.crate" \
-        "$PACKAGE_STAGING_ROOT/canic-memory-$VERSION.crate" \
         "$PACKAGE_STAGING_ROOT/canic-$VERSION.crate"
     do
         [ -f "$crate_archive" ] || {
@@ -68,7 +67,6 @@ canic-control-plane = { path = "package-root/canic-control-plane-$VERSION" }
 canic-core = { path = "package-root/canic-core-$VERSION" }
 canic-host = { path = "package-root/canic-host-$VERSION" }
 canic-macros = { path = "package-root/canic-macros-$VERSION" }
-canic-memory = { path = "package-root/canic-memory-$VERSION" }
 EOF
 }
 
@@ -150,7 +148,6 @@ main() {
     ensure_packaged_crate canic-core
     ensure_packaged_crate canic-macros
     ensure_packaged_crate canic-host
-    ensure_packaged_crate canic-memory
     ensure_packaged_crate canic
     populate_isolated_package_root
 
