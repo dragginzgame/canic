@@ -17,8 +17,7 @@ with this file, the code is wrong.
   policy. Do not duplicate its rules here.
 
 ## Ownership
-- Runtime/facade: `canic`, `canic-core`, `canic-cdk`, `canic-memory`,
-  `canic-macros`.
+- Runtime/facade: `canic`, `canic-core`, `canic-cdk`, `canic-macros`.
 - Canister control plane/store: `canic-control-plane`, `canic-wasm-store`.
 - Host/operator: `canic-cli`, `canic-host`, `canic-backup`.
 - Testing: `canic-testkit`, `canic-testing-internal`, `canic-tests`.

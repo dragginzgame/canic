@@ -26,7 +26,6 @@ const CANIC_FAMILY_CRATES: &[&str] = &[
     "canic-control-plane",
     "canic-core",
     "canic-macros",
-    "canic-memory",
 ];
 
 ///

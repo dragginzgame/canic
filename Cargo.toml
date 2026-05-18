@@ -24,7 +24,6 @@ members = [
     "crates/canic-core",
     "crates/canic-host",
     "crates/canic-macros",
-    "crates/canic-memory",
     "crates/canic-testing-internal",
     "crates/canic-testkit",
     "crates/canic-tests",
@@ -66,7 +65,6 @@ canic-control-plane = { version = "0.39.10", path = "crates/canic-control-plane"
 canic-core = { version = "0.39.10", path = "crates/canic-core" }
 canic-host = { version = "0.39.10", path = "crates/canic-host" }
 canic-macros = { version = "0.39.10", path = "crates/canic-macros" }
-canic-memory = { version = "0.39.10", path = "crates/canic-memory" }
 canic-testing-internal = { version = "0.39.10", path = "crates/canic-testing-internal" }
 canic-testkit = { version = "0.39.10", path = "crates/canic-testkit" }
 canic-wasm-store = { version = "0.39.10", path = "crates/canic-wasm-store" }
@@ -140,7 +138,6 @@ canic-control-plane = { path = "crates/canic-control-plane" }
 canic-core = { path = "crates/canic-core" }
 canic-macros = { path = "crates/canic-macros" }
 canic-host = { path = "crates/canic-host" }
-canic-memory = { path = "crates/canic-memory" }
 canic-testkit = { path = "crates/canic-testkit" }
 canic-wasm-store = { path = "crates/canic-wasm-store" }
 

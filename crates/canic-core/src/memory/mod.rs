@@ -1,12 +1,17 @@
 //! Canic-managed stable-memory runtime boundary.
 //!
-//! This module is the remaining Canic-owned adapter around the temporary
-//! `canic-memory` crate while durable allocation-governance mechanics move to
-//! `ic-memory`.
+//! This module is the Canic-owned adapter around current stable-memory
+//! bootstrap mechanics while durable allocation-governance primitives move
+//! into `ic-memory`.
 
 use crate::cdk::structures::{DefaultMemoryImpl, memory::VirtualMemory};
-use ::canic_memory::manager;
-pub use ::canic_memory::{api, registry, runtime};
+
+pub mod api;
+mod ledger;
+mod manager;
+mod policy;
+pub mod registry;
+pub mod runtime;
 
 pub use crate::{eager_init, eager_static, ic_memory_key, ic_memory_range};
 

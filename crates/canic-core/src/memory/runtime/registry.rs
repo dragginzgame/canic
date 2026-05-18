@@ -1,6 +1,6 @@
-use crate::ledger;
-use crate::manager::{self, RawStableMemoryState};
-use crate::registry::{
+use super::super::ledger;
+use super::super::manager::{self, RawStableMemoryState};
+use super::super::registry::{
     MemoryRange, MemoryRangeEntry, MemoryRangeSnapshot, MemoryRegistry, MemoryRegistryEntry,
     MemoryRegistryError, PendingRegistration, drain_pending_ranges, drain_pending_registrations,
 };
@@ -147,7 +147,7 @@ impl MemoryRegistryRuntime {
     /// this drains pending range/ID registrations so lazily touched statics can
     /// become visible during the same request.
     pub fn commit_pending_if_initialized() -> Result<(), MemoryRegistryError> {
-        if !Self::is_initialized() || crate::runtime::is_eager_tls_initializing() {
+        if !Self::is_initialized() || super::is_eager_tls_initializing() {
             return Ok(());
         }
 
@@ -259,7 +259,7 @@ fn set_initialized(value: bool) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::registry::{
+    use crate::memory::registry::{
         defer_register, defer_register_with_key, defer_reserve_range, reset_for_tests,
     };
 

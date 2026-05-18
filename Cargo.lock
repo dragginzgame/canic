@@ -390,10 +390,10 @@ dependencies = [
  "async-trait",
  "candid",
  "canic-cdk",
- "canic-memory",
  "criterion",
  "ctor",
  "futures",
+ "ic-memory",
  "k256",
  "proc-macro2",
  "quote",
@@ -427,17 +427,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.117",
-]
-
-[[package]]
-name = "canic-memory"
-version = "0.39.10"
-dependencies = [
- "canic-cdk",
- "ctor",
- "ic-memory",
- "serde",
- "thiserror 2.0.18",
 ]
 
 [[package]]

@@ -26,7 +26,7 @@ use thiserror::Error as ThisError;
 
 #[derive(Debug, ThisError)]
 pub enum MemoryRegistryOpsError {
-    // this error comes from the canic-memory crate
+    // this error comes from the Canic memory runtime boundary
     #[error(transparent)]
     Registry(#[from] MemoryRegistryError),
 }

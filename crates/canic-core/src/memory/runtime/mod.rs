@@ -1,6 +1,6 @@
 pub mod registry;
 
-use crate::registry::MemoryRegistryError;
+use super::registry::MemoryRegistryError;
 use std::sync::{
     Mutex,
     atomic::{AtomicBool, Ordering},

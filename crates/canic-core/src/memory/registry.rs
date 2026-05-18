@@ -1,7 +1,8 @@
-use crate::{ThisError, ledger, policy};
+use super::{ledger, policy};
 use ic_memory::{SchemaMetadata, SchemaMetadataError, StableKey};
 use serde::{Deserialize, Serialize};
 use std::{cell::RefCell, collections::BTreeMap};
+use thiserror::Error as ThisError;
 
 ///
 /// MemoryRange
@@ -655,7 +656,7 @@ pub(crate) fn drain_pending_registrations() -> Vec<PendingRegistration> {
 pub fn reset_for_tests() {
     reset_runtime_for_tests();
     ledger::reset_for_tests();
-    crate::runtime::registry::reset_initialized_for_tests();
+    super::runtime::registry::reset_initialized_for_tests();
 }
 
 #[cfg(test)]

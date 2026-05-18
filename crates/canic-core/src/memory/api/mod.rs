@@ -1,15 +1,15 @@
-use crate::ledger;
-use crate::{
-    cdk::structures::{
-        DefaultMemoryImpl,
-        memory::{MemoryId, VirtualMemory},
-    },
+use super::{
+    ledger,
     manager::MEMORY_MANAGER,
     registry::{
         MemoryRange, MemoryRangeAuthority, MemoryRegistry, MemoryRegistryError, defer_register,
         defer_register_with_key_metadata,
     },
     runtime::{MemoryRuntimeApi, registry::MemoryRegistryRuntime},
+};
+use crate::cdk::structures::{
+    DefaultMemoryImpl,
+    memory::{MemoryId, VirtualMemory},
 };
 
 ///
@@ -92,7 +92,7 @@ pub struct LedgerSnapshot {
     /// Historical owner ranges recorded by the persisted ABI ledger.
     pub ranges: Vec<(String, MemoryRange)>,
     /// Historical memory ID records recorded by the persisted ABI ledger.
-    pub entries: Vec<(u8, crate::registry::MemoryRegistryEntry)>,
+    pub entries: Vec<(u8, super::registry::MemoryRegistryEntry)>,
 }
 
 impl MemoryApi {
@@ -323,10 +323,10 @@ fn open_memory(id: u8) -> VirtualMemory<DefaultMemoryImpl> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::registry::{
+    use super::super::registry::{
         MemoryRegistryError, defer_register, defer_reserve_range, reset_for_tests,
     };
+    use super::*;
 
     #[test]
     fn register_memory_opens_validated_memory_for_reserved_slot() {

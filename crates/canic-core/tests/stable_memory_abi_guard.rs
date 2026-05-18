@@ -80,7 +80,8 @@ fn has_forbidden_memory_pattern(contents: &str) -> bool {
 }
 
 fn is_managed_memory_runtime_boundary(path: &Path) -> bool {
-    path.ends_with("crates/canic-core/src/memory/mod.rs")
+    path.to_string_lossy()
+        .contains("/crates/canic-core/src/memory/")
 }
 
 fn workspace_root() -> PathBuf {

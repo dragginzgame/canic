@@ -10,7 +10,7 @@ const MEMORY_MANAGER_MAGIC: &[u8; 3] = b"MGR";
 /// is allowed to initialize or repair its own metadata.
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum RawStableMemoryState {
+pub enum RawStableMemoryState {
     Empty,
     MemoryManager,
     ForeignOrCorrupt,
@@ -30,7 +30,7 @@ thread_local! {
         RefCell::new(MemoryManager::init(DefaultMemoryImpl::default()));
 }
 
-pub(crate) fn classify_raw_stable_memory() -> RawStableMemoryState {
+pub fn classify_raw_stable_memory() -> RawStableMemoryState {
     classify_stable_memory(&DefaultMemoryImpl::default())
 }
 

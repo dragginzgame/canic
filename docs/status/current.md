@@ -90,6 +90,10 @@ inspect only the files needed for the current task.
   implicit `ic_memory!` macro is not part of the core surface. The duplicated
   macro module has also been removed from `canic-memory`, leaving that crate as
   temporary backend glue.
+- Started `0.39.11` by removing the `canic-memory` crate from the workspace.
+  Its remaining backend modules now live under `canic-core::memory`, and
+  `canic-core` depends directly on `ic-memory` for allocation-governance
+  primitives.
 - Added a workspace manifest guard so explicitly publishable crates cannot add
   runtime or build dependencies on workspace crates marked `publish = false`.
 - Wired the same manifest-boundary guard into `scripts/ci/publish-workspace.sh`

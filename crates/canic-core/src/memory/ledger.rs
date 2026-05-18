@@ -1,21 +1,21 @@
-use crate::cdk::structures::Memory;
 #[cfg(target_arch = "wasm32")]
-use crate::manager;
-use crate::{
-    cdk::structures::{
-        DefaultMemoryImpl,
-        cell::Cell,
-        memory::{MemoryId, VirtualMemory},
-    },
+use super::manager;
+use super::{
     manager::{MEMORY_MANAGER, RawStableMemoryState},
     policy,
     registry::{MemoryRange, MemoryRangeAuthority, MemoryRegistryEntry, MemoryRegistryError},
+};
+use crate::cdk::structures::Memory;
+use crate::cdk::structures::{
+    DefaultMemoryImpl,
+    cell::Cell,
+    memory::{MemoryId, VirtualMemory},
 };
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 
 pub const MEMORY_LAYOUT_LEDGER_ID: u8 = 0;
-pub const MEMORY_LAYOUT_LEDGER_OWNER: &str = "canic-memory";
+pub const MEMORY_LAYOUT_LEDGER_OWNER: &str = "ic-memory";
 pub const MEMORY_LAYOUT_LEDGER_LABEL: &str = "MemoryLayoutLedger";
 pub const MEMORY_LAYOUT_LEDGER_STABLE_KEY: &str = "ic_memory.ledger.v1";
 pub const MEMORY_LAYOUT_RESERVED_MIN: u8 = 0;
@@ -559,7 +559,7 @@ fn decode_existing_ledger_memory<M: Memory>(
 
     let mut bytes = vec![0; value_len];
     memory.read(STABLE_CELL_VALUE_OFFSET, &mut bytes);
-    crate::serialize::deserialize(&bytes).map_err(|_| MemoryRegistryError::LedgerCorrupt {
+    canic_cdk::serialize::deserialize(&bytes).map_err(|_| MemoryRegistryError::LedgerCorrupt {
         reason: "ledger stable cell payload is invalid",
     })
 }

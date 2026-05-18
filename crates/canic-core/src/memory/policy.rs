@@ -1,4 +1,4 @@
-use crate::registry::{MemoryRange, MemoryRegistryError};
+use super::registry::{MemoryRange, MemoryRegistryError};
 use ic_memory::{MemoryManagerIdRange, StableKey};
 
 pub const IC_MEMORY_INTERNAL_MIN_ID: u8 = 0;
