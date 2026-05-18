@@ -12,8 +12,8 @@ use crate::cdk::structures::{
     memory::{MemoryId, VirtualMemory},
 };
 use ic_memory::{
-    AllocationSession, AllocationSlotDescriptor, MemoryManagerSlotError, StableKey,
-    StorageSubstrate, session::AllocationSessionError,
+    AllocationSession, AllocationSessionError, AllocationSlotDescriptor, MemoryManagerSlotError,
+    StableKey, StorageSubstrate,
 };
 
 ///

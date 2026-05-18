@@ -16,7 +16,9 @@ use crate::cdk::structures::{
 };
 use ic_memory::{
     AllocationHistory, AllocationLedger, AllocationRecord, AllocationSlotDescriptor,
-    AllocationState, GenerationRecord, SchemaMetadata, SchemaMetadataRecord, StableKey,
+    AllocationState, CommitRecoveryError, CommitSlotIndex, GenerationRecord,
+    ProtectedGenerationSlot, SchemaMetadata, SchemaMetadataRecord, StableKey,
+    select_authoritative_slot,
 };
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
@@ -166,6 +168,16 @@ impl Default for MemoryLayoutGenerationRecord {
         };
         generation.checksum = generation_checksum(&generation);
         generation
+    }
+}
+
+impl ProtectedGenerationSlot for MemoryLayoutGenerationRecord {
+    fn generation(&self) -> u64 {
+        self.generation
+    }
+
+    fn validates(&self) -> bool {
+        valid_generation(self)
     }
 }
 
@@ -649,24 +661,13 @@ fn authoritative_generation(
     validate_header_fields(data)?;
     validate_header_checksum(data)?;
 
-    let slot0 = data.slot0.as_ref().filter(|slot| valid_generation(slot));
-    let slot1 = data.slot1.as_ref().filter(|slot| valid_generation(slot));
+    if data.slot0.is_none() && data.slot1.is_none() {
+        return Ok(MemoryLayoutGenerationRecord::default());
+    }
 
-    let generation = match (slot0, slot1) {
-        (Some(left), Some(right)) if right.generation > left.generation => right,
-        (Some(left), Some(_) | None) => left,
-        (None, Some(right)) => right,
-        (None, None) if data.slot0.is_none() && data.slot1.is_none() => {
-            return Ok(MemoryLayoutGenerationRecord::default());
-        }
-        (None, None) => {
-            return Err(MemoryRegistryError::LedgerCorrupt {
-                reason: "no valid committed generation",
-            });
-        }
-    };
-
-    Ok(generation.clone())
+    select_authoritative_slot(data.slot0.as_ref(), data.slot1.as_ref())
+        .map(|authoritative| authoritative.record.clone())
+        .map_err(memory_registry_error_from_commit_recovery)
 }
 
 const fn validate_header_fields(
@@ -738,12 +739,20 @@ fn commit_generation(
     generation.commit_marker = MEMORY_LAYOUT_LEDGER_COMMIT_MARKER;
     generation.checksum = generation_checksum(&generation);
 
-    if data.committed_slot == 0 {
-        data.slot1 = Some(generation.clone());
-        data.committed_slot = 1;
-    } else {
-        data.slot0 = Some(generation.clone());
-        data.committed_slot = 0;
+    let inactive_slot = match select_authoritative_slot(data.slot0.as_ref(), data.slot1.as_ref()) {
+        Ok(authoritative) => authoritative.index.opposite(),
+        Err(_) => CommitSlotIndex::Slot0,
+    };
+
+    match inactive_slot {
+        CommitSlotIndex::Slot0 => {
+            data.slot0 = Some(generation.clone());
+            data.committed_slot = 0;
+        }
+        CommitSlotIndex::Slot1 => {
+            data.slot1 = Some(generation.clone());
+            data.committed_slot = 1;
+        }
     }
 
     data.magic = MEMORY_LAYOUT_LEDGER_MAGIC;
@@ -753,6 +762,16 @@ fn commit_generation(
     data.header_len = MEMORY_LAYOUT_LEDGER_HEADER_LEN;
     data.superblock_generation = generation.generation;
     data.header_checksum = header_checksum(data);
+}
+
+const fn memory_registry_error_from_commit_recovery(
+    err: CommitRecoveryError,
+) -> MemoryRegistryError {
+    match err {
+        CommitRecoveryError::NoValidGeneration => MemoryRegistryError::LedgerCorrupt {
+            reason: "no valid committed generation",
+        },
+    }
 }
 
 fn validate_range_against_generation(
@@ -1129,6 +1148,29 @@ mod tests {
         assert_eq!(authoritative.generation, 0);
         assert_eq!(authoritative.authorities, canonical_authority_records());
         assert!(authoritative.ranges.is_empty());
+    }
+
+    #[test]
+    fn commit_generation_uses_recovered_slot_not_unprotected_header_pointer() {
+        let mut record = MemoryLayoutLedgerRecord::default();
+        let mut generation = authoritative_generation(&record).expect("generation");
+        generation.ranges.push(MemoryLayoutRangeRecord::from_parts(
+            "crate_a",
+            MemoryRange {
+                start: 100,
+                end: 102,
+            },
+        ));
+        record.committed_slot = 1;
+        record.header_checksum = header_checksum(&record);
+
+        commit_generation(&mut record, generation);
+
+        assert_eq!(record.committed_slot, 1);
+        assert!(record.slot0.is_some());
+        assert!(record.slot1.is_some());
+        let authoritative = authoritative_generation(&record).expect("authoritative generation");
+        assert_eq!(authoritative.generation, 1);
     }
 
     #[test]

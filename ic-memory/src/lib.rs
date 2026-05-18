@@ -38,12 +38,13 @@ pub use ledger::{
     LedgerIntegrityError, SchemaMetadataRecord,
 };
 pub use physical::{
-    CommitRecoveryError, CommitSlotDiagnostic, CommitStoreDiagnostic, CommittedGenerationBytes,
-    DualCommitStore,
+    AuthoritativeSlot, CommitRecoveryError, CommitSlotDiagnostic, CommitSlotIndex,
+    CommitStoreDiagnostic, CommittedGenerationBytes, DualCommitStore, ProtectedGenerationSlot,
+    select_authoritative_slot,
 };
 pub use policy::{AllocationPolicy, NamespaceAuthority, RangeAuthority};
 pub use schema::{SchemaMetadata, SchemaMetadataError};
-pub use session::{AllocationSession, ValidatedAllocations};
+pub use session::{AllocationSession, AllocationSessionError, ValidatedAllocations};
 pub use slot::{
     AllocationSlot, AllocationSlotDescriptor, MEMORY_MANAGER_DESCRIPTOR_VERSION,
     MEMORY_MANAGER_INVALID_ID, MEMORY_MANAGER_MAX_ID, MEMORY_MANAGER_MIN_ID,

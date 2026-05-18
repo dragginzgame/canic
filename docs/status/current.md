@@ -102,6 +102,11 @@ inspect only the files needed for the current task.
   The validated allocation set is now published from bootstrap, and Canic memory
   opening uses `ic-memory::AllocationSession` over the current MemoryManager
   substrate.
+- Started `0.39.13` by moving reusable dual-slot protected recovery selection
+  into `ic-memory`, making Canic's physical ledger recovery call the generic
+  selector, and making Canic generation commits choose the inactive slot from
+  validated recovery state instead of the unprotected `committed_slot` header
+  field.
 - Added a workspace manifest guard so explicitly publishable crates cannot add
   runtime or build dependencies on workspace crates marked `publish = false`.
 - Wired the same manifest-boundary guard into `scripts/ci/publish-workspace.sh`

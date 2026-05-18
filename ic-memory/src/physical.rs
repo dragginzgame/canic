@@ -5,6 +5,81 @@ const FNV_OFFSET: u64 = 0xcbf2_9ce4_8422_2325;
 const FNV_PRIME: u64 = 0x0000_0100_0000_01b3;
 
 ///
+/// ProtectedGenerationSlot
+///
+/// One physical generation slot that can participate in protected recovery.
+pub trait ProtectedGenerationSlot {
+    /// Generation encoded by this slot.
+    fn generation(&self) -> u64;
+
+    /// Return whether the slot passed its marker/checksum validation.
+    fn validates(&self) -> bool;
+}
+
+///
+/// CommitSlotIndex
+///
+/// Physical dual-slot index selected by protected recovery.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+pub enum CommitSlotIndex {
+    /// First physical commit slot.
+    Slot0,
+    /// Second physical commit slot.
+    Slot1,
+}
+
+impl CommitSlotIndex {
+    /// Return the opposite physical slot.
+    #[must_use]
+    pub const fn opposite(self) -> Self {
+        match self {
+            Self::Slot0 => Self::Slot1,
+            Self::Slot1 => Self::Slot0,
+        }
+    }
+}
+
+///
+/// AuthoritativeSlot
+///
+/// Highest-generation valid slot selected by protected recovery.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct AuthoritativeSlot<'slot, T> {
+    /// Physical slot index.
+    pub index: CommitSlotIndex,
+    /// Valid committed generation in that slot.
+    pub record: &'slot T,
+}
+
+/// Select the highest-generation valid physical slot.
+pub fn select_authoritative_slot<'slot, T: ProtectedGenerationSlot>(
+    slot0: Option<&'slot T>,
+    slot1: Option<&'slot T>,
+) -> Result<AuthoritativeSlot<'slot, T>, CommitRecoveryError> {
+    let slot0 = slot0
+        .filter(|slot| slot.validates())
+        .map(|record| AuthoritativeSlot {
+            index: CommitSlotIndex::Slot0,
+            record,
+        });
+    let slot1 = slot1
+        .filter(|slot| slot.validates())
+        .map(|record| AuthoritativeSlot {
+            index: CommitSlotIndex::Slot1,
+            record,
+        });
+
+    match (slot0, slot1) {
+        (Some(left), Some(right)) if right.record.generation() > left.record.generation() => {
+            Ok(right)
+        }
+        (Some(left), Some(_) | None) => Ok(left),
+        (None, Some(right)) => Ok(right),
+        (None, None) => Err(CommitRecoveryError::NoValidGeneration),
+    }
+}
+
+///
 /// CommittedGenerationBytes
 ///
 /// Physically committed ledger generation payload protected by a checksum.
@@ -41,6 +116,16 @@ impl CommittedGenerationBytes {
     }
 }
 
+impl ProtectedGenerationSlot for CommittedGenerationBytes {
+    fn generation(&self) -> u64 {
+        self.generation
+    }
+
+    fn validates(&self) -> bool {
+        self.validates()
+    }
+}
+
 ///
 /// DualCommitStore
 ///
@@ -66,15 +151,8 @@ impl DualCommitStore {
 
     /// Return the highest-generation valid committed record.
     pub fn authoritative(&self) -> Result<&CommittedGenerationBytes, CommitRecoveryError> {
-        let slot0 = self.slot0.as_ref().filter(|slot| slot.validates());
-        let slot1 = self.slot1.as_ref().filter(|slot| slot.validates());
-
-        match (slot0, slot1) {
-            (Some(left), Some(right)) if right.generation > left.generation => Ok(right),
-            (Some(left), Some(_) | None) => Ok(left),
-            (None, Some(right)) => Ok(right),
-            (None, None) => Err(CommitRecoveryError::NoValidGeneration),
-        }
+        select_authoritative_slot(self.slot0.as_ref(), self.slot1.as_ref())
+            .map(|authoritative| authoritative.record)
     }
 
     /// Build a read-only recovery diagnostic for the protected commit slots.
@@ -128,8 +206,8 @@ impl DualCommitStore {
     }
 
     fn inactive_slot_index(&self) -> u8 {
-        match self.authoritative() {
-            Ok(record) if self.slot0.as_ref() == Some(record) => 1,
+        match select_authoritative_slot(self.slot0.as_ref(), self.slot1.as_ref()) {
+            Ok(authoritative) if authoritative.index == CommitSlotIndex::Slot0 => 1,
             Ok(_) | Err(_) => 0,
         }
     }
@@ -243,9 +321,14 @@ mod tests {
         store.commit_payload(payload(2)).expect("second commit");
 
         let authoritative = store.authoritative().expect("authoritative");
+        let authoritative_slot =
+            select_authoritative_slot(store.slot0.as_ref(), store.slot1.as_ref())
+                .expect("authoritative slot");
 
         assert_eq!(authoritative.generation, 1);
         assert_eq!(authoritative.payload, payload(2));
+        assert_eq!(authoritative_slot.index, CommitSlotIndex::Slot1);
+        assert_eq!(authoritative_slot.record.payload, payload(2));
     }
 
     #[test]
