@@ -205,7 +205,7 @@ where
     let options = ReplicaOptions::parse_start(args)?;
     let report = inspect_canic_icp_yaml(None)?;
     ensure_replica_project_config(&report)?;
-    let icp_root = report.icp_root.clone();
+    let icp_root = report.icp_root;
     ensure_requested_replica_port(&icp_root, options.port)?;
     let icp = IcpCli::new(options.icp, None, None);
     let icp_cli_running = icp
