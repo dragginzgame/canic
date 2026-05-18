@@ -1,0 +1,21 @@
+[package]
+name = "ic-memory"
+edition = { workspace = true }
+rust-version = { workspace = true }
+version = { workspace = true }
+license = { workspace = true }
+description = "Persistent allocation-governance infrastructure for Internet Computer stable memory"
+readme = "README.md"
+documentation = "https://docs.rs/ic-memory"
+homepage = { workspace = true }
+repository = { workspace = true }
+keywords = { workspace = true }
+categories = { workspace = true }
+publish = false
+
+[dependencies]
+serde = { workspace = true, features = ["alloc", "derive"] }
+thiserror = { workspace = true }
+
+[lints]
+workspace = true

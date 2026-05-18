@@ -6,6 +6,15 @@ documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.39.x] - 2026-05-18 - `ic-memory` extraction
+
+- `0.39.0` starts the standalone `ic-memory` extraction by adding a generic allocation-governance crate built around `stable_key -> allocation_slot forever` while keeping Canic-specific range, namespace, controller, and lifecycle policy in Canic adapters.
+
+See detailed breakdown:
+[docs/changelog/0.39.md](docs/changelog/0.39.md)
+
+---
+
 ## [0.38.x] - 2026-05-17 - Stable memory ABI hard cut
 
 - `0.38.9` removes the misleading `canic fleet sync` surface, replaces it with `canic fleet check <name>`, and cleans up the hidden control-plane support boundary.

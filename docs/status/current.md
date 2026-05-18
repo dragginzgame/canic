@@ -9,17 +9,16 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
-- Active minor: `0.38.x` stable-memory ABI hardening.
-- Theme: hard-cut stable-memory allocation ABI before more runtime storage
-  accretes around implicit owner/label identity.
-- Current release-work area: `canic-memory` ledger enforcement, explicit stable
-  keys, bootstrap declaration validation, and framework/application range
-  separation.
-- Design started at
-  `docs/design/0.38-stable-memory-abi/0.38-design.md`; the core issue is that
-  stable memory IDs are disk ABI, so Canic needs explicit stable keys,
-  persisted ledger enforcement, and a clear `0-99` framework / `100-254`
-  application boundary.
+- Active minor: `0.39.x` `ic-memory` extraction.
+- Theme: move durable allocation-governance infrastructure out of Canic into a
+  standalone `ic-memory` source boundary.
+- Current release-work area: generic `stable_key -> allocation_slot forever`
+  primitives, declaration/session boundaries, substrate and policy traits, and
+  explicit Canic adapter/migration planning.
+- Design started at `docs/design/0.39-asd/0.39-design.md`; the core issue is
+  that Canic 0.38 proved stable allocation identity, but the standalone crate
+  must govern allocation slots rather than hardcoding today's `MemoryManager`
+  virtual ID substrate.
 
 ## Recent Work
 
@@ -346,6 +345,16 @@ inspect only the files needed for the current task.
   `__control_plane_core` bridge to `control_plane_support`, moved neutral
   formatting to hidden `shared_support::format`, and removed the broad
   `core_support` caller aliases from `canic-control-plane`.
+- Started `0.39.0` by adding the root `ic-memory` crate as the future
+  standalone repository boundary. The first slice includes generic stable-key
+  parsing, allocation-slot descriptors, schema metadata, declaration
+  collection/sealing, policy and substrate traits, validated allocation
+  sessions, generation/ledger data shapes, and diagnostic export shapes without
+  depending on Canic or `canic-cdk`.
+- Extended the `0.39.0` generic crate with allocation-history validation and
+  pure logical generation staging. Current declarations are now checked against
+  policy, stable-key history, slot history, and retired allocation tombstones,
+  while omitted historical records remain owned and active.
 - Added a source-level guard test that rejects implicit registration, direct
   raw stable-memory APIs, independent `MemoryManager` access, and
   `RestrictedMemory` carve-outs in Canic-managed runtime crates.
