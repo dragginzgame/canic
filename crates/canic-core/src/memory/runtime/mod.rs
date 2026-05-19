@@ -108,7 +108,7 @@ pub fn is_eager_tls_initializing() -> bool {
 /// Return whether memory access is currently allowed during bootstrap.
 #[must_use]
 pub fn is_memory_bootstrap_ready() -> bool {
-    registry::MemoryRegistryRuntime::is_initialized()
+    registry::MemoryRegistryRuntime::validated_allocations().is_ok()
 }
 
 /// Panic if a stable-memory slot is touched before memory bootstrap is ready.
