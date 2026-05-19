@@ -1,5 +1,8 @@
 use crate::dto::{
-    auth::{RoleAttestationRequest, SignedRoleAttestation},
+    auth::{
+        InternalInvocationProofRequest, RoleAttestationRequest, SignedInternalInvocationProofV1,
+        SignedRoleAttestation,
+    },
     prelude::*,
 };
 
@@ -16,6 +19,7 @@ pub enum Request {
     RecycleCanister(RecycleCanisterRequest),
     Cycles(CyclesRequest),
     IssueRoleAttestation(RoleAttestationRequest),
+    IssueInternalInvocationProof(InternalInvocationProofRequest),
 }
 
 impl Request {
@@ -59,6 +63,14 @@ impl Request {
         Self::IssueRoleAttestation(request)
     }
 
+    // issue_internal_invocation_proof
+    //
+    // Build a root request for method-scoped internal invocation proof issuance.
+    #[must_use]
+    pub const fn issue_internal_invocation_proof(request: InternalInvocationProofRequest) -> Self {
+        Self::IssueInternalInvocationProof(request)
+    }
+
     // family
     //
     // Resolve the request capability family without exposing variant matches at call sites.
@@ -70,6 +82,7 @@ impl Request {
             Self::RecycleCanister(_) => RequestFamily::RecycleCanister,
             Self::Cycles(_) => RequestFamily::RequestCycles,
             Self::IssueRoleAttestation(_) => RequestFamily::IssueRoleAttestation,
+            Self::IssueInternalInvocationProof(_) => RequestFamily::IssueInternalInvocationProof,
         }
     }
 
@@ -84,6 +97,7 @@ impl Request {
             Self::RecycleCanister(req) => req.metadata,
             Self::Cycles(req) => req.metadata,
             Self::IssueRoleAttestation(req) => req.metadata,
+            Self::IssueInternalInvocationProof(req) => req.metadata,
         }
     }
 
@@ -98,6 +112,7 @@ impl Request {
             Self::RecycleCanister(req) => req.metadata = Some(metadata),
             Self::Cycles(req) => req.metadata = Some(metadata),
             Self::IssueRoleAttestation(req) => req.metadata = Some(metadata),
+            Self::IssueInternalInvocationProof(req) => req.metadata = Some(metadata),
         }
         self
     }
@@ -113,6 +128,7 @@ impl Request {
             Self::RecycleCanister(req) => req.metadata = None,
             Self::Cycles(req) => req.metadata = None,
             Self::IssueRoleAttestation(req) => req.metadata = None,
+            Self::IssueInternalInvocationProof(req) => req.metadata = None,
         }
         self
     }
@@ -142,6 +158,7 @@ pub enum RequestFamily {
     RecycleCanister,
     RequestCycles,
     IssueRoleAttestation,
+    IssueInternalInvocationProof,
 }
 
 impl RequestFamily {
@@ -156,6 +173,7 @@ impl RequestFamily {
             Self::RecycleCanister => "RecycleCanister",
             Self::RequestCycles => "RequestCycles",
             Self::IssueRoleAttestation => "IssueRoleAttestation",
+            Self::IssueInternalInvocationProof => "IssueInternalInvocationProof",
         }
     }
 }
@@ -173,6 +191,7 @@ pub enum RootCapabilityCommand {
     RecycleCanister(RecycleCanisterRequest),
     RequestCycles(CyclesRequest),
     IssueRoleAttestation(RoleAttestationRequest),
+    IssueInternalInvocationProof(InternalInvocationProofRequest),
 }
 
 impl From<Request> for RootCapabilityCommand {
@@ -183,6 +202,7 @@ impl From<Request> for RootCapabilityCommand {
             Request::RecycleCanister(req) => Self::RecycleCanister(req),
             Request::Cycles(req) => Self::RequestCycles(req),
             Request::IssueRoleAttestation(req) => Self::IssueRoleAttestation(req),
+            Request::IssueInternalInvocationProof(req) => Self::IssueInternalInvocationProof(req),
         }
     }
 }
@@ -283,6 +303,7 @@ pub enum Response {
     RecycleCanister(RecycleCanisterResponse),
     Cycles(CyclesResponse),
     RoleAttestationIssued(SignedRoleAttestation),
+    InternalInvocationProofIssued(SignedInternalInvocationProofV1),
 }
 
 //
@@ -369,6 +390,15 @@ mod tests {
                 epoch: 0,
                 metadata: None,
             }),
+            Request::issue_internal_invocation_proof(InternalInvocationProofRequest {
+                subject: p(5),
+                role: CanisterRole::new("test"),
+                subnet_id: None,
+                audience: p(6),
+                audience_method: "canic_internal".to_string(),
+                ttl_secs: 60,
+                metadata: None,
+            }),
         ]
     }
 
@@ -386,6 +416,7 @@ mod tests {
                 RequestFamily::RecycleCanister,
                 RequestFamily::RequestCycles,
                 RequestFamily::IssueRoleAttestation,
+                RequestFamily::IssueInternalInvocationProof,
             ]
         );
     }

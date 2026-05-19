@@ -9,19 +9,50 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
-- Active minor: `0.39.x` `ic-memory` extraction.
-- Theme: move durable allocation-governance infrastructure out of Canic into a
-  standalone `ic-memory` source boundary.
-- Current release-work area: generic `stable_key -> allocation_slot forever`
-  primitives, declaration/session boundaries, substrate and policy traits, and
-  explicit Canic adapter planning.
-- Design started at `docs/design/0.39-ic-memory/0.39-design.md`; the core issue is
-  that Canic 0.38 proved stable allocation identity, but the standalone crate
-  must govern allocation slots rather than hardcoding today's `MemoryManager`
-  virtual ID substrate.
+- Active minor: `0.40.x` attested Canic calls.
+- Theme: replace verifier-local sibling authorization with root-signed,
+  method-scoped internal invocation proofs carried in a Canic-owned internal
+  RPC envelope.
+- Current release-work area: protected internal-call wire DTOs, a distinct
+  internal invocation proof signing domain, root issuance, generated endpoint
+  envelope verification, and the `CanicCall`/generated-client path.
+- Design started at
+  `docs/design/0.40-attested-canic-calls/0.40-design.md`; the core issue is
+  that sibling Canic-to-Canic endpoints must not accept callers based only on
+  verifier-local AppIndex or subnet registry state.
 
 ## Recent Work
 
+- Started `0.40.0` by adding the passive Candid DTOs for the protected
+  internal-call wire ABI:
+  `CanicInternalCallEnvelopeV1`, `CanicInternalCallHeaderV1`,
+  `InternalInvocationProofRequest`, `InternalInvocationProofPayloadV1`, and
+  `SignedInternalInvocationProofV1`. The first slice also adds the
+  `CANIC_INTERNAL_INVOCATION_PROOF_V1` signing domain and hash helper so
+  method-scoped invocation proofs cannot share the generic role-attestation
+  signing domain.
+- Continued `0.40.0` by adding root issuance for method-scoped internal
+  invocation proofs. Root now accepts `InternalInvocationProofRequest` through
+  the root capability workflow and direct auth endpoint, authorizes the subject
+  role from either AppIndex or subnet registry ownership, verifies that the
+  audience is known, rejects empty method bindings, signs the proof with the
+  internal invocation proof domain, and chooses the signed epoch from root
+  config rather than caller input.
+- Continued `0.40.0` by adding verifier-side internal invocation proof checks
+  and the first generated protected update wrapper path. `caller::has_role(...)`
+  and `caller::has_any_role([...])` are now parsed and validated as attested-role
+  predicates, update-only in V1, and protected wrappers export
+  `CanicInternalCallEnvelopeV1`, verify the proof against caller/audience/method/
+  role/subnet/TTL/epoch bindings, then decode original Candid args only after
+  authorization succeeds. Mixed non-attested access predicates are rejected for
+  this protected wrapper path so no existing `requires(...)` condition is
+  silently dropped.
+- Continued `0.40.0` by adding the low-level `CanicCall` primitive through
+  `canic::api::ic` and the prelude. `CanicCall` keeps raw `Call` unchanged,
+  encodes original endpoint args, requests a root-signed method-scoped proof for
+  the caller role, builds the internal-call envelope, and dispatches it to the
+  protected endpoint. The first cut is correctness-only: no outgoing proof cache
+  and no retry-on-stale-material path yet.
 - Started `0.39.1` by adding an AppIndex-backed
   `caller::has_app_role(role)` internal access predicate, giving app hubs and
   shards a first-class way to trust canonical sibling app canisters without
@@ -127,13 +158,14 @@ inspect only the files needed for the current task.
 - Started `0.39.16` by moving the current `ic-memory` governance-slot range
   and ledger self-record metadata behind the standalone `ic-memory` API; Canic
   consumes that authority descriptor instead of defining the range itself.
-- Canic now targets published `ic-memory 0.2.0` and consumes its generic
-  `MemoryManagerRangeAuthority` helper for the reserved `0-9` and `10-99`
-  policy table. Downstream application IDs are no longer modeled as a named
-  Canic authority range; they are accepted when `ic-memory` validates the slot
-  shape and the ID does not collide with a reserved range. The temporary local
-  crates.io patch to the sibling checkout has been removed; `Cargo.lock`
-  resolves the crate from crates.io.
+- Canic now targets published `ic-memory 0.4.0` and consumes its generic
+  `MemoryManagerRangeAuthority`, native stable-cell ledger record, CBOR ledger
+  codec, and stable-structures re-export. Downstream application IDs are no
+  longer modeled as a named Canic authority range; they are accepted when
+  `ic-memory` validates the slot shape and the ID does not collide with a
+  reserved range. The temporary local crates.io patch to the sibling checkout
+  has been removed; `Cargo.lock` resolves the crate from crates.io with a
+  registry checksum.
 - Continued `0.39.16` by thinning `canic-core::memory`: macro-backed memory
   opens now validate by explicit stable key through `ic-memory::AllocationSession`,
   the old implicit-key declaration/registration helpers are gone, and
@@ -160,6 +192,9 @@ inspect only the files needed for the current task.
   adapter over `ic_memory::LedgerCommitStore`, old Canic physical ledger
   records/projection/writer/checksum ownership are gone, and old Canic physical
   ledger bytes fail closed with an explicit hard-cut error.
+- Removed Canic's direct `ic-stable-structures` workspace dependency; memory
+  and `canic-cdk::structures` now use `ic_memory::stable_structures` so Canic
+  does not drift from the storage substrate version selected by `ic-memory`.
 - Drafted the proposed 0.40 attested Canic-call hard cut at
   `docs/design/0.40-attested-canic-calls/0.40-design.md`, replacing
   AppIndex-only sibling authorization with root-signed caller-role envelopes

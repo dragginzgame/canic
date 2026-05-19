@@ -13,7 +13,7 @@ pub const CANIC_FRAMEWORK_AUTHORITY_PURPOSE: &str = "Canic framework allocation 
 ///
 /// CanicMemoryManagerPolicy
 ///
-/// Canic policy adapter for current `ic-stable-structures::MemoryManager`
+/// Canic policy adapter for the `ic-memory` MemoryManager substrate
 /// allocation slots.
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

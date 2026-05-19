@@ -1,5 +1,5 @@
 use crate::{
-    dto::auth::RoleAttestationRequest,
+    dto::auth::{InternalInvocationProofRequest, RoleAttestationRequest},
     dto::rpc::{
         CreateCanisterParent, CreateCanisterRequest, CyclesRequest, RecycleCanisterRequest,
         Request, RootRequestMetadata, UpgradeCanisterRequest,
@@ -14,6 +14,7 @@ pub(super) enum RootCapability {
     RecycleCanister(RecycleCanisterRequest),
     RequestCycles(CyclesRequest),
     IssueRoleAttestation(RoleAttestationRequest),
+    IssueInternalInvocationProof(InternalInvocationProofRequest),
 }
 
 #[derive(Clone, Copy)]
@@ -52,6 +53,10 @@ impl RootCapability {
                 name: "IssueRoleAttestation",
                 key: RootCapabilityMetricKey::IssueRoleAttestation,
             },
+            Self::IssueInternalInvocationProof(_) => RootCapabilityDescriptor {
+                name: "IssueInternalInvocationProof",
+                key: RootCapabilityMetricKey::IssueInternalInvocationProof,
+            },
         }
     }
 
@@ -86,6 +91,13 @@ impl RootCapability {
                 metadata,
                 payload_hash: hash_issue_role_attestation_payload(req),
             }),
+            Self::IssueInternalInvocationProof(req) => {
+                req.metadata.map(|metadata| RootReplayInput {
+                    descriptor: self.descriptor(),
+                    metadata,
+                    payload_hash: hash_issue_internal_invocation_proof_payload(req),
+                })
+            }
         }
     }
 
@@ -97,6 +109,9 @@ impl RootCapability {
             Self::RecycleCanister(req) => hash_recycle_payload(req),
             Self::RequestCycles(req) => hash_request_cycles_payload(req),
             Self::IssueRoleAttestation(req) => hash_issue_role_attestation_payload(req),
+            Self::IssueInternalInvocationProof(req) => {
+                hash_issue_internal_invocation_proof_payload(req)
+            }
         }
     }
 }
@@ -162,6 +177,18 @@ fn hash_issue_role_attestation_payload(req: &RoleAttestationRequest) -> [u8; 32]
     super::replay::finish_payload_hash(hasher)
 }
 
+fn hash_issue_internal_invocation_proof_payload(req: &InternalInvocationProofRequest) -> [u8; 32] {
+    let mut hasher = super::replay::payload_hasher();
+    super::replay::hash_str(&mut hasher, "IssueInternalInvocationProof");
+    super::replay::hash_principal(&mut hasher, &req.subject);
+    super::replay::hash_role(&mut hasher, &req.role);
+    super::replay::hash_optional_principal(&mut hasher, req.subnet_id);
+    super::replay::hash_principal(&mut hasher, &req.audience);
+    super::replay::hash_str(&mut hasher, &req.audience_method);
+    super::replay::hash_u64(&mut hasher, req.ttl_secs);
+    super::replay::finish_payload_hash(hasher)
+}
+
 pub(super) fn map_request(req: Request) -> RootCapability {
     match req {
         Request::CreateCanister(req) => RootCapability::Provision(req),
@@ -169,5 +196,8 @@ pub(super) fn map_request(req: Request) -> RootCapability {
         Request::RecycleCanister(req) => RootCapability::RecycleCanister(req),
         Request::Cycles(req) => RootCapability::RequestCycles(req),
         Request::IssueRoleAttestation(req) => RootCapability::IssueRoleAttestation(req),
+        Request::IssueInternalInvocationProof(req) => {
+            RootCapability::IssueInternalInvocationProof(req)
+        }
     }
 }

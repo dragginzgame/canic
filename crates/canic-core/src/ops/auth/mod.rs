@@ -1,4 +1,4 @@
-use crate::ops::ic::IcOps;
+use crate::{InternalError, cdk::types::Principal, ids::CanisterRole, ops::ic::IcOps};
 
 mod attestation;
 mod boundary;
@@ -23,6 +23,7 @@ const ROOT_PATH_SEGMENT: &[u8] = b"root";
 const SHARD_PATH_SEGMENT: &[u8] = b"shard";
 const ATTESTATION_PATH_SEGMENT: &[u8] = b"attestation";
 const ROLE_ATTESTATION_SIGNING_DOMAIN: &[u8] = b"CANIC_ROLE_ATTESTATION_V1";
+const INTERNAL_INVOCATION_PROOF_SIGNING_DOMAIN: &[u8] = b"CANIC_INTERNAL_INVOCATION_PROOF_V1";
 const ROLE_ATTESTATION_KEY_ID_V1: u32 = 1;
 
 ///
@@ -31,16 +32,41 @@ const ROLE_ATTESTATION_KEY_ID_V1: u32 = 1;
 
 pub struct AuthOps;
 
+///
+/// InternalInvocationProofVerificationInput
+///
+
+#[derive(Clone, Copy)]
+pub struct InternalInvocationProofVerificationInput<'a> {
+    pub caller: Principal,
+    pub self_pid: Principal,
+    pub target_method: &'a str,
+    pub accepted_roles: &'a [CanisterRole],
+    pub verifier_subnet: Option<Principal>,
+    pub now_secs: u64,
+    pub min_accepted_epoch: u64,
+}
+
 impl AuthOps {
+    /// Return the current minimum accepted attestation epoch for a role.
+    pub fn current_role_epoch(role: &CanisterRole) -> Result<u64, InternalError> {
+        let cfg = crate::ops::config::ConfigOps::role_attestation_config()?;
+        Ok(cfg
+            .min_accepted_epoch_by_role
+            .get(role.as_str())
+            .copied()
+            .unwrap_or(0))
+    }
+
     // Publish the root delegated-token public key into cascaded subnet state.
-    pub async fn publish_delegated_token_root_key_material() -> Result<(), crate::InternalError> {
+    pub async fn publish_delegated_token_root_key_material() -> Result<(), InternalError> {
         let root_pid = IcOps::canister_self();
         let delegated_key_name = keys::delegated_tokens_key_name()?;
         keys::ensure_root_public_key_published(&delegated_key_name, root_pid).await
     }
 
     // Publish root auth material and warm local root-owned auth keys once.
-    pub async fn publish_root_auth_material() -> Result<(), crate::InternalError> {
+    pub async fn publish_root_auth_material() -> Result<(), InternalError> {
         let root_pid = IcOps::canister_self();
         let now_secs = IcOps::now_secs();
 

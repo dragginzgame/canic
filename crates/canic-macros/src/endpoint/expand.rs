@@ -67,6 +67,11 @@ pub fn expand(kind: EndpointKind, args: ValidatedArgs, mut func: ItemFn) -> Toke
     let output = orig_sig.output.clone();
     let impl_async = orig_sig.asyncness.is_some();
     let returns_fallible = returns_fallible(&orig_sig);
+    let protected_roles = match protected_internal_roles(&args.requires) {
+        Ok(roles) => roles,
+        Err(err) => return err.to_compile_error(),
+    };
+    let is_protected_internal = !protected_roles.is_empty();
 
     let access_plan = match build_access_plan(kind, &args, &orig_sig) {
         Ok(plan) => plan,
@@ -77,7 +82,7 @@ pub fn expand(kind: EndpointKind, args: ValidatedArgs, mut func: ItemFn) -> Toke
         return syn::Error::new_spanned(&orig_sig.ident, message).to_compile_error();
     }
 
-    let wrapper_async = impl_async || access_plan.requires_async();
+    let wrapper_async = is_protected_internal || impl_async || access_plan.requires_async();
 
     let impl_name = format_ident!("__canic_impl_{}", orig_name);
     func.sig.ident = impl_name.clone();
@@ -94,6 +99,14 @@ pub fn expand(kind: EndpointKind, args: ValidatedArgs, mut func: ItemFn) -> Toke
     let payload_registration = payload_registration(kind, &args, &orig_name);
     let dispatch_fn = dispatch(kind, wrapper_async);
 
+    let wrapper_inputs = if is_protected_internal {
+        syn::parse_quote!(
+            __canic_envelope: ::canic::dto::auth::CanicInternalCallEnvelopeV1
+        )
+    } else {
+        inputs
+    };
+
     let wrapper_sig = syn::Signature {
         ident: orig_name.clone(),
         asyncness: if wrapper_async {
@@ -101,19 +114,32 @@ pub fn expand(kind: EndpointKind, args: ValidatedArgs, mut func: ItemFn) -> Toke
         } else {
             None
         },
-        inputs,
+        inputs: wrapper_inputs,
         output,
         ..orig_sig.clone()
     };
 
     let call_ident = format_ident!("__canic_call");
-    let call_decl = call_decl(kind, &call_ident, &orig_name);
+    let exported_method = exported_method(&args, &orig_name);
+    let call_decl = call_decl(kind, &call_ident, &exported_method);
 
-    let access_stage = access_stage(&access_plan, &call_ident);
+    let access_stage = if is_protected_internal {
+        quote!()
+    } else {
+        access_stage(&access_plan, &call_ident)
+    };
 
     let call_args = match extract_args(&orig_sig) {
         Ok(v) => v,
         Err(e) => return e.to_compile_error(),
+    };
+    let protected_stage = if is_protected_internal {
+        match protected_internal_stage(&orig_sig, &exported_method, &protected_roles) {
+            Ok(stage) => stage,
+            Err(err) => return err.to_compile_error(),
+        }
+    } else {
+        quote!()
     };
 
     let dispatch_call = dispatch_call(
@@ -133,6 +159,7 @@ pub fn expand(kind: EndpointKind, args: ValidatedArgs, mut func: ItemFn) -> Toke
         #cdk_attr
         #vis #wrapper_sig {
             #call_decl
+            #protected_stage
             #access_stage
             #dispatch_call
         }
@@ -220,7 +247,15 @@ fn payload_registration(
     }
 }
 
-fn call_decl(kind: EndpointKind, call: &syn::Ident, name: &syn::Ident) -> TokenStream2 {
+fn exported_method(args: &ValidatedArgs, name: &syn::Ident) -> TokenStream2 {
+    if let Some(export_name) = &args.export_name {
+        quote!(#export_name)
+    } else {
+        quote!(stringify!(#name))
+    }
+}
+
+fn call_decl(kind: EndpointKind, call: &syn::Ident, method_name: &TokenStream2) -> TokenStream2 {
     let call_kind = match kind {
         EndpointKind::Query => {
             quote!(::canic::__internal::core::ids::EndpointCallKind::Query)
@@ -232,7 +267,7 @@ fn call_decl(kind: EndpointKind, call: &syn::Ident, name: &syn::Ident) -> TokenS
 
     quote! {
         let #call = ::canic::__internal::core::ids::EndpointCall {
-            endpoint: ::canic::__internal::core::ids::EndpointId::new(stringify!(#name)),
+            endpoint: ::canic::__internal::core::ids::EndpointId::new(#method_name),
             kind: #call_kind,
         };
     }
@@ -336,6 +371,7 @@ fn build_access_plan(
     let is_app_command = is_app_command_endpoint(sig);
     let is_internal = args.internal || is_app_command;
     let has_app_state = exprs_have_app_state_predicate(&args.requires);
+    let has_attested_role = exprs_have_attested_role_predicate(&args.requires);
 
     if is_internal && has_app_state {
         let message = if is_app_command {
@@ -365,6 +401,10 @@ fn build_access_plan(
     }
 
     if exprs.is_empty() {
+        return Ok(AccessPlan::None);
+    }
+
+    if has_attested_role {
         return Ok(AccessPlan::None);
     }
 
@@ -431,16 +471,28 @@ fn expr_from_builtin(pred: &BuiltinPredicate) -> TokenStream2 {
         BuiltinPredicate::CallerIsSameCanister => {
             quote!(::canic::__internal::core::access::expr::caller::is_same_canister())
         }
-        BuiltinPredicate::CallerHasAppRole { role } => match role {
-            CanisterRoleArg::Literal(role) => quote!(
-                ::canic::__internal::core::access::expr::caller::has_app_role(
-                    ::canic::__internal::core::ids::CanisterRole::new(#role)
-                )
-            ),
-            CanisterRoleArg::Expr(role) => quote!(
-                ::canic::__internal::core::access::expr::caller::has_app_role(#role)
-            ),
-        },
+        BuiltinPredicate::CallerHasAppRole { role } | BuiltinPredicate::CallerHasRole { role } => {
+            match role {
+                CanisterRoleArg::Literal(role) => quote!(
+                    ::canic::__internal::core::access::expr::caller::has_app_role(
+                        ::canic::__internal::core::ids::CanisterRole::new(#role)
+                    )
+                ),
+                CanisterRoleArg::Expr(role) => quote!(
+                    ::canic::__internal::core::access::expr::caller::has_app_role(#role)
+                ),
+            }
+        }
+        BuiltinPredicate::CallerHasAnyRole { roles } => {
+            let items = roles.iter().map(role_to_tokens).map(
+                |role| quote!(::canic::__internal::core::access::expr::caller::has_app_role(#role)),
+            );
+            quote!(::canic::__internal::core::access::expr::AccessExpr::Any(
+                vec![
+                    #(#items),*
+                ]
+            ))
+        }
         BuiltinPredicate::CallerIsRegisteredToSubnet => {
             quote!(::canic::__internal::core::access::expr::caller::is_registered_to_subnet())
         }
@@ -475,6 +527,78 @@ fn expr_from_builtin(pred: &BuiltinPredicate) -> TokenStream2 {
 
 fn exprs_have_app_state_predicate(exprs: &[AccessExprAst]) -> bool {
     exprs.iter().any(expr_has_app_state_predicate)
+}
+
+fn exprs_have_attested_role_predicate(exprs: &[AccessExprAst]) -> bool {
+    exprs.iter().any(expr_has_attested_role_predicate)
+}
+
+fn expr_has_attested_role_predicate(expr: &AccessExprAst) -> bool {
+    match expr {
+        AccessExprAst::All(exprs) | AccessExprAst::Any(exprs) => {
+            exprs.iter().any(expr_has_attested_role_predicate)
+        }
+        AccessExprAst::Not(expr) => expr_has_attested_role_predicate(expr),
+        AccessExprAst::Pred(AccessPredicateAst::Builtin(
+            BuiltinPredicate::CallerHasRole { .. } | BuiltinPredicate::CallerHasAnyRole { .. },
+        )) => true,
+        AccessExprAst::Pred(AccessPredicateAst::Builtin(_) | AccessPredicateAst::Custom(_)) => {
+            false
+        }
+    }
+}
+
+fn protected_internal_roles(requires: &[AccessExprAst]) -> syn::Result<Vec<TokenStream2>> {
+    if !exprs_have_attested_role_predicate(requires) {
+        return Ok(Vec::new());
+    }
+
+    let mut roles = Vec::new();
+    for expr in requires {
+        collect_protected_role_expr(expr, &mut roles)?;
+    }
+    Ok(roles)
+}
+
+fn collect_protected_role_expr(
+    expr: &AccessExprAst,
+    roles: &mut Vec<TokenStream2>,
+) -> syn::Result<()> {
+    match expr {
+        AccessExprAst::All(exprs) => {
+            for expr in exprs {
+                collect_protected_role_expr(expr, roles)?;
+            }
+            Ok(())
+        }
+        AccessExprAst::Pred(AccessPredicateAst::Builtin(BuiltinPredicate::CallerHasRole {
+            role,
+        })) => {
+            roles.push(role_to_tokens(role));
+            Ok(())
+        }
+        AccessExprAst::Pred(AccessPredicateAst::Builtin(BuiltinPredicate::CallerHasAnyRole {
+            roles: any_roles,
+        })) => {
+            roles.extend(any_roles.iter().map(role_to_tokens));
+            Ok(())
+        }
+        AccessExprAst::Any(_) | AccessExprAst::Not(_) | AccessExprAst::Pred(_) => {
+            Err(syn::Error::new(
+                proc_macro2::Span::call_site(),
+                "caller::has_role(...) protected endpoints may only combine attested role predicates in this 0.40 slice",
+            ))
+        }
+    }
+}
+
+fn role_to_tokens(role: &CanisterRoleArg) -> TokenStream2 {
+    match role {
+        CanisterRoleArg::Literal(role) => {
+            quote!(::canic::__internal::core::ids::CanisterRole::new(#role))
+        }
+        CanisterRoleArg::Expr(role) => quote!(#role),
+    }
 }
 
 fn requires_authenticated(exprs: &[AccessExprAst]) -> bool {
@@ -625,12 +749,85 @@ fn dispatch_call(
     }
 }
 
+fn protected_internal_stage(
+    sig: &syn::Signature,
+    exported_method: &TokenStream2,
+    roles: &[TokenStream2],
+) -> syn::Result<TokenStream2> {
+    let typed_args = extract_typed_args(sig)?;
+    let arg_idents: Vec<_> = typed_args.iter().map(|(ident, _)| ident).collect();
+    let arg_types: Vec<_> = typed_args.iter().map(|(_, ty)| ty).collect();
+
+    let decode_stage = if typed_args.is_empty() {
+        quote! {
+            if let Err(_err) = ::canic::cdk::candid::decode_args::<()>(&__canic_envelope.args) {
+                return Err(::canic::Error::unauthorized("malformed Canic internal call envelope").into());
+            }
+        }
+    } else {
+        quote! {
+            let (#(#arg_idents,)*): (#(#arg_types,)*) =
+                match ::canic::cdk::candid::decode_args::<(#(#arg_types,)*)>(&__canic_envelope.args) {
+                    Ok(args) => args,
+                    Err(_err) => {
+                        return Err(::canic::Error::unauthorized("malformed Canic internal call envelope").into());
+                    }
+                };
+        }
+    };
+
+    Ok(quote! {
+        let __canic_method = #exported_method;
+        if __canic_envelope.version != 1
+            || __canic_envelope.header.target_canister != ::canic::cdk::api::canister_self()
+            || __canic_envelope.header.target_method != __canic_method
+        {
+            return Err(::canic::Error::unauthorized("invalid Canic internal call envelope").into());
+        }
+
+        let __canic_accepted_roles = [#(#roles),*];
+        if let Err(err) = ::canic::__internal::core::api::auth::AuthApi::verify_internal_invocation_proof(
+            &__canic_envelope.proof,
+            __canic_method,
+            &__canic_accepted_roles,
+        ).await {
+            return Err(err.into());
+        }
+
+        #decode_stage
+    })
+}
+
 fn extract_args(sig: &syn::Signature) -> syn::Result<Vec<TokenStream2>> {
     let mut out = Vec::new();
     for input in &sig.inputs {
         match input {
             syn::FnArg::Typed(pat) => match &*pat.pat {
                 syn::Pat::Ident(id) => out.push(quote!(#id)),
+                _ => {
+                    return Err(syn::Error::new_spanned(
+                        &pat.pat,
+                        "destructuring parameters not supported",
+                    ));
+                }
+            },
+            syn::FnArg::Receiver(r) => {
+                return Err(syn::Error::new_spanned(
+                    r,
+                    "`self` not supported in canic endpoints",
+                ));
+            }
+        }
+    }
+    Ok(out)
+}
+
+fn extract_typed_args(sig: &syn::Signature) -> syn::Result<Vec<(syn::Ident, Box<syn::Type>)>> {
+    let mut out = Vec::new();
+    for input in &sig.inputs {
+        match input {
+            syn::FnArg::Typed(pat) => match &*pat.pat {
+                syn::Pat::Ident(id) => out.push((id.ident.clone(), pat.ty.clone())),
                 _ => {
                     return Err(syn::Error::new_spanned(
                         &pat.pat,
@@ -823,5 +1020,93 @@ mod tests {
 
         assert!(access < dispatch);
         assert!(dispatch < impl_call);
+    }
+
+    #[test]
+    fn protected_internal_role_endpoint_exports_envelope_wrapper() {
+        let mut args = make_args(vec![AccessExprAst::All(vec![AccessExprAst::Pred(
+            AccessPredicateAst::Builtin(BuiltinPredicate::CallerHasRole {
+                role: CanisterRoleArg::Literal("project_hub".to_string()),
+            }),
+        )])]);
+        args.internal = true;
+        let func: ItemFn = syn::parse_quote!(
+            async fn system_add_project_to_user(
+                user_id: ::canic::cdk::types::Principal,
+                project_pid: ::canic::cdk::types::Principal,
+            ) -> Result<(), ::canic::Error> {
+                Ok(())
+            }
+        );
+
+        let expanded = expand(EndpointKind::Update, args, func).to_string();
+        let compact = expanded.split_whitespace().collect::<String>();
+
+        assert!(
+            compact.contains("__canic_envelope:::canic::dto::auth::CanicInternalCallEnvelopeV1")
+        );
+        assert!(compact.contains("verify_internal_invocation_proof"));
+        assert!(compact.contains("decode_args::<("));
+        assert!(!compact.contains("eval_access"));
+
+        let verify = compact
+            .find("verify_internal_invocation_proof")
+            .expect("protected wrapper must verify proof");
+        let decode = compact
+            .find("decode_args")
+            .expect("protected wrapper must decode original args");
+        let dispatch = compact
+            .find("dispatch_update_async")
+            .expect("protected wrapper must dispatch after verification");
+        assert!(verify < decode);
+        assert!(decode < dispatch);
+    }
+
+    #[test]
+    fn protected_internal_role_endpoint_rejects_mixed_access_predicates() {
+        let mut args = make_args(vec![AccessExprAst::All(vec![
+            AccessExprAst::Pred(AccessPredicateAst::Builtin(
+                BuiltinPredicate::CallerHasRole {
+                    role: CanisterRoleArg::Literal("project_hub".to_string()),
+                },
+            )),
+            AccessExprAst::Pred(AccessPredicateAst::Builtin(
+                BuiltinPredicate::CallerIsController,
+            )),
+        ])]);
+        args.internal = true;
+        let func: ItemFn = syn::parse_quote!(
+            async fn protected() -> Result<(), ::canic::Error> {
+                Ok(())
+            }
+        );
+
+        let expanded = expand(EndpointKind::Update, args, func).to_string();
+
+        assert!(expanded.contains("protected endpoints may only combine attested role predicates"));
+    }
+
+    #[test]
+    fn protected_internal_any_role_endpoint_exports_multiple_accepted_roles() {
+        let mut args = make_args(vec![AccessExprAst::All(vec![AccessExprAst::Pred(
+            AccessPredicateAst::Builtin(BuiltinPredicate::CallerHasAnyRole {
+                roles: vec![
+                    CanisterRoleArg::Literal("project_hub".to_string()),
+                    CanisterRoleArg::Literal("admin_hub".to_string()),
+                ],
+            }),
+        )])]);
+        args.internal = true;
+        let func: ItemFn = syn::parse_quote!(
+            async fn protected() -> Result<(), ::canic::Error> {
+                Ok(())
+            }
+        );
+
+        let expanded = expand(EndpointKind::Update, args, func).to_string();
+
+        assert!(expanded.contains("project_hub"));
+        assert!(expanded.contains("admin_hub"));
+        assert!(expanded.contains("verify_internal_invocation_proof"));
     }
 }

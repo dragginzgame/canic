@@ -207,6 +207,73 @@ pub struct SignedRoleAttestation {
 }
 
 //
+// InternalInvocationProofRequest
+//
+
+#[derive(CandidType, Clone, Debug, Deserialize)]
+pub struct InternalInvocationProofRequest {
+    pub subject: Principal,
+    pub role: CanisterRole,
+    #[serde(default)]
+    pub subnet_id: Option<Principal>,
+    pub audience: Principal,
+    pub audience_method: String,
+    pub ttl_secs: u64,
+    #[serde(default)]
+    pub metadata: Option<RootRequestMetadata>,
+}
+
+//
+// InternalInvocationProofPayloadV1
+//
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct InternalInvocationProofPayloadV1 {
+    pub subject: Principal,
+    pub role: CanisterRole,
+    #[serde(default)]
+    pub subnet_id: Option<Principal>,
+    pub audience: Principal,
+    pub audience_method: String,
+    pub issued_at: u64,
+    pub expires_at: u64,
+    pub epoch: u64,
+}
+
+//
+// SignedInternalInvocationProofV1
+//
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct SignedInternalInvocationProofV1 {
+    pub payload: InternalInvocationProofPayloadV1,
+    pub signature: Vec<u8>,
+    pub key_id: u32,
+}
+
+//
+// CanicInternalCallHeaderV1
+//
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct CanicInternalCallHeaderV1 {
+    pub target_canister: Principal,
+    pub target_method: String,
+}
+
+//
+// CanicInternalCallEnvelopeV1
+//
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct CanicInternalCallEnvelopeV1 {
+    pub version: u16,
+    pub header: CanicInternalCallHeaderV1,
+    pub proof: SignedInternalInvocationProofV1,
+    pub args: Vec<u8>,
+}
+
+//
 // AttestationKeyStatus
 //
 
@@ -259,6 +326,9 @@ mod tests {
             "impl DelegatedTokenClaims",
             "impl RoleAttestation",
             "impl SignedRoleAttestation",
+            "impl InternalInvocationProofPayloadV1",
+            "impl SignedInternalInvocationProofV1",
+            "impl CanicInternalCallEnvelopeV1",
             "fn verify",
             "fn sign",
             "fn resolve",

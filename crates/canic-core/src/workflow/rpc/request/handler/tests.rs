@@ -2,7 +2,7 @@ use super::*;
 use crate::{
     cdk::types::Principal,
     dto::{
-        auth::RoleAttestationRequest,
+        auth::{InternalInvocationProofRequest, RoleAttestationRequest},
         rpc::{
             CreateCanisterParent, CreateCanisterRequest, CyclesRequest, CyclesResponse,
             RecycleCanisterRequest, RootRequestMetadata, UpgradeCanisterRequest,
@@ -18,10 +18,12 @@ use crate::{
             },
         },
         storage::{
-            registry::subnet::SubnetRegistryOps, replay::RootReplayOps, state::app::AppStateOps,
+            index::app::AppIndexOps, registry::subnet::SubnetRegistryOps, replay::RootReplayOps,
+            state::app::AppStateOps,
         },
     },
     storage::stable::env::{Env, EnvRecord},
+    storage::stable::index::app::AppIndexRecord,
     storage::stable::replay::{ReplaySlotKey, RootReplayRecord},
     storage::stable::state::app::{AppMode, AppStateRecord},
 };
@@ -60,6 +62,24 @@ fn configure_root_env(root_pid: Principal) -> EnvRestore {
         ..EnvRecord::default()
     });
     EnvRestore(original)
+}
+
+///
+/// AppIndexRestore
+///
+
+struct AppIndexRestore(AppIndexRecord);
+
+impl Drop for AppIndexRestore {
+    fn drop(&mut self) {
+        AppIndexOps::import_allow_incomplete(self.0.clone()).expect("restore app index");
+    }
+}
+
+fn configure_app_index(entries: Vec<(CanisterRole, Principal)>) -> AppIndexRestore {
+    let original = AppIndexOps::data();
+    AppIndexOps::import_allow_incomplete(AppIndexRecord { entries }).expect("import app index");
+    AppIndexRestore(original)
 }
 
 fn cycles_funding_snapshot_map() -> HashMap<
@@ -222,6 +242,22 @@ fn map_request_maps_issue_role_attestation() {
 
     let mapped = RootResponseWorkflow::map_request(req);
     assert_eq!(mapped.capability_name(), "IssueRoleAttestation");
+}
+
+#[test]
+fn map_request_maps_issue_internal_invocation_proof() {
+    let req = Request::IssueInternalInvocationProof(InternalInvocationProofRequest {
+        subject: p(2),
+        role: CanisterRole::new("project_hub"),
+        subnet_id: Some(p(7)),
+        audience: p(8),
+        audience_method: "system_add_project_to_user".to_string(),
+        ttl_secs: 120,
+        metadata: None,
+    });
+
+    let mapped = RootResponseWorkflow::map_request(req);
+    assert_eq!(mapped.capability_name(), "IssueInternalInvocationProof");
 }
 
 #[test]
@@ -593,6 +629,67 @@ fn authorize_rejects_role_attestation_when_subnet_mismatch() {
 }
 
 #[test]
+fn authorize_accepts_internal_invocation_proof_from_app_index_role() {
+    let subject = p(51);
+    let audience = p(52);
+    let role = CanisterRole::new("project_hub");
+    let _app_index = configure_app_index(vec![
+        (role.clone(), subject),
+        (CanisterRole::new("user_hub"), audience),
+    ]);
+
+    let ctx = RootContext {
+        caller: subject,
+        self_pid: p(9),
+        is_root_env: true,
+        subnet_id: p(2),
+        now: 5,
+    };
+    let capability = RootCapability::IssueInternalInvocationProof(InternalInvocationProofRequest {
+        subject,
+        role,
+        subnet_id: Some(p(2)),
+        audience,
+        audience_method: "system_add_project_to_user".to_string(),
+        ttl_secs: 60,
+        metadata: None,
+    });
+
+    RootResponseWorkflow::authorize(&ctx, &capability)
+        .expect("AppIndex role should authorize internal proof issuance");
+}
+
+#[test]
+fn authorize_rejects_internal_invocation_proof_with_unknown_audience() {
+    let subject = p(53);
+    let role = CanisterRole::new("project_hub");
+    let _app_index = configure_app_index(vec![(role.clone(), subject)]);
+
+    let ctx = RootContext {
+        caller: subject,
+        self_pid: p(9),
+        is_root_env: true,
+        subnet_id: p(2),
+        now: 5,
+    };
+    let capability = RootCapability::IssueInternalInvocationProof(InternalInvocationProofRequest {
+        subject,
+        role,
+        subnet_id: None,
+        audience: p(54),
+        audience_method: "system_add_project_to_user".to_string(),
+        ttl_secs: 60,
+        metadata: None,
+    });
+
+    let err = RootResponseWorkflow::authorize(&ctx, &capability).expect_err("must deny");
+    assert!(
+        err.to_string().contains("audience"),
+        "expected audience denial, got: {err}"
+    );
+}
+
+#[test]
 fn build_role_attestation_uses_root_generated_time_window() {
     let ctx = RootContext {
         caller: p(1),
@@ -619,6 +716,37 @@ fn build_role_attestation_uses_root_generated_time_window() {
     assert_eq!(payload.issued_at, 1_000);
     assert_eq!(payload.expires_at, 1_120);
     assert_eq!(payload.epoch, 5);
+}
+
+#[test]
+fn build_internal_invocation_proof_uses_root_generated_epoch_and_method() {
+    let ctx = RootContext {
+        caller: p(1),
+        self_pid: p(9),
+        is_root_env: true,
+        subnet_id: p(2),
+        now: 1_000,
+    };
+    let req = InternalInvocationProofRequest {
+        subject: p(1),
+        role: CanisterRole::new("project_hub"),
+        subnet_id: Some(p(7)),
+        audience: p(8),
+        audience_method: "system_add_project_to_user".to_string(),
+        ttl_secs: 120,
+        metadata: None,
+    };
+
+    let payload =
+        RootResponseWorkflow::build_internal_invocation_proof(&ctx, &req).expect("payload");
+    assert_eq!(payload.subject, req.subject);
+    assert_eq!(payload.role, req.role);
+    assert_eq!(payload.subnet_id, req.subnet_id);
+    assert_eq!(payload.audience, req.audience);
+    assert_eq!(payload.audience_method, req.audience_method);
+    assert_eq!(payload.issued_at, 1_000);
+    assert_eq!(payload.expires_at, 1_120);
+    assert_eq!(payload.epoch, 0);
 }
 
 #[test]

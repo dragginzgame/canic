@@ -1,7 +1,10 @@
 use crate::{
     cdk::types::Principal,
-    dto::auth::{AttestationKey, RoleAttestation},
-    ops::auth::{AuthExpiryError, AuthOpsError, AuthScopeError, AuthValidationError},
+    dto::auth::{AttestationKey, InternalInvocationProofPayloadV1, RoleAttestation},
+    ops::auth::{
+        AuthExpiryError, AuthOpsError, AuthScopeError, AuthValidationError,
+        InternalInvocationProofVerificationInput,
+    },
 };
 
 // Enforce role-attestation subject, timing, audience, subnet, and epoch bounds.
@@ -60,6 +63,79 @@ pub(super) fn verify_role_attestation_claims(
     Ok(())
 }
 
+// Enforce internal-invocation proof subject, role, method, timing, audience,
+// subnet, and epoch bounds before endpoint dispatch.
+pub(super) fn verify_internal_invocation_proof_claims(
+    payload: &InternalInvocationProofPayloadV1,
+    input: InternalInvocationProofVerificationInput<'_>,
+) -> Result<(), AuthOpsError> {
+    if payload.subject != input.caller {
+        return Err(AuthScopeError::AttestationSubjectMismatch {
+            expected: input.caller,
+            found: payload.subject,
+        }
+        .into());
+    }
+
+    if input.now_secs > payload.expires_at {
+        return Err(AuthExpiryError::AttestationExpired {
+            expires_at: payload.expires_at,
+            now_secs: input.now_secs,
+        }
+        .into());
+    }
+
+    if payload.audience != input.self_pid {
+        return Err(AuthScopeError::AttestationAudienceMismatch {
+            expected: input.self_pid,
+            found: payload.audience,
+        }
+        .into());
+    }
+
+    if payload.audience_method != input.target_method {
+        return Err(AuthScopeError::InternalInvocationMethodMismatch {
+            expected: input.target_method.to_string(),
+            found: payload.audience_method.clone(),
+        }
+        .into());
+    }
+
+    if !input
+        .accepted_roles
+        .iter()
+        .any(|role| role == &payload.role)
+    {
+        return Err(AuthScopeError::InternalInvocationRoleRejected {
+            found: payload.role.clone(),
+        }
+        .into());
+    }
+
+    if let Some(attestation_subnet) = payload.subnet_id {
+        let verifier_subnet = input
+            .verifier_subnet
+            .ok_or(AuthValidationError::AttestationSubnetUnavailable)?;
+        if attestation_subnet != verifier_subnet {
+            return Err(AuthScopeError::AttestationSubnetMismatch {
+                expected: verifier_subnet,
+                found: attestation_subnet,
+            }
+            .into());
+        }
+    }
+
+    if payload.epoch < input.min_accepted_epoch {
+        return Err(AuthExpiryError::AttestationEpochRejected {
+            epoch: payload.epoch,
+            min_accepted_epoch: input.min_accepted_epoch,
+        }
+        .into());
+    }
+
+    Ok(())
+}
+
 // Reject attestation keys that are not yet valid or already expired.
 pub(super) fn verify_attestation_key_validity(
     key: &AttestationKey,
@@ -88,4 +164,106 @@ pub(super) fn verify_attestation_key_validity(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::verify_internal_invocation_proof_claims;
+    use crate::{
+        cdk::types::Principal,
+        dto::auth::InternalInvocationProofPayloadV1,
+        ids::CanisterRole,
+        ops::auth::{
+            AuthExpiryError, AuthOpsError, AuthScopeError, InternalInvocationProofVerificationInput,
+        },
+    };
+
+    fn p(id: u8) -> Principal {
+        Principal::from_slice(&[id; 29])
+    }
+
+    fn payload() -> InternalInvocationProofPayloadV1 {
+        InternalInvocationProofPayloadV1 {
+            subject: p(1),
+            role: CanisterRole::new("project_hub"),
+            subnet_id: Some(p(3)),
+            audience: p(2),
+            audience_method: "system_add_project_to_user".to_string(),
+            issued_at: 10,
+            expires_at: 20,
+            epoch: 4,
+        }
+    }
+
+    fn input<'a>(
+        target_method: &'a str,
+        accepted_roles: &'a [CanisterRole],
+        min_accepted_epoch: u64,
+    ) -> InternalInvocationProofVerificationInput<'a> {
+        InternalInvocationProofVerificationInput {
+            caller: p(1),
+            self_pid: p(2),
+            target_method,
+            accepted_roles,
+            verifier_subnet: Some(p(3)),
+            now_secs: 15,
+            min_accepted_epoch,
+        }
+    }
+
+    #[test]
+    fn internal_invocation_claims_accept_bound_method_role_and_subnet() {
+        let accepted = [CanisterRole::new("project_hub")];
+
+        verify_internal_invocation_proof_claims(
+            &payload(),
+            input("system_add_project_to_user", &accepted, 4),
+        )
+        .expect("valid internal proof claims");
+    }
+
+    #[test]
+    fn internal_invocation_claims_reject_method_mismatch() {
+        let accepted = [CanisterRole::new("project_hub")];
+        let err = verify_internal_invocation_proof_claims(
+            &payload(),
+            input("other_method", &accepted, 4),
+        )
+        .expect_err("method mismatch must reject");
+
+        assert!(matches!(
+            err,
+            AuthOpsError::Scope(AuthScopeError::InternalInvocationMethodMismatch { .. })
+        ));
+    }
+
+    #[test]
+    fn internal_invocation_claims_reject_role_mismatch() {
+        let accepted = [CanisterRole::new("admin_hub")];
+        let err = verify_internal_invocation_proof_claims(
+            &payload(),
+            input("system_add_project_to_user", &accepted, 4),
+        )
+        .expect_err("role mismatch must reject");
+
+        assert!(matches!(
+            err,
+            AuthOpsError::Scope(AuthScopeError::InternalInvocationRoleRejected { .. })
+        ));
+    }
+
+    #[test]
+    fn internal_invocation_claims_reject_stale_epoch() {
+        let accepted = [CanisterRole::new("project_hub")];
+        let err = verify_internal_invocation_proof_claims(
+            &payload(),
+            input("system_add_project_to_user", &accepted, 5),
+        )
+        .expect_err("stale epoch must reject");
+
+        assert!(matches!(
+            err,
+            AuthOpsError::Expiry(AuthExpiryError::AttestationEpochRejected { .. })
+        ));
+    }
 }

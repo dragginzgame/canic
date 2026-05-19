@@ -3,7 +3,10 @@ use super::{
 };
 use crate::{
     InternalError,
-    dto::auth::{RoleAttestation, RoleAttestationRequest},
+    dto::auth::{
+        InternalInvocationProofPayloadV1, InternalInvocationProofRequest, RoleAttestation,
+        RoleAttestationRequest,
+    },
     dto::rpc::{
         CreateCanisterParent, CreateCanisterRequest, CreateCanisterResponse,
         RecycleCanisterRequest, RecycleCanisterResponse, Response, UpgradeCanisterRequest,
@@ -46,6 +49,9 @@ pub(super) async fn execute_root_capability(
             Ok(Response::Cycles(response))
         }
         RootCapability::IssueRoleAttestation(req) => execute_issue_role_attestation(ctx, req).await,
+        RootCapability::IssueInternalInvocationProof(req) => {
+            execute_issue_internal_invocation_proof(ctx, req).await
+        }
     };
 
     if let Err(err) = &result {
@@ -129,6 +135,28 @@ async fn execute_issue_role_attestation(
     Ok(Response::RoleAttestationIssued(signed))
 }
 
+async fn execute_issue_internal_invocation_proof(
+    ctx: &RootContext,
+    req: InternalInvocationProofRequest,
+) -> Result<Response, InternalError> {
+    let payload = build_internal_invocation_proof(ctx, req)?;
+    let signed = AuthOps::sign_internal_invocation_proof(payload).await?;
+    log!(
+        Topic::Auth,
+        Info,
+        "internal invocation proof issued subject={} role={} audience={} method={} subnet={} issued_at={} expires_at={} epoch={}",
+        signed.payload.subject,
+        signed.payload.role,
+        signed.payload.audience,
+        signed.payload.audience_method,
+        display_optional(signed.payload.subnet_id),
+        signed.payload.issued_at,
+        signed.payload.expires_at,
+        signed.payload.epoch
+    );
+    Ok(Response::InternalInvocationProofIssued(signed))
+}
+
 pub(super) fn build_role_attestation(
     ctx: &RootContext,
     req: RoleAttestationRequest,
@@ -158,5 +186,39 @@ pub(super) fn build_role_attestation(
         issued_at: ctx.now,
         expires_at,
         epoch: req.epoch,
+    })
+}
+
+pub(super) fn build_internal_invocation_proof(
+    ctx: &RootContext,
+    req: InternalInvocationProofRequest,
+) -> Result<InternalInvocationProofPayloadV1, InternalError> {
+    let max_ttl_secs = authorize::max_role_attestation_ttl_seconds();
+    if req.ttl_secs == 0 || req.ttl_secs > max_ttl_secs {
+        return Err(RpcWorkflowError::RoleAttestationInvalidTtl {
+            ttl_secs: req.ttl_secs,
+            max_ttl_secs,
+        }
+        .into());
+    }
+
+    let expires_at =
+        ctx.now
+            .checked_add(req.ttl_secs)
+            .ok_or(RpcWorkflowError::RoleAttestationInvalidTtl {
+                ttl_secs: req.ttl_secs,
+                max_ttl_secs,
+            })?;
+    let epoch = AuthOps::current_role_epoch(&req.role)?;
+
+    Ok(InternalInvocationProofPayloadV1 {
+        subject: req.subject,
+        role: req.role,
+        subnet_id: req.subnet_id,
+        audience: req.audience,
+        audience_method: req.audience_method,
+        issued_at: ctx.now,
+        expires_at,
+        epoch,
     })
 }

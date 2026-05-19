@@ -189,6 +189,9 @@ const fn root_capability_metric_key(capability: &Request) -> RootCapabilityMetri
         RequestFamily::RecycleCanister => RootCapabilityMetricKey::RecycleCanister,
         RequestFamily::RequestCycles => RootCapabilityMetricKey::RequestCycles,
         RequestFamily::IssueRoleAttestation => RootCapabilityMetricKey::IssueRoleAttestation,
+        RequestFamily::IssueInternalInvocationProof => {
+            RootCapabilityMetricKey::IssueInternalInvocationProof
+        }
     }
 }
 

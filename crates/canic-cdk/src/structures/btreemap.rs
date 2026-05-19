@@ -6,8 +6,8 @@ use std::ops::{Deref, DerefMut};
 ///
 /// BTreeMap
 ///
-/// Thin wrapper around `ic_stable_structures::BTreeMap` with a small helper
-/// API used across Canic.
+/// Thin wrapper around `ic_memory::stable_structures::BTreeMap` with a small
+/// helper API used across Canic.
 ///
 
 pub struct BTreeMap<K, V, M>

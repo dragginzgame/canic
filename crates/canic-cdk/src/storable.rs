@@ -1,4 +1,4 @@
-//! Derive `ic-stable-structures` storage traits using CBOR serialization.
+//! Derive stable-structures storage traits using CBOR serialization.
 
 /// Implement [`Storable`](crate::structures::storable::Storable) with a
 /// bounded size guarantee.

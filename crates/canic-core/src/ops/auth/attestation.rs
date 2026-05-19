@@ -2,9 +2,15 @@ use super::{AuthOps, ROLE_ATTESTATION_KEY_ID_V1, crypto, keys, verify};
 use crate::{
     InternalError,
     cdk::types::Principal,
-    dto::auth::{AttestationKeySet, RoleAttestation, SignedRoleAttestation},
+    dto::auth::{
+        AttestationKeySet, InternalInvocationProofPayloadV1, RoleAttestation,
+        SignedInternalInvocationProofV1, SignedRoleAttestation,
+    },
     ops::{
-        auth::{AuthOpsError, AuthSignatureError, AuthValidationError},
+        auth::{
+            AuthOpsError, AuthSignatureError, AuthValidationError,
+            InternalInvocationProofVerificationInput,
+        },
         ic::{IcOps, ecdsa::EcdsaOps},
         storage::auth::AuthStateOps,
     },
@@ -23,6 +29,24 @@ impl AuthOps {
             EcdsaOps::sign_bytes(&key_name, keys::attestation_derivation_path(), hash).await?;
 
         Ok(SignedRoleAttestation {
+            payload,
+            signature,
+            key_id: ROLE_ATTESTATION_KEY_ID_V1,
+        })
+    }
+
+    /// Sign a method-scoped internal invocation proof using the 0.40 proof domain.
+    pub(crate) async fn sign_internal_invocation_proof(
+        payload: InternalInvocationProofPayloadV1,
+    ) -> Result<SignedInternalInvocationProofV1, InternalError> {
+        let key_name = keys::attestation_key_name()?;
+        keys::ensure_attestation_key_cached(&key_name, IcOps::canister_self(), IcOps::now_secs())
+            .await?;
+        let hash = crypto::internal_invocation_proof_hash(&payload)?;
+        let signature =
+            EcdsaOps::sign_bytes(&key_name, keys::attestation_derivation_path(), hash).await?;
+
+        Ok(SignedInternalInvocationProofV1 {
             payload,
             signature,
             key_id: ROLE_ATTESTATION_KEY_ID_V1,
@@ -83,5 +107,33 @@ impl AuthOps {
         )?;
 
         Ok(attestation.payload.clone())
+    }
+
+    pub(crate) fn verify_internal_invocation_proof_cached(
+        proof: &SignedInternalInvocationProofV1,
+        input: InternalInvocationProofVerificationInput<'_>,
+    ) -> Result<InternalInvocationProofPayloadV1, AuthOpsError> {
+        if proof.signature.is_empty() {
+            return Err(AuthSignatureError::AttestationSignatureUnavailable.into());
+        }
+
+        let key_name = keys::attestation_key_name()
+            .map_err(|err| AuthValidationError::Auth(err.to_string()))?;
+        let key = AuthStateOps::attestation_public_key(proof.key_id, &key_name).ok_or(
+            AuthValidationError::AttestationUnknownKeyId {
+                key_id: proof.key_id,
+            },
+        )?;
+        verify::verify_attestation_key_validity(&key, input.now_secs)?;
+
+        let public_key = key.public_key;
+        let hash = crypto::internal_invocation_proof_hash(&proof.payload)
+            .map_err(|err| AuthSignatureError::AttestationSignatureInvalid(err.to_string()))?;
+        EcdsaOps::verify_signature(&public_key, hash, &proof.signature)
+            .map_err(|err| AuthSignatureError::AttestationSignatureInvalid(err.to_string()))?;
+
+        verify::verify_internal_invocation_proof_claims(&proof.payload, input)?;
+
+        Ok(proof.payload.clone())
     }
 }

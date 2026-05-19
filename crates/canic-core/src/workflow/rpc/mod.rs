@@ -154,6 +154,12 @@ pub enum RpcWorkflowError {
         "role attestation ttl_secs must satisfy 0 < ttl_secs <= {max_ttl_secs} (got {ttl_secs})"
     )]
     RoleAttestationInvalidTtl { ttl_secs: u64, max_ttl_secs: u64 },
+
+    #[error("internal invocation proof audience {audience} is not known to root")]
+    InternalInvocationProofAudienceUnknown { audience: Principal },
+
+    #[error("internal invocation proof audience_method must not be empty")]
+    InternalInvocationProofMethodEmpty,
 }
 
 impl From<RpcWorkflowError> for InternalError {

@@ -4,12 +4,14 @@ use crate::{
         auth::{
             AttestationKeySet, DelegatedToken, DelegatedTokenIssueRequest,
             DelegatedTokenMintRequest, DelegationProof, DelegationProofIssueRequest,
-            RoleAttestationRequest, SignedRoleAttestation,
+            InternalInvocationProofRequest, RoleAttestationRequest,
+            SignedInternalInvocationProofV1, SignedRoleAttestation,
         },
         error::Error,
         rpc::{Request as RootRequest, Response as RootCapabilityResponse},
     },
     error::InternalErrorClass,
+    ids::CanisterRole,
     log,
     log::Topic,
     ops::{
@@ -166,6 +168,21 @@ impl AuthApi {
         }
     }
 
+    /// Request a method-scoped internal invocation proof from root over RPC.
+    pub async fn request_internal_invocation_proof(
+        request: InternalInvocationProofRequest,
+    ) -> Result<SignedInternalInvocationProofV1, Error> {
+        let request = metadata::with_internal_invocation_proof_request_metadata(request);
+        let response = Self::request_internal_invocation_proof_remote(request).await?;
+
+        match response {
+            RootCapabilityResponse::InternalInvocationProofIssued(response) => Ok(response),
+            _ => Err(Error::internal(
+                "invalid root response type for internal invocation proof request",
+            )),
+        }
+    }
+
     /// Return the current root role-attestation key set.
     pub async fn attestation_key_set() -> Result<AttestationKeySet, Error> {
         AuthOps::attestation_key_set()
@@ -278,6 +295,103 @@ impl AuthApi {
         }
     }
 
+    /// Verify a root-signed, method-scoped internal invocation proof for this endpoint.
+    pub async fn verify_internal_invocation_proof(
+        proof: &SignedInternalInvocationProofV1,
+        target_method: &str,
+        accepted_roles: &[CanisterRole],
+    ) -> Result<(), Error> {
+        let configured_min_accepted_epoch = ConfigOps::role_attestation_config()
+            .map_err(Error::from)?
+            .min_accepted_epoch_by_role
+            .get(proof.payload.role.as_str())
+            .copied();
+        let min_accepted_epoch =
+            verify_flow::resolve_min_accepted_epoch(0, configured_min_accepted_epoch);
+
+        let caller = IcOps::msg_caller();
+        let self_pid = IcOps::canister_self();
+        let now_secs = IcOps::now_secs();
+        let verifier_subnet = Some(EnvOps::subnet_pid().map_err(Error::from)?);
+        let root_pid = EnvOps::root_pid().map_err(Error::from)?;
+
+        let verify = || {
+            AuthOps::verify_internal_invocation_proof_cached(
+                proof,
+                crate::ops::auth::InternalInvocationProofVerificationInput {
+                    caller,
+                    self_pid,
+                    target_method,
+                    accepted_roles,
+                    verifier_subnet,
+                    now_secs,
+                    min_accepted_epoch,
+                },
+            )
+            .map(|_| ())
+        };
+        let refresh = || async {
+            let key_set: AttestationKeySet =
+                RpcOps::call_rpc_result(root_pid, protocol::CANIC_ATTESTATION_KEY_SET, ()).await?;
+            AuthOps::replace_attestation_key_set(key_set);
+            Ok(())
+        };
+
+        match verify_flow::verify_role_attestation_with_single_refresh(verify, refresh).await {
+            Ok(()) => Ok(()),
+            Err(verify_flow::RoleAttestationVerifyFlowError::Initial(err)) => {
+                verify_flow::record_attestation_verifier_rejection(&err);
+                log!(
+                    Topic::Auth,
+                    Warn,
+                    "internal invocation proof rejected phase=cached local={} caller={} subject={} role={} key_id={} audience={} method={} epoch={} error={}",
+                    self_pid,
+                    caller,
+                    proof.payload.subject,
+                    proof.payload.role,
+                    proof.key_id,
+                    proof.payload.audience,
+                    proof.payload.audience_method,
+                    proof.payload.epoch,
+                    err
+                );
+                Err(Self::map_auth_error(err.into()))
+            }
+            Err(verify_flow::RoleAttestationVerifyFlowError::Refresh { trigger, source }) => {
+                verify_flow::record_attestation_verifier_rejection(&trigger);
+                record_attestation_refresh_failed();
+                log!(
+                    Topic::Auth,
+                    Warn,
+                    "internal invocation proof refresh failed local={} caller={} key_id={} error={}",
+                    self_pid,
+                    caller,
+                    proof.key_id,
+                    source
+                );
+                Err(Self::map_auth_error(source))
+            }
+            Err(verify_flow::RoleAttestationVerifyFlowError::PostRefresh(err)) => {
+                verify_flow::record_attestation_verifier_rejection(&err);
+                log!(
+                    Topic::Auth,
+                    Warn,
+                    "internal invocation proof rejected phase=post_refresh local={} caller={} subject={} role={} key_id={} audience={} method={} epoch={} error={}",
+                    self_pid,
+                    caller,
+                    proof.payload.subject,
+                    proof.payload.role,
+                    proof.key_id,
+                    proof.payload.audience,
+                    proof.payload.audience_method,
+                    proof.payload.epoch,
+                    err
+                );
+                Err(Self::map_auth_error(err.into()))
+            }
+        }
+    }
+
     // Resolve the root-owned TTL ceiling from delegated-token config.
     fn delegated_token_max_ttl_secs() -> Result<u64, Error> {
         let cfg = ConfigOps::delegated_tokens_config().map_err(Error::from)?;
@@ -319,6 +433,24 @@ impl AuthApi {
         }
     }
 
+    // Execute one local root internal-invocation proof request.
+    pub async fn request_internal_invocation_proof_root(
+        request: InternalInvocationProofRequest,
+    ) -> Result<SignedInternalInvocationProofV1, Error> {
+        let request = metadata::with_internal_invocation_proof_request_metadata(request);
+        let response =
+            RootResponseWorkflow::response(RootRequest::issue_internal_invocation_proof(request))
+                .await
+                .map_err(Self::map_auth_error)?;
+
+        match response {
+            RootCapabilityResponse::InternalInvocationProofIssued(response) => Ok(response),
+            _ => Err(Error::internal(
+                "invalid root response type for internal invocation proof request",
+            )),
+        }
+    }
+
     // Route a canonical role-attestation request over RPC to root.
     async fn request_role_attestation_remote(
         request: RoleAttestationRequest,
@@ -327,5 +459,19 @@ impl AuthApi {
         RpcOps::call_rpc_result(root_pid, protocol::CANIC_REQUEST_ROLE_ATTESTATION, request)
             .await
             .map_err(Self::map_auth_error)
+    }
+
+    // Route a canonical internal-invocation proof request over RPC to root.
+    async fn request_internal_invocation_proof_remote(
+        request: InternalInvocationProofRequest,
+    ) -> Result<RootCapabilityResponse, Error> {
+        let root_pid = EnvOps::root_pid().map_err(Error::from)?;
+        RpcOps::call_rpc_result(
+            root_pid,
+            protocol::CANIC_REQUEST_INTERNAL_INVOCATION_PROOF,
+            request,
+        )
+        .await
+        .map_err(Self::map_auth_error)
     }
 }

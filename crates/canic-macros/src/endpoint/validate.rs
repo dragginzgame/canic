@@ -59,6 +59,15 @@ pub fn validate(
         validate_authenticated_args(sig)?;
     }
 
+    if contains_attested_caller_role_predicate(&parsed.requires)
+        && !matches!(kind, EndpointKind::Update)
+    {
+        return Err(syn::Error::new_spanned(
+            &sig.ident,
+            "caller::has_role(...) protected internal endpoints are update-only in 0.40 V1",
+        ));
+    }
+
     if !parsed.internal && contains_internal_only_caller_predicate(&parsed.requires) {
         return Err(syn::Error::new_spanned(
             &sig.ident,
@@ -109,6 +118,27 @@ fn access_expr_contains_authenticated(expr: &AccessExprAst) -> bool {
     }
 }
 
+fn contains_attested_caller_role_predicate(requires: &[AccessExprAst]) -> bool {
+    requires
+        .iter()
+        .any(access_expr_contains_attested_caller_role_predicate)
+}
+
+fn access_expr_contains_attested_caller_role_predicate(expr: &AccessExprAst) -> bool {
+    match expr {
+        AccessExprAst::All(exprs) | AccessExprAst::Any(exprs) => exprs
+            .iter()
+            .any(access_expr_contains_attested_caller_role_predicate),
+        AccessExprAst::Not(expr) => access_expr_contains_attested_caller_role_predicate(expr),
+        AccessExprAst::Pred(AccessPredicateAst::Builtin(
+            BuiltinPredicate::CallerHasRole { .. } | BuiltinPredicate::CallerHasAnyRole { .. },
+        )) => true,
+        AccessExprAst::Pred(AccessPredicateAst::Builtin(_) | AccessPredicateAst::Custom(_)) => {
+            false
+        }
+    }
+}
+
 fn contains_internal_only_caller_predicate(requires: &[AccessExprAst]) -> bool {
     requires
         .iter()
@@ -124,6 +154,8 @@ fn access_expr_contains_internal_only_caller_predicate(expr: &AccessExprAst) -> 
         AccessExprAst::Pred(AccessPredicateAst::Builtin(builtin)) => matches!(
             builtin,
             BuiltinPredicate::CallerHasAppRole { .. }
+                | BuiltinPredicate::CallerHasRole { .. }
+                | BuiltinPredicate::CallerHasAnyRole { .. }
                 | BuiltinPredicate::CallerIsRegisteredToSubnet
         ),
         AccessExprAst::Pred(AccessPredicateAst::Custom(_)) => false,
@@ -228,6 +260,24 @@ mod tests {
         }
     }
 
+    fn parsed_attested_role(internal: bool) -> ParsedArgs {
+        ParsedArgs {
+            forwarded: Vec::new(),
+            export_name: None,
+            payload_max_bytes: None,
+            requires: vec![AccessExprAst::Pred(AccessPredicateAst::Builtin(
+                BuiltinPredicate::CallerHasRole {
+                    role: crate::endpoint::parse::CanisterRoleArg::Literal(
+                        "project_hub".to_string(),
+                    ),
+                },
+            ))],
+            requires_async: true,
+            requires_fallible: true,
+            internal,
+        }
+    }
+
     #[test]
     fn authenticated_requires_first_argument() {
         let sig: Signature = syn::parse_quote!(async fn hello() -> Result<(), ::canic::Error>);
@@ -302,6 +352,36 @@ mod tests {
         let sig: Signature = syn::parse_quote!(async fn hello() -> Result<(), ::canic::Error>);
         validate(EndpointKind::Update, parsed_app_role(true), &sig, true)
             .expect("internal app canister predicate ok");
+    }
+
+    #[test]
+    fn attested_role_requires_internal_update_endpoint() {
+        let sig: Signature = syn::parse_quote!(async fn hello() -> Result<(), ::canic::Error>);
+        let err = validate(
+            EndpointKind::Update,
+            parsed_attested_role(false),
+            &sig,
+            true,
+        )
+        .expect_err("attested role must be internal");
+        assert!(
+            err.to_string()
+                .contains("caller topology predicates are internal-only")
+        );
+
+        let err = validate(EndpointKind::Query, parsed_attested_role(true), &sig, true)
+            .expect_err("attested query must fail");
+        assert!(
+            err.to_string()
+                .contains("protected internal endpoints are update-only")
+        );
+    }
+
+    #[test]
+    fn attested_role_is_allowed_for_internal_update_endpoint() {
+        let sig: Signature = syn::parse_quote!(async fn hello() -> Result<(), ::canic::Error>);
+        validate(EndpointKind::Update, parsed_attested_role(true), &sig, true)
+            .expect("internal update attested role predicate ok");
     }
 
     #[test]

@@ -1,5 +1,5 @@
 #[cfg(test)]
-use crate::dto::auth::RoleAttestation;
+use crate::dto::auth::{InternalInvocationProofPayloadV1, RoleAttestation};
 use crate::{
     InternalError,
     cdk::types::Principal,
@@ -234,6 +234,14 @@ impl RootResponseWorkflow {
         req: &crate::dto::auth::RoleAttestationRequest,
     ) -> Result<RoleAttestation, InternalError> {
         execute::build_role_attestation(ctx, req.clone())
+    }
+
+    #[cfg(test)]
+    fn build_internal_invocation_proof(
+        ctx: &RootContext,
+        req: &crate::dto::auth::InternalInvocationProofRequest,
+    ) -> Result<InternalInvocationProofPayloadV1, InternalError> {
+        execute::build_internal_invocation_proof(ctx, req.clone())
     }
 
     fn extract_root_context() -> Result<RootContext, InternalError> {

@@ -1,5 +1,8 @@
 use crate::{
-    dto::{auth::RoleAttestationRequest, rpc::RootRequestMetadata},
+    dto::{
+        auth::{InternalInvocationProofRequest, RoleAttestationRequest},
+        rpc::RootRequestMetadata,
+    },
     ops::ic::IcOps,
 };
 use sha2::{Digest, Sha256};
@@ -11,6 +14,15 @@ static ROOT_REQUEST_NONCE: AtomicU64 = AtomicU64::new(1);
 pub(super) fn with_root_attestation_request_metadata(
     mut request: RoleAttestationRequest,
 ) -> RoleAttestationRequest {
+    if request.metadata.is_none() {
+        request.metadata = Some(new_request_metadata());
+    }
+    request
+}
+
+pub(super) fn with_internal_invocation_proof_request_metadata(
+    mut request: InternalInvocationProofRequest,
+) -> InternalInvocationProofRequest {
     if request.metadata.is_none() {
         request.metadata = Some(new_request_metadata());
     }

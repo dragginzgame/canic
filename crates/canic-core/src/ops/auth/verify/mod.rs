@@ -2,8 +2,8 @@ mod attestation;
 
 use crate::{
     cdk::types::Principal,
-    dto::auth::{AttestationKey, RoleAttestation},
-    ops::auth::AuthOpsError,
+    dto::auth::{AttestationKey, InternalInvocationProofPayloadV1, RoleAttestation},
+    ops::auth::{AuthOpsError, InternalInvocationProofVerificationInput},
 };
 
 // Route role-attestation verification through the attestation-focused verifier module.
@@ -23,6 +23,14 @@ pub(super) fn verify_role_attestation_claims(
         now_secs,
         min_accepted_epoch,
     )
+}
+
+// Route internal-invocation proof verification through the attestation-focused verifier module.
+pub(super) fn verify_internal_invocation_proof_claims(
+    payload: &InternalInvocationProofPayloadV1,
+    input: InternalInvocationProofVerificationInput<'_>,
+) -> Result<(), AuthOpsError> {
+    attestation::verify_internal_invocation_proof_claims(payload, input)
 }
 
 // Route attestation-key time validity checks through the attestation verifier module.

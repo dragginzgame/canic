@@ -82,6 +82,16 @@ macro_rules! canic_emit_root_auth_attestation_endpoints {
                 .await
         }
 
+        #[$crate::canic_update(internal)]
+        async fn canic_request_internal_invocation_proof(
+            request: ::canic::dto::auth::InternalInvocationProofRequest,
+        ) -> Result<::canic::dto::auth::SignedInternalInvocationProofV1, ::canic::Error> {
+            $crate::__internal::core::api::auth::AuthApi::request_internal_invocation_proof_root(
+                request,
+            )
+            .await
+        }
+
         #[$crate::canic_update(internal, requires(caller::is_registered_to_subnet()))]
         async fn canic_attestation_key_set()
         -> Result<::canic::dto::auth::AttestationKeySet, ::canic::Error> {

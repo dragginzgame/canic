@@ -134,6 +134,12 @@ pub enum AuthScopeError {
         found: Principal,
     },
 
+    #[error("internal invocation method mismatch (expected {expected}, found {found})")]
+    InternalInvocationMethodMismatch { expected: String, found: String },
+
+    #[error("internal invocation role '{found}' is not accepted by this endpoint")]
+    InternalInvocationRoleRejected { found: CanisterRole },
+
     #[error("attestation subnet mismatch (expected {expected}, found {found})")]
     AttestationSubnetMismatch {
         expected: Principal,

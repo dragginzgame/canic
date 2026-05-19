@@ -6,9 +6,18 @@ documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.40.x] - 2026-05-19 - Attested Canic calls
+
+- `0.40.0` starts the attested internal-call hard cut by adding passive wire DTOs for method-scoped internal invocation proofs and Canic internal-call envelopes, a distinct signing domain for internal invocation proof payloads, root issuance for AppIndex or subnet-registry authorized internal callers, verifier-side method/role proof validation, the first protected update wrapper path for `caller::has_role(...)` endpoints, and the low-level `CanicCall` envelope-sending primitive.
+
+See detailed breakdown:
+[docs/changelog/0.40.md](docs/changelog/0.40.md)
+
+---
+
 ## [0.39.x] - 2026-05-18 - `ic-memory` extraction
 
-- `0.39.16` delegates `MemoryManager` range authority to published `ic-memory 0.2.0`, removes the temporary local crate patch, removes Canic-local range/live registry duplication including the stale named application authority range, removes the opt-in live memory registry diagnostic, and hard-cuts Canic allocation persistence to the native `ic-memory` durable ledger instead of preserving the old Canic physical ledger format.
+- `0.39.16` delegates `MemoryManager` range authority and native stable-cell allocation persistence to published `ic-memory 0.4.0`, removes the temporary local crate patch, removes Canic-local range/live registry duplication including the stale named application authority range, removes the opt-in live memory registry diagnostic, and hard-cuts Canic allocation persistence to the native `ic-memory` durable ledger instead of preserving the old Canic physical ledger format.
 
 - `0.39.15` points Canic at the standalone crates.io `ic-memory 0.0.1` package and removes the in-tree `ic-memory` workspace member.
 

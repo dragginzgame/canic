@@ -12,6 +12,7 @@ thread_local! {
 #[derive(Clone, Copy, Eq, Hash, PartialEq)]
 #[remain::sorted]
 pub enum RootCapabilityMetricKey {
+    IssueInternalInvocationProof,
     IssueRoleAttestation,
     Provision,
     RecycleCanister,
@@ -23,6 +24,7 @@ impl RootCapabilityMetricKey {
     #[must_use]
     pub const fn metric_label(self) -> &'static str {
         match self {
+            Self::IssueInternalInvocationProof => "IssueInternalInvocationProof",
             Self::IssueRoleAttestation => "IssueRoleAttestation",
             Self::Provision => "Provision",
             Self::RecycleCanister => "RecycleCanister",
