@@ -77,7 +77,7 @@ pub fn validate_stable_key_authority(
             reason: err.reason,
         })?;
 
-    let slot = AllocationSlotDescriptor::memory_manager_checked(id)
+    let slot = AllocationSlotDescriptor::memory_manager(id)
         .map_err(memory_slot_error_to_registry_error)?;
     let policy = CanicMemoryManagerPolicy::for_declaring_crate(crate_name);
 

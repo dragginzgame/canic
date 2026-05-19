@@ -6,15 +6,9 @@
 
 #[cfg(test)]
 const _: () = {
-    use std::sync::Once;
-
     fn __canic_memory_test_bootstrap() {
-        static ONCE: Once = Once::new();
-
-        ONCE.call_once(|| {
-            canic_core::api::runtime::MemoryRuntimeApi::bootstrap_registry()
-                .expect("test stable-memory bootstrap");
-        });
+        canic_core::api::runtime::MemoryRuntimeApi::bootstrap_registry()
+            .expect("test stable-memory bootstrap");
     }
 
     #[canic_core::__reexports::ctor::ctor(
