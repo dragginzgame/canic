@@ -2,7 +2,7 @@ use ic_memory::{
     AllocationDeclaration, AllocationHistory, AllocationLedger, AllocationPolicy,
     AllocationSlotDescriptor, DeclarationSnapshot, MEMORY_MANAGER_INVALID_ID,
     MemoryManagerRangeAuthority, MemoryManagerRangeAuthorityError, MemoryManagerRangeMode,
-    MemoryManagerSlotError, RangeAuthority, SchemaMetadata, StableKey, validate_allocations,
+    MemoryManagerSlotError, SchemaMetadata, StableKey, validate_allocations,
 };
 
 ///
@@ -61,17 +61,6 @@ impl AllocationPolicy for CanicMemoryManagerPolicy {
         slot: &AllocationSlotDescriptor,
     ) -> Result<(), Self::Error> {
         validate_key_slot_claim(self.declaring_crate_for_key(key), key, slot, true)
-    }
-}
-
-impl RangeAuthority for CanicMemoryManagerPolicy {
-    type Error = CanicMemoryPolicyError;
-
-    fn validate_slot(&self, slot: &AllocationSlotDescriptor) -> Result<(), Self::Error> {
-        slot.memory_manager_id()
-            .map(drop)
-            .map_err(CanicMemoryPolicyError::MemoryManagerSlot)?;
-        Ok(())
     }
 }
 
