@@ -38,8 +38,8 @@ pub fn post_upgrade_nonroot_canister_before_bootstrap(
         );
     }
 
-    let memory_summary = match workflow::runtime::init_memory_registry_post_upgrade() {
-        Ok(summary) => summary,
+    match workflow::runtime::init_memory_registry_post_upgrade() {
+        Ok(()) => {}
         Err(err) => {
             LifecycleMetricsApi::record_runtime(
                 LifecycleMetricPhase::PostUpgrade,
@@ -48,7 +48,7 @@ pub fn post_upgrade_nonroot_canister_before_bootstrap(
             );
             lifecycle_trap(LifecyclePhase::PostUpgrade, err);
         }
-    };
+    }
 
     if let Err(err) = EnvOps::restore_role(role.clone()) {
         LifecycleMetricsApi::record_runtime(
@@ -63,7 +63,6 @@ pub fn post_upgrade_nonroot_canister_before_bootstrap(
     }
     if let Err(err) = workflow::runtime::post_upgrade_nonroot_canister_after_memory_init(
         role,
-        memory_summary,
         with_role_attestation_refresh,
     ) {
         LifecycleMetricsApi::record_runtime(

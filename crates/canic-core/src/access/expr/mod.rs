@@ -92,14 +92,14 @@ impl BuiltinPredicate {
     /// name
     ///
     /// Return the stable metrics/logging name for this builtin predicate.
-    fn name(&self) -> &'static str {
+    const fn name(&self) -> &'static str {
         evaluators::name(self)
     }
 
     /// metric_kind
     ///
     /// Return the metric family used to classify this builtin predicate.
-    fn metric_kind(&self) -> AccessMetricKind {
+    const fn metric_kind(&self) -> AccessMetricKind {
         evaluators::metric_kind(self)
     }
 }
@@ -392,7 +392,7 @@ struct AccessFailure {
 }
 
 impl AccessFailure {
-    fn from_builtin(pred: &BuiltinPredicate, error: AccessError) -> Self {
+    const fn from_builtin(pred: &BuiltinPredicate, error: AccessError) -> Self {
         Self {
             error,
             metric_kind: pred.metric_kind(),

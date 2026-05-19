@@ -3,108 +3,47 @@ use super::manager;
 use super::{
     manager::{MEMORY_MANAGER, RawStableMemoryState},
     policy,
-    registry::{
-        MemoryRange, MemoryRangeAuthority, MemoryRegistryEntry, MemoryRegistryError,
-        schema_metadata_reason,
-    },
-};
-use crate::cdk::structures::Memory;
-use crate::cdk::structures::{
-    DefaultMemoryImpl,
-    cell::Cell,
-    memory::{MemoryId, VirtualMemory},
+    registry::MemoryRegistryError,
 };
 use ic_memory::{
-    AllocationHistory, AllocationLedger, AllocationRecord, AllocationSlotDescriptor,
-    AllocationState, CommitRecoveryError, CommitSlotIndex, CommitStoreDiagnostic,
-    DualProtectedCommitStore, GenerationRecord, ProtectedGenerationSlot, SchemaMetadata,
-    SchemaMetadataRecord, StableKey,
+    AllocationBootstrap, AllocationHistory, AllocationLedger, AllocationPolicy,
+    AllocationSlotDescriptor, BootstrapCommit, BootstrapError, CURRENT_LEDGER_SCHEMA_VERSION,
+    CURRENT_PHYSICAL_FORMAT_ID, CborLedgerCodec, DeclarationSnapshot, DiagnosticExport,
+    LedgerCodec, MemoryManagerAuthorityRecord, StableCellLedgerRecord,
+    decode_stable_cell_ledger_record, decode_stable_cell_payload,
+    stable_structures::{
+        DefaultMemoryImpl, Memory,
+        cell::Cell,
+        memory_manager::{MemoryId, VirtualMemory},
+    },
 };
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use std::cell::RefCell;
 
-pub const MEMORY_LAYOUT_LEDGER_ID: u8 = 0;
-pub const MEMORY_LAYOUT_LEDGER_OWNER: &str = "ic-memory";
-pub const MEMORY_LAYOUT_LEDGER_LABEL: &str = "MemoryLayoutLedger";
-pub const MEMORY_LAYOUT_LEDGER_STABLE_KEY: &str = "ic_memory.ledger.v1";
-pub const MEMORY_LAYOUT_RESERVED_MIN: u8 = 0;
-pub const MEMORY_LAYOUT_RESERVED_MAX: u8 = 9;
-
-const MEMORY_LAYOUT_LEDGER_SCHEMA_VERSION: u32 = 1;
-const MEMORY_LAYOUT_LEDGER_LAYOUT_EPOCH: u32 = 1;
-const MEMORY_LAYOUT_LEDGER_MAGIC: u64 = 0x4341_4E49_434D_454D;
-const MEMORY_LAYOUT_LEDGER_FORMAT_ID: u32 = 1;
-const MEMORY_LAYOUT_LEDGER_HEADER_LEN: u32 = 64;
-const MEMORY_LAYOUT_LEDGER_COMMIT_MARKER: u64 = 0x434F_4D4D_4954_4544;
-const STABLE_CELL_MAGIC: &[u8; 3] = b"SCL";
-const STABLE_CELL_LAYOUT_VERSION: u8 = 1;
-const STABLE_CELL_HEADER_SIZE: usize = 8;
-const STABLE_CELL_VALUE_OFFSET: u64 = 8;
-const WASM_PAGE_SIZE: u64 = 65_536;
-const FNV_OFFSET: u64 = 0xcbf2_9ce4_8422_2325;
-const FNV_PRIME: u64 = 0x0000_0100_0000_01b3;
+pub const MEMORY_LAYOUT_LEDGER_ID: u8 = ic_memory::MEMORY_MANAGER_LEDGER_ID;
+pub const MEMORY_LAYOUT_LEDGER_OWNER: &str = ic_memory::IC_MEMORY_AUTHORITY_OWNER;
+pub const MEMORY_LAYOUT_LEDGER_LABEL: &str = ic_memory::IC_MEMORY_LEDGER_LABEL;
+pub const MEMORY_LAYOUT_LEDGER_STABLE_KEY: &str = ic_memory::IC_MEMORY_LEDGER_STABLE_KEY;
+const LEGACY_CANIC_LEDGER_MAGIC: u64 = 0x4341_4E49_434D_454D;
+const LEGACY_CANIC_LEDGER_ERROR: &str = "legacy Canic memory ledger format detected; this build uses ic-memory-native allocation persistence and cannot boot from the old format";
 
 thread_local! {
     static MEMORY_LAYOUT_LEDGER: RefCell<
-        Cell<MemoryLayoutLedgerRecord, VirtualMemory<DefaultMemoryImpl>>
+        Cell<StableCellLedgerRecord, VirtualMemory<DefaultMemoryImpl>>
     > = RefCell::new(Cell::init(
         open_memory(MEMORY_LAYOUT_LEDGER_ID),
-        MemoryLayoutLedgerRecord::default(),
+        StableCellLedgerRecord::default(),
     ));
 }
 
 ///
-/// MemoryLayoutLedgerRecord
+/// NativeMemoryLedgerSnapshot
 ///
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-struct MemoryLayoutLedgerRecord {
-    magic: u64,
-    format_id: u32,
-    schema_version: u32,
-    #[serde(default = "default_layout_epoch")]
-    layout_epoch: u32,
-    header_len: u32,
-    header_checksum: u64,
-    committed_slot: u8,
-    superblock_generation: u64,
-    slot0: Option<MemoryLayoutGenerationRecord>,
-    slot1: Option<MemoryLayoutGenerationRecord>,
+pub struct NativeMemoryLedgerSnapshot {
+    pub export: DiagnosticExport,
+    pub authorities: Vec<MemoryManagerAuthorityRecord>,
 }
-
-impl Default for MemoryLayoutLedgerRecord {
-    fn default() -> Self {
-        let generation = MemoryLayoutGenerationRecord::default();
-        let mut record = Self {
-            magic: MEMORY_LAYOUT_LEDGER_MAGIC,
-            format_id: MEMORY_LAYOUT_LEDGER_FORMAT_ID,
-            schema_version: MEMORY_LAYOUT_LEDGER_SCHEMA_VERSION,
-            layout_epoch: MEMORY_LAYOUT_LEDGER_LAYOUT_EPOCH,
-            header_len: MEMORY_LAYOUT_LEDGER_HEADER_LEN,
-            header_checksum: 0,
-            committed_slot: 0,
-            superblock_generation: generation.generation,
-            slot0: Some(generation),
-            slot1: None,
-        };
-        record.header_checksum = header_checksum(&record);
-        record
-    }
-}
-
-impl DualProtectedCommitStore for MemoryLayoutLedgerRecord {
-    type Slot = MemoryLayoutGenerationRecord;
-
-    fn slot0(&self) -> Option<&Self::Slot> {
-        self.slot0.as_ref()
-    }
-
-    fn slot1(&self) -> Option<&Self::Slot> {
-        self.slot1.as_ref()
-    }
-}
-
-canic_cdk::impl_storable_unbounded!(MemoryLayoutLedgerRecord);
 
 pub fn validate_bootstrap_state_before_cell_init(
     raw_state: RawStableMemoryState,
@@ -121,391 +60,63 @@ pub fn validate_bootstrap_state_before_cell_init(
     }
 }
 
-///
-/// MemoryLayoutLedgerSnapshot
-///
-/// Diagnostic snapshot decoded from the durable ID `0` ABI ledger.
-
-pub struct MemoryLayoutLedgerSnapshot {
-    pub magic: u64,
-    pub format_id: u32,
-    pub schema_version: u32,
-    pub layout_epoch: u32,
-    pub header_len: u32,
-    pub header_checksum: u64,
-    pub current_generation: u64,
-    pub commit_recovery: CommitStoreDiagnostic,
-    pub authorities: Vec<MemoryRangeAuthority>,
-    pub ranges: Vec<(String, MemoryRange)>,
-    pub entries: Vec<(u8, MemoryRegistryEntry)>,
+pub(super) fn bootstrap_declarations<P>(
+    declaration_snapshot: DeclarationSnapshot,
+    policy: &P,
+) -> Result<BootstrapCommit, BootstrapError<<CborLedgerCodec as LedgerCodec>::Error, P::Error>>
+where
+    P: AllocationPolicy,
+{
+    MEMORY_LAYOUT_LEDGER.with_borrow_mut(|cell| {
+        let mut record = cell.get().clone();
+        let mut bootstrap = AllocationBootstrap::new(record.store_mut());
+        let commit = bootstrap.initialize_validate_and_commit(
+            &CborLedgerCodec,
+            &genesis_ledger(),
+            declaration_snapshot,
+            policy,
+            None,
+        )?;
+        cell.set(record);
+        Ok(commit)
+    })
 }
 
 #[cfg(target_arch = "wasm32")]
-pub fn try_diagnostic_snapshot() -> Result<MemoryLayoutLedgerSnapshot, MemoryRegistryError> {
+pub fn try_diagnostic_snapshot() -> Result<NativeMemoryLedgerSnapshot, MemoryRegistryError> {
     match manager::classify_raw_stable_memory() {
-        RawStableMemoryState::Empty => snapshot_from_record(&MemoryLayoutLedgerRecord::default()),
+        RawStableMemoryState::Empty => snapshot_from_record(&StableCellLedgerRecord::default()),
         RawStableMemoryState::ForeignOrCorrupt => Err(MemoryRegistryError::LedgerCorrupt {
             reason: "foreign or corrupt raw stable memory state",
         }),
         RawStableMemoryState::MemoryManager => {
             let memory = open_memory(MEMORY_LAYOUT_LEDGER_ID);
-            diagnostic_snapshot_from_existing_memory(&memory)
+            validate_existing_ledger_memory(&memory)?;
+            MEMORY_LAYOUT_LEDGER.with_borrow(|cell| snapshot_from_record(cell.get()))
         }
     }
-}
-
-///
-/// MemoryLayoutGenerationRecord
-///
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-struct MemoryLayoutGenerationRecord {
-    generation: u64,
-    commit_marker: u64,
-    checksum: u64,
-    #[serde(default)]
-    authorities: Vec<MemoryLayoutAuthorityRecord>,
-    ranges: Vec<MemoryLayoutRangeRecord>,
-    entries: Vec<MemoryLayoutEntryRecord>,
-}
-
-impl Default for MemoryLayoutGenerationRecord {
-    fn default() -> Self {
-        let mut generation = Self {
-            generation: 0,
-            commit_marker: MEMORY_LAYOUT_LEDGER_COMMIT_MARKER,
-            checksum: 0,
-            authorities: canonical_authority_records(),
-            ranges: Vec::new(),
-            entries: Vec::new(),
-        };
-        generation.checksum = generation_checksum(&generation);
-        generation
-    }
-}
-
-impl ProtectedGenerationSlot for MemoryLayoutGenerationRecord {
-    fn generation(&self) -> u64 {
-        self.generation
-    }
-
-    fn validates(&self) -> bool {
-        valid_generation(self)
-    }
-}
-
-///
-/// MemoryLayoutAuthorityRecord
-///
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-struct MemoryLayoutAuthorityRecord {
-    owner: String,
-    start: u8,
-    end: u8,
-    purpose: String,
-}
-
-impl MemoryLayoutAuthorityRecord {
-    fn from_parts(owner: &str, range: MemoryRange, purpose: &str) -> Self {
-        Self {
-            owner: owner.to_string(),
-            start: range.start,
-            end: range.end,
-            purpose: purpose.to_string(),
-        }
-    }
-
-    const fn range(&self) -> MemoryRange {
-        MemoryRange {
-            start: self.start,
-            end: self.end,
-        }
-    }
-
-    fn to_snapshot(&self) -> MemoryRangeAuthority {
-        MemoryRangeAuthority {
-            owner: self.owner.clone(),
-            range: self.range(),
-            purpose: self.purpose.clone(),
-        }
-    }
-}
-
-///
-/// MemoryLayoutRangeRecord
-///
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-struct MemoryLayoutRangeRecord {
-    owner: String,
-    start: u8,
-    end: u8,
-}
-
-impl MemoryLayoutRangeRecord {
-    fn from_parts(owner: &str, range: MemoryRange) -> Self {
-        Self {
-            owner: owner.to_string(),
-            start: range.start,
-            end: range.end,
-        }
-    }
-
-    const fn range(&self) -> MemoryRange {
-        MemoryRange {
-            start: self.start,
-            end: self.end,
-        }
-    }
-}
-
-///
-/// MemoryLayoutEntryRecord
-///
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-struct MemoryLayoutEntryRecord {
-    id: u8,
-    owner: String,
-    label: String,
-    stable_key: String,
-    #[serde(default)]
-    schema_version: Option<u32>,
-    #[serde(default)]
-    schema_fingerprint: Option<String>,
-    #[serde(default)]
-    declarations: Vec<MemoryLayoutDeclarationRecord>,
-}
-
-///
-/// MemoryLayoutDeclarationRecord
-///
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-struct MemoryLayoutDeclarationRecord {
-    generation: u64,
-    owner: String,
-    label: String,
-    #[serde(default)]
-    schema_version: Option<u32>,
-    #[serde(default)]
-    schema_fingerprint: Option<String>,
-}
-
-impl MemoryLayoutEntryRecord {
-    fn from_parts(
-        id: u8,
-        owner: &str,
-        label: &str,
-        stable_key: &str,
-        schema_version: Option<u32>,
-        schema_fingerprint: Option<&str>,
-        generation: u64,
-    ) -> Self {
-        Self {
-            id,
-            owner: owner.to_string(),
-            label: label.to_string(),
-            stable_key: stable_key.to_string(),
-            schema_version,
-            schema_fingerprint: schema_fingerprint.map(str::to_string),
-            declarations: vec![MemoryLayoutDeclarationRecord::from_parts(
-                generation,
-                owner,
-                label,
-                schema_version,
-                schema_fingerprint,
-            )],
-        }
-    }
-
-    fn update_latest(
-        &mut self,
-        owner: &str,
-        label: &str,
-        schema_version: Option<u32>,
-        schema_fingerprint: Option<&str>,
-        generation: u64,
-    ) {
-        let schema_fingerprint = schema_fingerprint.map(str::to_string);
-        let changed = self.owner != owner
-            || self.label != label
-            || self.schema_version != schema_version
-            || self.schema_fingerprint != schema_fingerprint;
-
-        self.owner = owner.to_string();
-        self.label = label.to_string();
-        self.schema_version = schema_version;
-        self.schema_fingerprint.clone_from(&schema_fingerprint);
-
-        if changed || self.declarations.is_empty() {
-            self.declarations.push(MemoryLayoutDeclarationRecord {
-                generation,
-                owner: owner.to_string(),
-                label: label.to_string(),
-                schema_version,
-                schema_fingerprint,
-            });
-        }
-    }
-}
-
-impl MemoryLayoutDeclarationRecord {
-    fn from_parts(
-        generation: u64,
-        owner: &str,
-        label: &str,
-        schema_version: Option<u32>,
-        schema_fingerprint: Option<&str>,
-    ) -> Self {
-        Self {
-            generation,
-            owner: owner.to_string(),
-            label: label.to_string(),
-            schema_version,
-            schema_fingerprint: schema_fingerprint.map(str::to_string),
-        }
-    }
-}
-
-pub fn record_range(owner: &str, range: MemoryRange) -> Result<(), MemoryRegistryError> {
-    MEMORY_LAYOUT_LEDGER.with_borrow_mut(|cell| {
-        let mut data = cell.get().clone();
-        ensure_header(&mut data)?;
-        let mut generation = authoritative_generation(&data)?;
-
-        validate_range_against_generation(&generation, owner, range)?;
-        for existing in &mut generation.ranges {
-            let existing_range = existing.range();
-            if existing_range.start == range.start && existing_range.end == range.end {
-                existing.owner = owner.to_string();
-                commit_generation(&mut data, generation);
-                cell.set(data);
-                return Ok(());
-            }
-        }
-
-        generation
-            .ranges
-            .push(MemoryLayoutRangeRecord::from_parts(owner, range));
-        generation.ranges.sort_by_key(|entry| entry.start);
-        commit_generation(&mut data, generation);
-        cell.set(data);
-
-        Ok(())
-    })
-}
-
-pub fn validate_range(owner: &str, range: MemoryRange) -> Result<(), MemoryRegistryError> {
-    MEMORY_LAYOUT_LEDGER.with_borrow(|cell| {
-        let generation = authoritative_generation(cell.get())?;
-        validate_range_against_generation(&generation, owner, range)
-    })
-}
-
-pub fn record_entry(
-    id: u8,
-    owner: &str,
-    label: &str,
-    stable_key: &str,
-    schema_version: Option<u32>,
-    schema_fingerprint: Option<&str>,
-) -> Result<(), MemoryRegistryError> {
-    MEMORY_LAYOUT_LEDGER.with_borrow_mut(|cell| {
-        let mut data = cell.get().clone();
-        ensure_header(&mut data)?;
-        let mut generation = authoritative_generation(&data)?;
-
-        validate_entry_against_generation(&generation, id, owner, label, stable_key)?;
-        let next_generation = generation.generation.saturating_add(1);
-        for existing in &mut generation.entries {
-            if existing.id == id && existing.stable_key == stable_key {
-                existing.update_latest(
-                    owner,
-                    label,
-                    schema_version,
-                    schema_fingerprint,
-                    next_generation,
-                );
-                commit_generation(&mut data, generation);
-                cell.set(data);
-                return Ok(());
-            }
-        }
-
-        generation.entries.push(MemoryLayoutEntryRecord::from_parts(
-            id,
-            owner,
-            label,
-            stable_key,
-            schema_version,
-            schema_fingerprint,
-            next_generation,
-        ));
-        generation.entries.sort_by_key(|entry| entry.id);
-        commit_generation(&mut data, generation);
-        cell.set(data);
-
-        Ok(())
-    })
-}
-
-pub fn validate_entry(
-    id: u8,
-    owner: &str,
-    label: &str,
-    stable_key: &str,
-) -> Result<(), MemoryRegistryError> {
-    MEMORY_LAYOUT_LEDGER.with_borrow(|cell| {
-        let generation = authoritative_generation(cell.get())?;
-        validate_entry_against_generation(&generation, id, owner, label, stable_key)
-    })
-}
-
-pub fn export_entries() -> Vec<(u8, MemoryRegistryEntry)> {
-    try_export_entries().unwrap_or_default()
-}
-
-pub fn try_export_entries() -> Result<Vec<(u8, MemoryRegistryEntry)>, MemoryRegistryError> {
-    MEMORY_LAYOUT_LEDGER.with_borrow(|cell| {
-        let generation = authoritative_generation(cell.get())?;
-        Ok(generation
-            .entries
-            .iter()
-            .map(|entry| {
-                (
-                    entry.id,
-                    MemoryRegistryEntry {
-                        crate_name: entry.owner.clone(),
-                        label: entry.label.clone(),
-                        stable_key: entry.stable_key.clone(),
-                        schema_version: entry.schema_version,
-                        schema_fingerprint: entry.schema_fingerprint.clone(),
-                    },
-                )
-            })
-            .collect())
-    })
-}
-
-pub(super) fn try_allocation_ledger_snapshot() -> Result<AllocationLedger, MemoryRegistryError> {
-    MEMORY_LAYOUT_LEDGER.with_borrow(|cell| {
-        let generation = authoritative_generation(cell.get())?;
-        allocation_ledger_from_generation(generation)
-    })
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-pub fn try_snapshot() -> Result<MemoryLayoutLedgerSnapshot, MemoryRegistryError> {
+pub fn try_snapshot() -> Result<NativeMemoryLedgerSnapshot, MemoryRegistryError> {
     MEMORY_LAYOUT_LEDGER.with_borrow(|cell| snapshot_from_record(cell.get()))
 }
 
 #[cfg(test)]
 pub fn reset_for_tests() {
     MEMORY_LAYOUT_LEDGER.with_borrow_mut(|cell| {
-        cell.set(MemoryLayoutLedgerRecord::default());
+        cell.set(StableCellLedgerRecord::default());
     });
+}
+
+#[cfg(test)]
+pub fn try_export_records() -> Result<Vec<ic_memory::AllocationRecord>, MemoryRegistryError> {
+    Ok(try_snapshot()?
+        .export
+        .records
+        .into_iter()
+        .map(|record| record.allocation)
+        .collect())
 }
 
 fn open_memory(id: u8) -> VirtualMemory<DefaultMemoryImpl> {
@@ -513,916 +124,184 @@ fn open_memory(id: u8) -> VirtualMemory<DefaultMemoryImpl> {
 }
 
 fn validate_existing_ledger_memory<M: Memory>(memory: &M) -> Result<(), MemoryRegistryError> {
-    let data = decode_existing_ledger_memory(memory)?;
-    let generation = authoritative_generation(&data)?;
-    if !generation.authorities.is_empty() {
-        validate_canonical_authorities(&generation)?;
-    }
-
-    Ok(())
-}
-
-#[cfg(any(target_arch = "wasm32", test))]
-fn diagnostic_snapshot_from_existing_memory<M: Memory>(
-    memory: &M,
-) -> Result<MemoryLayoutLedgerSnapshot, MemoryRegistryError> {
-    let data = decode_existing_ledger_memory(memory)?;
-    snapshot_from_record(&data)
-}
-
-fn decode_existing_ledger_memory<M: Memory>(
-    memory: &M,
-) -> Result<MemoryLayoutLedgerRecord, MemoryRegistryError> {
     if memory.size() == 0 {
+        return Ok(());
+    }
+
+    let bytes = decode_stable_cell_payload(memory).map_err(stable_cell_error)?;
+    if decode_stable_cell_ledger_record(&bytes).is_ok() {
+        return Ok(());
+    }
+
+    if let Ok(probe) = canic_cdk::serialize::deserialize::<LegacyCanicLedgerProbe>(&bytes)
+        && probe.magic == LEGACY_CANIC_LEDGER_MAGIC
+    {
         return Err(MemoryRegistryError::LedgerCorrupt {
-            reason: "MemoryManager state exists without Canic ABI ledger",
+            reason: LEGACY_CANIC_LEDGER_ERROR,
         });
     }
 
-    let mut header = [0; STABLE_CELL_HEADER_SIZE];
-    memory.read(0, &mut header);
-    if &header[0..3] != STABLE_CELL_MAGIC {
-        return Err(MemoryRegistryError::LedgerCorrupt {
-            reason: "ledger memory is not a stable cell",
-        });
-    }
-    if header[3] != STABLE_CELL_LAYOUT_VERSION {
-        return Err(MemoryRegistryError::LedgerCorrupt {
-            reason: "unsupported ledger stable cell version",
-        });
-    }
-
-    let value_len = u64::from(u32::from_le_bytes([
-        header[4], header[5], header[6], header[7],
-    ]));
-    let available_bytes = memory.size().saturating_mul(WASM_PAGE_SIZE);
-    if value_len > available_bytes.saturating_sub(STABLE_CELL_VALUE_OFFSET) {
-        return Err(MemoryRegistryError::LedgerCorrupt {
-            reason: "ledger stable cell length is invalid",
-        });
-    }
-
-    let value_len = usize::try_from(value_len).map_err(|_| MemoryRegistryError::LedgerCorrupt {
-        reason: "ledger stable cell length is invalid",
-    })?;
-
-    let mut bytes = vec![0; value_len];
-    memory.read(STABLE_CELL_VALUE_OFFSET, &mut bytes);
-    canic_cdk::serialize::deserialize(&bytes).map_err(|_| MemoryRegistryError::LedgerCorrupt {
-        reason: "ledger stable cell payload is invalid",
+    Err(MemoryRegistryError::LedgerCorrupt {
+        reason: "foreign or corrupt native ic-memory ledger state",
     })
+}
+
+#[derive(Deserialize)]
+struct LegacyCanicLedgerProbe {
+    magic: u64,
+}
+
+const fn stable_cell_error(_err: ic_memory::StableCellPayloadError) -> MemoryRegistryError {
+    MemoryRegistryError::LedgerCorrupt {
+        reason: "foreign or corrupt native ic-memory ledger state",
+    }
 }
 
 fn snapshot_from_record(
-    data: &MemoryLayoutLedgerRecord,
-) -> Result<MemoryLayoutLedgerSnapshot, MemoryRegistryError> {
-    let generation = authoritative_generation(data)?;
-    if !generation.authorities.is_empty() {
-        validate_canonical_authorities(&generation)?;
-    }
-
-    Ok(MemoryLayoutLedgerSnapshot {
-        magic: data.magic,
-        format_id: data.format_id,
-        schema_version: data.schema_version,
-        layout_epoch: data.layout_epoch,
-        header_len: data.header_len,
-        header_checksum: data.header_checksum,
-        current_generation: generation.generation,
-        commit_recovery: CommitStoreDiagnostic::from_store(data),
-        authorities: generation
-            .authorities
-            .iter()
-            .map(MemoryLayoutAuthorityRecord::to_snapshot)
-            .collect(),
-        ranges: generation
-            .ranges
-            .iter()
-            .map(|entry| (entry.owner.clone(), entry.range()))
-            .collect(),
-        entries: generation
-            .entries
-            .iter()
-            .map(|entry| {
-                (
-                    entry.id,
-                    MemoryRegistryEntry {
-                        crate_name: entry.owner.clone(),
-                        label: entry.label.clone(),
-                        stable_key: entry.stable_key.clone(),
-                        schema_version: entry.schema_version,
-                        schema_fingerprint: entry.schema_fingerprint.clone(),
-                    },
-                )
-            })
-            .collect(),
-    })
-}
-
-fn ensure_header(data: &mut MemoryLayoutLedgerRecord) -> Result<(), MemoryRegistryError> {
-    validate_header_fields(data)?;
-    validate_header_checksum(data)?;
-    let mut generation = authoritative_generation(data)?;
-    if generation.authorities.is_empty() {
-        generation.authorities = canonical_authority_records();
-        commit_generation(data, generation);
-        generation = authoritative_generation(data)?;
+    record: &StableCellLedgerRecord,
+) -> Result<NativeMemoryLedgerSnapshot, MemoryRegistryError> {
+    let store = record.store();
+    let ledger = if store.physical().is_uninitialized() {
+        genesis_ledger()
     } else {
-        validate_canonical_authorities(&generation)?;
-    }
-    if data.slot0.is_none() && data.slot1.is_none() {
-        data.slot0 = Some(generation);
-        data.committed_slot = 0;
-    }
-    data.superblock_generation = authoritative_generation(data)?.generation;
-    data.header_checksum = header_checksum(data);
-    Ok(())
-}
-
-fn authoritative_generation(
-    data: &MemoryLayoutLedgerRecord,
-) -> Result<MemoryLayoutGenerationRecord, MemoryRegistryError> {
-    validate_header_fields(data)?;
-    validate_header_checksum(data)?;
-
-    if data.slot0.is_none() && data.slot1.is_none() {
-        return Ok(MemoryLayoutGenerationRecord::default());
-    }
-
-    data.authoritative_slot()
-        .map(|authoritative| authoritative.record.clone())
-        .map_err(memory_registry_error_from_commit_recovery)
-}
-
-const fn validate_header_fields(
-    data: &MemoryLayoutLedgerRecord,
-) -> Result<(), MemoryRegistryError> {
-    if data.magic != MEMORY_LAYOUT_LEDGER_MAGIC {
-        return Err(MemoryRegistryError::LedgerCorrupt {
-            reason: "invalid ledger magic",
-        });
-    }
-
-    if data.format_id != MEMORY_LAYOUT_LEDGER_FORMAT_ID {
-        return Err(MemoryRegistryError::LedgerCorrupt {
-            reason: "unsupported ledger physical format",
-        });
-    }
-
-    if data.schema_version != MEMORY_LAYOUT_LEDGER_SCHEMA_VERSION {
-        return Err(MemoryRegistryError::LedgerCorrupt {
-            reason: "unsupported ledger schema version",
-        });
-    }
-
-    if data.layout_epoch != MEMORY_LAYOUT_LEDGER_LAYOUT_EPOCH {
-        return Err(MemoryRegistryError::LedgerCorrupt {
-            reason: "unsupported ledger layout epoch",
-        });
-    }
-
-    if data.header_len != MEMORY_LAYOUT_LEDGER_HEADER_LEN {
-        return Err(MemoryRegistryError::LedgerCorrupt {
-            reason: "invalid ledger header length",
-        });
-    }
-
-    if data.committed_slot > 1 {
-        return Err(MemoryRegistryError::LedgerCorrupt {
-            reason: "invalid committed ledger slot",
-        });
-    }
-
-    Ok(())
-}
-
-fn validate_header_checksum(data: &MemoryLayoutLedgerRecord) -> Result<(), MemoryRegistryError> {
-    if data.header_checksum == header_checksum(data) {
-        return Ok(());
-    }
-
-    if data.header_checksum == legacy_header_checksum(data) {
-        return Ok(());
-    }
-
-    Err(MemoryRegistryError::LedgerCorrupt {
-        reason: "invalid ledger header checksum",
-    })
-}
-
-fn valid_generation(generation: &MemoryLayoutGenerationRecord) -> bool {
-    generation.commit_marker == MEMORY_LAYOUT_LEDGER_COMMIT_MARKER
-        && generation.checksum == generation_checksum(generation)
-}
-
-fn commit_generation(
-    data: &mut MemoryLayoutLedgerRecord,
-    mut generation: MemoryLayoutGenerationRecord,
-) {
-    generation.generation = generation.generation.saturating_add(1);
-    generation.commit_marker = MEMORY_LAYOUT_LEDGER_COMMIT_MARKER;
-    generation.checksum = generation_checksum(&generation);
-
-    let inactive_slot = data.inactive_slot_index();
-
-    match inactive_slot {
-        CommitSlotIndex::Slot0 => {
-            data.slot0 = Some(generation.clone());
-            data.committed_slot = 0;
-        }
-        CommitSlotIndex::Slot1 => {
-            data.slot1 = Some(generation.clone());
-            data.committed_slot = 1;
-        }
-    }
-
-    data.magic = MEMORY_LAYOUT_LEDGER_MAGIC;
-    data.format_id = MEMORY_LAYOUT_LEDGER_FORMAT_ID;
-    data.schema_version = MEMORY_LAYOUT_LEDGER_SCHEMA_VERSION;
-    data.layout_epoch = MEMORY_LAYOUT_LEDGER_LAYOUT_EPOCH;
-    data.header_len = MEMORY_LAYOUT_LEDGER_HEADER_LEN;
-    data.superblock_generation = generation.generation;
-    data.header_checksum = header_checksum(data);
-}
-
-const fn memory_registry_error_from_commit_recovery(
-    err: CommitRecoveryError,
-) -> MemoryRegistryError {
-    match err {
-        CommitRecoveryError::NoValidGeneration => MemoryRegistryError::LedgerCorrupt {
-            reason: "no valid committed generation",
-        },
-    }
-}
-
-fn validate_range_against_generation(
-    generation: &MemoryLayoutGenerationRecord,
-    owner: &str,
-    range: MemoryRange,
-) -> Result<(), MemoryRegistryError> {
-    for existing in &generation.ranges {
-        let existing_range = existing.range();
-        if ranges_overlap(existing_range, range) {
-            if existing_range.start == range.start && existing_range.end == range.end {
-                return Ok(());
-            }
-
-            return Err(MemoryRegistryError::HistoricalRangeConflict {
-                existing_crate: existing.owner.clone(),
-                existing_start: existing_range.start,
-                existing_end: existing_range.end,
-                new_crate: owner.to_string(),
-                new_start: range.start,
-                new_end: range.end,
-            });
-        }
-    }
-
-    Ok(())
-}
-
-fn validate_entry_against_generation(
-    generation: &MemoryLayoutGenerationRecord,
-    id: u8,
-    owner: &str,
-    label: &str,
-    stable_key: &str,
-) -> Result<(), MemoryRegistryError> {
-    for existing in &generation.entries {
-        if existing.id == id {
-            if existing.stable_key == stable_key {
-                return Ok(());
-            }
-
-            return Err(MemoryRegistryError::HistoricalIdConflict {
-                id,
-                existing_crate: existing.owner.clone(),
-                existing_label: existing.label.clone(),
-                new_crate: owner.to_string(),
-                new_label: label.to_string(),
-                new_stable_key: stable_key.to_string(),
-            });
-        }
-
-        if existing.stable_key == stable_key {
-            return Err(MemoryRegistryError::HistoricalStableKeyConflict {
-                stable_key: stable_key.to_string(),
-                existing_id: existing.id,
-                new_id: id,
-            });
-        }
-    }
-
-    Ok(())
-}
-
-fn allocation_ledger_from_generation(
-    generation: MemoryLayoutGenerationRecord,
-) -> Result<AllocationLedger, MemoryRegistryError> {
-    let records = generation
-        .entries
-        .iter()
-        .map(|entry| allocation_record_from_entry(generation.generation, entry))
-        .collect::<Result<Vec<_>, _>>()?;
-
-    let ledger = AllocationLedger {
-        ledger_schema_version: ic_memory::CURRENT_LEDGER_SCHEMA_VERSION,
-        physical_format_id: ic_memory::CURRENT_PHYSICAL_FORMAT_ID,
-        current_generation: generation.generation,
-        allocation_history: AllocationHistory {
-            records,
-            generations: generation_history_from_entries(&generation.entries),
-        },
+        store
+            .recover(&CborLedgerCodec)
+            .map_err(|_| MemoryRegistryError::LedgerCorrupt {
+                reason: "native ic-memory ledger recovery failed",
+            })?
     };
-    ledger
-        .validate_integrity()
-        .map_err(|_| MemoryRegistryError::LedgerCorrupt {
-            reason: "allocation ledger history is structurally invalid",
-        })?;
-    Ok(ledger)
-}
-
-fn allocation_record_from_entry(
-    current_generation: u64,
-    entry: &MemoryLayoutEntryRecord,
-) -> Result<AllocationRecord, MemoryRegistryError> {
-    let stable_key =
-        StableKey::parse(&entry.stable_key).map_err(|_| MemoryRegistryError::LedgerCorrupt {
-            reason: "allocation ledger contains an invalid stable key",
-        })?;
-    let slot = AllocationSlotDescriptor::memory_manager_checked(entry.id).map_err(|_| {
-        MemoryRegistryError::LedgerCorrupt {
-            reason: "allocation ledger contains an invalid MemoryManager slot",
-        }
-    })?;
-
-    let first_generation = entry
-        .declarations
-        .first()
-        .map_or(current_generation, |declaration| declaration.generation);
-    let last_seen_generation = entry
-        .declarations
-        .last()
-        .map_or(current_generation, |declaration| declaration.generation);
-    let schema_history = schema_history_from_entry(first_generation, entry)?;
-
-    Ok(AllocationRecord {
-        stable_key,
-        slot,
-        state: AllocationState::Active,
-        first_generation,
-        last_seen_generation,
-        retired_generation: None,
-        schema_history,
+    let commit_recovery = store.physical().diagnostic();
+    Ok(NativeMemoryLedgerSnapshot {
+        export: DiagnosticExport::from_ledger_with_commit_recovery(
+            &ledger,
+            AllocationSlotDescriptor::memory_manager(MEMORY_LAYOUT_LEDGER_ID)
+                .expect("ledger ID is a usable MemoryManager ID"),
+            Some(commit_recovery),
+        ),
+        authorities: policy::canonical_authority_records(),
     })
 }
 
-fn schema_history_from_entry(
-    first_generation: u64,
-    entry: &MemoryLayoutEntryRecord,
-) -> Result<Vec<SchemaMetadataRecord>, MemoryRegistryError> {
-    if entry.declarations.is_empty() {
-        return Ok(vec![SchemaMetadataRecord {
-            generation: first_generation,
-            schema: schema_metadata_from_parts(
-                &entry.stable_key,
-                entry.schema_version,
-                entry.schema_fingerprint.clone(),
-            )?,
-        }]);
-    }
-
-    entry
-        .declarations
-        .iter()
-        .map(|declaration| {
-            Ok(SchemaMetadataRecord {
-                generation: declaration.generation,
-                schema: schema_metadata_from_parts(
-                    &entry.stable_key,
-                    declaration.schema_version,
-                    declaration.schema_fingerprint.clone(),
-                )?,
-            })
-        })
-        .collect()
+fn genesis_ledger() -> AllocationLedger {
+    AllocationLedger::new_committed(
+        CURRENT_LEDGER_SCHEMA_VERSION,
+        CURRENT_PHYSICAL_FORMAT_ID,
+        0,
+        AllocationHistory::default(),
+    )
+    .expect("empty ic-memory genesis ledger is structurally valid")
 }
 
-fn schema_metadata_from_parts(
-    stable_key: &str,
-    schema_version: Option<u32>,
-    schema_fingerprint: Option<String>,
-) -> Result<SchemaMetadata, MemoryRegistryError> {
-    SchemaMetadata::new(schema_version, schema_fingerprint).map_err(|err| {
-        MemoryRegistryError::InvalidSchemaMetadata {
-            stable_key: stable_key.to_string(),
-            reason: schema_metadata_reason(err),
-        }
-    })
-}
-
-fn generation_history_from_entries(entries: &[MemoryLayoutEntryRecord]) -> Vec<GenerationRecord> {
-    let mut generations = entries
-        .iter()
-        .flat_map(|entry| {
-            entry
-                .declarations
-                .iter()
-                .map(|declaration| declaration.generation)
-        })
-        .collect::<Vec<_>>();
-    generations.sort_unstable();
-    generations.dedup();
-
-    generations
-        .into_iter()
-        .map(|generation| GenerationRecord {
-            generation,
-            parent_generation: generation.checked_sub(1),
-            runtime_fingerprint: None,
-            declaration_count: 0,
-            committed_at: None,
-        })
-        .collect()
-}
-
-fn canonical_authority_records() -> Vec<MemoryLayoutAuthorityRecord> {
-    policy::canonical_authority_ranges()
-        .into_iter()
-        .map(|(owner, range, purpose)| {
-            MemoryLayoutAuthorityRecord::from_parts(owner, range, purpose)
-        })
-        .collect()
-}
-
-fn validate_canonical_authorities(
-    generation: &MemoryLayoutGenerationRecord,
-) -> Result<(), MemoryRegistryError> {
-    if generation.authorities == canonical_authority_records() {
-        return Ok(());
-    }
-
-    Err(MemoryRegistryError::LedgerCorrupt {
-        reason: "canonical range authority records are invalid",
-    })
-}
-
-fn header_checksum(data: &MemoryLayoutLedgerRecord) -> u64 {
-    let mut hash = FNV_OFFSET;
-    hash = hash_u64(hash, data.magic);
-    hash = hash_u32(hash, data.format_id);
-    hash = hash_u32(hash, data.schema_version);
-    hash = hash_u32(hash, data.layout_epoch);
-    hash = hash_u32(hash, data.header_len);
-    hash = hash_u8(hash, data.committed_slot);
-    hash_u64(hash, data.superblock_generation)
-}
-
-fn legacy_header_checksum(data: &MemoryLayoutLedgerRecord) -> u64 {
-    let mut hash = FNV_OFFSET;
-    hash = hash_u64(hash, data.magic);
-    hash = hash_u32(hash, data.format_id);
-    hash = hash_u32(hash, data.schema_version);
-    hash = hash_u32(hash, data.header_len);
-    hash = hash_u8(hash, data.committed_slot);
-    hash_u64(hash, data.superblock_generation)
-}
-
-const fn default_layout_epoch() -> u32 {
-    MEMORY_LAYOUT_LEDGER_LAYOUT_EPOCH
-}
-
-fn generation_checksum(generation: &MemoryLayoutGenerationRecord) -> u64 {
-    let mut hash = FNV_OFFSET;
-    hash = hash_u64(hash, generation.generation);
-    hash = hash_u64(hash, generation.commit_marker);
-    if !generation.authorities.is_empty() {
-        hash = hash_usize(hash, generation.authorities.len());
-        for authority in &generation.authorities {
-            hash = hash_str(hash, &authority.owner);
-            hash = hash_u8(hash, authority.start);
-            hash = hash_u8(hash, authority.end);
-            hash = hash_str(hash, &authority.purpose);
-        }
-    }
-    hash = hash_usize(hash, generation.ranges.len());
-    for range in &generation.ranges {
-        hash = hash_str(hash, &range.owner);
-        hash = hash_u8(hash, range.start);
-        hash = hash_u8(hash, range.end);
-    }
-    hash = hash_usize(hash, generation.entries.len());
-    for entry in &generation.entries {
-        hash = hash_u8(hash, entry.id);
-        hash = hash_str(hash, &entry.owner);
-        hash = hash_str(hash, &entry.label);
-        hash = hash_str(hash, &entry.stable_key);
-        hash = hash_option_u32(hash, entry.schema_version);
-        hash = hash_option_str(hash, entry.schema_fingerprint.as_deref());
-        hash = hash_usize(hash, entry.declarations.len());
-        for declaration in &entry.declarations {
-            hash = hash_u64(hash, declaration.generation);
-            hash = hash_str(hash, &declaration.owner);
-            hash = hash_str(hash, &declaration.label);
-            hash = hash_option_u32(hash, declaration.schema_version);
-            hash = hash_option_str(hash, declaration.schema_fingerprint.as_deref());
-        }
-    }
-    hash
-}
-
-fn hash_usize(hash: u64, value: usize) -> u64 {
-    hash_u64(hash, value as u64)
-}
-
-const fn hash_u8(hash: u64, value: u8) -> u64 {
-    hash_byte(hash, value)
-}
-
-fn hash_u32(mut hash: u64, value: u32) -> u64 {
-    for byte in value.to_le_bytes() {
-        hash = hash_byte(hash, byte);
-    }
-    hash
-}
-
-fn hash_u64(mut hash: u64, value: u64) -> u64 {
-    for byte in value.to_le_bytes() {
-        hash = hash_byte(hash, byte);
-    }
-    hash
-}
-
-fn hash_str(mut hash: u64, value: &str) -> u64 {
-    hash = hash_usize(hash, value.len());
-    for byte in value.as_bytes() {
-        hash = hash_byte(hash, *byte);
-    }
-    hash
-}
-
-fn hash_option_u32(hash: u64, value: Option<u32>) -> u64 {
-    match value {
-        Some(value) => hash_u32(hash_u8(hash, 1), value),
-        None => hash_u8(hash, 0),
-    }
-}
-
-fn hash_option_str(hash: u64, value: Option<&str>) -> u64 {
-    match value {
-        Some(value) => hash_str(hash_u8(hash, 1), value),
-        None => hash_u8(hash, 0),
-    }
-}
-
-const fn hash_byte(hash: u64, byte: u8) -> u64 {
-    (hash ^ byte as u64).wrapping_mul(FNV_PRIME)
-}
-
-const fn ranges_overlap(a: MemoryRange, b: MemoryRange) -> bool {
-    a.start <= b.end && b.start <= a.end
-}
+///
+/// TESTS
+///
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::memory::registry::MemoryRegistryError;
+    use ic_memory::{
+        AllocationDeclaration, DeclarationSnapshot, STABLE_CELL_LAYOUT_VERSION, STABLE_CELL_MAGIC,
+        STABLE_CELL_VALUE_OFFSET, SchemaMetadata, StableCellLedgerRecord,
+    };
+    use serde::Serialize;
 
-    #[test]
-    fn authoritative_generation_chooses_highest_valid_slot() {
-        let mut record = MemoryLayoutLedgerRecord::default();
-        let mut generation = authoritative_generation(&record).expect("authoritative generation");
-        generation.ranges.push(MemoryLayoutRangeRecord::from_parts(
-            "crate_a",
-            MemoryRange {
-                start: 100,
-                end: 102,
-            },
-        ));
-        commit_generation(&mut record, generation);
+    #[derive(Debug, Eq, PartialEq)]
+    struct AllowAllPolicy;
 
-        let authoritative = authoritative_generation(&record).expect("authoritative generation");
+    impl AllocationPolicy for AllowAllPolicy {
+        type Error = MemoryRegistryError;
 
-        assert_eq!(authoritative.generation, 1);
-        assert_eq!(authoritative.authorities, canonical_authority_records());
-        assert_eq!(authoritative.ranges.len(), 1);
-    }
-
-    #[test]
-    fn authoritative_generation_ignores_corrupt_newer_slot() {
-        let mut record = MemoryLayoutLedgerRecord::default();
-        let mut generation = authoritative_generation(&record).expect("authoritative generation");
-        generation.ranges.push(MemoryLayoutRangeRecord::from_parts(
-            "crate_a",
-            MemoryRange {
-                start: 100,
-                end: 102,
-            },
-        ));
-        commit_generation(&mut record, generation);
-
-        if let Some(slot) = &mut record.slot1 {
-            slot.checksum = slot.checksum.wrapping_add(1);
+        fn validate_key(&self, _key: &ic_memory::StableKey) -> Result<(), Self::Error> {
+            Ok(())
         }
 
-        let authoritative = authoritative_generation(&record).expect("authoritative generation");
+        fn validate_slot(
+            &self,
+            _key: &ic_memory::StableKey,
+            _slot: &AllocationSlotDescriptor,
+        ) -> Result<(), Self::Error> {
+            Ok(())
+        }
 
-        assert_eq!(authoritative.generation, 0);
-        assert_eq!(authoritative.authorities, canonical_authority_records());
-        assert!(authoritative.ranges.is_empty());
+        fn validate_reserved_slot(
+            &self,
+            _key: &ic_memory::StableKey,
+            _slot: &AllocationSlotDescriptor,
+        ) -> Result<(), Self::Error> {
+            Ok(())
+        }
     }
 
     #[test]
-    fn commit_generation_uses_recovered_slot_not_unprotected_header_pointer() {
-        let mut record = MemoryLayoutLedgerRecord::default();
-        let mut generation = authoritative_generation(&record).expect("generation");
-        generation.ranges.push(MemoryLayoutRangeRecord::from_parts(
-            "crate_a",
-            MemoryRange {
-                start: 100,
-                end: 102,
-            },
-        ));
-        record.committed_slot = 1;
-        record.header_checksum = header_checksum(&record);
+    fn native_bootstrap_persists_and_recovers_allocations() {
+        reset_for_tests();
+        let snapshot = declaration_snapshot(vec![declaration(100, "app.test.users.v1")]);
 
-        commit_generation(&mut record, generation);
+        bootstrap_declarations(snapshot, &AllowAllPolicy).expect("bootstrap native ledger");
 
-        assert_eq!(record.committed_slot, 1);
-        assert!(record.slot0.is_some());
-        assert!(record.slot1.is_some());
-        let authoritative = authoritative_generation(&record).expect("authoritative generation");
-        assert_eq!(authoritative.generation, 1);
-    }
-
-    #[test]
-    fn default_generation_contains_canonical_authority_records() {
-        let generation = MemoryLayoutGenerationRecord::default();
-
-        assert_eq!(generation.authorities, canonical_authority_records());
-    }
-
-    #[test]
-    fn ensure_header_rejects_corrupt_authority_records() {
-        let mut record = MemoryLayoutLedgerRecord::default();
-        let mut generation = authoritative_generation(&record).expect("generation");
-        generation.authorities[0].end = 98;
-        generation.checksum = generation_checksum(&generation);
-        record.slot0 = Some(generation);
-        record.header_checksum = header_checksum(&record);
-
-        let err = ensure_header(&mut record).expect_err("corrupt authority must fail");
-
-        assert!(matches!(err, MemoryRegistryError::LedgerCorrupt { .. }));
-    }
-
-    #[test]
-    fn existing_ledger_memory_validation_distinguishes_genesis_and_valid_ledger() {
-        let memory = DefaultMemoryImpl::default();
-        let err = validate_existing_ledger_memory(&memory).expect_err("missing ledger should fail");
-        assert!(matches!(err, MemoryRegistryError::LedgerCorrupt { .. }));
-
-        let _cell =
-            crate::cdk::structures::Cell::new(memory.clone(), MemoryLayoutLedgerRecord::default());
-
-        validate_existing_ledger_memory(&memory).expect("valid ledger should pass");
-    }
-
-    #[test]
-    fn diagnostic_snapshot_reads_existing_ledger_memory_without_runtime_registry() {
-        let memory = DefaultMemoryImpl::default();
-        let mut record = MemoryLayoutLedgerRecord::default();
-        let mut generation = authoritative_generation(&record).expect("generation");
-        generation.ranges.push(MemoryLayoutRangeRecord::from_parts(
-            "crate_a",
-            MemoryRange {
-                start: 100,
-                end: 102,
-            },
-        ));
-        generation.entries.push(MemoryLayoutEntryRecord::from_parts(
-            101,
-            "crate_a",
-            "slot",
-            "app.crate_a.slot.v1",
-            Some(1),
-            Some("sha256:abc123"),
-            1,
-        ));
-        commit_generation(&mut record, generation);
-        let _cell = crate::cdk::structures::Cell::new(memory.clone(), record);
-
-        let snapshot =
-            diagnostic_snapshot_from_existing_memory(&memory).expect("diagnostic snapshot");
-
-        assert_eq!(snapshot.magic, MEMORY_LAYOUT_LEDGER_MAGIC);
-        assert_eq!(snapshot.format_id, MEMORY_LAYOUT_LEDGER_FORMAT_ID);
-        assert_eq!(snapshot.schema_version, MEMORY_LAYOUT_LEDGER_SCHEMA_VERSION);
-        assert_eq!(snapshot.layout_epoch, MEMORY_LAYOUT_LEDGER_LAYOUT_EPOCH);
-        assert_eq!(snapshot.header_len, MEMORY_LAYOUT_LEDGER_HEADER_LEN);
-        assert_eq!(snapshot.current_generation, 1);
-        assert_eq!(snapshot.commit_recovery.authoritative_generation, Some(1));
-        assert!(snapshot.commit_recovery.slot0.valid || snapshot.commit_recovery.slot1.valid);
-        assert!(snapshot.authorities.iter().any(|authority| {
-            authority.owner == "ic-memory" && authority.range == MemoryRange { start: 0, end: 9 }
+        let records = try_export_records().expect("ledger records");
+        assert!(records.iter().any(|record| {
+            record.stable_key().as_str() == "app.test.users.v1"
+                && record.slot().memory_manager_id() == Ok(100)
         }));
-        assert!(snapshot.authorities.iter().any(|authority| {
-            authority.owner == "canic.framework"
-                && authority.range == MemoryRange { start: 10, end: 99 }
-        }));
-        assert_eq!(
-            snapshot.ranges,
-            vec![(
-                "crate_a".to_string(),
-                MemoryRange {
-                    start: 100,
-                    end: 102,
-                },
-            )]
+        assert!(try_snapshot().expect("snapshot").export.current_generation > 0);
+    }
+
+    #[test]
+    fn legacy_canic_ledger_payload_is_rejected() {
+        #[derive(Serialize)]
+        struct LegacyCanicLedgerProbeForTest {
+            magic: u64,
+        }
+
+        let payload = canic_cdk::serialize::serialize(&LegacyCanicLedgerProbeForTest {
+            magic: LEGACY_CANIC_LEDGER_MAGIC,
+        })
+        .expect("legacy probe payload");
+        let memory = DefaultMemoryImpl::default();
+        memory.grow(1);
+        write_stable_cell_payload(&memory, &payload);
+
+        let err = validate_existing_ledger_memory(&memory)
+            .expect_err("legacy Canic ledger must fail hard-cut bootstrap");
+        assert!(
+            matches!(err, MemoryRegistryError::LedgerCorrupt { reason } if reason == LEGACY_CANIC_LEDGER_ERROR)
         );
-        let (_, entry) = snapshot
-            .entries
-            .into_iter()
-            .find(|(id, _)| *id == 101)
-            .expect("entry");
-        assert_eq!(entry.stable_key, "app.crate_a.slot.v1");
-        assert_eq!(entry.schema_version, Some(1));
-        assert_eq!(entry.schema_fingerprint.as_deref(), Some("sha256:abc123"));
     }
 
     #[test]
-    fn existing_ledger_memory_validation_rejects_non_ledger_cells() {
+    fn validates_native_ledger_cell_payload() {
+        let payload = canic_cdk::serialize::serialize(&StableCellLedgerRecord::default())
+            .expect("native payload");
         let memory = DefaultMemoryImpl::default();
         memory.grow(1);
-        memory.write(0, b"BAD");
+        write_stable_cell_payload(&memory, &payload);
 
-        let err = validate_existing_ledger_memory(&memory).expect_err("foreign cell should fail");
-        assert!(matches!(err, MemoryRegistryError::LedgerCorrupt { .. }));
+        validate_existing_ledger_memory(&memory).expect("native payload should validate");
+    }
 
-        let memory = DefaultMemoryImpl::default();
-        memory.grow(1);
+    fn declaration(id: u8, stable_key: &str) -> AllocationDeclaration {
+        AllocationDeclaration::memory_manager_with_schema(
+            stable_key,
+            id,
+            stable_key,
+            SchemaMetadata::default(),
+        )
+        .expect("declaration")
+    }
+
+    fn declaration_snapshot(declarations: Vec<AllocationDeclaration>) -> DeclarationSnapshot {
+        DeclarationSnapshot::new(declarations).expect("snapshot")
+    }
+
+    fn write_stable_cell_payload<M: Memory>(memory: &M, payload: &[u8]) {
+        let len = u32::try_from(payload.len())
+            .expect("test payload length")
+            .to_le_bytes();
         memory.write(0, STABLE_CELL_MAGIC);
         memory.write(3, &[STABLE_CELL_LAYOUT_VERSION]);
-        memory.write(4, &3_u32.to_le_bytes());
-        memory.write(STABLE_CELL_VALUE_OFFSET, &[1, 2, 3]);
-
-        let err =
-            validate_existing_ledger_memory(&memory).expect_err("invalid payload should fail");
-        assert!(matches!(err, MemoryRegistryError::LedgerCorrupt { .. }));
-    }
-
-    #[test]
-    fn authoritative_generation_rejects_invalid_header_fields() {
-        let record = MemoryLayoutLedgerRecord {
-            magic: 0,
-            ..MemoryLayoutLedgerRecord::default()
-        };
-        let err = authoritative_generation(&record).expect_err("invalid magic must fail");
-        assert!(matches!(err, MemoryRegistryError::LedgerCorrupt { .. }));
-
-        let record = MemoryLayoutLedgerRecord {
-            format_id: 2,
-            ..MemoryLayoutLedgerRecord::default()
-        };
-        let err = authoritative_generation(&record).expect_err("invalid format must fail");
-        assert!(matches!(err, MemoryRegistryError::LedgerCorrupt { .. }));
-
-        let record = MemoryLayoutLedgerRecord {
-            schema_version: 2,
-            ..MemoryLayoutLedgerRecord::default()
-        };
-        let err = authoritative_generation(&record).expect_err("invalid schema must fail");
-        assert!(matches!(err, MemoryRegistryError::LedgerCorrupt { .. }));
-
-        let record = MemoryLayoutLedgerRecord {
-            layout_epoch: 2,
-            ..MemoryLayoutLedgerRecord::default()
-        };
-        let err = authoritative_generation(&record).expect_err("invalid epoch must fail");
-        assert!(matches!(err, MemoryRegistryError::LedgerCorrupt { .. }));
-
-        let record = MemoryLayoutLedgerRecord {
-            header_len: 0,
-            ..MemoryLayoutLedgerRecord::default()
-        };
-        let err = authoritative_generation(&record).expect_err("invalid header len must fail");
-        assert!(matches!(err, MemoryRegistryError::LedgerCorrupt { .. }));
-    }
-
-    #[test]
-    fn authoritative_generation_accepts_legacy_header_checksum() {
-        let mut record = MemoryLayoutLedgerRecord::default();
-        record.header_checksum = legacy_header_checksum(&record);
-
-        let generation = authoritative_generation(&record).expect("legacy checksum should pass");
-
-        assert_eq!(generation.generation, 0);
-    }
-
-    #[test]
-    fn authoritative_generation_rejects_invalid_header_checksum() {
-        let mut record = MemoryLayoutLedgerRecord::default();
-        record.header_checksum = record.header_checksum.wrapping_add(1);
-
-        let err = authoritative_generation(&record).expect_err("bad checksum must fail");
-
-        assert!(matches!(err, MemoryRegistryError::LedgerCorrupt { .. }));
-    }
-
-    #[test]
-    fn authoritative_generation_fails_when_no_slot_validates() {
-        let mut record = MemoryLayoutLedgerRecord::default();
-        if let Some(slot) = &mut record.slot0 {
-            slot.checksum = slot.checksum.wrapping_add(1);
-        }
-
-        let err = authoritative_generation(&record).expect_err("corrupt ledger should fail");
-
-        assert!(matches!(err, MemoryRegistryError::LedgerCorrupt { .. }));
-    }
-
-    #[test]
-    fn schema_metadata_changes_append_declaration_history() {
-        reset_for_tests();
-
-        record_entry(
-            100,
-            "crate_a",
-            "slot",
-            "app.crate_a.slot.v1",
-            Some(1),
-            Some("sha256:aaa"),
-        )
-        .expect("record first declaration");
-        record_entry(
-            100,
-            "crate_a",
-            "slot",
-            "app.crate_a.slot.v1",
-            Some(2),
-            Some("sha256:bbb"),
-        )
-        .expect("record second declaration");
-
-        MEMORY_LAYOUT_LEDGER.with_borrow(|cell| {
-            let generation = authoritative_generation(cell.get()).expect("generation");
-            let entry = generation
-                .entries
-                .iter()
-                .find(|entry| entry.id == 100)
-                .expect("entry");
-
-            assert_eq!(entry.schema_version, Some(2));
-            assert_eq!(entry.schema_fingerprint.as_deref(), Some("sha256:bbb"));
-            assert_eq!(entry.declarations.len(), 2);
-            assert_eq!(entry.declarations[0].schema_version, Some(1));
-            assert_eq!(entry.declarations[1].schema_version, Some(2));
-        });
-    }
-
-    #[test]
-    fn allocation_ledger_snapshot_projects_physical_history() {
-        reset_for_tests();
-
-        record_entry(
-            100,
-            "crate_a",
-            "slot",
-            "app.crate_a.slot.v1",
-            Some(1),
-            Some("sha256:aaa"),
-        )
-        .expect("record first declaration");
-        record_entry(
-            100,
-            "crate_a",
-            "slot",
-            "app.crate_a.slot.v1",
-            Some(2),
-            Some("sha256:bbb"),
-        )
-        .expect("record second declaration");
-
-        let allocation_ledger = try_allocation_ledger_snapshot().expect("allocation ledger");
-        let record = allocation_ledger
-            .allocation_history
-            .records
-            .iter()
-            .find(|record| record.stable_key.as_str() == "app.crate_a.slot.v1")
-            .expect("allocation record");
-
-        assert_eq!(allocation_ledger.current_generation, 2);
-        assert_eq!(record.slot.memory_manager_id().expect("memory id"), 100);
-        assert_eq!(record.state, ic_memory::AllocationState::Active);
-        assert_eq!(record.first_generation, 1);
-        assert_eq!(record.last_seen_generation, 2);
-        assert_eq!(record.schema_history.len(), 2);
-        assert_eq!(record.schema_history[0].schema.schema_version, Some(1));
-        assert_eq!(
-            record.schema_history[1]
-                .schema
-                .schema_fingerprint
-                .as_deref(),
-            Some("sha256:bbb")
-        );
+        memory.write(4, &len);
+        memory.write(STABLE_CELL_VALUE_OFFSET, payload);
     }
 }

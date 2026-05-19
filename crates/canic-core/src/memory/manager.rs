@@ -1,4 +1,4 @@
-use canic_cdk::structures::{DefaultMemoryImpl, Memory, memory::MemoryManager};
+use ic_memory::stable_structures::{DefaultMemoryImpl, Memory, memory_manager::MemoryManager};
 use std::cell::RefCell;
 
 const MEMORY_MANAGER_MAGIC: &[u8; 3] = b"MGR";

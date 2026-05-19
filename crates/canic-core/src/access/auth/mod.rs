@@ -19,12 +19,10 @@ mod token;
 use crate::{
     access::AccessError,
     cdk::types::Principal,
-    ids::{CanisterRole, EndpointCallKind},
+    ids::EndpointCallKind,
     ops::{runtime::env::EnvOps, storage::registry::subnet::SubnetRegistryOps},
 };
 use std::fmt;
-
-pub type Role = CanisterRole;
 
 ///
 /// AuthenticatedIdentitySource
@@ -45,14 +43,6 @@ pub struct ResolvedAuthenticatedIdentity {
     pub transport_caller: Principal,
     pub authenticated_subject: Principal,
     pub identity_source: AuthenticatedIdentitySource,
-}
-
-///
-/// VerifiedAccessToken
-///
-
-pub(crate) struct VerifiedAccessToken {
-    pub issuer_shard_pid: Principal,
 }
 
 ///
@@ -118,7 +108,7 @@ pub(crate) fn delegated_token_verified(
     authenticated_subject: Principal,
     required_scope: Option<&str>,
     call_kind: EndpointCallKind,
-) -> Result<VerifiedAccessToken, AccessError> {
+) -> Result<Principal, AccessError> {
     token::delegated_token_verified(authenticated_subject, required_scope, call_kind)
 }
 
@@ -172,17 +162,11 @@ pub async fn is_same_canister(caller: Principal) -> Result<(), AccessError> {
 }
 
 /// Require that the caller is the canonical app canister for the expected role.
-pub async fn has_app_role(caller: Principal, role: Role) -> Result<(), AccessError> {
+pub async fn has_app_role(
+    caller: Principal,
+    role: crate::ids::CanisterRole,
+) -> Result<(), AccessError> {
     predicates::has_app_role(caller, role).await
-}
-
-// -----------------------------------------------------------------------------
-// Registry predicates
-// -----------------------------------------------------------------------------
-
-/// Require that the caller is registered with the expected canister role.
-pub async fn has_role(caller: Principal, role: Role) -> Result<(), AccessError> {
-    predicates::has_role(caller, role).await
 }
 
 /// Require that the caller is registered as a canister on this subnet.

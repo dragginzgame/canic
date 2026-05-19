@@ -1,20 +1,9 @@
 use ic_memory::{
-    AllocationDeclaration, AllocationHistory, AllocationLedger, AllocationPolicy, AllocationSlot,
-    AllocationSlotDescriptor, DeclarationSnapshot, MEMORY_MANAGER_INVALID_ID, MemoryManagerIdRange,
+    AllocationDeclaration, AllocationHistory, AllocationLedger, AllocationPolicy,
+    AllocationSlotDescriptor, DeclarationSnapshot, MEMORY_MANAGER_INVALID_ID,
+    MemoryManagerRangeAuthority, MemoryManagerRangeAuthorityError, MemoryManagerRangeMode,
     MemoryManagerSlotError, RangeAuthority, SchemaMetadata, StableKey, validate_allocations,
 };
-
-fn ic_memory_internal_range() -> MemoryManagerIdRange {
-    MemoryManagerIdRange::new(0, 9).expect("ic-memory internal range")
-}
-
-fn canic_framework_range() -> MemoryManagerIdRange {
-    MemoryManagerIdRange::new(10, 99).expect("Canic framework range")
-}
-
-fn application_range() -> MemoryManagerIdRange {
-    MemoryManagerIdRange::new(100, 254).expect("application range")
-}
 
 ///
 /// CanicMemoryManagerPolicy
@@ -80,6 +69,7 @@ impl RangeAuthority for CanicMemoryManagerPolicy {
 
     fn validate_slot(&self, slot: &AllocationSlotDescriptor) -> Result<(), Self::Error> {
         slot.memory_manager_id()
+            .map(drop)
             .map_err(CanicMemoryPolicyError::MemoryManagerSlot)?;
         Ok(())
     }
@@ -93,6 +83,8 @@ impl RangeAuthority for CanicMemoryManagerPolicy {
 enum CanicMemoryPolicyError {
     /// Slot is not a usable `MemoryManager` descriptor.
     MemoryManagerSlot(MemoryManagerSlotError),
+    /// Canonical range authority policy rejected the slot.
+    RangeAuthority(MemoryManagerRangeAuthorityError),
     /// Stable-key namespace does not own the claimed MemoryManager ID.
     RangeAuthorityViolation,
     /// The declaring crate does not own the stable-key namespace.
@@ -116,25 +108,57 @@ fn validate_key_slot_claim(
         if declaring_crate != "ic-memory" {
             return Err(CanicMemoryPolicyError::NamespaceOwnerViolation);
         }
-        return in_range(id, ic_memory_internal_range());
+        return validate_authority(id, "ic-memory", MemoryManagerRangeMode::Reserved);
     }
     if key.starts_with("canic.") {
         if !declaring_crate.starts_with("canic") {
             return Err(CanicMemoryPolicyError::NamespaceOwnerViolation);
         }
-        return in_range(id, canic_framework_range());
+        return validate_authority(id, "canic.framework", MemoryManagerRangeMode::Reserved);
     }
     if reservation {
         return Err(CanicMemoryPolicyError::ApplicationReservation);
     }
-    in_range(id, application_range())
+    validate_application_slot(id)
 }
 
-const fn in_range(id: u8, range: MemoryManagerIdRange) -> Result<(), CanicMemoryPolicyError> {
-    if range.contains(id) {
-        return Ok(());
+fn canic_authority() -> MemoryManagerRangeAuthority {
+    MemoryManagerRangeAuthority::new()
+        .reserve(ic_memory::memory_manager_governance_range(), "ic-memory")
+        .expect("ic-memory governance range")
+        .reserve_ids(10, 99, "canic.framework")
+        .expect("Canic framework range")
+}
+
+fn validate_authority(
+    id: u8,
+    authority: &str,
+    mode: MemoryManagerRangeMode,
+) -> Result<(), CanicMemoryPolicyError> {
+    canic_authority()
+        .validate_id_authority_mode(id, authority, mode)
+        .map(drop)
+        .map_err(|err| match err {
+            MemoryManagerRangeAuthorityError::Slot(slot) => {
+                CanicMemoryPolicyError::MemoryManagerSlot(slot)
+            }
+            MemoryManagerRangeAuthorityError::UnclaimedId { .. }
+            | MemoryManagerRangeAuthorityError::AuthorityMismatch { .. }
+            | MemoryManagerRangeAuthorityError::ModeMismatch { .. } => {
+                CanicMemoryPolicyError::RangeAuthorityViolation
+            }
+            other => CanicMemoryPolicyError::RangeAuthority(other),
+        })
+}
+
+fn validate_application_slot(id: u8) -> Result<(), CanicMemoryPolicyError> {
+    match canic_authority()
+        .authority_for_id(id)
+        .map_err(CanicMemoryPolicyError::RangeAuthority)?
+    {
+        Some(_) => Err(CanicMemoryPolicyError::RangeAuthorityViolation),
+        None => Ok(()),
     }
-    Err(CanicMemoryPolicyError::RangeAuthorityViolation)
 }
 
 fn key(value: &str) -> StableKey {
@@ -142,16 +166,11 @@ fn key(value: &str) -> StableKey {
 }
 
 fn memory(id: u8) -> AllocationSlotDescriptor {
-    AllocationSlotDescriptor::memory_manager(id)
+    AllocationSlotDescriptor::memory_manager(id).expect("memory manager id")
 }
 
 fn ledger() -> AllocationLedger {
-    AllocationLedger {
-        ledger_schema_version: 1,
-        physical_format_id: 1,
-        current_generation: 0,
-        allocation_history: AllocationHistory::default(),
-    }
+    AllocationLedger::new(1, 1, 0, AllocationHistory::default()).expect("allocation ledger")
 }
 
 fn declaration(stable_key: &str, id: u8) -> AllocationDeclaration {
@@ -181,13 +200,23 @@ fn canic_policy_accepts_ic_memory_internal_governance_slots() {
 
     validate_claim(policy, "ic_memory.ledger.v1", 0).expect("ledger slot");
     validate_reservation(policy, "ic_memory.generation_log.v1", 1).expect("reserved internal slot");
-    validate_claim(policy, "ic_memory.maintenance_journal.v1", 9).expect("internal reserve slot");
+    validate_claim(
+        policy,
+        "ic_memory.maintenance_journal.v1",
+        ic_memory::memory_manager_governance_range().end(),
+    )
+    .expect("internal reserve slot");
 }
 
 #[test]
 fn canic_policy_rejects_ic_memory_key_outside_internal_range() {
     let policy = CanicMemoryManagerPolicy::for_declaring_crate("ic-memory");
-    let err = validate_claim(policy, "ic_memory.ledger.v1", 10).expect_err("range violation");
+    let err = validate_claim(
+        policy,
+        "ic_memory.ledger.v1",
+        ic_memory::memory_manager_governance_range().end() + 1,
+    )
+    .expect_err("range violation");
 
     assert_eq!(err, CanicMemoryPolicyError::RangeAuthorityViolation);
 }
@@ -209,7 +238,7 @@ fn canic_policy_accepts_canic_framework_slots() {
 }
 
 #[test]
-fn canic_policy_rejects_canic_key_in_application_range() {
+fn canic_policy_rejects_canic_key_outside_framework_range() {
     let policy = CanicMemoryManagerPolicy::for_declaring_crate("canic-core");
     let err = validate_claim(policy, "canic.core.app_state.v1", 100).expect_err("range violation");
 
@@ -217,15 +246,15 @@ fn canic_policy_rejects_canic_key_in_application_range() {
 }
 
 #[test]
-fn canic_policy_accepts_application_slots() {
+fn canic_policy_accepts_non_reserved_application_slots() {
     let policy = CanicMemoryManagerPolicy::for_declaring_crate("app-crate");
 
-    validate_claim(policy, "app.users.v1", 100).expect("first app slot");
-    validate_claim(policy, "app.users.v1", 254).expect("last app slot");
+    validate_claim(policy, "app.users.v1", 100).expect("non-reserved app slot");
+    validate_claim(policy, "app.archive.v1", 254).expect("last usable app slot");
 }
 
 #[test]
-fn canic_policy_rejects_application_key_below_application_range() {
+fn canic_policy_rejects_application_key_in_framework_reserved_range() {
     let policy = CanicMemoryManagerPolicy::for_declaring_crate("app-crate");
     let err = validate_claim(policy, "app.users.v1", 99).expect_err("range violation");
 
@@ -233,25 +262,36 @@ fn canic_policy_rejects_application_key_below_application_range() {
 }
 
 #[test]
-fn canic_policy_rejects_id_255_for_all_namespaces() {
-    for (declaring_crate, stable_key) in [
-        ("ic-memory", "ic_memory.ledger.v1"),
-        ("canic-core", "canic.core.app_state.v1"),
-        ("app-crate", "app.users.v1"),
-    ] {
-        let policy = CanicMemoryManagerPolicy::for_declaring_crate(declaring_crate);
-        let err =
-            validate_claim(policy, stable_key, MEMORY_MANAGER_INVALID_ID).expect_err("sentinel");
+fn canic_policy_rejects_application_key_in_ic_memory_governance_range() {
+    let policy = CanicMemoryManagerPolicy::for_declaring_crate("app-crate");
+    let err = validate_claim(policy, "app.users.v1", 0).expect_err("range violation");
 
-        assert_eq!(
-            err,
-            CanicMemoryPolicyError::MemoryManagerSlot(
-                MemoryManagerSlotError::InvalidMemoryManagerId {
-                    id: MEMORY_MANAGER_INVALID_ID
-                }
-            )
-        );
-    }
+    assert_eq!(err, CanicMemoryPolicyError::RangeAuthorityViolation);
+}
+
+#[test]
+fn canic_policy_no_longer_defines_application_authority_range() {
+    let authority = canic_authority();
+    assert_eq!(authority.authorities().len(), 2);
+    assert!(
+        authority
+            .authorities()
+            .iter()
+            .all(|record| record.mode == MemoryManagerRangeMode::Reserved)
+    );
+}
+
+#[test]
+fn canic_policy_rejects_id_255_for_all_namespaces() {
+    let err =
+        AllocationSlotDescriptor::memory_manager(MEMORY_MANAGER_INVALID_ID).expect_err("sentinel");
+
+    assert_eq!(
+        err,
+        MemoryManagerSlotError::InvalidMemoryManagerId {
+            id: MEMORY_MANAGER_INVALID_ID
+        }
+    );
 }
 
 #[test]
@@ -260,21 +300,6 @@ fn canic_policy_rejects_application_reservations() {
     let err = validate_reservation(policy, "app.users.v1", 100).expect_err("app reservation");
 
     assert_eq!(err, CanicMemoryPolicyError::ApplicationReservation);
-}
-
-#[test]
-fn canic_policy_rejects_non_memory_manager_slots() {
-    let slot = AllocationSlotDescriptor {
-        slot: AllocationSlot::NamedPartition("ledger".to_string()),
-        substrate: "named".to_string(),
-        descriptor_version: 1,
-    };
-
-    let policy = CanicMemoryManagerPolicy::for_declaring_crate("app-crate");
-    let err = AllocationPolicy::validate_slot(&policy, &key("app.users.v1"), &slot)
-        .expect_err("unsupported slot");
-
-    assert!(matches!(err, CanicMemoryPolicyError::MemoryManagerSlot(_)));
 }
 
 #[test]

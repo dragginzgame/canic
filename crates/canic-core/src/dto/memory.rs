@@ -6,17 +6,13 @@ use crate::dto::prelude::*;
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct MemoryLedgerResponse {
-    pub magic: u64,
-    pub format_id: u32,
-    pub schema_version: u32,
-    pub layout_epoch: u32,
-    pub header_len: u32,
-    pub header_checksum: u64,
+    pub ledger_schema_version: u32,
+    pub physical_format_id: u32,
     pub current_generation: u64,
     pub commit_recovery: MemoryCommitRecoveryResponse,
     pub authorities: Vec<MemoryRangeAuthorityEntry>,
-    pub ranges: Vec<MemoryRangeEntry>,
-    pub entries: Vec<MemoryRegistryEntry>,
+    pub records: Vec<MemoryAllocationRecordEntry>,
+    pub generations: Vec<MemoryLedgerGenerationEntry>,
 }
 
 ///
@@ -49,6 +45,9 @@ pub struct MemoryCommitSlotResponse {
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
 pub enum MemoryCommitRecoveryErrorResponse {
     NoValidGeneration,
+    AmbiguousGeneration,
+    GenerationOverflow,
+    UnexpectedGeneration,
 }
 
 ///
@@ -60,39 +59,66 @@ pub struct MemoryRangeAuthorityEntry {
     pub owner: String,
     pub start: u8,
     pub end: u8,
+    pub mode: MemoryRangeAuthorityMode,
     pub purpose: String,
 }
 
 ///
-/// MemoryRangeEntry
+/// MemoryRangeAuthorityMode
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize)]
-pub struct MemoryRangeEntry {
-    pub owner: String,
-    pub start: u8,
-    pub end: u8,
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+pub enum MemoryRangeAuthorityMode {
+    Reserved,
+    Allowed,
 }
 
 ///
-/// MemoryRegistryResponse
+/// MemoryAllocationRecordEntry
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
-pub struct MemoryRegistryResponse {
-    pub entries: Vec<MemoryRegistryEntry>,
-}
-
-///
-/// MemoryRegistryEntry
-///
-
-#[derive(CandidType, Clone, Debug, Deserialize)]
-pub struct MemoryRegistryEntry {
-    pub id: u8,
-    pub crate_name: String,
-    pub label: String,
+pub struct MemoryAllocationRecordEntry {
+    pub memory_manager_id: Option<u8>,
     pub stable_key: String,
+    pub state: MemoryAllocationState,
+    pub first_generation: u64,
+    pub last_seen_generation: u64,
+    pub retired_generation: Option<u64>,
+    pub schema_history: Vec<MemorySchemaMetadataEntry>,
+}
+
+///
+/// MemoryAllocationState
+///
+
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+pub enum MemoryAllocationState {
+    Reserved,
+    Active,
+    Retired,
+}
+
+///
+/// MemorySchemaMetadataEntry
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize)]
+pub struct MemorySchemaMetadataEntry {
+    pub generation: u64,
     pub schema_version: Option<u32>,
     pub schema_fingerprint: Option<String>,
+}
+
+///
+/// MemoryLedgerGenerationEntry
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize)]
+pub struct MemoryLedgerGenerationEntry {
+    pub generation: u64,
+    pub parent_generation: Option<u64>,
+    pub runtime_fingerprint: Option<String>,
+    pub declaration_count: u32,
+    pub committed_at: Option<u64>,
 }

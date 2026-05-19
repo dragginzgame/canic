@@ -10,10 +10,7 @@ pub mod timer;
 
 use crate::{
     InternalError, InternalErrorOrigin,
-    ops::runtime::{
-        env::EnvOps,
-        memory::{MemoryRegistryInitSummary, MemoryRegistryOps},
-    },
+    ops::runtime::{env::EnvOps, memory::MemoryRegistryOps},
     workflow::{self, prelude::*},
 };
 
@@ -59,28 +56,11 @@ impl RuntimeWorkflow {
     }
 }
 
-pub(super) fn log_memory_summary(summary: &MemoryRegistryInitSummary) {
-    for range in &summary.ranges {
-        let used = summary
-            .entries
-            .iter()
-            .filter(|entry| entry.id >= range.start && entry.id <= range.end)
-            .count();
-
-        crate::log!(
-            Topic::Memory,
-            Info,
-            "💾 memory.range: {} [{}-{}] ({}/{} slots used)",
-            range.crate_name,
-            range.start,
-            range.end,
-            used,
-            range.end - range.start + 1,
-        );
-    }
+pub(super) fn log_memory_summary() {
+    crate::log!(Topic::Memory, Info, "💾 memory.registry: bootstrapped");
 }
 
-fn init_post_upgrade_memory_registry() -> Result<MemoryRegistryInitSummary, InternalError> {
+fn init_post_upgrade_memory_registry() -> Result<(), InternalError> {
     MemoryRegistryOps::bootstrap_registry().map_err(|err| {
         InternalError::invariant(
             InternalErrorOrigin::Workflow,
@@ -89,6 +69,6 @@ fn init_post_upgrade_memory_registry() -> Result<MemoryRegistryInitSummary, Inte
     })
 }
 
-pub fn init_memory_registry_post_upgrade() -> Result<MemoryRegistryInitSummary, InternalError> {
+pub fn init_memory_registry_post_upgrade() -> Result<(), InternalError> {
     init_post_upgrade_memory_registry()
 }

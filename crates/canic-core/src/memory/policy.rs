@@ -1,22 +1,14 @@
-use super::registry::{MemoryRange, MemoryRegistryError};
+use super::registry::MemoryRegistryError;
 use ic_memory::{
-    AllocationPolicy, AllocationSlotDescriptor, MemoryManagerIdRange, MemoryManagerSlotError,
-    RangeAuthority, StableKey,
+    AllocationPolicy, AllocationSlotDescriptor, MemoryManagerAuthorityRecord, MemoryManagerIdRange,
+    MemoryManagerRangeMode, MemoryManagerSlotError, StableKey,
 };
 
-pub const IC_MEMORY_INTERNAL_MIN_ID: u8 = 0;
-pub const IC_MEMORY_INTERNAL_MAX_ID: u8 = 9;
 pub const CANIC_FRAMEWORK_MIN_ID: u8 = 10;
 pub const CANIC_FRAMEWORK_MAX_ID: u8 = 99;
-pub const APPLICATION_MIN_ID: u8 = 100;
-pub const APPLICATION_MAX_ID: u8 = ic_memory::MEMORY_MANAGER_MAX_ID;
 
-pub const IC_MEMORY_AUTHORITY_OWNER: &str = "ic-memory";
-pub const IC_MEMORY_AUTHORITY_PURPOSE: &str = "ic-memory allocation-governance authority";
 pub const CANIC_FRAMEWORK_AUTHORITY_OWNER: &str = "canic.framework";
 pub const CANIC_FRAMEWORK_AUTHORITY_PURPOSE: &str = "Canic framework allocation authority";
-pub const APPLICATION_AUTHORITY_OWNER: &str = "applications";
-pub const APPLICATION_AUTHORITY_PURPOSE: &str = "downstream application allocation authority";
 
 ///
 /// CanicMemoryManagerPolicy
@@ -62,7 +54,8 @@ impl AllocationPolicy for CanicMemoryManagerPolicy<'_> {
         let id = slot
             .memory_manager_id()
             .map_err(memory_slot_error_to_registry_error)?;
-        if !key.as_str().starts_with("ic_memory.") && !key.as_str().starts_with("canic.") {
+        if !ic_memory::is_ic_memory_stable_key(key.as_str()) && !key.as_str().starts_with("canic.")
+        {
             return Err(MemoryRegistryError::RangeAuthorityViolation {
                 stable_key: key.as_str().to_string(),
                 id,
@@ -73,23 +66,13 @@ impl AllocationPolicy for CanicMemoryManagerPolicy<'_> {
     }
 }
 
-impl RangeAuthority for CanicMemoryManagerPolicy<'_> {
-    type Error = MemoryRegistryError;
-
-    fn validate_slot(&self, slot: &AllocationSlotDescriptor) -> Result<(), Self::Error> {
-        slot.memory_manager_id()
-            .map(drop)
-            .map_err(memory_slot_error_to_registry_error)
-    }
-}
-
 pub fn validate_stable_key_authority(
     id: u8,
     crate_name: &str,
     stable_key: &str,
 ) -> Result<(), MemoryRegistryError> {
     let key =
-        StableKey::parse(stable_key).map_err(|err| MemoryRegistryError::InvalidStableKey {
+        StableKey::parse(stable_key).map_err(|err| MemoryRegistryError::InvalidDeclaration {
             stable_key: err.stable_key,
             reason: err.reason,
         })?;
@@ -102,32 +85,22 @@ pub fn validate_stable_key_authority(
 }
 
 #[must_use]
-pub fn canonical_authority_ranges() -> Vec<(&'static str, MemoryRange, &'static str)> {
+pub fn canonical_authority_records() -> Vec<MemoryManagerAuthorityRecord> {
     vec![
-        (
-            IC_MEMORY_AUTHORITY_OWNER,
-            MemoryRange {
-                start: IC_MEMORY_INTERNAL_MIN_ID,
-                end: IC_MEMORY_INTERNAL_MAX_ID,
-            },
-            IC_MEMORY_AUTHORITY_PURPOSE,
-        ),
-        (
+        MemoryManagerAuthorityRecord::new(
+            ic_memory::memory_manager_governance_range(),
+            ic_memory::IC_MEMORY_AUTHORITY_OWNER,
+            MemoryManagerRangeMode::Reserved,
+            Some(ic_memory::IC_MEMORY_AUTHORITY_PURPOSE.to_string()),
+        )
+        .expect("valid ic-memory authority record"),
+        MemoryManagerAuthorityRecord::new(
+            canic_framework_range(),
             CANIC_FRAMEWORK_AUTHORITY_OWNER,
-            MemoryRange {
-                start: CANIC_FRAMEWORK_MIN_ID,
-                end: CANIC_FRAMEWORK_MAX_ID,
-            },
-            CANIC_FRAMEWORK_AUTHORITY_PURPOSE,
-        ),
-        (
-            APPLICATION_AUTHORITY_OWNER,
-            MemoryRange {
-                start: APPLICATION_MIN_ID,
-                end: APPLICATION_MAX_ID,
-            },
-            APPLICATION_AUTHORITY_PURPOSE,
-        ),
+            MemoryManagerRangeMode::Reserved,
+            Some(CANIC_FRAMEWORK_AUTHORITY_PURPOSE.to_string()),
+        )
+        .expect("valid Canic authority record"),
     ]
 }
 
@@ -136,7 +109,7 @@ fn validate_key_id_claim(
     crate_name: &str,
     stable_key: &str,
 ) -> Result<(), MemoryRegistryError> {
-    if stable_key.starts_with("ic_memory.") {
+    if ic_memory::is_ic_memory_stable_key(stable_key) {
         return validate_ic_memory_claim(id, crate_name, stable_key);
     }
 
@@ -152,7 +125,7 @@ fn validate_ic_memory_claim(
     crate_name: &str,
     stable_key: &str,
 ) -> Result<(), MemoryRegistryError> {
-    if crate_name != IC_MEMORY_AUTHORITY_OWNER {
+    if crate_name != ic_memory::IC_MEMORY_AUTHORITY_OWNER {
         return Err(MemoryRegistryError::RangeAuthorityViolation {
             stable_key: stable_key.to_string(),
             id,
@@ -160,17 +133,12 @@ fn validate_ic_memory_claim(
         });
     }
 
-    let range = MemoryManagerIdRange::new(IC_MEMORY_INTERNAL_MIN_ID, IC_MEMORY_INTERNAL_MAX_ID)
-        .expect("valid ic-memory internal range");
-    if range.contains(id) {
-        return Ok(());
-    }
-
-    Err(MemoryRegistryError::RangeAuthorityViolation {
-        stable_key: stable_key.to_string(),
+    require_range(
         id,
-        reason: "ic_memory.* keys must use ids 0-9",
-    })
+        stable_key,
+        ic_memory::memory_manager_governance_range(),
+        "ic_memory.* keys must use the ic-memory governance range",
+    )
 }
 
 fn validate_canic_claim(
@@ -186,37 +154,60 @@ fn validate_canic_claim(
         });
     }
 
-    let range = MemoryManagerIdRange::new(CANIC_FRAMEWORK_MIN_ID, CANIC_FRAMEWORK_MAX_ID)
-        .expect("valid Canic framework range");
-    if range.contains(id) {
-        return Ok(());
-    }
-
-    Err(MemoryRegistryError::RangeAuthorityViolation {
-        stable_key: stable_key.to_string(),
+    require_range(
         id,
-        reason: "canic.* keys must use ids 10-99",
-    })
+        stable_key,
+        canic_framework_range(),
+        "canic.* keys must use ids 10-99",
+    )
 }
 
 fn validate_application_claim(id: u8, stable_key: &str) -> Result<(), MemoryRegistryError> {
-    let range =
-        MemoryManagerIdRange::new(APPLICATION_MIN_ID, APPLICATION_MAX_ID).expect("valid app range");
-    if range.contains(id) {
-        return Ok(());
+    if ic_memory::memory_manager_governance_range().contains(id)
+        || canic_framework_range().contains(id)
+    {
+        return Err(MemoryRegistryError::RangeAuthorityViolation {
+            stable_key: stable_key.to_string(),
+            id,
+            reason: "application keys may not use reserved MemoryManager IDs",
+        });
     }
+    Ok(())
+}
 
-    Err(MemoryRegistryError::RangeAuthorityViolation {
-        stable_key: stable_key.to_string(),
-        id,
-        reason: "application keys must use ids 100-254",
-    })
+fn require_range(
+    id: u8,
+    stable_key: &str,
+    range: MemoryManagerIdRange,
+    reason: &'static str,
+) -> Result<(), MemoryRegistryError> {
+    if range.contains(id) {
+        Ok(())
+    } else {
+        Err(MemoryRegistryError::RangeAuthorityViolation {
+            stable_key: stable_key.to_string(),
+            id,
+            reason,
+        })
+    }
+}
+
+fn canic_framework_range() -> MemoryManagerIdRange {
+    MemoryManagerIdRange::new(CANIC_FRAMEWORK_MIN_ID, CANIC_FRAMEWORK_MAX_ID)
+        .expect("valid Canic framework range")
 }
 
 fn memory_slot_error_to_registry_error(err: MemoryManagerSlotError) -> MemoryRegistryError {
     match err {
         MemoryManagerSlotError::InvalidMemoryManagerId { id } => {
-            MemoryRegistryError::ReservedInternalId { id }
+            MemoryRegistryError::InvalidDeclaration {
+                stable_key: "<slot>".to_string(),
+                reason: if id == ic_memory::MEMORY_MANAGER_INVALID_ID {
+                    "MemoryManager ID 255 is not usable"
+                } else {
+                    "MemoryManager ID is not usable"
+                },
+            }
         }
         MemoryManagerSlotError::UnsupportedSlot
         | MemoryManagerSlotError::UnsupportedSubstrate { .. }

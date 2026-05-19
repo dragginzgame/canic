@@ -1,6 +1,5 @@
 pub mod registry;
 
-use super::registry::MemoryRegistryError;
 use std::sync::{
     Mutex,
     atomic::{AtomicBool, Ordering},
@@ -79,7 +78,7 @@ pub fn init_eager_tls() {
 ///
 /// This drains the internal queue of eager-init functions and invokes each
 /// exactly once. Canic uses this during synchronous lifecycle bootstrap before
-/// the memory registry is committed, so explicit range declarations can be
+/// the memory registry is committed, so explicit memory declarations can be
 /// collected without opening stable-memory handles.
 pub fn run_registered_eager_init() {
     let funcs = {
@@ -177,37 +176,6 @@ fn run_test_bootstrap_hook() {
         .expect("test bootstrap hook poisoned");
     if let Some(hook) = hook {
         hook();
-    }
-}
-
-///
-/// MemoryRuntimeApi
-///
-/// High-level runtime bootstrap facade used by the supported public API.
-
-pub struct MemoryRuntimeApi;
-
-impl MemoryRuntimeApi {
-    /// Bootstrap eager-init hooks, the memory registry, and eager TLS for the given owner range.
-    pub fn bootstrap_registry(
-        crate_name: &'static str,
-        start: u8,
-        end: u8,
-    ) -> Result<registry::MemoryRegistryInitSummary, MemoryRegistryError> {
-        run_registered_eager_init();
-        let summary = registry::MemoryRegistryRuntime::init(Some((crate_name, start, end)))?;
-        init_eager_tls();
-        Ok(summary)
-    }
-
-    /// Bootstrap eager-init hooks, flush deferred registry state, and then
-    /// initialize eager TLS without reserving a new owner range.
-    pub fn bootstrap_registry_without_range()
-    -> Result<registry::MemoryRegistryInitSummary, MemoryRegistryError> {
-        run_registered_eager_init();
-        let summary = registry::MemoryRegistryRuntime::init(None)?;
-        init_eager_tls();
-        Ok(summary)
     }
 }
 

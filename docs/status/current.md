@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-05-18
+Last updated: 2026-05-19
 
 ## Purpose
 
@@ -124,14 +124,42 @@ inspect only the files needed for the current task.
   runtime or build dependencies on workspace crates marked `publish = false`.
 - Wired the same manifest-boundary guard into `scripts/ci/publish-workspace.sh`
   before any publish attempt.
-- Started `0.39.16` by making Canic's persisted `ic-memory` authority reserve
-  cover IDs `0-9` while leaving only the ID `0` ledger self-record active; the
-  remaining slots stay empty per-ID records until future `ic-memory`
-  allocation-governance work assigns them explicitly.
+- Started `0.39.16` by moving the current `ic-memory` governance-slot range
+  and ledger self-record metadata behind the standalone `ic-memory` API; Canic
+  consumes that authority descriptor instead of defining the range itself.
+- Canic now targets published `ic-memory 0.2.0` and consumes its generic
+  `MemoryManagerRangeAuthority` helper for the reserved `0-9` and `10-99`
+  policy table. Downstream application IDs are no longer modeled as a named
+  Canic authority range; they are accepted when `ic-memory` validates the slot
+  shape and the ID does not collide with a reserved range. The temporary local
+  crates.io patch to the sibling checkout has been removed; `Cargo.lock`
+  resolves the crate from crates.io.
 - Continued `0.39.16` by thinning `canic-core::memory`: macro-backed memory
   opens now validate by explicit stable key through `ic-memory::AllocationSession`,
   the old implicit-key declaration/registration helpers are gone, and
   `memory::api` is reduced to the ledger diagnostic facade.
+- Removed the old per-crate range-reservation runtime path from
+  `canic-core::memory`; Canic now keeps range concepts only as policy/ledger
+  authority diagnostics, not as a registration prerequisite.
+- Replaced Canic-local range DTOs in the memory diagnostic internals with
+  `ic-memory` authority records and added the authority `mode` to the
+  controller ledger diagnostic response.
+- Collapsed the remaining live Canic memory registry duplication. Macro-backed
+  stable-memory slots now register immutable `ic-memory::AllocationDeclaration`
+  values before bootstrap, ad hoc pre-bootstrap registration remains a small
+  pending queue, runtime bootstrap validates and commits a sealed
+  `DeclarationSnapshot` through the native `ic-memory` ledger, and diagnostics
+  are derived from native `ic-memory` state rather than a second authoritative
+  registry map.
+- Tightened the physical ledger writer hard cut: Canic now records entries only
+  when they are present in an `ic-memory::ValidatedAllocations` set, and the
+  old Canic-local key/ID historical conflict scanner has been removed from the
+  writer path.
+- Hard-cut Canic allocation persistence to the native `ic-memory` durable
+  ledger: `crates/canic-core/src/memory/ledger.rs` is now a small stable-cell
+  adapter over `ic_memory::LedgerCommitStore`, old Canic physical ledger
+  records/projection/writer/checksum ownership are gone, and old Canic physical
+  ledger bytes fail closed with an explicit hard-cut error.
 - Drafted the proposed 0.40 attested Canic-call hard cut at
   `docs/design/0.40-attested-canic-calls/0.40-design.md`, replacing
   AppIndex-only sibling authorization with root-signed caller-role envelopes
@@ -367,9 +395,9 @@ inspect only the files needed for the current task.
   ID `0` now stores a persisted layout ledger, and historical range or ID drift
   is rejected even if the old declaration is removed from the current binary.
 - Started the `0.38.0` hard-cut by making ID `0` the canonical ledger
-  self-record, treating IDs `1-99` as Canic framework expansion budget,
-  widening `canic-core` to `11-99`, and moving downstream application memory
-  to `100-254`.
+  self-record, treating IDs `1-99` as Canic framework expansion budget, and
+  widening `canic-core` to `11-99`. The later `0.39` hard cut removed the
+  named downstream application authority range from Canic policy.
 - Added explicit stable-memory ABI keys for Canic-managed memory declarations
   so package, module, type, or label renames do not silently allocate new
   stable memories or strand old ones.
@@ -405,9 +433,10 @@ inspect only the files needed for the current task.
   `schema_version` and `schema_fingerprint` metadata to managed memory
   declarations, registry DTOs, and ledger declaration history. Metadata remains
   informational and is not part of allocation identity.
-- Added canonical allocation authority records to the ABI ledger for the hard
-  `0-99` Canic framework and `100-254` application boundary, exposed through
-  `MemoryApi::ledger_snapshot()` diagnostics.
+- Added canonical allocation authority records to the old ABI ledger for the
+  previous Canic framework/application boundary, exposed through
+  `MemoryApi::ledger_snapshot()` diagnostics. The current native `ic-memory`
+  path now reports only reserved infrastructure ranges owned by Canic policy.
 - Tightened ABI ledger physical-header validation so invalid magic, format,
   schema version, header length, or committed slot metadata fails closed during
   bootstrap instead of being repaired.
@@ -689,8 +718,40 @@ inspect only the files needed for the current task.
   `backup::command` and `backup::render`; `backup::mod` is down to about
   `1050` lines.
 
+## Current Memory Boundary
+
+- Canic no longer maintains a live local allocation registry. Macro/static
+  declarations and the small ad hoc pending queue are declaration inputs only.
+- Runtime bootstrap collects declarations, validates and commits them through
+  the native `ic-memory` durable ledger with Canic policy, publishes
+  `ValidatedAllocations`, and only then opens stable-memory handles.
+- `ic-memory` owns generic allocation validation: stable-key grammar, schema
+  metadata bounds, `MemoryManager` ID shape and ID `255` rejection, duplicate
+  declaration keys/slots, historical stable-key movement rejection, physical
+  slot reuse rejection, and retired/tombstone rejection when represented in the
+  native ledger.
+- Canic still owns `canic.*` namespace policy, `ic_memory.*` owner
+  restrictions, framework reserved IDs, rejection of application claims against
+  reserved ranges, declaring-crate checks, lifecycle ordering, handle opening,
+  and diagnostic DTO shaping.
+- Canic no longer preserves the old Canic physical allocation ledger format.
+  There is no projection bridge or dual-read compatibility path in the current
+  hard cut; old allocation-ledger bytes require a separate migration or
+  destructive reset tool before a future compatible boot.
+- The opt-in live `canic_memory_registry` endpoint and DTOs have been removed.
+  `canic_memory_ledger` is the single supported memory diagnostic surface.
+
 ## Validation Recently Run
 
+- `cargo fmt --all --check`
+- `cargo test -p canic-core memory --lib`
+- `cargo test -p canic-core`
+- `cargo clippy -p canic-core --all-targets -- -D warnings`
+- `cargo test -p canic-tests --test ic_memory_policy_adapter`
+- `cargo clippy -p canic-tests --test ic_memory_policy_adapter -- -D warnings`
+- `cargo check --workspace`
+- `cargo test -p canic --test protocol_surface`
+- `git diff --check`
 - `cargo fmt --all`
 - `bash -n scripts/ci/build-ci-wasm-artifacts.sh scripts/ci/wasm-audit-report.sh`
 - `cargo check -p canic-host --examples`

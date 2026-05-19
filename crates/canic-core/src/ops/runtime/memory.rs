@@ -2,24 +2,24 @@
 //! Owns TLS setup for memory registry initialization.
 
 use crate::{
-    CRATE_NAME, InternalError,
+    InternalError,
     dto::memory::{
-        MemoryCommitRecoveryErrorResponse, MemoryCommitRecoveryResponse, MemoryCommitSlotResponse,
-        MemoryLedgerResponse, MemoryRangeAuthorityEntry, MemoryRangeEntry, MemoryRegistryEntry,
+        MemoryAllocationRecordEntry, MemoryAllocationState, MemoryCommitRecoveryErrorResponse,
+        MemoryCommitRecoveryResponse, MemoryCommitSlotResponse, MemoryLedgerGenerationEntry,
+        MemoryLedgerResponse, MemoryRangeAuthorityEntry, MemoryRangeAuthorityMode,
+        MemorySchemaMetadataEntry,
     },
     memory::{
-        api::MemoryApi,
+        ledger,
         registry::MemoryRegistryError,
-        runtime::{
-            init_eager_tls,
-            registry::{MemoryRegistryInitSummary as RawInitSummary, MemoryRegistryRuntime},
-            run_registered_eager_init,
-        },
+        runtime::{init_eager_tls, registry::MemoryRegistryRuntime, run_registered_eager_init},
     },
     ops::runtime::RuntimeOpsError,
-    storage::stable::{CANIC_MEMORY_MAX, CANIC_MEMORY_MIN},
 };
-use ic_memory::{CommitRecoveryError, CommitSlotDiagnostic, CommitStoreDiagnostic};
+use ic_memory::{
+    AllocationState, CommitRecoveryError, CommitSlotDiagnostic, CommitStoreDiagnostic,
+    DiagnosticGeneration, DiagnosticRecord, MemoryManagerRangeMode, SchemaMetadataRecord,
+};
 use thiserror::Error as ThisError;
 
 ///
@@ -36,56 +36,6 @@ pub enum MemoryRegistryOpsError {
 impl From<MemoryRegistryOpsError> for InternalError {
     fn from(err: MemoryRegistryOpsError) -> Self {
         RuntimeOpsError::MemoryRegistryOps(err).into()
-    }
-}
-
-///
-/// MemoryRangeSnapshot
-///
-
-#[derive(Clone, Debug)]
-pub struct MemoryRangeSnapshot {
-    pub crate_name: String,
-    pub start: u8,
-    pub end: u8,
-}
-
-///
-/// MemoryRegistryInitSummary
-///
-
-#[derive(Clone, Debug)]
-pub struct MemoryRegistryInitSummary {
-    pub ranges: Vec<MemoryRangeSnapshot>,
-    pub entries: Vec<MemoryRegistryEntry>,
-}
-
-impl MemoryRegistryInitSummary {
-    fn from_raw(summary: RawInitSummary) -> Self {
-        let ranges = summary
-            .ranges
-            .into_iter()
-            .map(|(crate_name, range)| MemoryRangeSnapshot {
-                crate_name,
-                start: range.start,
-                end: range.end,
-            })
-            .collect();
-
-        let entries = summary
-            .entries
-            .into_iter()
-            .map(|(id, entry)| MemoryRegistryEntry {
-                id,
-                crate_name: entry.crate_name,
-                label: entry.label,
-                stable_key: entry.stable_key,
-                schema_version: entry.schema_version,
-                schema_fingerprint: entry.schema_fingerprint,
-            })
-            .collect();
-
-        Self { ranges, entries }
     }
 }
 
@@ -107,20 +57,17 @@ impl MemoryRegistryOps {
     }
 
     // Initialize the stable-memory registry for this crate and summarize the layout.
-    pub(crate) fn init_registry() -> Result<MemoryRegistryInitSummary, InternalError> {
-        let summary =
-            MemoryRegistryRuntime::init(Some((CRATE_NAME, CANIC_MEMORY_MIN, CANIC_MEMORY_MAX)))
-                .map_err(MemoryRegistryOpsError::from)?;
-
-        Ok(MemoryRegistryInitSummary::from_raw(summary))
+    pub(crate) fn init_registry() -> Result<(), InternalError> {
+        MemoryRegistryRuntime::init().map_err(MemoryRegistryOpsError::from)?;
+        Ok(())
     }
 
     // Run the full synchronous Canic memory bootstrap and return the committed layout.
-    pub fn bootstrap_registry() -> Result<MemoryRegistryInitSummary, InternalError> {
+    pub fn bootstrap_registry() -> Result<(), InternalError> {
         Self::run_registered_eager_init();
-        let summary = Self::init_registry()?;
+        Self::init_registry()?;
         Self::init_eager_tls();
-        Ok(summary)
+        Ok(())
     }
 
     #[cfg(target_arch = "wasm32")]
@@ -135,80 +82,79 @@ impl MemoryRegistryOps {
             return Ok(());
         }
 
-        let _ = Self::bootstrap_registry()?;
+        Self::bootstrap_registry()?;
         Ok(())
-    }
-
-    #[must_use]
-    pub fn snapshot_entries() -> Vec<MemoryRegistryEntry> {
-        MemoryRegistryRuntime::snapshot_entries()
-            .into_iter()
-            .map(|(id, entry)| MemoryRegistryEntry {
-                id,
-                crate_name: entry.crate_name,
-                label: entry.label,
-                stable_key: entry.stable_key,
-                schema_version: entry.schema_version,
-                schema_fingerprint: entry.schema_fingerprint,
-            })
-            .collect()
     }
 
     // Read the committed ABI ledger using the restricted diagnostic path.
     pub fn ledger_snapshot() -> Result<MemoryLedgerResponse, InternalError> {
-        let snapshot = MemoryApi::ledger_snapshot().map_err(MemoryRegistryOpsError::from)?;
+        #[cfg(target_arch = "wasm32")]
+        let snapshot = ledger::try_diagnostic_snapshot().map_err(MemoryRegistryOpsError::from)?;
+
+        #[cfg(not(target_arch = "wasm32"))]
+        let snapshot = ledger::try_snapshot().map_err(MemoryRegistryOpsError::from)?;
 
         let authorities = snapshot
             .authorities
             .into_iter()
             .map(|authority| MemoryRangeAuthorityEntry {
-                owner: authority.owner,
-                start: authority.range.start,
-                end: authority.range.end,
-                purpose: authority.purpose,
+                owner: authority.authority,
+                start: authority.range.start(),
+                end: authority.range.end(),
+                mode: memory_range_authority_mode(authority.mode),
+                purpose: authority.purpose.unwrap_or_default(),
             })
             .collect();
 
-        let ranges = snapshot
-            .ranges
+        let records = snapshot
+            .export
+            .records
             .into_iter()
-            .map(|(owner, range)| MemoryRangeEntry {
-                owner,
-                start: range.start,
-                end: range.end,
-            })
+            .map(memory_allocation_record_response)
             .collect();
-
-        let entries = snapshot
-            .entries
+        let generations = snapshot
+            .export
+            .generations
             .into_iter()
-            .map(|(id, entry)| MemoryRegistryEntry {
-                id,
-                crate_name: entry.crate_name,
-                label: entry.label,
-                stable_key: entry.stable_key,
-                schema_version: entry.schema_version,
-                schema_fingerprint: entry.schema_fingerprint,
-            })
+            .map(memory_ledger_generation_response)
             .collect();
 
         Ok(MemoryLedgerResponse {
-            magic: snapshot.magic,
-            format_id: snapshot.format_id,
-            schema_version: snapshot.schema_version,
-            layout_epoch: snapshot.layout_epoch,
-            header_len: snapshot.header_len,
-            header_checksum: snapshot.header_checksum,
-            current_generation: snapshot.current_generation,
-            commit_recovery: commit_recovery_response(snapshot.commit_recovery),
+            ledger_schema_version: snapshot.export.ledger_schema_version,
+            physical_format_id: snapshot.export.physical_format_id,
+            current_generation: snapshot.export.current_generation,
+            commit_recovery: commit_recovery_response(snapshot.export.commit_recovery),
             authorities,
-            ranges,
-            entries,
+            records,
+            generations,
         })
     }
 }
 
-fn commit_recovery_response(diagnostic: CommitStoreDiagnostic) -> MemoryCommitRecoveryResponse {
+const fn memory_range_authority_mode(mode: MemoryManagerRangeMode) -> MemoryRangeAuthorityMode {
+    match mode {
+        MemoryManagerRangeMode::Reserved => MemoryRangeAuthorityMode::Reserved,
+        MemoryManagerRangeMode::Allowed => MemoryRangeAuthorityMode::Allowed,
+    }
+}
+
+fn commit_recovery_response(
+    diagnostic: Option<CommitStoreDiagnostic>,
+) -> MemoryCommitRecoveryResponse {
+    let diagnostic = diagnostic.unwrap_or(CommitStoreDiagnostic {
+        slot0: CommitSlotDiagnostic {
+            present: false,
+            generation: None,
+            valid: false,
+        },
+        slot1: CommitSlotDiagnostic {
+            present: false,
+            generation: None,
+            valid: false,
+        },
+        authoritative_generation: None,
+        recovery_error: Some(CommitRecoveryError::NoValidGeneration),
+    });
     MemoryCommitRecoveryResponse {
         slot0: commit_slot_response(diagnostic.slot0),
         slot1: commit_slot_response(diagnostic.slot1),
@@ -216,6 +162,52 @@ fn commit_recovery_response(diagnostic: CommitStoreDiagnostic) -> MemoryCommitRe
         recovery_error: diagnostic
             .recovery_error
             .map(commit_recovery_error_response),
+    }
+}
+
+fn memory_allocation_record_response(record: DiagnosticRecord) -> MemoryAllocationRecordEntry {
+    let allocation = record.allocation;
+    MemoryAllocationRecordEntry {
+        memory_manager_id: allocation.slot().memory_manager_id().ok(),
+        stable_key: allocation.stable_key().as_str().to_string(),
+        state: memory_allocation_state_response(allocation.state()),
+        first_generation: allocation.first_generation(),
+        last_seen_generation: allocation.last_seen_generation(),
+        retired_generation: allocation.retired_generation(),
+        schema_history: allocation
+            .schema_history()
+            .iter()
+            .map(memory_schema_metadata_response)
+            .collect(),
+    }
+}
+
+const fn memory_allocation_state_response(state: AllocationState) -> MemoryAllocationState {
+    match state {
+        AllocationState::Reserved => MemoryAllocationState::Reserved,
+        AllocationState::Active => MemoryAllocationState::Active,
+        AllocationState::Retired => MemoryAllocationState::Retired,
+    }
+}
+
+fn memory_schema_metadata_response(record: &SchemaMetadataRecord) -> MemorySchemaMetadataEntry {
+    MemorySchemaMetadataEntry {
+        generation: record.generation(),
+        schema_version: record.schema().schema_version,
+        schema_fingerprint: record.schema().schema_fingerprint.clone(),
+    }
+}
+
+fn memory_ledger_generation_response(
+    generation: DiagnosticGeneration,
+) -> MemoryLedgerGenerationEntry {
+    let generation = generation.generation;
+    MemoryLedgerGenerationEntry {
+        generation: generation.generation(),
+        parent_generation: generation.parent_generation(),
+        runtime_fingerprint: generation.runtime_fingerprint().map(str::to_string),
+        declaration_count: generation.declaration_count(),
+        committed_at: generation.committed_at(),
     }
 }
 
@@ -233,6 +225,15 @@ const fn commit_recovery_error_response(
     match err {
         CommitRecoveryError::NoValidGeneration => {
             MemoryCommitRecoveryErrorResponse::NoValidGeneration
+        }
+        CommitRecoveryError::AmbiguousGeneration { .. } => {
+            MemoryCommitRecoveryErrorResponse::AmbiguousGeneration
+        }
+        CommitRecoveryError::GenerationOverflow { .. } => {
+            MemoryCommitRecoveryErrorResponse::GenerationOverflow
+        }
+        CommitRecoveryError::UnexpectedGeneration { .. } => {
+            MemoryCommitRecoveryErrorResponse::UnexpectedGeneration
         }
     }
 }

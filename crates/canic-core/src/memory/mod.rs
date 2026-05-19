@@ -4,23 +4,22 @@
 //! bootstrap mechanics while durable allocation-governance primitives move
 //! into `ic-memory`.
 
-use crate::cdk::structures::{
-    DefaultMemoryImpl,
-    memory::{MemoryId, VirtualMemory},
-};
 use ic_memory::{
     AllocationSession, AllocationSessionError, AllocationSlotDescriptor, MemoryManagerSlotError,
     StableKey, StorageSubstrate,
+    stable_structures::{
+        DefaultMemoryImpl,
+        memory_manager::{MemoryId, VirtualMemory},
+    },
 };
 
-pub mod api;
-mod ledger;
+pub(crate) mod ledger;
 mod manager;
 mod policy;
 pub mod registry;
 pub mod runtime;
 
-pub use crate::{eager_init, eager_static, ic_memory_key, ic_memory_range};
+pub use crate::{eager_init, eager_static, ic_memory_key};
 
 ///
 /// open_validated_memory
@@ -46,24 +45,18 @@ fn try_open_validated_memory(
     id: u8,
 ) -> Result<VirtualMemory<DefaultMemoryImpl>, registry::MemoryRegistryError> {
     let key = StableKey::parse(stable_key).map_err(|err| {
-        registry::MemoryRegistryError::InvalidStableKey {
+        registry::MemoryRegistryError::InvalidDeclaration {
             stable_key: err.stable_key,
             reason: err.reason,
         }
     })?;
     let validated = runtime::registry::MemoryRegistryRuntime::validated_allocations()?;
-    let slot = validated.slot_for(&key).ok_or(
-        registry::MemoryRegistryError::RegistrationAfterBootstrap {
-            ranges: 0,
-            registrations: 1,
-        },
-    )?;
+    let slot = validated
+        .slot_for(&key)
+        .ok_or(registry::MemoryRegistryError::RegistrationAfterBootstrap { registrations: 1 })?;
     let slot_id = memory_manager_id_from_slot(slot)?;
     if slot_id != id {
-        return Err(registry::MemoryRegistryError::RegistrationAfterBootstrap {
-            ranges: 0,
-            registrations: 1,
-        });
+        return Err(registry::MemoryRegistryError::RegistrationAfterBootstrap { registrations: 1 });
     }
 
     let session = AllocationSession::new(MemoryManagerSubstrate, validated);
@@ -95,6 +88,7 @@ impl StorageSubstrate for MemoryManagerSubstrate {
 
     fn describe_slot(&self, slot: &Self::Slot) -> AllocationSlotDescriptor {
         AllocationSlotDescriptor::memory_manager(*slot)
+            .expect("MemoryManagerSubstrate only describes usable MemoryManager IDs")
     }
 }
 
@@ -107,10 +101,7 @@ fn memory_registry_error_from_session_error(
 ) -> registry::MemoryRegistryError {
     match err {
         AllocationSessionError::UnknownStableKey(_) => {
-            registry::MemoryRegistryError::RegistrationAfterBootstrap {
-                ranges: 0,
-                registrations: 1,
-            }
+            registry::MemoryRegistryError::RegistrationAfterBootstrap { registrations: 1 }
         }
         AllocationSessionError::Substrate(err) => err,
     }
@@ -128,7 +119,14 @@ fn memory_registry_error_from_slot_error(
 ) -> registry::MemoryRegistryError {
     match err {
         MemoryManagerSlotError::InvalidMemoryManagerId { id } => {
-            registry::MemoryRegistryError::ReservedInternalId { id }
+            registry::MemoryRegistryError::InvalidDeclaration {
+                stable_key: "<slot>".to_string(),
+                reason: if id == ic_memory::MEMORY_MANAGER_INVALID_ID {
+                    "MemoryManager ID 255 is not usable"
+                } else {
+                    "MemoryManager ID is not usable"
+                },
+            }
         }
         MemoryManagerSlotError::UnsupportedSlot
         | MemoryManagerSlotError::UnsupportedSubstrate { .. }
@@ -147,15 +145,14 @@ fn memory_registry_error_from_slot_error(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::memory::registry::{defer_register_with_key, defer_reserve_range, reset_for_tests};
+    use crate::memory::registry::{defer_register_with_key, reset_for_tests};
 
     #[test]
     fn validated_open_requires_declared_stable_key() {
         reset_for_tests();
-        defer_reserve_range("crate_a", 100, 102).expect("defer range");
         defer_register_with_key(101, "crate_a", "slot", "app.crate_a.slot.v1")
             .expect("defer register");
-        runtime::registry::MemoryRegistryRuntime::init(None).expect("bootstrap registry");
+        runtime::registry::MemoryRegistryRuntime::init().expect("bootstrap registry");
 
         let _memory =
             try_open_validated_memory("app.crate_a.slot.v1", 101).expect("open by stable key");
@@ -164,10 +161,9 @@ mod tests {
     #[test]
     fn validated_open_rejects_key_id_mismatch() {
         reset_for_tests();
-        defer_reserve_range("crate_a", 100, 102).expect("defer range");
         defer_register_with_key(101, "crate_a", "slot", "app.crate_a.slot.v1")
             .expect("defer register");
-        runtime::registry::MemoryRegistryRuntime::init(None).expect("bootstrap registry");
+        runtime::registry::MemoryRegistryRuntime::init().expect("bootstrap registry");
 
         let Err(err) = try_open_validated_memory("app.crate_a.slot.v1", 102) else {
             panic!("wrong id must not open declared key");

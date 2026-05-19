@@ -77,8 +77,7 @@ futures = "0.3"
 ic-cdk = "0.20.1"
 ic-cdk-management-canister = "0.1.0"
 ic-cdk-timers = "1.0"
-ic-memory = "0.0.1"
-ic-stable-structures = "0.7.2"
+ic-memory = "0.3.0"
 icrc-ledger-types = { version = "0.2", default-features = false }
 k256 = { version = "0.13", default-features = false, features = ["ecdsa"] }
 pocket-ic = "13.0"
@@ -139,6 +138,7 @@ canic-macros = { path = "crates/canic-macros" }
 canic-host = { path = "crates/canic-host" }
 canic-testkit = { path = "crates/canic-testkit" }
 canic-wasm-store = { path = "crates/canic-wasm-store" }
+ic-memory = { path = "../ic-memory" }
 
 # profiles
 [profile.dev]

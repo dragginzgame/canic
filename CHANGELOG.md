@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.39.x] - 2026-05-18 - `ic-memory` extraction
 
-- `0.39.16` reserves the full `0-9` `ic-memory` authority range and thins `canic-core::memory` so managed memory opens by validated stable key instead of legacy implicit registration facades.
+- `0.39.16` delegates `MemoryManager` range authority to published `ic-memory 0.2.0`, removes the temporary local crate patch, removes Canic-local range/live registry duplication including the stale named application authority range, removes the opt-in live memory registry diagnostic, and hard-cuts Canic allocation persistence to the native `ic-memory` durable ledger instead of preserving the old Canic physical ledger format.
 
 - `0.39.15` points Canic at the standalone crates.io `ic-memory 0.0.1` package and removes the in-tree `ic-memory` workspace member.
 

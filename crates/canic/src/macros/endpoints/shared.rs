@@ -89,18 +89,6 @@ macro_rules! canic_emit_memory_ledger_diagnostic_endpoint {
     };
 }
 
-// Leaf emitter for explicit test/probe runtime memory-registry diagnostics.
-#[macro_export]
-macro_rules! canic_emit_memory_observability_endpoints {
-    () => {
-        #[$crate::canic_query(requires(caller::is_controller()))]
-        async fn canic_memory_registry()
-        -> Result<::canic::dto::memory::MemoryRegistryResponse, ::canic::Error> {
-            Ok($crate::__internal::core::api::memory::MemoryQuery::registry())
-        }
-    };
-}
-
 // Leaf emitter for environment snapshot diagnostics shared by all Canic canisters.
 #[macro_export]
 macro_rules! canic_emit_env_observability_endpoints {

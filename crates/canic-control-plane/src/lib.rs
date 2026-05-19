@@ -4,17 +4,6 @@
 //! top of `canic-core` and is re-exported through the `canic` facade when the
 //! control-plane feature is enabled.
 
-const _: () = {
-    #[canic_core::__reexports::ctor::ctor(
-        unsafe,
-        anonymous,
-        crate_path = canic_core::__reexports::ctor
-    )]
-    fn __canic_reserve_control_plane_memory_range() {
-        canic_core::ic_memory_range!(80, 85);
-    }
-};
-
 #[cfg(test)]
 const _: () = {
     use std::sync::Once;

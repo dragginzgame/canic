@@ -1,6 +1,5 @@
 use super::{
-    Role, caller_not_registered_denial, dependency_unavailable,
-    non_root_subnet_registry_predicate_denial,
+    caller_not_registered_denial, dependency_unavailable, non_root_subnet_registry_predicate_denial,
 };
 use crate::{
     access::AccessError,
@@ -114,25 +113,6 @@ pub(super) async fn has_app_role(caller: Principal, role: CanisterRole) -> Resul
     } else {
         Err(AccessError::Denied(format!(
             "authentication error: caller '{caller}' is not app canister '{role}'"
-        )))
-    }
-}
-
-/// Require that the caller is registered with the expected canister role.
-#[expect(clippy::unused_async)]
-pub(super) async fn has_role(caller: Principal, role: Role) -> Result<(), AccessError> {
-    if !EnvOps::is_root() {
-        return Err(non_root_subnet_registry_predicate_denial());
-    }
-
-    let record =
-        SubnetRegistryOps::get(caller).ok_or_else(|| caller_not_registered_denial(caller))?;
-
-    if record.role == role {
-        Ok(())
-    } else {
-        Err(AccessError::Denied(format!(
-            "authentication error: caller '{caller}' does not have role '{role}'"
         )))
     }
 }

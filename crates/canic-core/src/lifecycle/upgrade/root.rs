@@ -33,8 +33,8 @@ pub fn post_upgrade_root_canister_before_bootstrap(
         );
     }
 
-    let memory_summary = match workflow::runtime::init_memory_registry_post_upgrade() {
-        Ok(summary) => summary,
+    match workflow::runtime::init_memory_registry_post_upgrade() {
+        Ok(()) => {}
         Err(err) => {
             LifecycleMetricsApi::record_runtime(
                 LifecycleMetricPhase::PostUpgrade,
@@ -43,7 +43,7 @@ pub fn post_upgrade_root_canister_before_bootstrap(
             );
             lifecycle_trap(LifecyclePhase::PostUpgrade, err);
         }
-    };
+    }
 
     if let Err(err) = EnvOps::restore_root() {
         LifecycleMetricsApi::record_runtime(
@@ -56,9 +56,7 @@ pub fn post_upgrade_root_canister_before_bootstrap(
             format!("env restore failed (root upgrade): {err}"),
         );
     }
-    if let Err(err) =
-        workflow::runtime::post_upgrade_root_canister_after_memory_init(memory_summary)
-    {
+    if let Err(err) = workflow::runtime::post_upgrade_root_canister_after_memory_init() {
         LifecycleMetricsApi::record_runtime(
             LifecycleMetricPhase::PostUpgrade,
             LifecycleMetricRole::Root,

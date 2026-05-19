@@ -1,12 +1,6 @@
 pub mod install;
 
-use crate::{
-    CRATE_NAME,
-    dto::error::Error,
-    memory::runtime::MemoryRuntimeApi as MemoryBootstrapApi,
-    ops::runtime::memory::MemoryRegistryOpsError,
-    storage::stable::{CANIC_MEMORY_MAX, CANIC_MEMORY_MIN},
-};
+use crate::{dto::error::Error, ops::runtime::memory::MemoryRegistryOps};
 
 ///
 /// MemoryRuntimeApi
@@ -15,13 +9,9 @@ use crate::{
 pub struct MemoryRuntimeApi;
 
 impl MemoryRuntimeApi {
-    /// Bootstrap Canic's reserved stable-memory range and flush deferred registrations.
+    /// Bootstrap Canic's stable-memory declaration snapshot.
     pub fn bootstrap_registry() -> Result<(), Error> {
-        let _ =
-            MemoryBootstrapApi::bootstrap_registry(CRATE_NAME, CANIC_MEMORY_MIN, CANIC_MEMORY_MAX)
-                .map_err(MemoryRegistryOpsError::from)
-                .map_err(crate::InternalError::from)
-                .map_err(Error::from)?;
+        MemoryRegistryOps::bootstrap_registry().map_err(Error::from)?;
 
         Ok(())
     }

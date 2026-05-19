@@ -32,7 +32,7 @@ make install
 * **Lifecycle and build macros**: `canic::start!`, `canic::start_root!`, `canic::build!`, `canic::build_root!`, and `canic::build_standalone!` wire IC hooks, endpoint bundles, and compile-time config validation.
 * **Topology-aware config**: `canic.toml` describes subnets, roles, singleton/replica/shard/instance placement, warm pools, scaling pools, sharding pools, and directory pools.
 * **Self-validating delegated auth**: root signs shard certificates, shards mint user tokens, and verifiers validate token + embedded proof with local root/shard key material. Verifiers do not require proof fanout or proof caches.
-* **Stable memory helpers**: `ic_memory_key!`, `ic_memory_range!`, and `eager_static!` wrap stable structures with explicit stable-key allocation.
+* **Stable memory helpers**: `ic_memory_key!` and `eager_static!` wrap stable structures with explicit stable-key allocation.
 * **Thin-root install flow**: the `canic` CLI builds child WASMs, stages ordinary fleet artifacts through the implicit `wasm_store`, and keeps child artifacts out of the root Wasm.
 * **Operator CLI**: the `canic` binary builds artifacts, manages local fleet configs and replica status, installs fleets, captures topology-aware snapshots, validates backup manifests, and drives guarded restore planning/journals.
 

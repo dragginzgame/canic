@@ -8,7 +8,7 @@ use canic::{
         env::EnvSnapshotResponse,
         error::ErrorCode,
         log::LogEntry,
-        memory::{MemoryLedgerResponse, MemoryRegistryResponse},
+        memory::MemoryLedgerResponse,
         page::{Page, PageRequest},
         state::{AppStateResponse, SubnetStateResponse},
         topology::AppRegistryResponse,
@@ -233,23 +233,19 @@ pub fn assert_root_diagnostics_are_controller_gated(pic: &Pic, root_id: Principa
         .expect("root log transport");
     logs.expect("root log application");
 
-    let memory_registry: Result<MemoryRegistryResponse, canic::Error> = pic
-        .query_call(root_id, protocol::CANIC_MEMORY_REGISTRY, ())
-        .expect("root memory registry transport");
-    memory_registry.expect("root memory registry application");
-
     let memory_ledger: Result<MemoryLedgerResponse, canic::Error> = pic
         .query_call(root_id, protocol::CANIC_MEMORY_LEDGER, ())
         .expect("root memory ledger transport");
     let memory_ledger = memory_ledger.expect("root memory ledger application");
-    assert_eq!(memory_ledger.format_id, 1);
-    assert_eq!(memory_ledger.schema_version, 1);
+    assert_eq!(memory_ledger.physical_format_id, 1);
+    assert_eq!(memory_ledger.ledger_schema_version, 1);
     assert!(memory_ledger.current_generation > 0);
     assert!(
         memory_ledger
-            .entries
+            .records
             .iter()
-            .any(|entry| entry.id == 0 && entry.stable_key == "canic.memory.abi_ledger.v1"),
+            .any(|entry| entry.memory_manager_id == Some(0)
+                && entry.stable_key == "ic_memory.ledger.v1"),
         "memory ledger diagnostic must expose the canonical ID 0 self-record"
     );
 
@@ -281,15 +277,6 @@ pub fn assert_root_diagnostics_are_controller_gated(pic: &Pic, root_id: Principa
         panic!("non-controller log query must be denied")
     };
     assert_eq!(denied_log.code, ErrorCode::Unauthorized);
-
-    let denied_memory_registry: Result<Result<MemoryRegistryResponse, canic::Error>, canic::Error> =
-        pic.query_call_as(root_id, non_controller, protocol::CANIC_MEMORY_REGISTRY, ());
-    let denied_memory_registry =
-        denied_memory_registry.expect("non-controller memory registry transport");
-    let Err(denied_memory_registry) = denied_memory_registry else {
-        panic!("non-controller memory registry query must be denied")
-    };
-    assert_eq!(denied_memory_registry.code, ErrorCode::Unauthorized);
 
     let denied_memory_ledger: Result<Result<MemoryLedgerResponse, canic::Error>, canic::Error> =
         pic.query_call_as(root_id, non_controller, protocol::CANIC_MEMORY_LEDGER, ());

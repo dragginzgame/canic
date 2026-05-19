@@ -8,7 +8,7 @@ macro_rules! ic_memory_key {
         const _: () = {
             #[ $crate::__reexports::ctor::ctor(unsafe, anonymous, crate_path = $crate::__reexports::ctor) ]
             fn __canic_declare_memory_slot() {
-                $crate::memory::registry::defer_register_with_key(
+                $crate::memory::registry::declare_memory_slot_with_key(
                     $id,
                     env!("CARGO_PKG_NAME"),
                     stringify!($label),
@@ -21,17 +21,6 @@ macro_rules! ic_memory_key {
         let _type_check: Option<$label> = None;
 
         $crate::memory::open_validated_memory($stable_key, stringify!($label), $id)
-    }};
-}
-
-/// Reserve a contiguous block of stable-memory IDs for the current crate.
-#[macro_export]
-macro_rules! ic_memory_range {
-    ($start:expr, $end:expr) => {{
-        $crate::memory::registry::defer_reserve_range(env!("CARGO_PKG_NAME"), $start, $end)
-            .expect("memory range reservation validation failed");
-        $crate::memory::runtime::registry::MemoryRegistryRuntime::commit_pending_if_initialized()
-            .expect("late memory range registration commit failed");
     }};
 }
 

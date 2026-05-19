@@ -1,4 +1,4 @@
-use super::{VerifiedAccessToken, dependency_unavailable};
+use super::dependency_unavailable;
 use crate::{
     access::AccessError,
     cdk::{
@@ -23,7 +23,7 @@ pub(super) fn delegated_token_verified(
     authenticated_subject: Principal,
     required_scope: Option<&str>,
     call_kind: EndpointCallKind,
-) -> Result<VerifiedAccessToken, AccessError> {
+) -> Result<Principal, AccessError> {
     let token = delegated_token_from_args()?;
 
     let now_secs = IcOps::now_secs();
@@ -44,7 +44,7 @@ fn verify_token(
     now_secs: u64,
     required_scope: Option<&str>,
     call_kind: EndpointCallKind,
-) -> Result<VerifiedAccessToken, AccessError> {
+) -> Result<Principal, AccessError> {
     let max_ttl_secs = delegated_token_max_ttl_secs()?;
     let required_scopes = required_scope
         .map(|scope| vec![scope.to_string()])
@@ -62,9 +62,7 @@ fn verify_token(
     enforce_required_scope(required_scope, &verified.scopes)?;
     consume_update_token_once(&token, now_secs, call_kind)?;
 
-    Ok(VerifiedAccessToken {
-        issuer_shard_pid: verified.issuer_shard_pid,
-    })
+    Ok(verified.issuer_shard_pid)
 }
 
 fn consume_update_token_once(

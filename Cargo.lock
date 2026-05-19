@@ -346,7 +346,7 @@ dependencies = [
  "ic-cdk",
  "ic-cdk-management-canister",
  "ic-cdk-timers",
- "ic-stable-structures",
+ "ic-memory",
  "icrc-ledger-types",
  "serde",
  "serde_bytes",
@@ -1601,11 +1601,11 @@ dependencies = [
 
 [[package]]
 name = "ic-memory"
-version = "0.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "52c631e5eab6abb225fe49f4de2fbef749fdca0241f1f56be65f9f9dbc688791"
+version = "0.3.0"
 dependencies = [
+ "ic-stable-structures",
  "serde",
+ "serde_cbor",
  "thiserror 2.0.18",
 ]
 
@@ -1992,9 +1992,9 @@ dependencies = [
 
 [[package]]
 name = "link-section"
-version = "0.17.1"
+version = "0.17.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0de704e04b8fdab2a6a633e7e9298211da1d6c73334fed54665559909064e58f"
+checksum = "4d1e908a416d6e9f725743b84a36feea40c4c131e805fbc26d61f9f451f36080"
 
 [[package]]
 name = "linktime-proc-macro"

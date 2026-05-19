@@ -1,6 +1,6 @@
-pub use ic_stable_structures::btreemap::*;
+pub use ic_memory::stable_structures::btreemap::*;
 
-use ic_stable_structures::{Memory, Storable, btreemap::BTreeMap as WrappedBTreeMap};
+use ic_memory::stable_structures::{Memory, Storable, btreemap::BTreeMap as WrappedBTreeMap};
 use std::ops::{Deref, DerefMut};
 
 ///

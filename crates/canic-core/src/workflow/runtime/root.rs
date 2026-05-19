@@ -21,7 +21,7 @@ use super::{RuntimeWorkflow, auth::RuntimeAuthWorkflow, log_memory_summary};
 
 pub fn init_root_canister(identity: SubnetIdentity) -> Result<(), InternalError> {
     // --- Phase 1: Init base systems ---
-    let memory_summary = MemoryRegistryOps::bootstrap_registry().map_err(|err| {
+    MemoryRegistryOps::bootstrap_registry().map_err(|err| {
         InternalError::invariant(
             InternalErrorOrigin::Workflow,
             format!("memory init failed: {err}"),
@@ -39,7 +39,7 @@ pub fn init_root_canister(identity: SubnetIdentity) -> Result<(), InternalError>
         "🔧 --------------------- canic v{VERSION} -----------------------",
     );
     crate::log!(Topic::Init, Info, "🏁 init: root ({identity:?})");
-    log_memory_summary(&memory_summary);
+    log_memory_summary();
 
     let self_pid = IcOps::canister_self();
     let (subnet_pid, subnet_role, prime_root_pid, module_hash) = match identity {
@@ -113,12 +113,10 @@ pub fn init_root_canister(identity: SubnetIdentity) -> Result<(), InternalError>
 /// post_upgrade_root_canister
 ///
 
-pub fn post_upgrade_root_canister_after_memory_init(
-    memory_summary: crate::ops::runtime::memory::MemoryRegistryInitSummary,
-) -> Result<(), InternalError> {
+pub fn post_upgrade_root_canister_after_memory_init() -> Result<(), InternalError> {
     crate::log::set_ready();
     crate::log!(Topic::Init, Info, "🏁 post_upgrade_root_canister");
-    log_memory_summary(&memory_summary);
+    log_memory_summary();
 
     // --- Phase 2 intentionally omitted: post-upgrade does not re-import env or directories.
     RuntimeAuthWorkflow::ensure_root_crypto_contract()?;

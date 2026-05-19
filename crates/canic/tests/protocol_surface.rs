@@ -136,7 +136,7 @@ fn memory_ledger_diagnostic_bypasses_normal_dispatch() {
 }
 
 #[test]
-fn memory_ledger_is_default_and_registry_remains_opt_in() {
+fn memory_ledger_is_default_and_registry_is_removed() {
     let bundle_path = workspace_root().join("crates/canic/src/macros/endpoints/bundles.rs");
     let bundles = read_text(&bundle_path);
     let shared_bundle = bundles
@@ -162,22 +162,13 @@ fn memory_ledger_is_default_and_registry_remains_opt_in() {
     );
     assert!(
         !shared_bundle.contains("canic_emit_memory_observability_endpoints!"),
-        "live memory registry diagnostics must remain opt-in"
+        "live memory registry diagnostics must not be in the default bundle"
     );
 
     let macro_path = workspace_root().join("crates/canic/src/macros/endpoints/shared.rs");
     let shared = read_text(&macro_path);
-    let observability_macro = shared
-        .split("macro_rules! canic_emit_memory_observability_endpoints")
-        .nth(1)
-        .expect("memory observability macro should exist");
-
     assert!(
-        !observability_macro.contains("fn canic_memory_ledger()"),
-        "opt-in registry diagnostics must not duplicate the default ledger endpoint"
-    );
-    assert!(
-        observability_macro.contains("fn canic_memory_registry()"),
-        "opt-in memory observability macro must still expose the live registry diagnostic"
+        !shared.contains("fn canic_memory_registry()"),
+        "live memory registry diagnostic endpoint must be removed"
     );
 }
