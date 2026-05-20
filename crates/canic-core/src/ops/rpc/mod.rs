@@ -73,6 +73,8 @@ pub trait Rpc {
 const DEFAULT_ROOT_ATTESTATION_REQUEST_TTL_SECONDS: u64 = 300;
 const DEFAULT_CAPABILITY_METADATA_TTL_SECONDS: u32 = 300;
 const CAPABILITY_HASH_DOMAIN_V1: &[u8] = b"CANIC_CAPABILITY_V1";
+const ROOT_ATTESTATION_REQUEST_ID_DOMAIN_V1: &[u8] = b"canic-root-attestation-request-id-v1";
+const ROOT_CAPABILITY_NONCE_DOMAIN_V1: &[u8] = b"canic-root-capability-nonce-v1";
 static ROOT_ATTESTATION_REQUEST_NONCE: AtomicU64 = AtomicU64::new(1);
 static ROOT_CAPABILITY_METADATA_NONCE: AtomicU64 = AtomicU64::new(1);
 
@@ -87,7 +89,6 @@ struct CachedRootResponseAttestation {
     audience_pid: Principal,
     subject_pid: Principal,
     role: CanisterRole,
-    epoch: u64,
     attestation: SignedRoleAttestation,
 }
 
@@ -154,7 +155,7 @@ impl RpcOps {
         let self_pid = IcOps::canister_self();
         let role = EnvOps::canister_role()?;
         let cfg = ConfigOps::role_attestation_config()?;
-        let epoch = cfg
+        let min_accepted_epoch = cfg
             .min_accepted_epoch_by_role
             .get(role.as_str())
             .copied()
@@ -165,7 +166,7 @@ impl RpcOps {
             audience_pid,
             self_pid,
             &role,
-            epoch,
+            min_accepted_epoch,
             IcOps::now_secs(),
         ) {
             return Ok(attestation);
@@ -177,20 +178,14 @@ impl RpcOps {
             subnet_id: None,
             audience: audience_pid,
             ttl_secs: cfg.max_ttl_secs,
-            epoch,
+            epoch: min_accepted_epoch,
             metadata: Some(new_root_attestation_request_metadata()),
         };
 
         let attestation: SignedRoleAttestation =
             Self::call_rpc_result(root_pid, protocol::CANIC_REQUEST_ROLE_ATTESTATION, request)
                 .await?;
-        cache_root_response_attestation(
-            root_pid,
-            audience_pid,
-            self_pid,
-            epoch,
-            attestation.clone(),
-        );
+        cache_root_response_attestation(root_pid, audience_pid, self_pid, attestation.clone());
         Ok(attestation)
     }
 
@@ -311,6 +306,7 @@ fn generate_capability_nonce() -> [u8; 16] {
     let canister = IcOps::metadata_entropy_canister();
 
     let mut hasher = Sha256::new();
+    hasher.update(ROOT_CAPABILITY_NONCE_DOMAIN_V1);
     hasher.update(now.to_be_bytes());
     hasher.update(nonce.to_be_bytes());
     hasher.update(caller.as_slice());
@@ -329,7 +325,7 @@ fn cached_root_response_attestation(
     audience_pid: Principal,
     subject_pid: Principal,
     role: &CanisterRole,
-    epoch: u64,
+    min_accepted_epoch: u64,
     now_secs: u64,
 ) -> Option<SignedRoleAttestation> {
     ROOT_RESPONSE_ATTESTATION_CACHE.with_borrow_mut(|entry| {
@@ -339,11 +335,10 @@ fn cached_root_response_attestation(
             && cached.audience_pid == audience_pid
             && cached.subject_pid == subject_pid
             && &cached.role == role
-            && cached.epoch == epoch
             && payload.subject == subject_pid
             && &payload.role == role
             && payload.audience == audience_pid
-            && payload.epoch == epoch
+            && payload.epoch >= min_accepted_epoch
             && now_secs <= payload.expires_at;
 
         if !valid {
@@ -362,7 +357,6 @@ fn cache_root_response_attestation(
     root_pid: Principal,
     audience_pid: Principal,
     subject_pid: Principal,
-    epoch: u64,
     attestation: SignedRoleAttestation,
 ) {
     ROOT_RESPONSE_ATTESTATION_CACHE.with_borrow_mut(|entry| {
@@ -371,7 +365,6 @@ fn cache_root_response_attestation(
             audience_pid,
             subject_pid,
             role: attestation.payload.role.clone(),
-            epoch,
             attestation,
         });
     });
@@ -381,7 +374,7 @@ fn root_capability_hash(
     target_canister: Principal,
     capability: &crate::dto::rpc::Request,
 ) -> Result<[u8; 32], InternalError> {
-    let canonical = capability.clone().without_metadata();
+    let canonical = capability.clone().canonical_capability_payload();
     let payload = encode_one(&(
         target_canister,
         CapabilityService::Root,
@@ -415,6 +408,7 @@ fn generate_root_attestation_request_id() -> [u8; 32] {
     let canister = IcOps::metadata_entropy_canister();
 
     let mut hasher = Sha256::new();
+    hasher.update(ROOT_ATTESTATION_REQUEST_ID_DOMAIN_V1);
     hasher.update(now.to_be_bytes());
     hasher.update(nonce.to_be_bytes());
     hasher.update(caller.as_slice());
@@ -507,13 +501,7 @@ mod tests {
         let subject_pid = p(3);
         let attestation = sample_attestation(subject_pid, audience_pid, 500, 9);
 
-        cache_root_response_attestation(
-            root_pid,
-            audience_pid,
-            subject_pid,
-            9,
-            attestation.clone(),
-        );
+        cache_root_response_attestation(root_pid, audience_pid, subject_pid, attestation.clone());
 
         let cached = cached_root_response_attestation(
             root_pid,
@@ -529,6 +517,55 @@ mod tests {
     }
 
     #[test]
+    fn cached_root_response_attestation_reuses_root_newer_epoch_above_local_floor() {
+        let root_pid = p(11);
+        let audience_pid = p(12);
+        let subject_pid = p(13);
+        let attestation = sample_attestation(subject_pid, audience_pid, 500, 12);
+
+        cache_root_response_attestation(root_pid, audience_pid, subject_pid, attestation.clone());
+
+        let cached = cached_root_response_attestation(
+            root_pid,
+            audience_pid,
+            subject_pid,
+            &USER_HUB_ROLE,
+            7,
+            400,
+        )
+        .expect("root-issued newer epoch above the local floor should be reusable");
+
+        assert_eq!(cached, attestation);
+    }
+
+    #[test]
+    fn cached_root_response_attestation_rejects_epoch_below_local_floor() {
+        let root_pid = p(21);
+        let audience_pid = p(22);
+        let subject_pid = p(23);
+
+        cache_root_response_attestation(
+            root_pid,
+            audience_pid,
+            subject_pid,
+            sample_attestation(subject_pid, audience_pid, 500, 3),
+        );
+
+        assert!(
+            cached_root_response_attestation(
+                root_pid,
+                audience_pid,
+                subject_pid,
+                &USER_HUB_ROLE,
+                7,
+                400,
+            )
+            .is_none(),
+            "cached attestation below the local epoch floor must not be reused"
+        );
+    }
+
+    #[test]
     fn cached_root_response_attestation_invalidates_expired_entry() {
         let root_pid = p(4);
         let audience_pid = p(5);
@@ -538,7 +575,6 @@ mod tests {
             root_pid,
             audience_pid,
             subject_pid,
-            11,
             sample_attestation(subject_pid, audience_pid, 120, 11),
         );
 
@@ -564,7 +600,7 @@ mod tests {
         let mut attestation = sample_attestation(subject_pid, audience_pid, 500, 13);
         attestation.payload.subject = p(10);
 
-        cache_root_response_attestation(root_pid, audience_pid, subject_pid, 13, attestation);
+        cache_root_response_attestation(root_pid, audience_pid, subject_pid, attestation);
 
         assert!(
             cached_root_response_attestation(

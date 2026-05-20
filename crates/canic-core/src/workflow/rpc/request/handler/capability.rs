@@ -173,7 +173,6 @@ fn hash_issue_role_attestation_payload(req: &RoleAttestationRequest) -> [u8; 32]
     super::replay::hash_optional_principal(&mut hasher, req.subnet_id);
     super::replay::hash_principal(&mut hasher, &req.audience);
     super::replay::hash_u64(&mut hasher, req.ttl_secs);
-    super::replay::hash_u64(&mut hasher, req.epoch);
     super::replay::finish_payload_hash(hasher)
 }
 

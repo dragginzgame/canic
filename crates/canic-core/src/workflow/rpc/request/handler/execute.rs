@@ -177,6 +177,7 @@ pub(super) fn build_role_attestation(
                 ttl_secs: req.ttl_secs,
                 max_ttl_secs,
             })?;
+    let epoch = AuthOps::current_role_epoch(&req.role)?;
 
     Ok(RoleAttestation {
         subject: req.subject,
@@ -185,7 +186,7 @@ pub(super) fn build_role_attestation(
         audience: req.audience,
         issued_at: ctx.now,
         expires_at,
-        epoch: req.epoch,
+        epoch,
     })
 }
 

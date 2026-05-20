@@ -133,6 +133,19 @@ impl Request {
         self
     }
 
+    // canonical_capability_payload
+    //
+    // Remove fields that are not authoritative root-capability inputs before
+    // signature/replay payload hashing.
+    #[must_use]
+    pub const fn canonical_capability_payload(mut self) -> Self {
+        self = self.without_metadata();
+        if let Self::IssueRoleAttestation(req) = &mut self {
+            req.epoch = 0;
+        }
+        self
+    }
+
     // upgrade_request
     //
     // Return the upgrade payload when this request belongs to the upgrade family.
@@ -439,6 +452,28 @@ mod tests {
                 None,
                 "without_metadata must strip metadata for every request variant"
             );
+        }
+    }
+
+    #[test]
+    fn canonical_capability_payload_strips_metadata_and_ignored_epoch() {
+        let canonical = Request::issue_role_attestation(RoleAttestationRequest {
+            subject: p(5),
+            role: CanisterRole::new("test"),
+            subnet_id: None,
+            audience: p(6),
+            ttl_secs: 60,
+            epoch: 99,
+            metadata: Some(metadata(9)),
+        })
+        .canonical_capability_payload();
+
+        match canonical {
+            Request::IssueRoleAttestation(req) => {
+                assert_eq!(req.metadata, None);
+                assert_eq!(req.epoch, 0);
+            }
+            other => panic!("expected role-attestation request, got {other:?}"),
         }
     }
 

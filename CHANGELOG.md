@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.40.x] - 2026-05-19 - Attested Canic calls
 
+- `0.40.10` makes root authoritative for role-attestation epochs, removes the legacy caller-supplied epoch from canonical replay/signature payloads, fixes outbound attestation cache reuse for newer root-signed epochs, and domain-separates the remaining root request/capability metadata nonce streams.
+
 - `0.40.9` adds a real app-style project hub/instance fixture for generated protected clients, proves it through PocketIC, fixes the built-in wasm-store protected client decode path, and domain-separates auth-material root request metadata from other root request IDs.
 
 - `0.40.8` adds `canic_protected_endpoint!` for shared protocol modules to publish protected internal endpoint descriptors consumed by `canic_internal_client!`, covering the cross-canister case where the caller crate cannot depend on the target canister implementation crate, and hardens descriptor construction so protected endpoint metadata cannot omit its method or caller roles.

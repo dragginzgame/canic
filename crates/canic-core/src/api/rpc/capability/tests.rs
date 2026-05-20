@@ -1,7 +1,7 @@
 use super::*;
 use crate::{
     dto::{
-        auth::{RoleAttestation, SignedRoleAttestation},
+        auth::{RoleAttestation, RoleAttestationRequest, SignedRoleAttestation},
         capability::{
             CAPABILITY_VERSION_V1, CapabilityProof, DelegatedGrant, DelegatedGrantProof,
             DelegatedGrantScope, PROOF_VERSION_V1, RoleAttestationProof,
@@ -82,6 +82,32 @@ fn root_capability_hash_ignores_request_metadata() {
     let hash_a = root_capability_hash(p(1), CAPABILITY_VERSION_V1, &req_a).expect("hash a");
     let hash_b = root_capability_hash(p(1), CAPABILITY_VERSION_V1, &req_b).expect("hash b");
     assert_eq!(hash_a, hash_b);
+}
+
+#[test]
+fn root_capability_hash_ignores_role_attestation_request_epoch() {
+    let request = |epoch| {
+        Request::IssueRoleAttestation(RoleAttestationRequest {
+            subject: p(1),
+            role: crate::ids::CanisterRole::new("project_hub"),
+            subnet_id: Some(p(2)),
+            audience: p(3),
+            ttl_secs: 60,
+            epoch,
+            metadata: Some(RootRequestMetadata {
+                request_id: [4u8; 32],
+                ttl_seconds: 60,
+            }),
+        })
+    };
+
+    let hash_a = root_capability_hash(p(1), CAPABILITY_VERSION_V1, &request(0)).expect("hash a");
+    let hash_b = root_capability_hash(p(1), CAPABILITY_VERSION_V1, &request(9)).expect("hash b");
+
+    assert_eq!(
+        hash_a, hash_b,
+        "root capability proof binding must ignore caller-supplied role-attestation epoch"
+    );
 }
 
 #[test]

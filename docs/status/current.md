@@ -23,6 +23,12 @@ inspect only the files needed for the current task.
 
 ## Recent Work
 
+- Started tentative `0.41` deployment-flexibility design at
+  `docs/design/0.41-deployment-flexibility/0.41-design.md`. The draft frames
+  current friction around the standard single-root/root-store deployment path,
+  lack of IC testnet, fleet-specific controllers, per-role wasm/config
+  overrides, deployment inventory/plan rendering, promotion receipts, and
+  keeping runtime config separate from host-side deployment authority.
 - Started `0.40.0` by adding the passive Candid DTOs for the protected
   internal-call wire ABI:
   `CanicInternalCallEnvelopeV1`, `CanicInternalCallHeaderV1`,
@@ -167,6 +173,15 @@ inspect only the files needed for the current task.
   double-nested `Result`, and auth-material root request metadata is
   domain-separated from provisioning/cycles request metadata so independent
   per-canister counters cannot collide in the same second.
+- Started `0.40.10` by making role-attestation issuance use the root's current
+  role epoch instead of copying the caller-supplied request epoch, matching the
+  internal invocation proof model. The same slice removes the ignored epoch
+  field from replay and capability proof payload identity, adds a canonical
+  root-capability request payload helper, and domain-separates the remaining
+  root request/capability metadata nonce streams. Outbound root-response
+  attestation caching now treats the local role epoch as a minimum floor so
+  newer root-signed epochs remain reusable while stale cached proofs are still
+  rejected.
 - Started `0.39.1` by adding an AppIndex-backed
   `caller::has_app_role(role)` internal access predicate, giving app hubs and
   shards a first-class way to trust canonical sibling app canisters without

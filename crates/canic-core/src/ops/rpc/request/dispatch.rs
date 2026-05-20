@@ -17,6 +17,7 @@ use sha2::{Digest, Sha256};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 const DEFAULT_ROOT_REQUEST_TTL_SECONDS: u64 = 300;
+const ROOT_REQUEST_METADATA_DOMAIN_V1: &[u8] = b"canic-root-request-metadata-v1";
 static ROOT_REQUEST_NONCE: AtomicU64 = AtomicU64::new(1);
 
 ///
@@ -222,6 +223,7 @@ fn generate_request_id() -> [u8; 32] {
     let canister = IcOps::metadata_entropy_canister();
 
     let mut hasher = Sha256::new();
+    hasher.update(ROOT_REQUEST_METADATA_DOMAIN_V1);
     hasher.update(now.to_be_bytes());
     hasher.update(nonce.to_be_bytes());
     hasher.update(caller.as_slice());

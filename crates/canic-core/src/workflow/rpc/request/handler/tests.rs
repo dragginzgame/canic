@@ -1,6 +1,7 @@
 use super::*;
 use crate::{
     cdk::types::Principal,
+    config::{Config, ConfigModel},
     dto::{
         auth::{InternalInvocationProofRequest, RoleAttestationRequest},
         rpc::{
@@ -80,6 +81,29 @@ fn configure_app_index(entries: Vec<(CanisterRole, Principal)>) -> AppIndexResto
     let original = AppIndexOps::data();
     AppIndexOps::import_allow_incomplete(AppIndexRecord { entries }).expect("import app index");
     AppIndexRestore(original)
+}
+
+///
+/// ConfigReset
+///
+
+struct ConfigReset;
+
+impl Drop for ConfigReset {
+    fn drop(&mut self) {
+        Config::reset_for_tests();
+    }
+}
+
+fn configure_role_epoch(role: &CanisterRole, epoch: u64) -> ConfigReset {
+    Config::reset_for_tests();
+    let mut cfg = ConfigModel::test_default();
+    cfg.auth
+        .role_attestation
+        .min_accepted_epoch_by_role
+        .insert(role.as_str().to_string(), epoch);
+    Config::init_from_model_for_tests(cfg).expect("install role epoch test config");
+    ConfigReset
 }
 
 fn cycles_funding_snapshot_map() -> HashMap<
@@ -690,7 +714,7 @@ fn authorize_rejects_internal_invocation_proof_with_unknown_audience() {
 }
 
 #[test]
-fn build_role_attestation_uses_root_generated_time_window() {
+fn build_role_attestation_uses_root_generated_time_window_and_epoch() {
     let ctx = RootContext {
         caller: p(1),
         self_pid: p(9),
@@ -698,9 +722,11 @@ fn build_role_attestation_uses_root_generated_time_window() {
         subnet_id: p(2),
         now: 1_000,
     };
+    let role = CanisterRole::new("test");
+    let _config = configure_role_epoch(&role, 7);
     let req = RoleAttestationRequest {
         subject: p(1),
-        role: CanisterRole::new("test"),
+        role,
         subnet_id: Some(p(7)),
         audience: p(8),
         ttl_secs: 120,
@@ -715,7 +741,7 @@ fn build_role_attestation_uses_root_generated_time_window() {
     assert_eq!(payload.audience, req.audience);
     assert_eq!(payload.issued_at, 1_000);
     assert_eq!(payload.expires_at, 1_120);
-    assert_eq!(payload.epoch, 5);
+    assert_eq!(payload.epoch, 7);
 }
 
 #[test]
@@ -798,6 +824,27 @@ fn payload_hash_ignores_metadata() {
     .payload_hash();
 
     assert_eq!(hash_a, hash_b, "metadata must not affect payload hash");
+}
+
+#[test]
+fn role_attestation_payload_hash_ignores_request_epoch() {
+    let request = |epoch| {
+        RootCapability::IssueRoleAttestation(RoleAttestationRequest {
+            subject: p(1),
+            role: CanisterRole::new("project_hub"),
+            subnet_id: Some(p(2)),
+            audience: p(3),
+            ttl_secs: 60,
+            epoch,
+            metadata: Some(meta(1, 60)),
+        })
+    };
+
+    assert_eq!(
+        request(0).payload_hash(),
+        request(7).payload_hash(),
+        "RoleAttestationRequest.epoch is caller-supplied legacy input and must not affect replay identity"
+    );
 }
 
 #[test]

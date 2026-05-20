@@ -10,7 +10,7 @@ pub(super) fn root_capability_hash(
     capability_version: u16,
     capability: &Request,
 ) -> Result<[u8; 32], Error> {
-    let canonical = capability.clone().without_metadata();
+    let canonical = capability.clone().canonical_capability_payload();
     let payload = encode_one(&(
         target_canister,
         CapabilityService::Root,
