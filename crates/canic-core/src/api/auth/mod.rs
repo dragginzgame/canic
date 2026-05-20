@@ -21,19 +21,19 @@ use crate::{
         },
         config::ConfigOps,
         ic::IcOps,
-        rpc::RpcOps,
         runtime::env::EnvOps,
         runtime::metrics::auth::record_attestation_refresh_failed,
     },
-    protocol,
     workflow::rpc::request::handler::RootResponseWorkflow,
 };
+use root_client::RootAuthMaterialClient;
 
 // Internal auth pipeline:
 // - `session` owns delegated-session ingress and replay/session state handling.
 // - `metadata` owns root request metadata construction.
 // - `verify_flow` owns verifier-side attestation refresh behavior.
 mod metadata;
+mod root_client;
 mod session;
 mod verify_flow;
 
@@ -242,8 +242,9 @@ impl AuthApi {
             .map(|_| ())
         };
         let refresh = || async {
-            let key_set: AttestationKeySet =
-                RpcOps::call_rpc_result(root_pid, protocol::CANIC_ATTESTATION_KEY_SET, ()).await?;
+            let key_set = RootAuthMaterialClient::new(root_pid)
+                .attestation_key_set()
+                .await?;
             AuthOps::replace_attestation_key_set(key_set);
             Ok(())
         };
@@ -332,8 +333,9 @@ impl AuthApi {
             .map(|_| ())
         };
         let refresh = || async {
-            let key_set: AttestationKeySet =
-                RpcOps::call_rpc_result(root_pid, protocol::CANIC_ATTESTATION_KEY_SET, ()).await?;
+            let key_set = RootAuthMaterialClient::new(root_pid)
+                .attestation_key_set()
+                .await?;
             AuthOps::replace_attestation_key_set(key_set);
             Ok(())
         };
@@ -412,7 +414,8 @@ impl AuthApi {
         request: DelegationProofIssueRequest,
     ) -> Result<DelegationProof, Error> {
         let root_pid = EnvOps::root_pid().map_err(Error::from)?;
-        RpcOps::call_rpc_result(root_pid, protocol::CANIC_REQUEST_DELEGATION, request)
+        RootAuthMaterialClient::new(root_pid)
+            .request_delegation(request)
             .await
             .map_err(Self::map_auth_error)
     }
@@ -457,7 +460,8 @@ impl AuthApi {
         request: RoleAttestationRequest,
     ) -> Result<SignedRoleAttestation, Error> {
         let root_pid = EnvOps::root_pid().map_err(Error::from)?;
-        RpcOps::call_rpc_result(root_pid, protocol::CANIC_REQUEST_ROLE_ATTESTATION, request)
+        RootAuthMaterialClient::new(root_pid)
+            .request_role_attestation(request)
             .await
             .map_err(Self::map_auth_error)
     }
@@ -467,12 +471,9 @@ impl AuthApi {
         request: InternalInvocationProofRequest,
     ) -> Result<SignedInternalInvocationProofV1, Error> {
         let root_pid = EnvOps::root_pid().map_err(Error::from)?;
-        RpcOps::call_rpc_result(
-            root_pid,
-            protocol::CANIC_REQUEST_INTERNAL_INVOCATION_PROOF,
-            request,
-        )
-        .await
-        .map_err(Self::map_auth_error)
+        RootAuthMaterialClient::new(root_pid)
+            .request_internal_invocation_proof(request)
+            .await
+            .map_err(Self::map_auth_error)
     }
 }

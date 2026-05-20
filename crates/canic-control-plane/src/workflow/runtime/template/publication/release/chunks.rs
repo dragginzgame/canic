@@ -1,7 +1,8 @@
 use crate::{
     dto::template::TemplateManifestResponse,
-    workflow::runtime::template::publication::{
-        WasmStorePublicationWorkflow, fleet::PublicationStoreSnapshot, store::TemplateChunkInputRef,
+    workflow::runtime::template::{
+        WasmStoreInternalClient,
+        publication::{WasmStorePublicationWorkflow, fleet::PublicationStoreSnapshot},
     },
 };
 use canic_core::api::lifecycle::metrics::{
@@ -11,7 +12,6 @@ use canic_core::control_plane_support::{
     cdk::types::Principal,
     error::{InternalError, InternalErrorOrigin},
     ops::ic::mgmt::MgmtOps,
-    protocol,
 };
 
 use super::metrics::{
@@ -87,17 +87,9 @@ impl WasmStorePublicationWorkflow {
             WasmStoreMetricReason::Ok,
         );
 
-        if let Err(err) = super::super::super::call_store_result::<(), _>(
-            target_store_pid,
-            protocol::CANIC_WASM_STORE_PUBLISH_CHUNK,
-            (TemplateChunkInputRef {
-                template_id: &manifest.template_id,
-                version: &manifest.version,
-                chunk_index,
-                bytes,
-            },),
-        )
-        .await
+        if let Err(err) = WasmStoreInternalClient::new(target_store_pid)
+            .publish_chunk(&manifest.template_id, &manifest.version, chunk_index, bytes)
+            .await
         {
             let reason = WasmStoreMetricReason::from_publication_error(&err);
             record_wasm_store_metric(

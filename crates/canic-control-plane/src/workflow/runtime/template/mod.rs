@@ -1,5 +1,7 @@
+mod client;
 pub mod publication;
 
+pub(in crate::workflow::runtime::template) use client::WasmStoreInternalClient;
 pub use publication::WasmStorePublicationWorkflow;
 
 use crate::{
@@ -10,8 +12,6 @@ use crate::{
         template::{TemplateChunkedOps, TemplateManifestOps},
     },
 };
-use candid::utils::ArgumentEncoder;
-use canic_core::api::ic::call::CanicCall;
 use canic_core::api::lifecycle::metrics::{
     WasmStoreMetricOperation, WasmStoreMetricOutcome, WasmStoreMetricReason, WasmStoreMetricSource,
     WasmStoreMetricsApi,
@@ -20,10 +20,8 @@ use canic_core::api::runtime::install::ApprovedModuleSource;
 use canic_core::control_plane_support::{
     cdk::types::Principal,
     error::{InternalError, InternalErrorOrigin},
-    ops::ic::{IcOps, call::CallOps, mgmt::MgmtOps},
-    protocol,
+    ops::ic::{IcOps, mgmt::MgmtOps},
 };
-use canic_core::dto::error::Error;
 use std::collections::BTreeSet;
 
 const WASM_STORE_BOOTSTRAP_BINDING: WasmStoreBinding = WasmStoreBinding::new("bootstrap");
@@ -175,15 +173,9 @@ async fn resolved_store_chunk_set_for_manifest(
     }
 
     let store_pid = store_pid_for_binding(&manifest.store_binding)?;
-    let info: TemplateChunkSetInfoResponse = call_store_result(
-        store_pid,
-        protocol::CANIC_WASM_STORE_INFO,
-        (
-            manifest.template_id.as_str().to_string(),
-            manifest.version.as_str().to_string(),
-        ),
-    )
-    .await?;
+    let info = WasmStoreInternalClient::new(store_pid)
+        .info(&manifest.template_id, &manifest.version)
+        .await?;
 
     if info.chunk_hashes.is_empty() {
         return Err(InternalError::workflow(
@@ -340,44 +332,9 @@ fn store_pid_for_binding(binding: &WasmStoreBinding) -> Result<Principal, Intern
     })
 }
 
-// Call one wasm-store endpoint that returns `Result<T, Error>`.
-async fn call_store_result<T, A>(
-    store_pid: Principal,
-    method: &str,
-    arg: A,
-) -> Result<T, InternalError>
-where
-    T: candid::CandidType + serde::de::DeserializeOwned,
-    A: ArgumentEncoder,
-{
-    let call_res: Result<T, Error> = if wasm_store_method_requires_internal_proof(method) {
-        let call = CanicCall::unbounded_wait(store_pid, method)
-            .with_caller_role(crate::ids::CanisterRole::ROOT)
-            .with_args(arg)
-            .map_err(InternalError::public)?
-            .execute()
-            .await
-            .map_err(InternalError::public)?;
-        call.candid::<Result<T, Error>>()
-            .map_err(InternalError::public)?
-    } else {
-        let call = CallOps::unbounded_wait(store_pid, method)
-            .with_args(arg)?
-            .execute()
-            .await?;
-        call.candid::<Result<T, Error>>()?
-    };
-
-    call_res.map_err(InternalError::public)
-}
-
-fn wasm_store_method_requires_internal_proof(method: &str) -> bool {
-    protocol::canic_wasm_store_method_requires_internal_proof(method)
-}
-
 #[cfg(test)]
 mod tests {
-    use super::{release_source_label, wasm_store_method_requires_internal_proof};
+    use super::{WasmStoreInternalClient, release_source_label};
     use crate::ids::{TemplateId, TemplateVersion};
     use canic_core::control_plane_support::protocol;
 
@@ -395,15 +352,15 @@ mod tests {
     fn wasm_store_protected_method_classifier_matches_protocol_list() {
         for method in protocol::CANIC_WASM_STORE_PROTECTED_UPDATE_METHODS {
             assert!(
-                wasm_store_method_requires_internal_proof(method),
+                WasmStoreInternalClient::method_requires_internal_proof(method),
                 "{method} must use CanicCall"
             );
         }
 
-        assert!(!wasm_store_method_requires_internal_proof(
+        assert!(!WasmStoreInternalClient::method_requires_internal_proof(
             protocol::CANIC_WASM_STORE_CATALOG
         ));
-        assert!(!wasm_store_method_requires_internal_proof(
+        assert!(!WasmStoreInternalClient::method_requires_internal_proof(
             protocol::CANIC_WASM_STORE_STATUS
         ));
     }

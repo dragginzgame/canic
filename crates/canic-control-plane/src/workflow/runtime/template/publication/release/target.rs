@@ -2,14 +2,15 @@ use crate::{
     dto::template::{
         TemplateChunkSetInfoResponse, TemplateChunkSetPrepareInput, TemplateManifestResponse,
     },
-    workflow::runtime::template::publication::{
-        WasmStorePublicationWorkflow, fleet::PublicationStoreSnapshot,
+    workflow::runtime::template::{
+        WasmStoreInternalClient,
+        publication::{WasmStorePublicationWorkflow, fleet::PublicationStoreSnapshot},
     },
 };
 use canic_core::api::lifecycle::metrics::{
     WasmStoreMetricOperation, WasmStoreMetricOutcome, WasmStoreMetricReason, WasmStoreMetricSource,
 };
-use canic_core::control_plane_support::{cdk::types::Principal, error::InternalError, protocol};
+use canic_core::control_plane_support::{cdk::types::Principal, error::InternalError};
 use canic_core::{log, log::Topic};
 
 use super::metrics::{
@@ -70,18 +71,15 @@ impl WasmStorePublicationWorkflow {
         );
 
         let result: Result<TemplateChunkSetInfoResponse, InternalError> =
-            super::super::super::call_store_result(
-                target_store_pid,
-                protocol::CANIC_WASM_STORE_PREPARE,
-                (TemplateChunkSetPrepareInput {
+            WasmStoreInternalClient::new(target_store_pid)
+                .prepare_chunk_set(TemplateChunkSetPrepareInput {
                     template_id: manifest.template_id.clone(),
                     version: manifest.version.clone(),
                     payload_hash: manifest.payload_hash.clone(),
                     payload_size_bytes: manifest.payload_size_bytes,
                     chunk_hashes: chunk_hashes.to_vec(),
-                },),
-            )
-            .await;
+                })
+                .await;
 
         match result {
             Ok(_) => {

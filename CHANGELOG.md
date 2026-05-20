@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.40.x] - 2026-05-19 - Attested Canic calls
 
+- `0.40.4` starts the built-in internal-client pass by moving root wasm-store calls behind a typed `WasmStoreInternalClient`, adding a private root auth material client for structural proof/key requests, and exposing the wasm-store protected/query manifests through the public `canic::protocol` facade.
+
 - `0.40.3` starts the protected-internal-call guardrail pass by centralizing the protected wasm-store method list, checking the macro and `.did` surfaces against it, classifying built-in internal endpoints under the 0.40 exception model, asserting protected macro wrappers verify the exported method name, and adding a first-party source scan that fails if protected methods are called through raw `Call`/`CallOps` instead of `CanicCall`.
 
 - `0.40.2` moves wasm-store update calls onto protected `CanicCall` envelopes, fixes direct root proof decoding, delegates generic multi-crate memory registration to `ic-memory 0.5.1`, and makes `canic-testkit` standalone from Canic runtime crates by moving Canic-specific PocketIC harness helpers into `canic-testing-internal`.

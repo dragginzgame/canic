@@ -104,6 +104,17 @@ inspect only the files needed for the current task.
 - Added a focused macro expansion regression for protected internal endpoints
   with `name = "..."` exports. The generated wrapper must compare the envelope
   target method and verify the invocation proof against the exported wire name.
+- Started `0.40.4` by adding a typed `WasmStoreInternalClient` for the root
+  control-plane publication path. Template source resolution, prepare/chunk/
+  stage calls, and store-local GC calls now go through one client that selects
+  `CanicCall` for protected updates and keeps catalog/status as structural raw
+  query exceptions.
+- Extended `0.40.4` by giving the wasm-store client an explicit endpoint table
+  tested against the protected/query manifests, re-exporting those manifests
+  through `canic::protocol`, and adding a private `RootAuthMaterialClient` so
+  delegation, role-attestation, internal-invocation-proof, and key-set refresh
+  requests use one structural bootstrap client boundary. Both clients now keep
+  explicit endpoint tables with focused manifest/classification tests.
 - Started `0.39.1` by adding an AppIndex-backed
   `caller::has_app_role(role)` internal access predicate, giving app hubs and
   shards a first-class way to trust canonical sibling app canisters without
