@@ -141,6 +141,11 @@ pub fn expand(kind: EndpointKind, args: ValidatedArgs, mut func: ItemFn) -> Toke
     } else {
         quote!()
     };
+    let protected_endpoint_descriptor = if is_protected_internal {
+        protected_internal_endpoint_descriptor(&vis, &orig_name, &exported_method, &protected_roles)
+    } else {
+        quote!()
+    };
 
     let dispatch_call = dispatch_call(
         wrapper_async,
@@ -153,6 +158,7 @@ pub fn expand(kind: EndpointKind, args: ValidatedArgs, mut func: ItemFn) -> Toke
 
     quote! {
         #payload_registration
+        #protected_endpoint_descriptor
 
         #(#attrs)*
         #[expect(clippy::missing_const_for_fn, clippy::unnecessary_wraps)]
@@ -790,6 +796,24 @@ fn protected_internal_stage(
     })
 }
 
+fn protected_internal_endpoint_descriptor(
+    vis: &syn::Visibility,
+    name: &syn::Ident,
+    exported_method: &TokenStream2,
+    roles: &[TokenStream2],
+) -> TokenStream2 {
+    let descriptor_name = format_ident!("__canic_internal_endpoint_{}", name);
+    quote! {
+        #[doc(hidden)]
+        #vis fn #descriptor_name() -> ::canic::api::ic::ProtectedInternalEndpoint {
+            ::canic::api::ic::ProtectedInternalEndpoint::new(
+                #exported_method,
+                [#(#roles),*],
+            )
+        }
+    }
+}
+
 fn extract_args(sig: &syn::Signature) -> syn::Result<Vec<TokenStream2>> {
     let mut out = Vec::new();
     for input in &sig.inputs {
@@ -1087,6 +1111,61 @@ mod tests {
             compact.contains("&__canic_envelope.proof,__canic_method,&__canic_accepted_roles"),
             "proof verification must bind the exported method name"
         );
+    }
+
+    #[test]
+    fn protected_internal_role_endpoint_emits_generated_client_descriptor() {
+        let mut args = make_args(vec![AccessExprAst::All(vec![AccessExprAst::Pred(
+            AccessPredicateAst::Builtin(BuiltinPredicate::CallerHasRole {
+                role: CanisterRoleArg::Literal("project_hub".to_string()),
+            }),
+        )])]);
+        args.internal = true;
+        args.export_name = Some(syn::LitStr::new(
+            "wire_system_add_project_to_user",
+            proc_macro2::Span::call_site(),
+        ));
+        let func: ItemFn = syn::parse_quote!(
+            pub async fn system_add_project_to_user(
+                user_id: ::canic::cdk::types::Principal,
+                project_pid: ::canic::cdk::types::Principal,
+            ) -> Result<(), ::canic::Error> {
+                Ok(())
+            }
+        );
+
+        let expanded = expand(EndpointKind::Update, args, func).to_string();
+        let compact = expanded.split_whitespace().collect::<String>();
+
+        assert!(compact.contains("pubfn__canic_internal_endpoint_system_add_project_to_user()"));
+        assert!(compact.contains("::canic::api::ic::ProtectedInternalEndpoint::new"));
+        assert!(compact.contains("\"wire_system_add_project_to_user\""));
+        assert!(compact.contains("CanisterRole::new(\"project_hub\")"));
+    }
+
+    #[test]
+    fn protected_internal_any_role_descriptor_keeps_all_roles() {
+        let mut args = make_args(vec![AccessExprAst::All(vec![AccessExprAst::Pred(
+            AccessPredicateAst::Builtin(BuiltinPredicate::CallerHasAnyRole {
+                roles: vec![
+                    CanisterRoleArg::Literal("project_hub".to_string()),
+                    CanisterRoleArg::Literal("admin_hub".to_string()),
+                ],
+            }),
+        )])]);
+        args.internal = true;
+        let func: ItemFn = syn::parse_quote!(
+            async fn protected() -> Result<(), ::canic::Error> {
+                Ok(())
+            }
+        );
+
+        let expanded = expand(EndpointKind::Update, args, func).to_string();
+        let compact = expanded.split_whitespace().collect::<String>();
+
+        assert!(compact.contains("__canic_internal_endpoint_protected()"));
+        assert!(compact.contains("CanisterRole::new(\"project_hub\")"));
+        assert!(compact.contains("CanisterRole::new(\"admin_hub\")"));
     }
 
     #[test]

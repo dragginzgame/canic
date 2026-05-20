@@ -3,11 +3,11 @@ use crate::{
         TemplateChunkResponse, TemplateChunkSetInfoResponse, TemplateChunkSetPrepareInput,
         TemplateManifestInput, WasmStoreCatalogEntryResponse, WasmStoreStatusResponse,
     },
-    ids::{CanisterRole, TemplateId, TemplateVersion},
+    ids::{TemplateId, TemplateVersion},
 };
 use candid::{CandidType, utils::ArgumentEncoder};
 use canic_core::{
-    api::ic::call::CanicCall,
+    api::ic::call::{CanicInternalClient, ProtectedInternalEndpoint},
     control_plane_support::{
         cdk::types::Principal, error::InternalError, ops::ic::call::CallOps, protocol,
     },
@@ -22,22 +22,40 @@ pub(in crate::workflow::runtime::template) struct WasmStoreInternalClient {
 }
 
 impl WasmStoreInternalClient {
-    const BEGIN_GC: WasmStoreEndpoint =
-        WasmStoreEndpoint::protected(protocol::CANIC_WASM_STORE_BEGIN_GC);
+    const BEGIN_GC: WasmStoreEndpoint = WasmStoreEndpoint::protected(
+        protocol::CANIC_WASM_STORE_BEGIN_GC,
+        protocol::canic_wasm_store_begin_gc_endpoint,
+    );
     const CATALOG: WasmStoreEndpoint =
         WasmStoreEndpoint::structural_query(protocol::CANIC_WASM_STORE_CATALOG);
-    const CHUNK: WasmStoreEndpoint = WasmStoreEndpoint::protected(protocol::CANIC_WASM_STORE_CHUNK);
-    const COMPLETE_GC: WasmStoreEndpoint =
-        WasmStoreEndpoint::protected(protocol::CANIC_WASM_STORE_COMPLETE_GC);
-    const INFO: WasmStoreEndpoint = WasmStoreEndpoint::protected(protocol::CANIC_WASM_STORE_INFO);
-    const PREPARE: WasmStoreEndpoint =
-        WasmStoreEndpoint::protected(protocol::CANIC_WASM_STORE_PREPARE);
-    const PREPARE_GC: WasmStoreEndpoint =
-        WasmStoreEndpoint::protected(protocol::CANIC_WASM_STORE_PREPARE_GC);
-    const PUBLISH_CHUNK: WasmStoreEndpoint =
-        WasmStoreEndpoint::protected(protocol::CANIC_WASM_STORE_PUBLISH_CHUNK);
-    const STAGE_MANIFEST: WasmStoreEndpoint =
-        WasmStoreEndpoint::protected(protocol::CANIC_WASM_STORE_STAGE_MANIFEST);
+    const CHUNK: WasmStoreEndpoint = WasmStoreEndpoint::protected(
+        protocol::CANIC_WASM_STORE_CHUNK,
+        protocol::canic_wasm_store_chunk_endpoint,
+    );
+    const COMPLETE_GC: WasmStoreEndpoint = WasmStoreEndpoint::protected(
+        protocol::CANIC_WASM_STORE_COMPLETE_GC,
+        protocol::canic_wasm_store_complete_gc_endpoint,
+    );
+    const INFO: WasmStoreEndpoint = WasmStoreEndpoint::protected(
+        protocol::CANIC_WASM_STORE_INFO,
+        protocol::canic_wasm_store_info_endpoint,
+    );
+    const PREPARE: WasmStoreEndpoint = WasmStoreEndpoint::protected(
+        protocol::CANIC_WASM_STORE_PREPARE,
+        protocol::canic_wasm_store_prepare_endpoint,
+    );
+    const PREPARE_GC: WasmStoreEndpoint = WasmStoreEndpoint::protected(
+        protocol::CANIC_WASM_STORE_PREPARE_GC,
+        protocol::canic_wasm_store_prepare_gc_endpoint,
+    );
+    const PUBLISH_CHUNK: WasmStoreEndpoint = WasmStoreEndpoint::protected(
+        protocol::CANIC_WASM_STORE_PUBLISH_CHUNK,
+        protocol::canic_wasm_store_publish_chunk_endpoint,
+    );
+    const STAGE_MANIFEST: WasmStoreEndpoint = WasmStoreEndpoint::protected(
+        protocol::CANIC_WASM_STORE_STAGE_MANIFEST,
+        protocol::canic_wasm_store_stage_manifest_endpoint,
+    );
     const STATUS: WasmStoreEndpoint =
         WasmStoreEndpoint::structural_query(protocol::CANIC_WASM_STORE_STATUS);
     #[cfg(test)]
@@ -166,14 +184,12 @@ impl WasmStoreInternalClient {
         A: ArgumentEncoder,
     {
         let call_res: Result<T, Error> = if endpoint.requires_internal_proof() {
-            let call = CanicCall::unbounded_wait(self.store_pid, endpoint.method)
-                .with_caller_role(CanisterRole::ROOT)
-                .with_args(arg)
-                .map_err(InternalError::public)?
-                .execute()
+            let descriptor = endpoint
+                .protected_descriptor()
+                .expect("protected endpoints must carry generated metadata");
+            CanicInternalClient::new(self.store_pid)
+                .call_update_result_with_single_role(&descriptor, arg)
                 .await
-                .map_err(InternalError::public)?;
-            call.candid::<Result<T, Error>>()
                 .map_err(InternalError::public)?
         } else {
             let call = CallOps::unbounded_wait(self.store_pid, endpoint.method)
@@ -197,10 +213,13 @@ struct WasmStoreEndpoint {
 }
 
 impl WasmStoreEndpoint {
-    const fn protected(method: &'static str) -> Self {
+    const fn protected(
+        method: &'static str,
+        descriptor: fn() -> ProtectedInternalEndpoint,
+    ) -> Self {
         Self {
             method,
-            abi: WasmStoreEndpointAbi::ProtectedUpdate,
+            abi: WasmStoreEndpointAbi::ProtectedUpdate { descriptor },
         }
     }
 
@@ -212,7 +231,14 @@ impl WasmStoreEndpoint {
     }
 
     const fn requires_internal_proof(&self) -> bool {
-        matches!(self.abi, WasmStoreEndpointAbi::ProtectedUpdate)
+        matches!(self.abi, WasmStoreEndpointAbi::ProtectedUpdate { .. })
+    }
+
+    fn protected_descriptor(&self) -> Option<ProtectedInternalEndpoint> {
+        match self.abi {
+            WasmStoreEndpointAbi::ProtectedUpdate { descriptor } => Some(descriptor()),
+            WasmStoreEndpointAbi::StructuralQuery => None,
+        }
     }
 }
 
@@ -221,7 +247,9 @@ impl WasmStoreEndpoint {
 ///
 #[derive(Clone, Copy)]
 enum WasmStoreEndpointAbi {
-    ProtectedUpdate,
+    ProtectedUpdate {
+        descriptor: fn() -> ProtectedInternalEndpoint,
+    },
     StructuralQuery,
 }
 
@@ -237,7 +265,7 @@ struct TemplateChunkInputRef<'a> {
 #[cfg(test)]
 mod tests {
     use super::WasmStoreInternalClient;
-    use canic_core::control_plane_support::protocol;
+    use canic_core::control_plane_support::{ids::CanisterRole, protocol};
     use std::collections::BTreeSet;
 
     #[test]
@@ -276,5 +304,19 @@ mod tests {
             WasmStoreInternalClient::ENDPOINTS.len(),
             "typed wasm-store client endpoint methods must be unique"
         );
+    }
+
+    #[test]
+    fn protected_endpoint_table_uses_generated_descriptors() {
+        for endpoint in WasmStoreInternalClient::ENDPOINTS
+            .iter()
+            .filter(|endpoint| endpoint.requires_internal_proof())
+        {
+            let descriptor = endpoint
+                .protected_descriptor()
+                .expect("protected endpoint should carry descriptor metadata");
+            assert_eq!(descriptor.method(), endpoint.method);
+            assert_eq!(descriptor.single_role(), Some(&CanisterRole::ROOT));
+        }
     }
 }

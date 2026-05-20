@@ -8,7 +8,7 @@
 pub use crate::{
     api::{
         canister::CanisterRole,
-        ic::{Call, CanicCall},
+        ic::{Call, CanicCall, CanicInternalClient},
         ops::{log, perf},
         timer::{timer, timer_interval},
     },

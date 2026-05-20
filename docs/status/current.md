@@ -119,6 +119,19 @@ inspect only the files needed for the current task.
   `caller::has_app_role(...)` path from the macro DSL and runtime access
   evaluator. Protected sibling Canic RPC now has one supported role surface:
   root-signed `caller::has_role(...)` / `caller::has_any_role(...)` envelopes.
+- Started `0.40.6` by adding the first generated-client metadata surface for
+  protected internal endpoints. The endpoint macro now emits a hidden
+  `ProtectedInternalEndpoint` descriptor for every root-signed role-protected
+  internal endpoint, and `CanicInternalClient` can call those descriptors through
+  `CanicCall` without duplicating method names or accepted-role metadata.
+- Extended `0.40.6` by adding protocol-owned protected descriptors for the
+  built-in wasm-store update methods and routing `WasmStoreInternalClient`
+  through `CanicInternalClient`, leaving only structural catalog/status queries
+  on the raw call path.
+- Tightened the same `.6` client surface with
+  `ProtectedInternalEndpoint::required_single_role()`, so generated clients for
+  single-role protected endpoints can derive the caller role from endpoint
+  metadata and reserve explicit role selection for multi-role endpoints.
 - Started `0.39.1` by adding an AppIndex-backed
   `caller::has_app_role(role)` internal access predicate, giving app hubs and
   shards a first-class way to trust canonical sibling app canisters without

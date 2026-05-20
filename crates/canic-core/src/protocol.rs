@@ -1,6 +1,7 @@
 /// Runtime wire-level endpoint names used by `canic-core` for inter-canister calls.
 ///
 /// Keep these synchronized with the macro-defined endpoints.
+use crate::{api::ic::call::ProtectedInternalEndpoint, ids::CanisterRole};
 
 pub const CANIC_RESPONSE_CAPABILITY_V1: &str = "canic_response_capability_v1";
 pub const CANIC_REQUEST_DELEGATION: &str = "canic_request_delegation";
@@ -50,4 +51,48 @@ pub const CANIC_WASM_STORE_STRUCTURAL_QUERY_METHODS: &[&str] =
 #[must_use]
 pub fn canic_wasm_store_method_requires_internal_proof(method: &str) -> bool {
     CANIC_WASM_STORE_PROTECTED_UPDATE_METHODS.contains(&method)
+}
+
+#[must_use]
+pub fn canic_wasm_store_begin_gc_endpoint() -> ProtectedInternalEndpoint {
+    wasm_store_root_endpoint(CANIC_WASM_STORE_BEGIN_GC)
+}
+
+#[must_use]
+pub fn canic_wasm_store_chunk_endpoint() -> ProtectedInternalEndpoint {
+    wasm_store_root_endpoint(CANIC_WASM_STORE_CHUNK)
+}
+
+#[must_use]
+pub fn canic_wasm_store_complete_gc_endpoint() -> ProtectedInternalEndpoint {
+    wasm_store_root_endpoint(CANIC_WASM_STORE_COMPLETE_GC)
+}
+
+#[must_use]
+pub fn canic_wasm_store_info_endpoint() -> ProtectedInternalEndpoint {
+    wasm_store_root_endpoint(CANIC_WASM_STORE_INFO)
+}
+
+#[must_use]
+pub fn canic_wasm_store_prepare_endpoint() -> ProtectedInternalEndpoint {
+    wasm_store_root_endpoint(CANIC_WASM_STORE_PREPARE)
+}
+
+#[must_use]
+pub fn canic_wasm_store_prepare_gc_endpoint() -> ProtectedInternalEndpoint {
+    wasm_store_root_endpoint(CANIC_WASM_STORE_PREPARE_GC)
+}
+
+#[must_use]
+pub fn canic_wasm_store_publish_chunk_endpoint() -> ProtectedInternalEndpoint {
+    wasm_store_root_endpoint(CANIC_WASM_STORE_PUBLISH_CHUNK)
+}
+
+#[must_use]
+pub fn canic_wasm_store_stage_manifest_endpoint() -> ProtectedInternalEndpoint {
+    wasm_store_root_endpoint(CANIC_WASM_STORE_STAGE_MANIFEST)
+}
+
+fn wasm_store_root_endpoint(method: &'static str) -> ProtectedInternalEndpoint {
+    ProtectedInternalEndpoint::new(method, [CanisterRole::ROOT])
 }

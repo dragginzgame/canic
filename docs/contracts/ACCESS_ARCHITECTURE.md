@@ -31,6 +31,11 @@ separate policy family.
 - `caller::has_role(role)` and `caller::has_any_role([...])` are protected
   internal-call predicates. They require a root-signed method-scoped invocation
   proof and are valid only on protected internal update endpoints.
+- Protected internal endpoint macros emit descriptor metadata for generated
+  clients. Typed internal clients should use `CanicInternalClient` and those
+  descriptors so method names, envelope proof scope, and accepted caller roles
+  come from the protected endpoint declaration instead of being duplicated at
+  call sites.
 - The old AppIndex-only `caller::has_app_role(role)` predicate was removed in
   0.40 because verifier-local AppIndex state is not sufficient authorization
   for sibling Canic RPC.

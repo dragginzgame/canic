@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.40.x] - 2026-05-19 - Attested Canic calls
 
+- `0.40.6` starts the app-facing generated-client surface by adding protected internal endpoint descriptors emitted by the endpoint macro, a generic `CanicInternalClient` that calls those descriptors through `CanicCall`, and moving the built-in wasm-store client onto protocol-owned protected endpoint descriptors.
+
 - `0.40.5` removes the transitional AppIndex-only `caller::has_app_role(...)` access predicate from the macro DSL and runtime access evaluator; protected sibling RPC must use root-signed `caller::has_role(...)` or `caller::has_any_role(...)`.
 
 - `0.40.4` starts the built-in internal-client pass by moving root wasm-store calls behind a typed `WasmStoreInternalClient`, adding a private root auth material client for structural proof/key requests, and exposing the wasm-store protected/query manifests through the public `canic::protocol` facade.

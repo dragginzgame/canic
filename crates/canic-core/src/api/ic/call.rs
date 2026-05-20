@@ -115,6 +115,146 @@ impl CanicCall {
 }
 
 ///
+/// ProtectedInternalEndpoint
+///
+/// Generated metadata for one protected Canic internal endpoint.
+///
+/// Endpoint macros emit this descriptor next to protected internal endpoints.
+/// Callers should pass it to `CanicInternalClient` instead of repeating method
+/// names and accepted-role metadata by hand.
+///
+
+#[derive(Clone, Debug)]
+pub struct ProtectedInternalEndpoint {
+    method: &'static str,
+    accepted_roles: Vec<CanisterRole>,
+}
+
+impl ProtectedInternalEndpoint {
+    #[must_use]
+    pub fn new(method: &'static str, roles: impl IntoIterator<Item = CanisterRole>) -> Self {
+        Self {
+            method,
+            accepted_roles: roles.into_iter().collect(),
+        }
+    }
+
+    #[must_use]
+    pub const fn method(&self) -> &'static str {
+        self.method
+    }
+
+    #[must_use]
+    pub fn accepted_roles(&self) -> &[CanisterRole] {
+        &self.accepted_roles
+    }
+
+    #[must_use]
+    pub fn accepts_role(&self, role: &CanisterRole) -> bool {
+        self.accepted_roles.iter().any(|accepted| accepted == role)
+    }
+
+    #[must_use]
+    pub fn single_role(&self) -> Option<&CanisterRole> {
+        match self.accepted_roles.as_slice() {
+            [role] => Some(role),
+            _ => None,
+        }
+    }
+
+    pub fn required_single_role(&self) -> Result<CanisterRole, Error> {
+        self.single_role().cloned().ok_or_else(|| {
+            Error::invalid(format!(
+                "protected internal endpoint '{}' accepts {} roles; choose a caller role explicitly",
+                self.method(),
+                self.accepted_roles.len()
+            ))
+        })
+    }
+}
+
+///
+/// CanicInternalClient
+///
+/// Generic protected internal client over generated endpoint descriptors.
+///
+
+#[derive(Clone, Copy, Debug)]
+pub struct CanicInternalClient {
+    canister_id: Principal,
+}
+
+impl CanicInternalClient {
+    #[must_use]
+    pub const fn new(canister_id: Principal) -> Self {
+        Self { canister_id }
+    }
+
+    pub async fn call_update<A>(
+        &self,
+        endpoint: &ProtectedInternalEndpoint,
+        caller_role: CanisterRole,
+        args: A,
+    ) -> Result<CallResult, Error>
+    where
+        A: ArgumentEncoder,
+    {
+        if !endpoint.accepts_role(&caller_role) {
+            return Err(Error::invalid(format!(
+                "caller role '{caller_role}' is not accepted by protected internal endpoint '{}'",
+                endpoint.method()
+            )));
+        }
+
+        CanicCall::unbounded_wait(self.canister_id, endpoint.method())
+            .with_caller_role(caller_role)
+            .with_args(args)?
+            .execute()
+            .await
+    }
+
+    pub async fn call_update_with_single_role<A>(
+        &self,
+        endpoint: &ProtectedInternalEndpoint,
+        args: A,
+    ) -> Result<CallResult, Error>
+    where
+        A: ArgumentEncoder,
+    {
+        let role = endpoint.required_single_role()?;
+        self.call_update(endpoint, role, args).await
+    }
+
+    pub async fn call_update_result<T, A>(
+        &self,
+        endpoint: &ProtectedInternalEndpoint,
+        caller_role: CanisterRole,
+        args: A,
+    ) -> Result<T, Error>
+    where
+        T: CandidType + DeserializeOwned,
+        A: ArgumentEncoder,
+    {
+        let call = self.call_update(endpoint, caller_role, args).await?;
+        let result: Result<T, Error> = call.candid()?;
+        result
+    }
+
+    pub async fn call_update_result_with_single_role<T, A>(
+        &self,
+        endpoint: &ProtectedInternalEndpoint,
+        args: A,
+    ) -> Result<T, Error>
+    where
+        T: CandidType + DeserializeOwned,
+        A: ArgumentEncoder,
+    {
+        let role = endpoint.required_single_role()?;
+        self.call_update_result(endpoint, role, args).await
+    }
+}
+
+///
 /// CanicCallBuilder
 ///
 
@@ -739,6 +879,56 @@ mod tests {
         assert_eq!(builder.ttl_secs, Some(30));
         assert_eq!(builder.cycles, 10);
         assert_eq!(builder.args.as_ref(), raw.as_slice());
+    }
+
+    #[test]
+    fn protected_internal_endpoint_descriptor_matches_roles() {
+        let endpoint = ProtectedInternalEndpoint::new(
+            "system_add_project_to_user",
+            [
+                CanisterRole::new("project_hub"),
+                CanisterRole::new("admin_hub"),
+            ],
+        );
+
+        assert_eq!(endpoint.method(), "system_add_project_to_user");
+        assert!(endpoint.accepts_role(&CanisterRole::new("project_hub")));
+        assert!(endpoint.accepts_role(&CanisterRole::new("admin_hub")));
+        assert!(!endpoint.accepts_role(&CanisterRole::new("user_hub")));
+        assert!(endpoint.single_role().is_none());
+    }
+
+    #[test]
+    fn protected_internal_endpoint_single_role_is_available_to_generated_clients() {
+        let endpoint = ProtectedInternalEndpoint::new(
+            "system_add_project_to_user",
+            [CanisterRole::new("project_hub")],
+        );
+
+        assert_eq!(
+            endpoint.single_role(),
+            Some(&CanisterRole::new("project_hub"))
+        );
+        assert_eq!(
+            endpoint.required_single_role().expect("single role"),
+            CanisterRole::new("project_hub")
+        );
+    }
+
+    #[test]
+    fn protected_internal_endpoint_requires_explicit_role_when_ambiguous() {
+        let endpoint = ProtectedInternalEndpoint::new(
+            "system_add_project_to_user",
+            [
+                CanisterRole::new("project_hub"),
+                CanisterRole::new("admin_hub"),
+            ],
+        );
+
+        let err = endpoint
+            .required_single_role()
+            .expect_err("multi-role endpoint should require explicit caller role");
+        assert_eq!(err.code, ErrorCode::InvalidInput);
     }
 
     #[test]
