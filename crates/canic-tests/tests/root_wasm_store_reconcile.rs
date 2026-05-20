@@ -792,18 +792,17 @@ fn live_store_status(
 }
 
 // Assert that a protected update cannot be called with its old raw Candid args.
-fn assert_protected_raw_call_rejected<T, E>(response: Result<Result<T, Error>, E>) {
+fn assert_protected_raw_call_rejected<T, E: std::fmt::Debug>(
+    response: Result<Result<T, Error>, E>,
+) {
     match response {
         Ok(Ok(_)) => panic!("raw call to protected wasm_store update unexpectedly succeeded"),
-        Ok(Err(err)) => assert!(
-            matches!(
-                err.code,
-                ErrorCode::InternalRpcMalformed | ErrorCode::Unauthorized
-            ),
-            "unexpected protected-call error code: {:?}",
-            err.code
-        ),
-        Err(_) => {}
+        Ok(Err(err)) => assert_eq!(err.code, ErrorCode::InternalRpcMalformed),
+        Err(err) => {
+            panic!(
+                "protected endpoint should return a typed Canic error instead of trapping: {err:?}"
+            )
+        }
     }
 }
 

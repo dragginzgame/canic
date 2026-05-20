@@ -75,6 +75,8 @@ Dependency direction is strict: `endpoints -> workflow -> policy -> ops -> model
 
 ## Checklist
 - Preserve dirty worktree state and keep edits scoped.
-- Update changelogs for user-facing changes.
+- Treat focused code slices as development work, not as release patches. Use
+  `docs/governance/changelog.md` for `Unreleased` notes and release-finalized
+  changelog rules.
 - Respect CLI/host/backup ownership boundaries.
 - Prefer targeted tests first; broaden when risk warrants it.

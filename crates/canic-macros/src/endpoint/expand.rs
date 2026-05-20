@@ -100,9 +100,7 @@ pub fn expand(kind: EndpointKind, args: ValidatedArgs, mut func: ItemFn) -> Toke
     let dispatch_fn = dispatch(kind, wrapper_async);
 
     let wrapper_inputs = if is_protected_internal {
-        syn::parse_quote!(
-            __canic_envelope: ::canic::dto::auth::CanicInternalCallEnvelopeV1
-        )
+        Default::default()
     } else {
         inputs
     };
@@ -772,6 +770,18 @@ fn protected_internal_stage(
     };
 
     Ok(quote! {
+        let __canic_raw_args = ::canic::cdk::api::msg_arg_data();
+        let __canic_envelope: ::canic::dto::auth::CanicInternalCallEnvelopeV1 =
+            match ::canic::cdk::candid::decode_one(&__canic_raw_args) {
+                Ok(envelope) => envelope,
+                Err(_err) => {
+                    return Err(::canic::Error::new(
+                        ::canic::dto::error::ErrorCode::InternalRpcMalformed,
+                        "malformed Canic internal call envelope".to_string(),
+                    ).into());
+                }
+            };
+
         let __canic_method = #exported_method;
         if __canic_envelope.version != 1
             || __canic_envelope.header.target_canister != ::canic::cdk::api::canister_self()
@@ -1057,24 +1067,28 @@ mod tests {
         let expanded = expand(EndpointKind::Update, args, func).to_string();
         let compact = expanded.split_whitespace().collect::<String>();
 
-        assert!(
-            compact.contains("__canic_envelope:::canic::dto::auth::CanicInternalCallEnvelopeV1")
-        );
+        assert!(compact.contains("msg_arg_data"));
+        assert!(compact.contains("decode_one"));
+        assert!(compact.contains("CanicInternalCallEnvelopeV1"));
         assert!(compact.contains("verify_internal_invocation_proof"));
         assert!(compact.contains("decode_args::<("));
         assert!(!compact.contains("eval_access"));
 
+        let envelope_decode = compact
+            .find("decode_one")
+            .expect("protected wrapper must decode the envelope inside Canic");
         let verify = compact
             .find("verify_internal_invocation_proof")
             .expect("protected wrapper must verify proof");
-        let decode = compact
+        let args_decode = compact
             .find("decode_args")
             .expect("protected wrapper must decode original args");
         let dispatch = compact
             .find("dispatch_update_async")
             .expect("protected wrapper must dispatch after verification");
-        assert!(verify < decode);
-        assert!(decode < dispatch);
+        assert!(envelope_decode < verify);
+        assert!(verify < args_decode);
+        assert!(args_decode < dispatch);
     }
 
     #[test]

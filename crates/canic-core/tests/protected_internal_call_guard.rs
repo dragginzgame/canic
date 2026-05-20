@@ -234,12 +234,12 @@ fn wasm_store_did_matches_protected_method_manifest() {
     for method in CANIC_WASM_STORE_PROTECTED_UPDATE_METHODS {
         let line = did_service_line(&did, method);
         assert!(
-            line.contains("(CanicInternalCallEnvelopeV1)"),
-            "{method} must expose the protected internal-call envelope ABI: {line}"
+            line.contains(" : () -> "),
+            "{method} must expose a no-argument raw-ingress wrapper ABI: {line}"
         );
         assert!(
             !line.contains(" query"),
-            "{method} must be an update method in the protected ABI: {line}"
+            "{method} must be an update method in the protected raw-ingress ABI: {line}"
         );
     }
 
@@ -685,7 +685,7 @@ fn wasm_store_methods_declared_by_macro(source: &str) -> Vec<(&'static str, Stri
 
 fn protected_wasm_store_methods_in_did(did: &str) -> BTreeSet<&'static str> {
     did.lines()
-        .filter(|line| line.contains("(CanicInternalCallEnvelopeV1)"))
+        .filter(|line| !line.contains(" query"))
         .filter_map(did_method_name)
         .filter(|method| method.starts_with("canic_wasm_store_"))
         .map(leak_test_str)

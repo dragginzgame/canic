@@ -5,16 +5,6 @@ type BootstrapStatusResponse = record {
   phase : text;
   ready : bool;
 };
-type CanicInternalCallEnvelopeV1 = record {
-  args : blob;
-  version : nat16;
-  proof : SignedInternalInvocationProofV1;
-  header : CanicInternalCallHeaderV1;
-};
-type CanicInternalCallHeaderV1 = record {
-  target_canister : principal;
-  target_method : text;
-};
 type CanicMetadataResponse = record {
   package_description : text;
   canister_version : nat64;
@@ -93,16 +83,6 @@ type ErrorCode = variant {
   Conflict;
 };
 type IndexEntryInput = record { pid : principal; role : text };
-type InternalInvocationProofPayloadV1 = record {
-  issued_at : nat64;
-  subject : principal;
-  subnet_id : opt principal;
-  role : text;
-  audience : principal;
-  epoch : nat64;
-  audience_method : text;
-  expires_at : nat64;
-};
 //
 // MemoryAllocationRecordEntry
 //
@@ -211,11 +191,6 @@ type Result_7 = variant { Ok : TemplateChunkResponse; Err : Error };
 type Result_8 = variant { Ok : TemplateChunkSetInfoResponse; Err : Error };
 type Result_9 = variant { Ok : WasmStoreStatusResponse; Err : Error };
 type RootRequestMetadata = record { request_id : blob; ttl_seconds : nat64 };
-type SignedInternalInvocationProofV1 = record {
-  signature : blob;
-  key_id : nat32;
-  payload : InternalInvocationProofPayloadV1;
-};
 type StateSnapshotInput = record {
   subnet_state : opt SubnetStateInput;
   app_state : opt AppStateInput;
@@ -299,15 +274,15 @@ service : (CanisterInitPayload, opt blob) -> {
     );
   canic_sync_state : (StateSnapshotInput) -> (Result_5);
   canic_sync_topology : (TopologySnapshotInput) -> (Result_5);
-  canic_wasm_store_begin_gc : (CanicInternalCallEnvelopeV1) -> (Result_5);
+  canic_wasm_store_begin_gc : () -> (Result_5);
   canic_wasm_store_catalog : () -> (Result_6) query;
-  canic_wasm_store_chunk : (CanicInternalCallEnvelopeV1) -> (Result_7);
-  canic_wasm_store_complete_gc : (CanicInternalCallEnvelopeV1) -> (Result_5);
-  canic_wasm_store_info : (CanicInternalCallEnvelopeV1) -> (Result_8);
-  canic_wasm_store_prepare : (CanicInternalCallEnvelopeV1) -> (Result_8);
-  canic_wasm_store_prepare_gc : (CanicInternalCallEnvelopeV1) -> (Result_5);
-  canic_wasm_store_publish_chunk : (CanicInternalCallEnvelopeV1) -> (Result_5);
-  canic_wasm_store_stage_manifest : (CanicInternalCallEnvelopeV1) -> (Result_5);
+  canic_wasm_store_chunk : () -> (Result_7);
+  canic_wasm_store_complete_gc : () -> (Result_5);
+  canic_wasm_store_info : () -> (Result_8);
+  canic_wasm_store_prepare : () -> (Result_8);
+  canic_wasm_store_prepare_gc : () -> (Result_5);
+  canic_wasm_store_publish_chunk : () -> (Result_5);
+  canic_wasm_store_stage_manifest : () -> (Result_5);
   canic_wasm_store_status : () -> (Result_9) query;
   icrc10_supported_standards : () -> (vec record { text; text }) query;
 }

@@ -191,6 +191,14 @@ inspect only the files needed for the current task.
   method names from shared `canic_protected_endpoint!` descriptors and
   protected `#[canic_update(... caller::has_role ...)]` declarations, while
   ignoring macro definitions and doc-comment examples.
+- Started `0.40.12` by moving protected internal endpoint envelope decoding
+  inside the Canic wrapper. Protected wrappers now read raw ingress bytes,
+  decode `CanicInternalCallEnvelopeV1`, verify the proof, and only then decode
+  the original endpoint arguments, so malformed raw calls return typed
+  `InternalRpcMalformed` errors instead of failing in CDK argument decoding.
+  The checked-in wasm-store DID and guard tests now reflect that protected
+  updates expose a no-argument raw-ingress wrapper in Candid while `CanicCall`
+  sends the envelope bytes directly.
 - Started `0.39.1` by adding an AppIndex-backed
   `caller::has_app_role(role)` internal access predicate, giving app hubs and
   shards a first-class way to trust canonical sibling app canisters without

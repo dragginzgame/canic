@@ -13,6 +13,34 @@ versioning, releases, and deployment-adjacent automation.
 - Merge verification normally includes `make fmt-check`, `make clippy`, and
   `make test` unless the task or maintainer explicitly narrows scope.
 
+## Development Slices and Validation Tiers
+
+A code slice is a small, focused implementation unit chosen for reviewability
+and safety. It is not a release patch by default.
+
+Default development cadence:
+
+- Prefer roughly 20 minutes of coherent development work per batch when the
+  task is open-ended.
+- Keep individual code slices focused by concern, module, or invariant.
+- Combine multiple compatible slices into one unreleased batch when that makes
+  review and publishing less noisy.
+- Do not assign patch versions during ordinary development. Version numbers are
+  assigned during release preparation by the human-owned release flow.
+
+Validation is tiered:
+
+- Focused slice checks: run the smallest format, test, lint, or compile command
+  that exercises the touched code and the relevant invariant.
+- Broader batch checks: after a coherent batch or when touching cross-cutting
+  behavior, add wider package or workspace checks as risk warrants.
+- Full release checks: reserve full merge/release validation for release-ready
+  or push-ready states, or when a maintainer explicitly asks for broad checks.
+
+For documentation-only governance changes, use docs-appropriate validation such
+as formatting, whitespace, link-shape review, and `git diff --check`. Do not run
+code test suites unless code files changed or the maintainer asks for them.
+
 ## Git Boundary
 
 Automated agents must never run:

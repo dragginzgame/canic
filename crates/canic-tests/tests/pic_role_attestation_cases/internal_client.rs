@@ -1,5 +1,11 @@
 use crate::pic_role_attestation_support::*;
-use canic_core::dto::placement::directory::DirectoryEntryStatusResponse;
+use canic_core::dto::{
+    auth::{
+        CanicInternalCallEnvelopeV1, CanicInternalCallHeaderV1, InternalInvocationProofPayloadV1,
+        SignedInternalInvocationProofV1,
+    },
+    placement::directory::DirectoryEntryStatusResponse,
+};
 
 #[test]
 fn generated_project_hub_client_calls_protected_project_instance() {
@@ -56,14 +62,57 @@ fn generated_project_hub_client_calls_protected_project_instance() {
         "project_instance_record_visit",
         ("alpha".to_string(),),
     );
-    assert!(
-        raw_call.is_err() || raw_call.is_ok_and(|response| response.is_err()),
-        "raw calls to protected instance endpoint must be rejected"
+    let raw_error = raw_call
+        .expect("protected endpoint should return a typed Canic error instead of trapping")
+        .expect_err("raw calls to protected instance endpoint must be rejected");
+    assert_eq!(raw_error.code, ErrorCode::InternalRpcMalformed);
+
+    test_progress(
+        "generated_project_hub_client_calls_protected_project_instance",
+        "invalid typed envelope rejection",
     );
+    let invalid_envelope_call = pic.update_call_as::<Result<(), Error>, _>(
+        instance_id,
+        project_hub_id,
+        "project_instance_record_visit",
+        (invalid_internal_envelope(instance_id, project_hub_id),),
+    );
+    let invalid_envelope_error = invalid_envelope_call
+        .expect("invalid envelope should return a typed Canic error instead of trapping")
+        .expect_err("invalid envelope must be rejected before proof verification");
+    assert_eq!(invalid_envelope_error.code, ErrorCode::InternalRpcMalformed);
 
     let registered_instance = role_pid(&pic, root_id, "project_instance", 120);
     assert_eq!(
         registered_instance, instance_id,
         "directory-created instance should be visible in root topology"
     );
+}
+
+fn invalid_internal_envelope(
+    instance_id: Principal,
+    project_hub_id: Principal,
+) -> CanicInternalCallEnvelopeV1 {
+    CanicInternalCallEnvelopeV1 {
+        version: 2,
+        header: CanicInternalCallHeaderV1 {
+            target_canister: instance_id,
+            target_method: "project_instance_record_visit".to_string(),
+        },
+        proof: SignedInternalInvocationProofV1 {
+            payload: InternalInvocationProofPayloadV1 {
+                subject: project_hub_id,
+                role: CanisterRole::new("project_hub"),
+                subnet_id: None,
+                audience: instance_id,
+                audience_method: "project_instance_record_visit".to_string(),
+                issued_at: 0,
+                expires_at: 1,
+                epoch: 0,
+            },
+            signature: Vec::new(),
+            key_id: 0,
+        },
+        args: Vec::new(),
+    }
 }

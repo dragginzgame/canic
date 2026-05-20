@@ -1,7 +1,8 @@
 # Canic Changelog Governance
 
 This document defines the authoritative rules for maintaining
-`CHANGELOG.md` and minor-line changelog archives.
+`CHANGELOG.md`, minor-line changelog archives, and unreleased development
+notes.
 
 These rules are intended to be followed by automated agents.
 
@@ -14,6 +15,9 @@ The root `CHANGELOG.md` file is the canonical release ledger for Canic.
 It records high-level architectural and behavioral changes per release.
 
 It must remain concise and structured.
+
+It is release-finalized output, not a mandatory log for every development
+slice.
 
 Detailed change breakdowns belong in:
 
@@ -35,6 +39,9 @@ For example: [docs/changelog/0.33.md](docs/changelog/0.33.md)
   - Links to detailed notes
 - Root minor-line summary entries must use exactly one concise bullet per patch version.
 - Within each minor-line section, patch entries must be ordered chronologically newest first (`x.y.9` before `x.y.8` before `x.y.7`).
+- Ordinary development slices do not require root changelog edits. Update the
+  root changelog when preparing a release, when a maintainer explicitly asks for
+  release-finalized notes, or when documenting a finalized release artifact.
 
 ## 2.2 Detailed Minor Notes
 
@@ -60,6 +67,39 @@ Example: `0.33.0`, `0.33.1`, and `0.33.2` all map to [docs/changelog/0.33.md](do
 Within a detailed minor notes file, patch sections must also be ordered chronologically newest first.
 
 The root changelog must link to the detailed file when present.
+
+## 2.3 Unreleased Notes
+
+Detailed minor notes may contain a top-level `## Unreleased` section above
+released patch sections.
+
+Use `Unreleased` for ordinary development batches that are not yet being
+published. It is the normal place to record user-facing, operator-facing, or
+architecturally meaningful work before a release version has been assigned.
+
+Rules:
+
+- Do not create a patch-numbered section for every small code slice.
+- Group related slices into coherent bullets under `Unreleased`.
+- Keep notes concise enough that they can be collapsed into a release entry
+  without rewriting from scratch.
+- Do not use `Unreleased` for formatting-only churn, transient debugging notes,
+  or validation command inventories unless the validation surface itself
+  changed.
+- Leave root `CHANGELOG.md` unchanged during ordinary development unless the
+  maintainer explicitly asks for root release notes.
+- When preparing a release, move the relevant `Unreleased` content into the
+  target patch section, delete or clear consumed `Unreleased` bullets, and add
+  one concise root bullet for the finalized patch.
+
+Terminology:
+
+- Code slice: a small focused change suitable for review and targeted
+  validation. It does not imply a version.
+- Unreleased batch: one or more related slices collected before release
+  preparation.
+- Published patch release: a versioned release prepared by the human-owned
+  release flow.
 
 ---
 
@@ -97,6 +137,8 @@ Rules:
 14. Each root minor-line patch bullet must be a high-level summary sentence, not an exhaustive implementation list.
 15. If a patch bullet starts becoming a multi-clause internal inventory, shorten it and move detail to `docs/changelog/<major>.<minor>.md`.
 16. Root minor-line patch bullets must be listed in descending patch order, with the newest patch first and the oldest patch last.
+17. Versioned root entries are created during release preparation, not during
+    ordinary development slices.
 
 ## 3.1 Section Header Emoji Mapping
 
@@ -132,6 +174,18 @@ Do not use plain backticked path text for detailed-breakdown links.
 
 # 4. Automation Rules for Agents
 
+During ordinary development:
+
+1. Keep code slices focused and reviewable.
+2. Do not treat a completed code slice as a release patch.
+3. Do not invent a patch version for a slice or batch.
+4. If changelog notes are warranted, write them under `## Unreleased` in the
+   relevant detailed minor notes file.
+5. Do not update root `CHANGELOG.md` for ordinary slice notes.
+6. If the work is changelog-policy/governance-only, do not add or update
+   release notes in either root or detailed changelog files unless explicitly
+   requested as a release artifact.
+
 When preparing a release:
 
 1. Identify all changes since last version tag.
@@ -144,13 +198,14 @@ When preparing a release:
    - Formatting-only changes
    - Test-only changes (unless behaviorally significant)
    - Internal renames without surface impact
-5. Generate a concise summary entry in root CHANGELOG.md.
-6. Generate or update docs/changelog/<major>.<minor>.md with full detail.
-7. Insert clickable Markdown link from root file to detailed file.
-8. Use the version specified by the release request or the existing latest changelog entry.
-9. Do not create a new version header if the newest entry already exists for the target version.
-10. If a change set is changelog-policy/governance-only, do not add or update release notes in `CHANGELOG.md` or `docs/changelog/<major>.<minor>.md`.
-11. When updating an existing minor line, keep the patch bullet/section in chronological order. In normal patch releases this means adding the new patch at the beginning of the existing minor-line list.
+5. Move relevant `Unreleased` notes into the target patch section.
+6. Generate a concise summary entry in root CHANGELOG.md.
+7. Generate or update docs/changelog/<major>.<minor>.md with full detail.
+8. Insert clickable Markdown link from root file to detailed file.
+9. Use the version specified by the release request or the existing latest changelog entry.
+10. Do not create a new version header if the newest entry already exists for the target version.
+11. If a change set is changelog-policy/governance-only, do not add or update release notes in `CHANGELOG.md` or `docs/changelog/<major>.<minor>.md`.
+12. When updating an existing minor line, keep the patch bullet/section in chronological order. In normal patch releases this means adding the new patch at the beginning of the existing minor-line list.
 
 Agents must never:
 
@@ -159,6 +214,8 @@ Agents must never:
 - Reorder version history.
 - Collapse multiple minor lines into one detailed file.
 - Add release notes for changelog-policy/governance-only edits (for example updates to `docs/governance/changelog.md`, `AGENTS.md`, or changelog formatting policy), unless explicitly requested as a documented release artifact.
+- Convert `Unreleased` notes into a versioned patch entry unless preparing a
+  release or explicitly asked by a maintainer.
 
 ---
 
@@ -203,7 +260,9 @@ Historical content must never be discarded.
 - PATCH: internal fixes without surface change.
 
 Agents must not bump version without checking semantic impact.
-When updating changelog entries, target the upcoming release version even if `Cargo.toml` still has the previous published version.
+During ordinary development, do not assign a version number. Use `Unreleased`
+notes when needed. When preparing a release, target the upcoming release version
+even if `Cargo.toml` still has the previous published version.
 
 ---
 
@@ -240,6 +299,9 @@ Testing section rules:
 
 - Do not add a `Testing` section for routine validation runs (`make check`, `make test`, `cargo test`).
 - Add `Testing` only when the release adds or changes tests, coverage, or test tooling.
+- For `Unreleased` notes, omit routine validation command lists. Validation
+  commands belong in agent handoff/final responses, not in changelog notes,
+  unless the validation tooling or coverage changed.
 
 ---
 
@@ -247,11 +309,13 @@ Testing section rules:
 
 For each release:
 
-1. Update version in Cargo.toml.
-2. Update CHANGELOG.md.
-3. Create or update docs/changelog/<major>.<minor>.md.
-4. Commit.
-5. Tag release.
+1. Choose the release version.
+2. Collapse relevant `Unreleased` notes into the versioned patch entry.
+3. Update version in Cargo.toml.
+4. Update CHANGELOG.md.
+5. Create or update docs/changelog/<major>.<minor>.md.
+6. Commit.
+7. Tag release.
 
 Order must be preserved.
 Typical release flow is `make patch` followed by `make publish`.
