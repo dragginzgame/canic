@@ -1072,6 +1072,41 @@ mod tests {
     }
 
     #[test]
+    fn protected_internal_role_endpoint_verifies_exported_method_name() {
+        let mut args = make_args(vec![AccessExprAst::All(vec![AccessExprAst::Pred(
+            AccessPredicateAst::Builtin(BuiltinPredicate::CallerHasRole {
+                role: CanisterRoleArg::Literal("project_hub".to_string()),
+            }),
+        )])]);
+        args.internal = true;
+        args.export_name = Some(syn::LitStr::new(
+            "wire_system_add_project_to_user",
+            proc_macro2::Span::call_site(),
+        ));
+        let func: ItemFn = syn::parse_quote!(
+            async fn system_add_project_to_user(
+                user_id: ::canic::cdk::types::Principal,
+                project_pid: ::canic::cdk::types::Principal,
+            ) -> Result<(), ::canic::Error> {
+                Ok(())
+            }
+        );
+
+        let expanded = expand(EndpointKind::Update, args, func).to_string();
+        let compact = expanded.split_whitespace().collect::<String>();
+
+        assert!(compact.contains("let__canic_method=\"wire_system_add_project_to_user\";"));
+        assert!(
+            compact.contains("__canic_envelope.header.target_method!=__canic_method"),
+            "envelope target method must be checked against the exported method name"
+        );
+        assert!(
+            compact.contains("&__canic_envelope.proof,__canic_method,&__canic_accepted_roles"),
+            "proof verification must bind the exported method name"
+        );
+    }
+
+    #[test]
     fn protected_internal_role_endpoint_rejects_mixed_access_predicates() {
         let mut args = make_args(vec![AccessExprAst::All(vec![
             AccessExprAst::Pred(AccessPredicateAst::Builtin(

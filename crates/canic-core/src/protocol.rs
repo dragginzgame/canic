@@ -32,3 +32,22 @@ pub const CANIC_TEMPLATE_STAGE_MANIFEST_ADMIN: &str = "canic_template_stage_mani
 
 pub const CANIC_SYNC_STATE: &str = "canic_sync_state";
 pub const CANIC_SYNC_TOPOLOGY: &str = "canic_sync_topology";
+
+pub const CANIC_WASM_STORE_PROTECTED_UPDATE_METHODS: &[&str] = &[
+    CANIC_WASM_STORE_BEGIN_GC,
+    CANIC_WASM_STORE_CHUNK,
+    CANIC_WASM_STORE_COMPLETE_GC,
+    CANIC_WASM_STORE_INFO,
+    CANIC_WASM_STORE_PREPARE,
+    CANIC_WASM_STORE_PREPARE_GC,
+    CANIC_WASM_STORE_PUBLISH_CHUNK,
+    CANIC_WASM_STORE_STAGE_MANIFEST,
+];
+
+pub const CANIC_WASM_STORE_STRUCTURAL_QUERY_METHODS: &[&str] =
+    &[CANIC_WASM_STORE_CATALOG, CANIC_WASM_STORE_STATUS];
+
+#[must_use]
+pub fn canic_wasm_store_method_requires_internal_proof(method: &str) -> bool {
+    CANIC_WASM_STORE_PROTECTED_UPDATE_METHODS.contains(&method)
+}

@@ -84,6 +84,26 @@ inspect only the files needed for the current task.
   crates. The published testkit now keeps only generic PocketIC/artifact/call
   helpers, uses its own transport error type, and leaves Canic-specific
   role/init/readiness fixtures in unpublished `canic-testing-internal`.
+- Started `0.40.3` by adding protected-internal-call guardrails. The protected
+  wasm-store update method list now lives in `canic-core::protocol`, the
+  control-plane caller path consumes that canonical classifier, and a source
+  guard test rejects first-party raw `Call`/`CallOps` usage for those protected
+  method names.
+- Extended the same guardrail slice so the wasm-store macro declarations and
+  checked-in `wasm_store.did` are tested against the protected-update and
+  structural-query manifests, preventing the protected ABI list from drifting
+  away from exported endpoint shape.
+- Tightened those manifest checks so they are exact-set comparisons in both
+  directions: listed methods must appear with the expected ABI, and newly
+  envelope-protected or structural-query wasm-store methods cannot appear
+  without a manifest update.
+- Added the first internal endpoint classification manifest for 0.40. The guard
+  parses Canic's built-in macro-emitted internal endpoints and fails if any are
+  missing an explicit protected/bootstrap/query-exception/capability/discovery/
+  operator classification.
+- Added a focused macro expansion regression for protected internal endpoints
+  with `name = "..."` exports. The generated wrapper must compare the envelope
+  target method and verify the invocation proof against the exported wire name.
 - Started `0.39.1` by adding an AppIndex-backed
   `caller::has_app_role(role)` internal access predicate, giving app hubs and
   shards a first-class way to trust canonical sibling app canisters without

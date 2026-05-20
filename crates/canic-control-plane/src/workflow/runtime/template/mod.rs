@@ -372,23 +372,14 @@ where
 }
 
 fn wasm_store_method_requires_internal_proof(method: &str) -> bool {
-    matches!(
-        method,
-        protocol::CANIC_WASM_STORE_BEGIN_GC
-            | protocol::CANIC_WASM_STORE_CHUNK
-            | protocol::CANIC_WASM_STORE_COMPLETE_GC
-            | protocol::CANIC_WASM_STORE_INFO
-            | protocol::CANIC_WASM_STORE_PREPARE
-            | protocol::CANIC_WASM_STORE_PREPARE_GC
-            | protocol::CANIC_WASM_STORE_PUBLISH_CHUNK
-            | protocol::CANIC_WASM_STORE_STAGE_MANIFEST
-    )
+    protocol::canic_wasm_store_method_requires_internal_proof(method)
 }
 
 #[cfg(test)]
 mod tests {
-    use super::release_source_label;
+    use super::{release_source_label, wasm_store_method_requires_internal_proof};
     use crate::ids::{TemplateId, TemplateVersion};
+    use canic_core::control_plane_support::protocol;
 
     #[test]
     fn release_source_label_includes_version() {
@@ -398,5 +389,22 @@ mod tests {
         );
 
         assert_eq!(label, "embedded:user_hub@0.20.2");
+    }
+
+    #[test]
+    fn wasm_store_protected_method_classifier_matches_protocol_list() {
+        for method in protocol::CANIC_WASM_STORE_PROTECTED_UPDATE_METHODS {
+            assert!(
+                wasm_store_method_requires_internal_proof(method),
+                "{method} must use CanicCall"
+            );
+        }
+
+        assert!(!wasm_store_method_requires_internal_proof(
+            protocol::CANIC_WASM_STORE_CATALOG
+        ));
+        assert!(!wasm_store_method_requires_internal_proof(
+            protocol::CANIC_WASM_STORE_STATUS
+        ));
     }
 }
