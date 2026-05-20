@@ -155,6 +155,18 @@ inspect only the files needed for the current task.
   reject missing method names, empty accepted-role sets, empty caller roles, and
   duplicate caller roles, while shared protocol descriptor macros reject
   `roles = []` at compile time.
+- Started `0.40.9` by adding a real project hub/instance fixture for generated
+  protected clients: a test-only shared protocol crate owns the instance
+  descriptor, the instance exposes a `caller::has_role("project_hub")`
+  protected endpoint, and the hub calls it through `canic_internal_client!`.
+- Extended the `.9` fixture into PocketIC coverage: the project hub provisions
+  a project instance, calls its protected endpoint through the generated client,
+  and a raw direct call to the protected target is rejected.
+- Fixed two runtime bugs found by that coverage: the built-in wasm-store
+  protected client now decodes the endpoint payload type instead of a
+  double-nested `Result`, and auth-material root request metadata is
+  domain-separated from provisioning/cycles request metadata so independent
+  per-canister counters cannot collide in the same second.
 - Started `0.39.1` by adding an AppIndex-backed
   `caller::has_app_role(role)` internal access predicate, giving app hubs and
   shards a first-class way to trust canonical sibling app canisters without

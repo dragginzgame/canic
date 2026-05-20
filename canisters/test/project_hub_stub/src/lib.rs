@@ -5,7 +5,7 @@
 use canic::{
     Error,
     api::auth::AuthApi,
-    api::canister::{CanisterRole, placement::DirectoryApi},
+    api::canister::placement::DirectoryApi,
     cdk::candid::Principal,
     dto::{
         auth::{DelegatedToken, SignedRoleAttestation},
@@ -14,11 +14,19 @@ use canic::{
     ids::cap,
     prelude::*,
 };
+use project_protocol_stub::{PROJECT_HUB, project_instance_record_visit_endpoint};
 
-const PROJECT_HUB: CanisterRole = CanisterRole::new("project_hub");
 const PROJECTS_POOL: &str = "projects";
 
 canic::start!(PROJECT_HUB);
+
+canic::canic_internal_client! {
+    struct ProjectInstanceInternalClient {
+        fn record_visit = project_instance_record_visit_endpoint; (
+            project_key: String,
+        ) -> ();
+    }
+}
 
 // Keep the test hub setup hook empty.
 async fn canic_setup() {}
@@ -82,6 +90,14 @@ async fn lookup_project_entry(
     project_key: String,
 ) -> Result<Option<DirectoryEntryStatusResponse>, Error> {
     Ok(DirectoryApi::lookup_entry(PROJECTS_POOL, &project_key))
+}
+
+/// Notify one project instance through the protected internal-call client path.
+#[canic_update]
+async fn notify_project_instance(instance_id: Principal, project_key: String) -> Result<(), Error> {
+    ProjectInstanceInternalClient::new(instance_id)
+        .record_visit(project_key)
+        .await
 }
 
 canic::finish!();

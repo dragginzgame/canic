@@ -2,12 +2,8 @@
 
 #![expect(clippy::unused_async)]
 
-use canic::{
-    Error, api::canister::CanisterRole, cdk::types::Principal, dto::auth::DelegatedToken, ids::cap,
-    prelude::*,
-};
-
-const PROJECT_INSTANCE: CanisterRole = CanisterRole::new("project_instance");
+use canic::{Error, cdk::types::Principal, dto::auth::DelegatedToken, ids::cap, prelude::*};
+use project_protocol_stub::PROJECT_INSTANCE;
 
 canic::start!(PROJECT_INSTANCE);
 
@@ -29,6 +25,16 @@ async fn instance_id() -> Result<Principal, Error> {
 /// Verify one self-contained delegated token.
 #[canic_update(requires(auth::authenticated(cap::VERIFY)))]
 async fn instance_verify_token(_token: DelegatedToken) -> Result<(), Error> {
+    Ok(())
+}
+
+/// Protected app-style instance call accepted only from the project hub role.
+#[canic_update(
+    internal,
+    name = "project_instance_record_visit",
+    requires(caller::has_role("project_hub"))
+)]
+async fn record_visit(_project_key: String) -> Result<(), Error> {
     Ok(())
 }
 

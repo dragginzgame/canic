@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.40.x] - 2026-05-19 - Attested Canic calls
 
+- `0.40.9` adds a real app-style project hub/instance fixture for generated protected clients, proves it through PocketIC, fixes the built-in wasm-store protected client decode path, and domain-separates auth-material root request metadata from other root request IDs.
+
 - `0.40.8` adds `canic_protected_endpoint!` for shared protocol modules to publish protected internal endpoint descriptors consumed by `canic_internal_client!`, covering the cross-canister case where the caller crate cannot depend on the target canister implementation crate, and hardens descriptor construction so protected endpoint metadata cannot omit its method or caller roles.
 
 - `0.40.7` adds the first facade macro for typed protected internal clients and promotes protected endpoint descriptor accessors to the stable generated `canic_internal_endpoint_<endpoint>()` naming shape.

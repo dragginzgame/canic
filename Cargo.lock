@@ -2490,12 +2490,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "project-protocol-stub"
+version = "0.40.8"
+dependencies = [
+ "canic",
+]
+
+[[package]]
 name = "project_hub_stub"
 version = "0.40.8"
 dependencies = [
  "candid",
  "canic",
  "ic-cdk",
+ "project-protocol-stub",
 ]
 
 [[package]]
@@ -2505,6 +2513,7 @@ dependencies = [
  "candid",
  "canic",
  "ic-cdk",
+ "project-protocol-stub",
 ]
 
 [[package]]

@@ -187,10 +187,11 @@ impl WasmStoreInternalClient {
             let descriptor = endpoint
                 .protected_descriptor()
                 .expect("protected endpoints must carry generated metadata");
-            CanicInternalClient::new(self.store_pid)
-                .call_update_result_with_single_role(&descriptor, arg)
+            let value = CanicInternalClient::new(self.store_pid)
+                .call_update_result_with_single_role::<T, _>(&descriptor, arg)
                 .await
-                .map_err(InternalError::public)?
+                .map_err(InternalError::public)?;
+            Ok(value)
         } else {
             let call = CallOps::unbounded_wait(self.store_pid, endpoint.method)
                 .with_args(arg)?

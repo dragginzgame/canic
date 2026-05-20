@@ -47,6 +47,10 @@ separate policy family.
   those shared descriptor functions. Shared protocol modules may define a small
   descriptor table in one macro invocation. The descriptor remains the source of
   truth for method name and accepted-role metadata.
+- The project hub/instance test fixture is the canonical app-style pattern:
+  target canister implements a protected `caller::has_role(...)` endpoint, a
+  shared protocol crate owns the descriptor, and the caller canister generates
+  a typed client from that descriptor.
 - Protected internal endpoint descriptors must name a concrete exported method
   and at least one accepted caller role. Empty descriptor metadata is invalid
   because it would create a generated client method that cannot request a

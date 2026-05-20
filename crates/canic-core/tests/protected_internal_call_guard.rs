@@ -255,6 +255,39 @@ fn wasm_store_did_matches_protected_method_manifest() {
     }
 }
 
+#[test]
+fn project_fixture_uses_shared_descriptor_generated_client_path() {
+    let protocol = read_workspace_file("canisters/test/project_protocol_stub/src/lib.rs");
+    let instance = read_workspace_file("canisters/test/project_instance_stub/src/lib.rs");
+    let hub = read_workspace_file("canisters/test/project_hub_stub/src/lib.rs");
+
+    assert!(
+        protocol.contains("canic::canic_protected_endpoint!"),
+        "project fixture must publish protected endpoint metadata from a shared protocol crate"
+    );
+    assert!(
+        protocol.contains("project_instance_record_visit_endpoint"),
+        "project fixture must expose a shared descriptor for the instance endpoint"
+    );
+    assert!(
+        instance.contains("name = \"project_instance_record_visit\"")
+            && instance.contains("requires(caller::has_role(\"project_hub\"))"),
+        "project instance fixture endpoint must be protected by project_hub role proof"
+    );
+    assert!(
+        hub.contains("canic::canic_internal_client!")
+            && hub.contains("project_instance_record_visit_endpoint")
+            && hub.contains(".record_visit(project_key)"),
+        "project hub fixture must call the instance through the generated protected client"
+    );
+    assert!(
+        !hub.contains("ProtectedInternalEndpoint::new")
+            && !hub.contains("CanicCall::")
+            && !hub.contains("Call::"),
+        "project hub fixture must not hand-build protected metadata or bypass the generated client"
+    );
+}
+
 fn scan_dir(root: &Path, violations: &mut Vec<String>) {
     let Ok(entries) = fs::read_dir(root) else {
         return;

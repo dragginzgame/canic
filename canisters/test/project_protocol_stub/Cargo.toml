@@ -1,0 +1,12 @@
+[package]
+name = "project-protocol-stub"
+edition = { workspace = true }
+rust-version = { workspace = true }
+version = { workspace = true }
+publish = false
+
+[dependencies]
+canic = { workspace = true }
+
+[lints]
+workspace = true
