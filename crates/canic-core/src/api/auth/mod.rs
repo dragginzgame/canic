@@ -173,14 +173,7 @@ impl AuthApi {
         request: RoleAttestationRequest,
     ) -> Result<SignedRoleAttestation, Error> {
         let request = metadata::with_root_attestation_request_metadata(request);
-        let response = Self::request_role_attestation_remote(request).await?;
-
-        match response {
-            RootCapabilityResponse::RoleAttestationIssued(response) => Ok(response),
-            _ => Err(Error::internal(
-                "invalid root response type for role attestation request",
-            )),
-        }
+        Self::request_role_attestation_remote(request).await
     }
 
     /// Request a method-scoped internal invocation proof from root over RPC.
@@ -188,14 +181,7 @@ impl AuthApi {
         request: InternalInvocationProofRequest,
     ) -> Result<SignedInternalInvocationProofV1, Error> {
         let request = metadata::with_internal_invocation_proof_request_metadata(request);
-        let response = Self::request_internal_invocation_proof_remote(request).await?;
-
-        match response {
-            RootCapabilityResponse::InternalInvocationProofIssued(response) => Ok(response),
-            _ => Err(Error::internal(
-                "invalid root response type for internal invocation proof request",
-            )),
-        }
+        Self::request_internal_invocation_proof_remote(request).await
     }
 
     /// Return the current root role-attestation key set.
@@ -469,7 +455,7 @@ impl AuthApi {
     // Route a canonical role-attestation request over RPC to root.
     async fn request_role_attestation_remote(
         request: RoleAttestationRequest,
-    ) -> Result<RootCapabilityResponse, Error> {
+    ) -> Result<SignedRoleAttestation, Error> {
         let root_pid = EnvOps::root_pid().map_err(Error::from)?;
         RpcOps::call_rpc_result(root_pid, protocol::CANIC_REQUEST_ROLE_ATTESTATION, request)
             .await
@@ -479,7 +465,7 @@ impl AuthApi {
     // Route a canonical internal-invocation proof request over RPC to root.
     async fn request_internal_invocation_proof_remote(
         request: InternalInvocationProofRequest,
-    ) -> Result<RootCapabilityResponse, Error> {
+    ) -> Result<SignedInternalInvocationProofV1, Error> {
         let root_pid = EnvOps::root_pid().map_err(Error::from)?;
         RpcOps::call_rpc_result(
             root_pid,

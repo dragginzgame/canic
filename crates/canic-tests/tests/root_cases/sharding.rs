@@ -13,7 +13,7 @@ use canic::{
 };
 use canic_testing_internal::canister;
 use canic_testing_internal::pic::{
-    create_user_shard, issue_delegated_token, request_root_delegation_provision,
+    CanicPicExt, create_user_shard, issue_delegated_token, request_root_delegation_provision,
 };
 
 #[test]
@@ -35,7 +35,7 @@ fn user_hub_sharding_profile_prewarms_first_shard_signing_key() {
         .copied()
         .expect("user_hub must exist in sharding profile");
 
-    let registry: Result<Result<ShardingRegistryResponse, Error>, Error> =
+    let registry: Result<Result<ShardingRegistryResponse, Error>, _> =
         setup
             .pic
             .query_call_as(user_hub_pid, setup.root_id, "canic_sharding_registry", ());
@@ -49,7 +49,7 @@ fn user_hub_sharding_profile_prewarms_first_shard_signing_key() {
         .map(|entry| entry.pid)
         .expect("startup user shard must exist before first account create");
 
-    let shard_public_key: Result<Result<Vec<u8>, Error>, Error> =
+    let shard_public_key: Result<Result<Vec<u8>, Error>, _> =
         setup
             .pic
             .update_call(startup_shard_pid, "user_shard_local_public_key_test", ());
@@ -61,7 +61,7 @@ fn user_hub_sharding_profile_prewarms_first_shard_signing_key() {
         "startup user shard must have local signer key material before first account create",
     );
 
-    let created: Result<Result<Principal, Error>, Error> = setup.pic.update_call(
+    let created: Result<Result<Principal, Error>, _> = setup.pic.update_call(
         user_hub_pid,
         "create_account",
         (Principal::from_slice(&[7; 29]),),
@@ -132,7 +132,7 @@ fn delegated_token_verification_uses_cascaded_subnet_state_root_key() {
             .saturating_sub(provision.cert.issued_at),
     );
 
-    let verified: Result<Result<(), Error>, Error> = setup.pic.update_call_as(
+    let verified: Result<Result<(), Error>, _> = setup.pic.update_call_as(
         verifier_pid,
         subject,
         "test_verify_delegated_token",

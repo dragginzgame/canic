@@ -2,7 +2,7 @@
 // This test relies on embedded production config by design.
 
 use canic_testing_internal::pic::{
-    install_lifecycle_boundary_fixture, invalid_init_args, upgrade_args,
+    CanicPicExt, install_lifecycle_boundary_fixture, invalid_init_args, upgrade_args,
 };
 use std::time::Duration;
 

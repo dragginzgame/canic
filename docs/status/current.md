@@ -64,6 +64,26 @@ inspect only the files needed for the current task.
   proof, obtains fresh root-signed material, and retries the protected call
   once. Expired proofs, malformed envelopes, authorization failures, and domain
   handler errors are not retried.
+- Started `0.40.2` by migrating the local wasm-store update surface onto the
+  protected internal-call protocol. Wasm-store update endpoints now require
+  `caller::has_role("root")` and export the `CanicInternalCallEnvelopeV1` ABI,
+  while root control-plane calls to those update methods use `CanicCall`.
+  Catalog/status queries remain structural root-query exceptions until a
+  protected-query design exists. The same slice aligned direct root auth RPC
+  decoding for role attestations and internal invocation proofs so callers
+  decode the signed proof payload returned by the direct endpoint instead of
+  the local root capability response envelope. Reconcile coverage now asserts
+  that old raw update tuples fail against protected wasm-store updates.
+- Continued `0.40.2` by consuming `ic-memory 0.5.1` for generic multi-crate
+  static range and memory declaration registration. Canic now declares its core
+  and control-plane ranges through `ic-memory`, delegates declaration/opening
+  macros to the generic runtime, removes the stale Canic-local declaration
+  registry, and keeps only the Canic-owned eager TLS touch queue for framework
+  storage wrappers.
+- Continued `0.40.2` by making `canic-testkit` standalone from Canic runtime
+  crates. The published testkit now keeps only generic PocketIC/artifact/call
+  helpers, uses its own transport error type, and leaves Canic-specific
+  role/init/readiness fixtures in unpublished `canic-testing-internal`.
 - Started `0.39.1` by adding an AppIndex-backed
   `caller::has_app_role(role)` internal access predicate, giving app hubs and
   shards a first-class way to trust canonical sibling app canisters without
@@ -776,10 +796,11 @@ inspect only the files needed for the current task.
   declaration keys/slots, historical stable-key movement rejection, physical
   slot reuse rejection, and retired/tombstone rejection when represented in the
   native ledger.
-- Canic still owns `canic.*` namespace policy, `ic_memory.*` owner
-  restrictions, framework reserved IDs, rejection of application claims against
-  reserved ranges, declaring-crate checks, lifecycle ordering, handle opening,
-  and diagnostic DTO shaping.
+- Canic still owns `canic.*` namespace policy, framework reserved IDs,
+  rejection of application claims against reserved ranges, lifecycle ordering,
+  eager TLS touches, and diagnostic DTO shaping. `ic-memory` owns
+  `ic_memory.*` authority checks, declaring-crate/range composition, and
+  validated handle opening.
 - Canic no longer preserves the old Canic physical allocation ledger format.
   There is no projection bridge or dual-read compatibility path in the current
   hard cut; old allocation-ledger bytes require a separate migration or
@@ -793,8 +814,7 @@ inspect only the files needed for the current task.
 - `cargo test -p canic-core memory --lib`
 - `cargo test -p canic-core`
 - `cargo clippy -p canic-core --all-targets -- -D warnings`
-- `cargo test -p canic-tests --test ic_memory_policy_adapter`
-- `cargo clippy -p canic-tests --test ic_memory_policy_adapter -- -D warnings`
+- `cargo test -p canic-core memory::policy -- --nocapture`
 - `cargo check --workspace`
 - `cargo test -p canic --test protocol_surface`
 - `git diff --check`

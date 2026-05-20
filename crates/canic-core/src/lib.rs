@@ -61,7 +61,8 @@ pub(crate) use error::{InternalError, InternalErrorClass, InternalErrorOrigin};
 /// Not part of the public API.
 #[doc(hidden)]
 pub mod __reexports {
-    pub use ::ctor;
+    pub use ::ic_memory;
+    pub use ::ic_memory::__reexports::ctor;
 }
 
 ///
@@ -75,6 +76,11 @@ pub const CANIC_MEMORY_MAX: u8 = storage::stable::CANIC_MEMORY_MAX;
 // Canonical hardcoded 1 MiB chunk size for Canic wasm staging/install flows.
 // The management canister wasm chunk store rejects larger payloads.
 pub const CANIC_WASM_CHUNK_BYTES: usize = 1_048_576;
+
+ic_memory::ic_memory_range!(
+    start = storage::stable::CANIC_MEMORY_MIN,
+    end = storage::stable::CANIC_MEMORY_MAX,
+);
 
 #[cfg(test)]
 const _: () = {

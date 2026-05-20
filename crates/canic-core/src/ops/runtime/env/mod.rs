@@ -1,6 +1,5 @@
 pub mod mapper;
 
-use crate::memory::runtime::registry::MemoryRegistryRuntime;
 use crate::{
     InternalError,
     cdk::api::canister_self,
@@ -272,7 +271,7 @@ impl EnvOps {
     }
 
     fn assert_memory_registry_initialized() -> Result<(), InternalError> {
-        let initialized = MemoryRegistryRuntime::is_initialized();
+        let initialized = ic_memory::runtime::is_default_memory_manager_bootstrapped();
         debug_assert!(
             initialized,
             "memory registry must be initialized before env restore"

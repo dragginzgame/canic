@@ -391,7 +391,6 @@ dependencies = [
  "candid",
  "canic-cdk",
  "criterion",
- "ctor",
  "futures",
  "ic-memory",
  "k256",
@@ -446,7 +445,6 @@ name = "canic-testkit"
 version = "0.40.1"
 dependencies = [
  "candid",
- "canic",
  "pocket-ic",
  "serde",
 ]
@@ -1601,10 +1599,11 @@ dependencies = [
 
 [[package]]
 name = "ic-memory"
-version = "0.4.1"
+version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f50eb33130cd99ea8bbecbbfda0d4870509e7dce1fd257a370d6a5769b2e3208"
+checksum = "eb4af854ca7d52216d6b4fc0c1f466991c42e5494c612840904f362bc9a68898"
 dependencies = [
+ "ctor",
  "ic-stable-structures",
  "serde",
  "serde_cbor",

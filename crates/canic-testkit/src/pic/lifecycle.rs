@@ -2,31 +2,10 @@ use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::time::Duration;
 
 use candid::Principal;
-use canic::{Error, ids::CanisterRole};
 
-use super::{INSTALL_CYCLES, Pic, PicInstallError, install_args, install_root_args, startup};
+use super::{Pic, PicInstallError, startup};
 
 impl Pic {
-    /// Install a root canister with the default root init arguments.
-    pub fn create_and_install_root_canister(&self, wasm: Vec<u8>) -> Result<Principal, Error> {
-        let init_bytes = install_root_args()?;
-
-        Ok(self.create_and_install_with_args(wasm, init_bytes, INSTALL_CYCLES))
-    }
-
-    /// Install a canister with the given type and wasm bytes.
-    ///
-    /// Install failures are treated as fatal in tests.
-    pub fn create_and_install_canister(
-        &self,
-        role: CanisterRole,
-        wasm: Vec<u8>,
-    ) -> Result<Principal, Error> {
-        let init_bytes = install_args(role)?;
-
-        Ok(self.create_and_install_with_args(wasm, init_bytes, INSTALL_CYCLES))
-    }
-
     /// Install one arbitrary wasm module with caller-provided init bytes.
     ///
     /// This is the generic install path for downstreams that use `canic-testkit`
@@ -50,43 +29,6 @@ impl Pic {
         install_cycles: u128,
     ) -> Result<Principal, PicInstallError> {
         self.try_create_funded_and_install(wasm, init_bytes, install_cycles)
-    }
-
-    /// Wait until one canister reports `canic_ready`.
-    pub fn wait_for_ready(&self, canister_id: Principal, tick_limit: usize, context: &str) {
-        for _ in 0..tick_limit {
-            self.tick();
-            if self.fetch_ready(canister_id) {
-                return;
-            }
-        }
-
-        self.dump_canister_debug(canister_id, context);
-        panic!("{context}: canister {canister_id} did not become ready after {tick_limit} ticks");
-    }
-
-    /// Wait until all provided canisters report `canic_ready`.
-    pub fn wait_for_all_ready<I>(&self, canister_ids: I, tick_limit: usize, context: &str)
-    where
-        I: IntoIterator<Item = Principal>,
-    {
-        let canister_ids = canister_ids.into_iter().collect::<Vec<_>>();
-
-        for _ in 0..tick_limit {
-            self.tick();
-            if canister_ids
-                .iter()
-                .copied()
-                .all(|canister_id| self.fetch_ready(canister_id))
-            {
-                return;
-            }
-        }
-
-        for canister_id in &canister_ids {
-            self.dump_canister_debug(*canister_id, context);
-        }
-        panic!("{context}: canisters did not become ready after {tick_limit} ticks");
     }
 
     /// Wait out the PocketIC `install_code` cooldown window inside the same instance.

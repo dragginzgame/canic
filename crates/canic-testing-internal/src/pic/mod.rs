@@ -2,6 +2,7 @@
 
 mod attestation;
 mod audit;
+mod canic;
 mod delegation;
 mod lifecycle;
 mod root;
@@ -15,7 +16,8 @@ pub use audit::{
     RootAuditProbeFixture, install_audit_leaf_probe, install_audit_root_probe,
     install_audit_scaling_probe,
 };
-pub use canic_testkit::pic::{StandaloneCanisterFixture, install_standalone_canister};
+pub use canic::{CanicPicExt, install_standalone_canister, role_pid, wait_until_ready};
+pub use canic_testkit::pic::StandaloneCanisterFixture;
 pub use delegation::{create_user_shard, issue_delegated_token, request_root_delegation_provision};
 pub use lifecycle::{
     LifecycleBoundaryFixture, install_lifecycle_boundary_fixture, invalid_init_args, upgrade_args,

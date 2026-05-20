@@ -4,15 +4,14 @@ use canic_testkit::{
     artifacts::{
         WasmBuildProfile, build_wasm_canisters, read_wasm, test_target_dir, workspace_root_for,
     },
-    pic::{
-        Pic, PicSerialGuard, StandaloneCanisterFixture, acquire_pic_serial_guard,
-        install_standalone_canister, pic,
-    },
+    pic::{Pic, PicSerialGuard, StandaloneCanisterFixture, acquire_pic_serial_guard, pic},
 };
 use std::{
     path::{Path, PathBuf},
     sync::Mutex,
 };
+
+use super::{CanicPicExt, install_standalone_canister};
 
 const AUDIT_READY_TICK_LIMIT: usize = 60;
 static AUDIT_BUILD_SERIAL: Mutex<()> = Mutex::new(());

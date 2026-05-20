@@ -13,12 +13,12 @@ use canic::{
     protocol,
 };
 use canic_testing_internal::canister::SCALE_REPLICA;
+use canic_testing_internal::pic::CanicPicExt;
 use canic_testkit::pic::Pic;
 
 /// Create a worker canister via the given hub canister.
 pub fn create_worker(pic: &Pic, hub_pid: Principal) -> Result<Principal, Error> {
-    let result: Result<Result<Principal, Error>, Error> =
-        pic.update_call(hub_pid, "create_worker", ());
+    let result: Result<Result<Principal, Error>, _> = pic.update_call(hub_pid, "create_worker", ());
 
     let worker_pid = result
         .map_err(|err| Error::internal(format!("create_worker transport failed: {err}")))??;

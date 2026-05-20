@@ -12,6 +12,7 @@ use canic_core::{
     },
     ids::{CanisterRole, SubnetRole},
 };
+use canic_testing_internal::pic::CanicPicExt;
 use canic_testkit::{
     artifacts::{
         WasmBuildProfile, build_internal_test_wasm_canisters, read_wasm, test_target_dir,

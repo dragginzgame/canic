@@ -3,6 +3,15 @@ use candid::Principal;
 use super::{PicSerialGuardError, startup::PicStartError};
 
 ///
+/// PicCallError
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PicCallError {
+    pub message: String,
+}
+
+///
 /// PicInstallError
 ///
 
@@ -22,6 +31,24 @@ pub enum StandaloneCanisterFixtureError {
     Start(PicStartError),
     Install(PicInstallError),
 }
+
+impl PicCallError {
+    /// Capture one PocketIC call/codec failure.
+    #[must_use]
+    pub fn new(message: impl Into<String>) -> Self {
+        Self {
+            message: message.into(),
+        }
+    }
+}
+
+impl std::fmt::Display for PicCallError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.message)
+    }
+}
+
+impl std::error::Error for PicCallError {}
 
 impl PicInstallError {
     /// Capture one install failure for a specific canister id.

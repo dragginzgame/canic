@@ -9,11 +9,7 @@ use crate::{
         MemoryLedgerResponse, MemoryRangeAuthorityEntry, MemoryRangeAuthorityMode,
         MemorySchemaMetadataEntry,
     },
-    memory::{
-        ledger,
-        registry::MemoryRegistryError,
-        runtime::{init_eager_tls, registry::MemoryRegistryRuntime, run_registered_eager_init},
-    },
+    memory::{self, ledger, registry::MemoryRegistryError, runtime::init_eager_tls},
     ops::runtime::RuntimeOpsError,
 };
 use ic_memory::{
@@ -31,6 +27,9 @@ pub enum MemoryRegistryOpsError {
     // this error comes from the Canic memory runtime boundary
     #[error(transparent)]
     Registry(#[from] MemoryRegistryError),
+    // this error comes from the generic ic-memory runtime boundary
+    #[error(transparent)]
+    Runtime(#[from] ic_memory::RuntimeBootstrapError<MemoryRegistryError>),
 }
 
 impl From<MemoryRegistryOpsError> for InternalError {
@@ -51,20 +50,14 @@ impl MemoryRegistryOps {
         init_eager_tls();
     }
 
-    // Run registered eager-init hooks before the registry commits deferred items.
-    pub fn run_registered_eager_init() {
-        run_registered_eager_init();
-    }
-
     // Initialize the stable-memory registry for this crate and summarize the layout.
     pub(crate) fn init_registry() -> Result<(), InternalError> {
-        MemoryRegistryRuntime::init().map_err(MemoryRegistryOpsError::from)?;
+        memory::bootstrap_default_memory_manager().map_err(MemoryRegistryOpsError::from)?;
         Ok(())
     }
 
     // Run the full synchronous Canic memory bootstrap and return the committed layout.
     pub fn bootstrap_registry() -> Result<(), InternalError> {
-        Self::run_registered_eager_init();
         Self::init_registry()?;
         Self::init_eager_tls();
         Ok(())
@@ -73,7 +66,7 @@ impl MemoryRegistryOps {
     #[cfg(target_arch = "wasm32")]
     #[must_use]
     pub fn is_initialized() -> bool {
-        MemoryRegistryRuntime::is_initialized()
+        ic_memory::runtime::is_default_memory_manager_bootstrapped()
     }
 
     #[cfg(target_arch = "wasm32")]

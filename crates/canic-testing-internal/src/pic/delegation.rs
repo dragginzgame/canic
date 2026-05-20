@@ -63,7 +63,7 @@ pub fn request_root_delegation_provision(
         aud: DelegationAudience::Principals(vec![verifier_pid]),
         cert_ttl_secs: 60,
     };
-    let response: Result<Result<DelegationProof, Error>, Error> = pic.update_call_as(
+    let response: Result<Result<DelegationProof, Error>, _> = pic.update_call_as(
         root_id,
         shard_pid,
         protocol::CANIC_REQUEST_DELEGATION,

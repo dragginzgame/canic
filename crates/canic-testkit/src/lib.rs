@@ -1,4 +1,4 @@
-//! Public PocketIC-oriented test utilities for projects that use Canic.
+//! Public PocketIC-oriented test utilities for IC canister tests.
 //!
 //! This crate is intended for host-side test environments (for example via
 //! PocketIC) and provides generic helpers such as stable dummy principals,
@@ -8,7 +8,17 @@
 
 pub mod artifacts;
 pub mod pic;
-use canic::cdk::types::{Account, Principal};
+use candid::Principal;
+
+///
+/// Account
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Account {
+    pub owner: Principal,
+    pub subaccount: Option<[u8; 32]>,
+}
 
 ///
 /// Deterministic dummy-value generator for tests.

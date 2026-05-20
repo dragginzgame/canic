@@ -1,5 +1,6 @@
 use canic::{Error, ids::CanisterRole};
-use canic_testkit::{artifacts::WasmBuildProfile, pic::install_standalone_canister};
+use canic_testing_internal::pic::install_standalone_canister;
+use canic_testkit::artifacts::WasmBuildProfile;
 
 const PROBE_CRATE: &str = "payload_limit_probe";
 const PROBE_ROLE: CanisterRole = CanisterRole::new("test");

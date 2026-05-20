@@ -178,7 +178,7 @@ pub fn assert_state_endpoints_are_root_only(pic: &Pic, root_id: Principal, child
     subnet_state.expect("root subnet state application");
 
     let non_controller = Principal::from_slice(&[251; 29]);
-    let denied_app_state: Result<Result<AppStateResponse, canic::Error>, canic::Error> =
+    let denied_app_state: Result<Result<AppStateResponse, canic::Error>, _> =
         pic.query_call_as(root_id, non_controller, protocol::CANIC_APP_STATE, ());
     let denied_app_state = denied_app_state.expect("non-controller app state transport");
     let Err(denied_app_state) = denied_app_state else {
@@ -186,7 +186,7 @@ pub fn assert_state_endpoints_are_root_only(pic: &Pic, root_id: Principal, child
     };
     assert_eq!(denied_app_state.code, ErrorCode::Unauthorized);
 
-    let denied_subnet_state: Result<Result<SubnetStateResponse, canic::Error>, canic::Error> =
+    let denied_subnet_state: Result<Result<SubnetStateResponse, canic::Error>, _> =
         pic.query_call_as(root_id, non_controller, protocol::CANIC_SUBNET_STATE, ());
     let denied_subnet_state = denied_subnet_state.expect("non-controller subnet state transport");
     let Err(denied_subnet_state) = denied_subnet_state else {
@@ -194,14 +194,14 @@ pub fn assert_state_endpoints_are_root_only(pic: &Pic, root_id: Principal, child
     };
     assert_eq!(denied_subnet_state.code, ErrorCode::Unauthorized);
 
-    let child_app_state: Result<Result<AppStateResponse, canic::Error>, canic::Error> =
+    let child_app_state: Result<Result<AppStateResponse, canic::Error>, _> =
         pic.query_call(child_pid, protocol::CANIC_APP_STATE, ());
     let Err(err) = child_app_state else {
         panic!("child app state endpoint should be absent")
     };
     assert_missing_method(&err, protocol::CANIC_APP_STATE);
 
-    let child_subnet_state: Result<Result<SubnetStateResponse, canic::Error>, canic::Error> =
+    let child_subnet_state: Result<Result<SubnetStateResponse, canic::Error>, _> =
         pic.query_call(child_pid, protocol::CANIC_SUBNET_STATE, ());
     let Err(err) = child_subnet_state else {
         panic!("child subnet state endpoint should be absent")
@@ -250,7 +250,7 @@ pub fn assert_root_diagnostics_are_controller_gated(pic: &Pic, root_id: Principa
     );
 
     let non_controller = Principal::from_slice(&[252; 29]);
-    let denied_app_registry: Result<Result<AppRegistryResponse, canic::Error>, canic::Error> =
+    let denied_app_registry: Result<Result<AppRegistryResponse, canic::Error>, _> =
         pic.query_call_as(root_id, non_controller, protocol::CANIC_APP_REGISTRY, ());
     let denied_app_registry = denied_app_registry.expect("non-controller app registry transport");
     let Err(denied_app_registry) = denied_app_registry else {
@@ -258,7 +258,7 @@ pub fn assert_root_diagnostics_are_controller_gated(pic: &Pic, root_id: Principa
     };
     assert_eq!(denied_app_registry.code, ErrorCode::Unauthorized);
 
-    let denied_log: Result<Result<Page<LogEntry>, canic::Error>, canic::Error> = pic.query_call_as(
+    let denied_log: Result<Result<Page<LogEntry>, canic::Error>, _> = pic.query_call_as(
         root_id,
         non_controller,
         protocol::CANIC_LOG,
@@ -278,7 +278,7 @@ pub fn assert_root_diagnostics_are_controller_gated(pic: &Pic, root_id: Principa
     };
     assert_eq!(denied_log.code, ErrorCode::Unauthorized);
 
-    let denied_memory_ledger: Result<Result<MemoryLedgerResponse, canic::Error>, canic::Error> =
+    let denied_memory_ledger: Result<Result<MemoryLedgerResponse, canic::Error>, _> =
         pic.query_call_as(root_id, non_controller, protocol::CANIC_MEMORY_LEDGER, ());
     let denied_memory_ledger =
         denied_memory_ledger.expect("non-controller memory ledger transport");
@@ -289,7 +289,7 @@ pub fn assert_root_diagnostics_are_controller_gated(pic: &Pic, root_id: Principa
 }
 
 // Match PocketIC missing-method failures without depending on one exact transport string.
-fn assert_missing_method(err: &canic::Error, method: &str) {
+fn assert_missing_method(err: &canic_testkit::pic::PicCallError, method: &str) {
     let message = err.message.as_str();
 
     assert!(

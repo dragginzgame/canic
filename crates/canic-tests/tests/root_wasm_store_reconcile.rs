@@ -20,6 +20,7 @@ use canic_control_plane::{
     },
 };
 use canic_testing_internal::canister::APP;
+use canic_testing_internal::pic::CanicPicExt;
 use canic_testkit::{artifacts::workspace_root_for, pic::Pic};
 use reconcile_root_harness::setup_cached_root;
 use std::{fs, path::PathBuf};
@@ -222,6 +223,29 @@ fn root_fixed_target_capacity_failure_is_rejected_without_fleet_mutation() {
         after, before,
         "a fixed-target capacity failure must not mutate the managed fleet view"
     );
+}
+
+#[test]
+fn root_raw_wasm_store_update_call_is_rejected_before_dispatch() {
+    let setup = setup_root_with_small_implicit_store();
+    let overview = publication_overview(&setup.pic, setup.root_id);
+    let store_pid = overview
+        .stores
+        .first()
+        .expect("small-store setup must produce at least one managed wasm_store")
+        .pid;
+    let template_id = TemplateId::from("canary:raw-protected-update".to_string());
+    let fixture = release_fixture(&template_id, "99.0.0-raw-protected-update", 128);
+
+    let response: Result<Result<TemplateChunkSetInfoResponse, Error>, _> =
+        setup.pic.update_call_as(
+            store_pid,
+            setup.root_id,
+            protocol::CANIC_WASM_STORE_PREPARE,
+            (fixture.prepare,),
+        );
+
+    assert_protected_raw_call_rejected(response);
 }
 
 #[test]
@@ -765,6 +789,22 @@ fn live_store_status(
         .expect("wasm_store status transport failed");
 
     response.expect("wasm_store status application failed")
+}
+
+// Assert that a protected update cannot be called with its old raw Candid args.
+fn assert_protected_raw_call_rejected<T, E>(response: Result<Result<T, Error>, E>) {
+    match response {
+        Ok(Ok(_)) => panic!("raw call to protected wasm_store update unexpectedly succeeded"),
+        Ok(Err(err)) => assert!(
+            matches!(
+                err.code,
+                ErrorCode::InternalRpcMalformed | ErrorCode::Unauthorized
+            ),
+            "unexpected protected-call error code: {:?}",
+            err.code
+        ),
+        Err(_) => {}
+    }
 }
 
 // Choose one payload size that must overflow the current store but still fit an empty fresh store.

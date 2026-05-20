@@ -1,6 +1,9 @@
-use ic_memory::stable_structures::{DefaultMemoryImpl, Memory, memory_manager::MemoryManager};
+#[cfg(any(test, target_arch = "wasm32"))]
+use ic_memory::stable_structures::Memory;
+use ic_memory::stable_structures::{DefaultMemoryImpl, memory_manager::MemoryManager};
 use std::cell::RefCell;
 
+#[cfg(any(test, target_arch = "wasm32"))]
 const MEMORY_MANAGER_MAGIC: &[u8; 3] = b"MGR";
 
 ///
@@ -9,6 +12,7 @@ const MEMORY_MANAGER_MAGIC: &[u8; 3] = b"MGR";
 /// Classification of the underlying raw stable memory before `MemoryManager`
 /// is allowed to initialize or repair its own metadata.
 
+#[cfg(any(test, target_arch = "wasm32"))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum RawStableMemoryState {
     Empty,
@@ -30,10 +34,12 @@ thread_local! {
         RefCell::new(MemoryManager::init(DefaultMemoryImpl::default()));
 }
 
+#[cfg(target_arch = "wasm32")]
 pub fn classify_raw_stable_memory() -> RawStableMemoryState {
     classify_stable_memory(&DefaultMemoryImpl::default())
 }
 
+#[cfg(any(test, target_arch = "wasm32"))]
 fn classify_stable_memory<M: Memory>(memory: &M) -> RawStableMemoryState {
     if memory.size() == 0 {
         return RawStableMemoryState::Empty;

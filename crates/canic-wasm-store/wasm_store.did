@@ -5,6 +5,16 @@ type BootstrapStatusResponse = record {
   phase : text;
   ready : bool;
 };
+type CanicInternalCallEnvelopeV1 = record {
+  args : blob;
+  version : nat16;
+  proof : SignedInternalInvocationProofV1;
+  header : CanicInternalCallHeaderV1;
+};
+type CanicInternalCallHeaderV1 = record {
+  target_canister : principal;
+  target_method : text;
+};
 type CanicMetadataResponse = record {
   package_description : text;
   canister_version : nat64;
@@ -36,16 +46,16 @@ type CapabilityRequestMetadata = record {
 type CapabilityService = variant { Root };
 type CycleTopupEvent = record {
   status : CycleTopupEventStatus;
-  transferred_cycles : opt nat;
-  requested_cycles : nat;
   error : opt text;
+  requested_cycles : nat;
   timestamp_secs : nat64;
+  transferred_cycles : opt nat;
   sequence : nat32;
 };
 type CycleTopupEventStatus = variant {
-  RequestErr;
-  RequestOk;
   RequestScheduled;
+  RequestOk;
+  RequestErr;
 };
 type CycleTrackerEntry = record { cycles : nat; timestamp_secs : nat64 };
 type CyclesRequest = record {
@@ -69,71 +79,115 @@ type ErrorCode = variant {
   InvariantViolation;
   PolicyShardRequiresSingletonWithSharding;
   NotFound;
+  AuthMaterialStale;
   PolicySingletonAlreadyRegisteredUnderParent;
   PolicyInstanceRequiresSingletonWithDirectory;
   Unauthorized;
   PolicyReplicaRequiresSingletonWithScaling;
+  AuthProofExpired;
+  AuthKeyUnknown;
+  InternalRpcMalformed;
   ResourceExhausted;
   Unavailable;
   Forbidden;
   Conflict;
 };
 type IndexEntryInput = record { pid : principal; role : text };
+type InternalInvocationProofPayloadV1 = record {
+  issued_at : nat64;
+  subject : principal;
+  subnet_id : opt principal;
+  role : text;
+  audience : principal;
+  epoch : nat64;
+  audience_method : text;
+  expires_at : nat64;
+};
+//
+// MemoryAllocationRecordEntry
+//
 type MemoryAllocationRecordEntry = record {
-  memory_manager_id : opt nat8;
-  schema_history : vec MemorySchemaMetadataEntry;
   stable_key : text;
-  state : MemoryAllocationState;
-  last_seen_generation : nat64;
-  first_generation : nat64;
   retired_generation : opt nat64;
+  last_seen_generation : nat64;
+  schema_history : vec MemorySchemaMetadataEntry;
+  first_generation : nat64;
+  state : MemoryAllocationState;
+  memory_manager_id : opt nat8;
 };
+//
+// MemoryAllocationState
+//
 type MemoryAllocationState = variant { Reserved; Active; Retired };
+//
+// MemoryCommitRecoveryErrorResponse
+//
 type MemoryCommitRecoveryErrorResponse = variant {
-  NoValidGeneration;
-  AmbiguousGeneration;
   GenerationOverflow;
+  NoValidGeneration;
   UnexpectedGeneration;
+  AmbiguousGeneration;
 };
+//
+// MemoryCommitRecoveryResponse
+//
 type MemoryCommitRecoveryResponse = record {
-  recovery_error : opt MemoryCommitRecoveryErrorResponse;
-  authoritative_generation : opt nat64;
   slot0 : MemoryCommitSlotResponse;
   slot1 : MemoryCommitSlotResponse;
+  authoritative_generation : opt nat64;
+  recovery_error : opt MemoryCommitRecoveryErrorResponse;
 };
+//
+// MemoryCommitSlotResponse
+//
 type MemoryCommitSlotResponse = record {
-  generation : opt nat64;
   valid : bool;
   present : bool;
+  generation : opt nat64;
 };
+//
+// MemoryLedgerGenerationEntry
+//
 type MemoryLedgerGenerationEntry = record {
+  committed_at : opt nat64;
   generation : nat64;
+  declaration_count : nat32;
   runtime_fingerprint : opt text;
   parent_generation : opt nat64;
-  declaration_count : nat32;
-  committed_at : opt nat64;
 };
+//
+// MemoryLedgerResponse
+//
+type MemoryLedgerResponse = record {
+  records : vec MemoryAllocationRecordEntry;
+  generations : vec MemoryLedgerGenerationEntry;
+  commit_recovery : MemoryCommitRecoveryResponse;
+  current_generation : nat64;
+  ledger_schema_version : nat32;
+  physical_format_id : nat32;
+  authorities : vec MemoryRangeAuthorityEntry;
+};
+//
+// MemoryRangeAuthorityEntry
+//
 type MemoryRangeAuthorityEntry = record {
-  start : nat8;
   end : nat8;
   owner : text;
   mode : MemoryRangeAuthorityMode;
+  start : nat8;
   purpose : text;
 };
+//
+// MemoryRangeAuthorityMode
+//
 type MemoryRangeAuthorityMode = variant { Reserved; Allowed };
+//
+// MemorySchemaMetadataEntry
+//
 type MemorySchemaMetadataEntry = record {
   generation : nat64;
   schema_version : opt nat32;
   schema_fingerprint : opt text;
-};
-type MemoryLedgerResponse = record {
-  ledger_schema_version : nat32;
-  generations : vec MemoryLedgerGenerationEntry;
-  records : vec MemoryAllocationRecordEntry;
-  physical_format_id : nat32;
-  commit_recovery : MemoryCommitRecoveryResponse;
-  authorities : vec MemoryRangeAuthorityEntry;
-  current_generation : nat64;
 };
 type NonrootCyclesCapabilityEnvelopeV1 = record {
   "service" : CapabilityService;
@@ -144,19 +198,24 @@ type NonrootCyclesCapabilityEnvelopeV1 = record {
 };
 type NonrootCyclesCapabilityResponseV1 = record { response : CyclesResponse };
 type Page = record { total : nat64; entries : vec CycleTopupEvent };
-type Page_1 = record { total : nat64; entries : vec CycleTrackerEntry };
 type PageRequest = record { offset : nat64; limit : nat64 };
+type Page_1 = record { total : nat64; entries : vec CycleTrackerEntry };
 type Result = variant { Ok : nat; Err : Error };
 type Result_1 = variant { Ok : Page; Err : Error };
 type Result_2 = variant { Ok : Page_1; Err : Error };
-type Result_3 = variant { Ok : NonrootCyclesCapabilityResponseV1; Err : Error };
-type Result_4 = variant { Ok; Err : Error };
-type Result_5 = variant { Ok : vec WasmStoreCatalogEntryResponse; Err : Error };
-type Result_6 = variant { Ok : TemplateChunkResponse; Err : Error };
-type Result_7 = variant { Ok : TemplateChunkSetInfoResponse; Err : Error };
-type Result_8 = variant { Ok : WasmStoreStatusResponse; Err : Error };
-type Result_9 = variant { Ok : MemoryLedgerResponse; Err : Error };
+type Result_3 = variant { Ok : MemoryLedgerResponse; Err : Error };
+type Result_4 = variant { Ok : NonrootCyclesCapabilityResponseV1; Err : Error };
+type Result_5 = variant { Ok; Err : Error };
+type Result_6 = variant { Ok : vec WasmStoreCatalogEntryResponse; Err : Error };
+type Result_7 = variant { Ok : TemplateChunkResponse; Err : Error };
+type Result_8 = variant { Ok : TemplateChunkSetInfoResponse; Err : Error };
+type Result_9 = variant { Ok : WasmStoreStatusResponse; Err : Error };
 type RootRequestMetadata = record { request_id : blob; ttl_seconds : nat64 };
+type SignedInternalInvocationProofV1 = record {
+  signature : blob;
+  key_id : nat32;
+  payload : InternalInvocationProofPayloadV1;
+};
 type StateSnapshotInput = record {
   subnet_state : opt SubnetStateInput;
   app_state : opt AppStateInput;
@@ -172,41 +231,8 @@ type SubnetRootPublicKeyInput = record {
   public_key_sec1 : blob;
 };
 type SubnetStateInput = record { auth : SubnetAuthStateInput };
-type TemplateChunkInput = record {
-  chunk_index : nat32;
-  template_id : text;
-  version : text;
-  bytes : blob;
-};
 type TemplateChunkResponse = record { bytes : blob };
 type TemplateChunkSetInfoResponse = record { chunk_hashes : vec blob };
-type TemplateChunkSetPrepareInput = record {
-  payload_size_bytes : nat64;
-  chunk_hashes : vec blob;
-  template_id : text;
-  version : text;
-  payload_hash : blob;
-};
-// 
-// TemplateChunkingMode
-// 
-type TemplateChunkingMode = variant { Chunked; Inline };
-type TemplateManifestInput = record {
-  role : text;
-  payload_size_bytes : nat64;
-  manifest_state : TemplateManifestState;
-  approved_at : opt nat64;
-  created_at : nat64;
-  template_id : text;
-  version : text;
-  store_binding : text;
-  chunking_mode : TemplateChunkingMode;
-  payload_hash : blob;
-};
-// 
-// TemplateManifestState
-// 
-type TemplateManifestState = variant { Blocked; Staged; Approved; Deprecated };
 type TopologyChildren = record {
   children : vec IndexEntryInput;
   parent_pid : principal;
@@ -227,9 +253,9 @@ type WasmStoreCatalogEntryResponse = record {
   version : text;
   payload_hash : blob;
 };
-// 
+//
 // WasmStoreGcMode
-// 
+//
 type WasmStoreGcMode = variant { Complete; Normal; Prepared; InProgress };
 type WasmStoreGcStatusResponse = record {
   prepared_at : opt nat64;
@@ -265,23 +291,23 @@ service : (CanisterInitPayload, opt blob) -> {
   canic_cycle_balance : () -> (Result) query;
   canic_cycle_topups : (PageRequest) -> (Result_1) query;
   canic_cycle_tracker : (PageRequest) -> (Result_2) query;
-  canic_memory_ledger : () -> (Result_9) query;
+  canic_memory_ledger : () -> (Result_3) query;
   canic_metadata : () -> (CanicMetadataResponse) query;
   canic_ready : () -> (bool) query;
   canic_response_capability_v1 : (NonrootCyclesCapabilityEnvelopeV1) -> (
-      Result_3,
+      Result_4,
     );
-  canic_sync_state : (StateSnapshotInput) -> (Result_4);
-  canic_sync_topology : (TopologySnapshotInput) -> (Result_4);
-  canic_wasm_store_begin_gc : () -> (Result_4);
-  canic_wasm_store_catalog : () -> (Result_5) query;
-  canic_wasm_store_chunk : (text, text, nat32) -> (Result_6);
-  canic_wasm_store_complete_gc : () -> (Result_4);
-  canic_wasm_store_info : (text, text) -> (Result_7);
-  canic_wasm_store_prepare : (TemplateChunkSetPrepareInput) -> (Result_7);
-  canic_wasm_store_prepare_gc : () -> (Result_4);
-  canic_wasm_store_publish_chunk : (TemplateChunkInput) -> (Result_4);
-  canic_wasm_store_stage_manifest : (TemplateManifestInput) -> (Result_4);
-  canic_wasm_store_status : () -> (Result_8) query;
+  canic_sync_state : (StateSnapshotInput) -> (Result_5);
+  canic_sync_topology : (TopologySnapshotInput) -> (Result_5);
+  canic_wasm_store_begin_gc : (CanicInternalCallEnvelopeV1) -> (Result_5);
+  canic_wasm_store_catalog : () -> (Result_6) query;
+  canic_wasm_store_chunk : (CanicInternalCallEnvelopeV1) -> (Result_7);
+  canic_wasm_store_complete_gc : (CanicInternalCallEnvelopeV1) -> (Result_5);
+  canic_wasm_store_info : (CanicInternalCallEnvelopeV1) -> (Result_8);
+  canic_wasm_store_prepare : (CanicInternalCallEnvelopeV1) -> (Result_8);
+  canic_wasm_store_prepare_gc : (CanicInternalCallEnvelopeV1) -> (Result_5);
+  canic_wasm_store_publish_chunk : (CanicInternalCallEnvelopeV1) -> (Result_5);
+  canic_wasm_store_stage_manifest : (CanicInternalCallEnvelopeV1) -> (Result_5);
+  canic_wasm_store_status : () -> (Result_9) query;
   icrc10_supported_standards : () -> (vec record { text; text }) query;
 }

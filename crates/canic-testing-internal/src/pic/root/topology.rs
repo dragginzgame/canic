@@ -9,6 +9,8 @@ use std::{
     time::Instant,
 };
 
+use crate::pic::CanicPicExt;
+
 /// Install root, stage one ordinary release profile, resume bootstrap, and fetch the subnet map.
 #[must_use]
 pub fn setup_root_topology(

@@ -2,9 +2,10 @@ use candid::{Principal, encode_one};
 use canic_core::dto::subnet::SubnetIdentity;
 use canic_testkit::pic::{
     CachedPicBaseline, CachedPicBaselineGuard, Pic, restore_or_rebuild_cached_pic_baseline,
-    role_pid as lookup_role_pid, wait_until_ready as wait_for_ready_canister,
 };
 use std::sync::{Mutex, OnceLock};
+
+use crate::pic::{role_pid as lookup_role_pid, wait_until_ready as wait_for_ready_canister};
 
 use super::{
     build::{build_normal_root_wasm, build_pic, build_test_root_wasm},

@@ -217,7 +217,7 @@ fn parent_cycles_request_increases_direct_child_balance() {
     let caller = create_worker(&setup.pic, parent).expect("scale_hub must create one worker");
     let amount = 654_000u128;
 
-    let response: Result<Result<u128, Error>, Error> =
+    let response: Result<Result<u128, Error>, _> =
         setup
             .pic
             .update_call(caller, "request_cycles_from_parent", (amount,));
@@ -626,7 +626,7 @@ fn capability_response_as(
         },
     };
 
-    let result: Result<Result<RootCapabilityResponseV1, Error>, Error> = setup.pic.update_call_as(
+    let result: Result<Result<RootCapabilityResponseV1, Error>, _> = setup.pic.update_call_as(
         target_pid,
         caller,
         protocol::CANIC_RESPONSE_CAPABILITY_V1,

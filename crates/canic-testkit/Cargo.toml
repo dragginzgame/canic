@@ -15,7 +15,6 @@ publish = true
 
 [dependencies]
 candid = { workspace = true }
-canic = { workspace = true }
 pocket-ic = { workspace = true }
 serde = { workspace = true }
 

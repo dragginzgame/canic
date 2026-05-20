@@ -22,7 +22,7 @@ fn scale_hub_bootstraps_initial_worker_then_manual_create_reaches_min() {
         "scale_hub should bootstrap policy.initial_workers before manual create_worker",
     );
 
-    let registry: Result<Result<ScalingRegistryResponse, Error>, Error> =
+    let registry: Result<Result<ScalingRegistryResponse, Error>, _> =
         setup
             .pic
             .query_call_as(scale_hub_pid, setup.root_id, "canic_scaling_registry", ());

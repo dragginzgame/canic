@@ -397,7 +397,7 @@ fn execute_verifier_auth_scenario(
         .delegated_token
         .clone()
         .expect("verifier auth audit scenario must mint a delegated token");
-    let response: Result<Result<(), Error>, Error> =
+    let response: Result<Result<(), Error>, _> =
         setup
             .pic
             .update_call_as(target_pid, caller, "test_verify_delegated_token", (token,));
@@ -724,7 +724,7 @@ fn root_capability_response_as(
         },
     };
 
-    let result: Result<Result<RootCapabilityResponseV1, Error>, Error> = setup.pic.update_call_as(
+    let result: Result<Result<RootCapabilityResponseV1, Error>, _> = setup.pic.update_call_as(
         target_pid,
         caller,
         protocol::CANIC_RESPONSE_CAPABILITY_V1,

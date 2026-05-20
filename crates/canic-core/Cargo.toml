@@ -25,7 +25,6 @@ auth-crypto = []
 async-trait = { workspace = true }
 candid = { workspace = true }
 canic-cdk = { workspace = true }
-ctor = { workspace = true }
 ic-memory = { workspace = true }
 k256 = { workspace = true }
 remain = { workspace = true }

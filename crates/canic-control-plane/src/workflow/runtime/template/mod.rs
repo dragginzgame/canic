@@ -11,6 +11,7 @@ use crate::{
     },
 };
 use candid::utils::ArgumentEncoder;
+use canic_core::api::ic::call::CanicCall;
 use canic_core::api::lifecycle::metrics::{
     WasmStoreMetricOperation, WasmStoreMetricOutcome, WasmStoreMetricReason, WasmStoreMetricSource,
     WasmStoreMetricsApi,
@@ -349,13 +350,39 @@ where
     T: candid::CandidType + serde::de::DeserializeOwned,
     A: ArgumentEncoder,
 {
-    let call = CallOps::unbounded_wait(store_pid, method)
-        .with_args(arg)?
-        .execute()
-        .await?;
-    let call_res: Result<T, Error> = call.candid::<Result<T, Error>>()?;
+    let call_res: Result<T, Error> = if wasm_store_method_requires_internal_proof(method) {
+        let call = CanicCall::unbounded_wait(store_pid, method)
+            .with_caller_role(crate::ids::CanisterRole::ROOT)
+            .with_args(arg)
+            .map_err(InternalError::public)?
+            .execute()
+            .await
+            .map_err(InternalError::public)?;
+        call.candid::<Result<T, Error>>()
+            .map_err(InternalError::public)?
+    } else {
+        let call = CallOps::unbounded_wait(store_pid, method)
+            .with_args(arg)?
+            .execute()
+            .await?;
+        call.candid::<Result<T, Error>>()?
+    };
 
     call_res.map_err(InternalError::public)
+}
+
+fn wasm_store_method_requires_internal_proof(method: &str) -> bool {
+    matches!(
+        method,
+        protocol::CANIC_WASM_STORE_BEGIN_GC
+            | protocol::CANIC_WASM_STORE_CHUNK
+            | protocol::CANIC_WASM_STORE_COMPLETE_GC
+            | protocol::CANIC_WASM_STORE_INFO
+            | protocol::CANIC_WASM_STORE_PREPARE
+            | protocol::CANIC_WASM_STORE_PREPARE_GC
+            | protocol::CANIC_WASM_STORE_PUBLISH_CHUNK
+            | protocol::CANIC_WASM_STORE_STAGE_MANIFEST
+    )
 }
 
 #[cfg(test)]

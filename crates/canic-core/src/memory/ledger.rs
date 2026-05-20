@@ -1,30 +1,28 @@
 #[cfg(target_arch = "wasm32")]
 use super::manager;
-use super::{
-    manager::{MEMORY_MANAGER, RawStableMemoryState},
-    policy,
-    registry::MemoryRegistryError,
-};
+use super::{manager::MEMORY_MANAGER, policy, registry::MemoryRegistryError};
+#[cfg(any(test, target_arch = "wasm32"))]
+use ic_memory::stable_structures::Memory;
 use ic_memory::{
-    AllocationBootstrap, AllocationHistory, AllocationLedger, AllocationPolicy,
-    AllocationSlotDescriptor, BootstrapCommit, BootstrapError, CURRENT_LEDGER_SCHEMA_VERSION,
-    CURRENT_PHYSICAL_FORMAT_ID, CborLedgerCodec, DeclarationSnapshot, DiagnosticExport,
-    LedgerCodec, MemoryManagerAuthorityRecord, StableCellLedgerRecord,
-    decode_stable_cell_ledger_record, decode_stable_cell_payload,
+    AllocationHistory, AllocationLedger, AllocationSlotDescriptor, CURRENT_LEDGER_SCHEMA_VERSION,
+    CURRENT_PHYSICAL_FORMAT_ID, CborLedgerCodec, DiagnosticExport, MemoryManagerAuthorityRecord,
+    StableCellLedgerRecord,
     stable_structures::{
-        DefaultMemoryImpl, Memory,
+        DefaultMemoryImpl,
         cell::Cell,
         memory_manager::{MemoryId, VirtualMemory},
     },
 };
+#[cfg(any(test, target_arch = "wasm32"))]
+use ic_memory::{decode_stable_cell_ledger_record, decode_stable_cell_payload};
+#[cfg(any(test, target_arch = "wasm32"))]
 use serde::Deserialize;
 use std::cell::RefCell;
 
 pub const MEMORY_LAYOUT_LEDGER_ID: u8 = ic_memory::MEMORY_MANAGER_LEDGER_ID;
-pub const MEMORY_LAYOUT_LEDGER_OWNER: &str = ic_memory::IC_MEMORY_AUTHORITY_OWNER;
-pub const MEMORY_LAYOUT_LEDGER_LABEL: &str = ic_memory::IC_MEMORY_LEDGER_LABEL;
-pub const MEMORY_LAYOUT_LEDGER_STABLE_KEY: &str = ic_memory::IC_MEMORY_LEDGER_STABLE_KEY;
+#[cfg(any(test, target_arch = "wasm32"))]
 const LEGACY_CANIC_LEDGER_MAGIC: u64 = 0x4341_4E49_434D_454D;
+#[cfg(any(test, target_arch = "wasm32"))]
 const LEGACY_CANIC_LEDGER_ERROR: &str = "legacy Canic memory ledger format detected; this build uses ic-memory-native allocation persistence and cannot boot from the old format";
 
 thread_local! {
@@ -45,51 +43,18 @@ pub struct NativeMemoryLedgerSnapshot {
     pub authorities: Vec<MemoryManagerAuthorityRecord>,
 }
 
-pub fn validate_bootstrap_state_before_cell_init(
-    raw_state: RawStableMemoryState,
-) -> Result<(), MemoryRegistryError> {
-    match raw_state {
-        RawStableMemoryState::Empty => Ok(()),
-        RawStableMemoryState::ForeignOrCorrupt => Err(MemoryRegistryError::LedgerCorrupt {
-            reason: "foreign or corrupt raw stable memory state",
-        }),
-        RawStableMemoryState::MemoryManager => {
-            let memory = open_memory(MEMORY_LAYOUT_LEDGER_ID);
-            validate_existing_ledger_memory(&memory)
-        }
-    }
-}
-
-pub(super) fn bootstrap_declarations<P>(
-    declaration_snapshot: DeclarationSnapshot,
-    policy: &P,
-) -> Result<BootstrapCommit, BootstrapError<<CborLedgerCodec as LedgerCodec>::Error, P::Error>>
-where
-    P: AllocationPolicy,
-{
-    MEMORY_LAYOUT_LEDGER.with_borrow_mut(|cell| {
-        let mut record = cell.get().clone();
-        let mut bootstrap = AllocationBootstrap::new(record.store_mut());
-        let commit = bootstrap.initialize_validate_and_commit(
-            &CborLedgerCodec,
-            &genesis_ledger(),
-            declaration_snapshot,
-            policy,
-            None,
-        )?;
-        cell.set(record);
-        Ok(commit)
-    })
-}
-
 #[cfg(target_arch = "wasm32")]
 pub fn try_diagnostic_snapshot() -> Result<NativeMemoryLedgerSnapshot, MemoryRegistryError> {
     match manager::classify_raw_stable_memory() {
-        RawStableMemoryState::Empty => snapshot_from_record(&StableCellLedgerRecord::default()),
-        RawStableMemoryState::ForeignOrCorrupt => Err(MemoryRegistryError::LedgerCorrupt {
-            reason: "foreign or corrupt raw stable memory state",
-        }),
-        RawStableMemoryState::MemoryManager => {
+        manager::RawStableMemoryState::Empty => {
+            snapshot_from_record(&StableCellLedgerRecord::default())
+        }
+        manager::RawStableMemoryState::ForeignOrCorrupt => {
+            Err(MemoryRegistryError::LedgerCorrupt {
+                reason: "foreign or corrupt raw stable memory state",
+            })
+        }
+        manager::RawStableMemoryState::MemoryManager => {
             let memory = open_memory(MEMORY_LAYOUT_LEDGER_ID);
             validate_existing_ledger_memory(&memory)?;
             MEMORY_LAYOUT_LEDGER.with_borrow(|cell| snapshot_from_record(cell.get()))
@@ -102,27 +67,11 @@ pub fn try_snapshot() -> Result<NativeMemoryLedgerSnapshot, MemoryRegistryError>
     MEMORY_LAYOUT_LEDGER.with_borrow(|cell| snapshot_from_record(cell.get()))
 }
 
-#[cfg(test)]
-pub fn reset_for_tests() {
-    MEMORY_LAYOUT_LEDGER.with_borrow_mut(|cell| {
-        cell.set(StableCellLedgerRecord::default());
-    });
-}
-
-#[cfg(test)]
-pub fn try_export_records() -> Result<Vec<ic_memory::AllocationRecord>, MemoryRegistryError> {
-    Ok(try_snapshot()?
-        .export
-        .records
-        .into_iter()
-        .map(|record| record.allocation)
-        .collect())
-}
-
 fn open_memory(id: u8) -> VirtualMemory<DefaultMemoryImpl> {
     MEMORY_MANAGER.with_borrow_mut(|mgr| mgr.get(MemoryId::new(id)))
 }
 
+#[cfg(any(test, target_arch = "wasm32"))]
 fn validate_existing_ledger_memory<M: Memory>(memory: &M) -> Result<(), MemoryRegistryError> {
     if memory.size() == 0 {
         return Ok(());
@@ -146,11 +95,13 @@ fn validate_existing_ledger_memory<M: Memory>(memory: &M) -> Result<(), MemoryRe
     })
 }
 
+#[cfg(any(test, target_arch = "wasm32"))]
 #[derive(Deserialize)]
 struct LegacyCanicLedgerProbe {
     magic: u64,
 }
 
+#[cfg(any(test, target_arch = "wasm32"))]
 const fn stable_cell_error(_err: ic_memory::StableCellPayloadError) -> MemoryRegistryError {
     MemoryRegistryError::LedgerCorrupt {
         reason: "foreign or corrupt native ic-memory ledger state",
@@ -199,54 +150,8 @@ fn genesis_ledger() -> AllocationLedger {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::memory::registry::MemoryRegistryError;
-    use ic_memory::{
-        AllocationDeclaration, DeclarationSnapshot, STABLE_CELL_LAYOUT_VERSION, STABLE_CELL_MAGIC,
-        STABLE_CELL_VALUE_OFFSET, SchemaMetadata, StableCellLedgerRecord,
-    };
+    use ic_memory::{STABLE_CELL_LAYOUT_VERSION, STABLE_CELL_MAGIC, STABLE_CELL_VALUE_OFFSET};
     use serde::Serialize;
-
-    #[derive(Debug, Eq, PartialEq)]
-    struct AllowAllPolicy;
-
-    impl AllocationPolicy for AllowAllPolicy {
-        type Error = MemoryRegistryError;
-
-        fn validate_key(&self, _key: &ic_memory::StableKey) -> Result<(), Self::Error> {
-            Ok(())
-        }
-
-        fn validate_slot(
-            &self,
-            _key: &ic_memory::StableKey,
-            _slot: &AllocationSlotDescriptor,
-        ) -> Result<(), Self::Error> {
-            Ok(())
-        }
-
-        fn validate_reserved_slot(
-            &self,
-            _key: &ic_memory::StableKey,
-            _slot: &AllocationSlotDescriptor,
-        ) -> Result<(), Self::Error> {
-            Ok(())
-        }
-    }
-
-    #[test]
-    fn native_bootstrap_persists_and_recovers_allocations() {
-        reset_for_tests();
-        let snapshot = declaration_snapshot(vec![declaration(100, "app.test.users.v1")]);
-
-        bootstrap_declarations(snapshot, &AllowAllPolicy).expect("bootstrap native ledger");
-
-        let records = try_export_records().expect("ledger records");
-        assert!(records.iter().any(|record| {
-            record.stable_key().as_str() == "app.test.users.v1"
-                && record.slot().memory_manager_id() == Ok(100)
-        }));
-        assert!(try_snapshot().expect("snapshot").export.current_generation > 0);
-    }
 
     #[test]
     fn legacy_canic_ledger_payload_is_rejected() {
@@ -279,20 +184,6 @@ mod tests {
         write_stable_cell_payload(&memory, &payload);
 
         validate_existing_ledger_memory(&memory).expect("native payload should validate");
-    }
-
-    fn declaration(id: u8, stable_key: &str) -> AllocationDeclaration {
-        AllocationDeclaration::memory_manager_with_schema(
-            stable_key,
-            id,
-            stable_key,
-            SchemaMetadata::default(),
-        )
-        .expect("declaration")
-    }
-
-    fn declaration_snapshot(declarations: Vec<AllocationDeclaration>) -> DeclarationSnapshot {
-        DeclarationSnapshot::new(declarations).expect("snapshot")
     }
 
     fn write_stable_cell_payload<M: Memory>(memory: &M, payload: &[u8]) {

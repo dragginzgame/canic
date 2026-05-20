@@ -1,17 +1,6 @@
-//! PocketIC wrapper and fixture helpers for host-side Canic tests.
+//! PocketIC wrapper and fixture helpers for host-side canister tests.
 
-use candid::{Principal, encode_args, encode_one};
-use canic::{
-    Error,
-    cdk::types::TC,
-    dto::{
-        abi::v1::CanisterInitPayload,
-        env::EnvBootstrapArgs,
-        subnet::SubnetIdentity,
-        topology::{AppIndexArgs, SubnetIndexArgs},
-    },
-    ids::CanisterRole,
-};
+use candid::Principal;
 use pocket_ic::{
     CanisterStatusResult, PocketIc, PocketIcBuilder, RejectResponse, common::rest::RawMessageId,
 };
@@ -23,7 +12,6 @@ mod diagnostics;
 mod errors;
 mod lifecycle;
 mod process_lock;
-mod readiness;
 mod snapshot;
 mod standalone;
 mod startup;
@@ -32,22 +20,19 @@ pub use baseline::{
     CachedPicBaseline, CachedPicBaselineGuard, ControllerSnapshots,
     restore_or_rebuild_cached_pic_baseline,
 };
-pub use errors::{PicInstallError, StandaloneCanisterFixtureError};
+pub use errors::{PicCallError, PicInstallError, StandaloneCanisterFixtureError};
 pub use process_lock::{
     PicSerialGuard, PicSerialGuardError, acquire_pic_serial_guard, try_acquire_pic_serial_guard,
 };
-pub use readiness::{role_pid, wait_until_ready};
 pub use startup::PicStartError;
-const INSTALL_CYCLES: u128 = 500 * TC;
 
 pub use standalone::{
     StandaloneCanisterFixture, install_prebuilt_canister, install_prebuilt_canister_with_cycles,
-    install_standalone_canister, try_install_prebuilt_canister,
-    try_install_prebuilt_canister_with_cycles,
+    try_install_prebuilt_canister, try_install_prebuilt_canister_with_cycles,
 };
 
 ///
-/// Create a fresh PocketIC instance with the default Canic test subnet layout.
+/// Create a fresh PocketIC instance with the default application subnet layout.
 ///
 /// IMPORTANT:
 /// - Each call creates a new IC instance
@@ -234,52 +219,3 @@ impl Pic {
         self.inner.set_certified_time(restored);
     }
 }
-
-/// --------------------------------------
-/// install_args helper
-/// --------------------------------------
-///
-/// Init semantics:
-/// - Root canisters receive a `SubnetIdentity` (direct root bootstrap).
-/// - Non-root canisters receive `EnvBootstrapArgs` + optional directory snapshots.
-///
-/// Directory handling:
-/// - By default, directory views are empty for standalone installs.
-/// - Directory-dependent logic is opt-in via `install_args_with_directories`.
-/// - Root-provisioned installs will populate directories via cascade.
-///
-
-fn install_args(role: CanisterRole) -> Result<Vec<u8>, Error> {
-    if role.is_root() {
-        install_root_args()
-    } else {
-        // Non-root standalone install.
-        // Provide only what is structurally known at install time.
-        let env = EnvBootstrapArgs {
-            prime_root_pid: None,
-            subnet_role: None,
-            subnet_pid: None,
-            root_pid: None,
-            canister_role: Some(role),
-            parent_pid: None,
-        };
-
-        // Intentional: standalone installs do not require directories unless
-        // a test explicitly exercises directory-dependent behavior.
-        let payload = CanisterInitPayload {
-            env,
-            app_index: AppIndexArgs(Vec::new()),
-            subnet_index: SubnetIndexArgs(Vec::new()),
-        };
-
-        encode_args::<(CanisterInitPayload, Option<Vec<u8>>)>((payload, None))
-            .map_err(|err| Error::internal(format!("encode_args failed: {err}")))
-    }
-}
-
-fn install_root_args() -> Result<Vec<u8>, Error> {
-    encode_one(SubnetIdentity::Manual)
-        .map_err(|err| Error::internal(format!("encode_one failed: {err}")))
-}
-
-// Prefer the likely controller sender first to reduce noisy management-call failures.

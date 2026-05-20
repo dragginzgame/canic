@@ -5,39 +5,27 @@
 #[macro_export]
 macro_rules! ic_memory_key {
     ($stable_key:literal, $label:path, $id:expr) => {{
-        const _: () = {
-            #[ $crate::__reexports::ctor::ctor(unsafe, anonymous, crate_path = $crate::__reexports::ctor) ]
-            fn __canic_declare_memory_slot() {
-                $crate::memory::registry::declare_memory_slot_with_key(
-                    $id,
-                    env!("CARGO_PKG_NAME"),
-                    stringify!($label),
-                    $stable_key,
-                )
-                .expect("memory id declaration validation failed");
-            }
-        };
-
-        let _type_check: Option<$label> = None;
-
-        $crate::memory::open_validated_memory($stable_key, stringify!($label), $id)
+        $crate::memory::runtime::assert_memory_bootstrap_ready(stringify!($label), $id);
+        $crate::__reexports::ic_memory::ic_memory_key!($stable_key, $label, $id)
     }};
+}
+
+/// Declare a MemoryManager ID range owned by the declaring crate.
+#[macro_export]
+macro_rules! ic_memory_range {
+    (start = $start:expr, end = $end:expr $(,)?) => {
+        $crate::__reexports::ic_memory::ic_memory_range!(start = $start, end = $end,);
+    };
+    (start = $start:expr, end = $end:expr, mode = $mode:ident $(,)?) => {
+        $crate::__reexports::ic_memory::ic_memory_range!(start = $start, end = $end, mode = $mode,);
+    };
 }
 
 /// Register one eager-init body for execution during lifecycle bootstrap.
 #[macro_export]
 macro_rules! eager_init {
     ($body:block) => {
-        const _: () = {
-            fn __canic_registered_eager_init_body() {
-                $body
-            }
-
-            #[ $crate::__reexports::ctor::ctor(unsafe, anonymous, crate_path = $crate::__reexports::ctor) ]
-            fn __canic_register_eager_init() {
-                $crate::memory::runtime::defer_eager_init(__canic_registered_eager_init_body);
-            }
-        };
+        $crate::__reexports::ic_memory::eager_init!($body);
     };
 }
 

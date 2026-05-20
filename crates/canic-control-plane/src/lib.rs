@@ -4,6 +4,8 @@
 //! top of `canic-core` and is re-exported through the `canic` facade when the
 //! control-plane feature is enabled.
 
+canic_core::ic_memory_range!(start = 80, end = 85);
+
 #[cfg(test)]
 const _: () = {
     fn __canic_memory_test_bootstrap() {

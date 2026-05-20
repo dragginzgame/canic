@@ -1,6 +1,6 @@
 # canic-testkit
 
-Public PocketIC-oriented test utilities for projects that use Canic.
+Public PocketIC-oriented test utilities for IC canister tests.
 
 Use this crate when you want generic host-side test infrastructure that is
 still publishable and reusable outside the Canic workspace.
@@ -8,8 +8,7 @@ still publishable and reusable outside the Canic workspace.
 What it owns:
 - PocketIC startup and builder helpers
 - generic call/install helpers
-- ready polling and diagnostics
-- standalone non-root canister fixtures
+- generic PocketIC diagnostics
 - generic prebuilt-wasm install helpers
 - cached PocketIC baseline primitives
 - workspace/wasm artifact helpers used by host-side tests
@@ -20,6 +19,9 @@ Current API shape:
 - tests should prefer the wrapper methods and fixture helpers here instead of reaching through to the underlying PocketIC client directly
 
 What it intentionally does not own:
+- Canic init payloads, role names, or endpoint method constants
+- Canic-specific `canic_ready` polling
+- Canic standalone canister fixtures
 - Canic's full root-topology harness
 - attestation-specific fixture policy
 - repo-only audit probes

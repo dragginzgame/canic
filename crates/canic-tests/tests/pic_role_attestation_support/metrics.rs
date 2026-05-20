@@ -6,7 +6,7 @@ pub fn query_metric_page(
     canister_id: Principal,
     kind: MetricsKind,
 ) -> Page<MetricEntry> {
-    let response: Result<Result<Page<MetricEntry>, Error>, Error> = pic.query_call_as(
+    let response: Result<Result<Page<MetricEntry>, Error>, _> = pic.query_call_as(
         canister_id,
         Principal::anonymous(),
         "canic_metrics",

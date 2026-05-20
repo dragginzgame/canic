@@ -1,32 +1,8 @@
-use candid::encode_args;
-use canic::{
-    dto::{
-        abi::v1::CanisterInitPayload,
-        env::EnvBootstrapArgs,
-        topology::{AppIndexArgs, SubnetIndexArgs},
-    },
-    ids::{CanisterRole, SubnetRole},
-};
-use std::{
-    path::{Path, PathBuf},
-    sync::Mutex,
-};
-
-use crate::{
-    Fake,
-    artifacts::{
-        WasmBuildProfile, build_internal_test_wasm_canisters, read_wasm, test_target_dir,
-        workspace_root_for,
-    },
-};
-
 use super::{
     Pic, PicSerialGuard, StandaloneCanisterFixtureError, try_acquire_pic_serial_guard, try_pic,
 };
 
 const STANDALONE_INSTALL_CYCLES: u128 = 1_000_000_000_000;
-const STANDALONE_READY_TICK_LIMIT: usize = 60;
-static STANDALONE_BUILD_SERIAL: Mutex<()> = Mutex::new(());
 
 ///
 /// StandaloneCanisterFixture
@@ -34,7 +10,7 @@ static STANDALONE_BUILD_SERIAL: Mutex<()> = Mutex::new(());
 
 pub struct StandaloneCanisterFixture {
     pic: Pic,
-    canister_id: canic::cdk::types::Principal,
+    canister_id: candid::Principal,
     _serial_guard: PicSerialGuard,
 }
 
@@ -53,13 +29,13 @@ impl StandaloneCanisterFixture {
 
     /// Read the installed canister id for this standalone fixture.
     #[must_use]
-    pub const fn canister_id(&self) -> canic::cdk::types::Principal {
+    pub const fn canister_id(&self) -> candid::Principal {
         self.canister_id
     }
 
     /// Consume the fixture and return the owned PocketIC instance and canister id.
     #[must_use]
-    pub fn into_parts(self) -> (Pic, canic::cdk::types::Principal) {
+    pub fn into_parts(self) -> (Pic, candid::Principal) {
         (self.pic, self.canister_id)
     }
 }
@@ -112,77 +88,4 @@ pub fn try_install_prebuilt_canister_with_cycles(
         canister_id,
         _serial_guard: serial_guard,
     })
-}
-
-// Install one non-root Canic canister into a fresh PocketIC instance with
-// explicit local env bootstrap fields, empty topology indexes, and the
-// internal test endpoint surface enabled for that test build.
-#[must_use]
-pub fn install_standalone_canister(
-    crate_name: &str,
-    role: CanisterRole,
-    profile: WasmBuildProfile,
-) -> StandaloneCanisterFixture {
-    assert!(
-        !role.is_root(),
-        "standalone helper is for non-root canisters"
-    );
-
-    let workspace_root = workspace_root();
-    let target_name = format!("standalone-{crate_name}");
-    let target_dir = test_target_dir(&workspace_root, &target_name);
-    ensure_canister_wasm_ready(&workspace_root, &target_dir, crate_name, profile);
-
-    let wasm = read_wasm(&target_dir, crate_name, profile);
-    let fixture = install_prebuilt_canister(wasm, standalone_init_args(role));
-    let canister_id = fixture.canister_id();
-    let pic = fixture.pic();
-    pic.wait_for_ready(
-        canister_id,
-        STANDALONE_READY_TICK_LIMIT,
-        "standalone canister bootstrap",
-    );
-
-    fixture
-}
-
-// Build the requested wasm artifact once per process for the shared standalone
-// target directory instead of trusting stale on-disk artifacts, and compile it
-// with the internal test endpoint surface enabled.
-fn ensure_canister_wasm_ready(
-    workspace_root: &Path,
-    target_dir: &Path,
-    crate_name: &str,
-    profile: WasmBuildProfile,
-) {
-    let _build_guard = STANDALONE_BUILD_SERIAL
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
-
-    build_internal_test_wasm_canisters(workspace_root, target_dir, &[crate_name], profile);
-}
-
-// Encode one explicit local non-root init payload without any preloaded
-// topology index snapshots.
-fn standalone_init_args(role: CanisterRole) -> Vec<u8> {
-    let root_pid = Fake::principal(1);
-    let payload = CanisterInitPayload {
-        env: EnvBootstrapArgs {
-            prime_root_pid: Some(root_pid),
-            subnet_role: Some(SubnetRole::PRIME),
-            subnet_pid: Some(Fake::principal(2)),
-            root_pid: Some(root_pid),
-            canister_role: Some(role),
-            parent_pid: Some(root_pid),
-        },
-        app_index: AppIndexArgs(Vec::new()),
-        subnet_index: SubnetIndexArgs(Vec::new()),
-    };
-
-    encode_args::<(CanisterInitPayload, Option<Vec<u8>>)>((payload, None))
-        .expect("encode standalone init args")
-}
-
-fn workspace_root() -> PathBuf {
-    workspace_root_for(env!("CARGO_MANIFEST_DIR"))
 }

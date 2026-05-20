@@ -1,9 +1,4 @@
-pub mod registry;
-
-use std::sync::{
-    Mutex,
-    atomic::{AtomicBool, Ordering},
-};
+use std::sync::Mutex;
 
 // -----------------------------------------------------------------------------
 // CANIC_EAGER_TLS
@@ -22,8 +17,6 @@ use std::sync::{
 // -----------------------------------------------------------------------------
 
 static CANIC_EAGER_TLS: Mutex<Vec<fn()>> = Mutex::new(Vec::new());
-static CANIC_EAGER_TLS_RUNNING: AtomicBool = AtomicBool::new(false);
-static CANIC_EAGER_INIT: Mutex<Vec<fn()>> = Mutex::new(Vec::new());
 #[cfg(any(test, debug_assertions))]
 static TEST_BOOTSTRAP_HOOK: Mutex<Option<fn()>> = Mutex::new(None);
 
@@ -41,21 +34,6 @@ static TEST_BOOTSTRAP_HOOK: Mutex<Option<fn()>> = Mutex::new(None);
 /// heartbeat, etc.) so that thread-local caches are in a fully-initialized state
 /// before the canister performs memory-dependent work.
 pub fn init_eager_tls() {
-    ///
-    /// RunningGuard
-    ///
-
-    struct RunningGuard;
-
-    impl Drop for RunningGuard {
-        fn drop(&mut self) {
-            CANIC_EAGER_TLS_RUNNING.store(false, Ordering::SeqCst);
-        }
-    }
-
-    CANIC_EAGER_TLS_RUNNING.store(true, Ordering::SeqCst);
-    let _running_guard = RunningGuard;
-
     let funcs = {
         let mut funcs = CANIC_EAGER_TLS.lock().expect("eager tls queue poisoned");
         std::mem::take(&mut *funcs)
@@ -74,41 +52,10 @@ pub fn init_eager_tls() {
     }
 }
 
-/// Run all registered eager-init hooks and clear the registry.
-///
-/// This drains the internal queue of eager-init functions and invokes each
-/// exactly once. Canic uses this during synchronous lifecycle bootstrap before
-/// the memory registry is committed, so explicit memory declarations can be
-/// collected without opening stable-memory handles.
-pub fn run_registered_eager_init() {
-    let funcs = {
-        let mut funcs = CANIC_EAGER_INIT.lock().expect("eager init queue poisoned");
-        std::mem::take(&mut *funcs)
-    };
-
-    debug_assert!(
-        CANIC_EAGER_INIT
-            .lock()
-            .expect("eager init queue poisoned")
-            .is_empty(),
-        "CANIC_EAGER_INIT was modified during eager init execution"
-    );
-
-    for f in funcs {
-        f();
-    }
-}
-
-/// Return whether eager TLS initializers are currently being executed.
-#[must_use]
-pub fn is_eager_tls_initializing() -> bool {
-    CANIC_EAGER_TLS_RUNNING.load(Ordering::SeqCst)
-}
-
 /// Return whether memory access is currently allowed during bootstrap.
 #[must_use]
 pub fn is_memory_bootstrap_ready() -> bool {
-    registry::MemoryRegistryRuntime::validated_allocations().is_ok()
+    ic_memory::runtime::is_default_memory_manager_bootstrapped()
 }
 
 /// Panic if a stable-memory slot is touched before memory bootstrap is ready.
@@ -126,7 +73,7 @@ pub fn assert_memory_bootstrap_ready(label: &str, id: u8) {
     }
 
     panic!(
-        "stable memory slot '{label}' (id {id}) accessed before memory bootstrap; call init_eager_tls() and MemoryRegistryRuntime::init(...) first"
+        "stable memory slot '{label}' (id {id}) accessed before memory bootstrap; call ic_memory::bootstrap_default_memory_manager_with_policy(...) first"
     );
 }
 
@@ -139,14 +86,6 @@ pub fn defer_tls_initializer(f: fn()) {
     CANIC_EAGER_TLS
         .lock()
         .expect("eager tls queue poisoned")
-        .push(f);
-}
-
-/// Register an eager-init function for lifecycle bootstrap execution.
-pub fn defer_eager_init(f: fn()) {
-    CANIC_EAGER_INIT
-        .lock()
-        .expect("eager init queue poisoned")
         .push(f);
 }
 
@@ -199,10 +138,6 @@ mod tests {
             .lock()
             .expect("eager tls queue poisoned")
             .clear();
-        CANIC_EAGER_INIT
-            .lock()
-            .expect("eager init queue poisoned")
-            .clear();
     }
 
     fn bump() {
@@ -224,25 +159,6 @@ mod tests {
 
         // second call sees empty queue
         init_eager_tls();
-        let second = COUNT.load(Ordering::SeqCst);
-        assert_eq!(second, 1);
-    }
-
-    #[test]
-    fn run_registered_eager_init_runs_and_clears_queue() {
-        let _guard = TEST_LOCK.lock().expect("test lock poisoned");
-        clear_test_queues();
-        COUNT.store(0, Ordering::SeqCst);
-        CANIC_EAGER_INIT
-            .lock()
-            .expect("eager init queue poisoned")
-            .push(bump);
-        run_registered_eager_init();
-        let first = COUNT.load(Ordering::SeqCst);
-        assert_eq!(first, 1);
-
-        // second call sees empty queue
-        run_registered_eager_init();
         let second = COUNT.load(Ordering::SeqCst);
         assert_eq!(second, 1);
     }

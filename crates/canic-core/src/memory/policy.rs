@@ -4,11 +4,15 @@ use ic_memory::{
     MemoryManagerRangeMode, MemoryManagerSlotError, StableKey,
 };
 
-pub const CANIC_FRAMEWORK_MIN_ID: u8 = 10;
-pub const CANIC_FRAMEWORK_MAX_ID: u8 = 99;
+pub const CANIC_CORE_MIN_ID: u8 = 11;
+pub const CANIC_CORE_MAX_ID: u8 = 79;
+pub const CANIC_CONTROL_PLANE_MIN_ID: u8 = 80;
+pub const CANIC_CONTROL_PLANE_MAX_ID: u8 = 85;
 
-pub const CANIC_FRAMEWORK_AUTHORITY_OWNER: &str = "canic.framework";
-pub const CANIC_FRAMEWORK_AUTHORITY_PURPOSE: &str = "Canic framework allocation authority";
+pub const CANIC_CORE_AUTHORITY_OWNER: &str = "canic-core";
+pub const CANIC_CORE_AUTHORITY_PURPOSE: &str = "Canic core allocation authority";
+pub const CANIC_CONTROL_PLANE_AUTHORITY_OWNER: &str = "canic-control-plane";
+pub const CANIC_CONTROL_PLANE_AUTHORITY_PURPOSE: &str = "Canic control-plane allocation authority";
 
 ///
 /// CanicMemoryManagerPolicy
@@ -17,18 +21,16 @@ pub const CANIC_FRAMEWORK_AUTHORITY_PURPOSE: &str = "Canic framework allocation 
 /// allocation slots.
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(super) struct CanicMemoryManagerPolicy<'a> {
-    declaring_crate: &'a str,
-}
+pub(super) struct CanicMemoryManagerPolicy;
 
-impl<'a> CanicMemoryManagerPolicy<'a> {
+impl CanicMemoryManagerPolicy {
     #[must_use]
-    pub(super) const fn for_declaring_crate(declaring_crate: &'a str) -> Self {
-        Self { declaring_crate }
+    pub(super) const fn new() -> Self {
+        Self
     }
 }
 
-impl AllocationPolicy for CanicMemoryManagerPolicy<'_> {
+impl AllocationPolicy for CanicMemoryManagerPolicy {
     type Error = MemoryRegistryError;
 
     fn validate_key(&self, _key: &StableKey) -> Result<(), Self::Error> {
@@ -43,7 +45,7 @@ impl AllocationPolicy for CanicMemoryManagerPolicy<'_> {
         let id = slot
             .memory_manager_id()
             .map_err(memory_slot_error_to_registry_error)?;
-        validate_key_id_claim(id, self.declaring_crate, key.as_str())
+        validate_key_id_claim(id, key.as_str())
     }
 
     fn validate_reserved_slot(
@@ -62,26 +64,8 @@ impl AllocationPolicy for CanicMemoryManagerPolicy<'_> {
                 reason: "application stable keys may not be pre-reserved by Canic",
             });
         }
-        validate_key_id_claim(id, self.declaring_crate, key.as_str())
+        validate_key_id_claim(id, key.as_str())
     }
-}
-
-pub fn validate_stable_key_authority(
-    id: u8,
-    crate_name: &str,
-    stable_key: &str,
-) -> Result<(), MemoryRegistryError> {
-    let key =
-        StableKey::parse(stable_key).map_err(|err| MemoryRegistryError::InvalidDeclaration {
-            stable_key: err.stable_key,
-            reason: err.reason,
-        })?;
-
-    let slot = AllocationSlotDescriptor::memory_manager(id)
-        .map_err(memory_slot_error_to_registry_error)?;
-    let policy = CanicMemoryManagerPolicy::for_declaring_crate(crate_name);
-
-    AllocationPolicy::validate_slot(&policy, &key, &slot)
 }
 
 #[must_use]
@@ -95,76 +79,60 @@ pub fn canonical_authority_records() -> Vec<MemoryManagerAuthorityRecord> {
         )
         .expect("valid ic-memory authority record"),
         MemoryManagerAuthorityRecord::new(
-            canic_framework_range(),
-            CANIC_FRAMEWORK_AUTHORITY_OWNER,
+            canic_core_range(),
+            CANIC_CORE_AUTHORITY_OWNER,
             MemoryManagerRangeMode::Reserved,
-            Some(CANIC_FRAMEWORK_AUTHORITY_PURPOSE.to_string()),
+            Some(CANIC_CORE_AUTHORITY_PURPOSE.to_string()),
         )
-        .expect("valid Canic authority record"),
+        .expect("valid Canic core authority record"),
+        MemoryManagerAuthorityRecord::new(
+            canic_control_plane_range(),
+            CANIC_CONTROL_PLANE_AUTHORITY_OWNER,
+            MemoryManagerRangeMode::Reserved,
+            Some(CANIC_CONTROL_PLANE_AUTHORITY_PURPOSE.to_string()),
+        )
+        .expect("valid Canic control-plane authority record"),
     ]
 }
 
-fn validate_key_id_claim(
-    id: u8,
-    crate_name: &str,
-    stable_key: &str,
-) -> Result<(), MemoryRegistryError> {
+fn validate_key_id_claim(id: u8, stable_key: &str) -> Result<(), MemoryRegistryError> {
     if ic_memory::is_ic_memory_stable_key(stable_key) {
-        return validate_ic_memory_claim(id, crate_name, stable_key);
+        return Ok(());
+    }
+
+    if stable_key.starts_with("canic.core.") {
+        return require_range(
+            id,
+            stable_key,
+            canic_core_range(),
+            "canic.core.* keys must use Canic core ids 11-79",
+        );
+    }
+
+    if stable_key.starts_with("canic.control_plane.") {
+        return require_range(
+            id,
+            stable_key,
+            canic_control_plane_range(),
+            "canic.control_plane.* keys must use Canic control-plane ids 80-85",
+        );
     }
 
     if stable_key.starts_with("canic.") {
-        return validate_canic_claim(id, crate_name, stable_key);
+        return Err(MemoryRegistryError::RangeAuthorityViolation {
+            stable_key: stable_key.to_string(),
+            id,
+            reason: "unrecognized canic.* stable key namespace",
+        });
     }
 
     validate_application_claim(id, stable_key)
 }
 
-fn validate_ic_memory_claim(
-    id: u8,
-    crate_name: &str,
-    stable_key: &str,
-) -> Result<(), MemoryRegistryError> {
-    if crate_name != ic_memory::IC_MEMORY_AUTHORITY_OWNER {
-        return Err(MemoryRegistryError::RangeAuthorityViolation {
-            stable_key: stable_key.to_string(),
-            id,
-            reason: "ic_memory.* keys may only be declared by ic-memory",
-        });
-    }
-
-    require_range(
-        id,
-        stable_key,
-        ic_memory::memory_manager_governance_range(),
-        "ic_memory.* keys must use the ic-memory governance range",
-    )
-}
-
-fn validate_canic_claim(
-    id: u8,
-    crate_name: &str,
-    stable_key: &str,
-) -> Result<(), MemoryRegistryError> {
-    if !crate_name.starts_with("canic") {
-        return Err(MemoryRegistryError::RangeAuthorityViolation {
-            stable_key: stable_key.to_string(),
-            id,
-            reason: "canic.* keys may only be declared by Canic framework crates",
-        });
-    }
-
-    require_range(
-        id,
-        stable_key,
-        canic_framework_range(),
-        "canic.* keys must use ids 10-99",
-    )
-}
-
 fn validate_application_claim(id: u8, stable_key: &str) -> Result<(), MemoryRegistryError> {
     if ic_memory::memory_manager_governance_range().contains(id)
-        || canic_framework_range().contains(id)
+        || canic_core_range().contains(id)
+        || canic_control_plane_range().contains(id)
     {
         return Err(MemoryRegistryError::RangeAuthorityViolation {
             stable_key: stable_key.to_string(),
@@ -192,9 +160,13 @@ fn require_range(
     }
 }
 
-fn canic_framework_range() -> MemoryManagerIdRange {
-    MemoryManagerIdRange::new(CANIC_FRAMEWORK_MIN_ID, CANIC_FRAMEWORK_MAX_ID)
-        .expect("valid Canic framework range")
+fn canic_core_range() -> MemoryManagerIdRange {
+    MemoryManagerIdRange::new(CANIC_CORE_MIN_ID, CANIC_CORE_MAX_ID).expect("valid Canic core range")
+}
+
+fn canic_control_plane_range() -> MemoryManagerIdRange {
+    MemoryManagerIdRange::new(CANIC_CONTROL_PLANE_MIN_ID, CANIC_CONTROL_PLANE_MAX_ID)
+        .expect("valid Canic control-plane range")
 }
 
 fn memory_slot_error_to_registry_error(err: MemoryManagerSlotError) -> MemoryRegistryError {
@@ -216,5 +188,107 @@ fn memory_slot_error_to_registry_error(err: MemoryManagerSlotError) -> MemoryReg
                 reason: "unsupported MemoryManager allocation slot descriptor",
             }
         }
+    }
+}
+
+///
+/// TESTS
+///
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn policy() -> CanicMemoryManagerPolicy {
+        CanicMemoryManagerPolicy::new()
+    }
+
+    fn key(value: &str) -> StableKey {
+        StableKey::parse(value).expect("stable key")
+    }
+
+    fn slot(id: u8) -> AllocationSlotDescriptor {
+        AllocationSlotDescriptor::memory_manager(id).expect("usable MemoryManager id")
+    }
+
+    fn validate(stable_key: &str, id: u8) -> Result<(), MemoryRegistryError> {
+        policy().validate_slot(&key(stable_key), &slot(id))
+    }
+
+    fn validate_reserved(stable_key: &str, id: u8) -> Result<(), MemoryRegistryError> {
+        policy().validate_reserved_slot(&key(stable_key), &slot(id))
+    }
+
+    #[test]
+    fn accepts_canic_framework_namespaces_in_owned_ranges() {
+        validate("canic.core.canister_children.v1", CANIC_CORE_MIN_ID).expect("first core slot");
+        validate("canic.core.future.v1", CANIC_CORE_MAX_ID).expect("last core slot");
+        validate(
+            "canic.control_plane.template_manifest.v1",
+            CANIC_CONTROL_PLANE_MIN_ID,
+        )
+        .expect("first control-plane slot");
+        validate(
+            "canic.control_plane.wasm_store_gc_state.v1",
+            CANIC_CONTROL_PLANE_MAX_ID,
+        )
+        .expect("last control-plane slot");
+    }
+
+    #[test]
+    fn rejects_canic_framework_namespaces_outside_owned_ranges() {
+        let err = validate("canic.core.app_state.v1", CANIC_CONTROL_PLANE_MIN_ID)
+            .expect_err("core key cannot claim control-plane range");
+        assert!(matches!(
+            err,
+            MemoryRegistryError::RangeAuthorityViolation { .. }
+        ));
+
+        let err = validate(
+            "canic.control_plane.template_manifest.v1",
+            CANIC_CORE_MIN_ID,
+        )
+        .expect_err("control-plane key cannot claim core range");
+        assert!(matches!(
+            err,
+            MemoryRegistryError::RangeAuthorityViolation { .. }
+        ));
+
+        let err = validate("canic.unknown.state.v1", CANIC_CONTROL_PLANE_MAX_ID + 1)
+            .expect_err("unknown canic namespace is reserved");
+        assert!(matches!(
+            err,
+            MemoryRegistryError::RangeAuthorityViolation { .. }
+        ));
+    }
+
+    #[test]
+    fn accepts_application_keys_only_outside_reserved_ranges() {
+        validate("app.users.v1", CANIC_CONTROL_PLANE_MAX_ID + 1).expect("application slot");
+        validate("app.archive.v1", ic_memory::MEMORY_MANAGER_MAX_ID).expect("last app slot");
+
+        let err = validate("app.users.v1", CANIC_CORE_MIN_ID)
+            .expect_err("application key cannot claim Canic core range");
+        assert!(matches!(
+            err,
+            MemoryRegistryError::RangeAuthorityViolation { .. }
+        ));
+
+        let err = validate("app.users.v1", ic_memory::MEMORY_MANAGER_LEDGER_ID)
+            .expect_err("application key cannot claim ic-memory governance range");
+        assert!(matches!(
+            err,
+            MemoryRegistryError::RangeAuthorityViolation { .. }
+        ));
+    }
+
+    #[test]
+    fn rejects_application_reservations() {
+        let err = validate_reserved("app.users.v1", CANIC_CONTROL_PLANE_MAX_ID + 1)
+            .expect_err("Canic does not pre-reserve application keys");
+        assert!(matches!(
+            err,
+            MemoryRegistryError::RangeAuthorityViolation { .. }
+        ));
     }
 }
