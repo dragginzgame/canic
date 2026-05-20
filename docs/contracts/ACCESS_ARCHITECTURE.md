@@ -36,6 +36,15 @@ separate policy family.
   descriptors so method names, envelope proof scope, and accepted caller roles
   come from the protected endpoint declaration instead of being duplicated at
   call sites.
+- The generated descriptor accessor name is
+  `canic_internal_endpoint_<endpoint>()`; `canic_internal_client!` consumes
+  those accessors to generate typed protected update client methods. Single-role
+  descriptors can infer the caller role; multi-role descriptors require an
+  explicit `role = ...` clause in the generated client method declaration.
+- Generated protected clients carry `CanicInternalCallOptions` for wait mode,
+  attached cycles, and requested proof TTL. These transport knobs must stay on
+  the protected client path and must not require callers to bypass descriptor
+  metadata or use raw `Call`.
 - The old AppIndex-only `caller::has_app_role(role)` predicate was removed in
   0.40 because verifier-local AppIndex state is not sufficient authorization
   for sibling Canic RPC.

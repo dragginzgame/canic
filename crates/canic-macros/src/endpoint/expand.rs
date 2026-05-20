@@ -802,9 +802,8 @@ fn protected_internal_endpoint_descriptor(
     exported_method: &TokenStream2,
     roles: &[TokenStream2],
 ) -> TokenStream2 {
-    let descriptor_name = format_ident!("__canic_internal_endpoint_{}", name);
+    let descriptor_name = format_ident!("canic_internal_endpoint_{}", name);
     quote! {
-        #[doc(hidden)]
         #vis fn #descriptor_name() -> ::canic::api::ic::ProtectedInternalEndpoint {
             ::canic::api::ic::ProtectedInternalEndpoint::new(
                 #exported_method,
@@ -1137,7 +1136,7 @@ mod tests {
         let expanded = expand(EndpointKind::Update, args, func).to_string();
         let compact = expanded.split_whitespace().collect::<String>();
 
-        assert!(compact.contains("pubfn__canic_internal_endpoint_system_add_project_to_user()"));
+        assert!(compact.contains("pubfncanic_internal_endpoint_system_add_project_to_user()"));
         assert!(compact.contains("::canic::api::ic::ProtectedInternalEndpoint::new"));
         assert!(compact.contains("\"wire_system_add_project_to_user\""));
         assert!(compact.contains("CanisterRole::new(\"project_hub\")"));
@@ -1163,7 +1162,7 @@ mod tests {
         let expanded = expand(EndpointKind::Update, args, func).to_string();
         let compact = expanded.split_whitespace().collect::<String>();
 
-        assert!(compact.contains("__canic_internal_endpoint_protected()"));
+        assert!(compact.contains("canic_internal_endpoint_protected()"));
         assert!(compact.contains("CanisterRole::new(\"project_hub\")"));
         assert!(compact.contains("CanisterRole::new(\"admin_hub\")"));
     }

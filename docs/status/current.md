@@ -132,6 +132,21 @@ inspect only the files needed for the current task.
   `ProtectedInternalEndpoint::required_single_role()`, so generated clients for
   single-role protected endpoints can derive the caller role from endpoint
   metadata and reserve explicit role selection for multi-role endpoints.
+- Started `0.40.7` by turning protected endpoint descriptor accessors into a
+  stable generated symbol shape, `canic_internal_endpoint_<endpoint>()`, and
+  adding the first `canic_internal_client!` facade macro for typed protected
+  update clients backed by those descriptors and `CanicInternalClient`.
+- Extended `0.40.7` so `canic_internal_client!` supports explicit
+  `role = ...` method clauses for multi-role protected endpoints while keeping
+  single-role descriptors as the ergonomic default.
+- Extended the `.7` client surface with `CanicInternalCallOptions` and generated
+  client `with_*` transport controls for wait mode, attached cycles, and proof
+  TTL, so typed clients do not need to drop down to raw `CanicCall` for those
+  settings.
+- Added integration coverage for the actual downstream flow: a protected
+  `#[canic_update(... caller::has_role(...))]` endpoint emits
+  `canic_internal_endpoint_<endpoint>()`, and `canic_internal_client!` consumes
+  that generated descriptor directly.
 - Started `0.39.1` by adding an AppIndex-backed
   `caller::has_app_role(role)` internal access predicate, giving app hubs and
   shards a first-class way to trust canonical sibling app canisters without

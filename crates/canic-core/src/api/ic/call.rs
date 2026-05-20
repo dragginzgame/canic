@@ -182,12 +182,46 @@ impl ProtectedInternalEndpoint {
 #[derive(Clone, Copy, Debug)]
 pub struct CanicInternalClient {
     canister_id: Principal,
+    options: CanicInternalCallOptions,
 }
 
 impl CanicInternalClient {
     #[must_use]
     pub const fn new(canister_id: Principal) -> Self {
-        Self { canister_id }
+        Self {
+            canister_id,
+            options: CanicInternalCallOptions::new(),
+        }
+    }
+
+    #[must_use]
+    pub const fn with_options(mut self, options: CanicInternalCallOptions) -> Self {
+        self.options = options;
+        self
+    }
+
+    #[must_use]
+    pub const fn with_bounded_wait(mut self) -> Self {
+        self.options = self.options.with_bounded_wait();
+        self
+    }
+
+    #[must_use]
+    pub const fn with_unbounded_wait(mut self) -> Self {
+        self.options = self.options.with_unbounded_wait();
+        self
+    }
+
+    #[must_use]
+    pub const fn with_cycles(mut self, cycles: u128) -> Self {
+        self.options = self.options.with_cycles(cycles);
+        self
+    }
+
+    #[must_use]
+    pub const fn with_proof_ttl_secs(mut self, ttl_secs: u64) -> Self {
+        self.options = self.options.with_proof_ttl_secs(ttl_secs);
+        self
     }
 
     pub async fn call_update<A>(
@@ -206,11 +240,24 @@ impl CanicInternalClient {
             )));
         }
 
-        CanicCall::unbounded_wait(self.canister_id, endpoint.method())
+        let builder = match self.options.wait {
+            CanicInternalWaitMode::Bounded => {
+                CanicCall::bounded_wait(self.canister_id, endpoint.method())
+            }
+            CanicInternalWaitMode::Unbounded => {
+                CanicCall::unbounded_wait(self.canister_id, endpoint.method())
+            }
+        };
+        let builder = builder
             .with_caller_role(caller_role)
-            .with_args(args)?
-            .execute()
-            .await
+            .with_cycles(self.options.cycles);
+        let builder = if let Some(ttl_secs) = self.options.proof_ttl_secs {
+            builder.with_proof_ttl_secs(ttl_secs)
+        } else {
+            builder
+        };
+
+        builder.with_args(args)?.execute().await
     }
 
     pub async fn call_update_with_single_role<A>(
@@ -252,6 +299,70 @@ impl CanicInternalClient {
         let role = endpoint.required_single_role()?;
         self.call_update_result(endpoint, role, args).await
     }
+}
+
+///
+/// CanicInternalCallOptions
+///
+/// Transport options shared by generated protected internal clients.
+///
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct CanicInternalCallOptions {
+    wait: CanicInternalWaitMode,
+    cycles: u128,
+    proof_ttl_secs: Option<u64>,
+}
+
+impl CanicInternalCallOptions {
+    #[must_use]
+    pub const fn new() -> Self {
+        Self {
+            wait: CanicInternalWaitMode::Unbounded,
+            cycles: 0,
+            proof_ttl_secs: None,
+        }
+    }
+
+    #[must_use]
+    pub const fn with_bounded_wait(mut self) -> Self {
+        self.wait = CanicInternalWaitMode::Bounded;
+        self
+    }
+
+    #[must_use]
+    pub const fn with_unbounded_wait(mut self) -> Self {
+        self.wait = CanicInternalWaitMode::Unbounded;
+        self
+    }
+
+    #[must_use]
+    pub const fn with_cycles(mut self, cycles: u128) -> Self {
+        self.cycles = cycles;
+        self
+    }
+
+    #[must_use]
+    pub const fn with_proof_ttl_secs(mut self, ttl_secs: u64) -> Self {
+        self.proof_ttl_secs = Some(ttl_secs);
+        self
+    }
+}
+
+impl Default for CanicInternalCallOptions {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+///
+/// CanicInternalWaitMode
+///
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CanicInternalWaitMode {
+    Bounded,
+    Unbounded,
 }
 
 ///
@@ -929,6 +1040,19 @@ mod tests {
             .required_single_role()
             .expect_err("multi-role endpoint should require explicit caller role");
         assert_eq!(err.code, ErrorCode::InvalidInput);
+    }
+
+    #[test]
+    fn internal_client_options_are_chainable() {
+        let client = CanicInternalClient::new(p(3))
+            .with_bounded_wait()
+            .with_cycles(10)
+            .with_proof_ttl_secs(30);
+
+        assert_eq!(client.canister_id, p(3));
+        assert_eq!(client.options.wait, CanicInternalWaitMode::Bounded);
+        assert_eq!(client.options.cycles, 10);
+        assert_eq!(client.options.proof_ttl_secs, Some(30));
     }
 
     #[test]
