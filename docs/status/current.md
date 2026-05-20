@@ -147,6 +147,14 @@ inspect only the files needed for the current task.
   `#[canic_update(... caller::has_role(...))]` endpoint emits
   `canic_internal_endpoint_<endpoint>()`, and `canic_internal_client!` consumes
   that generated descriptor directly.
+- Started `0.40.8` by adding `canic_protected_endpoint!` so shared protocol
+  modules can publish `ProtectedInternalEndpoint` descriptors for
+  cross-canister generated clients without depending on the target canister
+  implementation crate.
+- Tightened the `.8` descriptor boundary so protected endpoint descriptors
+  reject missing method names, empty accepted-role sets, empty caller roles, and
+  duplicate caller roles, while shared protocol descriptor macros reject
+  `roles = []` at compile time.
 - Started `0.39.1` by adding an AppIndex-backed
   `caller::has_app_role(role)` internal access predicate, giving app hubs and
   shards a first-class way to trust canonical sibling app canisters without

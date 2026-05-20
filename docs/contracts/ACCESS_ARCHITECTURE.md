@@ -41,6 +41,17 @@ separate policy family.
   those accessors to generate typed protected update client methods. Single-role
   descriptors can infer the caller role; multi-role descriptors require an
   explicit `role = ...` clause in the generated client method declaration.
+- Cross-canister callers that cannot depend on the target implementation crate
+  should put shared descriptors in a protocol module with
+  `canic_protected_endpoint!`, then bind `canic_internal_client!` methods to
+  those shared descriptor functions. Shared protocol modules may define a small
+  descriptor table in one macro invocation. The descriptor remains the source of
+  truth for method name and accepted-role metadata.
+- Protected internal endpoint descriptors must name a concrete exported method
+  and at least one accepted caller role. Empty descriptor metadata is invalid
+  because it would create a generated client method that cannot request a
+  method-scoped proof. Empty or duplicate caller roles are also invalid; role
+  metadata is the protected client's authorization contract.
 - Generated protected clients carry `CanicInternalCallOptions` for wait mode,
   attached cycles, and requested proof TTL. These transport knobs must stay on
   the protected client path and must not require callers to bypass descriptor

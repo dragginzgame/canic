@@ -132,10 +132,30 @@ pub struct ProtectedInternalEndpoint {
 
 impl ProtectedInternalEndpoint {
     #[must_use]
+    #[track_caller]
     pub fn new(method: &'static str, roles: impl IntoIterator<Item = CanisterRole>) -> Self {
+        assert!(
+            !method.is_empty(),
+            "protected internal endpoint descriptor method must not be empty"
+        );
+        let accepted_roles = roles.into_iter().collect::<Vec<_>>();
+        assert!(
+            !accepted_roles.is_empty(),
+            "protected internal endpoint descriptor '{method}' must accept at least one caller role"
+        );
+        for (index, role) in accepted_roles.iter().enumerate() {
+            assert!(
+                !role.as_str().is_empty(),
+                "protected internal endpoint descriptor '{method}' has an empty caller role at index {index}"
+            );
+            assert!(
+                !accepted_roles[..index].iter().any(|prior| prior == role),
+                "protected internal endpoint descriptor '{method}' contains duplicate caller role '{role}'"
+            );
+        }
         Self {
             method,
-            accepted_roles: roles.into_iter().collect(),
+            accepted_roles,
         }
     }
 
@@ -1040,6 +1060,47 @@ mod tests {
             .required_single_role()
             .expect_err("multi-role endpoint should require explicit caller role");
         assert_eq!(err.code, ErrorCode::InvalidInput);
+    }
+
+    #[test]
+    fn protected_internal_endpoint_descriptor_rejects_missing_method() {
+        let result =
+            std::panic::catch_unwind(|| ProtectedInternalEndpoint::new("", [CanisterRole::ROOT]));
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn protected_internal_endpoint_descriptor_rejects_missing_roles() {
+        let result = std::panic::catch_unwind(|| {
+            ProtectedInternalEndpoint::new("system_add_project_to_user", [])
+        });
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn protected_internal_endpoint_descriptor_rejects_empty_role() {
+        let result = std::panic::catch_unwind(|| {
+            ProtectedInternalEndpoint::new("system_add_project_to_user", [CanisterRole::new("")])
+        });
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn protected_internal_endpoint_descriptor_rejects_duplicate_roles() {
+        let result = std::panic::catch_unwind(|| {
+            ProtectedInternalEndpoint::new(
+                "system_add_project_to_user",
+                [
+                    CanisterRole::new("project_hub"),
+                    CanisterRole::new("project_hub"),
+                ],
+            )
+        });
+
+        assert!(result.is_err());
     }
 
     #[test]

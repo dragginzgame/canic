@@ -31,6 +31,19 @@ async fn system_add_project_to_user(
     Ok(())
 }
 
+canic::canic_protected_endpoint! {
+    pub fn shared_project_update_endpoint =
+        "wire_shared_project_update",
+        role = CanisterRole::new("project_hub");
+
+    fn shared_multi_role_project_endpoint =
+        "wire_shared_multi_role_project_update",
+        roles = [
+            CanisterRole::new("project_hub"),
+            CanisterRole::new("admin_hub"),
+        ];
+}
+
 canic::canic_internal_client! {
     pub struct ProjectHubInternalClient {
         fn add_project = protected_endpoint; (
@@ -46,6 +59,14 @@ canic::canic_internal_client! {
         fn ping = protected_endpoint; () -> ();
 
         fn admin_repair = multi_role_endpoint, role = CanisterRole::new("admin_hub"); (
+            project_id: Principal,
+        ) -> ();
+
+        fn shared_project_update = shared_project_update_endpoint; (
+            project_id: Principal,
+        ) -> ();
+
+        fn shared_admin_project_update = shared_multi_role_project_endpoint, role = CanisterRole::new("admin_hub"); (
             project_id: Principal,
         ) -> ();
     }
@@ -66,6 +87,8 @@ fn internal_client_macro_generates_typed_methods() {
     let _generated_add_project = client.generated_add_project(principal(2), principal(3));
     let _ping = client.ping();
     let _admin_repair = client.admin_repair(principal(4));
+    let _shared_project_update = client.shared_project_update(principal(4));
+    let _shared_admin_project_update = client.shared_admin_project_update(principal(4));
 }
 
 #[test]
@@ -77,6 +100,22 @@ fn protected_endpoint_macro_descriptor_is_client_compatible() {
         descriptor.single_role(),
         Some(&CanisterRole::new("project_hub"))
     );
+}
+
+#[test]
+fn protected_endpoint_descriptor_macro_supports_shared_protocol_modules() {
+    let single_role = shared_project_update_endpoint();
+    assert_eq!(single_role.method(), "wire_shared_project_update");
+    assert_eq!(
+        single_role.single_role(),
+        Some(&CanisterRole::new("project_hub"))
+    );
+
+    let multi_role = shared_multi_role_project_endpoint();
+    assert_eq!(multi_role.method(), "wire_shared_multi_role_project_update");
+    assert!(multi_role.accepts_role(&CanisterRole::new("project_hub")));
+    assert!(multi_role.accepts_role(&CanisterRole::new("admin_hub")));
+    assert!(multi_role.single_role().is_none());
 }
 
 #[test]
