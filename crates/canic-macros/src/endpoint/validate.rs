@@ -153,8 +153,7 @@ fn access_expr_contains_internal_only_caller_predicate(expr: &AccessExprAst) -> 
         AccessExprAst::Not(expr) => access_expr_contains_internal_only_caller_predicate(expr),
         AccessExprAst::Pred(AccessPredicateAst::Builtin(builtin)) => matches!(
             builtin,
-            BuiltinPredicate::CallerHasAppRole { .. }
-                | BuiltinPredicate::CallerHasRole { .. }
+            BuiltinPredicate::CallerHasRole { .. }
                 | BuiltinPredicate::CallerHasAnyRole { .. }
                 | BuiltinPredicate::CallerIsRegisteredToSubnet
         ),
@@ -242,24 +241,6 @@ mod tests {
         }
     }
 
-    fn parsed_app_role(internal: bool) -> ParsedArgs {
-        ParsedArgs {
-            forwarded: Vec::new(),
-            export_name: None,
-            payload_max_bytes: None,
-            requires: vec![AccessExprAst::Pred(AccessPredicateAst::Builtin(
-                BuiltinPredicate::CallerHasAppRole {
-                    role: crate::endpoint::parse::CanisterRoleArg::Literal(
-                        "project_hub".to_string(),
-                    ),
-                },
-            ))],
-            requires_async: true,
-            requires_fallible: true,
-            internal,
-        }
-    }
-
     fn parsed_attested_role(internal: bool) -> ParsedArgs {
         ParsedArgs {
             forwarded: Vec::new(),
@@ -335,23 +316,6 @@ mod tests {
             true,
         )
         .expect("internal predicate ok");
-    }
-
-    #[test]
-    fn app_role_requires_internal_endpoint() {
-        let sig: Signature = syn::parse_quote!(async fn hello() -> Result<(), ::canic::Error>);
-        let err = validate(EndpointKind::Update, parsed_app_role(false), &sig, true).unwrap_err();
-        assert!(
-            err.to_string()
-                .contains("caller topology predicates are internal-only")
-        );
-    }
-
-    #[test]
-    fn app_role_is_allowed_for_internal_endpoint() {
-        let sig: Signature = syn::parse_quote!(async fn hello() -> Result<(), ::canic::Error>);
-        validate(EndpointKind::Update, parsed_app_role(true), &sig, true)
-            .expect("internal app canister predicate ok");
     }
 
     #[test]

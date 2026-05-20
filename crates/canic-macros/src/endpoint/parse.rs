@@ -50,9 +50,6 @@ pub enum BuiltinPredicate {
     CallerIsChild,
     CallerIsRoot,
     CallerIsSameCanister,
-    CallerHasAppRole {
-        role: CanisterRoleArg,
-    },
     CallerHasRole {
         role: CanisterRoleArg,
     },
@@ -441,10 +438,16 @@ fn parse_call_expr(call: syn::ExprCall) -> syn::Result<AccessExprAst> {
                     let role = parse_canister_role_arg(&path, args, label)?;
                     BuiltinPredicate::CallerHasRole { role }
                 } else {
-                    let role = parse_canister_role_arg(&path, args, label)?;
-                    BuiltinPredicate::CallerHasAppRole { role }
+                    unreachable!("caller role predicate label must be exhaustive")
                 };
                 return Ok(AccessExprAst::Pred(AccessPredicateAst::Builtin(predicate)));
+            }
+
+            if is_removed_has_app_role_path(&path) {
+                return Err(syn::Error::new_spanned(
+                    &path,
+                    "caller::has_app_role(...) was removed in Canic 0.40; use root-signed caller::has_role(...) for protected internal endpoints",
+                ));
             }
 
             if args.next().is_some() {
@@ -663,11 +666,24 @@ fn caller_role_predicate_label(path: &Path) -> Option<&'static str> {
     let last = names.next_back();
     let module = names.next_back();
     match (module.as_deref(), last.as_deref()) {
-        (Some("caller"), Some("has_app_role")) => Some("caller::has_app_role"),
         (Some("caller"), Some("has_role")) => Some("caller::has_role"),
         (Some("caller"), Some("has_any_role")) => Some("caller::has_any_role"),
         _ => None,
     }
+}
+
+fn is_removed_has_app_role_path(path: &Path) -> bool {
+    if path.leading_colon.is_some() || path.segments.len() != 2 {
+        return false;
+    }
+
+    let mut names = path.segments.iter().map(|seg| seg.ident.to_string());
+    let last = names.next_back();
+    let module = names.next_back();
+    matches!(
+        (module.as_deref(), last.as_deref()),
+        (Some("caller"), Some("has_app_role"))
+    )
 }
 
 fn is_bare_authenticated_path(path: &Path) -> bool {
@@ -799,28 +815,6 @@ mod tests {
     }
 
     #[test]
-    fn app_role_allows_string_role_argument() {
-        let parsed = parse_args(quote!(
-            internal,
-            requires(caller::has_app_role("project_hub"))
-        ))
-        .expect("parse args");
-        let AccessExprAst::All(exprs) = &parsed.requires[0] else {
-            panic!("expected requires(all)");
-        };
-        let AccessExprAst::Pred(AccessPredicateAst::Builtin(BuiltinPredicate::CallerHasAppRole {
-            role,
-        })) = &exprs[0]
-        else {
-            panic!("expected app canister predicate");
-        };
-        let CanisterRoleArg::Literal(role) = role else {
-            panic!("expected literal role");
-        };
-        assert_eq!(role, "project_hub");
-    }
-
-    #[test]
     fn attested_role_allows_path_role_argument() {
         let parsed = parse_args(quote!(
             internal,
@@ -872,34 +866,15 @@ mod tests {
     }
 
     #[test]
-    fn app_role_allows_path_role_argument() {
-        let parsed = parse_args(quote!(
+    fn app_role_predicate_is_removed() {
+        let err = parse_args(quote!(
             internal,
-            requires(caller::has_app_role(canister::PROJECT_HUB))
+            requires(caller::has_app_role("project_hub"))
         ))
-        .expect("parse args");
-        let AccessExprAst::All(exprs) = &parsed.requires[0] else {
-            panic!("expected requires(all)");
-        };
-        let AccessExprAst::Pred(AccessPredicateAst::Builtin(BuiltinPredicate::CallerHasAppRole {
-            role,
-        })) = &exprs[0]
-        else {
-            panic!("expected app canister predicate");
-        };
-        let CanisterRoleArg::Expr(role) = role else {
-            panic!("expected path role");
-        };
-        assert_eq!(role.to_string(), "canister :: PROJECT_HUB");
-    }
-
-    #[test]
-    fn app_role_rejects_missing_role_argument() {
-        let err = parse_args(quote!(requires(caller::has_app_role())))
-            .expect_err("missing role must fail");
+        .expect_err("removed app role predicate must fail");
         assert!(
             err.to_string()
-                .contains("caller::has_app_role(...) requires one canister role argument")
+                .contains("caller::has_app_role(...) was removed in Canic 0.40")
         );
     }
 

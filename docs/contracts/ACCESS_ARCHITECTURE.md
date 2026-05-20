@@ -26,13 +26,16 @@ separate policy family.
 
 ## Topology Caller Checks
 
-- Parent, child, root, self, controller, whitelist, subnet-registry, and
-  AppIndex role checks use the raw transport caller, not delegated user
-  identity.
-- `caller::has_app_role(role)` resolves `role` through the local AppIndex and
-  grants access only when the transport caller equals that canonical principal.
-- AppIndex and subnet-registry caller predicates are internal-only endpoint
-  rules. Public user ingress should use `auth::authenticated(...)`.
+- Parent, child, root, self, controller, whitelist, and subnet-registry checks
+  use the raw transport caller, not delegated user identity.
+- `caller::has_role(role)` and `caller::has_any_role([...])` are protected
+  internal-call predicates. They require a root-signed method-scoped invocation
+  proof and are valid only on protected internal update endpoints.
+- The old AppIndex-only `caller::has_app_role(role)` predicate was removed in
+  0.40 because verifier-local AppIndex state is not sufficient authorization
+  for sibling Canic RPC.
+- Subnet-registry caller predicates are internal-only endpoint rules. Public
+  user ingress should use `auth::authenticated(...)`.
 
 ## Error Boundary
 

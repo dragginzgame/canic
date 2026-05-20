@@ -471,26 +471,9 @@ fn expr_from_builtin(pred: &BuiltinPredicate) -> TokenStream2 {
         BuiltinPredicate::CallerIsSameCanister => {
             quote!(::canic::__internal::core::access::expr::caller::is_same_canister())
         }
-        BuiltinPredicate::CallerHasAppRole { role } | BuiltinPredicate::CallerHasRole { role } => {
-            match role {
-                CanisterRoleArg::Literal(role) => quote!(
-                    ::canic::__internal::core::access::expr::caller::has_app_role(
-                        ::canic::__internal::core::ids::CanisterRole::new(#role)
-                    )
-                ),
-                CanisterRoleArg::Expr(role) => quote!(
-                    ::canic::__internal::core::access::expr::caller::has_app_role(#role)
-                ),
-            }
-        }
-        BuiltinPredicate::CallerHasAnyRole { roles } => {
-            let items = roles.iter().map(role_to_tokens).map(
-                |role| quote!(::canic::__internal::core::access::expr::caller::has_app_role(#role)),
-            );
-            quote!(::canic::__internal::core::access::expr::AccessExpr::Any(
-                vec![
-                    #(#items),*
-                ]
+        BuiltinPredicate::CallerHasRole { .. } | BuiltinPredicate::CallerHasAnyRole { .. } => {
+            quote!(compile_error!(
+                "caller::has_role(...) and caller::has_any_role(...) are protected internal-call predicates and must be lowered through the envelope wrapper"
             ))
         }
         BuiltinPredicate::CallerIsRegisteredToSubnet => {

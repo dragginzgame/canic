@@ -8,7 +8,7 @@ mod evaluators;
 use crate::{
     access::{self, AccessError, metrics::AccessMetrics},
     cdk::types::Principal,
-    ids::{AccessMetricKind, CanisterRole, EndpointCall},
+    ids::{AccessMetricKind, EndpointCall},
     log,
     log::Topic,
 };
@@ -125,7 +125,6 @@ pub enum CallerPredicate {
     IsChild,
     IsRoot,
     IsSameCanister,
-    IsAppCanister { role: CanisterRole },
     IsRegisteredToSubnet,
     IsWhitelisted,
 }
@@ -203,7 +202,6 @@ pub mod app {
 
 pub mod caller {
     use super::{AccessExpr, BuiltinPredicate, CallerPredicate, builtin};
-    use crate::ids::CanisterRole;
 
     #[must_use]
     pub const fn is_controller() -> AccessExpr {
@@ -228,13 +226,6 @@ pub mod caller {
     #[must_use]
     pub const fn is_same_canister() -> AccessExpr {
         builtin(BuiltinPredicate::Caller(CallerPredicate::IsSameCanister))
-    }
-
-    #[must_use]
-    pub const fn has_app_role(role: CanisterRole) -> AccessExpr {
-        builtin(BuiltinPredicate::Caller(CallerPredicate::IsAppCanister {
-            role,
-        }))
     }
 
     #[must_use]
@@ -457,9 +448,8 @@ mod tests {
     use super::*;
     use crate::{
         access,
-        ids::{CanisterRole, EndpointCall, EndpointCallKind, EndpointId},
+        ids::{EndpointCall, EndpointCallKind, EndpointId},
         storage::stable::env::{Env, EnvRecord},
-        storage::stable::index::app::{AppIndex, AppIndexRecord},
         storage::stable::state::app::{AppMode, AppState, AppStateRecord},
         test::seams,
     };
@@ -485,18 +475,6 @@ mod tests {
     impl Drop for AppRestore {
         fn drop(&mut self) {
             AppState::import(self.0);
-        }
-    }
-
-    ///
-    /// AppIndexRestore
-    ///
-
-    struct AppIndexRestore(AppIndexRecord);
-
-    impl Drop for AppIndexRestore {
-        fn drop(&mut self) {
-            AppIndex::import(self.0.clone());
         }
     }
 
@@ -591,43 +569,6 @@ mod tests {
                 "app::is_queryable parity mismatch for mode={mode:?}"
             );
         }
-    }
-
-    #[test]
-    fn caller_has_app_role_matches_access_auth() {
-        let _guard = seams::lock();
-        let original = AppIndex::export();
-        let _restore = AppIndexRestore(original);
-
-        let role = CanisterRole::new("project_hub");
-        let project_hub = seams::p(30);
-        let other = seams::p(31);
-        AppIndex::import(AppIndexRecord {
-            entries: vec![(role.clone(), project_hub)],
-        });
-
-        let expr = caller::has_app_role(role.clone());
-        let ctx_project_hub = AccessContext {
-            caller: project_hub,
-            authenticated_caller: project_hub,
-            identity_source: access::auth::AuthenticatedIdentitySource::RawCaller,
-            call: test_call(),
-        };
-        let ctx_other = AccessContext {
-            caller: other,
-            authenticated_caller: other,
-            identity_source: access::auth::AuthenticatedIdentitySource::RawCaller,
-            call: test_call(),
-        };
-
-        let expr_project_hub = futures::executor::block_on(eval_access(&expr, &ctx_project_hub));
-        let auth_project_hub =
-            futures::executor::block_on(access::auth::has_app_role(project_hub, role.clone()));
-        assert_eq!(expr_project_hub.is_ok(), auth_project_hub.is_ok());
-
-        let expr_other = futures::executor::block_on(eval_access(&expr, &ctx_other));
-        let auth_other = futures::executor::block_on(access::auth::has_app_role(other, role));
-        assert_eq!(expr_other.is_ok(), auth_other.is_ok());
     }
 
     #[test]

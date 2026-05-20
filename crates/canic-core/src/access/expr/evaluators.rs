@@ -13,7 +13,6 @@ pub(super) const fn name(pred: &BuiltinPredicate) -> &'static str {
         BuiltinPredicate::Caller(CallerPredicate::IsChild) => "caller_is_child",
         BuiltinPredicate::Caller(CallerPredicate::IsRoot) => "caller_is_root",
         BuiltinPredicate::Caller(CallerPredicate::IsSameCanister) => "caller_is_same_canister",
-        BuiltinPredicate::Caller(CallerPredicate::IsAppCanister { .. }) => "caller_has_app_role",
         BuiltinPredicate::Caller(CallerPredicate::IsRegisteredToSubnet) => {
             "caller_is_registered_to_subnet"
         }
@@ -66,9 +65,6 @@ pub(super) async fn evaluate(
         }
         BuiltinPredicate::Caller(CallerPredicate::IsSameCanister) => {
             access::auth::is_same_canister(ctx.caller).await
-        }
-        BuiltinPredicate::Caller(CallerPredicate::IsAppCanister { role }) => {
-            access::auth::has_app_role(ctx.caller, role.clone()).await
         }
         BuiltinPredicate::Caller(CallerPredicate::IsRegisteredToSubnet) => {
             access::auth::is_registered_to_subnet(ctx.caller).await

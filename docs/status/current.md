@@ -115,6 +115,10 @@ inspect only the files needed for the current task.
   delegation, role-attestation, internal-invocation-proof, and key-set refresh
   requests use one structural bootstrap client boundary. Both clients now keep
   explicit endpoint tables with focused manifest/classification tests.
+- Started `0.40.5` by removing the transitional AppIndex-only
+  `caller::has_app_role(...)` path from the macro DSL and runtime access
+  evaluator. Protected sibling Canic RPC now has one supported role surface:
+  root-signed `caller::has_role(...)` / `caller::has_any_role(...)` envelopes.
 - Started `0.39.1` by adding an AppIndex-backed
   `caller::has_app_role(role)` internal access predicate, giving app hubs and
   shards a first-class way to trust canonical sibling app canisters without
