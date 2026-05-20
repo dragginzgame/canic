@@ -22,12 +22,14 @@ use crate::{
         candid::{CandidType, encode_one},
         types::{BoundedString128, Principal},
     },
+    config::schema::RoleAttestationConfig,
     dto::{
         auth::{
             CanicInternalCallEnvelopeV1, CanicInternalCallHeaderV1, InternalInvocationProofRequest,
             SignedInternalInvocationProofV1,
         },
         error::Error,
+        error::ErrorCode,
     },
     ids::CanisterRole,
     ops::{config::ConfigOps, ic::IcOps, runtime::env::EnvOps},
@@ -41,9 +43,16 @@ use candid::{
     utils::{ArgumentDecoder, ArgumentEncoder},
 };
 use serde::de::DeserializeOwned;
-use std::borrow::Cow;
+use std::{borrow::Cow, cell::RefCell, collections::BTreeMap};
 
 const DEFAULT_INTERNAL_CALL_PROOF_TTL_SECS: u64 = 120;
+const INTERNAL_CALL_PROOF_REFRESH_MARGIN_MAX_SECS: u64 = 30;
+
+thread_local! {
+    static INTERNAL_INVOCATION_PROOF_CACHE:
+        RefCell<BTreeMap<InternalInvocationProofCacheKey, SignedInternalInvocationProofV1>> =
+        const { RefCell::new(BTreeMap::new()) };
+}
 
 ///
 /// Call
@@ -184,33 +193,43 @@ impl CanicCallBuilder<'_> {
         let role = self
             .caller_role
             .ok_or_else(|| Error::invalid("CanicCall requires with_caller_role(...)"))?;
-        let proof = crate::api::auth::AuthApi::request_internal_invocation_proof(
-            InternalInvocationProofRequest {
-                subject: IcOps::canister_self(),
-                role,
-                subnet_id: EnvOps::subnet_pid().ok(),
-                audience: self.canister_id,
-                audience_method: self.method.clone(),
-                ttl_secs,
-                metadata: None,
-            },
-        )
-        .await?;
+        let request = InternalInvocationProofRequest {
+            subject: IcOps::canister_self(),
+            role,
+            subnet_id: EnvOps::subnet_pid().ok(),
+            audience: self.canister_id,
+            audience_method: self.method.clone(),
+            ttl_secs,
+            metadata: None,
+        };
+        let args = self.args.into_owned();
+        let proof = internal_invocation_proof_for_request(request.clone()).await?;
 
-        let envelope = build_internal_call_envelope(
+        let envelope =
+            build_internal_call_envelope(self.canister_id, &self.method, proof, args.clone());
+        let result = execute_internal_call_once(
+            self.wait,
             self.canister_id,
             &self.method,
-            proof,
-            self.args.into_owned(),
-        );
-        let call = match self.wait {
-            WaitMode::Bounded => Call::bounded_wait(self.canister_id, &self.method),
-            WaitMode::Unbounded => Call::unbounded_wait(self.canister_id, &self.method),
+            self.cycles,
+            envelope,
+        )
+        .await?;
+        if !internal_call_result_is_retryable(&result) {
+            return Ok(result);
         }
-        .with_cycles(self.cycles)
-        .with_arg(envelope)?;
 
-        call.execute().await
+        invalidate_internal_invocation_proof(&request)?;
+        let proof = fresh_internal_invocation_proof_for_request(request).await?;
+        let envelope = build_internal_call_envelope(self.canister_id, &self.method, proof, args);
+        execute_internal_call_once(
+            self.wait,
+            self.canister_id,
+            &self.method,
+            self.cycles,
+            envelope,
+        )
+        .await
     }
 
     fn proof_ttl_secs(&self) -> Result<u64, Error> {
@@ -222,6 +241,189 @@ impl CanicCallBuilder<'_> {
             .max_ttl_secs;
         Ok(requested.min(max))
     }
+}
+
+async fn execute_internal_call_once(
+    wait: WaitMode,
+    canister_id: Principal,
+    method: &str,
+    cycles: u128,
+    envelope: CanicInternalCallEnvelopeV1,
+) -> Result<CallResult, Error> {
+    let call = match wait {
+        WaitMode::Bounded => Call::bounded_wait(canister_id, method),
+        WaitMode::Unbounded => Call::unbounded_wait(canister_id, method),
+    }
+    .with_cycles(cycles)
+    .with_arg(envelope)?;
+
+    call.execute().await
+}
+
+///
+/// InternalInvocationProofCacheKey
+///
+
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+struct InternalInvocationProofCacheKey {
+    root_pid: Principal,
+    attestation_key_name: String,
+    subject: Principal,
+    role: CanisterRole,
+    subnet_id: Option<Principal>,
+    audience: Principal,
+    audience_method: String,
+    ttl_secs: u64,
+}
+
+async fn internal_invocation_proof_for_request(
+    request: InternalInvocationProofRequest,
+) -> Result<SignedInternalInvocationProofV1, Error> {
+    let cfg = ConfigOps::role_attestation_config().map_err(Error::from)?;
+    let root_pid = EnvOps::root_pid().map_err(Error::from)?;
+    let now_secs = IcOps::now_secs();
+
+    if let Some(proof) = cached_internal_invocation_proof(&request, &cfg, root_pid, now_secs) {
+        return Ok(proof);
+    }
+
+    fresh_internal_invocation_proof_for_request_with_context(request, cfg, root_pid, now_secs).await
+}
+
+async fn fresh_internal_invocation_proof_for_request(
+    request: InternalInvocationProofRequest,
+) -> Result<SignedInternalInvocationProofV1, Error> {
+    let cfg = ConfigOps::role_attestation_config().map_err(Error::from)?;
+    let root_pid = EnvOps::root_pid().map_err(Error::from)?;
+    let now_secs = IcOps::now_secs();
+    fresh_internal_invocation_proof_for_request_with_context(request, cfg, root_pid, now_secs).await
+}
+
+async fn fresh_internal_invocation_proof_for_request_with_context(
+    request: InternalInvocationProofRequest,
+    cfg: RoleAttestationConfig,
+    root_pid: Principal,
+    now_secs: u64,
+) -> Result<SignedInternalInvocationProofV1, Error> {
+    let proof =
+        crate::api::auth::AuthApi::request_internal_invocation_proof(request.clone()).await?;
+    cache_internal_invocation_proof(&request, &cfg, root_pid, now_secs, proof.clone());
+    Ok(proof)
+}
+
+fn internal_invocation_proof_cache_key(
+    request: &InternalInvocationProofRequest,
+    cfg: &RoleAttestationConfig,
+    root_pid: Principal,
+) -> InternalInvocationProofCacheKey {
+    InternalInvocationProofCacheKey {
+        root_pid,
+        attestation_key_name: cfg.ecdsa_key_name.clone(),
+        subject: request.subject,
+        role: request.role.clone(),
+        subnet_id: request.subnet_id,
+        audience: request.audience,
+        audience_method: request.audience_method.clone(),
+        ttl_secs: request.ttl_secs,
+    }
+}
+
+fn cached_internal_invocation_proof(
+    request: &InternalInvocationProofRequest,
+    cfg: &RoleAttestationConfig,
+    root_pid: Principal,
+    now_secs: u64,
+) -> Option<SignedInternalInvocationProofV1> {
+    let key = internal_invocation_proof_cache_key(request, cfg, root_pid);
+    let min_accepted_epoch = cfg
+        .min_accepted_epoch_by_role
+        .get(request.role.as_str())
+        .copied()
+        .unwrap_or(0);
+
+    INTERNAL_INVOCATION_PROOF_CACHE.with_borrow_mut(|cache| {
+        let proof = cache.get(&key)?;
+        if internal_invocation_proof_is_reusable(proof, request, now_secs, min_accepted_epoch) {
+            Some(proof.clone())
+        } else {
+            cache.remove(&key);
+            None
+        }
+    })
+}
+
+fn cache_internal_invocation_proof(
+    request: &InternalInvocationProofRequest,
+    cfg: &RoleAttestationConfig,
+    root_pid: Principal,
+    now_secs: u64,
+    proof: SignedInternalInvocationProofV1,
+) {
+    let min_accepted_epoch = cfg
+        .min_accepted_epoch_by_role
+        .get(request.role.as_str())
+        .copied()
+        .unwrap_or(0);
+    if !internal_invocation_proof_is_reusable(&proof, request, now_secs, min_accepted_epoch) {
+        return;
+    }
+
+    let key = internal_invocation_proof_cache_key(request, cfg, root_pid);
+    INTERNAL_INVOCATION_PROOF_CACHE.with_borrow_mut(|cache| {
+        cache.insert(key, proof);
+    });
+}
+
+fn invalidate_internal_invocation_proof(
+    request: &InternalInvocationProofRequest,
+) -> Result<(), Error> {
+    let cfg = ConfigOps::role_attestation_config().map_err(Error::from)?;
+    let root_pid = EnvOps::root_pid().map_err(Error::from)?;
+    let key = internal_invocation_proof_cache_key(request, &cfg, root_pid);
+    INTERNAL_INVOCATION_PROOF_CACHE.with_borrow_mut(|cache| {
+        cache.remove(&key);
+    });
+    Ok(())
+}
+
+fn internal_invocation_proof_is_reusable(
+    proof: &SignedInternalInvocationProofV1,
+    request: &InternalInvocationProofRequest,
+    now_secs: u64,
+    min_accepted_epoch: u64,
+) -> bool {
+    let payload = &proof.payload;
+    payload.subject == request.subject
+        && payload.role == request.role
+        && payload.subnet_id == request.subnet_id
+        && payload.audience == request.audience
+        && payload.audience_method == request.audience_method
+        && payload.epoch >= min_accepted_epoch
+        && now_secs.saturating_add(internal_invocation_proof_refresh_margin_secs(proof))
+            < payload.expires_at
+}
+
+fn internal_invocation_proof_refresh_margin_secs(proof: &SignedInternalInvocationProofV1) -> u64 {
+    proof
+        .payload
+        .expires_at
+        .saturating_sub(proof.payload.issued_at)
+        .saturating_div(5)
+        .clamp(1, INTERNAL_CALL_PROOF_REFRESH_MARGIN_MAX_SECS)
+}
+
+fn internal_call_result_is_retryable(result: &CallResult) -> bool {
+    let Ok(Err(err)) = result.candid::<Result<candid::Reserved, Error>>() else {
+        return false;
+    };
+    internal_call_error_is_retryable(&err)
+}
+
+const fn internal_call_error_is_retryable(err: &Error) -> bool {
+    matches!(
+        err.code,
+        ErrorCode::AuthKeyUnknown | ErrorCode::AuthMaterialStale
+    )
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -451,8 +653,10 @@ impl CallResult {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::schema::RoleAttestationConfig;
     use crate::dto::auth::{InternalInvocationProofPayloadV1, SignedInternalInvocationProofV1};
     use candid::decode_args;
+    use std::collections::BTreeMap;
 
     fn p(id: u8) -> Principal {
         Principal::from_slice(&[id; 29])
@@ -473,6 +677,32 @@ mod tests {
             signature: vec![1, 2, 3],
             key_id: 1,
         }
+    }
+
+    fn request() -> InternalInvocationProofRequest {
+        InternalInvocationProofRequest {
+            subject: p(1),
+            role: CanisterRole::new("project_hub"),
+            subnet_id: Some(p(9)),
+            audience: p(2),
+            audience_method: "system_add_project_to_user".to_string(),
+            ttl_secs: 120,
+            metadata: None,
+        }
+    }
+
+    fn cfg(min_epoch: u64) -> RoleAttestationConfig {
+        let mut min_accepted_epoch_by_role = BTreeMap::new();
+        min_accepted_epoch_by_role.insert("project_hub".to_string(), min_epoch);
+        RoleAttestationConfig {
+            ecdsa_key_name: "key_1".to_string(),
+            max_ttl_secs: 900,
+            min_accepted_epoch_by_role,
+        }
+    }
+
+    fn clear_internal_invocation_proof_cache() {
+        INTERNAL_INVOCATION_PROOF_CACHE.with_borrow_mut(BTreeMap::clear);
     }
 
     #[test]
@@ -509,5 +739,63 @@ mod tests {
         assert_eq!(builder.ttl_secs, Some(30));
         assert_eq!(builder.cycles, 10);
         assert_eq!(builder.args.as_ref(), raw.as_slice());
+    }
+
+    #[test]
+    fn internal_invocation_proof_cache_reuses_exact_fresh_edge() {
+        clear_internal_invocation_proof_cache();
+        let request = request();
+        let mut proof = proof();
+        proof.payload.subnet_id = request.subnet_id;
+        cache_internal_invocation_proof(&request, &cfg(0), p(7), 12, proof.clone());
+
+        let cached = cached_internal_invocation_proof(&request, &cfg(0), p(7), 12)
+            .expect("fresh matching proof should cache-hit");
+
+        assert_eq!(cached, proof);
+    }
+
+    #[test]
+    fn internal_invocation_proof_cache_rejects_near_expiry_entry() {
+        clear_internal_invocation_proof_cache();
+        let request = request();
+        let mut proof = proof();
+        proof.payload.subnet_id = request.subnet_id;
+        proof.payload.issued_at = 10;
+        proof.payload.expires_at = 20;
+        cache_internal_invocation_proof(&request, &cfg(0), p(7), 18, proof);
+
+        assert!(cached_internal_invocation_proof(&request, &cfg(0), p(7), 18).is_none());
+    }
+
+    #[test]
+    fn internal_invocation_proof_cache_rejects_epoch_below_local_floor() {
+        clear_internal_invocation_proof_cache();
+        let request = request();
+        let mut proof = proof();
+        proof.payload.subnet_id = request.subnet_id;
+        proof.payload.epoch = 3;
+        cache_internal_invocation_proof(&request, &cfg(0), p(7), 12, proof);
+
+        assert!(cached_internal_invocation_proof(&request, &cfg(4), p(7), 12).is_none());
+    }
+
+    #[test]
+    fn internal_call_retry_classifier_is_limited_to_repairable_auth_material() {
+        assert!(internal_call_error_is_retryable(&Error::new(
+            ErrorCode::AuthKeyUnknown,
+            "unknown key".to_string(),
+        )));
+        assert!(internal_call_error_is_retryable(&Error::new(
+            ErrorCode::AuthMaterialStale,
+            "stale epoch".to_string(),
+        )));
+        assert!(!internal_call_error_is_retryable(&Error::new(
+            ErrorCode::AuthProofExpired,
+            "expired".to_string(),
+        )));
+        assert!(!internal_call_error_is_retryable(&Error::unauthorized(
+            "role mismatch"
+        )));
     }
 }

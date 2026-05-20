@@ -761,7 +761,10 @@ fn protected_internal_stage(
     let decode_stage = if typed_args.is_empty() {
         quote! {
             if let Err(_err) = ::canic::cdk::candid::decode_args::<()>(&__canic_envelope.args) {
-                return Err(::canic::Error::unauthorized("malformed Canic internal call envelope").into());
+                return Err(::canic::Error::new(
+                    ::canic::dto::error::ErrorCode::InternalRpcMalformed,
+                    "malformed Canic internal call envelope".to_string(),
+                ).into());
             }
         }
     } else {
@@ -770,7 +773,10 @@ fn protected_internal_stage(
                 match ::canic::cdk::candid::decode_args::<(#(#arg_types,)*)>(&__canic_envelope.args) {
                     Ok(args) => args,
                     Err(_err) => {
-                        return Err(::canic::Error::unauthorized("malformed Canic internal call envelope").into());
+                        return Err(::canic::Error::new(
+                            ::canic::dto::error::ErrorCode::InternalRpcMalformed,
+                            "malformed Canic internal call envelope".to_string(),
+                        ).into());
                     }
                 };
         }
@@ -782,7 +788,10 @@ fn protected_internal_stage(
             || __canic_envelope.header.target_canister != ::canic::cdk::api::canister_self()
             || __canic_envelope.header.target_method != __canic_method
         {
-            return Err(::canic::Error::unauthorized("invalid Canic internal call envelope").into());
+            return Err(::canic::Error::new(
+                ::canic::dto::error::ErrorCode::InternalRpcMalformed,
+                "invalid Canic internal call envelope".to_string(),
+            ).into());
         }
 
         let __canic_accepted_roles = [#(#roles),*];

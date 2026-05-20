@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-05-19
+Last updated: 2026-05-20
 
 ## Purpose
 
@@ -53,6 +53,17 @@ inspect only the files needed for the current task.
   the caller role, builds the internal-call envelope, and dispatches it to the
   protected endpoint. The first cut is correctness-only: no outgoing proof cache
   and no retry-on-stale-material path yet.
+- Started `0.40.1` by adding a heap-only outgoing internal-invocation proof
+  cache for `CanicCall`. The cache reuses only exact root/key/subject/role/
+  subnet/audience/method/TTL call-edge proofs, evicts near-expiry entries, and
+  rejects cached proofs below the local role epoch floor; callee verification
+  remains the authority.
+- Continued `0.40.1` by adding coarse protected internal-call auth error codes
+  and a narrow `CanicCall` repair path: if the callee returns stale role-epoch
+  material or unknown verifier-key material, the caller invalidates its cached
+  proof, obtains fresh root-signed material, and retries the protected call
+  once. Expired proofs, malformed envelopes, authorization failures, and domain
+  handler errors are not retried.
 - Started `0.39.1` by adding an AppIndex-backed
   `caller::has_app_role(role)` internal access predicate, giving app hubs and
   shards a first-class way to trust canonical sibling app canisters without

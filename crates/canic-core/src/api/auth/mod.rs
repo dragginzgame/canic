@@ -7,7 +7,7 @@ use crate::{
             InternalInvocationProofRequest, RoleAttestationRequest,
             SignedInternalInvocationProofV1, SignedRoleAttestation,
         },
-        error::Error,
+        error::{Error, ErrorCode},
         rpc::{Request as RootRequest, Response as RootCapabilityResponse},
     },
     error::InternalErrorClass,
@@ -16,8 +16,8 @@ use crate::{
     log::Topic,
     ops::{
         auth::{
-            AuthOps, SignDelegatedTokenInput, SignDelegationProofInput,
-            VerifyDelegatedTokenRuntimeInput,
+            AuthExpiryError, AuthOps, AuthOpsError, AuthValidationError, SignDelegatedTokenInput,
+            SignDelegationProofInput, VerifyDelegatedTokenRuntimeInput,
         },
         config::ConfigOps,
         ic::IcOps,
@@ -59,6 +59,21 @@ impl AuthApi {
                 Error::internal(err.to_string())
             }
             _ => Error::from(err),
+        }
+    }
+
+    fn map_internal_invocation_verify_error(err: AuthOpsError) -> Error {
+        match err {
+            AuthOpsError::Validation(AuthValidationError::AttestationUnknownKeyId { .. }) => {
+                Error::new(ErrorCode::AuthKeyUnknown, err.to_string())
+            }
+            AuthOpsError::Expiry(AuthExpiryError::AttestationEpochRejected { .. }) => {
+                Error::new(ErrorCode::AuthMaterialStale, err.to_string())
+            }
+            AuthOpsError::Expiry(AuthExpiryError::AttestationExpired { .. }) => {
+                Error::new(ErrorCode::AuthProofExpired, err.to_string())
+            }
+            _ => Error::unauthorized(err.to_string()),
         }
     }
 
@@ -355,7 +370,7 @@ impl AuthApi {
                     proof.payload.epoch,
                     err
                 );
-                Err(Self::map_auth_error(err.into()))
+                Err(Self::map_internal_invocation_verify_error(err))
             }
             Err(verify_flow::RoleAttestationVerifyFlowError::Refresh { trigger, source }) => {
                 verify_flow::record_attestation_verifier_rejection(&trigger);
@@ -387,7 +402,7 @@ impl AuthApi {
                     proof.payload.epoch,
                     err
                 );
-                Err(Self::map_auth_error(err.into()))
+                Err(Self::map_internal_invocation_verify_error(err))
             }
         }
     }

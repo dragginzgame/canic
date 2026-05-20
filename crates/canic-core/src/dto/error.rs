@@ -92,9 +92,13 @@ impl From<AccessError> for Error {
 #[non_exhaustive]
 #[remain::sorted]
 pub enum ErrorCode {
+    AuthKeyUnknown,
+    AuthMaterialStale,
+    AuthProofExpired,
     Conflict,
     Forbidden,
     Internal,
+    InternalRpcMalformed,
     InvalidInput,
     InvariantViolation,
     NotFound,

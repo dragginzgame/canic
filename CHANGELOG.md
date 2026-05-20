@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.40.x] - 2026-05-19 - Attested Canic calls
 
+- `0.40.1` adds an outgoing heap cache for `CanicCall` internal invocation proofs, keyed by the exact root/key/subject/role/audience/method/subnet/TTL call edge and evicted before expiry or when the local role epoch floor has moved past the cached proof, plus typed internal-call auth error codes so `CanicCall` can invalidate cached proof material and retry once for stale epochs or unknown verifier keys.
+
 - `0.40.0` starts the attested internal-call hard cut by adding passive wire DTOs for method-scoped internal invocation proofs and Canic internal-call envelopes, a distinct signing domain for internal invocation proof payloads, root issuance for AppIndex or subnet-registry authorized internal callers, verifier-side method/role proof validation, the first protected update wrapper path for `caller::has_role(...)` endpoints, and the low-level `CanicCall` envelope-sending primitive.
 
 See detailed breakdown:

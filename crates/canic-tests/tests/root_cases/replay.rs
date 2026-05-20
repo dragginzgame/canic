@@ -83,6 +83,15 @@ fn unauthorized_caller_is_denied_for_each_root_capability_variant() {
             epoch: 0,
             metadata: Some(metadata([33u8; 32], 120)),
         }),
+        Request::IssueInternalInvocationProof(canic::dto::auth::InternalInvocationProofRequest {
+            subject: unauthorized,
+            role: canister::TEST,
+            subnet_id: None,
+            audience: test_pid,
+            audience_method: "test".to_string(),
+            ttl_secs: 60,
+            metadata: Some(metadata([34u8; 32], 120)),
+        }),
     ];
 
     for request in cases {
