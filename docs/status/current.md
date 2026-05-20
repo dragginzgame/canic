@@ -24,11 +24,15 @@ inspect only the files needed for the current task.
 ## Recent Work
 
 - Started tentative `0.41` deployment-flexibility design at
-  `docs/design/0.41-deployment-flexibility/0.41-design.md`. The draft frames
-  current friction around the standard single-root/root-store deployment path,
-  lack of IC testnet, fleet-specific controllers, per-role wasm/config
-  overrides, deployment inventory/plan rendering, promotion receipts, and
-  keeping runtime config separate from host-side deployment authority.
+  `docs/design/0.41-deployment-flexibility/0.41-design.md`. The draft now
+  splits `TrustDomain` (one root/trust anchor), `Fleet` (runtime topology
+  template), `Deployment` (trust domain + fleet + authority + role artifacts),
+  `Plan` (materialized intent), and `Receipt` (observed result). The tentative
+  0.41 scope is describe-and-record first: deployment inventory, plan JSON,
+  receipts from the existing install path, PocketIC consuming the same plan
+  shape, and plan/receipt comparison. Execute-from-plan, authority application,
+  role artifact overrides, and promotion commands are explicitly deferred until
+  the plan model is proven.
 - Started `0.40.0` by adding the passive Candid DTOs for the protected
   internal-call wire ABI:
   `CanicInternalCallEnvelopeV1`, `CanicInternalCallHeaderV1`,
@@ -182,6 +186,11 @@ inspect only the files needed for the current task.
   attestation caching now treats the local role epoch as a minimum floor so
   newer root-signed epochs remain reusable while stale cached proofs are still
   rejected.
+- Started `0.40.11` by extending the protected internal-call raw-call source
+  guard beyond the wasm-store manifest. The guard now also discovers protected
+  method names from shared `canic_protected_endpoint!` descriptors and
+  protected `#[canic_update(... caller::has_role ...)]` declarations, while
+  ignoring macro definitions and doc-comment examples.
 - Started `0.39.1` by adding an AppIndex-backed
   `caller::has_app_role(role)` internal access predicate, giving app hubs and
   shards a first-class way to trust canonical sibling app canisters without

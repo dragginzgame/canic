@@ -135,10 +135,11 @@ const INTERNAL_ENDPOINT_CLASSIFICATIONS: &[InternalEndpointClassification] = &[
 #[test]
 fn first_party_code_does_not_raw_call_protected_internal_methods() {
     let workspace = workspace_root();
+    let protected_methods = protected_internal_method_names();
     let mut violations = Vec::new();
 
     for root in FIRST_PARTY_SRC_ROOTS {
-        scan_dir(&workspace.join(root), &mut violations);
+        scan_dir(&workspace.join(root), &protected_methods, &mut violations);
     }
 
     assert!(
@@ -288,7 +289,17 @@ fn project_fixture_uses_shared_descriptor_generated_client_path() {
     );
 }
 
-fn scan_dir(root: &Path, violations: &mut Vec<String>) {
+#[test]
+fn protected_internal_method_guard_includes_shared_protocol_descriptors() {
+    let protected_methods = protected_internal_method_names();
+
+    assert!(
+        protected_methods.contains("project_instance_record_visit"),
+        "shared protocol descriptors must be included in the raw-call guard method set"
+    );
+}
+
+fn scan_dir(root: &Path, protected_methods: &BTreeSet<String>, violations: &mut Vec<String>) {
     let Ok(entries) = fs::read_dir(root) else {
         return;
     };
@@ -296,7 +307,7 @@ fn scan_dir(root: &Path, violations: &mut Vec<String>) {
     for entry in entries.flatten() {
         let path = entry.path();
         if path.is_dir() {
-            scan_dir(&path, violations);
+            scan_dir(&path, protected_methods, violations);
             continue;
         }
 
@@ -315,14 +326,181 @@ fn scan_dir(root: &Path, violations: &mut Vec<String>) {
             if RAW_CALL_PATTERNS
                 .iter()
                 .any(|pattern| line.contains(pattern))
-                && CANIC_WASM_STORE_PROTECTED_UPDATE_METHODS
+                && protected_methods
                     .iter()
-                    .any(|method| line.contains(method))
+                    .any(|method| line.contains(method.as_str()))
             {
                 violations.push(format!("{}:{}", path.display(), index + 1));
             }
         }
     }
+}
+
+fn protected_internal_method_names() -> BTreeSet<String> {
+    let workspace = workspace_root();
+    let mut methods = CANIC_WASM_STORE_PROTECTED_UPDATE_METHODS
+        .iter()
+        .map(|method| (*method).to_string())
+        .collect::<BTreeSet<_>>();
+
+    for root in FIRST_PARTY_SRC_ROOTS {
+        collect_protected_methods_from_dir(&workspace.join(root), &mut methods);
+    }
+
+    methods
+}
+
+fn collect_protected_methods_from_dir(root: &Path, methods: &mut BTreeSet<String>) {
+    let Ok(entries) = fs::read_dir(root) else {
+        return;
+    };
+
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            collect_protected_methods_from_dir(&path, methods);
+            continue;
+        }
+
+        if path.extension().is_none_or(|ext| ext != "rs") {
+            continue;
+        }
+
+        let Ok(source) = fs::read_to_string(&path) else {
+            continue;
+        };
+
+        collect_shared_descriptor_methods(&source, methods);
+        collect_protected_update_methods(&source, methods);
+    }
+}
+
+fn collect_shared_descriptor_methods(source: &str, methods: &mut BTreeSet<String>) {
+    let mut offset = 0;
+    while let Some(marker_offset) = source[offset..].find("canic_protected_endpoint!") {
+        let marker_start = offset + marker_offset;
+        if marker_is_macro_definition(source, marker_start) {
+            offset = marker_start + "canic_protected_endpoint!".len();
+            continue;
+        }
+        let Some(open_offset) = source[marker_start..].find('{') else {
+            break;
+        };
+        let open = marker_start + open_offset;
+        let Some(close) = matching_brace(source, open) else {
+            break;
+        };
+        let body = &source[(open + 1)..close];
+
+        for statement in body.split(';') {
+            let Some(fn_offset) = statement.find("fn ") else {
+                continue;
+            };
+            let Some(equals_offset) = statement[fn_offset..].find('=') else {
+                continue;
+            };
+            let after_equals = &statement[(fn_offset + equals_offset + 1)..];
+            if let Some(method) = leading_string_literal(after_equals) {
+                methods.insert(method.to_string());
+            }
+        }
+
+        offset = close + 1;
+    }
+}
+
+fn collect_protected_update_methods(source: &str, methods: &mut BTreeSet<String>) {
+    let mut offset = 0;
+    while let Some(attribute_offset) = next_canic_update_attribute_offset(&source[offset..]) {
+        let attribute_start = offset + attribute_offset;
+        let Some(attribute_end_offset) = source[attribute_start..].find(']') else {
+            break;
+        };
+        let attribute_end = attribute_start + attribute_end_offset + 1;
+        let attribute = &source[attribute_start..attribute_end];
+        offset = attribute_end;
+
+        if !attribute.contains("internal")
+            || !(attribute.contains("caller::has_role")
+                || attribute.contains("caller::has_any_role"))
+        {
+            continue;
+        }
+
+        if let Some(method) = protected_endpoint_method_name(attribute, &source[attribute_end..]) {
+            methods.insert(method.to_string());
+        }
+    }
+}
+
+fn next_canic_update_attribute_offset(source: &str) -> Option<usize> {
+    ["#[canic_update", "#[$crate::canic_update"]
+        .into_iter()
+        .filter_map(|needle| {
+            let mut offset = 0;
+            while let Some(attribute_offset) = source[offset..].find(needle) {
+                let absolute = offset + attribute_offset;
+                if is_real_attribute_start(source, absolute) {
+                    return Some(absolute);
+                }
+                offset = absolute + needle.len();
+            }
+            None
+        })
+        .min()
+}
+
+fn marker_is_macro_definition(source: &str, marker_start: usize) -> bool {
+    source[..marker_start]
+        .rsplit('\n')
+        .next()
+        .is_some_and(|line| line.contains("macro_rules!"))
+}
+
+fn is_real_attribute_start(source: &str, attribute_start: usize) -> bool {
+    source[..attribute_start]
+        .chars()
+        .next_back()
+        .is_none_or(char::is_whitespace)
+}
+
+fn protected_endpoint_method_name<'a>(
+    attribute: &'a str,
+    after_attribute: &'a str,
+) -> Option<&'a str> {
+    if let Some(name_offset) = attribute.find("name") {
+        let after_name = &attribute[(name_offset + "name".len())..];
+        let equals_offset = after_name.find('=')?;
+        if let Some(method) = leading_string_literal(&after_name[(equals_offset + 1)..]) {
+            return Some(method);
+        }
+    }
+
+    next_function_name(after_attribute)
+}
+
+fn matching_brace(source: &str, open: usize) -> Option<usize> {
+    let mut depth = 0_u32;
+    for (relative, ch) in source[open..].char_indices() {
+        match ch {
+            '{' => depth += 1,
+            '}' => {
+                depth = depth.checked_sub(1)?;
+                if depth == 0 {
+                    return Some(open + relative);
+                }
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+fn leading_string_literal(source: &str) -> Option<&str> {
+    let trimmed = source.trim_start();
+    let rest = trimmed.strip_prefix('"')?;
+    let end = rest.find('"')?;
+    Some(&rest[..end])
 }
 
 #[derive(Debug)]

@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.40.x] - 2026-05-19 - Attested Canic calls
 
+- `0.40.11` extends the protected internal-call source guard beyond wasm-store methods so shared protocol descriptors and protected endpoint declarations are also treated as raw-call-forbidden Canic internal methods.
+
 - `0.40.10` makes root authoritative for role-attestation epochs, removes the legacy caller-supplied epoch from canonical replay/signature payloads, fixes outbound attestation cache reuse for newer root-signed epochs, and domain-separates the remaining root request/capability metadata nonce streams.
 
 - `0.40.9` adds a real app-style project hub/instance fixture for generated protected clients, proves it through PocketIC, fixes the built-in wasm-store protected client decode path, and domain-separates auth-material root request metadata from other root request IDs.
