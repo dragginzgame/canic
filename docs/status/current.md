@@ -222,6 +222,11 @@ inspect only the files needed for the current task.
   role arrays do not hide protected methods from discovery. Raw-call pattern
   matching now avoids treating allowed `CanicCall::...` usage as forbidden raw
   `Call::...` usage.
+- Started the next 0.40 hardening slice by making verifier-side auth material
+  time windows explicit. Role attestations and internal invocation proofs now
+  reject malformed windows where `expires_at <= issued_at`, reject future
+  `issued_at` values, and map not-yet-valid internal invocation proofs to the
+  non-retryable `AuthProofExpired` public class.
 - Started `0.39.1` by adding an AppIndex-backed
   `caller::has_app_role(role)` internal access predicate, giving app hubs and
   shards a first-class way to trust canonical sibling app canisters without

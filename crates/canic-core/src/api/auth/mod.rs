@@ -70,9 +70,10 @@ impl AuthApi {
             AuthOpsError::Expiry(AuthExpiryError::AttestationEpochRejected { .. }) => {
                 Error::new(ErrorCode::AuthMaterialStale, err.to_string())
             }
-            AuthOpsError::Expiry(AuthExpiryError::AttestationExpired { .. }) => {
-                Error::new(ErrorCode::AuthProofExpired, err.to_string())
-            }
+            AuthOpsError::Expiry(
+                AuthExpiryError::AttestationExpired { .. }
+                | AuthExpiryError::AttestationNotYetValid { .. },
+            ) => Error::new(ErrorCode::AuthProofExpired, err.to_string()),
             _ => Error::unauthorized(err.to_string()),
         }
     }
@@ -475,5 +476,26 @@ impl AuthApi {
             .request_internal_invocation_proof(request)
             .await
             .map_err(Self::map_auth_error)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::AuthApi;
+    use crate::{
+        dto::error::ErrorCode,
+        ops::auth::{AuthExpiryError, AuthOpsError},
+    };
+
+    #[test]
+    fn internal_invocation_not_yet_valid_maps_to_non_retryable_proof_expiry() {
+        let err = AuthApi::map_internal_invocation_verify_error(AuthOpsError::Expiry(
+            AuthExpiryError::AttestationNotYetValid {
+                issued_at: 20,
+                now_secs: 10,
+            },
+        ));
+
+        assert_eq!(err.code, ErrorCode::AuthProofExpired);
     }
 }

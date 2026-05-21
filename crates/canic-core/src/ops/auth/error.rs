@@ -47,6 +47,9 @@ pub enum AuthValidationError {
     #[error("attestation subnet was set but verifier subnet is unavailable")]
     AttestationSubnetUnavailable,
 
+    #[error("attestation expires_at ({expires_at}) must be greater than issued_at ({issued_at})")]
+    AttestationInvalidWindow { issued_at: u64, expires_at: u64 },
+
     #[error("delegated token auth disabled (set auth.delegated_tokens.enabled=true in canic.toml)")]
     DelegatedTokenAuthDisabled,
 
@@ -172,6 +175,9 @@ pub enum AuthExpiryError {
 
     #[error("attestation expired at {expires_at} (now {now_secs})")]
     AttestationExpired { expires_at: u64, now_secs: u64 },
+
+    #[error("attestation not yet valid (issued_at {issued_at}, now {now_secs})")]
+    AttestationNotYetValid { issued_at: u64, now_secs: u64 },
 
     #[error(
         "attestation key_id {key_id} is not valid yet (valid_from {valid_from}, now {now_secs})"

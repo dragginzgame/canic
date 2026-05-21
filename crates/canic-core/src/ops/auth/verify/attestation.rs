@@ -16,18 +16,12 @@ pub(super) fn verify_role_attestation_claims(
     now_secs: u64,
     min_accepted_epoch: u64,
 ) -> Result<(), AuthOpsError> {
+    verify_attestation_time_window(payload.issued_at, payload.expires_at, now_secs)?;
+
     if payload.subject != caller {
         return Err(AuthScopeError::AttestationSubjectMismatch {
             expected: caller,
             found: payload.subject,
-        }
-        .into());
-    }
-
-    if now_secs > payload.expires_at {
-        return Err(AuthExpiryError::AttestationExpired {
-            expires_at: payload.expires_at,
-            now_secs,
         }
         .into());
     }
@@ -69,18 +63,12 @@ pub(super) fn verify_internal_invocation_proof_claims(
     payload: &InternalInvocationProofPayloadV1,
     input: InternalInvocationProofVerificationInput<'_>,
 ) -> Result<(), AuthOpsError> {
+    verify_attestation_time_window(payload.issued_at, payload.expires_at, input.now_secs)?;
+
     if payload.subject != input.caller {
         return Err(AuthScopeError::AttestationSubjectMismatch {
             expected: input.caller,
             found: payload.subject,
-        }
-        .into());
-    }
-
-    if input.now_secs > payload.expires_at {
-        return Err(AuthExpiryError::AttestationExpired {
-            expires_at: payload.expires_at,
-            now_secs: input.now_secs,
         }
         .into());
     }
@@ -136,6 +124,38 @@ pub(super) fn verify_internal_invocation_proof_claims(
     Ok(())
 }
 
+fn verify_attestation_time_window(
+    issued_at: u64,
+    expires_at: u64,
+    now_secs: u64,
+) -> Result<(), AuthOpsError> {
+    if expires_at <= issued_at {
+        return Err(AuthValidationError::AttestationInvalidWindow {
+            issued_at,
+            expires_at,
+        }
+        .into());
+    }
+
+    if now_secs < issued_at {
+        return Err(AuthExpiryError::AttestationNotYetValid {
+            issued_at,
+            now_secs,
+        }
+        .into());
+    }
+
+    if now_secs > expires_at {
+        return Err(AuthExpiryError::AttestationExpired {
+            expires_at,
+            now_secs,
+        }
+        .into());
+    }
+
+    Ok(())
+}
+
 // Reject attestation keys that are not yet valid or already expired.
 pub(super) fn verify_attestation_key_validity(
     key: &AttestationKey,
@@ -171,10 +191,11 @@ mod tests {
     use super::verify_internal_invocation_proof_claims;
     use crate::{
         cdk::types::Principal,
-        dto::auth::InternalInvocationProofPayloadV1,
+        dto::auth::{InternalInvocationProofPayloadV1, RoleAttestation},
         ids::CanisterRole,
         ops::auth::{
-            AuthExpiryError, AuthOpsError, AuthScopeError, InternalInvocationProofVerificationInput,
+            AuthExpiryError, AuthOpsError, AuthScopeError, AuthValidationError,
+            InternalInvocationProofVerificationInput,
         },
     };
 
@@ -208,6 +229,18 @@ mod tests {
             verifier_subnet: Some(p(3)),
             now_secs: 15,
             min_accepted_epoch,
+        }
+    }
+
+    fn role_attestation() -> RoleAttestation {
+        RoleAttestation {
+            subject: p(1),
+            role: CanisterRole::new("project_hub"),
+            subnet_id: Some(p(3)),
+            audience: p(2),
+            issued_at: 10,
+            expires_at: 20,
+            epoch: 4,
         }
     }
 
@@ -264,6 +297,72 @@ mod tests {
         assert!(matches!(
             err,
             AuthOpsError::Expiry(AuthExpiryError::AttestationEpochRejected { .. })
+        ));
+    }
+
+    #[test]
+    fn internal_invocation_claims_reject_future_issued_at() {
+        let accepted = [CanisterRole::new("project_hub")];
+        let mut payload = payload();
+        payload.issued_at = 16;
+        payload.expires_at = 30;
+
+        let err = verify_internal_invocation_proof_claims(
+            &payload,
+            input("system_add_project_to_user", &accepted, 4),
+        )
+        .expect_err("future issued_at must reject");
+
+        assert!(matches!(
+            err,
+            AuthOpsError::Expiry(AuthExpiryError::AttestationNotYetValid { .. })
+        ));
+    }
+
+    #[test]
+    fn internal_invocation_claims_reject_invalid_time_window() {
+        let accepted = [CanisterRole::new("project_hub")];
+        let mut payload = payload();
+        payload.expires_at = payload.issued_at;
+
+        let err = verify_internal_invocation_proof_claims(
+            &payload,
+            input("system_add_project_to_user", &accepted, 4),
+        )
+        .expect_err("invalid attestation time window must reject");
+
+        assert!(matches!(
+            err,
+            AuthOpsError::Validation(AuthValidationError::AttestationInvalidWindow { .. })
+        ));
+    }
+
+    #[test]
+    fn role_attestation_claims_reject_future_issued_at() {
+        let mut payload = role_attestation();
+        payload.issued_at = 16;
+        payload.expires_at = 30;
+
+        let err = super::verify_role_attestation_claims(&payload, p(1), p(2), Some(p(3)), 15, 4)
+            .expect_err("future issued_at must reject");
+
+        assert!(matches!(
+            err,
+            AuthOpsError::Expiry(AuthExpiryError::AttestationNotYetValid { .. })
+        ));
+    }
+
+    #[test]
+    fn role_attestation_claims_reject_invalid_time_window() {
+        let mut payload = role_attestation();
+        payload.expires_at = payload.issued_at;
+
+        let err = super::verify_role_attestation_claims(&payload, p(1), p(2), Some(p(3)), 15, 4)
+            .expect_err("invalid attestation time window must reject");
+
+        assert!(matches!(
+            err,
+            AuthOpsError::Validation(AuthValidationError::AttestationInvalidWindow { .. })
         ));
     }
 }
