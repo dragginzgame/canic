@@ -7,6 +7,7 @@ mod bootstrap_store;
 mod build_profile;
 pub mod canister_build;
 mod cargo_metadata;
+pub mod deployment_truth;
 pub mod format;
 pub mod icp;
 pub mod icp_config;

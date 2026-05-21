@@ -22,6 +22,11 @@ inspect only the files needed for the current task.
 
 ## Recent Work
 
+- Added passive host-side deployment truth V1 model scaffolding under
+  `canic-host::deployment_truth`. The new types cover plans, inventories,
+  receipts, diffs, safety reports, role artifacts, canister control classes,
+  verifier readiness, and phase postconditions, with JSON round-trip tests but
+  no installer behavior changes.
 - Started `0.41.0` as a design-prep slice for the deployment truth model. This
   line follows the 0.40 attested-call hard cut and focuses on making intended
   deployment state, observed inventory, phase receipts, diffs, and safety
