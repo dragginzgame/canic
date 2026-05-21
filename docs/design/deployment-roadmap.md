@@ -137,6 +137,35 @@ inventory or authority reconciliation proves a safer state.
 It may also be used as an artifact transport after bootstrap, but those concepts
 must stay separate.
 
+### `wasm_store` Availability Is Evidence
+
+`wasm_store` catalog and staging state are artifact availability evidence.
+
+Live inventory remains deployment truth.
+
+---
+
+## `wasm_store` Enablement Thread
+
+0.41 through 0.46 should make `wasm_store` visible, typed, digest-checked,
+receipted, transport-capable, diffable, and safe to resume against only with
+live proof.
+
+They should not turn `wasm_store` into the artifact registry, rollback
+database, retention authority, source of deployment truth, or cross-deployment
+promotion brain.
+
+```text
+0.41 observes wasm_store as a role artifact and artifact-transport endpoint.
+0.43 routes wasm_store staging through DeploymentExecutor::stage_artifact.
+0.44 permits receipt-backed and wasm_store-backed artifact locators in plans.
+0.46 compares wasm_store artifact availability as evidence, not truth.
+```
+
+Post-0.46 work may promote `wasm_store` into a provenance-rich artifact
+registry with pinning, rollback selection, cross-deployment cache reuse, and
+deployment-aware retention.
+
 ### Automated Resume Requires Live Proof
 
 A receipt can skip work only after live inventory proves the phase

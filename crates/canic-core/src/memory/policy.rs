@@ -181,8 +181,7 @@ fn memory_slot_error_to_registry_error(err: MemoryManagerSlotError) -> MemoryReg
                 },
             }
         }
-        MemoryManagerSlotError::UnsupportedSlot
-        | MemoryManagerSlotError::UnsupportedSubstrate { .. }
+        MemoryManagerSlotError::UnsupportedSubstrate { .. }
         | MemoryManagerSlotError::UnsupportedDescriptorVersion { .. } => {
             MemoryRegistryError::LedgerCorrupt {
                 reason: "unsupported MemoryManager allocation slot descriptor",
@@ -209,6 +208,17 @@ mod tests {
 
     fn slot(id: u8) -> AllocationSlotDescriptor {
         AllocationSlotDescriptor::memory_manager(id).expect("usable MemoryManager id")
+    }
+
+    #[test]
+    fn rejects_memory_manager_sentinel_id_through_ic_memory() {
+        let err = AllocationSlotDescriptor::memory_manager(ic_memory::MEMORY_MANAGER_INVALID_ID)
+            .expect_err("ID 255 is the unallocated-bucket sentinel");
+        assert!(matches!(
+            err,
+            MemoryManagerSlotError::InvalidMemoryManagerId { id }
+                if id == ic_memory::MEMORY_MANAGER_INVALID_ID
+        ));
     }
 
     fn validate(stable_key: &str, id: u8) -> Result<(), MemoryRegistryError> {

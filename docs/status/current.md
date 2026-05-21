@@ -82,7 +82,7 @@ inspect only the files needed for the current task.
   decode the signed proof payload returned by the direct endpoint instead of
   the local root capability response envelope. Reconcile coverage now asserts
   that old raw update tuples fail against protected wasm-store updates.
-- Continued `0.40.2` by consuming `ic-memory 0.5.1` for generic multi-crate
+- Continued `0.40.2` by consuming `ic-memory` for generic multi-crate
   static range and memory declaration registration. Canic now declares its core
   and control-plane ranges through `ic-memory`, delegates declaration/opening
   macros to the generic runtime, removes the stale Canic-local declaration
@@ -252,8 +252,8 @@ inspect only the files needed for the current task.
   lifecycle mechanics inside `ic-memory`.
 - Added the first generic `ic-memory` physical commit model: dual protected
   generation slots with marker/checksum validation, highest-valid recovery,
-  corrupt-newer-slot tolerance, and a `LedgerCommitStore`/`LedgerCodec`
-  boundary that keeps serialization and stable-memory IO outside the core.
+  corrupt-newer-slot tolerance, and a native `LedgerCommitStore` boundary for
+  allocation-ledger recovery and commits.
 - Added generic `ic-memory` lifecycle mechanics for generation-scoped
   reservations, explicit retirements, `reserved -> active` activation, and an
   `AllocationBootstrap` pipeline that recovers, validates, stages, commits, and

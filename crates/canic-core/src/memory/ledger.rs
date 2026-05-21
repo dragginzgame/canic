@@ -5,7 +5,7 @@ use super::{manager::MEMORY_MANAGER, policy, registry::MemoryRegistryError};
 use ic_memory::stable_structures::Memory;
 use ic_memory::{
     AllocationHistory, AllocationLedger, AllocationSlotDescriptor, CURRENT_LEDGER_SCHEMA_VERSION,
-    CURRENT_PHYSICAL_FORMAT_ID, CborLedgerCodec, DiagnosticExport, MemoryManagerAuthorityRecord,
+    CURRENT_PHYSICAL_FORMAT_ID, DiagnosticExport, MemoryManagerAuthorityRecord,
     StableCellLedgerRecord,
     stable_structures::{
         DefaultMemoryImpl,
@@ -116,10 +116,12 @@ fn snapshot_from_record(
         genesis_ledger()
     } else {
         store
-            .recover(&CborLedgerCodec)
+            .recover()
             .map_err(|_| MemoryRegistryError::LedgerCorrupt {
                 reason: "native ic-memory ledger recovery failed",
             })?
+            .ledger()
+            .clone()
     };
     let commit_recovery = store.physical().diagnostic();
     Ok(NativeMemoryLedgerSnapshot {
