@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-05-20
+Last updated: 2026-05-21
 
 ## Purpose
 
@@ -51,12 +51,12 @@ inspect only the files needed for the current task.
 - Continued `0.40.0` by adding verifier-side internal invocation proof checks
   and the first generated protected update wrapper path. `caller::has_role(...)`
   and `caller::has_any_role([...])` are now parsed and validated as attested-role
-  predicates, update-only in V1, and protected wrappers export
-  `CanicInternalCallEnvelopeV1`, verify the proof against caller/audience/method/
-  role/subnet/TTL/epoch bindings, then decode original Candid args only after
-  authorization succeeds. Mixed non-attested access predicates are rejected for
-  this protected wrapper path so no existing `requires(...)` condition is
-  silently dropped.
+  predicates, update-only in V1, and protected wrappers decode
+  `CanicInternalCallEnvelopeV1` inside Canic, verify the proof against
+  caller/audience/method/role/subnet/TTL/epoch bindings, then decode original
+  Candid args only after authorization succeeds. Mixed non-attested access
+  predicates are rejected for this protected wrapper path so no existing
+  `requires(...)` condition is silently dropped.
 - Continued `0.40.0` by adding the low-level `CanicCall` primitive through
   `canic::api::ic` and the prelude. `CanicCall` keeps raw `Call` unchanged,
   encodes original endpoint args, requests a root-signed method-scoped proof for
@@ -76,8 +76,8 @@ inspect only the files needed for the current task.
   handler errors are not retried.
 - Started `0.40.2` by migrating the local wasm-store update surface onto the
   protected internal-call protocol. Wasm-store update endpoints now require
-  `caller::has_role("root")` and export the `CanicInternalCallEnvelopeV1` ABI,
-  while root control-plane calls to those update methods use `CanicCall`.
+  `caller::has_role("root")`, while root control-plane calls to those update
+  methods use `CanicCall`.
   Catalog/status queries remain structural root-query exceptions until a
   protected-query design exists. The same slice aligned direct root auth RPC
   decoding for role attestations and internal invocation proofs so callers
@@ -199,6 +199,29 @@ inspect only the files needed for the current task.
   The checked-in wasm-store DID and guard tests now reflect that protected
   updates expose a no-argument raw-ingress wrapper in Candid while `CanicCall`
   sends the envelope bytes directly.
+- Followed up after `0.40.12` by aligning the 0.40 design notes and this
+  handoff with the raw-ingress protected wrapper model. Historical implementation
+  entries should now be read as current raw-ingress behavior rather than typed
+  envelope Candid arguments.
+- Continued that follow-up by making `CanicCall` encode the internal-call
+  envelope explicitly and dispatch those bytes through `with_raw_args(...)`,
+  matching the no-argument protected wrapper ABI at the public call boundary.
+  A source guard now rejects a regression back to typed envelope-argument
+  dispatch. The same low-level call boundary now rejects empty target methods
+  and zero effective proof TTLs locally before requesting root proof material.
+  Protected endpoint descriptors and handwritten `CanicCall` role selection
+  treat whitespace-only method/role metadata as invalid.
+- Final closeout pass is aligning the 0.40 design doc with the implemented
+  raw-ingress wrapper, descriptor/generated-client, root issuance, heap-only
+  cache, and endpoint-classification state.
+- Started the next 0.40.13-sized hardening slice by strengthening the protected
+  raw-call source guard. It now scans raw call expressions instead of only
+  single lines, catches multi-line protected method literals/constants, and
+  keeps external calls plus structural query exceptions allowed. The same guard
+  now bracket-matches endpoint attributes so nested `caller::has_any_role([...])`
+  role arrays do not hide protected methods from discovery. Raw-call pattern
+  matching now avoids treating allowed `CanicCall::...` usage as forbidden raw
+  `Call::...` usage.
 - Started `0.39.1` by adding an AppIndex-backed
   `caller::has_app_role(role)` internal access predicate, giving app hubs and
   shards a first-class way to trust canonical sibling app canisters without

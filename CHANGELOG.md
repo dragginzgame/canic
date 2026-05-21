@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.40.x] - 2026-05-19 - Attested Canic calls
 
+- `0.40.13` aligns the 0.40 attested-call design and access-contract docs with the current raw-ingress protected wrapper model, makes `CanicCall` dispatch encoded envelopes through raw ingress bytes, validates empty method/role/TTL metadata locally, and strengthens the protected raw-call source guard so multi-line protected method literals/constants are caught without misclassifying `CanicCall::...` usage.
+
 - `0.40.12` makes protected internal endpoint wrappers decode the Canic envelope from raw ingress bytes inside Canic, so malformed raw calls return typed `InternalRpcMalformed` errors instead of failing in the CDK argument decoder.
 
 - `0.40.11` extends the protected internal-call source guard beyond wasm-store methods so shared protocol descriptors and protected endpoint declarations are also treated as raw-call-forbidden Canic internal methods.

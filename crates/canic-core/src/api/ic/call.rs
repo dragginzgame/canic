@@ -90,8 +90,8 @@ impl Call {
 ///
 /// Unlike `Call`, this API is only for Canic-to-Canic protected internal
 /// endpoints. It obtains a root-signed method-scoped invocation proof, wraps
-/// the original Candid arguments in `CanicInternalCallEnvelopeV1`, and dispatches
-/// through the raw call path.
+/// the original Candid arguments in `CanicInternalCallEnvelopeV1`, encodes that
+/// envelope as raw ingress bytes, and dispatches through the raw call path.
 ///
 
 pub struct CanicCall;
@@ -135,7 +135,7 @@ impl ProtectedInternalEndpoint {
     #[track_caller]
     pub fn new(method: &'static str, roles: impl IntoIterator<Item = CanisterRole>) -> Self {
         assert!(
-            !method.is_empty(),
+            !method.trim().is_empty(),
             "protected internal endpoint descriptor method must not be empty"
         );
         let accepted_roles = roles.into_iter().collect::<Vec<_>>();
@@ -145,7 +145,7 @@ impl ProtectedInternalEndpoint {
         );
         for (index, role) in accepted_roles.iter().enumerate() {
             assert!(
-                !role.as_str().is_empty(),
+                !role.as_str().trim().is_empty(),
                 "protected internal endpoint descriptor '{method}' has an empty caller role at index {index}"
             );
             assert!(
@@ -460,10 +460,12 @@ impl CanicCallBuilder<'_> {
     }
 
     pub async fn execute(self) -> Result<CallResult, Error> {
+        validate_internal_call_target_method(&self.method)?;
         let ttl_secs = self.proof_ttl_secs()?;
         let role = self
             .caller_role
             .ok_or_else(|| Error::invalid("CanicCall requires with_caller_role(...)"))?;
+        validate_internal_call_caller_role(&role)?;
         let request = InternalInvocationProofRequest {
             subject: IcOps::canister_self(),
             role,
@@ -510,8 +512,39 @@ impl CanicCallBuilder<'_> {
         let max = ConfigOps::role_attestation_config()
             .map_err(Error::from)?
             .max_ttl_secs;
-        Ok(requested.min(max))
+        effective_internal_call_proof_ttl_secs(requested, max)
     }
+}
+
+fn validate_internal_call_target_method(method: &str) -> Result<(), Error> {
+    if method.trim().is_empty() {
+        return Err(Error::invalid(
+            "CanicCall requires a non-empty target method",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_internal_call_caller_role(role: &CanisterRole) -> Result<(), Error> {
+    if role.as_str().trim().is_empty() {
+        return Err(Error::invalid("CanicCall requires a non-empty caller role"));
+    }
+    Ok(())
+}
+
+fn effective_internal_call_proof_ttl_secs(requested: u64, max: u64) -> Result<u64, Error> {
+    if requested == 0 {
+        return Err(Error::invalid(
+            "CanicCall proof TTL must be greater than zero",
+        ));
+    }
+    let effective = requested.min(max);
+    if effective == 0 {
+        return Err(Error::invalid(
+            "CanicCall proof TTL maximum must be greater than zero",
+        ));
+    }
+    Ok(effective)
 }
 
 async fn execute_internal_call_once(
@@ -526,7 +559,7 @@ async fn execute_internal_call_once(
         WaitMode::Unbounded => Call::unbounded_wait(canister_id, method),
     }
     .with_cycles(cycles)
-    .with_arg(envelope)?;
+    .with_raw_args(encode_internal_call_envelope_raw(envelope)?);
 
     call.execute().await
 }
@@ -718,6 +751,12 @@ fn build_internal_call_envelope(
         proof,
         args,
     }
+}
+
+fn encode_internal_call_envelope_raw(
+    envelope: CanicInternalCallEnvelopeV1,
+) -> Result<Vec<u8>, Error> {
+    encode_one(envelope).map_err(|err| Error::invalid(err.to_string()))
 }
 
 ///
@@ -926,7 +965,7 @@ mod tests {
     use super::*;
     use crate::config::schema::RoleAttestationConfig;
     use crate::dto::auth::{InternalInvocationProofPayloadV1, SignedInternalInvocationProofV1};
-    use candid::decode_args;
+    use candid::{decode_args, decode_one};
     use std::collections::BTreeMap;
 
     fn p(id: u8) -> Principal {
@@ -995,6 +1034,20 @@ mod tests {
     }
 
     #[test]
+    fn canic_call_encodes_envelope_as_raw_ingress_bytes() {
+        let args = encode_args((7_u64, "project")).expect("args encode");
+        let envelope =
+            build_internal_call_envelope(p(2), "system_add_project_to_user", proof(), args);
+        let raw =
+            encode_internal_call_envelope_raw(envelope.clone()).expect("envelope should encode");
+
+        let decoded: CanicInternalCallEnvelopeV1 =
+            decode_one(&raw).expect("raw ingress bytes decode as envelope");
+
+        assert_eq!(decoded, envelope);
+    }
+
+    #[test]
     fn canic_call_builder_records_role_and_raw_args() {
         let raw = vec![9_u8, 8, 7];
         let builder = CanicCall::unbounded_wait(p(3), "target")
@@ -1010,6 +1063,45 @@ mod tests {
         assert_eq!(builder.ttl_secs, Some(30));
         assert_eq!(builder.cycles, 10);
         assert_eq!(builder.args.as_ref(), raw.as_slice());
+    }
+
+    #[test]
+    fn canic_call_rejects_empty_target_method_locally() {
+        let err = validate_internal_call_target_method("   ")
+            .expect_err("empty protected call method should fail locally");
+
+        assert_eq!(err.code, ErrorCode::InvalidInput);
+    }
+
+    #[test]
+    fn canic_call_rejects_empty_caller_role_locally() {
+        let err = validate_internal_call_caller_role(&CanisterRole::new("   "))
+            .expect_err("empty protected call role should fail locally");
+
+        assert_eq!(err.code, ErrorCode::InvalidInput);
+    }
+
+    #[test]
+    fn canic_call_rejects_zero_effective_proof_ttl_locally() {
+        let zero_requested = effective_internal_call_proof_ttl_secs(0, 900)
+            .expect_err("zero requested proof ttl should fail locally");
+        assert_eq!(zero_requested.code, ErrorCode::InvalidInput);
+
+        let zero_max = effective_internal_call_proof_ttl_secs(120, 0)
+            .expect_err("zero configured max proof ttl should fail locally");
+        assert_eq!(zero_max.code, ErrorCode::InvalidInput);
+    }
+
+    #[test]
+    fn canic_call_clamps_requested_proof_ttl_to_config_max() {
+        assert_eq!(
+            effective_internal_call_proof_ttl_secs(120, 900).expect("ttl"),
+            120
+        );
+        assert_eq!(
+            effective_internal_call_proof_ttl_secs(1200, 900).expect("ttl"),
+            900
+        );
     }
 
     #[test]
@@ -1071,6 +1163,15 @@ mod tests {
     }
 
     #[test]
+    fn protected_internal_endpoint_descriptor_rejects_blank_method() {
+        let result = std::panic::catch_unwind(|| {
+            ProtectedInternalEndpoint::new("   ", [CanisterRole::ROOT])
+        });
+
+        assert!(result.is_err());
+    }
+
+    #[test]
     fn protected_internal_endpoint_descriptor_rejects_missing_roles() {
         let result = std::panic::catch_unwind(|| {
             ProtectedInternalEndpoint::new("system_add_project_to_user", [])
@@ -1083,6 +1184,15 @@ mod tests {
     fn protected_internal_endpoint_descriptor_rejects_empty_role() {
         let result = std::panic::catch_unwind(|| {
             ProtectedInternalEndpoint::new("system_add_project_to_user", [CanisterRole::new("")])
+        });
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn protected_internal_endpoint_descriptor_rejects_blank_role() {
+        let result = std::panic::catch_unwind(|| {
+            ProtectedInternalEndpoint::new("system_add_project_to_user", [CanisterRole::new("   ")])
         });
 
         assert!(result.is_err());
@@ -1114,6 +1224,25 @@ mod tests {
         assert_eq!(client.options.wait, CanicInternalWaitMode::Bounded);
         assert_eq!(client.options.cycles, 10);
         assert_eq!(client.options.proof_ttl_secs, Some(30));
+    }
+
+    #[test]
+    fn internal_client_rejects_unaccepted_explicit_role_locally() {
+        let client = CanicInternalClient::new(p(3));
+        let endpoint = ProtectedInternalEndpoint::new(
+            "system_add_project_to_user",
+            [CanisterRole::new("project_hub")],
+        );
+        let result = futures::executor::block_on(client.call_update(
+            &endpoint,
+            CanisterRole::new("admin_hub"),
+            (),
+        ));
+
+        match result {
+            Err(err) => assert_eq!(err.code, ErrorCode::InvalidInput),
+            Ok(_) => panic!("unaccepted caller role should fail before transport"),
+        }
     }
 
     #[test]

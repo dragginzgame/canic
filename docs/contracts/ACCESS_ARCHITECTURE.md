@@ -36,6 +36,10 @@ separate policy family.
   descriptors so method names, envelope proof scope, and accepted caller roles
   come from the protected endpoint declaration instead of being duplicated at
   call sites.
+- `CanicCall` transports the protected envelope as raw ingress bytes to a
+  no-argument protected wrapper. The envelope is decoded inside Canic code so
+  malformed protected calls return typed Canic errors instead of pre-dispatch
+  Candid decode traps.
 - The generated descriptor accessor name is
   `canic_internal_endpoint_<endpoint>()`; `canic_internal_client!` consumes
   those accessors to generate typed protected update client methods. Single-role
@@ -52,10 +56,11 @@ separate policy family.
   shared protocol crate owns the descriptor, and the caller canister generates
   a typed client from that descriptor.
 - Protected internal endpoint descriptors must name a concrete exported method
-  and at least one accepted caller role. Empty descriptor metadata is invalid
-  because it would create a generated client method that cannot request a
-  method-scoped proof. Empty or duplicate caller roles are also invalid; role
-  metadata is the protected client's authorization contract.
+  and at least one accepted caller role. Empty or whitespace-only descriptor
+  metadata is invalid because it would create a generated client method that
+  cannot request a method-scoped proof. Empty, whitespace-only, or duplicate
+  caller roles are also invalid; role metadata is the protected client's
+  authorization contract.
 - Generated protected clients carry `CanicInternalCallOptions` for wait mode,
   attached cycles, and requested proof TTL. These transport knobs must stay on
   the protected client path and must not require callers to bypass descriptor
@@ -72,6 +77,9 @@ separate policy family.
 - `AccessError` is internal to access evaluation.
 - Endpoint boundaries map access denials to public `canic::Error`
   (`Unauthorized` path).
+- Protected internal wrapper decoding is a protocol boundary before access
+  evaluation. Malformed raw ingress, unsupported envelope versions, and target
+  binding mismatches map to `InternalRpcMalformed`, not `Unauthorized`.
 
 ## Endpoint Types
 

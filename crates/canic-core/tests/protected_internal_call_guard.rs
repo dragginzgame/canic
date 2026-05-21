@@ -135,7 +135,7 @@ const INTERNAL_ENDPOINT_CLASSIFICATIONS: &[InternalEndpointClassification] = &[
 #[test]
 fn first_party_code_does_not_raw_call_protected_internal_methods() {
     let workspace = workspace_root();
-    let protected_methods = protected_internal_method_names();
+    let protected_methods = protected_internal_method_tokens();
     let mut violations = Vec::new();
 
     for root in FIRST_PARTY_SRC_ROOTS {
@@ -146,6 +146,127 @@ fn first_party_code_does_not_raw_call_protected_internal_methods() {
         violations.is_empty(),
         "protected Canic internal methods must be called through CanicCall: {violations:#?}"
     );
+}
+
+#[test]
+fn raw_call_guard_catches_multiline_protected_method_literals() {
+    let protected_methods = protected_internal_method_tokens();
+    let source = r#"
+async fn wrong(pid: Principal) {
+    let _ = CallOps::unbounded_wait(
+        pid,
+        "canic_wasm_store_prepare",
+    )
+    .execute()
+    .await;
+}
+"#;
+
+    let violations = raw_call_violations_in_source(
+        Path::new("crates/example/src/lib.rs"),
+        source,
+        &protected_methods,
+    );
+
+    assert_eq!(violations, vec!["crates/example/src/lib.rs:3".to_string()]);
+}
+
+#[test]
+fn raw_call_guard_catches_multiline_protected_method_constants() {
+    let protected_methods = protected_internal_method_tokens();
+    let source = r"
+async fn wrong(pid: Principal) {
+    let _ = Call::unbounded_wait(
+        pid,
+        CANIC_WASM_STORE_PREPARE,
+    )
+    .execute()
+    .await;
+}
+";
+
+    let violations = raw_call_violations_in_source(
+        Path::new("crates/example/src/lib.rs"),
+        source,
+        &protected_methods,
+    );
+
+    assert_eq!(violations, vec!["crates/example/src/lib.rs:3".to_string()]);
+}
+
+#[test]
+fn raw_call_guard_allows_multiline_external_or_structural_methods() {
+    let protected_methods = protected_internal_method_tokens();
+    let source = r#"
+async fn allowed(pid: Principal) {
+    let _ = Call::unbounded_wait(
+        pid,
+        "icrc1_balance_of",
+    )
+    .execute()
+    .await;
+
+    let _ = CallOps::unbounded_wait(
+        pid,
+        "canic_wasm_store_catalog",
+    )
+    .execute()
+    .await;
+}
+"#;
+
+    let violations = raw_call_violations_in_source(
+        Path::new("crates/example/src/lib.rs"),
+        source,
+        &protected_methods,
+    );
+
+    assert!(violations.is_empty(), "{violations:#?}");
+}
+
+#[test]
+fn raw_call_guard_does_not_treat_canic_call_as_raw_call() {
+    let protected_methods = protected_internal_method_tokens();
+    let source = r#"
+async fn allowed(pid: Principal) {
+    let _ = CanicCall::unbounded_wait(
+        pid,
+        "canic_wasm_store_prepare",
+    )
+    .execute()
+    .await;
+}
+"#;
+
+    let violations = raw_call_violations_in_source(
+        Path::new("crates/example/src/lib.rs"),
+        source,
+        &protected_methods,
+    );
+
+    assert!(violations.is_empty(), "{violations:#?}");
+}
+
+#[test]
+fn protected_method_discovery_handles_nested_role_arrays() {
+    let source = r#"
+#[canic_update(
+    internal,
+    name = "wire_multi_role_endpoint",
+    requires(caller::has_any_role([
+        "project_hub",
+        "admin_hub",
+    ]))
+)]
+async fn multi_role_endpoint() -> Result<(), canic::Error> {
+    Ok(())
+}
+"#;
+    let mut methods = BTreeSet::new();
+
+    collect_protected_update_methods(source, &mut methods);
+
+    assert!(methods.contains("wire_multi_role_endpoint"), "{methods:#?}");
 }
 
 #[test]
@@ -299,6 +420,20 @@ fn protected_internal_method_guard_includes_shared_protocol_descriptors() {
     );
 }
 
+#[test]
+fn canic_call_dispatches_protected_envelope_as_raw_ingress_bytes() {
+    let source = read_workspace_file("crates/canic-core/src/api/ic/call.rs");
+
+    assert!(
+        source.contains(".with_raw_args(encode_internal_call_envelope_raw(envelope)?)"),
+        "CanicCall must send protected envelopes through the raw-args boundary"
+    );
+    assert!(
+        !source.contains(".with_arg(envelope)?"),
+        "CanicCall must not expose the protected envelope as a typed Candid argument"
+    );
+}
+
 fn scan_dir(root: &Path, protected_methods: &BTreeSet<String>, violations: &mut Vec<String>) {
     let Ok(entries) = fs::read_dir(root) else {
         return;
@@ -319,21 +454,104 @@ fn scan_dir(root: &Path, protected_methods: &BTreeSet<String>, violations: &mut 
             continue;
         };
 
-        for (index, line) in contents.lines().enumerate() {
-            if is_allowed_boundary(&path) {
-                continue;
-            }
-            if RAW_CALL_PATTERNS
-                .iter()
-                .any(|pattern| line.contains(pattern))
-                && protected_methods
-                    .iter()
-                    .any(|method| line.contains(method.as_str()))
-            {
-                violations.push(format!("{}:{}", path.display(), index + 1));
-            }
-        }
+        violations.extend(raw_call_violations_in_source(
+            &path,
+            &contents,
+            protected_methods,
+        ));
     }
+}
+
+fn raw_call_violations_in_source(
+    path: &Path,
+    source: &str,
+    protected_methods: &BTreeSet<String>,
+) -> Vec<String> {
+    if is_allowed_boundary(path) {
+        return Vec::new();
+    }
+
+    let mut violations = Vec::new();
+    let mut offset = 0;
+    while let Some((call_start, _pattern)) = next_raw_call_offset(&source[offset..]) {
+        let absolute = offset + call_start;
+        let window = raw_call_expression_window(&source[absolute..]);
+        if protected_methods
+            .iter()
+            .any(|method| window.contains(method.as_str()))
+        {
+            violations.push(format!(
+                "{}:{}",
+                path.display(),
+                line_number(source, absolute)
+            ));
+        }
+        offset = absolute + 1;
+    }
+    violations
+}
+
+fn next_raw_call_offset(source: &str) -> Option<(usize, &'static str)> {
+    RAW_CALL_PATTERNS
+        .iter()
+        .filter_map(|pattern| next_pattern_offset(source, pattern).map(|offset| (offset, *pattern)))
+        .min_by_key(|(offset, _)| *offset)
+}
+
+fn next_pattern_offset(source: &str, pattern: &str) -> Option<usize> {
+    let mut offset = 0;
+    while let Some(found) = source[offset..].find(pattern) {
+        let absolute = offset + found;
+        if is_real_raw_call_start(source, absolute) {
+            return Some(absolute);
+        }
+        offset = absolute + pattern.len();
+    }
+    None
+}
+
+fn is_real_raw_call_start(source: &str, offset: usize) -> bool {
+    source[..offset]
+        .chars()
+        .next_back()
+        .is_none_or(|ch| !(ch.is_ascii_alphanumeric() || ch == '_'))
+}
+
+fn raw_call_expression_window(source: &str) -> &str {
+    let end = source
+        .char_indices()
+        .find_map(|(index, ch)| (ch == ';').then_some(index + ch.len_utf8()))
+        .unwrap_or_else(|| source.len().min(2_000));
+    &source[..end.min(source.len()).min(2_000)]
+}
+
+fn line_number(source: &str, offset: usize) -> usize {
+    source[..offset]
+        .bytes()
+        .filter(|byte| *byte == b'\n')
+        .count()
+        + 1
+}
+
+fn protected_internal_method_tokens() -> BTreeSet<String> {
+    protected_internal_method_names()
+        .into_iter()
+        .flat_map(|method| {
+            [
+                method.clone(),
+                method
+                    .chars()
+                    .map(|ch| {
+                        if ch.is_ascii_alphanumeric() {
+                            ch.to_ascii_uppercase()
+                        } else {
+                            '_'
+                        }
+                    })
+                    .collect(),
+            ]
+        })
+        .collect()
 }
 
 fn protected_internal_method_names() -> BTreeSet<String> {
@@ -413,10 +631,9 @@ fn collect_protected_update_methods(source: &str, methods: &mut BTreeSet<String>
     let mut offset = 0;
     while let Some(attribute_offset) = next_canic_update_attribute_offset(&source[offset..]) {
         let attribute_start = offset + attribute_offset;
-        let Some(attribute_end_offset) = source[attribute_start..].find(']') else {
+        let Some(attribute_end) = attribute_end(source, attribute_start) else {
             break;
         };
-        let attribute_end = attribute_start + attribute_end_offset + 1;
         let attribute = &source[attribute_start..attribute_end];
         offset = attribute_end;
 
@@ -531,10 +748,9 @@ fn collect_internal_endpoint_declarations(
     let mut offset = 0;
     while let Some(attribute_offset) = source[offset..].find("#[$crate::canic_") {
         let attribute_start = offset + attribute_offset;
-        let Some(attribute_end_offset) = source[attribute_start..].find(']') else {
+        let Some(attribute_end) = attribute_end(source, attribute_start) else {
             break;
         };
-        let attribute_end = attribute_start + attribute_end_offset + 1;
         let attribute = &source[attribute_start..attribute_end];
         offset = attribute_end;
 
@@ -629,7 +845,9 @@ fn declaration_prefix<'a>(source: &'a str, method: &str) -> &'a str {
     let attribute_start = prefix
         .rfind("#[$crate::canic_")
         .unwrap_or_else(|| panic!("missing endpoint attribute for {method}"));
-    &source[attribute_start..function_start]
+    let attribute_end =
+        attribute_end(source, attribute_start).expect("endpoint attribute must terminate");
+    &source[attribute_start..attribute_end.min(function_start)]
 }
 
 fn did_service_line<'a>(did: &'a str, method: &str) -> &'a str {
@@ -669,10 +887,8 @@ fn wasm_store_methods_declared_by_macro(source: &str) -> Vec<(&'static str, Stri
         let attribute_start = prefix
             .rfind("#[$crate::canic_")
             .unwrap_or_else(|| panic!("missing endpoint attribute for {method}"));
-        let attribute_end = source[attribute_start..]
-            .find(']')
-            .map(|end| attribute_start + end + 1)
-            .expect("endpoint attribute must terminate");
+        let attribute_end =
+            attribute_end(source, attribute_start).expect("endpoint attribute must terminate");
         methods.push((
             leak_test_str(method),
             source[attribute_start..attribute_end].to_string(),
@@ -681,6 +897,30 @@ fn wasm_store_methods_declared_by_macro(source: &str) -> Vec<(&'static str, Stri
     }
 
     methods
+}
+
+fn attribute_end(source: &str, attribute_start: usize) -> Option<usize> {
+    let open = source[attribute_start..]
+        .find('[')
+        .map(|offset| attribute_start + offset)?;
+    matching_bracket(source, open).map(|close| close + 1)
+}
+
+fn matching_bracket(source: &str, open: usize) -> Option<usize> {
+    let mut depth = 0_u32;
+    for (relative, ch) in source[open..].char_indices() {
+        match ch {
+            '[' => depth += 1,
+            ']' => {
+                depth = depth.checked_sub(1)?;
+                if depth == 0 {
+                    return Some(open + relative);
+                }
+            }
+            _ => {}
+        }
+    }
+    None
 }
 
 fn protected_wasm_store_methods_in_did(did: &str) -> BTreeSet<&'static str> {
