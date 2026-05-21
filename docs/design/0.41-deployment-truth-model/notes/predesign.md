@@ -3,7 +3,7 @@
 These are archival audit notes captured during 0.41 through 0.46 roadmap
 planning. They are not normative design text; the normative design is in
 `../0.41-design.md`, the later per-line design docs, and
-`../../deployment-roadmap.md`.
+`../0.41-0.50-deployment-roadmap.md`.
 
 ---
 
@@ -590,7 +590,7 @@ Each doc has good local scope, but there is no single compact roadmap contract.
 
 Add:
 
-docs/design/deployment-roadmap.md
+docs/design/0.41-deployment-truth-model/0.41-0.50-deployment-roadmap.md
 
 with:
 

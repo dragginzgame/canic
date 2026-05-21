@@ -1,9 +1,10 @@
-# Source Notes: Deployment Adoption Gap Inventory
+# Deployment Adoption Gap Inventory
 
-These are archival product-gap notes captured during deployment roadmap
-planning. They are not normative design text; the normative design is in
-`../0.41-design.md`, the later per-line design docs, and
-`../../deployment-roadmap.md`.
+This is product-gap source material for the 0.41-0.50 roadmap. It is not
+itself a release contract.
+
+The normative design is in the per-line design docs and
+`0.41-deployment-truth-model/0.41-0.50-deployment-roadmap.md`.
 
 ---
 

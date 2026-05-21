@@ -2,7 +2,7 @@
 
 These are archival source notes captured during 0.41 roadmap planning. They are
 not normative design text; the normative design is in `../0.41-design.md` and
-the cross-line roadmap is in `../../deployment-roadmap.md`.
+the cross-line roadmap is in `../0.41-0.50-deployment-roadmap.md`.
 
 ---
 
