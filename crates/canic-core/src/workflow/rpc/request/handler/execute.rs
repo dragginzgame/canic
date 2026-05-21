@@ -161,22 +161,7 @@ pub(super) fn build_role_attestation(
     ctx: &RootContext,
     req: RoleAttestationRequest,
 ) -> Result<RoleAttestation, InternalError> {
-    let max_ttl_secs = authorize::max_role_attestation_ttl_seconds();
-    if req.ttl_secs == 0 || req.ttl_secs > max_ttl_secs {
-        return Err(RpcWorkflowError::RoleAttestationInvalidTtl {
-            ttl_secs: req.ttl_secs,
-            max_ttl_secs,
-        }
-        .into());
-    }
-
-    let expires_at =
-        ctx.now
-            .checked_add(req.ttl_secs)
-            .ok_or(RpcWorkflowError::RoleAttestationInvalidTtl {
-                ttl_secs: req.ttl_secs,
-                max_ttl_secs,
-            })?;
+    let expires_at = attestation_expires_at(ctx.now, req.ttl_secs)?;
     let epoch = AuthOps::current_role_epoch(&req.role)?;
 
     Ok(RoleAttestation {
@@ -194,22 +179,7 @@ pub(super) fn build_internal_invocation_proof(
     ctx: &RootContext,
     req: InternalInvocationProofRequest,
 ) -> Result<InternalInvocationProofPayloadV1, InternalError> {
-    let max_ttl_secs = authorize::max_role_attestation_ttl_seconds();
-    if req.ttl_secs == 0 || req.ttl_secs > max_ttl_secs {
-        return Err(RpcWorkflowError::RoleAttestationInvalidTtl {
-            ttl_secs: req.ttl_secs,
-            max_ttl_secs,
-        }
-        .into());
-    }
-
-    let expires_at =
-        ctx.now
-            .checked_add(req.ttl_secs)
-            .ok_or(RpcWorkflowError::RoleAttestationInvalidTtl {
-                ttl_secs: req.ttl_secs,
-                max_ttl_secs,
-            })?;
+    let expires_at = attestation_expires_at(ctx.now, req.ttl_secs)?;
     let epoch = AuthOps::current_role_epoch(&req.role)?;
 
     Ok(InternalInvocationProofPayloadV1 {
@@ -221,5 +191,24 @@ pub(super) fn build_internal_invocation_proof(
         issued_at: ctx.now,
         expires_at,
         epoch,
+    })
+}
+
+fn attestation_expires_at(issued_at: u64, ttl_secs: u64) -> Result<u64, InternalError> {
+    let max_ttl_secs = authorize::max_role_attestation_ttl_seconds();
+    if ttl_secs == 0 || ttl_secs > max_ttl_secs {
+        return Err(RpcWorkflowError::RoleAttestationInvalidTtl {
+            ttl_secs,
+            max_ttl_secs,
+        }
+        .into());
+    }
+
+    issued_at.checked_add(ttl_secs).ok_or_else(|| {
+        RpcWorkflowError::RoleAttestationInvalidTtl {
+            ttl_secs,
+            max_ttl_secs,
+        }
+        .into()
     })
 }

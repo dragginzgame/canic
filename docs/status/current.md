@@ -23,16 +23,14 @@ inspect only the files needed for the current task.
 
 ## Recent Work
 
-- Started tentative `0.41` deployment-flexibility design at
-  `docs/design/0.41-deployment-flexibility/0.41-design.md`. The draft now
-  splits `TrustDomain` (one root/trust anchor), `Fleet` (runtime topology
-  template), `Deployment` (trust domain + fleet + authority + role artifacts),
-  `Plan` (materialized intent), and `Receipt` (observed result). The tentative
-  0.41 scope is describe-and-record first: deployment inventory, plan JSON,
-  receipts from the existing install path, PocketIC consuming the same plan
-  shape, and plan/receipt comparison. Execute-from-plan, authority application,
-  role artifact overrides, and promotion commands are explicitly deferred until
-  the plan model is proven.
+- Reframed tentative `0.41` as a deployment truth model at
+  `docs/design/0.41-deployment-truth-model/0.41-design.md`. The 0.41 line now
+  centers `DeploymentPlanV1`, `DeploymentInventoryV1`,
+  `DeploymentReceiptV1`, and `DeploymentDiffV1` / `SafetyReportV1`, with
+  receipts treated as evidence rather than truth. The roadmap now continues
+  through 0.42 authority reconciliation, 0.43 backend-agnostic execution,
+  0.44 artifact promotion, 0.45 external/user-owned lifecycle, and 0.46
+  multi-deployment operations.
 - Started `0.40.0` by adding the passive Candid DTOs for the protected
   internal-call wire ABI:
   `CanicInternalCallEnvelopeV1`, `CanicInternalCallHeaderV1`,
@@ -226,7 +224,11 @@ inspect only the files needed for the current task.
   time windows explicit. Role attestations and internal invocation proofs now
   reject malformed windows where `expires_at <= issued_at`, reject future
   `issued_at` values, and map not-yet-valid internal invocation proofs to the
-  non-retryable `AuthProofExpired` public class.
+  non-retryable `AuthProofExpired` public class. The outgoing `CanicCall` proof
+  cache also refuses malformed or future proof windows before retaining proof
+  material. Root-issued role attestations and internal invocation proofs now
+  share the same TTL/window construction path, keeping zero TTL, over-limit TTL,
+  and expiry-overflow rejection consistent across both auth-material families.
 - Started `0.39.1` by adding an AppIndex-backed
   `caller::has_app_role(role)` internal access predicate, giving app hubs and
   shards a first-class way to trust canonical sibling app canisters without

@@ -697,6 +697,10 @@ fn internal_invocation_proof_is_reusable(
     min_accepted_epoch: u64,
 ) -> bool {
     let payload = &proof.payload;
+    if payload.expires_at <= payload.issued_at || now_secs < payload.issued_at {
+        return false;
+    }
+
     payload.subject == request.subject
         && payload.role == request.role
         && payload.subnet_id == request.subnet_id
@@ -1270,6 +1274,32 @@ mod tests {
         cache_internal_invocation_proof(&request, &cfg(0), p(7), 18, proof);
 
         assert!(cached_internal_invocation_proof(&request, &cfg(0), p(7), 18).is_none());
+    }
+
+    #[test]
+    fn internal_invocation_proof_cache_rejects_future_issued_at_entry() {
+        clear_internal_invocation_proof_cache();
+        let request = request();
+        let mut proof = proof();
+        proof.payload.subnet_id = request.subnet_id;
+        proof.payload.issued_at = 20;
+        proof.payload.expires_at = 40;
+        cache_internal_invocation_proof(&request, &cfg(0), p(7), 12, proof);
+
+        assert!(cached_internal_invocation_proof(&request, &cfg(0), p(7), 12).is_none());
+    }
+
+    #[test]
+    fn internal_invocation_proof_cache_rejects_invalid_time_window() {
+        clear_internal_invocation_proof_cache();
+        let request = request();
+        let mut proof = proof();
+        proof.payload.subnet_id = request.subnet_id;
+        proof.payload.issued_at = 20;
+        proof.payload.expires_at = 20;
+        cache_internal_invocation_proof(&request, &cfg(0), p(7), 20, proof);
+
+        assert!(cached_internal_invocation_proof(&request, &cfg(0), p(7), 20).is_none());
     }
 
     #[test]

@@ -811,6 +811,84 @@ fn build_role_attestation_rejects_invalid_ttl() {
 }
 
 #[test]
+fn build_internal_invocation_proof_rejects_invalid_ttl() {
+    let ctx = RootContext {
+        caller: p(1),
+        self_pid: p(9),
+        is_root_env: true,
+        subnet_id: p(2),
+        now: 1_000,
+    };
+    let mut req = InternalInvocationProofRequest {
+        subject: p(1),
+        role: CanisterRole::new("project_hub"),
+        subnet_id: Some(p(7)),
+        audience: p(8),
+        audience_method: "system_add_project_to_user".to_string(),
+        ttl_secs: 0,
+        metadata: None,
+    };
+
+    let zero_ttl =
+        RootResponseWorkflow::build_internal_invocation_proof(&ctx, &req).expect_err("must reject");
+    assert!(
+        zero_ttl.to_string().contains("ttl_secs"),
+        "expected ttl error for zero ttl, got: {zero_ttl}"
+    );
+
+    req.ttl_secs = DEFAULT_MAX_ROLE_ATTESTATION_TTL_SECONDS + 1;
+    let too_large =
+        RootResponseWorkflow::build_internal_invocation_proof(&ctx, &req).expect_err("must reject");
+    assert!(
+        too_large.to_string().contains("ttl_secs"),
+        "expected ttl error for too-large ttl, got: {too_large}"
+    );
+}
+
+#[test]
+fn build_root_auth_material_rejects_expiry_overflow() {
+    let ctx = RootContext {
+        caller: p(1),
+        self_pid: p(9),
+        is_root_env: true,
+        subnet_id: p(2),
+        now: u64::MAX,
+    };
+    let role_req = RoleAttestationRequest {
+        subject: p(1),
+        role: CanisterRole::new("test"),
+        subnet_id: Some(p(7)),
+        audience: p(8),
+        ttl_secs: 1,
+        epoch: 5,
+        metadata: None,
+    };
+    let proof_req = InternalInvocationProofRequest {
+        subject: p(1),
+        role: CanisterRole::new("project_hub"),
+        subnet_id: Some(p(7)),
+        audience: p(8),
+        audience_method: "system_add_project_to_user".to_string(),
+        ttl_secs: 1,
+        metadata: None,
+    };
+
+    let role_err =
+        RootResponseWorkflow::build_role_attestation(&ctx, &role_req).expect_err("must reject");
+    let proof_err = RootResponseWorkflow::build_internal_invocation_proof(&ctx, &proof_req)
+        .expect_err("must reject");
+
+    assert!(
+        role_err.to_string().contains("ttl_secs"),
+        "expected ttl error for overflow, got: {role_err}"
+    );
+    assert!(
+        proof_err.to_string().contains("ttl_secs"),
+        "expected ttl error for overflow, got: {proof_err}"
+    );
+}
+
+#[test]
 fn payload_hash_ignores_metadata() {
     let hash_a = RootCapability::RequestCycles(CyclesRequest {
         cycles: 42,
