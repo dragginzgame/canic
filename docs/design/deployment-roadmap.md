@@ -73,6 +73,101 @@ can ship.
 
 ---
 
+## Adoption Coverage
+
+The 0.41 through 0.46 roadmap should cover the deployment needs that are
+directly tied to truth, authority, execution, promotion, external lifecycle, and
+comparison.
+
+### Covered By Active Lines
+
+0.41 should cover:
+
+- live IC inventory for controllers, module hashes, pool state, and
+  `wasm_store`;
+- role artifact manifest and post-build materialization gate;
+- deployment receipts with digests, paths, operator principal, and root
+  identity;
+- deployment identity stored by deployment target, not only fleet template
+  name;
+- safety reports with stable categories;
+- inventory-only reads against `ic`;
+- host-side deployment config validation before build.
+
+0.42 should cover:
+
+- dry-run authority reconciliation;
+- exact external-action reports;
+- explicit destructive pool import confirmation;
+- observe/adopt planning for existing canisters without destructive reset;
+- per-spawn controller policy as a design object;
+- CLI profile and identity-binding semantics as authority design, even if full
+  implementation waits.
+
+0.43 should cover:
+
+- current CLI backend behind the executor boundary;
+- deployment state recording workspace root, ICP root, and artifact roots;
+- stable executor result shapes for JSON output;
+- an optional project manifest shape for split repos and CI roots.
+
+0.44 should cover:
+
+- external wasm and pinned wasm artifact sources;
+- sealed artifact vs source/build promotion modes;
+- explicit config-independent role flags;
+- promotion readiness that includes verifier, role epoch, and cascade
+  prerequisites;
+- role-scoped artifact override planning.
+
+0.45 should cover:
+
+- partial fleet upgrades as the default for user-controlled roles;
+- proposal, consent, verify, and receipt flow for external lifecycle;
+- security patch playbook shape;
+- SDK or frontend consent contract requirements.
+
+0.46 should cover:
+
+- deployment catalog as an operator concept;
+- plan, inventory, receipt, and deployment comparisons;
+- drift reports over stable categories;
+- `wasm_store` artifact availability comparisons;
+- promotion readiness across lanes;
+- lane teardown as a designed command shape;
+- post-deploy verification profile as a designed object.
+
+### Explicit Backlog
+
+These are important adoption needs, but they should not expand the 0.41 through
+0.46 release bars:
+
+- full brownfield migration suite;
+- standalone or leaf-only production profile;
+- frontend declaration pipeline;
+- official GitHub or GitLab action;
+- signed plans and Sigstore-style receipts;
+- OpenTelemetry or external monitoring integration;
+- full `wasm_store` artifact registry and retention;
+- deployment clone and trust-domain migration command;
+- reproducible build attestation;
+- cost attribution per deployment;
+- memory migration tooling;
+- complete non-Rust or hybrid fleet build orchestration.
+
+### Current Sealed Artifact Policy
+
+While `CANIC_CONFIG_PATH` embeds deployment-specific config into wasm, Canic
+must assume per-deployment rebuilds whenever canonical embedded config differs.
+
+`build once, deploy many` is safe only for roles whose metadata proves they are
+config-independent or for targets with identical canonical embedded config.
+
+Until a later split-config design exists, promotion must not imply sealed wasm
+byte identity across roots, networks, authority profiles, or runtime variants.
+
+---
+
 ## Cross-Line Invariants
 
 ### Receipts Are Not Truth
