@@ -77,11 +77,12 @@ futures = "0.3"
 ic-cdk = "0.20.1"
 ic-cdk-management-canister = "0.1.0"
 ic-cdk-timers = "1.0"
-ic-memory = "0.6.0"
+ic-memory = "0.6.1"
 icrc-ledger-types = { version = "0.2", default-features = false }
 k256 = { version = "0.13", default-features = false, features = ["ecdsa"] }
 pocket-ic = "13.0"
 proc-macro2 = "1.0"
+project-protocol-stub = { version = "0.40.15", path = "canisters/test/project_protocol_stub" }
 quote = "1.0"
 rand_chacha = "0.10"
 remain = "0.2"

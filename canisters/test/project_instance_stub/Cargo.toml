@@ -18,7 +18,7 @@ crate-type = ["cdylib"]
 candid = { workspace = true }
 canic = { workspace = true }
 ic-cdk = { workspace = true }
-project-protocol-stub = { path = "../project_protocol_stub" }
+project-protocol-stub = { workspace = true }
 
 [build-dependencies]
 canic = { workspace = true }

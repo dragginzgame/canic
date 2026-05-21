@@ -58,6 +58,8 @@ fn unauthorized_caller_is_denied_for_each_root_capability_variant() {
         .copied()
         .expect("test canister must exist");
     let unauthorized = Principal::from_slice(&[250; 29]);
+    let baseline_metrics = root_capability_metrics(&setup);
+    let baseline_count = root_capability_count_total(&baseline_metrics);
 
     let cases = vec![
         Request::CreateCanister(CreateCanisterRequest {
@@ -103,8 +105,8 @@ fn unauthorized_caller_is_denied_for_each_root_capability_variant() {
     let metrics = root_capability_metrics(&setup);
     assert_eq!(
         root_capability_count_total(&metrics),
-        0,
-        "root capability metrics must stay zero when endpoint auth rejects calls before dispatch"
+        baseline_count,
+        "root capability metrics must not change when endpoint auth rejects calls before dispatch"
     );
 }
 

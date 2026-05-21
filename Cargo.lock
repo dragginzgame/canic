@@ -1599,9 +1599,9 @@ dependencies = [
 
 [[package]]
 name = "ic-memory"
-version = "0.6.0"
+version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c018abd776bbc36e478ed4f492899e975aac851fe4a62cea517fe726fab98c24"
+checksum = "914216c4e5e2321d348c34bf27fc4881c1f3f75191599d07ef07df7c393f50b2"
 dependencies = [
  "ctor",
  "ic-stable-structures",
