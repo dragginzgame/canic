@@ -6,6 +6,20 @@ documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.41.x] - 2026-05-21 - Deployment truth model
+
+- `0.41.0` starts the deployment-truth design-prep line by framing
+  `DeploymentPlanV1`, `DeploymentInventoryV1`, `DeploymentReceiptV1`,
+  `DeploymentDiffV1`, and `SafetyReportV1` as the next installer correctness
+  boundary after 0.40's attested internal-call hard cut. This slice is
+  documentation and architecture preparation only; it does not change runtime
+  deployment behavior.
+
+See detailed breakdown:
+[docs/changelog/0.41.md](docs/changelog/0.41.md)
+
+---
+
 ## [0.40.x] - 2026-05-19 - Attested Canic calls
 
 - `0.40.15` updates Canic to `ic-memory 0.6.1`, removes the last public ledger-codec integration surface from Canic's native memory diagnostic path, and keeps ID 255 rejection delegated to `ic-memory` slot validation.

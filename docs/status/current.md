@@ -9,20 +9,23 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
-- Active minor: `0.40.x` attested Canic calls.
-- Theme: replace verifier-local sibling authorization with root-signed,
-  method-scoped internal invocation proofs carried in a Canic-owned internal
-  RPC envelope.
-- Current release-work area: protected internal-call wire DTOs, a distinct
-  internal invocation proof signing domain, root issuance, generated endpoint
-  envelope verification, and the `CanicCall`/generated-client path.
+- Active minor: `0.41.x` deployment truth model.
+- Theme: make deployment intent, live inventory, receipts, normalized diffs,
+  and safety reports explicit before installer mutation.
+- Current release-work area: design prep for `DeploymentPlanV1`,
+  `DeploymentInventoryV1`, `DeploymentReceiptV1`, `DeploymentDiffV1`, and
+  `SafetyReportV1`.
 - Design started at
-  `docs/design/0.40-attested-canic-calls/0.40-design.md`; the core issue is
-  that sibling Canic-to-Canic endpoints must not accept callers based only on
-  verifier-local AppIndex or subnet registry state.
+  `docs/design/0.41-deployment-truth-model/0.41-design.md`; the core issue is
+  that Canic should tell the truth about deployment state before it mutates
+  controllers, pool canisters, artifacts, or protected-call authority inputs.
 
 ## Recent Work
 
+- Started `0.41.0` as a design-prep slice for the deployment truth model. This
+  line follows the 0.40 attested-call hard cut and focuses on making intended
+  deployment state, observed inventory, phase receipts, diffs, and safety
+  reports explicit before deployment mutation.
 - Reframed tentative `0.41` as a deployment truth model at
   `docs/design/0.41-deployment-truth-model/0.41-design.md`. The 0.41 line now
   centers `DeploymentPlanV1`, `DeploymentInventoryV1`,
