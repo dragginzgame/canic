@@ -1,3 +1,12 @@
+# Source Notes: Deployment Adoption Gap Inventory
+
+These are archival product-gap notes captured during deployment roadmap
+planning. They are not normative design text; the normative design is in
+`../0.41-design.md`, the later per-line design docs, and
+`../../deployment-roadmap.md`.
+
+---
+
 ## A. Use cases the product does not serve today (and may still miss after 0.46)
 
 ### A.1 Multiple real IC deployments (no testnet)
@@ -225,7 +234,7 @@ Until fixed, “build once, deploy many” is a **footgun** for every adopter, n
 
 ### B.2 `controllers = []` pretends to be policy but is not what IC shows
 
-**Problem:** Documented as optional list appended to provisioned canisters; field reports (see `docs/design/0.41-deployment-truth-model/gabriel.md`) show installed controllers ≠ config, pool canisters not gaining root, metadata-only feel.
+**Problem:** Documented as optional list appended to provisioned canisters; field reports (see `gabriel.md`) show installed controllers ≠ config, pool canisters not gaining root, metadata-only feel.
 
 **Change:**
 
