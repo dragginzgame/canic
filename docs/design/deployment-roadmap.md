@@ -183,3 +183,14 @@ Automated resume is optional until the safety report model has been exercised.
 - [0.44 Artifact Overrides And Promotion](0.44-artifact-promotion/0.44-design.md)
 - [0.45 External And User-Owned Lifecycle](0.45-external-lifecycle/0.45-design.md)
 - [0.46 Multi-Deployment Operations](0.46-multi-deployment-operations/0.46-design.md)
+
+## TBD Backlog Lines
+
+These are intentionally outside the 0.41 through 0.46 deployment truth
+roadmap. They exist so adoption needs are named without expanding the active
+design scope.
+
+- [0.47 Wasm Store Artifact Registry And Retention](0.47-wasm-store-artifact-registry/0.47-design.md)
+- [0.48 Adoption Profiles](0.48-adoption-profiles/0.48-design.md)
+- [0.49 CI, GitOps, And Provenance](0.49-ci-gitops-provenance/0.49-design.md)
+- [0.50 DR, Clone, And Operational Verification](0.50-dr-clone-verification/0.50-design.md)

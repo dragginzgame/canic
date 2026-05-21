@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.40.x] - 2026-05-19 - Attested Canic calls
 
-- `0.40.15` updates Canic to `ic-memory 0.6.0`, removes the last public ledger-codec integration surface from Canic's native memory diagnostic path, and keeps ID 255 rejection delegated to `ic-memory` slot validation.
+- `0.40.15` updates Canic to `ic-memory 0.6.1`, removes the last public ledger-codec integration surface from Canic's native memory diagnostic path, and keeps ID 255 rejection delegated to `ic-memory` slot validation.
 
 - `0.40.14` tightens root-signed auth-material time windows: verifiers reject malformed or future role-attestation/internal-invocation proof windows, `CanicCall` avoids caching proof material verifiers will reject, and root issuance now shares one TTL/window path for role attestations and internal invocation proofs.
 
