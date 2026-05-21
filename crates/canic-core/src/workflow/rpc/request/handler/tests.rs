@@ -653,6 +653,35 @@ fn authorize_rejects_role_attestation_when_subnet_mismatch() {
 }
 
 #[test]
+fn authorize_rejects_role_attestation_invalid_ttl_before_execution() {
+    let subject = p(45);
+    SubnetRegistryOps::register_root(subject, 1);
+
+    let ctx = RootContext {
+        caller: subject,
+        self_pid: p(9),
+        is_root_env: true,
+        subnet_id: p(2),
+        now: 5,
+    };
+    let capability = RootCapability::IssueRoleAttestation(RoleAttestationRequest {
+        subject,
+        role: CanisterRole::ROOT,
+        subnet_id: None,
+        audience: p(8),
+        ttl_secs: 0,
+        epoch: 0,
+        metadata: None,
+    });
+
+    let err = RootResponseWorkflow::authorize(&ctx, &capability).expect_err("must deny");
+    assert!(
+        err.to_string().contains("ttl_secs"),
+        "expected ttl denial, got: {err}"
+    );
+}
+
+#[test]
 fn authorize_accepts_internal_invocation_proof_from_app_index_role() {
     let subject = p(51);
     let audience = p(52);
@@ -710,6 +739,40 @@ fn authorize_rejects_internal_invocation_proof_with_unknown_audience() {
     assert!(
         err.to_string().contains("audience"),
         "expected audience denial, got: {err}"
+    );
+}
+
+#[test]
+fn authorize_rejects_internal_invocation_proof_invalid_ttl_before_execution() {
+    let subject = p(55);
+    let audience = p(56);
+    let role = CanisterRole::new("project_hub");
+    let _app_index = configure_app_index(vec![
+        (role.clone(), subject),
+        (CanisterRole::new("user_hub"), audience),
+    ]);
+
+    let ctx = RootContext {
+        caller: subject,
+        self_pid: p(9),
+        is_root_env: true,
+        subnet_id: p(2),
+        now: 5,
+    };
+    let capability = RootCapability::IssueInternalInvocationProof(InternalInvocationProofRequest {
+        subject,
+        role,
+        subnet_id: None,
+        audience,
+        audience_method: "system_add_project_to_user".to_string(),
+        ttl_secs: 0,
+        metadata: None,
+    });
+
+    let err = RootResponseWorkflow::authorize(&ctx, &capability).expect_err("must deny");
+    assert!(
+        err.to_string().contains("ttl_secs"),
+        "expected ttl denial, got: {err}"
     );
 }
 
@@ -842,6 +905,33 @@ fn build_internal_invocation_proof_rejects_invalid_ttl() {
     assert!(
         too_large.to_string().contains("ttl_secs"),
         "expected ttl error for too-large ttl, got: {too_large}"
+    );
+}
+
+#[test]
+fn build_internal_invocation_proof_rejects_blank_method() {
+    let ctx = RootContext {
+        caller: p(1),
+        self_pid: p(9),
+        is_root_env: true,
+        subnet_id: p(2),
+        now: 1_000,
+    };
+    let req = InternalInvocationProofRequest {
+        subject: p(1),
+        role: CanisterRole::new("project_hub"),
+        subnet_id: Some(p(7)),
+        audience: p(8),
+        audience_method: "   ".to_string(),
+        ttl_secs: 120,
+        metadata: None,
+    };
+
+    let err =
+        RootResponseWorkflow::build_internal_invocation_proof(&ctx, &req).expect_err("must reject");
+    assert!(
+        err.to_string().contains("audience_method"),
+        "expected method error, got: {err}"
     );
 }
 

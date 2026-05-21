@@ -7,6 +7,7 @@ use crate::{
     log,
     log::Topic,
     ops::{
+        config::ConfigOps,
         ic::IcOps,
         replay::guard::ReplayPending,
         runtime::env::EnvOps,
@@ -32,6 +33,37 @@ const MAX_ROOT_REPLAY_ENTRIES_PER_CALLER: usize = 512;
 const MAX_ROOT_TTL_SECONDS: u64 = 300;
 const DEFAULT_MAX_ROLE_ATTESTATION_TTL_SECONDS: u64 = 900;
 const REPLAY_PAYLOAD_HASH_DOMAIN: &[u8] = b"root-replay-payload-hash:v1";
+
+fn max_role_attestation_ttl_seconds() -> u64 {
+    ConfigOps::role_attestation_config().map_or(DEFAULT_MAX_ROLE_ATTESTATION_TTL_SECONDS, |cfg| {
+        cfg.max_ttl_secs
+    })
+}
+
+fn validate_role_attestation_ttl(ttl_secs: u64) -> Result<u64, InternalError> {
+    let max_ttl_secs = max_role_attestation_ttl_seconds();
+    if ttl_secs == 0 || ttl_secs > max_ttl_secs {
+        return Err(
+            crate::workflow::rpc::RpcWorkflowError::RoleAttestationInvalidTtl {
+                ttl_secs,
+                max_ttl_secs,
+            }
+            .into(),
+        );
+    }
+    Ok(max_ttl_secs)
+}
+
+fn attestation_expires_at(issued_at: u64, ttl_secs: u64) -> Result<u64, InternalError> {
+    let max_ttl_secs = validate_role_attestation_ttl(ttl_secs)?;
+    issued_at.checked_add(ttl_secs).ok_or_else(|| {
+        crate::workflow::rpc::RpcWorkflowError::RoleAttestationInvalidTtl {
+            ttl_secs,
+            max_ttl_secs,
+        }
+        .into()
+    })
+}
 
 ///
 /// RootContext

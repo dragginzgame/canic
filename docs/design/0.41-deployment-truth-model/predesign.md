@@ -1,3 +1,12 @@
+# Prior Audit Notes: Deployment Roadmap
+
+These are archival audit notes captured during 0.41 through 0.46 roadmap
+planning. They are not normative design text; the normative design is in
+`0.41-design.md`, the later per-line design docs, and
+`../deployment-roadmap.md`.
+
+---
+
 Overall Audit: Canic 0.41–0.46 Deployment Roadmap
 
 Baseline reviewed:

@@ -1,5 +1,6 @@
 use super::{
-    RootCapability, RootContext, authorize, nonroot_cycles, nonroot_cycles::AuthorizedCyclesGrant,
+    RootCapability, RootContext, attestation_expires_at, nonroot_cycles,
+    nonroot_cycles::AuthorizedCyclesGrant,
 };
 use crate::{
     InternalError,
@@ -179,6 +180,10 @@ pub(super) fn build_internal_invocation_proof(
     ctx: &RootContext,
     req: InternalInvocationProofRequest,
 ) -> Result<InternalInvocationProofPayloadV1, InternalError> {
+    if req.audience_method.trim().is_empty() {
+        return Err(RpcWorkflowError::InternalInvocationProofMethodEmpty.into());
+    }
+
     let expires_at = attestation_expires_at(ctx.now, req.ttl_secs)?;
     let epoch = AuthOps::current_role_epoch(&req.role)?;
 
@@ -191,24 +196,5 @@ pub(super) fn build_internal_invocation_proof(
         issued_at: ctx.now,
         expires_at,
         epoch,
-    })
-}
-
-fn attestation_expires_at(issued_at: u64, ttl_secs: u64) -> Result<u64, InternalError> {
-    let max_ttl_secs = authorize::max_role_attestation_ttl_seconds();
-    if ttl_secs == 0 || ttl_secs > max_ttl_secs {
-        return Err(RpcWorkflowError::RoleAttestationInvalidTtl {
-            ttl_secs,
-            max_ttl_secs,
-        }
-        .into());
-    }
-
-    issued_at.checked_add(ttl_secs).ok_or_else(|| {
-        RpcWorkflowError::RoleAttestationInvalidTtl {
-            ttl_secs,
-            max_ttl_secs,
-        }
-        .into()
     })
 }

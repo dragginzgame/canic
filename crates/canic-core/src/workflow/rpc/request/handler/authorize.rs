@@ -1,6 +1,4 @@
-use super::{
-    DEFAULT_MAX_ROLE_ATTESTATION_TTL_SECONDS, RootCapability, RootContext, nonroot_cycles,
-};
+use super::{RootCapability, RootContext, nonroot_cycles, validate_role_attestation_ttl};
 use crate::{
     InternalError,
     cdk::types::Principal,
@@ -9,7 +7,6 @@ use crate::{
     log,
     log::Topic,
     ops::{
-        config::ConfigOps,
         runtime::env::EnvOps,
         runtime::metrics::root_capability::{RootCapabilityMetricOutcome, RootCapabilityMetrics},
         storage::{index::app::AppIndexOps, registry::subnet::SubnetRegistryOps},
@@ -153,14 +150,7 @@ fn authorize_issue_role_attestation(
         .into());
     }
 
-    let max_ttl_secs = max_role_attestation_ttl_seconds();
-    if req.ttl_secs == 0 || req.ttl_secs > max_ttl_secs {
-        return Err(RpcWorkflowError::RoleAttestationInvalidTtl {
-            ttl_secs: req.ttl_secs,
-            max_ttl_secs,
-        }
-        .into());
-    }
+    validate_role_attestation_ttl(req.ttl_secs)?;
 
     Ok(())
 }
@@ -201,14 +191,7 @@ fn authorize_issue_internal_invocation_proof(
         .into());
     }
 
-    let max_ttl_secs = max_role_attestation_ttl_seconds();
-    if req.ttl_secs == 0 || req.ttl_secs > max_ttl_secs {
-        return Err(RpcWorkflowError::RoleAttestationInvalidTtl {
-            ttl_secs: req.ttl_secs,
-            max_ttl_secs,
-        }
-        .into());
-    }
+    validate_role_attestation_ttl(req.ttl_secs)?;
 
     Ok(())
 }
@@ -243,10 +226,4 @@ fn is_known_audience(ctx: &RootContext, audience: Principal) -> bool {
             .entries
             .iter()
             .any(|(_, pid)| *pid == audience)
-}
-
-pub(super) fn max_role_attestation_ttl_seconds() -> u64 {
-    ConfigOps::role_attestation_config().map_or(DEFAULT_MAX_ROLE_ATTESTATION_TTL_SECONDS, |cfg| {
-        cfg.max_ttl_secs
-    })
 }

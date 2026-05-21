@@ -229,6 +229,8 @@ inspect only the files needed for the current task.
   material. Root-issued role attestations and internal invocation proofs now
   share the same TTL/window construction path, keeping zero TTL, over-limit TTL,
   and expiry-overflow rejection consistent across both auth-material families.
+  Internal invocation proof payload construction also rejects blank
+  `audience_method` values, matching the authorization preflight guard.
 - Started `0.39.1` by adding an AppIndex-backed
   `caller::has_app_role(role)` internal access predicate, giving app hubs and
   shards a first-class way to trust canonical sibling app canisters without

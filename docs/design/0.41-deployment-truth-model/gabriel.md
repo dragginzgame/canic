@@ -1,3 +1,11 @@
+# Source Notes: Deployment Pain Points
+
+These are archival source notes captured during 0.41 roadmap planning. They are
+not normative design text; the normative design is in `0.41-design.md` and the
+cross-line roadmap is in `../deployment-roadmap.md`.
+
+---
+
 1) When I installed yesterday the new root the controllers in canic.toml were just metadata but only my controller was in the list after install, not sure if that's a bug or you need to run update-settings after the wasm is installed. How do you propagate the list of controller onto all canisters? do you add them in projects/ledger as well?
 
 2) Pool ownership, do you remove all controllers and re-add them once the canisters are installed? currently the controllers stay the same, not even root is added, I had to manually add it yesterday.

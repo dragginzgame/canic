@@ -37,6 +37,42 @@ Canic should not become more flexible before it becomes more honest.
 
 ---
 
+## Minimum Releasable Slices
+
+These are minimum safe release bars for each line. They are not the full design
+scope and they do not require every later command surface to exist before a line
+can ship.
+
+```text
+0.41 minimum release:
+  read-only inventory
+  role artifact manifest
+  safety report
+  post-build materialization checks
+
+0.42 minimum release:
+  dry-run authority reconciliation
+  exact external-action report
+
+0.43 minimum release:
+  current CLI backend behind executor boundary
+  no new backend required
+
+0.44 minimum release:
+  digest-pinned artifact override plan
+  promotion readiness report
+
+0.45 minimum release:
+  user/external control classification in plans
+  external-upgrade proposal and verification shape
+
+0.46 minimum release:
+  plan/inventory/receipt comparison
+  drift report over the 0.41 diff categories
+```
+
+---
+
 ## Cross-Line Invariants
 
 ### Receipts Are Not Truth
@@ -67,6 +103,15 @@ Different root trust anchor means a new trust domain or an explicit migration.
 
 Safety decisions use canonical embedded config digests, not raw config file
 bytes.
+
+The first 0.41 implementation slice should lock canonical digest behavior with
+tests for:
+
+- reordered TOML;
+- resolved includes;
+- explicit defaults;
+- normalized principals;
+- changed root or trust-domain values.
 
 ### Promotion Never Copies Authority
 
