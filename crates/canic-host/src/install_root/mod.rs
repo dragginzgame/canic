@@ -3,8 +3,8 @@ use crate::canister_build::{
     current_workspace_build_context_once,
 };
 use crate::deployment_truth::{
-    DeploymentCheckV1, LocalDeploymentCheckRequest, PhaseReceiptV1, artifact_gate_phase_receipt,
-    check_local_deployment,
+    DeploymentCheckV1, LocalDeploymentCheckRequest, PhaseReceiptV1, SafetyFindingV1,
+    artifact_gate_phase_receipt, check_local_deployment,
 };
 use crate::format::wasm_size_label;
 use crate::icp::{self, CANIC_ICP_LOCAL_NETWORK_URL_ENV, CANIC_ICP_LOCAL_ROOT_KEY_ENV};
@@ -150,7 +150,7 @@ pub fn install_root(options: InstallRootOptions) -> Result<(), Box<dyn std::erro
     )?;
     timings.build_all = build_started_at.elapsed();
 
-    run_install_deployment_truth_artifact_gate(
+    run_install_deployment_truth_safety_gate(
         &options,
         &workspace_root,
         &icp_root,
@@ -270,7 +270,7 @@ fn current_install_deployment_truth_check_at(
     .map_err(Into::into)
 }
 
-fn run_install_deployment_truth_artifact_gate(
+fn run_install_deployment_truth_safety_gate(
     options: &InstallRootOptions,
     workspace_root: &Path,
     icp_root: &Path,
@@ -291,41 +291,95 @@ fn run_install_deployment_truth_artifact_gate(
         truth_gate_started_at,
         Some(current_unix_timestamp_label()?),
     );
-    enforce_install_artifact_gate(&deployment_truth_check)?;
     print_install_deployment_truth_gate(&deployment_truth_check, &artifact_gate_receipt);
+    enforce_install_deployment_truth_gate(&deployment_truth_check)?;
     Ok(())
 }
 
-fn enforce_install_artifact_gate(
+fn enforce_install_deployment_truth_gate(
     check: &DeploymentCheckV1,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let blockers = check
-        .report
-        .hard_failures
-        .iter()
-        .filter(|finding| finding.code == "artifact_missing")
-        .collect::<Vec<_>>();
+    let blockers = install_deployment_truth_gate_blockers(check);
     if blockers.is_empty() {
         return Ok(());
     }
 
     let details = blockers
         .iter()
-        .map(|finding| finding.message.as_str())
+        .map(|finding| deployment_truth_finding_label(finding))
         .collect::<Vec<_>>()
         .join("; ");
-    Err(format!("deployment truth artifact gate blocked install: {details}").into())
+    Err(format!("deployment truth safety gate blocked install: {details}").into())
+}
+
+fn is_install_deployment_truth_gate_blocker(code: &str) -> bool {
+    matches!(
+        code,
+        "artifact_missing"
+            | "artifact_file_digest_mismatch"
+            | "artifact_digest_mismatch"
+            | "controller_authority_overlap"
+            | "expected_controller_missing"
+            | "unsafe_control_class"
+    )
+}
+
+fn install_deployment_truth_gate_blockers(check: &DeploymentCheckV1) -> Vec<&SafetyFindingV1> {
+    check
+        .report
+        .hard_failures
+        .iter()
+        .filter(|finding| is_install_deployment_truth_gate_blocker(&finding.code))
+        .collect()
 }
 
 fn print_install_deployment_truth_gate(check: &DeploymentCheckV1, receipt: &PhaseReceiptV1) {
-    println!("Deployment truth: {}", check.report.summary);
-    println!(
-        "Deployment truth receipt: phase={} postcondition={:?}",
-        receipt.phase, receipt.verified_postcondition.status
-    );
-    if !check.report.warnings.is_empty() {
-        println!("Deployment truth warnings: {}", check.report.warnings.len());
+    for line in install_deployment_truth_gate_lines(check, receipt) {
+        println!("{line}");
     }
+}
+
+fn install_deployment_truth_gate_lines(
+    check: &DeploymentCheckV1,
+    receipt: &PhaseReceiptV1,
+) -> Vec<String> {
+    let mut lines = vec![
+        format!("Deployment truth: {}", check.report.summary),
+        format!(
+            "Deployment truth receipt: phase={} postcondition={:?}",
+            receipt.phase, receipt.verified_postcondition.status
+        ),
+    ];
+
+    if !check.report.hard_failures.is_empty() {
+        lines.push(format!(
+            "Deployment truth hard failures: {}",
+            check.report.hard_failures.len()
+        ));
+    }
+    for finding in install_deployment_truth_gate_blockers(check) {
+        lines.push(format!(
+            "Deployment truth blocker: {}",
+            deployment_truth_finding_label(finding)
+        ));
+    }
+    if !check.report.warnings.is_empty() {
+        lines.push(format!(
+            "Deployment truth warnings: {}",
+            check.report.warnings.len()
+        ));
+    }
+    for finding in &check.report.warnings {
+        lines.push(format!(
+            "Deployment truth warning: {}",
+            deployment_truth_finding_label(finding)
+        ));
+    }
+    lines
+}
+
+fn deployment_truth_finding_label(finding: &SafetyFindingV1) -> String {
+    format!("{}: {}", finding.code, finding.message)
 }
 
 fn validate_expected_fleet_name(

@@ -78,6 +78,15 @@ pub fn configured_fleet_name(config_path: &Path) -> Result<String, Box<dyn std::
         .map_err(|err| format!("invalid {}: {err}", config_path.display()).into())
 }
 
+// Enumerate configured top-level deployment controllers from an install config.
+pub fn configured_controllers(
+    config_path: &Path,
+) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+    let config_source = fs::read_to_string(config_path)?;
+    configured_controllers_from_source(&config_source)
+        .map_err(|err| format!("invalid {}: {err}", config_path.display()).into())
+}
+
 // Select config paths whose required [fleet].name matches the requested fleet.
 #[must_use]
 pub fn matching_fleet_config_paths(choices: &[PathBuf], fleet: &str) -> Vec<PathBuf> {
@@ -460,6 +469,21 @@ pub(super) fn configured_fleet_name_from_source(
         .and_then(|fleet| fleet.name)
         .ok_or_else(|| "missing required [fleet].name in canic.toml".to_string())?;
     Ok(name)
+}
+
+// Enumerate configured top-level deployment controllers from raw config source.
+pub(super) fn configured_controllers_from_source(
+    config_source: &str,
+) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+    let config = parse_config_model(config_source).map_err(|err| err.to_string())?;
+    let mut controllers = config
+        .controllers
+        .iter()
+        .map(canic_core::cdk::types::Principal::to_text)
+        .collect::<Vec<_>>();
+    controllers.sort();
+    controllers.dedup();
+    Ok(controllers)
 }
 
 // Enumerate the configured ordinary roles for the single subnet that owns `root`.

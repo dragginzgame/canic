@@ -641,6 +641,57 @@ fn local_plan_uses_configured_roles_and_local_artifact_manifest() {
 }
 
 #[test]
+fn local_plan_uses_configured_controllers_as_expected_authority() {
+    let temp = TempWorkspace::new("canic-host-local-plan-controllers");
+    let workspace_root = temp.path().join("workspace");
+    let icp_root = temp.path().join("icp");
+    let config_dir = workspace_root.join("fleets");
+    fs::create_dir_all(&config_dir).expect("create config dir");
+    fs::write(
+        config_dir.join("canic.toml"),
+        r#"
+controllers = [
+  "zbf4m-zw3nk-6owqc-qmluz-xhwxt-2pkky-xhjy2-kqxor-qzxsn-6d2bz-nae",
+  "aaaaa-aa",
+]
+app_index = []
+
+[fleet]
+name = "demo"
+
+[app]
+init_mode = "enabled"
+[app.whitelist]
+
+[subnets.prime.canisters.root]
+kind = "root"
+"#,
+    )
+    .expect("write config");
+    write_artifact(&icp_root, "root", b"root-artifact");
+
+    let plan = build_local_deployment_plan(&LocalDeploymentPlanRequest {
+        deployment_name: "demo-local".to_string(),
+        network: "local".to_string(),
+        workspace_root,
+        icp_root,
+        config_path: None,
+        runtime_variant: "local".to_string(),
+        build_profile: "fast".to_string(),
+    });
+
+    assert_eq!(
+        plan.authority_profile.expected_controllers,
+        vec![
+            "aaaaa-aa".to_string(),
+            "zbf4m-zw3nk-6owqc-qmluz-xhwxt-2pkky-xhjy2-kqxor-qzxsn-6d2bz-nae".to_string(),
+        ]
+    );
+    assert!(plan.authority_profile.staging_controllers.is_empty());
+    assert!(plan.authority_profile.emergency_controllers.is_empty());
+}
+
+#[test]
 fn deployment_diff_blocks_deployment_manifest_mismatch() {
     let mut plan = sample_plan();
     plan.expected_canisters.clear();

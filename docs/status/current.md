@@ -21,6 +21,17 @@ inspect only the files needed for the current task.
 
 ## Recent Work
 
+- Wired configured deployment controllers into the local deployment truth plan
+  so controller drift checks compare live root status against `canic.toml`
+  authority intent.
+- Promoted the current-install deployment truth gate beyond missing artifacts:
+  materialized artifact digest drift and observable controller-authority drift
+  now block before manifest emission, install, or staging.
+- Blocked current-install deployment truth gates now print their summary,
+  receipt postcondition, and machine-readable blocker codes before returning
+  the install error.
+- Deployment truth gate errors and warning output now include finding codes so
+  failed current installs remain scriptable without parsing prose.
 - Added controller authority comparison to the deployment truth diff. Live
   root controllers must include the expected authority profile controllers;
   authority-profile overlaps block as unsafe; undeclared live controllers warn;

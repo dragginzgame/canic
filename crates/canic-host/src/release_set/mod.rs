@@ -8,11 +8,11 @@ mod paths;
 mod stage;
 
 pub use config::{
-    LOCAL_ROOT_MIN_READY_CYCLES, configured_bootstrap_roles, configured_fleet_name,
-    configured_fleet_roles, configured_install_targets, configured_local_root_create_cycles,
-    configured_release_roles, configured_role_auto_create, configured_role_capabilities,
-    configured_role_details, configured_role_kinds, configured_role_metrics_profiles,
-    configured_role_topups, matching_fleet_config_paths,
+    LOCAL_ROOT_MIN_READY_CYCLES, configured_bootstrap_roles, configured_controllers,
+    configured_fleet_name, configured_fleet_roles, configured_install_targets,
+    configured_local_root_create_cycles, configured_release_roles, configured_role_auto_create,
+    configured_role_capabilities, configured_role_details, configured_role_kinds,
+    configured_role_metrics_profiles, configured_role_topups, matching_fleet_config_paths,
 };
 pub use manifest::{
     ReleaseSetEntry, RootReleaseSetManifest, emit_root_release_set_manifest,
@@ -33,12 +33,12 @@ use stage::read_release_artifact;
 
 #[cfg(test)]
 use config::{
-    configured_bootstrap_roles_from_source, configured_fleet_name_from_source,
-    configured_fleet_roles_from_source, configured_local_root_create_cycles_from_source,
-    configured_release_roles_from_source, configured_role_auto_create_from_source,
-    configured_role_capabilities_from_source, configured_role_details_from_source,
-    configured_role_kinds_from_source, configured_role_metrics_profiles_from_source,
-    configured_role_topups_from_source,
+    configured_bootstrap_roles_from_source, configured_controllers_from_source,
+    configured_fleet_name_from_source, configured_fleet_roles_from_source,
+    configured_local_root_create_cycles_from_source, configured_release_roles_from_source,
+    configured_role_auto_create_from_source, configured_role_capabilities_from_source,
+    configured_role_details_from_source, configured_role_kinds_from_source,
+    configured_role_metrics_profiles_from_source, configured_role_topups_from_source,
 };
 
 pub(super) const CANISTERS_ROOT_RELATIVE: &str = "fleets";
@@ -62,13 +62,13 @@ pub(super) fn root_time_secs(root_canister: &str) -> Result<u64, Box<dyn std::er
 mod tests {
     use super::{
         canister_manifest_path, canisters_root, config_path,
-        configured_bootstrap_roles_from_source, configured_fleet_name_from_source,
-        configured_fleet_roles_from_source, configured_install_targets,
-        configured_local_root_create_cycles_from_source, configured_release_roles_from_source,
-        configured_role_auto_create_from_source, configured_role_capabilities_from_source,
-        configured_role_details_from_source, configured_role_kinds_from_source,
-        configured_role_metrics_profiles_from_source, configured_role_topups_from_source,
-        read_release_artifact, root_manifest_path,
+        configured_bootstrap_roles_from_source, configured_controllers_from_source,
+        configured_fleet_name_from_source, configured_fleet_roles_from_source,
+        configured_install_targets, configured_local_root_create_cycles_from_source,
+        configured_release_roles_from_source, configured_role_auto_create_from_source,
+        configured_role_capabilities_from_source, configured_role_details_from_source,
+        configured_role_kinds_from_source, configured_role_metrics_profiles_from_source,
+        configured_role_topups_from_source, read_release_artifact, root_manifest_path,
     };
     use crate::test_support::temp_dir;
     use flate2::{Compression, write::GzEncoder};
@@ -560,6 +560,39 @@ kind = "root"
             err.to_string()
                 .contains("missing required [fleet].name in canic.toml"),
             "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn configured_controllers_reads_top_level_authority() {
+        let controllers = configured_controllers_from_source(
+            r#"
+controllers = [
+  "zbf4m-zw3nk-6owqc-qmluz-xhwxt-2pkky-xhjy2-kqxor-qzxsn-6d2bz-nae",
+  "aaaaa-aa",
+  "aaaaa-aa",
+]
+app_index = []
+
+[fleet]
+name = "demo"
+
+[app]
+init_mode = "enabled"
+[app.whitelist]
+
+[subnets.prime.canisters.root]
+kind = "root"
+"#,
+        )
+        .expect("configured controllers");
+
+        assert_eq!(
+            controllers,
+            vec![
+                "aaaaa-aa".to_string(),
+                "zbf4m-zw3nk-6owqc-qmluz-xhwxt-2pkky-xhjy2-kqxor-qzxsn-6d2bz-nae".to_string(),
+            ]
         );
     }
 

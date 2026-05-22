@@ -10,6 +10,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.41.x] - 2026-05-21 - Deployment truth model
 
+- `0.41.7` wires configured deployment controllers into the local deployment
+  truth plan, expands the current-install safety gate to block artifact digest
+  and observable controller-authority drift, and prints finding codes for
+  scriptable gate failures.
+
 - `0.41.6` adds controller authority comparison to the deployment truth diff so
   live root controllers must include expected authority profile controllers,
   unsafe authority-profile overlaps block, undeclared live controllers warn,

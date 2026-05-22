@@ -18,6 +18,17 @@ narrow current-install artifact gate.
 
 ## Implemented
 
+- Wired configured deployment controllers into the local deployment truth plan.
+  Controller drift checks now compare live root status against `canic.toml`
+  authority intent instead of only synthetic test plans.
+- Promoted the current-install deployment truth gate beyond missing artifacts:
+  materialized artifact digest drift and observable controller-authority drift
+  now block before manifest emission, install, or staging.
+- Blocked current-install deployment truth gates now print their summary,
+  receipt postcondition, and machine-readable blocker codes before returning
+  the install error.
+- Deployment truth gate errors and warning output now include finding codes so
+  failed current installs remain scriptable without parsing prose.
 - Added controller authority comparison to the deployment truth diff. Live
   root controllers must include the expected authority profile controllers;
   authority-profile overlaps block as unsafe; undeclared live controllers warn;
@@ -106,20 +117,19 @@ narrow current-install artifact gate.
 - Implement canonical resolved-config and deployment-manifest digest
   computation. Raw config SHA-256 is currently diagnostic/local consistency
   evidence only.
-- Extend post-build materialization checks beyond missing configured role
-  artifacts.
 - Persist or surface `DeploymentReceiptV1` records from existing installer
   phases beyond the in-memory artifact-gate receipt.
 - Populate meaningful role-scoped phase receipt outcomes once installer phases
   can mutate multiple roles or canisters.
 - Compare plan, inventory, and receipt during install/resume.
-- Gate mutating installer operations on broader `SafetyReportV1` findings.
+- Gate mutating installer operations on all broader `SafetyReportV1` findings.
 
 ## Drift Log
 
-- The first installer refusal gate is intentionally narrow. It blocks missing
-  configured role artifacts after build, but broader authority, live canister,
-  and resume-safety findings remain report-only until live inventory improves.
+- The installer refusal gate is still selective. It blocks materialized
+  artifact failures and observable controller-authority failures after build,
+  but broader live canister and resume-safety findings remain report-only until
+  live inventory improves.
 - Artifact evidence now distinguishes release-set payload hashes from observed
   local file hashes. The original design called for artifact truth, but this
   implementation makes source semantics explicit before using hashes as safety

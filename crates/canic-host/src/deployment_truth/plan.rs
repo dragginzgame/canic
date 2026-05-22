@@ -1,5 +1,5 @@
 use super::*;
-use crate::release_set::{configured_fleet_name, configured_fleet_roles};
+use crate::release_set::{configured_controllers, configured_fleet_name, configured_fleet_roles};
 use std::path::PathBuf;
 
 ///
@@ -42,6 +42,16 @@ pub fn build_local_deployment_plan(request: &LocalDeploymentPlanRequest) -> Depl
         ));
         Vec::new()
     });
+    let expected_controllers = configured_controllers(&config).unwrap_or_else(|err| {
+        unresolved_assumptions.push(assumption(
+            "local_config.controllers",
+            format!(
+                "could not resolve configured controllers from {}: {err}",
+                config.display()
+            ),
+        ));
+        Vec::new()
+    });
     let raw_config_sha256 = config_sha256_assumption(&config, &mut unresolved_assumptions);
     let artifact_manifest = collect_local_role_artifact_manifest(&LocalArtifactManifestRequest {
         network: request.network.clone(),
@@ -59,35 +69,14 @@ pub fn build_local_deployment_plan(request: &LocalDeploymentPlanRequest) -> Depl
     DeploymentPlanV1 {
         schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
         plan_id: format!("local:{}:{}:plan", request.network, request.deployment_name),
-        deployment_identity: DeploymentIdentityV1 {
-            deployment_name: request.deployment_name.clone(),
-            network: request.network.clone(),
-            root_principal: None,
-            authority_profile_hash: None,
-            role_topology_hash: None,
-            deployment_manifest_digest: None,
-            canonical_runtime_config_digest: None,
-            role_embedded_config_set_digest: None,
-            artifact_set_digest: None,
-            pool_identity_set_digest: None,
-            canic_version: Some(env!("CARGO_PKG_VERSION").to_string()),
-            ic_memory_version: None,
-        },
+        deployment_identity: local_deployment_identity(request),
         trust_domain: TrustDomainV1 {
             root_trust_anchor: None,
             migration_from: None,
         },
         fleet_template,
         runtime_variant: request.runtime_variant.clone(),
-        authority_profile: AuthorityProfileV1 {
-            profile_id: format!(
-                "local:{}:{}:authority",
-                request.network, request.deployment_name
-            ),
-            expected_controllers: Vec::new(),
-            staging_controllers: Vec::new(),
-            emergency_controllers: Vec::new(),
-        },
+        authority_profile: local_authority_profile(request, expected_controllers),
         role_artifacts: artifact_manifest
             .role_artifacts
             .into_iter()
@@ -97,14 +86,7 @@ pub fn build_local_deployment_plan(request: &LocalDeploymentPlanRequest) -> Depl
                 artifact
             })
             .collect(),
-        expected_canisters: roles
-            .into_iter()
-            .map(|role| ExpectedCanisterV1 {
-                role,
-                canister_id: None,
-                control_class: CanisterControlClassV1::DeploymentControlled,
-            })
-            .collect(),
+        expected_canisters: local_expected_canisters(roles),
         expected_pool: Vec::new(),
         expected_verifier_readiness: VerifierReadinessExpectationV1 {
             required: false,
@@ -112,6 +94,49 @@ pub fn build_local_deployment_plan(request: &LocalDeploymentPlanRequest) -> Depl
         },
         unresolved_assumptions,
     }
+}
+
+fn local_deployment_identity(request: &LocalDeploymentPlanRequest) -> DeploymentIdentityV1 {
+    DeploymentIdentityV1 {
+        deployment_name: request.deployment_name.clone(),
+        network: request.network.clone(),
+        root_principal: None,
+        authority_profile_hash: None,
+        role_topology_hash: None,
+        deployment_manifest_digest: None,
+        canonical_runtime_config_digest: None,
+        role_embedded_config_set_digest: None,
+        artifact_set_digest: None,
+        pool_identity_set_digest: None,
+        canic_version: Some(env!("CARGO_PKG_VERSION").to_string()),
+        ic_memory_version: None,
+    }
+}
+
+fn local_authority_profile(
+    request: &LocalDeploymentPlanRequest,
+    expected_controllers: Vec<String>,
+) -> AuthorityProfileV1 {
+    AuthorityProfileV1 {
+        profile_id: format!(
+            "local:{}:{}:authority",
+            request.network, request.deployment_name
+        ),
+        expected_controllers,
+        staging_controllers: Vec::new(),
+        emergency_controllers: Vec::new(),
+    }
+}
+
+fn local_expected_canisters(roles: Vec<String>) -> Vec<ExpectedCanisterV1> {
+    roles
+        .into_iter()
+        .map(|role| ExpectedCanisterV1 {
+            role,
+            canister_id: None,
+            control_class: CanisterControlClassV1::DeploymentControlled,
+        })
+        .collect()
 }
 
 fn assumption(key: impl Into<String>, description: impl Into<String>) -> DeploymentAssumptionV1 {

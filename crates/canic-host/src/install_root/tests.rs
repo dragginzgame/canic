@@ -3,13 +3,18 @@ use super::{
     add_create_root_target, add_icp_environment_target, add_local_root_create_cycles_arg,
     check_install_deployment_truth, config_selection_error,
     current_install_deployment_truth_check_at, discover_canic_config_choices,
-    discover_project_canic_config_choices, enforce_install_artifact_gate, fleet_install_state_path,
-    icp_canister_command_in_network, is_missing_canister_id_error, parse_bootstrap_status_value,
-    parse_canister_id_json, parse_created_canister_id, parse_cycle_balance_response,
-    parse_root_ready_value, read_fleet_install_state, render_install_timing_summary,
-    resolve_install_config_path, root_init_args, validate_expected_fleet_name, write_install_state,
+    discover_project_canic_config_choices, enforce_install_deployment_truth_gate,
+    fleet_install_state_path, icp_canister_command_in_network, install_deployment_truth_gate_lines,
+    is_missing_canister_id_error, parse_bootstrap_status_value, parse_canister_id_json,
+    parse_created_canister_id, parse_cycle_balance_response, parse_root_ready_value,
+    read_fleet_install_state, render_install_timing_summary, resolve_install_config_path,
+    root_init_args, validate_expected_fleet_name, write_install_state,
 };
 use crate::canister_build::CanisterBuildProfile;
+use crate::deployment_truth::{
+    CanisterControlClassV1, ObservedCanisterV1, SafetyFindingV1, SafetySeverityV1,
+    compare_plan_to_inventory, safety_report_from_diff,
+};
 use crate::icp::{CANIC_ICP_LOCAL_NETWORK_URL_ENV, CANIC_ICP_LOCAL_ROOT_KEY_ENV};
 use crate::release_set::configured_install_targets;
 use crate::test_support::temp_dir;
@@ -382,7 +387,8 @@ kind = "singleton"
             vec!["fast", "fast"]
         );
         assert_eq!(check.inventory.observed_artifacts.len(), 2);
-        enforce_install_artifact_gate(&check).expect("complete local artifacts should pass gate");
+        enforce_install_deployment_truth_gate(&check)
+            .expect("complete local artifacts should pass gate");
         assert!(!root.join(".canic").exists());
 
         restore_env_var("CANIC_WORKSPACE_ROOT", previous_workspace_root);
@@ -448,7 +454,240 @@ kind = "singleton"
             .any(|finding| finding.code == "artifact_missing"
                 && finding.subject.as_deref() == Some("user_hub"))
     );
-    assert!(enforce_install_artifact_gate(&check).is_err());
+    assert!(enforce_install_deployment_truth_gate(&check).is_err());
+
+    fs::remove_dir_all(root).expect("clean temp dir");
+}
+
+#[test]
+fn install_truth_artifact_gate_blocks_materialized_digest_drift() {
+    let root = temp_dir("canic-install-truth-artifact-digest-gate");
+    let config_path = root.join("fleets/demo/canic.toml");
+    fs::create_dir_all(config_path.parent().expect("config parent")).expect("create config dir");
+    fs::write(
+        &config_path,
+        r#"
+controllers = []
+app_index = []
+
+[fleet]
+name = "demo"
+
+[app]
+init_mode = "enabled"
+[app.whitelist]
+
+[subnets.prime.canisters.root]
+kind = "root"
+"#,
+    )
+    .expect("write config");
+    write_wasm_gz_artifact(&root, "root", b"root-artifact");
+
+    let options = InstallRootOptions {
+        root_canister: "root".to_string(),
+        root_build_target: "root".to_string(),
+        network: "local".to_string(),
+        icp_root: Some(root.clone()),
+        build_profile: Some(CanisterBuildProfile::Fast),
+        ready_timeout_seconds: 30,
+        config_path: Some("fleets/demo/canic.toml".to_string()),
+        expected_fleet: Some("demo".to_string()),
+        interactive_config_selection: false,
+    };
+
+    let mut check = current_install_deployment_truth_check_at(
+        &options,
+        &root,
+        &root,
+        &config_path,
+        "demo",
+        "2026-05-22T00:00:00Z".to_string(),
+    )
+    .expect("deployment truth check");
+    check.plan.role_artifacts[0].observed_wasm_gz_file_sha256 =
+        Some("different-observed-file-digest".to_string());
+    check.diff = compare_plan_to_inventory(&check.plan, &check.inventory);
+    check.report = safety_report_from_diff(
+        "local:local:demo:report",
+        Some("local:local:demo:diff".to_string()),
+        &check.diff,
+    );
+
+    assert!(
+        check
+            .report
+            .hard_failures
+            .iter()
+            .any(|finding| finding.code == "artifact_file_digest_mismatch")
+    );
+    assert!(enforce_install_deployment_truth_gate(&check).is_err());
+
+    fs::remove_dir_all(root).expect("clean temp dir");
+}
+
+#[test]
+fn install_truth_gate_blocks_observed_controller_drift() {
+    let root = temp_dir("canic-install-truth-controller-gate");
+    let config_path = root.join("fleets/demo/canic.toml");
+    fs::create_dir_all(config_path.parent().expect("config parent")).expect("create config dir");
+    fs::write(
+        &config_path,
+        r#"
+controllers = []
+app_index = []
+
+[fleet]
+name = "demo"
+
+[app]
+init_mode = "enabled"
+[app.whitelist]
+
+[subnets.prime.canisters.root]
+kind = "root"
+"#,
+    )
+    .expect("write config");
+    write_wasm_gz_artifact(&root, "root", b"root-artifact");
+
+    let options = InstallRootOptions {
+        root_canister: "root".to_string(),
+        root_build_target: "root".to_string(),
+        network: "local".to_string(),
+        icp_root: Some(root.clone()),
+        build_profile: Some(CanisterBuildProfile::Fast),
+        ready_timeout_seconds: 30,
+        config_path: Some("fleets/demo/canic.toml".to_string()),
+        expected_fleet: Some("demo".to_string()),
+        interactive_config_selection: false,
+    };
+
+    let mut check = current_install_deployment_truth_check_at(
+        &options,
+        &root,
+        &root,
+        &config_path,
+        "demo",
+        "2026-05-22T00:00:00Z".to_string(),
+    )
+    .expect("deployment truth check");
+    check.plan.authority_profile.expected_controllers = vec!["aaaaa-aa".to_string()];
+    check.inventory.observed_canisters = vec![ObservedCanisterV1 {
+        canister_id: "aaaaa-aa".to_string(),
+        role: Some("root".to_string()),
+        control_class: CanisterControlClassV1::DeploymentControlled,
+        controllers: vec!["external-controller".to_string()],
+        module_hash: None,
+        status: Some("running".to_string()),
+        root_trust_anchor: Some("aaaaa-aa".to_string()),
+        canonical_embedded_config_digest: None,
+        role_assignment_source: Some("icp_canister_status".to_string()),
+    }];
+    check.diff = compare_plan_to_inventory(&check.plan, &check.inventory);
+    check.report = safety_report_from_diff(
+        "local:local:demo:report",
+        Some("local:local:demo:diff".to_string()),
+        &check.diff,
+    );
+
+    assert!(
+        check
+            .report
+            .hard_failures
+            .iter()
+            .any(|finding| finding.code == "expected_controller_missing")
+    );
+    assert!(enforce_install_deployment_truth_gate(&check).is_err());
+    let lines = install_deployment_truth_gate_lines(
+        &check,
+        &crate::deployment_truth::artifact_gate_phase_receipt(
+            &check,
+            "start",
+            Some("finish".into()),
+        ),
+    );
+    assert!(
+        lines
+            .iter()
+            .any(|line| line.contains("Deployment truth blocker: expected_controller_missing"))
+    );
+    let err = enforce_install_deployment_truth_gate(&check).unwrap_err();
+    assert!(
+        err.to_string().contains("expected_controller_missing:"),
+        "unexpected error: {err}"
+    );
+
+    fs::remove_dir_all(root).expect("clean temp dir");
+}
+
+#[test]
+fn install_truth_gate_lines_include_warning_codes() {
+    let root = temp_dir("canic-install-truth-warning-lines");
+    let config_path = root.join("fleets/demo/canic.toml");
+    fs::create_dir_all(config_path.parent().expect("config parent")).expect("create config dir");
+    fs::write(
+        &config_path,
+        r#"
+controllers = []
+app_index = []
+
+[fleet]
+name = "demo"
+
+[app]
+init_mode = "enabled"
+[app.whitelist]
+
+[subnets.prime.canisters.root]
+kind = "root"
+"#,
+    )
+    .expect("write config");
+    write_wasm_gz_artifact(&root, "root", b"root-artifact");
+
+    let options = InstallRootOptions {
+        root_canister: "root".to_string(),
+        root_build_target: "root".to_string(),
+        network: "local".to_string(),
+        icp_root: Some(root.clone()),
+        build_profile: Some(CanisterBuildProfile::Fast),
+        ready_timeout_seconds: 30,
+        config_path: Some("fleets/demo/canic.toml".to_string()),
+        expected_fleet: Some("demo".to_string()),
+        interactive_config_selection: false,
+    };
+
+    let mut check = current_install_deployment_truth_check_at(
+        &options,
+        &root,
+        &root,
+        &config_path,
+        "demo",
+        "2026-05-22T00:00:00Z".to_string(),
+    )
+    .expect("deployment truth check");
+    check.report.warnings.push(SafetyFindingV1 {
+        code: "observation_gap".to_string(),
+        message: "live root status was not observed".to_string(),
+        severity: SafetySeverityV1::Warning,
+        subject: Some("live_canister_status.root".to_string()),
+    });
+
+    let lines = install_deployment_truth_gate_lines(
+        &check,
+        &crate::deployment_truth::artifact_gate_phase_receipt(
+            &check,
+            "start",
+            Some("finish".into()),
+        ),
+    );
+
+    assert!(
+        lines
+            .iter()
+            .any(|line| line.contains("Deployment truth warning: observation_gap"))
+    );
 
     fs::remove_dir_all(root).expect("clean temp dir");
 }
