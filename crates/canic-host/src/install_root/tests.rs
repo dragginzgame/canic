@@ -5,17 +5,18 @@ use super::{
     current_install_deployment_truth_check_at, discover_canic_config_choices,
     discover_project_canic_config_choices, enforce_install_deployment_truth_gate,
     fleet_install_state_path, icp_canister_command_in_network, install_deployment_truth_gate_lines,
-    install_deployment_truth_gate_receipt, is_missing_canister_id_error,
+    install_deployment_truth_gate_receipt, install_deployment_truth_receipt_path,
+    is_missing_canister_id_error, latest_deployment_truth_receipt_path_from_root,
     parse_bootstrap_status_value, parse_canister_id_json, parse_created_canister_id,
     parse_cycle_balance_response, parse_root_ready_value, read_fleet_install_state,
     render_install_timing_summary, resolve_install_config_path, root_init_args,
-    validate_expected_fleet_name, write_install_state,
+    validate_expected_fleet_name, write_install_deployment_truth_gate_receipt, write_install_state,
 };
 use crate::canister_build::CanisterBuildProfile;
 use crate::deployment_truth::{
-    CanisterControlClassV1, ObservedCanisterV1, SafetyFindingV1, SafetySeverityV1,
-    artifact_gate_phase_receipt, artifact_gate_role_phase_receipts, compare_plan_to_inventory,
-    safety_report_from_diff,
+    CanisterControlClassV1, DeploymentReceiptV1, ObservedCanisterV1, SafetyFindingV1,
+    SafetySeverityV1, artifact_gate_phase_receipt, artifact_gate_role_phase_receipts,
+    compare_plan_to_inventory, safety_report_from_diff,
 };
 use crate::icp::{CANIC_ICP_LOCAL_NETWORK_URL_ENV, CANIC_ICP_LOCAL_ROOT_KEY_ENV};
 use crate::release_set::configured_install_targets;
@@ -707,6 +708,178 @@ kind = "root"
         err.to_string().contains("canister_missing:"),
         "unexpected error: {err}"
     );
+
+    fs::remove_dir_all(root).expect("clean temp dir");
+}
+
+#[test]
+fn install_truth_gate_blocks_all_safety_report_hard_failures() {
+    let root = temp_dir("canic-install-truth-all-hard-failures");
+    let config_path = root.join("fleets/demo/canic.toml");
+    fs::create_dir_all(config_path.parent().expect("config parent")).expect("create config dir");
+    fs::write(
+        &config_path,
+        r#"
+controllers = []
+app_index = []
+
+[fleet]
+name = "demo"
+
+[app]
+init_mode = "enabled"
+[app.whitelist]
+
+[subnets.prime.canisters.root]
+kind = "root"
+"#,
+    )
+    .expect("write config");
+    write_wasm_gz_artifact(&root, "root", b"root-artifact");
+
+    let options = InstallRootOptions {
+        root_canister: "root".to_string(),
+        root_build_target: "root".to_string(),
+        network: "local".to_string(),
+        icp_root: Some(root.clone()),
+        build_profile: Some(CanisterBuildProfile::Fast),
+        ready_timeout_seconds: 30,
+        config_path: Some("fleets/demo/canic.toml".to_string()),
+        expected_fleet: Some("demo".to_string()),
+        interactive_config_selection: false,
+    };
+
+    let mut check = current_install_deployment_truth_check_at(
+        &options,
+        &root,
+        &root,
+        &config_path,
+        "demo",
+        "2026-05-22T00:00:00Z".to_string(),
+    )
+    .expect("deployment truth check");
+    check.report.hard_failures.push(SafetyFindingV1 {
+        code: "future_hard_failure".to_string(),
+        message: "future deployment truth blocker".to_string(),
+        severity: SafetySeverityV1::HardFailure,
+        subject: Some("future.subject".to_string()),
+    });
+
+    let err = enforce_install_deployment_truth_gate(&check).unwrap_err();
+
+    assert!(
+        err.to_string().contains("future_hard_failure:"),
+        "unexpected error: {err}"
+    );
+
+    fs::remove_dir_all(root).expect("clean temp dir");
+}
+
+#[test]
+fn install_truth_gate_persists_machine_readable_receipt() {
+    let root = temp_dir("canic-install-truth-receipt-json");
+    let config_path = root.join("fleets/demo/canic.toml");
+    fs::create_dir_all(config_path.parent().expect("config parent")).expect("create config dir");
+    fs::write(
+        &config_path,
+        r#"
+controllers = []
+app_index = []
+
+[fleet]
+name = "demo"
+
+[app]
+init_mode = "enabled"
+[app.whitelist]
+
+[subnets.prime.canisters.root]
+kind = "root"
+"#,
+    )
+    .expect("write config");
+    write_wasm_gz_artifact(&root, "root", b"root-artifact");
+
+    let options = InstallRootOptions {
+        root_canister: "root".to_string(),
+        root_build_target: "root".to_string(),
+        network: "local".to_string(),
+        icp_root: Some(root.clone()),
+        build_profile: Some(CanisterBuildProfile::Fast),
+        ready_timeout_seconds: 30,
+        config_path: Some("fleets/demo/canic.toml".to_string()),
+        expected_fleet: Some("demo".to_string()),
+        interactive_config_selection: false,
+    };
+
+    let check = current_install_deployment_truth_check_at(
+        &options,
+        &root,
+        &root,
+        &config_path,
+        "demo",
+        "2026-05-22T00:00:00Z".to_string(),
+    )
+    .expect("deployment truth check");
+    let receipt = install_deployment_truth_gate_receipt(
+        &check,
+        "unix:1770000000".to_string(),
+        vec![artifact_gate_phase_receipt(
+            &check,
+            "unix:1770000000",
+            Some("unix:1770000001".to_string()),
+        )],
+        artifact_gate_role_phase_receipts(&check),
+    );
+
+    let path = write_install_deployment_truth_gate_receipt(&root, "local", "demo", &receipt)
+        .expect("write deployment truth receipt");
+    let expected_path = install_deployment_truth_receipt_path(&root, "local", "demo", &receipt)
+        .expect("receipt path");
+
+    assert_eq!(path, expected_path);
+    assert_eq!(
+        path.parent()
+            .and_then(Path::file_name)
+            .and_then(|name| name.to_str()),
+        Some("demo")
+    );
+    assert!(
+        path.file_name()
+            .and_then(|name| name.to_str())
+            .is_some_and(|name| {
+                !name.contains(':')
+                    && Path::new(name)
+                        .extension()
+                        .is_some_and(|ext| ext.eq_ignore_ascii_case("json"))
+            }),
+        "unexpected receipt path: {}",
+        path.display()
+    );
+    let decoded: DeploymentReceiptV1 =
+        serde_json::from_slice(&fs::read(&path).expect("read receipt")).expect("decode receipt");
+    assert_eq!(decoded, receipt);
+
+    fs::remove_dir_all(root).expect("clean temp dir");
+}
+
+#[test]
+fn install_truth_latest_receipt_uses_newest_persisted_receipt() {
+    let root = temp_dir("canic-install-truth-latest-receipt");
+    let receipt_dir = root.join(".canic/local/deployment-receipts/demo");
+    fs::create_dir_all(&receipt_dir).expect("create receipt dir");
+    let older = receipt_dir.join("unix_100-local_demo_check_materialize_artifacts.json");
+    let newer = receipt_dir.join("unix_200-local_demo_check_materialize_artifacts.json");
+    let ignored = receipt_dir.join("unix_300-local_demo_check_materialize_artifacts.txt");
+    fs::write(&older, "{}").expect("write older receipt");
+    fs::write(&newer, "{}").expect("write newer receipt");
+    fs::write(ignored, "{}").expect("write ignored file");
+
+    let latest = latest_deployment_truth_receipt_path_from_root(&root, "local", "demo")
+        .expect("latest receipt")
+        .expect("receipt exists");
+
+    assert_eq!(latest, newer);
 
     fs::remove_dir_all(root).expect("clean temp dir");
 }

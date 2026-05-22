@@ -43,7 +43,9 @@ pub use config_selection::{
     discover_project_canic_config_choices, project_fleet_roots,
 };
 use readiness::wait_for_root_ready;
-use state::{INSTALL_STATE_SCHEMA_VERSION, validate_fleet_name, write_install_state};
+use state::{
+    INSTALL_STATE_SCHEMA_VERSION, validate_fleet_name, validate_network_name, write_install_state,
+};
 pub use state::{
     InstallState, read_named_fleet_install_state, read_named_fleet_install_state_from_root,
 };
@@ -300,8 +302,19 @@ fn run_install_deployment_truth_safety_gate(
         vec![artifact_gate_receipt],
         role_receipts,
     );
+    let receipt_write = write_install_deployment_truth_gate_receipt(
+        icp_root,
+        &options.network,
+        fleet_name,
+        &deployment_receipt,
+    );
+    match &receipt_write {
+        Ok(path) => println!("Deployment truth receipt JSON: {}", path.display()),
+        Err(err) => eprintln!("Deployment truth receipt JSON write failed: {err}"),
+    }
     print_install_deployment_truth_gate(&deployment_truth_check, &deployment_receipt);
     enforce_install_deployment_truth_gate(&deployment_truth_check)?;
+    receipt_write?;
     Ok(())
 }
 
@@ -321,26 +334,8 @@ fn enforce_install_deployment_truth_gate(
     Err(format!("deployment truth safety gate blocked install: {details}").into())
 }
 
-fn is_install_deployment_truth_gate_blocker(code: &str) -> bool {
-    matches!(
-        code,
-        "artifact_missing"
-            | "artifact_file_digest_mismatch"
-            | "artifact_digest_mismatch"
-            | "canister_missing"
-            | "controller_authority_overlap"
-            | "expected_controller_missing"
-            | "unsafe_control_class"
-    )
-}
-
 fn install_deployment_truth_gate_blockers(check: &DeploymentCheckV1) -> Vec<&SafetyFindingV1> {
-    check
-        .report
-        .hard_failures
-        .iter()
-        .filter(|finding| is_install_deployment_truth_gate_blocker(&finding.code))
-        .collect()
+    check.report.hard_failures.iter().collect()
 }
 
 fn print_install_deployment_truth_gate(check: &DeploymentCheckV1, receipt: &DeploymentReceiptV1) {
@@ -437,6 +432,101 @@ fn install_deployment_truth_gate_receipt(
         role_phase_receipts,
         command_result,
     )
+}
+
+fn write_install_deployment_truth_gate_receipt(
+    icp_root: &Path,
+    network: &str,
+    fleet_name: &str,
+    receipt: &DeploymentReceiptV1,
+) -> Result<PathBuf, Box<dyn std::error::Error>> {
+    let path = install_deployment_truth_receipt_path(icp_root, network, fleet_name, receipt)?;
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    let mut bytes = serde_json::to_vec_pretty(receipt)?;
+    bytes.push(b'\n');
+    fs::write(&path, bytes)?;
+    Ok(path)
+}
+
+fn install_deployment_truth_receipt_path(
+    icp_root: &Path,
+    network: &str,
+    fleet_name: &str,
+    receipt: &DeploymentReceiptV1,
+) -> Result<PathBuf, Box<dyn std::error::Error>> {
+    validate_network_name(network)?;
+    validate_fleet_name(fleet_name)?;
+    let file_stem = format!(
+        "{}-{}",
+        safe_deployment_truth_path_label(&receipt.started_at),
+        safe_deployment_truth_path_label(&receipt.operation_id)
+    );
+    Ok(
+        install_deployment_truth_receipts_dir(icp_root, network, fleet_name)?
+            .join(format!("{file_stem}.json")),
+    )
+}
+
+/// Find the latest persisted deployment-truth receipt for one local fleet.
+pub fn latest_deployment_truth_receipt_path_from_root(
+    icp_root: &Path,
+    network: &str,
+    fleet_name: &str,
+) -> Result<Option<PathBuf>, Box<dyn std::error::Error>> {
+    let dir = install_deployment_truth_receipts_dir(icp_root, network, fleet_name)?;
+    if !dir.is_dir() {
+        return Ok(None);
+    }
+
+    let mut latest = None;
+    for entry in fs::read_dir(dir)? {
+        let path = entry?.path();
+        if !path.is_file()
+            || path
+                .extension()
+                .is_none_or(|ext| !ext.eq_ignore_ascii_case("json"))
+        {
+            continue;
+        }
+        if latest.as_ref().is_none_or(|current| path > *current) {
+            latest = Some(path);
+        }
+    }
+    Ok(latest)
+}
+
+fn install_deployment_truth_receipts_dir(
+    icp_root: &Path,
+    network: &str,
+    fleet_name: &str,
+) -> Result<PathBuf, Box<dyn std::error::Error>> {
+    validate_network_name(network)?;
+    validate_fleet_name(fleet_name)?;
+    Ok(icp_root
+        .join(".canic")
+        .join(network)
+        .join("deployment-receipts")
+        .join(fleet_name))
+}
+
+fn safe_deployment_truth_path_label(value: &str) -> String {
+    let label = value
+        .chars()
+        .map(|ch| {
+            if ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_' | '.') {
+                ch
+            } else {
+                '_'
+            }
+        })
+        .collect::<String>();
+    if label.is_empty() {
+        "unknown".to_string()
+    } else {
+        label
+    }
 }
 
 fn deployment_truth_finding_label(finding: &SafetyFindingV1) -> String {

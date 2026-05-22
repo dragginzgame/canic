@@ -18,6 +18,15 @@ narrow current-install artifact gate.
 
 ## Implemented
 
+- Current-install deployment truth gates now treat every
+  `SafetyReportV1.hard_failures` entry as a blocker instead of maintaining a
+  hand-picked blocker-code allowlist. Warnings remain report-only.
+- Current-install deployment truth gates now persist the lightweight
+  `DeploymentReceiptV1` artifact-gate receipt as machine-readable JSON under
+  `.canic/<network>/deployment-receipts/<fleet>/` before any installer mutation.
+- `canic deploy resume-report <fleet>` can now discover the latest persisted
+  local deployment receipt automatically; `--receipt <file>` remains available
+  for explicit comparisons.
 - Added passive pool-canister comparison to deployment truth diffs. Planned
   pool identities now produce `pool_diff` entries, missing concrete pool
   canisters or mismatched pool IDs block, unsafe observed pool control classes
@@ -156,20 +165,18 @@ narrow current-install artifact gate.
 - Implement canonical resolved-config and deployment-manifest digest
   computation. Raw config SHA-256 is currently diagnostic/local consistency
   evidence only.
-- Persist or surface `DeploymentReceiptV1` records from existing installer
-  phases beyond the in-memory artifact-gate receipt.
+- Persist or surface `DeploymentReceiptV1` records from installer phases beyond
+  the current artifact-gate receipt.
 - Populate meaningful role-scoped phase receipt outcomes once installer phases
   can mutate multiple roles or canisters.
-- Persist or discover prior deployment receipts so `resume-report` no longer
-  requires an explicit receipt JSON path.
-- Gate mutating installer operations on all broader `SafetyReportV1` findings.
+- Persist or discover richer prior deployment receipts beyond latest local
+  artifact-gate receipt lookup.
 
 ## Drift Log
 
-- The installer refusal gate is still selective. It blocks materialized
-  artifact failures and observable controller-authority failures after build,
-  but broader live canister and resume-safety findings remain report-only until
-  live inventory improves.
+- The installer refusal gate now blocks every hard failure from
+  `SafetyReportV1`, but warnings remain report-only until live inventory is
+  broad enough to make warning classes consistently actionable.
 - Artifact evidence now distinguishes release-set payload hashes from observed
   local file hashes. The original design called for artifact truth, but this
   implementation makes source semantics explicit before using hashes as safety

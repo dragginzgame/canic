@@ -10,6 +10,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.41.x] - 2026-05-21 - Deployment truth model
 
+- `0.41.11` tightens current-install deployment truth by blocking every
+  `SafetyReportV1` hard failure, persisting the artifact-gate receipt as local
+  JSON, and letting `deploy resume-report` discover the latest local receipt by
+  default.
+
 - `0.41.10` expands passive deployment truth coverage for pool and verifier
   readiness facts: configured pool identities now enter plans, installed
   registry entries can populate observed pool inventory, pool/readiness drift is

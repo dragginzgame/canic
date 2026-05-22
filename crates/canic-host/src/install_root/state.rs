@@ -138,7 +138,7 @@ pub(super) fn validate_fleet_name(name: &str) -> Result<(), Box<dyn std::error::
 }
 
 // Keep network names safe for `.canic/<network>` state paths.
-fn validate_network_name(name: &str) -> Result<(), Box<dyn std::error::Error>> {
+pub(super) fn validate_network_name(name: &str) -> Result<(), Box<dyn std::error::Error>> {
     let valid = !name.is_empty()
         && name
             .bytes()

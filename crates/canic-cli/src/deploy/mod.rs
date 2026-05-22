@@ -17,7 +17,10 @@ use canic_host::{
         compare_plan_inventory_and_receipt,
     },
     icp_config::resolve_current_canic_icp_root,
-    install_root::{InstallRootOptions, check_install_deployment_truth},
+    install_root::{
+        InstallRootOptions, check_install_deployment_truth,
+        latest_deployment_truth_receipt_path_from_root,
+    },
 };
 use clap::Command as ClapCommand;
 use std::{
@@ -37,6 +40,7 @@ Examples:
   canic deploy diff demo
   canic deploy report demo
   canic deploy check demo
+  canic deploy resume-report demo
   canic deploy resume-report --receipt receipt.json demo
   canic deploy check --profile fast demo
 
@@ -74,11 +78,14 @@ Examples:
 Prints the local DeploymentCheckV1 JSON without installing or mutating state.";
 const DEPLOY_RESUME_REPORT_HELP_AFTER: &str = "\
 Examples:
+  canic deploy resume-report demo
   canic deploy resume-report --receipt receipt.json demo
   canic --network local deploy resume-report --receipt receipt.json --profile fast demo
 
 Prints the passive ResumeSafetyV1 JSON for the current deployment truth check
-and a prior DeploymentReceiptV1. It does not resume, install, or mutate state.";
+and a prior DeploymentReceiptV1. When --receipt is omitted, Canic uses the
+latest local receipt under .canic/<network>/deployment-receipts/<fleet>. It
+does not resume, install, or mutate state.";
 
 ///
 /// DeployCommandError
@@ -111,7 +118,7 @@ struct DeployTruthOptions {
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct DeployResumeReportOptions {
     truth: DeployTruthOptions,
-    receipt: PathBuf,
+    receipt: Option<PathBuf>,
 }
 
 pub fn run<I>(args: I) -> Result<(), DeployCommandError>
@@ -242,7 +249,8 @@ where
     }
 
     let options = DeployResumeReportOptions::parse(args)?;
-    let receipt = read_deployment_receipt(&options.receipt)?;
+    let receipt_path = options.receipt_path()?;
+    let receipt = read_deployment_receipt(&receipt_path)?;
     let check = load_deployment_check(options.truth)?;
     let diff = compare_plan_inventory_and_receipt(&check.plan, &check.inventory, &receipt);
     print_json(&diff.resume_safety)?;
@@ -292,7 +300,38 @@ impl DeployResumeReportOptions {
             .map_err(|_| DeployCommandError::Usage(resume_report_usage()))?;
         Ok(Self {
             truth: DeployTruthOptions::from_matches(&matches, resume_report_usage)?,
-            receipt: path_option(&matches, "receipt").expect("clap requires receipt"),
+            receipt: path_option(&matches, "receipt"),
+        })
+    }
+
+    fn receipt_path(&self) -> Result<PathBuf, DeployCommandError> {
+        if let Some(path) = &self.receipt {
+            return Ok(path.clone());
+        }
+
+        let icp_root = resolve_current_canic_icp_root().map_err(|err| {
+            DeployCommandError::Usage(format!(
+                "could not discover current Canic project root for latest deployment receipt: {err}; pass --receipt <file>"
+            ))
+        })?;
+
+        latest_deployment_truth_receipt_path_from_root(
+            &icp_root,
+            &self.truth.network,
+            &self.truth.fleet,
+        )
+        .map_err(DeployCommandError::from)?
+        .ok_or_else(|| {
+            DeployCommandError::Usage(format!(
+                "no deployment receipt found under {} for fleet {}; pass --receipt <file>",
+                icp_root
+                    .join(".canic")
+                    .join(&self.truth.network)
+                    .join("deployment-receipts")
+                    .join(&self.truth.fleet)
+                    .display(),
+                self.truth.fleet
+            ))
         })
     }
 }
@@ -415,7 +454,6 @@ fn deploy_resume_report_command() -> ClapCommand {
         value_arg("receipt")
             .long("receipt")
             .value_name("file")
-            .required(true)
             .help("DeploymentReceiptV1 JSON file to compare with current deployment truth"),
     )
     .after_help(DEPLOY_RESUME_REPORT_HELP_AFTER)
@@ -621,15 +659,16 @@ mod tests {
         assert_eq!(diff.fleet, "demo");
         assert_eq!(report.fleet, "demo");
         assert_eq!(resume_report.truth.fleet, "demo");
-        assert_eq!(resume_report.receipt, PathBuf::from("receipt.json"));
+        assert_eq!(resume_report.receipt, Some(PathBuf::from("receipt.json")));
     }
 
     #[test]
-    fn deploy_resume_report_requires_receipt() {
-        assert!(matches!(
-            DeployResumeReportOptions::parse([OsString::from("demo")]),
-            Err(DeployCommandError::Usage(_))
-        ));
+    fn deploy_resume_report_allows_latest_local_receipt_lookup() {
+        let resume_report = DeployResumeReportOptions::parse([OsString::from("demo")])
+            .expect("parse deploy resume-report");
+
+        assert_eq!(resume_report.truth.fleet, "demo");
+        assert_eq!(resume_report.receipt, None);
     }
 
     #[test]

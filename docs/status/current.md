@@ -21,6 +21,15 @@ inspect only the files needed for the current task.
 
 ## Recent Work
 
+- Current-install deployment truth gates now treat every
+  `SafetyReportV1.hard_failures` entry as a blocker instead of maintaining a
+  hand-picked blocker-code allowlist. Warnings remain report-only.
+- Current-install deployment truth gates now persist the lightweight
+  `DeploymentReceiptV1` artifact-gate receipt as machine-readable JSON under
+  `.canic/<network>/deployment-receipts/<fleet>/` before any installer mutation.
+- `canic deploy resume-report <fleet>` can now discover the latest persisted
+  local deployment receipt automatically; `--receipt <file>` remains available
+  for explicit comparisons.
 - Added passive pool-canister comparison to deployment truth diffs. Planned
   pool identities now produce `pool_diff` entries, missing concrete pool
   canisters or mismatched pool IDs block, unsafe observed pool control classes
