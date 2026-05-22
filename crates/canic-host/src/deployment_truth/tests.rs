@@ -1,4 +1,7 @@
 use super::*;
+use crate::deployment_truth::observe::observed_root_from_status;
+use crate::icp::{IcpCanisterStatusReport, IcpCanisterStatusSettings};
+use crate::install_root::InstallState;
 use crate::release_set::ROOT_RELEASE_SET_MANIFEST_FILE;
 use crate::test_support::temp_dir;
 use serde::Serialize;
@@ -102,6 +105,7 @@ fn receipt_diff_and_safety_report_support_not_evaluated_state() {
         schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
         operation_id: "operation-1".to_string(),
         plan_id: "plan-local-root".to_string(),
+        operation_status: DeploymentExecutionStatusV1::InProgress,
         started_at: "2026-05-21T00:00:00Z".to_string(),
         finished_at: None,
         operator_principal: None,
@@ -116,6 +120,17 @@ fn receipt_diff_and_safety_report_support_not_evaluated_state() {
                 status: ObservationStatusV1::NotObserved,
                 evidence: Vec::new(),
             },
+        }],
+        role_phase_receipts: vec![RolePhaseReceiptV1 {
+            role: "root".to_string(),
+            phase: "install_root".to_string(),
+            result: RolePhaseResultV1::NotAttempted,
+            previous_module_hash: None,
+            target_module_hash: Some("module".to_string()),
+            observed_module_hash_after: None,
+            artifact_digest: Some("artifact".to_string()),
+            canonical_embedded_config_sha256: None,
+            error: None,
         }],
         final_inventory_id: None,
         command_result: DeploymentCommandResultV1::NotFinished,
@@ -230,7 +245,12 @@ fn artifact_gate_receipt_records_materialized_artifact_evidence() {
         vec!["artifact:root:sha256:file"]
     );
     assert_eq!(receipt.plan_id, "plan-local-root");
+    assert_eq!(
+        receipt.operation_status,
+        DeploymentExecutionStatusV1::Complete
+    );
     assert_eq!(receipt.final_inventory_id.as_deref(), Some("inventory-1"));
+    assert!(receipt.role_phase_receipts.is_empty());
     assert_eq!(receipt.phase_receipts, vec![phase]);
 }
 
@@ -352,9 +372,8 @@ fn local_inventory_collects_configured_roles_and_artifacts_without_live_queries(
         inventory
             .observed_identity
             .as_ref()
-            .and_then(|identity| identity.deployment_manifest_digest.as_ref())
-            .map(String::len),
-        Some(64)
+            .and_then(|identity| identity.deployment_manifest_digest.as_ref()),
+        None
     );
     assert_eq!(inventory.observed_artifacts.len(), 1);
     assert_eq!(inventory.observed_artifacts[0].role, "root");
@@ -375,6 +394,46 @@ fn local_inventory_collects_configured_roles_and_artifacts_without_live_queries(
             .unresolved_observations
             .iter()
             .any(|gap| gap.key == "local_artifacts.user_hub")
+    );
+}
+
+#[test]
+fn live_root_status_observation_maps_status_controllers_and_module_hash() {
+    let state = sample_install_state("aaaaa-aa");
+    let report = IcpCanisterStatusReport {
+        id: "aaaaa-aa".to_string(),
+        name: Some("root".to_string()),
+        status: "Running".to_string(),
+        settings: Some(IcpCanisterStatusSettings {
+            controllers: vec!["aaaaa-aa".to_string()],
+            compute_allocation: Some("0".to_string()),
+            memory_allocation: None,
+            freezing_threshold: None,
+            reserved_cycles_limit: None,
+            wasm_memory_limit: None,
+            wasm_memory_threshold: None,
+            log_memory_limit: None,
+        }),
+        module_hash: Some("0xABCD".to_string()),
+        memory_size: None,
+        cycles: None,
+        reserved_cycles: None,
+        idle_cycles_burned_per_day: None,
+    };
+
+    let observed = observed_root_from_status(&state, &report);
+
+    assert_eq!(observed.canister_id, "aaaaa-aa");
+    assert_eq!(
+        observed.control_class,
+        CanisterControlClassV1::DeploymentControlled
+    );
+    assert_eq!(observed.controllers, vec!["aaaaa-aa"]);
+    assert_eq!(observed.module_hash.as_deref(), Some("abcd"));
+    assert_eq!(observed.status.as_deref(), Some("Running"));
+    assert_eq!(
+        observed.role_assignment_source.as_deref(),
+        Some("icp_canister_status")
     );
 }
 
@@ -543,6 +602,12 @@ fn local_plan_uses_configured_roles_and_local_artifact_manifest() {
     assert_eq!(
         plan.deployment_identity
             .deployment_manifest_digest
+            .as_deref(),
+        None
+    );
+    assert_eq!(
+        plan.role_artifacts[0]
+            .raw_config_sha256
             .as_ref()
             .map(String::len),
         Some(64)
@@ -619,6 +684,118 @@ fn deployment_diff_blocks_deployment_manifest_mismatch() {
             .iter()
             .any(|finding| finding.code == "deployment_manifest_mismatch")
     );
+}
+
+#[test]
+fn deployment_diff_blocks_raw_config_digest_mismatch_without_claiming_manifest_identity() {
+    let mut plan = sample_plan();
+    plan.deployment_identity.deployment_manifest_digest = None;
+    plan.expected_canisters.clear();
+    plan.role_artifacts[0].wasm_gz_sha256 = None;
+    plan.role_artifacts[0].raw_config_sha256 = Some("planned-raw-config".to_string());
+    plan.expected_verifier_readiness.required = false;
+    let mut observed_identity = sample_identity();
+    observed_identity.deployment_manifest_digest = None;
+    let inventory = DeploymentInventoryV1 {
+        schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
+        inventory_id: "inventory-1".to_string(),
+        observed_at: "2026-05-21T00:00:00Z".to_string(),
+        observed_identity: Some(observed_identity),
+        local_config: LocalDeploymentConfigV1 {
+            config_path: Some("icp.yml".to_string()),
+            raw_config_sha256: Some("observed-raw-config".to_string()),
+            canonical_embedded_config_sha256: Some("runtime".to_string()),
+        },
+        observed_canisters: Vec::new(),
+        observed_pool: Vec::new(),
+        observed_artifacts: vec![ObservedArtifactV1 {
+            role: "root".to_string(),
+            artifact_path: "root.wasm.gz".to_string(),
+            file_sha256: Some("file".to_string()),
+            file_sha256_source: Some(ArtifactDigestSourceV1::ObservedFileDigest),
+            payload_sha256: None,
+            payload_size_bytes: Some(10),
+            source: ArtifactSourceV1::LocalBuild,
+        }],
+        observed_verifier_readiness: VerifierReadinessObservationV1 {
+            status: ObservationStatusV1::NotObserved,
+            role_epochs: Vec::new(),
+        },
+        unresolved_observations: Vec::new(),
+    };
+
+    let diff = compare_plan_to_inventory(&plan, &inventory);
+
+    assert_eq!(diff.resume_safety.status, SafetyStatusV1::Blocked);
+    assert!(
+        diff.hard_failures
+            .iter()
+            .any(|finding| finding.code == "raw_config_digest_mismatch")
+    );
+    assert!(diff.embedded_config_diff.iter().any(|item| {
+        item.category == "raw_config_sha256"
+            && item.expected.as_deref() == Some("planned-raw-config")
+            && item.observed.as_deref() == Some("observed-raw-config")
+    }));
+}
+
+#[test]
+fn deployment_diff_blocks_installed_module_hash_mismatch() {
+    let mut plan = sample_plan();
+    plan.expected_canisters.clear();
+    plan.role_artifacts[0].wasm_gz_sha256 = None;
+    plan.expected_verifier_readiness.required = false;
+    let inventory = DeploymentInventoryV1 {
+        schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
+        inventory_id: "inventory-1".to_string(),
+        observed_at: "2026-05-21T00:00:00Z".to_string(),
+        observed_identity: Some(sample_identity()),
+        local_config: LocalDeploymentConfigV1 {
+            config_path: Some("icp.yml".to_string()),
+            raw_config_sha256: None,
+            canonical_embedded_config_sha256: Some("runtime".to_string()),
+        },
+        observed_canisters: vec![ObservedCanisterV1 {
+            canister_id: "aaaaa-aa".to_string(),
+            role: Some("root".to_string()),
+            control_class: CanisterControlClassV1::DeploymentControlled,
+            controllers: vec!["aaaaa-aa".to_string()],
+            module_hash: Some("different-module".to_string()),
+            status: Some("Running".to_string()),
+            root_trust_anchor: Some("aaaaa-aa".to_string()),
+            canonical_embedded_config_digest: None,
+            role_assignment_source: Some("icp_canister_status".to_string()),
+        }],
+        observed_pool: Vec::new(),
+        observed_artifacts: vec![ObservedArtifactV1 {
+            role: "root".to_string(),
+            artifact_path: "root.wasm.gz".to_string(),
+            file_sha256: Some("file".to_string()),
+            file_sha256_source: Some(ArtifactDigestSourceV1::ObservedFileDigest),
+            payload_sha256: None,
+            payload_size_bytes: Some(10),
+            source: ArtifactSourceV1::LocalBuild,
+        }],
+        observed_verifier_readiness: VerifierReadinessObservationV1 {
+            status: ObservationStatusV1::NotObserved,
+            role_epochs: Vec::new(),
+        },
+        unresolved_observations: Vec::new(),
+    };
+
+    let diff = compare_plan_to_inventory(&plan, &inventory);
+
+    assert_eq!(diff.resume_safety.status, SafetyStatusV1::Blocked);
+    assert!(
+        diff.hard_failures
+            .iter()
+            .any(|finding| finding.code == "installed_module_hash_mismatch")
+    );
+    assert!(diff.module_hash_diff.iter().any(|item| {
+        item.category == "installed_module_hash"
+            && item.expected.as_deref() == Some("module")
+            && item.observed.as_deref() == Some("different-module")
+    }));
 }
 
 #[test]
@@ -846,7 +1023,7 @@ fn deployment_diff_is_safe_when_checked_facts_match() {
             role: Some("root".to_string()),
             control_class: CanisterControlClassV1::DeploymentControlled,
             controllers: vec!["aaaaa-aa".to_string()],
-            module_hash: None,
+            module_hash: Some("module".to_string()),
             status: None,
             root_trust_anchor: Some("aaaaa-aa".to_string()),
             canonical_embedded_config_digest: None,
@@ -1047,4 +1224,20 @@ fn write_release_set_manifest(icp_root: &Path) {
         serde_json::to_vec_pretty(&manifest).expect("encode manifest"),
     )
     .expect("write manifest");
+}
+
+fn sample_install_state(root_canister_id: &str) -> InstallState {
+    InstallState {
+        schema_version: 1,
+        fleet: "demo".to_string(),
+        installed_at_unix_secs: 1,
+        network: "local".to_string(),
+        root_target: "root".to_string(),
+        root_canister_id: root_canister_id.to_string(),
+        root_build_target: "root".to_string(),
+        workspace_root: "/workspace".to_string(),
+        icp_root: "/workspace".to_string(),
+        config_path: "fleets/canic.toml".to_string(),
+        release_set_manifest_path: ".icp/local/canisters/root/release-set.json".to_string(),
+    }
 }

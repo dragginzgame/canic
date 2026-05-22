@@ -73,7 +73,7 @@ pub fn compare_plan_to_inventory(
     let mut controller_diff = Vec::new();
     let pool_diff = Vec::new();
     let mut embedded_config_diff = Vec::new();
-    let module_hash_diff = Vec::new();
+    let mut module_hash_diff = Vec::new();
     let mut verifier_readiness_diff = Vec::new();
     let mut hard_failures = Vec::new();
     let mut warnings = Vec::new();
@@ -92,6 +92,19 @@ pub fn compare_plan_to_inventory(
         &mut controller_diff,
         &mut hard_failures,
         &mut warnings,
+    );
+    compare_module_hashes(
+        plan,
+        inventory,
+        &mut module_hash_diff,
+        &mut hard_failures,
+        &mut warnings,
+    );
+    compare_raw_config(
+        plan,
+        inventory,
+        &mut embedded_config_diff,
+        &mut hard_failures,
     );
     compare_embedded_config(
         plan,
@@ -391,6 +404,100 @@ fn compare_canisters(
                 Some(expected.role.clone()),
             ));
         }
+    }
+}
+
+fn compare_module_hashes(
+    plan: &DeploymentPlanV1,
+    inventory: &DeploymentInventoryV1,
+    module_hash_diff: &mut Vec<DiffItemV1>,
+    hard_failures: &mut Vec<SafetyFindingV1>,
+    warnings: &mut Vec<SafetyFindingV1>,
+) {
+    let observed_by_role = inventory
+        .observed_canisters
+        .iter()
+        .filter_map(|canister| canister.role.as_deref().map(|role| (role, canister)))
+        .collect::<BTreeMap<_, _>>();
+
+    for artifact in &plan.role_artifacts {
+        let Some(expected) = artifact.installed_module_hash.as_ref() else {
+            continue;
+        };
+        let Some(observed_canister) = observed_by_role.get(artifact.role.as_str()) else {
+            continue;
+        };
+        match observed_canister.module_hash.as_ref() {
+            Some(observed) if observed != expected => {
+                module_hash_diff.push(diff_item(
+                    "installed_module_hash",
+                    &artifact.role,
+                    Some(expected.clone()),
+                    Some(observed.clone()),
+                    SafetySeverityV1::HardFailure,
+                ));
+                hard_failures.push(finding(
+                    "installed_module_hash_mismatch",
+                    format!("installed module hash differs for role {}", artifact.role),
+                    SafetySeverityV1::HardFailure,
+                    Some(artifact.role.clone()),
+                ));
+            }
+            None => warnings.push(finding(
+                "installed_module_hash_unobserved",
+                format!(
+                    "installed module hash was not observed for role {}",
+                    artifact.role
+                ),
+                SafetySeverityV1::Warning,
+                Some(artifact.role.clone()),
+            )),
+            _ => {}
+        }
+    }
+}
+
+fn compare_raw_config(
+    plan: &DeploymentPlanV1,
+    inventory: &DeploymentInventoryV1,
+    embedded_config_diff: &mut Vec<DiffItemV1>,
+    hard_failures: &mut Vec<SafetyFindingV1>,
+) {
+    let mut expected = plan
+        .role_artifacts
+        .iter()
+        .filter_map(|artifact| artifact.raw_config_sha256.as_ref())
+        .collect::<Vec<_>>();
+    expected.sort_unstable();
+    expected.dedup();
+    let [expected] = expected.as_slice() else {
+        if expected.len() > 1 {
+            hard_failures.push(finding(
+                "raw_config_plan_inconsistent",
+                "planned role artifacts disagree on raw config digest",
+                SafetySeverityV1::HardFailure,
+                Some("role_artifacts.raw_config_sha256".to_string()),
+            ));
+        }
+        return;
+    };
+
+    if let Some(observed) = &inventory.local_config.raw_config_sha256
+        && observed != *expected
+    {
+        embedded_config_diff.push(diff_item(
+            "raw_config_sha256",
+            "deployment",
+            Some((*expected).clone()),
+            Some(observed.clone()),
+            SafetySeverityV1::HardFailure,
+        ));
+        hard_failures.push(finding(
+            "raw_config_digest_mismatch",
+            "raw local config digest changed during deployment truth check",
+            SafetySeverityV1::HardFailure,
+            Some("local_config.raw_sha256".to_string()),
+        ));
     }
 }
 

@@ -44,12 +44,14 @@ pub struct DeploymentReceiptV1 {
     pub schema_version: u32,
     pub operation_id: String,
     pub plan_id: String,
+    pub operation_status: DeploymentExecutionStatusV1,
     pub started_at: String,
     pub finished_at: Option<String>,
     pub operator_principal: Option<String>,
     pub root_principal: Option<String>,
     pub previous_observed_deployment_epoch: Option<u64>,
     pub phase_receipts: Vec<PhaseReceiptV1>,
+    pub role_phase_receipts: Vec<RolePhaseReceiptV1>,
     pub final_inventory_id: Option<String>,
     pub command_result: DeploymentCommandResultV1,
 }
@@ -364,6 +366,19 @@ pub struct VerifiedPostconditionV1 {
 }
 
 ///
+/// DeploymentExecutionStatusV1
+///
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum DeploymentExecutionStatusV1 {
+    NotStarted,
+    InProgress,
+    FailedBeforeMutation,
+    PartiallyApplied,
+    FailedAfterMutation,
+    Complete,
+}
+
+///
 /// DeploymentCommandResultV1
 ///
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -371,6 +386,34 @@ pub enum DeploymentCommandResultV1 {
     NotFinished,
     Succeeded,
     Failed { code: String, message: String },
+}
+
+///
+/// RolePhaseReceiptV1
+///
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RolePhaseReceiptV1 {
+    pub role: String,
+    pub phase: String,
+    pub result: RolePhaseResultV1,
+    pub previous_module_hash: Option<String>,
+    pub target_module_hash: Option<String>,
+    pub observed_module_hash_after: Option<String>,
+    pub artifact_digest: Option<String>,
+    pub canonical_embedded_config_sha256: Option<String>,
+    pub error: Option<String>,
+}
+
+///
+/// RolePhaseResultV1
+///
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum RolePhaseResultV1 {
+    Applied,
+    Failed,
+    Skipped,
+    NotAttempted,
+    VerifiedAlreadyApplied,
 }
 
 ///

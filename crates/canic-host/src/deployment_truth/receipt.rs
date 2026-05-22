@@ -81,6 +81,7 @@ pub fn deployment_receipt_from_check(
         schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
         operation_id: operation_id.into(),
         plan_id: check.plan.plan_id.clone(),
+        operation_status: operation_status_for_command_result(&command_result),
         started_at: started_at.into(),
         finished_at,
         operator_principal: None,
@@ -92,7 +93,20 @@ pub fn deployment_receipt_from_check(
             .or_else(|| check.plan.deployment_identity.root_principal.clone()),
         previous_observed_deployment_epoch: None,
         phase_receipts,
+        role_phase_receipts: Vec::new(),
         final_inventory_id: Some(check.inventory.inventory_id.clone()),
         command_result,
+    }
+}
+
+const fn operation_status_for_command_result(
+    result: &DeploymentCommandResultV1,
+) -> DeploymentExecutionStatusV1 {
+    match result {
+        DeploymentCommandResultV1::NotFinished => DeploymentExecutionStatusV1::InProgress,
+        DeploymentCommandResultV1::Succeeded => DeploymentExecutionStatusV1::Complete,
+        DeploymentCommandResultV1::Failed { .. } => {
+            DeploymentExecutionStatusV1::FailedAfterMutation
+        }
     }
 }

@@ -1,5 +1,6 @@
 use super::*;
 use crate::{
+    icp::{IcpCanisterStatusReport, IcpCli},
     install_root::read_named_fleet_install_state_from_root,
     release_set::{
         ROOT_RELEASE_SET_MANIFEST_FILE, configured_fleet_name, configured_fleet_roles,
@@ -86,7 +87,6 @@ pub fn collect_local_deployment_inventory(
     let observed_identity = Some(local_deployment_identity(
         request,
         &fleet_name,
-        raw_config_sha256.clone(),
         install_state
             .as_ref()
             .map(|state| state.root_canister_id.clone()),
@@ -108,9 +108,14 @@ pub fn collect_local_deployment_inventory(
             raw_config_sha256,
             canonical_embedded_config_sha256: None,
         },
-        observed_canisters: install_state
-            .as_ref()
-            .map_or_else(Vec::new, install_state_observed_canisters),
+        observed_canisters: install_state.as_ref().map_or_else(Vec::new, |state| {
+            install_state_observed_canisters(
+                state,
+                &request.icp_root,
+                &request.network,
+                &mut unresolved_observations,
+            )
+        }),
         observed_pool: Vec::new(),
         observed_artifacts,
         observed_verifier_readiness: VerifierReadinessObservationV1 {
@@ -384,7 +389,6 @@ fn observe_config_sha256(
 fn local_deployment_identity(
     request: &LocalInventoryRequest,
     fleet_name: &str,
-    deployment_manifest_digest: Option<String>,
     root_principal: Option<String>,
 ) -> DeploymentIdentityV1 {
     DeploymentIdentityV1 {
@@ -393,7 +397,7 @@ fn local_deployment_identity(
         root_principal,
         authority_profile_hash: None,
         role_topology_hash: None,
-        deployment_manifest_digest,
+        deployment_manifest_digest: None,
         canonical_runtime_config_digest: None,
         role_embedded_config_set_digest: None,
         artifact_set_digest: None,
@@ -405,8 +409,65 @@ fn local_deployment_identity(
 
 fn install_state_observed_canisters(
     state: &crate::install_root::InstallState,
+    icp_root: &Path,
+    network: &str,
+    gaps: &mut Vec<DeploymentObservationGapV1>,
 ) -> Vec<ObservedCanisterV1> {
-    vec![ObservedCanisterV1 {
+    match read_live_root_status(icp_root, network, &state.root_canister_id) {
+        Ok(report) => vec![observed_root_from_status(state, &report)],
+        Err(err) => {
+            gaps.push(observation_gap(
+                "live_canister_status.root",
+                format!(
+                    "could not observe live root canister status for {}: {err}",
+                    state.root_canister_id
+                ),
+            ));
+            vec![observed_root_from_install_state(state)]
+        }
+    }
+}
+
+fn read_live_root_status(
+    icp_root: &Path,
+    network: &str,
+    root_canister_id: &str,
+) -> Result<IcpCanisterStatusReport, crate::icp::IcpCommandError> {
+    IcpCli::new("icp", Some(network.to_string()), None)
+        .with_cwd(icp_root)
+        .canister_status_report(root_canister_id)
+}
+
+pub(super) fn observed_root_from_status(
+    state: &crate::install_root::InstallState,
+    report: &IcpCanisterStatusReport,
+) -> ObservedCanisterV1 {
+    let controllers = report
+        .settings
+        .as_ref()
+        .map(|settings| settings.controllers.clone())
+        .unwrap_or_default();
+    ObservedCanisterV1 {
+        canister_id: if report.id.is_empty() {
+            state.root_canister_id.clone()
+        } else {
+            report.id.clone()
+        },
+        role: Some("root".to_string()),
+        control_class: classify_root_control(&controllers, &state.root_canister_id),
+        controllers,
+        module_hash: report.module_hash.as_deref().map(normalize_module_hash),
+        status: Some(report.status.clone()),
+        root_trust_anchor: Some(state.root_canister_id.clone()),
+        canonical_embedded_config_digest: None,
+        role_assignment_source: Some("icp_canister_status".to_string()),
+    }
+}
+
+fn observed_root_from_install_state(
+    state: &crate::install_root::InstallState,
+) -> ObservedCanisterV1 {
+    ObservedCanisterV1 {
         canister_id: state.root_canister_id.clone(),
         role: Some("root".to_string()),
         control_class: CanisterControlClassV1::UnknownUnsafe,
@@ -416,7 +477,25 @@ fn install_state_observed_canisters(
         root_trust_anchor: Some(state.root_canister_id.clone()),
         canonical_embedded_config_digest: None,
         role_assignment_source: Some("local_install_state".to_string()),
-    }]
+    }
+}
+
+fn classify_root_control(controllers: &[String], root_canister_id: &str) -> CanisterControlClassV1 {
+    if controllers
+        .iter()
+        .any(|controller| controller == root_canister_id)
+    {
+        CanisterControlClassV1::DeploymentControlled
+    } else {
+        CanisterControlClassV1::UnknownUnsafe
+    }
+}
+
+fn normalize_module_hash(hash: &str) -> String {
+    hash.strip_prefix("0x")
+        .or_else(|| hash.strip_prefix("0X"))
+        .unwrap_or(hash)
+        .to_ascii_lowercase()
 }
 
 fn observation_gap(

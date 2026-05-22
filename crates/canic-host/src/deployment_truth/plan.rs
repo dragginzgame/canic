@@ -42,7 +42,7 @@ pub fn build_local_deployment_plan(request: &LocalDeploymentPlanRequest) -> Depl
         ));
         Vec::new()
     });
-    let deployment_manifest_digest = config_sha256_assumption(&config, &mut unresolved_assumptions);
+    let raw_config_sha256 = config_sha256_assumption(&config, &mut unresolved_assumptions);
     let artifact_manifest = collect_local_role_artifact_manifest(&LocalArtifactManifestRequest {
         network: request.network.clone(),
         workspace_root: request.workspace_root.clone(),
@@ -65,7 +65,7 @@ pub fn build_local_deployment_plan(request: &LocalDeploymentPlanRequest) -> Depl
             root_principal: None,
             authority_profile_hash: None,
             role_topology_hash: None,
-            deployment_manifest_digest,
+            deployment_manifest_digest: None,
             canonical_runtime_config_digest: None,
             role_embedded_config_set_digest: None,
             artifact_set_digest: None,
@@ -93,6 +93,7 @@ pub fn build_local_deployment_plan(request: &LocalDeploymentPlanRequest) -> Depl
             .into_iter()
             .map(|mut artifact| {
                 artifact.build_profile.clone_from(&request.build_profile);
+                artifact.raw_config_sha256.clone_from(&raw_config_sha256);
                 artifact
             })
             .collect(),

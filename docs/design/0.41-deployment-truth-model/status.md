@@ -18,6 +18,20 @@ narrow current-install artifact gate.
 
 ## Implemented
 
+- Corrected the config identity model after the latest design shift: raw local
+  config SHA-256 values are now raw evidence only, not
+  `deployment_manifest_digest`. Raw config drift still blocks as a local
+  consistency finding until canonical resolved-config digests are implemented.
+- Started live inventory expansion for installed roots. When local install
+  state identifies a root canister, deployment truth attempts a read-only ICP
+  status observation and records live controllers, module hash, and status when
+  available. Failed live reads are typed observation gaps.
+- Added installed module-hash comparison to the normalized diff so planned
+  role module identity can be checked against live root status observations.
+- Aligned `DeploymentReceiptV1` with the revised partial-execution design by
+  adding operation status and role-scoped phase receipt fields. Current
+  installer receipts still populate this lightly; richer per-role outcomes
+  remain future execution work.
 - Added passive `canic-host::deployment_truth` V1 DTOs for deployment plans,
   inventories, receipts, diffs, safety reports, role artifacts, canister control
   classifications, verifier-readiness observations, and phase postconditions.
@@ -44,8 +58,9 @@ narrow current-install artifact gate.
 - Added `canic deploy diff <fleet>` and `canic deploy report <fleet>` as
   direct read-only JSON views for the normalized diff and safety report.
 - Added local deployment config SHA-256 evidence to the deployment truth plan
-  and inventory. The normalized diff now blocks deployment-manifest digest
-  mismatch instead of leaving local config identity blank.
+  and inventory. The normalized diff now blocks raw config digest mismatch as
+  local consistency evidence without treating it as canonical deployment
+  manifest identity.
 - Made `canic deploy check <fleet>` return a failing exit status for blocked
   `SafetyReportV1` output while keeping `plan`, `inventory`, `diff`, and
   `report` as read-only JSON inspection surfaces.
@@ -80,14 +95,18 @@ narrow current-install artifact gate.
 
 - Extend `DeploymentPlanV1` beyond resolved local config/build intent with
   fuller authority, controller, pool, and live-runtime expectations.
-- Extend `DeploymentInventoryV1` with live IC observations such as controllers,
-  installed module hashes, and canister status.
+- Extend `DeploymentInventoryV1` beyond the installed root with live IC
+  observations for configured child roles, pool canisters, `wasm_store`, and
+  richer authority/readiness state.
+- Implement canonical resolved-config and deployment-manifest digest
+  computation. Raw config SHA-256 is currently diagnostic/local consistency
+  evidence only.
 - Extend post-build materialization checks beyond missing configured role
   artifacts.
 - Persist or surface `DeploymentReceiptV1` records from existing installer
   phases beyond the in-memory artifact-gate receipt.
-- Populate role-scoped phase receipts and operation statuses once installer
-  phases can mutate multiple roles or canisters.
+- Populate meaningful role-scoped phase receipt outcomes once installer phases
+  can mutate multiple roles or canisters.
 - Compare plan, inventory, and receipt during install/resume.
 - Gate mutating installer operations on broader `SafetyReportV1` findings.
 

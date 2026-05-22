@@ -21,6 +21,21 @@ inspect only the files needed for the current task.
 
 ## Recent Work
 
+- Corrected the 0.41 config identity model after the design update: raw local
+  config SHA-256 values are now raw evidence only, while
+  `deployment_manifest_digest` remains reserved for the canonical deployment
+  manifest identity. Raw config drift still blocks as a local consistency
+  finding.
+- Started live inventory expansion for installed roots: when local install
+  state identifies a root canister, deployment truth now attempts a read-only
+  ICP status observation and records live controllers, module hash, and status
+  when available. Failed live reads become typed observation gaps.
+- Added installed module-hash comparison to the normalized diff so planned
+  role module identity can be checked against live root status observations.
+- Aligned `DeploymentReceiptV1` with the revised partial-execution design by
+  adding operation status and role-scoped phase receipt fields. Current
+  installer receipts still populate this lightly; richer per-role outcomes
+  remain future execution work.
 - Added lightweight deployment truth receipt helpers for the current-install
   artifact materialization gate. The install path now constructs a
   `materialize_artifacts` phase receipt from live check evidence, but the gate
