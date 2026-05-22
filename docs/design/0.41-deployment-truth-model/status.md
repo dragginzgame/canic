@@ -31,6 +31,10 @@ gating.
   install-state root identity, and materialized `.wasm.gz` artifacts.
 - Added read-only local role artifact manifest collection from configured roles
   and materialized artifacts.
+- Added read-only local deployment plan construction from resolved fleet config
+  and the local role artifact manifest.
+- Added a read-only local deployment check wrapper that returns plan,
+  inventory, diff, and safety report together.
 - Captured missing config, artifact roots, release-set manifests, and role
   artifacts as typed observation gaps instead of installer errors.
 - Preserved release-set payload hashes with `ReleaseSetManifest` source
@@ -70,4 +74,3 @@ gating.
 0.41 should not close until Canic can produce a deployment truth report from the
 current install/build inputs and use at least the first safety gate before a
 mutating installer operation.
-

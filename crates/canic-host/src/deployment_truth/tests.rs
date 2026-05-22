@@ -155,6 +155,43 @@ fn receipt_diff_and_safety_report_support_not_evaluated_state() {
 }
 
 #[test]
+fn local_check_builds_plan_inventory_diff_and_report() {
+    let temp = TempWorkspace::new("canic-host-local-check");
+    let workspace_root = temp.path().join("workspace");
+    let icp_root = temp.path().join("icp");
+    let config_dir = workspace_root.join("fleets");
+    fs::create_dir_all(&config_dir).expect("create config dir");
+    fs::write(config_dir.join("canic.toml"), SAMPLE_CONFIG).expect("write config");
+    write_artifact(&icp_root, "root", b"root-artifact");
+    write_release_set_manifest(&icp_root);
+
+    let check = check_local_deployment(&LocalDeploymentCheckRequest {
+        deployment_name: "demo".to_string(),
+        network: "local".to_string(),
+        workspace_root,
+        icp_root,
+        observed_at: "2026-05-21T00:00:00Z".to_string(),
+        runtime_variant: "local".to_string(),
+        build_profile: "fast".to_string(),
+    })
+    .expect("check local deployment");
+
+    assert_eq!(check.schema_version, DEPLOYMENT_TRUTH_SCHEMA_VERSION);
+    assert_eq!(check.check_id, "local:local:demo:check");
+    assert_eq!(check.plan.plan_id, "local:local:demo:plan");
+    assert_eq!(check.inventory.inventory_id, "local:local:demo");
+    assert_eq!(check.diff.resume_safety.status, check.report.status);
+    assert!(
+        check
+            .diff
+            .hard_failures
+            .iter()
+            .any(|finding| finding.code == "artifact_missing")
+    );
+    assert_eq!(check.report.status, SafetyStatusV1::Blocked);
+}
+
+#[test]
 fn local_inventory_collects_configured_roles_and_artifacts_without_live_queries() {
     let temp = TempWorkspace::new("canic-host-local-inventory");
     let workspace_root = temp.path().join("workspace");
@@ -338,6 +375,57 @@ fn local_artifact_manifest_records_missing_artifacts_as_gaps() {
             .iter()
             .any(|gap| gap.key == "local_artifacts.user_hub")
     );
+}
+
+#[test]
+fn local_plan_uses_configured_roles_and_local_artifact_manifest() {
+    let temp = TempWorkspace::new("canic-host-local-plan");
+    let workspace_root = temp.path().join("workspace");
+    let icp_root = temp.path().join("icp");
+    let config_dir = workspace_root.join("fleets");
+    fs::create_dir_all(&config_dir).expect("create config dir");
+    fs::write(config_dir.join("canic.toml"), SAMPLE_CONFIG).expect("write config");
+    write_artifact(&icp_root, "root", b"root-artifact");
+    write_artifact(&icp_root, "user_hub", b"user-hub-artifact");
+    write_release_set_manifest(&icp_root);
+
+    let plan = build_local_deployment_plan(&LocalDeploymentPlanRequest {
+        deployment_name: "demo-local".to_string(),
+        network: "local".to_string(),
+        workspace_root,
+        icp_root,
+        runtime_variant: "local".to_string(),
+        build_profile: "fast".to_string(),
+    });
+
+    assert_eq!(plan.plan_id, "local:local:demo-local:plan");
+    assert_eq!(plan.deployment_identity.deployment_name, "demo-local");
+    assert_eq!(plan.fleet_template, "demo");
+    assert_eq!(plan.runtime_variant, "local");
+    assert_eq!(plan.role_artifacts.len(), 2);
+    assert!(
+        plan.role_artifacts
+            .iter()
+            .all(|artifact| artifact.build_profile == "fast")
+    );
+    assert!(
+        plan.role_artifacts
+            .iter()
+            .any(|artifact| artifact.role == "user_hub"
+                && artifact.wasm_gz_sha256.as_deref() == Some("user-hub-hash")
+                && artifact.wasm_gz_sha256_source
+                    == Some(ArtifactDigestSourceV1::ReleaseSetManifest)
+                && artifact.observed_wasm_gz_file_sha256_source
+                    == Some(ArtifactDigestSourceV1::ObservedFileDigest))
+    );
+    assert_eq!(
+        plan.expected_canisters
+            .iter()
+            .map(|canister| canister.role.as_str())
+            .collect::<Vec<_>>(),
+        vec!["root", "user_hub"]
+    );
+    assert!(plan.unresolved_assumptions.is_empty());
 }
 
 #[test]

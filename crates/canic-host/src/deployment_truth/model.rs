@@ -103,6 +103,19 @@ pub struct SafetyReportV1 {
 }
 
 ///
+/// DeploymentCheckV1
+///
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct DeploymentCheckV1 {
+    pub schema_version: u32,
+    pub check_id: String,
+    pub plan: DeploymentPlanV1,
+    pub inventory: DeploymentInventoryV1,
+    pub diff: DeploymentDiffV1,
+    pub report: SafetyReportV1,
+}
+
+///
 /// DeploymentIdentityV1
 ///
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]

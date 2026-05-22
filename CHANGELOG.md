@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.41.x] - 2026-05-21 - Deployment truth model
 
+- `0.41.2` adds the read-only local deployment truth check pipeline: local
+  inventory, role artifact manifests, source-tagged artifact hash evidence,
+  local plan construction, normalized diffs, safety reports, and per-design
+  status logs without changing installer mutation behavior.
+
 - `0.41.1` adds passive `canic-host::deployment_truth` V1 model scaffolding for
   deployment plans, inventories, receipts, diffs, safety reports, role
   artifacts, canister control classifications, verifier-readiness observations,

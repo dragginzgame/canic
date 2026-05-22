@@ -1,6 +1,65 @@
 use super::*;
 use std::collections::BTreeMap;
 
+///
+/// LocalDeploymentCheckRequest
+///
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct LocalDeploymentCheckRequest {
+    pub deployment_name: String,
+    pub network: String,
+    pub workspace_root: std::path::PathBuf,
+    pub icp_root: std::path::PathBuf,
+    pub observed_at: String,
+    pub runtime_variant: String,
+    pub build_profile: String,
+}
+
+/// Build local plan and inventory, then return the passive safety check bundle.
+pub fn check_local_deployment(
+    request: &LocalDeploymentCheckRequest,
+) -> Result<DeploymentCheckV1, DeploymentTruthError> {
+    let plan = build_local_deployment_plan(&LocalDeploymentPlanRequest {
+        deployment_name: request.deployment_name.clone(),
+        network: request.network.clone(),
+        workspace_root: request.workspace_root.clone(),
+        icp_root: request.icp_root.clone(),
+        runtime_variant: request.runtime_variant.clone(),
+        build_profile: request.build_profile.clone(),
+    });
+    let inventory = collect_local_deployment_inventory(&LocalInventoryRequest {
+        deployment_name: request.deployment_name.clone(),
+        network: request.network.clone(),
+        workspace_root: request.workspace_root.clone(),
+        icp_root: request.icp_root.clone(),
+        observed_at: request.observed_at.clone(),
+    })?;
+    let diff = compare_plan_to_inventory(&plan, &inventory);
+    let report = safety_report_from_diff(
+        format!(
+            "local:{}:{}:report",
+            request.network, request.deployment_name
+        ),
+        Some(format!(
+            "local:{}:{}:diff",
+            request.network, request.deployment_name
+        )),
+        &diff,
+    );
+
+    Ok(DeploymentCheckV1 {
+        schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
+        check_id: format!(
+            "local:{}:{}:check",
+            request.network, request.deployment_name
+        ),
+        plan,
+        inventory,
+        diff,
+        report,
+    })
+}
+
 /// Compare intended deployment state with observed inventory into a machine diff.
 #[must_use]
 pub fn compare_plan_to_inventory(

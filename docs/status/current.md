@@ -29,6 +29,14 @@ inspect only the files needed for the current task.
   0.41 is truth/report groundwork and current-install safety checks, 0.42 is
   report-first dry-run authority reconciliation, and 0.43 owns full
   plan-driven deploy-install execution unless explicitly promoted earlier.
+- Added a read-only local deployment plan builder that produces
+  `DeploymentPlanV1` from resolved fleet config and the local role artifact
+  manifest. It records unresolved assumptions instead of querying IC state or
+  changing installer mutation behavior.
+- Added a read-only local deployment check wrapper that ties together plan
+  construction, inventory collection, diffing, and safety-report rendering.
+  This is the first usable shape for a future current-install safety gate, but
+  it still does not mutate deployment state.
 - Added local `.wasm.gz` file SHA-256 observations to deployment truth
   inventory and role-artifact manifests. These are recorded as explicit
   `ObservedFileDigest` evidence and remain separate from release-set payload
