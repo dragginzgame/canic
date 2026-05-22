@@ -10,6 +10,13 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.41.x] - 2026-05-21 - Deployment truth model
 
+- `0.41.8` extends local deployment truth plans with installed root identity
+  from `.canic` state, records missing install state as a non-blocking plan
+  assumption, blocks current install when a concrete expected root canister is
+  missing from observed inventory, labels gate findings by source
+  (`plan`, `inventory`, or `diff`), and adds role-scoped artifact
+  materialization receipt evidence without making receipts the gate authority.
+
 - `0.41.7` wires configured deployment controllers into the local deployment
   truth plan, expands the current-install safety gate to block artifact digest
   and observable controller-authority drift, and prints finding codes for

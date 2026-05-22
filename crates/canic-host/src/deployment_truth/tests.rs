@@ -226,12 +226,14 @@ fn artifact_gate_receipt_records_materialized_artifact_evidence() {
         "2026-05-22T00:00:00Z",
         Some("2026-05-22T00:00:01Z".to_string()),
     );
+    let role_receipts = artifact_gate_role_phase_receipts(&check);
     let receipt = deployment_receipt_from_check(
         &check,
         "operation-1",
         "2026-05-22T00:00:00Z",
         Some("2026-05-22T00:00:01Z".to_string()),
         vec![phase.clone()],
+        role_receipts.clone(),
         DeploymentCommandResultV1::Succeeded,
     );
 
@@ -250,7 +252,14 @@ fn artifact_gate_receipt_records_materialized_artifact_evidence() {
         DeploymentExecutionStatusV1::Complete
     );
     assert_eq!(receipt.final_inventory_id.as_deref(), Some("inventory-1"));
-    assert!(receipt.role_phase_receipts.is_empty());
+    assert_eq!(role_receipts.len(), 1);
+    assert_eq!(role_receipts[0].role, "root");
+    assert_eq!(
+        role_receipts[0].result,
+        RolePhaseResultV1::VerifiedAlreadyApplied
+    );
+    assert_eq!(role_receipts[0].artifact_digest.as_deref(), Some("file"));
+    assert_eq!(receipt.role_phase_receipts, role_receipts);
     assert_eq!(receipt.phase_receipts, vec![phase]);
 }
 
@@ -277,6 +286,7 @@ fn artifact_gate_receipt_records_missing_artifact_postcondition() {
     .expect("check local deployment");
 
     let phase = artifact_gate_phase_receipt(&check, "start", Some("finish".to_string()));
+    let role_receipts = artifact_gate_role_phase_receipts(&check);
 
     assert_eq!(
         phase.verified_postcondition.status,
@@ -289,6 +299,14 @@ fn artifact_gate_receipt_records_missing_artifact_postcondition() {
             .iter()
             .any(|evidence| evidence == "artifact:user_hub:missing")
     );
+    assert!(role_receipts.iter().any(|receipt| {
+        receipt.role == "user_hub"
+            && receipt.result == RolePhaseResultV1::Failed
+            && receipt
+                .error
+                .as_deref()
+                .is_some_and(|error| error.contains("artifact_missing"))
+    }));
 }
 
 #[test]
@@ -637,7 +655,11 @@ fn local_plan_uses_configured_roles_and_local_artifact_manifest() {
             .collect::<Vec<_>>(),
         vec!["root", "user_hub"]
     );
-    assert!(plan.unresolved_assumptions.is_empty());
+    assert!(
+        plan.unresolved_assumptions
+            .iter()
+            .any(|assumption| assumption.key == "local_state.root_canister_id")
+    );
 }
 
 #[test]
@@ -689,6 +711,57 @@ kind = "root"
     );
     assert!(plan.authority_profile.staging_controllers.is_empty());
     assert!(plan.authority_profile.emergency_controllers.is_empty());
+    assert!(
+        plan.unresolved_assumptions
+            .iter()
+            .any(|assumption| assumption.key == "local_state.root_canister_id")
+    );
+}
+
+#[test]
+fn local_plan_uses_install_state_root_as_expected_canister() {
+    let temp = TempWorkspace::new("canic-host-local-plan-root-state");
+    let workspace_root = temp.path().join("workspace");
+    let icp_root = temp.path().join("icp");
+    let config_dir = workspace_root.join("fleets");
+    fs::create_dir_all(&config_dir).expect("create config dir");
+    fs::write(config_dir.join("canic.toml"), SAMPLE_CONFIG).expect("write config");
+    write_artifact(&icp_root, "root", b"root-artifact");
+    write_artifact(&icp_root, "user_hub", b"user-hub-artifact");
+    write_release_set_manifest(&icp_root);
+    let state_path = icp_root.join(".canic/local/fleets/demo.json");
+    fs::create_dir_all(state_path.parent().expect("state parent")).expect("create state dir");
+    fs::write(
+        state_path,
+        serde_json::to_vec_pretty(&sample_install_state("aaaaa-aa")).expect("encode state"),
+    )
+    .expect("write install state");
+
+    let plan = build_local_deployment_plan(&LocalDeploymentPlanRequest {
+        deployment_name: "demo-local".to_string(),
+        network: "local".to_string(),
+        workspace_root,
+        icp_root,
+        config_path: None,
+        runtime_variant: "local".to_string(),
+        build_profile: "fast".to_string(),
+    });
+
+    assert_eq!(
+        plan.deployment_identity.root_principal.as_deref(),
+        Some("aaaaa-aa")
+    );
+    assert_eq!(
+        plan.trust_domain.root_trust_anchor.as_deref(),
+        Some("aaaaa-aa")
+    );
+    assert!(
+        plan.expected_canisters
+            .iter()
+            .any(|canister| canister.role == "root"
+                && canister.canister_id.as_deref() == Some("aaaaa-aa"))
+    );
+    assert!(plan.unresolved_assumptions.is_empty());
 }
 
 #[test]
@@ -1227,6 +1300,58 @@ fn deployment_diff_warns_on_observation_gaps_without_blocking() {
         diff.warnings
             .iter()
             .any(|item| item.code == "observation_gap")
+    );
+    assert_eq!(report.status, SafetyStatusV1::Warning);
+}
+
+#[test]
+fn deployment_diff_warns_on_plan_assumptions_without_blocking() {
+    let mut plan = sample_plan();
+    plan.expected_canisters.clear();
+    plan.role_artifacts[0].wasm_gz_sha256 = None;
+    plan.expected_verifier_readiness.required = false;
+    plan.unresolved_assumptions.push(DeploymentAssumptionV1 {
+        key: "local_state.root_canister_id".to_string(),
+        description: "root identity is unknown until install".to_string(),
+    });
+    let inventory = DeploymentInventoryV1 {
+        schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
+        inventory_id: "inventory-1".to_string(),
+        observed_at: "2026-05-21T00:00:00Z".to_string(),
+        observed_identity: Some(sample_identity()),
+        local_config: LocalDeploymentConfigV1 {
+            config_path: Some("icp.yml".to_string()),
+            raw_config_sha256: None,
+            canonical_embedded_config_sha256: Some("runtime".to_string()),
+        },
+        observed_canisters: Vec::new(),
+        observed_pool: Vec::new(),
+        observed_artifacts: vec![ObservedArtifactV1 {
+            role: "root".to_string(),
+            artifact_path: "root.wasm.gz".to_string(),
+            file_sha256: Some("file".to_string()),
+            file_sha256_source: Some(ArtifactDigestSourceV1::ObservedFileDigest),
+            payload_sha256: None,
+            payload_size_bytes: Some(10),
+            source: ArtifactSourceV1::LocalBuild,
+        }],
+        observed_verifier_readiness: VerifierReadinessObservationV1 {
+            status: ObservationStatusV1::NotObserved,
+            role_epochs: Vec::new(),
+        },
+        unresolved_observations: Vec::new(),
+    };
+
+    let diff = compare_plan_to_inventory(&plan, &inventory);
+    let report = safety_report_from_diff("report-1", None, &diff);
+
+    assert_eq!(diff.resume_safety.status, SafetyStatusV1::Warning);
+    assert!(diff.hard_failures.is_empty());
+    assert!(
+        diff.warnings
+            .iter()
+            .any(|item| item.code == "plan_assumption"
+                && item.subject.as_deref() == Some("local_state.root_canister_id"))
     );
     assert_eq!(report.status, SafetyStatusV1::Warning);
 }

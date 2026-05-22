@@ -1,5 +1,8 @@
 use super::*;
-use crate::release_set::{configured_controllers, configured_fleet_name, configured_fleet_roles};
+use crate::{
+    install_root::read_named_fleet_install_state_from_root,
+    release_set::{configured_controllers, configured_fleet_name, configured_fleet_roles},
+};
 use std::path::PathBuf;
 
 ///
@@ -52,6 +55,8 @@ pub fn build_local_deployment_plan(request: &LocalDeploymentPlanRequest) -> Depl
         ));
         Vec::new()
     });
+    let root_canister_id =
+        local_root_canister_id(request, &fleet_template, &mut unresolved_assumptions);
     let raw_config_sha256 = config_sha256_assumption(&config, &mut unresolved_assumptions);
     let artifact_manifest = collect_local_role_artifact_manifest(&LocalArtifactManifestRequest {
         network: request.network.clone(),
@@ -69,9 +74,9 @@ pub fn build_local_deployment_plan(request: &LocalDeploymentPlanRequest) -> Depl
     DeploymentPlanV1 {
         schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
         plan_id: format!("local:{}:{}:plan", request.network, request.deployment_name),
-        deployment_identity: local_deployment_identity(request),
+        deployment_identity: local_deployment_identity(request, root_canister_id.clone()),
         trust_domain: TrustDomainV1 {
-            root_trust_anchor: None,
+            root_trust_anchor: root_canister_id.clone(),
             migration_from: None,
         },
         fleet_template,
@@ -86,7 +91,7 @@ pub fn build_local_deployment_plan(request: &LocalDeploymentPlanRequest) -> Depl
                 artifact
             })
             .collect(),
-        expected_canisters: local_expected_canisters(roles),
+        expected_canisters: local_expected_canisters(roles, root_canister_id.as_deref()),
         expected_pool: Vec::new(),
         expected_verifier_readiness: VerifierReadinessExpectationV1 {
             required: false,
@@ -96,11 +101,54 @@ pub fn build_local_deployment_plan(request: &LocalDeploymentPlanRequest) -> Depl
     }
 }
 
-fn local_deployment_identity(request: &LocalDeploymentPlanRequest) -> DeploymentIdentityV1 {
+fn local_root_canister_id(
+    request: &LocalDeploymentPlanRequest,
+    fleet_template: &str,
+    assumptions: &mut Vec<DeploymentAssumptionV1>,
+) -> Option<String> {
+    match read_named_fleet_install_state_from_root(
+        &request.icp_root,
+        &request.network,
+        fleet_template,
+    ) {
+        Ok(Some(state)) if state.network == request.network => Some(state.root_canister_id),
+        Ok(Some(state)) => {
+            assumptions.push(assumption(
+                "local_state.root_canister_id",
+                format!(
+                    "install state for fleet {fleet_template} has network {}, expected {}",
+                    state.network, request.network
+                ),
+            ));
+            None
+        }
+        Ok(None) => {
+            assumptions.push(assumption(
+                "local_state.root_canister_id",
+                format!(
+                    "no local install state exists for fleet {fleet_template}; root identity is unknown until install"
+                ),
+            ));
+            None
+        }
+        Err(err) => {
+            assumptions.push(assumption(
+                "local_state.root_canister_id",
+                format!("could not read install state for fleet {fleet_template}: {err}"),
+            ));
+            None
+        }
+    }
+}
+
+fn local_deployment_identity(
+    request: &LocalDeploymentPlanRequest,
+    root_canister_id: Option<String>,
+) -> DeploymentIdentityV1 {
     DeploymentIdentityV1 {
         deployment_name: request.deployment_name.clone(),
         network: request.network.clone(),
-        root_principal: None,
+        root_principal: root_canister_id,
         authority_profile_hash: None,
         role_topology_hash: None,
         deployment_manifest_digest: None,
@@ -128,12 +176,19 @@ fn local_authority_profile(
     }
 }
 
-fn local_expected_canisters(roles: Vec<String>) -> Vec<ExpectedCanisterV1> {
+fn local_expected_canisters(
+    roles: Vec<String>,
+    root_canister_id: Option<&str>,
+) -> Vec<ExpectedCanisterV1> {
     roles
         .into_iter()
         .map(|role| ExpectedCanisterV1 {
+            canister_id: if role == "root" {
+                root_canister_id.map(str::to_string)
+            } else {
+                None
+            },
             role,
-            canister_id: None,
             control_class: CanisterControlClassV1::DeploymentControlled,
         })
         .collect()

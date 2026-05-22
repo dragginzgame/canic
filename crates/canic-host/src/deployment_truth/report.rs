@@ -115,6 +115,14 @@ pub fn compare_plan_to_inventory(
         &mut warnings,
     );
     compare_verifier_readiness(plan, inventory, &mut verifier_readiness_diff, &mut warnings);
+    for assumption in &plan.unresolved_assumptions {
+        warnings.push(SafetyFindingV1 {
+            code: "plan_assumption".to_string(),
+            message: assumption.description.clone(),
+            severity: SafetySeverityV1::Warning,
+            subject: Some(assumption.key.clone()),
+        });
+    }
     for gap in &inventory.unresolved_observations {
         warnings.push(SafetyFindingV1 {
             code: "observation_gap".to_string(),

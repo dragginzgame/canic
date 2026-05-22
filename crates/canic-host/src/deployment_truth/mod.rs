@@ -33,7 +33,10 @@ pub use observe::{
     collect_local_deployment_inventory, collect_local_role_artifact_manifest,
 };
 pub use plan::{LocalDeploymentPlanRequest, build_local_deployment_plan};
-pub use receipt::{artifact_gate_phase_receipt, deployment_receipt_from_check, phase_receipt};
+pub use receipt::{
+    artifact_gate_phase_receipt, artifact_gate_role_phase_receipts, deployment_receipt_from_check,
+    phase_receipt,
+};
 pub use report::{
     LocalDeploymentCheckRequest, check_local_deployment, compare_plan_to_inventory,
     safety_report_from_diff,

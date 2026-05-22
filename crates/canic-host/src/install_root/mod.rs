@@ -3,8 +3,9 @@ use crate::canister_build::{
     current_workspace_build_context_once,
 };
 use crate::deployment_truth::{
-    DeploymentCheckV1, LocalDeploymentCheckRequest, PhaseReceiptV1, SafetyFindingV1,
-    artifact_gate_phase_receipt, check_local_deployment,
+    DeploymentCheckV1, LocalDeploymentCheckRequest, PhaseReceiptV1, RolePhaseReceiptV1,
+    SafetyFindingV1, artifact_gate_phase_receipt, artifact_gate_role_phase_receipts,
+    check_local_deployment,
 };
 use crate::format::wasm_size_label;
 use crate::icp::{self, CANIC_ICP_LOCAL_NETWORK_URL_ENV, CANIC_ICP_LOCAL_ROOT_KEY_ENV};
@@ -291,7 +292,12 @@ fn run_install_deployment_truth_safety_gate(
         truth_gate_started_at,
         Some(current_unix_timestamp_label()?),
     );
-    print_install_deployment_truth_gate(&deployment_truth_check, &artifact_gate_receipt);
+    let role_receipts = artifact_gate_role_phase_receipts(&deployment_truth_check);
+    print_install_deployment_truth_gate(
+        &deployment_truth_check,
+        &artifact_gate_receipt,
+        &role_receipts,
+    );
     enforce_install_deployment_truth_gate(&deployment_truth_check)?;
     Ok(())
 }
@@ -318,6 +324,7 @@ fn is_install_deployment_truth_gate_blocker(code: &str) -> bool {
         "artifact_missing"
             | "artifact_file_digest_mismatch"
             | "artifact_digest_mismatch"
+            | "canister_missing"
             | "controller_authority_overlap"
             | "expected_controller_missing"
             | "unsafe_control_class"
@@ -333,8 +340,12 @@ fn install_deployment_truth_gate_blockers(check: &DeploymentCheckV1) -> Vec<&Saf
         .collect()
 }
 
-fn print_install_deployment_truth_gate(check: &DeploymentCheckV1, receipt: &PhaseReceiptV1) {
-    for line in install_deployment_truth_gate_lines(check, receipt) {
+fn print_install_deployment_truth_gate(
+    check: &DeploymentCheckV1,
+    receipt: &PhaseReceiptV1,
+    role_receipts: &[RolePhaseReceiptV1],
+) {
+    for line in install_deployment_truth_gate_lines(check, receipt, role_receipts) {
         println!("{line}");
     }
 }
@@ -342,6 +353,7 @@ fn print_install_deployment_truth_gate(check: &DeploymentCheckV1, receipt: &Phas
 fn install_deployment_truth_gate_lines(
     check: &DeploymentCheckV1,
     receipt: &PhaseReceiptV1,
+    role_receipts: &[RolePhaseReceiptV1],
 ) -> Vec<String> {
     let mut lines = vec![
         format!("Deployment truth: {}", check.report.summary),
@@ -350,6 +362,18 @@ fn install_deployment_truth_gate_lines(
             receipt.phase, receipt.verified_postcondition.status
         ),
     ];
+    if !role_receipts.is_empty() {
+        lines.push(format!(
+            "Deployment truth role receipts: {}",
+            role_receipts.len()
+        ));
+    }
+    for role_receipt in role_receipts {
+        lines.push(format!(
+            "Deployment truth role receipt: phase={} role={} result={:?}",
+            role_receipt.phase, role_receipt.role, role_receipt.result
+        ));
+    }
 
     if !check.report.hard_failures.is_empty() {
         lines.push(format!(
@@ -379,7 +403,25 @@ fn install_deployment_truth_gate_lines(
 }
 
 fn deployment_truth_finding_label(finding: &SafetyFindingV1) -> String {
-    format!("{}: {}", finding.code, finding.message)
+    let subject = finding
+        .subject
+        .as_ref()
+        .map_or_else(|| "<none>".to_string(), Clone::clone);
+    format!(
+        "{}:{}:{}: {}",
+        deployment_truth_finding_source(&finding.code),
+        finding.code,
+        subject,
+        finding.message
+    )
+}
+
+fn deployment_truth_finding_source(code: &str) -> &'static str {
+    match code {
+        "plan_assumption" => "plan",
+        "observation_gap" => "inventory",
+        _ => "diff",
+    }
 }
 
 fn validate_expected_fleet_name(

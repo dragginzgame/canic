@@ -18,6 +18,20 @@ narrow current-install artifact gate.
 
 ## Implemented
 
+- Extended local deployment truth plans with installed root identity from
+  `.canic` state. The plan now records the current root trust anchor and
+  concrete expected root canister when local install state exists, and the
+  current-install safety gate blocks when that expected root is missing from
+  observed inventory.
+- Fresh local deployment truth plans now record missing install state as an
+  explicit non-blocking plan assumption, and deployment truth reports surface
+  plan assumptions as warning findings.
+- Current-install gate output now prefixes findings with stable source labels
+  (`plan`, `inventory`, or `diff`) and subjects, making plan assumptions
+  distinguishable from live observation gaps.
+- Current-install artifact receipts now include role-scoped materialization
+  evidence. Each configured role records whether its artifact was verified or
+  failed, while the deployment truth check remains the gate authority.
 - Wired configured deployment controllers into the local deployment truth plan.
   Controller drift checks now compare live root status against `canic.toml`
   authority intent instead of only synthetic test plans.

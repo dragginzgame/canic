@@ -606,15 +606,98 @@ kind = "root"
             "start",
             Some("finish".into()),
         ),
+        &crate::deployment_truth::artifact_gate_role_phase_receipts(&check),
     );
     assert!(
         lines
             .iter()
-            .any(|line| line.contains("Deployment truth blocker: expected_controller_missing"))
+            .any(|line| line.contains("Deployment truth blocker: diff:expected_controller_missing"))
     );
     let err = enforce_install_deployment_truth_gate(&check).unwrap_err();
     assert!(
-        err.to_string().contains("expected_controller_missing:"),
+        err.to_string()
+            .contains("diff:expected_controller_missing:"),
+        "unexpected error: {err}"
+    );
+
+    fs::remove_dir_all(root).expect("clean temp dir");
+}
+
+#[test]
+fn install_truth_gate_blocks_missing_expected_root_canister() {
+    let root = temp_dir("canic-install-truth-missing-root-gate");
+    let config_path = root.join("fleets/demo/canic.toml");
+    fs::create_dir_all(config_path.parent().expect("config parent")).expect("create config dir");
+    fs::write(
+        &config_path,
+        r#"
+controllers = []
+app_index = []
+
+[fleet]
+name = "demo"
+
+[app]
+init_mode = "enabled"
+[app.whitelist]
+
+[subnets.prime.canisters.root]
+kind = "root"
+"#,
+    )
+    .expect("write config");
+    write_wasm_gz_artifact(&root, "root", b"root-artifact");
+
+    let options = InstallRootOptions {
+        root_canister: "root".to_string(),
+        root_build_target: "root".to_string(),
+        network: "local".to_string(),
+        icp_root: Some(root.clone()),
+        build_profile: Some(CanisterBuildProfile::Fast),
+        ready_timeout_seconds: 30,
+        config_path: Some("fleets/demo/canic.toml".to_string()),
+        expected_fleet: Some("demo".to_string()),
+        interactive_config_selection: false,
+    };
+
+    let mut check = current_install_deployment_truth_check_at(
+        &options,
+        &root,
+        &root,
+        &config_path,
+        "demo",
+        "2026-05-22T00:00:00Z".to_string(),
+    )
+    .expect("deployment truth check");
+    check.plan.expected_canisters[0].canister_id = Some("aaaaa-aa".to_string());
+    check.inventory.observed_canisters = vec![ObservedCanisterV1 {
+        canister_id: "different-root".to_string(),
+        role: Some("root".to_string()),
+        control_class: CanisterControlClassV1::DeploymentControlled,
+        controllers: vec!["aaaaa-aa".to_string()],
+        module_hash: None,
+        status: Some("running".to_string()),
+        root_trust_anchor: Some("different-root".to_string()),
+        canonical_embedded_config_digest: None,
+        role_assignment_source: Some("icp_canister_status".to_string()),
+    }];
+    check.diff = compare_plan_to_inventory(&check.plan, &check.inventory);
+    check.report = safety_report_from_diff(
+        "local:local:demo:report",
+        Some("local:local:demo:diff".to_string()),
+        &check.diff,
+    );
+
+    assert!(
+        check
+            .report
+            .hard_failures
+            .iter()
+            .any(|finding| finding.code == "canister_missing")
+    );
+    let err = enforce_install_deployment_truth_gate(&check).unwrap_err();
+    assert!(
+        err.to_string().contains("canister_missing:"),
         "unexpected error: {err}"
     );
 
@@ -681,13 +764,78 @@ kind = "root"
             "start",
             Some("finish".into()),
         ),
+        &crate::deployment_truth::artifact_gate_role_phase_receipts(&check),
     );
 
-    assert!(
-        lines
-            .iter()
-            .any(|line| line.contains("Deployment truth warning: observation_gap"))
+    assert!(lines.iter().any(|line| line.contains(
+        "Deployment truth warning: inventory:observation_gap:live_canister_status.root"
+    )));
+    assert!(lines.iter().any(|line| {
+        line.contains("Deployment truth role receipt: phase=materialize_artifacts role=root")
+    }));
+
+    fs::remove_dir_all(root).expect("clean temp dir");
+}
+
+#[test]
+fn install_truth_gate_lines_distinguish_plan_assumptions() {
+    let root = temp_dir("canic-install-truth-plan-assumption-lines");
+    let config_path = root.join("fleets/demo/canic.toml");
+    fs::create_dir_all(config_path.parent().expect("config parent")).expect("create config dir");
+    fs::write(
+        &config_path,
+        r#"
+controllers = []
+app_index = []
+
+[fleet]
+name = "demo"
+
+[app]
+init_mode = "enabled"
+[app.whitelist]
+
+[subnets.prime.canisters.root]
+kind = "root"
+"#,
+    )
+    .expect("write config");
+    write_wasm_gz_artifact(&root, "root", b"root-artifact");
+
+    let options = InstallRootOptions {
+        root_canister: "root".to_string(),
+        root_build_target: "root".to_string(),
+        network: "local".to_string(),
+        icp_root: Some(root.clone()),
+        build_profile: Some(CanisterBuildProfile::Fast),
+        ready_timeout_seconds: 30,
+        config_path: Some("fleets/demo/canic.toml".to_string()),
+        expected_fleet: Some("demo".to_string()),
+        interactive_config_selection: false,
+    };
+
+    let check = current_install_deployment_truth_check_at(
+        &options,
+        &root,
+        &root,
+        &config_path,
+        "demo",
+        "2026-05-22T00:00:00Z".to_string(),
+    )
+    .expect("deployment truth check");
+    let lines = install_deployment_truth_gate_lines(
+        &check,
+        &crate::deployment_truth::artifact_gate_phase_receipt(
+            &check,
+            "start",
+            Some("finish".into()),
+        ),
+        &crate::deployment_truth::artifact_gate_role_phase_receipts(&check),
     );
+
+    assert!(lines.iter().any(|line| {
+        line.contains("Deployment truth warning: plan:plan_assumption:local_state.root_canister_id")
+    }));
 
     fs::remove_dir_all(root).expect("clean temp dir");
 }
