@@ -8,18 +8,14 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
-- Added a read-only current-install deployment truth preflight helper that
-  adapts `InstallRootOptions` into the 0.41 local plan, inventory, diff, and
-  safety-report pipeline without mutating deployment state.
-- Added `canic deploy plan|inventory|check <fleet>` as read-only operator
-  surfaces that print current local deployment truth JSON before deployment
-  mutation.
-- Added the first current-install deployment truth safety gate, blocking
-  installer continuation after build when configured role artifacts are missing.
-- Added changelog governance coverage so `## Unreleased` remains root-only and
-  detailed minor changelogs stay versioned.
+No unreleased changes.
 
 ## [0.41.x] - 2026-05-21 - Deployment truth model
+
+- `0.41.3` adds read-only `canic deploy plan|inventory|check <fleet>` JSON
+  surfaces, adapts current install inputs into deployment truth checks, and
+  blocks installer continuation after build when configured role artifacts are
+  missing.
 
 - `0.41.2` adds the read-only local deployment truth check pipeline: local
   inventory, role artifact manifests, source-tagged artifact hash evidence,
