@@ -10,6 +10,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.41.x] - 2026-05-21 - Deployment truth model
 
+- `0.41.9` adds receipt-aware deployment truth comparison for passive resume
+  reporting, prints explicit `Complete` or `FailedBeforeMutation` receipt
+  status from the current-install artifact gate, and introduces read-only
+  `canic deploy resume-report <fleet> --receipt <file>` to render
+  `ResumeSafetyV1` without resuming or mutating state.
+
 - `0.41.8` extends local deployment truth plans with installed root identity
   from `.canic` state, records missing install state as a non-blocking plan
   assumption, blocks current install when a concrete expected root canister is

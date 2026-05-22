@@ -145,11 +145,38 @@ pub fn deployment_receipt_from_check(
     role_phase_receipts: Vec<RolePhaseReceiptV1>,
     command_result: DeploymentCommandResultV1,
 ) -> DeploymentReceiptV1 {
+    let operation_status = operation_status_for_command_result(&command_result);
+    deployment_receipt_from_check_with_status(
+        check,
+        operation_id,
+        operation_status,
+        started_at,
+        finished_at,
+        phase_receipts,
+        role_phase_receipts,
+        command_result,
+    )
+}
+
+/// Build a deployment receipt when the caller knows whether failure happened
+/// before or after mutation.
+#[must_use]
+#[allow(clippy::too_many_arguments)]
+pub fn deployment_receipt_from_check_with_status(
+    check: &DeploymentCheckV1,
+    operation_id: impl Into<String>,
+    operation_status: DeploymentExecutionStatusV1,
+    started_at: impl Into<String>,
+    finished_at: Option<String>,
+    phase_receipts: Vec<PhaseReceiptV1>,
+    role_phase_receipts: Vec<RolePhaseReceiptV1>,
+    command_result: DeploymentCommandResultV1,
+) -> DeploymentReceiptV1 {
     DeploymentReceiptV1 {
         schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
         operation_id: operation_id.into(),
         plan_id: check.plan.plan_id.clone(),
-        operation_status: operation_status_for_command_result(&command_result),
+        operation_status,
         started_at: started_at.into(),
         finished_at,
         operator_principal: None,

@@ -310,6 +310,74 @@ fn artifact_gate_receipt_records_missing_artifact_postcondition() {
 }
 
 #[test]
+fn receipt_aware_diff_marks_verified_phase_resumable() {
+    let plan = sample_plan();
+    let inventory = sample_matching_inventory();
+    let receipt = sample_receipt_with_phase(
+        "plan-local-root",
+        Some("aaaaa-aa"),
+        ObservationStatusV1::Observed,
+        RolePhaseResultV1::VerifiedAlreadyApplied,
+    );
+
+    let diff = compare_plan_inventory_and_receipt(&plan, &inventory, &receipt);
+
+    assert_eq!(diff.resume_safety.status, SafetyStatusV1::Safe);
+    assert_eq!(
+        diff.resumable_phases,
+        vec!["materialize_artifacts".to_string()]
+    );
+    assert_eq!(
+        diff.resume_safety.reasons,
+        vec!["no blocking deployment truth differences were found".to_string()]
+    );
+}
+
+#[test]
+fn receipt_aware_diff_blocks_plan_mismatch_resume() {
+    let plan = sample_plan();
+    let inventory = sample_matching_inventory();
+    let receipt = sample_receipt_with_phase(
+        "old-plan",
+        Some("aaaaa-aa"),
+        ObservationStatusV1::Observed,
+        RolePhaseResultV1::VerifiedAlreadyApplied,
+    );
+
+    let diff = compare_plan_inventory_and_receipt(&plan, &inventory, &receipt);
+
+    assert_eq!(diff.resume_safety.status, SafetyStatusV1::Blocked);
+    assert!(diff.resumable_phases.is_empty());
+    assert!(
+        diff.hard_failures
+            .iter()
+            .any(|finding| finding.code == "receipt_plan_mismatch")
+    );
+}
+
+#[test]
+fn receipt_aware_diff_does_not_resume_unverified_phase() {
+    let plan = sample_plan();
+    let inventory = sample_matching_inventory();
+    let receipt = sample_receipt_with_phase(
+        "plan-local-root",
+        Some("aaaaa-aa"),
+        ObservationStatusV1::Missing,
+        RolePhaseResultV1::Failed,
+    );
+
+    let diff = compare_plan_inventory_and_receipt(&plan, &inventory, &receipt);
+
+    assert_eq!(diff.resume_safety.status, SafetyStatusV1::Blocked);
+    assert!(diff.resumable_phases.is_empty());
+    assert!(
+        diff.hard_failures
+            .iter()
+            .any(|finding| finding.code == "receipt_postcondition_unverified")
+    );
+}
+
+#[test]
 fn local_check_builds_plan_inventory_diff_and_report() {
     let temp = TempWorkspace::new("canic-host-local-check");
     let workspace_root = temp.path().join("workspace");
@@ -1560,6 +1628,93 @@ fn sample_plan() -> DeploymentPlanV1 {
             }],
         },
         unresolved_assumptions: Vec::new(),
+    }
+}
+
+fn sample_matching_inventory() -> DeploymentInventoryV1 {
+    DeploymentInventoryV1 {
+        schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
+        inventory_id: "inventory-1".to_string(),
+        observed_at: "2026-05-22T00:00:00Z".to_string(),
+        observed_identity: Some(sample_identity()),
+        local_config: LocalDeploymentConfigV1 {
+            config_path: Some("canic.toml".to_string()),
+            raw_config_sha256: Some("raw".to_string()),
+            canonical_embedded_config_sha256: Some("runtime".to_string()),
+        },
+        observed_canisters: vec![ObservedCanisterV1 {
+            canister_id: "aaaaa-aa".to_string(),
+            role: Some("root".to_string()),
+            control_class: CanisterControlClassV1::DeploymentControlled,
+            controllers: vec!["aaaaa-aa".to_string()],
+            module_hash: Some("module".to_string()),
+            status: Some("running".to_string()),
+            root_trust_anchor: Some("aaaaa-aa".to_string()),
+            canonical_embedded_config_digest: Some("canonical".to_string()),
+            role_assignment_source: Some("icp_canister_status".to_string()),
+        }],
+        observed_pool: Vec::new(),
+        observed_artifacts: vec![ObservedArtifactV1 {
+            role: "root".to_string(),
+            artifact_path: "root.wasm.gz".to_string(),
+            file_sha256: Some("file".to_string()),
+            file_sha256_source: Some(ArtifactDigestSourceV1::ObservedFileDigest),
+            payload_sha256: Some("gzip".to_string()),
+            payload_size_bytes: Some(42),
+            source: ArtifactSourceV1::LocalBuild,
+        }],
+        observed_verifier_readiness: VerifierReadinessObservationV1 {
+            status: ObservationStatusV1::Observed,
+            role_epochs: vec![RoleEpochObservationV1 {
+                role: "root".to_string(),
+                observed_epoch: Some(1),
+                status: ObservationStatusV1::Observed,
+            }],
+        },
+        unresolved_observations: Vec::new(),
+    }
+}
+
+fn sample_receipt_with_phase(
+    plan_id: &str,
+    root_principal: Option<&str>,
+    postcondition: ObservationStatusV1,
+    role_result: RolePhaseResultV1,
+) -> DeploymentReceiptV1 {
+    DeploymentReceiptV1 {
+        schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
+        operation_id: "operation-1".to_string(),
+        plan_id: plan_id.to_string(),
+        operation_status: DeploymentExecutionStatusV1::Complete,
+        started_at: "2026-05-22T00:00:00Z".to_string(),
+        finished_at: Some("2026-05-22T00:00:01Z".to_string()),
+        operator_principal: None,
+        root_principal: root_principal.map(str::to_string),
+        previous_observed_deployment_epoch: None,
+        phase_receipts: vec![PhaseReceiptV1 {
+            phase: "materialize_artifacts".to_string(),
+            started_at: "2026-05-22T00:00:00Z".to_string(),
+            finished_at: Some("2026-05-22T00:00:01Z".to_string()),
+            attempted_action: "verify configured role artifacts are materialized".to_string(),
+            verified_postcondition: VerifiedPostconditionV1 {
+                status: postcondition,
+                evidence: vec!["artifact:root:sha256:file".to_string()],
+            },
+        }],
+        role_phase_receipts: vec![RolePhaseReceiptV1 {
+            role: "root".to_string(),
+            phase: "materialize_artifacts".to_string(),
+            result: role_result,
+            previous_module_hash: None,
+            target_module_hash: Some("module".to_string()),
+            observed_module_hash_after: None,
+            artifact_digest: Some("file".to_string()),
+            canonical_embedded_config_sha256: Some("canonical".to_string()),
+            error: (role_result == RolePhaseResultV1::Failed)
+                .then(|| "artifact_missing: missing observed artifact for role root".to_string()),
+        }],
+        final_inventory_id: Some("inventory-1".to_string()),
+        command_result: DeploymentCommandResultV1::Succeeded,
     }
 }
 

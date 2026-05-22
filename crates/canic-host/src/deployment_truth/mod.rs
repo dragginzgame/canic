@@ -35,11 +35,11 @@ pub use observe::{
 pub use plan::{LocalDeploymentPlanRequest, build_local_deployment_plan};
 pub use receipt::{
     artifact_gate_phase_receipt, artifact_gate_role_phase_receipts, deployment_receipt_from_check,
-    phase_receipt,
+    deployment_receipt_from_check_with_status, phase_receipt,
 };
 pub use report::{
-    LocalDeploymentCheckRequest, check_local_deployment, compare_plan_to_inventory,
-    safety_report_from_diff,
+    LocalDeploymentCheckRequest, check_local_deployment, compare_plan_inventory_and_receipt,
+    compare_plan_to_inventory, safety_report_from_diff,
 };
 
 pub const DEPLOYMENT_TRUTH_SCHEMA_VERSION: u32 = 1;

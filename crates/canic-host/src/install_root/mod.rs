@@ -3,9 +3,10 @@ use crate::canister_build::{
     current_workspace_build_context_once,
 };
 use crate::deployment_truth::{
-    DeploymentCheckV1, LocalDeploymentCheckRequest, PhaseReceiptV1, RolePhaseReceiptV1,
-    SafetyFindingV1, artifact_gate_phase_receipt, artifact_gate_role_phase_receipts,
-    check_local_deployment,
+    DeploymentCheckV1, DeploymentCommandResultV1, DeploymentExecutionStatusV1, DeploymentReceiptV1,
+    LocalDeploymentCheckRequest, SafetyFindingV1, artifact_gate_phase_receipt,
+    artifact_gate_role_phase_receipts, check_local_deployment,
+    deployment_receipt_from_check_with_status,
 };
 use crate::format::wasm_size_label;
 use crate::icp::{self, CANIC_ICP_LOCAL_NETWORK_URL_ENV, CANIC_ICP_LOCAL_ROOT_KEY_ENV};
@@ -289,15 +290,17 @@ fn run_install_deployment_truth_safety_gate(
     )?;
     let artifact_gate_receipt = artifact_gate_phase_receipt(
         &deployment_truth_check,
-        truth_gate_started_at,
+        truth_gate_started_at.clone(),
         Some(current_unix_timestamp_label()?),
     );
     let role_receipts = artifact_gate_role_phase_receipts(&deployment_truth_check);
-    print_install_deployment_truth_gate(
+    let deployment_receipt = install_deployment_truth_gate_receipt(
         &deployment_truth_check,
-        &artifact_gate_receipt,
-        &role_receipts,
+        truth_gate_started_at,
+        vec![artifact_gate_receipt],
+        role_receipts,
     );
+    print_install_deployment_truth_gate(&deployment_truth_check, &deployment_receipt);
     enforce_install_deployment_truth_gate(&deployment_truth_check)?;
     Ok(())
 }
@@ -340,35 +343,36 @@ fn install_deployment_truth_gate_blockers(check: &DeploymentCheckV1) -> Vec<&Saf
         .collect()
 }
 
-fn print_install_deployment_truth_gate(
-    check: &DeploymentCheckV1,
-    receipt: &PhaseReceiptV1,
-    role_receipts: &[RolePhaseReceiptV1],
-) {
-    for line in install_deployment_truth_gate_lines(check, receipt, role_receipts) {
+fn print_install_deployment_truth_gate(check: &DeploymentCheckV1, receipt: &DeploymentReceiptV1) {
+    for line in install_deployment_truth_gate_lines(check, receipt) {
         println!("{line}");
     }
 }
 
 fn install_deployment_truth_gate_lines(
     check: &DeploymentCheckV1,
-    receipt: &PhaseReceiptV1,
-    role_receipts: &[RolePhaseReceiptV1],
+    receipt: &DeploymentReceiptV1,
 ) -> Vec<String> {
     let mut lines = vec![
         format!("Deployment truth: {}", check.report.summary),
         format!(
-            "Deployment truth receipt: phase={} postcondition={:?}",
-            receipt.phase, receipt.verified_postcondition.status
+            "Deployment truth receipt: operation={} status={:?}",
+            receipt.operation_id, receipt.operation_status
         ),
     ];
-    if !role_receipts.is_empty() {
+    for phase_receipt in &receipt.phase_receipts {
         lines.push(format!(
-            "Deployment truth role receipts: {}",
-            role_receipts.len()
+            "Deployment truth phase receipt: phase={} postcondition={:?}",
+            phase_receipt.phase, phase_receipt.verified_postcondition.status
         ));
     }
-    for role_receipt in role_receipts {
+    if !receipt.role_phase_receipts.is_empty() {
+        lines.push(format!(
+            "Deployment truth role receipts: {}",
+            receipt.role_phase_receipts.len()
+        ));
+    }
+    for role_receipt in &receipt.role_phase_receipts {
         lines.push(format!(
             "Deployment truth role receipt: phase={} role={} result={:?}",
             role_receipt.phase, role_receipt.role, role_receipt.result
@@ -400,6 +404,39 @@ fn install_deployment_truth_gate_lines(
         ));
     }
     lines
+}
+
+fn install_deployment_truth_gate_receipt(
+    check: &DeploymentCheckV1,
+    started_at: String,
+    phase_receipts: Vec<crate::deployment_truth::PhaseReceiptV1>,
+    role_phase_receipts: Vec<crate::deployment_truth::RolePhaseReceiptV1>,
+) -> DeploymentReceiptV1 {
+    let blockers = install_deployment_truth_gate_blockers(check);
+    let (operation_status, command_result) = if blockers.is_empty() {
+        (
+            DeploymentExecutionStatusV1::Complete,
+            DeploymentCommandResultV1::Succeeded,
+        )
+    } else {
+        (
+            DeploymentExecutionStatusV1::FailedBeforeMutation,
+            DeploymentCommandResultV1::Failed {
+                code: "deployment_truth_blocked".to_string(),
+                message: check.report.summary.clone(),
+            },
+        )
+    };
+    deployment_receipt_from_check_with_status(
+        check,
+        format!("{}:materialize_artifacts", check.check_id),
+        operation_status,
+        started_at,
+        Some(current_unix_timestamp_label().unwrap_or_else(|_| "unknown".to_string())),
+        phase_receipts,
+        role_phase_receipts,
+        command_result,
+    )
 }
 
 fn deployment_truth_finding_label(finding: &SafetyFindingV1) -> String {

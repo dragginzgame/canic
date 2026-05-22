@@ -5,15 +5,17 @@ use super::{
     current_install_deployment_truth_check_at, discover_canic_config_choices,
     discover_project_canic_config_choices, enforce_install_deployment_truth_gate,
     fleet_install_state_path, icp_canister_command_in_network, install_deployment_truth_gate_lines,
-    is_missing_canister_id_error, parse_bootstrap_status_value, parse_canister_id_json,
-    parse_created_canister_id, parse_cycle_balance_response, parse_root_ready_value,
-    read_fleet_install_state, render_install_timing_summary, resolve_install_config_path,
-    root_init_args, validate_expected_fleet_name, write_install_state,
+    install_deployment_truth_gate_receipt, is_missing_canister_id_error,
+    parse_bootstrap_status_value, parse_canister_id_json, parse_created_canister_id,
+    parse_cycle_balance_response, parse_root_ready_value, read_fleet_install_state,
+    render_install_timing_summary, resolve_install_config_path, root_init_args,
+    validate_expected_fleet_name, write_install_state,
 };
 use crate::canister_build::CanisterBuildProfile;
 use crate::deployment_truth::{
     CanisterControlClassV1, ObservedCanisterV1, SafetyFindingV1, SafetySeverityV1,
-    compare_plan_to_inventory, safety_report_from_diff,
+    artifact_gate_phase_receipt, artifact_gate_role_phase_receipts, compare_plan_to_inventory,
+    safety_report_from_diff,
 };
 use crate::icp::{CANIC_ICP_LOCAL_NETWORK_URL_ENV, CANIC_ICP_LOCAL_ROOT_KEY_ENV};
 use crate::release_set::configured_install_targets;
@@ -599,20 +601,25 @@ kind = "root"
             .any(|finding| finding.code == "expected_controller_missing")
     );
     assert!(enforce_install_deployment_truth_gate(&check).is_err());
-    let lines = install_deployment_truth_gate_lines(
+    let receipt = install_deployment_truth_gate_receipt(
         &check,
-        &crate::deployment_truth::artifact_gate_phase_receipt(
+        "start".to_string(),
+        vec![artifact_gate_phase_receipt(
             &check,
             "start",
             Some("finish".into()),
-        ),
-        &crate::deployment_truth::artifact_gate_role_phase_receipts(&check),
+        )],
+        artifact_gate_role_phase_receipts(&check),
     );
+    let lines = install_deployment_truth_gate_lines(&check, &receipt);
     assert!(
         lines
             .iter()
             .any(|line| line.contains("Deployment truth blocker: diff:expected_controller_missing"))
     );
+    assert!(lines.iter().any(|line| {
+        line.contains("Deployment truth receipt:") && line.contains("status=FailedBeforeMutation")
+    }));
     let err = enforce_install_deployment_truth_gate(&check).unwrap_err();
     assert!(
         err.to_string()
@@ -757,16 +764,21 @@ kind = "root"
         subject: Some("live_canister_status.root".to_string()),
     });
 
-    let lines = install_deployment_truth_gate_lines(
+    let receipt = install_deployment_truth_gate_receipt(
         &check,
-        &crate::deployment_truth::artifact_gate_phase_receipt(
+        "start".to_string(),
+        vec![artifact_gate_phase_receipt(
             &check,
             "start",
             Some("finish".into()),
-        ),
-        &crate::deployment_truth::artifact_gate_role_phase_receipts(&check),
+        )],
+        artifact_gate_role_phase_receipts(&check),
     );
+    let lines = install_deployment_truth_gate_lines(&check, &receipt);
 
+    assert!(lines.iter().any(|line| {
+        line.contains("Deployment truth receipt:") && line.contains("status=Complete")
+    }));
     assert!(lines.iter().any(|line| line.contains(
         "Deployment truth warning: inventory:observation_gap:live_canister_status.root"
     )));
@@ -823,15 +835,17 @@ kind = "root"
         "2026-05-22T00:00:00Z".to_string(),
     )
     .expect("deployment truth check");
-    let lines = install_deployment_truth_gate_lines(
+    let receipt = install_deployment_truth_gate_receipt(
         &check,
-        &crate::deployment_truth::artifact_gate_phase_receipt(
+        "start".to_string(),
+        vec![artifact_gate_phase_receipt(
             &check,
             "start",
             Some("finish".into()),
-        ),
-        &crate::deployment_truth::artifact_gate_role_phase_receipts(&check),
+        )],
+        artifact_gate_role_phase_receipts(&check),
     );
+    let lines = install_deployment_truth_gate_lines(&check, &receipt);
 
     assert!(lines.iter().any(|line| {
         line.contains("Deployment truth warning: plan:plan_assumption:local_state.root_canister_id")

@@ -18,6 +18,17 @@ narrow current-install artifact gate.
 
 ## Implemented
 
+- Added receipt-aware deployment truth comparison for resume reporting. It
+  evaluates plan, inventory, and prior receipt identity together, reports
+  blockers for mismatched plans, roots, failed commands, or unverified
+  postconditions, and only marks phases resumable after live truth and receipt
+  postconditions agree.
+- Current-install deployment truth gates now construct and print a lightweight
+  `DeploymentReceiptV1` with explicit `Complete` or `FailedBeforeMutation`
+  operation status for the artifact materialization gate.
+- Added read-only `canic deploy resume-report <fleet> --receipt <file>` to
+  print passive `ResumeSafetyV1` JSON from the current deployment truth check
+  and a prior `DeploymentReceiptV1`, without resuming or mutating state.
 - Extended local deployment truth plans with installed root identity from
   `.canic` state. The plan now records the current root trust anchor and
   concrete expected root canister when local install state exists, and the
@@ -135,7 +146,8 @@ narrow current-install artifact gate.
   phases beyond the in-memory artifact-gate receipt.
 - Populate meaningful role-scoped phase receipt outcomes once installer phases
   can mutate multiple roles or canisters.
-- Compare plan, inventory, and receipt during install/resume.
+- Persist or discover prior deployment receipts so `resume-report` no longer
+  requires an explicit receipt JSON path.
 - Gate mutating installer operations on all broader `SafetyReportV1` findings.
 
 ## Drift Log

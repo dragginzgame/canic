@@ -21,6 +21,17 @@ inspect only the files needed for the current task.
 
 ## Recent Work
 
+- Added receipt-aware deployment truth comparison for resume reporting. It
+  evaluates plan, inventory, and prior receipt identity together, reports
+  blockers for mismatched plans, roots, failed commands, or unverified
+  postconditions, and only marks phases resumable after live truth and receipt
+  postconditions agree.
+- Current-install deployment truth gates now construct and print a lightweight
+  `DeploymentReceiptV1` with explicit `Complete` or `FailedBeforeMutation`
+  operation status for the artifact materialization gate.
+- Added read-only `canic deploy resume-report <fleet> --receipt <file>` to
+  print passive `ResumeSafetyV1` JSON from the current deployment truth check
+  and a prior `DeploymentReceiptV1`, without resuming or mutating state.
 - Extended local deployment truth plans with installed root identity from
   `.canic` state, so the plan records the current root trust anchor and
   concrete expected root canister when available. The current-install safety

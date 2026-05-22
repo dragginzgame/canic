@@ -1,6 +1,9 @@
 use crate::{
     cli::{
-        clap::{parse_matches, parse_subcommand, passthrough_subcommand, string_option, value_arg},
+        clap::{
+            parse_matches, parse_subcommand, passthrough_subcommand, path_option, string_option,
+            value_arg,
+        },
         defaults::local_network,
         globals::internal_network_arg,
         help::print_help_or_version,
@@ -9,13 +12,18 @@ use crate::{
 };
 use canic_host::{
     canister_build::CanisterBuildProfile,
-    deployment_truth::{DeploymentCheckV1, SafetyReportV1, SafetyStatusV1},
+    deployment_truth::{
+        DeploymentCheckV1, DeploymentReceiptV1, SafetyReportV1, SafetyStatusV1,
+        compare_plan_inventory_and_receipt,
+    },
     icp_config::resolve_current_canic_icp_root,
     install_root::{InstallRootOptions, check_install_deployment_truth},
 };
 use clap::Command as ClapCommand;
 use std::{
     ffi::OsString,
+    fs,
+    path::PathBuf,
     time::{SystemTime, UNIX_EPOCH},
 };
 use thiserror::Error as ThisError;
@@ -29,6 +37,7 @@ Examples:
   canic deploy diff demo
   canic deploy report demo
   canic deploy check demo
+  canic deploy resume-report --receipt receipt.json demo
   canic deploy check --profile fast demo
 
 0.41 deploy commands are read-only deployment truth checks. Mutation still flows
@@ -63,6 +72,13 @@ Examples:
   canic --network local deploy check --profile fast demo
 
 Prints the local DeploymentCheckV1 JSON without installing or mutating state.";
+const DEPLOY_RESUME_REPORT_HELP_AFTER: &str = "\
+Examples:
+  canic deploy resume-report --receipt receipt.json demo
+  canic --network local deploy resume-report --receipt receipt.json --profile fast demo
+
+Prints the passive ResumeSafetyV1 JSON for the current deployment truth check
+and a prior DeploymentReceiptV1. It does not resume, install, or mutate state.";
 
 ///
 /// DeployCommandError
@@ -89,6 +105,15 @@ struct DeployTruthOptions {
     profile: Option<CanisterBuildProfile>,
 }
 
+///
+/// DeployResumeReportOptions
+///
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct DeployResumeReportOptions {
+    truth: DeployTruthOptions,
+    receipt: PathBuf,
+}
+
 pub fn run<I>(args: I) -> Result<(), DeployCommandError>
 where
     I: IntoIterator<Item = OsString>,
@@ -110,6 +135,7 @@ where
             "inventory" => run_inventory(args),
             "diff" => run_diff(args),
             "report" => run_report(args),
+            "resume-report" => run_resume_report(args),
             "check" => run_check(args),
             _ => unreachable!("deploy dispatch command only defines known commands"),
         },
@@ -206,6 +232,23 @@ where
     enforce_deployment_check_status(&check.report)
 }
 
+fn run_resume_report<I>(args: I) -> Result<(), DeployCommandError>
+where
+    I: IntoIterator<Item = OsString>,
+{
+    let args = args.into_iter().collect::<Vec<_>>();
+    if print_help_or_version(&args, resume_report_usage, version_text()) {
+        return Ok(());
+    }
+
+    let options = DeployResumeReportOptions::parse(args)?;
+    let receipt = read_deployment_receipt(&options.receipt)?;
+    let check = load_deployment_check(options.truth)?;
+    let diff = compare_plan_inventory_and_receipt(&check.plan, &check.inventory, &receipt);
+    print_json(&diff.resume_safety)?;
+    Ok(())
+}
+
 fn load_deployment_check(
     options: DeployTruthOptions,
 ) -> Result<DeploymentCheckV1, DeployCommandError> {
@@ -226,11 +269,32 @@ where
     Ok(())
 }
 
+fn read_deployment_receipt(path: &PathBuf) -> Result<DeploymentReceiptV1, DeployCommandError> {
+    let bytes = fs::read(path).map_err(Box::<dyn std::error::Error>::from)?;
+    serde_json::from_slice(&bytes)
+        .map_err(Box::<dyn std::error::Error>::from)
+        .map_err(DeployCommandError::from)
+}
+
 fn enforce_deployment_check_status(report: &SafetyReportV1) -> Result<(), DeployCommandError> {
     if report.status == SafetyStatusV1::Blocked {
         return Err(DeployCommandError::Blocked(report.summary.clone()));
     }
     Ok(())
+}
+
+impl DeployResumeReportOptions {
+    fn parse<I>(args: I) -> Result<Self, DeployCommandError>
+    where
+        I: IntoIterator<Item = OsString>,
+    {
+        let matches = parse_matches(deploy_resume_report_command(), args)
+            .map_err(|_| DeployCommandError::Usage(resume_report_usage()))?;
+        Ok(Self {
+            truth: DeployTruthOptions::from_matches(&matches, resume_report_usage)?,
+            receipt: path_option(&matches, "receipt").expect("clap requires receipt"),
+        })
+    }
 }
 
 impl DeployTruthOptions {
@@ -244,10 +308,17 @@ impl DeployTruthOptions {
     {
         let matches =
             parse_matches(command(), args).map_err(|_| DeployCommandError::Usage(usage()))?;
+        Self::from_matches(&matches, usage)
+    }
+
+    fn from_matches(
+        matches: &clap::ArgMatches,
+        usage: fn() -> String,
+    ) -> Result<Self, DeployCommandError> {
         Ok(Self {
-            fleet: string_option(&matches, "fleet").expect("clap requires fleet"),
-            network: string_option(&matches, "network").unwrap_or_else(local_network),
-            profile: string_option(&matches, "profile")
+            fleet: string_option(matches, "fleet").expect("clap requires fleet"),
+            network: string_option(matches, "network").unwrap_or_else(local_network),
+            profile: string_option(matches, "profile")
                 .as_deref()
                 .map(|profile| parse_profile(profile, usage))
                 .transpose()?,
@@ -302,6 +373,11 @@ fn deploy_command() -> ClapCommand {
                 .about("Print the local deployment safety report JSON")
                 .disable_help_flag(true),
         ))
+        .subcommand(passthrough_subcommand(
+            ClapCommand::new("resume-report")
+                .about("Print passive resume safety JSON from a receipt")
+                .disable_help_flag(true),
+        ))
         .after_help(DEPLOY_HELP_AFTER)
 }
 
@@ -328,6 +404,21 @@ fn deploy_report_command() -> ClapCommand {
 fn deploy_check_command() -> ClapCommand {
     deploy_truth_leaf_command("check", "Print the local deployment truth check JSON")
         .after_help(DEPLOY_CHECK_HELP_AFTER)
+}
+
+fn deploy_resume_report_command() -> ClapCommand {
+    deploy_truth_leaf_command(
+        "resume-report",
+        "Print passive resume safety JSON from a prior deployment receipt",
+    )
+    .arg(
+        value_arg("receipt")
+            .long("receipt")
+            .value_name("file")
+            .required(true)
+            .help("DeploymentReceiptV1 JSON file to compare with current deployment truth"),
+    )
+    .after_help(DEPLOY_RESUME_REPORT_HELP_AFTER)
 }
 
 fn deploy_truth_leaf_command(name: &'static str, about: &'static str) -> ClapCommand {
@@ -378,6 +469,11 @@ fn report_usage() -> String {
 
 fn check_usage() -> String {
     let mut command = deploy_check_command();
+    command.render_help().to_string()
+}
+
+fn resume_report_usage() -> String {
+    let mut command = deploy_resume_report_command();
     command.render_help().to_string()
 }
 
@@ -513,11 +609,27 @@ mod tests {
             report_usage,
         )
         .expect("parse deploy report");
+        let resume_report = DeployResumeReportOptions::parse([
+            OsString::from("--receipt"),
+            OsString::from("receipt.json"),
+            OsString::from("demo"),
+        ])
+        .expect("parse deploy resume-report");
 
         assert_eq!(plan.fleet, "demo");
         assert_eq!(inventory.fleet, "demo");
         assert_eq!(diff.fleet, "demo");
         assert_eq!(report.fleet, "demo");
+        assert_eq!(resume_report.truth.fleet, "demo");
+        assert_eq!(resume_report.receipt, PathBuf::from("receipt.json"));
+    }
+
+    #[test]
+    fn deploy_resume_report_requires_receipt() {
+        assert!(matches!(
+            DeployResumeReportOptions::parse([OsString::from("demo")]),
+            Err(DeployCommandError::Usage(_))
+        ));
     }
 
     #[test]

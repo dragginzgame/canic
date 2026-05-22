@@ -153,6 +153,19 @@ pub fn compare_plan_to_inventory(
     }
 }
 
+/// Compare intended state, observed inventory, and a prior receipt into a
+/// resume-aware deployment diff.
+#[must_use]
+pub fn compare_plan_inventory_and_receipt(
+    plan: &DeploymentPlanV1,
+    inventory: &DeploymentInventoryV1,
+    receipt: &DeploymentReceiptV1,
+) -> DeploymentDiffV1 {
+    let mut diff = compare_plan_to_inventory(plan, inventory);
+    apply_receipt_resume_safety(plan, receipt, &mut diff);
+    diff
+}
+
 /// Render an operator-facing safety report from a machine deployment diff.
 #[must_use]
 pub fn safety_report_from_diff(
@@ -171,6 +184,97 @@ pub fn safety_report_from_diff(
         warnings: diff.warnings.clone(),
         next_actions: safety_next_actions(status),
     }
+}
+
+fn apply_receipt_resume_safety(
+    plan: &DeploymentPlanV1,
+    receipt: &DeploymentReceiptV1,
+    diff: &mut DeploymentDiffV1,
+) {
+    validate_receipt_identity(plan, receipt, &mut diff.hard_failures);
+    validate_receipt_command_result(receipt, &mut diff.hard_failures);
+    if !diff.hard_failures.is_empty() {
+        diff.resume_safety.status = safety_status(&diff.hard_failures, &diff.warnings);
+        diff.resume_safety.reasons = resume_safety_reasons(&diff.hard_failures, &diff.warnings);
+        return;
+    }
+    let phase_failures = receipt_phase_failures(receipt);
+    for receipt in &receipt.phase_receipts {
+        if receipt.verified_postcondition.status != ObservationStatusV1::Observed {
+            diff.hard_failures.push(finding(
+                "receipt_postcondition_unverified",
+                format!(
+                    "receipt phase {} has no observed postcondition",
+                    receipt.phase
+                ),
+                SafetySeverityV1::HardFailure,
+                Some(receipt.phase.clone()),
+            ));
+            continue;
+        }
+        if phase_failures.contains(receipt.phase.as_str()) {
+            continue;
+        }
+        diff.resumable_phases.push(receipt.phase.clone());
+    }
+    diff.resumable_phases.sort();
+    diff.resumable_phases.dedup();
+    diff.resume_safety.status = safety_status(&diff.hard_failures, &diff.warnings);
+    diff.resume_safety.reasons = resume_safety_reasons(&diff.hard_failures, &diff.warnings);
+}
+
+fn validate_receipt_identity(
+    plan: &DeploymentPlanV1,
+    receipt: &DeploymentReceiptV1,
+    hard_failures: &mut Vec<SafetyFindingV1>,
+) {
+    if receipt.plan_id != plan.plan_id {
+        hard_failures.push(finding(
+            "receipt_plan_mismatch",
+            format!(
+                "receipt plan {} does not match current plan {}",
+                receipt.plan_id, plan.plan_id
+            ),
+            SafetySeverityV1::HardFailure,
+            Some("receipt.plan_id".to_string()),
+        ));
+    }
+    if let (Some(expected), Some(observed)) = (
+        plan.deployment_identity.root_principal.as_ref(),
+        receipt.root_principal.as_ref(),
+    ) && expected != observed
+    {
+        hard_failures.push(finding(
+            "receipt_root_mismatch",
+            format!("receipt root {observed} does not match current plan root {expected}"),
+            SafetySeverityV1::HardFailure,
+            Some("receipt.root_principal".to_string()),
+        ));
+    }
+}
+
+fn validate_receipt_command_result(
+    receipt: &DeploymentReceiptV1,
+    hard_failures: &mut Vec<SafetyFindingV1>,
+) {
+    if let DeploymentCommandResultV1::Failed { code, message } = &receipt.command_result {
+        hard_failures.push(finding(
+            "receipt_failed_command",
+            format!("receipt command failed with {code}: {message}"),
+            SafetySeverityV1::HardFailure,
+            Some("receipt.command_result".to_string()),
+        ));
+    }
+}
+
+fn receipt_phase_failures(receipt: &DeploymentReceiptV1) -> BTreeSet<&str> {
+    let mut failures = BTreeSet::new();
+    for role_receipt in &receipt.role_phase_receipts {
+        if matches!(role_receipt.result, RolePhaseResultV1::Failed) {
+            failures.insert(role_receipt.phase.as_str());
+        }
+    }
+    failures
 }
 
 fn compare_identity(
