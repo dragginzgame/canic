@@ -10,6 +10,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.41.x] - 2026-05-21 - Deployment truth model
 
+- `0.41.10` expands passive deployment truth coverage for pool and verifier
+  readiness facts: configured pool identities now enter plans, installed
+  registry entries can populate observed pool inventory, pool/readiness drift is
+  diffed, and ambiguous pool observations become typed gaps.
+
 - `0.41.9` adds receipt-aware deployment truth comparison for passive resume
   reporting, prints explicit `Complete` or `FailedBeforeMutation` receipt
   status from the current-install artifact gate, and introduces read-only

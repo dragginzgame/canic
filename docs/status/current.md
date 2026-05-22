@@ -21,6 +21,20 @@ inspect only the files needed for the current task.
 
 ## Recent Work
 
+- Added passive pool-canister comparison to deployment truth diffs. Planned
+  pool identities now produce `pool_diff` entries, missing concrete pool
+  canisters or mismatched pool IDs block, unsafe observed pool control classes
+  block, and undeclared observed pool canisters warn without changing installer
+  execution.
+- Tightened passive verifier-readiness diffs so required role epochs are
+  compared against observed epochs: stale observed epochs block and missing
+  required role-epoch observations warn.
+- Local deployment plans now populate `expected_pool` from configured
+  scaling, sharding, and directory pool identities, so pool expectations appear
+  in passive deployment truth reports instead of staying empty.
+- Local deployment inventory can now map installed fleet registry entries into
+  `observed_pool` for configured pool roles. Ambiguous role-to-pool mappings
+  are reported as observation gaps rather than guessed.
 - Added receipt-aware deployment truth comparison for resume reporting. It
   evaluates plan, inventory, and prior receipt identity together, reports
   blockers for mismatched plans, roots, failed commands, or unverified

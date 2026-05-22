@@ -8,11 +8,12 @@ mod paths;
 mod stage;
 
 pub use config::{
-    LOCAL_ROOT_MIN_READY_CYCLES, configured_bootstrap_roles, configured_controllers,
-    configured_fleet_name, configured_fleet_roles, configured_install_targets,
-    configured_local_root_create_cycles, configured_release_roles, configured_role_auto_create,
-    configured_role_capabilities, configured_role_details, configured_role_kinds,
-    configured_role_metrics_profiles, configured_role_topups, matching_fleet_config_paths,
+    ConfiguredPoolExpectation, LOCAL_ROOT_MIN_READY_CYCLES, configured_bootstrap_roles,
+    configured_controllers, configured_fleet_name, configured_fleet_roles,
+    configured_install_targets, configured_local_root_create_cycles, configured_pool_expectations,
+    configured_release_roles, configured_role_auto_create, configured_role_capabilities,
+    configured_role_details, configured_role_kinds, configured_role_metrics_profiles,
+    configured_role_topups, matching_fleet_config_paths,
 };
 pub use manifest::{
     ReleaseSetEntry, RootReleaseSetManifest, emit_root_release_set_manifest,
@@ -35,10 +36,11 @@ use stage::read_release_artifact;
 use config::{
     configured_bootstrap_roles_from_source, configured_controllers_from_source,
     configured_fleet_name_from_source, configured_fleet_roles_from_source,
-    configured_local_root_create_cycles_from_source, configured_release_roles_from_source,
-    configured_role_auto_create_from_source, configured_role_capabilities_from_source,
-    configured_role_details_from_source, configured_role_kinds_from_source,
-    configured_role_metrics_profiles_from_source, configured_role_topups_from_source,
+    configured_local_root_create_cycles_from_source, configured_pool_expectations_from_source,
+    configured_release_roles_from_source, configured_role_auto_create_from_source,
+    configured_role_capabilities_from_source, configured_role_details_from_source,
+    configured_role_kinds_from_source, configured_role_metrics_profiles_from_source,
+    configured_role_topups_from_source,
 };
 
 pub(super) const CANISTERS_ROOT_RELATIVE: &str = "fleets";
@@ -65,10 +67,11 @@ mod tests {
         configured_bootstrap_roles_from_source, configured_controllers_from_source,
         configured_fleet_name_from_source, configured_fleet_roles_from_source,
         configured_install_targets, configured_local_root_create_cycles_from_source,
-        configured_release_roles_from_source, configured_role_auto_create_from_source,
-        configured_role_capabilities_from_source, configured_role_details_from_source,
-        configured_role_kinds_from_source, configured_role_metrics_profiles_from_source,
-        configured_role_topups_from_source, read_release_artifact, root_manifest_path,
+        configured_pool_expectations_from_source, configured_release_roles_from_source,
+        configured_role_auto_create_from_source, configured_role_capabilities_from_source,
+        configured_role_details_from_source, configured_role_kinds_from_source,
+        configured_role_metrics_profiles_from_source, configured_role_topups_from_source,
+        read_release_artifact, root_manifest_path,
     };
     use crate::test_support::temp_dir;
     use flate2::{Compression, write::GzEncoder};
@@ -264,6 +267,69 @@ kind = "replica"
             Some(&vec!["scaling".to_string()])
         );
         assert!(!capabilities.contains_key("root"));
+    }
+
+    #[test]
+    fn configured_pool_expectations_lists_root_subnet_pools() {
+        let config = r#"
+controllers = []
+app_index = []
+
+[fleet]
+name = "demo"
+
+[app]
+init_mode = "enabled"
+[app.whitelist]
+
+[subnets.prime.canisters.root]
+kind = "root"
+
+[subnets.prime.canisters.user_hub]
+kind = "singleton"
+
+[subnets.prime.canisters.user_hub.sharding.pools.user_shards]
+canister_role = "user_shard"
+policy.capacity = 100
+policy.max_shards = 4
+
+[subnets.prime.canisters.user_hub.directory.pools.projects]
+canister_role = "project_instance"
+key_name = "project_id"
+
+[subnets.prime.canisters.user_shard]
+kind = "shard"
+
+[subnets.prime.canisters.project_instance]
+kind = "instance"
+
+[subnets.prime.canisters.scale_hub]
+kind = "singleton"
+
+[subnets.prime.canisters.scale_hub.scaling.pools.scales]
+canister_role = "scale_replica"
+
+[subnets.prime.canisters.scale_replica]
+kind = "replica"
+"#;
+        let pools = configured_pool_expectations_from_source(config).expect("pool expectations");
+
+        assert_eq!(pools.len(), 3);
+        assert!(
+            pools
+                .iter()
+                .any(|pool| { pool.pool == "user_shards" && pool.canister_role == "user_shard" })
+        );
+        assert!(
+            pools.iter().any(|pool| {
+                pool.pool == "projects" && pool.canister_role == "project_instance"
+            })
+        );
+        assert!(
+            pools
+                .iter()
+                .any(|pool| { pool.pool == "scales" && pool.canister_role == "scale_replica" })
+        );
     }
 
     #[test]

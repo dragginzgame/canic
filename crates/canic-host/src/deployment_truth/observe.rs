@@ -2,13 +2,15 @@ use super::*;
 use crate::{
     icp::{IcpCanisterStatusReport, IcpCli},
     install_root::read_named_fleet_install_state_from_root,
+    installed_fleet::{InstalledFleetRequest, resolve_installed_fleet_from_root},
+    registry::RegistryEntry,
     release_set::{
-        ROOT_RELEASE_SET_MANIFEST_FILE, configured_fleet_name, configured_fleet_roles,
-        load_root_release_set_manifest,
+        ConfiguredPoolExpectation, ROOT_RELEASE_SET_MANIFEST_FILE, configured_fleet_name,
+        configured_fleet_roles, configured_pool_expectations, load_root_release_set_manifest,
     },
 };
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     fs,
     path::{Path, PathBuf},
 };
@@ -79,6 +81,16 @@ pub fn collect_local_deployment_inventory(
             ),
         )),
     }
+    let pool_expectations = configured_pool_expectations(&config).unwrap_or_else(|err| {
+        unresolved_observations.push(observation_gap(
+            "local_config.pools",
+            format!(
+                "could not resolve configured pool expectations from {}: {err}",
+                config.display()
+            ),
+        ));
+        Vec::new()
+    });
 
     let install_state =
         read_named_fleet_install_state_from_root(&request.icp_root, &request.network, &fleet_name)
@@ -116,7 +128,15 @@ pub fn collect_local_deployment_inventory(
                 &mut unresolved_observations,
             )
         }),
-        observed_pool: Vec::new(),
+        observed_pool: install_state.as_ref().map_or_else(Vec::new, |state| {
+            install_state_observed_pool(
+                state,
+                request,
+                &fleet_name,
+                &pool_expectations,
+                &mut unresolved_observations,
+            )
+        }),
         observed_artifacts,
         observed_verifier_readiness: VerifierReadinessObservationV1 {
             status: ObservationStatusV1::NotObserved,
@@ -425,6 +445,105 @@ fn install_state_observed_canisters(
             ));
             vec![observed_root_from_install_state(state)]
         }
+    }
+}
+
+fn install_state_observed_pool(
+    state: &crate::install_root::InstallState,
+    request: &LocalInventoryRequest,
+    fleet_name: &str,
+    pool_expectations: &[ConfiguredPoolExpectation],
+    gaps: &mut Vec<DeploymentObservationGapV1>,
+) -> Vec<ObservedPoolCanisterV1> {
+    match resolve_installed_fleet_from_root(
+        &InstalledFleetRequest {
+            fleet: fleet_name.to_string(),
+            network: request.network.clone(),
+            icp: "icp".to_string(),
+            detect_lost_local_root: false,
+        },
+        &request.icp_root,
+    ) {
+        Ok(resolution) => registry_entries_to_observed_pool(
+            &state.root_canister_id,
+            &resolution.registry.entries,
+            pool_expectations,
+            gaps,
+        ),
+        Err(err) => {
+            gaps.push(observation_gap(
+                "live_subnet_registry",
+                format!(
+                    "could not observe live subnet registry for root {}: {err}",
+                    state.root_canister_id
+                ),
+            ));
+            Vec::new()
+        }
+    }
+}
+
+pub(super) fn registry_entries_to_observed_pool(
+    root_canister_id: &str,
+    entries: &[RegistryEntry],
+    pool_expectations: &[ConfiguredPoolExpectation],
+    gaps: &mut Vec<DeploymentObservationGapV1>,
+) -> Vec<ObservedPoolCanisterV1> {
+    let expectations_by_role = pool_expectations_by_role(pool_expectations);
+    let mut seen = BTreeSet::new();
+    let mut observed = Vec::new();
+
+    for entry in entries {
+        if entry.pid == root_canister_id {
+            continue;
+        }
+        let Some(role) = entry.role.as_ref() else {
+            continue;
+        };
+        let Some(expectations) = expectations_by_role.get(role.as_str()) else {
+            continue;
+        };
+        let [expectation] = expectations.as_slice() else {
+            gaps.push(observation_gap(
+                format!("live_subnet_registry.pool.{role}"),
+                format!(
+                    "could not assign observed role {role} to one configured pool without ambiguity"
+                ),
+            ));
+            continue;
+        };
+        if !seen.insert(entry.pid.as_str()) {
+            continue;
+        }
+        observed.push(ObservedPoolCanisterV1 {
+            pool: expectation.pool.clone(),
+            canister_id: entry.pid.clone(),
+            role: Some(role.clone()),
+            control_class: pool_control_class(entry),
+        });
+    }
+
+    observed
+}
+
+fn pool_expectations_by_role(
+    pool_expectations: &[ConfiguredPoolExpectation],
+) -> BTreeMap<&str, Vec<&ConfiguredPoolExpectation>> {
+    let mut by_role = BTreeMap::<&str, Vec<&ConfiguredPoolExpectation>>::new();
+    for expectation in pool_expectations {
+        by_role
+            .entry(expectation.canister_role.as_str())
+            .or_default()
+            .push(expectation);
+    }
+    by_role
+}
+
+const fn pool_control_class(entry: &RegistryEntry) -> CanisterControlClassV1 {
+    if entry.parent_pid.is_some() {
+        CanisterControlClassV1::CanicManagedPool
+    } else {
+        CanisterControlClassV1::UnknownUnsafe
     }
 }
 

@@ -1,7 +1,10 @@
 use super::*;
 use crate::{
     install_root::read_named_fleet_install_state_from_root,
-    release_set::{configured_controllers, configured_fleet_name, configured_fleet_roles},
+    release_set::{
+        ConfiguredPoolExpectation, configured_controllers, configured_fleet_name,
+        configured_fleet_roles, configured_pool_expectations,
+    },
 };
 use std::path::PathBuf;
 
@@ -55,6 +58,19 @@ pub fn build_local_deployment_plan(request: &LocalDeploymentPlanRequest) -> Depl
         ));
         Vec::new()
     });
+    let expected_pool = configured_pool_expectations(&config).map_or_else(
+        |err| {
+            unresolved_assumptions.push(assumption(
+                "local_config.pools",
+                format!(
+                    "could not resolve configured pool expectations from {}: {err}",
+                    config.display()
+                ),
+            ));
+            Vec::new()
+        },
+        local_expected_pool,
+    );
     let root_canister_id =
         local_root_canister_id(request, &fleet_template, &mut unresolved_assumptions);
     let raw_config_sha256 = config_sha256_assumption(&config, &mut unresolved_assumptions);
@@ -92,7 +108,7 @@ pub fn build_local_deployment_plan(request: &LocalDeploymentPlanRequest) -> Depl
             })
             .collect(),
         expected_canisters: local_expected_canisters(roles, root_canister_id.as_deref()),
-        expected_pool: Vec::new(),
+        expected_pool,
         expected_verifier_readiness: VerifierReadinessExpectationV1 {
             required: false,
             expected_role_epochs: Vec::new(),
@@ -190,6 +206,17 @@ fn local_expected_canisters(
             },
             role,
             control_class: CanisterControlClassV1::DeploymentControlled,
+        })
+        .collect()
+}
+
+fn local_expected_pool(pools: Vec<ConfiguredPoolExpectation>) -> Vec<ExpectedPoolCanisterV1> {
+    pools
+        .into_iter()
+        .map(|pool| ExpectedPoolCanisterV1 {
+            pool: pool.pool,
+            canister_id: None,
+            role: Some(pool.canister_role),
         })
         .collect()
 }

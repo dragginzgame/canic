@@ -71,7 +71,7 @@ pub fn compare_plan_to_inventory(
 ) -> DeploymentDiffV1 {
     let mut artifact_diff = Vec::new();
     let mut controller_diff = Vec::new();
-    let pool_diff = Vec::new();
+    let mut pool_diff = Vec::new();
     let mut embedded_config_diff = Vec::new();
     let mut module_hash_diff = Vec::new();
     let mut verifier_readiness_diff = Vec::new();
@@ -91,6 +91,13 @@ pub fn compare_plan_to_inventory(
         plan,
         inventory,
         &mut controller_diff,
+        &mut hard_failures,
+        &mut warnings,
+    );
+    compare_pools(
+        plan,
+        inventory,
+        &mut pool_diff,
         &mut hard_failures,
         &mut warnings,
     );
@@ -114,7 +121,13 @@ pub fn compare_plan_to_inventory(
         &mut hard_failures,
         &mut warnings,
     );
-    compare_verifier_readiness(plan, inventory, &mut verifier_readiness_diff, &mut warnings);
+    compare_verifier_readiness(
+        plan,
+        inventory,
+        &mut verifier_readiness_diff,
+        &mut hard_failures,
+        &mut warnings,
+    );
     for assumption in &plan.unresolved_assumptions {
         warnings.push(SafetyFindingV1 {
             code: "plan_assumption".to_string(),
@@ -552,6 +565,211 @@ fn compare_canisters(
     }
 }
 
+fn compare_pools(
+    plan: &DeploymentPlanV1,
+    inventory: &DeploymentInventoryV1,
+    pool_diff: &mut Vec<DiffItemV1>,
+    hard_failures: &mut Vec<SafetyFindingV1>,
+    warnings: &mut Vec<SafetyFindingV1>,
+) {
+    let mut matched_observed = BTreeSet::new();
+    for expected in &plan.expected_pool {
+        compare_expected_pool(
+            expected,
+            inventory,
+            pool_diff,
+            hard_failures,
+            warnings,
+            &mut matched_observed,
+        );
+    }
+
+    for observed in &inventory.observed_pool {
+        warn_extra_observed_pool(plan, observed, pool_diff, warnings, &matched_observed);
+    }
+}
+
+fn compare_expected_pool<'a>(
+    expected: &ExpectedPoolCanisterV1,
+    inventory: &'a DeploymentInventoryV1,
+    pool_diff: &mut Vec<DiffItemV1>,
+    hard_failures: &mut Vec<SafetyFindingV1>,
+    warnings: &mut Vec<SafetyFindingV1>,
+    matched_observed: &mut BTreeSet<&'a str>,
+) {
+    let observed = expected
+        .canister_id
+        .as_ref()
+        .and_then(|id| {
+            inventory
+                .observed_pool
+                .iter()
+                .find(|pool| &pool.canister_id == id)
+        })
+        .or_else(|| {
+            inventory
+                .observed_pool
+                .iter()
+                .find(|pool| pool_matches_expected_pool(pool, expected))
+        });
+    let Some(observed) = observed else {
+        record_missing_pool(expected, pool_diff, hard_failures, warnings);
+        return;
+    };
+
+    matched_observed.insert(observed.canister_id.as_str());
+    record_pool_id_mismatch(expected, observed, pool_diff, hard_failures);
+    record_unsafe_pool_control_class(observed, pool_diff, hard_failures);
+}
+
+fn record_missing_pool(
+    expected: &ExpectedPoolCanisterV1,
+    pool_diff: &mut Vec<DiffItemV1>,
+    hard_failures: &mut Vec<SafetyFindingV1>,
+    warnings: &mut Vec<SafetyFindingV1>,
+) {
+    let severity = if expected.canister_id.is_some() {
+        SafetySeverityV1::HardFailure
+    } else {
+        SafetySeverityV1::Warning
+    };
+    let subject = expected_pool_subject(expected);
+    pool_diff.push(diff_item(
+        "pool_canister",
+        &subject,
+        expected.canister_id.clone(),
+        None,
+        severity,
+    ));
+    let finding = finding(
+        if expected.canister_id.is_some() {
+            "pool_canister_missing"
+        } else {
+            "pool_canister_unobserved"
+        },
+        format!("missing observed pool canister for {subject}"),
+        severity,
+        Some(subject),
+    );
+    if expected.canister_id.is_some() {
+        hard_failures.push(finding);
+    } else {
+        warnings.push(finding);
+    }
+}
+
+fn record_pool_id_mismatch(
+    expected: &ExpectedPoolCanisterV1,
+    observed: &ObservedPoolCanisterV1,
+    pool_diff: &mut Vec<DiffItemV1>,
+    hard_failures: &mut Vec<SafetyFindingV1>,
+) {
+    if let Some(expected_id) = expected.canister_id.as_ref()
+        && observed.canister_id != *expected_id
+    {
+        let subject = observed_pool_subject(observed);
+        pool_diff.push(diff_item(
+            "pool_canister_id",
+            &subject,
+            Some(expected_id.clone()),
+            Some(observed.canister_id.clone()),
+            SafetySeverityV1::HardFailure,
+        ));
+        hard_failures.push(finding(
+            "pool_canister_id_mismatch",
+            format!(
+                "pool canister {subject} has observed id {}, expected {expected_id}",
+                observed.canister_id
+            ),
+            SafetySeverityV1::HardFailure,
+            Some(subject),
+        ));
+    }
+}
+
+fn record_unsafe_pool_control_class(
+    observed: &ObservedPoolCanisterV1,
+    pool_diff: &mut Vec<DiffItemV1>,
+    hard_failures: &mut Vec<SafetyFindingV1>,
+) {
+    if !matches!(
+        observed.control_class,
+        CanisterControlClassV1::UnknownUnsafe | CanisterControlClassV1::UserControlled
+    ) {
+        return;
+    }
+    let subject = observed_pool_subject(observed);
+    pool_diff.push(diff_item(
+        "pool_control_class",
+        &subject,
+        Some("CanicManagedPool".to_string()),
+        Some(format!("{:?}", observed.control_class)),
+        SafetySeverityV1::HardFailure,
+    ));
+    hard_failures.push(finding(
+        "unsafe_pool_control_class",
+        format!("pool canister {subject} has unsafe observed control class"),
+        SafetySeverityV1::HardFailure,
+        Some(subject),
+    ));
+}
+
+fn warn_extra_observed_pool(
+    plan: &DeploymentPlanV1,
+    observed: &ObservedPoolCanisterV1,
+    pool_diff: &mut Vec<DiffItemV1>,
+    warnings: &mut Vec<SafetyFindingV1>,
+    matched_observed: &BTreeSet<&str>,
+) {
+    if matched_observed.contains(observed.canister_id.as_str())
+        || plan.expected_pool.iter().any(|expected| {
+            expected.canister_id.as_ref() == Some(&observed.canister_id)
+                || pool_matches_expected_pool(observed, expected)
+        })
+    {
+        return;
+    }
+    let subject = observed_pool_subject(observed);
+    pool_diff.push(diff_item(
+        "pool_extra",
+        &subject,
+        None,
+        Some(observed.canister_id.clone()),
+        SafetySeverityV1::Warning,
+    ));
+    warnings.push(finding(
+        "extra_pool_canister_observed",
+        format!("observed undeclared pool canister {subject}"),
+        SafetySeverityV1::Warning,
+        Some(subject),
+    ));
+}
+
+fn pool_matches_expected_pool(
+    observed: &ObservedPoolCanisterV1,
+    expected: &ExpectedPoolCanisterV1,
+) -> bool {
+    observed.pool == expected.pool
+        && expected
+            .role
+            .as_ref()
+            .is_none_or(|role| observed.role.as_ref() == Some(role))
+}
+
+fn expected_pool_subject(expected: &ExpectedPoolCanisterV1) -> String {
+    expected.role.as_ref().map_or_else(
+        || expected.pool.clone(),
+        |role| format!("{}:{role}", expected.pool),
+    )
+}
+
+fn observed_pool_subject(observed: &ObservedPoolCanisterV1) -> String {
+    observed.role.as_ref().map_or_else(
+        || observed.pool.clone(),
+        |role| format!("{}:{role}", observed.pool),
+    )
+}
+
 fn compare_role_controllers(
     plan: &DeploymentPlanV1,
     observed: &ObservedCanisterV1,
@@ -763,6 +981,7 @@ fn compare_verifier_readiness(
     plan: &DeploymentPlanV1,
     inventory: &DeploymentInventoryV1,
     verifier_readiness_diff: &mut Vec<DiffItemV1>,
+    hard_failures: &mut Vec<SafetyFindingV1>,
     warnings: &mut Vec<SafetyFindingV1>,
 ) {
     if !plan.expected_verifier_readiness.required {
@@ -782,6 +1001,57 @@ fn compare_verifier_readiness(
             SafetySeverityV1::Warning,
             Some("verifier_readiness".to_string()),
         ));
+    }
+
+    let observed_by_role = inventory
+        .observed_verifier_readiness
+        .role_epochs
+        .iter()
+        .map(|epoch| (epoch.role.as_str(), epoch))
+        .collect::<BTreeMap<_, _>>();
+    for expected in &plan.expected_verifier_readiness.expected_role_epochs {
+        match observed_by_role.get(expected.role.as_str()) {
+            Some(observed)
+                if observed.status == ObservationStatusV1::Observed
+                    && observed.observed_epoch >= Some(expected.minimum_epoch) => {}
+            Some(observed)
+                if observed.status == ObservationStatusV1::Observed
+                    && observed.observed_epoch.is_some() =>
+            {
+                let observed_epoch = observed.observed_epoch.expect("checked above");
+                verifier_readiness_diff.push(diff_item(
+                    "verifier_role_epoch",
+                    &expected.role,
+                    Some(expected.minimum_epoch.to_string()),
+                    Some(observed_epoch.to_string()),
+                    SafetySeverityV1::HardFailure,
+                ));
+                hard_failures.push(finding(
+                    "verifier_role_epoch_stale",
+                    format!(
+                        "verifier role {} has epoch {observed_epoch}, expected at least {}",
+                        expected.role, expected.minimum_epoch
+                    ),
+                    SafetySeverityV1::HardFailure,
+                    Some(expected.role.clone()),
+                ));
+            }
+            _ => {
+                verifier_readiness_diff.push(diff_item(
+                    "verifier_role_epoch",
+                    &expected.role,
+                    Some(expected.minimum_epoch.to_string()),
+                    Some("not_observed".to_string()),
+                    SafetySeverityV1::Warning,
+                ));
+                warnings.push(finding(
+                    "verifier_role_epoch_unobserved",
+                    format!("verifier role {} epoch was not observed", expected.role),
+                    SafetySeverityV1::Warning,
+                    Some(expected.role.clone()),
+                ));
+            }
+        }
     }
 }
 

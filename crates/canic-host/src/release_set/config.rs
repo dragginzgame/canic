@@ -19,6 +19,15 @@ const DEFAULT_INITIAL_CYCLES: u128 = 5_000_000_000_000;
 pub const LOCAL_ROOT_MIN_READY_CYCLES: u128 = 100_000_000_000_000;
 const DEFAULT_RANDOMNESS_RESEED_INTERVAL_SECS: u64 = 3600;
 
+///
+/// ConfiguredPoolExpectation
+///
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ConfiguredPoolExpectation {
+    pub pool: String,
+    pub canister_role: String,
+}
+
 impl RootSubnetRoleScope {
     const fn includes_root(self) -> bool {
         matches!(self, Self::Fleet)
@@ -84,6 +93,15 @@ pub fn configured_controllers(
 ) -> Result<Vec<String>, Box<dyn std::error::Error>> {
     let config_source = fs::read_to_string(config_path)?;
     configured_controllers_from_source(&config_source)
+        .map_err(|err| format!("invalid {}: {err}", config_path.display()).into())
+}
+
+// Enumerate configured pool identities for the single subnet that owns `root`.
+pub fn configured_pool_expectations(
+    config_path: &Path,
+) -> Result<Vec<ConfiguredPoolExpectation>, Box<dyn std::error::Error>> {
+    let config_source = fs::read_to_string(config_path)?;
+    configured_pool_expectations_from_source(&config_source)
         .map_err(|err| format!("invalid {}: {err}", config_path.display()).into())
 }
 
@@ -484,6 +502,72 @@ pub(super) fn configured_controllers_from_source(
     controllers.sort();
     controllers.dedup();
     Ok(controllers)
+}
+
+// Enumerate configured pool identities for the single subnet that owns `root`.
+pub(super) fn configured_pool_expectations_from_source(
+    config_source: &str,
+) -> Result<Vec<ConfiguredPoolExpectation>, Box<dyn std::error::Error>> {
+    let config = parse_config_model(config_source).map_err(|err| err.to_string())?;
+    let mut root_subnet = None;
+
+    for (subnet_role, subnet) in &config.subnets {
+        if !subnet.canisters.keys().any(CanisterRole::is_root) {
+            continue;
+        }
+
+        if root_subnet.is_some() {
+            return Err(format!(
+                "multiple subnets define a root canister; expected exactly one root subnet (found at least '{subnet_role}')"
+            )
+            .into());
+        }
+
+        root_subnet = Some(subnet);
+    }
+
+    let subnet = root_subnet.ok_or_else(|| {
+        "no subnet defines a root canister; expected exactly one root subnet".to_string()
+    })?;
+    let mut pools = BTreeMap::<String, ConfiguredPoolExpectation>::new();
+
+    for canister in subnet.canisters.values() {
+        if let Some(scaling) = &canister.scaling {
+            for (pool_name, pool) in &scaling.pools {
+                pools.insert(
+                    format!("scaling:{pool_name}:{}", pool.canister_role.as_str()),
+                    ConfiguredPoolExpectation {
+                        pool: pool_name.clone(),
+                        canister_role: pool.canister_role.as_str().to_string(),
+                    },
+                );
+            }
+        }
+        if let Some(sharding) = &canister.sharding {
+            for (pool_name, pool) in &sharding.pools {
+                pools.insert(
+                    format!("sharding:{pool_name}:{}", pool.canister_role.as_str()),
+                    ConfiguredPoolExpectation {
+                        pool: pool_name.clone(),
+                        canister_role: pool.canister_role.as_str().to_string(),
+                    },
+                );
+            }
+        }
+        if let Some(directory) = &canister.directory {
+            for (pool_name, pool) in &directory.pools {
+                pools.insert(
+                    format!("directory:{pool_name}:{}", pool.canister_role.as_str()),
+                    ConfiguredPoolExpectation {
+                        pool: pool_name.clone(),
+                        canister_role: pool.canister_role.as_str().to_string(),
+                    },
+                );
+            }
+        }
+    }
+
+    Ok(pools.into_values().collect())
 }
 
 // Enumerate the configured ordinary roles for the single subnet that owns `root`.
