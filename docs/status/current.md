@@ -21,6 +21,11 @@ inspect only the files needed for the current task.
 
 ## Recent Work
 
+- Added controller authority comparison to the deployment truth diff. Live
+  root controllers must include the expected authority profile controllers;
+  authority-profile overlaps block as unsafe; undeclared live controllers warn;
+  declared staging and emergency controllers are treated as intentional
+  authority rather than unexplained drift.
 - Corrected the 0.41 config identity model after the design update: raw local
   config SHA-256 values are now raw evidence only, while
   `deployment_manifest_digest` remains reserved for the canonical deployment

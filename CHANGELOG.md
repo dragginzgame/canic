@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+- Added controller authority comparison to the deployment truth diff so live
+  root controllers must include the expected authority profile controllers,
+  authority-profile overlaps block as unsafe, undeclared live controllers warn,
+  and declared staging/emergency controllers are recognized as intentional.
+
 ## [0.41.x] - 2026-05-21 - Deployment truth model
 
 - `0.41.5` realigns deployment truth with the revised 0.41 design by keeping

@@ -1,5 +1,5 @@
 use super::*;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 ///
 /// LocalDeploymentCheckRequest
@@ -79,6 +79,7 @@ pub fn compare_plan_to_inventory(
     let mut warnings = Vec::new();
 
     compare_identity(plan, inventory, &mut hard_failures);
+    compare_authority_profile(plan, &mut controller_diff, &mut hard_failures);
     compare_artifacts(
         plan,
         inventory,
@@ -223,6 +224,37 @@ fn compare_identity(
             ));
         }
         _ => {}
+    }
+}
+
+fn compare_authority_profile(
+    plan: &DeploymentPlanV1,
+    controller_diff: &mut Vec<DiffItemV1>,
+    hard_failures: &mut Vec<SafetyFindingV1>,
+) {
+    let mut reported = BTreeSet::new();
+    for controller in &plan.authority_profile.expected_controllers {
+        if !is_staging_or_emergency_controller(plan, controller) {
+            continue;
+        }
+        if !reported.insert(controller.as_str()) {
+            continue;
+        }
+        controller_diff.push(diff_item(
+            "controller_authority_overlap",
+            "authority_profile",
+            Some("expected-only".to_string()),
+            Some(controller.clone()),
+            SafetySeverityV1::HardFailure,
+        ));
+        hard_failures.push(finding(
+            "controller_authority_overlap",
+            format!(
+                "controller {controller} appears in both expected and staging/emergency authority"
+            ),
+            SafetySeverityV1::HardFailure,
+            Some("authority_profile".to_string()),
+        ));
     }
 }
 
@@ -404,7 +436,85 @@ fn compare_canisters(
                 Some(expected.role.clone()),
             ));
         }
+        compare_role_controllers(plan, observed, controller_diff, hard_failures, warnings);
     }
+}
+
+fn compare_role_controllers(
+    plan: &DeploymentPlanV1,
+    observed: &ObservedCanisterV1,
+    controller_diff: &mut Vec<DiffItemV1>,
+    hard_failures: &mut Vec<SafetyFindingV1>,
+    warnings: &mut Vec<SafetyFindingV1>,
+) {
+    let role = observed.role.as_deref().unwrap_or("unknown");
+    for expected in &plan.authority_profile.expected_controllers {
+        if observed
+            .controllers
+            .iter()
+            .any(|controller| controller == expected)
+        {
+            continue;
+        }
+        controller_diff.push(diff_item(
+            "controller_missing",
+            role,
+            Some(expected.clone()),
+            Some(controller_set_label(&observed.controllers)),
+            SafetySeverityV1::HardFailure,
+        ));
+        hard_failures.push(finding(
+            "expected_controller_missing",
+            format!("role {role} is missing expected controller {expected}"),
+            SafetySeverityV1::HardFailure,
+            Some(role.to_string()),
+        ));
+    }
+
+    for observed_controller in &observed.controllers {
+        if is_declared_controller(plan, observed_controller) {
+            continue;
+        }
+        controller_diff.push(diff_item(
+            "controller_extra",
+            role,
+            Some(controller_set_label(
+                &plan.authority_profile.expected_controllers,
+            )),
+            Some(observed_controller.clone()),
+            SafetySeverityV1::Warning,
+        ));
+        warnings.push(finding(
+            "extra_controller_observed",
+            format!("role {role} has controller outside the expected authority profile"),
+            SafetySeverityV1::Warning,
+            Some(role.to_string()),
+        ));
+    }
+}
+
+fn is_declared_controller(plan: &DeploymentPlanV1, controller: &str) -> bool {
+    plan.authority_profile
+        .expected_controllers
+        .iter()
+        .chain(plan.authority_profile.staging_controllers.iter())
+        .chain(plan.authority_profile.emergency_controllers.iter())
+        .any(|expected| expected == controller)
+}
+
+fn is_staging_or_emergency_controller(plan: &DeploymentPlanV1, controller: &str) -> bool {
+    plan.authority_profile
+        .staging_controllers
+        .iter()
+        .chain(plan.authority_profile.emergency_controllers.iter())
+        .any(|declared| declared == controller)
+}
+
+fn controller_set_label(controllers: &[String]) -> String {
+    if controllers.is_empty() {
+        return "<none>".to_string();
+    }
+    controllers.join(",")
 }
 
 fn compare_module_hashes(

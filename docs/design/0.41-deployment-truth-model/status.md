@@ -18,6 +18,11 @@ narrow current-install artifact gate.
 
 ## Implemented
 
+- Added controller authority comparison to the deployment truth diff. Live
+  root controllers must include the expected authority profile controllers;
+  authority-profile overlaps block as unsafe; undeclared live controllers warn;
+  declared staging and emergency controllers are recognized as intentional
+  authority instead of unexplained drift.
 - Corrected the config identity model after the latest design shift: raw local
   config SHA-256 values are now raw evidence only, not
   `deployment_manifest_digest`. Raw config drift still blocks as a local
