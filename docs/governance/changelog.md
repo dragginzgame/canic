@@ -70,10 +70,11 @@ The root changelog must link to the detailed file when present.
 
 ## 2.3 Unreleased Notes
 
-Detailed minor notes may contain a top-level `## Unreleased` section above
-released patch sections.
+Only the root `CHANGELOG.md` may contain a top-level `## Unreleased` section.
+Detailed minor notes must start with versioned patch sections and must not
+carry their own `Unreleased` sections.
 
-Use `Unreleased` for ordinary development batches that are not yet being
+Use root `Unreleased` for ordinary development batches that are not yet being
 published. It is the normal place to record user-facing, operator-facing, or
 architecturally meaningful work before a release version has been assigned.
 
@@ -86,11 +87,9 @@ Rules:
 - Do not use `Unreleased` for formatting-only churn, transient debugging notes,
   or validation command inventories unless the validation surface itself
   changed.
-- Leave root `CHANGELOG.md` unchanged during ordinary development unless the
-  maintainer explicitly asks for root release notes.
 - When preparing a release, move the relevant `Unreleased` content into the
-  target patch section, delete or clear consumed `Unreleased` bullets, and add
-  one concise root bullet for the finalized patch.
+  target detailed patch section, delete or clear consumed root `Unreleased`
+  bullets, and add one concise root bullet for the finalized patch.
 
 Terminology:
 
@@ -180,8 +179,8 @@ During ordinary development:
 2. Do not treat a completed code slice as a release patch.
 3. Do not invent a patch version for a slice or batch.
 4. If changelog notes are warranted, write them under `## Unreleased` in the
-   relevant detailed minor notes file.
-5. Do not update root `CHANGELOG.md` for ordinary slice notes.
+   root `CHANGELOG.md`.
+5. Do not add `## Unreleased` to detailed minor notes.
 6. If the work is changelog-policy/governance-only, do not add or update
    release notes in either root or detailed changelog files unless explicitly
    requested as a release artifact.
@@ -198,8 +197,10 @@ When preparing a release:
    - Formatting-only changes
    - Test-only changes (unless behaviorally significant)
    - Internal renames without surface impact
-5. Move relevant `Unreleased` notes into the target patch section.
-6. Generate a concise summary entry in root CHANGELOG.md.
+5. Move relevant root `Unreleased` notes into the target detailed patch
+   section.
+6. Replace the consumed root `Unreleased` notes with a concise finalized
+   summary entry under the relevant root release line.
 7. Generate or update docs/changelog/<major>.<minor>.md with full detail.
 8. Insert clickable Markdown link from root file to detailed file.
 9. Use the version specified by the release request or the existing latest changelog entry.
@@ -261,8 +262,9 @@ Historical content must never be discarded.
 
 Agents must not bump version without checking semantic impact.
 During ordinary development, do not assign a version number. Use `Unreleased`
-notes when needed. When preparing a release, target the upcoming release version
-even if `Cargo.toml` still has the previous published version.
+notes in the root changelog when needed. When preparing a release, target the
+upcoming release version even if `Cargo.toml` still has the previous published
+version.
 
 ---
 
@@ -310,7 +312,8 @@ Testing section rules:
 For each release:
 
 1. Choose the release version.
-2. Collapse relevant `Unreleased` notes into the versioned patch entry.
+2. Collapse relevant root `Unreleased` notes into the detailed versioned patch
+   entry.
 3. Update version in Cargo.toml.
 4. Update CHANGELOG.md.
 5. Create or update docs/changelog/<major>.<minor>.md.

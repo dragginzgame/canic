@@ -6,6 +6,10 @@ documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## Unreleased
+
+No unreleased changes.
+
 ## [0.41.x] - 2026-05-21 - Deployment truth model
 
 - `0.41.2` adds the read-only local deployment truth check pipeline: local
