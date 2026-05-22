@@ -23,7 +23,8 @@ fn usage_lists_command_families() {
     assert!(plain.find("    fleet") < plain.find("    replica"));
     assert!(plain.find("    replica") < plain.find("    install"));
     assert!(plain.find("    install") < plain.find("    build"));
-    assert!(plain.find("    build") < plain.find("    config"));
+    assert!(plain.find("    build") < plain.find("    deploy"));
+    assert!(plain.find("    deploy") < plain.find("    config"));
     assert!(plain.find("    config") < plain.find("    info"));
     assert!(plain.find("    info") < plain.find("    endpoints"));
     assert!(plain.find("    endpoints") < plain.find("    medic"));
@@ -41,6 +42,7 @@ fn usage_lists_command_families() {
     assert!(plain.contains("endpoints"));
     assert!(plain.contains("metrics"));
     assert!(plain.contains("    build"));
+    assert!(plain.contains("    deploy"));
     assert!(!plain.contains("    network"));
     assert!(!plain.contains("    defaults"));
     assert!(plain.contains("    status"));
@@ -70,6 +72,10 @@ fn command_family_help_returns_ok() {
         &["backup", "verify", "help"],
         &["config", "help"],
         &["build", "help"],
+        &["deploy", "help"],
+        &["deploy", "check", "help"],
+        &["deploy", "inventory", "help"],
+        &["deploy", "plan", "help"],
         &["info", "help"],
         &["info", "list", "help"],
         &["info", "cycles", "help"],
@@ -211,6 +217,35 @@ fn version_flags_return_ok() {
 }
 
 #[test]
+fn deploy_version_flags_return_ok() {
+    assert!(run([OsString::from("deploy"), OsString::from("--version")]).is_ok());
+    assert!(
+        run([
+            OsString::from("deploy"),
+            OsString::from("check"),
+            OsString::from("--version")
+        ])
+        .is_ok()
+    );
+    assert!(
+        run([
+            OsString::from("deploy"),
+            OsString::from("inventory"),
+            OsString::from("--version")
+        ])
+        .is_ok()
+    );
+    assert!(
+        run([
+            OsString::from("deploy"),
+            OsString::from("plan"),
+            OsString::from("--version")
+        ])
+        .is_ok()
+    );
+}
+
+#[test]
 fn global_icp_is_forwarded_to_commands_that_use_icp() {
     let mut tail = vec![OsString::from("test")];
 
@@ -329,6 +364,48 @@ fn global_network_is_forwarded_to_commands_that_use_network() {
             OsString::from("ic")
         ]
     );
+}
+
+#[test]
+fn global_network_is_forwarded_to_deploy() {
+    let mut tail = vec![OsString::from("check"), OsString::from("demo")];
+    let mut inventory_tail = vec![OsString::from("inventory"), OsString::from("demo")];
+    let mut plan_tail = vec![OsString::from("plan"), OsString::from("demo")];
+    let mut family_tail = Vec::new();
+
+    apply_global_network("deploy", &mut tail, Some("ic".to_string()));
+    apply_global_network("deploy", &mut inventory_tail, Some("ic".to_string()));
+    apply_global_network("deploy", &mut plan_tail, Some("ic".to_string()));
+    apply_global_network("deploy", &mut family_tail, Some("ic".to_string()));
+
+    assert_eq!(
+        tail,
+        vec![
+            OsString::from("check"),
+            OsString::from("demo"),
+            OsString::from(INTERNAL_NETWORK_OPTION),
+            OsString::from("ic")
+        ]
+    );
+    assert_eq!(
+        inventory_tail,
+        vec![
+            OsString::from("inventory"),
+            OsString::from("demo"),
+            OsString::from(INTERNAL_NETWORK_OPTION),
+            OsString::from("ic")
+        ]
+    );
+    assert_eq!(
+        plan_tail,
+        vec![
+            OsString::from("plan"),
+            OsString::from("demo"),
+            OsString::from(INTERNAL_NETWORK_OPTION),
+            OsString::from("ic")
+        ]
+    );
+    assert!(family_tail.is_empty());
 }
 
 #[test]

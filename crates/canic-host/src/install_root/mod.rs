@@ -2,6 +2,9 @@ use crate::canister_build::{
     CanisterBuildProfile, build_current_workspace_canister_artifact,
     current_workspace_build_context_once,
 };
+use crate::deployment_truth::{
+    DeploymentCheckV1, LocalDeploymentCheckRequest, check_local_deployment,
+};
 use crate::format::wasm_size_label;
 use crate::icp::{self, CANIC_ICP_LOCAL_NETWORK_URL_ENV, CANIC_ICP_LOCAL_ROOT_KEY_ENV};
 use crate::release_set::{
@@ -146,6 +149,16 @@ pub fn install_root(options: InstallRootOptions) -> Result<(), Box<dyn std::erro
     )?;
     timings.build_all = build_started_at.elapsed();
 
+    let deployment_truth_check = current_install_deployment_truth_check(
+        &options,
+        &workspace_root,
+        &icp_root,
+        &config_path,
+        &fleet_name,
+    )?;
+    enforce_install_artifact_gate(&deployment_truth_check)?;
+    print_install_deployment_truth_gate(&deployment_truth_check);
+
     let emit_manifest_started_at = Instant::now();
     let manifest_path = emit_root_release_set_manifest_with_config(
         &workspace_root,
@@ -200,6 +213,107 @@ pub fn install_root(options: InstallRootOptions) -> Result<(), Box<dyn std::erro
     let state_path = write_install_state(&icp_root, &options.network, &state)?;
     print_install_result_summary(&options.network, &state.fleet, &state_path);
     Ok(())
+}
+
+/// Build the same read-only deployment truth check that can be used as a
+/// preflight for the current install inputs without mutating deployment state.
+pub fn check_install_deployment_truth(
+    options: &InstallRootOptions,
+    observed_at: impl Into<String>,
+) -> Result<DeploymentCheckV1, Box<dyn std::error::Error>> {
+    let workspace_root = workspace_root()?;
+    let icp_root = match &options.icp_root {
+        Some(path) => path.canonicalize()?,
+        None => icp_root()?,
+    };
+    let config_path = resolve_install_config_path(
+        &icp_root,
+        options.config_path.as_deref(),
+        options.interactive_config_selection,
+    )?;
+    let fleet_name = configured_fleet_name(&config_path)?;
+    validate_expected_fleet_name(options.expected_fleet.as_deref(), &fleet_name, &config_path)?;
+    validate_fleet_name(&fleet_name)?;
+    current_install_deployment_truth_check_at(
+        options,
+        &workspace_root,
+        &icp_root,
+        &config_path,
+        &fleet_name,
+        observed_at.into(),
+    )
+}
+
+fn current_install_deployment_truth_check(
+    options: &InstallRootOptions,
+    workspace_root: &Path,
+    icp_root: &Path,
+    config_path: &Path,
+    fleet_name: &str,
+) -> Result<DeploymentCheckV1, Box<dyn std::error::Error>> {
+    current_install_deployment_truth_check_at(
+        options,
+        workspace_root,
+        icp_root,
+        config_path,
+        fleet_name,
+        format!("unix:{}", current_unix_secs()?),
+    )
+}
+
+fn current_install_deployment_truth_check_at(
+    options: &InstallRootOptions,
+    workspace_root: &Path,
+    icp_root: &Path,
+    config_path: &Path,
+    fleet_name: &str,
+    observed_at: String,
+) -> Result<DeploymentCheckV1, Box<dyn std::error::Error>> {
+    let build_profile = options
+        .build_profile
+        .unwrap_or_else(CanisterBuildProfile::current)
+        .target_dir_name()
+        .to_string();
+
+    check_local_deployment(&LocalDeploymentCheckRequest {
+        deployment_name: fleet_name.to_string(),
+        network: options.network.clone(),
+        workspace_root: workspace_root.to_path_buf(),
+        icp_root: icp_root.to_path_buf(),
+        config_path: Some(config_path.to_path_buf()),
+        observed_at,
+        runtime_variant: options.network.clone(),
+        build_profile,
+    })
+    .map_err(Into::into)
+}
+
+fn enforce_install_artifact_gate(
+    check: &DeploymentCheckV1,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let blockers = check
+        .report
+        .hard_failures
+        .iter()
+        .filter(|finding| finding.code == "artifact_missing")
+        .collect::<Vec<_>>();
+    if blockers.is_empty() {
+        return Ok(());
+    }
+
+    let details = blockers
+        .iter()
+        .map(|finding| finding.message.as_str())
+        .collect::<Vec<_>>()
+        .join("; ");
+    Err(format!("deployment truth artifact gate blocked install: {details}").into())
+}
+
+fn print_install_deployment_truth_gate(check: &DeploymentCheckV1) {
+    println!("Deployment truth: {}", check.report.summary);
+    if !check.report.warnings.is_empty() {
+        println!("Deployment truth warnings: {}", check.report.warnings.len());
+    }
 }
 
 fn validate_expected_fleet_name(

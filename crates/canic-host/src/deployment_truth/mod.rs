@@ -1,5 +1,7 @@
 //! Passive deployment-truth model types for host-side planning and safety checks.
 
+use std::path::{Path, PathBuf};
+
 mod model;
 mod observe;
 mod plan;
@@ -29,3 +31,16 @@ pub use report::{
 };
 
 pub const DEPLOYMENT_TRUTH_SCHEMA_VERSION: u32 = 1;
+
+fn deployment_config_path(workspace_root: &Path, config_path: Option<&Path>) -> PathBuf {
+    config_path.map_or_else(
+        || crate::release_set::config_path(workspace_root),
+        |path| {
+            if path.is_absolute() {
+                path.to_path_buf()
+            } else {
+                workspace_root.join(path)
+            }
+        },
+    )
+}

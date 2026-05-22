@@ -10,6 +10,7 @@ pub struct LocalDeploymentCheckRequest {
     pub network: String,
     pub workspace_root: std::path::PathBuf,
     pub icp_root: std::path::PathBuf,
+    pub config_path: Option<std::path::PathBuf>,
     pub observed_at: String,
     pub runtime_variant: String,
     pub build_profile: String,
@@ -24,6 +25,7 @@ pub fn check_local_deployment(
         network: request.network.clone(),
         workspace_root: request.workspace_root.clone(),
         icp_root: request.icp_root.clone(),
+        config_path: request.config_path.clone(),
         runtime_variant: request.runtime_variant.clone(),
         build_profile: request.build_profile.clone(),
     });
@@ -32,6 +34,7 @@ pub fn check_local_deployment(
         network: request.network.clone(),
         workspace_root: request.workspace_root.clone(),
         icp_root: request.icp_root.clone(),
+        config_path: request.config_path.clone(),
         observed_at: request.observed_at.clone(),
     })?;
     let diff = compare_plan_to_inventory(&plan, &inventory);
@@ -83,7 +86,13 @@ pub fn compare_plan_to_inventory(
         &mut hard_failures,
         &mut warnings,
     );
-    compare_canisters(plan, inventory, &mut controller_diff, &mut hard_failures);
+    compare_canisters(
+        plan,
+        inventory,
+        &mut controller_diff,
+        &mut hard_failures,
+        &mut warnings,
+    );
     compare_embedded_config(
         plan,
         inventory,
@@ -261,6 +270,7 @@ fn compare_canisters(
     inventory: &DeploymentInventoryV1,
     controller_diff: &mut Vec<DiffItemV1>,
     hard_failures: &mut Vec<SafetyFindingV1>,
+    warnings: &mut Vec<SafetyFindingV1>,
 ) {
     for expected in &plan.expected_canisters {
         let observed = expected.canister_id.as_ref().map_or_else(
@@ -278,19 +288,33 @@ fn compare_canisters(
             },
         );
         let Some(observed) = observed else {
+            let severity = if expected.canister_id.is_some() {
+                SafetySeverityV1::HardFailure
+            } else {
+                SafetySeverityV1::Warning
+            };
             controller_diff.push(diff_item(
                 "canister",
                 &expected.role,
                 expected.canister_id.clone(),
                 None,
-                SafetySeverityV1::HardFailure,
+                severity,
             ));
-            hard_failures.push(finding(
-                "canister_missing",
+            let finding = finding(
+                if expected.canister_id.is_some() {
+                    "canister_missing"
+                } else {
+                    "canister_unobserved"
+                },
                 format!("missing observed canister for role {}", expected.role),
-                SafetySeverityV1::HardFailure,
+                severity,
                 Some(expected.role.clone()),
-            ));
+            );
+            if expected.canister_id.is_some() {
+                hard_failures.push(finding);
+            } else {
+                warnings.push(finding);
+            }
             continue;
         };
         if matches!(

@@ -2,7 +2,7 @@ use super::*;
 use crate::{
     install_root::read_named_fleet_install_state_from_root,
     release_set::{
-        ROOT_RELEASE_SET_MANIFEST_FILE, config_path, configured_fleet_name, configured_fleet_roles,
+        ROOT_RELEASE_SET_MANIFEST_FILE, configured_fleet_name, configured_fleet_roles,
         load_root_release_set_manifest,
     },
 };
@@ -25,6 +25,7 @@ pub struct LocalInventoryRequest {
     pub network: String,
     pub workspace_root: PathBuf,
     pub icp_root: PathBuf,
+    pub config_path: Option<PathBuf>,
     pub observed_at: String,
 }
 
@@ -36,6 +37,7 @@ pub struct LocalArtifactManifestRequest {
     pub network: String,
     pub workspace_root: PathBuf,
     pub icp_root: PathBuf,
+    pub config_path: Option<PathBuf>,
 }
 
 ///
@@ -51,7 +53,7 @@ pub enum DeploymentTruthError {
 pub fn collect_local_deployment_inventory(
     request: &LocalInventoryRequest,
 ) -> Result<DeploymentInventoryV1, DeploymentTruthError> {
-    let config = config_path(&request.workspace_root);
+    let config = deployment_config_path(&request.workspace_root, request.config_path.as_deref());
     let mut unresolved_observations = Vec::new();
     let mut roles = Vec::new();
 
@@ -124,7 +126,7 @@ pub fn collect_local_deployment_inventory(
 pub fn collect_local_role_artifact_manifest(
     request: &LocalArtifactManifestRequest,
 ) -> RoleArtifactManifestV1 {
-    let config = config_path(&request.workspace_root);
+    let config = deployment_config_path(&request.workspace_root, request.config_path.as_deref());
     let mut unresolved_artifacts = Vec::new();
     let fleet_name = configured_fleet_name(&config).unwrap_or_else(|err| {
         unresolved_artifacts.push(observation_gap(

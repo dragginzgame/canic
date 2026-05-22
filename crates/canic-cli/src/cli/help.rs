@@ -68,6 +68,11 @@ pub const COMMAND_SPECS: &[CommandSpec] = &[
         scope: CommandScope::FleetContext,
     },
     CommandSpec {
+        name: "deploy",
+        about: "Check deployment truth before mutation",
+        scope: CommandScope::FleetContext,
+    },
+    CommandSpec {
         name: "config",
         about: "Inspect selected fleet config",
         scope: CommandScope::FleetContext,

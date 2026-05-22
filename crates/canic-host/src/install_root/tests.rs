@@ -1,12 +1,15 @@
 use super::{
-    INSTALL_STATE_SCHEMA_VERSION, InstallState, InstallTimingSummary, add_create_root_target,
-    add_icp_environment_target, add_local_root_create_cycles_arg, config_selection_error,
-    discover_canic_config_choices, discover_project_canic_config_choices, fleet_install_state_path,
-    icp_canister_command_in_network, is_missing_canister_id_error, parse_bootstrap_status_value,
-    parse_canister_id_json, parse_created_canister_id, parse_cycle_balance_response,
-    parse_root_ready_value, read_fleet_install_state, render_install_timing_summary,
-    resolve_install_config_path, root_init_args, validate_expected_fleet_name, write_install_state,
+    INSTALL_STATE_SCHEMA_VERSION, InstallRootOptions, InstallState, InstallTimingSummary,
+    add_create_root_target, add_icp_environment_target, add_local_root_create_cycles_arg,
+    check_install_deployment_truth, config_selection_error, current_install_deployment_truth_check,
+    discover_canic_config_choices, discover_project_canic_config_choices,
+    enforce_install_artifact_gate, fleet_install_state_path, icp_canister_command_in_network,
+    is_missing_canister_id_error, parse_bootstrap_status_value, parse_canister_id_json,
+    parse_created_canister_id, parse_cycle_balance_response, parse_root_ready_value,
+    read_fleet_install_state, render_install_timing_summary, resolve_install_config_path,
+    root_init_args, validate_expected_fleet_name, write_install_state,
 };
+use crate::canister_build::CanisterBuildProfile;
 use crate::icp::{CANIC_ICP_LOCAL_NETWORK_URL_ENV, CANIC_ICP_LOCAL_ROOT_KEY_ENV};
 use crate::release_set::configured_install_targets;
 use crate::test_support::temp_dir;
@@ -317,6 +320,131 @@ kind = "singleton"
             "user_hub".to_string()
         ]
     );
+}
+
+#[test]
+fn install_truth_preflight_uses_current_install_inputs_without_mutation() {
+    with_guarded_env(|| {
+        let root = temp_dir("canic-install-truth-preflight");
+        fs::create_dir_all(root.join("fleets/demo")).expect("create config dir");
+        fs::write(
+            root.join("fleets/demo/canic.toml"),
+            r#"
+controllers = []
+app_index = []
+
+[fleet]
+name = "demo"
+
+[app]
+init_mode = "enabled"
+[app.whitelist]
+
+[subnets.prime.canisters.root]
+kind = "root"
+
+[subnets.prime.canisters.user_hub]
+kind = "singleton"
+"#,
+        )
+        .expect("write config");
+        write_wasm_gz_artifact(&root, "root", b"root-artifact");
+        write_wasm_gz_artifact(&root, "user_hub", b"user-hub-artifact");
+        let previous_workspace_root = env::var_os("CANIC_WORKSPACE_ROOT");
+        unsafe {
+            env::set_var("CANIC_WORKSPACE_ROOT", &root);
+        }
+
+        let options = InstallRootOptions {
+            root_canister: "root".to_string(),
+            root_build_target: "root".to_string(),
+            network: "local".to_string(),
+            icp_root: Some(root.clone()),
+            build_profile: Some(CanisterBuildProfile::Fast),
+            ready_timeout_seconds: 30,
+            config_path: Some("fleets/demo/canic.toml".to_string()),
+            expected_fleet: Some("demo".to_string()),
+            interactive_config_selection: false,
+        };
+
+        let check = check_install_deployment_truth(&options, "2026-05-22T00:00:00Z")
+            .expect("install truth preflight");
+
+        assert_eq!(check.check_id, "local:local:demo:check");
+        assert_eq!(check.plan.fleet_template, "demo");
+        assert_eq!(
+            check
+                .plan
+                .role_artifacts
+                .iter()
+                .map(|artifact| artifact.build_profile.as_str())
+                .collect::<Vec<_>>(),
+            vec!["fast", "fast"]
+        );
+        assert_eq!(check.inventory.observed_artifacts.len(), 2);
+        enforce_install_artifact_gate(&check).expect("complete local artifacts should pass gate");
+        assert!(!root.join(".canic").exists());
+
+        restore_env_var("CANIC_WORKSPACE_ROOT", previous_workspace_root);
+        fs::remove_dir_all(root).expect("clean temp dir");
+    });
+}
+
+#[test]
+fn install_truth_artifact_gate_blocks_missing_built_artifacts() {
+    let root = temp_dir("canic-install-truth-artifact-gate");
+    let config_path = root.join("fleets/demo/canic.toml");
+    fs::create_dir_all(config_path.parent().expect("config parent")).expect("create config dir");
+    fs::write(
+        &config_path,
+        r#"
+controllers = []
+app_index = []
+
+[fleet]
+name = "demo"
+
+[app]
+init_mode = "enabled"
+[app.whitelist]
+
+[subnets.prime.canisters.root]
+kind = "root"
+
+[subnets.prime.canisters.user_hub]
+kind = "singleton"
+"#,
+    )
+    .expect("write config");
+    write_wasm_gz_artifact(&root, "root", b"root-artifact");
+
+    let options = InstallRootOptions {
+        root_canister: "root".to_string(),
+        root_build_target: "root".to_string(),
+        network: "local".to_string(),
+        icp_root: Some(root.clone()),
+        build_profile: Some(CanisterBuildProfile::Fast),
+        ready_timeout_seconds: 30,
+        config_path: Some("fleets/demo/canic.toml".to_string()),
+        expected_fleet: Some("demo".to_string()),
+        interactive_config_selection: false,
+    };
+
+    let check =
+        current_install_deployment_truth_check(&options, &root, &root, &config_path, "demo")
+            .expect("deployment truth check");
+
+    assert!(
+        check
+            .report
+            .hard_failures
+            .iter()
+            .any(|finding| finding.code == "artifact_missing"
+                && finding.subject.as_deref() == Some("user_hub"))
+    );
+    assert!(enforce_install_artifact_gate(&check).is_err());
+
+    fs::remove_dir_all(root).expect("clean temp dir");
 }
 
 #[test]
@@ -821,6 +949,15 @@ fn write_temp_workspace_config(config_source: &str) -> PathBuf {
     fs::write(root.join("fleets/canic.toml"), config_source)
         .expect("temp canic.toml must be written");
     root
+}
+
+fn write_wasm_gz_artifact(root: &Path, role: &str, bytes: &[u8]) {
+    let path = root
+        .join(".icp/local/canisters")
+        .join(role)
+        .join(format!("{role}.wasm.gz"));
+    fs::create_dir_all(path.parent().expect("artifact parent")).expect("create artifact dir");
+    fs::write(path, bytes).expect("write artifact");
 }
 
 fn with_guarded_env(run: impl FnOnce()) {

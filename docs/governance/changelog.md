@@ -73,6 +73,7 @@ The root changelog must link to the detailed file when present.
 Only the root `CHANGELOG.md` may contain a top-level `## Unreleased` section.
 Detailed minor notes must start with versioned patch sections and must not
 carry their own `Unreleased` sections.
+This root-only rule is guarded by `cargo test -p canic --test changelog_governance`.
 
 Use root `Unreleased` for ordinary development batches that are not yet being
 published. It is the normal place to record user-facing, operator-facing, or

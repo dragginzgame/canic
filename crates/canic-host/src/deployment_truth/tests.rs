@@ -170,6 +170,7 @@ fn local_check_builds_plan_inventory_diff_and_report() {
         network: "local".to_string(),
         workspace_root,
         icp_root,
+        config_path: None,
         observed_at: "2026-05-21T00:00:00Z".to_string(),
         runtime_variant: "local".to_string(),
         build_profile: "fast".to_string(),
@@ -215,6 +216,7 @@ fn local_inventory_collects_configured_roles_and_artifacts_without_live_queries(
         network: "local".to_string(),
         workspace_root,
         icp_root,
+        config_path: None,
         observed_at: "2026-05-21T00:00:00Z".to_string(),
     })
     .expect("collect inventory");
@@ -252,6 +254,7 @@ fn local_inventory_reports_missing_config_as_observation_gap() {
         network: "local".to_string(),
         workspace_root: temp.path().join("workspace"),
         icp_root: temp.path().join("icp"),
+        config_path: None,
         observed_at: "2026-05-21T00:00:00Z".to_string(),
     })
     .expect("collect inventory");
@@ -287,6 +290,7 @@ fn local_artifact_manifest_collects_roles_and_release_set_hashes() {
         network: "local".to_string(),
         workspace_root,
         icp_root,
+        config_path: None,
     });
 
     assert_eq!(manifest.manifest_id, "local:local:demo:artifacts");
@@ -337,6 +341,7 @@ fn local_artifact_manifest_reports_network_artifact_fallback() {
         network: "ic".to_string(),
         workspace_root,
         icp_root,
+        config_path: None,
     });
 
     assert!(
@@ -361,6 +366,7 @@ fn local_artifact_manifest_records_missing_artifacts_as_gaps() {
         network: "local".to_string(),
         workspace_root,
         icp_root,
+        config_path: None,
     });
 
     assert!(
@@ -394,6 +400,7 @@ fn local_plan_uses_configured_roles_and_local_artifact_manifest() {
         network: "local".to_string(),
         workspace_root,
         icp_root,
+        config_path: None,
         runtime_variant: "local".to_string(),
         build_profile: "fast".to_string(),
     });
@@ -536,6 +543,51 @@ fn deployment_diff_warns_on_observation_gaps_without_blocking() {
             .any(|item| item.code == "observation_gap")
     );
     assert_eq!(report.status, SafetyStatusV1::Warning);
+}
+
+#[test]
+fn deployment_diff_warns_when_unspecified_canister_id_is_unobserved() {
+    let mut plan = sample_plan();
+    plan.expected_canisters[0].canister_id = None;
+    plan.expected_verifier_readiness.required = false;
+    let inventory = DeploymentInventoryV1 {
+        schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
+        inventory_id: "inventory-1".to_string(),
+        observed_at: "2026-05-21T00:00:00Z".to_string(),
+        observed_identity: Some(sample_identity()),
+        local_config: LocalDeploymentConfigV1 {
+            config_path: Some("icp.yml".to_string()),
+            raw_config_sha256: None,
+            canonical_embedded_config_sha256: Some("runtime".to_string()),
+        },
+        observed_canisters: Vec::new(),
+        observed_pool: Vec::new(),
+        observed_artifacts: vec![ObservedArtifactV1 {
+            role: "root".to_string(),
+            artifact_path: "root.wasm.gz".to_string(),
+            file_sha256: Some("file".to_string()),
+            file_sha256_source: Some(ArtifactDigestSourceV1::ObservedFileDigest),
+            payload_sha256: Some("gzip".to_string()),
+            payload_size_bytes: Some(10),
+            source: ArtifactSourceV1::LocalBuild,
+        }],
+        observed_verifier_readiness: VerifierReadinessObservationV1 {
+            status: ObservationStatusV1::NotObserved,
+            role_epochs: Vec::new(),
+        },
+        unresolved_observations: Vec::new(),
+    };
+
+    let diff = compare_plan_to_inventory(&plan, &inventory);
+
+    assert_eq!(diff.resume_safety.status, SafetyStatusV1::Warning);
+    assert!(diff.hard_failures.is_empty());
+    assert!(
+        diff.warnings
+            .iter()
+            .any(|finding| finding.code == "canister_unobserved"
+                && finding.subject.as_deref() == Some("root"))
+    );
 }
 
 #[test]

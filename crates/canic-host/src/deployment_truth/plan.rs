@@ -1,5 +1,5 @@
 use super::*;
-use crate::release_set::{config_path, configured_fleet_name, configured_fleet_roles};
+use crate::release_set::{configured_fleet_name, configured_fleet_roles};
 use std::path::PathBuf;
 
 ///
@@ -11,6 +11,7 @@ pub struct LocalDeploymentPlanRequest {
     pub network: String,
     pub workspace_root: PathBuf,
     pub icp_root: PathBuf,
+    pub config_path: Option<PathBuf>,
     pub runtime_variant: String,
     pub build_profile: String,
 }
@@ -19,7 +20,7 @@ pub struct LocalDeploymentPlanRequest {
 /// observations without querying or mutating IC state.
 #[must_use]
 pub fn build_local_deployment_plan(request: &LocalDeploymentPlanRequest) -> DeploymentPlanV1 {
-    let config = config_path(&request.workspace_root);
+    let config = deployment_config_path(&request.workspace_root, request.config_path.as_deref());
     let mut unresolved_assumptions = Vec::new();
     let fleet_template = configured_fleet_name(&config).unwrap_or_else(|err| {
         unresolved_assumptions.push(assumption(
@@ -45,6 +46,7 @@ pub fn build_local_deployment_plan(request: &LocalDeploymentPlanRequest) -> Depl
         network: request.network.clone(),
         workspace_root: request.workspace_root.clone(),
         icp_root: request.icp_root.clone(),
+        config_path: Some(config),
     });
     unresolved_assumptions.extend(
         artifact_manifest

@@ -2,6 +2,7 @@ mod backup;
 mod build;
 mod cli;
 mod cycles;
+mod deploy;
 mod endpoints;
 mod fleets;
 mod info;
@@ -51,6 +52,9 @@ pub enum CliError {
 
     #[error("config: {0}")]
     Config(String),
+
+    #[error("deploy: {0}")]
+    Deploy(#[from] deploy::DeployCommandError),
 
     #[error("endpoints: {0}")]
     Endpoints(#[from] endpoints::EndpointsCommandError),
@@ -132,6 +136,7 @@ where
         "backup" => backup::run(tail).map_err(CliError::from),
         "build" => build::run(tail).map_err(CliError::from),
         "config" => list::run_config(tail).map_err(|err| CliError::Config(err.to_string())),
+        "deploy" => deploy::run(tail).map_err(CliError::from),
         "endpoints" => endpoints::run(tail).map_err(CliError::from),
         "fleet" => fleets::run(tail).map_err(CliError::from),
         "info" => info::run(tail).map_err(CliError::from),

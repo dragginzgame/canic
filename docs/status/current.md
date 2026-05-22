@@ -22,6 +22,17 @@ inspect only the files needed for the current task.
 
 ## Recent Work
 
+- Added a read-only current-install deployment truth preflight helper. It
+  adapts `InstallRootOptions` into the existing local deployment truth check
+  pipeline without calling installer mutation steps.
+- Added `canic deploy plan|inventory|check <fleet>` as the first read-only
+  operator-facing deployment truth commands. They print local deployment truth
+  JSON and do not replace `canic install`.
+- Added the first current-install deployment truth safety gate. After the build
+  phase, the installer now refuses to continue when the deployment truth check
+  proves configured role artifacts are missing.
+- Added changelog governance coverage so `## Unreleased` remains root-only and
+  detailed minor changelog files stay versioned.
 - Added per-design-line `status.md` logs to the 0.41-0.50 design directories.
   These files are now the durable place to record what actually landed, what
   drifted from the design, and what remains open for each minor.

@@ -138,6 +138,10 @@ fn command_accepts_global_icp(command: &str, tail: &[OsString]) -> bool {
 fn command_accepts_global_network(command: &str, tail: &[OsString]) -> bool {
     match command {
         "build" | "endpoints" | "install" | "medic" | "metrics" | "status" => true,
+        "deploy" => matches!(
+            tail.first().and_then(|arg| arg.to_str()),
+            Some("check" | "inventory" | "plan")
+        ),
         "info" => info_leaf_accepts_globals(tail),
         "fleet" => tail.first().and_then(|arg| arg.to_str()) == Some("list"),
         "snapshot" => tail.first().and_then(|arg| arg.to_str()) == Some("download"),
