@@ -6,12 +6,9 @@ use crate::{
         load_root_release_set_manifest,
     },
 };
-use sha2::{Digest, Sha256};
 use std::{
     collections::BTreeMap,
-    fmt::Write as _,
     fs,
-    io::Read,
     path::{Path, PathBuf},
 };
 use thiserror::Error as ThisError;
@@ -85,9 +82,11 @@ pub fn collect_local_deployment_inventory(
     let install_state =
         read_named_fleet_install_state_from_root(&request.icp_root, &request.network, &fleet_name)
             .map_err(|err| DeploymentTruthError::LocalState(err.to_string()))?;
+    let raw_config_sha256 = observe_config_sha256(&config, &mut unresolved_observations);
     let observed_identity = Some(local_deployment_identity(
         request,
         &fleet_name,
+        raw_config_sha256.clone(),
         install_state
             .as_ref()
             .map(|state| state.root_canister_id.clone()),
@@ -106,7 +105,7 @@ pub fn collect_local_deployment_inventory(
         observed_identity,
         local_config: LocalDeploymentConfigV1 {
             config_path: Some(config.display().to_string()),
-            raw_config_sha256: None,
+            raw_config_sha256,
             canonical_embedded_config_sha256: None,
         },
         observed_canisters: install_state
@@ -366,28 +365,26 @@ fn observe_file_sha256(
     }
 }
 
-fn file_sha256_hex(path: &Path) -> std::io::Result<String> {
-    let mut file = fs::File::open(path)?;
-    let mut hasher = Sha256::new();
-    let mut buffer = [0_u8; 16 * 1024];
-    loop {
-        let read = file.read(&mut buffer)?;
-        if read == 0 {
-            break;
+fn observe_config_sha256(
+    path: &Path,
+    gaps: &mut Vec<DeploymentObservationGapV1>,
+) -> Option<String> {
+    match file_sha256_hex(path) {
+        Ok(hash) => Some(hash),
+        Err(err) => {
+            gaps.push(observation_gap(
+                "local_config.raw_sha256",
+                format!("could not hash config {}: {err}", path.display()),
+            ));
+            None
         }
-        hasher.update(&buffer[..read]);
     }
-    let digest = hasher.finalize();
-    let mut hex = String::with_capacity(digest.len() * 2);
-    for byte in digest {
-        write!(&mut hex, "{byte:02x}").expect("writing to a String cannot fail");
-    }
-    Ok(hex)
 }
 
 fn local_deployment_identity(
     request: &LocalInventoryRequest,
     fleet_name: &str,
+    deployment_manifest_digest: Option<String>,
     root_principal: Option<String>,
 ) -> DeploymentIdentityV1 {
     DeploymentIdentityV1 {
@@ -396,7 +393,7 @@ fn local_deployment_identity(
         root_principal,
         authority_profile_hash: None,
         role_topology_hash: None,
-        deployment_manifest_digest: None,
+        deployment_manifest_digest,
         canonical_runtime_config_digest: None,
         role_embedded_config_set_digest: None,
         artifact_set_digest: None,

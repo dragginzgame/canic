@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-05-21
+Last updated: 2026-05-22
 
 ## Purpose
 
@@ -12,9 +12,8 @@ inspect only the files needed for the current task.
 - Active minor: `0.41.x` deployment truth model.
 - Theme: make deployment intent, live inventory, receipts, normalized diffs,
   and safety reports explicit before installer mutation.
-- Current release-work area: design prep for `DeploymentPlanV1`,
-  `DeploymentInventoryV1`, `DeploymentReceiptV1`, `DeploymentDiffV1`, and
-  `SafetyReportV1`.
+- Current release-work area: local deployment truth surfaces, current-install
+  artifact safety gates, and lightweight phase-receipt evidence.
 - Design started at
   `docs/design/0.41-deployment-truth-model/0.41-design.md`; the core issue is
   that Canic should tell the truth about deployment state before it mutates
@@ -22,6 +21,31 @@ inspect only the files needed for the current task.
 
 ## Recent Work
 
+- Added lightweight deployment truth receipt helpers for the current-install
+  artifact materialization gate. The install path now constructs a
+  `materialize_artifacts` phase receipt from live check evidence, but the gate
+  still makes decisions from the deployment truth check, not from receipt trust.
+- Clarified the deployment roadmap/design contract that execution is partial,
+  not atomic: receipts must preserve per-role/per-phase outcomes, while
+  recovery starts with re-inventory and resume analysis rather than implicit
+  rollback.
+- Clarified the promotion roadmap/design contract that sealed wasm promotion
+  and source/build promotion are separate role-scoped modes. Source/build
+  recipe identity is distinct from target-specific materialization input and
+  target materialization result because embedded config can intentionally
+  change output bytes.
+- Added `canic deploy diff <fleet>` and `canic deploy report <fleet>` so the
+  normalized deployment diff and safety report are directly inspectable without
+  parsing the full deployment check JSON.
+- Added local deployment config SHA-256 evidence to the deployment truth plan
+  and inventory, and made the diff fail closed when the observed deployment
+  manifest digest disagrees with the plan.
+- Made `canic deploy check <fleet>` usable as a read-only automation gate: it
+  still prints the full `DeploymentCheckV1` JSON, but now exits non-zero when
+  the derived `SafetyReportV1` is blocked.
+- Tightened local artifact consistency checks: if the plan and inventory both
+  observe a `.wasm.gz` file digest for the same role, a mismatch becomes a
+  blocking deployment truth finding.
 - Added a read-only current-install deployment truth preflight helper. It
   adapts `InstallRootOptions` into the existing local deployment truth check
   pipeline without calling installer mutation steps.

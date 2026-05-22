@@ -12,9 +12,9 @@ landed, what drifted, and what remains open.
 
 Active implementation is underway.
 
-0.41 has moved beyond design preparation into the passive host-side deployment
-truth model and local observation layer. It has not yet reached installer
-gating.
+0.41 has moved beyond design preparation into the host-side deployment truth
+model, local observation layer, read-only operator JSON surfaces, and the first
+narrow current-install artifact gate.
 
 ## Implemented
 
@@ -41,9 +41,28 @@ gating.
 - Added `canic deploy plan|inventory|check <fleet>` as read-only
   operator-facing commands that emit local deployment truth JSON. They are
   report surfaces, not executor replacements.
+- Added `canic deploy diff <fleet>` and `canic deploy report <fleet>` as
+  direct read-only JSON views for the normalized diff and safety report.
+- Added local deployment config SHA-256 evidence to the deployment truth plan
+  and inventory. The normalized diff now blocks deployment-manifest digest
+  mismatch instead of leaving local config identity blank.
+- Made `canic deploy check <fleet>` return a failing exit status for blocked
+  `SafetyReportV1` output while keeping `plan`, `inventory`, `diff`, and
+  `report` as read-only JSON inspection surfaces.
+- Tightened local artifact consistency checks so plan-observed and
+  inventory-observed `.wasm.gz` file digests for the same role must agree.
 - Wired the first current-install safety gate after build and before
   manifest/install/stage continuation. The gate blocks missing configured role
   artifacts while leaving broader live-inventory warnings report-only.
+- Added lightweight `materialize_artifacts` phase receipt construction for the
+  current-install artifact gate. The receipt records verified postcondition
+  evidence, but it is not persisted and does not replace live check authority.
+- Clarified the cross-line design contract that deployment execution is not
+  atomic. Receipts must be able to express partial application, per-role
+  outcomes, and resume evidence without promising automatic rollback.
+- Clarified the promotion design split between sealed wasm promotion and
+  source/build promotion, with source/build recipe identity kept separate from
+  target-specific materialization input and target materialization result.
 - Captured missing config, artifact roots, release-set manifests, and role
   artifacts as typed observation gaps instead of installer errors.
 - Preserved release-set payload hashes with `ReleaseSetManifest` source
@@ -59,15 +78,18 @@ gating.
 
 ## Not Implemented Yet
 
-- Build a real `DeploymentPlanV1` from resolved config/build intent.
+- Extend `DeploymentPlanV1` beyond resolved local config/build intent with
+  fuller authority, controller, pool, and live-runtime expectations.
 - Extend `DeploymentInventoryV1` with live IC observations such as controllers,
   installed module hashes, and canister status.
 - Extend post-build materialization checks beyond missing configured role
   artifacts.
-- Emit lightweight `DeploymentReceiptV1` records from existing installer phases.
+- Persist or surface `DeploymentReceiptV1` records from existing installer
+  phases beyond the in-memory artifact-gate receipt.
+- Populate role-scoped phase receipts and operation statuses once installer
+  phases can mutate multiple roles or canisters.
 - Compare plan, inventory, and receipt during install/resume.
 - Gate mutating installer operations on broader `SafetyReportV1` findings.
-- Expose an operator-facing deployment truth report through CLI/host commands.
 
 ## Drift Log
 

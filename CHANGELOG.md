@@ -8,9 +8,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
-No unreleased changes.
-
 ## [0.41.x] - 2026-05-21 - Deployment truth model
+
+- `0.41.4` adds deployment truth receipt evidence for the current-install
+  artifact gate, exposes direct `deploy diff` and `deploy report` JSON views,
+  and tightens read-only safety checks around local config and artifact digest
+  drift.
 
 - `0.41.3` adds read-only `canic deploy plan|inventory|check <fleet>` JSON
   surfaces, adapts current install inputs into deployment truth checks, and

@@ -1,13 +1,13 @@
 use super::{
     INSTALL_STATE_SCHEMA_VERSION, InstallRootOptions, InstallState, InstallTimingSummary,
     add_create_root_target, add_icp_environment_target, add_local_root_create_cycles_arg,
-    check_install_deployment_truth, config_selection_error, current_install_deployment_truth_check,
-    discover_canic_config_choices, discover_project_canic_config_choices,
-    enforce_install_artifact_gate, fleet_install_state_path, icp_canister_command_in_network,
-    is_missing_canister_id_error, parse_bootstrap_status_value, parse_canister_id_json,
-    parse_created_canister_id, parse_cycle_balance_response, parse_root_ready_value,
-    read_fleet_install_state, render_install_timing_summary, resolve_install_config_path,
-    root_init_args, validate_expected_fleet_name, write_install_state,
+    check_install_deployment_truth, config_selection_error,
+    current_install_deployment_truth_check_at, discover_canic_config_choices,
+    discover_project_canic_config_choices, enforce_install_artifact_gate, fleet_install_state_path,
+    icp_canister_command_in_network, is_missing_canister_id_error, parse_bootstrap_status_value,
+    parse_canister_id_json, parse_created_canister_id, parse_cycle_balance_response,
+    parse_root_ready_value, read_fleet_install_state, render_install_timing_summary,
+    resolve_install_config_path, root_init_args, validate_expected_fleet_name, write_install_state,
 };
 use crate::canister_build::CanisterBuildProfile;
 use crate::icp::{CANIC_ICP_LOCAL_NETWORK_URL_ENV, CANIC_ICP_LOCAL_ROOT_KEY_ENV};
@@ -430,9 +430,15 @@ kind = "singleton"
         interactive_config_selection: false,
     };
 
-    let check =
-        current_install_deployment_truth_check(&options, &root, &root, &config_path, "demo")
-            .expect("deployment truth check");
+    let check = current_install_deployment_truth_check_at(
+        &options,
+        &root,
+        &root,
+        &config_path,
+        "demo",
+        "2026-05-22T00:00:00Z".to_string(),
+    )
+    .expect("deployment truth check");
 
     assert!(
         check

@@ -140,7 +140,7 @@ fn command_accepts_global_network(command: &str, tail: &[OsString]) -> bool {
         "build" | "endpoints" | "install" | "medic" | "metrics" | "status" => true,
         "deploy" => matches!(
             tail.first().and_then(|arg| arg.to_str()),
-            Some("check" | "inventory" | "plan")
+            Some("check" | "diff" | "inventory" | "plan" | "report")
         ),
         "info" => info_leaf_accepts_globals(tail),
         "fleet" => tail.first().and_then(|arg| arg.to_str()) == Some("list"),

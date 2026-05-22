@@ -1,10 +1,17 @@
 //! Passive deployment-truth model types for host-side planning and safety checks.
 
-use std::path::{Path, PathBuf};
+use sha2::{Digest, Sha256};
+use std::{
+    fmt::Write as _,
+    fs,
+    io::Read,
+    path::{Path, PathBuf},
+};
 
 mod model;
 mod observe;
 mod plan;
+mod receipt;
 mod report;
 #[cfg(test)]
 mod tests;
@@ -25,6 +32,7 @@ pub use observe::{
     collect_local_deployment_inventory, collect_local_role_artifact_manifest,
 };
 pub use plan::{LocalDeploymentPlanRequest, build_local_deployment_plan};
+pub use receipt::{artifact_gate_phase_receipt, deployment_receipt_from_check, phase_receipt};
 pub use report::{
     LocalDeploymentCheckRequest, check_local_deployment, compare_plan_to_inventory,
     safety_report_from_diff,
@@ -43,4 +51,23 @@ fn deployment_config_path(workspace_root: &Path, config_path: Option<&Path>) -> 
             }
         },
     )
+}
+
+fn file_sha256_hex(path: &Path) -> std::io::Result<String> {
+    let mut file = fs::File::open(path)?;
+    let mut hasher = Sha256::new();
+    let mut buffer = [0_u8; 16 * 1024];
+    loop {
+        let read = file.read(&mut buffer)?;
+        if read == 0 {
+            break;
+        }
+        hasher.update(&buffer[..read]);
+    }
+    let digest = hasher.finalize();
+    let mut hex = String::with_capacity(digest.len() * 2);
+    for byte in digest {
+        write!(&mut hex, "{byte:02x}").expect("writing to a String cannot fail");
+    }
+    Ok(hex)
 }

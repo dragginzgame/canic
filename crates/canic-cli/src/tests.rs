@@ -74,8 +74,10 @@ fn command_family_help_returns_ok() {
         &["build", "help"],
         &["deploy", "help"],
         &["deploy", "check", "help"],
+        &["deploy", "diff", "help"],
         &["deploy", "inventory", "help"],
         &["deploy", "plan", "help"],
+        &["deploy", "report", "help"],
         &["info", "help"],
         &["info", "list", "help"],
         &["info", "cycles", "help"],
@@ -230,6 +232,14 @@ fn deploy_version_flags_return_ok() {
     assert!(
         run([
             OsString::from("deploy"),
+            OsString::from("diff"),
+            OsString::from("--version")
+        ])
+        .is_ok()
+    );
+    assert!(
+        run([
+            OsString::from("deploy"),
             OsString::from("inventory"),
             OsString::from("--version")
         ])
@@ -239,6 +249,14 @@ fn deploy_version_flags_return_ok() {
         run([
             OsString::from("deploy"),
             OsString::from("plan"),
+            OsString::from("--version")
+        ])
+        .is_ok()
+    );
+    assert!(
+        run([
+            OsString::from("deploy"),
+            OsString::from("report"),
             OsString::from("--version")
         ])
         .is_ok()
@@ -369,19 +387,32 @@ fn global_network_is_forwarded_to_commands_that_use_network() {
 #[test]
 fn global_network_is_forwarded_to_deploy() {
     let mut tail = vec![OsString::from("check"), OsString::from("demo")];
+    let mut diff_tail = vec![OsString::from("diff"), OsString::from("demo")];
     let mut inventory_tail = vec![OsString::from("inventory"), OsString::from("demo")];
     let mut plan_tail = vec![OsString::from("plan"), OsString::from("demo")];
+    let mut report_tail = vec![OsString::from("report"), OsString::from("demo")];
     let mut family_tail = Vec::new();
 
     apply_global_network("deploy", &mut tail, Some("ic".to_string()));
+    apply_global_network("deploy", &mut diff_tail, Some("ic".to_string()));
     apply_global_network("deploy", &mut inventory_tail, Some("ic".to_string()));
     apply_global_network("deploy", &mut plan_tail, Some("ic".to_string()));
+    apply_global_network("deploy", &mut report_tail, Some("ic".to_string()));
     apply_global_network("deploy", &mut family_tail, Some("ic".to_string()));
 
     assert_eq!(
         tail,
         vec![
             OsString::from("check"),
+            OsString::from("demo"),
+            OsString::from(INTERNAL_NETWORK_OPTION),
+            OsString::from("ic")
+        ]
+    );
+    assert_eq!(
+        diff_tail,
+        vec![
+            OsString::from("diff"),
             OsString::from("demo"),
             OsString::from(INTERNAL_NETWORK_OPTION),
             OsString::from("ic")
@@ -400,6 +431,15 @@ fn global_network_is_forwarded_to_deploy() {
         plan_tail,
         vec![
             OsString::from("plan"),
+            OsString::from("demo"),
+            OsString::from(INTERNAL_NETWORK_OPTION),
+            OsString::from("ic")
+        ]
+    );
+    assert_eq!(
+        report_tail,
+        vec![
+            OsString::from("report"),
             OsString::from("demo"),
             OsString::from(INTERNAL_NETWORK_OPTION),
             OsString::from("ic")

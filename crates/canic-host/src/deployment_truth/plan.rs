@@ -42,6 +42,7 @@ pub fn build_local_deployment_plan(request: &LocalDeploymentPlanRequest) -> Depl
         ));
         Vec::new()
     });
+    let deployment_manifest_digest = config_sha256_assumption(&config, &mut unresolved_assumptions);
     let artifact_manifest = collect_local_role_artifact_manifest(&LocalArtifactManifestRequest {
         network: request.network.clone(),
         workspace_root: request.workspace_root.clone(),
@@ -64,7 +65,7 @@ pub fn build_local_deployment_plan(request: &LocalDeploymentPlanRequest) -> Depl
             root_principal: None,
             authority_profile_hash: None,
             role_topology_hash: None,
-            deployment_manifest_digest: None,
+            deployment_manifest_digest,
             canonical_runtime_config_digest: None,
             role_embedded_config_set_digest: None,
             artifact_set_digest: None,
@@ -116,5 +117,21 @@ fn assumption(key: impl Into<String>, description: impl Into<String>) -> Deploym
     DeploymentAssumptionV1 {
         key: key.into(),
         description: description.into(),
+    }
+}
+
+fn config_sha256_assumption(
+    path: &std::path::Path,
+    assumptions: &mut Vec<DeploymentAssumptionV1>,
+) -> Option<String> {
+    match file_sha256_hex(path) {
+        Ok(hash) => Some(hash),
+        Err(err) => {
+            assumptions.push(assumption(
+                "local_config.raw_sha256",
+                format!("could not hash config {}: {err}", path.display()),
+            ));
+            None
+        }
     }
 }

@@ -3,7 +3,8 @@ use crate::canister_build::{
     current_workspace_build_context_once,
 };
 use crate::deployment_truth::{
-    DeploymentCheckV1, LocalDeploymentCheckRequest, check_local_deployment,
+    DeploymentCheckV1, LocalDeploymentCheckRequest, PhaseReceiptV1, artifact_gate_phase_receipt,
+    check_local_deployment,
 };
 use crate::format::wasm_size_label;
 use crate::icp::{self, CANIC_ICP_LOCAL_NETWORK_URL_ENV, CANIC_ICP_LOCAL_ROOT_KEY_ENV};
@@ -149,15 +150,13 @@ pub fn install_root(options: InstallRootOptions) -> Result<(), Box<dyn std::erro
     )?;
     timings.build_all = build_started_at.elapsed();
 
-    let deployment_truth_check = current_install_deployment_truth_check(
+    run_install_deployment_truth_artifact_gate(
         &options,
         &workspace_root,
         &icp_root,
         &config_path,
         &fleet_name,
     )?;
-    enforce_install_artifact_gate(&deployment_truth_check)?;
-    print_install_deployment_truth_gate(&deployment_truth_check);
 
     let emit_manifest_started_at = Instant::now();
     let manifest_path = emit_root_release_set_manifest_with_config(
@@ -244,23 +243,6 @@ pub fn check_install_deployment_truth(
     )
 }
 
-fn current_install_deployment_truth_check(
-    options: &InstallRootOptions,
-    workspace_root: &Path,
-    icp_root: &Path,
-    config_path: &Path,
-    fleet_name: &str,
-) -> Result<DeploymentCheckV1, Box<dyn std::error::Error>> {
-    current_install_deployment_truth_check_at(
-        options,
-        workspace_root,
-        icp_root,
-        config_path,
-        fleet_name,
-        format!("unix:{}", current_unix_secs()?),
-    )
-}
-
 fn current_install_deployment_truth_check_at(
     options: &InstallRootOptions,
     workspace_root: &Path,
@@ -288,6 +270,32 @@ fn current_install_deployment_truth_check_at(
     .map_err(Into::into)
 }
 
+fn run_install_deployment_truth_artifact_gate(
+    options: &InstallRootOptions,
+    workspace_root: &Path,
+    icp_root: &Path,
+    config_path: &Path,
+    fleet_name: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let truth_gate_started_at = current_unix_timestamp_label()?;
+    let deployment_truth_check = current_install_deployment_truth_check_at(
+        options,
+        workspace_root,
+        icp_root,
+        config_path,
+        fleet_name,
+        truth_gate_started_at.clone(),
+    )?;
+    let artifact_gate_receipt = artifact_gate_phase_receipt(
+        &deployment_truth_check,
+        truth_gate_started_at,
+        Some(current_unix_timestamp_label()?),
+    );
+    enforce_install_artifact_gate(&deployment_truth_check)?;
+    print_install_deployment_truth_gate(&deployment_truth_check, &artifact_gate_receipt);
+    Ok(())
+}
+
 fn enforce_install_artifact_gate(
     check: &DeploymentCheckV1,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -309,8 +317,12 @@ fn enforce_install_artifact_gate(
     Err(format!("deployment truth artifact gate blocked install: {details}").into())
 }
 
-fn print_install_deployment_truth_gate(check: &DeploymentCheckV1) {
+fn print_install_deployment_truth_gate(check: &DeploymentCheckV1, receipt: &PhaseReceiptV1) {
     println!("Deployment truth: {}", check.report.summary);
+    println!(
+        "Deployment truth receipt: phase={} postcondition={:?}",
+        receipt.phase, receipt.verified_postcondition.status
+    );
     if !check.report.warnings.is_empty() {
         println!("Deployment truth warnings: {}", check.report.warnings.len());
     }
@@ -486,6 +498,10 @@ fn resolve_root_canister_id(
 // Read the current host clock as a unix timestamp for install state.
 fn current_unix_secs() -> Result<u64, Box<dyn std::error::Error>> {
     Ok(SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs())
+}
+
+fn current_unix_timestamp_label() -> Result<String, Box<dyn std::error::Error>> {
+    Ok(format!("unix:{}", current_unix_secs()?))
 }
 
 // Build each configured local install target through the host builder.

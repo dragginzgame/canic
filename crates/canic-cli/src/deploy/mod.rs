@@ -9,6 +9,7 @@ use crate::{
 };
 use canic_host::{
     canister_build::CanisterBuildProfile,
+    deployment_truth::{DeploymentCheckV1, SafetyReportV1, SafetyStatusV1},
     icp_config::resolve_current_canic_icp_root,
     install_root::{InstallRootOptions, check_install_deployment_truth},
 };
@@ -25,6 +26,8 @@ const DEPLOY_HELP_AFTER: &str = "\
 Examples:
   canic deploy plan demo
   canic deploy inventory demo
+  canic deploy diff demo
+  canic deploy report demo
   canic deploy check demo
   canic deploy check --profile fast demo
 
@@ -42,6 +45,18 @@ Examples:
   canic --network local deploy inventory --profile fast demo
 
 Prints the local DeploymentInventoryV1 JSON without installing or mutating state.";
+const DEPLOY_DIFF_HELP_AFTER: &str = "\
+Examples:
+  canic deploy diff demo
+  canic --network local deploy diff --profile fast demo
+
+Prints the local DeploymentDiffV1 JSON without installing or mutating state.";
+const DEPLOY_REPORT_HELP_AFTER: &str = "\
+Examples:
+  canic deploy report demo
+  canic --network local deploy report --profile fast demo
+
+Prints the local SafetyReportV1 JSON without installing or mutating state.";
 const DEPLOY_CHECK_HELP_AFTER: &str = "\
 Examples:
   canic deploy check demo
@@ -59,6 +74,9 @@ pub enum DeployCommandError {
 
     #[error(transparent)]
     Check(#[from] Box<dyn std::error::Error>),
+
+    #[error("deployment truth check blocked: {0}")]
+    Blocked(String),
 }
 
 ///
@@ -90,6 +108,8 @@ where
         Some((command, args)) => match command.as_str() {
             "plan" => run_plan(args),
             "inventory" => run_inventory(args),
+            "diff" => run_diff(args),
+            "report" => run_report(args),
             "check" => run_check(args),
             _ => unreachable!("deploy dispatch command only defines known commands"),
         },
@@ -132,6 +152,42 @@ where
     Ok(())
 }
 
+fn run_diff<I>(args: I) -> Result<(), DeployCommandError>
+where
+    I: IntoIterator<Item = OsString>,
+{
+    let args = args.into_iter().collect::<Vec<_>>();
+    if print_help_or_version(&args, diff_usage, version_text()) {
+        return Ok(());
+    }
+
+    let check = load_deployment_check(DeployTruthOptions::parse(
+        args,
+        deploy_diff_command,
+        diff_usage,
+    )?)?;
+    print_json(&check.diff)?;
+    Ok(())
+}
+
+fn run_report<I>(args: I) -> Result<(), DeployCommandError>
+where
+    I: IntoIterator<Item = OsString>,
+{
+    let args = args.into_iter().collect::<Vec<_>>();
+    if print_help_or_version(&args, report_usage, version_text()) {
+        return Ok(());
+    }
+
+    let check = load_deployment_check(DeployTruthOptions::parse(
+        args,
+        deploy_report_command,
+        report_usage,
+    )?)?;
+    print_json(&check.report)?;
+    Ok(())
+}
+
 fn run_check<I>(args: I) -> Result<(), DeployCommandError>
 where
     I: IntoIterator<Item = OsString>,
@@ -147,12 +203,12 @@ where
         check_usage,
     )?)?;
     print_json(&check)?;
-    Ok(())
+    enforce_deployment_check_status(&check.report)
 }
 
 fn load_deployment_check(
     options: DeployTruthOptions,
-) -> Result<canic_host::deployment_truth::DeploymentCheckV1, DeployCommandError> {
+) -> Result<DeploymentCheckV1, DeployCommandError> {
     let icp_root = resolve_current_canic_icp_root().ok();
     check_install_deployment_truth(
         &options.into_install_root_options_with_icp_root(icp_root),
@@ -167,6 +223,13 @@ where
 {
     let json = serde_json::to_string_pretty(value).map_err(Box::<dyn std::error::Error>::from)?;
     println!("{json}");
+    Ok(())
+}
+
+fn enforce_deployment_check_status(report: &SafetyReportV1) -> Result<(), DeployCommandError> {
+    if report.status == SafetyStatusV1::Blocked {
+        return Err(DeployCommandError::Blocked(report.summary.clone()));
+    }
     Ok(())
 }
 
@@ -220,6 +283,11 @@ fn deploy_command() -> ClapCommand {
                 .disable_help_flag(true),
         ))
         .subcommand(passthrough_subcommand(
+            ClapCommand::new("diff")
+                .about("Print the local deployment diff JSON")
+                .disable_help_flag(true),
+        ))
+        .subcommand(passthrough_subcommand(
             ClapCommand::new("inventory")
                 .about("Print the local deployment inventory JSON")
                 .disable_help_flag(true),
@@ -227,6 +295,11 @@ fn deploy_command() -> ClapCommand {
         .subcommand(passthrough_subcommand(
             ClapCommand::new("plan")
                 .about("Print the local deployment plan JSON")
+                .disable_help_flag(true),
+        ))
+        .subcommand(passthrough_subcommand(
+            ClapCommand::new("report")
+                .about("Print the local deployment safety report JSON")
                 .disable_help_flag(true),
         ))
         .after_help(DEPLOY_HELP_AFTER)
@@ -240,6 +313,16 @@ fn deploy_plan_command() -> ClapCommand {
 fn deploy_inventory_command() -> ClapCommand {
     deploy_truth_leaf_command("inventory", "Print the local deployment inventory JSON")
         .after_help(DEPLOY_INVENTORY_HELP_AFTER)
+}
+
+fn deploy_diff_command() -> ClapCommand {
+    deploy_truth_leaf_command("diff", "Print the local deployment diff JSON")
+        .after_help(DEPLOY_DIFF_HELP_AFTER)
+}
+
+fn deploy_report_command() -> ClapCommand {
+    deploy_truth_leaf_command("report", "Print the local deployment safety report JSON")
+        .after_help(DEPLOY_REPORT_HELP_AFTER)
 }
 
 fn deploy_check_command() -> ClapCommand {
@@ -280,6 +363,16 @@ fn plan_usage() -> String {
 
 fn inventory_usage() -> String {
     let mut command = deploy_inventory_command();
+    command.render_help().to_string()
+}
+
+fn diff_usage() -> String {
+    let mut command = deploy_diff_command();
+    command.render_help().to_string()
+}
+
+fn report_usage() -> String {
+    let mut command = deploy_report_command();
     command.render_help().to_string()
 }
 
@@ -365,7 +458,43 @@ mod tests {
     }
 
     #[test]
-    fn deploy_plan_and_inventory_parse_like_check() {
+    fn deploy_check_status_rejects_blocked_report() {
+        let report = SafetyReportV1 {
+            schema_version: 1,
+            report_id: "report-1".to_string(),
+            diff_id: None,
+            status: SafetyStatusV1::Blocked,
+            summary: "deployment inventory has 1 blocking issue(s) and 0 warning(s)".to_string(),
+            hard_failures: Vec::new(),
+            warnings: Vec::new(),
+            next_actions: Vec::new(),
+        };
+
+        assert!(matches!(
+            enforce_deployment_check_status(&report),
+            Err(DeployCommandError::Blocked(message))
+                if message == "deployment inventory has 1 blocking issue(s) and 0 warning(s)"
+        ));
+    }
+
+    #[test]
+    fn deploy_check_status_allows_warning_report() {
+        let report = SafetyReportV1 {
+            schema_version: 1,
+            report_id: "report-1".to_string(),
+            diff_id: None,
+            status: SafetyStatusV1::Warning,
+            summary: "deployment inventory has 1 warning(s)".to_string(),
+            hard_failures: Vec::new(),
+            warnings: Vec::new(),
+            next_actions: Vec::new(),
+        };
+
+        enforce_deployment_check_status(&report).expect("warning report should not fail check");
+    }
+
+    #[test]
+    fn deploy_leaf_commands_parse_like_check() {
         let plan =
             DeployTruthOptions::parse([OsString::from("demo")], deploy_plan_command, plan_usage)
                 .expect("parse deploy plan");
@@ -375,9 +504,20 @@ mod tests {
             inventory_usage,
         )
         .expect("parse deploy inventory");
+        let diff =
+            DeployTruthOptions::parse([OsString::from("demo")], deploy_diff_command, diff_usage)
+                .expect("parse deploy diff");
+        let report = DeployTruthOptions::parse(
+            [OsString::from("demo")],
+            deploy_report_command,
+            report_usage,
+        )
+        .expect("parse deploy report");
 
         assert_eq!(plan.fleet, "demo");
         assert_eq!(inventory.fleet, "demo");
+        assert_eq!(diff.fleet, "demo");
+        assert_eq!(report.fleet, "demo");
     }
 
     #[test]

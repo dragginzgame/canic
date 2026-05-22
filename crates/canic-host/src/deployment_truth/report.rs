@@ -189,6 +189,28 @@ fn compare_identity(
             Some("deployment_identity.root_principal".to_string()),
         ));
     }
+    match (
+        plan.deployment_identity.deployment_manifest_digest.as_ref(),
+        observed.deployment_manifest_digest.as_ref(),
+    ) {
+        (Some(expected), Some(actual)) if expected != actual => {
+            hard_failures.push(finding(
+                "deployment_manifest_mismatch",
+                "deployment manifest digest differs from the observed local config",
+                SafetySeverityV1::HardFailure,
+                Some("deployment_identity.deployment_manifest_digest".to_string()),
+            ));
+        }
+        (Some(_), None) => {
+            hard_failures.push(finding(
+                "deployment_manifest_unobserved",
+                "deployment manifest digest was not observed",
+                SafetySeverityV1::HardFailure,
+                Some("deployment_identity.deployment_manifest_digest".to_string()),
+            ));
+        }
+        _ => {}
+    }
 }
 
 fn compare_artifacts(
@@ -222,15 +244,7 @@ fn compare_artifacts(
             continue;
         };
 
-        if let Some(file_sha256) = &observed.file_sha256 {
-            artifact_diff.push(diff_item(
-                "artifact_file_sha256",
-                &expected.role,
-                None,
-                Some(file_sha256.clone()),
-                SafetySeverityV1::Info,
-            ));
-        }
+        compare_artifact_file_sha256(expected, observed, artifact_diff, hard_failures);
 
         match (
             expected.wasm_gz_sha256.as_ref(),
@@ -262,6 +276,47 @@ fn compare_artifacts(
             )),
             _ => {}
         }
+    }
+}
+
+fn compare_artifact_file_sha256(
+    expected: &RoleArtifactV1,
+    observed: &ObservedArtifactV1,
+    artifact_diff: &mut Vec<DiffItemV1>,
+    hard_failures: &mut Vec<SafetyFindingV1>,
+) {
+    match (
+        expected.observed_wasm_gz_file_sha256.as_ref(),
+        observed.file_sha256.as_ref(),
+    ) {
+        (Some(want), Some(got)) if want != got => {
+            artifact_diff.push(diff_item(
+                "artifact_file_sha256",
+                &expected.role,
+                Some(want.clone()),
+                Some(got.clone()),
+                SafetySeverityV1::HardFailure,
+            ));
+            hard_failures.push(finding(
+                "artifact_file_digest_mismatch",
+                format!(
+                    "observed artifact file digest changed during deployment truth check for role {}",
+                    expected.role
+                ),
+                SafetySeverityV1::HardFailure,
+                Some(expected.role.clone()),
+            ));
+        }
+        (_, Some(got)) => {
+            artifact_diff.push(diff_item(
+                "artifact_file_sha256",
+                &expected.role,
+                expected.observed_wasm_gz_file_sha256.clone(),
+                Some(got.clone()),
+                SafetySeverityV1::Info,
+            ));
+        }
+        _ => {}
     }
 }
 
