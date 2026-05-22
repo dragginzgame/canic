@@ -22,6 +22,36 @@ inspect only the files needed for the current task.
 
 ## Recent Work
 
+- Added per-design-line `status.md` logs to the 0.41-0.50 design directories.
+  These files are now the durable place to record what actually landed, what
+  drifted from the design, and what remains open for each minor.
+- Clarified the deployment roadmap ladder without changing the hard cut:
+  0.41 is truth/report groundwork and current-install safety checks, 0.42 is
+  report-first dry-run authority reconciliation, and 0.43 owns full
+  plan-driven deploy-install execution unless explicitly promoted earlier.
+- Added local `.wasm.gz` file SHA-256 observations to deployment truth
+  inventory and role-artifact manifests. These are recorded as explicit
+  `ObservedFileDigest` evidence and remain separate from release-set payload
+  hashes so observation does not turn release-set metadata into live truth.
+- Split `canic-host::deployment_truth` into focused module files before adding
+  more behavior: `mod.rs` owns public exports and the schema version,
+  `model.rs` owns passive V1 DTOs, `observe.rs` owns local inventory and
+  artifact observation, `report.rs` owns diff/report classification, and
+  `tests.rs` owns the focused host-side coverage.
+- Added a read-only local role artifact manifest builder for
+  `RoleArtifactManifestV1`. It maps configured roles and materialized
+  `.wasm.gz` files into deployment truth artifact records, reusing
+  release-set payload hashes when available and recording missing artifact
+  facts as observation gaps.
+- Added the first passive deployment truth evaluator. It compares
+  `DeploymentPlanV1` and `DeploymentInventoryV1` into `DeploymentDiffV1`, then
+  renders `SafetyReportV1` findings for missing artifacts, unsafe control
+  classes, identity mismatches, config drift, verifier-readiness gaps, and
+  inventory observation gaps without changing installer behavior.
+- Added the first read-only local deployment inventory collector. It maps
+  configured fleet roles, local install-state root identity, and materialized
+  `.wasm.gz` artifacts into `DeploymentInventoryV1`, while missing config or
+  artifacts become explicit observation gaps rather than installer errors.
 - Added passive host-side deployment truth V1 model scaffolding under
   `canic-host::deployment_truth`. The new types cover plans, inventories,
   receipts, diffs, safety reports, role artifacts, canister control classes,

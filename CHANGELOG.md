@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.41.x] - 2026-05-21 - Deployment truth model
 
+- `0.41.1` adds passive `canic-host::deployment_truth` V1 model scaffolding for
+  deployment plans, inventories, receipts, diffs, safety reports, role
+  artifacts, canister control classifications, verifier-readiness observations,
+  and phase postconditions, with JSON round-trip tests and no installer
+  behavior changes.
+
 - `0.41.0` starts the deployment-truth design-prep line by framing
   `DeploymentPlanV1`, `DeploymentInventoryV1`, `DeploymentReceiptV1`,
   `DeploymentDiffV1`, and `SafetyReportV1` as the next installer correctness
