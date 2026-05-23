@@ -72,7 +72,9 @@ pub fn collect_local_deployment_inventory(
     };
 
     match configured_fleet_roles(&config) {
-        Ok(configured_roles) => roles = configured_roles,
+        Ok(configured_roles) => {
+            roles = deployment_truth_roles_with_implicit_wasm_store(configured_roles);
+        }
         Err(err) => unresolved_observations.push(observation_gap(
             "local_config.roles",
             format!(
@@ -223,16 +225,19 @@ pub fn collect_local_role_artifact_manifest(
         ));
         "unknown".to_string()
     });
-    let roles = configured_fleet_roles(&config).unwrap_or_else(|err| {
-        unresolved_artifacts.push(observation_gap(
-            "local_config.roles",
-            format!(
-                "could not resolve configured roles from {}: {err}",
-                config.display()
-            ),
-        ));
-        Vec::new()
-    });
+    let roles = configured_fleet_roles(&config).map_or_else(
+        |err| {
+            unresolved_artifacts.push(observation_gap(
+                "local_config.roles",
+                format!(
+                    "could not resolve configured roles from {}: {err}",
+                    config.display()
+                ),
+            ));
+            Vec::new()
+        },
+        deployment_truth_roles_with_implicit_wasm_store,
+    );
     let artifact_root = match resolve_artifact_root_for_observation(
         &request.icp_root,
         &request.network,
@@ -318,7 +323,7 @@ fn collect_observed_artifacts(
                 file_sha256_source,
                 payload_sha256: None,
                 payload_size_bytes: size,
-                source: ArtifactSourceV1::LocalBuild,
+                source: deployment_truth_artifact_source(role),
             })
         })
         .collect()
@@ -453,7 +458,7 @@ fn role_artifact_from_local_files(
     let release_entry = release_entries.and_then(|entries| entries.get(role));
     RoleArtifactV1 {
         role: role.to_string(),
-        source: ArtifactSourceV1::LocalBuild,
+        source: deployment_truth_artifact_source(role),
         build_profile: "unknown".to_string(),
         wasm_path: None,
         wasm_gz_path: Some(wasm_gz_path.display().to_string()),
@@ -571,7 +576,7 @@ fn install_state_observed_canisters(
     network: &str,
     gaps: &mut Vec<DeploymentObservationGapV1>,
 ) -> Vec<ObservedCanisterV1> {
-    match read_live_root_status(icp_root, network, &state.root_canister_id) {
+    match read_live_canister_status(icp_root, network, &state.root_canister_id) {
         Ok(report) => vec![observed_root_from_status(state, &report)],
         Err(err) => {
             gaps.push(observation_gap(
@@ -604,10 +609,17 @@ fn install_state_registry_observations(
         &request.icp_root,
     ) {
         Ok(resolution) => {
-            observed_canisters.extend(registry_entries_to_observed_canisters(
+            let mut registry_canisters = registry_entries_to_observed_canisters(
                 &state.root_canister_id,
                 &resolution.registry.entries,
-            ));
+            );
+            enrich_registry_observed_canisters(
+                &mut registry_canisters,
+                &request.icp_root,
+                &request.network,
+                gaps,
+            );
+            observed_canisters.extend(registry_canisters);
             registry_entries_to_observed_pool(
                 &state.root_canister_id,
                 &resolution.registry.entries,
@@ -652,6 +664,74 @@ fn registry_entry_to_observed_canister(entry: &RegistryEntry) -> Option<Observed
         canonical_embedded_config_digest: None,
         role_assignment_source: Some("subnet_registry".to_string()),
     })
+}
+
+fn enrich_registry_observed_canisters(
+    observed_canisters: &mut [ObservedCanisterV1],
+    icp_root: &Path,
+    network: &str,
+    gaps: &mut Vec<DeploymentObservationGapV1>,
+) {
+    for observed in observed_canisters {
+        match read_live_canister_status(icp_root, network, &observed.canister_id) {
+            Ok(report) => apply_live_status_to_registry_observation(observed, &report),
+            Err(err) => gaps.push(observation_gap(
+                live_status_gap_key(observed),
+                format!(
+                    "could not observe live canister status for role {} at {}: {err}",
+                    observed.role.as_deref().unwrap_or("unknown"),
+                    observed.canister_id
+                ),
+            )),
+        }
+    }
+}
+
+pub(super) fn apply_live_status_to_registry_observation(
+    observed: &mut ObservedCanisterV1,
+    report: &IcpCanisterStatusReport,
+) {
+    let controllers = report
+        .settings
+        .as_ref()
+        .map(|settings| settings.controllers.clone())
+        .unwrap_or_default();
+    observed.canister_id = if report.id.is_empty() {
+        observed.canister_id.clone()
+    } else {
+        report.id.clone()
+    };
+    observed.control_class = classify_registry_observed_control(
+        observed.control_class,
+        &controllers,
+        observed.root_trust_anchor.as_deref(),
+    );
+    observed.controllers = controllers;
+    observed.module_hash = report.module_hash.as_deref().map(normalize_module_hash);
+    observed.status = Some(report.status.clone());
+    observed.role_assignment_source = Some("subnet_registry+icp_canister_status".to_string());
+}
+
+fn live_status_gap_key(observed: &ObservedCanisterV1) -> String {
+    observed.role.as_ref().map_or_else(
+        || format!("live_canister_status.{}", observed.canister_id),
+        |role| format!("live_canister_status.{role}"),
+    )
+}
+
+fn classify_registry_observed_control(
+    fallback: CanisterControlClassV1,
+    controllers: &[String],
+    root_trust_anchor: Option<&str>,
+) -> CanisterControlClassV1 {
+    let Some(anchor) = root_trust_anchor else {
+        return fallback;
+    };
+    if controllers.iter().any(|controller| controller == anchor) {
+        fallback
+    } else {
+        CanisterControlClassV1::UnknownUnsafe
+    }
 }
 
 const fn registry_entry_control_class(entry: &RegistryEntry) -> CanisterControlClassV1 {
@@ -726,14 +806,14 @@ const fn pool_control_class(entry: &RegistryEntry) -> CanisterControlClassV1 {
     }
 }
 
-fn read_live_root_status(
+fn read_live_canister_status(
     icp_root: &Path,
     network: &str,
-    root_canister_id: &str,
+    canister_id: &str,
 ) -> Result<IcpCanisterStatusReport, crate::icp::IcpCommandError> {
     IcpCli::new("icp", Some(network.to_string()), None)
         .with_cwd(icp_root)
-        .canister_status_report(root_canister_id)
+        .canister_status_report(canister_id)
 }
 
 pub(super) fn observed_root_from_status(

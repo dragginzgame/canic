@@ -18,6 +18,19 @@ narrow current-install artifact gate.
 
 ## Implemented
 
+- Local deployment truth now treats the implicit bootstrap `wasm_store` as part
+  of the passive role set. Plans expect it, local artifact manifests and
+  inventories observe its `.wasm.gz` file when present, and missing bootstrap
+  store artifacts remain typed gaps rather than installer-side mutation.
+- Installed child canister inventory now opportunistically enriches
+  subnet-registry role observations with read-only live status, controllers,
+  and module hashes. Failed child status reads stay typed observation gaps and
+  the registry-derived role fact remains available.
+- Deployment diffs now warn on extra observed non-pool canister roles so
+  unexpected registry/live topology appears in operator reports without
+  blocking current installer continuation.
+- Duplicate observed canisters for a planned non-pool role also surface as
+  extra canister warnings instead of being hidden by the expected role name.
 - Local deployment truth plans and inventories now populate
   `deployment_manifest_digest` from the observed root release-set manifest file
   when it exists. Missing manifests remain typed assumptions or observation
@@ -179,9 +192,9 @@ narrow current-install artifact gate.
 
 - Extend `DeploymentPlanV1` beyond resolved local config/build intent with
   fuller authority, concrete pool capacity, and live-runtime expectations.
-- Extend `DeploymentInventoryV1` beyond root status and subnet-registry role
-  observations with per-child IC status, `wasm_store`, and richer
-  authority/readiness state.
+- Extend `DeploymentInventoryV1` beyond root status, local `wasm_store`
+  artifact evidence, subnet-registry role observations, and opportunistic
+  per-child IC status with richer authority/readiness state.
 - Compute richer role-scoped embedded config digests after the promotion and
   execution layers expose target materialization identities. Raw config
   SHA-256 remains diagnostic/local consistency evidence only.

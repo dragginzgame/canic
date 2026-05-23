@@ -1,7 +1,7 @@
 use super::*;
 use crate::deployment_truth::observe::{
-    observed_root_from_status, registry_entries_to_observed_canisters,
-    registry_entries_to_observed_pool,
+    apply_live_status_to_registry_observation, observed_root_from_status,
+    registry_entries_to_observed_canisters, registry_entries_to_observed_pool,
 };
 use crate::icp::{IcpCanisterStatusReport, IcpCanisterStatusSettings};
 use crate::install_root::InstallState;
@@ -602,6 +602,56 @@ fn registry_entries_map_roles_to_observed_canisters_without_controller_authority
 }
 
 #[test]
+fn registry_observation_can_be_enriched_with_live_status() {
+    let mut observed = registry_entries_to_observed_canisters(
+        "root-id",
+        &[RegistryEntry {
+            pid: "user_hub-id".to_string(),
+            role: Some("user_hub".to_string()),
+            kind: None,
+            parent_pid: Some("root-id".to_string()),
+            module_hash: Some("stale".to_string()),
+        }],
+    )
+    .pop()
+    .expect("registry observation");
+    let report = IcpCanisterStatusReport {
+        id: "user_hub-id".to_string(),
+        name: Some("user_hub".to_string()),
+        status: "Running".to_string(),
+        settings: Some(IcpCanisterStatusSettings {
+            controllers: vec!["root-id".to_string()],
+            compute_allocation: Some("0".to_string()),
+            memory_allocation: None,
+            freezing_threshold: None,
+            reserved_cycles_limit: None,
+            wasm_memory_limit: None,
+            wasm_memory_threshold: None,
+            log_memory_limit: None,
+        }),
+        module_hash: Some("0xCAFE".to_string()),
+        memory_size: None,
+        cycles: None,
+        reserved_cycles: None,
+        idle_cycles_burned_per_day: None,
+    };
+
+    apply_live_status_to_registry_observation(&mut observed, &report);
+
+    assert_eq!(
+        observed.control_class,
+        CanisterControlClassV1::CanicManagedPool
+    );
+    assert_eq!(observed.controllers, vec!["root-id"]);
+    assert_eq!(observed.module_hash.as_deref(), Some("cafe"));
+    assert_eq!(observed.status.as_deref(), Some("Running"));
+    assert_eq!(
+        observed.role_assignment_source.as_deref(),
+        Some("subnet_registry+icp_canister_status")
+    );
+}
+
+#[test]
 fn registry_entries_report_ambiguous_pool_role_mapping() {
     let mut gaps = Vec::new();
     let entries = vec![RegistryEntry {
@@ -669,6 +719,7 @@ fn local_artifact_manifest_collects_roles_and_release_set_hashes() {
     fs::create_dir_all(&config_dir).expect("create config dir");
     fs::write(config_dir.join("canic.toml"), SAMPLE_CONFIG).expect("write config");
     write_artifact(&icp_root, "root", b"root-artifact");
+    write_artifact(&icp_root, "wasm_store", b"wasm-store-artifact");
     write_artifact(&icp_root, "user_hub", b"user-hub-artifact");
     write_release_set_manifest(&icp_root);
 
@@ -680,7 +731,17 @@ fn local_artifact_manifest_collects_roles_and_release_set_hashes() {
     });
 
     assert_eq!(manifest.manifest_id, "local:local:demo:artifacts");
-    assert_eq!(manifest.role_artifacts.len(), 2);
+    assert_eq!(manifest.role_artifacts.len(), 3);
+    let wasm_store = manifest
+        .role_artifacts
+        .iter()
+        .find(|artifact| artifact.role == "wasm_store")
+        .expect("wasm_store artifact");
+    assert_eq!(wasm_store.source, ArtifactSourceV1::WasmStore);
+    assert_eq!(
+        wasm_store.observed_wasm_gz_file_sha256_source,
+        Some(ArtifactDigestSourceV1::ObservedFileDigest)
+    );
     let user_hub = manifest
         .role_artifacts
         .iter()
@@ -767,6 +828,12 @@ fn local_artifact_manifest_records_missing_artifacts_as_gaps() {
             .iter()
             .any(|gap| gap.key == "local_artifacts.user_hub")
     );
+    assert!(
+        manifest
+            .unresolved_artifacts
+            .iter()
+            .any(|gap| gap.key == "local_artifacts.wasm_store")
+    );
 }
 
 #[test]
@@ -778,6 +845,7 @@ fn local_plan_uses_configured_roles_and_local_artifact_manifest() {
     fs::create_dir_all(&config_dir).expect("create config dir");
     fs::write(config_dir.join("canic.toml"), SAMPLE_CONFIG).expect("write config");
     write_artifact(&icp_root, "root", b"root-artifact");
+    write_artifact(&icp_root, "wasm_store", b"wasm-store-artifact");
     write_artifact(&icp_root, "user_hub", b"user-hub-artifact");
     write_release_set_manifest(&icp_root);
 
@@ -844,12 +912,40 @@ fn local_plan_uses_configured_roles_and_local_artifact_manifest() {
     );
     assert_eq!(plan.fleet_template, "demo");
     assert_eq!(plan.runtime_variant, "local");
-    assert_eq!(plan.role_artifacts.len(), 2);
+    assert_eq!(plan.role_artifacts.len(), 3);
     assert!(
         plan.role_artifacts
             .iter()
             .all(|artifact| artifact.build_profile == "fast")
     );
+    assert_plan_has_implicit_wasm_store_artifact(&plan);
+    assert_plan_has_user_hub_release_artifact(&plan);
+    assert_eq!(
+        plan.expected_canisters
+            .iter()
+            .map(|canister| canister.role.as_str())
+            .collect::<Vec<_>>(),
+        vec!["root", "wasm_store", "user_hub"]
+    );
+    assert!(
+        plan.unresolved_assumptions
+            .iter()
+            .any(|assumption| assumption.key == "local_state.root_canister_id")
+    );
+}
+
+fn assert_plan_has_implicit_wasm_store_artifact(plan: &DeploymentPlanV1) {
+    assert!(
+        plan.role_artifacts
+            .iter()
+            .any(|artifact| artifact.role == "wasm_store"
+                && artifact.source == ArtifactSourceV1::WasmStore
+                && artifact.observed_wasm_gz_file_sha256_source
+                    == Some(ArtifactDigestSourceV1::ObservedFileDigest))
+    );
+}
+
+fn assert_plan_has_user_hub_release_artifact(plan: &DeploymentPlanV1) {
     assert!(
         plan.role_artifacts
             .iter()
@@ -859,18 +955,6 @@ fn local_plan_uses_configured_roles_and_local_artifact_manifest() {
                     == Some(ArtifactDigestSourceV1::ReleaseSetManifest)
                 && artifact.observed_wasm_gz_file_sha256_source
                     == Some(ArtifactDigestSourceV1::ObservedFileDigest))
-    );
-    assert_eq!(
-        plan.expected_canisters
-            .iter()
-            .map(|canister| canister.role.as_str())
-            .collect::<Vec<_>>(),
-        vec!["root", "user_hub"]
-    );
-    assert!(
-        plan.unresolved_assumptions
-            .iter()
-            .any(|assumption| assumption.key == "local_state.root_canister_id")
     );
 }
 
@@ -939,6 +1023,7 @@ fn local_plan_uses_install_state_root_as_expected_canister() {
     fs::create_dir_all(&config_dir).expect("create config dir");
     fs::write(config_dir.join("canic.toml"), SAMPLE_CONFIG).expect("write config");
     write_artifact(&icp_root, "root", b"root-artifact");
+    write_artifact(&icp_root, "wasm_store", b"wasm-store-artifact");
     write_artifact(&icp_root, "user_hub", b"user-hub-artifact");
     write_release_set_manifest(&icp_root);
     let state_path = icp_root.join(".canic/local/fleets/demo.json");
@@ -1679,6 +1764,72 @@ fn deployment_diff_warns_when_unspecified_canister_id_is_unobserved() {
             .any(|finding| finding.code == "canister_unobserved"
                 && finding.subject.as_deref() == Some("root"))
     );
+}
+
+#[test]
+fn deployment_diff_warns_for_extra_observed_canister_roles() {
+    let plan = sample_plan();
+    let mut inventory = sample_matching_inventory();
+    inventory.observed_canisters.push(ObservedCanisterV1 {
+        canister_id: "user-hub-id".to_string(),
+        role: Some("user_hub".to_string()),
+        control_class: CanisterControlClassV1::CanicManagedPool,
+        controllers: vec!["aaaaa-aa".to_string()],
+        module_hash: Some("module".to_string()),
+        status: Some("Running".to_string()),
+        root_trust_anchor: Some("aaaaa-aa".to_string()),
+        canonical_embedded_config_digest: None,
+        role_assignment_source: Some("subnet_registry+icp_canister_status".to_string()),
+    });
+
+    let diff = compare_plan_to_inventory(&plan, &inventory);
+
+    assert_eq!(diff.resume_safety.status, SafetyStatusV1::Warning);
+    assert!(diff.hard_failures.is_empty());
+    assert!(
+        diff.warnings
+            .iter()
+            .any(|finding| finding.code == "extra_canister_observed"
+                && finding.subject.as_deref() == Some("user_hub"))
+    );
+    assert!(diff.controller_diff.iter().any(|item| {
+        item.category == "canister_extra"
+            && item.subject == "user_hub"
+            && item.observed.as_deref() == Some("user-hub-id")
+    }));
+}
+
+#[test]
+fn deployment_diff_warns_for_duplicate_observed_planned_role() {
+    let plan = sample_plan();
+    let mut inventory = sample_matching_inventory();
+    inventory.observed_canisters.push(ObservedCanisterV1 {
+        canister_id: "duplicate-root-id".to_string(),
+        role: Some("root".to_string()),
+        control_class: CanisterControlClassV1::DeploymentControlled,
+        controllers: vec!["aaaaa-aa".to_string()],
+        module_hash: Some("module".to_string()),
+        status: Some("Running".to_string()),
+        root_trust_anchor: Some("aaaaa-aa".to_string()),
+        canonical_embedded_config_digest: None,
+        role_assignment_source: Some("subnet_registry+icp_canister_status".to_string()),
+    });
+
+    let diff = compare_plan_to_inventory(&plan, &inventory);
+
+    assert_eq!(diff.resume_safety.status, SafetyStatusV1::Warning);
+    assert!(diff.hard_failures.is_empty());
+    assert!(
+        diff.warnings
+            .iter()
+            .any(|finding| finding.code == "extra_canister_observed"
+                && finding.subject.as_deref() == Some("root"))
+    );
+    assert!(diff.controller_diff.iter().any(|item| {
+        item.category == "canister_extra"
+            && item.subject == "root"
+            && item.observed.as_deref() == Some("duplicate-root-id")
+    }));
 }
 
 #[test]

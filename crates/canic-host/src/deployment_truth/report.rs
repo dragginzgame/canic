@@ -497,6 +497,7 @@ fn compare_canisters(
     hard_failures: &mut Vec<SafetyFindingV1>,
     warnings: &mut Vec<SafetyFindingV1>,
 ) {
+    let mut matched_observed = BTreeSet::new();
     for expected in &plan.expected_canisters {
         let observed = expected.canister_id.as_ref().map_or_else(
             || {
@@ -542,6 +543,7 @@ fn compare_canisters(
             }
             continue;
         };
+        matched_observed.insert(observed.canister_id.as_str());
         if matches!(
             observed.control_class,
             CanisterControlClassV1::UnknownUnsafe | CanisterControlClassV1::UserControlled
@@ -563,6 +565,59 @@ fn compare_canisters(
         }
         compare_role_controllers(plan, observed, controller_diff, hard_failures, warnings);
     }
+    warn_extra_observed_canisters(
+        plan,
+        inventory,
+        controller_diff,
+        warnings,
+        &matched_observed,
+    );
+}
+
+fn warn_extra_observed_canisters(
+    plan: &DeploymentPlanV1,
+    inventory: &DeploymentInventoryV1,
+    controller_diff: &mut Vec<DiffItemV1>,
+    warnings: &mut Vec<SafetyFindingV1>,
+    matched_observed: &BTreeSet<&str>,
+) {
+    let expected_pool_roles = plan
+        .expected_pool
+        .iter()
+        .filter_map(|pool| pool.role.as_deref())
+        .collect::<BTreeSet<_>>();
+
+    for observed in &inventory.observed_canisters {
+        if matched_observed.contains(observed.canister_id.as_str()) {
+            continue;
+        }
+        if let Some(role) = observed.role.as_deref()
+            && expected_pool_roles.contains(role)
+        {
+            continue;
+        }
+        let subject = observed_canister_subject(observed);
+        controller_diff.push(diff_item(
+            "canister_extra",
+            &subject,
+            None,
+            Some(observed.canister_id.clone()),
+            SafetySeverityV1::Warning,
+        ));
+        warnings.push(finding(
+            "extra_canister_observed",
+            format!("observed undeclared canister {subject}"),
+            SafetySeverityV1::Warning,
+            Some(subject),
+        ));
+    }
+}
+
+fn observed_canister_subject(observed: &ObservedCanisterV1) -> String {
+    observed
+        .role
+        .clone()
+        .unwrap_or_else(|| observed.canister_id.clone())
 }
 
 fn compare_pools(

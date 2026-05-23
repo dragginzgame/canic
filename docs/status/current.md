@@ -21,6 +21,20 @@ inspect only the files needed for the current task.
 
 ## Recent Work
 
+- Local deployment truth now treats the implicit bootstrap `wasm_store` role as
+  part of the passive role set. Plans expect it, local artifact manifests and
+  inventories observe its `.wasm.gz` artifact when present, and missing
+  bootstrap store artifacts remain typed gaps rather than installer mutation.
+- Installed child canister inventory now enriches subnet-registry role
+  observations with read-only live status/controllers/module hashes when those
+  status reads succeed. Failed child status reads remain typed observation gaps
+  and do not erase the registry-derived role fact.
+- Deployment diffs now warn on extra observed non-pool canister roles so
+  unexpected registry/live topology is visible in reports without blocking
+  current installer continuation.
+- Duplicate observed canisters for an otherwise planned non-pool role are
+  reported through the same extra-canister warning class rather than being
+  hidden by the expected role name.
 - Local deployment truth plans and inventories now populate
   `deployment_manifest_digest` from the observed root release-set manifest file
   when it exists. Missing manifests remain typed assumptions or observation

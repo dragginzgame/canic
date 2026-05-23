@@ -38,16 +38,19 @@ pub fn build_local_deployment_plan(request: &LocalDeploymentPlanRequest) -> Depl
         ));
         request.deployment_name.clone()
     });
-    let roles = configured_fleet_roles(&config).unwrap_or_else(|err| {
-        unresolved_assumptions.push(assumption(
-            "local_config.roles",
-            format!(
-                "could not resolve configured roles from {}: {err}",
-                config.display()
-            ),
-        ));
-        Vec::new()
-    });
+    let roles = configured_fleet_roles(&config).map_or_else(
+        |err| {
+            unresolved_assumptions.push(assumption(
+                "local_config.roles",
+                format!(
+                    "could not resolve configured roles from {}: {err}",
+                    config.display()
+                ),
+            ));
+            Vec::new()
+        },
+        deployment_truth_roles_with_implicit_wasm_store,
+    );
     let expected_controllers = configured_controllers(&config).unwrap_or_else(|err| {
         unresolved_assumptions.push(assumption(
             "local_config.controllers",
