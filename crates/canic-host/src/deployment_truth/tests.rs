@@ -3210,7 +3210,7 @@ fn authority_dry_run_receipt_records_observations_without_attempts() {
     let evidence = AuthorityDryRunEvidenceV1 {
         schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
         evidence_id: "authority-evidence-1".to_string(),
-        check_id: check.check_id.clone(),
+        check_id: check.check_id,
         generated_at: "2026-05-23T00:00:01Z".to_string(),
         reconciliation_plan: reconciliation,
         authority_report: report,
