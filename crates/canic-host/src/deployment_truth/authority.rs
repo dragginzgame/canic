@@ -9,7 +9,7 @@ pub fn build_authority_reconciliation_plan(
 ) -> AuthorityReconciliationPlanV1 {
     let mut canister_actions = Vec::new();
     let mut automatic_actions = Vec::new();
-    let mut hard_failures = Vec::new();
+    let mut hard_failures = authority_profile_overlap_findings(&check.plan);
     let mut external_actions_required = Vec::new();
 
     for expected in &check.plan.expected_canisters {
@@ -170,6 +170,7 @@ fn authority_report_counts(plan: &AuthorityReconciliationPlanV1) -> AuthorityRep
         requires_external_action: 0,
         unsafe_blocked: 0,
         unknown: 0,
+        hard_failures: plan.hard_failures.len(),
     };
     for action in &plan.canister_actions {
         match action.state {
@@ -187,8 +188,54 @@ fn authority_report_counts(plan: &AuthorityReconciliationPlanV1) -> AuthorityRep
     counts
 }
 
+fn authority_profile_overlap_findings(plan: &DeploymentPlanV1) -> Vec<SafetyFindingV1> {
+    let expected = sorted_unique(plan.authority_profile.expected_controllers.clone());
+    let staging = authority_category_overlaps(
+        "staging",
+        &expected,
+        &plan.authority_profile.staging_controllers,
+    );
+    let emergency = authority_category_overlaps(
+        "emergency",
+        &expected,
+        &plan.authority_profile.emergency_controllers,
+    );
+
+    staging.into_iter().chain(emergency).collect()
+}
+
+fn authority_category_overlaps(
+    category: &str,
+    expected_controllers: &[String],
+    category_controllers: &[String],
+) -> Vec<SafetyFindingV1> {
+    let overlaps = sorted_unique(
+        category_controllers
+            .iter()
+            .filter(|controller| {
+                expected_controllers
+                    .iter()
+                    .any(|expected| expected == *controller)
+            })
+            .cloned()
+            .collect(),
+    );
+
+    overlaps
+        .into_iter()
+        .map(|principal| SafetyFindingV1 {
+            code: "authority_profile_overlap".to_string(),
+            message: format!(
+                "{category} authority principal {principal} overlaps the normal expected controller set"
+            ),
+            severity: SafetySeverityV1::HardFailure,
+            subject: Some(principal),
+        })
+        .collect()
+}
+
 const fn authority_report_status(counts: &AuthorityReportCountsV1) -> SafetyStatusV1 {
-    if counts.unsafe_blocked > 0 {
+    if counts.unsafe_blocked > 0 || counts.hard_failures > 0 {
         SafetyStatusV1::Blocked
     } else if counts.requires_external_action > 0 || counts.unknown > 0 {
         SafetyStatusV1::Warning
@@ -200,8 +247,8 @@ const fn authority_report_status(counts: &AuthorityReportCountsV1) -> SafetyStat
 fn authority_report_summary(status: SafetyStatusV1, counts: &AuthorityReportCountsV1) -> String {
     match status {
         SafetyStatusV1::Blocked => format!(
-            "authority reconciliation is blocked by {} unsafe canister(s)",
-            counts.unsafe_blocked
+            "authority reconciliation is blocked by {} unsafe canister(s) and {} hard authority finding(s)",
+            counts.unsafe_blocked, counts.hard_failures
         ),
         SafetyStatusV1::Warning => format!(
             "authority reconciliation requires {} external action(s) and has {} unknown observation(s)",
@@ -344,7 +391,20 @@ fn authority_report_next_actions(
 ) -> Vec<String> {
     match status {
         SafetyStatusV1::Blocked => {
-            vec!["resolve unsafe authority findings before applying controller changes".to_string()]
+            let mut actions = Vec::new();
+            if counts.unsafe_blocked > 0 {
+                actions.push(
+                    "resolve unsafe canister authority findings before applying controller changes"
+                        .to_string(),
+                );
+            }
+            if counts.hard_failures > 0 {
+                actions.push(
+                    "resolve hard authority findings before applying controller changes"
+                        .to_string(),
+                );
+            }
+            actions
         }
         SafetyStatusV1::Warning => {
             let mut actions = Vec::new();

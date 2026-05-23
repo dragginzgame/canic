@@ -27,6 +27,7 @@ pub fn authority_dry_run_receipt_from_plan(
             .iter()
             .map(authority_controller_observation_from_action)
             .collect(),
+        hard_failures: report.hard_failures.clone(),
         unresolved_external_actions: report.external_actions_required.clone(),
         command_result: DeploymentCommandResultV1::Succeeded,
     }

@@ -8,6 +8,18 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+- Authority reconciliation now blocks authority profiles where staging or
+  emergency principals overlap the normal expected controller set, making
+  break-glass authority category violations visible in the dry-run plan and
+  report.
+- Authority dry-run receipts now preserve hard authority findings alongside
+  verified controller observations and unresolved external actions.
+- Authority report counts now include hard authority finding totals, so
+  automation can distinguish blocked findings from unsafe canister-state
+  counts without scanning the full finding list.
+- Blocked authority reports now emit separate next-action guidance for unsafe
+  canister authority findings and hard authority findings.
+
 ## [0.42.x] - 2026-05-23 - Authority reconciliation
 
 - `0.42.2` adds evidence-only authority dry-run receipts and read-only

@@ -69,6 +69,7 @@ pub struct AuthorityReceiptV1 {
     pub finished_at: Option<String>,
     pub attempted_actions: Vec<AuthorityAttemptedActionV1>,
     pub verified_controller_observations: Vec<AuthorityControllerObservationV1>,
+    pub hard_failures: Vec<SafetyFindingV1>,
     pub unresolved_external_actions: Vec<AuthorityExternalActionV1>,
     pub command_result: DeploymentCommandResultV1,
 }
@@ -252,6 +253,7 @@ pub struct AuthorityReportCountsV1 {
     pub requires_external_action: usize,
     pub unsafe_blocked: usize,
     pub unknown: usize,
+    pub hard_failures: usize,
 }
 
 ///

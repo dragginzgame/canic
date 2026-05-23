@@ -21,6 +21,19 @@ inspect only the files needed for the current task.
 
 ## Recent Work
 
+- Unreleased 0.42 development: authority reconciliation now blocks authority
+  profiles where staging or emergency principals overlap the normal expected
+  controller set, making break-glass authority category violations visible in
+  dry-run plans and reports.
+- Unreleased 0.42 development: authority dry-run receipts now preserve hard
+  authority findings alongside verified controller observations and unresolved
+  external actions.
+- Unreleased 0.42 development: authority report counts now include hard
+  authority finding totals, so automation can distinguish blocked findings from
+  unsafe canister-state counts without scanning the full finding list.
+- Unreleased 0.42 development: blocked authority reports now emit separate
+  next-action guidance for unsafe canister authority findings and hard
+  authority findings.
 - `0.42.2` adds passive authority dry-run receipts and read-only
   `canic deploy authority receipt|evidence <fleet>` JSON output. Receipts
   preserve verified controller observations and unresolved external actions

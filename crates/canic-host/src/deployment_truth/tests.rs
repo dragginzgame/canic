@@ -3026,6 +3026,7 @@ fn authority_report_summarizes_safe_reconciliation_plan() {
     assert_eq!(report.counts.requires_external_action, 0);
     assert_eq!(report.counts.unsafe_blocked, 0);
     assert_eq!(report.counts.unknown, 0);
+    assert_eq!(report.counts.hard_failures, 0);
     assert_eq!(
         report.action_counts,
         vec![AuthorityActionCountV1 {
@@ -3104,6 +3105,41 @@ fn authority_reconciliation_marks_deployment_controlled_delta_as_automatic_dry_r
         vec![
             "review automatic authority dry-run actions before enabling an apply path".to_string()
         ]
+    );
+}
+
+#[test]
+fn authority_reconciliation_blocks_staging_or_emergency_controller_overlap() {
+    let mut plan = sample_plan();
+    plan.authority_profile.staging_controllers = vec!["aaaaa-aa".to_string()];
+    plan.authority_profile.emergency_controllers = vec!["aaaaa-aa".to_string()];
+    let check = sample_check(plan, sample_matching_inventory());
+
+    let reconciliation = build_authority_reconciliation_plan(&check);
+
+    assert_eq!(reconciliation.hard_failures.len(), 2);
+    assert!(
+        reconciliation
+            .hard_failures
+            .iter()
+            .all(|finding| finding.code == "authority_profile_overlap"
+                && finding.severity == SafetySeverityV1::HardFailure
+                && finding.subject.as_deref() == Some("aaaaa-aa"))
+    );
+    assert_eq!(
+        reconciliation.canister_actions[0].state,
+        AuthorityReconciliationStateV1::AlreadyCorrect
+    );
+
+    let report = authority_report_from_plan("authority-report-1", &reconciliation);
+    assert_eq!(report.status, SafetyStatusV1::Blocked);
+    assert_eq!(report.counts.already_correct, 1);
+    assert_eq!(report.counts.unsafe_blocked, 0);
+    assert_eq!(report.counts.hard_failures, 2);
+    assert_eq!(report.hard_failures, reconciliation.hard_failures);
+    assert_eq!(
+        report.next_actions,
+        vec!["resolve hard authority findings before applying controller changes"]
     );
 }
 
@@ -3206,6 +3242,7 @@ fn authority_dry_run_receipt_records_observations_without_attempts() {
         receipt.unresolved_external_actions,
         report.external_actions_required
     );
+    assert_eq!(receipt.hard_failures, report.hard_failures);
 
     let evidence = AuthorityDryRunEvidenceV1 {
         schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
@@ -3218,6 +3255,29 @@ fn authority_dry_run_receipt_records_observations_without_attempts() {
     };
 
     assert_json_round_trip(&evidence);
+}
+
+#[test]
+fn authority_dry_run_receipt_preserves_hard_findings() {
+    let mut plan = sample_plan();
+    plan.authority_profile.staging_controllers = vec!["aaaaa-aa".to_string()];
+    let check = sample_check(plan, sample_matching_inventory());
+    let reconciliation = build_authority_reconciliation_plan(&check);
+    let report = authority_report_from_plan("authority-report-1", &reconciliation);
+
+    let receipt = authority_dry_run_receipt_from_plan(
+        &reconciliation,
+        &report,
+        "authority-dry-run-1",
+        "2026-05-23T00:00:00Z",
+        Some("2026-05-23T00:00:01Z".to_string()),
+    );
+
+    assert_eq!(report.status, SafetyStatusV1::Blocked);
+    assert_eq!(report.hard_failures.len(), 1);
+    assert_eq!(receipt.hard_failures, report.hard_failures);
+    assert!(receipt.attempted_actions.is_empty());
+    assert_eq!(receipt.verified_controller_observations.len(), 1);
 }
 
 #[test]
@@ -3276,7 +3336,10 @@ fn authority_reconciliation_blocks_unknown_unsafe_canister() {
     );
     assert_eq!(
         report.next_actions,
-        vec!["resolve unsafe authority findings before applying controller changes"]
+        vec![
+            "resolve unsafe canister authority findings before applying controller changes",
+            "resolve hard authority findings before applying controller changes",
+        ]
     );
 }
 
