@@ -6,7 +6,7 @@ use crate::deployment_truth::{
     DeploymentCheckV1, DeploymentCommandResultV1, DeploymentExecutionStatusV1, DeploymentReceiptV1,
     LocalDeploymentCheckRequest, SafetyFindingV1, artifact_gate_phase_receipt,
     artifact_gate_role_phase_receipts, check_local_deployment,
-    deployment_receipt_from_check_with_status,
+    deployment_receipt_from_check_with_status, phase_receipt,
 };
 use crate::format::wasm_size_label;
 use crate::icp::{self, CANIC_ICP_LOCAL_NETWORK_URL_ENV, CANIC_ICP_LOCAL_ROOT_KEY_ENV};
@@ -133,75 +133,43 @@ pub fn install_root(options: InstallRootOptions) -> Result<(), Box<dyn std::erro
 
     println!("Installing fleet {fleet_name}");
     println!();
-    ensure_icp_environment_ready(&icp_root, &options.network)?;
-    let create_started_at = Instant::now();
-    let root_canister_id = ensure_root_canister_id(
-        &icp_root,
-        &options.network,
-        &options.root_canister,
-        &config_path,
-    )?;
-    timings.create_canisters = create_started_at.elapsed();
-
-    let build_targets = configured_install_targets(&config_path, &options.root_build_target)?;
-    let build_started_at = Instant::now();
-    run_canic_build_targets(
-        &options.network,
-        &build_targets,
-        options.build_profile,
-        &config_path,
-        &icp_root,
-    )?;
-    timings.build_all = build_started_at.elapsed();
-
-    run_install_deployment_truth_safety_gate(
+    let prepared = prepare_install_deployment_truth(
         &options,
         &workspace_root,
         &icp_root,
         &config_path,
         &fleet_name,
     )?;
+    timings.create_canisters = prepared.timings.create_canisters;
+    timings.build_all = prepared.timings.build_all;
 
-    let emit_manifest_started_at = Instant::now();
-    let manifest_path = emit_root_release_set_manifest_with_config(
+    let (manifest_path, emit_manifest_duration) = emit_manifest_with_deployment_truth_receipt(
         &workspace_root,
         &icp_root,
-        &options.network,
+        &options,
         &config_path,
+        &fleet_name,
+        &prepared.deployment_truth_check,
     )?;
-    timings.emit_manifest = emit_manifest_started_at.elapsed();
-
-    let root_wasm = resolve_artifact_root(&icp_root, &options.network)?
-        .join(&options.root_build_target)
-        .join(format!("{}.wasm", options.root_build_target));
-    let install_started_at = Instant::now();
-    reinstall_root_wasm(&icp_root, &options.network, &root_canister_id, &root_wasm)?;
-    timings.install_root = install_started_at.elapsed();
-    let fund_root_started_at = Instant::now();
-    ensure_local_root_min_cycles(&icp_root, network, &root_canister_id, "pre-bootstrap")?;
-    timings.fund_root = fund_root_started_at.elapsed();
-
-    let manifest = load_root_release_set_manifest(&manifest_path)?;
-    let stage_started_at = Instant::now();
-    stage_root_release_set(&icp_root, &options.network, &root_canister_id, &manifest)?;
-    timings.stage_release_set = stage_started_at.elapsed();
-    let resume_started_at = Instant::now();
-    resume_root_bootstrap(&options.network, &root_canister_id)?;
-    timings.resume_bootstrap = resume_started_at.elapsed();
-    let ready_started_at = Instant::now();
-    let ready_result = wait_for_root_ready(
-        &options.network,
-        &root_canister_id,
-        options.ready_timeout_seconds,
-    );
-    timings.wait_ready = ready_started_at.elapsed();
-    if let Err(err) = ready_result {
-        print_install_timing_summary(&timings, total_started_at.elapsed());
-        return Err(err);
-    }
-    let finalize_funding_started_at = Instant::now();
-    ensure_local_root_min_cycles(&icp_root, network, &root_canister_id, "post-ready")?;
-    timings.finalize_root_funding = finalize_funding_started_at.elapsed();
+    timings.emit_manifest = emit_manifest_duration;
+    let activation_timings = run_root_activation_phases(
+        InstallReceiptScope {
+            icp_root: &icp_root,
+            network,
+            fleet_name: &fleet_name,
+            check: &prepared.deployment_truth_check,
+        },
+        &options,
+        &prepared.root_canister_id,
+        &manifest_path,
+        total_started_at,
+    )?;
+    timings.install_root = activation_timings.install_root;
+    timings.fund_root = activation_timings.fund_root;
+    timings.stage_release_set = activation_timings.stage_release_set;
+    timings.resume_bootstrap = activation_timings.resume_bootstrap;
+    timings.wait_ready = activation_timings.wait_ready;
+    timings.finalize_root_funding = activation_timings.finalize_root_funding;
 
     print_install_timing_summary(&timings, total_started_at.elapsed());
     let state = build_install_state(
@@ -211,11 +179,465 @@ pub fn install_root(options: InstallRootOptions) -> Result<(), Box<dyn std::erro
         &config_path,
         &manifest_path,
         &fleet_name,
-        &root_canister_id,
+        &prepared.root_canister_id,
     )?;
-    let state_path = write_install_state(&icp_root, &options.network, &state)?;
+    let state_path = write_install_state_with_deployment_truth_receipt(
+        InstallReceiptScope {
+            icp_root: &icp_root,
+            network,
+            fleet_name: &fleet_name,
+            check: &prepared.deployment_truth_check,
+        },
+        &options.network,
+        &state,
+    )?;
     print_install_result_summary(&options.network, &state.fleet, &state_path);
     Ok(())
+}
+
+struct PreparedInstallTruth {
+    root_canister_id: String,
+    deployment_truth_check: DeploymentCheckV1,
+    timings: InstallTimingSummary,
+}
+
+fn prepare_install_deployment_truth(
+    options: &InstallRootOptions,
+    workspace_root: &Path,
+    icp_root: &Path,
+    config_path: &Path,
+    fleet_name: &str,
+) -> Result<PreparedInstallTruth, Box<dyn std::error::Error>> {
+    let mut timings = InstallTimingSummary::default();
+    ensure_icp_environment_ready(icp_root, &options.network)?;
+    let (root_canister_id, create_phase, create_duration) =
+        resolve_root_canister_with_phase(options, icp_root, config_path)?;
+    timings.create_canisters = create_duration;
+
+    let (build_phase, build_duration) =
+        build_install_targets_with_phase(options, icp_root, config_path)?;
+    timings.build_all = build_duration;
+
+    let deployment_truth_check = run_install_deployment_truth_safety_gate(
+        options,
+        workspace_root,
+        icp_root,
+        config_path,
+        fleet_name,
+    )?;
+    let receipt_scope = InstallReceiptScope {
+        icp_root,
+        network: &options.network,
+        fleet_name,
+        check: &deployment_truth_check,
+    };
+    write_completed_install_phase_receipt(receipt_scope, create_phase)?;
+    write_completed_install_phase_receipt(receipt_scope, build_phase)?;
+
+    Ok(PreparedInstallTruth {
+        root_canister_id,
+        deployment_truth_check,
+        timings,
+    })
+}
+
+fn resolve_root_canister_with_phase(
+    options: &InstallRootOptions,
+    icp_root: &Path,
+    config_path: &Path,
+) -> Result<(String, CompletedInstallPhase, Duration), Box<dyn std::error::Error>> {
+    let started_at = current_unix_timestamp_label()?;
+    let started = Instant::now();
+    let root_canister_id = ensure_root_canister_id(
+        icp_root,
+        &options.network,
+        &options.root_canister,
+        config_path,
+    )?;
+    let duration = started.elapsed();
+    let phase = CompletedInstallPhase {
+        phase: "resolve_root_canister",
+        attempted_action: "resolve or create root canister id",
+        started_at,
+        finished_at: Some(current_unix_timestamp_label()?),
+        evidence: vec![
+            format!("root_target:{}", options.root_canister),
+            format!("root_canister:{root_canister_id}"),
+        ],
+        role_names: Vec::new(),
+    };
+    Ok((root_canister_id, phase, duration))
+}
+
+fn build_install_targets_with_phase(
+    options: &InstallRootOptions,
+    icp_root: &Path,
+    config_path: &Path,
+) -> Result<(CompletedInstallPhase, Duration), Box<dyn std::error::Error>> {
+    let build_targets = configured_install_targets(config_path, &options.root_build_target)?;
+    let started_at = current_unix_timestamp_label()?;
+    let started = Instant::now();
+    run_canic_build_targets(
+        &options.network,
+        &build_targets,
+        options.build_profile,
+        config_path,
+        icp_root,
+    )?;
+    let duration = started.elapsed();
+    let phase = CompletedInstallPhase {
+        phase: "build_artifacts",
+        attempted_action: "build configured install targets",
+        started_at,
+        finished_at: Some(current_unix_timestamp_label()?),
+        evidence: build_targets
+            .iter()
+            .map(|target| format!("build_target:{target}"))
+            .collect(),
+        role_names: build_targets,
+    };
+    Ok((phase, duration))
+}
+
+fn emit_manifest_with_deployment_truth_receipt(
+    workspace_root: &Path,
+    icp_root: &Path,
+    options: &InstallRootOptions,
+    config_path: &Path,
+    fleet_name: &str,
+    deployment_truth_check: &DeploymentCheckV1,
+) -> Result<(PathBuf, Duration), Box<dyn std::error::Error>> {
+    let emit_manifest_started_at_label = current_unix_timestamp_label()?;
+    let emit_manifest_started_at = Instant::now();
+    let manifest_path = emit_root_release_set_manifest_with_config(
+        workspace_root,
+        icp_root,
+        &options.network,
+        config_path,
+    )?;
+    let emit_manifest_duration = emit_manifest_started_at.elapsed();
+    let emit_manifest_receipt = install_deployment_truth_phase_receipt(
+        deployment_truth_check,
+        "emit_manifest",
+        emit_manifest_started_at_label,
+        Some(current_unix_timestamp_label()?),
+        "emit root release-set manifest",
+        crate::deployment_truth::ObservationStatusV1::Observed,
+        vec![format!("manifest_path:{}", manifest_path.display())],
+    );
+    let emit_manifest_receipt_path = write_install_deployment_truth_receipt(
+        icp_root,
+        &options.network,
+        fleet_name,
+        &emit_manifest_receipt,
+    )?;
+    println!(
+        "Deployment truth receipt JSON: {}",
+        emit_manifest_receipt_path.display()
+    );
+    Ok((manifest_path, emit_manifest_duration))
+}
+
+fn run_root_activation_phases(
+    receipt_scope: InstallReceiptScope<'_>,
+    options: &InstallRootOptions,
+    root_canister_id: &str,
+    manifest_path: &Path,
+    total_started_at: Instant,
+) -> Result<InstallTimingSummary, Box<dyn std::error::Error>> {
+    let mut timings = InstallTimingSummary::default();
+    let root_wasm = resolve_artifact_root(receipt_scope.icp_root, receipt_scope.network)?
+        .join(&options.root_build_target)
+        .join(format!("{}.wasm", options.root_build_target));
+    timings.install_root = receipt_scope.run_phase(
+        "install_root",
+        "install root wasm",
+        vec![
+            format!("root_canister:{root_canister_id}"),
+            format!("root_wasm:{}", root_wasm.display()),
+        ],
+        || {
+            reinstall_root_wasm(
+                receipt_scope.icp_root,
+                receipt_scope.network,
+                root_canister_id,
+                &root_wasm,
+            )
+        },
+    )?;
+    timings.fund_root = receipt_scope.run_phase(
+        "fund_root_pre_bootstrap",
+        "ensure local root minimum cycles before bootstrap",
+        vec![
+            format!("root_canister:{root_canister_id}"),
+            format!("minimum_cycles:{LOCAL_ROOT_MIN_READY_CYCLES}"),
+        ],
+        || {
+            ensure_local_root_min_cycles(
+                receipt_scope.icp_root,
+                receipt_scope.network,
+                root_canister_id,
+                "pre-bootstrap",
+            )
+        },
+    )?;
+    let manifest = load_root_release_set_manifest(manifest_path)?;
+    timings.stage_release_set = receipt_scope.run_phase(
+        "stage_release_set",
+        "stage root release set",
+        vec![
+            format!("root_canister:{root_canister_id}"),
+            format!("manifest_path:{}", manifest_path.display()),
+        ],
+        || {
+            stage_root_release_set(
+                receipt_scope.icp_root,
+                receipt_scope.network,
+                root_canister_id,
+                &manifest,
+            )
+        },
+    )?;
+    timings.resume_bootstrap = receipt_scope.run_phase(
+        "resume_bootstrap",
+        "resume root bootstrap",
+        vec![format!("root_canister:{root_canister_id}")],
+        || resume_root_bootstrap(receipt_scope.network, root_canister_id),
+    )?;
+    let wait_ready_result = receipt_scope.run_phase(
+        "wait_ready",
+        "wait for root bootstrap readiness",
+        vec![
+            format!("root_canister:{root_canister_id}"),
+            format!("timeout_seconds:{}", options.ready_timeout_seconds),
+        ],
+        || {
+            wait_for_root_ready(
+                receipt_scope.network,
+                root_canister_id,
+                options.ready_timeout_seconds,
+            )
+        },
+    );
+    match wait_ready_result {
+        Ok(duration) => timings.wait_ready = duration,
+        Err(err) => {
+            print_install_timing_summary(&timings, total_started_at.elapsed());
+            return Err(err);
+        }
+    }
+    timings.finalize_root_funding = receipt_scope.run_phase(
+        "fund_root_post_ready",
+        "ensure local root minimum cycles after ready",
+        vec![
+            format!("root_canister:{root_canister_id}"),
+            format!("minimum_cycles:{LOCAL_ROOT_MIN_READY_CYCLES}"),
+        ],
+        || {
+            ensure_local_root_min_cycles(
+                receipt_scope.icp_root,
+                receipt_scope.network,
+                root_canister_id,
+                "post-ready",
+            )
+        },
+    )?;
+    Ok(timings)
+}
+
+#[derive(Clone, Copy)]
+struct InstallReceiptScope<'a> {
+    icp_root: &'a Path,
+    network: &'a str,
+    fleet_name: &'a str,
+    check: &'a DeploymentCheckV1,
+}
+
+struct CompletedInstallPhase {
+    phase: &'static str,
+    attempted_action: &'static str,
+    started_at: String,
+    finished_at: Option<String>,
+    evidence: Vec<String>,
+    role_names: Vec<String>,
+}
+
+fn write_completed_install_phase_receipt(
+    receipt_scope: InstallReceiptScope<'_>,
+    completed: CompletedInstallPhase,
+) -> Result<PathBuf, Box<dyn std::error::Error>> {
+    let role_phase_receipts = completed
+        .role_names
+        .iter()
+        .filter_map(|role| {
+            completed_phase_role_receipt(
+                receipt_scope.check,
+                completed.phase,
+                role,
+                crate::deployment_truth::RolePhaseResultV1::Applied,
+                None,
+            )
+        })
+        .collect();
+    let receipt = install_deployment_truth_phase_receipt_with_result(
+        receipt_scope.check,
+        PhaseReceiptInput {
+            phase: completed.phase,
+            started_at: completed.started_at,
+            finished_at: completed.finished_at,
+            attempted_action: completed.attempted_action,
+            status: crate::deployment_truth::ObservationStatusV1::Observed,
+            evidence: completed.evidence,
+            role_phase_receipts,
+            operation_status: DeploymentExecutionStatusV1::Complete,
+            command_result: DeploymentCommandResultV1::Succeeded,
+        },
+    );
+    receipt_scope.write_receipt(&receipt)
+}
+
+fn completed_phase_role_receipt(
+    check: &DeploymentCheckV1,
+    phase: &str,
+    role: &str,
+    result: crate::deployment_truth::RolePhaseResultV1,
+    error: Option<String>,
+) -> Option<crate::deployment_truth::RolePhaseReceiptV1> {
+    let planned = check
+        .plan
+        .role_artifacts
+        .iter()
+        .find(|artifact| artifact.role == role)?;
+    let observed = check
+        .inventory
+        .observed_artifacts
+        .iter()
+        .find(|artifact| artifact.role == role);
+    let artifact_digest = observed
+        .and_then(|artifact| artifact.file_sha256.clone())
+        .or_else(|| observed.and_then(|artifact| artifact.payload_sha256.clone()))
+        .or_else(|| planned.observed_wasm_gz_file_sha256.clone())
+        .or_else(|| planned.wasm_gz_sha256.clone());
+
+    Some(crate::deployment_truth::RolePhaseReceiptV1 {
+        role: role.to_string(),
+        phase: phase.to_string(),
+        result,
+        previous_module_hash: None,
+        target_module_hash: planned.installed_module_hash.clone(),
+        observed_module_hash_after: None,
+        artifact_digest,
+        canonical_embedded_config_sha256: planned.canonical_embedded_config_sha256.clone(),
+        error,
+    })
+}
+
+fn write_install_state_with_deployment_truth_receipt(
+    receipt_scope: InstallReceiptScope<'_>,
+    network: &str,
+    state: &InstallState,
+) -> Result<PathBuf, Box<dyn std::error::Error>> {
+    let started_at = current_unix_timestamp_label()?;
+    let state_path = write_install_state(receipt_scope.icp_root, network, state)?;
+    let completed = CompletedInstallPhase {
+        phase: "write_install_state",
+        attempted_action: "write local install state",
+        started_at,
+        finished_at: Some(current_unix_timestamp_label()?),
+        evidence: vec![
+            format!("install_state:{}", state_path.display()),
+            format!("fleet:{}", state.fleet),
+            format!("root_canister:{}", state.root_canister_id),
+        ],
+        role_names: Vec::new(),
+    };
+    write_completed_install_phase_receipt(receipt_scope, completed)?;
+    Ok(state_path)
+}
+
+impl InstallReceiptScope<'_> {
+    fn run_phase(
+        self,
+        phase: &str,
+        attempted_action: &str,
+        evidence: Vec<String>,
+        run: impl FnOnce() -> Result<(), Box<dyn std::error::Error>>,
+    ) -> Result<Duration, Box<dyn std::error::Error>> {
+        let started_at = current_unix_timestamp_label()?;
+        let started = Instant::now();
+        match run() {
+            Ok(()) => {
+                let duration = started.elapsed();
+                let receipt = install_deployment_truth_phase_receipt(
+                    self.check,
+                    phase,
+                    started_at,
+                    Some(current_unix_timestamp_label()?),
+                    attempted_action,
+                    crate::deployment_truth::ObservationStatusV1::Observed,
+                    evidence,
+                );
+                self.write_receipt(&receipt)?;
+                Ok(duration)
+            }
+            Err(err) => {
+                self.try_write_failed_phase_receipt(
+                    phase,
+                    started_at,
+                    attempted_action,
+                    evidence,
+                    err.as_ref(),
+                );
+                Err(err)
+            }
+        }
+    }
+
+    fn write_receipt(
+        self,
+        receipt: &DeploymentReceiptV1,
+    ) -> Result<PathBuf, Box<dyn std::error::Error>> {
+        let path = write_install_deployment_truth_receipt(
+            self.icp_root,
+            self.network,
+            self.fleet_name,
+            receipt,
+        )?;
+        println!("Deployment truth receipt JSON: {}", path.display());
+        Ok(path)
+    }
+
+    fn try_write_failed_phase_receipt(
+        self,
+        phase: &str,
+        started_at: String,
+        attempted_action: &str,
+        evidence: Vec<String>,
+        err: &dyn std::error::Error,
+    ) {
+        let receipt = install_deployment_truth_phase_receipt_with_result(
+            self.check,
+            PhaseReceiptInput {
+                phase,
+                started_at,
+                finished_at: Some(
+                    current_unix_timestamp_label().unwrap_or_else(|_| "unknown".to_string()),
+                ),
+                attempted_action,
+                status: crate::deployment_truth::ObservationStatusV1::Inconclusive,
+                evidence,
+                role_phase_receipts: Vec::new(),
+                operation_status: DeploymentExecutionStatusV1::FailedAfterMutation,
+                command_result: DeploymentCommandResultV1::Failed {
+                    code: format!("{phase}_failed"),
+                    message: err.to_string(),
+                },
+            },
+        );
+        if let Err(write_err) = self.write_receipt(&receipt) {
+            eprintln!("Deployment truth receipt JSON write failed: {write_err}");
+        }
+    }
 }
 
 /// Build the same read-only deployment truth check that can be used as a
@@ -280,7 +702,7 @@ fn run_install_deployment_truth_safety_gate(
     icp_root: &Path,
     config_path: &Path,
     fleet_name: &str,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<DeploymentCheckV1, Box<dyn std::error::Error>> {
     let truth_gate_started_at = current_unix_timestamp_label()?;
     let deployment_truth_check = current_install_deployment_truth_check_at(
         options,
@@ -302,7 +724,7 @@ fn run_install_deployment_truth_safety_gate(
         vec![artifact_gate_receipt],
         role_receipts,
     );
-    let receipt_write = write_install_deployment_truth_gate_receipt(
+    let receipt_write = write_install_deployment_truth_receipt(
         icp_root,
         &options.network,
         fleet_name,
@@ -315,7 +737,7 @@ fn run_install_deployment_truth_safety_gate(
     print_install_deployment_truth_gate(&deployment_truth_check, &deployment_receipt);
     enforce_install_deployment_truth_gate(&deployment_truth_check)?;
     receipt_write?;
-    Ok(())
+    Ok(deployment_truth_check)
 }
 
 fn enforce_install_deployment_truth_gate(
@@ -434,7 +856,67 @@ fn install_deployment_truth_gate_receipt(
     )
 }
 
-fn write_install_deployment_truth_gate_receipt(
+fn install_deployment_truth_phase_receipt(
+    check: &DeploymentCheckV1,
+    phase: &str,
+    started_at: String,
+    finished_at: Option<String>,
+    attempted_action: &str,
+    status: crate::deployment_truth::ObservationStatusV1,
+    evidence: Vec<String>,
+) -> DeploymentReceiptV1 {
+    install_deployment_truth_phase_receipt_with_result(
+        check,
+        PhaseReceiptInput {
+            phase,
+            started_at,
+            finished_at,
+            attempted_action,
+            status,
+            evidence,
+            role_phase_receipts: Vec::new(),
+            operation_status: DeploymentExecutionStatusV1::Complete,
+            command_result: DeploymentCommandResultV1::Succeeded,
+        },
+    )
+}
+
+fn install_deployment_truth_phase_receipt_with_result(
+    check: &DeploymentCheckV1,
+    input: PhaseReceiptInput<'_>,
+) -> DeploymentReceiptV1 {
+    deployment_receipt_from_check_with_status(
+        check,
+        format!("{}:{}", check.check_id, input.phase),
+        input.operation_status,
+        input.started_at.clone(),
+        input.finished_at.clone(),
+        vec![phase_receipt(
+            input.phase,
+            input.started_at,
+            input.finished_at,
+            input.attempted_action,
+            input.status,
+            input.evidence,
+        )],
+        input.role_phase_receipts,
+        input.command_result,
+    )
+}
+
+struct PhaseReceiptInput<'a> {
+    phase: &'a str,
+    started_at: String,
+    finished_at: Option<String>,
+    attempted_action: &'a str,
+    status: crate::deployment_truth::ObservationStatusV1,
+    evidence: Vec<String>,
+    role_phase_receipts: Vec<crate::deployment_truth::RolePhaseReceiptV1>,
+    operation_status: DeploymentExecutionStatusV1,
+    command_result: DeploymentCommandResultV1,
+}
+
+fn write_install_deployment_truth_receipt(
     icp_root: &Path,
     network: &str,
     fleet_name: &str,

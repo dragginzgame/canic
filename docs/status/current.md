@@ -21,6 +21,12 @@ inspect only the files needed for the current task.
 
 ## Recent Work
 
+- Current install now persists additional deployment receipts for release-set
+  manifest emission, successful root canister resolution, local artifact build,
+  the IC-mutating root install/funding/staging/bootstrap phases, and observed
+  `wait_ready` evidence, plus the final local install-state write. The build
+  receipt now carries role-scoped artifact outcomes for configured build targets
+  when those roles are present in the deployment truth plan.
 - Current-install deployment truth gates now treat every
   `SafetyReportV1.hard_failures` entry as a blocker instead of maintaining a
   hand-picked blocker-code allowlist. Warnings remain report-only.

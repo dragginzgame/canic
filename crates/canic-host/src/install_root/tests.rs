@@ -1,22 +1,25 @@
 use super::{
-    INSTALL_STATE_SCHEMA_VERSION, InstallRootOptions, InstallState, InstallTimingSummary,
-    add_create_root_target, add_icp_environment_target, add_local_root_create_cycles_arg,
-    check_install_deployment_truth, config_selection_error,
+    CompletedInstallPhase, INSTALL_STATE_SCHEMA_VERSION, InstallReceiptScope, InstallRootOptions,
+    InstallState, InstallTimingSummary, add_create_root_target, add_icp_environment_target,
+    add_local_root_create_cycles_arg, check_install_deployment_truth, config_selection_error,
     current_install_deployment_truth_check_at, discover_canic_config_choices,
     discover_project_canic_config_choices, enforce_install_deployment_truth_gate,
     fleet_install_state_path, icp_canister_command_in_network, install_deployment_truth_gate_lines,
-    install_deployment_truth_gate_receipt, install_deployment_truth_receipt_path,
-    is_missing_canister_id_error, latest_deployment_truth_receipt_path_from_root,
-    parse_bootstrap_status_value, parse_canister_id_json, parse_created_canister_id,
-    parse_cycle_balance_response, parse_root_ready_value, read_fleet_install_state,
-    render_install_timing_summary, resolve_install_config_path, root_init_args,
-    validate_expected_fleet_name, write_install_deployment_truth_gate_receipt, write_install_state,
+    install_deployment_truth_gate_receipt, install_deployment_truth_phase_receipt,
+    install_deployment_truth_receipt_path, is_missing_canister_id_error,
+    latest_deployment_truth_receipt_path_from_root, parse_bootstrap_status_value,
+    parse_canister_id_json, parse_created_canister_id, parse_cycle_balance_response,
+    parse_root_ready_value, read_fleet_install_state, render_install_timing_summary,
+    resolve_install_config_path, root_init_args, validate_expected_fleet_name,
+    write_completed_install_phase_receipt, write_install_deployment_truth_receipt,
+    write_install_state, write_install_state_with_deployment_truth_receipt,
 };
 use crate::canister_build::CanisterBuildProfile;
 use crate::deployment_truth::{
-    CanisterControlClassV1, DeploymentReceiptV1, ObservedCanisterV1, SafetyFindingV1,
-    SafetySeverityV1, artifact_gate_phase_receipt, artifact_gate_role_phase_receipts,
-    compare_plan_to_inventory, safety_report_from_diff,
+    CanisterControlClassV1, DeploymentCheckV1, DeploymentExecutionStatusV1, DeploymentReceiptV1,
+    ObservationStatusV1, ObservedCanisterV1, SafetyFindingV1, SafetySeverityV1,
+    artifact_gate_phase_receipt, artifact_gate_role_phase_receipts, compare_plan_to_inventory,
+    safety_report_from_diff,
 };
 use crate::icp::{CANIC_ICP_LOCAL_NETWORK_URL_ENV, CANIC_ICP_LOCAL_ROOT_KEY_ENV};
 use crate::release_set::configured_install_targets;
@@ -832,7 +835,7 @@ kind = "root"
         artifact_gate_role_phase_receipts(&check),
     );
 
-    let path = write_install_deployment_truth_gate_receipt(&root, "local", "demo", &receipt)
+    let path = write_install_deployment_truth_receipt(&root, "local", "demo", &receipt)
         .expect("write deployment truth receipt");
     let expected_path = install_deployment_truth_receipt_path(&root, "local", "demo", &receipt)
         .expect("receipt path");
@@ -859,6 +862,216 @@ kind = "root"
     let decoded: DeploymentReceiptV1 =
         serde_json::from_slice(&fs::read(&path).expect("read receipt")).expect("decode receipt");
     assert_eq!(decoded, receipt);
+
+    fs::remove_dir_all(root).expect("clean temp dir");
+}
+
+#[test]
+fn install_truth_phase_receipt_records_emit_manifest_evidence() {
+    let root = temp_dir("canic-install-truth-emit-manifest-receipt");
+    let config_path = root.join("fleets/demo/canic.toml");
+    fs::create_dir_all(config_path.parent().expect("config parent")).expect("create config dir");
+    fs::write(
+        &config_path,
+        r#"
+controllers = []
+app_index = []
+
+[fleet]
+name = "demo"
+
+[app]
+init_mode = "enabled"
+[app.whitelist]
+
+[subnets.prime.canisters.root]
+kind = "root"
+"#,
+    )
+    .expect("write config");
+    write_wasm_gz_artifact(&root, "root", b"root-artifact");
+
+    let options = InstallRootOptions {
+        root_canister: "root".to_string(),
+        root_build_target: "root".to_string(),
+        network: "local".to_string(),
+        icp_root: Some(root.clone()),
+        build_profile: Some(CanisterBuildProfile::Fast),
+        ready_timeout_seconds: 30,
+        config_path: Some("fleets/demo/canic.toml".to_string()),
+        expected_fleet: Some("demo".to_string()),
+        interactive_config_selection: false,
+    };
+    let check = current_install_deployment_truth_check_at(
+        &options,
+        &root,
+        &root,
+        &config_path,
+        "demo",
+        "2026-05-22T00:00:00Z".to_string(),
+    )
+    .expect("deployment truth check");
+
+    let receipt = install_deployment_truth_phase_receipt(
+        &check,
+        "emit_manifest",
+        "unix:1770000002".to_string(),
+        Some("unix:1770000003".to_string()),
+        "emit root release-set manifest",
+        ObservationStatusV1::Observed,
+        vec!["manifest_path:/tmp/manifest.json".to_string()],
+    );
+
+    assert_eq!(
+        receipt.operation_status,
+        DeploymentExecutionStatusV1::Complete
+    );
+    assert_eq!(receipt.operation_id, "local:local:demo:check:emit_manifest");
+    assert_eq!(receipt.phase_receipts.len(), 1);
+    assert_eq!(receipt.phase_receipts[0].phase, "emit_manifest");
+    assert_eq!(
+        receipt.phase_receipts[0].verified_postcondition.status,
+        ObservationStatusV1::Observed
+    );
+    assert_eq!(
+        receipt.phase_receipts[0].verified_postcondition.evidence,
+        vec!["manifest_path:/tmp/manifest.json".to_string()]
+    );
+
+    fs::remove_dir_all(root).expect("clean temp dir");
+}
+
+#[test]
+fn install_truth_completed_phase_receipt_records_pre_gate_evidence() {
+    let (root, check) = demo_install_deployment_truth_check("canic-install-truth-pre-gate-phase");
+    let scope = InstallReceiptScope {
+        icp_root: &root,
+        network: "local",
+        fleet_name: "demo",
+        check: &check,
+    };
+
+    let path = write_completed_install_phase_receipt(
+        scope,
+        CompletedInstallPhase {
+            phase: "build_artifacts",
+            attempted_action: "build configured install targets",
+            started_at: "unix:1770000004".to_string(),
+            finished_at: Some("unix:1770000005".to_string()),
+            evidence: vec!["build_target:root".to_string()],
+            role_names: vec!["root".to_string()],
+        },
+    )
+    .expect("write completed phase receipt");
+    let receipt: DeploymentReceiptV1 =
+        serde_json::from_slice(&fs::read(path).expect("read receipt")).expect("decode receipt");
+
+    assert_eq!(
+        receipt.operation_id,
+        "local:local:demo:check:build_artifacts"
+    );
+    assert_eq!(
+        receipt.operation_status,
+        DeploymentExecutionStatusV1::Complete
+    );
+    assert_eq!(receipt.phase_receipts[0].phase, "build_artifacts");
+    assert_eq!(
+        receipt.phase_receipts[0].verified_postcondition.evidence,
+        vec!["build_target:root".to_string()]
+    );
+    assert_eq!(receipt.role_phase_receipts.len(), 1);
+    assert_eq!(receipt.role_phase_receipts[0].role, "root");
+    assert_eq!(receipt.role_phase_receipts[0].phase, "build_artifacts");
+    assert_eq!(
+        receipt.role_phase_receipts[0].result,
+        crate::deployment_truth::RolePhaseResultV1::Applied
+    );
+
+    fs::remove_dir_all(root).expect("clean temp dir");
+}
+
+#[test]
+fn install_truth_receipted_phase_records_success_and_failure() {
+    let (root, check) = demo_install_deployment_truth_check("canic-install-truth-receipted-phase");
+    let scope = InstallReceiptScope {
+        icp_root: &root,
+        network: "local",
+        fleet_name: "demo",
+        check: &check,
+    };
+
+    scope
+        .run_phase(
+            "install_root",
+            "install root wasm",
+            vec!["root_canister:aaaaa-aa".to_string()],
+            || Ok(()),
+        )
+        .expect("successful phase should record");
+    let err = scope
+        .run_phase(
+            "stage_release_set",
+            "stage root release set",
+            vec!["manifest_path:/tmp/release-set.json".to_string()],
+            || Err::<(), Box<dyn std::error::Error>>("stage failed".into()),
+        )
+        .expect_err("failed phase should return original error");
+    scope
+        .run_phase(
+            "wait_ready",
+            "wait for root bootstrap readiness",
+            vec!["timeout_seconds:30".to_string()],
+            || Ok(()),
+        )
+        .expect("wait-ready phase should record");
+
+    assert_eq!(err.to_string(), "stage failed");
+
+    let receipt_dir = root.join(".canic/local/deployment-receipts/demo");
+    let receipts = fs::read_dir(&receipt_dir)
+        .expect("read receipts")
+        .map(|entry| {
+            let path = entry.expect("receipt entry").path();
+            serde_json::from_slice::<DeploymentReceiptV1>(
+                &fs::read(path).expect("read receipt JSON"),
+            )
+            .expect("decode receipt")
+        })
+        .collect::<Vec<_>>();
+    let install = receipts
+        .iter()
+        .find(|receipt| receipt.operation_id.ends_with(":install_root"))
+        .expect("install receipt");
+    let stage = receipts
+        .iter()
+        .find(|receipt| receipt.operation_id.ends_with(":stage_release_set"))
+        .expect("stage receipt");
+    let wait = receipts
+        .iter()
+        .find(|receipt| receipt.operation_id.ends_with(":wait_ready"))
+        .expect("wait-ready receipt");
+
+    assert_eq!(
+        install.operation_status,
+        DeploymentExecutionStatusV1::Complete
+    );
+    assert_eq!(
+        install.phase_receipts[0].verified_postcondition.status,
+        ObservationStatusV1::Observed
+    );
+    assert_eq!(
+        stage.operation_status,
+        DeploymentExecutionStatusV1::FailedAfterMutation
+    );
+    assert_eq!(
+        stage.phase_receipts[0].verified_postcondition.status,
+        ObservationStatusV1::Inconclusive
+    );
+    assert_eq!(wait.operation_status, DeploymentExecutionStatusV1::Complete);
+    assert_eq!(
+        wait.phase_receipts[0].verified_postcondition.status,
+        ObservationStatusV1::Observed
+    );
 
     fs::remove_dir_all(root).expect("clean temp dir");
 }
@@ -1481,6 +1694,63 @@ fn install_state_round_trips_from_project_state_dir() {
 }
 
 #[test]
+fn install_truth_state_write_receipt_records_local_state_path() {
+    let (root, check) = demo_install_deployment_truth_check("canic-install-state-receipt");
+    let state = InstallState {
+        schema_version: INSTALL_STATE_SCHEMA_VERSION,
+        fleet: "demo".to_string(),
+        installed_at_unix_secs: 42,
+        network: "local".to_string(),
+        root_target: "root".to_string(),
+        root_canister_id: "uxrrr-q7777-77774-qaaaq-cai".to_string(),
+        root_build_target: "root".to_string(),
+        workspace_root: root.display().to_string(),
+        icp_root: root.display().to_string(),
+        config_path: root.join("fleets/demo/canic.toml").display().to_string(),
+        release_set_manifest_path: root
+            .join(".icp/local/canisters/root/root.release-set.json")
+            .display()
+            .to_string(),
+    };
+    let scope = InstallReceiptScope {
+        icp_root: &root,
+        network: "local",
+        fleet_name: "demo",
+        check: &check,
+    };
+
+    let state_path = write_install_state_with_deployment_truth_receipt(scope, "local", &state)
+        .expect("write install state and receipt");
+    let receipt_dir = root.join(".canic/local/deployment-receipts/demo");
+    let receipt = fs::read_dir(&receipt_dir)
+        .expect("read receipts")
+        .map(|entry| {
+            let path = entry.expect("receipt entry").path();
+            serde_json::from_slice::<DeploymentReceiptV1>(
+                &fs::read(path).expect("read receipt JSON"),
+            )
+            .expect("decode receipt")
+        })
+        .find(|receipt| receipt.operation_id.ends_with(":write_install_state"))
+        .expect("write install state receipt");
+
+    assert_eq!(state_path, root.join(".canic/local/fleets/demo.json"));
+    assert_eq!(
+        receipt.operation_status,
+        DeploymentExecutionStatusV1::Complete
+    );
+    assert_eq!(receipt.phase_receipts[0].phase, "write_install_state");
+    assert!(
+        receipt.phase_receipts[0]
+            .verified_postcondition
+            .evidence
+            .contains(&format!("install_state:{}", state_path.display()))
+    );
+
+    fs::remove_dir_all(root).expect("clean temp dir");
+}
+
+#[test]
 fn install_state_replaces_other_fleets_that_share_root() {
     let root = temp_dir("canic-install-state-replace");
     let demo = InstallState {
@@ -1538,6 +1808,53 @@ fn write_wasm_gz_artifact(root: &Path, role: &str, bytes: &[u8]) {
         .join(format!("{role}.wasm.gz"));
     fs::create_dir_all(path.parent().expect("artifact parent")).expect("create artifact dir");
     fs::write(path, bytes).expect("write artifact");
+}
+
+fn demo_install_deployment_truth_check(root_name: &str) -> (PathBuf, DeploymentCheckV1) {
+    let root = temp_dir(root_name);
+    let config_path = root.join("fleets/demo/canic.toml");
+    fs::create_dir_all(config_path.parent().expect("config parent")).expect("create config dir");
+    fs::write(
+        &config_path,
+        r#"
+controllers = []
+app_index = []
+
+[fleet]
+name = "demo"
+
+[app]
+init_mode = "enabled"
+[app.whitelist]
+
+[subnets.prime.canisters.root]
+kind = "root"
+"#,
+    )
+    .expect("write config");
+    write_wasm_gz_artifact(&root, "root", b"root-artifact");
+
+    let options = InstallRootOptions {
+        root_canister: "root".to_string(),
+        root_build_target: "root".to_string(),
+        network: "local".to_string(),
+        icp_root: Some(root.clone()),
+        build_profile: Some(CanisterBuildProfile::Fast),
+        ready_timeout_seconds: 30,
+        config_path: Some("fleets/demo/canic.toml".to_string()),
+        expected_fleet: Some("demo".to_string()),
+        interactive_config_selection: false,
+    };
+    let check = current_install_deployment_truth_check_at(
+        &options,
+        &root,
+        &root,
+        &config_path,
+        "demo",
+        "2026-05-22T00:00:00Z".to_string(),
+    )
+    .expect("deployment truth check");
+    (root, check)
 }
 
 fn with_guarded_env(run: impl FnOnce()) {

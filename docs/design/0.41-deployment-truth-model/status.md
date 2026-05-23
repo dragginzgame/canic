@@ -18,6 +18,12 @@ narrow current-install artifact gate.
 
 ## Implemented
 
+- Current install now persists additional deployment receipts for release-set
+  manifest emission, successful root canister resolution, local artifact build,
+  the IC-mutating root install/funding/staging/bootstrap phases, and observed
+  `wait_ready` evidence, plus the final local install-state write. The build
+  receipt now carries role-scoped artifact outcomes for configured build targets
+  when those roles are present in the deployment truth plan.
 - Current-install deployment truth gates now treat every
   `SafetyReportV1.hard_failures` entry as a blocker instead of maintaining a
   hand-picked blocker-code allowlist. Warnings remain report-only.
@@ -165,10 +171,11 @@ narrow current-install artifact gate.
 - Implement canonical resolved-config and deployment-manifest digest
   computation. Raw config SHA-256 is currently diagnostic/local consistency
   evidence only.
-- Persist or surface `DeploymentReceiptV1` records from installer phases beyond
-  the current artifact-gate receipt.
-- Populate meaningful role-scoped phase receipt outcomes once installer phases
-  can mutate multiple roles or canisters.
+- Persist or surface `DeploymentReceiptV1` records from remaining installer
+  phases beyond the current artifact, root-canister, build, manifest, install,
+  funding, staging, bootstrap resume, wait-ready, and install-state receipts.
+- Extend role-scoped phase receipt outcomes beyond the build-artifacts phase
+  once installer phases can mutate multiple roles or canisters.
 - Persist or discover richer prior deployment receipts beyond latest local
   artifact-gate receipt lookup.
 
