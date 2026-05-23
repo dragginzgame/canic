@@ -10,14 +10,20 @@ landed, what drifted, and what remains open.
 
 ## Current State
 
-Active implementation is underway.
+Active implementation is in closeout hardening.
 
-0.41 has moved beyond design preparation into the host-side deployment truth
-model, local observation layer, read-only operator JSON surfaces, and the first
-narrow current-install artifact gate.
+0.41 has shipped the host-side deployment truth model, local observation layer,
+read-only operator JSON surfaces, current-install safety gates, lightweight
+phase receipts, passive resume reports, and duplicate-evidence hardening.
+Remaining work should be limited to stale documentation cleanup, focused
+validation, audit findings, and final handoff preparation.
 
 ## Implemented
 
+- `0.41.18` cleaned up deployment truth report internals without intended
+  operator-facing behavior changes. Duplicate evidence grouping and
+  diff/finding construction now share local helpers, and verifier readiness
+  comparison no longer uses a panic-shaped checked unwrap.
 - Deployment diffs now detect duplicate planned verifier role-epoch
   expectations: conflicting minimum epochs hard-fail, while exact duplicate
   planned epoch requirements warn and compare only once.
@@ -247,13 +253,10 @@ narrow current-install artifact gate.
 - Compute richer role-scoped embedded config digests after the promotion and
   execution layers expose target materialization identities. Raw config
   SHA-256 remains diagnostic/local consistency evidence only.
-- Persist or surface `DeploymentReceiptV1` records from remaining installer
-  phases beyond the current artifact, root-canister, build, manifest, install,
-  funding, staging, bootstrap resume, wait-ready, and install-state receipts.
-- Extend role-scoped phase receipt outcomes beyond the build-artifacts phase
-  once installer phases can mutate multiple roles or canisters.
-- Persist or discover richer prior deployment receipts beyond latest local
-  artifact-gate receipt lookup.
+- Extend role-scoped phase receipt outcomes beyond the current build-artifacts
+  evidence once later executor phases can mutate multiple roles or canisters.
+- Persist or discover richer prior deployment histories beyond the latest local
+  receipt lookup.
 
 ## Drift Log
 
@@ -267,6 +270,9 @@ narrow current-install artifact gate.
 
 ## Release Bar
 
-0.41 should not close until the current install path has at least one more
-operator-facing validation pass confirming the new report and artifact gate work
-on realistic local install inputs.
+0.41 is ready for closeout audit once focused release-readiness validation
+passes over the deployment truth surface, current-install safety gates, deploy
+CLI surfaces, and changelog/status documentation.
+
+The closeout audit should confirm the exit criterion: Canic can state what it
+plans to do, what exists, what differs, and whether it is safe to continue.

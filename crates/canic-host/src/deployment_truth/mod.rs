@@ -10,6 +10,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
+mod authority;
 mod model;
 mod observe;
 mod plan;
@@ -18,17 +19,19 @@ mod report;
 #[cfg(test)]
 mod tests;
 
+pub use authority::build_authority_reconciliation_plan;
 pub use model::{
-    ArtifactDigestSourceV1, ArtifactSourceV1, AuthorityProfileV1, CanisterControlClassV1,
-    DeploymentAssumptionV1, DeploymentCheckV1, DeploymentCommandResultV1, DeploymentDiffV1,
-    DeploymentExecutionStatusV1, DeploymentIdentityV1, DeploymentInventoryV1,
-    DeploymentObservationGapV1, DeploymentPlanV1, DeploymentReceiptV1, DiffItemV1,
-    ExpectedCanisterV1, ExpectedPoolCanisterV1, LocalDeploymentConfigV1, ObservationStatusV1,
-    ObservedArtifactV1, ObservedCanisterV1, ObservedPoolCanisterV1, PhaseReceiptV1, ResumeSafetyV1,
-    RoleArtifactManifestV1, RoleArtifactV1, RoleEpochExpectationV1, RoleEpochObservationV1,
-    RolePhaseReceiptV1, RolePhaseResultV1, SafetyFindingV1, SafetyReportV1, SafetySeverityV1,
-    SafetyStatusV1, TrustDomainV1, VerifiedPostconditionV1, VerifierReadinessExpectationV1,
-    VerifierReadinessObservationV1,
+    ArtifactDigestSourceV1, ArtifactSourceV1, AuthorityActionV1, AuthorityExternalActionV1,
+    AuthorityProfileV1, AuthorityReconciliationPlanV1, AuthorityReconciliationStateV1,
+    CanisterAuthorityActionV1, CanisterControlClassV1, DeploymentAssumptionV1, DeploymentCheckV1,
+    DeploymentCommandResultV1, DeploymentDiffV1, DeploymentExecutionStatusV1, DeploymentIdentityV1,
+    DeploymentInventoryV1, DeploymentObservationGapV1, DeploymentPlanV1, DeploymentReceiptV1,
+    DiffItemV1, ExpectedCanisterV1, ExpectedPoolCanisterV1, LocalDeploymentConfigV1,
+    ObservationStatusV1, ObservedArtifactV1, ObservedCanisterV1, ObservedPoolCanisterV1,
+    PhaseReceiptV1, ResumeSafetyV1, RoleArtifactManifestV1, RoleArtifactV1, RoleEpochExpectationV1,
+    RoleEpochObservationV1, RolePhaseReceiptV1, RolePhaseResultV1, SafetyFindingV1, SafetyReportV1,
+    SafetySeverityV1, SafetyStatusV1, TrustDomainV1, VerifiedPostconditionV1,
+    VerifierReadinessExpectationV1, VerifierReadinessObservationV1,
 };
 pub use observe::{
     DeploymentTruthError, LocalArtifactManifestRequest, LocalInventoryRequest,

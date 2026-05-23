@@ -9,18 +9,30 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
-- Active minor: `0.41.x` deployment truth model.
-- Theme: make deployment intent, live inventory, receipts, normalized diffs,
-  and safety reports explicit before installer mutation.
-- Current release-work area: local deployment truth surfaces, current-install
-  artifact safety gates, and lightweight phase-receipt evidence.
+- Active minor: `0.42.x` authority reconciliation.
+- Theme: turn 0.41 deployment truth and observed controller evidence into a
+  dry-run authority reconciliation plan before any controller mutation.
+- Current release-work area: passive authority reconciliation model/planner,
+  exact external-action reporting, and CLI/report integration.
 - Design started at
-  `docs/design/0.41-deployment-truth-model/0.41-design.md`; the core issue is
-  that Canic should tell the truth about deployment state before it mutates
-  controllers, pool canisters, artifacts, or protected-call authority inputs.
+  `docs/design/0.42-authority-reconciliation/0.42-design.md`; the core issue is
+  that Canic should prove controller state is correct or explain exactly why it
+  cannot make it correct.
 
 ## Recent Work
 
+- Started `0.42.0` authority reconciliation with a passive
+  `AuthorityReconciliationPlanV1` model, dry-run planner over the existing
+  `DeploymentCheckV1`, and read-only
+  `canic deploy authority check <fleet>` JSON output. The first planner
+  classifies already-correct controller sets, deployment-controlled controller
+  deltas that could be applied automatically later, external-action cases for
+  non-exclusive control classes, and unsafe unknown canisters, without mutating
+  IC state.
+- `0.41.18` was a cleanup-only deployment truth report refactor. Duplicate
+  evidence grouping and diff/finding construction now share local helpers, and
+  verifier readiness no longer uses a panic-shaped `expect("checked above")`
+  path. No operator-facing behavior change was intended.
 - Deployment diffs now detect duplicate planned verifier role-epoch
   expectations: conflicting minimum epochs hard-fail, while exact duplicate
   planned epoch requirements warn and compare only once.
@@ -1367,12 +1379,14 @@ inspect only the files needed for the current task.
 
 ## Good Next Tasks
 
-1. Continue the module-structure cleanup with host install/release helpers,
-   backup manifest/snapshot planning, or the remaining direct registry-loading
-   callers in `snapshot download`, `backup`, and `status`.
-2. Keep `canic-cli`, `canic-host`, and `canic-backup` boundaries sharp: CLI owns
-   UX, host owns ICP CLI/filesystem/build/install mechanics, backup owns
-   backup/restore domain logic.
-3. Keep new modules on normal Rust directory discovery; do not add `#[path]`.
-4. Update `CHANGELOG.md`, `docs/changelog/0.34.md`, and this status file for
-   each cleanup slice.
+1. Finish 0.41 closeout: reconcile `CHANGELOG.md`, `docs/changelog/0.41.md`,
+   `docs/design/0.41-deployment-truth-model/status.md`, and this handoff before
+   moving the active line to 0.42.
+2. Run a focused release-readiness validation pass for the 0.41 deployment
+   truth surface: `canic-host` deployment truth tests, install truth tests,
+   `canic-cli deploy` tests, `canic-host` clippy, and `git diff --check`.
+3. Audit 0.41 against its exit criterion: Canic can state what it plans to do,
+   what exists, what differs, and whether it is safe to continue.
+4. Keep any remaining 0.41 work scoped to stale-doc cleanup, validation, and
+   closeout findings. New executor, authority-reconciliation, promotion, or
+   consent workflow work belongs in later design lines.

@@ -2992,6 +2992,107 @@ fn deployment_diff_is_safe_when_checked_facts_match() {
     assert!(report.next_actions.is_empty());
 }
 
+#[test]
+fn authority_reconciliation_reports_already_correct_controller_state() {
+    let check = sample_check(sample_plan(), sample_matching_inventory());
+
+    let plan = build_authority_reconciliation_plan(&check);
+
+    assert_eq!(plan.plan_id, "plan-local-root");
+    assert_eq!(plan.inventory_id, "inventory-1");
+    assert_eq!(plan.authority_profile_hash.as_deref(), Some("authority"));
+    assert!(plan.hard_failures.is_empty());
+    assert!(plan.external_actions_required.is_empty());
+    assert_eq!(plan.canister_actions.len(), 1);
+    assert_eq!(
+        plan.canister_actions[0].state,
+        AuthorityReconciliationStateV1::AlreadyCorrect
+    );
+    assert_eq!(plan.canister_actions[0].action, AuthorityActionV1::None);
+    assert!(!plan.canister_actions[0].can_apply);
+}
+
+#[test]
+fn authority_reconciliation_marks_deployment_controlled_delta_as_automatic_dry_run() {
+    let mut plan = sample_plan();
+    plan.authority_profile.expected_controllers =
+        vec!["aaaaa-aa".to_string(), "ops-principal".to_string()];
+    let check = sample_check(plan, sample_matching_inventory());
+
+    let reconciliation = build_authority_reconciliation_plan(&check);
+
+    assert!(reconciliation.hard_failures.is_empty());
+    assert!(reconciliation.external_actions_required.is_empty());
+    assert_eq!(
+        reconciliation.canister_actions[0].state,
+        AuthorityReconciliationStateV1::CanApplyAutomatically
+    );
+    assert_eq!(
+        reconciliation.canister_actions[0].action,
+        AuthorityActionV1::AddControllers
+    );
+    assert!(reconciliation.canister_actions[0].can_apply);
+    assert!(
+        reconciliation.canister_actions[0]
+            .reason
+            .contains("ops-principal")
+    );
+}
+
+#[test]
+fn authority_reconciliation_requires_external_action_for_user_controlled_drift() {
+    let mut plan = sample_plan();
+    plan.authority_profile.expected_controllers = vec!["aaaaa-aa".to_string()];
+    let mut inventory = sample_matching_inventory();
+    inventory.observed_canisters[0].control_class = CanisterControlClassV1::UserControlled;
+    inventory.observed_canisters[0].controllers = vec!["user-controller".to_string()];
+    let check = sample_check(plan, inventory);
+
+    let reconciliation = build_authority_reconciliation_plan(&check);
+
+    assert!(reconciliation.hard_failures.is_empty());
+    assert_eq!(reconciliation.external_actions_required.len(), 1);
+    assert_eq!(
+        reconciliation.canister_actions[0].state,
+        AuthorityReconciliationStateV1::RequiresExternalAction
+    );
+    assert_eq!(
+        reconciliation.canister_actions[0].action,
+        AuthorityActionV1::RequiresExternalController
+    );
+    assert!(!reconciliation.canister_actions[0].can_apply);
+}
+
+#[test]
+fn authority_reconciliation_blocks_unknown_unsafe_canister() {
+    let mut inventory = sample_matching_inventory();
+    inventory.observed_canisters.push(ObservedCanisterV1 {
+        canister_id: "unsafe-canister".to_string(),
+        role: Some("surprise".to_string()),
+        control_class: CanisterControlClassV1::UnknownUnsafe,
+        controllers: vec!["unknown-controller".to_string()],
+        module_hash: None,
+        status: None,
+        root_trust_anchor: None,
+        canonical_embedded_config_digest: None,
+        role_assignment_source: Some("icp_canister_status".to_string()),
+    });
+    let check = sample_check(sample_plan(), inventory);
+
+    let reconciliation = build_authority_reconciliation_plan(&check);
+
+    assert_eq!(reconciliation.hard_failures.len(), 1);
+    assert_eq!(
+        reconciliation.hard_failures[0].code,
+        "authority_unsafe_blocked"
+    );
+    assert!(reconciliation.canister_actions.iter().any(|action| {
+        action.canister_id.as_deref() == Some("unsafe-canister")
+            && action.state == AuthorityReconciliationStateV1::UnsafeBlocked
+            && action.action == AuthorityActionV1::BlockedByPolicy
+    }));
+}
+
 const SAMPLE_CONFIG: &str = r#"
 controllers = []
 app_index = []
@@ -3137,6 +3238,19 @@ fn sample_matching_inventory() -> DeploymentInventoryV1 {
             }],
         },
         unresolved_observations: Vec::new(),
+    }
+}
+
+fn sample_check(plan: DeploymentPlanV1, inventory: DeploymentInventoryV1) -> DeploymentCheckV1 {
+    let diff = compare_plan_to_inventory(&plan, &inventory);
+    let report = safety_report_from_diff("report-1", Some("diff-1".to_string()), &diff);
+    DeploymentCheckV1 {
+        schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
+        check_id: "check-1".to_string(),
+        plan,
+        inventory,
+        diff,
+        report,
     }
 }
 

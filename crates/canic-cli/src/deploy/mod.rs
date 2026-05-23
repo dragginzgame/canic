@@ -14,7 +14,7 @@ use canic_host::{
     canister_build::CanisterBuildProfile,
     deployment_truth::{
         DeploymentCheckV1, DeploymentReceiptV1, SafetyReportV1, SafetyStatusV1,
-        compare_plan_inventory_and_receipt,
+        build_authority_reconciliation_plan, compare_plan_inventory_and_receipt,
     },
     icp_config::resolve_current_canic_icp_root,
     install_root::{
@@ -40,12 +40,14 @@ Examples:
   canic deploy diff demo
   canic deploy report demo
   canic deploy check demo
+  canic deploy authority check demo
   canic deploy resume-report demo
   canic deploy resume-report --receipt receipt.json demo
   canic deploy check --profile fast demo
 
-0.41 deploy commands are read-only deployment truth checks. Mutation still flows
-through `canic install`.";
+Deployment truth commands are read-only checks. Mutation still flows through
+`canic install`. Authority commands are dry-run reconciliation reports and do
+not mutate controller state.";
 const DEPLOY_PLAN_HELP_AFTER: &str = "\
 Examples:
   canic deploy plan demo
@@ -76,6 +78,20 @@ Examples:
   canic --network local deploy check --profile fast demo
 
 Prints the local DeploymentCheckV1 JSON without installing or mutating state.";
+const DEPLOY_AUTHORITY_HELP_AFTER: &str = "\
+Examples:
+  canic deploy authority check demo
+  canic --network local deploy authority check --profile fast demo
+
+0.42 authority commands are dry-run reports. They do not apply controller
+changes.";
+const DEPLOY_AUTHORITY_CHECK_HELP_AFTER: &str = "\
+Examples:
+  canic deploy authority check demo
+  canic --network local deploy authority check --profile fast demo
+
+Prints the local AuthorityReconciliationPlanV1 JSON without applying controller
+changes.";
 const DEPLOY_RESUME_REPORT_HELP_AFTER: &str = "\
 Examples:
   canic deploy resume-report demo
@@ -138,6 +154,7 @@ where
             Ok(())
         }
         Some((command, args)) => match command.as_str() {
+            "authority" => run_authority(args),
             "plan" => run_plan(args),
             "inventory" => run_inventory(args),
             "diff" => run_diff(args),
@@ -147,6 +164,45 @@ where
             _ => unreachable!("deploy dispatch command only defines known commands"),
         },
     }
+}
+
+fn run_authority<I>(args: I) -> Result<(), DeployCommandError>
+where
+    I: IntoIterator<Item = OsString>,
+{
+    let args = args.into_iter().collect::<Vec<_>>();
+    if print_help_or_version(&args, authority_usage, version_text()) {
+        return Ok(());
+    }
+
+    match parse_subcommand(deploy_authority_command(), args)
+        .map_err(|_| DeployCommandError::Usage(authority_usage()))?
+    {
+        Some((command, args)) if command == "check" => run_authority_check(args),
+        _ => {
+            println!("{}", authority_usage());
+            Ok(())
+        }
+    }
+}
+
+fn run_authority_check<I>(args: I) -> Result<(), DeployCommandError>
+where
+    I: IntoIterator<Item = OsString>,
+{
+    let args = args.into_iter().collect::<Vec<_>>();
+    if print_help_or_version(&args, authority_check_usage, version_text()) {
+        return Ok(());
+    }
+
+    let check = load_deployment_check(DeployTruthOptions::parse(
+        args,
+        deploy_authority_check_command,
+        authority_check_usage,
+    )?)?;
+    let authority = build_authority_reconciliation_plan(&check);
+    print_json(&authority)?;
+    Ok(())
 }
 
 fn run_plan<I>(args: I) -> Result<(), DeployCommandError>
@@ -388,6 +444,11 @@ fn deploy_command() -> ClapCommand {
         .about("Check deployment truth before mutation")
         .disable_help_flag(true)
         .subcommand(passthrough_subcommand(
+            ClapCommand::new("authority")
+                .about("Dry-run controller authority reconciliation")
+                .disable_help_flag(true),
+        ))
+        .subcommand(passthrough_subcommand(
             ClapCommand::new("check")
                 .about("Print the local deployment truth check JSON")
                 .disable_help_flag(true),
@@ -418,6 +479,28 @@ fn deploy_command() -> ClapCommand {
                 .disable_help_flag(true),
         ))
         .after_help(DEPLOY_HELP_AFTER)
+}
+
+fn deploy_authority_command() -> ClapCommand {
+    ClapCommand::new("authority")
+        .bin_name("canic deploy authority")
+        .about("Dry-run controller authority reconciliation")
+        .disable_help_flag(true)
+        .subcommand(passthrough_subcommand(
+            ClapCommand::new("check")
+                .about("Print the local authority reconciliation plan JSON")
+                .disable_help_flag(true),
+        ))
+        .after_help(DEPLOY_AUTHORITY_HELP_AFTER)
+}
+
+fn deploy_authority_check_command() -> ClapCommand {
+    deploy_truth_leaf_command(
+        "check",
+        "Print the local authority reconciliation plan JSON",
+    )
+    .bin_name("canic deploy authority check")
+    .after_help(DEPLOY_AUTHORITY_CHECK_HELP_AFTER)
 }
 
 fn deploy_plan_command() -> ClapCommand {
@@ -507,6 +590,16 @@ fn report_usage() -> String {
 
 fn check_usage() -> String {
     let mut command = deploy_check_command();
+    command.render_help().to_string()
+}
+
+fn authority_usage() -> String {
+    let mut command = deploy_authority_command();
+    command.render_help().to_string()
+}
+
+fn authority_check_usage() -> String {
+    let mut command = deploy_authority_check_command();
     command.render_help().to_string()
 }
 
@@ -629,6 +722,12 @@ mod tests {
 
     #[test]
     fn deploy_leaf_commands_parse_like_check() {
+        let authority_check = DeployTruthOptions::parse(
+            [OsString::from("demo")],
+            deploy_authority_check_command,
+            authority_check_usage,
+        )
+        .expect("parse deploy authority check");
         let plan =
             DeployTruthOptions::parse([OsString::from("demo")], deploy_plan_command, plan_usage)
                 .expect("parse deploy plan");
@@ -654,12 +753,39 @@ mod tests {
         ])
         .expect("parse deploy resume-report");
 
+        assert_eq!(authority_check.fleet, "demo");
         assert_eq!(plan.fleet, "demo");
         assert_eq!(inventory.fleet, "demo");
         assert_eq!(diff.fleet, "demo");
         assert_eq!(report.fleet, "demo");
         assert_eq!(resume_report.truth.fleet, "demo");
         assert_eq!(resume_report.receipt, Some(PathBuf::from("receipt.json")));
+    }
+
+    #[test]
+    fn deploy_authority_command_dispatches_check() {
+        let parsed = parse_subcommand(
+            deploy_command(),
+            [
+                OsString::from("authority"),
+                OsString::from("check"),
+                OsString::from("demo"),
+            ],
+        )
+        .expect("parse deploy authority")
+        .expect("authority command");
+
+        assert_eq!(parsed.0, "authority");
+        assert_eq!(
+            parsed.1,
+            vec![OsString::from("check"), OsString::from("demo")]
+        );
+
+        let nested = parse_subcommand(deploy_authority_command(), parsed.1)
+            .expect("parse nested authority")
+            .expect("authority check command");
+        assert_eq!(nested.0, "check");
+        assert_eq!(nested.1, vec![OsString::from("demo")]);
     }
 
     #[test]

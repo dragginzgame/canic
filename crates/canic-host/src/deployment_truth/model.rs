@@ -118,6 +118,76 @@ pub struct DeploymentCheckV1 {
 }
 
 ///
+/// AuthorityReconciliationPlanV1
+///
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct AuthorityReconciliationPlanV1 {
+    pub schema_version: u32,
+    pub plan_id: String,
+    pub inventory_id: String,
+    pub authority_profile_hash: Option<String>,
+    pub canister_actions: Vec<CanisterAuthorityActionV1>,
+    pub hard_failures: Vec<SafetyFindingV1>,
+    pub external_actions_required: Vec<AuthorityExternalActionV1>,
+}
+
+///
+/// CanisterAuthorityActionV1
+///
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct CanisterAuthorityActionV1 {
+    pub canister_id: Option<String>,
+    pub role: Option<String>,
+    pub control_classification: CanisterControlClassV1,
+    pub observed_controllers: Vec<String>,
+    pub desired_controllers: Vec<String>,
+    pub action: AuthorityActionV1,
+    pub state: AuthorityReconciliationStateV1,
+    pub can_apply: bool,
+    pub reason: String,
+}
+
+///
+/// AuthorityExternalActionV1
+///
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct AuthorityExternalActionV1 {
+    pub canister_id: Option<String>,
+    pub role: Option<String>,
+    pub action: AuthorityActionV1,
+    pub reason: String,
+}
+
+///
+/// AuthorityActionV1
+///
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum AuthorityActionV1 {
+    None,
+    AddControllers,
+    RemoveControllers,
+    ReplaceControllerSet,
+    RequiresExternalController,
+    RequiresDestructiveImportConfirmation,
+    ObserveOnly,
+    AdoptPlanAvailable,
+    BlockedByPolicy,
+    UnknownObservation,
+}
+
+///
+/// AuthorityReconciliationStateV1
+///
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum AuthorityReconciliationStateV1 {
+    AlreadyCorrect,
+    CanApplyAutomatically,
+    RequiresExternalAction,
+    UnsafeBlocked,
+    Unknown,
+}
+
+///
 /// DeploymentIdentityV1
 ///
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]

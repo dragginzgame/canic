@@ -8,17 +8,23 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
-- Deployment diffs now detect duplicate planned verifier role-epoch
-  expectations: conflicting minimum epochs hard-fail, while exact duplicate
-  planned epoch requirements warn and compare only once.
-- Receipt-aware deployment diffs now detect duplicate phase receipts:
-  conflicting postcondition evidence hard-fails resume, while exact duplicate
-  phase receipts warn without changing the resumable phase set.
-- Receipt-aware deployment diffs now detect duplicate role-phase receipts:
-  conflicting role-scoped phase evidence hard-fails resume, while exact
-  duplicate role-phase receipts warn without changing the resumable phase set.
+## [0.42.x] - 2026-05-23 - Authority reconciliation
+
+- `0.42.0` starts dry-run authority reconciliation with
+  `AuthorityReconciliationPlanV1`, a passive planner over the 0.41 deployment
+  truth check, and read-only `canic deploy authority check <fleet>` output for
+  controller-state classification without IC controller mutation.
 
 ## [0.41.x] - 2026-05-21 - Deployment truth model
+
+- `0.41.18` is a cleanup-only deployment truth report refactor: duplicate
+  evidence grouping and diff/finding construction now share local helpers,
+  with no intended operator-facing behavior change.
+
+- `0.41.17` hardens receipt and planned verifier evidence handling: duplicate
+  phase receipts, duplicate role-phase receipts, and duplicate planned
+  verifier role-epoch expectations now warn for exact duplicates and hard-fail
+  when evidence conflicts.
 
 - `0.41.16` hardens deployment truth duplicate-evidence handling across
   observed artifacts, verifier role epochs, planned artifacts, planned
