@@ -10,9 +10,8 @@ landed, what drifted, and what remains open.
 
 ## Current State
 
-`0.42.6` is ready to publish. Work is continuing on the 0.42 line by
-tightening the dry-run report/evidence model while keeping reconciliation
-read-only.
+`0.42.6` is live. Work is continuing on the 0.42 line by tightening the
+dry-run report/evidence model while keeping reconciliation read-only.
 
 0.42 depends on 0.41 establishing deployment truth objects, observed inventory,
 diffs, safety reports, and installer gating.
@@ -77,6 +76,15 @@ diffs, safety reports, and installer gating.
   provenance.
 - Evidence validation also rejects attempted controller actions and mutated
   controller observations inside dry-run receipts.
+- `canic deploy authority check|evidence|report|receipt --format text` now
+  renders the existing authority DTOs as deterministic human-oriented
+  summaries while JSON remains the default machine-readable output. The text
+  renderers preserve per-canister decisions and detailed hard-failure,
+  observation-gap, and external-action evidence, and live in the host
+  deployment-truth layer rather than CLI-only formatting code. Text output
+  also includes evidence generation time and controller add/remove deltas for
+  automatic and external authority actions, plus verified controller
+  observations with observed and desired controller sets.
 - The first planner reports:
   - already-correct controller sets;
   - deployment-controlled controller deltas that can be applied automatically
@@ -87,7 +95,6 @@ diffs, safety reports, and installer gating.
 
 ## Not Implemented Yet
 
-- Human-oriented authority report formatting beyond the current JSON surfaces.
 - Apply path for safe automatic controller changes.
 - Post-apply re-inventory and authority receipts.
 - Pool ownership reconciliation beyond dry-run classification.

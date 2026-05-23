@@ -18,6 +18,7 @@ mod receipt;
 mod report;
 #[cfg(test)]
 mod tests;
+mod text;
 
 pub use authority::{
     authority_report_from_plan, authority_report_from_plan_with_check_id,
@@ -53,6 +54,9 @@ pub use receipt::{
 pub use report::{
     LocalDeploymentCheckRequest, check_local_deployment, compare_plan_inventory_and_receipt,
     compare_plan_to_inventory, safety_report_from_diff,
+};
+pub use text::{
+    authority_evidence_text, authority_plan_text, authority_receipt_text, authority_report_text,
 };
 
 pub const DEPLOYMENT_TRUTH_SCHEMA_VERSION: u32 = 1;

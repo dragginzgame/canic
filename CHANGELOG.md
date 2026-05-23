@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.42.x] - 2026-05-23 - Authority reconciliation
 
+- `0.42.7` adds host-owned human-readable text output for read-only authority
+  dry-run commands while preserving JSON as the default automation format.
+
 - `0.42.6` hardens authority dry-run evidence: reports and receipts now carry
   source check/inventory/profile provenance, receipt construction rejects mixed
   report/plan/check data, and complete evidence bundles are validated before

@@ -21,7 +21,18 @@ inspect only the files needed for the current task.
 
 ## Recent Work
 
-- Prepared `0.42.6`: authority reports and dry-run receipts now carry source
+- Added read-only human-oriented authority output:
+  `canic deploy authority check|evidence|report|receipt --format text` renders
+  existing authority DTOs as deterministic operator summaries while JSON
+  remains the default automation format. The text plan includes per-canister
+  dry-run decisions, and the evidence/receipt text surfaces preserve
+  hard-failure, observation-gap, and external-action details. The renderers
+  live in `canic-host` deployment-truth code so the CLI is a consumer rather
+  than the owner of the presentation model. Text output also preserves
+  evidence generation time and controller add/remove deltas for automatic and
+  external authority actions, plus verified controller observations with
+  observed and desired controller sets.
+- `0.42.6` is live: authority reports and dry-run receipts now carry source
   check IDs, inventory IDs, and authority profile hashes, matching
   evidence-bundle provenance so standalone outputs remain self-describing.
   Receipt construction rejects mismatched report/plan/check provenance and

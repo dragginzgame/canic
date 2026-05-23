@@ -3072,6 +3072,85 @@ fn authority_report_can_preserve_source_check_id() {
 }
 
 #[test]
+fn authority_text_renders_plan_and_report_summaries() {
+    let mut source_plan = sample_plan();
+    source_plan.authority_profile.expected_controllers =
+        vec!["aaaaa-aa".to_string(), "ops-principal".to_string()];
+    let check = sample_check(source_plan, sample_matching_inventory());
+    let plan = build_authority_reconciliation_plan(&check);
+    let report =
+        authority_report_from_plan_with_check_id("authority-report-1", Some(check.check_id), &plan);
+
+    let plan_text = authority_plan_text(&plan);
+    let report_text = authority_report_text(&report);
+
+    assert!(plan_text.contains("Authority reconciliation plan"));
+    assert!(plan_text.contains("plan_id: plan-local-root"));
+    assert!(plan_text.contains("root (aaaaa-aa) CanApplyAutomatically/AddControllers"));
+    assert!(plan_text.contains("[add=ops-principal; remove=none]"));
+    assert!(report_text.contains("Authority reconciliation report"));
+    assert!(report_text.contains("check_id: check-1"));
+    assert!(report_text.contains("status: safe"));
+    assert!(report_text.contains("[add=ops-principal; remove=none]"));
+}
+
+#[test]
+fn authority_text_renders_evidence_and_receipt_details() {
+    let mut source_plan = sample_plan();
+    source_plan.authority_profile.staging_controllers = vec!["aaaaa-aa".to_string()];
+    let check = sample_check(source_plan, sample_matching_inventory());
+    let plan = build_authority_reconciliation_plan(&check);
+    let report = authority_report_from_plan_with_check_id(
+        "authority-report-1",
+        Some(check.check_id.clone()),
+        &plan,
+    );
+    let receipt = authority_dry_run_receipt_from_plan(
+        &plan,
+        &report,
+        Some(check.check_id.clone()),
+        "authority-dry-run-1",
+        "2026-05-23T00:00:00Z",
+        Some("2026-05-23T00:00:01Z".to_string()),
+    )
+    .expect("build receipt");
+    let evidence = AuthorityDryRunEvidenceV1 {
+        schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
+        evidence_id: "authority-evidence-1".to_string(),
+        check_id: check.check_id,
+        generated_at: "2026-05-23T00:00:00Z".to_string(),
+        reconciliation_plan: plan,
+        authority_report: report,
+        authority_receipt: receipt,
+    };
+
+    let evidence_text = authority_evidence_text(&evidence);
+    let receipt_text = authority_receipt_text(&evidence.authority_receipt);
+
+    assert!(evidence_text.contains("Authority dry-run evidence"));
+    assert!(evidence_text.contains("evidence_id: authority-evidence-1"));
+    assert!(evidence_text.contains("generated_at: 2026-05-23T00:00:00Z"));
+    assert!(evidence_text.contains("verified_controller_observations:"));
+    assert!(
+        evidence_text
+            .contains("aaaaa-aa AlreadyCorrect/None: observed=[aaaaa-aa] desired=[aaaaa-aa]")
+    );
+    assert!(evidence_text.contains(
+        "[authority_profile_overlap] aaaaa-aa: staging authority principal aaaaa-aa overlaps"
+    ));
+    assert!(receipt_text.contains("Authority dry-run receipt"));
+    assert!(receipt_text.contains("operation_id: authority-dry-run-1"));
+    assert!(receipt_text.contains("verified_controller_observations:"));
+    assert!(
+        receipt_text
+            .contains("aaaaa-aa AlreadyCorrect/None: observed=[aaaaa-aa] desired=[aaaaa-aa]")
+    );
+    assert!(receipt_text.contains(
+        "[authority_profile_overlap] aaaaa-aa: staging authority principal aaaaa-aa overlaps"
+    ));
+}
+
+#[test]
 fn authority_receipt_rejects_mismatched_report_provenance() {
     let check = sample_check(sample_plan(), sample_matching_inventory());
     let reconciliation = build_authority_reconciliation_plan(&check);
