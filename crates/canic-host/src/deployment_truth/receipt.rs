@@ -18,6 +18,7 @@ pub fn authority_dry_run_receipt_from_plan(
         schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
         operation_id: operation_id.into(),
         reconciliation_plan_id: plan.plan_id.clone(),
+        authority_report_id: report.report_id.clone(),
         operation_status: DeploymentExecutionStatusV1::Complete,
         started_at: started_at.into(),
         finished_at,
@@ -239,6 +240,7 @@ fn authority_controller_observation_from_action(
         action: action.action,
         observed_controllers: action.observed_controllers.clone(),
         desired_controllers: action.desired_controllers.clone(),
+        controller_delta: action.controller_delta.clone(),
     }
 }
 

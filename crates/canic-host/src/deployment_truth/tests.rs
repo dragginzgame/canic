@@ -3021,6 +3021,8 @@ fn authority_report_summarizes_safe_reconciliation_plan() {
 
     assert_eq!(report.status, SafetyStatusV1::Safe);
     assert_eq!(report.reconciliation_plan_id, "plan-local-root");
+    assert_eq!(report.inventory_id, "inventory-1");
+    assert_eq!(report.authority_profile_hash.as_deref(), Some("authority"));
     assert_eq!(report.counts.already_correct, 1);
     assert_eq!(report.counts.can_apply_automatically, 0);
     assert_eq!(report.counts.requires_external_action, 0);
@@ -3094,6 +3096,13 @@ fn authority_reconciliation_marks_deployment_controlled_delta_as_automatic_dry_r
     assert_eq!(
         reconciliation.automatic_actions[0].desired_controllers,
         vec!["aaaaa-aa".to_string(), "ops-principal".to_string()]
+    );
+    assert_eq!(
+        reconciliation.automatic_actions[0].controller_delta,
+        AuthorityControllerDeltaV1 {
+            add_controllers: vec!["ops-principal".to_string()],
+            remove_controllers: Vec::new(),
+        }
     );
 
     let report = authority_report_from_plan("authority-report-1", &reconciliation);
@@ -3241,6 +3250,13 @@ fn authority_reconciliation_requires_external_action_for_user_controlled_drift()
     );
     assert_eq!(external.desired_controllers, vec!["aaaaa-aa".to_string()]);
     assert_eq!(
+        external.controller_delta,
+        AuthorityControllerDeltaV1 {
+            add_controllers: vec!["aaaaa-aa".to_string()],
+            remove_controllers: vec!["user-controller".to_string()],
+        }
+    );
+    assert_eq!(
         reconciliation.canister_actions[0].state,
         AuthorityReconciliationStateV1::RequiresExternalAction
     );
@@ -3290,6 +3306,7 @@ fn authority_dry_run_receipt_records_observations_without_attempts() {
 
     assert_eq!(receipt.operation_id, "authority-dry-run-1");
     assert_eq!(receipt.reconciliation_plan_id, "plan-local-root");
+    assert_eq!(receipt.authority_report_id, "authority-report-1");
     assert_eq!(
         receipt.operation_status,
         DeploymentExecutionStatusV1::Complete
@@ -3307,6 +3324,10 @@ fn authority_dry_run_receipt_records_observations_without_attempts() {
             action: AuthorityActionV1::RequiresExternalController,
             observed_controllers: vec!["user-controller".to_string()],
             desired_controllers: vec!["aaaaa-aa".to_string()],
+            controller_delta: AuthorityControllerDeltaV1 {
+                add_controllers: vec!["aaaaa-aa".to_string()],
+                remove_controllers: vec!["user-controller".to_string()],
+            },
         }
     );
     assert_eq!(

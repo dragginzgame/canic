@@ -64,6 +64,7 @@ pub struct AuthorityReceiptV1 {
     pub schema_version: u32,
     pub operation_id: String,
     pub reconciliation_plan_id: String,
+    pub authority_report_id: String,
     pub operation_status: DeploymentExecutionStatusV1,
     pub started_at: String,
     pub finished_at: Option<String>,
@@ -114,6 +115,7 @@ pub struct AuthorityControllerObservationV1 {
     pub action: AuthorityActionV1,
     pub observed_controllers: Vec<String>,
     pub desired_controllers: Vec<String>,
+    pub controller_delta: AuthorityControllerDeltaV1,
 }
 
 ///
@@ -203,7 +205,17 @@ pub struct AuthorityAutomaticActionV1 {
     pub action: AuthorityActionV1,
     pub observed_controllers: Vec<String>,
     pub desired_controllers: Vec<String>,
+    pub controller_delta: AuthorityControllerDeltaV1,
     pub reason: String,
+}
+
+///
+/// AuthorityControllerDeltaV1
+///
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+pub struct AuthorityControllerDeltaV1 {
+    pub add_controllers: Vec<String>,
+    pub remove_controllers: Vec<String>,
 }
 
 ///
@@ -214,6 +226,8 @@ pub struct AuthorityReportV1 {
     pub schema_version: u32,
     pub report_id: String,
     pub reconciliation_plan_id: String,
+    pub inventory_id: String,
+    pub authority_profile_hash: Option<String>,
     pub status: SafetyStatusV1,
     pub summary: String,
     pub counts: AuthorityReportCountsV1,
@@ -288,6 +302,7 @@ pub struct CanisterAuthorityActionV1 {
     pub control_classification: CanisterControlClassV1,
     pub observed_controllers: Vec<String>,
     pub desired_controllers: Vec<String>,
+    pub controller_delta: AuthorityControllerDeltaV1,
     pub action: AuthorityActionV1,
     pub state: AuthorityReconciliationStateV1,
     pub can_apply: bool,
@@ -307,6 +322,7 @@ pub struct AuthorityExternalActionV1 {
     pub action: AuthorityActionV1,
     pub observed_controllers: Vec<String>,
     pub desired_controllers: Vec<String>,
+    pub controller_delta: AuthorityControllerDeltaV1,
     pub reason: String,
 }
 

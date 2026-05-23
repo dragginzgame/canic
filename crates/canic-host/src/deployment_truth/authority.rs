@@ -90,6 +90,7 @@ fn reconcile_expected_pool_canister(
             control_classification: CanisterControlClassV1::CanicManagedPool,
             observed_controllers: Vec::new(),
             desired_controllers: Vec::new(),
+            controller_delta: AuthorityControllerDeltaV1::default(),
             action: AuthorityActionV1::UnknownObservation,
             state: AuthorityReconciliationStateV1::Unknown,
             can_apply: false,
@@ -107,6 +108,7 @@ fn reconcile_expected_pool_canister(
             control_classification: observed.control_class,
             observed_controllers: Vec::new(),
             desired_controllers: Vec::new(),
+            controller_delta: AuthorityControllerDeltaV1::default(),
             action: AuthorityActionV1::UnknownObservation,
             state: AuthorityReconciliationStateV1::Unknown,
             can_apply: false,
@@ -118,6 +120,7 @@ fn reconcile_expected_pool_canister(
             control_classification: observed.control_class,
             observed_controllers: Vec::new(),
             desired_controllers: Vec::new(),
+            controller_delta: AuthorityControllerDeltaV1::default(),
             action: AuthorityActionV1::BlockedByPolicy,
             state: AuthorityReconciliationStateV1::UnsafeBlocked,
             can_apply: false,
@@ -129,6 +132,7 @@ fn reconcile_expected_pool_canister(
             control_classification: observed.control_class,
             observed_controllers: Vec::new(),
             desired_controllers: Vec::new(),
+            controller_delta: AuthorityControllerDeltaV1::default(),
             action: AuthorityActionV1::RequiresExternalController,
             state: AuthorityReconciliationStateV1::RequiresExternalAction,
             can_apply: false,
@@ -151,6 +155,8 @@ pub fn authority_report_from_plan(
         schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
         report_id: report_id.into(),
         reconciliation_plan_id: plan.plan_id.clone(),
+        inventory_id: plan.inventory_id.clone(),
+        authority_profile_hash: plan.authority_profile_hash.clone(),
         status,
         summary: authority_report_summary(status, &counts),
         counts,
@@ -473,6 +479,7 @@ fn reconcile_expected_canister(
             control_classification: expected.control_class,
             observed_controllers: Vec::new(),
             desired_controllers,
+            controller_delta: AuthorityControllerDeltaV1::default(),
             action: AuthorityActionV1::UnknownObservation,
             state: AuthorityReconciliationStateV1::Unknown,
             can_apply: false,
@@ -491,6 +498,7 @@ fn reconcile_expected_canister(
             control_classification: observed.control_class,
             observed_controllers,
             desired_controllers,
+            controller_delta: AuthorityControllerDeltaV1::default(),
             action: AuthorityActionV1::UnknownObservation,
             state: AuthorityReconciliationStateV1::Unknown,
             can_apply: false,
@@ -500,6 +508,7 @@ fn reconcile_expected_canister(
 
     let missing = difference(&desired_controllers, &observed_controllers);
     let extra = difference(&observed_controllers, &desired_controllers);
+    let controller_delta = controller_delta(&missing, &extra);
     let (action, state, can_apply, reason) =
         classify_controller_reconciliation(observed.control_class, &missing, &extra);
 
@@ -512,6 +521,7 @@ fn reconcile_expected_canister(
         control_classification: observed.control_class,
         observed_controllers,
         desired_controllers,
+        controller_delta,
         action,
         state,
         can_apply,
@@ -612,6 +622,7 @@ fn observed_unplanned_canister_action(observed: &ObservedCanisterV1) -> Canister
         control_classification: observed.control_class,
         observed_controllers,
         desired_controllers: Vec::new(),
+        controller_delta: AuthorityControllerDeltaV1::default(),
         action,
         state,
         can_apply: false,
@@ -644,6 +655,7 @@ fn observed_unplanned_pool_action(observed: &ObservedPoolCanisterV1) -> Canister
         control_classification: observed.control_class,
         observed_controllers: Vec::new(),
         desired_controllers: Vec::new(),
+        controller_delta: AuthorityControllerDeltaV1::default(),
         action,
         state,
         can_apply: false,
@@ -668,6 +680,7 @@ fn record_authority_outcome(
             action: action.action,
             observed_controllers: action.observed_controllers.clone(),
             desired_controllers: action.desired_controllers.clone(),
+            controller_delta: action.controller_delta.clone(),
             reason: action.reason.clone(),
         });
     }
@@ -681,6 +694,7 @@ fn record_authority_outcome(
             action: action.action,
             observed_controllers: action.observed_controllers.clone(),
             desired_controllers: action.desired_controllers.clone(),
+            controller_delta: action.controller_delta.clone(),
             reason: action.reason.clone(),
         });
     }
@@ -768,6 +782,13 @@ fn difference(left: &[String], right: &[String]) -> Vec<String> {
         .filter(|value| !right.iter().any(|candidate| candidate == *value))
         .cloned()
         .collect()
+}
+
+fn controller_delta(missing: &[String], extra: &[String]) -> AuthorityControllerDeltaV1 {
+    AuthorityControllerDeltaV1 {
+        add_controllers: missing.to_vec(),
+        remove_controllers: extra.to_vec(),
+    }
 }
 
 fn sorted_unique(values: Vec<String>) -> Vec<String> {

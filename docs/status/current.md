@@ -21,6 +21,19 @@ inspect only the files needed for the current task.
 
 ## Recent Work
 
+- Unreleased 0.42 development: authority actions, automatic-action candidates,
+  external-action records, and dry-run receipt observations now carry typed
+  controller deltas so consumers can read exact add/remove controller sets
+  without recomputing them.
+- Unreleased 0.42 development: authority dry-run receipts now include the
+  source authority report ID, making standalone receipt provenance explicit
+  without requiring the full evidence bundle.
+- Unreleased 0.42 development: authority reports now carry the inventory ID
+  and authority profile hash from the reconciliation plan, making standalone
+  report output self-describing.
+- Unreleased 0.42 development: bootstrap `wasm_store` artifact builds now treat
+  missing `ic-wasm` metadata embedding as optional, matching the shrink pass and
+  avoiding CI failures on runners that do not install the auxiliary binary.
 - `0.42.4` tightens dry-run authority readiness. External-action records now
   contain only actual external authority actions, standalone receipts preserve
   unresolved observation gaps, reports include typed apply-readiness blockers,
