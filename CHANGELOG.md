@@ -8,16 +8,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
-- Added passive authority dry-run receipts that preserve verified controller
-  observations and unresolved external actions while explicitly recording that
-  no controller mutations were attempted.
-- Added read-only `canic deploy authority receipt <fleet>` output for
-  evidence-only `AuthorityReceiptV1` JSON from the local authority dry run.
-- Added read-only `canic deploy authority evidence <fleet>` output for a
-  single `AuthorityDryRunEvidenceV1` JSON bundle containing the local authority
-  plan, report, and dry-run receipt.
-
 ## [0.42.x] - 2026-05-23 - Authority reconciliation
+
+- `0.42.2` adds evidence-only authority dry-run receipts and read-only
+  `canic deploy authority receipt|evidence <fleet>` JSON surfaces, preserving
+  controller observations and unresolved external actions without attempting
+  controller mutation.
 
 - `0.42.1` adds the read-only authority report surface and completes the first
   self-contained dry-run evidence model: reports include status/counts,

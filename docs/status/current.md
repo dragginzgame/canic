@@ -21,16 +21,10 @@ inspect only the files needed for the current task.
 
 ## Recent Work
 
-- Unreleased 0.42 development: added passive authority dry-run receipts that
+- `0.42.2` adds passive authority dry-run receipts and read-only
+  `canic deploy authority receipt|evidence <fleet>` JSON output. Receipts
   preserve verified controller observations and unresolved external actions
   while explicitly recording that no controller mutations were attempted.
-- Unreleased 0.42 development: added read-only
-  `canic deploy authority receipt <fleet>` output for evidence-only
-  `AuthorityReceiptV1` JSON from the local authority dry run.
-- Unreleased 0.42 development: added read-only
-  `canic deploy authority evidence <fleet>` output for a single
-  `AuthorityDryRunEvidenceV1` JSON bundle containing the local authority plan,
-  report, and dry-run receipt.
 - `0.42.1` adds the read-only authority report/evidence surface. It includes
   `AuthorityReportV1`, `AuthorityReportCountsV1`, self-contained
   external-action records, pool authority cases, explicit
