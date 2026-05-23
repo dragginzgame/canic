@@ -1008,64 +1008,24 @@ mod tests {
             authority_check_usage,
         )
         .expect("parse deploy authority check");
-        let authority_check_text = DeployAuthorityOptions::parse(
-            [
-                OsString::from("--format"),
-                OsString::from("text"),
-                OsString::from("demo"),
-            ],
-            deploy_authority_check_command,
-            authority_check_usage,
-        )
-        .expect("parse deploy authority check text");
         let authority_evidence = DeployTruthOptions::parse(
             [OsString::from("demo")],
             deploy_authority_evidence_command,
             authority_evidence_usage,
         )
         .expect("parse deploy authority evidence");
-        let authority_evidence_text = DeployAuthorityOptions::parse(
-            [
-                OsString::from("--format"),
-                OsString::from("text"),
-                OsString::from("demo"),
-            ],
-            deploy_authority_evidence_command,
-            authority_evidence_usage,
-        )
-        .expect("parse deploy authority evidence text");
         let authority_report = DeployTruthOptions::parse(
             [OsString::from("demo")],
             deploy_authority_report_command,
             authority_report_usage,
         )
         .expect("parse deploy authority report");
-        let authority_report_text = DeployAuthorityOptions::parse(
-            [
-                OsString::from("--format"),
-                OsString::from("text"),
-                OsString::from("demo"),
-            ],
-            deploy_authority_report_command,
-            authority_report_usage,
-        )
-        .expect("parse deploy authority report text");
         let authority_receipt = DeployTruthOptions::parse(
             [OsString::from("demo")],
             deploy_authority_receipt_command,
             authority_receipt_usage,
         )
         .expect("parse deploy authority receipt");
-        let authority_receipt_text = DeployAuthorityOptions::parse(
-            [
-                OsString::from("--format"),
-                OsString::from("text"),
-                OsString::from("demo"),
-            ],
-            deploy_authority_receipt_command,
-            authority_receipt_usage,
-        )
-        .expect("parse deploy authority receipt text");
         let plan =
             DeployTruthOptions::parse([OsString::from("demo")], deploy_plan_command, plan_usage)
                 .expect("parse deploy plan");
@@ -1092,23 +1052,68 @@ mod tests {
         .expect("parse deploy resume-report");
 
         assert_eq!(authority_check.fleet, "demo");
-        assert_eq!(authority_check_text.truth.fleet, "demo");
-        assert_eq!(authority_check_text.format, AuthorityOutputFormat::Text);
         assert_eq!(authority_evidence.fleet, "demo");
-        assert_eq!(authority_evidence_text.truth.fleet, "demo");
-        assert_eq!(authority_evidence_text.format, AuthorityOutputFormat::Text);
         assert_eq!(authority_report.fleet, "demo");
-        assert_eq!(authority_report_text.truth.fleet, "demo");
-        assert_eq!(authority_report_text.format, AuthorityOutputFormat::Text);
         assert_eq!(authority_receipt.fleet, "demo");
-        assert_eq!(authority_receipt_text.truth.fleet, "demo");
-        assert_eq!(authority_receipt_text.format, AuthorityOutputFormat::Text);
         assert_eq!(plan.fleet, "demo");
         assert_eq!(inventory.fleet, "demo");
         assert_eq!(diff.fleet, "demo");
         assert_eq!(report.fleet, "demo");
         assert_eq!(resume_report.truth.fleet, "demo");
         assert_eq!(resume_report.receipt, Some(PathBuf::from("receipt.json")));
+    }
+
+    #[test]
+    fn deploy_authority_leaf_commands_parse_text_format() {
+        let authority_check = DeployAuthorityOptions::parse(
+            [
+                OsString::from("--format"),
+                OsString::from("text"),
+                OsString::from("demo"),
+            ],
+            deploy_authority_check_command,
+            authority_check_usage,
+        )
+        .expect("parse deploy authority check text");
+        let authority_evidence = DeployAuthorityOptions::parse(
+            [
+                OsString::from("--format"),
+                OsString::from("text"),
+                OsString::from("demo"),
+            ],
+            deploy_authority_evidence_command,
+            authority_evidence_usage,
+        )
+        .expect("parse deploy authority evidence text");
+        let authority_report = DeployAuthorityOptions::parse(
+            [
+                OsString::from("--format"),
+                OsString::from("text"),
+                OsString::from("demo"),
+            ],
+            deploy_authority_report_command,
+            authority_report_usage,
+        )
+        .expect("parse deploy authority report text");
+        let authority_receipt = DeployAuthorityOptions::parse(
+            [
+                OsString::from("--format"),
+                OsString::from("text"),
+                OsString::from("demo"),
+            ],
+            deploy_authority_receipt_command,
+            authority_receipt_usage,
+        )
+        .expect("parse deploy authority receipt text");
+
+        assert_eq!(authority_check.truth.fleet, "demo");
+        assert_eq!(authority_check.format, AuthorityOutputFormat::Text);
+        assert_eq!(authority_evidence.truth.fleet, "demo");
+        assert_eq!(authority_evidence.format, AuthorityOutputFormat::Text);
+        assert_eq!(authority_report.truth.fleet, "demo");
+        assert_eq!(authority_report.format, AuthorityOutputFormat::Text);
+        assert_eq!(authority_receipt.truth.fleet, "demo");
+        assert_eq!(authority_receipt.format, AuthorityOutputFormat::Text);
     }
 
     #[test]
@@ -1331,11 +1336,8 @@ mod tests {
     fn authority_report_text_summarizes_source_and_counts() {
         let check = sample_authority_check();
         let authority = build_authority_reconciliation_plan(&check);
-        let report = authority_report_from_plan_with_check_id(
-            "report-1",
-            Some(check.check_id.clone()),
-            &authority,
-        );
+        let report =
+            authority_report_from_plan_with_check_id("report-1", Some(check.check_id), &authority);
 
         let text = authority_report_text(&report);
 
