@@ -18,6 +18,15 @@ narrow current-install artifact gate.
 
 ## Implemented
 
+- Deployment diffs now detect duplicate planned verifier role-epoch
+  expectations: conflicting minimum epochs hard-fail, while exact duplicate
+  planned epoch requirements warn and compare only once.
+- Receipt-aware deployment diffs now detect duplicate phase receipts:
+  conflicting postcondition evidence hard-fails resume, while exact duplicate
+  phase receipts warn without changing the resumable phase set.
+- Receipt-aware deployment diffs now detect duplicate role-phase receipts:
+  conflicting role-scoped phase evidence hard-fails resume, while exact
+  duplicate role-phase receipts warn without changing the resumable phase set.
 - Deployment diffs now detect duplicate observed artifact evidence by role:
   conflicting artifact observations hard-fail, while exact duplicate artifact
   observations warn instead of being collapsed by role-indexed lookup.

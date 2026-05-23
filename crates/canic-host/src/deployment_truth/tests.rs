@@ -383,6 +383,118 @@ fn receipt_aware_diff_does_not_resume_unverified_phase() {
 }
 
 #[test]
+fn receipt_aware_diff_blocks_conflicting_duplicate_phase_receipt() {
+    let plan = sample_plan();
+    let inventory = sample_matching_inventory();
+    let mut receipt = sample_receipt_with_phase(
+        "plan-local-root",
+        Some("aaaaa-aa"),
+        ObservationStatusV1::Observed,
+        RolePhaseResultV1::VerifiedAlreadyApplied,
+    );
+    let mut conflicting = receipt.phase_receipts[0].clone();
+    conflicting.verified_postcondition.status = ObservationStatusV1::Missing;
+    receipt.phase_receipts.push(conflicting);
+
+    let diff = compare_plan_inventory_and_receipt(&plan, &inventory, &receipt);
+
+    assert_eq!(diff.resume_safety.status, SafetyStatusV1::Blocked);
+    assert!(diff.resumable_phases.is_empty());
+    assert!(
+        diff.hard_failures
+            .iter()
+            .any(|finding| finding.code == "receipt_phase_conflict"
+                && finding.subject.as_deref() == Some("materialize_artifacts"))
+    );
+}
+
+#[test]
+fn receipt_aware_diff_warns_for_duplicate_identical_phase_receipt() {
+    let plan = sample_plan();
+    let inventory = sample_matching_inventory();
+    let mut receipt = sample_receipt_with_phase(
+        "plan-local-root",
+        Some("aaaaa-aa"),
+        ObservationStatusV1::Observed,
+        RolePhaseResultV1::VerifiedAlreadyApplied,
+    );
+    receipt
+        .phase_receipts
+        .push(receipt.phase_receipts[0].clone());
+
+    let diff = compare_plan_inventory_and_receipt(&plan, &inventory, &receipt);
+
+    assert_eq!(diff.resume_safety.status, SafetyStatusV1::Warning);
+    assert_eq!(
+        diff.resumable_phases,
+        vec!["materialize_artifacts".to_string()]
+    );
+    assert!(
+        diff.warnings
+            .iter()
+            .any(|finding| finding.code == "duplicate_receipt_phase"
+                && finding.subject.as_deref() == Some("materialize_artifacts"))
+    );
+}
+
+#[test]
+fn receipt_aware_diff_blocks_conflicting_duplicate_role_phase_receipt() {
+    let plan = sample_plan();
+    let inventory = sample_matching_inventory();
+    let mut receipt = sample_receipt_with_phase(
+        "plan-local-root",
+        Some("aaaaa-aa"),
+        ObservationStatusV1::Observed,
+        RolePhaseResultV1::VerifiedAlreadyApplied,
+    );
+    receipt.role_phase_receipts[0].phase = "materialize_artifacts".to_string();
+    let mut conflicting = receipt.role_phase_receipts[0].clone();
+    conflicting.result = RolePhaseResultV1::Failed;
+    conflicting.error = Some("artifact_missing".to_string());
+    receipt.role_phase_receipts.push(conflicting);
+
+    let diff = compare_plan_inventory_and_receipt(&plan, &inventory, &receipt);
+
+    assert_eq!(diff.resume_safety.status, SafetyStatusV1::Blocked);
+    assert!(diff.resumable_phases.is_empty());
+    assert!(
+        diff.hard_failures
+            .iter()
+            .any(|finding| finding.code == "receipt_role_phase_conflict"
+                && finding.subject.as_deref() == Some("root:materialize_artifacts"))
+    );
+}
+
+#[test]
+fn receipt_aware_diff_warns_for_duplicate_identical_role_phase_receipt() {
+    let plan = sample_plan();
+    let inventory = sample_matching_inventory();
+    let mut receipt = sample_receipt_with_phase(
+        "plan-local-root",
+        Some("aaaaa-aa"),
+        ObservationStatusV1::Observed,
+        RolePhaseResultV1::VerifiedAlreadyApplied,
+    );
+    receipt
+        .role_phase_receipts
+        .push(receipt.role_phase_receipts[0].clone());
+
+    let diff = compare_plan_inventory_and_receipt(&plan, &inventory, &receipt);
+
+    assert_eq!(diff.resume_safety.status, SafetyStatusV1::Warning);
+    assert_eq!(
+        diff.resumable_phases,
+        vec!["materialize_artifacts".to_string()]
+    );
+    assert!(
+        diff.warnings
+            .iter()
+            .any(|finding| finding.code == "duplicate_receipt_role_phase"
+                && finding.subject.as_deref() == Some("root:materialize_artifacts"))
+    );
+}
+
+#[test]
 fn local_check_builds_plan_inventory_diff_and_report() {
     let temp = TempWorkspace::new("canic-host-local-check");
     let workspace_root = temp.path().join("workspace");
@@ -2767,6 +2879,55 @@ fn deployment_diff_warns_for_duplicate_identical_verifier_role_epoch_observation
         && finding.subject.as_deref() == Some("root")));
     assert!(diff.verifier_readiness_diff.iter().any(|item| {
         item.category == "verifier_role_epoch_duplicate"
+            && item.subject == "root"
+            && item.observed.as_deref() == Some("2")
+            && item.severity == SafetySeverityV1::Warning
+    }));
+}
+
+#[test]
+fn deployment_diff_blocks_conflicting_planned_verifier_role_epoch() {
+    let mut plan = sample_plan();
+    plan.expected_verifier_readiness
+        .expected_role_epochs
+        .push(RoleEpochExpectationV1 {
+            role: "root".to_string(),
+            minimum_epoch: 2,
+        });
+
+    let diff = compare_plan_to_inventory(&plan, &sample_matching_inventory());
+
+    assert_eq!(diff.resume_safety.status, SafetyStatusV1::Blocked);
+    assert!(diff.hard_failures.iter().any(|finding| finding.code
+        == "planned_verifier_role_epoch_conflict"
+        && finding.subject.as_deref() == Some("root")));
+    assert!(diff.verifier_readiness_diff.iter().any(|item| {
+        item.category == "planned_verifier_role_epoch_conflict"
+            && item.subject == "root"
+            && item
+                .observed
+                .as_deref()
+                .is_some_and(|observed| observed.contains('1') && observed.contains('2'))
+            && item.severity == SafetySeverityV1::HardFailure
+    }));
+}
+
+#[test]
+fn deployment_diff_warns_for_duplicate_identical_planned_verifier_role_epoch() {
+    let mut plan = sample_plan();
+    plan.expected_verifier_readiness
+        .expected_role_epochs
+        .push(plan.expected_verifier_readiness.expected_role_epochs[0].clone());
+
+    let diff = compare_plan_to_inventory(&plan, &sample_matching_inventory());
+
+    assert_eq!(diff.resume_safety.status, SafetyStatusV1::Warning);
+    assert!(diff.hard_failures.is_empty());
+    assert!(diff.warnings.iter().any(|finding| finding.code
+        == "duplicate_planned_verifier_role_epoch"
+        && finding.subject.as_deref() == Some("root")));
+    assert!(diff.verifier_readiness_diff.iter().any(|item| {
+        item.category == "planned_verifier_role_epoch_duplicate"
             && item.subject == "root"
             && item.observed.as_deref() == Some("2")
             && item.severity == SafetySeverityV1::Warning

@@ -213,6 +213,13 @@ fn apply_receipt_resume_safety(
 ) {
     validate_receipt_identity(plan, receipt, &mut diff.hard_failures);
     validate_receipt_command_result(receipt, &mut diff.hard_failures);
+    let phase_conflicts =
+        validate_receipt_phase_duplicates(receipt, &mut diff.hard_failures, &mut diff.warnings);
+    let role_phase_conflicts = validate_receipt_role_phase_duplicates(
+        receipt,
+        &mut diff.hard_failures,
+        &mut diff.warnings,
+    );
     if !diff.hard_failures.is_empty() {
         diff.resume_safety.status = safety_status(&diff.hard_failures, &diff.warnings);
         diff.resume_safety.reasons = resume_safety_reasons(&diff.hard_failures, &diff.warnings);
@@ -220,6 +227,9 @@ fn apply_receipt_resume_safety(
     }
     let phase_failures = receipt_phase_failures(receipt);
     for receipt in &receipt.phase_receipts {
+        if phase_conflicts.contains(&receipt.phase) {
+            continue;
+        }
         if receipt.verified_postcondition.status != ObservationStatusV1::Observed {
             diff.hard_failures.push(finding(
                 "receipt_postcondition_unverified",
@@ -235,12 +245,140 @@ fn apply_receipt_resume_safety(
         if phase_failures.contains(receipt.phase.as_str()) {
             continue;
         }
+        if role_phase_conflicts.contains(receipt.phase.as_str()) {
+            continue;
+        }
         diff.resumable_phases.push(receipt.phase.clone());
     }
     diff.resumable_phases.sort();
     diff.resumable_phases.dedup();
     diff.resume_safety.status = safety_status(&diff.hard_failures, &diff.warnings);
     diff.resume_safety.reasons = resume_safety_reasons(&diff.hard_failures, &diff.warnings);
+}
+
+fn validate_receipt_phase_duplicates(
+    receipt: &DeploymentReceiptV1,
+    hard_failures: &mut Vec<SafetyFindingV1>,
+    warnings: &mut Vec<SafetyFindingV1>,
+) -> BTreeSet<String> {
+    let mut by_phase = BTreeMap::<&str, Vec<&PhaseReceiptV1>>::new();
+    for phase_receipt in &receipt.phase_receipts {
+        by_phase
+            .entry(phase_receipt.phase.as_str())
+            .or_default()
+            .push(phase_receipt);
+    }
+
+    let mut conflicting_phases = BTreeSet::new();
+    for (phase, receipts) in by_phase {
+        if receipts.len() <= 1 {
+            continue;
+        }
+        let evidence = receipts
+            .iter()
+            .map(|receipt| receipt_phase_evidence_label(receipt))
+            .collect::<BTreeSet<_>>();
+        let evidence_label = evidence.iter().cloned().collect::<Vec<_>>().join(" | ");
+        if evidence.len() > 1 {
+            conflicting_phases.insert(phase.to_string());
+            hard_failures.push(finding(
+                "receipt_phase_conflict",
+                format!("receipt phase {phase} has conflicting evidence: {evidence_label}"),
+                SafetySeverityV1::HardFailure,
+                Some(phase.to_string()),
+            ));
+        } else {
+            warnings.push(finding(
+                "duplicate_receipt_phase",
+                format!(
+                    "receipt phase {phase} was reported {} times with identical evidence",
+                    receipts.len()
+                ),
+                SafetySeverityV1::Warning,
+                Some(phase.to_string()),
+            ));
+        }
+    }
+    conflicting_phases
+}
+
+fn receipt_phase_evidence_label(receipt: &PhaseReceiptV1) -> String {
+    format!(
+        "status={:?};evidence={}",
+        receipt.verified_postcondition.status,
+        receipt.verified_postcondition.evidence.join(",")
+    )
+}
+
+fn validate_receipt_role_phase_duplicates(
+    receipt: &DeploymentReceiptV1,
+    hard_failures: &mut Vec<SafetyFindingV1>,
+    warnings: &mut Vec<SafetyFindingV1>,
+) -> BTreeSet<String> {
+    let mut by_subject = BTreeMap::<String, Vec<&RolePhaseReceiptV1>>::new();
+    for role_receipt in &receipt.role_phase_receipts {
+        by_subject
+            .entry(role_phase_subject(role_receipt))
+            .or_default()
+            .push(role_receipt);
+    }
+
+    let mut conflicting_phases = BTreeSet::new();
+    for (subject, receipts) in by_subject {
+        if receipts.len() <= 1 {
+            continue;
+        }
+        let evidence = receipts
+            .iter()
+            .map(|receipt| role_phase_evidence_label(receipt))
+            .collect::<BTreeSet<_>>();
+        let evidence_label = evidence.iter().cloned().collect::<Vec<_>>().join(" | ");
+        if evidence.len() > 1 {
+            if let Some(phase) = subject.rsplit_once(':').map(|(_, phase)| phase.to_string()) {
+                conflicting_phases.insert(phase);
+            }
+            hard_failures.push(finding(
+                "receipt_role_phase_conflict",
+                format!("receipt role phase {subject} has conflicting evidence: {evidence_label}"),
+                SafetySeverityV1::HardFailure,
+                Some(subject),
+            ));
+        } else {
+            warnings.push(finding(
+                "duplicate_receipt_role_phase",
+                format!(
+                    "receipt role phase {subject} was reported {} times with identical evidence",
+                    receipts.len()
+                ),
+                SafetySeverityV1::Warning,
+                Some(subject),
+            ));
+        }
+    }
+    conflicting_phases
+}
+
+fn role_phase_subject(receipt: &RolePhaseReceiptV1) -> String {
+    format!("{}:{}", receipt.role, receipt.phase)
+}
+
+fn role_phase_evidence_label(receipt: &RolePhaseReceiptV1) -> String {
+    format!(
+        "result={:?};previous={};target={};observed={};artifact={};config={};error={}",
+        receipt.result,
+        receipt.previous_module_hash.as_deref().unwrap_or("<none>"),
+        receipt.target_module_hash.as_deref().unwrap_or("<none>"),
+        receipt
+            .observed_module_hash_after
+            .as_deref()
+            .unwrap_or("<none>"),
+        receipt.artifact_digest.as_deref().unwrap_or("<none>"),
+        receipt
+            .canonical_embedded_config_sha256
+            .as_deref()
+            .unwrap_or("<none>"),
+        receipt.error.as_deref().unwrap_or("<none>")
+    )
 }
 
 fn validate_receipt_identity(
@@ -1800,6 +1938,12 @@ fn compare_verifier_readiness(
         ));
     }
 
+    let planned_conflicting_roles = compare_planned_verifier_epoch_conflicts(
+        plan,
+        verifier_readiness_diff,
+        hard_failures,
+        warnings,
+    );
     let conflicting_roles = compare_observed_verifier_epoch_conflicts(
         inventory,
         verifier_readiness_diff,
@@ -1813,8 +1957,12 @@ fn compare_verifier_readiness(
         }
         observed_by_role.entry(epoch.role.as_str()).or_insert(epoch);
     }
+    let mut compared_roles = BTreeSet::new();
     for expected in &plan.expected_verifier_readiness.expected_role_epochs {
-        if conflicting_roles.contains(&expected.role) {
+        if planned_conflicting_roles.contains(&expected.role)
+            || conflicting_roles.contains(&expected.role)
+            || !compared_roles.insert(expected.role.as_str())
+        {
             continue;
         }
         match observed_by_role.get(expected.role.as_str()) {
@@ -1860,6 +2008,69 @@ fn compare_verifier_readiness(
             }
         }
     }
+}
+
+fn compare_planned_verifier_epoch_conflicts(
+    plan: &DeploymentPlanV1,
+    verifier_readiness_diff: &mut Vec<DiffItemV1>,
+    hard_failures: &mut Vec<SafetyFindingV1>,
+    warnings: &mut Vec<SafetyFindingV1>,
+) -> BTreeSet<String> {
+    let mut by_role = BTreeMap::<&str, Vec<&RoleEpochExpectationV1>>::new();
+    for expected in &plan.expected_verifier_readiness.expected_role_epochs {
+        by_role
+            .entry(expected.role.as_str())
+            .or_default()
+            .push(expected);
+    }
+
+    let mut conflicting_roles = BTreeSet::new();
+    for (role, expectations) in by_role {
+        if expectations.len() <= 1 {
+            continue;
+        }
+        let evidence = expectations
+            .iter()
+            .map(|expected| expected.minimum_epoch.to_string())
+            .collect::<BTreeSet<_>>();
+        let evidence_label = evidence.iter().cloned().collect::<Vec<_>>().join(",");
+        if evidence.len() > 1 {
+            conflicting_roles.insert(role.to_string());
+            verifier_readiness_diff.push(diff_item(
+                "planned_verifier_role_epoch_conflict",
+                role,
+                Some("one minimum epoch".to_string()),
+                Some(evidence_label.clone()),
+                SafetySeverityV1::HardFailure,
+            ));
+            hard_failures.push(finding(
+                "planned_verifier_role_epoch_conflict",
+                format!(
+                    "planned verifier role {role} has conflicting minimum epochs: {evidence_label}"
+                ),
+                SafetySeverityV1::HardFailure,
+                Some(role.to_string()),
+            ));
+        } else {
+            verifier_readiness_diff.push(diff_item(
+                "planned_verifier_role_epoch_duplicate",
+                role,
+                Some(evidence_label.clone()),
+                Some(expectations.len().to_string()),
+                SafetySeverityV1::Warning,
+            ));
+            warnings.push(finding(
+                "duplicate_planned_verifier_role_epoch",
+                format!(
+                    "planned verifier role {role} epoch was declared {} times with identical evidence",
+                    expectations.len()
+                ),
+                SafetySeverityV1::Warning,
+                Some(role.to_string()),
+            ));
+        }
+    }
+    conflicting_roles
 }
 
 fn compare_observed_verifier_epoch_conflicts(

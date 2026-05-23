@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+- Deployment diffs now detect duplicate planned verifier role-epoch
+  expectations: conflicting minimum epochs hard-fail, while exact duplicate
+  planned epoch requirements warn and compare only once.
+- Receipt-aware deployment diffs now detect duplicate phase receipts:
+  conflicting postcondition evidence hard-fails resume, while exact duplicate
+  phase receipts warn without changing the resumable phase set.
+- Receipt-aware deployment diffs now detect duplicate role-phase receipts:
+  conflicting role-scoped phase evidence hard-fails resume, while exact
+  duplicate role-phase receipts warn without changing the resumable phase set.
+
 ## [0.41.x] - 2026-05-21 - Deployment truth model
 
 - `0.41.16` hardens deployment truth duplicate-evidence handling across
