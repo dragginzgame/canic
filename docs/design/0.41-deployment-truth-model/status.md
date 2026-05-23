@@ -18,6 +18,31 @@ narrow current-install artifact gate.
 
 ## Implemented
 
+- Observed pool canister control classes now reuse enriched child live-status
+  evidence, so pool safety reports can reflect live controller drift rather
+  than only registry parentage.
+- Controller drift checks now treat `subnet_registry+icp_canister_status`
+  observations as live status evidence, so enriched child observations with
+  missing expected controllers fail as controller drift instead of registry-only
+  uncertainty.
+- Deployment diffs now hard-fail when a concrete expected canister ID is
+  observed with a different role assignment, making ID/role topology drift
+  explicit.
+- Deployment diffs now detect duplicate observed canister IDs: conflicting role
+  assignments hard-fail, while exact duplicate observations warn as suspicious
+  inventory evidence.
+- Deployment diffs now apply the same duplicate-ID guard to pool canisters:
+  conflicting pool identities for one canister ID hard-fail, while exact
+  duplicate pool observations warn.
+- Deployment diffs now hard-fail when a canister appears in both non-pool and
+  pool observations with conflicting role identities, making cross-surface
+  topology contradictions explicit.
+- Deployment diffs now hard-fail when an expected non-pool role has no
+  concrete planned canister ID and multiple observed canisters claim that role,
+  avoiding first-match ambiguity in passive inventory reports.
+- Installed module-hash comparison now targets the concrete planned canister ID
+  when available, and hard-fails ambiguous role-only module-hash evidence
+  instead of letting duplicate role observations decide the hash check.
 - Local deployment truth now treats the implicit bootstrap `wasm_store` as part
   of the passive role set. Plans expect it, local artifact manifests and
   inventories observe its `.wasm.gz` file when present, and missing bootstrap

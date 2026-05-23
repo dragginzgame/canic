@@ -619,13 +619,15 @@ fn install_state_registry_observations(
                 &request.network,
                 gaps,
             );
-            observed_canisters.extend(registry_canisters);
-            registry_entries_to_observed_pool(
+            let mut observed_pool = registry_entries_to_observed_pool(
                 &state.root_canister_id,
                 &resolution.registry.entries,
                 pool_expectations,
                 gaps,
-            )
+            );
+            apply_canister_control_to_observed_pool(&mut observed_pool, &registry_canisters);
+            observed_canisters.extend(registry_canisters);
+            observed_pool
         }
         Err(err) => {
             gaps.push(observation_gap(
@@ -664,6 +666,21 @@ fn registry_entry_to_observed_canister(entry: &RegistryEntry) -> Option<Observed
         canonical_embedded_config_digest: None,
         role_assignment_source: Some("subnet_registry".to_string()),
     })
+}
+
+pub(super) fn apply_canister_control_to_observed_pool(
+    observed_pool: &mut [ObservedPoolCanisterV1],
+    observed_canisters: &[ObservedCanisterV1],
+) {
+    let control_by_canister = observed_canisters
+        .iter()
+        .map(|canister| (canister.canister_id.as_str(), canister.control_class))
+        .collect::<BTreeMap<_, _>>();
+    for pool in observed_pool {
+        if let Some(control_class) = control_by_canister.get(pool.canister_id.as_str()) {
+            pool.control_class = *control_class;
+        }
+    }
 }
 
 fn enrich_registry_observed_canisters(

@@ -1,7 +1,8 @@
 use super::*;
 use crate::deployment_truth::observe::{
-    apply_live_status_to_registry_observation, observed_root_from_status,
-    registry_entries_to_observed_canisters, registry_entries_to_observed_pool,
+    apply_canister_control_to_observed_pool, apply_live_status_to_registry_observation,
+    observed_root_from_status, registry_entries_to_observed_canisters,
+    registry_entries_to_observed_pool,
 };
 use crate::icp::{IcpCanisterStatusReport, IcpCanisterStatusSettings};
 use crate::install_root::InstallState;
@@ -652,6 +653,34 @@ fn registry_observation_can_be_enriched_with_live_status() {
 }
 
 #[test]
+fn observed_pool_control_uses_enriched_canister_status() {
+    let mut observed_pool = vec![ObservedPoolCanisterV1 {
+        pool: "user_shards".to_string(),
+        canister_id: "shard-id".to_string(),
+        role: Some("user_shard".to_string()),
+        control_class: CanisterControlClassV1::CanicManagedPool,
+    }];
+    let observed_canisters = vec![ObservedCanisterV1 {
+        canister_id: "shard-id".to_string(),
+        role: Some("user_shard".to_string()),
+        control_class: CanisterControlClassV1::UnknownUnsafe,
+        controllers: vec!["external-controller".to_string()],
+        module_hash: Some("module".to_string()),
+        status: Some("Running".to_string()),
+        root_trust_anchor: Some("root-id".to_string()),
+        canonical_embedded_config_digest: None,
+        role_assignment_source: Some("subnet_registry+icp_canister_status".to_string()),
+    }];
+
+    apply_canister_control_to_observed_pool(&mut observed_pool, &observed_canisters);
+
+    assert_eq!(
+        observed_pool[0].control_class,
+        CanisterControlClassV1::UnknownUnsafe
+    );
+}
+
+#[test]
 fn registry_entries_report_ambiguous_pool_role_mapping() {
     let mut gaps = Vec::new();
     let entries = vec![RegistryEntry {
@@ -1288,6 +1317,75 @@ fn deployment_diff_blocks_installed_module_hash_mismatch() {
 }
 
 #[test]
+fn deployment_diff_uses_concrete_expected_id_for_installed_module_hash() {
+    let mut plan = sample_plan();
+    plan.expected_verifier_readiness.required = false;
+    let mut inventory = sample_matching_inventory();
+    inventory.observed_canisters.push(ObservedCanisterV1 {
+        canister_id: "duplicate-root-id".to_string(),
+        role: Some("root".to_string()),
+        control_class: CanisterControlClassV1::DeploymentControlled,
+        controllers: vec!["aaaaa-aa".to_string()],
+        module_hash: Some("different-module".to_string()),
+        status: Some("Running".to_string()),
+        root_trust_anchor: Some("aaaaa-aa".to_string()),
+        canonical_embedded_config_digest: None,
+        role_assignment_source: Some("subnet_registry+icp_canister_status".to_string()),
+    });
+
+    let diff = compare_plan_to_inventory(&plan, &inventory);
+
+    assert_eq!(diff.resume_safety.status, SafetyStatusV1::Warning);
+    assert!(
+        diff.hard_failures
+            .iter()
+            .all(|finding| finding.code != "installed_module_hash_mismatch")
+    );
+    assert!(
+        diff.module_hash_diff
+            .iter()
+            .all(|item| item.category != "installed_module_hash")
+    );
+}
+
+#[test]
+fn deployment_diff_blocks_ambiguous_installed_module_hash_target() {
+    let mut plan = sample_plan();
+    plan.expected_canisters.clear();
+    plan.expected_verifier_readiness.required = false;
+    let mut inventory = sample_matching_inventory();
+    inventory.observed_canisters.push(ObservedCanisterV1 {
+        canister_id: "duplicate-root-id".to_string(),
+        role: Some("root".to_string()),
+        control_class: CanisterControlClassV1::DeploymentControlled,
+        controllers: vec!["aaaaa-aa".to_string()],
+        module_hash: Some("module".to_string()),
+        status: Some("Running".to_string()),
+        root_trust_anchor: Some("aaaaa-aa".to_string()),
+        canonical_embedded_config_digest: None,
+        role_assignment_source: Some("subnet_registry+icp_canister_status".to_string()),
+    });
+
+    let diff = compare_plan_to_inventory(&plan, &inventory);
+
+    assert_eq!(diff.resume_safety.status, SafetyStatusV1::Blocked);
+    assert!(
+        diff.hard_failures
+            .iter()
+            .any(|finding| finding.code == "installed_module_hash_ambiguous"
+                && finding.subject.as_deref() == Some("root"))
+    );
+    assert!(diff.module_hash_diff.iter().any(|item| {
+        item.category == "installed_module_hash_ambiguous"
+            && item.subject == "root"
+            && item.observed.as_deref().is_some_and(|observed| {
+                observed.contains("aaaaa-aa") && observed.contains("duplicate-root-id")
+            })
+            && item.severity == SafetySeverityV1::HardFailure
+    }));
+}
+
+#[test]
 fn deployment_diff_blocks_missing_expected_controller() {
     let mut plan = sample_plan();
     plan.role_artifacts[0].wasm_gz_sha256 = None;
@@ -1833,6 +1931,190 @@ fn deployment_diff_warns_for_duplicate_observed_planned_role() {
 }
 
 #[test]
+fn deployment_diff_blocks_ambiguous_expected_role_without_canister_id() {
+    let mut plan = sample_plan();
+    plan.role_artifacts.clear();
+    plan.expected_verifier_readiness.required = false;
+    plan.expected_canisters.push(ExpectedCanisterV1 {
+        role: "user_hub".to_string(),
+        canister_id: None,
+        control_class: CanisterControlClassV1::DeploymentControlled,
+    });
+    let mut inventory = sample_matching_inventory();
+    inventory.observed_artifacts.clear();
+    inventory.observed_canisters.push(ObservedCanisterV1 {
+        canister_id: "user-hub-a".to_string(),
+        role: Some("user_hub".to_string()),
+        control_class: CanisterControlClassV1::DeploymentControlled,
+        controllers: vec!["aaaaa-aa".to_string()],
+        module_hash: Some("module".to_string()),
+        status: Some("Running".to_string()),
+        root_trust_anchor: Some("aaaaa-aa".to_string()),
+        canonical_embedded_config_digest: None,
+        role_assignment_source: Some("subnet_registry+icp_canister_status".to_string()),
+    });
+    inventory.observed_canisters.push(ObservedCanisterV1 {
+        canister_id: "user-hub-b".to_string(),
+        role: Some("user_hub".to_string()),
+        control_class: CanisterControlClassV1::DeploymentControlled,
+        controllers: vec!["aaaaa-aa".to_string()],
+        module_hash: Some("module".to_string()),
+        status: Some("Running".to_string()),
+        root_trust_anchor: Some("aaaaa-aa".to_string()),
+        canonical_embedded_config_digest: None,
+        role_assignment_source: Some("subnet_registry+icp_canister_status".to_string()),
+    });
+
+    let diff = compare_plan_to_inventory(&plan, &inventory);
+
+    assert_eq!(diff.resume_safety.status, SafetyStatusV1::Blocked);
+    assert!(
+        diff.hard_failures
+            .iter()
+            .any(|finding| finding.code == "canister_role_ambiguous"
+                && finding.subject.as_deref() == Some("user_hub"))
+    );
+    assert!(diff.controller_diff.iter().any(|item| {
+        item.category == "canister_role_ambiguous"
+            && item.subject == "user_hub"
+            && item.observed.as_deref().is_some_and(|observed| {
+                observed.contains("user-hub-a") && observed.contains("user-hub-b")
+            })
+            && item.severity == SafetySeverityV1::HardFailure
+    }));
+}
+
+#[test]
+fn deployment_diff_blocks_expected_canister_role_mismatch() {
+    let mut plan = sample_plan();
+    plan.role_artifacts.clear();
+    plan.expected_verifier_readiness.required = false;
+    let mut inventory = sample_matching_inventory();
+    inventory.observed_artifacts.clear();
+    inventory.observed_canisters[0].role = Some("user_hub".to_string());
+
+    let diff = compare_plan_to_inventory(&plan, &inventory);
+
+    assert_eq!(diff.resume_safety.status, SafetyStatusV1::Blocked);
+    assert!(
+        diff.hard_failures
+            .iter()
+            .any(|finding| finding.code == "canister_role_mismatch"
+                && finding.subject.as_deref() == Some("root"))
+    );
+    assert!(diff.controller_diff.iter().any(|item| {
+        item.category == "role_mismatch"
+            && item.subject == "root"
+            && item.expected.as_deref() == Some("root")
+            && item.observed.as_deref() == Some("user_hub")
+    }));
+}
+
+#[test]
+fn deployment_diff_blocks_conflicting_roles_for_same_canister_id() {
+    let mut plan = sample_plan();
+    plan.role_artifacts.clear();
+    plan.expected_verifier_readiness.required = false;
+    let mut inventory = sample_matching_inventory();
+    inventory.observed_artifacts.clear();
+    inventory.observed_canisters.push(ObservedCanisterV1 {
+        canister_id: "aaaaa-aa".to_string(),
+        role: Some("user_hub".to_string()),
+        control_class: CanisterControlClassV1::DeploymentControlled,
+        controllers: vec!["aaaaa-aa".to_string()],
+        module_hash: Some("module".to_string()),
+        status: Some("Running".to_string()),
+        root_trust_anchor: Some("aaaaa-aa".to_string()),
+        canonical_embedded_config_digest: None,
+        role_assignment_source: Some("subnet_registry+icp_canister_status".to_string()),
+    });
+
+    let diff = compare_plan_to_inventory(&plan, &inventory);
+
+    assert_eq!(diff.resume_safety.status, SafetyStatusV1::Blocked);
+    assert!(
+        diff.hard_failures
+            .iter()
+            .any(|finding| finding.code == "canister_id_role_conflict"
+                && finding.subject.as_deref() == Some("aaaaa-aa"))
+    );
+    assert!(diff.controller_diff.iter().any(|item| {
+        item.category == "canister_id_role_conflict"
+            && item.subject == "aaaaa-aa"
+            && item.observed.as_deref() == Some("root,user_hub")
+    }));
+}
+
+#[test]
+fn deployment_diff_warns_for_exact_duplicate_canister_observation() {
+    let mut plan = sample_plan();
+    plan.role_artifacts.clear();
+    plan.expected_verifier_readiness.required = false;
+    let mut inventory = sample_matching_inventory();
+    inventory.observed_artifacts.clear();
+    inventory
+        .observed_canisters
+        .push(inventory.observed_canisters[0].clone());
+
+    let diff = compare_plan_to_inventory(&plan, &inventory);
+
+    assert_eq!(diff.resume_safety.status, SafetyStatusV1::Warning);
+    assert!(diff.hard_failures.is_empty());
+    assert!(
+        diff.warnings
+            .iter()
+            .any(|finding| finding.code == "duplicate_canister_observed"
+                && finding.subject.as_deref() == Some("aaaaa-aa"))
+    );
+    assert!(diff.controller_diff.iter().any(|item| {
+        item.category == "canister_duplicate"
+            && item.subject == "aaaaa-aa"
+            && item.expected.as_deref() == Some("root")
+            && item.observed.as_deref() == Some("2")
+    }));
+}
+
+#[test]
+fn enriched_registry_status_participates_in_controller_checks() {
+    let mut plan = sample_plan();
+    plan.role_artifacts.clear();
+    plan.expected_verifier_readiness.required = false;
+    plan.expected_canisters.push(ExpectedCanisterV1 {
+        role: "user_hub".to_string(),
+        canister_id: None,
+        control_class: CanisterControlClassV1::DeploymentControlled,
+    });
+    let mut inventory = sample_matching_inventory();
+    inventory.observed_artifacts.clear();
+    inventory.observed_canisters.push(ObservedCanisterV1 {
+        canister_id: "user-hub-id".to_string(),
+        role: Some("user_hub".to_string()),
+        control_class: CanisterControlClassV1::DeploymentControlled,
+        controllers: Vec::new(),
+        module_hash: Some("module".to_string()),
+        status: Some("Running".to_string()),
+        root_trust_anchor: Some("aaaaa-aa".to_string()),
+        canonical_embedded_config_digest: None,
+        role_assignment_source: Some("subnet_registry+icp_canister_status".to_string()),
+    });
+
+    let diff = compare_plan_to_inventory(&plan, &inventory);
+
+    assert_eq!(diff.resume_safety.status, SafetyStatusV1::Blocked);
+    assert!(
+        diff.hard_failures
+            .iter()
+            .any(|finding| finding.code == "expected_controller_missing"
+                && finding.subject.as_deref() == Some("user_hub"))
+    );
+    assert!(
+        diff.warnings
+            .iter()
+            .all(|finding| finding.code != "controllers_unobserved")
+    );
+}
+
+#[test]
 fn deployment_diff_blocks_missing_expected_pool_canister() {
     let mut plan = sample_plan();
     plan.expected_pool.push(ExpectedPoolCanisterV1 {
@@ -1926,6 +2208,132 @@ fn deployment_diff_blocks_pool_canister_id_mismatch() {
             .iter()
             .all(|finding| finding.code != "extra_pool_canister_observed")
     );
+}
+
+#[test]
+fn deployment_diff_blocks_conflicting_pool_identities_for_same_canister_id() {
+    let mut plan = sample_plan();
+    plan.expected_pool.push(ExpectedPoolCanisterV1 {
+        pool: "user_shards".to_string(),
+        canister_id: Some("pool-canister".to_string()),
+        role: Some("user_shard".to_string()),
+    });
+    let mut inventory = sample_matching_inventory();
+    inventory.observed_pool.push(ObservedPoolCanisterV1 {
+        pool: "user_shards".to_string(),
+        canister_id: "pool-canister".to_string(),
+        role: Some("user_shard".to_string()),
+        control_class: CanisterControlClassV1::CanicManagedPool,
+    });
+    inventory.observed_pool.push(ObservedPoolCanisterV1 {
+        pool: "directory".to_string(),
+        canister_id: "pool-canister".to_string(),
+        role: Some("project_instance".to_string()),
+        control_class: CanisterControlClassV1::CanicManagedPool,
+    });
+
+    let diff = compare_plan_to_inventory(&plan, &inventory);
+
+    assert_eq!(diff.resume_safety.status, SafetyStatusV1::Blocked);
+    assert!(
+        diff.hard_failures
+            .iter()
+            .any(|finding| finding.code == "pool_canister_id_conflict"
+                && finding.subject.as_deref() == Some("pool-canister"))
+    );
+    assert!(diff.pool_diff.iter().any(|item| {
+        item.category == "pool_canister_id_conflict"
+            && item.subject == "pool-canister"
+            && item.observed.as_deref().is_some_and(|observed| {
+                observed.contains("directory:project_instance")
+                    && observed.contains("user_shards:user_shard")
+            })
+            && item.severity == SafetySeverityV1::HardFailure
+    }));
+}
+
+#[test]
+fn deployment_diff_warns_for_exact_duplicate_pool_observation() {
+    let mut plan = sample_plan();
+    plan.expected_pool.push(ExpectedPoolCanisterV1 {
+        pool: "user_shards".to_string(),
+        canister_id: Some("pool-canister".to_string()),
+        role: Some("user_shard".to_string()),
+    });
+    let mut inventory = sample_matching_inventory();
+    let observed = ObservedPoolCanisterV1 {
+        pool: "user_shards".to_string(),
+        canister_id: "pool-canister".to_string(),
+        role: Some("user_shard".to_string()),
+        control_class: CanisterControlClassV1::CanicManagedPool,
+    };
+    inventory.observed_pool.push(observed.clone());
+    inventory.observed_pool.push(observed);
+
+    let diff = compare_plan_to_inventory(&plan, &inventory);
+
+    assert_eq!(diff.resume_safety.status, SafetyStatusV1::Warning);
+    assert!(diff.hard_failures.is_empty());
+    assert!(
+        diff.warnings
+            .iter()
+            .any(|finding| finding.code == "duplicate_pool_canister_observed"
+                && finding.subject.as_deref() == Some("pool-canister"))
+    );
+    assert!(diff.pool_diff.iter().any(|item| {
+        item.category == "pool_canister_duplicate"
+            && item.subject == "pool-canister"
+            && item.expected.as_deref() == Some("user_shards:user_shard")
+            && item.observed.as_deref() == Some("2")
+            && item.severity == SafetySeverityV1::Warning
+    }));
+}
+
+#[test]
+fn deployment_diff_blocks_cross_surface_role_conflict_for_same_canister_id() {
+    let mut plan = sample_plan();
+    plan.expected_pool.push(ExpectedPoolCanisterV1 {
+        pool: "user_shards".to_string(),
+        canister_id: Some("shared-canister".to_string()),
+        role: Some("user_shard".to_string()),
+    });
+    let mut inventory = sample_matching_inventory();
+    inventory.observed_canisters.push(ObservedCanisterV1 {
+        canister_id: "shared-canister".to_string(),
+        role: Some("user_hub".to_string()),
+        control_class: CanisterControlClassV1::DeploymentControlled,
+        controllers: vec!["aaaaa-aa".to_string()],
+        module_hash: Some("module".to_string()),
+        status: Some("Running".to_string()),
+        root_trust_anchor: Some("aaaaa-aa".to_string()),
+        canonical_embedded_config_digest: None,
+        role_assignment_source: Some("subnet_registry+icp_canister_status".to_string()),
+    });
+    inventory.observed_pool.push(ObservedPoolCanisterV1 {
+        pool: "user_shards".to_string(),
+        canister_id: "shared-canister".to_string(),
+        role: Some("user_shard".to_string()),
+        control_class: CanisterControlClassV1::CanicManagedPool,
+    });
+
+    let diff = compare_plan_to_inventory(&plan, &inventory);
+
+    assert_eq!(diff.resume_safety.status, SafetyStatusV1::Blocked);
+    assert!(
+        diff.hard_failures
+            .iter()
+            .any(|finding| finding.code == "canister_pool_role_conflict"
+                && finding.subject.as_deref() == Some("shared-canister"))
+    );
+    assert!(diff.pool_diff.iter().any(|item| {
+        item.category == "canister_pool_role_conflict"
+            && item.subject == "shared-canister"
+            && item.observed.as_deref().is_some_and(|observed| {
+                observed.contains("canister=user_hub")
+                    && observed.contains("pool=user_shards:user_shard")
+            })
+            && item.severity == SafetySeverityV1::HardFailure
+    }));
 }
 
 #[test]

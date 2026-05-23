@@ -8,21 +8,20 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
-- Local deployment truth now treats the implicit bootstrap `wasm_store` role as
-  a passive planned/observed role, including local artifact hash evidence and
-  typed missing-artifact gaps without changing release-set staging or installer
-  mutation behavior.
-- Installed child canister inventory now keeps subnet-registry role evidence as
-  the fallback while enriching it with read-only live status, controllers, and
-  module hashes when per-child status observations succeed.
-- Deployment diffs now warn on extra observed non-pool canister roles, making
-  unexpected registry/live topology visible without turning it into an
-  installer blocker.
-- Duplicate observed canisters for an otherwise planned non-pool role now
-  surface as the same warning class instead of being hidden by the expected
-  role name.
-
 ## [0.41.x] - 2026-05-21 - Deployment truth model
+
+- `0.41.15` tightens passive deployment truth topology validation: enriched
+  live-status evidence now feeds pool and controller drift checks, concrete
+  canister IDs and observed role identities are checked for contradictions
+  across non-pool and pool inventory surfaces, ambiguous role-only matches
+  hard-fail, and installed module-hash comparison now targets concrete planned
+  canister IDs when available.
+
+- `0.41.14` expands passive deployment truth topology coverage: the implicit
+  bootstrap `wasm_store` now participates in planned and observed artifact
+  evidence, child registry observations can be enriched with live status,
+  controllers, and module hashes, and extra or duplicate non-pool canisters now
+  warn as topology drift.
 
 - `0.41.13` fills in passive deployment identity digests from release-set
   manifests, parsed runtime config, topology, artifacts, pools, and authority

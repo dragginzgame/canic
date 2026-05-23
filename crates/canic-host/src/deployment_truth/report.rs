@@ -87,6 +87,13 @@ pub fn compare_plan_to_inventory(
         &mut hard_failures,
         &mut warnings,
     );
+    compare_observed_canister_id_conflicts(
+        inventory,
+        &mut controller_diff,
+        &mut hard_failures,
+        &mut warnings,
+    );
+    compare_observed_canister_pool_role_conflicts(inventory, &mut pool_diff, &mut hard_failures);
     compare_canisters(
         plan,
         inventory,
@@ -490,6 +497,71 @@ fn compare_artifact_file_sha256(
     }
 }
 
+fn compare_observed_canister_id_conflicts(
+    inventory: &DeploymentInventoryV1,
+    controller_diff: &mut Vec<DiffItemV1>,
+    hard_failures: &mut Vec<SafetyFindingV1>,
+    warnings: &mut Vec<SafetyFindingV1>,
+) {
+    let mut by_id = BTreeMap::<&str, Vec<&ObservedCanisterV1>>::new();
+    for observed in &inventory.observed_canisters {
+        by_id
+            .entry(observed.canister_id.as_str())
+            .or_default()
+            .push(observed);
+    }
+
+    for (canister_id, observations) in by_id {
+        if observations.len() <= 1 {
+            continue;
+        }
+        let roles = observations
+            .iter()
+            .map(|observed| observed_role_label(observed))
+            .collect::<BTreeSet<_>>();
+        let role_label = roles.iter().cloned().collect::<Vec<_>>().join(",");
+        if roles.len() > 1 {
+            controller_diff.push(diff_item(
+                "canister_id_role_conflict",
+                canister_id,
+                None,
+                Some(role_label.clone()),
+                SafetySeverityV1::HardFailure,
+            ));
+            hard_failures.push(finding(
+                "canister_id_role_conflict",
+                format!("observed canister {canister_id} has conflicting roles {role_label}"),
+                SafetySeverityV1::HardFailure,
+                Some(canister_id.to_string()),
+            ));
+        } else {
+            controller_diff.push(diff_item(
+                "canister_duplicate",
+                canister_id,
+                Some(role_label.clone()),
+                Some(observations.len().to_string()),
+                SafetySeverityV1::Warning,
+            ));
+            warnings.push(finding(
+                "duplicate_canister_observed",
+                format!(
+                    "observed canister {canister_id} was reported {} times for role {role_label}",
+                    observations.len()
+                ),
+                SafetySeverityV1::Warning,
+                Some(canister_id.to_string()),
+            ));
+        }
+    }
+}
+
+fn observed_role_label(observed: &ObservedCanisterV1) -> String {
+    observed
+        .role
+        .clone()
+        .unwrap_or_else(|| "<unknown>".to_string())
+}
+
 fn compare_canisters(
     plan: &DeploymentPlanV1,
     inventory: &DeploymentInventoryV1,
@@ -501,10 +573,22 @@ fn compare_canisters(
     for expected in &plan.expected_canisters {
         let observed = expected.canister_id.as_ref().map_or_else(
             || {
-                inventory
+                let role_matches = inventory
                     .observed_canisters
                     .iter()
-                    .find(|canister| canister.role.as_deref() == Some(expected.role.as_str()))
+                    .filter(|canister| canister.role.as_deref() == Some(expected.role.as_str()))
+                    .collect::<Vec<_>>();
+                if role_matches.len() > 1 {
+                    record_ambiguous_canister_role(
+                        expected,
+                        &role_matches,
+                        controller_diff,
+                        hard_failures,
+                    );
+                    None
+                } else {
+                    role_matches.into_iter().next()
+                }
             },
             |id| {
                 inventory
@@ -544,6 +628,7 @@ fn compare_canisters(
             continue;
         };
         matched_observed.insert(observed.canister_id.as_str());
+        compare_observed_role(expected, observed, controller_diff, hard_failures);
         if matches!(
             observed.control_class,
             CanisterControlClassV1::UnknownUnsafe | CanisterControlClassV1::UserControlled
@@ -572,6 +657,65 @@ fn compare_canisters(
         warnings,
         &matched_observed,
     );
+}
+
+fn record_ambiguous_canister_role(
+    expected: &ExpectedCanisterV1,
+    observed_matches: &[&ObservedCanisterV1],
+    controller_diff: &mut Vec<DiffItemV1>,
+    hard_failures: &mut Vec<SafetyFindingV1>,
+) {
+    let observed_ids = observed_matches
+        .iter()
+        .map(|canister| canister.canister_id.as_str())
+        .collect::<Vec<_>>()
+        .join(",");
+    controller_diff.push(diff_item(
+        "canister_role_ambiguous",
+        &expected.role,
+        Some("one observed canister".to_string()),
+        Some(observed_ids.clone()),
+        SafetySeverityV1::HardFailure,
+    ));
+    hard_failures.push(finding(
+        "canister_role_ambiguous",
+        format!(
+            "expected role {} has multiple observed canisters: {observed_ids}",
+            expected.role
+        ),
+        SafetySeverityV1::HardFailure,
+        Some(expected.role.clone()),
+    ));
+}
+
+fn compare_observed_role(
+    expected: &ExpectedCanisterV1,
+    observed: &ObservedCanisterV1,
+    controller_diff: &mut Vec<DiffItemV1>,
+    hard_failures: &mut Vec<SafetyFindingV1>,
+) {
+    let Some(observed_role) = observed.role.as_deref() else {
+        return;
+    };
+    if observed_role == expected.role {
+        return;
+    }
+    controller_diff.push(diff_item(
+        "role_mismatch",
+        &expected.role,
+        Some(expected.role.clone()),
+        Some(observed_role.to_string()),
+        SafetySeverityV1::HardFailure,
+    ));
+    hard_failures.push(finding(
+        "canister_role_mismatch",
+        format!(
+            "expected canister {} to have role {}, observed role {observed_role}",
+            observed.canister_id, expected.role
+        ),
+        SafetySeverityV1::HardFailure,
+        Some(expected.role.clone()),
+    ));
 }
 
 fn warn_extra_observed_canisters(
@@ -620,6 +764,58 @@ fn observed_canister_subject(observed: &ObservedCanisterV1) -> String {
         .unwrap_or_else(|| observed.canister_id.clone())
 }
 
+fn compare_observed_canister_pool_role_conflicts(
+    inventory: &DeploymentInventoryV1,
+    pool_diff: &mut Vec<DiffItemV1>,
+    hard_failures: &mut Vec<SafetyFindingV1>,
+) {
+    let mut pools_by_id = BTreeMap::<&str, Vec<&ObservedPoolCanisterV1>>::new();
+    for observed_pool in &inventory.observed_pool {
+        pools_by_id
+            .entry(observed_pool.canister_id.as_str())
+            .or_default()
+            .push(observed_pool);
+    }
+
+    for observed_canister in &inventory.observed_canisters {
+        let Some(canister_role) = observed_canister.role.as_deref() else {
+            continue;
+        };
+        let Some(observed_pools) = pools_by_id.get(observed_canister.canister_id.as_str()) else {
+            continue;
+        };
+        for observed_pool in observed_pools {
+            let Some(pool_role) = observed_pool.role.as_deref() else {
+                continue;
+            };
+            if pool_role == canister_role {
+                continue;
+            }
+            let observed_label = format!(
+                "canister={};pool={}",
+                observed_canister_subject(observed_canister),
+                observed_pool_subject(observed_pool)
+            );
+            pool_diff.push(diff_item(
+                "canister_pool_role_conflict",
+                &observed_canister.canister_id,
+                None,
+                Some(observed_label.clone()),
+                SafetySeverityV1::HardFailure,
+            ));
+            hard_failures.push(finding(
+                "canister_pool_role_conflict",
+                format!(
+                    "observed canister {} has conflicting canister/pool roles {observed_label}",
+                    observed_canister.canister_id
+                ),
+                SafetySeverityV1::HardFailure,
+                Some(observed_canister.canister_id.clone()),
+            ));
+        }
+    }
+}
+
 fn compare_pools(
     plan: &DeploymentPlanV1,
     inventory: &DeploymentInventoryV1,
@@ -627,6 +823,7 @@ fn compare_pools(
     hard_failures: &mut Vec<SafetyFindingV1>,
     warnings: &mut Vec<SafetyFindingV1>,
 ) {
+    compare_observed_pool_id_conflicts(inventory, pool_diff, hard_failures, warnings);
     let mut matched_observed = BTreeSet::new();
     for expected in &plan.expected_pool {
         compare_expected_pool(
@@ -641,6 +838,66 @@ fn compare_pools(
 
     for observed in &inventory.observed_pool {
         warn_extra_observed_pool(plan, observed, pool_diff, warnings, &matched_observed);
+    }
+}
+
+fn compare_observed_pool_id_conflicts(
+    inventory: &DeploymentInventoryV1,
+    pool_diff: &mut Vec<DiffItemV1>,
+    hard_failures: &mut Vec<SafetyFindingV1>,
+    warnings: &mut Vec<SafetyFindingV1>,
+) {
+    let mut by_id = BTreeMap::<&str, Vec<&ObservedPoolCanisterV1>>::new();
+    for observed in &inventory.observed_pool {
+        by_id
+            .entry(observed.canister_id.as_str())
+            .or_default()
+            .push(observed);
+    }
+
+    for (canister_id, observations) in by_id {
+        if observations.len() <= 1 {
+            continue;
+        }
+        let identities = observations
+            .iter()
+            .map(|observed| observed_pool_subject(observed))
+            .collect::<BTreeSet<_>>();
+        let identity_label = identities.iter().cloned().collect::<Vec<_>>().join(",");
+        if identities.len() > 1 {
+            pool_diff.push(diff_item(
+                "pool_canister_id_conflict",
+                canister_id,
+                None,
+                Some(identity_label.clone()),
+                SafetySeverityV1::HardFailure,
+            ));
+            hard_failures.push(finding(
+                "pool_canister_id_conflict",
+                format!(
+                    "observed pool canister {canister_id} has conflicting pool identities {identity_label}"
+                ),
+                SafetySeverityV1::HardFailure,
+                Some(canister_id.to_string()),
+            ));
+        } else {
+            pool_diff.push(diff_item(
+                "pool_canister_duplicate",
+                canister_id,
+                Some(identity_label.clone()),
+                Some(observations.len().to_string()),
+                SafetySeverityV1::Warning,
+            ));
+            warnings.push(finding(
+                "duplicate_pool_canister_observed",
+                format!(
+                    "observed pool canister {canister_id} was reported {} times for {identity_label}",
+                    observations.len()
+                ),
+                SafetySeverityV1::Warning,
+                Some(canister_id.to_string()),
+            ));
+        }
     }
 }
 
@@ -833,9 +1090,7 @@ fn compare_role_controllers(
     warnings: &mut Vec<SafetyFindingV1>,
 ) {
     let role = observed.role.as_deref().unwrap_or("unknown");
-    if observed.controllers.is_empty()
-        && observed.role_assignment_source.as_deref() != Some("icp_canister_status")
-    {
+    if observed.controllers.is_empty() && !observed_source_includes_live_status(observed) {
         warnings.push(finding(
             "controllers_unobserved",
             format!("controllers were not observed for role {role}"),
@@ -889,6 +1144,13 @@ fn compare_role_controllers(
     }
 }
 
+fn observed_source_includes_live_status(observed: &ObservedCanisterV1) -> bool {
+    observed
+        .role_assignment_source
+        .as_deref()
+        .is_some_and(|source| source.contains("icp_canister_status"))
+}
+
 fn is_declared_controller(plan: &DeploymentPlanV1, controller: &str) -> bool {
     plan.authority_profile
         .expected_controllers
@@ -920,17 +1182,17 @@ fn compare_module_hashes(
     hard_failures: &mut Vec<SafetyFindingV1>,
     warnings: &mut Vec<SafetyFindingV1>,
 ) {
-    let observed_by_role = inventory
-        .observed_canisters
-        .iter()
-        .filter_map(|canister| canister.role.as_deref().map(|role| (role, canister)))
-        .collect::<BTreeMap<_, _>>();
-
     for artifact in &plan.role_artifacts {
         let Some(expected) = artifact.installed_module_hash.as_ref() else {
             continue;
         };
-        let Some(observed_canister) = observed_by_role.get(artifact.role.as_str()) else {
+        let Some(observed_canister) = observed_canister_for_module_hash(
+            plan,
+            inventory,
+            &artifact.role,
+            module_hash_diff,
+            hard_failures,
+        ) else {
             continue;
         };
         match observed_canister.module_hash.as_ref() {
@@ -961,6 +1223,57 @@ fn compare_module_hashes(
             _ => {}
         }
     }
+}
+
+fn observed_canister_for_module_hash<'a>(
+    plan: &DeploymentPlanV1,
+    inventory: &'a DeploymentInventoryV1,
+    role: &str,
+    module_hash_diff: &mut Vec<DiffItemV1>,
+    hard_failures: &mut Vec<SafetyFindingV1>,
+) -> Option<&'a ObservedCanisterV1> {
+    if let Some(expected_id) = expected_canister_id_for_role(plan, role) {
+        return inventory
+            .observed_canisters
+            .iter()
+            .find(|canister| canister.canister_id == expected_id);
+    }
+
+    let role_matches = inventory
+        .observed_canisters
+        .iter()
+        .filter(|canister| canister.role.as_deref() == Some(role))
+        .collect::<Vec<_>>();
+    if role_matches.len() > 1 {
+        let observed_ids = role_matches
+            .iter()
+            .map(|canister| canister.canister_id.as_str())
+            .collect::<Vec<_>>()
+            .join(",");
+        module_hash_diff.push(diff_item(
+            "installed_module_hash_ambiguous",
+            role,
+            Some("one observed canister".to_string()),
+            Some(observed_ids.clone()),
+            SafetySeverityV1::HardFailure,
+        ));
+        hard_failures.push(finding(
+            "installed_module_hash_ambiguous",
+            format!("installed module hash for role {role} has multiple observed canisters: {observed_ids}"),
+            SafetySeverityV1::HardFailure,
+            Some(role.to_string()),
+        ));
+        return None;
+    }
+
+    role_matches.into_iter().next()
+}
+
+fn expected_canister_id_for_role<'a>(plan: &'a DeploymentPlanV1, role: &str) -> Option<&'a str> {
+    plan.expected_canisters
+        .iter()
+        .find(|canister| canister.role == role)
+        .and_then(|canister| canister.canister_id.as_deref())
 }
 
 fn compare_raw_config(
