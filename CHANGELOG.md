@@ -8,19 +8,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
-- Authority actions, automatic-action candidates, external-action records, and
-  dry-run receipt observations now carry typed controller deltas so consumers
-  can read exact add/remove controller sets without recomputing them.
-- Authority dry-run receipts now include the source authority report ID,
-  making standalone receipt provenance explicit without requiring the full
-  evidence bundle.
-- Authority reports now carry the inventory ID and authority profile hash from
-  the reconciliation plan, making standalone report output self-describing.
-- Bootstrap `wasm_store` artifact builds no longer fail when the optional
-  `ic-wasm` binary is absent; the build still writes the raw/gzip artifacts and
-  checked-in Candid sidecar while skipping embedded `candid:service` metadata.
-
 ## [0.42.x] - 2026-05-23 - Authority reconciliation
+
+- `0.42.5` makes authority reports and receipts more self-describing by
+  preserving controller deltas, report IDs, inventory IDs, and profile hashes,
+  and fixes bootstrap `wasm_store` artifact builds on runners without the
+  optional `ic-wasm` binary.
 
 - `0.42.4` tightens dry-run authority report semantics: external-action
   records now contain only actual external authority actions, standalone
