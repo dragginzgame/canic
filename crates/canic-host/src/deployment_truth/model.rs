@@ -63,8 +63,11 @@ pub struct DeploymentReceiptV1 {
 pub struct AuthorityReceiptV1 {
     pub schema_version: u32,
     pub operation_id: String,
+    pub check_id: Option<String>,
     pub reconciliation_plan_id: String,
     pub authority_report_id: String,
+    pub inventory_id: String,
+    pub authority_profile_hash: Option<String>,
     pub operation_status: DeploymentExecutionStatusV1,
     pub started_at: String,
     pub finished_at: Option<String>,
@@ -225,6 +228,7 @@ pub struct AuthorityControllerDeltaV1 {
 pub struct AuthorityReportV1 {
     pub schema_version: u32,
     pub report_id: String,
+    pub check_id: Option<String>,
     pub reconciliation_plan_id: String,
     pub inventory_id: String,
     pub authority_profile_hash: Option<String>,

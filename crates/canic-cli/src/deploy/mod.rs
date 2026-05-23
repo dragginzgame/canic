@@ -15,8 +15,8 @@ use canic_host::{
     deployment_truth::{
         AuthorityDryRunEvidenceV1, DEPLOYMENT_TRUTH_SCHEMA_VERSION, DeploymentCheckV1,
         DeploymentReceiptV1, SafetyReportV1, SafetyStatusV1, authority_dry_run_receipt_from_plan,
-        authority_report_from_plan, build_authority_reconciliation_plan,
-        compare_plan_inventory_and_receipt,
+        authority_report_from_plan_with_check_id, build_authority_reconciliation_plan,
+        compare_plan_inventory_and_receipt, validate_authority_dry_run_evidence,
     },
     icp_config::resolve_current_canic_icp_root,
     install_root::{
@@ -270,11 +270,12 @@ where
         authority_report_usage,
     )?)?;
     let authority = build_authority_reconciliation_plan(&check);
-    let report = authority_report_from_plan(
+    let report = authority_report_from_plan_with_check_id(
         format!(
             "local:{}:{}:authority-report",
             check.plan.runtime_variant, check.plan.deployment_identity.deployment_name
         ),
+        Some(check.check_id),
         &authority,
     );
     print_json(&report)?;
@@ -317,16 +318,22 @@ fn build_authority_dry_run_evidence(
         check.plan.runtime_variant, check.plan.deployment_identity.deployment_name
     );
     let generated_at = current_observed_at()?;
-    let report = authority_report_from_plan(report_id, &authority);
+    let report = authority_report_from_plan_with_check_id(
+        report_id,
+        Some(check.check_id.clone()),
+        &authority,
+    );
     let receipt = authority_dry_run_receipt_from_plan(
         &authority,
         &report,
+        Some(check.check_id.clone()),
         receipt_id,
         generated_at.clone(),
         Some(generated_at.clone()),
-    );
+    )
+    .map_err(|err| DeployCommandError::Check(Box::new(err)))?;
 
-    Ok(AuthorityDryRunEvidenceV1 {
+    let evidence = AuthorityDryRunEvidenceV1 {
         schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
         evidence_id,
         check_id: check.check_id.clone(),
@@ -334,7 +341,10 @@ fn build_authority_dry_run_evidence(
         reconciliation_plan: authority,
         authority_report: report,
         authority_receipt: receipt,
-    })
+    };
+    validate_authority_dry_run_evidence(&evidence)
+        .map_err(|err| DeployCommandError::Check(Box::new(err)))?;
+    Ok(evidence)
 }
 
 fn run_plan<I>(args: I) -> Result<(), DeployCommandError>
@@ -1074,6 +1084,34 @@ mod tests {
     }
 
     #[test]
+    fn authority_evidence_builder_preserves_source_ids() {
+        let check = sample_authority_check();
+
+        let evidence =
+            build_authority_dry_run_evidence(&check).expect("build authority dry-run evidence");
+
+        assert_eq!(evidence.check_id, "check-1");
+        assert_eq!(
+            evidence.authority_report.check_id.as_deref(),
+            Some("check-1")
+        );
+        assert_eq!(evidence.authority_report.inventory_id, "inventory-1");
+        assert_eq!(
+            evidence.authority_report.authority_profile_hash.as_deref(),
+            Some("authority")
+        );
+        assert_eq!(
+            evidence.authority_receipt.check_id.as_deref(),
+            Some("check-1")
+        );
+        assert_eq!(evidence.authority_receipt.inventory_id, "inventory-1");
+        assert_eq!(
+            evidence.authority_receipt.authority_profile_hash.as_deref(),
+            Some("authority")
+        );
+    }
+
+    #[test]
     fn deploy_resume_report_allows_latest_local_receipt_lookup() {
         let resume_report = DeployResumeReportOptions::parse([OsString::from("demo")])
             .expect("parse deploy resume-report");
@@ -1100,5 +1138,124 @@ mod tests {
             Some("fleets/demo/canic.toml")
         );
         assert_eq!(options.expected_fleet.as_deref(), Some("demo"));
+    }
+
+    fn sample_authority_check() -> DeploymentCheckV1 {
+        use canic_host::deployment_truth::{
+            AuthorityProfileV1, CanisterControlClassV1, DeploymentDiffV1, DeploymentIdentityV1,
+            DeploymentInventoryV1, DeploymentPlanV1, ExpectedCanisterV1, LocalDeploymentConfigV1,
+            ObservationStatusV1, ObservedCanisterV1, ResumeSafetyV1, TrustDomainV1,
+            VerifierReadinessExpectationV1, VerifierReadinessObservationV1,
+        };
+
+        let identity = DeploymentIdentityV1 {
+            deployment_name: "demo".to_string(),
+            network: "local".to_string(),
+            root_principal: Some("aaaaa-aa".to_string()),
+            authority_profile_hash: Some("authority".to_string()),
+            role_topology_hash: None,
+            deployment_manifest_digest: None,
+            canonical_runtime_config_digest: None,
+            role_embedded_config_set_digest: None,
+            artifact_set_digest: None,
+            pool_identity_set_digest: None,
+            canic_version: None,
+            ic_memory_version: None,
+        };
+        let plan = DeploymentPlanV1 {
+            schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
+            plan_id: "plan-1".to_string(),
+            deployment_identity: identity.clone(),
+            trust_domain: TrustDomainV1 {
+                root_trust_anchor: Some("aaaaa-aa".to_string()),
+                migration_from: None,
+            },
+            fleet_template: "demo".to_string(),
+            runtime_variant: "local".to_string(),
+            authority_profile: AuthorityProfileV1 {
+                profile_id: "authority-profile-1".to_string(),
+                expected_controllers: vec!["aaaaa-aa".to_string()],
+                staging_controllers: Vec::new(),
+                emergency_controllers: Vec::new(),
+            },
+            role_artifacts: Vec::new(),
+            expected_canisters: vec![ExpectedCanisterV1 {
+                role: "root".to_string(),
+                canister_id: Some("aaaaa-aa".to_string()),
+                control_class: CanisterControlClassV1::DeploymentControlled,
+            }],
+            expected_pool: Vec::new(),
+            expected_verifier_readiness: VerifierReadinessExpectationV1 {
+                required: false,
+                expected_role_epochs: Vec::new(),
+            },
+            unresolved_assumptions: Vec::new(),
+        };
+        let inventory = DeploymentInventoryV1 {
+            schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
+            inventory_id: "inventory-1".to_string(),
+            observed_at: "2026-05-23T00:00:00Z".to_string(),
+            observed_identity: Some(identity),
+            local_config: LocalDeploymentConfigV1 {
+                config_path: None,
+                raw_config_sha256: None,
+                canonical_embedded_config_sha256: None,
+            },
+            observed_canisters: vec![ObservedCanisterV1 {
+                canister_id: "aaaaa-aa".to_string(),
+                role: Some("root".to_string()),
+                control_class: CanisterControlClassV1::DeploymentControlled,
+                controllers: vec!["aaaaa-aa".to_string()],
+                module_hash: None,
+                status: Some("running".to_string()),
+                root_trust_anchor: Some("aaaaa-aa".to_string()),
+                canonical_embedded_config_digest: None,
+                role_assignment_source: Some("test".to_string()),
+            }],
+            observed_pool: Vec::new(),
+            observed_artifacts: Vec::new(),
+            observed_verifier_readiness: VerifierReadinessObservationV1 {
+                status: ObservationStatusV1::NotObserved,
+                role_epochs: Vec::new(),
+            },
+            unresolved_observations: Vec::new(),
+        };
+        let diff = DeploymentDiffV1 {
+            schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
+            plan_identity: plan.deployment_identity.clone(),
+            observed_identity: inventory.observed_identity.clone(),
+            artifact_diff: Vec::new(),
+            controller_diff: Vec::new(),
+            pool_diff: Vec::new(),
+            embedded_config_diff: Vec::new(),
+            module_hash_diff: Vec::new(),
+            verifier_readiness_diff: Vec::new(),
+            resume_safety: ResumeSafetyV1 {
+                status: SafetyStatusV1::Safe,
+                reasons: vec!["safe".to_string()],
+            },
+            hard_failures: Vec::new(),
+            warnings: Vec::new(),
+            resumable_phases: Vec::new(),
+        };
+        let report = SafetyReportV1 {
+            schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
+            report_id: "safety-report-1".to_string(),
+            diff_id: None,
+            status: SafetyStatusV1::Safe,
+            summary: "safe".to_string(),
+            hard_failures: Vec::new(),
+            warnings: Vec::new(),
+            next_actions: Vec::new(),
+        };
+
+        DeploymentCheckV1 {
+            schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
+            check_id: "check-1".to_string(),
+            plan,
+            inventory,
+            diff,
+            report,
+        }
     }
 }

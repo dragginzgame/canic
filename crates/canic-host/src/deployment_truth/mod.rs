@@ -19,7 +19,10 @@ mod report;
 #[cfg(test)]
 mod tests;
 
-pub use authority::{authority_report_from_plan, build_authority_reconciliation_plan};
+pub use authority::{
+    authority_report_from_plan, authority_report_from_plan_with_check_id,
+    build_authority_reconciliation_plan,
+};
 pub use model::{
     ArtifactDigestSourceV1, ArtifactSourceV1, AuthorityActionCountV1, AuthorityActionV1,
     AuthorityApplyBlockerV1, AuthorityApplyReadinessV1, AuthorityAttemptedActionV1,
@@ -43,9 +46,9 @@ pub use observe::{
 };
 pub use plan::{LocalDeploymentPlanRequest, build_local_deployment_plan};
 pub use receipt::{
-    artifact_gate_phase_receipt, artifact_gate_role_phase_receipts,
+    AuthorityEvidenceError, artifact_gate_phase_receipt, artifact_gate_role_phase_receipts,
     authority_dry_run_receipt_from_plan, deployment_receipt_from_check,
-    deployment_receipt_from_check_with_status, phase_receipt,
+    deployment_receipt_from_check_with_status, phase_receipt, validate_authority_dry_run_evidence,
 };
 pub use report::{
     LocalDeploymentCheckRequest, check_local_deployment, compare_plan_inventory_and_receipt,

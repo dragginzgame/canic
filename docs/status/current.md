@@ -21,19 +21,19 @@ inspect only the files needed for the current task.
 
 ## Recent Work
 
-- Unreleased 0.42 development: authority actions, automatic-action candidates,
-  external-action records, and dry-run receipt observations now carry typed
-  controller deltas so consumers can read exact add/remove controller sets
-  without recomputing them.
-- Unreleased 0.42 development: authority dry-run receipts now include the
-  source authority report ID, making standalone receipt provenance explicit
-  without requiring the full evidence bundle.
-- Unreleased 0.42 development: authority reports now carry the inventory ID
-  and authority profile hash from the reconciliation plan, making standalone
-  report output self-describing.
-- Unreleased 0.42 development: bootstrap `wasm_store` artifact builds now treat
-  missing `ic-wasm` metadata embedding as optional, matching the shrink pass and
-  avoiding CI failures on runners that do not install the auxiliary binary.
+- Unreleased 0.42 development: authority reports and dry-run receipts now
+  carry source check IDs, inventory IDs, and authority profile hashes, matching
+  evidence-bundle provenance so standalone outputs remain self-describing.
+  Receipt construction rejects mismatched report/plan/check provenance and
+  altered report content instead of producing mixed evidence, and complete
+  evidence bundles are validated before CLI output to preserve dry-run
+  semantics and controller-observation evidence.
+- `0.42.5` makes authority evidence more self-describing. Authority actions,
+  automatic-action candidates, external-action records, and dry-run receipt
+  observations now carry typed controller deltas; authority dry-run receipts
+  include the source authority report ID; authority reports include the
+  inventory ID and authority profile hash; and bootstrap `wasm_store` artifact
+  builds no longer fail on runners without the optional `ic-wasm` binary.
 - `0.42.4` tightens dry-run authority readiness. External-action records now
   contain only actual external authority actions, standalone receipts preserve
   unresolved observation gaps, reports include typed apply-readiness blockers,

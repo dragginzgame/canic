@@ -147,6 +147,17 @@ pub fn authority_report_from_plan(
     report_id: impl Into<String>,
     plan: &AuthorityReconciliationPlanV1,
 ) -> AuthorityReportV1 {
+    authority_report_from_plan_with_check_id(report_id, None, plan)
+}
+
+/// Render the operator-facing authority report and attach the source deployment
+/// check identifier when the caller is building the report from a full check.
+#[must_use]
+pub fn authority_report_from_plan_with_check_id(
+    report_id: impl Into<String>,
+    check_id: Option<String>,
+    plan: &AuthorityReconciliationPlanV1,
+) -> AuthorityReportV1 {
     let counts = authority_report_counts(plan);
     let status = authority_report_status(&counts);
     let next_actions = authority_report_next_actions(status, &counts);
@@ -154,6 +165,7 @@ pub fn authority_report_from_plan(
     AuthorityReportV1 {
         schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
         report_id: report_id.into(),
+        check_id,
         reconciliation_plan_id: plan.plan_id.clone(),
         inventory_id: plan.inventory_id.clone(),
         authority_profile_hash: plan.authority_profile_hash.clone(),

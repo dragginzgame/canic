@@ -10,7 +10,7 @@ landed, what drifted, and what remains open.
 
 ## Current State
 
-`0.42.4` is live. Work is continuing on the 0.42 line by tightening the
+`0.42.5` is live. Work is continuing on the 0.42 line by tightening the
 dry-run report/evidence model while keeping reconciliation read-only.
 
 0.42 depends on 0.41 establishing deployment truth objects, observed inventory,
@@ -63,6 +63,19 @@ diffs, safety reports, and installer gating.
   bundle.
 - Authority reports now carry the inventory ID and authority profile hash from
   the reconciliation plan, making standalone report output self-describing.
+- Authority reports and dry-run receipts now carry check IDs, inventory IDs,
+  and authority profile hashes, matching evidence-bundle provenance so
+  standalone outputs remain self-describing.
+- Authority dry-run receipt construction rejects mismatched report/plan/check
+  provenance instead of producing mixed evidence.
+- Authority dry-run receipt construction also rejects report content that no
+  longer matches the reconciliation plan's automatic actions, hard findings, or
+  external actions.
+- Complete authority dry-run evidence bundles are validated before CLI output
+  so top-level evidence IDs cannot disagree with nested report or receipt
+  provenance.
+- Evidence validation also rejects attempted controller actions and mutated
+  controller observations inside dry-run receipts.
 - The first planner reports:
   - already-correct controller sets;
   - deployment-controlled controller deltas that can be applied automatically
