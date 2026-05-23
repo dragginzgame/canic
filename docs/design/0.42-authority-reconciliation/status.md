@@ -10,7 +10,8 @@ landed, what drifted, and what remains open.
 
 ## Current State
 
-`0.42.1` ready for validation/push.
+`0.42.3` is live. Work is continuing on the 0.42 line by tightening the
+dry-run report/evidence model while keeping reconciliation read-only.
 
 0.42 depends on 0.41 establishing deployment truth objects, observed inventory,
 diffs, safety reports, and installer gating.
@@ -34,13 +35,25 @@ diffs, safety reports, and installer gating.
   set, action, and reason.
 - Added expected and observed pool canisters to the dry-run authority plan:
   expected pools with unobserved controller state are explicit unknown
-  external-action records, and unplanned observed pool canisters are reported
-  as adoption/external-action cases.
+  observation gaps, and unplanned observed pool canisters are reported as
+  adoption/external-action cases.
 - Added explicit `AuthorityAutomaticActionV1` records to the dry-run plan and
   report surfaces so future apply logic has a narrow list of automatic
   candidates with observed/desired controller evidence.
 - Authority reports now include next-action guidance for safe dry-run plans
   that contain automatic candidates.
+- Added read-only dry-run authority receipts and evidence bundles.
+- Added hard authority findings for staging/emergency category overlap with the
+  normal expected controller set.
+- Narrowed `external_actions_required` so it records actual external authority
+  actions only. Unknown controller observations are reported as observation
+  gaps; unsafe blockers are reported as hard failures.
+- Authority dry-run receipts now preserve unresolved controller-observation
+  gaps directly, so the standalone receipt output remains complete enough to
+  explain missing authority evidence.
+- Authority dry-run reports now include an explicit `apply_readiness` summary
+  that distinguishes automatic-action candidates from hard failures, missing
+  observation blockers, and required external actions.
 - The first planner reports:
   - already-correct controller sets;
   - deployment-controlled controller deltas that can be applied automatically
@@ -51,15 +64,21 @@ diffs, safety reports, and installer gating.
 
 ## Not Implemented Yet
 
-- Rich operator-facing authority reports beyond raw JSON plan output.
+- Human-oriented authority report formatting beyond the current JSON surfaces.
 - Apply path for safe automatic controller changes.
 - Post-apply re-inventory and authority receipts.
 - Pool ownership reconciliation beyond dry-run classification.
-- Operator-visible authority change reports.
+- Controller-mutating authority change reports.
 
 ## Drift Log
 
-- No implementation drift recorded yet.
+- The implementation followed the post-0.41 report-first boundary more closely
+  than early 0.42 design text. The design has been narrowed so the 0.42
+  release bar is dry-run reconciliation, exact external-action reporting,
+  read-only receipts/evidence, hard authority findings, and no controller
+  mutation. Apply, remote lock/epoch checks, pool mutation, and post-apply
+  verification remain promoted-or-later work unless explicitly accepted into
+  the line.
 
 ## Release Bar
 

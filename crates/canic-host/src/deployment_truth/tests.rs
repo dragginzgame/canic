@@ -3028,6 +3028,14 @@ fn authority_report_summarizes_safe_reconciliation_plan() {
     assert_eq!(report.counts.unknown, 0);
     assert_eq!(report.counts.hard_failures, 0);
     assert_eq!(
+        report.apply_readiness,
+        AuthorityApplyReadinessV1 {
+            can_apply_automatically: false,
+            automatic_action_count: 0,
+            blockers: Vec::new(),
+        }
+    );
+    assert_eq!(
         report.action_counts,
         vec![AuthorityActionCountV1 {
             action: AuthorityActionV1::None,
@@ -3092,6 +3100,14 @@ fn authority_reconciliation_marks_deployment_controlled_delta_as_automatic_dry_r
     assert_eq!(report.status, SafetyStatusV1::Safe);
     assert_eq!(report.counts.can_apply_automatically, 1);
     assert_eq!(
+        report.apply_readiness,
+        AuthorityApplyReadinessV1 {
+            can_apply_automatically: true,
+            automatic_action_count: 1,
+            blockers: Vec::new(),
+        }
+    );
+    assert_eq!(
         report.action_counts,
         vec![AuthorityActionCountV1 {
             action: AuthorityActionV1::AddControllers,
@@ -3105,6 +3121,45 @@ fn authority_reconciliation_marks_deployment_controlled_delta_as_automatic_dry_r
         vec![
             "review automatic authority dry-run actions before enabling an apply path".to_string()
         ]
+    );
+}
+
+#[test]
+fn authority_apply_readiness_blocks_automatic_candidates_when_external_actions_remain() {
+    let mut plan = sample_plan();
+    plan.authority_profile.expected_controllers =
+        vec!["aaaaa-aa".to_string(), "ops-principal".to_string()];
+    plan.expected_canisters.push(ExpectedCanisterV1 {
+        role: "user_hub".to_string(),
+        canister_id: Some("user-hub-canister".to_string()),
+        control_class: CanisterControlClassV1::UserControlled,
+    });
+    let mut inventory = sample_matching_inventory();
+    inventory.observed_canisters.push(ObservedCanisterV1 {
+        canister_id: "user-hub-canister".to_string(),
+        role: Some("user_hub".to_string()),
+        control_class: CanisterControlClassV1::UserControlled,
+        controllers: vec!["user-controller".to_string()],
+        module_hash: None,
+        status: Some("running".to_string()),
+        root_trust_anchor: Some("aaaaa-aa".to_string()),
+        canonical_embedded_config_digest: None,
+        role_assignment_source: Some("icp_canister_status".to_string()),
+    });
+    let check = sample_check(plan, inventory);
+
+    let reconciliation = build_authority_reconciliation_plan(&check);
+    let report = authority_report_from_plan("authority-report-1", &reconciliation);
+
+    assert_eq!(report.counts.can_apply_automatically, 1);
+    assert_eq!(report.counts.requires_external_action, 1);
+    assert_eq!(
+        report.apply_readiness,
+        AuthorityApplyReadinessV1 {
+            can_apply_automatically: false,
+            automatic_action_count: 1,
+            blockers: vec![AuthorityApplyBlockerV1::ExternalActions],
+        }
     );
 }
 
@@ -3136,6 +3191,14 @@ fn authority_reconciliation_blocks_staging_or_emergency_controller_overlap() {
     assert_eq!(report.counts.already_correct, 1);
     assert_eq!(report.counts.unsafe_blocked, 0);
     assert_eq!(report.counts.hard_failures, 2);
+    assert_eq!(
+        report.apply_readiness,
+        AuthorityApplyReadinessV1 {
+            can_apply_automatically: false,
+            automatic_action_count: 0,
+            blockers: vec![AuthorityApplyBlockerV1::HardFailures],
+        }
+    );
     assert_eq!(report.hard_failures, reconciliation.hard_failures);
     assert_eq!(
         report.next_actions,
@@ -3190,6 +3253,14 @@ fn authority_reconciliation_requires_external_action_for_user_controlled_drift()
     let report = authority_report_from_plan("authority-report-1", &reconciliation);
     assert_eq!(report.status, SafetyStatusV1::Warning);
     assert_eq!(report.counts.requires_external_action, 1);
+    assert_eq!(
+        report.apply_readiness,
+        AuthorityApplyReadinessV1 {
+            can_apply_automatically: false,
+            automatic_action_count: 0,
+            blockers: vec![AuthorityApplyBlockerV1::ExternalActions],
+        }
+    );
     assert_eq!(report.external_actions_required.len(), 1);
     assert_eq!(report.external_actions_required[0], *external);
     assert_eq!(
@@ -3243,6 +3314,7 @@ fn authority_dry_run_receipt_records_observations_without_attempts() {
         report.external_actions_required
     );
     assert_eq!(receipt.hard_failures, report.hard_failures);
+    assert_eq!(receipt.unresolved_observation_gaps, report.observation_gaps);
 
     let evidence = AuthorityDryRunEvidenceV1 {
         schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
@@ -3276,6 +3348,7 @@ fn authority_dry_run_receipt_preserves_hard_findings() {
     assert_eq!(report.status, SafetyStatusV1::Blocked);
     assert_eq!(report.hard_failures.len(), 1);
     assert_eq!(receipt.hard_failures, report.hard_failures);
+    assert!(receipt.unresolved_observation_gaps.is_empty());
     assert!(receipt.attempted_actions.is_empty());
     assert_eq!(receipt.verified_controller_observations.len(), 1);
 }
@@ -3312,15 +3385,7 @@ fn authority_reconciliation_blocks_unknown_unsafe_canister() {
     let report = authority_report_from_plan("authority-report-1", &reconciliation);
     assert_eq!(report.status, SafetyStatusV1::Blocked);
     assert_eq!(report.counts.unsafe_blocked, 1);
-    assert!(
-        report
-            .external_actions_required
-            .iter()
-            .any(|external| external.subject == "unsafe-canister"
-                && external.control_classification == CanisterControlClassV1::UnknownUnsafe
-                && external.state == AuthorityReconciliationStateV1::UnsafeBlocked
-                && external.observed_controllers == vec!["unknown-controller".to_string()])
-    );
+    assert!(report.external_actions_required.is_empty());
     assert_eq!(
         report.control_class_counts,
         vec![
@@ -3373,19 +3438,18 @@ fn authority_reconciliation_reports_expected_pool_controller_observation_gap() {
         pool_action.reason,
         "pool canister controller set was not observed"
     );
-    assert!(
-        reconciliation
-            .external_actions_required
-            .iter()
-            .any(|external| {
-                external.subject == "pool-canister"
-                    && external.role.as_deref() == Some("user_shard")
-                    && external.control_classification == CanisterControlClassV1::CanicManagedPool
-                    && external.state == AuthorityReconciliationStateV1::Unknown
-            })
-    );
+    assert!(reconciliation.external_actions_required.is_empty());
     let report = authority_report_from_plan("authority-report-1", &reconciliation);
     assert_eq!(report.counts.unknown, 1);
+    assert!(report.external_actions_required.is_empty());
+    assert_eq!(
+        report.apply_readiness,
+        AuthorityApplyReadinessV1 {
+            can_apply_automatically: false,
+            automatic_action_count: 0,
+            blockers: vec![AuthorityApplyBlockerV1::ObservationGaps],
+        }
+    );
     assert_eq!(report.observation_gaps.len(), 1);
     assert_eq!(
         report.observation_gaps[0],
@@ -3394,6 +3458,15 @@ fn authority_reconciliation_reports_expected_pool_controller_observation_gap() {
             description: "pool canister controller set was not observed".to_string(),
         }
     );
+    let receipt = authority_dry_run_receipt_from_plan(
+        &reconciliation,
+        &report,
+        "authority-dry-run-1",
+        "2026-05-23T00:00:00Z",
+        Some("2026-05-23T00:00:01Z".to_string()),
+    );
+    assert_eq!(receipt.unresolved_observation_gaps, report.observation_gaps);
+    assert!(receipt.unresolved_external_actions.is_empty());
     assert_eq!(
         report.action_counts,
         vec![

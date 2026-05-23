@@ -70,6 +70,7 @@ pub struct AuthorityReceiptV1 {
     pub attempted_actions: Vec<AuthorityAttemptedActionV1>,
     pub verified_controller_observations: Vec<AuthorityControllerObservationV1>,
     pub hard_failures: Vec<SafetyFindingV1>,
+    pub unresolved_observation_gaps: Vec<DeploymentObservationGapV1>,
     pub unresolved_external_actions: Vec<AuthorityExternalActionV1>,
     pub command_result: DeploymentCommandResultV1,
 }
@@ -216,6 +217,7 @@ pub struct AuthorityReportV1 {
     pub status: SafetyStatusV1,
     pub summary: String,
     pub counts: AuthorityReportCountsV1,
+    pub apply_readiness: AuthorityApplyReadinessV1,
     pub action_counts: Vec<AuthorityActionCountV1>,
     pub control_class_counts: Vec<AuthorityControlClassCountV1>,
     pub observation_gaps: Vec<DeploymentObservationGapV1>,
@@ -223,6 +225,26 @@ pub struct AuthorityReportV1 {
     pub hard_failures: Vec<SafetyFindingV1>,
     pub external_actions_required: Vec<AuthorityExternalActionV1>,
     pub next_actions: Vec<String>,
+}
+
+///
+/// AuthorityApplyReadinessV1
+///
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct AuthorityApplyReadinessV1 {
+    pub can_apply_automatically: bool,
+    pub automatic_action_count: usize,
+    pub blockers: Vec<AuthorityApplyBlockerV1>,
+}
+
+///
+/// AuthorityApplyBlockerV1
+///
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum AuthorityApplyBlockerV1 {
+    HardFailures,
+    ObservationGaps,
+    ExternalActions,
 }
 
 ///

@@ -8,6 +8,23 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+- Authority dry-run reports now keep `external_actions_required` limited to
+  actual external authority actions; unknown controller observations remain
+  typed observation gaps and unsafe blockers remain hard failures.
+- Authority dry-run receipts now preserve unresolved controller-observation
+  gaps directly, so standalone receipts keep missing-evidence facts without
+  overloading external-action records.
+- Authority dry-run reports now include an explicit apply-readiness summary
+  that separates automatic-action candidates from hard failures, missing
+  observation blockers, and required external actions.
+- 0.42 design/status docs now match the post-0.41 dry-run release boundary:
+  authority apply, pool mutation, remote lock/epoch checks, and post-apply
+  verification are promoted-or-later work unless explicitly accepted into the
+  line.
+- Authority apply-readiness coverage now verifies that automatic controller
+  candidates do not make a report apply-ready while external authority actions
+  remain unresolved.
+
 ## [0.42.x] - 2026-05-23 - Authority reconciliation
 
 - `0.42.3` tightens break-glass authority reporting: staging/emergency overlap

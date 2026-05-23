@@ -146,6 +146,7 @@ pub fn authority_report_from_plan(
     let counts = authority_report_counts(plan);
     let status = authority_report_status(&counts);
     let next_actions = authority_report_next_actions(status, &counts);
+    let apply_readiness = authority_apply_readiness(&counts);
     AuthorityReportV1 {
         schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
         report_id: report_id.into(),
@@ -153,6 +154,7 @@ pub fn authority_report_from_plan(
         status,
         summary: authority_report_summary(status, &counts),
         counts,
+        apply_readiness,
         action_counts: authority_report_action_counts(plan),
         control_class_counts: authority_report_control_class_counts(plan),
         observation_gaps: authority_report_observation_gaps(plan),
@@ -186,6 +188,25 @@ fn authority_report_counts(plan: &AuthorityReconciliationPlanV1) -> AuthorityRep
         }
     }
     counts
+}
+
+fn authority_apply_readiness(counts: &AuthorityReportCountsV1) -> AuthorityApplyReadinessV1 {
+    let mut blockers = Vec::new();
+    if counts.hard_failures > 0 {
+        blockers.push(AuthorityApplyBlockerV1::HardFailures);
+    }
+    if counts.unknown > 0 {
+        blockers.push(AuthorityApplyBlockerV1::ObservationGaps);
+    }
+    if counts.requires_external_action > 0 {
+        blockers.push(AuthorityApplyBlockerV1::ExternalActions);
+    }
+    let can_apply_automatically = counts.can_apply_automatically > 0 && blockers.is_empty();
+    AuthorityApplyReadinessV1 {
+        can_apply_automatically,
+        automatic_action_count: counts.can_apply_automatically,
+        blockers,
+    }
 }
 
 fn authority_profile_overlap_findings(plan: &DeploymentPlanV1) -> Vec<SafetyFindingV1> {
@@ -650,12 +671,7 @@ fn record_authority_outcome(
             reason: action.reason.clone(),
         });
     }
-    if matches!(
-        action.state,
-        AuthorityReconciliationStateV1::RequiresExternalAction
-            | AuthorityReconciliationStateV1::UnsafeBlocked
-            | AuthorityReconciliationStateV1::Unknown
-    ) {
+    if action.state == AuthorityReconciliationStateV1::RequiresExternalAction {
         external_actions_required.push(AuthorityExternalActionV1 {
             subject: action_subject(&action).unwrap_or_else(|| "unknown".to_string()),
             canister_id: action.canister_id.clone(),
