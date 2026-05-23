@@ -8,14 +8,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
-- Authority reports and dry-run receipts now carry source check IDs, inventory
-  IDs, and authority profile hashes, matching evidence-bundle provenance so
-  standalone outputs remain self-describing; receipt construction now rejects
-  mismatched report/plan/check provenance and altered report content instead of
-  producing mixed evidence, and complete evidence bundles are validated before
-  CLI output to preserve dry-run semantics and controller-observation evidence.
-
 ## [0.42.x] - 2026-05-23 - Authority reconciliation
+
+- `0.42.6` hardens authority dry-run evidence: reports and receipts now carry
+  source check/inventory/profile provenance, receipt construction rejects mixed
+  report/plan/check data, and complete evidence bundles are validated before
+  CLI output.
 
 - `0.42.5` makes authority reports and receipts more self-describing by
   preserving controller deltas, report IDs, inventory IDs, and profile hashes,

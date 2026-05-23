@@ -21,8 +21,8 @@ inspect only the files needed for the current task.
 
 ## Recent Work
 
-- Unreleased 0.42 development: authority reports and dry-run receipts now
-  carry source check IDs, inventory IDs, and authority profile hashes, matching
+- Prepared `0.42.6`: authority reports and dry-run receipts now carry source
+  check IDs, inventory IDs, and authority profile hashes, matching
   evidence-bundle provenance so standalone outputs remain self-describing.
   Receipt construction rejects mismatched report/plan/check provenance and
   altered report content instead of producing mixed evidence, and complete

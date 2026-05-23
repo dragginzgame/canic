@@ -10,8 +10,9 @@ landed, what drifted, and what remains open.
 
 ## Current State
 
-`0.42.5` is live. Work is continuing on the 0.42 line by tightening the
-dry-run report/evidence model while keeping reconciliation read-only.
+`0.42.6` is ready to publish. Work is continuing on the 0.42 line by
+tightening the dry-run report/evidence model while keeping reconciliation
+read-only.
 
 0.42 depends on 0.41 establishing deployment truth objects, observed inventory,
 diffs, safety reports, and installer gating.

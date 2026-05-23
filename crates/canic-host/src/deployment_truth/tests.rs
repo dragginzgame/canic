@@ -3063,11 +3063,8 @@ fn authority_report_can_preserve_source_check_id() {
     let check = sample_check(sample_plan(), sample_matching_inventory());
     let plan = build_authority_reconciliation_plan(&check);
 
-    let report = authority_report_from_plan_with_check_id(
-        "authority-report-1",
-        Some(check.check_id.clone()),
-        &plan,
-    );
+    let report =
+        authority_report_from_plan_with_check_id("authority-report-1", Some(check.check_id), &plan);
 
     assert_eq!(report.check_id.as_deref(), Some("check-1"));
     assert_eq!(report.reconciliation_plan_id, "plan-local-root");

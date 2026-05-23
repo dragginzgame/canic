@@ -833,6 +833,12 @@ fn current_observed_at() -> Result<String, Box<dyn std::error::Error>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use canic_host::deployment_truth::{
+        AuthorityProfileV1, CanisterControlClassV1, DeploymentDiffV1, DeploymentIdentityV1,
+        DeploymentInventoryV1, DeploymentPlanV1, ExpectedCanisterV1, LocalDeploymentConfigV1,
+        ObservationStatusV1, ObservedCanisterV1, ResumeSafetyV1, TrustDomainV1,
+        VerifierReadinessExpectationV1, VerifierReadinessObservationV1,
+    };
 
     #[test]
     fn deploy_check_parses_required_fleet() {
@@ -1141,14 +1147,24 @@ mod tests {
     }
 
     fn sample_authority_check() -> DeploymentCheckV1 {
-        use canic_host::deployment_truth::{
-            AuthorityProfileV1, CanisterControlClassV1, DeploymentDiffV1, DeploymentIdentityV1,
-            DeploymentInventoryV1, DeploymentPlanV1, ExpectedCanisterV1, LocalDeploymentConfigV1,
-            ObservationStatusV1, ObservedCanisterV1, ResumeSafetyV1, TrustDomainV1,
-            VerifierReadinessExpectationV1, VerifierReadinessObservationV1,
-        };
+        let identity = sample_deployment_identity();
+        let plan = sample_deployment_plan(identity.clone());
+        let inventory = sample_deployment_inventory(identity);
+        let diff = sample_deployment_diff(&plan, &inventory);
+        let report = sample_safety_report();
 
-        let identity = DeploymentIdentityV1 {
+        DeploymentCheckV1 {
+            schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
+            check_id: "check-1".to_string(),
+            plan,
+            inventory,
+            diff,
+            report,
+        }
+    }
+
+    fn sample_deployment_identity() -> DeploymentIdentityV1 {
+        DeploymentIdentityV1 {
             deployment_name: "demo".to_string(),
             network: "local".to_string(),
             root_principal: Some("aaaaa-aa".to_string()),
@@ -1161,11 +1177,14 @@ mod tests {
             pool_identity_set_digest: None,
             canic_version: None,
             ic_memory_version: None,
-        };
-        let plan = DeploymentPlanV1 {
+        }
+    }
+
+    fn sample_deployment_plan(identity: DeploymentIdentityV1) -> DeploymentPlanV1 {
+        DeploymentPlanV1 {
             schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
             plan_id: "plan-1".to_string(),
-            deployment_identity: identity.clone(),
+            deployment_identity: identity,
             trust_domain: TrustDomainV1 {
                 root_trust_anchor: Some("aaaaa-aa".to_string()),
                 migration_from: None,
@@ -1190,8 +1209,11 @@ mod tests {
                 expected_role_epochs: Vec::new(),
             },
             unresolved_assumptions: Vec::new(),
-        };
-        let inventory = DeploymentInventoryV1 {
+        }
+    }
+
+    fn sample_deployment_inventory(identity: DeploymentIdentityV1) -> DeploymentInventoryV1 {
+        DeploymentInventoryV1 {
             schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
             inventory_id: "inventory-1".to_string(),
             observed_at: "2026-05-23T00:00:00Z".to_string(),
@@ -1219,8 +1241,14 @@ mod tests {
                 role_epochs: Vec::new(),
             },
             unresolved_observations: Vec::new(),
-        };
-        let diff = DeploymentDiffV1 {
+        }
+    }
+
+    fn sample_deployment_diff(
+        plan: &DeploymentPlanV1,
+        inventory: &DeploymentInventoryV1,
+    ) -> DeploymentDiffV1 {
+        DeploymentDiffV1 {
             schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
             plan_identity: plan.deployment_identity.clone(),
             observed_identity: inventory.observed_identity.clone(),
@@ -1237,8 +1265,11 @@ mod tests {
             hard_failures: Vec::new(),
             warnings: Vec::new(),
             resumable_phases: Vec::new(),
-        };
-        let report = SafetyReportV1 {
+        }
+    }
+
+    fn sample_safety_report() -> SafetyReportV1 {
+        SafetyReportV1 {
             schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
             report_id: "safety-report-1".to_string(),
             diff_id: None,
@@ -1247,15 +1278,6 @@ mod tests {
             hard_failures: Vec::new(),
             warnings: Vec::new(),
             next_actions: Vec::new(),
-        };
-
-        DeploymentCheckV1 {
-            schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
-            check_id: "check-1".to_string(),
-            plan,
-            inventory,
-            diff,
-            report,
         }
     }
 }
