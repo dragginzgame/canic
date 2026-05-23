@@ -1,5 +1,37 @@
 use super::*;
 
+/// Build an evidence-only receipt for a completed dry-run authority
+/// reconciliation.
+///
+/// The receipt records that no controller mutations were attempted. The
+/// original plan/report remain the authority for whether later apply work is
+/// safe.
+#[must_use]
+pub fn authority_dry_run_receipt_from_plan(
+    plan: &AuthorityReconciliationPlanV1,
+    report: &AuthorityReportV1,
+    operation_id: impl Into<String>,
+    started_at: impl Into<String>,
+    finished_at: Option<String>,
+) -> AuthorityReceiptV1 {
+    AuthorityReceiptV1 {
+        schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
+        operation_id: operation_id.into(),
+        reconciliation_plan_id: plan.plan_id.clone(),
+        operation_status: DeploymentExecutionStatusV1::Complete,
+        started_at: started_at.into(),
+        finished_at,
+        attempted_actions: Vec::new(),
+        verified_controller_observations: plan
+            .canister_actions
+            .iter()
+            .map(authority_controller_observation_from_action)
+            .collect(),
+        unresolved_external_actions: report.external_actions_required.clone(),
+        command_result: DeploymentCommandResultV1::Succeeded,
+    }
+}
+
 /// Build a lightweight receipt for the current-install artifact materialization
 /// gate. The receipt is evidence only; live inventory/check data remains the
 /// authority for any installer decision.
@@ -192,6 +224,28 @@ pub fn deployment_receipt_from_check_with_status(
         final_inventory_id: Some(check.inventory.inventory_id.clone()),
         command_result,
     }
+}
+
+fn authority_controller_observation_from_action(
+    action: &CanisterAuthorityActionV1,
+) -> AuthorityControllerObservationV1 {
+    AuthorityControllerObservationV1 {
+        subject: authority_action_subject(action),
+        canister_id: action.canister_id.clone(),
+        role: action.role.clone(),
+        state: action.state,
+        action: action.action,
+        observed_controllers: action.observed_controllers.clone(),
+        desired_controllers: action.desired_controllers.clone(),
+    }
+}
+
+fn authority_action_subject(action: &CanisterAuthorityActionV1) -> String {
+    action
+        .canister_id
+        .clone()
+        .or_else(|| action.role.as_ref().map(|role| format!("role:{role}")))
+        .unwrap_or_else(|| "unknown".to_string())
 }
 
 const fn operation_status_for_command_result(

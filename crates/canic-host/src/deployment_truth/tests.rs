@@ -3163,6 +3163,64 @@ fn authority_reconciliation_requires_external_action_for_user_controlled_drift()
 }
 
 #[test]
+fn authority_dry_run_receipt_records_observations_without_attempts() {
+    let mut plan = sample_plan();
+    plan.authority_profile.expected_controllers = vec!["aaaaa-aa".to_string()];
+    let mut inventory = sample_matching_inventory();
+    inventory.observed_canisters[0].control_class = CanisterControlClassV1::UserControlled;
+    inventory.observed_canisters[0].controllers = vec!["user-controller".to_string()];
+    let check = sample_check(plan, inventory);
+    let reconciliation = build_authority_reconciliation_plan(&check);
+    let report = authority_report_from_plan("authority-report-1", &reconciliation);
+
+    let receipt = authority_dry_run_receipt_from_plan(
+        &reconciliation,
+        &report,
+        "authority-dry-run-1",
+        "2026-05-23T00:00:00Z",
+        Some("2026-05-23T00:00:01Z".to_string()),
+    );
+
+    assert_eq!(receipt.operation_id, "authority-dry-run-1");
+    assert_eq!(receipt.reconciliation_plan_id, "plan-local-root");
+    assert_eq!(
+        receipt.operation_status,
+        DeploymentExecutionStatusV1::Complete
+    );
+    assert_eq!(receipt.command_result, DeploymentCommandResultV1::Succeeded);
+    assert!(receipt.attempted_actions.is_empty());
+    assert_eq!(receipt.verified_controller_observations.len(), 1);
+    assert_eq!(
+        receipt.verified_controller_observations[0],
+        AuthorityControllerObservationV1 {
+            subject: "aaaaa-aa".to_string(),
+            canister_id: Some("aaaaa-aa".to_string()),
+            role: Some("root".to_string()),
+            state: AuthorityReconciliationStateV1::RequiresExternalAction,
+            action: AuthorityActionV1::RequiresExternalController,
+            observed_controllers: vec!["user-controller".to_string()],
+            desired_controllers: vec!["aaaaa-aa".to_string()],
+        }
+    );
+    assert_eq!(
+        receipt.unresolved_external_actions,
+        report.external_actions_required
+    );
+
+    let evidence = AuthorityDryRunEvidenceV1 {
+        schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
+        evidence_id: "authority-evidence-1".to_string(),
+        check_id: check.check_id.clone(),
+        generated_at: "2026-05-23T00:00:01Z".to_string(),
+        reconciliation_plan: reconciliation,
+        authority_report: report,
+        authority_receipt: receipt,
+    };
+
+    assert_json_round_trip(&evidence);
+}
+
+#[test]
 fn authority_reconciliation_blocks_unknown_unsafe_canister() {
     let mut inventory = sample_matching_inventory();
     inventory.observed_canisters.push(ObservedCanisterV1 {

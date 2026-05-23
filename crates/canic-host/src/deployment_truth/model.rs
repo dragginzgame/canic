@@ -57,6 +57,64 @@ pub struct DeploymentReceiptV1 {
 }
 
 ///
+/// AuthorityReceiptV1
+///
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct AuthorityReceiptV1 {
+    pub schema_version: u32,
+    pub operation_id: String,
+    pub reconciliation_plan_id: String,
+    pub operation_status: DeploymentExecutionStatusV1,
+    pub started_at: String,
+    pub finished_at: Option<String>,
+    pub attempted_actions: Vec<AuthorityAttemptedActionV1>,
+    pub verified_controller_observations: Vec<AuthorityControllerObservationV1>,
+    pub unresolved_external_actions: Vec<AuthorityExternalActionV1>,
+    pub command_result: DeploymentCommandResultV1,
+}
+
+///
+/// AuthorityDryRunEvidenceV1
+///
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct AuthorityDryRunEvidenceV1 {
+    pub schema_version: u32,
+    pub evidence_id: String,
+    pub check_id: String,
+    pub generated_at: String,
+    pub reconciliation_plan: AuthorityReconciliationPlanV1,
+    pub authority_report: AuthorityReportV1,
+    pub authority_receipt: AuthorityReceiptV1,
+}
+
+///
+/// AuthorityAttemptedActionV1
+///
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct AuthorityAttemptedActionV1 {
+    pub subject: String,
+    pub canister_id: Option<String>,
+    pub role: Option<String>,
+    pub action: AuthorityActionV1,
+    pub result: RolePhaseResultV1,
+    pub error: Option<String>,
+}
+
+///
+/// AuthorityControllerObservationV1
+///
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct AuthorityControllerObservationV1 {
+    pub subject: String,
+    pub canister_id: Option<String>,
+    pub role: Option<String>,
+    pub state: AuthorityReconciliationStateV1,
+    pub action: AuthorityActionV1,
+    pub observed_controllers: Vec<String>,
+    pub desired_controllers: Vec<String>,
+}
+
+///
 /// RoleArtifactManifestV1
 ///
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
