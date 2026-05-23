@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-05-22
+Last updated: 2026-05-23
 
 ## Purpose
 
@@ -21,6 +21,21 @@ inspect only the files needed for the current task.
 
 ## Recent Work
 
+- Deployment diffs now detect duplicate observed artifact evidence by role:
+  conflicting artifact observations hard-fail, while exact duplicate artifact
+  observations warn instead of being collapsed by role-indexed lookup.
+- Deployment diffs now detect duplicate verifier role-epoch observations:
+  conflicting epoch evidence hard-fails, while exact duplicate epoch evidence
+  warns instead of being collapsed by role-indexed lookup.
+- Deployment diffs now detect duplicate planned artifact entries by role:
+  conflicting planned artifact evidence hard-fails, while exact duplicate
+  planned entries warn and compare only once.
+- Deployment diffs now detect duplicate planned canister declarations:
+  conflicting role-to-ID assignments hard-fail, while exact duplicate planned
+  canister entries warn and compare only once.
+- Deployment diffs now detect duplicate planned pool declarations:
+  conflicting pool identity-to-ID assignments hard-fail, while exact duplicate
+  planned pool entries warn and compare only once.
 - Observed pool canister control classes now reuse enriched child live-status
   evidence, so pool safety reports can reflect live controller drift rather
   than only registry parentage.

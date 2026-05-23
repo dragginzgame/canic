@@ -397,13 +397,28 @@ fn compare_artifacts(
     hard_failures: &mut Vec<SafetyFindingV1>,
     warnings: &mut Vec<SafetyFindingV1>,
 ) {
-    let observed_by_role = inventory
-        .observed_artifacts
-        .iter()
-        .map(|artifact| (artifact.role.as_str(), artifact))
-        .collect::<BTreeMap<_, _>>();
+    let planned_conflicting_roles =
+        compare_planned_artifact_role_conflicts(plan, artifact_diff, hard_failures, warnings);
+    let conflicting_roles =
+        compare_observed_artifact_role_conflicts(inventory, artifact_diff, hard_failures, warnings);
+    let mut observed_by_role = BTreeMap::new();
+    for artifact in &inventory.observed_artifacts {
+        if conflicting_roles.contains(&artifact.role) {
+            continue;
+        }
+        observed_by_role
+            .entry(artifact.role.as_str())
+            .or_insert(artifact);
+    }
 
+    let mut compared_roles = BTreeSet::new();
     for expected in &plan.role_artifacts {
+        if planned_conflicting_roles.contains(&expected.role)
+            || conflicting_roles.contains(&expected.role)
+            || !compared_roles.insert(expected.role.as_str())
+        {
+            continue;
+        }
         let Some(observed) = observed_by_role.get(expected.role.as_str()) else {
             artifact_diff.push(diff_item(
                 "artifact",
@@ -454,6 +469,159 @@ fn compare_artifacts(
             _ => {}
         }
     }
+}
+
+fn compare_planned_artifact_role_conflicts(
+    plan: &DeploymentPlanV1,
+    artifact_diff: &mut Vec<DiffItemV1>,
+    hard_failures: &mut Vec<SafetyFindingV1>,
+    warnings: &mut Vec<SafetyFindingV1>,
+) -> BTreeSet<String> {
+    let mut by_role = BTreeMap::<&str, Vec<&RoleArtifactV1>>::new();
+    for planned in &plan.role_artifacts {
+        by_role
+            .entry(planned.role.as_str())
+            .or_default()
+            .push(planned);
+    }
+
+    let mut conflicting_roles = BTreeSet::new();
+    for (role, planned_entries) in by_role {
+        if planned_entries.len() <= 1 {
+            continue;
+        }
+        let evidence = planned_entries
+            .iter()
+            .map(|planned| planned_artifact_evidence_label(planned))
+            .collect::<BTreeSet<_>>();
+        let evidence_label = evidence.iter().cloned().collect::<Vec<_>>().join(" | ");
+        if evidence.len() > 1 {
+            conflicting_roles.insert(role.to_string());
+            artifact_diff.push(diff_item(
+                "planned_artifact_role_conflict",
+                role,
+                Some("one planned artifact".to_string()),
+                Some(evidence_label.clone()),
+                SafetySeverityV1::HardFailure,
+            ));
+            hard_failures.push(finding(
+                "planned_artifact_role_conflict",
+                format!("planned artifact role {role} has conflicting evidence: {evidence_label}"),
+                SafetySeverityV1::HardFailure,
+                Some(role.to_string()),
+            ));
+        } else {
+            artifact_diff.push(diff_item(
+                "planned_artifact_duplicate",
+                role,
+                Some(evidence_label.clone()),
+                Some(planned_entries.len().to_string()),
+                SafetySeverityV1::Warning,
+            ));
+            warnings.push(finding(
+                "duplicate_planned_artifact_role",
+                format!(
+                    "planned artifact role {role} was declared {} times with identical evidence",
+                    planned_entries.len()
+                ),
+                SafetySeverityV1::Warning,
+                Some(role.to_string()),
+            ));
+        }
+    }
+    conflicting_roles
+}
+
+fn planned_artifact_evidence_label(planned: &RoleArtifactV1) -> String {
+    format!(
+        "wasm_gz_path={};wasm_gz={};file={};module={};raw_config={};canonical={}",
+        planned.wasm_gz_path.as_deref().unwrap_or("<none>"),
+        planned.wasm_gz_sha256.as_deref().unwrap_or("<none>"),
+        planned
+            .observed_wasm_gz_file_sha256
+            .as_deref()
+            .unwrap_or("<none>"),
+        planned.installed_module_hash.as_deref().unwrap_or("<none>"),
+        planned.raw_config_sha256.as_deref().unwrap_or("<none>"),
+        planned
+            .canonical_embedded_config_sha256
+            .as_deref()
+            .unwrap_or("<none>")
+    )
+}
+
+fn compare_observed_artifact_role_conflicts(
+    inventory: &DeploymentInventoryV1,
+    artifact_diff: &mut Vec<DiffItemV1>,
+    hard_failures: &mut Vec<SafetyFindingV1>,
+    warnings: &mut Vec<SafetyFindingV1>,
+) -> BTreeSet<String> {
+    let mut by_role = BTreeMap::<&str, Vec<&ObservedArtifactV1>>::new();
+    for observed in &inventory.observed_artifacts {
+        by_role
+            .entry(observed.role.as_str())
+            .or_default()
+            .push(observed);
+    }
+
+    let mut conflicting_roles = BTreeSet::new();
+    for (role, observations) in by_role {
+        if observations.len() <= 1 {
+            continue;
+        }
+        let evidence = observations
+            .iter()
+            .map(|observed| observed_artifact_evidence_label(observed))
+            .collect::<BTreeSet<_>>();
+        let evidence_label = evidence.iter().cloned().collect::<Vec<_>>().join(" | ");
+        if evidence.len() > 1 {
+            conflicting_roles.insert(role.to_string());
+            artifact_diff.push(diff_item(
+                "artifact_role_conflict",
+                role,
+                Some("one artifact observation".to_string()),
+                Some(evidence_label.clone()),
+                SafetySeverityV1::HardFailure,
+            ));
+            hard_failures.push(finding(
+                "artifact_role_conflict",
+                format!("observed artifact role {role} has conflicting evidence: {evidence_label}"),
+                SafetySeverityV1::HardFailure,
+                Some(role.to_string()),
+            ));
+        } else {
+            artifact_diff.push(diff_item(
+                "artifact_duplicate",
+                role,
+                Some(evidence_label.clone()),
+                Some(observations.len().to_string()),
+                SafetySeverityV1::Warning,
+            ));
+            warnings.push(finding(
+                "duplicate_artifact_observed",
+                format!(
+                    "observed artifact role {role} was reported {} times with identical evidence",
+                    observations.len()
+                ),
+                SafetySeverityV1::Warning,
+                Some(role.to_string()),
+            ));
+        }
+    }
+    conflicting_roles
+}
+
+fn observed_artifact_evidence_label(observed: &ObservedArtifactV1) -> String {
+    format!(
+        "path={};file={};payload={};size={};source={:?}",
+        observed.artifact_path,
+        observed.file_sha256.as_deref().unwrap_or("<none>"),
+        observed.payload_sha256.as_deref().unwrap_or("<none>"),
+        observed
+            .payload_size_bytes
+            .map_or_else(|| "<none>".to_string(), |size| size.to_string()),
+        observed.source
+    )
 }
 
 fn compare_artifact_file_sha256(
@@ -569,8 +737,20 @@ fn compare_canisters(
     hard_failures: &mut Vec<SafetyFindingV1>,
     warnings: &mut Vec<SafetyFindingV1>,
 ) {
+    let planned_conflicts =
+        compare_planned_canister_conflicts(plan, controller_diff, hard_failures, warnings);
     let mut matched_observed = BTreeSet::new();
+    let mut compared_planned = BTreeSet::new();
     for expected in &plan.expected_canisters {
+        if planned_conflicts.role_conflicts.contains(&expected.role)
+            || expected
+                .canister_id
+                .as_ref()
+                .is_some_and(|id| planned_conflicts.id_conflicts.contains(id))
+            || !compared_planned.insert(planned_canister_evidence_label(expected))
+        {
+            continue;
+        }
         let observed = expected.canister_id.as_ref().map_or_else(
             || {
                 let role_matches = inventory
@@ -657,6 +837,118 @@ fn compare_canisters(
         warnings,
         &matched_observed,
     );
+}
+
+struct PlannedCanisterConflicts {
+    role_conflicts: BTreeSet<String>,
+    id_conflicts: BTreeSet<String>,
+}
+
+fn compare_planned_canister_conflicts(
+    plan: &DeploymentPlanV1,
+    controller_diff: &mut Vec<DiffItemV1>,
+    hard_failures: &mut Vec<SafetyFindingV1>,
+    warnings: &mut Vec<SafetyFindingV1>,
+) -> PlannedCanisterConflicts {
+    let mut role_conflicts = BTreeSet::new();
+    let mut id_conflicts = BTreeSet::new();
+    let mut by_role = BTreeMap::<&str, Vec<&ExpectedCanisterV1>>::new();
+    let mut by_id = BTreeMap::<&str, Vec<&ExpectedCanisterV1>>::new();
+    for planned in &plan.expected_canisters {
+        by_role
+            .entry(planned.role.as_str())
+            .or_default()
+            .push(planned);
+        if let Some(id) = planned.canister_id.as_deref() {
+            by_id.entry(id).or_default().push(planned);
+        }
+    }
+
+    for (role, planned_entries) in by_role {
+        if planned_entries.len() <= 1 {
+            continue;
+        }
+        let evidence = planned_entries
+            .iter()
+            .map(|planned| planned_canister_evidence_label(planned))
+            .collect::<BTreeSet<_>>();
+        let evidence_label = evidence.iter().cloned().collect::<Vec<_>>().join(" | ");
+        if evidence.len() > 1 {
+            role_conflicts.insert(role.to_string());
+            controller_diff.push(diff_item(
+                "planned_canister_role_conflict",
+                role,
+                Some("one planned canister".to_string()),
+                Some(evidence_label.clone()),
+                SafetySeverityV1::HardFailure,
+            ));
+            hard_failures.push(finding(
+                "planned_canister_role_conflict",
+                format!("planned canister role {role} has conflicting evidence: {evidence_label}"),
+                SafetySeverityV1::HardFailure,
+                Some(role.to_string()),
+            ));
+        } else {
+            controller_diff.push(diff_item(
+                "planned_canister_duplicate",
+                role,
+                Some(evidence_label.clone()),
+                Some(planned_entries.len().to_string()),
+                SafetySeverityV1::Warning,
+            ));
+            warnings.push(finding(
+                "duplicate_planned_canister_role",
+                format!(
+                    "planned canister role {role} was declared {} times with identical evidence",
+                    planned_entries.len()
+                ),
+                SafetySeverityV1::Warning,
+                Some(role.to_string()),
+            ));
+        }
+    }
+
+    for (id, planned_entries) in by_id {
+        if planned_entries.len() <= 1 {
+            continue;
+        }
+        let roles = planned_entries
+            .iter()
+            .map(|planned| planned.role.as_str())
+            .collect::<BTreeSet<_>>();
+        if roles.len() <= 1 {
+            continue;
+        }
+        id_conflicts.insert(id.to_string());
+        let role_label = roles.iter().copied().collect::<Vec<_>>().join(",");
+        controller_diff.push(diff_item(
+            "planned_canister_id_conflict",
+            id,
+            Some("one planned role".to_string()),
+            Some(role_label.clone()),
+            SafetySeverityV1::HardFailure,
+        ));
+        hard_failures.push(finding(
+            "planned_canister_id_conflict",
+            format!("planned canister id {id} is assigned to conflicting roles {role_label}"),
+            SafetySeverityV1::HardFailure,
+            Some(id.to_string()),
+        ));
+    }
+
+    PlannedCanisterConflicts {
+        role_conflicts,
+        id_conflicts,
+    }
+}
+
+fn planned_canister_evidence_label(planned: &ExpectedCanisterV1) -> String {
+    format!(
+        "role={};id={};control={:?}",
+        planned.role,
+        planned.canister_id.as_deref().unwrap_or("<none>"),
+        planned.control_class
+    )
 }
 
 fn record_ambiguous_canister_role(
@@ -823,9 +1115,23 @@ fn compare_pools(
     hard_failures: &mut Vec<SafetyFindingV1>,
     warnings: &mut Vec<SafetyFindingV1>,
 ) {
+    let planned_conflicts =
+        compare_planned_pool_conflicts(plan, pool_diff, hard_failures, warnings);
     compare_observed_pool_id_conflicts(inventory, pool_diff, hard_failures, warnings);
     let mut matched_observed = BTreeSet::new();
+    let mut compared_planned = BTreeSet::new();
     for expected in &plan.expected_pool {
+        if planned_conflicts
+            .subject_conflicts
+            .contains(&expected_pool_subject(expected))
+            || expected
+                .canister_id
+                .as_ref()
+                .is_some_and(|id| planned_conflicts.id_conflicts.contains(id))
+            || !compared_planned.insert(planned_pool_evidence_label(expected))
+        {
+            continue;
+        }
         compare_expected_pool(
             expected,
             inventory,
@@ -839,6 +1145,118 @@ fn compare_pools(
     for observed in &inventory.observed_pool {
         warn_extra_observed_pool(plan, observed, pool_diff, warnings, &matched_observed);
     }
+}
+
+struct PlannedPoolConflicts {
+    subject_conflicts: BTreeSet<String>,
+    id_conflicts: BTreeSet<String>,
+}
+
+fn compare_planned_pool_conflicts(
+    plan: &DeploymentPlanV1,
+    pool_diff: &mut Vec<DiffItemV1>,
+    hard_failures: &mut Vec<SafetyFindingV1>,
+    warnings: &mut Vec<SafetyFindingV1>,
+) -> PlannedPoolConflicts {
+    let mut subject_conflicts = BTreeSet::new();
+    let mut id_conflicts = BTreeSet::new();
+    let mut by_subject = BTreeMap::<String, Vec<&ExpectedPoolCanisterV1>>::new();
+    let mut by_id = BTreeMap::<&str, Vec<&ExpectedPoolCanisterV1>>::new();
+    for planned in &plan.expected_pool {
+        by_subject
+            .entry(expected_pool_subject(planned))
+            .or_default()
+            .push(planned);
+        if let Some(id) = planned.canister_id.as_deref() {
+            by_id.entry(id).or_default().push(planned);
+        }
+    }
+
+    for (subject, planned_entries) in by_subject {
+        if planned_entries.len() <= 1 {
+            continue;
+        }
+        let evidence = planned_entries
+            .iter()
+            .map(|planned| planned_pool_evidence_label(planned))
+            .collect::<BTreeSet<_>>();
+        let evidence_label = evidence.iter().cloned().collect::<Vec<_>>().join(" | ");
+        if evidence.len() > 1 {
+            subject_conflicts.insert(subject.clone());
+            pool_diff.push(diff_item(
+                "planned_pool_conflict",
+                &subject,
+                Some("one planned pool canister".to_string()),
+                Some(evidence_label.clone()),
+                SafetySeverityV1::HardFailure,
+            ));
+            hard_failures.push(finding(
+                "planned_pool_conflict",
+                format!("planned pool {subject} has conflicting evidence: {evidence_label}"),
+                SafetySeverityV1::HardFailure,
+                Some(subject),
+            ));
+        } else {
+            pool_diff.push(diff_item(
+                "planned_pool_duplicate",
+                &subject,
+                Some(evidence_label.clone()),
+                Some(planned_entries.len().to_string()),
+                SafetySeverityV1::Warning,
+            ));
+            warnings.push(finding(
+                "duplicate_planned_pool",
+                format!(
+                    "planned pool {subject} was declared {} times with identical evidence",
+                    planned_entries.len()
+                ),
+                SafetySeverityV1::Warning,
+                Some(subject),
+            ));
+        }
+    }
+
+    for (id, planned_entries) in by_id {
+        if planned_entries.len() <= 1 {
+            continue;
+        }
+        let subjects = planned_entries
+            .iter()
+            .map(|planned| expected_pool_subject(planned))
+            .collect::<BTreeSet<_>>();
+        if subjects.len() <= 1 {
+            continue;
+        }
+        id_conflicts.insert(id.to_string());
+        let subject_label = subjects.iter().cloned().collect::<Vec<_>>().join(",");
+        pool_diff.push(diff_item(
+            "planned_pool_id_conflict",
+            id,
+            Some("one planned pool identity".to_string()),
+            Some(subject_label.clone()),
+            SafetySeverityV1::HardFailure,
+        ));
+        hard_failures.push(finding(
+            "planned_pool_id_conflict",
+            format!("planned pool id {id} is assigned to conflicting identities {subject_label}"),
+            SafetySeverityV1::HardFailure,
+            Some(id.to_string()),
+        ));
+    }
+
+    PlannedPoolConflicts {
+        subject_conflicts,
+        id_conflicts,
+    }
+}
+
+fn planned_pool_evidence_label(planned: &ExpectedPoolCanisterV1) -> String {
+    format!(
+        "pool={};role={};id={}",
+        planned.pool,
+        planned.role.as_deref().unwrap_or("<none>"),
+        planned.canister_id.as_deref().unwrap_or("<none>")
+    )
 }
 
 fn compare_observed_pool_id_conflicts(
@@ -1382,13 +1800,23 @@ fn compare_verifier_readiness(
         ));
     }
 
-    let observed_by_role = inventory
-        .observed_verifier_readiness
-        .role_epochs
-        .iter()
-        .map(|epoch| (epoch.role.as_str(), epoch))
-        .collect::<BTreeMap<_, _>>();
+    let conflicting_roles = compare_observed_verifier_epoch_conflicts(
+        inventory,
+        verifier_readiness_diff,
+        hard_failures,
+        warnings,
+    );
+    let mut observed_by_role = BTreeMap::new();
+    for epoch in &inventory.observed_verifier_readiness.role_epochs {
+        if conflicting_roles.contains(&epoch.role) {
+            continue;
+        }
+        observed_by_role.entry(epoch.role.as_str()).or_insert(epoch);
+    }
     for expected in &plan.expected_verifier_readiness.expected_role_epochs {
+        if conflicting_roles.contains(&expected.role) {
+            continue;
+        }
         match observed_by_role.get(expected.role.as_str()) {
             Some(observed)
                 if observed.status == ObservationStatusV1::Observed
@@ -1432,6 +1860,79 @@ fn compare_verifier_readiness(
             }
         }
     }
+}
+
+fn compare_observed_verifier_epoch_conflicts(
+    inventory: &DeploymentInventoryV1,
+    verifier_readiness_diff: &mut Vec<DiffItemV1>,
+    hard_failures: &mut Vec<SafetyFindingV1>,
+    warnings: &mut Vec<SafetyFindingV1>,
+) -> BTreeSet<String> {
+    let mut by_role = BTreeMap::<&str, Vec<&RoleEpochObservationV1>>::new();
+    for observed in &inventory.observed_verifier_readiness.role_epochs {
+        by_role
+            .entry(observed.role.as_str())
+            .or_default()
+            .push(observed);
+    }
+
+    let mut conflicting_roles = BTreeSet::new();
+    for (role, observations) in by_role {
+        if observations.len() <= 1 {
+            continue;
+        }
+        let evidence = observations
+            .iter()
+            .map(|observed| verifier_epoch_evidence_label(observed))
+            .collect::<BTreeSet<_>>();
+        let evidence_label = evidence.iter().cloned().collect::<Vec<_>>().join(",");
+        if evidence.len() > 1 {
+            conflicting_roles.insert(role.to_string());
+            verifier_readiness_diff.push(diff_item(
+                "verifier_role_epoch_conflict",
+                role,
+                Some("one epoch observation".to_string()),
+                Some(evidence_label.clone()),
+                SafetySeverityV1::HardFailure,
+            ));
+            hard_failures.push(finding(
+                "verifier_role_epoch_conflict",
+                format!(
+                    "verifier role {role} has conflicting epoch observations: {evidence_label}"
+                ),
+                SafetySeverityV1::HardFailure,
+                Some(role.to_string()),
+            ));
+        } else {
+            verifier_readiness_diff.push(diff_item(
+                "verifier_role_epoch_duplicate",
+                role,
+                Some(evidence_label.clone()),
+                Some(observations.len().to_string()),
+                SafetySeverityV1::Warning,
+            ));
+            warnings.push(finding(
+                "duplicate_verifier_role_epoch_observed",
+                format!(
+                    "verifier role {role} epoch was reported {} times with identical evidence",
+                    observations.len()
+                ),
+                SafetySeverityV1::Warning,
+                Some(role.to_string()),
+            ));
+        }
+    }
+    conflicting_roles
+}
+
+fn verifier_epoch_evidence_label(observed: &RoleEpochObservationV1) -> String {
+    format!(
+        "epoch={};status={:?}",
+        observed
+            .observed_epoch
+            .map_or_else(|| "<none>".to_string(), |epoch| epoch.to_string()),
+        observed.status
+    )
 }
 
 fn finding(

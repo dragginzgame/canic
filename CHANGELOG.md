@@ -10,6 +10,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.41.x] - 2026-05-21 - Deployment truth model
 
+- `0.41.16` hardens deployment truth duplicate-evidence handling across
+  observed artifacts, verifier role epochs, planned artifacts, planned
+  canisters, and planned pool identities: conflicting evidence now hard-fails,
+  while exact duplicate evidence warns and is compared only once.
+
 - `0.41.15` tightens passive deployment truth topology validation: enriched
   live-status evidence now feeds pool and controller drift checks, concrete
   canister IDs and observed role identities are checked for contradictions

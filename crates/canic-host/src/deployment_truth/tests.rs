@@ -1658,6 +1658,114 @@ fn deployment_diff_blocks_artifact_file_digest_mismatch() {
 }
 
 #[test]
+fn deployment_diff_blocks_conflicting_artifact_observations_for_same_role() {
+    let plan = sample_plan();
+    let mut inventory = sample_matching_inventory();
+    inventory.observed_artifacts.push(ObservedArtifactV1 {
+        role: "root".to_string(),
+        artifact_path: "alternate-root.wasm.gz".to_string(),
+        file_sha256: Some("different-file".to_string()),
+        file_sha256_source: Some(ArtifactDigestSourceV1::ObservedFileDigest),
+        payload_sha256: Some("different-gzip".to_string()),
+        payload_size_bytes: Some(99),
+        source: ArtifactSourceV1::LocalBuild,
+    });
+
+    let diff = compare_plan_to_inventory(&plan, &inventory);
+
+    assert_eq!(diff.resume_safety.status, SafetyStatusV1::Blocked);
+    assert!(
+        diff.hard_failures
+            .iter()
+            .any(|finding| finding.code == "artifact_role_conflict"
+                && finding.subject.as_deref() == Some("root"))
+    );
+    assert!(diff.artifact_diff.iter().any(|item| {
+        item.category == "artifact_role_conflict"
+            && item.subject == "root"
+            && item.observed.as_deref().is_some_and(|observed| {
+                observed.contains("root.wasm.gz") && observed.contains("alternate-root.wasm.gz")
+            })
+            && item.severity == SafetySeverityV1::HardFailure
+    }));
+}
+
+#[test]
+fn deployment_diff_warns_for_duplicate_identical_artifact_observation() {
+    let mut inventory = sample_matching_inventory();
+    inventory
+        .observed_artifacts
+        .push(inventory.observed_artifacts[0].clone());
+
+    let diff = compare_plan_to_inventory(&sample_plan(), &inventory);
+
+    assert_eq!(diff.resume_safety.status, SafetyStatusV1::Warning);
+    assert!(diff.hard_failures.is_empty());
+    assert!(
+        diff.warnings
+            .iter()
+            .any(|finding| finding.code == "duplicate_artifact_observed"
+                && finding.subject.as_deref() == Some("root"))
+    );
+    assert!(diff.artifact_diff.iter().any(|item| {
+        item.category == "artifact_duplicate"
+            && item.subject == "root"
+            && item.observed.as_deref() == Some("2")
+            && item.severity == SafetySeverityV1::Warning
+    }));
+}
+
+#[test]
+fn deployment_diff_blocks_conflicting_planned_artifacts_for_same_role() {
+    let mut plan = sample_plan();
+    let mut duplicate = sample_role_artifact();
+    duplicate.wasm_gz_path = Some("alternate-root.wasm.gz".to_string());
+    duplicate.wasm_gz_sha256 = Some("different-gzip".to_string());
+    plan.role_artifacts.push(duplicate);
+
+    let diff = compare_plan_to_inventory(&plan, &sample_matching_inventory());
+
+    assert_eq!(diff.resume_safety.status, SafetyStatusV1::Blocked);
+    assert!(
+        diff.hard_failures
+            .iter()
+            .any(|finding| finding.code == "planned_artifact_role_conflict"
+                && finding.subject.as_deref() == Some("root"))
+    );
+    assert!(diff.artifact_diff.iter().any(|item| {
+        item.category == "planned_artifact_role_conflict"
+            && item.subject == "root"
+            && item.observed.as_deref().is_some_and(|observed| {
+                observed.contains("root.wasm.gz") && observed.contains("alternate-root.wasm.gz")
+            })
+            && item.severity == SafetySeverityV1::HardFailure
+    }));
+}
+
+#[test]
+fn deployment_diff_warns_for_duplicate_identical_planned_artifact_role() {
+    let mut plan = sample_plan();
+    plan.role_artifacts.push(sample_role_artifact());
+
+    let diff = compare_plan_to_inventory(&plan, &sample_matching_inventory());
+
+    assert_eq!(diff.resume_safety.status, SafetyStatusV1::Warning);
+    assert!(diff.hard_failures.is_empty());
+    assert!(
+        diff.warnings
+            .iter()
+            .any(|finding| finding.code == "duplicate_planned_artifact_role"
+                && finding.subject.as_deref() == Some("root"))
+    );
+    assert!(diff.artifact_diff.iter().any(|item| {
+        item.category == "planned_artifact_duplicate"
+            && item.subject == "root"
+            && item.observed.as_deref() == Some("2")
+            && item.severity == SafetySeverityV1::Warning
+    }));
+}
+
+#[test]
 fn deployment_diff_blocks_missing_artifacts_and_unsafe_control_class() {
     let plan = sample_plan();
     let inventory = DeploymentInventoryV1 {
@@ -1862,6 +1970,93 @@ fn deployment_diff_warns_when_unspecified_canister_id_is_unobserved() {
             .any(|finding| finding.code == "canister_unobserved"
                 && finding.subject.as_deref() == Some("root"))
     );
+}
+
+#[test]
+fn deployment_diff_blocks_conflicting_planned_canisters_for_same_role() {
+    let mut plan = sample_plan();
+    plan.role_artifacts.clear();
+    plan.expected_verifier_readiness.required = false;
+    plan.expected_canisters.push(ExpectedCanisterV1 {
+        role: "root".to_string(),
+        canister_id: Some("duplicate-root-id".to_string()),
+        control_class: CanisterControlClassV1::DeploymentControlled,
+    });
+
+    let diff = compare_plan_to_inventory(&plan, &sample_matching_inventory());
+
+    assert_eq!(diff.resume_safety.status, SafetyStatusV1::Blocked);
+    assert!(
+        diff.hard_failures
+            .iter()
+            .any(|finding| finding.code == "planned_canister_role_conflict"
+                && finding.subject.as_deref() == Some("root"))
+    );
+    assert!(diff.controller_diff.iter().any(|item| {
+        item.category == "planned_canister_role_conflict"
+            && item.subject == "root"
+            && item.observed.as_deref().is_some_and(|observed| {
+                observed.contains("aaaaa-aa") && observed.contains("duplicate-root-id")
+            })
+            && item.severity == SafetySeverityV1::HardFailure
+    }));
+}
+
+#[test]
+fn deployment_diff_blocks_conflicting_planned_roles_for_same_canister_id() {
+    let mut plan = sample_plan();
+    plan.role_artifacts.clear();
+    plan.expected_verifier_readiness.required = false;
+    plan.expected_canisters.push(ExpectedCanisterV1 {
+        role: "user_hub".to_string(),
+        canister_id: Some("aaaaa-aa".to_string()),
+        control_class: CanisterControlClassV1::DeploymentControlled,
+    });
+
+    let diff = compare_plan_to_inventory(&plan, &sample_matching_inventory());
+
+    assert_eq!(diff.resume_safety.status, SafetyStatusV1::Blocked);
+    assert!(
+        diff.hard_failures
+            .iter()
+            .any(|finding| finding.code == "planned_canister_id_conflict"
+                && finding.subject.as_deref() == Some("aaaaa-aa"))
+    );
+    assert!(diff.controller_diff.iter().any(|item| {
+        item.category == "planned_canister_id_conflict"
+            && item.subject == "aaaaa-aa"
+            && item
+                .observed
+                .as_deref()
+                .is_some_and(|observed| observed.contains("root") && observed.contains("user_hub"))
+            && item.severity == SafetySeverityV1::HardFailure
+    }));
+}
+
+#[test]
+fn deployment_diff_warns_for_duplicate_identical_planned_canister_role() {
+    let mut plan = sample_plan();
+    plan.role_artifacts.clear();
+    plan.expected_verifier_readiness.required = false;
+    plan.expected_canisters
+        .push(plan.expected_canisters[0].clone());
+
+    let diff = compare_plan_to_inventory(&plan, &sample_matching_inventory());
+
+    assert_eq!(diff.resume_safety.status, SafetyStatusV1::Warning);
+    assert!(diff.hard_failures.is_empty());
+    assert!(
+        diff.warnings
+            .iter()
+            .any(|finding| finding.code == "duplicate_planned_canister_role"
+                && finding.subject.as_deref() == Some("root"))
+    );
+    assert!(diff.controller_diff.iter().any(|item| {
+        item.category == "planned_canister_duplicate"
+            && item.subject == "root"
+            && item.observed.as_deref() == Some("2")
+            && item.severity == SafetySeverityV1::Warning
+    }));
 }
 
 #[test]
@@ -2142,6 +2337,110 @@ fn deployment_diff_blocks_missing_expected_pool_canister() {
 }
 
 #[test]
+fn deployment_diff_blocks_conflicting_planned_pool_subject() {
+    let mut plan = sample_plan();
+    plan.expected_pool.push(ExpectedPoolCanisterV1 {
+        pool: "user_shards".to_string(),
+        canister_id: Some("pool-a".to_string()),
+        role: Some("user_shard".to_string()),
+    });
+    plan.expected_pool.push(ExpectedPoolCanisterV1 {
+        pool: "user_shards".to_string(),
+        canister_id: Some("pool-b".to_string()),
+        role: Some("user_shard".to_string()),
+    });
+
+    let diff = compare_plan_to_inventory(&plan, &sample_matching_inventory());
+
+    assert_eq!(diff.resume_safety.status, SafetyStatusV1::Blocked);
+    assert!(
+        diff.hard_failures
+            .iter()
+            .any(|finding| finding.code == "planned_pool_conflict"
+                && finding.subject.as_deref() == Some("user_shards:user_shard"))
+    );
+    assert!(diff.pool_diff.iter().any(|item| {
+        item.category == "planned_pool_conflict"
+            && item.subject == "user_shards:user_shard"
+            && item
+                .observed
+                .as_deref()
+                .is_some_and(|observed| observed.contains("pool-a") && observed.contains("pool-b"))
+            && item.severity == SafetySeverityV1::HardFailure
+    }));
+}
+
+#[test]
+fn deployment_diff_blocks_conflicting_planned_pool_id() {
+    let mut plan = sample_plan();
+    plan.expected_pool.push(ExpectedPoolCanisterV1 {
+        pool: "user_shards".to_string(),
+        canister_id: Some("pool-canister".to_string()),
+        role: Some("user_shard".to_string()),
+    });
+    plan.expected_pool.push(ExpectedPoolCanisterV1 {
+        pool: "directory".to_string(),
+        canister_id: Some("pool-canister".to_string()),
+        role: Some("project_instance".to_string()),
+    });
+
+    let diff = compare_plan_to_inventory(&plan, &sample_matching_inventory());
+
+    assert_eq!(diff.resume_safety.status, SafetyStatusV1::Blocked);
+    assert!(
+        diff.hard_failures
+            .iter()
+            .any(|finding| finding.code == "planned_pool_id_conflict"
+                && finding.subject.as_deref() == Some("pool-canister"))
+    );
+    assert!(diff.pool_diff.iter().any(|item| {
+        item.category == "planned_pool_id_conflict"
+            && item.subject == "pool-canister"
+            && item.observed.as_deref().is_some_and(|observed| {
+                observed.contains("directory:project_instance")
+                    && observed.contains("user_shards:user_shard")
+            })
+            && item.severity == SafetySeverityV1::HardFailure
+    }));
+}
+
+#[test]
+fn deployment_diff_warns_for_duplicate_identical_planned_pool() {
+    let mut plan = sample_plan();
+    let planned = ExpectedPoolCanisterV1 {
+        pool: "user_shards".to_string(),
+        canister_id: Some("pool-canister".to_string()),
+        role: Some("user_shard".to_string()),
+    };
+    plan.expected_pool.push(planned.clone());
+    plan.expected_pool.push(planned);
+    let mut inventory = sample_matching_inventory();
+    inventory.observed_pool.push(ObservedPoolCanisterV1 {
+        pool: "user_shards".to_string(),
+        canister_id: "pool-canister".to_string(),
+        role: Some("user_shard".to_string()),
+        control_class: CanisterControlClassV1::CanicManagedPool,
+    });
+
+    let diff = compare_plan_to_inventory(&plan, &inventory);
+
+    assert_eq!(diff.resume_safety.status, SafetyStatusV1::Warning);
+    assert!(diff.hard_failures.is_empty());
+    assert!(
+        diff.warnings
+            .iter()
+            .any(|finding| finding.code == "duplicate_planned_pool"
+                && finding.subject.as_deref() == Some("user_shards:user_shard"))
+    );
+    assert!(diff.pool_diff.iter().any(|item| {
+        item.category == "planned_pool_duplicate"
+            && item.subject == "user_shards:user_shard"
+            && item.observed.as_deref() == Some("2")
+            && item.severity == SafetySeverityV1::Warning
+    }));
+}
+
+#[test]
 fn deployment_diff_blocks_unsafe_pool_control_class() {
     let mut plan = sample_plan();
     plan.expected_pool.push(ExpectedPoolCanisterV1 {
@@ -2411,6 +2710,65 @@ fn deployment_diff_warns_when_required_verifier_role_epoch_is_unobserved() {
             && item.subject == "root"
             && item.expected.as_deref() == Some("1")
             && item.observed.as_deref() == Some("not_observed")
+            && item.severity == SafetySeverityV1::Warning
+    }));
+}
+
+#[test]
+fn deployment_diff_blocks_conflicting_verifier_role_epoch_observations() {
+    let plan = sample_plan();
+    let mut inventory = sample_matching_inventory();
+    inventory.observed_verifier_readiness.role_epochs = vec![
+        RoleEpochObservationV1 {
+            role: "root".to_string(),
+            observed_epoch: Some(1),
+            status: ObservationStatusV1::Observed,
+        },
+        RoleEpochObservationV1 {
+            role: "root".to_string(),
+            observed_epoch: Some(0),
+            status: ObservationStatusV1::Observed,
+        },
+    ];
+
+    let diff = compare_plan_to_inventory(&plan, &inventory);
+
+    assert_eq!(diff.resume_safety.status, SafetyStatusV1::Blocked);
+    assert!(
+        diff.hard_failures
+            .iter()
+            .any(|finding| finding.code == "verifier_role_epoch_conflict"
+                && finding.subject.as_deref() == Some("root"))
+    );
+    assert!(diff.verifier_readiness_diff.iter().any(|item| {
+        item.category == "verifier_role_epoch_conflict"
+            && item.subject == "root"
+            && item.observed.as_deref().is_some_and(|observed| {
+                observed.contains("epoch=1") && observed.contains("epoch=0")
+            })
+            && item.severity == SafetySeverityV1::HardFailure
+    }));
+}
+
+#[test]
+fn deployment_diff_warns_for_duplicate_identical_verifier_role_epoch_observation() {
+    let mut inventory = sample_matching_inventory();
+    inventory
+        .observed_verifier_readiness
+        .role_epochs
+        .push(inventory.observed_verifier_readiness.role_epochs[0].clone());
+
+    let diff = compare_plan_to_inventory(&sample_plan(), &inventory);
+
+    assert_eq!(diff.resume_safety.status, SafetyStatusV1::Warning);
+    assert!(diff.hard_failures.is_empty());
+    assert!(diff.warnings.iter().any(|finding| finding.code
+        == "duplicate_verifier_role_epoch_observed"
+        && finding.subject.as_deref() == Some("root")));
+    assert!(diff.verifier_readiness_diff.iter().any(|item| {
+        item.category == "verifier_role_epoch_duplicate"
+            && item.subject == "root"
+            && item.observed.as_deref() == Some("2")
             && item.severity == SafetySeverityV1::Warning
     }));
 }
