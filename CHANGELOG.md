@@ -8,14 +8,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
-- Current install now persists additional deployment receipts for release-set
-  manifest emission, successful root canister resolution, local artifact build,
-  the IC-mutating root install/funding/staging/bootstrap phases, and observed
-  `wait_ready` evidence, plus the final local install-state write. The build
-  receipt now carries role-scoped artifact outcomes for configured build targets
-  when those roles are present in the deployment truth plan.
-
 ## [0.41.x] - 2026-05-21 - Deployment truth model
+
+- `0.41.12` expands current-install deployment truth receipts across the
+  existing installer phases, including root resolution, build, manifest,
+  mutating activation phases, readiness, final install-state persistence, and
+  role-scoped build outcomes.
 
 - `0.41.11` tightens current-install deployment truth by blocking every
   `SafetyReportV1` hard failure, persisting the artifact-gate receipt as local
