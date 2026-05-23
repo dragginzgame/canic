@@ -21,24 +21,11 @@ inspect only the files needed for the current task.
 
 ## Recent Work
 
-- Unreleased 0.42 development: authority dry-run reports now keep
-  `external_actions_required` limited to actual external authority actions.
-  Unknown controller observations stay in typed observation gaps, and unsafe
-  blockers stay in hard failures.
-- Unreleased 0.42 development: standalone authority dry-run receipts now
-  preserve unresolved controller-observation gaps directly instead of requiring
-  consumers to inspect the larger evidence bundle.
-- Unreleased 0.42 development: authority dry-run reports now include
-  `apply_readiness`, a derived summary that separates automatic-action
-  candidates from hard failures, missing observation blockers, and required
-  external actions.
-- Unreleased 0.42 development: the 0.42 design/status docs now match the
-  post-0.41 dry-run release boundary. Authority apply, pool mutation, remote
-  lock/epoch checks, and post-apply verification are promoted-or-later work
-  unless explicitly accepted into the line.
-- Unreleased 0.42 development: authority apply-readiness coverage now verifies
-  that automatic controller candidates do not make a report apply-ready while
-  external authority actions remain unresolved.
+- `0.42.4` tightens dry-run authority readiness. External-action records now
+  contain only actual external authority actions, standalone receipts preserve
+  unresolved observation gaps, reports include typed apply-readiness blockers,
+  and the 0.42 design/status docs now frame apply, pool mutation, remote
+  lock/epoch checks, and post-apply verification as promoted-or-later work.
 - `0.42.3` tightens break-glass authority reporting. Authority reconciliation
   now blocks staging/emergency principal overlap with normal expected
   controllers as `authority_profile_overlap` hard failures, reports count hard
