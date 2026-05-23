@@ -127,8 +127,73 @@ pub struct AuthorityReconciliationPlanV1 {
     pub inventory_id: String,
     pub authority_profile_hash: Option<String>,
     pub canister_actions: Vec<CanisterAuthorityActionV1>,
+    pub automatic_actions: Vec<AuthorityAutomaticActionV1>,
     pub hard_failures: Vec<SafetyFindingV1>,
     pub external_actions_required: Vec<AuthorityExternalActionV1>,
+}
+
+///
+/// AuthorityAutomaticActionV1
+///
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct AuthorityAutomaticActionV1 {
+    pub subject: String,
+    pub canister_id: String,
+    pub role: Option<String>,
+    pub action: AuthorityActionV1,
+    pub observed_controllers: Vec<String>,
+    pub desired_controllers: Vec<String>,
+    pub reason: String,
+}
+
+///
+/// AuthorityReportV1
+///
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct AuthorityReportV1 {
+    pub schema_version: u32,
+    pub report_id: String,
+    pub reconciliation_plan_id: String,
+    pub status: SafetyStatusV1,
+    pub summary: String,
+    pub counts: AuthorityReportCountsV1,
+    pub action_counts: Vec<AuthorityActionCountV1>,
+    pub control_class_counts: Vec<AuthorityControlClassCountV1>,
+    pub observation_gaps: Vec<DeploymentObservationGapV1>,
+    pub automatic_actions: Vec<AuthorityAutomaticActionV1>,
+    pub hard_failures: Vec<SafetyFindingV1>,
+    pub external_actions_required: Vec<AuthorityExternalActionV1>,
+    pub next_actions: Vec<String>,
+}
+
+///
+/// AuthorityActionCountV1
+///
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct AuthorityActionCountV1 {
+    pub action: AuthorityActionV1,
+    pub count: usize,
+}
+
+///
+/// AuthorityControlClassCountV1
+///
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct AuthorityControlClassCountV1 {
+    pub control_class: CanisterControlClassV1,
+    pub count: usize,
+}
+
+///
+/// AuthorityReportCountsV1
+///
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct AuthorityReportCountsV1 {
+    pub already_correct: usize,
+    pub can_apply_automatically: usize,
+    pub requires_external_action: usize,
+    pub unsafe_blocked: usize,
+    pub unknown: usize,
 }
 
 ///
@@ -152,9 +217,14 @@ pub struct CanisterAuthorityActionV1 {
 ///
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct AuthorityExternalActionV1 {
+    pub subject: String,
     pub canister_id: Option<String>,
     pub role: Option<String>,
+    pub control_classification: CanisterControlClassV1,
+    pub state: AuthorityReconciliationStateV1,
     pub action: AuthorityActionV1,
+    pub observed_controllers: Vec<String>,
+    pub desired_controllers: Vec<String>,
     pub reason: String,
 }
 

@@ -3013,6 +3013,40 @@ fn authority_reconciliation_reports_already_correct_controller_state() {
 }
 
 #[test]
+fn authority_report_summarizes_safe_reconciliation_plan() {
+    let check = sample_check(sample_plan(), sample_matching_inventory());
+    let plan = build_authority_reconciliation_plan(&check);
+
+    let report = authority_report_from_plan("authority-report-1", &plan);
+
+    assert_eq!(report.status, SafetyStatusV1::Safe);
+    assert_eq!(report.reconciliation_plan_id, "plan-local-root");
+    assert_eq!(report.counts.already_correct, 1);
+    assert_eq!(report.counts.can_apply_automatically, 0);
+    assert_eq!(report.counts.requires_external_action, 0);
+    assert_eq!(report.counts.unsafe_blocked, 0);
+    assert_eq!(report.counts.unknown, 0);
+    assert_eq!(
+        report.action_counts,
+        vec![AuthorityActionCountV1 {
+            action: AuthorityActionV1::None,
+            count: 1,
+        }]
+    );
+    assert_eq!(
+        report.control_class_counts,
+        vec![AuthorityControlClassCountV1 {
+            control_class: CanisterControlClassV1::DeploymentControlled,
+            count: 1,
+        }]
+    );
+    assert!(report.observation_gaps.is_empty());
+    assert!(report.automatic_actions.is_empty());
+    assert!(report.external_actions_required.is_empty());
+    assert!(report.next_actions.is_empty());
+}
+
+#[test]
 fn authority_reconciliation_marks_deployment_controlled_delta_as_automatic_dry_run() {
     let mut plan = sample_plan();
     plan.authority_profile.expected_controllers =
@@ -3037,6 +3071,40 @@ fn authority_reconciliation_marks_deployment_controlled_delta_as_automatic_dry_r
             .reason
             .contains("ops-principal")
     );
+    assert_eq!(reconciliation.automatic_actions.len(), 1);
+    assert_eq!(reconciliation.automatic_actions[0].subject, "aaaaa-aa");
+    assert_eq!(reconciliation.automatic_actions[0].canister_id, "aaaaa-aa");
+    assert_eq!(
+        reconciliation.automatic_actions[0].action,
+        AuthorityActionV1::AddControllers
+    );
+    assert_eq!(
+        reconciliation.automatic_actions[0].observed_controllers,
+        vec!["aaaaa-aa".to_string()]
+    );
+    assert_eq!(
+        reconciliation.automatic_actions[0].desired_controllers,
+        vec!["aaaaa-aa".to_string(), "ops-principal".to_string()]
+    );
+
+    let report = authority_report_from_plan("authority-report-1", &reconciliation);
+    assert_eq!(report.status, SafetyStatusV1::Safe);
+    assert_eq!(report.counts.can_apply_automatically, 1);
+    assert_eq!(
+        report.action_counts,
+        vec![AuthorityActionCountV1 {
+            action: AuthorityActionV1::AddControllers,
+            count: 1,
+        }]
+    );
+    assert!(report.observation_gaps.is_empty());
+    assert_eq!(report.automatic_actions, reconciliation.automatic_actions);
+    assert_eq!(
+        report.next_actions,
+        vec![
+            "review automatic authority dry-run actions before enabling an apply path".to_string()
+        ]
+    );
 }
 
 #[test]
@@ -3052,6 +3120,27 @@ fn authority_reconciliation_requires_external_action_for_user_controlled_drift()
 
     assert!(reconciliation.hard_failures.is_empty());
     assert_eq!(reconciliation.external_actions_required.len(), 1);
+    let external = &reconciliation.external_actions_required[0];
+    assert_eq!(external.subject, "aaaaa-aa");
+    assert_eq!(external.canister_id.as_deref(), Some("aaaaa-aa"));
+    assert_eq!(external.role.as_deref(), Some("root"));
+    assert_eq!(
+        external.control_classification,
+        CanisterControlClassV1::UserControlled
+    );
+    assert_eq!(
+        external.state,
+        AuthorityReconciliationStateV1::RequiresExternalAction
+    );
+    assert_eq!(
+        external.action,
+        AuthorityActionV1::RequiresExternalController
+    );
+    assert_eq!(
+        external.observed_controllers,
+        vec!["user-controller".to_string()]
+    );
+    assert_eq!(external.desired_controllers, vec!["aaaaa-aa".to_string()]);
     assert_eq!(
         reconciliation.canister_actions[0].state,
         AuthorityReconciliationStateV1::RequiresExternalAction
@@ -3061,6 +3150,16 @@ fn authority_reconciliation_requires_external_action_for_user_controlled_drift()
         AuthorityActionV1::RequiresExternalController
     );
     assert!(!reconciliation.canister_actions[0].can_apply);
+
+    let report = authority_report_from_plan("authority-report-1", &reconciliation);
+    assert_eq!(report.status, SafetyStatusV1::Warning);
+    assert_eq!(report.counts.requires_external_action, 1);
+    assert_eq!(report.external_actions_required.len(), 1);
+    assert_eq!(report.external_actions_required[0], *external);
+    assert_eq!(
+        report.next_actions,
+        vec!["review external authority actions before applying controller changes"]
+    );
 }
 
 #[test]
@@ -3091,6 +3190,155 @@ fn authority_reconciliation_blocks_unknown_unsafe_canister() {
             && action.state == AuthorityReconciliationStateV1::UnsafeBlocked
             && action.action == AuthorityActionV1::BlockedByPolicy
     }));
+
+    let report = authority_report_from_plan("authority-report-1", &reconciliation);
+    assert_eq!(report.status, SafetyStatusV1::Blocked);
+    assert_eq!(report.counts.unsafe_blocked, 1);
+    assert!(
+        report
+            .external_actions_required
+            .iter()
+            .any(|external| external.subject == "unsafe-canister"
+                && external.control_classification == CanisterControlClassV1::UnknownUnsafe
+                && external.state == AuthorityReconciliationStateV1::UnsafeBlocked
+                && external.observed_controllers == vec!["unknown-controller".to_string()])
+    );
+    assert_eq!(
+        report.control_class_counts,
+        vec![
+            AuthorityControlClassCountV1 {
+                control_class: CanisterControlClassV1::DeploymentControlled,
+                count: 1,
+            },
+            AuthorityControlClassCountV1 {
+                control_class: CanisterControlClassV1::UnknownUnsafe,
+                count: 1,
+            },
+        ]
+    );
+    assert_eq!(
+        report.next_actions,
+        vec!["resolve unsafe authority findings before applying controller changes"]
+    );
+}
+
+#[test]
+fn authority_reconciliation_reports_expected_pool_controller_observation_gap() {
+    let mut plan = sample_plan();
+    plan.expected_pool.push(ExpectedPoolCanisterV1 {
+        pool: "user-shards".to_string(),
+        canister_id: Some("pool-canister".to_string()),
+        role: Some("user_shard".to_string()),
+    });
+    let mut inventory = sample_matching_inventory();
+    inventory.observed_pool.push(ObservedPoolCanisterV1 {
+        pool: "user-shards".to_string(),
+        canister_id: "pool-canister".to_string(),
+        role: Some("user_shard".to_string()),
+        control_class: CanisterControlClassV1::CanicManagedPool,
+    });
+    let check = sample_check(plan, inventory);
+
+    let reconciliation = build_authority_reconciliation_plan(&check);
+
+    let pool_action = reconciliation
+        .canister_actions
+        .iter()
+        .find(|action| action.canister_id.as_deref() == Some("pool-canister"))
+        .expect("pool action should be reported");
+    assert_eq!(pool_action.state, AuthorityReconciliationStateV1::Unknown);
+    assert_eq!(pool_action.action, AuthorityActionV1::UnknownObservation);
+    assert_eq!(
+        pool_action.reason,
+        "pool canister controller set was not observed"
+    );
+    assert!(
+        reconciliation
+            .external_actions_required
+            .iter()
+            .any(|external| {
+                external.subject == "pool-canister"
+                    && external.role.as_deref() == Some("user_shard")
+                    && external.control_classification == CanisterControlClassV1::CanicManagedPool
+                    && external.state == AuthorityReconciliationStateV1::Unknown
+            })
+    );
+    let report = authority_report_from_plan("authority-report-1", &reconciliation);
+    assert_eq!(report.counts.unknown, 1);
+    assert_eq!(report.observation_gaps.len(), 1);
+    assert_eq!(
+        report.observation_gaps[0],
+        DeploymentObservationGapV1 {
+            key: "authority.controllers.pool-canister".to_string(),
+            description: "pool canister controller set was not observed".to_string(),
+        }
+    );
+    assert_eq!(
+        report.action_counts,
+        vec![
+            AuthorityActionCountV1 {
+                action: AuthorityActionV1::None,
+                count: 1,
+            },
+            AuthorityActionCountV1 {
+                action: AuthorityActionV1::UnknownObservation,
+                count: 1,
+            },
+        ]
+    );
+    assert_eq!(
+        report.control_class_counts,
+        vec![
+            AuthorityControlClassCountV1 {
+                control_class: CanisterControlClassV1::DeploymentControlled,
+                count: 1,
+            },
+            AuthorityControlClassCountV1 {
+                control_class: CanisterControlClassV1::CanicManagedPool,
+                count: 1,
+            },
+        ]
+    );
+    assert_eq!(
+        report.next_actions,
+        vec!["collect missing controller observations before applying controller changes"]
+    );
+}
+
+#[test]
+fn authority_reconciliation_reports_unplanned_pool_canister_for_external_action() {
+    let mut inventory = sample_matching_inventory();
+    inventory.observed_pool.push(ObservedPoolCanisterV1 {
+        pool: "user-shards".to_string(),
+        canister_id: "unplanned-pool".to_string(),
+        role: Some("user_shard".to_string()),
+        control_class: CanisterControlClassV1::CanicManagedPool,
+    });
+    let check = sample_check(sample_plan(), inventory);
+
+    let reconciliation = build_authority_reconciliation_plan(&check);
+
+    let pool_action = reconciliation
+        .canister_actions
+        .iter()
+        .find(|action| action.canister_id.as_deref() == Some("unplanned-pool"))
+        .expect("unplanned pool action should be reported");
+    assert_eq!(
+        pool_action.state,
+        AuthorityReconciliationStateV1::RequiresExternalAction
+    );
+    assert_eq!(pool_action.action, AuthorityActionV1::AdoptPlanAvailable);
+    assert!(
+        reconciliation
+            .external_actions_required
+            .iter()
+            .any(|external| {
+                external.subject == "unplanned-pool"
+                    && external.action == AuthorityActionV1::AdoptPlanAvailable
+                    && external.reason
+                        == "observed pool canister is not present in the expected pool plan"
+            })
+    );
 }
 
 const SAMPLE_CONFIG: &str = r#"

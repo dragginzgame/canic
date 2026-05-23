@@ -21,6 +21,12 @@ inspect only the files needed for the current task.
 
 ## Recent Work
 
+- `0.42.1` adds the read-only authority report/evidence surface. It includes
+  `AuthorityReportV1`, `AuthorityReportCountsV1`, self-contained
+  external-action records, pool authority cases, explicit
+  `AuthorityAutomaticActionV1` records, typed observation gaps, action-count
+  breakdowns, control-class breakdowns, and next-action guidance without
+  applying controller changes.
 - Started `0.42.0` authority reconciliation with a passive
   `AuthorityReconciliationPlanV1` model, dry-run planner over the existing
   `DeploymentCheckV1`, and read-only

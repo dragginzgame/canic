@@ -10,6 +10,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.42.x] - 2026-05-23 - Authority reconciliation
 
+- `0.42.1` adds the read-only authority report surface and completes the first
+  self-contained dry-run evidence model: reports include status/counts,
+  external actions, pool authority cases, automatic action candidates, and
+  typed gap/action/control-class breakdowns without applying controller
+  changes.
+
 - `0.42.0` starts dry-run authority reconciliation with
   `AuthorityReconciliationPlanV1`, a passive planner over the 0.41 deployment
   truth check, and read-only `canic deploy authority check <fleet>` output for
