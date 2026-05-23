@@ -1,6 +1,7 @@
 use super::*;
 use crate::deployment_truth::observe::{
-    observed_root_from_status, registry_entries_to_observed_pool,
+    observed_root_from_status, registry_entries_to_observed_canisters,
+    registry_entries_to_observed_pool,
 };
 use crate::icp::{IcpCanisterStatusReport, IcpCanisterStatusSettings};
 use crate::install_root::InstallState;
@@ -436,6 +437,7 @@ fn local_inventory_collects_configured_roles_and_artifacts_without_live_queries(
     fs::create_dir_all(artifact_path.parent().expect("artifact parent"))
         .expect("create artifact dir");
     fs::write(&artifact_path, b"artifact").expect("write artifact");
+    write_release_set_manifest(&icp_root);
 
     let inventory = collect_local_deployment_inventory(&LocalInventoryRequest {
         deployment_name: "demo".to_string(),
@@ -449,21 +451,19 @@ fn local_inventory_collects_configured_roles_and_artifacts_without_live_queries(
 
     assert_eq!(inventory.schema_version, DEPLOYMENT_TRUTH_SCHEMA_VERSION);
     assert_eq!(inventory.inventory_id, "local:local:demo");
-    assert_eq!(
+    assert_sha256_len(inventory.local_config.raw_config_sha256.as_ref());
+    assert_sha256_len(
         inventory
             .local_config
-            .raw_config_sha256
-            .as_ref()
-            .map(String::len),
-        Some(64)
+            .canonical_embedded_config_sha256
+            .as_ref(),
     );
-    assert_eq!(
-        inventory
-            .observed_identity
-            .as_ref()
-            .and_then(|identity| identity.deployment_manifest_digest.as_ref()),
-        None
-    );
+    let observed_identity = inventory.observed_identity.as_ref().expect("identity");
+    assert_sha256_len(observed_identity.deployment_manifest_digest.as_ref());
+    assert_sha256_len(observed_identity.canonical_runtime_config_digest.as_ref());
+    assert_sha256_len(observed_identity.role_topology_hash.as_ref());
+    assert_sha256_len(observed_identity.artifact_set_digest.as_ref());
+    assert_sha256_len(observed_identity.pool_identity_set_digest.as_ref());
     assert_eq!(inventory.observed_artifacts.len(), 1);
     assert_eq!(inventory.observed_artifacts[0].role, "root");
     assert_eq!(inventory.observed_artifacts[0].payload_size_bytes, Some(8));
@@ -471,13 +471,7 @@ fn local_inventory_collects_configured_roles_and_artifacts_without_live_queries(
         inventory.observed_artifacts[0].file_sha256_source,
         Some(ArtifactDigestSourceV1::ObservedFileDigest)
     );
-    assert_eq!(
-        inventory.observed_artifacts[0]
-            .file_sha256
-            .as_ref()
-            .map(String::len),
-        Some(64)
-    );
+    assert_sha256_len(inventory.observed_artifacts[0].file_sha256.as_ref());
     assert!(
         inventory
             .unresolved_observations
@@ -569,6 +563,42 @@ fn registry_entries_map_configured_pool_roles_to_observed_pool() {
         }]
     );
     assert!(gaps.is_empty());
+}
+
+#[test]
+fn registry_entries_map_roles_to_observed_canisters_without_controller_authority() {
+    let entries = vec![
+        RegistryEntry {
+            pid: "root-id".to_string(),
+            role: Some("root".to_string()),
+            kind: None,
+            parent_pid: None,
+            module_hash: None,
+        },
+        RegistryEntry {
+            pid: "user_hub-id".to_string(),
+            role: Some("user_hub".to_string()),
+            kind: None,
+            parent_pid: Some("root-id".to_string()),
+            module_hash: Some("0xABCDEF".to_string()),
+        },
+    ];
+
+    let observed = registry_entries_to_observed_canisters("root-id", &entries);
+
+    assert_eq!(observed.len(), 1);
+    assert_eq!(observed[0].canister_id, "user_hub-id");
+    assert_eq!(observed[0].role.as_deref(), Some("user_hub"));
+    assert_eq!(
+        observed[0].control_class,
+        CanisterControlClassV1::CanicManagedPool
+    );
+    assert!(observed[0].controllers.is_empty());
+    assert_eq!(observed[0].module_hash.as_deref(), Some("abcdef"));
+    assert_eq!(
+        observed[0].role_assignment_source.as_deref(),
+        Some("subnet_registry")
+    );
 }
 
 #[test]
@@ -766,8 +796,44 @@ fn local_plan_uses_configured_roles_and_local_artifact_manifest() {
     assert_eq!(
         plan.deployment_identity
             .deployment_manifest_digest
-            .as_deref(),
-        None
+            .as_ref()
+            .map(String::len),
+        Some(64)
+    );
+    assert_eq!(
+        plan.deployment_identity
+            .canonical_runtime_config_digest
+            .as_ref()
+            .map(String::len),
+        Some(64)
+    );
+    assert_eq!(
+        plan.deployment_identity
+            .authority_profile_hash
+            .as_ref()
+            .map(String::len),
+        Some(64)
+    );
+    assert_eq!(
+        plan.deployment_identity
+            .role_topology_hash
+            .as_ref()
+            .map(String::len),
+        Some(64)
+    );
+    assert_eq!(
+        plan.deployment_identity
+            .artifact_set_digest
+            .as_ref()
+            .map(String::len),
+        Some(64)
+    );
+    assert_eq!(
+        plan.deployment_identity
+            .pool_identity_set_digest
+            .as_ref()
+            .map(String::len),
+        Some(64)
     );
     assert_eq!(
         plan.role_artifacts[0]
@@ -2037,6 +2103,10 @@ fn sample_receipt_with_phase(
         final_inventory_id: Some("inventory-1".to_string()),
         command_result: DeploymentCommandResultV1::Succeeded,
     }
+}
+
+fn assert_sha256_len(value: Option<&String>) {
+    assert_eq!(value.map(String::len), Some(64));
 }
 
 struct TempWorkspace {

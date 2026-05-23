@@ -21,6 +21,20 @@ inspect only the files needed for the current task.
 
 ## Recent Work
 
+- Local deployment truth plans and inventories now populate
+  `deployment_manifest_digest` from the observed root release-set manifest file
+  when it exists. Missing manifests remain typed assumptions or observation
+  gaps instead of installer authority.
+- Local deployment truth plans and inventories now populate canonical runtime
+  config digests from the parsed `ConfigModel`, keeping raw config SHA-256 as
+  separate local consistency evidence.
+- Local deployment truth identities now include stable set digests for planned
+  authority, expected/observed topology, artifact sets, and pool identities
+  where those passive facts are available.
+- Local deployment inventories now map live subnet-registry role entries into
+  observed canister facts. Registry-derived observations satisfy role
+  existence and module-hash evidence without pretending controller authority
+  was observed.
 - Current install now persists additional deployment receipts for release-set
   manifest emission, successful root canister resolution, local artifact build,
   the IC-mutating root install/funding/staging/bootstrap phases, and observed

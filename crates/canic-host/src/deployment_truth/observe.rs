@@ -96,19 +96,40 @@ pub fn collect_local_deployment_inventory(
         read_named_fleet_install_state_from_root(&request.icp_root, &request.network, &fleet_name)
             .map_err(|err| DeploymentTruthError::LocalState(err.to_string()))?;
     let raw_config_sha256 = observe_config_sha256(&config, &mut unresolved_observations);
-    let observed_identity = Some(local_deployment_identity(
-        request,
-        &fleet_name,
-        install_state
-            .as_ref()
-            .map(|state| state.root_canister_id.clone()),
-    ));
+    let canonical_runtime_config_digest =
+        observe_canonical_runtime_config_digest(&config, &mut unresolved_observations);
+    let deployment_manifest_digest = observe_deployment_manifest_digest(
+        &request.icp_root,
+        &request.network,
+        &mut unresolved_observations,
+    );
     let observed_artifacts = collect_observed_artifacts(
         &request.icp_root,
         &request.network,
         &roles,
         &mut unresolved_observations,
     );
+    let (observed_canisters, observed_pool) = install_state_observations(
+        install_state.as_ref(),
+        request,
+        &fleet_name,
+        &pool_expectations,
+        &mut unresolved_observations,
+    );
+    let observed_identity = Some(local_inventory_identity(
+        request,
+        InventoryIdentityFacts {
+            fleet_name: &fleet_name,
+            root_principal: install_state
+                .as_ref()
+                .map(|state| state.root_canister_id.clone()),
+            deployment_manifest_digest,
+            canonical_runtime_config_digest: canonical_runtime_config_digest.clone(),
+            observed_canisters: &observed_canisters,
+            observed_artifacts: &observed_artifacts,
+            observed_pool: &observed_pool,
+        },
+    ));
 
     Ok(DeploymentInventoryV1 {
         schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
@@ -118,25 +139,10 @@ pub fn collect_local_deployment_inventory(
         local_config: LocalDeploymentConfigV1 {
             config_path: Some(config.display().to_string()),
             raw_config_sha256,
-            canonical_embedded_config_sha256: None,
+            canonical_embedded_config_sha256: canonical_runtime_config_digest,
         },
-        observed_canisters: install_state.as_ref().map_or_else(Vec::new, |state| {
-            install_state_observed_canisters(
-                state,
-                &request.icp_root,
-                &request.network,
-                &mut unresolved_observations,
-            )
-        }),
-        observed_pool: install_state.as_ref().map_or_else(Vec::new, |state| {
-            install_state_observed_pool(
-                state,
-                request,
-                &fleet_name,
-                &pool_expectations,
-                &mut unresolved_observations,
-            )
-        }),
+        observed_canisters,
+        observed_pool,
         observed_artifacts,
         observed_verifier_readiness: VerifierReadinessObservationV1 {
             status: ObservationStatusV1::NotObserved,
@@ -144,6 +150,61 @@ pub fn collect_local_deployment_inventory(
         },
         unresolved_observations,
     })
+}
+
+fn install_state_observations(
+    install_state: Option<&crate::install_root::InstallState>,
+    request: &LocalInventoryRequest,
+    fleet_name: &str,
+    pool_expectations: &[ConfiguredPoolExpectation],
+    unresolved_observations: &mut Vec<DeploymentObservationGapV1>,
+) -> (Vec<ObservedCanisterV1>, Vec<ObservedPoolCanisterV1>) {
+    let Some(state) = install_state else {
+        return (Vec::new(), Vec::new());
+    };
+    let mut observed_canisters = install_state_observed_canisters(
+        state,
+        &request.icp_root,
+        &request.network,
+        unresolved_observations,
+    );
+    let observed_pool = install_state_registry_observations(
+        state,
+        request,
+        fleet_name,
+        pool_expectations,
+        &mut observed_canisters,
+        unresolved_observations,
+    );
+    (observed_canisters, observed_pool)
+}
+
+struct InventoryIdentityFacts<'a> {
+    fleet_name: &'a str,
+    root_principal: Option<String>,
+    deployment_manifest_digest: Option<String>,
+    canonical_runtime_config_digest: Option<String>,
+    observed_canisters: &'a [ObservedCanisterV1],
+    observed_artifacts: &'a [ObservedArtifactV1],
+    observed_pool: &'a [ObservedPoolCanisterV1],
+}
+
+fn local_inventory_identity(
+    request: &LocalInventoryRequest,
+    facts: InventoryIdentityFacts<'_>,
+) -> DeploymentIdentityV1 {
+    local_deployment_identity(
+        request,
+        InventoryIdentityInput {
+            fleet_name: facts.fleet_name,
+            root_principal: facts.root_principal,
+            deployment_manifest_digest: facts.deployment_manifest_digest,
+            canonical_runtime_config_digest: facts.canonical_runtime_config_digest,
+            role_topology_hash: Some(stable_json_sha256_hex(&facts.observed_canisters)),
+            artifact_set_digest: Some(stable_json_sha256_hex(&facts.observed_artifacts)),
+            pool_identity_set_digest: Some(stable_json_sha256_hex(&facts.observed_pool)),
+        },
+    )
 }
 
 /// Collect a read-only manifest of locally materialized role artifacts.
@@ -324,6 +385,47 @@ fn resolve_artifact_root_for_observation(
     Err(format!("missing built ICP artifacts under {}", preferred.display()).into())
 }
 
+pub(super) fn release_set_manifest_digest(
+    icp_root: &Path,
+    network: &str,
+    gaps: &mut Vec<DeploymentObservationGapV1>,
+) -> Option<String> {
+    let artifact_root = match resolve_artifact_root_for_observation(icp_root, network, gaps) {
+        Ok(root) => root,
+        Err(err) => {
+            gaps.push(observation_gap(
+                "deployment_manifest.path",
+                format!("could not resolve release-set manifest root: {err}"),
+            ));
+            return None;
+        }
+    };
+    let manifest_path = artifact_root
+        .join("root")
+        .join(ROOT_RELEASE_SET_MANIFEST_FILE);
+    if !manifest_path.is_file() {
+        gaps.push(observation_gap(
+            "deployment_manifest.path",
+            format!("missing release-set manifest {}", manifest_path.display()),
+        ));
+        return None;
+    }
+
+    match file_sha256_hex(&manifest_path) {
+        Ok(hash) => Some(hash),
+        Err(err) => {
+            gaps.push(observation_gap(
+                "deployment_manifest.sha256",
+                format!(
+                    "could not hash release-set manifest {}: {err}",
+                    manifest_path.display()
+                ),
+            ));
+            None
+        }
+    }
+}
+
 fn role_artifact_from_local_files(
     artifact_root: &Path,
     role: &str,
@@ -406,22 +508,58 @@ fn observe_config_sha256(
     }
 }
 
+fn observe_deployment_manifest_digest(
+    icp_root: &Path,
+    network: &str,
+    gaps: &mut Vec<DeploymentObservationGapV1>,
+) -> Option<String> {
+    release_set_manifest_digest(icp_root, network, gaps)
+}
+
+fn observe_canonical_runtime_config_digest(
+    path: &Path,
+    gaps: &mut Vec<DeploymentObservationGapV1>,
+) -> Option<String> {
+    match canonical_runtime_config_sha256_hex(path) {
+        Ok(hash) => Some(hash),
+        Err(err) => {
+            gaps.push(observation_gap(
+                "local_config.canonical_runtime_config_sha256",
+                format!(
+                    "could not hash canonical runtime config {}: {err}",
+                    path.display()
+                ),
+            ));
+            None
+        }
+    }
+}
+
+struct InventoryIdentityInput<'a> {
+    fleet_name: &'a str,
+    root_principal: Option<String>,
+    deployment_manifest_digest: Option<String>,
+    canonical_runtime_config_digest: Option<String>,
+    role_topology_hash: Option<String>,
+    artifact_set_digest: Option<String>,
+    pool_identity_set_digest: Option<String>,
+}
+
 fn local_deployment_identity(
     request: &LocalInventoryRequest,
-    fleet_name: &str,
-    root_principal: Option<String>,
+    input: InventoryIdentityInput<'_>,
 ) -> DeploymentIdentityV1 {
     DeploymentIdentityV1 {
-        deployment_name: fleet_name.to_string(),
+        deployment_name: input.fleet_name.to_string(),
         network: request.network.clone(),
-        root_principal,
+        root_principal: input.root_principal,
         authority_profile_hash: None,
-        role_topology_hash: None,
-        deployment_manifest_digest: None,
-        canonical_runtime_config_digest: None,
+        role_topology_hash: input.role_topology_hash,
+        deployment_manifest_digest: input.deployment_manifest_digest,
+        canonical_runtime_config_digest: input.canonical_runtime_config_digest,
         role_embedded_config_set_digest: None,
-        artifact_set_digest: None,
-        pool_identity_set_digest: None,
+        artifact_set_digest: input.artifact_set_digest,
+        pool_identity_set_digest: input.pool_identity_set_digest,
         canic_version: Some(env!("CARGO_PKG_VERSION").to_string()),
         ic_memory_version: None,
     }
@@ -448,11 +586,12 @@ fn install_state_observed_canisters(
     }
 }
 
-fn install_state_observed_pool(
+fn install_state_registry_observations(
     state: &crate::install_root::InstallState,
     request: &LocalInventoryRequest,
     fleet_name: &str,
     pool_expectations: &[ConfiguredPoolExpectation],
+    observed_canisters: &mut Vec<ObservedCanisterV1>,
     gaps: &mut Vec<DeploymentObservationGapV1>,
 ) -> Vec<ObservedPoolCanisterV1> {
     match resolve_installed_fleet_from_root(
@@ -464,12 +603,18 @@ fn install_state_observed_pool(
         },
         &request.icp_root,
     ) {
-        Ok(resolution) => registry_entries_to_observed_pool(
-            &state.root_canister_id,
-            &resolution.registry.entries,
-            pool_expectations,
-            gaps,
-        ),
+        Ok(resolution) => {
+            observed_canisters.extend(registry_entries_to_observed_canisters(
+                &state.root_canister_id,
+                &resolution.registry.entries,
+            ));
+            registry_entries_to_observed_pool(
+                &state.root_canister_id,
+                &resolution.registry.entries,
+                pool_expectations,
+                gaps,
+            )
+        }
         Err(err) => {
             gaps.push(observation_gap(
                 "live_subnet_registry",
@@ -480,6 +625,40 @@ fn install_state_observed_pool(
             ));
             Vec::new()
         }
+    }
+}
+
+pub(super) fn registry_entries_to_observed_canisters(
+    root_canister_id: &str,
+    entries: &[RegistryEntry],
+) -> Vec<ObservedCanisterV1> {
+    entries
+        .iter()
+        .filter(|entry| entry.pid != root_canister_id)
+        .filter_map(registry_entry_to_observed_canister)
+        .collect()
+}
+
+fn registry_entry_to_observed_canister(entry: &RegistryEntry) -> Option<ObservedCanisterV1> {
+    let role = entry.role.clone()?;
+    Some(ObservedCanisterV1 {
+        canister_id: entry.pid.clone(),
+        role: Some(role),
+        control_class: registry_entry_control_class(entry),
+        controllers: Vec::new(),
+        module_hash: entry.module_hash.as_deref().map(normalize_module_hash),
+        status: None,
+        root_trust_anchor: entry.parent_pid.clone(),
+        canonical_embedded_config_digest: None,
+        role_assignment_source: Some("subnet_registry".to_string()),
+    })
+}
+
+const fn registry_entry_control_class(entry: &RegistryEntry) -> CanisterControlClassV1 {
+    if entry.parent_pid.is_some() {
+        CanisterControlClassV1::CanicManagedPool
+    } else {
+        CanisterControlClassV1::UnknownUnsafe
     }
 }
 

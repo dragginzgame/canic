@@ -10,6 +10,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.41.x] - 2026-05-21 - Deployment truth model
 
+- `0.41.13` fills in passive deployment identity digests from release-set
+  manifests, parsed runtime config, topology, artifacts, pools, and authority
+  facts, and maps subnet-registry role entries into observed canister facts
+  without treating registry-only observations as controller authority.
+
 - `0.41.12` expands current-install deployment truth receipts across the
   existing installer phases, including root resolution, build, manifest,
   mutating activation phases, readiness, final install-state persistence, and

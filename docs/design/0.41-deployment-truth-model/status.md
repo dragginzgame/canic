@@ -18,6 +18,20 @@ narrow current-install artifact gate.
 
 ## Implemented
 
+- Local deployment truth plans and inventories now populate
+  `deployment_manifest_digest` from the observed root release-set manifest file
+  when it exists. Missing manifests remain typed assumptions or observation
+  gaps instead of installer authority.
+- Local deployment truth plans and inventories now populate canonical runtime
+  config digests from the parsed `ConfigModel`, keeping raw config SHA-256 as
+  separate local consistency evidence.
+- Local deployment truth identities now include stable set digests for planned
+  authority, expected/observed topology, artifact sets, and pool identities
+  where those passive facts are available.
+- Local deployment inventories now map live subnet-registry role entries into
+  observed canister facts. Registry-derived observations satisfy role
+  existence and module-hash evidence without pretending controller authority
+  was observed.
 - Current install now persists additional deployment receipts for release-set
   manifest emission, successful root canister resolution, local artifact build,
   the IC-mutating root install/funding/staging/bootstrap phases, and observed
@@ -165,12 +179,12 @@ narrow current-install artifact gate.
 
 - Extend `DeploymentPlanV1` beyond resolved local config/build intent with
   fuller authority, concrete pool capacity, and live-runtime expectations.
-- Extend `DeploymentInventoryV1` beyond the installed root with live IC
-  observations for configured child roles, `wasm_store`, and richer
+- Extend `DeploymentInventoryV1` beyond root status and subnet-registry role
+  observations with per-child IC status, `wasm_store`, and richer
   authority/readiness state.
-- Implement canonical resolved-config and deployment-manifest digest
-  computation. Raw config SHA-256 is currently diagnostic/local consistency
-  evidence only.
+- Compute richer role-scoped embedded config digests after the promotion and
+  execution layers expose target materialization identities. Raw config
+  SHA-256 remains diagnostic/local consistency evidence only.
 - Persist or surface `DeploymentReceiptV1` records from remaining installer
   phases beyond the current artifact, root-canister, build, manifest, install,
   funding, staging, bootstrap resume, wait-ready, and install-state receipts.

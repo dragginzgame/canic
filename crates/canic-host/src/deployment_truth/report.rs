@@ -778,6 +778,17 @@ fn compare_role_controllers(
     warnings: &mut Vec<SafetyFindingV1>,
 ) {
     let role = observed.role.as_deref().unwrap_or("unknown");
+    if observed.controllers.is_empty()
+        && observed.role_assignment_source.as_deref() != Some("icp_canister_status")
+    {
+        warnings.push(finding(
+            "controllers_unobserved",
+            format!("controllers were not observed for role {role}"),
+            SafetySeverityV1::Warning,
+            Some(role.to_string()),
+        ));
+        return;
+    }
     for expected in &plan.authority_profile.expected_controllers {
         if observed
             .controllers
