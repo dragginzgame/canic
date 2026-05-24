@@ -15,7 +15,9 @@ use canic_host::{
 };
 use std::{path::PathBuf, sync::Arc, thread};
 
-pub fn metrics_report(options: &MetricsOptions) -> Result<MetricsReport, MetricsCommandError> {
+pub(super) fn metrics_report(
+    options: &MetricsOptions,
+) -> Result<MetricsReport, MetricsCommandError> {
     let registry = load_registry(options)?;
     let canisters = collect_metrics_reports(options, &registry);
 

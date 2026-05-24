@@ -5,12 +5,12 @@ use serde::Serialize;
 ///
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
-pub struct CyclesReport {
-    pub fleet: String,
-    pub network: String,
-    pub since_seconds: u64,
-    pub generated_at_secs: u64,
-    pub canisters: Vec<CyclesCanisterReport>,
+pub(super) struct CyclesReport {
+    pub(super) fleet: String,
+    pub(super) network: String,
+    pub(super) since_seconds: u64,
+    pub(super) generated_at_secs: u64,
+    pub(super) canisters: Vec<CyclesCanisterReport>,
 }
 
 ///
@@ -18,28 +18,28 @@ pub struct CyclesReport {
 ///
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
-pub struct CyclesCanisterReport {
-    pub role: String,
+pub(super) struct CyclesCanisterReport {
+    pub(super) role: String,
     #[serde(skip)]
-    pub tree_prefix: String,
-    pub canister_id: String,
-    pub status: String,
-    pub sample_count: usize,
-    pub total_samples: u64,
-    pub requested_since_secs: u64,
-    pub coverage_seconds: Option<u64>,
-    pub coverage_status: String,
-    pub latest_timestamp_secs: Option<u64>,
-    pub latest_cycles: Option<u128>,
-    pub baseline_timestamp_secs: Option<u64>,
-    pub baseline_cycles: Option<u128>,
-    pub delta_cycles: Option<i128>,
-    pub rate_cycles_per_hour: Option<i128>,
-    pub burn_cycles: Option<u128>,
-    pub burn_cycles_per_hour: Option<u128>,
-    pub topup_cycles_per_hour: Option<u128>,
-    pub topups: Option<CyclesTopupSummary>,
-    pub error: Option<String>,
+    pub(super) tree_prefix: String,
+    pub(super) canister_id: String,
+    pub(super) status: String,
+    pub(super) sample_count: usize,
+    pub(super) total_samples: u64,
+    pub(super) requested_since_secs: u64,
+    pub(super) coverage_seconds: Option<u64>,
+    pub(super) coverage_status: String,
+    pub(super) latest_timestamp_secs: Option<u64>,
+    pub(super) latest_cycles: Option<u128>,
+    pub(super) baseline_timestamp_secs: Option<u64>,
+    pub(super) baseline_cycles: Option<u128>,
+    pub(super) delta_cycles: Option<i128>,
+    pub(super) rate_cycles_per_hour: Option<i128>,
+    pub(super) burn_cycles: Option<u128>,
+    pub(super) burn_cycles_per_hour: Option<u128>,
+    pub(super) topup_cycles_per_hour: Option<u128>,
+    pub(super) topups: Option<CyclesTopupSummary>,
+    pub(super) error: Option<String>,
 }
 
 ///
@@ -47,11 +47,11 @@ pub struct CyclesCanisterReport {
 ///
 
 #[derive(Clone, Debug, Default, Eq, PartialEq, Serialize)]
-pub struct CyclesTopupSummary {
-    pub request_scheduled: u64,
-    pub request_ok: u64,
-    pub request_err: u64,
-    pub transferred_cycles: u128,
+pub(super) struct CyclesTopupSummary {
+    pub(super) request_scheduled: u64,
+    pub(super) request_ok: u64,
+    pub(super) request_err: u64,
+    pub(super) transferred_cycles: u128,
 }
 
 impl CyclesTopupSummary {

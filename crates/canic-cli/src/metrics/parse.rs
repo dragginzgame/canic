@@ -4,7 +4,7 @@ use canic_host::response_parse::{
     parse_u64_digits, parse_u128_digits, quoted_strings, response_candid, text_after,
 };
 
-pub fn parse_metrics_page(output: &str) -> Option<Vec<MetricEntry>> {
+pub(super) fn parse_metrics_page(output: &str) -> Option<Vec<MetricEntry>> {
     let value = serde_json::from_str::<serde_json::Value>(output).ok()?;
     if let Some(entries) = parse_metrics_page_json(&value) {
         return Some(entries);

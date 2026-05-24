@@ -32,7 +32,7 @@ use std::{
 
 const TOPUP_EVENTS_LIMIT: u64 = 1_000;
 
-pub fn cycles_report(options: &CyclesOptions) -> Result<CyclesReport, CyclesCommandError> {
+pub(super) fn cycles_report(options: &CyclesOptions) -> Result<CyclesReport, CyclesCommandError> {
     let registry = load_registry(options)?;
     let generated_at_secs = current_unix_seconds();
     let requested_since_secs = generated_at_secs.saturating_sub(options.since_seconds);

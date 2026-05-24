@@ -18,17 +18,17 @@ const BACKUP_REF: &str = "backup-ref";
 ///
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct BackupCreateOptions {
-    pub fleet: String,
-    pub subtree: Option<String>,
-    pub out: Option<PathBuf>,
-    pub dry_run: bool,
-    pub network: String,
-    pub icp: String,
+pub(super) struct BackupCreateOptions {
+    pub(super) fleet: String,
+    pub(super) subtree: Option<String>,
+    pub(super) out: Option<PathBuf>,
+    pub(super) dry_run: bool,
+    pub(super) network: String,
+    pub(super) icp: String,
 }
 
 impl BackupCreateOptions {
-    pub fn parse<I>(args: I) -> Result<Self, BackupCommandError>
+    pub(super) fn parse<I>(args: I) -> Result<Self, BackupCommandError>
     where
         I: IntoIterator<Item = OsString>,
     {
@@ -82,13 +82,13 @@ pub(super) fn backup_create_command() -> ClapCommand {
 ///
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct BackupListOptions {
-    pub dir: PathBuf,
-    pub out: Option<PathBuf>,
+pub(super) struct BackupListOptions {
+    pub(super) dir: PathBuf,
+    pub(super) out: Option<PathBuf>,
 }
 
 impl BackupListOptions {
-    pub fn parse<I>(args: I) -> Result<Self, BackupCommandError>
+    pub(super) fn parse<I>(args: I) -> Result<Self, BackupCommandError>
     where
         I: IntoIterator<Item = OsString>,
     {
@@ -120,16 +120,16 @@ pub(super) fn backup_list_command() -> ClapCommand {
 ///
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct BackupPruneOptions {
-    pub dir: PathBuf,
-    pub failed: bool,
-    pub keep: Option<usize>,
-    pub dry_run: bool,
-    pub out: Option<PathBuf>,
+pub(super) struct BackupPruneOptions {
+    pub(super) dir: PathBuf,
+    pub(super) failed: bool,
+    pub(super) keep: Option<usize>,
+    pub(super) dry_run: bool,
+    pub(super) out: Option<PathBuf>,
 }
 
 impl BackupPruneOptions {
-    pub fn parse<I>(args: I) -> Result<Self, BackupCommandError>
+    pub(super) fn parse<I>(args: I) -> Result<Self, BackupCommandError>
     where
         I: IntoIterator<Item = OsString>,
     {
@@ -187,15 +187,15 @@ pub(super) fn backup_prune_command() -> ClapCommand {
 ///
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct BackupInspectOptions {
-    pub backup_ref: Option<String>,
-    pub dir: Option<PathBuf>,
-    pub out: Option<PathBuf>,
-    pub json: bool,
+pub(super) struct BackupInspectOptions {
+    pub(super) backup_ref: Option<String>,
+    pub(super) dir: Option<PathBuf>,
+    pub(super) out: Option<PathBuf>,
+    pub(super) json: bool,
 }
 
 impl BackupInspectOptions {
-    pub fn parse<I>(args: I) -> Result<Self, BackupCommandError>
+    pub(super) fn parse<I>(args: I) -> Result<Self, BackupCommandError>
     where
         I: IntoIterator<Item = OsString>,
     {
@@ -225,14 +225,14 @@ pub(super) fn backup_inspect_command() -> ClapCommand {
 ///
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct BackupVerifyOptions {
-    pub backup_ref: Option<String>,
-    pub dir: Option<PathBuf>,
-    pub out: Option<PathBuf>,
+pub(super) struct BackupVerifyOptions {
+    pub(super) backup_ref: Option<String>,
+    pub(super) dir: Option<PathBuf>,
+    pub(super) out: Option<PathBuf>,
 }
 
 impl BackupVerifyOptions {
-    pub fn parse<I>(args: I) -> Result<Self, BackupCommandError>
+    pub(super) fn parse<I>(args: I) -> Result<Self, BackupCommandError>
     where
         I: IntoIterator<Item = OsString>,
     {
@@ -260,15 +260,15 @@ pub(super) fn backup_verify_command() -> ClapCommand {
 ///
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct BackupStatusOptions {
-    pub backup_ref: Option<String>,
-    pub dir: Option<PathBuf>,
-    pub out: Option<PathBuf>,
-    pub require_complete: bool,
+pub(super) struct BackupStatusOptions {
+    pub(super) backup_ref: Option<String>,
+    pub(super) dir: Option<PathBuf>,
+    pub(super) out: Option<PathBuf>,
+    pub(super) require_complete: bool,
 }
 
 impl BackupStatusOptions {
-    pub fn parse<I>(args: I) -> Result<Self, BackupCommandError>
+    pub(super) fn parse<I>(args: I) -> Result<Self, BackupCommandError>
     where
         I: IntoIterator<Item = OsString>,
     {

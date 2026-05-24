@@ -15,20 +15,20 @@ const DEFAULT_LIMIT: u64 = 1_000;
 ///
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct CyclesOptions {
-    pub fleet: String,
-    pub subtree: Option<String>,
-    pub since_seconds: u64,
-    pub limit: u64,
-    pub json: bool,
-    pub verbose: bool,
-    pub out: Option<PathBuf>,
-    pub network: String,
-    pub icp: String,
+pub(super) struct CyclesOptions {
+    pub(super) fleet: String,
+    pub(super) subtree: Option<String>,
+    pub(super) since_seconds: u64,
+    pub(super) limit: u64,
+    pub(super) json: bool,
+    pub(super) verbose: bool,
+    pub(super) out: Option<PathBuf>,
+    pub(super) network: String,
+    pub(super) icp: String,
 }
 
 impl CyclesOptions {
-    pub fn parse_info<I>(args: I) -> Result<Self, CyclesCommandError>
+    pub(super) fn parse_info<I>(args: I) -> Result<Self, CyclesCommandError>
     where
         I: IntoIterator<Item = OsString>,
     {

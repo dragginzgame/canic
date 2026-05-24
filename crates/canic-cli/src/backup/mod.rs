@@ -41,7 +41,7 @@ pub use model::{
     BackupCreateReport, BackupDryRunStatusReport, BackupInspectOperation, BackupInspectReport,
     BackupInspectTarget, BackupListEntry, BackupPruneEntry, BackupPruneReport, BackupStatusReport,
 };
-pub use options::{
+use options::{
     BackupCreateOptions, BackupInspectOptions, BackupListOptions, BackupPruneOptions,
     BackupStatusOptions, BackupVerifyOptions,
 };

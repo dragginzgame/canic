@@ -7,7 +7,7 @@ use serde::Serialize;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
-pub enum MetricsKind {
+pub(super) enum MetricsKind {
     Core,
     Placement,
     Platform,
@@ -57,11 +57,11 @@ impl MetricsKind {
 ///
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
-pub struct MetricsReport {
-    pub fleet: String,
-    pub network: String,
-    pub kind: MetricsKind,
-    pub canisters: Vec<MetricsCanisterReport>,
+pub(super) struct MetricsReport {
+    pub(super) fleet: String,
+    pub(super) network: String,
+    pub(super) kind: MetricsKind,
+    pub(super) canisters: Vec<MetricsCanisterReport>,
 }
 
 ///
@@ -69,12 +69,12 @@ pub struct MetricsReport {
 ///
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
-pub struct MetricsCanisterReport {
-    pub role: String,
-    pub canister_id: String,
-    pub status: String,
-    pub entries: Vec<MetricEntry>,
-    pub error: Option<String>,
+pub(super) struct MetricsCanisterReport {
+    pub(super) role: String,
+    pub(super) canister_id: String,
+    pub(super) status: String,
+    pub(super) entries: Vec<MetricEntry>,
+    pub(super) error: Option<String>,
 }
 
 ///
@@ -82,10 +82,10 @@ pub struct MetricsCanisterReport {
 ///
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
-pub struct MetricEntry {
-    pub labels: Vec<String>,
-    pub principal: Option<String>,
-    pub value: MetricValue,
+pub(super) struct MetricEntry {
+    pub(super) labels: Vec<String>,
+    pub(super) principal: Option<String>,
+    pub(super) value: MetricValue,
 }
 
 ///
@@ -94,7 +94,7 @@ pub struct MetricEntry {
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case", tag = "type")]
-pub enum MetricValue {
+pub(super) enum MetricValue {
     Count { count: u64 },
     CountAndU64 { count: u64, value_u64: u64 },
     U128 { value: u128 },

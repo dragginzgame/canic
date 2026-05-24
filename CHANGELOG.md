@@ -10,6 +10,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.42.x] - 2026-05-23 - Authority reconciliation
 
+- `0.42.13` closes out the authority reconciliation line with a focused
+  closeout audit and status handoff updates confirming 0.42 remains a
+  dry-run/report-first authority evidence release.
+
 - `0.42.12` tightens authority receipt-only output and human-facing dry-run
   labels so standalone receipts keep provenance/timestamp guards and every
   authority text/help surface clearly reflects the read-only dry-run boundary.

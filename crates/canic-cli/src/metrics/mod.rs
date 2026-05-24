@@ -18,7 +18,7 @@ use canic_host::registry::RegistryParseError;
 use std::ffi::OsString;
 use thiserror::Error as ThisError;
 
-pub const CANIC_METRICS_METHOD: &str = "canic_metrics";
+const CANIC_METRICS_METHOD: &str = "canic_metrics";
 
 ///
 /// MetricsCommandError

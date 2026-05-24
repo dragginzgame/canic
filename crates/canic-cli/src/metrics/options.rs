@@ -14,21 +14,21 @@ const DEFAULT_LIMIT: u64 = 1_000;
 ///
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct MetricsOptions {
-    pub fleet: String,
-    pub kind: MetricsKind,
-    pub role: Option<String>,
-    pub canister: Option<String>,
-    pub nonzero: bool,
-    pub limit: u64,
-    pub json: bool,
-    pub out: Option<PathBuf>,
-    pub network: String,
-    pub icp: String,
+pub(super) struct MetricsOptions {
+    pub(super) fleet: String,
+    pub(super) kind: MetricsKind,
+    pub(super) role: Option<String>,
+    pub(super) canister: Option<String>,
+    pub(super) nonzero: bool,
+    pub(super) limit: u64,
+    pub(super) json: bool,
+    pub(super) out: Option<PathBuf>,
+    pub(super) network: String,
+    pub(super) icp: String,
 }
 
 impl MetricsOptions {
-    pub fn parse<I>(args: I) -> Result<Self, MetricsCommandError>
+    pub(super) fn parse<I>(args: I) -> Result<Self, MetricsCommandError>
     where
         I: IntoIterator<Item = OsString>,
     {
