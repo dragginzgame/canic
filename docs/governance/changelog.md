@@ -25,6 +25,16 @@ Detailed change breakdowns belong in:
 
 For example: [docs/changelog/0.33.md](docs/changelog/0.33.md)
 
+Every finalized patch entry must have both views:
+
+- one concise patch bullet in the root `CHANGELOG.md`;
+- one detailed patch section in the matching
+  `docs/changelog/<major>.<minor>.md` file.
+
+The root ledger is for scanning release history. The detailed file is where
+agents record the implementation breakdown, tests, notes, CLI surfaces, JSON
+shape changes, and operational nuance.
+
 ---
 
 # 2. File Structure
@@ -39,6 +49,8 @@ For example: [docs/changelog/0.33.md](docs/changelog/0.33.md)
   - Links to detailed notes
 - Root minor-line summary entries must use exactly one concise bullet per patch version.
 - Within each minor-line section, patch entries must be ordered chronologically newest first (`x.y.9` before `x.y.8` before `x.y.7`).
+- Each root minor-line section must link to its detailed
+  `docs/changelog/<major>.<minor>.md` file when that file exists.
 - Ordinary development slices do not require root changelog edits. Update the
   root changelog when preparing a release, when a maintainer explicitly asks for
   release-finalized notes, or when documenting a finalized release artifact.
@@ -55,6 +67,9 @@ For example: [docs/changelog/0.33.md](docs/changelog/0.33.md)
   - Migration commentary
 - This is the preferred place for code examples, LoC snapshots, and fenced blocks (` ``` `) that improve scanability.
 - Detailed minor notes may be substantially more verbose than root changelog entries.
+- Every patch listed in a root minor-line section must have a matching
+  versioned section in the detailed minor notes. If the patch is intentionally
+  small, the detailed section can be short, but it must still exist.
 - When a patch adds or changes a CLI query, command result, JSON shape, or
   visible output column, record that operator-facing surface under that patch
   section in the detailed minor notes. Keep implementation cleanup separate from
@@ -204,10 +219,12 @@ When preparing a release:
    summary entry under the relevant root release line.
 7. Generate or update docs/changelog/<major>.<minor>.md with full detail.
 8. Insert clickable Markdown link from root file to detailed file.
-9. Use the version specified by the release request or the existing latest changelog entry.
-10. Do not create a new version header if the newest entry already exists for the target version.
-11. If a change set is changelog-policy/governance-only, do not add or update release notes in `CHANGELOG.md` or `docs/changelog/<major>.<minor>.md`.
-12. When updating an existing minor line, keep the patch bullet/section in chronological order. In normal patch releases this means adding the new patch at the beginning of the existing minor-line list.
+9. Confirm the target patch appears in both files before declaring the
+   changelog ready.
+10. Use the version specified by the release request or the existing latest changelog entry.
+11. Do not create a new version header if the newest entry already exists for the target version.
+12. If a change set is changelog-policy/governance-only, do not add or update release notes in `CHANGELOG.md` or `docs/changelog/<major>.<minor>.md`.
+13. When updating an existing minor line, keep the patch bullet/section in chronological order. In normal patch releases this means adding the new patch at the beginning of the existing minor-line list.
 
 Agents must never:
 

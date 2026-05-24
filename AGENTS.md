@@ -19,6 +19,9 @@ with this file, the code is wrong.
 ## Changelog
 - Follow `docs/governance/changelog.md`; it is the authoritative changelog
   policy. Do not duplicate its rules here.
+- Use root `CHANGELOG.md` as the concise release ledger. Detailed patch
+  breakdowns belong in `docs/changelog/<major>.<minor>.md`, and release
+  preparation must keep both views aligned.
 
 ## Ownership
 - Runtime/facade: `canic`, `canic-core`, `canic-cdk`, `canic-macros`.

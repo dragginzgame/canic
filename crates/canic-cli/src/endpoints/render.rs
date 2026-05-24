@@ -18,7 +18,7 @@ pub(super) fn render_plain_endpoints(endpoints: &[EndpointEntry]) -> String {
     render_table(&HEADERS, &rows, &ALIGNMENTS)
 }
 
-pub(super) fn render_endpoint_type_list(types: &[EndpointType]) -> String {
+fn render_endpoint_type_list(types: &[EndpointType]) -> String {
     format!(
         "({})",
         types
