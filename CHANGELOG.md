@@ -10,6 +10,16 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.43.x] - 2026-05-24 - Backend-agnostic execution
 
+- `0.43.1` expands the passive execution-readiness path. Callers can now use
+  `deployment_execution_preflight_from_check(...)` or
+  `check_install_execution_preflight(...)` to derive executor readiness from
+  deployment checks/current install inputs without writing receipt state or
+  entering the mutating install path. Current install now persists a dedicated
+  `execution_preflight` deployment-truth receipt after the materialized safety
+  gate and stops before later install phases if that preflight is blocked.
+  Host-owned text rendering for `DeploymentExecutionPreflightV1` provides a
+  human-readable readiness summary without adding a new CLI command.
+
 - `0.43.0` starts the plan-driven execution line by adding backend execution
   context metadata, current-CLI backend capability records, a concrete
   current-CLI executor wrapper, and a minimal `DeploymentExecutor` trait.

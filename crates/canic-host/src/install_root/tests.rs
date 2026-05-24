@@ -1,7 +1,8 @@
 use super::{
     CompletedInstallPhase, INSTALL_STATE_SCHEMA_VERSION, InstallReceiptScope, InstallRootOptions,
     InstallState, InstallTimingSummary, add_create_root_target, add_icp_environment_target,
-    add_local_root_create_cycles_arg, check_install_deployment_truth, config_selection_error,
+    add_local_root_create_cycles_arg, check_install_deployment_truth,
+    check_install_execution_preflight, config_selection_error,
     current_install_deployment_truth_check_at, current_install_execution_context,
     current_install_executor_missing_capabilities, discover_canic_config_choices,
     discover_project_canic_config_choices, enforce_install_deployment_truth_gate,
@@ -12,16 +13,17 @@ use super::{
     parse_canister_id_json, parse_created_canister_id, parse_cycle_balance_response,
     parse_root_ready_value, read_fleet_install_state, render_install_timing_summary,
     resolve_install_config_path, root_init_args, validate_expected_fleet_name,
-    write_completed_install_phase_receipt, write_install_deployment_truth_receipt,
-    write_install_state, write_install_state_with_deployment_truth_receipt,
+    write_completed_install_phase_receipt, write_current_install_execution_preflight_receipt,
+    write_install_deployment_truth_receipt, write_install_state,
+    write_install_state_with_deployment_truth_receipt,
 };
 use crate::canister_build::CanisterBuildProfile;
 use crate::deployment_truth::{
     CanisterControlClassV1, DeploymentCheckV1, DeploymentExecutionContextV1,
-    DeploymentExecutionStatusV1, DeploymentExecutorBackendV1, DeploymentExecutorCapabilityV1,
-    DeploymentReceiptV1, ObservationStatusV1, ObservedCanisterV1, SafetyFindingV1,
-    SafetySeverityV1, artifact_gate_phase_receipt, artifact_gate_role_phase_receipts,
-    compare_plan_to_inventory, safety_report_from_diff,
+    DeploymentExecutionPreflightStatusV1, DeploymentExecutionStatusV1, DeploymentExecutorBackendV1,
+    DeploymentExecutorCapabilityV1, DeploymentReceiptV1, ObservationStatusV1, ObservedCanisterV1,
+    SafetyFindingV1, SafetySeverityV1, SafetyStatusV1, artifact_gate_phase_receipt,
+    artifact_gate_role_phase_receipts, compare_plan_to_inventory, safety_report_from_diff,
 };
 use crate::icp::{CANIC_ICP_LOCAL_NETWORK_URL_ENV, CANIC_ICP_LOCAL_ROOT_KEY_ENV};
 use crate::release_set::configured_install_targets;
@@ -383,6 +385,9 @@ kind = "singleton"
 
         let check = check_install_deployment_truth(&options, "2026-05-22T00:00:00Z")
             .expect("install truth preflight");
+        let execution_preflight =
+            check_install_execution_preflight(&options, "2026-05-22T00:00:01Z")
+                .expect("install execution preflight");
 
         assert_eq!(check.check_id, "local:local:demo:check");
         assert_eq!(check.plan.fleet_template, "demo");
@@ -398,6 +403,20 @@ kind = "singleton"
         assert_eq!(check.inventory.observed_artifacts.len(), 3);
         enforce_install_deployment_truth_gate(&check)
             .expect("complete local artifacts should pass gate");
+        assert_eq!(execution_preflight.plan_id, check.plan.plan_id);
+        assert_eq!(
+            execution_preflight.backend,
+            DeploymentExecutorBackendV1::CurrentCli
+        );
+        assert!(execution_preflight.missing_capabilities.is_empty());
+        assert_eq!(
+            execution_preflight.status,
+            DeploymentExecutionPreflightStatusV1::Blocked
+        );
+        assert!(execution_preflight.blockers.iter().any(|finding| {
+            finding.code == "authority_observation_missing"
+                && finding.subject.as_deref() == Some("root")
+        }));
         assert!(!root.join(".canic").exists());
 
         restore_env_var("CANIC_WORKSPACE_ROOT", previous_workspace_root);
@@ -1004,6 +1023,105 @@ fn install_truth_completed_phase_receipt_records_pre_gate_evidence() {
             .artifact_roots
             .iter()
             .any(|root| { root.ends_with(".icp/local/canisters") })
+    );
+
+    fs::remove_dir_all(root).expect("clean temp dir");
+}
+
+#[test]
+fn install_truth_execution_preflight_receipt_records_ready_state() {
+    let (root, mut check) =
+        demo_install_deployment_truth_check("canic-install-truth-execution-preflight-ready");
+    check.plan.expected_canisters.clear();
+    check.report.status = SafetyStatusV1::Safe;
+    check.report.summary = "deployment inventory matches plan".to_string();
+    check.report.hard_failures.clear();
+    let execution_context = current_install_execution_context(&root, &root, "local");
+
+    let path = write_current_install_execution_preflight_receipt(
+        &root,
+        "local",
+        "demo",
+        &check,
+        &execution_context,
+    )
+    .expect("write execution preflight receipt");
+    let receipt: DeploymentReceiptV1 =
+        serde_json::from_slice(&fs::read(path).expect("read receipt")).expect("decode receipt");
+
+    assert_eq!(
+        receipt.operation_id,
+        "local:local:demo:check:execution_preflight"
+    );
+    assert_eq!(
+        receipt.operation_status,
+        DeploymentExecutionStatusV1::Complete
+    );
+    assert_eq!(receipt.phase_receipts[0].phase, "execution_preflight");
+    assert!(
+        receipt.phase_receipts[0]
+            .verified_postcondition
+            .evidence
+            .contains(&"execution_preflight_status:Ready".to_string())
+    );
+    assert!(
+        receipt.phase_receipts[0]
+            .verified_postcondition
+            .evidence
+            .contains(&"blockers:0".to_string())
+    );
+    assert!(receipt.execution_context.is_some());
+
+    fs::remove_dir_all(root).expect("clean temp dir");
+}
+
+#[test]
+fn install_truth_execution_preflight_receipt_records_blocked_state_before_error() {
+    let (root, mut check) =
+        demo_install_deployment_truth_check("canic-install-truth-execution-preflight-blocked");
+    check.report.status = SafetyStatusV1::Blocked;
+    check.report.hard_failures.push(SafetyFindingV1 {
+        code: "deployment_artifact_missing".to_string(),
+        message: "planned artifact was not observed".to_string(),
+        severity: SafetySeverityV1::HardFailure,
+        subject: Some("root".to_string()),
+    });
+    let execution_context = current_install_execution_context(&root, &root, "local");
+
+    let err = write_current_install_execution_preflight_receipt(
+        &root,
+        "local",
+        "demo",
+        &check,
+        &execution_context,
+    )
+    .expect_err("blocked execution preflight should stop install");
+
+    assert!(
+        err.to_string()
+            .contains("deployment execution preflight blocked install")
+    );
+    let path = latest_deployment_truth_receipt_path_from_root(&root, "local", "demo")
+        .expect("find latest receipt")
+        .expect("blocked preflight receipt should be written");
+    let receipt: DeploymentReceiptV1 =
+        serde_json::from_slice(&fs::read(path).expect("read receipt")).expect("decode receipt");
+    assert_eq!(
+        receipt.operation_status,
+        DeploymentExecutionStatusV1::FailedBeforeMutation
+    );
+    assert!(
+        receipt.phase_receipts[0]
+            .verified_postcondition
+            .evidence
+            .contains(&"execution_preflight_status:Blocked".to_string())
+    );
+    assert!(
+        receipt.phase_receipts[0]
+            .verified_postcondition
+            .evidence
+            .iter()
+            .any(|line| line.starts_with("blocker:deployment_artifact_missing:"))
     );
 
     fs::remove_dir_all(root).expect("clean temp dir");

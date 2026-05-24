@@ -1,8 +1,9 @@
 use super::{
     AuthorityReconciliationPlanV1, AuthorityReconciliationStateV1, DEPLOYMENT_TRUTH_SCHEMA_VERSION,
-    DeploymentExecutionContextV1, DeploymentExecutionPreflightStatusV1,
+    DeploymentCheckV1, DeploymentExecutionContextV1, DeploymentExecutionPreflightStatusV1,
     DeploymentExecutionPreflightV1, DeploymentExecutorBackendV1, DeploymentExecutorCapabilityV1,
     DeploymentPlanV1, SafetyFindingV1, SafetyReportV1, SafetySeverityV1, SafetyStatusV1,
+    build_authority_reconciliation_plan,
 };
 use std::collections::BTreeSet;
 
@@ -95,6 +96,22 @@ pub fn has_executor_capabilities(
     required: &[DeploymentExecutorCapabilityV1],
 ) -> bool {
     missing_executor_capabilities(available, required).is_empty()
+}
+
+#[must_use]
+pub fn deployment_execution_preflight_from_check(
+    check: &DeploymentCheckV1,
+    executor: &impl DeploymentExecutor,
+    required_capabilities: &[DeploymentExecutorCapabilityV1],
+) -> DeploymentExecutionPreflightV1 {
+    let authority_plan = build_authority_reconciliation_plan(check);
+    deployment_execution_preflight(
+        &check.plan,
+        &check.report,
+        &authority_plan,
+        executor,
+        required_capabilities,
+    )
 }
 
 #[must_use]

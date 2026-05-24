@@ -189,7 +189,7 @@ pub(super) fn summarize_cycle_tracker(
         .zip(burn_cycles)
         .zip(coverage_seconds)
         .and_then(|((_, burn), coverage)| unsigned_hourly_rate(burn, coverage));
-    let visible_topups = topup_summary.filter(|summary| !summary.is_empty());
+    let visible_topups = topup_summary.filter(|summary| !topup_summary_is_empty(summary));
     let coverage_status = coverage_status(baseline.as_ref(), requested_since_secs);
     let status = if latest.is_some() { "ok" } else { "empty" };
 
@@ -269,6 +269,10 @@ pub(super) fn topup_summary_from_events(
         }
     }
     summary
+}
+
+const fn topup_summary_is_empty(summary: &CyclesTopupSummary) -> bool {
+    summary.request_scheduled == 0 && summary.request_ok == 0 && summary.request_err == 0
 }
 
 fn query_topup_event_page(

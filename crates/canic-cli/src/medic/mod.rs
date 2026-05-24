@@ -230,7 +230,7 @@ fn render_medic_report(checks: &[MedicCheck]) -> String {
         .map(|check| {
             [
                 check.name.clone(),
-                check.status.label().to_string(),
+                medic_status_label(check.status).to_string(),
                 check.detail.clone(),
                 check.next.clone(),
             ]
@@ -246,6 +246,14 @@ fn render_medic_report(checks: &[MedicCheck]) -> String {
 fn usage() -> String {
     let mut command = medic_command();
     command.render_help().to_string()
+}
+
+const fn medic_status_label(status: MedicStatus) -> &'static str {
+    match status {
+        MedicStatus::Ok => "ok",
+        MedicStatus::Warn => "warn",
+        MedicStatus::Error => "error",
+    }
 }
 
 ///
@@ -298,16 +306,6 @@ enum MedicStatus {
     Ok,
     Warn,
     Error,
-}
-
-impl MedicStatus {
-    const fn label(self) -> &'static str {
-        match self {
-            Self::Ok => "ok",
-            Self::Warn => "warn",
-            Self::Error => "error",
-        }
-    }
 }
 
 #[cfg(test)]

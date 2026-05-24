@@ -4,15 +4,13 @@ use crate::metrics::{
     parse::parse_metrics_page,
 };
 
-// Ensure the public kind selector maps to Candid variant names.
+// Ensure the public kind selector accepts the expected CLI vocabulary.
 #[test]
 fn parses_metric_kind_selectors() {
     assert_eq!(MetricsKind::parse("core").expect("core"), MetricsKind::Core);
     assert_eq!(
-        MetricsKind::parse("security")
-            .expect("security")
-            .candid_variant(),
-        "Security"
+        MetricsKind::parse("security").expect("security"),
+        MetricsKind::Security
     );
     assert!(matches!(
         MetricsKind::parse("cycles"),
@@ -82,18 +80,4 @@ fn metrics_json_rejects_malformed_entries_before_response_candid_fallback() {
 
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].labels, ["timer", "tick"]);
-}
-
-// Ensure zero filtering treats every payload shape consistently.
-#[test]
-fn detects_zero_metric_values() {
-    assert!(MetricValue::Count { count: 0 }.is_zero());
-    assert!(
-        MetricValue::CountAndU64 {
-            count: 0,
-            value_u64: 0
-        }
-        .is_zero()
-    );
-    assert!(!MetricValue::U128 { value: 1 }.is_zero());
 }

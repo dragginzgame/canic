@@ -1,7 +1,7 @@
 use crate::{
     metrics::{
         MetricsCommandError,
-        model::{MetricValue, MetricsReport},
+        model::{MetricValue, MetricsKind, MetricsReport},
         options::MetricsOptions,
     },
     output,
@@ -26,7 +26,7 @@ fn render_metrics_report(report: &MetricsReport) -> String {
             rows.push([
                 canister.role.clone(),
                 canister.canister_id.clone(),
-                report.kind.as_str().to_string(),
+                metrics_kind_label(report.kind).to_string(),
                 canister.status.clone(),
                 canister.error.clone().unwrap_or_else(|| "-".to_string()),
                 "-".to_string(),
@@ -39,7 +39,7 @@ fn render_metrics_report(report: &MetricsReport) -> String {
             rows.push([
                 canister.role.clone(),
                 canister.canister_id.clone(),
-                report.kind.as_str().to_string(),
+                metrics_kind_label(report.kind).to_string(),
                 canister.status.clone(),
                 entry.labels.join("/"),
                 entry.principal.clone().unwrap_or_else(|| "-".to_string()),
@@ -53,7 +53,7 @@ fn render_metrics_report(report: &MetricsReport) -> String {
             "Fleet: {} (network {}, metrics {})",
             report.fleet,
             report.network,
-            report.kind.as_str()
+            metrics_kind_label(report.kind)
         ),
         String::new(),
         render_table(
@@ -86,5 +86,16 @@ fn metric_value_label(value: &MetricValue) -> String {
         MetricValue::Count { count } => count.to_string(),
         MetricValue::CountAndU64 { count, value_u64 } => format!("{count}/{value_u64}"),
         MetricValue::U128 { value } => value.to_string(),
+    }
+}
+
+const fn metrics_kind_label(kind: MetricsKind) -> &'static str {
+    match kind {
+        MetricsKind::Core => "core",
+        MetricsKind::Placement => "placement",
+        MetricsKind::Platform => "platform",
+        MetricsKind::Runtime => "runtime",
+        MetricsKind::Security => "security",
+        MetricsKind::Storage => "storage",
     }
 }

@@ -293,6 +293,59 @@ fn deployment_execution_preflight_accepts_safe_plan_and_capable_executor() {
 }
 
 #[test]
+fn deployment_execution_preflight_from_check_derives_authority_plan() {
+    let check = sample_check(sample_plan(), sample_matching_inventory());
+    let executor = CurrentCliDeploymentExecutor::new(
+        Some("/workspace/canic".to_string()),
+        Some("/workspace/canic/.icp".to_string()),
+        vec!["/workspace/canic/.icp/local/canisters".to_string()],
+    );
+
+    let from_check = deployment_execution_preflight_from_check(
+        &check,
+        &executor,
+        CURRENT_CLI_EXECUTOR_CAPABILITIES,
+    );
+    let authority = build_authority_reconciliation_plan(&check);
+    let explicit = deployment_execution_preflight(
+        &check.plan,
+        &check.report,
+        &authority,
+        &executor,
+        CURRENT_CLI_EXECUTOR_CAPABILITIES,
+    );
+
+    assert_eq!(from_check, explicit);
+}
+
+#[test]
+fn deployment_execution_preflight_text_reports_passive_readiness() {
+    let check = sample_check(sample_plan(), sample_matching_inventory());
+    let executor = CurrentCliDeploymentExecutor::new(
+        Some("/workspace/canic".to_string()),
+        Some("/workspace/canic/.icp".to_string()),
+        vec!["/workspace/canic/.icp/local/canisters".to_string()],
+    );
+    let preflight = deployment_execution_preflight_from_check(
+        &check,
+        &executor,
+        CURRENT_CLI_EXECUTOR_CAPABILITIES,
+    );
+
+    let text = deployment_execution_preflight_text(&preflight);
+
+    assert!(text.contains("Deployment execution preflight"));
+    assert!(text.contains("mode: passive"));
+    assert!(text.contains("status: ready"));
+    assert!(text.contains("plan_id: plan-local-root"));
+    assert!(text.contains("backend: CurrentCli"));
+    assert!(text.contains("planned_phases:"));
+    assert!(text.contains("  - install_root"));
+    assert!(text.contains("required_capabilities:"));
+    assert!(text.contains("  - StageArtifact"));
+}
+
+#[test]
 fn deployment_execution_preflight_blocks_safety_authority_and_capability_gaps() {
     let mut check = sample_unknown_unsafe_check();
     check.report.status = SafetyStatusV1::Blocked;

@@ -54,12 +54,6 @@ pub(super) struct CyclesTopupSummary {
     pub(super) transferred_cycles: u128,
 }
 
-impl CyclesTopupSummary {
-    pub(super) const fn is_empty(&self) -> bool {
-        self.request_scheduled == 0 && self.request_ok == 0 && self.request_err == 0
-    }
-}
-
 ///
 /// CycleTopupEventPage
 ///

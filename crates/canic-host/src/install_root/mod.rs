@@ -4,10 +4,11 @@ use crate::canister_build::{
 };
 use crate::deployment_truth::{
     CurrentCliDeploymentExecutor, DeploymentCheckV1, DeploymentCommandResultV1,
-    DeploymentExecutionContextV1, DeploymentExecutionStatusV1, DeploymentExecutor,
-    DeploymentExecutorCapabilityV1, DeploymentReceiptV1, LocalDeploymentCheckRequest,
-    SafetyFindingV1, artifact_gate_phase_receipt, artifact_gate_role_phase_receipts,
-    check_local_deployment, deployment_receipt_from_check_with_status,
+    DeploymentExecutionContextV1, DeploymentExecutionPreflightV1, DeploymentExecutionStatusV1,
+    DeploymentExecutor, DeploymentExecutorCapabilityV1, DeploymentReceiptV1,
+    LocalDeploymentCheckRequest, SafetyFindingV1, artifact_gate_phase_receipt,
+    artifact_gate_role_phase_receipts, check_local_deployment,
+    deployment_execution_preflight_from_check, deployment_receipt_from_check_with_status,
     missing_executor_capabilities, phase_receipt,
 };
 use crate::format::wasm_size_label;
@@ -214,6 +215,13 @@ struct PreparedInstallTruth {
     root_canister_id: String,
     deployment_truth_check: DeploymentCheckV1,
     timings: InstallTimingSummary,
+}
+
+struct CurrentInstallTruthInputs {
+    workspace_root: PathBuf,
+    icp_root: PathBuf,
+    config_path: PathBuf,
+    fleet_name: String,
 }
 
 fn prepare_install_deployment_truth(
@@ -679,6 +687,55 @@ pub fn check_install_deployment_truth(
     options: &InstallRootOptions,
     observed_at: impl Into<String>,
 ) -> Result<DeploymentCheckV1, Box<dyn std::error::Error>> {
+    let inputs = resolve_current_install_truth_inputs(options)?;
+    current_install_deployment_truth_check_at(
+        options,
+        &inputs.workspace_root,
+        &inputs.icp_root,
+        &inputs.config_path,
+        &inputs.fleet_name,
+        observed_at.into(),
+    )
+}
+
+/// Build a read-only execution preflight for the current install inputs.
+///
+/// This validates the current plan, safety report, authority reconciliation,
+/// and executor capabilities without opening the mutating install path or
+/// writing local receipt state.
+pub fn check_install_execution_preflight(
+    options: &InstallRootOptions,
+    observed_at: impl Into<String>,
+) -> Result<DeploymentExecutionPreflightV1, Box<dyn std::error::Error>> {
+    let inputs = resolve_current_install_truth_inputs(options)?;
+    let check = current_install_deployment_truth_check_at(
+        options,
+        &inputs.workspace_root,
+        &inputs.icp_root,
+        &inputs.config_path,
+        &inputs.fleet_name,
+        observed_at.into(),
+    )?;
+    let execution_context = current_install_execution_context(
+        &inputs.workspace_root,
+        &inputs.icp_root,
+        &options.network,
+    );
+    let executor = CurrentCliDeploymentExecutor::new(
+        execution_context.workspace_root,
+        execution_context.icp_root,
+        execution_context.artifact_roots,
+    );
+    Ok(deployment_execution_preflight_from_check(
+        &check,
+        &executor,
+        CURRENT_INSTALL_REQUIRED_CAPABILITIES,
+    ))
+}
+
+fn resolve_current_install_truth_inputs(
+    options: &InstallRootOptions,
+) -> Result<CurrentInstallTruthInputs, Box<dyn std::error::Error>> {
     let workspace_root = workspace_root()?;
     let icp_root = match &options.icp_root {
         Some(path) => path.canonicalize()?,
@@ -692,14 +749,12 @@ pub fn check_install_deployment_truth(
     let fleet_name = configured_fleet_name(&config_path)?;
     validate_expected_fleet_name(options.expected_fleet.as_deref(), &fleet_name, &config_path)?;
     validate_fleet_name(&fleet_name)?;
-    current_install_deployment_truth_check_at(
-        options,
-        &workspace_root,
-        &icp_root,
-        &config_path,
-        &fleet_name,
-        observed_at.into(),
-    )
+    Ok(CurrentInstallTruthInputs {
+        workspace_root,
+        icp_root,
+        config_path,
+        fleet_name,
+    })
 }
 
 fn current_install_deployment_truth_check_at(
@@ -822,6 +877,13 @@ fn run_install_deployment_truth_safety_gate(
     print_install_deployment_truth_gate(&deployment_truth_check, &deployment_receipt);
     enforce_install_deployment_truth_gate(&deployment_truth_check)?;
     receipt_write?;
+    write_current_install_execution_preflight_receipt(
+        icp_root,
+        &options.network,
+        fleet_name,
+        &deployment_truth_check,
+        execution_context,
+    )?;
     Ok(deployment_truth_check)
 }
 
@@ -939,6 +1001,105 @@ fn install_deployment_truth_gate_receipt(
         role_phase_receipts,
         command_result,
     )
+}
+
+fn write_current_install_execution_preflight_receipt(
+    icp_root: &Path,
+    network: &str,
+    fleet_name: &str,
+    check: &DeploymentCheckV1,
+    execution_context: &DeploymentExecutionContextV1,
+) -> Result<PathBuf, Box<dyn std::error::Error>> {
+    let started_at = current_unix_timestamp_label()?;
+    let executor = CurrentCliDeploymentExecutor::new(
+        execution_context.workspace_root.clone(),
+        execution_context.icp_root.clone(),
+        execution_context.artifact_roots.clone(),
+    );
+    let preflight = deployment_execution_preflight_from_check(
+        check,
+        &executor,
+        CURRENT_INSTALL_REQUIRED_CAPABILITIES,
+    );
+    let blockers = preflight.blockers.clone();
+    let (operation_status, command_result) = if blockers.is_empty() {
+        (
+            DeploymentExecutionStatusV1::Complete,
+            DeploymentCommandResultV1::Succeeded,
+        )
+    } else {
+        (
+            DeploymentExecutionStatusV1::FailedBeforeMutation,
+            DeploymentCommandResultV1::Failed {
+                code: "execution_preflight_blocked".to_string(),
+                message: "deployment execution preflight blocked current install".to_string(),
+            },
+        )
+    };
+    let finished_at = current_unix_timestamp_label()?;
+    let receipt = receipt_with_execution_context(
+        deployment_receipt_from_check_with_status(
+            check,
+            format!("{}:execution_preflight", check.check_id),
+            operation_status,
+            started_at.clone(),
+            Some(finished_at.clone()),
+            vec![phase_receipt(
+                "execution_preflight",
+                started_at,
+                Some(finished_at),
+                "validate deployment plan, authority, and executor capability readiness",
+                crate::deployment_truth::ObservationStatusV1::Observed,
+                current_install_execution_preflight_evidence(&preflight),
+            )],
+            Vec::new(),
+            command_result,
+        ),
+        execution_context,
+    );
+    let path = write_install_deployment_truth_receipt(icp_root, network, fleet_name, &receipt)?;
+    println!("Deployment truth receipt JSON: {}", path.display());
+    if !blockers.is_empty() {
+        let details = blockers
+            .iter()
+            .map(deployment_truth_finding_label)
+            .collect::<Vec<_>>()
+            .join("; ");
+        return Err(format!("deployment execution preflight blocked install: {details}").into());
+    }
+    Ok(path)
+}
+
+fn current_install_execution_preflight_evidence(
+    preflight: &crate::deployment_truth::DeploymentExecutionPreflightV1,
+) -> Vec<String> {
+    let mut evidence = vec![
+        format!("execution_preflight_status:{:?}", preflight.status),
+        format!("authority_plan:{}", preflight.authority_plan_id),
+        format!("planned_phases:{}", preflight.planned_phases.len()),
+        format!(
+            "required_capabilities:{}",
+            preflight.required_capabilities.len()
+        ),
+        format!(
+            "missing_capabilities:{}",
+            preflight.missing_capabilities.len()
+        ),
+        format!("blockers:{}", preflight.blockers.len()),
+    ];
+    evidence.extend(
+        preflight
+            .missing_capabilities
+            .iter()
+            .map(|capability| format!("missing_capability:{capability:?}")),
+    );
+    evidence.extend(
+        preflight
+            .blockers
+            .iter()
+            .map(|finding| format!("blocker:{}:{}", finding.code, finding.message)),
+    );
+    evidence
 }
 
 fn install_deployment_truth_phase_receipt(

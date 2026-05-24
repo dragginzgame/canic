@@ -1,6 +1,6 @@
 use crate::metrics::{
     CANIC_METRICS_METHOD, MetricsCommandError,
-    model::{MetricEntry, MetricsCanisterReport, MetricsReport},
+    model::{MetricEntry, MetricValue, MetricsCanisterReport, MetricsKind, MetricsReport},
     options::MetricsOptions,
     parse::parse_metrics_page,
 };
@@ -76,7 +76,7 @@ fn metrics_canister_report(
     match query_metrics(options, &entry.pid) {
         Ok(mut entries) => {
             if options.nonzero {
-                entries.retain(|entry| !entry.value.is_zero());
+                entries.retain(|entry| !metric_value_is_zero(&entry.value));
             }
             MetricsCanisterReport {
                 role: entry.role.clone().unwrap_or_else(|| "-".to_string()),
@@ -106,10 +106,29 @@ fn metrics_error_report(entry: &RegistryEntry, error: &str) -> MetricsCanisterRe
     }
 }
 
+const fn metric_value_is_zero(value: &MetricValue) -> bool {
+    match value {
+        MetricValue::Count { count } => *count == 0,
+        MetricValue::CountAndU64 { count, value_u64 } => *count == 0 && *value_u64 == 0,
+        MetricValue::U128 { value } => *value == 0,
+    }
+}
+
+const fn metrics_kind_candid_variant(kind: MetricsKind) -> &'static str {
+    match kind {
+        MetricsKind::Core => "Core",
+        MetricsKind::Placement => "Placement",
+        MetricsKind::Platform => "Platform",
+        MetricsKind::Runtime => "Runtime",
+        MetricsKind::Security => "Security",
+        MetricsKind::Storage => "Storage",
+    }
+}
+
 fn query_metrics(options: &MetricsOptions, canister_id: &str) -> Result<Vec<MetricEntry>, String> {
     let arg = format!(
         "(variant {{ {} }}, record {{ offset = 0 : nat64; limit = {} : nat64 }})",
-        options.kind.candid_variant(),
+        metrics_kind_candid_variant(options.kind),
         options.limit
     );
     let mut icp = IcpCli::new(&options.icp, None, Some(options.network.clone()));
@@ -184,5 +203,25 @@ mod tests {
 
         assert_eq!(report.status, "unavailable");
         assert_eq!(report.error.as_deref(), Some("canic_metrics unavailable"));
+    }
+
+    // Ensure zero filtering treats every payload shape consistently.
+    #[test]
+    fn detects_zero_metric_values() {
+        assert!(metric_value_is_zero(&MetricValue::Count { count: 0 }));
+        assert!(metric_value_is_zero(&MetricValue::CountAndU64 {
+            count: 0,
+            value_u64: 0
+        }));
+        assert!(!metric_value_is_zero(&MetricValue::U128 { value: 1 }));
+    }
+
+    // Ensure transport preserves the Candid metric kind vocabulary.
+    #[test]
+    fn maps_metric_kind_to_candid_variant() {
+        assert_eq!(
+            metrics_kind_candid_variant(MetricsKind::Security),
+            "Security"
+        );
     }
 }

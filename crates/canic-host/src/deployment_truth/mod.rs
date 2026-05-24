@@ -28,7 +28,8 @@ pub use authority::{
 };
 pub use executor::{
     CURRENT_CLI_EXECUTOR_CAPABILITIES, CurrentCliDeploymentExecutor, DeploymentExecutor,
-    current_cli_execution_context, deployment_execution_preflight, has_executor_capabilities,
+    current_cli_execution_context, deployment_execution_preflight,
+    deployment_execution_preflight_from_check, has_executor_capabilities,
     missing_executor_capabilities,
 };
 pub use model::{
@@ -68,6 +69,7 @@ pub use report::{
 };
 pub use text::{
     authority_evidence_text, authority_plan_text, authority_receipt_text, authority_report_text,
+    deployment_execution_preflight_text,
 };
 
 pub const DEPLOYMENT_TRUTH_SCHEMA_VERSION: u32 = 1;

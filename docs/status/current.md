@@ -23,7 +23,18 @@ inspect only the files needed for the current task.
 
 ## Recent Work
 
-- The current 0.43 development slice adds a concrete current-CLI executor
+- Current unreleased 0.43 work adds
+  `deployment_execution_preflight_from_check(...)`, letting callers feed a
+  `DeploymentCheckV1` directly into passive execution readiness without
+  rebuilding authority reconciliation by hand. It also adds host-owned text
+  rendering for `DeploymentExecutionPreflightV1` so the readiness artifact has
+  a human-oriented summary before any CLI surface is promoted. Current install
+  now persists an `execution_preflight` deployment-truth receipt after the
+  materialized safety gate and stops before later install phases when that
+  preflight is blocked. `check_install_execution_preflight(...)` exposes the
+  same current-install execution readiness path as a read-only host API for
+  future CLI or executor integration.
+- `0.43.0` added a concrete current-CLI executor
   wrapper, routes current-install execution context through that executor
   object, and gates the existing current install phases on the backend
   capabilities they need before current install begins mutating deployment

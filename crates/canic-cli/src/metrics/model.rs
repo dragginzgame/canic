@@ -28,28 +28,6 @@ impl MetricsKind {
             _ => Err(MetricsCommandError::InvalidKind(value.to_string())),
         }
     }
-
-    pub(super) const fn as_str(self) -> &'static str {
-        match self {
-            Self::Core => "core",
-            Self::Placement => "placement",
-            Self::Platform => "platform",
-            Self::Runtime => "runtime",
-            Self::Security => "security",
-            Self::Storage => "storage",
-        }
-    }
-
-    pub(super) const fn candid_variant(self) -> &'static str {
-        match self {
-            Self::Core => "Core",
-            Self::Placement => "Placement",
-            Self::Platform => "Platform",
-            Self::Runtime => "Runtime",
-            Self::Security => "Security",
-            Self::Storage => "Storage",
-        }
-    }
 }
 
 ///
@@ -98,14 +76,4 @@ pub(super) enum MetricValue {
     Count { count: u64 },
     CountAndU64 { count: u64, value_u64: u64 },
     U128 { value: u128 },
-}
-
-impl MetricValue {
-    pub(super) const fn is_zero(&self) -> bool {
-        match self {
-            Self::Count { count } => *count == 0,
-            Self::CountAndU64 { count, value_u64 } => *count == 0 && *value_u64 == 0,
-            Self::U128 { value } => *value == 0,
-        }
-    }
 }

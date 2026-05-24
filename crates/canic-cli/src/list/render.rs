@@ -72,13 +72,6 @@ pub(super) struct ListTitle {
     pub(super) network: String,
 }
 
-impl ListTitle {
-    #[must_use]
-    pub(super) fn render(&self) -> String {
-        format!("Fleet: {} (network {})", self.fleet, self.network)
-    }
-}
-
 ///
 /// ReadyStatus
 ///
@@ -134,7 +127,7 @@ pub(super) fn render_list_output(
 ) -> Result<String, ListCommandError> {
     let mut output = format!(
         "{}\n\n{}",
-        title.render(),
+        render_list_title(title),
         render_registry_tree(registry, canister, columns)?
     );
     if !missing_roles.is_empty() {
@@ -152,9 +145,13 @@ pub(super) fn render_config_output(
 ) -> String {
     format!(
         "{}\n\n{}",
-        title.render(),
+        render_list_title(title),
         render_config_table(rows, verbose)
     )
+}
+
+fn render_list_title(title: &ListTitle) -> String {
+    format!("Fleet: {} (network {})", title.fleet, title.network)
 }
 
 ///
