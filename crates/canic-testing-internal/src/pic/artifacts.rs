@@ -76,7 +76,7 @@ pub fn build_icp_all_with_env(
         .expect("write local artifact build env stamp");
 }
 
-fn canic_wasm_profile_value(profile: WasmBuildProfile) -> &'static str {
+const fn canic_wasm_profile_value(profile: WasmBuildProfile) -> &'static str {
     match profile {
         WasmBuildProfile::Debug => "debug",
         WasmBuildProfile::Fast => "fast",
