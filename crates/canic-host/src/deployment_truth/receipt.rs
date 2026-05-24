@@ -814,7 +814,8 @@ pub fn deployment_receipt_from_check(
     role_phase_receipts: Vec<RolePhaseReceiptV1>,
     command_result: DeploymentCommandResultV1,
 ) -> DeploymentReceiptV1 {
-    let operation_status = operation_status_for_command_result(&command_result);
+    let operation_status =
+        deployment_execution_status_for_receipt_parts(&command_result, &role_phase_receipts);
     deployment_receipt_from_check_with_status(
         check,
         operation_id,
@@ -864,6 +865,44 @@ pub fn deployment_receipt_from_check_with_status(
     }
 }
 
+/// Derive deployment execution status from command and role-phase receipts.
+///
+/// Explicit status can still be supplied when the caller knows a failed phase
+/// happened after a mutation that cannot be represented by role receipts yet.
+/// The generic classifier is deliberately conservative: a failed command is
+/// considered partial only when receipts show both applied and failed role
+/// work, and failed after mutation only when at least one role was applied.
+#[must_use]
+pub fn deployment_execution_status_for_receipt_parts(
+    command_result: &DeploymentCommandResultV1,
+    role_phase_receipts: &[RolePhaseReceiptV1],
+) -> DeploymentExecutionStatusV1 {
+    match command_result {
+        DeploymentCommandResultV1::NotFinished => DeploymentExecutionStatusV1::InProgress,
+        DeploymentCommandResultV1::Succeeded => DeploymentExecutionStatusV1::Complete,
+        DeploymentCommandResultV1::Failed { .. } => {
+            failed_execution_status_from_role_phase_receipts(role_phase_receipts)
+        }
+    }
+}
+
+fn failed_execution_status_from_role_phase_receipts(
+    role_phase_receipts: &[RolePhaseReceiptV1],
+) -> DeploymentExecutionStatusV1 {
+    let applied = role_phase_receipts
+        .iter()
+        .any(|receipt| receipt.result == RolePhaseResultV1::Applied);
+    let failed = role_phase_receipts
+        .iter()
+        .any(|receipt| receipt.result == RolePhaseResultV1::Failed);
+
+    match (applied, failed) {
+        (true, true) => DeploymentExecutionStatusV1::PartiallyApplied,
+        (true, false) => DeploymentExecutionStatusV1::FailedAfterMutation,
+        (false, _) => DeploymentExecutionStatusV1::FailedBeforeMutation,
+    }
+}
+
 fn authority_controller_observation_from_action(
     action: &CanisterAuthorityActionV1,
 ) -> AuthorityControllerObservationV1 {
@@ -885,16 +924,4 @@ fn authority_action_subject(action: &CanisterAuthorityActionV1) -> String {
         .clone()
         .or_else(|| action.role.as_ref().map(|role| format!("role:{role}")))
         .unwrap_or_else(|| "unknown".to_string())
-}
-
-const fn operation_status_for_command_result(
-    result: &DeploymentCommandResultV1,
-) -> DeploymentExecutionStatusV1 {
-    match result {
-        DeploymentCommandResultV1::NotFinished => DeploymentExecutionStatusV1::InProgress,
-        DeploymentCommandResultV1::Succeeded => DeploymentExecutionStatusV1::Complete,
-        DeploymentCommandResultV1::Failed { .. } => {
-            DeploymentExecutionStatusV1::FailedAfterMutation
-        }
-    }
 }

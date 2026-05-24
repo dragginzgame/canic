@@ -23,6 +23,13 @@ inspect only the files needed for the current task.
 
 ## Recent Work
 
+- Current unreleased 0.43 work adds shared deployment receipt status
+  classification. Generic deployment receipt construction now derives
+  `FailedBeforeMutation`, `FailedAfterMutation`, and `PartiallyApplied` from
+  command results plus role-phase evidence, giving later executor extraction a
+  single receipt-status boundary instead of ad hoc current-install decisions.
+  Receipt-aware resume checks now also reject receipts whose claimed execution
+  status contradicts their command result and role-phase evidence.
 - Current unreleased 0.43 work starts the artifact-staging receipt model.
   `StagingReceiptV1` and `ArtifactTransportV1` now capture role artifact
   identity, transport, wasm-store locator, prepared chunk hashes, published

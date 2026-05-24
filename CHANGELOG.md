@@ -14,6 +14,10 @@ present.
 
 ## [0.43.x] - 2026-05-24 - Backend-agnostic execution
 
+- `0.43.5` hardens deployment receipt status semantics so failed execution
+  receipts distinguish pre-mutation, post-mutation, and partial application
+  from role-phase evidence, and resume checks reject contradictory receipts.
+
 - `0.43.4` adds typed artifact-staging receipts and enriches current-install
   `stage_release_set` evidence from the release-set manifest.
 

@@ -223,6 +223,7 @@ fn apply_receipt_resume_safety(
 ) {
     validate_receipt_identity(plan, receipt, &mut diff.hard_failures);
     validate_receipt_command_result(receipt, &mut diff.hard_failures);
+    validate_receipt_execution_status(receipt, &mut diff.hard_failures);
     let phase_conflicts =
         validate_receipt_phase_duplicates(receipt, &mut diff.hard_failures, &mut diff.warnings);
     let role_phase_conflicts = validate_receipt_role_phase_duplicates(
@@ -419,6 +420,39 @@ fn validate_receipt_command_result(
             format!("receipt command failed with {code}: {message}"),
             SafetySeverityV1::HardFailure,
             Some("receipt.command_result".to_string()),
+        ));
+    }
+}
+
+fn validate_receipt_execution_status(
+    receipt: &DeploymentReceiptV1,
+    hard_failures: &mut Vec<SafetyFindingV1>,
+) {
+    let derived_status = deployment_execution_status_for_receipt_parts(
+        &receipt.command_result,
+        &receipt.role_phase_receipts,
+    );
+    let status_is_consistent = match receipt.operation_status {
+        DeploymentExecutionStatusV1::FailedAfterMutation
+            if matches!(
+                derived_status,
+                DeploymentExecutionStatusV1::FailedBeforeMutation
+            ) =>
+        {
+            receipt.role_phase_receipts.is_empty()
+        }
+        _ => receipt.operation_status == derived_status,
+    };
+
+    if !status_is_consistent {
+        hard_failures.push(finding(
+            "receipt_execution_status_mismatch",
+            format!(
+                "receipt operation status {:?} does not match command result and role-phase evidence {:?}",
+                receipt.operation_status, derived_status
+            ),
+            SafetySeverityV1::HardFailure,
+            Some("receipt.operation_status".to_string()),
         ));
     }
 }

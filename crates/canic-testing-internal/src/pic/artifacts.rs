@@ -5,7 +5,7 @@ use std::{
     process::{Command, Output},
 };
 
-pub const INTERNAL_TEST_ENDPOINTS_ENV: (&str, &str) = ("CANIC_INTERNAL_TEST_ENDPOINTS", "1");
+pub(super) const INTERNAL_TEST_ENDPOINTS_ENV: (&str, &str) = ("CANIC_INTERNAL_TEST_ENDPOINTS", "1");
 const ICP_BUILD_ENV_STAMP_RELATIVE: &str = ".icp/canic-build-env.stamp";
 
 ///
@@ -20,7 +20,7 @@ pub enum CanicWasmBuildProfile {
 
 impl CanicWasmBuildProfile {
     #[must_use]
-    pub const fn cargo_profile_args(self) -> &'static [&'static str] {
+    pub(super) const fn cargo_profile_args(self) -> &'static [&'static str] {
         match self {
             Self::Debug => &[],
             Self::Fast => &["--profile", "fast"],
@@ -36,7 +36,7 @@ impl CanicWasmBuildProfile {
     }
 
     #[must_use]
-    pub const fn canic_wasm_profile_value(self) -> &'static str {
+    const fn canic_wasm_profile_value(self) -> &'static str {
         match self {
             Self::Debug => "debug",
             Self::Fast => "fast",
@@ -53,7 +53,7 @@ pub fn build_internal_test_wasm_canisters(
     build_internal_test_wasm_canisters_with_env(workspace_root, target_dir, packages, profile, &[]);
 }
 
-pub fn build_internal_test_wasm_canisters_with_env(
+pub(super) fn build_internal_test_wasm_canisters_with_env(
     workspace_root: &Path,
     target_dir: &Path,
     packages: &[&str],
@@ -74,7 +74,7 @@ pub fn build_internal_test_wasm_canisters_with_env(
 }
 
 #[must_use]
-pub fn icp_artifact_ready_with_snapshot(
+pub(super) fn icp_artifact_ready_with_snapshot(
     workspace_root: &Path,
     artifact_relative_path: &str,
     watched_inputs: WatchedInputSnapshot,
@@ -95,7 +95,7 @@ pub fn icp_artifact_ready_with_snapshot(
     }
 }
 
-pub fn build_icp_all_with_env(
+pub(super) fn build_icp_all_with_env(
     workspace_root: &Path,
     lock_relative_path: &str,
     network: &str,

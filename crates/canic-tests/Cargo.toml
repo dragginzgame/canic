@@ -16,7 +16,6 @@ canic-core = { workspace = true }
 canic-testing-internal = { workspace = true }
 ic-memory = { workspace = true }
 ic-testkit = { workspace = true }
-pocket-ic = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 

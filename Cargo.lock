@@ -437,7 +437,6 @@ dependencies = [
  "canic-testing-internal",
  "ic-memory",
  "ic-testkit",
- "pocket-ic",
  "serde",
  "serde_json",
 ]

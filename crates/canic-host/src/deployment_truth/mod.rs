@@ -62,9 +62,9 @@ pub use receipt::{
     AuthorityEvidenceError, artifact_gate_phase_receipt, artifact_gate_role_phase_receipts,
     authority_dry_run_evidence_from_check, authority_dry_run_evidence_from_check_with_local_ids,
     authority_dry_run_receipt_from_check, authority_dry_run_receipt_from_check_with_local_id,
-    authority_dry_run_receipt_from_plan, deployment_receipt_from_check,
-    deployment_receipt_from_check_with_status, phase_receipt, staging_receipt_evidence,
-    validate_authority_dry_run_evidence,
+    authority_dry_run_receipt_from_plan, deployment_execution_status_for_receipt_parts,
+    deployment_receipt_from_check, deployment_receipt_from_check_with_status, phase_receipt,
+    staging_receipt_evidence, validate_authority_dry_run_evidence,
 };
 pub use report::{
     LocalDeploymentCheckRequest, check_local_deployment, compare_plan_inventory_and_receipt,

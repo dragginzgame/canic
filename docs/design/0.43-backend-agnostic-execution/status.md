@@ -52,6 +52,15 @@ than implicit installer state.
   manifest, including role, artifact identity, wasm-store transport,
   prepared chunk hashes, published chunk counts, and verified postconditions,
   without changing current installer mutation behavior.
+- Added shared receipt status classification for generic deployment receipt
+  construction. Failed receipts now derive `FailedBeforeMutation`,
+  `FailedAfterMutation`, or `PartiallyApplied` from command result plus
+  role-phase evidence unless a caller explicitly supplies a more specific
+  status for phases that are not role-representable yet.
+- Receipt-aware resume safety now rejects persisted receipts whose claimed
+  execution status contradicts the command result and role-phase evidence,
+  preventing stale or hand-edited execution receipts from overstating resume
+  safety.
 
 ## Not Implemented Yet
 

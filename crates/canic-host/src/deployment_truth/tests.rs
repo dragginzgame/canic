@@ -732,6 +732,80 @@ fn artifact_gate_receipt_records_materialized_artifact_evidence() {
 }
 
 #[test]
+fn execution_status_classifier_marks_failed_before_mutation_without_applied_roles() {
+    let status = deployment_execution_status_for_receipt_parts(
+        &DeploymentCommandResultV1::Failed {
+            code: "preflight_blocked".to_string(),
+            message: "blocked before mutation".to_string(),
+        },
+        &[sample_role_phase_receipt(RolePhaseResultV1::NotAttempted)],
+    );
+
+    assert_eq!(status, DeploymentExecutionStatusV1::FailedBeforeMutation);
+}
+
+#[test]
+fn execution_status_classifier_marks_failed_after_mutation_with_applied_role() {
+    let status = deployment_execution_status_for_receipt_parts(
+        &DeploymentCommandResultV1::Failed {
+            code: "post_install_failed".to_string(),
+            message: "failed after one role applied".to_string(),
+        },
+        &[sample_role_phase_receipt(RolePhaseResultV1::Applied)],
+    );
+
+    assert_eq!(status, DeploymentExecutionStatusV1::FailedAfterMutation);
+}
+
+#[test]
+fn execution_status_classifier_marks_partially_applied_with_applied_and_failed_roles() {
+    let role_phase_receipts = vec![
+        sample_role_phase_receipt(RolePhaseResultV1::Applied),
+        RolePhaseReceiptV1 {
+            role: "user_hub".to_string(),
+            ..sample_role_phase_receipt(RolePhaseResultV1::Failed)
+        },
+    ];
+    let status = deployment_execution_status_for_receipt_parts(
+        &DeploymentCommandResultV1::Failed {
+            code: "multi_role_install_failed".to_string(),
+            message: "one role applied and another failed".to_string(),
+        },
+        &role_phase_receipts,
+    );
+
+    assert_eq!(status, DeploymentExecutionStatusV1::PartiallyApplied);
+}
+
+#[test]
+fn deployment_receipt_from_check_derives_partial_status_from_role_receipts() {
+    let check = sample_check(sample_plan(), sample_matching_inventory());
+    let receipt = deployment_receipt_from_check(
+        &check,
+        "operation-1",
+        "2026-05-22T00:00:00Z",
+        Some("2026-05-22T00:00:01Z".to_string()),
+        Vec::new(),
+        vec![
+            sample_role_phase_receipt(RolePhaseResultV1::Applied),
+            RolePhaseReceiptV1 {
+                role: "user_hub".to_string(),
+                ..sample_role_phase_receipt(RolePhaseResultV1::Failed)
+            },
+        ],
+        DeploymentCommandResultV1::Failed {
+            code: "partial".to_string(),
+            message: "partial execution".to_string(),
+        },
+    );
+
+    assert_eq!(
+        receipt.operation_status,
+        DeploymentExecutionStatusV1::PartiallyApplied
+    );
+}
+
+#[test]
 fn artifact_gate_receipt_records_missing_artifact_postcondition() {
     let temp = TempWorkspace::new("canic-host-artifact-gate-receipt");
     let workspace_root = temp.path().join("workspace");
@@ -843,6 +917,40 @@ fn receipt_aware_diff_does_not_resume_unverified_phase() {
             .iter()
             .any(|finding| finding.code == "receipt_postcondition_unverified")
     );
+}
+
+#[test]
+fn receipt_aware_diff_blocks_execution_status_mismatch() {
+    let plan = sample_plan();
+    let inventory = sample_matching_inventory();
+    let mut receipt = sample_receipt_with_phase(
+        "plan-local-root",
+        Some("aaaaa-aa"),
+        ObservationStatusV1::Observed,
+        RolePhaseResultV1::VerifiedAlreadyApplied,
+    );
+    receipt.command_result = DeploymentCommandResultV1::Failed {
+        code: "partial".to_string(),
+        message: "role application failed".to_string(),
+    };
+    receipt.operation_status = DeploymentExecutionStatusV1::PartiallyApplied;
+    receipt.role_phase_receipts = vec![
+        sample_role_phase_receipt(RolePhaseResultV1::Applied),
+        RolePhaseReceiptV1 {
+            role: "user_hub".to_string(),
+            ..sample_role_phase_receipt(RolePhaseResultV1::NotAttempted)
+        },
+    ];
+
+    let diff = compare_plan_inventory_and_receipt(&plan, &inventory, &receipt);
+
+    assert_eq!(diff.resume_safety.status, SafetyStatusV1::Blocked);
+    assert!(diff.resumable_phases.is_empty());
+    let has_status_mismatch = diff.hard_failures.iter().any(|finding| {
+        finding.code == "receipt_execution_status_mismatch"
+            && finding.subject.as_deref() == Some("receipt.operation_status")
+    });
+    assert!(has_status_mismatch);
 }
 
 #[test]
@@ -5264,6 +5372,21 @@ fn sample_receipt_with_phase(
         }],
         final_inventory_id: Some("inventory-1".to_string()),
         command_result: DeploymentCommandResultV1::Succeeded,
+    }
+}
+
+fn sample_role_phase_receipt(result: RolePhaseResultV1) -> RolePhaseReceiptV1 {
+    RolePhaseReceiptV1 {
+        role: "root".to_string(),
+        phase: "install_root".to_string(),
+        result,
+        previous_module_hash: None,
+        target_module_hash: Some("module".to_string()),
+        observed_module_hash_after: (result == RolePhaseResultV1::Applied)
+            .then(|| "module".to_string()),
+        artifact_digest: Some("file".to_string()),
+        canonical_embedded_config_sha256: Some("canonical".to_string()),
+        error: (result == RolePhaseResultV1::Failed).then(|| "install failed".to_string()),
     }
 }
 
