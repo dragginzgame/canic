@@ -293,14 +293,18 @@ fn deployment_execution_preflight_accepts_safe_plan_and_capable_executor() {
     assert_eq!(
         preflight.planned_phases,
         vec![
-            "create_root",
+            "resolve_root_canister",
             "build_artifacts",
             "materialize_artifacts",
+            "execution_preflight",
+            "emit_manifest",
             "install_root",
+            "fund_root_pre_bootstrap",
             "stage_release_set",
             "resume_bootstrap",
             "wait_ready",
-            "post_validate",
+            "fund_root_post_ready",
+            "write_install_state",
         ]
     );
     assert_json_round_trip(&preflight);

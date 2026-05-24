@@ -122,14 +122,18 @@ pub const TESTKIT_PREFLIGHT_CAPABILITIES: &[DeploymentExecutorCapabilityV1] =
     CURRENT_CLI_EXECUTOR_CAPABILITIES;
 
 pub const CURRENT_INSTALL_EXECUTION_PHASES: &[&str] = &[
-    "create_root",
+    "resolve_root_canister",
     "build_artifacts",
     "materialize_artifacts",
+    "execution_preflight",
+    "emit_manifest",
     "install_root",
+    "fund_root_pre_bootstrap",
     "stage_release_set",
     "resume_bootstrap",
     "wait_ready",
-    "post_validate",
+    "fund_root_post_ready",
+    "write_install_state",
 ];
 
 #[must_use]

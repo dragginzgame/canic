@@ -14,6 +14,10 @@ present.
 
 ## [0.43.x] - 2026-05-24 - Backend-agnostic execution
 
+- `0.43.7` moves the remaining current-install root resolution, build,
+  manifest, resume, and readiness phases behind narrow operation values and
+  aligns execution preflight evidence with the installer receipt phases.
+
 - `0.43.6` adds a testkit preflight context that validates the same
   `DeploymentPlanV1` shape as the current CLI executor, and moves current
   install root wasm installation, root funding, and release-set staging through

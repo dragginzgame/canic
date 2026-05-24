@@ -275,24 +275,22 @@ fn resolve_root_canister_with_phase(
     icp_root: &Path,
     config_path: &Path,
 ) -> Result<(String, CompletedInstallPhase, Duration), Box<dyn std::error::Error>> {
-    let started_at = current_unix_timestamp_label()?;
-    let started = Instant::now();
-    let root_canister_id = ensure_root_canister_id(
+    let operation = ResolveRootCanisterOperation::new(
         icp_root,
         &options.network,
         &options.root_canister,
         config_path,
-    )?;
+    );
+    let started_at = current_unix_timestamp_label()?;
+    let started = Instant::now();
+    let root_canister_id = operation.execute()?;
     let duration = started.elapsed();
     let phase = CompletedInstallPhase {
         phase: "resolve_root_canister",
         attempted_action: "resolve or create root canister id",
         started_at,
         finished_at: Some(current_unix_timestamp_label()?),
-        evidence: vec![
-            format!("root_target:{}", options.root_canister),
-            format!("root_canister:{root_canister_id}"),
-        ],
+        evidence: operation.evidence(&root_canister_id),
         role_names: Vec::new(),
     };
     Ok((root_canister_id, phase, duration))
@@ -304,26 +302,24 @@ fn build_install_targets_with_phase(
     config_path: &Path,
 ) -> Result<(CompletedInstallPhase, Duration), Box<dyn std::error::Error>> {
     let build_targets = configured_install_targets(config_path, &options.root_build_target)?;
-    let started_at = current_unix_timestamp_label()?;
-    let started = Instant::now();
-    run_canic_build_targets(
+    let operation = BuildInstallTargetsOperation::new(
         &options.network,
-        &build_targets,
+        build_targets,
         options.build_profile,
         config_path,
         icp_root,
-    )?;
+    );
+    let started_at = current_unix_timestamp_label()?;
+    let started = Instant::now();
+    operation.execute()?;
     let duration = started.elapsed();
     let phase = CompletedInstallPhase {
         phase: "build_artifacts",
         attempted_action: "build configured install targets",
         started_at,
         finished_at: Some(current_unix_timestamp_label()?),
-        evidence: build_targets
-            .iter()
-            .map(|target| format!("build_target:{target}"))
-            .collect(),
-        role_names: build_targets,
+        evidence: operation.evidence(),
+        role_names: operation.role_names(),
     };
     Ok((phase, duration))
 }
@@ -337,14 +333,11 @@ fn emit_manifest_with_deployment_truth_receipt(
     deployment_truth_check: &DeploymentCheckV1,
     execution_context: &DeploymentExecutionContextV1,
 ) -> Result<(PathBuf, Duration), Box<dyn std::error::Error>> {
+    let operation =
+        EmitRootManifestOperation::new(workspace_root, icp_root, &options.network, config_path);
     let emit_manifest_started_at_label = current_unix_timestamp_label()?;
     let emit_manifest_started_at = Instant::now();
-    let manifest_path = emit_root_release_set_manifest_with_config(
-        workspace_root,
-        icp_root,
-        &options.network,
-        config_path,
-    )?;
+    let manifest_path = operation.execute()?;
     let emit_manifest_duration = emit_manifest_started_at.elapsed();
     let emit_manifest_receipt = receipt_with_execution_context(
         install_deployment_truth_phase_receipt(
@@ -354,7 +347,7 @@ fn emit_manifest_with_deployment_truth_receipt(
             Some(current_unix_timestamp_label()?),
             "emit root release-set manifest",
             crate::deployment_truth::ObservationStatusV1::Observed,
-            vec![format!("manifest_path:{}", manifest_path.display())],
+            EmitRootManifestOperation::evidence(&manifest_path),
         ),
         execution_context,
     );
@@ -419,26 +412,23 @@ fn run_root_activation_phases(
         stage_operation.evidence(manifest_path),
         || stage_operation.execute(),
     )?;
+    let resume_operation = ResumeBootstrapOperation::new(receipt_scope.network, root_canister_id);
     timings.resume_bootstrap = receipt_scope.run_phase(
         "resume_bootstrap",
         "resume root bootstrap",
-        vec![format!("root_canister:{root_canister_id}")],
-        || resume_root_bootstrap(receipt_scope.network, root_canister_id),
+        resume_operation.evidence(),
+        || resume_operation.execute(),
     )?;
+    let wait_ready_operation = WaitRootReadyOperation::new(
+        receipt_scope.network,
+        root_canister_id,
+        options.ready_timeout_seconds,
+    );
     let wait_ready_result = receipt_scope.run_phase(
         "wait_ready",
         "wait for root bootstrap readiness",
-        vec![
-            format!("root_canister:{root_canister_id}"),
-            format!("timeout_seconds:{}", options.ready_timeout_seconds),
-        ],
-        || {
-            wait_for_root_ready(
-                receipt_scope.network,
-                root_canister_id,
-                options.ready_timeout_seconds,
-            )
-        },
+        wait_ready_operation.evidence(),
+        || wait_ready_operation.execute(),
     );
     match wait_ready_result {
         Ok(duration) => timings.wait_ready = duration,
@@ -478,6 +468,128 @@ struct CompletedInstallPhase {
     finished_at: Option<String>,
     evidence: Vec<String>,
     role_names: Vec<String>,
+}
+
+struct ResolveRootCanisterOperation<'a> {
+    icp_root: &'a Path,
+    network: &'a str,
+    root_canister: &'a str,
+    config_path: &'a Path,
+}
+
+impl<'a> ResolveRootCanisterOperation<'a> {
+    const fn new(
+        icp_root: &'a Path,
+        network: &'a str,
+        root_canister: &'a str,
+        config_path: &'a Path,
+    ) -> Self {
+        Self {
+            icp_root,
+            network,
+            root_canister,
+            config_path,
+        }
+    }
+
+    fn evidence(&self, root_canister_id: &str) -> Vec<String> {
+        vec![
+            format!("root_target:{}", self.root_canister),
+            format!("root_canister:{root_canister_id}"),
+        ]
+    }
+
+    fn execute(&self) -> Result<String, Box<dyn std::error::Error>> {
+        ensure_root_canister_id(
+            self.icp_root,
+            self.network,
+            self.root_canister,
+            self.config_path,
+        )
+    }
+}
+
+struct BuildInstallTargetsOperation<'a> {
+    network: &'a str,
+    build_targets: Vec<String>,
+    build_profile: Option<CanisterBuildProfile>,
+    config_path: &'a Path,
+    icp_root: &'a Path,
+}
+
+impl<'a> BuildInstallTargetsOperation<'a> {
+    const fn new(
+        network: &'a str,
+        build_targets: Vec<String>,
+        build_profile: Option<CanisterBuildProfile>,
+        config_path: &'a Path,
+        icp_root: &'a Path,
+    ) -> Self {
+        Self {
+            network,
+            build_targets,
+            build_profile,
+            config_path,
+            icp_root,
+        }
+    }
+
+    fn evidence(&self) -> Vec<String> {
+        self.build_targets
+            .iter()
+            .map(|target| format!("build_target:{target}"))
+            .collect()
+    }
+
+    fn role_names(&self) -> Vec<String> {
+        self.build_targets.clone()
+    }
+
+    fn execute(&self) -> Result<(), Box<dyn std::error::Error>> {
+        run_canic_build_targets(
+            self.network,
+            &self.build_targets,
+            self.build_profile,
+            self.config_path,
+            self.icp_root,
+        )
+    }
+}
+
+struct EmitRootManifestOperation<'a> {
+    workspace_root: &'a Path,
+    icp_root: &'a Path,
+    network: &'a str,
+    config_path: &'a Path,
+}
+
+impl<'a> EmitRootManifestOperation<'a> {
+    const fn new(
+        workspace_root: &'a Path,
+        icp_root: &'a Path,
+        network: &'a str,
+        config_path: &'a Path,
+    ) -> Self {
+        Self {
+            workspace_root,
+            icp_root,
+            network,
+            config_path,
+        }
+    }
+
+    fn evidence(manifest_path: &Path) -> Vec<String> {
+        vec![format!("manifest_path:{}", manifest_path.display())]
+    }
+
+    fn execute(&self) -> Result<PathBuf, Box<dyn std::error::Error>> {
+        emit_root_release_set_manifest_with_config(
+            self.workspace_root,
+            self.icp_root,
+            self.network,
+            self.config_path,
+        )
+    }
 }
 
 struct InstallRootWasmOperation<'a> {
@@ -556,6 +668,55 @@ impl<'a> EnsureRootCyclesOperation<'a> {
             self.root_canister_id,
             self.phase_label,
         )
+    }
+}
+
+struct ResumeBootstrapOperation<'a> {
+    network: &'a str,
+    root_canister_id: &'a str,
+}
+
+impl<'a> ResumeBootstrapOperation<'a> {
+    const fn new(network: &'a str, root_canister_id: &'a str) -> Self {
+        Self {
+            network,
+            root_canister_id,
+        }
+    }
+
+    fn evidence(&self) -> Vec<String> {
+        vec![format!("root_canister:{}", self.root_canister_id)]
+    }
+
+    fn execute(&self) -> Result<(), Box<dyn std::error::Error>> {
+        resume_root_bootstrap(self.network, self.root_canister_id)
+    }
+}
+
+struct WaitRootReadyOperation<'a> {
+    network: &'a str,
+    root_canister_id: &'a str,
+    timeout_seconds: u64,
+}
+
+impl<'a> WaitRootReadyOperation<'a> {
+    const fn new(network: &'a str, root_canister_id: &'a str, timeout_seconds: u64) -> Self {
+        Self {
+            network,
+            root_canister_id,
+            timeout_seconds,
+        }
+    }
+
+    fn evidence(&self) -> Vec<String> {
+        vec![
+            format!("root_canister:{}", self.root_canister_id),
+            format!("timeout_seconds:{}", self.timeout_seconds),
+        ]
+    }
+
+    fn execute(&self) -> Result<(), Box<dyn std::error::Error>> {
+        wait_for_root_ready(self.network, self.root_canister_id, self.timeout_seconds)
     }
 }
 

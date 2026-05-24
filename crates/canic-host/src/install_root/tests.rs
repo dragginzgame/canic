@@ -1,8 +1,10 @@
 use super::{
-    CompletedInstallPhase, EnsureRootCyclesOperation, INSTALL_STATE_SCHEMA_VERSION,
-    InstallReceiptScope, InstallRootOptions, InstallRootWasmOperation, InstallState,
-    InstallTimingSummary, StageReleaseSetOperation, add_create_root_target,
-    add_icp_environment_target, add_local_root_create_cycles_arg, check_install_deployment_truth,
+    BuildInstallTargetsOperation, CompletedInstallPhase, EmitRootManifestOperation,
+    EnsureRootCyclesOperation, INSTALL_STATE_SCHEMA_VERSION, InstallReceiptScope,
+    InstallRootOptions, InstallRootWasmOperation, InstallState, InstallTimingSummary,
+    ResolveRootCanisterOperation, ResumeBootstrapOperation, StageReleaseSetOperation,
+    WaitRootReadyOperation, add_create_root_target, add_icp_environment_target,
+    add_local_root_create_cycles_arg, check_install_deployment_truth,
     check_install_execution_preflight, config_selection_error,
     current_install_deployment_truth_check_at, current_install_execution_context,
     current_install_executor_missing_capabilities, current_install_staging_evidence,
@@ -1162,6 +1164,56 @@ fn current_install_staging_evidence_records_release_set_transport_facts() {
 }
 
 #[test]
+fn resolve_root_canister_operation_owns_current_install_evidence() {
+    let operation = ResolveRootCanisterOperation::new(
+        Path::new("/workspace/.icp"),
+        "local",
+        "root",
+        Path::new("/workspace/fleets/demo/canic.toml"),
+    );
+
+    let evidence = operation.evidence("aaaaa-aa");
+
+    assert_eq!(evidence, ["root_target:root", "root_canister:aaaaa-aa"]);
+}
+
+#[test]
+fn build_install_targets_operation_owns_current_install_evidence() {
+    let operation = BuildInstallTargetsOperation::new(
+        "local",
+        vec!["root".to_string(), "wasm_store".to_string()],
+        Some(CanisterBuildProfile::Fast),
+        Path::new("/workspace/fleets/demo/canic.toml"),
+        Path::new("/workspace/.icp"),
+    );
+
+    assert_eq!(
+        operation.evidence(),
+        ["build_target:root", "build_target:wasm_store"]
+    );
+    assert_eq!(operation.role_names(), ["root", "wasm_store"]);
+}
+
+#[test]
+fn emit_root_manifest_operation_owns_current_install_evidence() {
+    let _operation = EmitRootManifestOperation::new(
+        Path::new("/workspace"),
+        Path::new("/workspace/.icp"),
+        "local",
+        Path::new("/workspace/fleets/demo/canic.toml"),
+    );
+
+    let evidence = EmitRootManifestOperation::evidence(Path::new(
+        "/workspace/.icp/local/canisters/root.release-set.json",
+    ));
+
+    assert_eq!(
+        evidence,
+        ["manifest_path:/workspace/.icp/local/canisters/root.release-set.json"]
+    );
+}
+
+#[test]
 fn stage_release_set_operation_owns_current_install_staging_evidence() {
     let manifest = RootReleaseSetManifest {
         release_version: "0.43.6".to_string(),
@@ -1221,6 +1273,25 @@ fn ensure_root_cycles_operation_owns_current_install_evidence() {
     assert!(evidence.contains(&"root_canister:aaaaa-aa".to_string()));
     assert!(evidence.contains(&"minimum_cycles:100000000000000".to_string()));
     assert!(evidence.contains(&"funding_phase:pre-bootstrap".to_string()));
+}
+
+#[test]
+fn resume_bootstrap_operation_owns_current_install_evidence() {
+    let operation = ResumeBootstrapOperation::new("local", "aaaaa-aa");
+
+    let evidence = operation.evidence();
+
+    assert_eq!(evidence, ["root_canister:aaaaa-aa"]);
+}
+
+#[test]
+fn wait_root_ready_operation_owns_current_install_evidence() {
+    let operation = WaitRootReadyOperation::new("local", "aaaaa-aa", 30);
+
+    let evidence = operation.evidence();
+
+    assert!(evidence.contains(&"root_canister:aaaaa-aa".to_string()));
+    assert!(evidence.contains(&"timeout_seconds:30".to_string()));
 }
 
 #[test]

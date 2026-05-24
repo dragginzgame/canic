@@ -23,6 +23,24 @@ inspect only the files needed for the current task.
 
 ## Recent Work
 
+- `0.43.7` routes current-install root bootstrap resume
+  and readiness waiting through narrow operation values that own phase
+  evidence and execution calls. This keeps current behavior intact while
+  reducing the remaining ad hoc activation closure wiring before the executor
+  boundary is fully separated.
+- `0.43.7` also routes configured artifact builds through
+  a narrow operation value that owns build-target evidence, role names, and the
+  existing build call without changing build behavior.
+- `0.43.7` also routes root canister resolution through a
+  narrow operation value that owns root-target evidence and the existing root
+  lookup/create call without changing canister creation behavior.
+- `0.43.7` also routes release-set manifest emission
+  through a narrow operation value that owns manifest-path evidence and the
+  existing manifest writer call without changing manifest output.
+- `0.43.7` also aligns current-install execution preflight
+  phase evidence with the actual deployment-truth receipt phases emitted by the
+  installer, replacing the older coarse phase list with receipt-level phase
+  names.
 - `0.43.6` adds a narrow testkit preflight
   context and validation coverage proving the harness path consumes the same
   `DeploymentPlanV1`, safety report, authority plan, and phase list as the

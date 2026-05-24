@@ -70,6 +70,25 @@ than implicit installer state.
   `stage_release_set` through narrow operation values that own phase evidence
   and execution calls. This preserves current installer behavior while moving
   those phases closer to the executor operation boundary.
+- Routed current-install root bootstrap resume and readiness waiting through
+  narrow operation values that own phase evidence and execution calls. This
+  preserves current installer behavior while reducing the remaining ad hoc
+  activation closure wiring before the executor boundary is fully separated.
+- Routed current-install configured artifact builds through a narrow operation
+  value that owns build-target evidence, role names, and the existing build
+  call. This preserves current build behavior while keeping pre-activation
+  phase evidence on the same operation boundary as later install phases.
+- Routed current-install root canister resolution through a narrow operation
+  value that owns root-target evidence and the existing root lookup/create
+  call. This preserves current canister creation behavior while keeping the
+  pre-build receipt phase on the same operation boundary as later phases.
+- Routed current-install release-set manifest emission through a narrow
+  operation value that owns manifest-path evidence and the existing manifest
+  writer call. This preserves current manifest output while keeping the
+  pre-activation manifest phase on the same operation boundary as later phases.
+- Aligned current-install execution preflight phase evidence with the actual
+  deployment-truth receipt phases emitted by the installer, replacing the older
+  coarse phase list with receipt-level phase names.
 
 ## Not Implemented Yet
 
