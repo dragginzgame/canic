@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-05-23
+Last updated: 2026-05-24
 
 ## Purpose
 
@@ -21,6 +21,15 @@ inspect only the files needed for the current task.
 
 ## Recent Work
 
+- Continued 0.42 authority evidence hardening after `0.42.7`: dry-run
+  evidence validation now rejects schema-version drift and receipts whose
+  operation status or command result no longer represents a completed
+  successful dry run. It also recomputes report summaries from the
+  reconciliation plan and rejects mutated report counts, readiness,
+  breakdowns, observation gaps, or next actions. Completed dry-run receipts
+  must now include `finished_at`, and evidence `generated_at` must match that
+  completion time. This remains a passive consistency guard over
+  archived/read-only evidence and does not add controller mutation.
 - Added read-only human-oriented authority output:
   `canic deploy authority check|evidence|report|receipt --format text` renders
   existing authority DTOs as deterministic operator summaries while JSON

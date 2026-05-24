@@ -7,6 +7,15 @@ use thiserror::Error as ThisError;
 #[derive(Debug, ThisError)]
 pub enum AuthorityEvidenceError {
     #[error(
+        "authority evidence {component} has unsupported schema version: expected {expected}, found {found}"
+    )]
+    SchemaVersionMismatch {
+        component: &'static str,
+        expected: u32,
+        found: u32,
+    },
+
+    #[error(
         "authority report does not match reconciliation plan: {field} differs (plan={plan_value}, report={report_value})"
     )]
     PlanReportMismatch {
@@ -20,6 +29,23 @@ pub enum AuthorityEvidenceError {
 
     #[error("authority dry-run receipt contains attempted controller actions: {count}")]
     DryRunReceiptAttemptedActions { count: usize },
+
+    #[error("authority dry-run receipt has invalid operation status: {status:?}")]
+    DryRunReceiptStatus { status: DeploymentExecutionStatusV1 },
+
+    #[error("authority dry-run receipt has invalid command result: {result:?}")]
+    DryRunReceiptCommandResult { result: DeploymentCommandResultV1 },
+
+    #[error("authority dry-run receipt is complete but has no finished_at timestamp")]
+    DryRunReceiptMissingFinishedAt,
+
+    #[error(
+        "authority evidence generated_at does not match receipt finished_at (evidence={evidence_value}, receipt={receipt_value})"
+    )]
+    EvidenceGeneratedAtMismatch {
+        evidence_value: String,
+        receipt_value: String,
+    },
 
     #[error(
         "authority receipt check id does not match report check id (receipt={receipt_value}, report={report_value})"
@@ -46,6 +72,10 @@ pub enum AuthorityEvidenceError {
 pub fn validate_authority_dry_run_evidence(
     evidence: &AuthorityDryRunEvidenceV1,
 ) -> Result<(), AuthorityEvidenceError> {
+    ensure_authority_schema_version("evidence", evidence.schema_version)?;
+    ensure_authority_schema_version("plan", evidence.reconciliation_plan.schema_version)?;
+    ensure_authority_schema_version("report", evidence.authority_report.schema_version)?;
+    ensure_authority_schema_version("receipt", evidence.authority_receipt.schema_version)?;
     ensure_authority_report_matches_plan(
         &evidence.reconciliation_plan,
         &evidence.authority_report,
@@ -85,6 +115,20 @@ pub fn validate_authority_dry_run_evidence(
             count: evidence.authority_receipt.attempted_actions.len(),
         });
     }
+    if evidence.authority_receipt.operation_status != DeploymentExecutionStatusV1::Complete {
+        return Err(AuthorityEvidenceError::DryRunReceiptStatus {
+            status: evidence.authority_receipt.operation_status,
+        });
+    }
+    if evidence.authority_receipt.command_result != DeploymentCommandResultV1::Succeeded {
+        return Err(AuthorityEvidenceError::DryRunReceiptCommandResult {
+            result: evidence.authority_receipt.command_result.clone(),
+        });
+    }
+    ensure_evidence_generated_at_matches_finished_at(
+        &evidence.generated_at,
+        evidence.authority_receipt.finished_at.as_deref(),
+    )?;
     let expected_observations = evidence
         .reconciliation_plan
         .canister_actions
@@ -111,6 +155,38 @@ pub fn validate_authority_dry_run_evidence(
         &evidence.authority_report.external_actions_required,
         &evidence.authority_receipt.unresolved_external_actions,
     )
+}
+
+const fn ensure_authority_schema_version(
+    component: &'static str,
+    found: u32,
+) -> Result<(), AuthorityEvidenceError> {
+    if found == DEPLOYMENT_TRUTH_SCHEMA_VERSION {
+        return Ok(());
+    }
+
+    Err(AuthorityEvidenceError::SchemaVersionMismatch {
+        component,
+        expected: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
+        found,
+    })
+}
+
+fn ensure_evidence_generated_at_matches_finished_at(
+    evidence_generated_at: &str,
+    receipt_finished_at: Option<&str>,
+) -> Result<(), AuthorityEvidenceError> {
+    let Some(receipt_finished_at) = receipt_finished_at else {
+        return Err(AuthorityEvidenceError::DryRunReceiptMissingFinishedAt);
+    };
+    if evidence_generated_at == receipt_finished_at {
+        return Ok(());
+    }
+
+    Err(AuthorityEvidenceError::EvidenceGeneratedAtMismatch {
+        evidence_value: evidence_generated_at.to_string(),
+        receipt_value: receipt_finished_at.to_string(),
+    })
 }
 
 /// Build an evidence-only receipt for a completed dry-run authority
@@ -194,6 +270,58 @@ fn ensure_authority_report_matches_plan(
         "external_actions_required",
         &plan.external_actions_required,
         &report.external_actions_required,
+    )?;
+    ensure_authority_report_is_derived_from_plan(plan, report)
+}
+
+fn ensure_authority_report_is_derived_from_plan(
+    plan: &AuthorityReconciliationPlanV1,
+    report: &AuthorityReportV1,
+) -> Result<(), AuthorityEvidenceError> {
+    let expected_report = authority_report_from_plan_with_check_id(
+        report.report_id.clone(),
+        report.check_id.clone(),
+        plan,
+    );
+    ensure_matching_authority_evidence_content(
+        "report.status",
+        &expected_report.status,
+        &report.status,
+    )?;
+    ensure_matching_authority_evidence_content(
+        "report.summary",
+        &expected_report.summary,
+        &report.summary,
+    )?;
+    ensure_matching_authority_evidence_content(
+        "report.counts",
+        &expected_report.counts,
+        &report.counts,
+    )?;
+    ensure_matching_authority_evidence_content(
+        "report.apply_readiness",
+        &expected_report.apply_readiness,
+        &report.apply_readiness,
+    )?;
+    ensure_matching_authority_evidence_content(
+        "report.action_counts",
+        &expected_report.action_counts,
+        &report.action_counts,
+    )?;
+    ensure_matching_authority_evidence_content(
+        "report.control_class_counts",
+        &expected_report.control_class_counts,
+        &report.control_class_counts,
+    )?;
+    ensure_matching_authority_evidence_content(
+        "report.observation_gaps",
+        &expected_report.observation_gaps,
+        &report.observation_gaps,
+    )?;
+    ensure_matching_authority_evidence_content(
+        "report.next_actions",
+        &expected_report.next_actions,
+        &report.next_actions,
     )
 }
 

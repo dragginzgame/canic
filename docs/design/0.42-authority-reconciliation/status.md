@@ -1,6 +1,6 @@
 # 0.42 Status: Authority Reconciliation
 
-Last updated: 2026-05-23
+Last updated: 2026-05-24
 
 ## Purpose
 
@@ -10,7 +10,7 @@ landed, what drifted, and what remains open.
 
 ## Current State
 
-`0.42.6` is live. Work is continuing on the 0.42 line by tightening the
+`0.42.7` is live. Work is continuing on the 0.42 line by tightening the
 dry-run report/evidence model while keeping reconciliation read-only.
 
 0.42 depends on 0.41 establishing deployment truth objects, observed inventory,
@@ -85,6 +85,14 @@ diffs, safety reports, and installer gating.
   also includes evidence generation time and controller add/remove deltas for
   automatic and external authority actions, plus verified controller
   observations with observed and desired controller sets.
+- Authority dry-run evidence validation now rejects schema-version drift and
+  receipts whose operation status or command result no longer represents a
+  completed successful dry run. It also recomputes report summaries from the
+  reconciliation plan and rejects mutated report counts, readiness, breakdowns,
+  observation gaps, or next actions. Completed dry-run receipts must include
+  `finished_at`, and evidence `generated_at` must match that completion time.
+  This is a passive evidence-coherence guard; it does not make receipts
+  authority over live controller state.
 - The first planner reports:
   - already-correct controller sets;
   - deployment-controlled controller deltas that can be applied automatically
