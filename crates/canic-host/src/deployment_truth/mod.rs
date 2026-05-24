@@ -27,10 +27,11 @@ pub use authority::{
     build_authority_reconciliation_plan,
 };
 pub use executor::{
-    CURRENT_CLI_EXECUTOR_CAPABILITIES, CurrentCliDeploymentExecutor, DeploymentExecutor,
-    current_cli_execution_context, deployment_execution_preflight,
-    deployment_execution_preflight_from_check, has_executor_capabilities,
-    missing_executor_capabilities,
+    CURRENT_CLI_EXECUTOR_CAPABILITIES, CurrentCliDeploymentExecutor,
+    DeploymentExecutionPreflightError, DeploymentExecutor, current_cli_execution_context,
+    deployment_execution_preflight, deployment_execution_preflight_from_check,
+    has_executor_capabilities, missing_executor_capabilities,
+    validate_deployment_execution_preflight, validate_deployment_execution_preflight_for_check,
 };
 pub use model::{
     ArtifactDigestSourceV1, ArtifactSourceV1, AuthorityActionCountV1, AuthorityActionV1,

@@ -311,7 +311,10 @@ fn render_status_report(report: &StatusReport) -> String {
     let configured = report.fleets.len();
     let deployed = deployed_count(&report.fleets);
     let mut lines = vec![
-        format!("Replica: {}", report.replica.label(&report.replica_port)),
+        format!(
+            "Replica: {}",
+            render_replica_status(&report.replica, &report.replica_port)
+        ),
         format!("ICP CLI: {}", report.icp_cli),
         format!("ICP project: {}", report.icp_project),
         format!(
@@ -373,16 +376,14 @@ fn render_fleet_table(fleets: &[StatusFleetRow]) -> String {
     )
 }
 
-impl ReplicaStatus {
-    fn label(&self, port: &str) -> String {
-        match self {
-            Self::Running => format!("running (local, port {port})"),
-            Self::RunningHttpFallback => {
-                format!("running (local, port {port}, HTTP reachable; ICP CLI status stopped)")
-            }
-            Self::Stopped => format!("stopped (local, port {port})"),
-            Self::Error(err) => format!("unknown (local, port {port}): {err}"),
+fn render_replica_status(status: &ReplicaStatus, port: &str) -> String {
+    match status {
+        ReplicaStatus::Running => format!("running (local, port {port})"),
+        ReplicaStatus::RunningHttpFallback => {
+            format!("running (local, port {port}, HTTP reachable; ICP CLI status stopped)")
         }
+        ReplicaStatus::Stopped => format!("stopped (local, port {port})"),
+        ReplicaStatus::Error(err) => format!("unknown (local, port {port}): {err}"),
     }
 }
 

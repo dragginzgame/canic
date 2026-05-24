@@ -10,6 +10,7 @@ use crate::deployment_truth::{
     artifact_gate_role_phase_receipts, check_local_deployment,
     deployment_execution_preflight_from_check, deployment_receipt_from_check_with_status,
     missing_executor_capabilities, phase_receipt,
+    validate_deployment_execution_preflight_for_check,
 };
 use crate::format::wasm_size_label;
 use crate::icp::{self, CANIC_ICP_LOCAL_NETWORK_URL_ENV, CANIC_ICP_LOCAL_ROOT_KEY_ENV};
@@ -726,11 +727,13 @@ pub fn check_install_execution_preflight(
         execution_context.icp_root,
         execution_context.artifact_roots,
     );
-    Ok(deployment_execution_preflight_from_check(
+    let preflight = deployment_execution_preflight_from_check(
         &check,
         &executor,
         CURRENT_INSTALL_REQUIRED_CAPABILITIES,
-    ))
+    );
+    validate_deployment_execution_preflight_for_check(&check, &preflight)?;
+    Ok(preflight)
 }
 
 fn resolve_current_install_truth_inputs(
@@ -1021,6 +1024,7 @@ fn write_current_install_execution_preflight_receipt(
         &executor,
         CURRENT_INSTALL_REQUIRED_CAPABILITIES,
     );
+    validate_deployment_execution_preflight_for_check(check, &preflight)?;
     let blockers = preflight.blockers.clone();
     let (operation_status, command_result) = if blockers.is_empty() {
         (

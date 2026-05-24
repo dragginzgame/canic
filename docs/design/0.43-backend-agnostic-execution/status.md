@@ -36,6 +36,13 @@ than implicit installer state.
   `DeploymentPlanV1`, `SafetyReportV1`, `AuthorityReconciliationPlanV1`, and
   executor capabilities to produce a ready/blocked execution gate without
   running backend operations.
+- Added validation helpers for `DeploymentExecutionPreflightV1` artifacts,
+  including source-`DeploymentCheckV1` identity checks, status/blocker
+  consistency, required/missing capability consistency, and schema/provenance
+  guards. Current-install preflight paths validate the artifact before
+  returning read-only readiness or writing the `execution_preflight` receipt.
+- Added host tests pinning the `DeploymentExecutionPreflightV1` JSON field
+  shape and enum strings before any public CLI surface is promoted.
 - Current-install deployment truth receipts now record workspace root, ICP
   root, artifact roots, backend, and backend capability evidence as metadata
   on the existing receipt shape.

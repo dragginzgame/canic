@@ -6,6 +6,50 @@ use super::{
     build_authority_reconciliation_plan,
 };
 use std::collections::BTreeSet;
+use thiserror::Error as ThisError;
+
+///
+/// DeploymentExecutionPreflightError
+///
+#[derive(Debug, ThisError)]
+pub enum DeploymentExecutionPreflightError {
+    #[error("deployment execution preflight schema mismatch: expected {expected}, found {found}")]
+    SchemaVersionMismatch { expected: u32, found: u32 },
+    #[error("deployment execution preflight is missing required field: {field}")]
+    MissingRequiredField { field: &'static str },
+    #[error(
+        "deployment execution preflight status {status:?} does not match blocker count {blocker_count}"
+    )]
+    StatusBlockerMismatch {
+        status: DeploymentExecutionPreflightStatusV1,
+        blocker_count: usize,
+    },
+    #[error(
+        "deployment execution preflight contains duplicate capability in {field}: {capability:?}"
+    )]
+    DuplicateCapability {
+        field: &'static str,
+        capability: DeploymentExecutorCapabilityV1,
+    },
+    #[error(
+        "deployment execution preflight reports missing capability that was not required: {capability:?}"
+    )]
+    MissingCapabilityNotRequired {
+        capability: DeploymentExecutorCapabilityV1,
+    },
+    #[error("deployment execution preflight missing capability has no blocker: {capability:?}")]
+    MissingCapabilityWithoutBlocker {
+        capability: DeploymentExecutorCapabilityV1,
+    },
+    #[error(
+        "deployment execution preflight {field} does not match source check: preflight={preflight_value}, check={check_value}"
+    )]
+    SourceCheckMismatch {
+        field: &'static str,
+        preflight_value: String,
+        check_value: String,
+    },
+}
 
 ///
 /// DeploymentExecutor
@@ -152,6 +196,50 @@ pub fn deployment_execution_preflight(
     }
 }
 
+pub fn validate_deployment_execution_preflight(
+    preflight: &DeploymentExecutionPreflightV1,
+) -> Result<(), DeploymentExecutionPreflightError> {
+    if preflight.schema_version != DEPLOYMENT_TRUTH_SCHEMA_VERSION {
+        return Err(DeploymentExecutionPreflightError::SchemaVersionMismatch {
+            expected: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
+            found: preflight.schema_version,
+        });
+    }
+
+    ensure_preflight_field("plan_id", &preflight.plan_id)?;
+    ensure_preflight_field("safety_report_id", &preflight.safety_report_id)?;
+    ensure_preflight_field("authority_plan_id", &preflight.authority_plan_id)?;
+    ensure_preflight_status_matches_blockers(preflight)?;
+    ensure_unique_capabilities("required_capabilities", &preflight.required_capabilities)?;
+    ensure_unique_capabilities("missing_capabilities", &preflight.missing_capabilities)?;
+    ensure_missing_capabilities_are_required(preflight)?;
+    ensure_missing_capabilities_have_blockers(preflight)?;
+
+    Ok(())
+}
+
+pub fn validate_deployment_execution_preflight_for_check(
+    check: &DeploymentCheckV1,
+    preflight: &DeploymentExecutionPreflightV1,
+) -> Result<(), DeploymentExecutionPreflightError> {
+    validate_deployment_execution_preflight(preflight)?;
+    ensure_preflight_check_match("plan_id", &preflight.plan_id, &check.plan.plan_id)?;
+    ensure_preflight_check_match(
+        "safety_report_id",
+        &preflight.safety_report_id,
+        &check.report.report_id,
+    )?;
+
+    let authority_plan = build_authority_reconciliation_plan(check);
+    ensure_preflight_check_match(
+        "authority_plan_id",
+        &preflight.authority_plan_id,
+        &authority_plan.plan_id,
+    )?;
+
+    Ok(())
+}
+
 fn deployment_execution_blockers(
     safety_report: &SafetyReportV1,
     authority_plan: &AuthorityReconciliationPlanV1,
@@ -240,4 +328,101 @@ fn deployment_execution_blockers(
     }
 
     blockers
+}
+
+fn ensure_preflight_field(
+    field: &'static str,
+    value: &str,
+) -> Result<(), DeploymentExecutionPreflightError> {
+    if value.trim().is_empty() {
+        return Err(DeploymentExecutionPreflightError::MissingRequiredField { field });
+    }
+    Ok(())
+}
+
+const fn ensure_preflight_status_matches_blockers(
+    preflight: &DeploymentExecutionPreflightV1,
+) -> Result<(), DeploymentExecutionPreflightError> {
+    let blocker_count = preflight.blockers.len();
+    let matches_blockers = match preflight.status {
+        DeploymentExecutionPreflightStatusV1::Ready => blocker_count == 0,
+        DeploymentExecutionPreflightStatusV1::Blocked => blocker_count > 0,
+    };
+    if !matches_blockers {
+        return Err(DeploymentExecutionPreflightError::StatusBlockerMismatch {
+            status: preflight.status,
+            blocker_count,
+        });
+    }
+    Ok(())
+}
+
+fn ensure_unique_capabilities(
+    field: &'static str,
+    capabilities: &[DeploymentExecutorCapabilityV1],
+) -> Result<(), DeploymentExecutionPreflightError> {
+    let mut seen = BTreeSet::new();
+    for capability in capabilities {
+        if !seen.insert(*capability) {
+            return Err(DeploymentExecutionPreflightError::DuplicateCapability {
+                field,
+                capability: *capability,
+            });
+        }
+    }
+    Ok(())
+}
+
+fn ensure_missing_capabilities_are_required(
+    preflight: &DeploymentExecutionPreflightV1,
+) -> Result<(), DeploymentExecutionPreflightError> {
+    let required = preflight
+        .required_capabilities
+        .iter()
+        .copied()
+        .collect::<BTreeSet<_>>();
+    for capability in &preflight.missing_capabilities {
+        if !required.contains(capability) {
+            return Err(
+                DeploymentExecutionPreflightError::MissingCapabilityNotRequired {
+                    capability: *capability,
+                },
+            );
+        }
+    }
+    Ok(())
+}
+
+fn ensure_missing_capabilities_have_blockers(
+    preflight: &DeploymentExecutionPreflightV1,
+) -> Result<(), DeploymentExecutionPreflightError> {
+    for capability in &preflight.missing_capabilities {
+        let subject = format!("{capability:?}");
+        if !preflight.blockers.iter().any(|finding| {
+            finding.code == "executor_capability_missing"
+                && finding.subject.as_deref() == Some(subject.as_str())
+        }) {
+            return Err(
+                DeploymentExecutionPreflightError::MissingCapabilityWithoutBlocker {
+                    capability: *capability,
+                },
+            );
+        }
+    }
+    Ok(())
+}
+
+fn ensure_preflight_check_match(
+    field: &'static str,
+    preflight_value: &str,
+    check_value: &str,
+) -> Result<(), DeploymentExecutionPreflightError> {
+    if preflight_value != check_value {
+        return Err(DeploymentExecutionPreflightError::SourceCheckMismatch {
+            field,
+            preflight_value: preflight_value.to_string(),
+            check_value: check_value.to_string(),
+        });
+    }
+    Ok(())
 }

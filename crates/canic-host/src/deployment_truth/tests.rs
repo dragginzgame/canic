@@ -319,6 +319,169 @@ fn deployment_execution_preflight_from_check_derives_authority_plan() {
 }
 
 #[test]
+fn deployment_execution_preflight_validation_accepts_check_derived_artifact() {
+    let check = sample_check(sample_plan(), sample_matching_inventory());
+    let executor = CurrentCliDeploymentExecutor::new(
+        Some("/workspace/canic".to_string()),
+        Some("/workspace/canic/.icp".to_string()),
+        vec!["/workspace/canic/.icp/local/canisters".to_string()],
+    );
+    let preflight = deployment_execution_preflight_from_check(
+        &check,
+        &executor,
+        CURRENT_CLI_EXECUTOR_CAPABILITIES,
+    );
+
+    validate_deployment_execution_preflight(&preflight).expect("preflight should validate");
+    validate_deployment_execution_preflight_for_check(&check, &preflight)
+        .expect("preflight should match source check");
+}
+
+#[test]
+fn deployment_execution_preflight_validation_rejects_mutated_status() {
+    let check = sample_unknown_unsafe_check();
+    let executor = CurrentCliDeploymentExecutor::new(
+        Some("/workspace/canic".to_string()),
+        Some("/workspace/canic/.icp".to_string()),
+        vec!["/workspace/canic/.icp/local/canisters".to_string()],
+    );
+    let mut preflight = deployment_execution_preflight_from_check(
+        &check,
+        &executor,
+        CURRENT_CLI_EXECUTOR_CAPABILITIES,
+    );
+    preflight.status = DeploymentExecutionPreflightStatusV1::Ready;
+
+    let err = validate_deployment_execution_preflight(&preflight)
+        .expect_err("ready status with blockers should fail");
+
+    assert!(matches!(
+        err,
+        DeploymentExecutionPreflightError::StatusBlockerMismatch { .. }
+    ));
+}
+
+#[test]
+fn deployment_execution_preflight_validation_rejects_source_check_mismatch() {
+    let check = sample_check(sample_plan(), sample_matching_inventory());
+    let executor = CurrentCliDeploymentExecutor::new(
+        Some("/workspace/canic".to_string()),
+        Some("/workspace/canic/.icp".to_string()),
+        vec!["/workspace/canic/.icp/local/canisters".to_string()],
+    );
+    let mut preflight = deployment_execution_preflight_from_check(
+        &check,
+        &executor,
+        CURRENT_CLI_EXECUTOR_CAPABILITIES,
+    );
+    preflight.plan_id = "other-plan".to_string();
+
+    let err = validate_deployment_execution_preflight_for_check(&check, &preflight)
+        .expect_err("preflight from another plan should fail");
+
+    assert!(matches!(
+        err,
+        DeploymentExecutionPreflightError::SourceCheckMismatch {
+            field: "plan_id",
+            ..
+        }
+    ));
+}
+
+#[test]
+fn deployment_execution_preflight_validation_rejects_capability_inconsistency() {
+    let check = sample_unknown_unsafe_check();
+    let executor = LimitedExecutor {
+        context: DeploymentExecutionContextV1 {
+            workspace_root: Some("/workspace/canic".to_string()),
+            icp_root: Some("/workspace/canic/.icp".to_string()),
+            artifact_roots: Vec::new(),
+            backend: DeploymentExecutorBackendV1::Other {
+                name: "limited-test-backend".to_string(),
+            },
+            backend_capabilities: vec![DeploymentExecutorCapabilityV1::CanisterStatus],
+        },
+    };
+    let mut preflight = deployment_execution_preflight_from_check(
+        &check,
+        &executor,
+        &[DeploymentExecutorCapabilityV1::CanisterStatus],
+    );
+    preflight
+        .missing_capabilities
+        .push(DeploymentExecutorCapabilityV1::InstallCode);
+
+    let err = validate_deployment_execution_preflight(&preflight)
+        .expect_err("missing non-required capability should fail");
+
+    assert!(matches!(
+        err,
+        DeploymentExecutionPreflightError::MissingCapabilityNotRequired {
+            capability: DeploymentExecutorCapabilityV1::InstallCode
+        }
+    ));
+}
+
+#[test]
+fn deployment_execution_preflight_v1_json_schema_shape_is_stable() {
+    let check = sample_unknown_unsafe_check();
+    let executor = LimitedExecutor {
+        context: DeploymentExecutionContextV1 {
+            workspace_root: Some("/workspace/canic".to_string()),
+            icp_root: Some("/workspace/canic/.icp".to_string()),
+            artifact_roots: Vec::new(),
+            backend: DeploymentExecutorBackendV1::Other {
+                name: "limited-test-backend".to_string(),
+            },
+            backend_capabilities: vec![DeploymentExecutorCapabilityV1::CanisterStatus],
+        },
+    };
+    let preflight = deployment_execution_preflight_from_check(
+        &check,
+        &executor,
+        &[
+            DeploymentExecutorCapabilityV1::CanisterStatus,
+            DeploymentExecutorCapabilityV1::StageArtifact,
+        ],
+    );
+    let value = serde_json::to_value(&preflight).expect("encode execution preflight");
+
+    assert_object_keys(
+        &value,
+        &[
+            "schema_version",
+            "plan_id",
+            "safety_report_id",
+            "authority_plan_id",
+            "backend",
+            "status",
+            "planned_phases",
+            "required_capabilities",
+            "missing_capabilities",
+            "blockers",
+        ],
+    );
+    assert_eq!(value["schema_version"], DEPLOYMENT_TRUTH_SCHEMA_VERSION);
+    assert_eq!(value["plan_id"], "plan-local-root");
+    assert_eq!(value["safety_report_id"], "report-1");
+    assert_eq!(value["authority_plan_id"], "plan-local-root");
+    assert_eq!(value["backend"]["Other"]["name"], "limited-test-backend");
+    assert_eq!(value["status"], "Blocked");
+    assert_eq!(value["required_capabilities"][0], "CanisterStatus");
+    assert_eq!(value["required_capabilities"][1], "StageArtifact");
+    assert_eq!(value["missing_capabilities"][0], "StageArtifact");
+    assert_eq!(
+        value["blockers"]
+            .as_array()
+            .expect("blockers should be array")
+            .iter()
+            .filter(|finding| finding["code"] == "executor_capability_missing")
+            .count(),
+        1
+    );
+}
+
+#[test]
 fn deployment_execution_preflight_text_reports_passive_readiness() {
     let check = sample_check(sample_plan(), sample_matching_inventory());
     let executor = CurrentCliDeploymentExecutor::new(

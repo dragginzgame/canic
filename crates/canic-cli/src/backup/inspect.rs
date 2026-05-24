@@ -3,16 +3,17 @@ use super::{
     BackupInspectTarget,
 };
 use crate::backup::{
-    labels::{
-        backup_scope_label, control_authority_source_label, execution_layout_status,
-        format_authority, operation_kind_label, operation_state_label,
-        snapshot_read_authority_source_label,
-    },
+    labels::{backup_scope_label, execution_layout_status},
     layout::ensure_execution_journal_exists,
     reference::resolve_backup_dir,
 };
 use canic_backup::{
-    execution::BackupExecutionJournalOperation, persistence::BackupLayout, plan::BackupTarget,
+    execution::{BackupExecutionJournalOperation, BackupExecutionOperationState},
+    persistence::BackupLayout,
+    plan::{
+        AuthorityEvidence, BackupOperationKind, BackupTarget, ControlAuthoritySource,
+        SnapshotReadAuthoritySource,
+    },
 };
 
 pub(super) fn backup_inspect(
@@ -74,5 +75,62 @@ fn inspect_operation(operation: &BackupExecutionJournalOperation) -> BackupInspe
             .unwrap_or_else(|| "-".to_string()),
         state: operation_state_label(&operation.state).to_string(),
         blocking_reasons: operation.blocking_reasons.clone(),
+    }
+}
+
+fn format_authority(source: &str, evidence: &AuthorityEvidence) -> String {
+    format!("{source}/{}", authority_evidence_label(evidence))
+}
+
+const fn control_authority_source_label(source: &ControlAuthoritySource) -> &str {
+    match source {
+        ControlAuthoritySource::Unknown => "unknown",
+        ControlAuthoritySource::RootController => "root-controller",
+        ControlAuthoritySource::OperatorController => "operator-controller",
+        ControlAuthoritySource::AlternateController { .. } => "alternate-controller",
+    }
+}
+
+const fn snapshot_read_authority_source_label(source: &SnapshotReadAuthoritySource) -> &str {
+    match source {
+        SnapshotReadAuthoritySource::Unknown => "unknown",
+        SnapshotReadAuthoritySource::OperatorController => "operator-controller",
+        SnapshotReadAuthoritySource::SnapshotVisibility => "snapshot-visibility",
+        SnapshotReadAuthoritySource::RootConfiguredRead => "root-configured-read",
+        SnapshotReadAuthoritySource::RootMediatedTransfer => "root-mediated-transfer",
+    }
+}
+
+const fn authority_evidence_label(evidence: &AuthorityEvidence) -> &str {
+    match evidence {
+        AuthorityEvidence::Proven => "proven",
+        AuthorityEvidence::Declared => "declared",
+        AuthorityEvidence::Unknown => "unknown",
+    }
+}
+
+const fn operation_kind_label(kind: &BackupOperationKind) -> &str {
+    match kind {
+        BackupOperationKind::ValidateTopology => "validate-topology",
+        BackupOperationKind::ValidateControlAuthority => "validate-control-authority",
+        BackupOperationKind::ValidateSnapshotReadAuthority => "validate-snapshot-read-authority",
+        BackupOperationKind::ValidateQuiescencePolicy => "validate-quiescence-policy",
+        BackupOperationKind::Stop => "stop",
+        BackupOperationKind::CreateSnapshot => "create-snapshot",
+        BackupOperationKind::Start => "start",
+        BackupOperationKind::DownloadSnapshot => "download-snapshot",
+        BackupOperationKind::VerifyArtifact => "verify-artifact",
+        BackupOperationKind::FinalizeManifest => "finalize-manifest",
+    }
+}
+
+const fn operation_state_label(state: &BackupExecutionOperationState) -> &str {
+    match state {
+        BackupExecutionOperationState::Ready => "ready",
+        BackupExecutionOperationState::Pending => "pending",
+        BackupExecutionOperationState::Blocked => "blocked",
+        BackupExecutionOperationState::Completed => "completed",
+        BackupExecutionOperationState::Failed => "failed",
+        BackupExecutionOperationState::Skipped => "skipped",
     }
 }

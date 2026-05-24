@@ -23,6 +23,16 @@ inspect only the files needed for the current task.
 
 ## Recent Work
 
+- Current unreleased 0.43 work hardens passive execution-preflight evidence.
+  `DeploymentExecutionPreflightV1` now has validation helpers for standalone
+  artifacts and source-check-bound artifacts, rejecting schema drift, blank
+  provenance IDs, status/blocker mismatches, capability-list inconsistencies,
+  and mixed check/preflight identity before later executor surfaces consume
+  the readiness result. Current-install preflight paths run that validation
+  before returning read-only readiness or writing the `execution_preflight`
+  receipt. Host tests now pin the `DeploymentExecutionPreflightV1` JSON field
+  and enum shape so passive executor-readiness artifacts do not drift
+  accidentally before a CLI surface is promoted.
 - Current unreleased 0.43 work adds
   `deployment_execution_preflight_from_check(...)`, letting callers feed a
   `DeploymentCheckV1` directly into passive execution readiness without

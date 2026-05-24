@@ -10,6 +10,17 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.43.x] - 2026-05-24 - Backend-agnostic execution
 
+- `0.43.2` hardens passive execution preflight evidence for the 0.43 executor
+  line. `DeploymentExecutionPreflightV1` can now be validated as a standalone
+  artifact or against its source `DeploymentCheckV1`, rejecting schema drift,
+  blank provenance IDs, status/blocker mismatches, capability-list
+  inconsistencies, and mixed check/preflight identity before later executor
+  surfaces consume the readiness result. Current-install preflight paths now
+  run that validation before returning read-only readiness or writing the
+  `execution_preflight` receipt. The `DeploymentExecutionPreflightV1` JSON
+  field and enum shape is now pinned by host tests so execution-preflight
+  artifacts do not drift accidentally before a CLI surface is promoted.
+
 - `0.43.1` expands the passive execution-readiness path. Callers can now use
   `deployment_execution_preflight_from_check(...)` or
   `check_install_execution_preflight(...)` to derive executor readiness from
