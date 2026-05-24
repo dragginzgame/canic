@@ -2,7 +2,7 @@ use super::*;
 use crate::cycles::{
     model::{CycleTopupEventSample, CycleTopupStatus, CycleTrackerPage, CycleTrackerSample},
     parse::{parse_cycle_tracker_page, parse_cycle_tracker_page_text, parse_topup_event_page},
-    transport::{summarize_cycle_tracker, topup_summary_from_events},
+    transport::summarize_cycle_tracker,
 };
 use canic_host::format::compact_duration;
 use canic_host::registry::RegistryEntry;
@@ -227,29 +227,56 @@ fn summarizes_partial_cycle_window() {
 // Ensure structured top-up events become compact top-up context for cycles output.
 #[test]
 fn summarizes_topup_events() {
-    let entries = vec![
-        CycleTopupEventSample {
-            timestamp_secs: 100,
-            transferred_cycles: Some(4_000_000_000_000),
-            status: CycleTopupStatus::RequestOk,
+    let entry = RegistryEntry {
+        pid: "aaaaa-aa".to_string(),
+        role: Some("app".to_string()),
+        kind: Some("singleton".to_string()),
+        parent_pid: None,
+        module_hash: None,
+    };
+    let report = summarize_cycle_tracker(
+        &entry,
+        CycleTrackerPage {
+            total: 2,
+            entries: vec![
+                CycleTrackerSample {
+                    timestamp_secs: 50,
+                    cycles: 10_000_000_000_000,
+                },
+                CycleTrackerSample {
+                    timestamp_secs: 250,
+                    cycles: 12_000_000_000_000,
+                },
+            ],
         },
-        CycleTopupEventSample {
-            timestamp_secs: 200,
-            transferred_cycles: Some(4_000_000_000_000),
-            status: CycleTopupStatus::RequestOk,
-        },
-        CycleTopupEventSample {
-            timestamp_secs: 10,
-            transferred_cycles: Some(4_000_000_000_000),
-            status: CycleTopupStatus::RequestOk,
-        },
-        CycleTopupEventSample {
-            timestamp_secs: 300,
-            transferred_cycles: Some(4_000_000_000_000),
-            status: CycleTopupStatus::RequestOk,
-        },
-    ];
-    let summary = topup_summary_from_events(&entries, 50, 250);
+        String::new(),
+        50,
+        250,
+        None,
+        Some(vec![
+            CycleTopupEventSample {
+                timestamp_secs: 100,
+                transferred_cycles: Some(4_000_000_000_000),
+                status: CycleTopupStatus::RequestOk,
+            },
+            CycleTopupEventSample {
+                timestamp_secs: 200,
+                transferred_cycles: Some(4_000_000_000_000),
+                status: CycleTopupStatus::RequestOk,
+            },
+            CycleTopupEventSample {
+                timestamp_secs: 10,
+                transferred_cycles: Some(4_000_000_000_000),
+                status: CycleTopupStatus::RequestOk,
+            },
+            CycleTopupEventSample {
+                timestamp_secs: 300,
+                transferred_cycles: Some(4_000_000_000_000),
+                status: CycleTopupStatus::RequestOk,
+            },
+        ]),
+    );
+    let summary = report.topups.expect("topup summary");
 
     assert_eq!(summary.request_ok, 2);
     assert_eq!(summary.transferred_cycles, 8_000_000_000_000);

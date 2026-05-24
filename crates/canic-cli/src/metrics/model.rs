@@ -1,4 +1,3 @@
-use crate::metrics::MetricsCommandError;
 use serde::Serialize;
 
 ///
@@ -14,20 +13,6 @@ pub(super) enum MetricsKind {
     Runtime,
     Security,
     Storage,
-}
-
-impl MetricsKind {
-    pub(super) fn parse(value: &str) -> Result<Self, MetricsCommandError> {
-        match value {
-            "core" => Ok(Self::Core),
-            "placement" => Ok(Self::Placement),
-            "platform" => Ok(Self::Platform),
-            "runtime" => Ok(Self::Runtime),
-            "security" => Ok(Self::Security),
-            "storage" => Ok(Self::Storage),
-            _ => Err(MetricsCommandError::InvalidKind(value.to_string())),
-        }
-    }
 }
 
 ///

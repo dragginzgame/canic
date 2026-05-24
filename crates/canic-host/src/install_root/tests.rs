@@ -4,9 +4,10 @@ use super::{
     add_local_root_create_cycles_arg, check_install_deployment_truth,
     check_install_execution_preflight, config_selection_error,
     current_install_deployment_truth_check_at, current_install_execution_context,
-    current_install_executor_missing_capabilities, discover_canic_config_choices,
-    discover_project_canic_config_choices, enforce_install_deployment_truth_gate,
-    fleet_install_state_path, icp_canister_command_in_network, install_deployment_truth_gate_lines,
+    current_install_executor_missing_capabilities, current_install_staging_evidence,
+    discover_canic_config_choices, discover_project_canic_config_choices,
+    enforce_install_deployment_truth_gate, fleet_install_state_path,
+    icp_canister_command_in_network, install_deployment_truth_gate_lines,
     install_deployment_truth_gate_receipt, install_deployment_truth_phase_receipt,
     install_deployment_truth_receipt_path, is_missing_canister_id_error,
     latest_deployment_truth_receipt_path_from_root, parse_bootstrap_status_value,
@@ -26,7 +27,7 @@ use crate::deployment_truth::{
     artifact_gate_role_phase_receipts, compare_plan_to_inventory, safety_report_from_diff,
 };
 use crate::icp::{CANIC_ICP_LOCAL_NETWORK_URL_ENV, CANIC_ICP_LOCAL_ROOT_KEY_ENV};
-use crate::release_set::configured_install_targets;
+use crate::release_set::{ReleaseSetEntry, RootReleaseSetManifest, configured_install_targets};
 use crate::test_support::temp_dir;
 use serde_json::json;
 use std::{
@@ -1125,6 +1126,38 @@ fn install_truth_execution_preflight_receipt_records_blocked_state_before_error(
     );
 
     fs::remove_dir_all(root).expect("clean temp dir");
+}
+
+#[test]
+fn current_install_staging_evidence_records_release_set_transport_facts() {
+    let manifest = RootReleaseSetManifest {
+        release_version: "0.43.4".to_string(),
+        entries: vec![ReleaseSetEntry {
+            role: "user_hub".to_string(),
+            template_id: "embedded:user_hub".to_string(),
+            artifact_relative_path: "local/canisters/user_hub/user_hub.wasm.gz".to_string(),
+            payload_size_bytes: 42,
+            payload_sha256_hex: "payload-hash".to_string(),
+            chunk_size_bytes: 1_048_576,
+            chunk_sha256_hex: vec!["chunk-a".to_string(), "chunk-b".to_string()],
+        }],
+    };
+
+    let evidence = current_install_staging_evidence(
+        "aaaaa-aa",
+        Path::new("/workspace/.icp/local/canisters/root.release-set.json"),
+        &manifest,
+    );
+
+    assert!(evidence.contains(&"root_canister:aaaaa-aa".to_string()));
+    assert!(evidence.contains(&"release_version:0.43.4".to_string()));
+    assert!(evidence.contains(&"staging_receipts:1".to_string()));
+    assert!(evidence.contains(&"staging_role:user_hub".to_string()));
+    assert!(evidence.contains(&"staging_transport:WasmStore".to_string()));
+    assert!(evidence.contains(&"staging_chunks_prepared:2".to_string()));
+    assert!(evidence.contains(&"staging_chunks_published:2".to_string()));
+    assert!(evidence.contains(&"staging_postcondition:Observed".to_string()));
+    assert!(evidence.contains(&"staging_wasm_store:root:aaaaa-aa:bootstrap".to_string()));
 }
 
 #[test]

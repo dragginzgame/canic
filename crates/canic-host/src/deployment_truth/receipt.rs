@@ -770,6 +770,39 @@ pub fn phase_receipt(
     }
 }
 
+/// Convert typed artifact-staging receipts into compact phase evidence labels.
+///
+/// The typed receipts remain the source shape for executor work. Current
+/// install still stores phase evidence as strings, so this preserves the
+/// transport/chunk/postcondition facts without changing the persisted receipt
+/// envelope in this slice.
+#[must_use]
+pub fn staging_receipt_evidence(receipts: &[StagingReceiptV1]) -> Vec<String> {
+    let mut evidence = vec![format!("staging_receipts:{}", receipts.len())];
+
+    for receipt in receipts {
+        evidence.extend([
+            format!("staging_role:{}", receipt.role),
+            format!("staging_transport:{:?}", receipt.transport),
+            format!("staging_artifact:{}", receipt.artifact_identity),
+            format!(
+                "staging_chunks_prepared:{}",
+                receipt.prepared_chunk_hashes.len()
+            ),
+            format!("staging_chunks_published:{}", receipt.published_chunk_count),
+            format!(
+                "staging_postcondition:{:?}",
+                receipt.verified_postcondition.status
+            ),
+        ]);
+        if let Some(locator) = &receipt.wasm_store_locator {
+            evidence.push(format!("staging_wasm_store:{locator}"));
+        }
+    }
+
+    evidence
+}
+
 /// Build a deployment receipt from a validated check and phase receipts.
 #[must_use]
 pub fn deployment_receipt_from_check(

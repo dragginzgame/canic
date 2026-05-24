@@ -23,6 +23,12 @@ inspect only the files needed for the current task.
 
 ## Recent Work
 
+- Current unreleased 0.43 work starts the artifact-staging receipt model.
+  `StagingReceiptV1` and `ArtifactTransportV1` now capture role artifact
+  identity, transport, wasm-store locator, prepared chunk hashes, published
+  chunk counts, and verified postconditions. Current install uses that typed
+  shape to enrich `stage_release_set` phase evidence from the release-set
+  manifest without changing installer mutation behavior.
 - Current unreleased 0.43 work removes the standalone `canic-cdk` workspace
   crate. The curated `canic::cdk` facade now comes from `canic-core::cdk`,
   `canic-core` owns the small CDK helper surface it still needs, and

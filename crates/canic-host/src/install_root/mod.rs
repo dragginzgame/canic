@@ -3,22 +3,23 @@ use crate::canister_build::{
     current_workspace_build_context_once,
 };
 use crate::deployment_truth::{
-    CurrentCliDeploymentExecutor, DeploymentCheckV1, DeploymentCommandResultV1,
-    DeploymentExecutionContextV1, DeploymentExecutionPreflightV1, DeploymentExecutionStatusV1,
-    DeploymentExecutor, DeploymentExecutorCapabilityV1, DeploymentReceiptV1,
-    LocalDeploymentCheckRequest, SafetyFindingV1, artifact_gate_phase_receipt,
-    artifact_gate_role_phase_receipts, check_local_deployment,
-    deployment_execution_preflight_from_check, deployment_receipt_from_check_with_status,
-    missing_executor_capabilities, phase_receipt,
-    validate_deployment_execution_preflight_for_check,
+    ArtifactTransportV1, CurrentCliDeploymentExecutor, DeploymentCheckV1,
+    DeploymentCommandResultV1, DeploymentExecutionContextV1, DeploymentExecutionPreflightV1,
+    DeploymentExecutionStatusV1, DeploymentExecutor, DeploymentExecutorCapabilityV1,
+    DeploymentReceiptV1, LocalDeploymentCheckRequest, ObservationStatusV1, SafetyFindingV1,
+    StagingReceiptV1, artifact_gate_phase_receipt, artifact_gate_role_phase_receipts,
+    check_local_deployment, deployment_execution_preflight_from_check,
+    deployment_receipt_from_check_with_status, missing_executor_capabilities, phase_receipt,
+    staging_receipt_evidence, validate_deployment_execution_preflight_for_check,
 };
 use crate::format::wasm_size_label;
 use crate::icp::{self, CANIC_ICP_LOCAL_NETWORK_URL_ENV, CANIC_ICP_LOCAL_ROOT_KEY_ENV};
 use crate::release_set::{
-    LOCAL_ROOT_MIN_READY_CYCLES, configured_fleet_name, configured_install_targets,
-    configured_local_root_create_cycles, emit_root_release_set_manifest_with_config,
-    icp_query_on_network, icp_root, load_root_release_set_manifest, resolve_artifact_root,
-    resume_root_bootstrap, stage_root_release_set, workspace_root,
+    LOCAL_ROOT_MIN_READY_CYCLES, RootReleaseSetManifest, configured_fleet_name,
+    configured_install_targets, configured_local_root_create_cycles,
+    emit_root_release_set_manifest_with_config, icp_query_on_network, icp_root,
+    load_root_release_set_manifest, resolve_artifact_root, resume_root_bootstrap,
+    stage_root_release_set, workspace_root,
 };
 use crate::replica_query;
 use crate::response_parse::parse_cycle_balance_response;
@@ -417,10 +418,7 @@ fn run_root_activation_phases(
     timings.stage_release_set = receipt_scope.run_phase(
         "stage_release_set",
         "stage root release set",
-        vec![
-            format!("root_canister:{root_canister_id}"),
-            format!("manifest_path:{}", manifest_path.display()),
-        ],
+        current_install_staging_evidence(root_canister_id, manifest_path, &manifest),
         || {
             stage_root_release_set(
                 receipt_scope.icp_root,
@@ -1104,6 +1102,52 @@ fn current_install_execution_preflight_evidence(
             .map(|finding| format!("blocker:{}:{}", finding.code, finding.message)),
     );
     evidence
+}
+
+fn current_install_staging_evidence(
+    root_canister_id: &str,
+    manifest_path: &Path,
+    manifest: &RootReleaseSetManifest,
+) -> Vec<String> {
+    let mut evidence = vec![
+        format!("root_canister:{root_canister_id}"),
+        format!("manifest_path:{}", manifest_path.display()),
+        format!("release_version:{}", manifest.release_version),
+    ];
+    let staging_receipts = current_install_staging_receipts(root_canister_id, manifest);
+    evidence.extend(staging_receipt_evidence(&staging_receipts));
+    evidence
+}
+
+fn current_install_staging_receipts(
+    root_canister_id: &str,
+    manifest: &RootReleaseSetManifest,
+) -> Vec<StagingReceiptV1> {
+    manifest
+        .entries
+        .iter()
+        .map(|entry| StagingReceiptV1 {
+            schema_version: crate::deployment_truth::DEPLOYMENT_TRUTH_SCHEMA_VERSION,
+            role: entry.role.clone(),
+            artifact_identity: format!(
+                "{}:{}:{}",
+                entry.template_id, manifest.release_version, entry.payload_sha256_hex
+            ),
+            transport: ArtifactTransportV1::WasmStore,
+            wasm_store_locator: Some(format!("root:{root_canister_id}:bootstrap")),
+            prepared_chunk_hashes: entry.chunk_sha256_hex.clone(),
+            published_chunk_count: entry.chunk_sha256_hex.len(),
+            verified_postcondition: crate::deployment_truth::VerifiedPostconditionV1 {
+                status: ObservationStatusV1::Observed,
+                evidence: vec![
+                    format!("payload_sha256:{}", entry.payload_sha256_hex),
+                    format!("payload_size_bytes:{}", entry.payload_size_bytes),
+                    format!("chunk_size_bytes:{}", entry.chunk_size_bytes),
+                    format!("chunk_count:{}", entry.chunk_sha256_hex.len()),
+                ],
+            },
+        })
+        .collect()
 }
 
 fn install_deployment_truth_phase_receipt(

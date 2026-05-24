@@ -34,14 +34,14 @@ pub use executor::{
     validate_deployment_execution_preflight, validate_deployment_execution_preflight_for_check,
 };
 pub use model::{
-    ArtifactDigestSourceV1, ArtifactSourceV1, AuthorityActionCountV1, AuthorityActionV1,
-    AuthorityApplyBlockerV1, AuthorityApplyReadinessV1, AuthorityAttemptedActionV1,
-    AuthorityAutomaticActionV1, AuthorityControlClassCountV1, AuthorityControllerDeltaV1,
-    AuthorityControllerObservationV1, AuthorityDryRunEvidenceV1, AuthorityExternalActionV1,
-    AuthorityProfileV1, AuthorityReceiptV1, AuthorityReconciliationPlanV1,
-    AuthorityReconciliationStateV1, AuthorityReportCountsV1, AuthorityReportV1,
-    CanisterAuthorityActionV1, CanisterControlClassV1, DeploymentAssumptionV1, DeploymentCheckV1,
-    DeploymentCommandResultV1, DeploymentDiffV1, DeploymentExecutionContextV1,
+    ArtifactDigestSourceV1, ArtifactSourceV1, ArtifactTransportV1, AuthorityActionCountV1,
+    AuthorityActionV1, AuthorityApplyBlockerV1, AuthorityApplyReadinessV1,
+    AuthorityAttemptedActionV1, AuthorityAutomaticActionV1, AuthorityControlClassCountV1,
+    AuthorityControllerDeltaV1, AuthorityControllerObservationV1, AuthorityDryRunEvidenceV1,
+    AuthorityExternalActionV1, AuthorityProfileV1, AuthorityReceiptV1,
+    AuthorityReconciliationPlanV1, AuthorityReconciliationStateV1, AuthorityReportCountsV1,
+    AuthorityReportV1, CanisterAuthorityActionV1, CanisterControlClassV1, DeploymentAssumptionV1,
+    DeploymentCheckV1, DeploymentCommandResultV1, DeploymentDiffV1, DeploymentExecutionContextV1,
     DeploymentExecutionPreflightStatusV1, DeploymentExecutionPreflightV1,
     DeploymentExecutionStatusV1, DeploymentExecutorBackendV1, DeploymentExecutorCapabilityV1,
     DeploymentIdentityV1, DeploymentInventoryV1, DeploymentObservationGapV1, DeploymentPlanV1,
@@ -49,8 +49,9 @@ pub use model::{
     LocalDeploymentConfigV1, ObservationStatusV1, ObservedArtifactV1, ObservedCanisterV1,
     ObservedPoolCanisterV1, PhaseReceiptV1, ResumeSafetyV1, RoleArtifactManifestV1, RoleArtifactV1,
     RoleEpochExpectationV1, RoleEpochObservationV1, RolePhaseReceiptV1, RolePhaseResultV1,
-    SafetyFindingV1, SafetyReportV1, SafetySeverityV1, SafetyStatusV1, TrustDomainV1,
-    VerifiedPostconditionV1, VerifierReadinessExpectationV1, VerifierReadinessObservationV1,
+    SafetyFindingV1, SafetyReportV1, SafetySeverityV1, SafetyStatusV1, StagingReceiptV1,
+    TrustDomainV1, VerifiedPostconditionV1, VerifierReadinessExpectationV1,
+    VerifierReadinessObservationV1,
 };
 pub use observe::{
     DeploymentTruthError, LocalArtifactManifestRequest, LocalInventoryRequest,
@@ -62,7 +63,8 @@ pub use receipt::{
     authority_dry_run_evidence_from_check, authority_dry_run_evidence_from_check_with_local_ids,
     authority_dry_run_receipt_from_check, authority_dry_run_receipt_from_check_with_local_id,
     authority_dry_run_receipt_from_plan, deployment_receipt_from_check,
-    deployment_receipt_from_check_with_status, phase_receipt, validate_authority_dry_run_evidence,
+    deployment_receipt_from_check_with_status, phase_receipt, staging_receipt_evidence,
+    validate_authority_dry_run_evidence,
 };
 pub use report::{
     LocalDeploymentCheckRequest, check_local_deployment, compare_plan_inventory_and_receipt,

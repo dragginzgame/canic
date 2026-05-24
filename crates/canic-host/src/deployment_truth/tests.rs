@@ -482,6 +482,71 @@ fn deployment_execution_preflight_v1_json_schema_shape_is_stable() {
 }
 
 #[test]
+fn staging_receipt_v1_json_schema_shape_is_stable() {
+    let receipt = StagingReceiptV1 {
+        schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
+        role: "user_hub".to_string(),
+        artifact_identity: "embedded:user_hub:0.43.4:abc123".to_string(),
+        transport: ArtifactTransportV1::WasmStore,
+        wasm_store_locator: Some("root:aaaaa-aa:bootstrap".to_string()),
+        prepared_chunk_hashes: vec!["chunk-a".to_string(), "chunk-b".to_string()],
+        published_chunk_count: 2,
+        verified_postcondition: VerifiedPostconditionV1 {
+            status: ObservationStatusV1::Observed,
+            evidence: vec!["payload_sha256:abc123".to_string()],
+        },
+    };
+    let value = serde_json::to_value(&receipt).expect("encode staging receipt");
+
+    assert_object_keys(
+        &value,
+        &[
+            "schema_version",
+            "role",
+            "artifact_identity",
+            "transport",
+            "wasm_store_locator",
+            "prepared_chunk_hashes",
+            "published_chunk_count",
+            "verified_postcondition",
+        ],
+    );
+    assert_eq!(value["schema_version"], DEPLOYMENT_TRUTH_SCHEMA_VERSION);
+    assert_eq!(value["role"], "user_hub");
+    assert_eq!(value["transport"], "WasmStore");
+    assert_eq!(value["prepared_chunk_hashes"][1], "chunk-b");
+    assert_eq!(value["published_chunk_count"], 2);
+    assert_eq!(value["verified_postcondition"]["status"], "Observed");
+}
+
+#[test]
+fn staging_receipt_evidence_preserves_transport_and_chunk_facts() {
+    let receipts = vec![StagingReceiptV1 {
+        schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
+        role: "scale_hub".to_string(),
+        artifact_identity: "embedded:scale_hub:0.43.4:def456".to_string(),
+        transport: ArtifactTransportV1::WasmStore,
+        wasm_store_locator: Some("root:aaaaa-aa:bootstrap".to_string()),
+        prepared_chunk_hashes: vec!["chunk-a".to_string()],
+        published_chunk_count: 1,
+        verified_postcondition: VerifiedPostconditionV1 {
+            status: ObservationStatusV1::Observed,
+            evidence: Vec::new(),
+        },
+    }];
+
+    let evidence = staging_receipt_evidence(&receipts);
+
+    assert!(evidence.contains(&"staging_receipts:1".to_string()));
+    assert!(evidence.contains(&"staging_role:scale_hub".to_string()));
+    assert!(evidence.contains(&"staging_transport:WasmStore".to_string()));
+    assert!(evidence.contains(&"staging_chunks_prepared:1".to_string()));
+    assert!(evidence.contains(&"staging_chunks_published:1".to_string()));
+    assert!(evidence.contains(&"staging_postcondition:Observed".to_string()));
+    assert!(evidence.contains(&"staging_wasm_store:root:aaaaa-aa:bootstrap".to_string()));
+}
+
+#[test]
 fn deployment_execution_preflight_text_reports_passive_readiness() {
     let check = sample_check(sample_plan(), sample_matching_inventory());
     let executor = CurrentCliDeploymentExecutor::new(

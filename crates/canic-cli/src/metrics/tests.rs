@@ -7,13 +7,23 @@ use crate::metrics::{
 // Ensure the public kind selector accepts the expected CLI vocabulary.
 #[test]
 fn parses_metric_kind_selectors() {
-    assert_eq!(MetricsKind::parse("core").expect("core"), MetricsKind::Core);
-    assert_eq!(
-        MetricsKind::parse("security").expect("security"),
-        MetricsKind::Security
-    );
+    let options = MetricsOptions::parse([OsString::from("test")]).expect("default metrics kind");
+    assert_eq!(options.kind, MetricsKind::Core);
+
+    let options = MetricsOptions::parse([
+        OsString::from("test"),
+        OsString::from("--kind"),
+        OsString::from("security"),
+    ])
+    .expect("security metrics kind");
+    assert_eq!(options.kind, MetricsKind::Security);
+
     assert!(matches!(
-        MetricsKind::parse("cycles"),
+        MetricsOptions::parse([
+            OsString::from("test"),
+            OsString::from("--kind"),
+            OsString::from("cycles"),
+        ]),
         Err(MetricsCommandError::InvalidKind(_))
     ));
 }

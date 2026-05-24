@@ -121,6 +121,31 @@ pub enum DeploymentExecutorCapabilityV1 {
 }
 
 ///
+/// ArtifactTransportV1
+///
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum ArtifactTransportV1 {
+    LocalCli,
+    WasmStore,
+    DirectAgent,
+}
+
+///
+/// StagingReceiptV1
+///
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct StagingReceiptV1 {
+    pub schema_version: u32,
+    pub role: String,
+    pub artifact_identity: String,
+    pub transport: ArtifactTransportV1,
+    pub wasm_store_locator: Option<String>,
+    pub prepared_chunk_hashes: Vec<String>,
+    pub published_chunk_count: usize,
+    pub verified_postcondition: VerifiedPostconditionV1,
+}
+
+///
 /// AuthorityReceiptV1
 ///
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]

@@ -46,12 +46,19 @@ than implicit installer state.
 - Current-install deployment truth receipts now record workspace root, ICP
   root, artifact roots, backend, and backend capability evidence as metadata
   on the existing receipt shape.
+- Added `StagingReceiptV1` and `ArtifactTransportV1` as the typed artifact
+  staging evidence shape anticipated by the executor design. Current install
+  now derives richer `stage_release_set` phase evidence from the release-set
+  manifest, including role, artifact identity, wasm-store transport,
+  prepared chunk hashes, published chunk counts, and verified postconditions,
+  without changing current installer mutation behavior.
 
 ## Not Implemented Yet
 
 - Full backend-neutral execution model.
 - Separation between execution planning and the concrete local/IC backend.
-- Backend-specific receipts mapped into the common deployment receipt model.
+- Backend-specific mutating operation receipts mapped into the common
+  deployment receipt model.
 - Validation that backend behavior does not bypass deployment truth gates.
 
 ## Drift Log

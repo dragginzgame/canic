@@ -35,7 +35,7 @@ impl MetricsOptions {
         let matches = parse_matches(metrics_command(), args)
             .map_err(|_| MetricsCommandError::Usage(usage()))?;
         let kind = string_option(&matches, "kind")
-            .map(|value| MetricsKind::parse(&value))
+            .map(|value| parse_metrics_kind(&value))
             .transpose()?
             .unwrap_or(MetricsKind::Core);
         let limit = string_option(&matches, "limit")
@@ -55,6 +55,18 @@ impl MetricsOptions {
             network: string_option(&matches, "network").unwrap_or_else(local_network),
             icp: string_option(&matches, "icp").unwrap_or_else(default_icp),
         })
+    }
+}
+
+fn parse_metrics_kind(value: &str) -> Result<MetricsKind, MetricsCommandError> {
+    match value {
+        "core" => Ok(MetricsKind::Core),
+        "placement" => Ok(MetricsKind::Placement),
+        "platform" => Ok(MetricsKind::Platform),
+        "runtime" => Ok(MetricsKind::Runtime),
+        "security" => Ok(MetricsKind::Security),
+        "storage" => Ok(MetricsKind::Storage),
+        _ => Err(MetricsCommandError::InvalidKind(value.to_string())),
     }
 }
 

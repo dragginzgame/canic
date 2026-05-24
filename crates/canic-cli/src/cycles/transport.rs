@@ -243,7 +243,7 @@ fn query_topup_events(
     Ok(page.entries)
 }
 
-pub(super) fn topup_summary_from_events(
+fn topup_summary_from_events(
     entries: &[CycleTopupEventSample],
     start_secs: u64,
     end_secs: u64,
