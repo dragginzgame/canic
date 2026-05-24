@@ -8,17 +8,16 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
-- Authority dry-run evidence validation now rejects schema-version drift and
-  receipts that no longer represent a completed successful dry run, including
-  mutated operation status or command-result fields.
-- Authority dry-run evidence validation now recomputes report summaries from
-  the reconciliation plan and rejects mutated report counts, readiness,
-  breakdowns, observation gaps, or next actions.
-- Authority dry-run evidence validation now requires completed receipts to
-  carry `finished_at` and rejects bundles whose top-level `generated_at`
-  differs from the receipt completion time.
-
 ## [0.42.x] - 2026-05-23 - Authority reconciliation
+
+- `0.42.9` moves authority evidence/report construction and local
+  report/receipt/evidence ID generation into `canic-host`, strengthens
+  dry-run evidence provenance/timestamp validation, and thins CLI authority
+  tests back to parsing, format selection, and host-helper delegation.
+
+- `0.42.8` hardens authority dry-run evidence validation so archived evidence
+  rejects schema drift, stale report-derived fields, invalid receipt
+  completion state, and mismatched evidence/receipt completion timestamps.
 
 - `0.42.7` adds host-owned human-readable text output for read-only authority
   dry-run commands while preserving JSON as the default automation format.

@@ -21,6 +21,7 @@ mod tests;
 mod text;
 
 pub use authority::{
+    authority_report_from_check, authority_report_from_check_with_local_id,
     authority_report_from_plan, authority_report_from_plan_with_check_id,
     build_authority_reconciliation_plan,
 };
@@ -48,6 +49,7 @@ pub use observe::{
 pub use plan::{LocalDeploymentPlanRequest, build_local_deployment_plan};
 pub use receipt::{
     AuthorityEvidenceError, artifact_gate_phase_receipt, artifact_gate_role_phase_receipts,
+    authority_dry_run_evidence_from_check, authority_dry_run_evidence_from_check_with_local_ids,
     authority_dry_run_receipt_from_plan, deployment_receipt_from_check,
     deployment_receipt_from_check_with_status, phase_receipt, validate_authority_dry_run_evidence,
 };
@@ -142,5 +144,12 @@ fn stable_json_sha256_hex<T: Serialize>(value: &T) -> String {
     bytes_sha256_hex(
         &serde_json::to_vec(value)
             .expect("deployment truth identity inputs must JSON-encode deterministically"),
+    )
+}
+
+fn local_authority_artifact_id(check: &DeploymentCheckV1, suffix: &str) -> String {
+    format!(
+        "local:{}:{}:{suffix}",
+        check.plan.runtime_variant, check.plan.deployment_identity.deployment_name
     )
 }

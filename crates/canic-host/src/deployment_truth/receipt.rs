@@ -6,6 +6,9 @@ use thiserror::Error as ThisError;
 ///
 #[derive(Debug, ThisError)]
 pub enum AuthorityEvidenceError {
+    #[error("authority evidence is missing required field: {field}")]
+    MissingRequiredField { field: &'static str },
+
     #[error(
         "authority evidence {component} has unsupported schema version: expected {expected}, found {found}"
     )]
@@ -48,6 +51,16 @@ pub enum AuthorityEvidenceError {
     },
 
     #[error(
+        "authority dry-run receipt has invalid timestamp order: {field} ({left}) is after {other_field} ({right})"
+    )]
+    DryRunReceiptTimestampOrder {
+        field: &'static str,
+        left: String,
+        other_field: &'static str,
+        right: String,
+    },
+
+    #[error(
         "authority receipt check id does not match report check id (receipt={receipt_value}, report={report_value})"
     )]
     CheckIdMismatch {
@@ -72,14 +85,117 @@ pub enum AuthorityEvidenceError {
 pub fn validate_authority_dry_run_evidence(
     evidence: &AuthorityDryRunEvidenceV1,
 ) -> Result<(), AuthorityEvidenceError> {
-    ensure_authority_schema_version("evidence", evidence.schema_version)?;
-    ensure_authority_schema_version("plan", evidence.reconciliation_plan.schema_version)?;
-    ensure_authority_schema_version("report", evidence.authority_report.schema_version)?;
-    ensure_authority_schema_version("receipt", evidence.authority_receipt.schema_version)?;
+    ensure_authority_evidence_schema_versions(evidence)?;
+    ensure_authority_evidence_required_fields(evidence)?;
     ensure_authority_report_matches_plan(
         &evidence.reconciliation_plan,
         &evidence.authority_report,
     )?;
+    ensure_authority_evidence_provenance(evidence)?;
+    ensure_authority_receipt_is_completed_dry_run(&evidence.authority_receipt)?;
+    ensure_evidence_generated_at_matches_finished_at(
+        &evidence.generated_at,
+        evidence.authority_receipt.finished_at.as_deref(),
+    )?;
+    ensure_authority_receipt_timestamp_order(&evidence.authority_receipt)?;
+    ensure_authority_receipt_matches_evidence(evidence)
+}
+
+/// Build a complete read-only authority dry-run evidence bundle from a
+/// deployment truth check.
+///
+/// The returned bundle is validated before it leaves this function. It remains
+/// archive/report evidence only; live controller inventory is still the
+/// authority for future reconciliation.
+pub fn authority_dry_run_evidence_from_check(
+    check: &DeploymentCheckV1,
+    evidence_id: impl Into<String>,
+    report_id: impl Into<String>,
+    receipt_id: impl Into<String>,
+    generated_at: impl Into<String>,
+) -> Result<AuthorityDryRunEvidenceV1, AuthorityEvidenceError> {
+    let generated_at = generated_at.into();
+    let reconciliation = build_authority_reconciliation_plan(check);
+    let report = authority_report_from_plan_with_check_id(
+        report_id,
+        Some(check.check_id.clone()),
+        &reconciliation,
+    );
+    let receipt = authority_dry_run_receipt_from_plan(
+        &reconciliation,
+        &report,
+        Some(check.check_id.clone()),
+        receipt_id,
+        generated_at.clone(),
+        Some(generated_at.clone()),
+    )?;
+    let evidence = AuthorityDryRunEvidenceV1 {
+        schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
+        evidence_id: evidence_id.into(),
+        check_id: check.check_id.clone(),
+        generated_at,
+        reconciliation_plan: reconciliation,
+        authority_report: report,
+        authority_receipt: receipt,
+    };
+    validate_authority_dry_run_evidence(&evidence)?;
+    Ok(evidence)
+}
+
+/// Build a complete read-only authority dry-run evidence bundle using the
+/// standard local deployment-truth artifact identifiers.
+pub fn authority_dry_run_evidence_from_check_with_local_ids(
+    check: &DeploymentCheckV1,
+    generated_at: impl Into<String>,
+) -> Result<AuthorityDryRunEvidenceV1, AuthorityEvidenceError> {
+    authority_dry_run_evidence_from_check(
+        check,
+        local_authority_artifact_id(check, "authority-evidence"),
+        local_authority_artifact_id(check, "authority-report"),
+        local_authority_artifact_id(check, "authority-dry-run-receipt"),
+        generated_at,
+    )
+}
+
+fn ensure_authority_evidence_schema_versions(
+    evidence: &AuthorityDryRunEvidenceV1,
+) -> Result<(), AuthorityEvidenceError> {
+    ensure_authority_schema_version("evidence", evidence.schema_version)?;
+    ensure_authority_schema_version("plan", evidence.reconciliation_plan.schema_version)?;
+    ensure_authority_schema_version("report", evidence.authority_report.schema_version)?;
+    ensure_authority_schema_version("receipt", evidence.authority_receipt.schema_version)
+}
+
+fn ensure_authority_evidence_required_fields(
+    evidence: &AuthorityDryRunEvidenceV1,
+) -> Result<(), AuthorityEvidenceError> {
+    ensure_required_authority_field("evidence.evidence_id", &evidence.evidence_id)?;
+    ensure_required_authority_field("evidence.check_id", &evidence.check_id)?;
+    ensure_required_authority_field("evidence.generated_at", &evidence.generated_at)?;
+    ensure_required_authority_field("plan.plan_id", &evidence.reconciliation_plan.plan_id)?;
+    ensure_required_authority_field(
+        "plan.inventory_id",
+        &evidence.reconciliation_plan.inventory_id,
+    )?;
+    ensure_required_authority_field("report.report_id", &evidence.authority_report.report_id)?;
+    ensure_required_authority_field(
+        "receipt.operation_id",
+        &evidence.authority_receipt.operation_id,
+    )?;
+    ensure_required_authority_field("receipt.started_at", &evidence.authority_receipt.started_at)?;
+    ensure_required_optional_authority_field(
+        "report.check_id",
+        evidence.authority_report.check_id.as_deref(),
+    )?;
+    ensure_required_optional_authority_field(
+        "receipt.check_id",
+        evidence.authority_receipt.check_id.as_deref(),
+    )
+}
+
+fn ensure_authority_evidence_provenance(
+    evidence: &AuthorityDryRunEvidenceV1,
+) -> Result<(), AuthorityEvidenceError> {
     ensure_evidence_check_id_matches(
         &evidence.check_id,
         "report",
@@ -109,26 +225,33 @@ pub fn validate_authority_dry_run_evidence(
         "receipt.authority_profile_hash",
         &optional_authority_value(evidence.reconciliation_plan.authority_profile_hash.as_ref()),
         &optional_authority_value(evidence.authority_receipt.authority_profile_hash.as_ref()),
-    )?;
-    if !evidence.authority_receipt.attempted_actions.is_empty() {
+    )
+}
+
+fn ensure_authority_receipt_is_completed_dry_run(
+    receipt: &AuthorityReceiptV1,
+) -> Result<(), AuthorityEvidenceError> {
+    if !receipt.attempted_actions.is_empty() {
         return Err(AuthorityEvidenceError::DryRunReceiptAttemptedActions {
-            count: evidence.authority_receipt.attempted_actions.len(),
+            count: receipt.attempted_actions.len(),
         });
     }
-    if evidence.authority_receipt.operation_status != DeploymentExecutionStatusV1::Complete {
+    if receipt.operation_status != DeploymentExecutionStatusV1::Complete {
         return Err(AuthorityEvidenceError::DryRunReceiptStatus {
-            status: evidence.authority_receipt.operation_status,
+            status: receipt.operation_status,
         });
     }
-    if evidence.authority_receipt.command_result != DeploymentCommandResultV1::Succeeded {
+    if receipt.command_result != DeploymentCommandResultV1::Succeeded {
         return Err(AuthorityEvidenceError::DryRunReceiptCommandResult {
-            result: evidence.authority_receipt.command_result.clone(),
+            result: receipt.command_result.clone(),
         });
     }
-    ensure_evidence_generated_at_matches_finished_at(
-        &evidence.generated_at,
-        evidence.authority_receipt.finished_at.as_deref(),
-    )?;
+    Ok(())
+}
+
+fn ensure_authority_receipt_matches_evidence(
+    evidence: &AuthorityDryRunEvidenceV1,
+) -> Result<(), AuthorityEvidenceError> {
     let expected_observations = evidence
         .reconciliation_plan
         .canister_actions
@@ -172,6 +295,27 @@ const fn ensure_authority_schema_version(
     })
 }
 
+fn ensure_required_authority_field(
+    field: &'static str,
+    value: &str,
+) -> Result<(), AuthorityEvidenceError> {
+    if !value.trim().is_empty() {
+        return Ok(());
+    }
+
+    Err(AuthorityEvidenceError::MissingRequiredField { field })
+}
+
+fn ensure_required_optional_authority_field(
+    field: &'static str,
+    value: Option<&str>,
+) -> Result<(), AuthorityEvidenceError> {
+    let Some(value) = value else {
+        return Err(AuthorityEvidenceError::MissingRequiredField { field });
+    };
+    ensure_required_authority_field(field, value)
+}
+
 fn ensure_evidence_generated_at_matches_finished_at(
     evidence_generated_at: &str,
     receipt_finished_at: Option<&str>,
@@ -179,6 +323,7 @@ fn ensure_evidence_generated_at_matches_finished_at(
     let Some(receipt_finished_at) = receipt_finished_at else {
         return Err(AuthorityEvidenceError::DryRunReceiptMissingFinishedAt);
     };
+    ensure_required_authority_field("receipt.finished_at", receipt_finished_at)?;
     if evidence_generated_at == receipt_finished_at {
         return Ok(());
     }
@@ -186,6 +331,38 @@ fn ensure_evidence_generated_at_matches_finished_at(
     Err(AuthorityEvidenceError::EvidenceGeneratedAtMismatch {
         evidence_value: evidence_generated_at.to_string(),
         receipt_value: receipt_finished_at.to_string(),
+    })
+}
+
+fn ensure_authority_receipt_timestamp_order(
+    receipt: &AuthorityReceiptV1,
+) -> Result<(), AuthorityEvidenceError> {
+    let Some(finished_at) = receipt.finished_at.as_deref() else {
+        return Err(AuthorityEvidenceError::DryRunReceiptMissingFinishedAt);
+    };
+    ensure_timestamp_order(
+        "receipt.started_at",
+        &receipt.started_at,
+        "receipt.finished_at",
+        finished_at,
+    )
+}
+
+fn ensure_timestamp_order(
+    field: &'static str,
+    left: &str,
+    other_field: &'static str,
+    right: &str,
+) -> Result<(), AuthorityEvidenceError> {
+    if left <= right {
+        return Ok(());
+    }
+
+    Err(AuthorityEvidenceError::DryRunReceiptTimestampOrder {
+        field,
+        left: left.to_string(),
+        other_field,
+        right: right.to_string(),
     })
 }
 

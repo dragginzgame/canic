@@ -3072,6 +3072,63 @@ fn authority_report_can_preserve_source_check_id() {
 }
 
 #[test]
+fn authority_report_from_check_preserves_source_provenance() {
+    let check = sample_check(sample_plan(), sample_matching_inventory());
+
+    let report = authority_report_from_check("authority-report-1", &check);
+
+    assert_eq!(report.check_id.as_deref(), Some("check-1"));
+    assert_eq!(report.reconciliation_plan_id, "plan-local-root");
+    assert_eq!(report.inventory_id, "inventory-1");
+    assert_eq!(report.authority_profile_hash.as_deref(), Some("authority"));
+    assert_eq!(report.counts.already_correct, 1);
+}
+
+#[test]
+fn authority_report_from_check_with_local_id_uses_deployment_identity() {
+    let check = sample_check(sample_plan(), sample_matching_inventory());
+
+    let report = authority_report_from_check_with_local_id(&check);
+
+    assert_eq!(report.report_id, "local:local:local-root:authority-report");
+    assert_eq!(report.check_id.as_deref(), Some("check-1"));
+    assert_eq!(report.reconciliation_plan_id, "plan-local-root");
+    assert_eq!(report.inventory_id, "inventory-1");
+}
+
+#[test]
+fn authority_dry_run_evidence_from_check_with_local_ids_uses_deployment_identity() {
+    let check = sample_check(sample_plan(), sample_matching_inventory());
+
+    let evidence =
+        authority_dry_run_evidence_from_check_with_local_ids(&check, "2026-05-23T00:00:01Z")
+            .expect("build authority evidence");
+
+    assert_eq!(
+        evidence.evidence_id,
+        "local:local:local-root:authority-evidence"
+    );
+    assert_eq!(evidence.check_id, "check-1");
+    assert_eq!(
+        evidence.authority_report.report_id,
+        "local:local:local-root:authority-report"
+    );
+    assert_eq!(
+        evidence.authority_receipt.operation_id,
+        "local:local:local-root:authority-dry-run-receipt"
+    );
+    assert_eq!(
+        evidence.authority_receipt.authority_report_id,
+        evidence.authority_report.report_id
+    );
+    assert_eq!(evidence.generated_at, "2026-05-23T00:00:01Z");
+    assert_eq!(
+        evidence.authority_receipt.finished_at.as_deref(),
+        Some("2026-05-23T00:00:01Z")
+    );
+}
+
+#[test]
 fn authority_text_renders_plan_and_report_summaries() {
     let mut source_plan = sample_plan();
     source_plan.authority_profile.expected_controllers =
@@ -3240,31 +3297,8 @@ fn authority_receipt_rejects_mismatched_check_id() {
 
 #[test]
 fn authority_dry_run_evidence_rejects_mismatched_nested_check_id() {
-    let check = sample_check(sample_plan(), sample_matching_inventory());
-    let reconciliation = build_authority_reconciliation_plan(&check);
-    let report = authority_report_from_plan_with_check_id(
-        "authority-report-1",
-        Some(check.check_id.clone()),
-        &reconciliation,
-    );
-    let receipt = authority_dry_run_receipt_from_plan(
-        &reconciliation,
-        &report,
-        Some(check.check_id),
-        "authority-dry-run-1",
-        "2026-05-23T00:00:00Z",
-        Some("2026-05-23T00:00:01Z".to_string()),
-    )
-    .expect("build authority receipt");
-    let evidence = AuthorityDryRunEvidenceV1 {
-        schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
-        evidence_id: "authority-evidence-1".to_string(),
-        check_id: "other-check".to_string(),
-        generated_at: "2026-05-23T00:00:01Z".to_string(),
-        reconciliation_plan: reconciliation,
-        authority_report: report,
-        authority_receipt: receipt,
-    };
+    let mut evidence = sample_authority_evidence();
+    evidence.check_id = "other-check".to_string();
 
     let err = validate_authority_dry_run_evidence(&evidence)
         .expect_err("mismatched nested check id should fail evidence validation");
@@ -3280,31 +3314,8 @@ fn authority_dry_run_evidence_rejects_mismatched_nested_check_id() {
 
 #[test]
 fn authority_dry_run_evidence_rejects_unsupported_schema_version() {
-    let check = sample_check(sample_plan(), sample_matching_inventory());
-    let reconciliation = build_authority_reconciliation_plan(&check);
-    let report = authority_report_from_plan_with_check_id(
-        "authority-report-1",
-        Some(check.check_id.clone()),
-        &reconciliation,
-    );
-    let receipt = authority_dry_run_receipt_from_plan(
-        &reconciliation,
-        &report,
-        Some(check.check_id.clone()),
-        "authority-dry-run-1",
-        "2026-05-23T00:00:00Z",
-        Some("2026-05-23T00:00:01Z".to_string()),
-    )
-    .expect("build authority receipt");
-    let evidence = AuthorityDryRunEvidenceV1 {
-        schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION + 1,
-        evidence_id: "authority-evidence-1".to_string(),
-        check_id: check.check_id,
-        generated_at: "2026-05-23T00:00:01Z".to_string(),
-        reconciliation_plan: reconciliation,
-        authority_report: report,
-        authority_receipt: receipt,
-    };
+    let mut evidence = sample_authority_evidence();
+    evidence.schema_version = DEPLOYMENT_TRUTH_SCHEMA_VERSION + 1;
 
     let err = validate_authority_dry_run_evidence(&evidence)
         .expect_err("unsupported evidence schema should fail validation");
@@ -3321,32 +3332,8 @@ fn authority_dry_run_evidence_rejects_unsupported_schema_version() {
 
 #[test]
 fn authority_dry_run_evidence_rejects_nested_schema_version_drift() {
-    let check = sample_check(sample_plan(), sample_matching_inventory());
-    let reconciliation = build_authority_reconciliation_plan(&check);
-    let mut report = authority_report_from_plan_with_check_id(
-        "authority-report-1",
-        Some(check.check_id.clone()),
-        &reconciliation,
-    );
-    let receipt = authority_dry_run_receipt_from_plan(
-        &reconciliation,
-        &report,
-        Some(check.check_id.clone()),
-        "authority-dry-run-1",
-        "2026-05-23T00:00:00Z",
-        Some("2026-05-23T00:00:01Z".to_string()),
-    )
-    .expect("build authority receipt");
-    report.schema_version = DEPLOYMENT_TRUTH_SCHEMA_VERSION + 1;
-    let evidence = AuthorityDryRunEvidenceV1 {
-        schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
-        evidence_id: "authority-evidence-1".to_string(),
-        check_id: check.check_id,
-        generated_at: "2026-05-23T00:00:01Z".to_string(),
-        reconciliation_plan: reconciliation,
-        authority_report: report,
-        authority_receipt: receipt,
-    };
+    let mut evidence = sample_authority_evidence();
+    evidence.authority_report.schema_version = DEPLOYMENT_TRUTH_SCHEMA_VERSION + 1;
 
     let err = validate_authority_dry_run_evidence(&evidence)
         .expect_err("nested schema drift should fail evidence validation");
@@ -3361,38 +3348,49 @@ fn authority_dry_run_evidence_rejects_nested_schema_version_drift() {
 }
 
 #[test]
+fn authority_dry_run_evidence_rejects_blank_required_identity() {
+    let mut evidence = sample_authority_evidence();
+    evidence.evidence_id = "  ".to_string();
+
+    let err = validate_authority_dry_run_evidence(&evidence)
+        .expect_err("blank evidence identity should fail validation");
+
+    assert!(matches!(
+        err,
+        AuthorityEvidenceError::MissingRequiredField {
+            field: "evidence.evidence_id"
+        }
+    ));
+}
+
+#[test]
+fn authority_dry_run_evidence_rejects_missing_nested_check_provenance() {
+    let mut evidence = sample_authority_evidence();
+    evidence.authority_report.check_id = None;
+
+    let err = validate_authority_dry_run_evidence(&evidence)
+        .expect_err("full evidence should carry nested report check provenance");
+
+    assert!(matches!(
+        err,
+        AuthorityEvidenceError::MissingRequiredField {
+            field: "report.check_id"
+        }
+    ));
+}
+
+#[test]
 fn authority_dry_run_evidence_rejects_mismatched_receipt_content() {
-    let check = sample_check(sample_plan(), sample_matching_inventory());
-    let reconciliation = build_authority_reconciliation_plan(&check);
-    let report = authority_report_from_plan_with_check_id(
-        "authority-report-1",
-        Some(check.check_id.clone()),
-        &reconciliation,
-    );
-    let mut receipt = authority_dry_run_receipt_from_plan(
-        &reconciliation,
-        &report,
-        Some(check.check_id.clone()),
-        "authority-dry-run-1",
-        "2026-05-23T00:00:00Z",
-        Some("2026-05-23T00:00:01Z".to_string()),
-    )
-    .expect("build authority receipt");
-    receipt.hard_failures.push(SafetyFindingV1 {
-        code: "extra".to_string(),
-        message: "extra hard finding".to_string(),
-        severity: SafetySeverityV1::HardFailure,
-        subject: None,
-    });
-    let evidence = AuthorityDryRunEvidenceV1 {
-        schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
-        evidence_id: "authority-evidence-1".to_string(),
-        check_id: check.check_id,
-        generated_at: "2026-05-23T00:00:01Z".to_string(),
-        reconciliation_plan: reconciliation,
-        authority_report: report,
-        authority_receipt: receipt,
-    };
+    let mut evidence = sample_authority_evidence();
+    evidence
+        .authority_receipt
+        .hard_failures
+        .push(SafetyFindingV1 {
+            code: "extra".to_string(),
+            message: "extra hard finding".to_string(),
+            severity: SafetySeverityV1::HardFailure,
+            subject: None,
+        });
 
     let err = validate_authority_dry_run_evidence(&evidence)
         .expect_err("mismatched receipt content should fail evidence validation");
@@ -3407,35 +3405,8 @@ fn authority_dry_run_evidence_rejects_mismatched_receipt_content() {
 
 #[test]
 fn authority_dry_run_evidence_rejects_mutated_report_counts() {
-    let mut plan = sample_plan();
-    plan.authority_profile.expected_controllers =
-        vec!["aaaaa-aa".to_string(), "ops-principal".to_string()];
-    let check = sample_check(plan, sample_matching_inventory());
-    let reconciliation = build_authority_reconciliation_plan(&check);
-    let mut report = authority_report_from_plan_with_check_id(
-        "authority-report-1",
-        Some(check.check_id.clone()),
-        &reconciliation,
-    );
-    let receipt = authority_dry_run_receipt_from_plan(
-        &reconciliation,
-        &report,
-        Some(check.check_id.clone()),
-        "authority-dry-run-1",
-        "2026-05-23T00:00:00Z",
-        Some("2026-05-23T00:00:01Z".to_string()),
-    )
-    .expect("build authority receipt");
-    report.counts.can_apply_automatically = 0;
-    let evidence = AuthorityDryRunEvidenceV1 {
-        schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
-        evidence_id: "authority-evidence-1".to_string(),
-        check_id: check.check_id,
-        generated_at: "2026-05-23T00:00:01Z".to_string(),
-        reconciliation_plan: reconciliation,
-        authority_report: report,
-        authority_receipt: receipt,
-    };
+    let mut evidence = sample_authority_evidence();
+    evidence.authority_report.counts.already_correct = 0;
 
     let err = validate_authority_dry_run_evidence(&evidence)
         .expect_err("mutated report counts should fail evidence validation");
@@ -3450,35 +3421,11 @@ fn authority_dry_run_evidence_rejects_mutated_report_counts() {
 
 #[test]
 fn authority_dry_run_evidence_rejects_mutated_report_readiness() {
-    let mut plan = sample_plan();
-    plan.authority_profile.expected_controllers =
-        vec!["aaaaa-aa".to_string(), "ops-principal".to_string()];
-    let check = sample_check(plan, sample_matching_inventory());
-    let reconciliation = build_authority_reconciliation_plan(&check);
-    let mut report = authority_report_from_plan_with_check_id(
-        "authority-report-1",
-        Some(check.check_id.clone()),
-        &reconciliation,
-    );
-    let receipt = authority_dry_run_receipt_from_plan(
-        &reconciliation,
-        &report,
-        Some(check.check_id.clone()),
-        "authority-dry-run-1",
-        "2026-05-23T00:00:00Z",
-        Some("2026-05-23T00:00:01Z".to_string()),
-    )
-    .expect("build authority receipt");
-    report.apply_readiness.can_apply_automatically = false;
-    let evidence = AuthorityDryRunEvidenceV1 {
-        schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
-        evidence_id: "authority-evidence-1".to_string(),
-        check_id: check.check_id,
-        generated_at: "2026-05-23T00:00:01Z".to_string(),
-        reconciliation_plan: reconciliation,
-        authority_report: report,
-        authority_receipt: receipt,
-    };
+    let mut evidence = sample_authority_evidence();
+    evidence
+        .authority_report
+        .apply_readiness
+        .can_apply_automatically = true;
 
     let err = validate_authority_dry_run_evidence(&evidence)
         .expect_err("mutated report readiness should fail evidence validation");
@@ -3493,39 +3440,18 @@ fn authority_dry_run_evidence_rejects_mutated_report_readiness() {
 
 #[test]
 fn authority_dry_run_evidence_rejects_attempted_actions() {
-    let check = sample_check(sample_plan(), sample_matching_inventory());
-    let reconciliation = build_authority_reconciliation_plan(&check);
-    let report = authority_report_from_plan_with_check_id(
-        "authority-report-1",
-        Some(check.check_id.clone()),
-        &reconciliation,
-    );
-    let mut receipt = authority_dry_run_receipt_from_plan(
-        &reconciliation,
-        &report,
-        Some(check.check_id.clone()),
-        "authority-dry-run-1",
-        "2026-05-23T00:00:00Z",
-        Some("2026-05-23T00:00:01Z".to_string()),
-    )
-    .expect("build authority receipt");
-    receipt.attempted_actions.push(AuthorityAttemptedActionV1 {
-        subject: "aaaaa-aa".to_string(),
-        canister_id: Some("aaaaa-aa".to_string()),
-        role: Some("root".to_string()),
-        action: AuthorityActionV1::AddControllers,
-        result: RolePhaseResultV1::NotAttempted,
-        error: None,
-    });
-    let evidence = AuthorityDryRunEvidenceV1 {
-        schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
-        evidence_id: "authority-evidence-1".to_string(),
-        check_id: check.check_id,
-        generated_at: "2026-05-23T00:00:01Z".to_string(),
-        reconciliation_plan: reconciliation,
-        authority_report: report,
-        authority_receipt: receipt,
-    };
+    let mut evidence = sample_authority_evidence();
+    evidence
+        .authority_receipt
+        .attempted_actions
+        .push(AuthorityAttemptedActionV1 {
+            subject: "aaaaa-aa".to_string(),
+            canister_id: Some("aaaaa-aa".to_string()),
+            role: Some("root".to_string()),
+            action: AuthorityActionV1::AddControllers,
+            result: RolePhaseResultV1::NotAttempted,
+            error: None,
+        });
 
     let err = validate_authority_dry_run_evidence(&evidence)
         .expect_err("attempted dry-run actions should fail evidence validation");
@@ -3538,32 +3464,8 @@ fn authority_dry_run_evidence_rejects_attempted_actions() {
 
 #[test]
 fn authority_dry_run_evidence_rejects_non_complete_receipt_status() {
-    let check = sample_check(sample_plan(), sample_matching_inventory());
-    let reconciliation = build_authority_reconciliation_plan(&check);
-    let report = authority_report_from_plan_with_check_id(
-        "authority-report-1",
-        Some(check.check_id.clone()),
-        &reconciliation,
-    );
-    let mut receipt = authority_dry_run_receipt_from_plan(
-        &reconciliation,
-        &report,
-        Some(check.check_id.clone()),
-        "authority-dry-run-1",
-        "2026-05-23T00:00:00Z",
-        Some("2026-05-23T00:00:01Z".to_string()),
-    )
-    .expect("build authority receipt");
-    receipt.operation_status = DeploymentExecutionStatusV1::FailedBeforeMutation;
-    let evidence = AuthorityDryRunEvidenceV1 {
-        schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
-        evidence_id: "authority-evidence-1".to_string(),
-        check_id: check.check_id,
-        generated_at: "2026-05-23T00:00:01Z".to_string(),
-        reconciliation_plan: reconciliation,
-        authority_report: report,
-        authority_receipt: receipt,
-    };
+    let mut evidence = sample_authority_evidence();
+    evidence.authority_receipt.operation_status = DeploymentExecutionStatusV1::FailedBeforeMutation;
 
     let err = validate_authority_dry_run_evidence(&evidence)
         .expect_err("non-complete dry-run receipts should fail evidence validation");
@@ -3578,34 +3480,10 @@ fn authority_dry_run_evidence_rejects_non_complete_receipt_status() {
 
 #[test]
 fn authority_dry_run_evidence_rejects_failed_receipt_command_result() {
-    let check = sample_check(sample_plan(), sample_matching_inventory());
-    let reconciliation = build_authority_reconciliation_plan(&check);
-    let report = authority_report_from_plan_with_check_id(
-        "authority-report-1",
-        Some(check.check_id.clone()),
-        &reconciliation,
-    );
-    let mut receipt = authority_dry_run_receipt_from_plan(
-        &reconciliation,
-        &report,
-        Some(check.check_id.clone()),
-        "authority-dry-run-1",
-        "2026-05-23T00:00:00Z",
-        Some("2026-05-23T00:00:01Z".to_string()),
-    )
-    .expect("build authority receipt");
-    receipt.command_result = DeploymentCommandResultV1::Failed {
+    let mut evidence = sample_authority_evidence();
+    evidence.authority_receipt.command_result = DeploymentCommandResultV1::Failed {
         code: "dry_run_failed".to_string(),
         message: "dry run failed".to_string(),
-    };
-    let evidence = AuthorityDryRunEvidenceV1 {
-        schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
-        evidence_id: "authority-evidence-1".to_string(),
-        check_id: check.check_id,
-        generated_at: "2026-05-23T00:00:01Z".to_string(),
-        reconciliation_plan: reconciliation,
-        authority_report: report,
-        authority_receipt: receipt,
     };
 
     let err = validate_authority_dry_run_evidence(&evidence)
@@ -3621,31 +3499,8 @@ fn authority_dry_run_evidence_rejects_failed_receipt_command_result() {
 
 #[test]
 fn authority_dry_run_evidence_rejects_complete_receipt_without_finished_at() {
-    let check = sample_check(sample_plan(), sample_matching_inventory());
-    let reconciliation = build_authority_reconciliation_plan(&check);
-    let report = authority_report_from_plan_with_check_id(
-        "authority-report-1",
-        Some(check.check_id.clone()),
-        &reconciliation,
-    );
-    let receipt = authority_dry_run_receipt_from_plan(
-        &reconciliation,
-        &report,
-        Some(check.check_id.clone()),
-        "authority-dry-run-1",
-        "2026-05-23T00:00:00Z",
-        None,
-    )
-    .expect("build authority receipt");
-    let evidence = AuthorityDryRunEvidenceV1 {
-        schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
-        evidence_id: "authority-evidence-1".to_string(),
-        check_id: check.check_id,
-        generated_at: "2026-05-23T00:00:01Z".to_string(),
-        reconciliation_plan: reconciliation,
-        authority_report: report,
-        authority_receipt: receipt,
-    };
+    let mut evidence = sample_authority_evidence();
+    evidence.authority_receipt.finished_at = None;
 
     let err = validate_authority_dry_run_evidence(&evidence)
         .expect_err("complete dry-run receipts should record finished_at");
@@ -3658,31 +3513,8 @@ fn authority_dry_run_evidence_rejects_complete_receipt_without_finished_at() {
 
 #[test]
 fn authority_dry_run_evidence_rejects_generated_at_mismatch() {
-    let check = sample_check(sample_plan(), sample_matching_inventory());
-    let reconciliation = build_authority_reconciliation_plan(&check);
-    let report = authority_report_from_plan_with_check_id(
-        "authority-report-1",
-        Some(check.check_id.clone()),
-        &reconciliation,
-    );
-    let receipt = authority_dry_run_receipt_from_plan(
-        &reconciliation,
-        &report,
-        Some(check.check_id.clone()),
-        "authority-dry-run-1",
-        "2026-05-23T00:00:00Z",
-        Some("2026-05-23T00:00:01Z".to_string()),
-    )
-    .expect("build authority receipt");
-    let evidence = AuthorityDryRunEvidenceV1 {
-        schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
-        evidence_id: "authority-evidence-1".to_string(),
-        check_id: check.check_id,
-        generated_at: "2026-05-23T00:00:02Z".to_string(),
-        reconciliation_plan: reconciliation,
-        authority_report: report,
-        authority_receipt: receipt,
-    };
+    let mut evidence = sample_authority_evidence();
+    evidence.generated_at = "2026-05-23T00:00:02Z".to_string();
 
     let err = validate_authority_dry_run_evidence(&evidence)
         .expect_err("evidence generated_at should match receipt completion time");
@@ -3698,33 +3530,30 @@ fn authority_dry_run_evidence_rejects_generated_at_mismatch() {
 }
 
 #[test]
+fn authority_dry_run_evidence_rejects_receipt_finished_before_started() {
+    let mut evidence = sample_authority_evidence();
+    evidence.authority_receipt.started_at = "2026-05-23T00:00:02Z".to_string();
+
+    let err = validate_authority_dry_run_evidence(&evidence)
+        .expect_err("dry-run receipt finish time should not precede start time");
+
+    assert!(matches!(
+        err,
+        AuthorityEvidenceError::DryRunReceiptTimestampOrder {
+            field: "receipt.started_at",
+            other_field: "receipt.finished_at",
+            ..
+        }
+    ));
+}
+
+#[test]
 fn authority_dry_run_evidence_rejects_mismatched_controller_observations() {
-    let check = sample_check(sample_plan(), sample_matching_inventory());
-    let reconciliation = build_authority_reconciliation_plan(&check);
-    let report = authority_report_from_plan_with_check_id(
-        "authority-report-1",
-        Some(check.check_id.clone()),
-        &reconciliation,
-    );
-    let mut receipt = authority_dry_run_receipt_from_plan(
-        &reconciliation,
-        &report,
-        Some(check.check_id.clone()),
-        "authority-dry-run-1",
-        "2026-05-23T00:00:00Z",
-        Some("2026-05-23T00:00:01Z".to_string()),
-    )
-    .expect("build authority receipt");
-    receipt.verified_controller_observations.clear();
-    let evidence = AuthorityDryRunEvidenceV1 {
-        schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
-        evidence_id: "authority-evidence-1".to_string(),
-        check_id: check.check_id,
-        generated_at: "2026-05-23T00:00:01Z".to_string(),
-        reconciliation_plan: reconciliation,
-        authority_report: report,
-        authority_receipt: receipt,
-    };
+    let mut evidence = sample_authority_evidence();
+    evidence
+        .authority_receipt
+        .verified_controller_observations
+        .clear();
 
     let err = validate_authority_dry_run_evidence(&evidence)
         .expect_err("mismatched controller observations should fail evidence validation");
@@ -4404,6 +4233,21 @@ fn sample_check(plan: DeploymentPlanV1, inventory: DeploymentInventoryV1) -> Dep
         diff,
         report,
     }
+}
+
+fn sample_authority_evidence() -> AuthorityDryRunEvidenceV1 {
+    sample_authority_evidence_from_check(sample_check(sample_plan(), sample_matching_inventory()))
+}
+
+fn sample_authority_evidence_from_check(check: DeploymentCheckV1) -> AuthorityDryRunEvidenceV1 {
+    authority_dry_run_evidence_from_check(
+        &check,
+        "authority-evidence-1",
+        "authority-report-1",
+        "authority-dry-run-1",
+        "2026-05-23T00:00:01Z",
+    )
+    .expect("build authority evidence")
 }
 
 fn sample_receipt_with_phase(

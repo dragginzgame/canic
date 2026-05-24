@@ -150,6 +150,27 @@ pub fn authority_report_from_plan(
     authority_report_from_plan_with_check_id(report_id, None, plan)
 }
 
+/// Build the dry-run authority reconciliation plan for one deployment truth
+/// check and render the operator-facing report with source check provenance.
+#[must_use]
+pub fn authority_report_from_check(
+    report_id: impl Into<String>,
+    check: &DeploymentCheckV1,
+) -> AuthorityReportV1 {
+    let plan = build_authority_reconciliation_plan(check);
+    authority_report_from_plan_with_check_id(report_id, Some(check.check_id.clone()), &plan)
+}
+
+/// Build the operator-facing authority report using the standard local
+/// deployment-truth artifact identifier.
+#[must_use]
+pub fn authority_report_from_check_with_local_id(check: &DeploymentCheckV1) -> AuthorityReportV1 {
+    authority_report_from_check(
+        local_authority_artifact_id(check, "authority-report"),
+        check,
+    )
+}
+
 /// Render the operator-facing authority report and attach the source deployment
 /// check identifier when the caller is building the report from a full check.
 #[must_use]
