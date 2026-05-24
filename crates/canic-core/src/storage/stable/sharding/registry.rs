@@ -51,8 +51,8 @@ impl ShardingRegistry {
     #[cfg(test)]
     pub(crate) fn clear() {
         Self::with_mut(|core| {
-            core.registry.clear();
-            core.assignments.clear();
+            core.registry.clear_new();
+            core.assignments.clear_new();
         });
     }
 

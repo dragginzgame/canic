@@ -1,12 +1,13 @@
 use crate::{
-    cdk::structures::{BTreeMap, DefaultMemoryImpl, memory::VirtualMemory},
+    cdk::structures::{DefaultMemoryImpl, memory::VirtualMemory},
     storage::{prelude::*, stable::memory::topology::APP_INDEX_ID},
 };
+use ic_memory::stable_structures::btreemap::BTreeMap as StableBtreeMap;
 use std::cell::RefCell;
 
 eager_static! {
-    static APP_INDEX: RefCell<BTreeMap<CanisterRole, Principal, VirtualMemory<DefaultMemoryImpl>>> =
-        RefCell::new(BTreeMap::init(crate::ic_memory_key!("canic.core.app_index.v1", AppIndex, APP_INDEX_ID)));
+    static APP_INDEX: RefCell<StableBtreeMap<CanisterRole, Principal, VirtualMemory<DefaultMemoryImpl>>> =
+        RefCell::new(StableBtreeMap::init(crate::ic_memory_key!("canic.core.app_index.v1", AppIndex, APP_INDEX_ID)));
 }
 
 ///
@@ -46,7 +47,7 @@ impl AppIndex {
 
     pub(crate) fn import(data: AppIndexRecord) {
         APP_INDEX.with_borrow_mut(|map| {
-            map.clear();
+            map.clear_new();
             for (role, pid) in data.entries {
                 map.insert(role, pid);
             }

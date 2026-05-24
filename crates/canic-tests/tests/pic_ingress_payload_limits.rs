@@ -1,6 +1,6 @@
 use canic::{Error, ids::CanisterRole};
 use canic_testing_internal::pic::install_standalone_canister;
-use canic_testkit::artifacts::WasmBuildProfile;
+use ic_testkit::artifacts::WasmBuildProfile;
 
 const PROBE_CRATE: &str = "payload_limit_probe";
 const PROBE_ROLE: CanisterRole = CanisterRole::new("test");
@@ -24,7 +24,7 @@ fn inspect_message_enforces_default_explicit_and_named_payload_limits() {
 
 // Assert one ingress update reaches the canister and returns the echoed length.
 fn assert_echo_ok(
-    pic: &canic_testkit::pic::Pic,
+    pic: &ic_testkit::pic::Pic,
     canister_id: canic::cdk::types::Principal,
     method: &str,
     len: usize,
@@ -39,7 +39,7 @@ fn assert_echo_ok(
 
 // Assert one ingress update is rejected before endpoint execution.
 fn assert_rejected(
-    pic: &canic_testkit::pic::Pic,
+    pic: &ic_testkit::pic::Pic,
     canister_id: canic::cdk::types::Principal,
     method: &str,
     len: usize,

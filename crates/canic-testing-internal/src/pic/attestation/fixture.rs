@@ -1,5 +1,5 @@
 use candid::Principal;
-use canic_testkit::pic::{CachedPicBaselineGuard, Pic};
+use ic_testkit::pic::{CachedPicBaselineGuard, Pic};
 use std::io::Write;
 
 use super::baseline::{self, AttestationBaselineMetadata};

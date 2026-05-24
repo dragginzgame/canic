@@ -10,7 +10,7 @@ use canic_core::dto::{
     rpc::{CreateCanisterParent, CreateCanisterRequest, Request, Response},
 };
 use canic_core::ids::CanisterRole;
-use canic_testkit::pic::Pic;
+use ic_testkit::pic::Pic;
 use serde::de::DeserializeOwned;
 
 use crate::pic::wait_until_ready as wait_for_ready_canister;

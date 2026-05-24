@@ -378,6 +378,7 @@ dependencies = [
  "candid",
  "canic-cdk",
  "canic-core",
+ "ic-memory",
  "serde",
  "sha2",
  "thiserror 2.0.18",
@@ -437,16 +438,7 @@ dependencies = [
  "canic",
  "canic-control-plane",
  "canic-core",
- "canic-testkit",
- "serde",
-]
-
-[[package]]
-name = "canic-testkit"
-version = "0.42.10"
-dependencies = [
- "candid",
- "pocket-ic",
+ "ic-testkit",
  "serde",
 ]
 
@@ -459,8 +451,8 @@ dependencies = [
  "canic-control-plane",
  "canic-core",
  "canic-testing-internal",
- "canic-testkit",
  "ic-memory",
+ "ic-testkit",
  "pocket-ic",
  "serde",
  "serde_json",
@@ -1618,6 +1610,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8ee3372ddc0cf2a747fc26ce2d075a240ed6bfab151e63bc70109e8967f7ce6f"
 dependencies = [
  "ic_principal",
+]
+
+[[package]]
+name = "ic-testkit"
+version = "0.0.2"
+dependencies = [
+ "candid",
+ "pocket-ic",
+ "serde",
 ]
 
 [[package]]
@@ -2826,8 +2827,8 @@ version = "0.42.10"
 dependencies = [
  "candid",
  "canic",
- "canic-testkit",
  "ic-cdk",
+ "ic-testkit",
 ]
 
 [[package]]

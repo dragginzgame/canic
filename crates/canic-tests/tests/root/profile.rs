@@ -1,5 +1,5 @@
 use canic_testing_internal::pic::{RootBaselineMetadata, RootBaselineSpec};
-use canic_testkit::{
+use ic_testkit::{
     artifacts::{WasmBuildProfile, workspace_root_for},
     pic::CachedPicBaseline,
 };

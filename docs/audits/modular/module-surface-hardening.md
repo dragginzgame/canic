@@ -141,7 +141,7 @@ Default in-scope roots:
 
 Conditional roots:
 
-* `crates/canic-testkit/src` and `crates/canic-testing-internal/src` when test
+* sibling `../ic-testkit/src` and `crates/canic-testing-internal/src` when test
   support widens production visibility or acts as the real owner of a helper.
 * `crates/canic-tests`, `canisters/test`, `canisters/audit`, and `fleets/*`
   when they are direct consumers of production surface or generated-boundary

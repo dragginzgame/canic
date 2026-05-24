@@ -16,18 +16,19 @@
 use crate::{
     cdk::{
         candid::Principal,
-        structures::{BTreeMap, DefaultMemoryImpl, memory::VirtualMemory},
+        structures::{DefaultMemoryImpl, memory::VirtualMemory},
     },
     eager_static,
     ids::CanisterRole,
     storage::{canister::CanisterRecord, stable::memory::topology::SUBNET_REGISTRY_ID},
 };
+use ic_memory::stable_structures::btreemap::BTreeMap as StableBtreeMap;
 use std::cell::RefCell;
 
 eager_static! {
     static SUBNET_REGISTRY: RefCell<
-        BTreeMap<Principal, CanisterRecord, VirtualMemory<DefaultMemoryImpl>>
-    > = RefCell::new(BTreeMap::init(
+        StableBtreeMap<Principal, CanisterRecord, VirtualMemory<DefaultMemoryImpl>>
+    > = RefCell::new(StableBtreeMap::init(
         crate::ic_memory_key!("canic.core.subnet_registry.v1", SubnetRegistry, SUBNET_REGISTRY_ID)
     ));
 }
@@ -237,7 +238,7 @@ mod tests {
     }
 
     fn clear_registry() {
-        SUBNET_REGISTRY.with_borrow_mut(BTreeMap::clear);
+        SUBNET_REGISTRY.with_borrow_mut(StableBtreeMap::clear_new);
     }
 
     fn seed_simple_tree() {

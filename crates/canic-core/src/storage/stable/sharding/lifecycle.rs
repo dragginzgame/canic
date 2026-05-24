@@ -1,7 +1,8 @@
 use crate::{
-    cdk::structures::{BTreeMap, DefaultMemoryImpl, Memory, memory::VirtualMemory},
+    cdk::structures::{DefaultMemoryImpl, Memory, memory::VirtualMemory},
     storage::{prelude::*, stable::memory::placement::SHARDING_ACTIVE_SET_ID},
 };
+use ic_memory::stable_structures::btreemap::BTreeMap as StableBtreeMap;
 use std::cell::RefCell;
 
 const PRESENT: u8 = 1;
@@ -13,7 +14,7 @@ const PRESENT: u8 = 1;
 eager_static! {
     static SHARDING_LIFECYCLE: RefCell<ShardingLifecycleCore<VirtualMemory<DefaultMemoryImpl>>> =
         RefCell::new(ShardingLifecycleCore::new(
-            BTreeMap::init(crate::ic_memory_key!("canic.core.sharding_active_set.v1", ShardingActiveSet, SHARDING_ACTIVE_SET_ID)),
+            StableBtreeMap::init(crate::ic_memory_key!("canic.core.sharding_active_set.v1", ShardingActiveSet, SHARDING_ACTIVE_SET_ID)),
         ));
 }
 
@@ -64,7 +65,7 @@ impl ShardingLifecycle {
     #[cfg(test)]
     pub(crate) fn clear() {
         Self::with_mut(|core| {
-            core.active.clear();
+            core.active.clear_new();
         });
     }
 }
@@ -84,11 +85,11 @@ pub struct ShardingActiveSet;
 ///
 
 pub struct ShardingLifecycleCore<M: Memory> {
-    active: BTreeMap<Principal, u8, M>,
+    active: StableBtreeMap<Principal, u8, M>,
 }
 
 impl<M: Memory> ShardingLifecycleCore<M> {
-    pub const fn new(active: BTreeMap<Principal, u8, M>) -> Self {
+    pub const fn new(active: StableBtreeMap<Principal, u8, M>) -> Self {
         Self { active }
     }
 }

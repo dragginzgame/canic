@@ -8,18 +8,17 @@ use canic::{
     },
     ids::{CanisterRole, SubnetRole},
 };
-use canic_testkit::{
+use ic_testkit::{
     Fake,
-    artifacts::{
-        WasmBuildProfile, build_internal_test_wasm_canisters, read_wasm, test_target_dir,
-        workspace_root_for,
-    },
+    artifacts::{WasmBuildProfile, read_wasm, test_target_dir, workspace_root_for},
     pic::{Pic, PicSerialGuard, acquire_pic_serial_guard, pic},
 };
 use std::{
     path::{Path, PathBuf},
     sync::Once,
 };
+
+use super::artifacts::build_internal_test_wasm_canisters;
 
 const INSTALL_CYCLES: u128 = 1_000_000_000_000;
 const CANISTERS: [&str; 2] = ["runtime_probe", "intent_authority"];

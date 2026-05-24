@@ -12,12 +12,9 @@ use canic_core::{
     },
     ids::{CanisterRole, SubnetRole},
 };
-use canic_testing_internal::pic::CanicPicExt;
-use canic_testkit::{
-    artifacts::{
-        WasmBuildProfile, build_internal_test_wasm_canisters, read_wasm, test_target_dir,
-        workspace_root_for,
-    },
+use canic_testing_internal::pic::{CanicPicExt, build_internal_test_wasm_canisters};
+use ic_testkit::{
+    artifacts::{WasmBuildProfile, read_wasm, test_target_dir, workspace_root_for},
     pic::{Pic, acquire_pic_serial_guard, pic},
 };
 use serde::de::DeserializeOwned;

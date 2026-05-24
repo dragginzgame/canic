@@ -16,7 +16,7 @@ use canic::{
     ids::{CanisterRole, SubnetRole},
     protocol,
 };
-use canic_testkit::pic::Pic;
+use ic_testkit::pic::Pic;
 
 // Query the authoritative root subnet registry once and unwrap the canonical response shape.
 fn query_subnet_registry(
@@ -289,7 +289,7 @@ pub fn assert_root_diagnostics_are_controller_gated(pic: &Pic, root_id: Principa
 }
 
 // Match PocketIC missing-method failures without depending on one exact transport string.
-fn assert_missing_method(err: &canic_testkit::pic::PicCallError, method: &str) {
+fn assert_missing_method(err: &ic_testkit::pic::PicCallError, method: &str) {
     let message = err.message.as_str();
 
     assert!(

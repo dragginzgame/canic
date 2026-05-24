@@ -1,7 +1,7 @@
 //! Root-specific cached baseline and topology helpers for internal test suites.
 
 use canic::{cdk::types::Principal, ids::CanisterRole};
-use canic_testkit::{artifacts::WasmBuildProfile, pic::Pic};
+use ic_testkit::{artifacts::WasmBuildProfile, pic::Pic};
 use std::{collections::HashMap, io::Write, path::PathBuf, time::Instant};
 
 mod artifacts;

@@ -21,7 +21,7 @@ use canic_control_plane::{
 };
 use canic_testing_internal::canister::APP;
 use canic_testing_internal::pic::CanicPicExt;
-use canic_testkit::{artifacts::workspace_root_for, pic::Pic};
+use ic_testkit::{artifacts::workspace_root_for, pic::Pic};
 use reconcile_root_harness::setup_cached_root;
 use std::{fs, path::PathBuf};
 

@@ -5,7 +5,7 @@ use crate::root_cached_support::{
     RootSetup, baseline_spec_for_roles_owned_env, setup_cached_root as setup_cached_root_common,
 };
 use canic_testing_internal::pic::RootBaselineMetadata;
-use canic_testkit::{
+use ic_testkit::{
     artifacts::{WasmBuildProfile, workspace_root_for},
     pic::CachedPicBaseline,
 };

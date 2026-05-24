@@ -24,7 +24,7 @@ with this file, the code is wrong.
 - Runtime/facade: `canic`, `canic-core`, `canic-cdk`, `canic-macros`.
 - Canister control plane/store: `canic-control-plane`, `canic-wasm-store`.
 - Host/operator: `canic-cli`, `canic-host`, `canic-backup`.
-- Testing: `canic-testkit`, `canic-testing-internal`, `canic-tests`.
+- Testing: sibling `ic-testkit`, `canic-testing-internal`, `canic-tests`.
 - `scripts/dev/*` are intentional maintainer helpers, not stale CLI leftovers.
 - Keep flat `crates/` unless doing a full Cargo/CI/docs/publish migration.
 

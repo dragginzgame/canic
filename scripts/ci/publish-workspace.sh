@@ -21,7 +21,6 @@ PUBLISH_ORDER=(
     canic-host
     canic-cli
     canic-wasm-store
-    canic-testkit
 )
 
 # Fails before any publish attempt if an explicitly publishable workspace crate

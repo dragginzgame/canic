@@ -1,8 +1,6 @@
-//! Environment constants grouped by domain (ck, NNS, SNS).
+//! Environment constants grouped by domain.
 
 #[macro_use]
 mod macros;
 
 pub mod ck;
-pub mod nns;
-pub mod sns;

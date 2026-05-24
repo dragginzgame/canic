@@ -1,10 +1,12 @@
 use crate::{
     cdk::{
-        env::nns::NNS_REGISTRY_CANISTER,
         spec::governance::nns::{GetSubnetForCanisterRequest, GetSubnetForCanisterResponse},
         types::Principal,
     },
-    infra::{InfraError, ic::call::Call, ic::nns::NnsInfraError},
+    infra::{
+        InfraError,
+        ic::{call::Call, known::NNS_REGISTRY_CANISTER, nns::NnsInfraError},
+    },
     log,
     log::Topic,
 };

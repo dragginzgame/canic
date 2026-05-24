@@ -15,14 +15,13 @@ use canic::{
     ids::{CanisterRole, SubnetRole},
     protocol,
 };
-use canic_testkit::{
+use ic_testkit::{
     Fake,
-    artifacts::{
-        WasmBuildProfile, build_internal_test_wasm_canisters, read_wasm, test_target_dir,
-        workspace_root_for,
-    },
+    artifacts::{WasmBuildProfile, read_wasm, test_target_dir, workspace_root_for},
     pic::{Pic, StandaloneCanisterFixture, install_prebuilt_canister},
 };
+
+use super::artifacts::build_internal_test_wasm_canisters;
 
 const INSTALL_CYCLES: u128 = 500_000_000_000_000;
 const STANDALONE_READY_TICK_LIMIT: usize = 60;

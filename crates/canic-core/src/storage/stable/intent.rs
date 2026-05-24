@@ -6,7 +6,7 @@
 
 use crate::{
     cdk::structures::{
-        BTreeMap, DefaultMemoryImpl, Storable, cell::Cell, memory::VirtualMemory, storable::Bound,
+        DefaultMemoryImpl, Storable, cell::Cell, memory::VirtualMemory, storable::Bound,
     },
     ids::{IntentId, IntentResourceKey},
     storage::{
@@ -16,6 +16,7 @@ use crate::{
         },
     },
 };
+use ic_memory::stable_structures::btreemap::BTreeMap as StableBtreeMap;
 use std::{borrow::Cow, cell::RefCell};
 
 //
@@ -34,25 +35,25 @@ eager_static! {
 
 eager_static! {
     static INTENT_RECORDS: RefCell<
-        BTreeMap<IntentId, IntentRecord, VirtualMemory<DefaultMemoryImpl>>
+        StableBtreeMap<IntentId, IntentRecord, VirtualMemory<DefaultMemoryImpl>>
     > = RefCell::new(
-        BTreeMap::init(crate::ic_memory_key!("canic.core.intent_records.v1", IntentRecord, INTENT_RECORDS_ID)),
+        StableBtreeMap::init(crate::ic_memory_key!("canic.core.intent_records.v1", IntentRecord, INTENT_RECORDS_ID)),
     );
 }
 
 eager_static! {
     static INTENT_TOTALS: RefCell<
-        BTreeMap<IntentResourceKey, IntentResourceTotalsRecord, VirtualMemory<DefaultMemoryImpl>>
+        StableBtreeMap<IntentResourceKey, IntentResourceTotalsRecord, VirtualMemory<DefaultMemoryImpl>>
     > = RefCell::new(
-        BTreeMap::init(crate::ic_memory_key!("canic.core.intent_totals.v1", IntentResourceTotalsRecord, INTENT_TOTALS_ID)),
+        StableBtreeMap::init(crate::ic_memory_key!("canic.core.intent_totals.v1", IntentResourceTotalsRecord, INTENT_TOTALS_ID)),
     );
 }
 
 eager_static! {
     static INTENT_PENDING: RefCell<
-        BTreeMap<IntentId, IntentPendingEntryRecord, VirtualMemory<DefaultMemoryImpl>>
+        StableBtreeMap<IntentId, IntentPendingEntryRecord, VirtualMemory<DefaultMemoryImpl>>
     > = RefCell::new(
-        BTreeMap::init(crate::ic_memory_key!("canic.core.intent_pending.v1", IntentPendingEntryRecord, INTENT_PENDING_ID)),
+        StableBtreeMap::init(crate::ic_memory_key!("canic.core.intent_pending.v1", IntentPendingEntryRecord, INTENT_PENDING_ID)),
     );
 }
 
@@ -266,7 +267,7 @@ impl IntentStore {
 
     pub(crate) fn with_pending_entries<R>(
         f: impl FnOnce(
-            &BTreeMap<IntentId, IntentPendingEntryRecord, VirtualMemory<DefaultMemoryImpl>>,
+            &StableBtreeMap<IntentId, IntentPendingEntryRecord, VirtualMemory<DefaultMemoryImpl>>,
         ) -> R,
     ) -> R {
         INTENT_PENDING.with_borrow(|map| f(map))
@@ -282,9 +283,9 @@ impl IntentStore {
 #[cfg(test)]
 impl IntentStore {
     pub(crate) fn reset_for_tests() {
-        INTENT_RECORDS.with_borrow_mut(BTreeMap::clear);
-        INTENT_TOTALS.with_borrow_mut(BTreeMap::clear);
-        INTENT_PENDING.with_borrow_mut(BTreeMap::clear);
+        INTENT_RECORDS.with_borrow_mut(StableBtreeMap::clear_new);
+        INTENT_TOTALS.with_borrow_mut(StableBtreeMap::clear_new);
+        INTENT_PENDING.with_borrow_mut(StableBtreeMap::clear_new);
         INTENT_META.with_borrow_mut(|cell| cell.set(IntentStoreMetaRecord::default()));
     }
 }

@@ -1,12 +1,13 @@
 use crate::{
-    cdk::structures::{BTreeMap, DefaultMemoryImpl, memory::VirtualMemory},
+    cdk::structures::{DefaultMemoryImpl, memory::VirtualMemory},
     storage::{prelude::*, stable::memory::topology::SUBNET_INDEX_ID},
 };
+use ic_memory::stable_structures::btreemap::BTreeMap as StableBtreeMap;
 use std::cell::RefCell;
 
 eager_static! {
-    static SUBNET_INDEX: RefCell<BTreeMap<CanisterRole, Principal, VirtualMemory<DefaultMemoryImpl>>> =
-        RefCell::new(BTreeMap::init(crate::ic_memory_key!("canic.core.subnet_index.v1", SubnetIndex, SUBNET_INDEX_ID)));
+    static SUBNET_INDEX: RefCell<StableBtreeMap<CanisterRole, Principal, VirtualMemory<DefaultMemoryImpl>>> =
+        RefCell::new(StableBtreeMap::init(crate::ic_memory_key!("canic.core.subnet_index.v1", SubnetIndex, SUBNET_INDEX_ID)));
 }
 
 ///
@@ -47,7 +48,7 @@ impl SubnetIndex {
 
     pub(crate) fn import(data: SubnetIndexRecord) {
         SUBNET_INDEX.with_borrow_mut(|map| {
-            map.clear();
+            map.clear_new();
             for (role, pid) in data.entries {
                 map.insert(role, pid);
             }

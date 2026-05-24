@@ -1,11 +1,9 @@
 // Category C - Artifact test (built wasm; no runtime config).
 
 use candid::{Principal, decode_one, encode_one};
-use canic_testkit::{
-    artifacts::{
-        WasmBuildProfile, build_internal_test_wasm_canisters, read_wasm, test_target_dir,
-        workspace_root_for,
-    },
+use canic_testing_internal::pic::build_internal_test_wasm_canisters;
+use ic_testkit::{
+    artifacts::{WasmBuildProfile, read_wasm, test_target_dir, workspace_root_for},
     pic::{acquire_pic_serial_guard, pic},
 };
 use std::{

@@ -1,5 +1,6 @@
-//! Repo-only PocketIC fixtures layered on top of `canic-testkit`.
+//! Repo-only PocketIC fixtures layered on top of `ic-testkit`.
 
+mod artifacts;
 mod attestation;
 mod audit;
 mod canic;
@@ -7,6 +8,7 @@ mod delegation;
 mod lifecycle;
 mod root;
 
+pub use artifacts::build_internal_test_wasm_canisters;
 pub use attestation::{
     BaselinePicGuard, CachedInstalledRoot, install_test_root_cached,
     install_test_root_with_verifier_cached, install_test_root_without_test_material_cached,
@@ -17,8 +19,8 @@ pub use audit::{
     install_audit_scaling_probe,
 };
 pub use canic::{CanicPicExt, install_standalone_canister, role_pid, wait_until_ready};
-pub use canic_testkit::pic::StandaloneCanisterFixture;
 pub use delegation::{create_user_shard, issue_delegated_token, request_root_delegation_provision};
+pub use ic_testkit::pic::StandaloneCanisterFixture;
 pub use lifecycle::{
     LifecycleBoundaryFixture, install_lifecycle_boundary_fixture, invalid_init_args, upgrade_args,
 };

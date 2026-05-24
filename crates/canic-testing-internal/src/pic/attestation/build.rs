@@ -1,15 +1,16 @@
-use canic_testkit::artifacts::{
-    WasmBuildProfile, build_internal_test_wasm_canisters,
-    build_internal_test_wasm_canisters_with_env, read_wasm,
-    test_target_dir as artifact_test_target_dir,
+use ic_testkit::artifacts::{
+    WasmBuildProfile, read_wasm, test_target_dir as artifact_test_target_dir,
 };
-use canic_testkit::pic::{Pic, PicBuilder, PicSerialGuard, acquire_pic_serial_guard};
+use ic_testkit::pic::{Pic, PicBuilder, PicSerialGuard, acquire_pic_serial_guard};
 use std::{
     ops::{Deref, DerefMut},
     path::{Path, PathBuf},
     sync::{Mutex, Once},
 };
 
+use super::super::artifacts::{
+    build_internal_test_wasm_canisters, build_internal_test_wasm_canisters_with_env,
+};
 use super::fixture::progress;
 
 const CANISTER_PACKAGES: [&str; 1] = ["delegation_root_stub"];

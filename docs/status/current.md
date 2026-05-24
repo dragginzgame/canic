@@ -21,7 +21,32 @@ inspect only the files needed for the current task.
 
 ## Recent Work
 
-- `0.42.10` is staged as the next authority-reporting patch after `0.42.9`:
+- Removed the unused SNS-specific CDK surface, including the baked-in SNS
+  canister catalog; SNS deployment identities should be discovered from
+  live/mainnet sources instead of maintained as static framework data.
+- Removed the broad CDK NNS system-canister table. The NNS registry and
+  exchange-rate canister principals now live beside the Canic core infra
+  adapters that call them.
+- `0.42.11` changelog notes are staged for the authority receipt hardening,
+  `ic-testkit` helper split, MSRV declaration update, and stale CDK
+  helper/static-canister cleanup.
+- Removed the obsolete `canic-cdk::structures::BTreeMap` wrapper. Stable-storage
+  code now imports the upstream `ic_memory` B-tree map directly as
+  `StableBtreeMap`, and map clearing uses upstream `clear_new()`.
+- Lowered Canic's declared MSRV to Rust `1.88.0` while keeping
+  `rust-toolchain.toml` and the internal CI build/test lane on Rust `1.95.0`.
+  README badges now expose both lanes; `ic-testkit` has its own matching
+  `rust-toolchain.toml`.
+- Moved the reusable PocketIC helper surface out of the Canic workspace into
+  the sibling `../ic-testkit` crate. Canic now consumes it through the
+  workspace `ic-testkit` path dependency, while Canic-specific root/auth
+  fixtures remain in `canic-testing-internal`.
+- `0.42.10` is live. Continued authority receipt hardening after it:
+  standalone dry-run receipt construction now rejects unsupported source
+  schema versions, missing source report check provenance, blank receipt
+  identity inputs, and missing completion timestamps before emitting receipt
+  evidence.
+- `0.42.10` tightened authority-reporting after `0.42.9`:
   authority apply-readiness blockers now distinguish unsafe canister authority
   from other hard authority findings. Unsafe canister hard-failure evidence is
   still preserved in the report and receipt, but report counts and next-action

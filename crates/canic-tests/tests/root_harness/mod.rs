@@ -6,7 +6,7 @@ use canic_testing_internal::pic::{
     RootBaselineSpec, ensure_root_release_artifacts_built, load_root_wasm,
     setup_root_topology as bootstrap_root_topology,
 };
-use canic_testkit::{
+use ic_testkit::{
     artifacts::{WasmBuildProfile, workspace_root_for},
     pic::{Pic, PicSerialGuard, acquire_pic_serial_guard},
 };

@@ -671,7 +671,7 @@ fn query_subnet_index(setup: &RootSetup, canister_id: Principal) -> Vec<IndexEnt
 
 // Read one canister's public metrics page for the requested metric family.
 fn query_metrics(
-    pic: &canic_testkit::pic::Pic,
+    pic: &ic_testkit::pic::Pic,
     canister_id: Principal,
     kind: MetricsKind,
 ) -> Vec<MetricEntry> {

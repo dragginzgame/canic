@@ -15,12 +15,12 @@ use canic_testing_internal::{
     canister,
     pic::{CanicPicExt, upgrade_args},
 };
-use canic_testkit::artifacts::workspace_root_for;
+use ic_testkit::artifacts::workspace_root_for;
 use std::{fs, path::PathBuf, time::Duration};
 
 const READY_TICK_LIMIT: usize = 120;
 const INSTALL_CODE_RETRY_LIMIT: usize = 4;
-const INSTALL_CODE_COOLDOWN: Duration = Duration::from_mins(5);
+const INSTALL_CODE_COOLDOWN: Duration = Duration::from_secs(5 * 60);
 const TEST_WASM_RELATIVE: &str = ".icp/local/canisters/test/test.wasm.gz";
 const USER_SHARD_WASM_RELATIVE: &str = ".icp/local/canisters/user_shard/user_shard.wasm.gz";
 

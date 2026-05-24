@@ -23,7 +23,7 @@ ic-cdk = { workspace = true }
 canic = { workspace = true }
 
 [dev-dependencies]
-canic-testkit = { workspace = true }
+ic-testkit = { workspace = true }
 
 [lints]
 workspace = true

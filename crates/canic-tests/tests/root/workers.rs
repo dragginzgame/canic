@@ -14,7 +14,7 @@ use canic::{
 };
 use canic_testing_internal::canister::SCALE_REPLICA;
 use canic_testing_internal::pic::CanicPicExt;
-use canic_testkit::pic::Pic;
+use ic_testkit::pic::Pic;
 
 /// Create a worker canister via the given hub canister.
 pub fn create_worker(pic: &Pic, hub_pid: Principal) -> Result<Principal, Error> {

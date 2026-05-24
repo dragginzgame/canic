@@ -11,11 +11,12 @@
 //! The contents are replaced wholesale on import.
 
 use crate::{
-    cdk::structures::{BTreeMap, DefaultMemoryImpl, memory::VirtualMemory},
+    cdk::structures::{DefaultMemoryImpl, memory::VirtualMemory},
     storage::{
         canister::CanisterRecord, prelude::*, stable::memory::topology::CANISTER_CHILDREN_ID,
     },
 };
+use ic_memory::stable_structures::btreemap::BTreeMap as StableBtreeMap;
 use std::cell::RefCell;
 
 eager_static! {
@@ -23,9 +24,9 @@ eager_static! {
     // CANISTER_CHILDREN
     //
     static CANISTER_CHILDREN: RefCell<
-        BTreeMap<Principal, CanisterRecord, VirtualMemory<DefaultMemoryImpl>>
+        StableBtreeMap<Principal, CanisterRecord, VirtualMemory<DefaultMemoryImpl>>
     > = RefCell::new(
-        BTreeMap::init(crate::ic_memory_key!("canic.core.canister_children.v1", CanisterChildren, CANISTER_CHILDREN_ID)),
+        StableBtreeMap::init(crate::ic_memory_key!("canic.core.canister_children.v1", CanisterChildren, CANISTER_CHILDREN_ID)),
     );
 }
 
@@ -60,7 +61,7 @@ impl CanisterChildren {
 
     pub(crate) fn import(data: CanisterChildrenRecord) {
         CANISTER_CHILDREN.with_borrow_mut(|map| {
-            map.clear();
+            map.clear_new();
             for (pid, entry) in data.entries {
                 map.insert(pid, entry);
             }

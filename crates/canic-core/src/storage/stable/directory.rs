@@ -1,18 +1,19 @@
 use crate::{
     cdk::{
-        structures::{BTreeMap, DefaultMemoryImpl, memory::VirtualMemory},
+        structures::{DefaultMemoryImpl, memory::VirtualMemory},
         types::{BoundedString64, BoundedString128},
     },
     eager_static,
     storage::{prelude::*, stable::memory::placement::DIRECTORY_REGISTRY_ID},
 };
+use ic_memory::stable_structures::btreemap::BTreeMap as StableBtreeMap;
 use std::cell::RefCell;
 
 eager_static! {
     static DIRECTORY_REGISTRY: RefCell<
-        BTreeMap<DirectoryKey, DirectoryEntryRecord, VirtualMemory<DefaultMemoryImpl>>
+        StableBtreeMap<DirectoryKey, DirectoryEntryRecord, VirtualMemory<DefaultMemoryImpl>>
     > = RefCell::new(
-        BTreeMap::init(crate::ic_memory_key!("canic.core.directory_registry.v1", DirectoryRegistry, DIRECTORY_REGISTRY_ID)),
+        StableBtreeMap::init(crate::ic_memory_key!("canic.core.directory_registry.v1", DirectoryRegistry, DIRECTORY_REGISTRY_ID)),
     );
 }
 
@@ -113,6 +114,6 @@ impl DirectoryRegistry {
 
     #[cfg(test)]
     pub(crate) fn clear() {
-        DIRECTORY_REGISTRY.with_borrow_mut(BTreeMap::clear);
+        DIRECTORY_REGISTRY.with_borrow_mut(StableBtreeMap::clear_new);
     }
 }

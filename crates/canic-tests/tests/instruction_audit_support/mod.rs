@@ -35,7 +35,7 @@ use canic_testing_internal::pic::{
     install_audit_scaling_probe, install_standalone_canister, issue_delegated_token,
     request_root_delegation_provision,
 };
-use canic_testkit::{artifacts::WasmBuildProfile, pic::Pic};
+use ic_testkit::{artifacts::WasmBuildProfile, pic::Pic};
 use serde::Serialize;
 use std::{
     collections::BTreeSet,

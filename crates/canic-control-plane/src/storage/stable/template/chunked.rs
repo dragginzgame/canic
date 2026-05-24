@@ -1,12 +1,13 @@
 use crate::ids::{TemplateChunkKey, TemplateReleaseKey};
 use canic_cdk::impl_storable_unbounded;
 use canic_cdk::structures::{
-    BTreeMap, DefaultMemoryImpl, Vec as StableVec,
+    DefaultMemoryImpl, Vec as StableVec,
     memory::VirtualMemory,
     storable::{Bound, Storable},
 };
 use canic_core::CANIC_WASM_CHUNK_BYTES;
 use canic_core::eager_static;
+use ic_memory::stable_structures::btreemap::BTreeMap as StableBtreeMap;
 use serde::{Deserialize, Serialize};
 use std::{borrow::Cow, cell::RefCell, collections::BTreeMap as StdBTreeMap};
 
@@ -23,9 +24,9 @@ struct TemplateChunkPayloadStore;
 
 eager_static! {
     static TEMPLATE_CHUNK_SETS: RefCell<
-        BTreeMap<TemplateReleaseKey, TemplateChunkSetRecord, VirtualMemory<DefaultMemoryImpl>>
+        StableBtreeMap<TemplateReleaseKey, TemplateChunkSetRecord, VirtualMemory<DefaultMemoryImpl>>
     > = RefCell::new(
-        BTreeMap::init(canic_core::ic_memory_key!("canic.control_plane.template_chunk_sets.v1", TemplateChunkSetStateStore, TEMPLATE_CHUNK_SETS_ID)),
+        StableBtreeMap::init(canic_core::ic_memory_key!("canic.control_plane.template_chunk_sets.v1", TemplateChunkSetStateStore, TEMPLATE_CHUNK_SETS_ID)),
     );
 }
 
@@ -35,9 +36,9 @@ eager_static! {
 
 eager_static! {
     static TEMPLATE_CHUNK_REFS: RefCell<
-        BTreeMap<TemplateChunkKey, TemplateChunkRefRecord, VirtualMemory<DefaultMemoryImpl>>
+        StableBtreeMap<TemplateChunkKey, TemplateChunkRefRecord, VirtualMemory<DefaultMemoryImpl>>
     > = RefCell::new(
-        BTreeMap::init(canic_core::ic_memory_key!("canic.control_plane.template_chunk_refs.v1", TemplateChunkRefStore, TEMPLATE_CHUNK_REFS_ID)),
+        StableBtreeMap::init(canic_core::ic_memory_key!("canic.control_plane.template_chunk_refs.v1", TemplateChunkRefStore, TEMPLATE_CHUNK_REFS_ID)),
     );
 }
 
@@ -212,7 +213,7 @@ impl TemplateChunkSetStateStore {
 
     // Clear the chunk-set metadata store.
     pub fn clear() {
-        TEMPLATE_CHUNK_SETS.with_borrow_mut(BTreeMap::clear);
+        TEMPLATE_CHUNK_SETS.with_borrow_mut(StableBtreeMap::clear_new);
         TEMPLATE_CHUNK_SETS_OCCUPIED_BYTES.with_borrow_mut(|occupied| {
             *occupied = Some(0);
         });
@@ -353,7 +354,7 @@ impl TemplateChunkStore {
 
     // Clear the chunk store.
     pub fn clear() {
-        TEMPLATE_CHUNK_REFS.with_borrow_mut(BTreeMap::clear);
+        TEMPLATE_CHUNK_REFS.with_borrow_mut(StableBtreeMap::clear_new);
         TEMPLATE_CHUNK_PAYLOADS.with_borrow_mut(|payloads| {
             *payloads = reset_chunk_payloads();
         });

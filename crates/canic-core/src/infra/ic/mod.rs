@@ -6,6 +6,7 @@
 
 pub mod call;
 pub mod http;
+pub mod known;
 pub mod ledger;
 pub mod mgmt;
 pub mod network;

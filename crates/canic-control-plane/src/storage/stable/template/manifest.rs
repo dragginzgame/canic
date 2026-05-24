@@ -3,10 +3,9 @@ use crate::ids::{
     WasmStoreBinding,
 };
 use canic_cdk::impl_storable_bounded;
-use canic_cdk::structures::{
-    BTreeMap, DefaultMemoryImpl, memory::VirtualMemory, storable::Storable,
-};
+use canic_cdk::structures::{DefaultMemoryImpl, memory::VirtualMemory, storable::Storable};
 use canic_core::eager_static;
+use ic_memory::stable_structures::btreemap::BTreeMap as StableBtreeMap;
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 
@@ -14,9 +13,9 @@ const TEMPLATE_MANIFESTS_ID: u8 = 80;
 
 eager_static! {
     static TEMPLATE_MANIFESTS: RefCell<
-        BTreeMap<TemplateReleaseKey, TemplateManifestRecord, VirtualMemory<DefaultMemoryImpl>>
+        StableBtreeMap<TemplateReleaseKey, TemplateManifestRecord, VirtualMemory<DefaultMemoryImpl>>
     > = RefCell::new(
-        BTreeMap::init(canic_core::ic_memory_key!("canic.control_plane.template_manifest.v1", TemplateManifestStateStore, TEMPLATE_MANIFESTS_ID)),
+        StableBtreeMap::init(canic_core::ic_memory_key!("canic.control_plane.template_manifest.v1", TemplateManifestStateStore, TEMPLATE_MANIFESTS_ID)),
     );
 }
 
@@ -117,7 +116,7 @@ impl TemplateManifestStateStore {
 
     // Clear the manifest store.
     pub fn clear() {
-        TEMPLATE_MANIFESTS.with_borrow_mut(BTreeMap::clear);
+        TEMPLATE_MANIFESTS.with_borrow_mut(StableBtreeMap::clear_new);
         TEMPLATE_MANIFESTS_OCCUPIED_BYTES.with_borrow_mut(|occupied| {
             *occupied = Some(0);
         });

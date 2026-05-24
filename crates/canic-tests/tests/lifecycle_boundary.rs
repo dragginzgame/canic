@@ -8,7 +8,7 @@ use std::time::Duration;
 
 const READY_TICK_LIMIT: usize = 120;
 const INSTALL_CODE_RETRY_LIMIT: usize = 4;
-const INSTALL_CODE_COOLDOWN: Duration = Duration::from_mins(5);
+const INSTALL_CODE_COOLDOWN: Duration = Duration::from_secs(5 * 60);
 
 #[test]
 fn lifecycle_boundary_traps_are_phase_correct() {

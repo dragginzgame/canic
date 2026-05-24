@@ -1,6 +1,6 @@
 use crate::{
     cdk::{
-        structures::{BTreeMap, DefaultMemoryImpl, memory::VirtualMemory},
+        structures::{DefaultMemoryImpl, memory::VirtualMemory},
         types::{Cycles, Principal},
     },
     eager_static,
@@ -8,14 +8,15 @@ use crate::{
     storage::stable::memory::pool::CANISTER_POOL_ID,
 };
 use canic_cdk::impl_storable_unbounded;
+use ic_memory::stable_structures::btreemap::BTreeMap as StableBtreeMap;
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 
 eager_static! {
     static POOL_STORE: RefCell<
-        BTreeMap<Principal, PoolRecord, VirtualMemory<DefaultMemoryImpl>>
+        StableBtreeMap<Principal, PoolRecord, VirtualMemory<DefaultMemoryImpl>>
     > = RefCell::new(
-        BTreeMap::init(crate::ic_memory_key!("canic.core.canister_pool.v1", PoolStore, CANISTER_POOL_ID)),
+        StableBtreeMap::init(crate::ic_memory_key!("canic.core.canister_pool.v1", PoolStore, CANISTER_POOL_ID)),
     );
 }
 
@@ -143,7 +144,11 @@ impl PoolStore {
     #[must_use]
     pub(crate) fn export() -> PoolStoreRecord {
         PoolStoreRecord {
-            entries: POOL_STORE.with_borrow(BTreeMap::to_vec),
+            entries: POOL_STORE.with_borrow(|map| {
+                map.iter()
+                    .map(|entry| (*entry.key(), entry.value()))
+                    .collect()
+            }),
         }
     }
 

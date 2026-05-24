@@ -1,20 +1,19 @@
 use crate::{
-    cdk::structures::{
-        BTreeMap, DefaultMemoryImpl, Storable, memory::VirtualMemory, storable::Bound,
-    },
+    cdk::structures::{DefaultMemoryImpl, Storable, memory::VirtualMemory, storable::Bound},
     cdk::types::Principal,
     eager_static,
     storage::{prelude::*, stable::memory::auth::ROOT_REPLAY_ID},
 };
+use ic_memory::stable_structures::btreemap::BTreeMap as StableBtreeMap;
 use std::{borrow::Cow, cell::RefCell};
 
 const ROOT_REPLAY_RECORD_MIN_BYTES: usize = 1 + 32 + 8 + 8 + 4;
 
 eager_static! {
     static ROOT_REPLAY: RefCell<
-        BTreeMap<ReplaySlotKey, RootReplayRecord, VirtualMemory<DefaultMemoryImpl>>
+        StableBtreeMap<ReplaySlotKey, RootReplayRecord, VirtualMemory<DefaultMemoryImpl>>
     > = RefCell::new(
-        BTreeMap::init(crate::ic_memory_key!("canic.core.root_replay.v1", RootReplayStore, ROOT_REPLAY_ID)),
+        StableBtreeMap::init(crate::ic_memory_key!("canic.core.root_replay.v1", RootReplayStore, ROOT_REPLAY_ID)),
     );
 }
 
@@ -205,7 +204,7 @@ impl RootReplayStore {
 #[cfg(test)]
 impl RootReplayStore {
     pub(crate) fn reset_for_tests() {
-        ROOT_REPLAY.with_borrow_mut(BTreeMap::clear);
+        ROOT_REPLAY.with_borrow_mut(StableBtreeMap::clear_new);
     }
 }
 

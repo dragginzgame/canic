@@ -1,7 +1,8 @@
 use crate::{
-    cdk::structures::{BTreeMap, DefaultMemoryImpl, memory::VirtualMemory},
+    cdk::structures::{DefaultMemoryImpl, memory::VirtualMemory},
     storage::{prelude::*, stable::memory::topology::APP_REGISTRY_ID},
 };
+use ic_memory::stable_structures::btreemap::BTreeMap as StableBtreeMap;
 use std::cell::RefCell;
 
 //
@@ -11,8 +12,8 @@ use std::cell::RefCell;
 //
 
 eager_static! {
-    static APP_REGISTRY: RefCell<BTreeMap<Principal, Principal, VirtualMemory<DefaultMemoryImpl>>> =
-        RefCell::new(BTreeMap::init(crate::ic_memory_key!("canic.core.app_registry.v1", AppRegistry, APP_REGISTRY_ID)));
+    static APP_REGISTRY: RefCell<StableBtreeMap<Principal, Principal, VirtualMemory<DefaultMemoryImpl>>> =
+        RefCell::new(StableBtreeMap::init(crate::ic_memory_key!("canic.core.app_registry.v1", AppRegistry, APP_REGISTRY_ID)));
 }
 
 ///

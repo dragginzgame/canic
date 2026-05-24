@@ -2,7 +2,7 @@ use super::{
     InitializedRootTopology, RootBaselineMetadata, RootBaselineSpec, progress, progress_elapsed,
     topology::{wait_for_bootstrap, wait_for_children_ready, wait_for_snapshot_pids_ready},
 };
-use canic_testkit::pic::CachedPicBaseline;
+use ic_testkit::pic::CachedPicBaseline;
 use std::time::Instant;
 
 /// Build one fresh root topology and capture immutable controller snapshots for cache reuse.

@@ -1,6 +1,6 @@
 use candid::{Principal, encode_one};
 use canic_core::dto::subnet::SubnetIdentity;
-use canic_testkit::pic::{
+use ic_testkit::pic::{
     CachedPicBaseline, CachedPicBaselineGuard, Pic, restore_or_rebuild_cached_pic_baseline,
 };
 use std::sync::{Mutex, OnceLock};

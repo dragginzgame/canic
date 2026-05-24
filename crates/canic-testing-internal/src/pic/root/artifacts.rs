@@ -8,14 +8,12 @@ use canic_control_plane::{
         TemplateChunkingMode, TemplateId, TemplateManifestState, TemplateVersion, WasmStoreBinding,
     },
 };
-use canic_testkit::{
-    artifacts::{
-        INTERNAL_TEST_ENDPOINTS_ENV, WatchedInputSnapshot, build_icp_all_with_env,
-        icp_artifact_ready_with_snapshot,
-    },
-    pic::Pic,
-};
+use ic_testkit::{artifacts::WatchedInputSnapshot, pic::Pic};
 use std::{fs, io};
+
+use crate::pic::artifacts::{
+    INTERNAL_TEST_ENDPOINTS_ENV, build_icp_all_with_env, icp_artifact_ready_with_snapshot,
+};
 
 use super::{RootBaselineSpec, progress, progress_elapsed};
 

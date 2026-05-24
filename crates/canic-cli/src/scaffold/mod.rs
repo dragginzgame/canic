@@ -299,7 +299,7 @@ fn root_cargo_toml(name: &str) -> String {
         r#"[package]
 name = "canister_{name}_root"
 edition = "2024"
-rust-version = "1.91.0"
+rust-version = "1.88.0"
 version = "0.1.0"
 publish = false
 
@@ -323,7 +323,7 @@ fn app_cargo_toml(name: &str) -> String {
         r#"[package]
 name = "canister_{name}_app"
 edition = "2024"
-rust-version = "1.91.0"
+rust-version = "1.88.0"
 version = "0.1.0"
 publish = false
 

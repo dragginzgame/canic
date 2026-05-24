@@ -3,7 +3,7 @@ use super::{
 };
 use canic::{cdk::types::Principal, dto::topology::SubnetRegistryResponse, ids::CanisterRole};
 use canic_control_plane::dto::template::WasmStoreOverviewResponse;
-use canic_testkit::pic::{Pic, PicBuilder, PicStartError};
+use ic_testkit::pic::{Pic, PicBuilder, PicStartError};
 use std::{
     collections::{BTreeSet, HashMap},
     time::Instant,

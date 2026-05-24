@@ -7,6 +7,8 @@
 [![Crates.io](https://img.shields.io/crates/v/canic.svg)](https://crates.io/crates/canic)
 [![Docs.rs](https://docs.rs/canic/badge.svg)](https://docs.rs/canic)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![MSRV](https://img.shields.io/badge/MSRV-1.88.0-blue.svg)](Cargo.toml)
+[![Internal Rust](https://img.shields.io/badge/internal%20rust-1.95.0-orange.svg)](rust-toolchain.toml)
 
 Canic is a Rust toolkit and operator CLI for Internet Computer canister fleets.
 It gives canister crates lifecycle macros, validated topology config,
@@ -57,7 +59,7 @@ All Rust workspace crates live under `crates/`:
 * `crates/canic-cli/` – published `canic` operator binary for install, fleet, replica/status, snapshot, backup, manifest, and restore workflows.
 * `crates/canic-host/` – host-side build, install, fleet, and thin-root staging library used by `canic` and scripts.
 * `crates/canic-backup/` – backup/restore domain library for manifests, journals, topology snapshots, layout verification, and restore planning.
-* `crates/canic-testkit/` – public PocketIC helpers for downstream tests.
+* sibling `../ic-testkit/` – reusable PocketIC helpers for downstream tests.
 * `crates/canic-testing-internal/` and `crates/canic-tests/` – repo-only PocketIC harnesses and integration tests.
 
 * `fleets/test/` – config-defined reference topology used by local ICP CLI, CI wasm builds, and repo tests.
@@ -256,9 +258,9 @@ See `crates/canic-cli/README.md` for the operator guide and
 backup/restore checklist.
 
 If you are writing host-side PocketIC tests against Canic, prefer
-`crates/canic-testkit/` for the public wrapper surface. The unpublished
-`crates/canic-testing-internal/` crate owns Canic's heavier root/auth harnesses
-and other repo-only fixtures.
+the sibling `../ic-testkit/` crate for the reusable wrapper surface. The
+unpublished `crates/canic-testing-internal/` crate owns Canic's heavier
+root/auth harnesses and other repo-only fixtures.
 
 ## Architecture And Contracts
 
@@ -288,7 +290,7 @@ Reference docs:
 * Root replay dispatcher coverage: `cargo test -p canic-tests --test root_suite upgrade_routes_through_dispatcher_non_skip_path -- --nocapture --test-threads=1`
 
 `rust-toolchain.toml` pins the internal toolchain so CI and local builds stay in sync.
-Published crates declare MSRV `1.91.0` separately through `workspace.package.rust-version`.
+Published crates declare MSRV `1.88.0` separately through `workspace.package.rust-version`.
 
 ## Examples
 

@@ -8,7 +8,7 @@ use canic::{
     ids::cap,
     protocol,
 };
-use canic_testkit::pic::Pic;
+use ic_testkit::pic::Pic;
 
 const USER_SHARD_LOCAL_PUBLIC_KEY_TEST: &str = "user_shard_local_public_key_test";
 

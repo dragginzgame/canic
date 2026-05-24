@@ -1,6 +1,6 @@
 use crate::canister::{APP, SCALE_HUB};
 use canic::cdk::types::Principal;
-use canic_testkit::{
+use ic_testkit::{
     artifacts::{
         WasmBuildProfile, build_wasm_canisters, read_wasm, test_target_dir, workspace_root_for,
     },

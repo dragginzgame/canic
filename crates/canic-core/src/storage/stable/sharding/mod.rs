@@ -3,7 +3,7 @@ pub mod registry;
 
 use crate::{
     cdk::{
-        structures::{BTreeMap, DefaultMemoryImpl, Memory, memory::VirtualMemory},
+        structures::{DefaultMemoryImpl, Memory, memory::VirtualMemory},
         types::{BoundedString64, BoundedString128},
     },
     storage::{
@@ -14,6 +14,7 @@ use crate::{
         },
     },
 };
+use ic_memory::stable_structures::btreemap::BTreeMap as StableBtreeMap;
 use std::cell::RefCell;
 
 //
@@ -23,8 +24,8 @@ use std::cell::RefCell;
 eager_static! {
     static SHARDING_CORE: RefCell<ShardingCore<VirtualMemory<DefaultMemoryImpl>>> = RefCell::new(
         ShardingCore::new(
-            BTreeMap::init(crate::ic_memory_key!("canic.core.sharding_registry.v1", ShardingRegistry, SHARDING_REGISTRY_ID)),
-            BTreeMap::init(crate::ic_memory_key!("canic.core.sharding_assignment.v1", ShardingRegistry, SHARDING_ASSIGNMENT_ID)),
+            StableBtreeMap::init(crate::ic_memory_key!("canic.core.sharding_registry.v1", ShardingRegistry, SHARDING_REGISTRY_ID)),
+            StableBtreeMap::init(crate::ic_memory_key!("canic.core.sharding_assignment.v1", ShardingRegistry, SHARDING_ASSIGNMENT_ID)),
         )
     );
 }
@@ -111,14 +112,14 @@ impl_storable_bounded!(ShardEntryRecord, ShardEntryRecord::STORABLE_MAX_SIZE, fa
 ///
 
 pub struct ShardingCore<M: Memory> {
-    registry: BTreeMap<Principal, ShardEntryRecord, M>,
-    assignments: BTreeMap<ShardKey, Principal, M>,
+    registry: StableBtreeMap<Principal, ShardEntryRecord, M>,
+    assignments: StableBtreeMap<ShardKey, Principal, M>,
 }
 
 impl<M: Memory> ShardingCore<M> {
     pub const fn new(
-        registry: BTreeMap<Principal, ShardEntryRecord, M>,
-        assignments: BTreeMap<ShardKey, Principal, M>,
+        registry: StableBtreeMap<Principal, ShardEntryRecord, M>,
+        assignments: StableBtreeMap<ShardKey, Principal, M>,
     ) -> Self {
         Self {
             registry,

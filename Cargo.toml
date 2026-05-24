@@ -26,7 +26,6 @@ members = [
     "crates/canic-host",
     "crates/canic-macros",
     "crates/canic-testing-internal",
-    "crates/canic-testkit",
     "crates/canic-tests",
     "crates/canic-wasm-store",
     "fleets/demo/app",
@@ -41,7 +40,7 @@ members = [
 resolver = "2"
 
 [workspace.package]
-rust-version = "1.91.0"
+rust-version = "1.88.0"
 edition = "2024"
 version = "0.42.10"
 license = "MIT"
@@ -66,7 +65,6 @@ canic-core = { version = "0.42.10", path = "crates/canic-core" }
 canic-host = { version = "0.42.10", path = "crates/canic-host" }
 canic-macros = { version = "0.42.10", path = "crates/canic-macros" }
 canic-testing-internal = { version = "0.42.10", path = "crates/canic-testing-internal" }
-canic-testkit = { version = "0.42.10", path = "crates/canic-testkit" }
 canic-wasm-store = { version = "0.42.10", path = "crates/canic-wasm-store" }
 clap = "4.6.1"
 criterion = "0.8"
@@ -78,6 +76,7 @@ ic-cdk = "0.20.1"
 ic-cdk-management-canister = "0.1.0"
 ic-cdk-timers = "1.0"
 ic-memory = "0.6.2"
+ic-testkit = { path = "../ic-testkit" }
 icrc-ledger-types = { version = "0.2", default-features = false }
 k256 = { version = "0.13", default-features = false, features = ["ecdsa"] }
 pocket-ic = "13.0"
@@ -137,7 +136,6 @@ canic-control-plane = { path = "crates/canic-control-plane" }
 canic-core = { path = "crates/canic-core" }
 canic-macros = { path = "crates/canic-macros" }
 canic-host = { path = "crates/canic-host" }
-canic-testkit = { path = "crates/canic-testkit" }
 canic-wasm-store = { path = "crates/canic-wasm-store" }
 
 # profiles

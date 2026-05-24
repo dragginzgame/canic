@@ -16,7 +16,7 @@ pub use canic_core::ids::CanisterRole;
 pub use canic_testing_internal::pic::{
     install_test_root_cached, install_test_root_with_verifier_cached, role_pid, wait_until_ready,
 };
-pub use canic_testkit::pic::Pic;
+pub use ic_testkit::pic::Pic;
 pub use serde::de::DeserializeOwned;
 pub use std::time::Duration;
 

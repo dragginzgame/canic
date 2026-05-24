@@ -1,9 +1,7 @@
 use crate::{
     InternalError,
-    cdk::{
-        env::nns::EXCHANGE_RATE_CANISTER,
-        spec::standards::xrc::{ExchangeRate, GetExchangeRateRequest, GetExchangeRateResult},
-    },
+    cdk::spec::standards::xrc::{ExchangeRate, GetExchangeRateRequest, GetExchangeRateResult},
+    infra::ic::known::EXCHANGE_RATE_CANISTER,
     ops::{
         ic::{IcOpsError, call::CallOps},
         runtime::metrics::platform_call::{

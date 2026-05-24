@@ -6,7 +6,7 @@ use canic_testing_internal::pic::{
     RootBaselineMetadata, RootBaselineSpec, build_root_cached_baseline,
     ensure_root_release_artifacts_built, load_root_wasm, restore_root_cached_baseline,
 };
-use canic_testkit::{
+use ic_testkit::{
     artifacts::WasmBuildProfile,
     pic::{
         CachedPicBaseline, CachedPicBaselineGuard, Pic, PicSerialGuard, acquire_pic_serial_guard,

@@ -1,5 +1,5 @@
 //!
-//! Canonical representations of external IC specs (ICRC, NNS, SNS, etc.).
+//! Canonical representations of external IC specs (ICRC, NNS, etc.).
 //! This module corrals the verbose candid bindings so the rest of the codebase
 //! can import clean wrappers with consistent naming.
 //!

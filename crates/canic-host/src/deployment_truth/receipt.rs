@@ -380,6 +380,15 @@ pub fn authority_dry_run_receipt_from_plan(
     started_at: impl Into<String>,
     finished_at: Option<String>,
 ) -> Result<AuthorityReceiptV1, AuthorityEvidenceError> {
+    let operation_id = operation_id.into();
+    let started_at = started_at.into();
+    ensure_authority_receipt_source_inputs(
+        plan,
+        report,
+        &operation_id,
+        &started_at,
+        finished_at.as_deref(),
+    )?;
     ensure_authority_report_matches_plan(plan, report)?;
     if let (Some(receipt_check_id), Some(report_check_id)) = (&check_id, &report.check_id)
         && receipt_check_id != report_check_id
@@ -389,17 +398,18 @@ pub fn authority_dry_run_receipt_from_plan(
             report_value: report_check_id.clone(),
         });
     }
+    let receipt_check_id = check_id.or_else(|| report.check_id.clone());
 
     Ok(AuthorityReceiptV1 {
         schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
-        operation_id: operation_id.into(),
-        check_id: check_id.or_else(|| report.check_id.clone()),
+        operation_id,
+        check_id: receipt_check_id,
         reconciliation_plan_id: plan.plan_id.clone(),
         authority_report_id: report.report_id.clone(),
         inventory_id: plan.inventory_id.clone(),
         authority_profile_hash: plan.authority_profile_hash.clone(),
         operation_status: DeploymentExecutionStatusV1::Complete,
-        started_at: started_at.into(),
+        started_at,
         finished_at,
         attempted_actions: Vec::new(),
         verified_controller_observations: plan
@@ -412,6 +422,24 @@ pub fn authority_dry_run_receipt_from_plan(
         unresolved_external_actions: report.external_actions_required.clone(),
         command_result: DeploymentCommandResultV1::Succeeded,
     })
+}
+
+fn ensure_authority_receipt_source_inputs(
+    plan: &AuthorityReconciliationPlanV1,
+    report: &AuthorityReportV1,
+    operation_id: &str,
+    started_at: &str,
+    finished_at: Option<&str>,
+) -> Result<(), AuthorityEvidenceError> {
+    ensure_authority_schema_version("plan", plan.schema_version)?;
+    ensure_authority_schema_version("report", report.schema_version)?;
+    ensure_required_authority_field("plan.plan_id", &plan.plan_id)?;
+    ensure_required_authority_field("plan.inventory_id", &plan.inventory_id)?;
+    ensure_required_authority_field("report.report_id", &report.report_id)?;
+    ensure_required_optional_authority_field("report.check_id", report.check_id.as_deref())?;
+    ensure_required_authority_field("receipt.operation_id", operation_id)?;
+    ensure_required_authority_field("receipt.started_at", started_at)?;
+    ensure_required_optional_authority_field("receipt.finished_at", finished_at)
 }
 
 fn ensure_authority_report_matches_plan(

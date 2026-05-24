@@ -7,7 +7,7 @@ use canic_testing_internal::pic::{
     ensure_root_release_artifacts_built, load_root_wasm, restore_root_cached_baseline,
     setup_root_topology as bootstrap_root_topology,
 };
-use canic_testkit::pic::{
+use ic_testkit::pic::{
     CachedPicBaseline, CachedPicBaselineGuard, Pic, PicSerialGuard, acquire_pic_serial_guard,
     restore_or_rebuild_cached_pic_baseline,
 };

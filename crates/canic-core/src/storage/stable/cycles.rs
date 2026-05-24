@@ -1,7 +1,5 @@
 use crate::{
-    cdk::structures::{
-        BTreeMap, DefaultMemoryImpl, Storable, memory::VirtualMemory, storable::Bound,
-    },
+    cdk::structures::{DefaultMemoryImpl, Storable, memory::VirtualMemory, storable::Bound},
     dto::cycles::CycleTopupEventStatus,
     eager_static,
     storage::{
@@ -9,6 +7,7 @@ use crate::{
         stable::memory::observability::{CYCLE_TOPUP_EVENTS_ID, CYCLE_TRACKER_ID},
     },
 };
+use ic_memory::stable_structures::btreemap::BTreeMap as StableBtreeMap;
 use std::{borrow::Cow, cell::RefCell};
 
 eager_static! {
@@ -16,7 +15,7 @@ eager_static! {
     // CYCLE_TRACKER
     //
     static CYCLE_TRACKER: RefCell<CycleTracker> =
-        RefCell::new(CycleTracker::new(BTreeMap::init(
+        RefCell::new(CycleTracker::new(StableBtreeMap::init(
             crate::ic_memory_key!("canic.core.cycle_tracker.v1", CycleTracker, CYCLE_TRACKER_ID),
         )));
 }
@@ -26,7 +25,7 @@ eager_static! {
     // CYCLE_TOPUP_EVENTS
     //
     static CYCLE_TOPUP_EVENTS: RefCell<CycleTopupEvents> =
-        RefCell::new(CycleTopupEvents::new(BTreeMap::init(
+        RefCell::new(CycleTopupEvents::new(StableBtreeMap::init(
             crate::ic_memory_key!("canic.core.cycle_topup_events.v1", CycleTopupEvents, CYCLE_TOPUP_EVENTS_ID),
         )));
 }
@@ -36,7 +35,7 @@ eager_static! {
 ///
 
 pub struct CycleTracker {
-    map: BTreeMap<u64, Cycles, VirtualMemory<DefaultMemoryImpl>>,
+    map: StableBtreeMap<u64, Cycles, VirtualMemory<DefaultMemoryImpl>>,
 }
 
 ///
@@ -119,12 +118,17 @@ impl_storable_bounded!(
 ///
 
 pub struct CycleTopupEvents {
-    map: BTreeMap<CycleTopupEventKey, CycleTopupEventRecord, VirtualMemory<DefaultMemoryImpl>>,
+    map:
+        StableBtreeMap<CycleTopupEventKey, CycleTopupEventRecord, VirtualMemory<DefaultMemoryImpl>>,
 }
 
 impl CycleTopupEvents {
     pub const fn new(
-        map: BTreeMap<CycleTopupEventKey, CycleTopupEventRecord, VirtualMemory<DefaultMemoryImpl>>,
+        map: StableBtreeMap<
+            CycleTopupEventKey,
+            CycleTopupEventRecord,
+            VirtualMemory<DefaultMemoryImpl>,
+        >,
     ) -> Self {
         Self { map }
     }
@@ -197,7 +201,7 @@ impl CycleTopupEvents {
 }
 
 impl CycleTracker {
-    pub const fn new(map: BTreeMap<u64, Cycles, VirtualMemory<DefaultMemoryImpl>>) -> Self {
+    pub const fn new(map: StableBtreeMap<u64, Cycles, VirtualMemory<DefaultMemoryImpl>>) -> Self {
         Self { map }
     }
 

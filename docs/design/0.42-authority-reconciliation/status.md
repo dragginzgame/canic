@@ -10,9 +10,8 @@ landed, what drifted, and what remains open.
 
 ## Current State
 
-`0.42.10` is staged as the next authority-reporting patch after `0.42.9`.
-Work is continuing on the 0.42 line by tightening the dry-run report/evidence
-model while keeping reconciliation read-only.
+`0.42.10` is live. Work is continuing on the 0.42 line by tightening the
+dry-run report/evidence model while keeping reconciliation read-only.
 
 0.42 depends on 0.41 establishing deployment truth objects, observed inventory,
 diffs, safety reports, and installer gating.
@@ -121,6 +120,10 @@ diffs, safety reports, and installer gating.
   Evidence validation now has explicit regression coverage for mutated
   unsafe-blocker readiness, keeping archived evidence tied to the report model
   that produced it.
+- Standalone dry-run receipt construction now rejects unsupported source
+  schema versions, missing source report check provenance, blank receipt
+  identity inputs, and missing completion timestamps before emitting receipt
+  evidence.
 - The first planner reports:
   - already-correct controller sets;
   - deployment-controlled controller deltas that can be applied automatically
