@@ -4,11 +4,8 @@
 use crate::root_cached_support::{
     RootSetup, baseline_spec_for_roles_owned_env, setup_cached_root as setup_cached_root_common,
 };
-use canic_testing_internal::pic::RootBaselineMetadata;
-use ic_testkit::{
-    artifacts::{WasmBuildProfile, workspace_root_for},
-    pic::CachedPicBaseline,
-};
+use canic_testing_internal::pic::{CanicWasmBuildProfile, RootBaselineMetadata};
+use ic_testkit::{artifacts::workspace_root_for, pic::CachedPicBaseline};
 use std::sync::Mutex;
 
 mod lifecycle_gap;
@@ -41,7 +38,7 @@ fn baseline_spec() -> canic_testing_internal::pic::RootBaselineSpec<'static> {
     baseline_spec_for_roles_owned_env(
         workspace_root,
         ROOT_SHARDING_RELEASE_ROLES,
-        WasmBuildProfile::Fast,
+        CanicWasmBuildProfile::Fast,
         build_extra_env,
     )
 }

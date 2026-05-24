@@ -3,11 +3,11 @@
 
 use canic::{cdk::types::Principal, ids::CanisterRole};
 use canic_testing_internal::pic::{
-    RootBaselineSpec, ensure_root_release_artifacts_built, load_root_wasm,
+    CanicWasmBuildProfile, RootBaselineSpec, ensure_root_release_artifacts_built, load_root_wasm,
     setup_root_topology as bootstrap_root_topology,
 };
 use ic_testkit::{
-    artifacts::{WasmBuildProfile, workspace_root_for},
+    artifacts::workspace_root_for,
     pic::{Pic, PicSerialGuard, acquire_pic_serial_guard},
 };
 use std::{
@@ -151,7 +151,7 @@ fn baseline_spec_for_profile(profile: RootSetupProfile) -> RootBaselineSpec<'sta
     baseline_spec_for_roles_owned_env(
         workspace_root,
         profile.release_roles(),
-        WasmBuildProfile::Fast,
+        CanicWasmBuildProfile::Fast,
         build_extra_env,
     )
 }
@@ -160,7 +160,7 @@ fn baseline_spec_for_profile(profile: RootSetupProfile) -> RootBaselineSpec<'sta
 fn baseline_spec_for_roles_owned_env(
     workspace_root: PathBuf,
     release_roles: &'static [&'static str],
-    build_profile: WasmBuildProfile,
+    build_profile: CanicWasmBuildProfile,
     mut build_extra_env: Vec<(String, String)>,
 ) -> RootBaselineSpec<'static> {
     if build_extra_env

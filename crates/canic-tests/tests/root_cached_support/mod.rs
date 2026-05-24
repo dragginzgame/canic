@@ -3,15 +3,12 @@
 
 use canic::{cdk::types::Principal, ids::CanisterRole};
 use canic_testing_internal::pic::{
-    RootBaselineMetadata, RootBaselineSpec, build_root_cached_baseline,
+    CanicWasmBuildProfile, RootBaselineMetadata, RootBaselineSpec, build_root_cached_baseline,
     ensure_root_release_artifacts_built, load_root_wasm, restore_root_cached_baseline,
 };
-use ic_testkit::{
-    artifacts::WasmBuildProfile,
-    pic::{
-        CachedPicBaseline, CachedPicBaselineGuard, Pic, PicSerialGuard, acquire_pic_serial_guard,
-        restore_or_rebuild_cached_pic_baseline,
-    },
+use ic_testkit::pic::{
+    CachedPicBaseline, CachedPicBaselineGuard, Pic, PicSerialGuard, acquire_pic_serial_guard,
+    restore_or_rebuild_cached_pic_baseline,
 };
 use std::{
     collections::HashMap,
@@ -105,7 +102,7 @@ pub fn setup_cached_root(
 pub fn baseline_spec_for_roles_owned_env(
     workspace_root: PathBuf,
     release_roles: &'static [&'static str],
-    build_profile: WasmBuildProfile,
+    build_profile: CanicWasmBuildProfile,
     mut build_extra_env: Vec<(String, String)>,
 ) -> RootBaselineSpec<'static> {
     if build_extra_env

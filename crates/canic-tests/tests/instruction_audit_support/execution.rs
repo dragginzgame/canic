@@ -99,7 +99,7 @@ fn run_standalone_scenario(scenario: &AuditScenario) -> Option<ScenarioResult> {
         _ => return None,
     };
 
-    let fixture = install_standalone_canister(crate_name, role, WasmBuildProfile::Fast);
+    let fixture = install_standalone_canister(crate_name, role, CanicWasmBuildProfile::Fast);
     let target_pid = fixture.canister_id();
     let (count, total_instructions, sample_origin, checkpoint_rows) =
         if scenario.transport_mode == "query" {
@@ -156,17 +156,17 @@ fn run_standalone_scenario(scenario: &AuditScenario) -> Option<ScenarioResult> {
 }
 
 fn run_audit_leaf_probe_scenario(scenario: &AuditScenario) -> ScenarioResult {
-    let fixture = install_audit_leaf_probe(WasmBuildProfile::Fast);
+    let fixture = install_audit_leaf_probe(CanicWasmBuildProfile::Fast);
     run_query_only_standalone_result(scenario, fixture.pic(), fixture.canister_id())
 }
 
 fn run_audit_root_probe_scenario(scenario: &AuditScenario) -> ScenarioResult {
-    let fixture = install_audit_root_probe(WasmBuildProfile::Fast);
+    let fixture = install_audit_root_probe(CanicWasmBuildProfile::Fast);
     run_query_only_standalone_result(scenario, &fixture.pic, fixture.canister_id)
 }
 
 fn run_audit_scaling_probe_scenario(scenario: &AuditScenario) -> ScenarioResult {
-    let fixture = install_audit_scaling_probe(WasmBuildProfile::Fast);
+    let fixture = install_audit_scaling_probe(CanicWasmBuildProfile::Fast);
     run_query_only_standalone_result(scenario, fixture.pic(), fixture.canister_id())
 }
 

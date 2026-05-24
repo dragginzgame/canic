@@ -1,6 +1,4 @@
-use ic_testkit::artifacts::{
-    WasmBuildProfile, read_wasm, test_target_dir as artifact_test_target_dir,
-};
+use ic_testkit::artifacts::{read_wasm, test_target_dir as artifact_test_target_dir};
 use ic_testkit::pic::{Pic, PicBuilder, PicSerialGuard, acquire_pic_serial_guard};
 use std::{
     ops::{Deref, DerefMut},
@@ -9,7 +7,8 @@ use std::{
 };
 
 use super::super::artifacts::{
-    build_internal_test_wasm_canisters, build_internal_test_wasm_canisters_with_env,
+    CanicWasmBuildProfile, build_internal_test_wasm_canisters,
+    build_internal_test_wasm_canisters_with_env,
 };
 use super::fixture::progress;
 
@@ -95,7 +94,7 @@ fn build_canisters_once(workspace_root: &Path) {
             workspace_root,
             &target_dir,
             &CANISTER_PACKAGES,
-            WasmBuildProfile::Fast,
+            CanicWasmBuildProfile::Fast,
             &[("CANIC_TEST_DELEGATION_MATERIAL", "1")],
         );
         progress("finished PIC wasm build with test delegation material");
@@ -115,7 +114,7 @@ fn build_canisters_without_test_material_once(workspace_root: &Path) {
             workspace_root,
             &target_dir,
             &CANISTER_PACKAGES,
-            WasmBuildProfile::Fast,
+            CanicWasmBuildProfile::Fast,
         );
         progress("finished PIC wasm build without test delegation material");
     });
@@ -123,7 +122,11 @@ fn build_canisters_without_test_material_once(workspace_root: &Path) {
 
 // Read one built fast-profile wasm artifact from an explicit target directory.
 fn read_built_wasm(target_dir: &Path, crate_name: &str) -> Vec<u8> {
-    read_wasm(target_dir, crate_name, WasmBuildProfile::Fast)
+    read_wasm(
+        target_dir,
+        crate_name,
+        CanicWasmBuildProfile::Fast.target_dir_name(),
+    )
 }
 
 // Resolve the shared test-material PocketIC wasm target directory.

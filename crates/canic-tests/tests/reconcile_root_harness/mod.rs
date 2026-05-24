@@ -3,11 +3,11 @@
 
 use canic::cdk::types::Principal;
 use canic_testing_internal::pic::{
-    RootBaselineMetadata, RootBaselineSpec, build_root_cached_baseline,
+    CanicWasmBuildProfile, RootBaselineMetadata, RootBaselineSpec, build_root_cached_baseline,
     ensure_root_release_artifacts_built, load_root_wasm, restore_root_cached_baseline,
 };
 use ic_testkit::{
-    artifacts::{WasmBuildProfile, workspace_root_for},
+    artifacts::workspace_root_for,
     pic::{
         CachedPicBaseline, CachedPicBaselineGuard, Pic, PicSerialGuard, acquire_pic_serial_guard,
         restore_or_rebuild_cached_pic_baseline,
@@ -132,7 +132,7 @@ fn baseline_spec() -> RootBaselineSpec<'static> {
         release_roles: ROOT_RECONCILE_RELEASE_ROLES,
         icp_build_lock_relative: ICP_BUILD_LOCK_RELATIVE,
         build_network: "local",
-        build_profile: WasmBuildProfile::Debug,
+        build_profile: CanicWasmBuildProfile::Debug,
         build_extra_env,
         bootstrap_tick_limit: BOOTSTRAP_TICK_LIMIT,
         root_setup_max_attempts: ROOT_SETUP_MAX_ATTEMPTS,

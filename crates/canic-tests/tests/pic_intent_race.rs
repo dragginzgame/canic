@@ -1,9 +1,9 @@
 // Category C - Artifact test (built wasm; no runtime config).
 
 use candid::{Principal, decode_one, encode_one};
-use canic_testing_internal::pic::build_internal_test_wasm_canisters;
+use canic_testing_internal::pic::{CanicWasmBuildProfile, build_internal_test_wasm_canisters};
 use ic_testkit::{
-    artifacts::{WasmBuildProfile, read_wasm, test_target_dir, workspace_root_for},
+    artifacts::{read_wasm, test_target_dir, workspace_root_for},
     pic::{acquire_pic_serial_guard, pic},
 };
 use std::{
@@ -22,9 +22,10 @@ fn intent_race_capacity_one() {
     println!("intent_race: workspace_root={}", workspace_root.display());
     build_canisters(&workspace_root);
 
-    let authority_wasm = read_wasm(&target_dir, "intent_authority", WasmBuildProfile::Fast);
-    let external_wasm = read_wasm(&target_dir, "intent_external", WasmBuildProfile::Fast);
-    let client_wasm = read_wasm(&target_dir, "intent_client", WasmBuildProfile::Fast);
+    let profile_dir = CanicWasmBuildProfile::Fast.target_dir_name();
+    let authority_wasm = read_wasm(&target_dir, "intent_authority", profile_dir);
+    let external_wasm = read_wasm(&target_dir, "intent_external", profile_dir);
+    let client_wasm = read_wasm(&target_dir, "intent_client", profile_dir);
     println!(
         "intent_race: wasm sizes authority={} external={} client={}",
         authority_wasm.len(),
@@ -106,7 +107,7 @@ fn build_canisters(workspace_root: &Path) {
             workspace_root,
             &target_dir,
             &CANISTERS,
-            WasmBuildProfile::Fast,
+            CanicWasmBuildProfile::Fast,
         );
     });
 }

@@ -3948,7 +3948,11 @@ fn authority_dry_run_receipt_records_observations_without_attempts() {
     inventory.observed_canisters[0].controllers = vec!["user-controller".to_string()];
     let check = sample_check(plan, inventory);
     let reconciliation = build_authority_reconciliation_plan(&check);
-    let report = authority_report_from_plan("authority-report-1", &reconciliation);
+    let report = authority_report_from_plan_with_check_id(
+        "authority-report-1",
+        Some(check.check_id.clone()),
+        &reconciliation,
+    );
 
     let receipt = authority_dry_run_receipt_from_plan(
         &reconciliation,
@@ -4015,7 +4019,11 @@ fn authority_dry_run_receipt_preserves_hard_findings() {
     plan.authority_profile.staging_controllers = vec!["aaaaa-aa".to_string()];
     let check = sample_check(plan, sample_matching_inventory());
     let reconciliation = build_authority_reconciliation_plan(&check);
-    let report = authority_report_from_plan("authority-report-1", &reconciliation);
+    let report = authority_report_from_plan_with_check_id(
+        "authority-report-1",
+        Some(check.check_id.clone()),
+        &reconciliation,
+    );
 
     let receipt = authority_dry_run_receipt_from_plan(
         &reconciliation,
@@ -4252,7 +4260,11 @@ fn authority_reconciliation_reports_expected_pool_controller_observation_gap() {
         "pool canister controller set was not observed"
     );
     assert!(reconciliation.external_actions_required.is_empty());
-    let report = authority_report_from_plan("authority-report-1", &reconciliation);
+    let report = authority_report_from_plan_with_check_id(
+        "authority-report-1",
+        Some(check.check_id.clone()),
+        &reconciliation,
+    );
     assert_eq!(report.counts.unknown, 1);
     assert!(report.external_actions_required.is_empty());
     assert_eq!(

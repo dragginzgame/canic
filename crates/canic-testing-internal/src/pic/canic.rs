@@ -17,11 +17,11 @@ use canic::{
 };
 use ic_testkit::{
     Fake,
-    artifacts::{WasmBuildProfile, read_wasm, test_target_dir, workspace_root_for},
+    artifacts::{read_wasm, test_target_dir, workspace_root_for},
     pic::{Pic, StandaloneCanisterFixture, install_prebuilt_canister},
 };
 
-use super::artifacts::build_internal_test_wasm_canisters;
+use super::artifacts::{CanicWasmBuildProfile, build_internal_test_wasm_canisters};
 
 const INSTALL_CYCLES: u128 = 500_000_000_000_000;
 const STANDALONE_READY_TICK_LIMIT: usize = 60;
@@ -156,7 +156,7 @@ pub fn role_pid(pic: &Pic, root_id: Principal, role: &'static str, tick_limit: u
 pub fn install_standalone_canister(
     crate_name: &str,
     role: CanisterRole,
-    profile: WasmBuildProfile,
+    profile: CanicWasmBuildProfile,
 ) -> StandaloneCanisterFixture {
     assert!(
         !role.is_root(),
@@ -168,7 +168,7 @@ pub fn install_standalone_canister(
     let target_dir = test_target_dir(&workspace_root, &target_name);
     ensure_canister_wasm_ready(&workspace_root, &target_dir, crate_name, profile);
 
-    let wasm = read_wasm(&target_dir, crate_name, profile);
+    let wasm = read_wasm(&target_dir, crate_name, profile.target_dir_name());
     let fixture = install_prebuilt_canister(wasm, standalone_init_args(role));
     let canister_id = fixture.canister_id();
     let pic = fixture.pic();
@@ -224,7 +224,7 @@ fn ensure_canister_wasm_ready(
     workspace_root: &Path,
     target_dir: &Path,
     crate_name: &str,
-    profile: WasmBuildProfile,
+    profile: CanicWasmBuildProfile,
 ) {
     let _build_guard = STANDALONE_BUILD_SERIAL
         .lock()

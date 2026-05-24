@@ -1,6 +1,5 @@
 use canic::{Error, ids::CanisterRole};
-use canic_testing_internal::pic::install_standalone_canister;
-use ic_testkit::artifacts::WasmBuildProfile;
+use canic_testing_internal::pic::{CanicWasmBuildProfile, install_standalone_canister};
 
 const PROBE_CRATE: &str = "payload_limit_probe";
 const PROBE_ROLE: CanisterRole = CanisterRole::new("test");
@@ -8,7 +7,7 @@ const PROBE_ROLE: CanisterRole = CanisterRole::new("test");
 // Verify generated inspect-message limits for default, explicit, and named updates.
 #[test]
 fn inspect_message_enforces_default_explicit_and_named_payload_limits() {
-    let fixture = install_standalone_canister(PROBE_CRATE, PROBE_ROLE, WasmBuildProfile::Fast);
+    let fixture = install_standalone_canister(PROBE_CRATE, PROBE_ROLE, CanicWasmBuildProfile::Fast);
     let pic = fixture.pic();
     let canister_id = fixture.canister_id();
 

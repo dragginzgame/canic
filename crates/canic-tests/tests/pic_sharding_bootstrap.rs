@@ -12,9 +12,11 @@ use canic_core::{
     },
     ids::{CanisterRole, SubnetRole},
 };
-use canic_testing_internal::pic::{CanicPicExt, build_internal_test_wasm_canisters};
+use canic_testing_internal::pic::{
+    CanicPicExt, CanicWasmBuildProfile, build_internal_test_wasm_canisters,
+};
 use ic_testkit::{
-    artifacts::{WasmBuildProfile, read_wasm, test_target_dir, workspace_root_for},
+    artifacts::{read_wasm, test_target_dir, workspace_root_for},
     pic::{Pic, acquire_pic_serial_guard, pic},
 };
 use serde::de::DeserializeOwned;
@@ -35,8 +37,9 @@ fn sharding_bootstraps_first_shard_when_active_empty() {
     let target_dir = test_target_dir(&workspace_root, "pic-wasm");
     build_canisters_once(&workspace_root);
 
-    let root_wasm = read_wasm(&target_dir, "sharding_root_stub", WasmBuildProfile::Fast);
-    let user_hub_wasm = read_wasm(&target_dir, "canister_user_hub", WasmBuildProfile::Fast);
+    let profile_dir = CanicWasmBuildProfile::Fast.target_dir_name();
+    let root_wasm = read_wasm(&target_dir, "sharding_root_stub", profile_dir);
+    let user_hub_wasm = read_wasm(&target_dir, "canister_user_hub", profile_dir);
 
     let _serial_guard = acquire_pic_serial_guard();
     let pic = pic();
@@ -94,8 +97,9 @@ fn sharding_does_not_spawn_extra_shard_after_bootstrap() {
     let target_dir = test_target_dir(&workspace_root, "pic-wasm");
     build_canisters_once(&workspace_root);
 
-    let root_wasm = read_wasm(&target_dir, "sharding_root_stub", WasmBuildProfile::Fast);
-    let user_hub_wasm = read_wasm(&target_dir, "canister_user_hub", WasmBuildProfile::Fast);
+    let profile_dir = CanicWasmBuildProfile::Fast.target_dir_name();
+    let root_wasm = read_wasm(&target_dir, "sharding_root_stub", profile_dir);
+    let user_hub_wasm = read_wasm(&target_dir, "canister_user_hub", profile_dir);
 
     let _serial_guard = acquire_pic_serial_guard();
     let pic = pic();
@@ -195,7 +199,7 @@ fn build_canisters_once(workspace_root: &Path) {
             workspace_root,
             &target_dir,
             &CANISTER_PACKAGES,
-            WasmBuildProfile::Fast,
+            CanicWasmBuildProfile::Fast,
         );
     });
 }

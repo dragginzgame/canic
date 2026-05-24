@@ -1,8 +1,5 @@
-use canic_testing_internal::pic::{RootBaselineMetadata, RootBaselineSpec};
-use ic_testkit::{
-    artifacts::{WasmBuildProfile, workspace_root_for},
-    pic::CachedPicBaseline,
-};
+use canic_testing_internal::pic::{CanicWasmBuildProfile, RootBaselineMetadata, RootBaselineSpec};
+use ic_testkit::{artifacts::workspace_root_for, pic::CachedPicBaseline};
 use std::{path::PathBuf, sync::Mutex};
 
 /// Default location of the root wasm relative to the workspace root.
@@ -86,11 +83,11 @@ impl RootSetupProfile {
         }
     }
 
-    const fn build_profile(self) -> WasmBuildProfile {
+    const fn build_profile(self) -> CanicWasmBuildProfile {
         match self {
-            Self::ReconcileSmallStore => WasmBuildProfile::Debug,
+            Self::ReconcileSmallStore => CanicWasmBuildProfile::Debug,
             Self::Topology | Self::Capability | Self::Scaling | Self::Sharding => {
-                WasmBuildProfile::Fast
+                CanicWasmBuildProfile::Fast
             }
         }
     }
@@ -157,7 +154,7 @@ fn baseline_spec_for_profile(profile: RootSetupProfile) -> RootBaselineSpec<'sta
 fn baseline_spec_for_roles_owned_env(
     workspace_root: PathBuf,
     release_roles: &'static [&'static str],
-    build_profile: WasmBuildProfile,
+    build_profile: CanicWasmBuildProfile,
     mut build_extra_env: Vec<(String, String)>,
 ) -> RootBaselineSpec<'static> {
     if build_extra_env

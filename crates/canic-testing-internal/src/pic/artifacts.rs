@@ -1,4 +1,4 @@
-use ic_testkit::artifacts::{WasmBuildProfile, WatchedInputSnapshot, build_wasm_canisters};
+use ic_testkit::artifacts::{WatchedInputSnapshot, build_wasm_canisters};
 use std::{
     fs, io,
     path::Path,
@@ -8,11 +8,51 @@ use std::{
 pub const INTERNAL_TEST_ENDPOINTS_ENV: (&str, &str) = ("CANIC_INTERNAL_TEST_ENDPOINTS", "1");
 const ICP_BUILD_ENV_STAMP_RELATIVE: &str = ".icp/canic-build-env.stamp";
 
+///
+/// CanicWasmBuildProfile
+///
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CanicWasmBuildProfile {
+    Debug,
+    Fast,
+    Release,
+}
+
+impl CanicWasmBuildProfile {
+    #[must_use]
+    pub const fn cargo_profile_args(self) -> &'static [&'static str] {
+        match self {
+            Self::Debug => &[],
+            Self::Fast => &["--profile", "fast"],
+            Self::Release => &["--release"],
+        }
+    }
+
+    #[must_use]
+    pub const fn target_dir_name(self) -> &'static str {
+        match self {
+            Self::Debug => "debug",
+            Self::Fast => "fast",
+            Self::Release => "release",
+        }
+    }
+
+    #[must_use]
+    pub const fn canic_wasm_profile_value(self) -> &'static str {
+        match self {
+            Self::Debug => "debug",
+            Self::Fast => "fast",
+            Self::Release => "release",
+        }
+    }
+}
+
 pub fn build_internal_test_wasm_canisters(
     workspace_root: &Path,
     target_dir: &Path,
     packages: &[&str],
-    profile: WasmBuildProfile,
+    profile: CanicWasmBuildProfile,
 ) {
     build_internal_test_wasm_canisters_with_env(workspace_root, target_dir, packages, profile, &[]);
 }
@@ -21,14 +61,20 @@ pub fn build_internal_test_wasm_canisters_with_env(
     workspace_root: &Path,
     target_dir: &Path,
     packages: &[&str],
-    profile: WasmBuildProfile,
+    profile: CanicWasmBuildProfile,
     extra_env: &[(&str, &str)],
 ) {
     let mut build_env = Vec::with_capacity(extra_env.len() + 2);
     build_env.push(("ICP_ENVIRONMENT", "local"));
     build_env.push(INTERNAL_TEST_ENDPOINTS_ENV);
     build_env.extend_from_slice(extra_env);
-    build_wasm_canisters(workspace_root, target_dir, packages, profile, &build_env);
+    build_wasm_canisters(
+        workspace_root,
+        target_dir,
+        packages,
+        profile.cargo_profile_args(),
+        &build_env,
+    );
 }
 
 #[must_use]
@@ -37,7 +83,7 @@ pub fn icp_artifact_ready_with_snapshot(
     artifact_relative_path: &str,
     watched_inputs: WatchedInputSnapshot,
     network: &str,
-    profile: WasmBuildProfile,
+    profile: CanicWasmBuildProfile,
     extra_env: &[(&str, &str)],
 ) -> bool {
     let artifact_path = workspace_root.join(artifact_relative_path);
@@ -57,7 +103,7 @@ pub fn build_icp_all_with_env(
     workspace_root: &Path,
     lock_relative_path: &str,
     network: &str,
-    profile: WasmBuildProfile,
+    profile: CanicWasmBuildProfile,
     extra_env: &[(&str, &str)],
 ) {
     let output = run_local_artifact_build_with_lock(
@@ -76,18 +122,10 @@ pub fn build_icp_all_with_env(
         .expect("write local artifact build env stamp");
 }
 
-const fn canic_wasm_profile_value(profile: WasmBuildProfile) -> &'static str {
-    match profile {
-        WasmBuildProfile::Debug => "debug",
-        WasmBuildProfile::Fast => "fast",
-        WasmBuildProfile::Release => "release",
-    }
-}
-
 fn build_stamp_matches(
     workspace_root: &Path,
     network: &str,
-    profile: WasmBuildProfile,
+    profile: CanicWasmBuildProfile,
     extra_env: &[(&str, &str)],
 ) -> bool {
     fs::read_to_string(workspace_root.join(ICP_BUILD_ENV_STAMP_RELATIVE))
@@ -97,7 +135,7 @@ fn build_stamp_matches(
 fn write_build_stamp(
     workspace_root: &Path,
     network: &str,
-    profile: WasmBuildProfile,
+    profile: CanicWasmBuildProfile,
     extra_env: &[(&str, &str)],
 ) -> io::Result<()> {
     let stamp_path = workspace_root.join(ICP_BUILD_ENV_STAMP_RELATIVE);
@@ -112,12 +150,12 @@ fn write_build_stamp(
 
 fn build_stamp_contents(
     network: &str,
-    profile: WasmBuildProfile,
+    profile: CanicWasmBuildProfile,
     extra_env: &[(&str, &str)],
 ) -> String {
     let mut lines = vec![
         format!("ICP_ENVIRONMENT={network}"),
-        format!("CANIC_WASM_PROFILE={}", canic_wasm_profile_value(profile)),
+        format!("CANIC_WASM_PROFILE={}", profile.canic_wasm_profile_value()),
     ];
 
     let mut extra = extra_env.to_vec();
@@ -135,7 +173,7 @@ fn run_local_artifact_build_with_lock(
     workspace_root: &Path,
     lock_relative_path: &str,
     network: &str,
-    profile: WasmBuildProfile,
+    profile: CanicWasmBuildProfile,
     extra_env: &[(&str, &str)],
 ) -> Output {
     let lock_file = workspace_root.join(lock_relative_path);
@@ -151,7 +189,7 @@ fn run_local_artifact_build_with_lock(
         .arg(lock_file.as_os_str())
         .arg("bash")
         .env("ICP_ENVIRONMENT", network)
-        .env("CANIC_WASM_PROFILE", canic_wasm_profile_value(profile))
+        .env("CANIC_WASM_PROFILE", profile.canic_wasm_profile_value())
         .env("CARGO_TARGET_DIR", &target_dir)
         .arg("scripts/ci/build-ci-wasm-artifacts.sh");
     for (key, value) in extra_env {
@@ -170,7 +208,7 @@ fn run_local_artifact_build_with_lock(
 fn run_local_artifact_build(
     workspace_root: &Path,
     network: &str,
-    profile: WasmBuildProfile,
+    profile: CanicWasmBuildProfile,
     extra_env: &[(&str, &str)],
 ) -> Output {
     let target_dir = workspace_root.join("target/icp-build");
@@ -180,7 +218,7 @@ fn run_local_artifact_build(
     build
         .current_dir(workspace_root)
         .env("ICP_ENVIRONMENT", network)
-        .env("CANIC_WASM_PROFILE", canic_wasm_profile_value(profile))
+        .env("CANIC_WASM_PROFILE", profile.canic_wasm_profile_value())
         .env("CARGO_TARGET_DIR", &target_dir)
         .arg("scripts/ci/build-ci-wasm-artifacts.sh");
     for (key, value) in extra_env {

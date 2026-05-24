@@ -76,7 +76,7 @@ ic-cdk = "0.20.1"
 ic-cdk-management-canister = "0.1.0"
 ic-cdk-timers = "1.0"
 ic-memory = "0.6.2"
-ic-testkit = { path = "../ic-testkit" }
+ic-testkit = "0.0.5"
 icrc-ledger-types = { version = "0.2", default-features = false }
 k256 = { version = "0.13", default-features = false, features = ["ecdsa"] }
 pocket-ic = "13.0"

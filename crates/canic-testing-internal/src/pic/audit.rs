@@ -1,9 +1,7 @@
 use crate::canister::{APP, SCALE_HUB};
 use canic::cdk::types::Principal;
 use ic_testkit::{
-    artifacts::{
-        WasmBuildProfile, build_wasm_canisters, read_wasm, test_target_dir, workspace_root_for,
-    },
+    artifacts::{build_wasm_canisters, read_wasm, test_target_dir, workspace_root_for},
     pic::{Pic, PicSerialGuard, StandaloneCanisterFixture, acquire_pic_serial_guard, pic},
 };
 use std::{
@@ -11,7 +9,7 @@ use std::{
     sync::Mutex,
 };
 
-use super::{CanicPicExt, install_standalone_canister};
+use super::{CanicPicExt, CanicWasmBuildProfile, install_standalone_canister};
 
 const AUDIT_READY_TICK_LIMIT: usize = 60;
 static AUDIT_BUILD_SERIAL: Mutex<()> = Mutex::new(());
@@ -24,24 +22,24 @@ pub struct RootAuditProbeFixture {
 
 // Build one standalone internal leaf probe for shared query-floor audits.
 #[must_use]
-pub fn install_audit_leaf_probe(profile: WasmBuildProfile) -> StandaloneCanisterFixture {
+pub fn install_audit_leaf_probe(profile: CanicWasmBuildProfile) -> StandaloneCanisterFixture {
     install_standalone_canister("leaf_probe", APP, profile)
 }
 
 // Build one standalone internal scaling probe for dry-run placement audits.
 #[must_use]
-pub fn install_audit_scaling_probe(profile: WasmBuildProfile) -> StandaloneCanisterFixture {
+pub fn install_audit_scaling_probe(profile: CanicWasmBuildProfile) -> StandaloneCanisterFixture {
     install_standalone_canister("scaling_probe", SCALE_HUB, profile)
 }
 
 // Build one standalone internal root probe for root-only query audits.
 #[must_use]
-pub fn install_audit_root_probe(profile: WasmBuildProfile) -> RootAuditProbeFixture {
+pub fn install_audit_root_probe(profile: CanicWasmBuildProfile) -> RootAuditProbeFixture {
     let workspace_root = workspace_root();
     let target_dir = test_target_dir(&workspace_root, "standalone-root-probe");
     ensure_probe_wasm_ready(&workspace_root, &target_dir, "root_probe", profile);
 
-    let wasm = read_wasm(&target_dir, "root_probe", profile);
+    let wasm = read_wasm(&target_dir, "root_probe", profile.target_dir_name());
     let serial_guard = acquire_pic_serial_guard();
     let pic = pic();
     let canister_id = pic
@@ -64,13 +62,19 @@ fn ensure_probe_wasm_ready(
     workspace_root: &Path,
     target_dir: &Path,
     crate_name: &str,
-    profile: WasmBuildProfile,
+    profile: CanicWasmBuildProfile,
 ) {
     let _build_guard = AUDIT_BUILD_SERIAL
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
 
-    build_wasm_canisters(workspace_root, target_dir, &[crate_name], profile, &[]);
+    build_wasm_canisters(
+        workspace_root,
+        target_dir,
+        &[crate_name],
+        profile.cargo_profile_args(),
+        &[],
+    );
 }
 
 fn workspace_root() -> PathBuf {

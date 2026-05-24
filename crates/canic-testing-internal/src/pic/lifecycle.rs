@@ -10,7 +10,7 @@ use canic::{
 };
 use ic_testkit::{
     Fake,
-    artifacts::{WasmBuildProfile, read_wasm, test_target_dir, workspace_root_for},
+    artifacts::{read_wasm, test_target_dir, workspace_root_for},
     pic::{Pic, PicSerialGuard, acquire_pic_serial_guard, pic},
 };
 use std::{
@@ -18,7 +18,7 @@ use std::{
     sync::Once,
 };
 
-use super::artifacts::build_internal_test_wasm_canisters;
+use super::artifacts::{CanicWasmBuildProfile, build_internal_test_wasm_canisters};
 
 const INSTALL_CYCLES: u128 = 1_000_000_000_000;
 const CANISTERS: [&str; 2] = ["runtime_probe", "intent_authority"];
@@ -73,8 +73,16 @@ pub fn install_lifecycle_boundary_fixture() -> LifecycleBoundaryFixture {
     build_canisters_once(&workspace_root);
 
     LifecycleBoundaryFixture {
-        canic_wasm: read_wasm(&target_dir, "runtime_probe", WasmBuildProfile::Fast),
-        authority_wasm: read_wasm(&target_dir, "intent_authority", WasmBuildProfile::Fast),
+        canic_wasm: read_wasm(
+            &target_dir,
+            "runtime_probe",
+            CanicWasmBuildProfile::Fast.target_dir_name(),
+        ),
+        authority_wasm: read_wasm(
+            &target_dir,
+            "intent_authority",
+            CanicWasmBuildProfile::Fast.target_dir_name(),
+        ),
         _serial_guard: acquire_pic_serial_guard(),
         pic: pic(),
     }
@@ -113,7 +121,7 @@ fn build_canisters_once(workspace_root: &Path) {
             workspace_root,
             &target_dir,
             &CANISTERS,
-            WasmBuildProfile::Fast,
+            CanicWasmBuildProfile::Fast,
         );
     });
 }
