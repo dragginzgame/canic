@@ -21,15 +21,33 @@ inspect only the files needed for the current task.
 
 ## Recent Work
 
+- Added a receipt-only host helper for `canic deploy authority receipt`, so the
+  CLI no longer builds a full authority evidence bundle just to extract the
+  receipt. The receipt output still uses the same report/check provenance
+  validation path and remains read-only.
+- Authority dry-run receipt construction now rejects `finished_at` timestamps
+  earlier than `started_at` directly, preserving the timestamp-order invariant
+  even when callers build a standalone receipt without a full evidence bundle.
+- The generic authority receipt-from-check helper now takes an explicit report
+  ID. Only the local-ID convenience wrapper chooses Canic's standard local
+  report and receipt IDs.
+- Authority receipt and evidence text output now explicitly reports
+  `controller_mutation: none_attempted` for dry-run receipts.
+- Authority plan, report, evidence, and receipt text output now stamps
+  `mode: dry_run`, keeping the read-only authority boundary visible in every
+  human-oriented authority surface.
+- Top-level `canic deploy authority` help no longer describes the authority
+  leaves as JSON-only now that each leaf supports JSON by default and text via
+  `--format text`.
 - Removed the unused SNS-specific CDK surface, including the baked-in SNS
   canister catalog; SNS deployment identities should be discovered from
   live/mainnet sources instead of maintained as static framework data.
 - Removed the broad CDK NNS system-canister table. The NNS registry and
   exchange-rate canister principals now live beside the Canic core infra
   adapters that call them.
-- `0.42.11` changelog notes are staged for the authority receipt hardening,
-  `ic-testkit` helper split, MSRV declaration update, and stale CDK
-  helper/static-canister cleanup.
+- `0.42.11` is live. It covered authority receipt hardening, the `ic-testkit`
+  helper split, MSRV declaration update, and stale CDK helper/static-canister
+  cleanup.
 - Removed the obsolete `canic-cdk::structures::BTreeMap` wrapper. Stable-storage
   code now imports the upstream `ic_memory` B-tree map directly as
   `StableBtreeMap`, and map clearing uses upstream `clear_new()`.

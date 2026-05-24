@@ -40,14 +40,14 @@ pub enum MedicCommandError {
 ///
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct MedicOptions {
-    pub fleet: String,
-    pub network: String,
-    pub icp: String,
+struct MedicOptions {
+    fleet: String,
+    network: String,
+    icp: String,
 }
 
 impl MedicOptions {
-    pub fn parse<I>(args: I) -> Result<Self, MedicCommandError>
+    fn parse<I>(args: I) -> Result<Self, MedicCommandError>
     where
         I: IntoIterator<Item = OsString>,
     {

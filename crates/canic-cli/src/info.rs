@@ -57,6 +57,6 @@ where
 }
 
 #[must_use]
-pub fn usage() -> String {
+fn usage() -> String {
     INFO_USAGE.to_string()
 }

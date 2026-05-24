@@ -6,6 +6,7 @@ pub fn authority_plan_text(plan: &AuthorityReconciliationPlanV1) -> String {
     let state_counts = authority_plan_state_counts(plan);
     let mut lines = vec![
         "Authority reconciliation plan".to_string(),
+        "mode: dry_run".to_string(),
         format!("plan_id: {}", plan.plan_id),
         format!("inventory_id: {}", plan.inventory_id),
         format!(
@@ -48,6 +49,7 @@ pub fn authority_plan_text(plan: &AuthorityReconciliationPlanV1) -> String {
 pub fn authority_report_text(report: &AuthorityReportV1) -> String {
     let mut lines = vec![
         "Authority reconciliation report".to_string(),
+        "mode: dry_run".to_string(),
         format!("status: {}", safety_status_label(report.status)),
         format!("summary: {}", report.summary),
         format!("report_id: {}", report.report_id),
@@ -103,6 +105,7 @@ pub fn authority_report_text(report: &AuthorityReportV1) -> String {
 pub fn authority_evidence_text(evidence: &AuthorityDryRunEvidenceV1) -> String {
     let mut lines = vec![
         "Authority dry-run evidence".to_string(),
+        "mode: dry_run".to_string(),
         format!("evidence_id: {}", evidence.evidence_id),
         format!("check_id: {}", evidence.check_id),
         format!("generated_at: {}", evidence.generated_at),
@@ -151,6 +154,10 @@ pub fn authority_evidence_text(evidence: &AuthorityDryRunEvidenceV1) -> String {
             deployment_command_result_label(&evidence.authority_receipt.command_result)
         ),
         format!(
+            "  controller_mutation: {}",
+            authority_receipt_mutation_label(&evidence.authority_receipt)
+        ),
+        format!(
             "  attempted_actions: {}",
             evidence.authority_receipt.attempted_actions.len()
         ),
@@ -192,6 +199,7 @@ pub fn authority_evidence_text(evidence: &AuthorityDryRunEvidenceV1) -> String {
 pub fn authority_receipt_text(receipt: &AuthorityReceiptV1) -> String {
     let mut lines = vec![
         "Authority dry-run receipt".to_string(),
+        "mode: dry_run".to_string(),
         format!("operation_id: {}", receipt.operation_id),
         format!(
             "status: {}",
@@ -222,6 +230,10 @@ pub fn authority_receipt_text(receipt: &AuthorityReceiptV1) -> String {
         ),
         String::new(),
         "dry_run_evidence:".to_string(),
+        format!(
+            "  controller_mutation: {}",
+            authority_receipt_mutation_label(receipt)
+        ),
         format!("  attempted_actions: {}", receipt.attempted_actions.len()),
         format!(
             "  verified_controller_observations: {}",
@@ -522,5 +534,13 @@ fn deployment_command_result_label(result: &DeploymentCommandResultV1) -> String
         DeploymentCommandResultV1::Failed { code, message } => {
             format!("failed[{code}]: {message}")
         }
+    }
+}
+
+const fn authority_receipt_mutation_label(receipt: &AuthorityReceiptV1) -> &'static str {
+    if receipt.attempted_actions.is_empty() {
+        "none_attempted"
+    } else {
+        "attempted_actions_present"
     }
 }

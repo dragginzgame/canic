@@ -34,13 +34,13 @@ pub enum ManifestCommandError {
 ///
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ManifestValidateOptions {
-    pub manifest: PathBuf,
-    pub out: Option<PathBuf>,
+struct ManifestValidateOptions {
+    manifest: PathBuf,
+    out: Option<PathBuf>,
 }
 
 impl ManifestValidateOptions {
-    pub fn parse<I>(args: I) -> Result<Self, ManifestCommandError>
+    fn parse<I>(args: I) -> Result<Self, ManifestCommandError>
     where
         I: IntoIterator<Item = OsString>,
     {
@@ -99,7 +99,7 @@ where
 }
 
 /// Read and validate a fleet backup manifest from disk.
-pub fn validate_manifest(
+fn validate_manifest(
     options: &ManifestValidateOptions,
 ) -> Result<FleetBackupManifest, ManifestCommandError> {
     let data = fs::read_to_string(&options.manifest)?;

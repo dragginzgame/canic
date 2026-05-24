@@ -42,17 +42,17 @@ pub enum BuildCommandError {
 ///
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct BuildOptions {
-    pub canister: String,
-    pub network: String,
-    pub profile: Option<CanisterBuildProfile>,
-    pub workspace: Option<String>,
-    pub icp_root: Option<String>,
-    pub config: Option<String>,
+struct BuildOptions {
+    canister: String,
+    network: String,
+    profile: Option<CanisterBuildProfile>,
+    workspace: Option<String>,
+    icp_root: Option<String>,
+    config: Option<String>,
 }
 
 impl BuildOptions {
-    pub fn parse<I>(args: I) -> Result<Self, BuildCommandError>
+    fn parse<I>(args: I) -> Result<Self, BuildCommandError>
     where
         I: IntoIterator<Item = OsString>,
     {

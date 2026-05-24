@@ -10,7 +10,7 @@ landed, what drifted, and what remains open.
 
 ## Current State
 
-`0.42.10` is live. Work is continuing on the 0.42 line by tightening the
+`0.42.11` is live. Work is continuing on the 0.42 line by tightening the
 dry-run report/evidence model while keeping reconciliation read-only.
 
 0.42 depends on 0.41 establishing deployment truth objects, observed inventory,
@@ -124,6 +124,24 @@ diffs, safety reports, and installer gating.
   schema versions, missing source report check provenance, blank receipt
   identity inputs, and missing completion timestamps before emitting receipt
   evidence.
+- `canic deploy authority receipt` now uses a receipt-only host helper instead
+  of building a full authority evidence bundle just to extract the receipt.
+  The output still uses the same report/check provenance validation path and
+  remains read-only.
+- Standalone receipt construction now rejects `finished_at` timestamps earlier
+  than `started_at`, so timestamp-order validation is not limited to complete
+  evidence bundles.
+- The generic receipt-from-check helper now takes an explicit report ID. The
+  local-ID convenience wrapper is the only layer that chooses Canic's standard
+  local authority report and receipt artifact IDs.
+- Authority receipt and evidence text output now explicitly reports
+  `controller_mutation: none_attempted` for dry-run receipts.
+- Authority plan, report, evidence, and receipt text output now stamps
+  `mode: dry_run`, making the no-mutation authority boundary visible in every
+  human-oriented authority surface.
+- Top-level `canic deploy authority` help no longer describes the authority
+  leaves as JSON-only now that each leaf supports JSON by default and text via
+  `--format text`.
 - The first planner reports:
   - already-correct controller sets;
   - deployment-controlled controller deltas that can be applied automatically

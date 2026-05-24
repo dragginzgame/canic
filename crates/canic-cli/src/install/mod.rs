@@ -43,14 +43,14 @@ pub enum InstallCommandError {
 ///
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct InstallOptions {
-    pub fleet: String,
-    pub network: String,
-    pub profile: Option<CanisterBuildProfile>,
+struct InstallOptions {
+    fleet: String,
+    network: String,
+    profile: Option<CanisterBuildProfile>,
 }
 
 impl InstallOptions {
-    pub fn parse<I>(args: I) -> Result<Self, InstallCommandError>
+    fn parse<I>(args: I) -> Result<Self, InstallCommandError>
     where
         I: IntoIterator<Item = OsString>,
     {
@@ -70,11 +70,11 @@ impl InstallOptions {
 
     #[must_use]
     #[cfg(test)]
-    pub fn into_install_root_options(self) -> InstallRootOptions {
+    fn into_install_root_options(self) -> InstallRootOptions {
         self.into_install_root_options_with_icp_root(None)
     }
 
-    pub fn into_install_root_options_with_icp_root(
+    fn into_install_root_options_with_icp_root(
         self,
         icp_root: Option<PathBuf>,
     ) -> InstallRootOptions {

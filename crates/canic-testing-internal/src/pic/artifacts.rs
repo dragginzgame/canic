@@ -16,7 +16,6 @@ const ICP_BUILD_ENV_STAMP_RELATIVE: &str = ".icp/canic-build-env.stamp";
 pub enum CanicWasmBuildProfile {
     Debug,
     Fast,
-    Release,
 }
 
 impl CanicWasmBuildProfile {
@@ -25,7 +24,6 @@ impl CanicWasmBuildProfile {
         match self {
             Self::Debug => &[],
             Self::Fast => &["--profile", "fast"],
-            Self::Release => &["--release"],
         }
     }
 
@@ -34,7 +32,6 @@ impl CanicWasmBuildProfile {
         match self {
             Self::Debug => "debug",
             Self::Fast => "fast",
-            Self::Release => "release",
         }
     }
 
@@ -43,7 +40,6 @@ impl CanicWasmBuildProfile {
         match self {
             Self::Debug => "debug",
             Self::Fast => "fast",
-            Self::Release => "release",
         }
     }
 }

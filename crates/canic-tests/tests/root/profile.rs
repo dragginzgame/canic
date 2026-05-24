@@ -16,8 +16,6 @@ const ROOT_TOPOLOGY_RELEASE_ROLES: &[&str] = &[
 const ROOT_CAPABILITY_RELEASE_ROLES: &[&str] = &["app", "scale_hub", "test"];
 const ROOT_SCALING_RELEASE_ROLES: &[&str] = &["scale_hub", "scale_replica"];
 const ROOT_SHARDING_RELEASE_ROLES: &[&str] = &["test", "user_hub", "user_shard"];
-const ROOT_RECONCILE_RELEASE_ROLES: &[&str] = &["app", "scale_hub", "scale_replica", "user_hub"];
-const TEST_SMALL_STORE_RUSTFLAGS: &str = "--cfg canic_test_small_wasm_store";
 const ICP_BUILD_LOCK_RELATIVE: &str = ".icp/canic-tests-build.lock";
 const BOOTSTRAP_TICK_LIMIT: usize = 120;
 const ROOT_SETUP_MAX_ATTEMPTS: usize = 2;
@@ -37,8 +35,6 @@ static ROOT_SCALING_BASELINE: Mutex<Option<CachedPicBaseline<RootBaselineMetadat
     Mutex::new(None);
 static ROOT_SHARDING_BASELINE: Mutex<Option<CachedPicBaseline<RootBaselineMetadata>>> =
     Mutex::new(None);
-static ROOT_RECONCILE_BASELINE: Mutex<Option<CachedPicBaseline<RootBaselineMetadata>>> =
-    Mutex::new(None);
 
 #[derive(Clone, Copy)]
 pub enum RootSetupProfile {
@@ -46,8 +42,6 @@ pub enum RootSetupProfile {
     Capability,
     Scaling,
     Sharding,
-    #[expect(dead_code)]
-    ReconcileSmallStore,
 }
 
 impl RootSetupProfile {
@@ -57,7 +51,6 @@ impl RootSetupProfile {
             Self::Capability => "cached root capability baseline",
             Self::Scaling => "cached root scaling baseline",
             Self::Sharding => "cached root sharding baseline",
-            Self::ReconcileSmallStore => "cached root reconcile small-store baseline",
         }
     }
 
@@ -67,7 +60,6 @@ impl RootSetupProfile {
             Self::Capability => ROOT_CAPABILITY_RELEASE_ROLES,
             Self::Scaling => ROOT_SCALING_RELEASE_ROLES,
             Self::Sharding => ROOT_SHARDING_RELEASE_ROLES,
-            Self::ReconcileSmallStore => ROOT_RECONCILE_RELEASE_ROLES,
         }
     }
 
@@ -79,16 +71,6 @@ impl RootSetupProfile {
             Self::Capability => &ROOT_CAPABILITY_BASELINE,
             Self::Scaling => &ROOT_SCALING_BASELINE,
             Self::Sharding => &ROOT_SHARDING_BASELINE,
-            Self::ReconcileSmallStore => &ROOT_RECONCILE_BASELINE,
-        }
-    }
-
-    const fn build_profile(self) -> CanicWasmBuildProfile {
-        match self {
-            Self::ReconcileSmallStore => CanicWasmBuildProfile::Debug,
-            Self::Topology | Self::Capability | Self::Scaling | Self::Sharding => {
-                CanicWasmBuildProfile::Fast
-            }
         }
     }
 
@@ -131,10 +113,6 @@ fn profile_build_extra_env(
                 .display()
                 .to_string(),
         )],
-        RootSetupProfile::ReconcileSmallStore => vec![(
-            "RUSTFLAGS".to_string(),
-            TEST_SMALL_STORE_RUSTFLAGS.to_string(),
-        )],
     }
 }
 
@@ -145,7 +123,7 @@ fn baseline_spec_for_profile(profile: RootSetupProfile) -> RootBaselineSpec<'sta
     baseline_spec_for_roles_owned_env(
         workspace_root,
         profile.release_roles(),
-        profile.build_profile(),
+        CanicWasmBuildProfile::Fast,
         build_extra_env,
     )
 }

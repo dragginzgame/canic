@@ -42,16 +42,16 @@ pub enum ScaffoldCommandError {
 ///
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ScaffoldOptions {
-    pub name: String,
+struct ScaffoldOptions {
+    name: String,
     #[cfg(test)]
-    pub project_root: Option<PathBuf>,
-    pub yes: bool,
+    project_root: Option<PathBuf>,
+    yes: bool,
 }
 
 impl ScaffoldOptions {
     #[cfg(test)]
-    pub fn parse<I>(args: I) -> Result<Self, ScaffoldCommandError>
+    fn parse<I>(args: I) -> Result<Self, ScaffoldCommandError>
     where
         I: IntoIterator<Item = OsString>,
     {
@@ -118,15 +118,15 @@ fn run_scaffold(options: ScaffoldOptions) -> Result<(), ScaffoldCommandError> {
 ///
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ScaffoldResult {
-    pub project_dir: PathBuf,
-    pub root_dir: PathBuf,
-    pub app_dir: PathBuf,
-    pub config_path: PathBuf,
+struct ScaffoldResult {
+    project_dir: PathBuf,
+    root_dir: PathBuf,
+    app_dir: PathBuf,
+    config_path: PathBuf,
 }
 
 /// Create a minimal root plus app canister fleet scaffold.
-pub fn scaffold_project(options: &ScaffoldOptions) -> Result<ScaffoldResult, ScaffoldCommandError> {
+fn scaffold_project(options: &ScaffoldOptions) -> Result<ScaffoldResult, ScaffoldCommandError> {
     let project_dir = scaffold_project_root(options)?
         .join("fleets")
         .join(&options.name);

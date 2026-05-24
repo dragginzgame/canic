@@ -34,21 +34,21 @@ use std::{
 ///
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct SnapshotDownloadOptions {
-    pub canister: Option<String>,
-    pub out: Option<PathBuf>,
-    pub fleet: String,
-    pub root: Option<String>,
-    pub include_children: bool,
-    pub recursive: bool,
-    pub dry_run: bool,
-    pub lifecycle: SnapshotLifecycleMode,
-    pub network: Option<String>,
-    pub icp: String,
+pub(super) struct SnapshotDownloadOptions {
+    canister: Option<String>,
+    out: Option<PathBuf>,
+    fleet: String,
+    root: Option<String>,
+    include_children: bool,
+    recursive: bool,
+    dry_run: bool,
+    lifecycle: SnapshotLifecycleMode,
+    network: Option<String>,
+    icp: String,
 }
 
 impl SnapshotDownloadOptions {
-    pub fn parse<I>(args: I) -> Result<Self, SnapshotCommandError>
+    pub(super) fn parse<I>(args: I) -> Result<Self, SnapshotCommandError>
     where
         I: IntoIterator<Item = OsString>,
     {
@@ -106,7 +106,7 @@ pub(super) fn download_usage() -> String {
     command.render_help().to_string()
 }
 
-pub fn download_snapshots(
+pub(super) fn download_snapshots(
     options: &SnapshotDownloadOptions,
 ) -> Result<SnapshotDownloadResult, SnapshotCommandError> {
     let request = resolve_snapshot_download_request(options)?;

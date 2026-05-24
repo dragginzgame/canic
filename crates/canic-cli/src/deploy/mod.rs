@@ -15,9 +15,10 @@ use canic_host::{
     deployment_truth::{
         AuthorityDryRunEvidenceV1, DeploymentCheckV1, DeploymentReceiptV1, SafetyReportV1,
         SafetyStatusV1, authority_dry_run_evidence_from_check_with_local_ids,
-        authority_evidence_text, authority_plan_text, authority_receipt_text,
-        authority_report_from_check_with_local_id, authority_report_text,
-        build_authority_reconciliation_plan, compare_plan_inventory_and_receipt,
+        authority_dry_run_receipt_from_check_with_local_id, authority_evidence_text,
+        authority_plan_text, authority_receipt_text, authority_report_from_check_with_local_id,
+        authority_report_text, build_authority_reconciliation_plan,
+        compare_plan_inventory_and_receipt,
     },
     icp_config::resolve_current_canic_icp_root,
     install_root::{
@@ -262,7 +263,7 @@ where
         args,
         deploy_authority_receipt_command,
         authority_receipt_usage,
-        |check| Ok(build_authority_dry_run_evidence(check)?.authority_receipt),
+        build_authority_dry_run_receipt,
         authority_receipt_text,
     )
 }
@@ -324,6 +325,14 @@ fn build_authority_dry_run_evidence(
 ) -> Result<AuthorityDryRunEvidenceV1, DeployCommandError> {
     let generated_at = current_observed_at()?;
     authority_dry_run_evidence_from_check_with_local_ids(check, generated_at)
+        .map_err(|err| DeployCommandError::Check(Box::new(err)))
+}
+
+fn build_authority_dry_run_receipt(
+    check: &DeploymentCheckV1,
+) -> Result<canic_host::deployment_truth::AuthorityReceiptV1, DeployCommandError> {
+    let generated_at = current_observed_at()?;
+    authority_dry_run_receipt_from_check_with_local_id(check, generated_at)
         .map_err(|err| DeployCommandError::Check(Box::new(err)))
 }
 
@@ -631,22 +640,22 @@ fn deploy_authority_command() -> ClapCommand {
         .disable_help_flag(true)
         .subcommand(passthrough_subcommand(
             ClapCommand::new("check")
-                .about("Print the local authority reconciliation plan JSON")
+                .about("Print the local authority reconciliation plan")
                 .disable_help_flag(true),
         ))
         .subcommand(passthrough_subcommand(
             ClapCommand::new("evidence")
-                .about("Print the local authority dry-run evidence JSON")
+                .about("Print the local authority dry-run evidence")
                 .disable_help_flag(true),
         ))
         .subcommand(passthrough_subcommand(
             ClapCommand::new("report")
-                .about("Print the local authority reconciliation report JSON")
+                .about("Print the local authority reconciliation report")
                 .disable_help_flag(true),
         ))
         .subcommand(passthrough_subcommand(
             ClapCommand::new("receipt")
-                .about("Print the local authority dry-run receipt JSON")
+                .about("Print the local authority dry-run receipt")
                 .disable_help_flag(true),
         ))
         .after_help(DEPLOY_AUTHORITY_HELP_AFTER)
@@ -1068,6 +1077,20 @@ mod tests {
     }
 
     #[test]
+    fn deploy_authority_command_help_does_not_claim_json_only_output() {
+        let help = authority_usage();
+
+        assert!(help.contains("Print the local authority reconciliation plan"));
+        assert!(help.contains("Print the local authority dry-run evidence"));
+        assert!(help.contains("Print the local authority reconciliation report"));
+        assert!(help.contains("Print the local authority dry-run receipt"));
+        assert!(!help.contains("authority reconciliation plan JSON"));
+        assert!(!help.contains("authority dry-run evidence JSON"));
+        assert!(!help.contains("authority reconciliation report JSON"));
+        assert!(!help.contains("authority dry-run receipt JSON"));
+    }
+
+    #[test]
     fn deploy_authority_command_dispatches_check() {
         let parsed = parse_subcommand(
             deploy_command(),
@@ -1206,6 +1229,28 @@ mod tests {
             evidence.authority_receipt.authority_profile_hash.as_deref(),
             Some("authority")
         );
+    }
+
+    #[test]
+    fn authority_receipt_builder_delegates_to_host_local_ids() {
+        let check = sample_authority_check();
+
+        let receipt =
+            build_authority_dry_run_receipt(&check).expect("build authority dry-run receipt");
+
+        assert_eq!(
+            receipt.operation_id,
+            "local:local:demo:authority-dry-run-receipt"
+        );
+        assert_eq!(receipt.check_id.as_deref(), Some("check-1"));
+        assert_eq!(receipt.reconciliation_plan_id, "plan-1");
+        assert_eq!(
+            receipt.authority_report_id,
+            "local:local:demo:authority-report"
+        );
+        assert_eq!(receipt.inventory_id, "inventory-1");
+        assert_eq!(receipt.authority_profile_hash.as_deref(), Some("authority"));
+        assert!(receipt.attempted_actions.is_empty());
     }
 
     #[test]

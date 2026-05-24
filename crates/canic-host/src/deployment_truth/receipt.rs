@@ -157,6 +157,50 @@ pub fn authority_dry_run_evidence_from_check_with_local_ids(
     )
 }
 
+/// Build a read-only authority dry-run receipt from a deployment truth check.
+///
+/// This is the receipt-only counterpart to
+/// `authority_dry_run_evidence_from_check(...)`: it preserves the same plan,
+/// report, and check provenance without constructing a full evidence bundle.
+pub fn authority_dry_run_receipt_from_check(
+    check: &DeploymentCheckV1,
+    report_id: impl Into<String>,
+    receipt_id: impl Into<String>,
+    started_at: impl Into<String>,
+    finished_at: Option<String>,
+) -> Result<AuthorityReceiptV1, AuthorityEvidenceError> {
+    let reconciliation = build_authority_reconciliation_plan(check);
+    let report = authority_report_from_plan_with_check_id(
+        report_id,
+        Some(check.check_id.clone()),
+        &reconciliation,
+    );
+    authority_dry_run_receipt_from_plan(
+        &reconciliation,
+        &report,
+        Some(check.check_id.clone()),
+        receipt_id,
+        started_at,
+        finished_at,
+    )
+}
+
+/// Build a read-only authority dry-run receipt using the standard local
+/// deployment-truth artifact identifier.
+pub fn authority_dry_run_receipt_from_check_with_local_id(
+    check: &DeploymentCheckV1,
+    generated_at: impl Into<String>,
+) -> Result<AuthorityReceiptV1, AuthorityEvidenceError> {
+    let generated_at = generated_at.into();
+    authority_dry_run_receipt_from_check(
+        check,
+        local_authority_artifact_id(check, "authority-report"),
+        local_authority_artifact_id(check, "authority-dry-run-receipt"),
+        generated_at.clone(),
+        Some(generated_at),
+    )
+}
+
 fn ensure_authority_evidence_schema_versions(
     evidence: &AuthorityDryRunEvidenceV1,
 ) -> Result<(), AuthorityEvidenceError> {
@@ -439,7 +483,18 @@ fn ensure_authority_receipt_source_inputs(
     ensure_required_optional_authority_field("report.check_id", report.check_id.as_deref())?;
     ensure_required_authority_field("receipt.operation_id", operation_id)?;
     ensure_required_authority_field("receipt.started_at", started_at)?;
-    ensure_required_optional_authority_field("receipt.finished_at", finished_at)
+    ensure_required_optional_authority_field("receipt.finished_at", finished_at)?;
+    let Some(finished_at) = finished_at else {
+        return Err(AuthorityEvidenceError::MissingRequiredField {
+            field: "receipt.finished_at",
+        });
+    };
+    ensure_timestamp_order(
+        "receipt.started_at",
+        started_at,
+        "receipt.finished_at",
+        finished_at,
+    )
 }
 
 fn ensure_authority_report_matches_plan(

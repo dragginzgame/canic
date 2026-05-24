@@ -10,6 +10,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.42.x] - 2026-05-23 - Authority reconciliation
 
+- `0.42.12` tightens authority receipt-only output and human-facing dry-run
+  labels so standalone receipts keep provenance/timestamp guards and every
+  authority text/help surface clearly reflects the read-only dry-run boundary.
+
 - `0.42.11` hardens standalone authority receipt construction, separates the
   reusable PocketIC helpers into `ic-testkit`, lowers the declared MSRV to
   Rust 1.88, and removes stale CDK static-canister/wrapper surfaces.

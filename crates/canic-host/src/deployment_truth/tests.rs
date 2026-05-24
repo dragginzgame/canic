@@ -3129,6 +3129,49 @@ fn authority_dry_run_evidence_from_check_with_local_ids_uses_deployment_identity
 }
 
 #[test]
+fn authority_dry_run_receipt_from_check_with_local_id_uses_deployment_identity() {
+    let check = sample_check(sample_plan(), sample_matching_inventory());
+
+    let receipt =
+        authority_dry_run_receipt_from_check_with_local_id(&check, "2026-05-23T00:00:01Z")
+            .expect("build authority receipt");
+
+    assert_eq!(
+        receipt.operation_id,
+        "local:local:local-root:authority-dry-run-receipt"
+    );
+    assert_eq!(receipt.check_id.as_deref(), Some("check-1"));
+    assert_eq!(receipt.reconciliation_plan_id, "plan-local-root");
+    assert_eq!(
+        receipt.authority_report_id,
+        "local:local:local-root:authority-report"
+    );
+    assert_eq!(receipt.inventory_id, "inventory-1");
+    assert_eq!(receipt.authority_profile_hash.as_deref(), Some("authority"));
+    assert_eq!(receipt.finished_at.as_deref(), Some("2026-05-23T00:00:01Z"));
+    assert!(receipt.attempted_actions.is_empty());
+}
+
+#[test]
+fn authority_dry_run_receipt_from_check_preserves_explicit_report_id() {
+    let check = sample_check(sample_plan(), sample_matching_inventory());
+
+    let receipt = authority_dry_run_receipt_from_check(
+        &check,
+        "authority-report-explicit",
+        "authority-dry-run-explicit",
+        "2026-05-23T00:00:00Z",
+        Some("2026-05-23T00:00:01Z".to_string()),
+    )
+    .expect("build authority receipt");
+
+    assert_eq!(receipt.operation_id, "authority-dry-run-explicit");
+    assert_eq!(receipt.authority_report_id, "authority-report-explicit");
+    assert_eq!(receipt.check_id.as_deref(), Some("check-1"));
+    assert_eq!(receipt.reconciliation_plan_id, "plan-local-root");
+}
+
+#[test]
 fn authority_text_renders_plan_and_report_summaries() {
     let mut source_plan = sample_plan();
     source_plan.authority_profile.expected_controllers =
@@ -3142,10 +3185,12 @@ fn authority_text_renders_plan_and_report_summaries() {
     let report_text = authority_report_text(&report);
 
     assert!(plan_text.contains("Authority reconciliation plan"));
+    assert!(plan_text.contains("mode: dry_run"));
     assert!(plan_text.contains("plan_id: plan-local-root"));
     assert!(plan_text.contains("root (aaaaa-aa) CanApplyAutomatically/AddControllers"));
     assert!(plan_text.contains("[add=ops-principal; remove=none]"));
     assert!(report_text.contains("Authority reconciliation report"));
+    assert!(report_text.contains("mode: dry_run"));
     assert!(report_text.contains("check_id: check-1"));
     assert!(report_text.contains("status: safe"));
     assert!(report_text.contains("[add=ops-principal; remove=none]"));
@@ -3185,8 +3230,10 @@ fn authority_text_renders_evidence_and_receipt_details() {
     let receipt_text = authority_receipt_text(&evidence.authority_receipt);
 
     assert!(evidence_text.contains("Authority dry-run evidence"));
+    assert!(evidence_text.contains("mode: dry_run"));
     assert!(evidence_text.contains("evidence_id: authority-evidence-1"));
     assert!(evidence_text.contains("generated_at: 2026-05-23T00:00:00Z"));
+    assert!(evidence_text.contains("controller_mutation: none_attempted"));
     assert!(evidence_text.contains("verified_controller_observations:"));
     assert!(
         evidence_text
@@ -3196,7 +3243,9 @@ fn authority_text_renders_evidence_and_receipt_details() {
         "[authority_profile_overlap] aaaaa-aa: staging authority principal aaaaa-aa overlaps"
     ));
     assert!(receipt_text.contains("Authority dry-run receipt"));
+    assert!(receipt_text.contains("mode: dry_run"));
     assert!(receipt_text.contains("operation_id: authority-dry-run-1"));
+    assert!(receipt_text.contains("controller_mutation: none_attempted"));
     assert!(receipt_text.contains("verified_controller_observations:"));
     assert!(
         receipt_text
@@ -3407,6 +3456,36 @@ fn authority_receipt_rejects_missing_finished_at() {
         err,
         AuthorityEvidenceError::MissingRequiredField {
             field: "receipt.finished_at",
+        }
+    ));
+}
+
+#[test]
+fn authority_receipt_rejects_finished_before_started() {
+    let check = sample_check(sample_plan(), sample_matching_inventory());
+    let reconciliation = build_authority_reconciliation_plan(&check);
+    let report = authority_report_from_plan_with_check_id(
+        "authority-report-1",
+        Some(check.check_id.clone()),
+        &reconciliation,
+    );
+
+    let err = authority_dry_run_receipt_from_plan(
+        &reconciliation,
+        &report,
+        Some(check.check_id),
+        "authority-dry-run-1",
+        "2026-05-23T00:00:02Z",
+        Some("2026-05-23T00:00:01Z".to_string()),
+    )
+    .expect_err("receipt construction should reject invalid timestamp order");
+
+    assert!(matches!(
+        err,
+        AuthorityEvidenceError::DryRunReceiptTimestampOrder {
+            field: "receipt.started_at",
+            other_field: "receipt.finished_at",
+            ..
         }
     ));
 }
