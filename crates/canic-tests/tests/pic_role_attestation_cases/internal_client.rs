@@ -14,7 +14,7 @@ fn generated_project_hub_client_calls_protected_project_instance() {
         "setup root+project_hub",
     );
     let setup = install_test_root_with_verifier_cached();
-    let pic = PicBorrow(setup.pic.pic());
+    let pic = setup.pic.pic();
     let root_id = setup.root_id;
     let project_hub_id = setup
         .verifier_id
@@ -25,7 +25,7 @@ fn generated_project_hub_client_calls_protected_project_instance() {
         "resolve project instance",
     );
     let status: Result<DirectoryEntryStatusResponse, Error> = update_call_as(
-        &pic,
+        pic,
         project_hub_id,
         Principal::anonymous(),
         "resolve_project",
@@ -37,14 +37,14 @@ fn generated_project_hub_client_calls_protected_project_instance() {
             panic!("project resolve should bind an instance, got {other:?}")
         }
     };
-    wait_until_ready(&pic, instance_id, 240);
+    wait_until_ready(pic, instance_id, 240);
 
     test_progress(
         "generated_project_hub_client_calls_protected_project_instance",
         "protected generated client call",
     );
     let generated_client_call: Result<(), Error> = update_call_as(
-        &pic,
+        pic,
         project_hub_id,
         Principal::anonymous(),
         "notify_project_instance",
@@ -82,7 +82,7 @@ fn generated_project_hub_client_calls_protected_project_instance() {
         .expect_err("invalid envelope must be rejected before proof verification");
     assert_eq!(invalid_envelope_error.code, ErrorCode::InternalRpcMalformed);
 
-    let registered_instance = role_pid(&pic, root_id, "project_instance", 120);
+    let registered_instance = role_pid(pic, root_id, "project_instance", 120);
     assert_eq!(
         registered_instance, instance_id,
         "directory-created instance should be visible in root topology"

@@ -228,6 +228,20 @@ fn current_cli_executor_returns_declared_execution_context() {
 }
 
 #[test]
+fn testkit_preflight_context_has_no_local_workspace_roots() {
+    let context = testkit_execution_context(vec!["memory://pocket-ic/artifacts".to_string()]);
+
+    assert_eq!(context.backend, DeploymentExecutorBackendV1::PocketIc);
+    assert_eq!(context.workspace_root, None);
+    assert_eq!(context.icp_root, None);
+    assert_eq!(
+        context.artifact_roots,
+        vec!["memory://pocket-ic/artifacts".to_string()]
+    );
+    assert_eq!(context.backend_capabilities, TESTKIT_PREFLIGHT_CAPABILITIES);
+}
+
+#[test]
 fn missing_executor_capabilities_are_reported_in_required_order() {
     let available = [
         DeploymentExecutorCapabilityV1::CanisterStatus,
@@ -316,6 +330,50 @@ fn deployment_execution_preflight_from_check_derives_authority_plan() {
     );
 
     assert_eq!(from_check, explicit);
+}
+
+#[test]
+fn testkit_preflight_validates_same_plan_shape_as_current_cli() {
+    let check = sample_check(sample_plan(), sample_matching_inventory());
+    let current_cli = CurrentCliDeploymentExecutor::new(
+        Some("/workspace/canic".to_string()),
+        Some("/workspace/canic/.icp".to_string()),
+        vec!["/workspace/canic/.icp/local/canisters".to_string()],
+    );
+    let pocket_ic = TestkitPreflightContext::new(vec!["memory://pocket-ic/artifacts".to_string()]);
+
+    let current_cli_preflight = deployment_execution_preflight_from_check(
+        &check,
+        &current_cli,
+        CURRENT_CLI_EXECUTOR_CAPABILITIES,
+    );
+    let pocket_ic_preflight = deployment_execution_preflight_from_check(
+        &check,
+        &pocket_ic,
+        TESTKIT_PREFLIGHT_CAPABILITIES,
+    );
+
+    validate_deployment_execution_preflight_for_check(&check, &current_cli_preflight)
+        .expect("current CLI preflight should validate against source check");
+    validate_deployment_execution_preflight_for_check(&check, &pocket_ic_preflight)
+        .expect("PocketIC preflight should validate against source check");
+    assert_eq!(current_cli_preflight.plan_id, pocket_ic_preflight.plan_id);
+    assert_eq!(
+        current_cli_preflight.safety_report_id,
+        pocket_ic_preflight.safety_report_id
+    );
+    assert_eq!(
+        current_cli_preflight.authority_plan_id,
+        pocket_ic_preflight.authority_plan_id
+    );
+    assert_eq!(
+        current_cli_preflight.planned_phases,
+        pocket_ic_preflight.planned_phases
+    );
+    assert_eq!(
+        pocket_ic_preflight.backend,
+        DeploymentExecutorBackendV1::PocketIc
+    );
 }
 
 #[test]

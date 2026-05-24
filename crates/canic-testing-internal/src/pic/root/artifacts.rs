@@ -28,7 +28,7 @@ pub fn ensure_root_release_artifacts_built(spec: &RootBaselineSpec<'_>) {
     let started_at = std::time::Instant::now();
     build_icp_all_with_env(
         &spec.workspace_root,
-        spec.icp_build_lock_relative,
+        &spec.icp_build_lock_path,
         spec.build_network,
         spec.build_profile,
         &effective_build_env(spec),
@@ -39,20 +39,22 @@ pub fn ensure_root_release_artifacts_built(spec: &RootBaselineSpec<'_>) {
 /// Load the built `root.wasm.gz` artifact used for PocketIC root installs.
 #[must_use]
 pub fn load_root_wasm(spec: &RootBaselineSpec<'_>) -> Option<Vec<u8>> {
-    let path = spec.workspace_root.join(spec.root_wasm_relative);
-    match fs::read(&path) {
+    match fs::read(&spec.root_wasm_path) {
         Ok(bytes) => {
             assert!(
                 bytes.len() < spec.pocket_ic_wasm_chunk_store_limit_bytes,
                 "root wasm artifact is too large for PocketIC chunked install: {} bytes at {}. \
 Use a compressed `.wasm.gz` artifact and/or build canister wasm with `RUSTFLAGS=\"-C debuginfo=0\"`.",
                 bytes.len(),
-                path.display()
+                spec.root_wasm_path.display()
             );
             Some(bytes)
         }
         Err(err) if err.kind() == io::ErrorKind::NotFound => None,
-        Err(err) => panic!("failed to read root wasm at {}: {}", path.display(), err),
+        Err(err) => panic!(
+            "failed to read root wasm at {}: {err}",
+            spec.root_wasm_path.display()
+        ),
     }
 }
 
@@ -127,8 +129,8 @@ pub(super) fn stage_managed_release_set(
 // Load one built `.wasm.gz` artifact for a configured release role.
 fn load_release_wasm_gz(spec: &RootBaselineSpec<'_>, role_name: &str) -> Vec<u8> {
     let artifact_path = spec
-        .workspace_root
-        .join(spec.root_release_artifacts_relative)
+        .root_release_artifacts_dir
+        .clone()
         .join(role_name)
         .join(format!("{role_name}.wasm.gz"));
     let bytes = fs::read(&artifact_path)
@@ -152,7 +154,7 @@ fn root_release_artifacts_ready(spec: &RootBaselineSpec<'_>) -> bool {
 
     if !icp_artifact_ready_with_snapshot(
         &spec.workspace_root,
-        spec.root_wasm_artifact_relative,
+        &spec.root_wasm_artifact_path,
         watched_inputs,
         spec.build_network,
         spec.build_profile,
@@ -163,13 +165,13 @@ fn root_release_artifacts_ready(spec: &RootBaselineSpec<'_>) -> bool {
 
     configured_release_roles(spec).into_iter().all(|role| {
         let role_name = role.as_str().to_string();
-        let artifact_relative_path = format!(
-            "{}/{role_name}/{role_name}.wasm.gz",
-            spec.root_release_artifacts_relative
-        );
+        let artifact_path = spec
+            .root_release_artifacts_dir
+            .join(&role_name)
+            .join(format!("{role_name}.wasm.gz"));
         icp_artifact_ready_with_snapshot(
             &spec.workspace_root,
-            &artifact_relative_path,
+            &artifact_path,
             watched_inputs,
             spec.build_network,
             spec.build_profile,

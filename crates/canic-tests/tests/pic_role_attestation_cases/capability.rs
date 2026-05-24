@@ -8,7 +8,7 @@ fn capability_endpoint_role_attestation_proof_paths() {
         "setup root",
     );
     let setup = install_test_root_cached();
-    let pic = PicBorrow(setup.pic.pic());
+    let pic = setup.pic.pic();
     let root_id = setup.root_id;
     let signer_id = setup.signer_id;
     let request = Request::Cycles(CyclesRequest {
@@ -21,12 +21,12 @@ fn capability_endpoint_role_attestation_proof_paths() {
         "valid cycles proof",
     );
     // A valid child caller with a root-audience attestation should authorize the cycles request.
-    let issued = issue_self_attestation_as(&pic, root_id, signer_id, 60, root_id);
+    let issued = issue_self_attestation_as(pic, root_id, signer_id, 60, root_id);
     let issued_at = issued.payload.issued_at;
     let envelope =
         cycles_role_attestation_envelope(root_id, request.clone(), issued, issued_at, 1, 9);
     let response: Result<RootCapabilityResponseV1, Error> = update_call_as(
-        &pic,
+        pic,
         root_id,
         signer_id,
         "canic_response_capability_v1",
@@ -43,7 +43,7 @@ fn capability_endpoint_role_attestation_proof_paths() {
         "tampered signature rejection",
     );
     // Tampering with the signature must fail during attestation verification.
-    let mut issued = issue_self_attestation_as(&pic, root_id, signer_id, 60, root_id);
+    let mut issued = issue_self_attestation_as(pic, root_id, signer_id, 60, root_id);
     let issued_at = issued.payload.issued_at;
     if let Some(first) = issued.signature.first_mut() {
         *first ^= 0x01;
@@ -51,7 +51,7 @@ fn capability_endpoint_role_attestation_proof_paths() {
     let envelope =
         cycles_role_attestation_envelope(root_id, request.clone(), issued, issued_at, 6, 4);
     let response: Result<RootCapabilityResponseV1, Error> = update_call_as(
-        &pic,
+        pic,
         root_id,
         signer_id,
         "canic_response_capability_v1",
@@ -69,7 +69,7 @@ fn capability_endpoint_role_attestation_proof_paths() {
         "capability hash mismatch rejection",
     );
     // Capability hashes must match the request exactly.
-    let issued = issue_self_attestation_as(&pic, root_id, signer_id, 60, root_id);
+    let issued = issue_self_attestation_as(pic, root_id, signer_id, 60, root_id);
     let issued_at = issued.payload.issued_at;
     let envelope = RootCapabilityEnvelopeV1 {
         service: CapabilityService::Root,
@@ -83,7 +83,7 @@ fn capability_endpoint_role_attestation_proof_paths() {
         metadata: capability_metadata(issued_at, 9, 1, 60),
     };
     let response: Result<RootCapabilityResponseV1, Error> = update_call_as(
-        &pic,
+        pic,
         root_id,
         signer_id,
         "canic_response_capability_v1",
@@ -102,12 +102,12 @@ fn capability_endpoint_role_attestation_proof_paths() {
     );
     // Audience mismatches must be enforced by the capability verifier.
     let wrong_audience = Principal::from_slice(&[9; 29]);
-    let issued = issue_self_attestation_as(&pic, root_id, signer_id, 60, wrong_audience);
+    let issued = issue_self_attestation_as(pic, root_id, signer_id, 60, wrong_audience);
     let issued_at = issued.payload.issued_at;
     let envelope =
         cycles_role_attestation_envelope(root_id, request.clone(), issued, issued_at, 3, 7);
     let response: Result<RootCapabilityResponseV1, Error> = update_call_as(
-        &pic,
+        pic,
         root_id,
         signer_id,
         "canic_response_capability_v1",
@@ -125,13 +125,13 @@ fn capability_endpoint_role_attestation_proof_paths() {
         "expiry rejection",
     );
     // Expiry is time-sensitive, so keep it last after advancing the clock.
-    let issued = issue_self_attestation_as(&pic, root_id, signer_id, 1, root_id);
+    let issued = issue_self_attestation_as(pic, root_id, signer_id, 1, root_id);
     let issued_at = issued.payload.issued_at;
     pic.advance_time(Duration::from_secs(2));
     pic.tick();
     let envelope = cycles_role_attestation_envelope(root_id, request, issued, issued_at, 2, 8);
     let response: Result<RootCapabilityResponseV1, Error> = update_call_as(
-        &pic,
+        pic,
         root_id,
         signer_id,
         "canic_response_capability_v1",
@@ -154,10 +154,10 @@ fn capability_endpoint_policy_and_structural_paths() {
         "setup root",
     );
     let setup = install_test_root_cached();
-    let pic = PicBorrow(setup.pic.pic());
+    let pic = setup.pic.pic();
     let root_id = setup.root_id;
     let signer_id = setup.signer_id;
-    let issued = issue_self_attestation(&pic, root_id, 60, root_id);
+    let issued = issue_self_attestation(pic, root_id, 60, root_id);
     let issued_at = issued.payload.issued_at;
 
     test_progress(
@@ -187,7 +187,7 @@ fn capability_endpoint_policy_and_structural_paths() {
         metadata: capability_metadata(issued_at, 4, 6, 60),
     };
     let response: Result<RootCapabilityResponseV1, Error> = update_call_as(
-        &pic,
+        pic,
         root_id,
         root_id,
         "canic_response_capability_v1",
@@ -228,14 +228,14 @@ fn capability_endpoint_policy_and_structural_paths() {
         metadata: capability_metadata(issued_at, 4, 66, 60),
     };
     let first: Result<RootCapabilityResponseV1, Error> = update_call_as(
-        &pic,
+        pic,
         root_id,
         root_id,
         "canic_response_capability_v1",
         (envelope_a,),
     );
     let second: Result<RootCapabilityResponseV1, Error> = update_call_as(
-        &pic,
+        pic,
         root_id,
         root_id,
         "canic_response_capability_v1",
@@ -275,7 +275,7 @@ fn capability_endpoint_policy_and_structural_paths() {
         metadata: capability_metadata(issued_at, 7, 3, 60),
     };
     let response: Result<RootCapabilityResponseV1, Error> = update_call_as(
-        &pic,
+        pic,
         root_id,
         signer_id,
         "canic_response_capability_v1",
@@ -308,7 +308,7 @@ fn capability_endpoint_policy_and_structural_paths() {
         metadata: capability_metadata(issued_at, 7, 3, 60),
     };
     let response: Result<RootCapabilityResponseV1, Error> = update_call_as(
-        &pic,
+        pic,
         root_id,
         root_id,
         "canic_response_capability_v1",
@@ -354,7 +354,7 @@ fn capability_endpoint_policy_and_structural_paths() {
         metadata: capability_metadata(issued_at, 8, 2, 60),
     };
     let response: Result<RootCapabilityResponseV1, Error> = update_call_as(
-        &pic,
+        pic,
         root_id,
         root_id,
         "canic_response_capability_v1",

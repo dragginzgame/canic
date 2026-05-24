@@ -66,6 +66,14 @@ pub struct CurrentCliDeploymentExecutor {
     context: DeploymentExecutionContextV1,
 }
 
+///
+/// TestkitPreflightContext
+///
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TestkitPreflightContext {
+    context: DeploymentExecutionContextV1,
+}
+
 impl CurrentCliDeploymentExecutor {
     #[must_use]
     pub fn new(
@@ -79,7 +87,22 @@ impl CurrentCliDeploymentExecutor {
     }
 }
 
+impl TestkitPreflightContext {
+    #[must_use]
+    pub fn new(artifact_roots: Vec<String>) -> Self {
+        Self {
+            context: testkit_execution_context(artifact_roots),
+        }
+    }
+}
+
 impl DeploymentExecutor for CurrentCliDeploymentExecutor {
+    fn execution_context(&self) -> DeploymentExecutionContextV1 {
+        self.context.clone()
+    }
+}
+
+impl DeploymentExecutor for TestkitPreflightContext {
     fn execution_context(&self) -> DeploymentExecutionContextV1 {
         self.context.clone()
     }
@@ -94,6 +117,9 @@ pub const CURRENT_CLI_EXECUTOR_CAPABILITIES: &[DeploymentExecutorCapabilityV1] =
     DeploymentExecutorCapabilityV1::Query,
     DeploymentExecutorCapabilityV1::StageArtifact,
 ];
+
+pub const TESTKIT_PREFLIGHT_CAPABILITIES: &[DeploymentExecutorCapabilityV1] =
+    CURRENT_CLI_EXECUTOR_CAPABILITIES;
 
 pub const CURRENT_INSTALL_EXECUTION_PHASES: &[&str] = &[
     "create_root",
@@ -118,6 +144,17 @@ pub fn current_cli_execution_context(
         artifact_roots,
         backend: DeploymentExecutorBackendV1::CurrentCli,
         backend_capabilities: CURRENT_CLI_EXECUTOR_CAPABILITIES.to_vec(),
+    }
+}
+
+#[must_use]
+pub fn testkit_execution_context(artifact_roots: Vec<String>) -> DeploymentExecutionContextV1 {
+    DeploymentExecutionContextV1 {
+        workspace_root: None,
+        icp_root: None,
+        artifact_roots,
+        backend: DeploymentExecutorBackendV1::PocketIc,
+        backend_capabilities: TESTKIT_PREFLIGHT_CAPABILITIES.to_vec(),
     }
 }
 

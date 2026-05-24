@@ -1,16 +1,6 @@
-use std::{io::Write, ops::Deref};
+use std::io::Write;
 
 use super::*;
-
-pub struct PicBorrow<'a>(pub &'a Pic);
-
-impl Deref for PicBorrow<'_> {
-    type Target = Pic;
-
-    fn deref(&self) -> &Self::Target {
-        self.0
-    }
-}
 
 // Emit one short progress marker for long grouped PocketIC scenario tests.
 pub fn test_progress(test_name: &str, phase: &str) {

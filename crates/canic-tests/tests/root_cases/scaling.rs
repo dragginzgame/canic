@@ -1,10 +1,10 @@
-use crate::root::{
+use canic::{Error, dto::placement::scaling::ScalingRegistryResponse};
+use canic_testing_internal::canister;
+use canic_tests::root::{
     RootSetupProfile,
     harness::setup_cached_root,
     workers::{count_workers, create_worker},
 };
-use canic::{Error, dto::placement::scaling::ScalingRegistryResponse};
-use canic_testing_internal::canister;
 
 #[test]
 fn scale_hub_bootstraps_initial_worker_then_manual_create_reaches_min() {

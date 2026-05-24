@@ -8,7 +8,7 @@ pub(super) fn query_perf_is_unobservable(scenario: &AuditScenario, row: &Canonic
 }
 
 // Choose the fresh root topology shape required for one scenario.
-fn setup_for_scenario(scenario: &AuditScenario) -> root_harness::RootSetup {
+fn setup_for_scenario(scenario: &AuditScenario) -> root::harness::RootSetup {
     match scenario.key {
         "root:canic_subnet_registry:full-registry" | "root:canic_subnet_state:empty-struct" => {
             setup_root(RootSetupProfile::Topology)
@@ -254,7 +254,10 @@ fn scenario_target_pid(
 }
 
 // Prepare scenario-specific prerequisites outside the measured perf window.
-fn prepare_scenario(setup: &root_harness::RootSetup, scenario: &AuditScenario) -> PreparedScenario {
+fn prepare_scenario(
+    setup: &root::harness::RootSetup,
+    scenario: &AuditScenario,
+) -> PreparedScenario {
     let target_pid = scenario_target_pid(setup.root_id, scenario, &setup.subnet_index);
 
     match scenario.key {
@@ -328,7 +331,7 @@ fn prepare_scenario(setup: &root_harness::RootSetup, scenario: &AuditScenario) -
 
 // Execute the actual endpoint call for one scenario.
 fn execute_scenario(
-    setup: &root_harness::RootSetup,
+    setup: &root::harness::RootSetup,
     scenario: &AuditScenario,
     prepared: &PreparedScenario,
 ) {
@@ -368,7 +371,7 @@ fn execute_scenario(
 
 // Execute the root-side delegated auth issuance scenario from a fresh shard.
 fn execute_root_delegation_issue_scenario(
-    setup: &root_harness::RootSetup,
+    setup: &root::harness::RootSetup,
     _target_pid: Principal,
     prepared: &PreparedScenario,
 ) {
@@ -386,7 +389,7 @@ fn execute_root_delegation_issue_scenario(
 
 // Execute the verifier-side delegated token confirmation scenario.
 fn execute_verifier_auth_scenario(
-    setup: &root_harness::RootSetup,
+    setup: &root::harness::RootSetup,
     target_pid: Principal,
     prepared: &PreparedScenario,
 ) {
@@ -407,7 +410,7 @@ fn execute_verifier_auth_scenario(
 }
 
 // Execute the fresh root cycles request scenario through the root dispatcher.
-fn execute_root_cycles_scenario(setup: &root_harness::RootSetup, target_pid: Principal) {
+fn execute_root_cycles_scenario(setup: &root::harness::RootSetup, target_pid: Principal) {
     let caller = *setup
         .subnet_index
         .get(&TEST)
@@ -705,7 +708,7 @@ fn perf_checkpoint_slot(entries: &[MetricEntry], scope: &str, label: &str) -> (u
 
 // Execute one structural root capability call as the requested child caller.
 fn root_capability_response_as(
-    setup: &root_harness::RootSetup,
+    setup: &root::harness::RootSetup,
     target_pid: Principal,
     caller: Principal,
     request: Request,
@@ -736,7 +739,7 @@ fn root_capability_response_as(
 }
 
 // Read one canister's current time in seconds for capability metadata issuance.
-fn target_now_secs(setup: &root_harness::RootSetup, canister_id: Principal) -> u64 {
+fn target_now_secs(setup: &root::harness::RootSetup, canister_id: Principal) -> u64 {
     let _ = canister_id;
     setup.pic.current_time_nanos() / 1_000_000_000
 }

@@ -27,6 +27,7 @@ pub fn create_worker(pic: &Pic, hub_pid: Principal) -> Result<Principal, Error> 
 }
 
 /// Count worker canisters registered under a given parent.
+#[must_use]
 pub fn count_workers(pic: &Pic, root_id: Principal, parent_pid: Principal) -> usize {
     let registry: Result<SubnetRegistryResponse, Error> = pic
         .query_call(root_id, protocol::CANIC_SUBNET_REGISTRY, ())

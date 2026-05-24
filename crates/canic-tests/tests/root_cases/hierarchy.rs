@@ -1,4 +1,6 @@
-use crate::root::{
+use canic::ids::CanisterRole;
+use canic_testing_internal::canister;
+use canic_tests::root::{
     RootSetupProfile,
     assertions::{
         assert_child_envs_match_registry, assert_children_match_registry, assert_registry_parents,
@@ -6,8 +8,6 @@ use crate::root::{
     },
     harness::setup_root,
 };
-use canic::ids::CanisterRole;
-use canic_testing_internal::canister;
 use std::io::Write;
 
 fn test_progress(test_name: &str, phase: &str) {

@@ -61,11 +61,20 @@ than implicit installer state.
   execution status contradicts the command result and role-phase evidence,
   preventing stale or hand-edited execution receipts from overstating resume
   safety.
+- Added a narrow `TestkitPreflightContext` and a plan-shape preflight
+  test proving the testkit harness path consumes the same
+  `DeploymentPlanV1`, `SafetyReportV1`, authority reconciliation plan, and
+  phase list as the current CLI executor. This deliberately is not a full
+  test harness execution backend in `canic-host`.
+- Routed current-install root wasm installation, root funding, and
+  `stage_release_set` through narrow operation values that own phase evidence
+  and execution calls. This preserves current installer behavior while moving
+  those phases closer to the executor operation boundary.
 
 ## Not Implemented Yet
 
 - Full backend-neutral execution model.
-- Separation between execution planning and the concrete local/IC backend.
+- Full separation between execution planning and the concrete local/IC backend.
 - Backend-specific mutating operation receipts mapped into the common
   deployment receipt model.
 - Validation that backend behavior does not bypass deployment truth gates.

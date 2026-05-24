@@ -3,13 +3,13 @@ use crate::pic_role_attestation_support::*;
 #[test]
 fn role_attestation_verification_paths() {
     let setup = install_test_root_cached();
-    let pic = PicBorrow(setup.pic.pic());
+    let pic = setup.pic.pic();
     let root_id = setup.root_id;
 
     // Happy path should verify a freshly issued self-attestation.
-    let issued = issue_self_attestation(&pic, root_id, 60, root_id);
+    let issued = issue_self_attestation(pic, root_id, 60, root_id);
     let verified: Result<(), Error> = update_call_as(
-        &pic,
+        pic,
         root_id,
         root_id,
         "root_verify_role_attestation",
@@ -18,9 +18,9 @@ fn role_attestation_verification_paths() {
     verified.expect("attestation verification failed");
 
     // Mismatched caller must fail even with an otherwise valid attestation.
-    let issued = issue_self_attestation(&pic, root_id, 60, root_id);
+    let issued = issue_self_attestation(pic, root_id, 60, root_id);
     let verified: Result<(), Error> = update_call_as(
-        &pic,
+        pic,
         root_id,
         Principal::anonymous(),
         "root_verify_role_attestation",
@@ -35,9 +35,9 @@ fn role_attestation_verification_paths() {
 
     // Audience binding must be enforced by the verifier.
     let wrong_audience = Principal::from_slice(&[9; 29]);
-    let issued = issue_self_attestation(&pic, root_id, 60, wrong_audience);
+    let issued = issue_self_attestation(pic, root_id, 60, wrong_audience);
     let verified: Result<(), Error> = update_call_as(
-        &pic,
+        pic,
         root_id,
         root_id,
         "root_verify_role_attestation",
@@ -51,9 +51,9 @@ fn role_attestation_verification_paths() {
     );
 
     // Epoch floors higher than the attestation epoch must fail closed.
-    let issued = issue_self_attestation(&pic, root_id, 60, root_id);
+    let issued = issue_self_attestation(pic, root_id, 60, root_id);
     let verified: Result<(), Error> = update_call_as(
-        &pic,
+        pic,
         root_id,
         root_id,
         "root_verify_role_attestation",
@@ -67,11 +67,11 @@ fn role_attestation_verification_paths() {
     );
 
     // Expiry is time-sensitive, so keep it last after advancing the clock.
-    let issued = issue_self_attestation(&pic, root_id, 1, root_id);
+    let issued = issue_self_attestation(pic, root_id, 1, root_id);
     pic.advance_time(Duration::from_secs(2));
     pic.tick();
     let verified: Result<(), Error> = update_call_as(
-        &pic,
+        pic,
         root_id,
         root_id,
         "root_verify_role_attestation",
@@ -88,7 +88,7 @@ fn role_attestation_verification_paths() {
 #[test]
 fn role_attestation_verify_handles_rotated_key_grace_window() {
     let setup = install_test_root_cached();
-    let pic = PicBorrow(setup.pic.pic());
+    let pic = setup.pic.pic();
     let root_id = setup.root_id;
 
     let previous_key_id = 1_001u32;
@@ -97,7 +97,7 @@ fn role_attestation_verify_handles_rotated_key_grace_window() {
     let current_key_seed = 4u8;
 
     let previous_attestation: Result<SignedRoleAttestation, Error> = update_call_as(
-        &pic,
+        pic,
         root_id,
         root_id,
         "root_issue_self_attestation_test_with_key",
@@ -107,7 +107,7 @@ fn role_attestation_verify_handles_rotated_key_grace_window() {
     let grace_until = previous_attestation.payload.issued_at.saturating_add(5);
 
     let set_keys: Result<(), Error> = update_call_as(
-        &pic,
+        pic,
         root_id,
         root_id,
         "root_set_test_attestation_key_set",
@@ -131,7 +131,7 @@ fn role_attestation_verify_handles_rotated_key_grace_window() {
     set_keys.expect("seed key set failed");
 
     let verify_previous_in_grace: Result<(), Error> = update_call_as(
-        &pic,
+        pic,
         root_id,
         root_id,
         "root_verify_role_attestation",
@@ -143,7 +143,7 @@ fn role_attestation_verify_handles_rotated_key_grace_window() {
     pic.tick();
 
     let verify_previous_after_grace: Result<(), Error> = update_call_as(
-        &pic,
+        pic,
         root_id,
         root_id,
         "root_verify_role_attestation",
@@ -157,7 +157,7 @@ fn role_attestation_verify_handles_rotated_key_grace_window() {
     );
 
     let current_attestation: Result<SignedRoleAttestation, Error> = update_call_as(
-        &pic,
+        pic,
         root_id,
         root_id,
         "root_issue_self_attestation_test_with_key",
@@ -166,7 +166,7 @@ fn role_attestation_verify_handles_rotated_key_grace_window() {
     let current_attestation = current_attestation.expect("current-key attestation failed");
 
     let verify_current_after_grace: Result<(), Error> = update_call_as(
-        &pic,
+        pic,
         root_id,
         root_id,
         "root_verify_role_attestation",

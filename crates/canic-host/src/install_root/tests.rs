@@ -1,7 +1,8 @@
 use super::{
-    CompletedInstallPhase, INSTALL_STATE_SCHEMA_VERSION, InstallReceiptScope, InstallRootOptions,
-    InstallState, InstallTimingSummary, add_create_root_target, add_icp_environment_target,
-    add_local_root_create_cycles_arg, check_install_deployment_truth,
+    CompletedInstallPhase, EnsureRootCyclesOperation, INSTALL_STATE_SCHEMA_VERSION,
+    InstallReceiptScope, InstallRootOptions, InstallRootWasmOperation, InstallState,
+    InstallTimingSummary, StageReleaseSetOperation, add_create_root_target,
+    add_icp_environment_target, add_local_root_create_cycles_arg, check_install_deployment_truth,
     check_install_execution_preflight, config_selection_error,
     current_install_deployment_truth_check_at, current_install_execution_context,
     current_install_executor_missing_capabilities, current_install_staging_evidence,
@@ -1158,6 +1159,68 @@ fn current_install_staging_evidence_records_release_set_transport_facts() {
     assert!(evidence.contains(&"staging_chunks_published:2".to_string()));
     assert!(evidence.contains(&"staging_postcondition:Observed".to_string()));
     assert!(evidence.contains(&"staging_wasm_store:root:aaaaa-aa:bootstrap".to_string()));
+}
+
+#[test]
+fn stage_release_set_operation_owns_current_install_staging_evidence() {
+    let manifest = RootReleaseSetManifest {
+        release_version: "0.43.6".to_string(),
+        entries: vec![ReleaseSetEntry {
+            role: "root".to_string(),
+            template_id: "embedded:root".to_string(),
+            artifact_relative_path: "local/canisters/root/root.wasm.gz".to_string(),
+            payload_size_bytes: 84,
+            payload_sha256_hex: "payload-hash".to_string(),
+            chunk_size_bytes: 1_048_576,
+            chunk_sha256_hex: vec!["chunk-a".to_string()],
+        }],
+    };
+    let operation =
+        StageReleaseSetOperation::new(Path::new("/workspace/.icp"), "local", "aaaaa-aa", manifest);
+
+    let evidence = operation.evidence(Path::new(
+        "/workspace/.icp/local/canisters/root.release-set.json",
+    ));
+
+    assert!(evidence.contains(&"root_canister:aaaaa-aa".to_string()));
+    assert!(evidence.contains(&"release_version:0.43.6".to_string()));
+    assert!(evidence.contains(&"staging_role:root".to_string()));
+    assert!(evidence.contains(&"staging_transport:WasmStore".to_string()));
+    assert!(evidence.contains(&"staging_chunks_prepared:1".to_string()));
+    assert!(evidence.contains(&"staging_chunks_published:1".to_string()));
+}
+
+#[test]
+fn install_root_wasm_operation_owns_current_install_evidence() {
+    let operation = InstallRootWasmOperation::new(
+        Path::new("/workspace/.icp"),
+        "local",
+        "aaaaa-aa",
+        PathBuf::from("/workspace/.icp/local/canisters/root/root.wasm"),
+    );
+
+    let evidence = operation.evidence();
+
+    assert!(evidence.contains(&"root_canister:aaaaa-aa".to_string()));
+    assert!(
+        evidence.contains(&"root_wasm:/workspace/.icp/local/canisters/root/root.wasm".to_string())
+    );
+}
+
+#[test]
+fn ensure_root_cycles_operation_owns_current_install_evidence() {
+    let operation = EnsureRootCyclesOperation::new(
+        Path::new("/workspace/.icp"),
+        "local",
+        "aaaaa-aa",
+        "pre-bootstrap",
+    );
+
+    let evidence = operation.evidence();
+
+    assert!(evidence.contains(&"root_canister:aaaaa-aa".to_string()));
+    assert!(evidence.contains(&"minimum_cycles:100000000000000".to_string()));
+    assert!(evidence.contains(&"funding_phase:pre-bootstrap".to_string()));
 }
 
 #[test]

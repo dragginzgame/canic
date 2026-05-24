@@ -382,51 +382,42 @@ fn run_root_activation_phases(
     let root_wasm = resolve_artifact_root(receipt_scope.icp_root, receipt_scope.network)?
         .join(&options.root_build_target)
         .join(format!("{}.wasm", options.root_build_target));
+    let install_operation = InstallRootWasmOperation::new(
+        receipt_scope.icp_root,
+        receipt_scope.network,
+        root_canister_id,
+        root_wasm,
+    );
     timings.install_root = receipt_scope.run_phase(
         "install_root",
         "install root wasm",
-        vec![
-            format!("root_canister:{root_canister_id}"),
-            format!("root_wasm:{}", root_wasm.display()),
-        ],
-        || {
-            reinstall_root_wasm(
-                receipt_scope.icp_root,
-                receipt_scope.network,
-                root_canister_id,
-                &root_wasm,
-            )
-        },
+        install_operation.evidence(),
+        || install_operation.execute(),
     )?;
+    let pre_bootstrap_funding = EnsureRootCyclesOperation::new(
+        receipt_scope.icp_root,
+        receipt_scope.network,
+        root_canister_id,
+        "pre-bootstrap",
+    );
     timings.fund_root = receipt_scope.run_phase(
         "fund_root_pre_bootstrap",
         "ensure local root minimum cycles before bootstrap",
-        vec![
-            format!("root_canister:{root_canister_id}"),
-            format!("minimum_cycles:{LOCAL_ROOT_MIN_READY_CYCLES}"),
-        ],
-        || {
-            ensure_local_root_min_cycles(
-                receipt_scope.icp_root,
-                receipt_scope.network,
-                root_canister_id,
-                "pre-bootstrap",
-            )
-        },
+        pre_bootstrap_funding.evidence(),
+        || pre_bootstrap_funding.execute(),
     )?;
     let manifest = load_root_release_set_manifest(manifest_path)?;
+    let stage_operation = StageReleaseSetOperation::new(
+        receipt_scope.icp_root,
+        receipt_scope.network,
+        root_canister_id,
+        manifest,
+    );
     timings.stage_release_set = receipt_scope.run_phase(
         "stage_release_set",
         "stage root release set",
-        current_install_staging_evidence(root_canister_id, manifest_path, &manifest),
-        || {
-            stage_root_release_set(
-                receipt_scope.icp_root,
-                receipt_scope.network,
-                root_canister_id,
-                &manifest,
-            )
-        },
+        stage_operation.evidence(manifest_path),
+        || stage_operation.execute(),
     )?;
     timings.resume_bootstrap = receipt_scope.run_phase(
         "resume_bootstrap",
@@ -456,21 +447,17 @@ fn run_root_activation_phases(
             return Err(err);
         }
     }
+    let post_ready_funding = EnsureRootCyclesOperation::new(
+        receipt_scope.icp_root,
+        receipt_scope.network,
+        root_canister_id,
+        "post-ready",
+    );
     timings.finalize_root_funding = receipt_scope.run_phase(
         "fund_root_post_ready",
         "ensure local root minimum cycles after ready",
-        vec![
-            format!("root_canister:{root_canister_id}"),
-            format!("minimum_cycles:{LOCAL_ROOT_MIN_READY_CYCLES}"),
-        ],
-        || {
-            ensure_local_root_min_cycles(
-                receipt_scope.icp_root,
-                receipt_scope.network,
-                root_canister_id,
-                "post-ready",
-            )
-        },
+        post_ready_funding.evidence(),
+        || post_ready_funding.execute(),
     )?;
     Ok(timings)
 }
@@ -491,6 +478,85 @@ struct CompletedInstallPhase {
     finished_at: Option<String>,
     evidence: Vec<String>,
     role_names: Vec<String>,
+}
+
+struct InstallRootWasmOperation<'a> {
+    icp_root: &'a Path,
+    network: &'a str,
+    root_canister_id: &'a str,
+    root_wasm: PathBuf,
+}
+
+impl<'a> InstallRootWasmOperation<'a> {
+    const fn new(
+        icp_root: &'a Path,
+        network: &'a str,
+        root_canister_id: &'a str,
+        root_wasm: PathBuf,
+    ) -> Self {
+        Self {
+            icp_root,
+            network,
+            root_canister_id,
+            root_wasm,
+        }
+    }
+
+    fn evidence(&self) -> Vec<String> {
+        vec![
+            format!("root_canister:{}", self.root_canister_id),
+            format!("root_wasm:{}", self.root_wasm.display()),
+        ]
+    }
+
+    fn execute(&self) -> Result<(), Box<dyn std::error::Error>> {
+        reinstall_root_wasm(
+            self.icp_root,
+            self.network,
+            self.root_canister_id,
+            &self.root_wasm,
+        )
+    }
+}
+
+struct EnsureRootCyclesOperation<'a> {
+    icp_root: &'a Path,
+    network: &'a str,
+    root_canister_id: &'a str,
+    phase_label: &'a str,
+}
+
+impl<'a> EnsureRootCyclesOperation<'a> {
+    const fn new(
+        icp_root: &'a Path,
+        network: &'a str,
+        root_canister_id: &'a str,
+        phase_label: &'a str,
+    ) -> Self {
+        Self {
+            icp_root,
+            network,
+            root_canister_id,
+            phase_label,
+        }
+    }
+
+    fn evidence(&self) -> Vec<String> {
+        vec![
+            format!("root_canister:{}", self.root_canister_id),
+            format!("minimum_cycles:{LOCAL_ROOT_MIN_READY_CYCLES}"),
+            format!("funding_phase:{}", self.phase_label),
+        ]
+    }
+
+    fn execute(&self) -> Result<(), Box<dyn std::error::Error>> {
+        ensure_local_root_min_cycles(
+            self.icp_root,
+            self.network,
+            self.root_canister_id,
+            self.phase_label,
+        )
+    }
 }
 
 fn write_completed_install_phase_receipt(
@@ -1070,6 +1136,42 @@ fn write_current_install_execution_preflight_receipt(
         return Err(format!("deployment execution preflight blocked install: {details}").into());
     }
     Ok(path)
+}
+
+struct StageReleaseSetOperation<'a> {
+    icp_root: &'a Path,
+    network: &'a str,
+    root_canister_id: &'a str,
+    manifest: RootReleaseSetManifest,
+}
+
+impl<'a> StageReleaseSetOperation<'a> {
+    const fn new(
+        icp_root: &'a Path,
+        network: &'a str,
+        root_canister_id: &'a str,
+        manifest: RootReleaseSetManifest,
+    ) -> Self {
+        Self {
+            icp_root,
+            network,
+            root_canister_id,
+            manifest,
+        }
+    }
+
+    fn evidence(&self, manifest_path: &Path) -> Vec<String> {
+        current_install_staging_evidence(self.root_canister_id, manifest_path, &self.manifest)
+    }
+
+    fn execute(&self) -> Result<(), Box<dyn std::error::Error>> {
+        stage_root_release_set(
+            self.icp_root,
+            self.network,
+            self.root_canister_id,
+            &self.manifest,
+        )
+    }
 }
 
 fn current_install_execution_preflight_evidence(

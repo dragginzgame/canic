@@ -23,8 +23,18 @@ inspect only the files needed for the current task.
 
 ## Recent Work
 
-- Current unreleased 0.43 work adds shared deployment receipt status
-  classification. Generic deployment receipt construction now derives
+- `0.43.6` adds a narrow testkit preflight
+  context and validation coverage proving the harness path consumes the same
+  `DeploymentPlanV1`, safety report, authority plan, and phase list as the
+  current CLI executor. This satisfies the first harness-level plan-shape gate
+  without making `canic-host` own test harness execution.
+- `0.43.6` also routes current-install root wasm installation,
+  root funding, and `stage_release_set` through narrow operation values that
+  own their phase evidence and execution calls. This keeps current behavior
+  intact while moving those phases out of ad hoc installer closure wiring and
+  closer to the executor operation boundary.
+- `0.43.5` hardens shared deployment receipt status classification. Generic
+  deployment receipt construction now derives
   `FailedBeforeMutation`, `FailedAfterMutation`, and `PartiallyApplied` from
   command results plus role-phase evidence, giving later executor extraction a
   single receipt-status boundary instead of ad hoc current-install decisions.
@@ -132,8 +142,8 @@ inspect only the files needed for the current task.
   README badges now expose both lanes; `ic-testkit` has its own matching
   `rust-toolchain.toml`.
 - Moved the reusable PocketIC helper surface out of the Canic workspace into
-  the sibling `../ic-testkit` crate. Canic now consumes it through the
-  workspace `ic-testkit` path dependency, while Canic-specific root/auth
+  the sibling `ic-testkit` repository. Canic now consumes it through the
+  workspace `ic-testkit` dependency, while Canic-specific root/auth
   fixtures remain in `canic-testing-internal`.
 - `0.42.10` is live. Continued authority receipt hardening after it:
   standalone dry-run receipt construction now rejects unsupported source
@@ -543,10 +553,10 @@ inspect only the files needed for the current task.
   macros to the generic runtime, removes the stale Canic-local declaration
   registry, and keeps only the Canic-owned eager TLS touch queue for framework
   storage wrappers.
-- Continued `0.40.2` by making `canic-testkit` standalone from Canic runtime
-  crates. The published testkit now keeps only generic PocketIC/artifact/call
-  helpers, uses its own transport error type, and leaves Canic-specific
-  role/init/readiness fixtures in unpublished `canic-testing-internal`.
+- Continued `0.40.2` by separating reusable PocketIC helpers from Canic runtime
+  crates. The reusable helper boundary now lives in sibling `ic-testkit`, while
+  Canic-specific role/init/readiness fixtures stay in unpublished
+  `canic-testing-internal`.
 - Started `0.40.3` by adding protected-internal-call guardrails. The protected
   wasm-store update method list now lives in `canic-core::protocol`, the
   control-plane caller path consumes that canonical classifier, and a source
@@ -1421,7 +1431,7 @@ inspect only the files needed for the current task.
 - `cargo test -p canic --test protocol_surface`
 - `git diff --check`
 - `cargo fmt --all`
-- `bash -n scripts/ci/build-ci-wasm-artifacts.sh scripts/ci/wasm-audit-report.sh`
+- wasm CI shell helpers syntax check
 - `cargo check -p canic-host --examples`
 - `cargo check -p canic-host --examples -p canic-tests`
 - `cargo test -p canic-host canister_build -- --nocapture`
@@ -1498,7 +1508,7 @@ inspect only the files needed for the current task.
 - `cargo run -q -p canic-cli --bin canic -- backup create demo --dry-run --out /tmp/canic-backup-plan-demo`
 - `cargo run -q -p canic-cli --bin canic -- backup create demo --subtree app --dry-run --out /tmp/canic-backup-plan-demo-app`
 - `cargo run -q -p canic-cli --bin canic -- backup list`
-- `cargo package -p canic -p canic-backup -p canic-cli -p canic-control-plane -p canic-core -p canic-host -p canic-macros -p canic-memory -p canic-testkit -p canic-wasm-store --locked --allow-dirty`
+- `cargo package -p canic -p canic-backup -p canic-cli -p canic-control-plane -p canic-core -p canic-host -p canic-macros -p canic-wasm-store --locked --allow-dirty`
 - `cargo metadata --no-deps --format-version 1`
 - `cargo run -q -p canic-cli --bin canic -- backup status --dir backups/fleet-demo-20260510-222116`
 - `cargo test -p canic-cli endpoints -- --nocapture`

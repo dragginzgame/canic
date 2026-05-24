@@ -105,12 +105,12 @@ pub fn setup_root_topology(
 }
 
 // Wait until root reports `canic_ready`.
-pub fn wait_for_bootstrap(spec: &RootBaselineSpec<'_>, pic: &Pic, root_id: Principal) {
+pub(super) fn wait_for_bootstrap(spec: &RootBaselineSpec<'_>, pic: &Pic, root_id: Principal) {
     pic.wait_for_ready(root_id, spec.bootstrap_tick_limit, "root bootstrap");
 }
 
 // Wait until every child canister reports `canic_ready`.
-pub fn wait_for_children_ready(
+pub(super) fn wait_for_children_ready(
     spec: &RootBaselineSpec<'_>,
     pic: &Pic,
     subnet_index: &HashMap<CanisterRole, Principal>,
@@ -126,7 +126,7 @@ pub fn wait_for_children_ready(
 }
 
 // Wait until every registered child PID that will be snapshotted is ready.
-pub fn wait_for_snapshot_pids_ready(
+pub(super) fn wait_for_snapshot_pids_ready(
     spec: &RootBaselineSpec<'_>,
     pic: &Pic,
     snapshot_pids: &[Principal],

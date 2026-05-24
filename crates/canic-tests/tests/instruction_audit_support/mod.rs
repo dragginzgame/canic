@@ -1,4 +1,3 @@
-use crate::root_harness::{self, RootSetupProfile, setup_root};
 use canic::{
     Error,
     api::ic::network::NetworkApi,
@@ -35,6 +34,7 @@ use canic_testing_internal::pic::{
     install_audit_scaling_probe, install_standalone_canister, issue_delegated_token,
     request_root_delegation_provision,
 };
+use canic_tests::root::{self, RootSetupProfile, harness::setup_root};
 use ic_testkit::pic::Pic;
 use serde::Serialize;
 use std::{

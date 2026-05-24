@@ -1,6 +1,3 @@
-use crate::root::{
-    RootSetupProfile, assertions::assert_registry_parents, harness::setup_cached_root,
-};
 use canic::{
     Error,
     cdk::types::Principal,
@@ -14,6 +11,9 @@ use canic::{
 use canic_testing_internal::canister;
 use canic_testing_internal::pic::{
     CanicPicExt, create_user_shard, issue_delegated_token, request_root_delegation_provision,
+};
+use canic_tests::root::{
+    RootSetupProfile, assertions::assert_registry_parents, harness::setup_cached_root,
 };
 
 #[test]

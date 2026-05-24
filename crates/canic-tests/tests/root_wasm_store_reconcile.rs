@@ -1,8 +1,6 @@
 // Category C - Artifact / deployment test (embedded config).
 // This test relies on embedded production config by design.
 
-mod reconcile_root_harness;
-
 use candid::encode_one;
 use canic::{
     CANIC_WASM_CHUNK_BYTES, Error, cdk::utils::hash::wasm_hash, dto::error::ErrorCode, protocol,
@@ -21,12 +19,14 @@ use canic_control_plane::{
 };
 use canic_testing_internal::canister::APP;
 use canic_testing_internal::pic::CanicPicExt;
-use ic_testkit::{artifacts::workspace_root_for, pic::Pic};
-use reconcile_root_harness::setup_cached_root;
-use std::{fs, path::PathBuf};
+use canic_tests::root::{
+    RootSetupProfile, built_root_wasm_path,
+    harness::{RootSetup, setup_cached_root},
+};
+use ic_testkit::pic::Pic;
+use std::fs;
 
 const STORE_ROLLOVER_SAFETY_BYTES: u64 = 64 * 1024;
-const ROOT_WASM_RELATIVE: &str = ".icp/local/canisters/root/root.wasm.gz";
 const UPGRADE_READY_TICK_LIMIT: usize = 120;
 
 ///
@@ -84,7 +84,7 @@ fn root_post_upgrade_preserves_multi_store_current_release_binding() {
         "once rollover happens, the prior minimal store must not keep the approved canary release binding"
     );
 
-    let root_wasm = fs::read(root_wasm_path()).expect("read root wasm");
+    let root_wasm = fs::read(built_root_wasm_path()).expect("read root wasm");
     setup
         .pic
         .upgrade_canister(
@@ -353,8 +353,8 @@ fn root_retired_store_gc_finalize_and_delete_cleans_up_tracked_store() {
 }
 
 // Build the debug reference topology with the hidden small-cap store cfg, then install root.
-fn setup_root_with_small_implicit_store() -> reconcile_root_harness::RootSetup {
-    setup_cached_root()
+fn setup_root_with_small_implicit_store() -> RootSetup {
+    setup_cached_root(RootSetupProfile::ReconcileSmallStore)
 }
 
 // Retire one managed store so the GC/finalize/delete canary can drive the full lifecycle.
@@ -877,9 +877,4 @@ fn release_fixture_for_role(
 // Return one release that is actually staged by the reconcile small-store baseline.
 fn managed_app_template_id() -> TemplateId {
     TemplateId::from("embedded:app".to_string())
-}
-
-// Resolve the currently built root wasm artifact used for PocketIC upgrades.
-fn root_wasm_path() -> PathBuf {
-    workspace_root_for(env!("CARGO_MANIFEST_DIR")).join(ROOT_WASM_RELATIVE)
 }

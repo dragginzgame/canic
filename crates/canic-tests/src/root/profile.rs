@@ -1,11 +1,10 @@
 use canic_testing_internal::pic::{CanicWasmBuildProfile, RootBaselineMetadata, RootBaselineSpec};
 use ic_testkit::{artifacts::workspace_root_for, pic::CachedPicBaseline};
-use std::{path::PathBuf, sync::Mutex};
+use std::{
+    path::{Path, PathBuf},
+    sync::Mutex,
+};
 
-/// Default location of the root wasm relative to the workspace root.
-const ROOT_WASM_RELATIVE: &str = ".icp/local/canisters/root/root.wasm.gz";
-const ROOT_WASM_ARTIFACT_RELATIVE: &str = ".icp/local/canisters/root/root.wasm.gz";
-const ROOT_RELEASE_ARTIFACTS_RELATIVE: &str = ".icp/local/canisters";
 const ROOT_TOPOLOGY_RELEASE_ROLES: &[&str] = &[
     "app",
     "scale_hub",
@@ -16,7 +15,14 @@ const ROOT_TOPOLOGY_RELEASE_ROLES: &[&str] = &[
 const ROOT_CAPABILITY_RELEASE_ROLES: &[&str] = &["app", "scale_hub", "test"];
 const ROOT_SCALING_RELEASE_ROLES: &[&str] = &["scale_hub", "scale_replica"];
 const ROOT_SHARDING_RELEASE_ROLES: &[&str] = &["test", "user_hub", "user_shard"];
-const ICP_BUILD_LOCK_RELATIVE: &str = ".icp/canic-tests-build.lock";
+const ROOT_RECONCILE_RELEASE_ROLES: &[&str] = &[
+    "app",
+    "scale_hub",
+    "scale_replica",
+    "user_hub",
+    "user_shard",
+];
+const TEST_SMALL_STORE_RUSTFLAGS: &str = "--cfg canic_test_small_wasm_store";
 const BOOTSTRAP_TICK_LIMIT: usize = 120;
 const ROOT_SETUP_MAX_ATTEMPTS: usize = 2;
 const ROOT_WASM_WATCH_PATHS: &[&str] = &[
@@ -35,6 +41,8 @@ static ROOT_SCALING_BASELINE: Mutex<Option<CachedPicBaseline<RootBaselineMetadat
     Mutex::new(None);
 static ROOT_SHARDING_BASELINE: Mutex<Option<CachedPicBaseline<RootBaselineMetadata>>> =
     Mutex::new(None);
+static ROOT_RECONCILE_SMALL_STORE_BASELINE: Mutex<Option<CachedPicBaseline<RootBaselineMetadata>>> =
+    Mutex::new(None);
 
 #[derive(Clone, Copy)]
 pub enum RootSetupProfile {
@@ -42,6 +50,7 @@ pub enum RootSetupProfile {
     Capability,
     Scaling,
     Sharding,
+    ReconcileSmallStore,
 }
 
 impl RootSetupProfile {
@@ -51,6 +60,7 @@ impl RootSetupProfile {
             Self::Capability => "cached root capability baseline",
             Self::Scaling => "cached root scaling baseline",
             Self::Sharding => "cached root sharding baseline",
+            Self::ReconcileSmallStore => "cached root reconcile small-store baseline",
         }
     }
 
@@ -60,6 +70,16 @@ impl RootSetupProfile {
             Self::Capability => ROOT_CAPABILITY_RELEASE_ROLES,
             Self::Scaling => ROOT_SCALING_RELEASE_ROLES,
             Self::Sharding => ROOT_SHARDING_RELEASE_ROLES,
+            Self::ReconcileSmallStore => ROOT_RECONCILE_RELEASE_ROLES,
+        }
+    }
+
+    const fn build_profile(self) -> CanicWasmBuildProfile {
+        match self {
+            Self::ReconcileSmallStore => CanicWasmBuildProfile::Debug,
+            Self::Topology | Self::Capability | Self::Scaling | Self::Sharding => {
+                CanicWasmBuildProfile::Fast
+            }
         }
     }
 
@@ -71,6 +91,7 @@ impl RootSetupProfile {
             Self::Capability => &ROOT_CAPABILITY_BASELINE,
             Self::Scaling => &ROOT_SCALING_BASELINE,
             Self::Sharding => &ROOT_SHARDING_BASELINE,
+            Self::ReconcileSmallStore => &ROOT_RECONCILE_SMALL_STORE_BASELINE,
         }
     }
 
@@ -84,6 +105,11 @@ fn workspace_root() -> PathBuf {
     workspace_root_for(env!("CARGO_MANIFEST_DIR"))
 }
 
+#[must_use]
+pub fn built_root_wasm_path() -> PathBuf {
+    root_wasm_path(&workspace_root())
+}
+
 // Map one test profile to its embedded config override without leaking relative
 // crate-local paths into the shared build environment.
 fn profile_build_extra_env(
@@ -92,24 +118,37 @@ fn profile_build_extra_env(
 ) -> Vec<(String, String)> {
     match profile {
         RootSetupProfile::Topology => Vec::new(),
+        RootSetupProfile::ReconcileSmallStore => vec![(
+            "RUSTFLAGS".to_string(),
+            TEST_SMALL_STORE_RUSTFLAGS.to_string(),
+        )],
         RootSetupProfile::Capability => vec![(
             "CANIC_CONFIG_PATH".to_string(),
             workspace_root
-                .join("fleets/test/test-configs/root-capability.toml")
+                .join("fleets")
+                .join("test")
+                .join("test-configs")
+                .join("root-capability.toml")
                 .display()
                 .to_string(),
         )],
         RootSetupProfile::Scaling => vec![(
             "CANIC_CONFIG_PATH".to_string(),
             workspace_root
-                .join("fleets/test/test-configs/root-scaling.toml")
+                .join("fleets")
+                .join("test")
+                .join("test-configs")
+                .join("root-scaling.toml")
                 .display()
                 .to_string(),
         )],
         RootSetupProfile::Sharding => vec![(
             "CANIC_CONFIG_PATH".to_string(),
             workspace_root
-                .join("fleets/test/test-configs/root-sharding.toml")
+                .join("fleets")
+                .join("test")
+                .join("test-configs")
+                .join("root-sharding.toml")
                 .display()
                 .to_string(),
         )],
@@ -123,7 +162,7 @@ fn baseline_spec_for_profile(profile: RootSetupProfile) -> RootBaselineSpec<'sta
     baseline_spec_for_roles_owned_env(
         workspace_root,
         profile.release_roles(),
-        CanicWasmBuildProfile::Fast,
+        profile.build_profile(),
         build_extra_env,
     )
 }
@@ -151,14 +190,14 @@ fn baseline_spec_for_roles_owned_env(
     }
 
     RootBaselineSpec {
-        progress_prefix: "root_harness",
-        workspace_root,
-        root_wasm_relative: ROOT_WASM_RELATIVE,
-        root_wasm_artifact_relative: ROOT_WASM_ARTIFACT_RELATIVE,
-        root_release_artifacts_relative: ROOT_RELEASE_ARTIFACTS_RELATIVE,
+        progress_prefix: "root_setup",
+        root_wasm_path: root_wasm_path(&workspace_root),
+        root_wasm_artifact_path: root_wasm_path(&workspace_root),
+        root_release_artifacts_dir: root_release_artifacts_dir(&workspace_root),
         artifact_watch_paths: ROOT_WASM_WATCH_PATHS,
         release_roles,
-        icp_build_lock_relative: ICP_BUILD_LOCK_RELATIVE,
+        icp_build_lock_path: icp_build_lock_path(&workspace_root),
+        workspace_root,
         build_network: "local",
         build_profile,
         build_extra_env,
@@ -168,4 +207,18 @@ fn baseline_spec_for_roles_owned_env(
         root_release_chunk_bytes: canic::CANIC_WASM_CHUNK_BYTES,
         package_version: env!("CARGO_PKG_VERSION"),
     }
+}
+
+fn root_wasm_path(workspace_root: &Path) -> PathBuf {
+    root_release_artifacts_dir(workspace_root)
+        .join("root")
+        .join("root.wasm.gz")
+}
+
+fn root_release_artifacts_dir(workspace_root: &Path) -> PathBuf {
+    workspace_root.join(".icp").join("local").join("canisters")
+}
+
+fn icp_build_lock_path(workspace_root: &Path) -> PathBuf {
+    workspace_root.join(".icp").join("canic-tests-build.lock")
 }

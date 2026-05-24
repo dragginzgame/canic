@@ -6,4 +6,4 @@ pub mod harness;
 mod profile;
 pub mod workers;
 
-pub use profile::RootSetupProfile;
+pub use profile::{RootSetupProfile, built_root_wasm_path};

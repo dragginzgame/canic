@@ -14,6 +14,11 @@ present.
 
 ## [0.43.x] - 2026-05-24 - Backend-agnostic execution
 
+- `0.43.6` adds a testkit preflight context that validates the same
+  `DeploymentPlanV1` shape as the current CLI executor, and moves current
+  install root wasm installation, root funding, and release-set staging through
+  narrow operation values.
+
 - `0.43.5` hardens deployment receipt status semantics so failed execution
   receipts distinguish pre-mutation, post-mutation, and partial application
   from role-phase evidence, and resume checks reject contradictory receipts.

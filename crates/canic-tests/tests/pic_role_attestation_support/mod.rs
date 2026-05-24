@@ -29,5 +29,5 @@ pub use attestation::{
     encode_role_attestation_capability_proof, issue_self_attestation, issue_self_attestation_as,
     root_capability_hash,
 };
-pub use calls::{PicBorrow, test_progress, update_call_as};
+pub use calls::{test_progress, update_call_as};
 pub use metrics::{metric_count_for_labels, query_metric_entries};

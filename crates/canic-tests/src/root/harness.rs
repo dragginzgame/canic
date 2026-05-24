@@ -23,7 +23,7 @@ use super::profile::RootSetupProfile;
 static ROOT_SETUP_SERIAL: Mutex<()> = Mutex::new(());
 
 fn test_progress(phase: &str) {
-    eprintln!("[root_harness] {phase}");
+    eprintln!("[root_setup] {phase}");
     let _ = std::io::stderr().flush();
 }
 
@@ -70,11 +70,13 @@ impl DerefMut for RootPicHandle {
 }
 
 /// Acquire an isolated fresh root setup for one named root test profile.
+#[must_use]
 pub fn setup_root(profile: RootSetupProfile) -> RootSetup {
     setup_root_fresh(profile)
 }
 
 /// Acquire a cached root setup for one named root test profile.
+#[must_use]
 pub fn setup_cached_root(profile: RootSetupProfile) -> RootSetup {
     setup_root_cached(profile)
 }

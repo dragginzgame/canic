@@ -1,8 +1,3 @@
-use crate::root::{
-    RootSetupProfile,
-    harness::{RootSetup, setup_cached_root},
-    workers::create_worker,
-};
 use canic::{
     Error,
     cdk::types::Principal,
@@ -23,6 +18,11 @@ use canic::{
     protocol,
 };
 use canic_testing_internal::canister;
+use canic_tests::root::{
+    RootSetupProfile,
+    harness::{RootSetup, setup_cached_root},
+    workers::create_worker,
+};
 use std::convert::TryFrom;
 use std::time::Duration;
 

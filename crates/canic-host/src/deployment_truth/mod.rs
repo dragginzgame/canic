@@ -28,9 +28,10 @@ pub use authority::{
 };
 pub use executor::{
     CURRENT_CLI_EXECUTOR_CAPABILITIES, CurrentCliDeploymentExecutor,
-    DeploymentExecutionPreflightError, DeploymentExecutor, current_cli_execution_context,
-    deployment_execution_preflight, deployment_execution_preflight_from_check,
-    has_executor_capabilities, missing_executor_capabilities,
+    DeploymentExecutionPreflightError, DeploymentExecutor, TESTKIT_PREFLIGHT_CAPABILITIES,
+    TestkitPreflightContext, current_cli_execution_context, deployment_execution_preflight,
+    deployment_execution_preflight_from_check, has_executor_capabilities,
+    missing_executor_capabilities, testkit_execution_context,
     validate_deployment_execution_preflight, validate_deployment_execution_preflight_for_check,
 };
 pub use model::{
