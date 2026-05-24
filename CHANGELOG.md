@@ -12,11 +12,10 @@ present.
 
 ## Unreleased
 
-- Removed the standalone `canic-cdk` workspace crate. The public `canic::cdk`
-  facade now comes from `canic-core::cdk`, and remaining internal users import
-  CDK helpers through Canic core or local narrow helpers.
-
 ## [0.43.x] - 2026-05-24 - Backend-agnostic execution
+
+- `0.43.3` removes the standalone `canic-cdk` workspace crate while preserving
+  the public `canic::cdk` facade through `canic-core::cdk`.
 
 - `0.43.2` hardens passive execution-preflight evidence with provenance,
   consistency, capability, and JSON-shape validation.
