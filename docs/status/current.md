@@ -21,6 +21,18 @@ inspect only the files needed for the current task.
 
 ## Recent Work
 
+- `0.42.14` hardens the authority closeout boundary without adding controller
+  mutation. Authority CLI help now documents that successful command exit means
+  a local dry-run artifact was produced, not that controller state changed or
+  that the whole deployment is safe. The 0.42 design/status docs now clarify
+  that authority `Safe` is authority-scoped, and that dry-run receipts/evidence
+  are structural self-consistency artifacts rather than tamper-evident proof.
+- Added source-scan tests to keep authority CLI and deployment-truth authority
+  paths free of controller mutation primitives, plus JSON shape tests that pin
+  the `Authority*V1` artifact field names and enum strings used by automation.
+- Added explicit `Authority*V1` schema-governance rules so future authority
+  changes do not silently rename fields, reinterpret existing fields, or blur
+  dry-run receipts with any later controller-mutating receipt surface.
 - Added a receipt-only host helper for `canic deploy authority receipt`, so the
   CLI no longer builds a full authority evidence bundle just to extract the
   receipt. The receipt output still uses the same report/check provenance

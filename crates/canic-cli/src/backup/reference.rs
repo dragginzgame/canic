@@ -1,7 +1,6 @@
 use super::{BackupCommandError, BackupListEntry, BackupListOptions};
 use crate::{
-    backup::labels::execution_layout_status,
-    support::path_stamp::unix_timestamp_marker_from_directory_stamp,
+    backup::labels::execution_layout_status, support::path_stamp::backup_directory_stamp_to_unix,
 };
 use canic_backup::execution::BackupExecutionJournal;
 use canic_backup::persistence::BackupLayout;
@@ -190,7 +189,8 @@ fn run_id_created_at(run_id: &str) -> Option<String> {
     let mut parts = run_id.rsplit('-');
     let time = parts.next()?;
     let date = parts.next()?;
-    unix_timestamp_marker_from_directory_stamp(&format!("{date}-{time}"))
+    backup_directory_stamp_to_unix(&format!("{date}-{time}"))
+        .map(|seconds| format!("unix:{seconds}"))
 }
 
 fn created_at_sort_key(created_at: &str) -> Option<u64> {

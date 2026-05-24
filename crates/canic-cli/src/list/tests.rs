@@ -1,6 +1,7 @@
 use super::*;
 use canic_host::registry::parse_registry_entries;
 use canic_host::replica_query;
+use canic_host::table::{ColumnAlign, render_separator, render_table_row};
 use options::ListSource;
 use render::ReadyStatus;
 use serde_json::json;
@@ -15,6 +16,24 @@ const HASH: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789ab
 const HASH_PREFIX: &str = "01234567";
 const VARIANT_HASH: &str = "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789";
 const VARIANT_HASH_PREFIX: &str = "abcdef01";
+const TEST_REGISTRY_ALIGNMENTS: [ColumnAlign; 7] = [
+    ColumnAlign::Left,
+    ColumnAlign::Left,
+    ColumnAlign::Left,
+    ColumnAlign::Left,
+    ColumnAlign::Left,
+    ColumnAlign::Right,
+    ColumnAlign::Right,
+];
+
+fn render_registry_table_row(row: &[impl AsRef<str>], widths: &[usize; 7]) -> String {
+    render_table_row(row, widths, &TEST_REGISTRY_ALIGNMENTS)
+}
+
+fn render_registry_separator(widths: &[usize; 7]) -> String {
+    render_separator(widths)
+}
+
 // Ensure list options parse live registry queries.
 #[test]
 fn parses_live_list_options() {

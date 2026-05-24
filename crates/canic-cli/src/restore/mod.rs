@@ -39,7 +39,7 @@ use io::{
 };
 
 pub use error::RestoreCommandError;
-pub use options::{
+use options::{
     RestoreApplyOptions, RestorePlanOptions, RestorePrepareOptions, RestoreRunOptions,
     RestoreStatusOptions,
 };
@@ -173,7 +173,7 @@ fn restore_prepare(
     })
 }
 
-pub fn plan_restore(options: &RestorePlanOptions) -> Result<RestorePlan, RestoreCommandError> {
+fn plan_restore(options: &RestorePlanOptions) -> Result<RestorePlan, RestoreCommandError> {
     verify_backup_layout_if_required(options)?;
 
     let manifest = read_manifest_source(options)?;
@@ -182,7 +182,7 @@ pub fn plan_restore(options: &RestorePlanOptions) -> Result<RestorePlan, Restore
     RestorePlanner::plan(&manifest, mapping.as_ref()).map_err(RestoreCommandError::from)
 }
 
-pub fn restore_apply_dry_run(
+fn restore_apply_dry_run(
     options: &RestoreApplyOptions,
 ) -> Result<RestoreApplyDryRun, RestoreCommandError> {
     let plan = read_plan(&restore_apply_plan_path(options)?)?;
@@ -194,28 +194,28 @@ pub fn restore_apply_dry_run(
     Ok(RestoreApplyDryRun::from_plan(&plan))
 }
 
-pub fn restore_run_dry_run(
+fn restore_run_dry_run(
     options: &RestoreRunOptions,
 ) -> Result<RestoreRunResponse, RestoreCommandError> {
     canic_backup::restore::restore_run_dry_run(&restore_runner_config(options)?)
         .map_err(RestoreCommandError::from)
 }
 
-pub fn restore_run_unclaim_pending(
+fn restore_run_unclaim_pending(
     options: &RestoreRunOptions,
 ) -> Result<RestoreRunResponse, RestoreCommandError> {
     canic_backup::restore::restore_run_unclaim_pending(&restore_runner_config(options)?)
         .map_err(RestoreCommandError::from)
 }
 
-pub fn restore_run_retry_failed(
+fn restore_run_retry_failed(
     options: &RestoreRunOptions,
 ) -> Result<RestoreRunResponse, RestoreCommandError> {
     canic_backup::restore::restore_run_retry_failed(&restore_runner_config(options)?)
         .map_err(RestoreCommandError::from)
 }
 
-pub fn restore_status(
+fn restore_status(
     options: &RestoreStatusOptions,
 ) -> Result<RestoreRunResponse, RestoreCommandError> {
     canic_backup::restore::restore_run_dry_run(&restore_status_runner_config(options)?)

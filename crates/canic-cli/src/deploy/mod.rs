@@ -94,7 +94,8 @@ Examples:
   canic --network local deploy authority check --profile fast demo
 
 0.42 authority commands are dry-run reports. They do not apply controller
-changes.";
+changes. A successful command means the local authority artifact was produced,
+not that the deployment is globally safe or that controller state was changed.";
 const DEPLOY_AUTHORITY_EVIDENCE_HELP_AFTER: &str = "\
 Examples:
   canic deploy authority evidence demo
@@ -102,7 +103,9 @@ Examples:
   canic --network local deploy authority evidence --profile fast demo
 
 Prints AuthorityDryRunEvidenceV1 JSON by default, or a human-readable
-read-only summary with --format text. No controller changes are attempted.";
+read-only summary with --format text. No controller changes are attempted.
+Success means evidence generation succeeded, not that every deployment safety
+check is clean.";
 const DEPLOY_AUTHORITY_CHECK_HELP_AFTER: &str = "\
 Examples:
   canic deploy authority check demo
@@ -111,7 +114,7 @@ Examples:
 
 Prints the local AuthorityReconciliationPlanV1 JSON by default, or a
 human-readable read-only summary with --format text. No controller changes are
-attempted.";
+attempted. Success means the local plan was produced.";
 const DEPLOY_AUTHORITY_REPORT_HELP_AFTER: &str = "\
 Examples:
   canic deploy authority report demo
@@ -119,7 +122,9 @@ Examples:
   canic --network local deploy authority report --profile fast demo
 
 Prints the local AuthorityReportV1 JSON by default, or a human-readable
-read-only summary with --format text. No controller changes are attempted.";
+read-only summary with --format text. No controller changes are attempted.
+Authority status is authority-scoped; it is not a whole-deployment safety
+verdict.";
 const DEPLOY_AUTHORITY_RECEIPT_HELP_AFTER: &str = "\
 Examples:
   canic deploy authority receipt demo
@@ -127,7 +132,9 @@ Examples:
   canic --network local deploy authority receipt --profile fast demo
 
 Prints an evidence-only AuthorityReceiptV1 JSON by default, or a human-readable
-read-only summary with --format text. No controller changes are attempted.";
+read-only summary with --format text. No controller changes are attempted.
+Success means the dry-run receipt was produced with zero attempted controller
+actions.";
 const DEPLOY_RESUME_REPORT_HELP_AFTER: &str = "\
 Examples:
   canic deploy resume-report demo
@@ -1084,10 +1091,50 @@ mod tests {
         assert!(help.contains("Print the local authority dry-run evidence"));
         assert!(help.contains("Print the local authority reconciliation report"));
         assert!(help.contains("Print the local authority dry-run receipt"));
+        assert!(
+            help.contains("A successful command means the local authority artifact was produced")
+        );
+        assert!(help.contains("not that the deployment is globally safe"));
+        assert!(help.contains("controller state"));
+        assert!(help.contains("was changed"));
         assert!(!help.contains("authority reconciliation plan JSON"));
         assert!(!help.contains("authority dry-run evidence JSON"));
         assert!(!help.contains("authority reconciliation report JSON"));
         assert!(!help.contains("authority dry-run receipt JSON"));
+    }
+
+    #[test]
+    fn deploy_authority_leaf_help_documents_exit_status_scope() {
+        let report_help = authority_report_usage();
+        let receipt_help = authority_receipt_usage();
+        let evidence_help = authority_evidence_usage();
+
+        assert!(report_help.contains("Authority status is authority-scoped"));
+        assert!(report_help.contains("whole-deployment safety"));
+        assert!(receipt_help.contains("zero attempted"));
+        assert!(receipt_help.contains("actions."));
+        assert!(evidence_help.contains("evidence generation succeeded"));
+    }
+
+    #[test]
+    fn deploy_authority_path_has_no_controller_mutation_primitives() {
+        let source = include_str!("mod.rs");
+        let authority_source = source_between(source, "fn run_authority<I>", "fn run_plan<I>");
+        for forbidden in [
+            "update_settings",
+            "install_code",
+            "create_canister",
+            "delete_canister",
+            "stop_canister",
+            "uninstall_code",
+            "provisional_create_canister",
+            "dfx",
+        ] {
+            assert!(
+                !authority_source.contains(forbidden),
+                "authority CLI path must stay dry-run; found forbidden token {forbidden}"
+            );
+        }
     }
 
     #[test]
@@ -1327,6 +1374,13 @@ mod tests {
             Err(DeployCommandError::Usage(message))
                 if message.contains("invalid authority output format: toml")
         ));
+    }
+
+    fn source_between<'a>(source: &'a str, start: &str, end: &str) -> &'a str {
+        let start_index = source.find(start).expect("source start marker");
+        let rest = &source[start_index..];
+        let end_index = rest.find(end).expect("source end marker");
+        &rest[..end_index]
     }
 
     #[test]

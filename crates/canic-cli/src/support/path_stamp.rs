@@ -61,10 +61,6 @@ pub fn backup_list_timestamp(seconds: u64) -> String {
     format!("{day:02}/{month:02}/{year:04} {hour:02}:{minute:02}")
 }
 
-pub fn unix_timestamp_marker_from_directory_stamp(stamp: &str) -> Option<String> {
-    backup_directory_stamp_to_unix(stamp).map(|seconds| format!("unix:{seconds}"))
-}
-
 pub fn file_safe_component(value: &str) -> String {
     let cleaned = value
         .chars()

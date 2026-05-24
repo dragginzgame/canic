@@ -37,18 +37,18 @@ Examples:
 ///
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct RestorePlanOptions {
-    pub backup_ref: Option<String>,
-    pub manifest: Option<PathBuf>,
-    pub backup_dir: Option<PathBuf>,
-    pub mapping: Option<PathBuf>,
-    pub out: Option<PathBuf>,
-    pub require_verified: bool,
-    pub require_restore_ready: bool,
+pub(super) struct RestorePlanOptions {
+    pub(super) backup_ref: Option<String>,
+    pub(super) manifest: Option<PathBuf>,
+    pub(super) backup_dir: Option<PathBuf>,
+    pub(super) mapping: Option<PathBuf>,
+    pub(super) out: Option<PathBuf>,
+    pub(super) require_verified: bool,
+    pub(super) require_restore_ready: bool,
 }
 
 impl RestorePlanOptions {
-    pub fn parse<I>(args: I) -> Result<Self, RestoreCommandError>
+    pub(super) fn parse<I>(args: I) -> Result<Self, RestoreCommandError>
     where
         I: IntoIterator<Item = OsString>,
     {
@@ -98,19 +98,19 @@ pub(super) fn restore_plan_command() -> ClapCommand {
 ///
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct RestorePrepareOptions {
-    pub backup_ref: Option<String>,
-    pub backup_dir: Option<PathBuf>,
-    pub mapping: Option<PathBuf>,
-    pub out: Option<PathBuf>,
-    pub plan_out: Option<PathBuf>,
-    pub journal_out: Option<PathBuf>,
-    pub require_verified: bool,
-    pub require_restore_ready: bool,
+pub(super) struct RestorePrepareOptions {
+    pub(super) backup_ref: Option<String>,
+    pub(super) backup_dir: Option<PathBuf>,
+    pub(super) mapping: Option<PathBuf>,
+    pub(super) out: Option<PathBuf>,
+    pub(super) plan_out: Option<PathBuf>,
+    pub(super) journal_out: Option<PathBuf>,
+    pub(super) require_verified: bool,
+    pub(super) require_restore_ready: bool,
 }
 
 impl RestorePrepareOptions {
-    pub fn parse<I>(args: I) -> Result<Self, RestoreCommandError>
+    pub(super) fn parse<I>(args: I) -> Result<Self, RestoreCommandError>
     where
         I: IntoIterator<Item = OsString>,
     {
@@ -161,17 +161,17 @@ pub(super) fn restore_prepare_command() -> ClapCommand {
 ///
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct RestoreApplyOptions {
-    pub backup_ref: Option<String>,
-    pub plan: Option<PathBuf>,
-    pub backup_dir: Option<PathBuf>,
-    pub out: Option<PathBuf>,
-    pub journal_out: Option<PathBuf>,
-    pub dry_run: bool,
+pub(super) struct RestoreApplyOptions {
+    pub(super) backup_ref: Option<String>,
+    pub(super) plan: Option<PathBuf>,
+    pub(super) backup_dir: Option<PathBuf>,
+    pub(super) out: Option<PathBuf>,
+    pub(super) journal_out: Option<PathBuf>,
+    pub(super) dry_run: bool,
 }
 
 impl RestoreApplyOptions {
-    pub fn parse<I>(args: I) -> Result<Self, RestoreCommandError>
+    pub(super) fn parse<I>(args: I) -> Result<Self, RestoreCommandError>
     where
         I: IntoIterator<Item = OsString>,
     {
@@ -222,24 +222,24 @@ pub(super) fn restore_apply_command() -> ClapCommand {
     clippy::struct_excessive_bools,
     reason = "CLI runner options mirror mutually exclusive mode flags and operator guard flags"
 )]
-pub struct RestoreRunOptions {
-    pub backup_ref: Option<String>,
-    pub journal: Option<PathBuf>,
-    pub icp: String,
-    pub network: Option<String>,
-    pub out: Option<PathBuf>,
-    pub dry_run: bool,
-    pub execute: bool,
-    pub retry_failed: bool,
-    pub unclaim_pending: bool,
-    pub max_steps: Option<usize>,
-    pub require_ready: bool,
-    pub require_complete: bool,
-    pub require_no_attention: bool,
+pub(super) struct RestoreRunOptions {
+    pub(super) backup_ref: Option<String>,
+    pub(super) journal: Option<PathBuf>,
+    pub(super) icp: String,
+    pub(super) network: Option<String>,
+    pub(super) out: Option<PathBuf>,
+    pub(super) dry_run: bool,
+    pub(super) execute: bool,
+    pub(super) retry_failed: bool,
+    pub(super) unclaim_pending: bool,
+    pub(super) max_steps: Option<usize>,
+    pub(super) require_ready: bool,
+    pub(super) require_complete: bool,
+    pub(super) require_no_attention: bool,
 }
 
 impl RestoreRunOptions {
-    pub fn parse<I>(args: I) -> Result<Self, RestoreCommandError>
+    pub(super) fn parse<I>(args: I) -> Result<Self, RestoreCommandError>
     where
         I: IntoIterator<Item = OsString>,
     {
@@ -307,19 +307,19 @@ pub(super) fn restore_run_command() -> ClapCommand {
 ///
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct RestoreStatusOptions {
-    pub backup_ref: Option<String>,
-    pub journal: Option<PathBuf>,
-    pub icp: String,
-    pub network: Option<String>,
-    pub out: Option<PathBuf>,
-    pub require_ready: bool,
-    pub require_complete: bool,
-    pub require_no_attention: bool,
+pub(super) struct RestoreStatusOptions {
+    pub(super) backup_ref: Option<String>,
+    pub(super) journal: Option<PathBuf>,
+    pub(super) icp: String,
+    pub(super) network: Option<String>,
+    pub(super) out: Option<PathBuf>,
+    pub(super) require_ready: bool,
+    pub(super) require_complete: bool,
+    pub(super) require_no_attention: bool,
 }
 
 impl RestoreStatusOptions {
-    pub fn parse<I>(args: I) -> Result<Self, RestoreCommandError>
+    pub(super) fn parse<I>(args: I) -> Result<Self, RestoreCommandError>
     where
         I: IntoIterator<Item = OsString>,
     {

@@ -162,7 +162,7 @@ fn format_history(row: &CyclesCanisterReport) -> String {
     }
 }
 
-pub(super) fn format_topups(topups: &CyclesTopupSummary) -> String {
+fn format_topups(topups: &CyclesTopupSummary) -> String {
     let mut parts = Vec::new();
     if topups.request_ok > 0 {
         if topups.transferred_cycles > 0 {
@@ -206,4 +206,22 @@ fn format_signed_rate(value: i128) -> String {
 
 fn format_unsigned_rate(value: u128) -> String {
     format!("{}/h", cycles_tc(value))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Ensure structured top-up summaries become compact top-up context for cycles output.
+    #[test]
+    fn formats_topups() {
+        let summary = CyclesTopupSummary {
+            request_scheduled: 0,
+            request_ok: 2,
+            request_err: 0,
+            transferred_cycles: 8_000_000_000_000,
+        };
+
+        assert_eq!(format_topups(&summary), "8.00 TC (2)");
+    }
 }

@@ -360,16 +360,6 @@ fn row_module_hash<'a>(
         .filter(|hash| !hash.is_empty())
 }
 
-#[cfg(test)]
-pub(super) fn render_registry_table_row(row: &[impl AsRef<str>], widths: &[usize; 7]) -> String {
-    render_table_row(row, widths, &REGISTRY_ALIGNMENTS)
-}
-
-#[cfg(test)]
-pub(super) fn render_registry_separator(widths: &[usize; 7]) -> String {
-    render_separator(widths)
-}
-
 fn canister_label(row: &RegistryRow<'_>) -> String {
     row.entry.pid.clone()
 }

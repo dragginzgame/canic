@@ -52,7 +52,7 @@ pub struct RegistryRow<'a> {
     pub tree_prefix: String,
 }
 
-pub fn registry_rows(registry: &[RegistryEntry]) -> Vec<RegistryRow<'_>> {
+fn registry_rows(registry: &[RegistryEntry]) -> Vec<RegistryRow<'_>> {
     let roots = root_entries(registry);
     let children = child_entries(registry);
     let mut entries = Vec::new();

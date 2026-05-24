@@ -10,7 +10,7 @@ landed, what drifted, and what remains open.
 
 ## Current State
 
-`0.42.12` is live and is the closeout candidate for this design line. The
+`0.42.14` is in hardening after the closeout audit. The
 release bar has been met for dry-run authority reconciliation while keeping
 reconciliation read-only.
 
@@ -44,6 +44,23 @@ diffs, safety reports, and installer gating.
 - Authority reports now include next-action guidance for safe dry-run plans
   that contain automatic candidates.
 - Added read-only dry-run authority receipts and evidence bundles.
+- Documented the authority command exit-status contract: successful command
+  exit means the local authority artifact was produced, not that controller
+  state changed or that the whole deployment is safe.
+- Clarified that authority `Safe` is scoped to authority reconciliation only
+  and does not replace the whole-deployment safety report.
+- Documented dry-run authority receipts/evidence as structural
+  self-consistency artifacts, not tamper-evident proof of live controller
+  state.
+- Added source-scan tests that keep the authority CLI and deployment-truth
+  authority paths free of controller mutation primitives.
+- Added JSON shape tests that pin the `Authority*V1` field names and enum
+  strings used by operator automation.
+- Added explicit `Authority*V1` schema-governance rules: existing V1 fields
+  and enum variants are stable, incompatible semantics require a new schema
+  version or V2 surface, text output stays presentation-only, and dry-run
+  receipts must remain distinguishable from any future controller-mutating
+  receipts.
 - Added hard authority findings for staging/emergency category overlap with the
   normal expected controller set.
 - Narrowed `external_actions_required` so it records actual external authority

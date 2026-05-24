@@ -90,7 +90,7 @@ fn metrics_canister_report(
     }
 }
 
-pub(super) fn metrics_error_report(entry: &RegistryEntry, error: &str) -> MetricsCanisterReport {
+fn metrics_error_report(entry: &RegistryEntry, error: &str) -> MetricsCanisterReport {
     let (status, error) = if error.contains("has no query method 'canic_metrics'") {
         ("unavailable", "canic_metrics unavailable")
     } else {
@@ -160,5 +160,29 @@ fn metrics_installed_fleet_error(error: InstalledFleetError) -> MetricsCommandEr
         }
         InstalledFleetError::Registry(error) => MetricsCommandError::Registry(error),
         InstalledFleetError::Io(error) => MetricsCommandError::Io(error),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Ensure method-missing responses do not stretch the table with raw ICP output.
+    #[test]
+    fn shortens_metrics_unavailable_errors() {
+        let entry = RegistryEntry {
+            pid: "aaaaa-aa".to_string(),
+            role: Some("wasm_store".to_string()),
+            kind: Some("wasm_store".to_string()),
+            parent_pid: None,
+            module_hash: None,
+        };
+        let report = metrics_error_report(
+            &entry,
+            "icp command failed\nCanister has no query method 'canic_metrics'.",
+        );
+
+        assert_eq!(report.status, "unavailable");
+        assert_eq!(report.error.as_deref(), Some("canic_metrics unavailable"));
     }
 }

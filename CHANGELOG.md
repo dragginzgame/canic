@@ -10,6 +10,15 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.42.x] - 2026-05-23 - Authority reconciliation
 
+- `0.42.14` hardens the authority closeout boundary without adding controller
+  mutation: authority CLI help now documents exit-status scope, authority
+  `Safe` is documented as authority-scoped rather than whole-deployment-safe,
+  dry-run receipts/evidence are documented as structural self-consistency
+  artifacts, and tests now guard authority paths against controller mutation
+  primitives while pinning the `Authority*V1` JSON schema shape. The design
+  now also records explicit `Authority*V1` schema-governance rules for future
+  field, enum, and receipt-surface evolution.
+
 - `0.42.13` closes out the authority reconciliation line with a focused
   closeout audit and status handoff updates confirming 0.42 remains a
   dry-run/report-first authority evidence release.

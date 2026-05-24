@@ -2,9 +2,7 @@ use super::*;
 use crate::metrics::{
     model::{MetricValue, MetricsKind},
     parse::parse_metrics_page,
-    transport::metrics_error_report,
 };
-use canic_host::registry::RegistryEntry;
 
 // Ensure the public kind selector maps to Candid variant names.
 #[test]
@@ -98,23 +96,4 @@ fn detects_zero_metric_values() {
         .is_zero()
     );
     assert!(!MetricValue::U128 { value: 1 }.is_zero());
-}
-
-// Ensure method-missing responses do not stretch the table with raw ICP output.
-#[test]
-fn shortens_metrics_unavailable_errors() {
-    let entry = RegistryEntry {
-        pid: "aaaaa-aa".to_string(),
-        role: Some("wasm_store".to_string()),
-        kind: Some("wasm_store".to_string()),
-        parent_pid: None,
-        module_hash: None,
-    };
-    let report = metrics_error_report(
-        &entry,
-        "icp command failed\nCanister has no query method 'canic_metrics'.",
-    );
-
-    assert_eq!(report.status, "unavailable");
-    assert_eq!(report.error.as_deref(), Some("canic_metrics unavailable"));
 }

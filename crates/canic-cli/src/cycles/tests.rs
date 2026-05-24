@@ -3,7 +3,6 @@ use crate::cycles::{
     model::{CycleTopupEventSample, CycleTopupStatus, CycleTrackerPage, CycleTrackerSample},
     options::parse_duration,
     parse::{parse_cycle_tracker_page, parse_cycle_tracker_page_text, parse_topup_event_page},
-    render::format_topups,
     transport::{summarize_cycle_tracker, topup_summary_from_events},
 };
 use canic_host::format::compact_duration;
@@ -243,7 +242,6 @@ fn summarizes_topup_events() {
 
     assert_eq!(summary.request_ok, 2);
     assert_eq!(summary.transferred_cycles, 8_000_000_000_000);
-    assert_eq!(format_topups(&summary), "8.00 TC (2)");
 }
 
 // Ensure burn and top-up rates are explicit instead of hidden inside net rate.
