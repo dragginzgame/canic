@@ -12,6 +12,16 @@ use crate::test_support::temp_dir;
 use serde::Serialize;
 use std::{fs, path::Path};
 
+struct LimitedExecutor {
+    context: DeploymentExecutionContextV1,
+}
+
+impl DeploymentExecutor for LimitedExecutor {
+    fn execution_context(&self) -> DeploymentExecutionContextV1 {
+        self.context.clone()
+    }
+}
+
 #[test]
 fn plan_round_trips_through_json() {
     let plan = DeploymentPlanV1 {
@@ -110,6 +120,7 @@ fn receipt_diff_and_safety_report_support_not_evaluated_state() {
         schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
         operation_id: "operation-1".to_string(),
         plan_id: "plan-local-root".to_string(),
+        execution_context: None,
         operation_status: DeploymentExecutionStatusV1::InProgress,
         started_at: "2026-05-21T00:00:00Z".to_string(),
         finished_at: None,
@@ -172,6 +183,177 @@ fn receipt_diff_and_safety_report_support_not_evaluated_state() {
     assert_json_round_trip(&receipt);
     assert_json_round_trip(&diff);
     assert_json_round_trip(&report);
+}
+
+#[test]
+fn current_cli_execution_context_records_backend_roots_and_capabilities() {
+    let context = current_cli_execution_context(
+        Some("/workspace/canic".to_string()),
+        Some("/workspace/canic/.icp".to_string()),
+        vec![
+            "/workspace/canic/.icp/local/canisters".to_string(),
+            "/workspace/canic/target/wasm".to_string(),
+        ],
+    );
+
+    assert_eq!(context.backend, DeploymentExecutorBackendV1::CurrentCli);
+    assert!(has_executor_capabilities(
+        &context.backend_capabilities,
+        CURRENT_CLI_EXECUTOR_CAPABILITIES,
+    ));
+    assert_json_round_trip(&context);
+}
+
+#[test]
+fn current_cli_executor_returns_declared_execution_context() {
+    let executor = CurrentCliDeploymentExecutor::new(
+        Some("/workspace/canic".to_string()),
+        Some("/workspace/canic/.icp".to_string()),
+        vec!["/workspace/canic/.icp/local/canisters".to_string()],
+    );
+
+    let context = executor.execution_context();
+
+    assert_eq!(context.backend, DeploymentExecutorBackendV1::CurrentCli);
+    assert_eq!(context.workspace_root.as_deref(), Some("/workspace/canic"));
+    assert_eq!(context.icp_root.as_deref(), Some("/workspace/canic/.icp"));
+    assert_eq!(
+        context.artifact_roots,
+        vec!["/workspace/canic/.icp/local/canisters".to_string()]
+    );
+    assert!(has_executor_capabilities(
+        &context.backend_capabilities,
+        CURRENT_CLI_EXECUTOR_CAPABILITIES,
+    ));
+}
+
+#[test]
+fn missing_executor_capabilities_are_reported_in_required_order() {
+    let available = [
+        DeploymentExecutorCapabilityV1::CanisterStatus,
+        DeploymentExecutorCapabilityV1::StageArtifact,
+    ];
+    let required = [
+        DeploymentExecutorCapabilityV1::StageArtifact,
+        DeploymentExecutorCapabilityV1::InstallCode,
+        DeploymentExecutorCapabilityV1::CanisterStatus,
+        DeploymentExecutorCapabilityV1::UpdateSettings,
+    ];
+
+    assert_eq!(
+        missing_executor_capabilities(&available, &required),
+        vec![
+            DeploymentExecutorCapabilityV1::InstallCode,
+            DeploymentExecutorCapabilityV1::UpdateSettings,
+        ],
+    );
+}
+
+#[test]
+fn deployment_execution_preflight_accepts_safe_plan_and_capable_executor() {
+    let check = sample_check(sample_plan(), sample_matching_inventory());
+    let authority = build_authority_reconciliation_plan(&check);
+    let executor = CurrentCliDeploymentExecutor::new(
+        Some("/workspace/canic".to_string()),
+        Some("/workspace/canic/.icp".to_string()),
+        vec!["/workspace/canic/.icp/local/canisters".to_string()],
+    );
+
+    let preflight = deployment_execution_preflight(
+        &check.plan,
+        &check.report,
+        &authority,
+        &executor,
+        CURRENT_CLI_EXECUTOR_CAPABILITIES,
+    );
+
+    assert_eq!(preflight.plan_id, check.plan.plan_id);
+    assert_eq!(preflight.safety_report_id, check.report.report_id);
+    assert_eq!(preflight.authority_plan_id, authority.plan_id);
+    assert_eq!(
+        preflight.status,
+        DeploymentExecutionPreflightStatusV1::Ready
+    );
+    assert!(preflight.blockers.is_empty());
+    assert!(preflight.missing_capabilities.is_empty());
+    assert_eq!(
+        preflight.planned_phases,
+        vec![
+            "create_root",
+            "build_artifacts",
+            "materialize_artifacts",
+            "install_root",
+            "stage_release_set",
+            "resume_bootstrap",
+            "wait_ready",
+            "post_validate",
+        ]
+    );
+    assert_json_round_trip(&preflight);
+}
+
+#[test]
+fn deployment_execution_preflight_blocks_safety_authority_and_capability_gaps() {
+    let mut check = sample_unknown_unsafe_check();
+    check.report.status = SafetyStatusV1::Blocked;
+    check.report.hard_failures.push(SafetyFindingV1 {
+        code: "deployment_artifact_missing".to_string(),
+        message: "planned artifact was not observed".to_string(),
+        severity: SafetySeverityV1::HardFailure,
+        subject: Some("root".to_string()),
+    });
+    let authority = build_authority_reconciliation_plan(&check);
+    let executor = LimitedExecutor {
+        context: DeploymentExecutionContextV1 {
+            workspace_root: Some("/workspace/canic".to_string()),
+            icp_root: Some("/workspace/canic/.icp".to_string()),
+            artifact_roots: Vec::new(),
+            backend: DeploymentExecutorBackendV1::Other {
+                name: "limited-test-backend".to_string(),
+            },
+            backend_capabilities: vec![DeploymentExecutorCapabilityV1::CanisterStatus],
+        },
+    };
+
+    let preflight = deployment_execution_preflight(
+        &check.plan,
+        &check.report,
+        &authority,
+        &executor,
+        &[
+            DeploymentExecutorCapabilityV1::CanisterStatus,
+            DeploymentExecutorCapabilityV1::StageArtifact,
+        ],
+    );
+
+    assert_eq!(
+        preflight.status,
+        DeploymentExecutionPreflightStatusV1::Blocked
+    );
+    assert_eq!(
+        preflight.missing_capabilities,
+        vec![DeploymentExecutorCapabilityV1::StageArtifact]
+    );
+    assert!(preflight.blockers.iter().any(|finding| {
+        finding.code == "deployment_safety_blocked"
+            && finding.subject.as_deref() == Some("report-1")
+    }));
+    assert!(
+        preflight
+            .blockers
+            .iter()
+            .any(|finding| finding.code == "deployment_artifact_missing")
+    );
+    assert!(
+        preflight
+            .blockers
+            .iter()
+            .any(|finding| finding.code == "authority_unsafe_blocked")
+    );
+    assert!(preflight.blockers.iter().any(|finding| {
+        finding.code == "executor_capability_missing"
+            && finding.subject.as_deref() == Some("StageArtifact")
+    }));
 }
 
 #[test]
@@ -4770,6 +4952,7 @@ fn sample_receipt_with_phase(
         schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
         operation_id: "operation-1".to_string(),
         plan_id: plan_id.to_string(),
+        execution_context: None,
         operation_status: DeploymentExecutionStatusV1::Complete,
         started_at: "2026-05-22T00:00:00Z".to_string(),
         finished_at: Some("2026-05-22T00:00:01Z".to_string()),

@@ -156,13 +156,13 @@ fn renders_registry_table() {
         [
             render_registry_table_row(
                 &[
-                    ROLE_HEADER,
-                    MODULE_HEADER,
-                    CANISTER_HEADER,
-                    READY_HEADER,
-                    CANIC_HEADER,
-                    WASM_HEADER,
-                    CYCLES_HEADER,
+                    "ROLE",
+                    "MODULE",
+                    "CANISTER_ID",
+                    "READY",
+                    "CANIC",
+                    "WASM",
+                    "CYCLES",
                 ],
                 &widths
             ),
@@ -200,7 +200,7 @@ fn renders_verbose_registry_table_with_full_module_hashes() {
     };
     let tree = render_registry_tree(&registry, Some(APP), &columns).expect("render tree");
 
-    assert!(tree.contains(MODULE_HASH_HEADER));
+    assert!(tree.contains("MODULE_HASH"));
     assert!(tree.contains(HASH));
 }
 
@@ -278,13 +278,13 @@ fn renders_selected_subtree() {
         [
             render_registry_table_row(
                 &[
-                    ROLE_HEADER,
-                    MODULE_HEADER,
-                    CANISTER_HEADER,
-                    READY_HEADER,
-                    CANIC_HEADER,
-                    WASM_HEADER,
-                    CYCLES_HEADER,
+                    "ROLE",
+                    "MODULE",
+                    "CANISTER_ID",
+                    "READY",
+                    "CANIC",
+                    "WASM",
+                    "CYCLES",
                 ],
                 &widths
             ),
@@ -323,13 +323,13 @@ fn renders_selected_subtree_by_role_name() {
         [
             render_registry_table_row(
                 &[
-                    ROLE_HEADER,
-                    MODULE_HEADER,
-                    CANISTER_HEADER,
-                    READY_HEADER,
-                    CANIC_HEADER,
-                    WASM_HEADER,
-                    CYCLES_HEADER,
+                    "ROLE",
+                    "MODULE",
+                    "CANISTER_ID",
+                    "READY",
+                    "CANIC",
+                    "WASM",
+                    "CYCLES",
                 ],
                 &widths
             ),

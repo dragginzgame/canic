@@ -8,6 +8,27 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+## [0.43.x] - 2026-05-24 - Backend-agnostic execution
+
+- `0.43.0` starts the plan-driven execution line by adding backend execution
+  context metadata, current-CLI backend capability records, a concrete
+  current-CLI executor wrapper, and a minimal `DeploymentExecutor` trait.
+  `DeploymentReceiptV1` can now carry optional execution context so later
+  installer extraction can record workspace root, ICP root, artifact roots,
+  backend, and capability evidence. Current-install deployment truth receipts
+  now attach that current-CLI execution context when they are written, and
+  current install now checks the selected backend's required capabilities before
+  mutating install phases begin. It also adds passive
+  `DeploymentExecutionPreflightV1` readiness evidence over `DeploymentPlanV1`,
+  `SafetyReportV1`, `AuthorityReconciliationPlanV1`, and executor capabilities
+  to classify execution as ready or blocked before any backend operation runs.
+
+```bash
+canic deploy plan <fleet>
+canic deploy check <fleet>
+canic deploy authority check <fleet>
+```
+
 ## [0.42.x] - 2026-05-23 - Authority reconciliation
 
 - `0.42.14` hardens the authority closeout boundary without adding controller
@@ -17,7 +38,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
   artifacts, and tests now guard authority paths against controller mutation
   primitives while pinning the `Authority*V1` JSON schema shape. The design
   now also records explicit `Authority*V1` schema-governance rules for future
-  field, enum, and receipt-surface evolution.
+  field, enum, and receipt-surface evolution, and propagates the 0.42.14
+  handoff constraints into the 0.43 through 0.46 design docs.
 
 - `0.42.13` closes out the authority reconciliation line with a focused
   closeout audit and status handoff updates confirming 0.42 remains a
@@ -48,6 +70,13 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - `0.42.7` adds host-owned human-readable text output for read-only authority
   dry-run commands while preserving JSON as the default automation format.
 
+```bash
+canic deploy authority check <fleet> --format text
+canic deploy authority evidence <fleet> --format text
+canic deploy authority report <fleet> --format text
+canic deploy authority receipt <fleet> --format text
+```
+
 - `0.42.6` hardens authority dry-run evidence: reports and receipts now carry
   source check/inventory/profile provenance, receipt construction rejects mixed
   report/plan/check data, and complete evidence bundles are validated before
@@ -75,16 +104,29 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
   controller observations and unresolved external actions without attempting
   controller mutation.
 
+```bash
+canic deploy authority receipt <fleet>
+canic deploy authority evidence <fleet>
+```
+
 - `0.42.1` adds the read-only authority report surface and completes the first
   self-contained dry-run evidence model: reports include status/counts,
   external actions, pool authority cases, automatic action candidates, and
   typed gap/action/control-class breakdowns without applying controller
   changes.
 
+```bash
+canic deploy authority report <fleet>
+```
+
 - `0.42.0` starts dry-run authority reconciliation with
   `AuthorityReconciliationPlanV1`, a passive planner over the 0.41 deployment
   truth check, and read-only `canic deploy authority check <fleet>` output for
   controller-state classification without IC controller mutation.
+
+```bash
+canic deploy authority check <fleet>
+```
 
 ## [0.41.x] - 2026-05-21 - Deployment truth model
 
@@ -130,6 +172,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
   JSON, and letting `deploy resume-report` discover the latest local receipt by
   default.
 
+```bash
+canic deploy resume-report <fleet>
+```
+
 - `0.41.10` expands passive deployment truth coverage for pool and verifier
   readiness facts: configured pool identities now enter plans, installed
   registry entries can populate observed pool inventory, pool/readiness drift is
@@ -140,6 +186,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
   status from the current-install artifact gate, and introduces read-only
   `canic deploy resume-report <fleet> --receipt <file>` to render
   `ResumeSafetyV1` without resuming or mutating state.
+
+```bash
+canic deploy resume-report <fleet> --receipt <file>
+```
 
 - `0.41.8` extends local deployment truth plans with installed root identity
   from `.canic` state, records missing install state as a non-blocking plan
@@ -168,10 +218,22 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
   and tightens read-only safety checks around local config and artifact digest
   drift.
 
+```bash
+canic deploy diff <fleet>
+canic deploy report <fleet>
+canic deploy check <fleet>
+```
+
 - `0.41.3` adds read-only `canic deploy plan|inventory|check <fleet>` JSON
   surfaces, adapts current install inputs into deployment truth checks, and
   blocks installer continuation after build when configured role artifacts are
   missing.
+
+```bash
+canic deploy plan <fleet>
+canic deploy inventory <fleet>
+canic deploy check <fleet>
+```
 
 - `0.41.2` adds the read-only local deployment truth check pipeline: local
   inventory, role artifact manifests, source-tagged artifact hash evidence,

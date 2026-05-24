@@ -17,10 +17,7 @@ use render::RegistryColumnData;
 #[cfg(not(test))]
 use render::render_config_output;
 #[cfg(test)]
-use render::{
-    CANIC_HEADER, CANISTER_HEADER, CYCLES_HEADER, ConfigRoleRow, MODULE_HASH_HEADER, MODULE_HEADER,
-    READY_HEADER, ROLE_HEADER, WASM_HEADER, render_config_output, render_registry_tree,
-};
+use render::{ConfigRoleRow, render_config_output, render_registry_tree};
 use render::{ListTitle, render_list_output};
 use std::{
     ffi::OsString,

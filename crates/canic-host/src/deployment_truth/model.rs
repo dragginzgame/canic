@@ -44,6 +44,7 @@ pub struct DeploymentReceiptV1 {
     pub schema_version: u32,
     pub operation_id: String,
     pub plan_id: String,
+    pub execution_context: Option<DeploymentExecutionContextV1>,
     pub operation_status: DeploymentExecutionStatusV1,
     pub started_at: String,
     pub finished_at: Option<String>,
@@ -54,6 +55,69 @@ pub struct DeploymentReceiptV1 {
     pub role_phase_receipts: Vec<RolePhaseReceiptV1>,
     pub final_inventory_id: Option<String>,
     pub command_result: DeploymentCommandResultV1,
+}
+
+///
+/// DeploymentExecutionContextV1
+///
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct DeploymentExecutionContextV1 {
+    pub workspace_root: Option<String>,
+    pub icp_root: Option<String>,
+    pub artifact_roots: Vec<String>,
+    pub backend: DeploymentExecutorBackendV1,
+    pub backend_capabilities: Vec<DeploymentExecutorCapabilityV1>,
+}
+
+///
+/// DeploymentExecutionPreflightV1
+///
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct DeploymentExecutionPreflightV1 {
+    pub schema_version: u32,
+    pub plan_id: String,
+    pub safety_report_id: String,
+    pub authority_plan_id: String,
+    pub backend: DeploymentExecutorBackendV1,
+    pub status: DeploymentExecutionPreflightStatusV1,
+    pub planned_phases: Vec<String>,
+    pub required_capabilities: Vec<DeploymentExecutorCapabilityV1>,
+    pub missing_capabilities: Vec<DeploymentExecutorCapabilityV1>,
+    pub blockers: Vec<SafetyFindingV1>,
+}
+
+///
+/// DeploymentExecutionPreflightStatusV1
+///
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum DeploymentExecutionPreflightStatusV1 {
+    Ready,
+    Blocked,
+}
+
+///
+/// DeploymentExecutorBackendV1
+///
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum DeploymentExecutorBackendV1 {
+    CurrentCli,
+    PocketIc,
+    DirectAgent,
+    Other { name: String },
+}
+
+///
+/// DeploymentExecutorCapabilityV1
+///
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+pub enum DeploymentExecutorCapabilityV1 {
+    CreateCanister,
+    CanisterStatus,
+    UpdateSettings,
+    InstallCode,
+    Call,
+    Query,
+    StageArtifact,
 }
 
 ///

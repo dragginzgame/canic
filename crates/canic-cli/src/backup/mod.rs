@@ -50,8 +50,6 @@ use reference::backup_list;
 pub use reference::resolve_backup_reference;
 #[cfg(test)]
 use reference::resolve_backup_reference_in;
-#[cfg(test)]
-use render::{render_backup_list, render_create_report, render_inspect_report};
 use render::{
     write_create_report, write_inspect_report, write_list_report, write_prune_report,
     write_status_report, write_verify_report,

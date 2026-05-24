@@ -14,7 +14,7 @@ const COLOR_TIP: &str = "\x1b[38;5;245m";
 ///
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum CommandScope {
+enum CommandScope {
     Global,
     FleetContext,
     BackupRestore,
@@ -35,13 +35,13 @@ impl CommandScope {
 ///
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct CommandSpec {
-    pub name: &'static str,
-    pub about: &'static str,
+pub(super) struct CommandSpec {
+    pub(super) name: &'static str,
+    about: &'static str,
     scope: CommandScope,
 }
 
-pub const COMMAND_SPECS: &[CommandSpec] = &[
+pub(super) const COMMAND_SPECS: &[CommandSpec] = &[
     CommandSpec {
         name: "status",
         about: "Show quick Canic project status",
@@ -244,35 +244,16 @@ fn color(code: &str, text: &str) -> String {
 }
 
 #[cfg(test)]
-pub fn strip_ansi(text: &str) -> String {
-    let mut plain = String::new();
-    let mut chars = text.chars().peekable();
-    while let Some(ch) = chars.next() {
-        if ch == '\x1b' && chars.peek() == Some(&'[') {
-            chars.next();
-            for ch in chars.by_ref() {
-                if ch == 'm' {
-                    break;
-                }
-            }
-            continue;
-        }
-        plain.push(ch);
+mod tests {
+    use super::*;
+
+    // Ensure top-level usage keeps the intended color groups.
+    #[test]
+    fn usage_contains_help_colors() {
+        let text = usage();
+
+        assert!(text.contains(COLOR_HEADING));
+        assert!(text.contains(COLOR_GROUP));
+        assert!(text.contains(COLOR_COMMAND));
     }
-    plain
-}
-
-#[cfg(test)]
-pub const fn color_heading() -> &'static str {
-    COLOR_HEADING
-}
-
-#[cfg(test)]
-pub const fn color_group() -> &'static str {
-    COLOR_GROUP
-}
-
-#[cfg(test)]
-pub const fn color_command() -> &'static str {
-    COLOR_COMMAND
 }

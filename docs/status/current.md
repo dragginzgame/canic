@@ -9,24 +9,47 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
-- Active minor: `0.42.x` authority reconciliation.
-- Theme: turn 0.41 deployment truth and observed controller evidence into a
-  dry-run authority reconciliation plan before any controller mutation.
-- Current release-work area: passive authority reconciliation model/planner,
-  exact external-action reporting, and CLI/report integration.
+- Active minor: `0.43.x` backend-agnostic execution.
+- Theme: move deployment mutation behind a plan-driven executor boundary
+  without weakening 0.41 deployment truth gates or 0.42 authority
+  reconciliation.
+- Current release-work area: executor context/capability model, execution
+  receipt metadata, and gradual extraction of current install mechanics behind
+  `DeploymentExecutor`.
 - Design started at
-  `docs/design/0.42-authority-reconciliation/0.42-design.md`; the core issue is
-  that Canic should prove controller state is correct or explain exactly why it
-  cannot make it correct.
+  `docs/design/0.43-backend-agnostic-execution/0.43-design.md`; the core issue
+  is that deployment intent should run through `DeploymentPlanV1` rather than
+  through one local installer backend's filesystem assumptions.
 
 ## Recent Work
 
+- The current 0.43 development slice adds a concrete current-CLI executor
+  wrapper, routes current-install execution context through that executor
+  object, and gates the existing current install phases on the backend
+  capabilities they need before current install begins mutating deployment
+  state.
+- It also adds a passive `DeploymentExecutionPreflightV1` gate over
+  `DeploymentPlanV1`, `SafetyReportV1`, `AuthorityReconciliationPlanV1`, and
+  executor capabilities. This gives 0.43 a plan-shaped executor-readiness
+  artifact without running backend operations.
+- `0.43.0` starts the backend-agnostic execution line. Deployment receipts can
+  now carry optional execution context metadata, and Canic has a minimal
+  `DeploymentExecutor` trait plus current-CLI backend capability helpers.
+  Current-install deployment truth receipts now attach current-CLI execution
+  context metadata when they are written. Current install behavior is otherwise
+  unchanged; this slice creates the vocabulary later extraction will use.
 - `0.42.14` hardens the authority closeout boundary without adding controller
   mutation. Authority CLI help now documents that successful command exit means
   a local dry-run artifact was produced, not that controller state changed or
   that the whole deployment is safe. The 0.42 design/status docs now clarify
   that authority `Safe` is authority-scoped, and that dry-run receipts/evidence
   are structural self-consistency artifacts rather than tamper-evident proof.
+- The 0.42.14 handoff constraints now propagate into the 0.43 through 0.46
+  design docs: 0.43 owns plan-driven execution rather than standalone
+  authority-apply UX, 0.44 excludes authority dry-run artifacts as promotion
+  artifact sources, 0.45 projects existing control classifications into
+  lifecycle authority instead of reclassifying them, and 0.46 treats authority
+  dry-run artifacts as reporting evidence only.
 - Added source-scan tests to keep authority CLI and deployment-truth authority
   paths free of controller mutation primitives, plus JSON shape tests that pin
   the `Authority*V1` artifact field names and enum strings used by automation.

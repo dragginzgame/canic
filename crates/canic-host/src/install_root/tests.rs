@@ -2,7 +2,8 @@ use super::{
     CompletedInstallPhase, INSTALL_STATE_SCHEMA_VERSION, InstallReceiptScope, InstallRootOptions,
     InstallState, InstallTimingSummary, add_create_root_target, add_icp_environment_target,
     add_local_root_create_cycles_arg, check_install_deployment_truth, config_selection_error,
-    current_install_deployment_truth_check_at, discover_canic_config_choices,
+    current_install_deployment_truth_check_at, current_install_execution_context,
+    current_install_executor_missing_capabilities, discover_canic_config_choices,
     discover_project_canic_config_choices, enforce_install_deployment_truth_gate,
     fleet_install_state_path, icp_canister_command_in_network, install_deployment_truth_gate_lines,
     install_deployment_truth_gate_receipt, install_deployment_truth_phase_receipt,
@@ -16,10 +17,11 @@ use super::{
 };
 use crate::canister_build::CanisterBuildProfile;
 use crate::deployment_truth::{
-    CanisterControlClassV1, DeploymentCheckV1, DeploymentExecutionStatusV1, DeploymentReceiptV1,
-    ObservationStatusV1, ObservedCanisterV1, SafetyFindingV1, SafetySeverityV1,
-    artifact_gate_phase_receipt, artifact_gate_role_phase_receipts, compare_plan_to_inventory,
-    safety_report_from_diff,
+    CanisterControlClassV1, DeploymentCheckV1, DeploymentExecutionContextV1,
+    DeploymentExecutionStatusV1, DeploymentExecutorBackendV1, DeploymentExecutorCapabilityV1,
+    DeploymentReceiptV1, ObservationStatusV1, ObservedCanisterV1, SafetyFindingV1,
+    SafetySeverityV1, artifact_gate_phase_receipt, artifact_gate_role_phase_receipts,
+    compare_plan_to_inventory, safety_report_from_diff,
 };
 use crate::icp::{CANIC_ICP_LOCAL_NETWORK_URL_ENV, CANIC_ICP_LOCAL_ROOT_KEY_ENV};
 use crate::release_set::configured_install_targets;
@@ -946,11 +948,13 @@ kind = "root"
 #[test]
 fn install_truth_completed_phase_receipt_records_pre_gate_evidence() {
     let (root, check) = demo_install_deployment_truth_check("canic-install-truth-pre-gate-phase");
+    let execution_context = current_install_execution_context(&root, &root, "local");
     let scope = InstallReceiptScope {
         icp_root: &root,
         network: "local",
         fleet_name: "demo",
         check: &check,
+        execution_context: Some(&execution_context),
     };
 
     let path = write_completed_install_phase_receipt(
@@ -988,18 +992,57 @@ fn install_truth_completed_phase_receipt_records_pre_gate_evidence() {
         receipt.role_phase_receipts[0].result,
         crate::deployment_truth::RolePhaseResultV1::Applied
     );
+    let execution_context = receipt
+        .execution_context
+        .expect("completed phase receipt should include execution context");
+    assert_eq!(
+        execution_context.backend,
+        crate::deployment_truth::DeploymentExecutorBackendV1::CurrentCli
+    );
+    assert!(
+        execution_context
+            .artifact_roots
+            .iter()
+            .any(|root| { root.ends_with(".icp/local/canisters") })
+    );
 
     fs::remove_dir_all(root).expect("clean temp dir");
 }
 
 #[test]
+fn install_truth_reports_executor_missing_required_capabilities() {
+    let context = DeploymentExecutionContextV1 {
+        workspace_root: Some("/workspace/canic".to_string()),
+        icp_root: Some("/workspace/canic/.icp".to_string()),
+        artifact_roots: vec!["/workspace/canic/.icp/local/canisters".to_string()],
+        backend: DeploymentExecutorBackendV1::Other {
+            name: "limited-test-backend".to_string(),
+        },
+        backend_capabilities: vec![DeploymentExecutorCapabilityV1::CanisterStatus],
+    };
+
+    assert_eq!(
+        current_install_executor_missing_capabilities(&context),
+        vec![
+            DeploymentExecutorCapabilityV1::CreateCanister,
+            DeploymentExecutorCapabilityV1::InstallCode,
+            DeploymentExecutorCapabilityV1::Call,
+            DeploymentExecutorCapabilityV1::Query,
+            DeploymentExecutorCapabilityV1::StageArtifact,
+        ],
+    );
+}
+
+#[test]
 fn install_truth_receipted_phase_records_success_and_failure() {
     let (root, check) = demo_install_deployment_truth_check("canic-install-truth-receipted-phase");
+    let execution_context = current_install_execution_context(&root, &root, "local");
     let scope = InstallReceiptScope {
         icp_root: &root,
         network: "local",
         fleet_name: "demo",
         check: &check,
+        execution_context: Some(&execution_context),
     };
 
     scope
@@ -1715,11 +1758,13 @@ fn install_truth_state_write_receipt_records_local_state_path() {
             .display()
             .to_string(),
     };
+    let execution_context = current_install_execution_context(&root, &root, "local");
     let scope = InstallReceiptScope {
         icp_root: &root,
         network: "local",
         fleet_name: "demo",
         check: &check,
+        execution_context: Some(&execution_context),
     };
 
     let state_path = write_install_state_with_deployment_truth_receipt(scope, "local", &state)

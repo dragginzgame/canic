@@ -1,4 +1,3 @@
-use crate::endpoints::render::{render_candid_method_name, render_endpoint_type_list};
 use serde::Serialize;
 
 ///
@@ -24,32 +23,6 @@ pub(super) struct EndpointEntry {
     pub(super) returns: Vec<EndpointType>,
 }
 
-impl EndpointEntry {
-    pub(super) fn rendered_method_name(&self) -> String {
-        render_candid_method_name(&self.name)
-    }
-
-    pub(super) fn mode_label(&self) -> String {
-        if self.modes.is_empty() {
-            "update".to_string()
-        } else {
-            self.modes
-                .iter()
-                .map(EndpointMode::as_candid_label)
-                .collect::<Vec<_>>()
-                .join(" ")
-        }
-    }
-
-    pub(super) fn signature(&self) -> String {
-        format!(
-            "{} -> {}",
-            render_endpoint_type_list(&self.arguments),
-            render_endpoint_type_list(&self.returns)
-        )
-    }
-}
-
 ///
 /// EndpointMode
 ///
@@ -60,16 +33,6 @@ pub(super) enum EndpointMode {
     Query,
     CompositeQuery,
     Oneway,
-}
-
-impl EndpointMode {
-    pub(super) const fn as_candid_label(&self) -> &'static str {
-        match self {
-            Self::Query => "query",
-            Self::CompositeQuery => "composite_query",
-            Self::Oneway => "oneway",
-        }
-    }
 }
 
 ///
@@ -141,22 +104,6 @@ pub(super) enum EndpointType {
         initializers: Vec<Self>,
         service: Box<Self>,
     },
-}
-
-impl EndpointType {
-    pub(super) fn candid(&self) -> &str {
-        match self {
-            Self::Primitive { candid, .. }
-            | Self::Named { candid, .. }
-            | Self::Optional { candid, .. }
-            | Self::Vector { candid, .. }
-            | Self::Record { candid, .. }
-            | Self::Variant { candid, .. }
-            | Self::Function { candid, .. }
-            | Self::Service { candid, .. }
-            | Self::Class { candid, .. } => candid,
-        }
-    }
 }
 
 ///

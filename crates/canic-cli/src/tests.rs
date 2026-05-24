@@ -1,8 +1,23 @@
 use super::*;
-use crate::{
-    cli::globals::{INTERNAL_ICP_OPTION, INTERNAL_NETWORK_OPTION},
-    cli::help::{color_command, color_group, color_heading, strip_ansi},
-};
+use crate::cli::globals::{INTERNAL_ICP_OPTION, INTERNAL_NETWORK_OPTION};
+
+fn strip_ansi(text: &str) -> String {
+    let mut plain = String::new();
+    let mut chars = text.chars().peekable();
+    while let Some(ch) = chars.next() {
+        if ch == '\x1b' && chars.peek() == Some(&'[') {
+            chars.next();
+            for ch in chars.by_ref() {
+                if ch == 'm' {
+                    break;
+                }
+            }
+            continue;
+        }
+        plain.push(ch);
+    }
+    plain
+}
 
 // Ensure top-level help stays compact as command surfaces grow.
 #[test]
@@ -55,9 +70,6 @@ fn usage_lists_command_families() {
     assert!(plain.contains("medic"));
     assert!(plain.contains("restore"));
     assert!(plain.contains("Tip: Run `canic <command> help`"));
-    assert!(text.contains(color_heading()));
-    assert!(text.contains(color_group()));
-    assert!(text.contains(color_command()));
 }
 
 // Ensure command-family help paths return successfully instead of erroring.

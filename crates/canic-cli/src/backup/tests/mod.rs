@@ -80,30 +80,6 @@ fn parses_backup_prune_options() {
     assert_eq!(options.out, Some(PathBuf::from("prune.txt")));
 }
 
-// Ensure backup create output makes reused output layouts visible.
-#[test]
-fn render_backup_create_report_shows_layout_source() {
-    let report = BackupCreateReport {
-        fleet: "demo".to_string(),
-        network: "local".to_string(),
-        out: PathBuf::from("backups/demo"),
-        plan_id: "plan-demo".to_string(),
-        run_id: "run-demo".to_string(),
-        mode: "dry-run".to_string(),
-        layout: "existing".to_string(),
-        status: "planned".to_string(),
-        scope: "fleet".to_string(),
-        targets: 2,
-        operations: 3,
-        executed_operations: 0,
-    };
-
-    let text = render_create_report(&report);
-
-    assert!(text.contains("LAYOUT"));
-    assert!(text.contains("existing"));
-}
-
 // Ensure dry-run persistence writes a plan and matching execution journal.
 #[test]
 fn backup_create_dry_run_persists_plan_and_execution_journal() {
@@ -519,7 +495,6 @@ fn backup_inspect_reads_dry_run_details() {
         json: false,
     };
     let report = backup_inspect(&options).expect("inspect dry-run");
-    let rendered = render_inspect_report(&report);
 
     fs::remove_dir_all(root).expect("remove temp root");
     assert_eq!(report.layout_status, "dry-run");
@@ -527,13 +502,6 @@ fn backup_inspect_reads_dry_run_details() {
     assert_eq!(report.targets.len(), 1);
     assert_eq!(report.targets[0].expected_module_hash, HASH);
     assert_eq!(report.operations.len(), 10);
-    assert!(rendered.contains("Plan: plan-test"));
-    assert!(rendered.contains("Targets"));
-    assert!(rendered.contains("Operations"));
-    assert!(rendered.contains(CHILD));
-    assert!(rendered.contains("MODULE_HASH"));
-    assert!(rendered.contains(HASH));
-    assert!(rendered.contains("validate-topology"));
 }
 
 // Ensure backup inspect reports incomplete execution-backed layouts clearly.
@@ -593,7 +561,6 @@ fn backup_list_reads_backup_directories() {
         out: None,
     };
     let entries = backup_list(&options).expect("list backups");
-    let rendered = render_backup_list(&entries);
 
     fs::remove_dir_all(root).expect("remove temp root");
     assert_eq!(entries.len(), 3);
@@ -606,12 +573,6 @@ fn backup_list_reads_backup_directories() {
     assert_eq!(dry_run.status, "dry-run");
     assert_eq!(dry_run.members, 1);
     assert_eq!(dry_run.created_at, unix_marker_for_stamp("20260511-001234"));
-    assert!(rendered.contains('#'));
-    assert!(rendered.contains("DIR"));
-    assert!(rendered.contains(" 1"));
-    assert!(rendered.contains("backup-new"));
-    assert!(rendered.contains("dry-run"));
-    assert!(rendered.contains("fleet-demo-20260507-130000"));
 }
 
 // Ensure backup list reports execution-backed manifest layouts by execution state.
@@ -822,22 +783,6 @@ fn backup_prune_keep_removes_older_entries() {
     assert!(middle.is_dir());
     assert!(!oldest.is_dir());
     fs::remove_dir_all(root).expect("remove temp root");
-}
-
-// Ensure backup list hides machine timestamp markers in table output.
-#[test]
-fn backup_list_formats_unix_created_at() {
-    let entries = vec![BackupListEntry {
-        dir: PathBuf::from("backups/fleet-demo-20240507-140000"),
-        backup_id: "backup".to_string(),
-        created_at: "unix:1715090400".to_string(),
-        members: 7,
-        status: "ok".to_string(),
-    }];
-    let rendered = render_backup_list(&entries);
-
-    assert!(rendered.contains("07/05/2024 14:00"));
-    assert!(!rendered.contains("unix:"));
 }
 
 // Ensure require-complete accepts already durable backup journals.

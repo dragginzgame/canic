@@ -74,7 +74,7 @@ impl SnapshotDownloadOptions {
     }
 }
 
-pub(super) fn snapshot_download_command() -> ClapCommand {
+fn snapshot_download_command() -> ClapCommand {
     ClapCommand::new("download")
         .bin_name("canic snapshot download")
         .about("Download canister snapshots for one canister or subtree")

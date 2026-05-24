@@ -12,19 +12,19 @@ const MODULE_VARIANT_COLOR: &str = "\x1b[38;5;179m";
 const COLOR_RESET: &str = "\x1b[0m";
 const MODULE_COLUMN_INDEX: usize = 1;
 
-pub(super) const ROLE_HEADER: &str = "ROLE";
-pub(super) const KIND_HEADER: &str = "KIND";
-pub(super) const CAPS_HEADER: &str = "CAPS";
-pub(super) const AUTO_HEADER: &str = "AUTO";
-pub(super) const TOPUP_HEADER: &str = "TOPUP";
-pub(super) const METRICS_HEADER: &str = "METRICS";
-pub(super) const CANISTER_HEADER: &str = "CANISTER_ID";
-pub(super) const MODULE_HEADER: &str = "MODULE";
-pub(super) const MODULE_HASH_HEADER: &str = "MODULE_HASH";
-pub(super) const READY_HEADER: &str = "READY";
-pub(super) const CANIC_HEADER: &str = "CANIC";
-pub(super) const WASM_HEADER: &str = "WASM";
-pub(super) const CYCLES_HEADER: &str = "CYCLES";
+const ROLE_HEADER: &str = "ROLE";
+const KIND_HEADER: &str = "KIND";
+const CAPS_HEADER: &str = "CAPS";
+const AUTO_HEADER: &str = "AUTO";
+const TOPUP_HEADER: &str = "TOPUP";
+const METRICS_HEADER: &str = "METRICS";
+const CANISTER_HEADER: &str = "CANISTER_ID";
+const MODULE_HEADER: &str = "MODULE";
+const MODULE_HASH_HEADER: &str = "MODULE_HASH";
+const READY_HEADER: &str = "READY";
+const CANIC_HEADER: &str = "CANIC";
+const WASM_HEADER: &str = "WASM";
+const CYCLES_HEADER: &str = "CYCLES";
 const CONFIG_HEADERS: [&str; 6] = [
     ROLE_HEADER,
     KIND_HEADER,
