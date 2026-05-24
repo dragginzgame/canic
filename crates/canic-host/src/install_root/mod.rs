@@ -381,55 +381,33 @@ fn run_root_activation_phases(
         root_canister_id,
         root_wasm,
     );
-    timings.install_root = receipt_scope.run_phase(
-        "install_root",
-        "install root wasm",
-        install_operation.evidence(),
-        || install_operation.execute(),
-    )?;
+    timings.install_root = receipt_scope.run_operation(&install_operation)?;
     let pre_bootstrap_funding = EnsureRootCyclesOperation::new(
         receipt_scope.icp_root,
         receipt_scope.network,
         root_canister_id,
-        "pre-bootstrap",
-    );
-    timings.fund_root = receipt_scope.run_phase(
         "fund_root_pre_bootstrap",
         "ensure local root minimum cycles before bootstrap",
-        pre_bootstrap_funding.evidence(),
-        || pre_bootstrap_funding.execute(),
-    )?;
+        "pre-bootstrap",
+    );
+    timings.fund_root = receipt_scope.run_operation(&pre_bootstrap_funding)?;
     let manifest = load_root_release_set_manifest(manifest_path)?;
     let stage_operation = StageReleaseSetOperation::new(
         receipt_scope.icp_root,
         receipt_scope.network,
         root_canister_id,
+        manifest_path,
         manifest,
     );
-    timings.stage_release_set = receipt_scope.run_phase(
-        "stage_release_set",
-        "stage root release set",
-        stage_operation.evidence(manifest_path),
-        || stage_operation.execute(),
-    )?;
+    timings.stage_release_set = receipt_scope.run_operation(&stage_operation)?;
     let resume_operation = ResumeBootstrapOperation::new(receipt_scope.network, root_canister_id);
-    timings.resume_bootstrap = receipt_scope.run_phase(
-        "resume_bootstrap",
-        "resume root bootstrap",
-        resume_operation.evidence(),
-        || resume_operation.execute(),
-    )?;
+    timings.resume_bootstrap = receipt_scope.run_operation(&resume_operation)?;
     let wait_ready_operation = WaitRootReadyOperation::new(
         receipt_scope.network,
         root_canister_id,
         options.ready_timeout_seconds,
     );
-    let wait_ready_result = receipt_scope.run_phase(
-        "wait_ready",
-        "wait for root bootstrap readiness",
-        wait_ready_operation.evidence(),
-        || wait_ready_operation.execute(),
-    );
+    let wait_ready_result = receipt_scope.run_operation(&wait_ready_operation);
     match wait_ready_result {
         Ok(duration) => timings.wait_ready = duration,
         Err(err) => {
@@ -441,14 +419,11 @@ fn run_root_activation_phases(
         receipt_scope.icp_root,
         receipt_scope.network,
         root_canister_id,
-        "post-ready",
-    );
-    timings.finalize_root_funding = receipt_scope.run_phase(
         "fund_root_post_ready",
         "ensure local root minimum cycles after ready",
-        post_ready_funding.evidence(),
-        || post_ready_funding.execute(),
-    )?;
+        "post-ready",
+    );
+    timings.finalize_root_funding = receipt_scope.run_operation(&post_ready_funding)?;
     Ok(timings)
 }
 
@@ -468,6 +443,13 @@ struct CompletedInstallPhase {
     finished_at: Option<String>,
     evidence: Vec<String>,
     role_names: Vec<String>,
+}
+
+trait InstallPhaseOperation {
+    fn phase(&self) -> &'static str;
+    fn attempted_action(&self) -> &'static str;
+    fn evidence(&self) -> Vec<String>;
+    fn execute(&self) -> Result<(), Box<dyn std::error::Error>>;
 }
 
 struct ResolveRootCanisterOperation<'a> {
@@ -613,6 +595,16 @@ impl<'a> InstallRootWasmOperation<'a> {
             root_wasm,
         }
     }
+}
+
+impl InstallPhaseOperation for InstallRootWasmOperation<'_> {
+    fn phase(&self) -> &'static str {
+        "install_root"
+    }
+
+    fn attempted_action(&self) -> &'static str {
+        "install root wasm"
+    }
 
     fn evidence(&self) -> Vec<String> {
         vec![
@@ -635,6 +627,8 @@ struct EnsureRootCyclesOperation<'a> {
     icp_root: &'a Path,
     network: &'a str,
     root_canister_id: &'a str,
+    phase: &'static str,
+    attempted_action: &'static str,
     phase_label: &'a str,
 }
 
@@ -643,14 +637,28 @@ impl<'a> EnsureRootCyclesOperation<'a> {
         icp_root: &'a Path,
         network: &'a str,
         root_canister_id: &'a str,
+        phase: &'static str,
+        attempted_action: &'static str,
         phase_label: &'a str,
     ) -> Self {
         Self {
             icp_root,
             network,
             root_canister_id,
+            phase,
+            attempted_action,
             phase_label,
         }
+    }
+}
+
+impl InstallPhaseOperation for EnsureRootCyclesOperation<'_> {
+    fn phase(&self) -> &'static str {
+        self.phase
+    }
+
+    fn attempted_action(&self) -> &'static str {
+        self.attempted_action
     }
 
     fn evidence(&self) -> Vec<String> {
@@ -683,6 +691,16 @@ impl<'a> ResumeBootstrapOperation<'a> {
             root_canister_id,
         }
     }
+}
+
+impl InstallPhaseOperation for ResumeBootstrapOperation<'_> {
+    fn phase(&self) -> &'static str {
+        "resume_bootstrap"
+    }
+
+    fn attempted_action(&self) -> &'static str {
+        "resume root bootstrap"
+    }
 
     fn evidence(&self) -> Vec<String> {
         vec![format!("root_canister:{}", self.root_canister_id)]
@@ -706,6 +724,16 @@ impl<'a> WaitRootReadyOperation<'a> {
             root_canister_id,
             timeout_seconds,
         }
+    }
+}
+
+impl InstallPhaseOperation for WaitRootReadyOperation<'_> {
+    fn phase(&self) -> &'static str {
+        "wait_ready"
+    }
+
+    fn attempted_action(&self) -> &'static str {
+        "wait for root bootstrap readiness"
     }
 
     fn evidence(&self) -> Vec<String> {
@@ -815,6 +843,18 @@ fn write_install_state_with_deployment_truth_receipt(
 }
 
 impl InstallReceiptScope<'_> {
+    fn run_operation(
+        self,
+        operation: &impl InstallPhaseOperation,
+    ) -> Result<Duration, Box<dyn std::error::Error>> {
+        self.run_phase(
+            operation.phase(),
+            operation.attempted_action(),
+            operation.evidence(),
+            || operation.execute(),
+        )
+    }
+
     fn run_phase(
         self,
         phase: &str,
@@ -1303,6 +1343,7 @@ struct StageReleaseSetOperation<'a> {
     icp_root: &'a Path,
     network: &'a str,
     root_canister_id: &'a str,
+    manifest_path: &'a Path,
     manifest: RootReleaseSetManifest,
 }
 
@@ -1311,18 +1352,30 @@ impl<'a> StageReleaseSetOperation<'a> {
         icp_root: &'a Path,
         network: &'a str,
         root_canister_id: &'a str,
+        manifest_path: &'a Path,
         manifest: RootReleaseSetManifest,
     ) -> Self {
         Self {
             icp_root,
             network,
             root_canister_id,
+            manifest_path,
             manifest,
         }
     }
+}
 
-    fn evidence(&self, manifest_path: &Path) -> Vec<String> {
-        current_install_staging_evidence(self.root_canister_id, manifest_path, &self.manifest)
+impl InstallPhaseOperation for StageReleaseSetOperation<'_> {
+    fn phase(&self) -> &'static str {
+        "stage_release_set"
+    }
+
+    fn attempted_action(&self) -> &'static str {
+        "stage root release set"
+    }
+
+    fn evidence(&self) -> Vec<String> {
+        current_install_staging_evidence(self.root_canister_id, self.manifest_path, &self.manifest)
     }
 
     fn execute(&self) -> Result<(), Box<dyn std::error::Error>> {

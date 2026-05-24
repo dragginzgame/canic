@@ -14,6 +14,10 @@ present.
 
 ## [0.43.x] - 2026-05-24 - Backend-agnostic execution
 
+- `0.43.8` completes the current-install runner bridge by routing activation
+  phases through a private phase-operation runner and guarding the
+  deployment-truth/preflight-before-mutation ordering.
+
 - `0.43.7` moves the remaining current-install root resolution, build,
   manifest, resume, and readiness phases behind narrow operation values and
   aligns execution preflight evidence with the installer receipt phases.

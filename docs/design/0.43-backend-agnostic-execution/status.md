@@ -89,6 +89,12 @@ than implicit installer state.
 - Aligned current-install execution preflight phase evidence with the actual
   deployment-truth receipt phases emitted by the installer, replacing the older
   coarse phase list with receipt-level phase names.
+- Added a private current-install phase-operation runner, so activation phases
+  now execute through a common phase/action/evidence boundary instead of
+  manually wiring each operation into `run_phase`.
+- Added source-guard coverage proving current-install activation phases use
+  the operation runner and run only after deployment-truth and execution
+  preflight gates are recorded.
 
 ## Not Implemented Yet
 
@@ -96,7 +102,8 @@ than implicit installer state.
 - Full separation between execution planning and the concrete local/IC backend.
 - Backend-specific mutating operation receipts mapped into the common
   deployment receipt model.
-- Validation that backend behavior does not bypass deployment truth gates.
+- Validation that future non-current-install backends do not bypass deployment
+  truth gates.
 
 ## Drift Log
 
@@ -105,6 +112,7 @@ than implicit installer state.
 ## Release Bar
 
 0.43 should not close until deployment execution can be represented and audited
-independently of a single local installer backend, and at least one test or
-harness path validates the same `DeploymentPlanV1` shape used by real
-deployment execution.
+independently of a single local installer backend, at least one test or harness
+path validates the same `DeploymentPlanV1` shape used by real deployment
+execution, and current-install activation phases are mediated by the private
+operation runner after deployment-truth/preflight readiness is recorded.

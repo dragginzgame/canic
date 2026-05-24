@@ -23,6 +23,13 @@ inspect only the files needed for the current task.
 
 ## Recent Work
 
+- `0.43.8` adds a private current-install
+  phase-operation runner, so activation phases now execute through a common
+  phase/action/evidence boundary instead of manually wiring each operation
+  into `run_phase`.
+- `0.43.8` also adds source-guard coverage proving
+  current-install activation phases use the operation runner and run only
+  after deployment-truth and execution preflight gates are recorded.
 - `0.43.7` routes current-install root bootstrap resume
   and readiness waiting through narrow operation values that own phase
   evidence and execution calls. This keeps current behavior intact while
@@ -58,19 +65,19 @@ inspect only the files needed for the current task.
   single receipt-status boundary instead of ad hoc current-install decisions.
   Receipt-aware resume checks now also reject receipts whose claimed execution
   status contradicts their command result and role-phase evidence.
-- Current unreleased 0.43 work starts the artifact-staging receipt model.
+- `0.43.4` starts the artifact-staging receipt model.
   `StagingReceiptV1` and `ArtifactTransportV1` now capture role artifact
   identity, transport, wasm-store locator, prepared chunk hashes, published
   chunk counts, and verified postconditions. Current install uses that typed
   shape to enrich `stage_release_set` phase evidence from the release-set
   manifest without changing installer mutation behavior.
-- Current unreleased 0.43 work removes the standalone `canic-cdk` workspace
+- `0.43.3` removes the standalone `canic-cdk` workspace
   crate. The curated `canic::cdk` facade now comes from `canic-core::cdk`,
   `canic-core` owns the small CDK helper surface it still needs, and
   `canic-backup` now keeps its hash helpers locally instead of depending on a
   broad CDK support crate. This continues the 0.43 cleanup of facade/support
   boundaries while preserving the public `canic::cdk` import path.
-- Current unreleased 0.43 work hardens passive execution-preflight evidence.
+- `0.43.2` hardens passive execution-preflight evidence.
   `DeploymentExecutionPreflightV1` now has validation helpers for standalone
   artifacts and source-check-bound artifacts, rejecting schema drift, blank
   provenance IDs, status/blocker mismatches, capability-list inconsistencies,
@@ -80,7 +87,7 @@ inspect only the files needed for the current task.
   receipt. Host tests now pin the `DeploymentExecutionPreflightV1` JSON field
   and enum shape so passive executor-readiness artifacts do not drift
   accidentally before a CLI surface is promoted.
-- Current unreleased 0.43 work adds
+- `0.43.1` adds
   `deployment_execution_preflight_from_check(...)`, letting callers feed a
   `DeploymentCheckV1` directly into passive execution readiness without
   rebuilding authority reconciliation by hand. It also adds host-owned text

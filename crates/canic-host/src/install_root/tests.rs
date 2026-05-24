@@ -1,10 +1,10 @@
 use super::{
     BuildInstallTargetsOperation, CompletedInstallPhase, EmitRootManifestOperation,
-    EnsureRootCyclesOperation, INSTALL_STATE_SCHEMA_VERSION, InstallReceiptScope,
-    InstallRootOptions, InstallRootWasmOperation, InstallState, InstallTimingSummary,
-    ResolveRootCanisterOperation, ResumeBootstrapOperation, StageReleaseSetOperation,
-    WaitRootReadyOperation, add_create_root_target, add_icp_environment_target,
-    add_local_root_create_cycles_arg, check_install_deployment_truth,
+    EnsureRootCyclesOperation, INSTALL_STATE_SCHEMA_VERSION, InstallPhaseOperation,
+    InstallReceiptScope, InstallRootOptions, InstallRootWasmOperation, InstallState,
+    InstallTimingSummary, ResolveRootCanisterOperation, ResumeBootstrapOperation,
+    StageReleaseSetOperation, WaitRootReadyOperation, add_create_root_target,
+    add_icp_environment_target, add_local_root_create_cycles_arg, check_install_deployment_truth,
     check_install_execution_preflight, config_selection_error,
     current_install_deployment_truth_check_at, current_install_execution_context,
     current_install_executor_missing_capabilities, current_install_staging_evidence,
@@ -1227,12 +1227,15 @@ fn stage_release_set_operation_owns_current_install_staging_evidence() {
             chunk_sha256_hex: vec!["chunk-a".to_string()],
         }],
     };
-    let operation =
-        StageReleaseSetOperation::new(Path::new("/workspace/.icp"), "local", "aaaaa-aa", manifest);
+    let operation = StageReleaseSetOperation::new(
+        Path::new("/workspace/.icp"),
+        "local",
+        "aaaaa-aa",
+        Path::new("/workspace/.icp/local/canisters/root.release-set.json"),
+        manifest,
+    );
 
-    let evidence = operation.evidence(Path::new(
-        "/workspace/.icp/local/canisters/root.release-set.json",
-    ));
+    let evidence = operation.evidence();
 
     assert!(evidence.contains(&"root_canister:aaaaa-aa".to_string()));
     assert!(evidence.contains(&"release_version:0.43.6".to_string()));
@@ -1265,6 +1268,8 @@ fn ensure_root_cycles_operation_owns_current_install_evidence() {
         Path::new("/workspace/.icp"),
         "local",
         "aaaaa-aa",
+        "fund_root_pre_bootstrap",
+        "ensure local root minimum cycles before bootstrap",
         "pre-bootstrap",
     );
 
@@ -1292,6 +1297,94 @@ fn wait_root_ready_operation_owns_current_install_evidence() {
 
     assert!(evidence.contains(&"root_canister:aaaaa-aa".to_string()));
     assert!(evidence.contains(&"timeout_seconds:30".to_string()));
+}
+
+#[test]
+fn current_install_activation_phases_use_operation_runner() {
+    let source = include_str!("mod.rs");
+    let activation = source_section(
+        source,
+        "fn run_root_activation_phases(",
+        "#[derive(Clone, Copy)]",
+    );
+
+    for operation in [
+        "install_operation",
+        "pre_bootstrap_funding",
+        "stage_operation",
+        "resume_operation",
+        "wait_ready_operation",
+        "post_ready_funding",
+    ] {
+        assert!(
+            activation.contains(&format!("run_operation(&{operation})")),
+            "activation phase must run through operation runner: {operation}"
+        );
+    }
+    assert!(
+        !activation.contains("run_phase("),
+        "activation phases must not manually wire receipt_scope.run_phase"
+    );
+}
+
+#[test]
+fn current_install_records_gates_before_activation_mutation() {
+    let source = include_str!("mod.rs");
+    let install = source_section(
+        source,
+        "pub fn install_root(",
+        "struct PreparedInstallTruth",
+    );
+    assert_before(
+        install,
+        "prepare_install_deployment_truth(",
+        "run_root_activation_phases(",
+    );
+
+    let prepare = source_section(
+        source,
+        "fn prepare_install_deployment_truth(",
+        "fn resolve_root_canister_with_phase(",
+    );
+    assert_before(
+        prepare,
+        "ensure_current_install_executor_capabilities(execution_context)?",
+        "run_install_deployment_truth_safety_gate(",
+    );
+
+    let gate = source_section(
+        source,
+        "fn run_install_deployment_truth_safety_gate(",
+        "fn enforce_install_deployment_truth_gate(",
+    );
+    assert_before(
+        gate,
+        "enforce_install_deployment_truth_gate(&deployment_truth_check)?",
+        "write_current_install_execution_preflight_receipt(",
+    );
+    assert_before(
+        gate,
+        "write_current_install_execution_preflight_receipt(",
+        "Ok(deployment_truth_check)",
+    );
+}
+
+fn source_section<'a>(source: &'a str, start: &str, end: &str) -> &'a str {
+    let start_index = source.find(start).expect("source section start exists");
+    let end_index = source[start_index..]
+        .find(end)
+        .map(|offset| start_index + offset)
+        .expect("source section end exists");
+    &source[start_index..end_index]
+}
+
+fn assert_before(source: &str, before: &str, after: &str) {
+    let before_index = source.find(before).expect("before marker exists");
+    let after_index = source.find(after).expect("after marker exists");
+    assert!(
+        before_index < after_index,
+        "`{before}` must appear before `{after}`"
+    );
 }
 
 #[test]
