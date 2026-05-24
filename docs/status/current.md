@@ -21,7 +21,22 @@ inspect only the files needed for the current task.
 
 ## Recent Work
 
-- Continued 0.42 authority evidence hardening after `0.42.8`: dry-run
+- `0.42.10` is staged as the next authority-reporting patch after `0.42.9`:
+  authority apply-readiness blockers now distinguish unsafe canister authority
+  from other hard authority findings. Unsafe canister hard-failure evidence is
+  still preserved in the report and receipt, but report counts and next-action
+  guidance no longer double-count it as a separate hard authority-profile
+  finding. Blocked authority reports also keep external-action and
+  missing-observation next actions alongside unsafe/hard blocker guidance
+  instead of hiding that follow-up work until the blockers are resolved, and
+  blocked report summaries now include those warning-level counts when they
+  coexist with blocking authority findings. Reports with blockers also keep
+  next-action guidance for automatic dry-run candidates, so reviewable
+  controller changes stay visible even when they cannot be applied yet.
+  Evidence validation now has explicit regression coverage for mutated
+  unsafe-blocker readiness, keeping archived evidence tied to the report model
+  that produced it.
+- `0.42.9` moved authority evidence ownership into `canic-host`: dry-run
   evidence validation now rejects blank required identity fields and full
   evidence bundles whose nested report or receipt omits source check
   provenance. Completed receipts also reject `finished_at` timestamps earlier

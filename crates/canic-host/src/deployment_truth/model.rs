@@ -260,6 +260,7 @@ pub struct AuthorityApplyReadinessV1 {
 ///
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum AuthorityApplyBlockerV1 {
+    UnsafeBlocked,
     HardFailures,
     ObservationGaps,
     ExternalActions,

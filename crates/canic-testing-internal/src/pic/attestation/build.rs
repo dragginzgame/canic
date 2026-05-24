@@ -1,10 +1,10 @@
 use canic_testkit::artifacts::{
     WasmBuildProfile, build_internal_test_wasm_canisters,
-    build_internal_test_wasm_canisters_with_env,
+    build_internal_test_wasm_canisters_with_env, read_wasm,
+    test_target_dir as artifact_test_target_dir,
 };
 use canic_testkit::pic::{Pic, PicBuilder, PicSerialGuard, acquire_pic_serial_guard};
 use std::{
-    fs,
     ops::{Deref, DerefMut},
     path::{Path, PathBuf},
     sync::{Mutex, Once},
@@ -51,14 +51,14 @@ impl SerialPic {
 pub(super) fn build_test_root_wasm() -> Vec<u8> {
     let workspace_root = workspace_root();
     build_canisters_once(&workspace_root);
-    read_wasm(&workspace_root, "delegation_root_stub")
+    read_built_wasm(&test_target_dir(&workspace_root), "delegation_root_stub")
 }
 
 // Build the normal root wasm without delegation-material test cfg enabled.
 pub(super) fn build_normal_root_wasm() -> Vec<u8> {
     let workspace_root = workspace_root();
     build_canisters_without_test_material_once(&workspace_root);
-    read_wasm_from_target(
+    read_built_wasm(
         &test_target_dir_without_test_material(&workspace_root),
         "delegation_root_stub",
     )
@@ -120,43 +120,19 @@ fn build_canisters_without_test_material_once(workspace_root: &Path) {
     });
 }
 
-// Read one built wasm artifact from the shared test target directory.
-fn read_wasm(workspace_root: &Path, crate_name: &str) -> Vec<u8> {
-    let wasm_path = wasm_path(workspace_root, crate_name);
-    fs::read(&wasm_path).unwrap_or_else(|err| panic!("failed to read {crate_name} wasm: {err}"))
-}
-
-// Read one built wasm artifact from an explicit target directory.
-fn read_wasm_from_target(target_dir: &Path, crate_name: &str) -> Vec<u8> {
-    let wasm_path = wasm_path_from_target(target_dir, crate_name);
-    fs::read(&wasm_path).unwrap_or_else(|err| panic!("failed to read {crate_name} wasm: {err}"))
-}
-
-// Resolve one crate wasm path under the shared fast wasm target layout.
-fn wasm_path(workspace_root: &Path, crate_name: &str) -> PathBuf {
-    let target_dir = test_target_dir(workspace_root);
-
-    wasm_path_from_target(&target_dir, crate_name)
-}
-
-// Resolve one crate wasm path under a caller-provided target directory.
-fn wasm_path_from_target(target_dir: &Path, crate_name: &str) -> PathBuf {
-    target_dir
-        .join("wasm32-unknown-unknown")
-        .join("fast")
-        .join(format!("{crate_name}.wasm"))
+// Read one built fast-profile wasm artifact from an explicit target directory.
+fn read_built_wasm(target_dir: &Path, crate_name: &str) -> Vec<u8> {
+    read_wasm(target_dir, crate_name, WasmBuildProfile::Fast)
 }
 
 // Resolve the shared test-material PocketIC wasm target directory.
 fn test_target_dir(workspace_root: &Path) -> PathBuf {
-    workspace_root.join("target").join("pic-wasm")
+    artifact_test_target_dir(workspace_root, "pic-wasm")
 }
 
 // Resolve the normal-build PocketIC wasm target directory.
 fn test_target_dir_without_test_material(workspace_root: &Path) -> PathBuf {
-    workspace_root
-        .join("target")
-        .join("pic-wasm-no-test-material")
+    artifact_test_target_dir(workspace_root, "pic-wasm-no-test-material")
 }
 
 // Resolve the canic workspace root from the internal test crate manifest dir.

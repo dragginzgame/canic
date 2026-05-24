@@ -10,8 +10,9 @@ landed, what drifted, and what remains open.
 
 ## Current State
 
-`0.42.8` is live. Work is continuing on the 0.42 line by tightening the
-dry-run report/evidence model while keeping reconciliation read-only.
+`0.42.10` is staged as the next authority-reporting patch after `0.42.9`.
+Work is continuing on the 0.42 line by tightening the dry-run report/evidence
+model while keeping reconciliation read-only.
 
 0.42 depends on 0.41 establishing deployment truth objects, observed inventory,
 diffs, safety reports, and installer gating.
@@ -106,6 +107,20 @@ diffs, safety reports, and installer gating.
   helper and explicitly test JSON as the default authority output format. This
   keeps the CLI as a consumer of validated host evidence and keeps archived
   evidence self-contained without becoming authority over live controller state.
+- Authority apply-readiness blockers now distinguish unsafe canister authority
+  from other hard authority findings. Unsafe canister hard-failure evidence is
+  still preserved in the report and receipt, but report counts and next-action
+  guidance no longer double-count it as a separate hard authority-profile
+  finding. Blocked authority reports also keep external-action and
+  missing-observation next actions alongside unsafe/hard blocker guidance
+  instead of hiding that follow-up work until the blockers are resolved, and
+  blocked report summaries now include those warning-level counts when they
+  coexist with blocking authority findings. Reports with blockers also keep
+  next-action guidance for automatic dry-run candidates, so reviewable
+  controller changes stay visible even when they cannot be applied yet.
+  Evidence validation now has explicit regression coverage for mutated
+  unsafe-blocker readiness, keeping archived evidence tied to the report model
+  that produced it.
 - The first planner reports:
   - already-correct controller sets;
   - deployment-controlled controller deltas that can be applied automatically

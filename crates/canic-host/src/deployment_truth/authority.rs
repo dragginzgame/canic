@@ -1,6 +1,8 @@
 use super::*;
 use std::collections::BTreeSet;
 
+const AUTHORITY_UNSAFE_BLOCKED_CODE: &str = "authority_unsafe_blocked";
+
 /// Build a dry-run authority reconciliation plan from the current deployment
 /// truth check. The plan is observational; it does not mutate controller state.
 #[must_use]
@@ -211,7 +213,7 @@ fn authority_report_counts(plan: &AuthorityReconciliationPlanV1) -> AuthorityRep
         requires_external_action: 0,
         unsafe_blocked: 0,
         unknown: 0,
-        hard_failures: plan.hard_failures.len(),
+        hard_failures: hard_authority_failure_count(&plan.hard_failures),
     };
     for action in &plan.canister_actions {
         match action.state {
@@ -231,6 +233,9 @@ fn authority_report_counts(plan: &AuthorityReconciliationPlanV1) -> AuthorityRep
 
 fn authority_apply_readiness(counts: &AuthorityReportCountsV1) -> AuthorityApplyReadinessV1 {
     let mut blockers = Vec::new();
+    if counts.unsafe_blocked > 0 {
+        blockers.push(AuthorityApplyBlockerV1::UnsafeBlocked);
+    }
     if counts.hard_failures > 0 {
         blockers.push(AuthorityApplyBlockerV1::HardFailures);
     }
@@ -246,6 +251,13 @@ fn authority_apply_readiness(counts: &AuthorityReportCountsV1) -> AuthorityApply
         automatic_action_count: counts.can_apply_automatically,
         blockers,
     }
+}
+
+fn hard_authority_failure_count(failures: &[SafetyFindingV1]) -> usize {
+    failures
+        .iter()
+        .filter(|failure| failure.code != AUTHORITY_UNSAFE_BLOCKED_CODE)
+        .count()
 }
 
 fn authority_profile_overlap_findings(plan: &DeploymentPlanV1) -> Vec<SafetyFindingV1> {
@@ -306,10 +318,7 @@ const fn authority_report_status(counts: &AuthorityReportCountsV1) -> SafetyStat
 
 fn authority_report_summary(status: SafetyStatusV1, counts: &AuthorityReportCountsV1) -> String {
     match status {
-        SafetyStatusV1::Blocked => format!(
-            "authority reconciliation is blocked by {} unsafe canister(s) and {} hard authority finding(s)",
-            counts.unsafe_blocked, counts.hard_failures
-        ),
+        SafetyStatusV1::Blocked => authority_blocked_summary(counts),
         SafetyStatusV1::Warning => format!(
             "authority reconciliation requires {} external action(s) and has {} unknown observation(s)",
             counts.requires_external_action, counts.unknown
@@ -322,6 +331,24 @@ fn authority_report_summary(status: SafetyStatusV1, counts: &AuthorityReportCoun
             "authority reconciliation has not been evaluated".to_string()
         }
     }
+}
+
+fn authority_blocked_summary(counts: &AuthorityReportCountsV1) -> String {
+    let mut summary = format!(
+        "authority reconciliation is blocked by {} unsafe canister(s) and {} hard authority finding(s)",
+        counts.unsafe_blocked, counts.hard_failures
+    );
+    if counts.requires_external_action > 0 || counts.unknown > 0 {
+        std::fmt::Write::write_fmt(
+            &mut summary,
+            format_args!(
+                "; also requires {} external action(s) and has {} unknown observation(s)",
+                counts.requires_external_action, counts.unknown
+            ),
+        )
+        .expect("writing to a String cannot fail");
+    }
+    summary
 }
 
 fn authority_report_action_counts(
@@ -450,51 +477,48 @@ fn authority_report_next_actions(
     counts: &AuthorityReportCountsV1,
 ) -> Vec<String> {
     match status {
-        SafetyStatusV1::Blocked => {
-            let mut actions = Vec::new();
-            if counts.unsafe_blocked > 0 {
-                actions.push(
-                    "resolve unsafe canister authority findings before applying controller changes"
-                        .to_string(),
-                );
-            }
-            if counts.hard_failures > 0 {
-                actions.push(
-                    "resolve hard authority findings before applying controller changes"
-                        .to_string(),
-                );
-            }
-            actions
+        SafetyStatusV1::Blocked | SafetyStatusV1::Warning => {
+            authority_report_blocker_next_actions(counts)
         }
-        SafetyStatusV1::Warning => {
-            let mut actions = Vec::new();
-            if counts.requires_external_action > 0 {
-                actions.push(
-                    "review external authority actions before applying controller changes"
-                        .to_string(),
-                );
-            }
-            if counts.unknown > 0 {
-                actions.push(
-                    "collect missing controller observations before applying controller changes"
-                        .to_string(),
-                );
-            }
-            actions
-        }
-        SafetyStatusV1::Safe => {
-            if counts.can_apply_automatically > 0 {
-                vec![
-                    "review automatic authority dry-run actions before enabling an apply path"
-                        .to_string(),
-                ]
-            } else {
-                Vec::new()
-            }
-        }
+        SafetyStatusV1::Safe => authority_automatic_next_actions(counts),
         SafetyStatusV1::NotEvaluated => {
             vec!["collect deployment inventory and rerun authority reconciliation".to_string()]
         }
+    }
+}
+
+fn authority_report_blocker_next_actions(counts: &AuthorityReportCountsV1) -> Vec<String> {
+    let mut actions = Vec::new();
+    if counts.unsafe_blocked > 0 {
+        actions.push(
+            "resolve unsafe canister authority findings before applying controller changes"
+                .to_string(),
+        );
+    }
+    if counts.hard_failures > 0 {
+        actions
+            .push("resolve hard authority findings before applying controller changes".to_string());
+    }
+    if counts.requires_external_action > 0 {
+        actions.push(
+            "review external authority actions before applying controller changes".to_string(),
+        );
+    }
+    if counts.unknown > 0 {
+        actions.push(
+            "collect missing controller observations before applying controller changes"
+                .to_string(),
+        );
+    }
+    actions.extend(authority_automatic_next_actions(counts));
+    actions
+}
+
+fn authority_automatic_next_actions(counts: &AuthorityReportCountsV1) -> Vec<String> {
+    if counts.can_apply_automatically > 0 {
+        vec!["review automatic authority dry-run actions before enabling an apply path".to_string()]
+    } else {
+        Vec::new()
     }
 }
 
@@ -733,7 +757,7 @@ fn record_authority_outcome(
     }
     if action.state == AuthorityReconciliationStateV1::UnsafeBlocked {
         hard_failures.push(SafetyFindingV1 {
-            code: "authority_unsafe_blocked".to_string(),
+            code: AUTHORITY_UNSAFE_BLOCKED_CODE.to_string(),
             message: action.reason.clone(),
             severity: SafetySeverityV1::HardFailure,
             subject: action_subject(&action),

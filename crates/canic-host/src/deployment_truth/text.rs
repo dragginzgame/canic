@@ -497,6 +497,7 @@ const fn safety_status_label(status: SafetyStatusV1) -> &'static str {
 
 const fn authority_apply_blocker_label(blocker: AuthorityApplyBlockerV1) -> &'static str {
     match blocker {
+        AuthorityApplyBlockerV1::UnsafeBlocked => "unsafe_blocked",
         AuthorityApplyBlockerV1::HardFailures => "hard_failures",
         AuthorityApplyBlockerV1::ObservationGaps => "observation_gaps",
         AuthorityApplyBlockerV1::ExternalActions => "external_actions",

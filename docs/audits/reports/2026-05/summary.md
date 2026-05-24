@@ -12,6 +12,7 @@
 | `2026-05-12` | `docs/audits/reports/2026-05/2026-05-12/summary.md` | complete |
 | `2026-05-13` | `docs/audits/reports/2026-05/2026-05-13/summary.md` | complete |
 | `2026-05-14` | `docs/audits/reports/2026-05/2026-05-14/summary.md` | complete |
+| `2026-05-24` | `docs/audits/reports/2026-05/2026-05-24/summary.md` | complete |
 
 ## Month-Level Status
 
@@ -122,3 +123,5 @@ May has day summaries for the currently recorded audit days.
 37. Auth docs maintainers: keep active config docs and examples focused on
     `[auth.delegated_tokens]`, `[auth.role_attestation]`, and per-canister
     `auth` flags.
+38. Testkit maintainers: revisit `icp_artifact_ready_for_build` if the next
+    testkit surface audit still finds no consumers outside its own tests.

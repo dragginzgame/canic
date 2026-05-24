@@ -10,6 +10,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.42.x] - 2026-05-23 - Authority reconciliation
 
+- `0.42.10` tightens authority blocker reporting so unsafe canister authority,
+  hard authority findings, external actions, missing observations, and
+  automatic dry-run candidates stay distinct in blocked dry-run reports and
+  evidence validation.
+
 - `0.42.9` moves authority evidence/report construction and local
   report/receipt/evidence ID generation into `canic-host`, strengthens
   dry-run evidence provenance/timestamp validation, and thins CLI authority
