@@ -1,4 +1,4 @@
-use crate::{
+use crate::cdk::{
     candid::{CandidType, Nat},
     structures::{Storable, storable::Bound},
 };

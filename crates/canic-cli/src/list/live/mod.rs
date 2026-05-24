@@ -1,9 +1,6 @@
 use super::{
-    ListCommandError,
-    options::ListOptions,
-    parse::{parse_canic_metadata_version_response, parse_cycle_balance_response},
-    render::ReadyStatus,
-    state_network,
+    ListCommandError, options::ListOptions, parse::parse_canic_metadata_version_response,
+    render::ReadyStatus, state_network,
 };
 use crate::support::registry_tree::visible_entries;
 use canic_host::{
@@ -16,6 +13,7 @@ use canic_host::{
     },
     registry::RegistryEntry,
     replica_query,
+    response_parse::parse_cycle_balance_response,
 };
 use std::{
     collections::{BTreeMap, BTreeSet},

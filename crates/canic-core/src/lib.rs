@@ -23,6 +23,7 @@ pub mod access;
 pub mod api;
 #[doc(hidden)]
 pub mod bootstrap;
+pub mod cdk;
 #[doc(hidden)]
 pub mod control_plane_support;
 #[doc(hidden)]
@@ -52,8 +53,6 @@ pub(crate) mod ops;
 pub(crate) mod storage;
 pub(crate) mod view;
 pub(crate) mod workflow;
-
-pub use ::canic_cdk as cdk;
 
 pub(crate) use error::{InternalError, InternalErrorClass, InternalErrorOrigin};
 

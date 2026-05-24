@@ -1,5 +1,3 @@
-//! Stable-structure re-exports.
-
 pub mod memory {
     pub use ic_memory::stable_structures::memory_manager::*;
 }

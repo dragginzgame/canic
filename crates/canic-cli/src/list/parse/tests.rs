@@ -1,5 +1,6 @@
 use super::*;
 use canic_host::format::cycles_tc;
+use canic_host::response_parse::parse_cycle_balance_response;
 
 // Ensure cycle balances parse from canic_cycle_balance command output.
 #[test]

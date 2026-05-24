@@ -23,6 +23,12 @@ inspect only the files needed for the current task.
 
 ## Recent Work
 
+- Current unreleased 0.43 work removes the standalone `canic-cdk` workspace
+  crate. The curated `canic::cdk` facade now comes from `canic-core::cdk`,
+  `canic-core` owns the small CDK helper surface it still needs, and
+  `canic-backup` now keeps its hash helpers locally instead of depending on a
+  broad CDK support crate. This continues the 0.43 cleanup of facade/support
+  boundaries while preserving the public `canic::cdk` import path.
 - Current unreleased 0.43 work hardens passive execution-preflight evidence.
   `DeploymentExecutionPreflightV1` now has validation helpers for standalone
   artifacts and source-check-bound artifacts, rejecting schema drift, blank
@@ -1479,7 +1485,7 @@ inspect only the files needed for the current task.
 - `cargo run -q -p canic-cli --bin canic -- backup create demo --dry-run --out /tmp/canic-backup-plan-demo`
 - `cargo run -q -p canic-cli --bin canic -- backup create demo --subtree app --dry-run --out /tmp/canic-backup-plan-demo-app`
 - `cargo run -q -p canic-cli --bin canic -- backup list`
-- `cargo package -p canic -p canic-backup -p canic-cdk -p canic-cli -p canic-control-plane -p canic-core -p canic-host -p canic-macros -p canic-memory -p canic-testkit -p canic-wasm-store --locked --allow-dirty`
+- `cargo package -p canic -p canic-backup -p canic-cli -p canic-control-plane -p canic-core -p canic-host -p canic-macros -p canic-memory -p canic-testkit -p canic-wasm-store --locked --allow-dirty`
 - `cargo metadata --no-deps --format-version 1`
 - `cargo run -q -p canic-cli --bin canic -- backup status --dir backups/fleet-demo-20260510-222116`
 - `cargo test -p canic-cli endpoints -- --nocapture`

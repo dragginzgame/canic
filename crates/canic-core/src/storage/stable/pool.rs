@@ -1,3 +1,4 @@
+use crate::impl_storable_unbounded;
 use crate::{
     cdk::{
         structures::{DefaultMemoryImpl, memory::VirtualMemory},
@@ -7,7 +8,6 @@ use crate::{
     ids::CanisterRole,
     storage::stable::memory::pool::CANISTER_POOL_ID,
 };
-use canic_cdk::impl_storable_unbounded;
 use ic_memory::stable_structures::btreemap::BTreeMap as StableBtreeMap;
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;

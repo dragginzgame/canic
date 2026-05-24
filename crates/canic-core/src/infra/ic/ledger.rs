@@ -17,7 +17,6 @@
 
 use crate::{
     cdk::{
-        env::ck::{CKUSDC_LEDGER_CANISTER, CKUSDT_LEDGER_CANISTER},
         spec::standards::icrc::icrc2::{
             Allowance, AllowanceArgs, TransferFromArgs, TransferFromError, TransferFromResult,
         },
@@ -25,7 +24,11 @@ use crate::{
     },
     infra::{
         InfraError,
-        ic::{IcInfraError, call::Call},
+        ic::{
+            IcInfraError,
+            call::Call,
+            known::{CKUSDC_LEDGER_CANISTER, CKUSDT_LEDGER_CANISTER},
+        },
     },
 };
 use thiserror::Error as ThisError;

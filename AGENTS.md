@@ -24,7 +24,7 @@ with this file, the code is wrong.
   preparation must keep both views aligned.
 
 ## Ownership
-- Runtime/facade: `canic`, `canic-core`, `canic-cdk`, `canic-macros`.
+- Runtime/facade: `canic`, `canic-core`, `canic-macros`.
 - Canister control plane/store: `canic-control-plane`, `canic-wasm-store`.
 - Host/operator: `canic-cli`, `canic-host`, `canic-backup`.
 - Testing: sibling `ic-testkit`, `canic-testing-internal`, `canic-tests`.

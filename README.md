@@ -46,7 +46,6 @@ All Rust workspace crates live under `crates/`:
 
 * `crates/canic/` – public facade crate, macros, endpoint bundles, and protocol constants.
 * `crates/canic-core/` – shared canister runtime foundation: config, lifecycle, ingress limits, auth, storage, workflow, DTOs, and IDs.
-* `crates/canic-cdk/` – curated IC CDK facade used by Canic runtime crates.
 * `crates/canic-macros/` – proc macros behind the public `canic` facade.
 
 **Control-plane canister crates**

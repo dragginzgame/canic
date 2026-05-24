@@ -61,7 +61,7 @@ impl CyclesOptions {
     }
 }
 
-pub(super) fn parse_duration(value: &str) -> Result<u64, CyclesCommandError> {
+fn parse_duration(value: &str) -> Result<u64, CyclesCommandError> {
     let value = value.trim();
     let digits = value
         .chars()

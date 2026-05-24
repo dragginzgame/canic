@@ -4,13 +4,11 @@
 //! can import clean wrappers with consistent naming.
 //!
 
-pub mod governance;
 pub mod standards;
-pub mod system;
 
 /// Shared imports for spec modules so type definitions stay concise.
 pub mod prelude {
-    pub use crate::{
+    pub use crate::cdk::{
         candid::{CandidType, Principal},
         types::{Account, Int, Nat, Subaccount},
     };

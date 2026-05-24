@@ -49,13 +49,14 @@ pub mod __build {
 // -----------------------------------------------------------------------------
 // Sub-crates
 // -----------------------------------------------------------------------------
-pub use canic_cdk as cdk;
+pub use canic_core::cdk;
 pub use canic_core::memory;
 
 // -----------------------------------------------------------------------------
 // Re-exports
 // -----------------------------------------------------------------------------
 pub use canic_core::dto::error::Error;
+pub use canic_core::{impl_storable_bounded, impl_storable_unbounded};
 pub use canic_macros::{canic_query, canic_update};
 
 // -----------------------------------------------------------------------------

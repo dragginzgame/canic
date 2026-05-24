@@ -1,7 +1,5 @@
 use canic_host::response_parse::{find_string_field, parse_candid_text_field, response_candid};
 
-pub(super) use canic_host::response_parse::parse_cycle_balance_response;
-
 pub(super) fn parse_canic_metadata_version_response(output: &str) -> Option<String> {
     serde_json::from_str::<serde_json::Value>(output)
         .ok()

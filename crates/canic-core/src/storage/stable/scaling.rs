@@ -1,3 +1,4 @@
+use crate::impl_storable_bounded;
 use crate::{
     cdk::{
         candid::Principal,
@@ -8,7 +9,6 @@ use crate::{
     ids::CanisterRole,
     storage::stable::memory::placement::SCALING_REGISTRY_ID,
 };
-use canic_cdk::impl_storable_bounded;
 use ic_memory::stable_structures::btreemap::BTreeMap as StableBtreeMap;
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;

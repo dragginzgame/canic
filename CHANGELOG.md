@@ -12,35 +12,21 @@ present.
 
 ## Unreleased
 
+- Removed the standalone `canic-cdk` workspace crate. The public `canic::cdk`
+  facade now comes from `canic-core::cdk`, and remaining internal users import
+  CDK helpers through Canic core or local narrow helpers.
+
 ## [0.43.x] - 2026-05-24 - Backend-agnostic execution
 
-- `0.43.2` hardens passive execution-preflight evidence with validation for
-  schema/provenance drift, status/blocker consistency, capability metadata,
-  and source-check identity. Current-install preflight paths now validate
-  before returning readiness or writing `execution_preflight` receipts.
+- `0.43.2` hardens passive execution-preflight evidence with provenance,
+  consistency, capability, and JSON-shape validation.
 
-- `0.43.1` expands the passive execution-readiness path. Callers can now use
-  `deployment_execution_preflight_from_check(...)` or
-  `check_install_execution_preflight(...)` to derive executor readiness from
-  deployment checks/current install inputs without writing receipt state or
-  entering the mutating install path. Current install now persists a dedicated
-  `execution_preflight` deployment-truth receipt after the materialized safety
-  gate and stops before later install phases if that preflight is blocked.
-  Host-owned text rendering for `DeploymentExecutionPreflightV1` provides a
-  human-readable readiness summary without adding a new CLI command.
+- `0.43.1` expands passive execution-readiness checks and records
+  `execution_preflight` receipts before later current-install phases continue.
 
-- `0.43.0` starts the plan-driven execution line by adding backend execution
-  context metadata, current-CLI backend capability records, a concrete
-  current-CLI executor wrapper, and a minimal `DeploymentExecutor` trait.
-  `DeploymentReceiptV1` can now carry optional execution context so later
-  installer extraction can record workspace root, ICP root, artifact roots,
-  backend, and capability evidence. Current-install deployment truth receipts
-  now attach that current-CLI execution context when they are written, and
-  current install now checks the selected backend's required capabilities before
-  mutating install phases begin. It also adds passive
-  `DeploymentExecutionPreflightV1` readiness evidence over `DeploymentPlanV1`,
-  `SafetyReportV1`, `AuthorityReconciliationPlanV1`, and executor capabilities
-  to classify execution as ready or blocked before any backend operation runs.
+- `0.43.0` starts the plan-driven execution line with executor context,
+  capability evidence, current-CLI backend scaffolding, and passive execution
+  preflight readiness.
 
 ```bash
 canic deploy plan <fleet>

@@ -1,12 +1,12 @@
 use crate::ids::{TemplateChunkKey, TemplateReleaseKey};
-use canic_cdk::impl_storable_unbounded;
-use canic_cdk::structures::{
+use canic_core::CANIC_WASM_CHUNK_BYTES;
+use canic_core::cdk::structures::{
     DefaultMemoryImpl, Vec as StableVec,
     memory::VirtualMemory,
     storable::{Bound, Storable},
 };
-use canic_core::CANIC_WASM_CHUNK_BYTES;
 use canic_core::eager_static;
+use canic_core::impl_storable_unbounded;
 use ic_memory::stable_structures::btreemap::BTreeMap as StableBtreeMap;
 use serde::{Deserialize, Serialize};
 use std::{borrow::Cow, cell::RefCell, collections::BTreeMap as StdBTreeMap};
@@ -440,7 +440,7 @@ mod tests {
         TemplateChunkStore::upsert(chunk_key.clone(), TemplateChunkRecord { bytes: vec![4, 5] });
 
         let payload_slots =
-            TEMPLATE_CHUNK_PAYLOADS.with_borrow(canic_cdk::structures::StableVec::len);
+            TEMPLATE_CHUNK_PAYLOADS.with_borrow(canic_core::cdk::structures::StableVec::len);
         assert_eq!(payload_slots, 1);
         assert_eq!(
             TemplateChunkStore::get(&chunk_key),

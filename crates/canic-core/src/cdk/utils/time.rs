@@ -10,7 +10,7 @@ use std::time::SystemTime;
 fn time_nanos() -> u128 {
     #[cfg(target_arch = "wasm32")]
     {
-        return u128::from(crate::api::time());
+        return u128::from(crate::cdk::api::time());
     }
 
     match SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {

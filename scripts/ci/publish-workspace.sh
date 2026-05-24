@@ -12,7 +12,6 @@ PUBLISH_POLL_SECS="${PUBLISH_POLL_SECS:-10}"
 PUBLISH_TIMEOUT_SECS="${PUBLISH_TIMEOUT_SECS:-300}"
 
 PUBLISH_ORDER=(
-    canic-cdk
     canic-backup
     canic-core
     canic-control-plane

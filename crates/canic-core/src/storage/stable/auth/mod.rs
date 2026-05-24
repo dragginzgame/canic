@@ -1,9 +1,9 @@
+use crate::impl_storable_unbounded;
 use crate::{
     cdk::structures::{DefaultMemoryImpl, cell::Cell, memory::VirtualMemory},
     eager_static,
     storage::{prelude::*, stable::memory::auth::AUTH_STATE_ID},
 };
-use canic_cdk::impl_storable_unbounded;
 use std::cell::RefCell;
 
 mod key_state;

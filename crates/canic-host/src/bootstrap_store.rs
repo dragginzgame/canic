@@ -21,12 +21,7 @@ const CANONICAL_WASM_STORE_MANIFEST_RELATIVE: &str = "crates/canic-wasm-store/Ca
 const CANONICAL_WASM_STORE_DID_FILE: &str = "wasm_store.did";
 const CANONICAL_WASM_STORE_CRATE_NAME: &str = "canister_wasm_store";
 const GENERATED_WRAPPER_PACKAGE_NAME: &str = "canic-generated-wasm-store";
-const CANIC_FAMILY_CRATES: &[&str] = &[
-    "canic-cdk",
-    "canic-control-plane",
-    "canic-core",
-    "canic-macros",
-];
+const CANIC_FAMILY_CRATES: &[&str] = &["canic-control-plane", "canic-core", "canic-macros"];
 
 ///
 /// BootstrapWasmStoreBuildOutput

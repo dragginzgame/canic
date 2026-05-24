@@ -35,7 +35,6 @@ populate_isolated_package_root() {
 
     local crate_archive=""
     for crate_archive in \
-        "$PACKAGE_STAGING_ROOT/canic-cdk-$VERSION.crate" \
         "$PACKAGE_STAGING_ROOT/canic-backup-$VERSION.crate" \
         "$PACKAGE_STAGING_ROOT/canic-control-plane-$VERSION.crate" \
         "$PACKAGE_STAGING_ROOT/canic-core-$VERSION.crate" \
@@ -62,7 +61,6 @@ resolver = "2"
 [patch.crates-io]
 canic = { path = "package-root/canic-$VERSION" }
 canic-backup = { path = "package-root/canic-backup-$VERSION" }
-canic-cdk = { path = "package-root/canic-cdk-$VERSION" }
 canic-control-plane = { path = "package-root/canic-control-plane-$VERSION" }
 canic-core = { path = "package-root/canic-core-$VERSION" }
 canic-host = { path = "package-root/canic-host-$VERSION" }
@@ -142,7 +140,6 @@ assert_probe_outputs() {
 }
 
 main() {
-    ensure_packaged_crate canic-cdk
     ensure_packaged_crate canic-backup
     ensure_packaged_crate canic-control-plane
     ensure_packaged_crate canic-core

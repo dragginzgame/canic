@@ -4,7 +4,7 @@
 //! tables where size caps matter.
 //!
 
-use crate::structures::{Storable, storable::Bound};
+use crate::cdk::structures::{Storable, storable::Bound};
 use candid::CandidType;
 use serde::{Deserialize, Serialize};
 use std::{

@@ -7,7 +7,6 @@ use std::{
 
 const CANIC_MANAGED_RUNTIME_CRATES: &[&str] = &[
     "canic",
-    "canic-cdk",
     "canic-core",
     "canic-control-plane",
     "canic-macros",

@@ -15,13 +15,13 @@ pub mod stable;
 ///
 
 pub mod prelude {
+    pub use crate::impl_storable_bounded;
     pub use crate::{
         cdk::types::{Cycles, Principal},
         eager_static,
         ids::{CanisterRole, SubnetRole},
         storage::StorageError,
     };
-    pub use canic_cdk::impl_storable_bounded;
     pub use serde::{Deserialize, Serialize};
 }
 

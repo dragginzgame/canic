@@ -1,5 +1,6 @@
 #![allow(clippy::cast_possible_truncation)]
 
+use crate::impl_storable_unbounded;
 use crate::{
     cdk::structures::{
         DefaultMemoryImpl,
@@ -16,7 +17,6 @@ use crate::{
         },
     },
 };
-use canic_cdk::impl_storable_unbounded;
 use serde::{Deserialize, Serialize};
 use std::{cell::RefCell, collections::VecDeque};
 

@@ -10,7 +10,7 @@ mod errors;
 
 pub use errors::*;
 
-use crate::spec::prelude::*;
+use crate::cdk::spec::prelude::*;
 
 //
 // ConsentResult

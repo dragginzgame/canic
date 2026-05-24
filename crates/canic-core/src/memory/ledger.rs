@@ -82,7 +82,7 @@ fn validate_existing_ledger_memory<M: Memory>(memory: &M) -> Result<(), MemoryRe
         return Ok(());
     }
 
-    if let Ok(probe) = canic_cdk::serialize::deserialize::<LegacyCanicLedgerProbe>(&bytes)
+    if let Ok(probe) = crate::cdk::serialize::deserialize::<LegacyCanicLedgerProbe>(&bytes)
         && probe.magic == LEGACY_CANIC_LEDGER_MAGIC
     {
         return Err(MemoryRegistryError::LedgerCorrupt {
@@ -162,7 +162,7 @@ mod tests {
             magic: u64,
         }
 
-        let payload = canic_cdk::serialize::serialize(&LegacyCanicLedgerProbeForTest {
+        let payload = crate::cdk::serialize::serialize(&LegacyCanicLedgerProbeForTest {
             magic: LEGACY_CANIC_LEDGER_MAGIC,
         })
         .expect("legacy probe payload");
@@ -179,7 +179,7 @@ mod tests {
 
     #[test]
     fn validates_native_ledger_cell_payload() {
-        let payload = canic_cdk::serialize::serialize(&StableCellLedgerRecord::default())
+        let payload = crate::cdk::serialize::serialize(&StableCellLedgerRecord::default())
             .expect("native payload");
         let memory = DefaultMemoryImpl::default();
         memory.grow(1);

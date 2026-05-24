@@ -16,7 +16,6 @@ publish = true
 [dependencies]
 async-trait = { workspace = true }
 candid = { workspace = true }
-canic-cdk = { workspace = true }
 canic-core = { workspace = true }
 ic-memory = { workspace = true }
 serde = { workspace = true }

@@ -22,7 +22,6 @@ auth-crypto = ["canic-core/auth-crypto"]
 
 [dependencies]
 candid = { workspace = true }
-canic-cdk = { workspace = true }
 canic-control-plane = { workspace = true, optional = true }
 canic-core = { workspace = true }
 canic-macros = { workspace = true }

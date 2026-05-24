@@ -2,9 +2,9 @@ use crate::ids::{
     CanisterRole, TemplateChunkingMode, TemplateManifestState, TemplateReleaseKey, TemplateVersion,
     WasmStoreBinding,
 };
-use canic_cdk::impl_storable_bounded;
-use canic_cdk::structures::{DefaultMemoryImpl, memory::VirtualMemory, storable::Storable};
+use canic_core::cdk::structures::{DefaultMemoryImpl, memory::VirtualMemory, storable::Storable};
 use canic_core::eager_static;
+use canic_core::impl_storable_bounded;
 use ic_memory::stable_structures::btreemap::BTreeMap as StableBtreeMap;
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;

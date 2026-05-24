@@ -6,7 +6,7 @@ use crate::{
     ops::storage::state::mapper::SubnetStateMapper,
     storage::stable::state::subnet::{PublicationStoreStateRecord, SubnetState, WasmStoreRecord},
 };
-use canic_cdk::types::Principal;
+use canic_core::cdk::types::Principal;
 
 ///
 /// SubnetStateOps

@@ -1,7 +1,6 @@
 use super::*;
 use crate::cycles::{
     model::{CycleTopupEventSample, CycleTopupStatus, CycleTrackerPage, CycleTrackerSample},
-    options::parse_duration,
     parse::{parse_cycle_tracker_page, parse_cycle_tracker_page_text, parse_topup_event_page},
     transport::{summarize_cycle_tracker, topup_summary_from_events},
 };
@@ -13,11 +12,23 @@ use std::ffi::OsString;
 // Ensure common duration selectors parse into seconds.
 #[test]
 fn parses_duration_selectors() {
-    assert_eq!(parse_duration("30m").expect("30m"), 1_800);
-    assert_eq!(parse_duration("6h").expect("6h"), 21_600);
-    assert_eq!(parse_duration("7d").expect("7d"), 604_800);
+    for (value, expected) in [("30m", 1_800), ("6h", 21_600), ("7d", 604_800)] {
+        let options = options::CyclesOptions::parse_info([
+            OsString::from("test"),
+            OsString::from("--since"),
+            OsString::from(value),
+        ])
+        .expect("parse cycles duration");
+
+        assert_eq!(options.since_seconds, expected);
+    }
+
     assert!(matches!(
-        parse_duration("0h"),
+        options::CyclesOptions::parse_info([
+            OsString::from("test"),
+            OsString::from("--since"),
+            OsString::from("0h"),
+        ]),
         Err(CyclesCommandError::InvalidDuration(_))
     ));
 }

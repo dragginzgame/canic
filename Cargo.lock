@@ -316,7 +316,6 @@ version = "0.43.2"
 dependencies = [
  "candid",
  "candid_parser",
- "canic-cdk",
  "canic-control-plane",
  "canic-core",
  "canic-macros",
@@ -331,26 +330,8 @@ name = "canic-backup"
 version = "0.43.2"
 dependencies = [
  "candid",
- "canic-cdk",
  "serde",
  "serde_json",
- "sha2",
- "thiserror 2.0.18",
-]
-
-[[package]]
-name = "canic-cdk"
-version = "0.43.2"
-dependencies = [
- "candid",
- "ic-cdk",
- "ic-cdk-management-canister",
- "ic-cdk-timers",
- "ic-memory",
- "icrc-ledger-types",
- "serde",
- "serde_bytes",
- "serde_cbor",
  "sha2",
  "thiserror 2.0.18",
 ]
@@ -376,7 +357,6 @@ version = "0.43.2"
 dependencies = [
  "async-trait",
  "candid",
- "canic-cdk",
  "canic-core",
  "ic-memory",
  "serde",
@@ -390,16 +370,20 @@ version = "0.43.2"
 dependencies = [
  "async-trait",
  "candid",
- "canic-cdk",
  "criterion",
  "futures",
+ "ic-cdk",
+ "ic-cdk-management-canister",
+ "ic-cdk-timers",
  "ic-memory",
+ "icrc-ledger-types",
  "k256",
  "proc-macro2",
  "quote",
  "remain",
  "serde",
  "serde_bytes",
+ "serde_cbor",
  "sha2",
  "thiserror 2.0.18",
  "toml 1.1.2+spec-1.1.0",

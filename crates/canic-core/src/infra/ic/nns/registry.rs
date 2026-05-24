@@ -1,8 +1,5 @@
 use crate::{
-    cdk::{
-        spec::governance::nns::{GetSubnetForCanisterRequest, GetSubnetForCanisterResponse},
-        types::Principal,
-    },
+    cdk::types::Principal,
     infra::{
         InfraError,
         ic::{call::Call, known::NNS_REGISTRY_CANISTER, nns::NnsInfraError},
@@ -10,7 +7,33 @@ use crate::{
     log,
     log::Topic,
 };
+use candid::CandidType;
+use serde::Deserialize;
 use thiserror::Error as ThisError;
+
+///
+/// GetSubnetForCanisterRequest
+///
+
+#[derive(CandidType, Debug, Deserialize)]
+pub struct GetSubnetForCanisterRequest {
+    pub principal: Principal,
+}
+
+///
+/// GetSubnetForCanisterResponse
+///
+
+pub type GetSubnetForCanisterResponse = Result<GetSubnetForCanisterPayload, String>;
+
+///
+/// GetSubnetForCanisterPayload
+///
+
+#[derive(CandidType, Debug, Deserialize)]
+pub struct GetSubnetForCanisterPayload {
+    pub subnet_id: Option<Principal>,
+}
 
 ///
 /// NnsRegistryInfraError

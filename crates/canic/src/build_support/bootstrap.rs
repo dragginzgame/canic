@@ -1,4 +1,4 @@
-use canic_cdk::utils::hash::sha256_hex;
+use canic_core::cdk::utils::hash::sha256_hex;
 use flate2::read::GzDecoder;
 use std::{
     env,

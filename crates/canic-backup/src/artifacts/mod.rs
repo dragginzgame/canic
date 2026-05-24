@@ -1,4 +1,4 @@
-use canic_cdk::utils::hash::{hex_bytes, sha256_hex};
+use crate::hash::{hex_bytes, sha256_hex};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
