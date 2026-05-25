@@ -57,6 +57,14 @@ promotion can prove what was built, uploaded, installed, and promoted.
   validation that rechecks the nested transform.
 - Added host-owned passive text rendering for `PromotionPlanTransformEvidenceV1`
   that explicitly reports no execution occurred.
+- Added `PromotionArtifactIdentityReportV1` to separate role source locator
+  kind from artifact identity kind before promotion planning consumes role
+  sources.
+- Promotion artifact identity reports now group roles by deterministic artifact
+  identity key so operator output can show when distinct source locators resolve
+  to the same sealed or source/build identity.
+- Added host-owned passive text rendering for
+  `PromotionArtifactIdentityReportV1`.
 
 ## Not Implemented Yet
 
@@ -64,7 +72,7 @@ promotion can prove what was built, uploaded, installed, and promoted.
 - Promotion execution receipts and richer provenance.
 - Full promotion safety checks across deployment targets.
 - Integration with wasm-store artifact identity.
-- Source locator kind versus artifact identity dedupe/report semantics.
+- Artifact identity dedupe semantics beyond passive report grouping.
 - Full source/build materialization environment identity, including target,
   linker, deterministic-build mode, wasm optimization, and compression
   identity.

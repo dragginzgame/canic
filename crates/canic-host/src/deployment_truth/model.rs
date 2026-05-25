@@ -183,6 +183,65 @@ pub enum PromotionArtifactLevelV1 {
 }
 
 ///
+/// PromotionArtifactIdentityReportV1
+///
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct PromotionArtifactIdentityReportV1 {
+    pub schema_version: u32,
+    pub report_id: String,
+    pub status: PromotionReadinessStatusV1,
+    pub roles: Vec<RolePromotionArtifactIdentityV1>,
+    pub identity_groups: Vec<PromotionArtifactIdentityGroupV1>,
+    pub blockers: Vec<SafetyFindingV1>,
+}
+
+///
+/// PromotionArtifactIdentityGroupV1
+///
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct PromotionArtifactIdentityGroupV1 {
+    pub identity_key: String,
+    pub identity_kind: PromotionArtifactIdentityKindV1,
+    pub roles: Vec<String>,
+    pub source_kinds: Vec<RoleArtifactSourceKindV1>,
+    pub source_locators: Vec<String>,
+    pub digest_pinned: bool,
+    pub wasm_sha256: Option<String>,
+    pub wasm_gz_sha256: Option<String>,
+    pub candid_sha256: Option<String>,
+    pub canonical_embedded_config_sha256: Option<String>,
+}
+
+///
+/// RolePromotionArtifactIdentityV1
+///
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RolePromotionArtifactIdentityV1 {
+    pub role: String,
+    pub promotion_level: PromotionArtifactLevelV1,
+    pub source_kind: RoleArtifactSourceKindV1,
+    pub source_locator: Option<String>,
+    pub identity_kind: PromotionArtifactIdentityKindV1,
+    pub digest_pinned: bool,
+    pub wasm_sha256: Option<String>,
+    pub wasm_gz_sha256: Option<String>,
+    pub candid_sha256: Option<String>,
+    pub canonical_embedded_config_sha256: Option<String>,
+}
+
+///
+/// PromotionArtifactIdentityKindV1
+///
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum PromotionArtifactIdentityKindV1 {
+    SealedWasm,
+    SealedCompressedWasm,
+    SealedWasmAndCompressedWasm,
+    SourceBuild,
+    Deferred,
+}
+
+///
 /// PromotionReadinessV1
 ///
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]

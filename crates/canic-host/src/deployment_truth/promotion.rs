@@ -1,10 +1,13 @@
 use super::{
-    ArtifactSourceV1, DEPLOYMENT_TRUTH_SCHEMA_VERSION, DeploymentPlanV1, PromotionArtifactLevelV1,
-    PromotionPlanTransformEvidenceV1, PromotionPlanTransformV1, PromotionReadinessStatusV1,
-    PromotionReadinessV1, RoleArtifactSourceKindV1, RoleArtifactSourceV1, RoleArtifactV1,
-    RolePromotionInputV1, RolePromotionPlanTransformV1, RolePromotionReadinessV1, SafetyFindingV1,
-    SafetySeverityV1,
+    ArtifactSourceV1, DEPLOYMENT_TRUTH_SCHEMA_VERSION, DeploymentPlanV1,
+    PromotionArtifactIdentityGroupV1, PromotionArtifactIdentityKindV1,
+    PromotionArtifactIdentityReportV1, PromotionArtifactLevelV1, PromotionPlanTransformEvidenceV1,
+    PromotionPlanTransformV1, PromotionReadinessStatusV1, PromotionReadinessV1,
+    RoleArtifactSourceKindV1, RoleArtifactSourceV1, RoleArtifactV1,
+    RolePromotionArtifactIdentityV1, RolePromotionInputV1, RolePromotionPlanTransformV1,
+    RolePromotionReadinessV1, SafetyFindingV1, SafetySeverityV1,
 };
+use std::collections::{BTreeMap, BTreeSet};
 use thiserror::Error as ThisError;
 
 ///
@@ -94,6 +97,56 @@ pub enum PromotionPlanTransformEvidenceError {
 }
 
 ///
+/// PromotionArtifactIdentityReportError
+///
+#[derive(Debug, ThisError)]
+pub enum PromotionArtifactIdentityReportError {
+    #[error(
+        "promotion artifact identity report schema mismatch: expected {expected}, found {found}"
+    )]
+    SchemaVersionMismatch { expected: u32, found: u32 },
+    #[error("promotion artifact identity report is missing required field: {field}")]
+    MissingRequiredField { field: &'static str },
+    #[error(
+        "promotion artifact identity report status {status:?} does not match blocker count {blocker_count}"
+    )]
+    StatusBlockerMismatch {
+        status: PromotionReadinessStatusV1,
+        blocker_count: usize,
+    },
+    #[error("promotion artifact identity report contains duplicate role: {role}")]
+    DuplicateRole { role: String },
+    #[error("promotion artifact identity report contains duplicate identity group: {identity_key}")]
+    DuplicateIdentityGroup { identity_key: String },
+    #[error("promotion artifact identity report identity group {identity_key} has no roles")]
+    EmptyIdentityGroup { identity_key: String },
+    #[error("promotion artifact identity report identity group contains unknown role: {role}")]
+    UnknownGroupedRole { role: String },
+    #[error("promotion artifact identity report groups role {role} more than once")]
+    DuplicateGroupedRole { role: String },
+    #[error("promotion artifact identity report does not group role: {role}")]
+    MissingGroupedRole { role: String },
+    #[error(
+        "promotion artifact identity report role {role} belongs to identity group {expected}, found {found}"
+    )]
+    IdentityGroupRoleMismatch {
+        role: String,
+        expected: String,
+        found: String,
+    },
+    #[error(
+        "promotion artifact identity report identity group key mismatch: expected {expected}, found {found}"
+    )]
+    IdentityGroupKeyMismatch { expected: String, found: String },
+    #[error(
+        "promotion artifact identity report field {field} must be a lowercase sha256 hex digest"
+    )]
+    InvalidSha256Digest { field: &'static str },
+    #[error("promotion artifact identity report blocker has severity {severity:?}")]
+    BlockerSeverityMismatch { severity: SafetySeverityV1 },
+}
+
+///
 /// PromotionReadinessRequest
 ///
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -121,6 +174,15 @@ pub struct PromotionPlanTransformEvidenceRequest {
     pub evidence_id: String,
     pub generated_at: String,
     pub transform: PromotionPlanTransformV1,
+}
+
+///
+/// PromotionArtifactIdentityReportRequest
+///
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PromotionArtifactIdentityReportRequest {
+    pub report_id: String,
+    pub inputs: Vec<RolePromotionInputV1>,
 }
 
 pub fn promoted_deployment_plan_from_inputs(
@@ -176,6 +238,81 @@ pub fn check_promotion_readiness(
     );
     validate_promotion_readiness(&readiness)?;
     Ok(readiness)
+}
+
+pub fn promotion_artifact_identity_report_from_inputs(
+    request: PromotionArtifactIdentityReportRequest,
+) -> Result<PromotionArtifactIdentityReportV1, PromotionArtifactIdentityReportError> {
+    ensure_identity_report_field("report_id", &request.report_id)?;
+    let report = promotion_artifact_identity_report(&request.report_id, &request.inputs);
+    validate_promotion_artifact_identity_report(&report)?;
+    Ok(report)
+}
+
+#[must_use]
+pub fn promotion_artifact_identity_report(
+    report_id: impl Into<String>,
+    inputs: &[RolePromotionInputV1],
+) -> PromotionArtifactIdentityReportV1 {
+    let mut roles = Vec::with_capacity(inputs.len());
+    let mut blockers = Vec::new();
+    for input in inputs {
+        if let Err(err) = validate_role_artifact_source(&input.source) {
+            blockers.push(promotion_finding(
+                "promotion_artifact_source_invalid",
+                err.to_string(),
+                SafetySeverityV1::HardFailure,
+                &input.role,
+            ));
+        }
+        if input.role != input.source.role {
+            blockers.push(promotion_finding(
+                "promotion_source_role_mismatch",
+                format!(
+                    "promotion input role {} does not match artifact source role {}",
+                    input.role, input.source.role
+                ),
+                SafetySeverityV1::HardFailure,
+                &input.role,
+            ));
+        }
+        roles.push(role_promotion_artifact_identity(input));
+    }
+
+    PromotionArtifactIdentityReportV1 {
+        schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
+        report_id: report_id.into(),
+        status: if blockers.is_empty() {
+            PromotionReadinessStatusV1::Ready
+        } else {
+            PromotionReadinessStatusV1::Blocked
+        },
+        identity_groups: promotion_artifact_identity_groups(&roles),
+        roles,
+        blockers,
+    }
+}
+
+pub fn validate_promotion_artifact_identity_report(
+    report: &PromotionArtifactIdentityReportV1,
+) -> Result<(), PromotionArtifactIdentityReportError> {
+    if report.schema_version != DEPLOYMENT_TRUTH_SCHEMA_VERSION {
+        return Err(
+            PromotionArtifactIdentityReportError::SchemaVersionMismatch {
+                expected: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
+                found: report.schema_version,
+            },
+        );
+    }
+    ensure_identity_report_field("report_id", &report.report_id)?;
+    ensure_identity_report_status_matches_blockers(report)?;
+    ensure_unique_artifact_identity_roles(&report.roles)?;
+    for role in &report.roles {
+        validate_role_artifact_identity(role)?;
+    }
+    validate_artifact_identity_groups(&report.roles, &report.identity_groups)?;
+    validate_identity_report_blockers(&report.blockers)?;
+    Ok(())
 }
 
 pub fn promotion_plan_transform_evidence(
@@ -462,6 +599,274 @@ fn role_materialization_identity_matches(before: &RoleArtifactV1, after: &RoleAr
         && before.candid_path == after.candid_path
         && before.candid_sha256 == after.candid_sha256
         && before.canonical_embedded_config_sha256 == after.canonical_embedded_config_sha256
+}
+
+fn role_promotion_artifact_identity(
+    input: &RolePromotionInputV1,
+) -> RolePromotionArtifactIdentityV1 {
+    let wasm_sha256 = input.source.expected_wasm_sha256.clone();
+    let wasm_gz_sha256 = input.source.expected_wasm_gz_sha256.clone();
+    RolePromotionArtifactIdentityV1 {
+        role: input.role.clone(),
+        promotion_level: input.promotion_level,
+        source_kind: input.source.kind,
+        source_locator: input.source.locator.clone(),
+        identity_kind: promotion_artifact_identity_kind(input.promotion_level, &input.source),
+        digest_pinned: wasm_sha256.is_some() || wasm_gz_sha256.is_some(),
+        wasm_sha256,
+        wasm_gz_sha256,
+        candid_sha256: input.source.expected_candid_sha256.clone(),
+        canonical_embedded_config_sha256: input
+            .source
+            .expected_canonical_embedded_config_sha256
+            .clone(),
+    }
+}
+
+fn promotion_artifact_identity_groups(
+    roles: &[RolePromotionArtifactIdentityV1],
+) -> Vec<PromotionArtifactIdentityGroupV1> {
+    let mut groups = BTreeMap::<String, PromotionArtifactIdentityGroupV1>::new();
+    for role in roles {
+        let identity_key = artifact_identity_key_for_role(role);
+        let group = groups.entry(identity_key.clone()).or_insert_with(|| {
+            PromotionArtifactIdentityGroupV1 {
+                identity_key,
+                identity_kind: role.identity_kind,
+                roles: Vec::new(),
+                source_kinds: Vec::new(),
+                source_locators: Vec::new(),
+                digest_pinned: role.digest_pinned,
+                wasm_sha256: role.wasm_sha256.clone(),
+                wasm_gz_sha256: role.wasm_gz_sha256.clone(),
+                candid_sha256: role.candid_sha256.clone(),
+                canonical_embedded_config_sha256: role.canonical_embedded_config_sha256.clone(),
+            }
+        });
+        if !group.source_kinds.contains(&role.source_kind) {
+            group.source_kinds.push(role.source_kind);
+        }
+        if let Some(locator) = &role.source_locator
+            && !group.source_locators.contains(locator)
+        {
+            group.source_locators.push(locator.clone());
+        }
+        group.roles.push(role.role.clone());
+    }
+    groups.into_values().collect()
+}
+
+const fn promotion_artifact_identity_kind(
+    promotion_level: PromotionArtifactLevelV1,
+    source: &RoleArtifactSourceV1,
+) -> PromotionArtifactIdentityKindV1 {
+    if matches!(promotion_level, PromotionArtifactLevelV1::SourceBuild) {
+        return PromotionArtifactIdentityKindV1::SourceBuild;
+    }
+    match (
+        source.expected_wasm_sha256.is_some(),
+        source.expected_wasm_gz_sha256.is_some(),
+    ) {
+        (true, true) => PromotionArtifactIdentityKindV1::SealedWasmAndCompressedWasm,
+        (true, false) => PromotionArtifactIdentityKindV1::SealedWasm,
+        (false, true) => PromotionArtifactIdentityKindV1::SealedCompressedWasm,
+        (false, false) => PromotionArtifactIdentityKindV1::Deferred,
+    }
+}
+
+fn artifact_identity_key_for_role(role: &RolePromotionArtifactIdentityV1) -> String {
+    match role.identity_kind {
+        PromotionArtifactIdentityKindV1::SealedWasm
+        | PromotionArtifactIdentityKindV1::SealedCompressedWasm
+        | PromotionArtifactIdentityKindV1::SealedWasmAndCompressedWasm => sealed_identity_key(
+            role.wasm_sha256.as_deref(),
+            role.wasm_gz_sha256.as_deref(),
+            role.candid_sha256.as_deref(),
+            role.canonical_embedded_config_sha256.as_deref(),
+        ),
+        PromotionArtifactIdentityKindV1::SourceBuild => format!(
+            "source_build:source_kind={:?}:locator={}:candid={}:config={}",
+            role.source_kind,
+            optional_identity_part(role.source_locator.as_deref()),
+            optional_identity_part(role.candid_sha256.as_deref()),
+            optional_identity_part(role.canonical_embedded_config_sha256.as_deref())
+        ),
+        PromotionArtifactIdentityKindV1::Deferred => format!(
+            "deferred:source_kind={:?}:locator={}",
+            role.source_kind,
+            optional_identity_part(role.source_locator.as_deref())
+        ),
+    }
+}
+
+fn artifact_identity_key_for_group(group: &PromotionArtifactIdentityGroupV1) -> String {
+    match group.identity_kind {
+        PromotionArtifactIdentityKindV1::SealedWasm
+        | PromotionArtifactIdentityKindV1::SealedCompressedWasm
+        | PromotionArtifactIdentityKindV1::SealedWasmAndCompressedWasm => sealed_identity_key(
+            group.wasm_sha256.as_deref(),
+            group.wasm_gz_sha256.as_deref(),
+            group.candid_sha256.as_deref(),
+            group.canonical_embedded_config_sha256.as_deref(),
+        ),
+        PromotionArtifactIdentityKindV1::SourceBuild => format!(
+            "source_build:source_kind={}:locator={}:candid={}:config={}",
+            source_kind_identity_part(single_group_source_kind(group)),
+            optional_identity_part(single_group_source_locator(group)),
+            optional_identity_part(group.candid_sha256.as_deref()),
+            optional_identity_part(group.canonical_embedded_config_sha256.as_deref())
+        ),
+        PromotionArtifactIdentityKindV1::Deferred => format!(
+            "deferred:source_kind={}:locator={}",
+            source_kind_identity_part(single_group_source_kind(group)),
+            optional_identity_part(single_group_source_locator(group))
+        ),
+    }
+}
+
+fn source_kind_identity_part(kind: Option<RoleArtifactSourceKindV1>) -> String {
+    kind.map_or_else(|| "not-recorded".to_string(), |kind| format!("{kind:?}"))
+}
+
+fn single_group_source_kind(
+    group: &PromotionArtifactIdentityGroupV1,
+) -> Option<RoleArtifactSourceKindV1> {
+    group.source_kinds.first().copied()
+}
+
+fn single_group_source_locator(group: &PromotionArtifactIdentityGroupV1) -> Option<&str> {
+    group.source_locators.first().map(String::as_str)
+}
+
+fn sealed_identity_key(
+    wasm_sha256: Option<&str>,
+    wasm_gz_sha256: Option<&str>,
+    candid_sha256: Option<&str>,
+    canonical_embedded_config_sha256: Option<&str>,
+) -> String {
+    format!(
+        "sealed:wasm={}:wasm_gz={}:candid={}:config={}",
+        optional_identity_part(wasm_sha256),
+        optional_identity_part(wasm_gz_sha256),
+        optional_identity_part(candid_sha256),
+        optional_identity_part(canonical_embedded_config_sha256)
+    )
+}
+
+const fn optional_identity_part(value: Option<&str>) -> &str {
+    match value {
+        Some(value) => value,
+        None => "not-recorded",
+    }
+}
+
+fn validate_role_artifact_identity(
+    role: &RolePromotionArtifactIdentityV1,
+) -> Result<(), PromotionArtifactIdentityReportError> {
+    ensure_identity_report_field("role", &role.role)?;
+    ensure_identity_optional_sha256("wasm_sha256", role.wasm_sha256.as_deref())?;
+    ensure_identity_optional_sha256("wasm_gz_sha256", role.wasm_gz_sha256.as_deref())?;
+    ensure_identity_optional_sha256("candid_sha256", role.candid_sha256.as_deref())?;
+    ensure_identity_optional_sha256(
+        "canonical_embedded_config_sha256",
+        role.canonical_embedded_config_sha256.as_deref(),
+    )?;
+    Ok(())
+}
+
+fn validate_artifact_identity_groups(
+    roles: &[RolePromotionArtifactIdentityV1],
+    groups: &[PromotionArtifactIdentityGroupV1],
+) -> Result<(), PromotionArtifactIdentityReportError> {
+    let role_names = roles
+        .iter()
+        .map(|role| role.role.as_str())
+        .collect::<BTreeSet<_>>();
+    let mut grouped_roles = BTreeSet::new();
+    let mut group_keys = BTreeSet::new();
+    for group in groups {
+        validate_artifact_identity_group(group)?;
+        if !group_keys.insert(group.identity_key.as_str()) {
+            return Err(
+                PromotionArtifactIdentityReportError::DuplicateIdentityGroup {
+                    identity_key: group.identity_key.clone(),
+                },
+            );
+        }
+        if group.roles.is_empty() {
+            return Err(PromotionArtifactIdentityReportError::EmptyIdentityGroup {
+                identity_key: group.identity_key.clone(),
+            });
+        }
+        for role in &group.roles {
+            if !role_names.contains(role.as_str()) {
+                return Err(PromotionArtifactIdentityReportError::UnknownGroupedRole {
+                    role: role.clone(),
+                });
+            }
+            if !grouped_roles.insert(role.as_str()) {
+                return Err(PromotionArtifactIdentityReportError::DuplicateGroupedRole {
+                    role: role.clone(),
+                });
+            }
+            let role_identity = roles
+                .iter()
+                .find(|candidate| candidate.role == *role)
+                .expect("known role should be present");
+            let expected = artifact_identity_key_for_role(role_identity);
+            if expected != group.identity_key {
+                return Err(
+                    PromotionArtifactIdentityReportError::IdentityGroupRoleMismatch {
+                        role: role.clone(),
+                        expected,
+                        found: group.identity_key.clone(),
+                    },
+                );
+            }
+        }
+    }
+    for role in roles {
+        if !grouped_roles.contains(role.role.as_str()) {
+            return Err(PromotionArtifactIdentityReportError::MissingGroupedRole {
+                role: role.role.clone(),
+            });
+        }
+    }
+    Ok(())
+}
+
+fn validate_artifact_identity_group(
+    group: &PromotionArtifactIdentityGroupV1,
+) -> Result<(), PromotionArtifactIdentityReportError> {
+    ensure_identity_report_field("identity_group.identity_key", &group.identity_key)?;
+    if group.source_kinds.is_empty() {
+        return Err(PromotionArtifactIdentityReportError::MissingRequiredField {
+            field: "identity_group.source_kinds",
+        });
+    }
+    ensure_identity_optional_sha256("identity_group.wasm_sha256", group.wasm_sha256.as_deref())?;
+    ensure_identity_optional_sha256(
+        "identity_group.wasm_gz_sha256",
+        group.wasm_gz_sha256.as_deref(),
+    )?;
+    ensure_identity_optional_sha256(
+        "identity_group.candid_sha256",
+        group.candid_sha256.as_deref(),
+    )?;
+    ensure_identity_optional_sha256(
+        "identity_group.canonical_embedded_config_sha256",
+        group.canonical_embedded_config_sha256.as_deref(),
+    )?;
+    let expected = artifact_identity_key_for_group(group);
+    if expected != group.identity_key {
+        return Err(
+            PromotionArtifactIdentityReportError::IdentityGroupKeyMismatch {
+                expected,
+                found: group.identity_key.clone(),
+            },
+        );
+    }
+    Ok(())
 }
 
 fn validate_role_plan_transform(
@@ -859,6 +1264,52 @@ fn ensure_unique_transform_roles(
     Ok(())
 }
 
+const fn ensure_identity_report_status_matches_blockers(
+    report: &PromotionArtifactIdentityReportV1,
+) -> Result<(), PromotionArtifactIdentityReportError> {
+    match (report.status, report.blockers.is_empty()) {
+        (PromotionReadinessStatusV1::Ready, false)
+        | (PromotionReadinessStatusV1::Blocked, true) => Err(
+            PromotionArtifactIdentityReportError::StatusBlockerMismatch {
+                status: report.status,
+                blocker_count: report.blockers.len(),
+            },
+        ),
+        _ => Ok(()),
+    }
+}
+
+fn ensure_unique_artifact_identity_roles(
+    roles: &[RolePromotionArtifactIdentityV1],
+) -> Result<(), PromotionArtifactIdentityReportError> {
+    let mut seen = std::collections::BTreeSet::new();
+    for role in roles {
+        if !seen.insert(role.role.as_str()) {
+            return Err(PromotionArtifactIdentityReportError::DuplicateRole {
+                role: role.role.clone(),
+            });
+        }
+    }
+    Ok(())
+}
+
+fn validate_identity_report_blockers(
+    blockers: &[SafetyFindingV1],
+) -> Result<(), PromotionArtifactIdentityReportError> {
+    for blocker in blockers {
+        ensure_identity_report_field("blocker.code", &blocker.code)?;
+        ensure_identity_report_field("blocker.message", &blocker.message)?;
+        if blocker.severity != SafetySeverityV1::HardFailure {
+            return Err(
+                PromotionArtifactIdentityReportError::BlockerSeverityMismatch {
+                    severity: blocker.severity,
+                },
+            );
+        }
+    }
+    Ok(())
+}
+
 fn validate_readiness_findings(
     field: &'static str,
     findings: &[SafetyFindingV1],
@@ -875,6 +1326,30 @@ fn validate_readiness_findings(
         }
     }
     Ok(())
+}
+
+fn ensure_identity_report_field(
+    field: &'static str,
+    value: &str,
+) -> Result<(), PromotionArtifactIdentityReportError> {
+    if value.trim().is_empty() {
+        return Err(PromotionArtifactIdentityReportError::MissingRequiredField { field });
+    }
+    Ok(())
+}
+
+fn ensure_identity_optional_sha256(
+    field: &'static str,
+    value: Option<&str>,
+) -> Result<(), PromotionArtifactIdentityReportError> {
+    let Some(value) = value else {
+        return Ok(());
+    };
+    if is_lower_hex_sha256(value) {
+        Ok(())
+    } else {
+        Err(PromotionArtifactIdentityReportError::InvalidSha256Digest { field })
+    }
 }
 
 fn ensure_readiness_field(field: &'static str, value: &str) -> Result<(), PromotionReadinessError> {

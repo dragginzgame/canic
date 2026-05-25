@@ -74,6 +74,38 @@ pub fn promotion_readiness_text(readiness: &PromotionReadinessV1) -> String {
     lines.join("\n")
 }
 
+/// Render a promotion artifact identity report as passive operator text.
+#[must_use]
+pub fn promotion_artifact_identity_report_text(
+    report: &PromotionArtifactIdentityReportV1,
+) -> String {
+    let digest_pinned = report
+        .roles
+        .iter()
+        .filter(|role| role.digest_pinned)
+        .count();
+    let mut lines = vec![
+        "Promotion artifact identity report".to_string(),
+        "mode: passive".to_string(),
+        format!(
+            "status: {}",
+            promotion_readiness_status_label(report.status)
+        ),
+        format!("report_id: {}", report.report_id),
+        String::new(),
+        "counts:".to_string(),
+        format!("  roles: {}", report.roles.len()),
+        format!("  identity_groups: {}", report.identity_groups.len()),
+        format!("  digest_pinned: {digest_pinned}"),
+        format!("  blockers: {}", report.blockers.len()),
+    ];
+
+    append_promotion_artifact_identity_group_items(&mut lines, &report.identity_groups);
+    append_promotion_artifact_identity_role_items(&mut lines, &report.roles);
+    append_hard_failure_items(&mut lines, "blockers", &report.blockers);
+    lines.join("\n")
+}
+
 /// Render a promotion plan transform as passive operator text.
 #[must_use]
 pub fn promotion_plan_transform_text(transform: &PromotionPlanTransformV1) -> String {
@@ -594,6 +626,66 @@ fn append_promotion_role_items(lines: &mut Vec<String>, roles: &[RolePromotionRe
             role.target_canonical_embedded_config_sha256
                 .as_deref()
                 .unwrap_or("not recorded")
+        ));
+    }
+}
+
+fn append_promotion_artifact_identity_role_items(
+    lines: &mut Vec<String>,
+    roles: &[RolePromotionArtifactIdentityV1],
+) {
+    if roles.is_empty() {
+        return;
+    }
+    lines.push(String::new());
+    lines.push("roles:".to_string());
+    for role in roles {
+        lines.push(format!(
+            "  - {} {:?}/{:?}: identity_kind={:?} digest_pinned={}",
+            role.role,
+            role.promotion_level,
+            role.source_kind,
+            role.identity_kind,
+            role.digest_pinned
+        ));
+        lines.push(format!(
+            "    source_locator: {}",
+            role.source_locator.as_deref().unwrap_or("not recorded")
+        ));
+        lines.push(format!(
+            "    wasm_gz_sha256: {}",
+            role.wasm_gz_sha256.as_deref().unwrap_or("not recorded")
+        ));
+        lines.push(format!(
+            "    config_sha256: {}",
+            role.canonical_embedded_config_sha256
+                .as_deref()
+                .unwrap_or("not recorded")
+        ));
+    }
+}
+
+fn append_promotion_artifact_identity_group_items(
+    lines: &mut Vec<String>,
+    groups: &[PromotionArtifactIdentityGroupV1],
+) {
+    if groups.is_empty() {
+        return;
+    }
+    lines.push(String::new());
+    lines.push("identity groups:".to_string());
+    for group in groups {
+        lines.push(format!(
+            "  - {}: kind={:?} source_kinds={} roles={}",
+            group.identity_key,
+            group.identity_kind,
+            group
+                .source_kinds
+                .iter()
+                .map(|kind| format!("{kind:?}"))
+                .collect::<Vec<_>>()
+                .join(","),
+            group.roles.join(",")
         ));
     }
 }

@@ -63,6 +63,14 @@ inspect only the files needed for the current task.
   deployment state.
 - Promotion transform evidence now has host-owned passive text rendering that
   explicitly reports `execution: none`.
+- `PromotionArtifactIdentityReportV1` now records role source locator kind
+  separately from artifact identity kind, so later promotion planning can
+  compare/dedupe by identity semantics instead of source-kind labels alone.
+- Promotion artifact identity reports also group roles by deterministic
+  artifact identity key, showing when distinct source locators resolve to the
+  same sealed or source/build identity.
+- Promotion artifact identity reports also have host-owned passive text
+  rendering for future CLI/report consumers.
 - `0.43.8` is closed. The closeout report is
   `docs/audits/reports/2026-05/2026-05-25/0.43-closeout.md`.
 - `0.43.8` adds a private current-install
