@@ -803,6 +803,120 @@ fn build_materialization_evidence_rejects_mismatched_result_input_digest() {
 }
 
 #[test]
+fn promotion_materialization_identity_report_round_trips_through_json() {
+    let report = promotion_materialization_identity_report_from_evidence(
+        PromotionMaterializationIdentityReportRequest {
+            report_id: "materialization-report-1".to_string(),
+            evidence: vec![sample_build_materialization_evidence()],
+        },
+    )
+    .expect("materialization report should validate");
+
+    assert_json_round_trip(&report);
+    let encoded = serde_json::to_value(&report).expect("materialization report should encode");
+    assert_object_keys(
+        &encoded,
+        &[
+            "schema_version",
+            "report_id",
+            "status",
+            "roles",
+            "output_groups",
+            "blockers",
+        ],
+    );
+    assert_eq!(encoded["report_id"], "materialization-report-1");
+    assert_eq!(encoded["status"], "Ready");
+    assert_eq!(encoded["roles"][0]["role"], "root");
+    assert_eq!(encoded["output_groups"][0]["roles"][0], "root");
+}
+
+#[test]
+fn promotion_materialization_identity_report_groups_roles_by_output_identity() {
+    let mut second = sample_build_materialization_evidence();
+    second.evidence_id = "materialization-evidence-2".to_string();
+    second.recipe.package_or_role_selector = "user_hub".to_string();
+    let report = promotion_materialization_identity_report_from_evidence(
+        PromotionMaterializationIdentityReportRequest {
+            report_id: "materialization-report-1".to_string(),
+            evidence: vec![sample_build_materialization_evidence(), second],
+        },
+    )
+    .expect("materialization report should validate");
+
+    assert_eq!(report.roles.len(), 2);
+    assert_eq!(report.output_groups.len(), 1);
+    assert_eq!(
+        report.output_groups[0].roles,
+        vec!["root".to_string(), "user_hub".to_string()]
+    );
+}
+
+#[test]
+fn promotion_materialization_identity_report_validation_rejects_stale_output_group() {
+    let mut report = promotion_materialization_identity_report_from_evidence(
+        PromotionMaterializationIdentityReportRequest {
+            report_id: "materialization-report-1".to_string(),
+            evidence: vec![sample_build_materialization_evidence()],
+        },
+    )
+    .expect("materialization report should validate");
+    report.output_groups[0].output_identity_key = "stale".to_string();
+
+    let err = validate_promotion_materialization_identity_report(&report)
+        .expect_err("stale output group should fail");
+
+    assert!(matches!(
+        err,
+        PromotionMaterializationIdentityReportError::OutputGroupKeyMismatch { .. }
+            | PromotionMaterializationIdentityReportError::OutputGroupRoleMismatch { .. }
+    ));
+}
+
+#[test]
+fn promotion_materialization_identity_report_validation_rejects_duplicate_evidence() {
+    let mut report = promotion_materialization_identity_report_from_evidence(
+        PromotionMaterializationIdentityReportRequest {
+            report_id: "materialization-report-1".to_string(),
+            evidence: vec![sample_build_materialization_evidence()],
+        },
+    )
+    .expect("materialization report should validate");
+    let mut duplicate = report.roles[0].clone();
+    duplicate.role = "user_hub".to_string();
+    report.roles.push(duplicate);
+    report.output_groups[0].roles.push("user_hub".to_string());
+
+    let err = validate_promotion_materialization_identity_report(&report)
+        .expect_err("duplicate evidence ids should fail");
+
+    assert!(matches!(
+        err,
+        PromotionMaterializationIdentityReportError::DuplicateEvidence { .. }
+    ));
+}
+
+#[test]
+fn promotion_materialization_identity_report_text_reports_passive_summary() {
+    let report = promotion_materialization_identity_report_from_evidence(
+        PromotionMaterializationIdentityReportRequest {
+            report_id: "materialization-report-1".to_string(),
+            evidence: vec![sample_build_materialization_evidence()],
+        },
+    )
+    .expect("materialization report should validate");
+
+    let text = promotion_materialization_identity_report_text(&report);
+
+    assert!(text.contains("Promotion materialization identity report"));
+    assert!(text.contains("mode: passive"));
+    assert!(text.contains("execution: none"));
+    assert!(text.contains("report_id: materialization-report-1"));
+    assert!(text.contains("output_groups: 1"));
+    assert!(text.contains("root evidence=materialization-evidence-1 recipe=recipe:root:debug"));
+}
+
+#[test]
 fn promotion_readiness_round_trips_through_json() {
     let plan = sample_promotion_target_plan();
     let input = sample_role_promotion_input(PromotionArtifactLevelV1::SealedWasm);
@@ -1380,6 +1494,122 @@ fn artifact_promotion_plan_text_reports_passive_summary() {
     assert!(text.contains("  Promotion readiness report"));
     assert!(text.contains("  Promotion artifact identity report"));
     assert!(text.contains("  Promotion plan transform"));
+}
+
+#[test]
+fn artifact_promotion_provenance_report_round_trips_through_json() {
+    let report = artifact_promotion_provenance_report(ArtifactPromotionProvenanceReportRequest {
+        report_id: "promotion-provenance-1".to_string(),
+        artifact_promotion_plan: sample_artifact_promotion_plan(),
+        wasm_store_identity_report: Some(sample_wasm_store_identity_report()),
+        materialization_identity_report: Some(sample_materialization_identity_report()),
+    })
+    .expect("promotion provenance should validate");
+
+    assert_json_round_trip(&report);
+    let encoded = serde_json::to_value(&report).expect("promotion provenance should encode");
+    assert_object_keys(
+        &encoded,
+        &[
+            "schema_version",
+            "report_id",
+            "status",
+            "artifact_promotion_plan_id",
+            "target_plan_id",
+            "promoted_plan_id",
+            "promotion_plan_lineage_digest",
+            "readiness_id",
+            "artifact_identity_report_id",
+            "transform_id",
+            "target_execution_lineage_id",
+            "wasm_store_identity_report_id",
+            "materialization_identity_report_id",
+            "execution_attempted",
+            "roles",
+            "blockers",
+        ],
+    );
+    assert_eq!(encoded["report_id"], "promotion-provenance-1");
+    assert_eq!(encoded["status"], "Ready");
+    assert_eq!(encoded["execution_attempted"], false);
+    assert_eq!(encoded["roles"][0]["role"], "root");
+}
+
+#[test]
+fn artifact_promotion_provenance_report_links_optional_reports() {
+    let report = artifact_promotion_provenance_report(ArtifactPromotionProvenanceReportRequest {
+        report_id: "promotion-provenance-1".to_string(),
+        artifact_promotion_plan: sample_artifact_promotion_plan(),
+        wasm_store_identity_report: Some(sample_wasm_store_identity_report()),
+        materialization_identity_report: Some(sample_materialization_identity_report()),
+    })
+    .expect("promotion provenance should validate");
+
+    assert_eq!(
+        report.wasm_store_identity_report_id.as_deref(),
+        Some("wasm-store-identity-1")
+    );
+    assert_eq!(
+        report.materialization_identity_report_id.as_deref(),
+        Some("materialization-report-1")
+    );
+    assert_eq!(
+        report.roles[0].wasm_store_locator.as_deref(),
+        Some("root:aaaaa-aa:bootstrap")
+    );
+    assert_eq!(
+        report.roles[0].materialization_evidence_id.as_deref(),
+        Some("materialization-evidence-1")
+    );
+}
+
+#[test]
+fn artifact_promotion_provenance_report_blocks_unknown_report_roles() {
+    let mut receipt = sample_wasm_store_staging_receipt();
+    receipt.role = "unknown".to_string();
+    let wasm_store_report = promotion_wasm_store_identity_report_from_staging(
+        PromotionWasmStoreIdentityReportRequest {
+            report_id: "wasm-store-identity-1".to_string(),
+            staging_receipts: vec![receipt],
+        },
+    )
+    .expect("wasm-store identity report should validate");
+
+    let report = artifact_promotion_provenance_report(ArtifactPromotionProvenanceReportRequest {
+        report_id: "promotion-provenance-1".to_string(),
+        artifact_promotion_plan: sample_artifact_promotion_plan(),
+        wasm_store_identity_report: Some(wasm_store_report),
+        materialization_identity_report: None,
+    })
+    .expect("unknown optional report role should become provenance blocker");
+
+    assert_eq!(report.status, PromotionReadinessStatusV1::Blocked);
+    assert!(report.blockers.iter().any(|finding| {
+        finding.code == "promotion_provenance_unknown_wasm_store_role"
+            && finding.subject.as_deref() == Some("unknown")
+    }));
+}
+
+#[test]
+fn artifact_promotion_provenance_report_text_reports_passive_summary() {
+    let report = artifact_promotion_provenance_report(ArtifactPromotionProvenanceReportRequest {
+        report_id: "promotion-provenance-1".to_string(),
+        artifact_promotion_plan: sample_artifact_promotion_plan(),
+        wasm_store_identity_report: Some(sample_wasm_store_identity_report()),
+        materialization_identity_report: Some(sample_materialization_identity_report()),
+    })
+    .expect("promotion provenance should validate");
+
+    let text = artifact_promotion_provenance_report_text(&report);
+
+    assert!(text.contains("Artifact promotion provenance report"));
+    assert!(text.contains("mode: passive"));
+    assert!(text.contains("execution: none"));
+    assert!(text.contains("report_id: promotion-provenance-1"));
+    assert!(text.contains("artifact_promotion_plan_id: artifact-promotion-plan-1"));
+    assert!(text.contains("wasm_store_identity: wasm-store-identity-1"));
+    assert!(text.contains("materialization_identity: materialization-report-1"));
+    assert!(text.contains("root SealedWasm/LocalWasmGz"));
 }
 
 #[test]
@@ -2907,6 +3137,192 @@ fn staging_receipt_evidence_preserves_transport_and_chunk_facts() {
     assert!(evidence.contains(&"staging_chunks_published:1".to_string()));
     assert!(evidence.contains(&"staging_postcondition:Observed".to_string()));
     assert!(evidence.contains(&"staging_wasm_store:root:aaaaa-aa:bootstrap".to_string()));
+}
+
+#[test]
+fn promotion_wasm_store_identity_report_round_trips_through_json() {
+    let report = promotion_wasm_store_identity_report_from_staging(
+        PromotionWasmStoreIdentityReportRequest {
+            report_id: "wasm-store-identity-1".to_string(),
+            staging_receipts: vec![sample_wasm_store_staging_receipt()],
+        },
+    )
+    .expect("wasm-store identity report should validate");
+
+    assert_json_round_trip(&report);
+    let encoded = serde_json::to_value(&report).expect("wasm-store report should encode");
+    assert_object_keys(
+        &encoded,
+        &["schema_version", "report_id", "status", "roles", "blockers"],
+    );
+    assert_eq!(encoded["report_id"], "wasm-store-identity-1");
+    assert_eq!(encoded["status"], "Ready");
+    assert_eq!(encoded["roles"][0]["transport"], "WasmStore");
+}
+
+#[test]
+fn promotion_wasm_store_identity_report_records_staging_locator() {
+    let report = promotion_wasm_store_identity_report_from_staging(
+        PromotionWasmStoreIdentityReportRequest {
+            report_id: "wasm-store-identity-1".to_string(),
+            staging_receipts: vec![sample_wasm_store_staging_receipt()],
+        },
+    )
+    .expect("wasm-store identity report should validate");
+
+    validate_promotion_wasm_store_identity_report(&report)
+        .expect("generated report should validate");
+    assert_eq!(report.roles.len(), 1);
+    assert_eq!(report.roles[0].role, "root");
+    assert_eq!(
+        report.roles[0].wasm_store_locator.as_deref(),
+        Some("root:aaaaa-aa:bootstrap")
+    );
+    assert_eq!(report.roles[0].published_chunk_count, 2);
+    assert_eq!(report.status, PromotionReadinessStatusV1::Ready);
+}
+
+#[test]
+fn promotion_wasm_store_identity_report_blocks_non_wasm_store_transport() {
+    let mut receipt = sample_wasm_store_staging_receipt();
+    receipt.transport = ArtifactTransportV1::LocalCli;
+    let report = promotion_wasm_store_identity_report_from_staging(
+        PromotionWasmStoreIdentityReportRequest {
+            report_id: "wasm-store-identity-1".to_string(),
+            staging_receipts: vec![receipt],
+        },
+    )
+    .expect("blocked wasm-store identity report should still validate");
+
+    assert_eq!(report.status, PromotionReadinessStatusV1::Blocked);
+    assert!(report.blockers.iter().any(|finding| {
+        finding.code == "promotion_wasm_store_transport_mismatch"
+            && finding.subject.as_deref() == Some("root")
+    }));
+}
+
+#[test]
+fn promotion_wasm_store_identity_report_blocks_missing_locator() {
+    let mut receipt = sample_wasm_store_staging_receipt();
+    receipt.wasm_store_locator = None;
+    let report = promotion_wasm_store_identity_report_from_staging(
+        PromotionWasmStoreIdentityReportRequest {
+            report_id: "wasm-store-identity-1".to_string(),
+            staging_receipts: vec![receipt],
+        },
+    )
+    .expect("blocked wasm-store identity report should still validate");
+
+    assert_eq!(report.status, PromotionReadinessStatusV1::Blocked);
+    assert!(report.blockers.iter().any(|finding| {
+        finding.code == "promotion_wasm_store_locator_missing"
+            && finding.subject.as_deref() == Some("root")
+    }));
+}
+
+#[test]
+fn promotion_wasm_store_identity_report_blocks_unobserved_postcondition() {
+    let mut receipt = sample_wasm_store_staging_receipt();
+    receipt.verified_postcondition.status = ObservationStatusV1::Missing;
+    let report = promotion_wasm_store_identity_report_from_staging(
+        PromotionWasmStoreIdentityReportRequest {
+            report_id: "wasm-store-identity-1".to_string(),
+            staging_receipts: vec![receipt],
+        },
+    )
+    .expect("blocked wasm-store identity report should still validate");
+
+    assert_eq!(report.status, PromotionReadinessStatusV1::Blocked);
+    assert!(report.blockers.iter().any(|finding| {
+        finding.code == "promotion_wasm_store_postcondition_not_observed"
+            && finding.subject.as_deref() == Some("root")
+    }));
+}
+
+#[test]
+fn promotion_wasm_store_identity_report_blocks_chunk_count_mismatch() {
+    let mut receipt = sample_wasm_store_staging_receipt();
+    receipt.published_chunk_count = 1;
+    let report = promotion_wasm_store_identity_report_from_staging(
+        PromotionWasmStoreIdentityReportRequest {
+            report_id: "wasm-store-identity-1".to_string(),
+            staging_receipts: vec![receipt],
+        },
+    )
+    .expect("blocked wasm-store identity report should still validate");
+
+    assert_eq!(report.status, PromotionReadinessStatusV1::Blocked);
+    assert!(report.blockers.iter().any(|finding| {
+        finding.code == "promotion_wasm_store_chunk_count_mismatch"
+            && finding.subject.as_deref() == Some("root")
+    }));
+}
+
+#[test]
+fn promotion_wasm_store_identity_report_validation_rejects_stale_blockers() {
+    let mut report = promotion_wasm_store_identity_report_from_staging(
+        PromotionWasmStoreIdentityReportRequest {
+            report_id: "wasm-store-identity-1".to_string(),
+            staging_receipts: vec![sample_wasm_store_staging_receipt()],
+        },
+    )
+    .expect("wasm-store identity report should validate");
+    report.blockers.push(SafetyFindingV1 {
+        code: "stale".to_string(),
+        message: "stale".to_string(),
+        severity: SafetySeverityV1::HardFailure,
+        subject: Some("root".to_string()),
+    });
+    report.status = PromotionReadinessStatusV1::Blocked;
+
+    let err = validate_promotion_wasm_store_identity_report(&report)
+        .expect_err("stale blockers should fail");
+
+    assert!(matches!(
+        err,
+        PromotionWasmStoreIdentityReportError::BlockerMismatch
+    ));
+}
+
+#[test]
+fn promotion_wasm_store_identity_report_rejects_staging_schema_drift() {
+    let mut receipt = sample_wasm_store_staging_receipt();
+    receipt.schema_version += 1;
+
+    let err = promotion_wasm_store_identity_report_from_staging(
+        PromotionWasmStoreIdentityReportRequest {
+            report_id: "wasm-store-identity-1".to_string(),
+            staging_receipts: vec![receipt],
+        },
+    )
+    .expect_err("staging receipt schema drift should fail before projection");
+
+    assert!(matches!(
+        err,
+        PromotionWasmStoreIdentityReportError::StagingReceiptSchemaVersionMismatch { .. }
+    ));
+}
+
+#[test]
+fn promotion_wasm_store_identity_report_text_reports_passive_summary() {
+    let report = promotion_wasm_store_identity_report_from_staging(
+        PromotionWasmStoreIdentityReportRequest {
+            report_id: "wasm-store-identity-1".to_string(),
+            staging_receipts: vec![sample_wasm_store_staging_receipt()],
+        },
+    )
+    .expect("wasm-store identity report should validate");
+
+    let text = promotion_wasm_store_identity_report_text(&report);
+
+    assert!(text.contains("Promotion wasm-store identity report"));
+    assert!(text.contains("mode: passive"));
+    assert!(text.contains("execution: none"));
+    assert!(text.contains("report_id: wasm-store-identity-1"));
+    assert!(text.contains("roles: 1"));
+    assert!(text.contains(
+        "root artifact=embedded:root:0.44.0:abc123 locator=root:aaaaa-aa:bootstrap chunks=2/2 postcondition=Observed"
+    ));
 }
 
 #[test]
@@ -7740,6 +8156,24 @@ fn sample_artifact_promotion_plan() -> ArtifactPromotionPlanV1 {
     .expect("sample artifact promotion plan should validate")
 }
 
+fn sample_wasm_store_identity_report() -> PromotionWasmStoreIdentityReportV1 {
+    promotion_wasm_store_identity_report_from_staging(PromotionWasmStoreIdentityReportRequest {
+        report_id: "wasm-store-identity-1".to_string(),
+        staging_receipts: vec![sample_wasm_store_staging_receipt()],
+    })
+    .expect("sample wasm-store identity report should validate")
+}
+
+fn sample_materialization_identity_report() -> PromotionMaterializationIdentityReportV1 {
+    promotion_materialization_identity_report_from_evidence(
+        PromotionMaterializationIdentityReportRequest {
+            report_id: "materialization-report-1".to_string(),
+            evidence: vec![sample_build_materialization_evidence()],
+        },
+    )
+    .expect("sample materialization identity report should validate")
+}
+
 fn sample_sha256(seed: &str) -> String {
     seed.repeat(64)
 }
@@ -7909,6 +8343,22 @@ fn sample_receipt_with_phase(
         }],
         final_inventory_id: Some("inventory-1".to_string()),
         command_result: DeploymentCommandResultV1::Succeeded,
+    }
+}
+
+fn sample_wasm_store_staging_receipt() -> StagingReceiptV1 {
+    StagingReceiptV1 {
+        schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
+        role: "root".to_string(),
+        artifact_identity: "embedded:root:0.44.0:abc123".to_string(),
+        transport: ArtifactTransportV1::WasmStore,
+        wasm_store_locator: Some("root:aaaaa-aa:bootstrap".to_string()),
+        prepared_chunk_hashes: vec!["chunk-a".to_string(), "chunk-b".to_string()],
+        published_chunk_count: 2,
+        verified_postcondition: VerifiedPostconditionV1 {
+            status: ObservationStatusV1::Observed,
+            evidence: vec!["payload_sha256:abc123".to_string()],
+        },
     }
 }
 

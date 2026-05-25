@@ -3,18 +3,22 @@ use super::executor::{
     validate_deployment_execution_preflight_for_check,
 };
 use super::{
-    ArtifactPromotionPlanV1, ArtifactSourceV1, BuildMaterializationEvidenceV1,
-    BuildMaterializationInputV1, BuildMaterializationResultV1, BuildRecipeIdentityV1,
-    DEPLOYMENT_TRUTH_SCHEMA_VERSION, DeploymentCheckV1, DeploymentExecutionPreflightStatusV1,
-    DeploymentExecutionPreflightV1, DeploymentPlanV1, PromotionArtifactIdentityGroupV1,
+    ArtifactPromotionPlanV1, ArtifactPromotionProvenanceReportV1, ArtifactSourceV1,
+    ArtifactTransportV1, BuildMaterializationEvidenceV1, BuildMaterializationInputV1,
+    BuildMaterializationResultV1, BuildRecipeIdentityV1, DEPLOYMENT_TRUTH_SCHEMA_VERSION,
+    DeploymentCheckV1, DeploymentExecutionPreflightStatusV1, DeploymentExecutionPreflightV1,
+    DeploymentPlanV1, ObservationStatusV1, PromotionArtifactIdentityGroupV1,
     PromotionArtifactIdentityKindV1, PromotionArtifactIdentityReportV1, PromotionArtifactLevelV1,
+    PromotionMaterializationIdentityReportV1, PromotionMaterializationOutputGroupV1,
     PromotionPlanTransformEvidenceV1, PromotionPlanTransformV1, PromotionPolicyCheckV1,
     PromotionPolicyClaimV1, PromotionPolicyRequirementV1, PromotionReadinessStatusV1,
-    PromotionReadinessV1, PromotionTargetExecutionLineageV1, RoleArtifactSourceKindV1,
-    RoleArtifactSourceV1, RoleArtifactV1, RolePromotionArtifactIdentityV1, RolePromotionInputV1,
+    PromotionReadinessV1, PromotionTargetExecutionLineageV1, PromotionWasmStoreIdentityReportV1,
+    RoleArtifactSourceKindV1, RoleArtifactSourceV1, RoleArtifactV1,
+    RolePromotionArtifactIdentityV1, RolePromotionInputV1, RolePromotionMaterializationIdentityV1,
     RolePromotionMaterializationLinkV1, RolePromotionPlanTransformV1,
-    RolePromotionPolicyDecisionV1, RolePromotionPolicyV1, RolePromotionReadinessV1,
-    SafetyFindingV1, SafetySeverityV1, stable_json_sha256_hex,
+    RolePromotionPolicyDecisionV1, RolePromotionPolicyV1, RolePromotionProvenanceV1,
+    RolePromotionReadinessV1, RolePromotionWasmStoreIdentityV1, SafetyFindingV1, SafetySeverityV1,
+    StagingReceiptV1, stable_json_sha256_hex,
 };
 use serde::Serialize;
 use std::collections::{BTreeMap, BTreeSet};
@@ -159,6 +163,42 @@ pub enum ArtifactPromotionPlanError {
 }
 
 ///
+/// ArtifactPromotionProvenanceReportError
+///
+#[derive(Debug, ThisError)]
+pub enum ArtifactPromotionProvenanceReportError {
+    #[error(
+        "artifact promotion provenance report schema mismatch: expected {expected}, found {found}"
+    )]
+    SchemaVersionMismatch { expected: u32, found: u32 },
+    #[error("artifact promotion provenance report is missing required field: {field}")]
+    MissingRequiredField { field: &'static str },
+    #[error(
+        "artifact promotion provenance report status {status:?} does not match blocker count {blocker_count}"
+    )]
+    StatusBlockerMismatch {
+        status: PromotionReadinessStatusV1,
+        blocker_count: usize,
+    },
+    #[error("artifact promotion provenance report field {field} is inconsistent")]
+    LinkageMismatch { field: &'static str },
+    #[error("artifact promotion provenance report contains duplicate role: {role}")]
+    DuplicateRole { role: String },
+    #[error("artifact promotion provenance report blockers are stale")]
+    BlockerMismatch,
+    #[error("artifact promotion provenance report blocker has severity {severity:?}")]
+    BlockerSeverityMismatch { severity: SafetySeverityV1 },
+    #[error("artifact promotion provenance report has invalid artifact promotion plan: {0}")]
+    Plan(#[from] ArtifactPromotionPlanError),
+    #[error("artifact promotion provenance report has invalid wasm-store identity report: {0}")]
+    WasmStoreIdentity(#[from] PromotionWasmStoreIdentityReportError),
+    #[error(
+        "artifact promotion provenance report has invalid materialization identity report: {0}"
+    )]
+    MaterializationIdentity(#[from] PromotionMaterializationIdentityReportError),
+}
+
+///
 /// PromotionTargetExecutionLineageError
 ///
 #[derive(Debug, ThisError)]
@@ -234,6 +274,40 @@ pub enum PromotionArtifactIdentityReportError {
 }
 
 ///
+/// PromotionWasmStoreIdentityReportError
+///
+#[derive(Debug, ThisError)]
+pub enum PromotionWasmStoreIdentityReportError {
+    #[error(
+        "promotion wasm-store identity report schema mismatch: expected {expected}, found {found}"
+    )]
+    SchemaVersionMismatch { expected: u32, found: u32 },
+    #[error("promotion wasm-store identity report is missing required field: {field}")]
+    MissingRequiredField { field: &'static str },
+    #[error(
+        "promotion wasm-store identity report status {status:?} does not match blocker count {blocker_count}"
+    )]
+    StatusBlockerMismatch {
+        status: PromotionReadinessStatusV1,
+        blocker_count: usize,
+    },
+    #[error("promotion wasm-store identity report contains duplicate role: {role}")]
+    DuplicateRole { role: String },
+    #[error(
+        "promotion wasm-store identity report staging receipt schema mismatch for role {role}: expected {expected}, found {found}"
+    )]
+    StagingReceiptSchemaVersionMismatch {
+        role: String,
+        expected: u32,
+        found: u32,
+    },
+    #[error("promotion wasm-store identity report blockers are stale")]
+    BlockerMismatch,
+    #[error("promotion wasm-store identity report blocker has severity {severity:?}")]
+    BlockerSeverityMismatch { severity: SafetySeverityV1 },
+}
+
+///
 /// PromotionMaterializationIdentityError
 ///
 #[derive(Debug, ThisError)]
@@ -258,6 +332,62 @@ pub enum PromotionMaterializationIdentityError {
         expected: String,
         found: String,
     },
+}
+
+///
+/// PromotionMaterializationIdentityReportError
+///
+#[derive(Debug, ThisError)]
+pub enum PromotionMaterializationIdentityReportError {
+    #[error(
+        "promotion materialization identity report schema mismatch: expected {expected}, found {found}"
+    )]
+    SchemaVersionMismatch { expected: u32, found: u32 },
+    #[error("promotion materialization identity report is missing required field: {field}")]
+    MissingRequiredField { field: &'static str },
+    #[error(
+        "promotion materialization identity report status {status:?} does not match blocker count {blocker_count}"
+    )]
+    StatusBlockerMismatch {
+        status: PromotionReadinessStatusV1,
+        blocker_count: usize,
+    },
+    #[error("promotion materialization identity report contains duplicate role: {role}")]
+    DuplicateRole { role: String },
+    #[error("promotion materialization identity report contains duplicate evidence: {evidence_id}")]
+    DuplicateEvidence { evidence_id: String },
+    #[error(
+        "promotion materialization identity report contains duplicate output group: {output_identity_key}"
+    )]
+    DuplicateOutputGroup { output_identity_key: String },
+    #[error(
+        "promotion materialization identity report output group {output_identity_key} has no roles"
+    )]
+    EmptyOutputGroup { output_identity_key: String },
+    #[error("promotion materialization identity report output group contains unknown role: {role}")]
+    UnknownGroupedRole { role: String },
+    #[error("promotion materialization identity report groups role {role} more than once")]
+    DuplicateGroupedRole { role: String },
+    #[error("promotion materialization identity report does not group role: {role}")]
+    MissingGroupedRole { role: String },
+    #[error(
+        "promotion materialization identity report role {role} belongs to output group {expected}, found {found}"
+    )]
+    OutputGroupRoleMismatch {
+        role: String,
+        expected: String,
+        found: String,
+    },
+    #[error(
+        "promotion materialization identity report output group key mismatch: expected {expected}, found {found}"
+    )]
+    OutputGroupKeyMismatch { expected: String, found: String },
+    #[error("promotion materialization identity report blockers are stale")]
+    BlockerMismatch,
+    #[error("promotion materialization identity report blocker has severity {severity:?}")]
+    BlockerSeverityMismatch { severity: SafetySeverityV1 },
+    #[error("promotion materialization identity report has invalid materialization evidence: {0}")]
+    Materialization(#[from] PromotionMaterializationIdentityError),
 }
 
 ///
@@ -357,6 +487,17 @@ pub struct ArtifactPromotionPlanRequest {
 }
 
 ///
+/// ArtifactPromotionProvenanceReportRequest
+///
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ArtifactPromotionProvenanceReportRequest {
+    pub report_id: String,
+    pub artifact_promotion_plan: ArtifactPromotionPlanV1,
+    pub wasm_store_identity_report: Option<PromotionWasmStoreIdentityReportV1>,
+    pub materialization_identity_report: Option<PromotionMaterializationIdentityReportV1>,
+}
+
+///
 /// PromotionTargetExecutionLineageRequest
 ///
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -377,6 +518,15 @@ pub struct PromotionArtifactIdentityReportRequest {
 }
 
 ///
+/// PromotionWasmStoreIdentityReportRequest
+///
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PromotionWasmStoreIdentityReportRequest {
+    pub report_id: String,
+    pub staging_receipts: Vec<StagingReceiptV1>,
+}
+
+///
 /// BuildMaterializationEvidenceRequest
 ///
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -385,6 +535,15 @@ pub struct BuildMaterializationEvidenceRequest {
     pub recipe: BuildRecipeIdentityV1,
     pub materialization_input: BuildMaterializationInputV1,
     pub materialization_result: BuildMaterializationResultV1,
+}
+
+///
+/// PromotionMaterializationIdentityReportRequest
+///
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PromotionMaterializationIdentityReportRequest {
+    pub report_id: String,
+    pub evidence: Vec<BuildMaterializationEvidenceV1>,
 }
 
 ///
@@ -614,6 +773,17 @@ pub fn promotion_artifact_identity_report_from_inputs(
     Ok(report)
 }
 
+pub fn promotion_wasm_store_identity_report_from_staging(
+    request: PromotionWasmStoreIdentityReportRequest,
+) -> Result<PromotionWasmStoreIdentityReportV1, PromotionWasmStoreIdentityReportError> {
+    ensure_wasm_store_identity_report_field("report_id", &request.report_id)?;
+    ensure_wasm_store_identity_staging_receipts(&request.staging_receipts)?;
+    let report =
+        promotion_wasm_store_identity_report(&request.report_id, &request.staging_receipts);
+    validate_promotion_wasm_store_identity_report(&report)?;
+    Ok(report)
+}
+
 #[must_use]
 pub fn promotion_artifact_identity_report(
     report_id: impl Into<String>,
@@ -658,6 +828,29 @@ pub fn promotion_artifact_identity_report(
     }
 }
 
+#[must_use]
+pub fn promotion_wasm_store_identity_report(
+    report_id: impl Into<String>,
+    staging_receipts: &[StagingReceiptV1],
+) -> PromotionWasmStoreIdentityReportV1 {
+    let roles = staging_receipts
+        .iter()
+        .map(role_wasm_store_identity_from_staging)
+        .collect::<Vec<_>>();
+    let blockers = wasm_store_identity_blockers(&roles);
+    PromotionWasmStoreIdentityReportV1 {
+        schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
+        report_id: report_id.into(),
+        status: if blockers.is_empty() {
+            PromotionReadinessStatusV1::Ready
+        } else {
+            PromotionReadinessStatusV1::Blocked
+        },
+        roles,
+        blockers,
+    }
+}
+
 pub fn validate_promotion_artifact_identity_report(
     report: &PromotionArtifactIdentityReportV1,
 ) -> Result<(), PromotionArtifactIdentityReportError> {
@@ -677,6 +870,31 @@ pub fn validate_promotion_artifact_identity_report(
     }
     validate_artifact_identity_groups(&report.roles, &report.identity_groups)?;
     validate_identity_report_blockers(&report.blockers)?;
+    Ok(())
+}
+
+pub fn validate_promotion_wasm_store_identity_report(
+    report: &PromotionWasmStoreIdentityReportV1,
+) -> Result<(), PromotionWasmStoreIdentityReportError> {
+    if report.schema_version != DEPLOYMENT_TRUTH_SCHEMA_VERSION {
+        return Err(
+            PromotionWasmStoreIdentityReportError::SchemaVersionMismatch {
+                expected: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
+                found: report.schema_version,
+            },
+        );
+    }
+    ensure_wasm_store_identity_report_field("report_id", &report.report_id)?;
+    ensure_wasm_store_identity_status_matches_blockers(report)?;
+    ensure_unique_wasm_store_identity_roles(&report.roles)?;
+    for role in &report.roles {
+        validate_role_wasm_store_identity(role)?;
+    }
+    let expected_blockers = wasm_store_identity_blockers(&report.roles);
+    if expected_blockers != report.blockers {
+        return Err(PromotionWasmStoreIdentityReportError::BlockerMismatch);
+    }
+    validate_wasm_store_identity_blockers(&report.blockers)?;
     Ok(())
 }
 
@@ -807,6 +1025,68 @@ pub fn validate_artifact_promotion_plan_for_check(
     };
     validate_deployment_execution_preflight_for_check(target_check, &lineage.execution_preflight)
         .map_err(ArtifactPromotionPlanError::TargetCheck)?;
+    Ok(())
+}
+
+pub fn artifact_promotion_provenance_report(
+    request: ArtifactPromotionProvenanceReportRequest,
+) -> Result<ArtifactPromotionProvenanceReportV1, ArtifactPromotionProvenanceReportError> {
+    ensure_provenance_report_field("report_id", &request.report_id)?;
+    validate_artifact_promotion_plan(&request.artifact_promotion_plan)?;
+    if let Some(report) = &request.wasm_store_identity_report {
+        validate_promotion_wasm_store_identity_report(report)?;
+    }
+    if let Some(report) = &request.materialization_identity_report {
+        validate_promotion_materialization_identity_report(report)?;
+    }
+    let report = build_artifact_promotion_provenance_report(request);
+    validate_artifact_promotion_provenance_report(&report)?;
+    Ok(report)
+}
+
+pub fn validate_artifact_promotion_provenance_report(
+    report: &ArtifactPromotionProvenanceReportV1,
+) -> Result<(), ArtifactPromotionProvenanceReportError> {
+    if report.schema_version != DEPLOYMENT_TRUTH_SCHEMA_VERSION {
+        return Err(
+            ArtifactPromotionProvenanceReportError::SchemaVersionMismatch {
+                expected: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
+                found: report.schema_version,
+            },
+        );
+    }
+    ensure_provenance_report_field("report_id", &report.report_id)?;
+    ensure_provenance_report_field(
+        "artifact_promotion_plan_id",
+        &report.artifact_promotion_plan_id,
+    )?;
+    ensure_provenance_report_field("target_plan_id", &report.target_plan_id)?;
+    ensure_provenance_report_field("promoted_plan_id", &report.promoted_plan_id)?;
+    ensure_provenance_report_field(
+        "promotion_plan_lineage_digest",
+        &report.promotion_plan_lineage_digest,
+    )?;
+    ensure_provenance_report_field("readiness_id", &report.readiness_id)?;
+    ensure_provenance_report_field(
+        "artifact_identity_report_id",
+        &report.artifact_identity_report_id,
+    )?;
+    ensure_provenance_report_field("transform_id", &report.transform_id)?;
+    if let Some(lineage_id) = &report.target_execution_lineage_id {
+        ensure_provenance_report_field("target_execution_lineage_id", lineage_id)?;
+    }
+    if let Some(report_id) = &report.wasm_store_identity_report_id {
+        ensure_provenance_report_field("wasm_store_identity_report_id", report_id)?;
+    }
+    if let Some(report_id) = &report.materialization_identity_report_id {
+        ensure_provenance_report_field("materialization_identity_report_id", report_id)?;
+    }
+    ensure_provenance_report_status_matches_blockers(report)?;
+    ensure_unique_provenance_roles(&report.roles)?;
+    for role in &report.roles {
+        validate_role_promotion_provenance(role)?;
+    }
+    validate_provenance_report_blockers(&report.blockers)?;
     Ok(())
 }
 
@@ -1155,6 +1435,65 @@ pub fn validate_build_materialization_evidence(
     Ok(())
 }
 
+pub fn promotion_materialization_identity_report_from_evidence(
+    request: PromotionMaterializationIdentityReportRequest,
+) -> Result<PromotionMaterializationIdentityReportV1, PromotionMaterializationIdentityReportError> {
+    ensure_materialization_report_field("report_id", &request.report_id)?;
+    for evidence in &request.evidence {
+        validate_build_materialization_evidence(evidence)?;
+    }
+    let report = promotion_materialization_identity_report(&request.report_id, &request.evidence);
+    validate_promotion_materialization_identity_report(&report)?;
+    Ok(report)
+}
+
+#[must_use]
+pub fn promotion_materialization_identity_report(
+    report_id: impl Into<String>,
+    evidence: &[BuildMaterializationEvidenceV1],
+) -> PromotionMaterializationIdentityReportV1 {
+    let roles = evidence
+        .iter()
+        .map(role_materialization_identity_from_evidence)
+        .collect::<Vec<_>>();
+    let output_groups = promotion_materialization_output_groups(&roles);
+    let blockers = Vec::new();
+    PromotionMaterializationIdentityReportV1 {
+        schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
+        report_id: report_id.into(),
+        status: PromotionReadinessStatusV1::Ready,
+        roles,
+        output_groups,
+        blockers,
+    }
+}
+
+pub fn validate_promotion_materialization_identity_report(
+    report: &PromotionMaterializationIdentityReportV1,
+) -> Result<(), PromotionMaterializationIdentityReportError> {
+    if report.schema_version != DEPLOYMENT_TRUTH_SCHEMA_VERSION {
+        return Err(
+            PromotionMaterializationIdentityReportError::SchemaVersionMismatch {
+                expected: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
+                found: report.schema_version,
+            },
+        );
+    }
+    ensure_materialization_report_field("report_id", &report.report_id)?;
+    ensure_materialization_report_status_matches_blockers(report)?;
+    ensure_unique_materialization_report_roles(&report.roles)?;
+    for role in &report.roles {
+        validate_role_materialization_identity(role)?;
+    }
+    validate_materialization_output_groups(&report.roles, &report.output_groups)?;
+    let expected_blockers = Vec::<SafetyFindingV1>::new();
+    if report.blockers != expected_blockers {
+        return Err(PromotionMaterializationIdentityReportError::BlockerMismatch);
+    }
+    validate_materialization_report_blockers(&report.blockers)?;
+    Ok(())
+}
+
 #[must_use]
 pub fn build_materialization_input_digest(input: &BuildMaterializationInputV1) -> String {
     stable_json_sha256_hex(input)
@@ -1460,6 +1799,201 @@ fn artifact_promotion_plan_blockers(
     blockers
 }
 
+fn build_artifact_promotion_provenance_report(
+    request: ArtifactPromotionProvenanceReportRequest,
+) -> ArtifactPromotionProvenanceReportV1 {
+    let plan = request.artifact_promotion_plan;
+    let mut roles = plan
+        .transform
+        .roles
+        .iter()
+        .map(role_promotion_provenance_from_transform)
+        .collect::<Vec<_>>();
+    attach_wasm_store_provenance(&mut roles, request.wasm_store_identity_report.as_ref());
+    attach_materialization_provenance(&mut roles, request.materialization_identity_report.as_ref());
+    let blockers = artifact_promotion_provenance_blockers(
+        &plan,
+        request.wasm_store_identity_report.as_ref(),
+        request.materialization_identity_report.as_ref(),
+        &roles,
+    );
+    let status = if blockers.is_empty() {
+        PromotionReadinessStatusV1::Ready
+    } else {
+        PromotionReadinessStatusV1::Blocked
+    };
+    ArtifactPromotionProvenanceReportV1 {
+        schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
+        report_id: request.report_id,
+        status,
+        artifact_promotion_plan_id: plan.plan_id,
+        target_plan_id: plan.target_plan_id,
+        promoted_plan_id: plan.promoted_plan_id,
+        promotion_plan_lineage_digest: plan.promotion_plan_lineage_digest,
+        readiness_id: plan.readiness.readiness_id,
+        artifact_identity_report_id: plan.artifact_identity_report.report_id,
+        transform_id: plan.transform.transform_id,
+        target_execution_lineage_id: plan
+            .target_execution_lineage
+            .map(|lineage| lineage.lineage_id),
+        wasm_store_identity_report_id: request
+            .wasm_store_identity_report
+            .map(|report| report.report_id),
+        materialization_identity_report_id: request
+            .materialization_identity_report
+            .map(|report| report.report_id),
+        execution_attempted: false,
+        roles,
+        blockers,
+    }
+}
+
+fn artifact_promotion_provenance_blockers(
+    plan: &ArtifactPromotionPlanV1,
+    wasm_store_report: Option<&PromotionWasmStoreIdentityReportV1>,
+    materialization_report: Option<&PromotionMaterializationIdentityReportV1>,
+    roles: &[RolePromotionProvenanceV1],
+) -> Vec<SafetyFindingV1> {
+    let mut blockers = plan.blockers.clone();
+    if let Some(report) = wasm_store_report {
+        blockers.extend(report.blockers.iter().cloned());
+    }
+    if let Some(report) = materialization_report {
+        blockers.extend(report.blockers.iter().cloned());
+    }
+    let role_names = roles
+        .iter()
+        .map(|role| role.role.as_str())
+        .collect::<BTreeSet<_>>();
+    if let Some(report) = wasm_store_report {
+        for role in &report.roles {
+            if !role_names.contains(role.role.as_str()) {
+                blockers.push(promotion_finding(
+                    "promotion_provenance_unknown_wasm_store_role",
+                    format!(
+                        "wasm-store identity report contains unknown role {}",
+                        role.role
+                    ),
+                    SafetySeverityV1::HardFailure,
+                    &role.role,
+                ));
+            }
+        }
+    }
+    if let Some(report) = materialization_report {
+        for role in &report.roles {
+            if !role_names.contains(role.role.as_str()) {
+                blockers.push(promotion_finding(
+                    "promotion_provenance_unknown_materialization_role",
+                    format!(
+                        "materialization identity report contains unknown role {}",
+                        role.role
+                    ),
+                    SafetySeverityV1::HardFailure,
+                    &role.role,
+                ));
+            }
+        }
+    }
+    blockers
+}
+
+fn role_promotion_provenance_from_transform(
+    role: &RolePromotionPlanTransformV1,
+) -> RolePromotionProvenanceV1 {
+    RolePromotionProvenanceV1 {
+        role: role.role.clone(),
+        promotion_level: role.promotion_level,
+        source_kind: role.source_kind,
+        artifact_identity_changed: role.artifact_identity_changed,
+        embedded_config_changed: role.embedded_config_changed,
+        target_materialization_preserved: role.target_materialization_preserved,
+        materialization_evidence_id: role
+            .source_build_materialization
+            .as_ref()
+            .map(|materialization| materialization.evidence_id.clone()),
+        wasm_store_locator: None,
+    }
+}
+
+fn attach_wasm_store_provenance(
+    roles: &mut [RolePromotionProvenanceV1],
+    report: Option<&PromotionWasmStoreIdentityReportV1>,
+) {
+    let Some(report) = report else {
+        return;
+    };
+    for role in roles {
+        if let Some(wasm_store_role) = report.roles.iter().find(|item| item.role == role.role) {
+            role.wasm_store_locator = wasm_store_role.wasm_store_locator.clone();
+        }
+    }
+}
+
+fn attach_materialization_provenance(
+    roles: &mut [RolePromotionProvenanceV1],
+    report: Option<&PromotionMaterializationIdentityReportV1>,
+) {
+    let Some(report) = report else {
+        return;
+    };
+    for role in roles {
+        if let Some(materialization_role) = report.roles.iter().find(|item| item.role == role.role)
+        {
+            role.materialization_evidence_id = Some(materialization_role.evidence_id.clone());
+        }
+    }
+}
+
+fn wasm_store_identity_blockers(
+    roles: &[RolePromotionWasmStoreIdentityV1],
+) -> Vec<SafetyFindingV1> {
+    let mut blockers = Vec::new();
+    for role in roles {
+        if role.transport != ArtifactTransportV1::WasmStore {
+            blockers.push(promotion_finding(
+                "promotion_wasm_store_transport_mismatch",
+                format!("role {} was not staged through wasm_store", role.role),
+                SafetySeverityV1::HardFailure,
+                &role.role,
+            ));
+        }
+        if role.wasm_store_locator.as_deref().is_none_or(str::is_empty) {
+            blockers.push(promotion_finding(
+                "promotion_wasm_store_locator_missing",
+                format!("role {} does not record a wasm_store locator", role.role),
+                SafetySeverityV1::HardFailure,
+                &role.role,
+            ));
+        }
+        if role.verified_postcondition.status != ObservationStatusV1::Observed {
+            blockers.push(promotion_finding(
+                "promotion_wasm_store_postcondition_not_observed",
+                format!(
+                    "role {} wasm_store postcondition is {:?}",
+                    role.role, role.verified_postcondition.status
+                ),
+                SafetySeverityV1::HardFailure,
+                &role.role,
+            ));
+        }
+        if role.published_chunk_count != role.prepared_chunk_hashes.len() {
+            blockers.push(promotion_finding(
+                "promotion_wasm_store_chunk_count_mismatch",
+                format!(
+                    "role {} published {} chunk(s) for {} prepared chunk hash(es)",
+                    role.role,
+                    role.published_chunk_count,
+                    role.prepared_chunk_hashes.len()
+                ),
+                SafetySeverityV1::HardFailure,
+                &role.role,
+            ));
+        }
+    }
+    blockers
+}
+
 fn refresh_promotion_plan_lineage_digest(transform: &mut PromotionPlanTransformV1) {
     transform.promotion_plan_lineage_digest = promotion_plan_lineage_digest(
         &transform.target_plan_id,
@@ -1509,6 +2043,53 @@ fn role_promotion_artifact_identity(
             .source
             .expected_canonical_embedded_config_sha256
             .clone(),
+    }
+}
+
+fn role_wasm_store_identity_from_staging(
+    receipt: &StagingReceiptV1,
+) -> RolePromotionWasmStoreIdentityV1 {
+    RolePromotionWasmStoreIdentityV1 {
+        role: receipt.role.clone(),
+        artifact_identity: receipt.artifact_identity.clone(),
+        transport: receipt.transport,
+        wasm_store_locator: receipt.wasm_store_locator.clone(),
+        prepared_chunk_hashes: receipt.prepared_chunk_hashes.clone(),
+        published_chunk_count: receipt.published_chunk_count,
+        verified_postcondition: receipt.verified_postcondition.clone(),
+    }
+}
+
+fn role_materialization_identity_from_evidence(
+    evidence: &BuildMaterializationEvidenceV1,
+) -> RolePromotionMaterializationIdentityV1 {
+    RolePromotionMaterializationIdentityV1 {
+        role: evidence.recipe.package_or_role_selector.clone(),
+        evidence_id: evidence.evidence_id.clone(),
+        recipe_id: evidence.recipe.recipe_id.clone(),
+        materialization_input_id: evidence
+            .materialization_input
+            .materialization_input_id
+            .clone(),
+        materialization_result_id: evidence
+            .materialization_result
+            .materialization_result_id
+            .clone(),
+        materialization_input_digest: evidence.computed_materialization_input_digest.clone(),
+        canonical_embedded_config_sha256: evidence
+            .materialization_input
+            .canonical_embedded_config_sha256
+            .clone(),
+        network: evidence.materialization_input.network.clone(),
+        root_trust_anchor: evidence.materialization_input.root_trust_anchor.clone(),
+        runtime_variant: evidence.materialization_input.runtime_variant.clone(),
+        wasm_sha256: evidence.materialization_result.wasm_sha256.clone(),
+        wasm_gz_sha256: evidence.materialization_result.wasm_gz_sha256.clone(),
+        installed_module_hash: evidence
+            .materialization_result
+            .installed_module_hash
+            .clone(),
+        candid_sha256: evidence.materialization_result.candid_sha256.clone(),
     }
 }
 
@@ -1645,6 +2226,27 @@ fn promotion_artifact_identity_groups(
     groups.into_values().collect()
 }
 
+fn promotion_materialization_output_groups(
+    roles: &[RolePromotionMaterializationIdentityV1],
+) -> Vec<PromotionMaterializationOutputGroupV1> {
+    let mut groups = BTreeMap::<String, PromotionMaterializationOutputGroupV1>::new();
+    for role in roles {
+        let output_identity_key = materialization_output_key_for_role(role);
+        let group = groups
+            .entry(output_identity_key.clone())
+            .or_insert_with(|| PromotionMaterializationOutputGroupV1 {
+                output_identity_key,
+                roles: Vec::new(),
+                wasm_sha256: role.wasm_sha256.clone(),
+                wasm_gz_sha256: role.wasm_gz_sha256.clone(),
+                installed_module_hash: role.installed_module_hash.clone(),
+                candid_sha256: role.candid_sha256.clone(),
+            });
+        group.roles.push(role.role.clone());
+    }
+    groups.into_values().collect()
+}
+
 const fn promotion_artifact_identity_kind(
     promotion_level: PromotionArtifactLevelV1,
     source: &RoleArtifactSourceV1,
@@ -1711,6 +2313,35 @@ fn artifact_identity_key_for_group(group: &PromotionArtifactIdentityGroupV1) -> 
             optional_identity_part(single_group_source_locator(group))
         ),
     }
+}
+
+fn materialization_output_key_for_role(role: &RolePromotionMaterializationIdentityV1) -> String {
+    materialization_output_key(
+        &role.wasm_sha256,
+        &role.wasm_gz_sha256,
+        &role.installed_module_hash,
+        &role.candid_sha256,
+    )
+}
+
+fn materialization_output_key_for_group(group: &PromotionMaterializationOutputGroupV1) -> String {
+    materialization_output_key(
+        &group.wasm_sha256,
+        &group.wasm_gz_sha256,
+        &group.installed_module_hash,
+        &group.candid_sha256,
+    )
+}
+
+fn materialization_output_key(
+    wasm_sha256: &str,
+    wasm_gz_sha256: &str,
+    installed_module_hash: &str,
+    candid_sha256: &str,
+) -> String {
+    format!(
+        "materialized:wasm={wasm_sha256}:wasm_gz={wasm_gz_sha256}:installed={installed_module_hash}:candid={candid_sha256}"
+    )
 }
 
 fn source_kind_identity_part(kind: Option<RoleArtifactSourceKindV1>) -> String {
@@ -1969,6 +2600,101 @@ fn validate_artifact_identity_group(
             PromotionArtifactIdentityReportError::IdentityGroupKeyMismatch {
                 expected,
                 found: group.identity_key.clone(),
+            },
+        );
+    }
+    Ok(())
+}
+
+fn validate_materialization_output_groups(
+    roles: &[RolePromotionMaterializationIdentityV1],
+    groups: &[PromotionMaterializationOutputGroupV1],
+) -> Result<(), PromotionMaterializationIdentityReportError> {
+    let role_names = roles
+        .iter()
+        .map(|role| role.role.as_str())
+        .collect::<BTreeSet<_>>();
+    let mut grouped_roles = BTreeSet::new();
+    let mut group_keys = BTreeSet::new();
+    for group in groups {
+        validate_materialization_output_group(group)?;
+        if !group_keys.insert(group.output_identity_key.as_str()) {
+            return Err(
+                PromotionMaterializationIdentityReportError::DuplicateOutputGroup {
+                    output_identity_key: group.output_identity_key.clone(),
+                },
+            );
+        }
+        if group.roles.is_empty() {
+            return Err(
+                PromotionMaterializationIdentityReportError::EmptyOutputGroup {
+                    output_identity_key: group.output_identity_key.clone(),
+                },
+            );
+        }
+        for role in &group.roles {
+            if !role_names.contains(role.as_str()) {
+                return Err(
+                    PromotionMaterializationIdentityReportError::UnknownGroupedRole {
+                        role: role.clone(),
+                    },
+                );
+            }
+            if !grouped_roles.insert(role.as_str()) {
+                return Err(
+                    PromotionMaterializationIdentityReportError::DuplicateGroupedRole {
+                        role: role.clone(),
+                    },
+                );
+            }
+            let role_identity = roles
+                .iter()
+                .find(|candidate| candidate.role == *role)
+                .expect("known role should be present");
+            let expected = materialization_output_key_for_role(role_identity);
+            if expected != group.output_identity_key {
+                return Err(
+                    PromotionMaterializationIdentityReportError::OutputGroupRoleMismatch {
+                        role: role.clone(),
+                        expected,
+                        found: group.output_identity_key.clone(),
+                    },
+                );
+            }
+        }
+    }
+    for role in roles {
+        if !grouped_roles.contains(role.role.as_str()) {
+            return Err(
+                PromotionMaterializationIdentityReportError::MissingGroupedRole {
+                    role: role.role.clone(),
+                },
+            );
+        }
+    }
+    Ok(())
+}
+
+fn validate_materialization_output_group(
+    group: &PromotionMaterializationOutputGroupV1,
+) -> Result<(), PromotionMaterializationIdentityReportError> {
+    ensure_materialization_report_field(
+        "output_group.output_identity_key",
+        &group.output_identity_key,
+    )?;
+    ensure_materialization_report_sha256("output_group.wasm_sha256", &group.wasm_sha256)?;
+    ensure_materialization_report_sha256("output_group.wasm_gz_sha256", &group.wasm_gz_sha256)?;
+    ensure_materialization_report_sha256(
+        "output_group.installed_module_hash",
+        &group.installed_module_hash,
+    )?;
+    ensure_materialization_report_sha256("output_group.candid_sha256", &group.candid_sha256)?;
+    let expected = materialization_output_key_for_group(group);
+    if expected != group.output_identity_key {
+        return Err(
+            PromotionMaterializationIdentityReportError::OutputGroupKeyMismatch {
+                expected,
+                found: group.output_identity_key.clone(),
             },
         );
     }
@@ -2548,6 +3274,230 @@ fn validate_identity_report_blockers(
     Ok(())
 }
 
+const fn ensure_wasm_store_identity_status_matches_blockers(
+    report: &PromotionWasmStoreIdentityReportV1,
+) -> Result<(), PromotionWasmStoreIdentityReportError> {
+    match (report.status, report.blockers.is_empty()) {
+        (PromotionReadinessStatusV1::Ready, false)
+        | (PromotionReadinessStatusV1::Blocked, true) => Err(
+            PromotionWasmStoreIdentityReportError::StatusBlockerMismatch {
+                status: report.status,
+                blocker_count: report.blockers.len(),
+            },
+        ),
+        _ => Ok(()),
+    }
+}
+
+fn ensure_unique_wasm_store_identity_roles(
+    roles: &[RolePromotionWasmStoreIdentityV1],
+) -> Result<(), PromotionWasmStoreIdentityReportError> {
+    let mut seen = BTreeSet::new();
+    for role in roles {
+        if !seen.insert(role.role.as_str()) {
+            return Err(PromotionWasmStoreIdentityReportError::DuplicateRole {
+                role: role.role.clone(),
+            });
+        }
+    }
+    Ok(())
+}
+
+fn ensure_wasm_store_identity_staging_receipts(
+    receipts: &[StagingReceiptV1],
+) -> Result<(), PromotionWasmStoreIdentityReportError> {
+    for receipt in receipts {
+        if receipt.schema_version != DEPLOYMENT_TRUTH_SCHEMA_VERSION {
+            return Err(
+                PromotionWasmStoreIdentityReportError::StagingReceiptSchemaVersionMismatch {
+                    role: receipt.role.clone(),
+                    expected: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
+                    found: receipt.schema_version,
+                },
+            );
+        }
+        ensure_wasm_store_identity_report_field("role", &receipt.role)?;
+        ensure_wasm_store_identity_report_field("artifact_identity", &receipt.artifact_identity)?;
+    }
+    Ok(())
+}
+
+fn validate_role_wasm_store_identity(
+    role: &RolePromotionWasmStoreIdentityV1,
+) -> Result<(), PromotionWasmStoreIdentityReportError> {
+    ensure_wasm_store_identity_report_field("role", &role.role)?;
+    ensure_wasm_store_identity_report_field("artifact_identity", &role.artifact_identity)?;
+    if let Some(locator) = &role.wasm_store_locator {
+        ensure_wasm_store_identity_report_field("wasm_store_locator", locator)?;
+    }
+    for chunk_hash in &role.prepared_chunk_hashes {
+        ensure_wasm_store_identity_report_field("prepared_chunk_hash", chunk_hash)?;
+    }
+    Ok(())
+}
+
+fn validate_wasm_store_identity_blockers(
+    blockers: &[SafetyFindingV1],
+) -> Result<(), PromotionWasmStoreIdentityReportError> {
+    for blocker in blockers {
+        ensure_wasm_store_identity_report_field("blocker.code", &blocker.code)?;
+        ensure_wasm_store_identity_report_field("blocker.message", &blocker.message)?;
+        if blocker.severity != SafetySeverityV1::HardFailure {
+            return Err(
+                PromotionWasmStoreIdentityReportError::BlockerSeverityMismatch {
+                    severity: blocker.severity,
+                },
+            );
+        }
+    }
+    Ok(())
+}
+
+const fn ensure_materialization_report_status_matches_blockers(
+    report: &PromotionMaterializationIdentityReportV1,
+) -> Result<(), PromotionMaterializationIdentityReportError> {
+    match (report.status, report.blockers.is_empty()) {
+        (PromotionReadinessStatusV1::Ready, false)
+        | (PromotionReadinessStatusV1::Blocked, true) => Err(
+            PromotionMaterializationIdentityReportError::StatusBlockerMismatch {
+                status: report.status,
+                blocker_count: report.blockers.len(),
+            },
+        ),
+        _ => Ok(()),
+    }
+}
+
+fn ensure_unique_materialization_report_roles(
+    roles: &[RolePromotionMaterializationIdentityV1],
+) -> Result<(), PromotionMaterializationIdentityReportError> {
+    let mut seen_roles = BTreeSet::new();
+    let mut seen_evidence = BTreeSet::new();
+    for role in roles {
+        if !seen_roles.insert(role.role.as_str()) {
+            return Err(PromotionMaterializationIdentityReportError::DuplicateRole {
+                role: role.role.clone(),
+            });
+        }
+        if !seen_evidence.insert(role.evidence_id.as_str()) {
+            return Err(
+                PromotionMaterializationIdentityReportError::DuplicateEvidence {
+                    evidence_id: role.evidence_id.clone(),
+                },
+            );
+        }
+    }
+    Ok(())
+}
+
+fn validate_role_materialization_identity(
+    role: &RolePromotionMaterializationIdentityV1,
+) -> Result<(), PromotionMaterializationIdentityReportError> {
+    ensure_materialization_report_field("role", &role.role)?;
+    ensure_materialization_report_field("evidence_id", &role.evidence_id)?;
+    ensure_materialization_report_field("recipe_id", &role.recipe_id)?;
+    ensure_materialization_report_field(
+        "materialization_input_id",
+        &role.materialization_input_id,
+    )?;
+    ensure_materialization_report_field(
+        "materialization_result_id",
+        &role.materialization_result_id,
+    )?;
+    ensure_materialization_report_sha256(
+        "materialization_input_digest",
+        &role.materialization_input_digest,
+    )?;
+    ensure_materialization_report_sha256(
+        "canonical_embedded_config_sha256",
+        &role.canonical_embedded_config_sha256,
+    )?;
+    ensure_materialization_report_field("network", &role.network)?;
+    ensure_materialization_report_field("root_trust_anchor", &role.root_trust_anchor)?;
+    ensure_materialization_report_field("runtime_variant", &role.runtime_variant)?;
+    ensure_materialization_report_sha256("wasm_sha256", &role.wasm_sha256)?;
+    ensure_materialization_report_sha256("wasm_gz_sha256", &role.wasm_gz_sha256)?;
+    ensure_materialization_report_sha256("installed_module_hash", &role.installed_module_hash)?;
+    ensure_materialization_report_sha256("candid_sha256", &role.candid_sha256)?;
+    Ok(())
+}
+
+fn validate_materialization_report_blockers(
+    blockers: &[SafetyFindingV1],
+) -> Result<(), PromotionMaterializationIdentityReportError> {
+    for blocker in blockers {
+        ensure_materialization_report_field("blocker.code", &blocker.code)?;
+        ensure_materialization_report_field("blocker.message", &blocker.message)?;
+        if blocker.severity != SafetySeverityV1::HardFailure {
+            return Err(
+                PromotionMaterializationIdentityReportError::BlockerSeverityMismatch {
+                    severity: blocker.severity,
+                },
+            );
+        }
+    }
+    Ok(())
+}
+
+const fn ensure_provenance_report_status_matches_blockers(
+    report: &ArtifactPromotionProvenanceReportV1,
+) -> Result<(), ArtifactPromotionProvenanceReportError> {
+    match (report.status, report.blockers.is_empty()) {
+        (PromotionReadinessStatusV1::Ready, false)
+        | (PromotionReadinessStatusV1::Blocked, true) => Err(
+            ArtifactPromotionProvenanceReportError::StatusBlockerMismatch {
+                status: report.status,
+                blocker_count: report.blockers.len(),
+            },
+        ),
+        _ => Ok(()),
+    }
+}
+
+fn ensure_unique_provenance_roles(
+    roles: &[RolePromotionProvenanceV1],
+) -> Result<(), ArtifactPromotionProvenanceReportError> {
+    let mut seen = BTreeSet::new();
+    for role in roles {
+        if !seen.insert(role.role.as_str()) {
+            return Err(ArtifactPromotionProvenanceReportError::DuplicateRole {
+                role: role.role.clone(),
+            });
+        }
+    }
+    Ok(())
+}
+
+fn validate_role_promotion_provenance(
+    role: &RolePromotionProvenanceV1,
+) -> Result<(), ArtifactPromotionProvenanceReportError> {
+    ensure_provenance_report_field("role", &role.role)?;
+    if let Some(evidence_id) = &role.materialization_evidence_id {
+        ensure_provenance_report_field("materialization_evidence_id", evidence_id)?;
+    }
+    if let Some(locator) = &role.wasm_store_locator {
+        ensure_provenance_report_field("wasm_store_locator", locator)?;
+    }
+    Ok(())
+}
+
+fn validate_provenance_report_blockers(
+    blockers: &[SafetyFindingV1],
+) -> Result<(), ArtifactPromotionProvenanceReportError> {
+    for blocker in blockers {
+        ensure_provenance_report_field("blocker.code", &blocker.code)?;
+        ensure_provenance_report_field("blocker.message", &blocker.message)?;
+        if blocker.severity != SafetySeverityV1::HardFailure {
+            return Err(
+                ArtifactPromotionProvenanceReportError::BlockerSeverityMismatch {
+                    severity: blocker.severity,
+                },
+            );
+        }
+    }
+    Ok(())
+}
+
 fn validate_readiness_findings(
     field: &'static str,
     findings: &[SafetyFindingV1],
@@ -2594,6 +3544,52 @@ fn ensure_identity_optional_sha256(
         Ok(())
     } else {
         Err(PromotionArtifactIdentityReportError::InvalidSha256Digest { field })
+    }
+}
+
+fn ensure_wasm_store_identity_report_field(
+    field: &'static str,
+    value: &str,
+) -> Result<(), PromotionWasmStoreIdentityReportError> {
+    if value.trim().is_empty() {
+        return Err(PromotionWasmStoreIdentityReportError::MissingRequiredField { field });
+    }
+    Ok(())
+}
+
+fn ensure_materialization_report_field(
+    field: &'static str,
+    value: &str,
+) -> Result<(), PromotionMaterializationIdentityReportError> {
+    if value.trim().is_empty() {
+        return Err(PromotionMaterializationIdentityReportError::MissingRequiredField { field });
+    }
+    Ok(())
+}
+
+fn ensure_provenance_report_field(
+    field: &'static str,
+    value: &str,
+) -> Result<(), ArtifactPromotionProvenanceReportError> {
+    if value.trim().is_empty() {
+        return Err(ArtifactPromotionProvenanceReportError::MissingRequiredField { field });
+    }
+    Ok(())
+}
+
+fn ensure_materialization_report_sha256(
+    field: &'static str,
+    value: &str,
+) -> Result<(), PromotionMaterializationIdentityReportError> {
+    ensure_materialization_report_field(field, value)?;
+    if is_lower_hex_sha256(value) {
+        Ok(())
+    } else {
+        Err(
+            PromotionMaterializationIdentityReportError::Materialization(
+                PromotionMaterializationIdentityError::InvalidSha256Digest { field },
+            ),
+        )
     }
 }
 

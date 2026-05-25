@@ -94,6 +94,16 @@ inspect only the files needed for the current task.
 - Receipt-backed promotion artifact sources now require source receipt lineage
   digests, keeping artifact provenance tied to a specific archived receipt
   lineage instead of a locator alone.
+- Passive wasm-store artifact identity reports can now be derived from staging
+  receipts, preserving role locators, transport, chunk publication counts, and
+  verified postcondition facts without querying `wasm_store`.
+- Passive source/build materialization identity reports now aggregate validated
+  materialization evidence by role and group roles by materialized output
+  identity.
+- Passive artifact promotion provenance reports now link promotion plans to
+  readiness, artifact identity, transform, target execution lineage,
+  wasm-store identity, and materialization identity report IDs without claiming
+  execution.
 - `0.43.8` is closed. The closeout report is
   `docs/audits/reports/2026-05/2026-05-25/0.43-closeout.md`.
 - `0.43.8` adds a private current-install

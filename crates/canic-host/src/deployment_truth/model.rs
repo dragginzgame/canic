@@ -306,6 +306,53 @@ pub struct BuildMaterializationEvidenceV1 {
 }
 
 ///
+/// PromotionMaterializationIdentityReportV1
+///
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct PromotionMaterializationIdentityReportV1 {
+    pub schema_version: u32,
+    pub report_id: String,
+    pub status: PromotionReadinessStatusV1,
+    pub roles: Vec<RolePromotionMaterializationIdentityV1>,
+    pub output_groups: Vec<PromotionMaterializationOutputGroupV1>,
+    pub blockers: Vec<SafetyFindingV1>,
+}
+
+///
+/// RolePromotionMaterializationIdentityV1
+///
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RolePromotionMaterializationIdentityV1 {
+    pub role: String,
+    pub evidence_id: String,
+    pub recipe_id: String,
+    pub materialization_input_id: String,
+    pub materialization_result_id: String,
+    pub materialization_input_digest: String,
+    pub canonical_embedded_config_sha256: String,
+    pub network: String,
+    pub root_trust_anchor: String,
+    pub runtime_variant: String,
+    pub wasm_sha256: String,
+    pub wasm_gz_sha256: String,
+    pub installed_module_hash: String,
+    pub candid_sha256: String,
+}
+
+///
+/// PromotionMaterializationOutputGroupV1
+///
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct PromotionMaterializationOutputGroupV1 {
+    pub output_identity_key: String,
+    pub roles: Vec<String>,
+    pub wasm_sha256: String,
+    pub wasm_gz_sha256: String,
+    pub installed_module_hash: String,
+    pub candid_sha256: String,
+}
+
+///
 /// PromotionArtifactIdentityReportV1
 ///
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -316,6 +363,32 @@ pub struct PromotionArtifactIdentityReportV1 {
     pub roles: Vec<RolePromotionArtifactIdentityV1>,
     pub identity_groups: Vec<PromotionArtifactIdentityGroupV1>,
     pub blockers: Vec<SafetyFindingV1>,
+}
+
+///
+/// PromotionWasmStoreIdentityReportV1
+///
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct PromotionWasmStoreIdentityReportV1 {
+    pub schema_version: u32,
+    pub report_id: String,
+    pub status: PromotionReadinessStatusV1,
+    pub roles: Vec<RolePromotionWasmStoreIdentityV1>,
+    pub blockers: Vec<SafetyFindingV1>,
+}
+
+///
+/// RolePromotionWasmStoreIdentityV1
+///
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RolePromotionWasmStoreIdentityV1 {
+    pub role: String,
+    pub artifact_identity: String,
+    pub transport: ArtifactTransportV1,
+    pub wasm_store_locator: Option<String>,
+    pub prepared_chunk_hashes: Vec<String>,
+    pub published_chunk_count: usize,
+    pub verified_postcondition: VerifiedPostconditionV1,
 }
 
 ///
@@ -409,6 +482,44 @@ pub struct ArtifactPromotionPlanV1 {
     pub transform: PromotionPlanTransformV1,
     pub target_execution_lineage: Option<PromotionTargetExecutionLineageV1>,
     pub blockers: Vec<SafetyFindingV1>,
+}
+
+///
+/// ArtifactPromotionProvenanceReportV1
+///
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ArtifactPromotionProvenanceReportV1 {
+    pub schema_version: u32,
+    pub report_id: String,
+    pub status: PromotionReadinessStatusV1,
+    pub artifact_promotion_plan_id: String,
+    pub target_plan_id: String,
+    pub promoted_plan_id: String,
+    pub promotion_plan_lineage_digest: String,
+    pub readiness_id: String,
+    pub artifact_identity_report_id: String,
+    pub transform_id: String,
+    pub target_execution_lineage_id: Option<String>,
+    pub wasm_store_identity_report_id: Option<String>,
+    pub materialization_identity_report_id: Option<String>,
+    pub execution_attempted: bool,
+    pub roles: Vec<RolePromotionProvenanceV1>,
+    pub blockers: Vec<SafetyFindingV1>,
+}
+
+///
+/// RolePromotionProvenanceV1
+///
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RolePromotionProvenanceV1 {
+    pub role: String,
+    pub promotion_level: PromotionArtifactLevelV1,
+    pub source_kind: RoleArtifactSourceKindV1,
+    pub artifact_identity_changed: bool,
+    pub embedded_config_changed: bool,
+    pub target_materialization_preserved: bool,
+    pub materialization_evidence_id: Option<String>,
+    pub wasm_store_locator: Option<String>,
 }
 
 ///

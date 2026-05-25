@@ -111,6 +111,60 @@ pub fn build_materialization_evidence_text(evidence: &BuildMaterializationEviden
     .join("\n")
 }
 
+/// Render source/build materialization identity as passive operator text.
+#[must_use]
+pub fn promotion_materialization_identity_report_text(
+    report: &PromotionMaterializationIdentityReportV1,
+) -> String {
+    let mut lines = vec![
+        "Promotion materialization identity report".to_string(),
+        "mode: passive".to_string(),
+        "execution: none".to_string(),
+        format!(
+            "status: {}",
+            promotion_readiness_status_label(report.status)
+        ),
+        format!("report_id: {}", report.report_id),
+        String::new(),
+        "counts:".to_string(),
+        format!("  roles: {}", report.roles.len()),
+        format!("  output_groups: {}", report.output_groups.len()),
+        format!("  blockers: {}", report.blockers.len()),
+    ];
+
+    append_hard_failure_items(&mut lines, "blockers", &report.blockers);
+    if !report.output_groups.is_empty() {
+        lines.push(String::new());
+        lines.push("output groups:".to_string());
+        for group in &report.output_groups {
+            lines.push(format!(
+                "  {} roles={} wasm={} installed={}",
+                group.output_identity_key,
+                group.roles.join(","),
+                group.wasm_sha256,
+                group.installed_module_hash
+            ));
+        }
+    }
+    if !report.roles.is_empty() {
+        lines.push(String::new());
+        lines.push("roles:".to_string());
+        for role in &report.roles {
+            lines.push(format!(
+                "  {} evidence={} recipe={} input={} result={} network={} runtime={}",
+                role.role,
+                role.evidence_id,
+                role.recipe_id,
+                role.materialization_input_id,
+                role.materialization_result_id,
+                role.network,
+                role.runtime_variant
+            ));
+        }
+    }
+    lines.join("\n")
+}
+
 /// Render a promotion policy check as passive operator text.
 #[must_use]
 pub fn promotion_policy_check_text(check: &PromotionPolicyCheckV1) -> String {
@@ -165,6 +219,45 @@ pub fn promotion_artifact_identity_report_text(
     append_promotion_artifact_identity_group_items(&mut lines, &report.identity_groups);
     append_promotion_artifact_identity_role_items(&mut lines, &report.roles);
     append_hard_failure_items(&mut lines, "blockers", &report.blockers);
+    lines.join("\n")
+}
+
+/// Render a wasm-store identity report as passive operator text.
+#[must_use]
+pub fn promotion_wasm_store_identity_report_text(
+    report: &PromotionWasmStoreIdentityReportV1,
+) -> String {
+    let mut lines = vec![
+        "Promotion wasm-store identity report".to_string(),
+        "mode: passive".to_string(),
+        "execution: none".to_string(),
+        format!(
+            "status: {}",
+            promotion_readiness_status_label(report.status)
+        ),
+        format!("report_id: {}", report.report_id),
+        String::new(),
+        "counts:".to_string(),
+        format!("  roles: {}", report.roles.len()),
+        format!("  blockers: {}", report.blockers.len()),
+    ];
+
+    append_hard_failure_items(&mut lines, "blockers", &report.blockers);
+    if !report.roles.is_empty() {
+        lines.push(String::new());
+        lines.push("roles:".to_string());
+        for role in &report.roles {
+            lines.push(format!(
+                "  {} artifact={} locator={} chunks={}/{} postcondition={:?}",
+                role.role,
+                role.artifact_identity,
+                role.wasm_store_locator.as_deref().unwrap_or("none"),
+                role.published_chunk_count,
+                role.prepared_chunk_hashes.len(),
+                role.verified_postcondition.status
+            ));
+        }
+    }
     lines.join("\n")
 }
 
@@ -346,6 +439,84 @@ pub fn artifact_promotion_plan_text(plan: &ArtifactPromotionPlanV1) -> String {
                 .lines()
                 .map(|line| format!("  {line}")),
         );
+    }
+    lines.join("\n")
+}
+
+/// Render artifact promotion provenance as passive operator text.
+#[must_use]
+pub fn artifact_promotion_provenance_report_text(
+    report: &ArtifactPromotionProvenanceReportV1,
+) -> String {
+    let mut lines = vec![
+        "Artifact promotion provenance report".to_string(),
+        "mode: passive".to_string(),
+        "execution: none".to_string(),
+        format!(
+            "status: {}",
+            promotion_readiness_status_label(report.status)
+        ),
+        format!("report_id: {}", report.report_id),
+        format!(
+            "artifact_promotion_plan_id: {}",
+            report.artifact_promotion_plan_id
+        ),
+        format!("promoted_plan_id: {}", report.promoted_plan_id),
+        format!(
+            "promotion_plan_lineage_digest: {}",
+            report.promotion_plan_lineage_digest
+        ),
+        String::new(),
+        "linked reports:".to_string(),
+        format!("  readiness: {}", report.readiness_id),
+        format!(
+            "  artifact_identity: {}",
+            report.artifact_identity_report_id
+        ),
+        format!("  transform: {}", report.transform_id),
+        format!(
+            "  target_execution_lineage: {}",
+            report
+                .target_execution_lineage_id
+                .as_deref()
+                .unwrap_or("none")
+        ),
+        format!(
+            "  wasm_store_identity: {}",
+            report
+                .wasm_store_identity_report_id
+                .as_deref()
+                .unwrap_or("none")
+        ),
+        format!(
+            "  materialization_identity: {}",
+            report
+                .materialization_identity_report_id
+                .as_deref()
+                .unwrap_or("none")
+        ),
+        String::new(),
+        "counts:".to_string(),
+        format!("  roles: {}", report.roles.len()),
+        format!("  blockers: {}", report.blockers.len()),
+    ];
+
+    append_hard_failure_items(&mut lines, "blockers", &report.blockers);
+    if !report.roles.is_empty() {
+        lines.push(String::new());
+        lines.push("roles:".to_string());
+        for role in &report.roles {
+            lines.push(format!(
+                "  {} {:?}/{:?}: materialization={} wasm_store={}",
+                role.role,
+                role.promotion_level,
+                role.source_kind,
+                role.materialization_evidence_id
+                    .as_deref()
+                    .unwrap_or("none"),
+                role.wasm_store_locator.as_deref().unwrap_or("none")
+            ));
+        }
     }
     lines.join("\n")
 }

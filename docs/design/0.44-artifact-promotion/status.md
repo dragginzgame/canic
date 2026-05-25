@@ -99,13 +99,24 @@ promotion can prove what was built, uploaded, installed, and promoted.
 - Added target-check validation for artifact promotion plans, proving the
   promoted plan and execution preflight match the deployment truth check that
   would gate later execution.
+- Added passive wasm-store artifact identity reports derived from staging
+  receipts, preserving role locators, transport, chunk publication counts, and
+  verified postcondition facts without querying `wasm_store`.
+- Added passive source/build materialization identity reports that aggregate
+  validated materialization evidence by role and group roles by materialized
+  output identity.
+- Added passive artifact promotion provenance reports that link a promotion
+  plan to readiness, artifact identity, transform, target execution lineage,
+  wasm-store identity, and materialization identity report IDs without claiming
+  execution.
 
 ## Not Implemented Yet
 
-- Promotion execution receipts and richer provenance.
-- Integration with wasm-store artifact identity.
+- Promotion execution receipts.
+- Live `wasm_store` catalog lookup/verification beyond staging receipt
+  evidence.
 - Artifact identity dedupe semantics beyond passive report grouping.
-- CLI/operator report surfaces for source/build materialization identity.
+- CLI command wiring for source/build materialization identity reports.
 - CLI/report surfaces for role promotion policy checks.
 
 ## Drift Log

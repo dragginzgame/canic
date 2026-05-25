@@ -14,6 +14,10 @@ present.
 
 ## [0.44.x] - 2026-05-25 - Artifact promotion
 
+- `0.44.7` adds passive wasm-store, source/build materialization, and
+  promotion provenance reports so promotion planning can link staged bytes,
+  materialized outputs, and plan evidence without claiming execution.
+
 - `0.44.6` adds passive artifact promotion plan envelopes with target execution
   lineage and deployment-check validation for promoted-plan preflight evidence.
 
