@@ -14,6 +14,9 @@ present.
 
 ## [0.44.x] - 2026-05-25 - Artifact promotion
 
+- `0.44.6` adds passive artifact promotion plan envelopes with target execution
+  lineage and deployment-check validation for promoted-plan preflight evidence.
+
 - `0.44.5` adds materialization-linked promotion transforms and lineage digests
   for promoted plans and receipt-backed artifact sources.
 

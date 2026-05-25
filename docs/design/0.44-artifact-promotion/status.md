@@ -90,17 +90,23 @@ promotion can prove what was built, uploaded, installed, and promoted.
   summaries. Validation rejects stale lineage digests.
 - Receipt-backed promotion artifact sources now require a source receipt
   lineage digest, and non-receipt sources reject that field.
+- Added passive target execution lineage artifacts that bind a validated
+  promotion transform to a validated target execution preflight and explicitly
+  record that no execution has occurred.
+- Added a passive artifact promotion plan envelope that ties together
+  readiness, artifact identity, promoted-plan transform, and optional target
+  execution lineage artifacts without becoming an execution shortcut.
+- Added target-check validation for artifact promotion plans, proving the
+  promoted plan and execution preflight match the deployment truth check that
+  would gate later execution.
 
 ## Not Implemented Yet
 
-- Full artifact promotion plan model.
 - Promotion execution receipts and richer provenance.
-- Full promotion safety checks across deployment targets.
 - Integration with wasm-store artifact identity.
 - Artifact identity dedupe semantics beyond passive report grouping.
 - CLI/operator report surfaces for source/build materialization identity.
 - CLI/report surfaces for role promotion policy checks.
-- Target execution lineage identity.
 
 ## Drift Log
 

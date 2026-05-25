@@ -1,14 +1,20 @@
+use super::executor::{
+    DeploymentExecutionPreflightError, validate_deployment_execution_preflight,
+    validate_deployment_execution_preflight_for_check,
+};
 use super::{
-    ArtifactSourceV1, BuildMaterializationEvidenceV1, BuildMaterializationInputV1,
-    BuildMaterializationResultV1, BuildRecipeIdentityV1, DEPLOYMENT_TRUTH_SCHEMA_VERSION,
-    DeploymentPlanV1, PromotionArtifactIdentityGroupV1, PromotionArtifactIdentityKindV1,
-    PromotionArtifactIdentityReportV1, PromotionArtifactLevelV1, PromotionPlanTransformEvidenceV1,
-    PromotionPlanTransformV1, PromotionPolicyCheckV1, PromotionPolicyClaimV1,
-    PromotionPolicyRequirementV1, PromotionReadinessStatusV1, PromotionReadinessV1,
-    RoleArtifactSourceKindV1, RoleArtifactSourceV1, RoleArtifactV1,
-    RolePromotionArtifactIdentityV1, RolePromotionInputV1, RolePromotionMaterializationLinkV1,
-    RolePromotionPlanTransformV1, RolePromotionPolicyDecisionV1, RolePromotionPolicyV1,
-    RolePromotionReadinessV1, SafetyFindingV1, SafetySeverityV1, stable_json_sha256_hex,
+    ArtifactPromotionPlanV1, ArtifactSourceV1, BuildMaterializationEvidenceV1,
+    BuildMaterializationInputV1, BuildMaterializationResultV1, BuildRecipeIdentityV1,
+    DEPLOYMENT_TRUTH_SCHEMA_VERSION, DeploymentCheckV1, DeploymentExecutionPreflightStatusV1,
+    DeploymentExecutionPreflightV1, DeploymentPlanV1, PromotionArtifactIdentityGroupV1,
+    PromotionArtifactIdentityKindV1, PromotionArtifactIdentityReportV1, PromotionArtifactLevelV1,
+    PromotionPlanTransformEvidenceV1, PromotionPlanTransformV1, PromotionPolicyCheckV1,
+    PromotionPolicyClaimV1, PromotionPolicyRequirementV1, PromotionReadinessStatusV1,
+    PromotionReadinessV1, PromotionTargetExecutionLineageV1, RoleArtifactSourceKindV1,
+    RoleArtifactSourceV1, RoleArtifactV1, RolePromotionArtifactIdentityV1, RolePromotionInputV1,
+    RolePromotionMaterializationLinkV1, RolePromotionPlanTransformV1,
+    RolePromotionPolicyDecisionV1, RolePromotionPolicyV1, RolePromotionReadinessV1,
+    SafetyFindingV1, SafetySeverityV1, stable_json_sha256_hex,
 };
 use serde::Serialize;
 use std::collections::{BTreeMap, BTreeSet};
@@ -116,6 +122,65 @@ pub enum PromotionPlanTransformEvidenceError {
     MissingRequiredField { field: &'static str },
     #[error("promotion plan transform evidence has invalid transform: {0}")]
     Transform(#[from] PromotionPlanTransformError),
+}
+
+///
+/// ArtifactPromotionPlanError
+///
+#[derive(Debug, ThisError)]
+pub enum ArtifactPromotionPlanError {
+    #[error("artifact promotion plan schema mismatch: expected {expected}, found {found}")]
+    SchemaVersionMismatch { expected: u32, found: u32 },
+    #[error("artifact promotion plan is missing required field: {field}")]
+    MissingRequiredField { field: &'static str },
+    #[error(
+        "artifact promotion plan status {status:?} does not match blocker count {blocker_count}"
+    )]
+    StatusBlockerMismatch {
+        status: PromotionReadinessStatusV1,
+        blocker_count: usize,
+    },
+    #[error("artifact promotion plan field {field} is inconsistent")]
+    LinkageMismatch { field: &'static str },
+    #[error("artifact promotion plan readiness is invalid: {0}")]
+    Readiness(#[from] PromotionReadinessError),
+    #[error("artifact promotion plan artifact identity report is invalid: {0}")]
+    ArtifactIdentityReport(#[from] PromotionArtifactIdentityReportError),
+    #[error("artifact promotion plan transform is invalid: {0}")]
+    Transform(#[from] PromotionPlanTransformError),
+    #[error("artifact promotion plan target execution lineage is invalid: {0}")]
+    TargetExecutionLineage(#[from] PromotionTargetExecutionLineageError),
+    #[error(
+        "artifact promotion plan requires target execution lineage for deployment check validation"
+    )]
+    MissingTargetExecutionLineage,
+    #[error("artifact promotion plan target deployment check is invalid: {0}")]
+    TargetCheck(#[source] DeploymentExecutionPreflightError),
+}
+
+///
+/// PromotionTargetExecutionLineageError
+///
+#[derive(Debug, ThisError)]
+pub enum PromotionTargetExecutionLineageError {
+    #[error(
+        "promotion target execution lineage schema mismatch: expected {expected}, found {found}"
+    )]
+    SchemaVersionMismatch { expected: u32, found: u32 },
+    #[error("promotion target execution lineage is missing required field: {field}")]
+    MissingRequiredField { field: &'static str },
+    #[error(
+        "promotion target execution lineage field {field} must be a lowercase sha256 hex digest"
+    )]
+    InvalidSha256Digest { field: &'static str },
+    #[error("promotion target execution lineage has invalid transform: {0}")]
+    Transform(#[from] PromotionPlanTransformError),
+    #[error("promotion target execution lineage has invalid execution preflight: {0}")]
+    Preflight(#[from] DeploymentExecutionPreflightError),
+    #[error("promotion target execution lineage field {field} is inconsistent")]
+    LinkageMismatch { field: &'static str },
+    #[error("promotion target execution lineage must not claim execution occurred")]
+    ExecutionAttempted,
 }
 
 ///
@@ -279,6 +344,30 @@ pub struct PromotionPlanTransformEvidenceRequest {
 }
 
 ///
+/// ArtifactPromotionPlanRequest
+///
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ArtifactPromotionPlanRequest {
+    pub plan_id: String,
+    pub generated_at: String,
+    pub readiness: PromotionReadinessV1,
+    pub artifact_identity_report: PromotionArtifactIdentityReportV1,
+    pub transform: PromotionPlanTransformV1,
+    pub target_execution_lineage: Option<PromotionTargetExecutionLineageV1>,
+}
+
+///
+/// PromotionTargetExecutionLineageRequest
+///
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PromotionTargetExecutionLineageRequest {
+    pub lineage_id: String,
+    pub generated_at: String,
+    pub transform: PromotionPlanTransformV1,
+    pub execution_preflight: DeploymentExecutionPreflightV1,
+}
+
+///
 /// PromotionArtifactIdentityReportRequest
 ///
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -314,6 +403,21 @@ struct PromotionPlanLineageInput<'a> {
     promoted_plan_id: &'a str,
     promoted_plan: &'a DeploymentPlanV1,
     roles: &'a [RolePromotionPlanTransformV1],
+}
+
+#[derive(Serialize)]
+struct PromotionTargetExecutionLineageInput<'a> {
+    promotion_plan_lineage_digest: &'a str,
+    promoted_plan_id: &'a str,
+    preflight_plan_id: &'a str,
+    preflight_safety_report_id: &'a str,
+    preflight_authority_plan_id: &'a str,
+    preflight_backend: &'a super::DeploymentExecutorBackendV1,
+    preflight_status: DeploymentExecutionPreflightStatusV1,
+    planned_phases: &'a [String],
+    required_capabilities: &'a [super::DeploymentExecutorCapabilityV1],
+    missing_capabilities: &'a [super::DeploymentExecutorCapabilityV1],
+    execution_attempted: bool,
 }
 
 pub fn promoted_deployment_plan_from_inputs(
@@ -592,6 +696,120 @@ pub fn promotion_plan_transform_evidence(
     Ok(evidence)
 }
 
+pub fn artifact_promotion_plan(
+    request: ArtifactPromotionPlanRequest,
+) -> Result<ArtifactPromotionPlanV1, ArtifactPromotionPlanError> {
+    ensure_artifact_promotion_plan_field("plan_id", &request.plan_id)?;
+    ensure_artifact_promotion_plan_field("generated_at", &request.generated_at)?;
+    validate_promotion_readiness(&request.readiness)?;
+    validate_promotion_artifact_identity_report(&request.artifact_identity_report)?;
+    validate_promotion_plan_transform(&request.transform)?;
+    if let Some(lineage) = &request.target_execution_lineage {
+        validate_promotion_target_execution_lineage(lineage)?;
+    }
+
+    let blockers =
+        artifact_promotion_plan_blockers(&request.readiness, &request.artifact_identity_report);
+    let status = if blockers.is_empty() {
+        PromotionReadinessStatusV1::Ready
+    } else {
+        PromotionReadinessStatusV1::Blocked
+    };
+    let plan = ArtifactPromotionPlanV1 {
+        schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
+        plan_id: request.plan_id,
+        generated_at: request.generated_at,
+        status,
+        target_plan_id: request.transform.target_plan_id.clone(),
+        promoted_plan_id: request.transform.promoted_plan_id.clone(),
+        promotion_plan_lineage_digest: request.transform.promotion_plan_lineage_digest.clone(),
+        readiness: request.readiness,
+        artifact_identity_report: request.artifact_identity_report,
+        transform: request.transform,
+        target_execution_lineage: request.target_execution_lineage,
+        blockers,
+    };
+    validate_artifact_promotion_plan(&plan)?;
+    Ok(plan)
+}
+
+pub fn promotion_target_execution_lineage(
+    request: PromotionTargetExecutionLineageRequest,
+) -> Result<PromotionTargetExecutionLineageV1, PromotionTargetExecutionLineageError> {
+    ensure_target_execution_lineage_field("lineage_id", &request.lineage_id)?;
+    ensure_target_execution_lineage_field("generated_at", &request.generated_at)?;
+    validate_promotion_plan_transform(&request.transform)?;
+    validate_deployment_execution_preflight(&request.execution_preflight)?;
+
+    let target_execution_lineage_digest = promotion_target_execution_lineage_digest(
+        &request.transform,
+        &request.execution_preflight,
+        false,
+    );
+    let lineage = PromotionTargetExecutionLineageV1 {
+        schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
+        lineage_id: request.lineage_id,
+        generated_at: request.generated_at,
+        target_execution_lineage_digest,
+        transform: request.transform,
+        execution_preflight: request.execution_preflight,
+        execution_attempted: false,
+    };
+    validate_promotion_target_execution_lineage(&lineage)?;
+    Ok(lineage)
+}
+
+pub fn validate_artifact_promotion_plan(
+    plan: &ArtifactPromotionPlanV1,
+) -> Result<(), ArtifactPromotionPlanError> {
+    if plan.schema_version != DEPLOYMENT_TRUTH_SCHEMA_VERSION {
+        return Err(ArtifactPromotionPlanError::SchemaVersionMismatch {
+            expected: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
+            found: plan.schema_version,
+        });
+    }
+    ensure_artifact_promotion_plan_field("plan_id", &plan.plan_id)?;
+    ensure_artifact_promotion_plan_field("generated_at", &plan.generated_at)?;
+    ensure_artifact_promotion_plan_field("target_plan_id", &plan.target_plan_id)?;
+    ensure_artifact_promotion_plan_field("promoted_plan_id", &plan.promoted_plan_id)?;
+    ensure_artifact_promotion_plan_field(
+        "promotion_plan_lineage_digest",
+        &plan.promotion_plan_lineage_digest,
+    )?;
+    ensure_artifact_promotion_status_matches_blockers(plan)?;
+    validate_promotion_readiness(&plan.readiness)?;
+    validate_promotion_artifact_identity_report(&plan.artifact_identity_report)?;
+    validate_promotion_plan_transform(&plan.transform)?;
+    ensure_artifact_promotion_plan_linkage(plan)?;
+    if let Some(lineage) = &plan.target_execution_lineage {
+        validate_promotion_target_execution_lineage(lineage)?;
+        if lineage.transform != plan.transform {
+            return Err(ArtifactPromotionPlanError::LinkageMismatch {
+                field: "target_execution_lineage.transform",
+            });
+        }
+    }
+    Ok(())
+}
+
+pub fn validate_artifact_promotion_plan_for_check(
+    plan: &ArtifactPromotionPlanV1,
+    target_check: &DeploymentCheckV1,
+) -> Result<(), ArtifactPromotionPlanError> {
+    validate_artifact_promotion_plan(plan)?;
+    if target_check.plan != plan.transform.promoted_plan {
+        return Err(ArtifactPromotionPlanError::LinkageMismatch {
+            field: "target_check.plan",
+        });
+    }
+    let Some(lineage) = &plan.target_execution_lineage else {
+        return Err(ArtifactPromotionPlanError::MissingTargetExecutionLineage);
+    };
+    validate_deployment_execution_preflight_for_check(target_check, &lineage.execution_preflight)
+        .map_err(ArtifactPromotionPlanError::TargetCheck)?;
+    Ok(())
+}
+
 pub fn validate_promotion_plan_transform_evidence(
     evidence: &PromotionPlanTransformEvidenceV1,
 ) -> Result<(), PromotionPlanTransformEvidenceError> {
@@ -604,6 +822,46 @@ pub fn validate_promotion_plan_transform_evidence(
     ensure_evidence_field("evidence_id", &evidence.evidence_id)?;
     ensure_evidence_field("generated_at", &evidence.generated_at)?;
     validate_promotion_plan_transform(&evidence.transform)?;
+    Ok(())
+}
+
+pub fn validate_promotion_target_execution_lineage(
+    lineage: &PromotionTargetExecutionLineageV1,
+) -> Result<(), PromotionTargetExecutionLineageError> {
+    if lineage.schema_version != DEPLOYMENT_TRUTH_SCHEMA_VERSION {
+        return Err(
+            PromotionTargetExecutionLineageError::SchemaVersionMismatch {
+                expected: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
+                found: lineage.schema_version,
+            },
+        );
+    }
+    ensure_target_execution_lineage_field("lineage_id", &lineage.lineage_id)?;
+    ensure_target_execution_lineage_field("generated_at", &lineage.generated_at)?;
+    ensure_target_execution_lineage_sha256(
+        "target_execution_lineage_digest",
+        &lineage.target_execution_lineage_digest,
+    )?;
+    validate_promotion_plan_transform(&lineage.transform)?;
+    validate_deployment_execution_preflight(&lineage.execution_preflight)?;
+    if lineage.execution_attempted {
+        return Err(PromotionTargetExecutionLineageError::ExecutionAttempted);
+    }
+    if lineage.execution_preflight.plan_id != lineage.transform.promoted_plan_id {
+        return Err(PromotionTargetExecutionLineageError::LinkageMismatch {
+            field: "execution_preflight.plan_id",
+        });
+    }
+    let expected = promotion_target_execution_lineage_digest(
+        &lineage.transform,
+        &lineage.execution_preflight,
+        lineage.execution_attempted,
+    );
+    if expected != lineage.target_execution_lineage_digest {
+        return Err(PromotionTargetExecutionLineageError::LinkageMismatch {
+            field: "target_execution_lineage_digest",
+        });
+    }
     Ok(())
 }
 
@@ -1058,6 +1316,27 @@ pub fn promotion_plan_lineage_digest(
     })
 }
 
+#[must_use]
+pub fn promotion_target_execution_lineage_digest(
+    transform: &PromotionPlanTransformV1,
+    preflight: &DeploymentExecutionPreflightV1,
+    execution_attempted: bool,
+) -> String {
+    stable_json_sha256_hex(&PromotionTargetExecutionLineageInput {
+        promotion_plan_lineage_digest: &transform.promotion_plan_lineage_digest,
+        promoted_plan_id: &transform.promoted_plan_id,
+        preflight_plan_id: &preflight.plan_id,
+        preflight_safety_report_id: &preflight.safety_report_id,
+        preflight_authority_plan_id: &preflight.authority_plan_id,
+        preflight_backend: &preflight.backend,
+        preflight_status: preflight.status,
+        planned_phases: &preflight.planned_phases,
+        required_capabilities: &preflight.required_capabilities,
+        missing_capabilities: &preflight.missing_capabilities,
+        execution_attempted,
+    })
+}
+
 fn role_plan_transform(
     input: &RolePromotionInputV1,
     before: &RoleArtifactV1,
@@ -1168,6 +1447,17 @@ fn materialization_link_from_evidence(
             .clone(),
         candid_sha256: evidence.materialization_result.candid_sha256.clone(),
     }
+}
+
+fn artifact_promotion_plan_blockers(
+    readiness: &PromotionReadinessV1,
+    artifact_identity_report: &PromotionArtifactIdentityReportV1,
+) -> Vec<SafetyFindingV1> {
+    let mut blockers =
+        Vec::with_capacity(readiness.blockers.len() + artifact_identity_report.blockers.len());
+    blockers.extend(readiness.blockers.clone());
+    blockers.extend(artifact_identity_report.blockers.clone());
+    blockers
 }
 
 fn refresh_promotion_plan_lineage_digest(transform: &mut PromotionPlanTransformV1) {
@@ -2379,4 +2669,81 @@ fn ensure_evidence_field(
         return Err(PromotionPlanTransformEvidenceError::MissingRequiredField { field });
     }
     Ok(())
+}
+
+fn ensure_artifact_promotion_plan_field(
+    field: &'static str,
+    value: &str,
+) -> Result<(), ArtifactPromotionPlanError> {
+    if value.trim().is_empty() {
+        return Err(ArtifactPromotionPlanError::MissingRequiredField { field });
+    }
+    Ok(())
+}
+
+const fn ensure_artifact_promotion_status_matches_blockers(
+    plan: &ArtifactPromotionPlanV1,
+) -> Result<(), ArtifactPromotionPlanError> {
+    match (plan.status, plan.blockers.is_empty()) {
+        (PromotionReadinessStatusV1::Ready, false)
+        | (PromotionReadinessStatusV1::Blocked, true) => {
+            Err(ArtifactPromotionPlanError::StatusBlockerMismatch {
+                status: plan.status,
+                blocker_count: plan.blockers.len(),
+            })
+        }
+        _ => Ok(()),
+    }
+}
+
+fn ensure_artifact_promotion_plan_linkage(
+    plan: &ArtifactPromotionPlanV1,
+) -> Result<(), ArtifactPromotionPlanError> {
+    let expected_blockers =
+        artifact_promotion_plan_blockers(&plan.readiness, &plan.artifact_identity_report);
+    if expected_blockers != plan.blockers {
+        return Err(ArtifactPromotionPlanError::LinkageMismatch { field: "blockers" });
+    }
+    if plan.readiness.target_plan_id != plan.target_plan_id {
+        return Err(ArtifactPromotionPlanError::LinkageMismatch {
+            field: "readiness.target_plan_id",
+        });
+    }
+    if plan.transform.target_plan_id != plan.target_plan_id {
+        return Err(ArtifactPromotionPlanError::LinkageMismatch {
+            field: "transform.target_plan_id",
+        });
+    }
+    if plan.transform.promoted_plan_id != plan.promoted_plan_id {
+        return Err(ArtifactPromotionPlanError::LinkageMismatch {
+            field: "transform.promoted_plan_id",
+        });
+    }
+    if plan.transform.promotion_plan_lineage_digest != plan.promotion_plan_lineage_digest {
+        return Err(ArtifactPromotionPlanError::LinkageMismatch {
+            field: "promotion_plan_lineage_digest",
+        });
+    }
+    Ok(())
+}
+
+fn ensure_target_execution_lineage_field(
+    field: &'static str,
+    value: &str,
+) -> Result<(), PromotionTargetExecutionLineageError> {
+    if value.trim().is_empty() {
+        return Err(PromotionTargetExecutionLineageError::MissingRequiredField { field });
+    }
+    Ok(())
+}
+
+fn ensure_target_execution_lineage_sha256(
+    field: &'static str,
+    value: &str,
+) -> Result<(), PromotionTargetExecutionLineageError> {
+    if is_lower_hex_sha256(value) {
+        Ok(())
+    } else {
+        Err(PromotionTargetExecutionLineageError::InvalidSha256Digest { field })
+    }
 }

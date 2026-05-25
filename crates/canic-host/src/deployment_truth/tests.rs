@@ -1063,6 +1063,326 @@ fn promotion_plan_transform_evidence_validation_rejects_stale_transform() {
 }
 
 #[test]
+fn promotion_target_execution_lineage_round_trips_through_json() {
+    let transform = sample_promotion_transform();
+    let preflight = sample_execution_preflight_for_plan("promoted-plan-1");
+
+    let lineage = promotion_target_execution_lineage(PromotionTargetExecutionLineageRequest {
+        lineage_id: "target-execution-lineage-1".to_string(),
+        generated_at: "2026-05-25T00:00:00Z".to_string(),
+        transform,
+        execution_preflight: preflight,
+    })
+    .expect("target execution lineage should be produced");
+
+    assert_json_round_trip(&lineage);
+    let encoded = serde_json::to_value(&lineage).expect("lineage should encode");
+    assert_object_keys(
+        &encoded,
+        &[
+            "schema_version",
+            "lineage_id",
+            "generated_at",
+            "target_execution_lineage_digest",
+            "transform",
+            "execution_preflight",
+            "execution_attempted",
+        ],
+    );
+    assert_eq!(encoded["lineage_id"], "target-execution-lineage-1");
+    assert_eq!(encoded["execution_attempted"], false);
+}
+
+#[test]
+fn promotion_target_execution_lineage_validation_accepts_generated_lineage() {
+    let transform = sample_promotion_transform();
+    let preflight = sample_execution_preflight_for_plan("promoted-plan-1");
+
+    let lineage = promotion_target_execution_lineage(PromotionTargetExecutionLineageRequest {
+        lineage_id: "target-execution-lineage-1".to_string(),
+        generated_at: "2026-05-25T00:00:00Z".to_string(),
+        transform,
+        execution_preflight: preflight,
+    })
+    .expect("target execution lineage should be produced");
+
+    validate_promotion_target_execution_lineage(&lineage)
+        .expect("generated lineage should validate");
+}
+
+#[test]
+fn promotion_target_execution_lineage_rejects_preflight_for_other_plan() {
+    let transform = sample_promotion_transform();
+    let preflight = sample_execution_preflight_for_plan("other-promoted-plan");
+
+    let err = promotion_target_execution_lineage(PromotionTargetExecutionLineageRequest {
+        lineage_id: "target-execution-lineage-1".to_string(),
+        generated_at: "2026-05-25T00:00:00Z".to_string(),
+        transform,
+        execution_preflight: preflight,
+    })
+    .expect_err("preflight for another plan should fail");
+
+    assert!(matches!(
+        err,
+        PromotionTargetExecutionLineageError::LinkageMismatch {
+            field: "execution_preflight.plan_id"
+        }
+    ));
+}
+
+#[test]
+fn promotion_target_execution_lineage_rejects_execution_claim() {
+    let transform = sample_promotion_transform();
+    let preflight = sample_execution_preflight_for_plan("promoted-plan-1");
+    let mut lineage = promotion_target_execution_lineage(PromotionTargetExecutionLineageRequest {
+        lineage_id: "target-execution-lineage-1".to_string(),
+        generated_at: "2026-05-25T00:00:00Z".to_string(),
+        transform,
+        execution_preflight: preflight,
+    })
+    .expect("target execution lineage should be produced");
+    lineage.execution_attempted = true;
+
+    let err = validate_promotion_target_execution_lineage(&lineage)
+        .expect_err("execution claim should fail");
+
+    assert!(matches!(
+        err,
+        PromotionTargetExecutionLineageError::ExecutionAttempted
+    ));
+}
+
+#[test]
+fn promotion_target_execution_lineage_rejects_stale_digest() {
+    let transform = sample_promotion_transform();
+    let preflight = sample_execution_preflight_for_plan("promoted-plan-1");
+    let mut lineage = promotion_target_execution_lineage(PromotionTargetExecutionLineageRequest {
+        lineage_id: "target-execution-lineage-1".to_string(),
+        generated_at: "2026-05-25T00:00:00Z".to_string(),
+        transform,
+        execution_preflight: preflight,
+    })
+    .expect("target execution lineage should be produced");
+    lineage.target_execution_lineage_digest = sample_sha256("9");
+
+    let err = validate_promotion_target_execution_lineage(&lineage)
+        .expect_err("stale lineage digest should fail");
+
+    assert!(matches!(
+        err,
+        PromotionTargetExecutionLineageError::LinkageMismatch {
+            field: "target_execution_lineage_digest"
+        }
+    ));
+}
+
+#[test]
+fn promotion_target_execution_lineage_text_reports_passive_boundary() {
+    let transform = sample_promotion_transform();
+    let preflight = sample_execution_preflight_for_plan("promoted-plan-1");
+    let lineage = promotion_target_execution_lineage(PromotionTargetExecutionLineageRequest {
+        lineage_id: "target-execution-lineage-1".to_string(),
+        generated_at: "2026-05-25T00:00:00Z".to_string(),
+        transform,
+        execution_preflight: preflight,
+    })
+    .expect("target execution lineage should be produced");
+
+    let text = promotion_target_execution_lineage_text(&lineage);
+
+    assert!(text.contains("Promotion target execution lineage"));
+    assert!(text.contains("mode: passive"));
+    assert!(text.contains("execution: none"));
+    assert!(text.contains("execution_attempted: false"));
+    assert!(text.contains("lineage_id: target-execution-lineage-1"));
+    assert!(text.contains("target_execution_lineage_digest: "));
+    assert!(text.contains("transform_id: promotion-transform:promoted-plan-1"));
+    assert!(text.contains("preflight_plan_id: promoted-plan-1"));
+    assert!(text.contains("  Deployment execution preflight"));
+}
+
+#[test]
+fn artifact_promotion_plan_round_trips_through_json() {
+    let plan = sample_artifact_promotion_plan();
+
+    assert_json_round_trip(&plan);
+    let encoded = serde_json::to_value(&plan).expect("promotion plan should encode");
+    assert_object_keys(
+        &encoded,
+        &[
+            "schema_version",
+            "plan_id",
+            "generated_at",
+            "status",
+            "target_plan_id",
+            "promoted_plan_id",
+            "promotion_plan_lineage_digest",
+            "readiness",
+            "artifact_identity_report",
+            "transform",
+            "target_execution_lineage",
+            "blockers",
+        ],
+    );
+    assert_eq!(encoded["plan_id"], "artifact-promotion-plan-1");
+    assert_eq!(encoded["status"], "Ready");
+}
+
+#[test]
+fn artifact_promotion_plan_validation_accepts_generated_plan() {
+    let plan = sample_artifact_promotion_plan();
+
+    validate_artifact_promotion_plan(&plan).expect("generated promotion plan should validate");
+}
+
+#[test]
+fn artifact_promotion_plan_validation_rejects_status_blocker_mismatch() {
+    let mut plan = sample_artifact_promotion_plan();
+    plan.blockers.push(SafetyFindingV1 {
+        code: "promotion_blocker".to_string(),
+        message: "blocked".to_string(),
+        severity: SafetySeverityV1::HardFailure,
+        subject: Some("root".to_string()),
+    });
+
+    let err =
+        validate_artifact_promotion_plan(&plan).expect_err("ready plan with blockers should fail");
+
+    assert!(matches!(
+        err,
+        ArtifactPromotionPlanError::StatusBlockerMismatch { .. }
+    ));
+}
+
+#[test]
+fn artifact_promotion_plan_validation_rejects_stale_lineage_copy() {
+    let mut plan = sample_artifact_promotion_plan();
+    plan.promotion_plan_lineage_digest = sample_sha256("9");
+
+    let err =
+        validate_artifact_promotion_plan(&plan).expect_err("stale plan lineage copy should fail");
+
+    assert!(matches!(
+        err,
+        ArtifactPromotionPlanError::LinkageMismatch {
+            field: "promotion_plan_lineage_digest"
+        }
+    ));
+}
+
+#[test]
+fn artifact_promotion_plan_validation_rejects_mismatched_target_lineage() {
+    let mut plan = sample_artifact_promotion_plan();
+    let mut lineage = plan
+        .target_execution_lineage
+        .clone()
+        .expect("sample plan should carry target lineage");
+    lineage.transform.transform_id = "different-transform".to_string();
+    plan.target_execution_lineage = Some(lineage);
+
+    let err = validate_artifact_promotion_plan(&plan)
+        .expect_err("target lineage with different transform should fail");
+
+    assert!(matches!(
+        err,
+        ArtifactPromotionPlanError::LinkageMismatch {
+            field: "target_execution_lineage.transform"
+        }
+    ));
+}
+
+#[test]
+fn artifact_promotion_plan_for_check_accepts_matching_promoted_plan_check() {
+    let plan = sample_artifact_promotion_plan();
+    let check = sample_check(
+        plan.transform.promoted_plan.clone(),
+        sample_matching_inventory(),
+    );
+
+    validate_artifact_promotion_plan_for_check(&plan, &check)
+        .expect("promotion plan should validate against target check");
+}
+
+#[test]
+fn artifact_promotion_plan_for_check_rejects_other_target_plan() {
+    let plan = sample_artifact_promotion_plan();
+    let mut other_plan = sample_promotion_target_plan();
+    other_plan.plan_id = "other-target-plan".to_string();
+    let check = sample_check(other_plan, sample_matching_inventory());
+
+    let err = validate_artifact_promotion_plan_for_check(&plan, &check)
+        .expect_err("target check for another plan should fail");
+
+    assert!(matches!(
+        err,
+        ArtifactPromotionPlanError::LinkageMismatch {
+            field: "target_check.plan"
+        }
+    ));
+}
+
+#[test]
+fn artifact_promotion_plan_for_check_rejects_missing_target_execution_lineage() {
+    let mut plan = sample_artifact_promotion_plan();
+    plan.target_execution_lineage = None;
+    let check = sample_check(
+        plan.transform.promoted_plan.clone(),
+        sample_matching_inventory(),
+    );
+
+    let err = validate_artifact_promotion_plan_for_check(&plan, &check)
+        .expect_err("target check validation should require execution lineage");
+
+    assert!(matches!(
+        err,
+        ArtifactPromotionPlanError::MissingTargetExecutionLineage
+    ));
+}
+
+#[test]
+fn artifact_promotion_plan_for_check_rejects_preflight_check_mismatch() {
+    let plan = sample_artifact_promotion_plan();
+    let mut check = sample_check(
+        plan.transform.promoted_plan.clone(),
+        sample_matching_inventory(),
+    );
+    check.report.report_id = "other-report".to_string();
+
+    let err = validate_artifact_promotion_plan_for_check(&plan, &check)
+        .expect_err("preflight mismatch should fail");
+
+    assert!(matches!(
+        err,
+        ArtifactPromotionPlanError::TargetCheck(
+            DeploymentExecutionPreflightError::SourceCheckMismatch {
+                field: "safety_report_id",
+                ..
+            }
+        )
+    ));
+}
+
+#[test]
+fn artifact_promotion_plan_text_reports_passive_summary() {
+    let plan = sample_artifact_promotion_plan();
+
+    let text = artifact_promotion_plan_text(&plan);
+
+    assert!(text.contains("Artifact promotion plan"));
+    assert!(text.contains("mode: passive"));
+    assert!(text.contains("execution: none"));
+    assert!(text.contains("plan_id: artifact-promotion-plan-1"));
+    assert!(text.contains("target_execution_lineage: target-execution-lineage-1"));
+    assert!(text.contains("readiness_roles: 1"));
+    assert!(text.contains("artifact_identity_roles: 1"));
+    assert!(text.contains("transform_roles: 1"));
+    assert!(text.contains("  Promotion readiness report"));
+    assert!(text.contains("  Promotion artifact identity report"));
+    assert!(text.contains("  Promotion plan transform"));
+}
+
+#[test]
 fn promotion_plan_transform_validation_accepts_generated_transform() {
     let request = PromotionPlanTransformRequest {
         promoted_plan_id: "promoted-plan-1".to_string(),
@@ -7354,6 +7674,70 @@ fn sample_promotion_target_plan() -> DeploymentPlanV1 {
     plan.role_artifacts[0].wasm_gz_sha256 = Some(sample_sha256("a"));
     plan.role_artifacts[0].canonical_embedded_config_sha256 = Some(sample_sha256("c"));
     plan
+}
+
+fn sample_promotion_transform() -> PromotionPlanTransformV1 {
+    promoted_deployment_plan_transform_from_inputs(&PromotionPlanTransformRequest {
+        promoted_plan_id: "promoted-plan-1".to_string(),
+        target_plan: sample_promotion_target_plan(),
+        inputs: vec![sample_role_promotion_input(
+            PromotionArtifactLevelV1::SealedWasm,
+        )],
+    })
+    .expect("sample promotion transform should validate")
+}
+
+fn sample_execution_preflight_for_plan(plan_id: &str) -> DeploymentExecutionPreflightV1 {
+    DeploymentExecutionPreflightV1 {
+        schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
+        plan_id: plan_id.to_string(),
+        safety_report_id: "report-1".to_string(),
+        authority_plan_id: plan_id.to_string(),
+        backend: DeploymentExecutorBackendV1::CurrentCli,
+        status: DeploymentExecutionPreflightStatusV1::Ready,
+        planned_phases: vec!["install_root".to_string(), "activate_root".to_string()],
+        required_capabilities: vec![
+            DeploymentExecutorCapabilityV1::StageArtifact,
+            DeploymentExecutorCapabilityV1::InstallCode,
+        ],
+        missing_capabilities: Vec::new(),
+        blockers: Vec::new(),
+    }
+}
+
+fn sample_artifact_promotion_plan() -> ArtifactPromotionPlanV1 {
+    let target_plan = sample_promotion_target_plan();
+    let input = sample_role_promotion_input(PromotionArtifactLevelV1::SealedWasm);
+    let readiness = promotion_readiness_from_inputs(
+        "promotion-ready-1",
+        &target_plan,
+        std::slice::from_ref(&input),
+    );
+    let artifact_identity_report =
+        promotion_artifact_identity_report_from_inputs(PromotionArtifactIdentityReportRequest {
+            report_id: "promotion-artifact-identity-1".to_string(),
+            inputs: vec![input],
+        })
+        .expect("sample artifact identity report should validate");
+    let transform = sample_promotion_transform();
+    let target_execution_lineage =
+        promotion_target_execution_lineage(PromotionTargetExecutionLineageRequest {
+            lineage_id: "target-execution-lineage-1".to_string(),
+            generated_at: "2026-05-25T00:00:00Z".to_string(),
+            transform: transform.clone(),
+            execution_preflight: sample_execution_preflight_for_plan("promoted-plan-1"),
+        })
+        .expect("sample target execution lineage should validate");
+
+    artifact_promotion_plan(ArtifactPromotionPlanRequest {
+        plan_id: "artifact-promotion-plan-1".to_string(),
+        generated_at: "2026-05-25T00:00:00Z".to_string(),
+        readiness,
+        artifact_identity_report,
+        transform,
+        target_execution_lineage: Some(target_execution_lineage),
+    })
+    .expect("sample artifact promotion plan should validate")
 }
 
 fn sample_sha256(seed: &str) -> String {

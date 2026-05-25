@@ -36,8 +36,8 @@ pub use executor::{
     validate_deployment_execution_preflight, validate_deployment_execution_preflight_for_check,
 };
 pub use model::{
-    ArtifactDigestSourceV1, ArtifactSourceV1, ArtifactTransportV1, AuthorityActionCountV1,
-    AuthorityActionV1, AuthorityApplyBlockerV1, AuthorityApplyReadinessV1,
+    ArtifactDigestSourceV1, ArtifactPromotionPlanV1, ArtifactSourceV1, ArtifactTransportV1,
+    AuthorityActionCountV1, AuthorityActionV1, AuthorityApplyBlockerV1, AuthorityApplyReadinessV1,
     AuthorityAttemptedActionV1, AuthorityAutomaticActionV1, AuthorityControlClassCountV1,
     AuthorityControllerDeltaV1, AuthorityControllerObservationV1, AuthorityDryRunEvidenceV1,
     AuthorityExternalActionV1, AuthorityProfileV1, AuthorityReceiptV1,
@@ -55,13 +55,13 @@ pub use model::{
     PromotionArtifactIdentityKindV1, PromotionArtifactIdentityReportV1, PromotionArtifactLevelV1,
     PromotionPlanTransformEvidenceV1, PromotionPlanTransformV1, PromotionPolicyCheckV1,
     PromotionPolicyClaimV1, PromotionPolicyRequirementV1, PromotionReadinessStatusV1,
-    PromotionReadinessV1, ResumeSafetyV1, RoleArtifactManifestV1, RoleArtifactSourceKindV1,
-    RoleArtifactSourceV1, RoleArtifactV1, RoleEpochExpectationV1, RoleEpochObservationV1,
-    RolePhaseReceiptV1, RolePhaseResultV1, RolePromotionArtifactIdentityV1, RolePromotionInputV1,
-    RolePromotionMaterializationLinkV1, RolePromotionPlanTransformV1,
-    RolePromotionPolicyDecisionV1, RolePromotionPolicyV1, RolePromotionReadinessV1,
-    SafetyFindingV1, SafetyReportV1, SafetySeverityV1, SafetyStatusV1, StagingReceiptV1,
-    TrustDomainV1, VerifiedPostconditionV1, VerifierReadinessExpectationV1,
+    PromotionReadinessV1, PromotionTargetExecutionLineageV1, ResumeSafetyV1,
+    RoleArtifactManifestV1, RoleArtifactSourceKindV1, RoleArtifactSourceV1, RoleArtifactV1,
+    RoleEpochExpectationV1, RoleEpochObservationV1, RolePhaseReceiptV1, RolePhaseResultV1,
+    RolePromotionArtifactIdentityV1, RolePromotionInputV1, RolePromotionMaterializationLinkV1,
+    RolePromotionPlanTransformV1, RolePromotionPolicyDecisionV1, RolePromotionPolicyV1,
+    RolePromotionReadinessV1, SafetyFindingV1, SafetyReportV1, SafetySeverityV1, SafetyStatusV1,
+    StagingReceiptV1, TrustDomainV1, VerifiedPostconditionV1, VerifierReadinessExpectationV1,
     VerifierReadinessObservationV1,
 };
 pub use observe::{
@@ -70,25 +70,30 @@ pub use observe::{
 };
 pub use plan::{LocalDeploymentPlanRequest, build_local_deployment_plan};
 pub use promotion::{
-    BuildMaterializationEvidenceRequest, PromotionArtifactIdentityReportError,
-    PromotionArtifactIdentityReportRequest, PromotionArtifactSourceError,
-    PromotionMaterializationIdentityError, PromotionPlanTransformError,
-    PromotionPlanTransformEvidenceError, PromotionPlanTransformEvidenceRequest,
-    PromotionPlanTransformRequest, PromotionPlanTransformWithMaterializationRequest,
-    PromotionPolicyCheckError, PromotionPolicyCheckRequest, PromotionReadinessError,
-    PromotionReadinessRequest, PromotionReadinessWithPolicyRequest, build_materialization_evidence,
-    build_materialization_input_digest, check_promotion_policy, check_promotion_readiness,
-    check_promotion_readiness_with_policy, promoted_deployment_plan_from_inputs,
-    promoted_deployment_plan_transform_from_inputs,
+    ArtifactPromotionPlanError, ArtifactPromotionPlanRequest, BuildMaterializationEvidenceRequest,
+    PromotionArtifactIdentityReportError, PromotionArtifactIdentityReportRequest,
+    PromotionArtifactSourceError, PromotionMaterializationIdentityError,
+    PromotionPlanTransformError, PromotionPlanTransformEvidenceError,
+    PromotionPlanTransformEvidenceRequest, PromotionPlanTransformRequest,
+    PromotionPlanTransformWithMaterializationRequest, PromotionPolicyCheckError,
+    PromotionPolicyCheckRequest, PromotionReadinessError, PromotionReadinessRequest,
+    PromotionReadinessWithPolicyRequest, PromotionTargetExecutionLineageError,
+    PromotionTargetExecutionLineageRequest, artifact_promotion_plan,
+    build_materialization_evidence, build_materialization_input_digest, check_promotion_policy,
+    check_promotion_readiness, check_promotion_readiness_with_policy,
+    promoted_deployment_plan_from_inputs, promoted_deployment_plan_transform_from_inputs,
     promoted_deployment_plan_transform_from_inputs_with_materialization,
     promotion_artifact_identity_report, promotion_artifact_identity_report_from_inputs,
     promotion_plan_lineage_digest, promotion_plan_transform_evidence,
     promotion_policy_check_from_inputs, promotion_readiness_from_inputs,
-    promotion_readiness_from_inputs_with_policy, validate_build_materialization_evidence,
+    promotion_readiness_from_inputs_with_policy, promotion_target_execution_lineage,
+    promotion_target_execution_lineage_digest, validate_artifact_promotion_plan,
+    validate_artifact_promotion_plan_for_check, validate_build_materialization_evidence,
     validate_build_materialization_input, validate_build_materialization_result,
     validate_build_recipe_identity, validate_promotion_artifact_identity_report,
     validate_promotion_plan_transform, validate_promotion_plan_transform_evidence,
-    validate_promotion_policy_check, validate_promotion_readiness, validate_role_artifact_source,
+    validate_promotion_policy_check, validate_promotion_readiness,
+    validate_promotion_target_execution_lineage, validate_role_artifact_source,
     validate_role_promotion_policy,
 };
 pub use receipt::{
@@ -104,10 +109,11 @@ pub use report::{
     compare_plan_to_inventory, safety_report_from_diff,
 };
 pub use text::{
-    authority_evidence_text, authority_plan_text, authority_receipt_text, authority_report_text,
-    build_materialization_evidence_text, deployment_execution_preflight_text,
-    promotion_artifact_identity_report_text, promotion_plan_transform_evidence_text,
-    promotion_plan_transform_text, promotion_policy_check_text, promotion_readiness_text,
+    artifact_promotion_plan_text, authority_evidence_text, authority_plan_text,
+    authority_receipt_text, authority_report_text, build_materialization_evidence_text,
+    deployment_execution_preflight_text, promotion_artifact_identity_report_text,
+    promotion_plan_transform_evidence_text, promotion_plan_transform_text,
+    promotion_policy_check_text, promotion_readiness_text, promotion_target_execution_lineage_text,
 };
 
 pub const DEPLOYMENT_TRUTH_SCHEMA_VERSION: u32 = 1;

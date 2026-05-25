@@ -393,6 +393,25 @@ pub struct PromotionPlanTransformV1 {
 }
 
 ///
+/// ArtifactPromotionPlanV1
+///
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ArtifactPromotionPlanV1 {
+    pub schema_version: u32,
+    pub plan_id: String,
+    pub generated_at: String,
+    pub status: PromotionReadinessStatusV1,
+    pub target_plan_id: String,
+    pub promoted_plan_id: String,
+    pub promotion_plan_lineage_digest: String,
+    pub readiness: PromotionReadinessV1,
+    pub artifact_identity_report: PromotionArtifactIdentityReportV1,
+    pub transform: PromotionPlanTransformV1,
+    pub target_execution_lineage: Option<PromotionTargetExecutionLineageV1>,
+    pub blockers: Vec<SafetyFindingV1>,
+}
+
+///
 /// PromotionPlanTransformEvidenceV1
 ///
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -401,6 +420,20 @@ pub struct PromotionPlanTransformEvidenceV1 {
     pub evidence_id: String,
     pub generated_at: String,
     pub transform: PromotionPlanTransformV1,
+}
+
+///
+/// PromotionTargetExecutionLineageV1
+///
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct PromotionTargetExecutionLineageV1 {
+    pub schema_version: u32,
+    pub lineage_id: String,
+    pub generated_at: String,
+    pub target_execution_lineage_digest: String,
+    pub transform: PromotionPlanTransformV1,
+    pub execution_preflight: DeploymentExecutionPreflightV1,
+    pub execution_attempted: bool,
 }
 
 ///

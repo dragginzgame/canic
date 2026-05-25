@@ -234,6 +234,122 @@ pub fn promotion_plan_transform_evidence_text(
     lines.join("\n")
 }
 
+/// Render target execution lineage as passive operator text.
+#[must_use]
+pub fn promotion_target_execution_lineage_text(
+    lineage: &PromotionTargetExecutionLineageV1,
+) -> String {
+    let mut lines = vec![
+        "Promotion target execution lineage".to_string(),
+        "mode: passive".to_string(),
+        "execution: none".to_string(),
+        format!("lineage_id: {}", lineage.lineage_id),
+        format!("generated_at: {}", lineage.generated_at),
+        format!(
+            "target_execution_lineage_digest: {}",
+            lineage.target_execution_lineage_digest
+        ),
+        format!("transform_id: {}", lineage.transform.transform_id),
+        format!("target_plan_id: {}", lineage.transform.target_plan_id),
+        format!("promoted_plan_id: {}", lineage.transform.promoted_plan_id),
+        format!("preflight_plan_id: {}", lineage.execution_preflight.plan_id),
+        format!(
+            "preflight_safety_report_id: {}",
+            lineage.execution_preflight.safety_report_id
+        ),
+        format!(
+            "preflight_authority_plan_id: {}",
+            lineage.execution_preflight.authority_plan_id
+        ),
+        format!("backend: {:?}", lineage.execution_preflight.backend),
+        format!("preflight_status: {:?}", lineage.execution_preflight.status),
+        format!("execution_attempted: {}", lineage.execution_attempted),
+    ];
+
+    lines.push(String::new());
+    lines.push("promotion_plan:".to_string());
+    lines.extend(
+        promotion_plan_transform_text(&lineage.transform)
+            .lines()
+            .map(|line| format!("  {line}")),
+    );
+    lines.push(String::new());
+    lines.push("execution_preflight:".to_string());
+    lines.extend(
+        deployment_execution_preflight_text(&lineage.execution_preflight)
+            .lines()
+            .map(|line| format!("  {line}")),
+    );
+    lines.join("\n")
+}
+
+/// Render an artifact promotion plan as passive operator text.
+#[must_use]
+pub fn artifact_promotion_plan_text(plan: &ArtifactPromotionPlanV1) -> String {
+    let mut lines = vec![
+        "Artifact promotion plan".to_string(),
+        "mode: passive".to_string(),
+        "execution: none".to_string(),
+        format!("plan_id: {}", plan.plan_id),
+        format!("generated_at: {}", plan.generated_at),
+        format!("status: {:?}", plan.status),
+        format!("target_plan_id: {}", plan.target_plan_id),
+        format!("promoted_plan_id: {}", plan.promoted_plan_id),
+        format!(
+            "promotion_plan_lineage_digest: {}",
+            plan.promotion_plan_lineage_digest
+        ),
+        format!(
+            "target_execution_lineage: {}",
+            plan.target_execution_lineage
+                .as_ref()
+                .map_or("none", |lineage| lineage.lineage_id.as_str())
+        ),
+        String::new(),
+        "counts:".to_string(),
+        format!("  readiness_roles: {}", plan.readiness.roles.len()),
+        format!(
+            "  artifact_identity_roles: {}",
+            plan.artifact_identity_report.roles.len()
+        ),
+        format!("  transform_roles: {}", plan.transform.roles.len()),
+        format!("  blockers: {}", plan.blockers.len()),
+    ];
+
+    append_hard_failure_items(&mut lines, "blockers", &plan.blockers);
+    lines.push(String::new());
+    lines.push("readiness:".to_string());
+    lines.extend(
+        promotion_readiness_text(&plan.readiness)
+            .lines()
+            .map(|line| format!("  {line}")),
+    );
+    lines.push(String::new());
+    lines.push("artifact_identity:".to_string());
+    lines.extend(
+        promotion_artifact_identity_report_text(&plan.artifact_identity_report)
+            .lines()
+            .map(|line| format!("  {line}")),
+    );
+    lines.push(String::new());
+    lines.push("transform:".to_string());
+    lines.extend(
+        promotion_plan_transform_text(&plan.transform)
+            .lines()
+            .map(|line| format!("  {line}")),
+    );
+    if let Some(lineage) = &plan.target_execution_lineage {
+        lines.push(String::new());
+        lines.push("target_execution_lineage:".to_string());
+        lines.extend(
+            promotion_target_execution_lineage_text(lineage)
+                .lines()
+                .map(|line| format!("  {line}")),
+        );
+    }
+    lines.join("\n")
+}
+
 /// Render an authority reconciliation plan as read-only operator text.
 #[must_use]
 pub fn authority_plan_text(plan: &AuthorityReconciliationPlanV1) -> String {
