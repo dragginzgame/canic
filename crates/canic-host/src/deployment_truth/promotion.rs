@@ -6,9 +6,9 @@ use super::{
     PromotionPlanTransformV1, PromotionPolicyCheckV1, PromotionPolicyClaimV1,
     PromotionPolicyRequirementV1, PromotionReadinessStatusV1, PromotionReadinessV1,
     RoleArtifactSourceKindV1, RoleArtifactSourceV1, RoleArtifactV1,
-    RolePromotionArtifactIdentityV1, RolePromotionInputV1, RolePromotionPlanTransformV1,
-    RolePromotionPolicyDecisionV1, RolePromotionPolicyV1, RolePromotionReadinessV1,
-    SafetyFindingV1, SafetySeverityV1, stable_json_sha256_hex,
+    RolePromotionArtifactIdentityV1, RolePromotionInputV1, RolePromotionMaterializationLinkV1,
+    RolePromotionPlanTransformV1, RolePromotionPolicyDecisionV1, RolePromotionPolicyV1,
+    RolePromotionReadinessV1, SafetyFindingV1, SafetySeverityV1, stable_json_sha256_hex,
 };
 use std::collections::{BTreeMap, BTreeSet};
 use thiserror::Error as ThisError;
@@ -74,6 +74,18 @@ pub enum PromotionPlanTransformError {
     ReadinessBlocked { blocker_count: usize },
     #[error("promotion target plan is missing role: {role}")]
     TargetRoleMissing { role: String },
+    #[error("promotion transform contains duplicate source/build materialization for role: {role}")]
+    DuplicateMaterializationRole { role: String },
+    #[error(
+        "promotion transform is missing source/build materialization evidence for role: {role}"
+    )]
+    MaterializationRoleMissing { role: String },
+    #[error(
+        "promotion transform contains unexpected source/build materialization for role: {role}"
+    )]
+    UnexpectedMaterializationRole { role: String },
+    #[error("promotion materialization evidence is invalid: {0}")]
+    Materialization(#[from] PromotionMaterializationIdentityError),
     #[error("promotion transform contains duplicate role: {role}")]
     DuplicateRole { role: String },
     #[error("promotion transform promoted plan id mismatch: expected {expected}, found {found}")]
@@ -239,6 +251,17 @@ pub struct PromotionPlanTransformRequest {
 }
 
 ///
+/// PromotionPlanTransformWithMaterializationRequest
+///
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PromotionPlanTransformWithMaterializationRequest {
+    pub promoted_plan_id: String,
+    pub target_plan: DeploymentPlanV1,
+    pub inputs: Vec<RolePromotionInputV1>,
+    pub materialization_evidence: Vec<BuildMaterializationEvidenceV1>,
+}
+
+///
 /// PromotionPlanTransformEvidenceRequest
 ///
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -316,6 +339,24 @@ pub fn promoted_deployment_plan_transform_from_inputs(
     }
     let transform =
         promotion_plan_transform_from_parts(&request.target_plan, promoted_plan, &request.inputs);
+    validate_promotion_plan_transform(&transform)?;
+    Ok(transform)
+}
+
+pub fn promoted_deployment_plan_transform_from_inputs_with_materialization(
+    request: &PromotionPlanTransformWithMaterializationRequest,
+) -> Result<PromotionPlanTransformV1, PromotionPlanTransformError> {
+    let base_request = PromotionPlanTransformRequest {
+        promoted_plan_id: request.promoted_plan_id.clone(),
+        target_plan: request.target_plan.clone(),
+        inputs: request.inputs.clone(),
+    };
+    let mut transform = promoted_deployment_plan_transform_from_inputs(&base_request)?;
+    attach_source_build_materialization(
+        &mut transform,
+        &request.inputs,
+        &request.materialization_evidence,
+    )?;
     validate_promotion_plan_transform(&transform)?;
     Ok(transform)
 }

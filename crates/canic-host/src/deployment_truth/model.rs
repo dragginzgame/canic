@@ -423,6 +423,24 @@ pub struct RolePromotionPlanTransformV1 {
     pub artifact_identity_changed: bool,
     pub embedded_config_changed: bool,
     pub target_materialization_preserved: bool,
+    pub source_build_materialization: Option<RolePromotionMaterializationLinkV1>,
+}
+
+///
+/// RolePromotionMaterializationLinkV1
+///
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RolePromotionMaterializationLinkV1 {
+    pub role: String,
+    pub evidence_id: String,
+    pub recipe_id: String,
+    pub materialization_input_id: String,
+    pub materialization_result_id: String,
+    pub materialization_input_digest: String,
+    pub wasm_sha256: String,
+    pub wasm_gz_sha256: String,
+    pub installed_module_hash: String,
+    pub candid_sha256: String,
 }
 
 ///
