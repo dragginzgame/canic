@@ -84,6 +84,16 @@ inspect only the files needed for the current task.
 - Promotion readiness can now include those policy blockers directly, so
   readiness consumers can see sealed-byte and byte-identity policy failures
   without treating the standalone policy check as execution authority.
+- Source/build promotion transforms can now carry validated materialization
+  evidence links, giving the passive transform summary the recipe/input/result
+  evidence ID, target materialization-input digest, and output digests it would
+  rely on before any execution path is introduced.
+- Passive promotion transforms now carry deterministic promotion-plan lineage
+  digests, giving later execution receipts a stable promoted-plan identity to
+  cite without treating source authority as target authority.
+- Receipt-backed promotion artifact sources now require source receipt lineage
+  digests, keeping artifact provenance tied to a specific archived receipt
+  lineage instead of a locator alone.
 - `0.43.8` is closed. The closeout report is
   `docs/audits/reports/2026-05/2026-05-25/0.43-closeout.md`.
 - `0.43.8` adds a private current-install

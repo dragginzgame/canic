@@ -76,6 +76,7 @@ fn role_artifact_source_round_trips_through_json() {
             "kind",
             "locator",
             "previous_receipt_kind",
+            "previous_receipt_lineage_digest",
             "expected_wasm_sha256",
             "expected_wasm_gz_sha256",
             "expected_candid_sha256",
@@ -864,6 +865,7 @@ fn promotion_plan_transform_round_trips_through_json() {
             "transform_id",
             "target_plan_id",
             "promoted_plan_id",
+            "promotion_plan_lineage_digest",
             "promoted_plan",
             "roles",
         ],
@@ -889,6 +891,7 @@ fn promotion_plan_transform_round_trips_through_json() {
             "artifact_identity_changed",
             "embedded_config_changed",
             "target_materialization_preserved",
+            "source_build_materialization",
         ],
     );
 }
@@ -1158,6 +1161,64 @@ fn promotion_plan_transform_validation_rejects_missing_promoted_role() {
 }
 
 #[test]
+fn promotion_plan_transform_validation_rejects_stale_lineage_digest() {
+    let request = PromotionPlanTransformRequest {
+        promoted_plan_id: "promoted-plan-1".to_string(),
+        target_plan: sample_promotion_target_plan(),
+        inputs: vec![sample_role_promotion_input(
+            PromotionArtifactLevelV1::SealedWasm,
+        )],
+    };
+    let mut transform = promoted_deployment_plan_transform_from_inputs(&request)
+        .expect("transform should be produced");
+    transform.promotion_plan_lineage_digest = sample_sha256("9");
+
+    let err = validate_promotion_plan_transform(&transform)
+        .expect_err("stale lineage digest should fail");
+    assert!(matches!(
+        err,
+        PromotionPlanTransformError::RoleStateMismatch {
+            role,
+            field: "promotion_plan_lineage_digest"
+        } if role == "promotion_plan_lineage"
+    ));
+}
+
+#[test]
+fn promotion_plan_lineage_digest_changes_when_materialization_link_changes() {
+    let mut target_plan = sample_promotion_target_plan();
+    target_plan.role_artifacts[0].wasm_sha256 = Some(sample_sha256("5"));
+    target_plan.role_artifacts[0].wasm_gz_sha256 = Some(sample_sha256("6"));
+    target_plan.role_artifacts[0].installed_module_hash = Some(sample_sha256("7"));
+    target_plan.role_artifacts[0].candid_sha256 = Some(sample_sha256("8"));
+    let request = PromotionPlanTransformWithMaterializationRequest {
+        promoted_plan_id: "promoted-plan-1".to_string(),
+        target_plan,
+        inputs: vec![sample_role_promotion_input(
+            PromotionArtifactLevelV1::SourceBuild,
+        )],
+        materialization_evidence: vec![sample_build_materialization_evidence()],
+    };
+    let transform = promoted_deployment_plan_transform_from_inputs_with_materialization(&request)
+        .expect("source-build transform should link evidence");
+    let mut changed_roles = transform.roles.clone();
+    changed_roles[0]
+        .source_build_materialization
+        .as_mut()
+        .expect("materialization link should exist")
+        .evidence_id = "different-evidence".to_string();
+
+    let changed_digest = promotion_plan_lineage_digest(
+        &transform.target_plan_id,
+        &transform.promoted_plan_id,
+        &transform.promoted_plan,
+        &changed_roles,
+    );
+
+    assert_ne!(changed_digest, transform.promotion_plan_lineage_digest);
+}
+
+#[test]
 fn promotion_plan_transform_validation_rejects_stale_after_summary() {
     let request = PromotionPlanTransformRequest {
         promoted_plan_id: "promoted-plan-1".to_string(),
@@ -1252,6 +1313,36 @@ fn previous_receipt_artifact_source_requires_eligible_receipt_kind() {
 }
 
 #[test]
+fn previous_receipt_artifact_source_requires_lineage_digest() {
+    let mut source = sample_role_artifact_source(RoleArtifactSourceKindV1::PreviousReceiptArtifact);
+    source.previous_receipt_lineage_digest = None;
+
+    let err = validate_role_artifact_source(&source)
+        .expect_err("receipt lineage digest should be required");
+
+    assert!(matches!(
+        err,
+        PromotionArtifactSourceError::MissingPreviousReceiptLineageDigest
+    ));
+}
+
+#[test]
+fn previous_receipt_artifact_source_rejects_invalid_lineage_digest() {
+    let mut source = sample_role_artifact_source(RoleArtifactSourceKindV1::PreviousReceiptArtifact);
+    source.previous_receipt_lineage_digest = Some("bad-digest".to_string());
+
+    let err =
+        validate_role_artifact_source(&source).expect_err("receipt lineage digest should validate");
+
+    assert!(matches!(
+        err,
+        PromotionArtifactSourceError::InvalidSha256Digest {
+            field: "previous_receipt_lineage_digest"
+        }
+    ));
+}
+
+#[test]
 fn non_receipt_artifact_source_rejects_previous_receipt_kind() {
     let mut source = sample_role_artifact_source(RoleArtifactSourceKindV1::LocalWasmGz);
     source.previous_receipt_kind = Some(PreviousArtifactReceiptKindV1::DeploymentReceipt);
@@ -1267,12 +1358,29 @@ fn non_receipt_artifact_source_rejects_previous_receipt_kind() {
 }
 
 #[test]
+fn non_receipt_artifact_source_rejects_previous_receipt_lineage_digest() {
+    let mut source = sample_role_artifact_source(RoleArtifactSourceKindV1::LocalWasmGz);
+    source.previous_receipt_lineage_digest = Some(sample_sha256("9"));
+
+    let err = validate_role_artifact_source(&source)
+        .expect_err("receipt lineage digest should be source-specific");
+
+    assert!(matches!(
+        err,
+        PromotionArtifactSourceError::UnexpectedPreviousReceiptLineageDigest {
+            kind: RoleArtifactSourceKindV1::LocalWasmGz
+        }
+    ));
+}
+
+#[test]
 fn canonical_wasm_store_default_source_does_not_require_locator_or_digest_pin() {
     let source = RoleArtifactSourceV1 {
         role: "wasm_store".to_string(),
         kind: RoleArtifactSourceKindV1::CanonicalWasmStoreDefault,
         locator: None,
         previous_receipt_kind: None,
+        previous_receipt_lineage_digest: None,
         expected_wasm_sha256: None,
         expected_wasm_gz_sha256: None,
         expected_candid_sha256: None,
@@ -1529,6 +1637,7 @@ fn promotion_plan_transform_text_reports_passive_summary() {
     assert!(text.contains("transform_id: promotion-transform:promoted-plan-1"));
     assert!(text.contains("target_plan_id: plan-local-root"));
     assert!(text.contains("promoted_plan_id: promoted-plan-1"));
+    assert!(text.contains("promotion_plan_lineage_digest: "));
     assert!(text.contains("artifact_identity_changed: 1"));
     assert!(text.contains("embedded_config_changed: 0"));
     assert!(text.contains("target_materialization_preserved: 0"));
@@ -1596,6 +1705,119 @@ fn promoted_deployment_plan_transform_marks_source_build_target_materialization_
     assert!(!role.artifact_identity_changed);
     assert!(!role.embedded_config_changed);
     assert!(role.target_materialization_preserved);
+}
+
+#[test]
+fn promoted_deployment_plan_transform_links_source_build_materialization_evidence() {
+    let mut target_plan = sample_promotion_target_plan();
+    target_plan.role_artifacts[0].wasm_sha256 = Some(sample_sha256("5"));
+    target_plan.role_artifacts[0].wasm_gz_sha256 = Some(sample_sha256("6"));
+    target_plan.role_artifacts[0].installed_module_hash = Some(sample_sha256("7"));
+    target_plan.role_artifacts[0].candid_sha256 = Some(sample_sha256("8"));
+    let mut input = sample_role_promotion_input(PromotionArtifactLevelV1::SourceBuild);
+    input.source.expected_canonical_embedded_config_sha256 = target_plan.role_artifacts[0]
+        .canonical_embedded_config_sha256
+        .clone();
+    let request = PromotionPlanTransformWithMaterializationRequest {
+        promoted_plan_id: "promoted-plan-1".to_string(),
+        target_plan,
+        inputs: vec![input],
+        materialization_evidence: vec![sample_build_materialization_evidence()],
+    };
+
+    let transform = promoted_deployment_plan_transform_from_inputs_with_materialization(&request)
+        .expect("source-build transform should link materialization evidence");
+
+    let link = transform.roles[0]
+        .source_build_materialization
+        .as_ref()
+        .expect("source-build role should carry materialization link");
+    let expected_input_digest =
+        build_materialization_input_digest(&sample_build_materialization_input());
+    assert_eq!(link.role, "root");
+    assert_eq!(link.evidence_id, "materialization-evidence-1");
+    assert_eq!(link.materialization_input_digest, expected_input_digest);
+    assert_eq!(link.wasm_gz_sha256, sample_sha256("6"));
+    validate_promotion_plan_transform(&transform)
+        .expect("materialization-linked transform should validate");
+}
+
+#[test]
+fn promoted_deployment_plan_transform_requires_source_build_materialization_evidence() {
+    let input = sample_role_promotion_input(PromotionArtifactLevelV1::SourceBuild);
+    let request = PromotionPlanTransformWithMaterializationRequest {
+        promoted_plan_id: "promoted-plan-1".to_string(),
+        target_plan: sample_promotion_target_plan(),
+        inputs: vec![input],
+        materialization_evidence: Vec::new(),
+    };
+
+    let err = promoted_deployment_plan_transform_from_inputs_with_materialization(&request)
+        .expect_err("source-build transform should require materialization evidence");
+
+    assert!(matches!(
+        err,
+        PromotionPlanTransformError::MaterializationRoleMissing { role } if role == "root"
+    ));
+}
+
+#[test]
+fn promoted_deployment_plan_transform_rejects_duplicate_materialization_evidence() {
+    let mut target_plan = sample_promotion_target_plan();
+    target_plan.role_artifacts[0].wasm_sha256 = Some(sample_sha256("5"));
+    target_plan.role_artifacts[0].wasm_gz_sha256 = Some(sample_sha256("6"));
+    target_plan.role_artifacts[0].installed_module_hash = Some(sample_sha256("7"));
+    target_plan.role_artifacts[0].candid_sha256 = Some(sample_sha256("8"));
+    let request = PromotionPlanTransformWithMaterializationRequest {
+        promoted_plan_id: "promoted-plan-1".to_string(),
+        target_plan,
+        inputs: vec![sample_role_promotion_input(
+            PromotionArtifactLevelV1::SourceBuild,
+        )],
+        materialization_evidence: vec![
+            sample_build_materialization_evidence(),
+            sample_build_materialization_evidence(),
+        ],
+    };
+
+    let err = promoted_deployment_plan_transform_from_inputs_with_materialization(&request)
+        .expect_err("duplicate materialization evidence should fail");
+
+    assert!(matches!(
+        err,
+        PromotionPlanTransformError::DuplicateMaterializationRole { role } if role == "root"
+    ));
+}
+
+#[test]
+fn promotion_plan_transform_text_reports_source_build_materialization_link() {
+    let mut target_plan = sample_promotion_target_plan();
+    target_plan.role_artifacts[0].wasm_sha256 = Some(sample_sha256("5"));
+    target_plan.role_artifacts[0].wasm_gz_sha256 = Some(sample_sha256("6"));
+    target_plan.role_artifacts[0].installed_module_hash = Some(sample_sha256("7"));
+    target_plan.role_artifacts[0].candid_sha256 = Some(sample_sha256("8"));
+    let request = PromotionPlanTransformWithMaterializationRequest {
+        promoted_plan_id: "promoted-plan-1".to_string(),
+        target_plan,
+        inputs: vec![sample_role_promotion_input(
+            PromotionArtifactLevelV1::SourceBuild,
+        )],
+        materialization_evidence: vec![sample_build_materialization_evidence()],
+    };
+    let transform = promoted_deployment_plan_transform_from_inputs_with_materialization(&request)
+        .expect("source-build transform should link evidence");
+
+    let text = promotion_plan_transform_text(&transform);
+    let expected_input_digest =
+        build_materialization_input_digest(&sample_build_materialization_input());
+
+    assert!(text.contains("materialization_evidence_id: materialization-evidence-1"));
+    assert!(text.contains(&format!(
+        "materialization_input_digest: {expected_input_digest}"
+    )));
+    assert!(text.contains(
+        "materialized_wasm_gz_sha256: 6666666666666666666666666666666666666666666666666666666666666666"
+    ));
 }
 
 #[test]
@@ -7035,6 +7257,9 @@ fn sample_role_artifact_source(kind: RoleArtifactSourceKindV1) -> RoleArtifactSo
         locator: Some("artifacts/root.wasm.gz".to_string()),
         previous_receipt_kind: (kind == RoleArtifactSourceKindV1::PreviousReceiptArtifact)
             .then_some(PreviousArtifactReceiptKindV1::DeploymentReceipt),
+        previous_receipt_lineage_digest: (kind
+            == RoleArtifactSourceKindV1::PreviousReceiptArtifact)
+            .then(|| sample_sha256("9")),
         expected_wasm_sha256: Some(sample_sha256("d")),
         expected_wasm_gz_sha256: Some(sample_sha256("a")),
         expected_candid_sha256: Some(sample_sha256("b")),
@@ -7108,6 +7333,19 @@ fn sample_build_materialization_result() -> BuildMaterializationResultV1 {
         installed_module_hash: sample_sha256("7"),
         candid_sha256: sample_sha256("8"),
     }
+}
+
+fn sample_build_materialization_evidence() -> BuildMaterializationEvidenceV1 {
+    let input = sample_build_materialization_input();
+    let mut result = sample_build_materialization_result();
+    result.materialization_input_digest = build_materialization_input_digest(&input);
+    build_materialization_evidence(BuildMaterializationEvidenceRequest {
+        evidence_id: "materialization-evidence-1".to_string(),
+        recipe: sample_build_recipe_identity(),
+        materialization_input: input,
+        materialization_result: result,
+    })
+    .expect("sample materialization evidence should validate")
 }
 
 fn sample_promotion_target_plan() -> DeploymentPlanV1 {

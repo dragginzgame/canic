@@ -10,6 +10,7 @@ use super::{
     RolePromotionPlanTransformV1, RolePromotionPolicyDecisionV1, RolePromotionPolicyV1,
     RolePromotionReadinessV1, SafetyFindingV1, SafetySeverityV1, stable_json_sha256_hex,
 };
+use serde::Serialize;
 use std::collections::{BTreeMap, BTreeSet};
 use thiserror::Error as ThisError;
 
@@ -30,6 +31,12 @@ pub enum PromotionArtifactSourceError {
         "promotion artifact source kind PreviousReceiptArtifact requires an eligible receipt kind"
     )]
     MissingPreviousReceiptKind,
+    #[error(
+        "promotion artifact source kind PreviousReceiptArtifact requires a source receipt lineage digest"
+    )]
+    MissingPreviousReceiptLineageDigest,
+    #[error("promotion artifact source kind {kind:?} cannot carry source receipt lineage digest")]
+    UnexpectedPreviousReceiptLineageDigest { kind: RoleArtifactSourceKindV1 },
 }
 
 ///
@@ -301,6 +308,14 @@ pub struct PromotionPolicyCheckRequest {
     pub policies: Vec<RolePromotionPolicyV1>,
 }
 
+#[derive(Serialize)]
+struct PromotionPlanLineageInput<'a> {
+    target_plan_id: &'a str,
+    promoted_plan_id: &'a str,
+    promoted_plan: &'a DeploymentPlanV1,
+    roles: &'a [RolePromotionPlanTransformV1],
+}
+
 pub fn promoted_deployment_plan_from_inputs(
     request: &PromotionPlanTransformRequest,
 ) -> Result<DeploymentPlanV1, PromotionPlanTransformError> {
@@ -357,6 +372,7 @@ pub fn promoted_deployment_plan_transform_from_inputs_with_materialization(
         &request.inputs,
         &request.materialization_evidence,
     )?;
+    refresh_promotion_plan_lineage_digest(&mut transform);
     validate_promotion_plan_transform(&transform)?;
     Ok(transform)
 }
@@ -603,6 +619,10 @@ pub fn validate_promotion_plan_transform(
     ensure_transform_field("transform_id", &transform.transform_id)?;
     ensure_transform_field("target_plan_id", &transform.target_plan_id)?;
     ensure_transform_field("promoted_plan_id", &transform.promoted_plan_id)?;
+    ensure_transform_field(
+        "promotion_plan_lineage_digest",
+        &transform.promotion_plan_lineage_digest,
+    )?;
     ensure_transform_field("promoted_plan.plan_id", &transform.promoted_plan.plan_id)?;
     if transform.promoted_plan.plan_id != transform.promoted_plan_id {
         return Err(PromotionPlanTransformError::PromotedPlanIdMismatch {
@@ -613,6 +633,18 @@ pub fn validate_promotion_plan_transform(
     ensure_unique_transform_roles(&transform.roles)?;
     for role in &transform.roles {
         validate_role_plan_transform(role, &transform.promoted_plan)?;
+    }
+    let expected = promotion_plan_lineage_digest(
+        &transform.target_plan_id,
+        &transform.promoted_plan_id,
+        &transform.promoted_plan,
+        &transform.roles,
+    );
+    if expected != transform.promotion_plan_lineage_digest {
+        return Err(PromotionPlanTransformError::RoleStateMismatch {
+            role: "promotion_plan_lineage".to_string(),
+            field: "promotion_plan_lineage_digest",
+        });
     }
     Ok(())
 }
@@ -716,6 +748,7 @@ pub fn validate_role_artifact_source(
     ensure_locator_requirement(source)?;
     ensure_previous_receipt_requirement(source)?;
     ensure_digest_requirement(source)?;
+    ensure_previous_receipt_lineage_digest_requirement(source)?;
     ensure_optional_sha256(
         "expected_wasm_sha256",
         source.expected_wasm_sha256.as_deref(),
@@ -731,6 +764,10 @@ pub fn validate_role_artifact_source(
     ensure_optional_sha256(
         "expected_canonical_embedded_config_sha256",
         source.expected_canonical_embedded_config_sha256.as_deref(),
+    )?;
+    ensure_optional_sha256(
+        "previous_receipt_lineage_digest",
+        source.previous_receipt_lineage_digest.as_deref(),
     )?;
     Ok(())
 }
@@ -987,16 +1024,38 @@ fn promotion_plan_transform_from_parts(
                 .find(|artifact| artifact.role == input.role)?;
             Some(role_plan_transform(input, before, after))
         })
-        .collect();
+        .collect::<Vec<_>>();
+    let promotion_plan_lineage_digest = promotion_plan_lineage_digest(
+        &target_plan.plan_id,
+        &promoted_plan.plan_id,
+        &promoted_plan,
+        &roles,
+    );
 
     PromotionPlanTransformV1 {
         schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
         transform_id: format!("promotion-transform:{}", promoted_plan.plan_id),
         target_plan_id: target_plan.plan_id.clone(),
         promoted_plan_id: promoted_plan.plan_id.clone(),
+        promotion_plan_lineage_digest,
         promoted_plan,
         roles,
     }
+}
+
+#[must_use]
+pub fn promotion_plan_lineage_digest(
+    target_plan_id: &str,
+    promoted_plan_id: &str,
+    promoted_plan: &DeploymentPlanV1,
+    roles: &[RolePromotionPlanTransformV1],
+) -> String {
+    stable_json_sha256_hex(&PromotionPlanLineageInput {
+        target_plan_id,
+        promoted_plan_id,
+        promoted_plan,
+        roles,
+    })
 }
 
 fn role_plan_transform(
@@ -1025,7 +1084,99 @@ fn role_plan_transform(
         target_materialization_preserved: input.promotion_level
             == PromotionArtifactLevelV1::SourceBuild
             && role_materialization_identity_matches(before, after),
+        source_build_materialization: None,
     }
+}
+
+fn attach_source_build_materialization(
+    transform: &mut PromotionPlanTransformV1,
+    inputs: &[RolePromotionInputV1],
+    evidence: &[BuildMaterializationEvidenceV1],
+) -> Result<(), PromotionPlanTransformError> {
+    let input_roles = inputs
+        .iter()
+        .map(|input| input.role.as_str())
+        .collect::<BTreeSet<_>>();
+    let mut links = BTreeMap::new();
+    for item in evidence {
+        validate_build_materialization_evidence(item)?;
+        let role = item.recipe.package_or_role_selector.as_str();
+        if !input_roles.contains(role) {
+            return Err(PromotionPlanTransformError::UnexpectedMaterializationRole {
+                role: role.to_string(),
+            });
+        }
+        if links
+            .insert(role.to_string(), materialization_link_from_evidence(item))
+            .is_some()
+        {
+            return Err(PromotionPlanTransformError::DuplicateMaterializationRole {
+                role: role.to_string(),
+            });
+        }
+    }
+
+    for role in &mut transform.roles {
+        match role.promotion_level {
+            PromotionArtifactLevelV1::SourceBuild => {
+                let Some(link) = links.remove(&role.role) else {
+                    return Err(PromotionPlanTransformError::MaterializationRoleMissing {
+                        role: role.role.clone(),
+                    });
+                };
+                role.source_build_materialization = Some(link);
+            }
+            PromotionArtifactLevelV1::SealedWasm => {
+                if links.remove(&role.role).is_some() {
+                    return Err(PromotionPlanTransformError::UnexpectedMaterializationRole {
+                        role: role.role.clone(),
+                    });
+                }
+            }
+        }
+    }
+
+    if let Some(role) = links.keys().next() {
+        return Err(PromotionPlanTransformError::UnexpectedMaterializationRole {
+            role: role.clone(),
+        });
+    }
+    Ok(())
+}
+
+fn materialization_link_from_evidence(
+    evidence: &BuildMaterializationEvidenceV1,
+) -> RolePromotionMaterializationLinkV1 {
+    RolePromotionMaterializationLinkV1 {
+        role: evidence.recipe.package_or_role_selector.clone(),
+        evidence_id: evidence.evidence_id.clone(),
+        recipe_id: evidence.recipe.recipe_id.clone(),
+        materialization_input_id: evidence
+            .materialization_input
+            .materialization_input_id
+            .clone(),
+        materialization_result_id: evidence
+            .materialization_result
+            .materialization_result_id
+            .clone(),
+        materialization_input_digest: evidence.computed_materialization_input_digest.clone(),
+        wasm_sha256: evidence.materialization_result.wasm_sha256.clone(),
+        wasm_gz_sha256: evidence.materialization_result.wasm_gz_sha256.clone(),
+        installed_module_hash: evidence
+            .materialization_result
+            .installed_module_hash
+            .clone(),
+        candid_sha256: evidence.materialization_result.candid_sha256.clone(),
+    }
+}
+
+fn refresh_promotion_plan_lineage_digest(transform: &mut PromotionPlanTransformV1) {
+    transform.promotion_plan_lineage_digest = promotion_plan_lineage_digest(
+        &transform.target_plan_id,
+        &transform.promoted_plan_id,
+        &transform.promoted_plan,
+        &transform.roles,
+    );
 }
 
 fn artifact_identity_changed(before: &RoleArtifactV1, after: &RoleArtifactV1) -> bool {
@@ -1550,6 +1701,7 @@ fn validate_role_plan_transform(
     };
     ensure_role_matches_promoted_artifact(role, promoted_role)?;
     ensure_role_transform_flags_are_consistent(role)?;
+    validate_role_materialization_link(role, promoted_role)?;
     Ok(())
 }
 
@@ -1610,6 +1762,78 @@ fn ensure_role_transform_flags_are_consistent(
         )?;
     }
     Ok(())
+}
+
+fn validate_role_materialization_link(
+    role: &RolePromotionPlanTransformV1,
+    promoted_role: &RoleArtifactV1,
+) -> Result<(), PromotionPlanTransformError> {
+    let Some(link) = &role.source_build_materialization else {
+        return Ok(());
+    };
+    ensure_role_field_matches(
+        role,
+        "source_build_materialization",
+        role.promotion_level == PromotionArtifactLevelV1::SourceBuild,
+    )?;
+    ensure_role_field_matches(
+        role,
+        "source_build_materialization.role",
+        link.role == role.role,
+    )?;
+    ensure_transform_field(
+        "source_build_materialization.evidence_id",
+        &link.evidence_id,
+    )?;
+    ensure_transform_field("source_build_materialization.recipe_id", &link.recipe_id)?;
+    ensure_transform_field(
+        "source_build_materialization.materialization_input_id",
+        &link.materialization_input_id,
+    )?;
+    ensure_transform_field(
+        "source_build_materialization.materialization_result_id",
+        &link.materialization_result_id,
+    )?;
+    ensure_materialization_sha256(
+        "source_build_materialization.materialization_input_digest",
+        &link.materialization_input_digest,
+    )?;
+    ensure_materialization_sha256(
+        "source_build_materialization.wasm_sha256",
+        &link.wasm_sha256,
+    )?;
+    ensure_materialization_sha256(
+        "source_build_materialization.wasm_gz_sha256",
+        &link.wasm_gz_sha256,
+    )?;
+    ensure_materialization_sha256(
+        "source_build_materialization.installed_module_hash",
+        &link.installed_module_hash,
+    )?;
+    ensure_materialization_sha256(
+        "source_build_materialization.candid_sha256",
+        &link.candid_sha256,
+    )?;
+    ensure_role_field_matches(
+        role,
+        "source_build_materialization.wasm_sha256",
+        promoted_role.wasm_sha256.as_deref() == Some(link.wasm_sha256.as_str()),
+    )?;
+    ensure_role_field_matches(
+        role,
+        "source_build_materialization.wasm_gz_sha256",
+        promoted_role.wasm_gz_sha256.as_deref() == Some(link.wasm_gz_sha256.as_str()),
+    )?;
+    ensure_role_field_matches(
+        role,
+        "source_build_materialization.installed_module_hash",
+        promoted_role.installed_module_hash.as_deref() == Some(link.installed_module_hash.as_str()),
+    )?;
+    ensure_role_field_matches(
+        role,
+        "source_build_materialization.candid_sha256",
+        promoted_role.candid_sha256.as_deref() == Some(link.candid_sha256.as_str()),
+    )
 }
 
 fn role_summary_artifact_identity_changed(role: &RolePromotionPlanTransformV1) -> bool {
@@ -1822,6 +2046,23 @@ const fn ensure_previous_receipt_requirement(
         (_, Some(_)) => {
             Err(PromotionArtifactSourceError::UnexpectedPreviousReceiptKind { kind: source.kind })
         }
+        (_, None) => Ok(()),
+    }
+}
+
+const fn ensure_previous_receipt_lineage_digest_requirement(
+    source: &RoleArtifactSourceV1,
+) -> Result<(), PromotionArtifactSourceError> {
+    match (source.kind, source.previous_receipt_lineage_digest.as_ref()) {
+        (RoleArtifactSourceKindV1::PreviousReceiptArtifact, Some(_)) => Ok(()),
+        (RoleArtifactSourceKindV1::PreviousReceiptArtifact, None) => {
+            Err(PromotionArtifactSourceError::MissingPreviousReceiptLineageDigest)
+        }
+        (_, Some(_)) => Err(
+            PromotionArtifactSourceError::UnexpectedPreviousReceiptLineageDigest {
+                kind: source.kind,
+            },
+        ),
         (_, None) => Ok(()),
     }
 }

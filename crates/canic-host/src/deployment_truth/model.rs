@@ -154,6 +154,7 @@ pub struct RoleArtifactSourceV1 {
     pub kind: RoleArtifactSourceKindV1,
     pub locator: Option<String>,
     pub previous_receipt_kind: Option<PreviousArtifactReceiptKindV1>,
+    pub previous_receipt_lineage_digest: Option<String>,
     pub expected_wasm_sha256: Option<String>,
     pub expected_wasm_gz_sha256: Option<String>,
     pub expected_candid_sha256: Option<String>,
@@ -386,6 +387,7 @@ pub struct PromotionPlanTransformV1 {
     pub transform_id: String,
     pub target_plan_id: String,
     pub promoted_plan_id: String,
+    pub promotion_plan_lineage_digest: String,
     pub promoted_plan: DeploymentPlanV1,
     pub roles: Vec<RolePromotionPlanTransformV1>,
 }

@@ -14,6 +14,9 @@ present.
 
 ## [0.44.x] - 2026-05-25 - Artifact promotion
 
+- `0.44.5` adds materialization-linked promotion transforms and lineage digests
+  for promoted plans and receipt-backed artifact sources.
+
 - `0.44.4` adds passive role promotion policy checks and readiness integration
   that distinguish sealed-byte-only roles from byte-identical source/build
   promotion roles.

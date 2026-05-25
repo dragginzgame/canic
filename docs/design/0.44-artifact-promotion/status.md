@@ -82,6 +82,14 @@ promotion can prove what was built, uploaded, installed, and promoted.
 - Promotion readiness can now optionally fold role promotion policy blockers
   into the same passive `PromotionReadinessV1` artifact, while keeping the
   standalone policy check available for separate operator reports.
+- Source/build promotion transforms can now opt into validated materialization
+  evidence links, recording the evidence ID, target materialization input
+  digest, and materialized output digests in the role transform summary.
+- Passive promotion transforms now carry a deterministic promotion-plan lineage
+  digest over the target plan ID, promoted plan ID, promoted plan, and role
+  summaries. Validation rejects stale lineage digests.
+- Receipt-backed promotion artifact sources now require a source receipt
+  lineage digest, and non-receipt sources reject that field.
 
 ## Not Implemented Yet
 
@@ -90,10 +98,9 @@ promotion can prove what was built, uploaded, installed, and promoted.
 - Full promotion safety checks across deployment targets.
 - Integration with wasm-store artifact identity.
 - Artifact identity dedupe semantics beyond passive report grouping.
-- Wiring source/build materialization identity into promotion plans and
-  operator reports.
+- CLI/operator report surfaces for source/build materialization identity.
 - CLI/report surfaces for role promotion policy checks.
-- Promotion plan/source receipt/target execution lineage identity.
+- Target execution lineage identity.
 
 ## Drift Log
 

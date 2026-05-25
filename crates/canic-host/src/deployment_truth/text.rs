@@ -192,6 +192,10 @@ pub fn promotion_plan_transform_text(transform: &PromotionPlanTransformV1) -> St
         format!("transform_id: {}", transform.transform_id),
         format!("target_plan_id: {}", transform.target_plan_id),
         format!("promoted_plan_id: {}", transform.promoted_plan_id),
+        format!(
+            "promotion_plan_lineage_digest: {}",
+            transform.promotion_plan_lineage_digest
+        ),
         String::new(),
         "counts:".to_string(),
         format!("  roles: {}", transform.roles.len()),
@@ -823,6 +827,20 @@ fn append_promotion_transform_role_items(
                 .as_deref()
                 .unwrap_or("not recorded")
         ));
+        if let Some(materialization) = &role.source_build_materialization {
+            lines.push(format!(
+                "    materialization_evidence_id: {}",
+                materialization.evidence_id
+            ));
+            lines.push(format!(
+                "    materialization_input_digest: {}",
+                materialization.materialization_input_digest
+            ));
+            lines.push(format!(
+                "    materialized_wasm_gz_sha256: {}",
+                materialization.wasm_gz_sha256
+            ));
+        }
     }
 }
 
