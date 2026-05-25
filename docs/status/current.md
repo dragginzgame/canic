@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-05-24
+Last updated: 2026-05-25
 
 ## Purpose
 
@@ -9,20 +9,41 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
-- Active minor: `0.43.x` backend-agnostic execution.
-- Theme: move deployment mutation behind a plan-driven executor boundary
-  without weakening 0.41 deployment truth gates or 0.42 authority
-  reconciliation.
-- Current release-work area: executor context/capability model, execution
-  receipt metadata, and gradual extraction of current install mechanics behind
-  `DeploymentExecutor`.
-- Design started at
-  `docs/design/0.43-backend-agnostic-execution/0.43-design.md`; the core issue
-  is that deployment intent should run through `DeploymentPlanV1` rather than
-  through one local installer backend's filesystem assumptions.
+- Active minor: `0.44.x` artifact overrides and promotion.
+- Theme: promote artifact identity across deployment trust domains without
+  copying source authority, stale embedded topology, or authority dry-run
+  evidence.
+- Current release-work area: promotion planning, artifact-source validation,
+  target embedded-config checks, and promotion readiness reporting.
+- Design starts at
+  `docs/design/0.44-artifact-promotion/0.44-design.md`. Promotion execution
+  must remain a `DeploymentPlanV1` transformation and must use the
+  current-install runner/gate path established at the 0.43 closeout before any
+  promoted plan executes through the existing install command.
 
 ## Recent Work
 
+- 0.44 has started with passive role artifact source DTOs and validation for
+  digest-pinned override inputs. Receipt-backed artifact sources are limited to
+  deployment/staging receipt evidence and do not accept authority dry-run
+  artifacts as artifact sources.
+- 0.44 also has the first passive promotion readiness model. It reports
+  role-scoped promotion source identity, target wasm/config identity,
+  byte/config identity comparisons, blocking findings, and target-store
+  restage warnings without executing promoted plans. Readiness artifacts now
+  have validation for schema, identity fields, status/blocker consistency,
+  duplicate roles, digest shape, restage state, and finding severities.
+- Promotion readiness also has host-owned passive text rendering, keeping
+  operator formatting out of future CLI code and clearly labeling the surface
+  as non-executing readiness output.
+- Promotion DTO JSON shape tests now pin the initial source/input/readiness
+  field names. Source/build readiness explicitly permits target config digest
+  changes, while sealed-wasm readiness still blocks embedded-config mismatch.
+- `check_promotion_readiness(...)` is now the host-owned passive entry point
+  for building and validating readiness from a target plan plus role promotion
+  inputs.
+- `0.43.8` is closed. The closeout report is
+  `docs/audits/reports/2026-05/2026-05-25/0.43-closeout.md`.
 - `0.43.8` adds a private current-install
   phase-operation runner, so activation phases now execute through a common
   phase/action/evidence boundary instead of manually wiring each operation
@@ -1615,14 +1636,14 @@ inspect only the files needed for the current task.
 
 ## Good Next Tasks
 
-1. Finish 0.41 closeout: reconcile `CHANGELOG.md`, `docs/changelog/0.41.md`,
-   `docs/design/0.41-deployment-truth-model/status.md`, and this handoff before
-   moving the active line to 0.42.
-2. Run a focused release-readiness validation pass for the 0.41 deployment
-   truth surface: `canic-host` deployment truth tests, install truth tests,
-   `canic-cli deploy` tests, `canic-host` clippy, and `git diff --check`.
-3. Audit 0.41 against its exit criterion: Canic can state what it plans to do,
-   what exists, what differs, and whether it is safe to continue.
-4. Keep any remaining 0.41 work scoped to stale-doc cleanup, validation, and
-   closeout findings. New executor, authority-reconciliation, promotion, or
-   consent workflow work belongs in later design lines.
+1. Start 0.44 with promotion planning and readiness only: artifact-source
+   model, digest-pinned override inputs, receipt-backed artifact references,
+   and target embedded-config validation.
+2. Keep authority dry-run artifacts out of promotion artifact sources.
+   `AuthorityReceiptV1` and `AuthorityDryRunEvidenceV1` remain structural
+   authority-reporting evidence only.
+3. Do not add promoted-plan execution shortcuts. If promoted plans execute
+   through current install, they must use the 0.43.8 private operation runner
+   and deployment-truth/preflight gate path.
+4. Preserve 0.44's core rule: promote artifact identity, not source authority
+   or stale embedded topology.

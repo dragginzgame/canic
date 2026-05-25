@@ -43,6 +43,37 @@ pub fn deployment_execution_preflight_text(preflight: &DeploymentExecutionPrefli
     lines.join("\n")
 }
 
+/// Render promotion readiness as passive operator text.
+#[must_use]
+pub fn promotion_readiness_text(readiness: &PromotionReadinessV1) -> String {
+    let restage_required = readiness
+        .roles
+        .iter()
+        .filter(|role| role.restage_required)
+        .count();
+    let mut lines = vec![
+        "Promotion readiness report".to_string(),
+        "mode: passive".to_string(),
+        format!(
+            "status: {}",
+            promotion_readiness_status_label(readiness.status)
+        ),
+        format!("readiness_id: {}", readiness.readiness_id),
+        format!("target_plan_id: {}", readiness.target_plan_id),
+        String::new(),
+        "counts:".to_string(),
+        format!("  roles: {}", readiness.roles.len()),
+        format!("  blockers: {}", readiness.blockers.len()),
+        format!("  warnings: {}", readiness.warnings.len()),
+        format!("  restage_required: {restage_required}"),
+    ];
+
+    append_promotion_role_items(&mut lines, &readiness.roles);
+    append_hard_failure_items(&mut lines, "blockers", &readiness.blockers);
+    append_warning_items(&mut lines, "warnings", &readiness.warnings);
+    lines.join("\n")
+}
+
 /// Render an authority reconciliation plan as read-only operator text.
 #[must_use]
 pub fn authority_plan_text(plan: &AuthorityReconciliationPlanV1) -> String {
@@ -447,6 +478,64 @@ fn append_hard_failure_items(lines: &mut Vec<String>, label: &str, failures: &[S
     }
 }
 
+fn append_warning_items(lines: &mut Vec<String>, label: &str, warnings: &[SafetyFindingV1]) {
+    if warnings.is_empty() {
+        return;
+    }
+    lines.push(String::new());
+    lines.push(format!("{label}:"));
+    for warning in warnings {
+        let subject = warning.subject.as_deref().unwrap_or("unknown subject");
+        lines.push(format!(
+            "  - [{}] {}: {}",
+            warning.code, subject, warning.message
+        ));
+    }
+}
+
+fn append_promotion_role_items(lines: &mut Vec<String>, roles: &[RolePromotionReadinessV1]) {
+    if roles.is_empty() {
+        return;
+    }
+    lines.push(String::new());
+    lines.push("roles:".to_string());
+    for role in roles {
+        lines.push(format!(
+            "  - {} {:?}/{:?}: byte_identical_wasm={} embedded_config_identical={} restage_required={}",
+            role.role,
+            role.promotion_level,
+            role.source_kind,
+            optional_bool_label(role.byte_identical_wasm),
+            optional_bool_label(role.embedded_config_identical),
+            role.restage_required
+        ));
+        lines.push(format!(
+            "    source_wasm_gz_sha256: {}",
+            role.source_wasm_gz_sha256
+                .as_deref()
+                .unwrap_or("not recorded")
+        ));
+        lines.push(format!(
+            "    target_wasm_gz_sha256: {}",
+            role.target_wasm_gz_sha256
+                .as_deref()
+                .unwrap_or("not recorded")
+        ));
+        lines.push(format!(
+            "    source_config_sha256: {}",
+            role.source_canonical_embedded_config_sha256
+                .as_deref()
+                .unwrap_or("not recorded")
+        ));
+        lines.push(format!(
+            "    target_config_sha256: {}",
+            role.target_canonical_embedded_config_sha256
+                .as_deref()
+                .unwrap_or("not recorded")
+        ));
+    }
+}
+
 fn append_string_items(lines: &mut Vec<String>, label: &str, values: &[String]) {
     if values.is_empty() {
         return;
@@ -602,6 +691,21 @@ const fn deployment_execution_preflight_status_label(
     match status {
         DeploymentExecutionPreflightStatusV1::Ready => "ready",
         DeploymentExecutionPreflightStatusV1::Blocked => "blocked",
+    }
+}
+
+const fn promotion_readiness_status_label(status: PromotionReadinessStatusV1) -> &'static str {
+    match status {
+        PromotionReadinessStatusV1::Ready => "ready",
+        PromotionReadinessStatusV1::Blocked => "blocked",
+    }
+}
+
+const fn optional_bool_label(value: Option<bool>) -> &'static str {
+    match value {
+        Some(true) => "true",
+        Some(false) => "false",
+        None => "unknown",
     }
 }
 

@@ -146,6 +146,109 @@ pub struct StagingReceiptV1 {
 }
 
 ///
+/// RoleArtifactSourceV1
+///
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RoleArtifactSourceV1 {
+    pub role: String,
+    pub kind: RoleArtifactSourceKindV1,
+    pub locator: Option<String>,
+    pub previous_receipt_kind: Option<PreviousArtifactReceiptKindV1>,
+    pub expected_wasm_sha256: Option<String>,
+    pub expected_wasm_gz_sha256: Option<String>,
+    pub expected_candid_sha256: Option<String>,
+    pub expected_canonical_embedded_config_sha256: Option<String>,
+}
+
+///
+/// RolePromotionInputV1
+///
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RolePromotionInputV1 {
+    pub role: String,
+    pub promotion_level: PromotionArtifactLevelV1,
+    pub source: RoleArtifactSourceV1,
+    pub require_byte_identical_wasm: bool,
+    pub require_target_embedded_config: bool,
+    pub target_store_has_artifact: Option<bool>,
+}
+
+///
+/// PromotionArtifactLevelV1
+///
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum PromotionArtifactLevelV1 {
+    SealedWasm,
+    SourceBuild,
+}
+
+///
+/// PromotionReadinessV1
+///
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct PromotionReadinessV1 {
+    pub schema_version: u32,
+    pub readiness_id: String,
+    pub target_plan_id: String,
+    pub status: PromotionReadinessStatusV1,
+    pub roles: Vec<RolePromotionReadinessV1>,
+    pub blockers: Vec<SafetyFindingV1>,
+    pub warnings: Vec<SafetyFindingV1>,
+}
+
+///
+/// PromotionReadinessStatusV1
+///
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum PromotionReadinessStatusV1 {
+    Ready,
+    Blocked,
+}
+
+///
+/// RolePromotionReadinessV1
+///
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RolePromotionReadinessV1 {
+    pub role: String,
+    pub promotion_level: PromotionArtifactLevelV1,
+    pub source_kind: RoleArtifactSourceKindV1,
+    pub source_locator: Option<String>,
+    pub source_wasm_sha256: Option<String>,
+    pub source_wasm_gz_sha256: Option<String>,
+    pub target_wasm_sha256: Option<String>,
+    pub target_wasm_gz_sha256: Option<String>,
+    pub source_canonical_embedded_config_sha256: Option<String>,
+    pub target_canonical_embedded_config_sha256: Option<String>,
+    pub byte_identical_wasm: Option<bool>,
+    pub embedded_config_identical: Option<bool>,
+    pub target_store_has_artifact: Option<bool>,
+    pub restage_required: bool,
+}
+
+///
+/// RoleArtifactSourceKindV1
+///
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum RoleArtifactSourceKindV1 {
+    WorkspacePackage,
+    PublishedPackage,
+    LocalWasm,
+    LocalWasmGz,
+    PreviousReceiptArtifact,
+    CanonicalWasmStoreDefault,
+}
+
+///
+/// PreviousArtifactReceiptKindV1
+///
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum PreviousArtifactReceiptKindV1 {
+    DeploymentReceipt,
+    StagingReceipt,
+}
+
+///
 /// AuthorityReceiptV1
 ///
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]

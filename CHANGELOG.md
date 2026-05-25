@@ -12,6 +12,17 @@ present.
 
 ## Unreleased
 
+- Started the 0.44 artifact-promotion line with passive role artifact source
+  DTOs and validation for digest-pinned override inputs and eligible
+  receipt-backed artifact sources. Added the first promotion readiness model
+  for role-scoped source checks, target embedded-config comparison, and
+  restage-required reporting, validation for archived readiness artifacts, and
+  host-owned passive text output. JSON shape tests now pin the early
+  promotion DTO field names, and source/build readiness allows target config
+  digest changes without weakening sealed-wasm checks. Added a host-owned
+  passive `check_promotion_readiness(...)` entry point for future CLI/report
+  consumers.
+
 ## [0.43.x] - 2026-05-24 - Backend-agnostic execution
 
 - `0.43.8` completes the current-install runner bridge by routing activation

@@ -64,6 +64,422 @@ fn plan_round_trips_through_json() {
 }
 
 #[test]
+fn role_artifact_source_round_trips_through_json() {
+    let source = sample_role_artifact_source(RoleArtifactSourceKindV1::LocalWasmGz);
+
+    assert_json_round_trip(&source);
+    let encoded = serde_json::to_value(&source).expect("source should encode");
+    assert_object_keys(
+        &encoded,
+        &[
+            "role",
+            "kind",
+            "locator",
+            "previous_receipt_kind",
+            "expected_wasm_sha256",
+            "expected_wasm_gz_sha256",
+            "expected_candid_sha256",
+            "expected_canonical_embedded_config_sha256",
+        ],
+    );
+}
+
+#[test]
+fn role_promotion_input_round_trips_through_json() {
+    let input = sample_role_promotion_input(PromotionArtifactLevelV1::SealedWasm);
+
+    assert_json_round_trip(&input);
+    let encoded = serde_json::to_value(&input).expect("input should encode");
+    assert_object_keys(
+        &encoded,
+        &[
+            "role",
+            "promotion_level",
+            "source",
+            "require_byte_identical_wasm",
+            "require_target_embedded_config",
+            "target_store_has_artifact",
+        ],
+    );
+}
+
+#[test]
+fn promotion_readiness_round_trips_through_json() {
+    let plan = sample_promotion_target_plan();
+    let input = sample_role_promotion_input(PromotionArtifactLevelV1::SealedWasm);
+    let readiness = promotion_readiness_from_inputs("promotion-ready-1", &plan, &[input]);
+
+    assert_json_round_trip(&readiness);
+    let encoded = serde_json::to_value(&readiness).expect("readiness should encode");
+    assert_object_keys(
+        &encoded,
+        &[
+            "schema_version",
+            "readiness_id",
+            "target_plan_id",
+            "status",
+            "roles",
+            "blockers",
+            "warnings",
+        ],
+    );
+    let role = &encoded["roles"][0];
+    assert_object_keys(
+        role,
+        &[
+            "role",
+            "promotion_level",
+            "source_kind",
+            "source_locator",
+            "source_wasm_sha256",
+            "source_wasm_gz_sha256",
+            "target_wasm_sha256",
+            "target_wasm_gz_sha256",
+            "source_canonical_embedded_config_sha256",
+            "target_canonical_embedded_config_sha256",
+            "byte_identical_wasm",
+            "embedded_config_identical",
+            "target_store_has_artifact",
+            "restage_required",
+        ],
+    );
+}
+
+#[test]
+fn role_artifact_source_requires_digest_pins_for_executable_overrides() {
+    let mut source = sample_role_artifact_source(RoleArtifactSourceKindV1::LocalWasm);
+    source.expected_wasm_sha256 = None;
+    source.expected_wasm_gz_sha256 = None;
+
+    let err = validate_role_artifact_source(&source).expect_err("digest pin should be required");
+    assert!(matches!(
+        err,
+        PromotionArtifactSourceError::MissingDigestPin {
+            kind: RoleArtifactSourceKindV1::LocalWasm
+        }
+    ));
+}
+
+#[test]
+fn role_artifact_source_rejects_invalid_digest_shape() {
+    let mut source = sample_role_artifact_source(RoleArtifactSourceKindV1::LocalWasmGz);
+    source.expected_wasm_gz_sha256 = Some("NOT-A-DIGEST".to_string());
+
+    let err = validate_role_artifact_source(&source).expect_err("digest should be checked");
+    assert!(matches!(
+        err,
+        PromotionArtifactSourceError::InvalidSha256Digest {
+            field: "expected_wasm_gz_sha256"
+        }
+    ));
+}
+
+#[test]
+fn previous_receipt_artifact_source_requires_eligible_receipt_kind() {
+    let mut source = sample_role_artifact_source(RoleArtifactSourceKindV1::PreviousReceiptArtifact);
+    source.previous_receipt_kind = None;
+
+    let err = validate_role_artifact_source(&source).expect_err("receipt kind should be required");
+    assert!(matches!(
+        err,
+        PromotionArtifactSourceError::MissingPreviousReceiptKind
+    ));
+
+    source.previous_receipt_kind = Some(PreviousArtifactReceiptKindV1::DeploymentReceipt);
+    validate_role_artifact_source(&source).expect("deployment receipt artifact should be eligible");
+    source.previous_receipt_kind = Some(PreviousArtifactReceiptKindV1::StagingReceipt);
+    validate_role_artifact_source(&source).expect("staging receipt artifact should be eligible");
+}
+
+#[test]
+fn non_receipt_artifact_source_rejects_previous_receipt_kind() {
+    let mut source = sample_role_artifact_source(RoleArtifactSourceKindV1::LocalWasmGz);
+    source.previous_receipt_kind = Some(PreviousArtifactReceiptKindV1::DeploymentReceipt);
+
+    let err =
+        validate_role_artifact_source(&source).expect_err("receipt kind should be source-specific");
+    assert!(matches!(
+        err,
+        PromotionArtifactSourceError::UnexpectedPreviousReceiptKind {
+            kind: RoleArtifactSourceKindV1::LocalWasmGz
+        }
+    ));
+}
+
+#[test]
+fn canonical_wasm_store_default_source_does_not_require_locator_or_digest_pin() {
+    let source = RoleArtifactSourceV1 {
+        role: "wasm_store".to_string(),
+        kind: RoleArtifactSourceKindV1::CanonicalWasmStoreDefault,
+        locator: None,
+        previous_receipt_kind: None,
+        expected_wasm_sha256: None,
+        expected_wasm_gz_sha256: None,
+        expected_candid_sha256: None,
+        expected_canonical_embedded_config_sha256: None,
+    };
+
+    validate_role_artifact_source(&source).expect("canonical source should be deferred");
+}
+
+#[test]
+fn promotion_readiness_reports_ready_role_and_restage_warning() {
+    let plan = sample_promotion_target_plan();
+    let mut input = sample_role_promotion_input(PromotionArtifactLevelV1::SealedWasm);
+    input.target_store_has_artifact = Some(false);
+
+    let readiness = promotion_readiness_from_inputs("promotion-ready-1", &plan, &[input]);
+
+    assert_eq!(readiness.schema_version, DEPLOYMENT_TRUTH_SCHEMA_VERSION);
+    assert_eq!(readiness.target_plan_id, plan.plan_id);
+    assert_eq!(readiness.status, PromotionReadinessStatusV1::Ready);
+    assert!(readiness.blockers.is_empty());
+    assert_eq!(readiness.warnings.len(), 1);
+    assert_eq!(
+        readiness.warnings[0].code,
+        "promotion_target_store_restage_required"
+    );
+    assert_eq!(readiness.roles.len(), 1);
+    assert_eq!(readiness.roles[0].byte_identical_wasm, Some(true));
+    assert_eq!(readiness.roles[0].embedded_config_identical, Some(true));
+    assert!(readiness.roles[0].restage_required);
+    validate_promotion_readiness(&readiness).expect("readiness artifact should validate");
+}
+
+#[test]
+fn promotion_readiness_blocks_sealed_wasm_embedded_config_mismatch() {
+    let plan = sample_promotion_target_plan();
+    let mut input = sample_role_promotion_input(PromotionArtifactLevelV1::SealedWasm);
+    input.source.expected_canonical_embedded_config_sha256 = Some(sample_sha256("e"));
+
+    let readiness = promotion_readiness_from_inputs("promotion-ready-1", &plan, &[input]);
+
+    assert_eq!(readiness.status, PromotionReadinessStatusV1::Blocked);
+    assert!(readiness.blockers.iter().any(|finding| {
+        finding.code == "promotion_sealed_wasm_embedded_config_mismatch"
+            && finding.subject.as_deref() == Some("root")
+    }));
+}
+
+#[test]
+fn source_build_promotion_allows_target_config_digest_change() {
+    let plan = sample_promotion_target_plan();
+    let mut input = sample_role_promotion_input(PromotionArtifactLevelV1::SourceBuild);
+    input.source.expected_canonical_embedded_config_sha256 = Some(sample_sha256("e"));
+
+    let readiness = promotion_readiness_from_inputs("promotion-ready-1", &plan, &[input]);
+
+    assert_eq!(readiness.status, PromotionReadinessStatusV1::Ready);
+    assert!(readiness.blockers.is_empty());
+    assert_eq!(readiness.roles[0].embedded_config_identical, Some(false));
+    validate_promotion_readiness(&readiness).expect("source-build readiness should validate");
+}
+
+#[test]
+fn check_promotion_readiness_validates_and_returns_artifact() {
+    let request = PromotionReadinessRequest {
+        readiness_id: "promotion-ready-1".to_string(),
+        target_plan: sample_promotion_target_plan(),
+        inputs: vec![sample_role_promotion_input(
+            PromotionArtifactLevelV1::SealedWasm,
+        )],
+    };
+
+    let readiness = check_promotion_readiness(&request).expect("readiness should be valid");
+
+    assert_eq!(readiness.readiness_id, "promotion-ready-1");
+    assert_eq!(readiness.status, PromotionReadinessStatusV1::Ready);
+    assert_eq!(readiness.roles.len(), 1);
+}
+
+#[test]
+fn check_promotion_readiness_rejects_blank_readiness_id() {
+    let request = PromotionReadinessRequest {
+        readiness_id: " ".to_string(),
+        target_plan: sample_promotion_target_plan(),
+        inputs: vec![sample_role_promotion_input(
+            PromotionArtifactLevelV1::SealedWasm,
+        )],
+    };
+
+    let err = check_promotion_readiness(&request).expect_err("blank readiness id should fail");
+    assert!(matches!(
+        err,
+        PromotionReadinessError::MissingRequiredField {
+            field: "readiness_id"
+        }
+    ));
+}
+
+#[test]
+fn promotion_readiness_blocks_source_role_mismatch() {
+    let plan = sample_promotion_target_plan();
+    let mut input = sample_role_promotion_input(PromotionArtifactLevelV1::SourceBuild);
+    input.source.role = "other".to_string();
+
+    let readiness = promotion_readiness_from_inputs("promotion-ready-1", &plan, &[input]);
+
+    assert_eq!(readiness.status, PromotionReadinessStatusV1::Blocked);
+    assert!(readiness.blockers.iter().any(|finding| {
+        finding.code == "promotion_source_role_mismatch"
+            && finding.subject.as_deref() == Some("root")
+    }));
+}
+
+#[test]
+fn promotion_readiness_blocks_missing_target_role() {
+    let plan = sample_plan();
+    let mut input = sample_role_promotion_input(PromotionArtifactLevelV1::SourceBuild);
+    input.role = "missing".to_string();
+    input.source.role = "missing".to_string();
+
+    let readiness = promotion_readiness_from_inputs("promotion-ready-1", &plan, &[input]);
+
+    assert_eq!(readiness.status, PromotionReadinessStatusV1::Blocked);
+    assert!(readiness.roles.is_empty());
+    assert!(readiness.blockers.iter().any(|finding| {
+        finding.code == "promotion_target_role_missing"
+            && finding.subject.as_deref() == Some("missing")
+    }));
+}
+
+#[test]
+fn promotion_readiness_blocks_invalid_artifact_source() {
+    let plan = sample_promotion_target_plan();
+    let mut input = sample_role_promotion_input(PromotionArtifactLevelV1::SourceBuild);
+    input.source.expected_wasm_sha256 = None;
+    input.source.expected_wasm_gz_sha256 = None;
+
+    let readiness = promotion_readiness_from_inputs("promotion-ready-1", &plan, &[input]);
+
+    assert_eq!(readiness.status, PromotionReadinessStatusV1::Blocked);
+    assert!(readiness.blockers.iter().any(|finding| {
+        finding.code == "promotion_artifact_source_invalid"
+            && finding.subject.as_deref() == Some("root")
+    }));
+    validate_promotion_readiness(&readiness).expect("blocked readiness artifact should validate");
+}
+
+#[test]
+fn promotion_readiness_validation_rejects_status_blocker_mismatch() {
+    let plan = sample_promotion_target_plan();
+    let input = sample_role_promotion_input(PromotionArtifactLevelV1::SealedWasm);
+    let mut readiness = promotion_readiness_from_inputs("promotion-ready-1", &plan, &[input]);
+    readiness.status = PromotionReadinessStatusV1::Blocked;
+
+    let err = validate_promotion_readiness(&readiness).expect_err("status should match blockers");
+    assert!(matches!(
+        err,
+        PromotionReadinessError::StatusBlockerMismatch { .. }
+    ));
+}
+
+#[test]
+fn promotion_readiness_validation_rejects_duplicate_roles() {
+    let plan = sample_promotion_target_plan();
+    let input = sample_role_promotion_input(PromotionArtifactLevelV1::SealedWasm);
+    let mut readiness = promotion_readiness_from_inputs("promotion-ready-1", &plan, &[input]);
+    readiness.roles.push(readiness.roles[0].clone());
+
+    let err = validate_promotion_readiness(&readiness).expect_err("duplicate role should fail");
+    assert!(matches!(
+        err,
+        PromotionReadinessError::DuplicateRole { role } if role == "root"
+    ));
+}
+
+#[test]
+fn promotion_readiness_validation_rejects_restage_state_mismatch() {
+    let plan = sample_promotion_target_plan();
+    let input = sample_role_promotion_input(PromotionArtifactLevelV1::SealedWasm);
+    let mut readiness = promotion_readiness_from_inputs("promotion-ready-1", &plan, &[input]);
+    readiness.roles[0].target_store_has_artifact = Some(true);
+    readiness.roles[0].restage_required = true;
+
+    let err = validate_promotion_readiness(&readiness).expect_err("restage state should match");
+    assert!(matches!(
+        err,
+        PromotionReadinessError::RestageStateMismatch { role } if role == "root"
+    ));
+}
+
+#[test]
+fn promotion_readiness_validation_rejects_bad_digest_shape() {
+    let plan = sample_promotion_target_plan();
+    let input = sample_role_promotion_input(PromotionArtifactLevelV1::SealedWasm);
+    let mut readiness = promotion_readiness_from_inputs("promotion-ready-1", &plan, &[input]);
+    readiness.roles[0].target_wasm_gz_sha256 = Some("NOT-A-DIGEST".to_string());
+
+    let err = validate_promotion_readiness(&readiness).expect_err("digest should be checked");
+    assert!(matches!(
+        err,
+        PromotionReadinessError::InvalidSha256Digest {
+            field: "target_wasm_gz_sha256"
+        }
+    ));
+}
+
+#[test]
+fn promotion_readiness_validation_rejects_warning_in_blockers() {
+    let plan = sample_promotion_target_plan();
+    let mut input = sample_role_promotion_input(PromotionArtifactLevelV1::SealedWasm);
+    input.source.expected_canonical_embedded_config_sha256 = Some(sample_sha256("e"));
+    let mut readiness = promotion_readiness_from_inputs("promotion-ready-1", &plan, &[input]);
+    readiness.blockers[0].severity = SafetySeverityV1::Warning;
+
+    let err = validate_promotion_readiness(&readiness).expect_err("blockers must be hard failures");
+    assert!(matches!(
+        err,
+        PromotionReadinessError::FindingSeverityMismatch {
+            field: "blockers",
+            severity: SafetySeverityV1::Warning
+        }
+    ));
+}
+
+#[test]
+fn promotion_readiness_text_reports_passive_summary() {
+    let plan = sample_promotion_target_plan();
+    let mut input = sample_role_promotion_input(PromotionArtifactLevelV1::SealedWasm);
+    input.target_store_has_artifact = Some(false);
+    let readiness = promotion_readiness_from_inputs("promotion-ready-1", &plan, &[input]);
+
+    let text = promotion_readiness_text(&readiness);
+
+    assert!(text.contains("Promotion readiness report"));
+    assert!(text.contains("mode: passive"));
+    assert!(text.contains("status: ready"));
+    assert!(text.contains("readiness_id: promotion-ready-1"));
+    assert!(text.contains("target_plan_id: plan-local-root"));
+    assert!(text.contains("restage_required: 1"));
+    assert!(
+        text.contains("root SealedWasm/LocalWasmGz: byte_identical_wasm=true embedded_config_identical=true restage_required=true")
+    );
+    assert!(text.contains(
+        "source_wasm_gz_sha256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ));
+    assert!(text.contains(
+        "target_wasm_gz_sha256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ));
+    assert!(text.contains("[promotion_target_store_restage_required] root"));
+}
+
+#[test]
+fn promotion_readiness_text_reports_blockers() {
+    let plan = sample_promotion_target_plan();
+    let mut input = sample_role_promotion_input(PromotionArtifactLevelV1::SealedWasm);
+    input.source.expected_canonical_embedded_config_sha256 = Some(sample_sha256("e"));
+    let readiness = promotion_readiness_from_inputs("promotion-ready-1", &plan, &[input]);
+
+    let text = promotion_readiness_text(&readiness);
+
+    assert!(text.contains("status: blocked"));
+    assert!(text.contains("blockers: 1"));
+    assert!(text.contains("[promotion_sealed_wasm_embedded_config_mismatch] root"));
+    assert!(text.contains("embedded_config_identical=false"));
+}
+
+#[test]
 fn inventory_round_trips_through_json() {
     let inventory = DeploymentInventoryV1 {
         schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
@@ -5267,6 +5683,43 @@ fn sample_role_artifact() -> RoleArtifactV1 {
         rust_toolchain: Some("stable".to_string()),
         package_version: Some("0.41.0".to_string()),
     }
+}
+
+fn sample_role_artifact_source(kind: RoleArtifactSourceKindV1) -> RoleArtifactSourceV1 {
+    RoleArtifactSourceV1 {
+        role: "root".to_string(),
+        kind,
+        locator: Some("artifacts/root.wasm.gz".to_string()),
+        previous_receipt_kind: (kind == RoleArtifactSourceKindV1::PreviousReceiptArtifact)
+            .then_some(PreviousArtifactReceiptKindV1::DeploymentReceipt),
+        expected_wasm_sha256: Some(sample_sha256("d")),
+        expected_wasm_gz_sha256: Some(sample_sha256("a")),
+        expected_candid_sha256: Some(sample_sha256("b")),
+        expected_canonical_embedded_config_sha256: Some(sample_sha256("c")),
+    }
+}
+
+fn sample_role_promotion_input(promotion_level: PromotionArtifactLevelV1) -> RolePromotionInputV1 {
+    RolePromotionInputV1 {
+        role: "root".to_string(),
+        promotion_level,
+        source: sample_role_artifact_source(RoleArtifactSourceKindV1::LocalWasmGz),
+        require_byte_identical_wasm: promotion_level == PromotionArtifactLevelV1::SealedWasm,
+        require_target_embedded_config: true,
+        target_store_has_artifact: Some(true),
+    }
+}
+
+fn sample_promotion_target_plan() -> DeploymentPlanV1 {
+    let mut plan = sample_plan();
+    plan.role_artifacts[0].wasm_sha256 = Some(sample_sha256("d"));
+    plan.role_artifacts[0].wasm_gz_sha256 = Some(sample_sha256("a"));
+    plan.role_artifacts[0].canonical_embedded_config_sha256 = Some(sample_sha256("c"));
+    plan
+}
+
+fn sample_sha256(seed: &str) -> String {
+    seed.repeat(64)
 }
 
 fn sample_plan() -> DeploymentPlanV1 {

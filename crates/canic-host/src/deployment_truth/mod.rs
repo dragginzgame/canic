@@ -15,6 +15,7 @@ mod executor;
 mod model;
 mod observe;
 mod plan;
+mod promotion;
 mod receipt;
 mod report;
 #[cfg(test)]
@@ -48,17 +49,24 @@ pub use model::{
     DeploymentIdentityV1, DeploymentInventoryV1, DeploymentObservationGapV1, DeploymentPlanV1,
     DeploymentReceiptV1, DiffItemV1, ExpectedCanisterV1, ExpectedPoolCanisterV1,
     LocalDeploymentConfigV1, ObservationStatusV1, ObservedArtifactV1, ObservedCanisterV1,
-    ObservedPoolCanisterV1, PhaseReceiptV1, ResumeSafetyV1, RoleArtifactManifestV1, RoleArtifactV1,
+    ObservedPoolCanisterV1, PhaseReceiptV1, PreviousArtifactReceiptKindV1,
+    PromotionArtifactLevelV1, PromotionReadinessStatusV1, PromotionReadinessV1, ResumeSafetyV1,
+    RoleArtifactManifestV1, RoleArtifactSourceKindV1, RoleArtifactSourceV1, RoleArtifactV1,
     RoleEpochExpectationV1, RoleEpochObservationV1, RolePhaseReceiptV1, RolePhaseResultV1,
-    SafetyFindingV1, SafetyReportV1, SafetySeverityV1, SafetyStatusV1, StagingReceiptV1,
-    TrustDomainV1, VerifiedPostconditionV1, VerifierReadinessExpectationV1,
-    VerifierReadinessObservationV1,
+    RolePromotionInputV1, RolePromotionReadinessV1, SafetyFindingV1, SafetyReportV1,
+    SafetySeverityV1, SafetyStatusV1, StagingReceiptV1, TrustDomainV1, VerifiedPostconditionV1,
+    VerifierReadinessExpectationV1, VerifierReadinessObservationV1,
 };
 pub use observe::{
     DeploymentTruthError, LocalArtifactManifestRequest, LocalInventoryRequest,
     collect_local_deployment_inventory, collect_local_role_artifact_manifest,
 };
 pub use plan::{LocalDeploymentPlanRequest, build_local_deployment_plan};
+pub use promotion::{
+    PromotionArtifactSourceError, PromotionReadinessError, PromotionReadinessRequest,
+    check_promotion_readiness, promotion_readiness_from_inputs, validate_promotion_readiness,
+    validate_role_artifact_source,
+};
 pub use receipt::{
     AuthorityEvidenceError, artifact_gate_phase_receipt, artifact_gate_role_phase_receipts,
     authority_dry_run_evidence_from_check, authority_dry_run_evidence_from_check_with_local_ids,
@@ -73,7 +81,7 @@ pub use report::{
 };
 pub use text::{
     authority_evidence_text, authority_plan_text, authority_receipt_text, authority_report_text,
-    deployment_execution_preflight_text,
+    deployment_execution_preflight_text, promotion_readiness_text,
 };
 
 pub const DEPLOYMENT_TRUTH_SCHEMA_VERSION: u32 = 1;

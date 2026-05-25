@@ -1,6 +1,6 @@
 # 0.43 Status: Backend-Agnostic Execution
 
-Last updated: 2026-05-24
+Last updated: 2026-05-25
 
 ## Purpose
 
@@ -15,6 +15,9 @@ Started with the 0.43.0 executor-boundary scaffold.
 0.43 depends on 0.41 deployment truth and 0.42 authority reconciliation so
 execution backends can run against an explicit plan and safety report rather
 than implicit installer state.
+
+0.43 is closed at `0.43.8`. The closeout report is
+[docs/audits/reports/2026-05/2026-05-25/0.43-closeout.md](../../audits/reports/2026-05/2026-05-25/0.43-closeout.md).
 
 ## Implemented
 
@@ -107,12 +110,15 @@ than implicit installer state.
 
 ## Drift Log
 
-- No implementation drift recorded yet.
+- No release-blocking implementation drift recorded.
+- 0.43 deliberately closes as an internal current-install execution boundary,
+  not as a full backend-neutral executor, controller apply surface, new
+  backend, or public execution receipt JSON contract.
 
 ## Release Bar
 
-0.43 should not close until deployment execution can be represented and audited
+0.43 closed once deployment execution could be represented and audited
 independently of a single local installer backend, at least one test or harness
-path validates the same `DeploymentPlanV1` shape used by real deployment
-execution, and current-install activation phases are mediated by the private
-operation runner after deployment-truth/preflight readiness is recorded.
+path validated the same `DeploymentPlanV1` shape used by real deployment
+execution, and current-install activation phases were mediated by the private
+operation runner after deployment-truth/preflight readiness was recorded.
