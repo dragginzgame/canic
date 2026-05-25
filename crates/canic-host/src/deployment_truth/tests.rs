@@ -170,7 +170,19 @@ fn promotion_policy_check_accepts_sealed_wasm_policy() {
     let encoded = serde_json::to_value(&check).expect("policy check should encode");
     assert_object_keys(
         &encoded,
-        &["schema_version", "check_id", "status", "roles", "blockers"],
+        &[
+            "schema_version",
+            "check_id",
+            "promotion_policy_check_digest",
+            "status",
+            "roles",
+            "blockers",
+        ],
+    );
+    assert!(
+        encoded["promotion_policy_check_digest"]
+            .as_str()
+            .is_some_and(|digest| digest.len() == 64)
     );
     let role = &encoded["roles"][0];
     assert_object_keys(
@@ -283,8 +295,36 @@ fn promotion_policy_check_text_reports_passive_summary() {
     assert!(text.contains("mode: passive"));
     assert!(text.contains("status: ready"));
     assert!(text.contains("check_id: promotion-policy-1"));
+    assert!(text.contains("promotion_policy_check_digest:"));
     assert!(text.contains("policy_satisfied: 1"));
     assert!(text.contains("root SealedWasm: policy_satisfied=true"));
+}
+
+#[test]
+fn promotion_policy_check_round_trips_through_json() {
+    let input = sample_role_promotion_input(PromotionArtifactLevelV1::SealedWasm);
+    let policy = sample_role_promotion_policy();
+    let check = promotion_policy_check_from_inputs("promotion-policy-1", &[input], &[policy]);
+
+    assert_json_round_trip(&check);
+    let encoded = serde_json::to_value(&check).expect("promotion policy check should encode");
+    assert_object_keys(
+        &encoded,
+        &[
+            "schema_version",
+            "check_id",
+            "promotion_policy_check_digest",
+            "status",
+            "roles",
+            "blockers",
+        ],
+    );
+    assert_eq!(encoded["check_id"], "promotion-policy-1");
+    assert!(
+        encoded["promotion_policy_check_digest"]
+            .as_str()
+            .is_some_and(|digest| digest.len() == 64)
+    );
 }
 
 #[test]
@@ -306,6 +346,24 @@ fn promotion_policy_check_validation_rejects_stale_decision() {
 }
 
 #[test]
+fn promotion_policy_check_validation_rejects_stale_digest() {
+    let input = sample_role_promotion_input(PromotionArtifactLevelV1::SealedWasm);
+    let policy = sample_role_promotion_policy();
+    let mut check = promotion_policy_check_from_inputs("promotion-policy-1", &[input], &[policy]);
+    check.promotion_policy_check_digest = sample_sha256("9");
+
+    let err = validate_promotion_policy_check(&check)
+        .expect_err("stale promotion policy check digest should fail");
+
+    assert!(matches!(
+        err,
+        PromotionPolicyCheckError::LinkageMismatch {
+            field: "promotion_policy_check_digest"
+        }
+    ));
+}
+
+#[test]
 fn promotion_artifact_identity_report_round_trips_through_json() {
     let input = sample_role_promotion_input(PromotionArtifactLevelV1::SealedWasm);
     let report = promotion_artifact_identity_report("promotion-identity-1", &[input]);
@@ -317,6 +375,7 @@ fn promotion_artifact_identity_report_round_trips_through_json() {
         &[
             "schema_version",
             "report_id",
+            "artifact_identity_report_digest",
             "status",
             "summary",
             "roles",
@@ -334,6 +393,11 @@ fn promotion_artifact_identity_report_round_trips_through_json() {
             "source_build_role_count",
             "deferred_identity_role_count",
         ],
+    );
+    assert!(
+        encoded["artifact_identity_report_digest"]
+            .as_str()
+            .is_some_and(|digest| digest.len() == 64)
     );
     let role = &encoded["roles"][0];
     assert_object_keys(
@@ -490,6 +554,7 @@ fn promotion_artifact_identity_report_text_reports_passive_summary() {
     assert!(text.contains("mode: passive"));
     assert!(text.contains("status: ready"));
     assert!(text.contains("report_id: promotion-identity-1"));
+    assert!(text.contains("artifact_identity_report_digest:"));
     assert!(text.contains("identity_groups: 1"));
     assert!(text.contains("shared_identity_groups: 0"));
     assert!(text.contains("digest_pinned_roles: 1"));
@@ -516,6 +581,23 @@ fn promotion_artifact_identity_report_validation_rejects_stale_summary() {
         err,
         PromotionArtifactIdentityReportError::SummaryMismatch {
             field: "identity_group_count"
+        }
+    ));
+}
+
+#[test]
+fn promotion_artifact_identity_report_validation_rejects_stale_digest() {
+    let input = sample_role_promotion_input(PromotionArtifactLevelV1::SealedWasm);
+    let mut report = promotion_artifact_identity_report("promotion-identity-1", &[input]);
+    report.artifact_identity_report_digest = sample_sha256("9");
+
+    let err = validate_promotion_artifact_identity_report(&report)
+        .expect_err("stale identity report digest should fail");
+
+    assert!(matches!(
+        err,
+        PromotionArtifactIdentityReportError::LinkageMismatch {
+            field: "artifact_identity_report_digest"
         }
     ));
 }
@@ -857,6 +939,7 @@ fn promotion_materialization_identity_report_round_trips_through_json() {
         &[
             "schema_version",
             "report_id",
+            "materialization_identity_report_digest",
             "status",
             "roles",
             "output_groups",
@@ -864,6 +947,11 @@ fn promotion_materialization_identity_report_round_trips_through_json() {
         ],
     );
     assert_eq!(encoded["report_id"], "materialization-report-1");
+    assert!(
+        encoded["materialization_identity_report_digest"]
+            .as_str()
+            .is_some_and(|digest| digest.len() == 64)
+    );
     assert_eq!(encoded["status"], "Ready");
     assert_eq!(encoded["roles"][0]["role"], "root");
     assert_eq!(encoded["output_groups"][0]["roles"][0], "root");
@@ -912,6 +1000,28 @@ fn promotion_materialization_identity_report_validation_rejects_stale_output_gro
 }
 
 #[test]
+fn promotion_materialization_identity_report_validation_rejects_stale_digest() {
+    let mut report = promotion_materialization_identity_report_from_evidence(
+        PromotionMaterializationIdentityReportRequest {
+            report_id: "materialization-report-1".to_string(),
+            evidence: vec![sample_build_materialization_evidence()],
+        },
+    )
+    .expect("materialization report should validate");
+    report.materialization_identity_report_digest = sample_sha256("9");
+
+    let err = validate_promotion_materialization_identity_report(&report)
+        .expect_err("stale materialization report digest should fail");
+
+    assert!(matches!(
+        err,
+        PromotionMaterializationIdentityReportError::LinkageMismatch {
+            field: "materialization_identity_report_digest"
+        }
+    ));
+}
+
+#[test]
 fn promotion_materialization_identity_report_validation_rejects_duplicate_evidence() {
     let mut report = promotion_materialization_identity_report_from_evidence(
         PromotionMaterializationIdentityReportRequest {
@@ -950,6 +1060,7 @@ fn promotion_materialization_identity_report_text_reports_passive_summary() {
     assert!(text.contains("mode: passive"));
     assert!(text.contains("execution: none"));
     assert!(text.contains("report_id: materialization-report-1"));
+    assert!(text.contains("materialization_identity_report_digest:"));
     assert!(text.contains("output_groups: 1"));
     assert!(text.contains("root evidence=materialization-evidence-1 recipe=recipe:root:debug"));
 }
@@ -1365,6 +1476,7 @@ fn artifact_promotion_plan_round_trips_through_json() {
         &[
             "schema_version",
             "plan_id",
+            "artifact_promotion_plan_digest",
             "generated_at",
             "status",
             "target_plan_id",
@@ -1379,6 +1491,11 @@ fn artifact_promotion_plan_round_trips_through_json() {
     );
     assert_eq!(encoded["plan_id"], "artifact-promotion-plan-1");
     assert_eq!(encoded["status"], "Ready");
+    assert!(
+        encoded["artifact_promotion_plan_digest"]
+            .as_str()
+            .is_some_and(|digest| digest.len() == 64)
+    );
 }
 
 #[test]
@@ -1419,6 +1536,21 @@ fn artifact_promotion_plan_validation_rejects_stale_lineage_copy() {
         err,
         ArtifactPromotionPlanError::LinkageMismatch {
             field: "promotion_plan_lineage_digest"
+        }
+    ));
+}
+
+#[test]
+fn artifact_promotion_plan_validation_rejects_stale_digest() {
+    let mut plan = sample_artifact_promotion_plan();
+    plan.artifact_promotion_plan_digest = sample_sha256("9");
+
+    let err = validate_artifact_promotion_plan(&plan).expect_err("stale plan digest should fail");
+
+    assert!(matches!(
+        err,
+        ArtifactPromotionPlanError::LinkageMismatch {
+            field: "artifact_promotion_plan_digest"
         }
     ));
 }
@@ -1476,12 +1608,18 @@ fn artifact_promotion_plan_for_check_rejects_other_target_plan() {
 
 #[test]
 fn artifact_promotion_plan_for_check_rejects_missing_target_execution_lineage() {
-    let mut plan = sample_artifact_promotion_plan();
-    plan.target_execution_lineage = None;
-    let check = sample_check(
-        plan.transform.promoted_plan.clone(),
-        sample_matching_inventory(),
-    );
+    let sample = sample_artifact_promotion_plan();
+    let promoted_plan = sample.transform.promoted_plan.clone();
+    let plan = artifact_promotion_plan(ArtifactPromotionPlanRequest {
+        plan_id: sample.plan_id,
+        generated_at: sample.generated_at,
+        readiness: sample.readiness,
+        artifact_identity_report: sample.artifact_identity_report,
+        transform: sample.transform,
+        target_execution_lineage: None,
+    })
+    .expect("sample plan without lineage should still validate");
+    let check = sample_check(promoted_plan, sample_matching_inventory());
 
     let err = validate_artifact_promotion_plan_for_check(&plan, &check)
         .expect_err("target check validation should require execution lineage");
@@ -1525,6 +1663,7 @@ fn artifact_promotion_plan_text_reports_passive_summary() {
     assert!(text.contains("mode: passive"));
     assert!(text.contains("execution: none"));
     assert!(text.contains("plan_id: artifact-promotion-plan-1"));
+    assert!(text.contains("artifact_promotion_plan_digest:"));
     assert!(text.contains("target_execution_lineage: target-execution-lineage-1"));
     assert!(text.contains("readiness_roles: 1"));
     assert!(text.contains("artifact_identity_roles: 1"));
@@ -1554,6 +1693,7 @@ fn artifact_promotion_provenance_report_round_trips_through_json() {
             "report_id",
             "status",
             "artifact_promotion_plan_id",
+            "artifact_promotion_plan_digest",
             "target_plan_id",
             "promoted_plan_id",
             "promotion_plan_lineage_digest",
@@ -1563,8 +1703,11 @@ fn artifact_promotion_provenance_report_round_trips_through_json() {
             "transform_id",
             "target_execution_lineage_id",
             "wasm_store_identity_report_id",
+            "wasm_store_identity_report_digest",
             "wasm_store_catalog_verification_id",
+            "wasm_store_catalog_verification_digest",
             "materialization_identity_report_id",
+            "materialization_identity_report_digest",
             "execution_attempted",
             "roles",
             "blockers",
@@ -1573,7 +1716,27 @@ fn artifact_promotion_provenance_report_round_trips_through_json() {
     assert_eq!(encoded["report_id"], "promotion-provenance-1");
     assert_eq!(encoded["status"], "Ready");
     assert!(
+        encoded["artifact_promotion_plan_digest"]
+            .as_str()
+            .is_some_and(|digest| digest.len() == 64)
+    );
+    assert!(
         encoded["provenance_report_digest"]
+            .as_str()
+            .is_some_and(|digest| digest.len() == 64)
+    );
+    assert!(
+        encoded["wasm_store_identity_report_digest"]
+            .as_str()
+            .is_some_and(|digest| digest.len() == 64)
+    );
+    assert!(
+        encoded["wasm_store_catalog_verification_digest"]
+            .as_str()
+            .is_some_and(|digest| digest.len() == 64)
+    );
+    assert!(
+        encoded["materialization_identity_report_digest"]
             .as_str()
             .is_some_and(|digest| digest.len() == 64)
     );
@@ -1597,13 +1760,39 @@ fn artifact_promotion_provenance_report_links_optional_reports() {
         report.wasm_store_identity_report_id.as_deref(),
         Some("wasm-store-identity-1")
     );
+    assert!(
+        report
+            .wasm_store_identity_report_digest
+            .as_deref()
+            .is_some_and(|digest| digest.len() == 64),
+        "provenance should cite the wasm-store identity report digest"
+    );
     assert_eq!(
         report.wasm_store_catalog_verification_id.as_deref(),
         Some("wasm-store-catalog-1")
     );
+    assert!(
+        report
+            .wasm_store_catalog_verification_digest
+            .as_deref()
+            .is_some_and(|digest| digest.len() == 64),
+        "provenance should cite the wasm-store catalog verification digest"
+    );
     assert_eq!(
         report.materialization_identity_report_id.as_deref(),
         Some("materialization-report-1")
+    );
+    assert!(
+        report
+            .materialization_identity_report_digest
+            .as_deref()
+            .is_some_and(|digest| digest.len() == 64),
+        "provenance should cite the materialization report digest"
+    );
+    assert_eq!(
+        report.artifact_promotion_plan_digest.len(),
+        64,
+        "provenance should cite the plan digest"
     );
     assert_eq!(
         report.roles[0].wasm_store_locator.as_deref(),
@@ -1651,8 +1840,20 @@ fn artifact_promotion_provenance_report_blocks_unknown_report_roles() {
 
 #[test]
 fn artifact_promotion_provenance_report_blocks_catalog_identity_mismatch() {
-    let mut catalog = sample_wasm_store_catalog_verification();
-    catalog.wasm_store_identity_report_id = "other-wasm-store-report".to_string();
+    let other_identity = promotion_wasm_store_identity_report_from_staging(
+        PromotionWasmStoreIdentityReportRequest {
+            report_id: "other-wasm-store-report".to_string(),
+            staging_receipts: vec![sample_wasm_store_staging_receipt()],
+        },
+    )
+    .expect("alternate wasm-store identity report should validate");
+    let catalog =
+        promotion_wasm_store_catalog_verification(PromotionWasmStoreCatalogVerificationRequest {
+            verification_id: "wasm-store-catalog-1".to_string(),
+            wasm_store_identity_report: other_identity,
+            catalog_entries: vec![sample_wasm_store_catalog_entry()],
+        })
+        .expect("alternate catalog verification should validate");
 
     let report = artifact_promotion_provenance_report(ArtifactPromotionProvenanceReportRequest {
         report_id: "promotion-provenance-1".to_string(),
@@ -1726,6 +1927,70 @@ fn artifact_promotion_provenance_report_rejects_stale_digest() {
 }
 
 #[test]
+fn artifact_promotion_provenance_report_rejects_stale_plan_digest_link() {
+    let mut report = sample_artifact_promotion_provenance_report();
+    report.artifact_promotion_plan_digest = sample_sha256("9");
+
+    let err = validate_artifact_promotion_provenance_report(&report)
+        .expect_err("stale cited promotion plan digest should fail");
+
+    assert!(matches!(
+        err,
+        ArtifactPromotionProvenanceReportError::LinkageMismatch {
+            field: "provenance_report_digest"
+        }
+    ));
+}
+
+#[test]
+fn artifact_promotion_provenance_report_rejects_stale_wasm_store_digest_link() {
+    let mut report = sample_artifact_promotion_provenance_report();
+    report.wasm_store_identity_report_digest = Some(sample_sha256("9"));
+
+    let err = validate_artifact_promotion_provenance_report(&report)
+        .expect_err("stale cited wasm-store identity report digest should fail");
+
+    assert!(matches!(
+        err,
+        ArtifactPromotionProvenanceReportError::LinkageMismatch {
+            field: "provenance_report_digest"
+        }
+    ));
+}
+
+#[test]
+fn artifact_promotion_provenance_report_rejects_stale_wasm_store_catalog_digest_link() {
+    let mut report = sample_artifact_promotion_provenance_report();
+    report.wasm_store_catalog_verification_digest = Some(sample_sha256("9"));
+
+    let err = validate_artifact_promotion_provenance_report(&report)
+        .expect_err("stale cited wasm-store catalog verification digest should fail");
+
+    assert!(matches!(
+        err,
+        ArtifactPromotionProvenanceReportError::LinkageMismatch {
+            field: "provenance_report_digest"
+        }
+    ));
+}
+
+#[test]
+fn artifact_promotion_provenance_report_rejects_stale_materialization_digest_link() {
+    let mut report = sample_artifact_promotion_provenance_report();
+    report.materialization_identity_report_digest = Some(sample_sha256("9"));
+
+    let err = validate_artifact_promotion_provenance_report(&report)
+        .expect_err("stale cited materialization report digest should fail");
+
+    assert!(matches!(
+        err,
+        ArtifactPromotionProvenanceReportError::LinkageMismatch {
+            field: "provenance_report_digest"
+        }
+    ));
+}
+
+#[test]
 fn artifact_promotion_provenance_report_text_reports_passive_summary() {
     let report = artifact_promotion_provenance_report(ArtifactPromotionProvenanceReportRequest {
         report_id: "promotion-provenance-1".to_string(),
@@ -1743,11 +2008,15 @@ fn artifact_promotion_provenance_report_text_reports_passive_summary() {
     assert!(text.contains("execution: none"));
     assert!(text.contains("report_id: promotion-provenance-1"));
     assert!(text.contains("artifact_promotion_plan_id: artifact-promotion-plan-1"));
+    assert!(text.contains("artifact_promotion_plan_digest:"));
     assert!(text.contains("provenance_report_digest:"));
     assert!(text.contains("wasm_store_identity: wasm-store-identity-1"));
+    assert!(text.contains("wasm_store_identity_digest:"));
     assert!(text.contains("wasm_store_catalog: wasm-store-catalog-1"));
+    assert!(text.contains("wasm_store_catalog_digest:"));
     assert!(text.contains("catalog_digest="));
     assert!(text.contains("materialization_identity: materialization-report-1"));
+    assert!(text.contains("materialization_identity_digest:"));
     assert!(text.contains("root SealedWasm/LocalWasmGz"));
 }
 
@@ -1762,8 +2031,11 @@ fn artifact_promotion_execution_receipt_round_trips_through_json() {
         &[
             "schema_version",
             "receipt_id",
+            "execution_receipt_digest",
             "artifact_promotion_plan_id",
+            "artifact_promotion_plan_digest",
             "provenance_report_id",
+            "provenance_report_digest",
             "provenance_status",
             "promoted_plan_id",
             "promotion_plan_lineage_digest",
@@ -1777,11 +2049,26 @@ fn artifact_promotion_execution_receipt_round_trips_through_json() {
         ],
     );
     assert_eq!(encoded["receipt_id"], "promotion-execution-receipt-1");
+    assert!(
+        encoded["execution_receipt_digest"]
+            .as_str()
+            .is_some_and(|digest| digest.len() == 64)
+    );
     assert_eq!(
         encoded["artifact_promotion_plan_id"],
         "artifact-promotion-plan-1"
     );
+    assert!(
+        encoded["artifact_promotion_plan_digest"]
+            .as_str()
+            .is_some_and(|digest| digest.len() == 64)
+    );
     assert_eq!(encoded["provenance_report_id"], "promotion-provenance-1");
+    assert!(
+        encoded["provenance_report_digest"]
+            .as_str()
+            .is_some_and(|digest| digest.len() == 64)
+    );
     assert_eq!(encoded["provenance_status"], "Ready");
     assert_eq!(encoded["promoted_plan_id"], "promoted-plan-1");
     assert_eq!(encoded["operation_id"], "promoted-operation-1");
@@ -1803,10 +2090,13 @@ fn artifact_promotion_execution_receipt_links_deployment_receipt() {
         receipt.deployment_receipt.operation_id,
         receipt.operation_id
     );
+    assert_eq!(receipt.artifact_promotion_plan_digest.len(), 64);
     assert_eq!(
         receipt.roles[0].role_phase_result,
         Some(RolePhaseResultV1::Applied)
     );
+    assert_eq!(receipt.provenance_report_digest.len(), 64);
+    assert_eq!(receipt.execution_receipt_digest.len(), 64);
     assert_eq!(
         receipt.roles[0].artifact_digest.as_deref(),
         Some(sample_sha256("5").as_str())
@@ -1821,6 +2111,57 @@ fn artifact_promotion_execution_receipt_links_deployment_receipt() {
             .as_deref()
             .is_some_and(|digest| digest.len() == 64)
     );
+}
+
+#[test]
+fn artifact_promotion_execution_receipt_validation_rejects_stale_digest() {
+    let mut receipt = sample_artifact_promotion_execution_receipt();
+    receipt.execution_receipt_digest = sample_sha256("9");
+
+    let err = validate_artifact_promotion_execution_receipt(&receipt)
+        .expect_err("stale execution receipt digest should fail");
+
+    assert!(matches!(
+        err,
+        ArtifactPromotionExecutionReceiptError::LinkageMismatch {
+            field: "execution_receipt_digest"
+        }
+    ));
+}
+
+#[test]
+fn artifact_promotion_execution_receipt_validation_rejects_stale_plan_digest_link() {
+    let mut receipt = sample_artifact_promotion_execution_receipt();
+    receipt.artifact_promotion_plan_digest = sample_sha256("9");
+
+    let err = validate_artifact_promotion_execution_receipt(&receipt)
+        .expect_err("stale cited plan digest should fail");
+
+    assert!(matches!(
+        err,
+        ArtifactPromotionExecutionReceiptError::LinkageMismatch {
+            field: "execution_receipt_digest"
+        }
+    ));
+}
+
+#[test]
+fn artifact_promotion_execution_receipt_validation_rejects_nested_receipt_drift() {
+    let mut receipt = sample_artifact_promotion_execution_receipt();
+    receipt.deployment_receipt.phase_receipts[0]
+        .verified_postcondition
+        .evidence
+        .push("stale:evidence".to_string());
+
+    let err = validate_artifact_promotion_execution_receipt(&receipt)
+        .expect_err("nested deployment receipt drift should fail");
+
+    assert!(matches!(
+        err,
+        ArtifactPromotionExecutionReceiptError::LinkageMismatch {
+            field: "execution_receipt_digest"
+        }
+    ));
 }
 
 #[test]
@@ -1952,8 +2293,11 @@ fn artifact_promotion_execution_receipt_text_reports_execution_summary() {
     assert!(text.contains("Artifact promotion execution receipt"));
     assert!(text.contains("mode: execution_receipt"));
     assert!(text.contains("receipt_id: promotion-execution-receipt-1"));
+    assert!(text.contains("execution_receipt_digest:"));
     assert!(text.contains("artifact_promotion_plan_id: artifact-promotion-plan-1"));
+    assert!(text.contains("artifact_promotion_plan_digest:"));
     assert!(text.contains("provenance_report_id: promotion-provenance-1"));
+    assert!(text.contains("provenance_report_digest:"));
     assert!(text.contains("promoted_plan_id: promoted-plan-1"));
     assert!(text.contains("operation_id: promoted-operation-1"));
     assert!(text.contains("provenance_status: ready"));
@@ -3503,9 +3847,21 @@ fn promotion_wasm_store_identity_report_round_trips_through_json() {
     let encoded = serde_json::to_value(&report).expect("wasm-store report should encode");
     assert_object_keys(
         &encoded,
-        &["schema_version", "report_id", "status", "roles", "blockers"],
+        &[
+            "schema_version",
+            "report_id",
+            "wasm_store_identity_report_digest",
+            "status",
+            "roles",
+            "blockers",
+        ],
     );
     assert_eq!(encoded["report_id"], "wasm-store-identity-1");
+    assert!(
+        encoded["wasm_store_identity_report_digest"]
+            .as_str()
+            .is_some_and(|digest| digest.len() == 64)
+    );
     assert_eq!(encoded["status"], "Ready");
     assert_eq!(encoded["roles"][0]["transport"], "WasmStore");
 }
@@ -3530,6 +3886,7 @@ fn promotion_wasm_store_identity_report_records_staging_locator() {
     );
     assert_eq!(report.roles[0].published_chunk_count, 2);
     assert_eq!(report.status, PromotionReadinessStatusV1::Ready);
+    assert_eq!(report.wasm_store_identity_report_digest.len(), 64);
 }
 
 #[test]
@@ -3635,6 +3992,28 @@ fn promotion_wasm_store_identity_report_validation_rejects_stale_blockers() {
 }
 
 #[test]
+fn promotion_wasm_store_identity_report_validation_rejects_stale_digest() {
+    let mut report = promotion_wasm_store_identity_report_from_staging(
+        PromotionWasmStoreIdentityReportRequest {
+            report_id: "wasm-store-identity-1".to_string(),
+            staging_receipts: vec![sample_wasm_store_staging_receipt()],
+        },
+    )
+    .expect("wasm-store identity report should validate");
+    report.wasm_store_identity_report_digest = sample_sha256("9");
+
+    let err = validate_promotion_wasm_store_identity_report(&report)
+        .expect_err("stale wasm-store identity digest should fail");
+
+    assert!(matches!(
+        err,
+        PromotionWasmStoreIdentityReportError::LinkageMismatch {
+            field: "wasm_store_identity_report_digest"
+        }
+    ));
+}
+
+#[test]
 fn promotion_wasm_store_identity_report_rejects_staging_schema_drift() {
     let mut receipt = sample_wasm_store_staging_receipt();
     receipt.schema_version += 1;
@@ -3669,6 +4048,7 @@ fn promotion_wasm_store_identity_report_text_reports_passive_summary() {
     assert!(text.contains("mode: passive"));
     assert!(text.contains("execution: none"));
     assert!(text.contains("report_id: wasm-store-identity-1"));
+    assert!(text.contains("wasm_store_identity_report_digest:"));
     assert!(text.contains("roles: 1"));
     assert!(text.contains(
         "root artifact=embedded:root:0.44.0:abc123 locator=root:aaaaa-aa:bootstrap chunks=2/2 postcondition=Observed"
@@ -3686,6 +4066,7 @@ fn promotion_wasm_store_catalog_verification_round_trips_through_json() {
         &[
             "schema_version",
             "verification_id",
+            "wasm_store_catalog_verification_digest",
             "wasm_store_identity_report_id",
             "status",
             "roles",
@@ -3696,6 +4077,11 @@ fn promotion_wasm_store_catalog_verification_round_trips_through_json() {
     assert_eq!(
         encoded["wasm_store_identity_report_id"],
         "wasm-store-identity-1"
+    );
+    assert!(
+        encoded["wasm_store_catalog_verification_digest"]
+            .as_str()
+            .is_some_and(|digest| digest.len() == 64)
     );
     assert_eq!(encoded["status"], "Ready");
     assert_eq!(encoded["roles"][0]["catalog_matches"], true);
@@ -3834,6 +4220,22 @@ fn promotion_wasm_store_catalog_verification_validation_rejects_stale_observatio
 }
 
 #[test]
+fn promotion_wasm_store_catalog_verification_validation_rejects_stale_digest() {
+    let mut verification = sample_wasm_store_catalog_verification();
+    verification.wasm_store_catalog_verification_digest = sample_sha256("9");
+
+    let err = validate_promotion_wasm_store_catalog_verification(&verification)
+        .expect_err("stale catalog verification digest should fail");
+
+    assert!(matches!(
+        err,
+        PromotionWasmStoreCatalogVerificationError::LinkageMismatch {
+            field: "wasm_store_catalog_verification_digest"
+        }
+    ));
+}
+
+#[test]
 fn promotion_wasm_store_catalog_verification_text_reports_passive_summary() {
     let verification = sample_wasm_store_catalog_verification();
 
@@ -3843,6 +4245,7 @@ fn promotion_wasm_store_catalog_verification_text_reports_passive_summary() {
     assert!(text.contains("mode: passive"));
     assert!(text.contains("execution: none"));
     assert!(text.contains("verification_id: wasm-store-catalog-1"));
+    assert!(text.contains("wasm_store_catalog_verification_digest:"));
     assert!(text.contains("wasm_store_identity_report_id: wasm-store-identity-1"));
     assert!(text.contains("matching_roles: 1"));
     assert!(text.contains("missing_catalog_entries: 0"));

@@ -67,6 +67,9 @@ promotion can prove what was built, uploaded, installed, and promoted.
   role count, identity group count, shared identity groups, digest-pinned roles,
   source/build roles, and deferred identities so dedupe semantics are explicit
   report data rather than presentation-only grouping.
+- Promotion artifact identity reports now carry deterministic report digests
+  over status, summary, role identity rows, identity groups, and blockers, so
+  archived identity reports reject stale grouping or summary drift directly.
 - Added host-owned passive text rendering for
   `PromotionArtifactIdentityReportV1`.
 - Added passive `BuildRecipeIdentityV1`, `BuildMaterializationInputV1`, and
@@ -83,6 +86,9 @@ promotion can prove what was built, uploaded, installed, and promoted.
   promotion can report role policy decisions before execution, including the
   distinction between roles that must reuse sealed bytes and roles that may
   rebuild only when byte-identical output is later proven.
+- Promotion policy checks now carry deterministic check digests over their
+  status, role decisions, and blockers, so archived policy reports reject stale
+  decision drift directly.
 - Promotion readiness can now optionally fold role promotion policy blockers
   into the same passive `PromotionReadinessV1` artifact, while keeping the
   standalone policy check available for separate operator reports.
@@ -106,19 +112,34 @@ promotion can prove what was built, uploaded, installed, and promoted.
 - Added passive wasm-store artifact identity reports derived from staging
   receipts, preserving role locators, transport, chunk publication counts, and
   verified postcondition facts without querying `wasm_store`.
+- Passive wasm-store artifact identity reports now carry deterministic report
+  digests over staged role locators, transport, chunk facts, verified
+  postconditions, status, and blockers, so archived staged artifact identity
+  reports reject stale staging drift directly.
 - Added passive wasm-store catalog verification reports that compare staged
   wasm-store promotion identity against supplied catalog observations and
   report missing catalog entries, artifact mismatches, or chunk-count
   mismatches without querying `wasm_store` or executing promotion. Role-level
   catalog observations carry deterministic digests so archived catalog
   evidence cannot drift silently.
+- Passive wasm-store catalog verification reports now carry deterministic
+  verification digests over the wasm-store identity report link, role
+  observations, status, and blockers, so archived catalog verification
+  artifacts reject stale catalog-observation drift directly.
 - Added passive source/build materialization identity reports that aggregate
   validated materialization evidence by role and group roles by materialized
   output identity.
+- Source/build materialization identity reports now carry deterministic report
+  digests over their role evidence, output groups, status, and blockers, so
+  archived materialization identity reports reject stale output grouping drift
+  directly.
 - Added passive artifact promotion provenance reports that link a promotion
   plan to readiness, artifact identity, transform, target execution lineage,
   wasm-store identity, wasm-store catalog verification, and materialization
   identity report IDs without claiming execution.
+- Promotion provenance reports now cite wasm-store catalog verification reports
+  by both ID and digest, making supplied catalog-observation provenance
+  linkage digest-pinned rather than ID-only.
 - Promotion provenance validates linked wasm-store catalog verification against
   the same wasm-store identity report and turns mismatched or unknown catalog
   evidence into blockers rather than treating it as live artifact truth.
@@ -128,6 +149,31 @@ promotion can prove what was built, uploaded, installed, and promoted.
 - Promotion execution receipt wrappers now preserve the role-level catalog
   observation digest from provenance, keeping receipt evidence tied to the same
   archived catalog observation without making the receipt a live catalog proof.
+- Artifact promotion plan envelopes now carry a deterministic plan digest over
+  the plan linkage, readiness, artifact identity, transform, optional target
+  execution lineage, and blocker set, so archived plans reject stale plan-body
+  drift.
+- Promotion provenance reports now cite the artifact promotion plan by both ID
+  and digest, making plan/provenance linkage digest-pinned rather than ID-only.
+- Promotion provenance reports now carry a deterministic provenance digest over
+  linkage fields, role evidence, blockers, and the passive execution boundary,
+  so archived provenance artifacts reject stale drift in their own report
+  contents.
+- Promotion execution receipt wrappers now carry the provenance report digest
+  alongside the provenance report ID, making receipt/provenance linkage
+  digest-pinned rather than ID-only.
+- Promotion execution receipt wrappers also carry the artifact promotion plan
+  digest alongside the plan ID, keeping receipt/plan linkage digest-pinned even
+  when receipts are inspected without the full provenance artifact loaded.
+- Promotion provenance reports now cite optional wasm-store identity reports by
+  both ID and digest, making staged artifact provenance linkage digest-pinned
+  rather than ID-only.
+- Promotion provenance reports now cite optional materialization identity
+  reports by both ID and digest, making source/build provenance linkage
+  digest-pinned rather than ID-only.
+- Promotion execution receipt wrappers now also carry a deterministic execution
+  receipt digest over receipt linkage, nested deployment receipt data, and role
+  evidence, so archived receipt artifacts reject stale receipt drift.
 - Added passive artifact promotion execution receipt wrappers that link a
   validated promotion provenance report to an existing deployment receipt,
   preserve promoted-plan lineage, and surface role-level execution evidence

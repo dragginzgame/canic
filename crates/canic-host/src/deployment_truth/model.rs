@@ -212,6 +212,7 @@ pub enum PromotionPolicyClaimV1 {
 pub struct PromotionPolicyCheckV1 {
     pub schema_version: u32,
     pub check_id: String,
+    pub promotion_policy_check_digest: String,
     pub status: PromotionReadinessStatusV1,
     pub roles: Vec<RolePromotionPolicyDecisionV1>,
     pub blockers: Vec<SafetyFindingV1>,
@@ -312,6 +313,7 @@ pub struct BuildMaterializationEvidenceV1 {
 pub struct PromotionMaterializationIdentityReportV1 {
     pub schema_version: u32,
     pub report_id: String,
+    pub materialization_identity_report_digest: String,
     pub status: PromotionReadinessStatusV1,
     pub roles: Vec<RolePromotionMaterializationIdentityV1>,
     pub output_groups: Vec<PromotionMaterializationOutputGroupV1>,
@@ -359,6 +361,7 @@ pub struct PromotionMaterializationOutputGroupV1 {
 pub struct PromotionArtifactIdentityReportV1 {
     pub schema_version: u32,
     pub report_id: String,
+    pub artifact_identity_report_digest: String,
     pub status: PromotionReadinessStatusV1,
     pub summary: PromotionArtifactIdentitySummaryV1,
     pub roles: Vec<RolePromotionArtifactIdentityV1>,
@@ -386,6 +389,7 @@ pub struct PromotionArtifactIdentitySummaryV1 {
 pub struct PromotionWasmStoreIdentityReportV1 {
     pub schema_version: u32,
     pub report_id: String,
+    pub wasm_store_identity_report_digest: String,
     pub status: PromotionReadinessStatusV1,
     pub roles: Vec<RolePromotionWasmStoreIdentityV1>,
     pub blockers: Vec<SafetyFindingV1>,
@@ -422,6 +426,7 @@ pub struct PromotionWasmStoreCatalogEntryV1 {
 pub struct PromotionWasmStoreCatalogVerificationV1 {
     pub schema_version: u32,
     pub verification_id: String,
+    pub wasm_store_catalog_verification_digest: String,
     pub wasm_store_identity_report_id: String,
     pub status: PromotionReadinessStatusV1,
     pub roles: Vec<RolePromotionWasmStoreCatalogVerificationV1>,
@@ -525,6 +530,7 @@ pub struct PromotionPlanTransformV1 {
 pub struct ArtifactPromotionPlanV1 {
     pub schema_version: u32,
     pub plan_id: String,
+    pub artifact_promotion_plan_digest: String,
     pub generated_at: String,
     pub status: PromotionReadinessStatusV1,
     pub target_plan_id: String,
@@ -546,6 +552,7 @@ pub struct ArtifactPromotionProvenanceReportV1 {
     pub report_id: String,
     pub status: PromotionReadinessStatusV1,
     pub artifact_promotion_plan_id: String,
+    pub artifact_promotion_plan_digest: String,
     pub target_plan_id: String,
     pub promoted_plan_id: String,
     pub promotion_plan_lineage_digest: String,
@@ -555,8 +562,11 @@ pub struct ArtifactPromotionProvenanceReportV1 {
     pub transform_id: String,
     pub target_execution_lineage_id: Option<String>,
     pub wasm_store_identity_report_id: Option<String>,
+    pub wasm_store_identity_report_digest: Option<String>,
     pub wasm_store_catalog_verification_id: Option<String>,
+    pub wasm_store_catalog_verification_digest: Option<String>,
     pub materialization_identity_report_id: Option<String>,
+    pub materialization_identity_report_digest: Option<String>,
     pub execution_attempted: bool,
     pub roles: Vec<RolePromotionProvenanceV1>,
     pub blockers: Vec<SafetyFindingV1>,
@@ -569,8 +579,11 @@ pub struct ArtifactPromotionProvenanceReportV1 {
 pub struct ArtifactPromotionExecutionReceiptV1 {
     pub schema_version: u32,
     pub receipt_id: String,
+    pub execution_receipt_digest: String,
     pub artifact_promotion_plan_id: String,
+    pub artifact_promotion_plan_digest: String,
     pub provenance_report_id: String,
+    pub provenance_report_digest: String,
     pub provenance_status: PromotionReadinessStatusV1,
     pub promoted_plan_id: String,
     pub promotion_plan_lineage_digest: String,

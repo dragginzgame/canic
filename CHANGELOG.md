@@ -12,9 +12,12 @@ present.
 
 ## Unreleased
 
-- No unreleased changes yet.
-
 ## [0.44.x] - 2026-05-25 - Artifact promotion
+
+- `0.44.10` digest-pins passive promotion policy, catalog verification,
+  provenance, and execution receipt artifacts so archived promotion evidence
+  rejects stale policy decisions, catalog observations, report links, and
+  receipt drift.
 
 - `0.44.9` adds passive wasm-store catalog verification with deterministic
   role observation digests, provenance linkage, locator-drift blockers, and

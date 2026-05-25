@@ -125,6 +125,10 @@ pub fn promotion_materialization_identity_report_text(
             promotion_readiness_status_label(report.status)
         ),
         format!("report_id: {}", report.report_id),
+        format!(
+            "materialization_identity_report_digest: {}",
+            report.materialization_identity_report_digest
+        ),
         String::new(),
         "counts:".to_string(),
         format!("  roles: {}", report.roles.len()),
@@ -178,6 +182,10 @@ pub fn promotion_policy_check_text(check: &PromotionPolicyCheckV1) -> String {
         "mode: passive".to_string(),
         format!("status: {}", promotion_readiness_status_label(check.status)),
         format!("check_id: {}", check.check_id),
+        format!(
+            "promotion_policy_check_digest: {}",
+            check.promotion_policy_check_digest
+        ),
         String::new(),
         "counts:".to_string(),
         format!("  roles: {}", check.roles.len()),
@@ -203,6 +211,10 @@ pub fn promotion_artifact_identity_report_text(
             promotion_readiness_status_label(report.status)
         ),
         format!("report_id: {}", report.report_id),
+        format!(
+            "artifact_identity_report_digest: {}",
+            report.artifact_identity_report_digest
+        ),
         String::new(),
         "counts:".to_string(),
         format!("  roles: {}", report.summary.role_count),
@@ -246,6 +258,10 @@ pub fn promotion_wasm_store_identity_report_text(
             promotion_readiness_status_label(report.status)
         ),
         format!("report_id: {}", report.report_id),
+        format!(
+            "wasm_store_identity_report_digest: {}",
+            report.wasm_store_identity_report_digest
+        ),
         String::new(),
         "counts:".to_string(),
         format!("  roles: {}", report.roles.len()),
@@ -295,6 +311,10 @@ pub fn promotion_wasm_store_catalog_verification_text(
             promotion_readiness_status_label(verification.status)
         ),
         format!("verification_id: {}", verification.verification_id),
+        format!(
+            "wasm_store_catalog_verification_digest: {}",
+            verification.wasm_store_catalog_verification_digest
+        ),
         format!(
             "wasm_store_identity_report_id: {}",
             verification.wasm_store_identity_report_id
@@ -449,6 +469,10 @@ pub fn artifact_promotion_plan_text(plan: &ArtifactPromotionPlanV1) -> String {
         "mode: passive".to_string(),
         "execution: none".to_string(),
         format!("plan_id: {}", plan.plan_id),
+        format!(
+            "artifact_promotion_plan_digest: {}",
+            plan.artifact_promotion_plan_digest
+        ),
         format!("generated_at: {}", plan.generated_at),
         format!("status: {:?}", plan.status),
         format!("target_plan_id: {}", plan.target_plan_id),
@@ -526,6 +550,10 @@ pub fn artifact_promotion_provenance_report_text(
             "artifact_promotion_plan_id: {}",
             report.artifact_promotion_plan_id
         ),
+        format!(
+            "artifact_promotion_plan_digest: {}",
+            report.artifact_promotion_plan_digest
+        ),
         format!("promoted_plan_id: {}", report.promoted_plan_id),
         format!(
             "promotion_plan_lineage_digest: {}",
@@ -535,47 +563,14 @@ pub fn artifact_promotion_provenance_report_text(
             "provenance_report_digest: {}",
             report.provenance_report_digest
         ),
-        String::new(),
-        "linked reports:".to_string(),
-        format!("  readiness: {}", report.readiness_id),
-        format!(
-            "  artifact_identity: {}",
-            report.artifact_identity_report_id
-        ),
-        format!("  transform: {}", report.transform_id),
-        format!(
-            "  target_execution_lineage: {}",
-            report
-                .target_execution_lineage_id
-                .as_deref()
-                .unwrap_or("none")
-        ),
-        format!(
-            "  wasm_store_identity: {}",
-            report
-                .wasm_store_identity_report_id
-                .as_deref()
-                .unwrap_or("none")
-        ),
-        format!(
-            "  wasm_store_catalog: {}",
-            report
-                .wasm_store_catalog_verification_id
-                .as_deref()
-                .unwrap_or("none")
-        ),
-        format!(
-            "  materialization_identity: {}",
-            report
-                .materialization_identity_report_id
-                .as_deref()
-                .unwrap_or("none")
-        ),
+    ];
+    append_artifact_promotion_provenance_linked_reports(&mut lines, report);
+    lines.extend([
         String::new(),
         "counts:".to_string(),
         format!("  roles: {}", report.roles.len()),
         format!("  blockers: {}", report.blockers.len()),
-    ];
+    ]);
 
     append_hard_failure_items(&mut lines, "blockers", &report.blockers);
     if !report.roles.is_empty() {
@@ -600,6 +595,71 @@ pub fn artifact_promotion_provenance_report_text(
     lines.join("\n")
 }
 
+fn append_artifact_promotion_provenance_linked_reports(
+    lines: &mut Vec<String>,
+    report: &ArtifactPromotionProvenanceReportV1,
+) {
+    lines.extend([
+        String::new(),
+        "linked reports:".to_string(),
+        format!("  readiness: {}", report.readiness_id),
+        format!(
+            "  artifact_identity: {}",
+            report.artifact_identity_report_id
+        ),
+        format!("  transform: {}", report.transform_id),
+        format!(
+            "  target_execution_lineage: {}",
+            report
+                .target_execution_lineage_id
+                .as_deref()
+                .unwrap_or("none")
+        ),
+        format!(
+            "  wasm_store_identity: {}",
+            report
+                .wasm_store_identity_report_id
+                .as_deref()
+                .unwrap_or("none")
+        ),
+        format!(
+            "  wasm_store_identity_digest: {}",
+            report
+                .wasm_store_identity_report_digest
+                .as_deref()
+                .unwrap_or("none")
+        ),
+        format!(
+            "  wasm_store_catalog: {}",
+            report
+                .wasm_store_catalog_verification_id
+                .as_deref()
+                .unwrap_or("none")
+        ),
+        format!(
+            "  wasm_store_catalog_digest: {}",
+            report
+                .wasm_store_catalog_verification_digest
+                .as_deref()
+                .unwrap_or("none")
+        ),
+        format!(
+            "  materialization_identity: {}",
+            report
+                .materialization_identity_report_id
+                .as_deref()
+                .unwrap_or("none")
+        ),
+        format!(
+            "  materialization_identity_digest: {}",
+            report
+                .materialization_identity_report_digest
+                .as_deref()
+                .unwrap_or("none")
+        ),
+    ]);
+}
+
 /// Render artifact promotion execution receipt linkage as operator text.
 #[must_use]
 pub fn artifact_promotion_execution_receipt_text(
@@ -610,10 +670,22 @@ pub fn artifact_promotion_execution_receipt_text(
         "mode: execution_receipt".to_string(),
         format!("receipt_id: {}", receipt.receipt_id),
         format!(
+            "execution_receipt_digest: {}",
+            receipt.execution_receipt_digest
+        ),
+        format!(
             "artifact_promotion_plan_id: {}",
             receipt.artifact_promotion_plan_id
         ),
+        format!(
+            "artifact_promotion_plan_digest: {}",
+            receipt.artifact_promotion_plan_digest
+        ),
         format!("provenance_report_id: {}", receipt.provenance_report_id),
+        format!(
+            "provenance_report_digest: {}",
+            receipt.provenance_report_digest
+        ),
         format!("promoted_plan_id: {}", receipt.promoted_plan_id),
         format!(
             "promotion_plan_lineage_digest: {}",

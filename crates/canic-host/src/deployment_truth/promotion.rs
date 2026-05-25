@@ -150,6 +150,8 @@ pub enum ArtifactPromotionPlanError {
     },
     #[error("artifact promotion plan field {field} is inconsistent")]
     LinkageMismatch { field: &'static str },
+    #[error("artifact promotion plan field {field} must be a lowercase sha256 hex digest")]
+    InvalidSha256Digest { field: &'static str },
     #[error("artifact promotion plan readiness is invalid: {0}")]
     Readiness(#[from] PromotionReadinessError),
     #[error("artifact promotion plan artifact identity report is invalid: {0}")]
@@ -302,6 +304,8 @@ pub enum PromotionArtifactIdentityReportError {
     IdentityGroupKeyMismatch { expected: String, found: String },
     #[error("promotion artifact identity report summary field {field} is stale")]
     SummaryMismatch { field: &'static str },
+    #[error("promotion artifact identity report field {field} is inconsistent")]
+    LinkageMismatch { field: &'static str },
     #[error(
         "promotion artifact identity report field {field} must be a lowercase sha256 hex digest"
     )]
@@ -340,6 +344,12 @@ pub enum PromotionWasmStoreIdentityReportError {
     },
     #[error("promotion wasm-store identity report blockers are stale")]
     BlockerMismatch,
+    #[error("promotion wasm-store identity report field {field} is inconsistent")]
+    LinkageMismatch { field: &'static str },
+    #[error(
+        "promotion wasm-store identity report field {field} must be a lowercase sha256 hex digest"
+    )]
+    InvalidSha256Digest { field: &'static str },
     #[error("promotion wasm-store identity report blocker has severity {severity:?}")]
     BlockerSeverityMismatch { severity: SafetySeverityV1 },
 }
@@ -368,6 +378,12 @@ pub enum PromotionWasmStoreCatalogVerificationError {
     DuplicateLocator { locator: String },
     #[error("promotion wasm-store catalog verification role {role} has inconsistent field {field}")]
     RoleMismatch { role: String, field: &'static str },
+    #[error("promotion wasm-store catalog verification field {field} is inconsistent")]
+    LinkageMismatch { field: &'static str },
+    #[error(
+        "promotion wasm-store catalog verification field {field} must be a lowercase sha256 hex digest"
+    )]
+    InvalidSha256Digest { field: &'static str },
     #[error("promotion wasm-store catalog verification blockers are stale")]
     BlockerMismatch,
     #[error("promotion wasm-store catalog verification blocker has severity {severity:?}")]
@@ -453,6 +469,12 @@ pub enum PromotionMaterializationIdentityReportError {
         "promotion materialization identity report output group key mismatch: expected {expected}, found {found}"
     )]
     OutputGroupKeyMismatch { expected: String, found: String },
+    #[error("promotion materialization identity report field {field} is inconsistent")]
+    LinkageMismatch { field: &'static str },
+    #[error(
+        "promotion materialization identity report field {field} must be a lowercase sha256 hex digest"
+    )]
+    InvalidSha256Digest { field: &'static str },
     #[error("promotion materialization identity report blockers are stale")]
     BlockerMismatch,
     #[error("promotion materialization identity report blocker has severity {severity:?}")]
@@ -488,6 +510,10 @@ pub enum PromotionPolicyCheckError {
     EmptyAllowedLevels { role: String },
     #[error("promotion policy decision for role {role} has inconsistent field {field}")]
     DecisionMismatch { role: String, field: &'static str },
+    #[error("promotion policy check field {field} is inconsistent")]
+    LinkageMismatch { field: &'static str },
+    #[error("promotion policy check field {field} must be a lowercase sha256 hex digest")]
+    InvalidSha256Digest { field: &'static str },
     #[error("promotion policy check blocker has severity {severity:?}")]
     BlockerSeverityMismatch { severity: SafetySeverityV1 },
 }
@@ -672,11 +698,77 @@ struct PromotionTargetExecutionLineageInput<'a> {
 }
 
 #[derive(Serialize)]
+struct PromotionArtifactIdentityReportDigestInput<'a> {
+    schema_version: u32,
+    report_id: &'a str,
+    status: PromotionReadinessStatusV1,
+    summary: &'a PromotionArtifactIdentitySummaryV1,
+    roles: &'a [RolePromotionArtifactIdentityV1],
+    identity_groups: &'a [PromotionArtifactIdentityGroupV1],
+    blockers: &'a [SafetyFindingV1],
+}
+
+#[derive(Serialize)]
+struct PromotionMaterializationIdentityReportDigestInput<'a> {
+    schema_version: u32,
+    report_id: &'a str,
+    status: PromotionReadinessStatusV1,
+    roles: &'a [RolePromotionMaterializationIdentityV1],
+    output_groups: &'a [PromotionMaterializationOutputGroupV1],
+    blockers: &'a [SafetyFindingV1],
+}
+
+#[derive(Serialize)]
+struct PromotionWasmStoreIdentityReportDigestInput<'a> {
+    schema_version: u32,
+    report_id: &'a str,
+    status: PromotionReadinessStatusV1,
+    roles: &'a [RolePromotionWasmStoreIdentityV1],
+    blockers: &'a [SafetyFindingV1],
+}
+
+#[derive(Serialize)]
+struct PromotionWasmStoreCatalogVerificationDigestInput<'a> {
+    schema_version: u32,
+    verification_id: &'a str,
+    wasm_store_identity_report_id: &'a str,
+    status: PromotionReadinessStatusV1,
+    roles: &'a [RolePromotionWasmStoreCatalogVerificationV1],
+    blockers: &'a [SafetyFindingV1],
+}
+
+#[derive(Serialize)]
+struct PromotionPolicyCheckDigestInput<'a> {
+    schema_version: u32,
+    check_id: &'a str,
+    status: PromotionReadinessStatusV1,
+    roles: &'a [RolePromotionPolicyDecisionV1],
+    blockers: &'a [SafetyFindingV1],
+}
+
+#[derive(Serialize)]
+struct ArtifactPromotionPlanDigestInput<'a> {
+    schema_version: u32,
+    plan_id: &'a str,
+    generated_at: &'a str,
+    status: PromotionReadinessStatusV1,
+    target_plan_id: &'a str,
+    promoted_plan_id: &'a str,
+    promotion_plan_lineage_digest: &'a str,
+    readiness: &'a PromotionReadinessV1,
+    artifact_identity_report: &'a PromotionArtifactIdentityReportV1,
+    transform: &'a PromotionPlanTransformV1,
+    target_execution_lineage: Option<&'a PromotionTargetExecutionLineageV1>,
+    blockers: &'a [SafetyFindingV1],
+}
+
+#[derive(Serialize)]
 struct ArtifactPromotionProvenanceDigestInput<'a> {
     schema_version: u32,
     report_id: &'a str,
     status: PromotionReadinessStatusV1,
     artifact_promotion_plan_id: &'a str,
+    artifact_promotion_plan_digest: &'a str,
     target_plan_id: &'a str,
     promoted_plan_id: &'a str,
     promotion_plan_lineage_digest: &'a str,
@@ -685,11 +777,34 @@ struct ArtifactPromotionProvenanceDigestInput<'a> {
     transform_id: &'a str,
     target_execution_lineage_id: Option<&'a str>,
     wasm_store_identity_report_id: Option<&'a str>,
+    wasm_store_identity_report_digest: Option<&'a str>,
     wasm_store_catalog_verification_id: Option<&'a str>,
+    wasm_store_catalog_verification_digest: Option<&'a str>,
     materialization_identity_report_id: Option<&'a str>,
+    materialization_identity_report_digest: Option<&'a str>,
     execution_attempted: bool,
     roles: &'a [RolePromotionProvenanceV1],
     blockers: &'a [SafetyFindingV1],
+}
+
+#[derive(Serialize)]
+struct ArtifactPromotionExecutionReceiptDigestInput<'a> {
+    schema_version: u32,
+    receipt_id: &'a str,
+    artifact_promotion_plan_id: &'a str,
+    artifact_promotion_plan_digest: &'a str,
+    provenance_report_id: &'a str,
+    provenance_report_digest: &'a str,
+    provenance_status: PromotionReadinessStatusV1,
+    promoted_plan_id: &'a str,
+    promotion_plan_lineage_digest: &'a str,
+    operation_id: &'a str,
+    operation_status: super::DeploymentExecutionStatusV1,
+    command_result: &'a super::DeploymentCommandResultV1,
+    started_at: &'a str,
+    finished_at: Option<&'a str>,
+    deployment_receipt: &'a DeploymentReceiptV1,
+    roles: &'a [RolePromotionExecutionReceiptV1],
 }
 
 pub fn promoted_deployment_plan_from_inputs(
@@ -845,9 +960,10 @@ pub fn promotion_policy_check_from_inputs(
         }
     }
 
-    PromotionPolicyCheckV1 {
+    let mut check = PromotionPolicyCheckV1 {
         schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
         check_id: check_id.into(),
+        promotion_policy_check_digest: String::new(),
         status: if blockers.is_empty() {
             PromotionReadinessStatusV1::Ready
         } else {
@@ -855,7 +971,9 @@ pub fn promotion_policy_check_from_inputs(
         },
         roles,
         blockers,
-    }
+    };
+    check.promotion_policy_check_digest = promotion_policy_check_digest(&check);
+    check
 }
 
 pub fn validate_promotion_policy_check(
@@ -868,12 +986,21 @@ pub fn validate_promotion_policy_check(
         });
     }
     ensure_policy_field("check_id", &check.check_id)?;
+    ensure_policy_sha256(
+        "promotion_policy_check_digest",
+        &check.promotion_policy_check_digest,
+    )?;
     ensure_policy_status_matches_blockers(check)?;
     ensure_unique_policy_decision_roles(&check.roles)?;
     for role in &check.roles {
         validate_role_promotion_policy_decision(role)?;
     }
     validate_policy_blockers(&check.blockers)?;
+    if check.promotion_policy_check_digest != promotion_policy_check_digest(check) {
+        return Err(PromotionPolicyCheckError::LinkageMismatch {
+            field: "promotion_policy_check_digest",
+        });
+    }
     Ok(())
 }
 
@@ -929,9 +1056,10 @@ pub fn promotion_artifact_identity_report(
     let identity_groups = promotion_artifact_identity_groups(&roles);
     let summary = promotion_artifact_identity_summary(&roles, &identity_groups);
 
-    PromotionArtifactIdentityReportV1 {
+    let mut report = PromotionArtifactIdentityReportV1 {
         schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
         report_id: report_id.into(),
+        artifact_identity_report_digest: String::new(),
         status: if blockers.is_empty() {
             PromotionReadinessStatusV1::Ready
         } else {
@@ -941,7 +1069,9 @@ pub fn promotion_artifact_identity_report(
         identity_groups,
         roles,
         blockers,
-    }
+    };
+    report.artifact_identity_report_digest = promotion_artifact_identity_report_digest(&report);
+    report
 }
 
 #[must_use]
@@ -954,9 +1084,10 @@ pub fn promotion_wasm_store_identity_report(
         .map(role_wasm_store_identity_from_staging)
         .collect::<Vec<_>>();
     let blockers = wasm_store_identity_blockers(&roles);
-    PromotionWasmStoreIdentityReportV1 {
+    let mut report = PromotionWasmStoreIdentityReportV1 {
         schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
         report_id: report_id.into(),
+        wasm_store_identity_report_digest: String::new(),
         status: if blockers.is_empty() {
             PromotionReadinessStatusV1::Ready
         } else {
@@ -964,7 +1095,9 @@ pub fn promotion_wasm_store_identity_report(
         },
         roles,
         blockers,
-    }
+    };
+    report.wasm_store_identity_report_digest = promotion_wasm_store_identity_report_digest(&report);
+    report
 }
 
 pub fn validate_promotion_artifact_identity_report(
@@ -979,6 +1112,10 @@ pub fn validate_promotion_artifact_identity_report(
         );
     }
     ensure_identity_report_field("report_id", &report.report_id)?;
+    ensure_identity_report_sha256(
+        "artifact_identity_report_digest",
+        &report.artifact_identity_report_digest,
+    )?;
     ensure_identity_report_status_matches_blockers(report)?;
     ensure_unique_artifact_identity_roles(&report.roles)?;
     for role in &report.roles {
@@ -987,6 +1124,11 @@ pub fn validate_promotion_artifact_identity_report(
     validate_artifact_identity_groups(&report.roles, &report.identity_groups)?;
     validate_artifact_identity_summary(report)?;
     validate_identity_report_blockers(&report.blockers)?;
+    if report.artifact_identity_report_digest != promotion_artifact_identity_report_digest(report) {
+        return Err(PromotionArtifactIdentityReportError::LinkageMismatch {
+            field: "artifact_identity_report_digest",
+        });
+    }
     Ok(())
 }
 
@@ -1002,6 +1144,10 @@ pub fn validate_promotion_wasm_store_identity_report(
         );
     }
     ensure_wasm_store_identity_report_field("report_id", &report.report_id)?;
+    ensure_wasm_store_identity_report_sha256(
+        "wasm_store_identity_report_digest",
+        &report.wasm_store_identity_report_digest,
+    )?;
     ensure_wasm_store_identity_status_matches_blockers(report)?;
     ensure_unique_wasm_store_identity_roles(&report.roles)?;
     for role in &report.roles {
@@ -1012,6 +1158,13 @@ pub fn validate_promotion_wasm_store_identity_report(
         return Err(PromotionWasmStoreIdentityReportError::BlockerMismatch);
     }
     validate_wasm_store_identity_blockers(&report.blockers)?;
+    if report.wasm_store_identity_report_digest
+        != promotion_wasm_store_identity_report_digest(report)
+    {
+        return Err(PromotionWasmStoreIdentityReportError::LinkageMismatch {
+            field: "wasm_store_identity_report_digest",
+        });
+    }
     Ok(())
 }
 
@@ -1038,6 +1191,10 @@ pub fn validate_promotion_wasm_store_catalog_verification(
         );
     }
     ensure_wasm_store_catalog_verification_field("verification_id", &verification.verification_id)?;
+    ensure_wasm_store_catalog_verification_sha256(
+        "wasm_store_catalog_verification_digest",
+        &verification.wasm_store_catalog_verification_digest,
+    )?;
     ensure_wasm_store_catalog_verification_field(
         "wasm_store_identity_report_id",
         &verification.wasm_store_identity_report_id,
@@ -1049,6 +1206,15 @@ pub fn validate_promotion_wasm_store_catalog_verification(
         return Err(PromotionWasmStoreCatalogVerificationError::BlockerMismatch);
     }
     validate_wasm_store_catalog_verification_blockers(&verification.blockers)?;
+    if verification.wasm_store_catalog_verification_digest
+        != promotion_wasm_store_catalog_verification_digest(verification)
+    {
+        return Err(
+            PromotionWasmStoreCatalogVerificationError::LinkageMismatch {
+                field: "wasm_store_catalog_verification_digest",
+            },
+        );
+    }
     Ok(())
 }
 
@@ -1087,9 +1253,10 @@ pub fn artifact_promotion_plan(
     } else {
         PromotionReadinessStatusV1::Blocked
     };
-    let plan = ArtifactPromotionPlanV1 {
+    let mut plan = ArtifactPromotionPlanV1 {
         schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
         plan_id: request.plan_id,
+        artifact_promotion_plan_digest: String::new(),
         generated_at: request.generated_at,
         status,
         target_plan_id: request.transform.target_plan_id.clone(),
@@ -1101,6 +1268,7 @@ pub fn artifact_promotion_plan(
         target_execution_lineage: request.target_execution_lineage,
         blockers,
     };
+    plan.artifact_promotion_plan_digest = artifact_promotion_plan_digest(&plan);
     validate_artifact_promotion_plan(&plan)?;
     Ok(plan)
 }
@@ -1141,6 +1309,10 @@ pub fn validate_artifact_promotion_plan(
         });
     }
     ensure_artifact_promotion_plan_field("plan_id", &plan.plan_id)?;
+    ensure_artifact_promotion_plan_sha256(
+        "artifact_promotion_plan_digest",
+        &plan.artifact_promotion_plan_digest,
+    )?;
     ensure_artifact_promotion_plan_field("generated_at", &plan.generated_at)?;
     ensure_artifact_promotion_plan_field("target_plan_id", &plan.target_plan_id)?;
     ensure_artifact_promotion_plan_field("promoted_plan_id", &plan.promoted_plan_id)?;
@@ -1160,6 +1332,11 @@ pub fn validate_artifact_promotion_plan(
                 field: "target_execution_lineage.transform",
             });
         }
+    }
+    if plan.artifact_promotion_plan_digest != artifact_promotion_plan_digest(plan) {
+        return Err(ArtifactPromotionPlanError::LinkageMismatch {
+            field: "artifact_promotion_plan_digest",
+        });
     }
     Ok(())
 }
@@ -1217,6 +1394,10 @@ pub fn validate_artifact_promotion_provenance_report(
         "artifact_promotion_plan_id",
         &report.artifact_promotion_plan_id,
     )?;
+    ensure_provenance_report_sha256(
+        "artifact_promotion_plan_digest",
+        &report.artifact_promotion_plan_digest,
+    )?;
     ensure_provenance_report_field("target_plan_id", &report.target_plan_id)?;
     ensure_provenance_report_field("promoted_plan_id", &report.promoted_plan_id)?;
     ensure_provenance_report_field(
@@ -1236,6 +1417,14 @@ pub fn validate_artifact_promotion_provenance_report(
     if let Some(report_id) = &report.wasm_store_identity_report_id {
         ensure_provenance_report_field("wasm_store_identity_report_id", report_id)?;
     }
+    if let Some(digest) = &report.wasm_store_identity_report_digest {
+        ensure_provenance_report_sha256("wasm_store_identity_report_digest", digest)?;
+        if report.wasm_store_identity_report_id.is_none() {
+            return Err(ArtifactPromotionProvenanceReportError::LinkageMismatch {
+                field: "wasm_store_identity_report_digest",
+            });
+        }
+    }
     if let Some(verification_id) = &report.wasm_store_catalog_verification_id {
         ensure_provenance_report_field("wasm_store_catalog_verification_id", verification_id)?;
         if report.wasm_store_identity_report_id.is_none() {
@@ -1244,8 +1433,24 @@ pub fn validate_artifact_promotion_provenance_report(
             });
         }
     }
+    if let Some(digest) = &report.wasm_store_catalog_verification_digest {
+        ensure_provenance_report_sha256("wasm_store_catalog_verification_digest", digest)?;
+        if report.wasm_store_catalog_verification_id.is_none() {
+            return Err(ArtifactPromotionProvenanceReportError::LinkageMismatch {
+                field: "wasm_store_catalog_verification_digest",
+            });
+        }
+    }
     if let Some(report_id) = &report.materialization_identity_report_id {
         ensure_provenance_report_field("materialization_identity_report_id", report_id)?;
+    }
+    if let Some(digest) = &report.materialization_identity_report_digest {
+        ensure_provenance_report_sha256("materialization_identity_report_digest", digest)?;
+        if report.materialization_identity_report_id.is_none() {
+            return Err(ArtifactPromotionProvenanceReportError::LinkageMismatch {
+                field: "materialization_identity_report_digest",
+            });
+        }
     }
     ensure_provenance_report_status_matches_blockers(report)?;
     ensure_unique_provenance_roles(&report.roles)?;
@@ -1288,11 +1493,23 @@ pub fn validate_artifact_promotion_execution_receipt(
         );
     }
     ensure_execution_receipt_field("receipt_id", &receipt.receipt_id)?;
+    ensure_execution_receipt_sha256(
+        "execution_receipt_digest",
+        &receipt.execution_receipt_digest,
+    )?;
     ensure_execution_receipt_field(
         "artifact_promotion_plan_id",
         &receipt.artifact_promotion_plan_id,
     )?;
+    ensure_execution_receipt_sha256(
+        "artifact_promotion_plan_digest",
+        &receipt.artifact_promotion_plan_digest,
+    )?;
     ensure_execution_receipt_field("provenance_report_id", &receipt.provenance_report_id)?;
+    ensure_execution_receipt_sha256(
+        "provenance_report_digest",
+        &receipt.provenance_report_digest,
+    )?;
     ensure_execution_receipt_provenance_ready(receipt.provenance_status)?;
     ensure_execution_receipt_field("promoted_plan_id", &receipt.promoted_plan_id)?;
     ensure_execution_receipt_field(
@@ -1304,7 +1521,13 @@ pub fn validate_artifact_promotion_execution_receipt(
     if let Some(finished_at) = &receipt.finished_at {
         ensure_execution_receipt_field("finished_at", finished_at)?;
     }
-    ensure_execution_receipt_linkage(receipt)
+    ensure_execution_receipt_linkage(receipt)?;
+    if receipt.execution_receipt_digest != artifact_promotion_execution_receipt_digest(receipt) {
+        return Err(ArtifactPromotionExecutionReceiptError::LinkageMismatch {
+            field: "execution_receipt_digest",
+        });
+    }
+    Ok(())
 }
 
 pub fn validate_promotion_plan_transform_evidence(
@@ -1675,14 +1898,18 @@ pub fn promotion_materialization_identity_report(
         .collect::<Vec<_>>();
     let output_groups = promotion_materialization_output_groups(&roles);
     let blockers = Vec::new();
-    PromotionMaterializationIdentityReportV1 {
+    let mut report = PromotionMaterializationIdentityReportV1 {
         schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
         report_id: report_id.into(),
+        materialization_identity_report_digest: String::new(),
         status: PromotionReadinessStatusV1::Ready,
         roles,
         output_groups,
         blockers,
-    }
+    };
+    report.materialization_identity_report_digest =
+        promotion_materialization_identity_report_digest(&report);
+    report
 }
 
 pub fn validate_promotion_materialization_identity_report(
@@ -1697,6 +1924,10 @@ pub fn validate_promotion_materialization_identity_report(
         );
     }
     ensure_materialization_report_field("report_id", &report.report_id)?;
+    ensure_materialization_report_sha256(
+        "materialization_identity_report_digest",
+        &report.materialization_identity_report_digest,
+    )?;
     ensure_materialization_report_status_matches_blockers(report)?;
     ensure_unique_materialization_report_roles(&report.roles)?;
     for role in &report.roles {
@@ -1708,12 +1939,81 @@ pub fn validate_promotion_materialization_identity_report(
         return Err(PromotionMaterializationIdentityReportError::BlockerMismatch);
     }
     validate_materialization_report_blockers(&report.blockers)?;
+    if report.materialization_identity_report_digest
+        != promotion_materialization_identity_report_digest(report)
+    {
+        return Err(
+            PromotionMaterializationIdentityReportError::LinkageMismatch {
+                field: "materialization_identity_report_digest",
+            },
+        );
+    }
     Ok(())
 }
 
 #[must_use]
 pub fn build_materialization_input_digest(input: &BuildMaterializationInputV1) -> String {
     stable_json_sha256_hex(input)
+}
+
+fn promotion_artifact_identity_report_digest(report: &PromotionArtifactIdentityReportV1) -> String {
+    stable_json_sha256_hex(&PromotionArtifactIdentityReportDigestInput {
+        schema_version: report.schema_version,
+        report_id: &report.report_id,
+        status: report.status,
+        summary: &report.summary,
+        roles: &report.roles,
+        identity_groups: &report.identity_groups,
+        blockers: &report.blockers,
+    })
+}
+
+fn promotion_materialization_identity_report_digest(
+    report: &PromotionMaterializationIdentityReportV1,
+) -> String {
+    stable_json_sha256_hex(&PromotionMaterializationIdentityReportDigestInput {
+        schema_version: report.schema_version,
+        report_id: &report.report_id,
+        status: report.status,
+        roles: &report.roles,
+        output_groups: &report.output_groups,
+        blockers: &report.blockers,
+    })
+}
+
+fn promotion_wasm_store_identity_report_digest(
+    report: &PromotionWasmStoreIdentityReportV1,
+) -> String {
+    stable_json_sha256_hex(&PromotionWasmStoreIdentityReportDigestInput {
+        schema_version: report.schema_version,
+        report_id: &report.report_id,
+        status: report.status,
+        roles: &report.roles,
+        blockers: &report.blockers,
+    })
+}
+
+fn promotion_wasm_store_catalog_verification_digest(
+    verification: &PromotionWasmStoreCatalogVerificationV1,
+) -> String {
+    stable_json_sha256_hex(&PromotionWasmStoreCatalogVerificationDigestInput {
+        schema_version: verification.schema_version,
+        verification_id: &verification.verification_id,
+        wasm_store_identity_report_id: &verification.wasm_store_identity_report_id,
+        status: verification.status,
+        roles: &verification.roles,
+        blockers: &verification.blockers,
+    })
+}
+
+fn promotion_policy_check_digest(check: &PromotionPolicyCheckV1) -> String {
+    stable_json_sha256_hex(&PromotionPolicyCheckDigestInput {
+        schema_version: check.schema_version,
+        check_id: &check.check_id,
+        status: check.status,
+        roles: &check.roles,
+        blockers: &check.blockers,
+    })
 }
 
 pub fn validate_build_recipe_identity(
@@ -2049,6 +2349,7 @@ fn build_artifact_promotion_provenance_report(
         report_id: request.report_id,
         status,
         artifact_promotion_plan_id: plan.plan_id,
+        artifact_promotion_plan_digest: plan.artifact_promotion_plan_digest,
         target_plan_id: plan.target_plan_id,
         promoted_plan_id: plan.promoted_plan_id,
         promotion_plan_lineage_digest: plan.promotion_plan_lineage_digest,
@@ -2061,13 +2362,25 @@ fn build_artifact_promotion_provenance_report(
             .map(|lineage| lineage.lineage_id),
         wasm_store_identity_report_id: request
             .wasm_store_identity_report
-            .map(|report| report.report_id),
+            .as_ref()
+            .map(|report| report.report_id.clone()),
+        wasm_store_identity_report_digest: request
+            .wasm_store_identity_report
+            .map(|report| report.wasm_store_identity_report_digest),
         wasm_store_catalog_verification_id: request
             .wasm_store_catalog_verification
-            .map(|verification| verification.verification_id),
+            .as_ref()
+            .map(|verification| verification.verification_id.clone()),
+        wasm_store_catalog_verification_digest: request
+            .wasm_store_catalog_verification
+            .map(|verification| verification.wasm_store_catalog_verification_digest),
         materialization_identity_report_id: request
             .materialization_identity_report
-            .map(|report| report.report_id),
+            .as_ref()
+            .map(|report| report.report_id.clone()),
+        materialization_identity_report_digest: request
+            .materialization_identity_report
+            .map(|report| report.materialization_identity_report_digest),
         execution_attempted: false,
         roles,
         blockers,
@@ -2082,6 +2395,7 @@ fn artifact_promotion_provenance_digest(report: &ArtifactPromotionProvenanceRepo
         report_id: &report.report_id,
         status: report.status,
         artifact_promotion_plan_id: &report.artifact_promotion_plan_id,
+        artifact_promotion_plan_digest: &report.artifact_promotion_plan_digest,
         target_plan_id: &report.target_plan_id,
         promoted_plan_id: &report.promoted_plan_id,
         promotion_plan_lineage_digest: &report.promotion_plan_lineage_digest,
@@ -2090,11 +2404,35 @@ fn artifact_promotion_provenance_digest(report: &ArtifactPromotionProvenanceRepo
         transform_id: &report.transform_id,
         target_execution_lineage_id: report.target_execution_lineage_id.as_deref(),
         wasm_store_identity_report_id: report.wasm_store_identity_report_id.as_deref(),
+        wasm_store_identity_report_digest: report.wasm_store_identity_report_digest.as_deref(),
         wasm_store_catalog_verification_id: report.wasm_store_catalog_verification_id.as_deref(),
+        wasm_store_catalog_verification_digest: report
+            .wasm_store_catalog_verification_digest
+            .as_deref(),
         materialization_identity_report_id: report.materialization_identity_report_id.as_deref(),
+        materialization_identity_report_digest: report
+            .materialization_identity_report_digest
+            .as_deref(),
         execution_attempted: report.execution_attempted,
         roles: &report.roles,
         blockers: &report.blockers,
+    })
+}
+
+fn artifact_promotion_plan_digest(plan: &ArtifactPromotionPlanV1) -> String {
+    stable_json_sha256_hex(&ArtifactPromotionPlanDigestInput {
+        schema_version: plan.schema_version,
+        plan_id: &plan.plan_id,
+        generated_at: &plan.generated_at,
+        status: plan.status,
+        target_plan_id: &plan.target_plan_id,
+        promoted_plan_id: &plan.promoted_plan_id,
+        promotion_plan_lineage_digest: &plan.promotion_plan_lineage_digest,
+        readiness: &plan.readiness,
+        artifact_identity_report: &plan.artifact_identity_report,
+        transform: &plan.transform,
+        target_execution_lineage: plan.target_execution_lineage.as_ref(),
+        blockers: &plan.blockers,
     })
 }
 
@@ -2333,11 +2671,17 @@ fn build_artifact_promotion_execution_receipt(
         .iter()
         .map(|role| role_promotion_execution_receipt(role, &request.deployment_receipt))
         .collect::<Vec<_>>();
-    ArtifactPromotionExecutionReceiptV1 {
+    let mut receipt = ArtifactPromotionExecutionReceiptV1 {
         schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
         receipt_id: request.receipt_id,
+        execution_receipt_digest: String::new(),
         artifact_promotion_plan_id: request.provenance_report.artifact_promotion_plan_id.clone(),
-        provenance_report_id: request.provenance_report.report_id,
+        artifact_promotion_plan_digest: request
+            .provenance_report
+            .artifact_promotion_plan_digest
+            .clone(),
+        provenance_report_id: request.provenance_report.report_id.clone(),
+        provenance_report_digest: request.provenance_report.provenance_report_digest,
         provenance_status: request.provenance_report.status,
         promoted_plan_id: request.provenance_report.promoted_plan_id.clone(),
         promotion_plan_lineage_digest: request.provenance_report.promotion_plan_lineage_digest,
@@ -2348,7 +2692,32 @@ fn build_artifact_promotion_execution_receipt(
         finished_at: request.deployment_receipt.finished_at.clone(),
         deployment_receipt: request.deployment_receipt,
         roles,
-    }
+    };
+    receipt.execution_receipt_digest = artifact_promotion_execution_receipt_digest(&receipt);
+    receipt
+}
+
+fn artifact_promotion_execution_receipt_digest(
+    receipt: &ArtifactPromotionExecutionReceiptV1,
+) -> String {
+    stable_json_sha256_hex(&ArtifactPromotionExecutionReceiptDigestInput {
+        schema_version: receipt.schema_version,
+        receipt_id: &receipt.receipt_id,
+        artifact_promotion_plan_id: &receipt.artifact_promotion_plan_id,
+        artifact_promotion_plan_digest: &receipt.artifact_promotion_plan_digest,
+        provenance_report_id: &receipt.provenance_report_id,
+        provenance_report_digest: &receipt.provenance_report_digest,
+        provenance_status: receipt.provenance_status,
+        promoted_plan_id: &receipt.promoted_plan_id,
+        promotion_plan_lineage_digest: &receipt.promotion_plan_lineage_digest,
+        operation_id: &receipt.operation_id,
+        operation_status: receipt.operation_status,
+        command_result: &receipt.command_result,
+        started_at: &receipt.started_at,
+        finished_at: receipt.finished_at.as_deref(),
+        deployment_receipt: &receipt.deployment_receipt,
+        roles: &receipt.roles,
+    })
 }
 
 fn role_promotion_execution_receipt(
@@ -2464,9 +2833,10 @@ fn build_wasm_store_catalog_verification(
         .map(|role| role_wasm_store_catalog_verification(role, &catalog))
         .collect::<Vec<_>>();
     let blockers = wasm_store_catalog_verification_blockers(&roles);
-    PromotionWasmStoreCatalogVerificationV1 {
+    let mut verification = PromotionWasmStoreCatalogVerificationV1 {
         schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
         verification_id: request.verification_id,
+        wasm_store_catalog_verification_digest: String::new(),
         wasm_store_identity_report_id: request.wasm_store_identity_report.report_id,
         status: if blockers.is_empty() {
             PromotionReadinessStatusV1::Ready
@@ -2475,7 +2845,10 @@ fn build_wasm_store_catalog_verification(
         },
         roles,
         blockers,
-    }
+    };
+    verification.wasm_store_catalog_verification_digest =
+        promotion_wasm_store_catalog_verification_digest(&verification);
+    verification
 }
 
 fn role_wasm_store_catalog_verification(
@@ -4431,6 +4804,14 @@ fn ensure_policy_field(field: &'static str, value: &str) -> Result<(), Promotion
     Ok(())
 }
 
+fn ensure_policy_sha256(field: &'static str, value: &str) -> Result<(), PromotionPolicyCheckError> {
+    if is_lower_hex_sha256(value) {
+        Ok(())
+    } else {
+        Err(PromotionPolicyCheckError::InvalidSha256Digest { field })
+    }
+}
+
 fn ensure_identity_report_field(
     field: &'static str,
     value: &str,
@@ -4455,6 +4836,17 @@ fn ensure_identity_optional_sha256(
     }
 }
 
+fn ensure_identity_report_sha256(
+    field: &'static str,
+    value: &str,
+) -> Result<(), PromotionArtifactIdentityReportError> {
+    if is_lower_hex_sha256(value) {
+        Ok(())
+    } else {
+        Err(PromotionArtifactIdentityReportError::InvalidSha256Digest { field })
+    }
+}
+
 fn ensure_wasm_store_identity_report_field(
     field: &'static str,
     value: &str,
@@ -4465,6 +4857,17 @@ fn ensure_wasm_store_identity_report_field(
     Ok(())
 }
 
+fn ensure_wasm_store_identity_report_sha256(
+    field: &'static str,
+    value: &str,
+) -> Result<(), PromotionWasmStoreIdentityReportError> {
+    if is_lower_hex_sha256(value) {
+        Ok(())
+    } else {
+        Err(PromotionWasmStoreIdentityReportError::InvalidSha256Digest { field })
+    }
+}
+
 fn ensure_wasm_store_catalog_verification_field(
     field: &'static str,
     value: &str,
@@ -4473,6 +4876,17 @@ fn ensure_wasm_store_catalog_verification_field(
         return Err(PromotionWasmStoreCatalogVerificationError::MissingRequiredField { field });
     }
     Ok(())
+}
+
+fn ensure_wasm_store_catalog_verification_sha256(
+    field: &'static str,
+    value: &str,
+) -> Result<(), PromotionWasmStoreCatalogVerificationError> {
+    if is_lower_hex_sha256(value) {
+        Ok(())
+    } else {
+        Err(PromotionWasmStoreCatalogVerificationError::InvalidSha256Digest { field })
+    }
 }
 
 fn ensure_materialization_report_field(
@@ -4625,6 +5039,17 @@ fn ensure_artifact_promotion_plan_field(
         return Err(ArtifactPromotionPlanError::MissingRequiredField { field });
     }
     Ok(())
+}
+
+fn ensure_artifact_promotion_plan_sha256(
+    field: &'static str,
+    value: &str,
+) -> Result<(), ArtifactPromotionPlanError> {
+    if is_lower_hex_sha256(value) {
+        Ok(())
+    } else {
+        Err(ArtifactPromotionPlanError::InvalidSha256Digest { field })
+    }
 }
 
 const fn ensure_artifact_promotion_status_matches_blockers(
