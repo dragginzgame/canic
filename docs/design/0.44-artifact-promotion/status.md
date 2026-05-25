@@ -38,11 +38,30 @@ promotion can prove what was built, uploaded, installed, and promoted.
 - Added `check_promotion_readiness(...)` as the host-owned passive entry point
   that builds and validates readiness from a target plan plus role promotion
   inputs.
+- Added `promoted_deployment_plan_from_inputs(...)` as a pure plan
+  transformation helper. It applies validated sealed-wasm artifact identity to
+  selected target roles while preserving target authority/trust-domain fields;
+  source/build promotion leaves target materialization output in the target
+  plan.
+- Added `PromotionPlanTransformV1` and
+  `promoted_deployment_plan_transform_from_inputs(...)` so passive promotion
+  reports can carry the promoted plan plus role-scoped before/after artifact
+  identity, embedded-config change, and target materialization preservation
+  facts.
+- Added host-owned passive text rendering for `PromotionPlanTransformV1`.
+- Added validation for archived `PromotionPlanTransformV1` artifacts,
+  including schema, identity fields, promoted-plan linkage, duplicate roles,
+  role presence, role summary consistency, and transform flag consistency.
+- Added `PromotionPlanTransformEvidenceV1` as a passive provenance wrapper for
+  validated promotion transforms, with evidence ID, generated-at metadata, and
+  validation that rechecks the nested transform.
+- Added host-owned passive text rendering for `PromotionPlanTransformEvidenceV1`
+  that explicitly reports no execution occurred.
 
 ## Not Implemented Yet
 
 - Full artifact promotion plan model.
-- Promotion receipts and provenance.
+- Promotion execution receipts and richer provenance.
 - Full promotion safety checks across deployment targets.
 - Integration with wasm-store artifact identity.
 - Source locator kind versus artifact identity dedupe/report semantics.

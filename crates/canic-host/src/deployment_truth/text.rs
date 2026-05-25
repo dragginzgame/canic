@@ -74,6 +74,68 @@ pub fn promotion_readiness_text(readiness: &PromotionReadinessV1) -> String {
     lines.join("\n")
 }
 
+/// Render a promotion plan transform as passive operator text.
+#[must_use]
+pub fn promotion_plan_transform_text(transform: &PromotionPlanTransformV1) -> String {
+    let changed_artifacts = transform
+        .roles
+        .iter()
+        .filter(|role| role.artifact_identity_changed)
+        .count();
+    let changed_configs = transform
+        .roles
+        .iter()
+        .filter(|role| role.embedded_config_changed)
+        .count();
+    let preserved_materializations = transform
+        .roles
+        .iter()
+        .filter(|role| role.target_materialization_preserved)
+        .count();
+    let mut lines = vec![
+        "Promotion plan transform".to_string(),
+        "mode: passive".to_string(),
+        format!("transform_id: {}", transform.transform_id),
+        format!("target_plan_id: {}", transform.target_plan_id),
+        format!("promoted_plan_id: {}", transform.promoted_plan_id),
+        String::new(),
+        "counts:".to_string(),
+        format!("  roles: {}", transform.roles.len()),
+        format!("  artifact_identity_changed: {changed_artifacts}"),
+        format!("  embedded_config_changed: {changed_configs}"),
+        format!("  target_materialization_preserved: {preserved_materializations}"),
+    ];
+
+    append_promotion_transform_role_items(&mut lines, &transform.roles);
+    lines.join("\n")
+}
+
+/// Render promotion transform evidence as passive operator text.
+#[must_use]
+pub fn promotion_plan_transform_evidence_text(
+    evidence: &PromotionPlanTransformEvidenceV1,
+) -> String {
+    let mut lines = vec![
+        "Promotion plan transform evidence".to_string(),
+        "mode: passive".to_string(),
+        "execution: none".to_string(),
+        format!("evidence_id: {}", evidence.evidence_id),
+        format!("generated_at: {}", evidence.generated_at),
+        format!("transform_id: {}", evidence.transform.transform_id),
+        format!("target_plan_id: {}", evidence.transform.target_plan_id),
+        format!("promoted_plan_id: {}", evidence.transform.promoted_plan_id),
+        String::new(),
+        "transform:".to_string(),
+    ];
+
+    lines.extend(
+        promotion_plan_transform_text(&evidence.transform)
+            .lines()
+            .map(|line| format!("  {line}")),
+    );
+    lines.join("\n")
+}
+
 /// Render an authority reconciliation plan as read-only operator text.
 #[must_use]
 pub fn authority_plan_text(plan: &AuthorityReconciliationPlanV1) -> String {
@@ -530,6 +592,50 @@ fn append_promotion_role_items(lines: &mut Vec<String>, roles: &[RolePromotionRe
         lines.push(format!(
             "    target_config_sha256: {}",
             role.target_canonical_embedded_config_sha256
+                .as_deref()
+                .unwrap_or("not recorded")
+        ));
+    }
+}
+
+fn append_promotion_transform_role_items(
+    lines: &mut Vec<String>,
+    roles: &[RolePromotionPlanTransformV1],
+) {
+    if roles.is_empty() {
+        return;
+    }
+    lines.push(String::new());
+    lines.push("roles:".to_string());
+    for role in roles {
+        lines.push(format!(
+            "  - {} {:?}/{:?}: artifact_identity_changed={} embedded_config_changed={} target_materialization_preserved={}",
+            role.role,
+            role.promotion_level,
+            role.source_kind,
+            role.artifact_identity_changed,
+            role.embedded_config_changed,
+            role.target_materialization_preserved
+        ));
+        lines.push(format!(
+            "    artifact_source: {:?} -> {:?}",
+            role.artifact_source_before, role.artifact_source_after
+        ));
+        lines.push(format!(
+            "    wasm_gz_sha256: {} -> {}",
+            role.wasm_gz_sha256_before
+                .as_deref()
+                .unwrap_or("not recorded"),
+            role.wasm_gz_sha256_after
+                .as_deref()
+                .unwrap_or("not recorded")
+        ));
+        lines.push(format!(
+            "    config_sha256: {} -> {}",
+            role.canonical_embedded_config_sha256_before
+                .as_deref()
+                .unwrap_or("not recorded"),
+            role.canonical_embedded_config_sha256_after
                 .as_deref()
                 .unwrap_or("not recorded")
         ));

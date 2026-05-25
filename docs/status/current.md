@@ -42,6 +42,27 @@ inspect only the files needed for the current task.
 - `check_promotion_readiness(...)` is now the host-owned passive entry point
   for building and validating readiness from a target plan plus role promotion
   inputs.
+- `promoted_deployment_plan_from_inputs(...)` now produces a pure promoted
+  target `DeploymentPlanV1` from validated readiness. It applies sealed-wasm
+  artifact identity for selected roles while preserving the target plan's
+  authority profile and trust domain. Source/build promotion leaves target
+  materialization output in the target plan.
+- `promoted_deployment_plan_transform_from_inputs(...)` now returns the
+  promoted plan together with `PromotionPlanTransformV1` role summaries that
+  record before/after artifact identity, embedded-config changes, and whether
+  source/build promotion preserved target materialization output.
+- Promotion plan transforms also have host-owned passive text rendering, so a
+  future CLI surface can present role-level artifact/config changes without
+  owning promotion formatting logic itself.
+- `validate_promotion_plan_transform(...)` now validates archived transform
+  artifacts for schema, promoted-plan linkage, duplicate roles, role presence,
+  role summary consistency, and transform flag consistency.
+- `PromotionPlanTransformEvidenceV1` now wraps validated promotion transforms
+  with passive evidence ID and generated-at provenance. Evidence validation
+  rechecks the nested transform and does not claim execution, staging, or live
+  deployment state.
+- Promotion transform evidence now has host-owned passive text rendering that
+  explicitly reports `execution: none`.
 - `0.43.8` is closed. The closeout report is
   `docs/audits/reports/2026-05/2026-05-25/0.43-closeout.md`.
 - `0.43.8` adds a private current-install

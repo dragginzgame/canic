@@ -146,6 +146,368 @@ fn promotion_readiness_round_trips_through_json() {
 }
 
 #[test]
+fn promotion_plan_transform_round_trips_through_json() {
+    let request = PromotionPlanTransformRequest {
+        promoted_plan_id: "promoted-plan-1".to_string(),
+        target_plan: sample_promotion_target_plan(),
+        inputs: vec![sample_role_promotion_input(
+            PromotionArtifactLevelV1::SealedWasm,
+        )],
+    };
+    let transform = promoted_deployment_plan_transform_from_inputs(&request)
+        .expect("transform should be produced");
+
+    assert_json_round_trip(&transform);
+    let encoded = serde_json::to_value(&transform).expect("transform should encode");
+    assert_object_keys(
+        &encoded,
+        &[
+            "schema_version",
+            "transform_id",
+            "target_plan_id",
+            "promoted_plan_id",
+            "promoted_plan",
+            "roles",
+        ],
+    );
+    let role = &encoded["roles"][0];
+    assert_object_keys(
+        role,
+        &[
+            "role",
+            "promotion_level",
+            "source_kind",
+            "source_locator",
+            "artifact_source_before",
+            "artifact_source_after",
+            "wasm_sha256_before",
+            "wasm_sha256_after",
+            "wasm_gz_sha256_before",
+            "wasm_gz_sha256_after",
+            "candid_sha256_before",
+            "candid_sha256_after",
+            "canonical_embedded_config_sha256_before",
+            "canonical_embedded_config_sha256_after",
+            "artifact_identity_changed",
+            "embedded_config_changed",
+            "target_materialization_preserved",
+        ],
+    );
+}
+
+#[test]
+fn promotion_plan_transform_evidence_round_trips_through_json() {
+    let request = PromotionPlanTransformRequest {
+        promoted_plan_id: "promoted-plan-1".to_string(),
+        target_plan: sample_promotion_target_plan(),
+        inputs: vec![sample_role_promotion_input(
+            PromotionArtifactLevelV1::SealedWasm,
+        )],
+    };
+    let transform = promoted_deployment_plan_transform_from_inputs(&request)
+        .expect("transform should be produced");
+    let evidence = promotion_plan_transform_evidence(PromotionPlanTransformEvidenceRequest {
+        evidence_id: "promotion-evidence-1".to_string(),
+        generated_at: "2026-05-25T00:00:00Z".to_string(),
+        transform,
+    })
+    .expect("evidence should be produced");
+
+    assert_json_round_trip(&evidence);
+    let encoded = serde_json::to_value(&evidence).expect("evidence should encode");
+    assert_object_keys(
+        &encoded,
+        &["schema_version", "evidence_id", "generated_at", "transform"],
+    );
+}
+
+#[test]
+fn promotion_plan_transform_evidence_validation_accepts_generated_evidence() {
+    let request = PromotionPlanTransformRequest {
+        promoted_plan_id: "promoted-plan-1".to_string(),
+        target_plan: sample_promotion_target_plan(),
+        inputs: vec![sample_role_promotion_input(
+            PromotionArtifactLevelV1::SealedWasm,
+        )],
+    };
+    let transform = promoted_deployment_plan_transform_from_inputs(&request)
+        .expect("transform should be produced");
+    let evidence = promotion_plan_transform_evidence(PromotionPlanTransformEvidenceRequest {
+        evidence_id: "promotion-evidence-1".to_string(),
+        generated_at: "2026-05-25T00:00:00Z".to_string(),
+        transform,
+    })
+    .expect("evidence should be produced");
+
+    validate_promotion_plan_transform_evidence(&evidence)
+        .expect("generated evidence should validate");
+}
+
+#[test]
+fn promotion_plan_transform_evidence_text_reports_passive_boundary() {
+    let mut target_plan = sample_promotion_target_plan();
+    target_plan.role_artifacts[0].wasm_gz_sha256 = Some(sample_sha256("f"));
+    let mut input = sample_role_promotion_input(PromotionArtifactLevelV1::SealedWasm);
+    input.require_byte_identical_wasm = false;
+    let transform =
+        promoted_deployment_plan_transform_from_inputs(&PromotionPlanTransformRequest {
+            promoted_plan_id: "promoted-plan-1".to_string(),
+            target_plan,
+            inputs: vec![input],
+        })
+        .expect("transform should be produced");
+    let evidence = promotion_plan_transform_evidence(PromotionPlanTransformEvidenceRequest {
+        evidence_id: "promotion-evidence-1".to_string(),
+        generated_at: "2026-05-25T00:00:00Z".to_string(),
+        transform,
+    })
+    .expect("evidence should be produced");
+
+    let text = promotion_plan_transform_evidence_text(&evidence);
+
+    assert!(text.contains("Promotion plan transform evidence"));
+    assert!(text.contains("mode: passive"));
+    assert!(text.contains("execution: none"));
+    assert!(text.contains("evidence_id: promotion-evidence-1"));
+    assert!(text.contains("generated_at: 2026-05-25T00:00:00Z"));
+    assert!(text.contains("transform_id: promotion-transform:promoted-plan-1"));
+    assert!(text.contains("  Promotion plan transform"));
+    assert!(text.contains("  mode: passive"));
+    assert!(text.contains("  artifact_identity_changed: 1"));
+}
+
+#[test]
+fn promotion_plan_transform_evidence_validation_rejects_blank_evidence_id() {
+    let request = PromotionPlanTransformRequest {
+        promoted_plan_id: "promoted-plan-1".to_string(),
+        target_plan: sample_promotion_target_plan(),
+        inputs: vec![sample_role_promotion_input(
+            PromotionArtifactLevelV1::SealedWasm,
+        )],
+    };
+    let transform = promoted_deployment_plan_transform_from_inputs(&request)
+        .expect("transform should be produced");
+    let err = promotion_plan_transform_evidence(PromotionPlanTransformEvidenceRequest {
+        evidence_id: " ".to_string(),
+        generated_at: "2026-05-25T00:00:00Z".to_string(),
+        transform,
+    })
+    .expect_err("blank evidence id should fail");
+
+    assert!(matches!(
+        err,
+        PromotionPlanTransformEvidenceError::MissingRequiredField {
+            field: "evidence_id"
+        }
+    ));
+}
+
+#[test]
+fn promotion_plan_transform_evidence_validation_rejects_schema_drift() {
+    let request = PromotionPlanTransformRequest {
+        promoted_plan_id: "promoted-plan-1".to_string(),
+        target_plan: sample_promotion_target_plan(),
+        inputs: vec![sample_role_promotion_input(
+            PromotionArtifactLevelV1::SealedWasm,
+        )],
+    };
+    let transform = promoted_deployment_plan_transform_from_inputs(&request)
+        .expect("transform should be produced");
+    let mut evidence = promotion_plan_transform_evidence(PromotionPlanTransformEvidenceRequest {
+        evidence_id: "promotion-evidence-1".to_string(),
+        generated_at: "2026-05-25T00:00:00Z".to_string(),
+        transform,
+    })
+    .expect("evidence should be produced");
+    evidence.schema_version += 1;
+
+    let err = validate_promotion_plan_transform_evidence(&evidence)
+        .expect_err("schema drift should fail");
+    assert!(matches!(
+        err,
+        PromotionPlanTransformEvidenceError::SchemaVersionMismatch { .. }
+    ));
+}
+
+#[test]
+fn promotion_plan_transform_evidence_validation_rejects_stale_transform() {
+    let request = PromotionPlanTransformRequest {
+        promoted_plan_id: "promoted-plan-1".to_string(),
+        target_plan: sample_promotion_target_plan(),
+        inputs: vec![sample_role_promotion_input(
+            PromotionArtifactLevelV1::SealedWasm,
+        )],
+    };
+    let transform = promoted_deployment_plan_transform_from_inputs(&request)
+        .expect("transform should be produced");
+    let mut evidence = promotion_plan_transform_evidence(PromotionPlanTransformEvidenceRequest {
+        evidence_id: "promotion-evidence-1".to_string(),
+        generated_at: "2026-05-25T00:00:00Z".to_string(),
+        transform,
+    })
+    .expect("evidence should be produced");
+    evidence.transform.roles[0].artifact_identity_changed = false;
+
+    let err = validate_promotion_plan_transform_evidence(&evidence)
+        .expect_err("stale transform should fail");
+    assert!(matches!(
+        err,
+        PromotionPlanTransformEvidenceError::Transform(
+            PromotionPlanTransformError::RoleStateMismatch {
+                role,
+                field: "artifact_identity_changed"
+            }
+        ) if role == "root"
+    ));
+}
+
+#[test]
+fn promotion_plan_transform_validation_accepts_generated_transform() {
+    let request = PromotionPlanTransformRequest {
+        promoted_plan_id: "promoted-plan-1".to_string(),
+        target_plan: sample_promotion_target_plan(),
+        inputs: vec![sample_role_promotion_input(
+            PromotionArtifactLevelV1::SealedWasm,
+        )],
+    };
+    let transform = promoted_deployment_plan_transform_from_inputs(&request)
+        .expect("transform should be produced");
+
+    validate_promotion_plan_transform(&transform).expect("generated transform should validate");
+}
+
+#[test]
+fn promotion_plan_transform_validation_rejects_schema_drift() {
+    let request = PromotionPlanTransformRequest {
+        promoted_plan_id: "promoted-plan-1".to_string(),
+        target_plan: sample_promotion_target_plan(),
+        inputs: vec![sample_role_promotion_input(
+            PromotionArtifactLevelV1::SealedWasm,
+        )],
+    };
+    let mut transform = promoted_deployment_plan_transform_from_inputs(&request)
+        .expect("transform should be produced");
+    transform.schema_version += 1;
+
+    let err = validate_promotion_plan_transform(&transform).expect_err("schema drift should fail");
+    assert!(matches!(
+        err,
+        PromotionPlanTransformError::SchemaVersionMismatch { .. }
+    ));
+}
+
+#[test]
+fn promotion_plan_transform_validation_rejects_plan_id_mismatch() {
+    let request = PromotionPlanTransformRequest {
+        promoted_plan_id: "promoted-plan-1".to_string(),
+        target_plan: sample_promotion_target_plan(),
+        inputs: vec![sample_role_promotion_input(
+            PromotionArtifactLevelV1::SealedWasm,
+        )],
+    };
+    let mut transform = promoted_deployment_plan_transform_from_inputs(&request)
+        .expect("transform should be produced");
+    transform.promoted_plan.plan_id = "different-plan".to_string();
+
+    let err =
+        validate_promotion_plan_transform(&transform).expect_err("plan id mismatch should fail");
+    assert!(matches!(
+        err,
+        PromotionPlanTransformError::PromotedPlanIdMismatch { .. }
+    ));
+}
+
+#[test]
+fn promotion_plan_transform_validation_rejects_duplicate_roles() {
+    let request = PromotionPlanTransformRequest {
+        promoted_plan_id: "promoted-plan-1".to_string(),
+        target_plan: sample_promotion_target_plan(),
+        inputs: vec![sample_role_promotion_input(
+            PromotionArtifactLevelV1::SealedWasm,
+        )],
+    };
+    let mut transform = promoted_deployment_plan_transform_from_inputs(&request)
+        .expect("transform should be produced");
+    transform.roles.push(transform.roles[0].clone());
+
+    let err =
+        validate_promotion_plan_transform(&transform).expect_err("duplicate role should fail");
+    assert!(matches!(
+        err,
+        PromotionPlanTransformError::DuplicateRole { role } if role == "root"
+    ));
+}
+
+#[test]
+fn promotion_plan_transform_validation_rejects_missing_promoted_role() {
+    let request = PromotionPlanTransformRequest {
+        promoted_plan_id: "promoted-plan-1".to_string(),
+        target_plan: sample_promotion_target_plan(),
+        inputs: vec![sample_role_promotion_input(
+            PromotionArtifactLevelV1::SealedWasm,
+        )],
+    };
+    let mut transform = promoted_deployment_plan_transform_from_inputs(&request)
+        .expect("transform should be produced");
+    transform.promoted_plan.role_artifacts.clear();
+
+    let err = validate_promotion_plan_transform(&transform)
+        .expect_err("missing promoted role should fail");
+    assert!(matches!(
+        err,
+        PromotionPlanTransformError::PromotedRoleMissing { role } if role == "root"
+    ));
+}
+
+#[test]
+fn promotion_plan_transform_validation_rejects_stale_after_summary() {
+    let request = PromotionPlanTransformRequest {
+        promoted_plan_id: "promoted-plan-1".to_string(),
+        target_plan: sample_promotion_target_plan(),
+        inputs: vec![sample_role_promotion_input(
+            PromotionArtifactLevelV1::SealedWasm,
+        )],
+    };
+    let mut transform = promoted_deployment_plan_transform_from_inputs(&request)
+        .expect("transform should be produced");
+    transform.roles[0].wasm_gz_sha256_after = Some(sample_sha256("f"));
+
+    let err = validate_promotion_plan_transform(&transform).expect_err("stale summary should fail");
+    assert!(matches!(
+        err,
+        PromotionPlanTransformError::RoleStateMismatch {
+            role,
+            field: "wasm_gz_sha256_after"
+        } if role == "root"
+    ));
+}
+
+#[test]
+fn promotion_plan_transform_validation_rejects_stale_change_flag() {
+    let mut target_plan = sample_promotion_target_plan();
+    target_plan.role_artifacts[0].wasm_gz_sha256 = Some(sample_sha256("f"));
+    let mut input = sample_role_promotion_input(PromotionArtifactLevelV1::SealedWasm);
+    input.require_byte_identical_wasm = false;
+    let request = PromotionPlanTransformRequest {
+        promoted_plan_id: "promoted-plan-1".to_string(),
+        target_plan,
+        inputs: vec![input],
+    };
+    let mut transform = promoted_deployment_plan_transform_from_inputs(&request)
+        .expect("transform should be produced");
+    transform.roles[0].artifact_identity_changed = false;
+
+    let err = validate_promotion_plan_transform(&transform).expect_err("stale flag should fail");
+    assert!(matches!(
+        err,
+        PromotionPlanTransformError::RoleStateMismatch {
+            role,
+            field: "artifact_identity_changed"
+        } if role == "root"
+    ));
+}
+
+#[test]
 fn role_artifact_source_requires_digest_pins_for_executable_overrides() {
     let mut source = sample_role_artifact_source(RoleArtifactSourceKindV1::LocalWasm);
     source.expected_wasm_sha256 = None;
@@ -307,6 +669,213 @@ fn check_promotion_readiness_rejects_blank_readiness_id() {
         err,
         PromotionReadinessError::MissingRequiredField {
             field: "readiness_id"
+        }
+    ));
+}
+
+#[test]
+fn promoted_deployment_plan_applies_sealed_wasm_role_identity() {
+    let mut input = sample_role_promotion_input(PromotionArtifactLevelV1::SealedWasm);
+    input.source.kind = RoleArtifactSourceKindV1::LocalWasmGz;
+    input.source.locator = Some("promoted/root.wasm.gz".to_string());
+    let request = PromotionPlanTransformRequest {
+        promoted_plan_id: "promoted-plan-1".to_string(),
+        target_plan: sample_promotion_target_plan(),
+        inputs: vec![input],
+    };
+
+    let promoted =
+        promoted_deployment_plan_from_inputs(&request).expect("promoted plan should be produced");
+
+    assert_eq!(promoted.plan_id, "promoted-plan-1");
+    assert_eq!(
+        promoted.authority_profile,
+        request.target_plan.authority_profile
+    );
+    assert_eq!(promoted.trust_domain, request.target_plan.trust_domain);
+    let artifact = promoted
+        .role_artifacts
+        .iter()
+        .find(|artifact| artifact.role == "root")
+        .expect("root artifact should remain");
+    assert_eq!(artifact.source, ArtifactSourceV1::External);
+    assert_eq!(
+        artifact.wasm_gz_path.as_deref(),
+        Some("promoted/root.wasm.gz")
+    );
+    assert_eq!(artifact.wasm_sha256, Some(sample_sha256("d")));
+    assert_eq!(artifact.wasm_gz_sha256, Some(sample_sha256("a")));
+    assert_eq!(
+        artifact.canonical_embedded_config_sha256,
+        Some(sample_sha256("c"))
+    );
+}
+
+#[test]
+fn promoted_deployment_plan_transform_summarizes_sealed_wasm_changes() {
+    let mut target_plan = sample_promotion_target_plan();
+    target_plan.role_artifacts[0].wasm_gz_sha256 = Some(sample_sha256("f"));
+    let mut input = sample_role_promotion_input(PromotionArtifactLevelV1::SealedWasm);
+    input.require_byte_identical_wasm = false;
+    input.source.kind = RoleArtifactSourceKindV1::LocalWasmGz;
+    input.source.locator = Some("promoted/root.wasm.gz".to_string());
+    let request = PromotionPlanTransformRequest {
+        promoted_plan_id: "promoted-plan-1".to_string(),
+        target_plan,
+        inputs: vec![input],
+    };
+
+    let transform = promoted_deployment_plan_transform_from_inputs(&request)
+        .expect("sealed wasm transform should be produced");
+
+    assert_eq!(
+        transform.transform_id,
+        "promotion-transform:promoted-plan-1"
+    );
+    assert_eq!(transform.target_plan_id, "plan-local-root");
+    assert_eq!(transform.promoted_plan_id, "promoted-plan-1");
+    assert_eq!(transform.roles.len(), 1);
+    let role = &transform.roles[0];
+    assert_eq!(role.role, "root");
+    assert_eq!(role.promotion_level, PromotionArtifactLevelV1::SealedWasm);
+    assert_eq!(role.source_kind, RoleArtifactSourceKindV1::LocalWasmGz);
+    assert_eq!(
+        role.source_locator.as_deref(),
+        Some("promoted/root.wasm.gz")
+    );
+    assert_eq!(role.artifact_source_before, ArtifactSourceV1::LocalBuild);
+    assert_eq!(role.artifact_source_after, ArtifactSourceV1::External);
+    assert_eq!(role.wasm_gz_sha256_before, Some(sample_sha256("f")));
+    assert_eq!(role.wasm_gz_sha256_after, Some(sample_sha256("a")));
+    assert!(role.artifact_identity_changed);
+    assert!(!role.embedded_config_changed);
+    assert!(!role.target_materialization_preserved);
+}
+
+#[test]
+fn promotion_plan_transform_text_reports_passive_summary() {
+    let mut target_plan = sample_promotion_target_plan();
+    target_plan.role_artifacts[0].wasm_gz_sha256 = Some(sample_sha256("f"));
+    let mut input = sample_role_promotion_input(PromotionArtifactLevelV1::SealedWasm);
+    input.require_byte_identical_wasm = false;
+    let request = PromotionPlanTransformRequest {
+        promoted_plan_id: "promoted-plan-1".to_string(),
+        target_plan,
+        inputs: vec![input],
+    };
+    let transform = promoted_deployment_plan_transform_from_inputs(&request)
+        .expect("transform should be produced");
+
+    let text = promotion_plan_transform_text(&transform);
+
+    assert!(text.contains("Promotion plan transform"));
+    assert!(text.contains("mode: passive"));
+    assert!(text.contains("transform_id: promotion-transform:promoted-plan-1"));
+    assert!(text.contains("target_plan_id: plan-local-root"));
+    assert!(text.contains("promoted_plan_id: promoted-plan-1"));
+    assert!(text.contains("artifact_identity_changed: 1"));
+    assert!(text.contains("embedded_config_changed: 0"));
+    assert!(text.contains("target_materialization_preserved: 0"));
+    assert!(
+        text.contains("root SealedWasm/LocalWasmGz: artifact_identity_changed=true embedded_config_changed=false target_materialization_preserved=false")
+    );
+    assert!(text.contains("wasm_gz_sha256: ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff -> aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"));
+}
+
+#[test]
+fn promoted_deployment_plan_leaves_source_build_materialization_to_target_plan() {
+    let mut target_plan = sample_promotion_target_plan();
+    target_plan.role_artifacts[0].wasm_gz_sha256 = Some(sample_sha256("f"));
+    target_plan.role_artifacts[0].canonical_embedded_config_sha256 = Some(sample_sha256("1"));
+    let mut input = sample_role_promotion_input(PromotionArtifactLevelV1::SourceBuild);
+    input.source.expected_canonical_embedded_config_sha256 = Some(sample_sha256("c"));
+    let request = PromotionPlanTransformRequest {
+        promoted_plan_id: "promoted-plan-1".to_string(),
+        target_plan: target_plan.clone(),
+        inputs: vec![input],
+    };
+
+    let promoted = promoted_deployment_plan_from_inputs(&request)
+        .expect("source-build plan should be produced");
+
+    assert_eq!(promoted.plan_id, "promoted-plan-1");
+    assert_eq!(
+        promoted.role_artifacts[0].wasm_gz_sha256,
+        target_plan.role_artifacts[0].wasm_gz_sha256
+    );
+    assert_eq!(
+        promoted.role_artifacts[0].canonical_embedded_config_sha256,
+        target_plan.role_artifacts[0].canonical_embedded_config_sha256
+    );
+}
+
+#[test]
+fn promoted_deployment_plan_transform_marks_source_build_target_materialization_preserved() {
+    let mut target_plan = sample_promotion_target_plan();
+    target_plan.role_artifacts[0].wasm_gz_sha256 = Some(sample_sha256("f"));
+    target_plan.role_artifacts[0].canonical_embedded_config_sha256 = Some(sample_sha256("1"));
+    let mut input = sample_role_promotion_input(PromotionArtifactLevelV1::SourceBuild);
+    input.source.expected_canonical_embedded_config_sha256 = Some(sample_sha256("c"));
+    let request = PromotionPlanTransformRequest {
+        promoted_plan_id: "promoted-plan-1".to_string(),
+        target_plan,
+        inputs: vec![input],
+    };
+
+    let transform = promoted_deployment_plan_transform_from_inputs(&request)
+        .expect("source-build transform should be produced");
+
+    let role = &transform.roles[0];
+    assert_eq!(role.promotion_level, PromotionArtifactLevelV1::SourceBuild);
+    assert_eq!(role.wasm_gz_sha256_before, Some(sample_sha256("f")));
+    assert_eq!(role.wasm_gz_sha256_after, Some(sample_sha256("f")));
+    assert_eq!(
+        role.canonical_embedded_config_sha256_before,
+        Some(sample_sha256("1"))
+    );
+    assert_eq!(
+        role.canonical_embedded_config_sha256_after,
+        Some(sample_sha256("1"))
+    );
+    assert!(!role.artifact_identity_changed);
+    assert!(!role.embedded_config_changed);
+    assert!(role.target_materialization_preserved);
+}
+
+#[test]
+fn promoted_deployment_plan_rejects_blocked_readiness() {
+    let mut input = sample_role_promotion_input(PromotionArtifactLevelV1::SealedWasm);
+    input.source.expected_canonical_embedded_config_sha256 = Some(sample_sha256("e"));
+    let request = PromotionPlanTransformRequest {
+        promoted_plan_id: "promoted-plan-1".to_string(),
+        target_plan: sample_promotion_target_plan(),
+        inputs: vec![input],
+    };
+
+    let err =
+        promoted_deployment_plan_from_inputs(&request).expect_err("blocked readiness should fail");
+    assert!(matches!(
+        err,
+        PromotionPlanTransformError::ReadinessBlocked { blocker_count: 1 }
+    ));
+}
+
+#[test]
+fn promoted_deployment_plan_rejects_blank_plan_id() {
+    let request = PromotionPlanTransformRequest {
+        promoted_plan_id: " ".to_string(),
+        target_plan: sample_promotion_target_plan(),
+        inputs: vec![sample_role_promotion_input(
+            PromotionArtifactLevelV1::SealedWasm,
+        )],
+    };
+
+    let err =
+        promoted_deployment_plan_from_inputs(&request).expect_err("blank plan id should fail");
+    assert!(matches!(
+        err,
+        PromotionPlanTransformError::MissingRequiredField {
+            field: "promoted_plan_id"
         }
     ));
 }

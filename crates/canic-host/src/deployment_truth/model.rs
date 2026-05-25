@@ -197,6 +197,54 @@ pub struct PromotionReadinessV1 {
 }
 
 ///
+/// PromotionPlanTransformV1
+///
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct PromotionPlanTransformV1 {
+    pub schema_version: u32,
+    pub transform_id: String,
+    pub target_plan_id: String,
+    pub promoted_plan_id: String,
+    pub promoted_plan: DeploymentPlanV1,
+    pub roles: Vec<RolePromotionPlanTransformV1>,
+}
+
+///
+/// PromotionPlanTransformEvidenceV1
+///
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct PromotionPlanTransformEvidenceV1 {
+    pub schema_version: u32,
+    pub evidence_id: String,
+    pub generated_at: String,
+    pub transform: PromotionPlanTransformV1,
+}
+
+///
+/// RolePromotionPlanTransformV1
+///
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RolePromotionPlanTransformV1 {
+    pub role: String,
+    pub promotion_level: PromotionArtifactLevelV1,
+    pub source_kind: RoleArtifactSourceKindV1,
+    pub source_locator: Option<String>,
+    pub artifact_source_before: ArtifactSourceV1,
+    pub artifact_source_after: ArtifactSourceV1,
+    pub wasm_sha256_before: Option<String>,
+    pub wasm_sha256_after: Option<String>,
+    pub wasm_gz_sha256_before: Option<String>,
+    pub wasm_gz_sha256_after: Option<String>,
+    pub candid_sha256_before: Option<String>,
+    pub candid_sha256_after: Option<String>,
+    pub canonical_embedded_config_sha256_before: Option<String>,
+    pub canonical_embedded_config_sha256_after: Option<String>,
+    pub artifact_identity_changed: bool,
+    pub embedded_config_changed: bool,
+    pub target_materialization_preserved: bool,
+}
+
+///
 /// PromotionReadinessStatusV1
 ///
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
