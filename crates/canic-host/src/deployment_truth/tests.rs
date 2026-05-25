@@ -104,6 +104,207 @@ fn role_promotion_input_round_trips_through_json() {
 }
 
 #[test]
+fn role_promotion_policy_round_trips_through_json() {
+    let policy = sample_role_promotion_policy();
+
+    validate_role_promotion_policy(&policy).expect("policy should validate");
+    assert_json_round_trip(&policy);
+    let encoded = serde_json::to_value(&policy).expect("policy should encode");
+    assert_object_keys(
+        &encoded,
+        &["role", "allowed_promotion_levels", "requirements"],
+    );
+}
+
+#[test]
+fn role_promotion_policy_validation_rejects_sealed_only_policy_with_source_build_allowed() {
+    let mut policy = sample_role_promotion_policy();
+    policy
+        .allowed_promotion_levels
+        .push(PromotionArtifactLevelV1::SourceBuild);
+
+    let err = validate_role_promotion_policy(&policy)
+        .expect_err("sealed-only policy cannot allow source build");
+
+    assert!(matches!(
+        err,
+        PromotionPolicyCheckError::DecisionMismatch {
+            role,
+            field: "sealed_bytes"
+        } if role == "root"
+    ));
+}
+
+#[test]
+fn promotion_policy_check_accepts_sealed_wasm_policy() {
+    let input = sample_role_promotion_input(PromotionArtifactLevelV1::SealedWasm);
+    let policy = sample_role_promotion_policy();
+
+    let check = check_promotion_policy(PromotionPolicyCheckRequest {
+        check_id: "promotion-policy-1".to_string(),
+        inputs: vec![input],
+        policies: vec![policy],
+    })
+    .expect("policy check should validate");
+
+    assert_eq!(check.status, PromotionReadinessStatusV1::Ready);
+    assert_eq!(check.roles.len(), 1);
+    assert!(check.roles[0].policy_satisfied);
+    assert!(
+        check.roles[0]
+            .requirements
+            .contains(&PromotionPolicyRequirementV1::SealedBytes)
+    );
+    assert!(
+        check.roles[0]
+            .requirements
+            .contains(&PromotionPolicyRequirementV1::ByteIdenticalWasm)
+    );
+    assert!(
+        check.roles[0]
+            .requirements
+            .contains(&PromotionPolicyRequirementV1::TargetConfigDigest)
+    );
+    assert_json_round_trip(&check);
+    let encoded = serde_json::to_value(&check).expect("policy check should encode");
+    assert_object_keys(
+        &encoded,
+        &["schema_version", "check_id", "status", "roles", "blockers"],
+    );
+    let role = &encoded["roles"][0];
+    assert_object_keys(
+        role,
+        &[
+            "role",
+            "requested_promotion_level",
+            "allowed_promotion_levels",
+            "requirements",
+            "claims",
+            "level_allowed",
+            "policy_satisfied",
+        ],
+    );
+}
+
+#[test]
+fn promotion_policy_check_blocks_source_build_when_sealed_bytes_are_required() {
+    let input = sample_role_promotion_input(PromotionArtifactLevelV1::SourceBuild);
+    let policy = sample_role_promotion_policy();
+
+    let check = promotion_policy_check_from_inputs("promotion-policy-1", &[input], &[policy]);
+
+    assert_eq!(check.status, PromotionReadinessStatusV1::Blocked);
+    assert!(!check.roles[0].policy_satisfied);
+    assert!(check.blockers.iter().any(|finding| {
+        finding.code == "promotion_policy_level_not_allowed"
+            || finding.code == "promotion_policy_must_use_sealed_bytes"
+    }));
+    validate_promotion_policy_check(&check).expect("blocked policy check should validate");
+}
+
+#[test]
+fn promotion_policy_check_distinguishes_byte_identity_from_sealed_bytes() {
+    let mut input = sample_role_promotion_input(PromotionArtifactLevelV1::SourceBuild);
+    input.require_byte_identical_wasm = true;
+    let mut policy = sample_role_promotion_policy();
+    policy.allowed_promotion_levels = vec![PromotionArtifactLevelV1::SourceBuild];
+    policy.requirements = vec![PromotionPolicyRequirementV1::ByteIdenticalWasm];
+
+    let check = promotion_policy_check_from_inputs("promotion-policy-1", &[input], &[policy]);
+
+    assert_eq!(check.status, PromotionReadinessStatusV1::Ready);
+    assert!(check.roles[0].policy_satisfied);
+    assert!(
+        !check.roles[0]
+            .requirements
+            .contains(&PromotionPolicyRequirementV1::SealedBytes)
+    );
+    assert!(
+        check.roles[0]
+            .requirements
+            .contains(&PromotionPolicyRequirementV1::ByteIdenticalWasm)
+    );
+}
+
+#[test]
+fn promotion_policy_check_blocks_missing_byte_identity_claim() {
+    let mut input = sample_role_promotion_input(PromotionArtifactLevelV1::SourceBuild);
+    input.require_byte_identical_wasm = false;
+    let mut policy = sample_role_promotion_policy();
+    policy.allowed_promotion_levels = vec![PromotionArtifactLevelV1::SourceBuild];
+    policy.requirements = vec![PromotionPolicyRequirementV1::ByteIdenticalWasm];
+
+    let check = promotion_policy_check_from_inputs("promotion-policy-1", &[input], &[policy]);
+
+    assert_eq!(check.status, PromotionReadinessStatusV1::Blocked);
+    assert!(
+        check
+            .blockers
+            .iter()
+            .any(|finding| { finding.code == "promotion_policy_byte_identity_required" })
+    );
+}
+
+#[test]
+fn promotion_policy_check_blocks_duplicate_policy_roles_without_matching_input() {
+    let mut duplicate_policy = sample_role_promotion_policy();
+    duplicate_policy.role = "wasm_store".to_string();
+
+    let check = promotion_policy_check_from_inputs(
+        "promotion-policy-1",
+        &[sample_role_promotion_input(
+            PromotionArtifactLevelV1::SealedWasm,
+        )],
+        &[
+            sample_role_promotion_policy(),
+            duplicate_policy.clone(),
+            duplicate_policy,
+        ],
+    );
+
+    assert_eq!(check.status, PromotionReadinessStatusV1::Blocked);
+    assert!(check.blockers.iter().any(|finding| {
+        finding.code == "promotion_policy_duplicate"
+            && finding.subject.as_deref() == Some("wasm_store")
+    }));
+    validate_promotion_policy_check(&check).expect("duplicate-policy blocker should validate");
+}
+
+#[test]
+fn promotion_policy_check_text_reports_passive_summary() {
+    let input = sample_role_promotion_input(PromotionArtifactLevelV1::SealedWasm);
+    let policy = sample_role_promotion_policy();
+    let check = promotion_policy_check_from_inputs("promotion-policy-1", &[input], &[policy]);
+
+    let text = promotion_policy_check_text(&check);
+
+    assert!(text.contains("Promotion policy check"));
+    assert!(text.contains("mode: passive"));
+    assert!(text.contains("status: ready"));
+    assert!(text.contains("check_id: promotion-policy-1"));
+    assert!(text.contains("policy_satisfied: 1"));
+    assert!(text.contains("root SealedWasm: policy_satisfied=true"));
+}
+
+#[test]
+fn promotion_policy_check_validation_rejects_stale_decision() {
+    let input = sample_role_promotion_input(PromotionArtifactLevelV1::SealedWasm);
+    let policy = sample_role_promotion_policy();
+    let mut check = promotion_policy_check_from_inputs("promotion-policy-1", &[input], &[policy]);
+    check.roles[0].policy_satisfied = false;
+
+    let err = validate_promotion_policy_check(&check).expect_err("stale decision should fail");
+
+    assert!(matches!(
+        err,
+        PromotionPolicyCheckError::DecisionMismatch {
+            role,
+            field: "policy_satisfied"
+        } if role == "root"
+    ));
+}
+
+#[test]
 fn promotion_artifact_identity_report_round_trips_through_json() {
     let input = sample_role_promotion_input(PromotionArtifactLevelV1::SealedWasm);
     let report = promotion_artifact_identity_report("promotion-identity-1", &[input]);
@@ -1152,6 +1353,64 @@ fn check_promotion_readiness_validates_and_returns_artifact() {
 }
 
 #[test]
+fn promotion_readiness_with_policy_blocks_source_build_when_sealed_bytes_are_required() {
+    let input = sample_role_promotion_input(PromotionArtifactLevelV1::SourceBuild);
+    let policy = sample_role_promotion_policy();
+
+    let readiness = promotion_readiness_from_inputs_with_policy(
+        "promotion-ready-1",
+        &sample_promotion_target_plan(),
+        &[input],
+        &[policy],
+    );
+
+    assert_eq!(readiness.status, PromotionReadinessStatusV1::Blocked);
+    assert!(readiness.blockers.iter().any(|finding| {
+        finding.code == "promotion_policy_level_not_allowed"
+            || finding.code == "promotion_policy_must_use_sealed_bytes"
+    }));
+    validate_promotion_readiness(&readiness).expect("policy-blocked readiness should validate");
+}
+
+#[test]
+fn promotion_readiness_with_policy_accepts_byte_identical_source_build_policy() {
+    let mut input = sample_role_promotion_input(PromotionArtifactLevelV1::SourceBuild);
+    input.require_byte_identical_wasm = true;
+    let mut policy = sample_role_promotion_policy();
+    policy.allowed_promotion_levels = vec![PromotionArtifactLevelV1::SourceBuild];
+    policy.requirements = vec![PromotionPolicyRequirementV1::ByteIdenticalWasm];
+
+    let readiness = check_promotion_readiness_with_policy(&PromotionReadinessWithPolicyRequest {
+        readiness_id: "promotion-ready-1".to_string(),
+        target_plan: sample_promotion_target_plan(),
+        inputs: vec![input],
+        policies: vec![policy],
+    })
+    .expect("source-build policy readiness should validate");
+
+    assert_eq!(readiness.status, PromotionReadinessStatusV1::Ready);
+    assert!(readiness.blockers.is_empty());
+}
+
+#[test]
+fn promotion_readiness_with_policy_reports_missing_role_policy() {
+    let input = sample_role_promotion_input(PromotionArtifactLevelV1::SealedWasm);
+
+    let readiness = promotion_readiness_from_inputs_with_policy(
+        "promotion-ready-1",
+        &sample_promotion_target_plan(),
+        &[input],
+        &[],
+    );
+
+    assert_eq!(readiness.status, PromotionReadinessStatusV1::Blocked);
+    assert!(readiness.blockers.iter().any(|finding| {
+        finding.code == "promotion_policy_missing" && finding.subject.as_deref() == Some("root")
+    }));
+    validate_promotion_readiness(&readiness).expect("missing-policy readiness should validate");
+}
+
+#[test]
 fn check_promotion_readiness_rejects_blank_readiness_id() {
     let request = PromotionReadinessRequest {
         readiness_id: " ".to_string(),
@@ -1543,6 +1802,24 @@ fn promotion_readiness_text_reports_blockers() {
     assert!(text.contains("blockers: 1"));
     assert!(text.contains("[promotion_sealed_wasm_embedded_config_mismatch] root"));
     assert!(text.contains("embedded_config_identical=false"));
+}
+
+#[test]
+fn promotion_readiness_text_reports_policy_blockers() {
+    let input = sample_role_promotion_input(PromotionArtifactLevelV1::SourceBuild);
+    let policy = sample_role_promotion_policy();
+    let readiness = promotion_readiness_from_inputs_with_policy(
+        "promotion-ready-1",
+        &sample_promotion_target_plan(),
+        &[input],
+        &[policy],
+    );
+
+    let text = promotion_readiness_text(&readiness);
+
+    assert!(text.contains("status: blocked"));
+    assert!(text.contains("promotion_policy_level_not_allowed"));
+    assert!(text.contains("promotion_policy_must_use_sealed_bytes"));
 }
 
 #[test]
@@ -6773,6 +7050,20 @@ fn sample_role_promotion_input(promotion_level: PromotionArtifactLevelV1) -> Rol
         require_byte_identical_wasm: promotion_level == PromotionArtifactLevelV1::SealedWasm,
         require_target_embedded_config: true,
         target_store_has_artifact: Some(true),
+    }
+}
+
+fn sample_role_promotion_policy() -> RolePromotionPolicyV1 {
+    RolePromotionPolicyV1 {
+        role: "root".to_string(),
+        allowed_promotion_levels: vec![PromotionArtifactLevelV1::SealedWasm],
+        requirements: vec![
+            PromotionPolicyRequirementV1::SameSourceRevision,
+            PromotionPolicyRequirementV1::SameCargoFeatures,
+            PromotionPolicyRequirementV1::TargetConfigDigest,
+            PromotionPolicyRequirementV1::ByteIdenticalWasm,
+            PromotionPolicyRequirementV1::SealedBytes,
+        ],
     }
 }
 

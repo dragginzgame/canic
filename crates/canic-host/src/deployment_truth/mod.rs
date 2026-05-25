@@ -53,13 +53,15 @@ pub use model::{
     ObservedArtifactV1, ObservedCanisterV1, ObservedPoolCanisterV1, PhaseReceiptV1,
     PreviousArtifactReceiptKindV1, PromotionArtifactIdentityGroupV1,
     PromotionArtifactIdentityKindV1, PromotionArtifactIdentityReportV1, PromotionArtifactLevelV1,
-    PromotionPlanTransformEvidenceV1, PromotionPlanTransformV1, PromotionReadinessStatusV1,
+    PromotionPlanTransformEvidenceV1, PromotionPlanTransformV1, PromotionPolicyCheckV1,
+    PromotionPolicyClaimV1, PromotionPolicyRequirementV1, PromotionReadinessStatusV1,
     PromotionReadinessV1, ResumeSafetyV1, RoleArtifactManifestV1, RoleArtifactSourceKindV1,
     RoleArtifactSourceV1, RoleArtifactV1, RoleEpochExpectationV1, RoleEpochObservationV1,
     RolePhaseReceiptV1, RolePhaseResultV1, RolePromotionArtifactIdentityV1, RolePromotionInputV1,
-    RolePromotionPlanTransformV1, RolePromotionReadinessV1, SafetyFindingV1, SafetyReportV1,
-    SafetySeverityV1, SafetyStatusV1, StagingReceiptV1, TrustDomainV1, VerifiedPostconditionV1,
-    VerifierReadinessExpectationV1, VerifierReadinessObservationV1,
+    RolePromotionPlanTransformV1, RolePromotionPolicyDecisionV1, RolePromotionPolicyV1,
+    RolePromotionReadinessV1, SafetyFindingV1, SafetyReportV1, SafetySeverityV1, SafetyStatusV1,
+    StagingReceiptV1, TrustDomainV1, VerifiedPostconditionV1, VerifierReadinessExpectationV1,
+    VerifierReadinessObservationV1,
 };
 pub use observe::{
     DeploymentTruthError, LocalArtifactManifestRequest, LocalInventoryRequest,
@@ -71,16 +73,19 @@ pub use promotion::{
     PromotionArtifactIdentityReportRequest, PromotionArtifactSourceError,
     PromotionMaterializationIdentityError, PromotionPlanTransformError,
     PromotionPlanTransformEvidenceError, PromotionPlanTransformEvidenceRequest,
-    PromotionPlanTransformRequest, PromotionReadinessError, PromotionReadinessRequest,
-    build_materialization_evidence, build_materialization_input_digest, check_promotion_readiness,
+    PromotionPlanTransformRequest, PromotionPolicyCheckError, PromotionPolicyCheckRequest,
+    PromotionReadinessError, PromotionReadinessRequest, PromotionReadinessWithPolicyRequest,
+    build_materialization_evidence, build_materialization_input_digest, check_promotion_policy,
+    check_promotion_readiness, check_promotion_readiness_with_policy,
     promoted_deployment_plan_from_inputs, promoted_deployment_plan_transform_from_inputs,
     promotion_artifact_identity_report, promotion_artifact_identity_report_from_inputs,
-    promotion_plan_transform_evidence, promotion_readiness_from_inputs,
+    promotion_plan_transform_evidence, promotion_policy_check_from_inputs,
+    promotion_readiness_from_inputs, promotion_readiness_from_inputs_with_policy,
     validate_build_materialization_evidence, validate_build_materialization_input,
     validate_build_materialization_result, validate_build_recipe_identity,
     validate_promotion_artifact_identity_report, validate_promotion_plan_transform,
-    validate_promotion_plan_transform_evidence, validate_promotion_readiness,
-    validate_role_artifact_source,
+    validate_promotion_plan_transform_evidence, validate_promotion_policy_check,
+    validate_promotion_readiness, validate_role_artifact_source, validate_role_promotion_policy,
 };
 pub use receipt::{
     AuthorityEvidenceError, artifact_gate_phase_receipt, artifact_gate_role_phase_receipts,
@@ -98,7 +103,7 @@ pub use text::{
     authority_evidence_text, authority_plan_text, authority_receipt_text, authority_report_text,
     build_materialization_evidence_text, deployment_execution_preflight_text,
     promotion_artifact_identity_report_text, promotion_plan_transform_evidence_text,
-    promotion_plan_transform_text, promotion_readiness_text,
+    promotion_plan_transform_text, promotion_policy_check_text, promotion_readiness_text,
 };
 
 pub const DEPLOYMENT_TRUTH_SCHEMA_VERSION: u32 = 1;

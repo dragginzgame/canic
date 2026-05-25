@@ -78,6 +78,12 @@ inspect only the files needed for the current task.
 - `BuildMaterializationEvidenceV1` now links those source/build pieces with a
   computed target materialization-input digest, consistency flags, validation,
   and passive text output that explicitly reports no execution occurred.
+- Role promotion policy checks now model the 0.44 policy distinction between
+  roles that must reuse sealed bytes and roles that may rebuild only when
+  byte-identical output is later proven.
+- Promotion readiness can now include those policy blockers directly, so
+  readiness consumers can see sealed-byte and byte-identity policy failures
+  without treating the standalone policy check as execution authority.
 - `0.43.8` is closed. The closeout report is
   `docs/audits/reports/2026-05/2026-05-25/0.43-closeout.md`.
 - `0.43.8` adds a private current-install

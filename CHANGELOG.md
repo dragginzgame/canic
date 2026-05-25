@@ -14,6 +14,10 @@ present.
 
 ## [0.44.x] - 2026-05-25 - Artifact promotion
 
+- `0.44.4` adds passive role promotion policy checks and readiness integration
+  that distinguish sealed-byte-only roles from byte-identical source/build
+  promotion roles.
+
 - `0.44.3` adds passive source/build materialization identity and linkage
   evidence for build recipes, target-specific inputs, and output digests.
 

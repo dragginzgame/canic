@@ -111,6 +111,31 @@ pub fn build_materialization_evidence_text(evidence: &BuildMaterializationEviden
     .join("\n")
 }
 
+/// Render a promotion policy check as passive operator text.
+#[must_use]
+pub fn promotion_policy_check_text(check: &PromotionPolicyCheckV1) -> String {
+    let satisfied = check
+        .roles
+        .iter()
+        .filter(|role| role.policy_satisfied)
+        .count();
+    let mut lines = vec![
+        "Promotion policy check".to_string(),
+        "mode: passive".to_string(),
+        format!("status: {}", promotion_readiness_status_label(check.status)),
+        format!("check_id: {}", check.check_id),
+        String::new(),
+        "counts:".to_string(),
+        format!("  roles: {}", check.roles.len()),
+        format!("  policy_satisfied: {satisfied}"),
+        format!("  blockers: {}", check.blockers.len()),
+    ];
+
+    append_promotion_policy_decision_items(&mut lines, &check.roles);
+    append_hard_failure_items(&mut lines, "blockers", &check.blockers);
+    lines.join("\n")
+}
+
 /// Render a promotion artifact identity report as passive operator text.
 #[must_use]
 pub fn promotion_artifact_identity_report_text(
@@ -723,6 +748,36 @@ fn append_promotion_artifact_identity_group_items(
                 .collect::<Vec<_>>()
                 .join(","),
             group.roles.join(",")
+        ));
+    }
+}
+
+fn append_promotion_policy_decision_items(
+    lines: &mut Vec<String>,
+    roles: &[RolePromotionPolicyDecisionV1],
+) {
+    if roles.is_empty() {
+        return;
+    }
+    lines.push(String::new());
+    lines.push("roles:".to_string());
+    for role in roles {
+        lines.push(format!(
+            "  - {} {:?}: policy_satisfied={} level_allowed={} requirements={} claims={}",
+            role.role,
+            role.requested_promotion_level,
+            role.policy_satisfied,
+            role.level_allowed,
+            role.requirements
+                .iter()
+                .map(|requirement| format!("{requirement:?}"))
+                .collect::<Vec<_>>()
+                .join(","),
+            role.claims
+                .iter()
+                .map(|claim| format!("{claim:?}"))
+                .collect::<Vec<_>>()
+                .join(",")
         ));
     }
 }

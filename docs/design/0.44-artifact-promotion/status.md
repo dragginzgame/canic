@@ -75,6 +75,13 @@ promotion can prove what was built, uploaded, installed, and promoted.
 - Added `BuildMaterializationEvidenceV1` to link a recipe, materialization
   input, and materialization result with computed input-digest evidence and
   explicit passive text rendering.
+- Added passive `RolePromotionPolicyV1` and `PromotionPolicyCheckV1` so
+  promotion can report role policy decisions before execution, including the
+  distinction between roles that must reuse sealed bytes and roles that may
+  rebuild only when byte-identical output is later proven.
+- Promotion readiness can now optionally fold role promotion policy blockers
+  into the same passive `PromotionReadinessV1` artifact, while keeping the
+  standalone policy check available for separate operator reports.
 
 ## Not Implemented Yet
 
@@ -85,8 +92,7 @@ promotion can prove what was built, uploaded, installed, and promoted.
 - Artifact identity dedupe semantics beyond passive report grouping.
 - Wiring source/build materialization identity into promotion plans and
   operator reports.
-- Explicit role policy distinction between "must use sealed bytes" and
-  "rebuild allowed only if byte-identical output is proven."
+- CLI/report surfaces for role promotion policy checks.
 - Promotion plan/source receipt/target execution lineage identity.
 
 ## Drift Log
