@@ -3,22 +3,24 @@ use super::executor::{
     validate_deployment_execution_preflight_for_check,
 };
 use super::{
-    ArtifactPromotionPlanV1, ArtifactPromotionProvenanceReportV1, ArtifactSourceV1,
-    ArtifactTransportV1, BuildMaterializationEvidenceV1, BuildMaterializationInputV1,
-    BuildMaterializationResultV1, BuildRecipeIdentityV1, DEPLOYMENT_TRUTH_SCHEMA_VERSION,
-    DeploymentCheckV1, DeploymentExecutionPreflightStatusV1, DeploymentExecutionPreflightV1,
-    DeploymentPlanV1, ObservationStatusV1, PromotionArtifactIdentityGroupV1,
-    PromotionArtifactIdentityKindV1, PromotionArtifactIdentityReportV1, PromotionArtifactLevelV1,
+    ArtifactPromotionExecutionReceiptV1, ArtifactPromotionPlanV1,
+    ArtifactPromotionProvenanceReportV1, ArtifactSourceV1, ArtifactTransportV1,
+    BuildMaterializationEvidenceV1, BuildMaterializationInputV1, BuildMaterializationResultV1,
+    BuildRecipeIdentityV1, DEPLOYMENT_TRUTH_SCHEMA_VERSION, DeploymentCheckV1,
+    DeploymentExecutionPreflightStatusV1, DeploymentExecutionPreflightV1, DeploymentPlanV1,
+    DeploymentReceiptV1, ObservationStatusV1, PromotionArtifactIdentityGroupV1,
+    PromotionArtifactIdentityKindV1, PromotionArtifactIdentityReportV1,
+    PromotionArtifactIdentitySummaryV1, PromotionArtifactLevelV1,
     PromotionMaterializationIdentityReportV1, PromotionMaterializationOutputGroupV1,
     PromotionPlanTransformEvidenceV1, PromotionPlanTransformV1, PromotionPolicyCheckV1,
     PromotionPolicyClaimV1, PromotionPolicyRequirementV1, PromotionReadinessStatusV1,
     PromotionReadinessV1, PromotionTargetExecutionLineageV1, PromotionWasmStoreIdentityReportV1,
     RoleArtifactSourceKindV1, RoleArtifactSourceV1, RoleArtifactV1,
-    RolePromotionArtifactIdentityV1, RolePromotionInputV1, RolePromotionMaterializationIdentityV1,
-    RolePromotionMaterializationLinkV1, RolePromotionPlanTransformV1,
-    RolePromotionPolicyDecisionV1, RolePromotionPolicyV1, RolePromotionProvenanceV1,
-    RolePromotionReadinessV1, RolePromotionWasmStoreIdentityV1, SafetyFindingV1, SafetySeverityV1,
-    StagingReceiptV1, stable_json_sha256_hex,
+    RolePromotionArtifactIdentityV1, RolePromotionExecutionReceiptV1, RolePromotionInputV1,
+    RolePromotionMaterializationIdentityV1, RolePromotionMaterializationLinkV1,
+    RolePromotionPlanTransformV1, RolePromotionPolicyDecisionV1, RolePromotionPolicyV1,
+    RolePromotionProvenanceV1, RolePromotionReadinessV1, RolePromotionWasmStoreIdentityV1,
+    SafetyFindingV1, SafetySeverityV1, StagingReceiptV1, stable_json_sha256_hex,
 };
 use serde::Serialize;
 use std::collections::{BTreeMap, BTreeSet};
@@ -199,6 +201,29 @@ pub enum ArtifactPromotionProvenanceReportError {
 }
 
 ///
+/// ArtifactPromotionExecutionReceiptError
+///
+#[derive(Debug, ThisError)]
+pub enum ArtifactPromotionExecutionReceiptError {
+    #[error(
+        "artifact promotion execution receipt schema mismatch: expected {expected}, found {found}"
+    )]
+    SchemaVersionMismatch { expected: u32, found: u32 },
+    #[error("artifact promotion execution receipt is missing required field: {field}")]
+    MissingRequiredField { field: &'static str },
+    #[error("artifact promotion execution receipt field {field} is inconsistent")]
+    LinkageMismatch { field: &'static str },
+    #[error("artifact promotion execution receipt contains unknown deployment role: {role}")]
+    UnknownDeploymentRole { role: String },
+    #[error("artifact promotion execution receipt is missing deployment role: {role}")]
+    MissingDeploymentRole { role: String },
+    #[error("artifact promotion execution receipt provenance status {status:?} is not ready")]
+    ProvenanceNotReady { status: PromotionReadinessStatusV1 },
+    #[error("artifact promotion execution receipt has invalid provenance report: {0}")]
+    Provenance(#[from] ArtifactPromotionProvenanceReportError),
+}
+
+///
 /// PromotionTargetExecutionLineageError
 ///
 #[derive(Debug, ThisError)]
@@ -265,6 +290,8 @@ pub enum PromotionArtifactIdentityReportError {
         "promotion artifact identity report identity group key mismatch: expected {expected}, found {found}"
     )]
     IdentityGroupKeyMismatch { expected: String, found: String },
+    #[error("promotion artifact identity report summary field {field} is stale")]
+    SummaryMismatch { field: &'static str },
     #[error(
         "promotion artifact identity report field {field} must be a lowercase sha256 hex digest"
     )]
@@ -495,6 +522,16 @@ pub struct ArtifactPromotionProvenanceReportRequest {
     pub artifact_promotion_plan: ArtifactPromotionPlanV1,
     pub wasm_store_identity_report: Option<PromotionWasmStoreIdentityReportV1>,
     pub materialization_identity_report: Option<PromotionMaterializationIdentityReportV1>,
+}
+
+///
+/// ArtifactPromotionExecutionReceiptRequest
+///
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ArtifactPromotionExecutionReceiptRequest {
+    pub receipt_id: String,
+    pub provenance_report: ArtifactPromotionProvenanceReportV1,
+    pub deployment_receipt: DeploymentReceiptV1,
 }
 
 ///
@@ -813,6 +850,8 @@ pub fn promotion_artifact_identity_report(
         }
         roles.push(role_promotion_artifact_identity(input));
     }
+    let identity_groups = promotion_artifact_identity_groups(&roles);
+    let summary = promotion_artifact_identity_summary(&roles, &identity_groups);
 
     PromotionArtifactIdentityReportV1 {
         schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
@@ -822,7 +861,8 @@ pub fn promotion_artifact_identity_report(
         } else {
             PromotionReadinessStatusV1::Blocked
         },
-        identity_groups: promotion_artifact_identity_groups(&roles),
+        summary,
+        identity_groups,
         roles,
         blockers,
     }
@@ -869,6 +909,7 @@ pub fn validate_promotion_artifact_identity_report(
         validate_role_artifact_identity(role)?;
     }
     validate_artifact_identity_groups(&report.roles, &report.identity_groups)?;
+    validate_artifact_identity_summary(report)?;
     validate_identity_report_blockers(&report.blockers)?;
     Ok(())
 }
@@ -1088,6 +1129,52 @@ pub fn validate_artifact_promotion_provenance_report(
     }
     validate_provenance_report_blockers(&report.blockers)?;
     Ok(())
+}
+
+pub fn artifact_promotion_execution_receipt(
+    request: ArtifactPromotionExecutionReceiptRequest,
+) -> Result<ArtifactPromotionExecutionReceiptV1, ArtifactPromotionExecutionReceiptError> {
+    ensure_execution_receipt_field("receipt_id", &request.receipt_id)?;
+    validate_artifact_promotion_provenance_report(&request.provenance_report)?;
+    ensure_execution_receipt_provenance_ready(request.provenance_report.status)?;
+    validate_deployment_receipt_for_promotion(
+        &request.deployment_receipt,
+        &request.provenance_report,
+    )?;
+    let receipt = build_artifact_promotion_execution_receipt(request);
+    validate_artifact_promotion_execution_receipt(&receipt)?;
+    Ok(receipt)
+}
+
+pub fn validate_artifact_promotion_execution_receipt(
+    receipt: &ArtifactPromotionExecutionReceiptV1,
+) -> Result<(), ArtifactPromotionExecutionReceiptError> {
+    if receipt.schema_version != DEPLOYMENT_TRUTH_SCHEMA_VERSION {
+        return Err(
+            ArtifactPromotionExecutionReceiptError::SchemaVersionMismatch {
+                expected: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
+                found: receipt.schema_version,
+            },
+        );
+    }
+    ensure_execution_receipt_field("receipt_id", &receipt.receipt_id)?;
+    ensure_execution_receipt_field(
+        "artifact_promotion_plan_id",
+        &receipt.artifact_promotion_plan_id,
+    )?;
+    ensure_execution_receipt_field("provenance_report_id", &receipt.provenance_report_id)?;
+    ensure_execution_receipt_provenance_ready(receipt.provenance_status)?;
+    ensure_execution_receipt_field("promoted_plan_id", &receipt.promoted_plan_id)?;
+    ensure_execution_receipt_field(
+        "promotion_plan_lineage_digest",
+        &receipt.promotion_plan_lineage_digest,
+    )?;
+    ensure_execution_receipt_field("operation_id", &receipt.operation_id)?;
+    ensure_execution_receipt_field("started_at", &receipt.started_at)?;
+    if let Some(finished_at) = &receipt.finished_at {
+        ensure_execution_receipt_field("finished_at", finished_at)?;
+    }
+    ensure_execution_receipt_linkage(receipt)
 }
 
 pub fn validate_promotion_plan_transform_evidence(
@@ -1945,6 +2032,81 @@ fn attach_materialization_provenance(
     }
 }
 
+fn build_artifact_promotion_execution_receipt(
+    request: ArtifactPromotionExecutionReceiptRequest,
+) -> ArtifactPromotionExecutionReceiptV1 {
+    let roles = request
+        .provenance_report
+        .roles
+        .iter()
+        .map(|role| role_promotion_execution_receipt(role, &request.deployment_receipt))
+        .collect::<Vec<_>>();
+    ArtifactPromotionExecutionReceiptV1 {
+        schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
+        receipt_id: request.receipt_id,
+        artifact_promotion_plan_id: request.provenance_report.artifact_promotion_plan_id.clone(),
+        provenance_report_id: request.provenance_report.report_id,
+        provenance_status: request.provenance_report.status,
+        promoted_plan_id: request.provenance_report.promoted_plan_id.clone(),
+        promotion_plan_lineage_digest: request.provenance_report.promotion_plan_lineage_digest,
+        operation_id: request.deployment_receipt.operation_id.clone(),
+        operation_status: request.deployment_receipt.operation_status,
+        command_result: request.deployment_receipt.command_result.clone(),
+        started_at: request.deployment_receipt.started_at.clone(),
+        finished_at: request.deployment_receipt.finished_at.clone(),
+        deployment_receipt: request.deployment_receipt,
+        roles,
+    }
+}
+
+fn role_promotion_execution_receipt(
+    role: &RolePromotionProvenanceV1,
+    deployment_receipt: &DeploymentReceiptV1,
+) -> RolePromotionExecutionReceiptV1 {
+    let role_receipt = deployment_receipt
+        .role_phase_receipts
+        .iter()
+        .rev()
+        .find(|receipt| receipt.role == role.role);
+    RolePromotionExecutionReceiptV1 {
+        role: role.role.clone(),
+        promotion_level: role.promotion_level,
+        materialization_evidence_id: role.materialization_evidence_id.clone(),
+        wasm_store_locator: role.wasm_store_locator.clone(),
+        role_phase_result: role_receipt.map(|receipt| receipt.result),
+        artifact_digest: role_receipt.and_then(|receipt| receipt.artifact_digest.clone()),
+        observed_module_hash_after: role_receipt
+            .and_then(|receipt| receipt.observed_module_hash_after.clone()),
+        canonical_embedded_config_sha256: role_receipt
+            .and_then(|receipt| receipt.canonical_embedded_config_sha256.clone()),
+    }
+}
+
+fn validate_deployment_receipt_for_promotion(
+    receipt: &DeploymentReceiptV1,
+    provenance: &ArtifactPromotionProvenanceReportV1,
+) -> Result<(), ArtifactPromotionExecutionReceiptError> {
+    if receipt.schema_version != DEPLOYMENT_TRUTH_SCHEMA_VERSION {
+        return Err(
+            ArtifactPromotionExecutionReceiptError::SchemaVersionMismatch {
+                expected: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
+                found: receipt.schema_version,
+            },
+        );
+    }
+    ensure_execution_receipt_field("deployment_receipt.operation_id", &receipt.operation_id)?;
+    ensure_execution_receipt_field("deployment_receipt.started_at", &receipt.started_at)?;
+    if receipt.plan_id != provenance.promoted_plan_id {
+        return Err(ArtifactPromotionExecutionReceiptError::LinkageMismatch {
+            field: "deployment_receipt.plan_id",
+        });
+    }
+    if let Some(finished_at) = &receipt.finished_at {
+        ensure_execution_receipt_field("deployment_receipt.finished_at", finished_at)?;
+    }
+    Ok(())
+}
+
 fn wasm_store_identity_blockers(
     roles: &[RolePromotionWasmStoreIdentityV1],
 ) -> Vec<SafetyFindingV1> {
@@ -2224,6 +2386,26 @@ fn promotion_artifact_identity_groups(
         group.roles.push(role.role.clone());
     }
     groups.into_values().collect()
+}
+
+fn promotion_artifact_identity_summary(
+    roles: &[RolePromotionArtifactIdentityV1],
+    groups: &[PromotionArtifactIdentityGroupV1],
+) -> PromotionArtifactIdentitySummaryV1 {
+    PromotionArtifactIdentitySummaryV1 {
+        role_count: roles.len(),
+        identity_group_count: groups.len(),
+        shared_identity_group_count: groups.iter().filter(|group| group.roles.len() > 1).count(),
+        digest_pinned_role_count: roles.iter().filter(|role| role.digest_pinned).count(),
+        source_build_role_count: roles
+            .iter()
+            .filter(|role| role.identity_kind == PromotionArtifactIdentityKindV1::SourceBuild)
+            .count(),
+        deferred_identity_role_count: roles
+            .iter()
+            .filter(|role| role.identity_kind == PromotionArtifactIdentityKindV1::Deferred)
+            .count(),
+    }
 }
 
 fn promotion_materialization_output_groups(
@@ -2568,6 +2750,43 @@ fn validate_artifact_identity_groups(
                 role: role.role.clone(),
             });
         }
+    }
+    Ok(())
+}
+
+fn validate_artifact_identity_summary(
+    report: &PromotionArtifactIdentityReportV1,
+) -> Result<(), PromotionArtifactIdentityReportError> {
+    let expected = promotion_artifact_identity_summary(&report.roles, &report.identity_groups);
+    if report.summary.role_count != expected.role_count {
+        return Err(PromotionArtifactIdentityReportError::SummaryMismatch {
+            field: "role_count",
+        });
+    }
+    if report.summary.identity_group_count != expected.identity_group_count {
+        return Err(PromotionArtifactIdentityReportError::SummaryMismatch {
+            field: "identity_group_count",
+        });
+    }
+    if report.summary.shared_identity_group_count != expected.shared_identity_group_count {
+        return Err(PromotionArtifactIdentityReportError::SummaryMismatch {
+            field: "shared_identity_group_count",
+        });
+    }
+    if report.summary.digest_pinned_role_count != expected.digest_pinned_role_count {
+        return Err(PromotionArtifactIdentityReportError::SummaryMismatch {
+            field: "digest_pinned_role_count",
+        });
+    }
+    if report.summary.source_build_role_count != expected.source_build_role_count {
+        return Err(PromotionArtifactIdentityReportError::SummaryMismatch {
+            field: "source_build_role_count",
+        });
+    }
+    if report.summary.deferred_identity_role_count != expected.deferred_identity_role_count {
+        return Err(PromotionArtifactIdentityReportError::SummaryMismatch {
+            field: "deferred_identity_role_count",
+        });
     }
     Ok(())
 }
@@ -3498,6 +3717,158 @@ fn validate_provenance_report_blockers(
     Ok(())
 }
 
+fn ensure_execution_receipt_linkage(
+    receipt: &ArtifactPromotionExecutionReceiptV1,
+) -> Result<(), ArtifactPromotionExecutionReceiptError> {
+    if receipt.deployment_receipt.schema_version != DEPLOYMENT_TRUTH_SCHEMA_VERSION {
+        return Err(
+            ArtifactPromotionExecutionReceiptError::SchemaVersionMismatch {
+                expected: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
+                found: receipt.deployment_receipt.schema_version,
+            },
+        );
+    }
+    if receipt.deployment_receipt.plan_id != receipt.promoted_plan_id {
+        return Err(ArtifactPromotionExecutionReceiptError::LinkageMismatch {
+            field: "deployment_receipt.plan_id",
+        });
+    }
+    if receipt.deployment_receipt.operation_id != receipt.operation_id {
+        return Err(ArtifactPromotionExecutionReceiptError::LinkageMismatch {
+            field: "operation_id",
+        });
+    }
+    if receipt.deployment_receipt.operation_status != receipt.operation_status {
+        return Err(ArtifactPromotionExecutionReceiptError::LinkageMismatch {
+            field: "operation_status",
+        });
+    }
+    if receipt.deployment_receipt.command_result != receipt.command_result {
+        return Err(ArtifactPromotionExecutionReceiptError::LinkageMismatch {
+            field: "command_result",
+        });
+    }
+    if receipt.deployment_receipt.started_at != receipt.started_at {
+        return Err(ArtifactPromotionExecutionReceiptError::LinkageMismatch {
+            field: "started_at",
+        });
+    }
+    if receipt.deployment_receipt.finished_at != receipt.finished_at {
+        return Err(ArtifactPromotionExecutionReceiptError::LinkageMismatch {
+            field: "finished_at",
+        });
+    }
+    ensure_execution_receipt_roles_match_deployment_receipt(
+        &receipt.roles,
+        &receipt.deployment_receipt,
+    )?;
+    ensure_unique_execution_receipt_roles(&receipt.roles)
+}
+
+const fn ensure_execution_receipt_provenance_ready(
+    status: PromotionReadinessStatusV1,
+) -> Result<(), ArtifactPromotionExecutionReceiptError> {
+    if matches!(status, PromotionReadinessStatusV1::Ready) {
+        Ok(())
+    } else {
+        Err(ArtifactPromotionExecutionReceiptError::ProvenanceNotReady { status })
+    }
+}
+
+fn ensure_execution_receipt_roles_match_deployment_receipt(
+    roles: &[RolePromotionExecutionReceiptV1],
+    deployment_receipt: &DeploymentReceiptV1,
+) -> Result<(), ArtifactPromotionExecutionReceiptError> {
+    let promotion_roles = roles
+        .iter()
+        .map(|role| role.role.as_str())
+        .collect::<BTreeSet<_>>();
+    let deployment_roles = deployment_receipt
+        .role_phase_receipts
+        .iter()
+        .map(|receipt| receipt.role.as_str())
+        .collect::<BTreeSet<_>>();
+    for role in &promotion_roles {
+        if !deployment_roles.contains(role) {
+            return Err(
+                ArtifactPromotionExecutionReceiptError::MissingDeploymentRole {
+                    role: (*role).to_string(),
+                },
+            );
+        }
+    }
+    for role in &deployment_roles {
+        if !promotion_roles.contains(role) {
+            return Err(
+                ArtifactPromotionExecutionReceiptError::UnknownDeploymentRole {
+                    role: (*role).to_string(),
+                },
+            );
+        }
+    }
+    for role in roles {
+        let role_receipt = deployment_receipt
+            .role_phase_receipts
+            .iter()
+            .rev()
+            .find(|receipt| receipt.role == role.role);
+        if role.role_phase_result != role_receipt.map(|receipt| receipt.result) {
+            return Err(ArtifactPromotionExecutionReceiptError::LinkageMismatch {
+                field: "role_phase_result",
+            });
+        }
+        if role.artifact_digest != role_receipt.and_then(|receipt| receipt.artifact_digest.clone())
+        {
+            return Err(ArtifactPromotionExecutionReceiptError::LinkageMismatch {
+                field: "artifact_digest",
+            });
+        }
+        if role.observed_module_hash_after
+            != role_receipt.and_then(|receipt| receipt.observed_module_hash_after.clone())
+        {
+            return Err(ArtifactPromotionExecutionReceiptError::LinkageMismatch {
+                field: "observed_module_hash_after",
+            });
+        }
+        if role.canonical_embedded_config_sha256
+            != role_receipt.and_then(|receipt| receipt.canonical_embedded_config_sha256.clone())
+        {
+            return Err(ArtifactPromotionExecutionReceiptError::LinkageMismatch {
+                field: "canonical_embedded_config_sha256",
+            });
+        }
+    }
+    Ok(())
+}
+
+fn ensure_unique_execution_receipt_roles(
+    roles: &[RolePromotionExecutionReceiptV1],
+) -> Result<(), ArtifactPromotionExecutionReceiptError> {
+    let mut seen = BTreeSet::new();
+    for role in roles {
+        ensure_execution_receipt_field("role", &role.role)?;
+        if !seen.insert(role.role.as_str()) {
+            return Err(ArtifactPromotionExecutionReceiptError::LinkageMismatch { field: "roles" });
+        }
+        if let Some(evidence_id) = &role.materialization_evidence_id {
+            ensure_execution_receipt_field("materialization_evidence_id", evidence_id)?;
+        }
+        if let Some(locator) = &role.wasm_store_locator {
+            ensure_execution_receipt_field("wasm_store_locator", locator)?;
+        }
+        if let Some(digest) = &role.artifact_digest {
+            ensure_execution_receipt_field("artifact_digest", digest)?;
+        }
+        if let Some(hash) = &role.observed_module_hash_after {
+            ensure_execution_receipt_field("observed_module_hash_after", hash)?;
+        }
+        if let Some(digest) = &role.canonical_embedded_config_sha256 {
+            ensure_execution_receipt_field("canonical_embedded_config_sha256", digest)?;
+        }
+    }
+    Ok(())
+}
+
 fn validate_readiness_findings(
     field: &'static str,
     findings: &[SafetyFindingV1],
@@ -3573,6 +3944,16 @@ fn ensure_provenance_report_field(
 ) -> Result<(), ArtifactPromotionProvenanceReportError> {
     if value.trim().is_empty() {
         return Err(ArtifactPromotionProvenanceReportError::MissingRequiredField { field });
+    }
+    Ok(())
+}
+
+fn ensure_execution_receipt_field(
+    field: &'static str,
+    value: &str,
+) -> Result<(), ArtifactPromotionExecutionReceiptError> {
+    if value.trim().is_empty() {
+        return Err(ArtifactPromotionExecutionReceiptError::MissingRequiredField { field });
     }
     Ok(())
 }

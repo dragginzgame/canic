@@ -195,11 +195,6 @@ pub fn promotion_policy_check_text(check: &PromotionPolicyCheckV1) -> String {
 pub fn promotion_artifact_identity_report_text(
     report: &PromotionArtifactIdentityReportV1,
 ) -> String {
-    let digest_pinned = report
-        .roles
-        .iter()
-        .filter(|role| role.digest_pinned)
-        .count();
     let mut lines = vec![
         "Promotion artifact identity report".to_string(),
         "mode: passive".to_string(),
@@ -210,9 +205,24 @@ pub fn promotion_artifact_identity_report_text(
         format!("report_id: {}", report.report_id),
         String::new(),
         "counts:".to_string(),
-        format!("  roles: {}", report.roles.len()),
-        format!("  identity_groups: {}", report.identity_groups.len()),
-        format!("  digest_pinned: {digest_pinned}"),
+        format!("  roles: {}", report.summary.role_count),
+        format!("  identity_groups: {}", report.summary.identity_group_count),
+        format!(
+            "  shared_identity_groups: {}",
+            report.summary.shared_identity_group_count
+        ),
+        format!(
+            "  digest_pinned_roles: {}",
+            report.summary.digest_pinned_role_count
+        ),
+        format!(
+            "  source_build_roles: {}",
+            report.summary.source_build_role_count
+        ),
+        format!(
+            "  deferred_identity_roles: {}",
+            report.summary.deferred_identity_role_count
+        ),
         format!("  blockers: {}", report.blockers.len()),
     ];
 
@@ -515,6 +525,68 @@ pub fn artifact_promotion_provenance_report_text(
                     .as_deref()
                     .unwrap_or("none"),
                 role.wasm_store_locator.as_deref().unwrap_or("none")
+            ));
+        }
+    }
+    lines.join("\n")
+}
+
+/// Render artifact promotion execution receipt linkage as operator text.
+#[must_use]
+pub fn artifact_promotion_execution_receipt_text(
+    receipt: &ArtifactPromotionExecutionReceiptV1,
+) -> String {
+    let mut lines = vec![
+        "Artifact promotion execution receipt".to_string(),
+        "mode: execution_receipt".to_string(),
+        format!("receipt_id: {}", receipt.receipt_id),
+        format!(
+            "artifact_promotion_plan_id: {}",
+            receipt.artifact_promotion_plan_id
+        ),
+        format!("provenance_report_id: {}", receipt.provenance_report_id),
+        format!("promoted_plan_id: {}", receipt.promoted_plan_id),
+        format!(
+            "promotion_plan_lineage_digest: {}",
+            receipt.promotion_plan_lineage_digest
+        ),
+        format!("operation_id: {}", receipt.operation_id),
+        format!(
+            "provenance_status: {}",
+            promotion_readiness_status_label(receipt.provenance_status)
+        ),
+        format!("operation_status: {:?}", receipt.operation_status),
+        format!("command_result: {:?}", receipt.command_result),
+        format!("started_at: {}", receipt.started_at),
+        format!(
+            "finished_at: {}",
+            receipt.finished_at.as_deref().unwrap_or("none")
+        ),
+        String::new(),
+        "counts:".to_string(),
+        format!("  roles: {}", receipt.roles.len()),
+        format!(
+            "  deployment_phase_receipts: {}",
+            receipt.deployment_receipt.phase_receipts.len()
+        ),
+        format!(
+            "  deployment_role_phase_receipts: {}",
+            receipt.deployment_receipt.role_phase_receipts.len()
+        ),
+    ];
+
+    if !receipt.roles.is_empty() {
+        lines.push(String::new());
+        lines.push("roles:".to_string());
+        for role in &receipt.roles {
+            lines.push(format!(
+                "  {} {:?}: result={} artifact={} observed_module={}",
+                role.role,
+                role.promotion_level,
+                role.role_phase_result
+                    .map_or_else(|| "none".to_string(), |result| format!("{result:?}")),
+                role.artifact_digest.as_deref().unwrap_or("none"),
+                role.observed_module_hash_after.as_deref().unwrap_or("none")
             ));
         }
     }

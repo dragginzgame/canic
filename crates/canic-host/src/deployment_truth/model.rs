@@ -360,9 +360,23 @@ pub struct PromotionArtifactIdentityReportV1 {
     pub schema_version: u32,
     pub report_id: String,
     pub status: PromotionReadinessStatusV1,
+    pub summary: PromotionArtifactIdentitySummaryV1,
     pub roles: Vec<RolePromotionArtifactIdentityV1>,
     pub identity_groups: Vec<PromotionArtifactIdentityGroupV1>,
     pub blockers: Vec<SafetyFindingV1>,
+}
+
+///
+/// PromotionArtifactIdentitySummaryV1
+///
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct PromotionArtifactIdentitySummaryV1 {
+    pub role_count: usize,
+    pub identity_group_count: usize,
+    pub shared_identity_group_count: usize,
+    pub digest_pinned_role_count: usize,
+    pub source_build_role_count: usize,
+    pub deferred_identity_role_count: usize,
 }
 
 ///
@@ -505,6 +519,42 @@ pub struct ArtifactPromotionProvenanceReportV1 {
     pub execution_attempted: bool,
     pub roles: Vec<RolePromotionProvenanceV1>,
     pub blockers: Vec<SafetyFindingV1>,
+}
+
+///
+/// ArtifactPromotionExecutionReceiptV1
+///
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ArtifactPromotionExecutionReceiptV1 {
+    pub schema_version: u32,
+    pub receipt_id: String,
+    pub artifact_promotion_plan_id: String,
+    pub provenance_report_id: String,
+    pub provenance_status: PromotionReadinessStatusV1,
+    pub promoted_plan_id: String,
+    pub promotion_plan_lineage_digest: String,
+    pub operation_id: String,
+    pub operation_status: DeploymentExecutionStatusV1,
+    pub command_result: DeploymentCommandResultV1,
+    pub started_at: String,
+    pub finished_at: Option<String>,
+    pub deployment_receipt: DeploymentReceiptV1,
+    pub roles: Vec<RolePromotionExecutionReceiptV1>,
+}
+
+///
+/// RolePromotionExecutionReceiptV1
+///
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RolePromotionExecutionReceiptV1 {
+    pub role: String,
+    pub promotion_level: PromotionArtifactLevelV1,
+    pub materialization_evidence_id: Option<String>,
+    pub wasm_store_locator: Option<String>,
+    pub role_phase_result: Option<RolePhaseResultV1>,
+    pub artifact_digest: Option<String>,
+    pub observed_module_hash_after: Option<String>,
+    pub canonical_embedded_config_sha256: Option<String>,
 }
 
 ///

@@ -12,6 +12,13 @@ present.
 
 ## Unreleased
 
+- Adds passive promotion execution receipt wrappers that link promotion
+  provenance to existing deployment receipts without adding a separate
+  promotion executor, rejects blocked provenance as execution evidence, and
+  verifies nested deployment receipt roles match promotion provenance roles.
+- Adds validated artifact identity summary counters so promotion dedupe
+  semantics are explicit report data rather than only role-group text.
+
 ## [0.44.x] - 2026-05-25 - Artifact promotion
 
 - `0.44.7` adds passive wasm-store, source/build materialization, and

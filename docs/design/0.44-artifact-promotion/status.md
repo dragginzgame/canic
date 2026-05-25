@@ -63,6 +63,10 @@ promotion can prove what was built, uploaded, installed, and promoted.
 - Promotion artifact identity reports now group roles by deterministic artifact
   identity key so operator output can show when distinct source locators resolve
   to the same sealed or source/build identity.
+- Promotion artifact identity reports now include validated summary counters for
+  role count, identity group count, shared identity groups, digest-pinned roles,
+  source/build roles, and deferred identities so dedupe semantics are explicit
+  report data rather than presentation-only grouping.
 - Added host-owned passive text rendering for
   `PromotionArtifactIdentityReportV1`.
 - Added passive `BuildRecipeIdentityV1`, `BuildMaterializationInputV1`, and
@@ -109,13 +113,20 @@ promotion can prove what was built, uploaded, installed, and promoted.
   plan to readiness, artifact identity, transform, target execution lineage,
   wasm-store identity, and materialization identity report IDs without claiming
   execution.
+- Added passive artifact promotion execution receipt wrappers that link a
+  validated promotion provenance report to an existing deployment receipt,
+  preserve promoted-plan lineage, and surface role-level execution evidence
+  without introducing a separate promotion executor. Execution receipt wrappers
+  require ready promotion provenance, so blocked passive provenance cannot be
+  represented as a promotion execution artifact. They also require the nested
+  deployment receipt role evidence to match the promotion provenance role set.
 
 ## Not Implemented Yet
 
-- Promotion execution receipts.
+- Execution-path emission of promotion execution receipts.
 - Live `wasm_store` catalog lookup/verification beyond staging receipt
   evidence.
-- Artifact identity dedupe semantics beyond passive report grouping.
+- Artifact identity dedupe policy decisions beyond passive summary/grouping.
 - CLI command wiring for source/build materialization identity reports.
 - CLI/report surfaces for role promotion policy checks.
 

@@ -69,6 +69,9 @@ inspect only the files needed for the current task.
 - Promotion artifact identity reports also group roles by deterministic
   artifact identity key, showing when distinct source locators resolve to the
   same sealed or source/build identity.
+- Promotion artifact identity reports also carry validated summary counters for
+  shared identity groups, digest-pinned roles, source/build roles, and deferred
+  identities, making dedupe semantics explicit report data.
 - Promotion artifact identity reports also have host-owned passive text
   rendering for future CLI/report consumers.
 - Source/build promotion now has passive `BuildRecipeIdentityV1`,
@@ -104,6 +107,12 @@ inspect only the files needed for the current task.
   readiness, artifact identity, transform, target execution lineage,
   wasm-store identity, and materialization identity report IDs without claiming
   execution.
+- Passive artifact promotion execution receipts now wrap existing deployment
+  receipts with promotion provenance linkage, promoted-plan lineage, and
+  role-level execution evidence without adding a separate promotion executor.
+  They require ready provenance, so blocked passive provenance cannot be
+  presented as execution evidence, and the nested deployment receipt role
+  evidence must match the promotion provenance role set.
 - `0.43.8` is closed. The closeout report is
   `docs/audits/reports/2026-05/2026-05-25/0.43-closeout.md`.
 - `0.43.8` adds a private current-install

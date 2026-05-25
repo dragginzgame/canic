@@ -318,9 +318,21 @@ fn promotion_artifact_identity_report_round_trips_through_json() {
             "schema_version",
             "report_id",
             "status",
+            "summary",
             "roles",
             "identity_groups",
             "blockers",
+        ],
+    );
+    assert_object_keys(
+        &encoded["summary"],
+        &[
+            "role_count",
+            "identity_group_count",
+            "shared_identity_group_count",
+            "digest_pinned_role_count",
+            "source_build_role_count",
+            "deferred_identity_role_count",
         ],
     );
     let role = &encoded["roles"][0];
@@ -401,6 +413,10 @@ fn promotion_artifact_identity_report_groups_roles_by_identity_key() {
 
     assert_eq!(report.roles.len(), 2);
     assert_eq!(report.identity_groups.len(), 1);
+    assert_eq!(report.summary.role_count, 2);
+    assert_eq!(report.summary.identity_group_count, 1);
+    assert_eq!(report.summary.shared_identity_group_count, 1);
+    assert_eq!(report.summary.digest_pinned_role_count, 2);
     let group = &report.identity_groups[0];
     assert_eq!(
         group.identity_kind,
@@ -438,6 +454,7 @@ fn promotion_artifact_identity_report_marks_source_build_identity() {
         report.roles[0].identity_kind,
         PromotionArtifactIdentityKindV1::SourceBuild
     );
+    assert_eq!(report.summary.source_build_role_count, 1);
 }
 
 #[test]
@@ -455,6 +472,7 @@ fn promotion_artifact_identity_report_records_invalid_source_as_blocker() {
         report.roles[0].identity_kind,
         PromotionArtifactIdentityKindV1::Deferred
     );
+    assert_eq!(report.summary.deferred_identity_role_count, 1);
     validate_promotion_artifact_identity_report(&report)
         .expect("blocked report should still validate");
 }
@@ -473,13 +491,33 @@ fn promotion_artifact_identity_report_text_reports_passive_summary() {
     assert!(text.contains("status: ready"));
     assert!(text.contains("report_id: promotion-identity-1"));
     assert!(text.contains("identity_groups: 1"));
-    assert!(text.contains("digest_pinned: 1"));
+    assert!(text.contains("shared_identity_groups: 0"));
+    assert!(text.contains("digest_pinned_roles: 1"));
+    assert!(text.contains("source_build_roles: 0"));
+    assert!(text.contains("deferred_identity_roles: 0"));
     assert!(text.contains("identity groups:"));
     assert!(
         text.contains("root SealedWasm/LocalWasm: identity_kind=SealedWasm digest_pinned=true")
     );
     assert!(text.contains("source_locator: artifacts/root.wasm.gz"));
     assert!(text.contains("wasm_gz_sha256: not recorded"));
+}
+
+#[test]
+fn promotion_artifact_identity_report_validation_rejects_stale_summary() {
+    let input = sample_role_promotion_input(PromotionArtifactLevelV1::SealedWasm);
+    let mut report = promotion_artifact_identity_report("promotion-identity-1", &[input]);
+    report.summary.identity_group_count = 2;
+
+    let err = validate_promotion_artifact_identity_report(&report)
+        .expect_err("stale summary should fail");
+
+    assert!(matches!(
+        err,
+        PromotionArtifactIdentityReportError::SummaryMismatch {
+            field: "identity_group_count"
+        }
+    ));
 }
 
 #[test]
@@ -1610,6 +1648,208 @@ fn artifact_promotion_provenance_report_text_reports_passive_summary() {
     assert!(text.contains("wasm_store_identity: wasm-store-identity-1"));
     assert!(text.contains("materialization_identity: materialization-report-1"));
     assert!(text.contains("root SealedWasm/LocalWasmGz"));
+}
+
+#[test]
+fn artifact_promotion_execution_receipt_round_trips_through_json() {
+    let receipt = sample_artifact_promotion_execution_receipt();
+
+    assert_json_round_trip(&receipt);
+    let encoded = serde_json::to_value(&receipt).expect("execution receipt should encode");
+    assert_object_keys(
+        &encoded,
+        &[
+            "schema_version",
+            "receipt_id",
+            "artifact_promotion_plan_id",
+            "provenance_report_id",
+            "provenance_status",
+            "promoted_plan_id",
+            "promotion_plan_lineage_digest",
+            "operation_id",
+            "operation_status",
+            "command_result",
+            "started_at",
+            "finished_at",
+            "deployment_receipt",
+            "roles",
+        ],
+    );
+    assert_eq!(encoded["receipt_id"], "promotion-execution-receipt-1");
+    assert_eq!(
+        encoded["artifact_promotion_plan_id"],
+        "artifact-promotion-plan-1"
+    );
+    assert_eq!(encoded["provenance_report_id"], "promotion-provenance-1");
+    assert_eq!(encoded["provenance_status"], "Ready");
+    assert_eq!(encoded["promoted_plan_id"], "promoted-plan-1");
+    assert_eq!(encoded["operation_id"], "promoted-operation-1");
+    assert_eq!(encoded["roles"][0]["role"], "root");
+}
+
+#[test]
+fn artifact_promotion_execution_receipt_links_deployment_receipt() {
+    let receipt = sample_artifact_promotion_execution_receipt();
+
+    assert_eq!(
+        receipt.operation_status,
+        DeploymentExecutionStatusV1::Complete
+    );
+    assert_eq!(receipt.command_result, DeploymentCommandResultV1::Succeeded);
+    assert_eq!(receipt.deployment_receipt.plan_id, receipt.promoted_plan_id);
+    assert_eq!(
+        receipt.deployment_receipt.operation_id,
+        receipt.operation_id
+    );
+    assert_eq!(
+        receipt.roles[0].role_phase_result,
+        Some(RolePhaseResultV1::Applied)
+    );
+    assert_eq!(
+        receipt.roles[0].artifact_digest.as_deref(),
+        Some(sample_sha256("5").as_str())
+    );
+    assert_eq!(
+        receipt.roles[0].observed_module_hash_after.as_deref(),
+        Some(sample_sha256("7").as_str())
+    );
+}
+
+#[test]
+fn artifact_promotion_execution_receipt_rejects_other_promoted_plan() {
+    let err = artifact_promotion_execution_receipt(ArtifactPromotionExecutionReceiptRequest {
+        receipt_id: "promotion-execution-receipt-1".to_string(),
+        provenance_report: sample_artifact_promotion_provenance_report(),
+        deployment_receipt: sample_receipt_with_phase(
+            "other-plan",
+            Some("aaaaa-aa"),
+            ObservationStatusV1::Observed,
+            RolePhaseResultV1::Applied,
+        ),
+    })
+    .expect_err("deployment receipt must match promoted plan");
+
+    assert!(matches!(
+        err,
+        ArtifactPromotionExecutionReceiptError::LinkageMismatch {
+            field: "deployment_receipt.plan_id"
+        }
+    ));
+}
+
+#[test]
+fn artifact_promotion_execution_receipt_rejects_blocked_provenance() {
+    let mut receipt = sample_wasm_store_staging_receipt();
+    receipt.role = "unknown".to_string();
+    let wasm_store_report = promotion_wasm_store_identity_report_from_staging(
+        PromotionWasmStoreIdentityReportRequest {
+            report_id: "wasm-store-identity-1".to_string(),
+            staging_receipts: vec![receipt],
+        },
+    )
+    .expect("wasm-store identity report should validate");
+    let provenance_report =
+        artifact_promotion_provenance_report(ArtifactPromotionProvenanceReportRequest {
+            report_id: "promotion-provenance-1".to_string(),
+            artifact_promotion_plan: sample_artifact_promotion_plan(),
+            wasm_store_identity_report: Some(wasm_store_report),
+            materialization_identity_report: None,
+        })
+        .expect("blocked provenance report should still be reportable");
+
+    let err = artifact_promotion_execution_receipt(ArtifactPromotionExecutionReceiptRequest {
+        receipt_id: "promotion-execution-receipt-1".to_string(),
+        provenance_report,
+        deployment_receipt: sample_promoted_deployment_receipt(),
+    })
+    .expect_err("blocked provenance cannot become execution receipt");
+
+    assert!(matches!(
+        err,
+        ArtifactPromotionExecutionReceiptError::ProvenanceNotReady {
+            status: PromotionReadinessStatusV1::Blocked
+        }
+    ));
+}
+
+#[test]
+fn artifact_promotion_execution_receipt_validation_rejects_stale_operation_status() {
+    let mut receipt = sample_artifact_promotion_execution_receipt();
+    receipt.operation_status = DeploymentExecutionStatusV1::FailedBeforeMutation;
+
+    let err = validate_artifact_promotion_execution_receipt(&receipt)
+        .expect_err("wrapper status must match nested deployment receipt");
+
+    assert!(matches!(
+        err,
+        ArtifactPromotionExecutionReceiptError::LinkageMismatch {
+            field: "operation_status"
+        }
+    ));
+}
+
+#[test]
+fn artifact_promotion_execution_receipt_validation_rejects_stale_provenance_status() {
+    let mut receipt = sample_artifact_promotion_execution_receipt();
+    receipt.provenance_status = PromotionReadinessStatusV1::Blocked;
+
+    let err = validate_artifact_promotion_execution_receipt(&receipt)
+        .expect_err("archived execution receipt must preserve ready provenance");
+
+    assert!(matches!(
+        err,
+        ArtifactPromotionExecutionReceiptError::ProvenanceNotReady {
+            status: PromotionReadinessStatusV1::Blocked
+        }
+    ));
+}
+
+#[test]
+fn artifact_promotion_execution_receipt_validation_rejects_missing_deployment_role() {
+    let mut receipt = sample_artifact_promotion_execution_receipt();
+    receipt.deployment_receipt.role_phase_receipts.clear();
+
+    let err = validate_artifact_promotion_execution_receipt(&receipt)
+        .expect_err("promotion execution receipt must cite deployment role evidence");
+
+    assert!(matches!(
+        err,
+        ArtifactPromotionExecutionReceiptError::MissingDeploymentRole { role } if role == "root"
+    ));
+}
+
+#[test]
+fn artifact_promotion_execution_receipt_validation_rejects_unknown_deployment_role() {
+    let mut receipt = sample_artifact_promotion_execution_receipt();
+    let mut extra = receipt.deployment_receipt.role_phase_receipts[0].clone();
+    extra.role = "worker".to_string();
+    receipt.deployment_receipt.role_phase_receipts.push(extra);
+
+    let err = validate_artifact_promotion_execution_receipt(&receipt)
+        .expect_err("deployment receipt cannot add roles outside promotion provenance");
+
+    assert!(matches!(
+        err,
+        ArtifactPromotionExecutionReceiptError::UnknownDeploymentRole { role } if role == "worker"
+    ));
+}
+
+#[test]
+fn artifact_promotion_execution_receipt_text_reports_execution_summary() {
+    let receipt = sample_artifact_promotion_execution_receipt();
+
+    let text = artifact_promotion_execution_receipt_text(&receipt);
+
+    assert!(text.contains("Artifact promotion execution receipt"));
+    assert!(text.contains("mode: execution_receipt"));
+    assert!(text.contains("receipt_id: promotion-execution-receipt-1"));
+    assert!(text.contains("artifact_promotion_plan_id: artifact-promotion-plan-1"));
+    assert!(text.contains("provenance_report_id: promotion-provenance-1"));
+    assert!(text.contains("promoted_plan_id: promoted-plan-1"));
+    assert!(text.contains("operation_id: promoted-operation-1"));
+    assert!(text.contains("provenance_status: ready"));
+    assert!(text.contains("deployment_phase_receipts: 1"));
+    assert!(text.contains("root SealedWasm: result=Applied"));
 }
 
 #[test]
@@ -8154,6 +8394,41 @@ fn sample_artifact_promotion_plan() -> ArtifactPromotionPlanV1 {
         target_execution_lineage: Some(target_execution_lineage),
     })
     .expect("sample artifact promotion plan should validate")
+}
+
+fn sample_artifact_promotion_provenance_report() -> ArtifactPromotionProvenanceReportV1 {
+    artifact_promotion_provenance_report(ArtifactPromotionProvenanceReportRequest {
+        report_id: "promotion-provenance-1".to_string(),
+        artifact_promotion_plan: sample_artifact_promotion_plan(),
+        wasm_store_identity_report: Some(sample_wasm_store_identity_report()),
+        materialization_identity_report: Some(sample_materialization_identity_report()),
+    })
+    .expect("sample promotion provenance report should validate")
+}
+
+fn sample_artifact_promotion_execution_receipt() -> ArtifactPromotionExecutionReceiptV1 {
+    artifact_promotion_execution_receipt(ArtifactPromotionExecutionReceiptRequest {
+        receipt_id: "promotion-execution-receipt-1".to_string(),
+        provenance_report: sample_artifact_promotion_provenance_report(),
+        deployment_receipt: sample_promoted_deployment_receipt(),
+    })
+    .expect("sample promotion execution receipt should validate")
+}
+
+fn sample_promoted_deployment_receipt() -> DeploymentReceiptV1 {
+    let mut receipt = sample_receipt_with_phase(
+        "promoted-plan-1",
+        Some("aaaaa-aa"),
+        ObservationStatusV1::Observed,
+        RolePhaseResultV1::Applied,
+    );
+    receipt.operation_id = "promoted-operation-1".to_string();
+    receipt.phase_receipts[0].phase = "promote_artifacts".to_string();
+    receipt.role_phase_receipts[0].phase = "install_root".to_string();
+    receipt.role_phase_receipts[0].artifact_digest = Some(sample_sha256("5"));
+    receipt.role_phase_receipts[0].observed_module_hash_after = Some(sample_sha256("7"));
+    receipt.role_phase_receipts[0].canonical_embedded_config_sha256 = Some(sample_sha256("3"));
+    receipt
 }
 
 fn sample_wasm_store_identity_report() -> PromotionWasmStoreIdentityReportV1 {
