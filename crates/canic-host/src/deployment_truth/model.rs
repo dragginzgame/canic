@@ -549,6 +549,7 @@ pub struct ArtifactPromotionProvenanceReportV1 {
     pub target_plan_id: String,
     pub promoted_plan_id: String,
     pub promotion_plan_lineage_digest: String,
+    pub provenance_report_digest: String,
     pub readiness_id: String,
     pub artifact_identity_report_id: String,
     pub transform_id: String,

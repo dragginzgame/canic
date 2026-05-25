@@ -12,16 +12,13 @@ present.
 
 ## Unreleased
 
-- Adds passive wasm-store catalog verification reports that compare staged
-  wasm-store promotion identity against supplied catalog observations without
-  querying `wasm_store` or executing promotion. Catalog verification role rows
-  carry deterministic observation digests so archived catalog evidence cannot
-  drift silently, and promotion provenance can cite matching catalog
-  verification artifacts and role observation digests alongside wasm-store
-  identity reports. Promotion execution receipt wrappers preserve the same
-  catalog observation digest per role.
+- No unreleased changes yet.
 
 ## [0.44.x] - 2026-05-25 - Artifact promotion
+
+- `0.44.9` adds passive wasm-store catalog verification with deterministic
+  role observation digests, provenance linkage, locator-drift blockers, and
+  execution receipt preservation of catalog evidence.
 
 - `0.44.8` adds passive promotion execution receipt wrappers and validated
   artifact identity summary counters, tightening promotion evidence without

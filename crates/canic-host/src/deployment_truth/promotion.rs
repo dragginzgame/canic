@@ -671,6 +671,27 @@ struct PromotionTargetExecutionLineageInput<'a> {
     execution_attempted: bool,
 }
 
+#[derive(Serialize)]
+struct ArtifactPromotionProvenanceDigestInput<'a> {
+    schema_version: u32,
+    report_id: &'a str,
+    status: PromotionReadinessStatusV1,
+    artifact_promotion_plan_id: &'a str,
+    target_plan_id: &'a str,
+    promoted_plan_id: &'a str,
+    promotion_plan_lineage_digest: &'a str,
+    readiness_id: &'a str,
+    artifact_identity_report_id: &'a str,
+    transform_id: &'a str,
+    target_execution_lineage_id: Option<&'a str>,
+    wasm_store_identity_report_id: Option<&'a str>,
+    wasm_store_catalog_verification_id: Option<&'a str>,
+    materialization_identity_report_id: Option<&'a str>,
+    execution_attempted: bool,
+    roles: &'a [RolePromotionProvenanceV1],
+    blockers: &'a [SafetyFindingV1],
+}
+
 pub fn promoted_deployment_plan_from_inputs(
     request: &PromotionPlanTransformRequest,
 ) -> Result<DeploymentPlanV1, PromotionPlanTransformError> {
@@ -1202,6 +1223,7 @@ pub fn validate_artifact_promotion_provenance_report(
         "promotion_plan_lineage_digest",
         &report.promotion_plan_lineage_digest,
     )?;
+    ensure_provenance_report_sha256("provenance_report_digest", &report.provenance_report_digest)?;
     ensure_provenance_report_field("readiness_id", &report.readiness_id)?;
     ensure_provenance_report_field(
         "artifact_identity_report_id",
@@ -1231,6 +1253,11 @@ pub fn validate_artifact_promotion_provenance_report(
         validate_role_promotion_provenance(role)?;
     }
     validate_provenance_report_blockers(&report.blockers)?;
+    if report.provenance_report_digest != artifact_promotion_provenance_digest(report) {
+        return Err(ArtifactPromotionProvenanceReportError::LinkageMismatch {
+            field: "provenance_report_digest",
+        });
+    }
     Ok(())
 }
 
@@ -2017,7 +2044,7 @@ fn build_artifact_promotion_provenance_report(
     } else {
         PromotionReadinessStatusV1::Blocked
     };
-    ArtifactPromotionProvenanceReportV1 {
+    let mut report = ArtifactPromotionProvenanceReportV1 {
         schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
         report_id: request.report_id,
         status,
@@ -2025,6 +2052,7 @@ fn build_artifact_promotion_provenance_report(
         target_plan_id: plan.target_plan_id,
         promoted_plan_id: plan.promoted_plan_id,
         promotion_plan_lineage_digest: plan.promotion_plan_lineage_digest,
+        provenance_report_digest: String::new(),
         readiness_id: plan.readiness.readiness_id,
         artifact_identity_report_id: plan.artifact_identity_report.report_id,
         transform_id: plan.transform.transform_id,
@@ -2043,7 +2071,31 @@ fn build_artifact_promotion_provenance_report(
         execution_attempted: false,
         roles,
         blockers,
-    }
+    };
+    report.provenance_report_digest = artifact_promotion_provenance_digest(&report);
+    report
+}
+
+fn artifact_promotion_provenance_digest(report: &ArtifactPromotionProvenanceReportV1) -> String {
+    stable_json_sha256_hex(&ArtifactPromotionProvenanceDigestInput {
+        schema_version: report.schema_version,
+        report_id: &report.report_id,
+        status: report.status,
+        artifact_promotion_plan_id: &report.artifact_promotion_plan_id,
+        target_plan_id: &report.target_plan_id,
+        promoted_plan_id: &report.promoted_plan_id,
+        promotion_plan_lineage_digest: &report.promotion_plan_lineage_digest,
+        readiness_id: &report.readiness_id,
+        artifact_identity_report_id: &report.artifact_identity_report_id,
+        transform_id: &report.transform_id,
+        target_execution_lineage_id: report.target_execution_lineage_id.as_deref(),
+        wasm_store_identity_report_id: report.wasm_store_identity_report_id.as_deref(),
+        wasm_store_catalog_verification_id: report.wasm_store_catalog_verification_id.as_deref(),
+        materialization_identity_report_id: report.materialization_identity_report_id.as_deref(),
+        execution_attempted: report.execution_attempted,
+        roles: &report.roles,
+        blockers: &report.blockers,
+    })
 }
 
 fn artifact_promotion_provenance_blockers(

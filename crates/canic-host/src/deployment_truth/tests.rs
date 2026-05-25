@@ -1557,6 +1557,7 @@ fn artifact_promotion_provenance_report_round_trips_through_json() {
             "target_plan_id",
             "promoted_plan_id",
             "promotion_plan_lineage_digest",
+            "provenance_report_digest",
             "readiness_id",
             "artifact_identity_report_id",
             "transform_id",
@@ -1571,6 +1572,11 @@ fn artifact_promotion_provenance_report_round_trips_through_json() {
     );
     assert_eq!(encoded["report_id"], "promotion-provenance-1");
     assert_eq!(encoded["status"], "Ready");
+    assert!(
+        encoded["provenance_report_digest"]
+            .as_str()
+            .is_some_and(|digest| digest.len() == 64)
+    );
     assert_eq!(encoded["execution_attempted"], false);
     assert_eq!(encoded["roles"][0]["role"], "root");
     assert!(encoded["roles"][0]["wasm_store_catalog_observation_digest"].is_string());
@@ -1704,6 +1710,22 @@ fn artifact_promotion_provenance_report_blocks_catalog_locator_mismatch() {
 }
 
 #[test]
+fn artifact_promotion_provenance_report_rejects_stale_digest() {
+    let mut report = sample_artifact_promotion_provenance_report();
+    report.provenance_report_digest = sample_sha256("9");
+
+    let err = validate_artifact_promotion_provenance_report(&report)
+        .expect_err("stale provenance digest should fail");
+
+    assert!(matches!(
+        err,
+        ArtifactPromotionProvenanceReportError::LinkageMismatch {
+            field: "provenance_report_digest"
+        }
+    ));
+}
+
+#[test]
 fn artifact_promotion_provenance_report_text_reports_passive_summary() {
     let report = artifact_promotion_provenance_report(ArtifactPromotionProvenanceReportRequest {
         report_id: "promotion-provenance-1".to_string(),
@@ -1721,6 +1743,7 @@ fn artifact_promotion_provenance_report_text_reports_passive_summary() {
     assert!(text.contains("execution: none"));
     assert!(text.contains("report_id: promotion-provenance-1"));
     assert!(text.contains("artifact_promotion_plan_id: artifact-promotion-plan-1"));
+    assert!(text.contains("provenance_report_digest:"));
     assert!(text.contains("wasm_store_identity: wasm-store-identity-1"));
     assert!(text.contains("wasm_store_catalog: wasm-store-catalog-1"));
     assert!(text.contains("catalog_digest="));

@@ -531,6 +531,10 @@ pub fn artifact_promotion_provenance_report_text(
             "promotion_plan_lineage_digest: {}",
             report.promotion_plan_lineage_digest
         ),
+        format!(
+            "provenance_report_digest: {}",
+            report.provenance_report_digest
+        ),
         String::new(),
         "linked reports:".to_string(),
         format!("  readiness: {}", report.readiness_id),
