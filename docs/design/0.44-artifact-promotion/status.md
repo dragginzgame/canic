@@ -106,13 +106,28 @@ promotion can prove what was built, uploaded, installed, and promoted.
 - Added passive wasm-store artifact identity reports derived from staging
   receipts, preserving role locators, transport, chunk publication counts, and
   verified postcondition facts without querying `wasm_store`.
+- Added passive wasm-store catalog verification reports that compare staged
+  wasm-store promotion identity against supplied catalog observations and
+  report missing catalog entries, artifact mismatches, or chunk-count
+  mismatches without querying `wasm_store` or executing promotion. Role-level
+  catalog observations carry deterministic digests so archived catalog
+  evidence cannot drift silently.
 - Added passive source/build materialization identity reports that aggregate
   validated materialization evidence by role and group roles by materialized
   output identity.
 - Added passive artifact promotion provenance reports that link a promotion
   plan to readiness, artifact identity, transform, target execution lineage,
-  wasm-store identity, and materialization identity report IDs without claiming
-  execution.
+  wasm-store identity, wasm-store catalog verification, and materialization
+  identity report IDs without claiming execution.
+- Promotion provenance validates linked wasm-store catalog verification against
+  the same wasm-store identity report and turns mismatched or unknown catalog
+  evidence into blockers rather than treating it as live artifact truth.
+  Role-level provenance rows also preserve the catalog observation digest, and
+  provenance blocks locator drift between the identity report and the supplied
+  catalog verification.
+- Promotion execution receipt wrappers now preserve the role-level catalog
+  observation digest from provenance, keeping receipt evidence tied to the same
+  archived catalog observation without making the receipt a live catalog proof.
 - Added passive artifact promotion execution receipt wrappers that link a
   validated promotion provenance report to an existing deployment receipt,
   preserve promoted-plan lineage, and surface role-level execution evidence
@@ -124,8 +139,8 @@ promotion can prove what was built, uploaded, installed, and promoted.
 ## Not Implemented Yet
 
 - Execution-path emission of promotion execution receipts.
-- Live `wasm_store` catalog lookup/verification beyond staging receipt
-  evidence.
+- Live `wasm_store` catalog lookup. Catalog verification now exists for
+  supplied observations, but no live catalog reader is wired yet.
 - Artifact identity dedupe policy decisions beyond passive summary/grouping.
 - CLI command wiring for source/build materialization identity reports.
 - CLI/report surfaces for role promotion policy checks.

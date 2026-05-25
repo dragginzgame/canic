@@ -406,6 +406,45 @@ pub struct RolePromotionWasmStoreIdentityV1 {
 }
 
 ///
+/// PromotionWasmStoreCatalogEntryV1
+///
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct PromotionWasmStoreCatalogEntryV1 {
+    pub locator: String,
+    pub artifact_identity: String,
+    pub published_chunk_count: usize,
+}
+
+///
+/// PromotionWasmStoreCatalogVerificationV1
+///
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct PromotionWasmStoreCatalogVerificationV1 {
+    pub schema_version: u32,
+    pub verification_id: String,
+    pub wasm_store_identity_report_id: String,
+    pub status: PromotionReadinessStatusV1,
+    pub roles: Vec<RolePromotionWasmStoreCatalogVerificationV1>,
+    pub blockers: Vec<SafetyFindingV1>,
+}
+
+///
+/// RolePromotionWasmStoreCatalogVerificationV1
+///
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RolePromotionWasmStoreCatalogVerificationV1 {
+    pub role: String,
+    pub wasm_store_locator: String,
+    pub expected_artifact_identity: String,
+    pub observed_artifact_identity: Option<String>,
+    pub expected_published_chunk_count: usize,
+    pub observed_published_chunk_count: Option<usize>,
+    pub catalog_entry_present: bool,
+    pub catalog_matches: bool,
+    pub catalog_observation_digest: String,
+}
+
+///
 /// PromotionArtifactIdentityGroupV1
 ///
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -515,6 +554,7 @@ pub struct ArtifactPromotionProvenanceReportV1 {
     pub transform_id: String,
     pub target_execution_lineage_id: Option<String>,
     pub wasm_store_identity_report_id: Option<String>,
+    pub wasm_store_catalog_verification_id: Option<String>,
     pub materialization_identity_report_id: Option<String>,
     pub execution_attempted: bool,
     pub roles: Vec<RolePromotionProvenanceV1>,
@@ -551,6 +591,7 @@ pub struct RolePromotionExecutionReceiptV1 {
     pub promotion_level: PromotionArtifactLevelV1,
     pub materialization_evidence_id: Option<String>,
     pub wasm_store_locator: Option<String>,
+    pub wasm_store_catalog_observation_digest: Option<String>,
     pub role_phase_result: Option<RolePhaseResultV1>,
     pub artifact_digest: Option<String>,
     pub observed_module_hash_after: Option<String>,
@@ -570,6 +611,7 @@ pub struct RolePromotionProvenanceV1 {
     pub target_materialization_preserved: bool,
     pub materialization_evidence_id: Option<String>,
     pub wasm_store_locator: Option<String>,
+    pub wasm_store_catalog_observation_digest: Option<String>,
 }
 
 ///

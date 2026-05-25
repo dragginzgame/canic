@@ -271,6 +271,61 @@ pub fn promotion_wasm_store_identity_report_text(
     lines.join("\n")
 }
 
+/// Render a wasm-store catalog verification report as passive operator text.
+#[must_use]
+pub fn promotion_wasm_store_catalog_verification_text(
+    verification: &PromotionWasmStoreCatalogVerificationV1,
+) -> String {
+    let matching_roles = verification
+        .roles
+        .iter()
+        .filter(|role| role.catalog_matches)
+        .count();
+    let missing_roles = verification
+        .roles
+        .iter()
+        .filter(|role| !role.catalog_entry_present)
+        .count();
+    let mut lines = vec![
+        "Promotion wasm-store catalog verification".to_string(),
+        "mode: passive".to_string(),
+        "execution: none".to_string(),
+        format!(
+            "status: {}",
+            promotion_readiness_status_label(verification.status)
+        ),
+        format!("verification_id: {}", verification.verification_id),
+        format!(
+            "wasm_store_identity_report_id: {}",
+            verification.wasm_store_identity_report_id
+        ),
+        String::new(),
+        "counts:".to_string(),
+        format!("  roles: {}", verification.roles.len()),
+        format!("  matching_roles: {matching_roles}"),
+        format!("  missing_catalog_entries: {missing_roles}"),
+        format!("  blockers: {}", verification.blockers.len()),
+    ];
+
+    append_hard_failure_items(&mut lines, "blockers", &verification.blockers);
+    if !verification.roles.is_empty() {
+        lines.push(String::new());
+        lines.push("roles:".to_string());
+        for role in &verification.roles {
+            lines.push(format!(
+                "  {} locator={} match={} digest={} expected_artifact={} observed_artifact={}",
+                role.role,
+                role.wasm_store_locator,
+                role.catalog_matches,
+                role.catalog_observation_digest,
+                role.expected_artifact_identity,
+                role.observed_artifact_identity.as_deref().unwrap_or("none")
+            ));
+        }
+    }
+    lines.join("\n")
+}
+
 /// Render a promotion plan transform as passive operator text.
 #[must_use]
 pub fn promotion_plan_transform_text(transform: &PromotionPlanTransformV1) -> String {
@@ -499,6 +554,13 @@ pub fn artifact_promotion_provenance_report_text(
                 .unwrap_or("none")
         ),
         format!(
+            "  wasm_store_catalog: {}",
+            report
+                .wasm_store_catalog_verification_id
+                .as_deref()
+                .unwrap_or("none")
+        ),
+        format!(
             "  materialization_identity: {}",
             report
                 .materialization_identity_report_id
@@ -517,14 +579,17 @@ pub fn artifact_promotion_provenance_report_text(
         lines.push("roles:".to_string());
         for role in &report.roles {
             lines.push(format!(
-                "  {} {:?}/{:?}: materialization={} wasm_store={}",
+                "  {} {:?}/{:?}: materialization={} wasm_store={} catalog_digest={}",
                 role.role,
                 role.promotion_level,
                 role.source_kind,
                 role.materialization_evidence_id
                     .as_deref()
                     .unwrap_or("none"),
-                role.wasm_store_locator.as_deref().unwrap_or("none")
+                role.wasm_store_locator.as_deref().unwrap_or("none"),
+                role.wasm_store_catalog_observation_digest
+                    .as_deref()
+                    .unwrap_or("none")
             ));
         }
     }
@@ -580,13 +645,16 @@ pub fn artifact_promotion_execution_receipt_text(
         lines.push("roles:".to_string());
         for role in &receipt.roles {
             lines.push(format!(
-                "  {} {:?}: result={} artifact={} observed_module={}",
+                "  {} {:?}: result={} artifact={} observed_module={} catalog_digest={}",
                 role.role,
                 role.promotion_level,
                 role.role_phase_result
                     .map_or_else(|| "none".to_string(), |result| format!("{result:?}")),
                 role.artifact_digest.as_deref().unwrap_or("none"),
-                role.observed_module_hash_after.as_deref().unwrap_or("none")
+                role.observed_module_hash_after.as_deref().unwrap_or("none"),
+                role.wasm_store_catalog_observation_digest
+                    .as_deref()
+                    .unwrap_or("none")
             ));
         }
     }

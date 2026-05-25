@@ -100,13 +100,24 @@ inspect only the files needed for the current task.
 - Passive wasm-store artifact identity reports can now be derived from staging
   receipts, preserving role locators, transport, chunk publication counts, and
   verified postcondition facts without querying `wasm_store`.
+- Passive wasm-store catalog verification reports can now compare those staged
+  wasm-store identities against supplied catalog observations, reporting
+  missing catalog entries, artifact mismatches, and chunk-count mismatches
+  without querying `wasm_store` or executing promotion. Each role observation
+  carries a deterministic digest so archived catalog evidence cannot drift
+  silently.
 - Passive source/build materialization identity reports now aggregate validated
   materialization evidence by role and group roles by materialized output
   identity.
 - Passive artifact promotion provenance reports now link promotion plans to
   readiness, artifact identity, transform, target execution lineage,
-  wasm-store identity, and materialization identity report IDs without claiming
-  execution.
+  wasm-store identity, wasm-store catalog verification, and materialization
+  identity report IDs without claiming execution. Catalog verification must
+  reference the same wasm-store identity report or it becomes a passive
+  provenance blocker. Role-level provenance also preserves the catalog
+  observation digest and blocks locator drift between wasm-store identity and
+  catalog verification artifacts. Promotion execution receipt wrappers carry
+  that same role-level catalog observation digest forward.
 - Passive artifact promotion execution receipts now wrap existing deployment
   receipts with promotion provenance linkage, promoted-plan lineage, and
   role-level execution evidence without adding a separate promotion executor.

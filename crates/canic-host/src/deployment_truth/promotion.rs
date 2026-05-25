@@ -14,13 +14,15 @@ use super::{
     PromotionMaterializationIdentityReportV1, PromotionMaterializationOutputGroupV1,
     PromotionPlanTransformEvidenceV1, PromotionPlanTransformV1, PromotionPolicyCheckV1,
     PromotionPolicyClaimV1, PromotionPolicyRequirementV1, PromotionReadinessStatusV1,
-    PromotionReadinessV1, PromotionTargetExecutionLineageV1, PromotionWasmStoreIdentityReportV1,
+    PromotionReadinessV1, PromotionTargetExecutionLineageV1, PromotionWasmStoreCatalogEntryV1,
+    PromotionWasmStoreCatalogVerificationV1, PromotionWasmStoreIdentityReportV1,
     RoleArtifactSourceKindV1, RoleArtifactSourceV1, RoleArtifactV1,
     RolePromotionArtifactIdentityV1, RolePromotionExecutionReceiptV1, RolePromotionInputV1,
     RolePromotionMaterializationIdentityV1, RolePromotionMaterializationLinkV1,
     RolePromotionPlanTransformV1, RolePromotionPolicyDecisionV1, RolePromotionPolicyV1,
-    RolePromotionProvenanceV1, RolePromotionReadinessV1, RolePromotionWasmStoreIdentityV1,
-    SafetyFindingV1, SafetySeverityV1, StagingReceiptV1, stable_json_sha256_hex,
+    RolePromotionProvenanceV1, RolePromotionReadinessV1,
+    RolePromotionWasmStoreCatalogVerificationV1, RolePromotionWasmStoreIdentityV1, SafetyFindingV1,
+    SafetySeverityV1, StagingReceiptV1, stable_json_sha256_hex,
 };
 use serde::Serialize;
 use std::collections::{BTreeMap, BTreeSet};
@@ -190,10 +192,18 @@ pub enum ArtifactPromotionProvenanceReportError {
     BlockerMismatch,
     #[error("artifact promotion provenance report blocker has severity {severity:?}")]
     BlockerSeverityMismatch { severity: SafetySeverityV1 },
+    #[error(
+        "artifact promotion provenance report field {field} must be a lowercase sha256 hex digest"
+    )]
+    InvalidSha256Digest { field: &'static str },
     #[error("artifact promotion provenance report has invalid artifact promotion plan: {0}")]
     Plan(#[from] ArtifactPromotionPlanError),
     #[error("artifact promotion provenance report has invalid wasm-store identity report: {0}")]
     WasmStoreIdentity(#[from] PromotionWasmStoreIdentityReportError),
+    #[error(
+        "artifact promotion provenance report has invalid wasm-store catalog verification: {0}"
+    )]
+    WasmStoreCatalog(#[from] PromotionWasmStoreCatalogVerificationError),
     #[error(
         "artifact promotion provenance report has invalid materialization identity report: {0}"
     )]
@@ -332,6 +342,40 @@ pub enum PromotionWasmStoreIdentityReportError {
     BlockerMismatch,
     #[error("promotion wasm-store identity report blocker has severity {severity:?}")]
     BlockerSeverityMismatch { severity: SafetySeverityV1 },
+}
+
+///
+/// PromotionWasmStoreCatalogVerificationError
+///
+#[derive(Debug, ThisError)]
+pub enum PromotionWasmStoreCatalogVerificationError {
+    #[error(
+        "promotion wasm-store catalog verification schema mismatch: expected {expected}, found {found}"
+    )]
+    SchemaVersionMismatch { expected: u32, found: u32 },
+    #[error("promotion wasm-store catalog verification is missing required field: {field}")]
+    MissingRequiredField { field: &'static str },
+    #[error(
+        "promotion wasm-store catalog verification status {status:?} does not match blocker count {blocker_count}"
+    )]
+    StatusBlockerMismatch {
+        status: PromotionReadinessStatusV1,
+        blocker_count: usize,
+    },
+    #[error("promotion wasm-store catalog verification contains duplicate role: {role}")]
+    DuplicateRole { role: String },
+    #[error("promotion wasm-store catalog verification contains duplicate locator: {locator}")]
+    DuplicateLocator { locator: String },
+    #[error("promotion wasm-store catalog verification role {role} has inconsistent field {field}")]
+    RoleMismatch { role: String, field: &'static str },
+    #[error("promotion wasm-store catalog verification blockers are stale")]
+    BlockerMismatch,
+    #[error("promotion wasm-store catalog verification blocker has severity {severity:?}")]
+    BlockerSeverityMismatch { severity: SafetySeverityV1 },
+    #[error(
+        "promotion wasm-store catalog verification has invalid wasm-store identity report: {0}"
+    )]
+    WasmStoreIdentity(#[from] PromotionWasmStoreIdentityReportError),
 }
 
 ///
@@ -521,6 +565,7 @@ pub struct ArtifactPromotionProvenanceReportRequest {
     pub report_id: String,
     pub artifact_promotion_plan: ArtifactPromotionPlanV1,
     pub wasm_store_identity_report: Option<PromotionWasmStoreIdentityReportV1>,
+    pub wasm_store_catalog_verification: Option<PromotionWasmStoreCatalogVerificationV1>,
     pub materialization_identity_report: Option<PromotionMaterializationIdentityReportV1>,
 }
 
@@ -561,6 +606,16 @@ pub struct PromotionArtifactIdentityReportRequest {
 pub struct PromotionWasmStoreIdentityReportRequest {
     pub report_id: String,
     pub staging_receipts: Vec<StagingReceiptV1>,
+}
+
+///
+/// PromotionWasmStoreCatalogVerificationRequest
+///
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PromotionWasmStoreCatalogVerificationRequest {
+    pub verification_id: String,
+    pub wasm_store_identity_report: PromotionWasmStoreIdentityReportV1,
+    pub catalog_entries: Vec<PromotionWasmStoreCatalogEntryV1>,
 }
 
 ///
@@ -939,6 +994,43 @@ pub fn validate_promotion_wasm_store_identity_report(
     Ok(())
 }
 
+pub fn promotion_wasm_store_catalog_verification(
+    request: PromotionWasmStoreCatalogVerificationRequest,
+) -> Result<PromotionWasmStoreCatalogVerificationV1, PromotionWasmStoreCatalogVerificationError> {
+    ensure_wasm_store_catalog_verification_field("verification_id", &request.verification_id)?;
+    validate_promotion_wasm_store_identity_report(&request.wasm_store_identity_report)?;
+    ensure_unique_wasm_store_catalog_entries(&request.catalog_entries)?;
+    let verification = build_wasm_store_catalog_verification(request);
+    validate_promotion_wasm_store_catalog_verification(&verification)?;
+    Ok(verification)
+}
+
+pub fn validate_promotion_wasm_store_catalog_verification(
+    verification: &PromotionWasmStoreCatalogVerificationV1,
+) -> Result<(), PromotionWasmStoreCatalogVerificationError> {
+    if verification.schema_version != DEPLOYMENT_TRUTH_SCHEMA_VERSION {
+        return Err(
+            PromotionWasmStoreCatalogVerificationError::SchemaVersionMismatch {
+                expected: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
+                found: verification.schema_version,
+            },
+        );
+    }
+    ensure_wasm_store_catalog_verification_field("verification_id", &verification.verification_id)?;
+    ensure_wasm_store_catalog_verification_field(
+        "wasm_store_identity_report_id",
+        &verification.wasm_store_identity_report_id,
+    )?;
+    ensure_wasm_store_catalog_status_matches_blockers(verification)?;
+    ensure_unique_wasm_store_catalog_verification_roles(&verification.roles)?;
+    let expected_blockers = wasm_store_catalog_verification_blockers(&verification.roles);
+    if expected_blockers != verification.blockers {
+        return Err(PromotionWasmStoreCatalogVerificationError::BlockerMismatch);
+    }
+    validate_wasm_store_catalog_verification_blockers(&verification.blockers)?;
+    Ok(())
+}
+
 pub fn promotion_plan_transform_evidence(
     request: PromotionPlanTransformEvidenceRequest,
 ) -> Result<PromotionPlanTransformEvidenceV1, PromotionPlanTransformEvidenceError> {
@@ -1077,6 +1169,9 @@ pub fn artifact_promotion_provenance_report(
     if let Some(report) = &request.wasm_store_identity_report {
         validate_promotion_wasm_store_identity_report(report)?;
     }
+    if let Some(verification) = &request.wasm_store_catalog_verification {
+        validate_promotion_wasm_store_catalog_verification(verification)?;
+    }
     if let Some(report) = &request.materialization_identity_report {
         validate_promotion_materialization_identity_report(report)?;
     }
@@ -1118,6 +1213,14 @@ pub fn validate_artifact_promotion_provenance_report(
     }
     if let Some(report_id) = &report.wasm_store_identity_report_id {
         ensure_provenance_report_field("wasm_store_identity_report_id", report_id)?;
+    }
+    if let Some(verification_id) = &report.wasm_store_catalog_verification_id {
+        ensure_provenance_report_field("wasm_store_catalog_verification_id", verification_id)?;
+        if report.wasm_store_identity_report_id.is_none() {
+            return Err(ArtifactPromotionProvenanceReportError::LinkageMismatch {
+                field: "wasm_store_catalog_verification_id",
+            });
+        }
     }
     if let Some(report_id) = &report.materialization_identity_report_id {
         ensure_provenance_report_field("materialization_identity_report_id", report_id)?;
@@ -1897,10 +2000,15 @@ fn build_artifact_promotion_provenance_report(
         .map(role_promotion_provenance_from_transform)
         .collect::<Vec<_>>();
     attach_wasm_store_provenance(&mut roles, request.wasm_store_identity_report.as_ref());
+    attach_wasm_store_catalog_provenance(
+        &mut roles,
+        request.wasm_store_catalog_verification.as_ref(),
+    );
     attach_materialization_provenance(&mut roles, request.materialization_identity_report.as_ref());
     let blockers = artifact_promotion_provenance_blockers(
         &plan,
         request.wasm_store_identity_report.as_ref(),
+        request.wasm_store_catalog_verification.as_ref(),
         request.materialization_identity_report.as_ref(),
         &roles,
     );
@@ -1926,6 +2034,9 @@ fn build_artifact_promotion_provenance_report(
         wasm_store_identity_report_id: request
             .wasm_store_identity_report
             .map(|report| report.report_id),
+        wasm_store_catalog_verification_id: request
+            .wasm_store_catalog_verification
+            .map(|verification| verification.verification_id),
         materialization_identity_report_id: request
             .materialization_identity_report
             .map(|report| report.report_id),
@@ -1938,20 +2049,115 @@ fn build_artifact_promotion_provenance_report(
 fn artifact_promotion_provenance_blockers(
     plan: &ArtifactPromotionPlanV1,
     wasm_store_report: Option<&PromotionWasmStoreIdentityReportV1>,
+    wasm_store_catalog: Option<&PromotionWasmStoreCatalogVerificationV1>,
     materialization_report: Option<&PromotionMaterializationIdentityReportV1>,
     roles: &[RolePromotionProvenanceV1],
 ) -> Vec<SafetyFindingV1> {
     let mut blockers = plan.blockers.clone();
-    if let Some(report) = wasm_store_report {
-        blockers.extend(report.blockers.iter().cloned());
-    }
-    if let Some(report) = materialization_report {
-        blockers.extend(report.blockers.iter().cloned());
-    }
     let role_names = roles
         .iter()
         .map(|role| role.role.as_str())
         .collect::<BTreeSet<_>>();
+    if let Some(report) = wasm_store_report {
+        blockers.extend(report.blockers.iter().cloned());
+    }
+    append_wasm_store_catalog_provenance_blockers(
+        &mut blockers,
+        wasm_store_report,
+        wasm_store_catalog,
+        &role_names,
+    );
+    if let Some(report) = materialization_report {
+        blockers.extend(report.blockers.iter().cloned());
+    }
+    append_optional_report_unknown_role_blockers(
+        &mut blockers,
+        wasm_store_report,
+        wasm_store_catalog,
+        materialization_report,
+        &role_names,
+    );
+    blockers
+}
+
+fn append_wasm_store_catalog_provenance_blockers(
+    blockers: &mut Vec<SafetyFindingV1>,
+    wasm_store_report: Option<&PromotionWasmStoreIdentityReportV1>,
+    wasm_store_catalog: Option<&PromotionWasmStoreCatalogVerificationV1>,
+    role_names: &BTreeSet<&str>,
+) {
+    let Some(verification) = wasm_store_catalog else {
+        return;
+    };
+    blockers.extend(verification.blockers.iter().cloned());
+    match wasm_store_report {
+        Some(report) if verification.wasm_store_identity_report_id == report.report_id => {}
+        Some(report) => blockers.push(promotion_finding(
+            "promotion_provenance_wasm_store_catalog_identity_mismatch",
+            format!(
+                "wasm-store catalog verification references identity report {}, but provenance uses {}",
+                verification.wasm_store_identity_report_id, report.report_id
+            ),
+            SafetySeverityV1::HardFailure,
+            "wasm_store_catalog",
+        )),
+        None => blockers.push(promotion_finding(
+            "promotion_provenance_wasm_store_catalog_identity_missing",
+            "wasm-store catalog verification requires the referenced wasm-store identity report",
+            SafetySeverityV1::HardFailure,
+            "wasm_store_catalog",
+        )),
+    }
+    if let Some(report) = wasm_store_report {
+        append_wasm_store_catalog_locator_blockers(blockers, report, verification, role_names);
+    }
+}
+
+fn append_wasm_store_catalog_locator_blockers(
+    blockers: &mut Vec<SafetyFindingV1>,
+    report: &PromotionWasmStoreIdentityReportV1,
+    verification: &PromotionWasmStoreCatalogVerificationV1,
+    role_names: &BTreeSet<&str>,
+) {
+    for catalog_role in &verification.roles {
+        if !role_names.contains(catalog_role.role.as_str()) {
+            continue;
+        }
+        match report.roles.iter().find(|role| role.role == catalog_role.role) {
+            Some(identity_role)
+                if identity_role.wasm_store_locator.as_deref()
+                    == Some(catalog_role.wasm_store_locator.as_str()) => {}
+            Some(identity_role) => blockers.push(promotion_finding(
+                "promotion_provenance_wasm_store_catalog_locator_mismatch",
+                format!(
+                    "wasm-store catalog verification role {} uses locator {}, but identity report uses {}",
+                    catalog_role.role,
+                    catalog_role.wasm_store_locator,
+                    identity_role.wasm_store_locator.as_deref().unwrap_or("none")
+                ),
+                SafetySeverityV1::HardFailure,
+                &catalog_role.role,
+            )),
+            None => blockers.push(promotion_finding(
+                "promotion_provenance_wasm_store_catalog_role_identity_missing",
+                format!(
+                    "wasm-store catalog verification role {} is missing from the wasm-store identity report",
+                    catalog_role.role
+                ),
+                SafetySeverityV1::HardFailure,
+                &catalog_role.role,
+            )),
+        }
+    }
+}
+
+fn append_optional_report_unknown_role_blockers(
+    blockers: &mut Vec<SafetyFindingV1>,
+    wasm_store_report: Option<&PromotionWasmStoreIdentityReportV1>,
+    wasm_store_catalog: Option<&PromotionWasmStoreCatalogVerificationV1>,
+    materialization_report: Option<&PromotionMaterializationIdentityReportV1>,
+    role_names: &BTreeSet<&str>,
+) {
     if let Some(report) = wasm_store_report {
         for role in &report.roles {
             if !role_names.contains(role.role.as_str()) {
@@ -1959,6 +2165,21 @@ fn artifact_promotion_provenance_blockers(
                     "promotion_provenance_unknown_wasm_store_role",
                     format!(
                         "wasm-store identity report contains unknown role {}",
+                        role.role
+                    ),
+                    SafetySeverityV1::HardFailure,
+                    &role.role,
+                ));
+            }
+        }
+    }
+    if let Some(verification) = wasm_store_catalog {
+        for role in &verification.roles {
+            if !role_names.contains(role.role.as_str()) {
+                blockers.push(promotion_finding(
+                    "promotion_provenance_unknown_wasm_store_catalog_role",
+                    format!(
+                        "wasm-store catalog verification contains unknown role {}",
                         role.role
                     ),
                     SafetySeverityV1::HardFailure,
@@ -1982,7 +2203,6 @@ fn artifact_promotion_provenance_blockers(
             }
         }
     }
-    blockers
 }
 
 fn role_promotion_provenance_from_transform(
@@ -2000,6 +2220,7 @@ fn role_promotion_provenance_from_transform(
             .as_ref()
             .map(|materialization| materialization.evidence_id.clone()),
         wasm_store_locator: None,
+        wasm_store_catalog_observation_digest: None,
     }
 }
 
@@ -2013,6 +2234,25 @@ fn attach_wasm_store_provenance(
     for role in roles {
         if let Some(wasm_store_role) = report.roles.iter().find(|item| item.role == role.role) {
             role.wasm_store_locator = wasm_store_role.wasm_store_locator.clone();
+        }
+    }
+}
+
+fn attach_wasm_store_catalog_provenance(
+    roles: &mut [RolePromotionProvenanceV1],
+    verification: Option<&PromotionWasmStoreCatalogVerificationV1>,
+) {
+    let Some(verification) = verification else {
+        return;
+    };
+    for role in roles {
+        if let Some(catalog_role) = verification
+            .roles
+            .iter()
+            .find(|item| item.role == role.role)
+        {
+            role.wasm_store_catalog_observation_digest =
+                Some(catalog_role.catalog_observation_digest.clone());
         }
     }
 }
@@ -2073,6 +2313,7 @@ fn role_promotion_execution_receipt(
         promotion_level: role.promotion_level,
         materialization_evidence_id: role.materialization_evidence_id.clone(),
         wasm_store_locator: role.wasm_store_locator.clone(),
+        wasm_store_catalog_observation_digest: role.wasm_store_catalog_observation_digest.clone(),
         role_phase_result: role_receipt.map(|receipt| receipt.result),
         artifact_digest: role_receipt.and_then(|receipt| receipt.artifact_digest.clone()),
         observed_module_hash_after: role_receipt
@@ -2147,6 +2388,142 @@ fn wasm_store_identity_blockers(
                     role.role,
                     role.published_chunk_count,
                     role.prepared_chunk_hashes.len()
+                ),
+                SafetySeverityV1::HardFailure,
+                &role.role,
+            ));
+        }
+    }
+    blockers
+}
+
+fn build_wasm_store_catalog_verification(
+    request: PromotionWasmStoreCatalogVerificationRequest,
+) -> PromotionWasmStoreCatalogVerificationV1 {
+    let catalog = request
+        .catalog_entries
+        .iter()
+        .map(|entry| (entry.locator.as_str(), entry))
+        .collect::<BTreeMap<_, _>>();
+    let roles = request
+        .wasm_store_identity_report
+        .roles
+        .iter()
+        .map(|role| role_wasm_store_catalog_verification(role, &catalog))
+        .collect::<Vec<_>>();
+    let blockers = wasm_store_catalog_verification_blockers(&roles);
+    PromotionWasmStoreCatalogVerificationV1 {
+        schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
+        verification_id: request.verification_id,
+        wasm_store_identity_report_id: request.wasm_store_identity_report.report_id,
+        status: if blockers.is_empty() {
+            PromotionReadinessStatusV1::Ready
+        } else {
+            PromotionReadinessStatusV1::Blocked
+        },
+        roles,
+        blockers,
+    }
+}
+
+fn role_wasm_store_catalog_verification(
+    role: &RolePromotionWasmStoreIdentityV1,
+    catalog: &BTreeMap<&str, &PromotionWasmStoreCatalogEntryV1>,
+) -> RolePromotionWasmStoreCatalogVerificationV1 {
+    let locator = role.wasm_store_locator.clone().unwrap_or_default();
+    let entry = catalog.get(locator.as_str()).copied();
+    let mut verification = RolePromotionWasmStoreCatalogVerificationV1 {
+        role: role.role.clone(),
+        wasm_store_locator: locator,
+        expected_artifact_identity: role.artifact_identity.clone(),
+        observed_artifact_identity: entry.map(|entry| entry.artifact_identity.clone()),
+        expected_published_chunk_count: role.published_chunk_count,
+        observed_published_chunk_count: entry.map(|entry| entry.published_chunk_count),
+        catalog_entry_present: entry.is_some(),
+        catalog_matches: entry.is_some_and(|entry| {
+            entry.artifact_identity == role.artifact_identity
+                && entry.published_chunk_count == role.published_chunk_count
+        }),
+        catalog_observation_digest: String::new(),
+    };
+    verification.catalog_observation_digest = wasm_store_catalog_observation_digest(&verification);
+    verification
+}
+
+#[derive(Serialize)]
+struct WasmStoreCatalogObservationDigest<'a> {
+    role: &'a str,
+    wasm_store_locator: &'a str,
+    expected_artifact_identity: &'a str,
+    observed_artifact_identity: Option<&'a str>,
+    expected_published_chunk_count: usize,
+    observed_published_chunk_count: Option<usize>,
+    catalog_entry_present: bool,
+    catalog_matches: bool,
+}
+
+fn wasm_store_catalog_observation_digest(
+    role: &RolePromotionWasmStoreCatalogVerificationV1,
+) -> String {
+    stable_json_sha256_hex(&WasmStoreCatalogObservationDigest {
+        role: &role.role,
+        wasm_store_locator: &role.wasm_store_locator,
+        expected_artifact_identity: &role.expected_artifact_identity,
+        observed_artifact_identity: role.observed_artifact_identity.as_deref(),
+        expected_published_chunk_count: role.expected_published_chunk_count,
+        observed_published_chunk_count: role.observed_published_chunk_count,
+        catalog_entry_present: role.catalog_entry_present,
+        catalog_matches: role.catalog_matches,
+    })
+}
+
+fn wasm_store_catalog_verification_blockers(
+    roles: &[RolePromotionWasmStoreCatalogVerificationV1],
+) -> Vec<SafetyFindingV1> {
+    let mut blockers = Vec::new();
+    for role in roles {
+        if role.wasm_store_locator.is_empty() {
+            blockers.push(promotion_finding(
+                "promotion_wasm_store_catalog_locator_missing",
+                format!("role {} does not record a wasm_store locator", role.role),
+                SafetySeverityV1::HardFailure,
+                &role.role,
+            ));
+        } else if !role.catalog_entry_present {
+            blockers.push(promotion_finding(
+                "promotion_wasm_store_catalog_entry_missing",
+                format!(
+                    "role {} locator {} was not present in the wasm_store catalog observation",
+                    role.role, role.wasm_store_locator
+                ),
+                SafetySeverityV1::HardFailure,
+                &role.role,
+            ));
+        }
+        if let Some(observed) = &role.observed_artifact_identity
+            && observed != &role.expected_artifact_identity
+        {
+            blockers.push(promotion_finding(
+                "promotion_wasm_store_catalog_artifact_mismatch",
+                format!(
+                    "role {} expected artifact {} at {}, observed {}",
+                    role.role, role.expected_artifact_identity, role.wasm_store_locator, observed
+                ),
+                SafetySeverityV1::HardFailure,
+                &role.role,
+            ));
+        }
+        if let Some(observed) = role.observed_published_chunk_count
+            && observed != role.expected_published_chunk_count
+        {
+            blockers.push(promotion_finding(
+                "promotion_wasm_store_catalog_chunk_count_mismatch",
+                format!(
+                    "role {} expected {} published chunk(s) at {}, observed {}",
+                    role.role,
+                    role.expected_published_chunk_count,
+                    role.wasm_store_locator,
+                    observed
                 ),
                 SafetySeverityV1::HardFailure,
                 &role.role,
@@ -3572,6 +3949,108 @@ fn validate_wasm_store_identity_blockers(
     Ok(())
 }
 
+const fn ensure_wasm_store_catalog_status_matches_blockers(
+    verification: &PromotionWasmStoreCatalogVerificationV1,
+) -> Result<(), PromotionWasmStoreCatalogVerificationError> {
+    match (verification.status, verification.blockers.is_empty()) {
+        (PromotionReadinessStatusV1::Ready, false)
+        | (PromotionReadinessStatusV1::Blocked, true) => Err(
+            PromotionWasmStoreCatalogVerificationError::StatusBlockerMismatch {
+                status: verification.status,
+                blocker_count: verification.blockers.len(),
+            },
+        ),
+        _ => Ok(()),
+    }
+}
+
+fn ensure_unique_wasm_store_catalog_entries(
+    entries: &[PromotionWasmStoreCatalogEntryV1],
+) -> Result<(), PromotionWasmStoreCatalogVerificationError> {
+    let mut seen = BTreeSet::new();
+    for entry in entries {
+        ensure_wasm_store_catalog_verification_field("catalog.locator", &entry.locator)?;
+        ensure_wasm_store_catalog_verification_field(
+            "catalog.artifact_identity",
+            &entry.artifact_identity,
+        )?;
+        if !seen.insert(entry.locator.as_str()) {
+            return Err(
+                PromotionWasmStoreCatalogVerificationError::DuplicateLocator {
+                    locator: entry.locator.clone(),
+                },
+            );
+        }
+    }
+    Ok(())
+}
+
+fn ensure_unique_wasm_store_catalog_verification_roles(
+    roles: &[RolePromotionWasmStoreCatalogVerificationV1],
+) -> Result<(), PromotionWasmStoreCatalogVerificationError> {
+    let mut seen = BTreeSet::new();
+    for role in roles {
+        ensure_wasm_store_catalog_verification_field("role", &role.role)?;
+        ensure_wasm_store_catalog_verification_field(
+            "expected_artifact_identity",
+            &role.expected_artifact_identity,
+        )?;
+        ensure_wasm_store_catalog_verification_field(
+            "catalog_observation_digest",
+            &role.catalog_observation_digest,
+        )?;
+        if !seen.insert(role.role.as_str()) {
+            return Err(PromotionWasmStoreCatalogVerificationError::DuplicateRole {
+                role: role.role.clone(),
+            });
+        }
+        if role.catalog_entry_present
+            != (role.observed_artifact_identity.is_some()
+                && role.observed_published_chunk_count.is_some())
+        {
+            return Err(PromotionWasmStoreCatalogVerificationError::RoleMismatch {
+                role: role.role.clone(),
+                field: "catalog_entry_present",
+            });
+        }
+        if role.catalog_matches
+            != (role.catalog_entry_present
+                && role.observed_artifact_identity.as_ref()
+                    == Some(&role.expected_artifact_identity)
+                && role.observed_published_chunk_count == Some(role.expected_published_chunk_count))
+        {
+            return Err(PromotionWasmStoreCatalogVerificationError::RoleMismatch {
+                role: role.role.clone(),
+                field: "catalog_matches",
+            });
+        }
+        if role.catalog_observation_digest != wasm_store_catalog_observation_digest(role) {
+            return Err(PromotionWasmStoreCatalogVerificationError::RoleMismatch {
+                role: role.role.clone(),
+                field: "catalog_observation_digest",
+            });
+        }
+    }
+    Ok(())
+}
+
+fn validate_wasm_store_catalog_verification_blockers(
+    blockers: &[SafetyFindingV1],
+) -> Result<(), PromotionWasmStoreCatalogVerificationError> {
+    for blocker in blockers {
+        ensure_wasm_store_catalog_verification_field("blocker.code", &blocker.code)?;
+        ensure_wasm_store_catalog_verification_field("blocker.message", &blocker.message)?;
+        if blocker.severity != SafetySeverityV1::HardFailure {
+            return Err(
+                PromotionWasmStoreCatalogVerificationError::BlockerSeverityMismatch {
+                    severity: blocker.severity,
+                },
+            );
+        }
+    }
+    Ok(())
+}
+
 const fn ensure_materialization_report_status_matches_blockers(
     report: &PromotionMaterializationIdentityReportV1,
 ) -> Result<(), PromotionMaterializationIdentityReportError> {
@@ -3696,6 +4175,9 @@ fn validate_role_promotion_provenance(
     }
     if let Some(locator) = &role.wasm_store_locator {
         ensure_provenance_report_field("wasm_store_locator", locator)?;
+    }
+    if let Some(digest) = &role.wasm_store_catalog_observation_digest {
+        ensure_provenance_report_sha256("wasm_store_catalog_observation_digest", digest)?;
     }
     Ok(())
 }
@@ -3856,6 +4338,9 @@ fn ensure_unique_execution_receipt_roles(
         if let Some(locator) = &role.wasm_store_locator {
             ensure_execution_receipt_field("wasm_store_locator", locator)?;
         }
+        if let Some(digest) = &role.wasm_store_catalog_observation_digest {
+            ensure_execution_receipt_sha256("wasm_store_catalog_observation_digest", digest)?;
+        }
         if let Some(digest) = &role.artifact_digest {
             ensure_execution_receipt_field("artifact_digest", digest)?;
         }
@@ -3928,6 +4413,16 @@ fn ensure_wasm_store_identity_report_field(
     Ok(())
 }
 
+fn ensure_wasm_store_catalog_verification_field(
+    field: &'static str,
+    value: &str,
+) -> Result<(), PromotionWasmStoreCatalogVerificationError> {
+    if value.trim().is_empty() {
+        return Err(PromotionWasmStoreCatalogVerificationError::MissingRequiredField { field });
+    }
+    Ok(())
+}
+
 fn ensure_materialization_report_field(
     field: &'static str,
     value: &str,
@@ -3948,6 +4443,17 @@ fn ensure_provenance_report_field(
     Ok(())
 }
 
+fn ensure_provenance_report_sha256(
+    field: &'static str,
+    value: &str,
+) -> Result<(), ArtifactPromotionProvenanceReportError> {
+    if is_lower_hex_sha256(value) {
+        Ok(())
+    } else {
+        Err(ArtifactPromotionProvenanceReportError::InvalidSha256Digest { field })
+    }
+}
+
 fn ensure_execution_receipt_field(
     field: &'static str,
     value: &str,
@@ -3956,6 +4462,17 @@ fn ensure_execution_receipt_field(
         return Err(ArtifactPromotionExecutionReceiptError::MissingRequiredField { field });
     }
     Ok(())
+}
+
+fn ensure_execution_receipt_sha256(
+    field: &'static str,
+    value: &str,
+) -> Result<(), ArtifactPromotionExecutionReceiptError> {
+    if is_lower_hex_sha256(value) {
+        Ok(())
+    } else {
+        Err(ArtifactPromotionExecutionReceiptError::LinkageMismatch { field })
+    }
 }
 
 fn ensure_materialization_report_sha256(

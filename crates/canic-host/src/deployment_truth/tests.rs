@@ -1540,6 +1540,7 @@ fn artifact_promotion_provenance_report_round_trips_through_json() {
         report_id: "promotion-provenance-1".to_string(),
         artifact_promotion_plan: sample_artifact_promotion_plan(),
         wasm_store_identity_report: Some(sample_wasm_store_identity_report()),
+        wasm_store_catalog_verification: Some(sample_wasm_store_catalog_verification()),
         materialization_identity_report: Some(sample_materialization_identity_report()),
     })
     .expect("promotion provenance should validate");
@@ -1561,6 +1562,7 @@ fn artifact_promotion_provenance_report_round_trips_through_json() {
             "transform_id",
             "target_execution_lineage_id",
             "wasm_store_identity_report_id",
+            "wasm_store_catalog_verification_id",
             "materialization_identity_report_id",
             "execution_attempted",
             "roles",
@@ -1571,6 +1573,7 @@ fn artifact_promotion_provenance_report_round_trips_through_json() {
     assert_eq!(encoded["status"], "Ready");
     assert_eq!(encoded["execution_attempted"], false);
     assert_eq!(encoded["roles"][0]["role"], "root");
+    assert!(encoded["roles"][0]["wasm_store_catalog_observation_digest"].is_string());
 }
 
 #[test]
@@ -1579,6 +1582,7 @@ fn artifact_promotion_provenance_report_links_optional_reports() {
         report_id: "promotion-provenance-1".to_string(),
         artifact_promotion_plan: sample_artifact_promotion_plan(),
         wasm_store_identity_report: Some(sample_wasm_store_identity_report()),
+        wasm_store_catalog_verification: Some(sample_wasm_store_catalog_verification()),
         materialization_identity_report: Some(sample_materialization_identity_report()),
     })
     .expect("promotion provenance should validate");
@@ -1588,12 +1592,22 @@ fn artifact_promotion_provenance_report_links_optional_reports() {
         Some("wasm-store-identity-1")
     );
     assert_eq!(
+        report.wasm_store_catalog_verification_id.as_deref(),
+        Some("wasm-store-catalog-1")
+    );
+    assert_eq!(
         report.materialization_identity_report_id.as_deref(),
         Some("materialization-report-1")
     );
     assert_eq!(
         report.roles[0].wasm_store_locator.as_deref(),
         Some("root:aaaaa-aa:bootstrap")
+    );
+    assert!(
+        report.roles[0]
+            .wasm_store_catalog_observation_digest
+            .as_deref()
+            .is_some_and(|digest| digest.len() == 64)
     );
     assert_eq!(
         report.roles[0].materialization_evidence_id.as_deref(),
@@ -1617,6 +1631,7 @@ fn artifact_promotion_provenance_report_blocks_unknown_report_roles() {
         report_id: "promotion-provenance-1".to_string(),
         artifact_promotion_plan: sample_artifact_promotion_plan(),
         wasm_store_identity_report: Some(wasm_store_report),
+        wasm_store_catalog_verification: None,
         materialization_identity_report: None,
     })
     .expect("unknown optional report role should become provenance blocker");
@@ -1629,11 +1644,72 @@ fn artifact_promotion_provenance_report_blocks_unknown_report_roles() {
 }
 
 #[test]
+fn artifact_promotion_provenance_report_blocks_catalog_identity_mismatch() {
+    let mut catalog = sample_wasm_store_catalog_verification();
+    catalog.wasm_store_identity_report_id = "other-wasm-store-report".to_string();
+
+    let report = artifact_promotion_provenance_report(ArtifactPromotionProvenanceReportRequest {
+        report_id: "promotion-provenance-1".to_string(),
+        artifact_promotion_plan: sample_artifact_promotion_plan(),
+        wasm_store_identity_report: Some(sample_wasm_store_identity_report()),
+        wasm_store_catalog_verification: Some(catalog),
+        materialization_identity_report: None,
+    })
+    .expect("mismatched catalog verification should become provenance blocker");
+
+    assert_eq!(report.status, PromotionReadinessStatusV1::Blocked);
+    assert!(report.blockers.iter().any(|finding| {
+        finding.code == "promotion_provenance_wasm_store_catalog_identity_mismatch"
+            && finding.subject.as_deref() == Some("wasm_store_catalog")
+    }));
+}
+
+#[test]
+fn artifact_promotion_provenance_report_blocks_catalog_locator_mismatch() {
+    let mut receipt = sample_wasm_store_staging_receipt();
+    receipt.wasm_store_locator = Some("root:aaaaa-aa:other".to_string());
+    let other_identity = promotion_wasm_store_identity_report_from_staging(
+        PromotionWasmStoreIdentityReportRequest {
+            report_id: "wasm-store-identity-1".to_string(),
+            staging_receipts: vec![receipt],
+        },
+    )
+    .expect("alternate wasm-store identity report should validate");
+    let catalog =
+        promotion_wasm_store_catalog_verification(PromotionWasmStoreCatalogVerificationRequest {
+            verification_id: "wasm-store-catalog-1".to_string(),
+            wasm_store_identity_report: other_identity,
+            catalog_entries: vec![PromotionWasmStoreCatalogEntryV1 {
+                locator: "root:aaaaa-aa:other".to_string(),
+                artifact_identity: "embedded:root:0.44.0:abc123".to_string(),
+                published_chunk_count: 2,
+            }],
+        })
+        .expect("alternate catalog verification should validate");
+
+    let report = artifact_promotion_provenance_report(ArtifactPromotionProvenanceReportRequest {
+        report_id: "promotion-provenance-1".to_string(),
+        artifact_promotion_plan: sample_artifact_promotion_plan(),
+        wasm_store_identity_report: Some(sample_wasm_store_identity_report()),
+        wasm_store_catalog_verification: Some(catalog),
+        materialization_identity_report: None,
+    })
+    .expect("mismatched catalog locator should become provenance blocker");
+
+    assert_eq!(report.status, PromotionReadinessStatusV1::Blocked);
+    assert!(report.blockers.iter().any(|finding| {
+        finding.code == "promotion_provenance_wasm_store_catalog_locator_mismatch"
+            && finding.subject.as_deref() == Some("root")
+    }));
+}
+
+#[test]
 fn artifact_promotion_provenance_report_text_reports_passive_summary() {
     let report = artifact_promotion_provenance_report(ArtifactPromotionProvenanceReportRequest {
         report_id: "promotion-provenance-1".to_string(),
         artifact_promotion_plan: sample_artifact_promotion_plan(),
         wasm_store_identity_report: Some(sample_wasm_store_identity_report()),
+        wasm_store_catalog_verification: Some(sample_wasm_store_catalog_verification()),
         materialization_identity_report: Some(sample_materialization_identity_report()),
     })
     .expect("promotion provenance should validate");
@@ -1646,6 +1722,8 @@ fn artifact_promotion_provenance_report_text_reports_passive_summary() {
     assert!(text.contains("report_id: promotion-provenance-1"));
     assert!(text.contains("artifact_promotion_plan_id: artifact-promotion-plan-1"));
     assert!(text.contains("wasm_store_identity: wasm-store-identity-1"));
+    assert!(text.contains("wasm_store_catalog: wasm-store-catalog-1"));
+    assert!(text.contains("catalog_digest="));
     assert!(text.contains("materialization_identity: materialization-report-1"));
     assert!(text.contains("root SealedWasm/LocalWasmGz"));
 }
@@ -1685,6 +1763,7 @@ fn artifact_promotion_execution_receipt_round_trips_through_json() {
     assert_eq!(encoded["promoted_plan_id"], "promoted-plan-1");
     assert_eq!(encoded["operation_id"], "promoted-operation-1");
     assert_eq!(encoded["roles"][0]["role"], "root");
+    assert!(encoded["roles"][0]["wasm_store_catalog_observation_digest"].is_string());
 }
 
 #[test]
@@ -1712,6 +1791,12 @@ fn artifact_promotion_execution_receipt_links_deployment_receipt() {
     assert_eq!(
         receipt.roles[0].observed_module_hash_after.as_deref(),
         Some(sample_sha256("7").as_str())
+    );
+    assert!(
+        receipt.roles[0]
+            .wasm_store_catalog_observation_digest
+            .as_deref()
+            .is_some_and(|digest| digest.len() == 64)
     );
 }
 
@@ -1753,6 +1838,7 @@ fn artifact_promotion_execution_receipt_rejects_blocked_provenance() {
             report_id: "promotion-provenance-1".to_string(),
             artifact_promotion_plan: sample_artifact_promotion_plan(),
             wasm_store_identity_report: Some(wasm_store_report),
+            wasm_store_catalog_verification: None,
             materialization_identity_report: None,
         })
         .expect("blocked provenance report should still be reportable");
@@ -1850,6 +1936,7 @@ fn artifact_promotion_execution_receipt_text_reports_execution_summary() {
     assert!(text.contains("provenance_status: ready"));
     assert!(text.contains("deployment_phase_receipts: 1"));
     assert!(text.contains("root SealedWasm: result=Applied"));
+    assert!(text.contains("catalog_digest="));
 }
 
 #[test]
@@ -3563,6 +3650,181 @@ fn promotion_wasm_store_identity_report_text_reports_passive_summary() {
     assert!(text.contains(
         "root artifact=embedded:root:0.44.0:abc123 locator=root:aaaaa-aa:bootstrap chunks=2/2 postcondition=Observed"
     ));
+}
+
+#[test]
+fn promotion_wasm_store_catalog_verification_round_trips_through_json() {
+    let verification = sample_wasm_store_catalog_verification();
+
+    assert_json_round_trip(&verification);
+    let encoded = serde_json::to_value(&verification).expect("catalog verification should encode");
+    assert_object_keys(
+        &encoded,
+        &[
+            "schema_version",
+            "verification_id",
+            "wasm_store_identity_report_id",
+            "status",
+            "roles",
+            "blockers",
+        ],
+    );
+    assert_eq!(encoded["verification_id"], "wasm-store-catalog-1");
+    assert_eq!(
+        encoded["wasm_store_identity_report_id"],
+        "wasm-store-identity-1"
+    );
+    assert_eq!(encoded["status"], "Ready");
+    assert_eq!(encoded["roles"][0]["catalog_matches"], true);
+    assert_object_keys(
+        &encoded["roles"][0],
+        &[
+            "role",
+            "wasm_store_locator",
+            "expected_artifact_identity",
+            "observed_artifact_identity",
+            "expected_published_chunk_count",
+            "observed_published_chunk_count",
+            "catalog_entry_present",
+            "catalog_matches",
+            "catalog_observation_digest",
+        ],
+    );
+}
+
+#[test]
+fn promotion_wasm_store_catalog_verification_blocks_missing_entry() {
+    let report = sample_wasm_store_identity_report();
+
+    let verification =
+        promotion_wasm_store_catalog_verification(PromotionWasmStoreCatalogVerificationRequest {
+            verification_id: "wasm-store-catalog-1".to_string(),
+            wasm_store_identity_report: report,
+            catalog_entries: Vec::new(),
+        })
+        .expect("missing catalog entry should still produce blocked verification");
+
+    assert_eq!(verification.status, PromotionReadinessStatusV1::Blocked);
+    assert!(verification.blockers.iter().any(|finding| {
+        finding.code == "promotion_wasm_store_catalog_entry_missing"
+            && finding.subject.as_deref() == Some("root")
+    }));
+}
+
+#[test]
+fn promotion_wasm_store_catalog_verification_blocks_artifact_mismatch() {
+    let report = sample_wasm_store_identity_report();
+    let mut entry = sample_wasm_store_catalog_entry();
+    entry.artifact_identity = "embedded:root:0.44.0:other".to_string();
+
+    let verification =
+        promotion_wasm_store_catalog_verification(PromotionWasmStoreCatalogVerificationRequest {
+            verification_id: "wasm-store-catalog-1".to_string(),
+            wasm_store_identity_report: report,
+            catalog_entries: vec![entry],
+        })
+        .expect("catalog artifact mismatch should still produce blocked verification");
+
+    assert_eq!(verification.status, PromotionReadinessStatusV1::Blocked);
+    assert!(verification.blockers.iter().any(|finding| {
+        finding.code == "promotion_wasm_store_catalog_artifact_mismatch"
+            && finding.subject.as_deref() == Some("root")
+    }));
+}
+
+#[test]
+fn promotion_wasm_store_catalog_verification_blocks_chunk_count_mismatch() {
+    let report = sample_wasm_store_identity_report();
+    let mut entry = sample_wasm_store_catalog_entry();
+    entry.published_chunk_count = 1;
+
+    let verification =
+        promotion_wasm_store_catalog_verification(PromotionWasmStoreCatalogVerificationRequest {
+            verification_id: "wasm-store-catalog-1".to_string(),
+            wasm_store_identity_report: report,
+            catalog_entries: vec![entry],
+        })
+        .expect("catalog chunk-count mismatch should still produce blocked verification");
+
+    assert_eq!(verification.status, PromotionReadinessStatusV1::Blocked);
+    assert!(verification.blockers.iter().any(|finding| {
+        finding.code == "promotion_wasm_store_catalog_chunk_count_mismatch"
+            && finding.subject.as_deref() == Some("root")
+    }));
+}
+
+#[test]
+fn promotion_wasm_store_catalog_verification_rejects_duplicate_catalog_locator() {
+    let report = sample_wasm_store_identity_report();
+    let entry = sample_wasm_store_catalog_entry();
+
+    let err =
+        promotion_wasm_store_catalog_verification(PromotionWasmStoreCatalogVerificationRequest {
+            verification_id: "wasm-store-catalog-1".to_string(),
+            wasm_store_identity_report: report,
+            catalog_entries: vec![entry.clone(), entry],
+        })
+        .expect_err("duplicate catalog locator should fail before verification");
+
+    assert!(matches!(
+        err,
+        PromotionWasmStoreCatalogVerificationError::DuplicateLocator { locator }
+            if locator == "root:aaaaa-aa:bootstrap"
+    ));
+}
+
+#[test]
+fn promotion_wasm_store_catalog_verification_validation_rejects_stale_blockers() {
+    let mut verification = sample_wasm_store_catalog_verification();
+    verification.blockers.push(SafetyFindingV1 {
+        code: "stale".to_string(),
+        message: "stale".to_string(),
+        severity: SafetySeverityV1::HardFailure,
+        subject: Some("root".to_string()),
+    });
+    verification.status = PromotionReadinessStatusV1::Blocked;
+
+    let err = validate_promotion_wasm_store_catalog_verification(&verification)
+        .expect_err("stale catalog blockers should fail");
+
+    assert!(matches!(
+        err,
+        PromotionWasmStoreCatalogVerificationError::BlockerMismatch
+    ));
+}
+
+#[test]
+fn promotion_wasm_store_catalog_verification_validation_rejects_stale_observation_digest() {
+    let mut verification = sample_wasm_store_catalog_verification();
+    verification.roles[0].catalog_observation_digest = sample_sha256("9");
+
+    let err = validate_promotion_wasm_store_catalog_verification(&verification)
+        .expect_err("stale catalog observation digest should fail");
+
+    assert!(matches!(
+        err,
+        PromotionWasmStoreCatalogVerificationError::RoleMismatch {
+            role,
+            field: "catalog_observation_digest"
+        } if role == "root"
+    ));
+}
+
+#[test]
+fn promotion_wasm_store_catalog_verification_text_reports_passive_summary() {
+    let verification = sample_wasm_store_catalog_verification();
+
+    let text = promotion_wasm_store_catalog_verification_text(&verification);
+
+    assert!(text.contains("Promotion wasm-store catalog verification"));
+    assert!(text.contains("mode: passive"));
+    assert!(text.contains("execution: none"));
+    assert!(text.contains("verification_id: wasm-store-catalog-1"));
+    assert!(text.contains("wasm_store_identity_report_id: wasm-store-identity-1"));
+    assert!(text.contains("matching_roles: 1"));
+    assert!(text.contains("missing_catalog_entries: 0"));
+    assert!(text.contains("root locator=root:aaaaa-aa:bootstrap match=true"));
+    assert!(text.contains("digest="));
 }
 
 #[test]
@@ -8401,6 +8663,7 @@ fn sample_artifact_promotion_provenance_report() -> ArtifactPromotionProvenanceR
         report_id: "promotion-provenance-1".to_string(),
         artifact_promotion_plan: sample_artifact_promotion_plan(),
         wasm_store_identity_report: Some(sample_wasm_store_identity_report()),
+        wasm_store_catalog_verification: Some(sample_wasm_store_catalog_verification()),
         materialization_identity_report: Some(sample_materialization_identity_report()),
     })
     .expect("sample promotion provenance report should validate")
@@ -8437,6 +8700,23 @@ fn sample_wasm_store_identity_report() -> PromotionWasmStoreIdentityReportV1 {
         staging_receipts: vec![sample_wasm_store_staging_receipt()],
     })
     .expect("sample wasm-store identity report should validate")
+}
+
+fn sample_wasm_store_catalog_entry() -> PromotionWasmStoreCatalogEntryV1 {
+    PromotionWasmStoreCatalogEntryV1 {
+        locator: "root:aaaaa-aa:bootstrap".to_string(),
+        artifact_identity: "embedded:root:0.44.0:abc123".to_string(),
+        published_chunk_count: 2,
+    }
+}
+
+fn sample_wasm_store_catalog_verification() -> PromotionWasmStoreCatalogVerificationV1 {
+    promotion_wasm_store_catalog_verification(PromotionWasmStoreCatalogVerificationRequest {
+        verification_id: "wasm-store-catalog-1".to_string(),
+        wasm_store_identity_report: sample_wasm_store_identity_report(),
+        catalog_entries: vec![sample_wasm_store_catalog_entry()],
+    })
+    .expect("sample wasm-store catalog verification should validate")
 }
 
 fn sample_materialization_identity_report() -> PromotionMaterializationIdentityReportV1 {
