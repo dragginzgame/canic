@@ -12,12 +12,11 @@ present.
 
 ## Unreleased
 
-- Added a passive promotion artifact identity report that separates source
-  locator kind from artifact identity kind before later promotion planning
-  consumes role sources, groups roles by deterministic artifact identity key,
-  and includes host-owned text rendering for operator reports.
-
 ## [0.44.x] - 2026-05-25 - Artifact promotion
+
+- `0.44.2` adds passive promotion artifact identity reports that separate
+  source locator kind from artifact identity kind and group roles by
+  deterministic identity keys.
 
 - `0.44.1` adds passive promoted-plan transformation and transform evidence
   artifacts, including validation and text output that explicitly reports no
