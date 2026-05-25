@@ -65,6 +65,16 @@ promotion can prove what was built, uploaded, installed, and promoted.
   to the same sealed or source/build identity.
 - Added host-owned passive text rendering for
   `PromotionArtifactIdentityReportV1`.
+- Added passive `BuildRecipeIdentityV1`, `BuildMaterializationInputV1`, and
+  `BuildMaterializationResultV1` DTOs so source/build promotion can record the
+  reusable build recipe, target-specific materialization input, and concrete
+  output as separate evidence objects.
+- Added validation for source/build materialization identity fields, including
+  required IDs, builder/toolchain selectors, config digests, and output digest
+  shape.
+- Added `BuildMaterializationEvidenceV1` to link a recipe, materialization
+  input, and materialization result with computed input-digest evidence and
+  explicit passive text rendering.
 
 ## Not Implemented Yet
 
@@ -73,9 +83,8 @@ promotion can prove what was built, uploaded, installed, and promoted.
 - Full promotion safety checks across deployment targets.
 - Integration with wasm-store artifact identity.
 - Artifact identity dedupe semantics beyond passive report grouping.
-- Full source/build materialization environment identity, including target,
-  linker, deterministic-build mode, wasm optimization, and compression
-  identity.
+- Wiring source/build materialization identity into promotion plans and
+  operator reports.
 - Explicit role policy distinction between "must use sealed bytes" and
   "rebuild allowed only if byte-identical output is proven."
 - Promotion plan/source receipt/target execution lineage identity.

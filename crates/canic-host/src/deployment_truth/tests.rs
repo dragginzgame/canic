@@ -353,6 +353,254 @@ fn promotion_artifact_identity_report_validation_rejects_ungrouped_role() {
 }
 
 #[test]
+fn build_recipe_identity_round_trips_through_json() {
+    let recipe = sample_build_recipe_identity();
+
+    validate_build_recipe_identity(&recipe).expect("recipe identity should validate");
+    assert_json_round_trip(&recipe);
+    let encoded = serde_json::to_value(&recipe).expect("recipe identity should encode");
+    assert_object_keys(
+        &encoded,
+        &[
+            "recipe_id",
+            "source_kind",
+            "source_revision",
+            "source_tree_clean",
+            "package_or_role_selector",
+            "cargo_profile",
+            "cargo_features_digest",
+            "cargo_lock_digest",
+            "rust_toolchain",
+            "builder_version",
+            "target_triple",
+            "linker_identity",
+            "deterministic_build_mode",
+            "wasm_opt_version",
+            "compression_identity",
+        ],
+    );
+}
+
+#[test]
+fn build_recipe_identity_validation_rejects_dirty_ambiguous_revision() {
+    let mut recipe = sample_build_recipe_identity();
+    recipe.source_revision = " ".to_string();
+
+    let err = validate_build_recipe_identity(&recipe).expect_err("blank revision should fail");
+
+    assert!(matches!(
+        err,
+        PromotionMaterializationIdentityError::MissingRequiredField {
+            field: "source_revision"
+        }
+    ));
+}
+
+#[test]
+fn build_materialization_input_round_trips_through_json() {
+    let input = sample_build_materialization_input();
+
+    validate_build_materialization_input(&input).expect("materialization input should validate");
+    assert_json_round_trip(&input);
+    let encoded = serde_json::to_value(&input).expect("materialization input should encode");
+    assert_object_keys(
+        &encoded,
+        &[
+            "materialization_input_id",
+            "build_recipe_id",
+            "canonical_embedded_config_sha256",
+            "network",
+            "root_trust_anchor",
+            "runtime_variant",
+        ],
+    );
+}
+
+#[test]
+fn build_materialization_input_validation_rejects_bad_config_digest() {
+    let mut input = sample_build_materialization_input();
+    input.canonical_embedded_config_sha256 = "bad-digest".to_string();
+
+    let err =
+        validate_build_materialization_input(&input).expect_err("bad config digest should fail");
+
+    assert!(matches!(
+        err,
+        PromotionMaterializationIdentityError::InvalidSha256Digest {
+            field: "canonical_embedded_config_sha256"
+        }
+    ));
+}
+
+#[test]
+fn build_materialization_result_round_trips_through_json() {
+    let result = sample_build_materialization_result();
+
+    validate_build_materialization_result(&result).expect("materialization result should validate");
+    assert_json_round_trip(&result);
+    let encoded = serde_json::to_value(&result).expect("materialization result should encode");
+    assert_object_keys(
+        &encoded,
+        &[
+            "materialization_result_id",
+            "build_recipe_id",
+            "materialization_input_digest",
+            "wasm_sha256",
+            "wasm_gz_sha256",
+            "installed_module_hash",
+            "candid_sha256",
+        ],
+    );
+}
+
+#[test]
+fn build_materialization_result_validation_rejects_bad_output_digest() {
+    let mut result = sample_build_materialization_result();
+    result.wasm_sha256 = "BAD".to_string();
+
+    let err =
+        validate_build_materialization_result(&result).expect_err("bad output digest should fail");
+
+    assert!(matches!(
+        err,
+        PromotionMaterializationIdentityError::InvalidSha256Digest {
+            field: "wasm_sha256"
+        }
+    ));
+}
+
+#[test]
+fn build_materialization_evidence_round_trips_through_json() {
+    let input = sample_build_materialization_input();
+    let mut result = sample_build_materialization_result();
+    result.materialization_input_digest = build_materialization_input_digest(&input);
+
+    let evidence = build_materialization_evidence(BuildMaterializationEvidenceRequest {
+        evidence_id: "materialization-evidence-1".to_string(),
+        recipe: sample_build_recipe_identity(),
+        materialization_input: input,
+        materialization_result: result,
+    })
+    .expect("materialization evidence should validate");
+
+    assert!(evidence.recipe_id_matches_input);
+    assert!(evidence.recipe_id_matches_result);
+    assert!(evidence.materialization_input_digest_matches_result);
+    assert_json_round_trip(&evidence);
+    let encoded = serde_json::to_value(&evidence).expect("materialization evidence should encode");
+    assert_object_keys(
+        &encoded,
+        &[
+            "schema_version",
+            "evidence_id",
+            "recipe",
+            "materialization_input",
+            "materialization_result",
+            "computed_materialization_input_digest",
+            "recipe_id_matches_input",
+            "recipe_id_matches_result",
+            "materialization_input_digest_matches_result",
+        ],
+    );
+}
+
+#[test]
+fn build_materialization_evidence_text_reports_passive_boundary() {
+    let input = sample_build_materialization_input();
+    let mut result = sample_build_materialization_result();
+    result.materialization_input_digest = build_materialization_input_digest(&input);
+    let evidence = build_materialization_evidence(BuildMaterializationEvidenceRequest {
+        evidence_id: "materialization-evidence-1".to_string(),
+        recipe: sample_build_recipe_identity(),
+        materialization_input: input,
+        materialization_result: result,
+    })
+    .expect("materialization evidence should validate");
+
+    let text = build_materialization_evidence_text(&evidence);
+
+    assert!(text.contains("Build materialization evidence"));
+    assert!(text.contains("mode: passive"));
+    assert!(text.contains("evidence_id: materialization-evidence-1"));
+    assert!(text.contains("recipe_id_matches_input: true"));
+    assert!(text.contains("recipe_id_matches_result: true"));
+    assert!(text.contains("materialization_input_digest_matches_result: true"));
+    assert!(text.contains("execution: none"));
+}
+
+#[test]
+fn build_materialization_evidence_validation_rejects_stale_computed_digest() {
+    let input = sample_build_materialization_input();
+    let mut result = sample_build_materialization_result();
+    result.materialization_input_digest = build_materialization_input_digest(&input);
+    let mut evidence = build_materialization_evidence(BuildMaterializationEvidenceRequest {
+        evidence_id: "materialization-evidence-1".to_string(),
+        recipe: sample_build_recipe_identity(),
+        materialization_input: input,
+        materialization_result: result,
+    })
+    .expect("materialization evidence should validate");
+    evidence.computed_materialization_input_digest = sample_sha256("9");
+
+    let err = validate_build_materialization_evidence(&evidence)
+        .expect_err("stale computed digest should fail");
+
+    assert!(matches!(
+        err,
+        PromotionMaterializationIdentityError::DigestMismatch {
+            field: "computed_materialization_input_digest",
+            ..
+        }
+    ));
+}
+
+#[test]
+fn build_materialization_evidence_validation_rejects_stale_link_flag() {
+    let input = sample_build_materialization_input();
+    let mut result = sample_build_materialization_result();
+    result.materialization_input_digest = build_materialization_input_digest(&input);
+    let mut evidence = build_materialization_evidence(BuildMaterializationEvidenceRequest {
+        evidence_id: "materialization-evidence-1".to_string(),
+        recipe: sample_build_recipe_identity(),
+        materialization_input: input,
+        materialization_result: result,
+    })
+    .expect("materialization evidence should validate");
+    evidence.recipe_id_matches_input = false;
+
+    let err =
+        validate_build_materialization_evidence(&evidence).expect_err("stale flag should fail");
+
+    assert!(matches!(
+        err,
+        PromotionMaterializationIdentityError::LinkageMismatch {
+            field: "recipe_id_matches_input"
+        }
+    ));
+}
+
+#[test]
+fn build_materialization_evidence_rejects_mismatched_result_input_digest() {
+    let input = sample_build_materialization_input();
+    let result = sample_build_materialization_result();
+
+    let err = build_materialization_evidence(BuildMaterializationEvidenceRequest {
+        evidence_id: "materialization-evidence-1".to_string(),
+        recipe: sample_build_recipe_identity(),
+        materialization_input: input,
+        materialization_result: result,
+    })
+    .expect_err("mismatched result input digest should fail");
+
+    assert!(matches!(
+        err,
+        PromotionMaterializationIdentityError::LinkageMismatch {
+            field: "materialization_input_digest_matches_result"
+        }
+    ));
+}
+
+#[test]
 fn promotion_readiness_round_trips_through_json() {
     let plan = sample_promotion_target_plan();
     let input = sample_role_promotion_input(PromotionArtifactLevelV1::SealedWasm);
@@ -6525,6 +6773,49 @@ fn sample_role_promotion_input(promotion_level: PromotionArtifactLevelV1) -> Rol
         require_byte_identical_wasm: promotion_level == PromotionArtifactLevelV1::SealedWasm,
         require_target_embedded_config: true,
         target_store_has_artifact: Some(true),
+    }
+}
+
+fn sample_build_recipe_identity() -> BuildRecipeIdentityV1 {
+    BuildRecipeIdentityV1 {
+        recipe_id: "recipe:root:debug".to_string(),
+        source_kind: RoleArtifactSourceKindV1::WorkspacePackage,
+        source_revision: "0123456789abcdef0123456789abcdef01234567".to_string(),
+        source_tree_clean: true,
+        package_or_role_selector: "root".to_string(),
+        cargo_profile: "debug".to_string(),
+        cargo_features_digest: sample_sha256("1"),
+        cargo_lock_digest: sample_sha256("2"),
+        rust_toolchain: "1.88.0".to_string(),
+        builder_version: "canic-build-v1".to_string(),
+        target_triple: "wasm32-unknown-unknown".to_string(),
+        linker_identity: "rust-lld".to_string(),
+        deterministic_build_mode: "locked".to_string(),
+        wasm_opt_version: "not-used".to_string(),
+        compression_identity: "gzip:default".to_string(),
+    }
+}
+
+fn sample_build_materialization_input() -> BuildMaterializationInputV1 {
+    BuildMaterializationInputV1 {
+        materialization_input_id: "materialization-input:root:prod".to_string(),
+        build_recipe_id: "recipe:root:debug".to_string(),
+        canonical_embedded_config_sha256: sample_sha256("3"),
+        network: "ic".to_string(),
+        root_trust_anchor: "aaaaa-aa".to_string(),
+        runtime_variant: "prod".to_string(),
+    }
+}
+
+fn sample_build_materialization_result() -> BuildMaterializationResultV1 {
+    BuildMaterializationResultV1 {
+        materialization_result_id: "materialization-result:root:prod".to_string(),
+        build_recipe_id: "recipe:root:debug".to_string(),
+        materialization_input_digest: sample_sha256("4"),
+        wasm_sha256: sample_sha256("5"),
+        wasm_gz_sha256: sample_sha256("6"),
+        installed_module_hash: sample_sha256("7"),
+        candid_sha256: sample_sha256("8"),
     }
 }
 

@@ -14,6 +14,9 @@ present.
 
 ## [0.44.x] - 2026-05-25 - Artifact promotion
 
+- `0.44.3` adds passive source/build materialization identity and linkage
+  evidence for build recipes, target-specific inputs, and output digests.
+
 - `0.44.2` adds passive promotion artifact identity reports that separate
   source locator kind from artifact identity kind and group roles by
   deterministic identity keys.

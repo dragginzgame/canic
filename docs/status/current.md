@@ -71,6 +71,13 @@ inspect only the files needed for the current task.
   same sealed or source/build identity.
 - Promotion artifact identity reports also have host-owned passive text
   rendering for future CLI/report consumers.
+- Source/build promotion now has passive `BuildRecipeIdentityV1`,
+  `BuildMaterializationInputV1`, and `BuildMaterializationResultV1` DTOs with
+  validation, separating reusable build recipe identity from target-specific
+  config input and concrete output digests.
+- `BuildMaterializationEvidenceV1` now links those source/build pieces with a
+  computed target materialization-input digest, consistency flags, validation,
+  and passive text output that explicitly reports no execution occurred.
 - `0.43.8` is closed. The closeout report is
   `docs/audits/reports/2026-05/2026-05-25/0.43-closeout.md`.
 - `0.43.8` adds a private current-install

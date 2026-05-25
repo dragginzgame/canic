@@ -74,6 +74,43 @@ pub fn promotion_readiness_text(readiness: &PromotionReadinessV1) -> String {
     lines.join("\n")
 }
 
+/// Render source/build materialization evidence as passive operator text.
+#[must_use]
+pub fn build_materialization_evidence_text(evidence: &BuildMaterializationEvidenceV1) -> String {
+    [
+        "Build materialization evidence".to_string(),
+        "mode: passive".to_string(),
+        format!("evidence_id: {}", evidence.evidence_id),
+        format!("recipe_id: {}", evidence.recipe.recipe_id),
+        format!(
+            "materialization_input_id: {}",
+            evidence.materialization_input.materialization_input_id
+        ),
+        format!(
+            "materialization_result_id: {}",
+            evidence.materialization_result.materialization_result_id
+        ),
+        format!(
+            "computed_materialization_input_digest: {}",
+            evidence.computed_materialization_input_digest
+        ),
+        format!(
+            "recipe_id_matches_input: {}",
+            evidence.recipe_id_matches_input
+        ),
+        format!(
+            "recipe_id_matches_result: {}",
+            evidence.recipe_id_matches_result
+        ),
+        format!(
+            "materialization_input_digest_matches_result: {}",
+            evidence.materialization_input_digest_matches_result
+        ),
+        "execution: none".to_string(),
+    ]
+    .join("\n")
+}
+
 /// Render a promotion artifact identity report as passive operator text.
 #[must_use]
 pub fn promotion_artifact_identity_report_text(
