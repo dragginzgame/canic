@@ -12,10 +12,12 @@ landed, what drifted, and what remains open.
 
 Started.
 
-0.45 now has the first passive lifecycle-authority projection over existing
-deployment truth, lifecycle plan partitioning, and derived proposal/receipt
-evidence. External or user-owned lifecycle flows remain explicit report data;
-no consent delivery, external execution, or install mutation path has landed.
+0.45 now has passive lifecycle-authority projection over existing deployment
+truth, lifecycle plan partitioning, derived proposal/receipt/pending evidence,
+critical-fix residual exposure reporting, and structural external verification
+reporting. External or user-owned lifecycle flows remain explicit report data;
+no consent delivery, external execution, live re-inventory, or install mutation
+path has landed.
 
 ## Implemented
 
@@ -58,17 +60,47 @@ no consent delivery, external execution, or install mutation path has landed.
 - Receipt validation now rejects stale receipt digests while preserving
   semantic checks for refused-but-verified and missing-observation claims.
 - Passive text renderers exist for lifecycle authority reports, lifecycle
-  plans, proposal reports, and external completion receipts. They explicitly
+  plans, proposal reports, external completion receipts, pending reports,
+  critical-fix reports, and external verification reports. They explicitly
   report `mode: passive` and `execution: none`.
+- `ExternalLifecyclePendingReportV1` summarizes unresolved external lifecycle
+  work from the lifecycle plan and proposal report, including direct,
+  pending, and blocked counts; pending proposal links; residual exposure; and
+  digest validation.
+- `CriticalExternalFixReportV1` summarizes directly patchable roles,
+  externally blocked roles, dependency-blocked roles, required external
+  actions, protected-call implications, residual exposure, and operator next
+  steps from lifecycle pending evidence without claiming deployment
+  completion.
+- `ExternalUpgradeConsentEvidenceV1` separates reported consent/action state
+  from completion verification. It links a proposal/receipt pair, records
+  consent state, reporter, consent requirements, allowed authorization modes,
+  and a deterministic evidence digest, and remains passive structural evidence.
+  `canic deploy external inspect consent --request <file>` exposes it under an
+  advanced inspection namespace rather than as a top-level lifecycle workflow.
+- `ExternalUpgradeVerificationReportV1` packages a validated
+  proposal/receipt pair into a digest-pinned passive verification artifact.
+  It records the verification result, source proposal/receipt digests, notes,
+  and whether fresh live inventory remains required.
+- `canic deploy external plan <fleet>`, `proposals <fleet>`,
+  `pending <fleet>`, and `critical-fix <fleet>` expose local deployment-truth
+  external lifecycle artifacts as JSON by default or passive text with
+  `--format text`.
+- `canic deploy external verify --request <file>` reads an
+  `ExternalUpgradeVerificationReportRequest` JSON file and emits a passive
+  `ExternalUpgradeVerificationReportV1` without live lookup, consent delivery,
+  external execution, install, or mutation.
 - JSON shape and projection coverage pins deployment-controlled,
   user-controlled, and unknown-unsafe lifecycle authority behavior, plus the
-  first external proposal and receipt artifact shapes.
+  first external proposal, receipt, consent evidence, verification request,
+  and verification report artifact shapes.
 
 ## Not Implemented Yet
 
 - Consent and operator handoff workflow.
 - Safe upgrade/install boundaries for externally controlled canisters.
-- Live re-inventory integration for external lifecycle verification.
+- Live re-inventory integration for external lifecycle verification. Current
+  verification reports are structural proposal/receipt evidence only.
 
 ## Drift Log
 

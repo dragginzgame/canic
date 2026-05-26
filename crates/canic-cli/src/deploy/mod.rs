@@ -16,13 +16,15 @@ use canic_host::{
         ArtifactPromotionExecutionReceiptRequest, ArtifactPromotionExecutionReceiptV1,
         ArtifactPromotionPlanRequest, ArtifactPromotionPlanV1,
         ArtifactPromotionProvenanceReportRequest, ArtifactPromotionProvenanceReportV1,
-        AuthorityDryRunEvidenceV1, BuildMaterializationEvidenceV1, DeploymentCheckV1,
-        DeploymentExecutionPreflightV1, DeploymentPlanV1, DeploymentReceiptV1,
-        ExternalLifecyclePendingReportV1, ExternalLifecyclePlanV1, ExternalUpgradeProposalReportV1,
-        PromotionArtifactIdentityReportRequest, PromotionArtifactIdentityReportV1,
-        PromotionMaterializationIdentityReportRequest, PromotionMaterializationIdentityReportV1,
-        PromotionPlanTransformEvidenceRequest, PromotionPlanTransformEvidenceV1,
-        PromotionPlanTransformRequest, PromotionPlanTransformV1,
+        AuthorityDryRunEvidenceV1, BuildMaterializationEvidenceV1, CriticalExternalFixReportV1,
+        DeploymentCheckV1, DeploymentExecutionPreflightV1, DeploymentPlanV1, DeploymentReceiptV1,
+        ExternalLifecyclePendingReportV1, ExternalLifecyclePlanV1,
+        ExternalUpgradeConsentEvidenceRequest, ExternalUpgradeConsentEvidenceV1,
+        ExternalUpgradeProposalReportV1, ExternalUpgradeVerificationReportRequest,
+        ExternalUpgradeVerificationReportV1, PromotionArtifactIdentityReportRequest,
+        PromotionArtifactIdentityReportV1, PromotionMaterializationIdentityReportRequest,
+        PromotionMaterializationIdentityReportV1, PromotionPlanTransformEvidenceRequest,
+        PromotionPlanTransformEvidenceV1, PromotionPlanTransformRequest, PromotionPlanTransformV1,
         PromotionPlanTransformWithMaterializationRequest, PromotionPolicyCheckRequest,
         PromotionPolicyCheckV1, PromotionReadinessRequest, PromotionReadinessStatusV1,
         PromotionReadinessV1, PromotionTargetExecutionLineageRequest,
@@ -39,10 +41,13 @@ use canic_host::{
         authority_plan_text, authority_receipt_text, authority_report_from_check_with_local_id,
         authority_report_text, build_authority_reconciliation_plan, check_promotion_policy,
         check_promotion_readiness, compare_plan_inventory_and_receipt,
+        critical_external_fix_report_from_pending, critical_external_fix_report_text,
         external_lifecycle_pending_report_from_plan, external_lifecycle_pending_report_text,
         external_lifecycle_plan_from_check, external_lifecycle_plan_text,
+        external_upgrade_consent_evidence_from_receipt, external_upgrade_consent_evidence_text,
         external_upgrade_proposal_report_from_lifecycle_plan,
-        external_upgrade_proposal_report_text, promoted_deployment_plan_transform_from_inputs,
+        external_upgrade_proposal_report_text, external_upgrade_verification_report_from_receipt,
+        external_upgrade_verification_report_text, promoted_deployment_plan_transform_from_inputs,
         promoted_deployment_plan_transform_from_inputs_with_materialization,
         promotion_artifact_identity_report_from_inputs, promotion_artifact_identity_report_text,
         promotion_materialization_identity_report_from_evidence,
@@ -87,6 +92,9 @@ Examples:
   canic deploy external plan demo
   canic deploy external proposals demo
   canic deploy external pending demo
+  canic deploy external critical-fix --fix-id fix-2026-05 --severity critical demo
+  canic deploy external inspect consent --request external-consent.json
+  canic deploy external verify --request external-verification.json
   canic deploy promote plan --request promotion-plan.json
   canic deploy promote check --request promotion-check.json
   canic deploy promote diff --request promotion-diff.json
@@ -148,11 +156,32 @@ Examples:
   canic deploy external plan demo
   canic deploy external proposals demo
   canic deploy external pending demo
+  canic deploy external critical-fix --fix-id fix-2026-05 --severity critical demo
+  canic deploy external inspect consent --request external-consent.json
+  canic deploy external verify --request external-verification.json
   canic deploy external plan --format text demo
-  canic --network local deploy external pending --profile fast demo
+  canic deploy external verify --request external-verification.json --format text
+  canic --network local deploy external critical-fix --fix-id fix-2026-05 --severity high --profile fast demo
 
 0.45 external lifecycle commands are passive reports. They do not request
 consent, execute external upgrades, install code, or mutate deployment state.";
+const DEPLOY_EXTERNAL_INSPECT_HELP_AFTER: &str = "\
+Examples:
+  canic deploy external inspect consent --request external-consent.json
+  canic deploy external inspect consent --request external-consent.json --format text
+
+Advanced external lifecycle inspection commands expose archived/passive DTOs.
+They do not request consent, execute external upgrades, install code, or mutate
+deployment state.";
+const DEPLOY_EXTERNAL_CONSENT_HELP_AFTER: &str = "\
+Examples:
+  canic deploy external inspect consent --request external-consent.json
+  canic deploy external inspect consent --request external-consent.json --format text
+
+Reads an ExternalUpgradeConsentEvidenceRequest-shaped JSON file and prints
+ExternalUpgradeConsentEvidenceV1 JSON by default, or host-owned passive text
+with --format text. Consent evidence records reported consent/action state; it
+does not verify live completion.";
 const DEPLOY_INSTALL_HELP_AFTER: &str = "\
 Examples:
   canic deploy install --plan promoted-plan.json
@@ -366,6 +395,26 @@ Prints ExternalLifecyclePendingReportV1 JSON by default, or host-owned passive
 text with --format text. Pending reports summarize unresolved external actions,
 blocked subjects, and residual exposure without requesting consent or executing
 upgrades.";
+const DEPLOY_EXTERNAL_CRITICAL_FIX_HELP_AFTER: &str = "\
+Examples:
+  canic deploy external critical-fix --fix-id fix-2026-05 --severity critical demo
+  canic deploy external critical-fix --fix-id fix-2026-05 --severity critical --format text demo
+  canic --network local deploy external critical-fix --fix-id fix-2026-05 --severity high --profile fast demo
+
+Prints CriticalExternalFixReportV1 JSON by default, or host-owned passive text
+with --format text. Critical-fix reports summarize directly patchable roles,
+external blockers, required external actions, protected-call implications, and
+residual exposure without claiming deployment completion or mutating state.";
+const DEPLOY_EXTERNAL_VERIFY_HELP_AFTER: &str = "\
+Examples:
+  canic deploy external verify --request external-verification.json
+  canic deploy external verify --request external-verification.json --format text
+
+Reads an ExternalUpgradeVerificationReportRequest-shaped JSON file and prints
+ExternalUpgradeVerificationReportV1 JSON by default, or host-owned passive text
+with --format text. Verification reports package proposal/receipt structural
+evidence only; live inventory remains the source of truth for deployment
+state.";
 const DEPLOY_RESUME_REPORT_HELP_AFTER: &str = "\
 Examples:
   canic deploy resume-report demo
@@ -444,6 +493,35 @@ struct DeployAuthorityOptions {
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct DeployExternalOptions {
     truth: DeployTruthOptions,
+    format: ExternalOutputFormat,
+}
+
+///
+/// DeployExternalCriticalFixOptions
+///
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct DeployExternalCriticalFixOptions {
+    truth: DeployTruthOptions,
+    format: ExternalOutputFormat,
+    fix_id: String,
+    severity: String,
+}
+
+///
+/// DeployExternalVerifyOptions
+///
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct DeployExternalVerifyOptions {
+    request: PathBuf,
+    format: ExternalOutputFormat,
+}
+
+///
+/// DeployExternalInspectOptions
+///
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct DeployExternalInspectOptions {
+    request: PathBuf,
     format: ExternalOutputFormat,
 }
 
@@ -1132,8 +1210,31 @@ where
         Some((command, args)) if command == "plan" => run_external_plan(args),
         Some((command, args)) if command == "proposals" => run_external_proposals(args),
         Some((command, args)) if command == "pending" => run_external_pending(args),
+        Some((command, args)) if command == "critical-fix" => run_external_critical_fix(args),
+        Some((command, args)) if command == "inspect" => run_external_inspect(args),
+        Some((command, args)) if command == "verify" => run_external_verify(args),
         _ => {
             println!("{}", external_usage());
+            Ok(())
+        }
+    }
+}
+
+fn run_external_inspect<I>(args: I) -> Result<(), DeployCommandError>
+where
+    I: IntoIterator<Item = OsString>,
+{
+    let args = args.into_iter().collect::<Vec<_>>();
+    if print_help_or_version(&args, external_inspect_usage, version_text()) {
+        return Ok(());
+    }
+
+    match parse_subcommand(deploy_external_inspect_command(), args)
+        .map_err(|_| DeployCommandError::Usage(external_inspect_usage()))?
+    {
+        Some((command, args)) if command == "consent" => run_external_inspect_consent(args),
+        _ => {
+            println!("{}", external_inspect_usage());
             Ok(())
         }
     }
@@ -1176,6 +1277,83 @@ where
         build_external_lifecycle_pending_report,
         external_lifecycle_pending_report_text,
     )
+}
+
+fn run_external_critical_fix<I>(args: I) -> Result<(), DeployCommandError>
+where
+    I: IntoIterator<Item = OsString>,
+{
+    let args = args.into_iter().collect::<Vec<_>>();
+    if print_help_or_version(&args, external_critical_fix_usage, version_text()) {
+        return Ok(());
+    }
+
+    let options = DeployExternalCriticalFixOptions::parse(
+        args,
+        deploy_external_critical_fix_command,
+        external_critical_fix_usage,
+    )?;
+    let check = load_deployment_check(options.truth)?;
+    let report = build_critical_external_fix_report(
+        &check,
+        options.fix_id.as_str(),
+        options.severity.as_str(),
+    );
+    match options.format {
+        ExternalOutputFormat::Json => print_json(&report)?,
+        ExternalOutputFormat::Text => println!("{}", critical_external_fix_report_text(&report)),
+    }
+    Ok(())
+}
+
+fn run_external_inspect_consent<I>(args: I) -> Result<(), DeployCommandError>
+where
+    I: IntoIterator<Item = OsString>,
+{
+    let args = args.into_iter().collect::<Vec<_>>();
+    if print_help_or_version(&args, external_consent_usage, version_text()) {
+        return Ok(());
+    }
+
+    let options = DeployExternalInspectOptions::parse(
+        args,
+        deploy_external_inspect_consent_command,
+        external_consent_usage,
+    )?;
+    let request = read_json_file::<ExternalUpgradeConsentEvidenceRequest>(&options.request)?;
+    let evidence = build_external_upgrade_consent_evidence(request)?;
+    match options.format {
+        ExternalOutputFormat::Json => print_json(&evidence)?,
+        ExternalOutputFormat::Text => {
+            println!("{}", external_upgrade_consent_evidence_text(&evidence));
+        }
+    }
+    Ok(())
+}
+
+fn run_external_verify<I>(args: I) -> Result<(), DeployCommandError>
+where
+    I: IntoIterator<Item = OsString>,
+{
+    let args = args.into_iter().collect::<Vec<_>>();
+    if print_help_or_version(&args, external_verify_usage, version_text()) {
+        return Ok(());
+    }
+
+    let options = DeployExternalVerifyOptions::parse(
+        args,
+        deploy_external_verify_command,
+        external_verify_usage,
+    )?;
+    let request = read_json_file::<ExternalUpgradeVerificationReportRequest>(&options.request)?;
+    let report = build_external_upgrade_verification_report(request)?;
+    match options.format {
+        ExternalOutputFormat::Json => print_json(&report)?,
+        ExternalOutputFormat::Text => {
+            println!("{}", external_upgrade_verification_report_text(&report));
+        }
+    }
+    Ok(())
 }
 
 fn run_external_output<I, T>(
@@ -1239,6 +1417,53 @@ fn build_external_lifecycle_pending_report(
     )
 }
 
+fn build_critical_external_fix_report(
+    check: &DeploymentCheckV1,
+    fix_id: &str,
+    severity: &str,
+) -> CriticalExternalFixReportV1 {
+    let lifecycle_plan = build_external_lifecycle_plan(check);
+    let proposal_report = external_upgrade_proposal_report_from_lifecycle_plan(
+        local_external_proposal_report_id(check),
+        &lifecycle_plan,
+        check,
+    );
+    let pending_report = external_lifecycle_pending_report_from_plan(
+        local_external_pending_report_id(check),
+        &lifecycle_plan,
+        &proposal_report,
+    );
+    critical_external_fix_report_from_pending(
+        local_external_critical_fix_report_id(check),
+        fix_id,
+        severity,
+        &lifecycle_plan,
+        &pending_report,
+    )
+}
+
+fn build_external_upgrade_consent_evidence(
+    request: ExternalUpgradeConsentEvidenceRequest,
+) -> Result<ExternalUpgradeConsentEvidenceV1, DeployCommandError> {
+    external_upgrade_consent_evidence_from_receipt(
+        request.evidence_id,
+        &request.proposal,
+        &request.receipt,
+    )
+    .map_err(|err| DeployCommandError::Check(Box::new(err)))
+}
+
+fn build_external_upgrade_verification_report(
+    request: ExternalUpgradeVerificationReportRequest,
+) -> Result<ExternalUpgradeVerificationReportV1, DeployCommandError> {
+    external_upgrade_verification_report_from_receipt(
+        request.report_id,
+        &request.proposal,
+        &request.receipt,
+    )
+    .map_err(|err| DeployCommandError::Check(Box::new(err)))
+}
+
 fn local_external_lifecycle_plan_id(check: &DeploymentCheckV1) -> String {
     local_external_artifact_id(check, "external-lifecycle-plan")
 }
@@ -1253,6 +1478,10 @@ fn local_external_proposal_report_id(check: &DeploymentCheckV1) -> String {
 
 fn local_external_pending_report_id(check: &DeploymentCheckV1) -> String {
     local_external_artifact_id(check, "external-lifecycle-pending")
+}
+
+fn local_external_critical_fix_report_id(check: &DeploymentCheckV1) -> String {
+    local_external_artifact_id(check, "critical-external-fix")
 }
 
 fn local_external_artifact_id(check: &DeploymentCheckV1, suffix: &str) -> String {
@@ -1627,6 +1856,71 @@ impl DeployExternalOptions {
     }
 }
 
+impl DeployExternalCriticalFixOptions {
+    fn parse<I>(
+        args: I,
+        command: impl FnOnce() -> ClapCommand,
+        usage: fn() -> String,
+    ) -> Result<Self, DeployCommandError>
+    where
+        I: IntoIterator<Item = OsString>,
+    {
+        let matches =
+            parse_matches(command(), args).map_err(|_| DeployCommandError::Usage(usage()))?;
+        Ok(Self {
+            truth: DeployTruthOptions::from_matches(&matches, usage)?,
+            format: parse_external_output_format(
+                string_option(&matches, "format").as_deref(),
+                usage,
+            )?,
+            fix_id: string_option(&matches, "fix-id").expect("clap requires fix-id"),
+            severity: string_option(&matches, "severity").expect("clap requires severity"),
+        })
+    }
+}
+
+impl DeployExternalVerifyOptions {
+    fn parse<I>(
+        args: I,
+        command: impl FnOnce() -> ClapCommand,
+        usage: fn() -> String,
+    ) -> Result<Self, DeployCommandError>
+    where
+        I: IntoIterator<Item = OsString>,
+    {
+        let matches =
+            parse_matches(command(), args).map_err(|_| DeployCommandError::Usage(usage()))?;
+        Ok(Self {
+            request: path_option(&matches, "request").expect("clap requires request"),
+            format: parse_external_output_format(
+                string_option(&matches, "format").as_deref(),
+                usage,
+            )?,
+        })
+    }
+}
+
+impl DeployExternalInspectOptions {
+    fn parse<I>(
+        args: I,
+        command: impl FnOnce() -> ClapCommand,
+        usage: fn() -> String,
+    ) -> Result<Self, DeployCommandError>
+    where
+        I: IntoIterator<Item = OsString>,
+    {
+        let matches =
+            parse_matches(command(), args).map_err(|_| DeployCommandError::Usage(usage()))?;
+        Ok(Self {
+            request: path_option(&matches, "request").expect("clap requires request"),
+            format: parse_external_output_format(
+                string_option(&matches, "format").as_deref(),
+                usage,
+            )?,
+        })
+    }
+}
+
 impl DeployPromoteReportOptions {
     fn parse<I>(
         args: I,
@@ -1774,7 +2068,35 @@ fn deploy_external_command() -> ClapCommand {
                 .about("Build a passive external lifecycle pending report")
                 .disable_help_flag(true),
         ))
+        .subcommand(passthrough_subcommand(
+            ClapCommand::new("critical-fix")
+                .about("Build a passive critical external fix report")
+                .disable_help_flag(true),
+        ))
+        .subcommand(passthrough_subcommand(
+            ClapCommand::new("inspect")
+                .about("Inspect passive external lifecycle internals")
+                .disable_help_flag(true),
+        ))
+        .subcommand(passthrough_subcommand(
+            ClapCommand::new("verify")
+                .about("Build a passive external upgrade verification report")
+                .disable_help_flag(true),
+        ))
         .after_help(DEPLOY_EXTERNAL_HELP_AFTER)
+}
+
+fn deploy_external_inspect_command() -> ClapCommand {
+    ClapCommand::new("inspect")
+        .bin_name("canic deploy external inspect")
+        .about("Inspect passive external lifecycle internals")
+        .disable_help_flag(true)
+        .subcommand(passthrough_subcommand(
+            ClapCommand::new("consent")
+                .about("Build passive external consent evidence")
+                .disable_help_flag(true),
+        ))
+        .after_help(DEPLOY_EXTERNAL_INSPECT_HELP_AFTER)
 }
 
 fn deploy_promote_command() -> ClapCommand {
@@ -2117,6 +2439,64 @@ fn deploy_external_pending_command() -> ClapCommand {
     .after_help(DEPLOY_EXTERNAL_PENDING_HELP_AFTER)
 }
 
+fn deploy_external_critical_fix_command() -> ClapCommand {
+    deploy_truth_leaf_command(
+        "critical-fix",
+        "Print the local critical external fix report",
+    )
+    .arg(external_format_arg())
+    .arg(
+        value_arg("fix-id")
+            .long("fix-id")
+            .value_name("id")
+            .required(true)
+            .help("Critical fix identifier to record in the report"),
+    )
+    .arg(
+        value_arg("severity")
+            .long("severity")
+            .value_name("severity")
+            .required(true)
+            .help("Critical fix severity label to record in the report"),
+    )
+    .bin_name("canic deploy external critical-fix")
+    .after_help(DEPLOY_EXTERNAL_CRITICAL_FIX_HELP_AFTER)
+}
+
+fn deploy_external_verify_command() -> ClapCommand {
+    ClapCommand::new("verify")
+        .bin_name("canic deploy external verify")
+        .about("Build a passive external upgrade verification report")
+        .disable_help_flag(true)
+        .override_usage("canic deploy external verify --request <file>")
+        .arg(
+            value_arg("request")
+                .long("request")
+                .value_name("file")
+                .required(true)
+                .help("ExternalUpgradeVerificationReportRequest JSON file to verify"),
+        )
+        .arg(external_format_arg())
+        .after_help(DEPLOY_EXTERNAL_VERIFY_HELP_AFTER)
+}
+
+fn deploy_external_inspect_consent_command() -> ClapCommand {
+    ClapCommand::new("consent")
+        .bin_name("canic deploy external inspect consent")
+        .about("Build passive external consent evidence")
+        .disable_help_flag(true)
+        .override_usage("canic deploy external inspect consent --request <file>")
+        .arg(
+            value_arg("request")
+                .long("request")
+                .value_name("file")
+                .required(true)
+                .help("ExternalUpgradeConsentEvidenceRequest JSON file to inspect"),
+        )
+        .arg(external_format_arg())
+        .after_help(DEPLOY_EXTERNAL_CONSENT_HELP_AFTER)
+}
+
 fn deploy_plan_command() -> ClapCommand {
     deploy_truth_leaf_command("plan", "Print the local deployment plan JSON")
         .after_help(DEPLOY_PLAN_HELP_AFTER)
@@ -2253,6 +2633,26 @@ fn external_proposals_usage() -> String {
 
 fn external_pending_usage() -> String {
     let mut command = deploy_external_pending_command();
+    command.render_help().to_string()
+}
+
+fn external_critical_fix_usage() -> String {
+    let mut command = deploy_external_critical_fix_command();
+    command.render_help().to_string()
+}
+
+fn external_inspect_usage() -> String {
+    let mut command = deploy_external_inspect_command();
+    command.render_help().to_string()
+}
+
+fn external_consent_usage() -> String {
+    let mut command = deploy_external_inspect_consent_command();
+    command.render_help().to_string()
+}
+
+fn external_verify_usage() -> String {
+    let mut command = deploy_external_verify_command();
     command.render_help().to_string()
 }
 
@@ -2440,11 +2840,12 @@ mod tests {
     use canic_host::deployment_truth::{
         ArtifactDigestSourceV1, ArtifactSourceV1, AuthorityProfileV1, CanisterControlClassV1,
         DEPLOYMENT_TRUTH_SCHEMA_VERSION, DeploymentDiffV1, DeploymentIdentityV1,
-        DeploymentInventoryV1, DeploymentPlanV1, ExpectedCanisterV1, LocalDeploymentConfigV1,
-        ObservationStatusV1, ObservedCanisterV1, PreviousArtifactReceiptKindV1,
-        PromotionArtifactLevelV1, ResumeSafetyV1, RoleArtifactSourceKindV1, RoleArtifactSourceV1,
-        RoleArtifactV1, RolePromotionInputV1, TrustDomainV1, VerifierReadinessExpectationV1,
-        VerifierReadinessObservationV1, promotion_readiness_from_inputs,
+        DeploymentInventoryV1, DeploymentPlanV1, ExpectedCanisterV1, ExternalUpgradeConsentStateV1,
+        LocalDeploymentConfigV1, ObservationStatusV1, ObservedCanisterV1,
+        PreviousArtifactReceiptKindV1, PromotionArtifactLevelV1, ResumeSafetyV1,
+        RoleArtifactSourceKindV1, RoleArtifactSourceV1, RoleArtifactV1, RolePromotionInputV1,
+        TrustDomainV1, VerifierReadinessExpectationV1, VerifierReadinessObservationV1,
+        external_upgrade_receipt_from_observation, promotion_readiness_from_inputs,
     };
 
     #[test]
@@ -2680,6 +3081,44 @@ mod tests {
             assert_eq!(options.truth.fleet, "demo");
             assert_eq!(options.format, ExternalOutputFormat::Json);
         }
+        let critical_fix = DeployExternalCriticalFixOptions::parse(
+            [
+                OsString::from("--fix-id"),
+                OsString::from("fix-2026-05"),
+                OsString::from("--severity"),
+                OsString::from("critical"),
+                OsString::from("demo"),
+            ],
+            deploy_external_critical_fix_command,
+            external_critical_fix_usage,
+        )
+        .expect("parse deploy external critical-fix");
+        assert_eq!(critical_fix.truth.fleet, "demo");
+        assert_eq!(critical_fix.format, ExternalOutputFormat::Json);
+        assert_eq!(critical_fix.fix_id, "fix-2026-05");
+        assert_eq!(critical_fix.severity, "critical");
+        let verify = DeployExternalVerifyOptions::parse(
+            [
+                OsString::from("--request"),
+                OsString::from("external-verification.json"),
+            ],
+            deploy_external_verify_command,
+            external_verify_usage,
+        )
+        .expect("parse deploy external verify");
+        assert_eq!(verify.request, PathBuf::from("external-verification.json"));
+        assert_eq!(verify.format, ExternalOutputFormat::Json);
+        let consent = DeployExternalInspectOptions::parse(
+            [
+                OsString::from("--request"),
+                OsString::from("external-consent.json"),
+            ],
+            deploy_external_inspect_consent_command,
+            external_consent_usage,
+        )
+        .expect("parse deploy external inspect consent");
+        assert_eq!(consent.request, PathBuf::from("external-consent.json"));
+        assert_eq!(consent.format, ExternalOutputFormat::Json);
     }
 
     #[test]
@@ -2721,6 +3160,50 @@ mod tests {
         assert_eq!(external_proposals.format, ExternalOutputFormat::Text);
         assert_eq!(external_pending.truth.fleet, "demo");
         assert_eq!(external_pending.format, ExternalOutputFormat::Text);
+        let critical_fix = DeployExternalCriticalFixOptions::parse(
+            [
+                OsString::from("--fix-id"),
+                OsString::from("fix-2026-05"),
+                OsString::from("--severity"),
+                OsString::from("critical"),
+                OsString::from("--format"),
+                OsString::from("text"),
+                OsString::from("demo"),
+            ],
+            deploy_external_critical_fix_command,
+            external_critical_fix_usage,
+        )
+        .expect("parse deploy external critical-fix text");
+        assert_eq!(critical_fix.truth.fleet, "demo");
+        assert_eq!(critical_fix.format, ExternalOutputFormat::Text);
+        assert_eq!(critical_fix.fix_id, "fix-2026-05");
+        assert_eq!(critical_fix.severity, "critical");
+        let verify = DeployExternalVerifyOptions::parse(
+            [
+                OsString::from("--request"),
+                OsString::from("external-verification.json"),
+                OsString::from("--format"),
+                OsString::from("text"),
+            ],
+            deploy_external_verify_command,
+            external_verify_usage,
+        )
+        .expect("parse deploy external verify text");
+        assert_eq!(verify.request, PathBuf::from("external-verification.json"));
+        assert_eq!(verify.format, ExternalOutputFormat::Text);
+        let consent = DeployExternalInspectOptions::parse(
+            [
+                OsString::from("--request"),
+                OsString::from("external-consent.json"),
+                OsString::from("--format"),
+                OsString::from("text"),
+            ],
+            deploy_external_inspect_consent_command,
+            external_consent_usage,
+        )
+        .expect("parse deploy external inspect consent text");
+        assert_eq!(consent.request, PathBuf::from("external-consent.json"));
+        assert_eq!(consent.format, ExternalOutputFormat::Text);
     }
 
     #[test]
@@ -2874,17 +3357,32 @@ mod tests {
         let plan_help = external_plan_usage();
         let proposals_help = external_proposals_usage();
         let pending_help = external_pending_usage();
+        let critical_fix_help = external_critical_fix_usage();
+        let inspect_help = external_inspect_usage();
+        let consent_help = external_consent_usage();
+        let verify_help = external_verify_usage();
 
         assert!(help.contains("Build passive external lifecycle reports"));
         assert!(help.contains("do not request"));
         assert!(help.contains("mutate deployment state"));
         assert!(help.contains("Build a passive external lifecycle pending report"));
+        assert!(help.contains("Build a passive critical external fix report"));
+        assert!(help.contains("Inspect passive external lifecycle internals"));
+        assert!(help.contains("Build a passive external upgrade verification report"));
         assert!(plan_help.contains("ExternalLifecyclePlanV1 JSON"));
         assert!(plan_help.contains("No consent delivery"));
         assert!(proposals_help.contains("ExternalUpgradeProposalReportV1 JSON"));
         assert!(proposals_help.contains("do not grant consent"));
         assert!(pending_help.contains("ExternalLifecyclePendingReportV1 JSON"));
         assert!(pending_help.contains("residual exposure"));
+        assert!(critical_fix_help.contains("CriticalExternalFixReportV1 JSON"));
+        assert!(critical_fix_help.contains("without claiming deployment completion"));
+        assert!(inspect_help.contains("canic deploy external inspect consent"));
+        assert!(inspect_help.contains("do not request consent"));
+        assert!(consent_help.contains("ExternalUpgradeConsentEvidenceRequest-shaped JSON"));
+        assert!(consent_help.contains("does not verify live completion"));
+        assert!(verify_help.contains("ExternalUpgradeVerificationReportRequest-shaped JSON"));
+        assert!(verify_help.contains("live inventory remains the source of truth"));
     }
 
     #[test]
@@ -3073,8 +3571,8 @@ mod tests {
     }
 
     #[test]
-    fn deploy_external_command_dispatches_plan_proposals_and_pending() {
-        for command in ["plan", "proposals", "pending"] {
+    fn deploy_external_command_dispatches_passive_leaf_commands() {
+        for command in ["plan", "proposals", "pending", "critical-fix"] {
             let parsed = parse_subcommand(
                 deploy_command(),
                 [
@@ -3094,6 +3592,64 @@ mod tests {
             assert_eq!(nested.0, command);
             assert_eq!(nested.1, vec![OsString::from("demo")]);
         }
+
+        let parsed = parse_subcommand(
+            deploy_command(),
+            [
+                OsString::from("external"),
+                OsString::from("verify"),
+                OsString::from("--request"),
+                OsString::from("external-verification.json"),
+            ],
+        )
+        .expect("parse deploy external verify")
+        .expect("external command");
+
+        assert_eq!(parsed.0, "external");
+
+        let nested = parse_subcommand(deploy_external_command(), parsed.1)
+            .expect("parse nested external verify")
+            .expect("external verify command");
+        assert_eq!(nested.0, "verify");
+        assert_eq!(
+            nested.1,
+            vec![
+                OsString::from("--request"),
+                OsString::from("external-verification.json")
+            ]
+        );
+
+        let parsed = parse_subcommand(
+            deploy_command(),
+            [
+                OsString::from("external"),
+                OsString::from("inspect"),
+                OsString::from("consent"),
+                OsString::from("--request"),
+                OsString::from("external-consent.json"),
+            ],
+        )
+        .expect("parse deploy external inspect consent")
+        .expect("external command");
+
+        assert_eq!(parsed.0, "external");
+
+        let external = parse_subcommand(deploy_external_command(), parsed.1)
+            .expect("parse nested external inspect")
+            .expect("external inspect command");
+        assert_eq!(external.0, "inspect");
+
+        let inspect = parse_subcommand(deploy_external_inspect_command(), external.1)
+            .expect("parse nested inspect consent")
+            .expect("external inspect consent command");
+        assert_eq!(inspect.0, "consent");
+        assert_eq!(
+            inspect.1,
+            vec![
+                OsString::from("--request"),
+                OsString::from("external-consent.json")
+            ]
+        );
     }
 
     #[test]
@@ -3410,6 +3966,96 @@ mod tests {
             proposal_report.proposals[0].proposal_id
         );
         assert_eq!(pending_report.report_digest.len(), 64);
+    }
+
+    #[test]
+    fn external_critical_fix_report_builder_links_pending_report() {
+        let mut check = sample_authority_check();
+        check.plan.expected_canisters[0].control_class = CanisterControlClassV1::UserControlled;
+        check.inventory.observed_canisters[0].control_class =
+            CanisterControlClassV1::UserControlled;
+        check.inventory.observed_canisters[0].controllers = vec!["user-principal".to_string()];
+
+        let pending_report = build_external_lifecycle_pending_report(&check);
+        let critical_fix = build_critical_external_fix_report(&check, "fix-2026-05", "critical");
+
+        assert_eq!(
+            critical_fix.report_id,
+            "local:local:demo:critical-external-fix"
+        );
+        assert_eq!(critical_fix.fix_id, "fix-2026-05");
+        assert_eq!(critical_fix.severity, "critical");
+        assert_eq!(critical_fix.pending_report_id, pending_report.report_id);
+        assert_eq!(
+            critical_fix.pending_report_digest,
+            pending_report.report_digest
+        );
+        assert_eq!(critical_fix.externally_blocked_roles, vec!["root"]);
+        assert_eq!(critical_fix.required_external_actions.len(), 1);
+        assert!(!critical_fix.residual_exposure.is_empty());
+        assert_eq!(critical_fix.report_digest.len(), 64);
+    }
+
+    #[test]
+    fn external_consent_evidence_builder_delegates_to_receipt_validation() {
+        let mut check = sample_authority_check();
+        check.plan.expected_canisters[0].control_class = CanisterControlClassV1::UserControlled;
+        check.inventory.observed_canisters[0].control_class =
+            CanisterControlClassV1::UserControlled;
+        check.inventory.observed_canisters[0].controllers = vec!["user-principal".to_string()];
+
+        let proposal_report = build_external_upgrade_proposal_report(&check);
+        let proposal = proposal_report.proposals[0].clone();
+        let receipt = external_upgrade_receipt_from_observation(
+            "external-upgrade-receipt-1",
+            &proposal,
+            ExternalUpgradeConsentStateV1::Pending,
+            None,
+            None,
+        );
+        let evidence =
+            build_external_upgrade_consent_evidence(ExternalUpgradeConsentEvidenceRequest {
+                evidence_id: "external-upgrade-consent-1".to_string(),
+                proposal,
+                receipt,
+            })
+            .expect("consent evidence should build");
+
+        assert_eq!(evidence.evidence_id, "external-upgrade-consent-1");
+        assert_eq!(evidence.receipt_id, "external-upgrade-receipt-1");
+        assert!(!evidence.status_summary.is_empty());
+        assert_eq!(evidence.evidence_digest.len(), 64);
+    }
+
+    #[test]
+    fn external_verification_report_builder_delegates_to_receipt_validation() {
+        let mut check = sample_authority_check();
+        check.plan.expected_canisters[0].control_class = CanisterControlClassV1::UserControlled;
+        check.inventory.observed_canisters[0].control_class =
+            CanisterControlClassV1::UserControlled;
+        check.inventory.observed_canisters[0].controllers = vec!["user-principal".to_string()];
+
+        let proposal_report = build_external_upgrade_proposal_report(&check);
+        let proposal = proposal_report.proposals[0].clone();
+        let receipt = external_upgrade_receipt_from_observation(
+            "external-upgrade-receipt-1",
+            &proposal,
+            ExternalUpgradeConsentStateV1::Pending,
+            None,
+            None,
+        );
+        let report =
+            build_external_upgrade_verification_report(ExternalUpgradeVerificationReportRequest {
+                report_id: "external-upgrade-verification-1".to_string(),
+                proposal,
+                receipt,
+            })
+            .expect("verification report should build");
+
+        assert_eq!(report.report_id, "external-upgrade-verification-1");
+        assert_eq!(report.receipt_id, "external-upgrade-receipt-1");
+        assert!(!report.status_summary.is_empty());
+        assert_eq!(report.report_digest.len(), 64);
     }
 
     #[test]

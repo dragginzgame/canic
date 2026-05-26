@@ -134,6 +134,81 @@ pub fn external_lifecycle_pending_report_text(report: &ExternalLifecyclePendingR
     lines.join("\n")
 }
 
+/// Render a critical external fix report as passive operator text.
+#[must_use]
+pub fn critical_external_fix_report_text(report: &CriticalExternalFixReportV1) -> String {
+    let mut lines = vec![
+        "Critical external fix report".to_string(),
+        "mode: passive".to_string(),
+        "execution: none".to_string(),
+        format!("report_id: {}", report.report_id),
+        format!("report_digest: {}", report.report_digest),
+        format!("fix_id: {}", report.fix_id),
+        format!("severity: {}", report.severity),
+        format!("lifecycle_plan_id: {}", report.lifecycle_plan_id),
+        format!("lifecycle_plan_digest: {}", report.lifecycle_plan_digest),
+        format!("pending_report_id: {}", report.pending_report_id),
+        format!("pending_report_digest: {}", report.pending_report_digest),
+        format!("deployment_plan_id: {}", report.deployment_plan_id),
+        format!("deployment_plan_digest: {}", report.deployment_plan_digest),
+        format!("inventory_id: {}", report.inventory_id),
+        String::new(),
+        "counts:".to_string(),
+        format!("  affected_roles: {}", report.affected_roles.len()),
+        format!("  affected_canisters: {}", report.affected_canisters.len()),
+        format!(
+            "  directly_patchable_roles: {}",
+            report.directly_patchable_roles.len()
+        ),
+        format!(
+            "  externally_blocked_roles: {}",
+            report.externally_blocked_roles.len()
+        ),
+        format!(
+            "  dependency_blocked_roles: {}",
+            report.dependency_blocked_roles.len()
+        ),
+        format!(
+            "  required_external_actions: {}",
+            report.required_external_actions.len()
+        ),
+        format!("  residual_exposure: {}", report.residual_exposure.len()),
+    ];
+
+    append_string_items(
+        &mut lines,
+        "directly_patchable_roles",
+        &report.directly_patchable_roles,
+    );
+    append_string_items(
+        &mut lines,
+        "externally_blocked_roles",
+        &report.externally_blocked_roles,
+    );
+    append_string_items(
+        &mut lines,
+        "dependency_blocked_roles",
+        &report.dependency_blocked_roles,
+    );
+    append_string_items(
+        &mut lines,
+        "required_external_actions",
+        &report.required_external_actions,
+    );
+    append_string_items(
+        &mut lines,
+        "protected_call_implications",
+        &report.protected_call_implications,
+    );
+    append_string_items(&mut lines, "residual_exposure", &report.residual_exposure);
+    append_string_items(
+        &mut lines,
+        "operator_next_steps",
+        &report.operator_next_steps,
+    );
+    lines.join("\n")
+}
+
 /// Render an external-upgrade receipt as passive operator text.
 #[must_use]
 pub fn external_upgrade_receipt_text(receipt: &ExternalUpgradeReceiptV1) -> String {
@@ -174,6 +249,84 @@ pub fn external_upgrade_receipt_text(receipt: &ExternalUpgradeReceiptV1) -> Stri
         format!("verification_notes: {}", receipt.verification_notes.len()),
     ]
     .join("\n")
+}
+
+/// Render external-upgrade consent evidence as passive operator text.
+#[must_use]
+pub fn external_upgrade_consent_evidence_text(
+    evidence: &ExternalUpgradeConsentEvidenceV1,
+) -> String {
+    [
+        "External upgrade consent evidence".to_string(),
+        "mode: passive".to_string(),
+        "execution: none".to_string(),
+        format!("evidence_id: {}", evidence.evidence_id),
+        format!("evidence_digest: {}", evidence.evidence_digest),
+        format!("proposal_id: {}", evidence.proposal_id),
+        format!("proposal_digest: {}", evidence.proposal_digest),
+        format!("receipt_id: {}", evidence.receipt_id),
+        format!("receipt_digest: {}", evidence.receipt_digest),
+        format!("subject: {}", evidence.subject),
+        format!("role: {}", optional_text(evidence.role.as_deref())),
+        format!(
+            "canister_id: {}",
+            optional_text(evidence.canister_id.as_deref())
+        ),
+        format!(
+            "consent_state: {}",
+            external_upgrade_consent_state_label(evidence.consent_state)
+        ),
+        format!(
+            "reported_by: {}",
+            optional_text(evidence.reported_by.as_deref())
+        ),
+        format!("status_summary: {}", evidence.status_summary),
+        format!(
+            "consent_requirements: {}",
+            evidence.consent_requirements.len()
+        ),
+        format!(
+            "allowed_authorization_modes: {}",
+            evidence.allowed_authorization_modes.len()
+        ),
+    ]
+    .join("\n")
+}
+
+/// Render an external-upgrade verification report as passive operator text.
+#[must_use]
+pub fn external_upgrade_verification_report_text(
+    report: &ExternalUpgradeVerificationReportV1,
+) -> String {
+    let mut lines = vec![
+        "External upgrade verification report".to_string(),
+        "mode: passive".to_string(),
+        "execution: none".to_string(),
+        format!("report_id: {}", report.report_id),
+        format!("report_digest: {}", report.report_digest),
+        format!("proposal_id: {}", report.proposal_id),
+        format!("proposal_digest: {}", report.proposal_digest),
+        format!("receipt_id: {}", report.receipt_id),
+        format!("receipt_digest: {}", report.receipt_digest),
+        format!("subject: {}", report.subject),
+        format!("role: {}", optional_text(report.role.as_deref())),
+        format!(
+            "canister_id: {}",
+            optional_text(report.canister_id.as_deref())
+        ),
+        format!(
+            "verification_result: {}",
+            external_upgrade_verification_result_label(report.verification_result)
+        ),
+        format!(
+            "live_inventory_required: {}",
+            report.live_inventory_required
+        ),
+        format!("status_summary: {}", report.status_summary),
+        format!("verification_notes: {}", report.verification_notes.len()),
+    ];
+    append_string_items(&mut lines, "verification_notes", &report.verification_notes);
+    lines.join("\n")
 }
 
 /// Render an execution preflight as operator text.

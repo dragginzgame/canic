@@ -14,6 +14,19 @@ present.
 
 ## [0.45.x] - 2026-05-26 - External lifecycle
 
+- `0.45.4` adds passive critical-fix, consent-evidence, and verification
+  report artifacts for external lifecycle work, keeping reported consent,
+  reported external action, and verified live completion distinct.
+
+```bash
+canic deploy external critical-fix --fix-id fix-2026-05 --severity critical demo
+canic deploy external critical-fix --fix-id fix-2026-05 --severity critical --format text demo
+canic deploy external inspect consent --request external-consent.json
+canic deploy external inspect consent --request external-consent.json --format text
+canic deploy external verify --request external-verification.json
+canic deploy external verify --request external-verification.json --format text
+```
+
 - `0.45.3` adds passive pending external lifecycle reports and hardens
   external-upgrade receipts against stale proposal pairing.
 

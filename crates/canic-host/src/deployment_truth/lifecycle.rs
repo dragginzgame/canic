@@ -133,6 +133,39 @@ struct ExternalUpgradeReceiptDigestInput<'a> {
 }
 
 #[derive(Serialize)]
+struct ExternalUpgradeConsentEvidenceDigestInput<'a> {
+    evidence_id: &'a str,
+    proposal_id: &'a str,
+    proposal_digest: &'a str,
+    receipt_id: &'a str,
+    receipt_digest: &'a str,
+    subject: &'a str,
+    canister_id: &'a Option<String>,
+    role: &'a Option<String>,
+    consent_state: ExternalUpgradeConsentStateV1,
+    reported_by: &'a Option<String>,
+    consent_requirements: &'a [ConsentRequirementV1],
+    allowed_authorization_modes: &'a [ExternalUpgradeAuthorizationModeV1],
+    status_summary: &'a str,
+}
+
+#[derive(Serialize)]
+struct ExternalUpgradeVerificationReportDigestInput<'a> {
+    report_id: &'a str,
+    proposal_id: &'a str,
+    proposal_digest: &'a str,
+    receipt_id: &'a str,
+    receipt_digest: &'a str,
+    subject: &'a str,
+    canister_id: &'a Option<String>,
+    role: &'a Option<String>,
+    verification_result: ExternalUpgradeVerificationResultV1,
+    verification_notes: &'a [String],
+    live_inventory_required: bool,
+    status_summary: &'a str,
+}
+
+#[derive(Serialize)]
 struct ObservedBeforeDigestInput<'a> {
     subject: &'a str,
     canister_id: &'a Option<String>,
@@ -159,6 +192,44 @@ pub enum ExternalUpgradeReceiptError {
     VerificationMismatch,
     #[error("external upgrade receipt refused consent cannot be verified")]
     RefusedConsentVerified,
+}
+
+///
+/// ExternalUpgradeConsentEvidenceError
+///
+#[derive(Debug, Eq, thiserror::Error, PartialEq)]
+pub enum ExternalUpgradeConsentEvidenceError {
+    #[error(
+        "external upgrade consent evidence schema version {actual} does not match expected {expected}"
+    )]
+    SchemaVersionMismatch { expected: u32, actual: u32 },
+    #[error("external upgrade consent evidence field `{field}` is required")]
+    MissingRequiredField { field: &'static str },
+    #[error("external upgrade consent evidence field `{field}` digest is stale")]
+    DigestMismatch { field: &'static str },
+    #[error("external upgrade consent evidence field `{field}` no longer matches source receipt")]
+    SourceMismatch { field: &'static str },
+    #[error(transparent)]
+    Receipt(#[from] ExternalUpgradeReceiptError),
+}
+
+///
+/// ExternalUpgradeVerificationReportError
+///
+#[derive(Debug, Eq, thiserror::Error, PartialEq)]
+pub enum ExternalUpgradeVerificationReportError {
+    #[error(
+        "external upgrade verification report schema version {actual} does not match expected {expected}"
+    )]
+    SchemaVersionMismatch { expected: u32, actual: u32 },
+    #[error("external upgrade verification report field `{field}` is required")]
+    MissingRequiredField { field: &'static str },
+    #[error("external upgrade verification report field `{field}` digest is stale")]
+    DigestMismatch { field: &'static str },
+    #[error("external upgrade verification report field `{field}` does not match source evidence")]
+    SourceMismatch { field: &'static str },
+    #[error(transparent)]
+    Receipt(#[from] ExternalUpgradeReceiptError),
 }
 
 ///
@@ -648,6 +719,175 @@ pub fn validate_external_upgrade_receipt_for_proposal(
         });
     }
 
+    Ok(())
+}
+
+/// Build passive consent/action evidence from a proposal/receipt pair.
+///
+/// This records the reported consent or external action state only. It is not
+/// completion proof; verification remains separate and live inventory remains
+/// the source of deployment truth.
+pub fn external_upgrade_consent_evidence_from_receipt(
+    evidence_id: impl Into<String>,
+    proposal: &ExternalUpgradeProposalV1,
+    receipt: &ExternalUpgradeReceiptV1,
+) -> Result<ExternalUpgradeConsentEvidenceV1, ExternalUpgradeReceiptError> {
+    validate_external_upgrade_receipt_for_proposal(receipt, proposal)?;
+    let consent_state = receipt.consent_state;
+    let mut evidence = ExternalUpgradeConsentEvidenceV1 {
+        schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
+        evidence_id: evidence_id.into(),
+        evidence_digest: String::new(),
+        proposal_id: proposal.proposal_id.clone(),
+        proposal_digest: proposal.proposal_digest.clone(),
+        receipt_id: receipt.receipt_id.clone(),
+        receipt_digest: receipt.receipt_digest.clone(),
+        subject: proposal.subject.clone(),
+        canister_id: proposal.canister_id.clone(),
+        role: proposal.role.clone(),
+        consent_state,
+        reported_by: receipt.reported_by.clone(),
+        consent_requirements: proposal.consent_requirements.clone(),
+        allowed_authorization_modes: proposal.allowed_authorization_modes.clone(),
+        status_summary: external_upgrade_consent_summary(consent_state).to_string(),
+    };
+    evidence.evidence_digest = external_upgrade_consent_evidence_digest(&evidence);
+    Ok(evidence)
+}
+
+/// Validate archived consent evidence consistency and digest.
+pub fn validate_external_upgrade_consent_evidence(
+    evidence: &ExternalUpgradeConsentEvidenceV1,
+) -> Result<(), ExternalUpgradeConsentEvidenceError> {
+    if evidence.schema_version != DEPLOYMENT_TRUTH_SCHEMA_VERSION {
+        return Err(ExternalUpgradeConsentEvidenceError::SchemaVersionMismatch {
+            expected: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
+            actual: evidence.schema_version,
+        });
+    }
+    ensure_external_consent_evidence_field("evidence_id", evidence.evidence_id.as_str())?;
+    ensure_external_consent_evidence_field("evidence_digest", evidence.evidence_digest.as_str())?;
+    ensure_external_consent_evidence_field("proposal_id", evidence.proposal_id.as_str())?;
+    ensure_external_consent_evidence_field("proposal_digest", evidence.proposal_digest.as_str())?;
+    ensure_external_consent_evidence_field("receipt_id", evidence.receipt_id.as_str())?;
+    ensure_external_consent_evidence_field("receipt_digest", evidence.receipt_digest.as_str())?;
+    ensure_external_consent_evidence_field("subject", evidence.subject.as_str())?;
+    ensure_external_consent_evidence_field("status_summary", evidence.status_summary.as_str())?;
+    if evidence.status_summary != external_upgrade_consent_summary(evidence.consent_state) {
+        return Err(ExternalUpgradeConsentEvidenceError::SourceMismatch {
+            field: "status_summary",
+        });
+    }
+    if evidence.evidence_digest != external_upgrade_consent_evidence_digest(evidence) {
+        return Err(ExternalUpgradeConsentEvidenceError::DigestMismatch {
+            field: "evidence_digest",
+        });
+    }
+    Ok(())
+}
+
+/// Validate that archived consent evidence still matches the proposal/receipt
+/// pair it claims to summarize.
+pub fn validate_external_upgrade_consent_evidence_for_receipt(
+    evidence: &ExternalUpgradeConsentEvidenceV1,
+    proposal: &ExternalUpgradeProposalV1,
+    receipt: &ExternalUpgradeReceiptV1,
+) -> Result<(), ExternalUpgradeConsentEvidenceError> {
+    validate_external_upgrade_consent_evidence(evidence)?;
+    let expected = external_upgrade_consent_evidence_from_receipt(
+        evidence.evidence_id.clone(),
+        proposal,
+        receipt,
+    )?;
+    if evidence != &expected {
+        return Err(ExternalUpgradeConsentEvidenceError::SourceMismatch { field: "receipt" });
+    }
+    Ok(())
+}
+
+/// Build a passive verification report for a proposal/receipt pair.
+///
+/// This packages structural verification evidence only. Live inventory remains
+/// the source of truth for deployment state.
+pub fn external_upgrade_verification_report_from_receipt(
+    report_id: impl Into<String>,
+    proposal: &ExternalUpgradeProposalV1,
+    receipt: &ExternalUpgradeReceiptV1,
+) -> Result<ExternalUpgradeVerificationReportV1, ExternalUpgradeReceiptError> {
+    validate_external_upgrade_receipt_for_proposal(receipt, proposal)?;
+    let verification_result = receipt.verification_result;
+    let mut report = ExternalUpgradeVerificationReportV1 {
+        schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
+        report_id: report_id.into(),
+        report_digest: String::new(),
+        proposal_id: proposal.proposal_id.clone(),
+        proposal_digest: proposal.proposal_digest.clone(),
+        receipt_id: receipt.receipt_id.clone(),
+        receipt_digest: receipt.receipt_digest.clone(),
+        subject: proposal.subject.clone(),
+        canister_id: proposal.canister_id.clone(),
+        role: proposal.role.clone(),
+        verification_result,
+        verification_notes: receipt.verification_notes.clone(),
+        live_inventory_required: verification_result
+            != ExternalUpgradeVerificationResultV1::Pending
+            && verification_result != ExternalUpgradeVerificationResultV1::Refused,
+        status_summary: external_upgrade_verification_summary(verification_result).to_string(),
+    };
+    report.report_digest = external_upgrade_verification_report_digest(&report);
+    Ok(report)
+}
+
+/// Validate archived external-upgrade verification report consistency and
+/// digest.
+pub fn validate_external_upgrade_verification_report(
+    report: &ExternalUpgradeVerificationReportV1,
+) -> Result<(), ExternalUpgradeVerificationReportError> {
+    if report.schema_version != DEPLOYMENT_TRUTH_SCHEMA_VERSION {
+        return Err(
+            ExternalUpgradeVerificationReportError::SchemaVersionMismatch {
+                expected: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
+                actual: report.schema_version,
+            },
+        );
+    }
+    ensure_external_verification_report_field("report_id", report.report_id.as_str())?;
+    ensure_external_verification_report_field("report_digest", report.report_digest.as_str())?;
+    ensure_external_verification_report_field("proposal_id", report.proposal_id.as_str())?;
+    ensure_external_verification_report_field("proposal_digest", report.proposal_digest.as_str())?;
+    ensure_external_verification_report_field("receipt_id", report.receipt_id.as_str())?;
+    ensure_external_verification_report_field("receipt_digest", report.receipt_digest.as_str())?;
+    ensure_external_verification_report_field("subject", report.subject.as_str())?;
+    ensure_external_verification_report_field("status_summary", report.status_summary.as_str())?;
+    if report.status_summary != external_upgrade_verification_summary(report.verification_result) {
+        return Err(ExternalUpgradeVerificationReportError::SourceMismatch {
+            field: "status_summary",
+        });
+    }
+    if report.report_digest != external_upgrade_verification_report_digest(report) {
+        return Err(ExternalUpgradeVerificationReportError::DigestMismatch {
+            field: "report_digest",
+        });
+    }
+    Ok(())
+}
+
+/// Validate that an archived verification report still matches the
+/// proposal/receipt pair it claims to summarize.
+pub fn validate_external_upgrade_verification_report_for_receipt(
+    report: &ExternalUpgradeVerificationReportV1,
+    proposal: &ExternalUpgradeProposalV1,
+    receipt: &ExternalUpgradeReceiptV1,
+) -> Result<(), ExternalUpgradeVerificationReportError> {
+    validate_external_upgrade_verification_report(report)?;
+    let expected = external_upgrade_verification_report_from_receipt(
+        report.report_id.clone(),
+        proposal,
+        receipt,
+    )?;
+    if report != &expected {
+        return Err(ExternalUpgradeVerificationReportError::SourceMismatch { field: "receipt" });
+    }
     Ok(())
 }
 
@@ -1906,6 +2146,43 @@ fn external_upgrade_receipt_digest(receipt: &ExternalUpgradeReceiptV1) -> String
     })
 }
 
+fn external_upgrade_consent_evidence_digest(evidence: &ExternalUpgradeConsentEvidenceV1) -> String {
+    stable_json_sha256_hex(&ExternalUpgradeConsentEvidenceDigestInput {
+        evidence_id: &evidence.evidence_id,
+        proposal_id: &evidence.proposal_id,
+        proposal_digest: &evidence.proposal_digest,
+        receipt_id: &evidence.receipt_id,
+        receipt_digest: &evidence.receipt_digest,
+        subject: &evidence.subject,
+        canister_id: &evidence.canister_id,
+        role: &evidence.role,
+        consent_state: evidence.consent_state,
+        reported_by: &evidence.reported_by,
+        consent_requirements: &evidence.consent_requirements,
+        allowed_authorization_modes: &evidence.allowed_authorization_modes,
+        status_summary: &evidence.status_summary,
+    })
+}
+
+fn external_upgrade_verification_report_digest(
+    report: &ExternalUpgradeVerificationReportV1,
+) -> String {
+    stable_json_sha256_hex(&ExternalUpgradeVerificationReportDigestInput {
+        report_id: &report.report_id,
+        proposal_id: &report.proposal_id,
+        proposal_digest: &report.proposal_digest,
+        receipt_id: &report.receipt_id,
+        receipt_digest: &report.receipt_digest,
+        subject: &report.subject,
+        canister_id: &report.canister_id,
+        role: &report.role,
+        verification_result: report.verification_result,
+        verification_notes: &report.verification_notes,
+        live_inventory_required: report.live_inventory_required,
+        status_summary: &report.status_summary,
+    })
+}
+
 fn observed_before_digest(
     authority: &LifecycleAuthorityV1,
     current_module_hash: Option<&String>,
@@ -1971,6 +2248,36 @@ fn external_upgrade_verification_notes(
     notes
 }
 
+const fn external_upgrade_verification_summary(
+    result: ExternalUpgradeVerificationResultV1,
+) -> &'static str {
+    match result {
+        ExternalUpgradeVerificationResultV1::Pending => {
+            "external action has not been reported as complete"
+        }
+        ExternalUpgradeVerificationResultV1::Refused => "external consent was refused",
+        ExternalUpgradeVerificationResultV1::Verified => {
+            "reported external completion matches proposal target facts"
+        }
+        ExternalUpgradeVerificationResultV1::Mismatch => {
+            "reported external completion does not match proposal target facts"
+        }
+    }
+}
+
+const fn external_upgrade_consent_summary(state: ExternalUpgradeConsentStateV1) -> &'static str {
+    match state {
+        ExternalUpgradeConsentStateV1::Pending => {
+            "external consent or action has not been reported"
+        }
+        ExternalUpgradeConsentStateV1::Refused => "external consent was refused",
+        ExternalUpgradeConsentStateV1::Delegated => "delegated install authority was reported",
+        ExternalUpgradeConsentStateV1::ExecutedExternally => {
+            "external controller execution was reported"
+        }
+    }
+}
+
 fn external_upgrade_observation_matches(expected: Option<&str>, observed: Option<&str>) -> bool {
     expected.is_none_or(|expected| observed == Some(expected))
 }
@@ -2003,6 +2310,26 @@ fn ensure_external_receipt_option_matches_proposal(
 ) -> Result<(), ExternalUpgradeReceiptError> {
     if actual != expected {
         return Err(ExternalUpgradeReceiptError::SourceMismatch { field });
+    }
+    Ok(())
+}
+
+fn ensure_external_consent_evidence_field(
+    field: &'static str,
+    value: &str,
+) -> Result<(), ExternalUpgradeConsentEvidenceError> {
+    if value.trim().is_empty() {
+        return Err(ExternalUpgradeConsentEvidenceError::MissingRequiredField { field });
+    }
+    Ok(())
+}
+
+fn ensure_external_verification_report_field(
+    field: &'static str,
+    value: &str,
+) -> Result<(), ExternalUpgradeVerificationReportError> {
+    if value.trim().is_empty() {
+        return Err(ExternalUpgradeVerificationReportError::MissingRequiredField { field });
     }
     Ok(())
 }

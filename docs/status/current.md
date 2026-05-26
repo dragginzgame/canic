@@ -61,6 +61,27 @@ inspect only the files needed for the current task.
   carrying direct/pending/blocked counts, pending proposal links, blocked
   subjects, residual exposure, digest validation, and passive text rendering
   without adding any external consent or execution path.
+- `CriticalExternalFixReportV1` now gives the critical-fix path a passive
+  residual exposure artifact over lifecycle/pending evidence. It records
+  affected roles/canisters, directly patchable roles, externally blocked roles,
+  required external actions, protected-call implications, residual exposure,
+  and operator next steps without claiming deployment completion or mutating
+  external canisters. `canic deploy external critical-fix <fleet>` exposes that
+  report as JSON by default or host-owned text with `--format text`.
+- `ExternalUpgradeVerificationReportV1` now packages a validated
+  proposal/receipt pair into a digest-pinned passive verification artifact. It
+  records the verification result, notes, live-inventory requirement, and
+  source proposal/receipt digests while preserving the invariant that reported
+  completion is not deployment truth. `canic deploy external verify --request
+  <file>` exposes the report from an `ExternalUpgradeVerificationReportRequest`
+  JSON file as JSON by default or passive text with `--format text`.
+- `ExternalUpgradeConsentEvidenceV1` now separates reported consent/action
+  evidence from verification evidence. It links a proposal/receipt pair,
+  records consent state, reporter, consent requirements, and allowed
+  authorization modes, and remains passive structural evidence rather than
+  live completion proof. `canic deploy external inspect consent --request
+  <file>` exposes it as an advanced passive artifact without promoting it to a
+  top-level lifecycle workflow command.
 - 0.44 has started with passive role artifact source DTOs and validation for
   digest-pinned override inputs. Receipt-backed artifact sources are limited to
   deployment/staging receipt evidence and do not accept authority dry-run

@@ -1202,6 +1202,69 @@ pub struct ExternalUpgradeReceiptV1 {
 }
 
 ///
+/// ExternalUpgradeConsentEvidenceV1
+///
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ExternalUpgradeConsentEvidenceV1 {
+    pub schema_version: u32,
+    pub evidence_id: String,
+    pub evidence_digest: String,
+    pub proposal_id: String,
+    pub proposal_digest: String,
+    pub receipt_id: String,
+    pub receipt_digest: String,
+    pub subject: String,
+    pub canister_id: Option<String>,
+    pub role: Option<String>,
+    pub consent_state: ExternalUpgradeConsentStateV1,
+    pub reported_by: Option<String>,
+    pub consent_requirements: Vec<ConsentRequirementV1>,
+    pub allowed_authorization_modes: Vec<ExternalUpgradeAuthorizationModeV1>,
+    pub status_summary: String,
+}
+
+///
+/// ExternalUpgradeConsentEvidenceRequest
+///
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ExternalUpgradeConsentEvidenceRequest {
+    pub evidence_id: String,
+    pub proposal: ExternalUpgradeProposalV1,
+    pub receipt: ExternalUpgradeReceiptV1,
+}
+
+///
+/// ExternalUpgradeVerificationReportV1
+///
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ExternalUpgradeVerificationReportV1 {
+    pub schema_version: u32,
+    pub report_id: String,
+    pub report_digest: String,
+    pub proposal_id: String,
+    pub proposal_digest: String,
+    pub receipt_id: String,
+    pub receipt_digest: String,
+    pub subject: String,
+    pub canister_id: Option<String>,
+    pub role: Option<String>,
+    pub verification_result: ExternalUpgradeVerificationResultV1,
+    pub verification_notes: Vec<String>,
+    pub live_inventory_required: bool,
+    pub status_summary: String,
+}
+
+///
+/// ExternalUpgradeVerificationReportRequest
+///
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ExternalUpgradeVerificationReportRequest {
+    pub report_id: String,
+    pub proposal: ExternalUpgradeProposalV1,
+    pub receipt: ExternalUpgradeReceiptV1,
+}
+
+///
 /// ExternalUpgradeConsentStateV1
 ///
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
