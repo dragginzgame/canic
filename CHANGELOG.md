@@ -12,18 +12,16 @@ present.
 
 ## Unreleased
 
-- External upgrade verification checks now evaluate supplied observation facts
-  against passive verification policies, making postcondition mismatches
-  explicit without querying live inventory or executing lifecycle work. The
-  archived check validation also rejects duplicate or internally inconsistent
-  requirement rows.
+
+## [0.45.x] - 2026-05-26 - External lifecycle
+
+- `0.45.7` adds passive external upgrade verification checks that evaluate
+  supplied observation facts against verification policies and reject archived
+  checks with duplicate or internally inconsistent requirement rows.
 
 ```bash
 canic deploy external inspect verification-check --request external-verification-check.json
-canic deploy external inspect verification-check --request external-verification-check.json --format text
 ```
-
-## [0.45.x] - 2026-05-26 - External lifecycle
 
 - `0.45.6` adds passive external upgrade verification-policy artifacts so
   proposals can publish digest-bound live-inventory postconditions before any
@@ -31,7 +29,6 @@ canic deploy external inspect verification-check --request external-verification
 
 ```bash
 canic deploy external inspect verification-policy --request external-verification-policy.json
-canic deploy external inspect verification-policy --request external-verification-policy.json --format text
 ```
 
 - `0.45.5` adds passive external lifecycle check and handoff artifacts so
@@ -41,9 +38,7 @@ canic deploy external inspect verification-policy --request external-verificatio
 
 ```bash
 canic deploy external check demo
-canic deploy external check --format text demo
 canic deploy external handoff demo
-canic deploy external handoff --format text demo
 ```
 
 - `0.45.4` adds passive critical-fix, consent-evidence, and verification
@@ -52,11 +47,8 @@ canic deploy external handoff --format text demo
 
 ```bash
 canic deploy external critical-fix --fix-id fix-2026-05 --severity critical demo
-canic deploy external critical-fix --fix-id fix-2026-05 --severity critical --format text demo
 canic deploy external inspect consent --request external-consent.json
-canic deploy external inspect consent --request external-consent.json --format text
 canic deploy external verify --request external-verification.json
-canic deploy external verify --request external-verification.json --format text
 ```
 
 - `0.45.3` adds passive pending external lifecycle reports and hardens
@@ -64,7 +56,6 @@ canic deploy external verify --request external-verification.json --format text
 
 ```bash
 canic deploy external pending demo
-canic deploy external pending --format text demo
 ```
 
 - `0.45.2` adds the first passive external lifecycle CLI reports for lifecycle
@@ -73,8 +64,6 @@ canic deploy external pending --format text demo
 ```bash
 canic deploy external plan demo
 canic deploy external proposals demo
-canic deploy external plan --format text demo
-canic deploy external proposals --format text demo
 ```
 
 - `0.45.1` hardens passive external lifecycle artifacts with deterministic
@@ -105,18 +94,10 @@ See detailed breakdown:
   envelopes, linking promotion plan/provenance evidence to the nested
   deployment receipt without adding a promotion executor.
 
-```bash
-canic deploy install --plan promoted-plan.json
-```
-
 - `0.44.14` hardens plan-mediated promotion install with direct coverage for
   ready and blocked promotion plan envelopes, raw deployment plan input, target
   network mismatches, missing root wasm artifacts, and the current-install
   mediation source guard.
-
-```bash
-canic deploy install --plan promoted-plan.json
-```
 
 - `0.44.13` adds plan-mediated promotion install for supplied
   `DeploymentPlanV1` or `ArtifactPromotionPlanV1` files, routing execution
