@@ -43,6 +43,10 @@ inspect only the files needed for the current task.
   externally executed outcomes with structural verification against observed
   module/config facts. These receipts remain evidence; live inventory remains
   truth.
+- The passive 0.45 artifacts now have digest/text parity: lifecycle authority
+  reports, lifecycle plans, proposal reports, and external completion receipts
+  validate archived drift and render host-owned passive text that explicitly
+  reports no execution.
 - 0.44 has started with passive role artifact source DTOs and validation for
   digest-pinned override inputs. Receipt-backed artifact sources are limited to
   deployment/staging receipt evidence and do not accept authority dry-run

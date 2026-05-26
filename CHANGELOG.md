@@ -12,6 +12,15 @@ present.
 
 ## Unreleased
 
+- External lifecycle artifacts now have validation helpers for lifecycle
+  authority report digests, lifecycle plan digests, proposal report/proposal
+  digests, duplicate subjects, direct-row proposal mistakes, and receipt digest
+  drift. Lifecycle authority reports, lifecycle plans, proposal reports, and
+  external completion receipts have passive text renderers, and source guards
+  keep the lifecycle path free of controller-mutation primitives. Lifecycle
+  plans and proposal reports can also be validated against their source
+  deployment truth check to reject stale archived evidence.
+
 ## [0.45.x] - 2026-05-26 - External lifecycle
 
 - `0.45.0` starts the external/user-owned lifecycle line with passive

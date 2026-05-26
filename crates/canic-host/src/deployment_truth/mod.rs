@@ -37,10 +37,14 @@ pub use executor::{
     validate_deployment_execution_preflight, validate_deployment_execution_preflight_for_check,
 };
 pub use lifecycle::{
-    ExternalUpgradeReceiptError, external_lifecycle_plan_from_check,
+    ExternalLifecyclePlanError, ExternalUpgradeProposalReportError, ExternalUpgradeReceiptError,
+    LifecycleAuthorityReportError, external_lifecycle_plan_from_check,
     external_upgrade_proposal_report_from_lifecycle_plan,
     external_upgrade_receipt_from_observation, lifecycle_authority_report_from_check,
-    validate_external_upgrade_receipt,
+    validate_external_lifecycle_plan, validate_external_lifecycle_plan_for_check,
+    validate_external_upgrade_proposal_report,
+    validate_external_upgrade_proposal_report_for_lifecycle_plan,
+    validate_external_upgrade_receipt, validate_lifecycle_authority_report,
 };
 pub use model::{
     ArtifactDigestSourceV1, ArtifactPromotionExecutionReceiptV1, ArtifactPromotionPlanV1,
@@ -145,7 +149,9 @@ pub use text::{
     artifact_promotion_execution_receipt_text, artifact_promotion_plan_text,
     artifact_promotion_provenance_report_text, authority_evidence_text, authority_plan_text,
     authority_receipt_text, authority_report_text, build_materialization_evidence_text,
-    deployment_execution_preflight_text, promotion_artifact_identity_report_text,
+    deployment_execution_preflight_text, external_lifecycle_plan_text,
+    external_upgrade_proposal_report_text, external_upgrade_receipt_text,
+    lifecycle_authority_report_text, promotion_artifact_identity_report_text,
     promotion_materialization_identity_report_text, promotion_plan_transform_evidence_text,
     promotion_plan_transform_text, promotion_policy_check_text, promotion_readiness_text,
     promotion_target_execution_lineage_text, promotion_wasm_store_catalog_verification_text,

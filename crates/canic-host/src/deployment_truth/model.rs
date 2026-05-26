@@ -887,6 +887,7 @@ pub struct DeploymentCheckV1 {
 pub struct LifecycleAuthorityReportV1 {
     pub schema_version: u32,
     pub report_id: String,
+    pub report_digest: String,
     pub check_id: String,
     pub plan_id: String,
     pub inventory_id: String,
@@ -1050,6 +1051,7 @@ pub enum ExternalLifecyclePlanStatusV1 {
 pub struct ExternalUpgradeProposalReportV1 {
     pub schema_version: u32,
     pub report_id: String,
+    pub report_digest: String,
     pub lifecycle_plan_id: String,
     pub lifecycle_plan_digest: String,
     pub deployment_plan_id: String,

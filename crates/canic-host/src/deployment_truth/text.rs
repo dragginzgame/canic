@@ -1,5 +1,147 @@
 use super::*;
 
+/// Render lifecycle authority projection as passive operator text.
+#[must_use]
+pub fn lifecycle_authority_report_text(report: &LifecycleAuthorityReportV1) -> String {
+    let mut lines = vec![
+        "Lifecycle authority report".to_string(),
+        "mode: passive".to_string(),
+        "execution: none".to_string(),
+        format!("report_id: {}", report.report_id),
+        format!("report_digest: {}", report.report_digest),
+        format!("check_id: {}", report.check_id),
+        format!("plan_id: {}", report.plan_id),
+        format!("inventory_id: {}", report.inventory_id),
+        String::new(),
+        "counts:".to_string(),
+        format!("  authorities: {}", report.authorities.len()),
+        format!(
+            "  external_action_required: {}",
+            report.external_action_required_count
+        ),
+        format!("  blocked: {}", report.blocked_count),
+    ];
+
+    append_lifecycle_authority_items(&mut lines, &report.authorities);
+    lines.join("\n")
+}
+
+/// Render an external lifecycle plan as passive operator text.
+#[must_use]
+pub fn external_lifecycle_plan_text(plan: &ExternalLifecyclePlanV1) -> String {
+    let mut lines = vec![
+        "External lifecycle plan".to_string(),
+        "mode: passive".to_string(),
+        "execution: none".to_string(),
+        format!(
+            "status: {}",
+            external_lifecycle_plan_status_label(plan.status)
+        ),
+        format!("lifecycle_plan_id: {}", plan.lifecycle_plan_id),
+        format!("lifecycle_plan_digest: {}", plan.lifecycle_plan_digest),
+        format!("deployment_plan_id: {}", plan.deployment_plan_id),
+        format!("deployment_plan_digest: {}", plan.deployment_plan_digest),
+        format!("inventory_id: {}", plan.inventory_id),
+        String::new(),
+        "counts:".to_string(),
+        format!(
+            "  directly_executable: {}",
+            plan.directly_executable_role_upgrades.len()
+        ),
+        format!(
+            "  proposed_external: {}",
+            plan.proposed_external_role_upgrades.len()
+        ),
+        format!("  blocked: {}", plan.blocked_role_upgrades.len()),
+        format!("  residual_exposure: {}", plan.residual_exposure.len()),
+    ];
+
+    append_external_lifecycle_role_items(
+        &mut lines,
+        "directly_executable_role_upgrades",
+        &plan.directly_executable_role_upgrades,
+    );
+    append_external_lifecycle_role_items(
+        &mut lines,
+        "proposed_external_role_upgrades",
+        &plan.proposed_external_role_upgrades,
+    );
+    append_external_lifecycle_role_items(
+        &mut lines,
+        "blocked_role_upgrades",
+        &plan.blocked_role_upgrades,
+    );
+    append_string_items(&mut lines, "residual_exposure", &plan.residual_exposure);
+    lines.join("\n")
+}
+
+/// Render an external-upgrade proposal report as passive operator text.
+#[must_use]
+pub fn external_upgrade_proposal_report_text(report: &ExternalUpgradeProposalReportV1) -> String {
+    let mut lines = vec![
+        "External upgrade proposal report".to_string(),
+        "mode: passive".to_string(),
+        "execution: none".to_string(),
+        format!("report_id: {}", report.report_id),
+        format!("report_digest: {}", report.report_digest),
+        format!("lifecycle_plan_id: {}", report.lifecycle_plan_id),
+        format!("lifecycle_plan_digest: {}", report.lifecycle_plan_digest),
+        format!("deployment_plan_id: {}", report.deployment_plan_id),
+        format!("deployment_plan_digest: {}", report.deployment_plan_digest),
+        format!("inventory_id: {}", report.inventory_id),
+        String::new(),
+        "counts:".to_string(),
+        format!("  proposals: {}", report.proposals.len()),
+        format!("  blocked_subjects: {}", report.blocked_subjects.len()),
+    ];
+
+    append_external_upgrade_proposal_items(&mut lines, &report.proposals);
+    append_string_items(&mut lines, "blocked_subjects", &report.blocked_subjects);
+    lines.join("\n")
+}
+
+/// Render an external-upgrade receipt as passive operator text.
+#[must_use]
+pub fn external_upgrade_receipt_text(receipt: &ExternalUpgradeReceiptV1) -> String {
+    [
+        "External upgrade receipt".to_string(),
+        "mode: passive".to_string(),
+        "execution: none".to_string(),
+        format!("receipt_id: {}", receipt.receipt_id),
+        format!("receipt_digest: {}", receipt.receipt_digest),
+        format!("proposal_id: {}", receipt.proposal_id),
+        format!("proposal_digest: {}", receipt.proposal_digest),
+        format!("subject: {}", receipt.subject),
+        format!("role: {}", optional_text(receipt.role.as_deref())),
+        format!(
+            "canister_id: {}",
+            optional_text(receipt.canister_id.as_deref())
+        ),
+        format!(
+            "consent_state: {}",
+            external_upgrade_consent_state_label(receipt.consent_state)
+        ),
+        format!(
+            "verification_result: {}",
+            external_upgrade_verification_result_label(receipt.verification_result)
+        ),
+        format!(
+            "reported_by: {}",
+            optional_text(receipt.reported_by.as_deref())
+        ),
+        format!(
+            "observed_before_module_hash: {}",
+            optional_text(receipt.observed_before_module_hash.as_deref())
+        ),
+        format!(
+            "observed_after_module_hash: {}",
+            optional_text(receipt.observed_after_module_hash.as_deref())
+        ),
+        format!("verification_notes: {}", receipt.verification_notes.len()),
+    ]
+    .join("\n")
+}
+
 /// Render an execution preflight as operator text.
 #[must_use]
 pub fn deployment_execution_preflight_text(preflight: &DeploymentExecutionPreflightV1) -> String {
@@ -1532,6 +1674,121 @@ const fn promotion_readiness_status_label(status: PromotionReadinessStatusV1) ->
         PromotionReadinessStatusV1::Ready => "ready",
         PromotionReadinessStatusV1::Blocked => "blocked",
     }
+}
+
+const fn external_lifecycle_plan_status_label(
+    status: ExternalLifecyclePlanStatusV1,
+) -> &'static str {
+    match status {
+        ExternalLifecyclePlanStatusV1::Ready => "ready",
+        ExternalLifecyclePlanStatusV1::PendingExternalAction => "pending_external_action",
+        ExternalLifecyclePlanStatusV1::Blocked => "blocked",
+    }
+}
+
+const fn lifecycle_mode_label(mode: LifecycleModeV1) -> &'static str {
+    match mode {
+        LifecycleModeV1::DirectDeploymentAuthority => "direct_deployment_authority",
+        LifecycleModeV1::ProposalRequired => "proposal_required",
+        LifecycleModeV1::DelegatedInstallRequired => "delegated_install_required",
+        LifecycleModeV1::ExternalCompletionOnly => "external_completion_only",
+        LifecycleModeV1::VerifyOnly => "verify_only",
+        LifecycleModeV1::MustNotTouch => "must_not_touch",
+        LifecycleModeV1::UnknownUnsafeBlocked => "unknown_unsafe_blocked",
+    }
+}
+
+const fn external_upgrade_consent_state_label(
+    state: ExternalUpgradeConsentStateV1,
+) -> &'static str {
+    match state {
+        ExternalUpgradeConsentStateV1::Pending => "pending",
+        ExternalUpgradeConsentStateV1::Refused => "refused",
+        ExternalUpgradeConsentStateV1::Delegated => "delegated",
+        ExternalUpgradeConsentStateV1::ExecutedExternally => "executed_externally",
+    }
+}
+
+const fn external_upgrade_verification_result_label(
+    result: ExternalUpgradeVerificationResultV1,
+) -> &'static str {
+    match result {
+        ExternalUpgradeVerificationResultV1::Pending => "pending",
+        ExternalUpgradeVerificationResultV1::Refused => "refused",
+        ExternalUpgradeVerificationResultV1::Verified => "verified",
+        ExternalUpgradeVerificationResultV1::Mismatch => "mismatch",
+    }
+}
+
+fn append_external_lifecycle_role_items(
+    lines: &mut Vec<String>,
+    label: &str,
+    rows: &[ExternalLifecycleRoleUpgradeV1],
+) {
+    if rows.is_empty() {
+        return;
+    }
+    lines.push(String::new());
+    lines.push(format!("{label}:"));
+    for row in rows {
+        lines.push(format!(
+            "  - subject={} role={} canister_id={} control_class={:?} lifecycle_mode={} required_external_action={}",
+            row.subject,
+            optional_text(row.role.as_deref()),
+            optional_text(row.canister_id.as_deref()),
+            row.control_class,
+            lifecycle_mode_label(row.lifecycle_mode),
+            optional_text(row.required_external_action.as_deref())
+        ));
+    }
+}
+
+fn append_lifecycle_authority_items(lines: &mut Vec<String>, rows: &[LifecycleAuthorityV1]) {
+    if rows.is_empty() {
+        return;
+    }
+    lines.push(String::new());
+    lines.push("authorities:".to_string());
+    for row in rows {
+        lines.push(format!(
+            "  - subject={} role={} canister_id={} control_class={:?} lifecycle_mode={} external_action_required={} blocked={}",
+            row.subject,
+            optional_text(row.role.as_deref()),
+            optional_text(row.canister_id.as_deref()),
+            row.control_class,
+            lifecycle_mode_label(row.lifecycle_mode),
+            row.external_action_required,
+            row.blocked
+        ));
+    }
+}
+
+fn append_external_upgrade_proposal_items(
+    lines: &mut Vec<String>,
+    proposals: &[ExternalUpgradeProposalV1],
+) {
+    if proposals.is_empty() {
+        return;
+    }
+    lines.push(String::new());
+    lines.push("proposals:".to_string());
+    for proposal in proposals {
+        lines.push(format!(
+            "  - proposal_id={} subject={} role={} canister_id={} lifecycle_mode={} required_external_action={} consent_requirements={} proposal_digest={}",
+            proposal.proposal_id,
+            proposal.subject,
+            optional_text(proposal.role.as_deref()),
+            optional_text(proposal.canister_id.as_deref()),
+            lifecycle_mode_label(proposal.lifecycle_mode),
+            proposal.required_external_action,
+            proposal.consent_requirements.len(),
+            proposal.proposal_digest
+        ));
+    }
+}
+
+fn optional_text(value: Option<&str>) -> &str {
+    value.unwrap_or("none")
 }
 
 const fn optional_bool_label(value: Option<bool>) -> &'static str {
