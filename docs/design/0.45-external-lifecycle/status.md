@@ -82,6 +82,11 @@ re-inventory, or install mutation path has landed.
   proposal/receipt pair into a digest-pinned passive verification artifact.
   It records the verification result, source proposal/receipt digests, notes,
   and whether fresh live inventory remains required.
+- `ExternalUpgradeVerificationPolicyV1` makes required live-inventory
+  postconditions explicit before an externally reported lifecycle action can
+  be treated as complete. It records source proposal digests, required
+  verification facts, expected module/config facts, protected-call readiness
+  requirements, and passive status text.
 - `ExternalLifecycleCheckV1` summarizes lifecycle plan, proposal, and pending
   evidence into one passive status artifact with direct, pending, blocked, and
   residual-exposure counts, source artifact digests, summary text, and next
@@ -97,6 +102,10 @@ re-inventory, or install mutation path has landed.
 - `canic deploy external verify --request <file>` reads an
   `ExternalUpgradeVerificationReportRequest` JSON file and emits a passive
   `ExternalUpgradeVerificationReportV1` without live lookup, consent delivery,
+  external execution, install, or mutation.
+- `canic deploy external inspect verification-policy --request <file>` reads
+  an `ExternalUpgradeVerificationPolicyRequest` JSON file and emits a passive
+  `ExternalUpgradeVerificationPolicyV1` without live lookup, consent delivery,
   external execution, install, or mutation.
 - JSON shape and projection coverage pins deployment-controlled,
   user-controlled, and unknown-unsafe lifecycle authority behavior, plus the

@@ -1338,6 +1338,53 @@ pub struct ExternalUpgradeVerificationReportRequest {
 }
 
 ///
+/// ExternalUpgradeVerificationPolicyV1
+///
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ExternalUpgradeVerificationPolicyV1 {
+    pub schema_version: u32,
+    pub policy_id: String,
+    pub policy_digest: String,
+    pub proposal_id: String,
+    pub proposal_digest: String,
+    pub subject: String,
+    pub canister_id: Option<String>,
+    pub role: Option<String>,
+    pub required_verification: Vec<LifecycleVerificationRequirementV1>,
+    pub verification_requirements: Vec<ExternalUpgradeVerificationPolicyRequirementV1>,
+    pub max_observation_age_seconds: Option<u64>,
+    pub status_summary: String,
+}
+
+///
+/// ExternalUpgradeVerificationPolicyRequirementV1
+///
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ExternalUpgradeVerificationPolicyRequirementV1 {
+    pub requirement: LifecycleVerificationRequirementV1,
+    pub status: ExternalUpgradeVerificationRequirementStatusV1,
+    pub expected_value: Option<String>,
+}
+
+///
+/// ExternalUpgradeVerificationRequirementStatusV1
+///
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+pub enum ExternalUpgradeVerificationRequirementStatusV1 {
+    Required,
+    NotRequired,
+}
+
+///
+/// ExternalUpgradeVerificationPolicyRequest
+///
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ExternalUpgradeVerificationPolicyRequest {
+    pub policy_id: String,
+    pub proposal: ExternalUpgradeProposalV1,
+}
+
+///
 /// ExternalUpgradeConsentStateV1
 ///
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]

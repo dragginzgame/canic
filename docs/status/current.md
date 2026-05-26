@@ -19,6 +19,13 @@ inspect only the files needed for the current task.
   derives passive proposal/receipt/pending/check/handoff evidence, and
   exposes the first external lifecycle CLI reports without adding consent
   delivery, external execution, or install mutation.
+- `ExternalUpgradeVerificationPolicyV1` now makes required live-inventory
+  postconditions explicit for an external lifecycle proposal. It records the
+  source proposal digest, required verification facts, expected module/config
+  facts, protected-call readiness requirements, and passive status summary.
+  `canic deploy external inspect verification-policy --request <file>`
+  exposes that policy from proposal evidence without querying live inventory
+  or verifying completion.
 - Design starts at
   `docs/design/0.45-external-lifecycle/0.45-design.md`. 0.45 must reuse the
   canonical control classifications from deployment truth and authority

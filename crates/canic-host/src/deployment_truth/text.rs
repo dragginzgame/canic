@@ -398,6 +398,38 @@ pub fn external_upgrade_verification_report_text(
     lines.join("\n")
 }
 
+/// Render an external-upgrade verification policy as passive operator text.
+#[must_use]
+pub fn external_upgrade_verification_policy_text(
+    policy: &ExternalUpgradeVerificationPolicyV1,
+) -> String {
+    let mut lines = vec![
+        "External upgrade verification policy".to_string(),
+        "mode: passive".to_string(),
+        "execution: none".to_string(),
+        format!("policy_id: {}", policy.policy_id),
+        format!("policy_digest: {}", policy.policy_digest),
+        format!("proposal_id: {}", policy.proposal_id),
+        format!("proposal_digest: {}", policy.proposal_digest),
+        format!("subject: {}", policy.subject),
+        format!("role: {}", optional_text(policy.role.as_deref())),
+        format!(
+            "canister_id: {}",
+            optional_text(policy.canister_id.as_deref())
+        ),
+        format!("summary: {}", policy.status_summary),
+        String::new(),
+        format!(
+            "max_observation_age_seconds: {}",
+            policy
+                .max_observation_age_seconds
+                .map_or_else(|| "none".to_string(), |value| value.to_string())
+        ),
+    ];
+    append_verification_policy_requirement_items(&mut lines, &policy.verification_requirements);
+    lines.join("\n")
+}
+
 /// Render an execution preflight as operator text.
 #[must_use]
 pub fn deployment_execution_preflight_text(preflight: &DeploymentExecutionPreflightV1) -> String {
@@ -2112,6 +2144,46 @@ fn append_external_lifecycle_handoff_action_items(
             action.verification_requirements.len(),
             action.proposal_digest
         ));
+    }
+}
+
+fn append_verification_policy_requirement_items(
+    lines: &mut Vec<String>,
+    requirements: &[ExternalUpgradeVerificationPolicyRequirementV1],
+) {
+    if requirements.is_empty() {
+        return;
+    }
+    lines.push(String::new());
+    lines.push("verification_requirements:".to_string());
+    for requirement in requirements {
+        lines.push(format!(
+            "  - requirement={} status={} expected_value={}",
+            verification_requirement_label(requirement.requirement),
+            verification_requirement_status_label(requirement.status),
+            optional_text(requirement.expected_value.as_deref())
+        ));
+    }
+}
+
+const fn verification_requirement_status_label(
+    status: ExternalUpgradeVerificationRequirementStatusV1,
+) -> &'static str {
+    match status {
+        ExternalUpgradeVerificationRequirementStatusV1::Required => "required",
+        ExternalUpgradeVerificationRequirementStatusV1::NotRequired => "not_required",
+    }
+}
+
+const fn verification_requirement_label(
+    requirement: LifecycleVerificationRequirementV1,
+) -> &'static str {
+    match requirement {
+        LifecycleVerificationRequirementV1::LiveInventory => "live_inventory",
+        LifecycleVerificationRequirementV1::ControllerObservation => "controller_observation",
+        LifecycleVerificationRequirementV1::ModuleHash => "module_hash",
+        LifecycleVerificationRequirementV1::CanonicalEmbeddedConfig => "canonical_embedded_config",
+        LifecycleVerificationRequirementV1::ProtectedCallReadiness => "protected_call_readiness",
     }
 }
 

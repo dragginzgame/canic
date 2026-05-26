@@ -21,6 +21,7 @@ use canic_host::{
         ExternalLifecycleCheckV1, ExternalLifecycleHandoffV1, ExternalLifecyclePendingReportV1,
         ExternalLifecyclePlanV1, ExternalUpgradeConsentEvidenceRequest,
         ExternalUpgradeConsentEvidenceV1, ExternalUpgradeProposalReportV1,
+        ExternalUpgradeVerificationPolicyRequest, ExternalUpgradeVerificationPolicyV1,
         ExternalUpgradeVerificationReportRequest, ExternalUpgradeVerificationReportV1,
         PromotionArtifactIdentityReportRequest, PromotionArtifactIdentityReportV1,
         PromotionMaterializationIdentityReportRequest, PromotionMaterializationIdentityReportV1,
@@ -49,7 +50,9 @@ use canic_host::{
         external_lifecycle_plan_from_check, external_lifecycle_plan_text,
         external_upgrade_consent_evidence_from_receipt, external_upgrade_consent_evidence_text,
         external_upgrade_proposal_report_from_lifecycle_plan,
-        external_upgrade_proposal_report_text, external_upgrade_verification_report_from_receipt,
+        external_upgrade_proposal_report_text, external_upgrade_verification_policy_from_proposal,
+        external_upgrade_verification_policy_text,
+        external_upgrade_verification_report_from_receipt,
         external_upgrade_verification_report_text, promoted_deployment_plan_transform_from_inputs,
         promoted_deployment_plan_transform_from_inputs_with_materialization,
         promotion_artifact_identity_report_from_inputs, promotion_artifact_identity_report_text,
@@ -99,6 +102,7 @@ Examples:
   canic deploy external pending demo
   canic deploy external critical-fix --fix-id fix-2026-05 --severity critical demo
   canic deploy external inspect consent --request external-consent.json
+  canic deploy external inspect verification-policy --request external-verification-policy.json
   canic deploy external verify --request external-verification.json
   canic deploy promote plan --request promotion-plan.json
   canic deploy promote check --request promotion-check.json
@@ -165,6 +169,7 @@ Examples:
   canic deploy external pending demo
   canic deploy external critical-fix --fix-id fix-2026-05 --severity critical demo
   canic deploy external inspect consent --request external-consent.json
+  canic deploy external inspect verification-policy --request external-verification-policy.json
   canic deploy external verify --request external-verification.json
   canic deploy external plan --format text demo
   canic deploy external verify --request external-verification.json --format text
@@ -176,6 +181,8 @@ const DEPLOY_EXTERNAL_INSPECT_HELP_AFTER: &str = "\
 Examples:
   canic deploy external inspect consent --request external-consent.json
   canic deploy external inspect consent --request external-consent.json --format text
+  canic deploy external inspect verification-policy --request external-verification-policy.json
+  canic deploy external inspect verification-policy --request external-verification-policy.json --format text
 
 Advanced external lifecycle inspection commands expose archived/passive DTOs.
 They do not request consent, execute external upgrades, install code, or mutate
@@ -189,6 +196,15 @@ Reads an ExternalUpgradeConsentEvidenceRequest-shaped JSON file and prints
 ExternalUpgradeConsentEvidenceV1 JSON by default, or host-owned passive text
 with --format text. Consent evidence records reported consent/action state; it
 does not verify live completion.";
+const DEPLOY_EXTERNAL_VERIFICATION_POLICY_HELP_AFTER: &str = "\
+Examples:
+  canic deploy external inspect verification-policy --request external-verification-policy.json
+  canic deploy external inspect verification-policy --request external-verification-policy.json --format text
+
+Reads an ExternalUpgradeVerificationPolicyRequest-shaped JSON file and prints
+ExternalUpgradeVerificationPolicyV1 JSON by default, or host-owned passive text
+with --format text. Verification policies describe required live-inventory
+postconditions; they do not query live inventory or verify completion.";
 const DEPLOY_INSTALL_HELP_AFTER: &str = "\
 Examples:
   canic deploy install --plan promoted-plan.json
@@ -1262,6 +1278,9 @@ where
         .map_err(|_| DeployCommandError::Usage(external_inspect_usage()))?
     {
         Some((command, args)) if command == "consent" => run_external_inspect_consent(args),
+        Some((command, args)) if command == "verification-policy" => {
+            run_external_inspect_verification_policy(args)
+        }
         _ => {
             println!("{}", external_inspect_usage());
             Ok(())
@@ -1381,6 +1400,31 @@ where
         ExternalOutputFormat::Json => print_json(&evidence)?,
         ExternalOutputFormat::Text => {
             println!("{}", external_upgrade_consent_evidence_text(&evidence));
+        }
+    }
+    Ok(())
+}
+
+fn run_external_inspect_verification_policy<I>(args: I) -> Result<(), DeployCommandError>
+where
+    I: IntoIterator<Item = OsString>,
+{
+    let args = args.into_iter().collect::<Vec<_>>();
+    if print_help_or_version(&args, external_verification_policy_usage, version_text()) {
+        return Ok(());
+    }
+
+    let options = DeployExternalInspectOptions::parse(
+        args,
+        deploy_external_inspect_verification_policy_command,
+        external_verification_policy_usage,
+    )?;
+    let request = read_json_file::<ExternalUpgradeVerificationPolicyRequest>(&options.request)?;
+    let policy = build_external_upgrade_verification_policy(request);
+    match options.format {
+        ExternalOutputFormat::Json => print_json(&policy)?,
+        ExternalOutputFormat::Text => {
+            println!("{}", external_upgrade_verification_policy_text(&policy));
         }
     }
     Ok(())
@@ -1552,6 +1596,12 @@ fn build_external_upgrade_consent_evidence(
         &request.receipt,
     )
     .map_err(|err| DeployCommandError::Check(Box::new(err)))
+}
+
+fn build_external_upgrade_verification_policy(
+    request: ExternalUpgradeVerificationPolicyRequest,
+) -> ExternalUpgradeVerificationPolicyV1 {
+    external_upgrade_verification_policy_from_proposal(request.policy_id, &request.proposal)
 }
 
 fn build_external_upgrade_verification_report(
@@ -2215,6 +2265,11 @@ fn deploy_external_inspect_command() -> ClapCommand {
                 .about("Build passive external consent evidence")
                 .disable_help_flag(true),
         ))
+        .subcommand(passthrough_subcommand(
+            ClapCommand::new("verification-policy")
+                .about("Build passive external verification policy")
+                .disable_help_flag(true),
+        ))
         .after_help(DEPLOY_EXTERNAL_INSPECT_HELP_AFTER)
 }
 
@@ -2630,6 +2685,23 @@ fn deploy_external_inspect_consent_command() -> ClapCommand {
         .after_help(DEPLOY_EXTERNAL_CONSENT_HELP_AFTER)
 }
 
+fn deploy_external_inspect_verification_policy_command() -> ClapCommand {
+    ClapCommand::new("verification-policy")
+        .bin_name("canic deploy external inspect verification-policy")
+        .about("Build passive external verification policy")
+        .disable_help_flag(true)
+        .override_usage("canic deploy external inspect verification-policy --request <file>")
+        .arg(
+            value_arg("request")
+                .long("request")
+                .value_name("file")
+                .required(true)
+                .help("ExternalUpgradeVerificationPolicyRequest JSON file to inspect"),
+        )
+        .arg(external_format_arg())
+        .after_help(DEPLOY_EXTERNAL_VERIFICATION_POLICY_HELP_AFTER)
+}
+
 fn deploy_plan_command() -> ClapCommand {
     deploy_truth_leaf_command("plan", "Print the local deployment plan JSON")
         .after_help(DEPLOY_PLAN_HELP_AFTER)
@@ -2791,6 +2863,11 @@ fn external_inspect_usage() -> String {
 
 fn external_consent_usage() -> String {
     let mut command = deploy_external_inspect_consent_command();
+    command.render_help().to_string()
+}
+
+fn external_verification_policy_usage() -> String {
+    let mut command = deploy_external_inspect_verification_policy_command();
     command.render_help().to_string()
 }
 
@@ -2984,7 +3061,8 @@ mod tests {
         ArtifactDigestSourceV1, ArtifactSourceV1, AuthorityProfileV1, CanisterControlClassV1,
         ConsentChannelKindV1, DEPLOYMENT_TRUTH_SCHEMA_VERSION, DeploymentDiffV1,
         DeploymentIdentityV1, DeploymentInventoryV1, DeploymentPlanV1, ExpectedCanisterV1,
-        ExternalUpgradeConsentStateV1, LocalDeploymentConfigV1, ObservationStatusV1,
+        ExternalUpgradeConsentStateV1, ExternalUpgradeVerificationRequirementStatusV1,
+        LifecycleVerificationRequirementV1, LocalDeploymentConfigV1, ObservationStatusV1,
         ObservedCanisterV1, PreviousArtifactReceiptKindV1, PromotionArtifactLevelV1,
         ResumeSafetyV1, RoleArtifactSourceKindV1, RoleArtifactSourceV1, RoleArtifactV1,
         RolePromotionInputV1, TrustDomainV1, VerifierReadinessExpectationV1,
@@ -3552,6 +3630,7 @@ mod tests {
         let critical_fix_help = external_critical_fix_usage();
         let inspect_help = external_inspect_usage();
         let consent_help = external_consent_usage();
+        let verification_policy_help = external_verification_policy_usage();
         let verify_help = external_verify_usage();
 
         assert!(help.contains("Build passive external lifecycle reports"));
@@ -3576,9 +3655,16 @@ mod tests {
         assert!(critical_fix_help.contains("CriticalExternalFixReportV1 JSON"));
         assert!(critical_fix_help.contains("without claiming deployment completion"));
         assert!(inspect_help.contains("canic deploy external inspect consent"));
+        assert!(inspect_help.contains("verification-policy"));
         assert!(inspect_help.contains("do not request consent"));
         assert!(consent_help.contains("ExternalUpgradeConsentEvidenceRequest-shaped JSON"));
         assert!(consent_help.contains("does not verify live completion"));
+        assert!(
+            verification_policy_help
+                .contains("ExternalUpgradeVerificationPolicyRequest-shaped JSON")
+        );
+        assert!(verification_policy_help.contains("live-inventory"));
+        assert!(verification_policy_help.contains("postconditions"));
         assert!(verify_help.contains("ExternalUpgradeVerificationReportRequest-shaped JSON"));
         assert!(verify_help.contains("live inventory remains the source of truth"));
     }
@@ -3823,7 +3909,10 @@ mod tests {
                 OsString::from("external-verification.json")
             ]
         );
+    }
 
+    #[test]
+    fn deploy_external_inspect_dispatches_passive_leaf_commands() {
         let parsed = parse_subcommand(
             deploy_command(),
             [
@@ -3853,6 +3942,34 @@ mod tests {
             vec![
                 OsString::from("--request"),
                 OsString::from("external-consent.json")
+            ]
+        );
+
+        let parsed = parse_subcommand(
+            deploy_command(),
+            [
+                OsString::from("external"),
+                OsString::from("inspect"),
+                OsString::from("verification-policy"),
+                OsString::from("--request"),
+                OsString::from("external-verification-policy.json"),
+            ],
+        )
+        .expect("parse deploy external inspect verification-policy")
+        .expect("external command");
+
+        let external = parse_subcommand(deploy_external_command(), parsed.1)
+            .expect("parse nested external inspect")
+            .expect("external inspect command");
+        let inspect = parse_subcommand(deploy_external_inspect_command(), external.1)
+            .expect("parse nested inspect verification-policy")
+            .expect("external inspect verification-policy command");
+        assert_eq!(inspect.0, "verification-policy");
+        assert_eq!(
+            inspect.1,
+            vec![
+                OsString::from("--request"),
+                OsString::from("external-verification-policy.json")
             ]
         );
     }
@@ -4281,6 +4398,32 @@ mod tests {
         assert_eq!(evidence.receipt_id, "external-upgrade-receipt-1");
         assert!(!evidence.status_summary.is_empty());
         assert_eq!(evidence.evidence_digest.len(), 64);
+    }
+
+    #[test]
+    fn external_verification_policy_builder_uses_proposal_requirements() {
+        let mut check = sample_authority_check();
+        check.plan.expected_canisters[0].control_class = CanisterControlClassV1::UserControlled;
+        check.inventory.observed_canisters[0].control_class =
+            CanisterControlClassV1::UserControlled;
+        check.inventory.observed_canisters[0].controllers = vec!["user-principal".to_string()];
+
+        let proposal_report = build_external_upgrade_proposal_report(&check);
+        let proposal = proposal_report.proposals[0].clone();
+        let policy =
+            build_external_upgrade_verification_policy(ExternalUpgradeVerificationPolicyRequest {
+                policy_id: "external-upgrade-verification-policy-1".to_string(),
+                proposal,
+            });
+
+        assert_eq!(policy.policy_id, "external-upgrade-verification-policy-1");
+        assert_eq!(policy.verification_requirements.len(), 5);
+        assert!(policy.verification_requirements.iter().any(|row| {
+            row.requirement == LifecycleVerificationRequirementV1::LiveInventory
+                && row.status == ExternalUpgradeVerificationRequirementStatusV1::Required
+        }));
+        assert!(!policy.status_summary.is_empty());
+        assert_eq!(policy.policy_digest.len(), 64);
     }
 
     #[test]

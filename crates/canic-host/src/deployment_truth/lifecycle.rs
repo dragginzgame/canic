@@ -206,6 +206,20 @@ struct ExternalUpgradeVerificationReportDigestInput<'a> {
 }
 
 #[derive(Serialize)]
+struct ExternalUpgradeVerificationPolicyDigestInput<'a> {
+    policy_id: &'a str,
+    proposal_id: &'a str,
+    proposal_digest: &'a str,
+    subject: &'a str,
+    canister_id: &'a Option<String>,
+    role: &'a Option<String>,
+    required_verification: &'a [LifecycleVerificationRequirementV1],
+    verification_requirements: &'a [ExternalUpgradeVerificationPolicyRequirementV1],
+    max_observation_age_seconds: Option<u64>,
+    status_summary: &'a str,
+}
+
+#[derive(Serialize)]
 struct ObservedBeforeDigestInput<'a> {
     subject: &'a str,
     canister_id: &'a Option<String>,
@@ -270,6 +284,23 @@ pub enum ExternalUpgradeVerificationReportError {
     SourceMismatch { field: &'static str },
     #[error(transparent)]
     Receipt(#[from] ExternalUpgradeReceiptError),
+}
+
+///
+/// ExternalUpgradeVerificationPolicyError
+///
+#[derive(Debug, Eq, thiserror::Error, PartialEq)]
+pub enum ExternalUpgradeVerificationPolicyError {
+    #[error(
+        "external upgrade verification policy schema version {actual} does not match expected {expected}"
+    )]
+    SchemaVersionMismatch { expected: u32, actual: u32 },
+    #[error("external upgrade verification policy field `{field}` is required")]
+    MissingRequiredField { field: &'static str },
+    #[error("external upgrade verification policy field `{field}` digest is stale")]
+    DigestMismatch { field: &'static str },
+    #[error("external upgrade verification policy field `{field}` does not match proposal source")]
+    SourceMismatch { field: &'static str },
 }
 
 ///
@@ -963,6 +994,73 @@ pub fn validate_external_upgrade_verification_report_for_receipt(
     )?;
     if report != &expected {
         return Err(ExternalUpgradeVerificationReportError::SourceMismatch { field: "receipt" });
+    }
+    Ok(())
+}
+
+/// Build a passive live-inventory verification policy from an external
+/// lifecycle proposal.
+#[must_use]
+pub fn external_upgrade_verification_policy_from_proposal(
+    policy_id: impl Into<String>,
+    proposal: &ExternalUpgradeProposalV1,
+) -> ExternalUpgradeVerificationPolicyV1 {
+    let mut policy = ExternalUpgradeVerificationPolicyV1 {
+        schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
+        policy_id: policy_id.into(),
+        policy_digest: String::new(),
+        proposal_id: proposal.proposal_id.clone(),
+        proposal_digest: proposal.proposal_digest.clone(),
+        subject: proposal.subject.clone(),
+        canister_id: proposal.canister_id.clone(),
+        role: proposal.role.clone(),
+        required_verification: proposal.verification_requirements.clone(),
+        verification_requirements: external_upgrade_verification_policy_requirements(proposal),
+        max_observation_age_seconds: None,
+        status_summary: external_upgrade_verification_policy_summary(proposal).to_string(),
+    };
+    policy.policy_digest = external_upgrade_verification_policy_digest(&policy);
+    policy
+}
+
+/// Validate archived external-upgrade verification policy consistency and
+/// digest.
+pub fn validate_external_upgrade_verification_policy(
+    policy: &ExternalUpgradeVerificationPolicyV1,
+) -> Result<(), ExternalUpgradeVerificationPolicyError> {
+    if policy.schema_version != DEPLOYMENT_TRUTH_SCHEMA_VERSION {
+        return Err(
+            ExternalUpgradeVerificationPolicyError::SchemaVersionMismatch {
+                expected: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
+                actual: policy.schema_version,
+            },
+        );
+    }
+    ensure_external_verification_policy_field("policy_id", policy.policy_id.as_str())?;
+    ensure_external_verification_policy_field("policy_digest", policy.policy_digest.as_str())?;
+    ensure_external_verification_policy_field("proposal_id", policy.proposal_id.as_str())?;
+    ensure_external_verification_policy_field("proposal_digest", policy.proposal_digest.as_str())?;
+    ensure_external_verification_policy_field("subject", policy.subject.as_str())?;
+    ensure_external_verification_policy_field("status_summary", policy.status_summary.as_str())?;
+    if policy.policy_digest != external_upgrade_verification_policy_digest(policy) {
+        return Err(ExternalUpgradeVerificationPolicyError::DigestMismatch {
+            field: "policy_digest",
+        });
+    }
+    Ok(())
+}
+
+/// Validate that an archived verification policy still matches its source
+/// proposal.
+pub fn validate_external_upgrade_verification_policy_for_proposal(
+    policy: &ExternalUpgradeVerificationPolicyV1,
+    proposal: &ExternalUpgradeProposalV1,
+) -> Result<(), ExternalUpgradeVerificationPolicyError> {
+    validate_external_upgrade_verification_policy(policy)?;
+    let expected =
+        external_upgrade_verification_policy_from_proposal(policy.policy_id.clone(), proposal);
+    if policy != &expected {
+        return Err(ExternalUpgradeVerificationPolicyError::SourceMismatch { field: "proposal" });
     }
     Ok(())
 }
@@ -2642,6 +2740,23 @@ fn external_upgrade_verification_report_digest(
     })
 }
 
+fn external_upgrade_verification_policy_digest(
+    policy: &ExternalUpgradeVerificationPolicyV1,
+) -> String {
+    stable_json_sha256_hex(&ExternalUpgradeVerificationPolicyDigestInput {
+        policy_id: &policy.policy_id,
+        proposal_id: &policy.proposal_id,
+        proposal_digest: &policy.proposal_digest,
+        subject: &policy.subject,
+        canister_id: &policy.canister_id,
+        role: &policy.role,
+        required_verification: &policy.required_verification,
+        verification_requirements: &policy.verification_requirements,
+        max_observation_age_seconds: policy.max_observation_age_seconds,
+        status_summary: &policy.status_summary,
+    })
+}
+
 fn observed_before_digest(
     authority: &LifecycleAuthorityV1,
     current_module_hash: Option<&String>,
@@ -2822,6 +2937,56 @@ const fn external_upgrade_verification_summary(
     }
 }
 
+fn external_upgrade_verification_policy_summary(
+    proposal: &ExternalUpgradeProposalV1,
+) -> &'static str {
+    if proposal
+        .verification_requirements
+        .contains(&LifecycleVerificationRequirementV1::ProtectedCallReadiness)
+    {
+        "fresh live inventory, module/config facts, controller observation, and protected-call readiness are required"
+    } else {
+        "fresh live inventory, module/config facts, and controller observation are required"
+    }
+}
+
+fn external_upgrade_verification_policy_requirements(
+    proposal: &ExternalUpgradeProposalV1,
+) -> Vec<ExternalUpgradeVerificationPolicyRequirementV1> {
+    [
+        (LifecycleVerificationRequirementV1::LiveInventory, None),
+        (
+            LifecycleVerificationRequirementV1::ControllerObservation,
+            None,
+        ),
+        (
+            LifecycleVerificationRequirementV1::ModuleHash,
+            proposal.target_installed_module_hash.clone(),
+        ),
+        (
+            LifecycleVerificationRequirementV1::CanonicalEmbeddedConfig,
+            proposal.target_canonical_embedded_config_sha256.clone(),
+        ),
+        (
+            LifecycleVerificationRequirementV1::ProtectedCallReadiness,
+            None,
+        ),
+    ]
+    .into_iter()
+    .map(
+        |(requirement, expected_value)| ExternalUpgradeVerificationPolicyRequirementV1 {
+            requirement,
+            status: if proposal.verification_requirements.contains(&requirement) {
+                ExternalUpgradeVerificationRequirementStatusV1::Required
+            } else {
+                ExternalUpgradeVerificationRequirementStatusV1::NotRequired
+            },
+            expected_value,
+        },
+    )
+    .collect()
+}
+
 const fn external_upgrade_consent_summary(state: ExternalUpgradeConsentStateV1) -> &'static str {
     match state {
         ExternalUpgradeConsentStateV1::Pending => {
@@ -2887,6 +3052,16 @@ fn ensure_external_verification_report_field(
 ) -> Result<(), ExternalUpgradeVerificationReportError> {
     if value.trim().is_empty() {
         return Err(ExternalUpgradeVerificationReportError::MissingRequiredField { field });
+    }
+    Ok(())
+}
+
+fn ensure_external_verification_policy_field(
+    field: &'static str,
+    value: &str,
+) -> Result<(), ExternalUpgradeVerificationPolicyError> {
+    if value.trim().is_empty() {
+        return Err(ExternalUpgradeVerificationPolicyError::MissingRequiredField { field });
     }
     Ok(())
 }

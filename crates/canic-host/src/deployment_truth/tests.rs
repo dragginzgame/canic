@@ -1760,6 +1760,126 @@ fn external_upgrade_verification_report_text_reports_passive_boundary() {
 }
 
 #[test]
+fn external_upgrade_verification_policy_packages_proposal_requirements() {
+    let (proposal, _) = sample_external_upgrade_proposal_and_receipt();
+
+    let policy = external_upgrade_verification_policy_from_proposal(
+        "external-upgrade-verification-policy-1",
+        &proposal,
+    );
+
+    assert_eq!(policy.policy_id, "external-upgrade-verification-policy-1");
+    assert_eq!(policy.proposal_id, proposal.proposal_id);
+    assert_eq!(policy.proposal_digest, proposal.proposal_digest);
+    assert_eq!(policy.subject, proposal.subject);
+    assert_eq!(
+        policy.required_verification,
+        proposal.verification_requirements
+    );
+    assert_required_policy_requirement(
+        &policy,
+        LifecycleVerificationRequirementV1::LiveInventory,
+        None,
+    );
+    assert_required_policy_requirement(
+        &policy,
+        LifecycleVerificationRequirementV1::ControllerObservation,
+        None,
+    );
+    assert_required_policy_requirement(
+        &policy,
+        LifecycleVerificationRequirementV1::ModuleHash,
+        proposal.target_installed_module_hash.as_deref(),
+    );
+    assert_required_policy_requirement(
+        &policy,
+        LifecycleVerificationRequirementV1::CanonicalEmbeddedConfig,
+        proposal.target_canonical_embedded_config_sha256.as_deref(),
+    );
+    assert_eq!(policy.policy_digest.len(), 64);
+    validate_external_upgrade_verification_policy(&policy).expect("policy should validate");
+    validate_external_upgrade_verification_policy_for_proposal(&policy, &proposal)
+        .expect("policy should validate against proposal");
+    assert_json_round_trip(&policy);
+}
+
+#[test]
+fn external_upgrade_verification_policy_json_shape_is_stable() {
+    let (proposal, _) = sample_external_upgrade_proposal_and_receipt();
+    let policy = external_upgrade_verification_policy_from_proposal(
+        "external-upgrade-verification-policy-1",
+        &proposal,
+    );
+    let encoded = serde_json::to_value(&policy).expect("policy should encode");
+
+    assert_object_keys(
+        &encoded,
+        &[
+            "schema_version",
+            "policy_id",
+            "policy_digest",
+            "proposal_id",
+            "proposal_digest",
+            "subject",
+            "canister_id",
+            "role",
+            "required_verification",
+            "verification_requirements",
+            "max_observation_age_seconds",
+            "status_summary",
+        ],
+    );
+}
+
+#[test]
+fn external_upgrade_verification_policy_request_json_shape_is_stable() {
+    let (proposal, _) = sample_external_upgrade_proposal_and_receipt();
+    let request = ExternalUpgradeVerificationPolicyRequest {
+        policy_id: "external-upgrade-verification-policy-1".to_string(),
+        proposal,
+    };
+    let encoded = serde_json::to_value(&request).expect("request should encode");
+
+    assert_object_keys(&encoded, &["policy_id", "proposal"]);
+    assert_json_round_trip(&request);
+}
+
+#[test]
+fn external_upgrade_verification_policy_validation_rejects_stale_source() {
+    let (mut proposal, _) = sample_external_upgrade_proposal_and_receipt();
+    let policy = external_upgrade_verification_policy_from_proposal(
+        "external-upgrade-verification-policy-1",
+        &proposal,
+    );
+    proposal.proposal_id = "other-proposal".to_string();
+
+    let err = validate_external_upgrade_verification_policy_for_proposal(&policy, &proposal)
+        .expect_err("stale source should fail");
+
+    assert_eq!(
+        err,
+        ExternalUpgradeVerificationPolicyError::SourceMismatch { field: "proposal" }
+    );
+}
+
+#[test]
+fn external_upgrade_verification_policy_text_reports_passive_boundary() {
+    let (proposal, _) = sample_external_upgrade_proposal_and_receipt();
+    let policy = external_upgrade_verification_policy_from_proposal(
+        "external-upgrade-verification-policy-1",
+        &proposal,
+    );
+
+    let text = external_upgrade_verification_policy_text(&policy);
+
+    assert!(text.contains("External upgrade verification policy"));
+    assert!(text.contains("mode: passive"));
+    assert!(text.contains("execution: none"));
+    assert!(text.contains("verification_requirements"));
+    assert!(text.contains("requirement=live_inventory status=required"));
+}
+
+#[test]
 fn role_artifact_source_round_trips_through_json() {
     let source = sample_role_artifact_source(RoleArtifactSourceKindV1::LocalWasmGz);
 
@@ -10728,6 +10848,23 @@ fn assert_object_keys(value: &serde_json::Value, expected: &[&str]) {
     let mut expected = expected.to_vec();
     expected.sort_unstable();
     assert_eq!(actual, expected);
+}
+
+fn assert_required_policy_requirement(
+    policy: &ExternalUpgradeVerificationPolicyV1,
+    requirement: LifecycleVerificationRequirementV1,
+    expected_value: Option<&str>,
+) {
+    let row = policy
+        .verification_requirements
+        .iter()
+        .find(|row| row.requirement == requirement)
+        .expect("verification requirement should be present");
+    assert_eq!(
+        row.status,
+        ExternalUpgradeVerificationRequirementStatusV1::Required
+    );
+    assert_eq!(row.expected_value.as_deref(), expected_value);
 }
 
 fn sample_identity() -> DeploymentIdentityV1 {
