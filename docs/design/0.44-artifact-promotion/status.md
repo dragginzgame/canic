@@ -15,6 +15,12 @@ Started with passive artifact-source modeling.
 0.44 depends on deployment truth and backend-agnostic receipts so artifact
 promotion can prove what was built, uploaded, installed, and promoted.
 
+Plan-mediated promotion install is now wired through the current install
+runner: `canic deploy install --plan <file>` accepts a raw `DeploymentPlanV1`
+or an `ArtifactPromotionPlanV1` envelope, rejects blocked promotion envelopes
+before mutation, and keeps execution on the existing
+deployment-truth/preflight plus activation operation-runner path.
+
 ## Implemented
 
 - Added `RoleArtifactSourceV1` and source-kind DTOs for role-scoped promotion

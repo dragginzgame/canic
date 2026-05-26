@@ -23,12 +23,13 @@ use canic_host::{
         PromotionPlanTransformEvidenceRequest, PromotionPlanTransformEvidenceV1,
         PromotionPlanTransformRequest, PromotionPlanTransformV1,
         PromotionPlanTransformWithMaterializationRequest, PromotionPolicyCheckRequest,
-        PromotionPolicyCheckV1, PromotionReadinessRequest, PromotionReadinessV1,
-        PromotionTargetExecutionLineageRequest, PromotionTargetExecutionLineageV1,
-        PromotionWasmStoreCatalogEntryV1, PromotionWasmStoreCatalogVerificationRequest,
-        PromotionWasmStoreCatalogVerificationV1, PromotionWasmStoreIdentityReportRequest,
-        PromotionWasmStoreIdentityReportV1, RolePromotionInputV1, RolePromotionPolicyV1,
-        SafetyReportV1, SafetyStatusV1, StagingReceiptV1, artifact_promotion_execution_receipt,
+        PromotionPolicyCheckV1, PromotionReadinessRequest, PromotionReadinessStatusV1,
+        PromotionReadinessV1, PromotionTargetExecutionLineageRequest,
+        PromotionTargetExecutionLineageV1, PromotionWasmStoreCatalogEntryV1,
+        PromotionWasmStoreCatalogVerificationRequest, PromotionWasmStoreCatalogVerificationV1,
+        PromotionWasmStoreIdentityReportRequest, PromotionWasmStoreIdentityReportV1,
+        RolePromotionInputV1, RolePromotionPolicyV1, SafetyReportV1, SafetyStatusV1,
+        StagingReceiptV1, artifact_promotion_execution_receipt,
         artifact_promotion_execution_receipt_text, artifact_promotion_plan,
         artifact_promotion_plan_text, artifact_promotion_provenance_report,
         artifact_promotion_provenance_report_text,
@@ -47,11 +48,11 @@ use canic_host::{
         promotion_target_execution_lineage_text, promotion_wasm_store_catalog_verification,
         promotion_wasm_store_catalog_verification_text,
         promotion_wasm_store_identity_report_from_staging,
-        promotion_wasm_store_identity_report_text,
+        promotion_wasm_store_identity_report_text, validate_artifact_promotion_plan,
     },
     icp_config::resolve_current_canic_icp_root,
     install_root::{
-        InstallRootOptions, check_install_deployment_truth,
+        InstallRootOptions, check_install_deployment_truth, install_root,
         latest_deployment_truth_receipt_path_from_root,
     },
 };
@@ -82,6 +83,7 @@ Examples:
   canic deploy promote plan --request promotion-plan.json
   canic deploy promote check --request promotion-check.json
   canic deploy promote diff --request promotion-diff.json
+  canic deploy install --plan promoted-plan.json
   canic deploy promote inspect readiness --request promotion-readiness.json
   canic deploy promote inspect artifact-identity --request promotion-artifacts.json
   canic deploy promote inspect provenance --request promotion-provenance.json
@@ -89,9 +91,10 @@ Examples:
   canic deploy resume-report --receipt receipt.json demo
   canic deploy check --profile fast demo
 
-Deployment truth commands are read-only checks. Mutation still flows through
-`canic install`. Authority commands are dry-run reconciliation reports and do
-not mutate controller state.";
+Deployment truth commands are read-only checks. Plan-mediated mutation flows
+through `canic deploy install --plan <file>` or the legacy `canic install`
+entrypoint. Authority commands are dry-run reconciliation reports and do not
+mutate controller state.";
 const DEPLOY_PLAN_HELP_AFTER: &str = "\
 Examples:
   canic deploy plan demo
@@ -133,6 +136,15 @@ Examples:
 0.42 authority commands are dry-run reports. They do not apply controller
 changes. A successful command means the local authority artifact was produced,
 not that the deployment is globally safe or that controller state was changed.";
+const DEPLOY_INSTALL_HELP_AFTER: &str = "\
+Examples:
+  canic deploy install --plan promoted-plan.json
+  canic --network local deploy install --plan promoted-plan.json --profile fast
+
+Installs through the current install runner using a supplied DeploymentPlanV1
+or ArtifactPromotionPlanV1. The deployment-truth/preflight gate runs before
+mutation, and activation phases still execute through the current-install
+operation runner.";
 const DEPLOY_PROMOTE_HELP_AFTER: &str = "\
 Examples:
   canic deploy promote plan --request promotion-plan.json
@@ -354,6 +366,16 @@ struct DeployResumeReportOptions {
     receipt: Option<PathBuf>,
 }
 
+///
+/// DeployInstallPlanOptions
+///
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct DeployInstallPlanOptions {
+    plan: PathBuf,
+    network: String,
+    profile: Option<CanisterBuildProfile>,
+}
+
 /// DeployAuthorityOptions
 ///
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -496,6 +518,7 @@ where
         Some((command, args)) => match command.as_str() {
             "authority" => run_authority(args),
             "promote" => run_promote(args),
+            "install" => run_install(args),
             "plan" => run_plan(args),
             "inventory" => run_inventory(args),
             "diff" => run_diff(args),
@@ -505,6 +528,22 @@ where
             _ => unreachable!("deploy dispatch command only defines known commands"),
         },
     }
+}
+
+fn run_install<I>(args: I) -> Result<(), DeployCommandError>
+where
+    I: IntoIterator<Item = OsString>,
+{
+    let args = args.into_iter().collect::<Vec<_>>();
+    if print_help_or_version(&args, deploy_install_usage, version_text()) {
+        return Ok(());
+    }
+
+    let options = DeployInstallPlanOptions::parse(args)?;
+    let plan = read_install_deployment_plan(&options.plan)?;
+    let icp_root = resolve_current_canic_icp_root().ok();
+    install_root(options.into_install_root_options(plan, icp_root))
+        .map_err(DeployCommandError::from)
 }
 
 fn run_promote<I>(args: I) -> Result<(), DeployCommandError>
@@ -1179,6 +1218,30 @@ fn read_deployment_receipt(path: &PathBuf) -> Result<DeploymentReceiptV1, Deploy
     read_json_file(path)
 }
 
+fn read_install_deployment_plan(path: &PathBuf) -> Result<DeploymentPlanV1, DeployCommandError> {
+    let bytes = fs::read(path).map_err(Box::<dyn std::error::Error>::from)?;
+    if let Ok(plan) = serde_json::from_slice::<ArtifactPromotionPlanV1>(&bytes) {
+        validate_artifact_promotion_plan(&plan).map_err(Box::<dyn std::error::Error>::from)?;
+        if plan.status != PromotionReadinessStatusV1::Ready {
+            return Err(DeployCommandError::Blocked(format!(
+                "artifact promotion plan {} is not ready",
+                plan.plan_id
+            )));
+        }
+        return Ok(plan.transform.promoted_plan);
+    }
+
+    serde_json::from_slice::<DeploymentPlanV1>(&bytes).map_err(|err| {
+        DeployCommandError::Check(
+            format!(
+                "failed to decode {} as ArtifactPromotionPlanV1 or DeploymentPlanV1: {err}",
+                path.display()
+            )
+            .into(),
+        )
+    })
+}
+
 fn read_json_file<T>(path: &PathBuf) -> Result<T, DeployCommandError>
 where
     T: DeserializeOwned,
@@ -1239,6 +1302,58 @@ impl DeployResumeReportOptions {
             ))
         })
     }
+}
+
+impl DeployInstallPlanOptions {
+    fn parse<I>(args: I) -> Result<Self, DeployCommandError>
+    where
+        I: IntoIterator<Item = OsString>,
+    {
+        let matches = parse_matches(deploy_install_command(), args)
+            .map_err(|_| DeployCommandError::Usage(deploy_install_usage()))?;
+        Ok(Self {
+            plan: path_option(&matches, "plan").expect("clap requires plan"),
+            network: string_option(&matches, "network").unwrap_or_else(local_network),
+            profile: string_option(&matches, "profile")
+                .as_deref()
+                .map(|profile| parse_profile(profile, deploy_install_usage))
+                .transpose()?,
+        })
+    }
+
+    fn into_install_root_options(
+        self,
+        plan: DeploymentPlanV1,
+        icp_root: Option<std::path::PathBuf>,
+    ) -> InstallRootOptions {
+        let fleet_template = plan.fleet_template.clone();
+        InstallRootOptions {
+            root_canister: root_canister_for_plan(&plan),
+            root_build_target: DEFAULT_ROOT_TARGET.to_string(),
+            network: self.network,
+            icp_root,
+            build_profile: self.profile,
+            ready_timeout_seconds: DEFAULT_READY_TIMEOUT_SECONDS,
+            config_path: Some(default_fleet_config_path(&fleet_template)),
+            expected_fleet: Some(fleet_template),
+            interactive_config_selection: false,
+            deployment_plan_override: Some(plan),
+        }
+    }
+}
+
+fn root_canister_for_plan(plan: &DeploymentPlanV1) -> String {
+    plan.trust_domain
+        .root_trust_anchor
+        .clone()
+        .or_else(|| plan.deployment_identity.root_principal.clone())
+        .or_else(|| {
+            plan.expected_canisters
+                .iter()
+                .find(|canister| canister.role == DEFAULT_ROOT_TARGET)
+                .and_then(|canister| canister.canister_id.clone())
+        })
+        .unwrap_or_else(|| DEFAULT_ROOT_TARGET.to_string())
 }
 
 impl DeployAuthorityOptions {
@@ -1325,6 +1440,7 @@ impl DeployTruthOptions {
             config_path: Some(default_fleet_config_path(&self.fleet)),
             expected_fleet: Some(self.fleet),
             interactive_config_selection: false,
+            deployment_plan_override: None,
         }
     }
 }
@@ -1342,6 +1458,11 @@ fn deploy_command() -> ClapCommand {
         .subcommand(passthrough_subcommand(
             ClapCommand::new("promote")
                 .about("Build passive artifact promotion reports")
+                .disable_help_flag(true),
+        ))
+        .subcommand(passthrough_subcommand(
+            ClapCommand::new("install")
+                .about("Install through the current runner using a supplied deployment plan")
                 .disable_help_flag(true),
         ))
         .subcommand(passthrough_subcommand(
@@ -1403,6 +1524,30 @@ fn deploy_promote_command() -> ClapCommand {
                 .disable_help_flag(true),
         ))
         .after_help(DEPLOY_PROMOTE_HELP_AFTER)
+}
+
+fn deploy_install_command() -> ClapCommand {
+    ClapCommand::new("install")
+        .bin_name("canic deploy install")
+        .about("Install through the current runner using a supplied deployment plan")
+        .disable_help_flag(true)
+        .override_usage("canic deploy install --plan <file>")
+        .arg(
+            value_arg("plan")
+                .long("plan")
+                .value_name("file")
+                .required(true)
+                .help("DeploymentPlanV1 or ArtifactPromotionPlanV1 JSON file to install"),
+        )
+        .arg(
+            value_arg("profile")
+                .long("profile")
+                .value_name("debug|fast|release")
+                .num_args(1)
+                .help("Canister wasm build profile; defaults to CANIC_WASM_PROFILE or release"),
+        )
+        .arg(internal_network_arg())
+        .after_help(DEPLOY_INSTALL_HELP_AFTER)
 }
 
 fn deploy_promote_inspect_command() -> ClapCommand {
@@ -1777,6 +1922,11 @@ fn check_usage() -> String {
 
 fn promote_usage() -> String {
     let mut command = deploy_promote_command();
+    command.render_help().to_string()
+}
+
+fn deploy_install_usage() -> String {
+    let mut command = deploy_install_command();
     command.render_help().to_string()
 }
 
@@ -2504,6 +2654,32 @@ mod tests {
     }
 
     #[test]
+    fn deploy_install_command_dispatches_plan_install() {
+        let parsed = parse_subcommand(
+            deploy_command(),
+            [
+                OsString::from("install"),
+                OsString::from("--plan"),
+                OsString::from("promoted-plan.json"),
+            ],
+        )
+        .expect("parse deploy install")
+        .expect("install command");
+
+        assert_eq!(parsed.0, "install");
+        assert_eq!(
+            parsed.1,
+            vec![
+                OsString::from("--plan"),
+                OsString::from("promoted-plan.json")
+            ]
+        );
+
+        let options = DeployInstallPlanOptions::parse(parsed.1).expect("parse install plan");
+        assert_eq!(options.plan, PathBuf::from("promoted-plan.json"));
+    }
+
+    #[test]
     fn deploy_promote_command_dispatches_inspect_namespace() {
         let parsed = parse_subcommand(
             deploy_command(),
@@ -2898,6 +3074,30 @@ mod tests {
             Some("fleets/demo/canic.toml")
         );
         assert_eq!(options.expected_fleet.as_deref(), Some("demo"));
+    }
+
+    #[test]
+    fn deploy_install_plan_builds_current_install_options_with_plan_override() {
+        let mut identity = sample_deployment_identity();
+        identity.deployment_name = "demo-local".to_string();
+        let plan = sample_deployment_plan(identity);
+        let options = DeployInstallPlanOptions {
+            plan: PathBuf::from("promoted-plan.json"),
+            network: "local".to_string(),
+            profile: Some(CanisterBuildProfile::Fast),
+        }
+        .into_install_root_options(plan, Some(std::path::PathBuf::from("/tmp/icp")));
+
+        assert_eq!(options.root_canister, "aaaaa-aa");
+        assert_eq!(options.root_build_target, "root");
+        assert_eq!(options.network, "local");
+        assert_eq!(options.build_profile, Some(CanisterBuildProfile::Fast));
+        assert_eq!(
+            options.config_path.as_deref(),
+            Some("fleets/demo/canic.toml")
+        );
+        assert_eq!(options.expected_fleet.as_deref(), Some("demo"));
+        assert!(options.deployment_plan_override.is_some());
     }
 
     fn sample_authority_check() -> DeploymentCheckV1 {

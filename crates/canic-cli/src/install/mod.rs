@@ -96,6 +96,7 @@ impl InstallOptions {
             config_path: Some(config_path),
             expected_fleet: Some(self.fleet),
             interactive_config_selection: false,
+            deployment_plan_override: None,
         }
     }
 }

@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-05-25
+Last updated: 2026-05-26
 
 ## Purpose
 
@@ -14,7 +14,8 @@ inspect only the files needed for the current task.
   copying source authority, stale embedded topology, or authority dry-run
   evidence.
 - Current release-work area: promotion planning, artifact-source validation,
-  target embedded-config checks, and promotion readiness reporting.
+  target embedded-config checks, promotion readiness reporting, and
+  plan-mediated promotion install.
 - Design starts at
   `docs/design/0.44-artifact-promotion/0.44-design.md`. Promotion execution
   must remain a `DeploymentPlanV1` transformation and must use the
@@ -27,6 +28,10 @@ inspect only the files needed for the current task.
   digest-pinned override inputs. Receipt-backed artifact sources are limited to
   deployment/staging receipt evidence and do not accept authority dry-run
   artifacts as artifact sources.
+- `canic deploy install --plan <file>` now accepts a raw `DeploymentPlanV1` or
+  an `ArtifactPromotionPlanV1` envelope and routes the supplied plan through
+  the current install deployment-truth/preflight gate plus activation operation
+  runner. Blocked promotion plan envelopes are rejected before mutation.
 - 0.44 also has the first passive promotion readiness model. It reports
   role-scoped promotion source identity, target wasm/config identity,
   byte/config identity comparisons, blocking findings, and target-store

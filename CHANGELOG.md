@@ -12,6 +12,14 @@ present.
 
 ## Unreleased
 
+- Adds plan-mediated promotion install for supplied `DeploymentPlanV1` or
+  `ArtifactPromotionPlanV1` files, routing execution through the current
+  install runner/gate path.
+
+```bash
+canic deploy install --plan promoted-plan.json
+```
+
 - Adds a small passive artifact-promotion CLI surface for planning, readiness
   checks, and transform diffs, while demoting DTO-level promotion reports under
   the advanced inspect namespace.

@@ -6,11 +6,13 @@ use crate::deployment_truth::{
     ArtifactTransportV1, CurrentCliDeploymentExecutor, DeploymentCheckV1,
     DeploymentCommandResultV1, DeploymentExecutionContextV1, DeploymentExecutionPreflightV1,
     DeploymentExecutionStatusV1, DeploymentExecutor, DeploymentExecutorCapabilityV1,
-    DeploymentReceiptV1, LocalDeploymentCheckRequest, ObservationStatusV1, SafetyFindingV1,
-    StagingReceiptV1, artifact_gate_phase_receipt, artifact_gate_role_phase_receipts,
-    check_local_deployment, deployment_execution_preflight_from_check,
+    DeploymentPlanV1, DeploymentReceiptV1, LocalDeploymentCheckRequest, LocalInventoryRequest,
+    ObservationStatusV1, SafetyFindingV1, StagingReceiptV1, artifact_gate_phase_receipt,
+    artifact_gate_role_phase_receipts, check_local_deployment, collect_local_deployment_inventory,
+    compare_plan_to_inventory, deployment_execution_preflight_from_check,
     deployment_receipt_from_check_with_status, missing_executor_capabilities, phase_receipt,
-    staging_receipt_evidence, validate_deployment_execution_preflight_for_check,
+    safety_report_from_diff, staging_receipt_evidence,
+    validate_deployment_execution_preflight_for_check,
 };
 use crate::format::wasm_size_label;
 use crate::icp::{self, CANIC_ICP_LOCAL_NETWORK_URL_ENV, CANIC_ICP_LOCAL_ROOT_KEY_ENV};
@@ -24,7 +26,9 @@ use crate::release_set::{
 use crate::replica_query;
 use crate::response_parse::parse_cycle_balance_response;
 use crate::table::{ColumnAlign, render_separator, render_table, render_table_row, table_widths};
+use canic_core::cdk::utils::hash::wasm_hash_hex;
 use canic_core::{
+    CANIC_WASM_CHUNK_BYTES,
     cdk::{types::Principal, utils::hash::wasm_hash},
     protocol,
 };
@@ -80,6 +84,7 @@ pub struct InstallRootOptions {
     pub config_path: Option<String>,
     pub expected_fleet: Option<String>,
     pub interactive_config_selection: bool,
+    pub deployment_plan_override: Option<DeploymentPlanV1>,
 }
 
 ///
@@ -301,6 +306,10 @@ fn build_install_targets_with_phase(
     icp_root: &Path,
     config_path: &Path,
 ) -> Result<(CompletedInstallPhase, Duration), Box<dyn std::error::Error>> {
+    if let Some(plan) = &options.deployment_plan_override {
+        return validate_plan_artifacts_with_phase(plan, icp_root, &options.network);
+    }
+
     let build_targets = configured_install_targets(config_path, &options.root_build_target)?;
     let operation = BuildInstallTargetsOperation::new(
         &options.network,
@@ -324,6 +333,65 @@ fn build_install_targets_with_phase(
     Ok((phase, duration))
 }
 
+fn validate_plan_artifacts_with_phase(
+    plan: &DeploymentPlanV1,
+    icp_root: &Path,
+    network: &str,
+) -> Result<(CompletedInstallPhase, Duration), Box<dyn std::error::Error>> {
+    let started_at = current_unix_timestamp_label()?;
+    let started = Instant::now();
+    validate_plan_artifact_paths(plan, icp_root, network)?;
+    let duration = started.elapsed();
+    let role_names = plan
+        .role_artifacts
+        .iter()
+        .map(|artifact| artifact.role.clone())
+        .collect::<Vec<_>>();
+    let phase = CompletedInstallPhase {
+        phase: "materialize_artifacts",
+        attempted_action: "validate supplied deployment plan artifacts",
+        started_at,
+        finished_at: Some(current_unix_timestamp_label()?),
+        evidence: vec![format!("deployment_plan:{}", plan.plan_id)],
+        role_names,
+    };
+    Ok((phase, duration))
+}
+
+fn validate_plan_artifact_paths(
+    plan: &DeploymentPlanV1,
+    icp_root: &Path,
+    network: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let artifact_root = resolve_artifact_root(icp_root, network)?;
+    let root_artifact = plan
+        .role_artifacts
+        .iter()
+        .find(|artifact| artifact.role == "root")
+        .ok_or_else(|| "deployment plan is missing root role artifact".to_string())?;
+    let root_wasm = plan_role_wasm_path(icp_root, &artifact_root, root_artifact);
+    if !root_wasm.is_file() {
+        return Err(format!(
+            "deployment plan root wasm artifact does not exist: {}",
+            root_wasm.display()
+        )
+        .into());
+    }
+
+    for artifact in plan_release_role_artifacts(plan) {
+        let wasm_gz = plan_role_wasm_gz_path(icp_root, &artifact_root, artifact);
+        if !wasm_gz.is_file() {
+            return Err(format!(
+                "deployment plan role {} wasm.gz artifact does not exist: {}",
+                artifact.role,
+                wasm_gz.display()
+            )
+            .into());
+        }
+    }
+    Ok(())
+}
+
 fn emit_manifest_with_deployment_truth_receipt(
     workspace_root: &Path,
     icp_root: &Path,
@@ -337,7 +405,11 @@ fn emit_manifest_with_deployment_truth_receipt(
         EmitRootManifestOperation::new(workspace_root, icp_root, &options.network, config_path);
     let emit_manifest_started_at_label = current_unix_timestamp_label()?;
     let emit_manifest_started_at = Instant::now();
-    let manifest_path = operation.execute()?;
+    let manifest_path = if let Some(plan) = &options.deployment_plan_override {
+        emit_root_release_set_manifest_from_plan(icp_root, &options.network, plan)?
+    } else {
+        operation.execute()?
+    };
     let emit_manifest_duration = emit_manifest_started_at.elapsed();
     let emit_manifest_receipt = receipt_with_execution_context(
         install_deployment_truth_phase_receipt(
@@ -364,6 +436,110 @@ fn emit_manifest_with_deployment_truth_receipt(
     Ok((manifest_path, emit_manifest_duration))
 }
 
+fn emit_root_release_set_manifest_from_plan(
+    icp_root: &Path,
+    network: &str,
+    plan: &DeploymentPlanV1,
+) -> Result<PathBuf, Box<dyn std::error::Error>> {
+    let artifact_root = resolve_artifact_root(icp_root, network)?;
+    let manifest_path = crate::release_set::root_release_set_manifest_path(&artifact_root)?;
+    let entries = plan_release_role_artifacts(plan)
+        .map(|artifact| release_set_entry_from_plan_artifact(icp_root, &artifact_root, artifact))
+        .collect::<Result<Vec<_>, _>>()?;
+    let manifest = RootReleaseSetManifest {
+        release_version: plan
+            .deployment_identity
+            .canic_version
+            .clone()
+            .unwrap_or_else(|| plan.plan_id.clone()),
+        entries,
+    };
+
+    fs::write(&manifest_path, serde_json::to_vec_pretty(&manifest)?)?;
+    Ok(manifest_path)
+}
+
+fn release_set_entry_from_plan_artifact(
+    icp_root: &Path,
+    artifact_root: &Path,
+    artifact: &crate::deployment_truth::RoleArtifactV1,
+) -> Result<crate::release_set::ReleaseSetEntry, Box<dyn std::error::Error>> {
+    let artifact_path = plan_role_wasm_gz_path(icp_root, artifact_root, artifact);
+    let artifact_relative_path = artifact_path
+        .strip_prefix(icp_root)
+        .map_err(|_| {
+            format!(
+                "deployment plan artifact {} is not under ICP root {}",
+                artifact_path.display(),
+                icp_root.display()
+            )
+        })?
+        .to_string_lossy()
+        .to_string();
+    let wasm_module = fs::read(&artifact_path)?;
+    let chunk_hashes = wasm_module
+        .chunks(CANIC_WASM_CHUNK_BYTES)
+        .map(wasm_hash_hex)
+        .collect::<Vec<_>>();
+
+    Ok(crate::release_set::ReleaseSetEntry {
+        role: artifact.role.clone(),
+        template_id: format!("embedded:{}", artifact.role),
+        artifact_relative_path,
+        payload_size_bytes: wasm_module.len() as u64,
+        payload_sha256_hex: wasm_hash_hex(&wasm_module),
+        chunk_size_bytes: CANIC_WASM_CHUNK_BYTES as u64,
+        chunk_sha256_hex: chunk_hashes,
+    })
+}
+
+fn plan_release_role_artifacts(
+    plan: &DeploymentPlanV1,
+) -> impl Iterator<Item = &crate::deployment_truth::RoleArtifactV1> {
+    plan.role_artifacts
+        .iter()
+        .filter(|artifact| !matches!(artifact.role.as_str(), "root" | "wasm_store"))
+}
+
+fn plan_role_wasm_path(
+    icp_root: &Path,
+    artifact_root: &Path,
+    artifact: &crate::deployment_truth::RoleArtifactV1,
+) -> PathBuf {
+    artifact.wasm_path.as_ref().map_or_else(
+        || {
+            artifact_root
+                .join(&artifact.role)
+                .join(format!("{}.wasm", artifact.role))
+        },
+        |path| plan_artifact_path(icp_root, path),
+    )
+}
+
+fn plan_role_wasm_gz_path(
+    icp_root: &Path,
+    artifact_root: &Path,
+    artifact: &crate::deployment_truth::RoleArtifactV1,
+) -> PathBuf {
+    artifact.wasm_gz_path.as_ref().map_or_else(
+        || {
+            artifact_root
+                .join(&artifact.role)
+                .join(format!("{}.wasm.gz", artifact.role))
+        },
+        |path| plan_artifact_path(icp_root, path),
+    )
+}
+
+fn plan_artifact_path(icp_root: &Path, path: &str) -> PathBuf {
+    let path = PathBuf::from(path);
+    if path.is_absolute() {
+        path
+    } else {
+        icp_root.join(path)
+    }
+}
+
 fn run_root_activation_phases(
     receipt_scope: InstallReceiptScope<'_>,
     options: &InstallRootOptions,
@@ -372,9 +548,12 @@ fn run_root_activation_phases(
     total_started_at: Instant,
 ) -> Result<InstallTimingSummary, Box<dyn std::error::Error>> {
     let mut timings = InstallTimingSummary::default();
-    let root_wasm = resolve_artifact_root(receipt_scope.icp_root, receipt_scope.network)?
-        .join(&options.root_build_target)
-        .join(format!("{}.wasm", options.root_build_target));
+    let root_wasm = root_wasm_for_install_plan(
+        receipt_scope.icp_root,
+        receipt_scope.network,
+        &options.root_build_target,
+        options.deployment_plan_override.as_ref(),
+    )?;
     let install_operation = InstallRootWasmOperation::new(
         receipt_scope.icp_root,
         receipt_scope.network,
@@ -425,6 +604,27 @@ fn run_root_activation_phases(
     );
     timings.finalize_root_funding = receipt_scope.run_operation(&post_ready_funding)?;
     Ok(timings)
+}
+
+fn root_wasm_for_install_plan(
+    icp_root: &Path,
+    network: &str,
+    root_build_target: &str,
+    plan: Option<&DeploymentPlanV1>,
+) -> Result<PathBuf, Box<dyn std::error::Error>> {
+    let artifact_root = resolve_artifact_root(icp_root, network)?;
+    if let Some(plan) = plan {
+        let root_artifact = plan
+            .role_artifacts
+            .iter()
+            .find(|artifact| artifact.role == "root")
+            .ok_or_else(|| "deployment plan is missing root role artifact".to_string())?;
+        return Ok(plan_role_wasm_path(icp_root, &artifact_root, root_artifact));
+    }
+
+    Ok(artifact_root
+        .join(root_build_target)
+        .join(format!("{root_build_target}.wasm")))
 }
 
 #[derive(Clone, Copy)]
@@ -1033,6 +1233,19 @@ fn current_install_deployment_truth_check_at(
     fleet_name: &str,
     observed_at: String,
 ) -> Result<DeploymentCheckV1, Box<dyn std::error::Error>> {
+    if let Some(plan) = &options.deployment_plan_override {
+        validate_current_install_plan_override(plan, &options.network, fleet_name)?;
+        return current_install_deployment_truth_check_for_plan(
+            plan,
+            workspace_root,
+            icp_root,
+            config_path,
+            fleet_name,
+            observed_at,
+            &options.network,
+        );
+    }
+
     let build_profile = options
         .build_profile
         .unwrap_or_else(CanisterBuildProfile::current)
@@ -1050,6 +1263,70 @@ fn current_install_deployment_truth_check_at(
         build_profile,
     })
     .map_err(Into::into)
+}
+
+fn current_install_deployment_truth_check_for_plan(
+    plan: &DeploymentPlanV1,
+    workspace_root: &Path,
+    icp_root: &Path,
+    config_path: &Path,
+    fleet_name: &str,
+    observed_at: String,
+    network: &str,
+) -> Result<DeploymentCheckV1, Box<dyn std::error::Error>> {
+    let inventory = collect_local_deployment_inventory(&LocalInventoryRequest {
+        deployment_name: fleet_name.to_string(),
+        network: network.to_string(),
+        workspace_root: workspace_root.to_path_buf(),
+        icp_root: icp_root.to_path_buf(),
+        config_path: Some(config_path.to_path_buf()),
+        observed_at,
+    })?;
+    let diff = compare_plan_to_inventory(plan, &inventory);
+    let report = safety_report_from_diff(
+        format!("local:{network}:{fleet_name}:report"),
+        Some(format!("local:{network}:{fleet_name}:diff")),
+        &diff,
+    );
+
+    Ok(DeploymentCheckV1 {
+        schema_version: crate::deployment_truth::DEPLOYMENT_TRUTH_SCHEMA_VERSION,
+        check_id: format!("local:{network}:{fleet_name}:check"),
+        plan: plan.clone(),
+        inventory,
+        diff,
+        report,
+    })
+}
+
+fn validate_current_install_plan_override(
+    plan: &DeploymentPlanV1,
+    network: &str,
+    fleet_name: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    if plan.schema_version != crate::deployment_truth::DEPLOYMENT_TRUTH_SCHEMA_VERSION {
+        return Err(format!(
+            "deployment plan schema mismatch: expected {}, found {}",
+            crate::deployment_truth::DEPLOYMENT_TRUTH_SCHEMA_VERSION,
+            plan.schema_version
+        )
+        .into());
+    }
+    if plan.deployment_identity.network != network {
+        return Err(format!(
+            "deployment plan network mismatch: install network {network}, plan network {}",
+            plan.deployment_identity.network
+        )
+        .into());
+    }
+    if plan.deployment_identity.deployment_name != fleet_name && plan.fleet_template != fleet_name {
+        return Err(format!(
+            "deployment plan target mismatch: install fleet {fleet_name}, plan deployment {} / template {}",
+            plan.deployment_identity.deployment_name, plan.fleet_template
+        )
+        .into());
+    }
+    Ok(())
 }
 
 fn current_install_execution_context(

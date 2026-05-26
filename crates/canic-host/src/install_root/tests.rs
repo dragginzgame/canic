@@ -385,6 +385,7 @@ kind = "singleton"
             config_path: Some("fleets/demo/canic.toml".to_string()),
             expected_fleet: Some("demo".to_string()),
             interactive_config_selection: false,
+            deployment_plan_override: None,
         };
 
         let check = check_install_deployment_truth(&options, "2026-05-22T00:00:00Z")
@@ -467,6 +468,7 @@ kind = "singleton"
         config_path: Some("fleets/demo/canic.toml".to_string()),
         expected_fleet: Some("demo".to_string()),
         interactive_config_selection: false,
+        deployment_plan_override: None,
     };
 
     let check = current_install_deployment_truth_check_at(
@@ -489,6 +491,40 @@ kind = "singleton"
     );
     assert!(enforce_install_deployment_truth_gate(&check).is_err());
 
+    fs::remove_dir_all(root).expect("clean temp dir");
+}
+
+#[test]
+fn install_truth_check_uses_supplied_deployment_plan_override() {
+    let (root, mut check) = demo_install_deployment_truth_check(
+        "canic-install-truth-supplied-deployment-plan-override",
+    );
+    check.plan.plan_id = "promoted-plan-1".to_string();
+    let config_path = root.join("fleets/demo/canic.toml");
+    let options = InstallRootOptions {
+        root_canister: "root".to_string(),
+        root_build_target: "root".to_string(),
+        network: "local".to_string(),
+        icp_root: Some(root.clone()),
+        build_profile: Some(CanisterBuildProfile::Fast),
+        ready_timeout_seconds: 30,
+        config_path: Some("fleets/demo/canic.toml".to_string()),
+        expected_fleet: Some("demo".to_string()),
+        interactive_config_selection: false,
+        deployment_plan_override: Some(check.plan),
+    };
+
+    let supplied_check = current_install_deployment_truth_check_at(
+        &options,
+        &root,
+        &root,
+        &config_path,
+        "demo",
+        "2026-05-22T00:00:00Z".to_string(),
+    )
+    .expect("deployment truth check");
+
+    assert_eq!(supplied_check.plan.plan_id, "promoted-plan-1");
     fs::remove_dir_all(root).expect("clean temp dir");
 }
 
@@ -527,6 +563,7 @@ kind = "root"
         config_path: Some("fleets/demo/canic.toml".to_string()),
         expected_fleet: Some("demo".to_string()),
         interactive_config_selection: false,
+        deployment_plan_override: None,
     };
 
     let mut check = current_install_deployment_truth_check_at(
@@ -594,6 +631,7 @@ kind = "root"
         config_path: Some("fleets/demo/canic.toml".to_string()),
         expected_fleet: Some("demo".to_string()),
         interactive_config_selection: false,
+        deployment_plan_override: None,
     };
 
     let mut check = current_install_deployment_truth_check_at(
@@ -696,6 +734,7 @@ kind = "root"
         config_path: Some("fleets/demo/canic.toml".to_string()),
         expected_fleet: Some("demo".to_string()),
         interactive_config_selection: false,
+        deployment_plan_override: None,
     };
 
     let mut check = current_install_deployment_truth_check_at(
@@ -777,6 +816,7 @@ kind = "root"
         config_path: Some("fleets/demo/canic.toml".to_string()),
         expected_fleet: Some("demo".to_string()),
         interactive_config_selection: false,
+        deployment_plan_override: None,
     };
 
     let mut check = current_install_deployment_truth_check_at(
@@ -840,6 +880,7 @@ kind = "root"
         config_path: Some("fleets/demo/canic.toml".to_string()),
         expected_fleet: Some("demo".to_string()),
         interactive_config_selection: false,
+        deployment_plan_override: None,
     };
 
     let check = current_install_deployment_truth_check_at(
@@ -928,6 +969,7 @@ kind = "root"
         config_path: Some("fleets/demo/canic.toml".to_string()),
         expected_fleet: Some("demo".to_string()),
         interactive_config_selection: false,
+        deployment_plan_override: None,
     };
     let check = current_install_deployment_truth_check_at(
         &options,
@@ -1556,6 +1598,7 @@ kind = "root"
         config_path: Some("fleets/demo/canic.toml".to_string()),
         expected_fleet: Some("demo".to_string()),
         interactive_config_selection: false,
+        deployment_plan_override: None,
     };
 
     let mut check = current_install_deployment_truth_check_at(
@@ -1634,6 +1677,7 @@ kind = "root"
         config_path: Some("fleets/demo/canic.toml".to_string()),
         expected_fleet: Some("demo".to_string()),
         interactive_config_selection: false,
+        deployment_plan_override: None,
     };
 
     let check = current_install_deployment_truth_check_at(
@@ -2270,6 +2314,7 @@ kind = "root"
         config_path: Some("fleets/demo/canic.toml".to_string()),
         expected_fleet: Some("demo".to_string()),
         interactive_config_selection: false,
+        deployment_plan_override: None,
     };
     let check = current_install_deployment_truth_check_at(
         &options,
