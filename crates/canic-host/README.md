@@ -15,7 +15,7 @@ For normal local setup, prefer the root
 script directly:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/dragginzgame/canic/v0.44.10/scripts/dev/install_dev.sh | bash
+curl -fsSL https://raw.githubusercontent.com/dragginzgame/canic/v0.44.11/scripts/dev/install_dev.sh | bash
 ```
 
 That script bootstraps Rust when needed and installs the pinned internal
