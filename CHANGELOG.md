@@ -12,26 +12,28 @@ present.
 
 ## Unreleased
 
-- Hardens plan-mediated promotion install with direct coverage for ready and
-  blocked promotion plan envelopes, raw deployment plan input, target network
-  mismatches, missing root wasm artifacts, and the current-install mediation
-  source guard.
+## [0.44.x] - 2026-05-25 - Artifact promotion
+
+- `0.44.14` hardens plan-mediated promotion install with direct coverage for
+  ready and blocked promotion plan envelopes, raw deployment plan input, target
+  network mismatches, missing root wasm artifacts, and the current-install
+  mediation source guard.
 
 ```bash
 canic deploy install --plan promoted-plan.json
 ```
 
-- Adds plan-mediated promotion install for supplied `DeploymentPlanV1` or
-  `ArtifactPromotionPlanV1` files, routing execution through the current
-  install runner/gate path.
+- `0.44.13` adds plan-mediated promotion install for supplied
+  `DeploymentPlanV1` or `ArtifactPromotionPlanV1` files, routing execution
+  through the current install runner/gate path.
 
 ```bash
 canic deploy install --plan promoted-plan.json
 ```
 
-- Adds a small passive artifact-promotion CLI surface for planning, readiness
-  checks, and transform diffs, while demoting DTO-level promotion reports under
-  the advanced inspect namespace.
+- `0.44.12` adds a small passive artifact-promotion CLI surface for planning,
+  readiness checks, and transform diffs, while demoting DTO-level promotion
+  reports under the advanced inspect namespace.
 
 ```bash
 canic deploy promote plan --request promotion-plan.json
@@ -41,8 +43,6 @@ canic deploy promote inspect readiness --request promotion-readiness.json
 canic deploy promote inspect artifact-identity --request promotion-artifacts.json
 canic deploy promote inspect provenance --request promotion-provenance.json
 ```
-
-## [0.44.x] - 2026-05-25 - Artifact promotion
 
 - `0.44.11` digest-pins promotion readiness, transform evidence, and build
   materialization evidence, carrying materialization evidence digests through
