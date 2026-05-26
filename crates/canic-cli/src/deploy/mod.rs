@@ -13,12 +13,41 @@ use crate::{
 use canic_host::{
     canister_build::CanisterBuildProfile,
     deployment_truth::{
-        AuthorityDryRunEvidenceV1, DeploymentCheckV1, DeploymentReceiptV1, SafetyReportV1,
-        SafetyStatusV1, authority_dry_run_evidence_from_check_with_local_ids,
+        ArtifactPromotionExecutionReceiptRequest, ArtifactPromotionExecutionReceiptV1,
+        ArtifactPromotionPlanRequest, ArtifactPromotionPlanV1,
+        ArtifactPromotionProvenanceReportRequest, ArtifactPromotionProvenanceReportV1,
+        AuthorityDryRunEvidenceV1, BuildMaterializationEvidenceV1, DeploymentCheckV1,
+        DeploymentExecutionPreflightV1, DeploymentPlanV1, DeploymentReceiptV1,
+        PromotionArtifactIdentityReportRequest, PromotionArtifactIdentityReportV1,
+        PromotionMaterializationIdentityReportRequest, PromotionMaterializationIdentityReportV1,
+        PromotionPlanTransformEvidenceRequest, PromotionPlanTransformEvidenceV1,
+        PromotionPlanTransformRequest, PromotionPlanTransformV1,
+        PromotionPlanTransformWithMaterializationRequest, PromotionPolicyCheckRequest,
+        PromotionPolicyCheckV1, PromotionReadinessRequest, PromotionReadinessV1,
+        PromotionTargetExecutionLineageRequest, PromotionTargetExecutionLineageV1,
+        PromotionWasmStoreCatalogEntryV1, PromotionWasmStoreCatalogVerificationRequest,
+        PromotionWasmStoreCatalogVerificationV1, PromotionWasmStoreIdentityReportRequest,
+        PromotionWasmStoreIdentityReportV1, RolePromotionInputV1, RolePromotionPolicyV1,
+        SafetyReportV1, SafetyStatusV1, StagingReceiptV1, artifact_promotion_execution_receipt,
+        artifact_promotion_execution_receipt_text, artifact_promotion_plan,
+        artifact_promotion_plan_text, artifact_promotion_provenance_report,
+        artifact_promotion_provenance_report_text,
+        authority_dry_run_evidence_from_check_with_local_ids,
         authority_dry_run_receipt_from_check_with_local_id, authority_evidence_text,
         authority_plan_text, authority_receipt_text, authority_report_from_check_with_local_id,
-        authority_report_text, build_authority_reconciliation_plan,
-        compare_plan_inventory_and_receipt,
+        authority_report_text, build_authority_reconciliation_plan, check_promotion_policy,
+        check_promotion_readiness, compare_plan_inventory_and_receipt,
+        promoted_deployment_plan_transform_from_inputs,
+        promoted_deployment_plan_transform_from_inputs_with_materialization,
+        promotion_artifact_identity_report_from_inputs, promotion_artifact_identity_report_text,
+        promotion_materialization_identity_report_from_evidence,
+        promotion_materialization_identity_report_text, promotion_plan_transform_evidence,
+        promotion_plan_transform_evidence_text, promotion_plan_transform_text,
+        promotion_policy_check_text, promotion_readiness_text, promotion_target_execution_lineage,
+        promotion_target_execution_lineage_text, promotion_wasm_store_catalog_verification,
+        promotion_wasm_store_catalog_verification_text,
+        promotion_wasm_store_identity_report_from_staging,
+        promotion_wasm_store_identity_report_text,
     },
     icp_config::resolve_current_canic_icp_root,
     install_root::{
@@ -27,6 +56,8 @@ use canic_host::{
     },
 };
 use clap::Command as ClapCommand;
+use serde::Deserialize;
+use serde::de::DeserializeOwned;
 use std::{
     ffi::OsString,
     fs,
@@ -48,6 +79,12 @@ Examples:
   canic deploy authority evidence demo
   canic deploy authority report demo
   canic deploy authority receipt demo
+  canic deploy promote plan --request promotion-plan.json
+  canic deploy promote check --request promotion-check.json
+  canic deploy promote diff --request promotion-diff.json
+  canic deploy promote inspect readiness --request promotion-readiness.json
+  canic deploy promote inspect artifact-identity --request promotion-artifacts.json
+  canic deploy promote inspect provenance --request promotion-provenance.json
   canic deploy resume-report demo
   canic deploy resume-report --receipt receipt.json demo
   canic deploy check --profile fast demo
@@ -96,6 +133,143 @@ Examples:
 0.42 authority commands are dry-run reports. They do not apply controller
 changes. A successful command means the local authority artifact was produced,
 not that the deployment is globally safe or that controller state was changed.";
+const DEPLOY_PROMOTE_HELP_AFTER: &str = "\
+Examples:
+  canic deploy promote plan --request promotion-plan.json
+  canic deploy promote check --request promotion-check.json
+  canic deploy promote diff --request promotion-diff.json
+  canic deploy promote inspect readiness --request promotion-readiness.json
+  canic deploy promote inspect artifact-identity --request promotion-artifacts.json
+  canic deploy promote inspect provenance --request promotion-provenance.json
+  canic deploy promote inspect readiness --request promotion-readiness.json --format text
+
+0.44 promotion commands are passive report builders. They do not install,
+stage artifacts, query wasm_store, or mutate deployment/controller state.";
+const DEPLOY_PROMOTE_INSPECT_HELP_AFTER: &str = "\
+Examples:
+  canic deploy promote inspect readiness --request promotion-readiness.json
+  canic deploy promote inspect artifact-identity --request promotion-artifacts.json
+  canic deploy promote inspect transform --request promotion-transform.json
+  canic deploy promote inspect transform-evidence --request transform-evidence.json
+  canic deploy promote inspect target-lineage --request target-lineage.json
+  canic deploy promote inspect provenance --request promotion-provenance.json
+  canic deploy promote inspect wasm-store-identity --request wasm-store-identity.json
+  canic deploy promote inspect catalog-verification --request catalog-verification.json
+  canic deploy promote inspect materialization-identity --request materialization.json
+  canic deploy promote inspect policy --request promotion-policy.json
+  canic deploy promote inspect execution-receipt --request promotion-execution-receipt.json
+
+Advanced promotion inspection commands expose archived/passive artifact DTOs.
+They do not install, stage artifacts, query wasm_store, or mutate deployment or
+controller state.";
+const DEPLOY_PROMOTE_READINESS_HELP_AFTER: &str = "\
+Examples:
+  canic deploy promote inspect readiness --request promotion-readiness.json
+  canic deploy promote inspect readiness --request promotion-readiness.json --format text
+
+Reads a PromotionReadinessRequest-shaped JSON file and prints
+PromotionReadinessV1 JSON by default, or passive text with --format text.";
+const DEPLOY_PROMOTE_CHECK_HELP_AFTER: &str = "\
+Examples:
+  canic deploy promote check --request promotion-check.json
+  canic deploy promote check --request promotion-check.json --format text
+
+Reads a PromotionReadinessRequest-shaped JSON file and prints a passive
+PromotionReadinessV1 check report by default, or passive text with
+--format text.";
+const DEPLOY_PROMOTE_ARTIFACT_IDENTITY_HELP_AFTER: &str = "\
+Examples:
+  canic deploy promote inspect artifact-identity --request promotion-artifacts.json
+  canic deploy promote inspect artifact-identity --request promotion-artifacts.json --format text
+
+Reads a PromotionArtifactIdentityReportRequest-shaped JSON file and prints
+PromotionArtifactIdentityReportV1 JSON by default, or passive text with
+--format text.";
+const DEPLOY_PROMOTE_TRANSFORM_HELP_AFTER: &str = "\
+Examples:
+  canic deploy promote inspect transform --request promotion-transform.json
+  canic deploy promote inspect transform --request promotion-transform.json --format text
+
+Reads a PromotionPlanTransformRequest-shaped JSON file and prints
+PromotionPlanTransformV1 JSON by default, or passive text with --format text.";
+const DEPLOY_PROMOTE_DIFF_HELP_AFTER: &str = "\
+Examples:
+  canic deploy promote diff --request promotion-diff.json
+  canic deploy promote diff --request promotion-diff.json --format text
+
+Reads a PromotionPlanTransformRequest-shaped JSON file and prints a passive
+PromotionPlanTransformV1 diff report by default, or passive text with
+--format text.";
+const DEPLOY_PROMOTE_TRANSFORM_EVIDENCE_HELP_AFTER: &str = "\
+Examples:
+  canic deploy promote inspect transform-evidence --request transform-evidence.json
+  canic deploy promote inspect transform-evidence --request transform-evidence.json --format text
+
+Reads a PromotionPlanTransformEvidenceRequest-shaped JSON file and prints
+PromotionPlanTransformEvidenceV1 JSON by default, or passive text with
+--format text.";
+const DEPLOY_PROMOTE_TARGET_LINEAGE_HELP_AFTER: &str = "\
+Examples:
+  canic deploy promote inspect target-lineage --request target-lineage.json
+  canic deploy promote inspect target-lineage --request target-lineage.json --format text
+
+Reads a PromotionTargetExecutionLineageRequest-shaped JSON file and prints
+PromotionTargetExecutionLineageV1 JSON by default, or passive text with
+--format text.";
+const DEPLOY_PROMOTE_PLAN_HELP_AFTER: &str = "\
+Examples:
+  canic deploy promote plan --request promotion-plan.json
+  canic deploy promote plan --request promotion-plan.json --format text
+
+Reads an ArtifactPromotionPlanRequest-shaped JSON file and prints
+ArtifactPromotionPlanV1 JSON by default, or passive text with --format text.";
+const DEPLOY_PROMOTE_PROVENANCE_HELP_AFTER: &str = "\
+Examples:
+  canic deploy promote inspect provenance --request promotion-provenance.json
+  canic deploy promote inspect provenance --request promotion-provenance.json --format text
+
+Reads an ArtifactPromotionProvenanceReportRequest-shaped JSON file and prints
+ArtifactPromotionProvenanceReportV1 JSON by default, or passive text with
+--format text.";
+const DEPLOY_PROMOTE_WASM_STORE_IDENTITY_HELP_AFTER: &str = "\
+Examples:
+  canic deploy promote inspect wasm-store-identity --request wasm-store-identity.json
+  canic deploy promote inspect wasm-store-identity --request wasm-store-identity.json --format text
+
+Reads a PromotionWasmStoreIdentityReportRequest-shaped JSON file and prints
+PromotionWasmStoreIdentityReportV1 JSON by default, or passive text with
+--format text.";
+const DEPLOY_PROMOTE_CATALOG_VERIFICATION_HELP_AFTER: &str = "\
+Examples:
+  canic deploy promote inspect catalog-verification --request catalog-verification.json
+  canic deploy promote inspect catalog-verification --request catalog-verification.json --format text
+
+Reads a PromotionWasmStoreCatalogVerificationRequest-shaped JSON file and
+prints PromotionWasmStoreCatalogVerificationV1 JSON by default, or passive
+text with --format text.";
+const DEPLOY_PROMOTE_EXECUTION_RECEIPT_HELP_AFTER: &str = "\
+Examples:
+  canic deploy promote inspect execution-receipt --request promotion-execution-receipt.json
+  canic deploy promote inspect execution-receipt --request promotion-execution-receipt.json --format text
+
+Reads an ArtifactPromotionExecutionReceiptRequest-shaped JSON file and prints
+ArtifactPromotionExecutionReceiptV1 JSON by default, or passive text with
+--format text.";
+const DEPLOY_PROMOTE_POLICY_CHECK_HELP_AFTER: &str = "\
+Examples:
+  canic deploy promote inspect policy --request promotion-policy.json
+  canic deploy promote inspect policy --request promotion-policy.json --format text
+
+Reads a PromotionPolicyCheckRequest-shaped JSON file and prints
+PromotionPolicyCheckV1 JSON by default, or passive text with --format text.";
+const DEPLOY_PROMOTE_MATERIALIZATION_IDENTITY_HELP_AFTER: &str = "\
+Examples:
+  canic deploy promote inspect materialization-identity --request materialization.json
+  canic deploy promote inspect materialization-identity --request materialization.json --format text
+
+Reads a PromotionMaterializationIdentityReportRequest-shaped JSON file and
+prints PromotionMaterializationIdentityReportV1 JSON by default, or passive
+text with --format text.";
 const DEPLOY_AUTHORITY_EVIDENCE_HELP_AFTER: &str = "\
 Examples:
   canic deploy authority evidence demo
@@ -189,12 +363,118 @@ struct DeployAuthorityOptions {
 }
 
 ///
+/// DeployPromoteReportOptions
+///
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct DeployPromoteReportOptions {
+    request: PathBuf,
+    format: PromotionOutputFormat,
+}
+
+///
 /// AuthorityOutputFormat
 ///
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum AuthorityOutputFormat {
     Json,
     Text,
+}
+
+///
+/// PromotionOutputFormat
+///
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum PromotionOutputFormat {
+    Json,
+    Text,
+}
+
+#[derive(Deserialize)]
+struct PromotionReadinessFile {
+    readiness_id: String,
+    target_plan: DeploymentPlanV1,
+    inputs: Vec<RolePromotionInputV1>,
+}
+
+#[derive(Deserialize)]
+struct PromotionArtifactIdentityFile {
+    report_id: String,
+    inputs: Vec<RolePromotionInputV1>,
+}
+
+#[derive(Deserialize)]
+struct PromotionPlanTransformFile {
+    promoted_plan_id: String,
+    target_plan: DeploymentPlanV1,
+    inputs: Vec<RolePromotionInputV1>,
+    materialization_evidence: Option<Vec<BuildMaterializationEvidenceV1>>,
+}
+
+#[derive(Deserialize)]
+struct PromotionPlanTransformEvidenceFile {
+    evidence_id: String,
+    generated_at: String,
+    transform: PromotionPlanTransformV1,
+}
+
+#[derive(Deserialize)]
+struct PromotionTargetExecutionLineageFile {
+    lineage_id: String,
+    generated_at: String,
+    transform: PromotionPlanTransformV1,
+    execution_preflight: DeploymentExecutionPreflightV1,
+}
+
+#[derive(Deserialize)]
+struct ArtifactPromotionPlanFile {
+    plan_id: String,
+    generated_at: String,
+    readiness: PromotionReadinessV1,
+    artifact_identity_report: PromotionArtifactIdentityReportV1,
+    transform: PromotionPlanTransformV1,
+    target_execution_lineage: Option<PromotionTargetExecutionLineageV1>,
+}
+
+#[derive(Deserialize)]
+struct ArtifactPromotionProvenanceFile {
+    report_id: String,
+    artifact_promotion_plan: ArtifactPromotionPlanV1,
+    wasm_store_identity_report: Option<PromotionWasmStoreIdentityReportV1>,
+    wasm_store_catalog_verification: Option<PromotionWasmStoreCatalogVerificationV1>,
+    materialization_identity_report: Option<PromotionMaterializationIdentityReportV1>,
+}
+
+#[derive(Deserialize)]
+struct PromotionWasmStoreIdentityFile {
+    report_id: String,
+    staging_receipts: Vec<StagingReceiptV1>,
+}
+
+#[derive(Deserialize)]
+struct PromotionWasmStoreCatalogVerificationFile {
+    verification_id: String,
+    wasm_store_identity_report: PromotionWasmStoreIdentityReportV1,
+    catalog_entries: Vec<PromotionWasmStoreCatalogEntryV1>,
+}
+
+#[derive(Deserialize)]
+struct ArtifactPromotionExecutionReceiptFile {
+    receipt_id: String,
+    provenance_report: ArtifactPromotionProvenanceReportV1,
+    deployment_receipt: DeploymentReceiptV1,
+}
+
+#[derive(Deserialize)]
+struct PromotionPolicyCheckFile {
+    check_id: String,
+    inputs: Vec<RolePromotionInputV1>,
+    policies: Vec<RolePromotionPolicyV1>,
+}
+
+#[derive(Deserialize)]
+struct PromotionMaterializationIdentityFile {
+    report_id: String,
+    evidence: Vec<BuildMaterializationEvidenceV1>,
 }
 
 pub fn run<I>(args: I) -> Result<(), DeployCommandError>
@@ -215,6 +495,7 @@ where
         }
         Some((command, args)) => match command.as_str() {
             "authority" => run_authority(args),
+            "promote" => run_promote(args),
             "plan" => run_plan(args),
             "inventory" => run_inventory(args),
             "diff" => run_diff(args),
@@ -224,6 +505,429 @@ where
             _ => unreachable!("deploy dispatch command only defines known commands"),
         },
     }
+}
+
+fn run_promote<I>(args: I) -> Result<(), DeployCommandError>
+where
+    I: IntoIterator<Item = OsString>,
+{
+    let args = args.into_iter().collect::<Vec<_>>();
+    if print_help_or_version(&args, promote_usage, version_text()) {
+        return Ok(());
+    }
+
+    match parse_subcommand(deploy_promote_command(), args)
+        .map_err(|_| DeployCommandError::Usage(promote_usage()))?
+    {
+        Some((command, args)) if command == "inspect" => run_promote_inspect(args),
+        Some((command, args)) if command == "plan" => run_promote_plan(args),
+        Some((command, args)) if command == "check" => run_promote_check(args),
+        Some((command, args)) if command == "diff" => run_promote_diff(args),
+        _ => {
+            println!("{}", promote_usage());
+            Ok(())
+        }
+    }
+}
+
+fn run_promote_inspect<I>(args: I) -> Result<(), DeployCommandError>
+where
+    I: IntoIterator<Item = OsString>,
+{
+    let args = args.into_iter().collect::<Vec<_>>();
+    if print_help_or_version(&args, promote_inspect_usage, version_text()) {
+        return Ok(());
+    }
+
+    match parse_subcommand(deploy_promote_inspect_command(), args)
+        .map_err(|_| DeployCommandError::Usage(promote_inspect_usage()))?
+    {
+        Some((command, args)) if command == "readiness" => run_promote_readiness(args),
+        Some((command, args)) if command == "artifact-identity" => {
+            run_promote_artifact_identity(args)
+        }
+        Some((command, args)) if command == "transform" => run_promote_transform(args),
+        Some((command, args)) if command == "transform-evidence" => {
+            run_promote_transform_evidence(args)
+        }
+        Some((command, args)) if command == "target-lineage" => run_promote_target_lineage(args),
+        Some((command, args)) if command == "provenance" => run_promote_provenance(args),
+        Some((command, args)) if command == "wasm-store-identity" => {
+            run_promote_wasm_store_identity(args)
+        }
+        Some((command, args)) if command == "catalog-verification" => {
+            run_promote_catalog_verification(args)
+        }
+        Some((command, args)) if command == "execution-receipt" => {
+            run_promote_execution_receipt(args)
+        }
+        Some((command, args)) if command == "policy" => run_promote_policy_check(args),
+        Some((command, args)) if command == "materialization-identity" => {
+            run_promote_materialization_identity(args)
+        }
+        _ => {
+            println!("{}", promote_inspect_usage());
+            Ok(())
+        }
+    }
+}
+
+fn run_promote_readiness<I>(args: I) -> Result<(), DeployCommandError>
+where
+    I: IntoIterator<Item = OsString>,
+{
+    run_promote_output(
+        args,
+        deploy_promote_readiness_command,
+        promote_readiness_usage,
+        build_promotion_readiness,
+        promotion_readiness_text,
+    )
+}
+
+fn run_promote_check<I>(args: I) -> Result<(), DeployCommandError>
+where
+    I: IntoIterator<Item = OsString>,
+{
+    run_promote_output(
+        args,
+        deploy_promote_check_command,
+        promote_check_usage,
+        build_promotion_readiness,
+        promotion_readiness_text,
+    )
+}
+
+fn run_promote_artifact_identity<I>(args: I) -> Result<(), DeployCommandError>
+where
+    I: IntoIterator<Item = OsString>,
+{
+    run_promote_output(
+        args,
+        deploy_promote_artifact_identity_command,
+        promote_artifact_identity_usage,
+        build_promotion_artifact_identity_report,
+        promotion_artifact_identity_report_text,
+    )
+}
+
+fn run_promote_transform<I>(args: I) -> Result<(), DeployCommandError>
+where
+    I: IntoIterator<Item = OsString>,
+{
+    run_promote_output(
+        args,
+        deploy_promote_transform_command,
+        promote_transform_usage,
+        build_promotion_plan_transform,
+        promotion_plan_transform_text,
+    )
+}
+
+fn run_promote_diff<I>(args: I) -> Result<(), DeployCommandError>
+where
+    I: IntoIterator<Item = OsString>,
+{
+    run_promote_output(
+        args,
+        deploy_promote_diff_command,
+        promote_diff_usage,
+        build_promotion_plan_transform,
+        promotion_plan_transform_text,
+    )
+}
+
+fn run_promote_transform_evidence<I>(args: I) -> Result<(), DeployCommandError>
+where
+    I: IntoIterator<Item = OsString>,
+{
+    run_promote_output(
+        args,
+        deploy_promote_transform_evidence_command,
+        promote_transform_evidence_usage,
+        build_promotion_plan_transform_evidence,
+        promotion_plan_transform_evidence_text,
+    )
+}
+
+fn run_promote_target_lineage<I>(args: I) -> Result<(), DeployCommandError>
+where
+    I: IntoIterator<Item = OsString>,
+{
+    run_promote_output(
+        args,
+        deploy_promote_target_lineage_command,
+        promote_target_lineage_usage,
+        build_promotion_target_execution_lineage,
+        promotion_target_execution_lineage_text,
+    )
+}
+
+fn run_promote_plan<I>(args: I) -> Result<(), DeployCommandError>
+where
+    I: IntoIterator<Item = OsString>,
+{
+    run_promote_output(
+        args,
+        deploy_promote_plan_command,
+        promote_plan_usage,
+        build_artifact_promotion_plan,
+        artifact_promotion_plan_text,
+    )
+}
+
+fn run_promote_provenance<I>(args: I) -> Result<(), DeployCommandError>
+where
+    I: IntoIterator<Item = OsString>,
+{
+    run_promote_output(
+        args,
+        deploy_promote_provenance_command,
+        promote_provenance_usage,
+        build_artifact_promotion_provenance_report,
+        artifact_promotion_provenance_report_text,
+    )
+}
+
+fn run_promote_wasm_store_identity<I>(args: I) -> Result<(), DeployCommandError>
+where
+    I: IntoIterator<Item = OsString>,
+{
+    run_promote_output(
+        args,
+        deploy_promote_wasm_store_identity_command,
+        promote_wasm_store_identity_usage,
+        build_promotion_wasm_store_identity_report,
+        promotion_wasm_store_identity_report_text,
+    )
+}
+
+fn run_promote_catalog_verification<I>(args: I) -> Result<(), DeployCommandError>
+where
+    I: IntoIterator<Item = OsString>,
+{
+    run_promote_output(
+        args,
+        deploy_promote_catalog_verification_command,
+        promote_catalog_verification_usage,
+        build_promotion_wasm_store_catalog_verification,
+        promotion_wasm_store_catalog_verification_text,
+    )
+}
+
+fn run_promote_execution_receipt<I>(args: I) -> Result<(), DeployCommandError>
+where
+    I: IntoIterator<Item = OsString>,
+{
+    run_promote_output(
+        args,
+        deploy_promote_execution_receipt_command,
+        promote_execution_receipt_usage,
+        build_artifact_promotion_execution_receipt,
+        artifact_promotion_execution_receipt_text,
+    )
+}
+
+fn run_promote_policy_check<I>(args: I) -> Result<(), DeployCommandError>
+where
+    I: IntoIterator<Item = OsString>,
+{
+    run_promote_output(
+        args,
+        deploy_promote_policy_check_command,
+        promote_policy_check_usage,
+        build_promotion_policy_check,
+        promotion_policy_check_text,
+    )
+}
+
+fn run_promote_materialization_identity<I>(args: I) -> Result<(), DeployCommandError>
+where
+    I: IntoIterator<Item = OsString>,
+{
+    run_promote_output(
+        args,
+        deploy_promote_materialization_identity_command,
+        promote_materialization_identity_usage,
+        build_promotion_materialization_identity_report,
+        promotion_materialization_identity_report_text,
+    )
+}
+
+fn run_promote_output<I, T, R>(
+    args: I,
+    command: impl FnOnce() -> ClapCommand,
+    usage: fn() -> String,
+    build: impl FnOnce(R) -> Result<T, DeployCommandError>,
+    render_text: impl FnOnce(&T) -> String,
+) -> Result<(), DeployCommandError>
+where
+    I: IntoIterator<Item = OsString>,
+    T: serde::Serialize,
+    R: DeserializeOwned,
+{
+    let args = args.into_iter().collect::<Vec<_>>();
+    if print_help_or_version(&args, usage, version_text()) {
+        return Ok(());
+    }
+
+    let options = DeployPromoteReportOptions::parse(args, command, usage)?;
+    let request = read_json_file::<R>(&options.request)?;
+    let output = build(request)?;
+    match options.format {
+        PromotionOutputFormat::Json => print_json(&output)?,
+        PromotionOutputFormat::Text => println!("{}", render_text(&output)),
+    }
+    Ok(())
+}
+
+fn build_promotion_readiness(
+    request: PromotionReadinessFile,
+) -> Result<PromotionReadinessV1, DeployCommandError> {
+    check_promotion_readiness(&PromotionReadinessRequest {
+        readiness_id: request.readiness_id,
+        target_plan: request.target_plan,
+        inputs: request.inputs,
+    })
+    .map_err(|err| DeployCommandError::Check(Box::new(err)))
+}
+
+fn build_promotion_artifact_identity_report(
+    request: PromotionArtifactIdentityFile,
+) -> Result<PromotionArtifactIdentityReportV1, DeployCommandError> {
+    promotion_artifact_identity_report_from_inputs(PromotionArtifactIdentityReportRequest {
+        report_id: request.report_id,
+        inputs: request.inputs,
+    })
+    .map_err(|err| DeployCommandError::Check(Box::new(err)))
+}
+
+fn build_promotion_plan_transform(
+    request: PromotionPlanTransformFile,
+) -> Result<PromotionPlanTransformV1, DeployCommandError> {
+    if let Some(materialization_evidence) = request.materialization_evidence {
+        return promoted_deployment_plan_transform_from_inputs_with_materialization(
+            &PromotionPlanTransformWithMaterializationRequest {
+                promoted_plan_id: request.promoted_plan_id,
+                target_plan: request.target_plan,
+                inputs: request.inputs,
+                materialization_evidence,
+            },
+        )
+        .map_err(|err| DeployCommandError::Check(Box::new(err)));
+    }
+
+    promoted_deployment_plan_transform_from_inputs(&PromotionPlanTransformRequest {
+        promoted_plan_id: request.promoted_plan_id,
+        target_plan: request.target_plan,
+        inputs: request.inputs,
+    })
+    .map_err(|err| DeployCommandError::Check(Box::new(err)))
+}
+
+fn build_promotion_plan_transform_evidence(
+    request: PromotionPlanTransformEvidenceFile,
+) -> Result<PromotionPlanTransformEvidenceV1, DeployCommandError> {
+    promotion_plan_transform_evidence(PromotionPlanTransformEvidenceRequest {
+        evidence_id: request.evidence_id,
+        generated_at: request.generated_at,
+        transform: request.transform,
+    })
+    .map_err(|err| DeployCommandError::Check(Box::new(err)))
+}
+
+fn build_promotion_target_execution_lineage(
+    request: PromotionTargetExecutionLineageFile,
+) -> Result<PromotionTargetExecutionLineageV1, DeployCommandError> {
+    promotion_target_execution_lineage(PromotionTargetExecutionLineageRequest {
+        lineage_id: request.lineage_id,
+        generated_at: request.generated_at,
+        transform: request.transform,
+        execution_preflight: request.execution_preflight,
+    })
+    .map_err(|err| DeployCommandError::Check(Box::new(err)))
+}
+
+fn build_artifact_promotion_plan(
+    request: ArtifactPromotionPlanFile,
+) -> Result<ArtifactPromotionPlanV1, DeployCommandError> {
+    artifact_promotion_plan(ArtifactPromotionPlanRequest {
+        plan_id: request.plan_id,
+        generated_at: request.generated_at,
+        readiness: request.readiness,
+        artifact_identity_report: request.artifact_identity_report,
+        transform: request.transform,
+        target_execution_lineage: request.target_execution_lineage,
+    })
+    .map_err(|err| DeployCommandError::Check(Box::new(err)))
+}
+
+fn build_artifact_promotion_provenance_report(
+    request: ArtifactPromotionProvenanceFile,
+) -> Result<ArtifactPromotionProvenanceReportV1, DeployCommandError> {
+    artifact_promotion_provenance_report(ArtifactPromotionProvenanceReportRequest {
+        report_id: request.report_id,
+        artifact_promotion_plan: request.artifact_promotion_plan,
+        wasm_store_identity_report: request.wasm_store_identity_report,
+        wasm_store_catalog_verification: request.wasm_store_catalog_verification,
+        materialization_identity_report: request.materialization_identity_report,
+    })
+    .map_err(|err| DeployCommandError::Check(Box::new(err)))
+}
+
+fn build_promotion_wasm_store_identity_report(
+    request: PromotionWasmStoreIdentityFile,
+) -> Result<PromotionWasmStoreIdentityReportV1, DeployCommandError> {
+    promotion_wasm_store_identity_report_from_staging(PromotionWasmStoreIdentityReportRequest {
+        report_id: request.report_id,
+        staging_receipts: request.staging_receipts,
+    })
+    .map_err(|err| DeployCommandError::Check(Box::new(err)))
+}
+
+fn build_promotion_wasm_store_catalog_verification(
+    request: PromotionWasmStoreCatalogVerificationFile,
+) -> Result<PromotionWasmStoreCatalogVerificationV1, DeployCommandError> {
+    promotion_wasm_store_catalog_verification(PromotionWasmStoreCatalogVerificationRequest {
+        verification_id: request.verification_id,
+        wasm_store_identity_report: request.wasm_store_identity_report,
+        catalog_entries: request.catalog_entries,
+    })
+    .map_err(|err| DeployCommandError::Check(Box::new(err)))
+}
+
+fn build_artifact_promotion_execution_receipt(
+    request: ArtifactPromotionExecutionReceiptFile,
+) -> Result<ArtifactPromotionExecutionReceiptV1, DeployCommandError> {
+    artifact_promotion_execution_receipt(ArtifactPromotionExecutionReceiptRequest {
+        receipt_id: request.receipt_id,
+        provenance_report: request.provenance_report,
+        deployment_receipt: request.deployment_receipt,
+    })
+    .map_err(|err| DeployCommandError::Check(Box::new(err)))
+}
+
+fn build_promotion_policy_check(
+    request: PromotionPolicyCheckFile,
+) -> Result<PromotionPolicyCheckV1, DeployCommandError> {
+    check_promotion_policy(PromotionPolicyCheckRequest {
+        check_id: request.check_id,
+        inputs: request.inputs,
+        policies: request.policies,
+    })
+    .map_err(|err| DeployCommandError::Check(Box::new(err)))
+}
+
+fn build_promotion_materialization_identity_report(
+    request: PromotionMaterializationIdentityFile,
+) -> Result<PromotionMaterializationIdentityReportV1, DeployCommandError> {
+    promotion_materialization_identity_report_from_evidence(
+        PromotionMaterializationIdentityReportRequest {
+            report_id: request.report_id,
+            evidence: request.evidence,
+        },
+    )
+    .map_err(|err| DeployCommandError::Check(Box::new(err)))
 }
 
 fn run_authority<I>(args: I) -> Result<(), DeployCommandError>
@@ -472,6 +1176,13 @@ where
 }
 
 fn read_deployment_receipt(path: &PathBuf) -> Result<DeploymentReceiptV1, DeployCommandError> {
+    read_json_file(path)
+}
+
+fn read_json_file<T>(path: &PathBuf) -> Result<T, DeployCommandError>
+where
+    T: DeserializeOwned,
+{
     let bytes = fs::read(path).map_err(Box::<dyn std::error::Error>::from)?;
     serde_json::from_slice(&bytes)
         .map_err(Box::<dyn std::error::Error>::from)
@@ -551,6 +1262,27 @@ impl DeployAuthorityOptions {
     }
 }
 
+impl DeployPromoteReportOptions {
+    fn parse<I>(
+        args: I,
+        command: impl FnOnce() -> ClapCommand,
+        usage: fn() -> String,
+    ) -> Result<Self, DeployCommandError>
+    where
+        I: IntoIterator<Item = OsString>,
+    {
+        let matches =
+            parse_matches(command(), args).map_err(|_| DeployCommandError::Usage(usage()))?;
+        Ok(Self {
+            request: path_option(&matches, "request").expect("clap requires request"),
+            format: parse_promotion_output_format(
+                string_option(&matches, "format").as_deref(),
+                usage,
+            )?,
+        })
+    }
+}
+
 impl DeployTruthOptions {
     fn parse<I>(
         args: I,
@@ -608,6 +1340,11 @@ fn deploy_command() -> ClapCommand {
                 .disable_help_flag(true),
         ))
         .subcommand(passthrough_subcommand(
+            ClapCommand::new("promote")
+                .about("Build passive artifact promotion reports")
+                .disable_help_flag(true),
+        ))
+        .subcommand(passthrough_subcommand(
             ClapCommand::new("check")
                 .about("Print the local deployment truth check JSON")
                 .disable_help_flag(true),
@@ -638,6 +1375,242 @@ fn deploy_command() -> ClapCommand {
                 .disable_help_flag(true),
         ))
         .after_help(DEPLOY_HELP_AFTER)
+}
+
+fn deploy_promote_command() -> ClapCommand {
+    ClapCommand::new("promote")
+        .bin_name("canic deploy promote")
+        .about("Build passive artifact promotion reports")
+        .disable_help_flag(true)
+        .subcommand(passthrough_subcommand(
+            ClapCommand::new("plan")
+                .about("Build a passive artifact promotion plan")
+                .disable_help_flag(true),
+        ))
+        .subcommand(passthrough_subcommand(
+            ClapCommand::new("check")
+                .about("Build a passive artifact promotion readiness check")
+                .disable_help_flag(true),
+        ))
+        .subcommand(passthrough_subcommand(
+            ClapCommand::new("diff")
+                .about("Build a passive artifact promotion diff")
+                .disable_help_flag(true),
+        ))
+        .subcommand(passthrough_subcommand(
+            ClapCommand::new("inspect")
+                .about("Inspect passive artifact promotion internals")
+                .disable_help_flag(true),
+        ))
+        .after_help(DEPLOY_PROMOTE_HELP_AFTER)
+}
+
+fn deploy_promote_inspect_command() -> ClapCommand {
+    ClapCommand::new("inspect")
+        .bin_name("canic deploy promote inspect")
+        .about("Inspect passive artifact promotion internals")
+        .disable_help_flag(true)
+        .subcommand(passthrough_subcommand(
+            ClapCommand::new("readiness")
+                .about("Build a passive promotion readiness report")
+                .disable_help_flag(true),
+        ))
+        .subcommand(passthrough_subcommand(
+            ClapCommand::new("artifact-identity")
+                .about("Build a passive promotion artifact identity report")
+                .disable_help_flag(true),
+        ))
+        .subcommand(passthrough_subcommand(
+            ClapCommand::new("transform")
+                .about("Build a passive promoted-plan transform")
+                .disable_help_flag(true),
+        ))
+        .subcommand(passthrough_subcommand(
+            ClapCommand::new("transform-evidence")
+                .about("Build passive promoted-plan transform evidence")
+                .disable_help_flag(true),
+        ))
+        .subcommand(passthrough_subcommand(
+            ClapCommand::new("target-lineage")
+                .about("Build passive target execution lineage")
+                .disable_help_flag(true),
+        ))
+        .subcommand(passthrough_subcommand(
+            ClapCommand::new("provenance")
+                .about("Build a passive artifact promotion provenance report")
+                .disable_help_flag(true),
+        ))
+        .subcommand(passthrough_subcommand(
+            ClapCommand::new("wasm-store-identity")
+                .about("Build a passive wasm-store identity report")
+                .disable_help_flag(true),
+        ))
+        .subcommand(passthrough_subcommand(
+            ClapCommand::new("catalog-verification")
+                .about("Build a passive wasm-store catalog verification report")
+                .disable_help_flag(true),
+        ))
+        .subcommand(passthrough_subcommand(
+            ClapCommand::new("execution-receipt")
+                .about("Build a passive artifact promotion execution receipt wrapper")
+                .disable_help_flag(true),
+        ))
+        .subcommand(passthrough_subcommand(
+            ClapCommand::new("policy")
+                .about("Build a passive promotion policy check")
+                .disable_help_flag(true),
+        ))
+        .subcommand(passthrough_subcommand(
+            ClapCommand::new("materialization-identity")
+                .about("Build a passive source/build materialization identity report")
+                .disable_help_flag(true),
+        ))
+        .after_help(DEPLOY_PROMOTE_INSPECT_HELP_AFTER)
+}
+
+fn deploy_promote_readiness_command() -> ClapCommand {
+    deploy_promote_report_command(
+        "readiness",
+        "Build a passive promotion readiness report",
+        "canic deploy promote inspect readiness",
+    )
+    .after_help(DEPLOY_PROMOTE_READINESS_HELP_AFTER)
+}
+
+fn deploy_promote_check_command() -> ClapCommand {
+    deploy_promote_report_command(
+        "check",
+        "Build a passive artifact promotion readiness check",
+        "canic deploy promote check",
+    )
+    .after_help(DEPLOY_PROMOTE_CHECK_HELP_AFTER)
+}
+
+fn deploy_promote_artifact_identity_command() -> ClapCommand {
+    deploy_promote_report_command(
+        "artifact-identity",
+        "Build a passive promotion artifact identity report",
+        "canic deploy promote inspect artifact-identity",
+    )
+    .after_help(DEPLOY_PROMOTE_ARTIFACT_IDENTITY_HELP_AFTER)
+}
+
+fn deploy_promote_transform_command() -> ClapCommand {
+    deploy_promote_report_command(
+        "transform",
+        "Build a passive promoted-plan transform",
+        "canic deploy promote inspect transform",
+    )
+    .after_help(DEPLOY_PROMOTE_TRANSFORM_HELP_AFTER)
+}
+
+fn deploy_promote_diff_command() -> ClapCommand {
+    deploy_promote_report_command(
+        "diff",
+        "Build a passive artifact promotion diff",
+        "canic deploy promote diff",
+    )
+    .after_help(DEPLOY_PROMOTE_DIFF_HELP_AFTER)
+}
+
+fn deploy_promote_transform_evidence_command() -> ClapCommand {
+    deploy_promote_report_command(
+        "transform-evidence",
+        "Build passive promoted-plan transform evidence",
+        "canic deploy promote inspect transform-evidence",
+    )
+    .after_help(DEPLOY_PROMOTE_TRANSFORM_EVIDENCE_HELP_AFTER)
+}
+
+fn deploy_promote_target_lineage_command() -> ClapCommand {
+    deploy_promote_report_command(
+        "target-lineage",
+        "Build passive target execution lineage",
+        "canic deploy promote inspect target-lineage",
+    )
+    .after_help(DEPLOY_PROMOTE_TARGET_LINEAGE_HELP_AFTER)
+}
+
+fn deploy_promote_plan_command() -> ClapCommand {
+    deploy_promote_report_command(
+        "plan",
+        "Build a passive artifact promotion plan",
+        "canic deploy promote plan",
+    )
+    .after_help(DEPLOY_PROMOTE_PLAN_HELP_AFTER)
+}
+
+fn deploy_promote_provenance_command() -> ClapCommand {
+    deploy_promote_report_command(
+        "provenance",
+        "Build a passive artifact promotion provenance report",
+        "canic deploy promote inspect provenance",
+    )
+    .after_help(DEPLOY_PROMOTE_PROVENANCE_HELP_AFTER)
+}
+
+fn deploy_promote_wasm_store_identity_command() -> ClapCommand {
+    deploy_promote_report_command(
+        "wasm-store-identity",
+        "Build a passive wasm-store identity report",
+        "canic deploy promote inspect wasm-store-identity",
+    )
+    .after_help(DEPLOY_PROMOTE_WASM_STORE_IDENTITY_HELP_AFTER)
+}
+
+fn deploy_promote_catalog_verification_command() -> ClapCommand {
+    deploy_promote_report_command(
+        "catalog-verification",
+        "Build a passive wasm-store catalog verification report",
+        "canic deploy promote inspect catalog-verification",
+    )
+    .after_help(DEPLOY_PROMOTE_CATALOG_VERIFICATION_HELP_AFTER)
+}
+
+fn deploy_promote_execution_receipt_command() -> ClapCommand {
+    deploy_promote_report_command(
+        "execution-receipt",
+        "Build a passive artifact promotion execution receipt wrapper",
+        "canic deploy promote inspect execution-receipt",
+    )
+    .after_help(DEPLOY_PROMOTE_EXECUTION_RECEIPT_HELP_AFTER)
+}
+
+fn deploy_promote_policy_check_command() -> ClapCommand {
+    deploy_promote_report_command(
+        "policy",
+        "Build a passive promotion policy check",
+        "canic deploy promote inspect policy",
+    )
+    .after_help(DEPLOY_PROMOTE_POLICY_CHECK_HELP_AFTER)
+}
+
+fn deploy_promote_materialization_identity_command() -> ClapCommand {
+    deploy_promote_report_command(
+        "materialization-identity",
+        "Build a passive source/build materialization identity report",
+        "canic deploy promote inspect materialization-identity",
+    )
+    .after_help(DEPLOY_PROMOTE_MATERIALIZATION_IDENTITY_HELP_AFTER)
+}
+
+fn deploy_promote_report_command(
+    name: &'static str,
+    about: &'static str,
+    bin_name: &'static str,
+) -> ClapCommand {
+    ClapCommand::new(name)
+        .bin_name(bin_name)
+        .about(about)
+        .disable_help_flag(true)
+        .arg(
+            value_arg("request")
+                .long("request")
+                .value_name("file")
+                .required(true)
+                .help("Request JSON file for the passive promotion report"),
+        )
+        .arg(promotion_format_arg())
 }
 
 fn deploy_authority_command() -> ClapCommand {
@@ -764,6 +1737,14 @@ fn authority_format_arg() -> clap::Arg {
         .help("Output format; defaults to json")
 }
 
+fn promotion_format_arg() -> clap::Arg {
+    value_arg("format")
+        .long("format")
+        .value_name("json|text")
+        .num_args(1)
+        .help("Output format; defaults to json")
+}
+
 fn usage() -> String {
     let mut command = deploy_command();
     command.render_help().to_string()
@@ -791,6 +1772,86 @@ fn report_usage() -> String {
 
 fn check_usage() -> String {
     let mut command = deploy_check_command();
+    command.render_help().to_string()
+}
+
+fn promote_usage() -> String {
+    let mut command = deploy_promote_command();
+    command.render_help().to_string()
+}
+
+fn promote_inspect_usage() -> String {
+    let mut command = deploy_promote_inspect_command();
+    command.render_help().to_string()
+}
+
+fn promote_readiness_usage() -> String {
+    let mut command = deploy_promote_readiness_command();
+    command.render_help().to_string()
+}
+
+fn promote_check_usage() -> String {
+    let mut command = deploy_promote_check_command();
+    command.render_help().to_string()
+}
+
+fn promote_artifact_identity_usage() -> String {
+    let mut command = deploy_promote_artifact_identity_command();
+    command.render_help().to_string()
+}
+
+fn promote_transform_usage() -> String {
+    let mut command = deploy_promote_transform_command();
+    command.render_help().to_string()
+}
+
+fn promote_diff_usage() -> String {
+    let mut command = deploy_promote_diff_command();
+    command.render_help().to_string()
+}
+
+fn promote_transform_evidence_usage() -> String {
+    let mut command = deploy_promote_transform_evidence_command();
+    command.render_help().to_string()
+}
+
+fn promote_target_lineage_usage() -> String {
+    let mut command = deploy_promote_target_lineage_command();
+    command.render_help().to_string()
+}
+
+fn promote_plan_usage() -> String {
+    let mut command = deploy_promote_plan_command();
+    command.render_help().to_string()
+}
+
+fn promote_provenance_usage() -> String {
+    let mut command = deploy_promote_provenance_command();
+    command.render_help().to_string()
+}
+
+fn promote_wasm_store_identity_usage() -> String {
+    let mut command = deploy_promote_wasm_store_identity_command();
+    command.render_help().to_string()
+}
+
+fn promote_catalog_verification_usage() -> String {
+    let mut command = deploy_promote_catalog_verification_command();
+    command.render_help().to_string()
+}
+
+fn promote_execution_receipt_usage() -> String {
+    let mut command = deploy_promote_execution_receipt_command();
+    command.render_help().to_string()
+}
+
+fn promote_policy_check_usage() -> String {
+    let mut command = deploy_promote_policy_check_command();
+    command.render_help().to_string()
+}
+
+fn promote_materialization_identity_usage() -> String {
+    let mut command = deploy_promote_materialization_identity_command();
     command.render_help().to_string()
 }
 
@@ -834,6 +1895,20 @@ fn parse_profile(
         "release" => Ok(CanisterBuildProfile::Release),
         _ => Err(DeployCommandError::Usage(format!(
             "invalid build profile: {value}\n\n{}",
+            usage()
+        ))),
+    }
+}
+
+fn parse_promotion_output_format(
+    value: Option<&str>,
+    usage: fn() -> String,
+) -> Result<PromotionOutputFormat, DeployCommandError> {
+    match value.unwrap_or("json") {
+        "json" => Ok(PromotionOutputFormat::Json),
+        "text" => Ok(PromotionOutputFormat::Text),
+        other => Err(DeployCommandError::Usage(format!(
+            "invalid promotion output format: {other}\n\n{}",
             usage()
         ))),
     }
@@ -1104,6 +2179,95 @@ mod tests {
     }
 
     #[test]
+    fn deploy_promote_leaf_commands_default_to_json() {
+        for (command, usage, request) in promote_leaf_commands() {
+            let options = DeployPromoteReportOptions::parse(
+                [OsString::from("--request"), OsString::from(request)],
+                command,
+                usage,
+            )
+            .expect("parse promote leaf command");
+
+            assert_eq!(options.request, PathBuf::from(request));
+            assert_eq!(options.format, PromotionOutputFormat::Json);
+        }
+    }
+
+    #[test]
+    fn deploy_promote_leaf_commands_parse_text_format() {
+        for (command, usage, request) in promote_leaf_commands() {
+            let options = DeployPromoteReportOptions::parse(
+                [
+                    OsString::from("--request"),
+                    OsString::from(request),
+                    OsString::from("--format"),
+                    OsString::from("text"),
+                ],
+                command,
+                usage,
+            )
+            .expect("parse promote leaf command text");
+
+            assert_eq!(options.request, PathBuf::from(request));
+            assert_eq!(options.format, PromotionOutputFormat::Text);
+        }
+    }
+
+    #[test]
+    fn deploy_promote_help_documents_passive_scope() {
+        let help = promote_usage();
+        let readiness_help = promote_readiness_usage();
+        let check_help = promote_check_usage();
+        let artifact_identity_help = promote_artifact_identity_usage();
+        let transform_help = promote_transform_usage();
+        let diff_help = promote_diff_usage();
+        let transform_evidence_help = promote_transform_evidence_usage();
+        let target_lineage_help = promote_target_lineage_usage();
+        let plan_help = promote_plan_usage();
+        let provenance_help = promote_provenance_usage();
+        let wasm_store_identity_help = promote_wasm_store_identity_usage();
+        let catalog_verification_help = promote_catalog_verification_usage();
+        let execution_receipt_help = promote_execution_receipt_usage();
+        let policy_help = promote_policy_check_usage();
+        let materialization_help = promote_materialization_identity_usage();
+
+        assert!(help.contains("Build passive artifact promotion reports"));
+        assert!(help.contains("Build a passive artifact promotion readiness check"));
+        assert!(help.contains("Build a passive artifact promotion diff"));
+        assert!(help.contains("do not install"));
+        assert!(help.contains("mutate deployment/controller state"));
+        assert!(readiness_help.contains("PromotionReadinessRequest-shaped JSON"));
+        assert!(check_help.contains("PromotionReadinessRequest-shaped JSON"));
+        assert!(
+            artifact_identity_help.contains("PromotionArtifactIdentityReportRequest-shaped JSON")
+        );
+        assert!(transform_help.contains("PromotionPlanTransformRequest-shaped JSON"));
+        assert!(diff_help.contains("PromotionPlanTransformRequest-shaped JSON"));
+        assert!(
+            transform_evidence_help.contains("PromotionPlanTransformEvidenceRequest-shaped JSON")
+        );
+        assert!(target_lineage_help.contains("PromotionTargetExecutionLineageRequest-shaped JSON"));
+        assert!(plan_help.contains("ArtifactPromotionPlanRequest-shaped JSON"));
+        assert!(provenance_help.contains("ArtifactPromotionProvenanceReportRequest-shaped JSON"));
+        assert!(
+            wasm_store_identity_help
+                .contains("PromotionWasmStoreIdentityReportRequest-shaped JSON")
+        );
+        assert!(
+            catalog_verification_help
+                .contains("PromotionWasmStoreCatalogVerificationRequest-shaped JSON")
+        );
+        assert!(
+            execution_receipt_help.contains("ArtifactPromotionExecutionReceiptRequest-shaped JSON")
+        );
+        assert!(policy_help.contains("PromotionPolicyCheckRequest-shaped JSON"));
+        assert!(
+            materialization_help
+                .contains("PromotionMaterializationIdentityReportRequest-shaped JSON")
+        );
+    }
+
+    #[test]
     fn deploy_authority_leaf_help_documents_exit_status_scope() {
         let report_help = authority_report_usage();
         let receipt_help = authority_receipt_usage();
@@ -1133,6 +2297,44 @@ mod tests {
             assert!(
                 !authority_source.contains(forbidden),
                 "authority CLI path must stay dry-run; found forbidden token {forbidden}"
+            );
+        }
+    }
+
+    #[test]
+    fn deploy_promote_path_has_no_mutation_primitives() {
+        let source = include_str!("mod.rs");
+        let promote_source = source_between(source, "fn run_promote<I>", "fn run_authority<I>");
+        for forbidden in [
+            "update_settings",
+            "install_code",
+            "create_canister",
+            "delete_canister",
+            "stop_canister",
+            "uninstall_code",
+            "provisional_create_canister",
+            "dfx",
+        ] {
+            assert!(
+                !promote_source.contains(forbidden),
+                "promote CLI path must stay passive; found forbidden token {forbidden}"
+            );
+        }
+    }
+
+    #[test]
+    fn deploy_promote_path_has_no_live_deployment_truth_dependencies() {
+        let source = include_str!("mod.rs");
+        let promote_source = source_between(source, "fn run_promote<I>", "fn run_authority<I>");
+        for forbidden in [
+            "load_deployment_check",
+            "check_install_deployment_truth",
+            "resolve_current_canic_icp_root",
+            "latest_deployment_truth_receipt_path_from_root",
+        ] {
+            assert!(
+                !promote_source.contains(forbidden),
+                "promote CLI path must stay request-file based; found forbidden token {forbidden}"
             );
         }
     }
@@ -1239,6 +2441,118 @@ mod tests {
             .expect("authority receipt command");
         assert_eq!(nested.0, "receipt");
         assert_eq!(nested.1, vec![OsString::from("demo")]);
+    }
+
+    #[test]
+    fn deploy_promote_command_dispatches_plan_as_public_surface() {
+        let parsed = parse_subcommand(
+            deploy_command(),
+            [
+                OsString::from("promote"),
+                OsString::from("plan"),
+                OsString::from("--request"),
+                OsString::from("promotion-plan.json"),
+            ],
+        )
+        .expect("parse deploy promote")
+        .expect("promote command");
+
+        assert_eq!(parsed.0, "promote");
+
+        let nested = parse_subcommand(deploy_promote_command(), parsed.1)
+            .expect("parse nested promote")
+            .expect("promote plan command");
+        assert_eq!(nested.0, "plan");
+        assert_eq!(
+            nested.1,
+            vec![
+                OsString::from("--request"),
+                OsString::from("promotion-plan.json")
+            ]
+        );
+    }
+
+    #[test]
+    fn deploy_promote_command_dispatches_check_and_diff_as_public_surface() {
+        for (command, request) in [
+            ("check", "promotion-check.json"),
+            ("diff", "promotion-diff.json"),
+        ] {
+            let parsed = parse_subcommand(
+                deploy_command(),
+                [
+                    OsString::from("promote"),
+                    OsString::from(command),
+                    OsString::from("--request"),
+                    OsString::from(request),
+                ],
+            )
+            .expect("parse deploy promote")
+            .expect("promote command");
+
+            assert_eq!(parsed.0, "promote");
+
+            let nested = parse_subcommand(deploy_promote_command(), parsed.1)
+                .expect("parse nested promote")
+                .expect("promote public command");
+            assert_eq!(nested.0, command);
+            assert_eq!(
+                nested.1,
+                vec![OsString::from("--request"), OsString::from(request)]
+            );
+        }
+    }
+
+    #[test]
+    fn deploy_promote_command_dispatches_inspect_namespace() {
+        let parsed = parse_subcommand(
+            deploy_command(),
+            [OsString::from("promote"), OsString::from("inspect")],
+        )
+        .expect("parse deploy promote")
+        .expect("promote command");
+
+        assert_eq!(parsed.0, "promote");
+
+        let nested = parse_subcommand(deploy_promote_command(), parsed.1)
+            .expect("parse nested promote")
+            .expect("promote inspect command");
+        assert_eq!(nested.0, "inspect");
+        assert!(nested.1.is_empty());
+    }
+
+    #[test]
+    fn deploy_promote_inspect_dispatches_leaf_commands() {
+        for (_, _, command, request) in promote_inspect_leaf_commands() {
+            let parsed = parse_subcommand(
+                deploy_command(),
+                [
+                    OsString::from("promote"),
+                    OsString::from("inspect"),
+                    OsString::from(command),
+                    OsString::from("--request"),
+                    OsString::from(request),
+                ],
+            )
+            .expect("parse deploy promote inspect")
+            .expect("promote command");
+
+            assert_eq!(parsed.0, "promote");
+
+            let promote = parse_subcommand(deploy_promote_command(), parsed.1)
+                .expect("parse nested promote")
+                .expect("promote inspect command");
+            assert_eq!(promote.0, "inspect");
+
+            let inspect = parse_subcommand(deploy_promote_inspect_command(), promote.1)
+                .expect("parse nested inspect")
+                .expect("promote inspect leaf command");
+            assert_eq!(inspect.0, command);
+            assert_eq!(
+                inspect.1,
+                vec![OsString::from("--request"), OsString::from(request)]
+            );
+        }
     }
 
     #[test]
@@ -1374,6 +2688,180 @@ mod tests {
             Err(DeployCommandError::Usage(message))
                 if message.contains("invalid authority output format: toml")
         ));
+    }
+
+    #[test]
+    fn promote_policy_check_rejects_unknown_format() {
+        let result = DeployPromoteReportOptions::parse(
+            [
+                OsString::from("--request"),
+                OsString::from("promotion-policy.json"),
+                OsString::from("--format"),
+                OsString::from("csv"),
+            ],
+            deploy_promote_policy_check_command,
+            promote_policy_check_usage,
+        );
+
+        assert!(matches!(
+            result,
+            Err(DeployCommandError::Usage(message))
+                if message.contains("invalid promotion output format: csv")
+        ));
+    }
+
+    type PromoteCommandFactory = fn() -> ClapCommand;
+    type PromoteUsageFactory = fn() -> String;
+
+    fn promote_leaf_commands() -> [(PromoteCommandFactory, PromoteUsageFactory, &'static str); 14] {
+        [
+            (
+                deploy_promote_readiness_command,
+                promote_readiness_usage,
+                "promotion-readiness.json",
+            ),
+            (
+                deploy_promote_check_command,
+                promote_check_usage,
+                "promotion-check.json",
+            ),
+            (
+                deploy_promote_artifact_identity_command,
+                promote_artifact_identity_usage,
+                "promotion-artifacts.json",
+            ),
+            (
+                deploy_promote_transform_command,
+                promote_transform_usage,
+                "promotion-transform.json",
+            ),
+            (
+                deploy_promote_diff_command,
+                promote_diff_usage,
+                "promotion-diff.json",
+            ),
+            (
+                deploy_promote_transform_evidence_command,
+                promote_transform_evidence_usage,
+                "transform-evidence.json",
+            ),
+            (
+                deploy_promote_target_lineage_command,
+                promote_target_lineage_usage,
+                "target-lineage.json",
+            ),
+            (
+                deploy_promote_plan_command,
+                promote_plan_usage,
+                "promotion-plan.json",
+            ),
+            (
+                deploy_promote_provenance_command,
+                promote_provenance_usage,
+                "promotion-provenance.json",
+            ),
+            (
+                deploy_promote_wasm_store_identity_command,
+                promote_wasm_store_identity_usage,
+                "wasm-store-identity.json",
+            ),
+            (
+                deploy_promote_catalog_verification_command,
+                promote_catalog_verification_usage,
+                "catalog-verification.json",
+            ),
+            (
+                deploy_promote_execution_receipt_command,
+                promote_execution_receipt_usage,
+                "promotion-execution-receipt.json",
+            ),
+            (
+                deploy_promote_policy_check_command,
+                promote_policy_check_usage,
+                "promotion-policy.json",
+            ),
+            (
+                deploy_promote_materialization_identity_command,
+                promote_materialization_identity_usage,
+                "materialization.json",
+            ),
+        ]
+    }
+
+    fn promote_inspect_leaf_commands() -> [(
+        PromoteCommandFactory,
+        PromoteUsageFactory,
+        &'static str,
+        &'static str,
+    ); 11] {
+        [
+            (
+                deploy_promote_readiness_command,
+                promote_readiness_usage,
+                "readiness",
+                "promotion-readiness.json",
+            ),
+            (
+                deploy_promote_artifact_identity_command,
+                promote_artifact_identity_usage,
+                "artifact-identity",
+                "promotion-artifacts.json",
+            ),
+            (
+                deploy_promote_transform_command,
+                promote_transform_usage,
+                "transform",
+                "promotion-transform.json",
+            ),
+            (
+                deploy_promote_transform_evidence_command,
+                promote_transform_evidence_usage,
+                "transform-evidence",
+                "transform-evidence.json",
+            ),
+            (
+                deploy_promote_target_lineage_command,
+                promote_target_lineage_usage,
+                "target-lineage",
+                "target-lineage.json",
+            ),
+            (
+                deploy_promote_provenance_command,
+                promote_provenance_usage,
+                "provenance",
+                "promotion-provenance.json",
+            ),
+            (
+                deploy_promote_wasm_store_identity_command,
+                promote_wasm_store_identity_usage,
+                "wasm-store-identity",
+                "wasm-store-identity.json",
+            ),
+            (
+                deploy_promote_catalog_verification_command,
+                promote_catalog_verification_usage,
+                "catalog-verification",
+                "catalog-verification.json",
+            ),
+            (
+                deploy_promote_execution_receipt_command,
+                promote_execution_receipt_usage,
+                "execution-receipt",
+                "promotion-execution-receipt.json",
+            ),
+            (
+                deploy_promote_policy_check_command,
+                promote_policy_check_usage,
+                "policy",
+                "promotion-policy.json",
+            ),
+            (
+                deploy_promote_materialization_identity_command,
+                promote_materialization_identity_usage,
+                "materialization-identity",
+                "materialization.json",
+            ),
+        ]
     }
 
     fn source_between<'a>(source: &'a str, start: &str, end: &str) -> &'a str {

@@ -96,6 +96,14 @@ inspect only the files needed for the current task.
 - Role promotion policy checks now carry deterministic check digests over
   their status, role decisions, and blockers, so archived policy reports reject
   stale decision drift directly.
+- `canic deploy promote inspect policy --request <file>` now exposes passive
+  role promotion policy checks as JSON by default or host-owned text with
+  `--format text`.
+- `canic deploy promote inspect readiness --request <file>` and
+  `canic deploy promote inspect artifact-identity --request <file>` now expose the
+  existing passive promotion readiness and artifact identity reports through the
+  same JSON-default/text-optional CLI surface, without staging, installing,
+  querying `wasm_store`, or mutating deployment state.
 - Promotion readiness can now include those policy blockers directly, so
   readiness consumers can see sealed-byte and byte-identity policy failures
   without treating the standalone policy check as execution authority.
@@ -107,6 +115,15 @@ inspect only the files needed for the current task.
 - Passive promotion transforms now carry deterministic promotion-plan lineage
   digests, giving later execution receipts a stable promoted-plan identity to
   cite without treating source authority as target authority.
+- `canic deploy promote inspect transform --request <file>` and
+  `canic deploy promote inspect transform-evidence --request <file>` now expose
+  passive promoted-plan transforms and transform-evidence wrappers as JSON by
+  default or host-owned text with `--format text`, without adding a promotion
+  execution path.
+- `canic deploy promote inspect target-lineage --request <file>` now exposes passive
+  target execution lineage reports as JSON by default or host-owned text with
+  `--format text`, keeping target-preflight linkage inspectable without
+  attempting execution.
 - Receipt-backed promotion artifact sources now require source receipt lineage
   digests, keeping artifact provenance tied to a specific archived receipt
   lineage instead of a locator alone.
@@ -123,11 +140,19 @@ inspect only the files needed for the current task.
   silently. Catalog verification reports now also carry deterministic
   verification digests over the identity-report link, role observations,
   status, and blockers.
+- `canic deploy promote inspect wasm-store-identity --request <file>` and
+  `canic deploy promote inspect catalog-verification --request <file>` now expose
+  passive staged wasm-store identity and supplied-catalog verification reports
+  through the same JSON-default/text-optional CLI surface, without live catalog
+  lookup.
 - Passive source/build materialization identity reports now aggregate validated
   materialization evidence by role and group roles by materialized output
   identity. They now also carry deterministic report digests over their role
   evidence, output groups, status, and blockers, so archived source/build
   materialization reports reject stale grouping drift.
+- `canic deploy promote inspect materialization-identity --request <file>` now exposes
+  passive source/build materialization identity reports as JSON by default or
+  host-owned text with `--format text`.
 - Passive artifact promotion provenance reports now link promotion plans to
   readiness, artifact identity, transform, target execution lineage,
   wasm-store identity, wasm-store catalog verification, and materialization
@@ -150,12 +175,23 @@ inspect only the files needed for the current task.
   wrappers cite both the promotion plan and provenance report by ID and digest,
   and carry their own deterministic execution receipt digest over nested
   receipt and role evidence.
+- `canic deploy promote plan --request <file>`,
+  `canic deploy promote check --request <file>`, and
+  `canic deploy promote diff --request <file>` now form the small public
+  promotion report surface for plan, readiness, and transform diff output.
+  `canic deploy promote inspect provenance --request <file>` keeps passive
+  provenance under the advanced inspection namespace. These commands do not
+  treat promotion artifacts as execution authority.
 - Passive artifact promotion execution receipts now wrap existing deployment
   receipts with promotion provenance linkage, promoted-plan lineage, and
   role-level execution evidence without adding a separate promotion executor.
   They require ready provenance, so blocked passive provenance cannot be
   presented as execution evidence, and the nested deployment receipt role
   evidence must match the promotion provenance role set.
+- `canic deploy promote inspect execution-receipt --request <file>` now exposes the
+  passive artifact promotion execution receipt wrapper as JSON by default or
+  host-owned text with `--format text`, without adding a separate promotion
+  executor.
 - `0.43.8` is closed. The closeout report is
   `docs/audits/reports/2026-05/2026-05-25/0.43-closeout.md`.
 - `0.43.8` adds a private current-install

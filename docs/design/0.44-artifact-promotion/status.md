@@ -99,6 +99,14 @@ promotion can prove what was built, uploaded, installed, and promoted.
 - Promotion policy checks now carry deterministic check digests over their
   status, role decisions, and blockers, so archived policy reports reject stale
   decision drift directly.
+- Added passive CLI report surfacing for role promotion policy checks through
+  `canic deploy promote inspect policy --request <file>`, with JSON output by
+  default and host-owned text output through `--format text`.
+- Added passive CLI report surfacing for promotion readiness and artifact
+  identity reports through
+  `canic deploy promote inspect readiness --request <file>` and
+  `canic deploy promote inspect artifact-identity --request <file>`, with JSON
+  output by default and host-owned text output through `--format text`.
 - Promotion readiness can now optionally fold role promotion policy blockers
   into the same passive `PromotionReadinessV1` artifact, while keeping the
   standalone policy check available for separate operator reports.
@@ -109,6 +117,14 @@ promotion can prove what was built, uploaded, installed, and promoted.
 - Passive promotion transforms now carry a deterministic promotion-plan lineage
   digest over the target plan ID, promoted plan ID, promoted plan, and role
   summaries. Validation rejects stale lineage digests.
+- Added passive CLI report surfacing for promoted-plan transforms and
+  transform-evidence wrappers through
+  `canic deploy promote inspect transform --request <file>` and
+  `canic deploy promote inspect transform-evidence --request <file>`, with
+  JSON output by default and host-owned text output through `--format text`.
+- Added passive CLI report surfacing for target execution lineage through
+  `canic deploy promote inspect target-lineage --request <file>`, with JSON
+  output by default and host-owned text output through `--format text`.
 - Receipt-backed promotion artifact sources now require a source receipt
   lineage digest, and non-receipt sources reject that field.
 - Added passive target execution lineage artifacts that bind a validated
@@ -137,6 +153,11 @@ promotion can prove what was built, uploaded, installed, and promoted.
   verification digests over the wasm-store identity report link, role
   observations, status, and blockers, so archived catalog verification
   artifacts reject stale catalog-observation drift directly.
+- Added passive CLI report surfacing for staged wasm-store identity and
+  supplied catalog verification reports through
+  `canic deploy promote inspect wasm-store-identity --request <file>` and
+  `canic deploy promote inspect catalog-verification --request <file>`, with
+  JSON output by default and host-owned text output through `--format text`.
 - Added passive source/build materialization identity reports that aggregate
   validated materialization evidence by role and group roles by materialized
   output identity.
@@ -144,6 +165,11 @@ promotion can prove what was built, uploaded, installed, and promoted.
   digests over their role evidence, output groups, status, and blockers, so
   archived materialization identity reports reject stale output grouping drift
   directly.
+- Added passive CLI report surfacing for source/build materialization identity
+  reports through
+  `canic deploy promote inspect materialization-identity --request <file>`,
+  with JSON output by default and host-owned text output through
+  `--format text`.
 - Added passive artifact promotion provenance reports that link a promotion
   plan to readiness, artifact identity, transform, target execution lineage,
   wasm-store identity, wasm-store catalog verification, and materialization
@@ -175,6 +201,14 @@ promotion can prove what was built, uploaded, installed, and promoted.
   linkage fields, role evidence, blockers, and the passive execution boundary,
   so archived provenance artifacts reject stale drift in their own report
   contents.
+- Added passive CLI report surfacing for artifact promotion plan envelopes
+  through `canic deploy promote plan --request <file>`, readiness checks
+  through `canic deploy promote check --request <file>`, and transform diffs
+  through `canic deploy promote diff --request <file>`, with JSON output by
+  default and host-owned text output through `--format text`.
+- Added passive CLI report surfacing for provenance reports through
+  `canic deploy promote inspect provenance --request <file>`, keeping
+  DTO-level provenance under the advanced inspection namespace.
 - Promotion execution receipt wrappers now carry the provenance report digest
   alongside the provenance report ID, making receipt/provenance linkage
   digest-pinned rather than ID-only.
@@ -197,6 +231,10 @@ promotion can prove what was built, uploaded, installed, and promoted.
   require ready promotion provenance, so blocked passive provenance cannot be
   represented as a promotion execution artifact. They also require the nested
   deployment receipt role evidence to match the promotion provenance role set.
+- Added passive CLI report surfacing for artifact promotion execution receipt
+  wrappers through
+  `canic deploy promote inspect execution-receipt --request <file>`, with JSON
+  output by default and host-owned text output through `--format text`.
 
 ## Not Implemented Yet
 
@@ -204,8 +242,6 @@ promotion can prove what was built, uploaded, installed, and promoted.
 - Live `wasm_store` catalog lookup. Catalog verification now exists for
   supplied observations, but no live catalog reader is wired yet.
 - Artifact identity dedupe policy decisions beyond passive summary/grouping.
-- CLI command wiring for source/build materialization identity reports.
-- CLI/report surfaces for role promotion policy checks.
 
 ## Drift Log
 

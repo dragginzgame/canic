@@ -12,6 +12,19 @@ present.
 
 ## Unreleased
 
+- Adds a small passive artifact-promotion CLI surface for planning, readiness
+  checks, and transform diffs, while demoting DTO-level promotion reports under
+  the advanced inspect namespace.
+
+```bash
+canic deploy promote plan --request promotion-plan.json
+canic deploy promote check --request promotion-check.json
+canic deploy promote diff --request promotion-diff.json
+canic deploy promote inspect readiness --request promotion-readiness.json
+canic deploy promote inspect artifact-identity --request promotion-artifacts.json
+canic deploy promote inspect provenance --request promotion-provenance.json
+```
+
 ## [0.44.x] - 2026-05-25 - Artifact promotion
 
 - `0.44.11` digest-pins promotion readiness, transform evidence, and build
