@@ -14,6 +14,11 @@ present.
 
 ## [0.44.x] - 2026-05-25 - Artifact promotion
 
+- `0.44.16` closes the artifact-promotion line: promotion is represented as
+  digest-pinned, authority-preserving `DeploymentPlanV1` transformation and
+  passive provenance artifacts, with promoted-plan execution mediated by the
+  normal deployment-truth/preflight install runner.
+
 - `0.44.15` emits artifact promotion execution receipt wrappers after
   successful plan-mediated installs from ready `ArtifactPromotionPlanV1`
   envelopes, linking promotion plan/provenance evidence to the nested

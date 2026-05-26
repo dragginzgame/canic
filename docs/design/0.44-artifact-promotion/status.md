@@ -10,7 +10,7 @@ landed, what drifted, and what remains open.
 
 ## Current State
 
-Started with passive artifact-source modeling.
+Closed as the artifact promotion line.
 
 0.44 depends on deployment truth and backend-agnostic receipts so artifact
 promotion can prove what was built, uploaded, installed, and promoted.
@@ -25,6 +25,14 @@ blocked promotion envelopes, supplied-plan network mismatch rejection, missing
 root wasm pre-mutation artifact validation, and a source guard proving the CLI
 stays mediated by `install_root` instead of adding a promotion-specific
 executor shortcut.
+
+0.44 closes with artifact promotion represented as digest-pinned,
+authority-preserving `DeploymentPlanV1` transformation and passive provenance
+artifacts. Ready promotion envelopes can execute through
+`canic deploy install --plan <file>` on the existing deployment-truth/preflight
+and current-install operation-runner path. Successful guarded installs write
+promotion execution receipt wrappers that link plan/provenance evidence to the
+nested deployment receipt without introducing a separate promotion executor.
 
 ## Implemented
 
@@ -261,11 +269,14 @@ executor shortcut.
   the nested deployment receipt without replacing the deployment receipt or
   introducing a separate promotion executor.
 
-## Not Implemented Yet
+## Deferred Beyond 0.44
 
 - Live `wasm_store` catalog lookup. Catalog verification now exists for
   supplied observations, but no live catalog reader is wired yet.
 - Artifact identity dedupe policy decisions beyond passive summary/grouping.
+  0.44 grouping and summary counters are report data, not active dedupe policy.
+- Signed promotion attestations, cross-deployment artifact registry semantics,
+  rollback selection UX, and promotion-specific executor shortcuts.
 
 ## Drift Log
 
@@ -273,5 +284,6 @@ executor shortcut.
 
 ## Release Bar
 
-0.44 should not close until promoted artifacts carry enough provenance to be
-checked against deployment truth before use.
+Closed. Promoted artifacts carry enough digest-pinned provenance to be checked
+against deployment truth before use, and promoted-plan execution stays on the
+existing deployment-truth/preflight-mediated current-install runner path.

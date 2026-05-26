@@ -9,13 +9,13 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
-- Active minor: `0.44.x` artifact overrides and promotion.
+- Active minor: `0.44.x` artifact overrides and promotion closeout.
 - Theme: promote artifact identity across deployment trust domains without
   copying source authority, stale embedded topology, or authority dry-run
   evidence.
-- Current release-work area: promotion planning, artifact-source validation,
-  target embedded-config checks, promotion readiness reporting, and
-  plan-mediated promotion install.
+- Current release-work area: 0.44 closeout. The line is ready to close after
+  the closeout patch lands; the next design line is `0.45.x` lifecycle
+  authority.
 - Design starts at
   `docs/design/0.44-artifact-promotion/0.44-design.md`. Promotion execution
   must remain a `DeploymentPlanV1` transformation and must use the
@@ -41,6 +41,11 @@ inspect only the files needed for the current task.
   wrapper links promotion plan/provenance evidence to the nested deployment
   receipt while keeping raw `DeploymentPlanV1` installs on the ordinary
   deployment-receipt path.
+- 0.44 closeout confirmed the release bar: digest-pinned artifact override
+  plans, readiness reports, role-scoped sealed-wasm vs source/build artifact
+  levels, target canonical embedded config checks, and promoted-plan execution
+  only through the deployment-truth/preflight-mediated current-install runner
+  path.
 - 0.44 also has the first passive promotion readiness model. It reports
   role-scoped promotion source identity, target wasm/config identity,
   byte/config identity comparisons, blocking findings, and target-store

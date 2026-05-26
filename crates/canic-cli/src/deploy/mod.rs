@@ -2441,6 +2441,29 @@ mod tests {
     }
 
     #[test]
+    fn deploy_promote_help_keeps_advanced_reports_under_inspect() {
+        let help = promote_usage();
+
+        for advanced_command in [
+            "target-lineage",
+            "wasm-store-identity",
+            "catalog-verification",
+            "materialization-identity",
+            "execution-receipt",
+            "transform-evidence",
+            "policy",
+        ] {
+            assert!(
+                !help.contains(&format!("canic deploy promote {advanced_command}")),
+                "advanced promotion report {advanced_command} must stay below inspect"
+            );
+        }
+        assert!(help.contains("canic deploy promote inspect readiness"));
+        assert!(help.contains("canic deploy promote inspect artifact-identity"));
+        assert!(help.contains("canic deploy promote inspect provenance"));
+    }
+
+    #[test]
     fn deploy_authority_leaf_help_documents_exit_status_scope() {
         let report_help = authority_report_usage();
         let receipt_help = authority_receipt_usage();
