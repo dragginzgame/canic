@@ -1103,6 +1103,34 @@ pub struct ExternalLifecyclePendingActionV1 {
 }
 
 ///
+/// CriticalExternalFixReportV1
+///
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct CriticalExternalFixReportV1 {
+    pub schema_version: u32,
+    pub report_id: String,
+    pub report_digest: String,
+    pub fix_id: String,
+    pub severity: String,
+    pub lifecycle_plan_id: String,
+    pub lifecycle_plan_digest: String,
+    pub pending_report_id: String,
+    pub pending_report_digest: String,
+    pub deployment_plan_id: String,
+    pub deployment_plan_digest: String,
+    pub inventory_id: String,
+    pub affected_roles: Vec<String>,
+    pub affected_canisters: Vec<String>,
+    pub directly_patchable_roles: Vec<String>,
+    pub externally_blocked_roles: Vec<String>,
+    pub dependency_blocked_roles: Vec<String>,
+    pub required_external_actions: Vec<String>,
+    pub protected_call_implications: Vec<String>,
+    pub residual_exposure: Vec<String>,
+    pub operator_next_steps: Vec<String>,
+}
+
+///
 /// ExternalUpgradeProposalV1
 ///
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]

@@ -14,17 +14,22 @@ present.
 
 ## [0.45.x] - 2026-05-26 - External lifecycle
 
+- `0.45.3` adds passive pending external lifecycle reports and hardens
+  external-upgrade receipts against stale proposal pairing.
+
+```bash
+canic deploy external pending demo
+canic deploy external pending --format text demo
+```
+
 - `0.45.2` adds the first passive external lifecycle CLI reports for lifecycle
-  plans, external-upgrade proposals, and pending external lifecycle work, while
-  hardening external-upgrade receipts against stale proposal pairing.
+  plans and external-upgrade proposals.
 
 ```bash
 canic deploy external plan demo
 canic deploy external proposals demo
-canic deploy external pending demo
 canic deploy external plan --format text demo
 canic deploy external proposals --format text demo
-canic deploy external pending --format text demo
 ```
 
 - `0.45.1` hardens passive external lifecycle artifacts with deterministic

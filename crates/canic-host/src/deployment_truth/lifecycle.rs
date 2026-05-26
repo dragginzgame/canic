@@ -61,6 +61,29 @@ struct ExternalLifecyclePendingReportDigestInput<'a> {
 }
 
 #[derive(Serialize)]
+struct CriticalExternalFixReportDigestInput<'a> {
+    report_id: &'a str,
+    fix_id: &'a str,
+    severity: &'a str,
+    lifecycle_plan_id: &'a str,
+    lifecycle_plan_digest: &'a str,
+    pending_report_id: &'a str,
+    pending_report_digest: &'a str,
+    deployment_plan_id: &'a str,
+    deployment_plan_digest: &'a str,
+    inventory_id: &'a str,
+    affected_roles: &'a [String],
+    affected_canisters: &'a [String],
+    directly_patchable_roles: &'a [String],
+    externally_blocked_roles: &'a [String],
+    dependency_blocked_roles: &'a [String],
+    required_external_actions: &'a [String],
+    protected_call_implications: &'a [String],
+    residual_exposure: &'a [String],
+    operator_next_steps: &'a [String],
+}
+
+#[derive(Serialize)]
 struct ExternalUpgradeProposalDigestInput<'a> {
     deployment_plan_id: &'a str,
     deployment_plan_digest: &'a str,
@@ -218,6 +241,23 @@ pub enum ExternalLifecyclePendingReportError {
     CountMismatch,
     #[error("external lifecycle pending report contains duplicate subject `{subject}`")]
     DuplicateSubject { subject: String },
+}
+
+///
+/// CriticalExternalFixReportError
+///
+#[derive(Debug, Eq, thiserror::Error, PartialEq)]
+pub enum CriticalExternalFixReportError {
+    #[error(
+        "critical external fix report schema version {actual} does not match expected {expected}"
+    )]
+    SchemaVersionMismatch { expected: u32, actual: u32 },
+    #[error("critical external fix report field `{field}` is required")]
+    MissingRequiredField { field: &'static str },
+    #[error("critical external fix report field `{field}` digest is stale")]
+    DigestMismatch { field: &'static str },
+    #[error("critical external fix report field `{field}` does not match lifecycle source")]
+    SourceMismatch { field: &'static str },
 }
 
 /// Project the existing deployment truth control classifications into the 0.45
@@ -895,6 +935,206 @@ fn external_lifecycle_pending_action(
         consent_requirements: proposal.consent_requirements.clone(),
         verification_requirements: proposal.verification_requirements.clone(),
     }
+}
+
+fn lifecycle_roles(lifecycle_plan: &ExternalLifecyclePlanV1) -> Vec<String> {
+    lifecycle_plan
+        .lifecycle_authority_rows
+        .iter()
+        .filter_map(|authority| authority.role.clone())
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect()
+}
+
+fn lifecycle_canisters(lifecycle_plan: &ExternalLifecyclePlanV1) -> Vec<String> {
+    lifecycle_plan
+        .lifecycle_authority_rows
+        .iter()
+        .filter_map(|authority| authority.canister_id.clone())
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect()
+}
+
+fn role_names(upgrades: &[ExternalLifecycleRoleUpgradeV1]) -> Vec<String> {
+    upgrades
+        .iter()
+        .filter_map(|upgrade| upgrade.role.clone())
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect()
+}
+
+fn critical_fix_next_steps(
+    pending_external_count: usize,
+    blocked_count: usize,
+    protected_call_implications: &[String],
+) -> Vec<String> {
+    let mut steps = Vec::new();
+    if pending_external_count > 0 {
+        steps.push(
+            "request external consent or completion for externally controlled roles".to_string(),
+        );
+    }
+    if blocked_count > 0 {
+        steps.push(
+            "resolve blocked lifecycle rows before reporting the deployment fully patched"
+                .to_string(),
+        );
+    }
+    if !protected_call_implications.is_empty() {
+        steps.push(
+            "review protected-call readiness and role epoch implications before closure"
+                .to_string(),
+        );
+    }
+    if steps.is_empty() {
+        steps.push("no external lifecycle work remains for this critical fix".to_string());
+    }
+    steps
+}
+
+/// Build a passive critical-fix residual exposure report from lifecycle
+/// evidence.
+#[must_use]
+pub fn critical_external_fix_report_from_pending(
+    report_id: impl Into<String>,
+    fix_id: impl Into<String>,
+    severity: impl Into<String>,
+    lifecycle_plan: &ExternalLifecyclePlanV1,
+    pending_report: &ExternalLifecyclePendingReportV1,
+) -> CriticalExternalFixReportV1 {
+    let report_id = report_id.into();
+    let fix_id = fix_id.into();
+    let severity = severity.into();
+    let affected_roles = lifecycle_roles(lifecycle_plan);
+    let affected_canisters = lifecycle_canisters(lifecycle_plan);
+    let directly_patchable_roles = role_names(&lifecycle_plan.directly_executable_role_upgrades);
+    let externally_blocked_roles = pending_report
+        .pending_external_actions
+        .iter()
+        .filter_map(|action| action.role.clone())
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect::<Vec<_>>();
+    let dependency_blocked_roles = role_names(&lifecycle_plan.blocked_role_upgrades);
+    let required_external_actions = pending_report
+        .pending_external_actions
+        .iter()
+        .map(|action| format!("{}: {}", action.subject, action.required_external_action))
+        .collect::<Vec<_>>();
+    let operator_next_steps = critical_fix_next_steps(
+        pending_report.pending_external_count,
+        pending_report.blocked_count,
+        lifecycle_plan.protected_call_implications.as_slice(),
+    );
+    let mut report = CriticalExternalFixReportV1 {
+        schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
+        report_id,
+        report_digest: String::new(),
+        fix_id,
+        severity,
+        lifecycle_plan_id: lifecycle_plan.lifecycle_plan_id.clone(),
+        lifecycle_plan_digest: lifecycle_plan.lifecycle_plan_digest.clone(),
+        pending_report_id: pending_report.report_id.clone(),
+        pending_report_digest: pending_report.report_digest.clone(),
+        deployment_plan_id: lifecycle_plan.deployment_plan_id.clone(),
+        deployment_plan_digest: lifecycle_plan.deployment_plan_digest.clone(),
+        inventory_id: lifecycle_plan.inventory_id.clone(),
+        affected_roles,
+        affected_canisters,
+        directly_patchable_roles,
+        externally_blocked_roles,
+        dependency_blocked_roles,
+        required_external_actions,
+        protected_call_implications: lifecycle_plan.protected_call_implications.clone(),
+        residual_exposure: pending_report.residual_exposure.clone(),
+        operator_next_steps,
+    };
+    report.report_digest = critical_external_fix_report_digest(&report);
+    report
+}
+
+/// Validate archived critical external fix report consistency and digest.
+pub fn validate_critical_external_fix_report(
+    report: &CriticalExternalFixReportV1,
+) -> Result<(), CriticalExternalFixReportError> {
+    if report.schema_version != DEPLOYMENT_TRUTH_SCHEMA_VERSION {
+        return Err(CriticalExternalFixReportError::SchemaVersionMismatch {
+            expected: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
+            actual: report.schema_version,
+        });
+    }
+    ensure_critical_fix_report_field("report_id", report.report_id.as_str())?;
+    ensure_critical_fix_report_field("report_digest", report.report_digest.as_str())?;
+    ensure_critical_fix_report_field("fix_id", report.fix_id.as_str())?;
+    ensure_critical_fix_report_field("severity", report.severity.as_str())?;
+    ensure_critical_fix_report_field("lifecycle_plan_id", report.lifecycle_plan_id.as_str())?;
+    ensure_critical_fix_report_field(
+        "lifecycle_plan_digest",
+        report.lifecycle_plan_digest.as_str(),
+    )?;
+    ensure_critical_fix_report_field("pending_report_id", report.pending_report_id.as_str())?;
+    ensure_critical_fix_report_field(
+        "pending_report_digest",
+        report.pending_report_digest.as_str(),
+    )?;
+    ensure_critical_fix_report_field("deployment_plan_id", report.deployment_plan_id.as_str())?;
+    ensure_critical_fix_report_field(
+        "deployment_plan_digest",
+        report.deployment_plan_digest.as_str(),
+    )?;
+    ensure_critical_fix_report_field("inventory_id", report.inventory_id.as_str())?;
+    if report.report_digest != critical_external_fix_report_digest(report) {
+        return Err(CriticalExternalFixReportError::DigestMismatch {
+            field: "report_digest",
+        });
+    }
+    Ok(())
+}
+
+/// Validate that an archived critical external fix report still matches the
+/// lifecycle artifacts it claims to summarize.
+pub fn validate_critical_external_fix_report_for_pending(
+    report: &CriticalExternalFixReportV1,
+    lifecycle_plan: &ExternalLifecyclePlanV1,
+    pending_report: &ExternalLifecyclePendingReportV1,
+) -> Result<(), CriticalExternalFixReportError> {
+    validate_critical_external_fix_report(report)?;
+    if report.lifecycle_plan_id != lifecycle_plan.lifecycle_plan_id {
+        return Err(CriticalExternalFixReportError::SourceMismatch {
+            field: "lifecycle_plan_id",
+        });
+    }
+    if report.lifecycle_plan_digest != lifecycle_plan.lifecycle_plan_digest {
+        return Err(CriticalExternalFixReportError::SourceMismatch {
+            field: "lifecycle_plan_digest",
+        });
+    }
+    if report.pending_report_id != pending_report.report_id {
+        return Err(CriticalExternalFixReportError::SourceMismatch {
+            field: "pending_report_id",
+        });
+    }
+    if report.pending_report_digest != pending_report.report_digest {
+        return Err(CriticalExternalFixReportError::SourceMismatch {
+            field: "pending_report_digest",
+        });
+    }
+    let expected = critical_external_fix_report_from_pending(
+        report.report_id.clone(),
+        report.fix_id.clone(),
+        report.severity.clone(),
+        lifecycle_plan,
+        pending_report,
+    );
+    if report != &expected {
+        return Err(CriticalExternalFixReportError::SourceMismatch {
+            field: "lifecycle_plan",
+        });
+    }
+    Ok(())
 }
 
 fn external_upgrade_proposal(
@@ -1624,6 +1864,30 @@ fn external_lifecycle_pending_report_digest(report: &ExternalLifecyclePendingRep
     })
 }
 
+fn critical_external_fix_report_digest(report: &CriticalExternalFixReportV1) -> String {
+    stable_json_sha256_hex(&CriticalExternalFixReportDigestInput {
+        report_id: &report.report_id,
+        fix_id: &report.fix_id,
+        severity: &report.severity,
+        lifecycle_plan_id: &report.lifecycle_plan_id,
+        lifecycle_plan_digest: &report.lifecycle_plan_digest,
+        pending_report_id: &report.pending_report_id,
+        pending_report_digest: &report.pending_report_digest,
+        deployment_plan_id: &report.deployment_plan_id,
+        deployment_plan_digest: &report.deployment_plan_digest,
+        inventory_id: &report.inventory_id,
+        affected_roles: &report.affected_roles,
+        affected_canisters: &report.affected_canisters,
+        directly_patchable_roles: &report.directly_patchable_roles,
+        externally_blocked_roles: &report.externally_blocked_roles,
+        dependency_blocked_roles: &report.dependency_blocked_roles,
+        required_external_actions: &report.required_external_actions,
+        protected_call_implications: &report.protected_call_implications,
+        residual_exposure: &report.residual_exposure,
+        operator_next_steps: &report.operator_next_steps,
+    })
+}
+
 fn external_upgrade_receipt_digest(receipt: &ExternalUpgradeReceiptV1) -> String {
     stable_json_sha256_hex(&ExternalUpgradeReceiptDigestInput {
         proposal_id: &receipt.proposal_id,
@@ -1769,6 +2033,16 @@ fn ensure_external_pending_report_field(
 ) -> Result<(), ExternalLifecyclePendingReportError> {
     if value.trim().is_empty() {
         return Err(ExternalLifecyclePendingReportError::MissingRequiredField { field });
+    }
+    Ok(())
+}
+
+fn ensure_critical_fix_report_field(
+    field: &'static str,
+    value: &str,
+) -> Result<(), CriticalExternalFixReportError> {
+    if value.trim().is_empty() {
+        return Err(CriticalExternalFixReportError::MissingRequiredField { field });
     }
     Ok(())
 }
