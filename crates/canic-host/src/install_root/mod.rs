@@ -3,16 +3,18 @@ use crate::canister_build::{
     current_workspace_build_context_once,
 };
 use crate::deployment_truth::{
-    ArtifactTransportV1, CurrentCliDeploymentExecutor, DeploymentCheckV1,
-    DeploymentCommandResultV1, DeploymentExecutionContextV1, DeploymentExecutionPreflightV1,
-    DeploymentExecutionStatusV1, DeploymentExecutor, DeploymentExecutorCapabilityV1,
-    DeploymentPlanV1, DeploymentReceiptV1, LocalDeploymentCheckRequest, LocalInventoryRequest,
-    ObservationStatusV1, SafetyFindingV1, StagingReceiptV1, artifact_gate_phase_receipt,
-    artifact_gate_role_phase_receipts, check_local_deployment, collect_local_deployment_inventory,
-    compare_plan_to_inventory, deployment_execution_preflight_from_check,
-    deployment_receipt_from_check_with_status, missing_executor_capabilities, phase_receipt,
-    safety_report_from_diff, staging_receipt_evidence,
-    validate_deployment_execution_preflight_for_check,
+    ArtifactPromotionExecutionReceiptRequest, ArtifactPromotionExecutionReceiptV1,
+    ArtifactPromotionPlanV1, ArtifactPromotionProvenanceReportRequest, ArtifactTransportV1,
+    CurrentCliDeploymentExecutor, DeploymentCheckV1, DeploymentCommandResultV1,
+    DeploymentExecutionContextV1, DeploymentExecutionPreflightV1, DeploymentExecutionStatusV1,
+    DeploymentExecutor, DeploymentExecutorCapabilityV1, DeploymentPlanV1, DeploymentReceiptV1,
+    LocalDeploymentCheckRequest, LocalInventoryRequest, ObservationStatusV1, SafetyFindingV1,
+    StagingReceiptV1, artifact_gate_phase_receipt, artifact_gate_role_phase_receipts,
+    artifact_promotion_execution_receipt, artifact_promotion_provenance_report,
+    check_local_deployment, collect_local_deployment_inventory, compare_plan_to_inventory,
+    deployment_execution_preflight_from_check, deployment_receipt_from_check_with_status,
+    missing_executor_capabilities, phase_receipt, safety_report_from_diff,
+    staging_receipt_evidence, validate_deployment_execution_preflight_for_check,
 };
 use crate::format::wasm_size_label;
 use crate::icp::{self, CANIC_ICP_LOCAL_NETWORK_URL_ENV, CANIC_ICP_LOCAL_ROOT_KEY_ENV};
@@ -85,6 +87,7 @@ pub struct InstallRootOptions {
     pub expected_fleet: Option<String>,
     pub interactive_config_selection: bool,
     pub deployment_plan_override: Option<DeploymentPlanV1>,
+    pub artifact_promotion_plan_override: Option<ArtifactPromotionPlanV1>,
 }
 
 ///
@@ -213,6 +216,14 @@ pub fn install_root(options: InstallRootOptions) -> Result<(), Box<dyn std::erro
         },
         &options.network,
         &state,
+    )?;
+    write_artifact_promotion_execution_receipt_for_install(
+        &options,
+        &icp_root,
+        network,
+        &fleet_name,
+        &prepared.deployment_truth_check,
+        &execution_context,
     )?;
     print_install_result_summary(&options.network, &state.fleet, &state_path);
     Ok(())
@@ -1042,6 +1053,100 @@ fn write_install_state_with_deployment_truth_receipt(
     Ok(state_path)
 }
 
+fn write_artifact_promotion_execution_receipt_for_install(
+    options: &InstallRootOptions,
+    icp_root: &Path,
+    network: &str,
+    fleet_name: &str,
+    check: &DeploymentCheckV1,
+    execution_context: &DeploymentExecutionContextV1,
+) -> Result<Option<PathBuf>, Box<dyn std::error::Error>> {
+    let Some(promotion_plan) = &options.artifact_promotion_plan_override else {
+        return Ok(None);
+    };
+    let deployment_receipt =
+        promotion_install_deployment_receipt(check, execution_context, promotion_plan)?;
+    let provenance_report =
+        artifact_promotion_provenance_report(ArtifactPromotionProvenanceReportRequest {
+            report_id: format!("{}:execution-provenance", promotion_plan.plan_id),
+            artifact_promotion_plan: promotion_plan.clone(),
+            wasm_store_identity_report: None,
+            wasm_store_catalog_verification: None,
+            materialization_identity_report: None,
+        })?;
+    let receipt = artifact_promotion_execution_receipt(ArtifactPromotionExecutionReceiptRequest {
+        receipt_id: format!("{}:execution-receipt", promotion_plan.plan_id),
+        provenance_report,
+        deployment_receipt,
+    })?;
+    let path = write_artifact_promotion_execution_receipt(icp_root, network, fleet_name, &receipt)?;
+    println!(
+        "Artifact promotion execution receipt JSON: {}",
+        path.display()
+    );
+    Ok(Some(path))
+}
+
+fn promotion_install_deployment_receipt(
+    check: &DeploymentCheckV1,
+    execution_context: &DeploymentExecutionContextV1,
+    promotion_plan: &ArtifactPromotionPlanV1,
+) -> Result<DeploymentReceiptV1, Box<dyn std::error::Error>> {
+    let started_at = current_unix_timestamp_label()?;
+    let finished_at = current_unix_timestamp_label()?;
+    let phase = phase_receipt(
+        "promoted_plan_install",
+        started_at.clone(),
+        Some(finished_at.clone()),
+        "execute promoted deployment plan through current install runner",
+        ObservationStatusV1::Observed,
+        vec![
+            format!("artifact_promotion_plan:{}", promotion_plan.plan_id),
+            format!(
+                "artifact_promotion_plan_digest:{}",
+                promotion_plan.artifact_promotion_plan_digest
+            ),
+            format!(
+                "promotion_plan_lineage_digest:{}",
+                promotion_plan.promotion_plan_lineage_digest
+            ),
+        ],
+    );
+    let role_phase_receipts = promotion_plan
+        .transform
+        .roles
+        .iter()
+        .map(|role| {
+            completed_phase_role_receipt(
+                check,
+                "promoted_plan_install",
+                &role.role,
+                crate::deployment_truth::RolePhaseResultV1::Applied,
+                None,
+            )
+            .ok_or_else(|| {
+                format!(
+                    "promoted role {} is missing from deployment plan artifacts",
+                    role.role
+                )
+            })
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(receipt_with_execution_context(
+        deployment_receipt_from_check_with_status(
+            check,
+            format!("{}:promoted_plan_install", check.check_id),
+            DeploymentExecutionStatusV1::Complete,
+            started_at,
+            Some(finished_at),
+            vec![phase],
+            role_phase_receipts,
+            DeploymentCommandResultV1::Succeeded,
+        ),
+        execution_context,
+    ))
+}
+
 impl InstallReceiptScope<'_> {
     fn run_operation(
         self,
@@ -1825,6 +1930,55 @@ fn write_install_deployment_truth_receipt(
     bytes.push(b'\n');
     fs::write(&path, bytes)?;
     Ok(path)
+}
+
+fn write_artifact_promotion_execution_receipt(
+    icp_root: &Path,
+    network: &str,
+    fleet_name: &str,
+    receipt: &ArtifactPromotionExecutionReceiptV1,
+) -> Result<PathBuf, Box<dyn std::error::Error>> {
+    let path = artifact_promotion_execution_receipt_path(icp_root, network, fleet_name, receipt)?;
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    let mut bytes = serde_json::to_vec_pretty(receipt)?;
+    bytes.push(b'\n');
+    fs::write(&path, bytes)?;
+    Ok(path)
+}
+
+fn artifact_promotion_execution_receipt_path(
+    icp_root: &Path,
+    network: &str,
+    fleet_name: &str,
+    receipt: &ArtifactPromotionExecutionReceiptV1,
+) -> Result<PathBuf, Box<dyn std::error::Error>> {
+    validate_network_name(network)?;
+    validate_fleet_name(fleet_name)?;
+    let file_stem = format!(
+        "{}-{}",
+        safe_deployment_truth_path_label(&receipt.started_at),
+        safe_deployment_truth_path_label(&receipt.receipt_id)
+    );
+    Ok(
+        artifact_promotion_execution_receipts_dir(icp_root, network, fleet_name)?
+            .join(format!("{file_stem}.json")),
+    )
+}
+
+fn artifact_promotion_execution_receipts_dir(
+    icp_root: &Path,
+    network: &str,
+    fleet_name: &str,
+) -> Result<PathBuf, Box<dyn std::error::Error>> {
+    validate_network_name(network)?;
+    validate_fleet_name(fleet_name)?;
+    Ok(icp_root
+        .join(".canic")
+        .join(network)
+        .join("artifact-promotion-execution-receipts")
+        .join(fleet_name))
 }
 
 fn install_deployment_truth_receipt_path(

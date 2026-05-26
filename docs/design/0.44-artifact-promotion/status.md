@@ -255,10 +255,14 @@ executor shortcut.
   envelope decoding, supplied-plan network mismatch rejection, missing root
   wasm pre-mutation artifact validation, and CLI source-guard coverage proving
   no promotion-specific executor shortcut was introduced.
+- Plan-mediated installs from ready `ArtifactPromotionPlanV1` envelopes now
+  write artifact promotion execution receipt wrappers after the current install
+  path succeeds. The wrapper links the promotion plan/provenance evidence to
+  the nested deployment receipt without replacing the deployment receipt or
+  introducing a separate promotion executor.
 
 ## Not Implemented Yet
 
-- Execution-path emission of promotion execution receipts.
 - Live `wasm_store` catalog lookup. Catalog verification now exists for
   supplied observations, but no live catalog reader is wired yet.
 - Artifact identity dedupe policy decisions beyond passive summary/grouping.

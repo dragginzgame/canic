@@ -14,6 +14,15 @@ present.
 
 ## [0.44.x] - 2026-05-25 - Artifact promotion
 
+- `0.44.15` emits artifact promotion execution receipt wrappers after
+  successful plan-mediated installs from ready `ArtifactPromotionPlanV1`
+  envelopes, linking promotion plan/provenance evidence to the nested
+  deployment receipt without adding a promotion executor.
+
+```bash
+canic deploy install --plan promoted-plan.json
+```
+
 - `0.44.14` hardens plan-mediated promotion install with direct coverage for
   ready and blocked promotion plan envelopes, raw deployment plan input, target
   network mismatches, missing root wasm artifacts, and the current-install

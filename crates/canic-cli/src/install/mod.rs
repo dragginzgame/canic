@@ -97,6 +97,7 @@ impl InstallOptions {
             expected_fleet: Some(self.fleet),
             interactive_config_selection: false,
             deployment_plan_override: None,
+            artifact_promotion_plan_override: None,
         }
     }
 }

@@ -36,6 +36,11 @@ inspect only the files needed for the current task.
   blocked promotion envelopes, supplied-plan network mismatch rejection,
   missing root wasm artifact validation before mutation, and CLI source-guard
   mediation through `install_root`.
+- Ready `ArtifactPromotionPlanV1` envelope installs now write an artifact
+  promotion execution receipt wrapper after successful current install. The
+  wrapper links promotion plan/provenance evidence to the nested deployment
+  receipt while keeping raw `DeploymentPlanV1` installs on the ordinary
+  deployment-receipt path.
 - 0.44 also has the first passive promotion readiness model. It reports
   role-scoped promotion source identity, target wasm/config identity,
   byte/config identity comparisons, blocking findings, and target-store

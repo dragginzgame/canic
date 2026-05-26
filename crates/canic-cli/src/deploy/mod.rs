@@ -376,6 +376,15 @@ struct DeployInstallPlanOptions {
     profile: Option<CanisterBuildProfile>,
 }
 
+///
+/// DeployInstallPlanInput
+///
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct DeployInstallPlanInput {
+    deployment_plan: DeploymentPlanV1,
+    artifact_promotion_plan: Option<ArtifactPromotionPlanV1>,
+}
+
 /// DeployAuthorityOptions
 ///
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -1218,7 +1227,9 @@ fn read_deployment_receipt(path: &PathBuf) -> Result<DeploymentReceiptV1, Deploy
     read_json_file(path)
 }
 
-fn read_install_deployment_plan(path: &PathBuf) -> Result<DeploymentPlanV1, DeployCommandError> {
+fn read_install_deployment_plan(
+    path: &PathBuf,
+) -> Result<DeployInstallPlanInput, DeployCommandError> {
     let bytes = fs::read(path).map_err(Box::<dyn std::error::Error>::from)?;
     if let Ok(plan) = serde_json::from_slice::<ArtifactPromotionPlanV1>(&bytes) {
         validate_artifact_promotion_plan(&plan).map_err(Box::<dyn std::error::Error>::from)?;
@@ -1228,18 +1239,26 @@ fn read_install_deployment_plan(path: &PathBuf) -> Result<DeploymentPlanV1, Depl
                 plan.plan_id
             )));
         }
-        return Ok(plan.transform.promoted_plan);
+        return Ok(DeployInstallPlanInput {
+            deployment_plan: plan.transform.promoted_plan.clone(),
+            artifact_promotion_plan: Some(plan),
+        });
     }
 
-    serde_json::from_slice::<DeploymentPlanV1>(&bytes).map_err(|err| {
-        DeployCommandError::Check(
-            format!(
-                "failed to decode {} as ArtifactPromotionPlanV1 or DeploymentPlanV1: {err}",
-                path.display()
+    serde_json::from_slice::<DeploymentPlanV1>(&bytes)
+        .map(|deployment_plan| DeployInstallPlanInput {
+            deployment_plan,
+            artifact_promotion_plan: None,
+        })
+        .map_err(|err| {
+            DeployCommandError::Check(
+                format!(
+                    "failed to decode {} as ArtifactPromotionPlanV1 or DeploymentPlanV1: {err}",
+                    path.display()
+                )
+                .into(),
             )
-            .into(),
-        )
-    })
+        })
 }
 
 fn read_json_file<T>(path: &PathBuf) -> Result<T, DeployCommandError>
@@ -1323,12 +1342,12 @@ impl DeployInstallPlanOptions {
 
     fn into_install_root_options(
         self,
-        plan: DeploymentPlanV1,
+        plan: DeployInstallPlanInput,
         icp_root: Option<std::path::PathBuf>,
     ) -> InstallRootOptions {
-        let fleet_template = plan.fleet_template.clone();
+        let fleet_template = plan.deployment_plan.fleet_template.clone();
         InstallRootOptions {
-            root_canister: root_canister_for_plan(&plan),
+            root_canister: root_canister_for_plan(&plan.deployment_plan),
             root_build_target: DEFAULT_ROOT_TARGET.to_string(),
             network: self.network,
             icp_root,
@@ -1337,7 +1356,8 @@ impl DeployInstallPlanOptions {
             config_path: Some(default_fleet_config_path(&fleet_template)),
             expected_fleet: Some(fleet_template),
             interactive_config_selection: false,
-            deployment_plan_override: Some(plan),
+            deployment_plan_override: Some(plan.deployment_plan),
+            artifact_promotion_plan_override: plan.artifact_promotion_plan,
         }
     }
 }
@@ -1441,6 +1461,7 @@ impl DeployTruthOptions {
             expected_fleet: Some(self.fleet),
             interactive_config_selection: false,
             deployment_plan_override: None,
+            artifact_promotion_plan_override: None,
         }
     }
 }
@@ -3104,12 +3125,16 @@ mod tests {
         let mut identity = sample_deployment_identity();
         identity.deployment_name = "demo-local".to_string();
         let plan = sample_deployment_plan(identity);
+        let input = DeployInstallPlanInput {
+            deployment_plan: plan,
+            artifact_promotion_plan: None,
+        };
         let options = DeployInstallPlanOptions {
             plan: PathBuf::from("promoted-plan.json"),
             network: "local".to_string(),
             profile: Some(CanisterBuildProfile::Fast),
         }
-        .into_install_root_options(plan, Some(std::path::PathBuf::from("/tmp/icp")));
+        .into_install_root_options(input, Some(std::path::PathBuf::from("/tmp/icp")));
 
         assert_eq!(options.root_canister, "aaaaa-aa");
         assert_eq!(options.root_build_target, "root");
@@ -3131,7 +3156,8 @@ mod tests {
 
         let decoded = read_install_deployment_plan(&path).expect("decode deployment plan");
 
-        assert_eq!(decoded.plan_id, "plan-1");
+        assert_eq!(decoded.deployment_plan.plan_id, "plan-1");
+        assert_eq!(decoded.artifact_promotion_plan, None);
         fs::remove_file(path).expect("clean temp plan");
     }
 
@@ -3143,7 +3169,14 @@ mod tests {
 
         let decoded = read_install_deployment_plan(&path).expect("decode promotion plan");
 
-        assert_eq!(decoded.plan_id, "promoted-plan-1");
+        assert_eq!(decoded.deployment_plan.plan_id, "promoted-plan-1");
+        assert_eq!(
+            decoded
+                .artifact_promotion_plan
+                .as_ref()
+                .map(|plan| plan.plan_id.as_str()),
+            Some("artifact-promotion-plan-1")
+        );
         fs::remove_file(path).expect("clean temp plan");
     }
 

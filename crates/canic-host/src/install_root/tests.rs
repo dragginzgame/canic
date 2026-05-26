@@ -17,17 +17,24 @@ use super::{
     parse_canister_id_json, parse_created_canister_id, parse_cycle_balance_response,
     parse_root_ready_value, read_fleet_install_state, render_install_timing_summary,
     resolve_install_config_path, root_init_args, validate_expected_fleet_name,
-    validate_plan_artifacts_with_phase, write_completed_install_phase_receipt,
-    write_current_install_execution_preflight_receipt, write_install_deployment_truth_receipt,
-    write_install_state, write_install_state_with_deployment_truth_receipt,
+    validate_plan_artifacts_with_phase, write_artifact_promotion_execution_receipt_for_install,
+    write_completed_install_phase_receipt, write_current_install_execution_preflight_receipt,
+    write_install_deployment_truth_receipt, write_install_state,
+    write_install_state_with_deployment_truth_receipt,
 };
 use crate::canister_build::CanisterBuildProfile;
 use crate::deployment_truth::{
+    ArtifactPromotionExecutionReceiptV1, ArtifactPromotionPlanRequest, ArtifactPromotionPlanV1,
     CanisterControlClassV1, DeploymentCheckV1, DeploymentExecutionContextV1,
     DeploymentExecutionPreflightStatusV1, DeploymentExecutionStatusV1, DeploymentExecutorBackendV1,
     DeploymentExecutorCapabilityV1, DeploymentReceiptV1, ObservationStatusV1, ObservedCanisterV1,
-    SafetyFindingV1, SafetySeverityV1, SafetyStatusV1, artifact_gate_phase_receipt,
-    artifact_gate_role_phase_receipts, compare_plan_to_inventory, safety_report_from_diff,
+    PromotionArtifactIdentityReportRequest, PromotionArtifactLevelV1,
+    PromotionPlanTransformRequest, RoleArtifactSourceKindV1, RoleArtifactSourceV1,
+    RolePromotionInputV1, SafetyFindingV1, SafetySeverityV1, SafetyStatusV1,
+    artifact_gate_phase_receipt, artifact_gate_role_phase_receipts, artifact_promotion_plan,
+    compare_plan_to_inventory, promoted_deployment_plan_transform_from_inputs,
+    promotion_artifact_identity_report_from_inputs, promotion_readiness_from_inputs,
+    safety_report_from_diff,
 };
 use crate::icp::{CANIC_ICP_LOCAL_NETWORK_URL_ENV, CANIC_ICP_LOCAL_ROOT_KEY_ENV};
 use crate::release_set::{ReleaseSetEntry, RootReleaseSetManifest, configured_install_targets};
@@ -386,6 +393,7 @@ kind = "singleton"
             expected_fleet: Some("demo".to_string()),
             interactive_config_selection: false,
             deployment_plan_override: None,
+            artifact_promotion_plan_override: None,
         };
 
         let check = check_install_deployment_truth(&options, "2026-05-22T00:00:00Z")
@@ -469,6 +477,7 @@ kind = "singleton"
         expected_fleet: Some("demo".to_string()),
         interactive_config_selection: false,
         deployment_plan_override: None,
+        artifact_promotion_plan_override: None,
     };
 
     let check = current_install_deployment_truth_check_at(
@@ -512,6 +521,7 @@ fn install_truth_check_uses_supplied_deployment_plan_override() {
         expected_fleet: Some("demo".to_string()),
         interactive_config_selection: false,
         deployment_plan_override: Some(check.plan),
+        artifact_promotion_plan_override: None,
     };
 
     let supplied_check = current_install_deployment_truth_check_at(
@@ -545,6 +555,7 @@ fn install_truth_check_rejects_supplied_plan_network_mismatch() {
         expected_fleet: Some("demo".to_string()),
         interactive_config_selection: false,
         deployment_plan_override: Some(check.plan),
+        artifact_promotion_plan_override: None,
     };
 
     let err = current_install_deployment_truth_check_at(
@@ -572,6 +583,70 @@ fn install_plan_artifact_validation_rejects_missing_root_wasm_before_mutation() 
     assert!(
         err.to_string()
             .contains("deployment plan root wasm artifact does not exist")
+    );
+    fs::remove_dir_all(root).expect("clean temp dir");
+}
+
+#[test]
+fn install_writes_artifact_promotion_execution_receipt_for_promotion_plan() {
+    let (root, mut check) =
+        demo_install_deployment_truth_check("canic-install-promotion-execution-receipt");
+    let artifact = check
+        .plan
+        .role_artifacts
+        .iter_mut()
+        .find(|artifact| artifact.role == "root")
+        .expect("root artifact");
+    artifact.wasm_sha256 = Some(sample_sha256("d"));
+    artifact.wasm_gz_sha256 = Some(sample_sha256("a"));
+    artifact.observed_wasm_gz_file_sha256 = Some(sample_sha256("a"));
+    artifact.canonical_embedded_config_sha256 = Some(sample_sha256("c"));
+    let promotion_plan = sample_artifact_promotion_plan_for_install(&check);
+    let execution_context = current_install_execution_context(&root, &root, "local");
+    let options = InstallRootOptions {
+        root_canister: "root".to_string(),
+        root_build_target: "root".to_string(),
+        network: "local".to_string(),
+        icp_root: Some(root.clone()),
+        build_profile: Some(CanisterBuildProfile::Fast),
+        ready_timeout_seconds: 30,
+        config_path: Some("fleets/demo/canic.toml".to_string()),
+        expected_fleet: Some("demo".to_string()),
+        interactive_config_selection: false,
+        deployment_plan_override: Some(check.plan.clone()),
+        artifact_promotion_plan_override: Some(promotion_plan.clone()),
+    };
+    let latest_deployment_receipt_before =
+        latest_deployment_truth_receipt_path_from_root(&root, "local", "demo").ok();
+
+    let path = write_artifact_promotion_execution_receipt_for_install(
+        &options,
+        &root,
+        "local",
+        "demo",
+        &check,
+        &execution_context,
+    )
+    .expect("promotion execution receipt write")
+    .expect("promotion execution receipt path");
+    let receipt: ArtifactPromotionExecutionReceiptV1 =
+        serde_json::from_slice(&fs::read(&path).expect("read promotion receipt"))
+            .expect("decode promotion receipt");
+
+    assert!(
+        path.display()
+            .to_string()
+            .contains("artifact-promotion-execution-receipts")
+    );
+    assert_eq!(receipt.artifact_promotion_plan_id, promotion_plan.plan_id);
+    assert_eq!(receipt.promoted_plan_id, check.plan.plan_id);
+    assert_eq!(receipt.deployment_receipt.plan_id, check.plan.plan_id);
+    assert_eq!(receipt.roles.len(), 1);
+    assert_eq!(receipt.roles[0].role, "root");
+    assert_eq!(
+        latest_deployment_truth_receipt_path_from_root(&root, "local", "demo").ok(),
+        latest_deployment_receipt_before,
+        "promotion wrapper emission must not update ordinary deployment receipt discovery"
     );
     fs::remove_dir_all(root).expect("clean temp dir");
 }
@@ -612,6 +687,7 @@ kind = "root"
         expected_fleet: Some("demo".to_string()),
         interactive_config_selection: false,
         deployment_plan_override: None,
+        artifact_promotion_plan_override: None,
     };
 
     let mut check = current_install_deployment_truth_check_at(
@@ -680,6 +756,7 @@ kind = "root"
         expected_fleet: Some("demo".to_string()),
         interactive_config_selection: false,
         deployment_plan_override: None,
+        artifact_promotion_plan_override: None,
     };
 
     let mut check = current_install_deployment_truth_check_at(
@@ -783,6 +860,7 @@ kind = "root"
         expected_fleet: Some("demo".to_string()),
         interactive_config_selection: false,
         deployment_plan_override: None,
+        artifact_promotion_plan_override: None,
     };
 
     let mut check = current_install_deployment_truth_check_at(
@@ -865,6 +943,7 @@ kind = "root"
         expected_fleet: Some("demo".to_string()),
         interactive_config_selection: false,
         deployment_plan_override: None,
+        artifact_promotion_plan_override: None,
     };
 
     let mut check = current_install_deployment_truth_check_at(
@@ -929,6 +1008,7 @@ kind = "root"
         expected_fleet: Some("demo".to_string()),
         interactive_config_selection: false,
         deployment_plan_override: None,
+        artifact_promotion_plan_override: None,
     };
 
     let check = current_install_deployment_truth_check_at(
@@ -1018,6 +1098,7 @@ kind = "root"
         expected_fleet: Some("demo".to_string()),
         interactive_config_selection: false,
         deployment_plan_override: None,
+        artifact_promotion_plan_override: None,
     };
     let check = current_install_deployment_truth_check_at(
         &options,
@@ -1647,6 +1728,7 @@ kind = "root"
         expected_fleet: Some("demo".to_string()),
         interactive_config_selection: false,
         deployment_plan_override: None,
+        artifact_promotion_plan_override: None,
     };
 
     let mut check = current_install_deployment_truth_check_at(
@@ -1726,6 +1808,7 @@ kind = "root"
         expected_fleet: Some("demo".to_string()),
         interactive_config_selection: false,
         deployment_plan_override: None,
+        artifact_promotion_plan_override: None,
     };
 
     let check = current_install_deployment_truth_check_at(
@@ -2363,6 +2446,7 @@ kind = "root"
         expected_fleet: Some("demo".to_string()),
         interactive_config_selection: false,
         deployment_plan_override: None,
+        artifact_promotion_plan_override: None,
     };
     let check = current_install_deployment_truth_check_at(
         &options,
@@ -2374,6 +2458,76 @@ kind = "root"
     )
     .expect("deployment truth check");
     (root, check)
+}
+
+fn sample_artifact_promotion_plan_for_install(
+    check: &DeploymentCheckV1,
+) -> ArtifactPromotionPlanV1 {
+    let input = sample_role_promotion_input_for_install(check);
+    let readiness = promotion_readiness_from_inputs(
+        "promotion-readiness-1",
+        &check.plan,
+        std::slice::from_ref(&input),
+    );
+    let artifact_identity_report =
+        promotion_artifact_identity_report_from_inputs(PromotionArtifactIdentityReportRequest {
+            report_id: "promotion-artifact-identity-1".to_string(),
+            inputs: vec![input.clone()],
+        })
+        .expect("sample promotion artifact identity report");
+    let transform =
+        promoted_deployment_plan_transform_from_inputs(&PromotionPlanTransformRequest {
+            promoted_plan_id: check.plan.plan_id.clone(),
+            target_plan: check.plan.clone(),
+            inputs: vec![input],
+        })
+        .expect("sample promotion transform");
+
+    artifact_promotion_plan(ArtifactPromotionPlanRequest {
+        plan_id: "artifact-promotion-plan-1".to_string(),
+        generated_at: "2026-05-26T00:00:00Z".to_string(),
+        readiness,
+        artifact_identity_report,
+        transform,
+        target_execution_lineage: None,
+    })
+    .expect("sample artifact promotion plan")
+}
+
+fn sample_role_promotion_input_for_install(check: &DeploymentCheckV1) -> RolePromotionInputV1 {
+    let artifact = check
+        .plan
+        .role_artifacts
+        .iter()
+        .find(|artifact| artifact.role == "root")
+        .expect("root artifact");
+    RolePromotionInputV1 {
+        role: "root".to_string(),
+        promotion_level: PromotionArtifactLevelV1::SealedWasm,
+        source: RoleArtifactSourceV1 {
+            role: "root".to_string(),
+            kind: RoleArtifactSourceKindV1::LocalWasmGz,
+            locator: artifact.wasm_gz_path.clone(),
+            previous_receipt_kind: None,
+            previous_receipt_lineage_digest: None,
+            expected_wasm_sha256: artifact.wasm_sha256.clone(),
+            expected_wasm_gz_sha256: artifact
+                .wasm_gz_sha256
+                .clone()
+                .or_else(|| artifact.observed_wasm_gz_file_sha256.clone()),
+            expected_candid_sha256: artifact.candid_sha256.clone(),
+            expected_canonical_embedded_config_sha256: artifact
+                .canonical_embedded_config_sha256
+                .clone(),
+        },
+        require_byte_identical_wasm: true,
+        require_target_embedded_config: true,
+        target_store_has_artifact: Some(true),
+    }
+}
+
+fn sample_sha256(seed: &str) -> String {
+    seed.repeat(64)
 }
 
 fn with_guarded_env(run: impl FnOnce()) {
