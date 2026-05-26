@@ -32,6 +32,15 @@ inspect only the files needed for the current task.
   the boundary that the command does not query live inventory or execute
   lifecycle work. `canic deploy external inspect verification-check --request
   <file>` exposes that passive check.
+- `ExternalUpgradeCompletionReportV1` now combines proposal, consent-evidence,
+  and verification-check artifacts into one passive completion status. It
+  records blockers and next actions for awaiting-consent, refused,
+  awaiting-verification, verified-complete, and verification-failed cases
+  without delivering consent, querying live inventory, or executing lifecycle
+  work.
+- Source-guard coverage now pins the 0.45 lifecycle projection to the
+  canonical `CanisterControlClassV1` model so the external lifecycle layer
+  cannot silently introduce a second user/external control-class path.
 - Design starts at
   `docs/design/0.45-external-lifecycle/0.45-design.md`. 0.45 must reuse the
   canonical control classifications from deployment truth and authority
@@ -92,6 +101,13 @@ inspect only the files needed for the current task.
   postconditions and supplied observation facts without adding live
   re-inventory. It reports each required postcondition as satisfied or
   mismatched and remains passive structural evidence.
+- `ExternalUpgradeCompletionReportV1` now prevents downstream consumers from
+  conflating consent evidence, reported external action, and verified
+  completion. `canic deploy external inspect completion --request <file>`
+  exposes that passive rollup from archived proposal/evidence/check inputs.
+- The 0.45 test guard now verifies external lifecycle code continues to use
+  `CanisterControlClassV1` instead of adding a parallel external/user
+  classifier.
 - `ExternalUpgradeConsentEvidenceV1` now separates reported consent/action
   evidence from verification evidence. It links a proposal/receipt pair,
   records consent state, reporter, consent requirements, and allowed

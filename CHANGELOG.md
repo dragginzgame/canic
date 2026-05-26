@@ -12,6 +12,17 @@ present.
 
 ## Unreleased
 
+- External upgrade completion reports now combine proposal, consent-evidence,
+  and verification-check artifacts into one passive status report without
+  treating consent or reported external action as completion proof.
+- External lifecycle source guards now pin the 0.45 projection boundary to the
+  canonical `CanisterControlClassV1` model, preventing a second user/external
+  control-class path from appearing in lifecycle code.
+
+```bash
+canic deploy external inspect completion --request external-completion.json
+```
+
 
 ## [0.45.x] - 2026-05-26 - External lifecycle
 

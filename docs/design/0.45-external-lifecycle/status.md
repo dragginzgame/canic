@@ -16,9 +16,14 @@ Started.
 truth, lifecycle plan partitioning, derived proposal/receipt/pending/check/
 handoff evidence, critical-fix residual exposure reporting, structural
 external verification reporting, verification policies, and supplied-observation
-verification checks. External or user-owned lifecycle flows remain explicit
-report data; no consent delivery, external execution, live re-inventory, or
-install mutation path has landed.
+verification checks. The line also has passive completion reports that combine
+proposal, consent-evidence, and verification-check artifacts without treating
+consent or reported action as completion proof. External or user-owned
+lifecycle flows remain explicit report data; no consent delivery, external
+execution, live re-inventory, or install mutation path has landed.
+Source-guard coverage pins 0.45 lifecycle projection to the canonical
+`CanisterControlClassV1` model so the line cannot silently introduce a second
+user/external control-class path.
 
 ## Implemented
 
@@ -35,6 +40,9 @@ install mutation path has landed.
   external proposal/execution, verify-external-completion, observe-only, and
   blocked modes, plus verification requirements that later proposal/receipt
   surfaces can cite.
+- Source-guard coverage verifies the external lifecycle layer continues to
+  project from `CanisterControlClassV1` instead of adding a parallel
+  external/user classification model.
 - `ExternalLifecyclePlanV1` partitions lifecycle rows into directly executable,
   externally proposed, and blocked upgrades. It carries a deterministic plan
   digest plus residual exposure and protected-call implications.
@@ -92,6 +100,10 @@ install mutation path has landed.
   against an `ExternalUpgradeVerificationPolicyV1`, recording per-requirement
   expected/observed values and a verified/mismatch result without querying live
   inventory itself.
+- `ExternalUpgradeCompletionReportV1` combines proposal, consent-evidence, and
+  verification-check artifacts into a passive completion status with blockers
+  and next actions for awaiting-consent, refused, awaiting-verification,
+  verified-complete, and verification-failed cases.
 - `ExternalLifecycleCheckV1` summarizes lifecycle plan, proposal, and pending
   evidence into one passive status artifact with direct, pending, blocked, and
   residual-exposure counts, source artifact digests, summary text, and next
@@ -116,6 +128,11 @@ install mutation path has landed.
   `ExternalUpgradeVerificationCheckRequest` JSON file and emits a passive
   `ExternalUpgradeVerificationCheckV1` from supplied observation facts without
   live lookup, consent delivery, external execution, install, or mutation.
+- `canic deploy external inspect completion --request <file>` reads an
+  `ExternalUpgradeCompletionReportRequest` JSON file and emits a passive
+  `ExternalUpgradeCompletionReportV1` from archived proposal, consent-evidence,
+  and verification-check inputs without live lookup, consent delivery,
+  external execution, install, or mutation.
 - JSON shape and projection coverage pins deployment-controlled,
   user-controlled, and unknown-unsafe lifecycle authority behavior, plus the
   first external proposal, receipt, consent evidence, verification request,
@@ -126,7 +143,8 @@ install mutation path has landed.
 - Consent delivery and external action execution workflow.
 - Safe upgrade/install boundaries for externally controlled canisters.
 - Live re-inventory integration for external lifecycle verification. Current
-  verification reports and checks use supplied structural evidence only.
+  verification reports, checks, and completion reports use supplied structural
+  evidence only.
 
 ## Drift Log
 

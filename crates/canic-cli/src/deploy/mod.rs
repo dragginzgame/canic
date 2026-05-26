@@ -19,7 +19,8 @@ use canic_host::{
         AuthorityDryRunEvidenceV1, BuildMaterializationEvidenceV1, CriticalExternalFixReportV1,
         DeploymentCheckV1, DeploymentExecutionPreflightV1, DeploymentPlanV1, DeploymentReceiptV1,
         ExternalLifecycleCheckV1, ExternalLifecycleHandoffV1, ExternalLifecyclePendingReportV1,
-        ExternalLifecyclePlanV1, ExternalUpgradeConsentEvidenceRequest,
+        ExternalLifecyclePlanV1, ExternalUpgradeCompletionReportRequest,
+        ExternalUpgradeCompletionReportV1, ExternalUpgradeConsentEvidenceRequest,
         ExternalUpgradeConsentEvidenceV1, ExternalUpgradeProposalReportV1,
         ExternalUpgradeVerificationCheckRequest, ExternalUpgradeVerificationCheckV1,
         ExternalUpgradeVerificationPolicyRequest, ExternalUpgradeVerificationPolicyV1,
@@ -49,6 +50,7 @@ use canic_host::{
         external_lifecycle_handoff_from_reports, external_lifecycle_handoff_text,
         external_lifecycle_pending_report_from_plan, external_lifecycle_pending_report_text,
         external_lifecycle_plan_from_check, external_lifecycle_plan_text,
+        external_upgrade_completion_report_from_evidence, external_upgrade_completion_report_text,
         external_upgrade_consent_evidence_from_receipt, external_upgrade_consent_evidence_text,
         external_upgrade_proposal_report_from_lifecycle_plan,
         external_upgrade_proposal_report_text, external_upgrade_verification_check_from_policy,
@@ -107,6 +109,7 @@ Examples:
   canic deploy external inspect consent --request external-consent.json
   canic deploy external inspect verification-policy --request external-verification-policy.json
   canic deploy external inspect verification-check --request external-verification-check.json
+  canic deploy external inspect completion --request external-completion.json
   canic deploy external verify --request external-verification.json
   canic deploy promote plan --request promotion-plan.json
   canic deploy promote check --request promotion-check.json
@@ -190,6 +193,8 @@ Examples:
   canic deploy external inspect verification-policy --request external-verification-policy.json --format text
   canic deploy external inspect verification-check --request external-verification-check.json
   canic deploy external inspect verification-check --request external-verification-check.json --format text
+  canic deploy external inspect completion --request external-completion.json
+  canic deploy external inspect completion --request external-completion.json --format text
 
 Advanced external lifecycle inspection commands expose archived/passive DTOs.
 They do not request consent, execute external upgrades, install code, or mutate
@@ -222,6 +227,16 @@ ExternalUpgradeVerificationCheckV1 JSON by default, or host-owned passive text
 with --format text. Verification checks evaluate supplied observation facts
 against a verification policy; they do not query live inventory or execute
 external lifecycle work.";
+const DEPLOY_EXTERNAL_COMPLETION_HELP_AFTER: &str = "\
+Examples:
+  canic deploy external inspect completion --request external-completion.json
+  canic deploy external inspect completion --request external-completion.json --format text
+
+Reads an ExternalUpgradeCompletionReportRequest-shaped JSON file and prints
+ExternalUpgradeCompletionReportV1 JSON by default, or host-owned passive text
+with --format text. Completion reports combine proposal, consent evidence, and
+verification-check evidence; they do not deliver consent, query live inventory,
+or execute external lifecycle work.";
 const DEPLOY_INSTALL_HELP_AFTER: &str = "\
 Examples:
   canic deploy install --plan promoted-plan.json
@@ -1301,6 +1316,7 @@ where
         Some((command, args)) if command == "verification-check" => {
             run_external_inspect_verification_check(args)
         }
+        Some((command, args)) if command == "completion" => run_external_inspect_completion(args),
         _ => {
             println!("{}", external_inspect_usage());
             Ok(())
@@ -1470,6 +1486,31 @@ where
         ExternalOutputFormat::Json => print_json(&check)?,
         ExternalOutputFormat::Text => {
             println!("{}", external_upgrade_verification_check_text(&check));
+        }
+    }
+    Ok(())
+}
+
+fn run_external_inspect_completion<I>(args: I) -> Result<(), DeployCommandError>
+where
+    I: IntoIterator<Item = OsString>,
+{
+    let args = args.into_iter().collect::<Vec<_>>();
+    if print_help_or_version(&args, external_completion_usage, version_text()) {
+        return Ok(());
+    }
+
+    let options = DeployExternalInspectOptions::parse(
+        args,
+        deploy_external_inspect_completion_command,
+        external_completion_usage,
+    )?;
+    let request = read_json_file::<ExternalUpgradeCompletionReportRequest>(&options.request)?;
+    let report = build_external_upgrade_completion_report(request)?;
+    match options.format {
+        ExternalOutputFormat::Json => print_json(&report)?,
+        ExternalOutputFormat::Text => {
+            println!("{}", external_upgrade_completion_report_text(&report));
         }
     }
     Ok(())
@@ -1663,6 +1704,18 @@ fn build_external_upgrade_verification_check(
     )
     .map_err(|err| DeployCommandError::Check(Box::new(err)))?;
     Ok(check)
+}
+
+fn build_external_upgrade_completion_report(
+    request: ExternalUpgradeCompletionReportRequest,
+) -> Result<ExternalUpgradeCompletionReportV1, DeployCommandError> {
+    external_upgrade_completion_report_from_evidence(
+        request.report_id,
+        &request.proposal,
+        &request.consent_evidence,
+        &request.verification_check,
+    )
+    .map_err(|err| DeployCommandError::Check(Box::new(err)))
 }
 
 fn build_external_upgrade_verification_report(
@@ -2336,6 +2389,11 @@ fn deploy_external_inspect_command() -> ClapCommand {
                 .about("Build passive external verification check")
                 .disable_help_flag(true),
         ))
+        .subcommand(passthrough_subcommand(
+            ClapCommand::new("completion")
+                .about("Build passive external completion report")
+                .disable_help_flag(true),
+        ))
         .after_help(DEPLOY_EXTERNAL_INSPECT_HELP_AFTER)
 }
 
@@ -2785,6 +2843,23 @@ fn deploy_external_inspect_verification_check_command() -> ClapCommand {
         .after_help(DEPLOY_EXTERNAL_VERIFICATION_CHECK_HELP_AFTER)
 }
 
+fn deploy_external_inspect_completion_command() -> ClapCommand {
+    ClapCommand::new("completion")
+        .bin_name("canic deploy external inspect completion")
+        .about("Build passive external completion report")
+        .disable_help_flag(true)
+        .override_usage("canic deploy external inspect completion --request <file>")
+        .arg(
+            value_arg("request")
+                .long("request")
+                .value_name("file")
+                .required(true)
+                .help("ExternalUpgradeCompletionReportRequest JSON file to inspect"),
+        )
+        .arg(external_format_arg())
+        .after_help(DEPLOY_EXTERNAL_COMPLETION_HELP_AFTER)
+}
+
 fn deploy_plan_command() -> ClapCommand {
     deploy_truth_leaf_command("plan", "Print the local deployment plan JSON")
         .after_help(DEPLOY_PLAN_HELP_AFTER)
@@ -2956,6 +3031,11 @@ fn external_verification_policy_usage() -> String {
 
 fn external_verification_check_usage() -> String {
     let mut command = deploy_external_inspect_verification_check_command();
+    command.render_help().to_string()
+}
+
+fn external_completion_usage() -> String {
+    let mut command = deploy_external_inspect_completion_command();
     command.render_help().to_string()
 }
 
@@ -3149,14 +3229,14 @@ mod tests {
         ArtifactDigestSourceV1, ArtifactSourceV1, AuthorityProfileV1, CanisterControlClassV1,
         ConsentChannelKindV1, DEPLOYMENT_TRUTH_SCHEMA_VERSION, DeploymentDiffV1,
         DeploymentIdentityV1, DeploymentInventoryV1, DeploymentPlanV1, ExpectedCanisterV1,
-        ExternalUpgradeConsentStateV1, ExternalUpgradeVerificationObservationV1,
-        ExternalUpgradeVerificationRequirementStatusV1, ExternalUpgradeVerificationResultV1,
-        LifecycleVerificationRequirementV1, LocalDeploymentConfigV1, ObservationStatusV1,
-        ObservedCanisterV1, PreviousArtifactReceiptKindV1, PromotionArtifactLevelV1,
-        ResumeSafetyV1, RoleArtifactSourceKindV1, RoleArtifactSourceV1, RoleArtifactV1,
-        RolePromotionInputV1, TrustDomainV1, VerifierReadinessExpectationV1,
-        VerifierReadinessObservationV1, external_upgrade_receipt_from_observation,
-        promotion_readiness_from_inputs,
+        ExternalUpgradeCompletionStatusV1, ExternalUpgradeConsentStateV1,
+        ExternalUpgradeVerificationObservationV1, ExternalUpgradeVerificationRequirementStatusV1,
+        ExternalUpgradeVerificationResultV1, LifecycleVerificationRequirementV1,
+        LocalDeploymentConfigV1, ObservationStatusV1, ObservedCanisterV1,
+        PreviousArtifactReceiptKindV1, PromotionArtifactLevelV1, ResumeSafetyV1,
+        RoleArtifactSourceKindV1, RoleArtifactSourceV1, RoleArtifactV1, RolePromotionInputV1,
+        TrustDomainV1, VerifierReadinessExpectationV1, VerifierReadinessObservationV1,
+        external_upgrade_receipt_from_observation, promotion_readiness_from_inputs,
     };
 
     #[test]
@@ -3721,6 +3801,7 @@ mod tests {
         let consent_help = external_consent_usage();
         let verification_policy_help = external_verification_policy_usage();
         let verification_check_help = external_verification_check_usage();
+        let completion_help = external_completion_usage();
         let verify_help = external_verify_usage();
 
         assert!(help.contains("Build passive external lifecycle reports"));
@@ -3747,6 +3828,7 @@ mod tests {
         assert!(inspect_help.contains("canic deploy external inspect consent"));
         assert!(inspect_help.contains("verification-policy"));
         assert!(inspect_help.contains("verification-check"));
+        assert!(inspect_help.contains("completion"));
         assert!(inspect_help.contains("do not request consent"));
         assert!(consent_help.contains("ExternalUpgradeConsentEvidenceRequest-shaped JSON"));
         assert!(consent_help.contains("does not verify live completion"));
@@ -3760,6 +3842,8 @@ mod tests {
             verification_check_help.contains("ExternalUpgradeVerificationCheckRequest-shaped JSON")
         );
         assert!(verification_check_help.contains("supplied observation facts"));
+        assert!(completion_help.contains("ExternalUpgradeCompletionReportRequest-shaped JSON"));
+        assert!(completion_help.contains("proposal, consent evidence"));
         assert!(verify_help.contains("ExternalUpgradeVerificationReportRequest-shaped JSON"));
         assert!(verify_help.contains("live inventory remains the source of truth"));
     }
@@ -4008,17 +4092,28 @@ mod tests {
 
     #[test]
     fn deploy_external_inspect_dispatches_passive_leaf_commands() {
+        for (command, request) in [
+            ("consent", "external-consent.json"),
+            ("verification-policy", "external-verification-policy.json"),
+            ("verification-check", "external-verification-check.json"),
+            ("completion", "external-completion.json"),
+        ] {
+            assert_external_inspect_dispatches(command, request);
+        }
+    }
+
+    fn assert_external_inspect_dispatches(command: &str, request: &str) {
         let parsed = parse_subcommand(
             deploy_command(),
             [
                 OsString::from("external"),
                 OsString::from("inspect"),
-                OsString::from("consent"),
+                OsString::from(command),
                 OsString::from("--request"),
-                OsString::from("external-consent.json"),
+                OsString::from(request),
             ],
         )
-        .expect("parse deploy external inspect consent")
+        .expect("parse deploy external inspect")
         .expect("external command");
 
         assert_eq!(parsed.0, "external");
@@ -4029,71 +4124,12 @@ mod tests {
         assert_eq!(external.0, "inspect");
 
         let inspect = parse_subcommand(deploy_external_inspect_command(), external.1)
-            .expect("parse nested inspect consent")
-            .expect("external inspect consent command");
-        assert_eq!(inspect.0, "consent");
+            .expect("parse nested inspect command")
+            .expect("external inspect leaf command");
+        assert_eq!(inspect.0, command);
         assert_eq!(
             inspect.1,
-            vec![
-                OsString::from("--request"),
-                OsString::from("external-consent.json")
-            ]
-        );
-
-        let parsed = parse_subcommand(
-            deploy_command(),
-            [
-                OsString::from("external"),
-                OsString::from("inspect"),
-                OsString::from("verification-policy"),
-                OsString::from("--request"),
-                OsString::from("external-verification-policy.json"),
-            ],
-        )
-        .expect("parse deploy external inspect verification-policy")
-        .expect("external command");
-
-        let external = parse_subcommand(deploy_external_command(), parsed.1)
-            .expect("parse nested external inspect")
-            .expect("external inspect command");
-        let inspect = parse_subcommand(deploy_external_inspect_command(), external.1)
-            .expect("parse nested inspect verification-policy")
-            .expect("external inspect verification-policy command");
-        assert_eq!(inspect.0, "verification-policy");
-        assert_eq!(
-            inspect.1,
-            vec![
-                OsString::from("--request"),
-                OsString::from("external-verification-policy.json")
-            ]
-        );
-
-        let parsed = parse_subcommand(
-            deploy_command(),
-            [
-                OsString::from("external"),
-                OsString::from("inspect"),
-                OsString::from("verification-check"),
-                OsString::from("--request"),
-                OsString::from("external-verification-check.json"),
-            ],
-        )
-        .expect("parse deploy external inspect verification-check")
-        .expect("external command");
-
-        let external = parse_subcommand(deploy_external_command(), parsed.1)
-            .expect("parse nested external inspect")
-            .expect("external inspect command");
-        let inspect = parse_subcommand(deploy_external_inspect_command(), external.1)
-            .expect("parse nested inspect verification-check")
-            .expect("external inspect verification-check command");
-        assert_eq!(inspect.0, "verification-check");
-        assert_eq!(
-            inspect.1,
-            vec![
-                OsString::from("--request"),
-                OsString::from("external-verification-check.json")
-            ]
+            vec![OsString::from("--request"), OsString::from(request)]
         );
     }
 
@@ -4590,6 +4626,70 @@ mod tests {
             ExternalUpgradeVerificationResultV1::Verified
         );
         assert_eq!(verification_check.check_digest.len(), 64);
+    }
+
+    #[test]
+    fn external_completion_report_builder_links_consent_and_verification() {
+        let mut check = sample_authority_check();
+        check.plan.expected_canisters[0].control_class = CanisterControlClassV1::UserControlled;
+        check.inventory.observed_canisters[0].control_class =
+            CanisterControlClassV1::UserControlled;
+        check.inventory.observed_canisters[0].controllers = vec!["user-principal".to_string()];
+
+        let proposal_report = build_external_upgrade_proposal_report(&check);
+        let proposal = proposal_report.proposals[0].clone();
+        let receipt = external_upgrade_receipt_from_observation(
+            "external-upgrade-receipt-1",
+            &proposal,
+            ExternalUpgradeConsentStateV1::Pending,
+            None,
+            None,
+        );
+        let consent_evidence =
+            build_external_upgrade_consent_evidence(ExternalUpgradeConsentEvidenceRequest {
+                evidence_id: "external-upgrade-consent-1".to_string(),
+                proposal: proposal.clone(),
+                receipt,
+            })
+            .expect("consent evidence should build");
+        let policy =
+            build_external_upgrade_verification_policy(ExternalUpgradeVerificationPolicyRequest {
+                policy_id: "external-upgrade-verification-policy-1".to_string(),
+                proposal: proposal.clone(),
+            });
+        let verification_check =
+            build_external_upgrade_verification_check(ExternalUpgradeVerificationCheckRequest {
+                check_id: "external-upgrade-verification-check-1".to_string(),
+                policy,
+                observation: ExternalUpgradeVerificationObservationV1 {
+                    inventory_id: Some("inventory-verified".to_string()),
+                    observed_at: Some("2026-05-26T00:00:00Z".to_string()),
+                    live_inventory_observed: true,
+                    controller_observation_present: true,
+                    observed_module_hash: proposal.target_installed_module_hash.clone(),
+                    observed_canonical_embedded_config_sha256: proposal
+                        .target_canonical_embedded_config_sha256
+                        .clone(),
+                    protected_call_ready: Some(true),
+                },
+            })
+            .expect("verification check should build");
+
+        let completion =
+            build_external_upgrade_completion_report(ExternalUpgradeCompletionReportRequest {
+                report_id: "external-upgrade-completion-1".to_string(),
+                proposal,
+                consent_evidence,
+                verification_check,
+            })
+            .expect("completion report should build");
+
+        assert_eq!(completion.report_id, "external-upgrade-completion-1");
+        assert_eq!(
+            completion.completion_status,
+            ExternalUpgradeCompletionStatusV1::AwaitingConsent
+        );
+        assert_eq!(completion.report_digest.len(), 64);
     }
 
     #[test]

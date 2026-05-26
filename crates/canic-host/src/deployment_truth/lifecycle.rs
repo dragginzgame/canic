@@ -382,6 +382,8 @@ pub enum ExternalUpgradeCompletionReportError {
     #[error("external upgrade completion report field `{field}` does not match source evidence")]
     SourceMismatch { field: &'static str },
     #[error(transparent)]
+    Proposal(#[from] ExternalUpgradeProposalReportError),
+    #[error(transparent)]
     ConsentEvidence(#[from] ExternalUpgradeConsentEvidenceError),
     #[error(transparent)]
     VerificationCheck(#[from] ExternalUpgradeVerificationCheckError),
@@ -1251,7 +1253,7 @@ pub fn external_upgrade_completion_report_from_evidence(
     consent_evidence: &ExternalUpgradeConsentEvidenceV1,
     verification_check: &ExternalUpgradeVerificationCheckV1,
 ) -> Result<ExternalUpgradeCompletionReportV1, ExternalUpgradeCompletionReportError> {
-    validate_external_upgrade_proposal(proposal);
+    validate_external_upgrade_proposal(proposal)?;
     validate_external_upgrade_consent_evidence(consent_evidence)?;
     validate_external_upgrade_verification_check(verification_check)?;
     ensure_completion_sources_match_proposal(proposal, consent_evidence, verification_check)?;
@@ -3082,6 +3084,27 @@ fn external_upgrade_verification_check_digest(
     })
 }
 
+fn external_upgrade_completion_report_digest(report: &ExternalUpgradeCompletionReportV1) -> String {
+    stable_json_sha256_hex(&ExternalUpgradeCompletionReportDigestInput {
+        report_id: &report.report_id,
+        proposal_id: &report.proposal_id,
+        proposal_digest: &report.proposal_digest,
+        consent_evidence_id: &report.consent_evidence_id,
+        consent_evidence_digest: &report.consent_evidence_digest,
+        verification_check_id: &report.verification_check_id,
+        verification_check_digest: &report.verification_check_digest,
+        subject: &report.subject,
+        canister_id: &report.canister_id,
+        role: &report.role,
+        consent_state: report.consent_state,
+        verification_result: report.verification_result,
+        completion_status: report.completion_status,
+        blockers: &report.blockers,
+        next_actions: &report.next_actions,
+        status_summary: &report.status_summary,
+    })
+}
+
 fn observed_before_digest(
     authority: &LifecycleAuthorityV1,
     current_module_hash: Option<&String>,
@@ -3449,6 +3472,91 @@ fn validate_external_upgrade_verification_check_requirements(
     Ok(())
 }
 
+const fn external_upgrade_completion_status(
+    consent_state: ExternalUpgradeConsentStateV1,
+    verification_result: ExternalUpgradeVerificationResultV1,
+) -> ExternalUpgradeCompletionStatusV1 {
+    match consent_state {
+        ExternalUpgradeConsentStateV1::Pending => {
+            ExternalUpgradeCompletionStatusV1::AwaitingConsent
+        }
+        ExternalUpgradeConsentStateV1::Refused => ExternalUpgradeCompletionStatusV1::ConsentRefused,
+        ExternalUpgradeConsentStateV1::Delegated
+        | ExternalUpgradeConsentStateV1::ExecutedExternally => match verification_result {
+            ExternalUpgradeVerificationResultV1::Verified => {
+                ExternalUpgradeCompletionStatusV1::VerifiedComplete
+            }
+            ExternalUpgradeVerificationResultV1::Mismatch => {
+                ExternalUpgradeCompletionStatusV1::VerificationFailed
+            }
+            ExternalUpgradeVerificationResultV1::Pending
+            | ExternalUpgradeVerificationResultV1::Refused => {
+                ExternalUpgradeCompletionStatusV1::AwaitingVerification
+            }
+        },
+    }
+}
+
+fn external_upgrade_completion_blockers(status: ExternalUpgradeCompletionStatusV1) -> Vec<String> {
+    match status {
+        ExternalUpgradeCompletionStatusV1::AwaitingConsent => {
+            vec!["external consent or action has not been reported".to_string()]
+        }
+        ExternalUpgradeCompletionStatusV1::ConsentRefused => {
+            vec!["external consent was refused".to_string()]
+        }
+        ExternalUpgradeCompletionStatusV1::AwaitingVerification => {
+            vec!["external action requires verification against live inventory".to_string()]
+        }
+        ExternalUpgradeCompletionStatusV1::VerificationFailed => {
+            vec!["supplied observation does not satisfy verification policy".to_string()]
+        }
+        ExternalUpgradeCompletionStatusV1::VerifiedComplete => Vec::new(),
+    }
+}
+
+fn external_upgrade_completion_next_actions(
+    status: ExternalUpgradeCompletionStatusV1,
+) -> Vec<String> {
+    match status {
+        ExternalUpgradeCompletionStatusV1::AwaitingConsent => {
+            vec!["obtain external consent or reported external execution".to_string()]
+        }
+        ExternalUpgradeCompletionStatusV1::ConsentRefused => {
+            vec!["do not execute; supersede the proposal before retry".to_string()]
+        }
+        ExternalUpgradeCompletionStatusV1::AwaitingVerification => {
+            vec!["collect fresh inventory observations and run verification check".to_string()]
+        }
+        ExternalUpgradeCompletionStatusV1::VerificationFailed => {
+            vec!["resolve observed module/config/readiness mismatch".to_string()]
+        }
+        ExternalUpgradeCompletionStatusV1::VerifiedComplete => {
+            vec!["record external lifecycle item as verified complete".to_string()]
+        }
+    }
+}
+
+const fn external_upgrade_completion_summary(
+    status: ExternalUpgradeCompletionStatusV1,
+) -> &'static str {
+    match status {
+        ExternalUpgradeCompletionStatusV1::AwaitingConsent => {
+            "external lifecycle item is waiting for consent or external action"
+        }
+        ExternalUpgradeCompletionStatusV1::ConsentRefused => "external lifecycle item was refused",
+        ExternalUpgradeCompletionStatusV1::AwaitingVerification => {
+            "external lifecycle item needs verification before completion"
+        }
+        ExternalUpgradeCompletionStatusV1::VerifiedComplete => {
+            "external lifecycle item is structurally verified complete"
+        }
+        ExternalUpgradeCompletionStatusV1::VerificationFailed => {
+            "external lifecycle item failed supplied verification"
+        }
+    }
+}
+
 const fn external_upgrade_verification_check_summary(
     result: ExternalUpgradeVerificationResultV1,
 ) -> &'static str {
@@ -3553,6 +3661,95 @@ fn ensure_external_verification_check_field(
 ) -> Result<(), ExternalUpgradeVerificationCheckError> {
     if value.trim().is_empty() {
         return Err(ExternalUpgradeVerificationCheckError::MissingRequiredField { field });
+    }
+    Ok(())
+}
+
+fn ensure_external_completion_report_field(
+    field: &'static str,
+    value: &str,
+) -> Result<(), ExternalUpgradeCompletionReportError> {
+    if value.trim().is_empty() {
+        return Err(ExternalUpgradeCompletionReportError::MissingRequiredField { field });
+    }
+    Ok(())
+}
+
+fn ensure_completion_sources_match_proposal(
+    proposal: &ExternalUpgradeProposalV1,
+    consent_evidence: &ExternalUpgradeConsentEvidenceV1,
+    verification_check: &ExternalUpgradeVerificationCheckV1,
+) -> Result<(), ExternalUpgradeCompletionReportError> {
+    ensure_completion_source_field(
+        "consent_evidence.proposal_id",
+        consent_evidence.proposal_id.as_str(),
+        proposal.proposal_id.as_str(),
+    )?;
+    ensure_completion_source_field(
+        "consent_evidence.proposal_digest",
+        consent_evidence.proposal_digest.as_str(),
+        proposal.proposal_digest.as_str(),
+    )?;
+    ensure_completion_source_field(
+        "verification_check.proposal_id",
+        verification_check.proposal_id.as_str(),
+        proposal.proposal_id.as_str(),
+    )?;
+    ensure_completion_source_field(
+        "verification_check.proposal_digest",
+        verification_check.proposal_digest.as_str(),
+        proposal.proposal_digest.as_str(),
+    )?;
+    ensure_completion_source_field(
+        "consent_evidence.subject",
+        consent_evidence.subject.as_str(),
+        proposal.subject.as_str(),
+    )?;
+    ensure_completion_source_field(
+        "verification_check.subject",
+        verification_check.subject.as_str(),
+        proposal.subject.as_str(),
+    )?;
+    ensure_completion_option_source_field(
+        "consent_evidence.canister_id",
+        consent_evidence.canister_id.as_deref(),
+        proposal.canister_id.as_deref(),
+    )?;
+    ensure_completion_option_source_field(
+        "verification_check.canister_id",
+        verification_check.canister_id.as_deref(),
+        proposal.canister_id.as_deref(),
+    )?;
+    ensure_completion_option_source_field(
+        "consent_evidence.role",
+        consent_evidence.role.as_deref(),
+        proposal.role.as_deref(),
+    )?;
+    ensure_completion_option_source_field(
+        "verification_check.role",
+        verification_check.role.as_deref(),
+        proposal.role.as_deref(),
+    )
+}
+
+fn ensure_completion_source_field(
+    field: &'static str,
+    actual: &str,
+    expected: &str,
+) -> Result<(), ExternalUpgradeCompletionReportError> {
+    if actual != expected {
+        return Err(ExternalUpgradeCompletionReportError::SourceMismatch { field });
+    }
+    Ok(())
+}
+
+fn ensure_completion_option_source_field(
+    field: &'static str,
+    actual: Option<&str>,
+    expected: Option<&str>,
+) -> Result<(), ExternalUpgradeCompletionReportError> {
+    if actual != expected {
+        return Err(ExternalUpgradeCompletionReportError::SourceMismatch { field });
     }
     Ok(())
 }

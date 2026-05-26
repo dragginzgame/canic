@@ -2086,6 +2086,179 @@ fn external_upgrade_verification_check_text_reports_passive_boundary() {
 }
 
 #[test]
+fn external_upgrade_completion_report_marks_verified_completion() {
+    let (proposal, consent_evidence, verification_check) = sample_external_completion_sources();
+
+    let report = external_upgrade_completion_report_from_evidence(
+        "external-upgrade-completion-1",
+        &proposal,
+        &consent_evidence,
+        &verification_check,
+    )
+    .expect("completion report should build");
+
+    assert_eq!(report.report_id, "external-upgrade-completion-1");
+    assert_eq!(report.proposal_id, proposal.proposal_id);
+    assert_eq!(report.consent_evidence_id, consent_evidence.evidence_id);
+    assert_eq!(report.verification_check_id, verification_check.check_id);
+    assert_eq!(
+        report.completion_status,
+        ExternalUpgradeCompletionStatusV1::VerifiedComplete
+    );
+    assert!(report.blockers.is_empty());
+    assert_eq!(report.report_digest.len(), 64);
+    validate_external_upgrade_completion_report(&report).expect("report should validate");
+    validate_external_upgrade_completion_report_for_evidence(
+        &report,
+        &proposal,
+        &consent_evidence,
+        &verification_check,
+    )
+    .expect("report should validate against evidence");
+    assert_json_round_trip(&report);
+}
+
+#[test]
+fn external_upgrade_completion_report_marks_verification_failed() {
+    let (proposal, consent_evidence, _) = sample_external_completion_sources();
+    let policy = external_upgrade_verification_policy_from_proposal(
+        "external-upgrade-verification-policy-1",
+        &proposal,
+    );
+    let mut observation = matching_external_verification_observation(&proposal);
+    observation.observed_module_hash = Some("wrong-module-hash".to_string());
+    let verification_check = external_upgrade_verification_check_from_policy(
+        "external-upgrade-verification-check-1",
+        &policy,
+        observation,
+    );
+
+    let report = external_upgrade_completion_report_from_evidence(
+        "external-upgrade-completion-1",
+        &proposal,
+        &consent_evidence,
+        &verification_check,
+    )
+    .expect("completion report should build");
+
+    assert_eq!(
+        report.completion_status,
+        ExternalUpgradeCompletionStatusV1::VerificationFailed
+    );
+    assert_eq!(report.blockers.len(), 1);
+}
+
+#[test]
+fn external_upgrade_completion_report_validation_rejects_stale_evidence() {
+    let (proposal, mut consent_evidence, verification_check) = sample_external_completion_sources();
+    let report = external_upgrade_completion_report_from_evidence(
+        "external-upgrade-completion-1",
+        &proposal,
+        &consent_evidence,
+        &verification_check,
+    )
+    .expect("completion report should build");
+    consent_evidence.evidence_id = "other-consent-evidence".to_string();
+
+    let err = validate_external_upgrade_completion_report_for_evidence(
+        &report,
+        &proposal,
+        &consent_evidence,
+        &verification_check,
+    )
+    .expect_err("stale evidence should fail");
+
+    assert_eq!(
+        err,
+        ExternalUpgradeCompletionReportError::ConsentEvidence(
+            ExternalUpgradeConsentEvidenceError::DigestMismatch {
+                field: "evidence_digest"
+            }
+        )
+    );
+}
+
+#[test]
+fn external_upgrade_completion_report_json_shape_is_stable() {
+    let (proposal, consent_evidence, verification_check) = sample_external_completion_sources();
+    let report = external_upgrade_completion_report_from_evidence(
+        "external-upgrade-completion-1",
+        &proposal,
+        &consent_evidence,
+        &verification_check,
+    )
+    .expect("completion report should build");
+    let encoded = serde_json::to_value(&report).expect("report should encode");
+
+    assert_object_keys(
+        &encoded,
+        &[
+            "schema_version",
+            "report_id",
+            "report_digest",
+            "proposal_id",
+            "proposal_digest",
+            "consent_evidence_id",
+            "consent_evidence_digest",
+            "verification_check_id",
+            "verification_check_digest",
+            "subject",
+            "canister_id",
+            "role",
+            "consent_state",
+            "verification_result",
+            "completion_status",
+            "blockers",
+            "next_actions",
+            "status_summary",
+        ],
+    );
+}
+
+#[test]
+fn external_upgrade_completion_report_request_json_shape_is_stable() {
+    let (proposal, consent_evidence, verification_check) = sample_external_completion_sources();
+    let request = ExternalUpgradeCompletionReportRequest {
+        report_id: "external-upgrade-completion-1".to_string(),
+        proposal,
+        consent_evidence,
+        verification_check,
+    };
+    let encoded = serde_json::to_value(&request).expect("request should encode");
+
+    assert_object_keys(
+        &encoded,
+        &[
+            "report_id",
+            "proposal",
+            "consent_evidence",
+            "verification_check",
+        ],
+    );
+    assert_json_round_trip(&request);
+}
+
+#[test]
+fn external_upgrade_completion_report_text_reports_passive_boundary() {
+    let (proposal, consent_evidence, verification_check) = sample_external_completion_sources();
+    let report = external_upgrade_completion_report_from_evidence(
+        "external-upgrade-completion-1",
+        &proposal,
+        &consent_evidence,
+        &verification_check,
+    )
+    .expect("completion report should build");
+
+    let text = external_upgrade_completion_report_text(&report);
+
+    assert!(text.contains("External upgrade completion report"));
+    assert!(text.contains("mode: passive"));
+    assert!(text.contains("execution: none"));
+    assert!(text.contains("live_lookup: none"));
+    assert!(text.contains("completion_status: verified_complete"));
+}
+
+#[test]
 fn role_artifact_source_round_trips_through_json() {
     let source = sample_role_artifact_source(RoleArtifactSourceKindV1::LocalWasmGz);
 
@@ -10672,6 +10845,28 @@ fn deployment_truth_authority_paths_have_no_controller_mutation_primitives() {
 }
 
 #[test]
+fn external_lifecycle_uses_canonical_control_class_model() {
+    let model = include_str!("model.rs");
+    let lifecycle = include_str!("lifecycle.rs");
+
+    assert_eq!(model.matches("pub enum CanisterControlClassV1").count(), 1);
+    assert!(lifecycle.contains("CanisterControlClassV1"));
+
+    for forbidden in [
+        "ExternalControlClass",
+        "ExternalLifecycleControlClass",
+        "LifecycleControlClass",
+        "UserControlClass",
+        "UserLifecycleControlClass",
+    ] {
+        assert!(
+            !lifecycle.contains(forbidden),
+            "external lifecycle must project from CanisterControlClassV1; found {forbidden}"
+        );
+    }
+}
+
+#[test]
 fn authority_dry_run_receipt_preserves_hard_findings() {
     let mut plan = sample_plan();
     plan.authority_profile.staging_controllers = vec!["aaaaa-aa".to_string()];
@@ -11087,6 +11282,30 @@ fn matching_external_verification_observation(
             .clone(),
         protected_call_ready: Some(true),
     }
+}
+
+fn sample_external_completion_sources() -> (
+    ExternalUpgradeProposalV1,
+    ExternalUpgradeConsentEvidenceV1,
+    ExternalUpgradeVerificationCheckV1,
+) {
+    let (proposal, receipt) = sample_external_upgrade_proposal_and_receipt();
+    let consent_evidence = external_upgrade_consent_evidence_from_receipt(
+        "external-upgrade-consent-evidence-1",
+        &proposal,
+        &receipt,
+    )
+    .expect("consent evidence should build");
+    let policy = external_upgrade_verification_policy_from_proposal(
+        "external-upgrade-verification-policy-1",
+        &proposal,
+    );
+    let verification_check = external_upgrade_verification_check_from_policy(
+        "external-upgrade-verification-check-1",
+        &policy,
+        matching_external_verification_observation(&proposal),
+    );
+    (proposal, consent_evidence, verification_check)
 }
 
 fn sample_identity() -> DeploymentIdentityV1 {
