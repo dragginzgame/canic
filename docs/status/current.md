@@ -26,6 +26,12 @@ inspect only the files needed for the current task.
   `canic deploy external inspect verification-policy --request <file>`
   exposes that policy from proposal evidence without querying live inventory
   or verifying completion.
+- `ExternalUpgradeVerificationCheckV1` now evaluates supplied observation
+  facts against a passive verification policy. It records per-requirement
+  expected/observed values and a verified/mismatch result, while preserving
+  the boundary that the command does not query live inventory or execute
+  lifecycle work. `canic deploy external inspect verification-check --request
+  <file>` exposes that passive check.
 - Design starts at
   `docs/design/0.45-external-lifecycle/0.45-design.md`. 0.45 must reuse the
   canonical control classifications from deployment truth and authority
@@ -82,6 +88,10 @@ inspect only the files needed for the current task.
   completion is not deployment truth. `canic deploy external verify --request
   <file>` exposes the report from an `ExternalUpgradeVerificationReportRequest`
   JSON file as JSON by default or passive text with `--format text`.
+- `ExternalUpgradeVerificationCheckV1` now bridges verification-policy
+  postconditions and supplied observation facts without adding live
+  re-inventory. It reports each required postcondition as satisfied or
+  mismatched and remains passive structural evidence.
 - `ExternalUpgradeConsentEvidenceV1` now separates reported consent/action
   evidence from verification evidence. It links a proposal/receipt pair,
   records consent state, reporter, consent requirements, and allowed

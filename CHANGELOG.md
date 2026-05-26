@@ -12,6 +12,17 @@ present.
 
 ## Unreleased
 
+- External upgrade verification checks now evaluate supplied observation facts
+  against passive verification policies, making postcondition mismatches
+  explicit without querying live inventory or executing lifecycle work. The
+  archived check validation also rejects duplicate or internally inconsistent
+  requirement rows.
+
+```bash
+canic deploy external inspect verification-check --request external-verification-check.json
+canic deploy external inspect verification-check --request external-verification-check.json --format text
+```
+
 ## [0.45.x] - 2026-05-26 - External lifecycle
 
 - `0.45.6` adds passive external upgrade verification-policy artifacts so

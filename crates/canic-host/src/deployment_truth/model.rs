@@ -1385,6 +1385,63 @@ pub struct ExternalUpgradeVerificationPolicyRequest {
 }
 
 ///
+/// ExternalUpgradeVerificationObservationV1
+///
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ExternalUpgradeVerificationObservationV1 {
+    pub inventory_id: Option<String>,
+    pub observed_at: Option<String>,
+    pub live_inventory_observed: bool,
+    pub controller_observation_present: bool,
+    pub observed_module_hash: Option<String>,
+    pub observed_canonical_embedded_config_sha256: Option<String>,
+    pub protected_call_ready: Option<bool>,
+}
+
+///
+/// ExternalUpgradeVerificationCheckV1
+///
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ExternalUpgradeVerificationCheckV1 {
+    pub schema_version: u32,
+    pub check_id: String,
+    pub check_digest: String,
+    pub policy_id: String,
+    pub policy_digest: String,
+    pub proposal_id: String,
+    pub proposal_digest: String,
+    pub subject: String,
+    pub canister_id: Option<String>,
+    pub role: Option<String>,
+    pub observation: ExternalUpgradeVerificationObservationV1,
+    pub requirement_results: Vec<ExternalUpgradeVerificationCheckRequirementV1>,
+    pub verification_result: ExternalUpgradeVerificationResultV1,
+    pub status_summary: String,
+}
+
+///
+/// ExternalUpgradeVerificationCheckRequirementV1
+///
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ExternalUpgradeVerificationCheckRequirementV1 {
+    pub requirement: LifecycleVerificationRequirementV1,
+    pub status: ExternalUpgradeVerificationRequirementStatusV1,
+    pub expected_value: Option<String>,
+    pub observed_value: Option<String>,
+    pub satisfied: Option<bool>,
+}
+
+///
+/// ExternalUpgradeVerificationCheckRequest
+///
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ExternalUpgradeVerificationCheckRequest {
+    pub check_id: String,
+    pub policy: ExternalUpgradeVerificationPolicyV1,
+    pub observation: ExternalUpgradeVerificationObservationV1,
+}
+
+///
 /// ExternalUpgradeConsentStateV1
 ///
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]

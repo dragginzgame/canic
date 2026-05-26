@@ -220,6 +220,22 @@ struct ExternalUpgradeVerificationPolicyDigestInput<'a> {
 }
 
 #[derive(Serialize)]
+struct ExternalUpgradeVerificationCheckDigestInput<'a> {
+    check_id: &'a str,
+    policy_id: &'a str,
+    policy_digest: &'a str,
+    proposal_id: &'a str,
+    proposal_digest: &'a str,
+    subject: &'a str,
+    canister_id: &'a Option<String>,
+    role: &'a Option<String>,
+    observation: &'a ExternalUpgradeVerificationObservationV1,
+    requirement_results: &'a [ExternalUpgradeVerificationCheckRequirementV1],
+    verification_result: ExternalUpgradeVerificationResultV1,
+    status_summary: &'a str,
+}
+
+#[derive(Serialize)]
 struct ObservedBeforeDigestInput<'a> {
     subject: &'a str,
     canister_id: &'a Option<String>,
@@ -301,6 +317,33 @@ pub enum ExternalUpgradeVerificationPolicyError {
     DigestMismatch { field: &'static str },
     #[error("external upgrade verification policy field `{field}` does not match proposal source")]
     SourceMismatch { field: &'static str },
+}
+
+///
+/// ExternalUpgradeVerificationCheckError
+///
+#[derive(Debug, Eq, thiserror::Error, PartialEq)]
+pub enum ExternalUpgradeVerificationCheckError {
+    #[error(
+        "external upgrade verification check schema version {actual} does not match expected {expected}"
+    )]
+    SchemaVersionMismatch { expected: u32, actual: u32 },
+    #[error("external upgrade verification check field `{field}` is required")]
+    MissingRequiredField { field: &'static str },
+    #[error("external upgrade verification check field `{field}` digest is stale")]
+    DigestMismatch { field: &'static str },
+    #[error("external upgrade verification check field `{field}` does not match policy source")]
+    SourceMismatch { field: &'static str },
+    #[error("external upgrade verification check contains duplicate requirement `{requirement:?}`")]
+    DuplicateRequirement {
+        requirement: LifecycleVerificationRequirementV1,
+    },
+    #[error(
+        "external upgrade verification check requirement `{requirement:?}` has invalid satisfaction state"
+    )]
+    RequirementStatusMismatch {
+        requirement: LifecycleVerificationRequirementV1,
+    },
 }
 
 ///
@@ -1061,6 +1104,98 @@ pub fn validate_external_upgrade_verification_policy_for_proposal(
         external_upgrade_verification_policy_from_proposal(policy.policy_id.clone(), proposal);
     if policy != &expected {
         return Err(ExternalUpgradeVerificationPolicyError::SourceMismatch { field: "proposal" });
+    }
+    Ok(())
+}
+
+/// Build a passive verification check from a policy and supplied observation.
+///
+/// This evaluates caller-supplied observation facts only. It does not query IC
+/// state, deliver consent, execute upgrades, or prove live completion.
+#[must_use]
+pub fn external_upgrade_verification_check_from_policy(
+    check_id: impl Into<String>,
+    policy: &ExternalUpgradeVerificationPolicyV1,
+    observation: ExternalUpgradeVerificationObservationV1,
+) -> ExternalUpgradeVerificationCheckV1 {
+    let requirement_results =
+        external_upgrade_verification_check_requirements(policy, &observation);
+    let verification_result = external_upgrade_verification_check_result(&requirement_results);
+    let mut check = ExternalUpgradeVerificationCheckV1 {
+        schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
+        check_id: check_id.into(),
+        check_digest: String::new(),
+        policy_id: policy.policy_id.clone(),
+        policy_digest: policy.policy_digest.clone(),
+        proposal_id: policy.proposal_id.clone(),
+        proposal_digest: policy.proposal_digest.clone(),
+        subject: policy.subject.clone(),
+        canister_id: policy.canister_id.clone(),
+        role: policy.role.clone(),
+        observation,
+        requirement_results,
+        verification_result,
+        status_summary: external_upgrade_verification_check_summary(verification_result)
+            .to_string(),
+    };
+    check.check_digest = external_upgrade_verification_check_digest(&check);
+    check
+}
+
+/// Validate archived external-upgrade verification check consistency and
+/// digest.
+pub fn validate_external_upgrade_verification_check(
+    check: &ExternalUpgradeVerificationCheckV1,
+) -> Result<(), ExternalUpgradeVerificationCheckError> {
+    if check.schema_version != DEPLOYMENT_TRUTH_SCHEMA_VERSION {
+        return Err(
+            ExternalUpgradeVerificationCheckError::SchemaVersionMismatch {
+                expected: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
+                actual: check.schema_version,
+            },
+        );
+    }
+    ensure_external_verification_check_field("check_id", check.check_id.as_str())?;
+    ensure_external_verification_check_field("check_digest", check.check_digest.as_str())?;
+    ensure_external_verification_check_field("policy_id", check.policy_id.as_str())?;
+    ensure_external_verification_check_field("policy_digest", check.policy_digest.as_str())?;
+    ensure_external_verification_check_field("proposal_id", check.proposal_id.as_str())?;
+    ensure_external_verification_check_field("proposal_digest", check.proposal_digest.as_str())?;
+    ensure_external_verification_check_field("subject", check.subject.as_str())?;
+    ensure_external_verification_check_field("status_summary", check.status_summary.as_str())?;
+    validate_external_upgrade_verification_check_requirements(
+        &check.requirement_results,
+        check.verification_result,
+    )?;
+    if check.status_summary
+        != external_upgrade_verification_check_summary(check.verification_result)
+    {
+        return Err(ExternalUpgradeVerificationCheckError::SourceMismatch {
+            field: "status_summary",
+        });
+    }
+    if check.check_digest != external_upgrade_verification_check_digest(check) {
+        return Err(ExternalUpgradeVerificationCheckError::DigestMismatch {
+            field: "check_digest",
+        });
+    }
+    Ok(())
+}
+
+/// Validate that an archived verification check still matches the policy and
+/// observation it claims to evaluate.
+pub fn validate_external_upgrade_verification_check_for_policy(
+    check: &ExternalUpgradeVerificationCheckV1,
+    policy: &ExternalUpgradeVerificationPolicyV1,
+) -> Result<(), ExternalUpgradeVerificationCheckError> {
+    validate_external_upgrade_verification_check(check)?;
+    let expected = external_upgrade_verification_check_from_policy(
+        check.check_id.clone(),
+        policy,
+        check.observation.clone(),
+    );
+    if check != &expected {
+        return Err(ExternalUpgradeVerificationCheckError::SourceMismatch { field: "policy" });
     }
     Ok(())
 }
@@ -2757,6 +2892,25 @@ fn external_upgrade_verification_policy_digest(
     })
 }
 
+fn external_upgrade_verification_check_digest(
+    check: &ExternalUpgradeVerificationCheckV1,
+) -> String {
+    stable_json_sha256_hex(&ExternalUpgradeVerificationCheckDigestInput {
+        check_id: &check.check_id,
+        policy_id: &check.policy_id,
+        policy_digest: &check.policy_digest,
+        proposal_id: &check.proposal_id,
+        proposal_digest: &check.proposal_digest,
+        subject: &check.subject,
+        canister_id: &check.canister_id,
+        role: &check.role,
+        observation: &check.observation,
+        requirement_results: &check.requirement_results,
+        verification_result: check.verification_result,
+        status_summary: &check.status_summary,
+    })
+}
+
 fn observed_before_digest(
     authority: &LifecycleAuthorityV1,
     current_module_hash: Option<&String>,
@@ -2987,6 +3141,162 @@ fn external_upgrade_verification_policy_requirements(
     .collect()
 }
 
+fn external_upgrade_verification_check_requirements(
+    policy: &ExternalUpgradeVerificationPolicyV1,
+    observation: &ExternalUpgradeVerificationObservationV1,
+) -> Vec<ExternalUpgradeVerificationCheckRequirementV1> {
+    policy
+        .verification_requirements
+        .iter()
+        .map(|row| {
+            let observed_value =
+                external_upgrade_verification_observed_value(row.requirement, observation);
+            let satisfied =
+                if row.status == ExternalUpgradeVerificationRequirementStatusV1::Required {
+                    Some(external_upgrade_verification_requirement_satisfied(
+                        row.requirement,
+                        row.expected_value.as_deref(),
+                        observed_value.as_deref(),
+                        observation,
+                    ))
+                } else {
+                    None
+                };
+            ExternalUpgradeVerificationCheckRequirementV1 {
+                requirement: row.requirement,
+                status: row.status,
+                expected_value: row.expected_value.clone(),
+                observed_value,
+                satisfied,
+            }
+        })
+        .collect()
+}
+
+fn external_upgrade_verification_observed_value(
+    requirement: LifecycleVerificationRequirementV1,
+    observation: &ExternalUpgradeVerificationObservationV1,
+) -> Option<String> {
+    match requirement {
+        LifecycleVerificationRequirementV1::LiveInventory => {
+            Some(observation.live_inventory_observed.to_string())
+        }
+        LifecycleVerificationRequirementV1::ControllerObservation => {
+            Some(observation.controller_observation_present.to_string())
+        }
+        LifecycleVerificationRequirementV1::ModuleHash => observation.observed_module_hash.clone(),
+        LifecycleVerificationRequirementV1::CanonicalEmbeddedConfig => observation
+            .observed_canonical_embedded_config_sha256
+            .clone(),
+        LifecycleVerificationRequirementV1::ProtectedCallReadiness => observation
+            .protected_call_ready
+            .map(|value| value.to_string()),
+    }
+}
+
+fn external_upgrade_verification_requirement_satisfied(
+    requirement: LifecycleVerificationRequirementV1,
+    expected_value: Option<&str>,
+    observed_value: Option<&str>,
+    observation: &ExternalUpgradeVerificationObservationV1,
+) -> bool {
+    match requirement {
+        LifecycleVerificationRequirementV1::LiveInventory => observation.live_inventory_observed,
+        LifecycleVerificationRequirementV1::ControllerObservation => {
+            observation.controller_observation_present
+        }
+        LifecycleVerificationRequirementV1::ModuleHash
+        | LifecycleVerificationRequirementV1::CanonicalEmbeddedConfig => {
+            expected_value.is_some_and(|expected| observed_value == Some(expected))
+        }
+        LifecycleVerificationRequirementV1::ProtectedCallReadiness => {
+            observation.protected_call_ready == Some(true)
+        }
+    }
+}
+
+fn external_upgrade_verification_check_result(
+    requirements: &[ExternalUpgradeVerificationCheckRequirementV1],
+) -> ExternalUpgradeVerificationResultV1 {
+    if requirements
+        .iter()
+        .filter(|row| row.status == ExternalUpgradeVerificationRequirementStatusV1::Required)
+        .all(|row| row.satisfied == Some(true))
+    {
+        ExternalUpgradeVerificationResultV1::Verified
+    } else {
+        ExternalUpgradeVerificationResultV1::Mismatch
+    }
+}
+
+fn validate_external_upgrade_verification_check_requirements(
+    requirements: &[ExternalUpgradeVerificationCheckRequirementV1],
+    result: ExternalUpgradeVerificationResultV1,
+) -> Result<(), ExternalUpgradeVerificationCheckError> {
+    if requirements.is_empty() {
+        return Err(
+            ExternalUpgradeVerificationCheckError::MissingRequiredField {
+                field: "requirement_results",
+            },
+        );
+    }
+    let mut seen = BTreeSet::new();
+    for row in requirements {
+        if !seen.insert(row.requirement) {
+            return Err(
+                ExternalUpgradeVerificationCheckError::DuplicateRequirement {
+                    requirement: row.requirement,
+                },
+            );
+        }
+        match row.status {
+            ExternalUpgradeVerificationRequirementStatusV1::Required => {
+                if row.satisfied.is_none() {
+                    return Err(
+                        ExternalUpgradeVerificationCheckError::RequirementStatusMismatch {
+                            requirement: row.requirement,
+                        },
+                    );
+                }
+            }
+            ExternalUpgradeVerificationRequirementStatusV1::NotRequired => {
+                if row.satisfied.is_some() {
+                    return Err(
+                        ExternalUpgradeVerificationCheckError::RequirementStatusMismatch {
+                            requirement: row.requirement,
+                        },
+                    );
+                }
+            }
+        }
+    }
+    if external_upgrade_verification_check_result(requirements) != result {
+        return Err(ExternalUpgradeVerificationCheckError::SourceMismatch {
+            field: "verification_result",
+        });
+    }
+    Ok(())
+}
+
+const fn external_upgrade_verification_check_summary(
+    result: ExternalUpgradeVerificationResultV1,
+) -> &'static str {
+    match result {
+        ExternalUpgradeVerificationResultV1::Verified => {
+            "supplied observation satisfies required verification postconditions"
+        }
+        ExternalUpgradeVerificationResultV1::Mismatch => {
+            "supplied observation does not satisfy required verification postconditions"
+        }
+        ExternalUpgradeVerificationResultV1::Pending => {
+            "external verification check is pending observation"
+        }
+        ExternalUpgradeVerificationResultV1::Refused => {
+            "external verification check reflects refused consent"
+        }
+    }
+}
+
 const fn external_upgrade_consent_summary(state: ExternalUpgradeConsentStateV1) -> &'static str {
     match state {
         ExternalUpgradeConsentStateV1::Pending => {
@@ -3062,6 +3372,16 @@ fn ensure_external_verification_policy_field(
 ) -> Result<(), ExternalUpgradeVerificationPolicyError> {
     if value.trim().is_empty() {
         return Err(ExternalUpgradeVerificationPolicyError::MissingRequiredField { field });
+    }
+    Ok(())
+}
+
+fn ensure_external_verification_check_field(
+    field: &'static str,
+    value: &str,
+) -> Result<(), ExternalUpgradeVerificationCheckError> {
+    if value.trim().is_empty() {
+        return Err(ExternalUpgradeVerificationCheckError::MissingRequiredField { field });
     }
     Ok(())
 }

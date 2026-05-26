@@ -430,6 +430,47 @@ pub fn external_upgrade_verification_policy_text(
     lines.join("\n")
 }
 
+/// Render an external-upgrade verification check as passive operator text.
+#[must_use]
+pub fn external_upgrade_verification_check_text(
+    check: &ExternalUpgradeVerificationCheckV1,
+) -> String {
+    let mut lines = vec![
+        "External upgrade verification check".to_string(),
+        "mode: passive".to_string(),
+        "execution: none".to_string(),
+        "live_lookup: none".to_string(),
+        format!("check_id: {}", check.check_id),
+        format!("check_digest: {}", check.check_digest),
+        format!("policy_id: {}", check.policy_id),
+        format!("policy_digest: {}", check.policy_digest),
+        format!("proposal_id: {}", check.proposal_id),
+        format!("proposal_digest: {}", check.proposal_digest),
+        format!("subject: {}", check.subject),
+        format!("role: {}", optional_text(check.role.as_deref())),
+        format!(
+            "canister_id: {}",
+            optional_text(check.canister_id.as_deref())
+        ),
+        format!(
+            "verification_result: {}",
+            external_upgrade_verification_result_label(check.verification_result)
+        ),
+        format!("summary: {}", check.status_summary),
+        String::new(),
+        format!(
+            "observation.inventory_id: {}",
+            optional_text(check.observation.inventory_id.as_deref())
+        ),
+        format!(
+            "observation.observed_at: {}",
+            optional_text(check.observation.observed_at.as_deref())
+        ),
+    ];
+    append_verification_check_requirement_items(&mut lines, &check.requirement_results);
+    lines.join("\n")
+}
+
 /// Render an execution preflight as operator text.
 #[must_use]
 pub fn deployment_execution_preflight_text(preflight: &DeploymentExecutionPreflightV1) -> String {
@@ -2162,6 +2203,27 @@ fn append_verification_policy_requirement_items(
             verification_requirement_label(requirement.requirement),
             verification_requirement_status_label(requirement.status),
             optional_text(requirement.expected_value.as_deref())
+        ));
+    }
+}
+
+fn append_verification_check_requirement_items(
+    lines: &mut Vec<String>,
+    requirements: &[ExternalUpgradeVerificationCheckRequirementV1],
+) {
+    if requirements.is_empty() {
+        return;
+    }
+    lines.push(String::new());
+    lines.push("requirement_results:".to_string());
+    for requirement in requirements {
+        lines.push(format!(
+            "  - requirement={} status={} expected_value={} observed_value={} satisfied={}",
+            verification_requirement_label(requirement.requirement),
+            verification_requirement_status_label(requirement.status),
+            optional_text(requirement.expected_value.as_deref()),
+            optional_text(requirement.observed_value.as_deref()),
+            optional_bool_label(requirement.satisfied)
         ));
     }
 }

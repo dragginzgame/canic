@@ -14,10 +14,11 @@ Started.
 
 0.45 now has passive lifecycle-authority projection over existing deployment
 truth, lifecycle plan partitioning, derived proposal/receipt/pending/check/
-handoff evidence, critical-fix residual exposure reporting, and structural
-external verification reporting. External or user-owned lifecycle flows remain
-explicit report data; no consent delivery, external execution, live
-re-inventory, or install mutation path has landed.
+handoff evidence, critical-fix residual exposure reporting, structural
+external verification reporting, verification policies, and supplied-observation
+verification checks. External or user-owned lifecycle flows remain explicit
+report data; no consent delivery, external execution, live re-inventory, or
+install mutation path has landed.
 
 ## Implemented
 
@@ -87,6 +88,10 @@ re-inventory, or install mutation path has landed.
   be treated as complete. It records source proposal digests, required
   verification facts, expected module/config facts, protected-call readiness
   requirements, and passive status text.
+- `ExternalUpgradeVerificationCheckV1` evaluates supplied observation facts
+  against an `ExternalUpgradeVerificationPolicyV1`, recording per-requirement
+  expected/observed values and a verified/mismatch result without querying live
+  inventory itself.
 - `ExternalLifecycleCheckV1` summarizes lifecycle plan, proposal, and pending
   evidence into one passive status artifact with direct, pending, blocked, and
   residual-exposure counts, source artifact digests, summary text, and next
@@ -107,6 +112,10 @@ re-inventory, or install mutation path has landed.
   an `ExternalUpgradeVerificationPolicyRequest` JSON file and emits a passive
   `ExternalUpgradeVerificationPolicyV1` without live lookup, consent delivery,
   external execution, install, or mutation.
+- `canic deploy external inspect verification-check --request <file>` reads an
+  `ExternalUpgradeVerificationCheckRequest` JSON file and emits a passive
+  `ExternalUpgradeVerificationCheckV1` from supplied observation facts without
+  live lookup, consent delivery, external execution, install, or mutation.
 - JSON shape and projection coverage pins deployment-controlled,
   user-controlled, and unknown-unsafe lifecycle authority behavior, plus the
   first external proposal, receipt, consent evidence, verification request,
@@ -114,10 +123,10 @@ re-inventory, or install mutation path has landed.
 
 ## Not Implemented Yet
 
-- Consent and operator handoff workflow.
+- Consent delivery and external action execution workflow.
 - Safe upgrade/install boundaries for externally controlled canisters.
 - Live re-inventory integration for external lifecycle verification. Current
-  verification reports are structural proposal/receipt evidence only.
+  verification reports and checks use supplied structural evidence only.
 
 ## Drift Log
 
