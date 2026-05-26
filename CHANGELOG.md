@@ -12,19 +12,20 @@ present.
 
 ## Unreleased
 
-- The first passive external lifecycle CLI reports derive lifecycle plans and
-  external-upgrade proposal reports from local deployment truth without
-  consent delivery, external execution, install, or mutation. CLI coverage pins
-  their local artifact IDs, lifecycle-plan linkage, and format validation.
+## [0.45.x] - 2026-05-26 - External lifecycle
+
+- `0.45.2` adds the first passive external lifecycle CLI reports for lifecycle
+  plans, external-upgrade proposals, and pending external lifecycle work, while
+  hardening external-upgrade receipts against stale proposal pairing.
 
 ```bash
 canic deploy external plan demo
 canic deploy external proposals demo
+canic deploy external pending demo
 canic deploy external plan --format text demo
 canic deploy external proposals --format text demo
+canic deploy external pending --format text demo
 ```
-
-## [0.45.x] - 2026-05-26 - External lifecycle
 
 - `0.45.1` hardens passive external lifecycle artifacts with deterministic
   report/plan/proposal/receipt validation, source-check linkage, passive text

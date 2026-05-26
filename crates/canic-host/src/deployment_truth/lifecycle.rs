@@ -42,6 +42,25 @@ struct ExternalUpgradeProposalReportDigestInput<'a> {
 }
 
 #[derive(Serialize)]
+struct ExternalLifecyclePendingReportDigestInput<'a> {
+    report_id: &'a str,
+    lifecycle_plan_id: &'a str,
+    lifecycle_plan_digest: &'a str,
+    proposal_report_id: &'a str,
+    proposal_report_digest: &'a str,
+    deployment_plan_id: &'a str,
+    deployment_plan_digest: &'a str,
+    inventory_id: &'a str,
+    direct_upgrade_count: usize,
+    pending_external_count: usize,
+    blocked_count: usize,
+    pending_external_actions: &'a [ExternalLifecyclePendingActionV1],
+    blocked_subjects: &'a [String],
+    residual_exposure: &'a [String],
+    status: ExternalLifecyclePlanStatusV1,
+}
+
+#[derive(Serialize)]
 struct ExternalUpgradeProposalDigestInput<'a> {
     deployment_plan_id: &'a str,
     deployment_plan_digest: &'a str,
@@ -111,6 +130,8 @@ pub enum ExternalUpgradeReceiptError {
     MissingRequiredField { field: &'static str },
     #[error("external upgrade receipt field `{field}` digest is stale")]
     DigestMismatch { field: &'static str },
+    #[error("external upgrade receipt field `{field}` does not match proposal source")]
+    SourceMismatch { field: &'static str },
     #[error("external upgrade receipt verification result does not match observations")]
     VerificationMismatch,
     #[error("external upgrade receipt refused consent cannot be verified")]
@@ -175,6 +196,27 @@ pub enum ExternalUpgradeProposalReportError {
     )]
     DirectLifecycleProposal { subject: String },
     #[error("external upgrade proposal report contains duplicate subject `{subject}`")]
+    DuplicateSubject { subject: String },
+}
+
+///
+/// ExternalLifecyclePendingReportError
+///
+#[derive(Debug, Eq, thiserror::Error, PartialEq)]
+pub enum ExternalLifecyclePendingReportError {
+    #[error(
+        "external lifecycle pending report schema version {actual} does not match expected {expected}"
+    )]
+    SchemaVersionMismatch { expected: u32, actual: u32 },
+    #[error("external lifecycle pending report field `{field}` is required")]
+    MissingRequiredField { field: &'static str },
+    #[error("external lifecycle pending report field `{field}` digest is stale")]
+    DigestMismatch { field: &'static str },
+    #[error("external lifecycle pending report field `{field}` does not match lifecycle source")]
+    SourceMismatch { field: &'static str },
+    #[error("external lifecycle pending report counters do not match action rows")]
+    CountMismatch,
+    #[error("external lifecycle pending report contains duplicate subject `{subject}`")]
     DuplicateSubject { subject: String },
 }
 
@@ -499,6 +541,76 @@ pub fn validate_external_upgrade_receipt(
     Ok(())
 }
 
+/// Validate an external-upgrade receipt against the proposal it claims to
+/// satisfy.
+///
+/// This remains structural verification. It proves the receipt is linked to the
+/// supplied proposal and that its verification result matches the proposal's
+/// target facts, but live inventory remains the source of deployment truth.
+pub fn validate_external_upgrade_receipt_for_proposal(
+    receipt: &ExternalUpgradeReceiptV1,
+    proposal: &ExternalUpgradeProposalV1,
+) -> Result<(), ExternalUpgradeReceiptError> {
+    validate_external_upgrade_receipt(receipt)?;
+    ensure_external_receipt_matches_proposal(
+        "proposal_id",
+        receipt.proposal_id.as_str(),
+        proposal.proposal_id.as_str(),
+    )?;
+    ensure_external_receipt_matches_proposal(
+        "proposal_digest",
+        receipt.proposal_digest.as_str(),
+        proposal.proposal_digest.as_str(),
+    )?;
+    ensure_external_receipt_matches_proposal(
+        "subject",
+        receipt.subject.as_str(),
+        proposal.subject.as_str(),
+    )?;
+    ensure_external_receipt_option_matches_proposal(
+        "canister_id",
+        receipt.canister_id.as_deref(),
+        proposal.canister_id.as_deref(),
+    )?;
+    ensure_external_receipt_option_matches_proposal(
+        "role",
+        receipt.role.as_deref(),
+        proposal.role.as_deref(),
+    )?;
+    ensure_external_receipt_option_matches_proposal(
+        "observed_before_module_hash",
+        receipt.observed_before_module_hash.as_deref(),
+        proposal.current_module_hash.as_deref(),
+    )?;
+
+    let expected_result = external_upgrade_verification_result(
+        receipt.consent_state,
+        proposal,
+        receipt.observed_after_module_hash.as_deref(),
+        receipt
+            .observed_after_canonical_embedded_config_sha256
+            .as_deref(),
+    );
+    if receipt.verification_result != expected_result {
+        return Err(ExternalUpgradeReceiptError::VerificationMismatch);
+    }
+    let expected_notes = external_upgrade_verification_notes(
+        expected_result,
+        proposal,
+        receipt.observed_after_module_hash.as_deref(),
+        receipt
+            .observed_after_canonical_embedded_config_sha256
+            .as_deref(),
+    );
+    if receipt.verification_notes != expected_notes {
+        return Err(ExternalUpgradeReceiptError::SourceMismatch {
+            field: "verification_notes",
+        });
+    }
+
+    Ok(())
+}
+
 /// Build passive external-upgrade proposal artifacts from a lifecycle plan.
 ///
 /// This binds current observations to target artifact facts, but does not
@@ -621,6 +733,168 @@ pub fn validate_external_upgrade_proposal_report_for_lifecycle_plan(
         });
     }
     Ok(())
+}
+
+/// Build a passive summary of external lifecycle work still pending after a
+/// plan/proposal pass.
+#[must_use]
+pub fn external_lifecycle_pending_report_from_plan(
+    report_id: impl Into<String>,
+    lifecycle_plan: &ExternalLifecyclePlanV1,
+    proposal_report: &ExternalUpgradeProposalReportV1,
+) -> ExternalLifecyclePendingReportV1 {
+    let report_id = report_id.into();
+    let pending_external_actions = proposal_report
+        .proposals
+        .iter()
+        .map(external_lifecycle_pending_action)
+        .collect::<Vec<_>>();
+    let blocked_subjects = lifecycle_plan
+        .blocked_role_upgrades
+        .iter()
+        .map(|upgrade| upgrade.subject.clone())
+        .collect::<Vec<_>>();
+    let mut report = ExternalLifecyclePendingReportV1 {
+        schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
+        report_id,
+        report_digest: String::new(),
+        lifecycle_plan_id: lifecycle_plan.lifecycle_plan_id.clone(),
+        lifecycle_plan_digest: lifecycle_plan.lifecycle_plan_digest.clone(),
+        proposal_report_id: proposal_report.report_id.clone(),
+        proposal_report_digest: proposal_report.report_digest.clone(),
+        deployment_plan_id: lifecycle_plan.deployment_plan_id.clone(),
+        deployment_plan_digest: lifecycle_plan.deployment_plan_digest.clone(),
+        inventory_id: lifecycle_plan.inventory_id.clone(),
+        direct_upgrade_count: lifecycle_plan.directly_executable_role_upgrades.len(),
+        pending_external_count: pending_external_actions.len(),
+        blocked_count: blocked_subjects.len(),
+        pending_external_actions,
+        blocked_subjects,
+        residual_exposure: lifecycle_plan.residual_exposure.clone(),
+        status: lifecycle_plan.status,
+    };
+    report.report_digest = external_lifecycle_pending_report_digest(&report);
+    report
+}
+
+/// Validate archived external lifecycle pending report consistency and digest.
+pub fn validate_external_lifecycle_pending_report(
+    report: &ExternalLifecyclePendingReportV1,
+) -> Result<(), ExternalLifecyclePendingReportError> {
+    if report.schema_version != DEPLOYMENT_TRUTH_SCHEMA_VERSION {
+        return Err(ExternalLifecyclePendingReportError::SchemaVersionMismatch {
+            expected: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
+            actual: report.schema_version,
+        });
+    }
+    ensure_external_pending_report_field("report_id", report.report_id.as_str())?;
+    ensure_external_pending_report_field("report_digest", report.report_digest.as_str())?;
+    ensure_external_pending_report_field("lifecycle_plan_id", report.lifecycle_plan_id.as_str())?;
+    ensure_external_pending_report_field(
+        "lifecycle_plan_digest",
+        report.lifecycle_plan_digest.as_str(),
+    )?;
+    ensure_external_pending_report_field("proposal_report_id", report.proposal_report_id.as_str())?;
+    ensure_external_pending_report_field(
+        "proposal_report_digest",
+        report.proposal_report_digest.as_str(),
+    )?;
+    ensure_external_pending_report_field("deployment_plan_id", report.deployment_plan_id.as_str())?;
+    ensure_external_pending_report_field(
+        "deployment_plan_digest",
+        report.deployment_plan_digest.as_str(),
+    )?;
+    ensure_external_pending_report_field("inventory_id", report.inventory_id.as_str())?;
+    if report.pending_external_count != report.pending_external_actions.len()
+        || report.blocked_count != report.blocked_subjects.len()
+    {
+        return Err(ExternalLifecyclePendingReportError::CountMismatch);
+    }
+    let mut subjects = BTreeSet::new();
+    for action in &report.pending_external_actions {
+        ensure_external_pending_report_field("pending_action.subject", action.subject.as_str())?;
+        ensure_external_pending_report_field(
+            "pending_action.proposal_id",
+            action.proposal_id.as_str(),
+        )?;
+        ensure_external_pending_report_field(
+            "pending_action.proposal_digest",
+            action.proposal_digest.as_str(),
+        )?;
+        ensure_external_pending_report_field(
+            "pending_action.required_external_action",
+            action.required_external_action.as_str(),
+        )?;
+        if !subjects.insert(action.subject.clone()) {
+            return Err(ExternalLifecyclePendingReportError::DuplicateSubject {
+                subject: action.subject.clone(),
+            });
+        }
+    }
+    if report.report_digest != external_lifecycle_pending_report_digest(report) {
+        return Err(ExternalLifecyclePendingReportError::DigestMismatch {
+            field: "report_digest",
+        });
+    }
+    Ok(())
+}
+
+/// Validate that an archived external lifecycle pending report still matches
+/// the lifecycle and proposal artifacts it claims to derive from.
+pub fn validate_external_lifecycle_pending_report_for_plan(
+    report: &ExternalLifecyclePendingReportV1,
+    lifecycle_plan: &ExternalLifecyclePlanV1,
+    proposal_report: &ExternalUpgradeProposalReportV1,
+) -> Result<(), ExternalLifecyclePendingReportError> {
+    validate_external_lifecycle_pending_report(report)?;
+    if report.lifecycle_plan_id != lifecycle_plan.lifecycle_plan_id {
+        return Err(ExternalLifecyclePendingReportError::SourceMismatch {
+            field: "lifecycle_plan_id",
+        });
+    }
+    if report.lifecycle_plan_digest != lifecycle_plan.lifecycle_plan_digest {
+        return Err(ExternalLifecyclePendingReportError::SourceMismatch {
+            field: "lifecycle_plan_digest",
+        });
+    }
+    if report.proposal_report_id != proposal_report.report_id {
+        return Err(ExternalLifecyclePendingReportError::SourceMismatch {
+            field: "proposal_report_id",
+        });
+    }
+    if report.proposal_report_digest != proposal_report.report_digest {
+        return Err(ExternalLifecyclePendingReportError::SourceMismatch {
+            field: "proposal_report_digest",
+        });
+    }
+    let expected = external_lifecycle_pending_report_from_plan(
+        report.report_id.clone(),
+        lifecycle_plan,
+        proposal_report,
+    );
+    if report != &expected {
+        return Err(ExternalLifecyclePendingReportError::SourceMismatch {
+            field: "lifecycle_plan",
+        });
+    }
+    Ok(())
+}
+
+fn external_lifecycle_pending_action(
+    proposal: &ExternalUpgradeProposalV1,
+) -> ExternalLifecyclePendingActionV1 {
+    ExternalLifecyclePendingActionV1 {
+        subject: proposal.subject.clone(),
+        proposal_id: proposal.proposal_id.clone(),
+        proposal_digest: proposal.proposal_digest.clone(),
+        canister_id: proposal.canister_id.clone(),
+        role: proposal.role.clone(),
+        control_class: proposal.control_class,
+        lifecycle_mode: proposal.lifecycle_mode,
+        required_external_action: proposal.required_external_action.clone(),
+        consent_requirements: proposal.consent_requirements.clone(),
+        verification_requirements: proposal.verification_requirements.clone(),
+    }
 }
 
 fn external_upgrade_proposal(
@@ -1330,6 +1604,26 @@ fn external_upgrade_proposal_report_digest(report: &ExternalUpgradeProposalRepor
     })
 }
 
+fn external_lifecycle_pending_report_digest(report: &ExternalLifecyclePendingReportV1) -> String {
+    stable_json_sha256_hex(&ExternalLifecyclePendingReportDigestInput {
+        report_id: &report.report_id,
+        lifecycle_plan_id: &report.lifecycle_plan_id,
+        lifecycle_plan_digest: &report.lifecycle_plan_digest,
+        proposal_report_id: &report.proposal_report_id,
+        proposal_report_digest: &report.proposal_report_digest,
+        deployment_plan_id: &report.deployment_plan_id,
+        deployment_plan_digest: &report.deployment_plan_digest,
+        inventory_id: &report.inventory_id,
+        direct_upgrade_count: report.direct_upgrade_count,
+        pending_external_count: report.pending_external_count,
+        blocked_count: report.blocked_count,
+        pending_external_actions: &report.pending_external_actions,
+        blocked_subjects: &report.blocked_subjects,
+        residual_exposure: &report.residual_exposure,
+        status: report.status,
+    })
+}
+
 fn external_upgrade_receipt_digest(receipt: &ExternalUpgradeReceiptV1) -> String {
     stable_json_sha256_hex(&ExternalUpgradeReceiptDigestInput {
         proposal_id: &receipt.proposal_id,
@@ -1427,6 +1721,28 @@ fn ensure_external_receipt_field(
     Ok(())
 }
 
+fn ensure_external_receipt_matches_proposal(
+    field: &'static str,
+    actual: &str,
+    expected: &str,
+) -> Result<(), ExternalUpgradeReceiptError> {
+    if actual != expected {
+        return Err(ExternalUpgradeReceiptError::SourceMismatch { field });
+    }
+    Ok(())
+}
+
+fn ensure_external_receipt_option_matches_proposal(
+    field: &'static str,
+    actual: Option<&str>,
+    expected: Option<&str>,
+) -> Result<(), ExternalUpgradeReceiptError> {
+    if actual != expected {
+        return Err(ExternalUpgradeReceiptError::SourceMismatch { field });
+    }
+    Ok(())
+}
+
 fn ensure_external_lifecycle_plan_field(
     field: &'static str,
     value: &str,
@@ -1443,6 +1759,16 @@ fn ensure_external_proposal_report_field(
 ) -> Result<(), ExternalUpgradeProposalReportError> {
     if value.trim().is_empty() {
         return Err(ExternalUpgradeProposalReportError::MissingRequiredField { field });
+    }
+    Ok(())
+}
+
+fn ensure_external_pending_report_field(
+    field: &'static str,
+    value: &str,
+) -> Result<(), ExternalLifecyclePendingReportError> {
+    if value.trim().is_empty() {
+        return Err(ExternalLifecyclePendingReportError::MissingRequiredField { field });
     }
     Ok(())
 }

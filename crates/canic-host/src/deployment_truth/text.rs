@@ -100,6 +100,40 @@ pub fn external_upgrade_proposal_report_text(report: &ExternalUpgradeProposalRep
     lines.join("\n")
 }
 
+/// Render an external lifecycle pending report as passive operator text.
+#[must_use]
+pub fn external_lifecycle_pending_report_text(report: &ExternalLifecyclePendingReportV1) -> String {
+    let mut lines = vec![
+        "External lifecycle pending report".to_string(),
+        "mode: passive".to_string(),
+        "execution: none".to_string(),
+        format!(
+            "status: {}",
+            external_lifecycle_plan_status_label(report.status)
+        ),
+        format!("report_id: {}", report.report_id),
+        format!("report_digest: {}", report.report_digest),
+        format!("lifecycle_plan_id: {}", report.lifecycle_plan_id),
+        format!("lifecycle_plan_digest: {}", report.lifecycle_plan_digest),
+        format!("proposal_report_id: {}", report.proposal_report_id),
+        format!("proposal_report_digest: {}", report.proposal_report_digest),
+        format!("deployment_plan_id: {}", report.deployment_plan_id),
+        format!("deployment_plan_digest: {}", report.deployment_plan_digest),
+        format!("inventory_id: {}", report.inventory_id),
+        String::new(),
+        "counts:".to_string(),
+        format!("  directly_executable: {}", report.direct_upgrade_count),
+        format!("  pending_external: {}", report.pending_external_count),
+        format!("  blocked: {}", report.blocked_count),
+        format!("  residual_exposure: {}", report.residual_exposure.len()),
+    ];
+
+    append_external_lifecycle_pending_action_items(&mut lines, &report.pending_external_actions);
+    append_string_items(&mut lines, "blocked_subjects", &report.blocked_subjects);
+    append_string_items(&mut lines, "residual_exposure", &report.residual_exposure);
+    lines.join("\n")
+}
+
 /// Render an external-upgrade receipt as passive operator text.
 #[must_use]
 pub fn external_upgrade_receipt_text(receipt: &ExternalUpgradeReceiptV1) -> String {
@@ -1783,6 +1817,30 @@ fn append_external_upgrade_proposal_items(
             proposal.required_external_action,
             proposal.consent_requirements.len(),
             proposal.proposal_digest
+        ));
+    }
+}
+
+fn append_external_lifecycle_pending_action_items(
+    lines: &mut Vec<String>,
+    actions: &[ExternalLifecyclePendingActionV1],
+) {
+    if actions.is_empty() {
+        return;
+    }
+    lines.push(String::new());
+    lines.push("pending_external_actions:".to_string());
+    for action in actions {
+        lines.push(format!(
+            "  - proposal_id={} subject={} role={} canister_id={} lifecycle_mode={} required_external_action={} consent_requirements={} proposal_digest={}",
+            action.proposal_id,
+            action.subject,
+            optional_text(action.role.as_deref()),
+            optional_text(action.canister_id.as_deref()),
+            lifecycle_mode_label(action.lifecycle_mode),
+            action.required_external_action,
+            action.consent_requirements.len(),
+            action.proposal_digest
         ));
     }
 }

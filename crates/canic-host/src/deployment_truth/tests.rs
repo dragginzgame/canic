@@ -707,6 +707,164 @@ fn external_upgrade_proposal_report_json_shape_is_stable() {
 }
 
 #[test]
+fn external_lifecycle_pending_report_summarizes_external_work() {
+    let mut plan = sample_plan();
+    plan.expected_canisters[0].control_class = CanisterControlClassV1::UserControlled;
+    let mut inventory = sample_matching_inventory();
+    inventory.observed_canisters[0].control_class = CanisterControlClassV1::UserControlled;
+    inventory.observed_canisters[0].controllers = vec!["user-principal".to_string()];
+    let check = sample_check(plan, inventory);
+    let lifecycle_plan = external_lifecycle_plan_from_check(
+        "external-lifecycle-plan-1",
+        "lifecycle-authority-1",
+        &check,
+    );
+    let proposal_report = external_upgrade_proposal_report_from_lifecycle_plan(
+        "external-upgrade-proposals-1",
+        &lifecycle_plan,
+        &check,
+    );
+
+    let report = external_lifecycle_pending_report_from_plan(
+        "external-lifecycle-pending-1",
+        &lifecycle_plan,
+        &proposal_report,
+    );
+
+    assert_eq!(
+        report.status,
+        ExternalLifecyclePlanStatusV1::PendingExternalAction
+    );
+    assert_eq!(report.direct_upgrade_count, 0);
+    assert_eq!(report.pending_external_count, 1);
+    assert_eq!(report.blocked_count, 0);
+    assert_eq!(
+        report.pending_external_actions[0].proposal_id,
+        proposal_report.proposals[0].proposal_id
+    );
+    assert_eq!(
+        report.pending_external_actions[0].proposal_digest,
+        proposal_report.proposals[0].proposal_digest
+    );
+    assert_eq!(report.report_digest.len(), 64);
+    validate_external_lifecycle_pending_report(&report).expect("pending report should validate");
+    validate_external_lifecycle_pending_report_for_plan(&report, &lifecycle_plan, &proposal_report)
+        .expect("pending report should validate against source artifacts");
+    assert_json_round_trip(&report);
+}
+
+#[test]
+fn external_lifecycle_pending_report_validation_rejects_stale_artifacts() {
+    let mut plan = sample_plan();
+    plan.expected_canisters[0].control_class = CanisterControlClassV1::UserControlled;
+    let mut inventory = sample_matching_inventory();
+    inventory.observed_canisters[0].control_class = CanisterControlClassV1::UserControlled;
+    inventory.observed_canisters[0].controllers = vec!["user-principal".to_string()];
+    let check = sample_check(plan, inventory);
+    let lifecycle_plan = external_lifecycle_plan_from_check(
+        "external-lifecycle-plan-1",
+        "lifecycle-authority-1",
+        &check,
+    );
+    let mut proposal_report = external_upgrade_proposal_report_from_lifecycle_plan(
+        "external-upgrade-proposals-1",
+        &lifecycle_plan,
+        &check,
+    );
+    let mut report = external_lifecycle_pending_report_from_plan(
+        "external-lifecycle-pending-1",
+        &lifecycle_plan,
+        &proposal_report,
+    );
+    report.pending_external_count = 0;
+
+    let err = validate_external_lifecycle_pending_report(&report)
+        .expect_err("stale pending report count should fail");
+    assert_eq!(err, ExternalLifecyclePendingReportError::CountMismatch);
+
+    let report = external_lifecycle_pending_report_from_plan(
+        "external-lifecycle-pending-1",
+        &lifecycle_plan,
+        &proposal_report,
+    );
+    proposal_report.report_id = "other-proposal-report".to_string();
+    let err = validate_external_lifecycle_pending_report_for_plan(
+        &report,
+        &lifecycle_plan,
+        &proposal_report,
+    )
+    .expect_err("source drift should fail");
+    assert_eq!(
+        err,
+        ExternalLifecyclePendingReportError::SourceMismatch {
+            field: "proposal_report_id"
+        }
+    );
+}
+
+#[test]
+fn external_lifecycle_pending_report_text_reports_passive_boundary() {
+    let mut plan = sample_plan();
+    plan.expected_canisters[0].control_class = CanisterControlClassV1::UserControlled;
+    let mut inventory = sample_matching_inventory();
+    inventory.observed_canisters[0].control_class = CanisterControlClassV1::UserControlled;
+    inventory.observed_canisters[0].controllers = vec!["user-principal".to_string()];
+    let check = sample_check(plan, inventory);
+    let lifecycle_plan = external_lifecycle_plan_from_check(
+        "external-lifecycle-plan-1",
+        "lifecycle-authority-1",
+        &check,
+    );
+    let proposal_report = external_upgrade_proposal_report_from_lifecycle_plan(
+        "external-upgrade-proposals-1",
+        &lifecycle_plan,
+        &check,
+    );
+    let report = external_lifecycle_pending_report_from_plan(
+        "external-lifecycle-pending-1",
+        &lifecycle_plan,
+        &proposal_report,
+    );
+
+    let text = external_lifecycle_pending_report_text(&report);
+
+    assert!(text.contains("External lifecycle pending report"));
+    assert!(text.contains("mode: passive"));
+    assert!(text.contains("execution: none"));
+    assert!(text.contains("pending_external: 1"));
+    assert!(text.contains("pending_external_actions"));
+}
+
+fn sample_external_upgrade_proposal_and_receipt()
+-> (ExternalUpgradeProposalV1, ExternalUpgradeReceiptV1) {
+    let mut plan = sample_plan();
+    plan.expected_canisters[0].control_class = CanisterControlClassV1::UserControlled;
+    let mut inventory = sample_matching_inventory();
+    inventory.observed_canisters[0].control_class = CanisterControlClassV1::UserControlled;
+    inventory.observed_canisters[0].controllers = vec!["user-principal".to_string()];
+    let check = sample_check(plan, inventory);
+    let lifecycle_plan = external_lifecycle_plan_from_check(
+        "external-lifecycle-plan-1",
+        "lifecycle-authority-1",
+        &check,
+    );
+    let proposal_report = external_upgrade_proposal_report_from_lifecycle_plan(
+        "external-upgrade-proposals-1",
+        &lifecycle_plan,
+        &check,
+    );
+    let proposal = proposal_report.proposals[0].clone();
+    let receipt = external_upgrade_receipt_from_observation(
+        "external-upgrade-receipt-1",
+        &proposal,
+        ExternalUpgradeConsentStateV1::ExecutedExternally,
+        Some("user-principal".to_string()),
+        Some(&check.inventory.observed_canisters[0]),
+    );
+    (proposal, receipt)
+}
+
+#[test]
 fn external_upgrade_receipt_verifies_matching_external_completion() {
     let mut plan = sample_plan();
     plan.expected_canisters[0].control_class = CanisterControlClassV1::UserControlled;
@@ -744,6 +902,8 @@ fn external_upgrade_receipt_verifies_matching_external_completion() {
     );
     assert!(receipt.verification_notes.is_empty());
     validate_external_upgrade_receipt(&receipt).expect("receipt should validate");
+    validate_external_upgrade_receipt_for_proposal(&receipt, proposal)
+        .expect("receipt should validate against proposal");
     assert_eq!(receipt.receipt_digest.len(), 64);
     assert_json_round_trip(&receipt);
 }
@@ -788,6 +948,8 @@ fn external_upgrade_receipt_reports_mismatched_external_completion() {
             .any(|note| note.contains("module hash"))
     );
     validate_external_upgrade_receipt(&receipt).expect("mismatch receipt is still valid evidence");
+    validate_external_upgrade_receipt_for_proposal(&receipt, &proposal_report.proposals[0])
+        .expect("mismatch receipt should still validate against the proposal");
 }
 
 #[test]
@@ -825,6 +987,33 @@ fn external_upgrade_receipt_validation_rejects_stale_digest() {
             field: "receipt_digest"
         }
     ));
+}
+
+#[test]
+fn external_upgrade_receipt_validation_rejects_mismatched_proposal_source() {
+    let (mut mismatched, receipt) = sample_external_upgrade_proposal_and_receipt();
+    mismatched.proposal_id = "other-proposal".to_string();
+
+    let err = validate_external_upgrade_receipt_for_proposal(&receipt, &mismatched)
+        .expect_err("receipt cannot validate against another proposal");
+
+    assert!(matches!(
+        err,
+        ExternalUpgradeReceiptError::SourceMismatch {
+            field: "proposal_id"
+        }
+    ));
+}
+
+#[test]
+fn external_upgrade_receipt_validation_rejects_stale_proposal_target() {
+    let (mut proposal, receipt) = sample_external_upgrade_proposal_and_receipt();
+    proposal.target_installed_module_hash = Some("different-target-module".to_string());
+
+    let err = validate_external_upgrade_receipt_for_proposal(&receipt, &proposal)
+        .expect_err("receipt cannot verify against changed target facts");
+
+    assert_eq!(err, ExternalUpgradeReceiptError::VerificationMismatch);
 }
 
 #[test]

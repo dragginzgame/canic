@@ -1062,6 +1062,47 @@ pub struct ExternalUpgradeProposalReportV1 {
 }
 
 ///
+/// ExternalLifecyclePendingReportV1
+///
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ExternalLifecyclePendingReportV1 {
+    pub schema_version: u32,
+    pub report_id: String,
+    pub report_digest: String,
+    pub lifecycle_plan_id: String,
+    pub lifecycle_plan_digest: String,
+    pub proposal_report_id: String,
+    pub proposal_report_digest: String,
+    pub deployment_plan_id: String,
+    pub deployment_plan_digest: String,
+    pub inventory_id: String,
+    pub direct_upgrade_count: usize,
+    pub pending_external_count: usize,
+    pub blocked_count: usize,
+    pub pending_external_actions: Vec<ExternalLifecyclePendingActionV1>,
+    pub blocked_subjects: Vec<String>,
+    pub residual_exposure: Vec<String>,
+    pub status: ExternalLifecyclePlanStatusV1,
+}
+
+///
+/// ExternalLifecyclePendingActionV1
+///
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ExternalLifecyclePendingActionV1 {
+    pub subject: String,
+    pub proposal_id: String,
+    pub proposal_digest: String,
+    pub canister_id: Option<String>,
+    pub role: Option<String>,
+    pub control_class: CanisterControlClassV1,
+    pub lifecycle_mode: LifecycleModeV1,
+    pub required_external_action: String,
+    pub consent_requirements: Vec<ConsentRequirementV1>,
+    pub verification_requirements: Vec<LifecycleVerificationRequirementV1>,
+}
+
+///
 /// ExternalUpgradeProposalV1
 ///
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]

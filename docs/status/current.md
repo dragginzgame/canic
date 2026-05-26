@@ -13,10 +13,11 @@ inspect only the files needed for the current task.
 - Theme: coordinate lifecycle work for canisters Canic cannot unilaterally
   upgrade, without reclassifying authority or pretending deployment authority
   can mutate externally controlled roles.
-- Current release-work area: 0.45 first slice. The line starts by projecting
-  existing `CanisterControlClassV1` observations into `LifecycleAuthorityV1`,
-  partitioning them through `ExternalLifecyclePlanV1`, and deriving passive
-  proposal/receipt evidence without adding consent delivery, external
+- Current release-work area: 0.45 passive external lifecycle hardening. The line
+  now projects existing `CanisterControlClassV1` observations into
+  `LifecycleAuthorityV1`, partitions them through `ExternalLifecyclePlanV1`,
+  derives passive proposal/receipt/pending evidence, and exposes the first
+  external lifecycle CLI reports without adding consent delivery, external
   execution, or install mutation.
 - Design starts at
   `docs/design/0.45-external-lifecycle/0.45-design.md`. 0.45 must reuse the
@@ -41,18 +42,25 @@ inspect only the files needed for the current task.
   unknown-unsafe rows remain blocked.
 - `ExternalUpgradeReceiptV1` now records pending, refused, delegated, and
   externally executed outcomes with structural verification against observed
-  module/config facts. These receipts remain evidence; live inventory remains
-  truth.
+  module/config facts. Receipts now also validate against the exact proposal
+  they claim to satisfy, including proposal identity, before-state facts,
+  target verification result, and verification notes. These receipts remain
+  evidence; live inventory remains truth.
 - The passive 0.45 artifacts now have digest/text parity: lifecycle authority
   reports, lifecycle plans, proposal reports, and external completion receipts
   validate archived drift and render host-owned passive text that explicitly
   reports no execution.
 - `canic deploy external plan <fleet>` and
   `canic deploy external proposals <fleet>` now expose the first passive 0.45
-  CLI surface. They derive lifecycle plans and proposal reports from local
-  deployment truth, default to JSON, support `--format text`, and do not
-  request consent, execute external upgrades, install code, or mutate
-  deployment state.
+  CLI surface. `canic deploy external pending <fleet>` adds a passive pending
+  external lifecycle report over the same local deployment truth. They default
+  to JSON, support `--format text`, and do not request consent, execute
+  external upgrades, install code, or mutate deployment state.
+- `ExternalLifecyclePendingReportV1` now summarizes pending external lifecycle
+  work from `ExternalLifecyclePlanV1` and `ExternalUpgradeProposalReportV1`,
+  carrying direct/pending/blocked counts, pending proposal links, blocked
+  subjects, residual exposure, digest validation, and passive text rendering
+  without adding any external consent or execution path.
 - 0.44 has started with passive role artifact source DTOs and validation for
   digest-pinned override inputs. Receipt-backed artifact sources are limited to
   deployment/staging receipt evidence and do not accept authority dry-run

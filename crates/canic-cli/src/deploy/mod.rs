@@ -18,7 +18,7 @@ use canic_host::{
         ArtifactPromotionProvenanceReportRequest, ArtifactPromotionProvenanceReportV1,
         AuthorityDryRunEvidenceV1, BuildMaterializationEvidenceV1, DeploymentCheckV1,
         DeploymentExecutionPreflightV1, DeploymentPlanV1, DeploymentReceiptV1,
-        ExternalLifecyclePlanV1, ExternalUpgradeProposalReportV1,
+        ExternalLifecyclePendingReportV1, ExternalLifecyclePlanV1, ExternalUpgradeProposalReportV1,
         PromotionArtifactIdentityReportRequest, PromotionArtifactIdentityReportV1,
         PromotionMaterializationIdentityReportRequest, PromotionMaterializationIdentityReportV1,
         PromotionPlanTransformEvidenceRequest, PromotionPlanTransformEvidenceV1,
@@ -39,6 +39,7 @@ use canic_host::{
         authority_plan_text, authority_receipt_text, authority_report_from_check_with_local_id,
         authority_report_text, build_authority_reconciliation_plan, check_promotion_policy,
         check_promotion_readiness, compare_plan_inventory_and_receipt,
+        external_lifecycle_pending_report_from_plan, external_lifecycle_pending_report_text,
         external_lifecycle_plan_from_check, external_lifecycle_plan_text,
         external_upgrade_proposal_report_from_lifecycle_plan,
         external_upgrade_proposal_report_text, promoted_deployment_plan_transform_from_inputs,
@@ -85,6 +86,7 @@ Examples:
   canic deploy authority receipt demo
   canic deploy external plan demo
   canic deploy external proposals demo
+  canic deploy external pending demo
   canic deploy promote plan --request promotion-plan.json
   canic deploy promote check --request promotion-check.json
   canic deploy promote diff --request promotion-diff.json
@@ -145,8 +147,9 @@ const DEPLOY_EXTERNAL_HELP_AFTER: &str = "\
 Examples:
   canic deploy external plan demo
   canic deploy external proposals demo
+  canic deploy external pending demo
   canic deploy external plan --format text demo
-  canic --network local deploy external proposals --profile fast demo
+  canic --network local deploy external pending --profile fast demo
 
 0.45 external lifecycle commands are passive reports. They do not request
 consent, execute external upgrades, install code, or mutate deployment state.";
@@ -353,6 +356,16 @@ Examples:
 Prints ExternalUpgradeProposalReportV1 JSON by default, or host-owned passive
 text with --format text. Proposals are derived from the local lifecycle plan
 and do not grant consent or execute upgrades.";
+const DEPLOY_EXTERNAL_PENDING_HELP_AFTER: &str = "\
+Examples:
+  canic deploy external pending demo
+  canic deploy external pending --format text demo
+  canic --network local deploy external pending --profile fast demo
+
+Prints ExternalLifecyclePendingReportV1 JSON by default, or host-owned passive
+text with --format text. Pending reports summarize unresolved external actions,
+blocked subjects, and residual exposure without requesting consent or executing
+upgrades.";
 const DEPLOY_RESUME_REPORT_HELP_AFTER: &str = "\
 Examples:
   canic deploy resume-report demo
@@ -1118,6 +1131,7 @@ where
     {
         Some((command, args)) if command == "plan" => run_external_plan(args),
         Some((command, args)) if command == "proposals" => run_external_proposals(args),
+        Some((command, args)) if command == "pending" => run_external_pending(args),
         _ => {
             println!("{}", external_usage());
             Ok(())
@@ -1148,6 +1162,19 @@ where
         external_proposals_usage,
         build_external_upgrade_proposal_report,
         external_upgrade_proposal_report_text,
+    )
+}
+
+fn run_external_pending<I>(args: I) -> Result<(), DeployCommandError>
+where
+    I: IntoIterator<Item = OsString>,
+{
+    run_external_output(
+        args,
+        deploy_external_pending_command,
+        external_pending_usage,
+        build_external_lifecycle_pending_report,
+        external_lifecycle_pending_report_text,
     )
 }
 
@@ -1196,6 +1223,22 @@ fn build_external_upgrade_proposal_report(
     )
 }
 
+fn build_external_lifecycle_pending_report(
+    check: &DeploymentCheckV1,
+) -> ExternalLifecyclePendingReportV1 {
+    let lifecycle_plan = build_external_lifecycle_plan(check);
+    let proposal_report = external_upgrade_proposal_report_from_lifecycle_plan(
+        local_external_proposal_report_id(check),
+        &lifecycle_plan,
+        check,
+    );
+    external_lifecycle_pending_report_from_plan(
+        local_external_pending_report_id(check),
+        &lifecycle_plan,
+        &proposal_report,
+    )
+}
+
 fn local_external_lifecycle_plan_id(check: &DeploymentCheckV1) -> String {
     local_external_artifact_id(check, "external-lifecycle-plan")
 }
@@ -1206,6 +1249,10 @@ fn local_lifecycle_authority_report_id(check: &DeploymentCheckV1) -> String {
 
 fn local_external_proposal_report_id(check: &DeploymentCheckV1) -> String {
     local_external_artifact_id(check, "external-upgrade-proposals")
+}
+
+fn local_external_pending_report_id(check: &DeploymentCheckV1) -> String {
+    local_external_artifact_id(check, "external-lifecycle-pending")
 }
 
 fn local_external_artifact_id(check: &DeploymentCheckV1, suffix: &str) -> String {
@@ -1722,6 +1769,11 @@ fn deploy_external_command() -> ClapCommand {
                 .about("Build passive external upgrade proposals")
                 .disable_help_flag(true),
         ))
+        .subcommand(passthrough_subcommand(
+            ClapCommand::new("pending")
+                .about("Build a passive external lifecycle pending report")
+                .disable_help_flag(true),
+        ))
         .after_help(DEPLOY_EXTERNAL_HELP_AFTER)
 }
 
@@ -2055,6 +2107,16 @@ fn deploy_external_proposals_command() -> ClapCommand {
         .after_help(DEPLOY_EXTERNAL_PROPOSALS_HELP_AFTER)
 }
 
+fn deploy_external_pending_command() -> ClapCommand {
+    deploy_truth_leaf_command(
+        "pending",
+        "Print the local external lifecycle pending report",
+    )
+    .arg(external_format_arg())
+    .bin_name("canic deploy external pending")
+    .after_help(DEPLOY_EXTERNAL_PENDING_HELP_AFTER)
+}
+
 fn deploy_plan_command() -> ClapCommand {
     deploy_truth_leaf_command("plan", "Print the local deployment plan JSON")
         .after_help(DEPLOY_PLAN_HELP_AFTER)
@@ -2186,6 +2248,11 @@ fn external_plan_usage() -> String {
 
 fn external_proposals_usage() -> String {
     let mut command = deploy_external_proposals_command();
+    command.render_help().to_string()
+}
+
+fn external_pending_usage() -> String {
+    let mut command = deploy_external_pending_command();
     command.render_help().to_string()
 }
 
@@ -2602,8 +2669,14 @@ mod tests {
             external_proposals_usage,
         )
         .expect("parse deploy external proposals");
+        let external_pending = DeployExternalOptions::parse(
+            [OsString::from("demo")],
+            deploy_external_pending_command,
+            external_pending_usage,
+        )
+        .expect("parse deploy external pending");
 
-        for options in [external_plan, external_proposals] {
+        for options in [external_plan, external_proposals, external_pending] {
             assert_eq!(options.truth.fleet, "demo");
             assert_eq!(options.format, ExternalOutputFormat::Json);
         }
@@ -2631,11 +2704,23 @@ mod tests {
             external_proposals_usage,
         )
         .expect("parse deploy external proposals text");
+        let external_pending = DeployExternalOptions::parse(
+            [
+                OsString::from("--format"),
+                OsString::from("text"),
+                OsString::from("demo"),
+            ],
+            deploy_external_pending_command,
+            external_pending_usage,
+        )
+        .expect("parse deploy external pending text");
 
         assert_eq!(external_plan.truth.fleet, "demo");
         assert_eq!(external_plan.format, ExternalOutputFormat::Text);
         assert_eq!(external_proposals.truth.fleet, "demo");
         assert_eq!(external_proposals.format, ExternalOutputFormat::Text);
+        assert_eq!(external_pending.truth.fleet, "demo");
+        assert_eq!(external_pending.format, ExternalOutputFormat::Text);
     }
 
     #[test]
@@ -2788,14 +2873,18 @@ mod tests {
         let help = external_usage();
         let plan_help = external_plan_usage();
         let proposals_help = external_proposals_usage();
+        let pending_help = external_pending_usage();
 
         assert!(help.contains("Build passive external lifecycle reports"));
         assert!(help.contains("do not request"));
         assert!(help.contains("mutate deployment state"));
+        assert!(help.contains("Build a passive external lifecycle pending report"));
         assert!(plan_help.contains("ExternalLifecyclePlanV1 JSON"));
         assert!(plan_help.contains("No consent delivery"));
         assert!(proposals_help.contains("ExternalUpgradeProposalReportV1 JSON"));
         assert!(proposals_help.contains("do not grant consent"));
+        assert!(pending_help.contains("ExternalLifecyclePendingReportV1 JSON"));
+        assert!(pending_help.contains("residual exposure"));
     }
 
     #[test]
@@ -2984,8 +3073,8 @@ mod tests {
     }
 
     #[test]
-    fn deploy_external_command_dispatches_plan_and_proposals() {
-        for command in ["plan", "proposals"] {
+    fn deploy_external_command_dispatches_plan_proposals_and_pending() {
+        for command in ["plan", "proposals", "pending"] {
             let parsed = parse_subcommand(
                 deploy_command(),
                 [
@@ -3282,6 +3371,45 @@ mod tests {
             report.proposals[0].required_external_action,
             "external_controller_execution"
         );
+    }
+
+    #[test]
+    fn external_pending_report_builder_links_plan_and_proposals() {
+        let mut check = sample_authority_check();
+        check.plan.expected_canisters[0].control_class = CanisterControlClassV1::UserControlled;
+        check.inventory.observed_canisters[0].control_class =
+            CanisterControlClassV1::UserControlled;
+        check.inventory.observed_canisters[0].controllers = vec!["user-principal".to_string()];
+
+        let lifecycle_plan = build_external_lifecycle_plan(&check);
+        let proposal_report = build_external_upgrade_proposal_report(&check);
+        let pending_report = build_external_lifecycle_pending_report(&check);
+
+        assert_eq!(
+            pending_report.report_id,
+            "local:local:demo:external-lifecycle-pending"
+        );
+        assert_eq!(
+            pending_report.lifecycle_plan_id,
+            lifecycle_plan.lifecycle_plan_id
+        );
+        assert_eq!(
+            pending_report.lifecycle_plan_digest,
+            lifecycle_plan.lifecycle_plan_digest
+        );
+        assert_eq!(pending_report.proposal_report_id, proposal_report.report_id);
+        assert_eq!(
+            pending_report.proposal_report_digest,
+            proposal_report.report_digest
+        );
+        assert_eq!(pending_report.pending_external_count, 1);
+        assert_eq!(pending_report.direct_upgrade_count, 0);
+        assert_eq!(pending_report.blocked_count, 0);
+        assert_eq!(
+            pending_report.pending_external_actions[0].proposal_id,
+            proposal_report.proposals[0].proposal_id
+        );
+        assert_eq!(pending_report.report_digest.len(), 64);
     }
 
     #[test]
