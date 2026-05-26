@@ -12,16 +12,23 @@ present.
 
 ## Unreleased
 
-- External lifecycle artifacts now have validation helpers for lifecycle
-  authority report digests, lifecycle plan digests, proposal report/proposal
-  digests, duplicate subjects, direct-row proposal mistakes, and receipt digest
-  drift. Lifecycle authority reports, lifecycle plans, proposal reports, and
-  external completion receipts have passive text renderers, and source guards
-  keep the lifecycle path free of controller-mutation primitives. Lifecycle
-  plans and proposal reports can also be validated against their source
-  deployment truth check to reject stale archived evidence.
+- The first passive external lifecycle CLI reports derive lifecycle plans and
+  external-upgrade proposal reports from local deployment truth without
+  consent delivery, external execution, install, or mutation. CLI coverage pins
+  their local artifact IDs, lifecycle-plan linkage, and format validation.
+
+```bash
+canic deploy external plan demo
+canic deploy external proposals demo
+canic deploy external plan --format text demo
+canic deploy external proposals --format text demo
+```
 
 ## [0.45.x] - 2026-05-26 - External lifecycle
+
+- `0.45.1` hardens passive external lifecycle artifacts with deterministic
+  report/plan/proposal/receipt validation, source-check linkage, passive text
+  rendering, and no-mutation source guards.
 
 - `0.45.0` starts the external/user-owned lifecycle line with passive
   lifecycle authority projection from existing `CanisterControlClassV1`

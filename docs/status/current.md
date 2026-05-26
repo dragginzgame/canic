@@ -47,6 +47,12 @@ inspect only the files needed for the current task.
   reports, lifecycle plans, proposal reports, and external completion receipts
   validate archived drift and render host-owned passive text that explicitly
   reports no execution.
+- `canic deploy external plan <fleet>` and
+  `canic deploy external proposals <fleet>` now expose the first passive 0.45
+  CLI surface. They derive lifecycle plans and proposal reports from local
+  deployment truth, default to JSON, support `--format text`, and do not
+  request consent, execute external upgrades, install code, or mutate
+  deployment state.
 - 0.44 has started with passive role artifact source DTOs and validation for
   digest-pinned override inputs. Receipt-backed artifact sources are limited to
   deployment/staging receipt evidence and do not accept authority dry-run

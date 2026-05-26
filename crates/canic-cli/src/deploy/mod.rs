@@ -18,6 +18,7 @@ use canic_host::{
         ArtifactPromotionProvenanceReportRequest, ArtifactPromotionProvenanceReportV1,
         AuthorityDryRunEvidenceV1, BuildMaterializationEvidenceV1, DeploymentCheckV1,
         DeploymentExecutionPreflightV1, DeploymentPlanV1, DeploymentReceiptV1,
+        ExternalLifecyclePlanV1, ExternalUpgradeProposalReportV1,
         PromotionArtifactIdentityReportRequest, PromotionArtifactIdentityReportV1,
         PromotionMaterializationIdentityReportRequest, PromotionMaterializationIdentityReportV1,
         PromotionPlanTransformEvidenceRequest, PromotionPlanTransformEvidenceV1,
@@ -38,7 +39,9 @@ use canic_host::{
         authority_plan_text, authority_receipt_text, authority_report_from_check_with_local_id,
         authority_report_text, build_authority_reconciliation_plan, check_promotion_policy,
         check_promotion_readiness, compare_plan_inventory_and_receipt,
-        promoted_deployment_plan_transform_from_inputs,
+        external_lifecycle_plan_from_check, external_lifecycle_plan_text,
+        external_upgrade_proposal_report_from_lifecycle_plan,
+        external_upgrade_proposal_report_text, promoted_deployment_plan_transform_from_inputs,
         promoted_deployment_plan_transform_from_inputs_with_materialization,
         promotion_artifact_identity_report_from_inputs, promotion_artifact_identity_report_text,
         promotion_materialization_identity_report_from_evidence,
@@ -80,6 +83,8 @@ Examples:
   canic deploy authority evidence demo
   canic deploy authority report demo
   canic deploy authority receipt demo
+  canic deploy external plan demo
+  canic deploy external proposals demo
   canic deploy promote plan --request promotion-plan.json
   canic deploy promote check --request promotion-check.json
   canic deploy promote diff --request promotion-diff.json
@@ -136,6 +141,15 @@ Examples:
 0.42 authority commands are dry-run reports. They do not apply controller
 changes. A successful command means the local authority artifact was produced,
 not that the deployment is globally safe or that controller state was changed.";
+const DEPLOY_EXTERNAL_HELP_AFTER: &str = "\
+Examples:
+  canic deploy external plan demo
+  canic deploy external proposals demo
+  canic deploy external plan --format text demo
+  canic --network local deploy external proposals --profile fast demo
+
+0.45 external lifecycle commands are passive reports. They do not request
+consent, execute external upgrades, install code, or mutate deployment state.";
 const DEPLOY_INSTALL_HELP_AFTER: &str = "\
 Examples:
   canic deploy install --plan promoted-plan.json
@@ -321,6 +335,24 @@ Prints an evidence-only AuthorityReceiptV1 JSON by default, or a human-readable
 read-only summary with --format text. No controller changes are attempted.
 Success means the dry-run receipt was produced with zero attempted controller
 actions.";
+const DEPLOY_EXTERNAL_PLAN_HELP_AFTER: &str = "\
+Examples:
+  canic deploy external plan demo
+  canic deploy external plan --format text demo
+  canic --network local deploy external plan --profile fast demo
+
+Prints ExternalLifecyclePlanV1 JSON by default, or host-owned passive text with
+--format text. No consent delivery, external execution, install, or mutation is
+attempted.";
+const DEPLOY_EXTERNAL_PROPOSALS_HELP_AFTER: &str = "\
+Examples:
+  canic deploy external proposals demo
+  canic deploy external proposals --format text demo
+  canic --network local deploy external proposals --profile fast demo
+
+Prints ExternalUpgradeProposalReportV1 JSON by default, or host-owned passive
+text with --format text. Proposals are derived from the local lifecycle plan
+and do not grant consent or execute upgrades.";
 const DEPLOY_RESUME_REPORT_HELP_AFTER: &str = "\
 Examples:
   canic deploy resume-report demo
@@ -394,6 +426,15 @@ struct DeployAuthorityOptions {
 }
 
 ///
+/// DeployExternalOptions
+///
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct DeployExternalOptions {
+    truth: DeployTruthOptions,
+    format: ExternalOutputFormat,
+}
+
+///
 /// DeployPromoteReportOptions
 ///
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -407,6 +448,15 @@ struct DeployPromoteReportOptions {
 ///
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum AuthorityOutputFormat {
+    Json,
+    Text,
+}
+
+///
+/// ExternalOutputFormat
+///
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum ExternalOutputFormat {
     Json,
     Text,
 }
@@ -526,6 +576,7 @@ where
         }
         Some((command, args)) => match command.as_str() {
             "authority" => run_authority(args),
+            "external" => run_external(args),
             "promote" => run_promote(args),
             "install" => run_install(args),
             "plan" => run_plan(args),
@@ -1053,6 +1104,117 @@ where
     )
 }
 
+fn run_external<I>(args: I) -> Result<(), DeployCommandError>
+where
+    I: IntoIterator<Item = OsString>,
+{
+    let args = args.into_iter().collect::<Vec<_>>();
+    if print_help_or_version(&args, external_usage, version_text()) {
+        return Ok(());
+    }
+
+    match parse_subcommand(deploy_external_command(), args)
+        .map_err(|_| DeployCommandError::Usage(external_usage()))?
+    {
+        Some((command, args)) if command == "plan" => run_external_plan(args),
+        Some((command, args)) if command == "proposals" => run_external_proposals(args),
+        _ => {
+            println!("{}", external_usage());
+            Ok(())
+        }
+    }
+}
+
+fn run_external_plan<I>(args: I) -> Result<(), DeployCommandError>
+where
+    I: IntoIterator<Item = OsString>,
+{
+    run_external_output(
+        args,
+        deploy_external_plan_command,
+        external_plan_usage,
+        build_external_lifecycle_plan,
+        external_lifecycle_plan_text,
+    )
+}
+
+fn run_external_proposals<I>(args: I) -> Result<(), DeployCommandError>
+where
+    I: IntoIterator<Item = OsString>,
+{
+    run_external_output(
+        args,
+        deploy_external_proposals_command,
+        external_proposals_usage,
+        build_external_upgrade_proposal_report,
+        external_upgrade_proposal_report_text,
+    )
+}
+
+fn run_external_output<I, T>(
+    args: I,
+    command: impl FnOnce() -> ClapCommand,
+    usage: fn() -> String,
+    build: impl FnOnce(&DeploymentCheckV1) -> T,
+    render_text: impl FnOnce(&T) -> String,
+) -> Result<(), DeployCommandError>
+where
+    I: IntoIterator<Item = OsString>,
+    T: serde::Serialize,
+{
+    let args = args.into_iter().collect::<Vec<_>>();
+    if print_help_or_version(&args, usage, version_text()) {
+        return Ok(());
+    }
+
+    let options = DeployExternalOptions::parse(args, command, usage)?;
+    let check = load_deployment_check(options.truth)?;
+    let output = build(&check);
+    match options.format {
+        ExternalOutputFormat::Json => print_json(&output)?,
+        ExternalOutputFormat::Text => println!("{}", render_text(&output)),
+    }
+    Ok(())
+}
+
+fn build_external_lifecycle_plan(check: &DeploymentCheckV1) -> ExternalLifecyclePlanV1 {
+    external_lifecycle_plan_from_check(
+        local_external_lifecycle_plan_id(check),
+        local_lifecycle_authority_report_id(check),
+        check,
+    )
+}
+
+fn build_external_upgrade_proposal_report(
+    check: &DeploymentCheckV1,
+) -> ExternalUpgradeProposalReportV1 {
+    let lifecycle_plan = build_external_lifecycle_plan(check);
+    external_upgrade_proposal_report_from_lifecycle_plan(
+        local_external_proposal_report_id(check),
+        &lifecycle_plan,
+        check,
+    )
+}
+
+fn local_external_lifecycle_plan_id(check: &DeploymentCheckV1) -> String {
+    local_external_artifact_id(check, "external-lifecycle-plan")
+}
+
+fn local_lifecycle_authority_report_id(check: &DeploymentCheckV1) -> String {
+    local_external_artifact_id(check, "lifecycle-authority-report")
+}
+
+fn local_external_proposal_report_id(check: &DeploymentCheckV1) -> String {
+    local_external_artifact_id(check, "external-upgrade-proposals")
+}
+
+fn local_external_artifact_id(check: &DeploymentCheckV1, suffix: &str) -> String {
+    format!(
+        "local:{}:{}:{suffix}",
+        check.plan.runtime_variant, check.plan.deployment_identity.deployment_name
+    )
+}
+
 fn run_authority_output<I, T>(
     args: I,
     command: impl FnOnce() -> ClapCommand,
@@ -1397,6 +1559,27 @@ impl DeployAuthorityOptions {
     }
 }
 
+impl DeployExternalOptions {
+    fn parse<I>(
+        args: I,
+        command: impl FnOnce() -> ClapCommand,
+        usage: fn() -> String,
+    ) -> Result<Self, DeployCommandError>
+    where
+        I: IntoIterator<Item = OsString>,
+    {
+        let matches =
+            parse_matches(command(), args).map_err(|_| DeployCommandError::Usage(usage()))?;
+        Ok(Self {
+            truth: DeployTruthOptions::from_matches(&matches, usage)?,
+            format: parse_external_output_format(
+                string_option(&matches, "format").as_deref(),
+                usage,
+            )?,
+        })
+    }
+}
+
 impl DeployPromoteReportOptions {
     fn parse<I>(
         args: I,
@@ -1477,6 +1660,11 @@ fn deploy_command() -> ClapCommand {
                 .disable_help_flag(true),
         ))
         .subcommand(passthrough_subcommand(
+            ClapCommand::new("external")
+                .about("Build passive external lifecycle reports")
+                .disable_help_flag(true),
+        ))
+        .subcommand(passthrough_subcommand(
             ClapCommand::new("promote")
                 .about("Build passive artifact promotion reports")
                 .disable_help_flag(true),
@@ -1517,6 +1705,24 @@ fn deploy_command() -> ClapCommand {
                 .disable_help_flag(true),
         ))
         .after_help(DEPLOY_HELP_AFTER)
+}
+
+fn deploy_external_command() -> ClapCommand {
+    ClapCommand::new("external")
+        .bin_name("canic deploy external")
+        .about("Build passive external lifecycle reports")
+        .disable_help_flag(true)
+        .subcommand(passthrough_subcommand(
+            ClapCommand::new("plan")
+                .about("Build a passive external lifecycle plan")
+                .disable_help_flag(true),
+        ))
+        .subcommand(passthrough_subcommand(
+            ClapCommand::new("proposals")
+                .about("Build passive external upgrade proposals")
+                .disable_help_flag(true),
+        ))
+        .after_help(DEPLOY_EXTERNAL_HELP_AFTER)
 }
 
 fn deploy_promote_command() -> ClapCommand {
@@ -1835,6 +2041,20 @@ fn deploy_authority_receipt_command() -> ClapCommand {
         .after_help(DEPLOY_AUTHORITY_RECEIPT_HELP_AFTER)
 }
 
+fn deploy_external_plan_command() -> ClapCommand {
+    deploy_truth_leaf_command("plan", "Print the local external lifecycle plan")
+        .arg(external_format_arg())
+        .bin_name("canic deploy external plan")
+        .after_help(DEPLOY_EXTERNAL_PLAN_HELP_AFTER)
+}
+
+fn deploy_external_proposals_command() -> ClapCommand {
+    deploy_truth_leaf_command("proposals", "Print local external upgrade proposals")
+        .arg(external_format_arg())
+        .bin_name("canic deploy external proposals")
+        .after_help(DEPLOY_EXTERNAL_PROPOSALS_HELP_AFTER)
+}
+
 fn deploy_plan_command() -> ClapCommand {
     deploy_truth_leaf_command("plan", "Print the local deployment plan JSON")
         .after_help(DEPLOY_PLAN_HELP_AFTER)
@@ -1903,6 +2123,14 @@ fn authority_format_arg() -> clap::Arg {
         .help("Output format; defaults to json")
 }
 
+fn external_format_arg() -> clap::Arg {
+    value_arg("format")
+        .long("format")
+        .value_name("json|text")
+        .num_args(1)
+        .help("Output format; defaults to json")
+}
+
 fn promotion_format_arg() -> clap::Arg {
     value_arg("format")
         .long("format")
@@ -1943,6 +2171,21 @@ fn check_usage() -> String {
 
 fn promote_usage() -> String {
     let mut command = deploy_promote_command();
+    command.render_help().to_string()
+}
+
+fn external_usage() -> String {
+    let mut command = deploy_external_command();
+    command.render_help().to_string()
+}
+
+fn external_plan_usage() -> String {
+    let mut command = deploy_external_plan_command();
+    command.render_help().to_string()
+}
+
+fn external_proposals_usage() -> String {
+    let mut command = deploy_external_proposals_command();
     command.render_help().to_string()
 }
 
@@ -2094,6 +2337,20 @@ fn parse_authority_output_format(
         "text" => Ok(AuthorityOutputFormat::Text),
         other => Err(DeployCommandError::Usage(format!(
             "invalid authority output format: {other}\n\n{}",
+            usage()
+        ))),
+    }
+}
+
+fn parse_external_output_format(
+    value: Option<&str>,
+    usage: fn() -> String,
+) -> Result<ExternalOutputFormat, DeployCommandError> {
+    match value.unwrap_or("json") {
+        "json" => Ok(ExternalOutputFormat::Json),
+        "text" => Ok(ExternalOutputFormat::Text),
+        other => Err(DeployCommandError::Usage(format!(
+            "invalid external lifecycle output format: {other}\n\n{}",
             usage()
         ))),
     }
@@ -2332,6 +2589,56 @@ mod tests {
     }
 
     #[test]
+    fn deploy_external_leaf_commands_default_to_json() {
+        let external_plan = DeployExternalOptions::parse(
+            [OsString::from("demo")],
+            deploy_external_plan_command,
+            external_plan_usage,
+        )
+        .expect("parse deploy external plan");
+        let external_proposals = DeployExternalOptions::parse(
+            [OsString::from("demo")],
+            deploy_external_proposals_command,
+            external_proposals_usage,
+        )
+        .expect("parse deploy external proposals");
+
+        for options in [external_plan, external_proposals] {
+            assert_eq!(options.truth.fleet, "demo");
+            assert_eq!(options.format, ExternalOutputFormat::Json);
+        }
+    }
+
+    #[test]
+    fn deploy_external_leaf_commands_parse_text_format() {
+        let external_plan = DeployExternalOptions::parse(
+            [
+                OsString::from("--format"),
+                OsString::from("text"),
+                OsString::from("demo"),
+            ],
+            deploy_external_plan_command,
+            external_plan_usage,
+        )
+        .expect("parse deploy external plan text");
+        let external_proposals = DeployExternalOptions::parse(
+            [
+                OsString::from("--format"),
+                OsString::from("text"),
+                OsString::from("demo"),
+            ],
+            deploy_external_proposals_command,
+            external_proposals_usage,
+        )
+        .expect("parse deploy external proposals text");
+
+        assert_eq!(external_plan.truth.fleet, "demo");
+        assert_eq!(external_plan.format, ExternalOutputFormat::Text);
+        assert_eq!(external_proposals.truth.fleet, "demo");
+        assert_eq!(external_proposals.format, ExternalOutputFormat::Text);
+    }
+
+    #[test]
     fn deploy_authority_command_help_does_not_claim_json_only_output() {
         let help = authority_usage();
 
@@ -2477,6 +2784,21 @@ mod tests {
     }
 
     #[test]
+    fn deploy_external_help_documents_passive_scope() {
+        let help = external_usage();
+        let plan_help = external_plan_usage();
+        let proposals_help = external_proposals_usage();
+
+        assert!(help.contains("Build passive external lifecycle reports"));
+        assert!(help.contains("do not request"));
+        assert!(help.contains("mutate deployment state"));
+        assert!(plan_help.contains("ExternalLifecyclePlanV1 JSON"));
+        assert!(plan_help.contains("No consent delivery"));
+        assert!(proposals_help.contains("ExternalUpgradeProposalReportV1 JSON"));
+        assert!(proposals_help.contains("do not grant consent"));
+    }
+
+    #[test]
     fn deploy_authority_path_has_no_controller_mutation_primitives() {
         let source = include_str!("mod.rs");
         let authority_source = source_between(source, "fn run_authority<I>", "fn run_plan<I>");
@@ -2493,6 +2815,28 @@ mod tests {
             assert!(
                 !authority_source.contains(forbidden),
                 "authority CLI path must stay dry-run; found forbidden token {forbidden}"
+            );
+        }
+    }
+
+    #[test]
+    fn deploy_external_path_has_no_mutation_primitives() {
+        let source = include_str!("mod.rs");
+        let external_source =
+            source_between(source, "fn run_external<I>", "fn run_authority_output<I");
+        for forbidden in [
+            "update_settings",
+            "install_code",
+            "create_canister",
+            "delete_canister",
+            "stop_canister",
+            "uninstall_code",
+            "provisional_create_canister",
+            "dfx",
+        ] {
+            assert!(
+                !external_source.contains(forbidden),
+                "external lifecycle CLI path must stay passive; found forbidden token {forbidden}"
             );
         }
     }
@@ -2637,6 +2981,30 @@ mod tests {
             .expect("authority receipt command");
         assert_eq!(nested.0, "receipt");
         assert_eq!(nested.1, vec![OsString::from("demo")]);
+    }
+
+    #[test]
+    fn deploy_external_command_dispatches_plan_and_proposals() {
+        for command in ["plan", "proposals"] {
+            let parsed = parse_subcommand(
+                deploy_command(),
+                [
+                    OsString::from("external"),
+                    OsString::from(command),
+                    OsString::from("demo"),
+                ],
+            )
+            .expect("parse deploy external")
+            .expect("external command");
+
+            assert_eq!(parsed.0, "external");
+
+            let nested = parse_subcommand(deploy_external_command(), parsed.1)
+                .expect("parse nested external")
+                .expect("external leaf command");
+            assert_eq!(nested.0, command);
+            assert_eq!(nested.1, vec![OsString::from("demo")]);
+        }
     }
 
     #[test]
@@ -2858,6 +3226,65 @@ mod tests {
     }
 
     #[test]
+    fn external_lifecycle_plan_builder_uses_stable_local_ids() {
+        let mut check = sample_authority_check();
+        check.plan.expected_canisters[0].control_class = CanisterControlClassV1::UserControlled;
+        check.inventory.observed_canisters[0].control_class =
+            CanisterControlClassV1::UserControlled;
+        check.inventory.observed_canisters[0].controllers = vec!["user-principal".to_string()];
+
+        let plan = build_external_lifecycle_plan(&check);
+
+        assert_eq!(
+            plan.lifecycle_plan_id,
+            "local:local:demo:external-lifecycle-plan"
+        );
+        assert_eq!(
+            plan.lifecycle_authority_report_id,
+            "local:local:demo:lifecycle-authority-report"
+        );
+        assert_eq!(plan.deployment_plan_id, "plan-1");
+        assert_eq!(plan.inventory_id, "inventory-1");
+        assert_eq!(plan.proposed_external_role_upgrades.len(), 1);
+        assert!(plan.directly_executable_role_upgrades.is_empty());
+        assert_eq!(plan.lifecycle_plan_digest.len(), 64);
+    }
+
+    #[test]
+    fn external_proposal_report_builder_delegates_to_lifecycle_plan() {
+        let mut check = sample_authority_check();
+        check.plan.expected_canisters[0].control_class = CanisterControlClassV1::UserControlled;
+        check.inventory.observed_canisters[0].control_class =
+            CanisterControlClassV1::UserControlled;
+        check.inventory.observed_canisters[0].controllers = vec!["user-principal".to_string()];
+
+        let lifecycle_plan = build_external_lifecycle_plan(&check);
+        let report = build_external_upgrade_proposal_report(&check);
+
+        assert_eq!(
+            report.report_id,
+            "local:local:demo:external-upgrade-proposals"
+        );
+        assert_eq!(report.report_digest.len(), 64);
+        assert_eq!(report.lifecycle_plan_id, lifecycle_plan.lifecycle_plan_id);
+        assert_eq!(
+            report.lifecycle_plan_digest,
+            lifecycle_plan.lifecycle_plan_digest
+        );
+        assert_eq!(report.deployment_plan_id, "plan-1");
+        assert_eq!(report.inventory_id, "inventory-1");
+        assert_eq!(report.proposals.len(), 1);
+        assert_eq!(
+            report.proposals[0].lifecycle_plan_digest,
+            lifecycle_plan.lifecycle_plan_digest
+        );
+        assert_eq!(
+            report.proposals[0].required_external_action,
+            "external_controller_execution"
+        );
+    }
+
+    #[test]
     fn authority_check_rejects_unknown_format() {
         let result = DeployAuthorityOptions::parse(
             [
@@ -2950,6 +3377,25 @@ mod tests {
             result,
             Err(DeployCommandError::Usage(message))
                 if message.contains("invalid promotion output format: csv")
+        ));
+    }
+
+    #[test]
+    fn external_plan_rejects_unknown_format() {
+        let result = DeployExternalOptions::parse(
+            [
+                OsString::from("--format"),
+                OsString::from("yaml"),
+                OsString::from("demo"),
+            ],
+            deploy_external_plan_command,
+            external_plan_usage,
+        );
+
+        assert!(matches!(
+            result,
+            Err(DeployCommandError::Usage(message))
+                if message.contains("invalid external lifecycle output format: yaml")
         ));
     }
 
